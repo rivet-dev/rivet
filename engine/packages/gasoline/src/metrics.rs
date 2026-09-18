@@ -86,7 +86,7 @@ lazy_static::lazy_static! {
 	pub static ref WORKFLOW_DEAD: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"gasoline_workflow_dead",
 		"Total dead workflows.",
-		&["workflow_name", "error"],
+		&["workflow_name"],
 		*REGISTRY
 	).unwrap();
 	pub static ref WORKFLOW_SLEEPING: IntGaugeVec = register_int_gauge_vec_with_registry!(
@@ -98,7 +98,7 @@ lazy_static::lazy_static! {
 	pub static ref WORKFLOW_ERRORS: IntCounterVec = register_int_counter_vec_with_registry!(
 		"gasoline_workflow_errors",
 		"All errors made in a workflow.",
-		&["workflow_name", "error"],
+		&["workflow_name"],
 		*REGISTRY
 	).unwrap();
 	pub static ref WORKFLOW_WAKE_DELTA_DURATION: HistogramVec = register_histogram_vec_with_registry!(
@@ -161,14 +161,14 @@ lazy_static::lazy_static! {
 	pub static ref ACTIVITY_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"gasoline_activity_duration",
 		"Total duration of an activity.",
-		&["workflow_name", "activity_name", "error"],
+		&["workflow_name", "activity_name"],
 		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
 	pub static ref ACTIVITY_ERRORS: IntCounterVec = register_int_counter_vec_with_registry!(
 		"gasoline_activity_errors",
 		"All errors made in an activity.",
-		&["workflow_name", "activity_name", "error"],
+		&["workflow_name", "activity_name"],
 		*REGISTRY
 	).unwrap();
 
@@ -273,14 +273,14 @@ lazy_static::lazy_static! {
 	pub static ref OPERATION_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"gasoline_operation_duration",
 		"Total duration of an op call.",
-		&["operation_name", "error"],
+		&["operation_name"],
 		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
 	pub static ref OPERATION_ERRORS: IntCounterVec = register_int_counter_vec_with_registry!(
 		"gasoline_operation_errors",
 		"All errors made by this operation.",
-		&["operation_name", "error"],
+		&["operation_name"],
 		*REGISTRY
 	).unwrap();
 

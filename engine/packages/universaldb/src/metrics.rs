@@ -9,23 +9,7 @@ use rivet_metrics::{BUCKETS, MICRO_BUCKETS, REGISTRY, prometheus::*};
 pub static LAST_TX_COMPLETED_EPOCH_MS: AtomicU64 = AtomicU64::new(0);
 
 lazy_static::lazy_static! {
-	pub static ref FDB_PING_DURATION: Histogram = register_histogram_with_registry!(
-		"udb_fdb_ping_duration",
-		"Total duration to retrieve a single value from fdb.",
-		MICRO_BUCKETS.to_vec(),
-		*REGISTRY
-	).unwrap();
-	pub static ref FDB_MISSED_PING: IntGauge = register_int_gauge_with_registry!(
-		"udb_fdb_missed_ping",
-		"1 if fdb missed the last ping.",
-		*REGISTRY
-	).unwrap();
-	pub static ref FDB_LAST_TX_COMPLETED_AGE_SECONDS: Gauge = register_gauge_with_registry!(
-		"udb_fdb_last_tx_completed_age_seconds",
-		"Seconds since the most recent successful UDB tx completion on this pod. Diverges when all UDB writes on the pod stall (e.g. FDB client thread starvation); a single per-pod signal for global degradation.",
-		*REGISTRY
-	).unwrap();
-
+	// MARK: UDB
 	/// Current size of a Postgres driver connection pool, labelled `follower` or `leader`.
 	pub static ref POSTGRES_POOL_SIZE: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"udb_postgres_pool_size",
@@ -157,6 +141,11 @@ lazy_static::lazy_static! {
 		"udb_operation_keys",
 		"Keys read or written by UniversalDB operations.",
 		&["op"],
+		*REGISTRY
+	).unwrap();
+	pub static ref LAST_TX_COMPLETED_AGE_SECONDS: Gauge = register_gauge_with_registry!(
+		"udb_last_tx_completed_age_seconds",
+		"Seconds since the most recent successful UDB tx completion on this pod. Diverges when all UDB writes on the pod stall (e.g. FDB client thread starvation); a single per-pod signal for global degradation.",
 		*REGISTRY
 	).unwrap();
 }

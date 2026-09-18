@@ -70,6 +70,56 @@
 			"cache": false,
 			"env": ["SKIP_WASM_BUILD"]
 		},
+		"@rivet-dev/mcp#build": {
+			"dependsOn": [
+				"^build",
+				"rivetkit#build",
+				"@rivetkit/traces#build",
+				"@rivetkit/shared-data#build",
+				"@rivet-gg/icons#build",
+				"@rivetkit/engine-api-full#build"
+			],
+			"env": [
+				"RIVET_MCP_SENTRY_DSN",
+				"RIVET_MCP_APP_SENTRY_DSN",
+				"SENTRY_AUTH_TOKEN",
+				"SENTRY_BINARY_PATH",
+				"SENTRY_ORG",
+				"MCP_APP_SENTRY_PROJECT"
+			],
+			"inputs": [
+				"src/**",
+				"assets/**",
+				"tsup.config.ts",
+				"package.json"
+			],
+			"outputs": [
+				"dist/**"
+			]
+		},
+		"@rivet-gg/cloud-api#build": {
+			"dependsOn": [
+				"^build"
+			],
+			"inputs": [
+				"src/**",
+				"build.mjs",
+				"tsconfig.json",
+				"package.json"
+			],
+			"outputs": [
+				"dist/**"
+			],
+			"env": [
+				"SENTRY_RELEASE",
+				"SENTRY_ORG",
+				"SENTRY_PROJECT",
+				"SENTRY_PROJECT_MCP"
+			],
+			"passThroughEnv": [
+				"SENTRY_AUTH_TOKEN"
+			]
+		},
 		"build:ladle": {
 			"dependsOn": ["^build"],
 			"inputs": [

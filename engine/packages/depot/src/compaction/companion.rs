@@ -379,7 +379,7 @@ async fn run_reclaim_drain_v2(
 				}
 				return Ok(Loop::Continue);
 			};
-			let status = execute_reclaim_slice(
+			let outcome = execute_reclaim_slice(
 				ctx,
 				database_branch_id,
 				job_id,
@@ -388,12 +388,18 @@ async fn run_reclaim_drain_v2(
 				base_manifest_generation,
 				planned.input_fingerprint,
 				planned.input_range,
+				bypass_admission,
 			)
 			.await?;
-			if matches!(status, CompactionJobStatus::Succeeded) {
+			// The percent dropped between the sweep that admitted this pass and the slice that
+			// executes it. End the drain on the same terms the sweep's own gate does.
+			if outcome.admission_blocked {
+				return Ok(Loop::Break(RECLAIM_DRAIN_ADMISSION_BLOCKED));
+			}
+			if matches!(outcome.status, CompactionJobStatus::Succeeded) {
 				Ok(Loop::Continue)
 			} else {
-				Ok(Loop::Break(status))
+				Ok(Loop::Break(outcome.status))
 			}
 		}
 		.boxed()
@@ -413,6 +419,7 @@ async fn run_reclaim_drain_v1(
 	job_id: Id,
 	base_lifecycle_generation: u64,
 	base_manifest_generation: u64,
+	bypass_admission: bool,
 ) -> Result<CompactionJobStatus> {
 	ctx.loope(ReclaimDrainState::default(), move |ctx, state| {
 		async move {
@@ -447,7 +454,7 @@ async fn run_reclaim_drain_v1(
 				}
 				return Ok(Loop::Continue);
 			};
-			let status = execute_reclaim_slice(
+			let outcome = execute_reclaim_slice(
 				ctx,
 				database_branch_id,
 				job_id,
@@ -456,12 +463,18 @@ async fn run_reclaim_drain_v1(
 				base_manifest_generation,
 				planned.input_fingerprint,
 				planned.input_range,
+				bypass_admission,
 			)
 			.await?;
-			if matches!(status, CompactionJobStatus::Succeeded) {
+			// The percent dropped between the sweep that admitted this pass and the slice that
+			// executes it. End the drain on the same terms the sweep's own gate does.
+			if outcome.admission_blocked {
+				return Ok(Loop::Break(RECLAIM_DRAIN_ADMISSION_BLOCKED));
+			}
+			if matches!(outcome.status, CompactionJobStatus::Succeeded) {
 				Ok(Loop::Continue)
 			} else {
-				Ok(Loop::Break(status))
+				Ok(Loop::Break(outcome.status))
 			}
 		}
 		.boxed()
@@ -493,7 +506,7 @@ async fn run_reclaim_job(
 	let is_repair = !signal.input_range.stale_hot_job_ids.is_empty()
 		|| !signal.input_range.stale_cold_job_ids.is_empty();
 
-	let mut status = execute_reclaim_slice(
+	let outcome = execute_reclaim_slice(
 		ctx,
 		database_branch_id,
 		signal.job_id,
@@ -502,12 +515,23 @@ async fn run_reclaim_job(
 		signal.base_manifest_generation,
 		signal.input_fingerprint,
 		signal.input_range.clone(),
+		signal.bypass_admission,
 	)
 	.await?;
+	let mut status = outcome.status;
 
 	// Set when the drain stops early because the branch fell outside the admission percent. The
 	// sweeps after it are more reclaim work on the same branch, so they are skipped too.
-	let mut drain_admission_blocked = false;
+	//
+	// The first slice sets it too, which is what stops a staging cleanup on a de-admitted branch.
+	// Cleanup reaches this activity directly rather than through the drain, so the drain's gate never
+	// sees it, and it is the one reclaim lane the manager dispatches without consulting the percent.
+	let mut drain_admission_blocked = outcome.admission_blocked;
+	if drain_admission_blocked {
+		// The job did everything it was allowed to do. Report a clean finish so the manager frees the
+		// reclaim slot instead of re-dispatching an input the percent will refuse again.
+		status = CompactionJobStatus::Succeeded;
+	}
 
 	// Reclaim applies its deletes immediately, so a normal reclaim drains by replanning from current
 	// FDB state until the whole reclaimable range has been swept. A durable loop checkpoints progress
@@ -517,7 +541,7 @@ async fn run_reclaim_job(
 	// top of the workflow would pin every branch that already has one to v1 for the life of the branch
 	// and the new drain would only ever reach branches created after it shipped. Here, a job already
 	// mid-drain finishes on v1 and the branch's next job records v2.
-	if !is_repair && matches!(status, CompactionJobStatus::Succeeded) {
+	if !is_repair && !drain_admission_blocked && matches!(status, CompactionJobStatus::Succeeded) {
 		let job_id = signal.job_id;
 		let base_lifecycle_generation = signal.base_lifecycle_generation;
 		let base_manifest_generation = signal.base_manifest_generation;
@@ -529,6 +553,7 @@ async fn run_reclaim_job(
 					job_id,
 					base_lifecycle_generation,
 					base_manifest_generation,
+					signal.bypass_admission,
 				)
 				.await?
 			}
@@ -546,7 +571,7 @@ async fn run_reclaim_job(
 		};
 		// Translate the drain's de-admitted marker before anything downstream reads the status. The
 		// job did everything it was allowed to do, so the manager sees a clean finish and frees the
-		// reclaim slot for the staging cleanups that share it.
+		// reclaim slot.
 		if matches!(status, RECLAIM_DRAIN_ADMISSION_BLOCKED) {
 			drain_admission_blocked = true;
 			status = CompactionJobStatus::Succeeded;
@@ -639,6 +664,17 @@ async fn run_reclaim_job(
 	Ok(())
 }
 
+/// What one reclaim slice reported back.
+///
+/// `admission_blocked` is carried beside the status rather than encoded in it because the status a
+/// de-admitted slice returns is `Requested`, which every caller here also produces for ordinary
+/// reasons. The callers act on it by ending the job, so conflating the two would make a de-admitted
+/// branch look like one with work still pending.
+struct ReclaimSliceOutcome {
+	status: CompactionJobStatus,
+	admission_blocked: bool,
+}
+
 async fn execute_reclaim_slice(
 	ctx: &mut WorkflowCtx,
 	database_branch_id: DatabaseBranchId,
@@ -648,7 +684,8 @@ async fn execute_reclaim_slice(
 	base_manifest_generation: u64,
 	input_fingerprint: CompactionInputFingerprint,
 	input_range: ReclaimJobInputRange,
-) -> Result<CompactionJobStatus> {
+	bypass_admission: bool,
+) -> Result<ReclaimSliceOutcome> {
 	// Retry the FDB delete slice while the cluster-wide compaction write budget is spent. A throttled
 	// slice issues no deletes and changes nothing, so backing off and re-running the same input is
 	// safe and idempotent.
@@ -668,8 +705,15 @@ async fn execute_reclaim_slice(
 						base_manifest_generation,
 						input_fingerprint,
 						input_range,
+						bypass_admission,
 					})
 					.await?;
+				// The branch fell outside the admission percent. Stop rather than back off: the
+				// percent is an operator switch that can stay down for hours, and a slice parked on
+				// it would hold the reclaim slot for that whole time.
+				if output.admission_blocked {
+					return Ok(Loop::Break(output));
+				}
 				if output.throttled {
 					ctx.sleep(crate::THROTTLE_BACKOFF_MS).await?;
 					return Ok(Loop::Continue);
@@ -686,7 +730,10 @@ async fn execute_reclaim_slice(
 		})
 		.await?;
 
-	Ok(output.status)
+	Ok(ReclaimSliceOutcome {
+		status: output.status,
+		admission_blocked: output.admission_blocked,
+	})
 }
 
 fn record_companion_job(

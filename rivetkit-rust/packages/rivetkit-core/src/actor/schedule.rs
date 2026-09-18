@@ -1018,6 +1018,17 @@ impl ActorContext {
 		}
 	}
 
+	pub(crate) fn abandon_pending_alarm_writes(&self) {
+		// Startup runs inside envoy's actor-start callback, so actor-local alarm
+		// acks cannot arrive until that callback returns. Invalidate their
+		// persistence epoch and drop the completion waiters instead of creating a
+		// circular wait during failed-startup cleanup.
+		self.0
+			.schedule_alarm_push_epoch
+			.fetch_add(1, Ordering::SeqCst);
+		self.0.schedule_pending_alarm_writes.lock().clear();
+	}
+
 	fn set_alarm_tracked(
 		&self,
 		envoy_handle: EnvoyHandle,

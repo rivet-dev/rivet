@@ -38,7 +38,7 @@ export function serializeAgentInstructions(
 		"",
 		"## 3. Prepare and install",
 		"Check the guide's prerequisites and cloud authentication. Ask me to complete any missing authentication.",
-		"Download and extract this setup kit, then use terraform/aws/ or terraform/gcp/ for the selected provider:",
+		"Download and extract this setup kit, then use terraform/byoc-aws/ or terraform/byoc-gcp/ for the selected provider:",
 		BYOC_SETUP_KIT_URL,
 		"Configure terraform.tfvars.json with my choices. The cluster identity and token are already included here; do not ask me to download config or copy a token from the dashboard.",
 		`Write the following non-secret Terraform inputs to ${CLUSTER_CONFIG_FILENAME} in the same directory. Preserve the Cloud API endpoint when provided:`,

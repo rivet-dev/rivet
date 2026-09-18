@@ -63,6 +63,17 @@ pub enum Actor {
 	KeyReservedInDifferentDatacenter { datacenter_label: u16 },
 
 	#[error(
+		"key_index_scan_limit_exceeded",
+		"Too many index entries for this actor key to resolve it.",
+		"Examined {limit} index entries for actor key '{key}' of '{name}' without finding a live actor."
+	)]
+	KeyIndexScanLimitExceeded {
+		name: String,
+		key: String,
+		limit: usize,
+	},
+
+	#[error(
 		"no_runner_config_configured",
 		"No runner config configured in any datacenter. Validate a provider is listed that matches requested pool name.",
 		"No runner config with name '{pool_name}' are available in any datacenter for the namespace '{namespace}'. Validate a provider is listed that matches the requested pool name."

@@ -1587,6 +1587,162 @@ pub(crate) struct ColdObjectReclaimWindow {
 /// Note: a shard's newest version is the leftover `prev` after the walk and is never returned, so C4
 /// never deletes a shard's last version. The per-shard `SHARD_ACCESS`/`SHARD_LRU` rows therefore stay
 /// valid and need no cleanup here.
+#[derive(Default)]
+struct OwnerDeltaPageProbe {
+	page: Option<Vec<u8>>,
+	rows: usize,
+	value_bytes: u64,
+}
+
+/// What one owner delta's segment can say about the page a stale PIDX row owns.
+///
+/// Absent and unusable are held apart even though both retain the row, because they call for
+/// different responses. An absent segment is an ordinary miss. An unusable one means no row this
+/// delta owns can ever be confirmed, so the branch never writes `CMP/pidx_repair` and re-walks its
+/// whole PIDX prefix on every reclaim job from then on.
+enum OwnerDeltaSegment {
+	/// Decoded, so its pages can be compared against the shard image.
+	Decoded(crate::conveyer::ltx::LtxBlob),
+	/// No segment covering the page's range exists under this owner txid.
+	Missing,
+	/// Present but either too large to reassemble inside one window or holding bytes that did not
+	/// decode.
+	Unusable,
+}
+
+/// Reassembles scanned chunk rows into the segment that can hold `first_pgno`.
+///
+/// Errors are the caller's to classify. A delta that does not reassemble or decode proves nothing
+/// about the page, and this walk exists to delete rows, so the caller turns that into a retained row
+/// rather than failing the branch's whole reclaim lane.
+fn decode_owner_delta_segment(
+	branch_id: DatabaseBranchId,
+	owner_txid: u64,
+	first_pgno: Option<u32>,
+	delta_rows: Vec<(Vec<u8>, Vec<u8>)>,
+) -> Result<OwnerDeltaSegment> {
+	let Some(segment) = delta_blob::reassemble_delta_segments(branch_id, owner_txid, delta_rows)?
+		.into_iter()
+		.find(|segment| segment.first_pgno == first_pgno)
+	else {
+		return Ok(OwnerDeltaSegment::Missing);
+	};
+
+	Ok(OwnerDeltaSegment::Decoded(
+		crate::conveyer::ltx::LtxBlob::decode_index(segment.blob)?,
+	))
+}
+
+async fn read_stale_pidx_owner_page(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	owner_txid: u64,
+	pgno: u32,
+	isolation_level: universaldb::utils::IsolationLevel,
+	segment_cache: &mut BTreeMap<(u64, Option<u32>), OwnerDeltaSegment>,
+) -> Result<OwnerDeltaPageProbe> {
+	let delta_prefix = keys::branch_delta_chunk_prefix(branch_id, owner_txid);
+	let (_, delta_end) = keys::branch_delta_txid_range(branch_id, owner_txid);
+	let locate_end = pgno
+		.checked_add(1)
+		.map(|next_pgno| keys::branch_delta_segment_prefix(branch_id, owner_txid, next_pgno))
+		.unwrap_or_else(|| delta_end.clone());
+	let Some((key, value)) =
+		tx_get_range_last(tx, &delta_prefix, &locate_end, isolation_level).await?
+	else {
+		return Ok(OwnerDeltaPageProbe {
+			page: None,
+			rows: 0,
+			value_bytes: 0,
+		});
+	};
+
+	let first_pgno = keys::decode_branch_delta_chunk_ref(branch_id, owner_txid, &key)?.first_pgno();
+	let mut rows = 1;
+	let mut value_bytes = u64::try_from(value.len()).unwrap_or(u64::MAX);
+	let cache_key = (owner_txid, first_pgno);
+	if !segment_cache.contains_key(&cache_key) {
+		let (segment_start, segment_end) = match first_pgno {
+			Some(first_pgno) => (
+				keys::branch_delta_segment_prefix(branch_id, owner_txid, first_pgno),
+				first_pgno
+					.checked_add(1)
+					.map(|next_pgno| {
+						keys::branch_delta_segment_prefix(branch_id, owner_txid, next_pgno)
+					})
+					.unwrap_or_else(|| delta_end.clone()),
+			),
+			None => (delta_prefix, delta_end),
+		};
+		let delta_rows = tx_scan_range_values_limited(
+			tx,
+			&segment_start,
+			&segment_end,
+			CMP_FDB_BATCH_MAX_KEYS,
+			isolation_level,
+		)
+		.await?;
+		rows += delta_rows.len();
+		value_bytes = delta_rows
+			.iter()
+			.map(|(_, value)| u64::try_from(value.len()).unwrap_or(u64::MAX))
+			.fold(value_bytes, u64::saturating_add);
+		let segment = if delta_rows.len() >= CMP_FDB_BATCH_MAX_KEYS {
+			// The delta holds more chunk rows than one window may read, so its blob cannot be
+			// reassembled from what was scanned and nothing it owns is ever confirmable. Retaining
+			// is the safe outcome, but it also retires nothing, so it is worth chasing.
+			tracing::warn!(
+				?branch_id,
+				owner_txid,
+				?first_pgno,
+				scanned_rows = delta_rows.len(),
+				"owner delta is too large to reassemble in one stale pidx window, so its rows can never be confirmed"
+			);
+			OwnerDeltaSegment::Unusable
+		} else {
+			match decode_owner_delta_segment(branch_id, owner_txid, first_pgno, delta_rows) {
+				Ok(segment) => segment,
+				Err(err) => {
+					// An unreadable delta proves nothing about the page. Treat it as unusable so the
+					// sweep fails closed instead of wedging the branch's whole reclaim lane on a
+					// decode error, matching how an unreadable shard image is treated.
+					tracing::warn!(
+						?branch_id,
+						owner_txid,
+						?first_pgno,
+						?err,
+						"could not read an owner delta while confirming stale pidx contents"
+					);
+					OwnerDeltaSegment::Unusable
+				}
+			}
+		};
+		segment_cache.insert(cache_key, segment);
+	}
+
+	let page = match segment_cache.get(&cache_key) {
+		Some(OwnerDeltaSegment::Decoded(segment)) => match segment.get_page(pgno) {
+			Ok(page) => page,
+			Err(err) => {
+				tracing::warn!(
+					?branch_id,
+					owner_txid,
+					pgno,
+					?err,
+					"could not decode an owner delta page while confirming stale pidx contents"
+				);
+				None
+			}
+		},
+		Some(OwnerDeltaSegment::Missing) | Some(OwnerDeltaSegment::Unusable) | None => None,
+	};
+	Ok(OwnerDeltaPageProbe {
+		page,
+		rows,
+		value_bytes,
+	})
+}
+
 /// One bounded window of the stale-PIDX repair walk. Walks the pgno-major `PIDX` prefix ascending
 /// starting at `pgno_cursor`, reading at most `CMP_FDB_BATCH_MAX_KEYS` rows.
 ///
@@ -1597,14 +1753,11 @@ pub(crate) struct ColdObjectReclaimWindow {
 /// folded it; a slice whose budget ran out before its PIDX lane left it behind, and the owner-window
 /// filter in `read_hot_input_snapshot` means no later slice will ever revisit it.
 ///
-/// Staleness alone is not enough to clear: each candidate is confirmed against a `SHARD` version in
-/// `[owner_txid, hot_watermark]` that actually carries the page. Version existence is not coverage. A
-/// fold only stages pages whose PIDX owner falls inside its slice window, so a page written before the
-/// window and never rewritten is in no fold's page set and survives only through this PIDX row, while
-/// the shard itself keeps accumulating versions that omit it. Clearing on existence alone drops the
-/// page's only pointer and the read path then zero-fills it, which is silent database corruption.
-/// Confirmation is memoized per `(shard_id, owner_txid)` within the window, so one image read answers
-/// every page of that pair.
+/// Staleness alone is not enough to clear: the newest `SHARD` version at or below the watermark must
+/// be at least as new as the owner and carry bytes identical to the owner delta's page. Page-number
+/// presence is insufficient: an old hot pass could skip the owner commit yet copy an older version of
+/// the same page into a later shard. Clearing PIDX then makes reads serve those older bytes, which is
+/// silent database corruption. Shard images and owner-delta segments are memoized within the window.
 ///
 /// Every row scanned is charged against the budget whether or not it is clearable. Live rows are the
 /// overwhelming majority on a healthy branch, so a walk that only charged for candidates would read an
@@ -1638,10 +1791,11 @@ pub(crate) async fn read_stale_pidx_chunk(
 
 	let mut candidates = Vec::new();
 	let mut last_pgno: Option<u32> = None;
-	// The page set of each shard's newest folded image, or `None` when the shard has no version at
+	// The newest folded image of each shard, or `None` when the shard has no version at
 	// all. Keyed by shard alone because that one version is what every read of every page in the
 	// shard resolves through, so one image read answers the whole shard.
-	let mut latest_shard_pages: BTreeMap<u32, Option<(u64, BTreeSet<u32>)>> = BTreeMap::new();
+	let mut latest_shard_pages = BTreeMap::new();
+	let mut owner_delta_segments = BTreeMap::new();
 	let mut budget_capped = false;
 	let mut retained_unconfirmed = false;
 	for (key, value) in rows {
@@ -1661,7 +1815,7 @@ pub(crate) async fn read_stale_pidx_chunk(
 			continue;
 		}
 
-		// The coverage probe reads a whole shard image, so its cost is charged with the row that
+		// The content probe reads a whole shard image, so its cost is charged with the row that
 		// caused it and both are checked before the cursor advances past this page. A shard already
 		// probed in this window costs nothing more.
 		let shard_id = pgno / keys::SHARD_SIZE;
@@ -1680,10 +1834,7 @@ pub(crate) async fn read_stale_pidx_chunk(
 				Ok(Some(probe)) => {
 					probe_rows = probe.rows;
 					probe_value_bytes = probe.value_bytes;
-					Some((
-						probe.as_of_txid,
-						probe.blob.page_numbers().collect::<BTreeSet<_>>(),
-					))
+					Some(probe)
 				}
 				Ok(None) => None,
 				Err(err) => {
@@ -1702,6 +1853,28 @@ pub(crate) async fn read_stale_pidx_chunk(
 			latest_shard_pages.insert(shard_id, latest);
 		}
 
+		let latest = latest_shard_pages
+			.get(&shard_id)
+			.and_then(|latest| latest.as_ref());
+		let shard_page = latest
+			.filter(|latest| latest.as_of_txid >= owner_txid)
+			.and_then(|latest| latest.blob.get_page(pgno).ok().flatten());
+		let owner_probe = if shard_page.is_some() {
+			read_stale_pidx_owner_page(
+				tx,
+				branch_id,
+				owner_txid,
+				pgno,
+				isolation_level,
+				&mut owner_delta_segments,
+			)
+			.await?
+		} else {
+			OwnerDeltaPageProbe::default()
+		};
+		probe_rows += owner_probe.rows;
+		probe_value_bytes = probe_value_bytes.saturating_add(owner_probe.value_bytes);
+
 		// A window that has charged nothing yet always admits its first row, image and all, so a shard
 		// image larger than the whole budget cannot stall the walk.
 		if last_pgno.is_some()
@@ -1713,25 +1886,20 @@ pub(crate) async fn read_stale_pidx_chunk(
 		budget.add(1 + probe_rows, row_bytes.saturating_add(probe_value_bytes));
 		last_pgno = Some(pgno);
 
-		let latest = latest_shard_pages
-			.get(&shard_id)
-			.and_then(|latest| latest.as_ref());
-		let covered = latest.is_some_and(|(as_of_txid, page_set)| {
-			// A version older than the write cannot be the fold that absorbed it.
-			*as_of_txid >= owner_txid && page_set.contains(&pgno)
-		});
-		if !covered {
-			// The version reads resolve through does not carry this page, so clearing the row would
-			// drop the only pointer to its contents. Retain it. Reaching here also means the shard's
-			// newest image is sparse, which no current code path should produce, so it is worth
-			// chasing wherever it shows up.
+		let confirmed = shard_page
+			.as_ref()
+			.zip(owner_probe.page.as_ref())
+			.is_some_and(|(shard_page, owner_page)| shard_page == owner_page);
+		if !confirmed {
 			tracing::warn!(
 				?branch_id,
 				pgno,
 				owner_txid,
 				hot_watermark_txid = root.hot_watermark_txid,
-				latest_shard_version_txid = latest.map(|(as_of_txid, _)| *as_of_txid),
-				"retaining stale pidx row whose page the shard's newest image does not carry"
+				latest_shard_version_txid = latest.map(|latest| latest.as_of_txid),
+				shard_page_present = shard_page.is_some(),
+				owner_page_present = owner_probe.page.is_some(),
+				"retaining stale pidx row whose owner and shard page contents are not confirmed equal"
 			);
 			retained_unconfirmed = true;
 			continue;

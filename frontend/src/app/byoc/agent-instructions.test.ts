@@ -9,6 +9,7 @@ it("copies setup URLs, exact cluster config, and token with secret handling inst
 		token,
 	)!;
 	expect(text).toContain("https://rivet.dev/cloud/byoc/quickstart/");
+	expect(text).toContain("terraform/byoc-aws/ or terraform/byoc-gcp/");
 	expect(text).toContain(
 		"https://releases.rivet.dev/byoc/latest/setup-kit.tar.gz",
 	);

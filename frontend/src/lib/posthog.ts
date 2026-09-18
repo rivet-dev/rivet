@@ -22,12 +22,13 @@ export async function initPosthog(
 	apiKey: string,
 	apiHost: string,
 	debug: boolean,
+	overrides?: Partial<Parameters<(typeof PostHogType)["init"]>[1]>,
 ) {
 	if (instance) {
 		return instance;
 	}
 	const { default: ph } = await import("posthog-js");
-	ph.init(apiKey, { api_host: apiHost, debug });
+	ph.init(apiKey, { api_host: apiHost, debug, ...overrides });
 	instance = ph;
 	for (const call of queue) {
 		(ph[call.method] as (...args: unknown[]) => void)(...call.args);

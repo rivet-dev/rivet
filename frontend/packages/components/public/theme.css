@@ -1,4 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+/* Self-hosted. MCP hosts frame the embedded Inspector under a CSP that allows
+   only the origin serving it, so a fonts.googleapis.com stylesheet is blocked
+   and the app falls back to system fonts. */
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-sans/latin-600.css";
+@import "@fontsource/ibm-plex-sans/latin-700.css";
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
+@import "@fontsource/ibm-plex-mono/latin-600.css";
 
 :root {
 	/* Light tokens — kept as a fallback. App pins `<html class="dark">`

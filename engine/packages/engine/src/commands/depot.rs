@@ -333,12 +333,15 @@ impl ExecuteOpts {
 		let pools = rivet_pools::Pools::new(config.clone()).await?;
 		let udb = pools.udb()?;
 		let target = self.target(&udb).await?;
-		let db = Arc::new(Db::new(
-			Arc::new((*udb).clone()),
-			target.bucket_id,
-			target.database_id.clone(),
-			pools.node_id(),
-		));
+		let db = Arc::new(
+			Db::new(
+				Arc::new((*udb).clone()),
+				target.bucket_id,
+				target.database_id.clone(),
+				pools.node_id(),
+			)
+			.with_config(config.clone()),
+		);
 
 		let sqlite = depot_client_embedded::open_database_from_embedded_depot(
 			db,

@@ -19,6 +19,7 @@ pub async fn migrate_sqlite_v1_to_v2(
 
 	actor_sqlite::migrate_v1_to_v2(
 		db,
+		ctx.config().clone(),
 		actor_sqlite::MigrateV1ToV2Input {
 			actor_id: input.actor_id,
 			namespace_id: input.namespace_id,

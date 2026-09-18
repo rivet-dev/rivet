@@ -1205,6 +1205,56 @@ impl<'de> TupleUnpack<'de> for SilenceTsKey {
 	}
 }
 
+/// When the workflow last died. Only present while the workflow is dead.
+#[derive(Debug)]
+pub struct DeathTsKey {
+	workflow_id: Id,
+}
+
+impl DeathTsKey {
+	pub fn new(workflow_id: Id) -> Self {
+		DeathTsKey { workflow_id }
+	}
+}
+
+impl FormalKey for DeathTsKey {
+	// Timestamp.
+	type Value = i64;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(i64::from_be_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
+	}
+}
+
+impl TuplePack for DeathTsKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (WORKFLOW, DATA, self.workflow_id, DEATH_TS);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for DeathTsKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, workflow_id, data)) =
+			<(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+		if data != DEATH_TS {
+			return Err(PackError::Message("expected DEATH_TS data".into()));
+		}
+
+		let v = DeathTsKey { workflow_id };
+
+		Ok((input, v))
+	}
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Metric {
 	/// Count (signal name)

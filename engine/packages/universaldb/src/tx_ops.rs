@@ -14,6 +14,65 @@ use crate::{
 	value::{KeyValue, Slice, Values},
 };
 
+/// The key window a read-your-writes merge may inject pending writes into.
+///
+/// This is not simply the requested range. A chunked scan asks the database for one chunk at a time,
+/// and the merge for that chunk has to stop where the chunk stopped: a pending write past the end of
+/// the chunk would otherwise be returned early, and pagination would then advance past it and skip
+/// every key in between.
+struct MergeWindow {
+	lo: Vec<u8>,
+	lo_inclusive: bool,
+	hi: Vec<u8>,
+	hi_inclusive: bool,
+}
+
+impl MergeWindow {
+	fn new(opt: &RangeOption<'_>, more: bool, last_db_key: Option<&[u8]>) -> Self {
+		// A selector with offset 1 and `or_equal` set resolves to the first key strictly past its
+		// anchor, which is how a continuation excludes the previous chunk's last key. This mirrors how
+		// the drivers turn the same selectors into comparisons.
+		let lo_inclusive = !(opt.begin.offset() == 1 && opt.begin.or_equal());
+		let hi_inclusive = opt.end.offset() == 1 && opt.end.or_equal();
+
+		let mut window = MergeWindow {
+			lo: opt.begin.key().to_vec(),
+			lo_inclusive,
+			hi: opt.end.key().to_vec(),
+			hi_inclusive,
+		};
+
+		// Clamp the open end of the window to the last key the database actually returned. Only a
+		// partial fetch needs this: a fetch that reached the end of the range already covers it.
+		if more && let Some(last_db_key) = last_db_key {
+			if opt.reverse {
+				window.lo = last_db_key.to_vec();
+				window.lo_inclusive = true;
+			} else {
+				window.hi = last_db_key.to_vec();
+				window.hi_inclusive = true;
+			}
+		}
+
+		window
+	}
+
+	fn contains(&self, key: &[u8]) -> bool {
+		let above_lo = if self.lo_inclusive {
+			key >= self.lo.as_slice()
+		} else {
+			key > self.lo.as_slice()
+		};
+		let below_hi = if self.hi_inclusive {
+			key <= self.hi.as_slice()
+		} else {
+			key < self.hi.as_slice()
+		};
+
+		above_lo && below_hi
+	}
+}
+
 #[derive(Debug, Clone)]
 pub enum Operation {
 	SetValue {
@@ -412,8 +471,9 @@ impl TransactionOperations {
 			return Ok(db_values);
 		}
 
-		let begin = opt.begin.key();
-		let end = opt.end.key();
+		let more = db_values.more();
+		let last_db_key = db_values.last_db_key().map(|key| key.to_vec());
+		let window = MergeWindow::new(opt, more, last_db_key.as_deref());
 
 		// Start with database results in a map
 		let mut result_map = BTreeMap::new();
@@ -427,7 +487,7 @@ impl TransactionOperations {
 		for op in &*self.operations() {
 			match op {
 				Operation::SetValue { key, value } => {
-					if key.as_slice() >= begin && key.as_slice() < end {
+					if window.contains(key) {
 						result_map.insert(key.clone(), value.clone());
 					}
 				}
@@ -452,7 +512,7 @@ impl TransactionOperations {
 					param,
 					op_type,
 				} => {
-					if key.as_slice() >= begin && key.as_slice() < end {
+					if window.contains(key) {
 						// Get current value for this key (from result_map or empty if not exists)
 						let current_value = result_map.get(key);
 						let current_slice = current_value.map(|v| &**v);
@@ -476,6 +536,7 @@ impl TransactionOperations {
 		// highest. Reads with no local operations return above and never reach this path, so the
 		// direction only ever went wrong once the transaction held a pending write.
 		let limit = opt.limit.unwrap_or(usize::MAX);
+		let merged_len = result_map.len();
 		let keyvalues = if opt.reverse {
 			result_map
 				.into_iter()
@@ -491,7 +552,17 @@ impl TransactionOperations {
 				.collect::<Vec<_>>()
 		};
 
-		Ok(Values::new(keyvalues))
+		// Merging can push the fetch over its row limit, because a pending write for a key the database
+		// does not hold yet still counts as a row. The rows dropped by the limit sit below the last key
+		// the database returned, so continuing from that key would skip them. Continue from the last row
+		// actually kept instead.
+		if keyvalues.len() < merged_len {
+			let last_kept_key = keyvalues.last().map(|kv| kv.key().to_vec());
+
+			return Ok(Values::chunk(keyvalues, true, last_kept_key));
+		}
+
+		Ok(Values::chunk(keyvalues, more, last_db_key))
 	}
 
 	pub fn clear_all(&self) {

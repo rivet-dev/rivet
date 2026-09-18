@@ -20,11 +20,11 @@ use depot::{
 	keys::{
 		PAGE_SIZE, SHARD_SIZE, branch_commit_key, branch_commit_stage_key,
 		branch_compaction_root_key, branch_delta_chunk_key, branch_delta_chunk_prefix,
-		branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
-		branch_meta_compact_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
-		branch_vtx_key, branches_list_key, bucket_branches_list_key, bucket_branches_refcount_key,
-		bucket_pointer_cur_key, ctr_eviction_index_key, database_pointer_cur_key,
-		sqlite_cmp_dirty_key,
+		branch_delta_segment_prefix, branch_manifest_last_access_bucket_key,
+		branch_manifest_last_access_ts_ms_key, branch_meta_compact_key, branch_meta_head_key,
+		branch_pidx_key, branch_shard_key, branch_vtx_key, branches_list_key,
+		bucket_branches_list_key, bucket_branches_refcount_key, bucket_pointer_cur_key,
+		ctr_eviction_index_key, database_pointer_cur_key, sqlite_cmp_dirty_key,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
 	quota::{self, SQLITE_MAX_STORAGE_BYTES},
@@ -44,6 +44,10 @@ use rivet_pools::NodeId;
 use universaldb::utils::IsolationLevel::Snapshot;
 
 const TEST_DATABASE: &str = "test-database";
+
+/// A second database in the test bucket that replays a workload without the fault under test, so an
+/// assertion can compare against what the clean run produced instead of a bound.
+const CONTROL_DATABASE: &str = "control-database";
 
 fn test_bucket() -> Id {
 	Id::v1(uuid::Uuid::from_u128(0x1234), 1)
@@ -87,6 +91,19 @@ fn page(pgno: u32, fill: u8) -> DirtyPage {
 		pgno,
 		bytes: vec![fill; PAGE_SIZE as usize],
 	}
+}
+
+fn noisy_page(pgno: u32, seed: u64) -> DirtyPage {
+	let mut state = seed;
+	let bytes = (0..PAGE_SIZE)
+		.map(|_| {
+			state ^= state << 13;
+			state ^= state >> 7;
+			state ^= state << 17;
+			state as u8
+		})
+		.collect();
+	DirtyPage { pgno, bytes }
 }
 
 fn short_page(pgno: u32) -> DirtyPage {
@@ -192,8 +209,12 @@ async fn read_branch_id(db: &universaldb::Database) -> Result<DatabaseBranchId> 
 }
 
 async fn read_quota(db: &universaldb::Database) -> Result<i64> {
-	db.txn("test_depotconveyer_commit", |tx| async move {
-		quota::read_in_bucket(&tx, BucketId::from_gas_id(test_bucket()), TEST_DATABASE).await
+	read_database_quota(db, TEST_DATABASE).await
+}
+
+async fn read_database_quota(db: &universaldb::Database, database_id: &'static str) -> Result<i64> {
+	db.txn("test_depotconveyer_commit", move |tx| async move {
+		quota::read_in_bucket(&tx, BucketId::from_gas_id(test_bucket()), database_id).await
 	})
 	.await
 }
@@ -1418,6 +1439,153 @@ async fn abandoned_stage_is_reclaimed_by_the_next_begin() -> Result<()> {
 
 		Ok(())
 	})
+}
+
+/// A single-shot commit can reuse an abandoned staged commit's txid too. It must clear the staged
+/// delta range before publishing, or a shorter replacement leaves the abandoned blob's tail chunks
+/// behind and readers concatenate bytes from two different commit attempts.
+#[tokio::test]
+async fn abandoned_stage_is_reclaimed_by_a_single_shot_commit() -> Result<()> {
+	commit_matrix!(
+		"depot-staged-commit-single-shot-orphan",
+		|ctx, db, database_db| {
+			let _ = &ctx;
+			database_db.commit(vec![page(1, 0x01)], 4, 1_000).await?;
+			let txid = database_db.commit_stage_begin(0, Some(1)).await?;
+			assert_eq!(txid, 2);
+			database_db
+				.commit_stage_segment(
+					0,
+					txid,
+					0,
+					vec![
+						noisy_page(1, 0xa1),
+						noisy_page(2, 0xa2),
+						noisy_page(3, 0xa3),
+						noisy_page(4, 0xa4),
+					],
+				)
+				.await?;
+
+			let branch_id = read_branch_id(&db).await?;
+			let abandoned_keys =
+				read_prefix_keys(&db, branch_delta_chunk_prefix(branch_id, txid)).await?;
+			assert!(
+				abandoned_keys.len() > 1,
+				"the abandoned segment must have a tail chunk for this regression"
+			);
+
+			let result = database_db
+				.commit_with_options(
+					vec![page(1, 0xb1)],
+					4,
+					2_000,
+					CommitOptions {
+						expected_head_txid: Some(1),
+						..Default::default()
+					},
+				)
+				.await?;
+			assert_eq!(result.head_txid, txid, "the abandoned txid is reused");
+
+			assert_eq!(
+				database_db.get_pages(vec![1]).await?,
+				vec![fetched_page(1, 0xb1)],
+				"the replacement delta must remain decodable"
+			);
+			assert_eq!(
+				read_value(&db, branch_commit_stage_key(branch_id, txid)).await?,
+				None,
+				"publishing the replacement must consume the abandoned stage row"
+			);
+			assert_eq!(
+				read_prefix_keys(&db, branch_delta_chunk_prefix(branch_id, txid))
+					.await?
+					.len(),
+				1,
+				"the shorter replacement must not retain the abandoned blob's tail chunks"
+			);
+			// Replay the same two commits on a database that never staged anything. A partial refund
+			// would still pass a strictly-less check, so the usage has to match the clean run exactly.
+			let control_db = ctx.make_db(test_bucket(), CONTROL_DATABASE);
+			control_db.commit(vec![page(1, 0x01)], 4, 1_000).await?;
+			control_db
+				.commit_with_options(
+					vec![page(1, 0xb1)],
+					4,
+					2_000,
+					CommitOptions {
+						expected_head_txid: Some(1),
+						..Default::default()
+					},
+				)
+				.await?;
+			assert_eq!(
+				read_quota(&db).await?,
+				read_database_quota(&db, CONTROL_DATABASE).await?,
+				"the abandoned chunks' recorded quota must be refunded exactly"
+			);
+
+			Ok(())
+		}
+	)
+}
+
+/// The whole abandoned stage is cleared, not only the rows a replacement overwrites. A segment
+/// covering pages the single-shot commit never writes would otherwise survive whole and be published
+/// as part of it. Its pages decode cleanly, so nothing fails loudly: the history walk and compaction
+/// would serve the dead attempt's bytes as the replacement's.
+#[tokio::test]
+async fn abandoned_stage_segment_the_replacement_does_not_touch_is_not_published() -> Result<()> {
+	commit_matrix!(
+		"depot-staged-commit-untouched-orphan-segment",
+		|ctx, db, database_db| {
+			let _ = &ctx;
+			database_db
+				.commit(
+					vec![page(1, 0x01), page(SHARD_SIZE + 1, 0x41)],
+					SHARD_SIZE + 1,
+					1_000,
+				)
+				.await?;
+			let txid = database_db.commit_stage_begin(0, Some(1)).await?;
+			database_db
+				.commit_stage_segment(0, txid, SHARD_SIZE, vec![page(SHARD_SIZE + 1, 0xa1)])
+				.await?;
+			let branch_id = read_branch_id(&db).await?;
+			let orphan_segment = branch_delta_segment_prefix(branch_id, txid, SHARD_SIZE);
+			assert!(
+				!read_prefix_keys(&db, orphan_segment.clone())
+					.await?
+					.is_empty(),
+				"the abandoned segment must exist before the replacement for this regression"
+			);
+
+			let result = database_db
+				.commit_with_options(
+					vec![page(1, 0xb1)],
+					SHARD_SIZE + 1,
+					2_000,
+					CommitOptions {
+						expected_head_txid: Some(1),
+						..Default::default()
+					},
+				)
+				.await?;
+			assert_eq!(result.head_txid, txid, "the abandoned txid is reused");
+
+			assert!(
+				read_prefix_keys(&db, orphan_segment).await?.is_empty(),
+				"a segment the replacement never wrote must not be published as part of it"
+			);
+			assert_eq!(
+				database_db.get_pages(vec![1, SHARD_SIZE + 1]).await?,
+				vec![fetched_page(1, 0xb1), fetched_page(SHARD_SIZE + 1, 0x41)]
+			);
+
+			Ok(())
+		}
+	)
 }
 
 /// Finalize verifies the segments it was told about. A client that lost a stage reply and finalized

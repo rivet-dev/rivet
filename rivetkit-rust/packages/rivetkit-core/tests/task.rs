@@ -2516,6 +2516,14 @@ pub(crate) mod moved_tests {
 
 	#[tokio::test]
 	async fn failed_manual_startup_does_not_durably_mark_initialized() {
+		struct RuntimeDrop(Arc<AtomicBool>);
+
+		impl Drop for RuntimeDrop {
+			fn drop(&mut self) {
+				self.0.store(true, Ordering::SeqCst);
+			}
+		}
+
 		let kv = new_in_memory();
 		let ctx = new_with_kv(
 			"actor-manual-startup-fail",
@@ -2524,10 +2532,18 @@ pub(crate) mod moved_tests {
 			"local",
 			kv.clone(),
 		);
+		// Production envoy does not process actor-local messages until its startup
+		// callback returns. Keep this receiver idle to reproduce that ordering.
+		let (startup_envoy, mut startup_envoy_rx) = test_envoy_handle();
+		ctx.configure_envoy(startup_envoy, Some(1));
+		let runtime_dropped = Arc::new(AtomicBool::new(false));
+		let factory_runtime_dropped = runtime_dropped.clone();
 		let factory = Arc::new(ActorFactory::new_with_manual_startup_ready(
 			Default::default(),
 			move |mut start| {
+				let runtime_dropped = factory_runtime_dropped.clone();
 				Box::pin(async move {
+					let _runtime_drop = RuntimeDrop(runtime_dropped);
 					start.ctx.set_state_initial(vec![1, 2, 3]);
 					start
 						.startup_ready
@@ -2535,20 +2551,50 @@ pub(crate) mod moved_tests {
 						.expect("manual runtime should receive startup ready sender")
 						.send(Err(anyhow::anyhow!("onCreate failed")))
 						.expect("startup ready receiver should exist");
-					Err(anyhow::anyhow!("onCreate failed"))
+					std::future::pending::<anyhow::Result<()>>().await
 				})
 			},
 		));
 		let mut task = new_task_with_factory(ctx.clone(), factory);
 		let (start_tx, start_rx) = oneshot::channel();
 
-		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
-			.await;
+		timeout(
+			Duration::from_secs(1),
+			task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx }),
+		)
+		.await
+		.expect("failed startup cleanup must not wait for the envoy actor loop");
 		start_rx
 			.await
 			.expect("start reply should send")
 			.expect_err("start should fail");
+		assert!(
+			ctx.actor_aborted(),
+			"failed startup must revoke the actor context before replying"
+		);
+		assert!(
+			runtime_dropped.load(Ordering::SeqCst),
+			"failed startup must stop the runtime before replying"
+		);
+		let sqlite_error = ctx
+			.sql()
+			.execute("SELECT 1", None)
+			.await
+			.expect_err("failed startup must close SQLite before replying");
+		assert_eq!(
+			rivet_error::RivetError::extract(&sqlite_error).code(),
+			"transaction_closed"
+		);
+		assert!(task.run_handle.is_none());
+		assert_eq!(task.lifecycle, LifecycleState::Terminated);
 		assert!(maybe_load_persisted_actor(&ctx).await.is_none());
+		assert!(matches!(
+			startup_envoy_rx.try_recv(),
+			Ok(ToEnvoyMessage::SetAlarm {
+				ack_tx: Some(_),
+				..
+			})
+		));
 
 		let retry_ctx = new_with_kv(
 			"actor-manual-startup-fail",

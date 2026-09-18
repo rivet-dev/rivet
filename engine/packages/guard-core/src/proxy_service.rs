@@ -356,7 +356,7 @@ impl ProxyService {
 	}
 
 	/// Process an individual request.
-	#[tracing::instrument(name = "guard_request", skip_all, fields(ray_id, req_id, uri=%req.uri()))]
+	#[tracing::instrument(name = "guard_request", skip_all, fields(ray_id, req_id, uri=%utils::redact_uri_for_logs(req.uri())))]
 	pub async fn process(&self, mut req: Request<BodyIncoming>) -> Result<Response<ResponseBody>> {
 		let start_time = Instant::now();
 
@@ -454,7 +454,7 @@ impl ProxyService {
 			ray_id=?req_ctx.ray_id,
 			req_id=?req_ctx.req_id,
 			method=%req_ctx.method,
-			path=%req_ctx.path,
+			path=%req_ctx.path_for_logs(),
 			host=%req_ctx.host,
 			remote_addr=%req_ctx.remote_addr,
 			uri=%uri_string,
@@ -670,7 +670,7 @@ impl ProxyService {
 
 			// Add Vary header to prevent cache poisoning when echoing origin
 			if cors.allow_origin != "*" {
-				headers.insert("vary", HeaderValue::from_static("Origin"));
+				headers.append("vary", HeaderValue::from_static("Origin"));
 			}
 		}
 
@@ -1074,7 +1074,7 @@ impl ProxyService {
 		}
 
 		// Handle WebSocket upgrade properly with hyper_tungstenite
-		tracing::debug!(path=%req_ctx.path, "Upgrading client connection to WebSocket");
+		tracing::debug!(path=%req_ctx.path_for_logs(), "Upgrading client connection to WebSocket");
 		let (client_response, client_ws) = match hyper_tungstenite::upgrade(
 			req,
 			Some(websocket_config(self.state.config.guard())),
@@ -1706,7 +1706,7 @@ impl ProxyService {
 				);
 			}
 			ResolveRouteOutput::CustomServe(mut handler) => {
-				tracing::debug!(path=%req_ctx.path, "Spawning task to handle WebSocket communication");
+				tracing::debug!(path=%req_ctx.path_for_logs(), "Spawning task to handle WebSocket communication");
 				let state = self.state.clone();
 				let mut req_ctx = req_ctx.clone();
 

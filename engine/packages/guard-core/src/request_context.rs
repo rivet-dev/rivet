@@ -106,6 +106,11 @@ impl RequestContext {
 		&self.path
 	}
 
+	/// The request path and query string with credential query parameter values redacted.
+	pub fn path_for_logs(&self) -> String {
+		crate::utils::redact_path_for_logs(&self.path)
+	}
+
 	pub fn method(&self) -> &Method {
 		&self.method
 	}

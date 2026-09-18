@@ -1,9 +1,24 @@
 import { App } from "@modelcontextprotocol/ext-apps";
-import { useEffect, useState } from "react";
+import {
+	faDownLeftAndUpRightToCenter,
+	faUpRightAndDownLeftFromCenter,
+	Icon,
+} from "@rivet-gg/icons";
+import * as Sentry from "@sentry/react";
+import { useCallback, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import type { ActorId } from "@/components/actors/queries";
+import { WithTooltip } from "@/components/ui/tooltip";
 import "@/index.css";
+import {
+	describeFailure,
+	failureSummary,
+	type InspectorFailure,
+	toolResultError,
+} from "./mcp-error";
+import { McpErrorPanel } from "./mcp-error-panel";
 import { InspectorApp } from "./main";
+import { initMcpTelemetry, readMcpAppTelemetry } from "./telemetry";
 
 type ActorTarget =
 	| { actorId: string }
@@ -27,10 +42,12 @@ type InspectorGrant = {
 	dashboardUrl?: string;
 };
 
+// Passing options replaces the SDK default `{ autoResize: true }`, so the
+// resize notifications have to be re-enabled explicitly here.
 const app = new App(
 	{ name: "Rivet Actor Inspector", version: "0.1.0" },
-	{},
-	{ strict: true },
+	{ availableDisplayModes: ["inline", "fullscreen"] },
+	{ strict: true, autoResize: true },
 );
 
 let currentActor: ActorTarget | undefined;
@@ -38,14 +55,15 @@ let currentGrant: InspectorGrant | undefined;
 
 function structuredGrant(
 	result: Awaited<ReturnType<typeof app.callServerTool>>,
+	fallback: string,
 ): InspectorGrant {
 	if (result.isError || !result.structuredContent) {
-		throw new Error("Could not create the temporary Inspector session");
+		throw toolResultError(result, fallback);
 	}
 	const value = result.structuredContent as Record<string, unknown>;
 	for (const key of ["token", "proxyUrl", "expiresAt", "actorId"] as const) {
 		if (typeof value[key] !== "string")
-			throw new Error("Invalid Inspector session response");
+			throw new Error("The Inspector session response was malformed");
 	}
 	return value as InspectorGrant;
 }
@@ -56,6 +74,7 @@ async function createSession(actor: ActorTarget): Promise<InspectorGrant> {
 			name: "rivet.ui.actor.session.create",
 			arguments: { actor },
 		}),
+		"The temporary Inspector session could not be created",
 	);
 }
 
@@ -65,6 +84,7 @@ async function renewSession(token: string): Promise<InspectorGrant> {
 			name: "rivet.ui.actor.session.renew",
 			arguments: { token },
 		}),
+		"The temporary Inspector session could not be renewed",
 	);
 }
 
@@ -88,16 +108,57 @@ function replaceSession(actor: ActorTarget): Promise<InspectorGrant> {
 		const superseded = currentGrant;
 		const next = await createSession(actor);
 		currentGrant = next;
-		if (superseded) await revokeSession(superseded.token).catch(() => {});
+		if (superseded)
+			await revokeSession(superseded.token).catch((error) =>
+				Sentry.captureException(error),
+			);
 		return next;
 	});
 	sessionSwap = swap.catch(() => {});
 	return swap;
 }
 
+// Reporting the degraded state costs no turn, so the model can explain the
+// panel if the user asks about it without the app forcing a reply.
+function reportFailure(failure: InspectorFailure) {
+	if (!app.getHostCapabilities()?.updateModelContext) return;
+	void app
+		.updateModelContext({
+			content: [{ type: "text", text: failureSummary(failure) }],
+		})
+		.catch(() => {});
+}
+
 function McpInspector() {
 	const [grant, setGrant] = useState<InspectorGrant>();
-	const [error, setError] = useState<string>();
+	const [failure, setFailure] = useState<InspectorFailure>();
+	const [retrying, setRetrying] = useState(false);
+	const [asked, setAsked] = useState(false);
+	const [displayMode, setDisplayMode] = useState<"inline" | "fullscreen">(
+		"inline",
+	);
+
+	const fail = useCallback((error: unknown, title: string) => {
+		Sentry.captureException(error);
+		const described = describeFailure(error, title);
+		setFailure(described);
+		setAsked(false);
+		reportFailure(described);
+	}, []);
+
+	const openSession = useCallback(
+		(actor: ActorTarget, title: string) => {
+			setRetrying(true);
+			void replaceSession(actor)
+				.then((next) => {
+					setGrant(next);
+					setFailure(undefined);
+				})
+				.catch((error) => fail(error, title))
+				.finally(() => setRetrying(false));
+		},
+		[fail],
+	);
 
 	useEffect(() => {
 		const receiveInput = (params: {
@@ -109,11 +170,7 @@ function McpInspector() {
 		};
 		const receiveResult = () => {
 			if (!currentActor) return;
-			void replaceSession(currentActor)
-				.then(setGrant)
-				.catch(() =>
-					setError("Could not authenticate the embedded Inspector."),
-				);
+			openSession(currentActor, "Could not open the Inspector");
 		};
 		app.addEventListener("toolinput", receiveInput);
 		app.addEventListener("toolresult", receiveResult);
@@ -129,14 +186,14 @@ function McpInspector() {
 		};
 		void app
 			.connect()
-			.catch(() =>
-				setError("This host could not initialize the MCP App."),
+			.catch((error) =>
+				fail(error, "This host could not start the MCP App"),
 			);
 		return () => {
 			app.removeEventListener("toolinput", receiveInput);
 			app.removeEventListener("toolresult", receiveResult);
 		};
-	}, []);
+	}, [fail, openSession]);
 
 	useEffect(() => {
 		if (!grant) return;
@@ -150,24 +207,67 @@ function McpInspector() {
 					currentGrant = next;
 					setGrant(next);
 				})
-				.catch(() =>
-					setError(
-						"The Inspector session expired. Reopen the Inspector to continue.",
-					),
-				);
+				.catch((error) => fail(error, "The Inspector session expired"));
 		}, renewAt);
 		return () => window.clearTimeout(timer);
-	}, [grant]);
+	}, [grant, fail]);
 
-	if (error) return <p className="p-4 text-sm text-destructive">{error}</p>;
+	const retry = useCallback(() => {
+		if (!currentActor) return;
+		openSession(currentActor, "Could not reopen the Inspector");
+	}, [openSession]);
+
+	const ask = useCallback(() => {
+		if (!failure) return;
+		setAsked(true);
+		void app
+			.sendMessage({
+				role: "user",
+				content: [
+					{
+						type: "text",
+						text: `${failureSummary(failure)}\n\nWhat should I do to get the Inspector working?`,
+					},
+				],
+			})
+			.catch(() => setAsked(false));
+	}, [failure]);
+
+	const toggleDisplayMode = useCallback(() => {
+		const next = displayMode === "fullscreen" ? "inline" : "fullscreen";
+		void app
+			.requestDisplayMode({ mode: next })
+			.then((result) =>
+				setDisplayMode(
+					result.mode === "fullscreen" ? "fullscreen" : "inline",
+				),
+			)
+			.catch((error) => Sentry.captureException(error));
+	}, [displayMode]);
+
+	if (failure)
+		return (
+			<McpErrorPanel
+				failure={failure}
+				retrying={retrying}
+				onRetry={
+					failure.recoverable && currentActor ? retry : undefined
+				}
+				onAsk={app.getHostCapabilities()?.message ? ask : undefined}
+				asked={asked}
+			/>
+		);
 	if (!grant)
 		return (
-			<p className="p-4 text-sm text-muted-foreground">
-				Connecting to the Rivet Actor Inspector…
-			</p>
+			<div className="flex h-full min-h-0 items-center justify-center p-6">
+				<p className="text-sm text-muted-foreground">
+					Connecting to the Rivet Actor Inspector…
+				</p>
+			</div>
 		);
+	const expanded = displayMode === "fullscreen";
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<div className="flex h-full min-h-[38rem] flex-col">
 			{grant.dashboardUrl ? (
 				<div className="shrink-0 border-b px-3 py-2 text-xs text-muted-foreground">
 					Console and custom tabs are available in the{" "}
@@ -193,6 +293,30 @@ function McpInspector() {
 					}}
 					activeTab={undefined}
 					standalone
+					toolbar={
+						<WithTooltip
+							content={expanded ? "Collapse" : "Expand"}
+							trigger={
+								<button
+									type="button"
+									aria-label={
+										expanded ? "Collapse" : "Expand"
+									}
+									className="rounded px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+									onClick={toggleDisplayMode}
+								>
+									<Icon
+										icon={
+											expanded
+												? faDownLeftAndUpRightToCenter
+												: faUpRightAndDownLeftFromCenter
+										}
+										className="size-3.5"
+									/>
+								</button>
+							}
+						/>
+					}
 				/>
 			</div>
 		</div>
@@ -201,4 +325,11 @@ function McpInspector() {
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Inspector UI: #root element missing");
-ReactDOM.createRoot(root).render(<McpInspector />);
+const reactRoot = ReactDOM.createRoot(root);
+void initMcpTelemetry(readMcpAppTelemetry()).then((TelemetryProvider) => {
+	reactRoot.render(
+		<TelemetryProvider>
+			<McpInspector />
+		</TelemetryProvider>,
+	);
+});

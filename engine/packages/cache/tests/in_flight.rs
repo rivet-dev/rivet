@@ -359,3 +359,70 @@ async fn timeout_falls_back_to_getter() {
 		"both getters should be called: task1 held the lease, task2 timed out and fetched itself"
 	);
 }
+
+/// Cancelling the request that owns an in-flight lease must release the lease so
+/// a later request can fetch the same key immediately.
+#[tokio::test(flavor = "multi_thread")]
+async fn cancelled_owner_releases_lease() {
+	let cache = build_cache();
+	let call_count = Arc::new(AtomicUsize::new(0));
+	let getter_started = Arc::new(tokio::sync::Notify::new());
+	let getter_release = Arc::new(tokio::sync::Notify::new());
+
+	let cache1 = cache.clone();
+	let count1 = call_count.clone();
+	let started1 = getter_started.clone();
+	let release1 = getter_release.clone();
+	let owner = tokio::spawn(async move {
+		cache1
+			.request()
+			.fetch_one_json(
+				"cancelled_owner",
+				"key1",
+				move |mut ctx: rivet_cache::GetterCtx<&str, String>, key| {
+					let count = count1.clone();
+					let started = started1.clone();
+					let release = release1.clone();
+					async move {
+						count.fetch_add(1, Ordering::SeqCst);
+						started.notify_one();
+						release.notified().await;
+						ctx.resolve(&key, "owner_value".to_string());
+						Ok(ctx)
+					}
+				},
+			)
+			.await
+	});
+
+	getter_started.notified().await;
+	owner.abort();
+	assert!(owner.await.unwrap_err().is_cancelled());
+
+	let count2 = call_count.clone();
+	let result = tokio::time::timeout(
+		Duration::from_millis(500),
+		cache.request().fetch_one_json(
+			"cancelled_owner",
+			"key1",
+			move |mut ctx: rivet_cache::GetterCtx<&str, String>, key| {
+				let count = count2.clone();
+				async move {
+					count.fetch_add(1, Ordering::SeqCst);
+					ctx.resolve(&key, "replacement_value".to_string());
+					Ok(ctx)
+				}
+			},
+		),
+	)
+	.await
+	.expect("replacement request remained blocked on the cancelled owner's lease")
+	.unwrap();
+
+	assert_eq!(result, Some("replacement_value".to_string()));
+	assert_eq!(
+		call_count.load(Ordering::SeqCst),
+		2,
+		"the replacement request should run its getter after owner cancellation"
+	);
+}

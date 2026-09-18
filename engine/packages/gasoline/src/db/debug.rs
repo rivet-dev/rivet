@@ -47,6 +47,13 @@ pub trait DatabaseDebug: Database {
 		dry_run: bool,
 	) -> Result<usize>;
 
+	/// Lists workflows in the dead index that match the names and error substrings. Read only.
+	async fn list_dead_workflows(
+		&self,
+		names: &[&str],
+		error_like: &[&str],
+	) -> Result<Vec<DeadWorkflow>>;
+
 	async fn backfill_dead_workflows(
 		&self,
 		limit: usize,
@@ -180,6 +187,30 @@ pub enum RepairVariant {
 	/// than one run wrote into this loop. It says the history is untrustworthy but not which run
 	/// was right.
 	IterationTimestampInversion,
+	/// `pegboard_actor2` died with `unreachable: ConsensusFailed { .. }`.
+	///
+	/// An older binary recorded a `propose` output the current code treats as unreachable, so every
+	/// replay bails on that recorded output rather than on anything happening now. Clears the
+	/// `propose` so the next wake runs it again against the current epoxy state.
+	///
+	/// Reports manual required when the `propose` is not the last recorded event, because the
+	/// replay cursor is index based and clearing an earlier event shifts every event after it.
+	ProposeConsensusFailed,
+	/// `pegboard_actor2` died with `activity reserve_actor_key failed, max retries reached: invalid
+	/// type: null, expected struct State`.
+	///
+	/// `insert_state_and_db` completed, so replay never runs it again, but the workflow's state key
+	/// is absent, so every later activity that reads state fails. Rebuilds the state exactly as
+	/// `State::new` would from that activity's recorded input, then clears the failed
+	/// `reserve_actor_key` so it runs again with a fresh retry budget. Nothing is re-run, so
+	/// nothing the init activity counted is counted twice.
+	///
+	/// Restricted to a history that is still in actor creation, because state is not recorded in
+	/// history and only the init activity's value can be rebuilt exactly. A `from_v1` actor takes
+	/// its `create_ts` from the pegboard actor key rather than from the activity input, so that key
+	/// is read the same way the activity read it, and the repair reports manual required only when
+	/// it is missing.
+	MissingInitState,
 }
 
 /// Whether `wf repair` may apply a variant on its own.
@@ -203,13 +234,20 @@ impl RepairVariant {
 		RepairVariant::DuplicateIterationHistory,
 		RepairVariant::LoopIterationMismatch,
 		RepairVariant::IterationTimestampInversion,
+		RepairVariant::ProposeConsensusFailed,
+		RepairVariant::MissingInitState,
 	];
 
+	/// The mode a variant runs in by default. An inspection can downgrade an automatic repair to
+	/// manual when the defect is recognizable but a precondition makes writing unsafe, so read
+	/// `RepairInspection::mode` rather than this when reporting a specific workflow.
 	pub fn mode(&self) -> RepairMode {
 		match self {
 			RepairVariant::DeallocateSetError
 			| RepairVariant::OrphanedSleepState
-			| RepairVariant::LoopIterationMismatch => RepairMode::Automatic,
+			| RepairVariant::LoopIterationMismatch
+			| RepairVariant::ProposeConsensusFailed
+			| RepairVariant::MissingInitState => RepairMode::Automatic,
 			RepairVariant::SleepStateMismatch
 			| RepairVariant::DuplicateIterationHistory
 			| RepairVariant::IterationTimestampInversion => RepairMode::ManualOnly,
@@ -228,6 +266,8 @@ impl std::fmt::Display for RepairVariant {
 			RepairVariant::IterationTimestampInversion => {
 				write!(f, "iteration-timestamp-inversion")
 			}
+			RepairVariant::ProposeConsensusFailed => write!(f, "propose-consensus-failed"),
+			RepairVariant::MissingInitState => write!(f, "missing-init-state"),
 		}
 	}
 }
@@ -239,6 +279,10 @@ pub struct RepairInspection {
 	pub workflow_name: Option<String>,
 	pub workflow_error: Option<String>,
 	pub state: RepairState,
+	/// Whether this workflow's repair can be applied automatically. Usually the variant's own mode,
+	/// but an inspection downgrades it to `ManualOnly` when the defect is recognizable and the
+	/// remedy is not safe to write without a human reading the history.
+	pub mode: RepairMode,
 	/// Location the repair reads or writes. Must be passed back to `verify_workflow_repair`,
 	/// because after a successful repair the persisted error no longer identifies it.
 	pub location: Option<Location>,
@@ -340,6 +384,18 @@ pub struct WorkflowData {
 	pub output: Option<serde_json::Value>,
 	pub error: Option<String>,
 	pub state: WorkflowState,
+	/// When the workflow died. Only set while it is dead, and missing for workflows that died
+	/// before this was recorded.
+	pub death_ts: Option<i64>,
+}
+
+/// A workflow entry in the dead index.
+#[derive(Debug)]
+pub struct DeadWorkflow {
+	pub workflow_id: Id,
+	pub workflow_name: String,
+	/// The error the workflow died with, as recorded in the dead index.
+	pub error: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

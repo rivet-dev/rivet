@@ -63,6 +63,13 @@ ARG VITE_FEATURE_FLAGS=""
 ARG VITE_APP_TURNSTILE_SITE_KEY=""
 ARG DEPLOYMENT_TYPE="staging"
 
+# Source maps are generated and uploaded only when the auth token is present.
+# Railway exposes service variables to a Dockerfile build only through ARG.
+ARG SENTRY_AUTH_TOKEN=""
+ARG SENTRY_PROJECT=""
+ARG RAILWAY_GIT_BRANCH=""
+ARG RAILWAY_GIT_COMMIT_SHA=""
+
 ENV VITE_APP_API_URL=${VITE_APP_API_URL}
 ENV VITE_APP_CLOUD_API_URL=${VITE_APP_CLOUD_API_URL}
 ENV VITE_APP_ASSETS_URL=${VITE_APP_ASSETS_URL}
@@ -76,9 +83,23 @@ ENV VITE_APP_SENTRY_ENV=${DEPLOYMENT_TYPE}
 ENV VITE_DEPLOYMENT_TYPE=${DEPLOYMENT_TYPE}
 ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
 ENV VITE_APP_SENTRY_TUNNEL="/tunnel"
+ENV SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN}
+ENV SENTRY_PROJECT=${SENTRY_PROJECT}
+ENV RAILWAY_GIT_BRANCH=${RAILWAY_GIT_BRANCH}
+ENV RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}
 
 RUN --mount=type=cache,id=s/47975eb7-74fd-4043-a505-62b995ff5718-turbo,target=/app/.turbo \
     npx turbo run build --filter=@rivetkit/engine-frontend
+
+# Turbo only forwards env vars declared on the task, and the source map upload
+# degrades to a silent no-op when it drops them. Fail the build instead of
+# shipping a bundle whose stack traces never symbolicate.
+RUN if [ -n "$SENTRY_AUTH_TOKEN" ]; then \
+        grep -rq "sentry-dbid-" frontend/dist || { \
+            echo "error: no Sentry debug IDs in the bundle; check the SENTRY_* env declared on build in frontend/turbo.json"; \
+            exit 1; \
+        }; \
+    fi
 
 FROM caddy:alpine
 

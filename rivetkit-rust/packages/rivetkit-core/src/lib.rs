@@ -22,6 +22,8 @@ pub mod serverless_http;
 mod services_process;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod tokio_runtime_metrics;
 pub(crate) mod time {
 	use std::fmt;
 	use std::future::Future;

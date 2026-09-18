@@ -8,9 +8,8 @@ export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project",
 )({
 	component: RouteComponent,
-	beforeLoad: ({ params, context }) => {
-		recordRecentVisit(RECENT_PROJECTS_KEY, params.project);
-		return match(context)
+	context: ({ context, params }) =>
+		match(context)
 			.with({ __type: "cloud" }, (context) => ({
 				dataProvider: context.getOrCreateProjectContext(
 					context.dataProvider,
@@ -20,7 +19,9 @@ export const Route = createFileRoute(
 			}))
 			.otherwise(() => {
 				throw new Error("Invalid context type for this route");
-			});
+			}),
+	beforeLoad: ({ params }) => {
+		recordRecentVisit(RECENT_PROJECTS_KEY, params.project);
 	},
 	loader: ({ context }) => ({ dataProvider: context.dataProvider }),
 	errorComponent: RouteError,

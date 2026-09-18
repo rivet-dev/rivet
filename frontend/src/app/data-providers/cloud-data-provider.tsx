@@ -692,6 +692,8 @@ export const createOrganizationContext = ({
 			},
 			getNextPageParam: (lastPage) => lastPage.pagination.cursor,
 			select: (data) => data.pages.flatMap((page) => page.regions),
+			// Operators report heartbeats every 5s, so keep region rows live.
+			refetchInterval: 5_000,
 		});
 
 	const clusterCommandsQueryOptions = (opts: {

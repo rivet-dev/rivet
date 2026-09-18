@@ -946,9 +946,7 @@ pub fn record_reclaim_fdb(start: Instant, result: &Result<ReclaimFdbJobOutput>) 
 		result,
 		|output| &output.status,
 		|output| output.throttled,
-		// The v1 delete executes a slice the planner already admitted, so it has no admission gate of
-		// its own.
-		|_| false,
+		|output| output.admission_blocked,
 	);
 	record_compaction_pass(PASS_RECLAIM_FDB, start, label);
 	if let Ok(output) = result {

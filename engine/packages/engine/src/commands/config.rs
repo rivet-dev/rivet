@@ -18,6 +18,11 @@ pub enum SubCommand {
 
 #[derive(Parser)]
 pub enum UpdateSubCommand {
+	/// Maximum bytes of FoundationDB storage a single SQLite database may occupy
+	MaxStorageBytes {
+		/// Omit to revert to the value in the config file
+		bytes: Option<u64>,
+	},
 	/// Percentage (0-100) of database branches admitted to run compaction
 	CompactionAdmissionPercent {
 		/// Omit to revert to the value in the config file
@@ -99,6 +104,33 @@ pub enum UpdateSubCommand {
 		/// Omit to revert to the value in the config file
 		util: Option<f64>,
 	},
+	/// Worker pull interval in milliseconds
+	WorkerPollIntervalMs {
+		/// Omit to revert to the value in the config file
+		milliseconds: Option<u64>,
+	},
+	/// Maximum wake keys read per workflow name in one pull. Pass "default" as the workflow name
+	/// to apply to all workflow names.
+	WorkerMaxWakeKeysPerWorkflowNamePerPull {
+		workflow_name: String,
+		/// Omit to revert to the value in the config file
+		max: Option<usize>,
+	},
+	/// Maximum unique workflows retained after wake-key deduplication in one pull
+	WorkerMaxDedupedWorkflowsPerPull {
+		/// Omit to revert to the value in the config file
+		max: Option<usize>,
+	},
+	/// Maximum assigned workflow candidates attempted in one pull
+	WorkerMaxWorkflowsPerPull {
+		/// Omit to revert to the value in the config file
+		max: Option<usize>,
+	},
+	/// Maximum wake-condition keys eligible for clearing in one pull
+	WorkerMaxWakeConditionClearsPerPull {
+		/// Omit to revert to the value in the config file
+		max: Option<usize>,
+	},
 	/// Maximum concurrently running workflows of one workflow name for the entire cluster
 	WorkerMaxConcurrentWorkflows {
 		workflow_name: String,
@@ -122,6 +154,57 @@ impl SubCommand {
 impl UpdateSubCommand {
 	pub async fn execute(self, config: rivet_config::Config) -> Result<()> {
 		let (update, property, value) = match self {
+			Self::WorkerPollIntervalMs { milliseconds } => (
+				DynamicConfigUpdate {
+					worker_poll_interval_ms: Some(milliseconds),
+					..DynamicConfigUpdate::default()
+				},
+				"runtime.worker_poll_interval_ms".to_string(),
+				milliseconds.map(|value| value.to_string()),
+			),
+			Self::WorkerMaxWakeKeysPerWorkflowNamePerPull { workflow_name, max } => (
+				DynamicConfigUpdate {
+					worker_max_wake_keys_per_workflow_name_per_pull: Some(HashMap::from([(
+						workflow_name.clone(),
+						max,
+					)])),
+					..DynamicConfigUpdate::default()
+				},
+				format!("runtime.worker_max_wake_keys_per_workflow_name_per_pull.{workflow_name}"),
+				max.map(|value| value.to_string()),
+			),
+			Self::WorkerMaxDedupedWorkflowsPerPull { max } => (
+				DynamicConfigUpdate {
+					worker_max_deduped_workflows_per_pull: Some(max),
+					..DynamicConfigUpdate::default()
+				},
+				"runtime.worker_max_deduped_workflows_per_pull".to_string(),
+				max.map(|value| value.to_string()),
+			),
+			Self::WorkerMaxWorkflowsPerPull { max } => (
+				DynamicConfigUpdate {
+					worker_max_workflows_per_pull: Some(max),
+					..DynamicConfigUpdate::default()
+				},
+				"runtime.worker_max_workflows_per_pull".to_string(),
+				max.map(|value| value.to_string()),
+			),
+			Self::WorkerMaxWakeConditionClearsPerPull { max } => (
+				DynamicConfigUpdate {
+					worker_max_wake_condition_clears_per_pull: Some(max),
+					..DynamicConfigUpdate::default()
+				},
+				"runtime.worker_max_wake_condition_clears_per_pull".to_string(),
+				max.map(|value| value.to_string()),
+			),
+			Self::MaxStorageBytes { bytes } => (
+				DynamicConfigUpdate {
+					max_storage_bytes: Some(bytes),
+					..DynamicConfigUpdate::default()
+				},
+				"sqlite.max_storage_bytes".to_string(),
+				bytes.map(|bytes| bytes.to_string()),
+			),
 			Self::CompactionAdmissionPercent { percent } => (
 				DynamicConfigUpdate {
 					compaction_admission_percent: Some(percent),

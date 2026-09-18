@@ -370,6 +370,7 @@ impl SqliteTransport for DirectDepotTransport {
 		&self,
 		request: protocol::SqliteCommitStageSegmentRequest,
 	) -> Result<protocol::SqliteCommitStageSegmentResponse> {
+		let first_pgno = request.first_pgno;
 		let dirty_pages = request
 			.dirty_pages
 			.into_iter()
@@ -385,11 +386,20 @@ impl SqliteTransport for DirectDepotTransport {
 			)
 			.await
 		{
-			Ok(staged_bytes) => Ok(
-				protocol::SqliteCommitStageSegmentResponse::SqliteCommitStageSegmentOk(
-					protocol::SqliteCommitStageSegmentOk { staged_bytes },
-				),
-			),
+			Ok(staged_bytes) => {
+				if self
+					.storage
+					.hooks
+					.take_stage_segment_response_loss(first_pgno)
+				{
+					anyhow::bail!("InjectedTransportError: staged segment response lost");
+				}
+				Ok(
+					protocol::SqliteCommitStageSegmentResponse::SqliteCommitStageSegmentOk(
+						protocol::SqliteCommitStageSegmentOk { staged_bytes },
+					),
+				)
+			}
 			Err(err) => Ok(
 				protocol::SqliteCommitStageSegmentResponse::SqliteErrorResponse(
 					sqlite_error_response(&err),
@@ -538,6 +548,7 @@ pub(crate) struct DirectTransportHooks {
 	fail_next_commit_after_apply: Mutex<Option<String>>,
 	fail_next_get_pages: Mutex<Option<String>>,
 	hang_next_commit: Mutex<bool>,
+	lose_stage_segment_response_at: Mutex<Option<u32>>,
 	pause_next_commit: Mutex<Option<DirectCommitGate>>,
 	get_pages_requests: Mutex<Vec<protocol::SqliteGetPagesRequest>>,
 	commit_requests: Mutex<Vec<protocol::SqliteCommitRequest>>,
@@ -558,6 +569,28 @@ impl DirectTransportHooks {
 
 	pub(crate) fn hang_next_commit(&self) {
 		*self.hang_next_commit.lock() = true;
+	}
+
+	/// Lets the next staged segment starting at `first_pgno` land in storage, then fails the call as
+	/// if its response had been lost. The stage is left abandoned at `head + 1`.
+	pub(crate) fn lose_stage_segment_response_at(&self, first_pgno: u32) {
+		*self.lose_stage_segment_response_at.lock() = Some(first_pgno);
+	}
+
+	/// Whether an armed lost segment response has not fired yet, so a test can prove its workload
+	/// actually reached the staged path.
+	pub(crate) fn stage_segment_response_loss_pending(&self) -> bool {
+		self.lose_stage_segment_response_at.lock().is_some()
+	}
+
+	fn take_stage_segment_response_loss(&self, first_pgno: u32) -> bool {
+		let mut target = self.lose_stage_segment_response_at.lock();
+		if *target == Some(first_pgno) {
+			*target = None;
+			true
+		} else {
+			false
+		}
 	}
 
 	pub(crate) fn commit_requests(

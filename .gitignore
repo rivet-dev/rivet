@@ -113,3 +113,7 @@ container-runner/examples/unity-demo/packages-lock.json
 container-runner/examples/unity-demo/*.csproj
 container-runner/examples/unity-demo/*.sln
 container-runner/examples/unity-demo/.vsconfig
+
+# Python bytecode caches.
+__pycache__/
+*.pyc

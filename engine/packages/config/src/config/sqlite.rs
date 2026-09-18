@@ -18,6 +18,16 @@ pub const DEPOT_ACTOR_THROTTLE: &str = "depot_actor";
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Sqlite {
+	/// Maximum bytes of FoundationDB storage a single SQLite database may occupy, counting its
+	/// live shards, its unfolded delta history, and its page index. A commit whose projected usage
+	/// exceeds this is refused with `depot.quota_exceeded` rather than partially applied.
+	///
+	/// Defaults to 10 GiB. Burst mode raises the effective cap for a branch whose cold drain has
+	/// fallen behind, so peak usage can exceed this by that multiplier before a commit is refused.
+	/// Raising it lets existing databases keep growing immediately; lowering it does not delete
+	/// anything, it only refuses further growth on databases already above the new value.
+	#[serde(default)]
+	pub max_storage_bytes: Option<u64>,
 	#[serde(default)]
 	pub unstable_disable_commit_size_cap: Option<bool>,
 	/// UNSTABLE: disables SQLite hot compaction.
@@ -194,6 +204,11 @@ pub struct Sqlite {
 }
 
 impl Sqlite {
+	pub fn max_storage_bytes(&self) -> i64 {
+		let bytes = self.max_storage_bytes.unwrap_or(10 * 1024 * 1024 * 1024);
+		i64::try_from(bytes).unwrap_or(i64::MAX)
+	}
+
 	pub fn unstable_disable_commit_size_cap(&self) -> bool {
 		self.unstable_disable_commit_size_cap.unwrap_or_default()
 	}
@@ -305,6 +320,10 @@ impl Sqlite {
 
 		// A zero budget stalls compaction outright rather than meaning "unlimited". Throttle hard
 		// with a small value instead.
+		if self.max_storage_bytes() <= 0 {
+			bail!("sqlite.max_storage_bytes must be greater than 0");
+		}
+
 		if self.compaction_write_bytes_per_second() == 0 {
 			bail!("sqlite.compaction_write_bytes_per_second must be greater than 0");
 		}

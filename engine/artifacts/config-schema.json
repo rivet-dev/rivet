@@ -163,8 +163,11 @@
         "worker_load_shedding_beta": null,
         "worker_load_shedding_curve": null,
         "worker_max_concurrent_workflows": null,
+        "worker_max_deduped_workflows_per_pull": null,
         "worker_max_wake_condition_clears_per_pull": null,
+        "worker_max_wake_keys_per_workflow_name_per_pull": null,
         "worker_max_workflows_per_pull": null,
+        "worker_poll_interval_ms": null,
         "worker_shutdown_duration": null
       },
       "allOf": [
@@ -1764,8 +1767,8 @@
             "minimum": 0.0
           }
         },
-        "worker_max_wake_condition_clears_per_pull": {
-          "description": "Maximum wake condition keys a worker clears when leasing workflows in a single pull. Defaults to 10000.",
+        "worker_max_deduped_workflows_per_pull": {
+          "description": "Maximum deduplicated workflows considered in a single pull. Defaults to 10000.",
           "type": [
             "integer",
             "null"
@@ -1773,13 +1776,42 @@
           "format": "uint",
           "minimum": 0.0
         },
-        "worker_max_workflows_per_pull": {
-          "description": "Maximum workflows a worker attempts to lease in a single pull. Defaults to 1000.",
+        "worker_max_wake_condition_clears_per_pull": {
           "type": [
             "integer",
             "null"
           ],
           "format": "uint",
+          "minimum": 0.0
+        },
+        "worker_max_wake_keys_per_workflow_name_per_pull": {
+          "description": "Maximum wake condition keys read per workflow name in a single pull. Defaults to 20000, or 5000 for the depot compaction workflows. Set the \"default\" key to apply to all workflow names.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        "worker_max_workflows_per_pull": {
+          "description": "Maximum wake condition keys a worker clears when leasing workflows in a single pull. Defaults to 40000. Maximum workflows a worker attempts to lease in a single pull. Defaults to 1000.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "worker_poll_interval_ms": {
+          "description": "Poll interval for pulling workflows and deciding whether a short sleep stays in memory. Unit is in milliseconds. Defaults to 16000.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
           "minimum": 0.0
         },
         "worker_shutdown_duration": {
@@ -1947,6 +1979,16 @@
             "null"
           ],
           "format": "int64"
+        },
+        "max_storage_bytes": {
+          "description": "Maximum bytes of FoundationDB storage a single SQLite database may occupy, counting its live shards, its unfolded delta history, and its page index. A commit whose projected usage exceeds this is refused with `depot.quota_exceeded` rather than partially applied.\n\nDefaults to 10 GiB. Burst mode raises the effective cap for a branch whose cold drain has fallen behind, so peak usage can exceed this by that multiplier before a commit is refused. Raising it lets existing databases keep growing immediately; lowering it does not delete anything, it only refuses further growth on databases already above the new value.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "pitr": {
           "description": "Point-in-time recovery. Absent disables PITR entirely: hot compaction selects no interval coverage txids, writes no `PITR_INTERVAL` rows, and ignores any stored bucket or database policy override. Present enables it cluster-wide with the settings below.\n\nPITR is off by default because each retained coverage position pins a complete shard image per touched shard, so the retained shard versions scale with `retention_ms / interval_ms`. Turning it on is a deliberate trade of FoundationDB footprint for restorable positions.",

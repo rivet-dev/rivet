@@ -1744,10 +1744,11 @@ name = "epoxy-protocol"
 version = "2.3.17"
 dependencies = [
  "anyhow",
- "rivet-vbare-compiler",
  "serde",
  "serde_bare",
+ "serde_bytes",
  "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -2856,6 +2857,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "indicatif"
+version = "0.17.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "183b3088984b400f4cfac3620d5e076c84da5364016b4f49473de574b2586235"
+dependencies = [
+ "console",
+ "number_prefix",
+ "portable-atomic",
+ "unicode-width",
+ "web-time",
+]
+
+[[package]]
 name = "indoc"
 version = "2.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3664,6 +3678,12 @@ checksum = "5c7398b9c8b70908f6371f47ed36737907c87c52af34c268fed0bf0ceb92ead9"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "number_prefix"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "objc2-core-foundation"
@@ -5057,10 +5077,11 @@ name = "rivet-actor-runtime-socket-protocol"
 version = "2.3.17"
 dependencies = [
  "anyhow",
- "rivet-vbare-compiler",
  "serde",
  "serde_bare",
+ "serde_bytes",
  "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -5386,6 +5407,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum",
+ "tokio",
  "tracing",
  "url",
  "uuid",
@@ -5429,10 +5451,11 @@ dependencies = [
  "anyhow",
  "gasoline",
  "rivet-runner-protocol",
- "rivet-vbare-compiler",
  "serde",
  "serde_bare",
+ "serde_bytes",
  "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -5473,10 +5496,10 @@ name = "rivet-depot-protocol"
 version = "2.3.17"
 dependencies = [
  "anyhow",
- "rivet-vbare-compiler",
  "serde",
  "serde_bare",
  "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -5551,7 +5574,6 @@ dependencies = [
  "rivet-test-deps",
  "rivet-test-envoy",
  "rivet-types",
- "rivet-ups-broadcast",
  "rivet-util",
  "rivet-version-management",
  "rivet-workflow-worker",
@@ -5627,12 +5649,13 @@ dependencies = [
  "anyhow",
  "hex",
  "rand 0.8.5",
- "rivet-vbare-compiler",
  "serde",
  "serde_bare",
+ "serde_bytes",
  "utoipa",
  "uuid",
  "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -5903,12 +5926,13 @@ dependencies = [
  "hex",
  "rand 0.8.5",
  "rivet-util",
- "rivet-vbare-compiler",
  "serde",
  "serde_bare",
+ "serde_bytes",
  "utoipa",
  "uuid",
  "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -5974,6 +5998,7 @@ version = "2.3.17"
 dependencies = [
  "console",
  "derive_builder 0.12.0",
+ "indicatif",
  "tabled",
  "term_size",
  "thiserror 1.0.69",
@@ -6063,29 +6088,11 @@ name = "rivet-universaldb-commit"
 version = "2.3.17"
 dependencies = [
  "anyhow",
- "rivet-vbare-compiler",
  "serde",
  "serde_bare",
+ "serde_bytes",
  "vbare",
-]
-
-[[package]]
-name = "rivet-ups-broadcast"
-version = "2.3.17"
-dependencies = [
- "anyhow",
- "futures-util",
- "gasoline",
- "namespace",
- "rivet-cache",
- "rivet-config",
- "rivet-pools",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "universaldb",
- "universalpubsub",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -6094,10 +6101,11 @@ version = "2.3.17"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
- "rivet-vbare-compiler",
  "serde",
  "serde_bare",
+ "serde_bytes",
  "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -6147,33 +6155,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "rivet-vbare-compiler"
-version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6486e81acac7e63b432b63132eb55696cd07ab982dee8845768720d099d8f54f"
-dependencies = [
- "indoc",
- "prettyplease",
- "rivet-vbare-gen",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "rivet-vbare-gen"
-version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd4070bf7508533980a812761f8b743cb4747b5e540c3635719e1a9181bd6000"
-dependencies = [
- "heck 0.5.0",
- "pest",
- "pest_derive",
- "proc-macro2",
- "quote",
- "serde",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -6245,10 +6226,11 @@ name = "rivetkit-actor-persist"
 version = "2.3.17"
 dependencies = [
  "anyhow",
- "rivet-vbare-compiler",
  "serde",
  "serde_bare",
+ "serde_bytes",
  "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -6286,10 +6268,11 @@ name = "rivetkit-client-protocol"
 version = "2.3.17"
 dependencies = [
  "anyhow",
- "rivet-vbare-compiler",
  "serde",
  "serde_bare",
+ "serde_bytes",
  "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -6373,10 +6356,11 @@ name = "rivetkit-inspector-protocol"
 version = "2.3.17"
 dependencies = [
  "anyhow",
- "rivet-vbare-compiler",
  "serde",
  "serde_bare",
+ "serde_bytes",
  "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -8575,6 +8559,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51a63d4c173f6a6f7c8f524dcdda615e51f83d12bca9cc129f676229b995ca41"
 dependencies = [
  "anyhow",
+]
+
+[[package]]
+name = "vbare-compiler"
+version = "0.0.4"
+source = "git+https://github.com/rivet-dev/vbare?branch=main#d4febc1a7db7ea5eb2a7e6c145c4e59b8f4837d9"
+dependencies = [
+ "indoc",
+ "prettyplease",
+ "syn 2.0.117",
+ "vbare-gen",
+]
+
+[[package]]
+name = "vbare-gen"
+version = "0.0.4"
+source = "git+https://github.com/rivet-dev/vbare?branch=main#d4febc1a7db7ea5eb2a7e6c145c4e59b8f4837d9"
+dependencies = [
+ "heck 0.5.0",
+ "pest",
+ "pest_derive",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 2.0.117",
 ]
 
 [[package]]

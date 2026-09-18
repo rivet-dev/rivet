@@ -4,7 +4,16 @@
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
-			"env": ["VITE_APP_*", "VITE_FEATURE_FLAGS", "VITE_DEPLOYMENT_TYPE", "BASE_URL"],
+			"env": [
+				"VITE_APP_*",
+				"VITE_FEATURE_FLAGS",
+				"VITE_DEPLOYMENT_TYPE",
+				"BASE_URL",
+				"SENTRY_PROJECT",
+				"RAILWAY_GIT_BRANCH",
+				"RAILWAY_GIT_COMMIT_SHA"
+			],
+			"passThroughEnv": ["SENTRY_AUTH_TOKEN"],
 			"outputs": ["dist/**"]
 		},
 		"dev": {

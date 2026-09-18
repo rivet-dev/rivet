@@ -573,8 +573,12 @@ impl ActorTask {
 		match command {
 			LifecycleCommand::Start { reply } => {
 				let result = self.start_actor().await;
+				let failed = result.is_err();
+				if failed {
+					self.finish_failed_startup().await;
+				}
 				self.reply_lifecycle_command(command_kind, reason, reply, result);
-				None
+				failed.then_some(LiveExit::Terminated)
 			}
 			LifecycleCommand::Stop { reason, reply } => {
 				self.begin_stop(
@@ -1798,6 +1802,37 @@ impl ActorTask {
 		}
 		self.ctx.record_shutdown_wait(reason, started_at.elapsed());
 		result
+	}
+
+	async fn finish_failed_startup(&mut self) {
+		self.ctx.cancel_actor_abort_signal();
+		self.ctx.cancel_sleep_timer();
+		self.ctx.suspend_alarm_dispatch();
+		self.ctx.cancel_local_alarm_timeouts();
+		self.ctx.set_local_alarm_callback(None);
+		self.ctx.configure_lifecycle_events(None);
+		self.close_actor_event_channel();
+		if let Some(run_handle) = self.run_handle.as_mut() {
+			run_handle.abort();
+		}
+		self.join_aborted_run_handle().await;
+		// Failed startup has no grace period. Treat it as an elapsed shutdown
+		// deadline so abortable waitUntil/registered work cannot hold teardown.
+		self.ctx.mark_shutdown_deadline_reached();
+		self.ctx.teardown_sleep_state().await;
+		self.ctx.wait_for_pending_state_writes().await;
+		self.ctx.abandon_pending_alarm_writes();
+		#[cfg(feature = "sqlite-local")]
+		self.ctx.shutdown_actor_runtime_socket().await;
+		if let Err(error) = self.ctx.sql().close_and_wait().await {
+			tracing::error!(
+				actor_id = %self.ctx.actor_id(),
+				?error,
+				"actor resource cleanup failed after startup failure",
+			);
+		}
+		trim_native_allocator_after_shutdown(self.ctx.actor_id(), "startup_failed");
+		self.transition_to(LifecycleState::Terminated);
 	}
 
 	async fn save_final_state(&mut self) -> Result<()> {

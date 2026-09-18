@@ -127,7 +127,8 @@ docker-compose up -d
 - Rule of thumb: sync setup → `context()` + `useRouteContext`. Async setup → `beforeLoad` (for child route access) + `loader` return + `useLoaderData` (for component access).
 
 ### Data providers (convention)
-- Every route that owns a data provider sets it up in `context()` (sync) or `beforeLoad` (async) AND re-exports it from `loader` as `{ dataProvider: context.dataProvider }`. All consumer hooks in `src/components/actors/data-provider.tsx` read via `useLoaderData`. Do not read data providers via `useRouteContext` — `match.context` is a snapshot taken at match creation time and does not include `beforeLoad` results.
+- Every route that owns a data provider sets it up in `context()` (sync) or `beforeLoad` (async, only when the provider needs fetched data) AND re-exports it from `loader` as `{ dataProvider: context.dataProvider }`. All consumer hooks live in `src/components/actors/data-provider.tsx`.
+- Consumer hooks read `match.loaderData?.dataProvider ?? match.context.dataProvider` via `useMatch`. Routes run with `pendingMs: 0`, so a param change (org/project/namespace switch) swaps in a pending match whose `loaderData` is undefined while chrome above the route keeps rendering; loader-data-only reads crash there. The context fallback is only valid for providers built in `context()`. For a `beforeLoad`-built provider `match.context` still holds the parent scope's provider, so those hooks read loader data only and callers gate on a readiness check.
 
 ## Dependency Management
 

@@ -1,3 +1,9 @@
+use std::time::Duration;
+
+use futures_util::TryStreamExt;
+use universaldb::options::StreamingMode;
+use universaldb::utils::IsolationLevel::Serializable;
+
 use super::super::common;
 
 // MARK: Basic get-or-create tests
@@ -745,6 +751,121 @@ fn get_or_create_with_destroyed_actor() {
 			assert_ne!(
 				response2.actor.actor_id, first_actor_id,
 				"Should be a different actor ID"
+			);
+		},
+	);
+}
+
+// MARK: Key index growth
+
+/// Counts the `ActorByKeyKey` entries that exist under one actor key.
+async fn count_actor_by_key_entries(
+	dc: &common::TestDatacenter,
+	namespace_id: rivet_util::Id,
+	name: &str,
+	key: &str,
+) -> usize {
+	let name = name.to_string();
+	let key = key.to_string();
+	let name = &name;
+	let key = &key;
+
+	dc.workflow_ctx
+		.udb()
+		.expect("failed to get udb")
+		.txn("test_count_actor_by_key_entries", |tx| async move {
+			let tx = tx.with_subspace(pegboard::keys::subspace());
+			let actor_subspace =
+				pegboard::keys::subspace().subspace(&pegboard::keys::ns::ActorByKeyKey::subspace(
+					namespace_id,
+					name.clone(),
+					key.clone(),
+				));
+
+			let mut stream = tx.get_ranges_keyvalues(
+				universaldb::RangeOption {
+					mode: StreamingMode::WantAll,
+					..(&actor_subspace).into()
+				},
+				Serializable,
+			);
+
+			let mut count = 0;
+			while stream.try_next().await?.is_some() {
+				count += 1;
+			}
+
+			Ok(count)
+		})
+		.await
+		.expect("failed to count actor key index entries")
+}
+
+/// An actor that loses the key reservation race destroys itself, and it must not leave an index
+/// entry behind for a key it never owned. Those entries are permanent and every later lookup for
+/// the key has to read past them, so a losing candidate that writes one makes the key more
+/// expensive to resolve forever.
+#[test]
+fn get_or_create_race_leaves_one_key_index_entry() {
+	common::run(
+		common::TestOpts::new(1).with_timeout(60),
+		|ctx| async move {
+			let (namespace, namespace_id, _runner) =
+				common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+
+			let actor_name = "test-actor";
+			let actor_key = "index-growth-key";
+			let port = ctx.leader_dc().guard_port();
+
+			// Every request but one loses the reservation and destroys itself.
+			let mut handles = Vec::new();
+			for _ in 0..10 {
+				let namespace_clone = namespace.clone();
+				handles.push(tokio::spawn(async move {
+					common::api::public::actors_get_or_create(
+						port,
+						common::api::public::GetOrCreateQuery {
+							namespace: namespace_clone,
+						},
+						common::api::public::GetOrCreateRequest {
+							datacenter: None,
+							name: actor_name.to_string(),
+							key: actor_key.to_string(),
+							input: None,
+							runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
+							crash_policy: rivet_types::actors::CrashPolicy::Sleep,
+						},
+					)
+					.await
+				}));
+			}
+
+			for handle in handles {
+				// A losing request can surface as an error, which is not what this test asserts.
+				let _ = handle.await.expect("task panicked");
+			}
+
+			// The losers destroy themselves asynchronously after their request returns, so the
+			// index only settles once those workflows finish. Poll rather than sleeping a fixed
+			// amount so a slow machine does not decide the result.
+			let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+			let mut count =
+				count_actor_by_key_entries(ctx.leader_dc(), namespace_id, actor_name, actor_key)
+					.await;
+			while count != 1 && tokio::time::Instant::now() < deadline {
+				tokio::time::sleep(Duration::from_millis(250)).await;
+				count = count_actor_by_key_entries(
+					ctx.leader_dc(),
+					namespace_id,
+					actor_name,
+					actor_key,
+				)
+				.await;
+			}
+
+			assert_eq!(
+				count, 1,
+				"only the actor that reserved the key should have an index entry",
 			);
 		},
 	);

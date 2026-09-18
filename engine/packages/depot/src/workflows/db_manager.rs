@@ -778,10 +778,21 @@ pub(super) fn manager_effects_after_refresh(
 				bypass_admission: forced.hot,
 			});
 		}
-		// Staging cleanup shares the reclaim slot but is deliberately not gated on the admission
-		// percent. It is pure-delete work that frees space rather than consuming it, and a queued job
-		// id lives nowhere else, so gating it would strand a de-admitted branch's staging for as long
-		// as the percent stayed down. Only the ordinary reclaim scan is gated.
+		// Staging cleanup shares the reclaim slot and is gated on the admission percent like every
+		// other lane, so setting the percent to zero stops all compaction work on the branch rather
+		// than all of it except this.
+		//
+		// Cleanup is pure-delete work, but it is not free: it reads every staged chunk row back to
+		// validate it against its ref before clearing it, so it spends read and write budget in
+		// proportion to the staged volume. On a de-admitted branch it was the only lane still
+		// running, which left it the whole compaction budget to itself.
+		//
+		// Nothing is stranded by holding it. The queue is not drained here, so it stays intact for
+		// the next admitted wake, and `schedule_next_wake` arms the idle poll whenever cleanups are
+		// queued and undispatched. Even a queue lost to a restart is rebuilt, because the refresh
+		// activity's staging orphan scan re-derives the job ids from FDB and `record_orphan_stage_jobs`
+		// re-queues them.
+		let cleanup_admitted = refresh.compaction_admitted || forced.reclaim;
 		if state.active_jobs.reclaim.is_none() {
 			// Dispatch on any wake that finds work, not only on a reclaim-timer wake. Hot dispatch
 			// is driven by `triggers.hot`, which is just `signal_received`, so hot runs on every
@@ -816,7 +827,7 @@ pub(super) fn manager_effects_after_refresh(
 			// the staging scan indefinitely, and unconditional priority would let that one job stop
 			// commit, delta, and cold-object reclaim on the branch for good.
 			let cleanup_yields = planned_reclaim.is_some() && state.last_reclaim_slot_was_cleanup;
-			if !state.pending_cleanups.is_empty() && !cleanup_yields {
+			if cleanup_admitted && !state.pending_cleanups.is_empty() && !cleanup_yields {
 				effects.push(ManagerEffect::DispatchPendingCleanups);
 			} else if let Some(active_job) = planned_reclaim {
 				effects.push(ManagerEffect::RunReclaimJob {

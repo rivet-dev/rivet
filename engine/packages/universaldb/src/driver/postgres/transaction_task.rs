@@ -34,6 +34,7 @@ pub enum TransactionCommand {
 		end_or_equal: bool,
 		end_offset: i32,
 		limit: Option<usize>,
+		target_bytes: usize,
 		reverse: bool,
 		response: oneshot::Sender<Result<Values>>,
 	},
@@ -136,6 +137,7 @@ impl TransactionTask {
 							end_or_equal,
 							end_offset,
 							limit,
+							target_bytes,
 							reverse,
 							response,
 						} => {
@@ -149,6 +151,7 @@ impl TransactionTask {
 									end_or_equal,
 									end_offset,
 									limit,
+									target_bytes,
 									reverse,
 								)
 								.await;
@@ -267,6 +270,7 @@ async fn handle_get_range(
 	end_or_equal: bool,
 	end_offset: i32,
 	limit: Option<usize>,
+	target_bytes: usize,
 	reverse: bool,
 ) -> Result<Values> {
 	// Determine SQL operators based on key selector types
@@ -282,44 +286,54 @@ async fn handle_get_range(
 		"<"
 	};
 
-	let query = if reverse {
-		if let Some(limit) = limit {
-			format!(
-				"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key DESC LIMIT {limit}"
-			)
-		} else {
-			format!(
-				"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key DESC"
-			)
-		}
-	} else if let Some(limit) = limit {
-		format!(
-			"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key LIMIT {limit}"
-		)
-	} else {
-		format!(
-			"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key"
-		)
+	let direction = if reverse { " DESC" } else { "" };
+
+	// Ask for one row past the limit so a full result set can be told apart from one that happens to
+	// end exactly on the limit. The extra row is dropped below and only sets `more`.
+	let sql_limit = limit.map(|limit| limit.saturating_add(1));
+	let limit_clause = match sql_limit {
+		Some(sql_limit) => format!(" LIMIT {sql_limit}"),
+		None => String::new(),
 	};
+
+	let query = format!(
+		"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key{direction}{limit_clause}"
+	);
 
 	let stmt = tx
 		.prepare_cached(&query)
 		.await
 		.map_err(map_postgres_error)?;
 
-	tx.query(&stmt, &[&begin_key, &end_key])
+	let rows = tx
+		.query(&stmt, &[&begin_key, &end_key])
 		.await
-		.map(|rows| {
-			rows.into_iter()
-				.map(|row| {
-					let key: Vec<u8> = row.get(0);
-					let value: Vec<u8> = row.get(1);
-					KeyValue::new(key, value)
-				})
-				.collect()
-		})
-		.map(Values::new)
-		.map_err(map_postgres_error)
+		.map_err(map_postgres_error)?;
+
+	// Postgres materializes the whole result set rather than streaming it, so the row limit above is
+	// what bounds this fetch. The byte budget is applied on top of it for parity with the other
+	// drivers: without it the same range read would chunk differently per backend.
+	let mut results: Vec<KeyValue> = Vec::with_capacity(rows.len());
+	let mut bytes = 0usize;
+	let mut more = false;
+
+	for row in rows {
+		if limit.is_some_and(|limit| results.len() >= limit)
+			|| (!results.is_empty() && target_bytes != 0 && bytes >= target_bytes)
+		{
+			more = true;
+			break;
+		}
+
+		let key: Vec<u8> = row.get(0);
+		let value: Vec<u8> = row.get(1);
+		bytes += key.len() + value.len();
+		results.push(KeyValue::new(key, value));
+	}
+
+	let last_db_key = results.last().map(|kv| kv.key().to_vec());
+
+	Ok(Values::chunk(results, more, last_db_key))
 }
 
 async fn handle_get_estimated_range_size(

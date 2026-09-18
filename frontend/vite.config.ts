@@ -8,8 +8,8 @@ import { commonEnvSchema } from "./src/lib/env";
 import { baseViteConfig } from "./vite.base.config";
 
 // These are only needed in CI. They'll be undefined in dev.
-const GIT_BRANCH = process.env.CF_PAGES_BRANCH;
-const GIT_SHA = process.env.CF_PAGES_COMMIT_SHA;
+const GIT_BRANCH = process.env.RAILWAY_GIT_BRANCH;
+const GIT_SHA = process.env.RAILWAY_GIT_COMMIT_SHA;
 
 const getVariantForMode = (mode: string) => {
 	switch (mode) {
@@ -59,14 +59,26 @@ export default defineConfig(({ mode }) => {
 			react(),
 			env.SENTRY_AUTH_TOKEN
 				? sentryVitePlugin({
-					org: "rivet-gaming",
-					project: env.SENTRY_PROJECT,
-					authToken: env.SENTRY_AUTH_TOKEN,
-					release:
-						GIT_BRANCH === "main"
-							? { name: GIT_SHA }
-							: undefined,
-				})
+						org: "rivet-gaming",
+						project: env.SENTRY_PROJECT,
+						authToken: env.SENTRY_AUTH_TOKEN,
+						release:
+							GIT_BRANCH === "main"
+								? { name: GIT_SHA }
+								: undefined,
+						// The plugin logs upload failures and lets the build
+						// succeed, which ships a bundle whose stack traces never
+						// symbolicate. Build without a token to opt out entirely.
+						errorHandler: (error) => {
+							throw error;
+						},
+						sourcemaps: {
+							// Caddy serves everything under dist/, so maps left
+							// behind are public. Debug IDs in the bundle are what
+							// Sentry matches on, not the served maps.
+							filesToDeleteAfterUpload: ["./dist/**/*.map"],
+						},
+					})
 				: null,
 			favigo({
 				source: "./public/favicon.svg",

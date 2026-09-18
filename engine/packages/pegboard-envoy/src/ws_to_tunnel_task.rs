@@ -34,7 +34,6 @@ use tokio::{
 	task::JoinSet,
 };
 use universaldb::prelude::*;
-use universaldb::utils::end_of_key_range;
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
@@ -821,12 +820,30 @@ async fn dispatch_message(
 			task_manager
 				.enqueue_remote_sqlite(key, actor_remote_sqlite_task::Message::ExecuteBatch(req))?;
 		}
-		protocol::ToRivet::ToRivetTunnelMessage(tunnel_msg) => {
-			let inner_data_len = tunnel_message_inner_data_len(&tunnel_msg.message_kind);
-			if inner_data_len > ctx.config().pegboard().envoy_max_response_payload_size() {
-				return Err(
-					errors::WsError::InvalidPacket("payload too large".to_string()).build(),
+		protocol::ToRivet::ToRivetTunnelMessage(mut tunnel_msg) => {
+			let payload_size = tunnel_message_inner_data_len(&tunnel_msg.message_kind);
+			let max_payload_size = ctx.config().pegboard().envoy_max_response_payload_size();
+			if payload_size > max_payload_size {
+				let message_kind = tunnel_message_kind_name(&tunnel_msg.message_kind);
+				tracing::warn!(
+					namespace_id = %conn.namespace_id,
+					pool_name = %conn.pool_name,
+					envoy_key = %conn.envoy_key,
+					protocol_version = conn.protocol_version,
+					gateway_id = %tunnel_message_task::display_id(
+						&tunnel_msg.message_id.gateway_id
+					),
+					request_id = %tunnel_message_task::display_id(
+						&tunnel_msg.message_id.request_id
+					),
+					message_index = tunnel_msg.message_id.message_index,
+					message_kind,
+					payload_size,
+					max_payload_size,
+					"rejecting oversized decoded tunnel payload without closing envoy connection"
 				);
+
+				replace_oversized_payload_with_terminal_message(&mut tunnel_msg.message_kind);
 			}
 			let key = tunnel_message_task::Key::new(
 				tunnel_msg.message_id.gateway_id,
@@ -1317,15 +1334,19 @@ pub(super) async fn ack_commands(
 						checkpoint.generation,
 					),
 				);
-				let end = end_of_key_range(&tx.pack(
-					&pegboard::keys::envoy::ActorCommandKey::subspace_with_index(
-						namespace_id,
-						envoy_key.to_string(),
-						Id::parse(&checkpoint.actor_id)?,
-						checkpoint.generation,
-						checkpoint.index,
-					),
-				));
+				// The end of the acked index's subspace covers its chunks as well as a legacy
+				// unchunked value stored at the bare key.
+				let (_, end) = pegboard::keys::subspace()
+					.subspace(
+						&pegboard::keys::envoy::ActorCommandKey::subspace_with_index(
+							namespace_id,
+							envoy_key.to_string(),
+							Id::parse(&checkpoint.actor_id)?,
+							checkpoint.generation,
+							checkpoint.index,
+						),
+					)
+					.range();
 				tx.clear_range(&start, &end);
 			}
 
@@ -1432,11 +1453,6 @@ pub(super) async fn handle_tunnel_message(
 				])
 				.observe(start.elapsed().as_secs_f64());
 		}
-	}
-
-	// Enforce incoming payload size
-	if inner_data_len > ctx.config().pegboard().envoy_max_response_payload_size() {
-		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
 	}
 
 	// if !authorized_tunnel_routes
@@ -1567,6 +1583,39 @@ fn tunnel_message_kind_name(kind: &protocol::ToRivetTunnelMessageKind) -> &'stat
 		ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_) => "ToRivetWebSocketMessageAck",
 		ToRivetTunnelMessageKind::ToRivetWebSocketClose(_) => "ToRivetWebSocketClose",
 	}
+}
+
+fn replace_oversized_payload_with_terminal_message(kind: &mut protocol::ToRivetTunnelMessageKind) {
+	let terminal_message = match kind {
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(_)
+		| protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(_)
+		| protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(_) => {
+			protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(
+				protocol::ToRivetResponseAbort {
+					reason: protocol::HttpStreamAbortReason {
+						kind: protocol::HttpStreamAbortReasonKind::InternalError,
+						detail: Some("actor response payload exceeds the maximum size".to_string()),
+					},
+				},
+			)
+		}
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(_) => {
+			protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
+				protocol::ToRivetWebSocketClose {
+					code: Some(1009),
+					reason: Some("actor WebSocket message exceeds the maximum size".to_string()),
+					hibernate: false,
+				},
+			)
+		}
+		protocol::ToRivetTunnelMessageKind::ToRivetRequestBodyWindowUpdate(_)
+		| protocol::ToRivetTunnelMessageKind::ToRivetRequestBodyCancel
+		| protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
+		| protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_)
+		| protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(_) => return,
+	};
+
+	*kind = terminal_message;
 }
 
 async fn handle_sqlite_get_pages(
@@ -2112,25 +2161,23 @@ async fn validate_remote_sqlite_generation(
 							generation,
 						),
 					);
-					let mut command_entries = tx.get_ranges_keyvalues(
-						RangeOption {
-							mode: StreamingMode::WantAll,
-							..(&command_subspace).into()
-						},
-						Serializable,
-					);
-					let mut has_pending_start_command = false;
-					while let Some(entry) = command_entries.try_next().await? {
-						let (_, command) =
-							tx.read_entry::<pegboard::keys::envoy::ActorCommandKey>(&entry)?;
-						match command {
-							protocol::ActorCommandKeyData::CommandStartActor(_) => {
-								has_pending_start_command = true;
-								break;
-							}
-							protocol::ActorCommandKeyData::CommandStopActor(_) => {}
-						}
-					}
+					let command_entries = tx
+						.get_ranges_keyvalues(
+							RangeOption {
+								mode: StreamingMode::WantAll,
+								..(&command_subspace).into()
+							},
+							Serializable,
+						)
+						.try_collect::<Vec<_>>()
+						.await?;
+					let has_pending_start_command =
+						pegboard::keys::envoy::decode_actor_commands(&tx, command_entries)?
+							.into_iter()
+							.any(|(_, command)| match command {
+								protocol::ActorCommandKeyData::CommandStartActor(_) => true,
+								protocol::ActorCommandKeyData::CommandStopActor(_) => false,
+							});
 
 					Ok((active_generation, has_pending_start_command))
 				}
@@ -2336,18 +2383,17 @@ fn protocol_column_value(value: ColumnValue) -> protocol::SqliteColumnValue {
 
 async fn actor_db(ctx: &StandaloneCtx, conn: &Conn, actor_id: String) -> Result<Arc<Db>> {
 	let compaction_disabled = ctx.config().sqlite().unstable_disable_compaction();
+	let config = ctx.config().clone();
 	let db = conn
 		.actor_dbs
 		.entry_async(actor_id.clone())
 		.await
 		.or_insert_with(|| {
 			if compaction_disabled {
-				return Arc::new(Db::new(
-					conn.udb.clone(),
-					conn.namespace_id,
-					actor_id,
-					conn.node_id,
-				));
+				return Arc::new(
+					Db::new(conn.udb.clone(), conn.namespace_id, actor_id, conn.node_id)
+						.with_config(config),
+				);
 			}
 
 			let ctx = ctx.clone();
@@ -2375,13 +2421,16 @@ async fn actor_db(ctx: &StandaloneCtx, conn: &Conn, actor_id: String) -> Result<
 				.boxed()
 			});
 
-			Arc::new(Db::new_with_compaction_signaler(
-				conn.udb.clone(),
-				conn.namespace_id,
-				actor_id,
-				conn.node_id,
-				compaction_signaler,
-			))
+			Arc::new(
+				Db::new_with_compaction_signaler(
+					conn.udb.clone(),
+					conn.namespace_id,
+					actor_id,
+					conn.node_id,
+					compaction_signaler,
+				)
+				.with_config(config),
+			)
 		})
 		.get()
 		.clone();

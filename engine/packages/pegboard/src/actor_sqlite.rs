@@ -81,6 +81,7 @@ pub struct MigrateV1ToV2Output {
 
 pub async fn migrate_v1_to_v2(
 	db: universaldb::Database,
+	config: rivet_config::Config,
 	input: MigrateV1ToV2Input,
 ) -> Result<MigrateV1ToV2Output> {
 	let recipient = Recipient {
@@ -89,12 +90,16 @@ pub async fn migrate_v1_to_v2(
 		name: input.name,
 	};
 
-	let migrated = maybe_migrate_v1_to_v2(&db, &recipient).await?;
+	let migrated = maybe_migrate_v1_to_v2(&db, &config, &recipient).await?;
 
 	Ok(MigrateV1ToV2Output { migrated })
 }
 
-async fn maybe_migrate_v1_to_v2(db: &universaldb::Database, recipient: &Recipient) -> Result<bool> {
+async fn maybe_migrate_v1_to_v2(
+	db: &universaldb::Database,
+	config: &rivet_config::Config,
+	recipient: &Recipient,
+) -> Result<bool> {
 	if !crate::actor_kv::sqlite_v1_data_exists(db, recipient.actor_id).await? {
 		return Ok(false);
 	}
@@ -139,7 +144,8 @@ async fn maybe_migrate_v1_to_v2(db: &universaldb::Database, recipient: &Recipien
 		recipient.namespace_id,
 		actor_id.clone(),
 		NodeId::new(),
-	);
+	)
+	.with_config(config.clone());
 
 	// The marker is written before the first commit so that a crash part way
 	// through the import is always recognizable as an unfinished import rather

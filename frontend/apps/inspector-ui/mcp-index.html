@@ -4,6 +4,14 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Rivet Actor Inspector</title>
+		<style>
+			html,
+			body,
+			#root {
+				height: 100%;
+				margin: 0;
+			}
+		</style>
 		<script>
 			// MCP hosts may frame this app with `sandbox="allow-scripts"` and no
 			// `allow-same-origin`, which makes every `Window.localStorage` read throw
@@ -52,6 +60,8 @@
 	</head>
 	<body>
 		<div id="root"></div>
+		<!-- Rewritten by the MCP server that serves this bundle. -->
+		<script type="application/json" id="RIVET_MCP_CONFIG">null</script>
 		<script type="module" src="/src/mcp-main.tsx"></script>
 	</body>
 </html>

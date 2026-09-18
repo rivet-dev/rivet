@@ -39,7 +39,6 @@ rivet-dynamic-config.workspace = true
 rivet-guard.workspace = true
 rivet-logs.workspace = true
 rivet-profiling.workspace = true
-rivet-ups-broadcast.workspace = true
 rivet-pools.workspace = true
 rivet-runtime.workspace = true
 rivet-service-manager.workspace = true

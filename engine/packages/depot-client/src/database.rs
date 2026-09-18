@@ -13,7 +13,10 @@ use crate::{
 		SqliteVfsMetricsSnapshot, VfsConfig, VfsPreloadHintSnapshot,
 		fetch_initial_pages_for_registration,
 	},
-	worker::{SqliteWorkerFatalError, SqliteWorkerHandle, SqliteWorkerResult},
+	worker::{
+		SqliteWorkerCloseTimeoutError, SqliteWorkerFatalError, SqliteWorkerHandle,
+		SqliteWorkerResult,
+	},
 };
 
 #[derive(Clone)]
@@ -281,8 +284,28 @@ impl NativeDatabaseHandle {
 	}
 
 	pub async fn close(&self) -> Result<()> {
-		match self.worker.close().await {
+		self.map_worker_close_result(self.worker.close().await)
+	}
+
+	/// Closes the database without returning while its worker still owns SQLite.
+	/// Any returned error is reported only after the worker thread has terminated.
+	pub async fn close_and_wait(&self) -> Result<()> {
+		self.map_worker_close_result(self.worker.close_and_wait().await)
+	}
+
+	fn map_worker_close_result(&self, result: Result<()>) -> Result<()> {
+		match result {
 			Ok(()) => Ok(()),
+			// The caller uses this concrete outcome to retain the native handle for
+			// a later strict join. Never hide it behind a previously recorded VFS
+			// failure while the worker may still own SQLite.
+			Err(error)
+				if error
+					.downcast_ref::<SqliteWorkerCloseTimeoutError>()
+					.is_some() =>
+			{
+				Err(error)
+			}
 			Err(error) => Err(self.fatal_error().unwrap_or(error)),
 		}
 	}

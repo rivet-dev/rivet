@@ -4,8 +4,11 @@
 //! Nothing staged is readable. A staged segment writes only its DELTA chunk rows, so there is no
 //! PIDX row pointing at the txid, no COMMIT row, and head has not moved. Readers resolve pages
 //! through PIDX and never see a txid above head, which makes a half-staged commit indistinguishable
-//! from no commit at all. That is what lets an abandoned stage be a space leak rather than a
-//! correctness problem.
+//! from no commit at all.
+//!
+//! That holds only until something else claims the txid. An abandoned stage's rows sit at
+//! `head + 1`, which is exactly the txid the next commit publishes, so every path that hands out or
+//! publishes that txid has to call [`clear_abandoned_commit_stage`] first.
 
 use std::collections::BTreeSet;
 
@@ -28,14 +31,43 @@ use crate::conveyer::{
 	ltx::{LtxHeader, encode_ltx_v3},
 	quota,
 	types::{
-		CommitStageRow, DBHead, DirtyPage, STAGED_SEGMENT_SPAN_PAGES, StagedSegment,
-		decode_commit_stage_row, decode_compaction_root, decode_db_head, encode_commit_stage_row,
+		CommitStageRow, DBHead, DatabaseBranchId, DirtyPage, STAGED_SEGMENT_SPAN_PAGES,
+		StagedSegment, decode_commit_stage_row, decode_compaction_root, decode_db_head,
+		encode_commit_stage_row,
 	},
 	udb,
 };
 use crate::{burst_mode, conveyer::types::CommitResult, metrics};
 
 use universaldb::utils::IsolationLevel::Serializable;
+
+/// Clears what an abandoned staged commit left at `txid` and refunds the bytes its segments were
+/// charged.
+///
+/// A later commit at the same txid publishes every DELTA row it finds under that txid, so anything
+/// the abandoned stage wrote would read back as part of it. The whole txid range is cleared rather
+/// than only the rows a replacement is about to overwrite. A replacement overwrites a segment's
+/// leading chunks and leaves its tail, which fails to decode. Worse, a segment covering pages the
+/// replacement never touches survives whole and decodes cleanly, so the history walk and compaction
+/// would serve the dead attempt's pages as that commit's.
+///
+/// Does not decide whether the stage is abandoned. The caller owns that: begin and single-shot
+/// commit know it is, because they are the actor claiming `head + 1`, while the reclaimer has to
+/// re-check head and the orphan grace window first.
+pub(crate) fn clear_abandoned_commit_stage(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	txid: u64,
+	stage: &CommitStageRow,
+) {
+	let (delta_begin, delta_end) = keys::branch_delta_txid_range(branch_id, txid);
+	tx.informal().clear_range(&delta_begin, &delta_end);
+	tx.informal()
+		.clear(&keys::branch_commit_stage_key(branch_id, txid));
+	if stage.accounted_bytes != 0 {
+		quota::atomic_add_branch(tx, branch_id, stage.accounted_bytes.saturating_neg());
+	}
+}
 
 /// What a staged commit looked like, carried out of the finalize transaction so it can be metered
 /// after the transaction commits rather than on every attempt.
@@ -148,16 +180,7 @@ impl Db {
 					let stage_key = keys::branch_commit_stage_key(branch_id, txid);
 					if let Some(existing) = tx_get_value(&tx, &stage_key, Serializable).await? {
 						let existing = decode_commit_stage_row(&existing)?;
-						let (delta_begin, delta_end) =
-							keys::branch_delta_txid_range(branch_id, txid);
-						tx.informal().clear_range(&delta_begin, &delta_end);
-						if existing.accounted_bytes != 0 {
-							quota::atomic_add_branch(
-								&tx,
-								branch_id,
-								existing.accounted_bytes.saturating_neg(),
-							);
-						}
+						clear_abandoned_commit_stage(&tx, branch_id, txid, &existing);
 						tracing::info!(
 							?branch_id,
 							txid,
@@ -192,6 +215,7 @@ impl Db {
 	) -> Result<u64> {
 		let database_id = self.database_id.clone();
 		let bucket_id = self.sqlite_bucket_id();
+		let max_storage_bytes = self.max_storage_bytes();
 		let mut dirty_pages = dirty_pages;
 		dirty_pages.sort_by_key(|page| page.pgno);
 
@@ -305,7 +329,7 @@ impl Db {
 					.transpose()
 					.context("decode sqlite compaction root for staged commit")?;
 					let hot_quota_cap = burst_mode::adjusted_hot_quota_cap(
-						quota::SQLITE_MAX_STORAGE_BYTES,
+						max_storage_bytes,
 						burst_mode::read_branch_signal_for_head(txid, compaction_root.as_ref()),
 					)?;
 					quota::cap_check_with_cap(would_be, hot_quota_cap)?;
@@ -373,6 +397,7 @@ impl Db {
 		let node_id = self.node_id.to_string();
 		let tx_node_id = node_id.clone();
 		let compaction_enabled = self.compaction_signaler.is_some();
+		let max_storage_bytes = self.max_storage_bytes();
 		let cached_snapshot = self.cache_snapshot.read().await.clone();
 		#[cfg(feature = "pidx-cache")]
 		let cache_was_warm = cached_snapshot
@@ -529,6 +554,7 @@ impl Db {
 							delta_chunks: Vec::new(),
 							truncate_cleanup,
 							storage_used,
+							max_storage_bytes,
 							compaction_root,
 							compaction_enabled,
 							last_deltas_available_at_ms,

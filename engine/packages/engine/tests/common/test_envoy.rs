@@ -457,7 +457,7 @@ impl rivet_test_envoy::EnvoyCallbacks for TestEnvoyCallbacks {
 		Box::pin(async move {
 			let mut request_body = request.body.unwrap_or_default();
 			if let Some(mut body_stream) = request.body_stream {
-				while let Some(chunk) = body_stream.recv().await {
+				while let Some(chunk) = body_stream.recv().await? {
 					request_body.extend(chunk);
 				}
 			}

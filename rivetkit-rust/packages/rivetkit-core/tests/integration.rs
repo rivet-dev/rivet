@@ -10,5 +10,8 @@ mod metrics_endpoint;
 #[path = "integration/sqlite_corruption_fuzz.rs"]
 mod sqlite_corruption_fuzz;
 
+#[path = "integration/tokio_runtime_metrics.rs"]
+mod tokio_runtime_metrics;
+
 #[path = "migration/v2_2_1/mod.rs"]
 mod migration_v2_2_1;

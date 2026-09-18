@@ -27,7 +27,7 @@ use crate::optimization_flags::{
 };
 use crate::query::{BindParam, ColumnValue};
 use crate::vfs::SqliteVfsMetrics;
-use crate::worker::SqliteWorkerFatalError;
+use crate::worker::{SqliteWorkerCloseTimeoutError, SqliteWorkerFatalError};
 
 use super::*;
 
@@ -957,6 +957,55 @@ fn worker_close_rejects_new_work() {
 			"unexpected error: {error}"
 		);
 	});
+}
+
+#[test]
+fn worker_close_and_wait_does_not_return_after_the_bounded_timeout() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let metrics = Arc::new(WorkerTestMetrics::default());
+	let (vfs, db) = open_worker_handle_with_vfs(
+		&runtime,
+		&harness,
+		Some(metrics.clone() as Arc<dyn SqliteVfsMetrics>),
+	);
+
+	runtime.block_on(async {
+		let resume = db.pause_for_test().await;
+		vfs.ctx().mark_fatal("injected fatal error".to_owned());
+		let error = db
+			.close()
+			.await
+			.expect_err("bounded close should time out while the worker is blocked");
+		assert!(
+			error
+				.downcast_ref::<SqliteWorkerCloseTimeoutError>()
+				.is_some(),
+			"fatal error masked worker close timeout: {error:?}"
+		);
+		let close_db = db.clone();
+		let mut close_task = tokio::spawn(async move { close_db.close_and_wait().await });
+
+		assert!(
+			tokio::time::timeout(Duration::from_millis(100), &mut close_task)
+				.await
+				.is_err(),
+			"close_and_wait returned after a bounded timeout while the worker was still blocked"
+		);
+		close_task.abort();
+		close_task
+			.await
+			.expect_err("cancelled strict-close waiter should stop");
+
+		let close_db = db.clone();
+		let close_task = tokio::spawn(async move { close_db.close_and_wait().await });
+		let _ = resume.send(());
+		close_task
+			.await
+			.expect("close task should join")
+			.expect("worker should close after the blocked operation completes");
+	});
+	assert_eq!(metrics.close_durations.load(Ordering::Acquire), 1);
 }
 
 #[test]
@@ -7396,5 +7445,113 @@ fn direct_engine_persists_a_vacuum_shrink_across_reopen() {
 		sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM blobs;")
 			.expect("count after reopen should succeed"),
 		0
+	);
+}
+
+/// Seeds rows whose payload is large enough that indexing it dirties more pages than one single-shot
+/// commit carries, so building those indexes takes the staged commit path.
+fn seed_rows_for_staged_migration(db: *mut sqlite3) {
+	sqlite_exec(
+		db,
+		"CREATE TABLE migration_rows (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+	)
+	.expect("create migration table should succeed");
+	sqlite_exec(
+		db,
+		"WITH RECURSIVE seq(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM seq WHERE id < 700) \
+		 INSERT INTO migration_rows (id, payload) SELECT id, randomblob(1024) FROM seq;",
+	)
+	.expect("seed rows should succeed");
+}
+
+/// A staged commit whose segment response is lost leaves its rows at `head + 1`, and the connection
+/// that saw the failure immediately commits again at that same txid. That commit must not publish the
+/// abandoned rows with it.
+///
+/// The collision is invisible to any read that comes after a later commit rewrites the same pages, so
+/// this reopens straight away: the open reads page one at the colliding commit, which is exactly where
+/// a leftover segment tail fails to decode.
+#[test]
+fn direct_engine_commit_reusing_an_abandoned_stage_txid_stays_readable() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let hooks = DirectDepotTransport::new(Arc::clone(&engine)).direct_hooks();
+	let db = harness.open_db_on_engine(
+		&runtime,
+		Arc::clone(&engine),
+		&harness.actor_id,
+		VfsConfig::default(),
+	);
+	seed_rows_for_staged_migration(db.as_ptr());
+	let (abandoned_txid, commits_before_migration) = {
+		let commits = hooks.commit_requests();
+		let last_commit = commits
+			.last()
+			.expect("seeding should have committed through the single-shot path");
+		(
+			last_commit.expected_head_txid.map_or(1, |head| head + 1) + 1,
+			commits.len(),
+		)
+	};
+
+	hooks.lose_stage_segment_response_at(0);
+	sqlite_exec(
+		db.as_ptr(),
+		"BEGIN; \
+		 CREATE INDEX migration_rows_payload_a ON migration_rows(payload); \
+		 CREATE INDEX migration_rows_payload_b ON migration_rows(payload); \
+		 COMMIT;",
+	)
+	.expect_err("a lost staged segment response should fail the migration");
+	assert!(
+		!hooks.stage_segment_response_loss_pending(),
+		"the migration must reach the staged path, or this test exercises nothing",
+	);
+	// SQLite rolls a transaction back itself on most commit I/O errors, but not all of them.
+	if unsafe { sqlite3_get_autocommit(db.as_ptr()) } == 0 {
+		sqlite_exec(db.as_ptr(), "ROLLBACK;").expect("rollback should succeed");
+	}
+	assert!(
+		hooks.commit_requests()[commits_before_migration..]
+			.iter()
+			.any(|commit| commit.expected_head_txid == Some(abandoned_txid - 1)),
+		"a single-shot commit must reuse the abandoned stage's txid {abandoned_txid}, or this test \
+		 exercises nothing",
+	);
+	drop(db);
+
+	let db = harness.open_db_on_engine(
+		&runtime,
+		Arc::clone(&engine),
+		&harness.actor_id,
+		VfsConfig::default(),
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO migration_rows (id, payload) VALUES (701, randomblob(1024));",
+	)
+	.expect("a small write after the failed migration should commit");
+	drop(db);
+
+	let reopened =
+		harness.open_db_on_engine(&runtime, engine, &harness.actor_id, VfsConfig::default());
+	assert_eq!(
+		sqlite_query_text(reopened.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity_check after reopen should succeed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_i64(
+			reopened.as_ptr(),
+			"SELECT length(payload) FROM migration_rows WHERE id = 701;",
+		)
+		.expect("the post-failure row should be readable"),
+		1024
+	);
+	assert_eq!(
+		sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM migration_rows;")
+			.expect("row count should succeed"),
+		701
 	);
 }

@@ -1072,23 +1072,25 @@ async fn insert_and_send_commands_inner(
 			let tx = tx.with_subspace(keys::subspace());
 
 			for (i, command) in input.commands.iter().enumerate() {
-				tx.write(
-					&keys::envoy::ActorCommandKey::new(
-						namespace_id,
-						input.envoy_key.clone(),
-						actor_id,
-						input.generation,
-						old_last_command_idx + i as i64 + 1,
-					),
-					match command {
-						protocol::Command::CommandStartActor(x) => {
-							protocol::ActorCommandKeyData::CommandStartActor(x.clone())
-						}
-						protocol::Command::CommandStopActor(x) => {
-							protocol::ActorCommandKeyData::CommandStopActor(x.clone())
-						}
-					},
-				)?;
+				let command_key = keys::envoy::ActorCommandKey::new(
+					namespace_id,
+					input.envoy_key.clone(),
+					actor_id,
+					input.generation,
+					old_last_command_idx + i as i64 + 1,
+				);
+				let command_data = match command {
+					protocol::Command::CommandStartActor(x) => {
+						protocol::ActorCommandKeyData::CommandStartActor(x.clone())
+					}
+					protocol::Command::CommandStopActor(x) => {
+						protocol::ActorCommandKeyData::CommandStopActor(x.clone())
+					}
+				};
+
+				for (chunk_idx, chunk) in command_key.split(command_data)?.into_iter().enumerate() {
+					tx.set(&tx.pack(&command_key.chunk(chunk_idx)), &chunk);
+				}
 			}
 
 			tx.write(

@@ -32,10 +32,4 @@ pub enum WsError {
 		"Invalid websocket request: {0}."
 	)]
 	InvalidRequest(&'static str),
-	#[error(
-		"invalid_packet",
-		"The websocket could not process the given packet.",
-		"Invalid packet: {0}"
-	)]
-	InvalidPacket(String),
 }

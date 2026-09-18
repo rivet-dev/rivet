@@ -12,6 +12,7 @@ description = "Versioned protocol for the experimental Actor Runtime Socket"
 anyhow.workspace = true
 serde_bare.workspace = true
 serde.workspace = true
+serde_bytes.workspace = true
 vbare.workspace = true
 
 [build-dependencies]

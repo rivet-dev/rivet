@@ -19,9 +19,12 @@ export async function initThirdPartyProviders(router: unknown, debug: boolean) {
 	}
 
 	if (config.sentry) {
+		// tanstackRouterBrowserTracingIntegration reuses
+		// browserTracingIntegration's name, and Sentry keeps only the last
+		// integration of a given name. Adding both drops the router-aware one
+		// and names transactions by pathname instead of route id.
 		const integrations = [
 			Sentry.tanstackRouterBrowserTracingIntegration(router),
-			Sentry.browserTracingIntegration(),
 		];
 		if (ph) {
 			integrations.push(

@@ -115,7 +115,7 @@ impl RequestMetrics {
 					);
 					Ok(())
 				})
-				.instrument(tracing::info_span!("record_req_metrics_tx")),
+				.instrument(tracing::debug_span!("record_req_metrics_tx")),
 		)
 		.await
 		.context("timed out recording request metrics")??;

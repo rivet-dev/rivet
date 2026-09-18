@@ -58,6 +58,8 @@ pub(super) struct PublishCommitInput<'a> {
 	pub(super) delta_chunks: Vec<(Vec<u8>, Vec<u8>)>,
 	pub(super) truncate_cleanup: TruncateCleanup,
 	pub(super) storage_used: i64,
+	/// Bytes of storage this database may occupy, before burst mode adjusts it.
+	pub(super) max_storage_bytes: i64,
 	pub(super) compaction_root: Option<crate::conveyer::types::CompactionRoot>,
 	pub(super) compaction_enabled: bool,
 	pub(super) last_deltas_available_at_ms: Option<i64>,
@@ -90,6 +92,7 @@ pub(super) async fn publish_commit(
 		delta_chunks,
 		truncate_cleanup,
 		storage_used,
+		max_storage_bytes,
 		compaction_root,
 		compaction_enabled,
 		last_deltas_available_at_ms,
@@ -167,8 +170,7 @@ pub(super) async fn publish_commit(
 	} else {
 		None
 	};
-	let hot_quota_cap =
-		burst_mode::adjusted_hot_quota_cap(quota::SQLITE_MAX_STORAGE_BYTES, burst_signal)?;
+	let hot_quota_cap = burst_mode::adjusted_hot_quota_cap(max_storage_bytes, burst_signal)?;
 	quota::cap_check_with_cap(would_be, hot_quota_cap)?;
 
 	#[cfg(feature = "test-faults")]

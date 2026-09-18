@@ -24,10 +24,10 @@ use crate::{
 	db::{
 		BumpSubSubject,
 		debug::{
-			ActivityError, ActivityEvent, DatabaseDebug, Event, EventData, HistoryData, LoopEvent,
-			MessageSendEvent, RepairInspection, RepairOutcome, RepairVariant, RepairVerification,
-			SignalData, SignalEvent, SignalSendEvent, SignalState, SignalsEvent, SubWorkflowEvent,
-			WorkflowData, WorkflowState,
+			ActivityError, ActivityEvent, DatabaseDebug, DeadWorkflow, Event, EventData,
+			HistoryData, LoopEvent, MessageSendEvent, RepairInspection, RepairOutcome,
+			RepairVariant, RepairVerification, SignalData, SignalEvent, SignalSendEvent,
+			SignalState, SignalsEvent, SubWorkflowEvent, WorkflowData, WorkflowState,
 		},
 	},
 	error::{WorkflowError, WorkflowResult},
@@ -66,6 +66,7 @@ impl DatabaseKv {
 			let has_wake_condition_key = keys::workflow::HasWakeConditionKey::new(workflow_id);
 			let worker_id_key = keys::workflow::WorkerIdKey::new(workflow_id);
 			let silence_ts_key = keys::workflow::SilenceTsKey::new(workflow_id);
+			let death_ts_key = keys::workflow::DeathTsKey::new(workflow_id);
 
 			let (
 				tags,
@@ -78,6 +79,7 @@ impl DatabaseKv {
 				has_wake_condition_entry,
 				worker_id_entry,
 				silence_ts_entry,
+				death_ts_entry,
 			) = tokio::try_join!(
 				tx.get_ranges_keyvalues(
 					RangeOption {
@@ -123,6 +125,7 @@ impl DatabaseKv {
 				tx.get(&self.subspace.pack(&has_wake_condition_key), Snapshot),
 				tx.get(&self.subspace.pack(&worker_id_key), Snapshot),
 				tx.get(&self.subspace.pack(&silence_ts_key), Snapshot),
+				tx.get(&self.subspace.pack(&death_ts_key), Snapshot),
 			)?;
 
 			let Some(create_ts_entry) = &create_ts_entry else {
@@ -166,6 +169,10 @@ impl DatabaseKv {
 				WorkflowState::Dead
 			};
 
+			let death_ts = death_ts_entry
+				.map(|entry| death_ts_key.deserialize(&entry))
+				.transpose()?;
+
 			res.push(WorkflowData {
 				workflow_id,
 				workflow_name,
@@ -176,6 +183,7 @@ impl DatabaseKv {
 				output: output.map(|x| serde_json::from_str(x.get())).transpose()?,
 				error,
 				state,
+				death_ts,
 			});
 		}
 
@@ -637,8 +645,13 @@ impl DatabaseDebug for DatabaseKv {
 								error.clone(),
 								workflow_id,
 							)));
+							tx.clear(
+								&self
+									.subspace
+									.pack(&keys::workflow::DeathTsKey::new(workflow_id)),
+							);
 
-							keys::metric::Metric::WorkflowDead(workflow_name.clone(), error)
+							keys::metric::Metric::WorkflowDead(workflow_name.clone())
 						};
 
 						update_metric(&tx.with_subspace(self.subspace.clone()), Some(metric), None);
@@ -734,13 +747,11 @@ impl DatabaseDebug for DatabaseKv {
 								error.clone(),
 								workflow_id,
 							));
+							tx.delete(&keys::workflow::DeathTsKey::new(workflow_id));
 
 							update_metric(
 								&tx,
-								Some(keys::metric::Metric::WorkflowDead(
-									workflow_name.clone(),
-									error,
-								)),
+								Some(keys::metric::Metric::WorkflowDead(workflow_name.clone())),
 								Some(keys::metric::Metric::WorkflowSleeping(workflow_name)),
 							);
 						}
@@ -1276,6 +1287,44 @@ impl DatabaseDebug for DatabaseKv {
 		Ok(total)
 	}
 
+	#[tracing::instrument(level = "debug", skip_all)]
+	async fn list_dead_workflows(
+		&self,
+		names: &[&str],
+		error_like: &[&str],
+	) -> Result<Vec<DeadWorkflow>> {
+		let mut futs = FuturesUnordered::new();
+
+		for name in names {
+			futs.push(async move {
+				let mut workflows = Vec::new();
+				let mut last_key = None;
+
+				loop {
+					let (new_last_key, batch) = self
+						.find_dead_workflows_batch(name, error_like, last_key)
+						.await?;
+
+					workflows.extend(batch);
+					last_key = new_last_key;
+
+					if last_key.is_none() {
+						break;
+					}
+				}
+
+				anyhow::Ok(workflows)
+			});
+		}
+
+		let mut res = Vec::new();
+		while let Some(workflows) = futs.next().await {
+			res.extend(workflows?);
+		}
+
+		Ok(res)
+	}
+
 	async fn backfill_dead_workflows(
 		&self,
 		limit: usize,
@@ -1764,69 +1813,16 @@ impl DatabaseKv {
 		let mut last_key = None;
 
 		loop {
-			let (new_last_key, workflow_ids) = self.pools
-				.udb()?
-				.txn("gas_debug_revive_workflows", |tx| {
-					let mut last_key = last_key.clone();
-
-					async move {
-						tx.tag(&format!("revive_workflows:{name}"))?;
-
-						let mut workflow_ids = Vec::new();
-
-						let entire_subspace_key = keys::workflow::DeadIdxKey::subspace(name.to_string());
-						let start = if let Some(last_key) = last_key.take() {
-							last_key
-						} else {
-							self.subspace.subspace(&entire_subspace_key).range().0
-						};
-						let end = self.subspace.subspace(&entire_subspace_key).range().1;
-
-						let mut stream = tx.get_ranges_keyvalues(
-							RangeOption {
-								mode: StreamingMode::WantAll,
-								..(start, end).into()
-							},
-							Snapshot,
-						);
-
-						let mut workflows_processed = 0;
-
-						let fut = async {
-							while let Some(entry) = stream.try_next().await? {
-								let dead_idx_key = self.subspace.unpack::<keys::workflow::DeadIdxKey>(entry.key())?;
-
-								if error_like.is_empty() || error_like.iter().any(|err| dead_idx_key.error.to_lowercase().contains(err)) {
-									workflow_ids.push(dead_idx_key.workflow_id);
-								}
-
-								workflows_processed += 1;
-								last_key = Some(entry.key().to_vec());
-							}
-
-							last_key = None;
-
-							anyhow::Ok(())
-						};
-
-						match tokio::time::timeout(EARLY_TXN_TIMEOUT, fut).await {
-							Ok(res) => res?,
-							Err(_) => tracing::debug!("timed out reading workflows"),
-						}
-
-						tracing::info!(?workflows_processed, matching_workflows=?workflow_ids.len(), "batch processed workflows");
-
-						Ok((last_key, workflow_ids))
-					}
-				})
-				.instrument(tracing::debug_span!("find_dead_workflows_tx"))
+			let (new_last_key, workflows) = self
+				.find_dead_workflows_batch(name, error_like, last_key)
 				.await?;
 
 			last_key = new_last_key;
-			total += workflow_ids.len();
+			total += workflows.len();
 
 			if !dry_run {
-				self.wake_workflows(workflow_ids).await?;
+				self.wake_workflows(workflows.into_iter().map(|w| w.workflow_id).collect())
+					.await?;
 			}
 
 			if last_key.is_none() {
@@ -1836,6 +1832,79 @@ impl DatabaseKv {
 		}
 
 		Ok(total)
+	}
+
+	/// Reads one batch of the dead index for a workflow name. Returns the key to resume after, or
+	/// `None` once the end of the index was reached.
+	async fn find_dead_workflows_batch(
+		&self,
+		name: &str,
+		error_like: &[&str],
+		last_key: Option<Vec<u8>>,
+	) -> Result<(Option<Vec<u8>>, Vec<DeadWorkflow>)> {
+		self.pools
+			.udb()?
+			.txn("gas_debug_find_dead_workflows", |tx| {
+				let mut last_key = last_key.clone();
+
+				async move {
+					tx.tag(&format!("find_dead_workflows:{name}"))?;
+
+					let mut workflows = Vec::new();
+
+					let entire_subspace_key = keys::workflow::DeadIdxKey::subspace(name.to_string());
+					// The last key was already returned by the previous batch, so resume just after it
+					let start = if let Some(last_key) = last_key.take() {
+						end_of_key_range(&last_key)
+					} else {
+						self.subspace.subspace(&entire_subspace_key).range().0
+					};
+					let end = self.subspace.subspace(&entire_subspace_key).range().1;
+
+					let mut stream = tx.get_ranges_keyvalues(
+						RangeOption {
+							mode: StreamingMode::WantAll,
+							..(start, end).into()
+						},
+						Snapshot,
+					);
+
+					let mut workflows_processed = 0;
+
+					let fut = async {
+						while let Some(entry) = stream.try_next().await? {
+							let dead_idx_key = self.subspace.unpack::<keys::workflow::DeadIdxKey>(entry.key())?;
+
+							if error_like.is_empty() || error_like.iter().any(|err| dead_idx_key.error.to_lowercase().contains(err)) {
+								workflows.push(DeadWorkflow {
+									workflow_id: dead_idx_key.workflow_id,
+									workflow_name: dead_idx_key.workflow_name,
+									error: dead_idx_key.error,
+								});
+							}
+
+							workflows_processed += 1;
+							last_key = Some(entry.key().to_vec());
+						}
+
+						last_key = None;
+
+						anyhow::Ok(())
+					};
+
+					match tokio::time::timeout(EARLY_TXN_TIMEOUT, fut).await {
+						Ok(res) => res?,
+						Err(_) => tracing::debug!("timed out reading workflows"),
+					}
+
+					tracing::info!(?workflows_processed, matching_workflows=?workflows.len(), "batch processed workflows");
+
+					Ok((last_key, workflows))
+				}
+			})
+			.instrument(tracing::debug_span!("find_dead_workflows_tx"))
+			.await
+			.map_err(Into::into)
 	}
 
 	pub async fn prune_workflow_history_inner(

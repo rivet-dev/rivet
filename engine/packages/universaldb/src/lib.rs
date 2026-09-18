@@ -1,4 +1,5 @@
 pub(crate) mod atomic;
+pub mod chunk;
 pub(crate) mod conflict_tracker;
 mod database;
 pub mod driver;

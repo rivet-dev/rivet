@@ -17,7 +17,7 @@ pub async fn route_request(
 		return Ok(None);
 	}
 
-	tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path(), "routing to envoy via header");
+	tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path_for_logs(), "routing to envoy via header");
 
 	route_envoy_internal(ctx, req_ctx).await.map(Some)
 }
@@ -35,7 +35,7 @@ pub async fn route_request_path_based(
 		return Ok(None);
 	}
 
-	tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path(), "routing to envoy via path");
+	tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path_for_logs(), "routing to envoy via path");
 
 	route_envoy_internal(ctx, req_ctx).await.map(Some)
 }

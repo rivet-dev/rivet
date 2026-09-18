@@ -4,12 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-catalogs:
-  default:
-    drizzle-orm:
-      specifier: 0.45.2
-      version: 0.45.2
-
 overrides:
   rivetkit: workspace:*
   '@rivetkit/react': workspace:*
@@ -29,6 +23,10 @@ overrides:
   '@rivet-gg/components': workspace:*
   '@rivet-gg/icons': workspace:*
   '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@979
+  '@rivet-gg/cloud-actors>rivetkit': 2.3.16
+  '@rivet-gg/cloud-api>rivetkit': 2.3.16
+  '@rivet-gg/cloud-registry-proxy>rivetkit': 2.3.16
+  rivetkit>drizzle-orm: 0.45.2
   '@flue/sdk': 1.0.0-beta.9
   '@codemirror/state': 6.5.2
   '@codemirror/view': 6.38.2
@@ -2916,6 +2914,12 @@ importers:
       '@codemirror/view':
         specifier: 6.38.2
         version: 6.38.2
+      '@fontsource/ibm-plex-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/ibm-plex-sans':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@fortawesome/fontawesome-svg-core':
         specifier: ^6.7.2
         version: 6.7.2
@@ -3581,7 +3585,7 @@ importers:
         specifier: ^0.31.2
         version: 0.31.5
       drizzle-orm:
-        specifier: 'catalog:'
+        specifier: 0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.29.5)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0)
       hono:
         specifier: ^4.7.0
@@ -6277,6 +6281,12 @@ packages:
 
   '@flue/sdk@1.0.0-beta.9':
     resolution: {integrity: sha512-EkGWF1Yw6baM4ekmp+3xFkc+LmDKcIAA0KQSZSpaSqQRYyixXB+IwEbhePS83HCgrR0/jup9l8rgld4Q2IGNOw==}
+
+  '@fontsource/ibm-plex-mono@5.3.0':
+    resolution: {integrity: sha512-eTgnZjZEGk1QtD3ZstF+Vclo2HLAni8YMy34/DxllwZvyz1lR/1RF/xTiAquOBO7MvqBx8D2Ig2WCPMVfdZu7Q==}
+
+  '@fontsource/ibm-plex-sans@5.3.0':
+    resolution: {integrity: sha512-CbE4CbbEEZJX860XyUiRpsksXIQR8Rp2XDva2VO53NJox9tVNtusrysd2x5YkUEY3ErQ66W1IiiQL8/wihhw5w==}
 
   '@fortawesome/fontawesome-common-types@6.7.2':
     resolution: {integrity: sha512-Zs+YeHUC5fkt7Mg1l6XTniei3k4bwG/yo3iFUtZWd/pMx9g3fdvkSK9E0FOC+++phXOka78uJcYb8JaFkW52Xg==}
@@ -22018,6 +22028,10 @@ snapshots:
   '@flue/sdk@1.0.0-beta.9':
     dependencies:
       '@durable-streams/client': 0.2.6
+
+  '@fontsource/ibm-plex-mono@5.3.0': {}
+
+  '@fontsource/ibm-plex-sans@5.3.0': {}
 
   '@fortawesome/fontawesome-common-types@6.7.2': {}
 

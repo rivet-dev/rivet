@@ -1,6 +1,11 @@
 catalog:
   drizzle-orm: "0.45.2"
 
+catalogs:
+  platform:
+    rivetkit: "2.3.16"
+    "@rivetkit/rivetkit-napi": "2.3.16"
+
 packages:
   - engine
   - self-host/compose/template

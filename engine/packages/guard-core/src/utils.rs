@@ -193,35 +193,108 @@ pub(crate) fn proxied_request_builder(
 	Ok(builder)
 }
 
+/// Renders a request URI for logs with the values of credential query parameters replaced.
+pub(crate) fn redact_uri_for_logs(uri: &hyper::Uri) -> String {
+	let path_and_query = uri
+		.path_and_query()
+		.map(|path_and_query| path_and_query.as_str())
+		.unwrap_or_else(|| uri.path());
+
+	match (uri.scheme_str(), uri.authority()) {
+		(Some(scheme), Some(authority)) => {
+			format!(
+				"{scheme}://{authority}{}",
+				redact_path_for_logs(path_and_query)
+			)
+		}
+		_ => redact_path_for_logs(path_and_query),
+	}
+}
+
+/// Renders a request path and query string for logs with the values of credential query
+/// parameters replaced.
+pub fn redact_path_for_logs(path_and_query: &str) -> String {
+	let Some((path, query)) = path_and_query.split_once('?') else {
+		return path_and_query.to_string();
+	};
+
+	let redacted_query = query
+		.split('&')
+		.map(|pair| {
+			let raw_key = pair.split('=').next().unwrap_or_default();
+			let is_credential = url::form_urlencoded::parse(raw_key.as_bytes())
+				.next()
+				.is_some_and(|(key, _)| key.to_ascii_lowercase().ends_with("token"));
+
+			if is_credential {
+				format!("{raw_key}=REDACTED")
+			} else {
+				pair.to_string()
+			}
+		})
+		.collect::<Vec<_>>()
+		.join("&");
+
+	format!("{path}?{redacted_query}")
+}
+
+/// Headers that are scoped to a single connection and must not be forwarded to the upstream
+/// service. See RFC 9110 section 7.6.1. The outgoing request generates its own versions of these
+/// where they are needed, including the `Connection` and `Upgrade` headers of a websocket
+/// handshake.
+const HOP_BY_HOP_HEADERS: [HeaderName; 8] = [
+	hyper::header::CONNECTION,
+	HeaderName::from_static("keep-alive"),
+	hyper::header::PROXY_AUTHENTICATE,
+	hyper::header::PROXY_AUTHORIZATION,
+	hyper::header::TE,
+	hyper::header::TRAILER,
+	hyper::header::TRANSFER_ENCODING,
+	hyper::header::UPGRADE,
+];
+
+/// Headers belonging to the client's websocket handshake with guard. Guard terminates that
+/// handshake and opens its own to the upstream service, so the outgoing request keeps the key it
+/// generated for itself rather than echoing the client's.
+const CLIENT_HANDSHAKE_HEADERS: [HeaderName; 2] = [
+	hyper::header::SEC_WEBSOCKET_KEY,
+	hyper::header::SEC_WEBSOCKET_VERSION,
+];
+
 pub(crate) fn add_proxy_headers_with_addr(
 	headers: &mut hyper::HeaderMap,
 	req_ctx: &RequestContext,
 ) -> Result<()> {
-	// Copy headers except Host
+	// Copy every header the upstream service is allowed to see. Appending rather than inserting
+	// keeps all the values of a header the client sent as multiple field lines, such as a cookie
+	// split across lines by an HTTP/2 client.
 	for (key, value) in &req_ctx.headers {
-		if key != hyper::header::HOST {
-			headers.insert(key.clone(), value.clone());
+		if key == hyper::header::HOST
+			|| HOP_BY_HOP_HEADERS.contains(key)
+			|| CLIENT_HANDSHAKE_HEADERS.contains(key)
+		{
+			continue;
 		}
+
+		headers.append(key.clone(), value.clone());
 	}
 
-	// Add X-Forwarded-For header
-	if let Some(existing) = req_ctx.headers.get(X_FORWARDED_FOR) {
-		if let Ok(forwarded) = existing.to_str() {
-			if !forwarded.contains(&req_ctx.remote_addr.ip().to_string()) {
-				headers.insert(
-					X_FORWARDED_FOR,
-					hyper::header::HeaderValue::from_str(&format!(
-						"{}, {}",
-						forwarded,
-						req_ctx.remote_addr.ip()
-					))?,
-				);
-			}
-		}
-	} else {
-		headers.insert(
+	// Record this hop in X-Forwarded-For unless the client already claims to have come from this
+	// address. Appending keeps any existing chain intact, including a chain the client sent as
+	// multiple field lines.
+	let client_ip = req_ctx.remote_addr.ip().to_string();
+	let already_forwarded = req_ctx
+		.headers
+		.get_all(X_FORWARDED_FOR)
+		.into_iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(|value| value.split(','))
+		.any(|entry| entry.trim() == client_ip);
+
+	if !already_forwarded {
+		headers.append(
 			X_FORWARDED_FOR,
-			hyper::header::HeaderValue::from_str(&req_ctx.remote_addr.ip().to_string())?,
+			hyper::header::HeaderValue::from_str(&client_ip)?,
 		);
 	}
 

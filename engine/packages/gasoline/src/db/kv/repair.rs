@@ -8,7 +8,7 @@
 //! rather than guessing. Detect-only variants recognize a symptom whose remedy depends on which
 //! side of an inconsistency is authoritative; they report and stop.
 
-use std::{cmp::Ordering, collections::BTreeMap};
+use std::{cmp::Ordering, collections::BTreeMap, str::FromStr};
 
 use anyhow::{Context, Result, bail, ensure};
 use futures_util::TryStreamExt;
@@ -16,7 +16,12 @@ use rivet_util::Id;
 use universaldb::{
 	RangeOption,
 	options::StreamingMode,
-	utils::{FormalChunkedKey, FormalKey, IsolationLevel::*},
+	utils::{
+		FormalChunkedKey, FormalKey,
+		IsolationLevel::*,
+		Subspace,
+		keys::{ACTOR, CREATE_TS, DATA, PEGBOARD, RIVET},
+	},
 };
 
 use super::{DatabaseKv, keys, update_metric};
@@ -50,6 +55,14 @@ const ACTOR2_LOST_SIGNAL: &str = "pegboard_actor2_lost";
 /// discarded destroy leaves the actor alive with nothing to retry it.
 const ACTOR2_DESTROY_SIGNAL: &str = "pegboard_actor2_destroy";
 const SET_ERROR_ACTIVITY: &str = "set_error";
+const PROPOSE_ACTIVITY: &str = "propose";
+const RESERVE_ACTOR_KEY_ACTIVITY: &str = "reserve_actor_key";
+const INSERT_STATE_ACTIVITY: &str = "insert_state_and_db";
+const LOOKUP_KEY_ACTIVITY: &str = "lookup_key_optimistic";
+
+/// The `propose` outputs the workflow itself handles. Anything else reaches its `unreachable` arm,
+/// which is the defect `ProposeConsensusFailed` repairs.
+const PROPOSE_HANDLED_OUTPUTS: [&str; 2] = ["\"Committed\"", "ExpectedValueDoesNotMatch"];
 
 /// `pegboard_actor2::SetErrorInput { error: ActorError::EnvoyNoResponse { envoy_key: None } }` as
 /// gasoline persists activity input.
@@ -78,6 +91,7 @@ struct RawEvent {
 	/// Signals events only. Names of the signals this event consumed.
 	signal_names: Vec<String>,
 	input_chunks: Vec<Vec<u8>>,
+	output_chunks: Vec<Vec<u8>>,
 	has_output: bool,
 	/// Name of every field present, including fields this module does not decode. Used to prove a
 	/// row holds nothing but the field a repair is about to clear.
@@ -89,6 +103,10 @@ struct RawEvent {
 impl RawEvent {
 	fn input(&self) -> String {
 		String::from_utf8_lossy(&self.input_chunks.concat()).into_owned()
+	}
+
+	fn output(&self) -> String {
+		String::from_utf8_lossy(&self.output_chunks.concat()).into_owned()
 	}
 
 	fn is_activity(&self, name: &str) -> bool {
@@ -157,6 +175,25 @@ enum RepairPlan {
 		/// other generation.
 		generation: u64,
 	},
+	/// Clears the last recorded event so the activity runs again on the next wake. Only valid for
+	/// the trailing event: the replay cursor is index based, so clearing anything earlier shifts
+	/// every event after it.
+	ClearTrailingEvent {
+		location: Location,
+		/// Every raw key the inspection validated at that location. Cleared exactly rather than by
+		/// range, so a row written since the scan is never destroyed silently.
+		keys: Vec<Vec<u8>>,
+		/// What was cleared, for the mutation log.
+		description: String,
+	},
+	/// Writes the workflow state the init activity recorded and clears the trailing activity that
+	/// failed reading it.
+	WriteInitState {
+		location: Location,
+		keys: Vec<Vec<u8>>,
+		/// `pegboard_actor2::State` rebuilt from the recorded `insert_state_and_db` input.
+		state: String,
+	},
 }
 
 /// Work a repair still has to do once its transaction has committed.
@@ -176,6 +213,7 @@ struct PostCommit {
 struct InspectionBuilder {
 	variant: RepairVariant,
 	workflow_id: Id,
+	mode: RepairMode,
 	workflow_name: Option<String>,
 	workflow_error: Option<String>,
 	location: Option<Location>,
@@ -190,6 +228,7 @@ impl InspectionBuilder {
 		InspectionBuilder {
 			variant,
 			workflow_id,
+			mode: variant.mode(),
 			workflow_name: None,
 			workflow_error: None,
 			location: None,
@@ -212,6 +251,14 @@ impl InspectionBuilder {
 		self.checks.push(RepairCheck::pass(name, detail));
 	}
 
+	/// Reports the defect but refuses to write the remedy, for a workflow this repair recognizes and
+	/// cannot safely fix on its own. The check explains what a human has to settle.
+	fn manual(&mut self, name: impl Into<String>, detail: impl Into<String>) -> RepairInspection {
+		self.mode = RepairMode::ManualOnly;
+		self.checks.push(RepairCheck::pass(name, detail));
+		self.finish(RepairState::Ready)
+	}
+
 	fn refuse(&mut self, name: impl Into<String>, detail: impl Into<String>) -> RepairInspection {
 		self.checks.push(RepairCheck::fail(name, detail));
 		self.finish(RepairState::NotApplicable)
@@ -224,6 +271,7 @@ impl InspectionBuilder {
 			workflow_name: self.workflow_name.take(),
 			workflow_error: self.workflow_error.take(),
 			state,
+			mode: self.mode,
 			location: self.location.take(),
 			has_lease: self.has_lease,
 			has_worker: self.has_worker,
@@ -267,19 +315,21 @@ impl DatabaseKv {
 				let location = location.clone();
 
 				async move {
-					// Detect-only variants recognize a symptom but cannot settle which side of the
-					// inconsistency is authoritative, so there is no remedy to apply.
-					ensure!(
-						variant.mode() == RepairMode::Automatic,
-						"{variant} is a detect-only symptom and has no automatic repair",
-					);
-
 					// Revalidate everything inside the mutating transaction. The reads this
 					// performs become the transaction's read conflict ranges, so any concurrent
 					// change to the history, the lease, or the workflow state fails the repair
 					// instead of racing it.
 					let (inspection, plan) =
 						self.inspect(&tx, workflow_id, variant, location).await?;
+
+					// A detect-only symptom recognizes a defect but cannot settle which side of the
+					// inconsistency is authoritative, so there is no remedy to apply. An inspection
+					// downgrades an otherwise automatic repair the same way when this specific
+					// workflow fails a precondition the remedy depends on.
+					ensure!(
+						inspection.mode == RepairMode::Automatic,
+						"{variant} has no automatic repair for {workflow_id}, a human has to read the history and repair it by hand",
+					);
 
 					match inspection.state {
 						RepairState::AlreadyApplied => {
@@ -399,6 +449,14 @@ impl DatabaseKv {
 							self.verify_loop_iteration_mismatch(&tx, workflow_id, location)
 								.await
 						}
+						RepairVariant::ProposeConsensusFailed => {
+							self.verify_propose_consensus_failed(&tx, workflow_id, location)
+								.await
+						}
+						RepairVariant::MissingInitState => {
+							self.verify_missing_init_state(&tx, workflow_id, location)
+								.await
+						}
 						// Nothing was applied, so there is nothing to verify.
 						RepairVariant::SleepStateMismatch
 						| RepairVariant::DuplicateIterationHistory
@@ -440,6 +498,12 @@ impl DatabaseKv {
 			RepairVariant::IterationTimestampInversion => {
 				self.inspect_iteration_timestamp_inversion(tx, workflow_id)
 					.await
+			}
+			RepairVariant::ProposeConsensusFailed => {
+				self.inspect_propose_consensus_failed(tx, workflow_id).await
+			}
+			RepairVariant::MissingInitState => {
+				self.inspect_missing_init_state(tx, workflow_id).await
 			}
 		}
 	}
@@ -1059,6 +1123,430 @@ impl DatabaseKv {
 		.await
 	}
 
+	/// Validates that the workflow died replaying a `propose` output the current code treats as
+	/// unreachable, and that the event can be cleared without shifting replay.
+	async fn inspect_propose_consensus_failed(
+		&self,
+		tx: &universaldb::RetryableTransaction,
+		workflow_id: Id,
+	) -> Result<(RepairInspection, Option<RepairPlan>)> {
+		let mut builder =
+			InspectionBuilder::new(RepairVariant::ProposeConsensusFailed, workflow_id);
+
+		let meta = self.read_workflow_meta(tx, workflow_id).await?;
+		builder.apply_meta(&meta);
+
+		let Some(workflow_name) = meta.name.clone() else {
+			return Ok((
+				builder.refuse("workflow exists", "workflow not found"),
+				None,
+			));
+		};
+		if workflow_name != ACTOR2_WORKFLOW_NAME {
+			return Ok((
+				builder.refuse(
+					"workflow name",
+					format!(
+						"is {workflow_name:?}, this repair only handles {ACTOR2_WORKFLOW_NAME:?}"
+					),
+				),
+				None,
+			));
+		}
+		builder.pass("workflow name", format!("{workflow_name:?}"));
+
+		if let Some(refusal) = live_workflow_refusal(&meta) {
+			return Ok((builder.refuse("workflow state", refusal), None));
+		}
+		builder.pass(
+			"workflow state",
+			"dead, not leased, no pending wake condition",
+		);
+
+		// Unlike the divergence defects this error does not drift. The workflow bails on an output
+		// already in its history, so every replay dies exactly the same way.
+		let error = meta.error.clone().unwrap_or_default();
+		if !error.contains("unreachable: ConsensusFailed") {
+			return Ok((
+				builder.refuse(
+					"workflow error",
+					format!(
+						"is {error:?}, this repair only handles `unreachable: ConsensusFailed`"
+					),
+				),
+				None,
+			));
+		}
+		builder.pass("workflow error", format!("{error:?}"));
+
+		let active = self.scan_active_history(tx, workflow_id).await?;
+		let Some((last_location, last_event)) = active.iter().next_back() else {
+			return Ok((
+				builder.refuse("active history", "workflow has no active history"),
+				None,
+			));
+		};
+
+		let Some((propose_location, propose)) = active
+			.iter()
+			.filter(|(_, event)| event.is_activity(PROPOSE_ACTIVITY))
+			.next_back()
+		else {
+			return Ok((
+				builder.refuse(
+					"propose event",
+					format!(
+						"active history has no {PROPOSE_ACTIVITY:?} activity, the repair may already have cleared it"
+					),
+				),
+				None,
+			));
+		};
+		builder.location = Some(propose_location.clone());
+
+		if !propose.has_output {
+			return Ok((
+				builder.refuse(
+					"propose output",
+					format!("{propose_location} has no output, the activity never completed"),
+				),
+				None,
+			));
+		}
+
+		let output = propose.output();
+		if PROPOSE_HANDLED_OUTPUTS
+			.iter()
+			.any(|handled| output.contains(handled))
+		{
+			return Ok((
+				builder.refuse(
+					"propose output",
+					format!(
+						"{propose_location} recorded {output}, which the workflow handles rather than bails on"
+					),
+				),
+				None,
+			));
+		}
+		builder.pass(
+			"propose output",
+			format!(
+				"{propose_location} recorded {output}, which the workflow bails on as unreachable"
+			),
+		);
+
+		if last_location != propose_location {
+			return Ok((
+				builder.manual(
+					"trailing event",
+					format!(
+						"{propose_location} is followed by {} at {last_location}, so clearing it would shift every event after it",
+						last_event.describe()
+					),
+				),
+				None,
+			));
+		}
+		builder.pass(
+			"trailing event",
+			format!(
+				"{propose_location} is the last recorded event, so clearing it cannot shift replay"
+			),
+		);
+
+		let plan = RepairPlan::ClearTrailingEvent {
+			location: propose_location.clone(),
+			keys: propose.keys.clone(),
+			description: format!("activity {PROPOSE_ACTIVITY:?} (output was {output})"),
+		};
+
+		Ok((builder.finish(RepairState::Ready), Some(plan)))
+	}
+
+	/// Validates that a workflow still in actor creation lost its state key, and rebuilds the state
+	/// its init activity recorded.
+	async fn inspect_missing_init_state(
+		&self,
+		tx: &universaldb::RetryableTransaction,
+		workflow_id: Id,
+	) -> Result<(RepairInspection, Option<RepairPlan>)> {
+		let mut builder = InspectionBuilder::new(RepairVariant::MissingInitState, workflow_id);
+
+		let meta = self.read_workflow_meta(tx, workflow_id).await?;
+		builder.apply_meta(&meta);
+
+		let Some(workflow_name) = meta.name.clone() else {
+			return Ok((
+				builder.refuse("workflow exists", "workflow not found"),
+				None,
+			));
+		};
+		if workflow_name != ACTOR2_WORKFLOW_NAME {
+			return Ok((
+				builder.refuse(
+					"workflow name",
+					format!(
+						"is {workflow_name:?}, this repair only handles {ACTOR2_WORKFLOW_NAME:?}"
+					),
+				),
+				None,
+			));
+		}
+		builder.pass("workflow name", format!("{workflow_name:?}"));
+
+		if let Some(refusal) = live_workflow_refusal(&meta) {
+			return Ok((builder.refuse("workflow state", refusal), None));
+		}
+		builder.pass(
+			"workflow state",
+			"dead, not leased, no pending wake condition",
+		);
+
+		let error = meta.error.clone().unwrap_or_default();
+		if !error.contains("expected struct State") {
+			return Ok((
+				builder.refuse(
+					"workflow error",
+					format!(
+						"is {error:?}, this repair only handles an activity that failed reading a null state"
+					),
+				),
+				None,
+			));
+		}
+		builder.pass("workflow error", format!("{error:?}"));
+
+		if let Some(state) = &meta.state {
+			return Ok((
+				builder.refuse(
+					"state key",
+					format!("already holds {state}, there is nothing to rebuild"),
+				),
+				None,
+			));
+		}
+		builder.pass(
+			"state key",
+			"absent, so every activity that reads state fails",
+		);
+
+		// State is not recorded in history and completed activities never re-run, so only a history
+		// where the init activity is still the sole state writer can be rebuilt exactly. Creation
+		// records one activity per top level coordinate, so any other shape means the workflow got
+		// past creation and its state would have to be guessed.
+		let active = self.scan_active_history(tx, workflow_id).await?;
+		let expected_names: Vec<&str> = match active.len() {
+			// The key lookup found an existing reservation, so the workflow skipped `propose`.
+			3 => vec![
+				INSERT_STATE_ACTIVITY,
+				LOOKUP_KEY_ACTIVITY,
+				RESERVE_ACTOR_KEY_ACTIVITY,
+			],
+			4 => vec![
+				INSERT_STATE_ACTIVITY,
+				LOOKUP_KEY_ACTIVITY,
+				PROPOSE_ACTIVITY,
+				RESERVE_ACTOR_KEY_ACTIVITY,
+			],
+			_ => Vec::new(),
+		};
+
+		let recorded = active
+			.iter()
+			.map(|(location, event)| format!("{location} {}", event.describe()))
+			.collect::<Vec<_>>()
+			.join(", ");
+
+		let shape_matches = !expected_names.is_empty()
+			&& active.iter().zip(expected_names.iter()).enumerate().all(
+				|(i, ((location, event), name))| {
+					location == &Location::empty().join(Coordinate::simple(i + 1))
+						&& event.is_activity(name)
+				},
+			);
+		if !shape_matches {
+			return Ok((
+				builder.refuse(
+					"history shape",
+					format!(
+						"active history is [{recorded}], this repair only handles the creation activities before the actor is reserved"
+					),
+				),
+				None,
+			));
+		}
+
+		let (init_location, init) = active.iter().next().expect("checked len");
+		let (last_location, last) = active.iter().next_back().expect("checked len");
+
+		if active
+			.iter()
+			.take(active.len() - 1)
+			.any(|(_, event)| !event.has_output)
+		{
+			return Ok((
+				builder.refuse(
+					"recorded outputs",
+					"an activity before the last one has no output, so the workflow is mid creation rather than stuck on state",
+				),
+				None,
+			));
+		}
+		if last.has_output {
+			return Ok((
+				builder.refuse(
+					"recorded outputs",
+					format!(
+						"{last_location} already recorded an output, so it did not fail reading state"
+					),
+				),
+				None,
+			));
+		}
+		builder.pass(
+			"history shape",
+			format!("[{recorded}], with {last_location} recorded as failed"),
+		);
+		builder.location = Some(last_location.clone());
+
+		let raw_input = init.input();
+		let input: serde_json::Value = serde_json::from_str(&raw_input)
+			.with_context(|| format!("failed to parse {init_location} input"))?;
+
+		let Some(from_v1) = input.get("from_v1").and_then(|from_v1| from_v1.as_bool()) else {
+			return Ok((
+				builder.refuse(
+					"activity input",
+					format!("{init_location} input {raw_input} does not record from_v1"),
+				),
+				None,
+			));
+		};
+
+		let (Some(actor_id), Some(name), Some(pool_name), Some(namespace_id)) = (
+			input.get("actor_id").and_then(|v| v.as_str()),
+			input.get("name").and_then(|v| v.as_str()),
+			input.get("pool_name").and_then(|v| v.as_str()),
+			input.get("namespace_id").and_then(|v| v.as_str()),
+		) else {
+			return Ok((
+				builder.refuse(
+					"activity input",
+					format!("{init_location} input {raw_input} is missing a field the state needs"),
+				),
+				None,
+			));
+		};
+
+		// `insert_state_and_db` writes its input timestamp for a new actor, and for a v1 actor reads
+		// the one that actor's v1 workflow already wrote. Read the same pegboard key here so the
+		// rebuilt state carries what the activity actually recorded. The read joins this
+		// transaction's conflict ranges, so a concurrent write to it fails the repair rather than
+		// racing it.
+		let create_ts = if from_v1 {
+			let Ok(actor_id) = Id::from_str(actor_id) else {
+				return Ok((
+					builder.refuse(
+						"activity input",
+						format!(
+							"{init_location} input records actor_id {actor_id:?}, which is not an id"
+						),
+					),
+					None,
+				));
+			};
+
+			let create_ts_key =
+				Subspace::new(&(RIVET, PEGBOARD)).pack(&(ACTOR, DATA, actor_id, CREATE_TS));
+
+			let Some(entry) = tx.get(&create_ts_key, Serializable).await? else {
+				return Ok((
+					builder.manual(
+						"actor create ts",
+						format!(
+							"v1 actor {actor_id} has no create_ts key, so the timestamp {init_location} recorded cannot be recovered"
+						),
+					),
+					None,
+				));
+			};
+
+			let raw: &[u8] = &entry;
+			i64::from_be_bytes(
+				raw.try_into()
+					.with_context(|| format!("v1 actor {actor_id} create_ts is not an i64"))?,
+			)
+		} else {
+			let Some(create_ts) = input.get("create_ts").and_then(|v| v.as_i64()) else {
+				return Ok((
+					builder.refuse(
+						"activity input",
+						format!("{init_location} input {raw_input} does not record create_ts"),
+					),
+					None,
+				));
+			};
+
+			create_ts
+		};
+		builder.pass(
+			"actor create ts",
+			if from_v1 {
+				format!("{create_ts}, read from the v1 actor's pegboard key")
+			} else {
+				format!("{create_ts}, from the {init_location} input")
+			},
+		);
+
+		let key = input.get("key").cloned().unwrap_or(serde_json::Value::Null);
+		if !key.is_string() && !key.is_null() {
+			return Ok((
+				builder.refuse(
+					"activity input",
+					format!("{init_location} input records key {key}, expected a string or null"),
+				),
+				None,
+			));
+		}
+
+		// Mirrors `pegboard_actor2::State::new`, which derives every field from this input plus the
+		// create timestamp. Nothing re-runs, so the counters the init activity already moved stay
+		// where they are.
+		let state = serde_json::json!({
+			"actor_id": actor_id,
+			"name": name,
+			"pool_name": pool_name,
+			"key": key,
+			"namespace_id": namespace_id,
+			"acquired_slot": false,
+			"envoy_last_command_idx": -1,
+			"envoy_key": null,
+			"create_ts": create_ts,
+			"create_complete_ts": null,
+			"allocate_ts": null,
+			"start_ts": null,
+			"sleep_ts": null,
+			"connectable_ts": null,
+			"reschedule_ts": null,
+			"destroy_ts": null,
+			"error": null,
+		})
+		.to_string();
+		builder.pass(
+			"rebuilt state",
+			format!("{state}, derived from the {init_location} input"),
+		);
+
+		let plan = RepairPlan::WriteInitState {
+			location: last_location.clone(),
+			keys: last.keys.clone(),
+			state,
+		};
+
+		Ok((builder.finish(RepairState::Ready), Some(plan)))
+	}
+
 	/// Validates the `deallocate` / `set_error` divergence and locates the slot the missing
 	/// `set_error` activity belongs in.
 	async fn inspect_deallocate_set_error(
@@ -1361,20 +1849,23 @@ impl DatabaseKv {
 			},
 		);
 
+		// Read once and reuse. The orphan is found here, its row is validated below, and the trailing
+		// check needs to see everything recorded after it.
+		let active = self
+			.scan_raw_history(
+				tx,
+				&self
+					.subspace
+					.subspace(&keys::history::HistorySubspaceKey::new(
+						workflow_id,
+						keys::history::HistorySubspaceVariant::Active,
+					)),
+			)
+			.await?;
+
 		let orphan_location = match &location {
 			Some(location) => location.clone(),
 			None => {
-				let active = self
-					.scan_raw_history(
-						tx,
-						&self
-							.subspace
-							.subspace(&keys::history::HistorySubspaceKey::new(
-								workflow_id,
-								keys::history::HistorySubspaceVariant::Active,
-							)),
-					)
-					.await?;
 				let orphans = active
 					.iter()
 					.filter(|(_, event)| event.is_sleep_orphan())
@@ -1435,22 +1926,9 @@ impl DatabaseKv {
 			format!("{orphan_location} is a loop iteration sleep sub-event"),
 		);
 
-		// Both copies live under {loop, iteration}, so read that one subspace per history variant
-		// rather than scanning the whole history again.
+		// The forgotten copy lives under {loop, iteration}, so read just that one subspace rather than
+		// scanning the whole forgotten history.
 		let iteration_root = orphan_location.root().root();
-		let active = self
-			.scan_raw_history(
-				tx,
-				&self
-					.subspace
-					.subspace(&keys::history::EventHistorySubspaceKey::new(
-						workflow_id,
-						iteration_root.clone(),
-						iteration_coord.head(),
-						false,
-					)),
-			)
-			.await?;
 		let forgotten = self
 			.scan_raw_history(
 				tx,
@@ -1538,6 +2016,36 @@ impl DatabaseKv {
 				forgotten_event
 					.sleep_state
 					.expect("checked by is_complete_sleep"),
+			),
+		);
+
+		// Replay walks the history by index, so clearing a row that is not the last one shifts every
+		// event recorded after it. The workflow then resumes live inside an iteration that already has
+		// recorded events and dies with `history diverged` once the loop reaches the next one. Which
+		// side is authoritative depends on what those later iterations recorded, so report it and stop
+		// rather than guessing.
+		let Some((last_location, last_event)) = active.iter().next_back() else {
+			return Ok((
+				builder.refuse("trailing event", "active history is empty"),
+				None,
+			));
+		};
+		if last_location != &orphan_location {
+			return Ok((
+				builder.manual(
+					"trailing event",
+					format!(
+						"{orphan_location} is followed by {} at {last_location}, so clearing it would shift every event after it",
+						last_event.describe()
+					),
+				),
+				None,
+			));
+		}
+		builder.pass(
+			"trailing event",
+			format!(
+				"{orphan_location} is the last recorded event, so clearing it cannot shift replay"
 			),
 		);
 
@@ -1762,6 +2270,44 @@ impl DatabaseKv {
 					},
 					mutations,
 				))
+			}
+			RepairPlan::ClearTrailingEvent {
+				location,
+				keys,
+				description,
+			} => {
+				// Clear the exact keys the inspection validated rather than a range, so a row that
+				// appeared between the scan and this write is never silently destroyed.
+				for key in &keys {
+					tx.clear(key);
+				}
+				mutations.push(format!("clear {location} {description}"));
+
+				Ok((PostCommit::default(), mutations))
+			}
+			RepairPlan::WriteInitState {
+				location,
+				keys,
+				state,
+			} => {
+				let state_key = keys::workflow::StateKey::new(workflow_id);
+				let state_value = serde_json::value::RawValue::from_string(state.clone())
+					.context("failed to build workflow state")?;
+				for (i, chunk) in state_key.split_ref(&state_value)?.into_iter().enumerate() {
+					tx.set(&tx.pack(&state_key.chunk(i)), &chunk);
+				}
+				mutations.push(format!("set workflow state {state}"));
+
+				// Clearing the trailing activity resets its error rows, so it runs again with a
+				// fresh retry budget rather than dying on the first transient failure.
+				for key in &keys {
+					tx.clear(key);
+				}
+				mutations.push(format!(
+					"clear {location} activity {RESERVE_ACTOR_KEY_ACTIVITY:?}"
+				));
+
+				Ok((PostCommit::default(), mutations))
 			}
 		}
 	}
@@ -2099,6 +2645,128 @@ impl DatabaseKv {
 		})
 	}
 
+	async fn verify_propose_consensus_failed(
+		&self,
+		tx: &universaldb::RetryableTransaction,
+		workflow_id: Id,
+		location: Location,
+	) -> Result<RepairVerification> {
+		let meta = self.read_workflow_meta(tx, workflow_id).await?;
+		let mut checks = Vec::new();
+
+		let active = self.scan_active_history(tx, workflow_id).await?;
+		let event = active.get(&location);
+		let unhandled_output = event.is_some_and(|event| {
+			event.is_activity(PROPOSE_ACTIVITY)
+				&& event.has_output
+				&& !PROPOSE_HANDLED_OUTPUTS
+					.iter()
+					.any(|handled| event.output().contains(handled))
+		});
+
+		match event {
+			Some(event) if unhandled_output => checks.push(RepairCheck::fail(
+				"propose output",
+				format!("{location} recorded {} again", event.output()),
+			)),
+			Some(event) if event.has_output => checks.push(RepairCheck::pass(
+				"propose output",
+				format!("{location} re-ran and recorded {}", event.output()),
+			)),
+			Some(_) => checks.push(RepairCheck::pass(
+				"propose event",
+				format!("{location} is recorded without an output, so the activity is running"),
+			)),
+			None => checks.push(RepairCheck::pass(
+				"propose event",
+				format!("{location} is cleared, so the activity runs on the next wake"),
+			)),
+		}
+
+		let state = if unhandled_output {
+			RepairVerifyState::Regressed
+		} else if meta.has_lease || meta.has_worker {
+			RepairVerifyState::ReplayRunning
+		} else if meta
+			.error
+			.as_deref()
+			.is_some_and(|error| error.contains("unreachable: ConsensusFailed"))
+		{
+			RepairVerifyState::Regressed
+		} else {
+			classify_replayed_workflow(&meta)
+		};
+
+		Ok(RepairVerification {
+			variant: RepairVariant::ProposeConsensusFailed,
+			workflow_id,
+			workflow_error: meta.error.clone(),
+			state,
+			location,
+			has_lease: meta.has_lease,
+			has_worker: meta.has_worker,
+			has_wake_condition: meta.has_wake_condition,
+			checks,
+		})
+	}
+
+	async fn verify_missing_init_state(
+		&self,
+		tx: &universaldb::RetryableTransaction,
+		workflow_id: Id,
+		location: Location,
+	) -> Result<RepairVerification> {
+		let meta = self.read_workflow_meta(tx, workflow_id).await?;
+		let mut checks = Vec::new();
+
+		match &meta.state {
+			Some(state) => checks.push(RepairCheck::pass("state key", format!("holds {state}"))),
+			None => checks.push(RepairCheck::fail("state key", "is still absent")),
+		}
+
+		let active = self.scan_active_history(tx, workflow_id).await?;
+		match active.get(&location) {
+			Some(event) if event.has_output => checks.push(RepairCheck::pass(
+				RESERVE_ACTOR_KEY_ACTIVITY,
+				format!("{location} re-ran and recorded {}", event.output()),
+			)),
+			Some(_) => checks.push(RepairCheck::pass(
+				RESERVE_ACTOR_KEY_ACTIVITY,
+				format!("{location} is recorded without an output, so the activity is running"),
+			)),
+			None => checks.push(RepairCheck::pass(
+				RESERVE_ACTOR_KEY_ACTIVITY,
+				format!("{location} is cleared, so the activity runs on the next wake"),
+			)),
+		}
+
+		let verify_state = if meta.state.is_none() {
+			RepairVerifyState::Regressed
+		} else if meta.has_lease || meta.has_worker {
+			RepairVerifyState::ReplayRunning
+		} else if meta
+			.error
+			.as_deref()
+			.is_some_and(|error| error.contains("expected struct State"))
+		{
+			RepairVerifyState::Regressed
+		} else {
+			classify_replayed_workflow(&meta)
+		};
+
+		Ok(RepairVerification {
+			variant: RepairVariant::MissingInitState,
+			workflow_id,
+			workflow_error: meta.error.clone(),
+			state: verify_state,
+			location,
+			has_lease: meta.has_lease,
+			has_worker: meta.has_worker,
+			has_wake_condition: meta.has_wake_condition,
+			checks,
+		})
+	}
+
 	async fn read_workflow_meta(
 		&self,
 		tx: &universaldb::RetryableTransaction,
@@ -2278,6 +2946,8 @@ impl DatabaseKv {
 				.unpack::<keys::history::OutputChunkKey>(entry.key())
 				.is_ok()
 			{
+				// Chunks arrive in key order, which is chunk order.
+				event.output_chunks.push(entry.value().to_vec());
 				event.has_output = true;
 				event.fields.push("output");
 			} else {

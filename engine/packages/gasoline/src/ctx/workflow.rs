@@ -242,7 +242,7 @@ impl WorkflowCtx {
 					tracing::error!(?err, "workflow error");
 
 					metrics::WORKFLOW_ERRORS
-						.with_label_values(&[self.name.as_str(), err_str.as_str()])
+						.with_label_values(&[self.name.as_str()])
 						.inc();
 				}
 
@@ -370,7 +370,7 @@ impl WorkflowCtx {
 				)?;
 
 				metrics::ACTIVITY_DURATION
-					.with_label_values(&[self.name.as_str(), A::NAME, ""])
+					.with_label_values(&[self.name.as_str(), A::NAME])
 					.observe(dt);
 
 				Ok(output)
@@ -397,15 +397,19 @@ impl WorkflowCtx {
 					)
 					.await?;
 
-				// TODO: Temporarily don't record err to reduce metrics cardinality
-				// if !is_recoverable {
-				// 	metrics::ACTIVITY_ERRORS
-				// 		.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
-				// 		.inc();
-				// }
-				let err_str = String::new();
+				let is_recoverable = err
+					.chain()
+					.find_map(|err| err.downcast_ref::<WorkflowError>())
+					.map(WorkflowError::is_recoverable)
+					.unwrap_or_default();
+
+				if !is_recoverable {
+					metrics::ACTIVITY_ERRORS
+						.with_label_values(&[self.name.as_str(), A::NAME])
+						.inc();
+				}
 				metrics::ACTIVITY_DURATION
-					.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
+					.with_label_values(&[self.name.as_str(), A::NAME])
 					.observe(dt);
 
 				Err(WorkflowError::ActivityFailure(A::NAME, err, 0))
@@ -431,13 +435,11 @@ impl WorkflowCtx {
 					)
 					.await?;
 
-				// TODO: Temporarily don't record err to reduce metrics cardinality
-				// metrics::ACTIVITY_ERRORS
-				// 	.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
-				// 	.inc();
-				let err_str = String::new();
+				metrics::ACTIVITY_ERRORS
+					.with_label_values(&[self.name.as_str(), A::NAME])
+					.inc();
 				metrics::ACTIVITY_DURATION
-					.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
+					.with_label_values(&[self.name.as_str(), A::NAME])
 					.observe(dt);
 
 				Err(err)

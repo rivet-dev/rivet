@@ -60,7 +60,6 @@ members = [
   "engine/packages/types",
   "engine/packages/universaldb",
   "engine/packages/universalpubsub",
-  "engine/packages/ups-broadcast",
   "engine/packages/util",
   "engine/packages/util-id",
   "engine/packages/util-serde",
@@ -415,8 +414,9 @@ members = [
     version = "0.0.4"
 
     [workspace.dependencies.vbare-compiler]
-    package = "rivet-vbare-compiler"
-    version = "0.0.5"
+    package = "vbare-compiler"
+    git = "https://github.com/rivet-dev/vbare"
+    branch = "main"
 
     [workspace.dependencies.rivet-api-builder]
     path = "engine/packages/api-builder"
@@ -598,9 +598,6 @@ members = [
 
     [workspace.dependencies.universalpubsub]
     path = "engine/packages/universalpubsub"
-
-    [workspace.dependencies.rivet-ups-broadcast]
-    path = "engine/packages/ups-broadcast"
 
     [workspace.dependencies.rivet-util]
     path = "engine/packages/util"

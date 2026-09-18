@@ -36,6 +36,8 @@ pub fn run<F: Future>(f: F) -> Option<F::Output> {
 		let providers = init_otel_providers();
 		traces::init_tracing_subscriber(&providers);
 
+		tokio::spawn(sample_runtime_metrics(tokio::runtime::Handle::current()));
+
 		tokio::select! {
 			_ = notify.notified() => {
 				tracing::info!("shutting down runtime");
@@ -79,17 +81,10 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 			let last_seen_poll_counts = last_seen_poll_counts
 				.get_or_init(|| poll_count_state(metrics.num_workers(), buckets));
 
-			metrics::TOKIO_GLOBAL_QUEUE_DEPTH.set(metrics.global_queue_depth() as i64);
-			metrics::TOKIO_ACTIVE_TASK_COUNT.set(metrics.num_alive_tasks() as i64);
-
+			// Only the poll time histogram is read here. Everything else the runtime
+			// exposes is sampled at scrape time by `rivet_metrics::tokio_runtime`,
+			// which does not cost anything on the poll path.
 			for worker in 0..metrics.num_workers() {
-				metrics::TOKIO_WORKER_OVERFLOW_COUNT
-					.with_label_values(&[&worker.to_string()])
-					.set(metrics.worker_overflow_count(worker) as i64);
-				metrics::TOKIO_WORKER_LOCAL_QUEUE_DEPTH
-					.with_label_values(&[&worker.to_string()])
-					.set(metrics.worker_local_queue_depth(worker) as i64);
-
 				if let Some(worker_counts) = last_seen_poll_counts.get(worker) {
 					for bucket in 0..buckets {
 						if let Some(last_seen_count) = worker_counts.get(bucket) {
@@ -154,6 +149,61 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 	}
 
 	rt_builder
+}
+
+/// How often runtime state is read. Everything sampled here is either an
+/// instantaneous depth or a monotonic total, so the interval only needs to be
+/// finer than the scrape interval.
+const RUNTIME_METRICS_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Records the runtime state that can be read from a handle.
+///
+/// This used to run from an `on_before_task_poll` hook, which paid for a full
+/// sweep of every worker on the hot path to produce values that are only read
+/// at scrape time. Sampling on an interval costs the same per scrape and
+/// nothing per poll. The poll time histogram still needs the hook because it
+/// has to see each poll.
+async fn sample_runtime_metrics(handle: tokio::runtime::Handle) {
+	let mut interval = tokio::time::interval(RUNTIME_METRICS_INTERVAL);
+	interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+	// Tokio reports a cumulative busy duration per worker while a prometheus
+	// counter only advances by a delta.
+	let mut last_busy_nanos = vec![0u64; handle.metrics().num_workers()];
+
+	loop {
+		interval.tick().await;
+
+		let metrics = handle.metrics();
+
+		metrics::TOKIO_GLOBAL_QUEUE_DEPTH.set(metrics.global_queue_depth() as i64);
+		metrics::TOKIO_BLOCKING_QUEUE_DEPTH.set(metrics.blocking_queue_depth() as i64);
+		metrics::TOKIO_ACTIVE_TASK_COUNT.set(metrics.num_alive_tasks() as i64);
+		metrics::TOKIO_BLOCKING_THREAD_COUNT.set(metrics.num_blocking_threads() as i64);
+		metrics::TOKIO_IDLE_BLOCKING_THREAD_COUNT.set(metrics.num_idle_blocking_threads() as i64);
+
+		for worker in 0..metrics.num_workers() {
+			let label = worker.to_string();
+			let labels = [label.as_str()];
+
+			metrics::TOKIO_WORKER_OVERFLOW_COUNT
+				.with_label_values(&labels)
+				.set(metrics.worker_overflow_count(worker) as i64);
+			metrics::TOKIO_WORKER_LOCAL_QUEUE_DEPTH
+				.with_label_values(&labels)
+				.set(metrics.worker_local_queue_depth(worker) as i64);
+
+			let Some(last_busy_nanos) = last_busy_nanos.get_mut(worker) else {
+				continue;
+			};
+			let busy_nanos = metrics.worker_total_busy_duration(worker).as_nanos() as u64;
+			let delta_nanos = busy_nanos.saturating_sub(*last_busy_nanos);
+			*last_busy_nanos = busy_nanos;
+			metrics::TOKIO_WORKER_BUSY_DURATION_TOTAL
+				.with_label_values(&labels)
+				.inc_by(delta_nanos as f64 / 1_000_000_000.0);
+		}
+	}
 }
 
 fn poll_count_state(workers: usize, buckets: usize) -> Vec<Vec<AtomicU64>> {

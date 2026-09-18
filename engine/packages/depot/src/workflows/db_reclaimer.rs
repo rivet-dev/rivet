@@ -10,6 +10,7 @@ use crate::{
 		test_hooks, *,
 	},
 	conveyer::{
+		commit::clear_abandoned_commit_stage,
 		constants::COMMIT_STAGE_ORPHAN_GRACE_MS,
 		types::{ReclaimPlanOutcome, ReclaimProgress, encode_reclaim_progress},
 	},
@@ -564,6 +565,14 @@ pub async fn reclaim_fdb_job(
 	ctx: &ActivityCtx,
 	input: &ReclaimFdbJobInput,
 ) -> Result<ReclaimFdbJobOutput> {
+	// Re-check the admission percent every call so an operator lowering it reaches jobs already in
+	// flight, on the same terms as `sweep_commit_delta_chunk`. This gate covers the staging cleanup
+	// too, which is the only reclaim work that reaches this activity without passing through the
+	// drain's gate first, and which is therefore the only thing that kept writing at zero percent.
+	if !input.bypass_admission && !branch_admitted_now(ctx.config(), input.database_branch_id) {
+		return Ok(admission_blocked_reclaim_job());
+	}
+
 	let input = input.clone();
 	let input_for_tx = input.clone();
 	let now_ms = ctx.ts();
@@ -933,6 +942,7 @@ async fn reclaim_fdb_job_tx(
 		// Every other lane derives its candidate set under the shared slice budget, so a slice never
 		// leaves a partially handled candidate behind; the reclaim companion replans instead.
 		has_more: false,
+		admission_blocked: false,
 	})
 }
 
@@ -1406,17 +1416,7 @@ pub(super) async fn cleanup_repair_fdb_outputs_tx(
 			continue;
 		}
 
-		let (delta_begin, delta_end) =
-			keys::branch_delta_txid_range(input.database_branch_id, *txid);
-		tx.informal().clear_range(&delta_begin, &delta_end);
-		tx.informal().clear(&stage_key);
-		if stage.accounted_bytes != 0 {
-			quota::atomic_add_branch(
-				tx,
-				input.database_branch_id,
-				stage.accounted_bytes.saturating_neg(),
-			);
-		}
+		clear_abandoned_commit_stage(tx, input.database_branch_id, *txid, &stage);
 		cleared_any = true;
 		tracing::info!(
 			database_branch_id = ?input.database_branch_id,
@@ -1582,6 +1582,7 @@ pub(super) async fn cleanup_repair_fdb_outputs_tx(
 		}],
 		throttled: false,
 		has_more,
+		admission_blocked: false,
 	})
 }
 
@@ -1593,6 +1594,21 @@ fn rejected_reclaim_job(reason: impl Into<String>) -> ReclaimFdbJobOutput {
 		output_refs: Vec::new(),
 		throttled: false,
 		has_more: false,
+		admission_blocked: false,
+	}
+}
+
+/// The branch fell outside the admission percent. Nothing was read or deleted, and `has_more` is not
+/// set, so the companion ends the job instead of re-dispatching it. The staging cleanup ids the job
+/// was carrying are re-derived from FDB by the next refresh's staging orphan scan, so ending here
+/// defers the work rather than dropping it.
+fn admission_blocked_reclaim_job() -> ReclaimFdbJobOutput {
+	ReclaimFdbJobOutput {
+		status: CompactionJobStatus::Requested,
+		output_refs: Vec::new(),
+		throttled: false,
+		has_more: false,
+		admission_blocked: true,
 	}
 }
 
@@ -1602,6 +1618,7 @@ fn throttled_reclaim_job() -> ReclaimFdbJobOutput {
 		output_refs: Vec::new(),
 		throttled: true,
 		has_more: false,
+		admission_blocked: false,
 	}
 }
 
@@ -1616,6 +1633,7 @@ fn incomplete_reclaim_job() -> ReclaimFdbJobOutput {
 		output_refs: Vec::new(),
 		throttled: false,
 		has_more: true,
+		admission_blocked: false,
 	}
 }
 
@@ -1633,6 +1651,7 @@ async fn reclaim_fdb_fault_output(
 			output_refs: Vec::new(),
 			throttled: false,
 			has_more: false,
+			admission_blocked: false,
 		})),
 	}
 }

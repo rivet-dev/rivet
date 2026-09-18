@@ -1197,6 +1197,10 @@ pub struct ReclaimFdbJobInput {
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub input_range: ReclaimJobInputRange,
+	/// Carried from the job's `bypass_admission`, so a forced job keeps deleting regardless of the
+	/// admission percent.
+	#[serde(default)]
+	pub bypass_admission: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1212,6 +1216,10 @@ pub struct ReclaimFdbJobOutput {
 	// remainder in another bounded transaction.
 	#[serde(default)]
 	pub has_more: bool,
+	// Set when the branch fell outside the admission percent. No deletes were issued; the companion
+	// ends the job so the manager frees the reclaim slot.
+	#[serde(default)]
+	pub admission_blocked: bool,
 }
 
 /// Plans and stages one hot slice from the drain cursor in a single FDB transaction. `None` cursor

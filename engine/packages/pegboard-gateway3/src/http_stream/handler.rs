@@ -95,6 +95,7 @@ impl PegboardGateway3 {
 			msg_rx,
 			drop_rx,
 			http_response_abort_rx,
+			created: _,
 			handle: in_flight_req,
 		} = self
 			.shared_state
@@ -280,7 +281,7 @@ impl PegboardGateway3 {
 					response_start_deadline,
 					response_start_timeout,
 				)
-				.instrument(tracing::info_span!("stream_request_and_wait_for_response"))
+				.instrument(tracing::debug_span!("stream_request_and_wait_for_response"))
 				.await?
 			} else {
 				wait_for_http_response_start(
@@ -293,7 +294,7 @@ impl PegboardGateway3 {
 					response_start_deadline,
 					response_start_timeout,
 				)
-				.instrument(tracing::info_span!("wait_for_tunnel_response"))
+				.instrument(tracing::debug_span!("wait_for_tunnel_response"))
 				.await?
 			};
 			let (response_start_message_id, mut response_start) = response_start;
