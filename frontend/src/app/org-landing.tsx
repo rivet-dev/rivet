@@ -14,7 +14,6 @@ import {
 	Avatar,
 	AvatarFallback,
 	AvatarImage,
-	Badge,
 	Button,
 	cn,
 	DropdownMenu,
@@ -31,7 +30,7 @@ import {
 	WithTooltip,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
-import { RouteLayout } from "./route-layout";
+import { VisibilitySensor } from "@/components/visibility-sensor";
 import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
 import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
@@ -39,9 +38,9 @@ import {
 	getRecentTimestamp,
 	RECENT_PROJECTS_KEY,
 } from "@/lib/recently-visited";
-import { VisibilitySensor } from "@/components/visibility-sensor";
 import { queryClient } from "@/queries/global";
-import { LazyBillingPlanBadge } from "./billing/billing-plan-badge";
+import { LazyBillingPlanBadge, PlanBadge } from "./billing/billing-plan-badge";
+import { RouteLayout } from "./route-layout";
 
 export function OrgLanding({ organization }: { organization: string }) {
 	const navigate = useNavigate();
@@ -283,12 +282,10 @@ export function OrgLanding({ organization }: { organization: string }) {
 													/>
 												</SmallText>
 											) : null}
-											<Badge
-												variant="premium-violet"
-												className="absolute top-3 right-3 min-w-12 justify-center"
-											>
-												BYOC
-											</Badge>
+											<PlanBadge
+												plan="byoc"
+												className="absolute top-3 right-3 min-w-12"
+											/>
 										</Link>
 									))}
 								</div>

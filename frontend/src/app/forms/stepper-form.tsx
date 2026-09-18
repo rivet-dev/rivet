@@ -25,7 +25,7 @@ import {
 	useWatch,
 } from "react-hook-form";
 import type * as z from "zod";
-import { Button, cn } from "@/components";
+import { Button, cn, useDialogContentClassName } from "@/components";
 import type { defineStepper } from "@/components/ui/stepper";
 import { posthog } from "@/lib/posthog";
 
@@ -39,6 +39,7 @@ type Step = Stepperize.Step & {
 	// step can adapt its heading to earlier choices (e.g. the selected platform).
 	description?: string | ((values: Record<string, unknown>) => string);
 	titleFor?: (values: Record<string, unknown>) => string;
+	width?: string | ((values: Record<string, unknown>) => string);
 	schema: z.ZodSchema | ((values: Record<string, unknown>) => z.ZodSchema);
 	next?: string;
 	previous?: string;
@@ -304,6 +305,13 @@ function Content<const Steps extends Step[]>({
 		string,
 		unknown
 	>;
+
+	const currentStepWidth = (stepper.current as unknown as Step).width;
+	useDialogContentClassName(
+		typeof currentStepWidth === "function"
+			? currentStepWidth(liveValues)
+			: currentStepWidth,
+	);
 
 	const ref = useRef<z.infer<JoinStepSchemas<Steps>> | null>({});
 	const formRef = useRef<HTMLFormElement>(null);
