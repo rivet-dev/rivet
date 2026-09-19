@@ -56,6 +56,8 @@ export function runSqliteTransactionSync<T>(
 	try {
 		const result = callback(transaction);
 		if (isPromiseLike(result)) {
+			// The rejected callback can resume after rollback. Observe its rejection.
+			void Promise.resolve(result).catch(() => {});
 			throw new Error(
 				"db.transactionSync() callback must complete synchronously and must not return a promise.",
 			);

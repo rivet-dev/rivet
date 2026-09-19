@@ -721,9 +721,11 @@ describeDriverMatrix(
 						if (driverTestConfig.runtime === "wasm") {
 							await expect(
 								actor.synchronousQueries("sync"),
-							).rejects.toThrow(
-								"only available in the Node.js native runtime",
-							);
+							).resolves.toEqual({
+								unavailable: expect.stringContaining(
+									"only available in the Node.js native runtime",
+								),
+							});
 							return;
 						}
 

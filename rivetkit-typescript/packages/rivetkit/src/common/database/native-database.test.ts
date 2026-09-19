@@ -139,6 +139,109 @@ class FakeNativeDatabase implements JsNativeDatabaseLike {
 }
 
 describe("wrapJsNativeDatabase", () => {
+	test("rejects integer bindings that the native number bridge cannot preserve", async () => {
+		const native = new FakeNativeDatabase();
+		const wrapped = wrapJsNativeDatabase(native);
+		for (const value of [
+			9007199254740993n,
+			-9007199254740993n,
+			10n ** 400n,
+			1e20,
+		]) {
+			expect(() => wrapped.executeSync!("SELECT ?", [value])).toThrow(
+				"safe integer range",
+			);
+			await expect(wrapped.execute!("SELECT ?", [value])).rejects.toThrow(
+				"safe integer range",
+			);
+		}
+		expect(native.executeCalls).toEqual([]);
+		wrapped.executeSync!("SELECT ?, ?", [
+			BigInt(Number.MAX_SAFE_INTEGER),
+			Number.MIN_SAFE_INTEGER,
+		]);
+		expect(native.executeCalls[0]?.params).toEqual([
+			{ kind: "int", intValue: Number.MAX_SAFE_INTEGER },
+			{ kind: "int", intValue: Number.MIN_SAFE_INTEGER },
+		]);
+	});
+
+	test("closing a borrowed client preserves the core-owned database", async () => {
+		const native = new FakeNativeDatabase();
+		const wrapped = wrapJsNativeDatabase(native, { ownsDatabase: false });
+		await wrapped.close();
+		expect(native.closed).toBe(false);
+		expect(() => wrapped.executeSync!("SELECT 1")).toThrow(
+			"Database is closed",
+		);
+		const nextClient = wrapJsNativeDatabase(native, {
+			ownsDatabase: false,
+		});
+		expect(nextClient.executeSync!("SELECT 1").rows).toEqual([[1]]);
+		await nextClient.close();
+		await native.close();
+		expect(native.closed).toBe(true);
+	});
+
+	test("distinguishes unquoted identifiers from Unicode named parameters", () => {
+		const native = new FakeNativeDatabase();
+		const wrapped = wrapJsNativeDatabase(native);
+		wrapped.executeSync!("SELECT column$name, :café́, :🌍 FROM items", {
+			café́: 42,
+			"🌍": "world",
+		});
+		expect(native.executeCalls[0]?.params).toEqual([
+			{ kind: "int", intValue: 42 },
+			{ kind: "text", textValue: "world" },
+		]);
+	});
+
+	test("preserves the cached rowid across reads while still checking sync support", () => {
+		const native = new FakeNativeDatabase();
+		native.executeSync = (sql) => ({
+			columns: [],
+			rows: [],
+			changes: 0,
+			lastInsertRowId: sql === "INSERT" ? 42 : null,
+		});
+		const wrapped = wrapJsNativeDatabase(native);
+		wrapped.executeSync!("INSERT");
+		wrapped.executeSync!("SELECT 1");
+		expect(
+			wrapped.executeSync!("SELECT last_insert_rowid() AS id").rows,
+		).toEqual([[42]]);
+		native.executeSync = () => {
+			throw new Error("sync unavailable");
+		};
+		expect(() =>
+			wrapped.executeSync!("SELECT last_insert_rowid()"),
+		).toThrow("sync unavailable");
+	});
+
+	test("rejects cached rowid queries after close", async () => {
+		const wrapped = wrapJsNativeDatabase(new FakeNativeDatabase());
+		await wrapped.close();
+		expect(() =>
+			wrapped.executeSync!("SELECT last_insert_rowid()"),
+		).toThrow("Database is closed");
+		await expect(
+			wrapped.execute("SELECT last_insert_rowid()"),
+		).rejects.toThrow("Database is closed");
+	});
+
+	test("ignores named parameters in SQL strings, identifiers, and comments", () => {
+		const native = new FakeNativeDatabase();
+		const wrapped = wrapJsNativeDatabase(native);
+		wrapped.executeSync!(
+			`SELECT ':literal', :value AS "@column", ':it''s' /* $comment */ -- :line\r :stillComment
+		`,
+			{ value: 42 },
+		);
+		expect(native.executeCalls[0]?.params).toEqual([
+			{ kind: "int", intValue: 42 },
+		]);
+	});
+
 	test("admits Promise.all read queries concurrently", async () => {
 		const native = new FakeNativeDatabase();
 		const db = wrapJsNativeDatabase(native);

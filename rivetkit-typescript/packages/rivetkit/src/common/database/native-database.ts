@@ -188,13 +188,19 @@ function toNativeBinding(arg: unknown): NativeBindParam {
 	if (arg === null || arg === undefined) {
 		return { kind: "null" };
 	}
-	if (typeof arg === "bigint") {
-		return { kind: "int", intValue: Number(arg) };
+	if (
+		typeof arg === "bigint" ||
+		(typeof arg === "number" && Number.isInteger(arg))
+	) {
+		const value = Number(arg);
+		if (!Number.isSafeInteger(value)) {
+			throw new RangeError(
+				"SQLite integer bindings must be within the JavaScript safe integer range.",
+			);
+		}
+		return { kind: "int", intValue: value };
 	}
 	if (typeof arg === "number") {
-		if (Number.isInteger(arg)) {
-			return { kind: "int", intValue: arg };
-		}
 		return { kind: "float", floatValue: arg };
 	}
 	if (typeof arg === "string") {
@@ -212,9 +218,13 @@ function toNativeBinding(arg: unknown): NativeBindParam {
 function extractNamedSqliteParameters(sql: string): string[] {
 	const orderedNames: string[] = [];
 	const seen = new Set<string>();
-	const pattern = /([:@$][A-Za-z_][A-Za-z0-9_]*)/g;
+	// SQLite identifiers may contain "$" and any non-ASCII character. Consume
+	// whole identifiers so their suffixes cannot be mistaken for parameters.
+	const pattern =
+		/'(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|([:@$][\w$\u0080-\u{10FFFF}]+(?:::[\w$\u0080-\u{10FFFF}]+)*(?:\([^)]*\))?)|[A-Za-z_\u0080-\u{10FFFF}][\w$\u0080-\u{10FFFF}]*/gu;
 	for (const match of sql.matchAll(pattern)) {
 		const name = match[1];
+		if (!name) continue;
 		if (seen.has(name)) {
 			continue;
 		}
@@ -357,6 +367,7 @@ class NativeCloseGate {
 
 export function wrapJsNativeDatabase(
 	database: JsNativeDatabaseLike,
+	{ ownsDatabase = true }: { ownsDatabase?: boolean } = {},
 ): StateAwareSqliteDatabase {
 	const gate = new NativeCloseGate();
 	let closePromise: Promise<void> | undefined;
@@ -366,21 +377,21 @@ export function wrapJsNativeDatabase(
 		sql: string,
 		params?: SqliteBindings,
 	): Promise<SqliteExecuteResult> => {
-		const lastInsertRowIdColumn = lastInsertRowIdColumnName(sql);
-		if (lastInsertRowIdColumn) {
-			return {
-				columns: [lastInsertRowIdColumn],
-				rows: [[lastInsertRowId ?? 0]],
-				changes: 0,
-				lastInsertRowId,
-			};
-		}
-
 		const release = gate.enter();
 		try {
+			const lastInsertRowIdColumn = lastInsertRowIdColumnName(sql);
+			if (lastInsertRowIdColumn) {
+				return {
+					columns: [lastInsertRowIdColumn],
+					rows: [[lastInsertRowId ?? 0]],
+					changes: 0,
+					lastInsertRowId,
+				};
+			}
+
 			const nativeParams = toNativeBindings(sql, params);
 			const result = await database.execute(sql, nativeParams);
-			if (result.lastInsertRowId !== undefined) {
+			if (result.lastInsertRowId != null) {
 				lastInsertRowId = result.lastInsertRowId;
 			}
 			return result;
@@ -394,21 +405,21 @@ export function wrapJsNativeDatabase(
 		sql: string,
 		params?: SqliteBindings,
 	): SqliteExecuteResult => {
-		const lastInsertRowIdColumn = lastInsertRowIdColumnName(sql);
-		if (lastInsertRowIdColumn) {
-			return {
-				columns: [lastInsertRowIdColumn],
-				rows: [[lastInsertRowId ?? 0]],
-				changes: 0,
-				lastInsertRowId,
-			};
-		}
-
 		const release = gate.enter();
 		try {
 			const nativeParams = toNativeBindings(sql, params);
 			const result = database.executeSync(sql, nativeParams);
-			if (result.lastInsertRowId !== undefined) {
+			// Execute first so runtime availability and transaction admission are enforced.
+			const rowIdColumn = lastInsertRowIdColumnName(sql);
+			if (rowIdColumn) {
+				return {
+					columns: [rowIdColumn],
+					rows: [[lastInsertRowId ?? 0]],
+					changes: 0,
+					lastInsertRowId,
+				};
+			}
+			if (result.lastInsertRowId != null) {
 				lastInsertRowId = result.lastInsertRowId;
 			}
 			return result;
@@ -494,7 +505,7 @@ export function wrapJsNativeDatabase(
 							return transactionResults;
 						})();
 				for (const result of results) {
-					if (result.lastInsertRowId !== undefined) {
+					if (result.lastInsertRowId != null) {
 						lastInsertRowId = result.lastInsertRowId;
 					}
 				}
@@ -526,7 +537,7 @@ export function wrapJsNativeDatabase(
 				release();
 			}
 			return wrapTransaction(database, transaction, gate, (result) => {
-				if (result.lastInsertRowId !== undefined) {
+				if (result.lastInsertRowId != null) {
 					lastInsertRowId = result.lastInsertRowId;
 				}
 			});
@@ -545,7 +556,7 @@ export function wrapJsNativeDatabase(
 				release();
 			}
 			return wrapTransaction(database, transaction, gate, (result) => {
-				if (result.lastInsertRowId !== undefined) {
+				if (result.lastInsertRowId != null) {
 					lastInsertRowId = result.lastInsertRowId;
 				}
 			});
@@ -570,7 +581,7 @@ export function wrapJsNativeDatabase(
 				release();
 			}
 			return wrapTransaction(database, transaction, gate, (result) => {
-				if (result.lastInsertRowId !== undefined) {
+				if (result.lastInsertRowId != null) {
 					lastInsertRowId = result.lastInsertRowId;
 				}
 			});
@@ -586,7 +597,9 @@ export function wrapJsNativeDatabase(
 			return normalizeNativeMetrics(database.metrics?.());
 		},
 		async close(): Promise<void> {
-			closePromise ??= gate.close(() => database.close());
+			closePromise ??= gate.close(async () => {
+				if (ownsDatabase) await database.close();
+			});
 			await closePromise;
 		},
 	};

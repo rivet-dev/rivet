@@ -24,10 +24,29 @@ catalogs:
 		"0.45.2",
 	);
 	assert.equal(
+		resolveCatalogDependency("drizzle-orm", "catalog:default", catalogs),
+		"0.45.2",
+	);
+	assert.equal(
 		resolveCatalogDependency("react", "catalog:react19", catalogs),
 		"^19.0.0",
 	);
 	assert.equal(resolveCatalogDependency("zod", "^4.0.0", catalogs), undefined);
+});
+
+test("supports a named default catalog and rejects duplicate defaults", () => {
+	const catalogs = parseWorkspaceCatalogs(`
+catalogs:
+  default:
+    react: "^19.0.0"
+`);
+	for (const spec of ["catalog:", "catalog:default"]) {
+		assert.equal(resolveCatalogDependency("react", spec, catalogs), "^19.0.0");
+	}
+	assert.throws(
+		() => parseWorkspaceCatalogs("catalog: {}\ncatalogs:\n  default: {}\n"),
+		/default catalog is defined twice/,
+	);
 });
 
 test("rejects unresolved catalog references before publication", () => {

@@ -15,6 +15,7 @@ import type {
 } from "@/common/database/config";
 import {
 	isManualTransactionControl,
+	isSqliteBindingObject,
 	MIGRATION_TRANSACTION_TIMEOUT_MS,
 	runSqliteTransactionSync,
 	toSqliteBindings,
@@ -270,27 +271,32 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 							"Nested synchronous SQLite transactions are not supported.",
 						);
 					}
-					return runSqliteTransactionSync(
-						nativeDb,
-						(transaction) => {
-							const transactionClient = createDrizzleClient(
-								transaction,
-								true,
-							);
-							const tx: SynchronousTransactionAccess = {
-								executeSync: transactionClient.executeSync,
-							};
-							synchronousTransactionActive = true;
-							try {
+					synchronousTransactionActive = true;
+					try {
+						return runSqliteTransactionSync(
+							nativeDb,
+							(transaction) => {
+								const transactionClient = createDrizzleClient(
+									transaction,
+									true,
+								);
+								const tx: SynchronousTransactionAccess = {
+									executeSync: transactionClient.executeSync,
+								};
 								return transactionCallback(tx);
-							} finally {
-								synchronousTransactionActive = false;
-							}
-						},
-						options,
-					);
+							},
+							options,
+						);
+					} finally {
+						synchronousTransactionActive = false;
+					}
 				};
 				drizzleDb.close = async () => {
+					if (synchronousTransactionActive) {
+						throw new Error(
+							"Cannot close the database inside db.transactionSync().",
+						);
+					}
 					if (!closed) {
 						closed = true;
 						await nativeDb.close();
@@ -466,7 +472,9 @@ async function executeRaw<TRow extends Record<string, unknown>>(
 		if (args.length > 0) {
 			const { rows, columns } = await db.execute(
 				query,
-				toSqliteBindings(args),
+				args.length === 1 && isSqliteBindingObject(args[0])
+					? toSqliteBindings(args[0])
+					: toSqliteBindings(args),
 			);
 			return rows.map((row) => rowToObject<TRow>(row, columns));
 		}
@@ -523,7 +531,9 @@ function executeRawSync<TRow extends Record<string, unknown>>(
 		if (args.length > 0) {
 			const { rows, columns } = db.executeSync(
 				query,
-				toSqliteBindings(args),
+				args.length === 1 && isSqliteBindingObject(args[0])
+					? toSqliteBindings(args[0])
+					: toSqliteBindings(args),
 			);
 			return rows.map((row) => rowToObject<TRow>(row, columns));
 		}

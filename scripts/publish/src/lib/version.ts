@@ -97,8 +97,13 @@ export function parseWorkspaceCatalogs(source: string): WorkspaceCatalogs {
 			named.set(name, parseCatalog(value, `catalogs.${name}`));
 		}
 	}
+	if (parsed.catalog !== undefined && named.has("default")) {
+		throw new Error(
+			"default catalog is defined twice: catalog and catalogs.default",
+		);
+	}
 	return {
-		default: parseCatalog(parsed.catalog, "catalog"),
+		default: named.get("default") ?? parseCatalog(parsed.catalog, "catalog"),
 		named,
 	};
 }
@@ -111,7 +116,9 @@ export function resolveCatalogDependency(
 	if (!spec.startsWith("catalog:")) return undefined;
 	const catalogName = spec.slice("catalog:".length);
 	const catalog =
-		catalogName.length === 0 ? catalogs.default : catalogs.named.get(catalogName);
+		catalogName.length === 0 || catalogName === "default"
+			? catalogs.default
+			: catalogs.named.get(catalogName);
 	if (catalog === undefined) {
 		throw new Error(
 			`dependency ${dependency} references missing pnpm catalog ${catalogName}`,
@@ -304,6 +311,26 @@ export async function bumpPackageJsons(
 						continue;
 					}
 					deps[dep] = version;
+				}
+			}
+
+			// Fail loudly if a pnpm workspace protocol spec survived. These
+			// never resolve on a registry, so shipping one produces an
+			// uninstallable package (see the `catalog:` leak in rivetkit@2.3.14).
+			for (const field of DEP_FIELDS) {
+				const deps = pkgJson[field];
+				if (!deps) continue;
+				for (const [dep, spec] of Object.entries(deps)) {
+					if (
+						typeof spec === "string" &&
+						(spec.startsWith("workspace:") ||
+							spec.startsWith("catalog:"))
+					) {
+						const protocol = spec.slice(0, spec.indexOf(":"));
+						throw new Error(
+							`unresolved ${protocol}: spec in ${pkg.name} -> ${dep} ("${spec}"); it would publish an uninstallable package`,
+						);
+					}
 				}
 			}
 		}

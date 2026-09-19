@@ -183,7 +183,7 @@ impl JsNativeDatabase {
 		params: Option<Vec<JsBindParam>>,
 	) -> napi::Result<NativeExecuteResult> {
 		let params = params.map(js_bind_params_to_core).transpose()?;
-		let db = self.db.clone();
+		let db = self.db.for_synchronous_call();
 		wait_for_runtime(async move { db.execute(sql, params).await })
 			.map(core_execute_result_to_js)
 	}
@@ -210,7 +210,7 @@ impl JsNativeDatabase {
 
 	#[napi]
 	pub fn exec_sync(&self, sql: String) -> napi::Result<QueryResult> {
-		let db = self.db.clone();
+		let db = self.db.for_synchronous_call();
 		wait_for_runtime(async move { db.exec(sql).await }).map(core_query_result_to_js)
 	}
 
@@ -241,7 +241,7 @@ impl JsNativeDatabase {
 		name: Option<String>,
 	) -> napi::Result<JsSqliteTransaction> {
 		let timeout = timeout_ms.map(transaction_timeout).transpose()?;
-		let db = self.db.clone();
+		let db = self.db.for_synchronous_call();
 		let transaction =
 			wait_for_runtime(
 				async move { db.begin_named_transaction(name.as_deref(), timeout).await },
@@ -380,7 +380,17 @@ where
 			.build(),
 		)
 	})?;
-	// NAPI-RS enters its multithreaded runtime before invoking synchronous exports.
+	// napi-derive wraps synchronous exports in within_runtime_if_available.
+	// Reject a custom current-thread runtime rather than panicking across N-API.
+	if runtime.runtime_flavor() != tokio::runtime::RuntimeFlavor::MultiThread {
+		return Err(napi_anyhow_error(
+			crate::NapiInvalidState {
+				state: "runtime".to_owned(),
+				reason: "synchronous SQLite requires a multithreaded Tokio runtime".to_owned(),
+			}
+			.build(),
+		));
+	}
 	tokio::task::block_in_place(|| runtime.block_on(future)).map_err(crate::napi_anyhow_error)
 }
 
@@ -482,18 +492,5 @@ fn column_value_to_json(value: ColumnValue) -> serde_json::Value {
 }
 
 #[cfg(test)]
-mod tests {
-	#[test]
-	fn synchronous_wait_uses_the_active_multithreaded_runtime() {
-		let runtime = tokio::runtime::Builder::new_multi_thread()
-			.enable_all()
-			.build()
-			.expect("runtime should build");
-		let _guard = runtime.enter();
-
-		let result = super::wait_for_runtime(async { Ok::<_, anyhow::Error>(42) })
-			.expect("future should complete");
-
-		assert_eq!(result, 42);
-	}
-}
+#[path = "../tests/database.rs"]
+mod tests;

@@ -56,6 +56,7 @@ import {
 	registerNativeStateTransactionOpener,
 } from "@/common/database/mod";
 import {
+	type JsNativeDatabaseLike,
 	type JsNativeSynchronousTransactionLike,
 	wrapJsNativeDatabase,
 } from "@/common/database/native-database";
@@ -597,7 +598,7 @@ function getOrCreateNativeSqlDatabase(
 		return cachedDatabase;
 	}
 
-	const database = wrapJsNativeDatabase({
+	const bindings: JsNativeDatabaseLike = {
 		exec: (sql) => runtime.actorSqlExec(ctx, sql),
 		execSync: (sql) => runtime.actorSqlExecSync(ctx, sql),
 		execute: (sql, params) => runtime.actorSqlExecute(ctx, sql, params),
@@ -671,6 +672,11 @@ function getOrCreateNativeSqlDatabase(
 		metrics: () => runtime.actorSqlMetrics(ctx),
 		takeLastKvError: () => runtime.actorSqlTakeLastKvError(ctx),
 		close: () => runtime.actorSqlClose(ctx),
+	};
+	const database = wrapJsNativeDatabase(bindings, {
+		// Core still needs its shared database for the final state save, and
+		// closes it after shutting down the Actor Runtime Socket.
+		ownsDatabase: false,
 	});
 	runtimeState.sql = database;
 	return database;

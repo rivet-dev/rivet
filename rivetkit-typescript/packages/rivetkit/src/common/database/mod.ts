@@ -357,27 +357,33 @@ export function db({
 								"Nested synchronous SQLite transactions are not supported.",
 							);
 						}
-						return runSqliteTransactionSync(
-							db,
-							(transaction) => {
-								const transactionClient = createClient(
-									transaction,
-									true,
-								);
-								const tx: SynchronousTransactionAccess = {
-									executeSync: transactionClient.executeSync,
-								};
-								synchronousTransactionActive = true;
-								try {
+						synchronousTransactionActive = true;
+						try {
+							return runSqliteTransactionSync(
+								db,
+								(transaction) => {
+									const transactionClient = createClient(
+										transaction,
+										true,
+									);
+									const tx: SynchronousTransactionAccess = {
+										executeSync:
+											transactionClient.executeSync,
+									};
 									return callback(tx);
-								} finally {
-									synchronousTransactionActive = false;
-								}
-							},
-							options,
-						);
+								},
+								options,
+							);
+						} finally {
+							synchronousTransactionActive = false;
+						}
 					},
 					close: async () => {
+						if (synchronousTransactionActive) {
+							throw new Error(
+								"Cannot close the database inside db.transactionSync().",
+							);
+						}
 						if (!closed) {
 							closed = true;
 							await db.close();

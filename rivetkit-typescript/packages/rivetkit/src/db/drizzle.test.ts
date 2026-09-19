@@ -139,6 +139,15 @@ function testProviderContext(
 }
 
 describe("Drizzle database transactions", () => {
+	test("accepts named bindings for synchronous raw queries", async () => {
+		const nativeDb = new FakeSqliteDatabase();
+		const client = await db().createClient(testProviderContext(nativeDb));
+		client.executeSync("SELECT :value", { value: 42 });
+		expect(nativeDb.executeCalls).toEqual([
+			{ sql: "SELECT :value", params: { value: 42 } },
+		]);
+	});
+
 	test("runs migrations in the shared transaction with a generous timeout", async () => {
 		const nativeDb = new FakeSqliteDatabase();
 		const provider = db({

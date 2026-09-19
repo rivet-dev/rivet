@@ -276,7 +276,9 @@ export type SynchronousRawAccess = RawAccess & {
 	 * The callback must not return a promise.
 	 */
 	transactionSync: <T>(
-		callback: (tx: SynchronousTransactionAccess) => T,
+		callback: (
+			tx: SynchronousTransactionAccess,
+		) => T & (T extends PromiseLike<unknown> ? never : unknown),
 		options?: Omit<SqliteTransactionOptions, "experimental">,
 	) => T;
 };

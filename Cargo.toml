@@ -488,9 +488,11 @@ members = [
 
     [workspace.dependencies.rivet-error]
     path = "engine/packages/error"
+    version = "=2.3.14"
 
     [workspace.dependencies.rivet-error-macros]
     path = "engine/packages/error-macros"
+    version = "=2.3.14"
 
     [workspace.dependencies.gasoline]
     path = "engine/packages/gasoline"
@@ -516,6 +518,7 @@ members = [
 
     [workspace.dependencies.rivet-metrics]
     path = "engine/packages/metrics"
+    version = "=2.3.14"
 
     [workspace.dependencies.rivet-metrics-server]
     path = "engine/packages/metrics-server"
@@ -610,6 +613,7 @@ members = [
 
     [workspace.dependencies.rivet-util-serde]
     path = "engine/packages/util-serde"
+    version = "=2.3.14"
 
     [workspace.dependencies.rivet-version-management]
     path = "engine/packages/version-management"
@@ -619,6 +623,7 @@ members = [
 
     [workspace.dependencies.rivet-actor-runtime-socket-protocol]
     path = "engine/sdks/rust/actor-runtime-socket-protocol"
+    version = "=2.3.14"
 
     [workspace.dependencies.rivet-api-full]
     path = "engine/sdks/rust/api-full"
@@ -632,9 +637,11 @@ members = [
     [workspace.dependencies.rivet-envoy-client]
     path = "engine/sdks/rust/envoy-client"
     default-features = false
+    version = "=2.3.14"
 
     [workspace.dependencies.rivet-envoy-protocol]
     path = "engine/sdks/rust/envoy-protocol"
+    version = "=2.3.14"
 
     [workspace.dependencies.rivetkit-client-protocol]
     path = "rivetkit-rust/packages/client-protocol"

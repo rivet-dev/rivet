@@ -256,6 +256,7 @@ describe("db", () => {
 
 	test("rolls back synchronous transactions on callback and commit errors", async () => {
 		const callbackDb = new FakeSqliteDatabase();
+		callbackDb.failSql.set("ROLLBACK", new Error("rollback failed"));
 		const callbackClient = await db().createClient(
 			testProviderContext(callbackDb),
 		);
@@ -288,6 +289,7 @@ describe("db", () => {
 		const nativeDb = new FakeSqliteDatabase();
 		const client = await db().createClient(testProviderContext(nativeDb));
 
+		// @ts-expect-error Async callbacks are rejected by the public contract.
 		expect(() => client.transactionSync(async () => undefined)).toThrow(
 			"must not return a promise",
 		);
@@ -317,6 +319,36 @@ describe("db", () => {
 			"SELECT 2",
 			"COMMIT",
 		]);
+	});
+
+	test("keeps the outer client guarded while inspecting callback results", async () => {
+		const nativeDb = new FakeSqliteDatabase();
+		const client = await db().createClient(testProviderContext(nativeDb));
+		client.transactionSync(() => ({
+			get then() {
+				expect(() => client.executeSync("SELECT 1")).toThrow(
+					"transaction callback's tx value",
+				);
+				return undefined;
+			},
+		}));
+	});
+
+	test("observes rejected callback promises before they resume", async () => {
+		const nativeDb = new FakeSqliteDatabase();
+		const client = await db().createClient(testProviderContext(nativeDb));
+		let rejectionObserved = false;
+		const result = {
+			then(_resolve: unknown, reject: (error: Error) => void) {
+				rejectionObserved = true;
+				reject(new Error("async callback failed"));
+			},
+		};
+		expect(() => client.transactionSync(() => result)).toThrow(
+			"must not return a promise",
+		);
+		await Promise.resolve();
+		expect(rejectionObserved).toBe(true);
 	});
 
 	test("validates synchronous transaction options before beginning", async () => {

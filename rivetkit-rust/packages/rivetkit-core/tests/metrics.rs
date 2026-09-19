@@ -76,6 +76,29 @@ mod moved_tests {
 				),
 			)
 		}
+
+		// This metrics fixture uses small, single-request commits. Fail explicitly
+		// if a future test grows enough to require the staged-commit protocol.
+		async fn commit_stage_begin(
+			&self,
+			_request: rivet_envoy_client::protocol::SqliteCommitStageBeginRequest,
+		) -> anyhow::Result<rivet_envoy_client::protocol::SqliteCommitStageBeginResponse> {
+			anyhow::bail!("metrics fixture does not support staged commits")
+		}
+
+		async fn commit_stage_segment(
+			&self,
+			_request: rivet_envoy_client::protocol::SqliteCommitStageSegmentRequest,
+		) -> anyhow::Result<rivet_envoy_client::protocol::SqliteCommitStageSegmentResponse> {
+			anyhow::bail!("metrics fixture does not support staged commits")
+		}
+
+		async fn commit_finalize(
+			&self,
+			_request: rivet_envoy_client::protocol::SqliteCommitFinalizeRequest,
+		) -> anyhow::Result<rivet_envoy_client::protocol::SqliteCommitFinalizeResponse> {
+			anyhow::bail!("metrics fixture does not support staged commits")
+		}
 	}
 
 	#[test]
