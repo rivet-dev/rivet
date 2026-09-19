@@ -5,6 +5,12 @@ interface RelativeTimeProps {
 }
 
 const relativeTimeFormat = new Intl.RelativeTimeFormat("en", {
+	numeric: "always",
+	style: "narrow",
+});
+
+// Only used for sub-minute values, where "always" renders 0 seconds as "in 0s".
+const nowFormat = new Intl.RelativeTimeFormat("en", {
 	numeric: "auto",
 	style: "narrow",
 });
@@ -15,8 +21,19 @@ function decompose(duration: number) {
 	const minutes = Math.floor(seconds / 60);
 	const hours = Math.floor(minutes / 60);
 	const days = Math.floor(hours / 24);
-	const years = Math.floor(days / 365);
-	return { years, days, hours, minutes, seconds, milliseconds };
+	const weeks = Math.floor(days / 7);
+	const months = Math.floor(days / 30.44);
+	const years = Math.floor(days / 365.25);
+	return {
+		years,
+		months,
+		weeks,
+		days,
+		hours,
+		minutes,
+		seconds,
+		milliseconds,
+	};
 }
 
 // Shared per-tier clock. Each tier has one global interval shared by all
@@ -79,22 +96,36 @@ export const RelativeTime = forwardRef<HTMLTimeElement, RelativeTimeProps>(
 
 		const value = useMemo(() => {
 			const duration = now - time.getTime();
-			const { years, days, hours, minutes, seconds } =
-				decompose(duration);
+			// Negative durations are future timestamps, formatted as "in 2m".
+			const direction = duration < 0 ? 1 : -1;
+			const { years, months, weeks, days, hours, minutes, seconds } =
+				decompose(Math.abs(duration));
 
-			if (Math.trunc(years) > 0) {
-				return relativeTimeFormat.format(-years, "years");
+			if (years > 0) {
+				return relativeTimeFormat.format(direction * years, "years");
 			}
-			if (Math.trunc(days) > 0) {
-				return relativeTimeFormat.format(-days, "days");
+			if (months > 0) {
+				return relativeTimeFormat.format(direction * months, "months");
 			}
-			if (Math.trunc(hours) > 0) {
-				return relativeTimeFormat.format(-hours, "hours");
+			if (weeks > 0) {
+				return relativeTimeFormat.format(direction * weeks, "weeks");
 			}
-			if (Math.trunc(minutes) > 0) {
-				return relativeTimeFormat.format(-minutes, "minutes");
+			if (days > 0) {
+				return relativeTimeFormat.format(direction * days, "days");
 			}
-			return relativeTimeFormat.format(-seconds, "seconds");
+			if (hours > 0) {
+				return relativeTimeFormat.format(direction * hours, "hours");
+			}
+			if (minutes > 0) {
+				return relativeTimeFormat.format(
+					direction * minutes,
+					"minutes",
+				);
+			}
+			if (seconds < 1) {
+				return nowFormat.format(0, "seconds");
+			}
+			return relativeTimeFormat.format(direction * seconds, "seconds");
 		}, [now, time]);
 
 		return (

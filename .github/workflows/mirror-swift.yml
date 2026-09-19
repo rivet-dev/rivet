@@ -5,12 +5,13 @@ name: Mirror rivetkit-swift
 on:
   push:
     branches:
-      - "**"
+      - main
     tags:
       - "**"
 
 jobs:
   mirror:
+    if: github.repository == 'rivet-dev/actors'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

@@ -109,7 +109,7 @@ function Providers() {
 	return (
 		<SettingsCard
 			title="Providers"
-			description="Clouds connected to Rivet for running Rivet Actors."
+			description="Clouds connected to this namespace for running Rivet Actors."
 			action={
 				<ProviderDropdown>
 					<Button
@@ -190,7 +190,7 @@ function Runners() {
 	return (
 		<SettingsCard
 			title="Runners"
-			description="Processes connected to Rivet Cloud and ready to start running Rivet Actors."
+			description="Processes connected to this namespace and ready to run Rivet Actors."
 		>
 			<div className="border border-foreground/10 rounded-md overflow-hidden">
 				<RunnersTable

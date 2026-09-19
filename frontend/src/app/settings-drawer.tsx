@@ -5,6 +5,7 @@ import {
 	faClose,
 	faCreditCard,
 	faGear,
+	faPuzzlePiece,
 	faRivet,
 	faSliders,
 	faSparkles,
@@ -30,6 +31,7 @@ import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { PoolSwitcher, poolHeaderText, resolvePoolName } from "./pool-switcher";
 import { BillingPanel } from "./settings-pages/billing-panel";
 import { NamespaceComputeContent } from "./settings-pages/namespace-compute";
+import { NamespaceServicesContent } from "./settings-pages/namespace-services";
 import {
 	NamespaceAdvancedContent,
 	NamespaceSettingsContent,
@@ -42,6 +44,7 @@ import { WhatsNewPanel } from "./settings-pages/whats-new-panel";
 export type SettingsTab =
 	| "profile"
 	| "settings"
+	| "services"
 	| "compute"
 	| "advanced"
 	| "billing"
@@ -64,6 +67,7 @@ const NAV_SECTIONS: Array<{
 		label: "Namespace",
 		items: [
 			{ key: "settings", label: "Settings", icon: faGear },
+			{ key: "services", label: "Services", icon: faPuzzlePiece },
 			{ key: "compute", label: "Compute", icon: faRivet },
 			{ key: "advanced", label: "Advanced", icon: faSliders },
 		],
@@ -92,8 +96,14 @@ const TAB_META: Record<SettingsTab, { title: string; description?: string }> = {
 	},
 	settings: {
 		title: "Settings",
+		description: features.platform
+			? "Connect your RivetKit application to Rivet Cloud. Use your cloud of choice to run Rivet Actors."
+			: "Connect providers and runners to this namespace. Use your cloud of choice to run Rivet Actors.",
+	},
+	services: {
+		title: "Services",
 		description:
-			"Connect your RivetKit application to Rivet Cloud. Use your cloud of choice to run Rivet Actors.",
+			"Add Rivet-managed services to this namespace and point your app at them.",
 	},
 	compute: {
 		title: "Compute",
@@ -159,9 +169,16 @@ export function SettingsDrawer({
 
 	// Engine flavors only expose namespace-scoped settings (no account, billing,
 	// or organization), so the nav collapses to the Namespace section.
-	const navSections = features.platform
-		? NAV_SECTIONS
-		: NAV_SECTIONS.filter((section) => section.label === "Namespace");
+	const navSections = (
+		features.platform
+			? NAV_SECTIONS
+			: NAV_SECTIONS.filter((section) => section.label === "Namespace")
+	).map((section) => ({
+		...section,
+		items: section.items.filter(
+			(item) => item.key !== "services" || features.services,
+		),
+	}));
 
 	const meta = TAB_META[activeTab];
 	const titleNode: ReactNode =
@@ -365,6 +382,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
 			return <BillingPanel />;
 		case "settings":
 			return <SettingsTabBody />;
+		case "services":
+			return <ServicesTabBody />;
 		case "compute":
 			return <ComputeTabBody />;
 		case "advanced":
@@ -659,6 +678,43 @@ function CloudAdvancedTabBody() {
 	return <NamespaceAdvancedContent />;
 }
 
+function ServicesTabBody() {
+	if (!features.platform) {
+		return <EngineNamespaceServices />;
+	}
+	return <CloudServicesTabBody />;
+}
+
+function EngineNamespaceServices() {
+	return useEngineNamespaceReady() ? (
+		<NamespaceServicesContent />
+	) : (
+		<NamespaceSettingsSkeleton />
+	);
+}
+
+function CloudServicesTabBody() {
+	const namespaceMatch = useMatch({
+		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
+		shouldThrow: false,
+	});
+
+	if (!namespaceMatch) {
+		return (
+			<ResourcePicker
+				title="Pick a namespace"
+				description="Services are scoped to a namespace. Choose one to manage its services."
+				settings="services"
+				target="namespace"
+			/>
+		);
+	}
+	if (!namespaceMatch.loaderData) {
+		return <NamespaceSettingsSkeleton />;
+	}
+	return <NamespaceServicesContent />;
+}
+
 export function settingsParamToTab(
 	param: string | undefined,
 ): SettingsTab | null {
@@ -674,6 +730,8 @@ export function settingsParamToTab(
 		// the regular Settings tab on flavors without it.
 		case "compute":
 			return features.compute ? "compute" : "settings";
+		case "services":
+			return features.services ? "services" : "settings";
 		// Legacy: members lived in its own tab before being merged into
 		// Organization. Keep the deep link working.
 		case "members":

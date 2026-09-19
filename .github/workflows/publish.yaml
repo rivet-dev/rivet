@@ -664,6 +664,23 @@ jobs:
             --latest ${{ needs.context.outputs.latest }} \
             --name container-runner
 
+      # The Inspector UI lives in frontend/dist, outside the rivetkit-core
+      # crate, so it must be built and staged into the crate before packaging.
+      # Otherwise the published crate embeds the empty fallback and serves
+      # inspector.ui_asset_not_found. Runs for every trigger so branch previews
+      # gate the crate the same way release does.
+      - name: Build Inspector UI bundle
+        env:
+          SKIP_NAPI_BUILD: "1"
+          SKIP_WASM_BUILD: "1"
+        run: npx turbo build:inspector-ui -F @rivetkit/engine-frontend
+
+      - name: Stage Inspector UI into rivetkit-core
+        run: node rivetkit-rust/packages/rivetkit-core/scripts/stage-inspector-bundle.mjs
+
+      - name: Verify Inspector UI ships in the crate
+        run: node rivetkit-rust/packages/rivetkit-core/scripts/verify-inspector-bundle.mjs
+
       - name: Dry-run Rust crate publish
         if: needs.context.outputs.trigger != 'release'
         # Branch previews publish npm/R2/Docker artifacts only. Unlike npm,

@@ -20,7 +20,10 @@ async fn idle_timers_do_not_keep_a_closed_pool_and_host_callbacks_alive() {
 	overflow_registration.detach();
 	let weak = Arc::downgrade(&pool);
 	drop(pool);
-	assert!(weak.upgrade().is_none(), "idle timers must not own the pool");
+	assert!(
+		weak.upgrade().is_none(),
+		"idle timers must not own the pool"
+	);
 }
 
 fn actor_factories() -> HashMap<String, Arc<ActorFactory>> {
@@ -96,8 +99,7 @@ async fn acquire_with_spawn(
 #[tokio::test]
 async fn spreads_baseline_then_bin_packs_overflow() {
 	let (pool, mut spawn_rx, _retire_rx) = test_pool(2, 2, Duration::from_secs(60));
-	let (first, _first_registration) =
-		acquire_with_spawn(&pool, &mut spawn_rx, "actor-1", 1).await;
+	let (first, _first_registration) = acquire_with_spawn(&pool, &mut spawn_rx, "actor-1", 1).await;
 	let (second, _second_registration) =
 		acquire_with_spawn(&pool, &mut spawn_rx, "actor-2", 1).await;
 	assert_ne!(first.worker_id(), second.worker_id());
@@ -116,8 +118,7 @@ async fn spreads_baseline_then_bin_packs_overflow() {
 #[tokio::test]
 async fn actors_per_thread_is_a_hard_limit() {
 	let (pool, mut spawn_rx, _retire_rx) = test_pool(1, 1, Duration::from_secs(60));
-	let (first, _first_registration) =
-		acquire_with_spawn(&pool, &mut spawn_rx, "actor-1", 1).await;
+	let (first, _first_registration) = acquire_with_spawn(&pool, &mut spawn_rx, "actor-1", 1).await;
 	let (second, _second_registration) =
 		acquire_with_spawn(&pool, &mut spawn_rx, "actor-2", 1).await;
 	assert_ne!(first.worker_id(), second.worker_id());
@@ -332,8 +333,7 @@ async fn empty_overflow_worker_retires_after_idle_delay() {
 #[tokio::test]
 async fn baseline_worker_never_retires_from_idleness() {
 	let (pool, mut spawn_rx, mut retire_rx) = test_pool(1, 1, Duration::from_millis(10));
-	let (baseline, _registration) =
-		acquire_with_spawn(&pool, &mut spawn_rx, "actor-1", 1).await;
+	let (baseline, _registration) = acquire_with_spawn(&pool, &mut spawn_rx, "actor-1", 1).await;
 	baseline.release();
 	assert!(
 		tokio::time::timeout(Duration::from_millis(30), retire_rx.recv())

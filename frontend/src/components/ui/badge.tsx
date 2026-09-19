@@ -25,6 +25,7 @@ const badgeVariants = cva(
 				outline: "text-foreground",
 				premium: "border-transparent",
 				"premium-blue": "border-transparent",
+				"premium-violet": "border-transparent",
 			},
 		},
 		defaultVariants: {
@@ -32,6 +33,21 @@ const badgeVariants = cva(
 		},
 	},
 );
+
+const PREMIUM_SCHEMES = {
+	premium: {
+		gradientClasses: "from-primary via-orange-400 to-primary",
+		shimmerClasses: "via-primary/10",
+	},
+	"premium-blue": {
+		gradientClasses: "from-blue-500 via-sky-400 to-blue-500",
+		shimmerClasses: "via-blue-500/10",
+	},
+	"premium-violet": {
+		gradientClasses: "from-violet-500 via-fuchsia-400 to-violet-500",
+		shimmerClasses: "via-violet-500/10",
+	},
+} as const;
 
 export interface BadgeProps
 	extends React.HTMLAttributes<HTMLDivElement>,
@@ -44,14 +60,9 @@ const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
 	({ className, variant, asChild, children, ...props }, ref) => {
 		const Comp = asChild ? Slot : "div";
 
-		if (variant === "premium" || variant === "premium-blue") {
-			const isBlue = variant === "premium-blue";
-			const gradientClasses = isBlue
-				? "from-blue-500 via-sky-400 to-blue-500"
-				: "from-primary via-orange-400 to-primary";
-			const shimmerClasses = isBlue
-				? "via-blue-500/10"
-				: "via-primary/10";
+		if (variant && variant in PREMIUM_SCHEMES) {
+			const { gradientClasses, shimmerClasses } =
+				PREMIUM_SCHEMES[variant as keyof typeof PREMIUM_SCHEMES];
 
 			return (
 				<div

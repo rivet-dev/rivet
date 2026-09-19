@@ -55,6 +55,55 @@ const DEP_FIELDS = [
 	"optionalDependencies",
 ] as const;
 
+/**
+ * Read the pnpm default `catalog:` block from `pnpm-workspace.yaml`.
+ *
+ * Tiny hand-rolled reader (this package has no yaml dependency). Only the flat
+ * default catalog is used here; named catalogs (`catalogs:`) are intentionally
+ * unsupported and a `catalog:<name>` spec fails loudly in `resolveCatalogSpec`.
+ */
+async function loadDefaultCatalog(
+	repoRoot: string,
+): Promise<Record<string, string>> {
+	let text: string;
+	try {
+		text = await fs.readFile(join(repoRoot, "pnpm-workspace.yaml"), "utf8");
+	} catch {
+		return {};
+	}
+	// The `catalog:` header plus its indented `pkg: "version"` entries, up to the
+	// first blank/dedented line.
+	const block = text.match(/^catalog:[ \t]*\n((?:[ \t]+\S.*\n?)*)/m);
+	if (!block) return {};
+	const catalog: Record<string, string> = {};
+	for (const line of block[1].split("\n")) {
+		const entry = line.match(/^\s+([\w@./-]+)\s*:\s*(\S.*?)\s*$/);
+		if (entry) catalog[entry[1]] = entry[2].replace(/^["']|["']$/g, "");
+	}
+	return catalog;
+}
+
+/** Resolve a bare `catalog:` spec to a concrete version from the default catalog. */
+function resolveCatalogSpec(
+	catalog: Record<string, string>,
+	spec: string,
+	dep: string,
+	pkgName: string,
+): string {
+	if (spec.slice("catalog:".length).trim() !== "") {
+		throw new Error(
+			`unsupported named catalog spec "${spec}" for ${pkgName} -> ${dep}; only the default catalog is supported`,
+		);
+	}
+	const resolved = catalog[dep];
+	if (!resolved) {
+		throw new Error(
+			`cannot resolve "${spec}" for ${pkgName} -> ${dep}: no entry for ${dep} in the default catalog of pnpm-workspace.yaml`,
+		);
+	}
+	return resolved;
+}
+
 const PUBLISHED_RUST_WORKSPACE_DEPS = new Set([
 	"rivet-error-macros",
 	"rivet-error",
@@ -148,6 +197,7 @@ export async function bumpPackageJsons(
 	const packageNames = new Set(packages.map((p) => p.name));
 	const metaPlatformMap = buildMetaPlatformMap(packages);
 	const versionOnly = opts.versionOnly ?? false;
+	const catalog = await loadDefaultCatalog(repoRoot);
 
 	// Cache `npm view <pkg> version` lookups for out-of-scope dependencies so a
 	// dep referenced by several packages is only resolved once.
@@ -195,6 +245,22 @@ export async function bumpPackageJsons(
 				const deps = pkgJson[field];
 				if (!deps) continue;
 				for (const [dep, spec] of Object.entries(deps)) {
+					// Resolve pnpm `catalog:` specs first. Catalog deps are often
+					// third-party (e.g. drizzle-orm), so this must run before the
+					// `workspace:`/our-package checks below skip external deps.
+					if (typeof spec === "string" && spec.startsWith("catalog:")) {
+						const resolved = resolveCatalogSpec(
+							catalog,
+							spec,
+							dep,
+							pkg.name,
+						);
+						deps[dep] = resolved;
+						log.info(
+							`resolved catalog dep ${pkg.name} -> ${dep}@${resolved}`,
+						);
+						continue;
+					}
 					const isWorkspace =
 						typeof spec === "string" && spec.startsWith("workspace:");
 					if (!isWorkspace) continue;
@@ -217,6 +283,26 @@ export async function bumpPackageJsons(
 						continue;
 					}
 					deps[dep] = version;
+				}
+			}
+
+			// Fail loudly if a pnpm workspace protocol spec survived. These
+			// never resolve on a registry, so shipping one produces an
+			// uninstallable package (see the `catalog:` leak in rivetkit@2.3.14).
+			for (const field of DEP_FIELDS) {
+				const deps = pkgJson[field];
+				if (!deps) continue;
+				for (const [dep, spec] of Object.entries(deps)) {
+					if (
+						typeof spec === "string" &&
+						(spec.startsWith("workspace:") ||
+							spec.startsWith("catalog:"))
+					) {
+						const protocol = spec.slice(0, spec.indexOf(":"));
+						throw new Error(
+							`unresolved ${protocol}: spec in ${pkg.name} -> ${dep} ("${spec}"); it would publish an uninstallable package`,
+						);
+					}
 				}
 			}
 		}

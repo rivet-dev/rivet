@@ -17,7 +17,11 @@ import type {
 
 const DRIVER_TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const TEST_DIR = join(DRIVER_TEST_DIR, "..");
-const FIXTURE_PATH = join(TEST_DIR, "fixtures", "driver-test-suite-runtime.ts");
+const FIXTURE_PATH = join(
+	TEST_DIR,
+	"fixtures",
+	"driver-test-suite-entrypoint.mjs",
+);
 const WASM_FIXTURE_PATH = join(
 	TEST_DIR,
 	"fixtures",
@@ -290,6 +294,8 @@ export async function startNativeDriverRuntime(
 		cwd: dirname(TEST_DIR),
 		env: {
 			...process.env,
+			// This harness owns the Engine; actor runtimes must only connect to it.
+			RIVETKIT_ENGINE_SPAWN: "never",
 			RIVET_TOKEN: TOKEN,
 			RIVET_NAMESPACE: namespace,
 			RIVETKIT_DRIVER_REGISTRY_PATH: variant.registryPath,

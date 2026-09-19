@@ -324,5 +324,65 @@ describeDriverMatrix("Actor Handle", (driverTestConfig) => {
 				).toBe(2);
 			});
 		});
+
+		describe("Abort Signal", () => {
+			test("get(): already-aborted signal rejects the action before it runs", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const key = ["abort-get-preaborted", crypto.randomUUID()];
+				// Actor exists, so the action would otherwise succeed.
+				await client.counter.create(key);
+
+				const controller = new AbortController();
+				const reason = new Error("aborted before request");
+				controller.abort(reason);
+
+				const handle = client.counter.get(key, {
+					signal: controller.signal,
+				});
+
+				// The handle-level signal must short-circuit the action with
+				// the exact abort reason.
+				await expect(handle.increment(1)).rejects.toBe(reason);
+
+				// The aborted action never reached the actor.
+				const count = await client.counter.get(key).getCount();
+				expect(count).toBe(0);
+			});
+
+			test("getOrCreate(): already-aborted signal rejects the action before it runs", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const controller = new AbortController();
+				const reason = new Error("aborted before request");
+				controller.abort(reason);
+
+				const handle = client.counter.getOrCreate(
+					["abort-get-or-create-preaborted", crypto.randomUUID()],
+					{ signal: controller.signal },
+				);
+
+				await expect(handle.increment(1)).rejects.toBe(reason);
+			});
+
+			test("get(): mid-flight abort rejects the in-flight action", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const key = ["abort-get-midflight", crypto.randomUUID()];
+				const controller = new AbortController();
+
+				const handle = client.concurrentActionActor.getOrCreate(key, {
+					signal: controller.signal,
+				});
+
+				const promise = handle.runWithDelay("slow", 10_000);
+
+				// Give the request time to reach the actor before aborting.
+				await new Promise((resolve) => setTimeout(resolve, 150));
+				controller.abort();
+
+				await expect(promise).rejects.toThrow();
+			});
+		});
 	});
 });

@@ -1,8 +1,11 @@
 import type { Rivet } from "@rivet-gg/cloud";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { faArrowUpRightFromSquare, Icon } from "@rivet-gg/icons";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useRef } from "react";
 import * as CreateProjectForm from "@/app/forms/create-project-form";
-import { Flex, Frame } from "@/components";
+import { StepperForm } from "@/app/forms/stepper-form";
+import { Button, Flex, Frame, toast } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
 import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
@@ -44,9 +47,19 @@ export default function CreateProjectFrameContent({
 	const provider = useCloudDataProvider();
 
 	const defaultOrg = useDefaultOrg();
+	const createdProject = useRef<{
+		key: string;
+		project: Rivet.ProjectsCreateResponse;
+	} | null>(null);
 
-	const { mutateAsync } = useMutation({
+	const { mutateAsync: createProject } = useMutation({
 		...provider.createProjectMutationOptions(),
+	});
+	const { mutateAsync: createCluster } = useMutation({
+		...provider.createClusterMutationOptions(),
+	});
+	const { mutateAsync: setPlan } = useMutation({
+		...provider.setProjectBillingPlanMutationOptions(),
 	});
 
 	// Resolve the auto-created "Production" namespace so we can land on it and
@@ -68,71 +81,165 @@ export default function CreateProjectFrameContent({
 		return (production ?? namespaces[0])?.name;
 	};
 
-	return (
-		<CreateProjectForm.Form
-			onSubmit={async (values) => {
-				const result = await mutateAsync({
+	const ensureProject = async (values: CreateProjectForm.FormValues) => {
+		const key = `${values.organization}/${values.name}`;
+		if (createdProject.current?.key !== key) {
+			createdProject.current = {
+				key,
+				project: await createProject({
 					displayName: values.name,
 					organization: values.organization,
-				});
+				}),
+			};
+		}
+		return createdProject.current.project;
+	};
 
-				await queryClient.refetchQueries(
-					provider.currentOrgProjectsQueryOptions(),
-				);
+	const finishProject = async (values: CreateProjectForm.FormValues) => {
+		const result = await ensureProject(values);
 
-				const namespace = await resolveOnboardingNamespace(
-					values.organization,
-					result.project.name,
-				);
+		await queryClient.refetchQueries(
+			provider.currentOrgProjectsQueryOptions(),
+		);
 
-				const successVars: CreateProjectSuccessVars = {
-					displayName: values.name,
+		const namespace = await resolveOnboardingNamespace(
+			values.organization,
+			result.project.name,
+		);
+
+		const successVars: CreateProjectSuccessVars = {
+			displayName: values.name,
+			organization: values.organization,
+			namespace,
+		};
+
+		if (onSuccess) {
+			onSuccess(result, successVars);
+			return;
+		}
+
+		if (namespace) {
+			await navigate({
+				to: "/orgs/$organization/projects/$project/ns/$namespace",
+				params: {
 					organization: values.organization,
+					project: result.project.name,
 					namespace,
-				};
+				},
+			});
+			return;
+		}
 
-				if (onSuccess) {
-					onSuccess(result, successVars);
-					return;
-				}
+		await navigate({
+			to: "/orgs/$organization/projects/$project",
+			params: {
+				organization: values.organization,
+				project: result.project.name,
+			},
+		});
+	};
 
-				if (namespace) {
-					await navigate({
-						to: "/orgs/$organization/projects/$project/ns/$namespace",
-						params: {
-							organization: values.organization,
-							project: result.project.name,
-							namespace,
-						},
-					});
-					return;
-				}
+	const finishCluster = async (values: CreateProjectForm.FormValues) => {
+		const result = await createCluster({
+			name: values.name,
+			organization: values.organization,
+		});
 
-				await navigate({
-					to: "/orgs/$organization/projects/$project",
-					params: {
-						organization: values.organization,
-						project: result.project.name,
-					},
-				});
-			}}
-			defaultValues={{
-				name: name,
-				organization: organization ?? defaultOrg ?? "",
-			}}
-		>
-			<Frame.Header>
+		await queryClient.refetchQueries(
+			provider.currentOrgClustersQueryOptions(),
+		);
+
+		await navigate({
+			to: "/orgs/$organization/clusters/$cluster",
+			params: {
+				organization: values.organization,
+				cluster: result.cluster.name,
+			},
+		});
+	};
+
+	return (
+		<>
+			<Frame.Header className="sr-only">
 				<Frame.Title>Create new project</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
-				<Flex gap="4" direction="col">
-					<CreateProjectForm.Organization />
-					<CreateProjectForm.Name />
-				</Flex>
+				<StepperForm
+					{...CreateProjectForm.stepper}
+					singlePage
+					defaultValues={{
+						plan: "free",
+						name: name ?? "",
+						organization: organization ?? defaultOrg ?? "",
+					}}
+					content={{
+						plan: () => <CreateProjectForm.Plan />,
+						details: () => (
+							<Flex gap="4" direction="col">
+								<CreateProjectForm.Organization />
+								<CreateProjectForm.Name />
+							</Flex>
+						),
+						payment: () => <PaymentStep />,
+					}}
+					onPartialSubmit={async ({ values, stepper }) => {
+						if (stepper.current.id !== "details") {
+							return;
+						}
+
+						if (features.byoc && values.plan === "byoc") {
+							return;
+						}
+
+						const result = await ensureProject(values);
+
+						try {
+							await setPlan({
+								organization: values.organization,
+								project: result.project.name,
+								plan: values.plan as Rivet.BillingPlan,
+							});
+						} catch {
+							toast.error(
+								"Couldn't apply the plan. Set it from the project's billing page.",
+							);
+						}
+					}}
+					onSubmit={async ({ values }) => {
+						if (features.byoc && values.plan === "byoc") {
+							await finishCluster(values);
+							return;
+						}
+
+						await finishProject(values);
+					}}
+				/>
 			</Frame.Content>
-			<Frame.Footer className="flex-row justify-end">
-				<CreateProjectForm.DefaultSubmit />
-			</Frame.Footer>
-		</CreateProjectForm.Form>
+		</>
+	);
+}
+
+function PaymentStep() {
+	const provider = useCloudDataProvider();
+	const { data, refetch } = useQuery(
+		provider.billingCustomerPortalSessionQueryOptions(),
+	);
+
+	return (
+		<Button
+			type="button"
+			variant="secondary"
+			endIcon={<Icon icon={faArrowUpRightFromSquare} />}
+			onMouseEnter={() => {
+				refetch();
+			}}
+			onClick={() => {
+				if (data) {
+					window.open(data, "_blank");
+				}
+			}}
+		>
+			Add payment method
+		</Button>
 	);
 }

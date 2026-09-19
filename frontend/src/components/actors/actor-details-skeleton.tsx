@@ -13,8 +13,8 @@ const PLACEHOLDER_TABS: ReadonlyArray<{
 	icon: string;
 }> = [
 	{ id: "workflow", label: "Workflow", icon: "workflow" },
-	{ id: "database", label: "Database", icon: "database" },
 	{ id: "state", label: "State", icon: "state" },
+	{ id: "database", label: "Database", icon: "database" },
 	{ id: "queue", label: "Queue", icon: "queue" },
 	{ id: "connections", label: "Connections", icon: "plug" },
 	{ id: "console", label: "Console", icon: "terminal" },

@@ -13,13 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.and_then(|p| p.parent())
 		.ok_or("Failed to find workspace root")?;
 
-	// The one shared schema tree, as every other protocol crate does. A crate-local copy was kept
-	// here as well, so a schema edit landed in whichever of the two the author happened to open and
-	// codegen silently used the other.
-	let schema_dir = workspace_root
-		.join("sdks")
-		.join("schemas")
-		.join("envoy-protocol");
+	let schema_dir = manifest_dir.join("schemas");
 
 	// Rust SDK generation
 	let cfg = vbare_compiler::Config::default();

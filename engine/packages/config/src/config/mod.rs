@@ -262,6 +262,7 @@ impl Root {
 			pg.nats = Some(nats);
 		}
 
+		self.guard().validate()?;
 		self.pegboard().validate()?;
 		self.features().validate()?;
 		self.sqlite().validate()?;

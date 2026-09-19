@@ -517,11 +517,13 @@ function EmptyState({ count }: { count: number }) {
 						</Button>
 					</>
 				)
-			) : (
+			) : count > RECORDS_PER_PAGE ? (
+				// Only worth saying once the user has actually scrolled through
+				// more than one page; for short lists it is just noise.
 				<SmallText className="text-muted-foreground text-center text-xs">
 					{copy.noMoreActors}
 				</SmallText>
-			)}
+			) : null}
 		</div>
 	);
 }

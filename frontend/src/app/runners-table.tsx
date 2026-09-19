@@ -412,8 +412,8 @@ function EmptyState() {
 					</>
 				) : (
 					<Text className="text-center">
-						There are no runners connected. You will not be able to
-						run actors until a runner appears here.
+						No runners connected yet. Actors can't run until a
+						runner appears here.
 					</Text>
 				)}
 			</TableCell>

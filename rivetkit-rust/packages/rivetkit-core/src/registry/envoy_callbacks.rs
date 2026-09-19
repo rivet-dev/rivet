@@ -53,7 +53,7 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		&self,
 		_handle: EnvoyHandle,
 		actor_id: String,
-		_generation: u32,
+		generation: u32,
 		reason: protocol::StopActorReason,
 		stop_handle: ActorStopHandle,
 	) -> EnvoyBoxFuture<anyhow::Result<()>> {
@@ -61,7 +61,9 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		Box::pin(async move {
 			RuntimeSpawner::spawn(
 				async move {
-					if let Err(error) = dispatcher.stop_actor(&actor_id, reason, stop_handle).await
+					if let Err(error) = dispatcher
+						.stop_actor(&actor_id, generation, reason, stop_handle)
+						.await
 					{
 						tracing::error!(
 							?error,

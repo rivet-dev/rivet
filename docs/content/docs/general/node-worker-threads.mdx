@@ -5,6 +5,8 @@ description: "Run Rivet Actors across isolated Node.js event loops in a long-run
 
 Node.js normally runs every actor in a process on one JavaScript event loop. Set `actorsPerThread` to distribute actor JavaScript across worker threads when one actor must not block every other actor in the process.
 
+This feature is experimental.
+
 <CodeSnippet file="examples/docs/general-worker-threads/basic.ts" />
 
 `actorsPerThread` is a hard limit that includes actors which are starting, running, or stopping. Use `1` to give every actor generation its own event loop. Larger values reduce memory usage by allowing several actors to share one event loop.
@@ -26,6 +28,8 @@ RivetKit loads the file named by `process.argv[1]` in every new worker. That ent
 Each worker validates its actor names and runtime configuration against the main registry before it can receive an actor. The waiting actor start fails if the entrypoint cannot load, does not start a registry, loads a different actor configuration, or cannot initialize the native runtime. Worker acquisition times out after 30 seconds; a worker that finishes booting later remains available for the next actor start.
 
 The complete entrypoint module executes independently in every worker. Guard unrelated main-only side effects individually, but do not guard the RivetKit registry startup call. Only one worker-enabled registry may be started from an entrypoint in this first version. Development runners that replace `process.argv[1]` with a launcher or wrapper are not supported unless that file reloads the same registry entrypoint.
+
+For TypeScript applications, run compiled JavaScript or use a loader that registers in worker threads. Inheriting Node.js loader flags is not sufficient if the loader only initializes on the main thread.
 
 ## Isolation and memory
 

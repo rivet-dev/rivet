@@ -1131,7 +1131,10 @@ impl ActorWorkerPool {
 			if state.queued_acquires > 0 {
 				(true, true)
 			} else {
-				let worker = state.workers.get_mut(&worker_id).expect("worker checked above");
+				let worker = state
+					.workers
+					.get_mut(&worker_id)
+					.expect("worker checked above");
 				let key = worker.overflow_key();
 				worker.state = WorkerState::Draining;
 				METRICS
@@ -1191,14 +1194,25 @@ impl Drop for ActorWorkerPool {
 				WorkerState::Draining => "draining",
 			};
 			METRICS.workers.with_label_values(&[class, lifecycle]).dec();
-			METRICS.leases.with_label_values(&[class]).sub(worker.assignments.len() as i64);
+			METRICS
+				.leases
+				.with_label_values(&[class])
+				.sub(worker.assignments.len() as i64);
 			if worker.state == WorkerState::Ready {
-				METRICS.available_slots.with_label_values(&[class])
+				METRICS
+					.available_slots
+					.with_label_values(&[class])
 					.sub((self.config.actors_per_thread - worker.assignments.len()) as i64);
 			}
 		}
-		for (class, count) in [("baseline", state.pending_baseline), ("overflow", state.pending_overflow)] {
-			METRICS.workers.with_label_values(&[class, "starting"]).sub(count as i64);
+		for (class, count) in [
+			("baseline", state.pending_baseline),
+			("overflow", state.pending_overflow),
+		] {
+			METRICS
+				.workers
+				.with_label_values(&[class, "starting"])
+				.sub(count as i64);
 		}
 	}
 }

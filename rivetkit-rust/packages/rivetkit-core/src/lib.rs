@@ -153,7 +153,7 @@ pub use actor::task_types::ShutdownKind;
 pub use actor::work_registry::{ActorWorkKind, ActorWorkPolicy};
 pub use error::ActorLifecycle;
 pub use inspector::{Inspector, InspectorSnapshot};
-pub use registry::{CoreRegistry, EngineSpawnMode, ServeConfig};
+pub use registry::{CoreRegistry, EngineSpawnMode, RuntimeMode, ServeConfig};
 pub use rivet_envoy_client::config::{
 	HTTP_BODY_MAX_CHUNK_SIZE, HTTP_BODY_STREAM_CHANNEL_CAPACITY, HttpRequestBodyStream,
 	ResponseChunk,

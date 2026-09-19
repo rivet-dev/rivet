@@ -26,58 +26,74 @@ const X_RIVET_TARGET: HeaderName = HeaderName::from_static("x-rivet-target");
 const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 
-/// Throttling state for a single client IP. Both the rate limiter and the in-flight counter are
-/// keyed by client IP, so they share one cache entry and one lock.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum AdmissionRejection {
+	RateLimit,
+	MaxInFlight,
+}
+
+/// Optional admission state for a single client IP. The cache containing this state is not created
+/// when both admission controls are disabled.
 pub(crate) struct ClientState {
-	rate_limiter: RateLimiter,
-	in_flight: InFlightCounter,
+	rate_limiter: Option<RateLimiter>,
+	in_flight: Option<InFlightCounter>,
 }
 
 impl ClientState {
-	pub(crate) fn new(
-		rate_limit_requests: u64,
-		rate_limit_period: u64,
-		max_in_flight: usize,
-	) -> Self {
+	pub(crate) fn new(rate_limit: Option<(u64, Duration)>, max_in_flight: Option<usize>) -> Self {
 		Self {
-			rate_limiter: RateLimiter::new(RateLimitMethod::FixedWindow {
-				requests: rate_limit_requests,
-				period: Duration::from_secs(rate_limit_period),
+			rate_limiter: rate_limit.map(|(requests, period)| {
+				RateLimiter::new(RateLimitMethod::FixedWindow { requests, period })
 			}),
-			in_flight: InFlightCounter::new(max_in_flight),
+			in_flight: max_in_flight.map(InFlightCounter::new),
 		}
 	}
 
-	/// Consumes one rate limit token and one in-flight slot, returning false if either limit was
-	/// hit. A rate limit token is still consumed when the in-flight limit rejects the request.
-	pub(crate) fn try_admit(&mut self) -> bool {
-		self.rate_limiter.try_acquire() && self.in_flight.try_acquire()
+	/// Consumes one rate limit token and one in-flight slot when those controls are configured. A
+	/// rate limit token is still consumed when the in-flight limit rejects the request.
+	pub(crate) fn try_admit(&mut self) -> std::result::Result<(), AdmissionRejection> {
+		if let Some(rate_limiter) = &mut self.rate_limiter
+			&& !rate_limiter.try_acquire()
+		{
+			return Err(AdmissionRejection::RateLimit);
+		}
+
+		if let Some(in_flight) = &mut self.in_flight
+			&& !in_flight.try_acquire()
+		{
+			return Err(AdmissionRejection::MaxInFlight);
+		}
+
+		Ok(())
 	}
 
 	pub(crate) fn release_in_flight(&mut self) {
-		self.in_flight.release();
+		if let Some(in_flight) = &mut self.in_flight {
+			in_flight.release();
+		}
 	}
 }
 
-/// Owns one slot in a client's in-flight counter together with the request id registered in the
-/// global in-flight request set and the matching increment on `IN_FLIGHT_REQUEST_COUNT`. All three
-/// are released in `Drop`, so a cancelled or panicking request cannot leak any of them.
+/// Owns an optional slot in a client's in-flight counter together with the request id registered in
+/// the global in-flight request set and the matching increment on `IN_FLIGHT_REQUEST_COUNT`. All
+/// configured resources are released in `Drop`, so a cancelled or panicking request cannot leak
+/// any of them.
 ///
 /// The permit is held behind an `Arc` on `RequestContext`. Tasks that outlive the initial response,
 /// such as a proxied websocket, clone the context and therefore keep the slot and request id
 /// reserved for as long as they are still using them.
 pub(crate) struct InFlightPermit {
-	client_state: Arc<Mutex<ClientState>>,
+	client_state: Option<Arc<Mutex<ClientState>>>,
 	in_flight_requests: Arc<scc::HashSet<protocol::RequestId>>,
 	request_id: protocol::RequestId,
 	_in_flight_metric: IntGaugeGuard,
 }
 
 impl InFlightPermit {
-	/// Takes ownership of a slot already acquired from `client_state` and a request id already
-	/// inserted into `in_flight_requests`.
+	/// Takes ownership of an optional slot already acquired from `client_state` and a request id
+	/// already inserted into `in_flight_requests`.
 	pub(crate) fn new(
-		client_state: Arc<Mutex<ClientState>>,
+		client_state: Option<Arc<Mutex<ClientState>>>,
 		in_flight_requests: Arc<scc::HashSet<protocol::RequestId>>,
 		request_id: protocol::RequestId,
 	) -> Self {
@@ -96,7 +112,9 @@ impl InFlightPermit {
 
 impl Drop for InFlightPermit {
 	fn drop(&mut self) {
-		self.client_state.lock().release_in_flight();
+		if let Some(client_state) = &self.client_state {
+			client_state.lock().release_in_flight();
+		}
 		self.in_flight_requests.remove_sync(&self.request_id);
 	}
 }

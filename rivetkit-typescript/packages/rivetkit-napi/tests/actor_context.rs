@@ -8,8 +8,12 @@ mod moved_tests {
 		let harness = rivetkit_core::testing::ActorContextHarness::new();
 		let context = |generation| {
 			harness.context_with_config_and_generation(
-				"worker-generation-cache", "actor", Vec::new(), "local",
-				rivetkit_core::ActorConfig::default(), generation,
+				"worker-generation-cache",
+				"actor",
+				Vec::new(),
+				"local",
+				rivetkit_core::ActorConfig::default(),
+				generation,
 			)
 		};
 		let first_core = context(1);
