@@ -18,7 +18,6 @@ import {
 	ActorSleepButton,
 	ActorStopButton,
 } from "./actor-stop-button";
-import { ActorObjectInspector } from "./console/actor-inspector";
 import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
@@ -91,19 +90,19 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 								actorId={actorId}
 							/>
 						</Dd>
-						<Dt>Keys</Dt>
-						<Dd>
-							<Flex
-								direction="col"
-								gap="2"
-								className="flex-1 min-w-0"
-								w="full"
-							>
-								<ActorObjectInspector
-									data={keys}
-									expandPaths={["$"]}
-								/>
-							</Flex>
+						<Dt>Key</Dt>
+						<Dd className="text-mono">
+							{keys ? (
+								<DiscreteCopyButton
+									size="xs"
+									value={keys}
+									className="-mx-2 h-auto"
+								>
+									{keys}
+								</DiscreteCopyButton>
+							) : (
+								<span className="text-muted-foreground">-</span>
+							)}
 						</Dd>
 						{runner ? (
 							<>
@@ -129,7 +128,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 						) : null}
 						{connectableTs ? (
 							<>
-								<Dt>Connectable</Dt>
+								<Dt>Connectable since</Dt>
 								<Dd>
 									<TimestampValue ts={connectableTs} />
 								</Dd>
@@ -137,7 +136,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 						) : null}
 						{sleepTs ? (
 							<>
-								<Dt>Sleeping</Dt>
+								<Dt>Sleeping since</Dt>
 								<Dd>
 									<TimestampValue ts={sleepTs} />
 								</Dd>

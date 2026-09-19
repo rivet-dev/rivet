@@ -62,18 +62,17 @@ export function CreateActorButton({
 		</div>
 	);
 
-	if (canCreate) {
+	const tooltip = !canCreate
+		? data && data.length <= 0
+			? "Please deploy a build first."
+			: copy.createActorUsingForm
+		: iconOnly
+			? (label ?? copy.createActor)
+			: null;
+
+	if (tooltip === null) {
 		return content;
 	}
 
-	return (
-		<WithTooltip
-			trigger={content}
-			content={
-				data && data.length <= 0
-					? "Please deploy a build first."
-					: copy.createActorUsingForm
-			}
-		/>
-	);
+	return <WithTooltip trigger={content} content={tooltip} />;
 }

@@ -59,12 +59,6 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			false,
 		),
 		Service::new(
-			"ups_broadcast",
-			ServiceKind::Core,
-			|config, pools| Box::pin(rivet_ups_broadcast::start(config, pools)),
-			false,
-		),
-		Service::new(
 			"profiling",
 			ServiceKind::Core,
 			|config, pools| Box::pin(rivet_profiling::start(config, pools)),

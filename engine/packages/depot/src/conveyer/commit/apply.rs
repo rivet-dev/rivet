@@ -17,8 +17,8 @@ use crate::{
 		ltx::{LtxHeader, encode_ltx_v3},
 		quota,
 		types::{
-			CommitOptions, CommitResult, DatabaseBranchId, DirtyPage, decode_compaction_root,
-			decode_db_head,
+			CommitOptions, CommitResult, DatabaseBranchId, DirtyPage, decode_commit_stage_row,
+			decode_compaction_root, decode_db_head,
 		},
 	},
 	workflows::compaction::DeltasAvailable,
@@ -27,7 +27,9 @@ use crate::{
 use super::{
 	branch_init::{ensure_branch_writable, resolve_or_allocate_branch},
 	helpers::tx_get_value,
-	publish, test_hooks,
+	publish,
+	stage::clear_abandoned_commit_stage,
+	test_hooks,
 	truncate::collect_truncate_cleanup,
 };
 
@@ -65,6 +67,7 @@ impl Db {
 		.await?;
 
 		let node_id = self.node_id.to_string();
+		let max_storage_bytes = self.max_storage_bytes();
 		let labels = &[node_id.as_str(), metrics::COMMIT_PATH_SINGLE_SHOT];
 		let _timer = metrics::SQLITE_PUMP_COMMIT_DURATION
 			.with_label_values(labels)
@@ -245,6 +248,31 @@ impl Db {
 							.context("sqlite head txid overflowed")?,
 						None => 1,
 					};
+					// An abandoned staged commit leaves its rows at head + 1, which is the txid this
+					// commit is about to publish, and anything still there would be published with it.
+					let stage_key = keys::branch_commit_stage_key(branch_id, txid);
+					let storage_used =
+						if let Some(stage_bytes) =
+							tx_get_value(&tx, &stage_key, Serializable).await?
+						{
+							let stage = decode_commit_stage_row(&stage_bytes)?;
+							// The in-process quota cache is not updated while segments are staged, so
+							// read the authoritative counter before refunding the abandoned bytes.
+							let storage_used = quota::read_branch(&tx, branch_id)
+								.await?
+								.checked_sub(stage.accounted_bytes)
+								.context("sqlite abandoned stage quota refund underflowed i64")?;
+							clear_abandoned_commit_stage(&tx, branch_id, txid, &stage);
+							tracing::info!(
+								?branch_id,
+								txid,
+								refunded_bytes = stage.accounted_bytes,
+								"cleared an abandoned staged commit before a single-shot commit reused its txid"
+							);
+							storage_used
+						} else {
+							storage_used
+						};
 
 					let phase_start = Instant::now();
 					let truncate_cleanup = collect_truncate_cleanup(
@@ -335,6 +363,7 @@ impl Db {
 							delta_chunks,
 							truncate_cleanup,
 							storage_used,
+							max_storage_bytes,
 							compaction_root,
 							compaction_enabled,
 							last_deltas_available_at_ms,

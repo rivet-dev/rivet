@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/react";
 import { lazy, type PropsWithChildren, Suspense } from "react";
-import { getConfig, useConfig } from "@/components";
+import { getConfig, getPosthogConfig, useConfig } from "@/components";
 import { commonEnv } from "@/lib/env";
 import { initPosthog } from "@/lib/posthog";
 
@@ -9,18 +9,22 @@ export async function initThirdPartyProviders(router: unknown, debug: boolean) {
 
 	let ph = null;
 
-	if (config.posthog) {
+	const posthogConfig = getPosthogConfig(config);
+	if (posthogConfig) {
 		ph = await initPosthog(
-			config.posthog.apiKey,
-			config.posthog.apiHost,
+			posthogConfig.apiKey,
+			posthogConfig.apiHost,
 			debug,
 		);
 	}
 
 	if (config.sentry) {
+		// tanstackRouterBrowserTracingIntegration reuses
+		// browserTracingIntegration's name, and Sentry keeps only the last
+		// integration of a given name. Adding both drops the router-aware one
+		// and names transactions by pathname instead of route id.
 		const integrations = [
 			Sentry.tanstackRouterBrowserTracingIntegration(router),
-			Sentry.browserTracingIntegration(),
 		];
 		if (ph) {
 			integrations.push(
@@ -61,7 +65,7 @@ const LazyPostHogProvider = lazy(() =>
 export function ThirdPartyProviders({ children }: PropsWithChildren) {
 	const config = useConfig();
 
-	if (!config.posthog) {
+	if (!getPosthogConfig(config)) {
 		return children;
 	}
 

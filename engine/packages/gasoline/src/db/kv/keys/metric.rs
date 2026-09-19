@@ -7,8 +7,8 @@ pub enum Metric {
 	WorkflowActive(String),
 	/// Count (workflow name)
 	WorkflowSleeping(String),
-	/// Count (workflow name, error)
-	WorkflowDead(String, String),
+	/// Count (workflow name)
+	WorkflowDead(String),
 	/// Count (workflow name)
 	WorkflowComplete(String),
 	/// Deprecated
@@ -22,7 +22,7 @@ impl Metric {
 		match self {
 			Metric::WorkflowActive(_) => MetricVariant::WorkflowActive,
 			Metric::WorkflowSleeping(_) => MetricVariant::WorkflowSleeping,
-			Metric::WorkflowDead(_, _) => MetricVariant::WorkflowDead,
+			Metric::WorkflowDead(_) => MetricVariant::WorkflowDead,
 			Metric::WorkflowComplete(_) => MetricVariant::WorkflowComplete,
 			Metric::SignalPending(_) => MetricVariant::SignalPending,
 			Metric::SignalPending2(_) => MetricVariant::SignalPending2,
@@ -85,8 +85,9 @@ impl TuplePack for MetricKey {
 		offset += match &self.metric {
 			Metric::WorkflowActive(workflow_name) => workflow_name.pack(w, tuple_depth)?,
 			Metric::WorkflowSleeping(workflow_name) => workflow_name.pack(w, tuple_depth)?,
-			Metric::WorkflowDead(workflow_name, error) => {
-				(workflow_name, error).pack(w, tuple_depth)?
+			Metric::WorkflowDead(workflow_name) => {
+				// Keep the legacy tuple shape so old workers can decode this key.
+				(workflow_name, "").pack(w, tuple_depth)?
 			}
 			Metric::WorkflowComplete(workflow_name) => workflow_name.pack(w, tuple_depth)?,
 			Metric::SignalPending(signal_name) => signal_name.pack(w, tuple_depth)?,
@@ -126,13 +127,13 @@ impl<'de> TupleUnpack<'de> for MetricKey {
 				)
 			}
 			MetricVariant::WorkflowDead => {
-				let (input, (workflow_name, error)) =
+				let (input, (workflow_name, _error)) =
 					<(String, String)>::unpack(input, tuple_depth)?;
 
 				(
 					input,
 					MetricKey {
-						metric: Metric::WorkflowDead(workflow_name, error),
+						metric: Metric::WorkflowDead(workflow_name),
 					},
 				)
 			}

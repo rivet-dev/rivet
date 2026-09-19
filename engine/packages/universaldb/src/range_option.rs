@@ -52,8 +52,13 @@ impl RangeOption<'_> {
 			return None;
 		}
 
-		let last = kvs.iter().last()?;
-		let last_key = last.key();
+		// Advance from the last key the database returned rather than the last key in `kvs`. See
+		// `Values::chunk`.
+		let last_key = match kvs.last_db_key() {
+			Some(last_db_key) => last_db_key.to_vec(),
+			None => kvs.iter().last()?.key().to_vec(),
+		};
+		let last_key = last_key.as_slice();
 
 		if let Some(limit) = self.limit.as_mut() {
 			*limit = limit.saturating_sub(kvs.len());

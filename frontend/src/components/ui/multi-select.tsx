@@ -48,6 +48,7 @@ interface MultiSelectFormFieldProps
 	defaultValue?: string[];
 	disabled?: boolean;
 	placeholder: string;
+	maxCount?: number;
 	className?: string;
 	onValueChange: (value: string[]) => void;
 }
@@ -66,6 +67,7 @@ const MultiSelectFormField = React.forwardRef<
 			onValueChange,
 			disabled,
 			placeholder,
+			maxCount,
 			...props
 		},
 		ref,
@@ -99,6 +101,12 @@ const MultiSelectFormField = React.forwardRef<
 			}
 		};
 
+		const visibleValues =
+			maxCount === undefined
+				? selectedValues
+				: selectedValues.slice(0, maxCount);
+		const hiddenCount = selectedValues.length - visibleValues.length;
+
 		const toggleOption = (value: string) => {
 			if (selectedValuesSet.current.has(value)) {
 				selectedValuesSet.current.delete(value);
@@ -123,7 +131,7 @@ const MultiSelectFormField = React.forwardRef<
 						{selectedValues.length > 0 ? (
 							<div className="flex justify-between items-center w-full">
 								<div className="flex flex-wrap items-center">
-									{selectedValues.map((value) => {
+									{visibleValues.map((value) => {
 										const option = options.find(
 											(o) => o.value === value,
 										);
@@ -154,6 +162,18 @@ const MultiSelectFormField = React.forwardRef<
 											</Badge>
 										);
 									})}
+									{hiddenCount > 0 ? (
+										<Badge
+											className={cn(
+												multiSelectVariants({
+													variant,
+													className,
+												}),
+											)}
+										>
+											+{hiddenCount} more
+										</Badge>
+									) : null}
 								</div>
 								<div className="flex items-center justify-between">
 									<Icon

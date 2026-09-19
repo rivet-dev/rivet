@@ -807,24 +807,51 @@ impl SqliteDb {
 		run_detached_transaction_task(
 			async move {
 				let _gate = db.shutdown_transaction_coordinator().await;
-				db.close_backend().await
+				db.close_backend(false).await
 			},
 			"sqlite close task failed",
 		)
 		.await
 	}
 
-	async fn close_backend(&self) -> Result<()> {
+	/// Closes SQLite without returning before the native worker terminates.
+	/// Any returned error is reported only after the worker has relinquished SQLite.
+	pub async fn close_and_wait(&self) -> Result<()> {
+		// Keep this strict path in the caller task. Wrapping it in a detached task
+		// would make a task-level join failure ambiguous: the caller could no longer
+		// prove that the worker had relinquished SQLite before replacing the actor.
+		let _gate = self.shutdown_transaction_coordinator().await;
+		self.close_backend(true).await
+	}
+
+	async fn close_backend(&self, _wait_for_worker: bool) -> Result<()> {
 		match self.backend {
 			SqliteBackend::LocalNative => {
 				#[cfg(feature = "sqlite-local")]
 				{
-					let native_db = self.db.lock().take();
+					let native_db = self.db.lock().clone();
 					if let Some(native_db) = native_db {
-						let result = self.map_local_worker_result(native_db.close().await);
+						let close_result = if _wait_for_worker {
+							native_db.close_and_wait().await
+						} else {
+							native_db.close().await
+						};
+						let close_timed_out = close_result.as_ref().err().is_some_and(|error| {
+							error
+								.downcast_ref::<SqliteWorkerCloseTimeoutError>()
+								.is_some()
+						});
+						let release_handle = _wait_for_worker || !close_timed_out;
+						let result = self.map_local_worker_result(close_result);
 						self.abort_worker_failure_monitor();
 						if let Some(metrics) = self.vfs_metrics.as_ref() {
 							metrics.set_worker_active(false);
+						}
+						// Keep the handle after a bounded close timeout. A later strict close
+						// must still be able to observe the worker reaching CLOSED/DEAD before
+						// another actor generation can take ownership of SQLite.
+						if release_handle {
+							self.db.lock().take();
 						}
 						result?;
 					}
@@ -1238,7 +1265,10 @@ fn report_sqlite_worker_fatal(reported: &AtomicBool, config: SqliteRuntimeConfig
 	// A dead worker means SQLite's sole native connection is no longer a valid
 	// actor subsystem. Core reports that through envoy lifecycle instead of
 	// letting the actor continue to serve requests with a broken database.
-	config.handle.stop_actor(
+	// This is a crash, not a deliberate destroy, so it goes out as a sleep
+	// intent: the next generation opens a fresh worker over the same durable
+	// state.
+	config.handle.sleep_actor(
 		config.actor_id,
 		config
 			.generation

@@ -202,13 +202,6 @@ export function comparePlans(
 	return 0;
 }
 
-export function CurrentPlan({ plan }: { plan?: string }) {
-	if (!plan || plan === "free") return <>Free</>;
-	if (plan === "pro") return <>Hobby</>;
-	if (plan === "team") return <>Team</>;
-	return <>Enterprise</>;
-}
-
 export function BillingDetailsButton(props: ComponentProps<typeof Button>) {
 	const dataProvider = useCloudProjectDataProvider();
 

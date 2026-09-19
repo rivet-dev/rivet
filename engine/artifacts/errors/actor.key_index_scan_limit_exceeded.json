@@ -1,0 +1,5 @@
+{
+  "code": "key_index_scan_limit_exceeded",
+  "group": "actor",
+  "message": "Too many index entries for this actor key to resolve it."
+}

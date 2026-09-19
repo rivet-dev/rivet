@@ -8,6 +8,8 @@ use crate::conveyer::{
 	types::{BucketId, DatabaseBranchId},
 };
 
+/// Default bytes of storage one SQLite database may occupy, used by a `Db` opened without an
+/// engine config. Configured through `sqlite.max_storage_bytes`, which defaults to the same value.
 pub const SQLITE_MAX_STORAGE_BYTES: i64 = 10 * 1024 * 1024 * 1024;
 pub const COMPACTION_DELTA_THRESHOLD: u64 = 128;
 pub const TRIGGER_THROTTLE_MS: u64 = 15000;

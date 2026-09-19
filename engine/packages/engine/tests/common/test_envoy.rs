@@ -457,7 +457,7 @@ impl rivet_test_envoy::EnvoyCallbacks for TestEnvoyCallbacks {
 		Box::pin(async move {
 			let mut request_body = request.body.unwrap_or_default();
 			if let Some(mut body_stream) = request.body_stream {
-				while let Some(chunk) = body_stream.recv().await {
+				while let Some(chunk) = body_stream.recv().await? {
 					request_body.extend(chunk);
 				}
 			}
@@ -547,10 +547,10 @@ fn spawn_event_bridge(handle: EnvoyHandle, mut event_rx: mpsc::UnboundedReceiver
 				rivet_runner_protocol::mk2::Event::EventActorIntent(intent) => {
 					match intent.intent {
 						rivet_runner_protocol::mk2::ActorIntent::ActorIntentSleep => {
-							handle.sleep_actor(event.actor_id, Some(event.generation));
+							handle.sleep_actor(event.actor_id, Some(event.generation), None);
 						}
 						rivet_runner_protocol::mk2::ActorIntent::ActorIntentStop => {
-							handle.stop_actor(event.actor_id, Some(event.generation), None);
+							handle.stop_actor(event.actor_id, Some(event.generation));
 						}
 					}
 				}

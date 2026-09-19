@@ -12,6 +12,7 @@ license = "MIT"
 [dependencies]
 console = "0.15"
 derive_builder = "0.12"
+indicatif = "0.17"
 tabled = { version = "0.17.0", features = ["ansi"] }
 term_size = "0.3"
 thiserror = "1.0"

@@ -20,6 +20,12 @@ pub struct DynamicConfigUpdate {
 		deserialize_with = "double_option",
 		skip_serializing_if = "Option::is_none"
 	)]
+	pub max_storage_bytes: Option<Option<u64>>,
+	#[serde(
+		default,
+		deserialize_with = "double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
 	pub compaction_admission_percent: Option<Option<f64>>,
 	#[serde(
 		default,
@@ -99,6 +105,35 @@ pub struct DynamicConfigUpdate {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub compaction_reclaim_throttle_admit_soft_util: Option<Option<f64>>,
+	#[serde(
+		default,
+		deserialize_with = "double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub worker_poll_interval_ms: Option<Option<u64>>,
+	#[serde(
+		default,
+		deserialize_with = "double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub worker_max_deduped_workflows_per_pull: Option<Option<usize>>,
+	#[serde(
+		default,
+		deserialize_with = "double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub worker_max_workflows_per_pull: Option<Option<usize>>,
+	#[serde(
+		default,
+		deserialize_with = "double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub worker_max_wake_condition_clears_per_pull: Option<Option<usize>>,
+	/// Per workflow name wake key limits. Unlike the other properties this is keyed, so an absent
+	/// key leaves that workflow name alone, `Some(max)` overrides it, and `None` clears the
+	/// override for that one name. The "default" key applies to all workflow names.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub worker_max_wake_keys_per_workflow_name_per_pull: Option<HashMap<String, Option<usize>>>,
 	/// Per workflow name concurrency limits. Unlike the other properties this is keyed, so an
 	/// absent key leaves that workflow name alone, `Some(max)` overrides it, and `None` clears the
 	/// override for that one name.

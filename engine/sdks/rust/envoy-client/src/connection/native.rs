@@ -228,12 +228,26 @@ async fn single_connection(
 			Ok(tungstenite::Message::Binary(data)) => {
 				crate::utils::inject_latency(debug_latency_ms).await;
 
+				// Everything below runs before the next `read.next()`, so this is time the socket
+				// is not being drained. A slow reader shows up here rather than in the idle wait.
+				let handler_start = std::time::Instant::now();
+				METRICS.ws_rx_bytes_total.inc_by(data.len() as u64);
+				METRICS.ws_rx_messages_total.inc();
+
+				let decode_start = std::time::Instant::now();
 				let decoded = crate::protocol::versioned::ToEnvoy::deserialize(
 					&data,
 					protocol::PROTOCOL_VERSION,
 				)?;
+				METRICS
+					.ws_decode_duration
+					.observe(decode_start.elapsed().as_secs_f64());
 
 				super::forward_to_envoy(shared, session, decoded).await;
+
+				METRICS
+					.ws_read_handler_duration
+					.observe(handler_start.elapsed().as_secs_f64());
 			}
 			Ok(tungstenite::Message::Close(frame)) => {
 				disconnect_reason = "close";

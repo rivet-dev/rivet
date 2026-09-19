@@ -4,14 +4,18 @@ import { QueryErrorResetBoundary } from "@tanstack/react-query";
 import {
 	type ComponentProps,
 	type ComponentType,
+	createContext,
 	lazy,
 	Suspense,
 	useCallback,
+	useContext,
+	useEffect,
 	useMemo,
 	useState,
 } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
 import {
 	Dialog,
@@ -35,6 +39,24 @@ interface DialogConfig {
 	autoFocus?: boolean;
 }
 
+function isThirdPartyOverlayOpen() {
+	const box = document.querySelector("cal-modal-box");
+	return !!box && getComputedStyle(box).visibility !== "hidden";
+}
+
+type SetDialogContentClassName = (className: string | undefined) => void;
+
+const DialogContentClassNameContext =
+	createContext<SetDialogContentClassName | null>(null);
+
+export function useDialogContentClassName(className: string | undefined) {
+	const setClassName = useContext(DialogContentClassNameContext);
+	useEffect(() => {
+		setClassName?.(className);
+		return () => setClassName?.(undefined);
+	}, [setClassName, className]);
+}
+
 export const createDialogHook = <
 	// biome-ignore lint/suspicious/noExplicitAny: we don't know the type of the component, so we use any
 	Component extends () => Promise<{ default: ComponentType<any> }>,
@@ -52,6 +74,9 @@ export const createDialogHook = <
 	}) => {
 		// biome-ignore lint/correctness/useExhaustiveDependencies: component here is a static value, won't change over time
 		const Content = useMemo(() => lazy(component), []);
+		const [contentClassName, setContentClassName] = useState<
+			string | undefined
+		>(undefined);
 
 		return (
 			<IsInModalContext.Provider value={true}>
@@ -65,6 +90,11 @@ export const createDialogHook = <
 				>
 					<DialogContent
 						{...dialogContentProps}
+						className={cn(
+							"transition-[max-width,width] duration-200",
+							dialogContentProps?.className,
+							contentClassName,
+						)}
 						hideClose={
 							props.dismissible === false ||
 							dialogContentProps?.hideClose
@@ -77,6 +107,18 @@ export const createDialogHook = <
 							if (opts.autoFocus === false) {
 								return e.preventDefault();
 							}
+						}}
+						onInteractOutside={(event) => {
+							if (isThirdPartyOverlayOpen()) {
+								return event.preventDefault();
+							}
+							dialogContentProps?.onInteractOutside?.(event);
+						}}
+						onEscapeKeyDown={(event) => {
+							if (isThirdPartyOverlayOpen()) {
+								return event.preventDefault();
+							}
+							dialogContentProps?.onEscapeKeyDown?.(event);
 						}}
 					>
 						<QueryErrorResetBoundary>
@@ -129,14 +171,18 @@ export const createDialogHook = <
 											</div>
 										}
 									>
-										<Content
-											{...props}
-											onClose={() =>
-												dialogProps?.onOpenChange?.(
-													false,
-												)
-											}
-										/>
+										<DialogContentClassNameContext.Provider
+											value={setContentClassName}
+										>
+											<Content
+												{...props}
+												onClose={() =>
+													dialogProps?.onOpenChange?.(
+														false,
+													)
+												}
+											/>
+										</DialogContentClassNameContext.Provider>
 									</Suspense>
 								</ErrorBoundary>
 							)}

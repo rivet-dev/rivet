@@ -15,3 +15,4 @@ pub mod test_hooks;
 mod test_hooks;
 
 pub use dirty::clear_sqlite_cmp_dirty_if_observed_idle;
+pub(crate) use stage::clear_abandoned_commit_stage;

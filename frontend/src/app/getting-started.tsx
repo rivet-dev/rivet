@@ -1,9 +1,9 @@
 import {
-	faActors,
 	faArrowRight,
 	faCheck,
 	faChevronDown,
 	faKey,
+	faRivet,
 	Icon,
 } from "@rivet-gg/icons";
 import { deployOptions, type Provider } from "@rivetkit/shared-data";
@@ -22,18 +22,43 @@ import z from "zod";
 import * as ConnectServerfulForm from "@/app/forms/connect-manual-serverful-form";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
+	MANAGED_SERVICES_POOL_CONFIG,
+	useEnableManagedServicesMutation,
+} from "@/app/managed-services";
+import {
 	CodeFrame,
 	CodeGroup,
 	CodeGroupSyncProvider,
 	CodePreview,
+	DiscreteCopyButton,
 	FormField,
-	Skeleton,
 } from "@/components";
 import {
 	useCloudNamespaceDataProvider,
 	useEngineCompatDataProvider,
 } from "@/components/actors";
+import { AgentSelectStep } from "@/components/onboarding/agent-os/agent-select-step";
+import { buildAgentOsSetup } from "@/components/onboarding/agent-os/build-agent-os-setup";
+import {
+	DEFAULT_AGENT,
+	DEFAULT_PACKAGES,
+	DEFAULT_SANDBOX_PROVIDER,
+} from "@/components/onboarding/agent-os/catalog";
+import {
+	PRODUCT_COMPOSABILITY_NOTE,
+	ProductPicker,
+} from "@/components/products/product-picker";
 import { defineStepper } from "@/components/ui/stepper";
+import {
+	DURABLE_STREAMS_CLIENT_PACKAGE,
+	DURABLE_STREAMS_DEV_COMMAND,
+	DURABLE_STREAMS_DOCS_URL,
+	DURABLE_STREAMS_LOCAL_URL,
+	getDurableStreamsClientSnippet,
+	getDurableStreamUrl,
+	getOnboardingTargetCopy,
+	type OnboardingTarget,
+} from "@/content/agent-prompts";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { engineEnv } from "@/lib/env";
 import { features } from "@/lib/features";
@@ -48,6 +73,14 @@ import {
 	DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
 import { TEST_IDS } from "../utils/test-ids";
+import {
+	AgentPromptBanner,
+	CommandBox,
+	defaultRuntimeModeForProvider,
+	useAgentInstructionsCode,
+	useComputeInstructionsCode,
+	useDurableStreamsServiceUrl,
+} from "./compute-deploy";
 import { DeploymentCheck } from "./deployment-check";
 import { useEndpoint } from "./dialogs/connect-manual-serverful-frame";
 import {
@@ -55,23 +88,14 @@ import {
 	Configuration,
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
-import { EnvVariables } from "./env-variables";
-import { StepperForm, StepVisibilityContext } from "./forms/stepper-form";
+import { EnvVariables, useRivetDsn } from "./env-variables";
+import {
+	StepperForm,
+	StepVisibilityContext,
+	useStepperFormSubmit,
+} from "./forms/stepper-form";
 import { Content } from "./layout";
-import { AgentSelectStep } from "@/components/onboarding/agent-os/agent-select-step";
-import { buildAgentOsSetup } from "@/components/onboarding/agent-os/build-agent-os-setup";
-import {
-	DEFAULT_AGENT,
-	DEFAULT_PACKAGES,
-	DEFAULT_SANDBOX_PROVIDER,
-} from "@/components/onboarding/agent-os/catalog";
-import {
-	AgentPromptBanner,
-	CommandBox,
-	defaultRuntimeModeForProvider,
-	useAgentInstructionsCode,
-	useComputeInstructionsCode,
-} from "./compute-deploy";
+import { StepContentSkeleton } from "./onboarding-skeleton";
 
 function platformTitle(provider: unknown): string {
 	return (
@@ -82,21 +106,37 @@ function platformTitle(provider: unknown): string {
 
 const stepper = defineStepper(
 	{
-		id: "local",
-		title: "Run locally",
-		titleFor: (values: Record<string, unknown>) =>
-			values.template === "agent-os"
-				? "What are you building?"
-				: "Run locally",
-		description: "Get your first Rivet Actor running on your machine.",
-		next: "Continue",
+		id: "select",
+		title: "Select a product",
+		description: PRODUCT_COMPOSABILITY_NOTE,
+		// Selecting a card submits the step, so there is no Continue button.
+		showNext: false,
 		// `template` is carried in the step schema so the stepper accumulates it
-		// into its running values. The agentOS steps below gate on it via
-		// isVisible, so it must survive navigation past this step.
+		// into its running values. The steps below gate on it via isVisible, so
+		// it must survive navigation past this step.
 		schema: z.object({
-			template: z.enum(["actor", "agent-os"]).optional(),
+			template: z
+				.enum([
+					"actor",
+					"agent-os",
+					"workflows",
+					"dynamic-apps",
+					"durable-streams",
+				])
+				.optional(),
 		}),
 		group: "local",
+	},
+	{
+		id: "local",
+		title: "Run locally",
+		next: "Continue",
+		previous: "Back",
+		schema: z.object({}),
+		group: "local",
+		// agentOS gets the dedicated agent/handoff steps below instead.
+		isVisible: (values: Record<string, unknown>) =>
+			values.template !== "agent-os",
 	},
 	// agentOS-only steps. Hidden for the actor path via isVisible, so the
 	// stepper skips them and the wizard stays a two-step local -> deploy flow.
@@ -105,6 +145,7 @@ const stepper = defineStepper(
 		title: "Choose your agent",
 		description: "Pick the coding agent to run inside agentOS.",
 		next: "Continue",
+		previous: "Back",
 		schema: z.object({ agent: z.string().nonempty() }),
 		group: "local",
 		isVisible: (values: Record<string, unknown>) =>
@@ -121,6 +162,18 @@ const stepper = defineStepper(
 		isVisible: (values: Record<string, unknown>) =>
 			values.template === "agent-os",
 	},
+	// Services are managed by Rivet, so there is no runner or image to deploy.
+	// Durable Streams gets this step in place of the platform deploy below.
+	{
+		id: "services",
+		title: "Connect to Durable Streams",
+		next: "Done",
+		previous: "Back",
+		schema: z.object({}),
+		group: "deploy",
+		isVisible: (values: Record<string, unknown>) =>
+			features.services && values.template === "durable-streams",
+	},
 	{
 		id: "deploy",
 		title: "Deploy",
@@ -130,6 +183,8 @@ const stepper = defineStepper(
 		previous: "Back",
 		assist: true,
 		group: "deploy",
+		isVisible: (values: Record<string, unknown>) =>
+			values.template !== "durable-streams",
 		schema: (values: Record<string, unknown>) => {
 			const provider = (values.provider as string) || "rivet";
 			if (provider === "rivet") {
@@ -236,7 +291,7 @@ export function GettingStarted({
 			: defaultRuntimeModeForProvider(defaultProvider)) as
 			| "serverless"
 			| "serverful",
-		template: "actor" as "actor" | "agent-os",
+		template: "actor" as OnboardingTarget,
 		agent: DEFAULT_AGENT,
 		packages: DEFAULT_PACKAGES,
 		sandbox: { enabled: false, provider: DEFAULT_SANDBOX_PROVIDER } as {
@@ -323,6 +378,11 @@ export function GettingStarted({
 								}
 								defaultValues={defaultValues}
 								content={{
+									select: () => (
+										<StepContent>
+											<SelectProductStep />
+										</StepContent>
+									),
 									local: () => (
 										<StepContent>
 											<RunLocallyStep />
@@ -338,18 +398,14 @@ export function GettingStarted({
 											<AgentOsHandoff />
 										</StepContent>
 									),
+									services: () => (
+										<StepContent>
+											<DurableStreamsConnect />
+										</StepContent>
+									),
 									deploy: () => (
 										<StepContent>
-											<Suspense
-												fallback={
-													<div className="space-y-6">
-														<Skeleton className="w-full h-[180px]" />
-														<Skeleton className="w-full h-[200px]" />
-													</div>
-												}
-											>
-												<DeployScreen />
-											</Suspense>
+											<DeployScreen />
 										</StepContent>
 									),
 								}}
@@ -367,7 +423,18 @@ export function GettingStarted({
 									>;
 									const provider = (accumulated.provider ??
 										live.provider) as string | undefined;
-									if (provider && provider !== "rivet") {
+									const template = (accumulated.template ??
+										live.template) as
+										| OnboardingTarget
+										| undefined;
+									// Services skip the platform deploy step, so
+									// the provider fields hold untouched defaults;
+									// writing them would register a bogus runner.
+									if (
+										provider &&
+										provider !== "rivet" &&
+										template !== "durable-streams"
+									) {
 										await saveProviderConfig({
 											...accumulated,
 											provider,
@@ -385,7 +452,7 @@ export function GettingStarted({
 									// The managed pool is created by the Rivet CLI
 									// during deploy, not by the dashboard, so we only
 									// prefetch the data the deploy step renders here.
-									if (stepper.current.id === "local") {
+									if (stepper.current.id === "select") {
 										await Promise.all([
 											...(features.auth &&
 											"publishableTokenQueryOptions" in
@@ -417,7 +484,7 @@ export function GettingStarted({
 function StepContent({ children }: { children: ReactNode }) {
 	return (
 		<div className="w-full" data-component="step-content">
-			{children}
+			<Suspense fallback={<StepContentSkeleton />}>{children}</Suspense>
 		</div>
 	);
 }
@@ -438,15 +505,25 @@ function OnboardingHeader() {
 	);
 }
 
+// `deployOptions` only covers self-host platforms, so Rivet Compute has no
+// entry there and has to be prepended for the switcher to offer it.
+const RIVET_DEPLOY_OPTION = {
+	name: "rivet",
+	displayName: "Rivet Compute",
+	description: "Deploy to Rivet's managed compute with the Rivet CLI",
+	icon: faRivet,
+	badge: "Recommended",
+};
+
 // Platform switcher pinned top-right on the deploy screen. Defaults to Rivet
 // Compute; selecting another option updates the `provider` form field, which
 // re-tunes the deploy screen.
 function SwitchPlatform() {
 	const { setValue } = useFormContext();
 	const provider = (useWatch({ name: "provider" }) as string) || "rivet";
-	const options = deployOptions.filter(
-		(o) => features.compute || o.name !== "rivet",
-	);
+	const options = features.compute
+		? [RIVET_DEPLOY_OPTION, ...deployOptions]
+		: deployOptions;
 	const otherOptions = options.filter((o) => o.name !== provider);
 	return (
 		<DropdownMenu>
@@ -485,23 +562,23 @@ function SwitchPlatform() {
 						key={option.name}
 						className="items-start gap-3 py-2"
 						onClick={() => {
-							setValue("provider", option.name, {
+							const opts = {
 								shouldDirty: true,
 								shouldTouch: true,
 								shouldValidate: true,
-							});
+							};
+							setValue("provider", option.name, opts);
 							// Reset the runner mode to the new provider's default
 							// so switching to a container platform lands on the
 							// runner and a function platform lands on serverless.
 							setValue(
 								"mode",
 								defaultRuntimeModeForProvider(option.name),
-								{
-									shouldDirty: true,
-									shouldTouch: true,
-									shouldValidate: true,
-								},
+								opts,
 							);
+							setValue("runnerName", "default", opts);
+							setValue("customName", "", opts);
+							setValue("customIcon", "", opts);
 						}}
 					>
 						<Icon
@@ -555,8 +632,15 @@ function RivetDeploy() {
 	const { data: cloudToken } = useSuspenseQuery(
 		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
 	);
-	const deployCommand = `npx @rivetkit/cli deploy --token ${cloudToken ?? "<RIVET_CLOUD_TOKEN>"}`;
-	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
+	const target = useOnboardingTarget();
+	const token = cloudToken ?? "<RIVET_CLOUD_TOKEN>";
+	// `deploy` defaults to the `production` namespace, so the onboarding
+	// namespace has to be passed explicitly or the app lands somewhere the rest
+	// of the flow is not watching.
+	const deployCommand = `npx @rivetkit/cli deploy --token "${token}" --namespace ${dataProvider.engineNamespace} --env PORT=3000${
+		target === "dynamic-apps" ? ` --env RIVET_CLOUD_TOKEN="${token}"` : ""
+	}`;
+	const isAgentOs = target === "agent-os";
 	return (
 		<div className="flex flex-col gap-6">
 			{isAgentOs ? <AgentOsKeyNotice /> : null}
@@ -565,8 +649,11 @@ function RivetDeploy() {
 			<div>
 				<p className="text-sm text-muted-foreground mb-3">
 					Run this from your project root. The CLI builds and pushes
-					your image and provisions Rivet Compute. The token is saved
-					to{" "}
+					your image and provisions Rivet Compute.
+					{target === "dynamic-apps"
+						? " The Cloud API token is also passed to the Dynamic Apps host so it can provision an isolated namespace for each app."
+						: ""}{" "}
+					The token is saved to{" "}
 					<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
 						~/.rivet/credentials
 					</code>{" "}
@@ -625,7 +712,6 @@ function OnboardingProgress({ action }: { action?: ReactNode }) {
 	const steps = s.all.filter((step) => isStepVisible(step.id));
 	const currentIndex = Math.max(0, visibleStepIndex(s.current.id));
 	const total = visibleStepCount;
-	const groupLabel = s.current.group === "local" ? "Local setup" : "Deploy";
 	return (
 		<div className="mb-6 flex flex-col gap-2">
 			<div
@@ -633,7 +719,7 @@ function OnboardingProgress({ action }: { action?: ReactNode }) {
 				aria-valuemin={1}
 				aria-valuemax={total}
 				aria-valuenow={currentIndex + 1}
-				aria-valuetext={`Step ${currentIndex + 1} of ${total}, ${groupLabel}`}
+				aria-valuetext={`Step ${currentIndex + 1} of ${total}`}
 				className="flex gap-1.5"
 			>
 				{steps.map((step, i) => (
@@ -648,7 +734,7 @@ function OnboardingProgress({ action }: { action?: ReactNode }) {
 			</div>
 			<div className="flex min-h-8 items-center justify-between gap-4">
 				<div className="text-xs text-muted-foreground tabular-nums">
-					Step {currentIndex + 1} of {total} · {groupLabel}
+					Step {currentIndex + 1} of {total}
 				</div>
 				{action}
 			</div>
@@ -656,7 +742,7 @@ function OnboardingProgress({ action }: { action?: ReactNode }) {
 	);
 }
 
-function OrDivider({ label }: { label: string }) {
+export function OrDivider({ label }: { label: string }) {
 	return (
 		<div className="flex items-center gap-3">
 			<div className="h-px flex-1 bg-border" />
@@ -697,171 +783,317 @@ function AgentOsKeyNotice() {
 	);
 }
 
-// agentOS brand mark (rounded square + "OS") drawn in currentColor so it adapts
-// to the theme, unlike the white-only marketing SVG.
-function AgentOsLogo({ className }: { className?: string }) {
-	return (
-		<svg
-			viewBox="0 0 32 32"
-			fill="none"
-			className={className}
-			aria-hidden="true"
-		>
-			<rect
-				x="2.75"
-				y="2.75"
-				width="26.5"
-				height="26.5"
-				rx="8"
-				stroke="currentColor"
-				strokeWidth="2.5"
-			/>
-			<text
-				x="16"
-				y="20.5"
-				textAnchor="middle"
-				fontSize="11"
-				fontWeight="700"
-				fontFamily="inherit"
-				fill="currentColor"
-			>
-				OS
-			</text>
-		</svg>
-	);
-}
-
-function BuildTargetCard({
-	icon,
-	label,
-	description,
-	badge,
-	isSelected,
-	onSelect,
+// Product selector shown atop the first step. Selecting a product is the whole
+// step, so the choice advances the wizard instead of parking the user in front
+// of a Continue button.
+function BuildTargetSelector({
+	onSelectTarget,
 }: {
-	icon: ReactNode;
-	label: string;
-	description: string;
-	badge?: string;
-	isSelected: boolean;
-	onSelect: () => void;
+	onSelectTarget?: (target: OnboardingTarget) => void;
 }) {
-	return (
-		<button
-			type="button"
-			onClick={onSelect}
-			className={cn(
-				"flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors cursor-pointer",
-				isSelected
-					? "border-primary bg-primary/5"
-					: "border-border hover:border-muted-foreground/50",
-			)}
-		>
-			<span className="text-muted-foreground mt-0.5 shrink-0">
-				{icon}
-			</span>
-			<div className="min-w-0">
-				<div className="flex items-center gap-2">
-					<p className="text-sm font-medium">{label}</p>
-					{badge ? (
-						<Badge
-							variant="outline"
-							className="text-[10px] leading-none py-0.5 px-1.5 font-medium"
-						>
-							{badge}
-						</Badge>
-					) : null}
-				</div>
-				<p className="text-xs text-muted-foreground">{description}</p>
-			</div>
-		</button>
-	);
-}
-
-// "What are you building?" selector shown atop the first step when the agentOS
-// feature flag is on. Picking agentOS reveals the agent/software/sandbox/handoff
-// steps (gated by `template === "agent-os"` via the stepper's isVisible).
-function BuildTargetSelector() {
 	const { control, setValue } = useFormContext();
+	const submitForm = useStepperFormSubmit();
 	return (
 		<FormField
 			control={control}
 			name="template"
-			render={({ field }) => (
-				<div>
-					<p className="font-medium mb-2">What are you building?</p>
-					<div className="grid grid-cols-2 gap-2">
-						<BuildTargetCard
-							icon={<Icon icon={faActors} className="!size-5" />}
-							label="Rivet Actors"
-							description="Realtime, state, and multiplayer for any app"
-							isSelected={field.value !== "agent-os"}
-							onSelect={() =>
-								setValue("template", "actor", {
-									shouldDirty: true,
-									shouldTouch: true,
-									shouldValidate: true,
-								})
-							}
-						/>
-						<BuildTargetCard
-							icon={<AgentOsLogo className="size-5" />}
-							label="agentOS"
-							badge="Beta"
-							description="An open-source OS for agents. Runs in-process with ~6 ms cold starts."
-							isSelected={field.value === "agent-os"}
-							onSelect={() =>
-								setValue("template", "agent-os", {
-									shouldDirty: true,
-									shouldTouch: true,
-									shouldValidate: true,
-								})
-							}
-						/>
-					</div>
-				</div>
+			render={() => (
+				<ProductPicker
+					onSelect={(template) => {
+						onSelectTarget?.(template);
+						setValue("template", template, {
+							shouldDirty: true,
+							shouldTouch: true,
+							shouldValidate: true,
+						});
+						submitForm?.();
+					}}
+				/>
 			)}
 		/>
 	);
 }
 
+// Picking a service provisions the managed services pool up front so it is
+// warming while the user reads the connection steps.
+function CloudBuildTargetSelector() {
+	const { mutate } = useEnableManagedServicesMutation();
+	return (
+		<BuildTargetSelector
+			onSelectTarget={(target) => {
+				if (target !== "durable-streams") {
+					return;
+				}
+				mutate(MANAGED_SERVICES_POOL_CONFIG);
+			}}
+		/>
+	);
+}
+
+function useOnboardingTarget(): OnboardingTarget {
+	return (
+		(useWatch({ name: "template" }) as OnboardingTarget | undefined) ??
+		"actor"
+	);
+}
+
+function SelectProductStep() {
+	return features.compute ? (
+		<CloudBuildTargetSelector />
+	) : (
+		<BuildTargetSelector />
+	);
+}
+
 function RunLocallyStep() {
-	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
+	const target = useOnboardingTarget();
+	const copy = getOnboardingTargetCopy(target);
+	if (target === "durable-streams") {
+		return <DurableStreamsRunLocally />;
+	}
 	return (
 		<div className="flex flex-col gap-6">
-			{features.agentOs ? <BuildTargetSelector /> : null}
-			{isAgentOs ? null : (
-				<>
-					{features.compute ? (
-						<RunLocallyComputeBanner />
-					) : (
-						<RunLocallyGenericBanner />
-					)}
-					<OrDivider label="or do it yourself" />
-					<div className="w-full flex items-center justify-between gap-4 rounded-lg px-4 py-4 border border-border">
-						<div className="min-w-0">
-							<p className="font-medium mb-1">
-								Follow the quickstart guide
-							</p>
-							<p className="text-sm text-muted-foreground">
-								Build a Rivet Actor project by hand, step by
-								step.
-							</p>
-						</div>
-						<Button variant="outline" asChild className="shrink-0">
-							<a
-								href="https://rivet.dev/docs/actors/quickstart/"
-								target="_blank"
-								rel="noopener noreferrer"
-							>
-								Quickstart guide
-								<Icon icon={faArrowRight} className="ms-2" />
-							</a>
-						</Button>
+			{features.compute ? (
+				<RunLocallyComputeBanner target={target} />
+			) : (
+				<RunLocallyGenericBanner target={target} />
+			)}
+			<OrDivider label="or do it yourself" />
+			<QuickstartLink
+				description={copy.quickstartDescription}
+				url={copy.quickstartUrl}
+			/>
+		</div>
+	);
+}
+
+function QuickstartLink({
+	description,
+	url,
+	label = "Quickstart guide",
+}: {
+	description: string;
+	url: string;
+	label?: string;
+}) {
+	return (
+		<div className="w-full flex flex-col items-stretch justify-between gap-4 rounded-lg px-4 py-4 border border-border sm:flex-row sm:items-center">
+			<div className="min-w-0">
+				<p className="font-medium mb-1">Follow the quickstart guide</p>
+				<p className="text-sm text-muted-foreground">{description}</p>
+			</div>
+			<Button
+				variant="outline"
+				asChild
+				className="w-full shrink-0 sm:w-auto"
+			>
+				<a href={url} target="_blank" rel="noopener noreferrer">
+					{label}
+					<Icon icon={faArrowRight} className="ms-2" />
+				</a>
+			</Button>
+		</div>
+	);
+}
+
+// Durable Streams is a service, so "run locally" means starting the bundled dev
+// server and pointing the client SDK at it. There is no project to scaffold, so
+// the prompt is the generic one (no compute addendum) on every flavor.
+function DurableStreamsRunLocally() {
+	const code = useAgentInstructionsCode({ target: "durable-streams" });
+	const copy = getOnboardingTargetCopy("durable-streams");
+	return (
+		<div className="flex flex-col gap-6">
+			<AgentPromptBanner
+				code={code}
+				title="Use your coding agent"
+				description={`Copy a prompt that runs Durable Streams locally and wires up ${copy.promptObject} for you.${mcpSuffix}`}
+			/>
+			<OrDivider label="or do it yourself" />
+			<div className="flex gap-3">
+				<StepNumber n={1} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Start the dev server</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Runs a local Rivet control plane and the Durable Streams
+						worker. Streams are served at{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							{getDurableStreamUrl(
+								DURABLE_STREAMS_LOCAL_URL,
+								"<path>",
+							)}
+						</code>
+						.
+					</p>
+					<CommandBox command={DURABLE_STREAMS_DEV_COMMAND} />
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={2} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Connect a client</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Install the official client and append to your first
+						stream.
+					</p>
+					<div className="space-y-3">
+						<CommandBox
+							command={`npm install ${DURABLE_STREAMS_CLIENT_PACKAGE}`}
+						/>
+						<DurableStreamsClientSnippet
+							serviceUrl={DURABLE_STREAMS_LOCAL_URL}
+						/>
 					</div>
-				</>
+				</div>
+			</div>
+			<QuickstartLink
+				description={copy.quickstartDescription}
+				url={copy.quickstartUrl}
+				label="Integration guide"
+			/>
+		</div>
+	);
+}
+
+function DurableStreamsClientSnippet({ serviceUrl }: { serviceUrl: string }) {
+	const code = getDurableStreamsClientSnippet(serviceUrl);
+	return (
+		<CodeGroup className="my-0">
+			{[
+				<CodeFrame
+					key="client"
+					language="typescript"
+					title="client.ts"
+					code={() => code}
+					className="m-0"
+				>
+					<CodePreview
+						language="typescript"
+						className="text-left"
+						code={code}
+					/>
+				</CodeFrame>,
+			]}
+		</CodeGroup>
+	);
+}
+
+// Final step on the Durable Streams path. On Rivet Cloud the service is
+// managed per namespace, so this hands out the service URL. Self-hosted
+// flavors run the worker container against their own control plane instead.
+// Also rendered by the "Add Durable Streams" sheet from namespace settings.
+function DurableStreamsConnect() {
+	const code = useAgentInstructionsCode({ target: "durable-streams" });
+	const serviceUrl = useDurableStreamsServiceUrl();
+	return (
+		<div className="flex flex-col gap-6">
+			<AgentPromptBanner
+				code={code}
+				containsSecret={!serviceUrl}
+				description={
+					serviceUrl
+						? `Have your coding agent point your client at the managed Durable Streams service.${mcpSuffix}`
+						: `Have your coding agent run the Durable Streams worker against this namespace.${mcpSuffix}`
+				}
+			/>
+			<OrDivider label="or set it up manually" />
+			{serviceUrl ? (
+				<DurableStreamsManagedService serviceUrl={serviceUrl} />
+			) : (
+				<DurableStreamsSelfHosted />
 			)}
 		</div>
+	);
+}
+
+function DurableStreamsManagedService({ serviceUrl }: { serviceUrl: string }) {
+	return (
+		<>
+			<div className="flex gap-3">
+				<StepNumber n={1} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Copy your service URL</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Durable Streams runs as a managed service in this
+						namespace. There is nothing to deploy.
+					</p>
+					<DiscreteCopyButton
+						value={serviceUrl}
+						className="font-mono text-xs text-muted-foreground"
+					>
+						<span className="truncate">{serviceUrl}</span>
+					</DiscreteCopyButton>
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={2} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Point your client at it</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Swap the local URL for the service URL. Streams live
+						under{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							v1/stream/&lt;path&gt;
+						</code>
+						.
+					</p>
+					<DurableStreamsClientSnippet serviceUrl={serviceUrl} />
+				</div>
+			</div>
+		</>
+	);
+}
+
+function DurableStreamsSelfHosted() {
+	const endpoint = useRivetDsn({ kind: "secret" });
+	const command = `docker run -p 8642:8642 \\
+  -e RIVET_ENDPOINT="${endpoint}" \\
+  -e HOST=0.0.0.0 \\
+  rivetdev/services`;
+	return (
+		<>
+			<div className="flex gap-3">
+				<StepNumber n={1} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Run the worker</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						The worker runs your streams and connects to this
+						namespace.{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							RIVET_ENDPOINT
+						</code>{" "}
+						contains an admin credential, so keep it out of source
+						control and browser code.
+					</p>
+					<CommandBox command={command} />
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={2} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Point your client at it</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Streams are served at{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							http://&lt;host&gt;:8642/durable-streams/v1/stream/&lt;path&gt;
+						</code>
+						. See the{" "}
+						<a
+							href={DURABLE_STREAMS_DOCS_URL}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-primary hover:underline"
+						>
+							integration guide
+						</a>{" "}
+						for the control plane flags Durable Streams needs.
+					</p>
+					<DurableStreamsClientSnippet
+						serviceUrl={"http://<host>:8642/durable-streams/"}
+					/>
+				</div>
+			</div>
+		</>
 	);
 }
 
@@ -939,25 +1171,31 @@ function AgentOsHandoff() {
 // Compute is the default deploy target, so the run-locally prompt ships the
 // compute deployment addendum alongside the onboarding instructions. Copying it
 // gives the agent everything it needs to scaffold, run, and deploy in one paste.
-function RunLocallyComputeBanner() {
-	const { code } = useComputeInstructionsCode();
+// The prompt sets up the Rivet MCP server as part of the deploy, so the banner
+// says so rather than the flow growing a second agent-shaped affordance.
+const mcpSuffix = features.mcp
+	? " The prompt also connects Rivet to your editor over MCP."
+	: "";
+
+function RunLocallyComputeBanner({ target }: { target: OnboardingTarget }) {
+	const { code } = useComputeInstructionsCode(target);
 	return (
 		<AgentPromptBanner
 			code={code}
 			containsSecret
 			title="Use your coding agent"
-			description="Copy a prompt that scaffolds, runs, and deploys your first Actor for you."
+			description={`Copy a prompt that scaffolds, runs, and deploys ${getOnboardingTargetCopy(target).promptObject} for you.${mcpSuffix}`}
 		/>
 	);
 }
 
-function RunLocallyGenericBanner() {
-	const code = useAgentInstructionsCode();
+function RunLocallyGenericBanner({ target }: { target: OnboardingTarget }) {
+	const code = useAgentInstructionsCode({ target });
 	return (
 		<AgentPromptBanner
 			code={code}
 			title="Use your coding agent"
-			description="Copy a prompt that scaffolds and runs your first Actor for you."
+			description={`Copy a prompt that scaffolds and runs ${getOnboardingTargetCopy(target).promptObject} for you.${mcpSuffix}`}
 		/>
 	);
 }
@@ -971,22 +1209,40 @@ function StepNumber({ n }: { n: number }) {
 }
 
 function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
+	const target = useOnboardingTarget();
 	// The compute prompt reads cloud-namespace data; only available with compute.
 	if (provider === "rivet" && features.compute) {
-		return <ComputeCopyAgentInstructionsButton />;
+		return <ComputeCopyAgentInstructionsButton target={target} />;
 	}
-	return <GenericCopyAgentInstructionsButton provider={provider} />;
+	return (
+		<GenericCopyAgentInstructionsButton
+			provider={provider}
+			target={target}
+		/>
+	);
 }
 
-function ComputeCopyAgentInstructionsButton() {
-	const { code } = useComputeInstructionsCode();
-	return <AgentPromptBanner code={code} containsSecret />;
+function ComputeCopyAgentInstructionsButton({
+	target,
+}: {
+	target: OnboardingTarget;
+}) {
+	const { code } = useComputeInstructionsCode(target);
+	return (
+		<AgentPromptBanner
+			code={code}
+			containsSecret
+			description={`Have your coding agent deploy ${getOnboardingTargetCopy(target).promptObject} to Rivet Compute.${mcpSuffix}`}
+		/>
+	);
 }
 
 function GenericCopyAgentInstructionsButton({
 	provider,
+	target,
 }: {
 	provider?: Provider;
+	target: OnboardingTarget;
 }) {
 	const endpoint = useEndpoint();
 	const runnerName = useWatch({ name: "runnerName" }) as string;
@@ -999,12 +1255,13 @@ function GenericCopyAgentInstructionsButton({
 		runnerName,
 		endpoint,
 		mode,
+		target,
 	});
 	return (
 		<AgentPromptBanner
 			code={code}
 			containsSecret
-			description={`Have your coding agent complete these steps to deploy to ${platformTitle(provider)}.`}
+			description={`Have your coding agent deploy ${getOnboardingTargetCopy(target).promptObject} to ${platformTitle(provider)}.${mcpSuffix}`}
 		/>
 	);
 }

@@ -126,19 +126,27 @@ async fn update_state_and_db(
 				));
 
 				if let Some(key) = &key {
-					tx.write(
-						&keys::ns::ActorByKeyKey::new(
-							namespace_id,
-							name.clone(),
-							key.clone(),
-							create_ts,
-							input.actor_id,
-						),
-						ActorByKeyKeyData {
-							workflow_id: ctx.workflow_id(),
-							is_destroyed: true,
-						},
-					)?;
+					// Only tombstone the index entry this actor wrote when it reserved the key. An
+					// actor that lost the reservation race never wrote one, and creating a
+					// tombstone for it would leave a permanent entry under a key it never owned.
+					// Every such entry has to be read back by later lookups for that key.
+					let idx_key = keys::ns::ActorByKeyKey::new(
+						namespace_id,
+						name.clone(),
+						key.clone(),
+						create_ts,
+						input.actor_id,
+					);
+
+					if tx.exists(&idx_key, Serializable).await? {
+						tx.write(
+							&idx_key,
+							ActorByKeyKeyData {
+								workflow_id: ctx.workflow_id(),
+								is_destroyed: true,
+							},
+						)?;
+					}
 				}
 
 				// Update metrics

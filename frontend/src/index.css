@@ -292,3 +292,21 @@
 	}
  
 }
+
+cal-modal-box {
+	pointer-events: auto;
+	z-index: 2147483647;
+	opacity: 1;
+	transition: opacity 0.2s ease-out;
+
+	@starting-style {
+		opacity: 0;
+	}
+}
+
+cal-modal-box[style*="hidden"] {
+	opacity: 0;
+	transition:
+		opacity 0.2s ease-out,
+		visibility 0s linear 0.2s;
+}

@@ -8,6 +8,11 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 
 const RATE_LIMITER_CACHE_TTL: Duration = Duration::from_secs(60 * 60);
+/// How often the actor workflow's state is read while waiting for the actor to be created. Acts as
+/// a fallback for the create complete message, which pubsub can drop without any error.
+const CREATE_COMPLETE_POLL_INTERVAL: Duration = Duration::from_secs(5);
+/// Max decoded size of the base64 actor input.
+const MAX_INPUT_SIZE: usize = util::size::mebibytes(1) as usize;
 static RATE_LIMITERS: OnceLock<Cache<Id, Arc<Mutex<rivet_util::throttle::RateLimiter>>>> =
 	OnceLock::new();
 
@@ -37,6 +42,18 @@ pub struct Output {
 
 #[operation]
 pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<Output> {
+	// Validate before taking a rate limit token so rejected requests do not consume one
+	if input
+		.input
+		.as_deref()
+		.is_some_and(|x| decoded_base64_len(x) > MAX_INPUT_SIZE)
+	{
+		return Err(crate::errors::Actor::InputTooLarge {
+			max_size: MAX_INPUT_SIZE,
+		}
+		.build());
+	}
+
 	let rate_limit = RATE_LIMITERS
 		.get_or_init(|| {
 			Cache::builder()
@@ -92,102 +109,138 @@ pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<
 		.unwrap_or_default();
 	if actor_v2 {
 		// Dispatch actor workflow
-		ctx.workflow(crate::workflows::actor2::Input {
-			actor_id: input.actor_id,
-			name: input.name.clone(),
-			pool_name: input.runner_name_selector.clone(),
-			key: input.key.clone(),
-			namespace_id: input.namespace_id,
-			input: input.input.clone(),
-			from_v1: false,
-		})
-		.tag("actor_id", input.actor_id)
-		.dispatch()
-		.await?;
+		let workflow_id = ctx
+			.workflow(crate::workflows::actor2::Input {
+				actor_id: input.actor_id,
+				name: input.name.clone(),
+				pool_name: input.runner_name_selector.clone(),
+				key: input.key.clone(),
+				namespace_id: input.namespace_id,
+				input: input.input.clone(),
+				from_v1: false,
+			})
+			.tag("actor_id", input.actor_id)
+			.dispatch()
+			.await?;
 
 		// Wait for actor creation to complete, fail, or be destroyed
-		tokio::select! {
-			res = create_sub2.next() => { res?; },
-			res = fail_sub2.next() => {
-				let msg = res?;
-				let error = msg.into_body().error;
+		let mut poll_interval = create_complete_poll_interval();
 
-				// Check if this request needs to be forwarded
-				//
-				// We cannot forward if `datacenter_name` is specified because this actor is being
-				// restricted to the given datacenter.
-				if input.forward_request && input.datacenter_name.is_none() {
-					if let crate::errors::Actor::KeyReservedInDifferentDatacenter { datacenter_label } = &error {
-						// Forward the request to the correct datacenter
-						return forward_to_datacenter(
-							ctx,
-							*datacenter_label,
-							input.namespace_id,
-							input.name.clone(),
-							input.key.clone(),
-							input.runner_name_selector.clone(),
-							input.input.clone(),
-						input.crash_policy
-						).await;
+		loop {
+			tokio::select! {
+				res = create_sub2.next() => {
+					res?;
+					break;
+				}
+				res = fail_sub2.next() => {
+					let msg = res?;
+					let error = msg.into_body().error;
+
+					// Check if this request needs to be forwarded
+					//
+					// We cannot forward if `datacenter_name` is specified because this actor is being
+					// restricted to the given datacenter.
+					if input.forward_request && input.datacenter_name.is_none() {
+						if let crate::errors::Actor::KeyReservedInDifferentDatacenter { datacenter_label } = &error {
+							// Forward the request to the correct datacenter
+							return forward_to_datacenter(
+								ctx,
+								*datacenter_label,
+								input.namespace_id,
+								input.name.clone(),
+								input.key.clone(),
+								input.runner_name_selector.clone(),
+								input.input.clone(),
+							input.crash_policy
+							).await;
+						}
+					}
+
+					// Otherwise, return the error as-is
+					return Err(error.build());
+				}
+				res = destroy_sub2.next() => {
+					res?;
+					return Err(crate::errors::Actor::DestroyedDuringCreation.build());
+				}
+				_ = poll_interval.tick() => {
+					if create_complete(ctx, workflow_id, ActorVersion::V2).await {
+						tracing::warn!(
+							actor_id=?input.actor_id,
+							?workflow_id,
+							"create complete message was never received, creation resolved by polling workflow state",
+						);
+						break;
 					}
 				}
-
-				// Otherwise, return the error as-is
-				return Err(error.build());
-			}
-			res = destroy_sub2.next() => {
-				res?;
-				return Err(crate::errors::Actor::DestroyedDuringCreation.build());
 			}
 		}
 	} else {
 		// Dispatch actor workflow
-		ctx.workflow(crate::workflows::actor::Input {
-			actor_id: input.actor_id,
-			name: input.name.clone(),
-			runner_name_selector: input.runner_name_selector.clone(),
-			key: input.key.clone(),
-			namespace_id: input.namespace_id,
-			crash_policy: input.crash_policy,
-			input: input.input.clone(),
-		})
-		.tag("actor_id", input.actor_id)
-		.dispatch()
-		.await?;
+		let workflow_id = ctx
+			.workflow(crate::workflows::actor::Input {
+				actor_id: input.actor_id,
+				name: input.name.clone(),
+				runner_name_selector: input.runner_name_selector.clone(),
+				key: input.key.clone(),
+				namespace_id: input.namespace_id,
+				crash_policy: input.crash_policy,
+				input: input.input.clone(),
+			})
+			.tag("actor_id", input.actor_id)
+			.dispatch()
+			.await?;
 
 		// Wait for actor creation to complete, fail, or be destroyed
-		tokio::select! {
-			res = create_sub.next() => { res?; },
-			res = fail_sub.next() => {
-				let msg = res?;
-				let error = msg.into_body().error;
+		let mut poll_interval = create_complete_poll_interval();
 
-				// Check if this request needs to be forwarded
-				//
-				// We cannot forward if `datacenter_name` is specified because this actor is being
-				// restricted to the given datacenter.
-				if input.forward_request && input.datacenter_name.is_none() {
-					if let crate::errors::Actor::KeyReservedInDifferentDatacenter { datacenter_label } = &error {
-						// Forward the request to the correct datacenter
-						return forward_to_datacenter(
-							ctx,
-							*datacenter_label,
-							input.namespace_id,
-							input.name.clone(),
-							input.key.clone(),
-							input.runner_name_selector.clone(),
-							input.input.clone(),
-						input.crash_policy
-						).await;
+		loop {
+			tokio::select! {
+				res = create_sub.next() => {
+					res?;
+					break;
+				}
+				res = fail_sub.next() => {
+					let msg = res?;
+					let error = msg.into_body().error;
+
+					// Check if this request needs to be forwarded
+					//
+					// We cannot forward if `datacenter_name` is specified because this actor is being
+					// restricted to the given datacenter.
+					if input.forward_request && input.datacenter_name.is_none() {
+						if let crate::errors::Actor::KeyReservedInDifferentDatacenter { datacenter_label } = &error {
+							// Forward the request to the correct datacenter
+							return forward_to_datacenter(
+								ctx,
+								*datacenter_label,
+								input.namespace_id,
+								input.name.clone(),
+								input.key.clone(),
+								input.runner_name_selector.clone(),
+								input.input.clone(),
+							input.crash_policy
+							).await;
+						}
+					}
+
+					// Otherwise, return the error as-is
+					return Err(error.build());
+				}
+				res = destroy_sub.next() => {
+					res?;
+					return Err(crate::errors::Actor::DestroyedDuringCreation.build());
+				}
+				_ = poll_interval.tick() => {
+					if create_complete(ctx, workflow_id, ActorVersion::V1).await {
+						tracing::warn!(
+							actor_id=?input.actor_id,
+							?workflow_id,
+							"create complete message was never received, creation resolved by polling workflow state",
+						);
+						break;
 					}
 				}
-
-				// Otherwise, return the error as-is
-				return Err(error.build());
-			}
-			res = destroy_sub.next() => {
-				res?;
-				return Err(crate::errors::Actor::DestroyedDuringCreation.build());
 			}
 		}
 	}
@@ -207,6 +260,58 @@ pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<
 		.ok_or_else(|| crate::errors::Actor::NotFound.build())?;
 
 	Ok(Output { actor })
+}
+
+/// Builds the interval used to poll the actor workflow state while waiting for creation. The first
+/// tick fires one interval from now so the message is always given a chance to arrive first.
+fn create_complete_poll_interval() -> tokio::time::Interval {
+	let mut poll_interval = tokio::time::interval_at(
+		tokio::time::Instant::now() + CREATE_COMPLETE_POLL_INTERVAL,
+		CREATE_COMPLETE_POLL_INTERVAL,
+	);
+	poll_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+	poll_interval
+}
+
+/// Which actor workflow an actor was created with.
+enum ActorVersion {
+	V1,
+	V2,
+}
+
+/// Reads whether the actor workflow has finished creating the actor.
+async fn create_complete(ctx: &OperationCtx, workflow_id: Id, version: ActorVersion) -> bool {
+	// This is only a fallback for the create complete message, so a failure here should not fail
+	// the creation itself. Log and let the caller keep waiting for the message.
+	let wf = match ctx.get_workflows(vec![workflow_id]).await {
+		Ok(wfs) => wfs.into_iter().next(),
+		Err(err) => {
+			tracing::warn!(?workflow_id, ?err, "failed to read actor workflow");
+			return false;
+		}
+	};
+	let Some(wf) = wf else {
+		return false;
+	};
+
+	// State is not written until the first activity runs
+	let create_complete_ts = match version {
+		ActorVersion::V1 => wf
+			.parse_state::<Option<crate::workflows::actor::State>>()
+			.map(|state| state.and_then(|x| x.create_complete_ts)),
+		ActorVersion::V2 => wf
+			.parse_state::<Option<crate::workflows::actor2::State>>()
+			.map(|state| state.and_then(|x| x.create_complete_ts)),
+	};
+
+	match create_complete_ts {
+		Ok(create_complete_ts) => create_complete_ts.is_some(),
+		Err(err) => {
+			tracing::warn!(?workflow_id, ?err, "failed to parse actor workflow state");
+			false
+		}
+	}
 }
 
 /// Forward the actor creation request to the correct datacenter
@@ -259,4 +364,16 @@ async fn forward_to_datacenter(
 	Ok(Output {
 		actor: response.actor,
 	})
+}
+
+/// Returns the decoded byte length of a padded or unpadded base64 string without decoding it.
+fn decoded_base64_len(input: &str) -> usize {
+	let padding = input
+		.bytes()
+		.rev()
+		.take_while(|b| *b == b'=')
+		.count()
+		.min(2);
+
+	(input.len() * 3 / 4).saturating_sub(padding)
 }

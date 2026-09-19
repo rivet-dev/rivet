@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use anyhow::{Context, Result};
 use gas::prelude::Id;
+use rivet_pools::NodeId;
 use sha2::{Digest, Sha256};
 use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Snapshot;
@@ -36,6 +37,7 @@ use crate::compaction::shared::{
 };
 use crate::compaction::throttle::CompactionThrottleClass;
 use crate::conveyer::{
+	Db, branch,
 	constants::{
 		CMP_FDB_BATCH_MAX_KEYS, CMP_FDB_BATCH_MAX_VALUE_BYTES, CMP_MAX_PENDING_CLEANUP_JOB_IDS,
 		HOT_DRAIN_HEAD_GRAIN_TXIDS, MANAGER_RECLAIM_REJECTION_BACKOFF_BASE_MS,
@@ -44,8 +46,8 @@ use crate::conveyer::{
 	ltx::{DecodedLtx, LtxHeader, decode_ltx_v3, encode_ltx_v3},
 	shard_blob,
 	types::{
-		BranchState, BucketBranchId, CommitRow, DBHead, DbHistoryPin, DbHistoryPinKind, DirtyPage,
-		FoldIndexEntry, PitrIntervalCoverage, PitrPolicy, encode_commit_row,
+		BranchState, BucketBranchId, BucketId, CommitRow, DBHead, DbHistoryPin, DbHistoryPinKind,
+		DirtyPage, FoldIndexEntry, PitrIntervalCoverage, PitrPolicy, encode_commit_row,
 		encode_compaction_root, encode_database_branch_record, encode_db_head,
 		encode_fold_index_entry, encode_pitr_interval_coverage,
 	},
@@ -1095,8 +1097,11 @@ fn manager_marks_only_forced_jobs_as_bypassing_admission() {
 	);
 }
 
+/// Zero percent has to mean no compaction work at all. Staging cleanup used to be exempt, which left
+/// a de-admitted branch deleting staged shard images at the full compaction budget, and reading every
+/// one of them back to validate it first.
 #[test]
-fn manager_dispatches_staging_cleanup_on_an_unadmitted_branch() {
+fn manager_holds_staging_cleanup_on_an_unadmitted_branch() {
 	let database_branch_id = database_branch_id(0x4109);
 	let input = manager_input(database_branch_id);
 	let mut refresh = refresh_without_planned_work();
@@ -1116,25 +1121,32 @@ fn manager_dispatches_staging_cleanup_on_an_unadmitted_branch() {
 	assert!(state.pending_cleanups.push_hot(Id::new_v1(4151)));
 	let effects = manager_effects_after_refresh(&state, &input, &refresh, 1_500, triggers);
 
-	// Cleanup frees space rather than consuming it, and a queued job id lives nowhere else, so
-	// gating it on the percent would strand the branch's staging for as long as the percent stayed
-	// down.
+	assert!(
+		!effects.iter().any(|effect| matches!(
+			effect,
+			ManagerEffect::DispatchPendingCleanups | ManagerEffect::RunReclaimJob { .. }
+		)),
+		"an unadmitted branch must start no reclaim work, staging cleanup included"
+	);
+
+	// Holding the queue is what makes that safe: the ids are still there for the next admitted wake,
+	// so a percent that goes down and comes back up costs a delay rather than the staging area.
+	assert!(
+		!state.pending_cleanups.is_empty(),
+		"holding cleanup must leave the queued job ids in place"
+	);
+	refresh.compaction_admitted = true;
+	let effects = manager_effects_after_refresh(&state, &input, &refresh, 1_500, triggers);
 	assert!(
 		effects
 			.iter()
 			.any(|effect| matches!(effect, ManagerEffect::DispatchPendingCleanups)),
-		"staging cleanup must dispatch even while the branch is outside the admission percent"
-	);
-	assert!(
-		!effects
-			.iter()
-			.any(|effect| matches!(effect, ManagerEffect::RunReclaimJob { .. })),
-		"the ordinary reclaim scan must still be gated on the admission percent"
+		"a re-admitted branch must resume the staging cleanup it was holding"
 	);
 }
 
 #[test]
-fn manager_holds_the_reclaim_scan_but_not_cleanup_while_unadmitted() {
+fn manager_holds_every_reclaim_lane_while_unadmitted() {
 	let database_branch_id = database_branch_id(0x410a);
 	let input = manager_input(database_branch_id);
 	let mut refresh = refresh_without_planned_work();
@@ -1149,7 +1161,6 @@ fn manager_holds_the_reclaim_scan_but_not_cleanup_while_unadmitted() {
 		reclaim: true,
 	};
 
-	// With nothing queued for cleanup, an unadmitted branch starts no reclaim work at all.
 	let state = DbManagerState::new(companion_workflow_ids());
 	let effects = manager_effects_after_refresh(&state, &input, &refresh, 1_500, triggers);
 	assert!(
@@ -1419,6 +1430,7 @@ async fn repair_fdb_cleanup_clears_a_staged_shard_whose_bytes_do_not_match_its_r
 		base_manifest_generation: 1,
 		input_fingerprint: fingerprint_repair_reclaim_range(database_branch_id, &input_range),
 		input_range,
+		bypass_admission: false,
 	};
 
 	let output = db
@@ -1501,6 +1513,7 @@ async fn repair_fdb_cleanup_lifecycle_generation_rejects_recreated_branch() -> R
 		base_manifest_generation: 1,
 		input_fingerprint: fingerprint_repair_reclaim_range(database_branch_id, &input_range),
 		input_range,
+		bypass_admission: false,
 	};
 
 	let output = db
@@ -1647,6 +1660,10 @@ async fn stale_pidx_chunk_clears_covered_rows_and_keeps_live_rows() -> Result<()
 						&28_u64.to_be_bytes(),
 					);
 					tx.informal().set(
+						&keys::branch_delta_chunk_key(database_branch_id, 28, 0),
+						&shard_image(28, &[1])?,
+					);
+					tx.informal().set(
 						&keys::branch_shard_key(database_branch_id, 0, 90),
 						&shard_image(90, &[1])?,
 					);
@@ -1755,6 +1772,10 @@ async fn stale_pidx_chunk_advances_cursor_past_live_rows() -> Result<()> {
 					tx.informal().set(
 						&keys::branch_pidx_key(database_branch_id, stranded_pgno),
 						&28_u64.to_be_bytes(),
+					);
+					tx.informal().set(
+						&keys::branch_delta_chunk_key(database_branch_id, 28, 0),
+						&shard_image(28, &[stranded_pgno])?,
 					);
 					tx.informal().set(
 						&keys::branch_shard_key(
@@ -1889,6 +1910,10 @@ async fn stale_pidx_sweep_retires_the_branch_once_the_walk_finishes() -> Result<
 				tx.informal().set(
 					&keys::branch_pidx_key(database_branch_id, 1),
 					&28_u64.to_be_bytes(),
+				);
+				tx.informal().set(
+					&keys::branch_delta_chunk_key(database_branch_id, 28, 0),
+					&shard_image(28, &[1])?,
 				);
 				tx.informal().set(
 					&keys::branch_shard_key(database_branch_id, 0, 90),
@@ -3248,6 +3273,10 @@ async fn stale_pidx_chunk_clears_only_the_pages_a_shard_version_carries() -> Res
 						);
 					}
 					tx.informal().set(
+						&keys::branch_delta_chunk_key(database_branch_id, 28, 0),
+						&shard_image(28, &[1, 2, 3])?,
+					);
+					tx.informal().set(
 						&keys::branch_shard_key(database_branch_id, 0, 90),
 						&shard_image(90, &[1, 3])?,
 					);
@@ -3395,6 +3424,7 @@ async fn repair_fdb_cleanup_never_deletes_shard_versions() -> Result<()> {
 		base_manifest_generation: 1,
 		input_fingerprint: fingerprint_repair_reclaim_range(database_branch_id, &input_range),
 		input_range,
+		bypass_admission: false,
 	};
 
 	db.txn("test_depotinline_direct_fold_cleanup", {
@@ -3919,6 +3949,116 @@ async fn stale_pidx_sweep_does_not_retire_a_branch_with_rows_it_could_not_confir
 	Ok(())
 }
 
+/// Presence in the newest shard image is not enough to prove that a stale PIDX row is redundant.
+/// A pre-fix hot pass could skip the owner commit while a later fold copied an older version of the
+/// same page forward. Clearing the PIDX row in that state makes reads serve the stale shard bytes.
+#[tokio::test]
+async fn stale_pidx_sweep_retains_a_row_when_the_shard_has_older_page_bytes() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let bucket_id = Id::new_v1(0x3617);
+	let database_id = "stale-pidx-content-mismatch";
+	let pgno = 1;
+	let owner_txid = 2_u64;
+	let writer = Db::new(
+		Arc::clone(&db),
+		bucket_id,
+		database_id.to_owned(),
+		NodeId::new(),
+	);
+	let page = |pgno, fill| DirtyPage {
+		pgno,
+		bytes: vec![fill; keys::PAGE_SIZE as usize],
+	};
+
+	// A later fold copied the old page bytes forward even though the second commit still owns the
+	// newer bytes through PIDX. This is the state left by the old oversized-commit compaction bug.
+	writer.commit(vec![page(pgno, 0x01)], 1, 1_000).await?;
+	writer.commit(vec![page(pgno, 0x1c)], 1, 2_000).await?;
+	writer.commit(vec![page(2, 0x02)], 2, 3_000).await?;
+
+	let database_branch_id = db
+		.txn(
+			"test_depotinline_workflows_compaction",
+			move |tx| async move {
+				branch::resolve_database_branch(
+					&tx,
+					BucketId::from_gas_id(bucket_id),
+					database_id,
+					Snapshot,
+				)
+				.await?
+				.context("database branch should exist")
+			},
+		)
+		.await?;
+
+	let outcome = db
+		.txn(
+			"test_depotinline_workflows_compaction",
+			move |tx| async move {
+				tx.informal().set(
+					&keys::branch_compaction_root_key(database_branch_id),
+					&encode_compaction_root(root_with_watermarks(1, 3, 0))?,
+				);
+				// The newest shard contains page 1 from the first commit, not its owner commit.
+				tx.informal().set(
+					&keys::branch_shard_key(database_branch_id, 0, 3),
+					&shard_image(3, &[pgno])?,
+				);
+
+				sweep_stale_pidx_chunk_tx(
+					&tx,
+					&SweepStalePidxInput {
+						database_branch_id,
+						base_lifecycle_generation: 0,
+						base_manifest_generation: 1,
+						pgno_cursor: None,
+						retained_unconfirmed: false,
+					},
+					None,
+				)
+				.await
+			},
+		)
+		.await?;
+
+	// Use a fresh Db so the writer's PIDX cache cannot hide a cleared PIDX row. Before the
+	// fix, the sweep clears PIDX and this read returns the stale 0x01 bytes from the shard.
+	let reader = Db::new(
+		Arc::clone(&db),
+		bucket_id,
+		database_id.to_owned(),
+		NodeId::new(),
+	);
+	let pages = reader.get_pages(vec![pgno]).await?;
+	assert_eq!(pages.len(), 1);
+	assert_eq!(pages[0].pgno, pgno);
+	let bytes = pages[0].bytes.as_deref().context("page should exist")?;
+	assert_eq!(bytes.len(), keys::PAGE_SIZE as usize);
+	assert!(
+		bytes.iter().all(|byte| *byte == 0x1c),
+		"the read must return the newer owner-delta bytes, not stale shard byte {:?}",
+		bytes.first()
+	);
+
+	assert!(matches!(
+		outcome,
+		StalePidxSweepOutcome::Continue {
+			has_more: false,
+			cleared: 0,
+			retained_unconfirmed: true,
+			..
+		}
+	));
+	assert_eq!(
+		read_raw_key(&db, &keys::branch_pidx_key(database_branch_id, pgno),).await?,
+		Some(owner_txid.to_be_bytes().to_vec()),
+		"the owner delta must remain reachable while the shard has different bytes"
+	);
+
+	Ok(())
+}
+
 /// An earlier window's retention has to survive into the window that finishes the walk, which is
 /// usually a different transaction and often a different activity call.
 #[tokio::test]
@@ -3943,6 +4083,10 @@ async fn stale_pidx_sweep_carries_an_earlier_windows_retention_into_the_final_wi
 				tx.informal().set(
 					&keys::branch_pidx_key(database_branch_id, 1),
 					&28_u64.to_be_bytes(),
+				);
+				tx.informal().set(
+					&keys::branch_delta_chunk_key(database_branch_id, 28, 0),
+					&shard_image(28, &[1])?,
 				);
 				tx.informal().set(
 					&keys::branch_shard_key(database_branch_id, 0, 90),

@@ -62,6 +62,20 @@ pub async fn print_workflows(
 
 			println!("  {} {}", style("created at").bold(), style(date).magenta());
 
+			if let WorkflowState::Dead = workflow.state {
+				let died_at = if let Some(death_ts) = workflow.death_ts {
+					let datetime = Utc
+						.timestamp_millis_opt(death_ts)
+						.single()
+						.context("invalid ts")?;
+					style(datetime.format("%Y-%m-%d %H:%M:%S%.3f").to_string()).magenta()
+				} else {
+					style("unset".to_string()).dim()
+				};
+
+				println!("  {} {}", style("died at").bold(), died_at);
+			}
+
 			println!(
 				"  {} {}",
 				style("state").bold(),

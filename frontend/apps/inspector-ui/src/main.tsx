@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
 	Component,
@@ -33,6 +34,7 @@ class IframeErrorBoundary extends Component<
 	}
 	componentDidCatch(error: Error) {
 		console.error("Inspector UI crashed", error);
+		Sentry.captureException(error);
 	}
 	render() {
 		if (!this.state.error) return this.props.children;
@@ -63,11 +65,13 @@ function InspectorContent({
 	activeTab,
 	bridge,
 	standalone = false,
+	toolbar,
 }: {
 	actorId: ActorId;
 	activeTab: string | undefined;
 	bridge?: BridgeClient;
 	standalone?: boolean;
+	toolbar?: ReactNode;
 }) {
 	const availableTabs = useAvailableInspectorTabs(actorId);
 	const [standaloneTab, setStandaloneTab] = useState<string | undefined>();
@@ -84,22 +88,29 @@ function InspectorContent({
 			{standalone && availableTabs ? (
 				<nav
 					aria-label="Inspector tabs"
-					className="flex shrink-0 gap-1 overflow-x-auto border-b px-2 py-1"
+					className="flex shrink-0 items-center gap-1 border-b px-2 py-1"
 				>
-					{availableTabs.map((tab) => (
-						<button
-							key={tab.id}
-							type="button"
-							className={
-								selectedTab === tab.id
-									? "rounded bg-muted px-3 py-1.5 text-sm font-medium"
-									: "rounded px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted/60"
-							}
-							onClick={() => setStandaloneTab(tab.id)}
-						>
-							{tab.label}
-						</button>
-					))}
+					<div className="flex min-w-0 gap-1 overflow-x-auto">
+						{availableTabs.map((tab) => (
+							<button
+								key={tab.id}
+								type="button"
+								className={
+									selectedTab === tab.id
+										? "rounded bg-muted px-3 py-1.5 text-sm font-medium"
+										: "rounded px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted/60"
+								}
+								onClick={() => setStandaloneTab(tab.id)}
+							>
+								{tab.label}
+							</button>
+						))}
+					</div>
+					{toolbar ? (
+						<div className="ml-auto flex shrink-0 items-center">
+							{toolbar}
+						</div>
+					) : null}
 				</nav>
 			) : null}
 			<div
@@ -123,6 +134,7 @@ export function InspectorApp({
 	activeTab,
 	initialVersion,
 	standalone,
+	toolbar,
 }: {
 	actorId: ActorId;
 	credentials: { url: string; inspectorToken: string; token: string };
@@ -130,6 +142,7 @@ export function InspectorApp({
 	activeTab: string | undefined;
 	initialVersion?: string;
 	standalone?: boolean;
+	toolbar?: ReactNode;
 }) {
 	const queryClient = useMemo(
 		() =>
@@ -166,6 +179,7 @@ export function InspectorApp({
 							activeTab={activeTab}
 							bridge={bridge}
 							standalone={standalone}
+							toolbar={toolbar}
 						/>
 					</ActorInspectorProvider>
 				</DataProviderContext.Provider>

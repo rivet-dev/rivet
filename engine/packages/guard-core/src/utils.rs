@@ -26,58 +26,74 @@ const X_RIVET_TARGET: HeaderName = HeaderName::from_static("x-rivet-target");
 const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 
-/// Throttling state for a single client IP. Both the rate limiter and the in-flight counter are
-/// keyed by client IP, so they share one cache entry and one lock.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum AdmissionRejection {
+	RateLimit,
+	MaxInFlight,
+}
+
+/// Optional admission state for a single client IP. The cache containing this state is not created
+/// when both admission controls are disabled.
 pub(crate) struct ClientState {
-	rate_limiter: RateLimiter,
-	in_flight: InFlightCounter,
+	rate_limiter: Option<RateLimiter>,
+	in_flight: Option<InFlightCounter>,
 }
 
 impl ClientState {
-	pub(crate) fn new(
-		rate_limit_requests: u64,
-		rate_limit_period: u64,
-		max_in_flight: usize,
-	) -> Self {
+	pub(crate) fn new(rate_limit: Option<(u64, Duration)>, max_in_flight: Option<usize>) -> Self {
 		Self {
-			rate_limiter: RateLimiter::new(RateLimitMethod::FixedWindow {
-				requests: rate_limit_requests,
-				period: Duration::from_secs(rate_limit_period),
+			rate_limiter: rate_limit.map(|(requests, period)| {
+				RateLimiter::new(RateLimitMethod::FixedWindow { requests, period })
 			}),
-			in_flight: InFlightCounter::new(max_in_flight),
+			in_flight: max_in_flight.map(InFlightCounter::new),
 		}
 	}
 
-	/// Consumes one rate limit token and one in-flight slot, returning false if either limit was
-	/// hit. A rate limit token is still consumed when the in-flight limit rejects the request.
-	pub(crate) fn try_admit(&mut self) -> bool {
-		self.rate_limiter.try_acquire() && self.in_flight.try_acquire()
+	/// Consumes one rate limit token and one in-flight slot when those controls are configured. A
+	/// rate limit token is still consumed when the in-flight limit rejects the request.
+	pub(crate) fn try_admit(&mut self) -> std::result::Result<(), AdmissionRejection> {
+		if let Some(rate_limiter) = &mut self.rate_limiter
+			&& !rate_limiter.try_acquire()
+		{
+			return Err(AdmissionRejection::RateLimit);
+		}
+
+		if let Some(in_flight) = &mut self.in_flight
+			&& !in_flight.try_acquire()
+		{
+			return Err(AdmissionRejection::MaxInFlight);
+		}
+
+		Ok(())
 	}
 
 	pub(crate) fn release_in_flight(&mut self) {
-		self.in_flight.release();
+		if let Some(in_flight) = &mut self.in_flight {
+			in_flight.release();
+		}
 	}
 }
 
-/// Owns one slot in a client's in-flight counter together with the request id registered in the
-/// global in-flight request set and the matching increment on `IN_FLIGHT_REQUEST_COUNT`. All three
-/// are released in `Drop`, so a cancelled or panicking request cannot leak any of them.
+/// Owns an optional slot in a client's in-flight counter together with the request id registered in
+/// the global in-flight request set and the matching increment on `IN_FLIGHT_REQUEST_COUNT`. All
+/// configured resources are released in `Drop`, so a cancelled or panicking request cannot leak
+/// any of them.
 ///
 /// The permit is held behind an `Arc` on `RequestContext`. Tasks that outlive the initial response,
 /// such as a proxied websocket, clone the context and therefore keep the slot and request id
 /// reserved for as long as they are still using them.
 pub(crate) struct InFlightPermit {
-	client_state: Arc<Mutex<ClientState>>,
+	client_state: Option<Arc<Mutex<ClientState>>>,
 	in_flight_requests: Arc<scc::HashSet<protocol::RequestId>>,
 	request_id: protocol::RequestId,
 	_in_flight_metric: IntGaugeGuard,
 }
 
 impl InFlightPermit {
-	/// Takes ownership of a slot already acquired from `client_state` and a request id already
-	/// inserted into `in_flight_requests`.
+	/// Takes ownership of an optional slot already acquired from `client_state` and a request id
+	/// already inserted into `in_flight_requests`.
 	pub(crate) fn new(
-		client_state: Arc<Mutex<ClientState>>,
+		client_state: Option<Arc<Mutex<ClientState>>>,
 		in_flight_requests: Arc<scc::HashSet<protocol::RequestId>>,
 		request_id: protocol::RequestId,
 	) -> Self {
@@ -96,7 +112,9 @@ impl InFlightPermit {
 
 impl Drop for InFlightPermit {
 	fn drop(&mut self) {
-		self.client_state.lock().release_in_flight();
+		if let Some(client_state) = &self.client_state {
+			client_state.lock().release_in_flight();
+		}
 		self.in_flight_requests.remove_sync(&self.request_id);
 	}
 }
@@ -175,35 +193,108 @@ pub(crate) fn proxied_request_builder(
 	Ok(builder)
 }
 
+/// Renders a request URI for logs with the values of credential query parameters replaced.
+pub(crate) fn redact_uri_for_logs(uri: &hyper::Uri) -> String {
+	let path_and_query = uri
+		.path_and_query()
+		.map(|path_and_query| path_and_query.as_str())
+		.unwrap_or_else(|| uri.path());
+
+	match (uri.scheme_str(), uri.authority()) {
+		(Some(scheme), Some(authority)) => {
+			format!(
+				"{scheme}://{authority}{}",
+				redact_path_for_logs(path_and_query)
+			)
+		}
+		_ => redact_path_for_logs(path_and_query),
+	}
+}
+
+/// Renders a request path and query string for logs with the values of credential query
+/// parameters replaced.
+pub fn redact_path_for_logs(path_and_query: &str) -> String {
+	let Some((path, query)) = path_and_query.split_once('?') else {
+		return path_and_query.to_string();
+	};
+
+	let redacted_query = query
+		.split('&')
+		.map(|pair| {
+			let raw_key = pair.split('=').next().unwrap_or_default();
+			let is_credential = url::form_urlencoded::parse(raw_key.as_bytes())
+				.next()
+				.is_some_and(|(key, _)| key.to_ascii_lowercase().ends_with("token"));
+
+			if is_credential {
+				format!("{raw_key}=REDACTED")
+			} else {
+				pair.to_string()
+			}
+		})
+		.collect::<Vec<_>>()
+		.join("&");
+
+	format!("{path}?{redacted_query}")
+}
+
+/// Headers that are scoped to a single connection and must not be forwarded to the upstream
+/// service. See RFC 9110 section 7.6.1. The outgoing request generates its own versions of these
+/// where they are needed, including the `Connection` and `Upgrade` headers of a websocket
+/// handshake.
+const HOP_BY_HOP_HEADERS: [HeaderName; 8] = [
+	hyper::header::CONNECTION,
+	HeaderName::from_static("keep-alive"),
+	hyper::header::PROXY_AUTHENTICATE,
+	hyper::header::PROXY_AUTHORIZATION,
+	hyper::header::TE,
+	hyper::header::TRAILER,
+	hyper::header::TRANSFER_ENCODING,
+	hyper::header::UPGRADE,
+];
+
+/// Headers belonging to the client's websocket handshake with guard. Guard terminates that
+/// handshake and opens its own to the upstream service, so the outgoing request keeps the key it
+/// generated for itself rather than echoing the client's.
+const CLIENT_HANDSHAKE_HEADERS: [HeaderName; 2] = [
+	hyper::header::SEC_WEBSOCKET_KEY,
+	hyper::header::SEC_WEBSOCKET_VERSION,
+];
+
 pub(crate) fn add_proxy_headers_with_addr(
 	headers: &mut hyper::HeaderMap,
 	req_ctx: &RequestContext,
 ) -> Result<()> {
-	// Copy headers except Host
+	// Copy every header the upstream service is allowed to see. Appending rather than inserting
+	// keeps all the values of a header the client sent as multiple field lines, such as a cookie
+	// split across lines by an HTTP/2 client.
 	for (key, value) in &req_ctx.headers {
-		if key != hyper::header::HOST {
-			headers.insert(key.clone(), value.clone());
+		if key == hyper::header::HOST
+			|| HOP_BY_HOP_HEADERS.contains(key)
+			|| CLIENT_HANDSHAKE_HEADERS.contains(key)
+		{
+			continue;
 		}
+
+		headers.append(key.clone(), value.clone());
 	}
 
-	// Add X-Forwarded-For header
-	if let Some(existing) = req_ctx.headers.get(X_FORWARDED_FOR) {
-		if let Ok(forwarded) = existing.to_str() {
-			if !forwarded.contains(&req_ctx.remote_addr.ip().to_string()) {
-				headers.insert(
-					X_FORWARDED_FOR,
-					hyper::header::HeaderValue::from_str(&format!(
-						"{}, {}",
-						forwarded,
-						req_ctx.remote_addr.ip()
-					))?,
-				);
-			}
-		}
-	} else {
-		headers.insert(
+	// Record this hop in X-Forwarded-For unless the client already claims to have come from this
+	// address. Appending keeps any existing chain intact, including a chain the client sent as
+	// multiple field lines.
+	let client_ip = req_ctx.remote_addr.ip().to_string();
+	let already_forwarded = req_ctx
+		.headers
+		.get_all(X_FORWARDED_FOR)
+		.into_iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(|value| value.split(','))
+		.any(|entry| entry.trim() == client_ip);
+
+	if !already_forwarded {
+		headers.append(
 			X_FORWARDED_FOR,
-			hyper::header::HeaderValue::from_str(&req_ctx.remote_addr.ip().to_string())?,
+			hyper::header::HeaderValue::from_str(&client_ip)?,
 		);
 	}
 

@@ -9,8 +9,6 @@ use std::{
 use anyhow::Context;
 use depot::conveyer::Db;
 use depot_client::database::NativeDatabaseHandle;
-use futures_util::StreamExt;
-use futures_util::TryStreamExt;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::keys::{envoy::VirtualNodesKey, ns::EnvoyHashIdxKey};
@@ -145,7 +143,7 @@ pub async fn init_conn(
 		EnvoyLoadBalancer::Hash { virtual_nodes, .. } => Some(virtual_nodes),
 		_ => None,
 	};
-	let (_, (mut missed_commands, runner_config_protocol_changed)) = tokio::try_join!(
+	let (_, runner_config_protocol_changed, missed_commands) = tokio::try_join!(
 		// Send init packet as soon as possible
 		async {
 			let pb = ctx.config().pegboard();
@@ -167,74 +165,52 @@ pub async fn init_conn(
 		},
 		udb.txn("envoy_conn_prepare", |tx| {
 			let namespace_id = namespace.namespace_id;
-			let envoy_key = &envoy_key;
 			let pool_name = &pool_name;
 			async move {
-				let tx = tx.with_subspace(pegboard::keys::subspace());
-
 				// Detect whether the serverful-pool protocol cache must be purged before the final
 				// registration claim updates the persisted version.
-				let ns_tx = tx.with_subspace(namespace::keys::subspace());
-				let runner_config_protocol_version_key =
-					pegboard::keys::runner_config::ProtocolVersionKey::new(
-						namespace_id,
-						pool_name.clone(),
-					);
-
-				let envoy_actor_commands_subspace = pegboard::keys::subspace().subspace(
-					&pegboard::keys::envoy::ActorCommandKey::subspace(
-						namespace_id,
-						envoy_key.to_string(),
-					),
-				);
-
-				let (existing_runner_config_protocol_version, missed_commands) = tokio::try_join!(
-					ns_tx.read_opt(&runner_config_protocol_version_key, Serializable),
-					// Read missed commands
-					tx.get_ranges_keyvalues(
-						RangeOption {
-							mode: StreamingMode::WantAll,
-							..(&envoy_actor_commands_subspace).into()
-						},
+				let existing_runner_config_protocol_version = tx
+					.with_subspace(namespace::keys::subspace())
+					.read_opt(
+						&pegboard::keys::runner_config::ProtocolVersionKey::new(
+							namespace_id,
+							pool_name.clone(),
+						),
 						Serializable,
 					)
-					.map(|res| -> anyhow::Result<protocol::CommandWrapper> {
-						let (key, command) =
-							tx.read_entry::<pegboard::keys::envoy::ActorCommandKey>(&res?)?;
-						match command {
-							protocol::ActorCommandKeyData::CommandStartActor(x) => {
-								Ok(protocol::CommandWrapper {
-									checkpoint: protocol::ActorCheckpoint {
-										actor_id: key.actor_id.to_string(),
-										generation: key.generation,
-										index: key.index,
-									},
-									inner: protocol::Command::CommandStartActor(x),
-								})
-							}
-							protocol::ActorCommandKeyData::CommandStopActor(x) => {
-								Ok(protocol::CommandWrapper {
-									checkpoint: protocol::ActorCheckpoint {
-										actor_id: key.actor_id.to_string(),
-										generation: key.generation,
-										index: key.index,
-									},
-									inner: protocol::Command::CommandStopActor(x),
-								})
-							}
-						}
-					})
-					.try_collect::<Vec<_>>(),
-				)?;
+					.await?;
 
-				let runner_config_protocol_changed =
-					existing_runner_config_protocol_version != Some(protocol_version);
-
-				Ok((missed_commands, runner_config_protocol_changed))
+				Ok(existing_runner_config_protocol_version != Some(protocol_version))
 			}
 		})
 		.custom_instrument(tracing::info_span!("envoy_prepare_tx")),
+		// Read missed commands
+		pegboard::keys::envoy::read_actor_commands(
+			&udb,
+			namespace.namespace_id,
+			&envoy_key,
+			pegboard::keys::envoy::ACTOR_COMMAND_PAGE_BYTES,
+		),
 	)?;
+
+	let mut missed_commands = missed_commands
+		.into_iter()
+		.map(|(key, command)| protocol::CommandWrapper {
+			checkpoint: protocol::ActorCheckpoint {
+				actor_id: key.actor_id.to_string(),
+				generation: key.generation,
+				index: key.index,
+			},
+			inner: match command {
+				protocol::ActorCommandKeyData::CommandStartActor(x) => {
+					protocol::Command::CommandStartActor(x)
+				}
+				protocol::ActorCommandKeyData::CommandStopActor(x) => {
+					protocol::Command::CommandStopActor(x)
+				}
+			},
+		})
+		.collect::<Vec<_>>();
 
 	if runner_config_protocol_changed {
 		pegboard::utils::purge_runner_config_caches(

@@ -12,7 +12,7 @@
 use std::sync::LazyLock;
 
 use rivet_metrics::prometheus::{
-	Histogram, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry,
+	Histogram, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, Opts, Registry,
 };
 
 const SQLITE_REQUEST_EXPIRED_LABELS: &[&str] = &["kind", "was_sent"];
@@ -35,6 +35,10 @@ pub struct EnvoyClientMetrics {
 	pub ws_reconnect_total: IntCounterVec,
 	pub ws_session_duration_seconds: Histogram,
 	pub envoy_tx_depth: IntGauge,
+	pub ws_read_handler_duration: Histogram,
+	pub ws_decode_duration: Histogram,
+	pub ws_rx_bytes_total: IntCounter,
+	pub ws_rx_messages_total: IntCounter,
 }
 
 impl EnvoyClientMetrics {
@@ -150,6 +154,36 @@ impl EnvoyClientMetrics {
 		)
 		.expect("create envoy_client_envoy_tx_depth gauge");
 
+		let ws_read_handler_duration = Histogram::with_opts(
+			HistogramOpts::new(
+				"rivetkit_envoy_client_ws_read_handler_duration",
+				"time the websocket read loop spends decoding and dispatching one frame, during which the socket is not being drained",
+			)
+			.buckets(rivet_metrics::MICRO_BUCKETS.to_vec()),
+		)
+		.expect("create envoy_client_ws_read_handler_duration histogram");
+
+		let ws_decode_duration = Histogram::with_opts(
+			HistogramOpts::new(
+				"rivetkit_envoy_client_ws_decode_duration",
+				"time to deserialize one inbound websocket frame",
+			)
+			.buckets(rivet_metrics::MICRO_BUCKETS.to_vec()),
+		)
+		.expect("create envoy_client_ws_decode_duration histogram");
+
+		let ws_rx_bytes_total = IntCounter::new(
+			"rivetkit_envoy_client_ws_rx_bytes_total",
+			"total bytes read from the engine websocket; the rate of this is how fast this pod consumes websocket data",
+		)
+		.expect("create envoy_client_ws_rx_bytes_total counter");
+
+		let ws_rx_messages_total = IntCounter::new(
+			"rivetkit_envoy_client_ws_rx_messages_total",
+			"total inbound websocket frames read from the engine",
+		)
+		.expect("create envoy_client_ws_rx_messages_total counter");
+
 		register(
 			&rivet_metrics::REGISTRY,
 			sqlite_request_expired_total.clone(),
@@ -190,6 +224,10 @@ impl EnvoyClientMetrics {
 			ws_session_duration_seconds.clone(),
 		);
 		register(&rivet_metrics::REGISTRY, envoy_tx_depth.clone());
+		register(&rivet_metrics::REGISTRY, ws_read_handler_duration.clone());
+		register(&rivet_metrics::REGISTRY, ws_decode_duration.clone());
+		register(&rivet_metrics::REGISTRY, ws_rx_bytes_total.clone());
+		register(&rivet_metrics::REGISTRY, ws_rx_messages_total.clone());
 
 		Self {
 			sqlite_request_expired_total,
@@ -205,6 +243,10 @@ impl EnvoyClientMetrics {
 			ws_reconnect_total,
 			ws_session_duration_seconds,
 			envoy_tx_depth,
+			ws_read_handler_duration,
+			ws_decode_duration,
+			ws_rx_bytes_total,
+			ws_rx_messages_total,
 		}
 	}
 }

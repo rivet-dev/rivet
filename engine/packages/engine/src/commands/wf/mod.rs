@@ -15,6 +15,7 @@ use rivet_util::Id;
 
 use crate::util::{self, wf::KvPair};
 
+mod dead;
 mod repair;
 mod signal;
 
@@ -47,6 +48,18 @@ pub enum SubCommand {
 		error: Vec<String>,
 		#[clap(short = 'd', long)]
 		dry_run: bool,
+	},
+	/// Lists dead workflows that match the name and error queries, with the repairs that apply to
+	/// each.
+	Dead {
+		#[clap(short = 'n', long)]
+		name: Vec<String>,
+		/// Matches via substring (i.e. error = "database" will match workflows that died with error "database transaction failed").
+		#[clap(short = 'e', long)]
+		error: Vec<String>,
+		/// How many workflows to inspect at once.
+		#[clap(short = 'p', long)]
+		parallelization: Option<u16>,
 	},
 	/// Deletes the history for completed workflows that match the name and before filter.
 	PruneHistory {
@@ -160,6 +173,21 @@ impl SubCommand {
 
 				Ok(())
 			}
+			Self::Dead {
+				name,
+				error,
+				parallelization,
+			} => {
+				ensure!(!name.is_empty(), "must provide at least one name");
+
+				dead::execute(
+					&*db,
+					&name.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+					&error.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+					usize::from(parallelization.unwrap_or(8)),
+				)
+				.await
+			}
 			Self::PruneHistory {
 				name,
 				before,
@@ -240,6 +268,8 @@ pub enum RepairVariant {
 	DuplicateIterationHistory,
 	LoopIterationMismatch,
 	IterationTimestampInversion,
+	ProposeConsensusFailed,
+	MissingInitState,
 }
 
 impl From<RepairVariant> for DebugRepairVariant {
@@ -255,6 +285,8 @@ impl From<RepairVariant> for DebugRepairVariant {
 			RepairVariant::IterationTimestampInversion => {
 				DebugRepairVariant::IterationTimestampInversion
 			}
+			RepairVariant::ProposeConsensusFailed => DebugRepairVariant::ProposeConsensusFailed,
+			RepairVariant::MissingInitState => DebugRepairVariant::MissingInitState,
 		}
 	}
 }

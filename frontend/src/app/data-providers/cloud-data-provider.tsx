@@ -576,11 +576,222 @@ export const createOrganizationContext = ({
 		});
 	};
 
+	const clustersQueryOptions = (opts: { organization: string }) =>
+		infiniteQueryOptions({
+			queryKey: [opts, "byoc-clusters"],
+			initialPageParam: undefined as string | undefined,
+			queryFn: async ({ pageParam }) => {
+				return await client.byoc.listClusters({
+					org: opts.organization,
+					cursor: pageParam ?? undefined,
+					limit: RECORDS_PER_PAGE,
+				});
+			},
+			getNextPageParam: (lastPage) => lastPage.pagination.cursor,
+			select: (data) => data.pages.flatMap((page) => page.clusters),
+		});
+
+	const clusterQueryOptions = (opts: {
+		organization: string;
+		cluster: string;
+	}) =>
+		queryOptions({
+			queryKey: [opts, "byoc-cluster"],
+			queryFn: async () => {
+				const data = await client.byoc.getCluster(opts.cluster, {
+					org: opts.organization,
+				});
+				return data.cluster;
+			},
+			...no404Retry(),
+		});
+
+	const clusterOperatorTokenQueryOptions = (opts: {
+		organization: string;
+		cluster: string;
+	}) =>
+		queryOptions({
+			queryKey: [opts, "byoc-operator-token"],
+			queryFn: async () => {
+				return await client.byoc.getOperatorToken(opts.cluster, {
+					org: opts.organization,
+				});
+			},
+			...no404Retry(),
+		});
+
+	// The OTLP ingest token is a per-cluster singleton. A 404 means no active
+	// token exists yet, which is a normal empty state (not an error), so it maps
+	// to null and the UI offers to create one.
+	const clusterOtelTokenQueryOptions = (opts: {
+		organization: string;
+		cluster: string;
+	}) =>
+		queryOptions({
+			queryKey: [opts, "byoc-otel-token"],
+			queryFn:
+				async (): Promise<Rivet.ByocGetOtelTokenResponse | null> => {
+					try {
+						return await client.byoc.getOtelToken(opts.cluster, {
+							org: opts.organization,
+						});
+					} catch (error) {
+						if (
+							error &&
+							typeof error === "object" &&
+							"statusCode" in error &&
+							error.statusCode === 404
+						) {
+							return null;
+						}
+						throw error;
+					}
+				},
+			...no404Retry(),
+		});
+
+	const createOtelTokenMutationOptions = () =>
+		mutationOptions({
+			mutationKey: ["byoc-otel-token", "create"],
+			mutationFn: async (data: {
+				organization: string;
+				cluster: string;
+			}) => {
+				return await client.byoc.createOtelToken(data.cluster, {
+					org: data.organization,
+				});
+			},
+		});
+
+	const revokeOtelTokenMutationOptions = () =>
+		mutationOptions({
+			mutationKey: ["byoc-otel-token", "revoke"],
+			mutationFn: async (data: {
+				organization: string;
+				cluster: string;
+			}) => {
+				return await client.byoc.revokeOtelToken(data.cluster, {
+					org: data.organization,
+				});
+			},
+		});
+
+	const clusterRegionsQueryOptions = (opts: {
+		organization: string;
+		cluster: string;
+	}) =>
+		infiniteQueryOptions({
+			queryKey: [opts, "byoc-regions"],
+			initialPageParam: undefined as string | undefined,
+			queryFn: async ({ pageParam }) => {
+				return await client.byoc.listRegions(opts.cluster, {
+					org: opts.organization,
+					cursor: pageParam ?? undefined,
+					limit: RECORDS_PER_PAGE,
+				});
+			},
+			getNextPageParam: (lastPage) => lastPage.pagination.cursor,
+			select: (data) => data.pages.flatMap((page) => page.regions),
+			// Operators report heartbeats every 5s, so keep region rows live.
+			refetchInterval: 5_000,
+		});
+
+	const clusterCommandsQueryOptions = (opts: {
+		organization: string;
+		cluster: string;
+		regions: string[];
+	}) =>
+		infiniteQueryOptions({
+			queryKey: [opts, "byoc-commands"],
+			initialPageParam: undefined as string | undefined,
+			queryFn: async ({ pageParam }) => {
+				return await client.byoc.listCommands(opts.cluster, {
+					org: opts.organization,
+					cursor: pageParam ?? undefined,
+					limit: RECORDS_PER_PAGE,
+					regions: opts.regions.length
+						? opts.regions.join(",")
+						: undefined,
+				});
+			},
+			getNextPageParam: (lastPage) => lastPage.pagination.cursor,
+			select: (data) => data.pages.flatMap((page) => page.commands),
+		});
+
+	const createClusterMutationOptions = () =>
+		mutationOptions({
+			mutationKey: ["byoc-clusters", "create"],
+			mutationFn: async (data: {
+				name: string;
+				organization: string;
+			}) => {
+				return await client.byoc.createCluster(data.name, {
+					org: data.organization,
+				});
+			},
+		});
+
+	const setProjectBillingPlanMutationOptions = () =>
+		mutationOptions({
+			mutationKey: ["billing", "set-plan"],
+			mutationFn: async (data: {
+				organization: string;
+				project: string;
+				plan: Rivet.BillingPlan;
+			}) => {
+				await client.billing.setPlan(data.project, {
+					org: data.organization,
+					plan: data.plan,
+				});
+			},
+		});
+
 	return {
 		...parent,
 		client,
 		organization,
 		organizationsQueryOptions,
+		clustersQueryOptions,
+		currentOrgClustersQueryOptions: () => {
+			return clustersQueryOptions({ organization });
+		},
+		currentOrgClusterQueryOptions: (opts: { cluster: string }) => {
+			return clusterQueryOptions({ organization, cluster: opts.cluster });
+		},
+		currentOrgClusterOperatorTokenQueryOptions: (opts: {
+			cluster: string;
+		}) => {
+			return clusterOperatorTokenQueryOptions({
+				organization,
+				cluster: opts.cluster,
+			});
+		},
+		currentOrgClusterOtelTokenQueryOptions: (opts: { cluster: string }) => {
+			return clusterOtelTokenQueryOptions({
+				organization,
+				cluster: opts.cluster,
+			});
+		},
+		currentOrgClusterRegionsQueryOptions: (opts: { cluster: string }) => {
+			return clusterRegionsQueryOptions({
+				organization,
+				cluster: opts.cluster,
+			});
+		},
+		currentOrgClusterCommandsQueryOptions: (opts: {
+			cluster: string;
+			regions: string[];
+		}) => {
+			return clusterCommandsQueryOptions({
+				organization,
+				cluster: opts.cluster,
+				regions: opts.regions,
+			});
+		},
+		createClusterMutationOptions,
+		createOtelTokenMutationOptions,
+		revokeOtelTokenMutationOptions,
+		setProjectBillingPlanMutationOptions,
 		orgProjectNamespacesQueryOptions,
 		namespaceAccessTokenQueryOptions,
 		currentOrgProjectNamespacesQueryOptions: (opts: {

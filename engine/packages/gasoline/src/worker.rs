@@ -89,7 +89,9 @@ impl Worker {
 			.await?
 			.ready_chunks(1024);
 
-		let mut tick_interval = tokio::time::interval(self.db.worker_poll_interval());
+		let mut dynamic_config_rx = self.config.dynamic_watch();
+		let mut tick_interval_duration = dynamic_config_rx.borrow().runtime.worker_poll_interval();
+		let mut tick_interval = tokio::time::interval(tick_interval_duration);
 		tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 		let mut term_signal = TermSignal::get();
@@ -116,6 +118,20 @@ impl Worker {
 
 			tokio::select! {
 				_ = tick_interval.tick() => {},
+				res = dynamic_config_rx.changed() => {
+						if res.is_err() {
+							break Err(anyhow::anyhow!("dynamic config watch closed"));
+						}
+
+						let new_duration = dynamic_config_rx.borrow().runtime.worker_poll_interval();
+						if new_duration != tick_interval_duration {
+							tick_interval_duration = new_duration;
+							tick_interval = tokio::time::interval(new_duration);
+							tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+						}
+
+						continue;
+				},
 				res = bump_sub.next() => {
 					match res {
 						Some(bumps) => {

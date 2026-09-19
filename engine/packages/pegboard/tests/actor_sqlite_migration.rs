@@ -119,6 +119,7 @@ async fn migrate(
 ) -> Result<pegboard::actor_sqlite::MigrateV1ToV2Output> {
 	pegboard::actor_sqlite::migrate_v1_to_v2(
 		db.clone(),
+		rivet_config::Config::from_root(rivet_config::config::Root::default()),
 		pegboard::actor_sqlite::MigrateV1ToV2Input {
 			actor_id,
 			namespace_id: test_namespace(),

@@ -17,6 +17,7 @@
 !README.md
 docs/
 LICENSE*
+!LICENSE
 
 # Editor configs
 .vscode/

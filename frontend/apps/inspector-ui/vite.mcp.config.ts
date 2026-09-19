@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
@@ -15,6 +16,19 @@ const rivetkitVersion = JSON.parse(
 		"utf8",
 	),
 ).version as string;
+// Publish rewrites platform/mcp/package.json before this build runs, so the
+// bundle carries the version it actually ships as.
+const mcpVersion = JSON.parse(
+	readFileSync(
+		path.resolve(__dirname, "../../../platform/mcp/package.json"),
+		"utf8",
+	),
+).version as string;
+// Sentry rejects slashes in a release version, so this is not the npm name.
+const release = `rivet-mcp@${mcpVersion}`;
+// Uploads only when CI supplies a token. Without one the build stays local and
+// emits no sourcemap, keeping the single-file bundle lean.
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
 const require = createRequire(path.resolve(__dirname, "package.json"));
 const WORKER_IMPORT = 'import ActorWorker from "./actor-repl.worker?worker";';
 let sawConsoleWorker = false;
@@ -87,7 +101,25 @@ export default defineConfig({
 			},
 		},
 		tsconfigPaths({ projects: [path.resolve(__dirname, "tsconfig.json")] }),
-		viteSingleFile(),
+		// Must precede viteSingleFile: it needs the emitted JS chunk to inject a
+		// debug ID into, and singlefile inlines that chunk away.
+		sentryAuthToken
+			? sentryVitePlugin({
+					org: process.env.SENTRY_ORG ?? "rivet-gaming",
+					project: process.env.MCP_APP_SENTRY_PROJECT ?? "mcp-app",
+					authToken: sentryAuthToken,
+					release: { name: release },
+					telemetry: false,
+					// A telemetry outage must never fail a release build.
+					errorHandler: (error) => {
+						console.warn(`[sentry] sourcemaps: ${error.message}`);
+					},
+				})
+			: null,
+		// Only `mcp-index.html` is copied into the package, so keeping the
+		// inlined chunk on disk costs nothing and leaves the Sentry plugin a
+		// script/map pair to upload instead of an orphaned map.
+		viteSingleFile({ deleteInlinedFiles: !sentryAuthToken }),
 	],
 	resolve: {
 		alias: {
@@ -103,6 +135,7 @@ export default defineConfig({
 		__APP_TYPE__: JSON.stringify("inspector"),
 		__APP_BUILD_ID__: JSON.stringify("mcp-actor-inspector"),
 		__RIVETKIT_VERSION__: JSON.stringify(rivetkitVersion),
+		__MCP_VERSION__: JSON.stringify(mcpVersion),
 	},
 	optimizeDeps: {
 		include: ["@fortawesome/*", "@rivet-gg/icons", "@rivet-gg/cloud"],
@@ -111,8 +144,11 @@ export default defineConfig({
 	build: {
 		outDir: "../../dist/mcp-inspector-ui",
 		emptyOutDir: true,
-		sourcemap: false,
+		sourcemap: Boolean(sentryAuthToken),
 		cssCodeSplit: false,
+		// viteSingleFile inlines JS and CSS but leaves binary assets to this
+		// limit. Emitted font files would have no origin to load from.
+		assetsInlineLimit: 1024 * 1024,
 		rollupOptions: {
 			input: path.resolve(__dirname, "mcp-index.html"),
 			output: { inlineDynamicImports: true },

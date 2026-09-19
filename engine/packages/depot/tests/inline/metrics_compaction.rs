@@ -74,6 +74,7 @@ fn reclaim(status: CompactionJobStatus, throttled: bool) -> Result<ReclaimFdbJob
 		output_refs: Vec::new(),
 		throttled,
 		has_more: false,
+		admission_blocked: false,
 	})
 }
 

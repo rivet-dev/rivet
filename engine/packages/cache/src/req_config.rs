@@ -16,6 +16,42 @@ use crate::{errors::Error, metrics};
 /// How long to wait for an in flight cache req before proceeding to execute the same req anyway.
 const IN_FLIGHT_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Releases in-flight cache leases even if the fetch future is cancelled or
+/// returns before reaching its normal cleanup path.
+struct InFlightLeaseGuard {
+	cache: Cache,
+	broadcast_tx: broadcast::Sender<()>,
+	cache_keys: Vec<RawCacheKey>,
+}
+
+impl InFlightLeaseGuard {
+	fn new(cache: Cache, broadcast_tx: broadcast::Sender<()>) -> Self {
+		Self {
+			cache,
+			broadcast_tx,
+			cache_keys: Vec::new(),
+		}
+	}
+
+	fn insert(&mut self, cache_key: RawCacheKey) {
+		self.cache_keys.push(cache_key);
+	}
+
+	fn notify_waiters(&self) {
+		let _ = self.broadcast_tx.send(());
+	}
+}
+
+impl Drop for InFlightLeaseGuard {
+	fn drop(&mut self) {
+		for cache_key in &self.cache_keys {
+			self.cache
+				.in_flight()
+				.remove_if_sync(cache_key, |tx| tx.same_channel(&self.broadcast_tx));
+		}
+	}
+}
+
 /// Config specifying how cached values will behave.
 #[derive(Clone)]
 pub struct RequestConfig {
@@ -141,16 +177,18 @@ impl RequestConfig {
 					let mut waiting_keys = Vec::new();
 					let mut leased_keys = Vec::new();
 					let (broadcast_tx, _) = broadcast::channel::<()>(16);
+					let mut lease_guard = InFlightLeaseGuard::new(self.cache.clone(), broadcast_tx);
 
 					// Determine which keys are currently being fetched and not
 					for key in remaining_keys {
 						let cache_key = driver.process_key(&base_key, &key);
-						match self.cache.in_flight().entry_async(cache_key).await {
+						match self.cache.in_flight().entry_async(cache_key.clone()).await {
 							scc::hash_map::Entry::Occupied(broadcast) => {
 								waiting_keys.push((key, broadcast.subscribe()));
 							}
 							scc::hash_map::Entry::Vacant(entry) => {
-								entry.insert_entry(broadcast_tx.clone());
+								entry.insert_entry(lease_guard.broadcast_tx.clone());
+								lease_guard.insert(cache_key);
 								leased_keys.push(key);
 							}
 						}
@@ -289,13 +327,7 @@ impl RequestConfig {
 							tracing::error!(?err, "failed to write to cache");
 						}
 
-						let _ = broadcast_tx.send(());
-					}
-
-					// Release leases
-					for key in leased_keys {
-						let cache_key = driver.process_key(&base_key, &key);
-						self.cache.in_flight().remove_async(&cache_key).await;
+						lease_guard.notify_waiters();
 					}
 				}
 

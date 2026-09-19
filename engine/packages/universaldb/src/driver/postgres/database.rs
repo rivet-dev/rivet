@@ -19,6 +19,7 @@ use crate::{
 	RetryableTransaction, Transaction,
 	driver::{BoxFut, DatabaseDriver, Erased},
 	error::DatabaseError,
+	metrics,
 	transaction::TXN_TIMEOUT,
 	utils::{MaybeCommitted, calculate_tx_retry_backoff},
 };
@@ -32,10 +33,48 @@ use super::{
 };
 
 const GC_INTERVAL: Duration = Duration::from_secs(30);
+/// Default size of the follower connection pool, which serves ordinary transactions, dedup GC, and
+/// the lease cache refresh.
+const DEFAULT_POOL_MAX_SIZE: usize = 64;
+/// Size of the leader connection pool. The leader path only ever needs a connection for the drain
+/// batch and, concurrently, lease renewal, so two slots reserved away from follower traffic are
+/// enough to keep a leader alive under any amount of follower load.
+const LEADER_POOL_MAX_SIZE: usize = 2;
+/// How often pool occupancy is sampled into the pool gauges.
+const POOL_METRICS_INTERVAL: Duration = Duration::from_secs(1);
 /// Failover dedup rows older than this are garbage collected. Must be well beyond the longest a
 /// follower could spend resending a commit across a leader failover, so a dedup record is never
 /// deleted while a resend that needs it could still arrive.
 const DEDUP_ROW_MAX_AGE_SECS: i64 = 120;
+
+/// The schema every node applies on startup. `kv` is the durable latest-value store; the rest is the
+/// leader lease, commit version allocation, and failover dedup.
+pub(super) const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS kv (
+		key BYTEA PRIMARY KEY,
+		value BYTEA NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS udb_lease (
+		id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+		epoch           BIGINT NOT NULL,
+		leader_addr     TEXT   NOT NULL,
+		durable_version BIGINT NOT NULL DEFAULT 0,
+		expires_at      TIMESTAMPTZ NOT NULL
+	);
+
+	CREATE SEQUENCE IF NOT EXISTS udb_version_seq AS BIGINT
+		START WITH 1 INCREMENT BY 1 MINVALUE 1;
+
+	CREATE TABLE IF NOT EXISTS udb_applied (
+		client_node_id BYTEA  NOT NULL,
+		client_seq     BIGINT NOT NULL,
+		commit_version BIGINT NOT NULL,
+		created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+		PRIMARY KEY (client_node_id, client_seq)
+	);
+
+	CREATE INDEX IF NOT EXISTS udb_applied_created_at_idx
+		ON udb_applied (created_at);";
 
 #[derive(Clone, Debug)]
 pub struct PostgresConfig {
@@ -44,6 +83,9 @@ pub struct PostgresConfig {
 	/// When set, UniversalDB runs in multi-node mode and uses NATS for follower-to-leader commit
 	/// transport. When `None`, it runs single-node with an in-process resolver.
 	pub nats: Option<NatsConfig>,
+	/// Size of the follower connection pool. Defaults to [`DEFAULT_POOL_MAX_SIZE`]. This is a test
+	/// seam for forcing pool exhaustion with a handful of transactions, not an operator knob.
+	pub pool_max_size: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -60,6 +102,7 @@ impl PostgresConfig {
 			connection_string,
 			ssl_config: None,
 			nats: None,
+			pool_max_size: None,
 		}
 	}
 }
@@ -73,6 +116,7 @@ pub struct PostgresDatabaseDriver {
 	max_retries: AtomicI32,
 	resolver_handle: JoinHandle<()>,
 	gc_handle: JoinHandle<()>,
+	pool_metrics_handle: JoinHandle<()>,
 }
 
 impl PostgresDatabaseDriver {
@@ -96,7 +140,14 @@ impl PostgresDatabaseDriver {
 			false
 		};
 
-		let pool = Self::build_pool(&config, ssl_disabled)?;
+		let pool = Self::build_pool(
+			&config,
+			ssl_disabled,
+			config.pool_max_size.unwrap_or(DEFAULT_POOL_MAX_SIZE),
+		)?;
+		// The leader path gets its own pool so a leader can always renew its lease and drain the
+		// commit queue no matter how saturated the follower pool is.
+		let leader_pool = Self::build_pool(&config, ssl_disabled, LEADER_POOL_MAX_SIZE)?;
 
 		// Initialize the schema (idempotent).
 		{
@@ -119,6 +170,7 @@ impl PostgresDatabaseDriver {
 				let shared = PostgresShared::new(
 					rivet_config.clone(),
 					pool,
+					leader_pool,
 					node_id,
 					Transport::SingleNode { commit_tx },
 				);
@@ -142,6 +194,7 @@ impl PostgresDatabaseDriver {
 				let shared = PostgresShared::new(
 					rivet_config.clone(),
 					pool,
+					leader_pool,
 					node_id,
 					Transport::MultiNode(NatsTransport { client, subjects }),
 				);
@@ -152,20 +205,22 @@ impl PostgresDatabaseDriver {
 
 		let resolver_handle = resolver::spawn(shared.clone(), resolver_input);
 		let gc_handle = Self::spawn_gc(shared.clone());
+		let pool_metrics_handle = Self::spawn_pool_metrics(shared.clone());
 
 		Ok(PostgresDatabaseDriver {
 			shared,
 			max_retries: AtomicI32::new(10),
 			resolver_handle,
 			gc_handle,
+			pool_metrics_handle,
 		})
 	}
 
-	fn build_pool(config: &PostgresConfig, ssl_disabled: bool) -> Result<Pool> {
+	fn build_pool(config: &PostgresConfig, ssl_disabled: bool, max_size: usize) -> Result<Pool> {
 		let mut pool_config = Config::new();
 		pool_config.url = Some(config.connection_string.clone());
 		pool_config.pool = Some(PoolConfig {
-			max_size: 64,
+			max_size,
 			..Default::default()
 		});
 		pool_config.manager = Some(ManagerConfig {
@@ -198,37 +253,9 @@ impl PostgresDatabaseDriver {
 	}
 
 	async fn init_schema(conn: &deadpool_postgres::Client) -> Result<()> {
-		// Durable latest-value store.
-		conn.batch_execute(
-			"CREATE TABLE IF NOT EXISTS kv (
-				key BYTEA PRIMARY KEY,
-				value BYTEA NOT NULL
-			);
-
-			CREATE TABLE IF NOT EXISTS udb_lease (
-				id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-				epoch           BIGINT NOT NULL,
-				leader_addr     TEXT   NOT NULL,
-				durable_version BIGINT NOT NULL DEFAULT 0,
-				expires_at      TIMESTAMPTZ NOT NULL
-			);
-
-			CREATE SEQUENCE IF NOT EXISTS udb_version_seq AS BIGINT
-				START WITH 1 INCREMENT BY 1 MINVALUE 1;
-
-			CREATE TABLE IF NOT EXISTS udb_applied (
-				client_node_id BYTEA  NOT NULL,
-				client_seq     BIGINT NOT NULL,
-				commit_version BIGINT NOT NULL,
-				created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-				PRIMARY KEY (client_node_id, client_seq)
-			);
-
-			CREATE INDEX IF NOT EXISTS udb_applied_created_at_idx
-				ON udb_applied (created_at);",
-		)
-		.await
-		.context("failed to initialize postgres schema")?;
+		conn.batch_execute(SCHEMA)
+			.await
+			.context("failed to initialize postgres schema")?;
 
 		Ok(())
 	}
@@ -265,6 +292,32 @@ impl PostgresDatabaseDriver {
 			}
 		})
 	}
+
+	/// Sample both pools' occupancy into the pool gauges. `available == 0` with `waiting > 0` on the
+	/// follower pool is the signature of pool starvation.
+	fn spawn_pool_metrics(shared: Arc<PostgresShared>) -> JoinHandle<()> {
+		tokio::spawn(async move {
+			let mut interval = tokio::time::interval(POOL_METRICS_INTERVAL);
+			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+			loop {
+				interval.tick().await;
+
+				for (label, pool) in [("follower", &shared.pool), ("leader", &shared.leader_pool)] {
+					let status = pool.status();
+					metrics::POSTGRES_POOL_SIZE
+						.with_label_values(&[label])
+						.set(status.size as i64);
+					metrics::POSTGRES_POOL_AVAILABLE
+						.with_label_values(&[label])
+						.set(status.available as i64);
+					metrics::POSTGRES_POOL_WAITING
+						.with_label_values(&[label])
+						.set(status.waiting as i64);
+				}
+			}
+		})
+	}
 }
 
 impl DatabaseDriver for PostgresDatabaseDriver {
@@ -287,18 +340,6 @@ impl DatabaseDriver for PostgresDatabaseDriver {
 
 			let mut attempt = 0;
 			loop {
-				// Re-read every iteration. The first attempt always runs, because nothing has called
-				// `retry_limit` yet; from then on the closure's limit wins over the database-wide one.
-				let limit = retry_limit.load(Ordering::SeqCst);
-				let max_attempts = if limit == RETRY_LIMIT_UNSET {
-					max_retries
-				} else {
-					limit.saturating_add(1)
-				};
-				if attempt >= max_attempts {
-					break;
-				}
-
 				let tx = Transaction::new(Arc::new(PostgresTransactionDriver::with_retry_limit(
 					self.shared.clone(),
 					retry_limit.clone(),
@@ -328,17 +369,31 @@ impl DatabaseDriver for PostgresDatabaseDriver {
 							maybe_committed = MaybeCommitted(true);
 						}
 
+						// Re-read every iteration. Nothing has called `retry_limit` before the first
+						// attempt; from then on the closure's limit wins over the database-wide one.
+						// The check runs after an attempt failed, so both values bound retries rather
+						// than total attempts.
+						let limit = retry_limit.load(Ordering::SeqCst);
+						let retry_budget = if limit == RETRY_LIMIT_UNSET {
+							max_retries
+						} else {
+							limit
+						};
+						if attempt >= retry_budget {
+							return Err(DatabaseError::MaxRetriesReached(error).into());
+						}
+
+						attempt += 1;
+
 						let backoff_ms = calculate_tx_retry_backoff(attempt as usize);
 						tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
-						attempt += 1;
-						continue;
+					} else {
+						return Err(error);
 					}
+				} else {
+					return Err(error);
 				}
-
-				return Err(error);
 			}
-
-			Err(DatabaseError::MaxRetriesReached.into())
 		})
 	}
 
@@ -352,6 +407,7 @@ impl DatabaseDriver for PostgresDatabaseDriver {
 			// Stop renewing the lease before releasing it so a racing renew cannot re-extend it.
 			self.resolver_handle.abort();
 			self.gc_handle.abort();
+			self.pool_metrics_handle.abort();
 
 			// Hand off leadership immediately if we hold it, instead of waiting out the lease TTL.
 			resolver::handoff(&self.shared).await;
@@ -365,5 +421,6 @@ impl Drop for PostgresDatabaseDriver {
 		// another node can take over. Without this a dropped leader would renew its lease forever.
 		self.resolver_handle.abort();
 		self.gc_handle.abort();
+		self.pool_metrics_handle.abort();
 	}
 }

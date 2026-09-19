@@ -10,6 +10,8 @@ use std::{
 	time::Duration,
 };
 use tokio::sync::broadcast;
+use universaldb::utils::FormalChunkedKey;
+use vbare::OwnedVersionedData;
 
 use super::super::common;
 
@@ -144,14 +146,14 @@ async fn insert_pending_start_command(
 			let envoy_key = envoy_key.clone();
 			async move {
 				let tx = tx.with_subspace(keys::subspace());
-				tx.write(
-					&keys::envoy::ActorCommandKey::new(
-						namespace_id,
-						envoy_key,
-						actor_id,
-						generation,
-						i64::MAX / 2,
-					),
+				let command_key = keys::envoy::ActorCommandKey::new(
+					namespace_id,
+					envoy_key,
+					actor_id,
+					generation,
+					i64::MAX / 2,
+				);
+				let chunks = command_key.split(
 					protocol::ActorCommandKeyData::CommandStartActor(protocol::CommandStartActor {
 						config: protocol::ActorConfig {
 							name: "sqlite-generation-actor".to_string(),
@@ -163,6 +165,9 @@ async fn insert_pending_start_command(
 						preloaded_kv: None,
 					}),
 				)?;
+				for (chunk_idx, chunk) in chunks.into_iter().enumerate() {
+					tx.set(&tx.pack(&command_key.chunk(chunk_idx)), &chunk);
+				}
 				Ok(())
 			}
 		})
@@ -725,27 +730,32 @@ fn inline_sqlite_rejects_stale_generation_with_pending_start_command() {
 						),
 						generation + 1,
 					)?;
-					tx.write(
-						&pegboard::keys::envoy::ActorCommandKey::new(
+					// Seed an unchunked value at the bare key, as written before command values
+					// were chunked, so validation covers the legacy layout.
+					tx.set(
+						&tx.pack(&pegboard::keys::envoy::ActorCommandKey::new(
 							namespace_id,
 							envoy_key,
 							actor_id_parsed,
 							generation,
 							99,
-						),
-						protocol::ActorCommandKeyData::CommandStartActor(
-							protocol::CommandStartActor {
-								config: protocol::ActorConfig {
-									name: "sqlite-generation-actor".to_string(),
-									key: None,
-									create_ts: rivet_util::timestamp::now(),
-									input: None,
+						)),
+						&protocol::versioned::ActorCommandKeyData::wrap_latest(
+							protocol::ActorCommandKeyData::CommandStartActor(
+								protocol::CommandStartActor {
+									config: protocol::ActorConfig {
+										name: "sqlite-generation-actor".to_string(),
+										key: None,
+										create_ts: rivet_util::timestamp::now(),
+										input: None,
+									},
+									hibernating_requests: Vec::new(),
+									preloaded_kv: None,
 								},
-								hibernating_requests: Vec::new(),
-								preloaded_kv: None,
-							},
-						),
-					)?;
+							),
+						)
+						.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)?,
+					);
 					Ok(())
 				}
 			})

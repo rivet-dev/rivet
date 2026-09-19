@@ -125,6 +125,12 @@ pub struct Db {
 	/// Last wall-clock time this database sent a workflow compaction wakeup.
 	pub(super) last_deltas_available_at_ms: RwLock<Option<i64>>,
 	pub(super) compaction_signaler: Option<CompactionSignaler>,
+	/// Engine config this database reads its storage cap from, when one was attached.
+	///
+	/// Read through `dynamic()` on every commit so a runtime cap change applies to databases that
+	/// are already open. A database opened without a config (tests and standalone tooling) falls
+	/// back to `quota::SQLITE_MAX_STORAGE_BYTES`, which is the same value the config defaults to.
+	pub(super) config: Option<rivet_config::Config>,
 	#[cfg(feature = "test-faults")]
 	pub(super) fault_controller: Option<DepotFaultController>,
 }
@@ -236,9 +242,25 @@ impl Db {
 			read_bytes_since_rollup: AtomicU64::new(0),
 			last_deltas_available_at_ms: RwLock::new(None),
 			compaction_signaler,
+			config: None,
 			#[cfg(feature = "test-faults")]
 			fault_controller: None,
 		}
+	}
+
+	/// Attaches the engine config this database reads its storage cap from.
+	pub fn with_config(mut self, config: rivet_config::Config) -> Self {
+		self.config = Some(config);
+		self
+	}
+
+	/// Bytes of storage this database may occupy before commits are refused.
+	pub(super) fn max_storage_bytes(&self) -> i64 {
+		self.config
+			.as_ref()
+			.map_or(crate::conveyer::quota::SQLITE_MAX_STORAGE_BYTES, |config| {
+				config.dynamic().sqlite().max_storage_bytes()
+			})
 	}
 
 	pub(super) fn sqlite_bucket_id(&self) -> BucketId {

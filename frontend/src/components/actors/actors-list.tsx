@@ -1,11 +1,12 @@
 import {
 	faArrowUpRightFromSquare,
 	faBookOpen,
-	faMagnifyingGlass,
+	faFingerprint,
 	faQuestionSquare,
 	faSidebarFlip,
 	Icon,
 } from "@rivet-gg/icons";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import {
 	useInfiniteQuery,
 	useQuery,
@@ -37,6 +38,7 @@ import {
 	Input,
 	ls,
 	type OnFiltersChange,
+	Kbd,
 	ScrollArea,
 	ShimmerLine,
 	SmallText,
@@ -121,30 +123,35 @@ function TopBar() {
 
 	return (
 		<div className="col-span-full border-b sticky top-0 bg-card z-[1]">
-			<div className="flex items-center px-3 gap-2 h-[45px]">
+			<div className="flex items-center px-3 gap-2 h-9">
 				<ActorNameLabel />
-				{showInstanceTools ? (
-					<div className="ml-auto flex items-center gap-1 shrink-0">
-						<Display />
-						<InstanceSearchTrigger />
-						<CreateActorButton iconOnly label="Create Instance" />
-					</div>
-				) : null}
-				{isDetailsColCollapsed ? (
-					<WithTooltip
-						trigger={
-							<Button
-								onClick={() => detailsRef.current?.expand()}
-								variant="outline"
-								size="icon-sm"
-								className={showInstanceTools ? "" : "ml-auto"}
-							>
-								<Icon icon={faSidebarFlip} />
-							</Button>
-						}
-						content="Expand details column"
-					/>
-				) : null}
+				<div className="ml-auto flex items-center gap-1 shrink-0">
+					{showInstanceTools ? (
+						<>
+							<Display />
+							<InstanceSearchTrigger />
+							<CreateActorButton
+								iconOnly
+								label="Create Instance"
+							/>
+						</>
+					) : null}
+					{isDetailsColCollapsed ? (
+						<WithTooltip
+							trigger={
+								<Button
+									onClick={() => detailsRef.current?.expand()}
+									variant="ghost"
+									size="icon-sm"
+									aria-label="Expand details column"
+								>
+									<Icon icon={faSidebarFlip} />
+								</Button>
+							}
+							content="Expand details column"
+						/>
+					) : null}
+				</div>
 			</div>
 			<LoadingIndicator />
 		</div>
@@ -154,33 +161,29 @@ function TopBar() {
 function InstanceSearchTrigger() {
 	const [open, setOpen] = useState(false);
 
-	useEffect(() => {
-		const handler = (e: KeyboardEvent) => {
-			const isMod = e.metaKey || e.ctrlKey;
-			if (!isMod || e.key.toLowerCase() !== "k") return;
-			const target = e.target as HTMLElement | null;
-			if (target?.isContentEditable) return;
-			e.preventDefault();
-			setOpen(true);
-		};
-		window.addEventListener("keydown", handler);
-		return () => window.removeEventListener("keydown", handler);
-	}, []);
+	useHotkey("Mod+F", () => setOpen(true), { ignoreInputs: true });
 
 	return (
 		<>
 			<WithTooltip
 				trigger={
 					<Button
-						variant="outline"
+						variant="ghost"
 						size="icon-sm"
 						onClick={() => setOpen(true)}
-						aria-label="Open Actor by ID"
+						aria-label="Open by ID"
 					>
-						<Icon icon={faMagnifyingGlass} />
+						<Icon icon={faFingerprint} />
 					</Button>
 				}
-				content="Open Actor by ID (⌘K)"
+				content={
+					<span className="flex items-center gap-2">
+						Open by ID
+						<Kbd className="border-0 bg-foreground/10 font-sans text-xs font-medium text-muted-foreground">
+							<Kbd.Key />F
+						</Kbd>
+					</span>
+				}
 			/>
 			<InstanceSearchDialog open={open} onOpenChange={setOpen} />
 		</>
@@ -360,7 +363,7 @@ function List({
 	const rowVirtualizer = useVirtualizer({
 		count: actors.length,
 		getScrollElement: () => viewportRef.current,
-		estimateSize: () => 36,
+		estimateSize: () => 32,
 		overscan: 5,
 	});
 
@@ -517,11 +520,13 @@ function EmptyState({ count }: { count: number }) {
 						</Button>
 					</>
 				)
-			) : (
+			) : count > RECORDS_PER_PAGE ? (
+				// Only worth saying once the user has actually scrolled through
+				// more than one page; for short lists it is just noise.
 				<SmallText className="text-muted-foreground text-center text-xs">
 					{copy.noMoreActors}
 				</SmallText>
-			)}
+			) : null}
 		</div>
 	);
 }

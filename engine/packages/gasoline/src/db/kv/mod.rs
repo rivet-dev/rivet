@@ -57,54 +57,7 @@ pub struct DatabaseKv {
 	active_worker_count: ActiveWorkerCountEma,
 }
 
-/// Smoothed estimate of the cluster-wide active worker count.
-///
-/// Increases jump immediately (this behaves as a max), while decreases decay towards the latest
-/// observation with a fixed half life. This prevents a transient drop in observed workers from
-/// immediately loosening the cluster-wide workflow concurrency quota, while still recovering once
-/// workers actually go away.
-///
-/// The value and timestamp are stored as separate atomics. The observe read-modify-write is not
-/// strictly atomic across the pair, but a slightly stale estimate is acceptable here.
-struct ActiveWorkerCountEma {
-	/// Current smoothed value stored as `f64` bits.
-	value_bits: AtomicU64,
-	last_update_ts: AtomicI64,
-}
-
-impl ActiveWorkerCountEma {
-	fn new(initial: usize) -> Self {
-		ActiveWorkerCountEma {
-			value_bits: AtomicU64::new((initial as f64).to_bits()),
-			last_update_ts: AtomicI64::new(rivet_util::timestamp::now()),
-		}
-	}
-
-	/// Records a new observation. A higher value jumps immediately; a lower value decays the current
-	/// estimate towards the observation based on the elapsed time since the last observation.
-	fn observe(&self, count: usize, now: i64) {
-		let count = count as f64;
-		let prev = f64::from_bits(self.value_bits.load(Ordering::Relaxed));
-
-		let next = if count >= prev {
-			count
-		} else {
-			let prev_ts = self.last_update_ts.load(Ordering::Relaxed);
-			let dt = now.saturating_sub(prev_ts).max(0) as f64;
-			let decay = 0.5f64.powf(dt / ACTIVE_WORKER_COUNT_HALF_LIFE_MS);
-			count + (prev - count) * decay
-		};
-
-		self.value_bits.store(next.to_bits(), Ordering::Relaxed);
-		self.last_update_ts.store(now, Ordering::Relaxed);
-	}
-
-	/// Returns the current smoothed active worker count, rounded and floored at 1.
-	fn get(&self) -> usize {
-		(f64::from_bits(self.value_bits.load(Ordering::Relaxed)).round() as usize).max(1)
-	}
-}
-
+// MARK: UDB Helpers
 impl DatabaseKv {
 	/// Validates that `worker_id` still holds the lease for the given workflow.
 	///
@@ -177,10 +130,7 @@ impl DatabaseKv {
 			tracing::error!(?err, "failed to spawn bump task");
 		}
 	}
-}
 
-// MARK: UDB Helpers
-impl DatabaseKv {
 	fn write_signal_wake_idxs(
 		&self,
 		workflow_id: Id,
@@ -518,7 +468,7 @@ impl DatabaseKv {
 #[async_trait::async_trait]
 impl Database for DatabaseKv {
 	fn worker_poll_interval(&self) -> Duration {
-		Duration::from_secs(16)
+		self.config.dynamic().runtime.worker_poll_interval()
 	}
 
 	fn signal_poll_interval(&self) -> Duration {
@@ -796,6 +746,7 @@ impl Database for DatabaseKv {
 				.map_err(WorkflowError::Udb)?;
 
 			let mut total_workflow_counts: Vec<(String, i64)> = Vec::new();
+			let mut dead_workflow_counts = HashMap::<String, i64>::new();
 
 			for (key, count) in entries {
 				match key.metric {
@@ -827,10 +778,10 @@ impl Database for DatabaseKv {
 							total_workflow_counts.push((workflow_name, count));
 						}
 					}
-					keys::metric::Metric::WorkflowDead(workflow_name, error) => {
-						metrics::WORKFLOW_DEAD
-							.with_label_values(&[workflow_name.as_str(), error.as_str()])
-							.set(count);
+					keys::metric::Metric::WorkflowDead(workflow_name) => {
+						*dead_workflow_counts
+							.entry(workflow_name.clone())
+							.or_default() += count;
 
 						if let Some(entry) = total_workflow_counts
 							.iter_mut()
@@ -858,6 +809,12 @@ impl Database for DatabaseKv {
 							.set(count);
 					}
 				}
+			}
+
+			for (workflow_name, count) in dead_workflow_counts {
+				metrics::WORKFLOW_DEAD
+					.with_label_values(&[workflow_name.as_str()])
+					.set(count);
 			}
 
 			for (workflow_name, count) in total_workflow_counts {
@@ -1186,11 +1143,8 @@ impl Database for DatabaseKv {
 		running_workflows_by_name: &HashMap<String, usize>,
 	) -> WorkflowResult<Vec<PulledWorkflowData>> {
 		let start_instant = Instant::now();
-		let max_concurrent_workflows = self
-			.config
-			.dynamic()
-			.runtime
-			.worker_max_concurrent_workflows();
+		let dynamic_config = self.config.dynamic();
+		let max_concurrent_workflows = dynamic_config.runtime.worker_max_concurrent_workflows();
 		let last_active_worker_count = self.active_worker_count.get();
 		let owned_filter = filter
 			.into_iter()
@@ -1217,6 +1171,7 @@ impl Database for DatabaseKv {
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_pull_workflows", |tx| {
 				let owned_filter = owned_filter.clone();
+				let dynamic_config = dynamic_config.clone();
 				let max_concurrent_workflows = &max_concurrent_workflows;
 				let running_and_leased_workflows_by_name = scc::HashMap::<String, usize>::from_iter(
 					running_workflows_by_name
@@ -1231,17 +1186,18 @@ impl Database for DatabaseKv {
 					let now = rivet_util::timestamp::now();
 
 					// All wake conditions with a timestamp before this timestamp will be pulled
-					let pull_before = now + i64::try_from(self.worker_poll_interval().as_millis())?;
+					let pull_before = now
+						+ i64::try_from(dynamic_config.runtime.worker_poll_interval().as_millis())?;
 					// Only consider workers that have pinged within 2 ping intervals ago
 					let active_workers_after = now - i64::try_from(PING_INTERVAL.as_millis() * 2)?;
 
 					let cpu_usage_ratio = {
 						self.system.lock().await.fetch_cpu_usage(
-							self.config.runtime.worker_load_shedding_beta(),
-							self.config.runtime.worker_cpu_max,
+							dynamic_config.runtime.worker_load_shedding_beta(),
+							dynamic_config.runtime.worker_cpu_max,
 						)
 					};
-					let load_shed_curve = self.config.runtime.worker_load_shedding_curve();
+					let load_shed_curve = dynamic_config.runtime.worker_load_shedding_curve();
 					let load_shed_ratio_x1000 = calc_pull_ratio(
 						(cpu_usage_ratio * 1000.0) as u64,
 						load_shed_curve[0].0,
@@ -1279,6 +1235,9 @@ impl Database for DatabaseKv {
 							let mut buffer = Vec::new();
 							let mut stream = futures_util::stream::iter(owned_filter)
 								.map(|wf_name| {
+									let max_wake_keys = dynamic_config
+										.runtime
+										.worker_max_wake_keys_per_workflow_name_per_pull(&wf_name);
 									let wake_subspace_start = end_of_key_range(&tx.pack(
 										&keys::wake::WorkflowWakeConditionKey::subspace_without_ts(
 											wf_name.clone(),
@@ -1293,9 +1252,9 @@ impl Database for DatabaseKv {
 									tx.get_ranges_keyvalues(
 										universaldb::RangeOption {
 											mode: StreamingMode::WantAll,
-											// Limit to pulling 20k keys per name pull. If any are left behind
-											// they will be picked up on the next pull or by another worker
-											limit: Some(20_000),
+											// If keys are left behind, they will be picked up on the next pull
+											// or by another worker.
+											limit: Some(max_wake_keys),
 											..(wake_subspace_start, wake_subspace_end).into()
 										},
 										// This is Snapshot to reduce contention with any new wake conditions
@@ -1406,12 +1365,16 @@ impl Database for DatabaseKv {
 									workflow_name: wake_key.workflow_name.clone(),
 									wake_deadline_ts: wake_key.condition.deadline_ts(),
 									earliest_wake_condition_ts: wake_key.ts,
+									already_leased: false,
 								},
 							);
 
-							// Hard limit of 10k deduped workflows, this gets further limited to 1000 at
-							// `assigned_workflows`
-							if dedup_workflows.len() >= 10000 {
+							// Bound the global deduplicated candidate set before worker assignment.
+							if dedup_workflows.len()
+								>= dynamic_config
+									.runtime
+									.worker_max_deduped_workflows_per_pull()
+							{
 								break;
 							}
 
@@ -1446,10 +1409,15 @@ impl Database for DatabaseKv {
 							.observe(count as f64);
 					}
 
+					let mut dedup_workflows = dedup_workflows.into_values().collect::<Vec<_>>();
+
+					// TEMP HACK: Prioritize actor wfs over all
+					dedup_workflows.sort_by_key(|wf| wf.workflow_name != "pegboard_actor2");
+
 					// Filter workflows in a way that spreads all current pending workflows across all active
 					// workers evenly
 					let assigned_workflows = dedup_workflows
-						.into_values()
+						.into_iter()
 						.filter(|wf| {
 							let mut hasher = DefaultHasher::new();
 
@@ -1465,6 +1433,7 @@ impl Database for DatabaseKv {
 								hasher.finish() % 1000 // 0-1000
 							};
 
+							// Apply load shedding
 							if pseudorandom_value_x1000 > load_shed_ratio_x1000 {
 								return false;
 							}
@@ -1480,11 +1449,11 @@ impl Database for DatabaseKv {
 							wf_worker_idx == current_worker_idx || wf_worker_idx == next_worker_idx
 						})
 						// Hard limit per pull
-						.take(self.config.runtime.worker_max_workflows_per_pull());
+						.take(dynamic_config.runtime.worker_max_workflows_per_pull());
 
 					// Check leases
 					let leased_workflows = futures_util::stream::iter(assigned_workflows)
-						.map(|wf| {
+						.map(|mut wf| {
 							let tx = tx.clone();
 							let running_and_leased_workflows_by_name =
 								&running_and_leased_workflows_by_name;
@@ -1530,7 +1499,9 @@ impl Database for DatabaseKv {
 										}
 									}
 
-									Result::<_>::Ok(None)
+									wf.already_leased = true;
+
+									Result::<_>::Ok(Some(wf))
 								} else {
 									tx.write(&lease_key, (wf.workflow_name.clone(), worker_id))?;
 
@@ -1573,34 +1544,41 @@ impl Database for DatabaseKv {
 							.set(current as f64 / *max as f64);
 					}
 
-					if wake_keys.len()
-						> self
-							.config
-							.runtime
-							.worker_max_wake_condition_clears_per_pull()
-					{
-						tracing::warn!("capped pull workflows wake condition clears");
-					}
-
-					// Clear all wake conditions from workflows that we have leased
-					for wake_key in wake_keys.iter().take(
-						self.config
-							.runtime
-							.worker_max_wake_condition_clears_per_pull(),
-					) {
-						if !leased_workflows
-							.iter()
-							.any(|wf| wf.workflow_id == wake_key.workflow_id)
-						{
+					// Clear wake conditions from workflows that we have leased or are already leased. If the
+					// workflow is already leased we can clear all but immediate wake conditions (which are
+					// provably not redundant)
+					let mut clear_count = 0;
+					for wake_key in wake_keys {
+						if !leased_workflows.iter().any(|wf| {
+							wf.workflow_id == wake_key.workflow_id
+								&& (!wf.already_leased
+									|| !matches!(
+										wake_key.condition,
+										keys::wake::WakeCondition::Immediate
+									))
+						}) {
 							continue;
 						}
 
-						tx.delete(wake_key);
+						if clear_count
+							>= dynamic_config
+								.runtime
+								.worker_max_wake_condition_clears_per_pull()
+						{
+							tracing::warn!("capped pull workflows wake condition clears");
+							break;
+						}
+
+						tx.delete(&wake_key);
+						clear_count += 1;
 					}
 
 					// NOTE: We don't read any workflow data in this txn since its only for acquiring leases.
 					// The less operations we do in this txn the less contention there is with other workers.
-					Ok(leased_workflows)
+					Ok(leased_workflows
+						.into_iter()
+						.filter(|wf| !wf.already_leased)
+						.collect())
 				}
 			})
 			.custom_instrument(tracing::info_span!("pull_workflows_tx"))
@@ -2431,6 +2409,7 @@ impl Database for DatabaseKv {
 						|| wake_sub_workflow_id.is_some();
 					if has_wake_condition {
 						tx.write(&keys::workflow::HasWakeConditionKey::new(workflow_id), ())?;
+						tx.delete(&keys::workflow::DeathTsKey::new(workflow_id));
 					} else {
 						// Workflow died
 
@@ -2443,6 +2422,10 @@ impl Database for DatabaseKv {
 								workflow_id,
 							),
 							(),
+						)?;
+						tx.write(
+							&keys::workflow::DeathTsKey::new(workflow_id),
+							rivet_util::timestamp::now(),
 						)?;
 					}
 
@@ -2464,10 +2447,7 @@ impl Database for DatabaseKv {
 						Some(if has_wake_condition {
 							keys::metric::Metric::WorkflowSleeping(workflow_name.to_string())
 						} else {
-							keys::metric::Metric::WorkflowDead(
-								workflow_name.to_string(),
-								error.to_string(),
-							)
+							keys::metric::Metric::WorkflowDead(workflow_name.to_string())
 						}),
 					);
 
@@ -3502,12 +3482,62 @@ impl Drop for DatabaseKv {
 	}
 }
 
+/// Smoothed estimate of the cluster-wide active worker count.
+///
+/// Increases jump immediately (this behaves as a max), while decreases decay towards the latest
+/// observation with a fixed half life. This prevents a transient drop in observed workers from
+/// immediately loosening the cluster-wide workflow concurrency quota, while still recovering once
+/// workers actually go away.
+///
+/// The value and timestamp are stored as separate atomics. The observe read-modify-write is not
+/// strictly atomic across the pair, but a slightly stale estimate is acceptable here.
+struct ActiveWorkerCountEma {
+	/// Current smoothed value stored as `f64` bits.
+	value_bits: AtomicU64,
+	last_update_ts: AtomicI64,
+}
+
+impl ActiveWorkerCountEma {
+	fn new(initial: usize) -> Self {
+		ActiveWorkerCountEma {
+			value_bits: AtomicU64::new((initial as f64).to_bits()),
+			last_update_ts: AtomicI64::new(rivet_util::timestamp::now()),
+		}
+	}
+
+	/// Records a new observation. A higher value jumps immediately; a lower value decays the current
+	/// estimate towards the observation based on the elapsed time since the last observation.
+	fn observe(&self, count: usize, now: i64) {
+		let count = count as f64;
+		let prev = f64::from_bits(self.value_bits.load(Ordering::Relaxed));
+
+		let next = if count >= prev {
+			count
+		} else {
+			let prev_ts = self.last_update_ts.load(Ordering::Relaxed);
+			let dt = now.saturating_sub(prev_ts).max(0) as f64;
+			let decay = 0.5f64.powf(dt / ACTIVE_WORKER_COUNT_HALF_LIFE_MS);
+			count + (prev - count) * decay
+		};
+
+		self.value_bits.store(next.to_bits(), Ordering::Relaxed);
+		self.last_update_ts.store(now, Ordering::Relaxed);
+	}
+
+	/// Returns the current smoothed active worker count, rounded and floored at 1.
+	fn get(&self) -> usize {
+		(f64::from_bits(self.value_bits.load(Ordering::Relaxed)).round() as usize).max(1)
+	}
+}
+
 #[derive(Debug, Clone)]
 struct MinimalPulledWorkflow {
 	workflow_id: Id,
 	workflow_name: String,
 	wake_deadline_ts: Option<i64>,
 	earliest_wake_condition_ts: i64,
+	/// Set to true if a worker has already acquired a lease for this workflow in a prior pull.
+	already_leased: bool,
 }
 
 fn update_metric(

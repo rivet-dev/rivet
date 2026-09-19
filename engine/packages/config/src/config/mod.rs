@@ -262,8 +262,10 @@ impl Root {
 			pg.nats = Some(nats);
 		}
 
+		self.guard().validate()?;
 		self.pegboard().validate()?;
 		self.features().validate()?;
+		self.runtime.validate()?;
 		self.sqlite().validate()?;
 
 		// A zero budget stalls whatever charges the axis outright rather than meaning "unlimited".

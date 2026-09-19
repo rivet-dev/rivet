@@ -752,14 +752,14 @@ pub(crate) mod moved_tests {
 	}
 
 	fn detached_cleanup_after_failed_run_factory(
-		destroy_count: Arc<AtomicUsize>,
+		cleanup_count: Arc<AtomicUsize>,
 		run_returned_tx: oneshot::Sender<()>,
 		cleanup_tx: oneshot::Sender<ShutdownKind>,
 	) -> Arc<ActorFactory> {
 		let run_returned_tx = Arc::new(Mutex::new(Some(run_returned_tx)));
 		let cleanup_tx = Arc::new(Mutex::new(Some(cleanup_tx)));
 		Arc::new(ActorFactory::new(ActorConfig::default(), move |start| {
-			let destroy_count = destroy_count.clone();
+			let cleanup_count = cleanup_count.clone();
 			let run_returned_tx = run_returned_tx.clone();
 			let cleanup_tx = cleanup_tx.clone();
 			Box::pin(async move {
@@ -771,9 +771,7 @@ pub(crate) mod moved_tests {
 								reply.send(Ok(Vec::new()));
 							}
 							ActorEvent::RunGracefulCleanup { reason, reply } => {
-								if matches!(reason, ShutdownKind::Destroy) {
-									destroy_count.fetch_add(1, Ordering::SeqCst);
-								}
+								cleanup_count.fetch_add(1, Ordering::SeqCst);
 								reply.send(Ok(()));
 								if let Some(tx) = cleanup_tx
 									.lock()
@@ -2518,6 +2516,14 @@ pub(crate) mod moved_tests {
 
 	#[tokio::test]
 	async fn failed_manual_startup_does_not_durably_mark_initialized() {
+		struct RuntimeDrop(Arc<AtomicBool>);
+
+		impl Drop for RuntimeDrop {
+			fn drop(&mut self) {
+				self.0.store(true, Ordering::SeqCst);
+			}
+		}
+
 		let kv = new_in_memory();
 		let ctx = new_with_kv(
 			"actor-manual-startup-fail",
@@ -2526,10 +2532,18 @@ pub(crate) mod moved_tests {
 			"local",
 			kv.clone(),
 		);
+		// Production envoy does not process actor-local messages until its startup
+		// callback returns. Keep this receiver idle to reproduce that ordering.
+		let (startup_envoy, mut startup_envoy_rx) = test_envoy_handle();
+		ctx.configure_envoy(startup_envoy, Some(1));
+		let runtime_dropped = Arc::new(AtomicBool::new(false));
+		let factory_runtime_dropped = runtime_dropped.clone();
 		let factory = Arc::new(ActorFactory::new_with_manual_startup_ready(
 			Default::default(),
 			move |mut start| {
+				let runtime_dropped = factory_runtime_dropped.clone();
 				Box::pin(async move {
+					let _runtime_drop = RuntimeDrop(runtime_dropped);
 					start.ctx.set_state_initial(vec![1, 2, 3]);
 					start
 						.startup_ready
@@ -2537,20 +2551,50 @@ pub(crate) mod moved_tests {
 						.expect("manual runtime should receive startup ready sender")
 						.send(Err(anyhow::anyhow!("onCreate failed")))
 						.expect("startup ready receiver should exist");
-					Err(anyhow::anyhow!("onCreate failed"))
+					std::future::pending::<anyhow::Result<()>>().await
 				})
 			},
 		));
 		let mut task = new_task_with_factory(ctx.clone(), factory);
 		let (start_tx, start_rx) = oneshot::channel();
 
-		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
-			.await;
+		timeout(
+			Duration::from_secs(1),
+			task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx }),
+		)
+		.await
+		.expect("failed startup cleanup must not wait for the envoy actor loop");
 		start_rx
 			.await
 			.expect("start reply should send")
 			.expect_err("start should fail");
+		assert!(
+			ctx.actor_aborted(),
+			"failed startup must revoke the actor context before replying"
+		);
+		assert!(
+			runtime_dropped.load(Ordering::SeqCst),
+			"failed startup must stop the runtime before replying"
+		);
+		let sqlite_error = ctx
+			.sql()
+			.execute("SELECT 1", None)
+			.await
+			.expect_err("failed startup must close SQLite before replying");
+		assert_eq!(
+			rivet_error::RivetError::extract(&sqlite_error).code(),
+			"transaction_closed"
+		);
+		assert!(task.run_handle.is_none());
+		assert_eq!(task.lifecycle, LifecycleState::Terminated);
 		assert!(maybe_load_persisted_actor(&ctx).await.is_none());
+		assert!(matches!(
+			startup_envoy_rx.try_recv(),
+			Ok(ToEnvoyMessage::SetAlarm {
+				ack_tx: Some(_),
+				..
+			})
+		));
 
 		let retry_ctx = new_with_kv(
 			"actor-manual-startup-fail",
@@ -4102,13 +4146,13 @@ pub(crate) mod moved_tests {
 			"local",
 			new_in_memory(),
 		);
-		let destroy_count = Arc::new(AtomicUsize::new(0));
+		let cleanup_count = Arc::new(AtomicUsize::new(0));
 		let (run_returned_tx, run_returned_rx) = oneshot::channel();
 		let (cleanup_tx, cleanup_rx) = oneshot::channel();
 		let mut task = new_task_with_factory(
 			ctx.clone(),
 			detached_cleanup_after_failed_run_factory(
-				destroy_count.clone(),
+				cleanup_count.clone(),
 				run_returned_tx,
 				cleanup_tx,
 			),
@@ -4130,16 +4174,22 @@ pub(crate) mod moved_tests {
 		assert!(task.handle_run_handle_outcome(outcome).is_none());
 		// The failed run must not terminate the generation locally: the
 		// errored stop request goes to the engine and the answering Stop
-		// command still drives the destroy grace hooks.
+		// command still drives the grace hooks.
 		assert_eq!(task.lifecycle, LifecycleState::Started);
+		// A crash reports a sleep intent, not a destroy, so the engine can
+		// resume the actor on a new generation.
 		assert!(
-			ctx.is_destroy_requested(),
+			ctx.sleep_requested(),
 			"failed run should request an errored stop"
+		);
+		assert!(
+			!ctx.is_destroy_requested(),
+			"a crash must not request a destroy"
 		);
 
 		let (stop_tx, stop_rx) = oneshot::channel();
 		task.handle_lifecycle(LifecycleCommand::Stop {
-			reason: ShutdownKind::Destroy,
+			reason: ShutdownKind::Sleep,
 			reply: stop_tx,
 		})
 		.await;
@@ -4148,9 +4198,9 @@ pub(crate) mod moved_tests {
 				.await
 				.expect("grace cleanup should run after Stop")
 				.expect("cleanup signal should send"),
-			ShutdownKind::Destroy
+			ShutdownKind::Sleep
 		);
-		assert_eq!(destroy_count.load(Ordering::SeqCst), 1);
+		assert_eq!(cleanup_count.load(Ordering::SeqCst), 1);
 
 		timeout(Duration::from_secs(2), async {
 			while ctx.core_dispatched_hook_count() != 0 {
@@ -4169,7 +4219,7 @@ pub(crate) mod moved_tests {
 		else {
 			panic!("grace should transition to shutdown");
 		};
-		assert_eq!(shutdown_reason, ShutdownKind::Destroy);
+		assert_eq!(shutdown_reason, ShutdownKind::Sleep);
 		let result = task.run_shutdown(shutdown_reason).await;
 		task.deliver_shutdown_reply(shutdown_reason, &result);
 		task.transition_to(LifecycleState::Terminated);

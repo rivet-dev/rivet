@@ -145,10 +145,40 @@ export const CLOUD_TABS: readonly CloudTabSpec[] = [
  */
 export const SKELETON_INSPECTOR_TABS: readonly InspectorTabDescriptor[] = [
 	{ id: "workflow", label: "Workflow", icon: "workflow" },
-	{ id: "database", label: "Database", icon: "database" },
 	{ id: "state", label: "State", icon: "state" },
+	{ id: "database", label: "Database", icon: "database" },
 	{ id: "queue", label: "Queue", icon: "queue" },
 	{ id: "schedules", label: "Schedules", icon: "calendar" },
 	{ id: "connections", label: "Connections", icon: "plug" },
 	{ id: "console", label: "Console", icon: "terminal" },
 ];
+
+const KNOWN_INSPECTOR_TAB_ORDER = new Map(
+	SKELETON_INSPECTOR_TABS.map((tab, index) => [tab.id, index]),
+);
+
+/**
+ * Orders tabs advertised by an actor's inspector bundle to match the
+ * dashboard's canonical order. The bundle is shipped with the runner, so older
+ * runners may advertise tabs in a different order (e.g. Database before
+ * State); the dashboard owns the strip and picks `displayedTabs[0]` as the
+ * default, so it also owns the order. Custom tabs the dashboard doesn't know
+ * keep their advertised order and follow the built-in ones.
+ */
+export function orderInspectorTabs<T extends { id: string }>(
+	tabs: readonly T[],
+): T[] {
+	return tabs
+		.map((tab, index) => ({ tab, index }))
+		.sort((a, b) => {
+			const aKnown = KNOWN_INSPECTOR_TAB_ORDER.get(a.tab.id);
+			const bKnown = KNOWN_INSPECTOR_TAB_ORDER.get(b.tab.id);
+			if (aKnown !== undefined && bKnown !== undefined) {
+				return aKnown - bKnown;
+			}
+			if (aKnown !== undefined) return -1;
+			if (bKnown !== undefined) return 1;
+			return a.index - b.index;
+		})
+		.map(({ tab }) => tab);
+}

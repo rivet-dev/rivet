@@ -26,6 +26,8 @@ struct ConfigData {
 	/// This is a sync lock because it is read from sync `&self` accessors. Every critical section
 	/// clones an `Arc` or swaps one in, so a guard is never held across an await.
 	dynamic: RwLock<Arc<config::Root>>,
+	/// Notifies long-lived workers when the dynamic config changes.
+	dynamic_tx: tokio::sync::watch::Sender<Arc<config::Root>>,
 	/// Build metadata for this process, stamped once at startup by the binary that has it.
 	///
 	/// This does not come from the config file or the environment. It lives here so that reading
@@ -104,11 +106,14 @@ impl Config {
 		build_meta: BuildMeta,
 		protocols: RuntimeProtocols,
 	) -> Self {
+		let shared = Arc::new(config.clone());
+		let (dynamic_tx, _) = tokio::sync::watch::channel(shared.clone());
 		Self(Arc::new(ConfigData {
-			dynamic: RwLock::new(Arc::new(config.clone())),
-			config,
+			dynamic: RwLock::new(shared),
+			dynamic_tx,
 			build_meta: Arc::new(build_meta),
 			protocols: RwLock::new(Arc::new(protocols)),
+			config,
 		}))
 	}
 
@@ -138,6 +143,11 @@ impl Config {
 		self.0.dynamic.read().clone()
 	}
 
+	/// Subscribes to dynamic config changes. The receiver always starts with the current config.
+	pub fn dynamic_watch(&self) -> tokio::sync::watch::Receiver<Arc<config::Root>> {
+		self.0.dynamic_tx.subscribe()
+	}
+
 	/// Applies a runtime config change to every handle sharing this config, and returns the
 	/// resulting config.
 	///
@@ -149,6 +159,12 @@ impl Config {
 		let mut guard = self.0.dynamic.write();
 		let mut dynamic = (**guard).clone();
 
+		if let Some(value) = update.max_storage_bytes {
+			dynamic
+				.sqlite
+				.get_or_insert_with(config::Sqlite::default)
+				.max_storage_bytes = value.or(base.sqlite().max_storage_bytes);
+		}
 		if let Some(value) = update.compaction_admission_percent {
 			dynamic
 				.sqlite
@@ -243,6 +259,50 @@ impl Config {
 				.compaction_reclaim_throttle_admit_soft_util =
 				value.or(base.sqlite().compaction_reclaim_throttle_admit_soft_util);
 		}
+		if let Some(value) = update.worker_poll_interval_ms {
+			dynamic.runtime.worker_poll_interval_ms =
+				value.or(base.runtime.worker_poll_interval_ms);
+		}
+		if let Some(value) = update.worker_max_deduped_workflows_per_pull {
+			dynamic.runtime.worker_max_deduped_workflows_per_pull =
+				value.or(base.runtime.worker_max_deduped_workflows_per_pull);
+		}
+		if let Some(value) = update.worker_max_workflows_per_pull {
+			dynamic.runtime.worker_max_workflows_per_pull =
+				value.or(base.runtime.worker_max_workflows_per_pull);
+		}
+		if let Some(value) = update.worker_max_wake_condition_clears_per_pull {
+			dynamic.runtime.worker_max_wake_condition_clears_per_pull =
+				value.or(base.runtime.worker_max_wake_condition_clears_per_pull);
+		}
+		if let Some(overrides) = &update.worker_max_wake_keys_per_workflow_name_per_pull {
+			let base = base
+				.runtime
+				.worker_max_wake_keys_per_workflow_name_per_pull
+				.as_ref();
+			let map = dynamic
+				.runtime
+				.worker_max_wake_keys_per_workflow_name_per_pull
+				.get_or_insert_with(Default::default);
+
+			for (workflow_name, max) in overrides {
+				match max {
+					Some(max) => {
+						map.insert(workflow_name.clone(), *max);
+					}
+					// Clearing one name reverts it to the value loaded at startup, which may be no
+					// entry at all.
+					None => match base.and_then(|base| base.get(workflow_name)) {
+						Some(base_max) => {
+							map.insert(workflow_name.clone(), *base_max);
+						}
+						None => {
+							map.remove(workflow_name);
+						}
+					},
+				}
+			}
+		}
 		if let Some(overrides) = &update.worker_max_concurrent_workflows {
 			let base = base.runtime.worker_max_concurrent_workflows.as_ref();
 			let map = dynamic
@@ -273,6 +333,7 @@ impl Config {
 
 		let dynamic = Arc::new(dynamic);
 		*guard = dynamic.clone();
+		self.0.dynamic_tx.send_replace(dynamic.clone());
 
 		Ok(dynamic)
 	}

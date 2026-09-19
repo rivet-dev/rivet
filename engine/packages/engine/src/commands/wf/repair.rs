@@ -59,8 +59,7 @@ pub async fn execute(
 	let manual = inspections
 		.iter()
 		.filter(|inspection| {
-			inspection.state == RepairState::Ready
-				&& inspection.variant.mode() == RepairMode::ManualOnly
+			inspection.state == RepairState::Ready && inspection.mode == RepairMode::ManualOnly
 		})
 		.collect::<Vec<_>>();
 	if !manual.is_empty() {
@@ -71,8 +70,7 @@ pub async fn execute(
 	let ready = inspections
 		.iter()
 		.filter(|inspection| {
-			inspection.state == RepairState::Ready
-				&& inspection.variant.mode() == RepairMode::Automatic
+			inspection.state == RepairState::Ready && inspection.mode == RepairMode::Automatic
 		})
 		.collect::<Vec<_>>();
 	let applied = inspections

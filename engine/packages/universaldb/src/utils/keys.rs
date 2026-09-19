@@ -164,4 +164,5 @@ define_keys! {
 	(136, ENVOY_CONN_ID, "envoy_conn_id"),
 	(137, ENGINE, "engine"),
 	(138, PROTOCOL, "protocol"),
+	(139, DEATH_TS, "death_ts"),
 }

@@ -1,11 +1,13 @@
-import { faGear, faPlus, Icon } from "@rivet-gg/icons";
+import { faGear, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Button, H1, ScrollArea, SmallText, WithTooltip } from "@/components";
 import { useEngineNamespaceDataProvider } from "@/components/actors";
 import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 import { VisibilitySensor } from "@/components/visibility-sensor";
+import { features } from "@/lib/features";
 import { ActorBuildCard, ActorGridCardSkeleton } from "./actors-grid";
+import { AddComponentButton, AddComponentCard } from "./add-component-card";
 
 // Engine (OSS / enterprise) namespace landing shown when no Actor name is
 // selected. This is the engine counterpart to the cloud `ActorsGrid`; keep the
@@ -43,15 +45,6 @@ export function EngineNamespaceLanding() {
 
 	const sorted = [...builds].sort((a, b) => a.id.localeCompare(b.id));
 
-	const openCreateActor = () =>
-		navigate({
-			to: ".",
-			search: (old) => ({
-				...(old as Record<string, unknown>),
-				modal: "create-actor",
-			}),
-		});
-
 	return (
 		<div className="flex flex-1 min-h-0 my-2 mr-2 overflow-hidden rounded-xl border border-foreground/10 bg-card">
 			<ScrollArea className="h-full w-full">
@@ -87,18 +80,8 @@ export function EngineNamespaceLanding() {
 					<section>
 						<header className="flex items-center justify-between gap-4 mb-3">
 							<h2 className="text-base font-semibold text-foreground">
-								Actors
+								Components
 							</h2>
-							{builds.length > 0 ? (
-								<Button
-									variant="outline"
-									size="sm"
-									startIcon={<Icon icon={faPlus} />}
-									onClick={openCreateActor}
-								>
-									Create Actor
-								</Button>
-							) : null}
 						</header>
 
 						{isLoading ? (
@@ -114,20 +97,14 @@ export function EngineNamespaceLanding() {
 							) : (
 								<div className="flex flex-col items-center gap-3 rounded-md border border-dashed bg-card/50 px-6 py-10 text-center">
 									<h3 className="text-base font-semibold text-foreground">
-										No actors yet
+										No components yet
 									</h3>
 									<SmallText className="text-muted-foreground max-w-md">
-										Deploy code that registers an actor to
-										see it here.
+										{features.services
+											? "Deploy code that registers an actor or add a service to see it here."
+											: "Deploy code that registers an actor to see it here."}
 									</SmallText>
-									<Button
-										variant="default"
-										size="sm"
-										startIcon={<Icon icon={faPlus} />}
-										onClick={openCreateActor}
-									>
-										Create Actor
-									</Button>
+									<AddComponentButton />
 								</div>
 							)
 						) : (
@@ -139,6 +116,7 @@ export function EngineNamespaceLanding() {
 											build={build}
 										/>
 									))}
+									<AddComponentCard />
 									{isFetchingNextPage
 										? Array.from({ length: 4 }).map(
 												(_, i) => (

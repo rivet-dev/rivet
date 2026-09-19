@@ -87,7 +87,7 @@ export function RunnerConfigsTable({
 					<TableRow>
 						<TableCell colSpan={6}>
 							<Text className="text-center">
-								There's no providers matching criteria.
+								No providers added yet.
 							</Text>
 						</TableCell>
 					</TableRow>

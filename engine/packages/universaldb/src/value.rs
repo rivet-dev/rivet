@@ -70,6 +70,7 @@ impl Value {
 pub struct Values {
 	values: Vec<KeyValue>,
 	more: bool,
+	last_db_key: Option<Vec<u8>>,
 }
 
 impl Values {
@@ -77,15 +78,29 @@ impl Values {
 		Values {
 			values,
 			more: false,
+			last_db_key: None,
 		}
 	}
 
-	pub fn with_more(values: Vec<KeyValue>, more: bool) -> Self {
-		Values { values, more }
+	/// One fetch of a chunked range scan. `last_db_key` is the last key the database itself returned,
+	/// which is what pagination has to advance from. It is not always the last key in `values`:
+	/// read-your-writes merging can append a pending write that sits past the end of this fetch, and a
+	/// pending clear can empty the fetch entirely. Advancing from the merged rows would skip the keys
+	/// in between in the first case and stop the scan early in the second.
+	pub fn chunk(values: Vec<KeyValue>, more: bool, last_db_key: Option<Vec<u8>>) -> Self {
+		Values {
+			values,
+			more,
+			last_db_key,
+		}
 	}
 
 	pub fn more(&self) -> bool {
 		self.more
+	}
+
+	pub fn last_db_key(&self) -> Option<&[u8]> {
+		self.last_db_key.as_deref()
 	}
 
 	pub fn into_vec(self) -> Vec<KeyValue> {

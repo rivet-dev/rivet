@@ -45,6 +45,8 @@ pub struct Database {
 
 impl Database {
 	pub fn new(driver: DatabaseDriverHandle) -> Self {
+		tokio::spawn(last_tx_age_heartbeat());
+
 		Database {
 			driver,
 			throttle: Arc::new(ThrottleState::new(None)),
@@ -236,5 +238,26 @@ impl Drop for ThrottleAttemptGuard {
 		if let Some(throttle) = self.tx.throttle() {
 			throttle.end_attempt(self.tx.read_bytes(), self.tx.throttled_write_bytes());
 		}
+	}
+}
+
+/// Pod-local heartbeat exposing seconds since the most recent successful UDB tx.
+/// All actors on this pod slowing down at once shows up here as a rising gauge,
+/// even if per-request outliers are too noisy to spot in aggregate.
+async fn last_tx_age_heartbeat() {
+	loop {
+		tokio::time::sleep(Duration::from_secs(1)).await;
+
+		let last_ms = metrics::LAST_TX_COMPLETED_EPOCH_MS.load(Ordering::Acquire);
+		if last_ms == 0 {
+			// No successful tx recorded yet; leave the gauge at its default.
+			continue;
+		}
+		let now_ms = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.map(|d| d.as_millis() as u64)
+			.unwrap_or(last_ms);
+		let age_s = now_ms.saturating_sub(last_ms) as f64 / 1000.0;
+		metrics::LAST_TX_COMPLETED_AGE_SECONDS.set(age_s);
 	}
 }

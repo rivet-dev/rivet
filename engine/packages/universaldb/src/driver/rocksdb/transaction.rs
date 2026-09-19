@@ -12,6 +12,7 @@ use rocksdb::OptimisticTransactionDB;
 use tokio::sync::{OnceCell, mpsc, oneshot};
 
 use crate::{
+	chunk,
 	driver::TransactionDriver,
 	key_selector::KeySelector,
 	options::{ConflictRangeType, MutationType},
@@ -188,6 +189,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 			let end_or_equal = opt.end.or_equal();
 			let end_offset = opt.end.offset();
 			let limit = opt.limit;
+			let target_bytes = opt.target_bytes;
 			let reverse = opt.reverse;
 
 			self.operations
@@ -205,6 +207,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 							end_or_equal,
 							end_offset,
 							limit,
+							target_bytes,
 							reverse,
 							response: response_tx,
 						})
@@ -224,20 +227,9 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		opt: RangeOption<'a>,
 		isolation_level: IsolationLevel,
 	) -> crate::value::Stream<'a, Value> {
-		use futures_util::{StreamExt, stream};
-
-		// Convert the range result into a stream
-		let fut = async move {
-			match self.get_range(&opt, 1, isolation_level).await {
-				Ok(values) => values
-					.into_iter()
-					.map(|kv| Ok(Value::from_keyvalue(kv)))
-					.collect::<Vec<_>>(),
-				Err(e) => vec![Err(e)],
-			}
-		};
-
-		Box::pin(stream::once(fut).flat_map(stream::iter))
+		chunk::stream_range(opt, move |chunk_opt, iteration| async move {
+			self.get_range(&chunk_opt, iteration, isolation_level).await
+		})
 	}
 
 	fn set(&self, key: &[u8], value: &[u8]) {

@@ -11,10 +11,10 @@ import type {
 	SynchronousTransactionAccess,
 } from "./config";
 import {
+	createSynchronousTransactions,
 	isManualTransactionControl,
 	isSqliteBindingObject,
 	MIGRATION_TRANSACTION_TIMEOUT_MS,
-	runSqliteTransactionSync,
 	toSqliteBindings,
 	validateTransactionName,
 	validateTransactionTimeout,
@@ -101,20 +101,11 @@ export function db({
 			const db = await nativeDatabaseProvider.open(ctx.actorId);
 			let closed = false;
 			let manualTransactionWarned = false;
-			let synchronousTransactionActive = false;
+			const synchronousTransactions = createSynchronousTransactions(db);
 			const ensureOpen = () => {
 				if (closed) {
 					throw new Error(
 						"Database is closed. This usually means a background timer (setInterval, setTimeout) or a stray promise is still running after the actor stopped. Use c.abortSignal to clean up timers before the actor shuts down.",
-					);
-				}
-			};
-			const ensureSynchronousTransactionClient = (
-				transactionScoped: boolean,
-			) => {
-				if (!transactionScoped && synchronousTransactionActive) {
-					throw new Error(
-						"Use the transaction callback's tx value for queries inside db.transactionSync().",
 					);
 				}
 			};
@@ -135,7 +126,7 @@ export function db({
 						...args: unknown[]
 					): Promise<TRow[]> => {
 						ensureOpen();
-						ensureSynchronousTransactionClient(transactionScoped);
+						synchronousTransactions.ensureClient(transactionScoped);
 						if (
 							!transactionScoped &&
 							warnOnManualTransactions &&
@@ -212,7 +203,7 @@ export function db({
 						...args: unknown[]
 					): TRow[] => {
 						ensureOpen();
-						ensureSynchronousTransactionClient(transactionScoped);
+						synchronousTransactions.ensureClient(transactionScoped);
 						if (!target.executeSync) {
 							throw new Error(
 								"Synchronous SQLite queries are only available in the Node.js native runtime.",
@@ -286,7 +277,7 @@ export function db({
 						options?: SqliteTransactionOptions,
 					): Promise<T> => {
 						ensureOpen();
-						ensureSynchronousTransactionClient(transactionScoped);
+						synchronousTransactions.ensureClient(transactionScoped);
 						validateTransactionTimeout(options?.timeout);
 						validateTransactionName(options?.name);
 						if (
@@ -352,38 +343,22 @@ export function db({
 						>,
 					): T => {
 						ensureOpen();
-						if (transactionScoped || synchronousTransactionActive) {
-							throw new Error(
-								"Nested synchronous SQLite transactions are not supported.",
-							);
-						}
-						synchronousTransactionActive = true;
-						try {
-							return runSqliteTransactionSync(
-								db,
-								(transaction) => {
-									const transactionClient = createClient(
-										transaction,
-										true,
-									);
-									const tx: SynchronousTransactionAccess = {
-										executeSync:
-											transactionClient.executeSync,
-									};
-									return callback(tx);
-								},
-								options,
-							);
-						} finally {
-							synchronousTransactionActive = false;
-						}
+						return synchronousTransactions.run(
+							transactionScoped,
+							(transaction) => {
+								const transactionClient = createClient(
+									transaction,
+									true,
+								);
+								return callback({
+									executeSync: transactionClient.executeSync,
+								});
+							},
+							options,
+						);
 					},
 					close: async () => {
-						if (synchronousTransactionActive) {
-							throw new Error(
-								"Cannot close the database inside db.transactionSync().",
-							);
-						}
+						synchronousTransactions.ensureCanClose();
 						if (!closed) {
 							closed = true;
 							await db.close();

@@ -30,16 +30,17 @@ import {
 	WithTooltip,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
-import { RouteLayout } from "./route-layout";
+import { VisibilitySensor } from "@/components/visibility-sensor";
 import { authClient } from "@/lib/auth";
+import { features } from "@/lib/features";
 import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import {
 	getRecentTimestamp,
 	RECENT_PROJECTS_KEY,
 } from "@/lib/recently-visited";
-import { VisibilitySensor } from "@/components/visibility-sensor";
 import { queryClient } from "@/queries/global";
-import { LazyBillingPlanBadge } from "./billing/billing-plan-badge";
+import { LazyBillingPlanBadge, PlanBadge } from "./billing/billing-plan-badge";
+import { RouteLayout } from "./route-layout";
 
 export function OrgLanding({ organization }: { organization: string }) {
 	const navigate = useNavigate();
@@ -51,6 +52,15 @@ export function OrgLanding({ organization }: { organization: string }) {
 		fetchNextPage,
 		isFetchingNextPage,
 	} = useInfiniteQuery(dataProvider.currentOrgProjectsQueryOptions());
+	const {
+		data: clusters = [],
+		hasNextPage: hasNextClustersPage,
+		fetchNextPage: fetchNextClustersPage,
+		isFetchingNextPage: isFetchingNextClustersPage,
+	} = useInfiniteQuery({
+		...dataProvider.currentOrgClustersQueryOptions(),
+		enabled: features.byoc,
+	});
 	const { data: org } = authClient.useActiveOrganization();
 	const { data: session } = authClient.useSession();
 
@@ -115,7 +125,7 @@ export function OrgLanding({ organization }: { organization: string }) {
 							<h2 className="text-base font-semibold text-foreground">
 								Projects
 							</h2>
-							{sorted.length > 0 ? (
+							{sorted.length > 0 || clusters.length > 0 ? (
 								<Button
 									variant="outline"
 									size="sm"
@@ -139,7 +149,9 @@ export function OrgLanding({ organization }: { organization: string }) {
 							) : null}
 						</header>
 
-						{!isLoading && sorted.length === 0 ? (
+						{!isLoading &&
+						sorted.length === 0 &&
+						clusters.length === 0 ? (
 							<div className="flex flex-col items-center gap-3 rounded-md border border-dashed bg-card/50 px-6 py-10 text-center">
 								<H1 className="text-base">No projects yet</H1>
 								<SmallText className="text-muted-foreground max-w-md">
@@ -236,10 +248,56 @@ export function OrgLanding({ organization }: { organization: string }) {
 											</button>
 										</div>
 									))}
+									{clusters.map((cluster) => (
+										<Link
+											key={cluster.id}
+											to="/orgs/$organization/clusters/$cluster"
+											params={{
+												organization,
+												cluster: cluster.name,
+											}}
+											className={cn(
+												"group relative flex min-h-[130px] flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-all duration-150",
+												"hover:border-foreground/25 hover:bg-foreground/[0.06] hover:shadow-sm hover:-translate-y-0.5",
+												"active:translate-y-0 active:shadow-none",
+												"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+												"cursor-pointer",
+											)}
+										>
+											<div className="font-medium text-sm leading-tight truncate pr-14 w-full">
+												{cluster.name}
+											</div>
+											<SmallText className="text-muted-foreground text-xs leading-tight font-mono-console truncate w-full">
+												{cluster.id.split("-")[0]}
+											</SmallText>
+											{cluster.createdAt ? (
+												<SmallText className="text-muted-foreground text-[11px] mt-auto pt-1">
+													Created{" "}
+													<RelativeTime
+														time={
+															new Date(
+																cluster.createdAt,
+															)
+														}
+													/>
+												</SmallText>
+											) : null}
+											<PlanBadge
+												plan="byoc"
+												className="absolute top-3 right-3 min-w-12"
+											/>
+										</Link>
+									))}
 								</div>
 								{hasNextPage && !isFetchingNextPage ? (
 									<VisibilitySensor
 										onChange={() => fetchNextPage()}
+									/>
+								) : null}
+								{hasNextClustersPage &&
+								!isFetchingNextClustersPage ? (
+									<VisibilitySensor
+										onChange={() => fetchNextClustersPage()}
 									/>
 								) : null}
 							</>

@@ -152,6 +152,7 @@ impl PegboardGateway3 {
 			mut msg_rx,
 			mut drop_rx,
 			http_response_abort_rx: _,
+			created,
 			handle: in_flight_req,
 		} = self
 			.shared_state
@@ -170,10 +171,15 @@ impl PegboardGateway3 {
 			)
 			.await?;
 
+		// Guard keeps `after_hibernation` set for the rest of the connection, so a retry that
+		// happens after a hibernation can land here once the in flight entry is already gone. The
+		// envoy has no record of the request in that case, so the websocket has to be opened again.
+		let resumed_from_hibernation = after_hibernation && !created;
+
 		let res = async {
 			// Envoy restores and rebinds a hibernating websocket before sending the open
 			// acknowledgment. Do not resume client forwarding until that acknowledgment arrives.
-			if !after_hibernation {
+			if !resumed_from_hibernation {
 				// Send WebSocket open message
 				let open_message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(
 					protocol::ToEnvoyWebSocketOpen {
@@ -625,7 +631,7 @@ impl PegboardGateway3 {
 				);
 
 				if let Err(err) = in_flight_req.send_message(close_message, true).await {
-					tracing::error!(?err, "error sending close message");
+					tracing::warn!(?err, "error sending close message");
 				} else {
 					metrics::CLOSE_SENT_TOTAL
 						.with_label_values(&[
@@ -746,6 +752,7 @@ impl CustomServeTrait for PegboardGateway3 {
 			msg_rx,
 			drop_rx,
 			http_response_abort_rx: _,
+			created: _,
 			handle: in_flight_req,
 		} = self
 			.shared_state

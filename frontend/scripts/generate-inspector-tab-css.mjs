@@ -64,14 +64,12 @@ function main() {
 		}
 	}
 
-	// theme.css starts with its own font @import. We strip it because we
-	// emit our own font @import in the header (@import must come first in
-	// the output stylesheet, before any other rules). A naive regex on
-	// "@import...;" would terminate at the first semicolon inside the URL
-	// (the Google Fonts URL contains `;`-separated weight params), so we
-	// drop the entire first line instead.
+	// theme.css imports self-hosted font packages, which only a bundler can
+	// resolve. This stylesheet is included directly by third-party pages, so
+	// those imports are dropped and the header emits a plain CDN @import
+	// instead. @import must precede every other rule in the output.
 	const themeCss = readFileSync(THEME_CSS_PATH, "utf8")
-		.replace(/^@import\s+url\([^)]*\)\s*;\s*\n?/, "");
+		.replace(/^(?:\s*(?:\/\*[\s\S]*?\*\/|@import[^;]*;)\s*)+/, "");
 	const aliasesCss = readFileSync(ALIASES_CSS_PATH, "utf8");
 
 	const stylesheet = [

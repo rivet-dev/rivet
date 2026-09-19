@@ -14,10 +14,10 @@ import type {
 	SynchronousTransactionAccess,
 } from "@/common/database/config";
 import {
+	createSynchronousTransactions,
 	isManualTransactionControl,
 	isSqliteBindingObject,
 	MIGRATION_TRANSACTION_TIMEOUT_MS,
-	runSqliteTransactionSync,
 	toSqliteBindings,
 	validateTransactionName,
 	validateTransactionTimeout,
@@ -117,20 +117,12 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 			const nativeDb = await nativeDatabaseProvider.open(ctx.actorId);
 			let closed = false;
 			let manualTransactionWarned = false;
-			let synchronousTransactionActive = false;
+			const synchronousTransactions =
+				createSynchronousTransactions(nativeDb);
 			const ensureOpen = () => {
 				if (closed) {
 					throw new Error(
 						"Database is closed. This usually means a background timer (setInterval, setTimeout) or a stray promise is still running after the actor stopped. Use c.abortSignal to clean up timers before the actor shuts down.",
-					);
-				}
-			};
-			const ensureSynchronousTransactionClient = (
-				transactionScoped: boolean,
-			) => {
-				if (!transactionScoped && synchronousTransactionActive) {
-					throw new Error(
-						"Use the transaction callback's tx value for queries inside db.transactionSync().",
 					);
 				}
 			};
@@ -145,7 +137,7 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 					method: "run" | "all" | "values" | "get",
 				) => {
 					ensureOpen();
-					ensureSynchronousTransactionClient(transactionScoped);
+					synchronousTransactions.ensureClient(transactionScoped);
 					warnForManualTransaction(query, transactionScoped);
 
 					const start = performance.now();
@@ -200,7 +192,7 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 					query: string,
 					...args: unknown[]
 				): Promise<TRow[]> => {
-					ensureSynchronousTransactionClient(transactionScoped);
+					synchronousTransactions.ensureClient(transactionScoped);
 					return await executeRaw<TRow>(
 						target,
 						ctx,
@@ -220,7 +212,7 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 					query: string,
 					...args: unknown[]
 				): TRow[] => {
-					ensureSynchronousTransactionClient(transactionScoped);
+					synchronousTransactions.ensureClient(transactionScoped);
 					return executeRawSync<TRow>(
 						target,
 						ctx,
@@ -238,7 +230,7 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 					options?: SqliteTransactionOptions,
 				): Promise<T> => {
 					ensureOpen();
-					ensureSynchronousTransactionClient(transactionScoped);
+					synchronousTransactions.ensureClient(transactionScoped);
 					validateTransactionTimeout(options?.timeout);
 					validateTransactionName(options?.name);
 					const transaction = await nativeDb.beginTransaction(
@@ -266,37 +258,22 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 					options?: Omit<SqliteTransactionOptions, "experimental">,
 				): T => {
 					ensureOpen();
-					if (transactionScoped || synchronousTransactionActive) {
-						throw new Error(
-							"Nested synchronous SQLite transactions are not supported.",
-						);
-					}
-					synchronousTransactionActive = true;
-					try {
-						return runSqliteTransactionSync(
-							nativeDb,
-							(transaction) => {
-								const transactionClient = createDrizzleClient(
-									transaction,
-									true,
-								);
-								const tx: SynchronousTransactionAccess = {
-									executeSync: transactionClient.executeSync,
-								};
-								return transactionCallback(tx);
-							},
-							options,
-						);
-					} finally {
-						synchronousTransactionActive = false;
-					}
+					return synchronousTransactions.run(
+						transactionScoped,
+						(transaction) => {
+							const transactionClient = createDrizzleClient(
+								transaction,
+								true,
+							);
+							return transactionCallback({
+								executeSync: transactionClient.executeSync,
+							});
+						},
+						options,
+					);
 				};
 				drizzleDb.close = async () => {
-					if (synchronousTransactionActive) {
-						throw new Error(
-							"Cannot close the database inside db.transactionSync().",
-						);
-					}
+					synchronousTransactions.ensureCanClose();
 					if (!closed) {
 						closed = true;
 						await nativeDb.close();

@@ -13,7 +13,7 @@ use anyhow::{Context, Result, anyhow};
 use crossbeam_channel::{Receiver, Sender, TrySendError};
 use libsqlite3_sys::{SQLITE_OPEN_CREATE, SQLITE_OPEN_READWRITE, sqlite3_get_autocommit};
 use parking_lot::Mutex;
-use tokio::sync::{Notify, oneshot};
+use tokio::sync::{Notify, oneshot, watch};
 
 use crate::{
 	query::{
@@ -53,6 +53,7 @@ struct SqliteWorkerInner {
 	state: AtomicU8,
 	closed: Notify,
 	join: Mutex<Option<JoinHandle<()>>>,
+	join_completed: watch::Sender<Option<std::result::Result<(), String>>>,
 	ready: Mutex<Option<oneshot::Receiver<Result<()>>>>,
 }
 
@@ -134,11 +135,13 @@ impl SqliteWorkerHandle {
 		let (sql_tx, sql_rx) = crossbeam_channel::bounded(SQLITE_WORKER_QUEUE_CAPACITY);
 		let (close_tx, close_rx) = crossbeam_channel::bounded(1);
 		let (ready_tx, ready_rx) = oneshot::channel();
+		let (join_completed, _) = watch::channel(None);
 		let inner = Arc::new(SqliteWorkerInner {
 			metrics,
 			state: AtomicU8::new(STATE_RUNNING),
 			closed: Notify::new(),
 			join: Mutex::new(None),
+			join_completed,
 			ready: Mutex::new(Some(ready_rx)),
 		});
 
@@ -241,6 +244,17 @@ impl SqliteWorkerHandle {
 	}
 
 	pub async fn close(&self) -> Result<()> {
+		self.close_with_timeout(Some(SQLITE_WORKER_CLOSE_TIMEOUT))
+			.await
+	}
+
+	/// Closes the worker and joins its thread without a timeout.
+	/// Any returned error is reported only after the worker thread has terminated.
+	pub async fn close_and_wait(&self) -> Result<()> {
+		self.close_with_timeout(None).await
+	}
+
+	async fn close_with_timeout(&self, close_timeout: Option<Duration>) -> Result<()> {
 		let start = Instant::now();
 		if self.inner.mark_closing() {
 			// Close is a control path, not SQL work, so it must bypass the bounded
@@ -260,24 +274,44 @@ impl SqliteWorkerHandle {
 			}
 		};
 
-		match tokio::time::timeout(SQLITE_WORKER_CLOSE_TIMEOUT, wait_closed).await {
-			Ok(result) => result?,
-			Err(_) => {
+		let wait_result = if let Some(close_timeout) = close_timeout {
+			match tokio::time::timeout(close_timeout, wait_closed).await {
+				Ok(result) => result,
+				Err(_) => {
+					if let Some(metrics) = &self.inner.metrics {
+						metrics.record_worker_close_timeout();
+					}
+					// The worker thread still owns the SQLite connection and VFS handle.
+					// Reporting timeout here must not drop or unregister the VFS while
+					// SQLite may still be inside a synchronous VFS callback.
+					self.start_worker_join(start, true);
+					return Err(SqliteWorkerCloseTimeoutError.into());
+				}
+			}
+		} else {
+			tokio::pin!(wait_closed);
+			tokio::select! {
+				result = &mut wait_closed => result,
+				_ = tokio::time::sleep(SQLITE_WORKER_CLOSE_TIMEOUT) => {
 				if let Some(metrics) = &self.inner.metrics {
 					metrics.record_worker_close_timeout();
 				}
-				// The worker thread still owns the SQLite connection and VFS handle.
-				// Reporting timeout here must not drop or unregister the VFS while
-				// SQLite may still be inside a synchronous VFS callback.
-				self.join_worker_in_background(start);
-				return Err(SqliteWorkerCloseTimeoutError.into());
+				tracing::warn!(
+					duration_ms = start.elapsed().as_millis() as u64,
+					"waiting for SQLite worker to finish strict close",
+				);
+				self.start_worker_join(start, true);
+				wait_closed.await
 			}
-		}
-		if let Some(metrics) = &self.inner.metrics {
-			metrics.observe_worker_close_duration(start.elapsed().as_nanos() as u64);
-		}
+			}
+		};
+		let join_result = self.join_worker(start).await;
 
-		self.join_worker().await
+		match (wait_result, join_result) {
+			(_, Err(error)) => Err(error),
+			(Err(error), Ok(())) => Err(error),
+			(Ok(()), Ok(())) => Ok(()),
+		}
 	}
 
 	pub async fn wait_for_failure(&self) -> bool {
@@ -345,47 +379,48 @@ impl SqliteWorkerHandle {
 		assert!(self.wait_for_failure().await);
 	}
 
-	async fn join_worker(&self) -> Result<()> {
-		let join = self.inner.join.lock().take();
-		let Some(join) = join else {
-			return Ok(());
-		};
-		tokio::task::spawn_blocking(move || {
-			join.join()
-				.map_err(|panic| anyhow!("sqlite worker panicked: {}", panic_message(&panic)))
-		})
-		.await
-		.context("join sqlite worker join task")?
+	async fn join_worker(&self, start: Instant) -> Result<()> {
+		let mut completed = self.inner.join_completed.subscribe();
+		self.start_worker_join(start, false);
+		loop {
+			if let Some(result) = completed.borrow().clone() {
+				return result.map_err(anyhow::Error::msg);
+			}
+			completed
+				.changed()
+				.await
+				.context("sqlite worker join result channel closed")?;
+		}
 	}
 
-	fn join_worker_in_background(&self, start: Instant) {
-		let join = self.inner.join.lock().take();
-		let Some(join) = join else {
+	fn start_worker_join(&self, start: Instant, finished_after_timeout: bool) {
+		let Some(join) = self.inner.join.lock().take() else {
 			return;
 		};
 
-		let metrics = self.inner.metrics.clone();
-		let _ = tokio::task::spawn_blocking(move || {
-			let result = join.join();
+		let inner = Arc::clone(&self.inner);
+		drop(tokio::task::spawn_blocking(move || {
+			let result = join
+				.join()
+				.map_err(|panic| format!("sqlite worker panicked: {}", panic_message(&panic)));
+			let join_error = result.as_ref().err().cloned();
 			let duration_ns = start.elapsed().as_nanos() as u64;
-
-			if let Some(metrics) = &metrics {
+			if let Some(metrics) = &inner.metrics {
 				metrics.observe_worker_close_duration(duration_ns);
 			}
-
-			match result {
-				Ok(()) => {
-					tracing::warn!(duration_ns, "sqlite worker finished after close timeout");
-				}
-				Err(panic) => {
+			if finished_after_timeout {
+				if let Some(message) = join_error {
 					tracing::error!(
 						duration_ns,
-						message = panic_message(&panic),
+						%message,
 						"sqlite worker finished after close timeout with panic",
 					);
+				} else {
+					tracing::warn!(duration_ns, "sqlite worker finished after close timeout");
 				}
 			}
-		});
+			inner.join_completed.send_replace(Some(result));
+		}));
 	}
 }
 

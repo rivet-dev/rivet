@@ -111,22 +111,25 @@ pub async fn open_database(
 	target: &ExportTarget,
 ) -> Result<depot_client::database::NativeDatabaseHandle> {
 	let udb = pools.udb()?;
-	let db = Arc::new(if pools.config().sqlite().unstable_disable_compaction() {
-		Db::new(
-			Arc::new((*udb).clone()),
-			target.bucket_id,
-			target.database_id.clone(),
-			pools.node_id(),
-		)
-	} else {
-		Db::new_with_compaction_signaler(
-			Arc::new((*udb).clone()),
-			target.bucket_id,
-			target.database_id.clone(),
-			pools.node_id(),
-			compaction_signaler(ctx, target.database_id.clone()),
-		)
-	});
+	let db = Arc::new(
+		if pools.config().sqlite().unstable_disable_compaction() {
+			Db::new(
+				Arc::new((*udb).clone()),
+				target.bucket_id,
+				target.database_id.clone(),
+				pools.node_id(),
+			)
+		} else {
+			Db::new_with_compaction_signaler(
+				Arc::new((*udb).clone()),
+				target.bucket_id,
+				target.database_id.clone(),
+				pools.node_id(),
+				compaction_signaler(ctx, target.database_id.clone()),
+			)
+		}
+		.with_config(pools.config().clone()),
+	);
 	depot_client_embedded::open_database_from_embedded_depot(
 		db,
 		target.database_id.clone(),

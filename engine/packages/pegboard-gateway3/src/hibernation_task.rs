@@ -87,7 +87,7 @@ pub async fn task(
 						_ => {}
 					}
 				} else {
-					tracing::warn!("tunnel sub closed");
+					tracing::debug!("tunnel sub closed");
 					return Err(WebSocketTunnelSubscriptionClosed {
 						phase: "hibernating_websocket".to_owned(),
 					}
@@ -95,7 +95,7 @@ pub async fn task(
 				}
 			}
 			_ = drop_rx.changed() => {
-				tracing::warn!(reason=?drop_rx.borrow().as_ref(), "garbage collected");
+				tracing::debug!(reason=?drop_rx.borrow().as_ref(), "garbage collected");
 				return Err(WebSocketGarbageCollected {
 					phase: "hibernating_websocket".to_owned(),
 					reason: format!("{:?}", drop_rx.borrow().as_ref()),
@@ -127,7 +127,7 @@ pub async fn task(
 	}
 }
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(level = "debug", skip_all)]
 async fn peek_ws_during_hibernation(
 	ws_rx: &mut Pin<&mut WebSocketReceiver>,
 ) -> Result<HibernationLifecycleResult> {

@@ -8,7 +8,10 @@ mod moved_tests {
 	use std::collections::BTreeMap;
 	use std::panic::{AssertUnwindSafe, catch_unwind};
 	#[cfg(feature = "sqlite-local")]
-	use std::sync::Arc;
+	use std::sync::{
+		Arc,
+		atomic::{AtomicBool, Ordering},
+	};
 	use std::time::Duration;
 
 	use rivet_metrics::prometheus::{IntGauge, Opts, Registry};
@@ -24,6 +27,9 @@ mod moved_tests {
 	#[derive(Default)]
 	struct InMemorySqliteTransport {
 		state: parking_lot::Mutex<InMemorySqliteState>,
+		block_next_commit: AtomicBool,
+		commit_blocked: tokio::sync::Notify,
+		resume_commit: tokio::sync::Notify,
 	}
 
 	#[cfg(feature = "sqlite-local")]
@@ -31,6 +37,21 @@ mod moved_tests {
 	struct InMemorySqliteState {
 		pages: BTreeMap<u32, Vec<u8>>,
 		head_txid: u64,
+	}
+
+	#[cfg(feature = "sqlite-local")]
+	impl InMemorySqliteTransport {
+		fn block_next_commit(&self) {
+			self.block_next_commit.store(true, Ordering::Release);
+		}
+
+		async fn wait_for_blocked_commit(&self) {
+			self.commit_blocked.notified().await;
+		}
+
+		fn resume_blocked_commit(&self) {
+			self.resume_commit.notify_one();
+		}
 	}
 
 	#[cfg(feature = "sqlite-local")]
@@ -62,6 +83,10 @@ mod moved_tests {
 			&self,
 			request: rivet_envoy_client::protocol::SqliteCommitRequest,
 		) -> anyhow::Result<rivet_envoy_client::protocol::SqliteCommitResponse> {
+			if self.block_next_commit.swap(false, Ordering::AcqRel) {
+				self.commit_blocked.notify_one();
+				self.resume_commit.notified().await;
+			}
 			let mut state = self.state.lock();
 			for page in request.dirty_pages {
 				state.pages.insert(page.pgno, page.bytes);
@@ -77,27 +102,25 @@ mod moved_tests {
 			)
 		}
 
-		// This metrics fixture uses small, single-request commits. Fail explicitly
-		// if a future test grows enough to require the staged-commit protocol.
 		async fn commit_stage_begin(
 			&self,
 			_request: rivet_envoy_client::protocol::SqliteCommitStageBeginRequest,
 		) -> anyhow::Result<rivet_envoy_client::protocol::SqliteCommitStageBeginResponse> {
-			anyhow::bail!("metrics fixture does not support staged commits")
+			anyhow::bail!("in-memory SQLite transport does not support staged commits")
 		}
 
 		async fn commit_stage_segment(
 			&self,
 			_request: rivet_envoy_client::protocol::SqliteCommitStageSegmentRequest,
 		) -> anyhow::Result<rivet_envoy_client::protocol::SqliteCommitStageSegmentResponse> {
-			anyhow::bail!("metrics fixture does not support staged commits")
+			anyhow::bail!("in-memory SQLite transport does not support staged commits")
 		}
 
 		async fn commit_finalize(
 			&self,
 			_request: rivet_envoy_client::protocol::SqliteCommitFinalizeRequest,
 		) -> anyhow::Result<rivet_envoy_client::protocol::SqliteCommitFinalizeResponse> {
-			anyhow::bail!("metrics fixture does not support staged commits")
+			anyhow::bail!("in-memory SQLite transport does not support staged commits")
 		}
 	}
 
@@ -583,6 +606,7 @@ mod moved_tests {
 		)
 		.await
 		.expect("native database should open");
+		let worker_db = native_db.clone();
 		let db = crate::SqliteDb::from_native_database_for_test(
 			actor_id,
 			1,
@@ -645,9 +669,39 @@ mod moved_tests {
 			.commit()
 			.await
 			.expect("transaction should commit");
+
+		transport.block_next_commit();
+		let operation = tokio::spawn(async move {
+			worker_db
+				.exec("CREATE TABLE blocked (id INTEGER PRIMARY KEY)".to_owned())
+				.await
+		});
+		transport.wait_for_blocked_commit().await;
 		db.close()
 			.await
-			.expect("first native database should close");
+			.expect_err("bounded close should time out while the worker is blocked");
+		let strict_db = db.clone();
+		let mut strict_close = tokio::spawn(async move { strict_db.close_and_wait().await });
+		assert!(
+			tokio::time::timeout(Duration::from_millis(100), &mut strict_close)
+				.await
+				.is_err(),
+			"strict close returned before the blocked native worker terminated"
+		);
+
+		transport.resume_blocked_commit();
+		operation
+			.await
+			.expect("blocked operation task should join")
+			.expect("blocked operation should finish");
+		strict_close
+			.await
+			.expect("strict close task should join")
+			.expect("strict close should join the native worker");
+		assert!(
+			db.metrics().is_none(),
+			"strict close should release its handle"
+		);
 
 		let reopened_native_db = depot_client::database::open_database_from_transport(
 			transport,

@@ -28,12 +28,28 @@ pub struct InvalidResponseBody {
 	"guard",
 	"rate_limit",
 	"Too many requests. Try again later.",
-	"Too many requests to '{method} {path}' from IP {ip}."
+	"Too many requests to '{method} {path}' from IP {ip}; limit is {requests} requests per {period_ms} ms."
 )]
 pub struct RateLimit {
 	pub method: String,
 	pub path: String,
 	pub ip: String,
+	pub requests: u64,
+	pub period_ms: u64,
+}
+
+#[derive(RivetError, Serialize, Deserialize)]
+#[error(
+	"guard",
+	"max_in_flight",
+	"Too many concurrent requests. Try again later.",
+	"Too many concurrent requests to '{method} {path}' from IP {ip}; limit is {max_in_flight}."
+)]
+pub struct MaxInFlight {
+	pub method: String,
+	pub path: String,
+	pub ip: String,
+	pub max_in_flight: usize,
 }
 
 #[derive(RivetError, Serialize, Deserialize)]

@@ -75,9 +75,13 @@ interface TabRegistration {
 	render: (actorId: ActorId) => ReactNode;
 }
 
-// Tab list — preserved order matches the dashboard tab strip. Adding a new
-// inspector tab here automatically advertises it to the dashboard (in the
-// iframe path) and renders it inline (in the legacy path).
+// Tab list — preserved order matches the dashboard tab strip, and the first
+// available tab is the default the dashboard opens. State sits before
+// Database on purpose: every actor has a SQLite database (so Database would
+// otherwise always win), but the state object is what the actor's code
+// actually defines. Adding a new inspector tab here automatically advertises
+// it to the dashboard (in the iframe path) and renders it inline (in the
+// legacy path).
 export const INSPECTOR_TAB_REGISTRATIONS: readonly TabRegistration[] = [
 	{
 		descriptor: { id: "workflow", label: "Workflow", icon: "workflow" },
@@ -85,14 +89,14 @@ export const INSPECTOR_TAB_REGISTRATIONS: readonly TabRegistration[] = [
 		render: (actorId) => <ActorWorkflowTab actorId={actorId} />,
 	},
 	{
-		descriptor: { id: "database", label: "Database", icon: "database" },
-		available: (caps) => caps.isDatabaseEnabled,
-		render: (actorId) => <ActorDatabaseTab actorId={actorId} />,
-	},
-	{
 		descriptor: { id: "state", label: "State", icon: "state" },
 		available: (caps) => caps.isStateEnabled,
 		render: (actorId) => <ActorStateTab actorId={actorId} />,
+	},
+	{
+		descriptor: { id: "database", label: "Database", icon: "database" },
+		available: (caps) => caps.isDatabaseEnabled,
+		render: (actorId) => <ActorDatabaseTab actorId={actorId} />,
 	},
 	{
 		descriptor: { id: "queue", label: "Queue", icon: "queue" },

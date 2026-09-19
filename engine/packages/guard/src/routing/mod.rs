@@ -126,7 +126,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 
 		Box::pin(
 			async move {
-				tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path(), "Routing request");
+				tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path_for_logs(), "Routing request");
 
 				if ws_health::matches_path(req_ctx.path()) {
 					if ctx.config().guard().enable_websocket_health_route() {
@@ -291,7 +291,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 
 				metrics::ROUTE_TOTAL.with_label_values(&["none"]).inc();
 
-				tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path(), "No route found");
+				tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path_for_logs(), "No route found");
 				Err(errors::NoRoute {
 					host: req_ctx.hostname().to_string(),
 					path: req_ctx.path().to_string(),

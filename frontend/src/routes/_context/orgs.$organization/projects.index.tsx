@@ -1,6 +1,7 @@
 import { faChevronRight, faPlus, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { PlanBadge } from "@/app/billing/billing-plan-badge";
 import { RouteError } from "@/app/route-error";
 import { RouteLayout } from "@/app/route-layout";
 import {
@@ -12,6 +13,7 @@ import {
 	Skeleton,
 } from "@/components";
 import { VisibilitySensor } from "@/components/visibility-sensor";
+import { features } from "@/lib/features";
 
 export const Route = createFileRoute("/_context/orgs/$organization/projects/")({
 	component: RouteComponent,
@@ -47,10 +49,18 @@ function RouteComponent() {
 }
 
 function ProjectList() {
+	const dataProvider = Route.useRouteContext().dataProvider;
 	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
-		useInfiniteQuery(
-			Route.useRouteContext().dataProvider.currentOrgProjectsQueryOptions(),
-		);
+		useInfiniteQuery(dataProvider.currentOrgProjectsQueryOptions());
+	const {
+		data: clusters,
+		hasNextPage: hasNextClustersPage,
+		fetchNextPage: fetchNextClustersPage,
+		isFetchingNextPage: isFetchingNextClustersPage,
+	} = useInfiniteQuery({
+		...dataProvider.currentOrgClustersQueryOptions(),
+		enabled: features.byoc,
+	});
 
 	return (
 		<div className="flex flex-col border rounded-md w-full">
@@ -74,6 +84,22 @@ function ProjectList() {
 			))}
 			{hasNextPage && !isFetchingNextPage ? (
 				<VisibilitySensor onChange={fetchNextPage} />
+			) : null}
+			{clusters?.map((cluster) => (
+				<Link
+					key={cluster.id}
+					className="p-2 border-b last:border-0 w-full flex text-left items-center gap-2 hover:bg-accent rounded-md transition-colors"
+					to="/orgs/$organization/clusters/$cluster"
+					from="/orgs/$organization/projects/"
+					params={{ cluster: cluster.name }}
+				>
+					<span className="flex-1 truncate">{cluster.name}</span>
+					<PlanBadge plan="byoc" />
+					<Icon icon={faChevronRight} />
+				</Link>
+			))}
+			{hasNextClustersPage && !isFetchingNextClustersPage ? (
+				<VisibilitySensor onChange={fetchNextClustersPage} />
 			) : null}
 			<Link
 				from="/orgs/$organization/projects/"

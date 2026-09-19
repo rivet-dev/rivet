@@ -57,6 +57,7 @@ pub enum TransactionCommand {
 		end_or_equal: bool,
 		end_offset: i32,
 		limit: Option<usize>,
+		target_bytes: usize,
 		reverse: bool,
 		response: oneshot::Sender<Result<Values>>,
 	},
@@ -126,6 +127,7 @@ impl TransactionTask {
 					end_or_equal,
 					end_offset,
 					limit,
+					target_bytes,
 					reverse,
 					response,
 				} => {
@@ -139,6 +141,7 @@ impl TransactionTask {
 						end_or_equal,
 						end_offset,
 						limit,
+						target_bytes,
 						reverse,
 					);
 					let _ = response.send(result);
@@ -402,6 +405,7 @@ impl TransactionTask {
 		end_or_equal: bool,
 		end_offset: i32,
 		limit: Option<usize>,
+		target_bytes: usize,
 		reverse: bool,
 	) -> Result<Values> {
 		// Resolve the begin selector
@@ -414,6 +418,11 @@ impl TransactionTask {
 
 		let mut results = Vec::new();
 		let limit = limit.unwrap_or(usize::MAX);
+		// Key plus value bytes taken so far, which is how FoundationDB measures `target_bytes`.
+		let mut bytes = 0usize;
+		// Set when the scan stopped on a budget rather than at the end of the range, so the caller
+		// knows the iterator was still parked on a row it has not seen.
+		let mut more = false;
 
 		// When reversing, iterate descending from the end so that `limit` selects
 		// the highest keys in range (matching FDB semantics). Applying `limit`
@@ -435,13 +444,16 @@ impl TransactionTask {
 					break;
 				}
 
-				let key = iter_bytes_to_vec(k);
-				let value = iter.value().map(iter_bytes_to_vec).unwrap_or_default();
-				results.push(KeyValue::new(key, value));
-
-				if results.len() >= limit {
+				if Self::range_budget_spent(&results, limit, bytes, target_bytes) {
+					more = true;
 					break;
 				}
+
+				let key = iter_bytes_to_vec(k);
+				let value = iter.value().map(iter_bytes_to_vec).unwrap_or_default();
+				bytes += key.len() + value.len();
+				results.push(KeyValue::new(key, value));
+
 				iter.prev();
 			}
 			iter.status()
@@ -457,20 +469,41 @@ impl TransactionTask {
 					break;
 				}
 
-				let key = iter_bytes_to_vec(k);
-				let value = iter.value().map(iter_bytes_to_vec).unwrap_or_default();
-				results.push(KeyValue::new(key, value));
-
-				if results.len() >= limit {
+				if Self::range_budget_spent(&results, limit, bytes, target_bytes) {
+					more = true;
 					break;
 				}
+
+				let key = iter_bytes_to_vec(k);
+				let value = iter.value().map(iter_bytes_to_vec).unwrap_or_default();
+				bytes += key.len() + value.len();
+				results.push(KeyValue::new(key, value));
+
 				iter.next();
 			}
 			iter.status()
 				.context("failed to iterate rocksdb for get range")?;
 		}
 
-		Ok(Values::new(results))
+		let last_db_key = results.last().map(|kv| kv.key().to_vec());
+
+		Ok(Values::chunk(results, more, last_db_key))
+	}
+
+	/// Whether this fetch has taken everything it is allowed to.
+	fn range_budget_spent(
+		results: &[KeyValue],
+		limit: usize,
+		bytes: usize,
+		target_bytes: usize,
+	) -> bool {
+		if results.len() >= limit {
+			return true;
+		}
+
+		// An empty fetch always has budget for one more row. A value larger than the whole byte budget
+		// would otherwise come back as an empty chunk, leaving the scan unable to advance past it.
+		!results.is_empty() && target_bytes != 0 && bytes >= target_bytes
 	}
 
 	fn resolve_key_selector_for_range(

@@ -36,7 +36,44 @@ export function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 		: false;
 }
 
-export function runSqliteTransactionSync<T>(
+export function createSynchronousTransactions(database: SqliteDatabase) {
+	let active = false;
+	return {
+		ensureClient(transactionScoped: boolean): void {
+			if (!transactionScoped && active) {
+				throw new Error(
+					"Use the transaction callback's tx value for queries inside db.transactionSync().",
+				);
+			}
+		},
+		ensureCanClose(): void {
+			if (active) {
+				throw new Error(
+					"Cannot close the database inside db.transactionSync().",
+				);
+			}
+		},
+		run<T>(
+			transactionScoped: boolean,
+			callback: (transaction: SynchronousSqliteTransactionDatabase) => T,
+			options?: Omit<SqliteTransactionOptions, "experimental">,
+		): T {
+			if (transactionScoped || active) {
+				throw new Error(
+					"Nested synchronous SQLite transactions are not supported.",
+				);
+			}
+			active = true;
+			try {
+				return runSqliteTransactionSync(database, callback, options);
+			} finally {
+				active = false;
+			}
+		},
+	};
+}
+
+function runSqliteTransactionSync<T>(
 	database: SqliteDatabase,
 	callback: (transaction: SynchronousSqliteTransactionDatabase) => T,
 	options?: Omit<SqliteTransactionOptions, "experimental">,

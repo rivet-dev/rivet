@@ -125,26 +125,16 @@ where
 
 	// Record metrics
 	{
-		let error_str = match &res {
-			Ok(Err(_)) => {
-				// TODO: Temporarily don't record err to reduce metrics cardinality
-				// let error_str = err.to_string();
-
-				// crate::metrics::OPERATION_ERRORS
-				// 	.with_label_values(&[I::Operation::NAME, error_str.as_str()])
-				// 	.inc();
-
-				// error_str
-				String::new()
-			}
-			Ok(_) => String::new(),
-			Err(_) => "timeout".to_string(),
-		};
+		if matches!(&res, Ok(Err(_))) {
+			crate::metrics::OPERATION_ERRORS
+				.with_label_values(&[I::Operation::NAME])
+				.inc();
+		}
 
 		// Other request metrics
 		let dt = start_instant.elapsed().as_secs_f64();
 		crate::metrics::OPERATION_DURATION
-			.with_label_values(&[I::Operation::NAME, error_str.as_str()])
+			.with_label_values(&[I::Operation::NAME])
 			.observe(dt);
 	}
 

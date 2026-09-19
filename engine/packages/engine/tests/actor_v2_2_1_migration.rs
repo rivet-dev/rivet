@@ -61,6 +61,7 @@ async fn actor_v2_2_1_baseline_migrates_to_current_layout() -> Result<()> {
 
 	let migration = pegboard::actor_sqlite::migrate_v1_to_v2(
 		db.clone(),
+		standalone_ctx.config().clone(),
 		pegboard::actor_sqlite::MigrateV1ToV2Input {
 			actor_id: actor.actor_id,
 			namespace_id: namespace.namespace_id,

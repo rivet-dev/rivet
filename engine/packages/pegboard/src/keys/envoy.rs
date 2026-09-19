@@ -1,6 +1,8 @@
 use std::result::Result::Ok;
+use std::time::{Duration, Instant};
 
 use anyhow::*;
+use futures_util::TryStreamExt;
 use gas::prelude::*;
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
@@ -951,17 +953,187 @@ impl ActorCommandKey {
 	}
 }
 
-impl FormalKey for ActorCommandKey {
+impl ActorCommandKey {
+	fn is_same_command(&self, other: &ActorCommandKey) -> bool {
+		self.namespace_id == other.namespace_id
+			&& self.envoy_key == other.envoy_key
+			&& self.actor_id == other.actor_id
+			&& self.generation == other.generation
+			&& self.index == other.index
+	}
+}
+
+impl FormalChunkedKey for ActorCommandKey {
+	type ChunkKey = ActorCommandChunkKey;
 	type Value = rivet_envoy_protocol::ActorCommandKeyData;
 
-	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
-		rivet_envoy_protocol::versioned::ActorCommandKeyData::deserialize_with_embedded_version(raw)
+	fn chunk(&self, chunk: usize) -> Self::ChunkKey {
+		ActorCommandChunkKey {
+			namespace_id: self.namespace_id,
+			envoy_key: self.envoy_key.clone(),
+			actor_id: self.actor_id,
+			generation: self.generation,
+			index: self.index,
+			chunk,
+		}
 	}
 
-	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		rivet_envoy_protocol::versioned::ActorCommandKeyData::wrap_latest(value)
-			.serialize_with_embedded_version(rivet_envoy_protocol::PROTOCOL_VERSION)
+	fn combine(&self, chunks: Vec<Value>) -> Result<Self::Value> {
+		rivet_envoy_protocol::versioned::ActorCommandKeyData::deserialize_with_embedded_version(
+			&chunks
+				.iter()
+				.flat_map(|x| x.value().iter().copied())
+				.collect::<Vec<_>>(),
+		)
+		.context("failed to combine `ActorCommandKey`")
 	}
+
+	fn split(&self, value: Self::Value) -> Result<Vec<Vec<u8>>> {
+		Ok(
+			rivet_envoy_protocol::versioned::ActorCommandKeyData::wrap_latest(value)
+				.serialize_with_embedded_version(rivet_envoy_protocol::PROTOCOL_VERSION)?
+				.chunks(universaldb::utils::CHUNK_SIZE)
+				.map(|x| x.to_vec())
+				.collect(),
+		)
+	}
+}
+
+/// Decodes a range read over the actor command subspace into commands in key order.
+///
+/// Commands are stored as chunks under `ActorCommandChunkKey`. Commands written before chunking hold
+/// their entire value at the bare `ActorCommandKey`, so both layouts are accepted.
+pub fn decode_actor_commands(
+	tx: &universaldb::Transaction,
+	entries: Vec<Value>,
+) -> Result<Vec<(ActorCommandKey, rivet_envoy_protocol::ActorCommandKeyData)>> {
+	let mut commands = Vec::new();
+	let mut pending: Option<(ActorCommandKey, Vec<Value>)> = None;
+
+	for entry in entries {
+		match tx.unpack::<ActorCommandChunkKey>(entry.key()) {
+			Ok(chunk_key) => {
+				let key = chunk_key.into_command_key();
+				match pending.as_mut() {
+					Some((pending_key, chunks)) if pending_key.is_same_command(&key) => {
+						chunks.push(entry);
+					}
+					_ => {
+						flush_pending_command(&mut commands, pending.take())?;
+						pending = Some((key, vec![entry]));
+					}
+				}
+			}
+			Err(_) => {
+				flush_pending_command(&mut commands, pending.take())?;
+
+				let key = tx.unpack::<ActorCommandKey>(entry.key())?;
+				let command =
+					rivet_envoy_protocol::versioned::ActorCommandKeyData::deserialize_with_embedded_version(
+						entry.value(),
+					)
+					.context("failed to deserialize unchunked `ActorCommandKey`")?;
+				commands.push((key, command));
+			}
+		}
+	}
+
+	flush_pending_command(&mut commands, pending)?;
+
+	Ok(commands)
+}
+
+/// Bytes read per transaction before `read_actor_commands` ends the page at the next command.
+pub const ACTOR_COMMAND_PAGE_BYTES: usize = util::size::mebibytes(1) as usize;
+const EARLY_TXN_TIMEOUT: Duration = Duration::from_millis(2500);
+
+/// Reads every pending command for an envoy in key order across as many transactions as needed.
+///
+/// Each transaction ends at the next command once it has read `page_bytes` or run past
+/// `EARLY_TXN_TIMEOUT`, so a large backlog cannot exceed the transaction time limit and a chunked
+/// command is never split across pages.
+pub async fn read_actor_commands(
+	udb: &universaldb::Database,
+	namespace_id: Id,
+	envoy_key: &str,
+	page_bytes: usize,
+) -> Result<Vec<(ActorCommandKey, rivet_envoy_protocol::ActorCommandKeyData)>> {
+	let subspace = crate::keys::subspace().subspace(&ActorCommandKey::subspace(
+		namespace_id,
+		envoy_key.to_string(),
+	));
+	let (mut cursor, range_end) = subspace.range();
+	let mut commands = Vec::new();
+
+	loop {
+		let (page, next_cursor) = udb
+			.txn("pegboard_envoy_read_actor_commands", |tx| {
+				let cursor = &cursor;
+				let range_end = &range_end;
+				async move {
+					let start = Instant::now();
+					let tx = tx.with_subspace(crate::keys::subspace());
+					let mut stream = tx.get_ranges_keyvalues(
+						RangeOption {
+							mode: StreamingMode::WantAll,
+							..(cursor.as_slice(), range_end.as_slice()).into()
+						},
+						Serializable,
+					);
+					let mut entries = Vec::new();
+					let mut read_bytes = 0;
+
+					let next_cursor = loop {
+						let Some(entry) = stream.try_next().await? else {
+							break None;
+						};
+
+						// Always take at least one full command so every page makes progress.
+						if !entries.is_empty()
+							&& (read_bytes >= page_bytes || start.elapsed() > EARLY_TXN_TIMEOUT)
+							&& is_actor_command_start(&tx, entry.key())
+						{
+							break Some(entry.key().to_vec());
+						}
+
+						read_bytes += entry.key().len() + entry.value().len();
+						entries.push(entry);
+					};
+
+					Ok((decode_actor_commands(&tx, entries)?, next_cursor))
+				}
+			})
+			.custom_instrument(tracing::info_span!("read_actor_commands_tx"))
+			.await?;
+
+		commands.extend(page);
+
+		match next_cursor {
+			Some(next_cursor) => cursor = next_cursor,
+			None => return Ok(commands),
+		}
+	}
+}
+
+/// Returns whether `key` starts a command, meaning it is the first chunk of a chunked value or an
+/// unchunked value.
+fn is_actor_command_start(tx: &universaldb::Transaction, key: &[u8]) -> bool {
+	match tx.unpack::<ActorCommandChunkKey>(key) {
+		Ok(chunk_key) => chunk_key.chunk == 0,
+		Err(_) => true,
+	}
+}
+
+fn flush_pending_command(
+	commands: &mut Vec<(ActorCommandKey, rivet_envoy_protocol::ActorCommandKeyData)>,
+	pending: Option<(ActorCommandKey, Vec<Value>)>,
+) -> Result<()> {
+	if let Some((key, chunks)) = pending {
+		let command = key.combine(chunks)?;
+		commands.push((key, command));
+	}
+
+	Ok(())
 }
 
 impl TuplePack for ActorCommandKey {
@@ -999,6 +1171,80 @@ impl<'de> TupleUnpack<'de> for ActorCommandKey {
 			actor_id,
 			generation,
 			index,
+		};
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct ActorCommandChunkKey {
+	namespace_id: Id,
+	envoy_key: String,
+	actor_id: Id,
+	generation: u32,
+	index: i64,
+	chunk: usize,
+}
+
+impl ActorCommandChunkKey {
+	fn into_command_key(self) -> ActorCommandKey {
+		ActorCommandKey {
+			namespace_id: self.namespace_id,
+			envoy_key: self.envoy_key,
+			actor_id: self.actor_id,
+			generation: self.generation,
+			index: self.index,
+		}
+	}
+}
+
+impl TuplePack for ActorCommandChunkKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			NAMESPACE,
+			ENVOY,
+			DATA,
+			self.namespace_id,
+			&self.envoy_key,
+			ACTOR,
+			COMMAND,
+			self.actor_id,
+			self.generation,
+			self.index,
+			self.chunk,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for ActorCommandChunkKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, _, namespace_id, envoy_key, _, _, actor_id, generation, index, chunk)) =
+			<(
+				usize,
+				usize,
+				usize,
+				Id,
+				String,
+				usize,
+				usize,
+				Id,
+				u32,
+				i64,
+				usize,
+			)>::unpack(input, tuple_depth)?;
+		let v = ActorCommandChunkKey {
+			namespace_id,
+			envoy_key,
+			actor_id,
+			generation,
+			index,
+			chunk,
 		};
 
 		Ok((input, v))
