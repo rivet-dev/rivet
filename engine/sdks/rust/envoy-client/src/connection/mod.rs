@@ -51,6 +51,7 @@ pub(crate) fn new_ws_connection() -> (
 ) {
 	let (data_tx, data_rx) = tokio::sync::mpsc::channel(WS_DATA_MESSAGE_CAPACITY);
 	let (control_tx, control_rx) = tokio::sync::mpsc::channel(WS_CONTROL_MESSAGE_CAPACITY);
+	let admission_gate = std::sync::Arc::new(std::sync::Mutex::new(()));
 	(
 		WsConnectionTx {
 			data_tx,
@@ -61,6 +62,8 @@ pub(crate) fn new_ws_connection() -> (
 			control_byte_budget: std::sync::Arc::new(tokio::sync::Semaphore::new(
 				WS_CONTROL_BYTE_CAPACITY,
 			)),
+			closing: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+			admission_gate,
 		},
 		data_rx,
 		control_rx,
@@ -69,6 +72,13 @@ pub(crate) fn new_ws_connection() -> (
 
 impl WsConnectionTx {
 	pub(crate) fn try_send(&self, lane: WsLane, data: Vec<u8>) -> Result<(), &'static str> {
+		let _admission_guard = self
+			.admission_gate
+			.lock()
+			.expect("websocket admission gate poisoned");
+		if self.closing.load(Ordering::Acquire) {
+			return Err("connection is closing");
+		}
 		let lane_label = lane.as_str();
 		let Ok(byte_len) = u32::try_from(data.len()) else {
 			METRICS
@@ -105,6 +115,17 @@ impl WsConnectionTx {
 	}
 
 	pub(crate) fn try_close(&self) -> Result<(), &'static str> {
+		let _admission_guard = self
+			.admission_gate
+			.lock()
+			.expect("websocket admission gate poisoned");
+		if self
+			.closing
+			.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+			.is_err()
+		{
+			return Ok(());
+		}
 		self.control_tx
 			.try_send(WsTxMessage::Close)
 			.map_err(|_| "control queue is saturated")
@@ -150,11 +171,15 @@ pub(crate) async fn install_connection_with_http(
 		.fetch_add(1, Ordering::AcqRel)
 		.saturating_add(1);
 	shared.connection_session.store(session, Ordering::Release);
+	let admission_gate = tx.admission_gate.clone();
+	let closing = tx.closing.clone();
 	*guard = Some(tx);
 	*http_guard = Some(HttpConnectionTx {
 		session,
 		tx: http_tx,
 		byte_budget: http_byte_budget,
+		closing,
+		admission_gate,
 	});
 	drop(http_guard);
 	drop(guard);
@@ -224,7 +249,6 @@ pub(crate) async fn ws_send_http_for_session(
 		}
 		connection.clone()
 	};
-
 	let Ok(byte_permit) = connection
 		.byte_budget
 		.clone()
@@ -234,16 +258,25 @@ pub(crate) async fn ws_send_http_for_session(
 		return WsSendResult::Unavailable;
 	};
 	let (written, written_rx) = tokio::sync::oneshot::channel();
-	if connection
-		.tx
-		.send(HttpWsTxMessage {
-			data: encoded,
-			_byte_permit: byte_permit,
-			written,
-		})
-		.await
-		.is_err()
-	{
+	let admitted = {
+		let _admission_guard = connection
+			.admission_gate
+			.lock()
+			.expect("websocket admission gate poisoned");
+		if connection.closing.load(Ordering::Acquire) {
+			false
+		} else {
+			connection
+				.tx
+				.try_send(HttpWsTxMessage {
+					data: encoded,
+					_byte_permit: byte_permit,
+					written,
+				})
+				.is_ok()
+		}
+	};
+	if !admitted {
 		return WsSendResult::Unavailable;
 	}
 
@@ -435,6 +468,16 @@ mod tests {
 		}
 		assert!(tx.try_send(WsLane::Control, vec![1]).is_err());
 		assert!(matches!(control_rx.try_recv(), Ok(WsTxMessage::Send(_))));
+	}
+
+	#[test]
+	fn close_stops_new_admissions() {
+		let (tx, _data_rx, mut control_rx) = new_ws_connection();
+
+		tx.try_close().expect("close should be admitted");
+		assert!(matches!(control_rx.try_recv(), Ok(WsTxMessage::Close)));
+		assert!(tx.try_send(WsLane::Data, vec![0]).is_err());
+		assert!(tx.try_send(WsLane::Control, vec![0]).is_err());
 	}
 }
 

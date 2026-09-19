@@ -52,6 +52,7 @@ fn empty_envoy_context(shared: Arc<crate::context::SharedContext>) -> EnvoyConte
 		http_message_indices: BufferMap::new(),
 		http_request_cancellations: HashMap::new(),
 		buffered_messages: Vec::new(),
+		event_retry_pending: false,
 		processed_command_idx: HashMap::new(),
 	}
 }

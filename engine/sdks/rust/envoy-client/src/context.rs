@@ -68,6 +68,8 @@ pub struct WsConnectionTx {
 	pub control_tx: mpsc::Sender<WsTxMessage>,
 	pub data_byte_budget: Arc<Semaphore>,
 	pub control_byte_budget: Arc<Semaphore>,
+	pub closing: Arc<AtomicBool>,
+	pub admission_gate: Arc<StdMutex<()>>,
 }
 
 #[derive(Clone)]
@@ -75,6 +77,8 @@ pub struct HttpConnectionTx {
 	pub session: u64,
 	pub tx: mpsc::Sender<HttpWsTxMessage>,
 	pub byte_budget: Arc<Semaphore>,
+	pub closing: Arc<AtomicBool>,
+	pub admission_gate: Arc<StdMutex<()>>,
 }
 
 pub struct HttpWsTxMessage {
