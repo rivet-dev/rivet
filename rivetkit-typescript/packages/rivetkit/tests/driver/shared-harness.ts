@@ -17,11 +17,7 @@ import type {
 
 const DRIVER_TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const TEST_DIR = join(DRIVER_TEST_DIR, "..");
-const FIXTURE_PATH = join(
-	TEST_DIR,
-	"fixtures",
-	"driver-test-suite-entrypoint.mjs",
-);
+const FIXTURE_PATH = join(TEST_DIR, "fixtures", "driver-test-suite-runtime.ts");
 const WASM_FIXTURE_PATH = join(
 	TEST_DIR,
 	"fixtures",

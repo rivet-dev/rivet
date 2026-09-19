@@ -11,14 +11,18 @@ import type {
 } from "@/registry/runtime";
 
 const originalArgv = process.argv;
+const originalExecArgv = process.execArgv;
 
 afterEach(() => {
 	process.argv = originalArgv;
+	process.execArgv = originalExecArgv;
 	vi.unstubAllEnvs();
 	vi.useRealTimers();
 });
 
 async function startWorker() {
+	// Workers inherit this preload and run the TypeScript fixture through tsx.
+	process.execArgv = [...originalExecArgv, "--import", "tsx"];
 	// Worker I/O remains real while the parent bootstrap deadline is controlled.
 	vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 	const server = createServer();
@@ -31,7 +35,7 @@ async function startWorker() {
 	process.argv = [
 		process.execPath,
 		fileURLToPath(
-			new URL("./fixtures/worker-bootstrap.mjs", import.meta.url),
+			new URL("./fixtures/worker-bootstrap.ts", import.meta.url),
 		),
 		"--config",
 		"configuration with spaces.json",
