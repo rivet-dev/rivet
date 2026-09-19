@@ -130,9 +130,7 @@ async fn single_connection(
 			.await?;
 	let (mut write, mut read) = ws_stream.split();
 
-	// TODO: Bound shared WebSocket writer memory across protocol message types.
-	// https://github.com/rivet-dev/rivet/issues/5468
-	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel::<WsTxMessage>();
+	let (ws_tx, mut ws_data_rx, mut ws_control_rx) = super::new_ws_connection();
 	let (http_ws_tx, mut http_ws_rx) =
 		mpsc::channel::<HttpWsTxMessage>(super::HTTP_WS_MESSAGE_CAPACITY);
 	let http_byte_budget = Arc::new(Semaphore::new(super::HTTP_WS_BYTE_CAPACITY));
@@ -165,13 +163,17 @@ async fn single_connection(
 
 			loop {
 				let msg = tokio::select! {
-					msg = ws_rx.recv() => msg.map(EitherWrite::Legacy),
+					biased;
+					msg = ws_control_rx.recv() => msg.map(EitherWrite::Legacy),
+					msg = ws_data_rx.recv() => msg.map(EitherWrite::Legacy),
 					msg = http_ws_rx.recv() => msg.map(EitherWrite::Http),
 				};
 				let Some(msg) = msg else { break };
 				match msg {
-					EitherWrite::Legacy(WsTxMessage::Send(data)) => {
-						let result = write.send(tungstenite::Message::Binary(data.into())).await;
+					EitherWrite::Legacy(WsTxMessage::Send(payload)) => {
+						let result = write
+							.send(tungstenite::Message::Binary(payload.data.into()))
+							.await;
 						if let Err(e) = result {
 							tracing::error!(?e, "failed to send ws message");
 							if let Some(write_failed_tx) = write_failed_tx.take() {

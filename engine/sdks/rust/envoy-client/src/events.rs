@@ -88,7 +88,7 @@ mod tests {
 		BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, WebSocketHandler,
 		WebSocketSender,
 	};
-	use crate::context::{SharedContext, WsTxMessage};
+	use crate::context::SharedContext;
 	use crate::envoy::EnvoyContext;
 	use crate::handle::EnvoyHandle;
 
@@ -167,9 +167,7 @@ mod tests {
 			actors_notify: Arc::new(tokio::sync::Notify::new()),
 			live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
-			ws_tx: Arc::new(tokio::sync::Mutex::new(
-				None::<mpsc::UnboundedSender<WsTxMessage>>,
-			)),
+			ws_tx: Arc::new(tokio::sync::Mutex::new(None)),
 			http_ws_tx: Arc::new(tokio::sync::Mutex::new(None)),
 			connection_session: std::sync::atomic::AtomicU64::new(0),
 			next_connection_session: std::sync::atomic::AtomicU64::new(0),

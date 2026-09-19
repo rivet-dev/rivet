@@ -17,7 +17,7 @@ use crate::actor::ToActor;
 use crate::commands::{ACK_COMMANDS_INTERVAL_MS, handle_commands, send_command_ack};
 use crate::config::EnvoyConfig;
 use crate::connection::{start_connection, ws_send};
-use crate::context::{SharedContext, WsTxMessage};
+use crate::context::SharedContext;
 use crate::events::{handle_ack_events, handle_send_events, resend_unacknowledged_events};
 use crate::handle::EnvoyHandle;
 use crate::kv::{
@@ -614,7 +614,7 @@ async fn envoy_loop(
 	{
 		let guard = ctx.shared.ws_tx.lock().await;
 		if let Some(tx) = guard.as_ref() {
-			let _ = tx.send(WsTxMessage::Close);
+			let _ = tx.try_close();
 		}
 	}
 

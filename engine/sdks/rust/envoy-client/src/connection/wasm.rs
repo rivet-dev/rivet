@@ -171,9 +171,7 @@ mod imp {
 			}
 		}
 
-		// TODO: Bound shared WebSocket writer memory across protocol message types.
-		// https://github.com/rivet-dev/rivet/issues/5468
-		let (ws_tx, mut ws_rx) = mpsc::unbounded_channel::<WsTxMessage>();
+		let (ws_tx, mut ws_data_rx, mut ws_control_rx) = super::super::new_ws_connection();
 		let (http_ws_tx, mut http_ws_rx) =
 			mpsc::channel::<HttpWsTxMessage>(super::super::HTTP_WS_MESSAGE_CAPACITY);
 		let http_byte_budget = Arc::new(Semaphore::new(super::super::HTTP_WS_BYTE_CAPACITY));
@@ -203,13 +201,15 @@ mod imp {
 
 						loop {
 							let msg = tokio::select! {
-								msg = ws_rx.recv() => msg.map(EitherWrite::Legacy),
+								biased;
+								msg = ws_control_rx.recv() => msg.map(EitherWrite::Legacy),
+								msg = ws_data_rx.recv() => msg.map(EitherWrite::Legacy),
 								msg = http_ws_rx.recv() => msg.map(EitherWrite::Http),
 							};
 							let Some(msg) = msg else { break };
 							match msg {
-								EitherWrite::Legacy(WsTxMessage::Send(data)) => {
-									let data = Uint8Array::from(data.as_slice());
+								EitherWrite::Legacy(WsTxMessage::Send(payload)) => {
+									let data = Uint8Array::from(payload.data.as_slice());
 									if let Err(error) = ws.send_with_array_buffer(&data.buffer()) {
 										tracing::error!(error = %js_error(error), "failed to send ws message");
 										let _ = event_tx.send(ConnectionEvent::WriteFailed);
