@@ -15,6 +15,10 @@ bootstrap.runtime = {
 	},
 };
 bootstrap.registration = { workerId: bootstrap.workerId, workerEpoch: 1 };
+if (process.env.RIVETKIT_TEST_UNRELATED_MESSAGES === "1") {
+	parentPort.postMessage(null);
+	parentPort.postMessage({ message: "application data" });
+}
 
 // The test gates the acknowledgement independently of native registration.
 const socket = connect(Number(process.env.RIVETKIT_TEST_WORKER_PORT), "127.0.0.1");
@@ -23,6 +27,9 @@ bootstrap.attachPromise = (async () => {
 	for await (const line of lines) {
 		if (line !== "ready") continue;
 		parentPort.postMessage({ kind: "ready", ...bootstrap.registration });
+		if (process.env.RIVETKIT_TEST_UNRELATED_MESSAGES === "1") {
+			parentPort.postMessage({ kind: "application", ...bootstrap.registration });
+		}
 		socket.write("ready\n");
 		break;
 	}

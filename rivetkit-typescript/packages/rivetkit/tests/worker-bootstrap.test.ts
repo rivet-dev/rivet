@@ -120,6 +120,28 @@ test("replayed entrypoint receives the application path and all CLI arguments", 
 	}
 });
 
+test("unrelated worker messages cannot crash the host or retire a live worker", async () => {
+	vi.stubEnv("RIVETKIT_TEST_UNRELATED_MESSAGES", "1");
+	const worker = await startWorker();
+	try {
+		await worker.acknowledgeAndRetire();
+		expect(worker.workerSpawnFailed).not.toHaveBeenCalled();
+	} finally {
+		await worker.close();
+	}
+});
+
+test("closing an empty pool leaves no retirement deadline behind", async () => {
+	const worker = await startWorker();
+	try {
+		await worker.acknowledgeAndRetire();
+		await worker.pool.close();
+		expect(vi.getTimerCount()).toBe(0);
+	} finally {
+		await worker.close();
+	}
+});
+
 test("a delayed ready acknowledgement cannot time out a natively registered worker", async () => {
 	const worker = await startWorker();
 	try {

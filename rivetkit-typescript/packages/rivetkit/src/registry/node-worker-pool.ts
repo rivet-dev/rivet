@@ -32,6 +32,23 @@ type WorkerStatusMessage =
 	| { kind: "bootstrapError"; reason: string }
 	| ({ kind: "retired" } & RuntimeWorkerRegistration);
 
+function isWorkerStatusMessage(value: unknown): value is WorkerStatusMessage {
+	if (typeof value !== "object" || value === null) return false;
+	const message = value as Partial<WorkerStatusMessage>;
+	switch (message.kind) {
+		case "bootstrapError":
+			return typeof message.reason === "string";
+		case "ready":
+		case "retired":
+			return (
+				Number.isSafeInteger(message.workerId) &&
+				Number.isSafeInteger(message.workerEpoch)
+			);
+		default:
+			return false;
+	}
+}
+
 interface ManagedWorker {
 	worker: import("node:worker_threads").Worker;
 	request: RuntimeWorkerSpawnRequest;
@@ -262,7 +279,8 @@ export async function configureNodeActorWorkerPool(
 		};
 		managed.bootstrapTimeout.unref?.();
 		workers.set(request.workerId, managed);
-		worker.on("message", (message: WorkerStatusMessage) => {
+		worker.on("message", (message: unknown) => {
+			if (!isWorkerStatusMessage(message)) return;
 			if (message.kind === "ready") {
 				if (
 					message.workerId !== request.workerId ||
@@ -285,6 +303,8 @@ export async function configureNodeActorWorkerPool(
 			} else if (message.kind === "bootstrapError") {
 				reportSpawnFailure(managed, message.reason);
 			} else if (
+				message.kind === "retired" &&
+				managed.retirementRequested &&
 				managed.registration &&
 				message.workerId === managed.registration.workerId &&
 				message.workerEpoch === managed.registration.workerEpoch
@@ -415,6 +435,7 @@ export async function configureNodeActorWorkerPool(
 			closing = true;
 			spawnQueue.length = 0;
 			queuedWorkerIds.clear();
+			if (workers.size === 0) return;
 			// Grace expiry can interrupt an already-running graceful close.
 			if (force) {
 				await Promise.all(
@@ -433,16 +454,21 @@ export async function configureNodeActorWorkerPool(
 			for (const managed of workers.values()) {
 				if (!managed.registration) void managed.worker.terminate();
 			}
+			let timeout: ReturnType<typeof setTimeout>;
 			const deadline = new Promise<void>((resolve) => {
-				const timeout = setTimeout(resolve, WORKER_RETIRE_TIMEOUT_MS);
+				timeout = setTimeout(resolve, WORKER_RETIRE_TIMEOUT_MS);
 				timeout.unref?.();
 			});
-			await Promise.race([
-				Promise.all(
-					[...workers.values()].map((worker) => worker.exited),
-				),
-				deadline,
-			]);
+			try {
+				await Promise.race([
+					Promise.all(
+						[...workers.values()].map((worker) => worker.exited),
+					),
+					deadline,
+				]);
+			} finally {
+				clearTimeout(timeout!);
+			}
 			await Promise.all(
 				[...workers.values()].map((managed) =>
 					managed.worker.terminate(),
