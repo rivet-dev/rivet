@@ -322,6 +322,62 @@ mod moved_tests {
 
 	#[cfg(feature = "sqlite-local")]
 	#[test]
+	fn sqlite_aggregate_outcome_survives_fingerprint_series_budget() {
+		use depot_client::vfs::{SqliteOperationMetric, SqliteVfsMetrics};
+
+		let actor_name = "counter-sqlite-profile-series-budget";
+		let baseline = ActorMetrics::new(actor_name);
+		baseline
+			.sqlite_low_card_handles("proxy")
+			.expect("low-cardinality handles should be admitted");
+		let metrics =
+			ActorMetrics::new_with_sqlite_profiling(actor_name, crate::SqliteProfilingConfig {
+				max_prometheus_series: 0,
+				max_tracked_statement_fingerprints: usize::MAX,
+				slow_operation_threshold_ms: 0,
+				..Default::default()
+			});
+
+		assert!(!metrics.observe_operation_profile(&SqliteOperationMetric {
+			operation_type: "statement",
+			fingerprint: "select-series-budget0001".to_owned(),
+			fingerprint_source: "query",
+			transaction_mode: "autocommit",
+			storage_transport: "proxy",
+			outcome: "success",
+			sql_bytes: 8,
+			total_ns: 100_000_000,
+			transaction_wait_ns: 0,
+			profile: Default::default(),
+		}));
+
+		let rendered = render_global_metrics();
+		assert_metric_value_with_labels(
+			&rendered,
+			"rivet_rivetkit_sqlite_operations_total",
+			actor_name,
+			&[
+				"type=\"statement\"",
+				"outcome=\"success\"",
+				"storage_transport=\"proxy\"",
+			],
+			"1",
+		);
+		assert_metric_value_with_labels(
+			&rendered,
+			"rivet_rivetkit_sqlite_fingerprint_overflow_total",
+			actor_name,
+			&["type=\"statement\"", "reason=\"series_budget\""],
+			"1",
+		);
+		assert!(!rendered.lines().any(|line| {
+			line.starts_with("rivet_rivetkit_sqlite_outcome_total{")
+				&& line.contains(&format!("actor_name=\"{actor_name}\""))
+		}));
+	}
+
+	#[cfg(feature = "sqlite-local")]
+	#[test]
 	fn sqlite_profiling_metrics_render_statement_and_transaction_end_to_end() {
 		use depot_client::vfs::{
 			SqliteGetPagesProfile, SqliteOperationMetric, SqliteOperationProfile,
