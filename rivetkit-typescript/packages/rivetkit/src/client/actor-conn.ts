@@ -69,6 +69,16 @@ interface CloseEventLike {
 	wasClean?: boolean;
 }
 
+class UnclassifiedWebSocketCloseError extends Error {
+	constructor(closeEvent: CloseEventLike) {
+		const reason = closeEvent.reason || "";
+		super(
+			`${closeEvent.wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${reason})`,
+		);
+		this.name = "UnclassifiedWebSocketCloseError";
+	}
+}
+
 /**
  * Connection status for an actor connection.
  *
@@ -136,6 +146,7 @@ export const CONNECT_SYMBOL = Symbol("connect");
  */
 export class ActorConnRaw {
 	#disposed = false;
+	#hasConnectedOnce = false;
 
 	/* Will be aborted on dispose. */
 	#abortController = new AbortController();
@@ -447,6 +458,7 @@ export class ActorConnRaw {
 			forever: true,
 			minTimeout: 250,
 			maxTimeout: 30_000,
+			randomize: true,
 
 			onFailedAttempt: (error) => {
 				logger().warn({
@@ -476,6 +488,10 @@ export class ActorConnRaw {
 
 	async #connectAndWait() {
 		try {
+			// Reflect every retry attempt instead of remaining disconnected while
+			// a new handshake is in progress.
+			this.#setConnStatus("connecting");
+
 			// Create promise for open
 			if (this.#onOpenPromise)
 				throw new Error("#onOpenPromise already defined");
@@ -536,6 +552,18 @@ export class ActorConnRaw {
 			error instanceof errors.ActorError &&
 			error.group === "client" &&
 			error.code === "get_params_failed"
+		) {
+			return true;
+		}
+
+		// Browsers hide failed WebSocket handshake status codes. A transient 503
+		// and a permanent 401 both surface as an unclassified close (usually
+		// code 1006), so only retry this opaque signal after the same client has
+		// already established a valid connection. Structured ActorErrors remain
+		// authoritative and are classified above.
+		if (
+			this.#hasConnectedOnce &&
+			error instanceof UnclassifiedWebSocketCloseError
 		) {
 			return true;
 		}
@@ -670,6 +698,7 @@ export class ActorConnRaw {
 				messageQueueLength: this.#messageQueue.length,
 				connId: this.#connId,
 			});
+			this.#hasConnectedOnce = true;
 
 			// Update connection state (this also notifies handlers)
 			this.#setConnStatus("connected");
@@ -801,6 +830,16 @@ export class ActorConnRaw {
 					}
 				}
 
+				// Keep queued messages and their pending promises intact while a
+				// retryable connection-opening failure is handed back to p-retry.
+				if (
+					this.#onOpenPromise &&
+					this.#shouldRetryConnectionOpenError(errorToThrow)
+				) {
+					this.#onOpenPromise.reject(errorToThrow);
+					return;
+				}
+
 				// If we have an onOpenPromise, reject it with the error
 				if (this.#onOpenPromise) {
 					this.#onOpenPromise.reject(errorToThrow);
@@ -920,16 +959,28 @@ export class ActorConnRaw {
 
 				this.#invalidateActorIfStale(group, code);
 			} else {
-				// Default error for non-structured close reasons
-				error = new Error(
-					`${wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${reason})`,
-				);
+				// Browsers intentionally do not expose the HTTP status for a failed
+				// WebSocket handshake. Preserve this as a distinct error so the open
+				// retry policy does not accidentally retry unrelated programming
+				// errors.
+				error = new UnclassifiedWebSocketCloseError(closeEvent);
 			}
 
-			this.#rejectPendingPromises(error, false);
+			const retryingOpen =
+				!wasConnected &&
+				this.#onOpenPromise !== undefined &&
+				this.#shouldRetryConnectionOpenError(error);
+
+			if (retryingOpen) {
+				// Reject only the per-attempt open promise. Pending actions and queued
+				// messages must survive until a later handshake succeeds.
+				this.#onOpenPromise?.reject(error);
+			} else {
+				this.#rejectPendingPromises(error, false);
+			}
 
 			// Dispatch to error handler if it's an ActorError
-			if (error instanceof errors.ActorError) {
+			if (!retryingOpen && error instanceof errors.ActorError) {
 				this.#dispatchActorError(error);
 			}
 
