@@ -604,6 +604,8 @@ export interface CoreRuntime {
 	startWorkflowSpan(ctx: ActorContextHandle): Promise<WorkflowSpan>;
 	/** Backs `ActorRun.runOutsideWorkflowSpan`. */
 	runOutsideActorInvocationContext<T>(run: () => T): T;
+	/** Identity of the invocation the caller runs in, usable as a cache key. */
+	currentInvocationScope(): object | undefined;
 	actorName(ctx: ActorContextHandle): string;
 	actorKey(ctx: ActorContextHandle): RuntimeActorKeySegment[];
 	actorRegion(ctx: ActorContextHandle): string;

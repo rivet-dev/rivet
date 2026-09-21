@@ -664,6 +664,10 @@ export class NapiCoreRuntime implements CoreRuntime {
 		return this.#invocationContext.exit(run);
 	}
 
+	currentInvocationScope(): object | undefined {
+		return this.#invocationContext.getStore();
+	}
+
 	actorName(ctx: ActorContextHandle): string {
 		return asNativeActorContext(ctx).name();
 	}

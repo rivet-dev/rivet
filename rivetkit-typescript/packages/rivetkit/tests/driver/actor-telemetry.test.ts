@@ -985,6 +985,18 @@ describeDriverMatrix(
 					}
 				});
 
+				test("logs written inside a step carry the step's trace ids", () => {
+					const [reserve] = named(`${actorName}/reserve-stock`);
+					const line = traced.runtime
+						.getRuntimeOutput?.()
+						.split("\n")
+						.find((candidate) =>
+							candidate.includes(`workflow_log_key=${actorKey}`),
+						);
+					expect(line).toContain(`traceId=${reserve.traceId}`);
+					expect(line).toContain(`spanId=${reserve.spanId}`);
+				});
+
 				test("reports each attempt of a retried step under its own run", () => {
 					const attempts = named(`${actorName}/charge-card`);
 					expect(
