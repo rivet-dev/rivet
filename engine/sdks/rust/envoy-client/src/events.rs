@@ -4,20 +4,32 @@ use crate::connection::ws_send;
 use crate::envoy::EnvoyContext;
 use crate::stringify::stringify_event_wrapper;
 
+pub(crate) const TERMINAL_EVENT_RETENTION: std::time::Duration =
+	std::time::Duration::from_secs(60 * 60);
+
 pub async fn handle_send_events(ctx: &mut EnvoyContext, events: Vec<protocol::EventWrapper>) {
 	tracing::info!(event_count = events.len(), "sending events");
 	for event in &events {
 		tracing::info!(event = %stringify_event_wrapper(event), "sending event");
 	}
 
-	// Record in history per actor
 	for event in &events {
+		let pending = ctx.pending_events
+			.entry((event.checkpoint.actor_id.clone(), event.checkpoint.generation))
+			.or_default();
+		pending.events.push(event.clone());
+		if matches!(
+			&event.inner,
+			protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
+				state: protocol::ActorState::ActorStateStopped(_),
+			})
+		) {
+			pending.retired_at.get_or_insert_with(crate::time::Instant::now);
+		}
 		let mut remove_after_stop = false;
 		let entry =
 			ctx.get_actor_entry_mut(&event.checkpoint.actor_id, event.checkpoint.generation);
 		if let Some(entry) = entry {
-			entry.event_history.push(event.clone());
-
 			if let protocol::Event::EventActorStateUpdate(ref state_update) = event.inner {
 				if matches!(
 					state_update.state,
@@ -41,24 +53,50 @@ pub async fn handle_send_events(ctx: &mut EnvoyContext, events: Vec<protocol::Ev
 
 pub fn handle_ack_events(ctx: &mut EnvoyContext, ack: protocol::ToEnvoyAckEvents) {
 	for checkpoint in &ack.last_event_checkpoints {
-		let entry = ctx.get_actor_entry_mut(&checkpoint.actor_id, checkpoint.generation);
-		if let Some(entry) = entry {
-			entry
-				.event_history
-				.retain(|event| event.checkpoint.index > checkpoint.index);
+		let key = (checkpoint.actor_id.clone(), checkpoint.generation);
+		if let Some(pending) = ctx.pending_events.get_mut(&key) {
+			pending.events.retain(|event| event.checkpoint.index > checkpoint.index);
+			if pending.events.is_empty() {
+				ctx.pending_events.remove(&key);
+			}
 		}
 	}
 }
 
-// TODO: If the envoy disconnects, actor stops, then envoy reconnects, we will send the stop event but there
-// is no mechanism to remove the actor entry afterwards. We only remove the actor entry if rivet stops the actor.
-pub async fn resend_unacknowledged_events(ctx: &EnvoyContext) {
+pub fn cleanup_expired_terminal_events(ctx: &mut EnvoyContext) {
+	cleanup_expired_terminal_events_at(ctx, crate::time::Instant::now());
+}
+
+fn cleanup_expired_terminal_events_at(ctx: &mut EnvoyContext, now: crate::time::Instant) {
+	for ((actor_id, generation), pending) in ctx.pending_events.iter_mut() {
+		if pending.retired_at.is_none()
+			&& !ctx
+				.actors
+				.get(actor_id)
+				.is_some_and(|generations| generations.contains_key(generation))
+		{
+			pending.retired_at = Some(now);
+		}
+	}
+
+	let before = ctx.pending_events.len();
+	ctx.pending_events.retain(|_, pending| {
+		pending
+			.retired_at
+			.is_none_or(|at| now.saturating_duration_since(at) < TERMINAL_EVENT_RETENTION)
+	});
+	let expired = before - ctx.pending_events.len();
+	if expired > 0 {
+		tracing::warn!(expired, "discarded expired terminal actor events");
+	}
+}
+
+pub async fn resend_unacknowledged_events(ctx: &mut EnvoyContext) {
+	cleanup_expired_terminal_events(ctx);
 	let mut events: Vec<protocol::EventWrapper> = Vec::new();
 
-	for generations in ctx.actors.values() {
-		for entry in generations.values() {
-			events.extend(entry.event_history.iter().cloned());
-		}
+	for pending in ctx.pending_events.values() {
+		events.extend(pending.events.iter().cloned());
 	}
 
 	if events.is_empty() {
@@ -81,14 +119,19 @@ mod tests {
 	use crate::async_counter::AsyncCounter;
 	use rivet_envoy_protocol as protocol;
 	use tokio::sync::mpsc;
+	use vbare::OwnedVersionedData;
 
-	use super::handle_send_events;
+	use super::{
+		TERMINAL_EVENT_RETENTION, cleanup_expired_terminal_events_at, handle_ack_events,
+		handle_send_events, resend_unacknowledged_events,
+	};
 	use crate::actor::ToActor;
 	use crate::config::{
 		BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, WebSocketHandler,
 		WebSocketSender,
 	};
 	use crate::context::{SharedContext, WsTxMessage};
+	use crate::connection::install_connection;
 	use crate::envoy::EnvoyContext;
 	use crate::handle::EnvoyHandle;
 
@@ -188,6 +231,7 @@ mod tests {
 				shared,
 				shutting_down: false,
 				actors: HashMap::new(),
+				pending_events: HashMap::new(),
 				buffered_actor_messages: HashMap::new(),
 				kv_requests: HashMap::new(),
 				next_kv_request_id: 0,
@@ -245,6 +289,19 @@ mod tests {
 		}
 	}
 
+	fn running_event(actor_id: &str, generation: u32) -> protocol::EventWrapper {
+		protocol::EventWrapper {
+			checkpoint: protocol::ActorCheckpoint {
+				actor_id: actor_id.to_string(),
+				generation,
+				index: 0,
+			},
+			inner: protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
+				state: protocol::ActorState::ActorStateRunning,
+			}),
+		}
+	}
+
 	#[tokio::test]
 	async fn stop_event_removes_actor_from_primary_and_shared_registries() {
 		let (mut ctx, handle) = new_envoy_context();
@@ -298,5 +355,108 @@ mod tests {
 				.expect("actor id should remain")
 				.contains_key(&1)
 		);
+	}
+
+	#[tokio::test]
+	async fn stopped_event_survives_actor_removal_and_replays_until_acked() {
+		let (mut ctx, _handle) = new_envoy_context();
+		insert_actor(&mut ctx, "actor-stop", 1, Arc::new(AsyncCounter::new()), false);
+		ctx.remove_actor("actor-stop", 1);
+		let event = stopped_event("actor-stop", 1);
+		let other_event = stopped_event("actor-other", 2);
+
+		handle_send_events(&mut ctx, vec![event.clone(), other_event.clone()]).await;
+		assert!(ctx.actors.is_empty());
+		assert_eq!(ctx.pending_events.len(), 2);
+
+		let (tx, mut rx) = mpsc::unbounded_channel();
+		install_connection(&ctx.shared, tx).await;
+		resend_unacknowledged_events(&mut ctx).await;
+		let WsTxMessage::Send(bytes) = rx.recv().await.expect("replayed event") else {
+			panic!("expected event frame");
+		};
+		let replayed = protocol::versioned::ToRivet::deserialize(
+			&bytes,
+			protocol::PROTOCOL_VERSION,
+		)
+		.expect("decode replayed event");
+		assert!(matches!(replayed, protocol::ToRivet::ToRivetEvents(events) if events.len() == 2 && events.contains(&event) && events.contains(&other_event)));
+
+		handle_ack_events(
+			&mut ctx,
+			protocol::ToEnvoyAckEvents {
+				last_event_checkpoints: vec![event.checkpoint],
+			},
+		);
+		assert_eq!(ctx.pending_events.len(), 1);
+
+		crate::connection::remove_connection(&ctx.shared).await;
+		let (next_tx, mut next_rx) = mpsc::unbounded_channel();
+		install_connection(&ctx.shared, next_tx).await;
+		resend_unacknowledged_events(&mut ctx).await;
+		let WsTxMessage::Send(bytes) = next_rx.recv().await.expect("second replay") else {
+			panic!("expected event frame");
+		};
+		let replayed = protocol::versioned::ToRivet::deserialize(
+			&bytes,
+			protocol::PROTOCOL_VERSION,
+		)
+		.expect("decode second replay");
+		assert!(matches!(replayed, protocol::ToRivet::ToRivetEvents(events) if events == vec![other_event.clone()]));
+		handle_ack_events(
+			&mut ctx,
+			protocol::ToEnvoyAckEvents {
+				last_event_checkpoints: vec![other_event.checkpoint],
+			},
+		);
+		assert!(ctx.pending_events.is_empty());
+		resend_unacknowledged_events(&mut ctx).await;
+		assert!(next_rx.try_recv().is_err());
+	}
+
+	#[tokio::test]
+	async fn expired_terminal_events_are_removed_without_ack() {
+		let (mut ctx, _handle) = new_envoy_context();
+		insert_actor(&mut ctx, "running", 1, Arc::new(AsyncCounter::new()), false);
+		handle_send_events(&mut ctx, vec![stopped_event("stopped", 1)]).await;
+		handle_send_events(&mut ctx, vec![running_event("running", 1)]).await;
+		cleanup_expired_terminal_events_at(
+			&mut ctx,
+			crate::time::Instant::now() + TERMINAL_EVENT_RETENTION,
+		);
+
+		let (tx, mut rx) = mpsc::unbounded_channel();
+		install_connection(&ctx.shared, tx).await;
+		resend_unacknowledged_events(&mut ctx).await;
+		assert!(!ctx.pending_events.contains_key(&("stopped".to_string(), 1)));
+		assert!(ctx.pending_events.contains_key(&("running".to_string(), 1)));
+		let WsTxMessage::Send(bytes) = rx.recv().await.expect("live event replay") else {
+			panic!("expected event frame");
+		};
+		let replayed = protocol::versioned::ToRivet::deserialize(
+			&bytes,
+			protocol::PROTOCOL_VERSION,
+		)
+		.expect("decode live replay");
+		assert!(matches!(replayed, protocol::ToRivet::ToRivetEvents(events) if events.len() == 1 && events[0].checkpoint.actor_id == "running"));
+	}
+
+	#[tokio::test]
+	async fn events_of_actor_exiting_without_stop_expire() {
+		let (mut ctx, _handle) = new_envoy_context();
+		insert_actor(&mut ctx, "crashed", 1, Arc::new(AsyncCounter::new()), false);
+		handle_send_events(&mut ctx, vec![running_event("crashed", 1)]).await;
+		let key = ("crashed".to_string(), 1);
+
+		let now = crate::time::Instant::now();
+		cleanup_expired_terminal_events_at(&mut ctx, now + TERMINAL_EVENT_RETENTION);
+		assert!(ctx.pending_events[&key].retired_at.is_none());
+
+		ctx.remove_actor("crashed", 1);
+		cleanup_expired_terminal_events_at(&mut ctx, now);
+		assert_eq!(ctx.pending_events[&key].retired_at, Some(now));
+
+		cleanup_expired_terminal_events_at(&mut ctx, now + TERMINAL_EVENT_RETENTION);
+		assert!(ctx.pending_events.is_empty());
 	}
 }

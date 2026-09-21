@@ -54,6 +54,7 @@ pub struct EnvoyContext {
 	pub shared: Arc<SharedContext>,
 	pub shutting_down: bool,
 	pub actors: HashMap<String, HashMap<u32, ActorEntry>>,
+	pub pending_events: HashMap<(String, u32), PendingActorEvents>,
 	pub buffered_actor_messages: HashMap<String, Vec<BufferedActorMessage>>,
 	pub kv_requests: HashMap<u32, KvRequestEntry>,
 	pub next_kv_request_id: u32,
@@ -94,9 +95,14 @@ pub struct ActorEntry {
 	pub handle: mpsc::UnboundedSender<ToActor>,
 	pub active_http_request_count: Arc<AsyncCounter>,
 	pub name: String,
-	pub event_history: Vec<protocol::EventWrapper>,
 	pub last_command_idx: i64,
 	pub received_stop: bool,
+}
+
+#[derive(Default)]
+pub struct PendingActorEvents {
+	pub events: Vec<protocol::EventWrapper>,
+	pub retired_at: Option<crate::time::Instant>,
 }
 
 pub enum BufferedActorMessage {
@@ -240,7 +246,6 @@ impl EnvoyContext {
 					handle: handle.clone(),
 					active_http_request_count: active_http_request_count.clone(),
 					name,
-					event_history: Vec::new(),
 					last_command_idx,
 					received_stop: false,
 				},
@@ -417,6 +422,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		shared: shared.clone(),
 		shutting_down: false,
 		actors: HashMap::new(),
+		pending_events: HashMap::new(),
 		buffered_actor_messages: HashMap::new(),
 		kv_requests: HashMap::new(),
 		next_kv_request_id: 0,
@@ -570,6 +576,7 @@ async fn envoy_loop(
 				cleanup_old_kv_requests(&mut ctx);
 				cleanup_old_sqlite_requests(&mut ctx);
 				cleanup_old_remote_sqlite_requests(&mut ctx);
+				crate::events::cleanup_expired_terminal_events(&mut ctx);
 				kv_cleanup_tick = boxed_sleep(std::time::Duration::from_millis(KV_CLEANUP_INTERVAL_MS));
 			}
 			_ = async {

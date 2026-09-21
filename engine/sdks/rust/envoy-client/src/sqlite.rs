@@ -690,6 +690,7 @@ mod tests {
 			shared,
 			shutting_down: false,
 			actors: HashMap::new(),
+			pending_events: HashMap::new(),
 			buffered_actor_messages: HashMap::new(),
 			kv_requests: HashMap::new(),
 			next_kv_request_id: 0,
