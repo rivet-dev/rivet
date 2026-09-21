@@ -15,7 +15,7 @@ export const DURABLE_STREAMS_LOCAL_URL =
 export const DURABLE_STREAMS_CLIENT_PACKAGE = "@durable-streams/client";
 
 // Path under a Rivet Run origin where the managed Durable Streams service is
-// served, e.g. `https://<ns>.rivet.run/durable-streams/`.
+// served, e.g. `https://services--<ns>.rivet.run/durable-streams/`.
 export function getDurableStreamsServiceUrl(rivetRunUrl: string) {
 	return `${rivetRunUrl.replace(/\/?$/, "/")}durable-streams/`;
 }

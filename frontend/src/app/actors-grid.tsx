@@ -28,6 +28,7 @@ import { VisibilitySensor } from "@/components/visibility-sensor";
 import { features } from "@/lib/features";
 import { getRivetRunUrl } from "../lib/env";
 import { AddComponentButton, AddComponentCard } from "./add-component-card";
+import { MANAGED_SERVICES_POOL } from "./managed-services";
 import { RouteLayout } from "./route-layout";
 
 function _GridCard({
@@ -264,6 +265,8 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 					</section>
 
 					<DeploymentsSection />
+
+					<ServicesUrlSection />
 				</div>
 			</ScrollArea>
 		</div>
@@ -437,6 +440,58 @@ function DeploymentsSection() {
 						View all
 					</Link>
 				) : null}
+			</div>
+		</section>
+	);
+}
+
+// Shows the namespace's Rivet Run services origin once the managed services pool
+// exists. Mirrors the compute deployment URL, but keyed off the services pool
+// and only on flavors that run managed services.
+function ServicesUrlSection() {
+	const { namespace } = useParams({ strict: false }) as {
+		namespace: string;
+	};
+	const dataProvider = useCloudNamespaceDataProvider();
+
+	const { data: servicesPool } = useQuery({
+		...dataProvider.currentProjectManagedPoolQueryOptions({
+			namespace,
+			pool: MANAGED_SERVICES_POOL,
+			safe: true,
+		}),
+		enabled: features.compute && features.services,
+		refetchInterval: (query) => (query.state.data === null ? false : 5_000),
+		refetchOnWindowFocus: (query) => query.state.data !== null,
+	});
+
+	const { data: nsData } = useQuery(
+		dataProvider.currentProjectNamespaceQueryOptions({ namespace }),
+	);
+
+	if (!features.compute || !features.services) {
+		return null;
+	}
+	if (servicesPool == null) {
+		return null;
+	}
+	const engineNsName = nsData?.access?.engineNamespaceName;
+	if (!engineNsName) {
+		return null;
+	}
+
+	const servicesUrl = getRivetRunUrl(engineNsName, MANAGED_SERVICES_POOL);
+
+	return (
+		<section>
+			<div className="flex items-center gap-2 text-sm">
+				<span className="text-muted-foreground">Services URL</span>
+				<DiscreteCopyButton
+					value={servicesUrl}
+					className="font-mono text-xs text-muted-foreground"
+				>
+					{servicesUrl}
+				</DiscreteCopyButton>
 			</div>
 		</section>
 	);

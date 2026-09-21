@@ -3,6 +3,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import {
 	Button,
 	cn,
+	DiscreteCopyButton,
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -17,7 +18,9 @@ import {
 	ProductMark,
 } from "@/components/products/product-picker";
 import { features } from "@/lib/features";
+import { getRivetRunUrl } from "@/lib/env";
 import {
+	MANAGED_SERVICES_POOL,
 	MANAGED_SERVICES_POOL_CONFIG,
 	useEnableManagedServicesMutation,
 	useManagedServicesPoolQueryOptions,
@@ -114,6 +117,13 @@ function EnableServices() {
 
 function ServicesList() {
 	const dataProvider = useEngineCompatDataProvider();
+	// On Rivet Cloud every managed service is served under the namespace's Rivet
+	// Run origin. Self-hosted flavors run the worker themselves, so there is no
+	// fixed URL to hand out.
+	const rivetRunUrl =
+		features.compute && features.services
+			? getRivetRunUrl(dataProvider.engineNamespace, MANAGED_SERVICES_POOL)
+			: null;
 	// Probed per service rather than read off the namespace build list: that
 	// list is paginated, so a service registered past the first page would read
 	// as not connected.
@@ -172,6 +182,9 @@ function ServicesList() {
 			>
 				{SERVICES.map((service, idx) => {
 					const connected = connections[idx]?.data ?? false;
+					const serviceUrl = rivetRunUrl
+						? `${rivetRunUrl.replace(/\/?$/, "/")}${service.product.target}/`
+						: null;
 					return (
 						<div
 							key={service.product.target}
@@ -193,6 +206,14 @@ function ServicesList() {
 									<div className="text-xs text-muted-foreground truncate">
 										{service.product.description}
 									</div>
+									{serviceUrl ? (
+										<DiscreteCopyButton
+											value={serviceUrl}
+											className="mt-1 max-w-full font-mono text-xs text-muted-foreground"
+										>
+											{serviceUrl}
+										</DiscreteCopyButton>
+									) : null}
 								</div>
 							</div>
 							<div className="flex items-center gap-3 shrink-0">

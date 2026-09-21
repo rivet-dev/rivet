@@ -29,6 +29,7 @@ import {
 } from "@/content/agent-prompts";
 import { cloudEnv, getMcpUrl, getRivetRunUrl } from "@/lib/env";
 import { features } from "@/lib/features";
+import { MANAGED_SERVICES_POOL } from "@/app/managed-services";
 import { usePublishableToken } from "@/queries/accessors";
 import { useRivetDsn } from "./env-variables";
 
@@ -108,7 +109,9 @@ export function useAgentInstructionsCode({
 export function useDurableStreamsServiceUrl(): string | undefined {
 	const namespace = useEngineCompatDataProvider().engineNamespace;
 	if (!features.compute || !features.services) return undefined;
-	return getDurableStreamsServiceUrl(getRivetRunUrl(namespace));
+	return getDurableStreamsServiceUrl(
+		getRivetRunUrl(namespace, MANAGED_SERVICES_POOL),
+	);
 }
 
 // The MCP setup the copy-prompt should instruct the agent to perform. The hosted

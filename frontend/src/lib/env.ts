@@ -41,8 +41,13 @@ export const cloudEnv = () => cloudEnvSchema.parse(import.meta.env);
 export const getMcpUrl = () =>
 	cloudEnv().VITE_APP_MCP_URL ?? "https://mcp.rivet.dev/mcp";
 
-export const getRivetRunUrl = (engineNsName: string) => {
+// Rivet Run host for a namespace. The default compute pool is served off the
+// bare namespace subdomain; any other pool (e.g. the managed services pool) is
+// served off a `<pool>--<namespace>` subdomain.
+export const getRivetRunUrl = (engineNsName: string, pool?: string) => {
+	const host =
+		pool && pool !== "default" ? `${pool}--${engineNsName}` : engineNsName;
 	return cloudEnv().VITE_DEPLOYMENT_TYPE === "production"
-		? `https://${engineNsName}.rivet.run/`
-		: `https://${engineNsName}.staging.rivet.run/`;
+		? `https://${host}.rivet.run/`
+		: `https://${host}.staging.rivet.run/`;
 };
