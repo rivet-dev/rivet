@@ -12,6 +12,8 @@ mod serverless_listener;
 pub mod sqlite;
 pub mod start;
 pub mod test;
+#[cfg(test)]
+mod test_fixtures;
 pub mod typed_client;
 
 pub use crate::{

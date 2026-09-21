@@ -6211,6 +6211,7 @@ dependencies = [
  "rivetkit-client-protocol",
  "rivetkit-core",
  "serde",
+ "serde_bytes",
  "serde_json",
  "tokio",
  "tokio-stream",

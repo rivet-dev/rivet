@@ -12,13 +12,15 @@ use rivetkit_core::{
 use serde::{
 	Serialize,
 	de::{
-		self, DeserializeOwned, DeserializeSeed, EnumAccess, MapAccess, VariantAccess, Visitor,
+		self, DeserializeOwned, DeserializeSeed, EnumAccess, VariantAccess, Visitor,
 		value::BorrowedStrDeserializer,
 	},
 };
 
 use crate::{action, actor::Actor, context::ConnCtx, persist};
 
+/// An event an actor can broadcast to connected clients. Payloads must be JSON-compatible,
+/// like [`crate::action::Action`] arguments.
 pub trait Event: Serialize + DeserializeOwned + Send + Sync + 'static {
 	const NAME: &'static str;
 }
@@ -228,18 +230,24 @@ impl<A: Actor> ActionCall<A> {
 		&self.args
 	}
 
+	/// Decode this call into the actor's action enum, keyed by action name. Part of the legacy
+	/// event-loop API; new code should prefer the trait API. Decodes current-format payloads
+	/// and falls back to the legacy binary form, matching [`Self::decode_as`].
 	pub fn decode(&self) -> AnyhowResult<A::Action> {
-		<A::Action as serde::Deserialize>::deserialize(ActionDeserializer::new(
-			self.name.as_str(),
-			self.raw_args(),
-		))
-		.map_err(|error| {
-			ActorRuntime::InvalidOperation {
-				operation: format!("decode action '{}'", self.name),
-				reason: error.to_string(),
-			}
-			.build()
-		})
+		let name = self.name.as_str();
+		let args = self.raw_args();
+
+		<A::Action as serde::Deserialize>::deserialize(ActionDeserializer::new(name, args))
+			.or_else(|current_error| {
+				decode_legacy_action_enum::<A::Action>(name, args).map_err(|_| current_error)
+			})
+			.map_err(|error| {
+				ActorRuntime::InvalidOperation {
+					operation: format!("decode action '{}'", self.name),
+					reason: error.to_string(),
+				}
+				.build()
+			})
 	}
 
 	pub fn decode_as<T: DeserializeOwned>(&self) -> AnyhowResult<T> {
@@ -355,14 +363,16 @@ impl<'de> VariantAccess<'de> for ActionVariantAccess<'de> {
 	where
 		T: DeserializeSeed<'de>,
 	{
-		seed.deserialize(ValueDeserializer::from_args(self.args)?)
+		seed.deserialize(action_payload_value(self.args)?)
+			.map_err(map_json_error)
 	}
 
 	fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
 	where
 		V: Visitor<'de>,
 	{
-		de::Deserializer::deserialize_tuple(ValueDeserializer::from_args(self.args)?, len, visitor)
+		de::Deserializer::deserialize_tuple(action_payload_value(self.args)?, len, visitor)
+			.map_err(map_json_error)
 	}
 
 	fn struct_variant<V>(
@@ -373,513 +383,39 @@ impl<'de> VariantAccess<'de> for ActionVariantAccess<'de> {
 	where
 		V: Visitor<'de>,
 	{
-		de::Deserializer::deserialize_struct(
-			ValueDeserializer::from_args(self.args)?,
-			"action",
-			fields,
-			visitor,
-		)
+		de::Deserializer::deserialize_struct(action_payload_value(self.args)?, "action", fields, visitor)
+			.map_err(map_json_error)
 	}
 }
 
-struct ValueDeserializer {
-	value: Value,
+/// Decode an action variant's payload into a JSON-shaped value, symmetric with the encoder.
+fn action_payload_value(args: &[u8]) -> Result<serde_json::Value, de::value::Error> {
+	let value = decode_action_value(args)?;
+	action::cbor_to_json(value).map_err(|error| de::Error::custom(error.to_string()))
 }
 
-impl ValueDeserializer {
-	fn new(value: Value) -> Self {
-		Self { value }
-	}
-
-	fn from_args(args: &[u8]) -> Result<Self, de::value::Error> {
-		decode_action_value(args).map(Self::new)
-	}
+fn map_json_error(error: serde_json::Error) -> de::value::Error {
+	de::Error::custom(error)
 }
 
-impl<'de> de::Deserializer<'de> for ValueDeserializer {
-	type Error = de::value::Error;
+/// Legacy fallback for [`ActionCall::decode`]: reconstruct the externally tagged enum (`name`
+/// for a unit variant, `{name: payload}` otherwise) as a CBOR value and decode it natively, so
+/// payloads persisted by an older runtime still decode.
+fn decode_legacy_action_enum<T: DeserializeOwned>(
+	name: &str,
+	args: &[u8],
+) -> Result<T, de::value::Error> {
+	let enum_value = if args.is_empty() {
+		Value::Text(name.to_owned())
+	} else {
+		Value::Map(vec![(Value::Text(name.to_owned()), decode_action_value(args)?)])
+	};
 
-	fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Bool(value) => visitor.visit_bool(value),
-			Value::Integer(value) => {
-				let value = i128::from(value);
-				if value < 0 {
-					if let Ok(value) = i64::try_from(value) {
-						visitor.visit_i64(value)
-					} else {
-						visitor.visit_i128(value)
-					}
-				} else if let Ok(value) = u64::try_from(value) {
-					visitor.visit_u64(value)
-				} else {
-					visitor.visit_u128(value as u128)
-				}
-			}
-			Value::Float(value) => visitor.visit_f64(value),
-			Value::Bytes(value) => visitor.visit_byte_buf(value),
-			Value::Text(value) => visitor.visit_string(value),
-			Value::Null => visitor.visit_unit(),
-			Value::Array(values) => visitor.visit_seq(ValueSeqAccess {
-				values: values.into_iter(),
-			}),
-			Value::Map(entries) => visitor.visit_map(ValueMapAccess {
-				entries: entries.into_iter(),
-				value: None,
-			}),
-			Value::Tag(_, _) => Err(de::Error::custom(
-				"tagged action payloads are not supported",
-			)),
-			_ => Err(de::Error::custom("unsupported action payload value")),
-		}
-	}
-
-	fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Bool(value) => visitor.visit_bool(value),
-			other => Err(invalid_type(&other, "a bool")),
-		}
-	}
-
-	fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		visitor.visit_i8(expect_signed(self.value, "an i8")?)
-	}
-
-	fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		visitor.visit_i16(expect_signed(self.value, "an i16")?)
-	}
-
-	fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		visitor.visit_i32(expect_signed(self.value, "an i32")?)
-	}
-
-	fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		visitor.visit_i64(expect_signed(self.value, "an i64")?)
-	}
-
-	fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		visitor.visit_i128(expect_signed(self.value, "an i128")?)
-	}
-
-	fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		visitor.visit_u8(expect_unsigned(self.value, "a u8")?)
-	}
-
-	fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		visitor.visit_u16(expect_unsigned(self.value, "a u16")?)
-	}
-
-	fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		visitor.visit_u32(expect_unsigned(self.value, "a u32")?)
-	}
-
-	fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		visitor.visit_u64(expect_unsigned(self.value, "a u64")?)
-	}
-
-	fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		visitor.visit_u128(expect_unsigned(self.value, "a u128")?)
-	}
-
-	fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Float(value) => visitor.visit_f32(value as f32),
-			other => Err(invalid_type(&other, "an f32")),
-		}
-	}
-
-	fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Float(value) => visitor.visit_f64(value),
-			other => Err(invalid_type(&other, "an f64")),
-		}
-	}
-
-	fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Text(value) => {
-				let mut chars = value.chars();
-				match (chars.next(), chars.next()) {
-					(Some(ch), None) => visitor.visit_char(ch),
-					_ => Err(de::Error::custom("expected a single-character string")),
-				}
-			}
-			other => Err(invalid_type(&other, "a char")),
-		}
-	}
-
-	fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Text(value) => visitor.visit_string(value),
-			other => Err(invalid_type(&other, "a string")),
-		}
-	}
-
-	fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		self.deserialize_str(visitor)
-	}
-
-	fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Bytes(value) => visitor.visit_byte_buf(value),
-			other => Err(invalid_type(&other, "bytes")),
-		}
-	}
-
-	fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		self.deserialize_bytes(visitor)
-	}
-
-	fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Null => visitor.visit_none(),
-			other => visitor.visit_some(ValueDeserializer::new(other)),
-		}
-	}
-
-	fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Null => visitor.visit_unit(),
-			other => Err(invalid_type(&other, "null")),
-		}
-	}
-
-	fn deserialize_unit_struct<V>(
-		self,
-		_name: &'static str,
-		visitor: V,
-	) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		self.deserialize_unit(visitor)
-	}
-
-	fn deserialize_newtype_struct<V>(
-		self,
-		_name: &'static str,
-		visitor: V,
-	) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		visitor.visit_newtype_struct(self)
-	}
-
-	fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Array(values) => visitor.visit_seq(ValueSeqAccess {
-				values: values.into_iter(),
-			}),
-			other => Err(invalid_type(&other, "an array")),
-		}
-	}
-
-	fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Array(values) => {
-				if values.len() != len {
-					return Err(de::Error::custom(format!(
-						"expected tuple action payload with {len} elements, got {}",
-						values.len()
-					)));
-				}
-				visitor.visit_seq(ValueSeqAccess {
-					values: values.into_iter(),
-				})
-			}
-			other => Err(invalid_type(&other, "an array")),
-		}
-	}
-
-	fn deserialize_tuple_struct<V>(
-		self,
-		_name: &'static str,
-		len: usize,
-		visitor: V,
-	) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		self.deserialize_tuple(len, visitor)
-	}
-
-	fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Map(entries) => visitor.visit_map(ValueMapAccess {
-				entries: entries.into_iter(),
-				value: None,
-			}),
-			other => Err(invalid_type(&other, "a map")),
-		}
-	}
-
-	fn deserialize_struct<V>(
-		self,
-		_name: &'static str,
-		_fields: &'static [&'static str],
-		visitor: V,
-	) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Map(entries) => visitor.visit_map(ValueMapAccess {
-				entries: entries.into_iter(),
-				value: None,
-			}),
-			Value::Array(values) => visitor.visit_seq(ValueSeqAccess {
-				values: values.into_iter(),
-			}),
-			other => Err(invalid_type(&other, "a map or array")),
-		}
-	}
-
-	fn deserialize_enum<V>(
-		self,
-		_name: &'static str,
-		_variants: &'static [&'static str],
-		visitor: V,
-	) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		match self.value {
-			Value::Text(variant) => visitor.visit_enum(ValueEnumAccess {
-				variant,
-				value: None,
-			}),
-			Value::Map(mut entries) if entries.len() == 1 => {
-				let Some((key, value)) = entries.pop() else {
-					return Err(de::Error::custom(
-						"expected externally tagged enum map to contain one entry",
-					));
-				};
-				match key {
-					Value::Text(variant) => visitor.visit_enum(ValueEnumAccess {
-						variant,
-						value: Some(value),
-					}),
-					other => Err(invalid_type(&other, "a string enum variant")),
-				}
-			}
-			other => Err(invalid_type(&other, "an externally tagged enum")),
-		}
-	}
-
-	fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		self.deserialize_str(visitor)
-	}
-
-	fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		visitor.visit_unit()
-	}
-}
-
-struct ValueSeqAccess {
-	values: std::vec::IntoIter<Value>,
-}
-
-impl<'de> de::SeqAccess<'de> for ValueSeqAccess {
-	type Error = de::value::Error;
-
-	fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
-	where
-		T: DeserializeSeed<'de>,
-	{
-		self.values
-			.next()
-			.map(|value| seed.deserialize(ValueDeserializer::new(value)))
-			.transpose()
-	}
-
-	fn size_hint(&self) -> Option<usize> {
-		Some(self.values.len())
-	}
-}
-
-struct ValueMapAccess {
-	entries: std::vec::IntoIter<(Value, Value)>,
-	value: Option<Value>,
-}
-
-impl<'de> MapAccess<'de> for ValueMapAccess {
-	type Error = de::value::Error;
-
-	fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
-	where
-		K: DeserializeSeed<'de>,
-	{
-		match self.entries.next() {
-			Some((key, value)) => {
-				self.value = Some(value);
-				seed.deserialize(ValueDeserializer::new(key)).map(Some)
-			}
-			None => Ok(None),
-		}
-	}
-
-	fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Self::Error>
-	where
-		V: DeserializeSeed<'de>,
-	{
-		let value = self
-			.value
-			.take()
-			.ok_or_else(|| de::Error::custom("value requested before key"))?;
-		seed.deserialize(ValueDeserializer::new(value))
-	}
-
-	fn size_hint(&self) -> Option<usize> {
-		Some(self.entries.len())
-	}
-}
-
-struct ValueEnumAccess {
-	variant: String,
-	value: Option<Value>,
-}
-
-impl<'de> EnumAccess<'de> for ValueEnumAccess {
-	type Error = de::value::Error;
-	type Variant = ValueVariantAccess;
-
-	fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
-	where
-		V: DeserializeSeed<'de>,
-	{
-		let variant = seed.deserialize(
-			serde::de::value::StringDeserializer::<de::value::Error>::new(self.variant),
-		)?;
-		Ok((variant, ValueVariantAccess { value: self.value }))
-	}
-}
-
-struct ValueVariantAccess {
-	value: Option<Value>,
-}
-
-impl<'de> VariantAccess<'de> for ValueVariantAccess {
-	type Error = de::value::Error;
-
-	fn unit_variant(self) -> Result<(), Self::Error> {
-		match self.value {
-			None | Some(Value::Null) => Ok(()),
-			Some(other) => Err(invalid_type(&other, "null")),
-		}
-	}
-
-	fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
-	where
-		T: DeserializeSeed<'de>,
-	{
-		seed.deserialize(ValueDeserializer::new(self.value.unwrap_or(Value::Null)))
-	}
-
-	fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		de::Deserializer::deserialize_tuple(
-			ValueDeserializer::new(self.value.unwrap_or(Value::Null)),
-			len,
-			visitor,
-		)
-	}
-
-	fn struct_variant<V>(
-		self,
-		fields: &'static [&'static str],
-		visitor: V,
-	) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		de::Deserializer::deserialize_struct(
-			ValueDeserializer::new(self.value.unwrap_or(Value::Null)),
-			"enum",
-			fields,
-			visitor,
-		)
-	}
+	let mut encoded = Vec::new();
+	ciborium::into_writer(&enum_value, &mut encoded)
+		.map_err(|error| de::Error::custom(format!("re-encode legacy action enum: {error}")))?;
+	ciborium::from_reader(Cursor::new(encoded))
+		.map_err(|error| de::Error::custom(format!("decode legacy action enum: {error}")))
 }
 
 fn decode_action_value(args: &[u8]) -> Result<Value, de::value::Error> {
@@ -890,77 +426,33 @@ fn decode_action_value(args: &[u8]) -> Result<Value, de::value::Error> {
 pub(crate) fn deserialize_cbor_value<T: DeserializeOwned>(
 	value: Value,
 ) -> Result<T, de::value::Error> {
-	T::deserialize(ValueDeserializer::new(value))
+	// Current format: decode through the JSON value model, symmetric with the encoder. Fall
+	// back to the legacy native-binary codec for payloads persisted by an older runtime,
+	// preferring the current-format error since it describes new payloads.
+	match deserialize_json_value(value.clone()) {
+		Ok(decoded) => Ok(decoded),
+		Err(current_error) => deserialize_binary_value(&value).map_err(|_| current_error),
+	}
+}
+
+fn deserialize_json_value<T: DeserializeOwned>(value: Value) -> Result<T, de::value::Error> {
+	let json = action::cbor_to_json(value)
+		.map_err(|error| de::Error::custom(format!("convert cbor envelope to json: {error}")))?;
+	serde_json::from_value(json)
+		.map_err(|error| de::Error::custom(format!("decode json value: {error}")))
+}
+
+fn deserialize_binary_value<T: DeserializeOwned>(value: &Value) -> Result<T, de::value::Error> {
+	let mut encoded = Vec::new();
+	ciborium::into_writer(value, &mut encoded)
+		.map_err(|error| de::Error::custom(format!("re-encode value for binary decode: {error}")))?;
+	ciborium::from_reader(Cursor::new(encoded))
+		.map_err(|error| de::Error::custom(format!("decode value in binary mode: {error}")))
 }
 
 fn encode_cbor<T: Serialize>(value: &T, context: &'static str) -> AnyhowResult<Vec<u8>> {
-	let mut encoded = Vec::new();
-	ciborium::into_writer(value, &mut encoded).context(context)?;
-	Ok(encoded)
-}
-
-fn expect_signed<T>(value: Value, expected: &'static str) -> Result<T, de::value::Error>
-where
-	T: TryFrom<i128>,
-{
-	match value {
-		Value::Integer(value) => T::try_from(i128::from(value))
-			.map_err(|_| de::Error::custom(format!("expected {expected}"))),
-		other => Err(invalid_type(&other, expected)),
-	}
-}
-
-fn expect_unsigned<T>(value: Value, expected: &'static str) -> Result<T, de::value::Error>
-where
-	T: TryFrom<u128>,
-{
-	match value {
-		Value::Integer(value) => T::try_from(
-			u128::try_from(value).map_err(|_| de::Error::custom(format!("expected {expected}")))?,
-		)
-		.map_err(|_| de::Error::custom(format!("expected {expected}"))),
-		other => Err(invalid_type(&other, expected)),
-	}
-}
-
-fn invalid_type(value: &Value, expected: &'static str) -> de::value::Error {
-	de::Error::invalid_type(unexpected(value), &Expected(expected))
-}
-
-fn unexpected(value: &Value) -> de::Unexpected<'_> {
-	match value {
-		Value::Bool(value) => de::Unexpected::Bool(*value),
-		Value::Integer(value) => {
-			let signed = i128::from(*value);
-			if signed < 0 {
-				if let Ok(value) = i64::try_from(signed) {
-					de::Unexpected::Signed(value)
-				} else {
-					de::Unexpected::Other("integer")
-				}
-			} else if let Ok(value) = u64::try_from(signed) {
-				de::Unexpected::Unsigned(value)
-			} else {
-				de::Unexpected::Other("integer")
-			}
-		}
-		Value::Float(value) => de::Unexpected::Float(*value),
-		Value::Bytes(value) => de::Unexpected::Bytes(value),
-		Value::Text(value) => de::Unexpected::Str(value),
-		Value::Null => de::Unexpected::Other("null"),
-		Value::Tag(_, _) => de::Unexpected::Other("tag"),
-		Value::Array(_) => de::Unexpected::Seq,
-		Value::Map(_) => de::Unexpected::Map,
-		_ => de::Unexpected::Other("value"),
-	}
-}
-
-struct Expected(&'static str);
-
-impl de::Expected for Expected {
-	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-		formatter.write_str(self.0)
-	}
+	let value = action::to_json_value(value, context)?;
+	action::encode_json_as_cbor(&value, context)
 }
 
 #[derive(Debug)]
@@ -1450,6 +942,8 @@ mod tests {
 		Rename(String),
 		Pair(String, u32),
 		Send { text: String, count: u32 },
+		Blob(serde_bytes::ByteBuf),
+		Tagged(crate::test_fixtures::HrSensitive),
 	}
 
 	struct TestActor;
@@ -1700,6 +1194,43 @@ mod tests {
 
 		let err = action.decode().expect_err("unknown variant should fail");
 		assert!(err.to_string().contains("unknown action variant: Nope"));
+	}
+
+	#[test]
+	fn action_decode_accepts_legacy_binary_payload() {
+		use crate::test_fixtures::HrSensitive;
+
+		// Legacy payload: the hr-sensitive field is bytes, which the current path can't decode
+		// (it requests a string), so the legacy fallback must.
+		let value = HrSensitive([1, 2, 3, 4]);
+		let legacy_args = encode_test_cbor(&value);
+		let cbor: ciborium::Value =
+			ciborium::from_reader(std::io::Cursor::new(&legacy_args)).expect("decode cbor value");
+		assert!(
+			matches!(cbor, ciborium::Value::Bytes(_)),
+			"legacy form should encode the field as bytes",
+		);
+
+		let action = test_action("Tagged", legacy_args);
+		assert_eq!(
+			action.decode().expect("decode legacy binary action"),
+			TestAction::Tagged(value)
+		);
+	}
+
+	#[test]
+	fn action_decode_accepts_json_reshaped_payload() {
+		// A byte string reshapes to a JSON number array on the wire; the enum decode path must
+		// accept that shape.
+		let payload = serde_bytes::ByteBuf::from(vec![1u8, 2, 3, 255]);
+		let json = action::to_json_value(&payload, "blob").expect("encode payload as json");
+		let args = action::encode_json_as_cbor(&json, "blob").expect("encode payload as cbor");
+		let action = test_action("Blob", args);
+
+		assert_eq!(
+			action.decode().expect("decode json-reshaped action"),
+			TestAction::Blob(payload)
+		);
 	}
 
 	#[test]

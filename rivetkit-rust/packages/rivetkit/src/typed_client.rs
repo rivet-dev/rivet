@@ -8,7 +8,7 @@ use rivetkit_client::{
 	connection::{ActorConnection, Event as ClientEvent, SubscriptionHandle},
 	handle::ActorHandle,
 };
-use serde_json::{Map as JsonMap, Number as JsonNumber, Value as JsonValue};
+use serde_json::Value as JsonValue;
 
 use crate::action::{Action, Handles, encode_positional};
 use crate::actor::Actor;
@@ -220,7 +220,7 @@ pub(crate) fn encode_action_args<M: Action>(action: &M) -> Result<Vec<JsonValue>
 		bail!("positional action args must encode as a cbor array");
 	};
 
-	values.into_iter().map(cbor_to_json).collect()
+	values.into_iter().map(crate::action::cbor_to_json).collect()
 }
 
 fn decode_event<E: Event>(event: &ClientEvent) -> Result<E> {
@@ -251,45 +251,70 @@ fn decode_event_args<E: Event>(raw_args: &[u8]) -> Result<E> {
 	}
 }
 
-fn cbor_to_json(value: CborValue) -> Result<JsonValue> {
-	Ok(match value {
-		CborValue::Null => JsonValue::Null,
-		CborValue::Bool(value) => JsonValue::Bool(value),
-		CborValue::Integer(value) => integer_to_json(i128::from(value))?,
-		CborValue::Float(value) => JsonValue::Number(
-			JsonNumber::from_f64(value).context("cbor float cannot be represented as json")?,
-		),
-		CborValue::Bytes(value) => {
-			JsonValue::Array(value.into_iter().map(JsonValue::from).collect())
-		}
-		CborValue::Text(value) => JsonValue::String(value),
-		CborValue::Array(values) => JsonValue::Array(
-			values
-				.into_iter()
-				.map(cbor_to_json)
-				.collect::<Result<Vec<_>>>()?,
-		),
-		CborValue::Map(entries) => {
-			let mut object = JsonMap::new();
-			for (key, value) in entries {
-				let CborValue::Text(key) = key else {
-					bail!("cbor map key cannot be represented as a json object key");
-				};
-				object.insert(key, cbor_to_json(value)?);
-			}
-			JsonValue::Object(object)
-		}
-		CborValue::Tag(_, value) => cbor_to_json(*value)?,
-		_ => bail!("cbor value cannot be represented as json"),
-	})
-}
 
-fn integer_to_json(value: i128) -> Result<JsonValue> {
-	if let Ok(value) = i64::try_from(value) {
-		return Ok(JsonValue::Number(JsonNumber::from(value)));
+#[cfg(test)]
+mod tests {
+	use std::io::Cursor;
+
+	use serde::{Deserialize, Serialize};
+	use serde_json::Value as JsonValue;
+
+	use super::encode_action_args;
+	use crate::action::{self, Action};
+	use crate::test_fixtures::HrSensitive;
+
+	#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+	struct Ping {
+		id: HrSensitive,
 	}
-	if let Ok(value) = u64::try_from(value) {
-		return Ok(JsonValue::Number(JsonNumber::from(value)));
+
+	impl Action for Ping {
+		type Output = ();
+
+		const NAME: &'static str = "ping";
 	}
-	bail!("cbor integer cannot be represented as json number")
+
+	#[test]
+	fn encode_action_args_emits_string_not_byte_array() {
+		let args = encode_action_args(&Ping {
+			id: HrSensitive([0xde, 0xad, 0xbe, 0xef]),
+		})
+		.expect("encode action args");
+
+		assert_eq!(args.len(), 1);
+		let object = args[0].as_object().expect("named struct arg is a json object");
+		// The uuid-like field must be a json string, not a number array.
+		assert_eq!(
+			object.get("id").and_then(JsonValue::as_str),
+			Some("deadbeef"),
+			"uuid-like field must be a string, got {:?}",
+			object.get("id"),
+		);
+	}
+
+	#[test]
+	fn encode_action_args_round_trips_through_actor_decode() {
+		let action = Ping {
+			id: HrSensitive([0x01, 0x02, 0x03, 0x04]),
+		};
+		let args = encode_action_args(&action).expect("encode action args");
+
+		// Mimic the engine re-encoding the JSON args into the CBOR buffer the actor receives.
+		let mut cbor = Vec::new();
+		ciborium::into_writer(&JsonValue::Array(args), &mut cbor).expect("encode json args as cbor");
+
+		let decoded = action::decode_positional::<Ping>(&cbor).expect("actor decodes args");
+		assert_eq!(decoded, action);
+
+		// The wire form carries the string form.
+		let value: ciborium::Value =
+			ciborium::from_reader(Cursor::new(&cbor)).expect("decode cbor value");
+		let ciborium::Value::Array(values) = value else {
+			panic!("positional args should be an array");
+		};
+		let ciborium::Value::Map(fields) = &values[0] else {
+			panic!("named struct arg should remain a map");
+		};
+		assert!(matches!(&fields[0].1, ciborium::Value::Text(text) if text == "01020304"));
+	}
 }
