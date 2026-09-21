@@ -632,12 +632,20 @@ function RivetDeploy() {
 	const { data: cloudToken } = useSuspenseQuery(
 		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
 	);
+	const { data: namespace } = useSuspenseQuery(
+		dataProvider.currentNamespaceQueryOptions(),
+	);
 	const target = useOnboardingTarget();
 	const token = cloudToken ?? "<RIVET_CLOUD_TOKEN>";
-	// `deploy` defaults to the `production` namespace, so the onboarding
-	// namespace has to be passed explicitly or the app lands somewhere the rest
-	// of the flow is not watching.
-	const deployCommand = `npx @rivetkit/cli deploy --token "${token}" --namespace ${dataProvider.engineNamespace} --env PORT=3000${
+	// `deploy` defaults to the `production` namespace, so only pass `--namespace`
+	// when it would not already resolve there.
+	const isDefaultNamespace =
+		dataProvider.cloudNamespace === "production" ||
+		namespace.displayName?.toLowerCase() === "production";
+	const namespaceFlag = isDefaultNamespace
+		? ""
+		: ` --namespace ${dataProvider.cloudNamespace}`;
+	const deployCommand = `npx @rivetkit/cli deploy --token "${token}"${namespaceFlag}${
 		target === "dynamic-apps" ? ` --env RIVET_CLOUD_TOKEN="${token}"` : ""
 	}`;
 	const isAgentOs = target === "agent-os";
