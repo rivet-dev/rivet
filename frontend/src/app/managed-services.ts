@@ -7,7 +7,7 @@ import { queryClient } from "@/queries/global";
 // Rivet runs every managed service for a namespace out of one dedicated compute
 // pool. The pool existing is what "services are enabled" means for a namespace,
 // so both the enable button and the service URL key off it.
-export const MANAGED_SERVICES_POOL = "x-rivet-managed-services";
+export const MANAGED_SERVICES_POOL = "services";
 
 export const MANAGED_SERVICES_POOL_CONFIG = {
 	pool: MANAGED_SERVICES_POOL,
