@@ -47,6 +47,7 @@ const piOptionKeys = [
 	"resourceLoader",
 	"sessionStartEvent",
 	"settings",
+	"sandbox",
 ] as const satisfies readonly (keyof PiSessionOptions)[];
 
 export type PiActorConfigInput<
@@ -186,14 +187,14 @@ export function pi<
 			try {
 				await userOnSleep?.(c);
 			} finally {
-				await closePiSession(c);
+				await closePiSession(c, sessionOptions, "sleep");
 			}
 		},
 		onDestroy: async (c: PiContext) => {
 			try {
 				await userOnDestroy?.(c);
 			} finally {
-				await closePiSession(c);
+				await closePiSession(c, sessionOptions, "destroy");
 			}
 		},
 	} as any) as ActorDefinition<
