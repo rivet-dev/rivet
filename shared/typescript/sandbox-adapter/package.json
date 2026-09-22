@@ -19,6 +19,10 @@
 		"./agentos": {
 			"types": "./dist/agentos.d.ts",
 			"default": "./dist/agentos.js"
+		},
+		"./sandbox-agent": {
+			"types": "./dist/sandbox-agent.d.ts",
+			"default": "./dist/sandbox-agent.js"
 		}
 	},
 	"main": "./dist/index.js",
@@ -27,8 +31,17 @@
 		"build": "tsc -p tsconfig.build.json",
 		"check-types": "tsc --noEmit"
 	},
+	"peerDependencies": {
+		"sandbox-agent": "^0.4.2"
+	},
+	"peerDependenciesMeta": {
+		"sandbox-agent": {
+			"optional": true
+		}
+	},
 	"devDependencies": {
 		"@types/node": "^24.0.0",
+		"sandbox-agent": "^0.4.2",
 		"typescript": "^5.9.2"
 	},
 	"engines": {
