@@ -855,6 +855,9 @@ importers:
       '@opentelemetry/sdk-node':
         specifier: ^0.211.0
         version: 0.211.0(@opentelemetry/api@1.9.0)
+      '@rivet-dev/pi':
+        specifier: workspace:*
+        version: link:../../integrations/pi
       '@rivetkit/cloudflare-workers':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/cloudflare-workers
