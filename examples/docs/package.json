@@ -9,6 +9,7 @@
 	"dependencies": {
 		"@durable-streams/client": "^0.2.6",
 		"rivetkit": "workspace:*",
+		"@rivet-dev/pi": "workspace:*",
 		"@rivetkit/react": "workspace:*",
 		"@rivetkit/engine-api-full": "workspace:*",
 		"@rivetkit/next-js": "workspace:*",

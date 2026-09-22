@@ -432,6 +432,10 @@
 					"href": "/actors/integrations/flue"
 				},
 				{
+					"title": "Pi (Beta)",
+					"href": "/actors/integrations/pi"
+				},
+				{
 					"title": "Vercel Eve",
 					"href": "/actors/integrations/vercel-eve"
 				},

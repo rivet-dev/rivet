@@ -1,0 +1,76 @@
+---
+title: "Pi (Beta)"
+description: "Run the Pi coding agent as a durable Rivet Actor."
+skill: false
+---
+
+<Info>
+This integration is in beta. APIs may change between releases.
+</Info>
+
+`@rivet-dev/pi` runs one [Pi](https://github.com/earendil-works/pi) coding-agent session per Rivet Actor. The conversation is stored in the actor's SQLite database and restored on wake.
+
+## Quickstart
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm install @rivet-dev/pi rivetkit
+```
+
+</Step>
+
+<Step title="Define the actor">
+
+<CodeSnippet file="examples/docs/actors-integrations-pi/server.ts" title="server.ts" />
+
+`pi()` accepts the same config as `actor()`. Pi reads provider API keys such as `ANTHROPIC_API_KEY` from the actor process.
+
+</Step>
+
+<Step title="Prompt it">
+
+<CodeSnippet file="examples/docs/actors-integrations-pi/client.ts" title="client.ts" />
+
+`prompt` returns once Pi accepts the message. The run streams on the `event` event. `waitForIdle` waits for it to finish.
+
+</Step>
+
+</Steps>
+
+## Actions
+
+Actions use Pi's `AgentSession` method names and arguments, for example `steer`, `followUp`, `abort`, `compact`, `setThinkingLevel`, `executeBash`, `getMessages`, and `getSession`.
+
+## Sandboxes
+
+Pi's file and shell tools run only in a sandbox. Without one, Pi has no file or shell tools, only the `customTools` you pass, and never touches the actor host.
+
+The actor stores the sandbox id and reconnects to it on wake. If a sandbox fails, the tool call fails.
+
+Run the tools in an [agentOS](https://rivet.dev/agentos) VM:
+
+```ts
+import { agentOS, setup } from "@rivet-dev/agentos";
+import { pi } from "@rivet-dev/pi";
+import { agentOSProvider } from "@rivet-dev/sandbox-adapter/agentos";
+
+const vm = agentOS();
+const agent = pi({ sandbox: agentOSProvider({ actor: "vm" }) });
+
+export const registry = setup({ use: { agent, vm } });
+```
+
+Or in a hosted sandbox such as E2B, Daytona, or Modal through [sandbox-agent](https://github.com/rivet-dev/sandbox-agent):
+
+```ts
+import { pi } from "@rivet-dev/pi";
+import { sandboxAgentProvider } from "@rivet-dev/sandbox-adapter/sandbox-agent";
+import { e2b } from "sandbox-agent/e2b";
+
+const agent = pi({ sandbox: sandboxAgentProvider(e2b()) });
+```
+
+To use another environment, implement `SandboxProvider` from `@rivet-dev/sandbox-adapter`.

@@ -849,6 +849,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.14.1
         version: 1.19.13(hono@4.11.9)
+      '@rivet-dev/pi':
+        specifier: workspace:*
+        version: link:../../integrations/pi
       '@rivetkit/cloudflare-workers':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/cloudflare-workers
