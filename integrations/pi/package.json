@@ -26,6 +26,7 @@
 	},
 	"dependencies": {
 		"@earendil-works/pi-coding-agent": "0.87.1",
+		"@rivet-dev/sandbox-adapter": "workspace:*",
 		"rivetkit": "workspace:*"
 	},
 	"devDependencies": {
