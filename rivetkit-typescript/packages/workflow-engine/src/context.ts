@@ -1,4 +1,5 @@
 import type { Logger } from "pino";
+import { serializeEntry } from "../schemas/serde.js";
 import type { EngineDriver } from "./driver.js";
 import {
 	extractErrorInfo,
@@ -20,6 +21,8 @@ import {
 	SleepError,
 	StepExhaustedError,
 	StepFailedError,
+	StepOutputTooLargeError,
+	StorageLimitError,
 } from "./errors.js";
 import { buildEntryMetadataKey, buildLoopIterationRange } from "./keys.js";
 import {
@@ -933,7 +936,16 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					step: config.name,
 					key,
 				});
-				await this.flushStorage();
+				try {
+					await this.flushStorage();
+				} catch (error) {
+					if (!(error instanceof StorageLimitError)) throw error;
+					throw new StepOutputTooLargeError(
+						config.name,
+						serializeEntry(entry).byteLength,
+						error.message,
+					);
+				}
 			}
 
 			this.log("debug", {
@@ -944,9 +956,11 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			return output;
 		} catch (error) {
 			if (entry.kind.type === "step") {
+				entry.kind.data.output = undefined;
 				entry.kind.data.error = String(error);
 			}
 			entry.dirty = true;
+			metadata.completedAt = undefined;
 
 			// Timeout errors are treated as critical by default. Steps opt
 			// into retrying on timeout with retryOnTimeout: true.

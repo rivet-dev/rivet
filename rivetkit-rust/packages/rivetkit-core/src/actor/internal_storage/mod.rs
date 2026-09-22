@@ -14,7 +14,7 @@ use crate::actor::persist::{
 };
 use crate::actor::queue::{PersistedQueueMessage, QueueMetadata};
 use crate::actor::state::PersistedActor;
-use crate::error::KvRuntimeError;
+use crate::error::{KvRuntimeError, StorageLimitError};
 use crate::sqlite::{BindParam, ColumnValue, SqliteBatchStatement, SqliteDb};
 use crate::types::ListOpts;
 
@@ -839,11 +839,11 @@ pub(crate) async fn workflow_kv_batch_put(db: &SqliteDb, entries: &[(&[u8], &[u8
 	let mut statements = Vec::with_capacity(entries.len());
 	for (key, value) in entries {
 		if value.len() > WORKFLOW_KV_VALUE_LIMIT {
-			bail!(
-				"workflow kv value exceeds sqlite storage limit: {} > {}",
-				value.len(),
-				WORKFLOW_KV_VALUE_LIMIT
-			);
+			return Err(StorageLimitError::WorkflowValueTooLarge {
+				size: value.len(),
+				limit: WORKFLOW_KV_VALUE_LIMIT,
+			}
+			.build());
 		}
 		statements.push(SqliteBatchStatement {
 			sql: UPSERT_WORKFLOW_KV_SQL.to_owned(),
@@ -867,11 +867,11 @@ fn build_workflow_kv_statements(writes: &[WorkflowKvWrite]) -> Result<Vec<Sqlite
 		.iter()
 		.map(|write| {
 			if write.value.len() > WORKFLOW_KV_VALUE_LIMIT {
-				bail!(
-					"workflow kv value exceeds sqlite storage limit: {} > {}",
-					write.value.len(),
-					WORKFLOW_KV_VALUE_LIMIT
-				);
+				return Err(StorageLimitError::WorkflowValueTooLarge {
+					size: write.value.len(),
+					limit: WORKFLOW_KV_VALUE_LIMIT,
+				}
+				.build());
 			}
 			Ok(SqliteBatchStatement {
 				sql: UPSERT_WORKFLOW_KV_SQL.to_owned(),
@@ -895,11 +895,13 @@ pub(crate) fn validate_atomic_state_transaction_budget(
 	payload_bytes: usize,
 ) -> Result<()> {
 	if row_count > KV_TX_MAX_ROWS || payload_bytes > KV_TX_MAX_PAYLOAD_BYTES {
-		bail!(
-			"atomic SQLite and actor state transaction exceeds transaction budget: {row_count} rows and {payload_bytes} bytes (limits: {} rows and {} bytes)",
-			KV_TX_MAX_ROWS,
-			KV_TX_MAX_PAYLOAD_BYTES
-		);
+		return Err(StorageLimitError::TransactionTooLarge {
+			rows: row_count,
+			bytes: payload_bytes,
+			max_rows: KV_TX_MAX_ROWS,
+			max_bytes: KV_TX_MAX_PAYLOAD_BYTES,
+		}
+		.build());
 	}
 	Ok(())
 }

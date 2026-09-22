@@ -1,0 +1,5 @@
+{
+  "code": "transaction_too_large",
+  "group": "storage",
+  "message": "Atomic storage transaction is too large."
+}

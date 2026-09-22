@@ -1,12 +1,14 @@
-import type {
-	EngineDriver,
-	KVEntry,
-	KVWrite,
-	Message,
-	WorkflowMessageDriver,
+import {
+	type EngineDriver,
+	type KVEntry,
+	type KVWrite,
+	type Message,
+	StorageLimitError,
+	type WorkflowMessageDriver,
 } from "@rivetkit/workflow-engine";
 import type { RunContext } from "@/actor/config";
 import type { AnyStaticActorInstance } from "@/actor/definition";
+import { isRivetErrorLike } from "@/actor/errors";
 import { makeWorkflowKey, workflowStoragePrefix } from "@/actor/keys";
 import type { RawAccess } from "@/common/database/config";
 
@@ -81,6 +83,18 @@ function runtimeDbFromContext(
 		return db as RawAccess;
 	}
 	return undefined;
+}
+
+// Raised by rivetkit-core when an atomic state + workflow flush exceeds its
+// SQLite transaction budget or per-value limit.
+function isStorageLimitError(error: unknown): error is Error {
+	return (
+		error instanceof Error &&
+		isRivetErrorLike(error) &&
+		error.group === "storage" &&
+		(error.code === "transaction_too_large" ||
+			error.code === "workflow_value_too_large")
+	);
 }
 
 class WorkflowStorage {
@@ -372,9 +386,16 @@ export class ActorWorkflowDriver implements EngineDriver {
 	async batch(writes: KVWrite[]): Promise<void> {
 		if (writes.length === 0) return;
 
-		await this.#runCtx.internalKeepAwake(
-			this.#actor.stateManager.saveStateAndWorkflowBatch(writes),
-		);
+		try {
+			await this.#runCtx.internalKeepAwake(
+				this.#actor.stateManager.saveStateAndWorkflowBatch(writes),
+			);
+		} catch (error) {
+			if (isStorageLimitError(error)) {
+				throw new StorageLimitError(error.message, { cause: error });
+			}
+			throw error;
+		}
 	}
 
 	async setAlarm(_workflowId: string, wakeAt: number): Promise<void> {

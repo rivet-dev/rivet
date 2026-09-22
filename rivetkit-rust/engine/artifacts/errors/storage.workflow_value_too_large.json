@@ -1,0 +1,5 @@
+{
+  "code": "workflow_value_too_large",
+  "group": "storage",
+  "message": "Workflow storage value is too large."
+}

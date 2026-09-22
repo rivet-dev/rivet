@@ -1701,7 +1701,12 @@ async fn atomic_workflow_flush_rejects_whole_units_over_transaction_budget() -> 
 		)
 		.await
 		.expect_err("the atomic unit must not be chunked");
-	assert!(format!("{error:#}").contains("exceeds transaction budget"));
+	let error = rivet_error::RivetError::extract(&error);
+	assert_eq!(
+		(error.group(), error.code()),
+		("storage", "transaction_too_large")
+	);
+	assert!(error.message().contains("129 rows"));
 	assert!(
 		internal_storage::load_actor_snapshot(ctx.sql())
 			.await?
@@ -1769,7 +1774,11 @@ async fn atomic_workflow_flush_rejects_oversized_values_without_partial_state() 
 		)
 		.await
 		.expect_err("oversized workflow values must fail before sqlite execution");
-	assert!(format!("{error:#}").contains("workflow kv value exceeds sqlite storage limit"));
+	let error = rivet_error::RivetError::extract(&error);
+	assert_eq!(
+		(error.group(), error.code()),
+		("storage", "workflow_value_too_large")
+	);
 	assert!(
 		internal_storage::load_actor_snapshot(ctx.sql())
 			.await?
