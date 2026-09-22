@@ -61,6 +61,7 @@ Each span shows how long an operation took and whether it failed. RivetKit recor
 - SQLite operations, without recording SQL text, bindings, or results
 - Queue sends and receipts, with a link from each receipt to its sender
 - Scheduled actions, in a new trace linked to the work that scheduled them
+- Workflow runs and steps. Each run is a new trace linked to the run before it
 
 The full list of span names and attributes lives in [`telemetry.rs`](https://github.com/rivet-dev/rivet/blob/main/rivetkit-rust/packages/rivetkit-core/src/telemetry.rs), and the SQLite operations in [`sqlite/mod.rs`](https://github.com/rivet-dev/rivet/blob/main/rivetkit-rust/packages/rivetkit-core/src/actor/sqlite/mod.rs).
 
@@ -184,5 +185,6 @@ RivetKit sends spans in the background. Actor requests continue if the collector
 - Actions called over `.connect()` start a new trace instead of joining the caller's trace
 - Effect spans are not traced. Use `@effect/opentelemetry`
 - RivetKit does not add `rivet.ray.id` to your application spans
+- Workflow spans carry a `rivet.ray.id` only after the workflow receives a queue message
 - The Wasm runtime is not traced
 - A hard process exit can lose spans still waiting in the export queue

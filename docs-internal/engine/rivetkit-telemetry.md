@@ -35,6 +35,8 @@ Core spans use the `rivetkit::telemetry` tracing target. Log layers exclude this
 | Queue receive | `{actor}/queue.receive` | `consumer` | Linked to the send origin |
 | Actor call | `{callee}/{action}` | `client` | Child of application or invocation span |
 | SQLite | `rivet.sqlite.{operation}` | `internal` | Child of application or invocation span |
+| Workflow run | `{actor}/workflow` | `internal` | New trace linked to the previous run |
+| Workflow step | `{actor}/{step}` | `internal` | Child of the run span, one per attempt |
 
 Core records these attributes:
 
@@ -47,6 +49,7 @@ Core records these attributes:
 | HTTP | `http.request.method`, `http.response.status_code` |
 | Queue | `rivet.queue.name` |
 | SQLite | `rivet.operation.system`, `rivet.operation.name` |
+| Workflow | `rivet.workflow.run.outcome`, `rivet.workflow.step.name`, `rivet.workflow.step.attempt`, `rivet.workflow.step.outcome` |
 
 Raw HTTP spans use `onRequest`, never the request path. Handler errors use their `group.code` as `error.type`. A 5xx response uses the status code. Abandoned SQLite and actor-call tracking uses `actor.operation_abandoned` to represent an unknown outcome.
 
@@ -120,5 +123,5 @@ Record actor identity, invocation type, HTTP method and status, correlation IDs,
 
 - WebSocket handlers, lifecycle hooks, connection callbacks, KV, and actor-state operations have no dedicated spans
 - WebSocket action messages and inspector actions do not inherit caller context
-- Actor creation ray IDs do not reach the actor runtime
+- Actor creation ray IDs do not reach the actor runtime. A workflow run takes the ray of each queue message it receives and keeps it for later runs
 - Wasm does not export host spans or expose Core invocation context to TypeScript
