@@ -104,3 +104,6 @@ path = "tests/integration.rs"
 [[test]]
 name = "inspector_bundle"
 path = "tests/inspector_bundle.rs"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(tokio_unstable)"] }

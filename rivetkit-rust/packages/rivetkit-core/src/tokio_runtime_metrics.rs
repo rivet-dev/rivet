@@ -21,10 +21,11 @@ use std::{
 use rivet_metrics::{
 	REGISTRY,
 	prometheus::{
-		CounterVec, IntGauge, IntGaugeVec, register_counter_vec_with_registry,
-		register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
+		CounterVec, IntGauge, register_counter_vec_with_registry, register_int_gauge_with_registry,
 	},
 };
+#[cfg(tokio_unstable)]
+use rivet_metrics::prometheus::{IntGaugeVec, register_int_gauge_vec_with_registry};
 
 /// How often runtime state is read. Everything sampled here is either an
 /// instantaneous depth or a monotonic total, so the interval only needs to be
@@ -42,6 +43,7 @@ static GLOBAL_QUEUE_DEPTH: LazyLock<IntGauge> = LazyLock::new(|| {
 	.unwrap()
 });
 
+#[cfg(tokio_unstable)]
 static BLOCKING_QUEUE_DEPTH: LazyLock<IntGauge> = LazyLock::new(|| {
 	register_int_gauge_with_registry!(
 		"tokio_blocking_queue_depth",
@@ -60,6 +62,7 @@ static ACTIVE_TASK_COUNT: LazyLock<IntGauge> = LazyLock::new(|| {
 	.unwrap()
 });
 
+#[cfg(tokio_unstable)]
 static BLOCKING_THREAD_COUNT: LazyLock<IntGauge> = LazyLock::new(|| {
 	register_int_gauge_with_registry!(
 		"tokio_blocking_thread_count",
@@ -69,6 +72,7 @@ static BLOCKING_THREAD_COUNT: LazyLock<IntGauge> = LazyLock::new(|| {
 	.unwrap()
 });
 
+#[cfg(tokio_unstable)]
 static IDLE_BLOCKING_THREAD_COUNT: LazyLock<IntGauge> = LazyLock::new(|| {
 	register_int_gauge_with_registry!(
 		"tokio_idle_blocking_thread_count",
@@ -78,6 +82,7 @@ static IDLE_BLOCKING_THREAD_COUNT: LazyLock<IntGauge> = LazyLock::new(|| {
 	.unwrap()
 });
 
+#[cfg(tokio_unstable)]
 static WORKER_LOCAL_QUEUE_DEPTH: LazyLock<IntGaugeVec> = LazyLock::new(|| {
 	register_int_gauge_vec_with_registry!(
 		"tokio_worker_local_queue_depth",
@@ -88,6 +93,7 @@ static WORKER_LOCAL_QUEUE_DEPTH: LazyLock<IntGaugeVec> = LazyLock::new(|| {
 	.unwrap()
 });
 
+#[cfg(tokio_unstable)]
 static WORKER_OVERFLOW_COUNT: LazyLock<IntGaugeVec> = LazyLock::new(|| {
 	register_int_gauge_vec_with_registry!(
 		"tokio_worker_overflow_count",
@@ -143,21 +149,27 @@ async fn sample(handle: tokio::runtime::Handle) {
 		let metrics = handle.metrics();
 
 		GLOBAL_QUEUE_DEPTH.set(metrics.global_queue_depth() as i64);
-		BLOCKING_QUEUE_DEPTH.set(metrics.blocking_queue_depth() as i64);
 		ACTIVE_TASK_COUNT.set(metrics.num_alive_tasks() as i64);
-		BLOCKING_THREAD_COUNT.set(metrics.num_blocking_threads() as i64);
-		IDLE_BLOCKING_THREAD_COUNT.set(metrics.num_idle_blocking_threads() as i64);
+		#[cfg(tokio_unstable)]
+		{
+			BLOCKING_QUEUE_DEPTH.set(metrics.blocking_queue_depth() as i64);
+			BLOCKING_THREAD_COUNT.set(metrics.num_blocking_threads() as i64);
+			IDLE_BLOCKING_THREAD_COUNT.set(metrics.num_idle_blocking_threads() as i64);
+		}
 
 		for worker in 0..metrics.num_workers() {
 			let label = worker.to_string();
 			let labels = [label.as_str()];
 
-			WORKER_LOCAL_QUEUE_DEPTH
-				.with_label_values(&labels)
-				.set(metrics.worker_local_queue_depth(worker) as i64);
-			WORKER_OVERFLOW_COUNT
-				.with_label_values(&labels)
-				.set(metrics.worker_overflow_count(worker) as i64);
+			#[cfg(tokio_unstable)]
+			{
+				WORKER_LOCAL_QUEUE_DEPTH
+					.with_label_values(&labels)
+					.set(metrics.worker_local_queue_depth(worker) as i64);
+				WORKER_OVERFLOW_COUNT
+					.with_label_values(&labels)
+					.set(metrics.worker_overflow_count(worker) as i64);
+			}
 
 			let Some(last_busy_nanos) = last_busy_nanos.get_mut(worker) else {
 				continue;
