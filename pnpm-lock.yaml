@@ -3885,6 +3885,9 @@ importers:
       '@types/node':
         specifier: ^24.0.0
         version: 24.7.1
+      sandbox-agent:
+        specifier: ^0.4.2
+        version: 0.4.2(get-port@7.1.0)(zod@4.3.6)
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -9354,6 +9357,38 @@ packages:
   '@rushstack/ts-command-line@5.1.2':
     resolution: {integrity: sha512-jn0EnSefYrkZDrBGd6KGuecL84LI06DgzL4hVQ46AUijNBt2nRU/ST4HhrfII/w91siCd1J/Okvxq/BS75Me/A==}
 
+  '@sandbox-agent/cli-darwin-arm64@0.4.2':
+    resolution: {integrity: sha512-+L1O8SI7k/LLhyB4dG0ghmz1cJHa0WtVjuRTrEE2gw/5EbGLWopPBsCVCmQ7snrQ4fPwtaiZDhfExcEj1VI7aw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@sandbox-agent/cli-darwin-x64@0.4.2':
+    resolution: {integrity: sha512-dDg/EwWsdgVVbJiiCX1scSNRRA48u77SsC7Tuqrfzx4fIJMLuLiIcmEtXQyCBWysSyQNV2Cr+PYXXQfCb3xg8g==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@sandbox-agent/cli-linux-arm64@0.4.2':
+    resolution: {integrity: sha512-TGmTUexMoubmWQyTeaOJu0rDVl2h0Ifh1pZ0ceZy7u/6Eoqs2n46CbfQtasUxZJf10uxPgRyzEDhcdDrTYVQUA==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@sandbox-agent/cli-linux-x64@0.4.2':
+    resolution: {integrity: sha512-H9Rbqq0DRkCHvakzefJUDrDa2y+vJjlYd5/tefzKbQ34locE13TGNygRLxdEVXpBECjK9wVdBwTVEphQNsOcjw==}
+    cpu: [x64]
+    os: [linux]
+
+  '@sandbox-agent/cli-shared@0.4.2':
+    resolution: {integrity: sha512-sjZXRkKeFXCSKR6hHzF2Af8CCRO3F3WFwVQJ22+sLTXJ2xskV8lkUE4egknQU9B5BC1Zumts/YiNCFQWG85awQ==}
+
+  '@sandbox-agent/cli-win32-x64@0.4.2':
+    resolution: {integrity: sha512-lZNfHWPwQe/VH51Yvrl/ATCUvBZ3a+c8mwovojhQcmZlv4QuUQPkuvxhPqHRh9AyBx78L5J/ha46es2doa34nQ==}
+    cpu: [x64]
+    os: [win32]
+
+  '@sandbox-agent/cli@0.4.2':
+    resolution: {integrity: sha512-trO//ypJBSt5xkewuol9LOykvDgHwUXq8R+yQVS+0CmpN3lYUtewHkb+At9RVGRhDMmJZY2oasaXDnhfurQ33w==}
+    hasBin: true
+
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
 
@@ -11357,6 +11392,9 @@ packages:
     resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
     engines: {node: '>=0.4.0'}
     hasBin: true
+
+  acp-http-client@0.4.2:
+    resolution: {integrity: sha512-3wtPieF08YIU4vNXaoL5up/1D0if4i9IX3Ye5q/bwbcwg1BKsazIK/VNNfvN4ldbPjWul69IqIOpGRS3I0qo3Q==}
 
   actor-core@0.6.3:
     resolution: {integrity: sha512-cdYf0GX3m3jvlubbdujOcnPn93r1fP9F0mEBso72ofMTI0+EeGMS34BNrmaGmk5Pb3iD45KQl3u5ZY5Mzv4DNg==}
@@ -17514,6 +17552,38 @@ packages:
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
 
+  sandbox-agent@0.4.2:
+    resolution: {integrity: sha512-fH6WDQEaIrgiu93LxZcy+4Dx+t+/cslu+hzXImDyUlsaL6jV2jIv4fdxELkALlo7uzyEDVK9lmqs9qy65RHwBQ==}
+    peerDependencies:
+      '@cloudflare/sandbox': '>=0.1.0'
+      '@daytonaio/sdk': '>=0.12.0'
+      '@e2b/code-interpreter': '>=1.0.0'
+      '@fly/sprites': '>=0.0.1'
+      '@vercel/sandbox': '>=0.1.0'
+      computesdk: '>=0.1.0'
+      dockerode: '>=4.0.0'
+      get-port: '>=7.0.0'
+      modal: '>=0.1.0'
+    peerDependenciesMeta:
+      '@cloudflare/sandbox':
+        optional: true
+      '@daytonaio/sdk':
+        optional: true
+      '@e2b/code-interpreter':
+        optional: true
+      '@fly/sprites':
+        optional: true
+      '@vercel/sandbox':
+        optional: true
+      computesdk:
+        optional: true
+      dockerode:
+        optional: true
+      get-port:
+        optional: true
+      modal:
+        optional: true
+
   sass@1.93.2:
     resolution: {integrity: sha512-t+YPtOQHpGW1QWsh1CHQ5cPIr9lbbGZLZnbihP/D/qZj/yuV68m8qarcV17nvkOX81BCrvzAlq2klCQFZghyTg==}
     engines: {node: '>=14.0.0'}
@@ -19753,6 +19823,10 @@ snapshots:
   '@agentclientprotocol/sdk@0.16.1(zod@4.1.13)':
     dependencies:
       zod: 4.1.13
+
+  '@agentclientprotocol/sdk@0.16.1(zod@4.3.6)':
+    dependencies:
+      zod: 4.3.6
 
   '@ai-sdk/anthropic@1.2.12(zod@4.1.13)':
     dependencies:
@@ -26202,6 +26276,34 @@ snapshots:
       - '@types/node'
     optional: true
 
+  '@sandbox-agent/cli-darwin-arm64@0.4.2':
+    optional: true
+
+  '@sandbox-agent/cli-darwin-x64@0.4.2':
+    optional: true
+
+  '@sandbox-agent/cli-linux-arm64@0.4.2':
+    optional: true
+
+  '@sandbox-agent/cli-linux-x64@0.4.2':
+    optional: true
+
+  '@sandbox-agent/cli-shared@0.4.2': {}
+
+  '@sandbox-agent/cli-win32-x64@0.4.2':
+    optional: true
+
+  '@sandbox-agent/cli@0.4.2':
+    dependencies:
+      '@sandbox-agent/cli-shared': 0.4.2
+    optionalDependencies:
+      '@sandbox-agent/cli-darwin-arm64': 0.4.2
+      '@sandbox-agent/cli-darwin-x64': 0.4.2
+      '@sandbox-agent/cli-linux-arm64': 0.4.2
+      '@sandbox-agent/cli-linux-x64': 0.4.2
+      '@sandbox-agent/cli-win32-x64': 0.4.2
+    optional: true
+
   '@sec-ant/readable-stream@0.4.1': {}
 
   '@secure-exec/core@0.2.1':
@@ -28935,6 +29037,12 @@ snapshots:
   acorn@8.15.0: {}
 
   acorn@8.16.0: {}
+
+  acp-http-client@0.4.2(zod@4.3.6):
+    dependencies:
+      '@agentclientprotocol/sdk': 0.16.1(zod@4.3.6)
+    transitivePeerDependencies:
+      - zod
 
   actor-core@0.6.3(eventsource@3.0.7)(ws@8.21.0):
     dependencies:
@@ -36156,6 +36264,16 @@ snapshots:
   safe-stable-stringify@2.5.0: {}
 
   safer-buffer@2.1.2: {}
+
+  sandbox-agent@0.4.2(get-port@7.1.0)(zod@4.3.6):
+    dependencies:
+      '@sandbox-agent/cli-shared': 0.4.2
+      acp-http-client: 0.4.2(zod@4.3.6)
+    optionalDependencies:
+      '@sandbox-agent/cli': 0.4.2
+      get-port: 7.1.0
+    transitivePeerDependencies:
+      - zod
 
   sass@1.93.2:
     dependencies:
