@@ -15,6 +15,10 @@
 		".": {
 			"types": "./dist/index.d.ts",
 			"default": "./dist/index.js"
+		},
+		"./agentos": {
+			"types": "./dist/agentos.d.ts",
+			"default": "./dist/agentos.js"
 		}
 	},
 	"main": "./dist/index.js",
