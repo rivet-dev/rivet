@@ -2,6 +2,7 @@ import { isAbsolute } from "node:path";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
+	type BashOperations,
 	createAgentSession,
 	type CreateAgentSessionOptions,
 	ModelRuntime,
@@ -53,6 +54,8 @@ export interface PiSession {
 	settingsManager: SettingsManager;
 	cwd: string;
 	unsubscribe: () => void;
+	/** Command execution for `executeBash`. Undefined runs on the actor host. */
+	bashOperations: BashOperations | undefined;
 	/** JSON of the settings last written to SQLite, to skip no-op writes. */
 	persistedSettings: string;
 	/** Entries (header excluded) already written to SQLite, in Pi's append order. */
@@ -143,6 +146,7 @@ async function openPiSession(
 		settingsManager,
 		cwd,
 		unsubscribe: () => {},
+		bashOperations: undefined,
 		persistedSettings: JSON.stringify(settingsManager.getGlobalSettings()),
 		persistedEntryCount: stored?.entries.length ?? 0,
 	};
