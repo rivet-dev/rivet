@@ -922,7 +922,6 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				timeout,
 				config.name,
 			);
-			stepSpan?.finish("ok");
 
 			if (entry.kind.type === "step") {
 				entry.kind.data.output = output;
@@ -946,6 +945,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				await this.flushStorage();
 			}
 
+			stepSpan?.finish("ok");
 			this.log("debug", {
 				msg: "step completed",
 				step: config.name,
