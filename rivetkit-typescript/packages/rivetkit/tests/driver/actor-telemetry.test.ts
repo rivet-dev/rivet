@@ -985,7 +985,7 @@ describeDriverMatrix(
 					}
 				});
 
-				test("logs written inside a step carry the step's trace ids", () => {
+				test("logs written inside a step carry the step's trace ids and ray", () => {
 					const [reserve] = named(`${actorName}/reserve-stock`);
 					const line = traced.runtime
 						.getRuntimeOutput?.()
@@ -995,6 +995,7 @@ describeDriverMatrix(
 						);
 					expect(line).toContain(`traceId=${reserve.traceId}`);
 					expect(line).toContain(`spanId=${reserve.spanId}`);
+					expect(line).toContain(`rayId=${approveRayId}`);
 				});
 
 				test("reports each attempt of a retried step under its own run", () => {
@@ -1021,7 +1022,7 @@ describeDriverMatrix(
 					}
 				});
 
-				test("keeps a run's ray unchanged when it receives a message sent under another ray", () => {
+				test("gives a run the ray of the message that woke it and keeps it for later runs", () => {
 					const ray = (name: string) =>
 						attribute(named(name), "rivet.ray.id");
 					const sends = named(`${actorName}/queue.send`);
@@ -1038,15 +1039,23 @@ describeDriverMatrix(
 					expect(ray(`${actorName}/queue.receive`).sort()).toEqual(
 						[approveRayId, resumeRayId].sort(),
 					);
-					expect(new Set(ray(`${actorName}/workflow`))).toEqual(
-						new Set([undefined]),
-					);
-					expect(ray(`${actorName}/reserve-stock`)).toEqual([undefined]);
-					expect(ray(`${actorName}/charge-card`)).toEqual([
-						undefined,
-						undefined,
-						undefined,
+					expect(ray(`${actorName}/reserve-stock`)).toEqual([
+						approveRayId,
 					]);
+					expect(ray(`${actorName}/charge-card`)).toEqual([
+						resumeRayId,
+						resumeRayId,
+						resumeRayId,
+					]);
+					const runRays = ray(`${actorName}/workflow`);
+					const firstWithRay = runRays.findIndex(
+						(id) => id !== undefined,
+					);
+					expect(runRays[firstWithRay]).toBe(approveRayId);
+					expect(runRays.slice(firstWithRay)).not.toContain(
+						undefined,
+					);
+					expect(runRays.at(-1)).toBe(resumeRayId);
 				});
 
 				test("puts a queue send made inside a step in that step's trace", () => {

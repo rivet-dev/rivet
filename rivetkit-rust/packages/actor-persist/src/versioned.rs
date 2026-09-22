@@ -537,9 +537,10 @@ impl OwnedVersionedData for RunWakeAt {
 	}
 }
 
-/// The span of the last workflow run, which the next run links to.
+/// The span and ray of the last workflow run, which the next run continues.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct WorkflowTraceContextV1 {
+	pub ray_id: Option<String>,
 	pub traceparent: Option<String>,
 	pub tracestate: Option<String>,
 }

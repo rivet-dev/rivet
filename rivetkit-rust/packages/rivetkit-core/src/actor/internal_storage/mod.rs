@@ -1100,9 +1100,9 @@ pub(crate) async fn load_workflow_trace(db: &SqliteDb) -> Result<IncomingTraceCo
 		"workflow trace context",
 	)?;
 	Ok(IncomingTraceContext {
+		ray_id: stored.ray_id,
 		traceparent: stored.traceparent,
 		tracestate: stored.tracestate,
-		..Default::default()
 	})
 }
 
@@ -1112,6 +1112,7 @@ pub(crate) async fn persist_workflow_trace(
 ) -> Result<()> {
 	let payload = encode_latest_with_embedded_version::<persist_versioned::WorkflowTraceContext>(
 		persist_versioned::WorkflowTraceContextV1 {
+			ray_id: trace_context.ray_id,
 			traceparent: trace_context.traceparent,
 			tracestate: trace_context.tracestate,
 		},

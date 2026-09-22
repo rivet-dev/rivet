@@ -327,7 +327,7 @@ impl ActorContext {
 		WorkflowRunInvocation::start(self, previous)
 	}
 
-	/// Closes a workflow run and persists its span for the next run to link to.
+	/// Closes a workflow run and persists its span and ray for the next run.
 	#[doc(hidden)]
 	pub async fn finish_workflow_span(
 		&self,
