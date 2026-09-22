@@ -10,6 +10,7 @@ import {
 	type Type,
 } from "rivetkit";
 import { db } from "rivetkit/db";
+import { createPiActions, type PiActions } from "./actions.js";
 import {
 	closePiSession,
 	createPiRuntime,
@@ -23,10 +24,10 @@ import { migratePiTables } from "./storage.js";
 /** Ten minutes. Pi actions such as `waitForIdle` and `compact` outlive RivetKit's one-minute default. */
 const DEFAULT_ACTION_TIMEOUT_MS = 10 * 60_000;
 
-export interface PiEvents {
-	/** Every Pi `AgentSessionEvent`, in order, for connected clients. */
+/** Every Pi `AgentSessionEvent`, in order, for connected clients. */
+export type PiEvents = {
 	event: Type<AgentSessionEvent>;
-}
+};
 
 const piEvents: PiEvents = {
 	event: event<AgentSessionEvent>(),
@@ -48,10 +49,6 @@ const piOptionKeys = [
 	"settings",
 ] as const satisfies readonly (keyof PiSessionOptions)[];
 
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-	? Omit<T, K>
-	: never;
-
 export type PiActorConfigInput<
 	TState = undefined,
 	TConnParams = undefined,
@@ -70,21 +67,24 @@ export type PiActorConfigInput<
 		TEvents,
 		TQueues
 	> = Record<never, never>,
-> = DistributiveOmit<
-	ActorConfigInput<
-		TState,
-		TConnParams,
-		TConnState,
-		TVars,
-		TInput,
-		PiDatabaseProvider,
-		TEvents,
-		TQueues,
-		TUserActions
-	>,
-	"db"
+> = ActorConfigInput<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	PiDatabaseProvider,
+	TEvents,
+	TQueues,
+	TUserActions
 > &
 	PiSessionOptions;
+
+/**
+ * The actions the user defined. With no `actions` option, TypeScript uses the
+ * default, a record with an index signature, which would hide the Pi actions.
+ */
+type UserActions<T> = string extends keyof T ? Record<never, never> : T;
 
 /**
  * Defines a Rivet Actor that owns one Pi coding-agent session.
@@ -94,11 +94,11 @@ export type PiActorConfigInput<
  * Ordinary actor config (state, vars, actions, events, hooks) is passed through.
  */
 export function pi<
-	TState = undefined,
-	TConnParams = undefined,
-	TConnState = undefined,
-	TVars = undefined,
-	TInput = undefined,
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
 	TEvents extends EventSchemaConfig = Record<never, never>,
 	TQueues extends QueueSchemaConfig = Record<never, never>,
 	TUserActions extends Actions<
@@ -110,7 +110,16 @@ export function pi<
 		PiDatabaseProvider,
 		TEvents,
 		TQueues
-	> = Record<never, never>,
+	> = Actions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		PiDatabaseProvider,
+		TEvents,
+		TQueues
+	>,
 >(
 	config: PiActorConfigInput<
 		TState,
@@ -140,9 +149,14 @@ export function pi<
 	PiDatabaseProvider,
 	TEvents & PiEvents,
 	TQueues,
-	TUserActions
+	UserActions<TUserActions> & PiActions
 > {
 	const { actorConfig, sessionOptions } = splitConfig(config);
+	if (actorConfig.db !== undefined) {
+		throw new Error("pi() owns the actor database; remove the db option");
+	}
+	const actions = createPiActions(sessionOptions);
+	assertNoReservedKeys("action", actorConfig.actions, actions);
 	assertNoReservedKeys("event", actorConfig.events, piEvents);
 
 	const userVars = actorConfig.vars;
@@ -159,6 +173,7 @@ export function pi<
 		},
 		db: db({ onMigrate: migratePiTables }),
 		events: { ...(actorConfig.events ?? {}), ...piEvents },
+		actions: { ...(actorConfig.actions ?? {}), ...actions },
 		createVars: async (c: unknown, driverCtx: unknown) => {
 			const vars = userCreateVars
 				? await userCreateVars(c, driverCtx)
@@ -190,7 +205,7 @@ export function pi<
 		PiDatabaseProvider,
 		TEvents & PiEvents,
 		TQueues,
-		TUserActions
+		UserActions<TUserActions> & PiActions
 	>;
 }
 
