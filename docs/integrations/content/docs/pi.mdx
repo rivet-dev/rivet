@@ -1,0 +1,178 @@
+---
+title: "Pi"
+description: "Run the Pi coding agent as a durable Rivet Actor."
+skill: false
+---
+
+import { Hosting } from "@/components/docs/Hosting";
+
+<Info>
+This integration is in beta. APIs may change between releases.
+</Info>
+
+`@rivet-dev/pi` runs the [Pi](https://github.com/earendil-works/pi) coding agent in a Rivet Actor. The agent loop runs in the actor. Pi's file and shell tools run in a separate sandbox.
+
+Each actor holds one Pi session and saves it in its SQLite database, so a conversation survives sleep and restarts.
+
+<div style="overflow-x:auto">
+<svg viewBox="0 0 724 340" role="img" aria-label="Your backend runs the Pi actors. Two working Pi actors each run the agent loop, store their session in SQLite, send model calls to the model provider, and send tool calls to their own sandbox with a shell and files. A third Pi actor is asleep, and its sandbox is paused." style="display:block;width:100%;min-width:560px;max-width:724px;height:auto;margin:2.5rem auto;font-family:system-ui,sans-serif" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="pi-arch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" style="fill:rgb(var(--site-pine, 46 64 52))"/></marker>
+  </defs>
+  <g style="fill:rgb(var(--site-paper-mid, 250 248 243));stroke:rgb(var(--site-pine, 46 64 52));stroke-width:1.4;stroke-dasharray:7 6">
+    <rect x="196" y="12" width="240" height="316" rx="10"/>
+    <rect x="516" y="44" width="192" height="80" rx="10"/>
+    <rect x="516" y="136" width="192" height="80" rx="10"/>
+    <rect x="516" y="228" width="192" height="80" rx="10"/>
+  </g>
+  <g font-size="11" font-family="ui-monospace, monospace" font-weight="600" letter-spacing="0.14em" style="fill:rgb(var(--site-pine, 46 64 52))">
+    <text x="214" y="35">YOUR BACKEND</text>
+    <text x="516" y="35">SANDBOXES</text>
+  </g>
+
+  <rect x="16" y="104" width="140" height="52" rx="7" fill="#ffffff" stroke="#1b1916" stroke-width="1.4"/>
+
+  <g style="fill:none;stroke:rgb(var(--site-pine, 46 64 52));stroke-width:1.4">
+    <path d="M406 84 H530" marker-end="url(#pi-arch-arrow)"/>
+    <path d="M406 176 H530" marker-end="url(#pi-arch-arrow)"/>
+    <path d="M406 268 H530" marker-end="url(#pi-arch-arrow)" opacity="0.45"/>
+    <path d="M226 84 H190 Q178 84 178 96 V118 Q178 130 166 130 H158" marker-end="url(#pi-arch-arrow)"/>
+    <path d="M226 176 H190 Q178 176 178 164 V142 Q178 130 166 130"/>
+  </g>
+
+  <g id="pi-arch-row">
+    <rect x="226" y="54" width="180" height="60" rx="8" fill="#c7e4fb" stroke="#3d9df3" stroke-width="2"/>
+    <rect x="532" y="60" width="160" height="48" rx="7" fill="#fddcbb" stroke="#f0923b" stroke-width="2"/>
+    <g text-anchor="middle" font-size="15" font-weight="600" fill="#1b1916">
+      <text x="316" y="81">Pi actor</text>
+      <text x="612" y="89">Shell + files</text>
+    </g>
+    <text x="316" y="100" text-anchor="middle" font-size="12" fill="#56524a">agent loop + SQLite</text>
+  </g>
+  <use href="#pi-arch-row" y="92"/>
+  <g style="fill:rgb(var(--site-paper-mid, 255 255 255))">
+    <rect x="226" y="238" width="180" height="60" rx="8"/>
+    <rect x="532" y="244" width="160" height="48" rx="7"/>
+  </g>
+  <use href="#pi-arch-row" y="184" opacity="0.35"/>
+
+  <g text-anchor="middle" font-size="15" font-weight="600" style="fill:rgb(var(--site-ink, 27 25 22))">
+    <text x="316" y="273">Sleeping</text>
+    <text x="612" y="273">Paused</text>
+  </g>
+
+  <g text-anchor="middle" font-size="12" style="fill:rgb(var(--site-ink-soft, 86 82 74))">
+    <text x="468" y="75">Tool calls</text>
+    <text x="86" y="176">Model calls</text>
+    <text x="86" y="135" font-size="14" font-weight="600" style="fill:#1b1916">Model provider</text>
+  </g>
+</svg>
+</div>
+
+
+
+
+
+## Quickstart
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add @rivet-dev/pi rivetkit
+```
+
+</Step>
+
+<Step title="Define the actor">
+
+<CodeSnippet file="examples/docs/actors-integrations-pi/server.ts" title="server.ts" />
+
+Set the key for your model provider, such as `ANTHROPIC_API_KEY`.
+
+</Step>
+
+<Step title="Add a sandbox">
+
+Pi's file and shell tools run in a sandbox. Without one they are disabled.
+
+```sh
+npm add @rivet-dev/sandbox-adapter @rivet-dev/agentos
+```
+
+```ts title="server.ts"
+import { agentOS } from "@rivet-dev/agentos";
+import { pi } from "@rivet-dev/pi";
+import { agentOSProvider } from "@rivet-dev/sandbox-adapter/agentos";
+import { setup } from "rivetkit";
+
+const agent = pi({
+	model: "anthropic/claude-opus-5-5",
+	sandbox: agentOSProvider({ actor: "vm" }),
+});
+
+export const registry = setup({ use: { agent, vm: agentOS() } });
+```
+
+To use another provider, install its SDK and pass its provider instead. Provider credentials never enter the sandbox.
+
+| Provider | Import from `@rivet-dev/sandbox-adapter` | SDK |
+| --- | --- | --- |
+| [E2B](https://e2b.dev) | `e2bProvider` from `/e2b` | `e2b` |
+| [Daytona](https://daytona.io) | `daytonaProvider` from `/daytona` | `@daytonaio/sdk` |
+
+For another provider, implement [`SandboxProvider`](https://github.com/rivet-dev/rivet/blob/main/shared/typescript/sandbox-adapter/src/index.ts). See [`e2b.ts`](https://github.com/rivet-dev/rivet/blob/main/shared/typescript/sandbox-adapter/src/e2b.ts) for an example.
+
+</Step>
+
+<Step title="Send a prompt">
+
+<CodeSnippet file="examples/docs/actors-integrations-pi/client.ts" title="client.ts" />
+
+The client waits for Pi to finish, then reads the full reply with `getLastAssistantText()`.
+
+</Step>
+
+<Step title="Deploy">
+
+<Hosting />
+
+</Step>
+
+</Steps>
+
+## Configuration
+
+The Pi actor accepts every [`actor()`](/actors/docs/actor-configuration) option and Pi's [session options](https://github.com/rivet-dev/rivet/blob/main/integrations/pi/src/runtime.ts), such as `thinkingLevel`, `tools`, and `customTools`. It also accepts:
+
+| Option | Description |
+| --- | --- |
+| `model` | Model for a new session, as `provider/modelId`. |
+| `scopedModels` | Models a client may switch to with `setModel`. |
+| `apiKeys` | API keys by provider. Defaults to the environment. |
+| `providers` | Custom providers, in the shape of Pi's `models.json`. |
+| `credentials` | Logins your application stores. See [Bring your subscription](#bring-your-subscription). |
+| `sandbox` | Where Pi's file and shell tools run. See [`@rivet-dev/sandbox-adapter`](https://github.com/rivet-dev/rivet/tree/main/shared/typescript/sandbox-adapter/src). |
+| `settings` | Pi settings for a new session. |
+
+Each run is traced as an `invoke_agent pi` span with [OpenTelemetry GenAI attributes](https://github.com/rivet-dev/rivet/blob/main/integrations/pi/src/tracing.ts), without prompts or tool data. See [OpenTelemetry](/docs/tracing) to export traces.
+
+## Bring your subscription
+
+Your users can run Pi on their own Claude or ChatGPT subscription instead of your API key.
+
+```ts title="credentials.ts"
+const agent = pi({
+	model: "openai-codex/gpt-6-astra",
+	// c.key[0] is the user id, so each user has one credentials actor.
+	credentials: (c) =>
+		c.client<Registry<{ credentials: typeof credentials }>>().credentials.getOrCreate([c.key[0]]),
+});
+```
+
+See the [`credentials` actor implementation](https://github.com/rivet-dev/rivet/tree/main/examples/pi-credentials).
+
+<Warning>
+Make sure to protect the `credentials` actor with [authentication](/docs/authentication), because its actions return provider tokens.
+</Warning>
