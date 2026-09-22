@@ -140,12 +140,15 @@ export function createPiActions(options: PiSessionOptions): PiActions {
 		setActiveToolsByName: (c, ...args) =>
 			mutate(c, ({ session }) => session.setActiveToolsByName(...args)),
 		executeBash: (c, command, bashOptions) =>
-			mutate(c, ({ session, bashOperations }) =>
-				session.executeBash(command, undefined, {
+			mutate(c, ({ session, bashOperations }) => {
+				if (!bashOperations) {
+					throw new Error("executeBash needs a sandbox; this pi() actor has none configured");
+				}
+				return session.executeBash(command, undefined, {
 					...bashOptions,
 					operations: bashOperations,
-				}),
-			),
+				});
+			}),
 		abortBash: (c) => read(c, ({ session }) => session.abortBash()),
 
 		setSteeringMode: (c, ...args) =>
