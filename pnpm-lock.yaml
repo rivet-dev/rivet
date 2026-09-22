@@ -3968,6 +3968,15 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  shared/typescript/sandbox-adapter:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.7.1
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   shared/typescript/virtual-websocket:
     devDependencies:
       '@types/node':

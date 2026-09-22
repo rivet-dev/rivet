@@ -1,0 +1,33 @@
+{
+	"name": "@rivet-dev/sandbox-adapter",
+	"version": "2.3.20",
+	"description": "Sandbox providers for agent harnesses running in Rivet Actors",
+	"license": "Apache-2.0",
+	"publishConfig": {
+		"access": "public"
+	},
+	"type": "module",
+	"files": [
+		"dist",
+		"package.json"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"check-types": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/node": "^24.0.0",
+		"typescript": "^5.9.2"
+	},
+	"engines": {
+		"node": ">=22.19.0"
+	}
+}
