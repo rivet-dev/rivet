@@ -5,18 +5,25 @@ import {
 	type BashOperations,
 	createAgentSession,
 	type CreateAgentSessionOptions,
+	DefaultResourceLoader,
+	getAgentDir,
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import type { Sandbox, SandboxProvider } from "@rivet-dev/sandbox-adapter";
 import type { ActorContext } from "rivetkit";
 import type { DatabaseProvider, RawAccess } from "rivetkit/db";
+import { createSandboxBashOperations, createSandboxTools } from "./sandbox.js";
 import {
 	appendPiEntry,
 	createPiSession,
+	loadPiSandbox,
 	loadPiSession,
 	type PiSettings,
+	savePiSandbox,
 	savePiSettings,
+	type StoredSandbox,
 	toFileEntries,
 } from "./storage.js";
 
@@ -39,6 +46,11 @@ export interface PiSessionOptions
 	extends Omit<CreateAgentSessionOptions, "sessionManager" | "settingsManager"> {
 	/** Initial Pi settings for a brand-new session. Later changes persist per actor. */
 	settings?: Partial<PiSettings>;
+	/**
+	 * Runs Pi's built-in file and shell tools in a sandbox. Without one, Pi has
+	 * no file or shell tools and only the `customTools` passed in.
+	 */
+	sandbox?: SandboxProvider;
 }
 
 /** One open Pi session for a live actor generation. */
@@ -46,12 +58,20 @@ export interface PiSession {
 	session: AgentSession;
 	settingsManager: SettingsManager;
 	cwd: string;
-	/** Command execution for `executeBash`. Undefined runs on the actor host. */
+	sandbox: ConnectedSandbox | undefined;
+	/** Command execution for `executeBash`. Undefined when there is no sandbox. */
 	bashOperations: BashOperations | undefined;
 	/** JSON of the settings last written to SQLite, to skip no-op writes. */
 	persistedSettings: string;
 	/** Entries (header excluded) already written to SQLite, in Pi's append order. */
 	persistedEntryCount: number;
+}
+
+/** The sandbox a session's tools run in for this actor generation. */
+export interface ConnectedSandbox {
+	provider: SandboxProvider;
+	id: string;
+	sandbox: Sandbox;
 }
 
 /** Per-actor-generation runtime state, stored on `c.vars` under `PI_RUNTIME`. */
@@ -94,6 +114,9 @@ export function ensurePiSession(
 	return runtime.ready;
 }
 
+/** Pi's built-in tools, which all run on the actor host. */
+const PI_BUILT_IN_TOOLS = ["read", "bash", "powershell", "edit", "write", "grep", "find", "ls"];
+
 let defaultModelRuntime: Promise<ModelRuntime> | undefined;
 
 /** One `ModelRuntime` per process. It loads provider catalogs and credentials, which are not per actor. */
@@ -107,11 +130,23 @@ async function openPiSession(
 	runtime: PiRuntime,
 	options: PiSessionOptions,
 ): Promise<PiSession> {
-	const { settings, ...sessionOptions } = options;
+	const { settings, sandbox: sandboxProvider, ...sessionOptions } =
+		options;
 	const stored = await loadPiSession(c.db);
-	const cwd = stored?.cwd ?? sessionOptions.cwd ?? process.cwd();
+	const connected = sandboxProvider
+		? await connectSandbox(c, sandboxProvider)
+		: undefined;
+	const sandbox = connected?.sandbox;
+	const cwd = sandbox?.cwd ?? stored?.cwd ?? sessionOptions.cwd ?? process.cwd();
 	if (!isAbsolute(cwd)) {
 		throw new Error(`pi() cwd must be an absolute path, received ${cwd}`);
+	}
+	if (stored && stored.cwd !== cwd) {
+		c.log.warn({
+			msg: "pi session cwd changed since it was stored",
+			storedCwd: stored.cwd,
+			cwd,
+		});
 	}
 
 	const settingsManager = SettingsManager.inMemory(
@@ -121,6 +156,9 @@ async function openPiSession(
 		? SessionManager.inMemory(cwd, undefined, toFileEntries(stored))
 		: SessionManager.inMemory(cwd);
 	const modelRuntime = sessionOptions.modelRuntime ?? (await sharedModelRuntime());
+	const resourceLoader =
+		sessionOptions.resourceLoader ??
+		(await isolatedResourceLoader(cwd, sessionOptions.agentDir, settingsManager));
 
 	const { session, modelFallbackMessage } = await createAgentSession({
 		...sessionOptions,
@@ -128,6 +166,16 @@ async function openPiSession(
 		modelRuntime,
 		settingsManager,
 		sessionManager,
+		resourceLoader,
+		customTools: sandbox
+			? [...(sessionOptions.customTools ?? []), ...createSandboxTools(sandbox)]
+			: sessionOptions.customTools,
+		excludeTools: [
+			...new Set([
+				...(sessionOptions.excludeTools ?? []),
+				...(sandbox ? ["powershell"] : PI_BUILT_IN_TOOLS),
+			]),
+		],
 	});
 	if (modelFallbackMessage) {
 		c.log.warn({ msg: "pi model fallback", detail: modelFallbackMessage });
@@ -137,7 +185,8 @@ async function openPiSession(
 		session,
 		settingsManager,
 		cwd,
-		bashOperations: undefined,
+		sandbox: connected,
+		bashOperations: sandbox ? createSandboxBashOperations(sandbox) : undefined,
 		persistedSettings: JSON.stringify(settingsManager.getGlobalSettings()),
 		persistedEntryCount: stored?.entries.length ?? 0,
 	};
@@ -174,6 +223,65 @@ async function openPiSession(
 		messageCount: session.messages.length,
 	});
 	return handle;
+}
+
+/**
+ * Connects to the actor's sandbox, creating one when none is stored or the
+ * provider reports the stored one no longer exists. A new sandbox id is saved
+ * as soon as `create` returns, so a failure later in the start reuses it. Any
+ * other connect failure is thrown, so a temporary outage never replaces a
+ * sandbox.
+ */
+async function connectSandbox(
+	c: PiContext,
+	provider: SandboxProvider,
+): Promise<ConnectedSandbox> {
+	const existing = await loadPiSandbox(c.db);
+	if (existing && existing.provider !== provider.name) {
+		throw new Error(
+			`pi sandbox was created by provider ${existing.provider}, but the actor now uses ${provider.name}`,
+		);
+	}
+	if (existing) {
+		const sandbox = await provider.connect(c, existing.id);
+		if (sandbox) return { provider, id: existing.id, sandbox };
+		c.log.warn({
+			msg: "pi sandbox no longer exists, creating a new one; files from the previous sandbox are lost",
+			provider: provider.name,
+			sandboxId: existing.id,
+		});
+	}
+	const id = await provider.create(c);
+	await savePiSandbox(c.db, { provider: provider.name, id });
+	const sandbox = await provider.connect(c, id);
+	if (!sandbox) {
+		throw new Error(`pi sandbox ${provider.name}/${id} was not found right after it was created`);
+	}
+	return { provider, id, sandbox };
+}
+
+/**
+ * Pi's resource discovery reads the actor host's filesystem and loads host
+ * code as extensions. Extensions, skills, prompt templates, context files, and
+ * themes stay off unless the developer passes a loader.
+ */
+async function isolatedResourceLoader(
+	cwd: string,
+	agentDir: string | undefined,
+	settingsManager: SettingsManager,
+): Promise<DefaultResourceLoader> {
+	const loader = new DefaultResourceLoader({
+		cwd,
+		agentDir: agentDir ?? getAgentDir(),
+		settingsManager,
+		noExtensions: true,
+		noSkills: true,
+		noPromptTemplates: true,
+		noContextFiles: true,
+		noThemes: true,
+	});
+	await loader.reload();
+	return loader;
 }
 
 /** Token and output deltas never append entries, so they skip the entry diff. */
@@ -239,38 +347,69 @@ export async function persistPiState(
 
 /**
  * Stops the Pi session for this actor generation: aborts any run, lets
- * extensions shut down, flushes settings, and waits for queued entry writes.
+ * extensions shut down, and flushes settings and entries. Then suspends the
+ * sandbox on sleep, or destroys it on destroy.
  */
-export async function closePiSession(c: PiContext): Promise<void> {
+export async function closePiSession(
+	c: PiContext,
+	options: PiSessionOptions,
+	reason: "sleep" | "destroy",
+): Promise<void> {
 	const runtime = piRuntime(c);
 	const ready = runtime.ready;
 	runtime.ready = undefined;
-	if (!ready) return;
-	let handle: PiSession;
+	const errors: unknown[] = [];
+	let handle: PiSession | undefined;
 	try {
 		handle = await ready;
 	} catch {
-		return;
 	}
 
-	const errors: unknown[] = [];
-	await attempt(errors, () => handle.session.abort());
-	await attempt(errors, async () => {
-		if (handle.session.hasExtensionHandlers("session_shutdown")) {
-			await handle.session.extensionRunner.emit({
-				type: "session_shutdown",
-				reason: "quit",
-			});
-		}
-	});
-	await attempt(errors, () => persistPiState(c, handle));
-	handle.session.dispose();
+	if (handle) {
+		const open = handle;
+		await attempt(errors, () => open.session.abort());
+		await attempt(errors, async () => {
+			if (open.session.hasExtensionHandlers("session_shutdown")) {
+				await open.session.extensionRunner.emit({
+					type: "session_shutdown",
+					reason: "quit",
+				});
+			}
+		});
+		await attempt(errors, () => persistPiState(c, open));
+		open.session.dispose();
+		c.log.info({ msg: "pi session closed", sessionId: open.session.sessionId });
+	}
 
-	c.log.info({ msg: "pi session closed", sessionId: handle.session.sessionId });
+	const provider = options.sandbox;
+	if (provider) {
+		await attempt(errors, async () => {
+			if (reason === "sleep") {
+				if (handle?.sandbox && provider.suspend) {
+					await provider.suspend(c, handle.sandbox.id);
+				}
+				return;
+			}
+			const sandbox = handle?.sandbox ?? (await storedSandbox(c, provider));
+			if (sandbox && provider.destroy) {
+				await provider.destroy(c, sandbox.id);
+			}
+		});
+	}
+
 	if (errors.length === 1) throw errors[0];
 	if (errors.length > 1) {
 		throw new AggregateError(errors, "pi session shutdown failed");
 	}
+}
+
+/** The stored sandbox, when it belongs to `provider`. */
+async function storedSandbox(
+	c: PiContext,
+	provider: SandboxProvider,
+): Promise<StoredSandbox | undefined> {
+	const sandbox = await loadPiSandbox(c.db);
+	return sandbox?.provider === provider.name ? sandbox : undefined;
 }
 
 async function attempt(
