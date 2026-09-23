@@ -14,6 +14,7 @@ use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::schedule::ScheduledFireInfo;
 use crate::actor::task_types::ShutdownKind;
 use crate::error::ProtocolError;
+use crate::telemetry::ActorInvocationTelemetry;
 use crate::types::ConnId;
 use crate::websocket::WebSocket;
 
@@ -313,6 +314,15 @@ pub enum ActorHttpResponse {
 	Stream(StreamingResponse),
 }
 
+impl ActorHttpResponse {
+	pub fn status(&self) -> u16 {
+		match self {
+			Self::Buffered(response) => response.status().as_u16(),
+			Self::Stream(response) => response.status,
+		}
+	}
+}
+
 impl From<Response> for ActorHttpResponse {
 	fn from(value: Response) -> Self {
 		Self::Buffered(value)
@@ -392,10 +402,16 @@ pub enum ActorEvent {
 		args: Vec<u8>,
 		conn: Option<ConnHandle>,
 		scheduled_fire: Option<ScheduledFireInfo>,
+		/// Telemetry of the invocation this action runs as, for the host
+		/// runtime to bind onto the context it hands the action. Absent when
+		/// the dispatch opened no invocation.
+		invocation_telemetry: Option<ActorInvocationTelemetry>,
 		reply: Reply<Vec<u8>>,
 	},
 	HttpRequest {
 		request: Request,
+		/// Telemetry of the invocation this request runs as. See `Action`.
+		invocation_telemetry: Option<crate::ActorInvocationTelemetry>,
 		reply: Reply<ActorHttpResponse>,
 	},
 	QueueSend {
@@ -405,6 +421,8 @@ pub enum ActorEvent {
 		request: Request,
 		wait: bool,
 		timeout_ms: Option<u64>,
+		/// Telemetry of the invocation this send runs as. See `Action`.
+		invocation_telemetry: Option<crate::ActorInvocationTelemetry>,
 		reply: Reply<QueueSendResult>,
 	},
 	WebSocketOpen {

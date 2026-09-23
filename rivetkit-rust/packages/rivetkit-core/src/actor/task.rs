@@ -57,6 +57,7 @@ use crate::actor::task_types::ShutdownKind;
 use crate::actor::work_registry::ActorWorkKind;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::runtime::RuntimeSpawner;
+use crate::telemetry::{ActorInvocation, IncomingInvocationContext};
 #[cfg(test)]
 use crate::time::sleep;
 use crate::time::{Instant, sleep_until, timeout};
@@ -201,12 +202,14 @@ pub enum DispatchCommand {
 	Action {
 		name: String,
 		args: Vec<u8>,
+		incoming: IncomingInvocationContext,
 		conn: ConnHandle,
 		reply: oneshot::Sender<Result<Vec<u8>>>,
 	},
 	QueueSend {
 		name: String,
 		body: Vec<u8>,
+		incoming: crate::telemetry::IncomingInvocationContext,
 		conn: ConnHandle,
 		request: Request,
 		wait: bool,
@@ -906,9 +909,12 @@ impl ActorTask {
 			DispatchCommand::Action {
 				name,
 				args,
+				incoming,
 				conn,
 				reply,
 			} => {
+				let invocation = ActorInvocation::start_action(&self.ctx, &name, incoming);
+				let invocation_telemetry = invocation.telemetry();
 				tracing::info!(
 					actor_id = %self.ctx.actor_id(),
 					action_name = %name,
@@ -925,6 +931,7 @@ impl ActorTask {
 						args,
 						conn: Some(conn),
 						scheduled_fire: None,
+						invocation_telemetry: Some(invocation_telemetry),
 						reply: Reply::from(tracked_reply_tx),
 					},
 				) {
@@ -938,7 +945,7 @@ impl ActorTask {
 						let actor_id = self.ctx.actor_id().to_owned();
 						let ctx = self.ctx.clone();
 						self.ctx.spawn_work(ActorWorkKind::Action, async move {
-							match tracked_reply_rx.await {
+							let result = match tracked_reply_rx.await {
 								Ok(result) => {
 									let result =
 										result.map_err(|error| ctx.attach_actor_to_error(error));
@@ -948,7 +955,7 @@ impl ActorTask {
 										ok = result.is_ok(),
 										"actor task: tracked reply received, forwarding"
 									);
-									let _ = reply.send(result);
+									result
 								}
 								Err(_) => {
 									tracing::warn!(
@@ -959,9 +966,11 @@ impl ActorTask {
 									let error = ctx.attach_actor_to_error(
 										ActorLifecycleError::DroppedReply.build(),
 									);
-									let _ = reply.send(Err(error));
+									Err(error)
 								}
-							}
+							};
+							invocation.finish(result.as_ref().err());
+							let _ = reply.send(result);
 						});
 					}
 					Err(error) => {
@@ -971,7 +980,9 @@ impl ActorTask {
 							?error,
 							"actor task: failed to enqueue ActorEvent::Action"
 						);
-						let _ = reply.send(Err(self.attach_actor_to_error(error)));
+						let error = self.attach_actor_to_error(error);
+						invocation.finish(Some(&error));
+						let _ = reply.send(Err(error));
 						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
 					}
 				}
@@ -979,36 +990,46 @@ impl ActorTask {
 			DispatchCommand::QueueSend {
 				name,
 				body,
+				incoming,
 				conn,
 				request,
 				wait,
 				timeout_ms,
 				reply,
-			} => match self.send_actor_event(
-				"dispatch_queue_send",
-				ActorEvent::QueueSend {
-					name,
-					body,
-					conn,
-					request,
-					wait,
-					timeout_ms,
-					reply: Reply::from(reply),
-				},
-			) {
-				Ok(()) => {
-					self.log_dispatch_command_handled(command_kind, "enqueued");
+			} => {
+				let invocation = ActorInvocation::start_queue_send(&self.ctx, &name, incoming);
+				match self.send_actor_event(
+					"dispatch_queue_send",
+					ActorEvent::QueueSend {
+						name,
+						body,
+						conn,
+						request,
+						wait,
+						timeout_ms,
+						invocation_telemetry: Some(invocation.telemetry()),
+						reply: Reply::from(reply)
+							.on_reply(move |result| invocation.finish(result.as_ref().err())),
+					},
+				) {
+					Ok(()) => {
+						self.log_dispatch_command_handled(command_kind, "enqueued");
+					}
+					Err(_error) => {
+						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
+					}
 				}
-				Err(_error) => {
-					self.log_dispatch_command_handled(command_kind, "enqueue_failed");
-				}
-			},
+			}
 			DispatchCommand::Http { request, reply } => {
+				let incoming = IncomingInvocationContext::from_http_headers(request.headers());
+				let invocation = ActorInvocation::start_request(&self.ctx, &request, incoming);
 				match self.send_actor_event(
 					"dispatch_http",
 					ActorEvent::HttpRequest {
 						request,
-						reply: Reply::from(reply),
+						invocation_telemetry: Some(invocation.telemetry()),
+						reply: Reply::from(reply)
+							.on_reply(move |result| invocation.finish_request(result.as_ref())),
 					},
 				) {
 					Ok(()) => {

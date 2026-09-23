@@ -7,7 +7,7 @@ use rivetkit_actor_persist::versioned as persist_versioned;
 use crate::actor::connection::{
 	PersistedConnection, PersistedSubscription, encode_persisted_connection,
 };
-use crate::actor::keys::make_workflow_key;
+use crate::actor::keys::{WORKFLOW_TRACE_CONTEXT_KEY, make_workflow_key};
 use crate::actor::messages::WorkflowKvWrite;
 use crate::actor::persist::{
 	decode_latest_with_embedded_version, encode_latest_with_embedded_version,
@@ -16,6 +16,7 @@ use crate::actor::queue::{PersistedQueueMessage, QueueMetadata};
 use crate::actor::state::PersistedActor;
 use crate::error::KvRuntimeError;
 use crate::sqlite::{BindParam, ColumnValue, SqliteBatchStatement, SqliteDb};
+use crate::telemetry::IncomingTraceContext;
 use crate::types::ListOpts;
 
 pub(crate) mod queries;
@@ -34,6 +35,7 @@ const QUEUE_MESSAGE_IDS_PER_QUERY: usize = 128;
 const WORKFLOW_KV_VALUE_LIMIT: usize = 256 * 1024;
 pub(crate) const RUN_WAKE_AT_META_KEY: &str = "run_wake_at";
 const RUN_WAKE_AT_VERSION: u16 = 1;
+const WORKFLOW_TRACE_CONTEXT_VERSION: u16 = 1;
 
 /// Depot rejects SQLite commits that dirty more than `MAX_COMMIT_RAW_DIRTY_BYTES`
 /// (320 pages * 4 KiB = 1.3 MiB) in `engine/packages/depot/src/conveyer/constants.rs`.
@@ -155,20 +157,22 @@ pub(crate) async fn import_legacy_actor_snapshot(
 		},
 	];
 	for event in &actor.scheduled_events {
+		let mut params = vec![
+			BindParam::Text(event.event_id.clone()),
+			BindParam::Integer(event.timestamp),
+			BindParam::Text(event.action.clone()),
+			optional_blob_param(event.args.clone()),
+			BindParam::Integer(0),
+			BindParam::Null,
+			BindParam::Null,
+			BindParam::Null,
+			BindParam::Null,
+			BindParam::Integer(0),
+		];
+		params.extend(trace_context_params(IncomingTraceContext::default()));
 		statements.push(SqliteBatchStatement {
 			sql: INSERT_SCHEDULE_EVENT_SQL.to_owned(),
-			params: Some(vec![
-				BindParam::Text(event.event_id.clone()),
-				BindParam::Integer(event.timestamp),
-				BindParam::Text(event.action.clone()),
-				optional_blob_param(event.args.clone()),
-				BindParam::Integer(0),
-				BindParam::Null,
-				BindParam::Null,
-				BindParam::Null,
-				BindParam::Null,
-				BindParam::Integer(0),
-			]),
+			params: Some(params),
 		});
 	}
 	db.execute_batch(statements)
@@ -382,18 +386,21 @@ pub(crate) async fn persist_queue_message(
 	id: u64,
 	next_id: u64,
 	message: &PersistedQueueMessage,
+	trace_context: IncomingTraceContext,
 ) -> Result<()> {
 	let id = i64::try_from(id).context("queue message id exceeds sqlite integer range")?;
 	let next_id = i64::try_from(next_id).context("queue next id exceeds sqlite integer range")?;
+	let mut params = vec![
+		BindParam::Integer(id),
+		BindParam::Text(message.name.clone()),
+		BindParam::Blob(message.body.clone()),
+		BindParam::Integer(message.created_at),
+	];
+	params.extend(trace_context_params(trace_context));
 	db.execute_batch(vec![
 		SqliteBatchStatement {
 			sql: INSERT_QUEUE_MESSAGE_SQL.to_owned(),
-			params: Some(vec![
-				BindParam::Integer(id),
-				BindParam::Text(message.name.clone()),
-				BindParam::Blob(message.body.clone()),
-				BindParam::Integer(message.created_at),
-			]),
+			params: Some(params),
 		},
 		SqliteBatchStatement {
 			sql: UPSERT_QUEUE_NEXT_ID_SQL.to_owned(),
@@ -418,17 +425,18 @@ pub(crate) async fn persist_queue_messages(
 	for chunk in split_queue_tx_chunks(messages) {
 		let mut statements = Vec::with_capacity(chunk.len());
 		for (id, message) in chunk {
+			let mut params = vec![
+				BindParam::Integer(
+					i64::try_from(*id).context("queue message id exceeds sqlite integer range")?,
+				),
+				BindParam::Text(message.name.clone()),
+				BindParam::Blob(message.body.clone()),
+				BindParam::Integer(message.created_at),
+			];
+			params.extend(trace_context_params(IncomingTraceContext::default()));
 			statements.push(SqliteBatchStatement {
 				sql: INSERT_QUEUE_MESSAGE_SQL.to_owned(),
-				params: Some(vec![
-					BindParam::Integer(
-						i64::try_from(*id)
-							.context("queue message id exceeds sqlite integer range")?,
-					),
-					BindParam::Text(message.name.clone()),
-					BindParam::Blob(message.body.clone()),
-					BindParam::Integer(message.created_at),
-				]),
+				params: Some(params),
 			});
 		}
 		db.execute_batch(statements)
@@ -642,6 +650,7 @@ fn decode_queue_message_rows(rows: &[Vec<ColumnValue>]) -> Result<Vec<QueueMessa
 					in_flight: None,
 					in_flight_at: None,
 				},
+				trace_context: read_trace_context(row, 4, "queue message trace context")?,
 			})
 		})
 		.collect()
@@ -685,6 +694,7 @@ pub(crate) async fn reset_queue(db: &SqliteDb) -> Result<()> {
 pub(crate) struct QueueMessageRow {
 	pub id: u64,
 	pub message: PersistedQueueMessage,
+	pub trace_context: IncomingTraceContext,
 }
 
 pub(crate) async fn user_kv_batch_get(
@@ -1073,6 +1083,54 @@ pub(crate) async fn persist_run_wake_at(db: &SqliteDb, wake_at: Option<i64>) -> 
 	Ok(())
 }
 
+pub(crate) async fn load_workflow_trace(db: &SqliteDb) -> Result<IncomingTraceContext> {
+	let result = db
+		.query(
+			LOAD_WORKFLOW_KV_SQL,
+			Some(vec![BindParam::Blob(WORKFLOW_TRACE_CONTEXT_KEY.to_vec())]),
+		)
+		.await
+		.context("load workflow trace context")?;
+	let Some(row) = result.rows.first() else {
+		return Ok(IncomingTraceContext::default());
+	};
+	let payload = read_blob(row, 0, "workflow trace context")?;
+	let stored = decode_latest_with_embedded_version::<persist_versioned::WorkflowTraceContext>(
+		&payload,
+		"workflow trace context",
+	)?;
+	Ok(IncomingTraceContext {
+		ray_id: stored.ray_id,
+		traceparent: stored.traceparent,
+		tracestate: stored.tracestate,
+	})
+}
+
+pub(crate) async fn persist_workflow_trace(
+	db: &SqliteDb,
+	trace_context: IncomingTraceContext,
+) -> Result<()> {
+	let payload = encode_latest_with_embedded_version::<persist_versioned::WorkflowTraceContext>(
+		persist_versioned::WorkflowTraceContextV1 {
+			ray_id: trace_context.ray_id,
+			traceparent: trace_context.traceparent,
+			tracestate: trace_context.tracestate,
+		},
+		WORKFLOW_TRACE_CONTEXT_VERSION,
+		"workflow trace context",
+	)?;
+	db.execute(
+		UPSERT_WORKFLOW_KV_SQL,
+		Some(vec![
+			BindParam::Blob(WORKFLOW_TRACE_CONTEXT_KEY.to_vec()),
+			BindParam::Blob(payload),
+		]),
+	)
+	.await
+	.context("persist workflow trace context")?;
+	Ok(())
+}
+
 pub(crate) async fn load_inspector_token(db: &SqliteDb) -> Result<Option<String>> {
 	let result = db
 		.query(LOAD_INSPECTOR_TOKEN_SQL, None)
@@ -1246,6 +1304,33 @@ async fn clear_table_bounded(
 			);
 		}
 	}
+}
+
+/// Bind parameters for the three trace context columns a schedule or queue row
+/// stores beside its payload.
+pub(crate) fn trace_context_params(trace_context: IncomingTraceContext) -> [BindParam; 3] {
+	[
+		optional_owned_text_param(trace_context.ray_id),
+		optional_owned_text_param(trace_context.traceparent),
+		optional_owned_text_param(trace_context.tracestate),
+	]
+}
+
+/// Reads the three trace context columns starting at `index`.
+pub(crate) fn read_trace_context(
+	row: &[ColumnValue],
+	index: usize,
+	label: &str,
+) -> Result<IncomingTraceContext> {
+	Ok(IncomingTraceContext {
+		ray_id: read_optional_text(row, index, label)?,
+		traceparent: read_optional_text(row, index + 1, label)?,
+		tracestate: read_optional_text(row, index + 2, label)?,
+	})
+}
+
+pub(crate) fn optional_owned_text_param(value: Option<String>) -> BindParam {
+	value.map_or(BindParam::Null, BindParam::Text)
 }
 
 fn optional_blob_param(value: Option<Vec<u8>>) -> BindParam {

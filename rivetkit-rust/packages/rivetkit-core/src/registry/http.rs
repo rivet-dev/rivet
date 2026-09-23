@@ -3,6 +3,7 @@ use super::inspector::*;
 use super::*;
 use crate::error::{ProtocolError, client_error_message, client_error_metadata};
 use crate::serde_metrics;
+use crate::telemetry::IncomingInvocationContext;
 use ::http;
 
 const HEADER_RIVET_ACTOR: &str = "x-rivet-actor";
@@ -255,6 +256,7 @@ impl RegistryDispatcher {
 				conn.clone(),
 				action_name.clone(),
 				args,
+				IncomingInvocationContext::from_http_headers(request.headers()),
 			),
 		)
 		.await;
@@ -368,12 +370,15 @@ impl RegistryDispatcher {
 			}
 		};
 
+		let incoming =
+			crate::telemetry::IncomingInvocationContext::from_http_headers(request.headers());
 		let (reply_tx, reply_rx) = oneshot::channel();
 		let dispatch_result = try_send_dispatch_command(
 			&instance.dispatch,
 			DispatchCommand::QueueSend {
 				name: queue_name,
 				body: queue_request.body,
+				incoming,
 				conn: conn.clone(),
 				request,
 				wait: queue_request.wait,

@@ -20,6 +20,13 @@ pub mod serverless;
 pub mod serverless_http;
 #[cfg(feature = "native-runtime")]
 mod services_process;
+pub mod telemetry;
+#[doc(hidden)]
+pub use telemetry::{
+	ActorInvocationSpanContext, ActorInvocationTelemetry, ActorInvocationTraceContext,
+	IncomingTraceContext, OutboundCallInvocation, WorkflowRunInvocation, WorkflowRunOutcome,
+	WorkflowStepOutcome, WorkflowStepSpan,
+};
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
 #[cfg(not(target_arch = "wasm32"))]

@@ -1,3 +1,4 @@
+import type { AsyncLocalStorage } from "node:async_hooks";
 import type {
 	ActorContext as NativeActorContext,
 	NapiActorFactory as NativeActorFactory,
@@ -7,6 +8,14 @@ import type {
 	HttpResponseBodyStream as NativeHttpResponseBodyStream,
 	WebSocket as NativeWebSocket,
 } from "@rivetkit/rivetkit-napi";
+import type { WorkflowSpan } from "@/actor/config";
+import { encodeErrorForBridge } from "@/actor/errors";
+import type { ActorInvocationTraceContext } from "@/common/actor-telemetry-context";
+import {
+	readActiveTraceHeaders,
+	runWithActorInvocationSpan,
+} from "@/common/otel-context";
+import { logger } from "./log";
 import type {
 	ActorContextHandle,
 	ActorFactoryHandle,
@@ -26,6 +35,7 @@ import type {
 	RuntimeKvEntry,
 	RuntimeKvListOptions,
 	RuntimeListenerConfig,
+	RuntimeOutboundCall,
 	RuntimeQueueEnqueueAndWaitOptions,
 	RuntimeQueueMessage,
 	RuntimeQueueNextBatchOptions,
@@ -64,6 +74,9 @@ type NapiSqlTransaction = Awaited<
 >;
 type NapiActorStateTransaction = Awaited<
 	ReturnType<NativeActorContext["beginStateTransaction"]>
+>;
+type NapiQueueMessage = Awaited<
+	ReturnType<ReturnType<NativeActorContext["queue"]>["send"]>
 >;
 
 function asNativeRegistry(handle: RegistryHandle): NativeCoreRegistry {
@@ -233,7 +246,7 @@ function toNapiKvEntry(entry: RuntimeKvEntry): {
 	};
 }
 
-function toNapiQueueMessage(message: RuntimeQueueMessage): RuntimeQueueMessage {
+function toNapiQueueMessage(message: NapiQueueMessage): RuntimeQueueMessage {
 	return {
 		id: () => message.id(),
 		name: () => message.name(),
@@ -254,23 +267,54 @@ export class NapiCoreRuntime implements CoreRuntime {
 	readonly kind = "napi";
 
 	#bindings: NativeBindings;
-	#sql = new WeakMap<NativeActorContext, NapiSqlDatabase>();
+	#sqlOpened = new WeakSet<NativeActorContext>();
+	#invocationContext: AsyncLocalStorage<NativeActorContext>;
 
-	constructor(bindings: NativeBindings) {
+	constructor(
+		bindings: NativeBindings,
+		invocationContext: AsyncLocalStorage<NativeActorContext>,
+	) {
 		this.#bindings = bindings;
+		this.#invocationContext = invocationContext;
+	}
+
+	#actorContextForOperation(owner: ActorContextHandle): NativeActorContext {
+		const ownerCtx = asNativeActorContext(owner);
+		const active = this.#invocationContext.getStore();
+		if (!active?.sameActorInstance(ownerCtx)) {
+			return ownerCtx;
+		}
+		const applicationSpan = readActiveTraceHeaders();
+		if (!applicationSpan) {
+			return active;
+		}
+		return active.withApplicationSpan(
+			applicationSpan.traceparent,
+			applicationSpan.tracestate ?? null,
+		);
 	}
 
 	#actorSql(ctx: ActorContextHandle): NapiSqlDatabase {
-		const nativeCtx = asNativeActorContext(ctx);
-		let database = this.#sql.get(nativeCtx);
-		if (!database) {
-			database = nativeCtx.sql();
-			this.#sql.set(nativeCtx, database);
-		}
-		return database;
+		this.#sqlOpened.add(asNativeActorContext(ctx));
+		return this.#actorContextForOperation(ctx).sql();
 	}
 
 	createRegistry(): RegistryHandle {
+		this.#bindings.setTelemetryLogSink(
+			(event: {
+				name: string;
+				message: string;
+				level: "warn" | "error";
+			}) => {
+				const fields = { otelEvent: event.name };
+				const message = event.message || event.name;
+				if (event.level === "error") {
+					logger().error(fields, message);
+				} else {
+					logger().warn(fields, message);
+				}
+			},
+		);
 		return asRegistryHandle(new this.#bindings.CoreRegistry());
 	}
 
@@ -295,6 +339,10 @@ export class NapiCoreRuntime implements CoreRuntime {
 
 	async shutdownRegistry(registry: RegistryHandle): Promise<void> {
 		await asNativeRegistry(registry).shutdown();
+	}
+
+	async shutdownTelemetry(): Promise<void> {
+		await this.#bindings.shutdownTelemetry();
 	}
 
 	async registryActorStopThresholdMs(
@@ -552,6 +600,74 @@ export class NapiCoreRuntime implements CoreRuntime {
 		return asNativeActorContext(ctx).actorId();
 	}
 
+	runWithActorInvocationContext<T>(ctx: ActorContextHandle, run: () => T): T {
+		return this.#runAs(asNativeActorContext(ctx), run);
+	}
+
+	#runAs<T>(nativeCtx: NativeActorContext, run: () => T): T {
+		const span = nativeCtx.invocationTraceContext()?.span;
+		return this.#invocationContext.run(nativeCtx, () =>
+			runWithActorInvocationSpan(span, run),
+		);
+	}
+
+	actorInvocationTraceContext(
+		ctx: ActorContextHandle,
+	): ActorInvocationTraceContext | undefined {
+		return (
+			this.#actorContextForOperation(ctx).invocationTraceContext() ??
+			undefined
+		);
+	}
+
+	startCallSpan(
+		ctx: ActorContextHandle,
+		actorName: string,
+		actionName: string,
+	): RuntimeOutboundCall | undefined {
+		const call = this.#actorContextForOperation(ctx).startCallSpan(
+			actorName,
+			actionName,
+		);
+		if (!call) return undefined;
+		return {
+			span: call.spanContext() ?? undefined,
+			finish: (error?: string) => call.finish(error),
+		};
+	}
+
+	async startWorkflowSpan(ctx: ActorContextHandle): Promise<WorkflowSpan> {
+		const span = await asNativeActorContext(ctx).startWorkflowSpan();
+		const spanCtx = span.ctx();
+		return {
+			run: (body) => this.#runAs(spanCtx, body),
+			startStep: (name, attempt) => {
+				const step = spanCtx.startWorkflowStepSpan(name, attempt);
+				if (!step) return undefined;
+				const stepCtx = step.ctx();
+				return {
+					run: (body) => this.#runAs(stepCtx, body),
+					finish: (outcome, error) =>
+						step.finish(
+							outcome,
+							error === undefined
+								? undefined
+								: encodeErrorForBridge(error),
+						),
+				};
+			},
+			finish: (outcome) => span.finish(outcome),
+		};
+	}
+
+	runOutsideActorInvocationContext<T>(run: () => T): T {
+		return this.#invocationContext.exit(run);
+	}
+
+	currentInvocationScope(): object | undefined {
+		return this.#invocationContext.getStore();
+	}
+
 	actorName(ctx: ActorContextHandle): string {
 		return asNativeActorContext(ctx).name();
 	}
@@ -600,7 +716,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 	}
 
 	actorWaitUntil(ctx: ActorContextHandle, promise: Promise<unknown>): void {
-		asNativeActorContext(ctx).waitUntil(promise);
+		this.#actorContextForOperation(ctx).waitUntil(promise);
 	}
 
 	async actorWaitForTrackedShutdownWork(
@@ -810,7 +926,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		timeoutMs?: number,
 	): Promise<ActorStateTransactionHandle> {
-		return (await asNativeActorContext(ctx).beginStateTransaction(
+		return (await this.#actorContextForOperation(ctx).beginStateTransaction(
 			timeoutMs,
 		)) as unknown as ActorStateTransactionHandle;
 	}
@@ -871,13 +987,10 @@ export class NapiCoreRuntime implements CoreRuntime {
 
 	async actorSqlClose(ctx: ActorContextHandle): Promise<void> {
 		const nativeCtx = asNativeActorContext(ctx);
-		const database = this.#sql.get(nativeCtx);
-		if (!database) {
+		if (!this.#sqlOpened.delete(nativeCtx)) {
 			return;
 		}
-
-		this.#sql.delete(nativeCtx);
-		await database.close();
+		await nativeCtx.sql().close();
 	}
 
 	async actorRuntimeSocketProvision(ctx: ActorContextHandle) {
@@ -890,7 +1003,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		body: RuntimeBytes,
 	): Promise<RuntimeQueueMessage> {
 		return toNapiQueueMessage(
-			await asNativeActorContext(ctx)
+			await this.#actorContextForOperation(ctx)
 				.queue()
 				.send(name, toNapiBuffer(body)),
 		);
@@ -901,7 +1014,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		options?: RuntimeQueueNextBatchOptions | undefined | null,
 		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<RuntimeQueueMessage[]> {
-		const messages = await asNativeActorContext(ctx)
+		const messages = await this.#actorContextForOperation(ctx)
 			.queue()
 			.nextBatch(
 				options,
@@ -917,7 +1030,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<RuntimeQueueMessage> {
 		return toNapiQueueMessage(
-			await asNativeActorContext(ctx)
+			await this.#actorContextForOperation(ctx)
 				.queue()
 				.waitForNames(
 					names,
@@ -964,7 +1077,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		options?: RuntimeQueueEnqueueAndWaitOptions | undefined | null,
 		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<RuntimeBytes | null> {
-		return await asNativeActorContext(ctx)
+		return await this.#actorContextForOperation(ctx)
 			.queue()
 			.enqueueAndWait(
 				name,
@@ -1002,7 +1115,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		actionName: string,
 		args: RuntimeBytes,
 	): Promise<string> {
-		return await asNativeActorContext(ctx)
+		return await this.#actorContextForOperation(ctx)
 			.schedule()
 			.after(durationMs, actionName, toNapiBuffer(args));
 	}
@@ -1013,13 +1126,13 @@ export class NapiCoreRuntime implements CoreRuntime {
 		actionName: string,
 		args: RuntimeBytes,
 	): Promise<string> {
-		return await asNativeActorContext(ctx)
+		return await this.#actorContextForOperation(ctx)
 			.schedule()
 			.at(timestampMs, actionName, toNapiBuffer(args));
 	}
 
 	async actorScheduleCancel(ctx: ActorContextHandle, id: string) {
-		return await asNativeActorContext(ctx).schedule().cancel(id);
+		return await this.#actorContextForOperation(ctx).schedule().cancel(id);
 	}
 
 	async actorScheduleGet(
@@ -1027,12 +1140,13 @@ export class NapiCoreRuntime implements CoreRuntime {
 		id: string,
 	): Promise<RuntimeScheduledEventInfo | undefined> {
 		return (
-			(await asNativeActorContext(ctx).schedule().get(id)) ?? undefined
+			(await this.#actorContextForOperation(ctx).schedule().get(id)) ??
+			undefined
 		);
 	}
 
 	async actorScheduleList(ctx: ActorContextHandle) {
-		return await asNativeActorContext(ctx).schedule().list();
+		return await this.#actorContextForOperation(ctx).schedule().list();
 	}
 
 	async actorCronSet(
@@ -1044,7 +1158,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		args: RuntimeBytes,
 		maxHistory: number | undefined,
 	) {
-		await asNativeActorContext(ctx)
+		await this.#actorContextForOperation(ctx)
 			.schedule()
 			.cronSet(
 				name,
@@ -1064,7 +1178,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		args: RuntimeBytes,
 		maxHistory: number | undefined,
 	) {
-		await asNativeActorContext(ctx)
+		await this.#actorContextForOperation(ctx)
 			.schedule()
 			.cronEvery(
 				name,
@@ -1079,20 +1193,23 @@ export class NapiCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		name: string,
 	): Promise<RuntimeCronJobInfo | undefined> {
-		return ((await asNativeActorContext(ctx).schedule().cronGet(name)) ??
-			undefined) as RuntimeCronJobInfo | undefined;
+		return ((await this.#actorContextForOperation(ctx)
+			.schedule()
+			.cronGet(name)) ?? undefined) as RuntimeCronJobInfo | undefined;
 	}
 
 	async actorCronList(
 		ctx: ActorContextHandle,
 	): Promise<RuntimeCronJobInfo[]> {
-		return (await asNativeActorContext(ctx)
+		return (await this.#actorContextForOperation(ctx)
 			.schedule()
 			.cronList()) as RuntimeCronJobInfo[];
 	}
 
 	async actorCronDelete(ctx: ActorContextHandle, name: string) {
-		return await asNativeActorContext(ctx).schedule().cronDelete(name);
+		return await this.#actorContextForOperation(ctx)
+			.schedule()
+			.cronDelete(name);
 	}
 
 	async actorCronHistory(
@@ -1100,7 +1217,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		name: string,
 		limit: number | undefined,
 	): Promise<RuntimeCronFire[]> {
-		return (await asNativeActorContext(ctx)
+		return (await this.#actorContextForOperation(ctx)
 			.schedule()
 			.cronHistory(name, limit)) as RuntimeCronFire[];
 	}
@@ -1173,9 +1290,12 @@ export async function loadNapiRuntime(): Promise<{
 	// would snapshot the native `.node` addon into the deploy and 413. The
 	// computed specifier keeps it opaque to static analysis so it is never
 	// bundled. Enforced by scripts/ci/check-edge-native-closure.mjs.
-	const bindings = await import(["@rivetkit", "rivetkit-napi"].join("/"));
+	const [{ AsyncLocalStorage }, bindings] = await Promise.all([
+		import("node:async_hooks"),
+		import(["@rivetkit", "rivetkit-napi"].join("/")),
+	]);
 	return {
 		bindings,
-		runtime: new NapiCoreRuntime(bindings),
+		runtime: new NapiCoreRuntime(bindings, new AsyncLocalStorage()),
 	};
 }

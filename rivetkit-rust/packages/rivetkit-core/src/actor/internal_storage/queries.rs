@@ -14,8 +14,8 @@ pub(crate) const DELETE_CONN_STATE_SQL: &str = "DELETE FROM _rivet_conn_state WH
 pub(crate) const DELETE_CONN_SQL: &str = "DELETE FROM _rivet_conns WHERE conn_id = ?";
 
 pub(crate) const RESET_SCHEDULES_FOR_LEGACY_IMPORT_SQL: &str = "DELETE FROM _rivet_schedule_events";
-pub(crate) const INSERT_SCHEDULE_EVENT_SQL: &str = "INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-pub(crate) const UPSERT_RECURRING_SCHEDULE_SQL: &str = "INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(event_id) DO UPDATE SET trigger_at = excluded.trigger_at, action = excluded.action, args = excluded.args, kind = excluded.kind, cron_expression = excluded.cron_expression, timezone = excluded.timezone, interval_ms = excluded.interval_ms, max_history = excluded.max_history";
+pub(crate) const INSERT_SCHEDULE_EVENT_SQL: &str = "INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history, ray_id, traceparent, tracestate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+pub(crate) const UPSERT_RECURRING_SCHEDULE_SQL: &str = "INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history, ray_id, traceparent, tracestate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(event_id) DO UPDATE SET trigger_at = excluded.trigger_at, action = excluded.action, args = excluded.args, kind = excluded.kind, cron_expression = excluded.cron_expression, timezone = excluded.timezone, interval_ms = excluded.interval_ms, max_history = excluded.max_history, ray_id = excluded.ray_id, traceparent = excluded.traceparent, tracestate = excluded.tracestate";
 pub(crate) const CANCEL_SCHEDULE_SQL: &str =
 	"DELETE FROM _rivet_schedule_events WHERE event_id = ? AND kind = ?";
 pub(crate) const GET_SCHEDULED_EVENT_SQL: &str = "SELECT event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history FROM _rivet_schedule_events WHERE event_id = ? AND kind = ?";
@@ -29,7 +29,7 @@ pub(crate) const LIST_CRONS_SQL: &str = "SELECT event_id, trigger_at, action, ar
 pub(crate) const CRON_HISTORY_SQL: &str = "SELECT action, scheduled_at, fired_at, finished_at, result, error_group, error_code, error_message, error_metadata FROM _rivet_schedule_history WHERE schedule_id = ? ORDER BY fired_at DESC, id DESC LIMIT ?";
 pub(crate) const LOAD_SCHEDULE_SQL: &str = "SELECT event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history FROM _rivet_schedule_events WHERE event_id = ?";
 pub(crate) const COUNT_SCHEDULES_SQL: &str = "SELECT COUNT(*) FROM _rivet_schedule_events";
-pub(crate) const TAKE_DUE_SCHEDULES_SQL: &str = "SELECT event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history FROM _rivet_schedule_events WHERE trigger_at <= ? ORDER BY trigger_at, event_id";
+pub(crate) const TAKE_DUE_SCHEDULES_SQL: &str = "SELECT event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history, ray_id, traceparent, tracestate FROM _rivet_schedule_events WHERE trigger_at <= ? ORDER BY trigger_at, event_id";
 pub(crate) const ADVANCE_SKIPPED_SCHEDULE_SQL: &str =
 	"UPDATE _rivet_schedule_events SET trigger_at = ? WHERE event_id = ?";
 pub(crate) const ADVANCE_SCHEDULE_SQL: &str =
@@ -55,11 +55,9 @@ pub(crate) fn claim_one_shots_sql(event_count: usize) -> String {
 pub(crate) const LOAD_QUEUE_NEXT_ID_SQL: &str =
 	"SELECT queue_next_id FROM _rivet_runtime WHERE id = 1";
 pub(crate) const LOAD_QUEUE_STATS_SQL: &str = "SELECT COUNT(*), MAX(id) FROM _rivet_queue";
-pub(crate) const LOAD_QUEUE_MESSAGES_SQL: &str =
-	"SELECT id, name, body, created_at FROM _rivet_queue ORDER BY id";
-pub(crate) const LOAD_QUEUE_MESSAGES_LIMITED_SQL: &str =
-	"SELECT id, name, body, created_at FROM _rivet_queue ORDER BY id LIMIT ?";
-pub(crate) const LOAD_QUEUE_MESSAGES_FOR_NAME_SQL: &str = "SELECT id, name, body, created_at FROM _rivet_queue INDEXED BY _rivet_queue_name_id WHERE name = ? ORDER BY id LIMIT ?";
+pub(crate) const LOAD_QUEUE_MESSAGES_SQL: &str = "SELECT id, name, body, created_at, ray_id, traceparent, tracestate FROM _rivet_queue ORDER BY id";
+pub(crate) const LOAD_QUEUE_MESSAGES_LIMITED_SQL: &str = "SELECT id, name, body, created_at, ray_id, traceparent, tracestate FROM _rivet_queue ORDER BY id LIMIT ?";
+pub(crate) const LOAD_QUEUE_MESSAGES_FOR_NAME_SQL: &str = "SELECT id, name, body, created_at, ray_id, traceparent, tracestate FROM _rivet_queue INDEXED BY _rivet_queue_name_id WHERE name = ? ORDER BY id LIMIT ?";
 pub(crate) const HAS_QUEUE_MESSAGES_SQL: &str = "SELECT 1 FROM _rivet_queue LIMIT 1";
 pub(crate) const HAS_QUEUE_MESSAGES_FOR_NAME_SQL: &str =
 	"SELECT 1 FROM _rivet_queue INDEXED BY _rivet_queue_name_id WHERE name = ? LIMIT 1";
@@ -71,11 +69,10 @@ pub(crate) fn load_queue_messages_by_ids_sql(id_count: usize) -> String {
 		.collect::<Vec<_>>()
 		.join(", ");
 	format!(
-		"SELECT id, name, body, created_at FROM _rivet_queue WHERE id IN ({placeholders}) ORDER BY id"
+		"SELECT id, name, body, created_at, ray_id, traceparent, tracestate FROM _rivet_queue WHERE id IN ({placeholders}) ORDER BY id"
 	)
 }
-pub(crate) const INSERT_QUEUE_MESSAGE_SQL: &str =
-	"INSERT OR REPLACE INTO _rivet_queue (id, name, body, created_at) VALUES (?, ?, ?, ?)";
+pub(crate) const INSERT_QUEUE_MESSAGE_SQL: &str = "INSERT OR REPLACE INTO _rivet_queue (id, name, body, created_at, ray_id, traceparent, tracestate) VALUES (?, ?, ?, ?, ?, ?, ?)";
 pub(crate) const DELETE_QUEUE_MESSAGE_SQL: &str = "DELETE FROM _rivet_queue WHERE id = ?";
 pub(crate) const RESET_QUEUE_SQL: &str = "DELETE FROM _rivet_queue";
 
@@ -94,6 +91,7 @@ pub(crate) const UPSERT_QUEUE_NEXT_ID_SQL: &str = "INSERT INTO _rivet_runtime (i
 pub(crate) const UPSERT_LAST_PUSHED_ALARM_SQL: &str = "INSERT INTO _rivet_runtime (id, last_pushed_alarm, inspector_token, queue_next_id) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET last_pushed_alarm = excluded.last_pushed_alarm";
 pub(crate) const UPSERT_RUN_WAKE_AT_SQL: &str = "INSERT INTO _rivet_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
 pub(crate) const UPSERT_INSPECTOR_TOKEN_SQL: &str = "INSERT INTO _rivet_runtime (id, last_pushed_alarm, inspector_token, queue_next_id) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET inspector_token = excluded.inspector_token";
+pub(crate) const LOAD_WORKFLOW_KV_SQL: &str = "SELECT value FROM _rivet_wf_kv WHERE key = ?";
 pub(crate) const LOAD_META_TEXT_SQL: &str = "SELECT value FROM _rivet_meta WHERE key = ?";
 pub(crate) const UPSERT_META_TEXT_SQL: &str = "INSERT INTO _rivet_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
 

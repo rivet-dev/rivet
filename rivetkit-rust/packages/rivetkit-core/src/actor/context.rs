@@ -52,6 +52,11 @@ use crate::actor::work_registry::{ActorWorkKind, CountGuard, RegionGuard};
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::{Inspector, InspectorSnapshot};
 use crate::sqlite::SqliteDb;
+use crate::telemetry::{
+	ActorInvocationTelemetry, ActorInvocationTraceContext, ActorTelemetryIdentity,
+	IncomingTraceContext, OutboundCallInvocation, WorkflowRunInvocation, WorkflowRunOutcome,
+	WorkflowStepSpan,
+};
 use crate::types::{ActorKey, ConnId, ListOpts, format_actor_key};
 
 /// Shared actor runtime context.
@@ -62,7 +67,11 @@ use crate::types::{ActorKey, ConnId, ListOpts, format_actor_key};
 /// and on the returned runtime objects like `SqliteDb`, schedule APIs,
 /// queue APIs, `ConnHandle`, and `WebSocket`.
 #[derive(Clone)]
-pub struct ActorContext(pub(crate) Arc<ActorContextInner>);
+pub struct ActorContext(
+	pub(crate) Arc<ActorContextInner>,
+	/// Telemetry of the invocation this handle serves, `None` outside an invocation.
+	pub(crate) Option<ActorInvocationTelemetry>,
+);
 
 #[derive(Clone)]
 pub struct ActorKv {
@@ -172,6 +181,7 @@ pub(crate) struct ActorContextInner {
 	hibernated_connection_liveness_override: RwLock<Option<BTreeSet<(Vec<u8>, Vec<u8>)>>>,
 	pub(super) metrics: ActorMetrics,
 	diagnostics: ActorDiagnostics,
+	telemetry_identity: Arc<ActorTelemetryIdentity>,
 	actor_id: String,
 	name: String,
 	key: ActorKey,
@@ -242,6 +252,125 @@ impl ActorKv {
 }
 
 impl ActorContext {
+	/// Returns a handle bound to `telemetry`, so schedules and SQLite work done
+	/// through it are attributed to that invocation.
+	pub fn with_invocation_telemetry(
+		mut self,
+		telemetry: Option<ActorInvocationTelemetry>,
+	) -> Self {
+		self.1 = telemetry;
+		self
+	}
+
+	/// Returns a handle for the same invocation whose spans parent to the
+	/// application span the host runtime has active, given as W3C
+	/// `traceparent` and `tracestate`. A handle that serves no invocation is
+	/// returned unchanged, because it opens no spans.
+	#[doc(hidden)]
+	pub fn with_application_span(
+		&self,
+		traceparent: Option<&str>,
+		tracestate: Option<&str>,
+	) -> Self {
+		Self(
+			self.0.clone(),
+			self.1
+				.as_ref()
+				.map(|telemetry| telemetry.with_application_span(traceparent, tracestate)),
+		)
+	}
+
+	pub(crate) fn invocation_telemetry(&self) -> Option<&ActorInvocationTelemetry> {
+		self.1.as_ref()
+	}
+
+	/// Returns the SQLite handle bound to this handle's invocation.
+	pub fn invocation_sql(&self) -> SqliteDb {
+		self.0.sql.clone().with_invocation_telemetry(self.1.clone())
+	}
+
+	/// Opens the span covering one call out to another actor, or nothing when
+	/// this handle serves no invocation or tracing is disabled.
+	///
+	/// `actor_name` and `action_name` name the callee. Both come from the
+	/// caller's own registry rather than from a remote peer, so neither is a
+	/// cardinality surface.
+	#[doc(hidden)]
+	pub fn start_call_span(
+		&self,
+		actor_name: &str,
+		action_name: &str,
+	) -> Option<OutboundCallInvocation> {
+		self.1
+			.as_ref()?
+			.start_outbound_call(actor_name, action_name)
+	}
+
+	/// Opens one workflow run as its own invocation, linked to the span the
+	/// previous run persisted.
+	#[doc(hidden)]
+	pub async fn start_workflow_span(&self) -> WorkflowRunInvocation {
+		let previous = if tracing::enabled!(target: "rivetkit::telemetry", tracing::Level::INFO) {
+			internal_storage::load_workflow_trace(&self.0.sql)
+				.await
+				.unwrap_or_else(|error| {
+					tracing::warn!(
+						actor_id = %self.actor_id(),
+						?error,
+						"failed to load the previous workflow run span, so this run will not link to it"
+					);
+					IncomingTraceContext::default()
+				})
+		} else {
+			IncomingTraceContext::default()
+		};
+		WorkflowRunInvocation::start(self, previous)
+	}
+
+	/// Closes a workflow run and persists its span and ray for the next run.
+	#[doc(hidden)]
+	pub async fn finish_workflow_span(
+		&self,
+		run: WorkflowRunInvocation,
+		outcome: WorkflowRunOutcome,
+	) {
+		let Some(trace_context) = run.finish(outcome) else {
+			return;
+		};
+		if let Err(error) =
+			internal_storage::persist_workflow_trace(&self.0.sql, trace_context).await
+		{
+			tracing::warn!(
+				actor_id = %self.actor_id(),
+				?error,
+				"failed to persist the workflow run span, so the next run will not link to it"
+			);
+		}
+	}
+
+	/// Opens the span for one step attempt, or nothing when this handle serves
+	/// no invocation or tracing is off.
+	#[doc(hidden)]
+	pub fn start_workflow_step_span(
+		&self,
+		step_name: &str,
+		attempt: u32,
+	) -> Option<WorkflowStepSpan> {
+		WorkflowStepSpan::start(self, step_name, attempt)
+	}
+
+	/// Returns correlation for the invocation this handle serves, absent when
+	/// the handle is not bound to one or tracing is disabled.
+	pub fn invocation_trace_context(&self) -> Option<ActorInvocationTraceContext> {
+		self.1.as_ref()?.trace_context()
+	}
+
+	/// Returns whether two handles belong to the same running actor generation.
+	#[doc(hidden)]
+	pub fn is_same_instance(&self, other: &Self) -> bool {
+		Arc::ptr_eq(&self.0, &other.0)
+	}
+
 	#[cfg(test)]
 	pub(crate) fn new(
 		actor_id: impl Into<String>,
@@ -300,7 +429,7 @@ impl ActorContext {
 		let shutdown_deadline = CancellationToken::new();
 		let sleep = SleepState::new(config.clone());
 		let user_kv = ActorKv { sql: sql.clone() };
-		let ctx = Self(Arc::new(ActorContextInner {
+		let inner = Arc::new(ActorContextInner {
 			legacy_kv,
 			user_kv,
 			sql,
@@ -387,11 +516,17 @@ impl ActorContext {
 			hibernated_connection_liveness_override: RwLock::new(None),
 			metrics,
 			diagnostics,
+			telemetry_identity: Arc::new(ActorTelemetryIdentity {
+				actor_id: actor_id.clone(),
+				actor_name: name.clone(),
+				actor_key: format_actor_key(&key),
+			}),
 			actor_id,
 			name,
 			key,
 			region,
-		}));
+		});
+		let ctx = Self(inner, None);
 		ctx.configure_sleep_hooks();
 		ctx
 	}
@@ -714,9 +849,20 @@ impl ActorContext {
 		false
 	}
 
+	/// Runs `future` to completion after the current reply, without blocking
+	/// it. Work started from an invocation keeps that invocation's span open
+	/// until it settles, so its SQLite operations and logs stay attributed to
+	/// the request that started them.
 	#[cfg(not(feature = "wasm-runtime"))]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_work(ActorWorkKind::WaitUntil, future);
+		let invocation = self
+			.1
+			.as_ref()
+			.and_then(crate::ActorInvocationTelemetry::hold_open);
+		self.spawn_work(ActorWorkKind::WaitUntil, async move {
+			future.await;
+			drop(invocation);
+		});
 	}
 
 	#[cfg(not(feature = "wasm-runtime"))]
@@ -726,7 +872,14 @@ impl ActorContext {
 
 	#[cfg(feature = "wasm-runtime")]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + 'static) {
-		self.spawn_work(ActorWorkKind::WaitUntil, future);
+		let invocation = self
+			.1
+			.as_ref()
+			.and_then(crate::ActorInvocationTelemetry::hold_open);
+		self.spawn_work(ActorWorkKind::WaitUntil, async move {
+			future.await;
+			drop(invocation);
+		});
 	}
 
 	#[cfg(feature = "wasm-runtime")]
@@ -909,6 +1062,12 @@ impl ActorContext {
 
 	pub(crate) fn metrics(&self) -> &ActorMetrics {
 		&self.0.metrics
+	}
+
+	/// Identity fields shared by every invocation on this actor. Built once so a
+	/// span does not re-allocate them per action.
+	pub(crate) fn telemetry_identity(&self) -> Arc<ActorTelemetryIdentity> {
+		self.0.telemetry_identity.clone()
 	}
 
 	pub(crate) fn record_user_task_started(&self, kind: UserTaskKind) {
@@ -1337,7 +1496,7 @@ impl ActorContext {
 	}
 
 	pub(crate) fn from_weak(weak: &Weak<ActorContextInner>) -> Option<Self> {
-		weak.upgrade().map(Self)
+		weak.upgrade().map(|inner| Self(inner, None))
 	}
 
 	#[doc(hidden)]
@@ -1748,8 +1907,14 @@ impl ActorContext {
 		self.track_shutdown_task(async move {
 			let _internal_keep_awake_region = internal_keep_awake_region;
 			ctx.record_user_task_started(UserTaskKind::ScheduledAction);
-			let started_at = Instant::now();
+			let user_task_started_at = Instant::now();
 			let action_name = action.clone();
+			let invocation = crate::telemetry::ActorInvocation::start_scheduled(
+				&ctx,
+				&action_name,
+				dispatch.trace_context,
+			);
+			let invocation_telemetry = invocation.telemetry();
 			let (reply_tx, reply_rx) = oneshot::channel();
 
 			let mut dispatch_error = None;
@@ -1759,6 +1924,7 @@ impl ActorContext {
 					args,
 					conn: None,
 					scheduled_fire: Some(scheduled_fire),
+					invocation_telemetry: Some(invocation_telemetry),
 					reply: Reply::from(reply_tx),
 				},
 				"scheduled_action",
@@ -1774,8 +1940,8 @@ impl ActorContext {
 							"scheduled event execution failed"
 						);
 					}
-					Err(error) => {
-						dispatch_error = Some(error.into());
+					Err(_) => {
+						dispatch_error = Some(ActorLifecycleError::DroppedReply.build());
 						tracing::error!(
 							error = ?dispatch_error.as_ref().expect("just assigned"),
 							event_id,
@@ -1794,6 +1960,7 @@ impl ActorContext {
 					);
 				}
 			}
+			invocation.finish(dispatch_error.as_ref());
 
 			ctx.finish_schedule_dispatch(&event_id, history_id, dispatch_error.as_ref())
 				.await;
@@ -1811,7 +1978,10 @@ impl ActorContext {
 				}
 			}
 
-			ctx.record_user_task_finished(UserTaskKind::ScheduledAction, started_at.elapsed());
+			ctx.record_user_task_finished(
+				UserTaskKind::ScheduledAction,
+				user_task_started_at.elapsed(),
+			);
 		});
 	}
 

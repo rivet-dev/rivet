@@ -97,6 +97,7 @@ impl<A: Actor> RuntimeEvent<A> {
 				args,
 				conn,
 				scheduled_fire,
+				invocation_telemetry: _,
 				reply,
 			} => Self::Action(ActionCall {
 				name,
@@ -105,7 +106,11 @@ impl<A: Actor> RuntimeEvent<A> {
 				scheduled_fire,
 				reply: Some(reply),
 			}),
-			ActorEvent::HttpRequest { request, reply } => Self::Http(HttpCall {
+			ActorEvent::HttpRequest {
+				request,
+				invocation_telemetry: _,
+				reply,
+			} => Self::Http(HttpCall {
 				request: Some(request),
 				reply: Some(reply),
 			}),
@@ -116,6 +121,7 @@ impl<A: Actor> RuntimeEvent<A> {
 				request,
 				wait,
 				timeout_ms,
+				invocation_telemetry: _,
 				reply,
 			} => Self::QueueSend(QueueSend {
 				name,
@@ -994,6 +1000,7 @@ mod tests {
 					args: Vec::new(),
 					conn: None,
 					scheduled_fire: None,
+					invocation_telemetry: None,
 					reply: reply_tx.into(),
 				})
 				.expect("queue action event");

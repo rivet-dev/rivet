@@ -155,6 +155,7 @@ pub(crate) struct MigratePayload {
 #[derive(Clone)]
 pub(crate) struct QueueSendPayload {
 	pub(crate) ctx: CoreActorContext,
+	pub(crate) telemetry: Option<rivetkit_core::ActorInvocationTelemetry>,
 	pub(crate) conn: CoreConnHandle,
 	pub(crate) request: Request,
 	pub(crate) name: String,
@@ -196,6 +197,7 @@ pub(crate) struct ConnectionPayload {
 #[derive(Clone)]
 pub(crate) struct ActionPayload {
 	pub(crate) ctx: CoreActorContext,
+	pub(crate) telemetry: Option<rivetkit_core::ActorInvocationTelemetry>,
 	pub(crate) conn: Option<CoreConnHandle>,
 	pub(crate) name: String,
 	pub(crate) args: Vec<u8>,
@@ -804,7 +806,10 @@ fn build_queue_send_payload(
 	payload: QueueSendPayload,
 ) -> napi::Result<Vec<napi::JsUnknown>> {
 	let mut object = env.create_object()?;
-	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set(
+		"ctx",
+		ActorContext::new(payload.ctx.with_invocation_telemetry(payload.telemetry)),
+	)?;
 	object.set("conn", ConnHandle::new(payload.conn))?;
 	object.set("request", build_request_object(env, payload.request)?)?;
 	object.set("name", payload.name)?;
@@ -871,7 +876,10 @@ fn build_connection_payload(
 
 fn build_action_payload(env: &Env, payload: ActionPayload) -> napi::Result<Vec<napi::JsUnknown>> {
 	let mut object = env.create_object()?;
-	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set(
+		"ctx",
+		ActorContext::new(payload.ctx.with_invocation_telemetry(payload.telemetry)),
+	)?;
 	match payload.conn {
 		Some(conn) => object.set("conn", ConnHandle::new(conn))?,
 		None => object.set("conn", env.get_null()?)?,
@@ -970,6 +978,14 @@ fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 		status_code: payload.status_code,
 		ray_id: payload.ray_id,
 	}))
+}
+
+/// Rebuilds an error raised in JavaScript from the reason string the bridge
+/// carries. A structured error arrives bridge-encoded and keeps its group and
+/// code; anything else stays an unstructured message, which is what lets Core
+/// classify and sanitize it rather than trusting the JavaScript text.
+pub(crate) fn anyhow_error_from_js_reason(reason: String) -> anyhow::Error {
+	parse_bridge_rivet_error(&reason).unwrap_or_else(|| anyhow::anyhow!(reason))
 }
 
 pub(crate) fn callback_error(callback_name: &str, error: napi::Error) -> anyhow::Error {

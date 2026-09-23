@@ -8,6 +8,18 @@ export interface JsActorKeySegment {
   stringValue?: string
   numberValue?: number
 }
+/** Active actor invocation correlation exposed to the TypeScript runtime adapter. */
+export interface JsActorInvocationTraceContext {
+  rayId?: string
+  span?: JsActorInvocationSpanContext
+}
+/** W3C span context of the current invocation span, present only when tracing is active. */
+export interface JsActorInvocationSpanContext {
+  traceId: string
+  spanId: string
+  traceFlags: number
+  tracestate?: string
+}
 export interface JsHttpRequest {
   method: string
   uri: string
@@ -299,6 +311,13 @@ export interface JsKvEntry {
   key: Buffer
   value: Buffer
 }
+/**
+ * Routes the OpenTelemetry SDK's own warnings, such as dropped spans, to the
+ * JavaScript logger. Each call replaces the previous sink. The sink is
+ * released by `shutdownTelemetry`.
+ */
+export declare function setTelemetryLogSink(callback: (...args: any[]) => any): void
+export declare function shutdownTelemetry(): Promise<void>
 /** N-API wrapper around `rivetkit-core::ActorContext`. */
 export declare class ActorContext {
   state(): Buffer
@@ -306,6 +325,22 @@ export declare class ActorContext {
   endOnStateChange(): void
   kv(): Kv
   sql(): JsNativeDatabase
+  sameActorInstance(other: ActorContext): boolean
+  /**
+   * Returns a handle for the same invocation whose Core spans parent to the
+   * application span active in JavaScript, given as W3C headers.
+   */
+  withApplicationSpan(traceparent?: string | undefined | null, tracestate?: string | undefined | null): ActorContext
+  invocationTraceContext(): JsActorInvocationTraceContext | null
+  /**
+   * Opens the span covering one call out to another actor. Returns nothing
+   * when this handle serves no invocation or tracing is disabled, in which
+   * case the caller sends its own context as before.
+   */
+  startCallSpan(actorName: string, actionName: string): OutboundCall | null
+  startWorkflowSpan(): Promise<WorkflowSpan>
+  /** Returns nothing outside a workflow run or when tracing is off. */
+  startWorkflowStepSpan(stepName: string, attempt: number): WorkflowStepSpan | null
   provisionActorRuntimeSocket(): Promise<JsActorRuntimeSocketEndpointInfo>
   schedule(): Schedule
   queue(): Queue
@@ -354,6 +389,42 @@ export declare class ActorContext {
   registerTask(promise: Promise<any>): void
   runtimeState(): object
   clearRuntimeState(): void
+}
+/**
+ * One open call out to another actor.
+ *
+ * The call spans a request made by the host runtime, so it is opened and closed
+ * by two separate calls. Letting this be collected without finishing records
+ * the call as cancelled rather than silently losing it.
+ */
+export declare class OutboundCall {
+  /**
+   * W3C context of this call's span, to send to the callee so it parents to
+   * the call rather than to the invocation that made it.
+   */
+  spanContext(): JsActorInvocationSpanContext | null
+  /**
+   * Records the call's outcome. `error` is the failure as the bridge encodes
+   * it, so a structured error keeps its group and code while anything else
+   * stays unstructured for Core to classify.
+   */
+  finish(error?: string | undefined | null): void
+}
+/**
+ * One open workflow run. Collecting it without `finish` records the run as
+ * abandoned.
+ */
+export declare class WorkflowSpan {
+  /** The context workflow code runs under. */
+  ctx(): ActorContext
+  finish(outcome: string): Promise<void>
+}
+/** One open attempt at one workflow step. */
+export declare class WorkflowStepSpan {
+  /** The context the step's callback runs under. */
+  ctx(): ActorContext
+  /** `error` is what the step threw, as the bridge encodes it. */
+  finish(outcome: string, error?: string | undefined | null): void
 }
 export declare class NapiActorFactory {
   constructor(callbacks: object, config?: JsActorConfig | undefined | null)

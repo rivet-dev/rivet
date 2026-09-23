@@ -725,6 +725,7 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 			args,
 			conn,
 			scheduled_fire,
+			invocation_telemetry: _,
 			reply,
 		} => {
 			let Some(callback) = action_callback(&callbacks.actions, &name) else {
@@ -856,7 +857,11 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 				},
 			);
 		}
-		ActorEvent::HttpRequest { request, reply } => {
+		ActorEvent::HttpRequest {
+			request,
+			invocation_telemetry: _,
+			reply,
+		} => {
 			let callback = callbacks.on_request.clone();
 			let ctx = ctx.clone();
 			RuntimeSpawner::spawn(async move {
@@ -891,6 +896,7 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 			request,
 			wait,
 			timeout_ms,
+			invocation_telemetry: _,
 			reply,
 		} => {
 			let callback = callbacks.on_queue_send.clone();

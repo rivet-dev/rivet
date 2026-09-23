@@ -1,5 +1,6 @@
 import type { AnyActorDefinition } from "@/actor/definition";
-import type { ActorSpecifier } from "@/actor/errors";
+import { type ActorSpecifier, encodeErrorForBridge } from "@/actor/errors";
+import type { ActorInvocationSpanContext } from "@/common/actor-telemetry-context";
 import {
 	HEADER_CONN_PARAMS,
 	HEADER_ENCODING,
@@ -24,6 +25,7 @@ import { AsyncMutex } from "@/common/database/shared";
 import type { Encoding, JsonCompatValue } from "@/common/encoding";
 import { deconstructError } from "@/common/utils";
 import type { EngineControlClient } from "@/engine-client/driver";
+import type { StartCallSpan, CurrentActorInvocation } from "@/registry/runtime";
 import {
 	decodeCborCompat,
 	deserializeWithEncoding,
@@ -53,6 +55,7 @@ import { type ClientRaw, CREATE_ACTOR_CONN_PROXY } from "./client";
 import { ActorError, isSchedulingError } from "./errors";
 import { retryOnLifecycleBoundary } from "./lifecycle-errors";
 import { logger } from "./log";
+import { outboundTelemetryHeaders } from "./outbound-telemetry";
 import {
 	createQueueSender,
 	type QueueSendNoWaitOptions,
@@ -82,6 +85,8 @@ export class ActorHandleRaw {
 	#resolvedActorId?: string;
 	#resolvingActorId?: Promise<string>;
 	#queueSendMutex = new AsyncMutex();
+	#currentActorInvocation?: CurrentActorInvocation;
+	#startCallSpan?: StartCallSpan;
 
 	/**
 	 * Do not call this directly.
@@ -99,6 +104,8 @@ export class ActorHandleRaw {
 		actorResolutionState: ActorResolutionState,
 		gatewayOptions: ActorGatewayOptions = {},
 		signal?: AbortSignal,
+		currentActorInvocation?: CurrentActorInvocation,
+		startCallSpan?: StartCallSpan,
 	) {
 		this.#client = client;
 		this.#driver = driver;
@@ -108,6 +115,8 @@ export class ActorHandleRaw {
 		this.#params = params;
 		this.#getParams = getParams;
 		this.#signal = signal;
+		this.#currentActorInvocation = currentActorInvocation;
+		this.#startCallSpan = startCallSpan;
 	}
 
 	async #resolveConnectionParams(): Promise<unknown> {
@@ -166,6 +175,10 @@ export class ActorHandleRaw {
 					return await createQueueSender({
 						encoding: this.#encoding,
 						params: this.#params,
+						telemetryHeaders: () =>
+							outboundTelemetryHeaders(
+								this.#currentActorInvocation?.(),
+							),
 						customFetch: async (request: Request) => {
 							return await this.#driver.sendRequest(
 								target,
@@ -275,20 +288,41 @@ export class ActorHandleRaw {
 		// when no per-call signal is provided.
 		const signal = opts.signal ?? this.#signal;
 		const optsWithSignal = { ...opts, signal };
+		// Open before retries so all attempts share one span and parent context.
+		const call = this.#startCallSpan?.(
+			getActorNameFromQuery(this.#actorResolutionState),
+			opts.name,
+		);
 		const run = async () =>
-			(await this.#sendActionNow(optsWithSignal)) as Response;
-		if (opts.name === "destroy") {
-			return await run();
+			(await this.#sendActionAttempts(
+				optsWithSignal,
+				call?.span,
+			)) as Response;
+		const send = async () => {
+			if (opts.name === "destroy") {
+				return await run();
+			}
+			return await retryOnLifecycleBoundary(run, { signal });
+		};
+		if (!call) {
+			return await send();
 		}
-
-		return await retryOnLifecycleBoundary(run, { signal });
+		try {
+			const output = await send();
+			call.finish();
+			return output;
+		} catch (error) {
+			call.finish(encodeErrorForBridge(error));
+			throw error;
+		}
 	}
 
-	async #sendActionNow(
+	async #sendActionAttempts(
 		opts: {
 			name: string;
 			args: unknown[];
 		} & ActorActionOptions,
+		callSpan?: ActorInvocationSpanContext,
 	): Promise<unknown> {
 		const maxAttempts = this.#getDynamicQueryMaxAttempts();
 		let useQueryTarget = isDynamicActorQuery(this.#actorResolutionState);
@@ -320,6 +354,16 @@ export class ActorHandleRaw {
 					name: opts.name,
 					encoding: this.#encoding,
 				});
+				const headers: Record<string, string> = {
+					[HEADER_ENCODING]: this.#encoding,
+					...outboundTelemetryHeaders(
+						this.#currentActorInvocation?.(),
+						callSpan,
+					),
+				};
+				if (this.#params !== undefined) {
+					headers[HEADER_CONN_PARAMS] = JSON.stringify(this.#params);
+				}
 				const output = await sendHttpRequest<
 					protocol.HttpActionRequest,
 					protocol.HttpActionResponse,
@@ -330,16 +374,7 @@ export class ActorHandleRaw {
 				>({
 					url: `http://actor/action/${encodeURIComponent(opts.name)}`,
 					method: "POST",
-					headers: {
-						[HEADER_ENCODING]: this.#encoding,
-						...(this.#params !== undefined
-							? {
-									[HEADER_CONN_PARAMS]: JSON.stringify(
-										this.#params,
-									),
-								}
-							: {}),
-					},
+					headers,
 					body: opts.args,
 					encoding: this.#encoding,
 					customFetch: async (request) =>
@@ -643,6 +678,7 @@ export class ActorHandleRaw {
 			this.#encoding,
 			this.#actorResolutionState,
 			resolveActorGatewayOptions(this.#gatewayOptions, options),
+			this.#currentActorInvocation,
 		);
 
 		return this.#client[CREATE_ACTOR_CONN_PROXY](
@@ -680,6 +716,9 @@ export class ActorHandleRaw {
 				skipReadyWait,
 			},
 		);
+		const telemetryHeaders = outboundTelemetryHeaders(
+			this.#currentActorInvocation?.(),
+		);
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
 			let actorId: string | undefined;
@@ -698,6 +737,7 @@ export class ActorHandleRaw {
 					clonesInputBody ? input.clone() : input,
 					requestInit,
 					gatewayOptions,
+					telemetryHeaders,
 				);
 				const retry = await this.#shouldRetryRawFetchResponse(
 					response,
