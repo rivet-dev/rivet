@@ -22,6 +22,8 @@ use rivetkit_core::{
 	ActorWorkKind, ConnHandle as CoreConnHandle, KeepAwakeRegion,
 	OutboundCallInvocation as CoreOutboundCallInvocation, Request as CoreRequest, RequestSaveOpts,
 	StateDelta, WebSocketCallbackRegion, WorkflowKvWrite,
+	WorkflowRunInvocation as CoreWorkflowRunInvocation, WorkflowRunOutcome, WorkflowStepOutcome,
+	WorkflowStepSpan as CoreWorkflowStepSpan,
 };
 use scc::HashMap as SccHashMap;
 use tokio::sync::mpsc::UnboundedSender;
@@ -351,6 +353,32 @@ impl ActorContext {
 			.start_call_span(&actor_name, &action_name)
 			.map(|invocation| OutboundCall {
 				invocation: Some(invocation),
+			})
+	}
+
+	#[napi]
+	pub async fn start_workflow_span(&self) -> WorkflowSpan {
+		let span = self.inner.start_workflow_span().await;
+		WorkflowSpan {
+			ctx: span.ctx(),
+			shared: self.shared.clone(),
+			span: Mutex::new(Some(span)),
+		}
+	}
+
+	/// Returns nothing outside a workflow run or when tracing is off.
+	#[napi]
+	pub fn start_workflow_step_span(
+		&self,
+		step_name: String,
+		attempt: u32,
+	) -> Option<WorkflowStepSpan> {
+		self.inner
+			.start_workflow_step_span(&step_name, attempt)
+			.map(|step| WorkflowStepSpan {
+				ctx: step.ctx(),
+				shared: self.shared.clone(),
+				step: Some(step),
 			})
 	}
 
@@ -1165,5 +1193,68 @@ impl OutboundCall {
 		};
 		let error = error.map(anyhow_error_from_js_reason);
 		invocation.finish(error.as_ref());
+	}
+}
+
+/// One open workflow run. Collecting it without `finish` records the run as
+/// abandoned.
+#[napi]
+pub struct WorkflowSpan {
+	ctx: CoreActorContext,
+	shared: Arc<ActorContextShared>,
+	span: Mutex<Option<CoreWorkflowRunInvocation>>,
+}
+
+#[napi]
+impl WorkflowSpan {
+	/// The context workflow code runs under.
+	#[napi]
+	pub fn ctx(&self) -> ActorContext {
+		ActorContext {
+			inner: self.ctx.clone(),
+			shared: self.shared.clone(),
+		}
+	}
+
+	#[napi]
+	pub async fn finish(&self, outcome: String) -> napi::Result<()> {
+		let outcome = WorkflowRunOutcome::parse(&outcome).map_err(napi_anyhow_error)?;
+		let Some(span) = self.span.lock().take() else {
+			return Ok(());
+		};
+		self.ctx.finish_workflow_span(span, outcome).await;
+		Ok(())
+	}
+}
+
+/// One open attempt at one workflow step.
+#[napi]
+pub struct WorkflowStepSpan {
+	ctx: CoreActorContext,
+	shared: Arc<ActorContextShared>,
+	step: Option<CoreWorkflowStepSpan>,
+}
+
+#[napi]
+impl WorkflowStepSpan {
+	/// The context the step's callback runs under.
+	#[napi]
+	pub fn ctx(&self) -> ActorContext {
+		ActorContext {
+			inner: self.ctx.clone(),
+			shared: self.shared.clone(),
+		}
+	}
+
+	/// `error` is what the step threw, as the bridge encodes it.
+	#[napi]
+	pub fn finish(&mut self, outcome: String, error: Option<String>) -> napi::Result<()> {
+		let outcome = WorkflowStepOutcome::parse(&outcome).map_err(napi_anyhow_error)?;
+		let Some(step) = self.step.take() else {
+			return Ok(());
+		};
+		let error = error.map(anyhow_error_from_js_reason);
+		step.finish(outcome, error.as_ref());
+		Ok(())
 	}
 }

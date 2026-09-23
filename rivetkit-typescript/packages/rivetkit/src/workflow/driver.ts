@@ -4,6 +4,7 @@ import type {
 	KVWrite,
 	Message,
 	WorkflowMessageDriver,
+	WorkflowTelemetryDriver,
 } from "@rivetkit/workflow-engine";
 import type { RunContext } from "@/actor/config";
 import type { AnyStaticActorInstance } from "@/actor/definition";
@@ -323,6 +324,7 @@ export class ActorWorkflowDriver implements EngineDriver {
 	readonly atomicBatch = true;
 	readonly workerPollInterval = 100;
 	readonly messageDriver: WorkflowMessageDriver;
+	readonly telemetry: WorkflowTelemetryDriver;
 	#actor: AnyStaticActorInstance;
 	#runCtx: RunContext<any, any, any, any, any, any, any, any>;
 	#storage: WorkflowStorage;
@@ -334,45 +336,51 @@ export class ActorWorkflowDriver implements EngineDriver {
 		this.#actor = actor;
 		this.#runCtx = runCtx;
 		this.messageDriver = new ActorWorkflowMessageDriver(actor, runCtx);
+		this.telemetry = {
+			startSpan: () => runCtx.run.startWorkflowSpan(),
+		};
 		this.#storage = new WorkflowStorage(runtimeDbFromContext(runCtx));
 	}
 
+	/** Keeps the engine's history storage out of the workflow run's trace. */
+	#untraced<T>(run: () => Promise<T>): Promise<T> {
+		return this.#runCtx.internalKeepAwake(
+			this.#runCtx.run.runOutsideWorkflowSpan(run),
+		);
+	}
+
 	async get(key: Uint8Array): Promise<Uint8Array | null> {
-		return await this.#runCtx.internalKeepAwake(this.#storage.get(key));
+		return await this.#untraced(() => this.#storage.get(key));
 	}
 
 	async set(key: Uint8Array, value: Uint8Array): Promise<void> {
-		await this.#runCtx.internalKeepAwake(this.#storage.set(key, value));
+		await this.#untraced(() => this.#storage.set(key, value));
 	}
 
 	async delete(key: Uint8Array): Promise<void> {
-		await this.#runCtx.internalKeepAwake(this.#storage.delete(key));
+		await this.#untraced(() => this.#storage.delete(key));
 	}
 
 	async batchDelete(keys: Uint8Array[]): Promise<void> {
-		await this.#runCtx.internalKeepAwake(this.#storage.batchDelete(keys));
+		await this.#untraced(() => this.#storage.batchDelete(keys));
 	}
 
 	async deletePrefix(prefix: Uint8Array): Promise<void> {
-		await this.#runCtx.internalKeepAwake(
-			this.#storage.deletePrefix(prefix),
-		);
+		await this.#untraced(() => this.#storage.deletePrefix(prefix));
 	}
 
 	async deleteRange(start: Uint8Array, end: Uint8Array): Promise<void> {
-		await this.#runCtx.internalKeepAwake(
-			this.#storage.deleteRange(start, end),
-		);
+		await this.#untraced(() => this.#storage.deleteRange(start, end));
 	}
 
 	async list(prefix: Uint8Array): Promise<KVEntry[]> {
-		return await this.#runCtx.internalKeepAwake(this.#storage.list(prefix));
+		return await this.#untraced(() => this.#storage.list(prefix));
 	}
 
 	async batch(writes: KVWrite[]): Promise<void> {
 		if (writes.length === 0) return;
 
-		await this.#runCtx.internalKeepAwake(
+		await this.#untraced(() =>
 			this.#actor.stateManager.saveStateAndWorkflowBatch(writes),
 		);
 	}

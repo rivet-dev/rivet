@@ -447,6 +447,37 @@ export interface ActorContext<
 	[key: string]: any;
 }
 
+/** @experimental How one run of a workflow function ended. */
+export type WorkflowOutcome =
+	| "completed"
+	| "sleeping"
+	| "evicted"
+	| "failed"
+	| "cancelled";
+
+/** @experimental How one workflow step attempt ended. `retry` will be tried again, `failed` will not. */
+export type WorkflowStepOutcome = "ok" | "retry" | "failed";
+
+/** @experimental One open run of a workflow function, traced as its own invocation. */
+export interface WorkflowSpan {
+	/** Runs `body` attributed to this run. */
+	run<T>(body: () => Promise<T>): Promise<T>;
+	/**
+	 * Called by a workflow engine before each attempt at a step. Returns
+	 * nothing when tracing is off.
+	 */
+	startStep(name: string, attempt: number): WorkflowStepSpan | undefined;
+	finish(outcome: WorkflowOutcome): Promise<void>;
+}
+
+/** @experimental One open attempt at one workflow step. */
+export interface WorkflowStepSpan {
+	/** Runs `body` attributed to this attempt. */
+	run<T>(body: () => Promise<T>): Promise<T>;
+	/** `error` is what the step callback threw. */
+	finish(outcome: WorkflowStepOutcome, error?: unknown): void;
+}
+
 /** @experimental */
 export interface ActorRun {
 	/**
@@ -454,6 +485,13 @@ export interface ActorRun {
 	 * ensures this actor's run handler is active, starting it if inactive.
 	 */
 	setWakeAt(timestamp: number | null): Promise<void>;
+	/** @experimental Called by a workflow engine each time it runs the workflow function. */
+	startWorkflowSpan(): Promise<WorkflowSpan>;
+	/**
+	 * @experimental Runs `body` outside the current workflow run, so a workflow
+	 * engine's own history storage stays out of the trace.
+	 */
+	runOutsideWorkflowSpan<T>(body: () => T): T;
 }
 
 export type ActionContext<
