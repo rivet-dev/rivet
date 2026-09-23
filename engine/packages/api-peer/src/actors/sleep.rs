@@ -36,6 +36,15 @@ pub async fn sleep(
 		return Err(pegboard::errors::Actor::NotFound.build());
 	}
 
+	if pegboard::actor_lease::enabled() {
+		ctx.op(pegboard::actor_lease::Input {
+			actor_id: path.actor_id,
+			action: pegboard::actor_lease::Action::Sleep,
+		})
+		.await?;
+		return Ok(SleepResponse {});
+	}
+
 	let res = ctx
 		.signal(pegboard::workflows::actor2::Sleep {})
 		.to_workflow::<pegboard::workflows::actor2::Workflow>()
