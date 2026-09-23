@@ -4106,6 +4106,9 @@ pub fn verify_batch_atomic_writes(
 	vfs: &SqliteVfs,
 	file_name: &str,
 ) -> std::result::Result<(), String> {
+	if std::env::var("RIVET_ACTOR_START_READONLY").as_deref() == Ok("1") {
+		return verify_batch_atomic_capability(db);
+	}
 	#[cfg(test)]
 	let assert_batch_atomic = vfs.ctx.config.assert_batch_atomic;
 	#[cfg(not(test))]
@@ -4122,6 +4125,35 @@ pub fn verify_batch_atomic_writes(
 		}
 	}
 
+	Ok(())
+}
+
+// Verify the compiled SQLite and the actual opened main-file VFS without a
+// create/insert/drop transaction on every actor wake. Fault tests still exercise
+// the complete atomic-commit path; this check does not replace that coverage.
+fn verify_batch_atomic_capability(db: *mut sqlite3) -> std::result::Result<(), String> {
+	unsafe {
+		if sqlite3_compileoption_used(c"ENABLE_BATCH_ATOMIC_WRITE".as_ptr()) == 0 {
+			return Err("SQLite was built without ENABLE_BATCH_ATOMIC_WRITE".into());
+		}
+		let mut file: *mut sqlite3_file = ptr::null_mut();
+		let result = sqlite3_file_control(
+			db,
+			c"main".as_ptr(),
+			SQLITE_FCNTL_FILE_POINTER,
+			(&mut file as *mut *mut sqlite3_file).cast(),
+		);
+		if result != SQLITE_OK || file.is_null() || (*file).pMethods.is_null() {
+			return Err("could not inspect SQLite main-file VFS capability".into());
+		}
+		let flags = (*(*file).pMethods)
+			.xDeviceCharacteristics
+			.map(|f| f(file))
+			.unwrap_or(0);
+		if flags & SQLITE_IOCAP_BATCH_ATOMIC == 0 {
+			return Err("SQLite main-file VFS does not support batch atomic writes".into());
+		}
+	}
 	Ok(())
 }
 

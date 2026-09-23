@@ -155,12 +155,31 @@ CREATE TABLE _rivet_user_kv (
 	"#,
 ]];
 
-pub(crate) async fn ensure_internal_schema(db: &SqliteDb) -> Result<()> {
-	db.execute(CREATE_META_TABLE, None)
-		.await
-		.context("create rivet internal schema metadata table")?;
+pub(crate) fn read_only_wake_enabled() -> bool {
+	static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+	*ENABLED.get_or_init(|| std::env::var("RIVET_ACTOR_START_READONLY").as_deref() == Ok("1"))
+}
 
-	let current_version = read_schema_version(db).await?;
+pub(crate) async fn ensure_internal_schema(db: &SqliteDb) -> Result<()> {
+	// Initialized actors only need the version lookup. First initialization still
+	// creates the metadata root, and older versions still run the migration ladder.
+	let version = if read_only_wake_enabled() {
+		match read_schema_version(db).await {
+			Ok(version) => Some(version),
+			Err(error) if missing_meta_table(&error) => None,
+			Err(error) => return Err(error),
+		}
+	} else {
+		None
+	};
+	let current_version = if let Some(version) = version {
+		version
+	} else {
+		db.execute(CREATE_META_TABLE, None)
+			.await
+			.context("create rivet internal schema metadata table")?;
+		read_schema_version(db).await?
+	};
 	if current_version > INTERNAL_SCHEMA_VERSION {
 		bail!(
 			"actor sqlite internal schema version {current_version} is newer than supported version {INTERNAL_SCHEMA_VERSION}"
@@ -169,8 +188,13 @@ pub(crate) async fn ensure_internal_schema(db: &SqliteDb) -> Result<()> {
 	if current_version == INTERNAL_SCHEMA_VERSION {
 		return Ok(());
 	}
-
 	apply_schema_ladder(db, current_version).await
+}
+
+fn missing_meta_table(error: &anyhow::Error) -> bool {
+	error
+		.chain()
+		.any(|cause| cause.to_string().ends_with("no such table: _rivet_meta"))
 }
 
 async fn apply_schema_ladder(db: &SqliteDb, current_version: i64) -> Result<()> {

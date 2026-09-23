@@ -766,6 +766,16 @@ impl ActorContext {
 	}
 
 	pub(crate) async fn recover_interrupted_schedule_history(&self) -> Result<()> {
+		if super::internal_storage::schema::read_only_wake_enabled()
+			&& self
+				.sql()
+				.query(HAS_RUNNING_HISTORY_SQL, None)
+				.await?
+				.rows
+				.is_empty()
+		{
+			return Ok(());
+		}
 		let error = ScheduleErrorInfo {
 			group: "schedule".to_owned(),
 			code: "interrupted".to_owned(),

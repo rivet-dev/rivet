@@ -602,6 +602,12 @@ fn query_catalog() -> Vec<QueryCase> {
 			expectation: indexed(None, all_history),
 		},
 		QueryCase {
+			id: "schedule.has_running_history",
+			sql: queries::HAS_RUNNING_HISTORY_SQL.into(),
+			params: vec![],
+			expectation: indexed(Some("_rivet_schedule_history_running"), all_history),
+		},
+		QueryCase {
 			id: "schedule.recover_history",
 			sql: queries::RECOVER_HISTORY_SQL.into(),
 			params: vec![
