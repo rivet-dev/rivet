@@ -2783,6 +2783,11 @@ export class ActorContextHandleAdapter {
 			}
 		)[ACTOR_CONTEXT_INTERNAL_SYMBOL] = new NativeWorkflowRuntimeAdapter(
 			this,
+			() =>
+				this.#logByInvocationScope.delete(
+					this.#runtime.currentInvocationScope() ??
+						NO_INVOCATION_SCOPE,
+				),
 		);
 	}
 
@@ -2990,7 +2995,10 @@ export class ActorContextHandleAdapter {
 		);
 	}
 
-	/** Cached per invocation, because the `run` context outlives workflow runs and steps. */
+	/**
+	 * Cached per invocation, because the `run` context outlives workflow runs and steps.
+	 * A workflow queue receive clears the entry, because the run's ray becomes the message's ray.
+	 */
 	get log() {
 		const scope =
 			this.#runtime.currentInvocationScope() ?? NO_INVOCATION_SCOPE;
@@ -3647,6 +3655,7 @@ type NativeWorkflowQueueMessage = Awaited<
 
 class NativeWorkflowRuntimeAdapter {
 	#ctx: ActorContextHandleAdapter;
+	#onMessagesReceived: () => void;
 	#completions = new Map<string, (response?: unknown) => Promise<void>>();
 
 	readonly id: string;
@@ -3714,8 +3723,12 @@ class NativeWorkflowRuntimeAdapter {
 		) => Promise<void>;
 	};
 
-	constructor(ctx: ActorContextHandleAdapter) {
+	constructor(
+		ctx: ActorContextHandleAdapter,
+		onMessagesReceived: () => void,
+	) {
 		this.#ctx = ctx;
+		this.#onMessagesReceived = onMessagesReceived;
 		this.id = ctx.actorId;
 		this.driver = {
 			kvBatchGet: async (actorId, keys) => {
@@ -3761,6 +3774,9 @@ class NativeWorkflowRuntimeAdapter {
 					timeout: timeout ?? 0,
 					completable,
 				});
+				if (messages.length > 0) {
+					this.#onMessagesReceived();
+				}
 				return messages.map((message) =>
 					this.#wrapQueueMessage(message),
 				);
