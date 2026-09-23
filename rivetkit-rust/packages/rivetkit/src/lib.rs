@@ -11,6 +11,7 @@ pub mod registry;
 mod serverless_listener;
 pub mod sqlite;
 pub mod start;
+pub mod telemetry;
 pub mod test;
 #[cfg(test)]
 mod test_fixtures;
