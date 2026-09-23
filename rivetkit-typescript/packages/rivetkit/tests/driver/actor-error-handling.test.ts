@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
 	INTERNAL_ERROR_CODE,
 	INTERNAL_ERROR_DESCRIPTION,
@@ -47,6 +47,34 @@ describeDriverMatrix("Actor Error Handling", (driverTestConfig) => {
 					expect(error.metadata.reason).toBe("test");
 					expect(error.metadata.timestamp).toBeDefined();
 				}
+			});
+
+			test("returns the UserError without metadata JSON cannot encode and logs the drop", async (c) => {
+				const { client, getRuntimeOutput } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+				const handle = client.errorHandlingActor.getOrCreate();
+
+				const error = await handle.throwBigintMetadataError().then(
+					() => undefined,
+					(error: any) => error,
+				);
+
+				expect(error?.code).toBe("card_declined");
+				expect(error?.message).toBe("Card declined");
+				expect(error?.metadata).toBeUndefined();
+				// The runtime process writes its log through a pipe that can lag the action reply.
+				await vi.waitFor(() => {
+					const warning = getRuntimeOutput()
+						.split("\n")
+						.find((line) =>
+							line.includes(
+								"dropped error metadata that JSON cannot encode",
+							),
+						);
+					expect(warning).toContain("code=card_declined");
+				});
 			});
 		});
 

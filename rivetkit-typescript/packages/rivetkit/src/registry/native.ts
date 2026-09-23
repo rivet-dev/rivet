@@ -872,7 +872,19 @@ function encodeNativeCallbackError(error: unknown): Error {
 		? error
 		: deconstructError(error, true);
 
-	const bridgeError = new Error(encodeBridgeRivetError(structuredError), {
+	const { encoded, droppedMetadataCause } =
+		encodeBridgeRivetError(structuredError);
+	if (droppedMetadataCause !== undefined) {
+		logger().warn(
+			{
+				group: structuredError.group,
+				code: structuredError.code,
+				error: String(droppedMetadataCause),
+			},
+			"dropped error metadata that JSON cannot encode",
+		);
+	}
+	const bridgeError = new Error(encoded, {
 		cause: error instanceof Error ? error : undefined,
 	});
 	return Object.assign(bridgeError, {

@@ -21,6 +21,14 @@ export const errorHandlingActor = actor({
 			});
 		},
 
+		// Action that throws a UserError whose metadata JSON cannot encode
+		throwBigintMetadataError: () => {
+			throw new UserError("Card declined", {
+				code: "card_declined",
+				metadata: { amountCents: 1999n },
+			});
+		},
+
 		// Action that throws an internal error
 		throwInternalError: () => {
 			throw new Error("This is an internal error");
