@@ -18,7 +18,7 @@ use crate::{
 	errors, metrics,
 	routing::{
 		Phase,
-		actor_path::{is_actor_gateway_path, parse_actor_path},
+		actor_path::{QueryActorQuery, is_actor_gateway_path, parse_actor_path},
 		pegboard_gateway::resolve_actor_query::ResolveQueryActorResult,
 		phase_timeout,
 	},
@@ -73,7 +73,7 @@ pub async fn route_request_path_based_inner(
 		return Ok(None);
 	};
 
-	tracing::debug!(?actor_path, "routing using path-based actor routing");
+	tracing::debug!(path = %req_ctx.path_for_logs(), "routing using path-based actor routing");
 
 	let (actor_id, token, stripped_path, skip_ready_wait) = match actor_path {
 		ParsedActorPath::Direct(path) => (
@@ -86,6 +86,9 @@ pub async fn route_request_path_based_inner(
 		ParsedActorPath::Query(path) => {
 			let token = read_gateway_token_for_path_based(req_ctx, path.token.as_deref())?
 				.map(ToOwned::to_owned);
+			// getOrCreate can create an actor, so authorize before resolving the query.
+			auth_query_actor_path(ctx, shared_state, req_ctx, &path.query, token.as_deref())
+				.await?;
 
 			match phase_timeout(
 				Phase::new(
@@ -144,6 +147,47 @@ pub async fn route_request_path_based_inner(
 	)
 	.await
 	.map(Some)
+}
+
+async fn auth_query_actor_path(
+	ctx: &StandaloneCtx,
+	shared_state: &SharedState,
+	req_ctx: &RequestContext,
+	query: &QueryActorQuery,
+	token: Option<&str>,
+) -> Result<()> {
+	let (namespace, operation) = match query {
+		QueryActorQuery::Get { namespace, .. } => (namespace, OperationKind::Read),
+		QueryActorQuery::GetOrCreate { namespace, .. } => (namespace, OperationKind::Create),
+	};
+	let token = token.ok_or_else(|| rivet_auth::errors::Auth::InvalidToken.build())?;
+	let auth_state = req_ctx.auth_state().clone();
+	phase_timeout(
+		Phase::new("route_auth_check", &metrics::ROUTE_AUTH_CHECK_DURATION)
+			.with_router("pegboard_query"),
+		ctx.config().guard().route_auth_check_timeout(),
+		rivet_auth::check(
+			ctx,
+			shared_state.jwt_key_ring_cache.as_ref(),
+			&auth_state,
+			rivet_auth::CheckInput {
+				token,
+				namespace: AccessNamespaceScope::Name(namespace.clone()),
+				resource: ResourceKind::Actor,
+				target: TargetScope::Any,
+				operation,
+			},
+		),
+		|elapsed, timeout| {
+			errors::RouteAuthCheckTimeout {
+				target: "pegboard_query".to_string(),
+				elapsed_ms: elapsed.as_millis() as u64,
+				timeout_ms: timeout.as_millis() as u64,
+			}
+			.build()
+		},
+	)
+	.await
 }
 
 /// Route requests to actor services based on headers

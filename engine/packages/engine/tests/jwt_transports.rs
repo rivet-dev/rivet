@@ -21,7 +21,7 @@ fn scoped_jwt_connects_envoy_and_actor_gateway() {
 		move |ctx| async move {
 			let dc = ctx.leader_dc();
 			let namespace = format!("jwt-transport-{:016x}", rand::random::<u64>());
-			common::api::peer::namespaces_create(
+			let created_namespace = common::api::peer::namespaces_create(
 				dc.api_peer_port(),
 				rivet_api_peer::namespaces::CreateRequest {
 					name: namespace.clone(),
@@ -132,6 +132,48 @@ fn scoped_jwt_connects_envoy_and_actor_gateway() {
 				]),
 			)
 			.await;
+
+			for (key, token, expected_code) in [
+				("missing-auth", None, "invalid_token"),
+				("invalid-auth", Some("invalid-token"), "invalid_token"),
+				(
+					"read-only-auth",
+					Some(client_token.as_str()),
+					"insufficient_permissions",
+				),
+			] {
+				let mut request = client
+					.get(format!("{base}/gateway/test-actor/ping"))
+					.query(&[
+						("rvt-namespace", namespace.as_str()),
+						("rvt-method", "getOrCreate"),
+						("rvt-runner", runner_name),
+						("rvt-key", key),
+					]);
+				if let Some(token) = token {
+					request = request.header("x-rivet-token", token);
+				}
+				let response = request.send().await.expect("failed to request query actor");
+				assert!(!response.status().is_success());
+				let error: Value = response.json().await.expect("invalid gateway error");
+				assert_eq!(error["code"], expected_code);
+
+				let actor = dc
+					.workflow_ctx
+					.op(pegboard::ops::actor::get_for_key::Input {
+						namespace_id: created_namespace.namespace.namespace_id,
+						name: "test-actor".into(),
+						key: key.into(),
+						pool_name: Some(runner_name.into()),
+						fetch_error: false,
+					})
+					.await
+					.expect("failed to check for unauthorized actor creation");
+				assert!(
+					matches!(actor, pegboard::ops::actor::get_for_key::Output::NotFound),
+					"unauthorized query created an actor: {actor:?}"
+				);
+			}
 
 			let response = client
 				.get(format!("{base}/request/ping"))
