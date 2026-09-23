@@ -249,7 +249,7 @@ async fn handle_http_protocol_violation(
 	send_response_abort_for_session(ctx, connection_session, message_id, detail).await;
 }
 
-async fn send_response_abort_for_session(
+pub(crate) async fn send_response_abort_for_session(
 	ctx: &EnvoyContext,
 	connection_session: u64,
 	mut message_id: protocol::MessageId,

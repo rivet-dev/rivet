@@ -127,8 +127,11 @@ async fn handle_message(
 	// actor WebSocket. This keeps the gateway's sequential send loop behind the
 	// final transport handoff and turns a disconnect into a request failure
 	// instead of acknowledging data that the actor never received.
-	let reply_after_websocket_handoff =
-		matches!(&msg, protocol::ToEnvoyConn::ToEnvoyTunnelMessage(_));
+	let reply_after_websocket_handoff = matches!(
+		&msg,
+		protocol::ToEnvoyConn::ToEnvoyTunnelMessage(_)
+			| protocol::ToEnvoyConn::ToEnvoyStartRequest(_)
+	);
 	if !reply_after_websocket_handoff {
 		reply_to_gateway(conn, &tunnel_msg, ack_start).await?;
 	}
@@ -164,8 +167,38 @@ async fn handle_message(
 			return Ok(false);
 		}
 		protocol::ToEnvoyConn::ToEnvoyConnClose => return Ok(true),
-		protocol::ToEnvoyConn::ToEnvoyStartRequest(_) => {
-			bail!("bundled actor startup is not enabled")
+		protocol::ToEnvoyConn::ToEnvoyStartRequest(mut bundled) => {
+			let protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(req) =
+				&bundled.request.message_kind
+			else {
+				anyhow::bail!("bundled Start requires HTTP RequestStart")
+			};
+			anyhow::ensure!(
+				req.actor_id == bundled.command.checkpoint.actor_id
+					&& req.actor_generation == Some(bundled.command.checkpoint.generation),
+				"bundled request lease mismatch"
+			);
+			hibernating_requests::hydrate_command_wrapper(
+				ctx,
+				conn.namespace_id,
+				&mut bundled.command,
+			)
+			.await?;
+			let protocol::Command::CommandStartActor(start) = &mut bundled.command.inner else {
+				anyhow::bail!("bundled command must be Start")
+			};
+			let _ = conn
+				.authorized_tunnel_routes
+				.insert_async(
+					(
+						bundled.request.message_id.gateway_id,
+						bundled.request.message_id.request_id,
+					),
+					(),
+				)
+				.await;
+			start.waiting_requests = vec![bundled.request];
+			protocol::ToEnvoy::ToEnvoyCommands(vec![bundled.command])
 		}
 		protocol::ToEnvoyConn::ToEnvoyCommands(mut command_wrappers) => {
 			// TODO: Parallelize

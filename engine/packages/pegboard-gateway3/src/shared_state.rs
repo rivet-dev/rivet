@@ -430,6 +430,7 @@ impl SharedState {
 				let request_body_window = Arc::new(HttpBodySendWindow::new());
 				let (upload_cancel_tx, _) = watch::channel(false);
 				entry.insert_entry(InFlightRequest {
+					start_command: None,
 					namespace_id,
 					actor_id,
 					pool_name: pool_name.to_string(),
@@ -779,6 +780,16 @@ pub struct InFlightRequestHandle {
 }
 
 impl InFlightRequestHandle {
+	pub(crate) async fn set_start_command(&self, command: Option<protocol::CommandWrapper>) {
+		if let Some(mut req) = self
+			.shared_state
+			.in_flight_requests
+			.get_async(&self.request_id)
+			.await
+		{
+			req.start_command = command;
+		}
+	}
 	pub(crate) async fn begin_http_abort(&self) -> Option<(String, Option<u32>)> {
 		let Some(mut request) = self
 			.shared_state
@@ -899,7 +910,18 @@ impl InFlightRequestHandle {
 			message_kind,
 		};
 
-		let message = protocol::ToEnvoyConn::ToEnvoyTunnelMessage(payload);
+		let message = if is_request_start {
+			if let Some(command) = req.start_command.take() {
+				protocol::ToEnvoyConn::ToEnvoyStartRequest(protocol::ToEnvoyStartRequest {
+					command,
+					request: payload,
+				})
+			} else {
+				protocol::ToEnvoyConn::ToEnvoyTunnelMessage(payload)
+			}
+		} else {
+			protocol::ToEnvoyConn::ToEnvoyTunnelMessage(payload)
+		};
 		let message_serialized = versioned::ToEnvoyConn::wrap_latest(message)
 			.serialize_with_embedded_version(PROTOCOL_VERSION)?;
 
@@ -1834,6 +1856,7 @@ mod tests {
 			message_index: 2,
 		};
 		let mut request = InFlightRequest {
+			start_command: None,
 			namespace_id: Id::new_v1(1),
 			actor_id: Id::new_v1(2),
 			pool_name: "test".to_owned(),
@@ -1896,6 +1919,7 @@ mod tests {
 }
 
 struct InFlightRequest {
+	start_command: Option<protocol::CommandWrapper>,
 	namespace_id: Id,
 	actor_id: Id,
 	pool_name: String,

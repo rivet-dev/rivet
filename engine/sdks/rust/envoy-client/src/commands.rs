@@ -25,69 +25,83 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 		.map(|c| (c.checkpoint.actor_id.clone(), c.checkpoint.generation))
 		.collect();
 
-	for command_wrapper in commands {
+	for mut command_wrapper in commands {
+		let waiting = match &mut command_wrapper.inner {
+			protocol::Command::CommandStartActor(start) => {
+				std::mem::take(&mut start.waiting_requests)
+			}
+			_ => Vec::new(),
+		};
 		let checkpoint = command_wrapper.checkpoint;
 		let dedup_key = (checkpoint.actor_id.clone(), checkpoint.generation);
 
-		// Drop replayed commands. `pegboard-envoy` re-streams every unacked
-		// command on reconnect, and the command index is monotonic per
-		// `(actor_id, generation)`, so any index at or below the highest one
-		// we have already processed is a duplicate.
-		if let Some(&last_idx) = ctx.processed_command_idx.get(&dedup_key) {
-			if checkpoint.index <= last_idx {
-				tracing::debug!(
-					actor_id = %checkpoint.actor_id,
-					generation = checkpoint.generation,
-					index = checkpoint.index,
-					last_idx,
-					"skipping replayed command"
-				);
-				continue;
-			}
-		}
-		ctx.processed_command_idx
-			.insert(dedup_key, checkpoint.index);
+		let previous_generation = ctx
+			.processed_command_idx
+			.keys()
+			.filter(|(id, _)| id == &checkpoint.actor_id)
+			.map(|(_, g)| *g)
+			.max();
+		let replay = previous_generation.is_some_and(|g| g > checkpoint.generation)
+			|| ctx
+				.processed_command_idx
+				.get(&dedup_key)
+				.is_some_and(|index| checkpoint.index <= *index);
+		if !replay {
+			ctx.processed_command_idx
+				.retain(|(id, g), _| id != &checkpoint.actor_id || *g >= checkpoint.generation);
+			ctx.processed_command_idx
+				.insert(dedup_key, checkpoint.index);
 
-		match command_wrapper.inner {
-			protocol::Command::CommandStartActor(val) => {
-				let actor_name = val.config.name.clone();
-				let (handle, active_http_request_count) = create_actor_with_startup(
-					ctx.shared.clone(),
-					checkpoint.actor_id.clone(),
-					checkpoint.generation,
-					val.config,
-					val.hibernating_requests,
-					val.preloaded_kv,
-					val.sqlite_startup,
-				);
+			match command_wrapper.inner {
+				protocol::Command::CommandStartActor(val) => {
+					if ctx
+						.get_actor_entry_mut(&checkpoint.actor_id, checkpoint.generation)
+						.is_none()
+					{
+						let actor_name = val.config.name.clone();
+						let (handle, active_http_request_count) = create_actor_with_startup(
+							ctx.shared.clone(),
+							checkpoint.actor_id.clone(),
+							checkpoint.generation,
+							val.config,
+							val.hibernating_requests,
+							val.preloaded_kv,
+							val.sqlite_startup,
+						);
 
-				ctx.insert_actor(
-					checkpoint.actor_id.clone(),
-					checkpoint.generation,
-					handle,
-					active_http_request_count,
-					actor_name,
-					checkpoint.index,
-				);
-			}
-			protocol::Command::CommandStopActor(val) => {
-				let entry = ctx.get_actor_entry_mut(&checkpoint.actor_id, checkpoint.generation);
+						ctx.insert_actor(
+							checkpoint.actor_id.clone(),
+							checkpoint.generation,
+							handle,
+							active_http_request_count,
+							actor_name,
+							checkpoint.index,
+						);
+					}
+				}
+				protocol::Command::CommandStopActor(val) => {
+					let entry =
+						ctx.get_actor_entry_mut(&checkpoint.actor_id, checkpoint.generation);
 
-				if let Some(entry) = entry {
-					entry.received_stop = true;
-					entry.last_command_idx = checkpoint.index;
-					let _ = entry.handle.send(crate::actor::ToActor::Stop {
-						command_idx: checkpoint.index,
-						reason: val.reason,
-					});
-				} else {
-					tracing::warn!(
-						actor_id = %checkpoint.actor_id,
-						generation = checkpoint.generation,
-						"received stop actor command for unknown actor"
-					);
+					if let Some(entry) = entry {
+						entry.received_stop = true;
+						entry.last_command_idx = checkpoint.index;
+						let _ = entry.handle.send(crate::actor::ToActor::Stop {
+							command_idx: checkpoint.index,
+							reason: val.reason,
+						});
+					} else {
+						tracing::warn!(
+							actor_id = %checkpoint.actor_id,
+							generation = checkpoint.generation,
+							"received stop actor command for unknown actor"
+						);
+					}
 				}
 			}
+		}
+		for request in waiting {
+			admit_startup_request(ctx, &checkpoint, request).await;
 		}
 	}
 
@@ -155,22 +169,8 @@ pub async fn send_command_ack(ctx: &mut EnvoyContext) {
 		return;
 	}
 
-	// TODO: Race condition. We clear `processed_command_idx` as soon as the
-	// ack bytes leave this process, not when `pegboard-envoy` actually
-	// commits the matching `clear_range` over `ActorCommandKey` entries. If
-	// the WS drops between `ws_send` returning and the server applying the
-	// ack, on reconnect `pegboard-envoy` will replay these commands and the
-	// dedup map will no longer be populated to drop them, allowing a
-	// stopped actor to be resurrected or a live actor to be replaced. The
-	// window is narrow (the gap between OS-accepted bytes and the FDB
-	// commit), but a strictly correct fix needs an ack-of-ack from
-	// `pegboard-envoy` so we only clear after positive confirmation.
-	// This now also applies to removed actors whose stops are acked here: a
-	// short-lived actor can be resurrected in the same window. Same fix.
-	for cp in &last_command_checkpoints {
-		ctx.processed_command_idx
-			.remove(&(cp.actor_id.clone(), cp.generation));
-	}
+	// Keep one generation watermark per actor for this process lifetime. Sending an ACK is
+	// not proof that the engine durably deleted a command; delayed Start cannot resurrect it.
 }
 
 fn checkpoints_from(highest: HashMap<(String, u32), i64>) -> Vec<protocol::ActorCheckpoint> {
@@ -198,4 +198,40 @@ async fn send_ack_checkpoints(
 		}),
 	)
 	.await
+}
+
+async fn admit_startup_request(
+	ctx: &mut EnvoyContext,
+	checkpoint: &protocol::ActorCheckpoint,
+	request: protocol::ToEnvoyTunnelMessage,
+) {
+	let session = ctx
+		.shared
+		.connection_session
+		.load(std::sync::atomic::Ordering::Acquire);
+	let valid = matches!(&request.message_kind, protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(r)
+        if r.actor_id == checkpoint.actor_id && r.actor_generation == Some(checkpoint.generation));
+	if !valid {
+		return;
+	}
+	let mut key = [0; 8];
+	key[..4].copy_from_slice(&request.message_id.gateway_id);
+	key[4..].copy_from_slice(&request.message_id.request_id);
+	if let Some(entry) = ctx.get_actor_entry_mut(&checkpoint.actor_id, checkpoint.generation) {
+		if entry.startup_requests.contains(&key) {
+			return;
+		}
+		if entry.startup_requests.len() >= 128 {
+			crate::tunnel::send_response_abort_for_session(
+				ctx,
+				session,
+				request.message_id,
+				"actor startup request capacity exceeded",
+			)
+			.await;
+			return;
+		}
+		entry.startup_requests.insert(key);
+	}
+	crate::tunnel::handle_tunnel_message(ctx, session, request).await;
 }

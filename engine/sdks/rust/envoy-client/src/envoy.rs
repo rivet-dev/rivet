@@ -92,6 +92,7 @@ pub struct WebSocketRoute {
 }
 
 pub struct ActorEntry {
+	pub startup_requests: std::collections::HashSet<[u8; 8]>,
 	pub handle: mpsc::UnboundedSender<ToActor>,
 	pub active_http_request_count: Arc<AsyncCounter>,
 	pub name: String,
@@ -243,6 +244,7 @@ impl EnvoyContext {
 			.insert(
 				generation,
 				ActorEntry {
+					startup_requests: Default::default(),
 					handle: handle.clone(),
 					active_http_request_count: active_http_request_count.clone(),
 					name,

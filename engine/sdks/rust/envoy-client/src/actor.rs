@@ -263,6 +263,48 @@ async fn actor_inner(
 		}
 	}
 
+	let mut startup_queue = std::collections::VecDeque::new();
+	while let Ok(message) = rx.try_recv() {
+		startup_queue.push_back(message);
+	}
+	let cancelled: std::collections::HashSet<_> = startup_queue
+		.iter()
+		.filter_map(|m| match m {
+			ToActor::ReqAbort { message_id, .. } => {
+				Some((message_id.gateway_id, message_id.request_id))
+			}
+			_ => None,
+		})
+		.collect();
+	let disconnected: std::collections::HashSet<_> = startup_queue
+		.iter()
+		.filter_map(|m| match m {
+			ToActor::ConnectionClosed { session } => Some(*session),
+			_ => None,
+		})
+		.collect();
+	startup_queue.retain(|m| {
+		if let ToActor::ReqStart {
+			message_id,
+			connection_session,
+			..
+		} = m
+		{
+			if cancelled.contains(&(message_id.gateway_id, message_id.request_id))
+				|| disconnected.contains(connection_session)
+			{
+				let _ = shared
+					.envoy_tx
+					.send(crate::envoy::ToEnvoyMessage::HttpRequestComplete {
+						gateway_id: message_id.gateway_id,
+						request_id: message_id.request_id,
+					});
+				return false;
+			}
+		}
+		true
+	});
+
 	// Send running state
 	send_event(
 		&mut ctx,
@@ -285,7 +327,7 @@ async fn actor_inner(
 				}
 			}
 			msg = async {
-				if rx_closed {
+				if let Some(message) = startup_queue.pop_front() { Some(message) } else if rx_closed {
 					std::future::pending::<Option<ToActor>>().await
 				} else {
 					rx.recv().await
@@ -1265,6 +1307,8 @@ mod tests {
 	}
 
 	pub(super) struct TestCallbacks {
+		startup_gate: Option<Arc<Notify>>,
+		fail_startup: bool,
 		fetch_started_tx: Mutex<Option<oneshot::Sender<()>>>,
 		fetch_dropped_tx: Mutex<Option<oneshot::Sender<()>>>,
 		release_fetch: Arc<Notify>,
@@ -1274,6 +1318,8 @@ mod tests {
 	impl TestCallbacks {
 		pub(super) fn idle() -> Self {
 			Self {
+				startup_gate: None,
+				fail_startup: false,
 				fetch_started_tx: Mutex::new(None),
 				fetch_dropped_tx: Mutex::new(None),
 				release_fetch: Arc::new(Notify::new()),
@@ -1283,6 +1329,8 @@ mod tests {
 
 		fn completing(fetch_started_tx: oneshot::Sender<()>, release_fetch: Arc<Notify>) -> Self {
 			Self {
+				startup_gate: None,
+				fail_startup: false,
 				fetch_started_tx: Mutex::new(Some(fetch_started_tx)),
 				fetch_dropped_tx: Mutex::new(None),
 				release_fetch,
@@ -1295,6 +1343,8 @@ mod tests {
 			fetch_dropped_tx: oneshot::Sender<()>,
 		) -> Self {
 			Self {
+				startup_gate: None,
+				fail_startup: false,
 				fetch_started_tx: Mutex::new(Some(fetch_started_tx)),
 				fetch_dropped_tx: Mutex::new(Some(fetch_dropped_tx)),
 				release_fetch: Arc::new(Notify::new()),
@@ -1324,7 +1374,15 @@ mod tests {
 			_config: protocol::ActorConfig,
 			_preloaded_kv: Option<protocol::PreloadedKv>,
 		) -> BoxFuture<anyhow::Result<()>> {
-			Box::pin(async { Ok(()) })
+			let gate = self.startup_gate.clone();
+			let fail = self.fail_startup;
+			Box::pin(async move {
+				if let Some(gate) = gate {
+					gate.notified().await;
+				}
+				anyhow::ensure!(!fail, "startup fixture failure");
+				Ok(())
+			})
 		}
 
 		fn on_actor_stop(
@@ -2002,6 +2060,7 @@ mod tests {
 		assert!(stop_handle.complete(), "stop handle should complete once");
 		assert_alarm_before_stopped_event(&mut envoy_rx, Some(123)).await;
 	}
+	include!("../tests/support/actor_startup.rs");
 }
 
 #[cfg(test)]
