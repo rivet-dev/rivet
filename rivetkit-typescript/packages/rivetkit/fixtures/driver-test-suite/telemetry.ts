@@ -123,7 +123,10 @@ export const telemetryRunConsumerActor = actor({
 	actions: {},
 });
 
-/** Waits for two messages and logs when it sleeps, so a test can send the second one after the sleep. */
+/**
+ * Waits for two messages and logs when it sleeps, so a test can send the second one after the sleep.
+ * The declined charge carries `bigint` metadata, which JSON cannot encode.
+ */
 export const workflowTracedActor = actor({
 	state: { chargeAttempts: 0, wakes: 0 },
 	db: db(),
@@ -157,6 +160,7 @@ export const workflowTracedActor = actor({
 				if (c.state.chargeAttempts <= 2) {
 					throw new UserError("card declined", {
 						code: "card_declined",
+						metadata: { amountCents: 1999n },
 					});
 				}
 			},

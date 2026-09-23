@@ -261,10 +261,14 @@ export function encodeBridgeRivetError(error: RivetErrorLike): string {
  * Encodes an error for the telemetry bridge. A structured error crosses with
  * its group and code. Anything else crosses as text so Core classifies it,
  * which is the same rule that keeps raw messages out of every span.
+ *
+ * Only the checked string fields cross, so encoding cannot throw on metadata
+ * that JSON cannot represent.
  */
 export function encodeErrorForBridge(error: unknown): string {
 	if (isCanonicalStructuredRivetError(error)) {
-		return encodeBridgeRivetError(error);
+		const { group, code, message } = error;
+		return encodeBridgeRivetError({ group, code, message });
 	}
 	return String(error);
 }
