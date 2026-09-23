@@ -37,7 +37,11 @@ import {
 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { TwinklingSparkles } from "@/components/twinkling-sparkles";
-import { COMPUTE_MONTHLY_CAP_USD, findPlan } from "@/content/billing";
+import {
+	COMPUTE_MONTHLY_CAP_USD,
+	computeOutsideTotalUsd,
+	findPlan,
+} from "@/content/billing";
 import { features } from "@/lib/features";
 import { ResourcePicker } from "./resource-picker";
 import { SettingsCard } from "./settings-card";
@@ -108,11 +112,7 @@ function BillingDrawerBody() {
 	const showCompute = features.compute && !compute.isUnavailable;
 	const computeDollars = compute.isError ? 0 : compute.monthToDate;
 	const computeCapUsd = COMPUTE_MONTHLY_CAP_USD[plan] ?? null;
-	// Capped plans are billed for compute only up to the cap.
-	const billedCompute =
-		computeCapUsd != null
-			? Math.min(computeDollars, computeCapUsd)
-			: computeDollars;
+	const billedCompute = computeOutsideTotalUsd(plan, computeDollars);
 
 	const periodStart = usage.currentPeriodStart
 		? new Date(usage.currentPeriodStart)

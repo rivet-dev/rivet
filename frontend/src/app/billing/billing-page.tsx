@@ -12,6 +12,7 @@ import { USAGE_METRICS } from "@/app/billing/usage-metrics";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { Button, H1 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
+import { computeOutsideTotalUsd } from "@/content/billing";
 import { features } from "@/lib/features";
 import { Content } from "../layout";
 
@@ -70,7 +71,10 @@ export function BillingBody() {
 	return (
 		<div className="px-4  max-w-5xl mx-auto @6xl:px-0 space-y-8 pb-8">
 			<CurrentBillTotal
-				total={Number(usage.totalCents) / 100 + computeDollars}
+				total={
+					Number(usage.totalCents) / 100 +
+					computeOutsideTotalUsd(usage.plan, computeDollars)
+				}
 				periodStart={
 					usage.currentPeriodStart
 						? new Date(usage.currentPeriodStart)

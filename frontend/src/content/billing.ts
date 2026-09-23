@@ -35,6 +35,18 @@ export const COMPUTE_MONTHLY_CAP_USD: Record<string, number | null> = {
 	enterprise: null,
 };
 
+/**
+ * Compute dollars to add on top of the usage endpoint's `totalCents`. Paid
+ * plans already include compute there; only free's capped compute is left out.
+ */
+export function computeOutsideTotalUsd(
+	plan: string,
+	computeDollars: number,
+): number {
+	const cap = COMPUTE_MONTHLY_CAP_USD[plan] ?? null;
+	return cap != null ? Math.min(computeDollars, cap) : 0;
+}
+
 /** Compute cost in dollars per active second for the given actor config. */
 export function computeCostPerSecond(vcpus: number, memoryMb: number): number {
 	return (
