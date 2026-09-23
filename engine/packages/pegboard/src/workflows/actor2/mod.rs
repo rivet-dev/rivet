@@ -6,7 +6,7 @@ use universaldb::prelude::*;
 
 use crate::errors;
 
-mod alloc_serverful;
+pub(crate) mod alloc_serverful;
 mod keys;
 pub mod metrics;
 mod runtime;
@@ -163,6 +163,7 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 		namespace_id: input.namespace_id,
 		create_ts: ctx.create_ts(),
 		from_v1: input.from_v1,
+		actor_input: input.input.clone(),
 	})
 	.await?;
 
@@ -233,6 +234,10 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 			.await?;
 	}
 
+	if crate::actor_lease::enabled() {
+		return lease_maintenance(ctx, input).await;
+	}
+
 	// Spawn adjacent workflows
 	let metrics_workflow_id = ctx
 		.workflow(metrics::Input {
@@ -286,6 +291,7 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InitStateAndUdbInput {
+	pub actor_input: Option<String>,
 	pub actor_id: Id,
 	pub name: String,
 	pub key: Option<String>,
@@ -342,6 +348,26 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 				tx.write(
 					&crate::keys::actor::KeyKey::new(input.actor_id),
 					key.clone(),
+				)?;
+			}
+
+			if crate::actor_lease::enabled() {
+				use base64::Engine;
+				crate::actor_lease::initialize(
+					&tx,
+					input.actor_id,
+					input.namespace_id,
+					input.pool_name.clone(),
+					protocol::ActorConfig {
+						name: input.name.clone(),
+						key: input.key.clone(),
+						create_ts,
+						input: input
+							.actor_input
+							.as_ref()
+							.map(|x| base64::prelude::BASE64_STANDARD.decode(x))
+							.transpose()?,
+					},
 				)?;
 			}
 
@@ -1391,4 +1417,76 @@ join_signal!(Main {
 	GoingAway,
 	Destroy,
 	// Comment to prevent invalid formatting
+});
+
+#[signal("pegboard_actor_lease_maintenance")]
+pub struct LeaseMaintenance {}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct LeaseMaintenanceInput {
+	actor_id: Id,
+	wake: bool,
+}
+
+#[activity(LeaseMaintenanceRead)]
+async fn lease_maintenance_read(
+	ctx: &ActivityCtx,
+	input: &LeaseMaintenanceInput,
+) -> Result<Option<i64>> {
+	let lease = ctx
+		.op(crate::actor_lease::Input {
+			actor_id: input.actor_id,
+			action: if input.wake {
+				crate::actor_lease::Action::Acquire
+			} else {
+				crate::actor_lease::Action::Read
+			},
+		})
+		.await?;
+	// The runtime owns alarms while awake. A persisted alarm only wakes sleeping actors.
+	Ok(if lease.phase == crate::actor_lease::Phase::Sleeping {
+		lease.alarm_ts
+	} else {
+		None
+	})
+}
+
+async fn lease_maintenance(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+	ctx.loope((), |ctx, _| {
+		let actor_id = input.actor_id;
+		async move {
+			let alarm = ctx
+				.activity(LeaseMaintenanceInput {
+					actor_id,
+					wake: false,
+				})
+				.await?;
+			let signals = if let Some(ts) = alarm {
+				ctx.listen_n_until::<LeaseSignals>(ts, 256).await?
+			} else {
+				ctx.listen_n::<LeaseSignals>(256).await?
+			};
+			if signals.is_empty() {
+				ctx.activity(LeaseMaintenanceInput {
+					actor_id,
+					wake: true,
+				})
+				.await?;
+			}
+			for signal in signals {
+				if matches!(signal, LeaseSignals::Destroy(_)) {
+					return Ok(Loop::Break(()));
+				}
+			}
+			Ok(Loop::Continue)
+		}
+		.boxed()
+	})
+	.await?;
+	destroy(ctx, input).await
+}
+
+join_signal!(LeaseSignals {
+	LeaseMaintenance,
+	Destroy,
 });

@@ -44,13 +44,32 @@ pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result
 		.ok_or_else(|| pegboard::errors::Actor::NotFound.build())?;
 
 	// Already destroyed: succeed idempotently
-	if actor.destroy_ts.is_some() {
+	if actor.destroy_ts.is_some() && !pegboard::actor_lease::enabled() {
 		return Ok(DeleteResponse {});
 	}
 
 	// Verify the actor belongs to the specified namespace
 	if actor.namespace_id != namespace.namespace_id {
 		return Err(pegboard::errors::Actor::NotFound.build());
+	}
+
+	if pegboard::actor_lease::enabled() {
+		tokio::time::timeout(std::time::Duration::from_secs(30), async {
+			loop {
+				let lease = ctx
+					.op(pegboard::actor_lease::Input {
+						actor_id: path.actor_id,
+						action: pegboard::actor_lease::Action::Destroy,
+					})
+					.await?;
+				if lease.phase == pegboard::actor_lease::Phase::Sleeping {
+					break;
+				}
+				tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+			}
+			anyhow::Ok(())
+		})
+		.await??;
 	}
 
 	// Try actor2 first, then fallback to actor

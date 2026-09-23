@@ -447,6 +447,51 @@ async fn handle_actor_v2(
 	mut fail_sub: SubscriptionHandle<pegboard::workflows::actor2::Failed>,
 	mut destroy_sub: SubscriptionHandle<pegboard::workflows::actor2::DestroyStarted>,
 ) -> Result<RoutingOutput> {
+	if pegboard::actor_lease::enabled() {
+		let lease = phase_timeout(
+			Phase::new(
+				"route_pegboard_acquire_lease",
+				&metrics::ROUTE_PEGBOARD_WAKE_SIGNAL_DURATION,
+			)
+			.with_namespace_id(actor.namespace_id)
+			.with_actor_id(actor_id),
+			ctx.config().guard().route_pegboard_wake_signal_timeout(),
+			async {
+				loop {
+					let lease = ctx
+						.op(pegboard::actor_lease::Input {
+							actor_id,
+							action: pegboard::actor_lease::Action::Acquire,
+						})
+						.await?;
+					if lease.phase == pegboard::actor_lease::Phase::Running {
+						break anyhow::Ok(lease);
+					}
+					// Pubsub is only a hint. Retry reads recover a lost publish or readiness event.
+					tokio::select! {
+						_ = ready_sub.next() => {},
+						_ = stopped_sub.next() => {},
+						_ = tokio::time::sleep(std::time::Duration::from_millis(25)) => {},
+					}
+				}
+			},
+			|elapsed, timeout| {
+				pegboard::errors::RouteWakeSignalTimeout {
+					actor_id: actor_id.to_string(),
+					elapsed_ms: elapsed.as_millis() as u64,
+					timeout_ms: timeout.as_millis() as u64,
+				}
+				.build()
+			},
+		)
+		.await?;
+		actor.envoy_key = lease.envoy_key;
+		actor.generation = Some(lease.generation);
+		actor.envoy_protocol_version = Some(lease.protocol_version);
+		actor.sleeping = false;
+		actor.connectable = true;
+	}
+
 	// Wake actor if sleeping
 	if actor.sleeping {
 		tracing::debug!(

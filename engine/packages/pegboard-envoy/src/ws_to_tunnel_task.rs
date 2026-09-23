@@ -450,7 +450,12 @@ pub async fn task(
 	ws_rx: Arc<Mutex<WebSocketReceiver>>,
 	ws_to_tunnel_abort_rx: watch::Receiver<()>,
 ) -> Result<LifecycleResult> {
-	let mut event_demuxer = ActorEventDemuxer::new(ctx.clone(), conn.envoy_key.clone());
+	let mut event_demuxer = ActorEventDemuxer::new(
+		ctx.clone(),
+		conn.envoy_key.clone(),
+		conn.namespace_id,
+		conn.envoy_conn_id,
+	);
 
 	let res = task_inner(ctx, conn, ws_rx, ws_to_tunnel_abort_rx, &mut event_demuxer).await;
 
