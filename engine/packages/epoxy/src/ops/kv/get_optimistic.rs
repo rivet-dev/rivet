@@ -58,6 +58,12 @@ pub struct Output {
 /// best-effort lookup.
 #[operation]
 pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output> {
+	Ok(Output {
+		value: read(ctx, input).await?.and_then(|value| value.value),
+	})
+}
+
+pub(super) async fn read(ctx: &OperationCtx, input: &Input) -> Result<Option<CommittedValue>> {
 	let local_read = read_local_value(
 		ctx,
 		input.replica_id,
@@ -66,11 +72,13 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 	)
 	.await?;
 	if let Some(value) = local_read.value {
-		return Ok(Output { value: value.value });
+		return Ok(Some(value));
 	} else if let Some(value) = local_read.cache_value {
-		return Ok(Output {
-			value: value.value.flatten(),
-		});
+		return Ok(value.value.map(|bytes| CommittedValue {
+			value: bytes,
+			version: value.version,
+			mutable: false,
+		}));
 	}
 
 	// Request fanout to other datacenters, return first datacenter with any non-none value
@@ -87,7 +95,7 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 	)?;
 
 	if quorum_members.len() == 1 {
-		return Ok(Output { value: None });
+		return Ok(None);
 	}
 
 	let responses = http_client::fanout_to_replicas(
@@ -136,13 +144,13 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 			cache_fanout_value(ctx, input.replica_id, &input.key, &value).await?;
 		}
 
-		return Ok(Output { value: value.value });
+		return Ok(Some(value));
 	} else if input.save_empty {
 		cache_empty_value(ctx, input.replica_id, &input.key).await?;
 	}
 
 	// No value found in any datacenter
-	Ok(Output { value: None })
+	Ok(None)
 }
 
 async fn cache_fanout_value(

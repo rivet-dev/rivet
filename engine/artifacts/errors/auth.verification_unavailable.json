@@ -1,0 +1,5 @@
+{
+  "code": "verification_unavailable",
+  "group": "auth",
+  "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+}

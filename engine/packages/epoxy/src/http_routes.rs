@@ -3,7 +3,6 @@ use axum::body::Bytes;
 use epoxy_protocol::{protocol, versioned};
 use rivet_api_builder::prelude::*;
 use rivet_perf::{perf_finish, perf_start};
-use vbare::OwnedVersionedData;
 
 use crate::metrics;
 
@@ -40,13 +39,13 @@ pub async fn protocol_version(
 }
 
 pub async fn message(ctx: ApiCtx, path: ProtocolPath, _query: (), body: Bytes) -> Result<Vec<u8>> {
-	let request = versioned::Request::deserialize_version(&body, path.version)?.unwrap_latest()?;
+	let request = versioned::decode_request(&body, path.version)?;
 	ensure!(
 		!matches!(request.kind, protocol::RequestKind::ChangelogReadRequest(_)),
 		"use /epoxy/changelog-read for changelog reads"
 	);
 
-	handle_request(ctx, request).await
+	handle_request(ctx, request, path.version).await
 }
 
 pub async fn changelog_read(
@@ -55,13 +54,13 @@ pub async fn changelog_read(
 	_query: (),
 	body: Bytes,
 ) -> Result<Vec<u8>> {
-	let request = versioned::Request::deserialize_version(&body, path.version)?.unwrap_latest()?;
+	let request = versioned::decode_request(&body, path.version)?;
 	ensure!(
 		matches!(request.kind, protocol::RequestKind::ChangelogReadRequest(_)),
 		"/epoxy/changelog-read only accepts changelog read requests"
 	);
 
-	handle_request(ctx, request).await
+	handle_request(ctx, request, path.version).await
 }
 
 fn request_kind_label(kind: &protocol::RequestKind) -> &'static str {
@@ -78,11 +77,12 @@ fn request_kind_label(kind: &protocol::RequestKind) -> &'static str {
 		}
 		protocol::RequestKind::BeginLearningRequest(_) => "begin_learning",
 		protocol::RequestKind::KvGetRequest(_) => "kv_get",
+		protocol::RequestKind::KvReadStateRequest(_) => "kv_read_state",
 		protocol::RequestKind::KvPurgeCacheRequest(_) => "kv_purge_cache",
 	}
 }
 
-async fn handle_request(ctx: ApiCtx, request: protocol::Request) -> Result<Vec<u8>> {
+async fn handle_request(ctx: ApiCtx, request: protocol::Request, version: u16) -> Result<Vec<u8>> {
 	let current_replica_id = ctx.config().epoxy_replica_id();
 	ensure!(
 		request.to_replica_id == current_replica_id,
@@ -107,5 +107,5 @@ async fn handle_request(ctx: ApiCtx, request: protocol::Request) -> Result<Vec<u
 	metrics::record_request_result(kind_label, result_label);
 	perf_finish!(measure, fields: { result = %result_label });
 
-	rivet_util::serde::bare_to_vec!(&res?).map_err(Into::into)
+	versioned::encode_response(res?, version)
 }

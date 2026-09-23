@@ -1,7 +1,19 @@
 use std::{fs, path::Path};
 
 fn main() {
-	let schema = schemars::schema_for!(rivet_config::config::Root);
+	let mut schema = schemars::schema_for!(rivet_config::config::Root);
+	// Config loading keeps root fields optional so environment overrides can merge, but a
+	// running Engine requires authentication. Reflect that invariant in the published schema.
+	let object = schema.schema.object.as_mut().expect("root object schema");
+	object.required.insert("auth".to_owned());
+	object.properties.insert(
+		"auth".to_owned(),
+		schemars::schema::SchemaObject {
+			reference: Some("#/definitions/Auth".to_owned()),
+			..Default::default()
+		}
+		.into(),
+	);
 
 	// Create out directory at workspace root
 	let workspace_root = std::env::var("CARGO_MANIFEST_DIR")

@@ -374,6 +374,261 @@ type ActorsSleepRequestBody = map[string]interface{}
 
 type ActorsSleepResponse = map[string]interface{}
 
+type AuthOperationKind string
+
+const (
+	AuthOperationKindRead   AuthOperationKind = "read"
+	AuthOperationKindUpdate AuthOperationKind = "update"
+	AuthOperationKindList   AuthOperationKind = "list"
+	AuthOperationKindCreate AuthOperationKind = "create"
+	AuthOperationKindDelete AuthOperationKind = "delete"
+)
+
+func NewAuthOperationKindFromString(s string) (AuthOperationKind, error) {
+	switch s {
+	case "read":
+		return AuthOperationKindRead, nil
+	case "update":
+		return AuthOperationKindUpdate, nil
+	case "list":
+		return AuthOperationKindList, nil
+	case "create":
+		return AuthOperationKindCreate, nil
+	case "delete":
+		return AuthOperationKindDelete, nil
+	}
+	var t AuthOperationKind
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (a AuthOperationKind) Ptr() *AuthOperationKind {
+	return &a
+}
+
+type AuthTokenCreateResponse struct {
+	ExpiresTs int64  `json:"expires_ts"`
+	IssuedTs  int64  `json:"issued_ts"`
+	Token     string `json:"token"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *AuthTokenCreateResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler AuthTokenCreateResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = AuthTokenCreateResponse(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *AuthTokenCreateResponse) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+type AuthTokenGrant struct {
+	Operations []AuthOperationKind   `json:"operations,omitempty"`
+	Resource   AuthTokenResource     `json:"resource,omitempty"`
+	Target     *AuthTokenTargetScope `json:"target,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *AuthTokenGrant) UnmarshalJSON(data []byte) error {
+	type unmarshaler AuthTokenGrant
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = AuthTokenGrant(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *AuthTokenGrant) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+type AuthTokenInspectResponse struct {
+	ExpiresTs   int64             `json:"expires_ts"`
+	Grants      []*AuthTokenGrant `json:"grants,omitempty"`
+	IssuedTs    int64             `json:"issued_ts"`
+	NamespaceId RivetId           `json:"namespace_id"`
+	Subject     *string           `json:"subject,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *AuthTokenInspectResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler AuthTokenInspectResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = AuthTokenInspectResponse(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *AuthTokenInspectResponse) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+type AuthTokenResource string
+
+const (
+	AuthTokenResourceNamespace    AuthTokenResource = "namespace"
+	AuthTokenResourceActor        AuthTokenResource = "actor"
+	AuthTokenResourceRunner       AuthTokenResource = "runner"
+	AuthTokenResourceRunnerConfig AuthTokenResource = "runner_config"
+	AuthTokenResourceDatacenter   AuthTokenResource = "datacenter"
+	AuthTokenResourceActorGateway AuthTokenResource = "actor_gateway"
+	AuthTokenResourceActorKv      AuthTokenResource = "actor_kv"
+)
+
+func NewAuthTokenResourceFromString(s string) (AuthTokenResource, error) {
+	switch s {
+	case "namespace":
+		return AuthTokenResourceNamespace, nil
+	case "actor":
+		return AuthTokenResourceActor, nil
+	case "runner":
+		return AuthTokenResourceRunner, nil
+	case "runner_config":
+		return AuthTokenResourceRunnerConfig, nil
+	case "datacenter":
+		return AuthTokenResourceDatacenter, nil
+	case "actor_gateway":
+		return AuthTokenResourceActorGateway, nil
+	case "actor_kv":
+		return AuthTokenResourceActorKv, nil
+	}
+	var t AuthTokenResource
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (a AuthTokenResource) Ptr() *AuthTokenResource {
+	return &a
+}
+
+type AuthTokenTargetScope struct {
+	typeName               string
+	stringLiteral          string
+	AuthTokenTargetScopeId *AuthTokenTargetScopeId
+}
+
+func NewAuthTokenTargetScopeWithStringLiteral() *AuthTokenTargetScope {
+	return &AuthTokenTargetScope{typeName: "stringLiteral", stringLiteral: "any"}
+}
+
+func NewAuthTokenTargetScopeFromAuthTokenTargetScopeId(value *AuthTokenTargetScopeId) *AuthTokenTargetScope {
+	return &AuthTokenTargetScope{typeName: "authTokenTargetScopeId", AuthTokenTargetScopeId: value}
+}
+
+func (a *AuthTokenTargetScope) StringLiteral() string {
+	return a.stringLiteral
+}
+
+func (a *AuthTokenTargetScope) UnmarshalJSON(data []byte) error {
+	var valueStringLiteral string
+	if err := json.Unmarshal(data, &valueStringLiteral); err == nil {
+		if valueStringLiteral == "any" {
+			a.typeName = "stringLiteral"
+			a.stringLiteral = valueStringLiteral
+			return nil
+		}
+	}
+	valueAuthTokenTargetScopeId := new(AuthTokenTargetScopeId)
+	if err := json.Unmarshal(data, &valueAuthTokenTargetScopeId); err == nil {
+		a.typeName = "authTokenTargetScopeId"
+		a.AuthTokenTargetScopeId = valueAuthTokenTargetScopeId
+		return nil
+	}
+	return fmt.Errorf("%s cannot be deserialized as a %T", data, a)
+}
+
+func (a AuthTokenTargetScope) MarshalJSON() ([]byte, error) {
+	switch a.typeName {
+	default:
+		return nil, fmt.Errorf("invalid type %s in %T", a.typeName, a)
+	case "stringLiteral":
+		return json.Marshal("any")
+	case "authTokenTargetScopeId":
+		return json.Marshal(a.AuthTokenTargetScopeId)
+	}
+}
+
+type AuthTokenTargetScopeVisitor interface {
+	VisitStringLiteral(string) error
+	VisitAuthTokenTargetScopeId(*AuthTokenTargetScopeId) error
+}
+
+func (a *AuthTokenTargetScope) Accept(visitor AuthTokenTargetScopeVisitor) error {
+	switch a.typeName {
+	default:
+		return fmt.Errorf("invalid type %s in %T", a.typeName, a)
+	case "stringLiteral":
+		return visitor.VisitStringLiteral(a.stringLiteral)
+	case "authTokenTargetScopeId":
+		return visitor.VisitAuthTokenTargetScopeId(a.AuthTokenTargetScopeId)
+	}
+}
+
+type AuthTokenTargetScopeId struct {
+	Id RivetId `json:"id"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *AuthTokenTargetScopeId) UnmarshalJSON(data []byte) error {
+	type unmarshaler AuthTokenTargetScopeId
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = AuthTokenTargetScopeId(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *AuthTokenTargetScopeId) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
 type CrashPolicy string
 
 const (

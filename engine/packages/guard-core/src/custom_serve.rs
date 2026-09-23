@@ -58,6 +58,12 @@ pub trait CustomServeTrait: Send + Sync {
 		Err(errors::WebSocketNotSupported.build())
 	}
 
+	/// Terminate downstream state after Guard drops an in-flight WebSocket handler.
+	/// Implementations that register a downstream request must keep this operation bounded.
+	async fn terminate_websocket(&self, _req_ctx: &RequestContext) -> Result<()> {
+		Ok(())
+	}
+
 	// TODO: Combine into handle_websocket, remove hibernation from guard
 	/// Returns true if the websocket should close.
 	async fn handle_websocket_hibernation(

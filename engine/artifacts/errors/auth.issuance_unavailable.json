@@ -1,0 +1,5 @@
+{
+  "code": "issuance_unavailable",
+  "group": "auth",
+  "message": "The server could not issue an authentication token because the signing service is temporarily unavailable. Retry the request."
+}

@@ -35,7 +35,9 @@ pub(crate) struct LocalValueRead {
 /// 1. **V2 value** (`EPOXY_V2/replica/{id}/kv/{key}/value`). The current write path.
 /// 2. **Legacy committed value** (`EPOXY_V1/replica/{id}/kv/{key}/committed_value`). Written by
 ///    the original EPaxos protocol. Deserialized as raw bytes with version 0 and mutable=false.
-/// 3. **Optimistic cache** (`EPOXY_V2/replica/{id}/kv/{key}/cache`). Only checked when
+/// 3. **Legacy versioned value** (`EPOXY_V1/replica/{id}/kv/{key}/value`). Written during
+///    the transition to the versioned value format.
+/// 4. **Optimistic cache** (`EPOXY_V2/replica/{id}/kv/{key}/cache`). Only checked when
 ///    `include_cache` is true. Contains values fetched from remote replicas for the optimistic
 ///    read path.
 ///
@@ -56,11 +58,13 @@ pub(crate) async fn read_local_value(
 				let packed_value_key = keys::subspace(replica_id).pack(&value_key);
 				let packed_legacy_value_key =
 					keys::legacy_subspace(replica_id).pack(&legacy_value_key);
+				let packed_legacy_v2_value_key = keys::legacy_subspace(replica_id).pack(&value_key);
 				let packed_cache_key = keys::subspace(replica_id).pack(&cache_key);
 
-				let (local_value, legacy_value, cache_value) = tokio::try_join!(
+				let (local_value, legacy_value, legacy_v2_value, cache_value) = tokio::try_join!(
 					tx.get(&packed_value_key, Serializable),
 					tx.get(&packed_legacy_value_key, Serializable),
+					tx.get(&packed_legacy_v2_value_key, Serializable),
 					async {
 						if include_cache {
 							tx.get(&packed_cache_key, Serializable).await
@@ -86,6 +90,13 @@ pub(crate) async fn read_local_value(
 							version: 0,
 							mutable: false,
 						}),
+						cache_value: None,
+					});
+				}
+
+				if let Some(value) = legacy_v2_value {
+					return Ok(LocalValueRead {
+						value: Some(value_key.deserialize(&value)?),
 						cache_value: None,
 					});
 				}

@@ -277,6 +277,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ec6fb3fe69024a75fa7e1bfb48aa6cf59706a101658ea01bfd33b2b248a038f"
 dependencies = [
  "aws-lc-sys",
+ "untrusted 0.7.1",
  "zeroize",
 ]
 
@@ -1208,6 +1209,7 @@ dependencies = [
  "fiat-crypto",
  "rustc_version",
  "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -1318,7 +1320,7 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
 name = "datacenter"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -1377,7 +1379,7 @@ dependencies = [
 
 [[package]]
 name = "depot"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1420,7 +1422,7 @@ dependencies = [
 
 [[package]]
 name = "depot-client-embedded"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1651,6 +1653,7 @@ version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
 dependencies = [
+ "pkcs8",
  "signature",
 ]
 
@@ -1662,9 +1665,12 @@ checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
+ "rand_core 0.6.4",
+ "serde",
  "sha2",
  "signature",
  "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -1696,7 +1702,7 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "epoxy"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -1712,6 +1718,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest 0.12.22",
  "rivet-api-builder",
+ "rivet-build-meta",
  "rivet-config",
  "rivet-error",
  "rivet-metrics",
@@ -1741,7 +1748,7 @@ dependencies = [
 
 [[package]]
 name = "epoxy-protocol"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "serde",
@@ -2093,7 +2100,7 @@ dependencies = [
 
 [[package]]
 name = "gasoline"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2144,7 +2151,7 @@ dependencies = [
 
 [[package]]
 name = "gasoline-macros"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2153,7 +2160,7 @@ dependencies = [
 
 [[package]]
 name = "gasoline-runtime"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "epoxy",
@@ -3032,6 +3039,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonwebtoken"
+version = "11.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e75fe14a82d81e5f5af639997db37d8b96045938a7ac6ab18cdbe1c7467e05e1"
+dependencies = [
+ "aws-lc-rs",
+ "base64 0.22.1",
+ "getrandom 0.2.16",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "signature",
+ "zeroize",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3389,7 +3412,7 @@ dependencies = [
 
 [[package]]
 name = "namespace"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "epoxy",
@@ -3968,7 +3991,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4026,7 +4049,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-envoy"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4075,7 +4098,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-gateway"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4109,7 +4132,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-gateway2"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4144,7 +4167,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-gateway3"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4164,6 +4187,7 @@ dependencies = [
  "rivet-error",
  "rivet-guard-core",
  "rivet-metrics",
+ "rivet-ups-protocol",
  "rivet-util",
  "scc",
  "serde",
@@ -4179,7 +4203,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-outbound"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "epoxy",
@@ -4206,7 +4230,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-runner"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5072,13 +5096,13 @@ dependencies = [
  "cfg-if",
  "getrandom 0.2.16",
  "libc",
- "untrusted",
+ "untrusted 0.9.0",
  "windows-sys 0.52.0",
 ]
 
 [[package]]
 name = "rivet-actor-runtime-socket-protocol"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "serde",
@@ -5090,7 +5114,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-builder"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -5121,7 +5145,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-full"
-version = "0.0.1"
+version = "2.3.19"
 dependencies = [
  "reqwest 0.12.22",
  "serde",
@@ -5133,7 +5157,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-peer"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -5169,7 +5193,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-public"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -5188,6 +5212,8 @@ dependencies = [
  "rivet-api-peer",
  "rivet-api-types",
  "rivet-api-util",
+ "rivet-auth",
+ "rivet-auth-jwt",
  "rivet-config",
  "rivet-data",
  "rivet-envoy-protocol",
@@ -5207,7 +5233,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-public-openapi-gen"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "rivet-api-public",
  "serde_json",
@@ -5216,11 +5242,12 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-types"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "gasoline",
  "rivet-api-builder",
+ "rivet-auth-policy",
  "rivet-runner-protocol",
  "rivet-types",
  "rivet-util",
@@ -5231,7 +5258,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-util"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -5288,8 +5315,68 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-auth"
+version = "2.3.19"
+dependencies = [
+ "anyhow",
+ "gasoline",
+ "namespace",
+ "rivet-auth-jwt",
+ "rivet-auth-policy",
+ "serde",
+ "sha2",
+ "subtle",
+ "tokio",
+ "utoipa",
+]
+
+[[package]]
+name = "rivet-auth-jwt"
+version = "2.3.19"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "epoxy",
+ "epoxy-protocol",
+ "futures-util",
+ "gasoline",
+ "hex",
+ "jsonwebtoken",
+ "lazy_static",
+ "rand 0.8.5",
+ "rivet-auth-policy",
+ "rivet-config",
+ "rivet-data",
+ "rivet-metrics",
+ "rivet-util",
+ "rivet-util-id",
+ "serde",
+ "serde_bare",
+ "serde_json",
+ "sha2",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "universaldb",
+ "vbare",
+ "zeroize",
+]
+
+[[package]]
+name = "rivet-auth-policy"
+version = "2.3.19"
+dependencies = [
+ "anyhow",
+ "rivet-error",
+ "serde",
+ "strum",
+ "utoipa",
+]
+
+[[package]]
 name = "rivet-bootstrap"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "datacenter",
  "depot",
@@ -5298,6 +5385,7 @@ dependencies = [
  "gasoline-runtime",
  "namespace",
  "pegboard",
+ "rivet-auth-jwt",
  "rivet-config",
  "rivet-metrics",
  "rivet-runtime",
@@ -5311,7 +5399,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-build-meta"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "epoxy-protocol",
@@ -5325,7 +5413,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-cache"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -5351,7 +5439,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-cache-purge"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -5368,14 +5456,14 @@ dependencies = [
 
 [[package]]
 name = "rivet-cache-result"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "rivet-util",
 ]
 
 [[package]]
 name = "rivet-cli"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anstyle",
  "anyhow",
@@ -5396,7 +5484,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-config"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5419,7 +5507,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-config-schema-gen"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "rivet-config",
  "schemars 0.8.22",
@@ -5428,7 +5516,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-container-runner"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5450,7 +5538,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-data"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "gasoline",
@@ -5464,7 +5552,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-depot-client"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5493,11 +5581,11 @@ dependencies = [
 
 [[package]]
 name = "rivet-depot-client-types"
-version = "2.3.17"
+version = "2.3.19"
 
 [[package]]
 name = "rivet-depot-protocol"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "serde",
@@ -5508,7 +5596,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-dynamic-config"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -5526,7 +5614,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-engine"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5557,6 +5645,7 @@ dependencies = [
  "rivet-api-peer",
  "rivet-api-public",
  "rivet-api-types",
+ "rivet-auth-jwt",
  "rivet-bootstrap",
  "rivet-build-meta",
  "rivet-cache",
@@ -5608,7 +5697,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-env"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "lazy_static",
  "uuid",
@@ -5616,7 +5705,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-envoy-client"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -5648,7 +5737,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-envoy-protocol"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "hex",
@@ -5664,7 +5753,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-error"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "indoc",
@@ -5676,7 +5765,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-error-macros"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "indoc",
  "proc-macro2",
@@ -5687,7 +5776,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-guard"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5718,6 +5807,8 @@ dependencies = [
  "rivet-api-public",
  "rivet-api-types",
  "rivet-api-util",
+ "rivet-auth",
+ "rivet-auth-jwt",
  "rivet-cache",
  "rivet-config",
  "rivet-data",
@@ -5750,7 +5841,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-guard-core"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5774,6 +5865,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.22",
  "rivet-api-builder",
+ "rivet-auth",
  "rivet-config",
  "rivet-error",
  "rivet-metrics",
@@ -5800,7 +5892,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-logs"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5814,7 +5906,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-metrics"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "lazy_static",
  "prometheus",
@@ -5822,7 +5914,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-metrics-server"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "console-subscriber",
@@ -5840,7 +5932,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-outbound-guard"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "ipnet",
@@ -5854,7 +5946,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-perf"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "prometheus",
  "tokio",
@@ -5864,7 +5956,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-pools"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "clickhouse",
@@ -5897,7 +5989,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-postgres-util"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "rustls",
@@ -5908,7 +6000,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-profiling"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "gasoline",
@@ -5923,7 +6015,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-runner-protocol"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "gasoline",
@@ -5941,7 +6033,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-runtime"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "console-subscriber",
@@ -5970,7 +6062,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-service-manager"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5987,7 +6079,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-telemetry"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "rivet-config",
@@ -5998,7 +6090,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-term"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "console",
  "derive_builder 0.12.0",
@@ -6011,7 +6103,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-test-deps"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -6029,7 +6121,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-test-deps-docker"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "portpicker",
@@ -6046,7 +6138,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-test-envoy"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -6062,7 +6154,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-tracing-utils"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "futures-util",
  "lazy_static",
@@ -6072,7 +6164,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-types"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "gasoline",
@@ -6089,7 +6181,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-universaldb-commit"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "serde",
@@ -6101,7 +6193,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-ups-protocol"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -6114,7 +6206,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6142,7 +6234,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-id"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
@@ -6153,7 +6245,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-serde"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "indexmap 2.14.0",
  "serde",
@@ -6163,7 +6255,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-version-management"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -6183,7 +6275,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-workflow-worker"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "datacenter",
@@ -6193,13 +6285,14 @@ dependencies = [
  "gasoline-runtime",
  "namespace",
  "pegboard",
+ "rivet-auth-jwt",
  "rivet-config",
  "tracing",
 ]
 
 [[package]]
 name = "rivetkit"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6228,7 +6321,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-actor-persist"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "serde",
@@ -6240,7 +6333,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-client"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -6274,7 +6367,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-client-protocol"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "serde",
@@ -6286,7 +6379,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-core"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6349,7 +6442,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-engine-process"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "libc",
@@ -6366,7 +6459,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-inspector-protocol"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "serde",
@@ -6378,7 +6471,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-napi"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6404,7 +6497,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-shared-types"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "serde",
  "serde_json",
@@ -6412,7 +6505,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-wasm"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -6589,7 +6682,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64ca1bc8749bd4cf37b5ce386cc146580777b4e8572c7b97baf22c83f444bee9"
 dependencies = [
  "rustls-pki-types",
- "untrusted",
+ "untrusted 0.9.0",
 ]
 
 [[package]]
@@ -6601,7 +6694,7 @@ dependencies = [
  "aws-lc-rs",
  "ring",
  "rustls-pki-types",
- "untrusted",
+ "untrusted 0.9.0",
 ]
 
 [[package]]
@@ -7596,7 +7689,7 @@ dependencies = [
 
 [[package]]
 name = "test-snapshot-gen"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8379,7 +8472,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "universaldb"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8417,7 +8510,7 @@ dependencies = [
 
 [[package]]
 name = "universalpubsub"
-version = "2.3.17"
+version = "2.3.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8451,6 +8544,12 @@ name = "unsafe-libyaml"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
+
+[[package]]
+name = "untrusted"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
 
 [[package]]
 name = "untrusted"
@@ -9599,18 +9698,18 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.8.1"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ced3678a2879b30306d323f4542626697a464a97c0a07c9aebf7ebca65cd4dde"
+checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
 dependencies = [
  "zeroize_derive",
 ]
 
 [[package]]
 name = "zeroize_derive"
-version = "1.4.2"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce36e65b0d2999d2aafac989fb249189a141aee1f53c612c1f37d72631959f69"
+checksum = "3c50655cbb0fe3fc43170059e702f1ce5e19b84cec58dc87b037a09935c2f328"
 dependencies = [
  "proc-macro2",
  "quote",

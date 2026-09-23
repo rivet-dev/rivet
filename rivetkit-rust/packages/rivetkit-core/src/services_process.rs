@@ -117,6 +117,7 @@ impl ServicesProcessManager {
 		command
 			.arg("start")
 			.env("RIVET_ENDPOINT", &config.endpoint)
+			.env("RIVET__AUTH__ADMIN_TOKEN", "default")
 			.env("RIVET_NAMESPACE", &config.namespace)
 			.env("RIVET_POOL_NAME", &config.pool_name)
 			.env("RIVETKIT_ENGINE_SPAWN", "never")

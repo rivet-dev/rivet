@@ -9,8 +9,8 @@ const rl = readline.createInterface({
 
 const rivetToken =
 	process.env.RIVET_TOKEN ||
-	(await rl.question("Rivet Token (default: dev): ")).trim() ||
-	"dev";
+	(await rl.question("Rivet Token (default: default): ")).trim() ||
+	"default";
 
 const endpoint =
 	process.env.RIVET_ENDPOINT ||

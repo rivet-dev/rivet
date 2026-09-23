@@ -23,7 +23,7 @@ use crate::{
 
 const ENDPOINT: &str = "http://127.0.0.1:6420";
 const ENGINE_PORT: u16 = 6420;
-const TOKEN: &str = "dev";
+const TOKEN: &str = "default";
 const NAMESPACE: &str = "default";
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
 

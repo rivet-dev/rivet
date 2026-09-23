@@ -1,6 +1,6 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use axum::{
-	extract::Request,
+	extract::{Request, State},
 	middleware::{self, Next},
 	response::{IntoResponse, Redirect, Response},
 };
@@ -10,7 +10,8 @@ use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 
 use crate::{
-	actors, ctx, datacenters, envoys, health, metadata, namespaces, runner_configs, runners, ui,
+	actors, auth, ctx, datacenters, envoys, health, metadata, namespaces, runner_configs, runners,
+	ui,
 };
 
 #[derive(OpenApi)]
@@ -37,6 +38,8 @@ use crate::{
 		datacenters::list,
 		health::fanout,
 		metadata::get,
+		auth::tokens::create,
+		auth::tokens::inspect,
 	),
 	components(
 		schemas(rivet_types::keys::namespace::runner_config::RunnerConfigVariant)
@@ -50,10 +53,15 @@ pub struct ApiDoc;
 pub async fn router(
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
+	jwt_key_ring_cache: Option<std::sync::Arc<rivet_auth_jwt::key_ring_cache::KeyRingCache>>,
 ) -> Result<axum::Router> {
 	tracing::debug!("creating api-public router");
+	let jwt_enabled = config.auth.as_ref().is_some_and(|auth| auth.jwt.enabled());
+	if jwt_enabled != jwt_key_ring_cache.is_some() {
+		bail!("API Public JWT verifier configuration does not match auth.jwt.enabled");
+	}
 
-	create_router("api-public", config, pools, |router| {
+	create_router("api-public", config, pools, move |router| {
 		router
 			// Root redirect
 			.route(
@@ -65,6 +73,15 @@ pub async fn router(
 			// MARK: Namespaces
 			.route("/namespaces", axum::routing::get(namespaces::list))
 			.route("/namespaces", axum::routing::post(namespaces::create))
+			.route(
+				"/auth/tokens",
+				axum::routing::post(auth::tokens::create)
+					.layer(axum::extract::DefaultBodyLimit::max(32 * 1024)),
+			)
+			.route(
+				"/auth/tokens/inspect",
+				axum::routing::get(auth::tokens::inspect),
+			)
 			.route("/runner-configs", axum::routing::get(runner_configs::list))
 			.route(
 				"/runner-configs/serverless-health-check",
@@ -122,7 +139,6 @@ pub async fn router(
 			.route("/ui", axum::routing::get(ui::serve_index))
 			.route("/ui/", axum::routing::get(ui::serve_index))
 			.route("/ui/{*path}", axum::routing::get(ui::serve_ui))
-			// MARK: ACL
 			// MARK: Middleware (must go after all routes)
 			// Add CORS layer that mirrors the request origin
 			.layer(
@@ -132,7 +148,10 @@ pub async fn router(
 					.allow_headers(tower_http::cors::AllowHeaders::mirror_request())
 					.allow_credentials(true),
 			)
-			.layer(middleware::from_fn(auth_middleware))
+			.layer(middleware::from_fn_with_state(
+				jwt_key_ring_cache,
+				auth_middleware,
+			))
 	})
 	.await
 }
@@ -141,6 +160,9 @@ pub async fn router(
 // handled in an endpoint
 #[tracing::instrument(level = "debug", skip_all)]
 async fn auth_middleware(
+	State(jwt_key_ring_cache): State<
+		Option<std::sync::Arc<rivet_auth_jwt::key_ring_cache::KeyRingCache>>,
+	>,
 	headers: HeaderMap,
 	mut req: Request,
 	next: Next,
@@ -157,7 +179,7 @@ async fn auth_middleware(
 		.map(|x| x.to_string());
 
 	// Insert the new ApiCtx into request extensions
-	let ctx = ctx::ApiCtx::new(ctx.clone(), token);
+	let ctx = ctx::ApiCtx::new(ctx.clone(), token, jwt_key_ring_cache);
 	req.extensions_mut().insert(ctx.clone());
 
 	let method = req.method().clone();

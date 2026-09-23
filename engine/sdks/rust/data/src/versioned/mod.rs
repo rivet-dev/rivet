@@ -5,8 +5,12 @@ use vbare::OwnedVersionedData;
 use crate::converted;
 use crate::generated::*;
 
+mod auth_grants;
+mod auth_jwt_key_ring;
 mod namespace_runner_config;
 
+pub use auth_grants::*;
+pub use auth_jwt_key_ring::*;
 pub use namespace_runner_config::*;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

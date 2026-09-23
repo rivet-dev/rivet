@@ -1110,6 +1110,30 @@ impl InFlightRequestHandle {
 	}
 }
 
+impl SharedState {
+	pub async fn terminate_websocket(&self, request_id: protocol::RequestId) -> Result<()> {
+		let handle = InFlightRequestHandle {
+			shared_state: self.clone(),
+			request_id,
+		};
+		let close_result = handle
+			.send_message(
+				protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(
+					protocol::ToEnvoyWebSocketClose {
+						code: Some(u16::from(
+							tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Policy,
+						)),
+						reason: Some("auth.token_expired".to_owned()),
+					},
+				),
+				true,
+			)
+			.await;
+		handle.stop(RequestStopResult::ClientDisconnect).await;
+		close_result
+	}
+}
+
 fn attempt_bucket(attempt: u32) -> &'static str {
 	match attempt {
 		0 => "1",

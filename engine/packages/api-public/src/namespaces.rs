@@ -7,6 +7,7 @@ use rivet_api_builder::{
 use rivet_api_peer::namespaces::*;
 use rivet_api_types::namespaces::list::*;
 use rivet_api_util::request_remote_datacenter;
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 
 use crate::ctx::ApiCtx;
 
@@ -29,7 +30,17 @@ pub async fn list(Extension(ctx): Extension<ApiCtx>, Query(query): Query<ListQue
 }
 
 async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Any,
+		ResourceKind::Namespace,
+		TargetScope::Any,
+		if query.namespace_ids.is_none() && query.namespace_id.is_empty() && query.name.is_none() {
+			OperationKind::List
+		} else {
+			OperationKind::Read
+		},
+	)
+	.await?;
 
 	if ctx.config().is_leader() {
 		rivet_api_peer::namespaces::list(ctx.into(), (), query).await
@@ -70,7 +81,13 @@ pub async fn create(
 
 #[tracing::instrument(level = "debug", skip_all)]
 async fn create_inner(ctx: ApiCtx, body: CreateRequest) -> Result<CreateResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Any,
+		ResourceKind::Namespace,
+		TargetScope::Any,
+		OperationKind::Create,
+	)
+	.await?;
 
 	if ctx.config().is_leader() {
 		rivet_api_peer::namespaces::create(ctx.into(), (), (), body).await

@@ -32,17 +32,48 @@ pub enum CommandKind {
 	CheckAndSetCommand(CheckAndSetCommand),
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
 pub struct SetCommand {
 	pub key: Vec<u8>,
 	pub value: Option<Vec<u8>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
+impl std::fmt::Debug for SetCommand {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("SetCommand")
+			.field("key_bytes", &self.key.len())
+			.field("value", &self.value.as_ref().map(|_| "<redacted>"))
+			.finish()
+	}
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
 pub struct CheckAndSetCommand {
 	pub key: Vec<u8>,
+	/// Mutable CAS is coordinator-authoritative: the coordinator checks this against its local
+	/// committed value before proposing, while consensus prevents overlapping proposals from
+	/// choosing different successors. A loser can observe either a value mismatch or a retryable
+	/// consensus failure, depending on whether it sees the winner before ballot contention rejects
+	/// it. This is sufficient only while one authoritative coordinator replica owns the key, as the
+	/// JWT key ring does in the leader datacenter.
+	///
+	/// TODO(epoxy): Before allowing independent coordinators to mutate the same key, make the
+	/// condition part of a new protocol version. Carry the expected predecessor through
+	/// prepare/accept/commit and evaluate it against the value selected during recovery, including
+	/// accepted-but-not-yet-learned values; do not compare each replica's potentially stale local
+	/// snapshot independently. The versioned transport must also encode the negotiated schema.
 	pub expect_one_of: Vec<Option<Vec<u8>>>,
 	pub new_value: Option<Vec<u8>>,
+}
+
+impl std::fmt::Debug for CheckAndSetCommand {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("CheckAndSetCommand")
+			.field("key_bytes", &self.key.len())
+			.field("expected_count", &self.expect_one_of.len())
+			.field("new_value", &self.new_value.as_ref().map(|_| "<redacted>"))
+			.finish()
+	}
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -72,12 +103,26 @@ impl ProposalResult {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub enum ConsensusFailedReason {
 	PreparePhaseConsensusFailed,
 	AcceptPhaseConsensusFailed,
 	StaleBallot,
 	ExpectedValueDoesNotMatch { current_value: Option<Vec<u8>> },
+}
+
+impl std::fmt::Debug for ConsensusFailedReason {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::PreparePhaseConsensusFailed => f.write_str("PreparePhaseConsensusFailed"),
+			Self::AcceptPhaseConsensusFailed => f.write_str("AcceptPhaseConsensusFailed"),
+			Self::StaleBallot => f.write_str("StaleBallot"),
+			Self::ExpectedValueDoesNotMatch { .. } => f
+				.debug_struct("ExpectedValueDoesNotMatch")
+				.field("current_value", &"<redacted>")
+				.finish(),
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -94,11 +139,12 @@ pub struct Input {
 	pub target_replicas: Option<Vec<ReplicaId>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct SetProposal {
 	key: Vec<u8>,
 	value: Option<Vec<u8>>,
 	mutable: bool,
+	expect_one_of: Option<Vec<Option<Vec<u8>>>>,
 }
 
 impl SetProposal {
@@ -113,43 +159,81 @@ impl SetProposal {
 				key: key.clone(),
 				value: value.clone(),
 				mutable,
+				expect_one_of: None,
 			}),
 			CommandKind::CheckAndSetCommand(CheckAndSetCommand {
 				key,
 				expect_one_of,
 				new_value,
 			}) => {
-				if expect_one_of.len() != 1 || !matches!(expect_one_of.first(), Some(None)) {
-					bail!(
-						"epoxy v2 does not support multiple `expect_one_of` values for `CheckAndSet` or `expect_one_of` values that are not `None`"
-					)
+				if expect_one_of.is_empty() {
+					bail!("`CheckAndSet.expect_one_of` must not be empty");
 				}
 
 				Ok(Self {
 					key: key.clone(),
 					value: new_value.clone(),
 					mutable,
+					expect_one_of: Some(expect_one_of.clone()),
 				})
 			}
 		}
 	}
 
-	fn result_for_committed_value(&self, current_value: Option<Vec<u8>>) -> ProposalResult {
-		if self.mutable {
-			if current_value == self.value {
-				ProposalResult::Committed
-			} else {
-				ProposalResult::ConsensusFailed {
-					reason: ConsensusFailedReason::ExpectedValueDoesNotMatch { current_value },
-				}
-			}
-		} else if current_value == self.value {
-			ProposalResult::Committed
+	fn expectation_failure(&self, current_value: &Option<Vec<u8>>) -> Option<ProposalResult> {
+		let Some(expect_one_of) = &self.expect_one_of else {
+			return None;
+		};
+
+		if expect_one_of.contains(current_value) {
+			None
 		} else {
-			ProposalResult::ConsensusFailed {
-				reason: ConsensusFailedReason::ExpectedValueDoesNotMatch { current_value },
-			}
+			Some(ProposalResult::ConsensusFailed {
+				reason: ConsensusFailedReason::ExpectedValueDoesNotMatch {
+					current_value: current_value.clone(),
+				},
+			})
 		}
+	}
+
+	fn result_for_chosen_value(&self, chosen: &CommittedValue) -> ProposalResult {
+		if self.expect_one_of.is_none() || chosen.value == self.value {
+			return ProposalResult::Committed;
+		}
+
+		ProposalResult::ConsensusFailed {
+			reason: ConsensusFailedReason::ExpectedValueDoesNotMatch {
+				current_value: chosen.value.clone(),
+			},
+		}
+	}
+
+	fn result_for_already_committed(
+		&self,
+		current_value: &Option<Vec<u8>>,
+	) -> ProposalAttemptResult {
+		if current_value == &self.value
+			&& (self.expect_one_of.is_none()
+				|| self.mutable
+				|| self.expect_one_of.as_deref() == Some(&[None]))
+		{
+			return ProposalAttemptResult::Complete(ProposalResult::Committed);
+		}
+
+		if self.mutable
+			&& self
+				.expect_one_of
+				.as_ref()
+				.is_some_and(|expected| expected.contains(current_value))
+		{
+			return ProposalAttemptResult::RetryExpectedCommit;
+		}
+
+		ProposalAttemptResult::Complete(ProposalResult::ConsensusFailed {
+			reason: ConsensusFailedReason::ExpectedValueDoesNotMatch {
+				current_value: current_value.clone(),
+			},
+		})
 	}
 }
 
@@ -226,6 +310,12 @@ fn apply_accept_observation(
 const PREPARE_RETRY_INITIAL_DELAY_MS: u64 = 10;
 const PREPARE_RETRY_MAX_DELAY_MS: u64 = 1_000;
 const PREPARE_RETRY_MAX_ATTEMPTS: usize = 10;
+const EXPECTED_COMMIT_RETRY_MAX_ATTEMPTS: usize = 3;
+
+enum ProposalAttemptResult {
+	Complete(ProposalResult),
+	RetryExpectedCommit,
+}
 
 #[operation]
 pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<ProposalResult> {
@@ -255,122 +345,164 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 		"resolved quorum members for proposal"
 	);
 
-	let result = match ctx
-		.udb()?
-		.txn("epoxy_propose_ballot_selection", |tx| {
-			let key = proposal.key.clone();
-			let mutable = proposal.mutable;
-			async move { ballot::ballot_selection(&tx, replica_id, key, mutable).await }
-		})
-		.custom_instrument(tracing::debug_span!("ballot_selection_tx"))
-		.await
-		.context("failed selecting ballot")?
-	{
-		BallotSelection::AlreadyCommitted(value) => proposal.result_for_committed_value(value),
-		BallotSelection::AlreadyCommittedMutable {
-			value: committed_value,
-			ballot,
-		} => {
-			let version = committed_value
-				.version
-				.checked_add(1)
-				.context("epoxy mutable key version overflow")?;
-
-			used_slow_path = true;
-			metrics::SLOW_PATH_TOTAL.inc();
-			metrics::PREPARE_TOTAL.inc();
-			match run_prepare_phase(
-				ctx,
-				&config,
-				replica_id,
-				&quorum_members,
-				proposal.key.clone(),
-				CommittedValue {
-					value: proposal.value.clone(),
-					version,
-					mutable: true,
-				},
-				ballot,
-			)
-			.await?
-			{
-				PreparePhaseOutcome::Prepared { ballot, value } => {
-					run_slow_path(
-						ctx,
-						&config,
-						replica_id,
-						&quorum_members,
-						&proposal,
-						ballot,
-						value,
-						input.purge_cache,
-					)
-					.await?
-				}
-				PreparePhaseOutcome::AlreadyCommitted(value) => {
-					proposal.result_for_committed_value(value)
-				}
-				PreparePhaseOutcome::ConsensusFailed => ProposalResult::ConsensusFailed {
-					reason: ConsensusFailedReason::PreparePhaseConsensusFailed,
-				},
+	let mut expected_commit_retries = 0;
+	let result = loop {
+		let ballot_selection = ctx
+			.udb()?
+			.txn("epoxy_propose_ballot_selection", |tx| {
+				let key = proposal.key.clone();
+				let mutable = proposal.mutable;
+				async move { ballot::ballot_selection(&tx, replica_id, key, mutable).await }
+			})
+			.custom_instrument(tracing::debug_span!("ballot_selection_tx"))
+			.await
+			.context("failed selecting ballot")?;
+		let expectation_failure = match &ballot_selection {
+			BallotSelection::AlreadyCommittedMutable { value, .. } => {
+				proposal.expectation_failure(&value.value)
 			}
-		}
-		BallotSelection::FreshBallot(ballot) => {
-			metrics::FAST_PATH_TOTAL.inc();
-			run_fast_path(
-				ctx,
-				&config,
-				replica_id,
-				&quorum_members,
-				&proposal,
-				ballot.into(),
-				CommittedValue {
-					value: proposal.value.clone(),
-					version: 1,
-					mutable: proposal.mutable,
-				},
-				input.purge_cache,
-			)
-			.await?
-		}
-		BallotSelection::NeedsPrepare { ballot } => {
-			used_slow_path = true;
-			metrics::SLOW_PATH_TOTAL.inc();
-			metrics::PREPARE_TOTAL.inc();
-			match run_prepare_phase(
-				ctx,
-				&config,
-				replica_id,
-				&quorum_members,
-				proposal.key.clone(),
-				CommittedValue {
-					value: proposal.value.clone(),
-					version: 1,
-					mutable: proposal.mutable,
-				},
-				ballot,
-			)
-			.await?
-			{
-				PreparePhaseOutcome::Prepared { ballot, value } => {
-					run_slow_path(
+			BallotSelection::FreshBallot(_) | BallotSelection::NeedsPrepare { .. } => {
+				proposal.expectation_failure(&None)
+			}
+			BallotSelection::AlreadyCommitted(_) => None,
+		};
+
+		let attempt = if let Some(failure) = expectation_failure {
+			ProposalAttemptResult::Complete(failure)
+		} else {
+			match ballot_selection {
+				BallotSelection::AlreadyCommitted(value) => {
+					proposal.result_for_already_committed(&value)
+				}
+				BallotSelection::AlreadyCommittedMutable {
+					value: committed_value,
+					ballot,
+				} => {
+					let version = committed_value
+						.version
+						.checked_add(1)
+						.context("epoxy mutable key version overflow")?;
+
+					used_slow_path = true;
+					metrics::SLOW_PATH_TOTAL.inc();
+					metrics::PREPARE_TOTAL.inc();
+					match run_prepare_phase(
+						ctx,
+						&config,
+						replica_id,
+						&quorum_members,
+						proposal.key.clone(),
+						CommittedValue {
+							value: proposal.value.clone(),
+							version,
+							mutable: true,
+						},
+						ballot,
+					)
+					.await?
+					{
+						PreparePhaseOutcome::Prepared { ballot, value } => {
+							run_slow_path(
+								ctx,
+								&config,
+								replica_id,
+								&quorum_members,
+								&proposal,
+								ballot,
+								value,
+								input.purge_cache,
+							)
+							.await?
+						}
+						PreparePhaseOutcome::AlreadyCommitted(value) => {
+							proposal.result_for_already_committed(&value)
+						}
+						PreparePhaseOutcome::ConsensusFailed => {
+							ProposalAttemptResult::Complete(ProposalResult::ConsensusFailed {
+								reason: ConsensusFailedReason::PreparePhaseConsensusFailed,
+							})
+						}
+					}
+				}
+				BallotSelection::FreshBallot(ballot) => {
+					metrics::FAST_PATH_TOTAL.inc();
+					run_fast_path(
 						ctx,
 						&config,
 						replica_id,
 						&quorum_members,
 						&proposal,
-						ballot,
-						value,
+						ballot.into(),
+						CommittedValue {
+							value: proposal.value.clone(),
+							version: 1,
+							mutable: proposal.mutable,
+						},
 						input.purge_cache,
 					)
 					.await?
 				}
-				PreparePhaseOutcome::AlreadyCommitted(value) => {
-					proposal.result_for_committed_value(value)
+				BallotSelection::NeedsPrepare { ballot } => {
+					used_slow_path = true;
+					metrics::SLOW_PATH_TOTAL.inc();
+					metrics::PREPARE_TOTAL.inc();
+					match run_prepare_phase(
+						ctx,
+						&config,
+						replica_id,
+						&quorum_members,
+						proposal.key.clone(),
+						CommittedValue {
+							value: proposal.value.clone(),
+							version: 1,
+							mutable: proposal.mutable,
+						},
+						ballot,
+					)
+					.await?
+					{
+						PreparePhaseOutcome::Prepared { ballot, value } => {
+							run_slow_path(
+								ctx,
+								&config,
+								replica_id,
+								&quorum_members,
+								&proposal,
+								ballot,
+								value,
+								input.purge_cache,
+							)
+							.await?
+						}
+						PreparePhaseOutcome::AlreadyCommitted(value) => {
+							proposal.result_for_already_committed(&value)
+						}
+						PreparePhaseOutcome::ConsensusFailed => {
+							ProposalAttemptResult::Complete(ProposalResult::ConsensusFailed {
+								reason: ConsensusFailedReason::PreparePhaseConsensusFailed,
+							})
+						}
+					}
 				}
-				PreparePhaseOutcome::ConsensusFailed => ProposalResult::ConsensusFailed {
+			}
+		};
+
+		match attempt {
+			ProposalAttemptResult::Complete(result) => break result,
+			ProposalAttemptResult::RetryExpectedCommit
+				if expected_commit_retries < EXPECTED_COMMIT_RETRY_MAX_ATTEMPTS =>
+			{
+				expected_commit_retries += 1;
+				tracing::debug!(
+					attempt = expected_commit_retries,
+					"retrying proposal after observing an expected committed value"
+				);
+				continue;
+			}
+			ProposalAttemptResult::RetryExpectedCommit => {
+				break ProposalResult::ConsensusFailed {
 					reason: ConsensusFailedReason::PreparePhaseConsensusFailed,
-				},
+				};
 			}
 		}
 	};
@@ -394,7 +526,7 @@ async fn run_fast_path(
 	ballot: protocol::Ballot,
 	chosen_value: CommittedValue,
 	purge_cache: bool,
-) -> Result<ProposalResult> {
+) -> Result<ProposalAttemptResult> {
 	run_accept_path(
 		ctx,
 		config,
@@ -418,7 +550,7 @@ async fn run_slow_path(
 	ballot: protocol::Ballot,
 	chosen_value: CommittedValue,
 	purge_cache: bool,
-) -> Result<ProposalResult> {
+) -> Result<ProposalAttemptResult> {
 	run_accept_path(
 		ctx,
 		config,
@@ -443,7 +575,38 @@ async fn run_accept_path(
 	chosen_value: CommittedValue,
 	purge_cache: bool,
 	accept_quorum: utils::QuorumType,
-) -> Result<ProposalResult> {
+) -> Result<ProposalAttemptResult> {
+	if proposal.mutable && proposal.expect_one_of.is_some() {
+		// Mutable CAS is owned by its coordinator (including the JWT ring). Record acceptance
+		// locally before peers can choose a successor, so the owner read sees unresolved writes.
+		match tokio::time::timeout(
+			crate::consts::REQUEST_TIMEOUT,
+			send_accept_request(
+				ctx,
+				config,
+				replica_id,
+				replica_id,
+				proposal.key.clone(),
+				chosen_value.clone(),
+				ballot.clone(),
+			),
+		)
+		.await??
+		{
+			protocol::AcceptResponse::AcceptResponseOk(_) => {}
+			protocol::AcceptResponse::AcceptResponseAlreadyCommitted(value) => {
+				return Ok(proposal.result_for_already_committed(&value.value));
+			}
+			protocol::AcceptResponse::AcceptResponseHigherBallot(_) => {
+				return Ok(ProposalAttemptResult::Complete(
+					ProposalResult::ConsensusFailed {
+						reason: ConsensusFailedReason::StaleBallot,
+					},
+				));
+			}
+		}
+	}
+
 	match send_accept_round(
 		ctx,
 		config,
@@ -458,12 +621,14 @@ async fn run_accept_path(
 	{
 		AcceptPhaseOutcome::Accepted => {}
 		AcceptPhaseOutcome::AlreadyCommitted(value) => {
-			return Ok(proposal.result_for_committed_value(value));
+			return Ok(proposal.result_for_already_committed(&value));
 		}
 		AcceptPhaseOutcome::ConsensusFailed => {
-			return Ok(ProposalResult::ConsensusFailed {
-				reason: ConsensusFailedReason::AcceptPhaseConsensusFailed,
-			});
+			return Ok(ProposalAttemptResult::Complete(
+				ProposalResult::ConsensusFailed {
+					reason: ConsensusFailedReason::AcceptPhaseConsensusFailed,
+				},
+			));
 		}
 	}
 
@@ -488,6 +653,7 @@ async fn run_accept_path(
 
 	match commit_result {
 		CommitKvOutcome::Committed => {
+			let result = proposal.result_for_chosen_value(&chosen_value);
 			// Broadcast is fire-and-forget. The local commit already succeeded, so
 			// propagation failures should not fail the proposal.
 			tokio::spawn({
@@ -528,14 +694,16 @@ async fn run_accept_path(
 					}
 				}
 			});
-			Ok(ProposalResult::Committed)
+			Ok(ProposalAttemptResult::Complete(result))
 		}
 		CommitKvOutcome::AlreadyCommitted { value, .. } => {
-			Ok(proposal.result_for_committed_value(value))
+			Ok(proposal.result_for_already_committed(&value))
 		}
-		CommitKvOutcome::StaleBallot { .. } => Ok(ProposalResult::ConsensusFailed {
-			reason: ConsensusFailedReason::StaleBallot,
-		}),
+		CommitKvOutcome::StaleBallot { .. } => Ok(ProposalAttemptResult::Complete(
+			ProposalResult::ConsensusFailed {
+				reason: ConsensusFailedReason::StaleBallot,
+			},
+		)),
 	}
 }
 
@@ -850,7 +1018,7 @@ async fn send_prepare_request(
 	Ok(response)
 }
 
-async fn send_accept_request(
+pub(crate) async fn send_accept_request(
 	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
 	from_replica_id: ReplicaId,
@@ -891,7 +1059,7 @@ async fn send_accept_request(
 	Ok(response)
 }
 
-async fn broadcast_commits(
+pub(crate) async fn broadcast_commits(
 	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
 	from_replica_id: ReplicaId,
@@ -1049,6 +1217,48 @@ mod tests {
 	use rand::{SeedableRng, rngs::StdRng};
 
 	#[test]
+	fn proposal_debug_never_logs_encoded_values() {
+		let secret = b"secret-epoxy-test-sentinel".to_vec();
+		let proposal = Input {
+			proposal: Proposal {
+				commands: vec![
+					Command {
+						kind: CommandKind::SetCommand(SetCommand {
+							key: secret.clone(),
+							value: Some(secret.clone()),
+						}),
+					},
+					Command {
+						kind: CommandKind::CheckAndSetCommand(CheckAndSetCommand {
+							key: secret.clone(),
+							expect_one_of: vec![Some(secret.clone())],
+							new_value: Some(secret.clone()),
+						}),
+					},
+				],
+			},
+			mutable: true,
+			purge_cache: false,
+			target_replicas: None,
+		};
+		for logged in [
+			format!("{proposal:?}"),
+			format!(
+				"{:?}",
+				ProposalResult::ConsensusFailed {
+					reason: ConsensusFailedReason::ExpectedValueDoesNotMatch {
+						current_value: Some(secret.clone()),
+					},
+				}
+			),
+		] {
+			assert!(!logged.contains(&format!("{secret:?}")));
+			assert!(!logged.contains("secret-epoxy-test-sentinel"));
+			assert!(logged.contains("<redacted>"));
+		}
+	}
+
+	#[test]
 	fn parses_set_command_as_set_proposal() {
 		let proposal = Proposal {
 			commands: vec![Command {
@@ -1063,6 +1273,27 @@ mod tests {
 		assert_eq!(parsed.key, b"key".to_vec());
 		assert_eq!(parsed.value, Some(b"value".to_vec()));
 		assert!(!parsed.mutable);
+	}
+
+	#[test]
+	fn already_committed_expected_value_retries_mutable_cas() {
+		let proposal = SetProposal {
+			key: b"key".to_vec(),
+			value: Some(b"next".to_vec()),
+			mutable: true,
+			expect_one_of: Some(vec![Some(b"previous".to_vec())]),
+		};
+
+		assert!(matches!(
+			proposal.result_for_already_committed(&Some(b"previous".to_vec())),
+			ProposalAttemptResult::RetryExpectedCommit
+		));
+		assert!(matches!(
+			proposal.result_for_already_committed(&Some(b"unexpected".to_vec())),
+			ProposalAttemptResult::Complete(ProposalResult::ConsensusFailed {
+				reason: ConsensusFailedReason::ExpectedValueDoesNotMatch { .. }
+			})
+		));
 	}
 
 	#[test]

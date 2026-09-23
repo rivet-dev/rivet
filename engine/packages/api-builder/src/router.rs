@@ -50,12 +50,15 @@ async fn api_ctx_middleware(
 	Ok(next.run(req).await)
 }
 
-pub async fn create_router(
+pub async fn create_router<F>(
 	name: &'static str,
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
-	builder: fn(ApiRouter) -> ApiRouter,
-) -> Result<Router> {
+	builder: F,
+) -> Result<Router>
+where
+	F: FnOnce(ApiRouter) -> ApiRouter,
+{
 	let ctx = GlobalApiCtx::new(config.clone(), pools, name).await?;
 
 	let user_router = builder(Router::new());

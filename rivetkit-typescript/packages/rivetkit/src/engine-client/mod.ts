@@ -3,6 +3,11 @@ import invariant from "invariant";
 import { deserializeActorKey, serializeActorKey } from "@/actor/keys";
 import type { ClientConfig } from "@/client/client";
 import {
+	isInvalidToken,
+	isInvalidTokenResponse,
+	TokenProvider,
+} from "@/client/token-provider";
+import {
 	PATH_CONNECT,
 	PATH_WEBSOCKET_BASE,
 	PATH_WEBSOCKET_PREFIX,
@@ -50,6 +55,13 @@ import { createWebSocketProxy } from "./ws-proxy";
 export class RemoteEngineControlClient implements EngineControlClient {
 	#config: ClientConfig;
 	#metadataPromise: Promise<void> | undefined;
+	#tokenProvider?: TokenProvider;
+	#webSocketTokens = new WeakMap<
+		UniversalWebSocket,
+		{
+			refresh?: Promise<string>;
+		}
+	>();
 
 	constructor(runConfig: ClientConfig) {
 		// Disable health check if in Next.js build phase since there is no `/metadata` endpoint
@@ -65,6 +77,8 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		// Clone config so we can mutate the endpoint in #metadataPromise
 		// NOTE: This is a shallow clone, so mutating nested properties will not do anything
 		this.#config = { ...runConfig };
+		if (runConfig.getToken)
+			this.#tokenProvider = new TokenProvider(runConfig.getToken);
 
 		// Perform metadata check if enabled
 		if (!runConfig.disableMetadataLookup) {
@@ -80,7 +94,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 							this.#config.namespace =
 								metadataData.clientNamespace;
 						}
-						if (metadataData.clientToken) {
+						if (metadataData.clientToken && !this.#tokenProvider) {
 							this.#config.token = metadataData.clientToken;
 						}
 
@@ -88,7 +102,6 @@ export class RemoteEngineControlClient implements EngineControlClient {
 							msg: "overriding client endpoint",
 							endpoint: metadataData.clientEndpoint,
 							namespace: metadataData.clientNamespace,
-							token: metadataData.clientToken,
 						});
 					}
 
@@ -103,6 +116,39 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		}
 	}
 
+	async #authorizedConfig(): Promise<ClientConfig> {
+		if (!this.#tokenProvider) return this.#config;
+		return { ...this.#config, token: await this.#tokenProvider.current() };
+	}
+
+	async #withCredential<T>(
+		request: (config: ClientConfig) => Promise<T>,
+		readOnly = false,
+	): Promise<T> {
+		const config = await this.#authorizedConfig();
+		try {
+			return await request(config);
+		} catch (error) {
+			if (
+				this.#tokenProvider &&
+				config.token &&
+				error instanceof EngineApiError &&
+				error.statusCode === 401 &&
+				isInvalidToken(error.group, error.code)
+			) {
+				if (readOnly) {
+					const token = await this.#tokenProvider.refreshIfCurrent(
+						config.token,
+					);
+					return request({ ...this.#config, token });
+				}
+				// Mutations may have executed; refresh the next call, not this one.
+				await this.#tokenProvider.refreshIfCurrent(config.token);
+			}
+			throw error;
+		}
+	}
+
 	async getForId({
 		name,
 		actorId,
@@ -110,7 +156,10 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		await this.#metadataPromise;
 
 		// Fetch from API if not in cache
-		const response = await getActor(this.#config, name, actorId);
+		const response = await this.#withCredential(
+			(config) => getActor(config, name, actorId),
+			true,
+		);
 		const actor = response.actors[0];
 		if (!actor) return undefined;
 
@@ -138,7 +187,10 @@ export class RemoteEngineControlClient implements EngineControlClient {
 
 		// If not in local cache, fetch by key from API
 		try {
-			const response = await getActorByKey(this.#config, name, key);
+			const response = await this.#withCredential(
+				(config) => getActorByKey(config, name, key),
+				true,
+			);
 			const actor = response.actors[0];
 			if (!actor) return undefined;
 
@@ -183,18 +235,20 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		});
 
 		try {
-			const { actor, created } = await getOrCreateActor(this.#config, {
-				datacenter: region,
-				name,
-				key: serializeActorKey(key),
-				runner_name_selector: poolName ?? this.#config.poolName,
-				input: actorInput
-					? uint8ArrayToBase64(
-							encodeCborCompat(actorInput as JsonCompatValue),
-						)
-					: undefined,
-				crash_policy: crashPolicy ?? "sleep",
-			});
+			const { actor, created } = await this.#withCredential((config) =>
+				getOrCreateActor(config, {
+					datacenter: region,
+					name,
+					key: serializeActorKey(key),
+					runner_name_selector: poolName ?? this.#config.poolName,
+					input: actorInput
+						? uint8ArrayToBase64(
+								encodeCborCompat(actorInput as JsonCompatValue),
+							)
+						: undefined,
+					crash_policy: crashPolicy ?? "sleep",
+				}),
+			);
 
 			logger().info({
 				msg: "getOrCreateWithKey: actor ready",
@@ -220,7 +274,10 @@ export class RemoteEngineControlClient implements EngineControlClient {
 					key,
 				});
 
-				const response = await getActorByKey(this.#config, name, key);
+				const response = await this.#withCredential(
+					(config) => getActorByKey(config, name, key),
+					true,
+				);
 				const existing = response.actors[0];
 				if (!existing) throw error;
 
@@ -250,16 +307,20 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		logger().info({ msg: "creating actor via engine api", name, key });
 
 		// Create actor via engine API
-		const result = await createActor(this.#config, {
-			datacenter: region,
-			name,
-			runner_name_selector: poolName ?? this.#config.poolName,
-			key: serializeActorKey(key),
-			input: input
-				? uint8ArrayToBase64(encodeCborCompat(input as JsonCompatValue))
-				: undefined,
-			crash_policy: crashPolicy ?? "sleep",
-		});
+		const result = await this.#withCredential((config) =>
+			createActor(config, {
+				datacenter: region,
+				name,
+				runner_name_selector: poolName ?? this.#config.poolName,
+				key: serializeActorKey(key),
+				input: input
+					? uint8ArrayToBase64(
+							encodeCborCompat(input as JsonCompatValue),
+						)
+					: undefined,
+				crash_policy: crashPolicy ?? "sleep",
+			}),
+		);
 
 		logger().info({
 			msg: "actor created",
@@ -276,7 +337,10 @@ export class RemoteEngineControlClient implements EngineControlClient {
 
 		logger().debug({ msg: "listing actors via engine api", name });
 
-		const response = await listActorsByName(this.#config, name);
+		const response = await this.#withCredential(
+			(config) => listActorsByName(config, name),
+			true,
+		);
 
 		return response.actors.map(apiActorToOutput);
 	}
@@ -286,7 +350,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 
 		logger().info({ msg: "destroying actor via engine api", actorId });
 
-		await destroyActor(this.#config, actorId);
+		await this.#withCredential((config) => destroyActor(config, actorId));
 
 		logger().info({ msg: "actor destroyed", actorId });
 	}
@@ -297,13 +361,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		options: GatewayRequestOptions = {},
 	): Promise<Response> {
 		await this.#metadataPromise;
-
-		const path = requestPath(actorRequest);
-		const gatewayUrl = this.#buildGatewayUrlForTarget(
-			target,
-			path,
-			options,
-		);
+		const config = await this.#authorizedConfig();
 		const httpOptions = {
 			...options,
 			directActorId: shouldSkipReadyWait(options)
@@ -311,12 +369,37 @@ export class RemoteEngineControlClient implements EngineControlClient {
 				: undefined,
 		};
 
-		return sendHttpRequestToGateway(
-			this.#config,
-			gatewayUrl,
-			actorRequest,
-			httpOptions,
-		);
+		const send = (current: ClientConfig) =>
+			sendHttpRequestToGateway(
+				current,
+				this.#buildGatewayUrlForTarget(
+					current,
+					target,
+					requestPath(actorRequest),
+					options,
+				),
+				actorRequest,
+				httpOptions,
+			);
+		const response = await send(config);
+		if (
+			!this.#tokenProvider ||
+			!config.token ||
+			!isInvalidTokenResponse(response)
+		)
+			return response;
+		if (
+			(actorRequest.method === "GET" || actorRequest.method === "HEAD") &&
+			!("getOrCreateForKey" in target)
+		) {
+			const token = await this.#tokenProvider.refreshIfCurrent(
+				config.token,
+			);
+			await response.body?.cancel();
+			return send({ ...this.#config, token });
+		}
+		await this.#tokenProvider.refreshIfCurrent(config.token);
+		return response;
 	}
 
 	async openWebSocket(
@@ -327,15 +410,17 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		options: GatewayRequestOptions = {},
 	): Promise<UniversalWebSocket> {
 		await this.#metadataPromise;
+		const config = await this.#authorizedConfig();
 
 		const gatewayUrl = this.#buildGatewayUrlForTarget(
+			config,
 			target,
 			path,
 			options,
 		);
 
-		return openWebSocketToGateway(
-			this.#config,
+		const ws = await openWebSocketToGateway(
+			config,
 			gatewayUrl,
 			encoding,
 			params,
@@ -346,6 +431,45 @@ export class RemoteEngineControlClient implements EngineControlClient {
 					: undefined,
 			},
 		);
+		this.#watchWebSocketAuth(ws, config.token);
+		return ws;
+	}
+
+	async refreshAuthToken(ws: UniversalWebSocket): Promise<boolean> {
+		const context = this.#webSocketTokens.get(ws);
+		if (!context?.refresh) return false;
+		await context.refresh;
+		return true;
+	}
+
+	#watchWebSocketAuth(ws: UniversalWebSocket, token?: string): void {
+		const tokenProvider = this.#tokenProvider;
+		if (!tokenProvider || !token) return;
+		const context: { refresh?: Promise<string> } = {};
+		this.#webSocketTokens.set(ws, context);
+		ws.addEventListener(
+			"close",
+			(event: { code?: number; reason?: string }) => {
+				if (event.code !== 1008 || !event.reason) return;
+				const separator = event.reason.indexOf(".");
+				if (separator < 0) return;
+				const code = event.reason
+					.slice(separator + 1)
+					.split(/[\s:#]/, 1)[0];
+				if (isInvalidToken(event.reason.slice(0, separator), code)) {
+					context.refresh = tokenProvider
+						.refreshIfCurrent(token)
+						.catch((error) => {
+							logger().warn(
+								"failed to renew authentication token",
+							);
+							throw error;
+						});
+					// Raw websockets have no built-in reconnection; preempt unhandled rejection.
+					context.refresh.catch(() => {});
+				}
+			},
+		);
 	}
 
 	async buildGatewayUrl(
@@ -353,7 +477,12 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		options: GatewayRequestOptions = {},
 	): Promise<string> {
 		await this.#metadataPromise;
-		return this.#buildGatewayUrlForTarget(target, "", options);
+		return this.#buildGatewayUrlForTarget(
+			await this.#authorizedConfig(),
+			target,
+			"",
+			options,
+		);
 	}
 
 	async proxyRequest(
@@ -361,14 +490,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		actorRequest: Request,
 		actorId: string,
 	): Promise<Response> {
-		await this.#metadataPromise;
-
-		const gatewayUrl = this.#buildGatewayUrlForTarget(
-			{ directId: actorId },
-			requestPath(actorRequest),
-		);
-
-		return sendHttpRequestToGateway(this.#config, gatewayUrl, actorRequest);
+		return this.sendRequest({ directId: actorId }, actorRequest);
 	}
 
 	async proxyWebSocket(
@@ -379,11 +501,12 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		params: unknown,
 	): Promise<Response> {
 		await this.#metadataPromise;
+		const config = await this.#authorizedConfig();
 
-		const upgradeWebSocket = this.#config.getUpgradeWebSocket?.();
+		const upgradeWebSocket = config.getUpgradeWebSocket?.();
 		invariant(upgradeWebSocket, "missing getUpgradeWebSocket");
 
-		const endpoint = getEndpoint(this.#config);
+		const endpoint = getEndpoint(config);
 		const guardUrl = combineUrlPath(endpoint, path);
 		const wsGuardUrl = guardUrl.replace("http://", "ws://");
 
@@ -396,7 +519,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 
 		// Build protocols
 		const protocols = buildWebSocketProtocols(
-			this.#config,
+			config,
 			encoding,
 			params,
 			undefined,
@@ -419,11 +542,12 @@ export class RemoteEngineControlClient implements EngineControlClient {
 	}
 
 	#buildGatewayUrlForTarget(
+		config: ClientConfig,
 		target: GatewayTarget,
 		path: string,
 		options: GatewayRequestOptions = {},
 	): string {
-		const endpoint = getEndpoint(this.#config);
+		const endpoint = getEndpoint(config);
 
 		if (
 			shouldSkipReadyWait(options) &&
@@ -437,7 +561,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 			return buildActorGatewayUrl(
 				endpoint,
 				target.directId,
-				this.#config.token,
+				config.token,
 				path,
 			);
 		}
@@ -446,7 +570,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 			return buildActorGatewayUrl(
 				endpoint,
 				target.getForId.actorId,
-				this.#config.token,
+				config.token,
 				path,
 			);
 		}
@@ -454,15 +578,14 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		if ("getForKey" in target || "getOrCreateForKey" in target) {
 			return buildActorQueryGatewayUrl(
 				endpoint,
-				this.#config.namespace,
+				config.namespace,
 				target,
-				this.#config.token,
+				config.token,
 				path,
-				this.#config.maxInputSize,
+				config.maxInputSize,
 				undefined,
 				"getOrCreateForKey" in target
-					? (target.getOrCreateForKey.poolName ??
-							this.#config.poolName)
+					? (target.getOrCreateForKey.poolName ?? config.poolName)
 					: undefined,
 				options,
 			);

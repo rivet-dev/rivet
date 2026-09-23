@@ -7,6 +7,7 @@ import * as Rivet from "./api/index";
 import * as serializers from "./serialization/index";
 import urlJoin from "url-join";
 import * as errors from "./errors/index";
+import { AuthTokens } from "./api/resources/authTokens/client/Client";
 import { Datacenters } from "./api/resources/datacenters/client/Client";
 import { Envoys } from "./api/resources/envoys/client/Client";
 import { Health } from "./api/resources/health/client/Client";
@@ -36,6 +37,7 @@ export declare namespace RivetClient {
 }
 
 export class RivetClient {
+    protected _authTokens: AuthTokens | undefined;
     protected _datacenters: Datacenters | undefined;
     protected _envoys: Envoys | undefined;
     protected _health: Health | undefined;
@@ -44,6 +46,10 @@ export class RivetClient {
     protected _runners: Runners | undefined;
 
     constructor(protected readonly _options: RivetClient.Options) {}
+
+    public get authTokens(): AuthTokens {
+        return (this._authTokens ??= new AuthTokens(this._options));
+    }
 
     public get datacenters(): Datacenters {
         return (this._datacenters ??= new Datacenters(this._options));

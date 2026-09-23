@@ -6,18 +6,7 @@ use futures_util::future::join_all;
 
 static TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-/// Reproduces the staging-side `acl_manifest_upsert failed: proposal failed`.
-///
-/// `acl_manifest_upsert` fans N parallel `epoxy_propose` calls with `mutable=true` on the same
-/// by-name keys; the bytes differ between proposers because each one mints a fresh
-/// `Id::new_v1()` for the same rule/policy/role name. For idempotent semantics every caller
-/// should observe `Committed` (last-writer-wins), but `propose::result_for_committed_value`
-/// returns `ConsensusFailed{ExpectedValueDoesNotMatch}` whenever a concurrent proposer
-/// committed a different value first.
-///
-/// This test isolates that behavior at the epoxy layer: N concurrent `set_mutable` calls on
-/// the same key with distinct values. Expectation under idempotent mutable semantics: every
-/// call resolves to `Committed`. Current behavior: at least one returns `ConsensusFailed`.
+/// Concurrent mutable proposals with different values should all report `Committed`.
 #[tokio::test(flavor = "multi_thread")]
 async fn concurrent_mutable_proposals_same_key_different_values() {
 	let _guard = TEST_LOCK.lock().await;
@@ -25,7 +14,7 @@ async fn concurrent_mutable_proposals_same_key_different_values() {
 	let replica_id = test_ctx.leader_id;
 	let ctx = test_ctx.get_ctx(replica_id);
 
-	let key = b"acl-manifest-repro-by-name-key";
+	let key = b"concurrent-mutable-proposals-key";
 	let n: usize = 10;
 
 	tracing::info!(

@@ -252,6 +252,13 @@ impl Root {
 	}
 
 	pub fn validate_and_set_defaults(&mut self) -> Result<()> {
+		let auth = self
+			.auth
+			.as_ref()
+			.context("Authentication configuration is required. Configure auth.admin_token.")?;
+		let desired_issuer = auth::derive_issuer(self)?;
+		auth.validate(&desired_issuer)?;
+
 		// When UDB runs on Postgres without an explicit NATS config, inherit the UPS NATS config if
 		// one is set. The presence of NATS is what selects UDB multi-node mode, so this lets a
 		// single `pubsub: nats` config drive both UPS and UDB across nodes.

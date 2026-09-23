@@ -128,6 +128,14 @@ impl Config {
 		self.0.protocols.read().clone()
 	}
 
+	pub fn auth_required(&self) -> Result<&config::Auth> {
+		self.0
+			.config
+			.auth
+			.as_ref()
+			.context("authentication is not configured")
+	}
+
 	pub fn set_protocols(&self, protocol: RuntimeProtocols) {
 		*self.0.protocols.write() = Arc::new(protocol);
 	}

@@ -8,6 +8,7 @@ import (
 	http "net/http"
 	url "net/url"
 	sdk "sdk"
+	authtokens "sdk/authtokens"
 	core "sdk/core"
 	datacenters "sdk/datacenters"
 	envoys "sdk/envoys"
@@ -22,6 +23,7 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
+	AuthTokens  *authtokens.Client
 	Datacenters *datacenters.Client
 	Envoys      *envoys.Client
 	Health      *health.Client
@@ -39,6 +41,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 		baseURL:     options.BaseURL,
 		caller:      core.NewCaller(options.HTTPClient),
 		header:      options.ToHeader(),
+		AuthTokens:  authtokens.NewClient(opts...),
 		Datacenters: datacenters.NewClient(opts...),
 		Envoys:      envoys.NewClient(opts...),
 		Health:      health.NewClient(opts...),

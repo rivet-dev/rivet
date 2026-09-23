@@ -1,0 +1,5 @@
+{
+  "code": "invalid_token",
+  "group": "auth",
+  "message": "Authentication token is invalid."
+}

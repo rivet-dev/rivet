@@ -143,15 +143,19 @@ fn refresh_metadata_invalidates_protocol_cache_before_v2_dispatch() {
 							headers: None,
 							request_lifespan: 30,
 							max_concurrent_actors: Some(10),
-							drain_grace_period: None,
-							slots_per_runner: 1,
+							drain_grace_period: Some(1),
+							slots_per_runner: Some(1),
 							min_runners: Some(0),
-							max_runners: 0,
+							max_runners: Some(0),
 							runners_margin: Some(0),
 							metadata_poll_interval: None,
+							drain_on_version_upgrade: None,
+							actor_eviction_delay: None,
+							actor_eviction_period: None,
+							actor_eviction_rate: None,
 						},
 					metadata: None,
-					drain_on_version_upgrade: true,
+					drain_on_version_upgrade: Some(true),
 				},
 			);
 
@@ -271,15 +275,19 @@ fn refresh_metadata_surfaces_invalid_envoy_protocol_version_in_error_metadata() 
 					headers: None,
 					request_lifespan: 30,
 					max_concurrent_actors: Some(10),
-					drain_grace_period: None,
-					slots_per_runner: 1,
+					drain_grace_period: Some(1),
+					slots_per_runner: Some(1),
 					min_runners: Some(0),
-					max_runners: 0,
+					max_runners: Some(0),
 					runners_margin: Some(0),
 					metadata_poll_interval: None,
+					drain_on_version_upgrade: None,
+					actor_eviction_delay: None,
+					actor_eviction_period: None,
+					actor_eviction_rate: None,
 				},
 				metadata: None,
-				drain_on_version_upgrade: true,
+				drain_on_version_upgrade: Some(true),
 			},
 		);
 
@@ -306,6 +314,7 @@ fn refresh_metadata_surfaces_invalid_envoy_protocol_version_in_error_metadata() 
 		)
 		.await
 		.expect("failed to build refresh request")
+		.bearer_auth(api::TEST_ADMIN_TOKEN)
 		.send()
 		.await
 		.expect("failed to send refresh request");

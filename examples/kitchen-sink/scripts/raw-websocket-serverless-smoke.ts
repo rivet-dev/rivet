@@ -18,7 +18,7 @@ const ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 const SERVERLESS_URL = process.env.RIVET_SERVERLESS_URL;
 const NAMESPACE =
 	process.env.SMOKE_NAMESPACE ?? process.env.RIVET_NAMESPACE ?? "default";
-const TOKEN = process.env.SMOKE_TOKEN ?? process.env.RIVET_TOKEN ?? "dev";
+const TOKEN = process.env.SMOKE_TOKEN ?? process.env.RIVET_TOKEN ?? "default";
 const POOL_NAME = process.env.SMOKE_POOL ?? process.env.RIVET_POOL ?? "k8s";
 const KEY = process.env.SMOKE_KEY ?? `raw-ws-serverless-smoke-${Date.now()}`;
 const DURATION_MS = Number(process.env.SMOKE_DURATION_MS ?? "120000");

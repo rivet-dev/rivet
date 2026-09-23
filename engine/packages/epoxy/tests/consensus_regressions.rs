@@ -5,11 +5,11 @@ use common::{
 	THREE_REPLICAS, TestCtx,
 	utils::{read_accepted_value, read_v2_value, set_if_absent, write_ballot},
 };
-use epoxy::protocol::{
+use epoxy_protocol::PROTOCOL_VERSION;
+use epoxy_protocol::protocol::{
 	self, AcceptRequest, AcceptResponse, CommitRequest, CommitResponse, PrepareRequest,
 	PrepareResponse, Request, RequestKind, ResponseKind,
 };
-use epoxy_protocol::PROTOCOL_VERSION;
 
 static TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 

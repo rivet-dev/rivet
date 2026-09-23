@@ -636,6 +636,8 @@ async function startEngine(args: Args, runDir: string): Promise<LocalEngine> {
 	);
 	const env: NodeJS.ProcessEnv = {
 		...process.env,
+		RIVET__AUTH__ADMIN_TOKEN:
+			process.env.RIVET__AUTH__ADMIN_TOKEN ?? "default",
 		RIVET__GUARD__HOST: guardHost,
 		RIVET__GUARD__PORT: guardPort.toString(),
 		RIVET__API_PEER__HOST: guardHost,
@@ -688,7 +690,7 @@ async function startKitchenSinkServer(
 		...process.env,
 		PORT: serverPort.toString(),
 		RIVET_ENDPOINT: args.endpoint,
-		RIVET_TOKEN: process.env.RIVET_TOKEN ?? "dev",
+		RIVET_TOKEN: process.env.RIVET_TOKEN ?? "default",
 		RIVET_NAMESPACE: process.env.RIVET_NAMESPACE ?? "default",
 		RIVET_POOL: process.env.RIVET_POOL ?? "k8s",
 		RIVET_SERVERLESS_URL: serverlessUrl,
@@ -765,7 +767,7 @@ async function configureServerlessRunner(
 ): Promise<void> {
 	const base = args.endpoint.replace(/\/$/, "");
 	const namespace = process.env.RIVET_NAMESPACE ?? "default";
-	const token = process.env.RIVET_TOKEN ?? "dev";
+	const token = process.env.RIVET_TOKEN ?? "default";
 	const poolName = process.env.RIVET_POOL ?? "k8s";
 	const datacentersResponse = await fetch(
 		`${base}/datacenters?namespace=${namespace}`,
@@ -1100,7 +1102,7 @@ async function forceActorSleepViaApi(
 	actorId: string,
 ): Promise<unknown> {
 	const namespace = process.env.RIVET_NAMESPACE ?? "default";
-	const token = process.env.RIVET_TOKEN ?? "dev";
+	const token = process.env.RIVET_TOKEN ?? "default";
 	const response = await fetch(
 		`${args.endpoint.replace(/\/$/, "")}/actors/${encodeURIComponent(actorId)}/sleep?namespace=${encodeURIComponent(namespace)}`,
 		{
@@ -1968,7 +1970,7 @@ async function main(): Promise<void> {
 		const client = createClient<typeof registry>({
 			endpoint: args.endpoint,
 			namespace: process.env.RIVET_NAMESPACE ?? "default",
-			token: process.env.RIVET_TOKEN ?? "dev",
+			token: process.env.RIVET_TOKEN ?? "default",
 			poolName: process.env.RIVET_POOL ?? "k8s",
 		});
 

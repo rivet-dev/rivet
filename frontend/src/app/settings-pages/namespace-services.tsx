@@ -122,7 +122,10 @@ function ServicesList() {
 	// fixed URL to hand out.
 	const rivetRunUrl =
 		features.compute && features.services
-			? getRivetRunUrl(dataProvider.engineNamespace, MANAGED_SERVICES_POOL)
+			? getRivetRunUrl(
+					dataProvider.engineNamespace,
+					MANAGED_SERVICES_POOL,
+				)
 			: null;
 	// Probed per service rather than read off the namespace build list: that
 	// list is paginated, so a service registered past the first page would read

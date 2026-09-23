@@ -28,6 +28,9 @@
       "additionalProperties": false
     }
   ],
+  "required": [
+    "auth"
+  ],
   "properties": {
     "api_peer": {
       "default": null,
@@ -41,15 +44,7 @@
       ]
     },
     "auth": {
-      "default": null,
-      "anyOf": [
-        {
-          "$ref": "#/definitions/Auth"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      "$ref": "#/definitions/Auth"
     },
     "cache": {
       "default": null,
@@ -241,6 +236,29 @@
       "properties": {
         "admin_token": {
           "$ref": "#/definitions/Secret<String>"
+        },
+        "jwt": {
+          "description": "Short-lived, namespace-scoped JWT authentication. Enabled by default.",
+          "default": {
+            "accepted_issuers": [],
+            "audience": null,
+            "default_duration": null,
+            "enabled": null,
+            "issuance_enabled": null,
+            "issuer_generation": null,
+            "key_max_signing_lifetime": null,
+            "key_publish_lead": null,
+            "key_rotation_interval": null,
+            "max_duration": null,
+            "unknown_kid_refresh_cooldown": null,
+            "verifier_cache_ttl": null,
+            "verifier_max_stale": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Jwt"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -898,6 +916,119 @@
         },
         "tls": {
           "$ref": "#/definitions/Tls"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Jwt": {
+      "type": "object",
+      "properties": {
+        "accepted_issuers": {
+          "description": "Previous Rivet issuers temporarily authorized during a migration.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "audience": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default_duration": {
+          "description": "Default access-token lifetime, in seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "enabled": {
+          "description": "Controls verification, issuance, and key maintenance. Defaults to true.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "issuance_enabled": {
+          "description": "Pauses only new token minting. Defaults to true while JWT is enabled.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "issuer_generation": {
+          "description": "Monotonic topology fence. Increment when changing the derived issuer or signing leader.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "key_max_signing_lifetime": {
+          "description": "Fail-closed maximum signing lifetime, in seconds (fourteen days by default). Normal rotation is still at day seven; this deadline only prevents A from signing forever if rotation stalls.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "key_publish_lead": {
+          "description": "Time to publish a pending public key before activation, in seconds (ten minutes by default). It provides verifier propagation time and does not extend the active key's lifetime.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "key_rotation_interval": {
+          "description": "Normal active-key age at rotation, in seconds (seven days by default).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_duration": {
+          "description": "Maximum access-token lifetime, in seconds. V1 is capped at one day.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "unknown_kid_refresh_cooldown": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "verifier_cache_ttl": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "verifier_max_stale": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false

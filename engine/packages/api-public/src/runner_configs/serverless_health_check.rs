@@ -1,3 +1,4 @@
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 use std::collections::HashMap;
 
 use anyhow::Result;
@@ -70,10 +71,16 @@ pub async fn serverless_health_check(
 #[tracing::instrument(level = "debug", skip_all)]
 async fn serverless_health_check_inner(
 	ctx: ApiCtx,
-	_query: ServerlessHealthCheckQuery,
+	query: ServerlessHealthCheckQuery,
 	body: ServerlessHealthCheckRequest,
 ) -> Result<ServerlessHealthCheckResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Name(query.namespace.clone()),
+		ResourceKind::RunnerConfig,
+		TargetScope::Any,
+		OperationKind::Create,
+	)
+	.await?;
 
 	let ServerlessHealthCheckRequest { url, headers } = body;
 

@@ -1,11 +1,13 @@
 use rivet_config::{
 	Config, DynamicConfigUpdate,
-	config::{Root, Sqlite},
+	config::{Auth, Root, Sqlite},
+	secret::Secret,
 };
 
 fn config_with_pull_limits() -> Config {
 	Config::from_root(
 		serde_json::from_value::<Root>(serde_json::json!({
+			"auth": { "admin_token": "default" },
 			"runtime": {
 				"worker_poll_interval_ms": 8000,
 				"worker_max_deduped_workflows_per_pull": 100,
@@ -98,6 +100,10 @@ fn pull_limits_reject_zero_without_publishing() {
 
 fn config_with_admission_percent(percent: f64) -> Config {
 	Config::from_root(Root {
+		auth: Some(Auth {
+			admin_token: Secret::new("default".to_owned()),
+			jwt: Default::default(),
+		}),
 		sqlite: Some(Sqlite {
 			compaction_admission_percent: Some(percent),
 			..Sqlite::default()
@@ -213,6 +219,7 @@ fn an_update_message_round_trips_as_json() {
 fn config_with_max_concurrent_foo() -> Config {
 	Config::from_root(
 		serde_json::from_value::<Root>(serde_json::json!({
+			"auth": { "admin_token": "default" },
 			"runtime": { "worker_max_concurrent_workflows": { "foo": 5 } },
 		}))
 		.expect("valid config"),
@@ -288,6 +295,7 @@ fn clearing_one_max_concurrent_workflow_reverts_only_that_name() {
 fn config_with_max_wake_keys_foo() -> Config {
 	Config::from_root(
 		serde_json::from_value::<Root>(serde_json::json!({
+			"auth": { "admin_token": "default" },
 			"runtime": { "worker_max_wake_keys_per_workflow_name_per_pull": { "foo": 200 } },
 		}))
 		.expect("valid config"),

@@ -44,6 +44,7 @@ vbare.workspace = true
 
 [dev-dependencies]
 gas.workspace = true
+rivet-build-meta.workspace = true
 rivet-runtime.workspace = true
 rivet-test-deps.workspace = true
 test-snapshot-gen.workspace = true

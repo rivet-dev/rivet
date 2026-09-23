@@ -229,6 +229,7 @@ export async function sendHttpRequest<
 					metadata: responseData.metadata,
 					rayId: rayId ?? undefined,
 					actor: responseData.actor,
+					statusCode: response.status,
 				},
 			);
 		} catch (error) {

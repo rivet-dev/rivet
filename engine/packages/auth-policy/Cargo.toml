@@ -1,0 +1,13 @@
+[package]
+name = "rivet-auth-policy"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+rivet-error.workspace = true
+serde.workspace = true
+strum.workspace = true
+utoipa.workspace = true

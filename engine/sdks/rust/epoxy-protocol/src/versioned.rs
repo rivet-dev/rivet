@@ -1,23 +1,24 @@
 use anyhow::{Result, bail};
 use vbare::OwnedVersionedData;
 
-use crate::generated::{v2, v3};
+use crate::generated::{v2, v3, v4};
 
 pub enum CommittedValue {
 	V2(v2::CommittedValue),
 	V3(v3::CommittedValue),
+	V4(v4::CommittedValue),
 }
 
 impl OwnedVersionedData for CommittedValue {
-	type Latest = v3::CommittedValue;
+	type Latest = v4::CommittedValue;
 
-	fn wrap_latest(latest: v3::CommittedValue) -> Self {
-		CommittedValue::V3(latest)
+	fn wrap_latest(latest: v4::CommittedValue) -> Self {
+		CommittedValue::V4(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
-		if let CommittedValue::V3(data) = self {
+		if let CommittedValue::V4(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -28,6 +29,7 @@ impl OwnedVersionedData for CommittedValue {
 		match version {
 			2 => Ok(CommittedValue::V2(serde_bare::from_slice(payload)?)),
 			3 => Ok(CommittedValue::V3(serde_bare::from_slice(payload)?)),
+			4 => Ok(CommittedValue::V4(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -36,15 +38,16 @@ impl OwnedVersionedData for CommittedValue {
 		match self {
 			CommittedValue::V2(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			CommittedValue::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			CommittedValue::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Self::v2_to_v3]
+		vec![Ok, Self::v2_to_v3, Self::v3_to_v4]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v3_to_v2, Ok]
+		vec![Self::v4_to_v3, Self::v3_to_v2, Ok]
 	}
 }
 
@@ -69,18 +72,19 @@ impl CommittedValue {
 pub enum CachedValue {
 	V2(v2::CachedValue),
 	V3(v3::CachedValue),
+	V4(v4::CachedValue),
 }
 
 impl OwnedVersionedData for CachedValue {
-	type Latest = v3::CachedValue;
+	type Latest = v4::CachedValue;
 
-	fn wrap_latest(latest: v3::CachedValue) -> Self {
-		CachedValue::V3(latest)
+	fn wrap_latest(latest: v4::CachedValue) -> Self {
+		CachedValue::V4(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
-		if let CachedValue::V3(data) = self {
+		if let CachedValue::V4(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -91,6 +95,7 @@ impl OwnedVersionedData for CachedValue {
 		match version {
 			2 => Ok(CachedValue::V2(serde_bare::from_slice(payload)?)),
 			3 => Ok(CachedValue::V3(serde_bare::from_slice(payload)?)),
+			4 => Ok(CachedValue::V4(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -99,15 +104,16 @@ impl OwnedVersionedData for CachedValue {
 		match self {
 			CachedValue::V2(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			CachedValue::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			CachedValue::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Self::v2_to_v3]
+		vec![Ok, Self::v2_to_v3, Self::v3_to_v4]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v3_to_v2, Ok]
+		vec![Self::v4_to_v3, Self::v3_to_v2, Ok]
 	}
 }
 
@@ -133,18 +139,19 @@ impl CachedValue {
 pub enum AcceptedValue {
 	V2(v2::AcceptedValue),
 	V3(v3::AcceptedValue),
+	V4(v4::AcceptedValue),
 }
 
 impl OwnedVersionedData for AcceptedValue {
-	type Latest = v3::AcceptedValue;
+	type Latest = v4::AcceptedValue;
 
-	fn wrap_latest(latest: v3::AcceptedValue) -> Self {
-		AcceptedValue::V3(latest)
+	fn wrap_latest(latest: v4::AcceptedValue) -> Self {
+		AcceptedValue::V4(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
-		if let AcceptedValue::V3(data) = self {
+		if let AcceptedValue::V4(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -155,6 +162,7 @@ impl OwnedVersionedData for AcceptedValue {
 		match version {
 			2 => Ok(AcceptedValue::V2(serde_bare::from_slice(payload)?)),
 			3 => Ok(AcceptedValue::V3(serde_bare::from_slice(payload)?)),
+			4 => Ok(AcceptedValue::V4(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -163,15 +171,16 @@ impl OwnedVersionedData for AcceptedValue {
 		match self {
 			AcceptedValue::V2(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			AcceptedValue::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			AcceptedValue::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Self::v2_to_v3]
+		vec![Ok, Self::v2_to_v3, Self::v3_to_v4]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v3_to_v2, Ok]
+		vec![Self::v4_to_v3, Self::v3_to_v2, Ok]
 	}
 }
 
@@ -197,17 +206,18 @@ impl AcceptedValue {
 pub enum Request {
 	V2(v2::Request),
 	V3(v3::Request),
+	V4(v4::Request),
 }
 
 impl OwnedVersionedData for Request {
-	type Latest = v3::Request;
+	type Latest = v4::Request;
 
-	fn wrap_latest(latest: v3::Request) -> Self {
-		Request::V3(latest)
+	fn wrap_latest(latest: v4::Request) -> Self {
+		Request::V4(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
-		if let Request::V3(data) = self {
+		if let Request::V4(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -218,6 +228,7 @@ impl OwnedVersionedData for Request {
 		match version {
 			2 => Ok(Request::V2(serde_bare::from_slice(payload)?)),
 			3 => Ok(Request::V3(serde_bare::from_slice(payload)?)),
+			4 => Ok(Request::V4(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -226,15 +237,16 @@ impl OwnedVersionedData for Request {
 		match self {
 			Request::V2(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			Request::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			Request::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Self::v2_to_v3]
+		vec![Ok, Self::v2_to_v3, Self::v3_to_v4]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v3_to_v2, Ok]
+		vec![Self::v4_to_v3, Self::v3_to_v2, Ok]
 	}
 }
 
@@ -368,5 +380,106 @@ fn convert_caching_behavior_v2_to_v3(b: v2::CachingBehavior) -> v3::CachingBehav
 	match b {
 		v2::CachingBehavior::Optimistic => v3::CachingBehavior::Optimistic,
 		v2::CachingBehavior::SkipCache => v3::CachingBehavior::SkipCache,
+	}
+}
+
+impl CommittedValue {
+	fn v3_to_v4(self) -> Result<Self> {
+		if let Self::V3(x) = self {
+			Ok(Self::V4(crate::convert::committed_value_3_to_4(x)?))
+		} else {
+			bail!("unexpected version")
+		}
+	}
+	fn v4_to_v3(self) -> Result<Self> {
+		if let Self::V4(x) = self {
+			Ok(Self::V3(crate::convert::committed_value_4_to_3(x)?))
+		} else {
+			bail!("unexpected version")
+		}
+	}
+}
+
+impl CachedValue {
+	fn v3_to_v4(self) -> Result<Self> {
+		if let Self::V3(x) = self {
+			Ok(Self::V4(crate::convert::cached_value_3_to_4(x)?))
+		} else {
+			bail!("unexpected version")
+		}
+	}
+	fn v4_to_v3(self) -> Result<Self> {
+		if let Self::V4(x) = self {
+			Ok(Self::V3(crate::convert::cached_value_4_to_3(x)?))
+		} else {
+			bail!("unexpected version")
+		}
+	}
+}
+
+impl AcceptedValue {
+	fn v3_to_v4(self) -> Result<Self> {
+		if let Self::V3(x) = self {
+			Ok(Self::V4(crate::convert::accepted_value_3_to_4(x)?))
+		} else {
+			bail!("unexpected version")
+		}
+	}
+	fn v4_to_v3(self) -> Result<Self> {
+		if let Self::V4(x) = self {
+			Ok(Self::V3(crate::convert::accepted_value_4_to_3(x)?))
+		} else {
+			bail!("unexpected version")
+		}
+	}
+}
+
+impl Request {
+	fn v3_to_v4(self) -> Result<Self> {
+		if let Self::V3(x) = self {
+			Ok(Self::V4(crate::convert::request_3_to_4(x)?))
+		} else {
+			bail!("unexpected version")
+		}
+	}
+	fn v4_to_v3(self) -> Result<Self> {
+		if let Self::V4(x) = self {
+			Ok(Self::V3(crate::convert::request_4_to_3(x)?))
+		} else {
+			bail!("unexpected version")
+		}
+	}
+}
+
+pub fn decode_request(bytes: &[u8], version: u16) -> Result<v4::Request> {
+	match version {
+		3 => crate::convert::request_3_to_4(serde_bare::from_slice(bytes)?),
+		4 => Ok(serde_bare::from_slice(bytes)?),
+		_ => bail!("unsupported Epoxy request version"),
+	}
+}
+pub fn encode_request(request: v4::Request, version: u16) -> Result<Vec<u8>> {
+	match version {
+		3 => Ok(serde_bare::to_vec(&crate::convert::request_4_to_3(
+			request,
+		)?)?),
+		4 => Ok(serde_bare::to_vec(&request)?),
+		_ => bail!("unsupported Epoxy request version"),
+	}
+}
+pub fn decode_response(bytes: &[u8], version: u16) -> Result<v4::Response> {
+	match version {
+		3 => crate::convert::response_3_to_4(serde_bare::from_slice(bytes)?),
+		4 => Ok(serde_bare::from_slice(bytes)?),
+		_ => bail!("unsupported Epoxy response version"),
+	}
+}
+pub fn encode_response(response: v4::Response, version: u16) -> Result<Vec<u8>> {
+	match version {
+		3 => Ok(serde_bare::to_vec(&crate::convert::response_4_to_3(
+			response,
+		)?)?),
+		4 => Ok(serde_bare::to_vec(&response)?),
+		_ => bail!("unsupported Epoxy response version"),
 	}
 }

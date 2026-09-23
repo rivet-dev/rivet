@@ -17,7 +17,7 @@ const SERVERLESS_RUNTIME_PATH = join(
 	TEST_DIR,
 	"fixtures/engine-restart-serverless-runtime.ts",
 );
-const TOKEN = "dev";
+const TOKEN = "default";
 const HOST = "127.0.0.1";
 const ENGINE_START_TIMEOUT_MS = 90_000;
 const SERVERLESS_START_TIMEOUT_MS = 30_000;
@@ -135,6 +135,8 @@ class OwnedEngine {
 			{
 				env: {
 					...process.env,
+					RIVET__AUTH__ADMIN_TOKEN:
+						process.env.RIVET__AUTH__ADMIN_TOKEN ?? "default",
 					RIVET__GUARD__HOST: HOST,
 					RIVET__GUARD__PORT: this.#guardPort.toString(),
 					RIVET__API_PEER__HOST: HOST,

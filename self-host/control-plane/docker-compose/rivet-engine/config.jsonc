@@ -1,2 +1,5 @@
 {
+	"auth": {
+		"admin_token": "dev"
+	}
 }

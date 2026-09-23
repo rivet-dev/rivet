@@ -50,7 +50,11 @@ impl CustomServeTrait for ApiPublicService {
 
 /// Route requests to the api-public service
 #[tracing::instrument(skip_all)]
-pub async fn route_request(ctx: &StandaloneCtx, target: &str) -> Result<Option<RoutingOutput>> {
+pub async fn route_request(
+	ctx: &StandaloneCtx,
+	shared_state: &crate::shared_state::SharedState,
+	target: &str,
+) -> Result<Option<RoutingOutput>> {
 	// Check target
 	if target != "api-public" {
 		return Ok(None);
@@ -60,7 +64,11 @@ pub async fn route_request(ctx: &StandaloneCtx, target: &str) -> Result<Option<R
 	let router = phase_timeout(
 		Phase::new("route_api_public", &metrics::ROUTE_API_PUBLIC_DURATION),
 		ctx.config().guard().route_api_public_timeout(),
-		rivet_api_public::router(ctx.config().clone(), ctx.pools().clone()),
+		rivet_api_public::router(
+			ctx.config().clone(),
+			ctx.pools().clone(),
+			shared_state.jwt_key_ring_cache.clone(),
+		),
 		|elapsed, timeout| {
 			errors::RouteApiPublicTimeout {
 				elapsed_ms: elapsed.as_millis() as u64,

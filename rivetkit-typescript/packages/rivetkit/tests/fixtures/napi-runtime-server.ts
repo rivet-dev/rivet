@@ -152,7 +152,7 @@ const registry = setup({
 	},
 	endpoint,
 	namespace: process.env.RIVET_NAMESPACE ?? "default",
-	token: process.env.RIVET_TOKEN ?? "dev",
+	token: process.env.RIVET_TOKEN ?? "default",
 	envoy: {
 		poolName: process.env.RIVETKIT_TEST_POOL_NAME ?? "default",
 	},

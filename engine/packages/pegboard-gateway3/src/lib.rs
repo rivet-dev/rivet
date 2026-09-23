@@ -690,6 +690,12 @@ impl CustomServeTrait for PegboardGateway3 {
 		true
 	}
 
+	async fn terminate_websocket(&self, req_ctx: &RequestContext) -> Result<()> {
+		self.shared_state
+			.terminate_websocket(req_ctx.in_flight_request_id()?)
+			.await
+	}
+
 	async fn prepare_streaming_request(&self, req_ctx: &mut RequestContext) -> Result<()> {
 		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
 		let prepared = self.prepare_http_exchange(&ctx, req_ctx).await?;

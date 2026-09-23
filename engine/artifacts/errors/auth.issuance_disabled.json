@@ -1,0 +1,5 @@
+{
+  "code": "issuance_disabled",
+  "group": "auth",
+  "message": "JWT issuance is not enabled for this deployment."
+}

@@ -25,9 +25,12 @@ impl IntoResponse for ApiError {
 					("api", "not_found") => StatusCode::NOT_FOUND,
 					("api", "unauthorized") => StatusCode::UNAUTHORIZED,
 					("api", "forbidden") => StatusCode::FORBIDDEN,
-					("acl", "token_not_found") => StatusCode::UNAUTHORIZED,
-					("acl", "token_expired") => StatusCode::UNAUTHORIZED,
-					("acl", "insufficient_permissions") => StatusCode::FORBIDDEN,
+					("auth", "invalid_token" | "token_expired") => StatusCode::UNAUTHORIZED,
+					("auth", "insufficient_permissions") => StatusCode::FORBIDDEN,
+					(
+						"auth",
+						"verification_unavailable" | "issuance_unavailable" | "issuance_disabled",
+					) => StatusCode::SERVICE_UNAVAILABLE,
 					_ => StatusCode::BAD_REQUEST,
 				};
 

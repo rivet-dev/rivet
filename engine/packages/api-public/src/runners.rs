@@ -7,6 +7,7 @@ use rivet_api_builder::{
 };
 use rivet_api_types::{pagination::Pagination, runners::list::*, runners::list_names::*};
 use rivet_api_util::fanout_to_datacenters;
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 
 use crate::ctx::ApiCtx;
 
@@ -29,7 +30,17 @@ pub async fn list(Extension(ctx): Extension<ApiCtx>, Query(query): Query<ListQue
 }
 
 async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Name(query.namespace.clone()),
+		ResourceKind::Runner,
+		TargetScope::Any,
+		if query.runner_ids.is_none() && query.runner_id.is_empty() {
+			OperationKind::List
+		} else {
+			OperationKind::Read
+		},
+	)
+	.await?;
 
 	// Fanout to all datacenters
 	let mut runners =
@@ -85,7 +96,13 @@ pub async fn list_names(
 
 #[tracing::instrument(level = "debug", skip_all)]
 async fn list_names_inner(ctx: ApiCtx, query: ListNamesQuery) -> Result<ListNamesResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Name(query.namespace.clone()),
+		ResourceKind::Runner,
+		TargetScope::Any,
+		OperationKind::List,
+	)
+	.await?;
 
 	// Prepare peer query for local handler
 	let limit = query.limit.unwrap_or(100);

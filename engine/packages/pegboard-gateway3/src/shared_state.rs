@@ -1580,6 +1580,38 @@ impl InFlightRequestHandle {
 	}
 }
 
+impl SharedState {
+	pub async fn terminate_websocket(&self, request_id: protocol::RequestId) -> Result<()> {
+		let Some(request) = self.in_flight_requests.get_async(&request_id).await else {
+			return Ok(());
+		};
+		let handle = InFlightRequestHandle {
+			shared_state: self.clone(),
+			request_id,
+			send_lock: request.send_lock.clone(),
+			request_body_window: request.request_body_window.clone(),
+			upload_cancel_tx: request.upload_cancel_tx.clone(),
+		};
+		drop(request);
+
+		let close_result = handle
+			.send_message(
+				protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(
+					protocol::ToEnvoyWebSocketClose {
+						code: Some(u16::from(
+							tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Policy,
+						)),
+						reason: Some("auth.token_expired".to_owned()),
+					},
+				),
+				true,
+			)
+			.await;
+		handle.stop(RequestStopResult::ClientDisconnect).await;
+		close_result
+	}
+}
+
 fn attempt_bucket(attempt: u32) -> &'static str {
 	match attempt {
 		0 => "1",
@@ -1598,6 +1630,20 @@ mod tests {
 	use universalpubsub::driver::memory::MemoryDriver;
 
 	use super::*;
+
+	fn test_config(root: rivet_config::config::Root) -> rivet_config::Config {
+		rivet_config::Config::from_root_with_build_meta(
+			root,
+			rivet_config::BuildMeta::default(),
+			rivet_config::RuntimeProtocols {
+				ups: rivet_config::RuntimeProtocol::new(
+					rivet_config::RuntimeProtocolKind::Ups,
+					rivet_ups_protocol::PROTOCOL_VERSION,
+				),
+				..Default::default()
+			},
+		)
+	}
 
 	fn request_start() -> protocol::ToEnvoyTunnelMessageKind {
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(protocol::ToEnvoyRequestStart {
@@ -1657,9 +1703,18 @@ mod tests {
 
 	#[tokio::test]
 	async fn delivered_request_start_ack_timeout_is_indeterminate_and_sends_exact_abort() {
-		let ups = PubSub::new(Arc::new(MemoryDriver::new(
-			"gateway3-indeterminate-request-start".to_owned(),
-		)));
+		let mut root = rivet_config::config::Root::default();
+		root.pegboard = Some(rivet_config::config::Pegboard {
+			gateway_tunnel_ping_timeout_ms: Some(20),
+			..Default::default()
+		});
+		let config = test_config(root);
+		let ups = PubSub::new(
+			config.clone(),
+			Arc::new(MemoryDriver::new(
+				"gateway3-indeterminate-request-start".to_owned(),
+			)),
+		);
 		let receiver_subject = "test.envoy.receiver".to_owned();
 		let actor_id = Id::new_v1(2);
 		let expected_actor_id = actor_id.to_string();
@@ -1667,6 +1722,7 @@ mod tests {
 			.subscribe(&receiver_subject)
 			.await
 			.expect("subscribe test Envoy receiver");
+		ups.flush().await.expect("flush test Envoy subscription");
 		let observer = tokio::spawn(async move {
 			let NextOutput::Message(start) = receiver.next().await.expect("receive request start")
 			else {
@@ -1707,12 +1763,6 @@ mod tests {
 				.expect("acknowledge request cancellation");
 		});
 
-		let mut root = rivet_config::config::Root::default();
-		root.pegboard = Some(rivet_config::config::Pegboard {
-			gateway_tunnel_ping_timeout_ms: Some(20),
-			..Default::default()
-		});
-		let config = rivet_config::Config::from_root(root);
 		let shared_state = SharedState::new(&config, ups);
 		let request_id = [9, 8, 7, 6];
 		let InFlightRequestCtx { handle, .. } = shared_state
@@ -1800,6 +1850,100 @@ mod tests {
 			.await
 			.expect("join blocked request reservation")
 			.expect("reserve request byte after credit");
+	}
+
+	#[tokio::test]
+	async fn terminating_websocket_notifies_envoy_before_removing_request() {
+		let mut root = rivet_config::config::Root::default();
+		root.pegboard = Some(rivet_config::config::Pegboard {
+			gateway_tunnel_ping_timeout_ms: Some(1_000),
+			..Default::default()
+		});
+		let config = test_config(root);
+		let ups = PubSub::new(
+			config.clone(),
+			Arc::new(MemoryDriver::new("gateway3-terminate-websocket".to_owned())),
+		);
+		let receiver_subject = "test.envoy.websocket".to_owned();
+		let mut receiver = ups
+			.subscribe(&receiver_subject)
+			.await
+			.expect("subscribe test Envoy receiver");
+		ups.flush().await.expect("flush test Envoy subscription");
+		let shared_state = SharedState::new(&config, ups);
+		let request_id = [1, 2, 3, 4];
+		let observer_state = shared_state.clone();
+		let observer = tokio::spawn(async move {
+			let NextOutput::Message(message) = receiver.next().await.expect("receive close") else {
+				panic!("expected websocket close");
+			};
+			let decoded =
+				versioned::ToEnvoyConn::deserialize_with_embedded_version(&message.payload)
+					.expect("decode websocket close");
+			let protocol::ToEnvoyConn::ToEnvoyTunnelMessage(protocol::ToEnvoyTunnelMessage {
+				message_kind: protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(close),
+				..
+			}) = decoded
+			else {
+				panic!("expected websocket close");
+			};
+			assert_eq!(close.code, Some(1008));
+			assert_eq!(close.reason.as_deref(), Some("auth.token_expired"));
+			assert!(
+				observer_state
+					.in_flight_requests
+					.get_async(&request_id)
+					.await
+					.is_some(),
+				"request was removed before the close reached Envoy",
+			);
+			message
+				.reply(&[])
+				.await
+				.expect("acknowledge websocket close");
+		});
+
+		shared_state
+			.create_or_wake_in_flight_request(
+				Id::new_v1(1),
+				Id::new_v1(2),
+				"test-pool",
+				Some("test-key".to_owned()),
+				Some(1),
+				Some(7),
+				RequestProtocol::WebSocket,
+				receiver_subject,
+				request_id,
+				rivet_guard_core::metrics::PegboardGatewayLifecycle::new(
+					rivet_guard_core::metrics::PegboardGatewayVersion::V3,
+					Some(7),
+					rivet_guard_core::metrics::PegboardGatewayRequestKind::WebSocket,
+				),
+				false,
+			)
+			.await
+			.expect("create in-flight request");
+
+		let (terminate_result, observer_result) = tokio::join!(
+			tokio::time::timeout(
+				Duration::from_secs(2),
+				shared_state.terminate_websocket(request_id),
+			),
+			tokio::time::timeout(Duration::from_secs(2), observer),
+		);
+		terminate_result
+			.expect("termination should not hang")
+			.expect("terminate websocket");
+		observer_result
+			.expect("Envoy observer should not hang")
+			.expect("join Envoy observer");
+		assert!(
+			shared_state
+				.in_flight_requests
+				.get_async(&request_id)
+				.await
+				.is_none()
+		);
 	}
 
 	#[tokio::test]

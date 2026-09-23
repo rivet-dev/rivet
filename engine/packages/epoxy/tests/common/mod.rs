@@ -193,6 +193,9 @@ impl TestCtx {
 			metadata.guard_port,
 		)
 		.await?;
+		test_deps
+			.config
+			.set_protocols(rivet_build_meta::compiled_runtime_protocols());
 
 		// Create test context
 		let reg = epoxy::registry()?;

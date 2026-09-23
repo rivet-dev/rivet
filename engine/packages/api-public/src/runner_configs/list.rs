@@ -1,3 +1,4 @@
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 use std::collections::HashMap;
 
 use anyhow::Result;
@@ -56,7 +57,17 @@ pub async fn list(
 
 #[tracing::instrument(level = "debug", skip_all)]
 async fn list_inner(ctx: ApiCtx, path: ListPath, query: ListQuery) -> Result<ListResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Name(query.namespace.clone()),
+		ResourceKind::RunnerConfig,
+		TargetScope::Any,
+		if query.runner_names.is_none() && query.runner_name.is_empty() {
+			OperationKind::List
+		} else {
+			OperationKind::Read
+		},
+	)
+	.await?;
 
 	let runner_configs = fanout_to_datacenters::<
 		rivet_api_types::runner_configs::list::ListResponse,

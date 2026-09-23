@@ -3,6 +3,8 @@ use gas::prelude::*;
 use rivet_service_manager::{Service, ServiceKind};
 use std::time::Duration;
 
+pub const TEST_ADMIN_TOKEN: &str = "default";
+
 pub struct TestOpts {
 	pub datacenters: usize,
 	pub timeout_secs: u64,
@@ -17,7 +19,7 @@ impl TestOpts {
 			datacenters,
 			timeout_secs: 10,
 			pegboard_outbound: false,
-			auth_admin_token: None,
+			auth_admin_token: Some(TEST_ADMIN_TOKEN.to_owned()),
 			network_faults: false,
 		}
 	}
@@ -49,7 +51,7 @@ impl Default for TestOpts {
 			datacenters: 1,
 			timeout_secs: 10,
 			pegboard_outbound: false,
-			auth_admin_token: None,
+			auth_admin_token: Some(TEST_ADMIN_TOKEN.to_owned()),
 			network_faults: false,
 		}
 	}
@@ -126,15 +128,20 @@ impl TestCtx {
 		include_pegboard_outbound: bool,
 		auth_admin_token: Option<String>,
 	) -> Result<TestDatacenter> {
+		test_deps
+			.config()
+			.set_protocols(rivet_build_meta::compiled_runtime_protocols());
 		let config = if let Some(admin_token) = auth_admin_token {
 			let mut root = (**test_deps.config()).clone();
 			root.auth = Some(rivet_config::config::auth::Auth {
 				admin_token: rivet_config::secret::Secret::new(admin_token),
+				jwt: Default::default(),
 			});
 			rivet_config::Config::from_root(root)
 		} else {
 			test_deps.config().clone()
 		};
+		config.set_protocols(rivet_build_meta::compiled_runtime_protocols());
 		let pools = test_deps.pools().clone();
 
 		// Start the service manager with all required services

@@ -118,11 +118,8 @@ where
 		let tags = serde_json::Value::Object(self.tags);
 		let tags = if no_tags { None } else { Some(&tags) };
 
-		if self.unique {
-			tracing::debug!(?tags, ?input, "dispatching unique workflow");
-		} else {
-			tracing::debug!(?tags, ?input, "dispatching workflow");
-		}
+		// Workflow inputs and tags can carry credentials.
+		tracing::debug!(workflow_name, unique = self.unique, "dispatching workflow");
 
 		// Serialize input
 		let input_val = rivet_util::serde::json_to_raw_value!(&input)
@@ -144,9 +141,9 @@ where
 
 		if self.unique {
 			if workflow_id == actual_workflow_id {
-				tracing::debug!(?tags, "dispatched unique workflow");
+				tracing::debug!(workflow_name, "dispatched unique workflow");
 			} else {
-				tracing::debug!(?tags, "unique workflow already exists");
+				tracing::debug!(workflow_name, "unique workflow already exists");
 			}
 		} else {
 			tracing::debug!(?actual_workflow_id, "dispatched workflow");

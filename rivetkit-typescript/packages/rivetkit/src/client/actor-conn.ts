@@ -51,6 +51,7 @@ import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
 import * as errors from "./errors";
 import { isRetryableLifecycleReconnectSignal } from "./lifecycle-errors";
 import { logger } from "./log";
+import { isInvalidToken } from "./token-provider";
 import { outboundTelemetryHeaders } from "./outbound-telemetry";
 import {
 	createQueueSender,
@@ -183,6 +184,7 @@ export class ActorConnRaw {
 	#onOpenPromise?: ReturnType<typeof promiseWithResolvers<undefined>>;
 
 	#websocket?: UniversalWebSocket;
+	#authRetryAvailable = true;
 
 	#client: ClientRaw;
 	#driver: EngineControlClient;
@@ -531,6 +533,15 @@ export class ActorConnRaw {
 		if (error instanceof errors.ActorConnDisposed) {
 			return false;
 		}
+		if (
+			error instanceof errors.ActorError &&
+			isInvalidToken(error.group, error.code) &&
+			this.#driver.refreshAuthToken &&
+			this.#authRetryAvailable
+		) {
+			this.#authRetryAvailable = false;
+			return true;
+		}
 
 		if (
 			error instanceof errors.ActorError &&
@@ -679,6 +690,7 @@ export class ActorConnRaw {
 			});
 
 			// Update connection state (this also notifies handlers)
+			this.#authRetryAvailable = true;
 			this.#setConnStatus("connected");
 
 			// Resolve open promise
@@ -853,6 +865,7 @@ export class ActorConnRaw {
 
 	/** Called by the onclose event from drivers. */
 	async #handleOnClose(event: Event | CloseEventLike) {
+		const failedSocket = this.#websocket;
 		// We can't use `event instanceof CloseEvent` because it's not defined in NodeJS
 		const closeEvent = event as CloseEventLike;
 		const wasClean = closeEvent.wasClean;
@@ -882,6 +895,26 @@ export class ActorConnRaw {
 
 			if (parsed) {
 				const { group, code, rayId } = parsed;
+				if (
+					isInvalidToken(group, code) &&
+					closeEvent.code === 1008 &&
+					failedSocket
+				) {
+					try {
+						if (
+							!(await this.#driver.refreshAuthToken?.(
+								failedSocket,
+							))
+						) {
+							this.#authRetryAvailable = false;
+						}
+					} catch {
+						logger().warn("token renewal failed");
+						this.#authRetryAvailable = false;
+					}
+				} else if (isInvalidToken(group, code)) {
+					this.#authRetryAvailable = false;
+				}
 
 				if (this.#shouldReconnectForStaleActor(group, code)) {
 					this.#clearResolvedActorIdentity();
@@ -941,7 +974,7 @@ export class ActorConnRaw {
 			}
 
 			// Automatically reconnect if we were connected
-			if (wasConnected) {
+			if (wasConnected && this.#authRetryAvailable) {
 				logger().debug({
 					msg: "triggering reconnect",
 					connId: this.#connId,

@@ -1,0 +1,21 @@
+{
+	"name": "jwt-counter-example",
+	"version": "1.0.0",
+	"private": true,
+	"license": "MIT",
+	"type": "module",
+	"scripts": {
+		"start": "tsx src/server.ts --host 0.0.0.0",
+		"client": "tsx src/client.ts",
+		"smoke": "tsx tests/smoke.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"rivetkit": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"tsx": "^4.20.0",
+		"typescript": "^5.5.2"
+	}
+}

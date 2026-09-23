@@ -16,4 +16,5 @@ gasoline-runtime.workspace = true
 namespace.workspace = true
 pegboard.workspace = true
 rivet-config.workspace = true
+rivet-auth-jwt = { workspace = true, features = ["service"] }
 tracing.workspace = true

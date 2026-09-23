@@ -2,6 +2,7 @@ use anyhow::{Result, bail};
 use axum::{Json, extract::Extension, response::IntoResponse};
 use futures_util::StreamExt;
 use rivet_api_builder::ApiError;
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use utoipa::ToSchema;
@@ -58,7 +59,13 @@ pub async fn fanout(Extension(ctx): Extension<ApiCtx>) -> impl IntoResponse {
 #[tracing::instrument(level = "debug", skip_all)]
 async fn fanout_inner(ctx: ApiCtx) -> Result<FanoutResponse> {
 	// Require datacenter read permissions to access health status
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Any,
+		ResourceKind::Datacenter,
+		TargetScope::Any,
+		OperationKind::Read,
+	)
+	.await?;
 
 	let dcs = ctx
 		.config()

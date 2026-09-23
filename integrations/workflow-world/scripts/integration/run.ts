@@ -11,7 +11,7 @@ import { createClient, type Client } from "rivetkit/client";
 import { registry } from "../../src/actors.ts";
 import { RivetClientWorld } from "../../src/index.ts";
 
-const TOKEN = "dev";
+const TOKEN = "default";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const RUNTIME_PATH = join(ROOT, "src/runtime.ts");
 

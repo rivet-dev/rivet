@@ -1,5 +1,6 @@
 import z from "zod/v4";
 import { EncodingSchema } from "@/common/encoding";
+import { isLocalEngineEndpoint } from "@/common/engine";
 import type { RegistryConfig } from "@/registry/config";
 import type { GetUpgradeWebSocket } from "@/utils";
 import { tryParseEndpoint } from "@/utils/endpoint-parser";
@@ -10,6 +11,7 @@ import {
 	getRivetPool,
 	getRivetToken,
 } from "@/utils/env-vars";
+import type { GetToken } from "./token-provider";
 
 const DEFAULT_ENDPOINT = "http://localhost:6420";
 export const DEFAULT_MAX_QUERY_INPUT_SIZE = 4 * 1024;
@@ -53,6 +55,9 @@ export const ClientConfigSchemaBase = z.object({
 		.string()
 		.optional()
 		.transform((val) => val ?? getRivetToken()),
+
+	/** Issue and renew a client token on demand. Overrides the static token when provided. */
+	getToken: z.custom<GetToken>().optional(),
 
 	/** Namespace to connect to. */
 	namespace: z
@@ -131,7 +136,12 @@ export function transformClientConfig(
 		...config,
 		endpoint: parsedEndpoint?.endpoint,
 		namespace: parsedEndpoint?.namespace ?? config.namespace ?? "default",
-		token: parsedEndpoint?.token ?? config.token,
+		token:
+			parsedEndpoint?.token ??
+			config.token ??
+			(config.endpoint && isLocalEngineEndpoint(config.endpoint)
+				? "default"
+				: undefined),
 	};
 }
 
@@ -151,6 +161,7 @@ export function convertRegistryConfigToClientConfig(
 	return {
 		endpoint: config.endpoint,
 		token: config.token,
+		getToken: undefined,
 		namespace: config.namespace,
 		poolName: config.envoy.poolName,
 		headers: config.headers,

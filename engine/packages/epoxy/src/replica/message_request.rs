@@ -123,6 +123,25 @@ async fn message_request_inner(
 
 			protocol::ResponseKind::BeginLearningResponse
 		}
+		protocol::RequestKind::KvReadStateRequest(req) => {
+			// This also gates direct/local dispatch. An old writer in this datacenter may
+			// still omit coordinator acceptance, so its local state cannot certify freshness.
+			ensure!(
+				ctx.config().protocols().epoxy.version() >= 4,
+				"Epoxy read-state requires a completed v4 rollout in this datacenter"
+			);
+			let response = ctx
+				.udb()?
+				.txn("epoxy_read_state", |tx| {
+					let req = req.clone();
+					async move {
+						replica::messages::read_state::read_state(&tx, current_replica_id, req)
+							.await
+					}
+				})
+				.await?;
+			protocol::ResponseKind::KvReadStateResponse(response)
+		}
 		protocol::RequestKind::KvGetRequest(req) => {
 			let result = ctx
 				.op(ops::kv::get_local::Input {

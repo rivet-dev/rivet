@@ -149,7 +149,7 @@ impl ProxyState {
 	) -> Result<ResolveRouteOutput> {
 		tracing::debug!(
 			hostname = %req_ctx.hostname,
-			path = %req_ctx.path,
+			path = %req_ctx.path_for_logs(),
 			method = %req_ctx.method,
 			"Resolving route for request"
 		);
@@ -171,7 +171,7 @@ impl ProxyState {
 			let route_timeout = self.config.guard().route_timeout();
 			tracing::debug!(
 				hostname = %req_ctx.hostname,
-				path = %req_ctx.path,
+				path = %req_ctx.path_for_logs(),
 				cache_hit = false,
 				timeout_seconds = route_timeout.as_secs(),
 				"Cache miss, calling routing function"
@@ -201,7 +201,7 @@ impl ProxyState {
 			RoutingOutput::Route(result) => {
 				tracing::debug!(
 					hostname = %req_ctx.hostname,
-					path = %req_ctx.path,
+					path = %req_ctx.path_for_logs(),
 					targets_count = result.targets.len(),
 					"Received routing result"
 				);
@@ -210,22 +210,22 @@ impl ProxyState {
 				if let Some(target) = choose_random_target(&result.targets) {
 					tracing::debug!(
 						hostname = %req_ctx.hostname,
-						path = %req_ctx.path,
+						path = %req_ctx.path_for_logs(),
 						target_host = %target.host,
 						target_port = target.port,
-						target_path = %target.path,
+						target_path = %utils::redact_path_for_logs(&target.path),
 						"Selected target for request"
 					);
 					Ok(ResolveRouteOutput::Target(target.clone()))
 				} else {
 					tracing::warn!(
 						hostname = %req_ctx.hostname,
-						path = %req_ctx.path,
+						path = %req_ctx.path_for_logs(),
 						"No route targets available from result"
 					);
 					Err(errors::NoRouteTargets {
 						hostname: req_ctx.hostname.clone(),
-						path: req_ctx.path.clone(),
+						path: req_ctx.path_for_logs(),
 					}
 					.build())
 				}
@@ -233,7 +233,7 @@ impl ProxyState {
 			RoutingOutput::CustomServe(handler) => {
 				tracing::debug!(
 					hostname = %req_ctx.hostname,
-					path = %req_ctx.path,
+					path = %req_ctx.path_for_logs(),
 					"Routing returned custom serve handler"
 				);
 				Ok(ResolveRouteOutput::CustomServe(handler))
@@ -419,7 +419,7 @@ impl ProxyService {
 			.and_then(|h| h.to_str().ok())
 			.unwrap_or("unknown")
 			.to_string();
-		let uri_string = req.uri().to_string();
+		let uri_string = utils::redact_uri_for_logs(req.uri());
 		let path = req
 			.uri()
 			.path_and_query()
@@ -499,8 +499,12 @@ impl ProxyService {
 		let mock_req = mock_req_builder.body(())?;
 
 		// Process the request
+		let mut enforce_response_deadline = false;
 		let mut res = match self.handle_request(req, &mut req_ctx).await {
-			Ok(res) => res,
+			Ok(res) => {
+				enforce_response_deadline = true;
+				res
+			}
 			Err(err) => {
 				// Log the error
 				if err
@@ -718,13 +722,24 @@ impl ProxyService {
 			external_ray_id=%req_ctx.external_ray_id,
 			req_id=?req_ctx.req_id,
 			method = %req_ctx.method,
-			path = %req_ctx.path,
+			path = %req_ctx.path_for_logs(),
 			host = %req_ctx.host,
 			remote_addr = %req_ctx.remote_addr,
 			status = %status,
 			content_length = %content_length,
 			"Request completed"
 		);
+
+		// This is the common boundary for target and custom-handler responses. Before headers,
+		// `handle_request` returns a structured expiration error; after headers, the body wrapper
+		// terminates streaming responses and drops their upstream body.
+		if enforce_response_deadline && !is_websocket {
+			let (parts, body) = res.into_parts();
+			res = Response::from_parts(
+				parts,
+				body.with_authorization_deadline(req_ctx.authorization_deadline()),
+			);
+		}
 
 		Ok(res)
 	}
@@ -736,7 +751,12 @@ impl ProxyService {
 		req_ctx: &mut RequestContext,
 	) -> Result<Response<ResponseBody>> {
 		// Resolve target
-		let target_res = self.state.resolve_route(req_ctx, false).await;
+		let auth_state = req_ctx.auth_state().clone();
+		let target_res = utils::race_request_authorization_deadline(
+			&auth_state,
+			self.state.resolve_route(req_ctx, false),
+		)
+		.await;
 
 		let duration_secs = req_ctx.start_time.elapsed().as_secs_f64();
 		metrics::RESOLVE_ROUTE_DURATION.observe(duration_secs);
@@ -757,7 +777,7 @@ impl ProxyService {
 						.context("rate limit rejected request without rate limit config")?;
 					Err(errors::RateLimit {
 						method: req_ctx.method.to_string(),
-						path: req_ctx.path.clone(),
+						path: req_ctx.path_for_logs(),
 						ip: req_ctx.client_ip.to_string(),
 						requests: rate_limit.requests,
 						period_ms: rate_limit.period_ms,
@@ -771,7 +791,7 @@ impl ProxyService {
 						)?;
 					Err(errors::MaxInFlight {
 						method: req_ctx.method.to_string(),
-						path: req_ctx.path.clone(),
+						path: req_ctx.path_for_logs(),
 						ip: req_ctx.client_ip.to_string(),
 						max_in_flight,
 					}
@@ -785,11 +805,15 @@ impl ProxyService {
 		metrics::PROXY_REQUEST_TOTAL.inc();
 
 		let is_websocket = hyper_tungstenite::is_upgrade_request(&req);
-		let res = if is_websocket {
-			self.handle_websocket_upgrade(req, req_ctx, target).await
-		} else {
-			self.handle_http_request(req, req_ctx, target).await
+		let authorization_deadline = req_ctx.authorization_deadline();
+		let request = async {
+			if is_websocket {
+				self.handle_websocket_upgrade(req, req_ctx, target).await
+			} else {
+				self.handle_http_request(req, req_ctx, target).await
+			}
 		};
+		let res = utils::race_authorization_deadline(authorization_deadline, request).await;
 
 		let status = match &res {
 			Ok(resp) => resp.status().as_u16().to_string(),
@@ -1092,14 +1116,6 @@ impl ProxyService {
 		req_ctx: &mut RequestContext,
 		target: ResolveRouteOutput,
 	) -> Result<Response<ResponseBody>> {
-		// Log the headers for debugging
-		tracing::debug!("WebSocket upgrade request headers:");
-		for (name, value) in &req_ctx.headers {
-			if let Ok(val) = value.to_str() {
-				tracing::debug!("  {}: {}", name, val);
-			}
-		}
-
 		// Handle WebSocket upgrade properly with hyper_tungstenite
 		tracing::debug!(path=%req_ctx.path_for_logs(), "Upgrading client connection to WebSocket");
 		let (client_response, client_ws) = match hyper_tungstenite::upgrade(
@@ -1120,16 +1136,12 @@ impl ProxyService {
 			}
 		};
 
-		// Log response status and headers
+		// Do not log handshake headers: credentials can be transported in Authorization,
+		// x-rivet-token, or Sec-WebSocket-Protocol.
 		tracing::debug!(
 			"Client upgrade response status: {}",
 			client_response.status()
 		);
-		for (name, value) in client_response.headers() {
-			if let Ok(val) = value.to_str() {
-				tracing::debug!("Client upgrade response header - {}: {}", name, val);
-			}
-		}
 
 		// Clone needed values for the spawned task
 		let state = self.state.clone();
@@ -1148,6 +1160,7 @@ impl ProxyService {
 					async move {
 						let _active_guard = active_guard;
 						let req_ctx = &mut req_ctx;
+						let authorization_deadline = req_ctx.authorization_deadline();
 
 						let timeout_duration = state.config.guard().websocket_setup_timeout();
 						tracing::debug!(
@@ -1161,10 +1174,28 @@ impl ProxyService {
 
 						// First, wait for the client WebSocket to be ready (do this first to avoid race conditions)
 						tracing::debug!("Waiting for client WebSocket to be ready...");
-						let mut client_ws = match tokio::time::timeout(timeout_duration, client_ws)
-							.instrument(tracing::debug_span!("connect_client_ws"))
-							.await
-						{
+						let mut client_ws_future = Box::pin(client_ws);
+						let client_ws_result = tokio::select! {
+							biased;
+							_ = utils::wait_for_authorization_deadline(authorization_deadline) => {
+								// The HTTP upgrade may already have been sent. Finish acquiring the socket only
+								// long enough to deliver the canonical policy close frame.
+								if let Ok(Ok(mut websocket)) = tokio::time::timeout(
+									timeout_duration,
+									client_ws_future.as_mut(),
+								).await {
+									let error = rivet_auth::errors::Auth::TokenExpired.build();
+									let _ = websocket.close(Some(utils::err_to_close_frame(
+										error,
+										req_ctx.external_ray_id(),
+									))).await;
+								}
+								return;
+							}
+							result = tokio::time::timeout(timeout_duration, client_ws_future.as_mut())
+								.instrument(tracing::debug_span!("connect_client_ws")) => result,
+						};
+						let mut client_ws = match client_ws_result {
 							Ok(Ok(ws)) => {
 								tracing::debug!("Client WebSocket is ready");
 								ws
@@ -1255,17 +1286,26 @@ impl ProxyService {
 								return;
 							}
 
-							match tokio::time::timeout(
-								state.config.guard().websocket_connect_attempt_timeout(),
-								tokio_tungstenite::connect_async_with_config(
-									ws_request,
-									Some(websocket_config(state.config.guard())),
-									false,
-								),
-							)
-							.instrument(tracing::debug_span!("connect_upstream_ws"))
-							.await
-							{
+							let connect_result = tokio::select! {
+								biased;
+								_ = utils::wait_for_authorization_deadline(authorization_deadline) => {
+									let error = rivet_auth::errors::Auth::TokenExpired.build();
+									let _ = client_ws.close(Some(utils::err_to_close_frame(
+										error,
+										req_ctx.external_ray_id(),
+									))).await;
+									return;
+								}
+								result = tokio::time::timeout(
+									state.config.guard().websocket_connect_attempt_timeout(),
+									tokio_tungstenite::connect_async_with_config(
+										ws_request,
+										Some(websocket_config(state.config.guard())),
+										false,
+									),
+								).instrument(tracing::debug_span!("connect_upstream_ws")) => result,
+							};
+							match connect_result {
 								Ok(Ok((ws_stream, resp))) => {
 									tracing::debug!(
 										"Successfully connected to upstream WebSocket server"
@@ -1274,17 +1314,6 @@ impl ProxyService {
 										"Upstream connection response status: {:?}",
 										resp.status()
 									);
-
-									// Log headers for debugging
-									for (name, value) in resp.headers() {
-										if let Ok(val) = value.to_str() {
-											tracing::debug!(
-												"Upstream response header - {}: {}",
-												name,
-												val
-											);
-										}
-									}
 
 									upstream_ws = Some(ws_stream);
 									break;
@@ -1376,13 +1405,34 @@ impl ProxyService {
 								backoff
 							);
 
-							tokio::time::sleep(backoff)
-								.instrument(tracing::debug_span!("backoff_sleep"))
-								.await;
+							tokio::select! {
+								biased;
+								_ = utils::wait_for_authorization_deadline(authorization_deadline) => {
+									let error = rivet_auth::errors::Auth::TokenExpired.build();
+									let _ = client_ws.close(Some(utils::err_to_close_frame(
+										error,
+										req_ctx.external_ray_id(),
+									))).await;
+									return;
+								}
+								_ = tokio::time::sleep(backoff)
+									.instrument(tracing::debug_span!("backoff_sleep")) => {}
+							}
 
 							// Resolve target again, this time ignoring cache. This makes sure
 							// we always re-fetch the route on error
-							let new_target = state.resolve_route(req_ctx, true).await;
+							let new_target = tokio::select! {
+								biased;
+								_ = utils::wait_for_authorization_deadline(authorization_deadline) => {
+									let error = rivet_auth::errors::Auth::TokenExpired.build();
+									let _ = client_ws.close(Some(utils::err_to_close_frame(
+										error,
+										req_ctx.external_ray_id(),
+									))).await;
+									return;
+								}
+								result = state.resolve_route(req_ctx, true) => result,
+							};
 
 							match new_target {
 								Ok(ResolveRouteOutput::Target(new_target)) => {
@@ -1594,9 +1644,21 @@ impl ProxyService {
 							let mut stream = upstream_stream;
 							let mut sink = client_sink;
 							let mut shutdown_rx = shutdown_rx.clone();
+							let authorization_deadline = req_ctx.authorization_deadline();
 
 							loop {
 								tokio::select! {
+									biased;
+									_ = utils::wait_for_authorization_deadline(authorization_deadline) => {
+										let _ = shutdown_tx.send(true);
+										let error = rivet_auth::errors::Auth::TokenExpired.build();
+										let _ = sink.send(utils::to_hyper_close(Some(
+											utils::err_to_close_frame(error, req_ctx.external_ray_id()),
+										))).await;
+										let _ = sink.flush().await;
+										return;
+									}
+
 									// Check for shutdown signal
 									shutdown_result = shutdown_rx.changed() => {
 										match shutdown_result {
@@ -1747,155 +1809,108 @@ impl ProxyService {
 						let mut ws_hibernation_close = false;
 						let mut after_hibernation = false;
 						let mut attempts = 0u32;
+						let authorization_deadline = req_ctx.authorization_deadline();
+						let termination_handler = handler.clone();
+						let termination_req_ctx = req_ctx.clone();
 
 						let ws_handle = WebSocketHandle::new(client_ws)
 							.await
 							.context("failed initiating websocket handle")?;
 
-						loop {
-							match handler
-								.handle_websocket(req_ctx, ws_handle.clone(), after_hibernation)
-								.await
-							{
-								Ok(close_frame) => {
-									tracing::debug!("websocket handler complete, closing");
+						let session = async {
+							loop {
+								let handler_result = handler
+									.handle_websocket(req_ctx, ws_handle.clone(), after_hibernation)
+									.await;
+								match handler_result {
+									Ok(close_frame) => {
+										tracing::debug!("websocket handler complete, closing");
 
-									// Send graceful close. This may fail if client already sent
-									// close frame, which is normal.
-									tracing::debug!(?close_frame, "sending close frame to client");
-									match ws_handle.send(utils::to_hyper_close(close_frame)).await {
-										Ok(_) => {
-											tracing::debug!("close frame sent successfully");
-										}
-										Err(err) => {
-											tracing::debug!(
-												?err,
-												"failed to send close frame (websocket may be already closing)"
-											);
-										}
-									}
-
-									// Flush to ensure close frame is sent
-									tracing::debug!("flushing websocket");
-									match ws_handle.flush().await {
-										Ok(_) => {
-											tracing::debug!("websocket flushed successfully");
-										}
-										Err(err) => {
-											tracing::debug!(
-												?err,
-												"failed to flush websocket (websocket may be already closing)"
-											);
-										}
-									}
-
-									// Keep TCP connection open briefly to allow client to process close
-									tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
-
-									break;
-								}
-								Err(err) => {
-									tracing::debug!(?err, "websocket handler error");
-
-									// Denotes that the connection did not fail, but the downstream has closed
-									let ws_hibernate = utils::is_ws_hibernate(&err);
-
-									if ws_hibernate {
-										attempts = 0;
-									} else {
-										attempts += 1;
-									}
-
-									if ws_hibernate {
-										// This should be unreachable because as soon as the actor is
-										// reconnected to after hibernation the gateway will consume the close
-										// frame from the client ws stream
-										ensure!(
-											!ws_hibernation_close,
-											"should not be hibernating again after receiving a close frame during hibernation"
-										);
-
-										// After this function returns:
-										// - the route will be resolved again
-										// - the websocket will connect to the new downstream target
-										// - the gateway will continue reading messages from the client ws
-										//   (starting with the message that caused the hibernation to end)
-										let res = handler
-											.handle_websocket_hibernation(
-												req_ctx,
-												ws_handle.clone(),
-											)
-											.await?;
-
-										after_hibernation = true;
-
-										// Despite receiving a close frame from the client during hibernation
-										// we are going to reconnect to the actor so that it knows the
-										// connection has closed
-										if let HibernationResult::Close = res {
-											tracing::debug!("starting hibernating websocket close");
-
-											ws_hibernation_close = true;
-										}
-									} else if attempts > req_ctx.retry.max_attempts
-										|| !utils::is_retryable_ws_error(&err)
-									{
 										tracing::debug!(
-											?err,
-											?attempts,
-											max_attempts=?req_ctx.retry.max_attempts,
-											"websocket failed"
+											?close_frame,
+											"sending close frame to client"
 										);
+										match ws_handle
+											.send(utils::to_hyper_close(close_frame))
+											.await
+										{
+											Ok(_) => {
+												tracing::debug!("close frame sent successfully");
+											}
+											Err(err) => {
+												tracing::debug!(
+													?err,
+													"failed to send close frame (websocket may be already closing)"
+												);
+											}
+										}
 
-										// Close WebSocket with error
-										ws_handle
-											.send(utils::to_hyper_close(Some(
-												utils::err_to_close_frame(
-													err,
-													req_ctx.external_ray_id(),
-												),
-											)))
-											.await?;
+										tracing::debug!("flushing websocket");
+										match ws_handle.flush().await {
+											Ok(_) => {
+												tracing::debug!("websocket flushed successfully");
+											}
+											Err(err) => {
+												tracing::debug!(
+													?err,
+													"failed to flush websocket (websocket may be already closing)"
+												);
+											}
+										}
 
-										// Flush to ensure close frame is sent
-										ws_handle.flush().await?;
-
-										// Keep TCP connection open briefly to allow client to process close
 										tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
 
 										break;
-									} else {
-										let backoff = utils::calculate_backoff(
-											attempts,
-											req_ctx.retry.initial_interval,
-										);
-
-										tracing::debug!(
-											?backoff,
-											"WebSocket attempt {attempts} failed (service unavailable)"
-										);
-
-										// Apply backoff for retryable error
-										tokio::time::sleep(backoff).await;
 									}
+									Err(err) => {
+										tracing::debug!(?err, "websocket handler error");
 
-									// Retry route resolution
-									match state.resolve_route(req_ctx, true).await {
-										Ok(ResolveRouteOutput::CustomServe(new_handler)) => {
-											handler = new_handler;
-											continue;
+										let ws_hibernate = utils::is_ws_hibernate(&err);
+
+										if ws_hibernate {
+											attempts = 0;
+										} else {
+											attempts += 1;
 										}
-										Ok(ResolveRouteOutput::Target(_)) => {
-											let err = errors::WebSocketTargetChanged {
-												phase: "custom_serve_websocket_retry".to_owned(),
-												from_target_kind: "custom_serve".to_owned(),
-												to_target_kind: "target".to_owned(),
+
+										if ws_hibernate {
+											// This should be unreachable because as soon as the actor is
+											// reconnected to after hibernation the gateway will consume the close
+											// frame from the client ws stream
+											ensure!(
+												!ws_hibernation_close,
+												"should not be hibernating again after receiving a close frame during hibernation"
+											);
+
+											let res = handler
+												.handle_websocket_hibernation(
+													req_ctx,
+													ws_handle.clone(),
+												)
+												.await?;
+
+											after_hibernation = true;
+
+											// Despite receiving a close frame from the client during hibernation
+											// we are going to reconnect to the actor so that it knows the
+											// connection has closed
+											if let HibernationResult::Close = res {
+												tracing::debug!(
+													"starting hibernating websocket close"
+												);
+
+												ws_hibernation_close = true;
 											}
-											.build();
-											tracing::warn!(
+										} else if attempts > req_ctx.retry.max_attempts
+											|| !utils::is_retryable_ws_error(&err)
+										{
+											tracing::debug!(
 												?err,
-												"websocket target changed to target"
+												?attempts,
+												max_attempts=?req_ctx.retry.max_attempts,
+												"websocket failed"
 											);
+
 											ws_handle
 												.send(utils::to_hyper_close(Some(
 													utils::err_to_close_frame(
@@ -1905,42 +1920,106 @@ impl ProxyService {
 												)))
 												.await?;
 
-											// Flush to ensure close frame is sent
 											ws_handle.flush().await?;
 
-											// Keep TCP connection open briefly to allow client to process close
 											tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
 
 											break;
+										} else {
+											let backoff = utils::calculate_backoff(
+												attempts,
+												req_ctx.retry.initial_interval,
+											);
+
+											tracing::debug!(
+												?backoff,
+												"WebSocket attempt {attempts} failed (service unavailable)"
+											);
+
+											tokio::time::sleep(backoff).await;
 										}
-										Err(err) => {
-											tracing::warn!(
-												?err,
-												"closing websocket due to route resolution error"
-											);
-											ws_handle
-												.send(utils::to_hyper_close(Some(
-													utils::err_to_close_frame(
-														err,
-														req_ctx.external_ray_id(),
-													),
-												)))
-												.await?;
 
-											// Flush to ensure close frame is sent
-											ws_handle.flush().await?;
+										match state.resolve_route(req_ctx, true).await {
+											Ok(ResolveRouteOutput::CustomServe(new_handler)) => {
+												handler = new_handler;
+												continue;
+											}
+											Ok(ResolveRouteOutput::Target(_)) => {
+												let err = errors::WebSocketTargetChanged {
+													phase: "custom_serve_websocket_retry"
+														.to_owned(),
+													from_target_kind: "custom_serve".to_owned(),
+													to_target_kind: "target".to_owned(),
+												}
+												.build();
+												tracing::warn!(
+													?err,
+													"websocket target changed to target"
+												);
+												ws_handle
+													.send(utils::to_hyper_close(Some(
+														utils::err_to_close_frame(
+															err,
+															req_ctx.external_ray_id(),
+														),
+													)))
+													.await?;
 
-											// Keep TCP connection open briefly to allow client to process close
-											tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+												ws_handle.flush().await?;
 
-											break;
+												tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+
+												break;
+											}
+											Err(err) => {
+												tracing::warn!(
+													?err,
+													"closing websocket due to route resolution error"
+												);
+												ws_handle
+													.send(utils::to_hyper_close(Some(
+														utils::err_to_close_frame(
+															err,
+															req_ctx.external_ray_id(),
+														),
+													)))
+													.await?;
+
+												ws_handle.flush().await?;
+
+												tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+
+												break;
+											}
 										}
 									}
 								}
 							}
+							Ok::<(), anyhow::Error>(())
+						};
+
+						tokio::select! {
+							biased;
+							_ = utils::wait_for_authorization_deadline(authorization_deadline) => {
+								tokio::spawn(async move {
+									if let Err(error) = termination_handler
+										.terminate_websocket(&termination_req_ctx)
+										.await
+									{
+										tracing::warn!(?error, "failed to terminate expired downstream websocket");
+									}
+								});
+								let error = rivet_auth::errors::Auth::TokenExpired.build();
+								ws_handle.send(utils::to_hyper_close(Some(
+									utils::err_to_close_frame(error, req_ctx.external_ray_id()),
+								))).await?;
+								ws_handle.flush().await?;
+								tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+							}
+							result = session => result?,
 						}
 
-						Ok(())
+						Ok::<(), anyhow::Error>(())
 					}
 					.instrument(tracing::debug_span!("handle_ws_task_custom_serve")),
 				);
@@ -2015,6 +2094,8 @@ mod tests {
 	use rivet_util::Id;
 
 	fn test_state(guard: rivet_config::config::guard::Guard) -> ProxyState {
+		// Production installs a provider during pool startup; isolated ProxyState tests do not.
+		let _ = rustls::crypto::ring::default_provider().install_default();
 		let config = rivet_config::Config::from_root(rivet_config::config::Root {
 			guard: Some(guard),
 			..Default::default()

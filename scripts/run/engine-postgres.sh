@@ -38,6 +38,7 @@ fi
 cd "${REPO_ROOT}"
 
 RUST_BACKTRACE=full \
+RIVET__AUTH__ADMIN_TOKEN="${RIVET__AUTH__ADMIN_TOKEN:-default}" \
 RIVET__POSTGRES__URL=postgres://postgres:postgres@localhost:5432/postgres \
 RUST_LOG=debug \
 RUST_LOG_TARGET=1 \

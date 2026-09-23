@@ -96,7 +96,8 @@ where
 	I: OperationInput,
 	<I as OperationInput>::Operation: Operation<Input = I>,
 {
-	tracing::debug!(?input, "operation call");
+	// Operation payloads can carry credentials; log metadata only.
+	tracing::debug!(operation = I::Operation::NAME, "operation call");
 
 	// Record metrics
 	let _pending_guard = crate::metrics::OPERATION_PENDING
@@ -140,7 +141,11 @@ where
 
 	let res = res?;
 
-	tracing::debug!(?res, "operation response");
+	tracing::debug!(
+		operation = I::Operation::NAME,
+		succeeded = res.is_ok(),
+		"operation response"
+	);
 
 	res.map_err(Into::into)
 }

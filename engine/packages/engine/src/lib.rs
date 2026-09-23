@@ -28,6 +28,11 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		command: config::SubCommand,
 	},
+	/// Manage authentication state
+	Auth {
+		#[clap(subcommand)]
+		command: auth::SubCommand,
+	},
 	/// Manage tracing configuration
 	Tracing {
 		#[clap(subcommand)]
@@ -59,6 +64,7 @@ impl SubCommand {
 			SubCommand::Database { command } => command.execute(config).await,
 			SubCommand::Workflow { command } => command.execute(config).await,
 			SubCommand::Config { command } => command.execute(config).await,
+			SubCommand::Auth { command } => command.execute(config).await,
 			SubCommand::Tracing { command } => command.execute(config).await,
 			SubCommand::Profile { command } => command.execute(config).await,
 			SubCommand::Epoxy { command } => command.execute(config).await,

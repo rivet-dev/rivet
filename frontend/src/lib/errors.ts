@@ -13,15 +13,19 @@ export function isRivetApiError(
 	);
 }
 
-// Auth errors that should trigger the credentials modal:
-// - 403 with no/missing token (api.forbidden)
-// - 401 from the ACL system when a stale or invalid token was sent
-//   (acl.token_not_found, acl.token_expired)
 export function isAuthError(error: unknown): boolean {
 	if (!isRivetApiError(error)) return false;
-	if (error.statusCode === 403) return true;
-	if (error.statusCode !== 401) return false;
 	const body = error.body as { group?: unknown; code?: unknown } | undefined;
+	if (error.statusCode === 403) {
+		return body?.group === "api" && body.code === "forbidden";
+	}
+	if (error.statusCode !== 401) return false;
+	if (
+		body?.group === "auth" &&
+		(body.code === "invalid_token" || body.code === "token_expired")
+	) {
+		return true;
+	}
 	return (
 		body?.group === "acl" &&
 		(body.code === "token_not_found" || body.code === "token_expired")

@@ -5,7 +5,7 @@ const host = process.env.RIVETKIT_TEST_HOST ?? "127.0.0.1";
 const port = Number(process.env.RIVETKIT_TEST_PORT);
 const endpoint = process.env.RIVETKIT_TEST_ENDPOINT;
 const namespace = process.env.RIVET_NAMESPACE;
-const token = process.env.RIVET_TOKEN ?? "dev";
+const token = process.env.RIVET_TOKEN ?? "default";
 const poolName = process.env.RIVETKIT_TEST_POOL_NAME;
 const heartbeatMode = process.env.RIVETKIT_HEARTBEAT_MODE ?? "sqlite";
 

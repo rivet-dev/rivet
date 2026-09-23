@@ -16,6 +16,11 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "rivetkit/client";
 import type { registry } from "../src/index.ts";
 
+const LOCAL_ENGINE_TOKEN =
+	process.env.RIVET_TOKEN ??
+	process.env.RIVET__AUTH__ADMIN_TOKEN ??
+	"default";
+
 const DEFAULT_ENDPOINT = "http://127.0.0.1:6420";
 const DEFAULT_WAKE_DELAY_MS = 2000;
 const DEFAULT_POST_SETUP_WAIT_MS = 0;
@@ -1002,6 +1007,8 @@ async function startLocalEngine(args: Args): Promise<LocalEngine> {
 	const guardHost = engineEndpoint.hostname || "127.0.0.1";
 	const env: NodeJS.ProcessEnv = {
 		...process.env,
+		RIVET__AUTH__ADMIN_TOKEN:
+			process.env.RIVET__AUTH__ADMIN_TOKEN ?? "default",
 		RIVET__GUARD__HOST: guardHost,
 		RIVET__GUARD__PORT: guardPort.toString(),
 		RIVET__API_PEER__HOST: guardHost,
@@ -1090,7 +1097,7 @@ async function configureLocalRunner(endpoint: string): Promise<void> {
 	const datacentersResponse = await fetch(
 		`${base}/datacenters?namespace=default`,
 		{
-			headers: { Authorization: "Bearer dev" },
+			headers: { Authorization: `Bearer ${LOCAL_ENGINE_TOKEN}` },
 		},
 	);
 	if (!datacentersResponse.ok) {
@@ -1110,7 +1117,7 @@ async function configureLocalRunner(endpoint: string): Promise<void> {
 		{
 			method: "PUT",
 			headers: {
-				Authorization: "Bearer dev",
+				Authorization: `Bearer ${LOCAL_ENGINE_TOKEN}`,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
@@ -1137,7 +1144,7 @@ async function waitForEnvoy(endpoint: string): Promise<void> {
 		const response = await fetch(
 			`${base}/envoys?namespace=default&name=k8s`,
 			{
-				headers: { Authorization: "Bearer dev" },
+				headers: { Authorization: `Bearer ${LOCAL_ENGINE_TOKEN}` },
 			},
 		);
 		if (response.ok) {
@@ -1585,7 +1592,7 @@ async function main(): Promise<void> {
 
 	if (args.startLocalEnvoy) {
 		process.env.RIVET_ENDPOINT = args.endpoint;
-		process.env.RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
+		process.env.RIVET_TOKEN = process.env.RIVET_TOKEN ?? "default";
 		try {
 			engine = await startLocalEngine(args);
 			await configureLocalRunner(args.endpoint);
