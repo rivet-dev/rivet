@@ -8,7 +8,6 @@ use std::sync::{
 use anyhow::{Context, Result};
 use depot_client_types::is_head_fence_mismatch;
 pub use depot_client_types::{BindParam, ColumnValue, ExecResult, ExecuteResult, QueryResult};
-#[cfg(feature = "sqlite-local")]
 use parking_lot::Mutex;
 use rivet_envoy_client::protocol;
 use rivet_envoy_client::{
@@ -50,7 +49,7 @@ use crate::runtime::RuntimeSpawner;
 
 #[cfg(feature = "sqlite-local")]
 use depot_client::{
-	database::{NativeDatabaseHandle, open_database_from_transport},
+	database::{NativeDatabaseHandle, open_database_from_transport_with_startup},
 	vfs::{SqliteVfsMetrics, SqliteVfsMetricsSnapshot},
 	worker::{
 		SQLITE_WORKER_QUEUE_CAPACITY, SqliteWorkerCloseTimeoutError, SqliteWorkerClosingError,
@@ -64,6 +63,9 @@ use envoy_sqlite_transport::EnvoySqliteTransport;
 #[cfg(not(feature = "sqlite-local"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SqliteVfsMetricsSnapshot {
+	pub read_cache_misses: u64,
+	pub page_fetches: u64,
+	pub mutating_statements: u64,
 	pub request_build_ns: u64,
 	pub serialize_ns: u64,
 	pub transport_ns: u64,
@@ -98,6 +100,33 @@ struct ProfiledBackendResult<T> {
 }
 
 impl SqliteDb {
+	pub fn startup_report(&self) -> Option<JsonValue> {
+		self.startup_report.lock().clone()
+	}
+	pub(crate) fn finish_startup_report(
+		&self,
+		actor_id: &str,
+		generation: Option<u32>,
+		is_new: bool,
+		phases: JsonValue,
+	) {
+		let preload = self.startup.lock();
+		let metrics = self.metrics();
+		*self.startup_report.lock() = Some(serde_json::json!({
+			"actor_id": actor_id, "generation": generation, "is_new": is_new, "phases_ms": phases,
+			"page_limit": preload.as_ref().map(|p| p.page_limit),
+			"preload_pages": preload.as_ref().map(|p| p.pages.len()).unwrap_or(0),
+			"preload_bytes": preload.as_ref().map(|p| p.pages.iter().filter_map(|p| p.bytes.as_ref()).map(Vec::len).sum::<usize>()).unwrap_or(0),
+			"assembler_misses": preload.as_ref().map(|p| p.cache_misses),
+			"vfs_read_misses": metrics.map(|m| m.read_cache_misses),
+			"fallback_page_rpcs": metrics.map(|m| m.page_fetches),
+			"depot_commits": metrics.map(|m| m.commit_count),
+			"mutating_sql": metrics.map(|m| m.mutating_statements),
+		}));
+	}
+	pub fn set_startup(&self, startup: Option<protocol::ActorSqliteStartup>) {
+		*self.startup.lock() = startup;
+	}
 	#[cfg(feature = "sqlite-local")]
 	async fn exec_backend_profiled(&self, sql: String) -> ProfiledBackendResult<QueryResult> {
 		match self.backend {
@@ -225,6 +254,8 @@ impl SqliteDb {
 
 #[derive(Clone)]
 pub struct SqliteDb {
+	startup_report: Arc<Mutex<Option<JsonValue>>>,
+	startup: Arc<Mutex<Option<protocol::ActorSqliteStartup>>>,
 	handle: Option<EnvoyHandle>,
 	actor_id: Option<String>,
 	actor_key: Option<String>,
@@ -253,6 +284,8 @@ pub struct SqliteDb {
 impl Default for SqliteDb {
 	fn default() -> Self {
 		Self {
+			startup: Default::default(),
+			startup_report: Default::default(),
 			handle: None,
 			actor_id: None,
 			actor_key: None,
@@ -293,6 +326,8 @@ impl SqliteDb {
 		remote_sqlite: bool,
 	) -> Result<Self> {
 		Ok(Self {
+			startup: Default::default(),
+			startup_report: Default::default(),
 			handle: Some(handle),
 			actor_id: Some(actor_id.into()),
 			actor_key,
@@ -381,8 +416,9 @@ impl SqliteDb {
 						.context("open sqlite database requires a tokio runtime")?;
 					self.worker_fatal_reported.store(false, Ordering::Release);
 
+					let startup = self.startup.lock().clone();
 					let native_db = self.map_local_worker_result(
-						open_database_from_transport(
+						open_database_from_transport_with_startup(
 							Arc::new(EnvoySqliteTransport::new(config.handle.clone())),
 							config.actor_id.clone(),
 							config
@@ -390,6 +426,7 @@ impl SqliteDb {
 								.ok_or_else(|| sqlite_not_configured("generation"))?,
 							rt_handle,
 							vfs_metrics,
+							startup,
 						)
 						.await,
 					)?;

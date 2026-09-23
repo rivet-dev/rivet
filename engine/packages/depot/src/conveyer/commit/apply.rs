@@ -398,6 +398,16 @@ impl Db {
 		)
 		.await?;
 
+		crate::startup::remember(
+			self.sqlite_bucket_id(),
+			&self.database_id,
+			result.branch_id,
+			result.txid,
+			db_size_pages,
+			result.txid.checked_sub(1),
+			dirty_pages.iter().map(|p| (p.pgno, p.bytes.to_vec())),
+		)
+		.await;
 		publish::record_published_commit(self, &result, cache_was_warm, &node_id).await?;
 
 		self.publish_deltas_available_if_needed(result.deltas_available, result.branch_id)

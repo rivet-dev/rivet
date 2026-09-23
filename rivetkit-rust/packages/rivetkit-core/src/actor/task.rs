@@ -1174,6 +1174,7 @@ impl ActorTask {
 			"perf internal: initInternalSqliteSchemaMs"
 		);
 
+		let schema_ms = duration_ms_f64(schema_started_at.elapsed());
 		let load_state_started_at = Instant::now();
 		let load_state_result = self.load_persisted_startup().await;
 		let persisted = self.ctx.metrics().observe_startup_phase_result(
@@ -1182,6 +1183,7 @@ impl ActorTask {
 			load_state_started_at,
 			load_state_result,
 		)?;
+		let load_ms = duration_ms_f64(load_state_started_at.elapsed());
 		let is_new = !persisted.actor.has_initialized;
 		startup_timer.set_is_new(is_new);
 		tracing::debug!(
@@ -1233,6 +1235,7 @@ impl ActorTask {
 			core_init_result,
 		)?;
 
+		let core_ms = duration_ms_f64(core_init_started_at.elapsed());
 		self.transition_to(LifecycleState::Started);
 		self.ctx
 			.metrics()
@@ -1249,6 +1252,7 @@ impl ActorTask {
 		self.ctx
 			.metrics()
 			.set_startup_phase(StartupPhase::PostReady);
+		let callback_ms = duration_ms_f64(runtime_preamble_started_at.elapsed());
 		let post_ready_started_at = Instant::now();
 		let post_ready_result: Result<()> = async {
 			if is_new {
@@ -1274,6 +1278,15 @@ impl ActorTask {
 			post_ready_started_at,
 			post_ready_result,
 		)?;
+		self.ctx.sql().finish_startup_report(
+			&actor_id,
+			self.ctx.sleep_generation(),
+			is_new,
+			serde_json::json!({
+				"schema": schema_ms, "load": load_ms, "core": core_ms,
+				"callbacks": callback_ms, "post_ready": duration_ms_f64(post_ready_started_at.elapsed()),
+			}),
+		);
 		let startup_elapsed = startup_timer.finish_success();
 		tracing::debug!(
 			actor_id = %actor_id,

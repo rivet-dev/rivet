@@ -250,7 +250,8 @@ pub async fn init_conn(
 		let replay_result: Result<Vec<protocol::ActorCheckpoint>> = async {
 			let mut stop_checkpoints = Vec::new();
 			for cmd_wrapper in &mut missed_commands {
-				hibernating_requests::hydrate_command_wrapper(ctx, cmd_wrapper).await?;
+				hibernating_requests::hydrate_command_wrapper(ctx, conn.namespace_id, cmd_wrapper)
+					.await?;
 				if matches!(&cmd_wrapper.inner, protocol::Command::CommandStopActor(_)) {
 					stop_checkpoints.push(cmd_wrapper.checkpoint.clone());
 				}

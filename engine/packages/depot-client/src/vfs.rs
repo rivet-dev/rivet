@@ -301,6 +301,9 @@ pub enum CommitBufferError {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SqliteVfsMetricsSnapshot {
+	pub read_cache_misses: u64,
+	pub page_fetches: u64,
+	pub mutating_statements: u64,
 	pub request_build_ns: u64,
 	pub serialize_ns: u64,
 	pub transport_ns: u64,
@@ -621,6 +624,7 @@ pub struct VfsContext {
 	pub resolve_pages_total: AtomicU64,
 	pub resolve_pages_cache_hits: AtomicU64,
 	pub resolve_pages_fetches: AtomicU64,
+	pub startup_read_misses: AtomicU64,
 	pub pages_fetched_total: AtomicU64,
 	pub prefetch_pages_total: AtomicU64,
 	pub commit_total: AtomicU64,
@@ -1453,6 +1457,7 @@ impl VfsContext {
 			resolve_pages_total: AtomicU64::new(0),
 			resolve_pages_cache_hits: AtomicU64::new(0),
 			resolve_pages_fetches: AtomicU64::new(0),
+			startup_read_misses: AtomicU64::new(0),
 			pages_fetched_total: AtomicU64::new(0),
 			prefetch_pages_total: AtomicU64::new(0),
 			commit_total: AtomicU64::new(0),
@@ -1583,6 +1588,9 @@ impl VfsContext {
 		let state = self.state.read();
 
 		SqliteVfsMetricsSnapshot {
+			read_cache_misses: self.startup_read_misses.load(Ordering::Relaxed),
+			page_fetches: self.resolve_pages_fetches.load(Ordering::Relaxed),
+			mutating_statements: 0,
 			request_build_ns: self.commit_request_build_ns.load(Ordering::Relaxed),
 			serialize_ns: self.commit_serialize_ns.load(Ordering::Relaxed),
 			transport_ns: self.commit_transport_ns.load(Ordering::Relaxed),
@@ -1796,6 +1804,11 @@ impl VfsContext {
 			});
 			return Ok(resolved);
 		}
+		let committed_size = self.state.read().committed_db_size_pages;
+		self.startup_read_misses.fetch_add(
+			missing.iter().filter(|n| **n <= committed_size).count() as u64,
+			Relaxed,
+		);
 		self.resolve_pages_cache_hits
 			.fetch_add((seen.len() - missing.len()) as u64, Relaxed);
 		if let Some(metrics) = &self.metrics {

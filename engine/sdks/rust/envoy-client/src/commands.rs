@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use rivet_envoy_protocol as protocol;
 
-use crate::actor::create_actor;
+use crate::actor::create_actor_with_startup;
 use crate::connection::ws_send;
 use crate::envoy::EnvoyContext;
 use crate::stringify::stringify_command_wrapper;
@@ -51,13 +51,14 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 		match command_wrapper.inner {
 			protocol::Command::CommandStartActor(val) => {
 				let actor_name = val.config.name.clone();
-				let (handle, active_http_request_count) = create_actor(
+				let (handle, active_http_request_count) = create_actor_with_startup(
 					ctx.shared.clone(),
 					checkpoint.actor_id.clone(),
 					checkpoint.generation,
 					val.config,
 					val.hibernating_requests,
 					val.preloaded_kv,
+					val.sqlite_startup,
 				);
 
 				ctx.insert_actor(

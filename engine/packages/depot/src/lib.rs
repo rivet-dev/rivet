@@ -1,4 +1,5 @@
 pub mod burst_mode;
+pub mod startup;
 use gas::prelude::*;
 
 mod compaction;

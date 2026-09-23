@@ -136,6 +136,26 @@ pub fn create_actor(
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
 ) -> (mpsc::UnboundedSender<ToActor>, Arc<AsyncCounter>) {
+	create_actor_with_startup(
+		shared,
+		actor_id,
+		generation,
+		config,
+		hibernating_requests,
+		preloaded_kv,
+		None,
+	)
+}
+
+pub fn create_actor_with_startup(
+	shared: Arc<SharedContext>,
+	actor_id: String,
+	generation: u32,
+	config: protocol::ActorConfig,
+	hibernating_requests: Vec<protocol::HibernatingRequest>,
+	preloaded_kv: Option<protocol::PreloadedKv>,
+	sqlite_startup: Option<protocol::ActorSqliteStartup>,
+) -> (mpsc::UnboundedSender<ToActor>, Arc<AsyncCounter>) {
 	let (tx, rx) = mpsc::unbounded_channel();
 	let active_http_request_count = Arc::new(AsyncCounter::new());
 	spawn_detached(actor_inner(
@@ -145,6 +165,7 @@ pub fn create_actor(
 		config,
 		hibernating_requests,
 		preloaded_kv,
+		sqlite_startup,
 		tx.clone(),
 		rx,
 		active_http_request_count.clone(),
@@ -168,6 +189,7 @@ async fn actor_inner(
 	config: protocol::ActorConfig,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
+	sqlite_startup: Option<protocol::ActorSqliteStartup>,
 	tx: mpsc::UnboundedSender<ToActor>,
 	mut rx: mpsc::UnboundedReceiver<ToActor>,
 	active_http_request_count: Arc<AsyncCounter>,
@@ -200,12 +222,13 @@ async fn actor_inner(
 	let start_result = shared
 		.config
 		.callbacks
-		.on_actor_start(
+		.on_actor_start_with_sqlite(
 			handle.clone(),
 			actor_id.clone(),
 			generation,
 			config,
 			preloaded_kv,
+			sqlite_startup,
 		)
 		.await;
 

@@ -170,7 +170,12 @@ async fn handle_message(
 		protocol::ToEnvoyConn::ToEnvoyCommands(mut command_wrappers) => {
 			// TODO: Parallelize
 			for command_wrapper in &mut command_wrappers {
-				hibernating_requests::hydrate_command_wrapper(ctx, command_wrapper).await?;
+				hibernating_requests::hydrate_command_wrapper(
+					ctx,
+					conn.namespace_id,
+					command_wrapper,
+				)
+				.await?;
 				if let protocol::Command::CommandStopActor(_) = &command_wrapper.inner {
 					actor_lifecycle::stop_actor(conn, &command_wrapper.checkpoint).await?;
 				}

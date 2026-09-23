@@ -21,6 +21,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct NativeDatabaseHandle {
+	initial_page_fetches: u64,
 	vfs: NativeVfsHandle,
 	worker: SqliteWorkerHandle,
 }
@@ -30,6 +31,7 @@ pub fn vfs_name_for_actor_database(actor_id: &str, generation: u64) -> String {
 }
 
 struct GenerationFencedTransport {
+	page_fetches: Arc<std::sync::atomic::AtomicU64>,
 	inner: SqliteTransportHandle,
 	generation: u64,
 }
@@ -40,6 +42,8 @@ impl crate::vfs::SqliteTransport for GenerationFencedTransport {
 		&self,
 		mut request: protocol::SqliteGetPagesRequest,
 	) -> Result<protocol::SqliteGetPagesResponse> {
+		self.page_fetches
+			.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 		request.expected_generation.get_or_insert(self.generation);
 		self.inner.get_pages(request).await
 	}
@@ -84,18 +88,45 @@ pub async fn open_database_from_transport(
 	rt_handle: Handle,
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 ) -> Result<NativeDatabaseHandle> {
+	open_database_from_transport_with_startup(
+		transport, actor_id, generation, rt_handle, metrics, None,
+	)
+	.await
+}
+
+pub async fn open_database_from_transport_with_startup(
+	transport: SqliteTransportHandle,
+	actor_id: String,
+	generation: u64,
+	rt_handle: Handle,
+	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+	startup: Option<protocol::ActorSqliteStartup>,
+) -> Result<NativeDatabaseHandle> {
 	let open_timer = SqliteOpenTimer::new(&metrics);
 	let vfs_name = vfs_name_for_actor_database(&actor_id, generation);
 	let config = VfsConfig::default();
+	let page_fetches = Arc::new(std::sync::atomic::AtomicU64::new(0));
 	let transport: SqliteTransportHandle = Arc::new(GenerationFencedTransport {
+		page_fetches: page_fetches.clone(),
 		inner: transport,
 		generation,
 	});
 	let preload_start = Instant::now();
-	let preload_result =
+	let preload_result = if let Some(startup) = startup.filter(|s| validate_startup(s).is_ok()) {
+		validate_startup(&startup).map(|_| crate::vfs::InitialPages {
+			requested_page_count: startup.page_limit.min(startup.fence.db_size_pages),
+			head_txid: Some(startup.fence.head_txid),
+			pages: startup
+				.pages
+				.into_iter()
+				.filter_map(|p| p.bytes.map(|b| (p.pgno, b.into())))
+				.collect(),
+		})
+	} else {
 		fetch_initial_pages_for_registration(transport.clone(), &actor_id, generation, &config)
 			.await
-			.map_err(|err| anyhow!("failed to preload sqlite pages: {err}"));
+			.map_err(|err| anyhow!("failed to preload sqlite pages: {err}"))
+	};
 	let initial_pages = observe_open_phase_result(
 		&metrics,
 		SqliteOpenPhase::InitialPreload,
@@ -108,6 +139,7 @@ pub async fn open_database_from_transport(
 		initial_pages.pages.len() as u64,
 	);
 
+	let initial_page_fetches = page_fetches.load(std::sync::atomic::Ordering::Relaxed);
 	let vfs_register_start = Instant::now();
 	let vfs_result = SqliteVfs::register_with_transport_and_initial_pages(
 		&vfs_name,
@@ -129,7 +161,8 @@ pub async fn open_database_from_transport(
 
 	let worker_ready_start = Instant::now();
 	let worker_ready_result: Result<NativeDatabaseHandle> = async {
-		let native_db = NativeDatabaseHandle::new_with_metrics(vfs, actor_id, metrics.clone())?;
+		let mut native_db = NativeDatabaseHandle::new_with_metrics(vfs, actor_id, metrics.clone())?;
+		native_db.initial_page_fetches = initial_page_fetches;
 		native_db.initialize().await?;
 		Ok(native_db)
 	}
@@ -238,6 +271,7 @@ impl NativeDatabaseHandle {
 	) -> Result<Self> {
 		Ok(Self {
 			worker: SqliteWorkerHandle::start(vfs.clone(), file_name, metrics)?,
+			initial_page_fetches: 0,
 			vfs,
 		})
 	}
@@ -337,7 +371,10 @@ impl NativeDatabaseHandle {
 	}
 
 	pub fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
-		self.vfs.sqlite_vfs_metrics()
+		let mut snapshot = self.vfs.sqlite_vfs_metrics();
+		snapshot.page_fetches += self.initial_page_fetches;
+		snapshot.mutating_statements = self.worker.mutating_statements();
+		snapshot
 	}
 
 	#[cfg(test)]
@@ -395,3 +432,44 @@ mod tests {
 		);
 	}
 }
+
+fn validate_startup(startup: &protocol::ActorSqliteStartup) -> Result<()> {
+	anyhow::ensure!(
+		startup.page_limit > 0 && startup.page_limit <= 256,
+		"invalid startup page limit"
+	);
+	anyhow::ensure!(
+		startup.pages.len() <= startup.page_limit as usize,
+		"startup exceeds page limit"
+	);
+	let mut seen = std::collections::HashSet::new();
+	for page in &startup.pages {
+		anyhow::ensure!(
+			page.pgno > 0
+				&& page.pgno <= startup.fence.db_size_pages
+				&& page.pgno <= startup.page_limit
+				&& seen.insert(page.pgno),
+			"invalid startup page number"
+		);
+		let bytes = page
+			.bytes
+			.as_ref()
+			.ok_or_else(|| anyhow!("missing startup page bytes"))?;
+		anyhow::ensure!(bytes.len() == 4096, "invalid startup page size");
+		if page.pgno == 1 {
+			anyhow::ensure!(
+				bytes.starts_with(b"SQLite format 3\0")
+					&& u32::from_be_bytes(bytes[28..32].try_into().unwrap())
+						== startup.fence.db_size_pages,
+				"startup metadata disagrees with page one"
+			);
+		}
+	}
+	// Partial snapshots without page one must use the normal metadata-fetch path.
+	anyhow::ensure!(seen.contains(&1), "startup snapshot missing page one");
+	Ok(())
+}
+
+#[cfg(test)]
+#[path = "../tests/inline/startup_validation.rs"]
+mod startup_validation_tests;
