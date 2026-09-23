@@ -466,7 +466,17 @@ pub async fn commit(
 									config: lease.config.clone(),
 									hibernating_requests: Vec::new(),
 									preloaded_kv: None,
-									sqlite_fence: None,
+									sqlite_fence: depot::startup::read_fence(
+										&tx,
+										depot::types::BucketId::from_gas_id(lease.namespace_id),
+										&input.actor_id.to_string(),
+									)
+									.await?
+									.map(|h| protocol::SqliteStartFence {
+										branch_id: h.branch_id.as_uuid().to_string(),
+										head_txid: h.head_txid,
+										db_size_pages: h.db_size_pages,
+									}),
 									sqlite_startup: None,
 									waiting_requests: Vec::new(),
 								},

@@ -1120,6 +1120,18 @@ impl Db {
 			}
 		}
 
+		crate::startup::remember(
+			self.sqlite_bucket_id(),
+			&self.database_id,
+			tx_result.branch_id,
+			tx_result.head_txid,
+			tx_result.db_size_pages,
+			None,
+			pages
+				.iter()
+				.filter_map(|p| p.bytes.as_ref().map(|b| (p.pgno, b.clone()))),
+		)
+		.await;
 		Ok(GetPagesResult {
 			pages,
 			head_txid: tx_result.head_txid,

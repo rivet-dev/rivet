@@ -77,6 +77,18 @@ pub trait EnvoyCallbacks: Send + Sync + 'static {
 		preloaded_kv: Option<protocol::PreloadedKv>,
 	) -> BoxFuture<anyhow::Result<()>>;
 
+	fn on_actor_start_with_sqlite(
+		&self,
+		handle: EnvoyHandle,
+		actor_id: String,
+		generation: u32,
+		config: protocol::ActorConfig,
+		preloaded_kv: Option<protocol::PreloadedKv>,
+		_sqlite_startup: Option<protocol::ActorSqliteStartup>,
+	) -> BoxFuture<anyhow::Result<()>> {
+		self.on_actor_start(handle, actor_id, generation, config, preloaded_kv)
+	}
+
 	fn on_actor_stop(
 		&self,
 		_handle: EnvoyHandle,

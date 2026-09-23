@@ -3,7 +3,7 @@ use std::{
 	fmt,
 	sync::{
 		Arc,
-		atomic::{AtomicU8, Ordering},
+		atomic::{AtomicU8, AtomicU64, Ordering},
 	},
 	thread::JoinHandle,
 	time::{Duration, Instant},
@@ -49,6 +49,7 @@ pub struct SqliteWorkerHandle {
 }
 
 struct SqliteWorkerInner {
+	mutating_statements: AtomicU64,
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 	state: AtomicU8,
 	closed: Notify,
@@ -127,6 +128,9 @@ struct WorkerContext {
 }
 
 impl SqliteWorkerHandle {
+	pub fn mutating_statements(&self) -> u64 {
+		self.inner.mutating_statements.load(Ordering::Relaxed)
+	}
 	pub fn start(
 		vfs: NativeVfsHandle,
 		file_name: String,
@@ -137,6 +141,7 @@ impl SqliteWorkerHandle {
 		let (ready_tx, ready_rx) = oneshot::channel();
 		let (join_completed, _) = watch::channel(None);
 		let inner = Arc::new(SqliteWorkerInner {
+			mutating_statements: AtomicU64::new(0),
 			metrics,
 			state: AtomicU8::new(STATE_RUNNING),
 			closed: Notify::new(),
@@ -540,7 +545,31 @@ fn open_worker_connection(ctx: &WorkerContext) -> Result<NativeConnection> {
 		.map_err(anyhow::Error::msg)?;
 	verify_batch_atomic_writes(connection.as_ptr(), &ctx.vfs, &ctx.file_name)
 		.map_err(anyhow::Error::msg)?;
+	// WorkerContext retains the Arc until after its SQLite connection closes.
+	unsafe {
+		libsqlite3_sys::sqlite3_trace_v2(
+			connection.as_ptr(),
+			libsqlite3_sys::SQLITE_TRACE_STMT as u32,
+			Some(count_mutating_statement),
+			(&ctx.inner.mutating_statements as *const AtomicU64)
+				.cast_mut()
+				.cast(),
+		);
+	}
 	Ok(connection)
+}
+unsafe extern "C" fn count_mutating_statement(
+	_: u32,
+	context: *mut std::ffi::c_void,
+	statement: *mut std::ffi::c_void,
+	_: *mut std::ffi::c_void,
+) -> i32 {
+	unsafe {
+		if libsqlite3_sys::sqlite3_stmt_readonly(statement.cast()) == 0 {
+			(*(context as *const AtomicU64)).fetch_add(1, Ordering::Relaxed);
+		}
+	}
+	0
 }
 
 fn run_command(
