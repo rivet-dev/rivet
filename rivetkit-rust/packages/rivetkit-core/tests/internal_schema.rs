@@ -113,3 +113,16 @@ fn logical_run_wake_metadata_keeps_the_v1_schema_openable() {
 		Some(1_723_456_789_000),
 	);
 }
+
+#[test]
+fn read_only_schema_probe_only_falls_back_for_missing_metadata() {
+	assert!(missing_meta_table(&anyhow::anyhow!(
+		"no such table: _rivet_meta"
+	)));
+	assert!(!missing_meta_table(&anyhow::anyhow!(
+		"no such column: value"
+	)));
+	assert!(!missing_meta_table(&anyhow::anyhow!(
+		"database disk image is malformed"
+	)));
+}

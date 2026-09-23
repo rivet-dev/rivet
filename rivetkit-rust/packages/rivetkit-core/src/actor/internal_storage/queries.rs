@@ -36,6 +36,8 @@ pub(crate) const ADVANCE_SCHEDULE_SQL: &str =
 	"UPDATE _rivet_schedule_events SET trigger_at = ?, last_started_at = ? WHERE event_id = ?";
 pub(crate) const INSERT_SCHEDULE_HISTORY_SQL: &str = "INSERT INTO _rivet_schedule_history (schedule_id, action, scheduled_at, fired_at, finished_at, result, error_group, error_code, error_message, error_metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 pub(crate) const FINISH_HISTORY_SQL: &str = "UPDATE _rivet_schedule_history SET finished_at = ?, result = ?, error_group = ?, error_code = ?, error_message = ?, error_metadata = ? WHERE id = ? AND result = ?";
+pub(crate) const HAS_RUNNING_HISTORY_SQL: &str =
+	"SELECT 1 FROM _rivet_schedule_history WHERE result = 0 LIMIT 1";
 pub(crate) const RECOVER_HISTORY_SQL: &str = "UPDATE _rivet_schedule_history SET finished_at = ?, result = ?, error_group = ?, error_code = ?, error_message = ?, error_metadata = ? WHERE result = 0";
 pub(crate) const NEXT_FUTURE_SCHEDULE_SQL: &str =
 	"SELECT MIN(trigger_at) FROM _rivet_schedule_events WHERE trigger_at > ?";

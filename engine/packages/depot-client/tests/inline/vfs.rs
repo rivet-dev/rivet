@@ -2902,6 +2902,24 @@ fn direct_engine_batch_atomic_probe_runs_on_open() {
 }
 
 #[test]
+fn read_only_batch_atomic_capability_check_does_not_commit_and_rejects_missing_capability() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	for advertised in [true, false] {
+		let mut config = VfsConfig::default();
+		config.assert_batch_atomic = false;
+		config.advertise_batch_atomic = advertised;
+		let db = harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config);
+		assert_eq!(
+			verify_batch_atomic_capability(db.as_ptr()).is_ok(),
+			advertised
+		);
+		assert_eq!(direct_vfs_ctx(&db).commit_total.load(Ordering::Relaxed), 0);
+	}
+}
+
+#[test]
 fn direct_engine_marks_vfs_dead_after_transport_errors() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
