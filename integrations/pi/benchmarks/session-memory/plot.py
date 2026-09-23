@@ -38,12 +38,12 @@ assert (
     and data["uniquePiSessions"] == count
 )
 assert [r["live"] for r in rows] == list(range(count + 1))
-x = [r["live"] for r in rows]
-y = [r["rss"] / mib for r in rows]
+# Use the first completed session as the baseline for incremental memory.
+x = [r["live"] for r in rows[1:]]
+y = [r["rss"] / mib for r in rows[1:]]
 base, last = y[0], y[-1]
 delta = last - base
-# Exclude shared first-session initialization from the incremental session cost.
-average_per_session = (last - y[1]) / (count - 1)
+average_per_session = delta / (count - 1)
 fonts = {}
 for name, weight, src in [
     ("body", 500, "manrope/Manrope-Variable-latin.woff2"),
@@ -101,7 +101,7 @@ def rule(y):
 
 label(0.055, 0.89, f"{count} Pi sessions using Rivet Actors", 27, font="bold")
 for xpos, value, title, color in [
-    (0.055, f"+{delta:.1f} MiB", "RSS increase", ACCENT),
+    (0.055, f"+{delta:.1f} MiB", "Additional RSS", ACCENT),
     (0.50, f"{average_per_session:.2f} MiB", "Average per session", INK),
 ]:
     label(xpos, 0.79, title, 13, SOFT)
@@ -116,7 +116,7 @@ ax.scatter(
 )
 ax.axhline(base, color=SOFT, lw=1, ls=(0, (4, 5)))
 span = max(y) - min(y)
-ax.set(xlim=(0, count * 1.08), ylim=(min(y) - span * 0.16, max(y) + span * 0.24))
+ax.set(xlim=(1, count * 1.08), ylim=(min(y) - span * 0.16, max(y) + span * 0.24))
 from matplotlib.ticker import MaxNLocator
 
 ax.xaxis.set_major_locator(MaxNLocator(nbins=5, integer=True))
@@ -155,7 +155,7 @@ ax.annotate(
 ax.text(
     count * 0.44,
     base - span * 0.075,
-    f"{base:.1f} MiB empty runner",
+    f"{base:.1f} MiB baseline (1 session)",
     fontproperties=fonts["mono"],
     fontsize=11,
     color=SOFT,
@@ -183,5 +183,5 @@ cairosvg.svg2png(
 )
 cairosvg.svg2pdf(url=str(svg), write_to=str(out / "pi-session-runner-rss.pdf"))
 print(
-    f"Rendered PNG, SVG, PDF. {base:.1f} → {last:.1f} MiB; +{delta:.1f} MiB. All {count + 1} samples retained."
+    f"Rendered PNG, SVG, PDF. {base:.1f} → {last:.1f} MiB; +{delta:.1f} MiB. Plotted sessions 1–{count}; baseline is session 1."
 )

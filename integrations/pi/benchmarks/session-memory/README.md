@@ -40,9 +40,9 @@ The recorded Linux / Node.js v24.18.0 run verified 100 responses, 100 mock HTTP 
 
 | Measurement | MiB |
 | --- | ---: |
-| Empty runner RSS | 197.1 |
+| Baseline RSS after the first session | 223.0 |
 | RSS with 100 prompted sessions | 304.3 |
-| Total increase | 107.2 |
+| Additional RSS for sessions 2–100 | 81.3 |
 | Average increase per session, excluding first-session startup | 0.82 |
 
-Raw measurements are in [prompted-100.json](results/prompted-100.json). The chart’s average per session is the mean of the RSS deltas for sessions 2–100; it excludes both the empty-runner baseline and first-session startup. This was a single development run using cached native artifacts (Engine 2.3.13 and an existing NAPI build), not a release performance guarantee. Native binaries were not rebuilt for that run; allocator state, native build, platform, and conversation length affect results. The average is `(RSS at 100 − RSS at 1) / 99`; total RSS increase still includes all 100 sessions.
+Raw measurements are in [prompted-100.json](results/prompted-100.json). The chart starts at the first completed session (223.0 MiB), showing additional RSS and the average of the deltas for sessions 2–100. The raw data still includes the original empty-runner measurement. This was a single development run using cached native artifacts (Engine 2.3.13 and an existing NAPI build), not a release performance guarantee. Native binaries were not rebuilt for that run; allocator state, native build, platform, and conversation length affect results. The average is `(RSS at 100 − RSS at 1) / 99`; additional RSS is `RSS at 100 − RSS at 1`.
