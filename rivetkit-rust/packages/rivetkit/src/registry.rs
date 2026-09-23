@@ -127,6 +127,8 @@ impl Registry {
 	/// implicit runtime to keep the process alive. For programmatic lifecycle
 	/// control (tests, embedding), drive [`serve`](Self::serve) with your own
 	/// [`CancellationToken`] instead.
+	///
+	/// Flushes pending telemetry spans before returning.
 	pub async fn start(self) -> Result<()> {
 		self.start_with_config(ServeConfig::from_env()?).await
 	}
@@ -152,14 +154,16 @@ impl Registry {
 			async move { self.serve_with_config(config, shutdown).await }
 		});
 
-		tokio::select! {
+		let result = tokio::select! {
 			// Surface an early serve failure instead of waiting for a signal.
-			result = &mut serve => return result?,
-			_ = shutdown_signal() => {}
-		}
-
-		shutdown.cancel();
-		serve.await?
+			result = &mut serve => result,
+			_ = shutdown_signal() => {
+				shutdown.cancel();
+				serve.await
+			}
+		};
+		crate::telemetry::shutdown().await;
+		result?
 	}
 
 	/// Serverless `start`: runs the HTTP listener until SIGINT/SIGTERM, then
@@ -172,14 +176,16 @@ impl Registry {
 			async move { serverless_listener::serve(runtime, shutdown).await }
 		});
 
-		tokio::select! {
+		let result = tokio::select! {
 			// Surface an early listener failure instead of waiting for a signal.
-			result = &mut serve => return result?,
-			_ = shutdown_signal() => {}
-		}
-
-		shutdown.cancel();
-		serve.await?
+			result = &mut serve => result,
+			_ = shutdown_signal() => {
+				shutdown.cancel();
+				serve.await
+			}
+		};
+		crate::telemetry::shutdown().await;
+		result?
 	}
 }
 
