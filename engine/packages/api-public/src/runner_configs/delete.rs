@@ -7,6 +7,7 @@ use rivet_api_builder::{
 };
 use rivet_api_peer::runner_configs::*;
 use rivet_api_util::request_remote_datacenter;
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 
 use crate::ctx::ApiCtx;
 
@@ -37,7 +38,13 @@ pub async fn delete(
 
 #[tracing::instrument(level = "debug", skip_all)]
 async fn delete_inner(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result<DeleteResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Name(query.namespace.clone()),
+		ResourceKind::RunnerConfig,
+		TargetScope::Any,
+		OperationKind::Delete,
+	)
+	.await?;
 
 	let dcs = ctx
 		.config()

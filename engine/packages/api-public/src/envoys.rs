@@ -6,6 +6,7 @@ use rivet_api_builder::{
 };
 use rivet_api_types::{envoys::list::*, pagination::Pagination};
 use rivet_api_util::fanout_to_datacenters;
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 
 use crate::ctx::ApiCtx;
 
@@ -28,7 +29,17 @@ pub async fn list(Extension(ctx): Extension<ApiCtx>, Query(query): Query<ListQue
 }
 
 async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Name(query.namespace.clone()),
+		ResourceKind::Runner,
+		TargetScope::Any,
+		if query.envoy_key.is_empty() {
+			OperationKind::List
+		} else {
+			OperationKind::Read
+		},
+	)
+	.await?;
 
 	// Fanout to all datacenters
 	let mut envoys =

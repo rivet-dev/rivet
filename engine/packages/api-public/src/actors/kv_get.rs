@@ -6,6 +6,7 @@ use rivet_api_builder::{
 };
 use rivet_api_types::actors::kv_get::*;
 use rivet_api_util::request_remote_datacenter_raw;
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 use rivet_util::Id;
 
 use crate::ctx::ApiCtx;
@@ -38,7 +39,13 @@ pub async fn kv_get(
 
 #[tracing::instrument(level = "debug", skip_all)]
 async fn kv_get_inner(ctx: ApiCtx, path: KvGetPath, query: KvGetQuery) -> Result<Response> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Name(query.namespace.clone()),
+		ResourceKind::ActorKv,
+		TargetScope::Id(path.actor_id),
+		OperationKind::Read,
+	)
+	.await?;
 
 	if path.actor_id.label() == ctx.config().dc_label() {
 		let res = rivet_api_peer::actors::kv_get::kv_get(ctx.into(), path, query).await?;

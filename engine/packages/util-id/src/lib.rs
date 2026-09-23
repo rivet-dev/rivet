@@ -1,8 +1,10 @@
 use std::{fmt, str::FromStr};
 
 use thiserror::Error;
-use universaldb::prelude::*;
 use uuid::Uuid;
+
+#[cfg(feature = "universaldb")]
+use universaldb::prelude::*;
 
 #[derive(Debug, Error)]
 pub enum IdError {
@@ -112,15 +114,17 @@ impl FromStr for Id {
 	type Err = IdError;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		if s.len() < 4 {
-			return Err(IdError::TooShort);
-		}
+		let mut chars = s.chars();
+		let c0 = chars.next().ok_or(IdError::TooShort)?;
+		let c1 = chars.next().ok_or(IdError::TooShort)?;
+		let c2 = chars.next().ok_or(IdError::TooShort)?;
+		let c3 = chars.next().ok_or(IdError::TooShort)?;
 
 		let version = base36_mod256(
-			base36_char_to_base10(s.chars().nth(3).expect("length should be 4"))?,
-			base36_char_to_base10(s.chars().nth(2).expect("length should be 4"))?,
-			base36_char_to_base10(s.chars().nth(1).expect("length should be 4"))?,
-			base36_char_to_base10(s.chars().nth(0).expect("length should be 4"))?,
+			base36_char_to_base10(c3)?,
+			base36_char_to_base10(c2)?,
+			base36_char_to_base10(c1)?,
+			base36_char_to_base10(c0)?,
 		);
 
 		match version {
@@ -218,6 +222,7 @@ impl utoipa::PartialSchema for Id {
 	}
 }
 
+#[cfg(feature = "universaldb")]
 impl TuplePack for Id {
 	fn pack<W: std::io::Write>(
 		&self,
@@ -240,6 +245,7 @@ impl TuplePack for Id {
 	}
 }
 
+#[cfg(feature = "universaldb")]
 impl<'de> TupleUnpack<'de> for Id {
 	fn unpack(input: &[u8], _tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let input = universaldb::utils::parse_code(input, universaldb::utils::codes::ID)?;
@@ -325,5 +331,11 @@ mod tests {
 		assert_eq!(s.len(), 30);
 		let parsed = Id::from_str(&s).unwrap();
 		assert_eq!(parsed, id);
+	}
+
+	#[test]
+	fn multibyte_input_shorter_than_four_characters_is_rejected() {
+		assert!(matches!(Id::from_str("💥"), Err(IdError::TooShort)));
+		assert!(matches!(Id::from_str("éé"), Err(IdError::TooShort)));
 	}
 }

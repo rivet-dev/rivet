@@ -1,4 +1,5 @@
 use hyper::header::HeaderValue;
+use rivet_util::Id;
 
 use super::*;
 
@@ -38,6 +39,22 @@ fn redact_path_for_logs_replaces_token_query_values() {
 		"/gateway/actor/action/run?rvt-namespace=default&rvt-token=REDACTED",
 	);
 	assert_eq!(redact_path_for_logs("/health"), "/health");
+}
+
+#[test]
+fn redact_path_for_logs_replaces_direct_gateway_credentials() {
+	assert_eq!(
+		redact_path_for_logs("/gateway/actor@ey.header.signature/action/run"),
+		"/gateway/actor@REDACTED/action/run",
+	);
+	assert_eq!(
+		redact_path_for_logs("/gateway/actor%40ey%2Eheader%2Esignature/action/run?x=1"),
+		"/gateway/actor%40REDACTED/action/run?x=1",
+	);
+	assert_eq!(
+		redact_path_for_logs("/gateway/actor%40secret/action?rvt-token=other"),
+		"/gateway/actor%40REDACTED/action?rvt-token=REDACTED",
+	);
 }
 
 #[test]
@@ -189,6 +206,7 @@ fn test_request_context(remote_addr: &str, headers: hyper::HeaderMap) -> Request
 	RequestContext::new(
 		remote_addr.parse().expect("parse remote addr"),
 		Id::nil(),
+		"test-ray".to_owned(),
 		Id::nil(),
 		"example.com".to_string(),
 		"/".to_string(),
@@ -359,4 +377,109 @@ fn add_proxy_headers_does_not_match_an_address_that_is_only_a_substring() {
 		.into_iter()
 		.collect::<Vec<_>>();
 	assert_eq!(forwarded, vec!["110.0.0.10", "10.0.0.1"]);
+}
+
+#[test]
+fn authentication_availability_errors_use_service_unavailable() {
+	for error in [
+		rivet_auth::errors::Auth::VerificationUnavailable.build(),
+		rivet_auth::errors::Auth::IssuanceUnavailable.build(),
+	] {
+		let response = err_into_response(error).expect("build authentication error response");
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+	}
+}
+
+#[test]
+fn authentication_errors_use_websocket_policy_close_code() {
+	let frame = err_to_close_frame(rivet_auth::errors::Auth::TokenExpired.build(), "test-ray");
+
+	assert_eq!(CloseCode::Policy, frame.code);
+	assert!(frame.reason.starts_with("auth.token_expired#"));
+}
+
+#[test]
+fn authorization_deadline_delay_preserves_subsecond_precision() {
+	assert_eq!(
+		authorization_deadline_delay_at(11, 10_001),
+		Duration::from_millis(999)
+	);
+	assert_eq!(
+		authorization_deadline_delay_at(11, 10_999),
+		Duration::from_millis(1)
+	);
+	assert_eq!(authorization_deadline_delay_at(11, 11_000), Duration::ZERO);
+}
+
+#[tokio::test]
+async fn authorization_deadline_wins_before_response_headers() {
+	let error = race_authorization_deadline(Some(0), async { Ok::<_, anyhow::Error>(()) })
+		.await
+		.unwrap_err();
+	let error = error.downcast_ref::<rivet_error::RivetError>().unwrap();
+	assert_eq!(error.group(), "auth");
+	assert_eq!(error.code(), "token_expired");
+}
+
+#[tokio::test(start_paused = true)]
+async fn authorization_deadline_cancels_request_body_collection() {
+	let now = u64::try_from(rivet_util::timestamp::now() / 1_000).unwrap();
+	let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+	let work = tokio::spawn(async move {
+		race_authorization_deadline(Some(now + 1), async move {
+			let _ = rx.await;
+			Ok(())
+		})
+		.await
+	});
+
+	tokio::time::advance(Duration::from_secs(2)).await;
+	let error = work.await.unwrap().unwrap_err();
+	assert!(
+		tx.send(()).is_err(),
+		"expiration must cancel body collection"
+	);
+	let error = error.downcast_ref::<rivet_error::RivetError>().unwrap();
+	assert_eq!(error.code(), "token_expired");
+}
+
+#[tokio::test(start_paused = true)]
+async fn authorization_deadline_cancels_retry_backoff() {
+	let now = u64::try_from(rivet_util::timestamp::now() / 1_000).unwrap();
+	let work = tokio::spawn(async move {
+		race_authorization_deadline(Some(now + 1), async move {
+			tokio::time::sleep(Duration::from_secs(60)).await;
+			Ok(())
+		})
+		.await
+	});
+
+	tokio::time::advance(Duration::from_secs(2)).await;
+	let error = work.await.unwrap().unwrap_err();
+	let error = error.downcast_ref::<rivet_error::RivetError>().unwrap();
+	assert_eq!(error.code(), "token_expired");
+}
+
+#[tokio::test(start_paused = true)]
+async fn authorization_deadline_discovered_during_routing_cancels_route_work() {
+	let now = u64::try_from(rivet_util::timestamp::now() / 1_000).unwrap();
+	let (deadline_tx, deadline_rx) = tokio::sync::watch::channel(None);
+	let (route_tx, route_rx) = tokio::sync::oneshot::channel::<()>();
+	let work = tokio::spawn(async move {
+		race_authorization_deadline_updates(deadline_rx, async move {
+			let _ = route_rx.await;
+			Ok(())
+		})
+		.await
+	});
+
+	deadline_tx.send_replace(Some(now + 1));
+	tokio::time::advance(Duration::from_secs(2)).await;
+	let error = work.await.unwrap().unwrap_err();
+	assert!(
+		route_tx.send(()).is_err(),
+		"expiration must cancel route work"
+	);
+	let error = error.downcast_ref::<rivet_error::RivetError>().unwrap();
+	assert_eq!(error.code(), "token_expired");
 }

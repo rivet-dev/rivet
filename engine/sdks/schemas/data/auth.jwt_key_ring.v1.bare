@@ -1,0 +1,58 @@
+type Algorithm enum {
+	ED25519
+}
+
+type PublicKeyRecord struct {
+	kid: data
+	algorithm: Algorithm
+	publicKey: data
+	ownerDatacenterId: u16
+	ownerEpoch: u64
+	createdTs: i64
+	privateKeyGeneration: u64
+}
+
+type ActiveKey struct {
+	key: PublicKeyRecord
+	activatedTs: i64
+	signUntilTs: i64
+}
+
+type PendingKey struct {
+	key: PublicKeyRecord
+	activateAfterTs: i64
+}
+
+type RetiringKey struct {
+	key: PublicKeyRecord
+	retiredTs: i64
+	maxTokenExpTs: i64
+	verifyUntilTs: i64
+}
+
+type PrivateKeyRef struct {
+	ownerDatacenterId: u16
+	ownerEpoch: u64
+	targetGeneration: u64
+}
+
+type EmergencyReceipt struct {
+	requestId: data
+	expectedGeneration: u64
+	committedGeneration: u64
+	revokedKids: list<data>
+	obsoletePrivateKeys: list<PrivateKeyRef>
+}
+
+type Data struct {
+	claimsVersion: u16
+	issuer: str
+	audience: str
+	leaderDatacenterId: u16
+	leaderEpoch: u64
+	generation: u64
+	active: ActiveKey
+	pending: optional<PendingKey>
+	retiring: list<RetiringKey>
+	lastEmergencyReceipt: optional<EmergencyReceipt>
+}

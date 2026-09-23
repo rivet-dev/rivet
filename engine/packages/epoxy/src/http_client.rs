@@ -180,8 +180,8 @@ async fn send_request_to_address(
 	let client = rivet_pools::reqwest::client().await?;
 
 	// Create the request
-	let request =
-		rivet_util::serde::bare_to_vec!(&request).context("failed to serialize epoxy request")?;
+	let request = epoxy_protocol::versioned::encode_request(request, protocol_version)
+		.context("failed to serialize epoxy request")?;
 
 	// Send the request
 	let response_result = client
@@ -225,7 +225,7 @@ async fn send_request_to_address(
 	}
 
 	let body = response.bytes().await?;
-	let response_body = rivet_util::serde::bare_from_slice!(&body)?;
+	let response_body = epoxy_protocol::versioned::decode_response(&body, protocol_version)?;
 
 	tracing::debug!(
 		to_replica = to_replica_id,

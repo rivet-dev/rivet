@@ -1,4 +1,5 @@
 pub mod actors;
+pub mod auth;
 pub mod datacenters;
 pub mod envoys;
 pub mod namespaces;

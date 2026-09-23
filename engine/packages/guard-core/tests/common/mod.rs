@@ -472,7 +472,7 @@ pub fn create_test_config(
 	mutate(&mut guard);
 	root.guard = Some(guard);
 
-	rivet_config::Config::from_root(root)
+	rivet_config::Config::from_root_unchecked(root)
 }
 
 pub fn create_test_cache_key_fn() -> CacheKeyFn {

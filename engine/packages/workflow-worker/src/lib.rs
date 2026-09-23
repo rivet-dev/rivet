@@ -16,6 +16,7 @@ pub fn registry(config: &rivet_config::Config) -> Result<Registry> {
 		.merge(namespace::registry()?)?
 		.merge(epoxy::registry()?)?
 		.merge(gasoline_runtime::registry()?)?
+		.merge(rivet_auth_jwt::registry()?)?
 		.merge(datacenter::registry()?)?
 		.merge(depot::registry(config)?)
 		.map_err(Into::into)

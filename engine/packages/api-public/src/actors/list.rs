@@ -6,6 +6,7 @@ use rivet_api_builder::{
 };
 use rivet_api_types::{actors::list::*, pagination::Pagination};
 use rivet_api_util::fanout_to_datacenters;
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 
 use crate::{actors::utils::fetch_actors_by_ids, ctx::ApiCtx, errors};
 
@@ -49,7 +50,17 @@ pub async fn list(Extension(ctx): Extension<ApiCtx>, Query(query): Query<ListQue
 }
 
 async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Name(query.namespace.clone()),
+		ResourceKind::Actor,
+		TargetScope::Any,
+		if query.actor_ids.is_none() && query.actor_id.is_empty() && query.key.is_none() {
+			OperationKind::List
+		} else {
+			OperationKind::Read
+		},
+	)
+	.await?;
 
 	// Parse query
 	let actor_ids = [

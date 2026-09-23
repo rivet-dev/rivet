@@ -73,6 +73,30 @@ pub async fn check_and_set_absent(
 }
 
 #[allow(dead_code)]
+pub async fn check_and_set_mutable(
+	ctx: &WorkflowTestCtx,
+	key: &[u8],
+	expect_one_of: Vec<Option<Vec<u8>>>,
+	new_value: Option<Vec<u8>>,
+) -> Result<ProposalResult> {
+	ctx.op(propose::Input {
+		proposal: Proposal {
+			commands: vec![Command {
+				kind: CommandKind::CheckAndSetCommand(CheckAndSetCommand {
+					key: key.to_vec(),
+					expect_one_of,
+					new_value,
+				}),
+			}],
+		},
+		mutable: true,
+		purge_cache: false,
+		target_replicas: None,
+	})
+	.await
+}
+
+#[allow(dead_code)]
 pub async fn set_mutable(
 	ctx: &WorkflowTestCtx,
 	key: &[u8],
@@ -259,8 +283,14 @@ pub async fn write_legacy_v2_value(
 			let value = value.clone();
 			async move {
 				let legacy_subspace = keys::legacy_subspace(replica_id);
-				let packed_key = legacy_subspace.pack(&KvValueKey::new(key));
-				tx.set(&packed_key, &value);
+				tx.with_subspace(legacy_subspace).write(
+					&KvValueKey::new(key),
+					protocol::CommittedValue {
+						value: Some(value),
+						version: 0,
+						mutable: false,
+					},
+				)?;
 				Ok(())
 			}
 		})

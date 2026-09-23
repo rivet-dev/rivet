@@ -336,7 +336,8 @@ export async function openWebSocketToGateway(
 
 	logger().debug({
 		msg: "opening websocket to actor via guard",
-		gatewayUrl,
+		// Gateway URLs can embed credentials; never include the path or query in logs.
+		origin: new URL(gatewayUrl).origin,
 	});
 
 	// Create WebSocket connection

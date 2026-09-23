@@ -213,8 +213,12 @@ pub(crate) fn redact_uri_for_logs(uri: &hyper::Uri) -> String {
 /// Renders a request path and query string for logs with the values of credential query
 /// parameters replaced.
 pub fn redact_path_for_logs(path_and_query: &str) -> String {
-	let Some((path, query)) = path_and_query.split_once('?') else {
-		return path_and_query.to_string();
+	let (path, query) = path_and_query
+		.split_once('?')
+		.map_or((path_and_query, None), |(path, query)| (path, Some(query)));
+	let path = redact_direct_gateway_token(path);
+	let Some(query) = query else {
+		return path;
 	};
 
 	let redacted_query = query
@@ -259,6 +263,36 @@ const CLIENT_HANDSHAKE_HEADERS: [HeaderName; 2] = [
 	hyper::header::SEC_WEBSOCKET_KEY,
 	hyper::header::SEC_WEBSOCKET_VERSION,
 ];
+
+fn redact_direct_gateway_token(path: &str) -> String {
+	let Some(segment_start) = path.strip_prefix("/gateway/").map(|_| "/gateway/".len()) else {
+		return path.to_owned();
+	};
+	let segment_end = path[segment_start..]
+		.find('/')
+		.map_or(path.len(), |offset| segment_start + offset);
+	let segment = &path[segment_start..segment_end];
+	let raw_delimiter = segment.find('@').map(|offset| (offset, 1));
+	let encoded_delimiter = segment
+		.to_ascii_lowercase()
+		.find("%40")
+		.map(|offset| (offset, 3));
+	let delimiter = match (raw_delimiter, encoded_delimiter) {
+		(Some(raw), Some(encoded)) => Some(if raw.0 <= encoded.0 { raw } else { encoded }),
+		(Some(raw), None) => Some(raw),
+		(None, Some(encoded)) => Some(encoded),
+		(None, None) => None,
+	};
+	let Some((delimiter_offset, delimiter_len)) = delimiter else {
+		return path.to_owned();
+	};
+	let credential_start = segment_start + delimiter_offset + delimiter_len;
+	format!(
+		"{}REDACTED{}",
+		&path[..credential_start],
+		&path[segment_end..]
+	)
+}
 
 pub(crate) fn add_proxy_headers_with_addr(
 	headers: &mut hyper::HeaderMap,
@@ -361,9 +395,12 @@ pub(crate) fn err_into_response(err: anyhow::Error) -> Result<Response<ResponseB
 				("api", "not_found") => StatusCode::NOT_FOUND,
 				("api", "unauthorized") => StatusCode::UNAUTHORIZED,
 				("api", "forbidden") => StatusCode::FORBIDDEN,
-				("acl", "token_not_found") => StatusCode::UNAUTHORIZED,
-				("acl", "token_expired") => StatusCode::UNAUTHORIZED,
-				("acl", "insufficient_permissions") => StatusCode::FORBIDDEN,
+				("auth", "invalid_token") => StatusCode::UNAUTHORIZED,
+				("auth", "token_expired") => StatusCode::UNAUTHORIZED,
+				("auth", "insufficient_permissions") => StatusCode::FORBIDDEN,
+				("auth", "verification_unavailable") => StatusCode::SERVICE_UNAVAILABLE,
+				("auth", "issuance_unavailable") => StatusCode::SERVICE_UNAVAILABLE,
+				("auth", "issuance_disabled") => StatusCode::SERVICE_UNAVAILABLE,
 				("guard", "rate_limit") => StatusCode::TOO_MANY_REQUESTS,
 				("guard", "upstream_error") => StatusCode::BAD_GATEWAY,
 				("guard", "routing_error") => StatusCode::BAD_GATEWAY,
@@ -503,6 +540,7 @@ pub(crate) fn err_to_close_frame(err: anyhow::Error, ray_id: &str) -> CloseFrame
 
 	let code = match (rivet_err.group(), rivet_err.code()) {
 		("ws", "connection_closed") | ("ws", "eviction") => CloseCode::Normal,
+		("auth", _) => CloseCode::Policy,
 		_ => CloseCode::Error,
 	};
 
@@ -569,6 +607,87 @@ pub(crate) fn to_hyper_close(frame: Option<CloseFrame>) -> hyper_tungstenite::tu
 				reason: "ws.closed".into(),
 			},
 		))
+	}
+}
+
+pub(crate) async fn wait_for_authorization_deadline(deadline: Option<u64>) {
+	let Some(deadline) = deadline else {
+		std::future::pending::<()>().await;
+		return;
+	};
+	let delay = authorization_deadline_delay(deadline);
+	if delay.is_zero() {
+		return;
+	}
+	tokio::time::sleep(delay).await;
+}
+
+pub(crate) fn authorization_deadline_delay(deadline: u64) -> Duration {
+	let now_ms = u64::try_from(rivet_util::timestamp::now()).unwrap_or(u64::MAX);
+	authorization_deadline_delay_at(deadline, now_ms)
+}
+
+fn authorization_deadline_delay_at(deadline: u64, now_ms: u64) -> Duration {
+	Duration::from_millis(deadline.saturating_mul(1_000).saturating_sub(now_ms))
+}
+
+/// Waits for authentication to discover a JWT deadline while route resolution is still running,
+/// then cancels any post-authentication route work when that deadline expires.
+async fn wait_for_authorization_deadline_updates(
+	mut deadlines: tokio::sync::watch::Receiver<Option<u64>>,
+) {
+	loop {
+		let deadline = *deadlines.borrow_and_update();
+		if let Some(deadline) = deadline {
+			tokio::select! {
+				biased;
+				_ = wait_for_authorization_deadline(Some(deadline)) => return,
+				changed = deadlines.changed() => {
+					if changed.is_err() {
+						std::future::pending::<()>().await;
+					}
+				}
+			}
+		} else if deadlines.changed().await.is_err() {
+			std::future::pending::<()>().await;
+		}
+	}
+}
+
+/// Runs pre-response work only while the authenticated credential remains authorized. Expiration
+/// wins when both branches are ready so an already-passed deadline cannot leak response headers.
+pub(crate) async fn race_authorization_deadline<T>(
+	deadline: Option<u64>,
+	future: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+	tokio::select! {
+		biased;
+		_ = wait_for_authorization_deadline(deadline) => {
+			Err(rivet_auth::errors::Auth::TokenExpired.build())
+		}
+		result = future => result,
+	}
+}
+
+/// Covers route resolution even though its authentication callback discovers the JWT deadline
+/// partway through the operation.
+pub(crate) async fn race_request_authorization_deadline<T>(
+	auth_state: &rivet_auth::RequestAuthState,
+	future: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+	race_authorization_deadline_updates(auth_state.subscribe_authorization_deadline(), future).await
+}
+
+async fn race_authorization_deadline_updates<T>(
+	deadlines: tokio::sync::watch::Receiver<Option<u64>>,
+	future: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+	tokio::select! {
+		biased;
+		_ = wait_for_authorization_deadline_updates(deadlines) => {
+			Err(rivet_auth::errors::Auth::TokenExpired.build())
+		}
+		result = future => result,
 	}
 }
 

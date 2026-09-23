@@ -1,3 +1,4 @@
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 use std::collections::HashMap;
 
 use anyhow::Result;
@@ -55,7 +56,13 @@ async fn upsert_inner(
 	query: UpsertQuery,
 	mut body: UpsertRequest,
 ) -> Result<UpsertResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Name(query.namespace.clone()),
+		ResourceKind::RunnerConfig,
+		TargetScope::Any,
+		OperationKind::Create,
+	)
+	.await?;
 
 	let dcs = ctx
 		.config()

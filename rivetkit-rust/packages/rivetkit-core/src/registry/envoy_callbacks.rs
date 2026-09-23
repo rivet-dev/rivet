@@ -188,7 +188,7 @@ impl ServeSettings {
 				parsed
 					.token
 					.or(env_token)
-					.unwrap_or_else(|| "dev".to_owned()),
+					.unwrap_or_else(|| "default".to_owned()),
 			),
 			namespace: parsed
 				.namespace

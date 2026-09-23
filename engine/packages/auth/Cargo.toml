@@ -1,0 +1,18 @@
+[package]
+name = "rivet-auth"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+gas.workspace = true
+namespace.workspace = true
+rivet-auth-jwt = { workspace = true, features = ["service"] }
+rivet-auth-policy.workspace = true
+serde.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+tokio.workspace = true
+utoipa.workspace = true

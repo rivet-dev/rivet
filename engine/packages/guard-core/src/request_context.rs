@@ -41,6 +41,7 @@ pub struct RequestContext {
 	/// last clone of the context is dropped.
 	pub(crate) in_flight_permit: Option<Arc<InFlightPermit>>,
 	pub(crate) cors: Option<CorsConfig>,
+	pub(crate) auth_state: rivet_auth::RequestAuthState,
 }
 
 impl RequestContext {
@@ -88,6 +89,7 @@ impl RequestContext {
 
 			in_flight_permit: None,
 			cors: None,
+			auth_state: rivet_auth::RequestAuthState::default(),
 		}
 	}
 
@@ -174,6 +176,14 @@ impl RequestContext {
 
 	pub fn set_cors(&mut self, cors_config: CorsConfig) {
 		self.cors = Some(cors_config);
+	}
+
+	pub fn auth_state(&self) -> &rivet_auth::RequestAuthState {
+		&self.auth_state
+	}
+
+	pub fn authorization_deadline(&self) -> Option<u64> {
+		self.auth_state.authorization_deadline()
 	}
 }
 

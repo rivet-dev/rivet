@@ -1,3 +1,4 @@
+use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
@@ -389,6 +390,10 @@ pub fn engine_env(config: &EngineResolverConfig) -> Result<Vec<(String, String)>
 	let db_path = engine_db_path()?;
 
 	Ok(vec![
+		(
+			"RIVET__AUTH__ADMIN_TOKEN".to_owned(),
+			env::var("RIVET__AUTH__ADMIN_TOKEN").unwrap_or_else(|_| "default".to_owned()),
+		),
 		("RIVET__GUARD__HOST".to_owned(), guard_host.clone()),
 		("RIVET__GUARD__PORT".to_owned(), guard_port.to_string()),
 		("RIVET__API_PEER__HOST".to_owned(), guard_host.clone()),
@@ -1058,6 +1063,7 @@ mod tests {
 		assert_eq!(env["RIVET__PEGBOARD__ENVOY_ELIGIBLE_THRESHOLD"], "5000");
 		assert_eq!(env["RIVET__PEGBOARD__ENVOY_LOST_THRESHOLD"], "7000");
 		assert_eq!(env["RIVET__PEGBOARD__MIN_METADATA_POLL_INTERVAL"], "1000");
+		assert_eq!(env["RIVET__AUTH__ADMIN_TOKEN"], "default");
 		assert_eq!(env["RIVET__FEATURES__GUARD_GATEWAY_V3__MODE"], "on");
 		assert_eq!(env["RIVET__FEATURES__GUARD_GATEWAY_V3__PERCENTAGE"], "100");
 		assert_eq!(env["RIVET__RUNTIME__WORKER_SHUTDOWN_DURATION"], "1");

@@ -1,0 +1,5 @@
+{
+  "code": "token_expired",
+  "group": "auth",
+  "message": "Authentication token has expired."
+}

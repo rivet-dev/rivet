@@ -5,6 +5,7 @@ use axum::{
 };
 use rivet_api_builder::ApiError;
 use rivet_api_types::{datacenters::list::*, pagination::Pagination};
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 use rivet_types::datacenters::Datacenter;
 
 use crate::ctx::ApiCtx;
@@ -28,7 +29,13 @@ pub async fn list(Extension(ctx): Extension<ApiCtx>) -> Response {
 
 #[tracing::instrument(level = "debug", skip_all)]
 async fn list_inner(ctx: ApiCtx) -> Result<ListResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Any,
+		ResourceKind::Datacenter,
+		TargetScope::Any,
+		OperationKind::List,
+	)
+	.await?;
 
 	Ok(ListResponse {
 		datacenters: ctx

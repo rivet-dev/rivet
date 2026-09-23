@@ -29,7 +29,7 @@ interface RuntimeLogs {
 	stderr: string;
 }
 
-export const TEST_ENGINE_TOKEN = "dev";
+export const TEST_ENGINE_TOKEN = "default";
 
 export interface SharedTestEngine {
 	endpoint: string;
@@ -316,6 +316,8 @@ async function spawnSharedEngine(
 		{
 			env: {
 				...process.env,
+				RIVET__AUTH__ADMIN_TOKEN:
+					process.env.RIVET__AUTH__ADMIN_TOKEN ?? "default",
 				RIVET__GUARD__HOST: host,
 				RIVET__GUARD__PORT: guardPort.toString(),
 				RIVET__API_PEER__HOST: host,

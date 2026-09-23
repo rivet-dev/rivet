@@ -34,6 +34,7 @@ rivet-bootstrap.workspace = true
 rivet-build-meta.workspace = true
 rivet-cache-purge.workspace = true
 rivet-cache.workspace = true
+rivet-auth-jwt = { workspace = true, features = ["service"] }
 rivet-config.workspace = true
 rivet-dynamic-config.workspace = true
 rivet-guard.workspace = true

@@ -463,7 +463,7 @@ impl rivet_test_envoy::EnvoyCallbacks for TestEnvoyCallbacks {
 			}
 
 			let (status, body) = match request.path.as_str() {
-				"/ping" => (
+				"/ping" | "/request/ping" => (
 					200,
 					serde_json::to_vec(&serde_json::json!({
 						"actorId": actor_id,
@@ -658,6 +658,7 @@ fn spawn_kv_bridge(handle: EnvoyHandle, mut kv_rx: mpsc::UnboundedReceiver<KvReq
 pub struct TestEnvoyBuilder {
 	namespace: String,
 	pool_name: String,
+	token: String,
 	version: u32,
 	endpoint: Option<String>,
 	actor_factories: HashMap<String, ActorFactory>,
@@ -668,6 +669,7 @@ impl TestEnvoyBuilder {
 		Self {
 			namespace: namespace.to_string(),
 			pool_name: "test-envoy".to_string(),
+			token: "dev".to_string(),
 			version: 1,
 			endpoint: None,
 			actor_factories: HashMap::new(),
@@ -676,6 +678,11 @@ impl TestEnvoyBuilder {
 
 	pub fn with_pool_name(mut self, name: &str) -> Self {
 		self.pool_name = name.to_string();
+		self
+	}
+
+	pub fn with_token(mut self, token: impl Into<String>) -> Self {
+		self.token = token.into();
 		self
 	}
 
@@ -704,7 +711,7 @@ impl TestEnvoyBuilder {
 				self.endpoint
 					.unwrap_or_else(|| format!("http://127.0.0.1:{}", dc.guard_port())),
 			)
-			.token("dev")
+			.token(self.token)
 			.namespace(&self.namespace)
 			.pool_name(&self.pool_name)
 			.version(self.version)

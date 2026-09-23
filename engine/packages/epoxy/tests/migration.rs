@@ -7,7 +7,8 @@ use common::{
 		write_legacy_value,
 	},
 };
-use epoxy::ops::propose::{CommandError, ProposalResult};
+use epoxy::ops::kv::get::{Input, ReadMode};
+use epoxy::ops::propose::{ConsensusFailedReason, ProposalResult};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn dual_read_fallback_reads_legacy_subspaces_without_migrating() {
@@ -33,9 +34,9 @@ async fn dual_read_fallback_reads_legacy_subspaces_without_migrating() {
 		.unwrap();
 	assert!(matches!(
 		blocked_result,
-		ProposalResult::CommandError(CommandError::ExpectedValueDoesNotMatch {
+		ProposalResult::ConsensusFailed { reason: ConsensusFailedReason::ExpectedValueDoesNotMatch {
 			current_value: Some(value),
-		}) if value == blocked_value
+		} } if value == blocked_value
 	));
 	assert_eq!(
 		read_legacy_value(ctx, replica_id, blocked_key)
@@ -61,6 +62,30 @@ async fn dual_read_fallback_reads_legacy_subspaces_without_migrating() {
 		read_v2_value(ctx, replica_id, migrated_key).await.unwrap(),
 		None
 	);
+	for key in [blocked_key.as_slice(), migrated_key.as_slice()] {
+		let local = ctx
+			.op(Input {
+				key: key.to_vec(),
+				mode: ReadMode::LocalCommitted { replica_id },
+			})
+			.await
+			.unwrap();
+		assert_eq!(
+			local.value.as_ref().and_then(|value| value.value.clone()),
+			get_local(ctx, replica_id, key).await.unwrap()
+		);
+		assert_eq!(read_v2_value(ctx, replica_id, key).await.unwrap(), None);
+		let agreed = ctx
+			.op(Input {
+				key: key.to_vec(),
+				mode: ReadMode::Linearizable {
+					target_replicas: None,
+				},
+			})
+			.await
+			.unwrap();
+		assert_eq!(agreed.value, local.value);
+	}
 
 	let fresh_key = b"fresh-v2-key";
 	let fresh_value = b"fresh-v2-value";

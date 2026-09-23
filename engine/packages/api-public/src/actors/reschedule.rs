@@ -6,6 +6,7 @@ use rivet_api_builder::{
 };
 use rivet_api_types::actors::reschedule::*;
 use rivet_api_util::request_remote_datacenter_raw;
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 use rivet_util::Id;
 
 use crate::ctx::ApiCtx;
@@ -44,7 +45,13 @@ async fn reschedule_inner(
 	query: RescheduleQuery,
 	body: RescheduleRequest,
 ) -> Result<Response> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Name(query.namespace.clone()),
+		ResourceKind::Actor,
+		TargetScope::Id(path.actor_id),
+		OperationKind::Update,
+	)
+	.await?;
 
 	if path.actor_id.label() == ctx.config().dc_label() {
 		let res =

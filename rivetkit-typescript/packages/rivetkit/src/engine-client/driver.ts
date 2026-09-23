@@ -35,6 +35,8 @@ export interface EngineControlClient {
 		params: unknown,
 		options?: GatewayRequestOptions,
 	): Promise<UniversalWebSocket>;
+	/** Refresh a credential rejected during this WebSocket handshake, if supported. */
+	refreshAuthToken?(ws: UniversalWebSocket): Promise<boolean>;
 	proxyRequest(
 		c: HonoContext,
 		actorRequest: Request,

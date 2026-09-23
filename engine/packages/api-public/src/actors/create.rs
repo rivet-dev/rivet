@@ -6,6 +6,7 @@ use rivet_api_builder::{
 };
 use rivet_api_types::actors::create::*;
 use rivet_api_util::request_remote_datacenter;
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 
 use crate::ctx::ApiCtx;
 
@@ -54,7 +55,13 @@ async fn create_inner(
 	query: CreateQuery,
 	body: CreateRequest,
 ) -> Result<CreateResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Name(query.namespace.clone()),
+		ResourceKind::Actor,
+		TargetScope::Any,
+		OperationKind::Create,
+	)
+	.await?;
 
 	let namespace = ctx
 		.op(namespace::ops::resolve_for_name_global::Input {

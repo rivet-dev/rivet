@@ -7,6 +7,7 @@ use std::{sync::Arc, time::Duration};
 use anyhow::Result;
 use gas::{ctx::message::SubscriptionHandle, prelude::*};
 use hyper::header::HeaderName;
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 use rivet_guard_core::{RouteConfig, RouteTarget, RoutingOutput, request_context::RequestContext};
 
 use super::{
@@ -280,13 +281,13 @@ async fn route_request_inner(
 	req_ctx: &mut RequestContext,
 	actor_id: Id,
 	stripped_path: &str,
-	_token: Option<&str>,
+	token: Option<&str>,
 	skip_ready_wait: bool,
 ) -> Result<RoutingOutput> {
 	tracing::Span::current().record("actor_id", actor_id.to_string());
 
 	// Attach CORS headers to the actual (non-OPTIONS) response so both the
-	// actor response and any early error (e.g. EE auth failure) are readable
+	// actor response and any early auth error are readable
 	// by the browser.
 	set_non_preflight_cors(req_ctx);
 
@@ -379,7 +380,40 @@ async fn route_request_inner(
 		return Err(pegboard::errors::Actor::NotFound.build());
 	};
 
-	// NOTE: Token validation implemented in EE
+	if ctx.config().auth.is_some() {
+		let token = token.ok_or_else(|| rivet_auth::errors::Auth::InvalidToken.build())?;
+		let auth_state = req_ctx.auth_state().clone();
+		phase_timeout(
+			Phase::new(
+				"route_pegboard_auth_check",
+				&metrics::ROUTE_PEGBOARD_AUTH_CHECK_DURATION,
+			)
+			.with_namespace_id(actor.namespace_id)
+			.with_actor_id(actor_id),
+			ctx.config().guard().route_pegboard_auth_check_timeout(),
+			rivet_auth::check(
+				ctx,
+				shared_state.jwt_key_ring_cache.as_ref(),
+				&auth_state,
+				rivet_auth::CheckInput {
+					token,
+					namespace: AccessNamespaceScope::Id(actor.namespace_id),
+					resource: ResourceKind::ActorGateway,
+					target: TargetScope::Id(actor_id),
+					operation: OperationKind::Read,
+				},
+			),
+			|elapsed, timeout| {
+				pegboard::errors::RouteAuthCheckTimeout {
+					actor_id: actor_id.to_string(),
+					elapsed_ms: elapsed.as_millis() as u64,
+					timeout_ms: timeout.as_millis() as u64,
+				}
+				.build()
+			},
+		)
+		.await?;
+	}
 
 	if actor.destroyed {
 		return Err(pegboard::errors::Actor::NotFound.build());

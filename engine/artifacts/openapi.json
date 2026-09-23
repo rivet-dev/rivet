@@ -11,7 +11,7 @@
       "name": "Apache-2.0",
       "identifier": "Apache-2.0"
     },
-    "version": "2.3.17"
+    "version": "2.3.19"
   },
   "paths": {
     "/actors": {
@@ -446,6 +446,66 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ActorsSleepResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/auth/tokens": {
+      "post": {
+        "tags": [
+          "auth::tokens"
+        ],
+        "operationId": "auth_tokens_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTokenCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokenCreateResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/auth/tokens/inspect": {
+      "get": {
+        "tags": [
+          "auth::tokens"
+        ],
+        "operationId": "auth_tokens_inspect",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokenInspectResponse"
                 }
               }
             }
@@ -1414,6 +1474,162 @@
       "ActorsSleepResponse": {
         "type": "object",
         "additionalProperties": false
+      },
+      "AuthOperationKind": {
+        "type": "string",
+        "enum": [
+          "read",
+          "update",
+          "list",
+          "create",
+          "delete"
+        ]
+      },
+      "AuthTokenCreateRequest": {
+        "type": "object",
+        "required": [
+          "namespace",
+          "grants"
+        ],
+        "properties": {
+          "duration": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthTokenGrant"
+            }
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthTokenCreateResponse": {
+        "type": "object",
+        "required": [
+          "token",
+          "issued_ts",
+          "expires_ts"
+        ],
+        "properties": {
+          "expires_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issued_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthTokenGrant": {
+        "type": "object",
+        "required": [
+          "resource",
+          "target",
+          "operations"
+        ],
+        "properties": {
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthOperationKind"
+            }
+          },
+          "resource": {
+            "$ref": "#/components/schemas/AuthTokenResource"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AuthTokenTargetScope"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthTokenInspectResponse": {
+        "type": "object",
+        "required": [
+          "namespace_id",
+          "grants",
+          "issued_ts",
+          "expires_ts"
+        ],
+        "properties": {
+          "expires_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthTokenGrant"
+            }
+          },
+          "issued_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "namespace_id": {
+            "$ref": "#/components/schemas/RivetId"
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthTokenResource": {
+        "type": "string",
+        "enum": [
+          "namespace",
+          "actor",
+          "runner",
+          "runner_config",
+          "datacenter",
+          "actor_gateway",
+          "actor_kv"
+        ]
+      },
+      "AuthTokenTargetScope": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "any"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/RivetId"
+              }
+            }
+          }
+        ]
       },
       "CrashPolicy": {
         "type": "string",

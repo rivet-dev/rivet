@@ -1,4 +1,5 @@
 use anyhow::Result;
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 use std::{
 	ops::Deref,
 	sync::{
@@ -6,50 +7,80 @@ use std::{
 		atomic::{AtomicBool, Ordering},
 	},
 };
-use subtle::ConstantTimeEq;
 
 #[derive(Clone)]
 pub struct ApiCtx {
 	inner: rivet_api_builder::ApiCtx,
 	token: Option<String>,
+	jwt_key_ring_cache: Option<Arc<rivet_auth_jwt::key_ring_cache::KeyRingCache>>,
+	auth_state: rivet_auth::RequestAuthState,
 	authentication_handled: Arc<AtomicBool>,
 }
 
 impl ApiCtx {
-	pub fn new(inner: rivet_api_builder::ApiCtx, token: Option<String>) -> Self {
-		ApiCtx {
+	pub fn new(
+		inner: rivet_api_builder::ApiCtx,
+		token: Option<String>,
+		jwt_key_ring_cache: Option<Arc<rivet_auth_jwt::key_ring_cache::KeyRingCache>>,
+	) -> Self {
+		Self {
 			inner,
 			token,
+			jwt_key_ring_cache,
+			auth_state: rivet_auth::RequestAuthState::default(),
 			authentication_handled: Arc::new(AtomicBool::new(false)),
 		}
 	}
 
-	pub async fn auth(&self) -> Result<()> {
-		let Some(auth) = &self.config().auth else {
+	pub async fn auth(
+		&self,
+		namespace: AccessNamespaceScope,
+		resource: ResourceKind,
+		target: TargetScope,
+		operation: OperationKind,
+	) -> Result<()> {
+		if self.config().auth.is_none() {
 			return Ok(());
-		};
-
-		self.authentication_handled.store(true, Ordering::Relaxed);
-
-		let Some(token) = &self.token else {
-			return Err(rivet_api_builder::ApiForbidden {
-				reason: "Token not provided".into(),
-			}
-			.build());
-		};
-
-		if token
-			.as_bytes()
-			.ct_ne(auth.admin_token.read().as_bytes())
-			.into()
-		{
-			return Err(rivet_api_builder::ApiForbidden {
-				reason: "Invalid token".into(),
-			}
-			.build());
 		}
+		self.authentication_handled.store(true, Ordering::Relaxed);
+		let token = self
+			.token
+			.as_deref()
+			.ok_or_else(|| rivet_auth::errors::Auth::InvalidToken.build())?;
+		rivet_auth::check(
+			self,
+			self.jwt_key_ring_cache.as_ref(),
+			&self.auth_state,
+			rivet_auth::CheckInput {
+				token,
+				namespace,
+				resource,
+				target,
+				operation,
+			},
+		)
+		.await
+	}
 
-		Ok(())
+	pub async fn authenticate(&self) -> Result<Arc<rivet_auth::AuthenticatedCredential>> {
+		self.authentication_handled.store(true, Ordering::Relaxed);
+		let token = self
+			.token
+			.as_deref()
+			.ok_or_else(|| rivet_auth::errors::Auth::InvalidToken.build())?;
+		rivet_auth::authenticate(
+			self,
+			self.jwt_key_ring_cache.as_ref(),
+			&self.auth_state,
+			token,
+		)
+		.await
+	}
+
+	pub fn jwt_key_ring_cache(&self) -> Result<Arc<rivet_auth_jwt::key_ring_cache::KeyRingCache>> {
+		self.jwt_key_ring_cache
+			.clone()
+			.ok_or_else(|| rivet_auth::errors::Auth::IssuanceUnavailable.build())
 	}
 
 	pub fn skip_auth(&self) {
@@ -57,11 +88,7 @@ impl ApiCtx {
 	}
 
 	pub fn is_auth_handled(&self) -> bool {
-		if self.config().auth.is_none() {
-			return true;
-		}
-
-		self.authentication_handled.load(Ordering::Relaxed)
+		self.config().auth.is_none() || self.authentication_handled.load(Ordering::Relaxed)
 	}
 
 	pub fn token(&self) -> Option<&str> {

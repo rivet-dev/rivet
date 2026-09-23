@@ -6,9 +6,13 @@ authors.workspace = true
 license.workspace = true
 edition.workspace = true
 
+[features]
+default = ["universaldb"]
+universaldb = ["dep:universaldb"]
+
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
-universaldb.workspace = true
+universaldb = { workspace = true, optional = true }
 utoipa.workspace = true
 uuid.workspace = true

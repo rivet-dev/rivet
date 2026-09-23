@@ -1,9 +1,13 @@
 use anyhow::Result;
-use epoxy_protocol::{PROTOCOL_VERSION, protocol, versioned};
+use epoxy_protocol::{protocol, versioned};
 use serde::{Deserialize, Serialize};
 use universaldb::prelude::*;
 use universaldb::tuple::Versionstamp;
 use vbare::OwnedVersionedData;
+
+// v4 adds only read RPCs. Keep the unchanged persisted layouts readable by v3 binaries
+// throughout a rolling upgrade; wire-version negotiation must not advance storage formats.
+const STORAGE_VERSION: u16 = 3;
 
 /// In-flight accepted proposal state stored under `kv/{key}/accepted`.
 ///
@@ -44,7 +48,7 @@ impl FormalKey for KvValueKey {
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
 		versioned::CommittedValue::wrap_latest(value)
-			.serialize_with_embedded_version(PROTOCOL_VERSION)
+			.serialize_with_embedded_version(STORAGE_VERSION)
 	}
 }
 
@@ -262,7 +266,7 @@ impl FormalKey for KvAccepted2Key {
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
 		versioned::AcceptedValue::wrap_latest(value)
-			.serialize_with_embedded_version(PROTOCOL_VERSION)
+			.serialize_with_embedded_version(STORAGE_VERSION)
 	}
 }
 
@@ -316,7 +320,7 @@ impl FormalKey for KvOptimisticCacheKey {
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		versioned::CachedValue::wrap_latest(value).serialize_with_embedded_version(PROTOCOL_VERSION)
+		versioned::CachedValue::wrap_latest(value).serialize_with_embedded_version(STORAGE_VERSION)
 	}
 }
 

@@ -28,7 +28,27 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	)?;
 
 	// Must happen after coordinator is reconfigured
+	setup_auth_jwt_key_rotation(&ctx).await?;
 
+	Ok(())
+}
+
+async fn setup_auth_jwt_key_rotation(ctx: &StandaloneCtx) -> Result<()> {
+	let Some(auth) = &ctx.config().auth else {
+		return Ok(());
+	};
+	rivet_auth_jwt::metrics::ENABLED.set(i64::from(auth.jwt.enabled()));
+	if !auth.jwt.enabled() || !ctx.config().is_leader() {
+		return Ok(());
+	}
+
+	let workflow_id = ctx
+		.workflow(rivet_auth_jwt::workflows::key_rotation::Input)
+		.tag("auth", "jwt")
+		.unique()
+		.dispatch()
+		.await?;
+	tracing::debug!(%workflow_id, "created JWT key-rotation workflow");
 	Ok(())
 }
 

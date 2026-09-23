@@ -49,6 +49,7 @@ export type {
 	QueryOptions,
 	Region,
 } from "./client";
+export type { GetToken } from "./token-provider";
 
 /**
  * Creates a client with the actor accessor proxy.

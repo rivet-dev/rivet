@@ -3,6 +3,7 @@ use std::{future::Future, sync::Arc, time::Duration};
 use anyhow::Result;
 use gas::prelude::*;
 use hyper::header::HeaderName;
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 use rivet_guard_core::{RoutingFn, request_context::RequestContext};
 use rivet_metrics::prometheus::HistogramVec;
 use rivet_perf::{perf_finish, perf_start};
@@ -114,6 +115,72 @@ fn route_dispatch_phase(router: &'static str) -> Phase {
 	Phase::new("route_dispatch", &metrics::ROUTE_DISPATCH_DURATION).with_router(router)
 }
 
+async fn check_connection_auth(
+	ctx: &StandaloneCtx,
+	shared_state: &SharedState,
+	req_ctx: &RequestContext,
+	target: &'static str,
+) -> Result<()> {
+	if ctx.config().auth.is_none() {
+		return Ok(());
+	}
+
+	let token = if req_ctx.is_websocket() {
+		req_ctx
+			.headers()
+			.get(SEC_WEBSOCKET_PROTOCOL)
+			.and_then(|value| value.to_str().ok())
+			.and_then(|protocols| {
+				protocols
+					.split(',')
+					.map(str::trim)
+					.find_map(|protocol| protocol.strip_prefix(WS_PROTOCOL_TOKEN))
+			})
+	} else {
+		req_ctx
+			.headers()
+			.get(X_RIVET_TOKEN)
+			.and_then(|value| value.to_str().ok())
+	}
+	.ok_or_else(|| rivet_auth::errors::Auth::InvalidToken.build())?;
+
+	let namespace = req_ctx
+		.path()
+		.split_once('?')
+		.and_then(|(_, query)| {
+			url::form_urlencoded::parse(query.as_bytes())
+				.find_map(|(key, value)| (key == "namespace").then(|| value.into_owned()))
+		})
+		.map(AccessNamespaceScope::Name)
+		.unwrap_or(AccessNamespaceScope::Any);
+	let auth_state = req_ctx.auth_state().clone();
+	phase_timeout(
+		Phase::new("route_auth_check", &metrics::ROUTE_AUTH_CHECK_DURATION).with_router(target),
+		ctx.config().guard().route_auth_check_timeout(),
+		rivet_auth::check(
+			ctx,
+			shared_state.jwt_key_ring_cache.as_ref(),
+			&auth_state,
+			rivet_auth::CheckInput {
+				token,
+				namespace,
+				resource: ResourceKind::Runner,
+				target: TargetScope::Any,
+				operation: OperationKind::Create,
+			},
+		),
+		|elapsed, timeout| {
+			errors::RouteAuthCheckTimeout {
+				target: target.to_owned(),
+				elapsed_ms: elapsed.as_millis() as u64,
+				timeout_ms: timeout.as_millis() as u64,
+			}
+			.build()
+		},
+	)
+	.await
+}
+
 /// Creates the main routing function that handles all incoming requests
 #[tracing::instrument(level = "debug", skip_all)]
 pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -> RoutingFn {
@@ -122,7 +189,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 		let ctx = ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id()).unwrap();
 		let shared_state = shared_state.clone();
 		let hostname = req_ctx.hostname().to_string();
-		let path = req_ctx.path().to_string();
+		let path = req_ctx.path_for_logs();
 
 		Box::pin(
 			async move {
@@ -138,7 +205,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 
 					return Err(errors::NoRoute {
 						host: req_ctx.hostname().to_string(),
-						path: req_ctx.path().to_string(),
+						path: req_ctx.path_for_logs(),
 					}
 					.build());
 				}
@@ -163,7 +230,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 				if let Some(routing_output) = phase_timeout(
 					route_dispatch_phase("runner_path"),
 					ctx.config().guard().route_dispatch_timeout(),
-					runner::route_request_path_based(&ctx, req_ctx),
+					runner::route_request_path_based(&ctx, &shared_state, req_ctx),
 					|elapsed, timeout| route_dispatch_timeout("runner_path", elapsed, timeout),
 				)
 				.await?
@@ -177,7 +244,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 				if let Some(routing_output) = phase_timeout(
 					route_dispatch_phase("envoy_path"),
 					ctx.config().guard().route_dispatch_timeout(),
-					envoy::route_request_path_based(&ctx, req_ctx),
+					envoy::route_request_path_based(&ctx, &shared_state, req_ctx),
 					|elapsed, timeout| route_dispatch_timeout("envoy_path", elapsed, timeout),
 				)
 				.await?
@@ -232,7 +299,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					if let Some(routing_output) = phase_timeout(
 						route_dispatch_phase("runner_header"),
 						ctx.config().guard().route_dispatch_timeout(),
-						runner::route_request(&ctx, req_ctx, &target),
+						runner::route_request(&ctx, &shared_state, req_ctx, &target),
 						|elapsed, timeout| {
 							route_dispatch_timeout("runner_header", elapsed, timeout)
 						},
@@ -247,7 +314,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					if let Some(routing_output) = phase_timeout(
 						route_dispatch_phase("envoy_header"),
 						ctx.config().guard().route_dispatch_timeout(),
-						envoy::route_request(&ctx, req_ctx, target),
+						envoy::route_request(&ctx, &shared_state, req_ctx, target),
 						|elapsed, timeout| route_dispatch_timeout("envoy_header", elapsed, timeout),
 					)
 					.await?
@@ -260,7 +327,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					if let Some(routing_output) = phase_timeout(
 						route_dispatch_phase("api_public_header"),
 						ctx.config().guard().route_dispatch_timeout(),
-						api_public::route_request(&ctx, &target),
+						api_public::route_request(&ctx, &shared_state, &target),
 						|elapsed, timeout| {
 							route_dispatch_timeout("api_public_header", elapsed, timeout)
 						},
@@ -276,7 +343,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					if let Some(routing_output) = phase_timeout(
 						route_dispatch_phase("api_public_default"),
 						ctx.config().guard().route_dispatch_timeout(),
-						api_public::route_request(&ctx, "api-public"),
+						api_public::route_request(&ctx, &shared_state, "api-public"),
 						|elapsed, timeout| {
 							route_dispatch_timeout("api_public_default", elapsed, timeout)
 						},
@@ -294,7 +361,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 				tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path_for_logs(), "No route found");
 				Err(errors::NoRoute {
 					host: req_ctx.hostname().to_string(),
-					path: req_ctx.path().to_string(),
+					path: req_ctx.path_for_logs(),
 				}
 				.build())
 			}

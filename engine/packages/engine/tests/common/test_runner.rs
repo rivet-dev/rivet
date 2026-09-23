@@ -947,6 +947,7 @@ pub struct TestRunnerBuilder {
 	namespace: String,
 	runner_name: String,
 	runner_key: String,
+	token: String,
 	version: u32,
 	total_slots: u32,
 	actor_factories: HashMap<String, ActorFactory>,
@@ -958,6 +959,7 @@ impl TestRunnerBuilder {
 			namespace: namespace.to_string(),
 			runner_name: "test-runner".to_string(),
 			runner_key: format!("key-{:012x}", rand::random::<u64>()),
+			token: "dev".to_string(),
 			version: 1,
 			total_slots: 100,
 			actor_factories: HashMap::new(),
@@ -971,6 +973,11 @@ impl TestRunnerBuilder {
 
 	pub fn with_runner_key(mut self, key: &str) -> Self {
 		self.runner_key = key.to_string();
+		self
+	}
+
+	pub fn with_token(mut self, token: impl Into<String>) -> Self {
+		self.token = token.into();
 		self
 	}
 
@@ -996,7 +1003,7 @@ impl TestRunnerBuilder {
 	pub async fn build(self, dc: &super::TestDatacenter) -> Result<Runner> {
 		let config = RunnerConfig::builder()
 			.endpoint(format!("http://127.0.0.1:{}", dc.guard_port()))
-			.token("dev")
+			.token(self.token)
 			.namespace(&self.namespace)
 			.runner_name(&self.runner_name)
 			.runner_key(&self.runner_key)

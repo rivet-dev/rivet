@@ -2,6 +2,9 @@
 resolver = "2"
 members = [
   "container-runner",
+  "engine/packages/auth",
+  "engine/packages/auth-jwt",
+  "engine/packages/auth-policy",
   "engine/packages/api-builder",
   "engine/packages/api-peer",
   "engine/packages/api-public",
@@ -113,6 +116,7 @@ members = [
   console-subscriber = "0.4"
   dirs = "5.0.1"
   divan = "0.1.17"
+  ed25519-dalek = { version = "2.2", features = [ "pkcs8", "rand_core", "zeroize" ] }
   foundationdb-tuple = "0.9.1"
   fs_extra = "1.3.0"
   futures = "0.3.30"
@@ -129,6 +133,7 @@ members = [
   indoc = "2.0.5"
   itertools = "0.14.0"
   json5 = "0.4.1"
+  jsonwebtoken = { version = "11", default-features = false, features = [ "aws_lc_rs" ] }
   lazy_static = "1.4"
   libc = "0.2"
   lz4_flex = "0.11.3"
@@ -175,6 +180,7 @@ members = [
   tracing-opentelemetry = "0.29"
   tracing-slog = "0.2"
   vergen-gitcl = "1.0.0"
+  zeroize = { version = "1.8", features = [ "derive" ] }
   reqwest-eventsource = "0.6.0"
 
     [workspace.dependencies.async-nats]
@@ -419,6 +425,15 @@ members = [
     [workspace.dependencies.rivet-api-builder]
     path = "engine/packages/api-builder"
 
+    [workspace.dependencies.rivet-auth-policy]
+    path = "engine/packages/auth-policy"
+
+    [workspace.dependencies.rivet-auth]
+    path = "engine/packages/auth"
+
+    [workspace.dependencies.rivet-auth-jwt]
+    path = "engine/packages/auth-jwt"
+
     [workspace.dependencies.rivet-api-peer]
     path = "engine/packages/api-peer"
 
@@ -606,6 +621,7 @@ members = [
 
     [workspace.dependencies.rivet-util-id]
     path = "engine/packages/util-id"
+    default-features = false
 
     [workspace.dependencies.rivet-util-serde]
     path = "engine/packages/util-serde"

@@ -4,6 +4,7 @@ use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
 };
+use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 use serde::{Deserialize, Serialize};
 use utoipa::IntoParams;
 use utoipa::ToSchema;
@@ -68,7 +69,13 @@ async fn refresh_metadata_inner(
 	query: RefreshMetadataQuery,
 	_body: RefreshMetadataRequest,
 ) -> Result<RefreshMetadataResponse> {
-	ctx.auth().await?;
+	ctx.auth(
+		AccessNamespaceScope::Name(query.namespace.clone()),
+		ResourceKind::RunnerConfig,
+		TargetScope::Any,
+		OperationKind::Create,
+	)
+	.await?;
 
 	// Resolve namespace
 	let namespace = ctx
