@@ -1174,6 +1174,19 @@ describeDriverMatrix(
 					expect(line).toContain(`rayId=${approveRayId}`);
 				});
 
+				test("logs written by the workflow function after a receive carry the message's ray", () => {
+					const line = traced.runtime
+						.getRuntimeOutput?.()
+						.split("\n")
+						.find(
+							(candidate) =>
+								candidate.includes(
+									`workflow_run_log_key=${actorKey}`,
+								) && candidate.includes("approved"),
+						);
+					expect(line).toContain(`rayId=${approveRayId}`);
+				});
+
 				test("reports each attempt of a retried step under its own run, even when the error metadata is not JSON", () => {
 					const attempts = named(`${actorName}/charge-card`);
 					expect(

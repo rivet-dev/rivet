@@ -144,7 +144,12 @@ export const workflowTracedActor = actor({
 		);
 	},
 	run: workflow(async (ctx) => {
+		ctx.log.warn(
+			{ workflow_run_log_key: ctx.key[0] },
+			"waiting for approval",
+		);
 		await ctx.queue.next("wait-approve", { names: ["approve"] });
+		ctx.log.warn({ workflow_run_log_key: ctx.key[0] }, "approved");
 		await ctx.step("reserve-stock", async (c) => {
 			c.log.warn({ workflow_log_key: c.key[0] }, "reserving stock");
 			await c.db.execute("SELECT 'reserve-stock' AS step");
