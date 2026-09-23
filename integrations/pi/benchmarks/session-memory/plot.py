@@ -42,6 +42,8 @@ x = [r["live"] for r in rows]
 y = [r["rss"] / mib for r in rows]
 base, last = y[0], y[-1]
 delta = last - base
+# Exclude shared first-session initialization from the incremental session cost.
+average_per_session = (last - y[1]) / (count - 1)
 fonts = {}
 for name, weight, src in [
     ("body", 500, "manrope/Manrope-Variable-latin.woff2"),
@@ -100,7 +102,7 @@ def rule(y):
 label(0.055, 0.89, f"{count} Pi sessions using Rivet Actors", 27, font="bold")
 for xpos, value, title, color in [
     (0.055, f"+{delta:.1f} MiB", "RSS increase", ACCENT),
-    (0.50, f"{delta / count:.2f} MiB", "Average per session", INK),
+    (0.50, f"{average_per_session:.2f} MiB", "Average per session", INK),
 ]:
     label(xpos, 0.79, title, 13, SOFT)
     label(xpos, 0.725, value, 31, color, "bold")
