@@ -704,13 +704,13 @@ impl ActorInvocationTelemetry {
 	/// ray ID, and the application span active in the host runtime at that
 	/// moment, or the invocation span when there was none. Work that links
 	/// back to it then points at the code that caused it rather than at the
-	/// whole invocation around that code.
+	/// whole invocation around that code. The ray ID is recorded even when no
+	/// span is, because logs correlate by it.
 	pub(crate) fn incoming_trace_context(&self) -> IncomingTraceContext {
-		let Some(parent) = self.parent_context() else {
-			return IncomingTraceContext::default();
-		};
-		let parent_span = parent.span();
-		let headers = w3c_trace_headers(parent_span.span_context());
+		let headers = self
+			.parent_context()
+			.map(|parent| w3c_trace_headers(parent.span().span_context()))
+			.unwrap_or_default();
 		IncomingTraceContext {
 			ray_id: self.ray_id(),
 			traceparent: headers.traceparent,
@@ -1003,7 +1003,16 @@ fn span_context_of(span: &tracing::Span) -> Option<ActorInvocationSpanContext> {
 /// ray ID. Outside one, as from the run handler, it is a root span carrying the
 /// ray ID the message was sent under. It closes when the caller drops it, which
 /// `try_receive_batch` does as it hands the message back.
+///
+/// A workflow invocation takes the message's ray ID even when no span is
+/// recorded, because logs read the ray ID from the invocation.
 pub(crate) fn start_queue_receive(ctx: &ActorContext, message: &QueueMessage) -> tracing::Span {
+	let message_ray_id = message.trace_context.ray_id.as_deref();
+	if let (Some(telemetry), Some(message_ray_id)) = (ctx.invocation_telemetry(), message_ray_id)
+		&& telemetry.inner.takes_message_ray
+	{
+		telemetry.inner.state.lock().ray_id = Some(message_ray_id.to_owned());
+	}
 	if !tracing::enabled!(target: "rivetkit::telemetry", tracing::Level::INFO) {
 		return tracing::Span::none();
 	}
@@ -1030,17 +1039,13 @@ pub(crate) fn start_queue_receive(ctx: &ActorContext, message: &QueueMessage) ->
 		rivet.sampling.ratio = sampler,
 	);
 	if let Some((telemetry, parent)) = invocation_parent {
-		let message_ray_id = message.trace_context.ray_id.as_deref();
-		let mut state = telemetry.inner.state.lock();
-		if let (true, Some(message_ray_id)) = (telemetry.inner.takes_message_ray, message_ray_id) {
-			state.ray_id = Some(message_ray_id.to_owned());
-		}
+		let state = telemetry.inner.state.lock();
 		if let Some(ray_id) = state.ray_id.as_deref().or(message_ray_id) {
 			span.record("rivet.ray.id", ray_id);
 		}
 		drop(state);
 		span.set_parent(parent);
-	} else if let Some(ray_id) = &message.trace_context.ray_id {
+	} else if let Some(ray_id) = message_ray_id {
 		span.record("rivet.ray.id", ray_id);
 	}
 	if let Some(link) = parse_remote_parent(
