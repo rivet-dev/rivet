@@ -10,6 +10,7 @@ import {
 	type PiSession,
 	type PiSessionOptions,
 } from "./runtime.js";
+import { traceRun } from "./tracing.js";
 
 /** An action that mirrors one `AgentSession` method: same arguments, same result. */
 type SessionMethodAction<K extends keyof AgentSession> =
@@ -129,7 +130,7 @@ export function createPiActions(options: PiSessionOptions): PiActions {
 				const abort = () => void session.abort();
 				c.abortSignal.addEventListener("abort", abort, { once: true });
 				try {
-					await session.prompt(text, promptOptions);
+					await traceRun(session, c.actorId, () => session.prompt(text, promptOptions));
 				} finally {
 					c.abortSignal.removeEventListener("abort", abort);
 				}
@@ -219,4 +220,3 @@ export function createPiActions(options: PiSessionOptions): PiActions {
 			read(c, ({ session }) => session.getLastAssistantText()),
 	};
 }
-
