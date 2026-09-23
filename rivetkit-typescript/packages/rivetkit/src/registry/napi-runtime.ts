@@ -8,11 +8,14 @@ import type {
 	HttpResponseBodyStream as NativeHttpResponseBodyStream,
 	WebSocket as NativeWebSocket,
 } from "@rivetkit/rivetkit-napi";
+import type { WorkflowSpan } from "@/actor/config";
+import { encodeErrorForBridge } from "@/actor/errors";
 import type { ActorInvocationTraceContext } from "@/common/actor-telemetry-context";
 import {
 	readActiveTraceHeaders,
 	runWithActorInvocationSpan,
 } from "@/common/otel-context";
+import { logger } from "./log";
 import type {
 	ActorContextHandle,
 	ActorFactoryHandle,
@@ -297,6 +300,21 @@ export class NapiCoreRuntime implements CoreRuntime {
 	}
 
 	createRegistry(): RegistryHandle {
+		this.#bindings.setTelemetryLogSink(
+			(event: {
+				name: string;
+				message: string;
+				level: "warn" | "error";
+			}) => {
+				const fields = { otelEvent: event.name };
+				const message = event.message || event.name;
+				if (event.level === "error") {
+					logger().error(fields, message);
+				} else {
+					logger().warn(fields, message);
+				}
+			},
+		);
 		return asRegistryHandle(new this.#bindings.CoreRegistry());
 	}
 
@@ -583,7 +601,10 @@ export class NapiCoreRuntime implements CoreRuntime {
 	}
 
 	runWithActorInvocationContext<T>(ctx: ActorContextHandle, run: () => T): T {
-		const nativeCtx = asNativeActorContext(ctx);
+		return this.#runAs(asNativeActorContext(ctx), run);
+	}
+
+	#runAs<T>(nativeCtx: NativeActorContext, run: () => T): T {
 		const span = nativeCtx.invocationTraceContext()?.span;
 		return this.#invocationContext.run(nativeCtx, () =>
 			runWithActorInvocationSpan(span, run),
@@ -613,6 +634,38 @@ export class NapiCoreRuntime implements CoreRuntime {
 			span: call.spanContext() ?? undefined,
 			finish: (error?: string) => call.finish(error),
 		};
+	}
+
+	async startWorkflowSpan(ctx: ActorContextHandle): Promise<WorkflowSpan> {
+		const span = await asNativeActorContext(ctx).startWorkflowSpan();
+		const spanCtx = span.ctx();
+		return {
+			run: (body) => this.#runAs(spanCtx, body),
+			startStep: (name, attempt) => {
+				const step = spanCtx.startWorkflowStepSpan(name, attempt);
+				if (!step) return undefined;
+				const stepCtx = step.ctx();
+				return {
+					run: (body) => this.#runAs(stepCtx, body),
+					finish: (outcome, error) =>
+						step.finish(
+							outcome,
+							error === undefined
+								? undefined
+								: encodeErrorForBridge(error),
+						),
+				};
+			},
+			finish: (outcome) => span.finish(outcome),
+		};
+	}
+
+	runOutsideActorInvocationContext<T>(run: () => T): T {
+		return this.#invocationContext.exit(run);
+	}
+
+	currentInvocationScope(): object | undefined {
+		return this.#invocationContext.getStore();
 	}
 
 	actorName(ctx: ActorContextHandle): string {

@@ -219,10 +219,70 @@ describeDriverMatrix(
 					`telemetry-down-${crypto.randomUUID()}`,
 				]);
 				expect(await handle.increment(4)).toBe(4);
+				// The exporter reports the failed export on its own export cycle,
+				// which runs after the action returns, so there is nothing to await.
+				await vi.waitFor(
+					() => {
+						const exportFailure = traced.runtime
+							.getRuntimeOutput?.()
+							.split("\n")
+							.find((line) =>
+								line.includes(
+									"otelEvent=BatchSpanProcessor.ExportError",
+								),
+							);
+						expect(exportFailure).toContain("level=error");
+					},
+					{ timeout: 15_000, interval: 250 },
+				);
 			} finally {
 				await traced.stop();
 			}
 		}, 60_000);
+
+		test("keeps actor behavior intact when the trace exporter is slow", async () => {
+			const collector = await startOtlpCollector(
+				await getPort({ host: "127.0.0.1" }),
+				{ responseDelayMs: 120_000 },
+			);
+			try {
+				const traced = await startTracedRuntime(
+					driverTestConfig,
+					collector.endpoint,
+					{
+						OTEL_BSP_MAX_QUEUE_SIZE: "8",
+						OTEL_BSP_MAX_EXPORT_BATCH_SIZE: "4",
+					},
+				);
+				try {
+					const handle = traced.client.telemetryActor.getOrCreate([
+						`telemetry-slow-${crypto.randomUUID()}`,
+					]);
+					const started = Date.now();
+					for (let index = 1; index <= 12; index += 1) {
+						expect(await handle.increment(1)).toBe(index);
+					}
+					expect(Date.now() - started).toBeLessThan(60_000);
+					// The processor reports dropped spans on its own export cycle, which
+					// runs after the actions return, so there is nothing to await.
+					await vi.waitFor(
+						() => {
+							expect(
+								traced.runtime.getRuntimeOutput?.(),
+							).toContain(
+								"otelEvent=BatchSpanProcessor.SpanDroppingStarted",
+							);
+						},
+						{ timeout: 15_000, interval: 250 },
+					);
+					expect(await handle.getCount()).toBe(12);
+				} finally {
+					await traced.stop();
+				}
+			} finally {
+				await collector.close();
+			}
+		}, 120_000);
 
 		/**
 		 * One traced runtime and actor shared by every test that asserts on
@@ -809,6 +869,204 @@ describeDriverMatrix(
 					}
 				}
 			}, 60_000);
+			describe("workflow", () => {
+				const actorName = "workflowTracedActor";
+				let actorKey: string;
+				let approveRayId: string;
+				let resumeRayId: string;
+				let spans: ExportedSpan[];
+				let runs: ExportedSpan[];
+
+				const named = (name: string) =>
+					spans
+						.filter(
+							(span) =>
+								span.name === name &&
+								span.attributes["rivet.actor.key"] === actorKey,
+						)
+						.sort((a, b) =>
+							Number(a.endTimeUnixNano - b.endTimeUnixNano),
+						);
+				const attribute = (found: ExportedSpan[], key: string) =>
+					found.map((span) => span.attributes[key]);
+
+				beforeAll(async () => {
+					actorKey = `workflow-traced-${crypto.randomUUID()}`;
+					approveRayId = `approve-${crypto.randomUUID().slice(0, 8)}`;
+					resumeRayId = `resume-${crypto.randomUUID().slice(0, 8)}`;
+					const workflowActor =
+						traced.client.workflowTracedActor.getOrCreate([
+							actorKey,
+						]);
+					await withRayBaggage(approveRayId, () =>
+						workflowActor.send("approve", { id: "approve" }),
+					);
+					// The actor process logs from its sleep hook, and calling an action
+					// to ask would count as activity and keep the actor awake.
+					await vi.waitFor(
+						() => {
+							expect(
+								traced.runtime.getRuntimeOutput?.(),
+							).toContain(`slept_actor_key=${actorKey}`);
+						},
+						{ timeout: 30_000, interval: 100 },
+					);
+					await withRayBaggage(resumeRayId, () =>
+						workflowActor.send("resume", { id: "resume" }),
+					);
+					spans = await waitForSpans(
+						traceExports,
+						"the completed workflow run and the queue send it caused",
+						(exported) => {
+							spans = exported;
+							return (
+								attribute(
+									named(`${actorName}/workflow`),
+									"rivet.workflow.run.outcome",
+								).includes("completed") &&
+								named("telemetryRunConsumerActor/queue.send")
+									.length > 0
+							);
+						},
+						30_000,
+					);
+					runs = named(`${actorName}/workflow`);
+				}, 90_000);
+
+				test("chains every run to the one before it across the actor sleeping", async () => {
+					const wakes = await traced.client.workflowTracedActor
+						.getOrCreate([actorKey])
+						.getWakes();
+					expect(wakes).toBeGreaterThanOrEqual(2);
+					expect(runs.length).toBeGreaterThanOrEqual(4);
+					expect(runs[0].links).toEqual([]);
+					for (const [index, run] of runs.entries()) {
+						expect(run.parentSpanId).toBeUndefined();
+						expect(run.attributes["rivet.invocation.type"]).toBe(
+							"workflow",
+						);
+						if (index === 0) continue;
+						const previous = runs[index - 1];
+						expect(run.traceId).not.toBe(previous.traceId);
+						expect(run.links).toEqual([
+							{
+								traceId: previous.traceId,
+								spanId: previous.spanId,
+							},
+						]);
+					}
+					const outcomes = attribute(
+						runs,
+						"rivet.workflow.run.outcome",
+					);
+					const completedAt = outcomes.indexOf("completed");
+					expect(new Set(outcomes.slice(0, completedAt))).toEqual(
+						new Set(["sleeping"]),
+					);
+					expect(runs[completedAt].statusCode).toBe(OTLP_STATUS_OK);
+				});
+
+				test("reports a completed step once, with only its own work under it", () => {
+					const reserve = named(`${actorName}/reserve-stock`);
+					expect(reserve).toHaveLength(1);
+					expect(reserve[0].attributes).toMatchObject({
+						"rivet.workflow.step.name": "reserve-stock",
+						"rivet.workflow.step.attempt": "1",
+						"rivet.workflow.step.outcome": "ok",
+					});
+					const sqliteParents = spans
+						.filter((span) => span.name.startsWith("rivet.sqlite."))
+						.map((span) => span.parentSpanId);
+					expect(
+						sqliteParents.filter((id) => id === reserve[0].spanId),
+					).toHaveLength(1);
+					for (const run of runs) {
+						expect(sqliteParents).not.toContain(run.spanId);
+					}
+				});
+
+				test("logs written inside a step carry the step's trace ids and ray", () => {
+					const [reserve] = named(`${actorName}/reserve-stock`);
+					const line = traced.runtime
+						.getRuntimeOutput?.()
+						.split("\n")
+						.find((candidate) =>
+							candidate.includes(`workflow_log_key=${actorKey}`),
+						);
+					expect(line).toContain(`traceId=${reserve.traceId}`);
+					expect(line).toContain(`spanId=${reserve.spanId}`);
+					expect(line).toContain(`rayId=${approveRayId}`);
+				});
+
+				test("reports each attempt of a retried step under its own run", () => {
+					const attempts = named(`${actorName}/charge-card`);
+					expect(
+						attempts.map((attempt) => [
+							attempt.attributes["rivet.workflow.step.attempt"],
+							attempt.attributes["rivet.workflow.step.outcome"],
+							attempt.attributes["error.type"],
+							attempt.statusCode,
+						]),
+					).toEqual([
+						["1", "retry", "user.card_declined", OTLP_STATUS_ERROR],
+						["2", "retry", "user.card_declined", OTLP_STATUS_ERROR],
+						["3", "ok", undefined, OTLP_STATUS_OK],
+					]);
+					const runIds = runs.map((run) => run.spanId);
+					const parents = attempts.map(
+						(attempt) => attempt.parentSpanId,
+					);
+					expect(new Set(parents).size).toBe(3);
+					for (const parent of parents) {
+						expect(runIds).toContain(parent);
+					}
+				});
+
+				test("gives a run the ray of the message that woke it and keeps it for later runs", () => {
+					const ray = (name: string) =>
+						attribute(named(name), "rivet.ray.id");
+					const sends = named(`${actorName}/queue.send`);
+					for (const receive of named(`${actorName}/queue.receive`)) {
+						const send = sends.find(
+							(candidate) =>
+								candidate.attributes["rivet.ray.id"] ===
+								receive.attributes["rivet.ray.id"],
+						);
+						expect(receive.links).toEqual([
+							{ traceId: send?.traceId, spanId: send?.spanId },
+						]);
+					}
+					expect(ray(`${actorName}/queue.receive`).sort()).toEqual(
+						[approveRayId, resumeRayId].sort(),
+					);
+					expect(ray(`${actorName}/reserve-stock`)).toEqual([
+						approveRayId,
+					]);
+					expect(ray(`${actorName}/charge-card`)).toEqual([
+						resumeRayId,
+						resumeRayId,
+						resumeRayId,
+					]);
+					const runRays = ray(`${actorName}/workflow`);
+					const firstWithRay = runRays.findIndex(
+						(id) => id !== undefined,
+					);
+					expect(runRays[firstWithRay]).toBe(approveRayId);
+					expect(runRays.slice(firstWithRay)).not.toContain(
+						undefined,
+					);
+					expect(runRays.at(-1)).toBe(resumeRayId);
+				});
+
+				test("puts a queue send made inside a step in that step's trace", () => {
+					const [notify] = named(`${actorName}/notify`);
+					const [send] = named(
+						"telemetryRunConsumerActor/queue.send",
+					);
+					expect(send.traceId).toBe(notify.traceId);
+					expect(send.parentSpanId).toBe(notify.spanId);
+				});
+			});
 		});
 	},
 	{

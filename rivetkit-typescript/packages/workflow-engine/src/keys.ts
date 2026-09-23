@@ -14,6 +14,7 @@ export const KEY_PREFIX = {
 	HISTORY: 2, // History entries: [2, ...locationSegments]
 	WORKFLOW: 3, // Workflow metadata: [3, field]
 	ENTRY_METADATA: 4, // Entry metadata: [4, entryId]
+	// 5 is reserved for RivetKit's workflow trace context.
 } as const;
 
 // Workflow metadata field identifiers

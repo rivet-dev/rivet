@@ -310,12 +310,14 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { ActorContext, decodeInspectorRequest, encodeInspectorResponse, OutboundCall, NapiActorFactory, CancellationToken, ConnHandle, JsNativeDatabase, JsSqliteTransaction, JsActorStateTransaction, HttpResponseBodyStream, HttpRequestBodyStream, Kv, Queue, QueueMessage, CoreRegistry, Schedule, WebSocket, shutdownTelemetry } = nativeBinding
+const { ActorContext, decodeInspectorRequest, encodeInspectorResponse, OutboundCall, WorkflowSpan, WorkflowStepSpan, NapiActorFactory, CancellationToken, ConnHandle, JsNativeDatabase, JsSqliteTransaction, JsActorStateTransaction, HttpResponseBodyStream, HttpRequestBodyStream, Kv, Queue, QueueMessage, CoreRegistry, Schedule, WebSocket, setTelemetryLogSink, shutdownTelemetry } = nativeBinding
 
 module.exports.ActorContext = ActorContext
 module.exports.decodeInspectorRequest = decodeInspectorRequest
 module.exports.encodeInspectorResponse = encodeInspectorResponse
 module.exports.OutboundCall = OutboundCall
+module.exports.WorkflowSpan = WorkflowSpan
+module.exports.WorkflowStepSpan = WorkflowStepSpan
 module.exports.NapiActorFactory = NapiActorFactory
 module.exports.CancellationToken = CancellationToken
 module.exports.ConnHandle = ConnHandle
@@ -330,4 +332,5 @@ module.exports.QueueMessage = QueueMessage
 module.exports.CoreRegistry = CoreRegistry
 module.exports.Schedule = Schedule
 module.exports.WebSocket = WebSocket
+module.exports.setTelemetryLogSink = setTelemetryLogSink
 module.exports.shutdownTelemetry = shutdownTelemetry
