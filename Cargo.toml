@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+	"benchmarks/guard-leasing",
   "container-runner",
   "engine/packages/api-builder",
   "engine/packages/api-peer",
