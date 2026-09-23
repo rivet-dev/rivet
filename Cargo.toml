@@ -411,12 +411,10 @@ members = [
     version = "0.5.0"
 
     [workspace.dependencies.vbare]
-    version = "0.0.4"
+    version = "0.0.5"
 
     [workspace.dependencies.vbare-compiler]
-    package = "vbare-compiler"
-    git = "https://github.com/rivet-dev/vbare"
-    branch = "main"
+    version = "0.0.5"
 
     [workspace.dependencies.rivet-api-builder]
     path = "engine/packages/api-builder"

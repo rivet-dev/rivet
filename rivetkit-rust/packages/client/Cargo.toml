@@ -26,7 +26,7 @@ tokio-tungstenite = { version = "0.26.1", features = ["rustls-tls-native-roots",
 tracing = "0.1.41"
 tungstenite = "0.26.2"
 urlencoding = "2.1.3"
-vbare = "0.0.4"
+vbare = "0.0.5"
 
 [dev-dependencies]
 axum = { workspace = true, features = ["ws"] }

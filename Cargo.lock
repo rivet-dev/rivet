@@ -8555,17 +8555,18 @@ checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
 name = "vbare"
-version = "0.0.4"
+version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51a63d4c173f6a6f7c8f524dcdda615e51f83d12bca9cc129f676229b995ca41"
+checksum = "4da8f87c236f82b06387d70dbdd9dad164b8bdf2cc839b0d07378c8cfd2de701"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "vbare-compiler"
-version = "0.0.4"
-source = "git+https://github.com/rivet-dev/vbare?branch=main#d4febc1a7db7ea5eb2a7e6c145c4e59b8f4837d9"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18428cb434c3f2e49ae908b9ee963741320d859c0ddd4e24f8a724f2daea3244"
 dependencies = [
  "indoc",
  "prettyplease",
@@ -8575,8 +8576,9 @@ dependencies = [
 
 [[package]]
 name = "vbare-gen"
-version = "0.0.4"
-source = "git+https://github.com/rivet-dev/vbare?branch=main#d4febc1a7db7ea5eb2a7e6c145c4e59b8f4837d9"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1cfbe99d7877d9a4baeade691b87dc22cef572c158f0f1ca3382ebbfb1ab48e"
 dependencies = [
  "heck 0.5.0",
  "pest",
