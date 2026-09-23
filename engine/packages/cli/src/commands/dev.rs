@@ -382,7 +382,7 @@ async fn register_runner_config(endpoint: &str, runner: &str, handler_url: &str)
 	let response = Client::new()
 		.put(url)
 		.header("Content-Type", "application/json")
-		.bearer_auth("dev")
+		.bearer_auth("default")
 		.json(&body)
 		.send()
 		.await

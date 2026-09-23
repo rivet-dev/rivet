@@ -43,7 +43,7 @@ fn envoy_connect_rejects_bad_token() {
 				"rivet, rivet_token.bad-token".parse().unwrap(),
 			);
 
-			assert_envoy_rejection(request, "token_not_found").await;
+			assert_envoy_rejection(request, "invalid_token").await;
 		},
 	);
 }

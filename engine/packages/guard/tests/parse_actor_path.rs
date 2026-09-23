@@ -21,6 +21,23 @@ fn parses_direct_actor_paths_with_existing_behavior() {
 }
 
 #[test]
+fn parses_url_credentials_near_the_jwt_size_limit() {
+	let token = "a".repeat(rivet_auth_jwt::MAX_TOKEN_BYTES);
+	let direct = format!("/gateway/actor-123@{token}/connect");
+	match parse_actor_path(&direct).unwrap().unwrap() {
+		ParsedActorPath::Direct(path) => assert_eq!(path.token.as_deref(), Some(token.as_str())),
+		ParsedActorPath::Query(_) => panic!("expected direct actor path"),
+	}
+
+	let query =
+		format!("/gateway/lobby/connect?rvt-namespace=default&rvt-method=get&rvt-token={token}");
+	match parse_actor_path(&query).unwrap().unwrap() {
+		ParsedActorPath::Query(path) => assert_eq!(path.token.as_deref(), Some(token.as_str())),
+		ParsedActorPath::Direct(_) => panic!("expected query actor path"),
+	}
+}
+
+#[test]
 fn parses_query_actor_get_paths() {
 	let path = "/gateway/lobby/inspect?rvt-namespace=prod&rvt-method=get&rvt-key=region-west%2F1,shard-2,alpha%40beta&rvt-token=guard%2Ftoken&watch=1";
 	let result = parse_actor_path(path).unwrap().unwrap();

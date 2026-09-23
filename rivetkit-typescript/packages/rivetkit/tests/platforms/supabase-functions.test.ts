@@ -102,6 +102,8 @@ async function startSupabaseTestEngine(): Promise<SupabaseTestEngine> {
 		options: {
 			env: {
 				...process.env,
+				RIVET__AUTH__ADMIN_TOKEN:
+					process.env.RIVET__AUTH__ADMIN_TOKEN ?? "default",
 				RIVET__GUARD__HOST: "0.0.0.0",
 				RIVET__GUARD__PORT: guardPort.toString(),
 				RIVET__API_PEER__HOST: host,

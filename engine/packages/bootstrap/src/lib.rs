@@ -34,9 +34,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 }
 
 async fn setup_auth_jwt_key_rotation(ctx: &StandaloneCtx) -> Result<()> {
-	let Some(auth) = &ctx.config().auth else {
-		return Ok(());
-	};
+	let auth = ctx.config().auth_required()?;
 	rivet_auth_jwt::metrics::ENABLED.set(i64::from(auth.jwt.enabled()));
 	if !auth.jwt.enabled() || !ctx.config().is_leader() {
 		return Ok(());

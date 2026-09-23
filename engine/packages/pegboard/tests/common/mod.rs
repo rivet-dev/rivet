@@ -137,6 +137,7 @@ pub async fn load_hash_config(hash_fields: &str) -> Result<rivet_config::Config>
 	write!(
 		file,
 		r#"{{
+			auth: {{ admin_token: "default" }},
 			pegboard: {{
 				envoy_load_balancer: {{
 					hash: {{

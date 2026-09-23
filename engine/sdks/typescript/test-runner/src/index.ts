@@ -20,7 +20,7 @@ const RIVET_RUNNER_TOTAL_SLOTS = parseInt(
 	10,
 );
 const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
-const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
+const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "default";
 const AUTOSTART_SERVER = (process.env.AUTOSTART_SERVER ?? "1") === "1";
 const AUTOSTART_RUNNER = (process.env.AUTOSTART_RUNNER ?? "0") === "1";
 const AUTOCONFIGURE_SERVERLESS =

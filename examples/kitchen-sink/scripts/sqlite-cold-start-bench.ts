@@ -8,6 +8,11 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "rivetkit/client";
 import type { registry } from "../src/index.ts";
 
+const LOCAL_ENGINE_TOKEN =
+	process.env.RIVET_TOKEN ??
+	process.env.RIVET__AUTH__ADMIN_TOKEN ??
+	"default";
+
 interface Args {
 	endpoint: string;
 	key: string;
@@ -459,7 +464,7 @@ async function configureLocalRunner(endpoint: string): Promise<void> {
 	const datacentersResponse = await fetch(
 		`${base}/datacenters?namespace=default`,
 		{
-			headers: { Authorization: "Bearer dev" },
+			headers: { Authorization: `Bearer ${LOCAL_ENGINE_TOKEN}` },
 		},
 	);
 	if (!datacentersResponse.ok) {
@@ -479,7 +484,7 @@ async function configureLocalRunner(endpoint: string): Promise<void> {
 		{
 			method: "PUT",
 			headers: {
-				Authorization: "Bearer dev",
+				Authorization: `Bearer ${LOCAL_ENGINE_TOKEN}`,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
@@ -506,7 +511,7 @@ async function waitForEnvoy(endpoint: string): Promise<void> {
 		const response = await fetch(
 			`${base}/envoys?namespace=default&name=k8s`,
 			{
-				headers: { Authorization: "Bearer dev" },
+				headers: { Authorization: `Bearer ${LOCAL_ENGINE_TOKEN}` },
 			},
 		);
 		if (response.ok) {
@@ -578,6 +583,8 @@ async function startLocalEngine(
 	const dbRoot = mkdtempSync(join(tmpdir(), "sqlite-cold-start-engine-"));
 	const env = {
 		...process.env,
+		RIVET__AUTH__ADMIN_TOKEN:
+			process.env.RIVET__AUTH__ADMIN_TOKEN ?? "default",
 		RIVET__FILE_SYSTEM__PATH: join(dbRoot, "db"),
 		_RIVET_METRICS_TOKEN:
 			process.env._RIVET_METRICS_TOKEN ??

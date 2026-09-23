@@ -13,7 +13,7 @@ use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-const TOKEN: &str = "dev";
+const TOKEN: &str = "default";
 const DEFAULT_NAMESPACE: &str = "default";
 const DEFAULT_POOL: &str = "default";
 
@@ -602,6 +602,7 @@ async fn spawn_engine_child(
 	let mut command = Command::new(binary_path);
 	command
 		.arg("start")
+		.env("RIVET__AUTH__ADMIN_TOKEN", "default")
 		.env("RIVET__GUARD__HOST", "127.0.0.1")
 		.env("RIVET__GUARD__PORT", guard_port.to_string())
 		.env("RIVET__API_PEER__HOST", "127.0.0.1")

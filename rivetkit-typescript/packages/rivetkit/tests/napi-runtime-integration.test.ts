@@ -10,7 +10,7 @@ import { createClient } from "../src/client/mod";
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = join(TEST_DIR, "fixtures", "napi-runtime-server.ts");
 const NAMESPACE = "default";
-const TOKEN = "dev";
+const TOKEN = "default";
 const SERVICES_POOL_NAME = "services";
 let runtimeLogs = {
 	stdout: "",

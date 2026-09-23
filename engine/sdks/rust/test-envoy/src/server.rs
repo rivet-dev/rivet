@@ -56,7 +56,7 @@ impl Settings {
 				.unwrap_or(1),
 			endpoint: std::env::var("RIVET_ENDPOINT")
 				.unwrap_or_else(|_| "http://127.0.0.1:6420".to_string()),
-			token: std::env::var("RIVET_TOKEN").unwrap_or_else(|_| "dev".to_string()),
+			token: std::env::var("RIVET_TOKEN").unwrap_or_else(|_| "default".to_string()),
 			autostart_server: read_bool_env("AUTOSTART_SERVER", true),
 			autostart_envoy: read_bool_env("AUTOSTART_ENVOY", false),
 			autoconfigure_serverless: read_bool_env("AUTOCONFIGURE_SERVERLESS", true),

@@ -249,6 +249,11 @@ function startEngine({ guardPort, peerPort, metricsPort }) {
 		}),
 	);
 	const child = spawn(getEnginePath(), ['start', '--config', configPath], {
+		env: {
+			...process.env,
+			RIVET__AUTH__ADMIN_TOKEN:
+				process.env.RIVET__AUTH__ADMIN_TOKEN ?? 'default',
+		},
 		stdio: ['ignore', 'pipe', 'pipe'],
 	});
 	let output = '';

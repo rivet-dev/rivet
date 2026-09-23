@@ -4187,6 +4187,7 @@ dependencies = [
  "rivet-error",
  "rivet-guard-core",
  "rivet-metrics",
+ "rivet-ups-protocol",
  "rivet-util",
  "scc",
  "serde",
@@ -5144,7 +5145,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-full"
-version = "0.0.1"
+version = "2.3.19"
 dependencies = [
  "reqwest 0.12.22",
  "serde",

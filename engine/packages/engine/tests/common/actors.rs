@@ -16,6 +16,7 @@ pub async fn ping_actor_via_guard(dc: &TestDatacenter, actor_id: &str) -> serde_
 	let client = reqwest::Client::new();
 	let response = client
 		.get(format!("http://127.0.0.1:{}/ping", guard_port))
+		.bearer_auth(super::TEST_ADMIN_TOKEN)
 		.header("X-Rivet-Target", "actor")
 		.header("X-Rivet-Actor", actor_id)
 		.send()
@@ -163,6 +164,12 @@ pub async fn ping_actor_websocket_via_guard(
 		)
 		.parse()
 		.unwrap(),
+	);
+	request.headers_mut().insert(
+		"Authorization",
+		format!("Bearer {}", super::TEST_ADMIN_TOKEN)
+			.parse()
+			.unwrap(),
 	);
 
 	// Connect to WebSocket

@@ -6,7 +6,7 @@ import { buildConfiguredRegistry } from "../../src/registry/native";
 
 const registryPath = process.env.RIVETKIT_DRIVER_REGISTRY_PATH;
 const endpoint = process.env.RIVETKIT_TEST_ENDPOINT;
-const token = process.env.RIVET_TOKEN ?? "dev";
+const token = process.env.RIVET_TOKEN ?? "default";
 const namespace = process.env.RIVET_NAMESPACE ?? "default";
 const poolName = process.env.RIVETKIT_TEST_POOL_NAME ?? "default";
 const sqliteBackend = process.env.RIVETKIT_TEST_SQLITE_BACKEND ?? "remote";

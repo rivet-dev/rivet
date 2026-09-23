@@ -1,6 +1,6 @@
 export const RIVET_ENDPOINT =
 	process.env.RIVET_ENDPOINT ?? "http://localhost:6420";
-export const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
+export const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "default";
 export const RIVET_NAMESPACE = process.env.RIVET_NAMESPACE ?? "default";
 
 export async function createActor(

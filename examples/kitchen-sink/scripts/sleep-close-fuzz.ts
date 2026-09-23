@@ -20,7 +20,7 @@ import type { registry } from "../src/index.ts";
 const ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 const NAMESPACE =
 	process.env.FUZZ_NAMESPACE ?? process.env.RIVET_NAMESPACE ?? "default";
-const TOKEN = process.env.FUZZ_TOKEN ?? process.env.RIVET_TOKEN ?? "dev";
+const TOKEN = process.env.FUZZ_TOKEN ?? process.env.RIVET_TOKEN ?? "default";
 const PARALLELISM = Number(process.env.FUZZ_PARALLELISM ?? "10");
 const DURATION_MS = Number(process.env.FUZZ_DURATION_MS ?? "60000");
 const WAIT_BEFORE_SLEEP_MS = Number(

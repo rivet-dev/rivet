@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 const FERN_GROUP = process.env.FERN_GROUP;
 if (!FERN_GROUP) throw new Error("Missing FERN_GROUP");
 const OPENAPI_PATH = `engine/artifacts/openapi.json`;
-const GEN_PATH_RUST = `engine/sdks/rust/api-${FERN_GROUP}/rust`;
+const GEN_PATH_RUST = `engine/sdks/rust/api-${FERN_GROUP}`;
 
 function runCommand(command: string, args: string[]): Promise<void> {
 	return new Promise((resolve, reject) => {
@@ -110,6 +110,10 @@ async function modifyDependencies() {
 	const cargoTomlPath = `${GEN_PATH_RUST}/Cargo.toml`;
 	let cargoToml = await readFile(cargoTomlPath, 'utf-8');
 	cargoToml = cargoToml.replace(
+		/^(name = "rivet-api-[^\"]+")$/m,
+		"$1\npublish = false",
+	);
+	cargoToml = cargoToml.replace(
 		/\[dependencies\.reqwest\]/,
 		"[dependencies.reqwest]\ndefault-features = false",
 	);
@@ -127,7 +131,7 @@ async function applyErrorPatch() {
 }
 
 async function formatSdk() {
-	await runCommand("cargo", ["fmt"]);
+	await runCommand("cargo", ["fmt", "--manifest-path", `${GEN_PATH_RUST}/Cargo.toml`]);
 }
 
 async function main() {

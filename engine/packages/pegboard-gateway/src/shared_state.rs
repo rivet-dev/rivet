@@ -315,6 +315,24 @@ impl SharedState {
 		Ok(())
 	}
 
+	pub async fn terminate_websocket(&self, request_id: protocol::mk2::RequestId) -> Result<()> {
+		let close_result = self
+			.send_message(
+				request_id,
+				protocol::mk2::ToClientTunnelMessageKind::ToClientWebSocketClose(
+					protocol::mk2::ToClientWebSocketClose {
+						code: Some(u16::from(
+							tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Policy,
+						)),
+						reason: Some("auth.token_expired".to_owned()),
+					},
+				),
+			)
+			.await;
+		self.in_flight_requests.remove_async(&request_id).await;
+		close_result
+	}
+
 	#[tracing::instrument(level = "debug", skip_all, fields(request_id=%protocol::util::id_to_string(&request_id)))]
 	pub async fn send_and_check_ping(&self, request_id: protocol::mk2::RequestId) -> Result<()> {
 		let req = self

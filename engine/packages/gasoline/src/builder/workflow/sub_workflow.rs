@@ -148,11 +148,8 @@ where
 			let sub_workflow_id = Id::new_v1(ctx.config().dc_label());
 			let start_instant = Instant::now();
 
-			if unique {
-				tracing::debug!(?tags, ?input, "dispatching unique sub workflow");
-			} else {
-				tracing::debug!(?tags, ?input, "dispatching sub workflow");
-			}
+			// Sub-workflow inputs and tags can carry credentials.
+			tracing::debug!(sub_workflow_name, unique, "dispatching sub workflow");
 
 			// Serialize input
 			let input_val = rivet_util::serde::json_to_raw_value!(input)
@@ -177,9 +174,9 @@ where
 
 			if unique {
 				if sub_workflow_id == actual_sub_workflow_id {
-					tracing::debug!(?tags, "dispatched unique sub workflow");
+					tracing::debug!(sub_workflow_name, "dispatched unique sub workflow");
 				} else {
-					tracing::debug!(?tags, "unique sub workflow already exists");
+					tracing::debug!(sub_workflow_name, "unique sub workflow already exists");
 				}
 			}
 

@@ -688,6 +688,12 @@ impl CustomServeTrait for PegboardGateway {
 		res
 	}
 
+	async fn terminate_websocket(&self, req_ctx: &RequestContext) -> Result<()> {
+		self.shared_state
+			.terminate_websocket(req_ctx.in_flight_request_id()?)
+			.await
+	}
+
 	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id))]
 	async fn handle_websocket(
 		&self,

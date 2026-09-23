@@ -5,7 +5,7 @@ import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
 const HIBERNATABLE_ACK_SETTLE_TIMEOUT_MS = 12_000;
-const DRIVER_API_TOKEN = "dev";
+const DRIVER_API_TOKEN = "default";
 
 async function waitForJsonMessage(
 	ws: WebSocket,

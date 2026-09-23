@@ -36,7 +36,7 @@ const NAMESPACE =
 	process.env.RIVET_NAMESPACE ??
 	"default";
 const TOKEN =
-	process.env.MOCK_AGENTIC_TOKEN ?? process.env.RIVET_TOKEN ?? "dev";
+	process.env.MOCK_AGENTIC_TOKEN ?? process.env.RIVET_TOKEN ?? "default";
 const POOL_NAME =
 	process.env.MOCK_AGENTIC_POOL ?? process.env.RIVET_POOL ?? "k8s";
 const KEY_PREFIX = process.env.MOCK_AGENTIC_KEY_PREFIX ?? "mock-agentic-loop";
@@ -981,7 +981,9 @@ function isTransientConnectError(error: unknown) {
 		message.includes("guard.actor_wake_retries_exceeded") ||
 		message.includes("guard.service_unavailable") ||
 		message.includes("guard.websocket_closed_before_open") ||
-		message.includes("guard.actor_stopped_while_waiting_for_websocket_open") ||
+		message.includes(
+			"guard.actor_stopped_while_waiting_for_websocket_open",
+		) ||
 		message.includes("guard.websocket_open_dropped") ||
 		message.includes("guard.websocket_open_response_closed") ||
 		message.includes("guard.websocket_open_timeout") ||

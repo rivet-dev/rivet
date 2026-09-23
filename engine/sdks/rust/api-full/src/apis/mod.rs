@@ -113,7 +113,25 @@ impl From<&str> for ContentType {
 	}
 }
 
-pub mod actors_api;
-pub mod ns_api;
+pub mod actors_create_api;
+pub mod actors_delete_api;
+pub mod actors_get_or_create_api;
+pub mod actors_kv_get_api;
+pub mod actors_list_api;
+pub mod actors_list_names_api;
+pub mod actors_reschedule_api;
+pub mod actors_sleep_api;
+pub mod auth_tokens_api;
+pub mod datacenters_api;
+pub mod envoys_api;
+pub mod health_api;
+pub mod metadata_api;
+pub mod namespaces_api;
+pub mod runner_configs_delete_api;
+pub mod runner_configs_list_api;
+pub mod runner_configs_refresh_metadata_api;
+pub mod runner_configs_serverless_health_check_api;
+pub mod runner_configs_upsert_api;
+pub mod runners_api;
 
 pub mod configuration;

@@ -121,10 +121,6 @@ async fn check_connection_auth(
 	req_ctx: &RequestContext,
 	target: &'static str,
 ) -> Result<()> {
-	if ctx.config().auth.is_none() {
-		return Ok(());
-	}
-
 	let token = if req_ctx.is_websocket() {
 		req_ctx
 			.headers()

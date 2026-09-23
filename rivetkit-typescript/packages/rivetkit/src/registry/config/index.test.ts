@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe("RegistryConfigSchema", () => {
-	test("defaults token to dev", () => {
+	test("defaults local Engine token", () => {
 		delete process.env.RIVET_TOKEN;
 
 		const config = RegistryConfigSchema.parse({
@@ -20,6 +20,6 @@ describe("RegistryConfigSchema", () => {
 			startEngine: true,
 		});
 
-		expect(config.token).toBe("dev");
+		expect(config.token).toBe("default");
 	});
 });

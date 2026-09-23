@@ -39,7 +39,7 @@ pub async fn build_metadata_get_request(port: u16) -> Result<reqwest::RequestBui
 
 pub async fn metadata_get(port: u16) -> Result<MetadataResponse> {
 	let request = build_metadata_get_request(port).await?;
-	let response = request.send().await?;
+	let response = request.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -62,7 +62,7 @@ pub async fn namespaces_list(
 	query: namespaces::list::ListQuery,
 ) -> Result<namespaces::list::ListResponse> {
 	let request = build_namespaces_list_request(port, query).await?;
-	let response = request.send().await?;
+	let response = request.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -81,7 +81,7 @@ pub async fn namespaces_create(
 	request: rivet_api_peer::namespaces::CreateRequest,
 ) -> Result<rivet_api_peer::namespaces::CreateResponse> {
 	let req = build_namespaces_create_request(port, request).await?;
-	let response = req.send().await?;
+	let response = req.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -104,7 +104,7 @@ pub async fn runner_configs_list(
 	query: runner_configs::list::ListQuery,
 ) -> Result<rivet_api_public::runner_configs::list::ListResponse> {
 	let request = build_runner_configs_list_request(port, query).await?;
-	let response = request.send().await?;
+	let response = request.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -157,7 +157,7 @@ pub async fn runner_configs_serverless_health_check(
 	request: ServerlessHealthCheckRequest,
 ) -> Result<ServerlessHealthCheckResponse> {
 	let req = build_runner_configs_serverless_health_check_request(port, query, request).await?;
-	let response = req.send().await?;
+	let response = req.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -185,7 +185,7 @@ pub async fn runner_configs_upsert(
 	request: rivet_api_public::runner_configs::upsert::UpsertRequest,
 ) -> Result<rivet_api_peer::runner_configs::UpsertResponse> {
 	let req = build_runner_configs_upsert_request(port, path, query, request).await?;
-	let response = req.send().await?;
+	let response = req.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -209,7 +209,7 @@ pub async fn runner_configs_delete(
 	query: rivet_api_peer::runner_configs::DeleteQuery,
 ) -> Result<rivet_api_peer::runner_configs::DeleteResponse> {
 	let request = build_runner_configs_delete_request(port, path, query).await?;
-	let response = request.send().await?;
+	let response = request.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -249,7 +249,7 @@ pub async fn runner_configs_refresh_metadata(
 ) -> Result<RefreshMetadataResponse> {
 	let req =
 		build_runner_configs_refresh_metadata_request(port, runner_name, query, request).await?;
-	let response = req.send().await?;
+	let response = req.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -272,7 +272,7 @@ pub async fn actors_list(
 	query: actors::list::ListQuery,
 ) -> Result<actors::list::ListResponse> {
 	let request = build_actors_list_request(port, query).await?;
-	let response = request.send().await?;
+	let response = request.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -297,7 +297,7 @@ pub async fn actors_create(
 	request: actors::create::CreateRequest,
 ) -> Result<actors::create::CreateResponse> {
 	let req = build_actors_create_request(port, query, request).await?;
-	let response = req.send().await?;
+	let response = req.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -343,7 +343,7 @@ pub async fn actors_get_or_create(
 	request: GetOrCreateRequest,
 ) -> Result<GetOrCreateResponse> {
 	let req = build_actors_get_or_create_request(port, query, request).await?;
-	let response = req.send().await?;
+	let response = req.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -367,7 +367,7 @@ pub async fn actors_delete(
 	query: actors::delete::DeleteQuery,
 ) -> Result<actors::delete::DeleteResponse> {
 	let request = build_actors_delete_request(port, path, query).await?;
-	let response = request.send().await?;
+	let response = request.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -388,7 +388,7 @@ pub async fn actors_list_names(
 	query: actors::list_names::ListNamesQuery,
 ) -> Result<actors::list_names::ListNamesResponse> {
 	let request = build_actors_list_names_request(port, query).await?;
-	let response = request.send().await?;
+	let response = request.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -411,7 +411,7 @@ pub async fn runners_list(
 	query: runners::list::ListQuery,
 ) -> Result<runners::list::ListResponse> {
 	let request = build_runners_list_request(port, query).await?;
-	let response = request.send().await?;
+	let response = request.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -432,7 +432,7 @@ pub async fn runners_list_names(
 	query: runners::list_names::ListNamesQuery,
 ) -> Result<runners::list_names::ListNamesResponse> {
 	let request = build_runners_list_names_request(port, query).await?;
-	let response = request.send().await?;
+	let response = request.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -445,7 +445,7 @@ pub async fn build_datacenters_list_request(port: u16) -> Result<reqwest::Reques
 
 pub async fn datacenters_list(port: u16) -> Result<datacenters::list::ListResponse> {
 	let request = build_datacenters_list_request(port).await?;
-	let response = request.send().await?;
+	let response = request.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }
 
@@ -470,6 +470,6 @@ pub async fn build_health_fanout_request(port: u16) -> Result<reqwest::RequestBu
 
 pub async fn health_fanout(port: u16) -> Result<HealthFanoutResponse> {
 	let request = build_health_fanout_request(port).await?;
-	let response = request.send().await?;
+	let response = request.bearer_auth(super::TEST_ADMIN_TOKEN).send().await?;
 	parse_response(response).await
 }

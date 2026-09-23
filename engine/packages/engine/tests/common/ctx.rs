@@ -3,6 +3,8 @@ use gas::prelude::*;
 use rivet_service_manager::{Service, ServiceKind};
 use std::time::Duration;
 
+pub const TEST_ADMIN_TOKEN: &str = "default";
+
 pub struct TestOpts {
 	pub datacenters: usize,
 	pub timeout_secs: u64,
@@ -17,7 +19,7 @@ impl TestOpts {
 			datacenters,
 			timeout_secs: 10,
 			pegboard_outbound: false,
-			auth_admin_token: None,
+			auth_admin_token: Some(TEST_ADMIN_TOKEN.to_owned()),
 			network_faults: false,
 		}
 	}
@@ -49,7 +51,7 @@ impl Default for TestOpts {
 			datacenters: 1,
 			timeout_secs: 10,
 			pegboard_outbound: false,
-			auth_admin_token: None,
+			auth_admin_token: Some(TEST_ADMIN_TOKEN.to_owned()),
 			network_faults: false,
 		}
 	}

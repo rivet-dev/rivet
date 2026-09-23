@@ -37,7 +37,7 @@ const NAMESPACE = stringFromConfig(
 const TOKEN = stringFromConfig(
 	"token",
 	["SIGTERM_SLEEP_TOKEN", "RIVET_TOKEN"],
-	"dev",
+	"default",
 );
 const POOL_NAME = stringFromConfig(
 	"pool",

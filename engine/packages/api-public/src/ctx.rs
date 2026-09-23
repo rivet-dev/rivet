@@ -39,9 +39,6 @@ impl ApiCtx {
 		target: TargetScope,
 		operation: OperationKind,
 	) -> Result<()> {
-		if self.config().auth.is_none() {
-			return Ok(());
-		}
 		self.authentication_handled.store(true, Ordering::Relaxed);
 		let token = self
 			.token
@@ -88,7 +85,7 @@ impl ApiCtx {
 	}
 
 	pub fn is_auth_handled(&self) -> bool {
-		self.config().auth.is_none() || self.authentication_handled.load(Ordering::Relaxed)
+		self.authentication_handled.load(Ordering::Relaxed)
 	}
 
 	pub fn token(&self) -> Option<&str> {

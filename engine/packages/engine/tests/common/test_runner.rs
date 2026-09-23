@@ -301,7 +301,7 @@ impl RunnerConfigBuilder {
 	pub fn build(self) -> Result<RunnerConfig> {
 		Ok(RunnerConfig {
 			endpoint: self.endpoint.context("endpoint is required")?,
-			token: self.token.unwrap_or_else(|| "dev".to_string()),
+			token: self.token.unwrap_or_else(|| "default".to_string()),
 			namespace: self.namespace.context("namespace is required")?,
 			runner_name: self
 				.runner_name
@@ -959,7 +959,7 @@ impl TestRunnerBuilder {
 			namespace: namespace.to_string(),
 			runner_name: "test-runner".to_string(),
 			runner_key: format!("key-{:012x}", rand::random::<u64>()),
-			token: "dev".to_string(),
+			token: "default".to_string(),
 			version: 1,
 			total_slots: 100,
 			actor_factories: HashMap::new(),

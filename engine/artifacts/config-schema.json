@@ -28,6 +28,9 @@
       "additionalProperties": false
     }
   ],
+  "required": [
+    "auth"
+  ],
   "properties": {
     "api_peer": {
       "default": null,
@@ -41,15 +44,7 @@
       ]
     },
     "auth": {
-      "default": null,
-      "anyOf": [
-        {
-          "$ref": "#/definitions/Auth"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      "$ref": "#/definitions/Auth"
     },
     "cache": {
       "default": null,

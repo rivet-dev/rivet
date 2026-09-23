@@ -380,40 +380,38 @@ async fn route_request_inner(
 		return Err(pegboard::errors::Actor::NotFound.build());
 	};
 
-	if ctx.config().auth.is_some() {
-		let token = token.ok_or_else(|| rivet_auth::errors::Auth::InvalidToken.build())?;
-		let auth_state = req_ctx.auth_state().clone();
-		phase_timeout(
-			Phase::new(
-				"route_pegboard_auth_check",
-				&metrics::ROUTE_PEGBOARD_AUTH_CHECK_DURATION,
-			)
-			.with_namespace_id(actor.namespace_id)
-			.with_actor_id(actor_id),
-			ctx.config().guard().route_pegboard_auth_check_timeout(),
-			rivet_auth::check(
-				ctx,
-				shared_state.jwt_key_ring_cache.as_ref(),
-				&auth_state,
-				rivet_auth::CheckInput {
-					token,
-					namespace: AccessNamespaceScope::Id(actor.namespace_id),
-					resource: ResourceKind::ActorGateway,
-					target: TargetScope::Id(actor_id),
-					operation: OperationKind::Read,
-				},
-			),
-			|elapsed, timeout| {
-				pegboard::errors::RouteAuthCheckTimeout {
-					actor_id: actor_id.to_string(),
-					elapsed_ms: elapsed.as_millis() as u64,
-					timeout_ms: timeout.as_millis() as u64,
-				}
-				.build()
-			},
+	let token = token.ok_or_else(|| rivet_auth::errors::Auth::InvalidToken.build())?;
+	let auth_state = req_ctx.auth_state().clone();
+	phase_timeout(
+		Phase::new(
+			"route_pegboard_auth_check",
+			&metrics::ROUTE_PEGBOARD_AUTH_CHECK_DURATION,
 		)
-		.await?;
-	}
+		.with_namespace_id(actor.namespace_id)
+		.with_actor_id(actor_id),
+		ctx.config().guard().route_pegboard_auth_check_timeout(),
+		rivet_auth::check(
+			ctx,
+			shared_state.jwt_key_ring_cache.as_ref(),
+			&auth_state,
+			rivet_auth::CheckInput {
+				token,
+				namespace: AccessNamespaceScope::Id(actor.namespace_id),
+				resource: ResourceKind::ActorGateway,
+				target: TargetScope::Id(actor_id),
+				operation: OperationKind::Read,
+			},
+		),
+		|elapsed, timeout| {
+			pegboard::errors::RouteAuthCheckTimeout {
+				actor_id: actor_id.to_string(),
+				elapsed_ms: elapsed.as_millis() as u64,
+				timeout_ms: timeout.as_millis() as u64,
+			}
+			.build()
+		},
+	)
+	.await?;
 
 	if actor.destroyed {
 		return Err(pegboard::errors::Actor::NotFound.build());

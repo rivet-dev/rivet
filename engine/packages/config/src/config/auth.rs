@@ -258,6 +258,14 @@ mod tests {
 	const ISSUER: &str = "https://api.rivet.dev";
 
 	#[test]
+	fn root_requires_auth_configuration() {
+		let error = super::super::Root::default()
+			.validate_and_set_defaults()
+			.expect_err("missing auth must fail at startup");
+		assert!(error.to_string().contains("auth.admin_token"));
+	}
+
+	#[test]
 	fn existing_admin_token_config_enables_jwt_by_default() {
 		let auth: Auth = serde_json::from_str(r#"{"admin_token":"secret"}"#).unwrap();
 		auth.validate(ISSUER).unwrap();

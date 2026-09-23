@@ -77,7 +77,7 @@ function ensureStringRecord(
 }
 
 const rivetToken =
-	process.env.RIVET_TOKEN || (await ask("Rivet token", { default: "dev" }));
+	process.env.RIVET_TOKEN || (await ask("Rivet token", { default: "default" }));
 
 const endpoint =
 	process.env.RIVET_ENDPOINT ||

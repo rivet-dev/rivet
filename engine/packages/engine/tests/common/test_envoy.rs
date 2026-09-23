@@ -120,7 +120,7 @@ impl EnvoyConfigBuilder {
 	pub fn build(self) -> Result<EnvoyConfig> {
 		Ok(EnvoyConfig {
 			endpoint: self.endpoint.context("endpoint is required")?,
-			token: self.token.unwrap_or_else(|| "dev".to_string()),
+			token: self.token.unwrap_or_else(|| "default".to_string()),
 			namespace: self.namespace.context("namespace is required")?,
 			pool_name: self.pool_name.unwrap_or_else(|| "test-envoy".to_string()),
 			version: self.version.unwrap_or(1),
@@ -669,7 +669,7 @@ impl TestEnvoyBuilder {
 		Self {
 			namespace: namespace.to_string(),
 			pool_name: "test-envoy".to_string(),
-			token: "dev".to_string(),
+			token: "default".to_string(),
 			version: 1,
 			endpoint: None,
 			actor_factories: HashMap::new(),

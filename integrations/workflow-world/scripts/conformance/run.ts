@@ -7,7 +7,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getEnginePath } from "@rivetkit/engine-cli";
 
-const TOKEN = "dev";
+const TOKEN = "default";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const PNPM_BIN = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
