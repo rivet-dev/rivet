@@ -16,6 +16,42 @@ export interface KVWrite {
 	value: Uint8Array;
 }
 
+/** How one run of the workflow function ended. */
+export type WorkflowOutcome =
+	| "completed"
+	| "sleeping"
+	| "evicted"
+	| "failed"
+	| "cancelled";
+
+/** How one step attempt ended. `retry` will be tried again, `failed` will not. */
+export type WorkflowStepOutcome = "ok" | "retry" | "failed";
+
+/** One open run of the workflow function. */
+export interface WorkflowSpan {
+	/** Runs `body` attributed to this run. */
+	run<T>(body: () => Promise<T>): Promise<T>;
+	/** Returns nothing when the attempt is not being traced. */
+	startStep(name: string, attempt: number): WorkflowStepSpan | undefined;
+	finish(outcome: WorkflowOutcome): Promise<void>;
+}
+
+/** One open attempt at one step. */
+export interface WorkflowStepSpan {
+	/** Runs `body` attributed to this attempt. */
+	run<T>(body: () => Promise<T>): Promise<T>;
+	/** `error` is what the step callback threw. */
+	finish(outcome: WorkflowStepOutcome, error?: unknown): void;
+}
+
+/**
+ * Receives the start and end of each workflow run and step attempt. A
+ * completed step replayed from history is not an attempt and is not reported.
+ */
+export interface WorkflowTelemetryDriver {
+	startSpan(): Promise<WorkflowSpan>;
+}
+
 /**
  * The engine driver provides the KV and scheduling interface.
  * Implementations must provide these methods to integrate with different backends.
@@ -117,4 +153,7 @@ export interface EngineDriver {
 		messageNames: string[],
 		abortSignal: AbortSignal,
 	): Promise<void>;
+
+	/** Present when the host traces workflows. */
+	readonly telemetry?: WorkflowTelemetryDriver;
 }

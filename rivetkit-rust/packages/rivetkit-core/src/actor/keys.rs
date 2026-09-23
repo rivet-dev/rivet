@@ -58,6 +58,10 @@ pub const QUEUE_MESSAGES_PREFIX: [u8; 3] = [
 ];
 // Prefix for workflow v1 storage: [6, 1, ...workflow_key].
 pub const WORKFLOW_STORAGE_PREFIX: [u8; 2] = [WORKFLOW_PREFIX[0], WORKFLOW_STORAGE_VERSION];
+/// Workflow storage key for the last run's trace context. The last two bytes
+/// are the tuple encoding of 5, which the workflow engine reserves for core.
+pub const WORKFLOW_TRACE_CONTEXT_KEY: [u8; 4] =
+	[WORKFLOW_PREFIX[0], WORKFLOW_STORAGE_VERSION, 0x15, 5];
 // Prefix for trace v1 storage: [7, 1, ...trace_key].
 pub const TRACES_STORAGE_PREFIX: [u8; 2] = [TRACES_PREFIX[0], TRACES_STORAGE_VERSION];
 

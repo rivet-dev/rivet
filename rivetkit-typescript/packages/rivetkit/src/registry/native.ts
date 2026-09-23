@@ -9,6 +9,7 @@ import {
 	type ActorCronEveryOptions,
 	type ActorCronSetOptions,
 	type ActorLogger,
+	type ActorRun,
 	type ActorSchedule,
 	CONN_STATE_MANAGER_SYMBOL,
 	type CronFire,
@@ -2708,6 +2709,9 @@ class NativeConnectionMap implements ReadonlyMap<string, NativeConnAdapter> {
 	readonly [Symbol.toStringTag] = "NativeConnectionMap";
 }
 
+/** Logger cache key for code that runs outside any invocation. */
+const NO_INVOCATION_SCOPE = {};
+
 export class ActorContextHandleAdapter {
 	#runtime: CoreRuntime;
 	#ctx: ActorContextHandle;
@@ -2722,11 +2726,11 @@ export class ActorContextHandleAdapter {
 	#db?: unknown;
 	#dispatchCancelToken?: CancellationTokenHandle;
 	#kv?: NativeKvAdapter;
-	#log?: ActorLogger;
+	#logByInvocationScope = new WeakMap<object, ActorLogger>();
 	#queue?: NativeQueueAdapter;
 	#request?: Request;
 	#schedule?: NativeScheduleAdapter;
-	#run?: { setWakeAt(timestamp: number | null): Promise<void> };
+	#run?: ActorRun;
 	#runHandlerConfigured: boolean;
 	#onStateChange?: NativeOnStateChangeHandler;
 	#stateEnabled: boolean;
@@ -2907,6 +2911,12 @@ export class ActorContextHandleAdapter {
 						this.#runtime.actorSetRunWakeAt(this.#ctx, timestamp),
 					);
 				},
+				startWorkflowSpan: () =>
+					callNative(() =>
+						this.#runtime.startWorkflowSpan(this.#ctx),
+					),
+				runOutsideWorkflowSpan: (body) =>
+					this.#runtime.runOutsideActorInvocationContext(body),
 			};
 		}
 		return this.#run;
@@ -2965,21 +2975,26 @@ export class ActorContextHandleAdapter {
 		);
 	}
 
+	/** Cached per invocation, because the `run` context outlives workflow runs and steps. */
 	get log() {
-		if (!this.#log) {
-			const invocation = this.#invocationTraceContext();
-			this.#log = logger().child({
-				actorId: this.actorId,
-				actorName: this.name,
-				actorKey: this.key,
-				...(invocation?.rayId && { rayId: invocation.rayId }),
-				...(invocation?.span && {
-					traceId: invocation.span.traceId,
-					spanId: invocation.span.spanId,
-				}),
-			});
-		}
-		return this.#log;
+		const scope =
+			this.#runtime.currentInvocationScope() ?? NO_INVOCATION_SCOPE;
+		const cached = this.#logByInvocationScope.get(scope);
+		if (cached) return cached;
+
+		const invocation = this.#invocationTraceContext();
+		const log = logger().child({
+			actorId: this.actorId,
+			actorName: this.name,
+			actorKey: this.key,
+			...(invocation?.rayId && { rayId: invocation.rayId }),
+			...(invocation?.span && {
+				traceId: invocation.span.traceId,
+				spanId: invocation.span.spanId,
+			}),
+		});
+		this.#logByInvocationScope.set(scope, log);
+		return log;
 	}
 
 	get abortSignal(): AbortSignal {

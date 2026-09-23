@@ -116,6 +116,9 @@ fn fixture(row_count: usize) -> Connection {
 	let mut user_kv_insert = tx
 		.prepare("INSERT INTO _rivet_user_kv (key, value) VALUES (?, x'01')")
 		.expect("prepare user kv seed");
+	let mut workflow_kv_insert = tx
+		.prepare("INSERT INTO _rivet_wf_kv (key, value) VALUES (?, x'01')")
+		.expect("prepare workflow kv seed");
 	let mut schedule_insert = tx
 		.prepare("INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history) VALUES (?, ?, 'run', x'01', ?, NULL, NULL, NULL, NULL, 100)")
 		.expect("prepare schedule seed");
@@ -134,6 +137,9 @@ fn fixture(row_count: usize) -> Connection {
 		user_kv_insert
 			.execute([key.as_bytes()])
 			.expect("seed user kv");
+		workflow_kv_insert
+			.execute([key.as_bytes()])
+			.expect("seed workflow kv");
 		let event_id = if index % 3 == 0 {
 			format!("at:{key}")
 		} else {
@@ -157,6 +163,7 @@ fn fixture(row_count: usize) -> Connection {
 	drop(conn_state_insert);
 	drop(queue_insert);
 	drop(user_kv_insert);
+	drop(workflow_kv_insert);
 	drop(schedule_insert);
 	drop(history_insert);
 	tx.commit().expect("commit fixture seed");
@@ -463,6 +470,14 @@ fn query_catalog() -> Vec<QueryCase> {
 			sql: internal_storage::LOAD_LAST_PUSHED_ALARM_SQL.into(),
 			params: vec![],
 			expectation: indexed(None, &["_rivet_runtime"]),
+		},
+		QueryCase {
+			id: "workflow.kv_get",
+			sql: internal_storage::LOAD_WORKFLOW_KV_SQL.into(),
+			params: vec![Value::Blob(
+				crate::actor::keys::WORKFLOW_TRACE_CONTEXT_KEY.to_vec(),
+			)],
+			expectation: indexed(None, &["_rivet_wf_kv"]),
 		},
 		QueryCase {
 			id: "runtime.run_wake",
