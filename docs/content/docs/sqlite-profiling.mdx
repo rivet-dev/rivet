@@ -84,6 +84,14 @@ histogram_quantile(
 Find statements and transactions that fail, roll back, expire, or lose their connection.
 
 ```promql
+sum by (actor_name, type, outcome) (
+  rate(rivet_rivetkit_sqlite_operations_total{outcome!="success"}[5m])
+)
+```
+
+These aggregate counts remain exact when the fingerprint series budget is exhausted. To break admitted operations down by fingerprint, use:
+
+```promql
 sum by (actor_name, type, fingerprint, outcome) (
   rate(rivet_rivetkit_sqlite_outcome_total{outcome!="success"}[5m])
 )

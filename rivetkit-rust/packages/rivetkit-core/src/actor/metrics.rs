@@ -250,6 +250,7 @@ struct SqliteProfileCollectors {
 	get_pages_round_trips: HistogramVec,
 	transaction_statement_count: HistogramVec,
 	outcome_total: IntCounterVec,
+	operations_total: IntCounterVec,
 	local_pages_total: IntCounterVec,
 	local_bytes_total: IntCounterVec,
 	get_pages_duration_seconds: HistogramVec,
@@ -308,6 +309,20 @@ const SQLITE_PROFILE_OUTCOMES: [&str; 7] = [
 	"connection_lost",
 	"cancelled",
 ];
+
+#[cfg(feature = "sqlite-local")]
+fn sqlite_profile_outcome_index(outcome: &str) -> usize {
+	match outcome {
+		"success" => 0,
+		"error" => 1,
+		"rollback" => 2,
+		"timeout" => 3,
+		"expired" => 4,
+		"connection_lost" => 5,
+		"cancelled" => 6,
+		_ => 1,
+	}
+}
 
 #[cfg(feature = "sqlite-local")]
 struct SqliteFingerprintMetricHandles {
@@ -407,17 +422,7 @@ impl SqliteFingerprintMetricHandles {
 	}
 
 	fn record_outcome(&self, outcome: &str) {
-		let index = match outcome {
-			"success" => 0,
-			"error" => 1,
-			"rollback" => 2,
-			"timeout" => 3,
-			"expired" => 4,
-			"connection_lost" => 5,
-			"cancelled" => 6,
-			_ => 1,
-		};
-		self.outcomes[index].inc();
+		self.outcomes[sqlite_profile_outcome_index(outcome)].inc();
 	}
 }
 
@@ -431,6 +436,7 @@ struct SqliteRequestMetricHandles {
 
 #[cfg(feature = "sqlite-local")]
 struct SqliteLowCardMetricHandles {
+	operation_outcomes: [[IntCounter; SQLITE_PROFILE_OUTCOMES.len()]; 2],
 	local_pages: [[IntCounter; SQLITE_PROFILE_PAGE_KINDS.len()]; 2],
 	local_bytes: [[IntCounter; SQLITE_PROFILE_BYTE_KINDS.len()]; 2],
 	requests: [SqliteRequestMetricHandles; SQLITE_PROFILE_REQUEST_ORDINALS.len()],
@@ -453,6 +459,16 @@ impl SqliteLowCardMetricHandles {
 	fn new(actor_name: &str, storage_transport: &'static str) -> Self {
 		let operation_types = ["statement", "transaction"];
 		Self {
+			operation_outcomes: std::array::from_fn(|operation_index| {
+				std::array::from_fn(|outcome_index| {
+					SQLITE_PROFILE_METRICS.operations_total.with_label_values(&[
+						actor_name,
+						operation_types[operation_index],
+						SQLITE_PROFILE_OUTCOMES[outcome_index],
+						storage_transport,
+					])
+				})
+			}),
 			local_pages: std::array::from_fn(|operation_index| {
 				std::array::from_fn(|kind_index| {
 					SQLITE_PROFILE_METRICS
@@ -532,6 +548,11 @@ impl SqliteLowCardMetricHandles {
 				.coordinator_queue_depth
 				.with_label_values(&[actor_name]),
 		}
+	}
+
+	fn record_operation_outcome(&self, operation_type: &str, outcome: &str) {
+		let operation_index = usize::from(operation_type == "transaction");
+		self.operation_outcomes[operation_index][sqlite_profile_outcome_index(outcome)].inc();
 	}
 }
 
@@ -829,6 +850,14 @@ impl SqliteProfileCollectors {
 			],
 		)
 		.expect("create sqlite outcome counter");
+		let operations_total = IntCounterVec::new(
+			Opts::new(
+				"rivetkit_sqlite_operations_total",
+				"SQLite operation outcomes independent of fingerprint admission",
+			),
+			&["actor_name", "type", "outcome", "storage_transport"],
+		)
+		.expect("create sqlite aggregate operation counter");
 		let local_pages_total = IntCounterVec::new(
 			Opts::new(
 				"rivetkit_sqlite_local_pages_total",
@@ -946,6 +975,7 @@ impl SqliteProfileCollectors {
 			transaction_statement_count.clone(),
 		);
 		register_metric(&rivet_metrics::REGISTRY, outcome_total.clone());
+		register_metric(&rivet_metrics::REGISTRY, operations_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, local_pages_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, local_bytes_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, get_pages_duration_seconds.clone());
@@ -967,6 +997,7 @@ impl SqliteProfileCollectors {
 			get_pages_round_trips,
 			transaction_statement_count,
 			outcome_total,
+			operations_total,
 			local_pages_total,
 			local_bytes_total,
 			get_pages_duration_seconds,
@@ -2061,7 +2092,7 @@ impl fmt::Debug for ActorMetrics {
 
 #[cfg(feature = "sqlite-local")]
 impl ActorMetrics {
-	const SQLITE_LOW_CARD_SERIES_COST: usize = 891;
+	const SQLITE_LOW_CARD_SERIES_COST: usize = 905;
 
 	fn reserve_sqlite_series(&self, cost: usize) -> bool {
 		SQLITE_PROFILE_ADMISSION
@@ -2352,6 +2383,8 @@ impl ActorMetrics {
 		phases: &[(&'static str, u64)],
 		get_pages_round_trips: u64,
 	) -> Option<AdmittedSqliteProfile<'_>> {
+		let low_card_handles = self.sqlite_low_card_handles(storage_transport)?;
+		low_card_handles.record_operation_outcome(operation_type, outcome);
 		let admitted = self.admitted_sqlite_fingerprint(
 			operation_type,
 			fingerprint,
