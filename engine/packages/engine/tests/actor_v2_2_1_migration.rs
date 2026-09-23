@@ -57,6 +57,9 @@ async fn actor_v2_2_1_baseline_migrates_to_current_layout() -> Result<()> {
 		},
 		hibernating_requests: Vec::new(),
 		preloaded_kv: None,
+		sqlite_fence: None,
+		sqlite_startup: None,
+		waiting_requests: Vec::new(),
 	};
 
 	let migration = pegboard::actor_sqlite::migrate_v1_to_v2(

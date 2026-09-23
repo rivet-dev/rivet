@@ -164,6 +164,9 @@ async fn handle_message(
 			return Ok(false);
 		}
 		protocol::ToEnvoyConn::ToEnvoyConnClose => return Ok(true),
+		protocol::ToEnvoyConn::ToEnvoyStartRequest(_) => {
+			bail!("bundled actor startup is not enabled")
+		}
 		protocol::ToEnvoyConn::ToEnvoyCommands(mut command_wrappers) => {
 			// TODO: Parallelize
 			for command_wrapper in &mut command_wrappers {

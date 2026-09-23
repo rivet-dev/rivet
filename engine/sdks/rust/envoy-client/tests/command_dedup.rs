@@ -157,6 +157,9 @@ fn start_command(actor_id: &str, generation: u32, index: i64) -> protocol::Comma
 			},
 			hibernating_requests: Vec::new(),
 			preloaded_kv: None,
+			sqlite_fence: None,
+			sqlite_startup: None,
+			waiting_requests: Vec::new(),
 		}),
 	}
 }
