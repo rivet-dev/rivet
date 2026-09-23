@@ -23,7 +23,9 @@ describe("RivetError bridge helpers", () => {
 			},
 		});
 
-		const decoded = decodeBridgeRivetError(encodeBridgeRivetError(error));
+		const decoded = decodeBridgeRivetError(
+			encodeBridgeRivetError(error).encoded,
+		);
 
 		expect(decoded).toBeInstanceOf(RivetError);
 		expect(decoded).toMatchObject({

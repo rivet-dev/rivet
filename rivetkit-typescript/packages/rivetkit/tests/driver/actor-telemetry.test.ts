@@ -1174,7 +1174,7 @@ describeDriverMatrix(
 					expect(line).toContain(`rayId=${approveRayId}`);
 				});
 
-				test("reports each attempt of a retried step under its own run", () => {
+				test("reports each attempt of a retried step under its own run, even when the error metadata is not JSON", () => {
 					const attempts = named(`${actorName}/charge-card`);
 					expect(
 						attempts.map((attempt) => [
