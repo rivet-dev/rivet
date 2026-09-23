@@ -1,0 +1,21 @@
+# Version 2 payload, wrapped by vbare's embedded version.
+# Protocol types ActorConfig and CommandWrapper use envoy protocol v9's schema.
+# Id uses rivet_util::Id's serde representation.
+type Phase enum { Sleeping Starting Running Stopping }
+type Lease struct {
+  namespace_id: str
+  pool_name: str
+  config: ActorConfig
+  generation: u32
+  protocol_version: u16
+  envoy_key: optional<str>
+  connection_id: optional<str>
+  phase: Phase
+  last_event: i64
+  command: optional<CommandWrapper>
+  sleep_ts: optional<i64>
+  start_ts: optional<i64>
+  connectable_ts: optional<i64>
+  destroy_ts: optional<i64>
+  alarm_ts: optional<i64>
+}

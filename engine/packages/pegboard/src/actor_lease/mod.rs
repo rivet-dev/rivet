@@ -41,6 +41,25 @@ pub struct Lease {
 	pub alarm_ts: Option<i64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LeaseV1 {
+	pub namespace_id: Id,
+	pub pool_name: String,
+	pub config: protocol::generated::v8::ActorConfig,
+	pub generation: u32,
+	pub protocol_version: u16,
+	pub envoy_key: Option<String>,
+	pub connection_id: Option<Id>,
+	pub phase: Phase,
+	pub last_event: i64,
+	pub command: Option<protocol::generated::v8::CommandWrapper>,
+	pub sleep_ts: Option<i64>,
+	pub start_ts: Option<i64>,
+	pub connectable_ts: Option<i64>,
+	pub destroy_ts: Option<i64>,
+	pub alarm_ts: Option<i64>,
+}
+
 impl OwnedVersionedData for Lease {
 	type Latest = Self;
 	fn wrap_latest(value: Self) -> Self {
@@ -50,18 +69,42 @@ impl OwnedVersionedData for Lease {
 		Ok(self)
 	}
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		if version == 2 {
+			return Ok(serde_bare::from_slice(payload)?);
+		}
 		ensure!(version == 1, "unsupported actor lease version");
-		Ok(serde_bare::from_slice(payload)?)
+		let old: LeaseV1 = serde_bare::from_slice(payload)?;
+		Ok(Self {
+			namespace_id: old.namespace_id,
+			pool_name: old.pool_name,
+			config: versioned::v8_to_v9::convert_actor_config_v8_to_v9(old.config)?,
+			generation: old.generation,
+			protocol_version: old.protocol_version,
+			envoy_key: old.envoy_key,
+			connection_id: old.connection_id,
+			phase: old.phase,
+			last_event: old.last_event,
+			command: old
+				.command
+				.map(versioned::v8_to_v9::convert_command_wrapper_v8_to_v9)
+				.transpose()?,
+			sleep_ts: old.sleep_ts,
+			start_ts: old.start_ts,
+			connectable_ts: old.connectable_ts,
+			destroy_ts: old.destroy_ts,
+			alarm_ts: old.alarm_ts,
+		})
 	}
 	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
-		ensure!(version == 1, "unsupported actor lease version");
+		ensure!(version == 2, "unsupported actor lease version");
 		Ok(serde_bare::to_vec(&self)?)
 	}
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		Vec::<fn(Self) -> Result<Self>>::new()
 	}
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		Vec::<fn(Self) -> Result<Self>>::new()
+		// vbare derives the latest writable version from this converter count.
+		vec![|_: Self| bail!("actor lease v2 cannot be downgraded")]
 	}
 }
 
@@ -79,7 +122,7 @@ pub async fn read(tx: &universaldb::Transaction, actor_id: Id) -> Result<Option<
 fn write(tx: &universaldb::Transaction, actor_id: Id, lease: &Lease) -> Result<()> {
 	tx.set(
 		&tx.pack(&lease_key(actor_id)),
-		&lease.clone().serialize_with_embedded_version(1)?,
+		&lease.clone().serialize_with_embedded_version(2)?,
 	);
 	Ok(())
 }
@@ -324,7 +367,7 @@ pub async fn commit(
 			let mut lease = read(&tx, input.actor_id)
 				.await?
 				.context("actor lease not initialized")?;
-			let original = lease.clone().serialize_with_embedded_version(1)?;
+			let original = lease.clone().serialize_with_embedded_version(2)?;
 			let now = util::timestamp::now();
 			match &input.action {
 				Action::Read => return Ok(lease),
@@ -423,6 +466,9 @@ pub async fn commit(
 									config: lease.config.clone(),
 									hibernating_requests: Vec::new(),
 									preloaded_kv: None,
+									sqlite_fence: None,
+									sqlite_startup: None,
+									waiting_requests: Vec::new(),
 								},
 							),
 						});
@@ -525,10 +571,14 @@ pub async fn commit(
 					}
 				}
 			}
-			if lease.clone().serialize_with_embedded_version(1)? != original {
+			if lease.clone().serialize_with_embedded_version(2)? != original {
 				write(&tx, input.actor_id, &lease)?;
 			}
 			Ok(lease)
 		})
 		.await
 }
+
+#[cfg(test)]
+#[path = "../../tests/inline/actor_lease_codec.rs"]
+mod lease_codec_tests;

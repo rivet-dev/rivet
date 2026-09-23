@@ -458,6 +458,9 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 				// WebSocket send path immediately before the actor start reaches envoy.
 				hibernating_requests: Vec::new(),
 				preloaded_kv: None,
+				sqlite_fence: None,
+				sqlite_startup: None,
+				waiting_requests: Vec::new(),
 			});
 
 			insert_and_send_commands_inner(

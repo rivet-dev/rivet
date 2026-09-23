@@ -251,6 +251,9 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 							})
 							.collect(),
 						preloaded_kv,
+						sqlite_fence: None,
+						sqlite_startup: None,
+						waiting_requests: Vec::new(),
 					}),
 				},
 			]))

@@ -31,6 +31,9 @@ fn start_command(input_len: usize) -> protocol::ActorCommandKeyData {
 		},
 		hibernating_requests: Vec::new(),
 		preloaded_kv: None,
+		sqlite_fence: None,
+		sqlite_startup: None,
+		waiting_requests: Vec::new(),
 	})
 }
 

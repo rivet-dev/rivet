@@ -163,6 +163,9 @@ async fn insert_pending_start_command(
 						},
 						hibernating_requests: Vec::new(),
 						preloaded_kv: None,
+						sqlite_fence: None,
+						sqlite_startup: None,
+						waiting_requests: Vec::new(),
 					}),
 				)?;
 				for (chunk_idx, chunk) in chunks.into_iter().enumerate() {
@@ -751,6 +754,9 @@ fn inline_sqlite_rejects_stale_generation_with_pending_start_command() {
 									},
 									hibernating_requests: Vec::new(),
 									preloaded_kv: None,
+									sqlite_fence: None,
+									sqlite_startup: None,
+									waiting_requests: Vec::new(),
 								},
 							),
 						)

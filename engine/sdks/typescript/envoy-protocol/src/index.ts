@@ -61,9 +61,6 @@ export function writeMessageIndex(bc: bare.ByteCursor, x: MessageIndex): void {
     bare.writeU16(bc, x)
 }
 
-/**
- * Basic types
- */
 export type KvKey = ArrayBuffer
 
 export function readKvKey(bc: bare.ByteCursor): KvKey {
@@ -101,9 +98,6 @@ export function writeKvMetadata(bc: bare.ByteCursor, x: KvMetadata): void {
     bare.writeI64(bc, x.updateTs)
 }
 
-/**
- * Query types
- */
 export type KvListAllQuery = null
 
 export type KvListRangeQuery = {
@@ -200,9 +194,6 @@ function write0(bc: bare.ByteCursor, x: readonly KvKey[]): void {
     }
 }
 
-/**
- * Request types
- */
 export type KvGetRequest = {
     readonly keys: readonly KvKey[]
 }
@@ -328,9 +319,6 @@ export function writeKvDeleteRangeRequest(bc: bare.ByteCursor, x: KvDeleteRangeR
 
 export type KvDropRequest = null
 
-/**
- * Response types
- */
 export type KvErrorResponse = {
     readonly message: string
 }
@@ -410,9 +398,6 @@ export type KvDeleteResponse = null
 
 export type KvDropResponse = null
 
-/**
- * Request/Response unions
- */
 export type KvRequestData =
     | { readonly tag: "KvGetRequest"; readonly val: KvGetRequest }
     | { readonly tag: "KvListRequest"; readonly val: KvListRequest }
@@ -844,12 +829,6 @@ export function writeSqliteCommitResponse(bc: bare.ByteCursor, x: SqliteCommitRe
     }
 }
 
-/**
- * Staged commit. A commit too large for one transaction is written as a sequence of shard-aligned
- * segments and then made visible by a single finalize. Nothing staged is readable until finalize:
- * no PIDX row, no COMMIT row, no head advance, so an abandoned stage is indistinguishable from no
- * commit at all. The single-shot SqliteCommitRequest above stays the path for small commits.
- */
 export type SqliteCommitStageBeginRequest = {
     readonly actorId: Id
     readonly expectedGeneration: u64 | null
@@ -1677,9 +1656,6 @@ export function writeSqliteExecuteBatchResponse(bc: bare.ByteCursor, x: SqliteEx
     }
 }
 
-/**
- * Core
- */
 export enum StopCode {
     Ok = "Ok",
     Error = "Error",
@@ -1792,9 +1768,6 @@ export function writeActorCheckpoint(bc: bare.ByteCursor, x: ActorCheckpoint): v
     bare.writeI64(bc, x.index)
 }
 
-/**
- * Intent
- */
 export type ActorIntentSleep = null
 
 export type ActorIntentStop = null
@@ -1831,9 +1804,6 @@ export function writeActorIntent(bc: bare.ByteCursor, x: ActorIntent): void {
     }
 }
 
-/**
- * State
- */
 export type ActorStateRunning = null
 
 export type ActorStateStopped = {
@@ -1886,9 +1856,6 @@ export function writeActorState(bc: bare.ByteCursor, x: ActorState): void {
     }
 }
 
-/**
- * MARK: Events
- */
 export type EventActorIntent = {
     readonly intent: ActorIntent
 }
@@ -2066,7 +2033,463 @@ export function writeHibernatingRequest(bc: bare.ByteCursor, x: HibernatingReque
     writeRequestId(bc, x.requestId)
 }
 
-function read20(bc: bare.ByteCursor): readonly HibernatingRequest[] {
+export type SqliteStartFence = {
+    readonly branchId: string
+    readonly headTxid: u64
+    readonly dbSizePages: u32
+}
+
+export function readSqliteStartFence(bc: bare.ByteCursor): SqliteStartFence {
+    return {
+        branchId: bare.readString(bc),
+        headTxid: bare.readU64(bc),
+        dbSizePages: bare.readU32(bc),
+    }
+}
+
+export function writeSqliteStartFence(bc: bare.ByteCursor, x: SqliteStartFence): void {
+    bare.writeString(bc, x.branchId)
+    bare.writeU64(bc, x.headTxid)
+    bare.writeU32(bc, x.dbSizePages)
+}
+
+export type ActorSqliteStartup = {
+    readonly fence: SqliteStartFence
+    readonly pageLimit: u32
+    readonly pages: readonly SqliteFetchedPage[]
+    readonly cacheMisses: u32
+}
+
+export function readActorSqliteStartup(bc: bare.ByteCursor): ActorSqliteStartup {
+    return {
+        fence: readSqliteStartFence(bc),
+        pageLimit: bare.readU32(bc),
+        pages: read7(bc),
+        cacheMisses: bare.readU32(bc),
+    }
+}
+
+export function writeActorSqliteStartup(bc: bare.ByteCursor, x: ActorSqliteStartup): void {
+    writeSqliteStartFence(bc, x.fence)
+    bare.writeU32(bc, x.pageLimit)
+    write7(bc, x.pages)
+    bare.writeU32(bc, x.cacheMisses)
+}
+
+export type MessageId = {
+    /**
+     * Globally unique ID
+     */
+    readonly gatewayId: GatewayId
+    /**
+     * Unique ID to the gateway
+     */
+    readonly requestId: RequestId
+    /**
+     * Unique ID to the request
+     */
+    readonly messageIndex: MessageIndex
+}
+
+export function readMessageId(bc: bare.ByteCursor): MessageId {
+    return {
+        gatewayId: readGatewayId(bc),
+        requestId: readRequestId(bc),
+        messageIndex: readMessageIndex(bc),
+    }
+}
+
+export function writeMessageId(bc: bare.ByteCursor, x: MessageId): void {
+    writeGatewayId(bc, x.gatewayId)
+    writeRequestId(bc, x.requestId)
+    writeMessageIndex(bc, x.messageIndex)
+}
+
+function read20(bc: bare.ByteCursor): u32 | null {
+    return bare.readBool(bc) ? bare.readU32(bc) : null
+}
+
+function write20(bc: bare.ByteCursor, x: u32 | null): void {
+    bare.writeBool(bc, x != null)
+    if (x != null) {
+        bare.writeU32(bc, x)
+    }
+}
+
+function read21(bc: bare.ByteCursor): ReadonlyMap<string, string> {
+    const len = bare.readUintSafe(bc)
+    const result = new Map<string, string>()
+    for (let i = 0; i < len; i++) {
+        const offset = bc.offset
+        const key = bare.readString(bc)
+        if (result.has(key)) {
+            bc.offset = offset
+            throw new bare.BareError(offset, "duplicated key")
+        }
+        result.set(key, bare.readString(bc))
+    }
+    return result
+}
+
+function write21(bc: bare.ByteCursor, x: ReadonlyMap<string, string>): void {
+    bare.writeUintSafe(bc, x.size)
+    for (const kv of x) {
+        bare.writeString(bc, kv[0])
+        bare.writeString(bc, kv[1])
+    }
+}
+
+export type ToEnvoyRequestStart = {
+    readonly actorId: Id
+    /**
+     * Exact actor generation selected by Gateway 3. Legacy Gateway 2 requests
+     * omit this and retain highest-live-generation routing.
+     */
+    readonly actorGeneration: u32 | null
+    readonly method: string
+    readonly path: string
+    readonly headers: ReadonlyMap<string, string>
+    readonly body: ArrayBuffer | null
+    readonly stream: boolean
+    /**
+     * Whether the gateway can accept a streamed response body.
+     */
+    readonly responseStream: boolean
+}
+
+export function readToEnvoyRequestStart(bc: bare.ByteCursor): ToEnvoyRequestStart {
+    return {
+        actorId: readId(bc),
+        actorGeneration: read20(bc),
+        method: bare.readString(bc),
+        path: bare.readString(bc),
+        headers: read21(bc),
+        body: read18(bc),
+        stream: bare.readBool(bc),
+        responseStream: bare.readBool(bc),
+    }
+}
+
+export function writeToEnvoyRequestStart(bc: bare.ByteCursor, x: ToEnvoyRequestStart): void {
+    writeId(bc, x.actorId)
+    write20(bc, x.actorGeneration)
+    bare.writeString(bc, x.method)
+    bare.writeString(bc, x.path)
+    write21(bc, x.headers)
+    write18(bc, x.body)
+    bare.writeBool(bc, x.stream)
+    bare.writeBool(bc, x.responseStream)
+}
+
+export type ToEnvoyRequestChunk = {
+    readonly body: ArrayBuffer
+    readonly finish: boolean
+}
+
+export function readToEnvoyRequestChunk(bc: bare.ByteCursor): ToEnvoyRequestChunk {
+    return {
+        body: bare.readData(bc),
+        finish: bare.readBool(bc),
+    }
+}
+
+export function writeToEnvoyRequestChunk(bc: bare.ByteCursor, x: ToEnvoyRequestChunk): void {
+    bare.writeData(bc, x.body)
+    bare.writeBool(bc, x.finish)
+}
+
+export enum HttpStreamAbortReasonKind {
+    Unknown = "Unknown",
+    Cancelled = "Cancelled",
+    HandlerError = "HandlerError",
+    InternalError = "InternalError",
+}
+
+export function readHttpStreamAbortReasonKind(bc: bare.ByteCursor): HttpStreamAbortReasonKind {
+    const offset = bc.offset
+    const tag = bare.readU8(bc)
+    switch (tag) {
+        case 0:
+            return HttpStreamAbortReasonKind.Unknown
+        case 1:
+            return HttpStreamAbortReasonKind.Cancelled
+        case 2:
+            return HttpStreamAbortReasonKind.HandlerError
+        case 3:
+            return HttpStreamAbortReasonKind.InternalError
+        default: {
+            bc.offset = offset
+            throw new bare.BareError(offset, "invalid tag")
+        }
+    }
+}
+
+export function writeHttpStreamAbortReasonKind(bc: bare.ByteCursor, x: HttpStreamAbortReasonKind): void {
+    switch (x) {
+        case HttpStreamAbortReasonKind.Unknown: {
+            bare.writeU8(bc, 0)
+            break
+        }
+        case HttpStreamAbortReasonKind.Cancelled: {
+            bare.writeU8(bc, 1)
+            break
+        }
+        case HttpStreamAbortReasonKind.HandlerError: {
+            bare.writeU8(bc, 2)
+            break
+        }
+        case HttpStreamAbortReasonKind.InternalError: {
+            bare.writeU8(bc, 3)
+            break
+        }
+    }
+}
+
+export type HttpStreamAbortReason = {
+    readonly kind: HttpStreamAbortReasonKind
+    readonly detail: string | null
+}
+
+export function readHttpStreamAbortReason(bc: bare.ByteCursor): HttpStreamAbortReason {
+    return {
+        kind: readHttpStreamAbortReasonKind(bc),
+        detail: read17(bc),
+    }
+}
+
+export function writeHttpStreamAbortReason(bc: bare.ByteCursor, x: HttpStreamAbortReason): void {
+    writeHttpStreamAbortReasonKind(bc, x.kind)
+    write17(bc, x.detail)
+}
+
+function read22(bc: bare.ByteCursor): Id | null {
+    return bare.readBool(bc) ? readId(bc) : null
+}
+
+function write22(bc: bare.ByteCursor, x: Id | null): void {
+    bare.writeBool(bc, x != null)
+    if (x != null) {
+        writeId(bc, x)
+    }
+}
+
+export type ToEnvoyRequestAbort = {
+    /**
+     * Exact admission identity. Gateway 3 always sets both fields so Envoy can
+     * suppress a delayed RequestStart after an indeterminate handoff.
+     */
+    readonly actorId: Id | null
+    readonly actorGeneration: u32 | null
+    readonly reason: HttpStreamAbortReason
+}
+
+export function readToEnvoyRequestAbort(bc: bare.ByteCursor): ToEnvoyRequestAbort {
+    return {
+        actorId: read22(bc),
+        actorGeneration: read20(bc),
+        reason: readHttpStreamAbortReason(bc),
+    }
+}
+
+export function writeToEnvoyRequestAbort(bc: bare.ByteCursor, x: ToEnvoyRequestAbort): void {
+    write22(bc, x.actorId)
+    write20(bc, x.actorGeneration)
+    writeHttpStreamAbortReason(bc, x.reason)
+}
+
+export type ToEnvoyRequestBodyCancel = null
+
+export type ToEnvoyResponseBodyWindowUpdate = {
+    readonly consumedBytes: u64
+}
+
+export function readToEnvoyResponseBodyWindowUpdate(bc: bare.ByteCursor): ToEnvoyResponseBodyWindowUpdate {
+    return {
+        consumedBytes: bare.readU64(bc),
+    }
+}
+
+export function writeToEnvoyResponseBodyWindowUpdate(bc: bare.ByteCursor, x: ToEnvoyResponseBodyWindowUpdate): void {
+    bare.writeU64(bc, x.consumedBytes)
+}
+
+export type ToEnvoyWebSocketOpen = {
+    readonly actorId: Id
+    /**
+     * Exact actor generation selected by Gateway 3. Legacy Gateway 2 requests
+     * omit this and retain highest-live-generation routing.
+     */
+    readonly actorGeneration: u32 | null
+    readonly path: string
+    readonly headers: ReadonlyMap<string, string>
+}
+
+export function readToEnvoyWebSocketOpen(bc: bare.ByteCursor): ToEnvoyWebSocketOpen {
+    return {
+        actorId: readId(bc),
+        actorGeneration: read20(bc),
+        path: bare.readString(bc),
+        headers: read21(bc),
+    }
+}
+
+export function writeToEnvoyWebSocketOpen(bc: bare.ByteCursor, x: ToEnvoyWebSocketOpen): void {
+    writeId(bc, x.actorId)
+    write20(bc, x.actorGeneration)
+    bare.writeString(bc, x.path)
+    write21(bc, x.headers)
+}
+
+export type ToEnvoyWebSocketMessage = {
+    readonly data: ArrayBuffer
+    readonly binary: boolean
+}
+
+export function readToEnvoyWebSocketMessage(bc: bare.ByteCursor): ToEnvoyWebSocketMessage {
+    return {
+        data: bare.readData(bc),
+        binary: bare.readBool(bc),
+    }
+}
+
+export function writeToEnvoyWebSocketMessage(bc: bare.ByteCursor, x: ToEnvoyWebSocketMessage): void {
+    bare.writeData(bc, x.data)
+    bare.writeBool(bc, x.binary)
+}
+
+function read23(bc: bare.ByteCursor): u16 | null {
+    return bare.readBool(bc) ? bare.readU16(bc) : null
+}
+
+function write23(bc: bare.ByteCursor, x: u16 | null): void {
+    bare.writeBool(bc, x != null)
+    if (x != null) {
+        bare.writeU16(bc, x)
+    }
+}
+
+export type ToEnvoyWebSocketClose = {
+    readonly code: u16 | null
+    readonly reason: string | null
+}
+
+export function readToEnvoyWebSocketClose(bc: bare.ByteCursor): ToEnvoyWebSocketClose {
+    return {
+        code: read23(bc),
+        reason: read17(bc),
+    }
+}
+
+export function writeToEnvoyWebSocketClose(bc: bare.ByteCursor, x: ToEnvoyWebSocketClose): void {
+    write23(bc, x.code)
+    write17(bc, x.reason)
+}
+
+export type ToEnvoyTunnelMessageKind =
+    /**
+     * HTTP
+     */
+    | { readonly tag: "ToEnvoyRequestStart"; readonly val: ToEnvoyRequestStart }
+    | { readonly tag: "ToEnvoyRequestChunk"; readonly val: ToEnvoyRequestChunk }
+    | { readonly tag: "ToEnvoyRequestAbort"; readonly val: ToEnvoyRequestAbort }
+    | { readonly tag: "ToEnvoyRequestBodyCancel"; readonly val: ToEnvoyRequestBodyCancel }
+    | { readonly tag: "ToEnvoyResponseBodyWindowUpdate"; readonly val: ToEnvoyResponseBodyWindowUpdate }
+    /**
+     * WebSocket
+     */
+    | { readonly tag: "ToEnvoyWebSocketOpen"; readonly val: ToEnvoyWebSocketOpen }
+    | { readonly tag: "ToEnvoyWebSocketMessage"; readonly val: ToEnvoyWebSocketMessage }
+    | { readonly tag: "ToEnvoyWebSocketClose"; readonly val: ToEnvoyWebSocketClose }
+
+export function readToEnvoyTunnelMessageKind(bc: bare.ByteCursor): ToEnvoyTunnelMessageKind {
+    const offset = bc.offset
+    const tag = bare.readU8(bc)
+    switch (tag) {
+        case 0:
+            return { tag: "ToEnvoyRequestStart", val: readToEnvoyRequestStart(bc) }
+        case 1:
+            return { tag: "ToEnvoyRequestChunk", val: readToEnvoyRequestChunk(bc) }
+        case 2:
+            return { tag: "ToEnvoyRequestAbort", val: readToEnvoyRequestAbort(bc) }
+        case 3:
+            return { tag: "ToEnvoyRequestBodyCancel", val: null }
+        case 4:
+            return { tag: "ToEnvoyResponseBodyWindowUpdate", val: readToEnvoyResponseBodyWindowUpdate(bc) }
+        case 5:
+            return { tag: "ToEnvoyWebSocketOpen", val: readToEnvoyWebSocketOpen(bc) }
+        case 6:
+            return { tag: "ToEnvoyWebSocketMessage", val: readToEnvoyWebSocketMessage(bc) }
+        case 7:
+            return { tag: "ToEnvoyWebSocketClose", val: readToEnvoyWebSocketClose(bc) }
+        default: {
+            bc.offset = offset
+            throw new bare.BareError(offset, "invalid tag")
+        }
+    }
+}
+
+export function writeToEnvoyTunnelMessageKind(bc: bare.ByteCursor, x: ToEnvoyTunnelMessageKind): void {
+    switch (x.tag) {
+        case "ToEnvoyRequestStart": {
+            bare.writeU8(bc, 0)
+            writeToEnvoyRequestStart(bc, x.val)
+            break
+        }
+        case "ToEnvoyRequestChunk": {
+            bare.writeU8(bc, 1)
+            writeToEnvoyRequestChunk(bc, x.val)
+            break
+        }
+        case "ToEnvoyRequestAbort": {
+            bare.writeU8(bc, 2)
+            writeToEnvoyRequestAbort(bc, x.val)
+            break
+        }
+        case "ToEnvoyRequestBodyCancel": {
+            bare.writeU8(bc, 3)
+            break
+        }
+        case "ToEnvoyResponseBodyWindowUpdate": {
+            bare.writeU8(bc, 4)
+            writeToEnvoyResponseBodyWindowUpdate(bc, x.val)
+            break
+        }
+        case "ToEnvoyWebSocketOpen": {
+            bare.writeU8(bc, 5)
+            writeToEnvoyWebSocketOpen(bc, x.val)
+            break
+        }
+        case "ToEnvoyWebSocketMessage": {
+            bare.writeU8(bc, 6)
+            writeToEnvoyWebSocketMessage(bc, x.val)
+            break
+        }
+        case "ToEnvoyWebSocketClose": {
+            bare.writeU8(bc, 7)
+            writeToEnvoyWebSocketClose(bc, x.val)
+            break
+        }
+    }
+}
+
+export type ToEnvoyTunnelMessage = {
+    readonly messageId: MessageId
+    readonly messageKind: ToEnvoyTunnelMessageKind
+}
+
+export function readToEnvoyTunnelMessage(bc: bare.ByteCursor): ToEnvoyTunnelMessage {
+    return {
+        messageId: readMessageId(bc),
+        messageKind: readToEnvoyTunnelMessageKind(bc),
+    }
+}
+
+export function writeToEnvoyTunnelMessage(bc: bare.ByteCursor, x: ToEnvoyTunnelMessage): void {
+    writeMessageId(bc, x.messageId)
+    writeToEnvoyTunnelMessageKind(bc, x.messageKind)
+}
+
+function read24(bc: bare.ByteCursor): readonly HibernatingRequest[] {
     const len = bare.readUintSafe(bc)
     if (len === 0) {
         return []
@@ -2078,21 +2501,62 @@ function read20(bc: bare.ByteCursor): readonly HibernatingRequest[] {
     return result
 }
 
-function write20(bc: bare.ByteCursor, x: readonly HibernatingRequest[]): void {
+function write24(bc: bare.ByteCursor, x: readonly HibernatingRequest[]): void {
     bare.writeUintSafe(bc, x.length)
     for (let i = 0; i < x.length; i++) {
         writeHibernatingRequest(bc, x[i])
     }
 }
 
-function read21(bc: bare.ByteCursor): PreloadedKv | null {
+function read25(bc: bare.ByteCursor): PreloadedKv | null {
     return bare.readBool(bc) ? readPreloadedKv(bc) : null
 }
 
-function write21(bc: bare.ByteCursor, x: PreloadedKv | null): void {
+function write25(bc: bare.ByteCursor, x: PreloadedKv | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         writePreloadedKv(bc, x)
+    }
+}
+
+function read26(bc: bare.ByteCursor): SqliteStartFence | null {
+    return bare.readBool(bc) ? readSqliteStartFence(bc) : null
+}
+
+function write26(bc: bare.ByteCursor, x: SqliteStartFence | null): void {
+    bare.writeBool(bc, x != null)
+    if (x != null) {
+        writeSqliteStartFence(bc, x)
+    }
+}
+
+function read27(bc: bare.ByteCursor): ActorSqliteStartup | null {
+    return bare.readBool(bc) ? readActorSqliteStartup(bc) : null
+}
+
+function write27(bc: bare.ByteCursor, x: ActorSqliteStartup | null): void {
+    bare.writeBool(bc, x != null)
+    if (x != null) {
+        writeActorSqliteStartup(bc, x)
+    }
+}
+
+function read28(bc: bare.ByteCursor): readonly ToEnvoyTunnelMessage[] {
+    const len = bare.readUintSafe(bc)
+    if (len === 0) {
+        return []
+    }
+    const result = [readToEnvoyTunnelMessage(bc)]
+    for (let i = 1; i < len; i++) {
+        result[i] = readToEnvoyTunnelMessage(bc)
+    }
+    return result
+}
+
+function write28(bc: bare.ByteCursor, x: readonly ToEnvoyTunnelMessage[]): void {
+    bare.writeUintSafe(bc, x.length)
+    for (let i = 0; i < x.length; i++) {
+        writeToEnvoyTunnelMessage(bc, x[i])
     }
 }
 
@@ -2100,20 +2564,29 @@ export type CommandStartActor = {
     readonly config: ActorConfig
     readonly hibernatingRequests: readonly HibernatingRequest[]
     readonly preloadedKv: PreloadedKv | null
+    readonly sqliteFence: SqliteStartFence | null
+    readonly sqliteStartup: ActorSqliteStartup | null
+    readonly waitingRequests: readonly ToEnvoyTunnelMessage[]
 }
 
 export function readCommandStartActor(bc: bare.ByteCursor): CommandStartActor {
     return {
         config: readActorConfig(bc),
-        hibernatingRequests: read20(bc),
-        preloadedKv: read21(bc),
+        hibernatingRequests: read24(bc),
+        preloadedKv: read25(bc),
+        sqliteFence: read26(bc),
+        sqliteStartup: read27(bc),
+        waitingRequests: read28(bc),
     }
 }
 
 export function writeCommandStartActor(bc: bare.ByteCursor, x: CommandStartActor): void {
     writeActorConfig(bc, x.config)
-    write20(bc, x.hibernatingRequests)
-    write21(bc, x.preloadedKv)
+    write24(bc, x.hibernatingRequests)
+    write25(bc, x.preloadedKv)
+    write26(bc, x.sqliteFence)
+    write27(bc, x.sqliteStartup)
+    write28(bc, x.waitingRequests)
 }
 
 export enum StopActorReason {
@@ -2235,9 +2708,6 @@ export function writeCommandWrapper(bc: bare.ByteCursor, x: CommandWrapper): voi
     writeCommand(bc, x.inner)
 }
 
-/**
- * We redeclare this so its top level
- */
 export type ActorCommandKeyData =
     | { readonly tag: "CommandStartActor"; readonly val: CommandStartActor }
     | { readonly tag: "CommandStopActor"; readonly val: CommandStopActor }
@@ -2291,135 +2761,6 @@ export function decodeActorCommandKeyData(bytes: Uint8Array): ActorCommandKeyDat
     return result
 }
 
-export type MessageId = {
-    /**
-     * Globally unique ID
-     */
-    readonly gatewayId: GatewayId
-    /**
-     * Unique ID to the gateway
-     */
-    readonly requestId: RequestId
-    /**
-     * Unique ID to the request
-     */
-    readonly messageIndex: MessageIndex
-}
-
-export function readMessageId(bc: bare.ByteCursor): MessageId {
-    return {
-        gatewayId: readGatewayId(bc),
-        requestId: readRequestId(bc),
-        messageIndex: readMessageIndex(bc),
-    }
-}
-
-export function writeMessageId(bc: bare.ByteCursor, x: MessageId): void {
-    writeGatewayId(bc, x.gatewayId)
-    writeRequestId(bc, x.requestId)
-    writeMessageIndex(bc, x.messageIndex)
-}
-
-function read22(bc: bare.ByteCursor): u32 | null {
-    return bare.readBool(bc) ? bare.readU32(bc) : null
-}
-
-function write22(bc: bare.ByteCursor, x: u32 | null): void {
-    bare.writeBool(bc, x != null)
-    if (x != null) {
-        bare.writeU32(bc, x)
-    }
-}
-
-function read23(bc: bare.ByteCursor): ReadonlyMap<string, string> {
-    const len = bare.readUintSafe(bc)
-    const result = new Map<string, string>()
-    for (let i = 0; i < len; i++) {
-        const offset = bc.offset
-        const key = bare.readString(bc)
-        if (result.has(key)) {
-            bc.offset = offset
-            throw new bare.BareError(offset, "duplicated key")
-        }
-        result.set(key, bare.readString(bc))
-    }
-    return result
-}
-
-function write23(bc: bare.ByteCursor, x: ReadonlyMap<string, string>): void {
-    bare.writeUintSafe(bc, x.size)
-    for (const kv of x) {
-        bare.writeString(bc, kv[0])
-        bare.writeString(bc, kv[1])
-    }
-}
-
-/**
- * HTTP
- */
-export type ToEnvoyRequestStart = {
-    readonly actorId: Id
-    /**
-     * Exact actor generation selected by Gateway 3. Legacy Gateway 2 requests
-     * omit this and retain highest-live-generation routing.
-     */
-    readonly actorGeneration: u32 | null
-    readonly method: string
-    readonly path: string
-    readonly headers: ReadonlyMap<string, string>
-    readonly body: ArrayBuffer | null
-    readonly stream: boolean
-    /**
-     * Whether the gateway can accept a streamed response body.
-     */
-    readonly responseStream: boolean
-}
-
-export function readToEnvoyRequestStart(bc: bare.ByteCursor): ToEnvoyRequestStart {
-    return {
-        actorId: readId(bc),
-        actorGeneration: read22(bc),
-        method: bare.readString(bc),
-        path: bare.readString(bc),
-        headers: read23(bc),
-        body: read18(bc),
-        stream: bare.readBool(bc),
-        responseStream: bare.readBool(bc),
-    }
-}
-
-export function writeToEnvoyRequestStart(bc: bare.ByteCursor, x: ToEnvoyRequestStart): void {
-    writeId(bc, x.actorId)
-    write22(bc, x.actorGeneration)
-    bare.writeString(bc, x.method)
-    bare.writeString(bc, x.path)
-    write23(bc, x.headers)
-    write18(bc, x.body)
-    bare.writeBool(bc, x.stream)
-    bare.writeBool(bc, x.responseStream)
-}
-
-export type ToEnvoyRequestChunk = {
-    readonly body: ArrayBuffer
-    readonly finish: boolean
-}
-
-export function readToEnvoyRequestChunk(bc: bare.ByteCursor): ToEnvoyRequestChunk {
-    return {
-        body: bare.readData(bc),
-        finish: bare.readBool(bc),
-    }
-}
-
-export function writeToEnvoyRequestChunk(bc: bare.ByteCursor, x: ToEnvoyRequestChunk): void {
-    bare.writeData(bc, x.body)
-    bare.writeBool(bc, x.finish)
-}
-
-/**
- * Cumulative request-body bytes consumed by the actor handler. This restores
- * sender credit without requiring one acknowledgement per chunk.
- */
 export type ToRivetRequestBodyWindowUpdate = {
     readonly consumedBytes: u64
 }
@@ -2434,115 +2775,7 @@ export function writeToRivetRequestBodyWindowUpdate(bc: bare.ByteCursor, x: ToRi
     bare.writeU64(bc, x.consumedBytes)
 }
 
-/**
- * The actor handler no longer wants request-body bytes. The HTTP response may
- * still continue normally.
- */
 export type ToRivetRequestBodyCancel = null
-
-export enum HttpStreamAbortReasonKind {
-    Unknown = "Unknown",
-    Cancelled = "Cancelled",
-    HandlerError = "HandlerError",
-    InternalError = "InternalError",
-}
-
-export function readHttpStreamAbortReasonKind(bc: bare.ByteCursor): HttpStreamAbortReasonKind {
-    const offset = bc.offset
-    const tag = bare.readU8(bc)
-    switch (tag) {
-        case 0:
-            return HttpStreamAbortReasonKind.Unknown
-        case 1:
-            return HttpStreamAbortReasonKind.Cancelled
-        case 2:
-            return HttpStreamAbortReasonKind.HandlerError
-        case 3:
-            return HttpStreamAbortReasonKind.InternalError
-        default: {
-            bc.offset = offset
-            throw new bare.BareError(offset, "invalid tag")
-        }
-    }
-}
-
-export function writeHttpStreamAbortReasonKind(bc: bare.ByteCursor, x: HttpStreamAbortReasonKind): void {
-    switch (x) {
-        case HttpStreamAbortReasonKind.Unknown: {
-            bare.writeU8(bc, 0)
-            break
-        }
-        case HttpStreamAbortReasonKind.Cancelled: {
-            bare.writeU8(bc, 1)
-            break
-        }
-        case HttpStreamAbortReasonKind.HandlerError: {
-            bare.writeU8(bc, 2)
-            break
-        }
-        case HttpStreamAbortReasonKind.InternalError: {
-            bare.writeU8(bc, 3)
-            break
-        }
-    }
-}
-
-export type HttpStreamAbortReason = {
-    readonly kind: HttpStreamAbortReasonKind
-    readonly detail: string | null
-}
-
-export function readHttpStreamAbortReason(bc: bare.ByteCursor): HttpStreamAbortReason {
-    return {
-        kind: readHttpStreamAbortReasonKind(bc),
-        detail: read17(bc),
-    }
-}
-
-export function writeHttpStreamAbortReason(bc: bare.ByteCursor, x: HttpStreamAbortReason): void {
-    writeHttpStreamAbortReasonKind(bc, x.kind)
-    write17(bc, x.detail)
-}
-
-function read24(bc: bare.ByteCursor): Id | null {
-    return bare.readBool(bc) ? readId(bc) : null
-}
-
-function write24(bc: bare.ByteCursor, x: Id | null): void {
-    bare.writeBool(bc, x != null)
-    if (x != null) {
-        writeId(bc, x)
-    }
-}
-
-export type ToEnvoyRequestAbort = {
-    /**
-     * Exact admission identity. Gateway 3 always sets both fields so Envoy can
-     * suppress a delayed RequestStart after an indeterminate handoff.
-     */
-    readonly actorId: Id | null
-    readonly actorGeneration: u32 | null
-    readonly reason: HttpStreamAbortReason
-}
-
-export function readToEnvoyRequestAbort(bc: bare.ByteCursor): ToEnvoyRequestAbort {
-    return {
-        actorId: read24(bc),
-        actorGeneration: read22(bc),
-        reason: readHttpStreamAbortReason(bc),
-    }
-}
-
-export function writeToEnvoyRequestAbort(bc: bare.ByteCursor, x: ToEnvoyRequestAbort): void {
-    write24(bc, x.actorId)
-    write22(bc, x.actorGeneration)
-    writeHttpStreamAbortReason(bc, x.reason)
-}
-
-/**
- * Stop the actor-side request body without cancelling the HTTP response.
- */
-export type ToEnvoyRequestBodyCancel = null
 
 export type ToRivetResponseStart = {
     readonly status: u16
@@ -2554,7 +2787,7 @@ export type ToRivetResponseStart = {
 export function readToRivetResponseStart(bc: bare.ByteCursor): ToRivetResponseStart {
     return {
         status: bare.readU16(bc),
-        headers: read23(bc),
+        headers: read21(bc),
         body: read18(bc),
         stream: bare.readBool(bc),
     }
@@ -2562,7 +2795,7 @@ export function readToRivetResponseStart(bc: bare.ByteCursor): ToRivetResponseSt
 
 export function writeToRivetResponseStart(bc: bare.ByteCursor, x: ToRivetResponseStart): void {
     bare.writeU16(bc, x.status)
-    write23(bc, x.headers)
+    write21(bc, x.headers)
     write18(bc, x.body)
     bare.writeBool(bc, x.stream)
 }
@@ -2584,24 +2817,6 @@ export function writeToRivetResponseChunk(bc: bare.ByteCursor, x: ToRivetRespons
     bare.writeBool(bc, x.finish)
 }
 
-/**
- * Cumulative response-body bytes consumed by the gateway client. This restores
- * sender credit without requiring one acknowledgement per chunk.
- */
-export type ToEnvoyResponseBodyWindowUpdate = {
-    readonly consumedBytes: u64
-}
-
-export function readToEnvoyResponseBodyWindowUpdate(bc: bare.ByteCursor): ToEnvoyResponseBodyWindowUpdate {
-    return {
-        consumedBytes: bare.readU64(bc),
-    }
-}
-
-export function writeToEnvoyResponseBodyWindowUpdate(bc: bare.ByteCursor, x: ToEnvoyResponseBodyWindowUpdate): void {
-    bare.writeU64(bc, x.consumedBytes)
-}
-
 export type ToRivetResponseAbort = {
     readonly reason: HttpStreamAbortReason
 }
@@ -2614,81 +2829,6 @@ export function readToRivetResponseAbort(bc: bare.ByteCursor): ToRivetResponseAb
 
 export function writeToRivetResponseAbort(bc: bare.ByteCursor, x: ToRivetResponseAbort): void {
     writeHttpStreamAbortReason(bc, x.reason)
-}
-
-/**
- * WebSocket
- */
-export type ToEnvoyWebSocketOpen = {
-    readonly actorId: Id
-    /**
-     * Exact actor generation selected by Gateway 3. Legacy Gateway 2 requests
-     * omit this and retain highest-live-generation routing.
-     */
-    readonly actorGeneration: u32 | null
-    readonly path: string
-    readonly headers: ReadonlyMap<string, string>
-}
-
-export function readToEnvoyWebSocketOpen(bc: bare.ByteCursor): ToEnvoyWebSocketOpen {
-    return {
-        actorId: readId(bc),
-        actorGeneration: read22(bc),
-        path: bare.readString(bc),
-        headers: read23(bc),
-    }
-}
-
-export function writeToEnvoyWebSocketOpen(bc: bare.ByteCursor, x: ToEnvoyWebSocketOpen): void {
-    writeId(bc, x.actorId)
-    write22(bc, x.actorGeneration)
-    bare.writeString(bc, x.path)
-    write23(bc, x.headers)
-}
-
-export type ToEnvoyWebSocketMessage = {
-    readonly data: ArrayBuffer
-    readonly binary: boolean
-}
-
-export function readToEnvoyWebSocketMessage(bc: bare.ByteCursor): ToEnvoyWebSocketMessage {
-    return {
-        data: bare.readData(bc),
-        binary: bare.readBool(bc),
-    }
-}
-
-export function writeToEnvoyWebSocketMessage(bc: bare.ByteCursor, x: ToEnvoyWebSocketMessage): void {
-    bare.writeData(bc, x.data)
-    bare.writeBool(bc, x.binary)
-}
-
-function read25(bc: bare.ByteCursor): u16 | null {
-    return bare.readBool(bc) ? bare.readU16(bc) : null
-}
-
-function write25(bc: bare.ByteCursor, x: u16 | null): void {
-    bare.writeBool(bc, x != null)
-    if (x != null) {
-        bare.writeU16(bc, x)
-    }
-}
-
-export type ToEnvoyWebSocketClose = {
-    readonly code: u16 | null
-    readonly reason: string | null
-}
-
-export function readToEnvoyWebSocketClose(bc: bare.ByteCursor): ToEnvoyWebSocketClose {
-    return {
-        code: read25(bc),
-        reason: read17(bc),
-    }
-}
-
-export function writeToEnvoyWebSocketClose(bc: bare.ByteCursor, x: ToEnvoyWebSocketClose): void {
-    write25(bc, x.code)
-    write17(bc, x.reason)
 }
 
 export type ToRivetWebSocketOpen = {
@@ -2744,21 +2884,18 @@ export type ToRivetWebSocketClose = {
 
 export function readToRivetWebSocketClose(bc: bare.ByteCursor): ToRivetWebSocketClose {
     return {
-        code: read25(bc),
+        code: read23(bc),
         reason: read17(bc),
         hibernate: bare.readBool(bc),
     }
 }
 
 export function writeToRivetWebSocketClose(bc: bare.ByteCursor, x: ToRivetWebSocketClose): void {
-    write25(bc, x.code)
+    write23(bc, x.code)
     write17(bc, x.reason)
     bare.writeBool(bc, x.hibernate)
 }
 
-/**
- * To Rivet
- */
 export type ToRivetTunnelMessageKind =
     /**
      * HTTP
@@ -2871,113 +3008,6 @@ export function writeToRivetTunnelMessage(bc: bare.ByteCursor, x: ToRivetTunnelM
     writeToRivetTunnelMessageKind(bc, x.messageKind)
 }
 
-/**
- * To Envoy
- */
-export type ToEnvoyTunnelMessageKind =
-    /**
-     * HTTP
-     */
-    | { readonly tag: "ToEnvoyRequestStart"; readonly val: ToEnvoyRequestStart }
-    | { readonly tag: "ToEnvoyRequestChunk"; readonly val: ToEnvoyRequestChunk }
-    | { readonly tag: "ToEnvoyRequestAbort"; readonly val: ToEnvoyRequestAbort }
-    | { readonly tag: "ToEnvoyRequestBodyCancel"; readonly val: ToEnvoyRequestBodyCancel }
-    | { readonly tag: "ToEnvoyResponseBodyWindowUpdate"; readonly val: ToEnvoyResponseBodyWindowUpdate }
-    /**
-     * WebSocket
-     */
-    | { readonly tag: "ToEnvoyWebSocketOpen"; readonly val: ToEnvoyWebSocketOpen }
-    | { readonly tag: "ToEnvoyWebSocketMessage"; readonly val: ToEnvoyWebSocketMessage }
-    | { readonly tag: "ToEnvoyWebSocketClose"; readonly val: ToEnvoyWebSocketClose }
-
-export function readToEnvoyTunnelMessageKind(bc: bare.ByteCursor): ToEnvoyTunnelMessageKind {
-    const offset = bc.offset
-    const tag = bare.readU8(bc)
-    switch (tag) {
-        case 0:
-            return { tag: "ToEnvoyRequestStart", val: readToEnvoyRequestStart(bc) }
-        case 1:
-            return { tag: "ToEnvoyRequestChunk", val: readToEnvoyRequestChunk(bc) }
-        case 2:
-            return { tag: "ToEnvoyRequestAbort", val: readToEnvoyRequestAbort(bc) }
-        case 3:
-            return { tag: "ToEnvoyRequestBodyCancel", val: null }
-        case 4:
-            return { tag: "ToEnvoyResponseBodyWindowUpdate", val: readToEnvoyResponseBodyWindowUpdate(bc) }
-        case 5:
-            return { tag: "ToEnvoyWebSocketOpen", val: readToEnvoyWebSocketOpen(bc) }
-        case 6:
-            return { tag: "ToEnvoyWebSocketMessage", val: readToEnvoyWebSocketMessage(bc) }
-        case 7:
-            return { tag: "ToEnvoyWebSocketClose", val: readToEnvoyWebSocketClose(bc) }
-        default: {
-            bc.offset = offset
-            throw new bare.BareError(offset, "invalid tag")
-        }
-    }
-}
-
-export function writeToEnvoyTunnelMessageKind(bc: bare.ByteCursor, x: ToEnvoyTunnelMessageKind): void {
-    switch (x.tag) {
-        case "ToEnvoyRequestStart": {
-            bare.writeU8(bc, 0)
-            writeToEnvoyRequestStart(bc, x.val)
-            break
-        }
-        case "ToEnvoyRequestChunk": {
-            bare.writeU8(bc, 1)
-            writeToEnvoyRequestChunk(bc, x.val)
-            break
-        }
-        case "ToEnvoyRequestAbort": {
-            bare.writeU8(bc, 2)
-            writeToEnvoyRequestAbort(bc, x.val)
-            break
-        }
-        case "ToEnvoyRequestBodyCancel": {
-            bare.writeU8(bc, 3)
-            break
-        }
-        case "ToEnvoyResponseBodyWindowUpdate": {
-            bare.writeU8(bc, 4)
-            writeToEnvoyResponseBodyWindowUpdate(bc, x.val)
-            break
-        }
-        case "ToEnvoyWebSocketOpen": {
-            bare.writeU8(bc, 5)
-            writeToEnvoyWebSocketOpen(bc, x.val)
-            break
-        }
-        case "ToEnvoyWebSocketMessage": {
-            bare.writeU8(bc, 6)
-            writeToEnvoyWebSocketMessage(bc, x.val)
-            break
-        }
-        case "ToEnvoyWebSocketClose": {
-            bare.writeU8(bc, 7)
-            writeToEnvoyWebSocketClose(bc, x.val)
-            break
-        }
-    }
-}
-
-export type ToEnvoyTunnelMessage = {
-    readonly messageId: MessageId
-    readonly messageKind: ToEnvoyTunnelMessageKind
-}
-
-export function readToEnvoyTunnelMessage(bc: bare.ByteCursor): ToEnvoyTunnelMessage {
-    return {
-        messageId: readMessageId(bc),
-        messageKind: readToEnvoyTunnelMessageKind(bc),
-    }
-}
-
-export function writeToEnvoyTunnelMessage(bc: bare.ByteCursor, x: ToEnvoyTunnelMessage): void {
-    writeMessageId(bc, x.messageId)
-    writeToEnvoyTunnelMessageKind(bc, x.messageKind)
-}
-
 export type ToEnvoyPing = {
     readonly ts: i64
 }
@@ -2992,7 +3022,7 @@ export function writeToEnvoyPing(bc: bare.ByteCursor, x: ToEnvoyPing): void {
     bare.writeI64(bc, x.ts)
 }
 
-function read26(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
+function read29(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, ActorName>()
     for (let i = 0; i < len; i++) {
@@ -3007,7 +3037,7 @@ function read26(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     return result
 }
 
-function write26(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
+function write29(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -3015,31 +3045,28 @@ function write26(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     }
 }
 
-function read27(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
-    return bare.readBool(bc) ? read26(bc) : null
+function read30(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
+    return bare.readBool(bc) ? read29(bc) : null
 }
 
-function write27(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
+function write30(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
-        write26(bc, x)
+        write29(bc, x)
     }
 }
 
-function read28(bc: bare.ByteCursor): Json | null {
+function read31(bc: bare.ByteCursor): Json | null {
     return bare.readBool(bc) ? readJson(bc) : null
 }
 
-function write28(bc: bare.ByteCursor, x: Json | null): void {
+function write31(bc: bare.ByteCursor, x: Json | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         writeJson(bc, x)
     }
 }
 
-/**
- * MARK: To Rivet
- */
 export type ToRivetMetadata = {
     readonly prepopulateActorNames: ReadonlyMap<string, ActorName> | null
     readonly metadata: Json | null
@@ -3047,14 +3074,14 @@ export type ToRivetMetadata = {
 
 export function readToRivetMetadata(bc: bare.ByteCursor): ToRivetMetadata {
     return {
-        prepopulateActorNames: read27(bc),
-        metadata: read28(bc),
+        prepopulateActorNames: read30(bc),
+        metadata: read31(bc),
     }
 }
 
 export function writeToRivetMetadata(bc: bare.ByteCursor, x: ToRivetMetadata): void {
-    write27(bc, x.prepopulateActorNames)
-    write28(bc, x.metadata)
+    write30(bc, x.prepopulateActorNames)
+    write31(bc, x.metadata)
 }
 
 export type ToRivetEvents = readonly EventWrapper[]
@@ -3078,7 +3105,7 @@ export function writeToRivetEvents(bc: bare.ByteCursor, x: ToRivetEvents): void 
     }
 }
 
-function read29(bc: bare.ByteCursor): readonly ActorCheckpoint[] {
+function read32(bc: bare.ByteCursor): readonly ActorCheckpoint[] {
     const len = bare.readUintSafe(bc)
     if (len === 0) {
         return []
@@ -3090,7 +3117,7 @@ function read29(bc: bare.ByteCursor): readonly ActorCheckpoint[] {
     return result
 }
 
-function write29(bc: bare.ByteCursor, x: readonly ActorCheckpoint[]): void {
+function write32(bc: bare.ByteCursor, x: readonly ActorCheckpoint[]): void {
     bare.writeUintSafe(bc, x.length)
     for (let i = 0; i < x.length; i++) {
         writeActorCheckpoint(bc, x[i])
@@ -3103,12 +3130,12 @@ export type ToRivetAckCommands = {
 
 export function readToRivetAckCommands(bc: bare.ByteCursor): ToRivetAckCommands {
     return {
-        lastCommandCheckpoints: read29(bc),
+        lastCommandCheckpoints: read32(bc),
     }
 }
 
 export function writeToRivetAckCommands(bc: bare.ByteCursor, x: ToRivetAckCommands): void {
-    write29(bc, x.lastCommandCheckpoints)
+    write32(bc, x.lastCommandCheckpoints)
 }
 
 export type ToRivetStopping = null
@@ -3439,9 +3466,6 @@ export function decodeToRivet(bytes: Uint8Array): ToRivet {
     return result
 }
 
-/**
- * MARK: To Envoy
- */
 export type ProtocolMetadata = {
     readonly envoyLostThreshold: i64
     readonly actorStopThreshold: i64
@@ -3503,12 +3527,12 @@ export type ToEnvoyAckEvents = {
 
 export function readToEnvoyAckEvents(bc: bare.ByteCursor): ToEnvoyAckEvents {
     return {
-        lastEventCheckpoints: read29(bc),
+        lastEventCheckpoints: read32(bc),
     }
 }
 
 export function writeToEnvoyAckEvents(bc: bare.ByteCursor, x: ToEnvoyAckEvents): void {
-    write29(bc, x.lastEventCheckpoints)
+    write32(bc, x.lastEventCheckpoints)
 }
 
 export type ToEnvoyKvResponse = {
@@ -3813,9 +3837,6 @@ export function decodeToEnvoy(bytes: Uint8Array): ToEnvoy {
     return result
 }
 
-/**
- * MARK: To Envoy Conn
- */
 export type ToEnvoyConnPing = {
     readonly gatewayId: GatewayId
     readonly requestId: RequestId
@@ -3838,7 +3859,25 @@ export function writeToEnvoyConnPing(bc: bare.ByteCursor, x: ToEnvoyConnPing): v
 
 export type ToEnvoyConnClose = null
 
+export type ToEnvoyStartRequest = {
+    readonly command: CommandWrapper
+    readonly request: ToEnvoyTunnelMessage
+}
+
+export function readToEnvoyStartRequest(bc: bare.ByteCursor): ToEnvoyStartRequest {
+    return {
+        command: readCommandWrapper(bc),
+        request: readToEnvoyTunnelMessage(bc),
+    }
+}
+
+export function writeToEnvoyStartRequest(bc: bare.ByteCursor, x: ToEnvoyStartRequest): void {
+    writeCommandWrapper(bc, x.command)
+    writeToEnvoyTunnelMessage(bc, x.request)
+}
+
 export type ToEnvoyConn =
+    | { readonly tag: "ToEnvoyStartRequest"; readonly val: ToEnvoyStartRequest }
     | { readonly tag: "ToEnvoyConnPing"; readonly val: ToEnvoyConnPing }
     | { readonly tag: "ToEnvoyConnClose"; readonly val: ToEnvoyConnClose }
     | { readonly tag: "ToEnvoyCommands"; readonly val: ToEnvoyCommands }
@@ -3850,14 +3889,16 @@ export function readToEnvoyConn(bc: bare.ByteCursor): ToEnvoyConn {
     const tag = bare.readU8(bc)
     switch (tag) {
         case 0:
-            return { tag: "ToEnvoyConnPing", val: readToEnvoyConnPing(bc) }
+            return { tag: "ToEnvoyStartRequest", val: readToEnvoyStartRequest(bc) }
         case 1:
-            return { tag: "ToEnvoyConnClose", val: null }
+            return { tag: "ToEnvoyConnPing", val: readToEnvoyConnPing(bc) }
         case 2:
-            return { tag: "ToEnvoyCommands", val: readToEnvoyCommands(bc) }
+            return { tag: "ToEnvoyConnClose", val: null }
         case 3:
-            return { tag: "ToEnvoyAckEvents", val: readToEnvoyAckEvents(bc) }
+            return { tag: "ToEnvoyCommands", val: readToEnvoyCommands(bc) }
         case 4:
+            return { tag: "ToEnvoyAckEvents", val: readToEnvoyAckEvents(bc) }
+        case 5:
             return { tag: "ToEnvoyTunnelMessage", val: readToEnvoyTunnelMessage(bc) }
         default: {
             bc.offset = offset
@@ -3868,27 +3909,32 @@ export function readToEnvoyConn(bc: bare.ByteCursor): ToEnvoyConn {
 
 export function writeToEnvoyConn(bc: bare.ByteCursor, x: ToEnvoyConn): void {
     switch (x.tag) {
-        case "ToEnvoyConnPing": {
+        case "ToEnvoyStartRequest": {
             bare.writeU8(bc, 0)
+            writeToEnvoyStartRequest(bc, x.val)
+            break
+        }
+        case "ToEnvoyConnPing": {
+            bare.writeU8(bc, 1)
             writeToEnvoyConnPing(bc, x.val)
             break
         }
         case "ToEnvoyConnClose": {
-            bare.writeU8(bc, 1)
+            bare.writeU8(bc, 2)
             break
         }
         case "ToEnvoyCommands": {
-            bare.writeU8(bc, 2)
+            bare.writeU8(bc, 3)
             writeToEnvoyCommands(bc, x.val)
             break
         }
         case "ToEnvoyAckEvents": {
-            bare.writeU8(bc, 3)
+            bare.writeU8(bc, 4)
             writeToEnvoyAckEvents(bc, x.val)
             break
         }
         case "ToEnvoyTunnelMessage": {
-            bare.writeU8(bc, 4)
+            bare.writeU8(bc, 5)
             writeToEnvoyTunnelMessage(bc, x.val)
             break
         }
@@ -3914,9 +3960,6 @@ export function decodeToEnvoyConn(bytes: Uint8Array): ToEnvoyConn {
     return result
 }
 
-/**
- * MARK: To Gateway
- */
 export type ToGatewayPong = {
     readonly requestId: RequestId
     readonly ts: i64
@@ -3987,9 +4030,6 @@ export function decodeToGateway(bytes: Uint8Array): ToGateway {
     return result
 }
 
-/**
- * MARK: To Outbound
- */
 export type ToOutboundActorStart = {
     readonly namespaceId: Id
     readonly poolName: string
@@ -4063,4 +4103,4 @@ function assert(condition: boolean, message?: string): asserts condition {
     if (!condition) throw new Error(message ?? "Assertion failed")
 }
 
-export const VERSION = 8;
+export const VERSION = 9;
