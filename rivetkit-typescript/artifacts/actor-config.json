@@ -78,6 +78,9 @@
       },
       "additionalProperties": {}
     },
+    "tracing": {
+      "description": "Trace sampling for this actor: `sampler` is the share of its invocations that are recorded, from 0 to 1, with optional per-action rates under `actions`. A rate lowers what is recorded and never raises it. Defaults to the process sampler from OTEL_TRACES_SAMPLER."
+    },
     "connParamsSchema": {
       "description": "Optional schema for validating connection params in native runtimes."
     },

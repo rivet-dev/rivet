@@ -11,7 +11,7 @@ use rivet_error::{ActorSpecifier, RivetError, RivetErrorKind};
 use rivetkit_core::inspector::InspectorTabEntry;
 use rivetkit_core::{
 	ActionDefinition, ActorConfig, ActorConfigInput, ActorContext as CoreActorContext,
-	ActorFactory as CoreActorFactory, ConnHandle as CoreConnHandle, Request,
+	ActorFactory as CoreActorFactory, ActorTracingConfig, ConnHandle as CoreConnHandle, Request,
 	SqliteProfilingConfigInput, WebSocket as CoreWebSocket,
 };
 
@@ -90,6 +90,15 @@ pub struct JsSqliteProfilingConfig {
 	pub diagnostic_event_queue_capacity: Option<u32>,
 }
 
+/// Per-actor trace sample rates, from 0 to 1.
+#[napi(object)]
+#[derive(Clone, Default)]
+pub struct JsActorTracingConfig {
+	pub sampler: Option<f64>,
+	/// Keyed by flattened, dot-separated action name.
+	pub actions: Option<HashMap<String, f64>>,
+}
+
 #[napi(object)]
 #[derive(Clone, Default)]
 pub struct JsActorConfig {
@@ -98,6 +107,7 @@ pub struct JsActorConfig {
 	pub has_database: Option<bool>,
 	pub remote_sqlite: Option<bool>,
 	pub sqlite_profiling: Option<JsSqliteProfilingConfig>,
+	pub tracing: Option<JsActorTracingConfig>,
 	pub enable_actor_runtime_socket: Option<bool>,
 	pub has_state: Option<bool>,
 	pub can_hibernate_websocket: Option<bool>,
@@ -1012,6 +1022,7 @@ impl From<JsActorConfig> for ActorConfigInput {
 			has_database: value.has_database,
 			remote_sqlite: value.remote_sqlite,
 			sqlite_profiling: value.sqlite_profiling.map(Into::into),
+			tracing: value.tracing.map(Into::into),
 			enable_actor_runtime_socket: value.enable_actor_runtime_socket,
 			has_state: value.has_state,
 			can_hibernate_websocket: value.can_hibernate_websocket,
@@ -1072,6 +1083,15 @@ impl From<JsActorConfig> for ActorConfigInput {
 					})
 					.collect()
 			}),
+		}
+	}
+}
+
+impl From<JsActorTracingConfig> for ActorTracingConfig {
+	fn from(value: JsActorTracingConfig) -> Self {
+		Self {
+			sampler: value.sampler,
+			actions: value.actions.unwrap_or_default(),
 		}
 	}
 }

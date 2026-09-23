@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
@@ -143,6 +144,42 @@ impl SqliteProfilingConfig {
 	}
 }
 
+/// Per-actor trace sample rates, from 0.0 to 1.0. A rate lowers what is recorded
+/// and never raises it.
+#[derive(Clone, Debug, Default)]
+pub struct ActorTracingConfig {
+	/// `None` defers to the process sampler from `OTEL_TRACES_SAMPLER`.
+	pub sampler: Option<f64>,
+	/// Keyed by flattened action name. Also covers scheduled runs of the action.
+	pub actions: HashMap<String, f64>,
+}
+
+impl ActorTracingConfig {
+	pub(crate) fn sampler_for_action(&self, action_name: &str) -> Option<f64> {
+		self.actions.get(action_name).copied().or(self.sampler)
+	}
+
+	fn validate(&self, actions: &[ActionDefinition]) -> anyhow::Result<()> {
+		for rate in self.sampler.iter().chain(self.actions.values()) {
+			anyhow::ensure!(
+				rate.is_finite() && (0.0..=1.0).contains(rate),
+				"tracing sampler must be between 0 and 1, got {rate}"
+			);
+		}
+		// The Rust SDK never fills `ActorConfig::actions`.
+		if actions.is_empty() {
+			return Ok(());
+		}
+		for action_name in self.actions.keys() {
+			anyhow::ensure!(
+				actions.iter().any(|action| &action.name == action_name),
+				"tracing sampler names unknown action `{action_name}`"
+			);
+		}
+		Ok(())
+	}
+}
+
 #[derive(Clone, Debug)]
 pub struct ActorConfig {
 	pub name: Option<String>,
@@ -152,6 +189,7 @@ pub struct ActorConfig {
 	pub has_database: bool,
 	pub remote_sqlite: bool,
 	pub sqlite_profiling: SqliteProfilingConfig,
+	pub tracing: Arc<ActorTracingConfig>,
 	/// Enables the experimental Actor Runtime Socket.
 	pub enable_actor_runtime_socket: bool,
 	/// Whether the user declared actor state (`state: ...` or `createState`).
@@ -191,6 +229,7 @@ pub struct ActorConfigInput {
 	pub has_database: Option<bool>,
 	pub remote_sqlite: Option<bool>,
 	pub sqlite_profiling: Option<SqliteProfilingConfigInput>,
+	pub tracing: Option<ActorTracingConfig>,
 	pub enable_actor_runtime_socket: Option<bool>,
 	pub has_state: Option<bool>,
 	pub can_hibernate_websocket: Option<bool>,
@@ -226,6 +265,7 @@ impl ActorConfig {
 				.sqlite_profiling
 				.map(SqliteProfilingConfig::from_input)
 				.unwrap_or_default(),
+			tracing: Arc::new(config.tracing.unwrap_or_default()),
 			enable_actor_runtime_socket: config.enable_actor_runtime_socket.unwrap_or(false),
 			has_state: config.has_state.unwrap_or(false),
 			..Self::default()
@@ -311,6 +351,7 @@ impl ActorConfig {
 	/// config so the actor never starts with garbage state.
 	pub fn validate(&self) -> anyhow::Result<()> {
 		crate::inspector::validate_inspector_tabs(&self.inspector_tabs)?;
+		self.tracing.validate(&self.actions)?;
 		anyhow::ensure!(
 			self.sqlite_profiling.baseline_sample_rate.is_finite()
 				&& (0.0..=1.0).contains(&self.sqlite_profiling.baseline_sample_rate),
@@ -341,6 +382,7 @@ impl Default for ActorConfig {
 			has_database: false,
 			remote_sqlite: false,
 			sqlite_profiling: SqliteProfilingConfig::default(),
+			tracing: Arc::default(),
 			enable_actor_runtime_socket: false,
 			has_state: false,
 			can_hibernate_websocket: CanHibernateWebSocket::default(),

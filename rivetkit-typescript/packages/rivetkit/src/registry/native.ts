@@ -2,6 +2,7 @@ import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import {
 	flattenActionHandlers,
 	flattenActionInputSchemas,
+	flattenActionTraceSamplers,
 } from "@/actor/actions";
 import {
 	ACTOR_CONTEXT_INTERNAL_SYMBOL,
@@ -41,6 +42,7 @@ import {
 	getQueueCanPublish,
 	hasSchemaConfigKey,
 } from "@/actor/schema";
+import type { ActionSampleRates } from "@/actor/tracing";
 import {
 	type AnyClient,
 	type Client,
@@ -112,6 +114,7 @@ import type {
 	CoreRuntime,
 	RegistryHandle,
 	RuntimeActorConfig,
+	RuntimeActorTracingConfig,
 	RuntimeBytes,
 	RuntimeCronFire,
 	RuntimeCronJobInfo,
@@ -3854,6 +3857,17 @@ function withConnContext(
 	});
 }
 
+function buildActorTracingConfig(
+	actions: unknown,
+	tracing: { sampler?: number; actions?: ActionSampleRates } | undefined,
+): RuntimeActorTracingConfig | undefined {
+	if (tracing === undefined) return undefined;
+	return {
+		sampler: tracing.sampler,
+		actions: flattenActionTraceSamplers(actions, tracing.actions),
+	};
+}
+
 function buildActorConfig(
 	definition: AnyActorDefinition,
 	registryConfig: RegistryConfig,
@@ -3874,6 +3888,10 @@ function buildActorConfig(
 		hasDatabase: true,
 		remoteSqlite: usesRemoteSqlite,
 		sqliteProfiling,
+		tracing: buildActorTracingConfig(
+			definition.config.actions,
+			definition.config.tracing,
+		),
 		enableActorRuntimeSocket: options.enableActorRuntimeSocket === true,
 		hasState:
 			config.state !== undefined ||

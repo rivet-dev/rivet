@@ -1,4 +1,5 @@
 import type { PrimitiveSchema } from "./schema";
+import type { ActionSampleRates } from "./tracing";
 
 export type RuntimeActionHandler = (...args: any[]) => any;
 
@@ -44,6 +45,41 @@ export function flattenActionInputSchemas(
 		}
 	}
 	return flattened;
+}
+
+/**
+ * Flatten per-action sample rates into dot-separated action names.
+ *
+ * @throws TypeError when a rate names something that is not an action.
+ */
+export function flattenActionTraceSamplers(
+	actions: unknown,
+	rates: ActionSampleRates = {},
+): Record<string, number> {
+	const handlers = flattenActionHandlers(actions);
+	const flattened = Object.fromEntries(flattenSampleRates(rates, []));
+	for (const name of Object.keys(flattened)) {
+		if (!Object.hasOwn(handlers, name)) {
+			throw new TypeError(
+				`tracing.actions.${name} does not name an action`,
+			);
+		}
+	}
+	return flattened;
+}
+
+function flattenSampleRates(
+	rates: ActionSampleRates,
+	path: readonly string[],
+): Array<[name: string, rate: number]> {
+	return Object.entries(rates).flatMap(
+		([segment, rate]): Array<[name: string, rate: number]> => {
+			const childPath = [...path, segment];
+			return typeof rate === "number"
+				? [[childPath.join("."), rate]]
+				: flattenSampleRates(rate, childPath);
+		},
+	);
 }
 
 interface ActionEntry {
