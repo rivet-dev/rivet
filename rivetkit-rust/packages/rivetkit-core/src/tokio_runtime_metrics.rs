@@ -18,14 +18,14 @@ use std::{
 	time::Duration,
 };
 
+#[cfg(tokio_unstable)]
+use rivet_metrics::prometheus::{IntGaugeVec, register_int_gauge_vec_with_registry};
 use rivet_metrics::{
 	REGISTRY,
 	prometheus::{
 		CounterVec, IntGauge, register_counter_vec_with_registry, register_int_gauge_with_registry,
 	},
 };
-#[cfg(tokio_unstable)]
-use rivet_metrics::prometheus::{IntGaugeVec, register_int_gauge_vec_with_registry};
 
 /// How often runtime state is read. Everything sampled here is either an
 /// instantaneous depth or a monotonic total, so the interval only needs to be

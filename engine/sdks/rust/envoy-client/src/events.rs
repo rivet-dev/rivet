@@ -14,8 +14,12 @@ pub async fn handle_send_events(ctx: &mut EnvoyContext, events: Vec<protocol::Ev
 	}
 
 	for event in &events {
-		let pending = ctx.pending_events
-			.entry((event.checkpoint.actor_id.clone(), event.checkpoint.generation))
+		let pending = ctx
+			.pending_events
+			.entry((
+				event.checkpoint.actor_id.clone(),
+				event.checkpoint.generation,
+			))
 			.or_default();
 		pending.events.push(event.clone());
 		if matches!(
@@ -24,7 +28,9 @@ pub async fn handle_send_events(ctx: &mut EnvoyContext, events: Vec<protocol::Ev
 				state: protocol::ActorState::ActorStateStopped(_),
 			})
 		) {
-			pending.retired_at.get_or_insert_with(crate::time::Instant::now);
+			pending
+				.retired_at
+				.get_or_insert_with(crate::time::Instant::now);
 		}
 		let mut remove_after_stop = false;
 		let entry =
@@ -55,7 +61,9 @@ pub fn handle_ack_events(ctx: &mut EnvoyContext, ack: protocol::ToEnvoyAckEvents
 	for checkpoint in &ack.last_event_checkpoints {
 		let key = (checkpoint.actor_id.clone(), checkpoint.generation);
 		if let Some(pending) = ctx.pending_events.get_mut(&key) {
-			pending.events.retain(|event| event.checkpoint.index > checkpoint.index);
+			pending
+				.events
+				.retain(|event| event.checkpoint.index > checkpoint.index);
 			if pending.events.is_empty() {
 				ctx.pending_events.remove(&key);
 			}
@@ -130,8 +138,8 @@ mod tests {
 		BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, WebSocketHandler,
 		WebSocketSender,
 	};
-	use crate::context::{SharedContext, WsTxMessage};
 	use crate::connection::install_connection;
+	use crate::context::{SharedContext, WsTxMessage};
 	use crate::envoy::EnvoyContext;
 	use crate::handle::EnvoyHandle;
 
@@ -360,7 +368,13 @@ mod tests {
 	#[tokio::test]
 	async fn stopped_event_survives_actor_removal_and_replays_until_acked() {
 		let (mut ctx, _handle) = new_envoy_context();
-		insert_actor(&mut ctx, "actor-stop", 1, Arc::new(AsyncCounter::new()), false);
+		insert_actor(
+			&mut ctx,
+			"actor-stop",
+			1,
+			Arc::new(AsyncCounter::new()),
+			false,
+		);
 		ctx.remove_actor("actor-stop", 1);
 		let event = stopped_event("actor-stop", 1);
 		let other_event = stopped_event("actor-other", 2);
@@ -375,12 +389,12 @@ mod tests {
 		let WsTxMessage::Send(bytes) = rx.recv().await.expect("replayed event") else {
 			panic!("expected event frame");
 		};
-		let replayed = protocol::versioned::ToRivet::deserialize(
-			&bytes,
-			protocol::PROTOCOL_VERSION,
-		)
-		.expect("decode replayed event");
-		assert!(matches!(replayed, protocol::ToRivet::ToRivetEvents(events) if events.len() == 2 && events.contains(&event) && events.contains(&other_event)));
+		let replayed =
+			protocol::versioned::ToRivet::deserialize(&bytes, protocol::PROTOCOL_VERSION)
+				.expect("decode replayed event");
+		assert!(
+			matches!(replayed, protocol::ToRivet::ToRivetEvents(events) if events.len() == 2 && events.contains(&event) && events.contains(&other_event))
+		);
 
 		handle_ack_events(
 			&mut ctx,
@@ -397,12 +411,12 @@ mod tests {
 		let WsTxMessage::Send(bytes) = next_rx.recv().await.expect("second replay") else {
 			panic!("expected event frame");
 		};
-		let replayed = protocol::versioned::ToRivet::deserialize(
-			&bytes,
-			protocol::PROTOCOL_VERSION,
-		)
-		.expect("decode second replay");
-		assert!(matches!(replayed, protocol::ToRivet::ToRivetEvents(events) if events == vec![other_event.clone()]));
+		let replayed =
+			protocol::versioned::ToRivet::deserialize(&bytes, protocol::PROTOCOL_VERSION)
+				.expect("decode second replay");
+		assert!(
+			matches!(replayed, protocol::ToRivet::ToRivetEvents(events) if events == vec![other_event.clone()])
+		);
 		handle_ack_events(
 			&mut ctx,
 			protocol::ToEnvoyAckEvents {
@@ -433,12 +447,12 @@ mod tests {
 		let WsTxMessage::Send(bytes) = rx.recv().await.expect("live event replay") else {
 			panic!("expected event frame");
 		};
-		let replayed = protocol::versioned::ToRivet::deserialize(
-			&bytes,
-			protocol::PROTOCOL_VERSION,
-		)
-		.expect("decode live replay");
-		assert!(matches!(replayed, protocol::ToRivet::ToRivetEvents(events) if events.len() == 1 && events[0].checkpoint.actor_id == "running"));
+		let replayed =
+			protocol::versioned::ToRivet::deserialize(&bytes, protocol::PROTOCOL_VERSION)
+				.expect("decode live replay");
+		assert!(
+			matches!(replayed, protocol::ToRivet::ToRivetEvents(events) if events.len() == 1 && events[0].checkpoint.actor_id == "running")
+		);
 	}
 
 	#[tokio::test]

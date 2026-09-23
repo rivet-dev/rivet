@@ -60,7 +60,8 @@ pub(crate) fn cbor_to_json(value: Value) -> Result<serde_json::Value> {
 		Value::Bool(value) => JsonValue::Bool(value),
 		Value::Integer(value) => integer_to_json(i128::from(value))?,
 		Value::Float(value) => JsonValue::Number(
-			serde_json::Number::from_f64(value).context("cbor float cannot be represented as json")?,
+			serde_json::Number::from_f64(value)
+				.context("cbor float cannot be represented as json")?,
 		),
 		Value::Bytes(value) => JsonValue::Array(value.into_iter().map(JsonValue::from).collect()),
 		Value::Text(value) => JsonValue::String(value),
@@ -98,7 +99,9 @@ fn integer_to_json(value: i128) -> Result<serde_json::Value> {
 /// Reject non-finite floats (`NaN`/infinity), which `serde_json::to_value` would silently
 /// coerce to `null`.
 fn reject_non_finite_floats<T: Serialize>(value: &T) -> Result<()> {
-	value.serialize(finite::Checker).map_err(anyhow::Error::from)
+	value
+		.serialize(finite::Checker)
+		.map_err(anyhow::Error::from)
 }
 
 /// A `serde::Serializer` that produces no output and errors on non-finite floats.
@@ -116,7 +119,9 @@ mod finite {
 
 	impl fmt::Display for Error {
 		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-			f.write_str("value contains a non-finite float (NaN or infinity), which is not json-compatible")
+			f.write_str(
+				"value contains a non-finite float (NaN or infinity), which is not json-compatible",
+			)
 		}
 	}
 
@@ -144,11 +149,19 @@ mod finite {
 		type SerializeStructVariant = Nested;
 
 		fn serialize_f32(self, value: f32) -> Result<(), Error> {
-			if value.is_finite() { Ok(()) } else { Err(Error) }
+			if value.is_finite() {
+				Ok(())
+			} else {
+				Err(Error)
+			}
 		}
 
 		fn serialize_f64(self, value: f64) -> Result<(), Error> {
-			if value.is_finite() { Ok(()) } else { Err(Error) }
+			if value.is_finite() {
+				Ok(())
+			} else {
+				Err(Error)
+			}
 		}
 
 		fn serialize_some<T: Serialize + ?Sized>(self, value: &T) -> Result<(), Error> {
@@ -886,8 +899,11 @@ mod tests {
 			"legacy form should encode the field as bytes",
 		);
 		let mut legacy_args = Vec::new();
-		ciborium::into_writer(&ciborium::Value::Array(vec![struct_value]), &mut legacy_args)
-			.expect("encode legacy positional args");
+		ciborium::into_writer(
+			&ciborium::Value::Array(vec![struct_value]),
+			&mut legacy_args,
+		)
+		.expect("encode legacy positional args");
 
 		let decoded =
 			decode_positional::<WithHrSensitive>(&legacy_args).expect("decode legacy binary args");
@@ -910,11 +926,14 @@ mod tests {
 			"legacy form should encode the tuple field as an array, not bytes",
 		);
 		let mut legacy_args = Vec::new();
-		ciborium::into_writer(&ciborium::Value::Array(vec![struct_value]), &mut legacy_args)
-			.expect("encode legacy positional args");
+		ciborium::into_writer(
+			&ciborium::Value::Array(vec![struct_value]),
+			&mut legacy_args,
+		)
+		.expect("encode legacy positional args");
 
-		let decoded =
-			decode_positional::<WithHrTuple>(&legacy_args).expect("decode legacy binary tuple args");
+		let decoded = decode_positional::<WithHrTuple>(&legacy_args)
+			.expect("decode legacy binary tuple args");
 		assert_eq!(decoded, value);
 	}
 
@@ -982,9 +1001,10 @@ mod tests {
 				shape: Shape::Point,
 			},
 		] {
-			let decoded =
-				decode_positional::<WithEnum>(&encode_positional(&value).expect("encode enum field"))
-					.expect("decode enum field");
+			let decoded = decode_positional::<WithEnum>(
+				&encode_positional(&value).expect("encode enum field"),
+			)
+			.expect("decode enum field");
 			assert_eq!(decoded, value);
 		}
 	}
@@ -1008,9 +1028,10 @@ mod tests {
 		assert!(encode_positional(&vec![1.0f64, f64::NAN]).is_err());
 
 		let value = WithFloat { value: 1.5 };
-		let decoded =
-			decode_positional::<WithFloat>(&encode_positional(&value).expect("encode finite float"))
-				.expect("decode finite float");
+		let decoded = decode_positional::<WithFloat>(
+			&encode_positional(&value).expect("encode finite float"),
+		)
+		.expect("decode finite float");
 		assert_eq!(decoded, value);
 	}
 }

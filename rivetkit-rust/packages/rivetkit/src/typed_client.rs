@@ -220,7 +220,10 @@ pub(crate) fn encode_action_args<M: Action>(action: &M) -> Result<Vec<JsonValue>
 		bail!("positional action args must encode as a cbor array");
 	};
 
-	values.into_iter().map(crate::action::cbor_to_json).collect()
+	values
+		.into_iter()
+		.map(crate::action::cbor_to_json)
+		.collect()
 }
 
 fn decode_event<E: Event>(event: &ClientEvent) -> Result<E> {
@@ -250,7 +253,6 @@ fn decode_event_args<E: Event>(raw_args: &[u8]) -> Result<E> {
 			.context("decode typed event from legacy payload"),
 	}
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -282,7 +284,9 @@ mod tests {
 		.expect("encode action args");
 
 		assert_eq!(args.len(), 1);
-		let object = args[0].as_object().expect("named struct arg is a json object");
+		let object = args[0]
+			.as_object()
+			.expect("named struct arg is a json object");
 		// The uuid-like field must be a json string, not a number array.
 		assert_eq!(
 			object.get("id").and_then(JsonValue::as_str),
@@ -301,7 +305,8 @@ mod tests {
 
 		// Mimic the engine re-encoding the JSON args into the CBOR buffer the actor receives.
 		let mut cbor = Vec::new();
-		ciborium::into_writer(&JsonValue::Array(args), &mut cbor).expect("encode json args as cbor");
+		ciborium::into_writer(&JsonValue::Array(args), &mut cbor)
+			.expect("encode json args as cbor");
 
 		let decoded = action::decode_positional::<Ping>(&cbor).expect("actor decodes args");
 		assert_eq!(decoded, action);

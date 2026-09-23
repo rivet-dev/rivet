@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/engine-cli",
-	"version": "2.3.17",
+	"version": "2.3.19",
 	"description": "Rivet Engine binary distributed as platform-specific npm packages",
 	"license": "Apache-2.0",
 	"main": "index.js",

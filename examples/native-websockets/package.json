@@ -25,10 +25,10 @@
 		"ws": "^8.16.0"
 	},
 	"dependencies": {
-		"@rivetkit/react": "^2.3.17",
+		"@rivetkit/react": "^2.3.19",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
-		"rivetkit": "^2.3.17"
+		"rivetkit": "^2.3.19"
 	},
 	"license": "MIT"
 }

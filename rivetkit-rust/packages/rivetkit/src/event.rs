@@ -389,8 +389,13 @@ impl<'de> VariantAccess<'de> for ActionVariantAccess<'de> {
 	where
 		V: Visitor<'de>,
 	{
-		de::Deserializer::deserialize_struct(action_payload_value(self.args)?, "action", fields, visitor)
-			.map_err(map_json_error)
+		de::Deserializer::deserialize_struct(
+			action_payload_value(self.args)?,
+			"action",
+			fields,
+			visitor,
+		)
+		.map_err(map_json_error)
 	}
 }
 
@@ -414,7 +419,10 @@ fn decode_legacy_action_enum<T: DeserializeOwned>(
 	let enum_value = if args.is_empty() {
 		Value::Text(name.to_owned())
 	} else {
-		Value::Map(vec![(Value::Text(name.to_owned()), decode_action_value(args)?)])
+		Value::Map(vec![(
+			Value::Text(name.to_owned()),
+			decode_action_value(args)?,
+		)])
 	};
 
 	let mut encoded = Vec::new();
@@ -450,8 +458,9 @@ fn deserialize_json_value<T: DeserializeOwned>(value: Value) -> Result<T, de::va
 
 fn deserialize_binary_value<T: DeserializeOwned>(value: &Value) -> Result<T, de::value::Error> {
 	let mut encoded = Vec::new();
-	ciborium::into_writer(value, &mut encoded)
-		.map_err(|error| de::Error::custom(format!("re-encode value for binary decode: {error}")))?;
+	ciborium::into_writer(value, &mut encoded).map_err(|error| {
+		de::Error::custom(format!("re-encode value for binary decode: {error}"))
+	})?;
 	ciborium::from_reader(Cursor::new(encoded))
 		.map_err(|error| de::Error::custom(format!("decode value in binary mode: {error}")))
 }
