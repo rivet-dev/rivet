@@ -29,6 +29,8 @@ export {
 	SleepError,
 	StepExhaustedError,
 	StepFailedError,
+	StepOutputTooLargeError,
+	StorageLimitError,
 } from "./errors.js";
 
 // Location utilities

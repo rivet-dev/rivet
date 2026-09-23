@@ -13,6 +13,7 @@ import {
 	serializeWorkflowState,
 } from "../schemas/serde.js";
 import type { EngineDriver, KVWrite } from "./driver.js";
+import { StorageLimitError } from "./errors.js";
 import {
 	buildEntryMetadataKey,
 	buildEntryMetadataPrefix,
@@ -364,7 +365,7 @@ function splitBatchWrites(writes: KVWrite[]): KVWrite[][] {
 	for (const write of writes) {
 		const writeBytes = write.key.byteLength + write.value.byteLength;
 		if (writeBytes > MAX_KV_BATCH_PAYLOAD_BYTES) {
-			throw new Error(
+			throw new StorageLimitError(
 				`KV batch write is ${writeBytes} bytes, exceeding the ${MAX_KV_BATCH_PAYLOAD_BYTES} byte limit`,
 			);
 		}

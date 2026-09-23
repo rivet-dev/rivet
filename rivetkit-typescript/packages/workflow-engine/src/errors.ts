@@ -10,6 +10,34 @@ export class CriticalError extends Error {
 }
 
 /**
+ * Thrown by an `EngineDriver` when a write batch exceeds a storage limit of
+ * the backing store. Nothing from the rejected batch may have been persisted.
+ */
+export class StorageLimitError extends Error {
+	constructor(message: string, options?: { cause?: unknown }) {
+		super(message, options);
+		this.name = "StorageLimitError";
+	}
+}
+
+/**
+ * A step completed but its result could not be persisted because it exceeds
+ * storage limits. Critical because a rerun would produce the same output.
+ */
+export class StepOutputTooLargeError extends CriticalError {
+	constructor(
+		public readonly stepName: string,
+		public readonly outputBytes: number,
+		public readonly reason: string,
+	) {
+		super(
+			`Step "${stepName}" output (${outputBytes} bytes serialized) exceeds workflow storage limits: ${reason}`,
+		);
+		this.name = "StepOutputTooLargeError";
+	}
+}
+
+/**
  * Thrown from steps to force rollback without retry.
  */
 export class RollbackError extends Error {

@@ -47,6 +47,7 @@ pub fn public_error_status_code(group: &str, code: &str) -> Option<u16> {
 			| "timed_out",
 		) => Some(400),
 		("kv", _) => Some(400),
+		("storage", _) => Some(400),
 		("user", _) => Some(400),
 		_ => None,
 	}
@@ -127,6 +128,28 @@ pub(crate) enum KvRuntimeError {
 		"KV key too large ({size} bytes). Limit is {limit} bytes."
 	)]
 	KeyTooLarge { size: usize, limit: usize },
+}
+
+#[derive(RivetError, Debug, Clone, Deserialize, Serialize)]
+#[error("storage")]
+pub(crate) enum StorageLimitError {
+	#[error(
+		"transaction_too_large",
+		"Atomic storage transaction is too large.",
+		"Atomic SQLite and actor state transaction exceeds transaction budget: {rows} rows and {bytes} bytes (limits: {max_rows} rows and {max_bytes} bytes)."
+	)]
+	TransactionTooLarge {
+		rows: usize,
+		bytes: usize,
+		max_rows: usize,
+		max_bytes: usize,
+	},
+	#[error(
+		"workflow_value_too_large",
+		"Workflow storage value is too large.",
+		"Workflow storage value too large ({size} bytes). Limit is {limit} bytes."
+	)]
+	WorkflowValueTooLarge { size: usize, limit: usize },
 }
 
 pub(crate) fn is_internal_error(group: &str, code: &str) -> bool {
