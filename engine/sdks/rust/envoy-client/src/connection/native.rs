@@ -126,7 +126,7 @@ async fn single_connection(
 		.map_err(|e| anyhow::anyhow!("failed to build ws request: {e}"))?;
 
 	let (ws_stream, _) =
-		tokio_tungstenite::connect_async_with_config(request, Some(websocket_config()), false)
+		tokio_tungstenite::connect_async_with_config(request, Some(websocket_config()), true)
 			.await?;
 	let (mut write, mut read) = ws_stream.split();
 
