@@ -42,7 +42,6 @@ x = [r["live"] for r in rows]
 y = [r["rss"] / mib for r in rows]
 base, last = y[0], y[-1]
 delta = last - base
-warm = (last - y[1]) / (count - 1)
 fonts = {}
 for name, weight, src in [
     ("body", 500, "manrope/Manrope-Variable-latin.woff2"),
@@ -59,6 +58,11 @@ for name, weight, src in [
     font = instantiateVariableFont(
         TTFont(site / "public/fonts" / src), {"wght": weight}, inplace=True
     )
+    # Matplotlib keys SVG glyphs by PostScript name. Variable-font instances
+    # retain the same name unless renamed, mixing regular and bold glyphs.
+    for record in font["name"].names:
+        if record.nameID == 6:
+            record.string = f"PiChart-{name}-{weight}".encode(record.getEncoding())
     font.flavor = None
     font.save(dest)
     fonts[name] = FontProperties(fname=str(dest))
@@ -78,7 +82,7 @@ plt.rcParams.update(
         "ytick.color": SOFT,
     }
 )
-fig = plt.figure(figsize=(14, 10), facecolor=PAPER)
+fig = plt.figure(figsize=(14, 8), facecolor=PAPER)
 
 
 def label(x, y, text, size=14, color=INK, font="body", **kw):
@@ -93,38 +97,15 @@ def rule(y):
     )
 
 
-label(0.055, 0.934, "RIVET  /  RUNNER BENCHMARK", 11, PINE, "mono")
-label(0.055, 0.867, f"{count} Pi sessions. One runner.", 31, font="bold")
-label(
-    0.055,
-    0.822,
-    "A real prompt and a verified mock LLM response in every session.",
-    15,
-    SOFT,
-)
-rule(0.785)
-for xpos, value, title, detail, color in [
-    (
-        0.055,
-        f"+{delta:.1f} MiB",
-        "TOTAL RSS INCREASE",
-        f"Across {count} live sessions",
-        ACCENT,
-    ),
-    (
-        0.38,
-        f"{delta / count:.2f} MiB",
-        "PER SESSION",
-        "Including first-session setup",
-        INK,
-    ),
-    (0.705, f"{warm:.2f} MiB", "WARM PER SESSION", "Average after session one", INK),
+label(0.055, 0.89, f"{count} Pi sessions using Rivet Actors", 27, font="bold")
+for xpos, value, title, color in [
+    (0.055, f"+{delta:.1f} MiB", "RSS increase", ACCENT),
+    (0.50, f"{delta / count:.2f} MiB", "Average per session", INK),
 ]:
-    label(xpos, 0.749, title, 10, SOFT, "mono")
-    label(xpos, 0.695, value, 29, color, "bold")
-    label(xpos, 0.664, detail, 12, SOFT)
-rule(0.638)
-ax = fig.add_axes([0.095, 0.245, 0.81, 0.345], facecolor=PAPER)
+    label(xpos, 0.79, title, 13, SOFT)
+    label(xpos, 0.725, value, 31, color, "bold")
+rule(0.675)
+ax = fig.add_axes([0.095, 0.16, 0.81, 0.45], facecolor=PAPER)
 ax.fill_between(x, base, y, color=PINE, alpha=0.055, linewidth=0)
 ax.plot(x, y, color=PINE, lw=2.5, zorder=3)
 ax.scatter(x, y, s=10, color=PINE, zorder=4, edgecolors="none")
@@ -179,24 +160,6 @@ ax.text(
     va="top",
     bbox={"facecolor": PAPER, "edgecolor": "none", "pad": 3},
 )
-label(0.055, 0.142, f"{count} / {count} RESPONSES VERIFIED", 11, PINE, "mono")
-label(0.945, 0.142, f"{count + 1} RSS SAMPLES", 11, SOFT, "mono", ha="right")
-rule(0.12)
-label(0.055, 0.087, "Includes Node.js + RivetKit NAPI / Rust memory.", 12, font="bold")
-label(
-    0.055,
-    0.058,
-    "Excludes the Rivet Engine subprocess, client, and mock LLM server.",
-    11,
-    SOFT,
-)
-label(
-    0.055,
-    0.031,
-    "RSS sampled after each response and forced GC. All sessions awake; no tools or sandbox VMs.",
-    10,
-    SOFT,
-)
 svg = out / "pi-session-runner-rss.svg"
 fig.savefig(svg, facecolor=PAPER)
 # Embed the website's actual vector wordmark; retain vector paths in the export.
@@ -205,7 +168,7 @@ ET.register_namespace("", ns)
 root = ET.fromstring(svg.read_text())
 logo = ET.parse(Path(__file__).parent / "assets/rivet.svg").getroot()
 logo.set("x", "840")
-logo.set("y", "26")
+logo.set("y", "33")
 logo.set("width", "112")
 logo.set("height", str(112 / 3))
 root.append(logo)
@@ -214,7 +177,7 @@ cairosvg.svg2png(
     url=str(svg),
     write_to=str(out / "pi-session-runner-rss.png"),
     output_width=2520,
-    output_height=1800,
+    output_height=1440,
 )
 cairosvg.svg2pdf(url=str(svg), write_to=str(out / "pi-session-runner-rss.pdf"))
 print(
