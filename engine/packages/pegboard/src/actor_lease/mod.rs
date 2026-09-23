@@ -162,6 +162,7 @@ pub fn initialize(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Action {
 	Acquire,
+	AcquireForRequest,
 	Sleep,
 	Destroy,
 	Read,
@@ -184,7 +185,11 @@ pub async fn pegboard_actor_lease(ctx: &OperationCtx, input: &Input) -> Result<L
 	let lease = commit(ctx.config(), ctx.pools(), input).await?;
 
 	// Cancellation here leaves a durable command. Any acquire retry sends it again.
-	if !matches!(input.action, Action::Read) {
+	if !matches!(input.action, Action::Read)
+		&& !(matches!(input.action, Action::AcquireForRequest)
+			&& lease.phase == Phase::Starting
+			&& lease.protocol_version >= 9)
+	{
 		if let (Some(envoy), Some(command)) = (&lease.envoy_key, &lease.command) {
 			publish(
 				ctx,
@@ -371,7 +376,7 @@ pub async fn commit(
 			let now = util::timestamp::now();
 			match &input.action {
 				Action::Read => return Ok(lease),
-				Action::Acquire => {
+				Action::Acquire | Action::AcquireForRequest => {
 					ensure!(lease.destroy_ts.is_none(), "actor destroyed");
 					if let Some(envoy) = lease.envoy_key.clone() {
 						let last_ping = tx

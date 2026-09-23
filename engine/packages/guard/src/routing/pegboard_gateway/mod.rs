@@ -447,6 +447,16 @@ async fn handle_actor_v2(
 	mut fail_sub: SubscriptionHandle<pegboard::workflows::actor2::Failed>,
 	mut destroy_sub: SubscriptionHandle<pegboard::workflows::actor2::DestroyStarted>,
 ) -> Result<RoutingOutput> {
+	let mut start_command = None;
+	let bundle_start = std::env::var("RIVET_ACTOR_START_REQUEST").as_deref() == Ok("1")
+		&& select_gateway(
+			&ctx.config().features().guard_gateway_v3(),
+			req_ctx,
+			actor.namespace_id,
+			actor_id,
+			Some(rivet_envoy_protocol::PROTOCOL_VERSION),
+		)
+		.use_gateway3();
 	if pegboard::actor_lease::enabled() {
 		let lease = phase_timeout(
 			Phase::new(
@@ -461,10 +471,18 @@ async fn handle_actor_v2(
 					let lease = ctx
 						.op(pegboard::actor_lease::Input {
 							actor_id,
-							action: pegboard::actor_lease::Action::Acquire,
+							action: if bundle_start {
+								pegboard::actor_lease::Action::AcquireForRequest
+							} else {
+								pegboard::actor_lease::Action::Acquire
+							},
 						})
 						.await?;
-					if lease.phase == pegboard::actor_lease::Phase::Running {
+					if lease.phase == pegboard::actor_lease::Phase::Running
+						|| (bundle_start
+							&& lease.protocol_version >= 9
+							&& lease.phase == pegboard::actor_lease::Phase::Starting)
+					{
 						break anyhow::Ok(lease);
 					}
 					// Pubsub is only a hint. Retry reads recover a lost publish or readiness event.
@@ -485,6 +503,9 @@ async fn handle_actor_v2(
 			},
 		)
 		.await?;
+		if bundle_start && lease.phase == pegboard::actor_lease::Phase::Starting {
+			start_command = lease.command;
+		}
 		actor.envoy_key = lease.envoy_key;
 		actor.generation = Some(lease.generation);
 		actor.envoy_protocol_version = Some(lease.protocol_version);
@@ -744,7 +765,8 @@ async fn handle_actor_v2(
 			actor.key,
 			actor_generation,
 			stripped_path.to_string(),
-		);
+		)
+		.with_start_command(start_command);
 		Ok(RoutingOutput::CustomServe(std::sync::Arc::new(gateway)))
 	} else {
 		let lifecycle = rivet_guard_core::metrics::PegboardGatewayLifecycle::new(

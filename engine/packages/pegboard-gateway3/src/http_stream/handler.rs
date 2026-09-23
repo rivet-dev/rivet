@@ -113,6 +113,9 @@ impl PegboardGateway3 {
 				false,
 			)
 			.await?;
+		in_flight_req
+			.set_start_command(self.start_command.clone())
+			.await;
 		let client_disconnect_guard = HttpClientDisconnectGuard::new(in_flight_req.clone());
 		let message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(
 			protocol::ToEnvoyRequestStart {

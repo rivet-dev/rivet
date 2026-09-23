@@ -483,3 +483,52 @@ async fn live_actor_is_reacked_on_each_tick() {
 	assert_eq!(second[0].actor_id, "actor-a");
 	assert_eq!(second[0].index, 3);
 }
+
+#[tokio::test]
+async fn bundled_start_reuses_live_actor_and_deduplicates_completed_request() {
+	let mut ctx = new_envoy_context();
+	let (actor_tx, mut actor_rx) = mpsc::unbounded_channel();
+	ctx.insert_actor(
+		"bundled".into(),
+		1,
+		actor_tx,
+		Arc::new(AsyncCounter::new()),
+		"bundled".into(),
+		1,
+	);
+	let mut command = start_command("bundled", 1, 1);
+	if let protocol::Command::CommandStartActor(start) = &mut command.inner {
+		start.waiting_requests.push(protocol::ToEnvoyTunnelMessage {
+			message_id: protocol::MessageId {
+				gateway_id: [1; 4],
+				request_id: [2; 4],
+				message_index: 0,
+			},
+			message_kind: protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(
+				protocol::ToEnvoyRequestStart {
+					actor_id: "bundled".into(),
+					actor_generation: Some(1),
+					method: "GET".into(),
+					path: "/".into(),
+					headers: Default::default(),
+					body: None,
+					stream: false,
+					response_stream: false,
+				},
+			),
+		});
+	}
+	handle_commands(&mut ctx, vec![command.clone()]).await;
+	assert!(matches!(actor_rx.try_recv(), Ok(ToActor::ReqStart { .. })));
+	handle_commands(&mut ctx, vec![command.clone()]).await;
+	assert!(actor_rx.try_recv().is_err());
+	// Request tombstones survive route retirement and the command ACK tick.
+	ctx.http_request_routes.remove(&[&[1; 4], &[2; 4]]);
+	send_command_ack(&mut ctx).await;
+	handle_commands(&mut ctx, vec![command]).await;
+	assert!(actor_rx.try_recv().is_err());
+	ctx.remove_actor("bundled", 1);
+	send_command_ack(&mut ctx).await;
+	handle_commands(&mut ctx, vec![start_command("bundled", 1, 1)]).await;
+	assert!(ctx.get_actor("bundled", Some(1)).is_none());
+}

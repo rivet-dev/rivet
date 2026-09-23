@@ -69,6 +69,7 @@ enum HibernationLifecycleResult {
 }
 
 pub struct PegboardGateway3 {
+	start_command: Option<protocol::CommandWrapper>,
 	ctx: StandaloneCtx,
 	shared_state: SharedState,
 	lifecycle: rivet_guard_core::metrics::PegboardGatewayLifecycle,
@@ -84,6 +85,10 @@ pub struct PegboardGateway3 {
 }
 
 impl PegboardGateway3 {
+	pub fn with_start_command(mut self, command: Option<protocol::CommandWrapper>) -> Self {
+		self.start_command = command;
+		self
+	}
 	#[tracing::instrument(skip_all, fields(?actor_id, actor_key=?actor_key, actor_generation=?actor_generation, ?namespace_id, %pool_name, %envoy_key, ?path))]
 	pub fn new(
 		ctx: StandaloneCtx,
@@ -99,6 +104,7 @@ impl PegboardGateway3 {
 		path: String,
 	) -> Self {
 		Self {
+			start_command: None,
 			ctx,
 			shared_state,
 			lifecycle,
