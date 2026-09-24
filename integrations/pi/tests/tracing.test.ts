@@ -11,7 +11,7 @@ import { setup } from "rivetkit";
 import { setupTest } from "rivetkit/test";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { pi } from "../src/index.js";
-import { type MockModel, slowly, startMockModel } from "./helpers/mock-model.js";
+import { type MockModel, slowly, createMockModel } from "./helpers/mock-model.js";
 import { type OtlpCollector, startOtlpCollector } from "./helpers/otlp-collector.js";
 
 const piSpans = new InMemorySpanExporter();
@@ -25,8 +25,9 @@ let registry: ReturnType<typeof buildRegistry>;
 
 function buildRegistry(mock: MockModel) {
 	const agent = pi({
-		model: mock.model,
-		modelRuntime: mock.modelRuntime,
+		model: "mock/mock-model",
+		providers: { mock: mock.providerConfig },
+		apiKeys: { mock: "mock" },
 		settings: { retry: { baseDelayMs: 10 } },
 	});
 	return setup({ use: { agent } });
@@ -39,7 +40,7 @@ beforeAll(async () => {
 	process.env.OTEL_TRACES_SAMPLER = "always_on";
 	process.env.OTEL_BSP_SCHEDULE_DELAY = "10";
 
-	mockModel = await startMockModel();
+	mockModel = createMockModel();
 	registry = buildRegistry(mockModel);
 
 	mockModel.reply(
@@ -55,7 +56,6 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-	await mockModel?.dispose();
 	await collector?.close();
 });
 
