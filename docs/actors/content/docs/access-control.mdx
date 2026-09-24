@@ -28,7 +28,7 @@ Use deny-by-default rules everywhere:
 2. In each action, explicitly allow expected roles and throw `forbidden` otherwise.
 3. In `canPublish` and `canSubscribe`, return `true` only for allowed roles and end with `return false`.
 
-<CodeSnippet file="examples/docs/actors-access-control/chat-room.ts" />
+<CodeSnippet file="examples/docs/actors-permissions/chat-room.ts" />
 
 ## Return Value Contract
 

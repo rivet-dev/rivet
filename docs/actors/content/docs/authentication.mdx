@@ -78,13 +78,13 @@ After a connection is authenticated, use [Access Control](/actors/docs/access-co
 
 The `onBeforeConnect` hook validates credentials before allowing a connection. Throw an error to reject the connection.
 
-<CodeSnippet file="examples/docs/actors-authentication/on-before-connect.ts" />
+<CodeSnippet file="examples/docs/actors-permissions/on-before-connect.ts" />
 
 ### `createConnState`
 
 Use `createConnState` to extract user data from credentials and store it in connection state. This data is accessible in actions via `c.conn.state`. Like `onBeforeConnect`, throwing an error will reject the connection. See [connections](/actors/docs/connections) for more details.
 
-<CodeSnippet file="examples/docs/actors-authentication/create-conn-state.ts" />
+<CodeSnippet file="examples/docs/actors-permissions/create-conn-state.ts" />
 
 ## Available Auth Data
 
@@ -107,9 +107,9 @@ It's recommended to use `params` instead of `c.request.headers` whenever possibl
 Pass authentication data when connecting. Use `getParams` when you need a fresh JWT for every connection or reconnect:
 
 <CodeGroup>
-<CodeSnippet file="examples/docs/actors-authentication/passing-credentials-connection.ts" title="Connection" />
-<CodeSnippet file="examples/docs/actors-authentication/passing-credentials-stateless.ts" title="Stateless-Action" />
-<CodeSnippet file="examples/docs/actors-authentication/passing-credentials-headers.ts" title="HTTP-Headers" />
+<CodeSnippet file="examples/docs/actors-permissions/passing-credentials-connection.ts" title="Connection" />
+<CodeSnippet file="examples/docs/actors-permissions/passing-credentials-stateless.ts" title="Stateless-Action" />
+<CodeSnippet file="examples/docs/actors-permissions/passing-credentials-headers.ts" title="HTTP-Headers" />
 </CodeGroup>
 
 ### Handling Errors
@@ -117,8 +117,8 @@ Pass authentication data when connecting. Use `getParams` when you need a fresh 
 Authentication errors use the same system as regular errors. See [errors](/actors/docs/errors) for more details.
 
 <CodeGroup>
-<CodeSnippet file="examples/docs/actors-authentication/handling-errors-connection.ts" title="Connection" />
-<CodeSnippet file="examples/docs/actors-authentication/handling-errors-stateless.ts" title="Stateless-Action" />
+<CodeSnippet file="examples/docs/actors-permissions/handling-errors-connection.ts" title="Connection" />
+<CodeSnippet file="examples/docs/actors-permissions/handling-errors-stateless.ts" title="Stateless-Action" />
 </CodeGroup>
 
 ## Examples
@@ -127,31 +127,31 @@ Authentication errors use the same system as regular errors. See [errors](/actor
 
 Validate JSON Web Tokens and extract user claims:
 
-<CodeSnippet file="examples/docs/actors-authentication/jwt.ts" />
+<CodeSnippet file="examples/docs/actors-permissions/jwt.ts" />
 
 ### External Auth Provider
 
 Validate credentials against an external authentication service:
 
-<CodeSnippet file="examples/docs/actors-authentication/external-auth-provider.ts" />
+<CodeSnippet file="examples/docs/actors-permissions/external-auth-provider.ts" />
 
 ### Using `c.state` In Authorization
 
 Access actor state via `c.state` and the actor's key via `c.key` to make authorization decisions:
 
-<CodeSnippet file="examples/docs/actors-authentication/using-state.ts" />
+<CodeSnippet file="examples/docs/actors-permissions/using-state.ts" />
 
 ### Role-Based Access Control
 
 Create helper functions for common authorization patterns:
 
-<CodeSnippet file="examples/docs/actors-authentication/role-based-access-control.ts" />
+<CodeSnippet file="examples/docs/actors-permissions/role-based-access-control.ts" />
 
 ### Rate Limiting
 
 Use `c.vars` to track connection attempts and rate limit by user:
 
-<CodeSnippet file="examples/docs/actors-authentication/rate-limiting.ts" />
+<CodeSnippet file="examples/docs/actors-permissions/rate-limiting.ts" />
 
 The limits in this example are [ephemeral](/actors/docs/state#ephemeral-variables). If you wish to persist rate limits, you can optionally replace `vars` with `state`.
 
@@ -159,4 +159,4 @@ The limits in this example are [ephemeral](/actors/docs/state#ephemeral-variable
 
 Cache validated tokens in `c.vars` to avoid redundant validation on repeated connections. See [ephemeral variables](/actors/docs/state#ephemeral-variables) for more details.
 
-<CodeSnippet file="examples/docs/actors-authentication/caching-tokens.ts" />
+<CodeSnippet file="examples/docs/actors-permissions/caching-tokens.ts" />
