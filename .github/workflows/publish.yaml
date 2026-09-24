@@ -103,26 +103,7 @@ jobs:
         run: pnpm --filter=publish exec tsx src/ci/bin.ts context-output
       - name: Check npm trusted publishing
         if: steps.ctx.outputs.trigger == 'release'
-        run: |
-          set -euo pipefail
-          oidc_token=$(curl -fsS \
-            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm%3Aregistry.npmjs.org" | jq -r '.value // empty')
-          if [ -z "$oidc_token" ]; then
-            echo "GitHub did not return an OIDC token" >&2
-            exit 1
-          fi
-
-          response=$(curl -sS -w '\n%{http_code}' -X POST \
-            -H "Authorization: Bearer $oidc_token" \
-            'https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/@rivetkit%2frivetkit-napi-linux-x64-gnu')
-          status=${response##*$'\n'}
-          body=${response%$'\n'*}
-          echo "npm OIDC exchange HTTP $status"
-          if [ "$status" != "201" ]; then
-            jq -r '.message // .error // "npm OIDC exchange rejected"' <<<"$body" >&2
-            exit 1
-          fi
+        run: pnpm --filter=publish exec tsx src/ci/bin.ts check-npm-oidc
 
   # ---------------------------------------------------------------------------
   # build — matrix of native/engine artifacts
