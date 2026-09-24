@@ -4,6 +4,8 @@ import { configureBaseLogger } from "@/common/log";
 import { configureServerlessPool } from "@/serverless/configure";
 import { VERSION } from "@/utils";
 import {
+	getNodeEnv,
+	getRivetEnvoyVersion,
 	getRivetkitPublicDir,
 	getRivetkitRuntimeMode,
 	parsePortEnv,
@@ -624,6 +626,32 @@ export class Registry<A extends RegistryActors> {
 	 */
 	#startEnvoy(config: RegistryConfig, printWelcome: boolean) {
 		if (!this.#runtimeServePromise) {
+			const configuredEnvoyVersion = this.#config.envoy?.version;
+			const envoyVersionSource =
+				configuredEnvoyVersion !== undefined
+					? "config"
+					: getRivetEnvoyVersion() !== undefined
+						? "environment"
+						: "default";
+
+			logger().info({
+				msg: "starting rivetkit envoy",
+				rivetkitVersion: VERSION,
+				envoyVersion: config.envoy.version,
+				envoyVersionSource,
+			});
+
+			if (
+				envoyVersionSource === "default" &&
+				getNodeEnv() === "production"
+			) {
+				logger().error({
+					msg: "envoy version defaulted because neither config.envoy.version nor RIVET_ENVOY_VERSION is set; actors will not drain automatically across deploys. See https://rivet.dev/docs/actors/versions",
+					envoyVersion: config.envoy.version,
+					envoyVersionSource,
+				});
+			}
+
 			const configuredRegistryPromise =
 				this.#buildConfiguredRegistry(config);
 			this.#runtimeServeConfiguredPromise = configuredRegistryPromise;
