@@ -6,6 +6,8 @@ skill: true
 
 Every request to Rivet carries a credential, and the control plane checks what that credential may reach before routing it to an actor. This page covers the kinds available. To authorize a caller after it is connected, see [Permissions](/actors/docs/permissions).
 
+Authentication is required by default. On a self-hosted control plane, `auth.insecure_allow_unauthenticated` restores the old unauthenticated behavior for a trusted network; do not enable it on anything publicly reachable.
+
 ## Choosing a Credential
 
 | | Lifetime | Scope | Revoke | Available in |

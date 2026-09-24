@@ -34,7 +34,7 @@ Use one whenever a browser or mobile app talks to Rivet directly. For which cred
   </g>
   <g font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))" text-anchor="middle">
     <text x="197" y="105">POST /login</text>
-    <text x="410" y="151">POST /auth/tokens</text>
+    <text x="410" y="151">issueToken()</text>
     <text x="410" y="167" font-size="10" fill="rgb(var(--site-ink-faint, 138 132 120))">grant: actor_gateway read on user:alice</text>
     <text x="410" y="211">JWT, expires in 1h</text>
     <text x="197" y="255">session + JWT</text>
@@ -61,7 +61,7 @@ Use one whenever a browser or mobile app talks to Rivet directly. For which cred
 
 <Step title="Issue a token on your backend">
 
-Authenticate the user however you already do, resolve the actor they own, then request a token from the control plane. Return only the JWT to the client.
+Authenticate the user however you already do, then call `issueToken` on the actor they own. It defaults to gateway read access scoped to that one actor, so there is nothing to spell out. Return only the token to the client.
 
 <CodeGroup workspace>
 <CodeSnippet file="examples/docs/general-jwt/quickstart/server.ts" title="server.ts" />
@@ -96,11 +96,11 @@ x-rivet-error: auth.insufficient_permissions
 
 </Steps>
 
-Issuing requires the admin token, so it can only be done from your backend. `duration` defaults to 1 hour and is capped at 24. `subject` is your user identifier, opaque to Rivet, and shows up in token inspection.
+Issuing needs a credential that already holds the grants being handed out, so it only works from a server-side client. `expiresIn` is in seconds and defaults to the control plane's lifetime, capped at 24 hours. `subject` is your user identifier, opaque to Rivet, and shows up in token inspection. `issuedAt` and `expiresAt` come back as Unix milliseconds.
 
 ## Grants
 
-A grant answers one question: which operations may the holder perform on which resource. `target` is `"any"` for every instance in the namespace, or `{ id }` for one.
+`actor.issueToken` covers the common case. Pass `permissions` to widen what the holder may do to that actor; every grant stays scoped to its resolved ID. For namespace-wide operations such as creating actors, use `client.auth.issueToken` with an explicit grant list, which adds nothing on its own.
 
 | Resource | Gates |
 | --- | --- |
@@ -109,7 +109,7 @@ A grant answers one question: which operations may the holder perform on which r
 | `actor_kv` | Reading an actor's raw KV, which the [inspector](/actors/docs/debugging) needs. |
 | `namespace`, `runner`, `runner_config`, `datacenter` | Control-plane management APIs. |
 
-Operations are a subset of `create`, `read`, `update`, `delete`, and `list`. A grant set is capped at 32 grants, 5 operations each, and 2048 bytes encoded.
+A grant is a resource, a `target` of `"any"` or `{ id }`, and operations drawn from `create`, `read`, `update`, `delete`, and `list`. A grant set is capped at 32 grants, 5 operations each, and 2048 bytes encoded.
 
 <CodeSnippet file="examples/docs/general-jwt/grants.ts" />
 

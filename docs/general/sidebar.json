@@ -11,7 +11,12 @@
 				{
 					"title": "Architecture",
 					"href": "/docs/architecture"
-				},
+				}
+			]
+		},
+		{
+			"title": "Concepts",
+			"pages": [
 				{
 					"title": "Authentication",
 					"collapsible": true,
