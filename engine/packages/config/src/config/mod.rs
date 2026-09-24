@@ -147,6 +147,12 @@ impl Default for Root {
 }
 
 impl Root {
+	pub fn insecure_allow_unauthenticated(&self) -> bool {
+		self.auth
+			.as_ref()
+			.is_some_and(|auth| auth.insecure_allow_unauthenticated)
+	}
+
 	pub fn guard(&self) -> &Guard {
 		static DEFAULT: LazyLock<Guard> = LazyLock::new(Guard::default);
 		self.guard.as_ref().unwrap_or(&DEFAULT)
@@ -255,7 +261,7 @@ impl Root {
 		let auth = self
 			.auth
 			.as_ref()
-			.context("Authentication configuration is required. Configure auth.admin_token.")?;
+			.context("Authentication is required. Configure auth.admin_token and send a Bearer token with requests. To restore legacy unauthenticated access behavior, also set auth.insecure_allow_unauthenticated=true.")?;
 		let desired_issuer = auth::derive_issuer(self)?;
 		auth.validate(&desired_issuer)?;
 

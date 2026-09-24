@@ -102,6 +102,7 @@ fn config_with_admission_percent(percent: f64) -> Config {
 	Config::from_root(Root {
 		auth: Some(Auth {
 			admin_token: Secret::new("default".to_owned()),
+			insecure_allow_unauthenticated: false,
 			jwt: Default::default(),
 		}),
 		sqlite: Some(Sqlite {

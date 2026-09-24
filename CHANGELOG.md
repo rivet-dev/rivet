@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Engine now requires an admin token for self-hosted deployments. Set `auth.admin_token` and
+  send it as a Bearer token. To restore legacy unauthenticated access behavior for actor
+  management and routing, also set `auth.insecure_allow_unauthenticated: true`. The admin token
+  remains required, and token issuance stays authenticated.
+
 - The Rust SDK now supports actor action sets containing up to 128 action types, increased from 16. TypeScript actor definitions remain unrestricted.
 
 - `rivetkit` no longer exposes `ctx.sql` on actor contexts. Migrate raw SQLite calls to `ctx.db` from `rivetkit/db`, and keep Drizzle setup on the `rivetkit/db/drizzle` subpath.

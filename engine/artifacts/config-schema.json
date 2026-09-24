@@ -237,6 +237,11 @@
         "admin_token": {
           "$ref": "#/definitions/Secret<String>"
         },
+        "insecure_allow_unauthenticated": {
+          "description": "Restores legacy unauthenticated access behavior for actor and routing endpoints.",
+          "default": false,
+          "type": "boolean"
+        },
         "jwt": {
           "description": "Short-lived, namespace-scoped JWT authentication. Enabled by default.",
           "default": {

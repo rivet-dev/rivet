@@ -20,6 +20,7 @@ async fn router_preserves_method_handling_and_public_health() {
 	let mut root = rivet_config::config::Root::default();
 	root.auth = Some(rivet_config::config::Auth {
 		admin_token: rivet_config::secret::Secret::new("router-test-admin".into()),
+		insecure_allow_unauthenticated: false,
 		jwt: rivet_config::config::Jwt {
 			enabled: Some(false),
 			..Default::default()

@@ -10,6 +10,7 @@ pub struct TestOpts {
 	pub timeout_secs: u64,
 	pub pegboard_outbound: bool,
 	pub auth_admin_token: Option<String>,
+	pub insecure_allow_unauthenticated: bool,
 	pub network_faults: bool,
 }
 
@@ -20,6 +21,7 @@ impl TestOpts {
 			timeout_secs: 10,
 			pegboard_outbound: false,
 			auth_admin_token: Some(TEST_ADMIN_TOKEN.to_owned()),
+			insecure_allow_unauthenticated: false,
 			network_faults: false,
 		}
 	}
@@ -39,6 +41,11 @@ impl TestOpts {
 		self
 	}
 
+	pub fn with_insecure_allow_unauthenticated(mut self) -> Self {
+		self.insecure_allow_unauthenticated = true;
+		self
+	}
+
 	pub fn with_network_faults(mut self) -> Self {
 		self.network_faults = true;
 		self
@@ -52,6 +59,7 @@ impl Default for TestOpts {
 			timeout_secs: 10,
 			pegboard_outbound: false,
 			auth_admin_token: Some(TEST_ADMIN_TOKEN.to_owned()),
+			insecure_allow_unauthenticated: false,
 			network_faults: false,
 		}
 	}
@@ -104,6 +112,7 @@ impl TestCtx {
 				test_deps,
 				opts.pegboard_outbound,
 				opts.auth_admin_token.clone(),
+				opts.insecure_allow_unauthenticated,
 			)
 		});
 		let mut dcs: Vec<TestDatacenter> =
@@ -127,6 +136,7 @@ impl TestCtx {
 		test_deps: rivet_test_deps::TestDeps,
 		include_pegboard_outbound: bool,
 		auth_admin_token: Option<String>,
+		insecure_allow_unauthenticated: bool,
 	) -> Result<TestDatacenter> {
 		test_deps
 			.config()
@@ -135,6 +145,7 @@ impl TestCtx {
 			let mut root = (**test_deps.config()).clone();
 			root.auth = Some(rivet_config::config::auth::Auth {
 				admin_token: rivet_config::secret::Secret::new(admin_token),
+				insecure_allow_unauthenticated,
 				jwt: Default::default(),
 			});
 			rivet_config::Config::from_root(root)

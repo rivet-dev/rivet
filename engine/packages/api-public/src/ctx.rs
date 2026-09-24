@@ -40,6 +40,11 @@ impl ApiCtx {
 		operation: OperationKind,
 	) -> Result<()> {
 		self.authentication_handled.store(true, Ordering::Relaxed);
+		if self.config().insecure_allow_unauthenticated()
+			&& !matches!(resource, ResourceKind::Token | ResourceKind::Jwt)
+		{
+			return Ok(());
+		}
 		let token = self
 			.token
 			.as_deref()

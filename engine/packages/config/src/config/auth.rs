@@ -25,6 +25,10 @@ const MIN_SIGNING_FAILOVER_WINDOW_SECS: u64 = 7 * 24 * 60 * 60;
 pub struct Auth {
 	pub admin_token: Secret<String>,
 
+	/// Restores legacy unauthenticated access behavior for actor and routing endpoints.
+	#[serde(default)]
+	pub insecure_allow_unauthenticated: bool,
+
 	/// Short-lived, namespace-scoped JWT authentication. Enabled by default.
 	#[serde(default)]
 	pub jwt: Jwt,
@@ -279,6 +283,21 @@ mod tests {
 		assert!(serde_json::from_str::<Auth>(r#"{"disable_admin_token":true}"#).is_err());
 		let auth: Auth = serde_json::from_str(r#"{"admin_token":""}"#).unwrap();
 		assert!(auth.validate(ISSUER).is_err());
+		let auth: Auth = serde_json::from_str(
+			r#"{"admin_token":"","insecure_allow_unauthenticated":true}"#,
+		)
+		.unwrap();
+		assert_eq!(auth.validate(ISSUER).unwrap_err().to_string(), "auth.admin_token cannot be empty");
+	}
+
+	#[test]
+	fn legacy_access_requires_an_admin_token() {
+		let mut root: super::super::Root = serde_json::from_str(
+			r#"{"auth":{"admin_token":"secret","insecure_allow_unauthenticated":true}}"#,
+		)
+		.unwrap();
+		root.validate_and_set_defaults().unwrap();
+		assert!(root.insecure_allow_unauthenticated());
 	}
 
 	#[test]
