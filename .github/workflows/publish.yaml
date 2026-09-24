@@ -443,7 +443,7 @@ jobs:
       - run: corepack enable
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "24.20.0"
           registry-url: "https://registry.npmjs.org"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
@@ -624,11 +624,18 @@ jobs:
 
       - name: Publish npm packages
         env:
-          # setup-node provides a dummy token value; clear it so token-only
-          # post-publish operations stay disabled for trusted publishing.
-          NODE_AUTH_TOKEN: ""
           SKIP_WASM_BUILD: "1"
         run: |
+          # setup-node writes an auth token placeholder into npmrc. Remove it
+          # so npm uses the GitHub OIDC credentials for trusted publishing.
+          if [ -f "${NPM_CONFIG_USERCONFIG:-}" ]; then
+            sed -i '/:_authToken=/d' "$NPM_CONFIG_USERCONFIG"
+          fi
+          unset NODE_AUTH_TOKEN
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+            echo "GitHub OIDC token request is unavailable" >&2
+            exit 1
+          fi
           pnpm --filter=publish exec tsx src/ci/bin.ts publish-npm \
             --tag ${{ needs.context.outputs.npm_tag }} \
             --parallel 16 \
