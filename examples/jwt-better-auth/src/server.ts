@@ -24,36 +24,20 @@ app.get("/api/user", async (c) => {
 
 app.post("/api/token", async (c) => {
 	// Derive actor access from the session, never from a browser-supplied user or actor ID.
-	const { actorId, userId } = await getUserActor(c);
+	const { user, userId } = await getUserActor(c);
 	c.header("Cache-Control", "no-store");
 
 	// Ask Engine for a short-lived token that can access only this user's counter.
-	const response = await fetch(`${endpoint.replace(/\/$/, "")}/auth/tokens`, {
-		method: "POST",
-		headers: {
-			Authorization: `Bearer ${engineToken}`,
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			namespace,
+	try {
+		const { token } = await user.issueToken({
 			subject: userId,
-			duration: 30,
-			grants: [
-				{
-					resource: "actor_gateway",
-					target: { id: actorId },
-					operations: ["read"],
-				},
-			],
-		}),
-	});
-	if (!response.ok) {
-		console.error(`Token issuance failed: HTTP ${response.status}`);
+			expiresIn: 30,
+		});
+		return c.json({ token });
+	} catch (error) {
+		console.error("Token issuance failed", error);
 		return c.json({ error: "Token issuance failed" }, 502);
 	}
-	const { token } = (await response.json()) as { token: string };
-
-	return c.json({ token });
 });
 
 registry.start();
@@ -63,6 +47,7 @@ async function getUserActor(c: Context) {
 	const session = await auth.api.getSession({ headers: c.req.raw.headers });
 	if (!session) throw new HTTPException(401, { message: "Log in first" });
 	const userId = session.user.id;
-	const actorId = await client.user.getOrCreate(["user", userId]).resolve();
-	return { userId, actorId };
+	const user = client.user.getOrCreate(["user", userId]);
+	const actorId = await user.resolve();
+	return { userId, actorId, user };
 }

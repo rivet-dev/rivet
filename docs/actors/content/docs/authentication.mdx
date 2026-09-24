@@ -14,12 +14,50 @@ skill: true
 	- **Frontend-accessible actors**: If your publishable token is included in your frontend, then implementing authentication is recommended.
 </Tab>
 <Tab title="Self-Hosted">
-	Actors are public by default on self-hosted Rivet. Anyone can access them without a token.
+	Engine authentication is required by default on self-hosted Rivet. Configure an admin token on the server and issue scoped tokens for clients.
 
-	- **Only accessible within private network**: If Rivet is only accessible within your private network, then authentication is not necessary.
-	- **Rivet exposed to the public internet**: If Rivet is configured to accept traffic from the public internet, then implementing authentication is recommended.
+	The explicit `auth.insecure_allow_unauthenticated` Engine setting restores legacy unauthenticated access behavior for trusted networks. Do not enable it on a publicly reachable Engine.
 </Tab>
 </Tabs>
+
+## Issue Engine Access Tokens
+
+Use a server-side RivetKit client configured with an Engine endpoint and an issuing credential. Engine checks that credential and rejects grants it cannot delegate. These tokens control access to Engine resources; actor connection hooks below can enforce your application's own user authentication as well.
+
+For one actor, use its handle. The default is only `actor_gateway: ["read"]`, scoped to that actor ID:
+
+```ts
+const user = client.user.getOrCreate(["user", session.user.id]);
+const { token, issuedAt, expiresAt } = await user.issueToken({
+  subject: session.user.id,
+  expiresIn: 30,
+});
+```
+
+Supply `permissions` to replace the default. The actor helper accepts `actor_gateway`, `actor`, and `actor_kv` permissions and scopes every grant to the resolved actor ID:
+
+```ts
+await user.issueToken({
+  subject: session.user.id,
+  expiresIn: 60,
+  permissions: {
+    actor_gateway: ["read"],
+    actor: ["read", "update", "delete"],
+    actor_kv: ["read"],
+  },
+});
+```
+
+For namespace-wide operations such as actor creation, call `client.auth.issueToken` with an explicit grant list. It never adds permissions automatically:
+
+```ts
+await client.auth.issueToken({
+  subject: session.user.id,
+  grants: [{ resource: "actor", target: "any", operations: ["create"] }],
+});
+```
+
+`expiresIn` is in seconds; omit it to use Engine's default lifetime. `issuedAt` and `expiresAt` are Unix timestamps in **milliseconds**. Keep the issuing credential on your server and return only the scoped token to the browser.
 
 ## Authentication Connections
 

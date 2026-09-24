@@ -3655,6 +3655,9 @@ importers:
       '@rivetkit/bare-ts':
         specifier: ^0.6.2
         version: 0.6.2
+      '@rivetkit/engine-api-full':
+        specifier: workspace:*
+        version: link:../../../engine/sdks/typescript/api-full
       '@rivetkit/engine-cli':
         specifier: workspace:*
         version: link:../engine-cli

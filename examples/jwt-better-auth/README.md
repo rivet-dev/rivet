@@ -37,7 +37,7 @@ Use HTTPS outside local development.
 1. [`src/auth.ts`](./src/auth.ts) configures Better Auth's email/password login and seeds the account from [`demo-account.ts`](./demo-account.ts).
 2. [`frontend/login.ts`](./frontend/login.ts) calls Better Auth to log in. The browser receives an HTTP-only session cookie, then asks the backend for the user actor ID.
 3. [`frontend/App.tsx`](./frontend/App.tsx) creates a normal RivetKit client with `getToken`, then connects to the user actor.
-4. [`src/server.ts`](./src/server.ts) verifies the Better Auth session before returning the user actor or issuing a 30-second actor token. The user ID comes from the verified session, not from the browser.
+4. [`src/server.ts`](./src/server.ts) verifies the Better Auth session before returning the user actor or calling `user.issueToken({ subject: userId, expiresIn: 30 })`. The helper defaults to `actor_gateway: ["read"]` for that actor. The user ID comes from the verified session, not from the browser.
 5. When the actor token expires, RivetKit requests a fresh token and reconnects. The user stays logged in while the Better Auth session is valid.
 
 The client setup is:

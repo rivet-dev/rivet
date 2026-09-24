@@ -18,27 +18,14 @@ app.get("/api/counter", async (c) => {
 
 app.post("/api/token", async (c) => {
 	// This public demo shares one counter. See jwt-better-auth for per-user access.
-	const actorId = await client.counter.getOrCreate(["demo"]).resolve();
-	const response = await fetch(`${endpoint.replace(/\/$/, "")}/auth/tokens`, {
-		method: "POST",
-		headers: {
-			Authorization: `Bearer ${engineToken}`,
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			namespace,
-			duration: 30,
-			grants: [
-				{
-					resource: "actor_gateway",
-					target: { id: actorId },
-					operations: ["read"],
-				},
-			],
-		}),
-	});
-	if (!response.ok) return c.json({ error: "Token issuance failed" }, 502);
-	const { token } = await response.json();
+	const counter = client.counter.getOrCreate(["demo"]);
+	const actorId = await counter.resolve();
+	let token: string;
+	try {
+		({ token } = await counter.issueToken({ expiresIn: 30 }));
+	} catch {
+		return c.json({ error: "Token issuance failed" }, 502);
+	}
 	c.header("Cache-Control", "no-store");
 	return c.json({ endpoint, namespace, actorId, token });
 });

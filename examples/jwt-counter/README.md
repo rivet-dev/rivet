@@ -21,7 +21,7 @@ If another local Services process owns port 8642, set `RIVET_RUN_SERVICES=0`. Th
 
 ## Read the flow
 
-1. [`src/server.ts`](./src/server.ts) returns the demo counter’s connection details from `/api/counter` and issues scoped JWTs through `/api/token`.
+1. [`src/server.ts`](./src/server.ts) returns the demo counter’s connection details from `/api/counter` and calls `counter.issueToken({ expiresIn: 30 })` in `/api/token`. The actor helper defaults to the `actor_gateway: ["read"]` permission for that counter only.
 2. [`frontend/App.tsx`](./frontend/App.tsx) loads the connection details and lets RivetKit request tokens:
 
    ```ts

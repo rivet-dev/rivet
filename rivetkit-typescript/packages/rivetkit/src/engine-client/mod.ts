@@ -2,6 +2,7 @@ import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
 import { deserializeActorKey, serializeActorKey } from "@/actor/keys";
 import type { ClientConfig } from "@/client/client";
+import type { IssuedToken, IssueTokenOptions } from "@/client/auth";
 import {
 	isInvalidToken,
 	isInvalidTokenResponse,
@@ -45,6 +46,7 @@ import {
 	getActor,
 	getActorByKey,
 	getOrCreateActor,
+	issueToken as issueEngineToken,
 	listActorsByName,
 } from "./api-endpoints";
 import { EngineApiError, getEndpoint } from "./api-utils";
@@ -147,6 +149,18 @@ export class RemoteEngineControlClient implements EngineControlClient {
 			}
 			throw error;
 		}
+	}
+
+	async issueToken(options: IssueTokenOptions): Promise<IssuedToken> {
+		await this.#metadataPromise;
+		const response = await this.#withCredential((config) =>
+			issueEngineToken(config, options),
+		);
+		return {
+			token: response.token,
+			issuedAt: response.issued_ts,
+			expiresAt: response.expires_ts,
+		};
 	}
 
 	async getForId({

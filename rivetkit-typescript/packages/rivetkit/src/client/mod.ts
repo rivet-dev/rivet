@@ -19,6 +19,14 @@ export {
 	UserError,
 } from "@/client/errors";
 export type { CreateRequest } from "@/client/query";
+export type {
+	ActorIssueTokenOptions,
+	ActorTokenPermissions,
+	ActorTokenResource,
+	IssuedToken,
+	IssueTokenOptions,
+	TokenGrant,
+} from "./auth";
 export type { Encoding } from "@/common/encoding";
 export type {
 	ActorActionFunction,

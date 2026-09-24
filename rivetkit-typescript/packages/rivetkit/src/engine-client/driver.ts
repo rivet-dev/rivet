@@ -1,6 +1,7 @@
 import type { Hono, Context as HonoContext } from "hono";
 import type { ActorKey, Encoding, UniversalWebSocket } from "@/actor/mod";
 import type { ActorQuery, CrashPolicy } from "@/client/query";
+import type { IssuedToken, IssueTokenOptions } from "@/client/auth";
 import type { RegistryConfig } from "@/registry/config";
 import type { GetUpgradeWebSocket } from "@/utils";
 
@@ -17,6 +18,7 @@ export function shouldSkipReadyWait(
 }
 
 export interface EngineControlClient {
+	issueToken(options: IssueTokenOptions): Promise<IssuedToken>;
 	getForId(input: GetForIdInput): Promise<ActorOutput | undefined>;
 	getWithKey(input: GetWithKeyInput): Promise<ActorOutput | undefined>;
 	getOrCreateWithKey(input: GetOrCreateWithKeyInput): Promise<ActorOutput>;

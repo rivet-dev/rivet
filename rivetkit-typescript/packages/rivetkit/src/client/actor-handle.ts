@@ -25,6 +25,13 @@ import { AsyncMutex } from "@/common/database/shared";
 import type { Encoding, JsonCompatValue } from "@/common/encoding";
 import { deconstructError } from "@/common/utils";
 import type { EngineControlClient } from "@/engine-client/driver";
+import type {
+	ActorIssueTokenOptions,
+	ActorTokenPermissions,
+	ActorTokenResource,
+	IssuedToken,
+	TokenGrant,
+} from "@/client/auth";
 import type { StartCallSpan, CurrentActorInvocation } from "@/registry/runtime";
 import {
 	decodeCborCompat,
@@ -993,6 +1000,27 @@ export class ActorHandleRaw {
 		);
 	}
 
+	/** Issue a token scoped to this actor. Defaults to actor gateway read access. */
+	async issueToken(options: ActorIssueTokenOptions = {}): Promise<IssuedToken> {
+		const actorId = await this.resolve();
+		const permissions: ActorTokenPermissions = options.permissions ?? {
+			actor_gateway: ["read"],
+		};
+		const grants: TokenGrant[] = (
+			Object.keys(permissions) as ActorTokenResource[]
+		).flatMap((resource) => {
+			const operations = permissions[resource];
+			return operations
+				? [{ resource, target: { id: actorId }, operations }]
+				: [];
+		});
+		return this.#driver.issueToken({
+			subject: options.subject,
+			expiresIn: options.expiresIn,
+			grants,
+		});
+	}
+
 	/**
 	 * Returns the raw URL for routing traffic to the actor.
 	 */
@@ -1048,4 +1076,4 @@ export type ActorHandle<AD extends AnyActorDefinition> = Omit<
 	// Resolve method returns the actor ID
 	resolve(): Promise<string>;
 } & ActorDefinitionQueueSend<AD> &
-	ActorDefinitionActions<AD>;
+	Omit<ActorDefinitionActions<AD>, keyof ActorHandleRaw>;

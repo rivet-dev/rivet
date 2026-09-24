@@ -1,4 +1,5 @@
 import type { AnyActorDefinition } from "@/actor/definition";
+import type { IssuedToken, IssueTokenOptions } from "@/client/auth";
 import type { ActorQuery } from "@/client/query";
 import type { Encoding } from "@/common/encoding";
 import type { EngineControlClient } from "@/engine-client/driver";
@@ -198,6 +199,10 @@ export interface ActorClientRuntimeOptions {
  */
 export class ClientRaw {
 	#disposed = false;
+	/** Issue namespace-scoped tokens with an explicit grant list. */
+	readonly auth: {
+		issueToken(options: IssueTokenOptions): Promise<IssuedToken>;
+	};
 
 	[ACTOR_CONNS_SYMBOL] = new Set<ActorConnRaw>();
 
@@ -215,6 +220,9 @@ export class ClientRaw {
 		options: ClientRawOptions & ActorClientRuntimeOptions = {},
 	) {
 		this.#driver = driver;
+		this.auth = {
+			issueToken: (issueOptions) => this.#driver.issueToken(issueOptions),
+		};
 
 		this.#encodingKind = options.encoding ?? "bare";
 		this.#gatewayOptions = options.gateway ?? {};
@@ -469,11 +477,11 @@ export class ClientRaw {
  *
  * @template A The actor registry type.
  */
-export type Client<A extends Registry<any>> = ClientRaw & {
+export type Client<A extends Registry<any>> = ClientRaw & Omit<{
 	[K in keyof ExtractActorsFromRegistry<A>]: ActorAccessor<
 		ExtractActorsFromRegistry<A>[K]
 	>;
-};
+}, keyof ClientRaw>;
 
 export type AnyClient = Client<Registry<any>>;
 

@@ -1,5 +1,6 @@
 import { serializeActorKey } from "@/actor/keys";
 import type { ClientConfig } from "@/client/client";
+import type { IssuedToken, IssueTokenOptions } from "@/client/auth";
 import type { MetadataResponse } from "@/common/router";
 import type {
 	ActorsCreateRequest,
@@ -11,6 +12,33 @@ import type {
 } from "@/engine-api/actors";
 import type { RivetId } from "@/engine-api/common";
 import { apiCall } from "./api-utils";
+
+/** Engine's JSON response uses snake_case; the public result uses camelCase. */
+export type IssueTokenResponse = {
+	token: IssuedToken["token"];
+	issued_ts: IssuedToken["issuedAt"];
+	expires_ts: IssuedToken["expiresAt"];
+};
+
+export async function issueToken(
+	config: ClientConfig,
+	options: IssueTokenOptions,
+): Promise<IssueTokenResponse> {
+	return apiCall<
+		{
+			namespace: string;
+			subject?: IssueTokenOptions["subject"];
+			duration?: IssueTokenOptions["expiresIn"];
+			grants: IssueTokenOptions["grants"];
+		},
+		IssueTokenResponse
+	>(config, "POST", "/auth/tokens", {
+		namespace: config.namespace,
+		subject: options.subject,
+		duration: options.expiresIn,
+		grants: options.grants,
+	});
+}
 
 // MARK: Get actor
 export async function getActor(

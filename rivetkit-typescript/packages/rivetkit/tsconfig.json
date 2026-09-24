@@ -18,7 +18,8 @@
 	},
 	"include": [
 		"src/**/*",
-		"runtime/index.ts"
+		"runtime/index.ts",
+		"tests/token-issuance.types.ts"
 	],
 	"exclude": [
 		"src/actor/instance/mod.ts",

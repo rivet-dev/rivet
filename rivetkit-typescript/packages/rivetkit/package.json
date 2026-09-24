@@ -213,6 +213,7 @@
 		"@rivet-dev/agent-os-core": "^0.1.1",
 		"@rivet-dev/services": "^0.1.5",
 		"@rivetkit/bare-ts": "^0.6.2",
+		"@rivetkit/engine-api-full": "workspace:*",
 		"@rivetkit/engine-cli": "workspace:*",
 		"@rivetkit/engine-envoy-protocol": "workspace:*",
 		"@rivetkit/on-change": "6.0.1",

@@ -147,6 +147,7 @@ docker-compose up -d
 - The high-level `rivetkit` crate stays a thin typed wrapper over `rivetkit-core` and re-exports shared transport/config types instead of redefining them.
 - When `rivetkit` needs ergonomic helpers on a `rivetkit-core` type it re-exports, prefer an extension trait plus `prelude` re-export instead of wrapping and replacing the core type.
 - RivetKit action and event protocol `args` must always be array-shaped before crossing the client protocol boundary. Normalize at the server/source side, not in client delivery code: named structs/objects become `[object]`, tuples/arrays stay positional, scalars become `[scalar]`, and unit/null becomes `[]`.
+- Keep both issueToken APIs synchronized with Engine’s token/grant types; reuse those types and update both APIs whenever supported resources, operations, or scopes change.
 - `engine/sdks/*/api-*` are auto-generated SDK outputs; update the source API schema and regenerate them instead of editing them by hand.
 
 ### RivetKit Test Fixtures
