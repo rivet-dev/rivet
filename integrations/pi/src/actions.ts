@@ -13,6 +13,7 @@ import {
 import {
 	availableModels,
 	type PiModelInfo,
+	requireCredential,
 	switchModel,
 } from "./models.js";
 import { traceRun } from "./tracing.js";
@@ -140,7 +141,10 @@ export function createPiActions(options: PiSessionOptions): PiActions {
 
 	return {
 		prompt: (c, text, promptOptions) =>
-			mutate(c, async ({ session }) => {
+			mutate(c, async (handle) => {
+				await reloadCredentials(handle);
+				const { session } = handle;
+				requireCredential(session);
 				const abort = () => void session.abort();
 				c.abortSignal.addEventListener("abort", abort, { once: true });
 				try {
@@ -157,9 +161,15 @@ export function createPiActions(options: PiSessionOptions): PiActions {
 		waitForIdle: (c) => read(c, ({ session }) => session.waitForIdle()),
 
 		getAvailableModels: (c) =>
-			read(c, ({ session }) => availableModels(options, session)),
+			read(c, async (handle) => {
+				await reloadCredentials(handle);
+				return availableModels(options, handle.session);
+			}),
 		setModel: (c, provider, modelId) =>
-			mutate(c, ({ session }) => switchModel(options, session, provider, modelId)),
+			mutate(c, async (handle) => {
+				await reloadCredentials(handle);
+				await switchModel(options, handle.session, provider, modelId);
+			}),
 
 		setThinkingLevel: (c, ...args) =>
 			mutate(c, ({ session }) => session.setThinkingLevel(...args)),
@@ -238,4 +248,15 @@ export function createPiActions(options: PiSessionOptions): PiActions {
 		getLastAssistantText: (c) =>
 			read(c, ({ session }) => session.getLastAssistantText()),
 	};
+}
+
+/**
+ * Picks up logins and logouts made since the session opened. An error from the
+ * application's credential source rejects the action.
+ */
+async function reloadCredentials(handle: PiSession): Promise<void> {
+	if (!handle.credentials) return;
+	handle.credentials.invalidate();
+	await handle.credentials.list();
+	await handle.session.modelRuntime.refresh({ allowNetwork: false });
 }
