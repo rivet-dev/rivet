@@ -9,14 +9,23 @@
 					"icon": "faSquareInfo"
 				},
 				{
-					"title": "Architecture",
-					"href": "/docs/architecture"
+					"title": "Quickstart",
+					"href": "/docs/quickstart",
+					"icon": "faFastForward"
 				}
 			]
 		},
 		{
 			"title": "Concepts",
 			"pages": [
+				{
+					"title": "Architecture",
+					"href": "/docs/architecture"
+				},
+				{
+					"title": "Runtime Modes",
+					"href": "/docs/runtime-modes"
+				},
 				{
 					"title": "Authentication",
 					"collapsible": true,
@@ -39,61 +48,78 @@
 			]
 		},
 		{
-			"title": "Running Workloads",
-			"pages": [
-				{
-					"title": "Runtime Modes",
-					"href": "/docs/runtime-modes"
-				},
-				{
-					"title": "Endpoints",
-					"href": "/docs/endpoints"
-				},
-				{
-					"title": "Environment Variables",
-					"href": "/docs/environment-variables"
-				},
-				{
-					"title": "Pool Configuration",
-					"href": "/docs/pool-configuration"
-				},
-				{
-					"title": "Versions & Upgrades",
-					"href": "/docs/versions"
-				},
-				{
-					"title": "Regions & Multi-Region",
-					"href": "/docs/regions"
-				},
-				{
-					"title": "Container Runner",
-					"href": "/docs/container-runner"
-				}
-			]
-		},
-		{
-			"title": "Operating",
-			"pages": [
-				{
-					"title": "Statuses",
-					"href": "/docs/statuses"
-				},
-				{
-					"title": "Tracing",
-					"href": "/docs/tracing"
-				},
-				{
-					"title": "Debugging",
-					"href": "/docs/debugging"
-				}
-			]
-		},
-		{
 			"title": "Reference",
 			"pages": [
 				{
+					"title": "Configuration",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "Connect",
+							"href": "/docs/endpoints"
+						},
+						{
+							"title": "Environment Variables",
+							"href": "/docs/environment-variables"
+						},
+						{
+							"title": "Pool Configuration",
+							"href": "/docs/pool-configuration"
+						},
+						{
+							"title": "Versions & Upgrades",
+							"href": "/docs/versions"
+						},
+						{
+							"title": "Regions & Multi-Region",
+							"href": "/docs/regions"
+						}
+					]
+				},
+				{
+					"title": "Monitoring",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "OpenTelemetry",
+							"href": "/docs/tracing"
+						},
+						{
+							"title": "Debugging",
+							"href": "/docs/debugging"
+						},
+						{
+							"title": "Actor Statuses",
+							"href": "/docs/statuses"
+						}
+					]
+				},
+				{
+					"title": "Advanced",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "Container Runner",
+							"href": "/docs/container-runner"
+						}
+					]
+				},
+				{
 					"title": "CLI",
 					"href": "/docs/cli"
+				}
+			]
+		},
+		{
+			"title": "AI Integration",
+			"pages": [
+				{
+					"title": "Rivet MCP",
+					"href": "/docs/mcp"
+				},
+				{
+					"title": "Skills",
+					"href": "/docs/skill"
 				},
 				{
 					"title": "API Reference",

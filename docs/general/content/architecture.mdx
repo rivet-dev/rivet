@@ -8,22 +8,40 @@ Rivet separates the process that decides *where* work runs from the process that
 *runs* it. Everything else in these docs is a detail of one of those two sides,
 or of the boundary between them.
 
-```
-                    ┌──────────────────────────────────┐
-   your client ────▶│  Gateway                         │
-                    │    routes to a specific workload │
-                    ├──────────────────────────────────┤
-                    │  Control plane                   │
-                    │    schedules, versions, persists │
-                    └───────────────┬──────────────────┘
-                                    │  runner protocol
-                    ┌───────────────┴──────────────────┐
-                    │  Runner (your process, your code)│
-                    │    ┌────────┐ ┌────────┐         │
-                    │    │ actor  │ │ actor  │   ...   │
-                    │    └────────┘ └────────┘         │
-                    └──────────────────────────────────┘
-```
+<svg viewBox="0 0 720 360" role="img" aria-label="Your client calls the gateway, which routes to a specific workload. The gateway sits above the control plane, which schedules, versions, and persists. The control plane talks to a runner over the runner protocol. The runner is your own process running your code, and it hosts many actors." style="width:100%;max-width:720px;height:auto;display:block;margin:2.5rem auto;font-family:system-ui,sans-serif">
+  <defs>
+    <marker id="arch-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="rgb(var(--site-ink, 27 25 22))"/></marker>
+    <marker id="arch-arrow-hl" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="rgb(var(--runtime-highlight, 183 75 35))"/></marker>
+  </defs>
+
+  <text x="20" y="72" font-size="13" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Your client</text>
+  <line x1="112" y1="67" x2="228" y2="67" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4" marker-end="url(#arch-arrow)"/>
+
+  <rect x="230" y="28" width="470" height="120" rx="8" fill="rgb(var(--site-paper-mid, 227 227 229))" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4"/>
+  <text x="252" y="58" font-size="14" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Gateway</text>
+  <text x="252" y="78" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">routes to a specific workload</text>
+  <line x1="230" y1="92" x2="700" y2="92" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4"/>
+  <text x="252" y="118" font-size="14" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Control plane</text>
+  <text x="252" y="138" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">schedules, versions, persists</text>
+
+  <line x1="465" y1="149" x2="465" y2="209" stroke="rgb(var(--runtime-highlight, 183 75 35))" stroke-width="1.4" marker-start="url(#arch-arrow-hl)" marker-end="url(#arch-arrow-hl)"/>
+  <text x="479" y="184" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">runner protocol</text>
+
+  <rect x="230" y="210" width="470" height="122" rx="8" fill="rgb(var(--runtime-highlight, 183 75 35) / 0.14)" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4"/>
+  <text x="252" y="240" font-size="14" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Runner</text>
+  <text x="252" y="260" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">your process, your code</text>
+  <g fill="rgb(var(--site-paper, 239 239 239))" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.3">
+    <rect x="252" y="276" width="96" height="38" rx="6"/>
+    <rect x="364" y="276" width="96" height="38" rx="6"/>
+    <rect x="476" y="276" width="96" height="38" rx="6"/>
+  </g>
+  <g text-anchor="middle" font-size="12" fill="rgb(var(--site-ink, 27 25 22))">
+    <text x="300" y="300">actor</text>
+    <text x="412" y="300">actor</text>
+    <text x="524" y="300">actor</text>
+  </g>
+  <text x="600" y="300" font-size="13" fill="rgb(var(--site-ink-faint, 138 132 120))">…</text>
+</svg>
 
 ## Control plane
 

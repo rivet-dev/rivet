@@ -1,0 +1,56 @@
+---
+title: "Quickstart"
+description: "Pick the Actor type you are building and follow its quickstart. Every one runs on the same control plane."
+---
+
+Every Actor type on this site is built on the same primitive, so the control plane, deployment, and authentication work the same way whichever you start with. Pick the one closest to what you are building.
+
+## Actors
+
+The primitive itself. Start here if you are building your own durable processes, and pick the quickstart matching your stack.
+
+<CardGroup>
+  <Card title="Node.js & Bun" href="/actors/docs/quickstart/backend">
+    A standalone backend with the RivetKit SDK.
+  </Card>
+  <Card title="React" href="/actors/docs/quickstart/react">
+    A frontend talking to Actors over the browser client.
+  </Card>
+  <Card title="Next.js" href="/actors/docs/quickstart/next-js">
+    Route handlers and server components.
+  </Card>
+  <Card title="Rust" href="/actors/docs/quickstart/rust">
+    The Rust SDK.
+  </Card>
+  <Card title="Effect.ts" href="/actors/docs/quickstart/effect">
+    Actors inside an Effect runtime.
+  </Card>
+  <Card title="Cloudflare Workers" href="/actors/docs/quickstart/cloudflare">
+    Serverless workers on Cloudflare.
+  </Card>
+  <Card title="Supabase Functions" href="/actors/docs/quickstart/supabase">
+    Serverless workers on Supabase.
+  </Card>
+</CardGroup>
+
+## Higher-level Actor types
+
+Each of these is an Actor with a job already built into it, so you write less to get started.
+
+<CardGroup>
+  <Card title="Workflows" href="/workflows/docs/quickstart">
+    Multi-step operations that replay instead of starting over.
+  </Card>
+  <Card title="Sandboxes" href="/agentos/docs/quickstart">
+    A filesystem, shell, and network for code you did not write.
+  </Card>
+  <Card title="Dynamic Apps" href="/dynamic-apps/docs/quickstart">
+    A backend per user, deployed the moment it is generated.
+  </Card>
+</CardGroup>
+
+## Next steps
+
+- [Architecture](/docs/architecture) for the vocabulary the rest of these docs use.
+- [Authentication](/docs/authentication) before you expose anything to a browser.
+- [Deploy](/docs/deploy) to run the control plane and workers yourself, or on Rivet Cloud.
