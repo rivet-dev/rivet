@@ -1,5 +1,5 @@
-// Grant sets for three common scopes. Pass one as the `grants` field of
-// POST /auth/tokens.
+// Grant sets for three common scopes. Pass one as the `grants` field when
+// issuing a token.
 
 type Grant = {
 	resource: "actor" | "actor_gateway" | "actor_kv";

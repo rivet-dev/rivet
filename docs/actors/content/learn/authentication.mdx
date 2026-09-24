@@ -34,8 +34,8 @@ The admin token reaches every actor in every namespace, so it never leaves your 
 Authenticate the user with your existing session system, resolve the actor they own, then request a JWT that grants `actor_gateway` `read` on that single actor ID.
 
 <CodeGroup workspace>
-<CodeSnippet file="examples/docs/actors-jwt/quickstart/server.ts" title="server.ts" />
-<CodeSnippet file="examples/docs/actors-jwt/quickstart/registry.ts" title="registry.ts" />
+<CodeSnippet file="examples/docs/general-jwt/quickstart/server.ts" title="server.ts" />
+<CodeSnippet file="examples/docs/general-jwt/quickstart/registry.ts" title="registry.ts" />
 </CodeGroup>
 
 Resolving the ID on the backend is what makes the grant tight. The client never names an actor, so it cannot ask for someone else's.
@@ -46,7 +46,7 @@ Resolving the ID on the backend is what makes the grant tight. The client never 
 
 Give the client `getToken` instead of a static token. RivetKit calls it when it needs a credential and again when one expires, so a 15 minute token supports a connection that stays open for hours.
 
-<CodeSnippet file="examples/docs/actors-jwt/quickstart/client.ts" title="client.ts" />
+<CodeSnippet file="examples/docs/general-jwt/quickstart/client.ts" title="client.ts" />
 
 </Step>
 

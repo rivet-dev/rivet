@@ -16,8 +16,7 @@ const adminClient = createClient<typeof registry>({
 
 // Replace this with your own session check.
 async function authenticateUser(request: Request): Promise<string | null> {
-	const userId = request.headers.get("x-demo-user");
-	return userId ?? null;
+	return request.headers.get("x-demo-user");
 }
 
 const app = new Hono();
@@ -50,13 +49,10 @@ app.post("/token", async (c) => {
 			],
 		}),
 	});
-
 	if (!response.ok) return c.json({ error: "issuer_unavailable" }, 503);
 
-	const issued = (await response.json()) as { token: string };
-	return c.json({ actorId, token: issued.token }, 200, {
-		"Cache-Control": "no-store",
-	});
+	const { token } = (await response.json()) as { token: string };
+	return c.json({ actorId, token }, 200, { "Cache-Control": "no-store" });
 });
 
 export default app;
