@@ -16,34 +16,30 @@ interface JwtPayload {
 	permissions?: string[];
 }
 
-// Example JWT verification function - in production use a JWT library
-function verifyJwt(token: string, secret: string): JwtPayload {
-	// This is a simplified example - use jsonwebtoken or similar in production
-	const parts = token.split(".");
-	if (parts.length !== 3) throw new Error("Invalid token");
-	const payload = JSON.parse(atob(parts[1])) as JwtPayload;
-	return payload;
-}
+// Supply this from your auth provider's SDK or a JWT library such as `jose`.
+// It must verify the signature and check the issuer, audience, and expiry.
+// Decoding the payload without verifying the signature authenticates nobody:
+// any client can forge a token.
+declare function verifyAccessToken(token: string): Promise<JwtPayload>;
 
 const jwtActor = actor({
 	state: {},
 
-	createConnState: (c, params: ConnParams): ConnState => {
+	createConnState: async (c, params: ConnParams): Promise<ConnState> => {
+		let payload: JwtPayload;
 		try {
-			const payload = verifyJwt(
-				params.token,
-				process.env.JWT_SECRET || "secret",
-			);
-			return {
-				userId: payload.sub,
-				role: payload.role,
-				permissions: payload.permissions || [],
-			};
+			payload = await verifyAccessToken(params.token);
 		} catch {
 			throw new UserError("Invalid or expired token", {
 				code: "invalid_token",
 			});
 		}
+
+		return {
+			userId: payload.sub,
+			role: payload.role,
+			permissions: payload.permissions ?? [],
+		};
 	},
 
 	actions: {
