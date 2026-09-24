@@ -1,0 +1,127 @@
+---
+title: Rivet MCP
+description: Connect your AI client to Rivet to inspect Actors, call actions, and use the Actor Inspector.
+seoTitle: "Rivet MCP: connect your AI client to Rivet"
+seoDescription: Connect Claude Code, Codex, Cursor, and other AI clients to Rivet to inspect Actors, call actions, and use the Actor Inspector.
+---
+
+import { faClaude, faCursor, faGemini, faLaptopCode, faOpenai, faVscode } from '@rivet-gg/icons';
+
+## Connect your client
+
+The hosted endpoint is `https://mcp.rivet.dev/mcp`. When a hosted client connects, Rivet opens a sign-in flow so you can choose and approve its access.
+
+<Tabs label="MCP setup options">
+
+<Tab title="Claude Code" icon={faClaude}>
+
+Run this command, then approve the Rivet sign-in when it opens.
+
+<CodeSnippet file="examples/docs/mcp/claude-code.sh" title="Terminal" />
+
+</Tab>
+
+<Tab title="Codex" icon={faOpenai}>
+
+Run this command, then approve the Rivet sign-in when it opens.
+
+<CodeSnippet file="examples/docs/mcp/codex.sh" title="Terminal" />
+
+</Tab>
+
+<Tab title="Cursor" icon={faCursor}>
+
+Add this configuration to Cursor, then approve the Rivet sign-in when it opens.
+
+<CodeSnippet file="examples/docs/mcp/cursor.json" title="MCP configuration" />
+
+</Tab>
+
+<Tab title="Gemini CLI" icon={faGemini}>
+
+Run this command, then approve the Rivet sign-in when it opens.
+
+<CodeSnippet file="examples/docs/mcp/gemini-cli.sh" title="Terminal" />
+
+</Tab>
+
+<Tab title="VS Code" icon={faVscode}>
+
+Run this command, then approve the Rivet sign-in when it opens.
+
+<CodeSnippet file="examples/docs/mcp/vs-code.sh" title="Terminal" />
+
+</Tab>
+
+<Tab title="Local" icon={faLaptopCode}>
+
+Add this configuration to your client to connect to Rivet already running on your machine. Local connections need neither a URL nor sign-in.
+
+<CodeSnippet file="examples/docs/mcp/local.json" title="MCP configuration" />
+
+</Tab>
+
+</Tabs>
+
+## Control access
+
+### Scope hosted connections
+
+You can constrain the hosted endpoint with organization, project, and namespace query parameters.
+
+| Endpoint | Access |
+| --- | --- |
+| `https://mcp.rivet.dev/mcp` | Your client asks which scope to use and remembers it. |
+| `https://mcp.rivet.dev/mcp?organization=ORG` | One organization. |
+| `https://mcp.rivet.dev/mcp?organization=ORG&project=PROJECT` | One project. |
+| `https://mcp.rivet.dev/mcp?organization=ORG&project=PROJECT&namespace=NS` | One namespace. |
+
+Replace the placeholders with the same slugs used in your [dashboard](https://dashboard.rivet.dev) URL: `/orgs/ORG/projects/PROJECT/ns/NS`. If you omit the values, your client asks you to choose and stays on that selection for the rest of the session.
+
+### Security model
+
+- Generated code runs with no network, environment variables, files, or way to start a process.
+- Every call goes through Rivet. Rivet checks it against the access you approved and attaches your credentials.
+- A hosted connection carries only the access you granted, and its grant expires after 15 minutes.
+- Your credentials stay on Rivet and never reach the model.
+- An inline Inspector is limited to the Actor you requested and disappears with the conversation. Clients that cannot render it receive the same details as text.
+
+## What you can do
+
+These examples are illustrative and make no live backend calls.
+
+### Find running Actors
+
+<CodeSnippet file="examples/docs/mcp/find-running-actors.txt" title="Prompt" />
+
+Rivet MCP uses `search` to find `rivet.actors.list`, lists the matching `chat-room` Actors, and returns one concise result: **3 rooms awake**.
+
+### Call an Actor action
+
+<CodeSnippet file="examples/docs/mcp/call-actor-action.txt" title="Prompt" />
+
+Rivet MCP uses `search` to find `rivet.actor.action`, calls the `getHistory` action on the `chat-room · acme` Actor, and returns the action result: **128 messages from Acme**.
+
+### Inspect an Actor inline
+
+<CodeSnippet file="examples/docs/mcp/inspect-actor-inline.txt" title="Prompt" />
+
+The same Actor view available in the dashboard opens inside the conversation. It includes the **State**, **Connections**, **Queue**, **Workflow**, and **Database** tabs. The inline view is limited to the Actor you requested and disappears with the conversation. Clients that cannot render the Inspector receive the same details as text.
+
+## One request, two tools
+
+Your client does not have to choose from a long list of narrow tools. Rivet MCP exposes two tools and composes the operations needed for a request.
+
+### Find the right operations
+
+The `search` tool looks at the namespace you connected and returns only the operations that apply to the request.
+
+### Run one composed request
+
+The `execute` tool writes ordinary JavaScript, combines the relevant operations, and returns one answer instead of making the client coordinate every call. You do not write this generated code or see it unless you ask.
+
+For the request **“Which chat rooms are still awake, and what has Acme been saying?”**, Rivet MCP finds and runs `rivet.actors.list` and `rivet.actor.action`:
+
+<CodeSnippet file="examples/docs/mcp/one-request.js" title="Generated JavaScript" />
+
+The result is one answer: **3 rooms awake, 128 messages from Acme**.

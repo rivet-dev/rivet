@@ -473,7 +473,7 @@ export class Runner {
 		}
 
 		// When changing SIGTERM/shutdown behavior, update
-		// website/src/content/docs/actors/versions.mdx (SIGTERM Handling section).
+		// docs/general/content/versions.mdx (SIGTERM Handling section).
 		if (!this.#config.noAutoShutdown) {
 			if (!SIGNAL_HANDLERS.length) {
 				process.on("SIGTERM", async () => {
@@ -657,7 +657,7 @@ export class Runner {
 	 * - The shutdown timeout is reached (120 seconds)
 	 *
 	 * When changing this timeout, update
-	 * website/src/content/docs/actors/versions.mdx (SIGTERM Handling section).
+	 * docs/general/content/versions.mdx (SIGTERM Handling section).
 	 */
 	async #waitForActorsToStop(ws: WebSocket): Promise<void> {
 		const shutdownTimeout = 120_000; // 120 seconds

@@ -7,7 +7,7 @@ This integration is in beta.
 Set `WORKFLOW_TARGET_WORLD=@rivet-dev/workflow-world` and `WORKFLOW_RUNTIME_URL`
 in the application environment. The Rivet connection resolves through RivetKit's
 [standard environment
-variables](https://rivet.dev/actors/docs/general/environment-variables), so local
+variables](https://rivet.dev/docs/environment-variables), so local
 development needs nothing further. Set them only when connecting to a remote
 control plane.
 

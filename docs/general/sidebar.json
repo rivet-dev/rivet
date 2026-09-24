@@ -1,0 +1,106 @@
+{
+	"docs": [
+		{
+			"title": "General",
+			"pages": [
+				{
+					"title": "Overview",
+					"href": "/docs/",
+					"icon": "faSquareInfo"
+				},
+				{
+					"title": "Architecture",
+					"href": "/docs/architecture"
+				}
+			]
+		},
+		{
+			"title": "Running Workloads",
+			"pages": [
+				{
+					"title": "Runtime Modes",
+					"href": "/docs/runtime-modes"
+				},
+				{
+					"title": "Endpoints",
+					"href": "/docs/endpoints"
+				},
+				{
+					"title": "Environment Variables",
+					"href": "/docs/environment-variables"
+				},
+				{
+					"title": "Pool Configuration",
+					"href": "/docs/pool-configuration"
+				},
+				{
+					"title": "Versions & Upgrades",
+					"href": "/docs/versions"
+				},
+				{
+					"title": "Regions & Multi-Region",
+					"href": "/docs/regions"
+				},
+				{
+					"title": "Container Runner",
+					"href": "/docs/container-runner"
+				}
+			]
+		},
+		{
+			"title": "Operating",
+			"pages": [
+				{
+					"title": "Statuses",
+					"href": "/docs/statuses"
+				},
+				{
+					"title": "Tracing",
+					"href": "/docs/tracing"
+				},
+				{
+					"title": "Debugging",
+					"href": "/docs/debugging"
+				}
+			]
+		},
+		{
+			"title": "Reference",
+			"pages": [
+				{
+					"title": "CLI",
+					"href": "/docs/cli"
+				},
+				{
+					"title": "API Reference",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "OpenAPI",
+							"href": "https://github.com/rivet-dev/rivet/tree/main/rivetkit-openapi",
+							"external": true
+						},
+						{
+							"title": "AsyncAPI",
+							"href": "https://github.com/rivet-dev/rivet/tree/main/rivetkit-asyncapi",
+							"external": true
+						}
+					]
+				}
+			]
+		},
+		{
+			"title": "AI Integration",
+			"pages": [
+				{
+					"title": "Rivet MCP",
+					"href": "/docs/mcp"
+				},
+				{
+					"title": "Skill File",
+					"href": "/docs/skill"
+				}
+			]
+		}
+	]
+}

@@ -11,7 +11,7 @@ on:
 
 jobs:
   mirror:
-    if: github.repository == 'rivet-dev/actors'
+    if: github.repository == 'rivet-dev/rivet'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

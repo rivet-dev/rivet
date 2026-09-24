@@ -1,0 +1,396 @@
+---
+title: "Debugging Actors"
+description: "Inspect a running Rivet Actor through its gateway endpoints and the actor inspector API, including state, connections, and workflow history."
+skill: true
+---
+
+Every endpoint here is reached through the gateway using an actor ID. To find
+actor IDs, list runners, or read provider config, see [Debugging](/docs/debugging)
+in the platform docs. That page also defines the `$RIVET_API`, `$RIVET_NAMESPACE`,
+and `$RIVET_TOKEN` shell variables used throughout the examples below.
+
+
+All actor-level endpoints are accessed through the gateway. The gateway routes requests to the correct actor instance using the actor ID in the URL path:
+
+```
+{RIVET_API}/gateway/{actor_id}/{path}
+```
+
+The gateway only accepts actor IDs, not names. Use `GET /actors?name=...` from the management API to look up actor IDs first.
+
+## Authentication
+
+Standard actor endpoints (health, actions, requests) and inspector endpoints have separate authentication requirements.
+
+### Standard Endpoints
+
+| Environment | Authentication |
+|---|---|
+| **Local development** | No authentication required. |
+| **Self-hosted engine** | The Rivet control plane handles authentication at the gateway level. |
+| **Rivet Cloud** | Authentication is handled by the Rivet Cloud platform at the gateway level. |
+
+### Inspector Endpoints
+
+Each actor generates a unique inspector token on first start and persists it in internal SQLite storage. It is also mirrored to legacy KV key `0x03` (base64 `Aw==`) for dashboard compatibility. Pass it as a bearer token in the `Authorization` header.
+
+Inspector endpoints always require the actor's inspector token, including in local development. There is no local-development bypass.
+
+| Environment | Authentication |
+|---|---|
+| **Local development** | Bearer the actor's inspector token in the `Authorization` header. Fetch it through the management KV endpoint (see below). |
+| **Self-hosted engine** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically; for direct API access, fetch it through the management KV endpoint (see below). |
+| **Rivet Cloud** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically; for direct API access, fetch it through the management KV endpoint (see below). |
+
+```bash
+curl "$RIVET_API/gateway/{actor_id}/inspector/summary" \
+  -H 'Authorization: Bearer YOUR_INSPECTOR_TOKEN'
+```
+
+### Retrieving the Inspector Token
+
+Each actor generates a unique inspector token on first start and persists it in internal SQLite storage. The token is also mirrored to the legacy KV key below so the Rivet dashboard can continue to retrieve it through the management KV endpoint. This applies in every environment, including local development.
+
+The inspector token is stored at internal KV key `0x03` (base64: `Aw==`). The response value is also base64-encoded.
+
+```bash
+# Fetch the inspector token for a specific actor
+ACTOR_ID="your-actor-id"
+
+RESPONSE=$(curl -s "$RIVET_API/actors/$ACTOR_ID/kv/keys/Aw==" \
+  -H "Authorization: Bearer $RIVET_TOKEN")
+
+# Extract and decode the base64 value
+INSPECTOR_TOKEN=$(echo "$RESPONSE" | jq -r '.value' | base64 -d)
+
+# Use it to call inspector endpoints
+curl "$RIVET_API/gateway/$ACTOR_ID/inspector/summary" \
+  -H "Authorization: Bearer $INSPECTOR_TOKEN"
+```
+
+## Standard Actor Endpoints
+
+These are the built-in actor endpoints available through the gateway:
+
+```bash
+# Health check
+curl $RIVET_API/gateway/{actor_id}/health
+
+# Metadata
+curl $RIVET_API/gateway/{actor_id}/metadata
+
+# Call an action
+curl -X POST $RIVET_API/gateway/{actor_id}/action/myAction \
+  -H 'Content-Type: application/json' \
+  -d '{"args": [1, 2, 3]}'
+
+# Send queue message (queue name in path)
+curl -X POST $RIVET_API/gateway/{actor_id}/queue/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{"body":{"id":"job-1"}}'
+
+# Send queue message and wait for completion (optional timeout in ms)
+curl -X POST $RIVET_API/gateway/{actor_id}/queue/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{"body":{"id":"job-1"},"wait":true,"timeout":5000}'
+
+# Forward an HTTP request to the actor's onRequest handler
+curl $RIVET_API/gateway/{actor_id}/request/my/custom/path
+```
+
+Queue send responses always include a `status` field:
+
+```json
+{ "status": "completed" }
+```
+
+The `response` field is only present when the queue handler returns a value:
+
+```json
+{ "status": "completed", "response": { "result": "ok" } }
+```
+
+If `wait: true` and the timeout is reached, `status` is `"timedOut"`.
+
+## Inspector Endpoints
+
+The inspector HTTP API exposes JSON endpoints for querying and modifying actor internals at runtime. These are designed for agent-based debugging and tooling.
+
+Every inspector endpoint requires the actor's inspector token as a bearer token, including in local development. The examples below omit the `Authorization` header for brevity, but you must add `-H "Authorization: Bearer $INSPECTOR_TOKEN"` to each request. See [Retrieving the Inspector Token](#retrieving-the-inspector-token) above.
+
+### Get State
+
+```bash
+curl $RIVET_API/gateway/{actor_id}/inspector/state
+```
+
+Returns the actor's current persisted state:
+
+```json
+{
+  "state": { "count": 42, "users": [] },
+  "isStateEnabled": true
+}
+```
+
+### Set State
+
+```bash
+curl -X PATCH $RIVET_API/gateway/{actor_id}/inspector/state \
+  -H 'Content-Type: application/json' \
+  -d '{"state": {"count": 0, "users": []}}'
+```
+
+Returns:
+
+```json
+{ "ok": true }
+```
+
+### Get Connections
+
+```bash
+curl $RIVET_API/gateway/{actor_id}/inspector/connections
+```
+
+Returns all active connections with their params, state, and metadata:
+
+```json
+{
+  "connections": [
+    {
+      "type": "websocket",
+      "id": "conn-id",
+      "details": {
+        "type": "websocket",
+        "params": {},
+        "stateEnabled": true,
+        "state": {},
+        "subscriptions": 2,
+        "isHibernatable": true
+      }
+    }
+  ]
+}
+```
+
+### Get RPCs
+
+```bash
+curl $RIVET_API/gateway/{actor_id}/inspector/rpcs
+```
+
+Returns a list of available actions:
+
+```json
+{ "rpcs": ["increment", "getCount"] }
+```
+
+### Execute Action
+
+```bash
+curl -X POST $RIVET_API/gateway/{actor_id}/inspector/action/increment \
+  -H 'Content-Type: application/json' \
+  -d '{"args": [5]}'
+```
+
+Returns:
+
+```json
+{ "output": 47 }
+```
+
+### Get Queue Status
+
+```bash
+curl $RIVET_API/gateway/{actor_id}/inspector/queue?limit=10
+```
+
+Returns queue status with messages:
+
+```json
+{
+  "size": 3,
+  "maxSize": 1000,
+  "truncated": false,
+  "messages": [
+    { "id": 1, "name": "process", "createdAtMs": 1706000000000 }
+  ]
+}
+```
+
+### Get Workflow History
+
+```bash
+curl $RIVET_API/gateway/{actor_id}/inspector/workflow-history
+```
+
+Returns:
+
+```json
+{
+  "history": null,
+  "isWorkflowEnabled": false
+}
+```
+
+### Get Database Schema
+
+```bash
+curl $RIVET_API/gateway/{actor_id}/inspector/database/schema
+```
+
+Returns discovered SQLite tables and views when the actor has `c.db` enabled:
+
+```json
+{
+  "schema": {
+    "tables": [
+      {
+        "table": { "schema": "main", "name": "test_data", "type": "table" },
+        "columns": [
+          { "cid": 0, "name": "id", "type": "", "notnull": 0, "dflt_value": null, "pk": 0 }
+        ],
+        "foreignKeys": [],
+        "records": 2
+      }
+    ]
+  }
+}
+```
+
+### Get Database Rows
+
+```bash
+curl "$RIVET_API/gateway/{actor_id}/inspector/database/rows?table=test_data&limit=100&offset=0"
+```
+
+Returns paged rows for a specific SQLite table or view:
+
+```json
+{
+  "rows": [
+    {
+      "id": 1,
+      "value": "Alice",
+      "payload": "",
+      "created_at": 1706000000000
+    }
+  ]
+}
+```
+
+### Execute SQLite
+
+Run manual SQL against an actor's SQLite database. This supports both read-only queries and mutations.
+
+```bash
+curl -X POST http://localhost:6420/gateway/{actor_id}/inspector/database/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "sql": "SELECT id, value FROM test_data WHERE value = ? ORDER BY id DESC",
+    "args": ["alpha"]
+  }'
+```
+
+Returns:
+
+```json
+{
+  "rows": [
+    { "id": 2, "value": "alpha" }
+  ]
+}
+```
+
+You can also use named SQLite bindings through a `properties` object:
+
+```bash
+curl -X POST http://localhost:6420/gateway/{actor_id}/inspector/database/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "sql": "SELECT id, value FROM test_data WHERE value = :value ORDER BY id DESC",
+    "properties": {
+      "value": "alpha"
+    }
+  }'
+```
+
+For mutations, use `RETURNING` if you want rows back. Otherwise the statement still runs and `rows` is empty:
+
+```bash
+curl -X POST http://localhost:6420/gateway/{actor_id}/inspector/database/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "sql": "INSERT INTO test_data (value, created_at) VALUES (?, ?) RETURNING id, value",
+    "args": ["beta", 1706000000000]
+  }'
+```
+
+For workflow-enabled actors, `history` is a JSON object with `nameRegistry`, `entries`, and `entryMetadata`. Step outputs, loop state, and message payloads are decoded from CBOR into normal JSON values.
+
+### Replay Workflow From Step
+
+Reset a workflow to a specific step and restart execution immediately. Omitting `entryId` replays the workflow from the beginning.
+
+If the workflow is still running when you call replay, the endpoint rejects the request with `409 Conflict` and an `actor/workflow_in_flight` error instead of cancelling the live run for you.
+
+```bash
+curl -X POST http://localhost:6420/gateway/{actor_id}/inspector/workflow/replay \
+  -H 'Content-Type: application/json' \
+  -d '{"entryId":"workflow-step-id"}'
+```
+
+Returns the same JSON shape as `/inspector/workflow-history`:
+
+```json
+{
+  "history": {
+    "nameRegistry": ["step-one", "step-two"],
+    "entries": [],
+    "entryMetadata": {}
+  },
+  "isWorkflowEnabled": true
+}
+```
+
+While a workflow is in flight, the response shape is:
+
+```json
+{
+  "group": "actor",
+  "code": "workflow_in_flight",
+  "message": "Workflow replay is unavailable while the workflow is currently in flight.",
+  "metadata": null
+}
+```
+
+### Summary
+
+Get a full snapshot of the actor in a single request:
+
+```bash
+curl $RIVET_API/gateway/{actor_id}/inspector/summary
+```
+
+Returns:
+
+```json
+{
+  "state": { "count": 42 },
+  "connections": [],
+  "rpcs": ["increment", "getCount"],
+  "queueSize": 0,
+  "isStateEnabled": true,
+  "isDatabaseEnabled": false,
+  "isWorkflowEnabled": false,
+  "workflowHistory": null
+}
+```
+
+When workflow history is present in `/inspector/summary`, `workflowHistory` is returned as the same decoded JSON shape as `/inspector/workflow-history`.
+
+## Polling
+
+Inspector endpoints are safe to poll. For live monitoring, poll at 1-5 second intervals. The `/inspector/summary` endpoint is useful for periodic snapshots since it returns all data in a single request.
+
