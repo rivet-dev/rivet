@@ -171,6 +171,53 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
+	async fn uncompleted_completable_message_is_delivered_again_after_context_recreation() {
+		let queue = test_queue();
+		crate::actor::internal_storage::schema::ensure_internal_schema(queue.sql())
+			.await
+			.expect("initialize queue storage");
+		let sent = queue
+			.send("durable", b"body")
+			.await
+			.expect("send queue message");
+
+		let received = queue
+			.next(QueueNextOpts {
+				completable: true,
+				..Default::default()
+			})
+			.await
+			.expect("receive completable message")
+			.expect("completable message");
+		assert_eq!(received.id, sent.id);
+		let sql = queue.sql().clone();
+		drop(received);
+		drop(queue);
+
+		let recreated = ActorContext::build(
+			"actor-queue".to_owned(),
+			"queue-test".to_owned(),
+			Vec::new(),
+			"local".to_owned(),
+			Some(2),
+			"test-envoy".to_owned(),
+			ActorConfig::default(),
+			Kv::new_in_memory(),
+			sql,
+		);
+		let redelivered = recreated
+			.next(QueueNextOpts {
+				timeout: Some(Duration::ZERO),
+				..Default::default()
+			})
+			.await
+			.expect("receive after recreation")
+			.expect("uncompleted message is still queued");
+		assert_eq!(redelivered.id, sent.id);
+		assert_eq!(redelivered.name, "durable");
+	}
+
+	#[tokio::test]
 	async fn stale_completion_does_not_decrement_queue_size_twice() {
 		let queue = test_queue();
 		crate::actor::internal_storage::schema::ensure_internal_schema(queue.sql())

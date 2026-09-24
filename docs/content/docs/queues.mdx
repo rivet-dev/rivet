@@ -33,8 +33,8 @@ This is the default pattern. Define queue names in `queues`, process them in `ru
 
 Use this when you want explicit completion/ack semantics but do not need to return data.
 
-- `message.complete()` resolves a sender waiting on `wait: true` (or `enqueueAndWait`). It does not change durability: messages are removed from queue storage when they are received, not when they are completed.
-- If processing fails before `message.complete()`, the message is not redelivered, and any waiting sender times out instead of receiving a completion.
+- `message.complete()` resolves a sender waiting on `wait: true` (or `enqueueAndWait`) and removes the message from queue storage. A message received with `completable: true` stays stored until it is completed. Messages received without it are removed as soon as they are received.
+- If the actor stops or crashes before `message.complete()`, the message is delivered again after the actor starts back up. Make completable handlers safe to run more than once.
 - `status: "timedOut"` means sender timeout elapsed before `message.complete(...)`.
 
 <CodeGroup>
