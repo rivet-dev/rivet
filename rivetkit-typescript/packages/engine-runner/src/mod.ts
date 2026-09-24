@@ -173,6 +173,13 @@ export interface RunnerConfig {
 		config: ActorConfig,
 	) => Promise<void>;
 
+	/**
+	 * Timeout in milliseconds for onActorStart to complete.
+	 * If it takes longer than this, the actor will fail to start.
+	 * Defaults to 60000 (60 seconds).
+	 */
+	onActorStartTimeoutMs?: number;
+
 	onActorStop: (actorId: string, generation: number) => Promise<void>;
 	noAutoShutdown?: boolean;
 
@@ -1168,14 +1175,30 @@ export class Runner {
 		this.#sendActorStateUpdate(actorId, generation, "running");
 
 		try {
-			// TODO: Add timeout to onActorStart
-			// Call onActorStart asynchronously and handle errors
+			// Call onActorStart asynchronously and handle errors with timeout
 			this.log?.debug({
 				msg: "calling onActorStart",
 				actorId,
 				generation,
 			});
-			await this.#config.onActorStart(actorId, generation, actorConfig);
+
+			const timeoutMs = this.#config.onActorStartTimeoutMs ?? 60_000;
+			await new Promise<void>((resolve, reject) => {
+				const timeout = setTimeout(() => {
+					reject(new Error(`onActorStart timed out after ${timeoutMs}ms`));
+				}, timeoutMs);
+
+				this.#config
+					.onActorStart(actorId, generation, actorConfig)
+					.then(() => {
+						clearTimeout(timeout);
+						resolve();
+					})
+					.catch((err) => {
+						clearTimeout(timeout);
+						reject(err);
+					});
+			});
 
 			instance.actorStartPromise.resolve();
 		} catch (error) {
