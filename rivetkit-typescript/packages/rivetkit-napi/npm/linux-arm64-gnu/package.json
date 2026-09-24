@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/rivetkit-napi-linux-arm64-gnu",
-	"version": "2.3.20",
+	"version": "2.3.21",
 	"os": [
 		"linux"
 	],
