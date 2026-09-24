@@ -335,6 +335,10 @@
 					"href": "/actors/learn/ai-agent"
 				},
 				{
+					"title": "Authenticate Users End to End",
+					"href": "/actors/learn/authentication"
+				},
+				{
 					"title": "Chat Room",
 					"href": "/actors/learn/chat-room"
 				},
