@@ -1,6 +1,7 @@
 import type { Rivet } from "@rivet-gg/cloud";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import { endOfMonth, startOfMonth } from "date-fns";
+import { MANAGED_SERVICES_POOL } from "@/app/managed-services";
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { BILLING } from "@/content/billing";
 import { features } from "@/lib/features";
@@ -66,6 +67,29 @@ export function useBilledComputeCost() {
 		isError,
 		isUnavailable: isNotFound || isEmpty,
 	};
+}
+
+/**
+ * Whether any namespace in the project runs the managed services pool. Services
+ * run on Rivet Compute, so the project is billed for compute even before any
+ * usage has been recorded.
+ */
+export function useHasActiveManagedServices(): boolean {
+	const dataProvider = useCloudProjectDataProvider();
+	const { data: namespaces } = useInfiniteQuery({
+		...dataProvider.currentProjectNamespacesQueryOptions(),
+		enabled: features.compute,
+	});
+	const pools = useQueries({
+		queries: (namespaces ?? []).map((ns) =>
+			dataProvider.currentProjectManagedPoolQueryOptions({
+				namespace: ns.name,
+				pool: MANAGED_SERVICES_POOL,
+				safe: true,
+			}),
+		),
+	});
+	return pools.some((pool) => pool.data?.status === "ready");
 }
 
 export function useHighestUsagePercent(): number {

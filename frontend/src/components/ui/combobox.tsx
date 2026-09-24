@@ -71,7 +71,7 @@ export const defaultRenderCurrentOptions = <Option extends ComboboxOption>(
 				.slice(0, maxToShow)}
 
 			{currentOptions.length > maxToShow ? (
-				<Badge variant="outline">
+				<Badge variant="outline" className="shrink-0">
 					+{currentOptions.length - maxToShow}
 				</Badge>
 			) : null}
@@ -167,7 +167,7 @@ export const Combobox = <Option extends ComboboxOption>({
 						className,
 					)}
 				>
-					<div className="flex gap-4">
+					<div className="flex min-w-0 items-center gap-4 overflow-hidden">
 						{currentOptions.length > 0
 							? renderCurrentOptions
 								? renderCurrentOptions(currentOptions)
@@ -178,7 +178,7 @@ export const Combobox = <Option extends ComboboxOption>({
 							: placeholder}
 					</div>
 
-					<div className="flex items-center gap-1">
+					<div className="flex shrink-0 items-center gap-1">
 						{isLoading && (
 							<Icon
 								className="ml-2 h-4 w-4 shrink-0 text-foreground opacity-50 animate-spin"
@@ -209,11 +209,12 @@ export const Combobox = <Option extends ComboboxOption>({
 						onValueChange={setSearch}
 						placeholder={placeholder}
 					/>
-					<CommandList>
+					<CommandList aria-multiselectable={multiple || undefined}>
 						{sorted.map((option) => {
 							return (
 								<ComboboxOption<Option>
 									key={option.value}
+									multiple={multiple}
 									isCurrent={
 										Array.isArray(value)
 											? value.includes(option.value)
@@ -247,6 +248,7 @@ export const Combobox = <Option extends ComboboxOption>({
 
 interface ComboboxOptionProps<Option extends ComboboxOption> {
 	isCurrent?: boolean;
+	multiple?: boolean;
 	label: Option["label"];
 	value: Option["value"];
 	onSelect: (value: string) => void;
@@ -254,6 +256,7 @@ interface ComboboxOptionProps<Option extends ComboboxOption> {
 
 function ComboboxOption<Option extends ComboboxOption>({
 	isCurrent,
+	multiple,
 	label,
 	value,
 	onSelect,
@@ -265,13 +268,29 @@ function ComboboxOption<Option extends ComboboxOption>({
 			keywords={[value]}
 			onSelect={onSelect}
 		>
-			<Icon
-				icon={faCheck}
-				className={cn(
-					"mr-2 h-4 w-4",
-					isCurrent ? "opacity-100" : "opacity-0",
-				)}
-			/>
+			{multiple ? (
+				<span
+					aria-hidden
+					className={cn(
+						"mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+						isCurrent
+							? "border-foreground bg-foreground text-background"
+							: "border-foreground/30",
+					)}
+				>
+					{isCurrent ? (
+						<Icon icon={faCheck} className="h-2.5 w-2.5" />
+					) : null}
+				</span>
+			) : (
+				<Icon
+					icon={faCheck}
+					className={cn(
+						"mr-2 h-4 w-4",
+						isCurrent ? "opacity-100" : "opacity-0",
+					)}
+				/>
+			)}
 			{label}
 		</CommandItem>
 	);

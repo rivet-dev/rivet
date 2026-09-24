@@ -9,6 +9,7 @@ import {
 } from "@/app/serverless-connection-check";
 import {
 	Button,
+	defaultRenderCurrentOptions,
 	FormControl,
 	FormDescription,
 	FormField,
@@ -19,7 +20,7 @@ import {
 	Input,
 	Label,
 } from "@/components";
-import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
+import { useEngineCompatDataProvider } from "@/components/actors";
 import { RegionSelect } from "@/components/actors/region-select";
 import { IconPicker, IconRenderer } from "@/components/ui/icon-picker";
 import { defineStepper } from "@/components/ui/stepper";
@@ -205,11 +206,12 @@ export const Datacenters = function Datacenter() {
 						<FormLabel>Datacenters</FormLabel>
 						<FormDescription className="mb-4">
 							{watch("provider") === "rivet"
-								? "Select the region(s) to enable for Rivet. Rivet's edge network handles multi-region routing automatically."
-								: "Select the region(s) that your backend is running in. Rivet's edge network handles multi-region routing automatically."}
+								? "Select one or more regions to enable for Rivet. Rivet's edge network handles multi-region routing automatically."
+								: "Select every region your backend runs in. Rivet's edge network handles multi-region routing automatically."}
 						</FormDescription>
 						<RegionSelect
 							showAuto={false}
+							placeholder="Select regions..."
 							value={Object.keys(field.value || {}).filter(
 								(key) => field.value[key],
 							)}
@@ -217,14 +219,7 @@ export const Datacenters = function Datacenter() {
 								if (options.length === datacenterCount) {
 									return <span>Global</span>;
 								}
-								return options.map((option) => (
-									<span key={option.value} className="mr-2">
-										<ActorRegion
-											regionId={option.value}
-											showLabel
-										/>
-									</span>
-								));
+								return defaultRenderCurrentOptions(options, 2);
 							}}
 							onValueChange={(value) => {
 								field.onChange(
