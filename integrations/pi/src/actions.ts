@@ -10,6 +10,11 @@ import {
 	type PiSession,
 	type PiSessionOptions,
 } from "./runtime.js";
+import {
+	availableModels,
+	type PiModelInfo,
+	switchModel,
+} from "./models.js";
 import { traceRun } from "./tracing.js";
 
 /** An action that mirrors one `AgentSession` method: same arguments, same result. */
@@ -59,6 +64,15 @@ export interface PiActions {
 	clearQueue: SessionMethodAction<"clearQueue">;
 	abort: SessionMethodAction<"abort">;
 	waitForIdle: SessionMethodAction<"waitForIdle">;
+
+	/** Allowed models that have a credential. */
+	getAvailableModels: (c: PiContext) => Promise<PiModelInfo[]>;
+	/**
+	 * Switches to an allowed model by provider and model id. Throws
+	 * `user.model_not_allowed` outside the allowlist and `user.model_unavailable`
+	 * when the provider has no credential.
+	 */
+	setModel: (c: PiContext, provider: string, modelId: string) => Promise<void>;
 
 	setThinkingLevel: SessionMethodAction<"setThinkingLevel">;
 	cycleThinkingLevel: SessionMethodAction<"cycleThinkingLevel">;
@@ -141,6 +155,11 @@ export function createPiActions(options: PiSessionOptions): PiActions {
 		clearQueue: (c) => mutate(c, ({ session }) => session.clearQueue()),
 		abort: (c) => mutate(c, ({ session }) => session.abort()),
 		waitForIdle: (c) => read(c, ({ session }) => session.waitForIdle()),
+
+		getAvailableModels: (c) =>
+			read(c, ({ session }) => availableModels(options, session)),
+		setModel: (c, provider, modelId) =>
+			mutate(c, ({ session }) => switchModel(options, session, provider, modelId)),
 
 		setThinkingLevel: (c, ...args) =>
 			mutate(c, ({ session }) => session.setThinkingLevel(...args)),
