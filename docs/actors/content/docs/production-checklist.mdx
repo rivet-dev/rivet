@@ -54,7 +54,7 @@ actor, not before shipping it.
 ### Authentication
 
 - **Validate connections in `createConnState` or `onBeforeConnect`.** Do not trust client input without validation. See [Permissions](/actors/docs/permissions).
-- **Never ship a secret to a public client.** Mint a short-lived, scoped [JWT](/actors/docs/jwt) per user on your backend instead of embedding a token that reaches your whole namespace. See [Authentication](/actors/docs/authentication).
+- **Never ship a secret to a public client.** Mint a short-lived, scoped [JWT](/docs/jwt) per user on your backend instead of embedding a token that reaches your whole namespace. See [Authentication](/docs/authentication).
 
 ### CORS
 

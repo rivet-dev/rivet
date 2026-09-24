@@ -12,9 +12,9 @@ Every request to Rivet carries a credential, and the control plane checks what t
 | --- | --- | --- | --- | --- |
 | [Admin token](/docs/deploy/self-host/control-plane/configuration#admin-token) | Static | Everything, every namespace | Rotate the secret and restart | Self-hosted |
 | [Secret key](/docs/deploy/cloud#tokens) | Static | One namespace | Delete the key | Rivet Cloud |
-| [JWT](/actors/docs/jwt) | 1 hour by default, 24 hour maximum | One namespace, one grant set | Wait for expiry | Self-hosted, Rivet Cloud |
+| [JWT](/docs/jwt) | 1 hour by default, 24 hour maximum | One namespace, one grant set | Wait for expiry | Self-hosted, Rivet Cloud |
 | [ACL token](/docs/deploy/self-host/control-plane/rbac) | Long-lived | Roles built from reusable policies | Delete the token | Enterprise |
 
-Your backend can hold a secret, so it uses one directly. A browser or mobile app cannot, because anyone can read it out of the bundle, so mint a short-lived [JWT](/actors/docs/jwt) per user on your backend and hand that out instead. Reach for [ACL](/docs/deploy/self-host/control-plane/rbac) when a credential has to outlive a session and stay revocable.
+Your backend can hold a secret, so it uses one directly. A browser or mobile app cannot, because anyone can read it out of the bundle, so mint a short-lived [JWT](/docs/jwt) per user on your backend and hand that out instead. Reach for [ACL](/docs/deploy/self-host/control-plane/rbac) when a credential has to outlive a session and stay revocable.
 
 On Rivet Cloud the secret, publishable, and connection keys are created from the dashboard or the CLI. See [Tokens](/docs/deploy/cloud#tokens).

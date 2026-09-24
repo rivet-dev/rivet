@@ -51,25 +51,6 @@
 							"icon": "faSupabase"
 						}
 					]
-				},
-				{
-					"title": "Authentication",
-					"collapsible": true,
-					"pages": [
-						{
-							"title": "Overview",
-							"href": "/actors/docs/authentication"
-						},
-						{
-							"title": "JWTs",
-							"href": "/actors/docs/jwt"
-						},
-						{
-							"title": "ACL",
-							"href": "/docs/deploy/self-host/control-plane/rbac",
-							"badge": "Enterprise"
-						}
-					]
 				}
 			]
 		},

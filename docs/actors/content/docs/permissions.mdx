@@ -7,7 +7,7 @@ skill: true
 
 Permissions are enforced inside your actor, on a caller that has already reached it. This is the only layer that can see `c.state`, `c.key`, and action arguments, so every domain rule lives here.
 
-The layer above it decides which actor a client may reach at all. See [Authentication](/actors/docs/authentication) for that, and [JWTs](/actors/docs/jwt) to scope a client to a single actor before it ever gets here.
+The layer above it decides which actor a client may reach at all. See [Authentication](/docs/authentication) for that, and [JWTs](/docs/jwt) to scope a client to a single actor before it ever gets here.
 
 ## Quickstart
 
@@ -147,4 +147,4 @@ Avoid revalidating the same token on every reconnect.
 
 ## When You Need Less of This
 
-If you scope each user's [JWT](/actors/docs/jwt) to a single actor, that actor has exactly one participant and needs little authorization of its own. These hooks earn their keep once an actor is shared, as in a chat room or a per-tenant database.
+If you scope each user's [JWT](/docs/jwt) to a single actor, that actor has exactly one participant and needs little authorization of its own. These hooks earn their keep once an actor is shared, as in a chat room or a per-tenant database.

@@ -54,7 +54,7 @@ The example's sign-in is cosmetic: the client picks any company string and that 
 
 - Derive the tenant id from a verified credential, such as a JWT claim, never from user input.
 - Validate the credential against `c.key` in `onBeforeConnect` (pass/fail) or `createConnState` (store the verified user on connection state). See [Permissions](/actors/docs/permissions) and [Connections](/actors/docs/connections).
-- Add per-action permission checks on top of connection-level auth, and scope each tenant's [JWT](/actors/docs/jwt) to its own actor so the boundary is enforced before a request reaches your code.
+- Add per-action permission checks on top of connection-level auth, and scope each tenant's [JWT](/docs/jwt) to its own actor so the boundary is enforced before a request reaches your code.
 
 ## Actors
 

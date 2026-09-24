@@ -5,7 +5,7 @@ description: "Wire a login endpoint to Rivet Actors: authenticate the user, mint
 
 This guide connects both halves of Rivet authentication in one working flow. A user logs in, your backend mints a JWT that reaches only that user's actor, the browser connects with it, and the actor authorizes what the user may do once connected.
 
-Read [Authentication](/actors/docs/authentication) first for the two-layer model. This guide is the runnable version of it.
+Read [Authentication](/docs/authentication) first for the two-layer model. This guide is the runnable version of it.
 
 ## What You Are Building
 
@@ -79,6 +79,6 @@ ActorError: Admins only
 
 ## Where to Go Next
 
-- [JWTs](/actors/docs/jwt) for the full grant vocabulary, expiry behavior, and renewal.
+- [JWTs](/docs/jwt) for the full grant vocabulary, expiry behavior, and renewal.
 - [Permissions](/actors/docs/permissions) for queue and event gating and deny-by-default patterns.
 - [`examples/jwt-counter`](https://github.com/rivet-dev/rivet/tree/main/examples/jwt-counter) for a complete project with a smoke test covering renewal and rejection.

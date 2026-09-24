@@ -11,6 +11,25 @@
 				{
 					"title": "Architecture",
 					"href": "/docs/architecture"
+				},
+				{
+					"title": "Authentication",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "Overview",
+							"href": "/docs/authentication"
+						},
+						{
+							"title": "JWTs",
+							"href": "/docs/jwt"
+						},
+						{
+							"title": "ACL",
+							"href": "/docs/deploy/self-host/control-plane/rbac",
+							"badge": "Enterprise"
+						}
+					]
 				}
 			]
 		},
