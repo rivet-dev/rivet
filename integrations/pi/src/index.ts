@@ -6,6 +6,11 @@ export type {
 } from "./actions.js";
 export { pi, type PiActorConfigInput, type PiEvents } from "./actor.js";
 export type {
+	PiCredentialInfo,
+	PiCredentialSource,
+	PiProviderCredential,
+} from "./credentials.js";
+export type {
 	PiModelInfo,
 	PiModelOptions,
 	PiProviderConfig,

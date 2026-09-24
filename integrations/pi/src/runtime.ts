@@ -13,6 +13,7 @@ import {
 import type { Sandbox, SandboxProvider } from "@rivet-dev/sandbox-adapter";
 import type { ActorContext } from "rivetkit";
 import type { DatabaseProvider, RawAccess } from "rivetkit/db";
+import { SourceCredentialStore } from "./credentials.js";
 import {
 	createActorModelRuntime,
 	emptyCredentialStore,
@@ -74,6 +75,8 @@ export interface PiSession {
 	persistedSettings: string;
 	/** Entries (header excluded) already written to SQLite, in Pi's append order. */
 	persistedEntryCount: number;
+	/** The application's credentials, when `pi({ credentials })` is set. */
+	credentials: SourceCredentialStore | undefined;
 }
 
 /** The sandbox a session's tools run in for this actor generation. */
@@ -138,6 +141,7 @@ async function openPiSession(
 		apiKeys,
 		model,
 		scopedModels,
+		credentials: credentialSource,
 		...sessionOptions
 	} = options;
 	const stored = await loadPiSession(c.db);
@@ -163,9 +167,12 @@ async function openPiSession(
 	const sessionManager = stored
 		? SessionManager.inMemory(cwd, undefined, toFileEntries(stored))
 		: SessionManager.inMemory(cwd);
+	const credentials = credentialSource
+		? new SourceCredentialStore(credentialSource(c))
+		: undefined;
 	const modelRuntime = await createActorModelRuntime(
 		{ providers, apiKeys },
-		emptyCredentialStore,
+		credentials ?? emptyCredentialStore,
 	);
 	const resourceLoader =
 		sessionOptions.resourceLoader ??
@@ -205,6 +212,7 @@ async function openPiSession(
 		bashOperations: sandbox ? createSandboxBashOperations(sandbox) : undefined,
 		persistedSettings: JSON.stringify(settingsManager.getGlobalSettings()),
 		persistedEntryCount: stored?.entries.length ?? 0,
+		credentials,
 	};
 
 	if (!stored) {
