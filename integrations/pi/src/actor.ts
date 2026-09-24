@@ -38,6 +38,7 @@ const piOptionKeys = [
 	"agentDir",
 	"providers",
 	"apiKeys",
+	"credentials",
 	"model",
 	"thinkingLevel",
 	"scopedModels",

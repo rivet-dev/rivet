@@ -4,6 +4,8 @@ import {
 	ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
 import { UserError } from "rivetkit";
+import type { PiCredentialSource } from "./credentials.js";
+import type { PiContext } from "./runtime.js";
 
 /** Pi's credential store interface. `read`, `list`, `modify`, and `delete`, keyed by provider id. */
 export type PiCredentialStore = NonNullable<CreateModelRuntimeOptions["credentials"]>;
@@ -34,6 +36,11 @@ export interface PiModelOptions {
 	 * every other source.
 	 */
 	apiKeys?: Record<string, string>;
+	/**
+	 * Provider credentials the application manages, such as subscription
+	 * logins. Called once per actor generation with the actor's context.
+	 */
+	credentials?: (c: PiContext) => PiCredentialSource;
 }
 
 /** A model a client may switch to. */
@@ -56,7 +63,7 @@ type AllowlistOptions = Pick<PiModelOptions, "model" | "scopedModels">;
  * then `credentials`, then the server environment.
  */
 export async function createActorModelRuntime(
-	options: PiModelOptions,
+	options: Omit<PiModelOptions, "credentials">,
 	credentials: PiCredentialStore,
 ): Promise<ModelRuntime> {
 	const runtime = await ModelRuntime.create({ credentials, modelsPath: null });
@@ -140,6 +147,20 @@ export function availableModels(
 			contextWindow: model.contextWindow,
 			maxTokens: model.maxTokens,
 		}));
+}
+
+/** Throws `model_unavailable` when the session's model has no credential, for example after a logout. */
+export function requireCredential(session: AgentSession): void {
+	const model = session.model;
+	if (!model) return;
+	const available = session.modelRuntime
+		.getAvailableSnapshot()
+		.some((candidate) => candidate.provider === model.provider && candidate.id === model.id);
+	if (!available) {
+		throw new UserError(`No credential is configured for ${model.provider}/${model.id}.`, {
+			code: "model_unavailable",
+		});
+	}
 }
 
 /**
