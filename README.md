@@ -8,7 +8,11 @@
   <br/>
   <br/>
   <h3>Fast, high-density, scalable orchestration for agentic workloads.</h3>
-  <p>Run agents, workflows, and sandboxes as durable Actors. 12 ms cold starts, 72 KB per Actor, billions on one control plane. Open source and self-hostable.</p>
+  <p>
+    Rivet Actors are durable processes for agents, workflows, and sandboxes.<br/>
+    12 ms cold starts, 72 KB per Actor, billions on one control plane.<br/>
+    Open source and self-hostable.
+  </p>
   <p>
     <a href="https://www.rivet.dev/docs">Quickstart</a> •
     <a href="https://www.rivet.dev/actors/docs">Documentation</a> •
