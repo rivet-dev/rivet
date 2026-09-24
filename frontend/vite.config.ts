@@ -105,7 +105,17 @@ export default defineConfig(({ mode }) => {
 			// Accept the shared dev tunnel hostname.
 			// See docs-internal/platform/dev-tunnel.md.
 			// allowedHosts: ["dashboard.dev.rivet.dev"],
-			allowedHosts: ["local.staging.rivet.dev"],
+			allowedHosts: [
+				"local.staging.rivet.dev",
+				// A sandbox that proxies this dev server on a generated
+				// hostname passes it here, because the name changes every
+				// session and cannot be committed. Amp orbs set it to the
+				// portal host.
+				...(process.env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS ?? "")
+					.split(",")
+					.map((host) => host.trim())
+					.filter(Boolean),
+			],
 		},
 		preview: {
 			port: 43708,
