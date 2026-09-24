@@ -9,7 +9,7 @@ import { setupTest } from "rivetkit/test";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { pi } from "../src/index.js";
 import { localSandboxProvider } from "./helpers/local-sandbox.js";
-import { type MockModel, slowly, startMockModel, toolCall } from "./helpers/mock-model.js";
+import { type MockModel, slowly, createMockModel, toolCall } from "./helpers/mock-model.js";
 
 let mockModel: MockModel;
 let workdir: string;
@@ -17,8 +17,9 @@ let registry: ReturnType<typeof buildRegistry>;
 
 function buildRegistry(mock: MockModel, root: string) {
 	const agent = pi({
-		model: mock.model,
-		modelRuntime: mock.modelRuntime,
+		model: "mock/mock-model",
+		providers: { mock: mock.providerConfig },
+		apiKeys: { mock: "mock" },
 		state: { sleeps: 0 },
 		onSleep: (c) => {
 			c.state.sleeps += 1;
@@ -31,8 +32,9 @@ function buildRegistry(mock: MockModel, root: string) {
 		},
 	});
 	const sandboxed = pi({
-		model: mock.model,
-		modelRuntime: mock.modelRuntime,
+		model: "mock/mock-model",
+		providers: { mock: mock.providerConfig },
+		apiKeys: { mock: "mock" },
 		tools: ["write", "find", "bash"],
 		sandbox: localSandboxProvider(join(root, "sandboxes")),
 		state: { sleeps: 0 },
@@ -50,15 +52,16 @@ function buildRegistry(mock: MockModel, root: string) {
 		},
 	});
 	const timed = pi({
-		model: mock.model,
-		modelRuntime: mock.modelRuntime,
+		model: "mock/mock-model",
+		providers: { mock: mock.providerConfig },
+		apiKeys: { mock: "mock" },
 		options: { actionTimeout: 1_000 },
 	});
 	return setup({ use: { agent, sandboxed, timed } });
 }
 
 beforeAll(async () => {
-	mockModel = await startMockModel();
+	mockModel = createMockModel();
 	workdir = await mkdtemp(join(tmpdir(), "rivet-pi-test-"));
 	registry = buildRegistry(mockModel, workdir);
 
@@ -84,7 +87,6 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-	await mockModel?.dispose();
 	if (workdir) await rm(workdir, { recursive: true, force: true });
 });
 
