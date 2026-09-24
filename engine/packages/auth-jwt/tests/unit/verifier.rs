@@ -13,6 +13,7 @@ struct MockSource {
 	reads: Arc<AtomicUsize>,
 	blocked: Arc<AtomicBool>,
 	local: Arc<AtomicBool>,
+	v4_error: Arc<AtomicBool>,
 	notify: Arc<Notify>,
 }
 
@@ -23,6 +24,7 @@ impl MockSource {
 			reads: Arc::new(AtomicUsize::new(0)),
 			blocked: Arc::new(AtomicBool::new(false)),
 			local: Arc::new(AtomicBool::new(false)),
+			v4_error: Arc::new(AtomicBool::new(false)),
 			notify: Arc::new(Notify::new()),
 		}
 	}
@@ -35,6 +37,11 @@ impl MockSource {
 				source.reads.fetch_add(1, Ordering::AcqRel);
 				while source.blocked.load(Ordering::Acquire) {
 					source.notify.notified().await;
+				}
+				if source.v4_error.load(Ordering::Acquire) {
+					return Err(anyhow::anyhow!(
+						epoxy_protocol::READ_STATE_REQUIRES_V4_ERROR
+					));
 				}
 				source
 					.snapshot
@@ -298,6 +305,31 @@ async fn start_requires_and_installs_an_initial_snapshot() {
 		Duration::from_secs(1),
 	);
 	verifier.start().await.unwrap();
+	assert_eq!(verifier.current_snapshot().unwrap().generation, 1);
+}
+
+#[tokio::test]
+async fn start_defers_only_v4_read_errors_and_verification_stays_unavailable() {
+	let source = MockSource::new(Some(snapshot(1, &[1])));
+	source.v4_error.store(true, Ordering::Release);
+	let verifier = test_verifier(
+		&source,
+		Duration::from_secs(60),
+		Duration::from_secs(300),
+		Duration::from_secs(1),
+	);
+	verifier.start().await.unwrap();
+	assert!(verifier.current_snapshot().is_none());
+	assert!(matches!(
+		verifier.usable_snapshot().await,
+		Err(VerificationFailure::VerificationUnavailable)
+	));
+
+	source.v4_error.store(false, Ordering::Release);
+	verifier
+		.last_refresh_failure_ts
+		.store(i64::MIN, Ordering::Release);
+	verifier.refresh(false).await.unwrap();
 	assert_eq!(verifier.current_snapshot().unwrap().generation, 1);
 }
 

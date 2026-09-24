@@ -128,7 +128,7 @@ async fn message_request_inner(
 			// still omit coordinator acceptance, so its local state cannot certify freshness.
 			ensure!(
 				ctx.config().protocols().epoxy.version() >= 4,
-				"Epoxy read-state requires a completed v4 rollout in this datacenter"
+				epoxy_protocol::READ_STATE_REQUIRES_V4_ERROR
 			);
 			let response = ctx
 				.udb()?

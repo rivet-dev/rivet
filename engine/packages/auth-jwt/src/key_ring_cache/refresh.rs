@@ -20,6 +20,12 @@ const REFRESH_FAILURE_BACKOFF: Duration = Duration::from_secs(1);
 type SnapshotFuture = Pin<Box<dyn Future<Output = Result<FetchedSnapshot>> + Send>>;
 pub(super) type SnapshotFetcher = Arc<dyn Fn() -> SnapshotFuture + Send + Sync>;
 
+fn is_v4_read_error(error: &anyhow::Error) -> bool {
+	error
+		.chain()
+		.any(|cause| cause.to_string() == epoxy_protocol::READ_STATE_REQUIRES_V4_ERROR)
+}
+
 impl KeyRingCache {
 	pub(super) async fn usable_snapshot(
 		self: &Arc<Self>,
@@ -128,10 +134,14 @@ impl KeyRingCache {
 				crate::metrics::record_verifier_refresh(mode, "timeout", None);
 				VerificationFailure::VerificationUnavailable
 			})?
-			.map_err(|_| {
+			.map_err(|error| {
 				tracing::warn!("JWT key-ring read failed");
 				crate::metrics::record_verifier_refresh(mode, "error", None);
-				VerificationFailure::VerificationUnavailable
+				if is_v4_read_error(&error) {
+					VerificationFailure::EpoxyV4Pending
+				} else {
+					VerificationFailure::VerificationUnavailable
+				}
 			})?;
 		let path = fetched.path;
 		let authoritative = path.authoritative();
@@ -336,7 +346,7 @@ pub(super) async fn fetch_snapshot_from_epoxy(
 			Duration::from_secs(1),
 		),
 	] {
-		let Ok(Ok(output)) = tokio::time::timeout(
+		let output = match tokio::time::timeout(
 			timeout,
 			ctx.op(Input {
 				key: key.clone(),
@@ -344,8 +354,12 @@ pub(super) async fn fetch_snapshot_from_epoxy(
 			}),
 		)
 		.await
-		else {
-			continue;
+		{
+			Ok(Ok(output)) => output,
+			Ok(Err(error)) if is_v4_read_error(&error) => {
+				return Err(error.into());
+			}
+			_ => continue,
 		};
 		if path == ReadPath::Owner && output.pending_write {
 			continue;

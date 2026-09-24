@@ -750,7 +750,7 @@ pub(crate) fn request_kind_4_to_3(x: v4::RequestKind) -> Result<v3::RequestKind>
 			v3::RequestKind::KvPurgeCacheRequest(kv_purge_cache_request_4_to_3(x)?)
 		}
 		v4::RequestKind::KvReadStateRequest(_) => {
-			bail!("read-state requests require Epoxy protocol v4")
+			bail!(crate::READ_STATE_REQUIRES_V4_ERROR)
 		}
 	})
 }
@@ -789,7 +789,7 @@ pub(crate) fn response_kind_4_to_3(x: v4::ResponseKind) -> Result<v3::ResponseKi
 		}
 		v4::ResponseKind::KvPurgeCacheResponse => v3::ResponseKind::KvPurgeCacheResponse,
 		v4::ResponseKind::KvReadStateResponse(_) => {
-			bail!("read-state requests require Epoxy protocol v4")
+			bail!(crate::READ_STATE_REQUIRES_V4_ERROR)
 		}
 	})
 }

@@ -32,6 +32,9 @@ pub enum VerificationFailure {
 	InvalidToken,
 	Expired,
 	VerificationUnavailable,
+	/// Guard's initial refresh blocks startup for other failures. This one lets Guard start
+	/// with JWT verification unavailable while Pac upgrades to Epoxy v4 and refresh retries.
+	EpoxyV4Pending,
 }
 
 impl std::fmt::Display for VerificationFailure {
@@ -39,7 +42,9 @@ impl std::fmt::Display for VerificationFailure {
 		formatter.write_str(match self {
 			Self::InvalidToken => "authentication token is invalid",
 			Self::Expired => "authentication token has expired",
-			Self::VerificationUnavailable => "authentication key service is unavailable",
+			Self::VerificationUnavailable | Self::EpoxyV4Pending => {
+				"authentication key service is unavailable"
+			}
 		})
 	}
 }
@@ -51,7 +56,7 @@ impl VerificationFailure {
 		match self {
 			Self::InvalidToken => rivet_auth_policy::errors::Auth::InvalidToken.build(),
 			Self::Expired => rivet_auth_policy::errors::Auth::TokenExpired.build(),
-			Self::VerificationUnavailable => {
+			Self::VerificationUnavailable | Self::EpoxyV4Pending => {
 				rivet_auth_policy::errors::Auth::VerificationUnavailable.build()
 			}
 		}
@@ -107,9 +112,12 @@ impl KeyRingCache {
 	}
 
 	pub async fn start(self: &Arc<Self>) -> Result<()> {
-		self.refresh(false)
-			.await
-			.map_err(VerificationFailure::into_error)?;
+		if let Err(error) = self.refresh(false).await {
+			if error != VerificationFailure::EpoxyV4Pending {
+				return Err(error.into_error());
+			}
+			tracing::warn!("JWT key-ring startup deferred until Epoxy protocol v4 is available");
+		}
 
 		let weak = Arc::downgrade(self);
 		let interval = self.cache_ttl;
@@ -118,13 +126,22 @@ impl KeyRingCache {
 	}
 
 	pub async fn verify(self: &Arc<Self>, token: &str) -> Result<VerifiedJwt, VerificationFailure> {
-		let result = self.verify_inner(token).await;
+		let result = self.verify_inner(token).await.map_err(|error| {
+			if error == VerificationFailure::EpoxyV4Pending {
+				VerificationFailure::VerificationUnavailable
+			} else {
+				error
+			}
+		});
 		crate::metrics::VERIFICATION_TOTAL
 			.with_label_values(&[match &result {
 				Ok(_) => "valid",
 				Err(VerificationFailure::InvalidToken) => "invalid",
 				Err(VerificationFailure::Expired) => "expired",
-				Err(VerificationFailure::VerificationUnavailable) => "verification_unavailable",
+				Err(
+					VerificationFailure::VerificationUnavailable
+					| VerificationFailure::EpoxyV4Pending,
+				) => "verification_unavailable",
 			}])
 			.inc();
 		result
