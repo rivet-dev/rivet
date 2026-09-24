@@ -36,7 +36,8 @@ const piEvents: PiEvents = {
 const piOptionKeys = [
 	"cwd",
 	"agentDir",
-	"modelRuntime",
+	"providers",
+	"apiKeys",
 	"model",
 	"thinkingLevel",
 	"scopedModels",
