@@ -1,0 +1,150 @@
+---
+title: "Permissions"
+seoTitle: "Authorize Callers Inside Rivet Actors"
+description: "Identify callers when they connect to a Rivet Actor, then authorize every action, queue publish, and event subscription with deny-by-default rules."
+skill: true
+---
+
+Permissions are enforced inside your actor, on a caller that has already reached it. This is the only layer that can see `c.state`, `c.key`, and action arguments, so every domain rule lives here.
+
+The layer above it decides which actor a client may reach at all. See [Authentication](/actors/docs/authentication) for that, and [JWTs](/actors/docs/jwt) to scope a client to a single actor before it ever gets here.
+
+## Quickstart
+
+<Steps>
+
+<Step title="Identify the caller and gate an action">
+
+Use `createConnState` to turn a credential into connection state, then check that state in the actions that need it. Throwing from `createConnState` rejects the connection.
+
+<CodeGroup workspace>
+<CodeSnippet file="examples/docs/actors-permissions/quickstart/index.ts" title="index.ts" />
+<CodeSnippet file="examples/docs/actors-permissions/quickstart/client.ts" title="client.ts" />
+</CodeGroup>
+
+</Step>
+
+<Step title="Verify the rejection">
+
+Running the client prints the allowed read, then the rejected edit:
+
+```
+(empty string)
+ActorError: Admins only
+```
+
+</Step>
+
+</Steps>
+
+## Identifying the Caller
+
+Two hooks run before a connection is usable. Both can be async, and throwing from either rejects the connection.
+
+### `onBeforeConnect`
+
+Use it for pass or fail validation when you do not need the result later.
+
+<CodeSnippet file="examples/docs/actors-permissions/on-before-connect.ts" />
+
+### `createConnState`
+
+Use it when actions need to know who is calling. The returned object becomes `c.conn.state`. See [Connections](/actors/docs/connections) for the full lifecycle.
+
+<CodeSnippet file="examples/docs/actors-permissions/create-conn-state.ts" />
+
+### Available Data
+
+Both hooks can read:
+
+| Property | Description |
+| --- | --- |
+| `params` | Data the client passed when connecting. See [connection params](/actors/docs/connections#extracting-data-from-connection-params). |
+| `c.request` | The underlying HTTP request. |
+| `c.request.headers` | Request headers. Not available for `.connect()`. |
+| `c.state` | Actor state, for authorization decisions. See [state](/actors/docs/state). |
+| `c.key` | The actor's key. See [keys](/actors/docs/keys). |
+
+Prefer `params` over `c.request.headers`. It works for both HTTP and WebSocket connections, while headers do not.
+
+## Passing Credentials from the Client
+
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-permissions/passing-credentials-connection.ts" title="Connection" />
+<CodeSnippet file="examples/docs/actors-permissions/passing-credentials-stateless.ts" title="Stateless-Action" />
+<CodeSnippet file="examples/docs/actors-permissions/passing-credentials-headers.ts" title="HTTP-Headers" />
+</CodeGroup>
+
+Use `getParams` rather than `params` when the credential can change between attempts, such as a token that has to be fresh on every reconnect.
+
+### Handling Errors
+
+Rejections surface through the normal error system. See [errors](/actors/docs/errors).
+
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-permissions/handling-errors-connection.ts" title="Connection" />
+<CodeSnippet file="examples/docs/actors-permissions/handling-errors-stateless.ts" title="Stateless-Action" />
+</CodeGroup>
+
+## Permission Surfaces
+
+Authorization is explicit per surface. Nothing is checked implicitly.
+
+- `onBeforeConnect` and `createConnState` reject unauthenticated connections.
+- Action handlers enforce per-action rules.
+- `queues.<name>.canPublish` allows or denies an inbound queue publish.
+- `events.<name>.canSubscribe` allows or denies an event subscription.
+
+<CodeSnippet file="examples/docs/actors-permissions/chat-room.ts" />
+
+### Fail by Default
+
+1. Keep connection hooks strict and reject invalid credentials.
+2. In each action, allow the expected roles explicitly and throw `forbidden` otherwise.
+3. In `canPublish` and `canSubscribe`, return `true` only for allowed roles and end with `return false`.
+
+### Return Value Contract
+
+`canPublish` and `canSubscribe` must return a boolean. `true` allows, `false` denies with `forbidden`. Returning `undefined`, `null`, or any non-boolean throws an internal error.
+
+`canPublish` applies only to queue names declared in `queues`, and messages for undeclared queues are ignored while the publish still reports as completed. `canSubscribe` applies only to event names declared in `events`, and broadcasting an undeclared event still reaches its subscribers.
+
+## Patterns
+
+### Verifying a JWT from Your Auth Provider
+
+Tokens from Clerk, Auth0, Supabase, or your own issuer are opaque to Rivet. Verify them here with your provider's SDK or a library such as `jose`, checking the signature, issuer, audience, and expiry.
+
+<CodeSnippet file="examples/docs/actors-permissions/jwt.ts" />
+
+### Calling an External Auth Service
+
+<CodeSnippet file="examples/docs/actors-permissions/external-auth-provider.ts" />
+
+### Authorizing Against Actor State
+
+`c.state` and `c.key` are both available, so an actor can decide access from its own data.
+
+<CodeSnippet file="examples/docs/actors-permissions/using-state.ts" />
+
+### Role-Based Access Control
+
+<CodeSnippet file="examples/docs/actors-permissions/role-based-access-control.ts" />
+
+### Rate Limiting
+
+Track attempts in `c.vars` and reject callers that exceed a limit.
+
+<CodeSnippet file="examples/docs/actors-permissions/rate-limiting.ts" />
+
+These counters are [ephemeral](/actors/docs/state#ephemeral-variables). Use `state` instead of `vars` to persist them.
+
+### Caching Validated Tokens
+
+Avoid revalidating the same token on every reconnect.
+
+<CodeSnippet file="examples/docs/actors-permissions/caching-tokens.ts" />
+
+## When You Need Less of This
+
+If you scope each user's [JWT](/actors/docs/jwt) to a single actor, that actor has exactly one participant and needs little authorization of its own. These hooks earn their keep once an actor is shared, as in a chat room or a per-tenant database.

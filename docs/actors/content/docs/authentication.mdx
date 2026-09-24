@@ -1,162 +1,20 @@
 ---
 title: "Authentication"
-description: "Authenticate Rivet Actor connections, validate credentials before clients connect, and carry trusted identity into actor actions."
+description: "How clients authenticate to Rivet: secrets for your backend, short-lived JWTs for public clients, and ACL tokens for long-lived scoped access."
 skill: true
 ---
 
-## Do You Need Authentication?
+Every request to Rivet carries a credential, and the control plane checks what that credential may reach before routing it to an actor. This page covers the kinds available. To authorize a caller after it is connected, see [Permissions](/actors/docs/permissions).
 
-<Tabs>
-<Tab title="Rivet Cloud">
-	Actors are private by default on Rivet Cloud. Only requests with the publishable token can interact with actors.
+## Choosing a Credential
 
-	- **Backend-only actors**: If your publishable token is only included in your backend, then authentication is not necessary.
-	- **Frontend-accessible actors**: If your publishable token is included in your frontend, then implementing authentication is recommended.
-</Tab>
-<Tab title="Self-Hosted">
-	Engine authentication is required by default on self-hosted Rivet. Configure an admin token on the server and issue scoped tokens for clients.
+| | Lifetime | Scope | Revoke | Available in |
+| --- | --- | --- | --- | --- |
+| [Admin token](/docs/deploy/self-host/control-plane/configuration#admin-token) | Static | Everything, every namespace | Rotate the secret and restart | Self-hosted |
+| [Secret key](/docs/deploy/cloud#tokens) | Static | One namespace | Delete the key | Rivet Cloud |
+| [JWT](/actors/docs/jwt) | 1 hour by default, 24 hour maximum | One namespace, one grant set | Wait for expiry | Self-hosted, Rivet Cloud |
+| [ACL token](/docs/deploy/self-host/control-plane/rbac) | Long-lived | Roles built from reusable policies | Delete the token | Enterprise |
 
-	The explicit `auth.insecure_allow_unauthenticated` Engine setting restores legacy unauthenticated access behavior for trusted networks. Do not enable it on a publicly reachable Engine.
-</Tab>
-</Tabs>
+Your backend can hold a secret, so it uses one directly. A browser or mobile app cannot, because anyone can read it out of the bundle, so mint a short-lived [JWT](/actors/docs/jwt) per user on your backend and hand that out instead. Reach for [ACL](/docs/deploy/self-host/control-plane/rbac) when a credential has to outlive a session and stay revocable.
 
-## Issue Engine Access Tokens
-
-Use a server-side RivetKit client configured with an Engine endpoint and an issuing credential. Engine checks that credential and rejects grants it cannot delegate. These tokens control access to Engine resources; actor connection hooks below can enforce your application's own user authentication as well.
-
-For one actor, use its handle. The default is only `actor_gateway: ["read"]`, scoped to that actor ID:
-
-```ts
-const user = client.user.getOrCreate(["user", session.user.id]);
-const { token, issuedAt, expiresAt } = await user.issueToken({
-  subject: session.user.id,
-  expiresIn: 30,
-});
-```
-
-Supply `permissions` to replace the default. The actor helper accepts `actor_gateway`, `actor`, and `actor_kv` permissions and scopes every grant to the resolved actor ID:
-
-```ts
-await user.issueToken({
-  subject: session.user.id,
-  expiresIn: 60,
-  permissions: {
-    actor_gateway: ["read"],
-    actor: ["read", "update", "delete"],
-    actor_kv: ["read"],
-  },
-});
-```
-
-For namespace-wide operations such as actor creation, call `client.auth.issueToken` with an explicit grant list. It never adds permissions automatically:
-
-```ts
-await client.auth.issueToken({
-  subject: session.user.id,
-  grants: [{ resource: "actor", target: "any", operations: ["create"] }],
-});
-```
-
-`expiresIn` is in seconds; omit it to use Engine's default lifetime. `issuedAt` and `expiresAt` are Unix timestamps in **milliseconds**. Keep the issuing credential on your server and return only the scoped token to the browser.
-
-## Authentication Connections
-
-Authentication is configured through either:
-
-- `onBeforeConnect` for simple pass/fail validation
-- `createConnState` when you need to access user data in your actions via `c.conn.state`
-
-## Access Control
-
-After a connection is authenticated, use [Access Control](/actors/docs/access-control) to enforce authorization:
-
-- Check permissions in action handlers.
-- Use `queues.<name>.canPublish` to gate inbound queue publishes.
-- Use `events.<name>.canSubscribe` to gate event subscriptions.
-
-### `onBeforeConnect`
-
-The `onBeforeConnect` hook validates credentials before allowing a connection. Throw an error to reject the connection.
-
-<CodeSnippet file="examples/docs/actors-permissions/on-before-connect.ts" />
-
-### `createConnState`
-
-Use `createConnState` to extract user data from credentials and store it in connection state. This data is accessible in actions via `c.conn.state`. Like `onBeforeConnect`, throwing an error will reject the connection. See [connections](/actors/docs/connections) for more details.
-
-<CodeSnippet file="examples/docs/actors-permissions/create-conn-state.ts" />
-
-## Available Auth Data
-
-Authentication hooks have access to several properties:
-
-| Property | Description |
-|----------|-------------|
-| `params` | Custom data passed by the client when connecting (see [connection params](/actors/docs/connections#extracting-data-from-connection-params)) |
-| `c.request` | The underlying HTTP request object |
-| `c.request.headers` | Request headers for tokens, API keys (does not work for `.connect()`) |
-| `c.state` | Actor state for authorization decisions (see [state](/actors/docs/state)) |
-| `c.key` | The actor's key (see [keys](/actors/docs/keys)) |
-
-It's recommended to use `params` instead of `c.request.headers` whenever possible since it works for both HTTP & WebSocket connections.
-
-## Client Usage
-
-### Passing Credentials
-
-Pass authentication data when connecting. Use `getParams` when you need a fresh JWT for every connection or reconnect:
-
-<CodeGroup>
-<CodeSnippet file="examples/docs/actors-permissions/passing-credentials-connection.ts" title="Connection" />
-<CodeSnippet file="examples/docs/actors-permissions/passing-credentials-stateless.ts" title="Stateless-Action" />
-<CodeSnippet file="examples/docs/actors-permissions/passing-credentials-headers.ts" title="HTTP-Headers" />
-</CodeGroup>
-
-### Handling Errors
-
-Authentication errors use the same system as regular errors. See [errors](/actors/docs/errors) for more details.
-
-<CodeGroup>
-<CodeSnippet file="examples/docs/actors-permissions/handling-errors-connection.ts" title="Connection" />
-<CodeSnippet file="examples/docs/actors-permissions/handling-errors-stateless.ts" title="Stateless-Action" />
-</CodeGroup>
-
-## Examples
-
-### JWT
-
-Validate JSON Web Tokens and extract user claims:
-
-<CodeSnippet file="examples/docs/actors-permissions/jwt.ts" />
-
-### External Auth Provider
-
-Validate credentials against an external authentication service:
-
-<CodeSnippet file="examples/docs/actors-permissions/external-auth-provider.ts" />
-
-### Using `c.state` In Authorization
-
-Access actor state via `c.state` and the actor's key via `c.key` to make authorization decisions:
-
-<CodeSnippet file="examples/docs/actors-permissions/using-state.ts" />
-
-### Role-Based Access Control
-
-Create helper functions for common authorization patterns:
-
-<CodeSnippet file="examples/docs/actors-permissions/role-based-access-control.ts" />
-
-### Rate Limiting
-
-Use `c.vars` to track connection attempts and rate limit by user:
-
-<CodeSnippet file="examples/docs/actors-permissions/rate-limiting.ts" />
-
-The limits in this example are [ephemeral](/actors/docs/state#ephemeral-variables). If you wish to persist rate limits, you can optionally replace `vars` with `state`.
-
-### Caching Tokens
-
-Cache validated tokens in `c.vars` to avoid redundant validation on repeated connections. See [ephemeral variables](/actors/docs/state#ephemeral-variables) for more details.
-
-<CodeSnippet file="examples/docs/actors-permissions/caching-tokens.ts" />
+On Rivet Cloud the secret, publishable, and connection keys are created from the dashboard or the CLI. See [Tokens](/docs/deploy/cloud#tokens).

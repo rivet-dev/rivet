@@ -156,7 +156,7 @@ sequenceDiagram
 
 The example ships with no authentication or authorization. Harden it with this baseline before production. None of these are implemented in the example.
 
-- **Authenticate before connect**: Anyone who knows or guesses a workspace ID can connect, and because `useActor` implicitly getOrCreates, connecting with a nonexistent workspace ID silently creates a blank `documentList` coordinator. Add connection auth so unauthenticated clients never reach an actor. See [Authentication](/actors/docs/authentication).
+- **Authenticate before connect**: Anyone who knows or guesses a workspace ID can connect, and because `useActor` implicitly getOrCreates, connecting with a nonexistent workspace ID silently creates a blank `documentList` coordinator. Add connection auth so unauthenticated clients never reach an actor. See [Permissions](/actors/docs/permissions).
 - **Per-document access control**: Validate that the authenticated user is allowed to access the specific `[workspaceId, documentId]` key, not just any document.
 - **Cap and rate limit `applyUpdate`**: Update payloads are unvalidated `number[]` arrays with no size limit, and the example client sends one action per keystroke and per cursor move with zero throttling. Enforce payload size caps and per-connection rate limits on the server, and debounce on the client.
 - **Do not trust client-asserted awareness clientIds**: The `clientId` argument to `applyUpdate` is client-supplied and trusted as-is. Derive or verify presence identity from connection-scoped server state instead.

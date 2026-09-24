@@ -53,7 +53,8 @@ actor, not before shipping it.
 
 ### Authentication
 
-- **Validate connections in `createConnState` or `onBeforeConnect`.** Do not trust client input without validation. See [Authentication](/actors/docs/authentication).
+- **Validate connections in `createConnState` or `onBeforeConnect`.** Do not trust client input without validation. See [Permissions](/actors/docs/permissions).
+- **Never ship a secret to a public client.** Mint a short-lived, scoped [JWT](/actors/docs/jwt) per user on your backend instead of embedding a token that reaches your whole namespace. See [Authentication](/actors/docs/authentication).
 
 ### CORS
 
@@ -66,11 +67,11 @@ actor, not before shipping it.
 - **Do not leak your secret token.** Never expose `sk_*` tokens in client-side code, public repositories, or browser environments. See [Endpoints](/docs/endpoints).
 - **Verify you're connecting to the correct region.** Use the nearest datacenter endpoint (e.g. `api-us-west-1.rivet.dev`) for lowest latency.
 
-### Access Control
+### Permissions
 
-Access control is only needed if you want granular permissions for different clients. For most use cases, basic authentication in `onBeforeConnect` or `createConnState` is sufficient.
+Granular permissions are only needed if different clients should be able to do different things. For most use cases, basic validation in `onBeforeConnect` or `createConnState` is sufficient.
 
-- **Use deny-by-default rules.** Reject unknown roles in `onBeforeConnect`, action handlers, `canPublish`, and `canSubscribe`. See [Access Control](/actors/docs/access-control).
+- **Use deny-by-default rules.** Reject unknown roles in `onBeforeConnect`, action handlers, `canPublish`, and `canSubscribe`. See [Permissions](/actors/docs/permissions).
 - **Authorize actions explicitly.** Check the caller's role in each action handler and throw `forbidden` for unauthorized access.
 - **Gate event subscriptions and queue publishes.** Use `canSubscribe` and `canPublish` hooks to restrict which clients can subscribe to events or publish to queues.
 

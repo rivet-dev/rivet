@@ -191,7 +191,7 @@ The `onBeforeConnect` hook does NOT return connection state - it's used solely f
 
 <CodeSnippet file="examples/docs/actors-lifecycle/on-before-connect.ts" />
 
-Connections cannot interact with the actor until this method completes successfully. Throwing an error will abort the connection. This can be used for authentication - see [Authentication](/actors/docs/authentication) for details.
+Connections cannot interact with the actor until this method completes successfully. Throwing an error will abort the connection. This can be used for authentication, see [Permissions](/actors/docs/permissions) for details.
 
 ### `onConnect`
 
@@ -212,7 +212,7 @@ For actions, enforce authorization directly inside each action handler.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/can-publish-subscribe.ts" />
 
-Use deny-by-default rules for each hook and return `false` unless explicitly allowed. See [Access Control](/actors/docs/access-control) for full guidance.
+Use deny-by-default rules for each hook and return `false` unless explicitly allowed. See [Permissions](/actors/docs/permissions) for full guidance.
 
 ### `onDisconnect`
 

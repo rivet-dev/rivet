@@ -109,7 +109,7 @@ sequenceDiagram
 
 The example is intentionally minimal and skips all of the following. Add them before production:
 
-- **Auth before join**: any client can join any room by knowing its name, and `sender` is arbitrary client input on every call. Validate a token during [connection auth](/actors/docs/authentication), bind identity to [connection state](/actors/docs/connections), and check room membership before serving history. Never trust a sender name passed as an action argument.
+- **Auth before join**: any client can join any room by knowing its name, and `sender` is arbitrary client input on every call. Validate a token during [connection auth](/actors/docs/permissions), bind identity to [connection state](/actors/docs/connections), and check room membership before serving history. Never trust a sender name passed as an action argument.
 - **Message length clamps**: the example accepts empty messages and has no length limit. Trim server-side, reject empty text, and clamp to a maximum length.
 - **Per-connection rate limiting**: rate limit `sendMessage` per connection to stop spam and broadcast amplification.
 - **Server-side timestamps and ids**: the example already does this correctly. `timestamp` comes from `Date.now()` inside the action and `id` from SQLite `AUTOINCREMENT`. Keep it that way; never accept client-supplied timestamps or ids.

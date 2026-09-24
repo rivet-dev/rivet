@@ -53,8 +53,8 @@ Because each tenant has its own database, migrations roll out per actor as each 
 The example's sign-in is cosmetic: the client picks any company string and that string becomes the actor key, so any visitor can read and write any tenant's data. Do not ship this. As a required production extension (not implemented by the example):
 
 - Derive the tenant id from a verified credential, such as a JWT claim, never from user input.
-- Validate the credential against `c.key` in `onBeforeConnect` (pass/fail) or `createConnState` (store the verified user on connection state). See [Authentication](/actors/docs/authentication) and [Connections](/actors/docs/connections).
-- Add per-action permission checks on top of connection-level auth. See [Access Control](/actors/docs/access-control).
+- Validate the credential against `c.key` in `onBeforeConnect` (pass/fail) or `createConnState` (store the verified user on connection state). See [Permissions](/actors/docs/permissions) and [Connections](/actors/docs/connections).
+- Add per-action permission checks on top of connection-level auth, and scope each tenant's [JWT](/actors/docs/jwt) to its own actor so the boundary is enforced before a request reaches your code.
 
 ## Actors
 
@@ -116,7 +116,7 @@ The example ships with none of these. Apply all of them before production.
 
 - **Tenant identity**: Derive the tenant id from a verified JWT claim, never from a client-supplied string.
 - **Connection validation**: In `onBeforeConnect` or `createConnState`, verify the credential's tenant claim matches `c.key` and reject mismatches.
-- **Per-action authorization**: Check the caller's role before mutating actions (`addEmployee`, `addProject`), not just at connect time. See [Access Control](/actors/docs/access-control).
+- **Per-action authorization**: Check the caller's role before mutating actions (`addEmployee`, `addProject`), not just at connect time. See [Permissions](/actors/docs/permissions).
 - **Input validation**: Clamp name and role lengths and validate enums. The example only trims input and substitutes fallback defaults.
 - **Key construction**: Always pass the tenant id as an array element (`key: [tenantId]`). Never interpolate tenant ids into key strings, and never build keys from one tenant's input to address another tenant's actor.
 - **Growth limits**: As a recommended extension, cap or paginate the `employees` and `projects` arrays. The example lets them grow unboundedly in JSON state; move to [SQLite](/actors/docs/sqlite) when the dataset outgrows memory.

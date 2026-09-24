@@ -51,6 +51,25 @@
 							"icon": "faSupabase"
 						}
 					]
+				},
+				{
+					"title": "Authentication",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "Overview",
+							"href": "/actors/docs/authentication"
+						},
+						{
+							"title": "JWTs",
+							"href": "/actors/docs/jwt"
+						},
+						{
+							"title": "ACL",
+							"href": "/docs/deploy/self-host/control-plane/rbac",
+							"badge": "Enterprise"
+						}
+					]
 				}
 			]
 		},
@@ -105,14 +124,6 @@
 					"collapsible": true,
 					"pages": [
 						{
-							"title": "Authentication",
-							"href": "/actors/docs/authentication"
-						},
-						{
-							"title": "Access Control",
-							"href": "/actors/docs/access-control"
-						},
-						{
 							"title": "Connections",
 							"href": "/actors/docs/connections"
 						},
@@ -141,6 +152,10 @@
 						{
 							"title": "Lifecycle",
 							"href": "/actors/docs/lifecycle"
+						},
+						{
+							"title": "Permissions",
+							"href": "/actors/docs/permissions"
 						},
 						{
 							"title": "Input Parameters",

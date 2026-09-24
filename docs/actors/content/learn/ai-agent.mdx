@@ -126,7 +126,7 @@ sequenceDiagram
 The examples ship without auth so they stay minimal. Apply this baseline before exposing an agent backend.
 
 - **API keys stay server-side**: `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`) is read by the AI SDK inside the actor process. The key never reaches the browser; clients only talk to the actor over RivetKit. The sandbox variant forwards keys into the sandbox env, never to the client.
-- **Add authentication**: The examples have no auth, so anyone who reaches the server can create agents, list them, and message any agent whose key they can guess. Add `onBeforeConnect` or `createConnState` checks with scoped tokens as a recommended extension. See [Authentication](/actors/docs/authentication).
+- **Add authentication**: The examples have no auth, so anyone who reaches the server can create agents, list them, and message any agent whose key they can guess. Add `onBeforeConnect` or `createConnState` checks with scoped tokens as a recommended extension. See [Permissions](/actors/docs/permissions).
 - **Validate and rate-limit queue payloads**: The example only skips bodies without a string `text`. Enforce payload size limits, schema validation, and per-connection rate limits as a recommended extension.
 - **Derive sender identity server-side**: The example trusts the client-supplied `sender` field verbatim. Bind sender identity to the authenticated connection instead.
 - **Cap or trim message history**: The example sends the full transcript on every model call with no cap. Trim or summarize old messages as a recommended extension so prompts and state stay bounded.
