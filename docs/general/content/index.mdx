@@ -1,0 +1,67 @@
+---
+title: "Rivet"
+description: "A fast, high-density, scalable orchestrator for every workload an agent needs."
+seoTitle: "Rivet Documentation: Actors, Workflows, Deploy"
+seoDescription: "Run agents, workflows, sandboxes, and generated apps as durable Actors on one control plane. Start with the Actors quickstart or pick an Actor type."
+---
+
+Rivet runs agents, workflows, sandboxes, and generated apps as **Actors**: long-lived processes with durable state, scheduled by one control plane and hosted in worker processes you already run. Every Actor type on this site is built on the same primitive.
+
+<CardGroup>
+  <Card title="Actors" href="/actors/docs">
+    The primitive: durable state, queues, events, and scheduling.
+  </Card>
+  {/* TEMPORARY: Agents is built but unlaunched (see HIDDEN.md). Restore when it ships:
+  <Card title="Agents" href="/agents/docs">
+    A durable process per agent, with memory that survives restarts.
+  </Card>
+  */}
+  <Card title="Workflows" href="/workflows/docs">
+    Multi-step operations that replay instead of starting over.
+  </Card>
+  <Card title="Sandboxes" href="/agentos/docs">
+    A filesystem, shell, and network for code you did not write.
+  </Card>
+  <Card title="Dynamic Apps" href="/dynamic-apps/docs">
+    A backend per user, deployed the moment it is generated.
+  </Card>
+  <Card title="Deploy" href="/docs/deploy">
+    Run the control plane and workers on your own infrastructure, or on Rivet Cloud.
+  </Card>
+</CardGroup>
+
+## Why Actors
+
+**Run thousands of workloads per server.** An Actor lives inside a worker process you already run, not in its own container or VM. A running Actor adds about 72 KB of memory (RSS increase per Actor, measured on FoundationDB with the Rust rivetkit SDK); a server that held hundreds of pods holds hundreds of thousands of Actors.
+
+**Start in milliseconds, not minutes.** A cold start includes scheduling the Actor, loading its state, and serving the first request: 12.3 ms p50 (27.7 ms p99) for an HTTP round trip waking a hibernated Actor, measured on FoundationDB with the Rust rivetkit SDK using an [experimental Rivet feature](https://github.com/rivet-dev/rivet/pull/5772) that will be enabled by default in an upcoming update, against roughly 6 s for a Kubernetes pod. No image pull, no container boot.
+
+**Built for scale.** Actors are scheduled independently, so adding capacity means adding machines. The same control plane runs a thousand Actors or a billion.
+
+**Hibernates when idle, wakes on demand.** An idle Actor writes its state and unloads. The next request brings it back in milliseconds with nothing lost, and a hibernating Actor holds no memory.
+
+**Durable state for every workload.** Every Actor gets a SQLite database and a POSIX filesystem, tiered to S3. Idle Actors cost nothing, so millions can sit parked with their state intact.
+
+## What the control plane provides
+
+- **Fault tolerance by design.** A worker going down reschedules its Actors elsewhere with their state intact. No replay harness or checkpointing of your own.
+- **Multi-region.** Place Actors near the users and data they serve, and route requests to wherever each one currently lives. See [edge placement](/docs/regions).
+- **HTTP and WebSocket networking.** Address an Actor directly over HTTP or hold a live WebSocket to it. No queue or broker in between.
+- **End-to-end type safety.** Actor definitions generate their own client types, so a signature change breaks the build rather than production.
+- **React SDK.** First-party hooks that subscribe a component to an Actor's state and keep it live as the Actor updates.
+- **OpenTelemetry.** Traces, metrics, and structured logs emitted in OTel format, into the collector you already run.
+- **Cron and scheduling.** Wake an Actor on a schedule or at a timestamp it sets for itself, without a separate scheduler.
+- **Actor-to-Actor calls.** Actors address each other by key and call across the cluster as if the other one were local.
+- **Single Rust binary.** The control plane ships as one static binary. One control plane behind a load balancer, speaking plain HTTP inside your VPC: no CRDs, no operator, no service mesh.
+- **Open source.** Apache 2.0 and self-hostable in full. [Rivet Cloud](/docs/deploy/cloud) runs the same control plane you can run yourself.
+
+## Works with the tools you already use
+
+Typed SDKs for TypeScript, Node.js, Bun, and Rust on the backend, React hooks on the frontend, and an [Effect](/actors/docs/quickstart/effect) SDK. Start from the [quickstarts](/actors/docs/quickstart/backend), or connect your AI client with [Rivet MCP](/docs/mcp) and the [Rivet skill](/docs/skill).
+
+## Where to go next
+
+- [Guides](/guides): worked examples such as an AI agent, a chat room, a multiplayer game, and a per-tenant database.
+- [Integrations](/integrations/): frameworks and libraries that run on Rivet Actors.
+- [Deploy](/docs/deploy): run the control plane on Kubernetes, Docker, or a VM, or deploy workers to a serverless platform.
+- [Registry](/registry): every Actor type, first-party and community.

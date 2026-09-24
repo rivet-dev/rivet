@@ -8,7 +8,7 @@ Wire-level and integration rules for the RivetKit actor inspector (WebSocket + H
 - When updating the WebSocket inspector, also update the HTTP endpoints.
 - When adding or modifying inspector endpoints, also update:
   - Relevant tests in `rivetkit-typescript/packages/rivetkit/tests/` to cover all inspector HTTP endpoints.
-  - Docs in `website/src/metadata/skill-base-rivetkit.md` and `website/src/content/docs/actors/debugging.mdx`.
+  - Docs in `website/src/metadata/skill-base-rivetkit.md` and `docs/actors/content/docs/debugging.mdx`.
 
 ## Version negotiation
 

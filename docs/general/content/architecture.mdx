@@ -1,0 +1,123 @@
+---
+title: "Architecture"
+description: "How the Rivet control plane, runners, pools, and namespaces fit together, and the vocabulary the rest of these docs use."
+skill: true
+---
+
+Rivet separates the process that decides *where* work runs from the process that
+*runs* it. Everything else in these docs is a detail of one of those two sides,
+or of the boundary between them.
+
+```
+                    ┌──────────────────────────────────┐
+   your client ────▶│  Gateway                         │
+                    │    routes to a specific workload │
+                    ├──────────────────────────────────┤
+                    │  Control plane                   │
+                    │    schedules, versions, persists │
+                    └───────────────┬──────────────────┘
+                                    │  runner protocol
+                    ┌───────────────┴──────────────────┐
+                    │  Runner (your process, your code)│
+                    │    ┌────────┐ ┌────────┐         │
+                    │    │ actor  │ │ actor  │   ...   │
+                    │    └────────┘ └────────┘         │
+                    └──────────────────────────────────┘
+```
+
+## Control plane
+
+The control plane is a single Rust binary, `rivet-engine`. It tracks every
+workload, decides which runner each one is allocated to, routes requests to it,
+and persists its state. It is the only stateful component you operate.
+
+In local development it listens on `http://localhost:6420` with no
+authentication. RivetKit starts one for you automatically, so a first run needs
+no configuration at all. See [Environment Variables](/docs/environment-variables)
+for the variables that control that behavior, and
+[Deploy](/docs/deploy) for running one yourself.
+
+The control plane never runs your code.
+
+## Runner
+
+A runner is a process you operate that has your code loaded and the Rivet SDK
+running inside it. It is the only place your code executes.
+
+Runners connect *outbound* to the control plane, so they need no public URL and
+no inbound firewall rule. There are two ways that connection is established, and
+which one you use is the single biggest deployment decision:
+
+- **Runner mode** holds a long-lived connection open and waits for work. Use it
+  for containers, VMs, and bare metal.
+- **Serverless mode** has no persistent process. The control plane calls an HTTP
+  endpoint to wake one on demand. Use it for Vercel, Cloudflare Workers, and
+  similar platforms.
+
+See [Runtime Modes](/docs/runtime-modes) for both, and
+[Container Runner](/docs/container-runner) for running a container that is not a
+RivetKit application at all.
+
+## Workloads
+
+A workload is one schedulable unit of work with its own durable state and its
+own address. Rivet Actors are the workload type these docs are mostly about, but
+the control plane's view of one is the same either way: it has an ID, a key, a
+status, and a runner it is currently allocated to.
+
+A workload is created on demand, runs until it goes idle, hibernates with its
+state intact, and wakes on the next request. It does not move between regions.
+See [Statuses](/docs/statuses) for the lifecycle the control plane exposes.
+
+## Pool
+
+A pool is the set of runners registered under one runner name within a
+namespace. Pools are how you route work to the right hardware: a `gpu-workers`
+pool and a `default` pool can serve the same application.
+
+Each pool has a kind that matches how its runners attach. `normal` pools hold
+runners that connect themselves; the control plane never starts or stops them.
+`serverless` pools are woken by the control plane over HTTP. Scaling, drain
+behavior, and eviction rate limits are per-pool. See
+[Pool Configuration](/docs/pool-configuration).
+
+## Namespace
+
+A namespace is the tenancy boundary. Workload IDs, keys, runner names, and pools
+are all scoped to one, and so are tokens. A namespace is the unit you would use
+to separate production from staging, or one customer from another.
+
+Every connection names a namespace, defaulting to `default`. Tokens come in two
+kinds: `sk_` secret keys for server-side use, and `pk_` public keys that are safe
+to ship to a browser. See [Endpoints](/docs/endpoints) for how both are supplied.
+
+## Datacenter
+
+A datacenter is one control plane deployment with its own hostname. A
+multi-region deployment runs one per region over a shared database and pub/sub
+layer, and each region must be reachable at its own hostname so a client can
+address a specific one. Workloads are placed in a datacenter at creation and stay
+there. See [Regions & Multi-Region](/docs/regions).
+
+## Gateway
+
+The gateway is the part of the control plane that accepts client traffic and
+proxies it to whichever runner currently holds the target workload. It speaks
+plain HTTP and WebSocket:
+
+```
+{RIVET_ENDPOINT}/gateway/{actor_id}/{path}
+```
+
+Because it resolves the target on every request, a client holds no knowledge of
+where a workload is running, and a workload that is rescheduled onto a different
+runner keeps serving the same address. See
+[Debugging](/docs/debugging) for addressing workloads directly.
+
+## Versions
+
+Every runner reports a version number. The control plane prefers the highest
+version it can see when allocating new work, which is what makes a rolling
+deploy work without coordination: old and new runners coexist, new workloads go
+to the new version, and existing ones drain across on their own schedule. See
+[Versions & Upgrades](/docs/versions).

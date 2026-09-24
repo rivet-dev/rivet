@@ -243,7 +243,7 @@ impl Pegboard {
 	}
 
 	/// When changing this default, update
-	/// website/src/content/docs/actors/versions.mdx (SIGTERM Handling section).
+	/// docs/general/content/versions.mdx (SIGTERM Handling section).
 	pub fn actor_stop_threshold(&self) -> i64 {
 		self.actor_stop_threshold.unwrap_or(30 * 60 * 1000)
 	}

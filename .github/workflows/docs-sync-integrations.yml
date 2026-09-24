@@ -1,0 +1,25 @@
+name: Sync docs (integrations)
+
+# The site-wide Integrations section at rivet.dev/integrations.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/integrations/**"
+      - "examples/docs/**"
+      - "examples/workflow-sdk/**"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rivet-dev/rivet-website/.github/actions/sync-docs@main
+        with:
+          product: integrations
+          source: docs/integrations
+          token: ${{ secrets.RIVET_WEBSITE_TOKEN }}
+          extra-paths: >-
+            examples/docs
+            examples/workflow-sdk

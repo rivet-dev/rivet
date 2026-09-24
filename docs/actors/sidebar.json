@@ -1,0 +1,349 @@
+{
+	"docs": [
+		{
+			"title": "General",
+			"pages": [
+				{
+					"title": "Introduction",
+					"href": "/actors/docs",
+					"icon": "faSquareInfo"
+				},
+				{
+					"title": "Quickstart",
+					"icon": "faFastForward",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "Node.js & Bun",
+							"href": "/actors/docs/quickstart/backend",
+							"icon": "faNodeJs"
+						},
+						{
+							"title": "React",
+							"href": "/actors/docs/quickstart/react",
+							"icon": "faReact"
+						},
+						{
+							"title": "Next.js",
+							"href": "/actors/docs/quickstart/next-js",
+							"icon": "faNextjs"
+						},
+						{
+							"title": "Rust",
+							"href": "/actors/docs/quickstart/rust",
+							"icon": "faRust",
+							"badge": "Beta"
+						},
+						{
+							"title": "Effect.ts",
+							"href": "/actors/docs/quickstart/effect",
+							"icon": "faLayerGroup",
+							"badge": "Beta"
+						},
+						{
+							"title": "Cloudflare Workers",
+							"href": "/actors/docs/quickstart/cloudflare",
+							"icon": "faCloudflare"
+						},
+						{
+							"title": "Supabase Functions",
+							"href": "/actors/docs/quickstart/supabase",
+							"icon": "faSupabase"
+						}
+					]
+				}
+			]
+		},
+		{
+			"title": "Features",
+			"pages": [
+				{
+					"title": "In-Memory State",
+					"href": "/actors/docs/state",
+					"icon": "faFloppyDisk"
+				},
+				{
+					"title": "Actions",
+					"href": "/actors/docs/actions",
+					"icon": "faBolt"
+				},
+				{
+					"title": "Realtime",
+					"href": "/actors/docs/events",
+					"icon": "faTowerBroadcast"
+				},
+				{
+					"title": "Queues",
+					"href": "/actors/docs/queues",
+					"icon": "faMailbox"
+				},
+				{
+					"title": "Schedule & Cron",
+					"href": "/actors/docs/schedule",
+					"icon": "faClock"
+				},
+				{
+					"title": "SQLite",
+					"href": "/actors/docs/sqlite",
+					"icon": "faSqlite"
+				}
+			]
+		},
+		{
+			"title": "Concepts",
+			"pages": [
+				{
+					"title": "Crash Course",
+					"href": "/actors/docs/crash-course"
+				},
+				{
+					"title": "Design Patterns",
+					"href": "/actors/docs/design-patterns"
+				},
+				{
+					"title": "Communication & Networking",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "Authentication",
+							"href": "/actors/docs/authentication"
+						},
+						{
+							"title": "Access Control",
+							"href": "/actors/docs/access-control"
+						},
+						{
+							"title": "Connections",
+							"href": "/actors/docs/connections"
+						},
+						{
+							"title": "Actor-Actor Communication",
+							"href": "/actors/docs/communicating-between-actors"
+						},
+						{
+							"title": "Low-Level WebSocket Handler",
+							"href": "/actors/docs/websocket-handler"
+						},
+						{
+							"title": "Low-Level HTTP Handler",
+							"href": "/actors/docs/request-handler"
+						},
+						{
+							"title": "Vanilla HTTP API",
+							"href": "/actors/docs/http-api"
+						}
+					]
+				},
+				{
+					"title": "Lifecycle & Config",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "Lifecycle",
+							"href": "/actors/docs/lifecycle"
+						},
+						{
+							"title": "Input Parameters",
+							"href": "/actors/docs/input"
+						},
+						{
+							"title": "Keys",
+							"href": "/actors/docs/keys"
+						},
+						{
+							"title": "Metadata",
+							"href": "/actors/docs/metadata"
+						},
+						{
+							"title": "Destroying",
+							"href": "/actors/docs/destroy"
+						}
+					]
+				},
+				{
+					"title": "More",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "SQLite + Drizzle",
+							"href": "/actors/docs/sqlite-drizzle"
+						},
+						{
+							"title": "SQLite Profiling",
+							"href": "/actors/docs/sqlite-profiling"
+						},
+						{
+							"title": "Low-Level KV Storage",
+							"href": "/actors/docs/kv"
+						},
+						{
+							"title": "Logging",
+							"href": "/actors/docs/logging"
+						},
+						{
+							"title": "Errors",
+							"href": "/actors/docs/errors"
+						},
+						{
+							"title": "Testing",
+							"href": "/actors/docs/testing"
+						},
+						{
+							"title": "Debugging Actors",
+							"href": "/actors/docs/debugging"
+						},
+						{
+							"title": "Types",
+							"href": "/actors/docs/types"
+						},
+						{
+							"title": "CORS",
+							"href": "/actors/docs/cors"
+						},
+						{
+							"title": "Icons & Names",
+							"href": "/actors/docs/appearance"
+						},
+						{
+							"title": "Custom Inspector Tabs",
+							"href": "/actors/docs/inspector-tabs"
+						},
+						{
+							"title": "Actor Runtime Socket",
+							"href": "/actors/docs/actor-runtime-socket",
+							"badge": "Beta"
+						},
+						{
+							"title": "Limits",
+							"href": "/actors/docs/limits"
+						}
+					]
+				}
+			]
+		},
+		{
+			"title": "Clients",
+			"pages": [
+				{
+					"title": "Overview",
+					"href": "/actors/docs/clients"
+				},
+				{
+					"title": "Languages & Frameworks",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "JavaScript",
+							"href": "/actors/docs/clients/javascript",
+							"icon": "faNodeJs"
+						},
+						{
+							"title": "React",
+							"href": "/actors/docs/clients/react",
+							"icon": "faReact"
+						},
+						{
+							"title": "Rust",
+							"href": "/actors/docs/clients/rust",
+							"icon": "faRust"
+						},
+						{
+							"title": "Swift",
+							"href": "/actors/docs/clients/swift",
+							"icon": "faSwift"
+						},
+						{
+							"title": "SwiftUI",
+							"href": "/actors/docs/clients/swiftui",
+							"icon": "faSwift"
+						}
+					]
+				}
+			]
+		},
+		{
+			"title": "Reference",
+			"pages": [
+				{
+					"title": "Troubleshooting",
+					"href": "/actors/docs/troubleshooting"
+				},
+				{
+					"title": "Production Checklist",
+					"href": "/actors/docs/production-checklist"
+				},
+				{
+					"title": "Configuration",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "Registry Configuration",
+							"href": "/actors/docs/registry-configuration"
+						},
+						{
+							"title": "Actor Configuration",
+							"href": "/actors/docs/actor-configuration"
+						},
+						{
+							"title": "HTTP Server",
+							"href": "/actors/docs/http-server"
+						},
+						{
+							"title": "Environment Variables",
+							"href": "/actors/docs/environment-variables"
+						},
+						{
+							"title": "WASM vs Native SDK",
+							"href": "/actors/docs/wasm-vs-native-sdk"
+						}
+					]
+				}
+			]
+		}
+	],
+	"learn": [
+		{
+			"title": "General",
+			"pages": [
+				{
+					"title": "Overview",
+					"href": "/actors/learn",
+					"icon": "faSquareInfo"
+				}
+			]
+		},
+		{
+			"title": "Guides",
+			"pages": [
+				{
+					"title": "AI Agent",
+					"href": "/actors/learn/ai-agent"
+				},
+				{
+					"title": "Chat Room",
+					"href": "/actors/learn/chat-room"
+				},
+				{
+					"title": "Collaborative Text Editor",
+					"href": "/actors/learn/collaborative-text-editor"
+				},
+				{
+					"title": "Cron Jobs and Scheduled Tasks",
+					"href": "/actors/learn/cron-jobs"
+				},
+				{
+					"title": "Database per Tenant",
+					"href": "/actors/learn/per-tenant-database"
+				},
+				{
+					"title": "Live Cursors and Presence",
+					"href": "/actors/learn/live-cursors"
+				},
+				{
+					"title": "Multiplayer Game",
+					"href": "/actors/learn/multiplayer-game"
+				}
+			]
+		}
+	]
+}

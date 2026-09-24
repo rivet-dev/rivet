@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rivet": {
+      "command": "npx",
+      "args": ["-y", "@rivet-dev/mcp", "--target", "local"]
+    }
+  }
+}
