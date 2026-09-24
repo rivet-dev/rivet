@@ -22,6 +22,40 @@
   </p>
 </div>
 
+## Getting Started
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### Use with Your Coding Agent
+
+Give your coding agent the Rivet skills to create examples or integrate into existing projects:
+
+```bash
+npx skills add rivet-dev/skills
+```
+
+Works with Claude Code, Cursor, Windsurf, and other AI coding tools.
+
+</td>
+<td width="50%" valign="top">
+
+### Start From Scratch
+
+- [Node.js & Bun](https://www.rivet.dev/actors/docs/quickstart/backend)
+- [React](https://www.rivet.dev/actors/docs/quickstart/react)
+- [Next.js](https://www.rivet.dev/actors/docs/quickstart/next-js)
+- [Rust](https://www.rivet.dev/actors/docs/quickstart/rust)
+- [Effect](https://www.rivet.dev/actors/docs/quickstart/effect)
+- [Cloudflare Workers](https://www.rivet.dev/actors/docs/quickstart/cloudflare)
+
+[View documentation →](https://www.rivet.dev/docs)
+
+</td>
+</tr>
+</table>
+
 ## What is Rivet?
 
 Rivet is an orchestrator for agentic workloads. Where Kubernetes schedules pods, Rivet schedules Actors: long-lived processes with durable state, a SQLite database, a queue, realtime connections, and scheduling, each addressed by key. An Actor starts in 12 ms, weighs 72 KB, and hibernates when idle, so one control plane runs a thousand agents or a billion.
@@ -73,40 +107,6 @@ agent.on("token", delta => process.stdout.write(delta));
 // Send message to Actor
 await agent.queue.send("how many r's in strawberry?");
 ```
-
-## Getting Started
-
-<table>
-<tr>
-<td width="50%" valign="top">
-
-### Use with Your Coding Agent
-
-Give your coding agent the Rivet skills to create examples or integrate into existing projects:
-
-```bash
-npx skills add rivet-dev/skills
-```
-
-Works with Claude Code, Cursor, Windsurf, and other AI coding tools.
-
-</td>
-<td width="50%" valign="top">
-
-### Start From Scratch
-
-- [Node.js & Bun](https://www.rivet.dev/actors/docs/quickstart/backend)
-- [React](https://www.rivet.dev/actors/docs/quickstart/react)
-- [Next.js](https://www.rivet.dev/actors/docs/quickstart/next-js)
-- [Rust](https://www.rivet.dev/actors/docs/quickstart/rust)
-- [Effect](https://www.rivet.dev/actors/docs/quickstart/effect)
-- [Cloudflare Workers](https://www.rivet.dev/actors/docs/quickstart/cloudflare)
-
-[View documentation →](https://www.rivet.dev/docs)
-
-</td>
-</tr>
-</table>
 
 ## Whatever the workload, there's an Actor for it
 
