@@ -16,7 +16,10 @@ import { endOfMonth, startOfMonth } from "date-fns";
 import { Suspense, useState } from "react";
 import { PlanBadge } from "@/app/billing/billing-plan-badge";
 import { BillingPlans } from "@/app/billing/billing-plans";
-import { useBilledComputeCost } from "@/app/billing/hooks";
+import {
+	useBilledComputeCost,
+	useHasActiveManagedServices,
+} from "@/app/billing/hooks";
 import { ManageBillingButton } from "@/app/billing/manage-billing-button";
 import { formatMetricValue } from "@/app/billing/usage-card";
 import {
@@ -37,11 +40,7 @@ import {
 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { TwinklingSparkles } from "@/components/twinkling-sparkles";
-import {
-	COMPUTE_MONTHLY_CAP_USD,
-	computeOutsideTotalUsd,
-	findPlan,
-} from "@/content/billing";
+import { COMPUTE_MONTHLY_CAP_USD, findPlan } from "@/content/billing";
 import { features } from "@/lib/features";
 import { ResourcePicker } from "./resource-picker";
 import { SettingsCard } from "./settings-card";
@@ -94,6 +93,7 @@ function BillingDrawerBody() {
 		dataProvider.currentProjectBillingUsageQueryOptions(),
 	);
 	const compute = useBilledComputeCost();
+	const hasManagedServices = useHasActiveManagedServices();
 	const [plansOpen, setPlansOpen] = useState(false);
 
 	if (isLoading || !usage) {
@@ -105,14 +105,16 @@ function BillingDrawerBody() {
 	const totalOverageCents = usage.totalCents;
 
 	// Billing is always project-scoped, even when this drawer is opened from a
-	// namespace URL, so compute usage shows the same regardless of context.
-	// Hide the compute row entirely when the project isn't using compute (no
-	// compute pools 404s, or an empty usage result), rather than rendering a
-	// row of zeros / skeletons.
-	const showCompute = features.compute && !compute.isUnavailable;
+	// namespace URL, so compute usage shows the same regardless of context. The
+	// compute row is shown when the project has recorded compute usage or runs
+	// managed services, which are billed as compute.
+	const showCompute =
+		features.compute && (!compute.isUnavailable || hasManagedServices);
 	const computeDollars = compute.isError ? 0 : compute.monthToDate;
-	const computeCapUsd = COMPUTE_MONTHLY_CAP_USD[plan] ?? null;
-	const billedCompute = computeOutsideTotalUsd(plan, computeDollars);
+	const computeAllowanceUsd = COMPUTE_MONTHLY_CAP_USD[plan] ?? null;
+	// The free plan's compute allowance is never billed, and paid compute is
+	// already part of the usage endpoint's total.
+	const billedCompute = computeAllowanceUsd != null ? 0 : computeDollars;
 
 	const periodStart = usage.currentPeriodStart
 		? new Date(usage.currentPeriodStart)
@@ -129,10 +131,7 @@ function BillingDrawerBody() {
 					onUpgrade={() => setPlansOpen(true)}
 				/>
 				<CurrentBillCard
-					total={
-						Number(totalOverageCents) / 100 +
-						(showCompute ? billedCompute : 0)
-					}
+					total={Number(totalOverageCents) / 100}
 					periodStart={periodStart}
 					periodEnd={periodEnd}
 				/>
@@ -196,7 +195,7 @@ function BillingDrawerBody() {
 					{showCompute ? (
 						<ComputeUsageRow
 							cost={computeDollars}
-							capUsd={computeCapUsd}
+							allowanceUsd={computeAllowanceUsd}
 							loading={compute.isLoading}
 							last
 						/>
@@ -378,21 +377,21 @@ function UsageRow({
 }
 
 // Compute is a dollar amount rather than a metered unit, so it has its own row.
-// Capped plans show progress toward the cap; uncapped plans show "No limit" with
-// no bar. The billed amount (right column + total) is clamped to the cap.
+// The free plan shows progress toward its allowance, which is never billed. Paid
+// plans are usage-based, with no bar, and are billed for every second.
 function ComputeUsageRow({
 	cost,
-	capUsd,
+	allowanceUsd,
 	loading,
 	last,
 }: {
 	cost: number;
-	capUsd: number | null;
+	allowanceUsd: number | null;
 	loading?: boolean;
 	last: boolean;
 }) {
-	const pct = capUsd ? Math.min(100, (cost / capUsd) * 100) : 0;
-	const billed = capUsd != null ? Math.min(cost, capUsd) : cost;
+	const pct = allowanceUsd ? Math.min(100, (cost / allowanceUsd) * 100) : 0;
+	const billed = allowanceUsd != null ? 0 : cost;
 
 	return (
 		<div
@@ -423,11 +422,11 @@ function ComputeUsageRow({
 			</div>
 			<div className="min-w-0">
 				<div className="text-xs text-muted-foreground">
-					{capUsd != null
-						? `of ${formatCurrency(capUsd)}`
-						: "No limit"}
+					{allowanceUsd != null
+						? `of ${formatCurrency(allowanceUsd)}`
+						: "Usage-based"}
 				</div>
-				{capUsd != null ? (
+				{allowanceUsd != null ? (
 					<div className="relative h-1 rounded-full bg-foreground/10 mt-1">
 						<div
 							className="absolute h-1 rounded-full bg-primary"
