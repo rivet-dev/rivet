@@ -11,6 +11,7 @@ Each runner has a **version number**. When you deploy new code with a new versio
 - **New actors go to the newest version**: When allocating actors, Rivet always prefers runners with the highest version number
 - **Multiple versions can coexist**: Old actors continue running on old versions while new actors are created on the new version
 - **Drain old actors**: When enabled, a runner connecting with a newer version number will gracefully stop old actors to be rescheduled to the new version
+- **Versions only go up**: Deploying a lower version number never moves allocation back to it. To undo a bad deploy, redeploy the previous code with a new, higher version number.
 
 <Note>
 Versions are not configured by default. See [Registry Configuration](/actors/docs/general/registry-configuration) to learn how to configure the runner version.
@@ -105,6 +106,10 @@ RIVET_ENVOY_VERSION=2
 
 <Warning>
 The version **must** be set at build time, not at runtime. Do not use `Date.now()` or similar runtime values in your registry setup code. This would assign a different version every time the server starts, causing actors to be drained and rescheduled on every restart instead of only on new deployments.
+</Warning>
+
+<Warning>
+The version **must** increase on every deployment. Never roll a deployment back to an older version number. New actors keep going to the runners still on the higher version, so as the rollback replaces them the set of runners accepting actors shrinks until it reaches zero and nothing can be scheduled. Allocation only recovers once every higher-version runner has disconnected and expired. To undo a bad deploy, redeploy the previous code with a new, higher version number.
 </Warning>
 
 ### Example Configurations
