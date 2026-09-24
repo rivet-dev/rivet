@@ -1,0 +1,22 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #f5f5f2; color: #202522; font-family: system-ui, sans-serif; }
+main { max-width: 440px; margin: 10vh auto; padding: 32px; background: white; border: 1px solid #e0e4de; border-radius: 16px; }
+h1 { margin: 10px 0; font-size: 28px; letter-spacing: -0.7px; }
+.eyebrow { color: #42694a; font-size: 13px; font-weight: 600; }
+.intro, .hint { color: #616b64; line-height: 1.6; }
+.intro { margin-bottom: 28px; }
+.hint { margin: 20px 0 0; font-size: 13px; }
+.hint code { overflow-wrap: anywhere; }
+label { display: block; margin: 18px 0 7px; font-size: 14px; font-weight: 600; }
+input, button { width: 100%; border-radius: 8px; font: inherit; padding: 12px; }
+input { border: 1px solid #b8c1ba; }
+button { margin-top: 20px; border: 1px solid #24533a; background: #24533a; color: white; font-weight: 600; cursor: pointer; }
+button:hover { background: #193e2a; }
+button:disabled { opacity: 0.6; cursor: wait; }
+:focus-visible { outline: 3px solid #8bb39a; outline-offset: 3px; }
+.secondary { margin-top: 10px; background: white; color: #24533a; }
+.secondary:hover { background: #edf4ef; }
+.status { color: #24533a; font-size: 14px; }
+.count { margin: 16px 0; font-size: 64px; font-weight: 600; font-variant-numeric: tabular-nums; }
+[role="alert"] { color: #a62b25; font-size: 14px; line-height: 1.5; }
+@media (max-width: 480px) { main { margin: 24px 16px; padding: 24px; } }

@@ -1,5 +1,5 @@
 {
-	"name": "jwt-counter-example",
+	"name": "jwt-better-auth-example",
 	"version": "1.0.0",
 	"private": true,
 	"license": "MIT",
@@ -13,9 +13,11 @@
 		"build": "vite build && vite build --mode server"
 	},
 	"dependencies": {
+		"better-auth": "1.6.23",
 		"hono": "^4.12.25",
 		"react": "19.1.0",
 		"react-dom": "19.1.0",
+		"react-hook-form": "^7.62.0",
 		"rivetkit": "workspace:*",
 		"srvx": "^0.10.0"
 	},
@@ -28,5 +30,8 @@
 		"typescript": "^5.5.2",
 		"vite": "^5.0.0",
 		"vite-plugin-srvx": "^1.0.2"
+	},
+	"engines": {
+		"node": ">=22.13.0"
 	}
 }

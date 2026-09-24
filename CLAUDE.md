@@ -132,6 +132,8 @@ docker-compose up -d
 
 ## Dependency Management
 
+- Prefer `RIVET_ENDPOINT` / `endpoint` whenever possible: the URL includes the namespace and token (`https://namespace:token@host`), so avoid configuring them separately.
+
 - Integrations must default to RivetKit's standard behavior and configuration resolution. Do not duplicate Rivet endpoint, namespace, token, pool, local Engine, runtime, or readiness defaults inside an integration; pass configuration through to RivetKit and add integration-specific behavior only when the external protocol requires it.
 
 - Prefer the Tokio-shaped APIs from `antiox` (`antiox/sync/mpsc`, `antiox/task`, etc.) over ad hoc Promise queues, custom channel wrappers, or event-emitter coordination.

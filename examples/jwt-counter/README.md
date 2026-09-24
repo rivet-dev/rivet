@@ -1,39 +1,56 @@
 # Scoped JWT counter
 
-A backend authenticates a user, creates a private counter actor, and issues a short-lived JWT that grants access only to that actor's gateway. The RivetKit client renews the JWT through `getToken` and never receives the Engine admin token.
+The smallest JWT flow: a server issues a token scoped to one counter actor, and a React page uses the normal RivetKit SDK to connect and increment it. There is no signup or login. For signup and login, see [jwt-better-auth](../jwt-better-auth).
 
-## Prerequisites
+## Getting started
 
-Configure an Engine with `auth.admin_token` and JWT issuance enabled. Set these variables for the backend:
+Use an Engine with JWT issuance enabled. Set its endpoint URL, which includes the namespace and token:
 
-| Variable | Purpose |
-| --- | --- |
-| `RIVET_ENDPOINT` | Engine API URL, such as `http://127.0.0.1:6420` |
-| `RIVET_NAMESPACE` | Namespace containing the counter actor |
-| `RIVET_ADMIN_TOKEN` | Engine admin token; **backend only** |
-| `DEMO_USER`, `DEMO_PASSWORD` | Local example login |
+```sh
+export RIVET_ENDPOINT="http://default:YOUR_TOKEN@127.0.0.1:6420"
+pnpm --filter jwt-counter-example dev
+```
 
-## Getting Started
+Open Vite's URL, normally `http://localhost:5173`, and click **Connect to counter**, then **Increment**.
 
-Run `pnpm --filter jwt-counter-example start`. In another terminal, set the same endpoint, namespace, and demo login variables, then run `pnpm --filter jwt-counter-example client`. The client process does not need `RIVET_ADMIN_TOKEN`.
+The configured Engine endpoint stays on the server. The page receives only a token for the shared demo counter. The public `/api/token` endpoint deliberately allows anyone to access this counter; it is not a user authentication system.
 
-With the backend and Engine running, use `pnpm --filter jwt-counter-example smoke` to check issuance, scoped access, renewal after a rejected token, and no replay of the rejected action.
+The browser connects directly to the Engine endpoint. Use a reachable hostname or IP to access it from another device, and start Vite with `dev --host 0.0.0.0`. URL-encode special characters in the Engine credentials. Use HTTPS outside local development.
 
-## Features
+If another local Services process owns port 8642, set `RIVET_RUN_SERVICES=0`. This example does not use Services.
 
-- The backend keeps the admin token private and issues a 30-second actor-specific JWT.
-- RivetKit's `getToken` callback renews the client credential.
-- An invalid JWT fails closed, and the next action requests a fresh token.
+## Read the flow
 
-## Implementation
+1. [`src/server.ts`](./src/server.ts) returns the demo counter’s connection details from `/api/counter` and issues scoped JWTs through `/api/token`.
+2. [`frontend/App.tsx`](./frontend/App.tsx) loads the connection details and lets RivetKit request tokens:
 
-The [backend](./src/server.ts) checks the demo login, creates the actor, and calls `/auth/tokens`. The [client](./src/client.ts) uses only the scoped JWT. The [smoke test](./tests/smoke.ts) exercises expiry recovery and rejection.
+   ```ts
+   const client = createClient<typeof registry>({
+     endpoint,
+     namespace,
+     getToken: async () => (await requestToken()).token,
+   });
+   const counter = client.counter.getForId(actorId).connect();
+   await counter.increment(1);
+   ```
 
-`DEMO_ISSUER_URL` defaults to `http://127.0.0.1:3020`. Basic authentication is only for this CLI example. Use HTTPS outside loopback and replace Basic with your application's login/session middleware in a real app. Never put the admin token, demo password, or a signing key in a client bundle.
+3. [`src/actors.ts`](./src/actors.ts) defines the counter and its actions.
 
-## Resources
+Tokens last **30 seconds**. The page uses `getToken` to fetch the first token and every subsequent token whenever RivetKit requests it. Watch **Refreshes** increase while the counter stays connected. Engine allows an additional 30 seconds of clock skew on an existing WebSocket, so renewal occurs at about **60 seconds**. There is no page reload or custom refresh timer. [jwt-better-auth](../jwt-better-auth) adds a login session to authorize token issuance.
 
-- [Rivet documentation](https://rivet.dev/docs)
+Metadata lookup uses RivetKit's defaults. The `actor_gateway` grant's `read` operation allows gateway access, including mutating actions such as `increment`.
+
+## Build and verify
+
+```sh
+pnpm --filter jwt-counter-example check-types
+pnpm --filter jwt-counter-example build
+pnpm --filter jwt-counter-example start --port 5173
+```
+
+With the server running and `RIVET_ENDPOINT` configured, run `pnpm --filter jwt-counter-example smoke`. It checks token issuance, the CLI, actor isolation, expiry, renewal, and no action replay; it takes about 70 seconds. Set `DEMO_ISSUER_URL` if the app is not at `http://localhost:5173`.
+
+[`scripts/client.ts`](./scripts/client.ts) demonstrates the same flow from Node.
 
 ## License
 
