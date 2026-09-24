@@ -2,9 +2,9 @@ import { createClient } from "rivetkit/client";
 
 // This only works for stateless actions, not WebSockets
 const client = createClient({
-  headers: {
-    Authorization: "Bearer my-token",
-  },
+	headers: {
+		Authorization: "Bearer my-token",
+	},
 });
 
 const chat = client.chatRoom.getOrCreate(["general"]);
