@@ -7,13 +7,18 @@ import {
 	type CreateAgentSessionOptions,
 	DefaultResourceLoader,
 	getAgentDir,
-	ModelRuntime,
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { Sandbox, SandboxProvider } from "@rivet-dev/sandbox-adapter";
 import type { ActorContext } from "rivetkit";
 import type { DatabaseProvider, RawAccess } from "rivetkit/db";
+import {
+	createActorModelRuntime,
+	emptyCredentialStore,
+	openingModel,
+	type PiModelOptions,
+} from "./models.js";
 import { createSandboxBashOperations, createSandboxTools } from "./sandbox.js";
 import {
 	appendPiEntry,
@@ -43,7 +48,11 @@ export type PiContext = ActorContext<
 
 /** Pi options accepted by `pi()` on top of ordinary actor config. */
 export interface PiSessionOptions
-	extends Omit<CreateAgentSessionOptions, "sessionManager" | "settingsManager"> {
+	extends Omit<
+			CreateAgentSessionOptions,
+			"sessionManager" | "settingsManager" | "modelRuntime" | "model" | "scopedModels"
+		>,
+		PiModelOptions {
 	/** Initial Pi settings for a brand-new session. Later changes persist per actor. */
 	settings?: Partial<PiSettings>;
 	/**
@@ -117,21 +126,20 @@ export function ensurePiSession(
 /** Pi's built-in tools, which all run on the actor host. */
 const PI_BUILT_IN_TOOLS = ["read", "bash", "powershell", "edit", "write", "grep", "find", "ls"];
 
-let defaultModelRuntime: Promise<ModelRuntime> | undefined;
-
-/** One `ModelRuntime` per process. It loads provider catalogs and credentials, which are not per actor. */
-function sharedModelRuntime(): Promise<ModelRuntime> {
-	defaultModelRuntime ??= ModelRuntime.create();
-	return defaultModelRuntime;
-}
-
 async function openPiSession(
 	c: PiContext,
 	runtime: PiRuntime,
 	options: PiSessionOptions,
 ): Promise<PiSession> {
-	const { settings, sandbox: sandboxProvider, ...sessionOptions } =
-		options;
+	const {
+		settings,
+		sandbox: sandboxProvider,
+		providers,
+		apiKeys,
+		model,
+		scopedModels,
+		...sessionOptions
+	} = options;
 	const stored = await loadPiSession(c.db);
 	const connected = sandboxProvider
 		? await connectSandbox(c, sandboxProvider)
@@ -155,7 +163,10 @@ async function openPiSession(
 	const sessionManager = stored
 		? SessionManager.inMemory(cwd, undefined, toFileEntries(stored))
 		: SessionManager.inMemory(cwd);
-	const modelRuntime = sessionOptions.modelRuntime ?? (await sharedModelRuntime());
+	const modelRuntime = await createActorModelRuntime(
+		{ providers, apiKeys },
+		emptyCredentialStore,
+	);
 	const resourceLoader =
 		sessionOptions.resourceLoader ??
 		(await isolatedResourceLoader(cwd, sessionOptions.agentDir, settingsManager));
@@ -164,6 +175,11 @@ async function openPiSession(
 		...sessionOptions,
 		cwd,
 		modelRuntime,
+		model: openingModel(
+			{ model, scopedModels },
+			modelRuntime,
+			sessionManager.buildSessionContext().model,
+		),
 		settingsManager,
 		sessionManager,
 		resourceLoader,
