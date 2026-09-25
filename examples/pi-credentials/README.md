@@ -19,6 +19,8 @@ pnpm login alice
 
 Pi actors with key `["alice", ...]` now use Alice's logins.
 
+To use them from an [ACP](https://agentclientprotocol.com) editor such as Zed, add a custom agent server that runs `npx rivet-pi acp --actor agent --user alice --credentials credentials` in this folder. The editor offers the same login.
+
 ## Implementation
 
 - [`src/actors.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/pi-credentials/src/actors.ts): the `credentials` actor and the Pi actor.

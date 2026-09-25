@@ -164,3 +164,17 @@ const agent = pi({
 `logins` is your own storage. See [`PiCredentialSource`](https://github.com/rivet-dev/rivet/blob/main/integrations/pi/src/credentials.ts) for what each method returns. Pi never receives the refresh token.
 
 The [credentials example](https://github.com/rivet-dev/rivet/tree/main/examples/pi-credentials) stores logins in a `credentials` actor and runs the login in a terminal.
+
+## ACP
+
+Connect [ACP](https://agentclientprotocol.com) editors such as Zed to Pi actors:
+
+```sh
+npx @rivet-dev/pi acp --actor agent --user me
+```
+
+Each editor session is the Pi actor with key `[user, sessionId]`.
+
+The command uses `RIVET_TOKEN`, which reaches every actor, so use it only for yourself. For your users, build a command with `serveAcp()` from `@rivet-dev/pi/acp` that reaches each actor with an [actor-scoped JWT](/docs/jwt).
+
+Add `--credentials <actor>` to let users log in to a subscription from the editor. The editor runs Pi's login in a terminal, then the command calls `save(provider, credential)` on that actor with key `[user]`.
