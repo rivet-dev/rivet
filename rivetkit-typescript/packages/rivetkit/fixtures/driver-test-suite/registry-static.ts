@@ -62,6 +62,7 @@ import {
 } from "./destroy";
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
 import { fileSystemHibernationCleanupActor } from "./file-system-hibernation-cleanup";
+import { heldReplyActor } from "./held-reply";
 import { hibernationActor, hibernationSleepWindowActor } from "./hibernation";
 import { kvActor } from "./kv";
 import { largePayloadActor, largePayloadConnActor } from "./large-payloads";
@@ -313,6 +314,8 @@ export const registry = setup({
 		rawWebSocketConnContextActor,
 		// From reject-connection.ts
 		rejectConnectionActor,
+		// From held-reply.ts
+		heldReplyActor,
 		// From request-access.ts
 		requestAccessActor,
 		// From actor-onstatechange.ts
