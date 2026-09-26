@@ -1,14 +1,10 @@
-use std::{collections::HashMap, sync::LazyLock};
+use std::sync::LazyLock;
 
 use anyhow::{Context, Result};
 use parking_lot::Mutex;
 use rivet_metrics::prometheus::{
 	Encoder, IntGaugeVec, TextEncoder, register_int_gauge_vec_with_registry,
 };
-use subtle::ConstantTimeEq;
-
-const METRICS_ENABLED_ENV: &str = "RIVETKIT_METRICS_ENABLED";
-const METRICS_TOKEN_ENV: &str = "RIVETKIT_METRICS_TOKEN";
 
 static RIVETKIT_INFO: LazyLock<IntGaugeVec> = LazyLock::new(|| {
 	register_int_gauge_vec_with_registry!(
@@ -58,11 +54,6 @@ pub struct RenderedMetrics {
 	pub body: Vec<u8>,
 }
 
-pub enum MetricsAccessError {
-	NotEnabled,
-	Unauthorized,
-}
-
 pub fn runtime_type() -> &'static str {
 	if std::env::var("NODE_ENV").as_deref() == Ok("production") {
 		"deployed"
@@ -87,28 +78,6 @@ pub fn record_rivetkit_info(
 	});
 }
 
-pub fn authorize_metrics_request(
-	bearer_token: Option<&str>,
-) -> std::result::Result<(), MetricsAccessError> {
-	let Some(configured_token) = configured_metrics_token() else {
-		return Err(MetricsAccessError::NotEnabled);
-	};
-
-	let Some(bearer_token) = bearer_token.filter(|token| !token.is_empty()) else {
-		return Err(MetricsAccessError::Unauthorized);
-	};
-
-	if bearer_token
-		.as_bytes()
-		.ct_eq(configured_token.as_bytes())
-		.into()
-	{
-		Ok(())
-	} else {
-		Err(MetricsAccessError::Unauthorized)
-	}
-}
-
 pub fn render_prometheus_metrics() -> Result<RenderedMetrics> {
 	ensure_rivetkit_info_recorded();
 
@@ -123,31 +92,6 @@ pub fn render_prometheus_metrics() -> Result<RenderedMetrics> {
 		content_type: encoder.format_type().to_owned(),
 		body,
 	})
-}
-
-pub fn authorization_bearer_token(headers: &http::HeaderMap) -> Option<&str> {
-	headers
-		.get(http::header::AUTHORIZATION)
-		.and_then(|value| value.to_str().ok())
-		.and_then(bearer_token_from_authorization)
-}
-
-pub fn authorization_bearer_token_map(headers: &HashMap<String, String>) -> Option<&str> {
-	headers
-		.iter()
-		.find(|(name, _)| name.eq_ignore_ascii_case(http::header::AUTHORIZATION.as_str()))
-		.and_then(|(_, value)| bearer_token_from_authorization(value))
-}
-
-fn configured_metrics_token() -> Option<String> {
-	let enabled = std::env::var(METRICS_ENABLED_ENV).ok()?;
-	if enabled != "1" {
-		return None;
-	}
-
-	std::env::var(METRICS_TOKEN_ENV)
-		.ok()
-		.filter(|token| !token.is_empty())
 }
 
 fn ensure_rivetkit_info_recorded() {
@@ -183,20 +127,4 @@ fn record_rivetkit_info_inner(info: RivetKitInfo) {
 
 	RIVETKIT_INFO.with_label_values(&info.labels()).set(1);
 	*current = Some(info);
-}
-
-fn bearer_token_from_authorization(value: &str) -> Option<&str> {
-	let value = value.trim_start();
-	let scheme = value.get(..6)?;
-	if !scheme.eq_ignore_ascii_case("bearer") {
-		return None;
-	}
-
-	let rest = value.get(6..)?;
-	if !rest.chars().next().is_some_and(char::is_whitespace) {
-		return None;
-	}
-
-	let token = rest.trim_start();
-	if token.is_empty() { None } else { Some(token) }
 }
