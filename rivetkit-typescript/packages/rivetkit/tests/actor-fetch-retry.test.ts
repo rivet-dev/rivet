@@ -148,6 +148,79 @@ describe("ActorHandleRaw.fetch", () => {
 		expect(bodies).toEqual(["streamed body", "streamed body"]);
 	});
 
+	test("rejects an already-aborted streaming init body before dispatch", async () => {
+		let attempts = 0;
+		const driver = {
+			async sendRequest() {
+				attempts++;
+				return Response.json({ ok: true });
+			},
+		} as EngineControlClient;
+		const handle = dynamicHandle(driver);
+		const controller = new AbortController();
+		controller.abort();
+		const stream = new ReadableStream({
+			start(streamController) {
+				streamController.enqueue(
+					new TextEncoder().encode("streamed body"),
+				);
+			},
+		});
+
+		await expect(
+			handle.fetch("http://example.test/submit", {
+				method: "POST",
+				body: stream,
+				signal: controller.signal,
+			}),
+		).rejects.toBe(controller.signal.reason);
+		expect(attempts).toBe(0);
+		expect(stream.locked).toBe(false);
+	});
+
+	test("cancels stream buffering when the request signal aborts", async () => {
+		let attempts = 0;
+		let cancelReason: unknown;
+		const driver = {
+			async sendRequest() {
+				attempts++;
+				return Response.json({ ok: true });
+			},
+		} as EngineControlClient;
+		const handle = new ActorHandleRaw(
+			{},
+			driver,
+			undefined,
+			undefined,
+			"json",
+			{ getForKey: { name: "example", key: ["key"] } },
+		);
+		const controller = new AbortController();
+		const stream = new ReadableStream({
+			start(streamController) {
+				streamController.enqueue(
+					new TextEncoder().encode("streamed body"),
+				);
+			},
+			cancel(reason) {
+				cancelReason = reason;
+			},
+		});
+		const request = handle.fetch("http://example.test/submit", {
+			method: "POST",
+			body: stream,
+			signal: controller.signal,
+		});
+		const reason = new Error("cancel upload");
+
+		controller.abort(reason);
+
+		await expect(request).rejects.toBe(reason);
+		expect(cancelReason).toBe(reason);
+		expect(attempts).toBe(0);
+		expect(stream.locked).toBe(false);
+	});
+
 	test("sends an init body override without cloning a consumed Request", async () => {
 		const bodies: string[] = [];
 		const driver = {

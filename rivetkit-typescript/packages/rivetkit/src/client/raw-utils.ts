@@ -3,8 +3,8 @@ import {
 	HEADER_ORIGINAL_REQUEST_URL,
 	PATH_WEBSOCKET_PREFIX,
 } from "@/common/actor-router-consts";
-import { deconstructError } from "@/common/utils";
 import { isRequestLike, isUrlLike } from "@/common/fetch-like";
+import { deconstructError } from "@/common/utils";
 import type {
 	EngineControlClient,
 	GatewayRequestOptions,
@@ -21,11 +21,56 @@ export async function prepareRetryableInit(
 	if (init.body instanceof ReadableStream) {
 		return {
 			...init,
-			body: new Uint8Array(await new Response(init.body).arrayBuffer()),
+			body: await bufferReadableStream(init.body, init.signal),
 		};
 	}
 
 	return init;
+}
+
+async function bufferReadableStream(
+	body: ReadableStream,
+	signal?: AbortSignal | null,
+): Promise<Uint8Array> {
+	signal?.throwIfAborted();
+
+	const reader = body.getReader();
+	const chunks: Uint8Array[] = [];
+	let byteLength = 0;
+	const onAbort = () => {
+		void reader.cancel(signal?.reason).catch(() => {
+			// The abort reason takes precedence over a stream cancellation error.
+		});
+	};
+	signal?.addEventListener("abort", onAbort, { once: true });
+
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			signal?.throwIfAborted();
+			if (done) {
+				break;
+			}
+			if (!(value instanceof Uint8Array)) {
+				throw new TypeError(
+					"Received a non-Uint8Array chunk from a request body stream.",
+				);
+			}
+			chunks.push(value);
+			byteLength += value.byteLength;
+		}
+	} finally {
+		signal?.removeEventListener("abort", onAbort);
+		reader.releaseLock();
+	}
+
+	const buffered = new Uint8Array(byteLength);
+	let offset = 0;
+	for (const chunk of chunks) {
+		buffered.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return buffered;
 }
 
 /**
