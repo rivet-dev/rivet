@@ -121,7 +121,6 @@ interface Args {
 	postSetupWaitMs: number;
 	vfsRoundTripLatencyMs: number;
 	outputDir: string;
-	metricsToken: string;
 	matrix: MatrixName;
 	matrixScenario: string | null;
 	onlyProvided: boolean;
@@ -695,7 +694,6 @@ Options:
   --vfs-round-trip-latency-ms <n>
                                 Artificial latency added to each VFS read round trip. Default: env or ${DEFAULT_BENCH_VFS_ROUND_TRIP_LATENCY_MS}.
   --output-dir <path>           Results directory. Default: ${DEFAULT_RESULTS_ROOT}/<timestamp>
-  --metrics-token <token>       Bearer token for actor /metrics. Default: env or dev-metrics.
   --matrix <name>               Run a SQLite optimization matrix: impact, full-impact, or none. Default: none.
   --disable-metadata-lookup     Treat --endpoint as the direct engine endpoint.
   --start-local-envoy           Start this registry's local envoy before driving it.
@@ -861,11 +859,6 @@ function parseArgs(argv: string[]): Args {
 			DEFAULT_BENCH_VFS_ROUND_TRIP_LATENCY_MS,
 		),
 		outputDir,
-		metricsToken:
-			readFlag(argv, "--metrics-token") ??
-			process.env.SQLITE_REALWORLD_METRICS_TOKEN ??
-			process.env._RIVET_METRICS_TOKEN ??
-			"dev-metrics",
 		matrix: parseMatrix(readFlag(argv, "--matrix")),
 		matrixScenario: readFlag(argv, "--matrix-scenario") ?? null,
 		onlyProvided: onlyFlag !== undefined,
@@ -1016,7 +1009,6 @@ async function startLocalEngine(args: Args): Promise<LocalEngine> {
 		RIVET__FILE_SYSTEM__PATH: join(dbRoot, "db"),
 		RIVET__METRICS__HOST: "127.0.0.1",
 		RIVET__METRICS__PORT: metricsPort.toString(),
-		_RIVET_METRICS_TOKEN: args.metricsToken,
 	};
 	if (args.disableStorageCompaction) {
 		env.RIVET_SQLITE_DISABLE_COMPACTION =
@@ -1218,23 +1210,18 @@ function metricValue(text: string, name: string): number {
 	return found ? total : 0;
 }
 
-async function scrapeActorMetricsText(
-	endpoint: string,
-	actorId: string,
-	metricsToken: string,
-): Promise<string> {
-	const base = endpoint.replace(/\/$/, "");
-	const gatewayToken = process.env.RIVET_TOKEN
-		? `@${encodeURIComponent(process.env.RIVET_TOKEN)}`
-		: "";
-	const response = await fetch(
-		`${base}/gateway/${encodeURIComponent(actorId)}${gatewayToken}/metrics`,
-		{
-			headers: {
-				Authorization: `Bearer ${metricsToken}`,
-			},
-		},
-	);
+// RivetKit metrics are process-wide and are only reachable from the process
+// hosting the actors, so the benchmark reads them from the in-process registry
+// it started itself. There is no per-actor gateway route to scrape remotely.
+let localMetricsRegistry: typeof registry | undefined;
+
+async function scrapeActorMetricsText(): Promise<string> {
+	if (!localMetricsRegistry) {
+		throw new Error(
+			"VFS metrics require --start-local-envoy; a remote endpoint does not expose per-actor Prometheus metrics",
+		);
+	}
+	const response = await localMetricsRegistry.routes.prometheusMetrics();
 	if (!response.ok) {
 		throw new Error(
 			`failed to scrape actor metrics: ${response.status} ${await response.text()}`,
@@ -1584,7 +1571,6 @@ async function main(): Promise<void> {
 	}
 	process.env[BENCH_VFS_ROUND_TRIP_LATENCY_MS_ENV] =
 		args.vfsRoundTripLatencyMs.toString();
-	process.env._RIVET_METRICS_TOKEN = args.metricsToken;
 	const selectedSpecs = WORKLOAD_SPECS.filter((spec) =>
 		args.only.includes(spec.name),
 	);
@@ -1599,6 +1585,7 @@ async function main(): Promise<void> {
 			await import("@rivetkit/sql-loader");
 			const { registry } = await import("../src/index.ts");
 			registry.start();
+			localMetricsRegistry = registry;
 			await waitForRegistryReady(args.endpoint);
 			await waitForEnvoy(args.endpoint);
 			await sleep(500);
@@ -1645,7 +1632,6 @@ async function main(): Promise<void> {
 				largeBytes: args.largeBytes,
 				rowBytes: args.rowBytes,
 			},
-			metricsToken: args.metricsToken,
 			matrixScenario: args.matrixScenario,
 			wakeDelayMs: args.wakeDelayMs,
 			postSetupWaitMs: args.postSetupWaitMs,
@@ -1746,11 +1732,7 @@ async function main(): Promise<void> {
 					targetBytes,
 				}),
 			)) as MainResult;
-			const afterMainMetricsText = await scrapeActorMetricsText(
-				args.endpoint,
-				actorId,
-				args.metricsToken,
-			);
+			const afterMainMetricsText = await scrapeActorMetricsText();
 			const vfsMetrics = diffMetrics(
 				scrapeVfsMetrics(afterMainMetricsText),
 				emptyVfsMetrics(),

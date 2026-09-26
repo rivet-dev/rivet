@@ -23,7 +23,6 @@ interface Args {
 	transactionBytes: number;
 	wakeDelayMs: number;
 	compactionWaitMs: number;
-	metricsToken: string;
 	disableMetadataLookup: boolean;
 	startLocalEnvoy: boolean;
 }
@@ -129,7 +128,6 @@ Options:
 	  --transaction-bytes <n>       Bytes per SQLite transaction. Default: ${DEFAULT_TRANSACTION_BYTES}
 	  --wake-delay-ms <n>           Delay after c.sleep() before the cold read. Default: ${DEFAULT_WAKE_DELAY_MS}
 	  --compaction-wait-ms <n>      Extra wait after compacted writes. Default: ${DEFAULT_COMPACTION_WAIT_MS}
-	  --metrics-token <token>       Bearer token for actor /metrics. Default: env or dev-metrics.
 	  --disable-metadata-lookup     Treat --endpoint as the direct engine endpoint.
 	  --start-local-envoy           Start this registry's local envoy before driving it.
   --no-start-local-envoy        Use an already-running endpoint.
@@ -137,8 +135,7 @@ Options:
 Environment:
 	  RIVET_ENDPOINT, SQLITE_COLD_START_BYTES, SQLITE_COLD_START_ROW_BYTES,
 	  SQLITE_COLD_START_BATCH_ROWS, SQLITE_COLD_START_TRANSACTION_BYTES,
-	  SQLITE_COLD_START_WAKE_DELAY_MS, SQLITE_COLD_START_METRICS_TOKEN,
-	  _RIVET_METRICS_TOKEN`);
+	  SQLITE_COLD_START_WAKE_DELAY_MS`);
 	process.exit(1);
 }
 
@@ -228,11 +225,6 @@ function parseArgs(argv: string[]): Args {
 			"SQLITE_COLD_START_COMPACTION_WAIT_MS",
 			DEFAULT_COMPACTION_WAIT_MS,
 		),
-		metricsToken:
-			readFlag(argv, "--metrics-token") ??
-			process.env.SQLITE_COLD_START_METRICS_TOKEN ??
-			process.env._RIVET_METRICS_TOKEN ??
-			"dev-metrics",
 		disableMetadataLookup: argv.includes("--disable-metadata-lookup"),
 		startLocalEnvoy: shouldStartLocalEnvoy,
 	};
@@ -302,23 +294,18 @@ function metricValue(
 	return 0;
 }
 
-async function scrapeMetrics(
-	endpoint: string,
-	actorId: string,
-	metricsToken: string,
-): Promise<VfsMetricSnapshot> {
-	const base = endpoint.replace(/\/$/, "");
-	const gatewayToken = process.env.RIVET_TOKEN
-		? `@${encodeURIComponent(process.env.RIVET_TOKEN)}`
-		: "";
-	const response = await fetch(
-		`${base}/gateway/${encodeURIComponent(actorId)}${gatewayToken}/metrics`,
-		{
-			headers: {
-				Authorization: `Bearer ${metricsToken}`,
-			},
-		},
-	);
+// RivetKit metrics are process-wide and are only reachable from the process
+// hosting the actors, so the benchmark reads them from the in-process registry
+// it started itself. There is no per-actor gateway route to scrape remotely.
+let localMetricsRegistry: typeof registry | undefined;
+
+async function scrapeMetrics(): Promise<VfsMetricSnapshot> {
+	if (!localMetricsRegistry) {
+		throw new Error(
+			"VFS metrics require --start-local-envoy; a remote endpoint does not expose per-actor Prometheus metrics",
+		);
+	}
+	const response = await localMetricsRegistry.routes.prometheusMetrics();
 	if (!response.ok) {
 		throw new Error(
 			`failed to scrape actor metrics: ${response.status} ${await response.text()}`,
@@ -586,10 +573,6 @@ async function startLocalEngine(
 		RIVET__AUTH__ADMIN_TOKEN:
 			process.env.RIVET__AUTH__ADMIN_TOKEN ?? "default",
 		RIVET__FILE_SYSTEM__PATH: join(dbRoot, "db"),
-		_RIVET_METRICS_TOKEN:
-			process.env._RIVET_METRICS_TOKEN ??
-			process.env.SQLITE_COLD_START_METRICS_TOKEN ??
-			"dev-metrics",
 	};
 	if (disableCompaction) {
 		env.RIVET_SQLITE_DISABLE_COMPACTION =
@@ -653,8 +636,6 @@ function childArgs(
 		args.wakeDelayMs.toString(),
 		"--compaction-wait-ms",
 		args.compactionWaitMs.toString(),
-		"--metrics-token",
-		args.metricsToken,
 		args.disableMetadataLookup ? "--disable-metadata-lookup" : undefined,
 		args.startLocalEnvoy ? "--start-local-envoy" : "--no-start-local-envoy",
 	];
@@ -708,7 +689,6 @@ async function runChildScenario(
 async function main(): Promise<void> {
 	const args = parseArgs(process.argv.slice(2));
 	let engine: LocalEngine | undefined;
-	process.env._RIVET_METRICS_TOKEN = args.metricsToken;
 
 	if (args.scenario === "both") {
 		console.log("SQLite cold-start benchmark");
@@ -724,6 +704,7 @@ async function main(): Promise<void> {
 		await import("@rivetkit/sql-loader");
 		const { registry } = await import("../src/index.ts");
 		registry.start();
+		localMetricsRegistry = registry;
 		await waitForRegistryReady(args.endpoint);
 		await waitForEnvoy(args.endpoint);
 	}
@@ -754,7 +735,6 @@ async function main(): Promise<void> {
 		const runColdReadVariant = async (
 			label: string,
 			scenarioActorKey: string[],
-			scenarioActorId: string,
 			activeHandle: BenchHandle,
 			expectedBytes: number,
 			expectedRows: number,
@@ -769,11 +749,7 @@ async function main(): Promise<void> {
 				client.sqliteColdStartBench.getOrCreate(scenarioActorKey);
 			const wakeOpen = await timed(() => wakeHandle.wakeSqlite());
 			const wakeOpenResult = wakeOpen.result as WakeOpenResult;
-			await scrapeMetrics(
-				args.endpoint,
-				scenarioActorId,
-				args.metricsToken,
-			);
+			await scrapeMetrics();
 
 			console.log(`sleep before ${label} cold full read...`);
 			await wakeHandle.goToSleep();
@@ -785,11 +761,7 @@ async function main(): Promise<void> {
 			const coldRead = await timed(() => readFull(coldHandle));
 			const coldReadResult = coldRead.result as ReadResult;
 			assertRead(label, coldReadResult, expectedBytes, expectedRows);
-			const metrics = await scrapeMetrics(
-				args.endpoint,
-				scenarioActorId,
-				args.metricsToken,
-			);
+			const metrics = await scrapeMetrics();
 
 			return {
 				label,
@@ -831,11 +803,7 @@ async function main(): Promise<void> {
 				}),
 			);
 			const writeResult = write.result as WriteResult;
-			const afterWriteMetrics = await scrapeMetrics(
-				args.endpoint,
-				scenarioActorId,
-				args.metricsToken,
-			);
+			const afterWriteMetrics = await scrapeMetrics();
 
 			if (label === "compacted") {
 				console.log(`${label} wait for storage compaction...`);
@@ -855,11 +823,7 @@ async function main(): Promise<void> {
 					writeResult.bytes,
 					writeResult.rows,
 				);
-				const afterHotReadMetrics = await scrapeMetrics(
-					args.endpoint,
-					scenarioActorId,
-					args.metricsToken,
-				);
+				const afterHotReadMetrics = await scrapeMetrics();
 				hotReadMetrics = diffMetrics(
 					afterHotReadMetrics,
 					afterWriteMetrics,
@@ -872,7 +836,6 @@ async function main(): Promise<void> {
 			const coldRead = await runColdReadVariant(
 				label,
 				scenarioActorKey,
-				scenarioActorId,
 				scenarioHandle,
 				writeResult.bytes,
 				writeResult.rows,
@@ -881,7 +844,6 @@ async function main(): Promise<void> {
 			const reverseColdRead = await runColdReadVariant(
 				`${label} reverse`,
 				scenarioActorKey,
-				scenarioActorId,
 				client.sqliteColdStartBench.getOrCreate(scenarioActorKey),
 				writeResult.reverseProbeRows,
 				writeResult.reverseProbeRows,

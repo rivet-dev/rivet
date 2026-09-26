@@ -81,7 +81,7 @@ rivet-engine udb -q 'ls 0/1/2/workflow/by_name_and_tag/pegboard_actor/str:actor_
 
 ## Metrics
 
-- RivetKit core exposes per-actor Prometheus metrics at `/gateway/<actor_id>/metrics`, gated by `_RIVET_METRICS_TOKEN`; prefer this endpoint for actor and VFS performance tuning metrics.
+- RivetKit core exposes process-wide Prometheus metrics (actor, SQLite, VFS, tokio runtime) through `registry.routes.prometheusMetrics()` in TypeScript, `Registry::prometheus_metrics()` in Rust, and the serverless handler's `/metrics` route gated by `RIVETKIT_METRICS_ENABLED=1` plus `RIVETKIT_METRICS_TOKEN`. There is no per-actor `/gateway/<actor_id>/metrics` route; scrape the hosting process instead.
 - Track SQLite cold-read, VFS, storage, and preload optimization ideas in `docs-internal/engine/SQLITE_OPTIMIZATIONS.md`.
 - Track SQLite cold-read optimization implementation and per-step benchmark deltas in `scripts/ralph/prd.json`.
 

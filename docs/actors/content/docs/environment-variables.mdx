@@ -19,7 +19,8 @@ platform docs.
 
 | Environment Variable | Description |
 |---------------------|-------------|
-| `_RIVET_METRICS_TOKEN` | Bearer token that gates the per-actor Prometheus `/metrics` endpoint. When unset, `/metrics` is disabled. |
+| `RIVETKIT_METRICS_ENABLED` | Set to `1` to enable the Prometheus `/metrics` route on the serverless handler. |
+| `RIVETKIT_METRICS_TOKEN` | Bearer token that gates the serverless `/metrics` route. When unset, the route is disabled. |
 
 ## Experimental
 

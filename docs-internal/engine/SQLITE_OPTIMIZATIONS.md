@@ -17,7 +17,7 @@ Range page-read protocol details live in `~/.agents/specs/sqlite-range-page-read
 - VFS staging cache behavior is selected with `RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE=off|target|startup|prefetch|all`, with capacity configured separately. The protected-cache budget no longer pins VFS page bytes beyond `xRead`.
 - The VFS has speculative read-ahead selected with `RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE=off|bounded|adaptive`; the default bounded budget is 64 pages, which reduced the cold-read benchmark from 1,249 to 368 VFS `get_pages` calls.
 - The VFS tracks bounded recent page hints as hot pages plus coalesced scan ranges; `NativeDatabase::snapshot_preload_hints()` exposes the in-memory plan for future flush wiring.
-- Actor Prometheus metrics expose VFS read counters, fetched bytes, cache hits/misses, and `get_pages` duration at `/gateway/<actor_id>/metrics`.
+- RivetKit Prometheus metrics expose VFS read counters, fetched bytes, cache hits/misses, and `get_pages` duration. Scrape them from the hosting process via `registry.routes.prometheusMetrics()` (or the serverless handler's `/metrics` route); there is no per-actor gateway route.
 - `sqlite-storage` keeps an in-memory PIDX cache and decodes each unique DELTA/SHARD blob once per `get_pages(...)` call.
 - `sqlite-storage` exposes `get_page_range(...)` for bounded contiguous reads; it reuses `get_pages(...)` source resolution and currently caps ranges at 256 pages / 1 MiB.
 - `sqlite-storage` reassembles large chunked logical values with one bounded chunk-prefix range read by default; `RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=false` selects serial 10 KB chunk gets for comparison runs.
