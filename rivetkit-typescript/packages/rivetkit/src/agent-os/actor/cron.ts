@@ -1,4 +1,8 @@
-import type { CronAction, CronJobInfo } from "@rivet-dev/agent-os-core";
+import type {
+	AgentType,
+	CronAction,
+	CronJobInfo,
+} from "@rivet-dev/agent-os-core";
 import type { AgentOsActorConfig } from "../config";
 import type {
 	AgentOsActionContext,
@@ -28,6 +32,25 @@ function serializeCronAction(action: CronAction): SerializableCronAction {
 	}
 }
 
+function deserializeCronAction(action: SerializableCronAction): CronAction {
+	switch (action.type) {
+		case "session":
+			return {
+				type: "session",
+				agentType: action.agentType as AgentType,
+				prompt: action.prompt,
+				options:
+					action.cwd !== undefined ? { cwd: action.cwd } : undefined,
+			};
+		case "exec":
+			return {
+				type: "exec",
+				command: action.command,
+				args: action.args,
+			};
+	}
+}
+
 function serializeCronJob(job: CronJobInfo): SerializableCronJobInfo {
 	return {
 		id: job.id,
@@ -54,7 +77,7 @@ export function buildCronActions<TConnParams>(
 			const job = agentOs.scheduleCron({
 				id: options.id,
 				schedule: options.schedule,
-				action: options.action as CronAction,
+				action: deserializeCronAction(options.action),
 				overlap: options.overlap,
 			});
 			c.log.info({
