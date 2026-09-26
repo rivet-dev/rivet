@@ -4,8 +4,8 @@ mod common;
 #[path = "integration/counter.rs"]
 mod counter;
 
-#[path = "integration/metrics_endpoint.rs"]
-mod metrics_endpoint;
+#[path = "integration/metrics.rs"]
+mod metrics;
 
 #[path = "integration/sqlite_corruption_fuzz.rs"]
 mod sqlite_corruption_fuzz;

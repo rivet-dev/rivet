@@ -39,7 +39,7 @@ pub use rivetkit_core::actor::schedule::{
 };
 pub use rivetkit_core::actor::state::OnStateChangeGuard;
 pub use rivetkit_core::inspector::InspectorTabEntry;
-pub use rivetkit_core::metrics_endpoint::RenderedMetrics;
+pub use rivetkit_core::metrics::RenderedMetrics;
 pub use rivetkit_core::serverless::{
 	CoreServerlessRuntime, ServerlessRequest, ServerlessResponse, ServerlessStreamError,
 };

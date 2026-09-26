@@ -618,12 +618,14 @@ impl CoreRegistry {
 		shutdown: CancellationToken,
 		on_handle: impl FnOnce(CoreEnvoyHandle) + Send + 'static,
 	) -> Result<()> {
-		crate::metrics_endpoint::record_rivetkit_info(
+		crate::metrics::record_rivetkit_info(
 			config.serverless_package_version.clone(),
 			config.version,
 			"serverful",
 			config.pool_name.clone(),
 		);
+		#[cfg(not(target_arch = "wasm32"))]
+		crate::tokio_runtime_metrics::ensure_sampler_started();
 
 		let dispatcher = self.into_dispatcher(&config);
 		let manage_engine = should_manage_engine(&config.endpoint, config.engine_spawn)?;

@@ -1,13 +1,13 @@
 //! The sampler reads runtime state through a handle rather than builder hooks,
 //! so what is worth testing is that it starts from an async caller and produces
-//! live values on the metrics endpoint.
+//! live values in the rendered metrics.
 
 use std::time::Duration;
 
-use rivetkit_core::{metrics_endpoint, tokio_runtime_metrics};
+use rivetkit_core::{metrics, tokio_runtime_metrics};
 
 fn rendered_metrics() -> String {
-	let rendered = metrics_endpoint::render_prometheus_metrics().expect("render metrics");
+	let rendered = metrics::render_prometheus_metrics().expect("render metrics");
 	String::from_utf8(rendered.body).expect("metrics body is utf8")
 }
 

@@ -544,10 +544,6 @@ async function startLocalKitchenSinkServer() {
 				RIVET__FILE_SYSTEM__PATH:
 					process.env.RIVET__FILE_SYSTEM__PATH ?? join(dbRoot, "db"),
 				MOCK_AGENTIC_ENGINE_RUN_ID: runId,
-				_RIVET_METRICS_TOKEN:
-					process.env._RIVET_METRICS_TOKEN ??
-					process.env.MOCK_AGENTIC_METRICS_TOKEN ??
-					"dev-metrics",
 			},
 			stdio: ["ignore", "pipe", "pipe"],
 		},

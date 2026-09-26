@@ -2,7 +2,7 @@ use std::{future::Future, sync::Arc};
 
 use anyhow::Result;
 use rivet_error::RivetError;
-use rivetkit_core::metrics_endpoint::{RenderedMetrics, render_prometheus_metrics};
+use rivetkit_core::metrics::{RenderedMetrics, render_prometheus_metrics};
 use rivetkit_core::registry::CoreEnvoyHandle;
 use rivetkit_core::serverless::CoreServerlessRuntime;
 use rivetkit_core::{

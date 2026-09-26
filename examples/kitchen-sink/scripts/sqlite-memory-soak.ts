@@ -62,7 +62,6 @@ interface Args {
 	engineEnvoyLostThresholdMs: number;
 	serverlessMaxStartPayloadBytes: number;
 	outputDir: string;
-	metricsToken: string;
 	reset: boolean;
 	cleanup: boolean;
 	forceGcSamples: boolean;
@@ -165,7 +164,6 @@ Options:
   --serverless-max-start-payload-bytes <n>
                                Local /api/rivet/start body limit. Default: 8388608.
   --output-dir <path>          Output directory. Default: ${DEFAULT_OUTPUT_DIR}.
-  --metrics-token <token>      Engine metrics token. Default: dev-metrics.
   --no-reset                   Reuse actor DBs instead of resetting first.
   --no-cleanup                 Leave actor DB contents after run.
   --force-gc-samples           Request /debug/memory?gc=1 on each sample.
@@ -413,10 +411,6 @@ function parseArgs(argv: string[]): Args {
 			readFlag(argv, "--output-dir") ??
 			process.env.SQLITE_MEMORY_SOAK_OUTPUT_DIR ??
 			DEFAULT_OUTPUT_DIR,
-		metricsToken:
-			readFlag(argv, "--metrics-token") ??
-			process.env.SQLITE_MEMORY_SOAK_METRICS_TOKEN ??
-			"dev-metrics",
 		reset: !argv.includes("--no-reset"),
 		cleanup: !argv.includes("--no-cleanup"),
 		forceGcSamples: argv.includes("--force-gc-samples"),
@@ -645,7 +639,6 @@ async function startEngine(args: Args, runDir: string): Promise<LocalEngine> {
 		RIVET__METRICS__HOST: guardHost,
 		RIVET__METRICS__PORT: (guardPort + 10).toString(),
 		RIVET__FILE_SYSTEM__PATH: join(dbRoot, "db"),
-		_RIVET_METRICS_TOKEN: args.metricsToken,
 		RIVET__PEGBOARD__ENVOY_PING_TIMEOUT:
 			args.engineEnvoyPingTimeoutMs.toString(),
 		RIVET__PEGBOARD__ENVOY_LOST_THRESHOLD:

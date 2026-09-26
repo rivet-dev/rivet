@@ -113,11 +113,6 @@ fn ensure_rivetkit_info_recorded() {
 }
 
 fn record_rivetkit_info_inner(info: RivetKitInfo) {
-	// Startup paths reach this from inside the runtime, which is the only place
-	// a handle to sample can be taken.
-	#[cfg(not(target_arch = "wasm32"))]
-	crate::tokio_runtime_metrics::ensure_sampler_started();
-
 	let mut current = CURRENT_RIVETKIT_INFO.lock();
 	if let Some(previous) = current.as_ref()
 		&& previous != &info

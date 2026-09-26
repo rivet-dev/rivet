@@ -421,8 +421,8 @@ impl CoreRegistry {
 
 	#[napi]
 	pub fn metrics(&self) -> napi::Result<JsRegistryRouteResponse> {
-		let metrics = rivetkit_core::metrics_endpoint::render_prometheus_metrics()
-			.map_err(napi_anyhow_error)?;
+		let metrics =
+			rivetkit_core::metrics::render_prometheus_metrics().map_err(napi_anyhow_error)?;
 		Ok(JsRegistryRouteResponse {
 			status: 200,
 			headers: HashMap::from([("content-type".to_owned(), metrics.content_type)]),

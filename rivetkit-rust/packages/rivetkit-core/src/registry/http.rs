@@ -504,7 +504,7 @@ fn handle_metadata_fetch(
 		&serde_json::json!({
 			"runtime": "rivetkit",
 			"version": env!("CARGO_PKG_VERSION"),
-			"type": crate::metrics_endpoint::runtime_type(),
+			"type": crate::metrics::runtime_type(),
 		}),
 	)
 }
