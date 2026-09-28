@@ -8,6 +8,7 @@ import {
 	HEADER_TRACEPARENT,
 	HEADER_TRACESTATE,
 } from "@/common/actor-router-consts";
+import { readRequestBody } from "@/common/fetch-like";
 import { type GatewayRequestOptions, shouldSkipReadyWait } from "./driver";
 
 export interface HttpGatewayRequestOptions extends GatewayRequestOptions {
@@ -20,7 +21,7 @@ export async function sendHttpRequestToGateway(
 	actorRequest: Request,
 	options: HttpGatewayRequestOptions = {},
 ): Promise<Response> {
-	let bodyToSend: ReadableStream<Uint8Array> | null = null;
+	let bodyToSend: ArrayBuffer | null = null;
 	const guardHeaders = buildGuardHeaders(runConfig, actorRequest, options);
 
 	if (actorRequest.method !== "GET" && actorRequest.method !== "HEAD") {
@@ -28,8 +29,10 @@ export async function sendHttpRequestToGateway(
 			throw new Error("Request body has already been consumed");
 		}
 
-		if (actorRequest.body) {
-			bodyToSend = actorRequest.body;
+		// Browsers reject ReadableStream request bodies, so send bytes.
+		const bytes = await readRequestBody(actorRequest);
+		if (bytes.byteLength > 0) {
+			bodyToSend = bytes;
 			guardHeaders.delete("transfer-encoding");
 			guardHeaders.delete("content-length");
 		}
@@ -40,8 +43,7 @@ export async function sendHttpRequestToGateway(
 		headers: guardHeaders,
 		body: bodyToSend,
 		signal: actorRequest.signal,
-		...(bodyToSend ? { duplex: "half" } : {}),
-	} as RequestInit);
+	});
 }
 
 function buildGuardHeaders(
