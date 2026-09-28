@@ -6,6 +6,8 @@ use rivet_guard_core::request_context::RequestContext;
 use rivet_util::Id;
 use xxhash_rust::xxh3::xxh3_128_with_seed;
 
+use pegboard_gateway3::HTTP_BODY_CHUNK_SIZE;
+
 use crate::metrics;
 
 const MIN_GATEWAY3_PROTOCOL_VERSION: u16 = 7;
@@ -17,6 +19,7 @@ enum RequestKind {
 	WebSocket,
 	HttpSse,
 	HttpUnknownLength,
+	HttpLargeBody,
 	HttpOther,
 }
 
@@ -26,12 +29,16 @@ impl RequestKind {
 			Self::WebSocket => "websocket",
 			Self::HttpSse => "http_sse",
 			Self::HttpUnknownLength => "http_unknown_length",
+			Self::HttpLargeBody => "http_large_body",
 			Self::HttpOther => "http_other",
 		}
 	}
 
 	fn is_opportunistic_candidate(self) -> bool {
-		matches!(self, Self::HttpSse | Self::HttpUnknownLength)
+		matches!(
+			self,
+			Self::HttpSse | Self::HttpUnknownLength | Self::HttpLargeBody
+		)
 	}
 }
 
@@ -192,6 +199,8 @@ fn classify_request_parts(
 		RequestKind::HttpSse
 	} else if !body_is_end_stream && body_exact_size.is_none() {
 		RequestKind::HttpUnknownLength
+	} else if body_exact_size.is_some_and(|size| size > HTTP_BODY_CHUNK_SIZE as u64) {
+		RequestKind::HttpLargeBody
 	} else {
 		RequestKind::HttpOther
 	}
@@ -332,6 +341,15 @@ mod tests {
 			Decision::NotCandidate
 		);
 		assert_eq!(
+			decision(
+				GuardGatewayV3Mode::Opportunistic,
+				100,
+				RequestKind::HttpLargeBody,
+				Some(7),
+			),
+			Decision::SampledIn
+		);
+		assert_eq!(
 			decision(GuardGatewayV3Mode::On, 0, RequestKind::HttpOther, Some(7)),
 			Decision::SampledOut
 		);
@@ -351,6 +369,14 @@ mod tests {
 		assert_eq!(
 			classify_request_parts(false, &empty, Some(10), false),
 			RequestKind::HttpOther
+		);
+		assert_eq!(
+			classify_request_parts(false, &empty, Some(HTTP_BODY_CHUNK_SIZE as u64), false),
+			RequestKind::HttpOther
+		);
+		assert_eq!(
+			classify_request_parts(false, &empty, Some(HTTP_BODY_CHUNK_SIZE as u64 + 1), false),
+			RequestKind::HttpLargeBody
 		);
 		assert_eq!(
 			classify_request_parts(false, &empty, None, true),

@@ -17,10 +17,12 @@ use std::{
 };
 use tokio::sync::{mpsc, watch};
 
-use crate::shared_state::{InFlightRequestHandle, InFlightTunnelMessage, MsgGcReason};
+use crate::{
+	HTTP_BODY_CHUNK_SIZE,
+	shared_state::{InFlightRequestHandle, InFlightTunnelMessage, MsgGcReason},
+};
 
 const PHASE_WAITING_FOR_RESPONSE_START: &str = "waiting_for_response_start";
-const HTTP_BODY_CHUNK_SIZE: usize = 64 * 1024;
 const HTTP_BODY_CHUNK_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
 
 pub(super) fn should_stream_http_request_body(

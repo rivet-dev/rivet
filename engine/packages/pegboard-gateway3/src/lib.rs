@@ -41,6 +41,8 @@ mod ws_to_tunnel_task;
 
 use request_metrics::{RequestKind, RequestMetrics};
 
+/// Gateway3 sends request bodies to the actor in chunks of this size.
+pub const HTTP_BODY_CHUNK_SIZE: usize = 64 * 1024;
 const UPDATE_METRICS_INTERVAL: Duration = Duration::from_secs(15);
 const PHASE_PRE_WEBSOCKET_OPEN: &str = "pre_websocket_open";
 const PHASE_WAITING_FOR_WEBSOCKET_OPEN: &str = "waiting_for_websocket_open";
