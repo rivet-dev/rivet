@@ -4,7 +4,7 @@ import {
 	PATH_WEBSOCKET_PREFIX,
 } from "@/common/actor-router-consts";
 import { deconstructError } from "@/common/utils";
-import { isRequestLike, isUrlLike } from "@/common/fetch-like";
+import { isRequestLike, isUrlLike, readRequestBody } from "@/common/fetch-like";
 import type {
 	EngineControlClient,
 	GatewayRequestOptions,
@@ -65,9 +65,14 @@ export async function rawHttpFetch(
 			mergedHeaders.set(key, value);
 		});
 
+		const readsInputBody =
+			init?.body === undefined &&
+			input.method !== "GET" &&
+			input.method !== "HEAD";
+
 		mergedInit = {
 			method: input.method,
-			body: input.body,
+			body: readsInputBody ? await readRequestBody(input) : undefined,
 			mode: input.mode,
 			credentials: input.credentials,
 			redirect: input.redirect,
