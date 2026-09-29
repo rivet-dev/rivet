@@ -42,6 +42,7 @@ function isFlagEnabled(
 export default defineConfig(({ mode }) => {
 	const env = commonEnvSchema.parse(loadEnv(mode, process.cwd(), ""));
 	const featureFlags = process.env.VITE_FEATURE_FLAGS;
+	const cloudApiProxyTarget = process.env.CLOUD_API_PROXY_TARGET;
 	const supportEnabled = isFlagEnabled(featureFlags, "support");
 	const multitenancyEnabled = isFlagEnabled(featureFlags, "multitenancy");
 	const base = multitenancyEnabled ? "/" : "/ui/";
@@ -101,6 +102,27 @@ export default defineConfig(({ mode }) => {
 					changeOrigin: true,
 					rewrite: (path: string) => path.replace(/^\/api/, ""),
 				},
+				// The Rivet Cloud auth API only allows known origins, so a dev
+				// server reached through a sandbox portal cannot call it
+				// directly. Setting CLOUD_API_PROXY_TARGET serves it same-origin
+				// under /cloud-api; point VITE_APP_CLOUD_API_URL there. Amp orbs
+				// set both in .amp/services.yaml.
+				...(cloudApiProxyTarget
+					? {
+							"/cloud-api": {
+								target: cloudApiProxyTarget,
+								changeOrigin: true,
+								rewrite: (path: string) =>
+									path.replace(/^\/cloud-api/, ""),
+								// Session cookies must bind to the dev server's host,
+								// and the API must see its own origin to accept writes.
+								cookieDomainRewrite: "",
+								headers: {
+									origin: new URL(cloudApiProxyTarget).origin,
+								},
+							},
+						}
+					: {}),
 			},
 			// Accept the shared dev tunnel hostname.
 			// See docs-internal/platform/dev-tunnel.md.
