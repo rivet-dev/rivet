@@ -277,8 +277,8 @@ For anything beyond simple defaults, consider moving to [SQLite](/actors/docs/sq
 
 When `drainOnVersionUpgrade` is enabled, Rivet uses two mechanisms to detect version changes:
 
-- **New runner connection**: When a runner connects with a newer version number, the control plane immediately drains all older runners with the same name. This is the primary mechanism for [runner mode](/docs/runtime-modes) deployments.
-- **Metadata polling** (serverless only): In [serverless mode](/docs/runtime-modes), runners periodically poll the control plane to check for newer versions and self-drain if one is found. This ensures old runners drain even if no new requests trigger a runner connection.
+- **New runner connection**: When a runner connects with a newer version number, the control plane immediately drains all older runners with the same name. This is the primary mechanism for [long-running worker](/docs/workers#long-running-workers) deployments.
+- **Metadata polling** (serverless only): In [serverless mode](/docs/workers#serverless-workers), runners periodically poll the control plane to check for newer versions and self-drain if one is found. This ensures old runners drain even if no new requests trigger a runner connection.
 
 ### SIGTERM Handling
 
@@ -307,5 +307,5 @@ Rivet has a max shutdown grace period of 30 minutes that cannot be configured.
 
 ## Related
 
-- [Runtime Modes](/docs/runtime-modes): Serverless vs runner deployment modes
+- [Workers & Pools](/docs/workers): Serverless vs long-running workers
 - [Lifecycle](/actors/docs/lifecycle): Actor lifecycle hooks including `onSleep`

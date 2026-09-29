@@ -13,10 +13,10 @@ These are the statuses you can see in the dashboard for each actor.
 | **Starting** | The actor has been created but has not yet become connectable. |
 | **Running** | The actor is live and accepting connections. |
 | **Destroyed** | The actor has been gracefully destroyed. |
-| **Crashed** | The actor failed to start or encountered a fatal error. See [Troubleshooting](/actors/docs/troubleshooting#actor-status-is-crashed) for common failure reasons. |
+| **Crashed** | The actor failed to start or encountered a fatal error. See [Troubleshooting](/docs/troubleshooting#actor-status-is-crashed) for common failure reasons. |
 | **Sleeping** | The actor has been put to sleep from inactivity. It will be woken up automatically when a new request arrives. |
-| **Pending** | The actor is waiting to be allocated to a runner. This happens when no runner is available to handle the actor. See [Troubleshooting](/actors/docs/troubleshooting#actor-status-is-pending) for common causes. |
-| **Crash Loop Backoff** | The actor failed to allocate and is waiting to retry with a backoff. This typically means repeated allocation failures. The backoff prevents overloading your infrastructure in the case of a widespread misconfiguration in your backend. See [Troubleshooting](/actors/docs/troubleshooting#actor-status-is-crashed) for common failure reasons. |
+| **Pending** | The actor is waiting to be allocated to a runner. This happens when no runner is available to handle the actor. See [Troubleshooting](/docs/troubleshooting#actor-status-is-pending) for common causes. |
+| **Crash Loop Backoff** | The actor failed to allocate and is waiting to retry with a backoff. This typically means repeated allocation failures. The backoff prevents overloading your infrastructure in the case of a widespread misconfiguration in your backend. See [Troubleshooting](/docs/troubleshooting#actor-status-is-crashed) for common failure reasons. |
 
 ## API Representation
 

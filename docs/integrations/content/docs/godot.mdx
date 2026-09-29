@@ -1,0 +1,130 @@
+---
+title: "Godot"
+description: "Run a Godot dedicated server as a Rivet Actor with the container runner and connect clients over WebSockets."
+skill: true
+---
+
+Rivet runs a Godot dedicated server export as a Rivet Actor: one actor per match, cold-started on demand and shut down when the match ends. The export ships in a container with the [container runner](/integrations/containers) as its entrypoint. Your Godot project does not link against RivetKit.
+
+The container runner proxies HTTP and WebSocket traffic only, so use Godot's built-in `WebSocketMultiplayerPeer` instead of ENet. No plugins or engine changes are required.
+
+## Steps
+
+<Steps>
+<Step title="Prerequisites">
+
+- Godot 4.x with Linux export templates installed
+- Docker running locally
+- A [Rivet Cloud](https://dashboard.rivet.dev/) namespace with a secret token (`sk_`) and a public token (`pk_`)
+
+</Step>
+<Step title="Configure the Server">
+
+Listen on the port from the `PORT` environment variable. The container runner sets `PORT` for each actor it launches. Use the `dedicated_server` feature tag to branch between server and client code in one project:
+
+```gdscript
+extends Node
+
+const DEFAULT_PORT := 7770
+
+func _ready() -> void:
+	if OS.has_feature("dedicated_server"):
+		_start_server()
+
+func _start_server() -> void:
+	var port_env := OS.get_environment("PORT")
+	var port := int(port_env) if port_env != "" else DEFAULT_PORT
+
+	var peer := WebSocketMultiplayerPeer.new()
+	var err := peer.create_server(port)
+	if err != OK:
+		push_error("Failed to listen on port %d: %s" % [port, error_string(err)])
+		get_tree().quit(1)
+		return
+
+	multiplayer.multiplayer_peer = peer
+	print("Server listening on port %d" % port)
+```
+
+The server side needs nothing else: the container runner connects to it at `ws://127.0.0.1:<PORT>/` with a plain WebSocket handshake.
+
+</Step>
+<Step title="Configure the Client">
+
+Clients reach an actor through the Rivet gateway at a URL that carries the actor ID and your public token in the path. `WebSocketMultiplayerPeer.create_client` accepts a full URL, so no extra configuration is needed:
+
+```gdscript
+func connect_to_match(actor_id: String, public_token: String) -> void:
+	var url := "wss://api.rivet.dev/gateway/%s@%s/" % [actor_id, public_token]
+
+	var peer := WebSocketMultiplayerPeer.new()
+	var err := peer.create_client(url)
+	if err != OK:
+		push_error("Failed to connect: %s" % error_string(err))
+		return
+
+	multiplayer.multiplayer_peer = peer
+```
+
+</Step>
+<Step title="Export the Server">
+
+Add a Linux export preset. Under **Resources**, set **Export Mode** to **Export as dedicated server** so the build strips visual assets and sets the `dedicated_server` feature tag. Export to `build/server.x86_64`.
+
+</Step>
+<Step title="Write the Dockerfile">
+
+Wrap the export with the container runner. Run the server with `--headless` so it starts without a display.
+
+```dockerfile @nocheck
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://releases.rivet.dev/rivet/latest/container-runner/rivet-container-runner-x86_64-unknown-linux-musl \
+        -o /usr/local/bin/rivet-container-runner \
+    && chmod +x /usr/local/bin/rivet-container-runner
+
+COPY build/ /game/
+WORKDIR /game
+RUN chmod +x /game/server.x86_64
+
+ENTRYPOINT ["rivet-container-runner", "--", "./server.x86_64", "--headless"]
+```
+
+If the server logs a missing shared object at startup, add that library to the `apt-get install` line.
+
+</Step>
+<Step title="Deploy">
+
+```bash
+npx @rivetkit/cli deploy \
+	--token "$RIVET_CLOUD_TOKEN" \
+	--instance-request-concurrency 1 \
+	--drain-on-version-upgrade false \
+	--dockerfile Dockerfile
+```
+
+`--instance-request-concurrency 1` runs one match per container. `--drain-on-version-upgrade false` lets running matches finish when you deploy a new version.
+
+</Step>
+<Step title="Create a Match and Connect">
+
+Your backend or matchmaker creates one actor per match with the secret token, then hands the actor ID to players:
+
+```bash
+curl -X POST "https://api.rivet.dev/actors?namespace=my-namespace" \
+	-H "Authorization: Bearer sk_xxxxx" \
+	-H "Content-Type: application/json" \
+	-d '{"name":"game","key":"match-1234","runner_name_selector":"default","crash_policy":"destroy"}'
+```
+
+Players call `connect_to_match(actor_id, "pk_xxxxx")`. The first connection cold-starts the container; the gateway holds the connection until the server's port opens.
+
+</Step>
+</Steps>
+
+## Next Steps
+
+- [Containers](/integrations/containers) for runner flags, per-actor launch overrides, and how traffic is proxied
+- [Godot high-level multiplayer docs](https://docs.godotengine.org/en/stable/tutorials/networking/high_level_multiplayer.html) for RPCs and `MultiplayerSpawner`
+- [Authentication](/docs/authentication) for public and secret tokens

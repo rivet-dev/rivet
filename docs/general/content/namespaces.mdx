@@ -1,0 +1,44 @@
+---
+title: "Namespaces"
+description: "Namespaces isolate Rivet Actors, workers, pools, and tokens so environments and tenants never share state."
+skill: true
+---
+
+A namespace is an isolated environment inside the Rivet control plane. Every Actor, worker, pool, token, and configuration setting belongs to exactly one namespace, and nothing crosses the boundary: an Actor key in `staging` never collides with the same key in `production`, and a `production` token cannot read `staging`.
+
+## What Lives in a Namespace
+
+- **Actors**: Actor IDs and keys are unique within a namespace. Looking up an Actor by key always resolves within the namespace of the token making the request.
+- **Workers and pools**: Workers register under a pool name inside a namespace. Actors are only scheduled onto workers in their own namespace. See [Workers & Pools](/docs/workers).
+- **Pool configuration**: Scaling, drain, and eviction settings are stored per pool per namespace. See [Pool Configuration](/docs/pool-configuration).
+- **Tokens**: Secret, public, and connection tokens are minted for one namespace and only grant access to it. See [Connect](/docs/connect).
+
+If you are running a local control plane or a fresh self-hosted deployment, everything lands in the `default` namespace until you create more.
+
+## Common Layouts
+
+Namespaces are cheap, so create as many as your workflow needs:
+
+- **One per environment**: `production`, `staging`, and `development` each get their own namespace and their own tokens, so a bad deploy to staging cannot touch production Actors.
+- **One per customer**: For multi-tenant products that need hard isolation, a namespace per customer keeps Actor keys, data, and tokens separated without any application code.
+- **One per branch**: CI can mint a namespace for each pull request, run its tests against real Actors, and throw it away when the branch merges.
+
+## Creating a Namespace
+
+Create namespaces from the [dashboard](https://dashboard.rivet.dev) or mint a token with `--create-namespace` to create the namespace on the fly:
+
+```bash
+rivet token create --kind secret --namespace preview-123 --create-namespace
+```
+
+Both approaches produce the same namespace. The CLI form is convenient in scripts and CI. See the [CLI reference](/docs/cli#rivet-token) for the full set of flags.
+
+## Selecting a Namespace
+
+Your backend and clients select a namespace through the Rivet endpoint URL, which embeds the namespace name and a token scoped to it:
+
+```bash
+RIVET_ENDPOINT=https://production:sk_xxxxx@api.rivet.dev
+```
+
+The [Management API](/docs/debugging) takes the namespace as a `?namespace=` query parameter on every request, and the CLI takes `--namespace`. In each case the token you present must belong to that namespace.

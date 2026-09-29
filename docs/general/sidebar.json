@@ -9,22 +9,17 @@
 					"icon": "faSquareInfo"
 				},
 				{
-					"title": "Quickstart",
-					"href": "/docs/quickstart",
-					"icon": "faFastForward"
+					"title": "Architecture",
+					"href": "/docs/architecture"
 				}
 			]
 		},
 		{
-			"title": "Concepts",
+			"title": "Connect",
 			"pages": [
 				{
-					"title": "Architecture",
-					"href": "/docs/architecture"
-				},
-				{
-					"title": "Runtime Modes",
-					"href": "/docs/runtime-modes"
+					"title": "Connect",
+					"href": "/docs/connect"
 				},
 				{
 					"title": "Authentication",
@@ -48,33 +43,27 @@
 			]
 		},
 		{
-			"title": "Reference",
+			"title": "Operate",
 			"pages": [
 				{
-					"title": "Configuration",
-					"collapsible": true,
-					"pages": [
-						{
-							"title": "Connect",
-							"href": "/docs/endpoints"
-						},
-						{
-							"title": "Environment Variables",
-							"href": "/docs/environment-variables"
-						},
-						{
-							"title": "Pool Configuration",
-							"href": "/docs/pool-configuration"
-						},
-						{
-							"title": "Versions & Upgrades",
-							"href": "/docs/versions"
-						},
-						{
-							"title": "Regions & Multi-Region",
-							"href": "/docs/regions"
-						}
-					]
+					"title": "Namespaces",
+					"href": "/docs/namespaces"
+				},
+				{
+					"title": "Workers & Pools",
+					"href": "/docs/workers"
+				},
+				{
+					"title": "Versions & Upgrades",
+					"href": "/docs/versions"
+				},
+				{
+					"title": "Regions & Multi-Region",
+					"href": "/docs/regions"
+				},
+				{
+					"title": "Pool Configuration",
+					"href": "/docs/pool-configuration"
 				},
 				{
 					"title": "Monitoring",
@@ -85,44 +74,34 @@
 							"href": "/docs/tracing"
 						},
 						{
-							"title": "Debugging",
-							"href": "/docs/debugging"
-						},
-						{
 							"title": "Actor Statuses",
 							"href": "/docs/statuses"
-						}
-					]
-				},
-				{
-					"title": "Advanced",
-					"collapsible": true,
-					"pages": [
+						},
 						{
-							"title": "Container Runner",
-							"href": "/docs/container-runner"
+							"title": "Troubleshooting",
+							"href": "/docs/troubleshooting"
+						},
+						{
+							"title": "Management API",
+							"href": "/docs/debugging"
 						}
 					]
-				},
-				{
-					"title": "CLI",
-					"href": "/docs/cli"
 				}
 			]
 		},
 		{
-			"title": "AI Integration",
+			"title": "Reference",
 			"pages": [
 				{
-					"title": "Rivet MCP",
-					"href": "/docs/mcp"
+					"title": "Environment Variables",
+					"href": "/docs/environment-variables"
 				},
 				{
-					"title": "Skills",
-					"href": "/docs/skill"
+					"title": "CLI",
+					"href": "/docs/cli"
 				},
 				{
-					"title": "API Reference",
+					"title": "API Specs",
 					"collapsible": true,
 					"pages": [
 						{

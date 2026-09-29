@@ -1,10 +1,10 @@
 ---
-title: "Container Runner"
-description: "Package an existing containerized backend as a Rivet Actor worker and connect it to the Rivet control plane for lifecycle management."
+title: "Containers"
+description: "Run any container, such as a Unity or Godot dedicated server or a batch job, as a Rivet Actor without writing RivetKit code."
 skill: true
 ---
 
-The container runner (`rivet-container-runner`) is an adapter for running arbitrary containers as Rivet Actors. Use it for non-RivetKit workloads such as Unity or Godot dedicated game servers and batch jobs like FFmpeg transcoding.
+Rivet can run any container as a Rivet Actor. The `rivet-container-runner` binary is an adapter you set as your image's entrypoint: it speaks the control plane's protocol, launches your server as a child process, and proxies traffic to it. Your code never links against RivetKit. Use it for workloads such as Unity or Godot dedicated game servers and batch jobs like FFmpeg transcoding.
 
 ## Steps
 
@@ -12,7 +12,7 @@ The container runner (`rivet-container-runner`) is an adapter for running arbitr
 <Step title="Prerequisites">
 
 - A containerized server (a Unity or Godot dedicated server, a plain Node process, or any HTTP/WebSocket server)
-- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a [self-hosted Rivet Engine](/docs/deploy/self-host)
+- Access to [Rivet Cloud](https://dashboard.rivet.dev/) or a [self-hosted control plane](/docs/deploy/self-host/control-plane)
 - Docker running locally
 
 </Step>
@@ -41,7 +41,7 @@ Artifacts are published for `x86_64-unknown-linux-musl` and `aarch64-unknown-lin
 </Step>
 <Step title="Deploy">
 
-Deploy the image to Rivet Compute with the CLI. For game servers, configure the pool with one actor per instance and keep running instances alive across version upgrades:
+Deploy the image to Rivet Cloud with the CLI. For game servers, configure the pool with one actor per instance and keep running instances alive across version upgrades:
 
 ```bash
 npx @rivetkit/cli deploy \
@@ -54,16 +54,25 @@ npx @rivetkit/cli deploy \
 </Step>
 <Step title="Create Actors and Connect Clients">
 
-Create actors against the pool's runner (`default`) and connect clients through the gateway URL shown in the dashboard. WebSocket clients connect at the bare gateway URL with the `rivet` WebSocket subprotocol.
+Create actors against the pool's runner (`default`) and connect clients through the gateway. WebSocket clients connect at `wss://api.rivet.dev/gateway/<actor_id>@<pk_token>/`; with the public token in the path, no WebSocket subprotocol is required.
 
 </Step>
 </Steps>
 
+## Dedicated Game Server Guides
+
+Engine-specific setup, including which WebSocket transport to use and how to read `PORT`:
+
+<CardGroup>
+<Card title="Unity" href="/integrations/unity" />
+<Card title="Godot" href="/integrations/godot" />
+</CardGroup>
+
 ## How It Works
 
-1. The engine cold-starts your container and calls `POST /api/rivet/start` on the port it injects as `RIVET_PORT`.
+1. The control plane cold-starts your container and calls `POST /api/rivet/start` on the port it injects as `RIVET_PORT`.
 2. The runner spawns your server as a child process with `PORT` set to the child port, waits for the port to open, and reports the actor as running.
-3. Gateway traffic for the actor arrives over Rivet's tunnel and is proxied to `127.0.0.1:<child port>`. WebSocket clients connect at the bare gateway URL with the `rivet` WebSocket subprotocol. Raw HTTP reaches the child under the `/request/*` prefix on the actor surface (the prefix is stripped before proxying); other paths are reserved for the runtime's own endpoints.
+3. Gateway traffic for the actor arrives over Rivet's tunnel and is proxied to `127.0.0.1:<child port>`. WebSocket clients connect at `/gateway/<actor_id>@<pk_token>/`; the child sees a plain WebSocket handshake at the remaining path. Raw HTTP reaches the child under the `/request/*` prefix on the actor surface (the prefix is stripped before proxying); other paths are reserved for the runtime's own endpoints.
 4. Child stdout and stderr are re-emitted with an `[actorId=... key=...]` prefix so actor logs are attributed in the dashboard.
 5. When an actor stops, the runner sends its child `SIGTERM`, escalates to `SIGKILL` after a grace period, and exits the process once no actors remain.
 
@@ -73,17 +82,17 @@ All flags can also be set through environment variables:
 
 | Flag | Environment variable | Default | Description |
 | --- | --- | --- | --- |
-| `--port` | `RIVET_PORT` / `PORT` | `8080` | Serverless front-door HTTP port. Rivet Compute injects `RIVET_PORT` automatically. |
+| `--port` | `RIVET_PORT` / `PORT` | `8080` | Serverless front-door HTTP port. Rivet Cloud injects `RIVET_PORT` automatically. |
 | `--child-port` | `CHILD_PORT` | `7770` | First local child port; each actor's child gets the next free port at or above this, exported to the child as `PORT`. |
 | `--actor-name` | `RIVET_ACTOR_NAME` | `game` | Actor name this runner serves. |
-| `--runner-version` | `RIVET_RUNNER_VERSION` | `1` | Version reported to the engine, used to drain old runners on deploy. |
-| `--base-path` | `RIVET_SERVERLESS_BASE_PATH` | `/api/rivet` | Base path the engine calls for serverless start. |
+| `--runner-version` | `RIVET_RUNNER_VERSION` | `1` | Version reported to the control plane, used to drain old workers on deploy. |
+| `--base-path` | `RIVET_SERVERLESS_BASE_PATH` | `/api/rivet` | Base path the control plane calls for serverless start. |
 | `--stop-grace-secs` | `RIVET_STOP_GRACE_SECS` | `25` | `SIGTERM` to `SIGKILL` grace period when stopping the child. Capped to a few seconds when the platform itself is reclaiming the instance, so shutdown fits inside the platform's own kill window. |
 | `--readiness-timeout-secs` | `RIVET_READINESS_TIMEOUT_SECS` | `30` | How long to wait for the child's port to open before failing the start. |
 
 ### Per-Actor Input
 
-The actor's `input` payload can override the launch spec per actor. All fields are optional and fall back to the entrypoint command. RivetKit clients pass this object directly; when creating actors through the raw engine API, encode it as CBOR before base64-encoding the `input` field:
+The actor's `input` payload can override the launch spec per actor. All fields are optional and fall back to the entrypoint command. RivetKit clients pass this object directly; when creating actors through the raw control plane API, encode it as CBOR before base64-encoding the `input` field:
 
 ```json
 {
@@ -97,4 +106,4 @@ The actor's `input` payload can override the launch spec per actor. All fields a
 
 ## Source and Examples
 
-The runner and a full end-to-end example, including a Unity FishNet demo project and a local test harness, live in the Rivet repository under [`container-runner/`](https://github.com/rivet-dev/rivet/tree/main/container-runner).
+The adapter and a full end-to-end example, including a Unity FishNet demo project and a local test harness, live in the Rivet repository under [`container-runner/`](https://github.com/rivet-dev/rivet/tree/main/container-runner).
