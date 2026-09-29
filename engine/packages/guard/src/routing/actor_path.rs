@@ -89,6 +89,11 @@ struct RvtParams {
 	pool: Option<String>,
 	#[serde(default)]
 	key: Option<String>,
+	/// Unambiguous key encoding: one `rvt-key-part` occurrence per key
+	/// component. Takes precedence over the legacy comma-joined `key` field
+	/// when present. See `build_actor_query`.
+	#[serde(default, rename = "key-part")]
+	key_part: Vec<String>,
 	#[serde(default)]
 	input: Option<String>,
 	#[serde(default)]
@@ -231,11 +236,20 @@ fn parse_query_actor_path(
 /// Extract and validate rvt-* params from pre-parsed query pairs.
 fn extract_rvt_params(rvt_params: &[(String, String)]) -> Result<RvtParams> {
 	let mut map = serde_json::Map::new();
+	let mut key_parts = Vec::new();
 
 	for (raw_key, value) in rvt_params {
 		let stripped = raw_key
 			.strip_prefix(RVT_PREFIX)
 			.expect("rvt_params should only contain rvt- prefixed keys");
+
+		// `key-part` is the only rvt-* param allowed to repeat: one
+		// occurrence per key component, collected in order below instead of
+		// going through the single-value duplicate check.
+		if stripped == "key-part" {
+			key_parts.push(serde_json::Value::String(value.clone()));
+			continue;
+		}
 
 		if map.contains_key(stripped) {
 			return Err(errors::QueryDuplicateParam {
@@ -251,6 +265,8 @@ fn extract_rvt_params(rvt_params: &[(String, String)]) -> Result<RvtParams> {
 		};
 		map.insert(stripped.to_string(), value);
 	}
+
+	map.insert("key-part".to_string(), serde_json::Value::Array(key_parts));
 
 	serde_json::from_value(serde_json::Value::Object(map)).map_err(|e| {
 		errors::QueryInvalidParams {
@@ -270,6 +286,12 @@ fn parse_query_bool(value: &str) -> Option<bool> {
 
 /// Split a comma-separated key string into components.
 /// Missing or empty key yields an empty vec.
+///
+/// This is the legacy encoding: it cannot distinguish a single component
+/// containing a literal comma from multiple components, so it only remains
+/// for backward compatibility with clients that predate `rvt-key-part`. New
+/// clients must send `rvt-key-part` instead, which `build_actor_query` below
+/// prefers whenever present.
 fn split_key(raw: Option<&str>) -> Vec<String> {
 	match raw {
 		None | Some("") => Vec::new(),
@@ -278,7 +300,11 @@ fn split_key(raw: Option<&str>) -> Vec<String> {
 }
 
 fn build_actor_query(name: &str, rvt: RvtParams) -> Result<QueryActorQuery> {
-	let key = split_key(rvt.key.as_deref());
+	let key = if !rvt.key_part.is_empty() {
+		rvt.key_part.clone()
+	} else {
+		split_key(rvt.key.as_deref())
+	};
 
 	match rvt.method.as_str() {
 		"get" => {

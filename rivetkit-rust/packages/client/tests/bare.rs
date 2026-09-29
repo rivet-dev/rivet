@@ -716,9 +716,10 @@ fn gateway_url_uses_query_backed_get_target() {
 	assert_eq!(params.get("rvt-namespace").map(String::as_str), Some("ns"));
 	assert_eq!(params.get("rvt-method").map(String::as_str), Some("get"));
 	assert_eq!(
-		params.get("rvt-key").map(String::as_str),
-		Some("tenant,room 1")
+		query_key_parts(&url),
+		vec!["tenant".to_owned(), "room 1".to_owned()]
 	);
+	assert!(!params.contains_key("rvt-key"));
 	assert_eq!(
 		params.get("rvt-token").map(String::as_str),
 		Some("dev-token")
@@ -758,9 +759,10 @@ fn gateway_url_uses_query_backed_get_or_create_target() {
 		Some("getOrCreate")
 	);
 	assert_eq!(
-		params.get("rvt-key").map(String::as_str),
-		Some("tenant,room 1")
+		query_key_parts(&url),
+		vec!["tenant".to_owned(), "room 1".to_owned()]
 	);
+	assert!(!params.contains_key("rvt-key"));
 	assert_eq!(
 		params.get("rvt-runner").map(String::as_str),
 		Some("runner-a")
@@ -1140,7 +1142,10 @@ async fn raw_fetch(
 		params.get("rvt-method").map(String::as_str),
 		Some("getOrCreate")
 	);
-	assert_eq!(params.get("rvt-key").map(String::as_str), Some("raw-fetch"));
+	assert_eq!(
+		params.get("rvt-key-part").map(String::as_str),
+		Some("raw-fetch")
+	);
 	assert_eq!(
 		headers
 			.get("x-test-header")
@@ -1177,7 +1182,7 @@ async fn raw_websocket(
 		Some("getOrCreate")
 	);
 	assert_eq!(
-		params.get("rvt-key").map(String::as_str),
+		params.get("rvt-key-part").map(String::as_str),
 		Some("raw-websocket")
 	);
 	let protocols = headers
@@ -1549,6 +1554,13 @@ fn endpoint(addr: SocketAddr) -> String {
 
 fn query_params(url: &Url) -> HashMap<String, String> {
 	url.query_pairs().into_owned().collect()
+}
+
+fn query_key_parts(url: &Url) -> Vec<String> {
+	url.query_pairs()
+		.filter(|(key, _)| key == "rvt-key-part")
+		.map(|(_, value)| value.into_owned())
+		.collect()
 }
 
 fn query_map(query: &str) -> HashMap<String, String> {

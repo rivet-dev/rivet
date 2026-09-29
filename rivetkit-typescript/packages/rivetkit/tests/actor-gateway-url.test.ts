@@ -33,7 +33,7 @@ describe("gateway URL builders", () => {
 		);
 	});
 
-	test("serializes get queries with comma-separated key encoding", () => {
+	test("serializes get queries with one rvt-key-part per key component", () => {
 		const url = buildActorQueryGatewayUrl(
 			"https://api.rivet.dev/manager",
 			"prod",
@@ -51,10 +51,46 @@ describe("gateway URL builders", () => {
 		const params = urlObj.searchParams;
 		expect(params.get("rvt-namespace")).toBe("prod");
 		expect(params.get("rvt-method")).toBe("get");
-		expect(params.get("rvt-key")).toBe("part/one,shard-2,100%");
+		expect(params.getAll("rvt-key-part")).toEqual([
+			"part/one",
+			"shard-2",
+			"100%",
+		]);
+		expect(params.has("rvt-key")).toBe(false);
 		expect(params.get("rvt-token")).toBe("tok/en");
 		expect(urlObj.pathname).toContain("/gateway/alpha%20team/status");
 		expect(url).not.toContain("@");
+	});
+
+	test("distinguishes key component boundaries that previously collided under comma-joining", () => {
+		// Regression coverage for https://github.com/rivet-dev/rivet/issues/5807:
+		// a component containing a literal comma must not become
+		// indistinguishable from a key with an extra component.
+		const keyPartsOf = (key: string[]) => {
+			const url = buildActorQueryGatewayUrl(
+				"https://api.rivet.dev/manager",
+				"prod",
+				{ getForKey: { name: "room", key } },
+				undefined,
+			);
+			return new URL(url).searchParams.getAll("rvt-key-part");
+		};
+
+		expect(keyPartsOf(["a,b"])).toEqual(["a,b"]);
+		expect(keyPartsOf(["a", "b"])).toEqual(["a", "b"]);
+		expect(keyPartsOf(["a,b"])).not.toEqual(keyPartsOf(["a", "b"]));
+
+		expect(keyPartsOf([""])).toEqual([""]);
+		expect(keyPartsOf([])).toEqual([]);
+		expect(keyPartsOf([""])).not.toEqual(keyPartsOf([]));
+
+		expect(keyPartsOf(["a,", "b"])).toEqual(["a,", "b"]);
+		expect(keyPartsOf(["a", "", "b"])).toEqual(["a", "", "b"]);
+		expect(keyPartsOf(["a,", "b"])).not.toEqual(keyPartsOf(["a", "", "b"]));
+
+		expect(keyPartsOf([","])).toEqual([","]);
+		expect(keyPartsOf(["", ""])).toEqual(["", ""]);
+		expect(keyPartsOf([","])).not.toEqual(keyPartsOf(["", ""]));
 	});
 
 	test("serializes skipReadyWait for query routing", () => {
@@ -122,7 +158,7 @@ describe("gateway URL builders", () => {
 		expect(params.get("rvt-namespace")).toBe("default");
 		expect(params.get("rvt-method")).toBe("getOrCreate");
 		expect(params.get("rvt-runner")).toBe("my-pool");
-		expect(params.get("rvt-key")).toBe("user,");
+		expect(params.getAll("rvt-key-part")).toEqual(["user", ""]);
 		expect(params.get("rvt-input")).toBe(toBase64Url(cbor.encode(input)));
 		expect(params.get("rvt-region")).toBe("local/us-west");
 		expect(params.get("rvt-crash-policy")).toBe("sleep");
@@ -130,7 +166,7 @@ describe("gateway URL builders", () => {
 		expect(urlObj.pathname).toContain("/gateway/room/connect");
 	});
 
-	test("omits rvt-key param for empty key arrays", () => {
+	test("omits key params for empty key arrays", () => {
 		const url = buildActorQueryGatewayUrl(
 			"https://api.rivet.dev/manager",
 			"default",
@@ -149,7 +185,9 @@ describe("gateway URL builders", () => {
 			"default",
 		);
 
-		expect(new URL(url).searchParams.has("rvt-key")).toBe(false);
+		const params = new URL(url).searchParams;
+		expect(params.has("rvt-key")).toBe(false);
+		expect(params.has("rvt-key-part")).toBe(false);
 	});
 
 	test("rejects oversized query input before base64url encoding", () => {

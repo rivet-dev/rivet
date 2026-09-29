@@ -30,7 +30,7 @@ Actor IDs come from the response of [Create Actor](/docs/api/actors/create), [Ge
 Put the actor name in the path and describe the lookup with `rvt-*` query parameters. Rivet resolves the actor, creates it if asked, waits for it to be ready, and forwards the request.
 
 ```bash
-curl "https://api.rivet.dev/gateway/counter/action/increment?rvt-namespace=$RIVET_NAMESPACE&rvt-method=getOrCreate&rvt-key=my-counter&rvt-pool=default" \
+curl "https://api.rivet.dev/gateway/counter/action/increment?rvt-namespace=$RIVET_NAMESPACE&rvt-method=getOrCreate&rvt-key-part=my-counter&rvt-pool=default" \
   -H "x-rivet-token: $RIVET_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"args": [1]}'
@@ -44,7 +44,8 @@ This is what the RivetKit client does for `client.counter.getOrCreate(["my-count
 | --- | --- | --- |
 | `rvt-namespace` | Yes | Namespace the actor lives in. |
 | `rvt-method` | Yes | `get` to fail if the actor does not exist, or `getOrCreate` to create it on first use. |
-| `rvt-key` | No | Actor key. Separate multi-part keys with commas: `rvt-key=org-1,room-2`. Omit for a keyless actor. |
+| `rvt-key-part` | No | One key part. Repeat for a multi-part key, in order: `rvt-key-part=org-1&rvt-key-part=room-2`. Omit entirely for a keyless actor. |
+| `rvt-key` | No | Legacy single-parameter key encoding. Separate multi-part keys with commas: `rvt-key=org-1,room-2`. Prefer `rvt-key-part`; this form cannot express a part that contains a comma. |
 | `rvt-pool` | For `getOrCreate` | Pool to create the actor on. RivetKit registers the `default` pool unless configured otherwise. `rvt-runner` is a deprecated alias. |
 | `rvt-input` | No | Base64url-encoded CBOR passed to `createState` and `onCreate` if the actor is created. Only with `getOrCreate`. |
 | `rvt-region` | No | Preferred region if the actor is created. Only with `getOrCreate`. |
@@ -54,8 +55,8 @@ This is what the RivetKit client does for `client.counter.getOrCreate(["my-count
 
 ### Rules
 
-- Every `rvt-*` parameter is reserved. Unknown or duplicated `rvt-*` parameters return a `400`.
+- Every `rvt-*` parameter is reserved. Unknown `rvt-*` parameters return a `400`, as does a duplicated `rvt-*` parameter other than `rvt-key-part`, which is expected to repeat once per key part.
 - `rvt-*` parameters are stripped before the request reaches your actor. Other query parameters pass through unchanged, so `/gateway/counter/request/search?q=hi&rvt-namespace=...` reaches `onRequest` as `/search?q=hi`.
 - `rvt-method=get` never creates an actor. Passing `rvt-input`, `rvt-region`, `rvt-crash-policy`, or `rvt-runner` with `get` returns a `400`.
 - The `@{token}` path syntax is not allowed with actor names. Use `rvt-token` or the header instead.
-- Commas inside a key part cannot be expressed in `rvt-key`. Create such actors with [Create Actor](/docs/api/actors/create) and route to them by ID. See [Actor Keys](/docs/api/actor-keys) for how the control plane encodes keys.
+- If both `rvt-key-part` and `rvt-key` are present, `rvt-key-part` wins. Use `rvt-key-part` for any key part that might contain a comma; see [Actor Keys](/docs/api/actor-keys) for how the control plane encodes keys.

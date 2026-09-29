@@ -58,7 +58,8 @@ Inspector endpoints do not accept namespace tokens. Send the actor's inspector t
 | --- | --- | --- | --- |
 | `rvt-namespace` | `string` | No | Namespace the actor lives in. Required when `{actor}` is an actor name. |
 | `rvt-method` | `string` | No | How to resolve an actor name to an actor. `getOrCreate` requires `rvt-pool`. One of `"get"`, `"getOrCreate"`. |
-| `rvt-key` | `string` | No | Actor key. Separate multi-part keys with commas. |
+| `rvt-key` | `string` | No | Actor key. Separate multi-part keys with commas. Deprecated in favor of `rvt-key-part`, which unambiguously represents a component containing a literal comma. |
+| `rvt-key-part` | `string[]` | No | Actor key component. Repeat this parameter once per key component instead of comma-joining them into `rvt-key`. Takes precedence over `rvt-key` when both are present. |
 | `rvt-pool` | `string` | No | Pool to create the actor on when `rvt-method=getOrCreate`. RivetKit registers the `default` pool unless configured otherwise. |
 | `rvt-runner` | `string` | No | Deprecated alias for `rvt-pool`. |
 | `rvt-input` | `string` | No | Base64url-encoded CBOR input passed to `createState` and `onCreate` when `rvt-method=getOrCreate` creates the actor. |
