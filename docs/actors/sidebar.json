@@ -119,10 +119,6 @@
 						{
 							"title": "Low-Level HTTP Handler",
 							"href": "/actors/docs/request-handler"
-						},
-						{
-							"title": "Vanilla HTTP API",
-							"href": "/actors/docs/http-api"
 						}
 					]
 				},

@@ -1,0 +1,58 @@
+---
+title: "HTTP API"
+description: "Work with Rivet Actors over plain HTTP from any language, without installing a client SDK."
+skill: true
+---
+
+Everything the RivetKit client does happens over HTTP. This reference documents those requests so you can call actors from any language, curl, or a platform without a Rivet SDK. Every endpoint page shows the raw request next to the equivalent TypeScript.
+
+```http
+https://api.rivet.dev
+```
+
+Self-hosted deployments use the endpoint from your `RIVET_ENDPOINT` URL instead. See [Endpoints](/docs/endpoints).
+
+## Two Surfaces
+
+The API has two parts that use different authentication and addressing rules.
+
+| | Gateway | Control plane |
+| --- | --- | --- |
+| Path prefix | `/gateway/{actor}/...` | `/actors`, `/auth/tokens`, ... |
+| Purpose | Talk to a running actor: call actions, send HTTP requests, open realtime connections | Manage actors: list, create, destroy, sleep, and issue tokens |
+| Authentication | `x-rivet-token` header, `{actor_id}@{token}` path, or `rvt-token` query | `Authorization: Bearer` header plus `namespace` query parameter |
+| Safe from browsers | Yes, with a public (`pk_`) or scoped token | No, requires a secret (`sk_`) token |
+
+Most applications only need the gateway. The RivetKit client resolves actors by name and key inline on each gateway request, so you rarely need to create actors or look up IDs through the control plane first.
+
+## TypeScript to HTTP
+
+| RivetKit client | HTTP |
+| --- | --- |
+| `client.counter.getOrCreate(["my-counter"]).increment(1)` | [`POST /gateway/counter/action/increment?rvt-method=getOrCreate&rvt-key=my-counter&...`](/docs/api/gateway/call-action) |
+| `handle.fetch("/path", init)` | [`ANY /gateway/{actor}/request/path`](/docs/api/gateway/request) |
+| `handle.connect()` | [`GET /gateway/{actor}/connect` (WebSocket)](/docs/api/gateway/connect) |
+| `conn.increment(1)` | [`ActionRequest` message](/docs/api/gateway/connect#actions) |
+| `conn.on("countChanged", cb)` | [`SubscriptionRequest` message](/docs/api/gateway/connect#events) |
+| `handle.webSocket("/path")` | [`GET /gateway/{actor}/websocket/path` (WebSocket)](/docs/api/websockets) |
+| `handle.resolve()` | [`PUT /actors`](/docs/api/actors/get-or-create) |
+| `client.counter.create(["key"])` | [`POST /actors`](/docs/api/actors/create) |
+| `handle.issueToken()` | [`POST /auth/tokens`](/docs/api/tokens/create) |
+| Dashboard "Destroy" | [`DELETE /actors/{actor_id}`](/docs/api/actors/destroy) |
+
+## When to Use HTTP Directly
+
+- Calling actors from a language without a RivetKit client (Go, Ruby, PHP, shell scripts).
+- Serverless platforms or edge runtimes where you want zero dependencies.
+- Operational scripts that list, destroy, or sleep actors in bulk.
+- Debugging: reproducing what the client sends with curl.
+
+If you are writing TypeScript, Rust, Python, or Swift, use the client libraries instead. They handle actor resolution, retries, token refresh, and realtime connections for you. See [Clients](/actors/docs/clients).
+
+## Specifications
+
+Machine-readable definitions of the same API:
+
+- [OpenAPI (gateway)](https://github.com/rivet-dev/rivet/tree/main/rivetkit-openapi)
+- [OpenAPI (control plane)](https://github.com/rivet-dev/rivet/blob/main/engine/artifacts/openapi.json)
+- [AsyncAPI (WebSocket protocol)](https://github.com/rivet-dev/rivet/tree/main/rivetkit-asyncapi)

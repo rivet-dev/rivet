@@ -8,7 +8,7 @@ correctly there.
 
 ## Layout
 
-Three bundles live here. Each is synced to the website independently by its own
+Four bundles live here. Each is synced to the website independently by its own
 workflow in `.github/workflows/docs-sync-*.yml`.
 
 ```
@@ -25,6 +25,19 @@ docs/
     sidebar.json
     content/
       docs/**.mdx         -> /integrations/...
+  api/                    -> /docs/api/...
+    endpoints.json        source of truth for the generated pages
+    sidebar.json          GENERATED
+    error-registry.json   GENERATED, rendered by the website on error-codes.mdx
+    content/
+      *.mdx               -> /docs/api/...       (hand-written, incl. inspector-connect.mdx)
+      gateway/**.mdx      -> /docs/api/gateway/...    GENERATED (endpoints and connection protocol)
+      actors/**.mdx       -> /docs/api/actors/...     GENERATED
+      tokens/**.mdx       -> /docs/api/tokens/...     GENERATED
+      namespaces/**.mdx   -> /docs/api/namespaces/... GENERATED
+      workers/**.mdx      -> /docs/api/workers/...    GENERATED (/runners, /runner-configs, /envoys)
+      control-plane/**.mdx -> /docs/api/control-plane/... GENERATED
+      inspector/**.mdx    -> /docs/api/inspector/...  GENERATED (dashboard inspector HTTP routes)
 ```
 
 The website links each bundle's `content` into its content collection, so **only
@@ -45,6 +58,33 @@ dimension the way a product vertical does. `content/cli.mdx` renders at
 `integrations` covers third-party frameworks and SDKs. Its `sidebar.json` is
 intentionally empty: the website builds that navigation from
 `src/data/integrations.ts` so it can carry vendor logos and category groups.
+
+`api` is the HTTP API reference. Its endpoint pages, connection protocol pages,
+`error-registry.json`, and `sidebar.json` are generated from `docs/api/endpoints.json`
+plus the OpenAPI specs in `engine/artifacts/openapi.json` (control plane) and
+`rivetkit-openapi/openapi.json` (gateway), the AsyncAPI spec in
+`rivetkit-asyncapi/asyncapi.json` (connection protocol), and the error artifacts
+in `engine/artifacts/errors/`. Do not edit generated files by hand; edit
+`endpoints.json` (prose, examples, which operations and messages are published)
+or the spec, then run:
+
+```sh
+node scripts/docs/gen-api-reference.mjs          # regenerate
+node scripts/docs/gen-api-reference.mjs --check  # CI: fail if stale
+```
+
+Only the top-level `content/*.mdx` pages (overview, authentication, actor-keys,
+actor-routing, errors, error-codes, websockets, inspector-connect,
+worker-connect) are hand-written. A hand-written page is placed in a group through `pages` in
+`endpoints.json`; `first: true` puts it at the top of the group and `after`
+puts it after a generated slug. The error codes page is prose
+plus `<ErrorCodes />`, a website component that renders `error-registry.json`;
+the website's `assemble` step copies that file from this bundle. Add a
+description for a new user-facing error group in `errorCodes.groups` in
+`endpoints.json`. TypeScript and raw WebSocket examples live
+in `examples/docs/api/` and are referenced from `endpoints.json`. Endpoint pages
+pair a cURL tab with a TypeScript tab; connection protocol pages pair a raw
+WebSocket tab with a TypeScript tab. Keep that pairing when adding pages.
 
 ## Frontmatter
 
@@ -75,9 +115,9 @@ not objects, so this repo needs no dependency on the website's icon package.
 ```
 
 - One key per content directory. `docs/actors` uses `docs` and `learn`; the other
-  two bundles use `docs` alone.
+  bundles use `docs` alone.
 - `href` is the full site path the page renders at, so it differs per bundle:
-  `/actors/docs/...`, `/docs/...`, `/integrations/...`. The `learn` section is the
+  `/actors/docs/...`, `/docs/...`, `/integrations/...`, `/docs/api/...`. The `learn` section is the
   exception: author it as `/actors/learn/...` and the website re-roots it onto
   `/guides/...`.
 - Adding a page to `content/` does not add it to the nav. Add it here too.
@@ -147,7 +187,7 @@ git clone https://github.com/rivet-dev/website
 cd rivet-website && pnpm install && pnpm dev
 ```
 
-The website resolves this repo as the sibling `../rivet`, and reads all three
+The website resolves this repo as the sibling `../rivet`, and reads all four
 bundles from it.
 
 `pnpm assemble` prints which checkout each product resolved to. To point at a
@@ -158,4 +198,5 @@ existing one alone:
 ln -sfn /path/to/this/repo/docs/actors/content       src/content/docs/actors
 ln -sfn /path/to/this/repo/docs/general/content      src/content/docs/docs
 ln -sfn /path/to/this/repo/docs/integrations/content src/content/docs/integrations
+ln -sfn /path/to/this/repo/docs/api/content          src/content/docs/api
 ```

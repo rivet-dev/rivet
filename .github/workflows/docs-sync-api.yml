@@ -1,0 +1,45 @@
+name: Sync docs (api)
+
+# The HTTP API reference published at rivet.dev/docs/api. Endpoint and connection
+# protocol pages plus docs/api/error-registry.json (rendered by the website on the
+# error codes page) are generated from the OpenAPI and AsyncAPI specs and the
+# error artifacts in this repo by scripts/docs/gen-api-reference.mjs, so they are
+# regenerated here before syncing to guarantee the published docs match main even
+# if a commit forgot to run the generator.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/api/**"
+      - "examples/docs/**"
+      - "engine/artifacts/openapi.json"
+      - "engine/artifacts/errors/**"
+      - "rivetkit-openapi/**"
+      - "rivetkit-asyncapi/**"
+      - "engine/packages/guard-core/src/utils.rs"
+      - "engine/packages/api-builder/src/error_response.rs"
+      - "rivetkit-rust/packages/rivetkit-core/src/registry/http.rs"
+      - "rivetkit-rust/packages/rivetkit-core/src/error.rs"
+      - "scripts/docs/gen-api-reference.mjs"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Generate endpoint pages
+        run: node scripts/docs/gen-api-reference.mjs
+      - uses: rivet-dev/rivet-website/.github/actions/sync-docs@main
+        with:
+          product: api
+          source: docs/api
+          token: ${{ secrets.RIVET_WEBSITE_TOKEN }}
+          extra-paths: >-
+            examples/docs
+            engine/artifacts/openapi.json
+            rivetkit-openapi/openapi.json
+            rivetkit-asyncapi/asyncapi.json

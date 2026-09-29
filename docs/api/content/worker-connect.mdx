@@ -1,0 +1,33 @@
+---
+title: "Worker Connection"
+description: "The WebSocket a worker opens to the control plane to receive actors. Advanced; use rivetkit-core instead of implementing it."
+skill: true
+---
+
+A worker is a process that runs your actor code. It registers with the control plane by opening one long-lived WebSocket and then receives commands over it: start this actor, stop that one, deliver this message. Every RivetKit runtime opens this connection for you.
+
+<Warning>
+This protocol is internal and changes between releases. Do not implement it by hand. If you are bringing RivetKit to a new language, bind to [rivetkit-core](https://github.com/rivet-dev/rivet/tree/main/rivetkit-rust/packages/rivetkit-core), the Rust library that already speaks it and that the TypeScript runtime is built on.
+</Warning>
+
+```http
+GET wss://api.rivet.dev/envoys/connect
+```
+
+| Query parameter | Description |
+| --- | --- |
+| `protocol_version` | Protocol version the worker speaks. The control plane rejects versions it has not agreed to. |
+| `namespace` | Namespace the worker serves. |
+| `pool_name` | Pool the worker joins. Actors created with `rvt-pool` or `pool` matching this name run on it. |
+| `envoy_key` | Identifier for this worker process, unique within the pool. |
+| `version` | Integer build version of the worker. When a pool has `drain_on_version_upgrade` set, connecting a newer version drains workers on older versions. |
+
+The token travels as a `rivet_token.{token}` subprotocol, the same as other WebSocket endpoints. See [Authentication](/docs/api/authentication#websocket-requests). It must be a secret (`sk_`) token or a scoped token granting `create` on the `runner` resource.
+
+Messages are binary [BARE](https://baremessages.org/) frames. The schema, versioned message types, and a reference client live in the repository:
+
+- [Protocol schemas](https://github.com/rivet-dev/rivet/tree/main/engine/sdks/schemas/envoy-protocol), one `.bare` file per protocol version
+- [Rust protocol types](https://github.com/rivet-dev/rivet/tree/main/engine/sdks/rust/envoy-protocol) generated from the schemas
+- [Rust client](https://github.com/rivet-dev/rivet/tree/main/engine/sdks/rust/envoy-client), the transport rivetkit-core uses to hold this connection
+
+To see which workers are connected, use [List Workers](/docs/api/workers/list).

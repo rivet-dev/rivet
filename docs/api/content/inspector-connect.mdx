@@ -1,0 +1,525 @@
+---
+title: "Inspector Connect"
+description: "Open the Inspector WebSocket used for live actor inspection."
+---
+
+<Note>
+The inspector API powers the Rivet dashboard and is subject to change without notice. Do not build production integrations on it.
+</Note>
+
+The inspector connection exposes the same live data used by the Rivet dashboard. `{actor}` is an actor ID. See [Actor Routing](/docs/api/actor-routing).
+
+```http
+GET wss://api.rivet.dev/gateway/{actor}/inspector/connect?protocol_version=6
+```
+
+## Handshake
+
+Pass these WebSocket subprotocols in this order:
+
+| Subprotocol | Purpose |
+| --- | --- |
+| `rivet` | Selects the Rivet WebSocket protocol. |
+| `rivet_target.actor` | Routes the connection to an actor. |
+| `rivet_actor.{actor}` | Identifies the actor. |
+| `rivet_encoding.bare` | Selects BARE binary messages. |
+| `rivet_token.{token}` | Authenticates the gateway request. |
+| `rivet_inspector_token.{token}` | Authenticates access to the inspector. |
+
+Each actor stores its inspector token in its KV storage under the single byte `0x03`. Read it through the control plane with `GET /actors/{actor_id}/kv/keys/Aw==?namespace={namespace}` using a namespace token, then base64-decode the response `value` before adding it to `rivet_inspector_token.<token>`.
+
+Set `protocol_version=6` for the message shapes on this page. Supported values are `1` through `6`. Omitting the parameter selects the legacy version 5 framing, which embeds a version in every message.
+
+<CodeGroup>
+
+```javascript Raw WebSocket
+import * as cbor from "cbor-x";
+import {
+  CURRENT_VERSION,
+  TO_CLIENT_VERSIONED,
+  TO_SERVER_VERSIONED,
+} from "rivetkit/inspector/client";
+
+const ws = new WebSocket(
+  `wss://api.rivet.dev/gateway/${actorId}/inspector/connect?protocol_version=${CURRENT_VERSION}`,
+  [
+    "rivet",
+    "rivet_target.actor",
+    `rivet_actor.${actorId}`,
+    "rivet_encoding.bare",
+    `rivet_token.${apiToken}`,
+    `rivet_inspector_token.${inspectorToken}`,
+  ],
+);
+ws.binaryType = "arraybuffer";
+
+ws.onmessage = (event) => {
+  const message = TO_CLIENT_VERSIONED.deserialize(
+    new Uint8Array(event.data),
+    CURRENT_VERSION,
+  );
+  if (message.body.tag === "StateUpdated") {
+    console.log(cbor.decode(new Uint8Array(message.body.val.state)));
+  }
+  console.log(message.body);
+};
+
+ws.onopen = () => {
+  ws.send(TO_SERVER_VERSIONED.serialize({
+    body: { tag: "StateRequest", val: { id: 1n } },
+  }, CURRENT_VERSION));
+};
+```
+
+</CodeGroup>
+
+## Message envelope
+
+Messages are binary BARE frames, not JSON text. Import the versioned codecs from `rivetkit/inspector/client` as shown above. The decoded envelope is `{ body: { tag, val } }`. Fields with type `data` contain CBOR bytes. Decode those bytes with a CBOR codec. The JSON examples below show the decoded logical shape, with CBOR values expanded for readability. Unsigned integers decode to JavaScript `bigint`.
+
+Most requests have a client-selected `id`. Their response uses the same value as `rid`. `PatchStateRequest` has no response.
+
+## Client to actor messages
+
+### PatchStateRequest
+
+Replaces the actor state.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `state` | `data` | Yes | New state encoded as CBOR. |
+
+```json
+{ "body": { "tag": "PatchStateRequest", "val": { "state": { "count": 2 } } } }
+```
+
+### StateRequest
+
+Requests the current state.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+
+```json
+{ "body": { "tag": "StateRequest", "val": { "id": 1 } } }
+```
+
+### ConnectionsRequest
+
+Requests the current connections.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+
+```json
+{ "body": { "tag": "ConnectionsRequest", "val": { "id": 2 } } }
+```
+
+### ActionRequest
+
+Calls an actor action.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+| `name` | `string` | Yes | Action name. |
+| `args` | `data` | Yes | Action arguments encoded as CBOR. |
+
+```json
+{ "body": { "tag": "ActionRequest", "val": { "id": 3, "name": "increment", "args": [1] } } }
+```
+
+### RpcsListRequest
+
+Requests the available action names.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+
+```json
+{ "body": { "tag": "RpcsListRequest", "val": { "id": 4 } } }
+```
+
+### TraceQueryRequest
+
+Queries traces in a time range.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+| `startMs` | `uint` | Yes | Inclusive start time in Unix milliseconds. |
+| `endMs` | `uint` | Yes | End time in Unix milliseconds. |
+| `limit` | `uint` | Yes | Maximum number of records. |
+
+```json
+{ "body": { "tag": "TraceQueryRequest", "val": { "id": 5, "startMs": 1735689600000, "endMs": 1735689660000, "limit": 100 } } }
+```
+
+### QueueRequest
+
+Requests queue status. The actor limits `limit` to 200.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+| `limit` | `uint` | Yes | Maximum number of message summaries. |
+
+```json
+{ "body": { "tag": "QueueRequest", "val": { "id": 6, "limit": 50 } } }
+```
+
+### WorkflowHistoryRequest
+
+Requests workflow history.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+
+```json
+{ "body": { "tag": "WorkflowHistoryRequest", "val": { "id": 7 } } }
+```
+
+### WorkflowReplayRequest
+
+Replays a workflow from an optional history entry.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+| `entryId` | `string` | No | History entry to replay from. `null` starts from the beginning. |
+
+```json
+{ "body": { "tag": "WorkflowReplayRequest", "val": { "id": 8, "entryId": "step-2" } } }
+```
+
+### DatabaseSchemaRequest
+
+Requests the SQLite schema.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+
+```json
+{ "body": { "tag": "DatabaseSchemaRequest", "val": { "id": 9 } } }
+```
+
+### DatabaseTableRowsRequest
+
+Requests rows from a SQLite table.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+| `table` | `string` | Yes | Table name. |
+| `limit` | `uint` | Yes | Maximum rows to return. |
+| `offset` | `uint` | Yes | Number of rows to skip. |
+
+```json
+{ "body": { "tag": "DatabaseTableRowsRequest", "val": { "id": 10, "table": "users", "limit": 50, "offset": 0 } } }
+```
+
+### SchedulesRequest
+
+Requests all schedules.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+
+```json
+{ "body": { "tag": "SchedulesRequest", "val": { "id": 11 } } }
+```
+
+### ScheduleHistoryRequest
+
+Requests recent fires for one schedule.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+| `scheduleId` | `string` | Yes | Schedule identifier. |
+| `limit` | `uint` | Yes | Maximum history entries. |
+
+```json
+{ "body": { "tag": "ScheduleHistoryRequest", "val": { "id": 12, "scheduleId": "cleanup", "limit": 20 } } }
+```
+
+### ScheduleDeleteRequest
+
+Deletes a schedule.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uint` | Yes | Request identifier. |
+| `scheduleId` | `string` | Yes | Schedule identifier. |
+| `kind` | `string` | Yes | Schedule kind: `at`, `cron`, or `every`. |
+
+```json
+{ "body": { "tag": "ScheduleDeleteRequest", "val": { "id": 13, "scheduleId": "cleanup", "kind": "cron" } } }
+```
+
+## Actor to client messages
+
+### Init
+
+Sent when inspection starts. It contains the initial snapshot.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `connections` | `Connection[]` | Yes | Current connections. Each item has string `id` and CBOR `details`. |
+| `state` | `data` | No | Current state encoded as CBOR. |
+| `isStateEnabled` | `boolean` | Yes | Whether the actor uses state. |
+| `rpcs` | `string[]` | Yes | Available action names. |
+| `isDatabaseEnabled` | `boolean` | Yes | Whether SQLite is enabled. |
+| `queueSize` | `uint` | Yes | Current queued message count. |
+| `workflowHistory` | `data` | No | Workflow history transport data. |
+| `isWorkflowEnabled` | `boolean` | Yes | Whether workflows are enabled. |
+| `tabConfig` | `TabConfigEntry[]` | Yes | Inspector tabs. Each item has `id`, optional `label`, optional `icon`, and boolean `hidden`. |
+| `schedules` | `Schedule[]` | Yes | Current schedules. |
+
+```json
+{ "body": { "tag": "Init", "val": { "connections": [], "state": { "count": 1 }, "isStateEnabled": true, "rpcs": ["increment"], "isDatabaseEnabled": true, "queueSize": 0, "workflowHistory": null, "isWorkflowEnabled": false, "tabConfig": [{ "id": "state", "label": null, "icon": null, "hidden": false }], "schedules": [] } } }
+```
+
+### StateResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `state` | `data` | No | State encoded as CBOR. |
+| `isStateEnabled` | `boolean` | Yes | Whether state is enabled. |
+
+```json
+{ "body": { "tag": "StateResponse", "val": { "rid": 1, "state": { "count": 2 }, "isStateEnabled": true } } }
+```
+
+### ConnectionsResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `connections` | `Connection[]` | Yes | Connections with string `id` and CBOR `details`. |
+
+```json
+{ "body": { "tag": "ConnectionsResponse", "val": { "rid": 2, "connections": [{ "id": "conn-1", "details": { "name": "Sam" } }] } } }
+```
+
+### ActionResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `output` | `data` | Yes | Action output encoded as CBOR. |
+
+```json
+{ "body": { "tag": "ActionResponse", "val": { "rid": 3, "output": 2 } } }
+```
+
+### RpcsListResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `rpcs` | `string[]` | Yes | Available action names. |
+
+```json
+{ "body": { "tag": "RpcsListResponse", "val": { "rid": 4, "rpcs": ["increment"] } } }
+```
+
+### TraceQueryResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `payload` | `data` | Yes | Trace range transport payload. |
+
+```json
+{ "body": { "tag": "TraceQueryResponse", "val": { "rid": 5, "payload": { "records": [] } } } }
+```
+
+### QueueResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `status.size` | `uint` | Yes | Current queue size. |
+| `status.maxSize` | `uint` | Yes | Queue capacity. |
+| `status.messages` | `QueueMessageSummary[]` | Yes | Summaries with uint `id`, string `name`, and uint `createdAtMs`. |
+| `status.truncated` | `boolean` | Yes | Whether more summaries were available. |
+
+```json
+{ "body": { "tag": "QueueResponse", "val": { "rid": 6, "status": { "size": 1, "maxSize": 1000, "messages": [{ "id": 42, "name": "email", "createdAtMs": 1735689600000 }], "truncated": false } } } }
+```
+
+### WorkflowHistoryResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `history` | `data` | No | Workflow history transport data. |
+| `isWorkflowEnabled` | `boolean` | Yes | Whether workflows are enabled. |
+
+```json
+{ "body": { "tag": "WorkflowHistoryResponse", "val": { "rid": 7, "history": null, "isWorkflowEnabled": false } } }
+```
+
+### WorkflowReplayResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `history` | `data` | No | Updated workflow history transport data. |
+| `isWorkflowEnabled` | `boolean` | Yes | Whether workflows are enabled. |
+
+```json
+{ "body": { "tag": "WorkflowReplayResponse", "val": { "rid": 8, "history": { "entries": [] }, "isWorkflowEnabled": true } } }
+```
+
+### DatabaseSchemaResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `schema` | `data` | Yes | SQLite schema encoded as CBOR. |
+
+```json
+{ "body": { "tag": "DatabaseSchemaResponse", "val": { "rid": 9, "schema": { "tables": [] } } } }
+```
+
+### DatabaseTableRowsResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `result` | `data` | Yes | Rows encoded as CBOR. |
+
+```json
+{ "body": { "tag": "DatabaseTableRowsResponse", "val": { "rid": 10, "result": [{ "id": 1 }] } } }
+```
+
+### SchedulesResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `schedules` | `Schedule[]` | Yes | Current schedules. |
+
+```json
+{ "body": { "tag": "SchedulesResponse", "val": { "rid": 11, "schedules": [] } } }
+```
+
+### ScheduleHistoryResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `scheduleId` | `string` | Yes | Schedule identifier. |
+| `history` | `ScheduleFire[]` | Yes | Schedule fire history. |
+
+```json
+{ "body": { "tag": "ScheduleHistoryResponse", "val": { "rid": 12, "scheduleId": "cleanup", "history": [{ "action": "cleanup", "scheduledAt": 1735689600000, "firedAt": 1735689600010, "finishedAt": 1735689600040, "result": "ok", "error": null }] } } }
+```
+
+### ScheduleDeleteResponse
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rid` | `uint` | Yes | Matching request identifier. |
+| `scheduleId` | `string` | Yes | Schedule identifier. |
+| `deleted` | `boolean` | Yes | Whether a schedule was deleted. |
+
+```json
+{ "body": { "tag": "ScheduleDeleteResponse", "val": { "rid": 13, "scheduleId": "cleanup", "deleted": true } } }
+```
+
+### ConnectionsUpdated
+
+Sent when the connection list changes.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `connections` | `Connection[]` | Yes | Current connections. |
+
+```json
+{ "body": { "tag": "ConnectionsUpdated", "val": { "connections": [] } } }
+```
+
+### StateUpdated
+
+Sent when state changes.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `state` | `data` | Yes | State encoded as CBOR. |
+
+```json
+{ "body": { "tag": "StateUpdated", "val": { "state": { "count": 3 } } } }
+```
+
+### QueueUpdated
+
+Sent when the queue size changes.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `queueSize` | `uint` | Yes | Current queue size. |
+
+```json
+{ "body": { "tag": "QueueUpdated", "val": { "queueSize": 2 } } }
+```
+
+### WorkflowHistoryUpdated
+
+Sent when workflow history changes.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `history` | `data` | Yes | Workflow history transport data. |
+
+```json
+{ "body": { "tag": "WorkflowHistoryUpdated", "val": { "history": { "entries": [] } } } }
+```
+
+### SchedulesUpdated
+
+Sent when schedules change.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `schedules` | `Schedule[]` | Yes | Current schedules. |
+
+```json
+{ "body": { "tag": "SchedulesUpdated", "val": { "schedules": [] } } }
+```
+
+### Error
+
+Reports an inspector protocol error. This message does not carry a request identifier.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `message` | `string` | Yes | Error identifier or description. |
+
+```json
+{ "body": { "tag": "Error", "val": { "message": "inspector.events_dropped" } } }
+```
+
+## Shared structures
+
+`Schedule` contains `id`, optional `name`, `kind`, `action`, CBOR `args`, `nextRunAt`, optional `lastRunAt`, optional `expression`, optional `timezone`, optional `intervalMs`, and optional `maxHistory`. All time and interval values are unsigned integers in milliseconds.
+
+`ScheduleFire` contains `action`, `scheduledAt`, `firedAt`, optional `finishedAt`, `result`, and optional `error`. An error contains `group`, `code`, `message`, and optional CBOR `metadata`.
+
+## Close behavior
+
+An invalid or unsupported `protocol_version` closes the socket with code `1002` and reason `inspector.invalid_protocol_version`. A missing or invalid inspector token closes it with code `1008` and reason `inspector.unauthorized`. Other established-connection errors can arrive as `Error` messages.
+
+## Related
+
+- [Actor Routing](/docs/api/actor-routing)
+- [Raw WebSocket](/docs/api/websockets)

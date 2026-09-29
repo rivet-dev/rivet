@@ -1,0 +1,46 @@
+---
+title: "Errors"
+description: "Error response format, status codes, and ray IDs for the Rivet HTTP API."
+skill: true
+---
+
+Failed requests return a non-2xx status and a JSON body that identifies the error by group and code. Match on `group` and `code` in your code, not on `message`, which is human-readable and may change.
+
+```json
+{
+  "group": "actor",
+  "code": "not_found",
+  "message": "The actor does not exist or was destroyed."
+}
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Subsystem that produced the error, such as `api`, `auth`, `actor`, `guard`, or `user`. |
+| `code` | `string` | Error identifier within the group. |
+| `message` | `string` | Human-readable explanation. |
+| `metadata` | `object \| null` | Structured details for some errors, such as the maximum size that was exceeded. Omitted or `null` when not applicable. |
+
+Errors that reach your actor and are thrown by your own code come back through the same shape. Responses from the gateway also include an `actor` object with the `actorId`, `generation`, and `key` of the actor that handled the request.
+
+## Ray IDs
+
+Every response includes an `x-rivet-ray-id` header that uniquely identifies the request. Include it when reporting a problem so it can be traced through Rivet's logs.
+
+## Status Codes
+
+| Status | Meaning |
+| --- | --- |
+| `400` | The request is malformed, or an actor threw a `UserError`. Most application errors are `400`. |
+| `401` | Missing, invalid, or expired token. |
+| `403` | Token is valid but not permitted to perform this operation. |
+| `404` | The resource does not exist. |
+| `429` | Rate limited. Back off and retry. |
+| `500` | An unexpected error. The body has `group: "core"`, `code: "internal_error"`. Details are only exposed in development. |
+| `503` | Token verification or issuance is temporarily unavailable. Retry with backoff. |
+
+[Error Codes](/docs/api/error-codes) lists every group and code with its status and cause. Errors thrown by your own actor code come back as `user.{code}`; see [Errors](/actors/docs/errors) for throwing and catching them inside actors.
+
+## WebSockets
+
+When a WebSocket upgrade fails or the gateway closes a connection, the close reason is `{group}.{code}#{ray_id}`. See [WebSockets](/docs/api/websockets#close-codes). On an open connection, errors arrive as `Error` messages instead. See [Connect](/docs/api/gateway/connect#errors).
