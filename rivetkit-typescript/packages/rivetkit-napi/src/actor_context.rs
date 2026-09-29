@@ -43,8 +43,13 @@ type DisconnectPredicateTsfn =
 type RunRestartHook = Arc<dyn Fn(Option<(i64, u64)>) -> anyhow::Result<()> + Send + Sync + 'static>;
 pub(crate) type RegisteredTask = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 
-static ACTOR_CONTEXT_SHARED: LazyLock<SccHashMap<String, Weak<ActorContextShared>>> =
-	LazyLock::new(SccHashMap::new);
+// Keyed by generation so a newer generation of the same actor never shares, resets, or clears the
+// JS runtime state of an older generation that is still shutting down on this host.
+static ACTOR_CONTEXT_SHARED: LazyLock<
+	SccHashMap<ActorContextSharedKey, Weak<ActorContextShared>>,
+> = LazyLock::new(SccHashMap::new);
+
+type ActorContextSharedKey = (String, Option<u32>);
 
 /// N-API wrapper around `rivetkit-core::ActorContext`.
 #[derive(Clone)]
@@ -193,10 +198,12 @@ struct DisconnectPredicatePayload {
 impl ActorContext {
 	pub(crate) fn new(inner: CoreActorContext) -> Self {
 		let actor_id = inner.actor_id().to_owned();
-		let shared = actor_context_shared(&actor_id);
+		let generation = inner.generation();
+		let shared = actor_context_shared(&actor_id, generation);
 		tracing::debug!(
 			class = "ActorContext",
 			%actor_id,
+			?generation,
 			shared_strong_count = Arc::strong_count(&shared),
 			"constructed napi class"
 		);
@@ -994,14 +1001,15 @@ impl Drop for ActorContextShared {
 	}
 }
 
-fn actor_context_shared(actor_id: &str) -> Arc<ActorContextShared> {
+fn actor_context_shared(actor_id: &str, generation: Option<u32>) -> Arc<ActorContextShared> {
 	ACTOR_CONTEXT_SHARED.retain_sync(|_, shared| shared.strong_count() > 0);
 
-	match ACTOR_CONTEXT_SHARED.entry_sync(actor_id.to_owned()) {
+	match ACTOR_CONTEXT_SHARED.entry_sync((actor_id.to_owned(), generation)) {
 		scc::hash_map::Entry::Occupied(mut entry) => {
 			if let Some(shared) = entry.get().upgrade() {
 				tracing::debug!(
 					%actor_id,
+					?generation,
 					outcome = "hit",
 					strong_count = Arc::strong_count(&shared),
 					"actor context shared-state cache lookup"
@@ -1013,6 +1021,7 @@ fn actor_context_shared(actor_id: &str) -> Arc<ActorContextShared> {
 			*entry.get_mut() = Arc::downgrade(&shared);
 			tracing::debug!(
 				%actor_id,
+				?generation,
 				outcome = "stale",
 				"actor context shared-state cache lookup"
 			);
@@ -1023,6 +1032,7 @@ fn actor_context_shared(actor_id: &str) -> Arc<ActorContextShared> {
 			entry.insert_entry(Arc::downgrade(&shared));
 			tracing::debug!(
 				%actor_id,
+				?generation,
 				outcome = "miss",
 				"actor context shared-state cache lookup"
 			);
