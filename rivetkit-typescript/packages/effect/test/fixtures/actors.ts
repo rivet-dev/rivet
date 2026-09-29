@@ -1,4 +1,4 @@
-import { Action, Actor, State } from "@rivetkit/effect";
+import { Action, Actor, Event, State } from "@rivetkit/effect";
 import {
 	Context,
 	DateTime,
@@ -597,6 +597,30 @@ export const Pinger = Actor.make("Pinger", { actions: [Ping] });
 export const PingerLive = Pinger.toLayer({
 	Ping: () => Effect.succeed("pong"),
 });
+
+// --- Broadcaster ---
+
+// Minimal actor used to verify `events.broadcast` end to end: the
+// payload is encoded through `Chime`'s schema on the way out, so a
+// raw rivetkit client subscribing via `.on("Chime", ...)` should see
+// the JSON-codec-encoded shape, not the constructor input shape.
+export const Chime = Event.make("Chime", {
+	payload: { count: Schema.Number, at: Schema.DateFromString },
+});
+
+export const SendChime = Action.make("SendChime", {
+	payload: { count: Schema.Number, at: Schema.DateFromString },
+	success: Schema.Void,
+});
+
+export const Broadcaster = Actor.make("Broadcaster", {
+	actions: [SendChime],
+	events: [Chime],
+});
+
+export const BroadcasterLive = Broadcaster.toLayer(({ events }) => ({
+	SendChime: ({ payload }) => events.broadcast("Chime", payload),
+}));
 
 // --- FailingActor ---
 

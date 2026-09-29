@@ -164,3 +164,10 @@ Cloudflare Workers forbid `setTimeout`, `fetch`, `connect`, and other async I/O 
 
 - Reference `docs-internal/rivetkit-typescript/DYNAMIC_ACTORS_ARCHITECTURE.md` when working on dynamic actor behavior, bridge contracts, isolate lifecycle, or runtime sandbox wiring.
 - Keep `docs-internal/rivetkit-typescript/DYNAMIC_ACTORS_ARCHITECTURE.md` up to date in the same change whenever dynamic actor architecture, lifecycle, bridge payloads, security behavior, or temporary compatibility paths change.
+
+## @rivetkit/effect Events
+
+- Events are part of an actor's contract like actions: declare them with `Event.make` and pass them to `Actor.make`'s `events` option, not `toLayer`'s per-instantiation options (`state`/`db` are per-instantiation; events are not).
+- `Actor.toLayer`'s wake options always include an `events: EventBroadcaster<Events>` field (unconditionally, unlike `state`, which is only present when the actor declares one). An eventless actor's `events.broadcast` is simply uncallable at the type level since its `Tag` union is `never`.
+- RivetKit's own event schema validation is bypassed the same way `ActionDispatcher` bypasses its action schema validation: declared events register with a bare `Rivetkit.event()` token (no `.schema`) so RivetKit performs no validation, and `@rivetkit/effect` encodes the payload itself via `effect/Schema` before calling raw `broadcast`.
+- `Actor<Name, Actions, Events>`'s `events: ReadonlyArray<Events>` field makes `Events` invariant for exact-type comparisons. Any signature that only forwards an actor without reading its events (`Actor.Any`, `Client.makeActorAccessor`, `ActionDispatcher.make`) must pin `Events` to `any`, not rely on the `never` default, or a real actor's type won't be assignable to it.
