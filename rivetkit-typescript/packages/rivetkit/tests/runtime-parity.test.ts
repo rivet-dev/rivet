@@ -196,6 +196,10 @@ class FakeActorContext {
 		};
 	}
 
+	generation(): number | null {
+		return null;
+	}
+
 	restartRunHandler(): void {
 		this.scenario.runRestarts += 1;
 	}

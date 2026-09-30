@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { defineRunHandler, type RunControl } from "@/actor/config";
+import { workflow } from "@/workflow/mod";
 import { RunHandlerCoordinator } from "./run-handler-coordinator";
 
 class Deferred<T = void> {
@@ -51,6 +52,107 @@ function createCoordinator() {
 }
 
 describe("RunHandlerCoordinator", () => {
+	test("workflow inspector registrations stay per generation", () => {
+		const coordinator = new RunHandlerCoordinator(workflow(async () => {}));
+		const restart = vi.fn();
+
+		const oldInspector = coordinator.getInspector(
+			"actor-1",
+			restart,
+			1,
+		)?.workflow;
+		const newInspector = coordinator.getInspector(
+			"actor-1",
+			restart,
+			2,
+		)?.workflow;
+		expect(oldInspector).toBeDefined();
+		expect(newInspector).toBeDefined();
+		expect(newInspector).not.toBe(oldInspector);
+
+		// A superseded generation cannot re-initialize or rebind the current generation's
+		// workflow registration.
+		expect(coordinator.getInspector("actor-1", restart, 1)).toBeUndefined();
+		expect(coordinator.getInspector("actor-1", restart, 2)?.workflow).toBe(
+			newInspector,
+		);
+	});
+
+	test("a superseded generation's run is rejected before it touches the inspector", async () => {
+		const coordinator = new RunHandlerCoordinator(workflow(async () => {}));
+		const restart = vi.fn();
+		const newInspector = coordinator.getInspector(
+			"actor-1",
+			restart,
+			2,
+		)?.workflow;
+
+		await expect(
+			coordinator.run("actor-1", restart, async () => {}, 1),
+		).resolves.toBe("closed");
+		expect(coordinator.getInspector("actor-1", restart, 2)?.workflow).toBe(
+			newInspector,
+		);
+	});
+
+	test("a newer generation does not wait on an older generation's stuck run", async () => {
+		const coordinator = new RunHandlerCoordinator(
+			defineRunHandler(async () => {}, {
+				inspectorKind: "workflow",
+				createInspector: () => ({
+					inspector: {
+						workflow: {
+							getHistory: () => null,
+							getState: async () => null,
+							onHistoryUpdated: () => () => {},
+							replayFromStep: async () => null,
+						},
+					},
+				}),
+			}),
+		);
+		const oldRun = new Deferred();
+		const oldOutcome = coordinator.run(
+			"actor-1",
+			() => {},
+			() => oldRun.promise,
+			1,
+		);
+
+		// The lost generation's JS callback cannot be cancelled, so it stays active.
+		await expect(
+			coordinator.run(
+				"actor-1",
+				() => {},
+				async () => {},
+				2,
+			),
+		).resolves.toBe("ran");
+
+		// The superseded generation cannot start new runs, and its late destroy leaves the
+		// newer generation's state in place.
+		await expect(
+			coordinator.run(
+				"actor-1",
+				() => {},
+				async () => {},
+				1,
+			),
+		).resolves.toBe("closed");
+		coordinator.destroy("actor-1", 1);
+		await expect(
+			coordinator.run(
+				"actor-1",
+				() => {},
+				async () => {},
+				2,
+			),
+		).resolves.toBe("ran");
+
+		oldRun.resolve();
+		await expect(oldOutcome).resolves.toBe("ran");
+	});
+
 	test("fails explicitly when a JavaScript factory omits required workflow controls", async () => {
 		const coordinator = new RunHandlerCoordinator(
 			defineRunHandler(async () => {}, {
