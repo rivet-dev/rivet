@@ -51,6 +51,10 @@ use crate::utils::{BufferMap, EnvoyShutdownError, SleepFuture, boxed_sleep, spaw
 #[cfg(not(target_arch = "wasm32"))]
 static GLOBAL_ENVOY: OnceLock<Mutex<Option<EnvoyHandle>>> = OnceLock::new();
 
+/// How long before the engine's lost threshold the envoy stops its own actors. Covers ping
+/// delivery latency and the jitter in the engine's ping interval.
+const LOST_THRESHOLD_SAFETY_MARGIN_MS: i64 = 3_000;
+
 pub struct EnvoyContext {
 	pub shared: Arc<SharedContext>,
 	pub shutting_down: bool,
@@ -487,6 +491,7 @@ async fn envoy_loop(
 		let iter_start = crate::time::Instant::now();
 		#[allow(unused_assignments)]
 		let mut branch: &'static str = "unknown";
+		let ping_silence_wait = engine_ping_silence_wait(&ctx);
 		tokio::select! {
 			msg = rx.recv() => {
 				branch = "envoy_msg";
@@ -614,33 +619,24 @@ async fn envoy_loop(
 				}
 			} => {
 				branch = "lost_timeout";
-				// Lost timeout fired
-				for (_id, request) in ctx.kv_requests.drain() {
-					METRICS.kv_requests_inflight.dec();
-					let _ = request.response_tx.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
-				}
-				fail_sqlite_requests_with_shutdown(&mut ctx);
-				fail_remote_sqlite_requests_with_shutdown(&mut ctx);
-
-				if !ctx.actors.is_empty() {
-					tracing::warn!("stopping all actors due to envoy lost threshold");
-					for (_actor_id, gens) in &ctx.actors {
-						for (_g, entry) in gens {
-							entry.lost.cancel();
-							if !entry.handle.is_closed() {
-								let _ = entry.handle.send(ToActor::Lost);
-							}
-						}
-					}
-					ctx.actors.clear();
-					ctx.shared
-						.actors
-						.lock()
-						.expect("shared actor registry poisoned")
-						.clear();
-				}
-
+				declare_actors_lost(&mut ctx, "stopping all actors due to envoy lost threshold");
 				lost_timeout = None;
+			}
+			_ = async {
+				match ping_silence_wait {
+					Some(wait) => crate::utils::sleep(wait).await,
+					None => std::future::pending::<()>().await,
+				}
+			}, if !ctx.actors.is_empty() => {
+				branch = "engine_ping_silence";
+				// A ping may have arrived while this branch slept.
+				if engine_ping_silence_expired(&ctx, crate::time::now_millis()) {
+					declare_actors_lost(
+						&mut ctx,
+						"stopping all actors because the engine stopped pinging and is about to declare them lost",
+					);
+					lost_timeout = None;
+				}
 			}
 		}
 		observe_envoy_loop_iteration(branch, iter_start);
@@ -787,19 +783,84 @@ fn handle_conn_close(ctx: &EnvoyContext, lost_timeout: Option<SleepFuture>) -> O
 		return lost_timeout;
 	}
 
-	// Read threshold from protocol metadata, fall back to 10 seconds
-	let lost_threshold = {
-		let metadata = ctx.shared.protocol_metadata.try_lock().ok();
-		metadata
-			.and_then(|guard| guard.as_ref().map(|m| m.envoy_lost_threshold as u64))
-			.unwrap_or(10_000)
-	};
+	let lost_threshold = envoy_lost_threshold_ms(ctx) as u64;
 
 	tracing::debug!(ms = lost_threshold, "starting envoy lost timeout");
 
 	Some(boxed_sleep(std::time::Duration::from_millis(
 		lost_threshold,
 	)))
+}
+
+/// Reads the engine's lost threshold from protocol metadata, falling back to 10 seconds.
+fn envoy_lost_threshold_ms(ctx: &EnvoyContext) -> i64 {
+	let metadata = ctx.shared.protocol_metadata.try_lock().ok();
+	metadata
+		.and_then(|guard| guard.as_ref().map(|m| m.envoy_lost_threshold))
+		.unwrap_or(10_000)
+}
+
+/// When the envoy stops trusting its actors after the last engine ping. The engine refreshes its
+/// envoy liveness timestamp right before sending each ping and declares the envoy's actors lost
+/// once that timestamp is older than `envoy_lost_threshold`, then may start them elsewhere. The
+/// envoy receives each ping after that refresh, so giving up a margin before the threshold normally
+/// stops the actors before the engine can reallocate them. A ping delayed in transit by more than
+/// the margin can still let the engine give up first. This also covers half-open connections that
+/// never report a close.
+pub fn engine_ping_silence_deadline_ms(ctx: &EnvoyContext) -> Option<i64> {
+	let last_ping_ts = ctx.shared.last_ping_ts.load(Ordering::Acquire);
+	if last_ping_ts == 0 {
+		return None;
+	}
+	let threshold = envoy_lost_threshold_ms(ctx);
+	let margin = LOST_THRESHOLD_SAFETY_MARGIN_MS.min(threshold / 2);
+	Some(last_ping_ts + threshold - margin)
+}
+
+pub fn engine_ping_silence_expired(ctx: &EnvoyContext, now_ms: i64) -> bool {
+	engine_ping_silence_deadline_ms(ctx).is_some_and(|deadline| now_ms >= deadline)
+}
+
+fn engine_ping_silence_wait(ctx: &EnvoyContext) -> Option<std::time::Duration> {
+	let deadline = engine_ping_silence_deadline_ms(ctx)?;
+	let remaining = (deadline - crate::time::now_millis()).max(0);
+	Some(std::time::Duration::from_millis(remaining as u64))
+}
+
+/// Stops every actor on this envoy because the engine has given up on them. The lost token is
+/// cancelled first so each generation stops writing storage before its task sees the message.
+pub fn declare_actors_lost(ctx: &mut EnvoyContext, message: &'static str) {
+	for (_id, request) in ctx.kv_requests.drain() {
+		METRICS.kv_requests_inflight.dec();
+		let _ = request
+			.response_tx
+			.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
+	}
+	fail_sqlite_requests_with_shutdown(ctx);
+	fail_remote_sqlite_requests_with_shutdown(ctx);
+
+	if ctx.actors.is_empty() {
+		return;
+	}
+	tracing::warn!(
+		actor_count = ctx.actors.len(),
+		reason = message,
+		"declaring envoy actors lost"
+	);
+	for (_actor_id, gens) in &ctx.actors {
+		for (_g, entry) in gens {
+			entry.lost.cancel();
+			if !entry.handle.is_closed() {
+				let _ = entry.handle.send(ToActor::Lost);
+			}
+		}
+	}
+	ctx.actors.clear();
+	ctx.shared
+		.actors
+		.lock()
+		.expect("shared actor registry poisoned")
+		.clear();
 }
 
 async fn handle_shutdown(ctx: &mut EnvoyContext) {
