@@ -60,7 +60,7 @@ See [Namespaces](/docs/namespaces).
 
 An Actor is one schedulable unit of work with its own durable state and its own address. The control plane's view of every Actor is the same regardless of type: it has an ID, a key, a status, and the worker it is currently allocated to.
 
-An Actor is created on demand, runs until it goes idle, hibernates with its state intact, and wakes on the next request. It does not move between regions. Workflows, Sandboxes, and Dynamic Apps are Actors with a job already built in.
+An Actor is created on demand, runs until it goes idle, hibernates with its state intact, and wakes on the next request. It does not move between regions. Workflows, agentOS, and Dynamic Apps are Actors with a job already built in.
 
 See [Actor Statuses](/docs/statuses) for the lifecycle the control plane exposes.
 
