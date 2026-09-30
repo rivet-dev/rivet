@@ -584,6 +584,7 @@ export interface CoreRuntime {
 	): Promise<void>;
 	actorId(ctx: ActorContextHandle): string;
 	actorGeneration(ctx: ActorContextHandle): number | undefined;
+	actorIsLost(ctx: ActorContextHandle): boolean;
 	/**
 	 * Runs one actor callback with `ctx` as the current invocation: operations
 	 * on retained handles for the same actor resolve to it, and its Core span

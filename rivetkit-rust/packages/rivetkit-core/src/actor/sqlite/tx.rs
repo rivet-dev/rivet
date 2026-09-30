@@ -20,6 +20,7 @@ use tokio::sync::{
 };
 use tokio_util::sync::CancellationToken;
 
+use crate::error::SqliteRuntimeError;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::runtime::RuntimeSpawner;
 use crate::telemetry::SqliteOperation;
@@ -80,6 +81,8 @@ pub(super) struct TransactionCoordinator {
 	pub(super) state: AsyncMutex<TransactionCoordinatorState>,
 	epoch: AtomicU64,
 	waiters: AtomicU64,
+	// Forced-sync: read on every statement submission, including from synchronous paths.
+	lost: parking_lot::Mutex<Option<CancellationToken>>,
 }
 
 pub(super) struct TransactionCoordinatorState {
@@ -173,11 +176,44 @@ impl Default for TransactionCoordinator {
 			}),
 			epoch: AtomicU64::new(0),
 			waiters: AtomicU64::new(0),
+			lost: parking_lot::Mutex::new(None),
 		}
 	}
 }
 
 impl SqliteDb {
+	/// Binds the actor generation's lost signal. Once it fires, every statement except `ROLLBACK`
+	/// is rejected at submission, including statements of transactions that were admitted
+	/// earlier, so a lost generation can no longer write actor storage.
+	/// Whether the owning generation was declared lost.
+	pub fn is_lost(&self) -> bool {
+		self.transaction_coordinator
+			.lost
+			.lock()
+			.as_ref()
+			.is_some_and(CancellationToken::is_cancelled)
+	}
+
+	pub(crate) fn set_lost_signal(&self, lost: CancellationToken) {
+		*self.transaction_coordinator.lost.lock() = Some(lost);
+	}
+
+	/// Rejects a statement from a lost generation. `ROLLBACK` stays allowed because it only
+	/// discards uncommitted work.
+	pub(super) fn ensure_not_lost(&self, sql: &str) -> Result<()> {
+		let lost = self
+			.transaction_coordinator
+			.lost
+			.lock()
+			.as_ref()
+			.is_some_and(CancellationToken::is_cancelled);
+		if lost && !is_rollback_statement(sql) {
+			return Err(SqliteRuntimeError::Closed.build())
+				.context("actor generation was declared lost; storage writes are revoked");
+		}
+		Ok(())
+	}
+
 	pub(super) fn try_transaction_admission(&self) -> Result<OwnedSemaphorePermit> {
 		match Arc::clone(&self.transaction_coordinator.admission).try_acquire_owned() {
 			Ok(permit) => Ok(permit),
@@ -1405,4 +1441,11 @@ fn transaction_terminal_state_error(key: &str, state: &'static str) -> anyhow::E
 		key: key.to_owned(),
 		state,
 	})
+}
+
+fn is_rollback_statement(sql: &str) -> bool {
+	sql.trim()
+		.trim_end_matches(';')
+		.trim()
+		.eq_ignore_ascii_case("ROLLBACK")
 }

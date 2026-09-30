@@ -61,9 +61,15 @@ function createRunState(actorGeneration: number | undefined): ActorRunState {
 	};
 }
 
-function closeRunState(state: ActorRunState): void {
+/**
+ * Closes run state. The inspector disposer is user code, so it is skipped for a generation
+ * that was declared lost.
+ */
+function closeRunState(state: ActorRunState, disposeInspector = true): void {
 	state.closed = true;
-	state.inspector?.dispose?.();
+	if (disposeInspector) {
+		state.inspector?.dispose?.();
+	}
 	state.inspector = undefined;
 	notifyStateChanged(state);
 }
@@ -153,7 +159,11 @@ export class RunHandlerCoordinator {
 	 * Closes the run state for `actorId`. With `actorGeneration`, only state owned by that
 	 * generation is closed, so an older generation's late cleanup cannot close a newer one.
 	 */
-	destroy(actorId: string, actorGeneration?: number): void {
+	destroy(
+		actorId: string,
+		actorGeneration?: number,
+		options: { disposeInspector?: boolean } = {},
+	): void {
 		const state = this.#states.get(actorId);
 		if (!state) return;
 		if (
@@ -164,7 +174,7 @@ export class RunHandlerCoordinator {
 			return;
 		}
 
-		closeRunState(state);
+		closeRunState(state, options.disposeInspector ?? true);
 		this.#states.delete(actorId);
 	}
 
@@ -232,8 +242,10 @@ export class RunHandlerCoordinator {
 				return detached;
 			}
 			// A newer generation replaces state left by an older one, which may still be
-			// marked active because its JS callback cannot be cancelled.
-			closeRunState(state);
+			// marked active because its JS callback cannot be cancelled. That generation did not
+			// clean up after itself, which only happens when it was lost, so its user inspector
+			// disposer is not called.
+			closeRunState(state, false);
 			this.#states.delete(actorId);
 			state = undefined;
 		}

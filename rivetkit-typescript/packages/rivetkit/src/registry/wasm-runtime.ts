@@ -542,6 +542,10 @@ export class WasmCoreRuntime implements CoreRuntime {
 		return callHandle(asWasmActorContext(ctx), "generation") ?? undefined;
 	}
 
+	actorIsLost(ctx: ActorContextHandle): boolean {
+		return callHandle(asWasmActorContext(ctx), "isLost");
+	}
+
 	runWithActorInvocationContext<T>(
 		_ctx: ActorContextHandle,
 		run: () => T,

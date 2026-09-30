@@ -1570,3 +1570,37 @@ fn remote_head_fence_mismatch_stops_actor_once() {
 	});
 	assert!(envoy_rx.try_recv().is_err());
 }
+
+/// A statement can pass the lost check and then wait on the open lock. If the generation is
+/// lost while it waits, it must not be submitted to the native worker afterward.
+#[cfg(feature = "sqlite-local")]
+#[tokio::test]
+async fn lost_while_waiting_to_open_rejects_local_submission() {
+	let db = Arc::new(SqliteDb::default());
+	let lost = tokio_util::sync::CancellationToken::new();
+	db.set_lost_signal(lost.clone());
+
+	let open_guard = db.open_lock.clone().lock_owned().await;
+	let execute = tokio::spawn({
+		let db = db.clone();
+		async move {
+			db.local_execute("INSERT INTO lost_probe VALUES (1)".to_owned(), None)
+				.await
+		}
+	});
+	// Let the statement pass the first lost check and park on the open lock.
+	for _ in 0..10 {
+		tokio::task::yield_now().await;
+	}
+	lost.cancel();
+	drop(open_guard);
+
+	let error = execute
+		.await
+		.expect("execute task joins")
+		.expect_err("a statement from a lost generation must not be submitted");
+	assert!(
+		format!("{error:#}").contains("storage writes are revoked"),
+		"unexpected error: {error:#}"
+	);
+}

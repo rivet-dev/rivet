@@ -10,6 +10,7 @@ import type { RunContext } from "@/actor/config";
 import type { AnyStaticActorInstance } from "@/actor/definition";
 import { makeWorkflowKey, workflowStoragePrefix } from "@/actor/keys";
 import type { RawAccess } from "@/common/database/config";
+import { throwIfGenerationLost } from "./context";
 
 const WORKFLOW_STORAGE_PREFIX = workflowStoragePrefix();
 // Keep workflow flushes below depot's 320-dirty-page commit ceiling. The
@@ -69,6 +70,26 @@ function normalizeSqlBlob(value: unknown): Uint8Array {
 	throw new Error("workflow sqlite value was not a blob");
 }
 
+function guardRawAccessAgainstLost(
+	access: RawAccess,
+	runCtx: RunContext<any, any, any, any, any, any, any, any> | undefined,
+): RawAccess {
+	return {
+		...access,
+		execute: ((...args: Parameters<RawAccess["execute"]>) => {
+			throwIfGenerationLost(runCtx);
+			return access.execute(...args);
+		}) as RawAccess["execute"],
+		transaction: (callback, options) => {
+			throwIfGenerationLost(runCtx);
+			return access.transaction(
+				(tx) => callback(guardRawAccessAgainstLost(tx, runCtx)),
+				options,
+			);
+		},
+	};
+}
+
 function runtimeDbFromContext(
 	runCtx?: RunContext<any, any, any, any, any, any, any, any>,
 ): RawAccess | undefined {
@@ -79,7 +100,10 @@ function runtimeDbFromContext(
 		"execute" in db &&
 		"transaction" in db
 	) {
-		return db as RawAccess;
+		// The client can come from a user database provider. Workflow storage calls it after
+		// awaits, including inside its own transactions, so every call checks that the
+		// generation was not lost first.
+		return guardRawAccessAgainstLost(db as RawAccess, runCtx);
 	}
 	return undefined;
 }
