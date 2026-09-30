@@ -51,7 +51,7 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 		match command_wrapper.inner {
 			protocol::Command::CommandStartActor(val) => {
 				let actor_name = val.config.name.clone();
-				let (handle, active_http_request_count) = create_actor(
+				let (handle, lost, active_http_request_count) = create_actor(
 					ctx.shared.clone(),
 					checkpoint.actor_id.clone(),
 					checkpoint.generation,
@@ -60,10 +60,11 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 					val.preloaded_kv,
 				);
 
-				ctx.insert_actor(
+				ctx.insert_actor_with_lost_signal(
 					checkpoint.actor_id.clone(),
 					checkpoint.generation,
 					handle,
+					lost,
 					active_http_request_count,
 					actor_name,
 					checkpoint.index,
@@ -73,6 +74,11 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 				let entry = ctx.get_actor_entry_mut(&checkpoint.actor_id, checkpoint.generation);
 
 				if let Some(entry) = entry {
+					// Signal loss before the stop reaches the actor task, which may be busy
+					// starting or already tearing down.
+					if matches!(val.reason, protocol::StopActorReason::Lost) {
+						entry.lost.cancel();
+					}
 					entry.received_stop = true;
 					entry.last_command_idx = checkpoint.index;
 					let _ = entry.handle.send(crate::actor::ToActor::Stop {
