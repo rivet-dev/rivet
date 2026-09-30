@@ -1079,6 +1079,8 @@ export interface RunControl {
 /** @experimental */
 export interface RunInspectorFactoryContext {
 	actorId: string;
+	/** Actor generation the inspector belongs to, when the runtime reports one. */
+	actorGeneration?: number;
 	control: RunControl;
 }
 

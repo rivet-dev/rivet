@@ -538,6 +538,10 @@ export class WasmCoreRuntime implements CoreRuntime {
 		return callHandle(asWasmActorContext(ctx), "actorId");
 	}
 
+	actorGeneration(ctx: ActorContextHandle): number | undefined {
+		return callHandle(asWasmActorContext(ctx), "generation") ?? undefined;
+	}
+
 	runWithActorInvocationContext<T>(
 		_ctx: ActorContextHandle,
 		run: () => T,
