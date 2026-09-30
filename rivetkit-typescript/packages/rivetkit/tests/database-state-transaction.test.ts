@@ -32,6 +32,7 @@ describe("experimental database state transactions", () => {
 		const context = new ActorContextHandleAdapter(
 			{
 				actorId: () => "actor-a",
+				actorIsLost: () => false,
 				actorRuntimeState: () => runtimeState,
 			} as never,
 			{} as never,

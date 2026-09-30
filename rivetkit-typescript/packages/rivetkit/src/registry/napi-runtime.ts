@@ -604,6 +604,10 @@ export class NapiCoreRuntime implements CoreRuntime {
 		return asNativeActorContext(ctx).generation() ?? undefined;
 	}
 
+	actorIsLost(ctx: ActorContextHandle): boolean {
+		return asNativeActorContext(ctx).isLost();
+	}
+
 	runWithActorInvocationContext<T>(ctx: ActorContextHandle, run: () => T): T {
 		return this.#runAs(asNativeActorContext(ctx), run);
 	}

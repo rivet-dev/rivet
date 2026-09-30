@@ -1,13 +1,15 @@
 #[cfg(test)]
 use std::collections::BTreeMap;
-#[cfg(test)]
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use parking_lot::Mutex;
 #[cfg(test)]
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use rivet_envoy_client::handle::EnvoyHandle;
+use tokio_util::sync::CancellationToken;
 
+use crate::error::SqliteRuntimeError;
 use crate::types::ListOpts;
 
 /// Narrow access to the actor's pre-SQLite KV namespace.
@@ -18,6 +20,8 @@ use crate::types::ListOpts;
 #[derive(Clone)]
 pub(crate) struct LegacyActorKv {
 	backend: LegacyActorKvBackend,
+	/// The owning generation's lost signal. Writes are revoked once it fires.
+	lost: Arc<Mutex<Option<CancellationToken>>>,
 }
 
 #[derive(Clone)]
@@ -45,6 +49,7 @@ impl LegacyActorKv {
 				handle,
 				actor_id: actor_id.into(),
 			},
+			lost: Default::default(),
 		}
 	}
 
@@ -57,7 +62,25 @@ impl LegacyActorKv {
 				list_limit_cap: Mutex::new(None),
 				range_start_inclusive: Mutex::new(true),
 			})),
+			lost: Default::default(),
 		}
+	}
+
+	pub(crate) fn set_lost_signal(&self, lost: CancellationToken) {
+		*self.lost.lock() = Some(lost);
+	}
+
+	fn ensure_not_lost(&self) -> Result<()> {
+		let lost = self
+			.lost
+			.lock()
+			.as_ref()
+			.is_some_and(CancellationToken::is_cancelled);
+		if lost {
+			return Err(SqliteRuntimeError::Closed.build())
+				.context("actor generation was declared lost; storage writes are revoked");
+		}
+		Ok(())
 	}
 
 	#[cfg(test)]
@@ -88,17 +111,20 @@ impl LegacyActorKv {
 	}
 
 	pub(crate) async fn batch_put(&self, entries: &[(&[u8], &[u8])]) -> Result<()> {
+		self.ensure_not_lost()?;
 		match &self.backend {
 			LegacyActorKvBackend::Envoy { handle, actor_id } => {
-				handle
-					.kv_put(
-						actor_id.clone(),
-						entries
-							.iter()
-							.map(|(key, value)| (key.to_vec(), value.to_vec()))
-							.collect(),
-					)
-					.await
+				let entries = entries
+					.iter()
+					.map(|(key, value)| (key.to_vec(), value.to_vec()))
+					.collect();
+				// The write can sit in envoy's queue, so envoy drops it if the generation is
+				// declared lost before it is sent.
+				let lost = self.lost.lock().clone();
+				match lost {
+					Some(lost) => handle.kv_put_fenced(actor_id.clone(), entries, lost).await,
+					None => handle.kv_put(actor_id.clone(), entries).await,
+				}
 			}
 			#[cfg(test)]
 			LegacyActorKvBackend::InMemory(store) => {

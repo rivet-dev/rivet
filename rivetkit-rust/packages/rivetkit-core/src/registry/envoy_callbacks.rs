@@ -1,3 +1,4 @@
+use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
 use super::*;
@@ -11,7 +12,26 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		actor_id: String,
 		generation: u32,
 		config: protocol::ActorConfig,
+		preloaded_kv: Option<protocol::PreloadedKv>,
+	) -> EnvoyBoxFuture<anyhow::Result<()>> {
+		self.on_actor_start_with_lost_signal(
+			handle,
+			actor_id,
+			generation,
+			config,
+			preloaded_kv,
+			CancellationToken::new(),
+		)
+	}
+
+	fn on_actor_start_with_lost_signal(
+		&self,
+		handle: EnvoyHandle,
+		actor_id: String,
+		generation: u32,
+		config: protocol::ActorConfig,
 		_preloaded_kv: Option<protocol::PreloadedKv>,
+		lost: CancellationToken,
 	) -> EnvoyBoxFuture<anyhow::Result<()>> {
 		let dispatcher = self.dispatcher.clone();
 		let actor_name = config.name.clone();
@@ -34,6 +54,7 @@ impl EnvoyCallbacks for RegistryCallbacks {
 				key,
 				factory.as_ref(),
 			)?;
+			ctx.configure_lost_signal(lost);
 
 			dispatcher
 				.start_actor(StartActorRequest {

@@ -45,8 +45,8 @@ pub(crate) mod moved_tests {
 		encode_persisted_actor,
 	};
 	use crate::actor::task::{
-		ActorTask, DispatchCommand, LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD, LifecycleCommand,
-		LifecycleEvent, LifecycleState, LiveExit,
+		ActorTask, DispatchCommand, LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD,
+		LOST_SHUTDOWN_GRACE_PERIOD, LifecycleCommand, LifecycleEvent, LifecycleState, LiveExit,
 	};
 	use crate::actor::task_types::ShutdownKind;
 	use crate::kv::tests::new_in_memory;
@@ -2370,6 +2370,413 @@ pub(crate) mod moved_tests {
 		task.handle_stop(ShutdownKind::Destroy)
 			.await
 			.expect("destroy stop should succeed");
+	}
+
+	#[derive(Clone, Default)]
+	struct LostTestCounters {
+		serialize: Arc<AtomicUsize>,
+		action: Arc<AtomicUsize>,
+		cleanup: Arc<AtomicUsize>,
+	}
+
+	#[derive(Clone, Copy, PartialEq, Eq)]
+	enum LostTestHold {
+		None,
+		/// Holds the runtime cleanup hook open, like a slow `onSleep`.
+		Cleanup,
+		/// Never answers state serialization, like a stuck state serializer.
+		Serialize,
+		/// Behaves normally and exits its event loop once core closes the channel.
+		ExitOnClose,
+	}
+
+	/// Factory for lost-generation tests. Its event loop counts serialization, actions, and
+	/// cleanup, can hold one of them open, and never exits after its event channel closes, like a
+	/// runtime adapter stuck draining user promises.
+	fn lost_test_factory(counters: LostTestCounters, hold: LostTestHold) -> Arc<ActorFactory> {
+		let config = ActorConfig {
+			sleep_grace_period: Duration::from_secs(60),
+			sleep_grace_period_overridden: true,
+			..Default::default()
+		};
+		Arc::new(ActorFactory::new(config, move |start| {
+			let counters = counters.clone();
+			Box::pin(async move {
+				let mut events = start.events;
+				// Replies held open for the lifetime of the loop.
+				let mut held_serialize_replies = Vec::new();
+				while let Some(event) = events.recv().await {
+					if let ActorEvent::SerializeState { reply, .. } = event {
+						counters.serialize.fetch_add(1, Ordering::SeqCst);
+						if hold == LostTestHold::Serialize {
+							held_serialize_replies.push(reply);
+						} else {
+							reply.send(Ok(Vec::new()));
+						}
+					} else if let ActorEvent::Action { reply, .. } = event {
+						counters.action.fetch_add(1, Ordering::SeqCst);
+						reply.send(Ok(Vec::new()));
+					} else if let ActorEvent::RunGracefulCleanup { reply, .. } = event {
+						counters.cleanup.fetch_add(1, Ordering::SeqCst);
+						if hold == LostTestHold::Cleanup {
+							futures::future::pending::<()>().await;
+						}
+						reply.send(Ok(()));
+					}
+				}
+				if hold == LostTestHold::ExitOnClose {
+					return Ok(());
+				}
+				futures::future::pending::<()>().await;
+				Ok(())
+			})
+		}))
+	}
+
+	async fn start_task_for_lost_test(
+		ctx: &ActorContext,
+		counters: LostTestCounters,
+		hold: LostTestHold,
+	) -> (
+		tokio::task::JoinHandle<anyhow::Result<()>>,
+		mpsc::UnboundedSender<LifecycleCommand>,
+		mpsc::UnboundedSender<DispatchCommand>,
+		mpsc::UnboundedSender<LifecycleEvent>,
+	) {
+		let (mut task, lifecycle_tx, dispatch_tx, events_tx) = new_task_with_senders(ctx.clone());
+		task.factory = lost_test_factory(counters, hold);
+		let run = tokio::spawn(task.run());
+		let (start_tx, start_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Start { reply: start_tx })
+			.expect("start command should send");
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+		// The caller keeps every sender alive; dropping one closes the task inbox and ends it.
+		(run, lifecycle_tx, dispatch_tx, events_tx)
+	}
+
+	fn lost_test_ctx(name: &str) -> ActorContext {
+		new_with_kv(name, name, Vec::new(), "local", new_in_memory())
+	}
+
+	#[tokio::test]
+	async fn lost_signal_cancels_tracked_user_work_and_rejects_new_work() {
+		struct DropFlag(Arc<AtomicBool>);
+		impl Drop for DropFlag {
+			fn drop(&mut self) {
+				self.0.store(true, Ordering::SeqCst);
+			}
+		}
+
+		let ctx = lost_test_ctx("actor-lost-tracked-work");
+		let dropped = Arc::new(AtomicBool::new(false));
+		let resumed = Arc::new(AtomicBool::new(false));
+		let release = Arc::new(Notify::new());
+		ctx.wait_until({
+			let dropped = DropFlag(dropped.clone());
+			let resumed = resumed.clone();
+			let release = release.clone();
+			async move {
+				let _dropped = dropped;
+				release.notified().await;
+				resumed.store(true, Ordering::SeqCst);
+			}
+		});
+		tokio::task::yield_now().await;
+
+		ctx.mark_lost();
+		// The work becomes ready at the same time, but cancellation must win.
+		release.notify_waiters();
+		for _ in 0..100 {
+			if dropped.load(Ordering::SeqCst) {
+				break;
+			}
+			tokio::task::yield_now().await;
+		}
+		assert!(dropped.load(Ordering::SeqCst), "lost work must be dropped");
+		assert!(
+			!resumed.load(Ordering::SeqCst),
+			"lost work must not resume user code"
+		);
+
+		let ran = Arc::new(AtomicBool::new(false));
+		ctx.register_task({
+			let ran = ran.clone();
+			async move {
+				ran.store(true, Ordering::SeqCst);
+			}
+		});
+		for _ in 0..100 {
+			tokio::task::yield_now().await;
+		}
+		assert!(
+			!ran.load(Ordering::SeqCst),
+			"work registered after Lost must not run"
+		);
+	}
+
+	#[tokio::test]
+	async fn lost_signal_revokes_legacy_kv_writes() {
+		let ctx = lost_test_ctx("actor-lost-legacy-kv");
+		ctx.legacy_kv()
+			.put(b"probe", b"before")
+			.await
+			.expect("writes succeed before the generation is lost");
+
+		ctx.mark_lost();
+
+		let error = ctx
+			.legacy_kv()
+			.put(b"probe", b"after")
+			.await
+			.expect_err("a lost generation must not write legacy kv");
+		assert!(
+			format!("{error:#}").contains("storage writes are revoked"),
+			"unexpected error: {error:#}"
+		);
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn lost_signal_interrupts_a_startup_stuck_in_the_runtime_preamble() {
+		let ctx = lost_test_ctx("actor-lost-startup");
+		let (entered_tx, entered_rx) = oneshot::channel();
+		let entered_tx = Arc::new(Mutex::new(Some(entered_tx)));
+		let factory = Arc::new(ActorFactory::new_with_manual_startup_ready(
+			Default::default(),
+			move |mut start| {
+				let entered_tx = entered_tx.clone();
+				Box::pin(async move {
+					// Models a `createVars` or `onWake` that never returns. The preamble never
+					// reports startup ready.
+					let _startup_ready = start.startup_ready.take();
+					entered_tx
+						.lock()
+						.expect("entered lock poisoned")
+						.take()
+						.expect("entered sender should exist")
+						.send(())
+						.expect("entered receiver should exist");
+					std::future::pending::<()>().await;
+					Ok(())
+				})
+			},
+		));
+		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
+		task.factory = factory;
+		let run = tokio::spawn(task.run());
+		let (start_tx, start_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Start { reply: start_tx })
+			.expect("start command should send");
+		entered_rx.await.expect("runtime preamble should start");
+
+		let lost_at = Instant::now();
+		ctx.mark_lost();
+
+		timeout(Duration::from_secs(10), run)
+			.await
+			.expect("a generation lost during startup must tear down on its own")
+			.expect("task run should join")
+			.expect("task run should succeed");
+		assert!(
+			lost_at.elapsed() <= LOST_SHUTDOWN_GRACE_PERIOD + Duration::from_millis(100),
+			"teardown took {:?}",
+			lost_at.elapsed()
+		);
+		assert!(
+			!matches!(start_rx.await, Ok(Ok(()))),
+			"a generation lost during startup must not report a successful start"
+		);
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn lost_teardown_finishes_as_soon_as_runtime_cleanup_replies() {
+		let ctx = lost_test_ctx("actor-lost-prompt");
+		let counters = LostTestCounters::default();
+		let (run, _lifecycle_tx, _dispatch_tx, _events_tx) =
+			start_task_for_lost_test(&ctx, counters.clone(), LostTestHold::ExitOnClose).await;
+
+		// Paused time only advances when every task is idle, so this measures how long the
+		// teardown waited, not wall time.
+		let lost_at = tokio::time::Instant::now();
+		ctx.mark_lost();
+		timeout(Duration::from_secs(10), run)
+			.await
+			.expect("a lost generation must tear down on its own")
+			.expect("task run should join")
+			.expect("task run should succeed");
+
+		assert_eq!(
+			counters.cleanup.load(Ordering::SeqCst),
+			1,
+			"runtime cleanup should run once"
+		);
+		assert!(
+			lost_at.elapsed() < LOST_SHUTDOWN_GRACE_PERIOD / 2,
+			"lost teardown waited {:?} although runtime cleanup replied immediately",
+			lost_at.elapsed()
+		);
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn lost_signal_aborts_a_running_generation_without_a_stop_command() {
+		let ctx = lost_test_ctx("actor-lost-running");
+		let counters = LostTestCounters::default();
+		let (run, _lifecycle_tx, dispatch_tx, _events_tx) =
+			start_task_for_lost_test(&ctx, counters.clone(), LostTestHold::None).await;
+
+		// A pending save tick and in-flight user work would normally be honored.
+		ctx.request_save(RequestSaveOpts::default());
+		let _user_work = ctx.keep_awake_region();
+
+		let lost_at = Instant::now();
+		ctx.mark_lost();
+		let (action_tx, action_rx) = oneshot::channel();
+		dispatch_tx
+			.send(DispatchCommand::Action {
+				name: "after-lost".to_owned(),
+				args: Vec::new(),
+				incoming: IncomingInvocationContext::default(),
+				conn: ConnHandle::new("conn-lost", Vec::new(), Vec::new(), false),
+				reply: action_tx,
+			})
+			.expect("action should send");
+
+		timeout(Duration::from_secs(10), run)
+			.await
+			.expect("a lost generation must tear down on its own, even with a stuck event loop")
+			.expect("task run should join")
+			.expect("task run should succeed");
+
+		assert!(
+			lost_at.elapsed() <= 2 * LOST_SHUTDOWN_GRACE_PERIOD,
+			"lost teardown took {:?}",
+			lost_at.elapsed(),
+		);
+		assert!(
+			action_rx.await.map_or(true, |reply| reply.is_err()),
+			"a lost generation must not run new actions"
+		);
+		assert_eq!(counters.action.load(Ordering::SeqCst), 0);
+		assert_eq!(
+			counters.serialize.load(Ordering::SeqCst),
+			0,
+			"a lost generation must not serialize state"
+		);
+		assert_eq!(
+			counters.cleanup.load(Ordering::SeqCst),
+			1,
+			"a lost generation still runs runtime cleanup exactly once"
+		);
+		assert!(ctx.actor_aborted());
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn lost_signal_interrupts_a_graceful_sleep_stuck_in_cleanup() {
+		let ctx = lost_test_ctx("actor-lost-cleanup");
+		let counters = LostTestCounters::default();
+		let (run, lifecycle_tx, _dispatch_tx, _events_tx) =
+			start_task_for_lost_test(&ctx, counters.clone(), LostTestHold::Cleanup).await;
+
+		let (sleep_tx, sleep_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Stop {
+				reason: ShutdownKind::Sleep,
+				reply: sleep_tx,
+			})
+			.expect("sleep stop should send");
+		sleep(Duration::from_millis(100)).await;
+		assert_eq!(counters.cleanup.load(Ordering::SeqCst), 1);
+
+		let lost_at = Instant::now();
+		ctx.mark_lost();
+		timeout(Duration::from_secs(10), sleep_rx)
+			.await
+			.expect("the graceful sleep must finish within the lost bound")
+			.expect("sleep reply should send")
+			.expect("sleep stop should succeed");
+		timeout(Duration::from_secs(10), run)
+			.await
+			.expect("task run should finish")
+			.expect("task run should join")
+			.expect("task run should succeed");
+
+		assert!(lost_at.elapsed() <= 2 * LOST_SHUTDOWN_GRACE_PERIOD);
+		assert_eq!(
+			counters.cleanup.load(Ordering::SeqCst),
+			1,
+			"the abort path must not dispatch runtime cleanup a second time"
+		);
+		assert_eq!(
+			counters.serialize.load(Ordering::SeqCst),
+			0,
+			"an interrupted sleep must not serialize final state"
+		);
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn lost_signal_interrupts_a_save_waiting_on_serialization() {
+		let ctx = lost_test_ctx("actor-lost-serialize");
+		let counters = LostTestCounters::default();
+		let (run, _lifecycle_tx, _dispatch_tx, events_tx) =
+			start_task_for_lost_test(&ctx, counters.clone(), LostTestHold::Serialize).await;
+
+		// A save tick asks the runtime to serialize state and waits for the reply, which the
+		// test factory never sends.
+		ctx.request_save(RequestSaveOpts {
+			immediate: true,
+			max_wait_ms: None,
+		});
+		events_tx
+			.send(LifecycleEvent::SaveRequested { immediate: true })
+			.expect("save request should send");
+		timeout(Duration::from_secs(30), async {
+			while counters.serialize.load(Ordering::SeqCst) == 0 {
+				sleep(Duration::from_millis(10)).await;
+			}
+		})
+		.await
+		.expect("the save tick should request state serialization");
+
+		let lost_at = Instant::now();
+		ctx.mark_lost();
+		timeout(Duration::from_secs(10), run)
+			.await
+			.expect("a save stuck on serialization must not hold a lost generation")
+			.expect("task run should join")
+			.expect("task run should succeed");
+		assert!(lost_at.elapsed() <= 2 * LOST_SHUTDOWN_GRACE_PERIOD);
+	}
+
+	#[tokio::test]
+	async fn lost_signal_revokes_sqlite_writes() {
+		let ctx = lost_test_ctx("actor-lost-sqlite");
+		ctx.sql()
+			.execute("CREATE TABLE lost_probe (id INTEGER)", None)
+			.await
+			.expect("writes succeed before the generation is lost");
+
+		ctx.mark_lost();
+
+		let error = ctx
+			.sql()
+			.execute("INSERT INTO lost_probe VALUES (1)", None)
+			.await
+			.expect_err("a lost generation must not write storage");
+		assert!(
+			format!("{error:#}").contains("storage writes are revoked"),
+			"unexpected error: {error:#}"
+		);
+		let rollback = ctx.sql().execute("ROLLBACK", None).await;
+		if let Err(error) = rollback {
+			assert!(
+				!format!("{error:#}").contains("storage writes are revoked"),
+				"rollback must stay allowed after loss: {error:#}"
+			);
+		}
 	}
 
 	#[tokio::test(start_paused = true)]

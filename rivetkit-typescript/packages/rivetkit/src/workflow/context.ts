@@ -12,6 +12,7 @@ import type {
 	WorkflowContextInterface,
 	WorkflowQueueMessage,
 } from "@rivetkit/workflow-engine";
+import { EvictedError } from "@rivetkit/workflow-engine";
 import type {
 	QueueFilterName,
 	QueueNextBatchOptions,
@@ -19,6 +20,7 @@ import type {
 	QueueResultMessageForName,
 	RunContext,
 } from "@/actor/config";
+import { ACTOR_CONTEXT_INTERNAL_SYMBOL } from "@/actor/config";
 import type {
 	AnyActorDefinition,
 	BaseActorDefinition,
@@ -281,6 +283,20 @@ export type WorkflowBranchConfig<
 // Marks a step context inactive once its step has finished. Module-private so it
 // never appears on the public surface.
 const DEACTIVATE_STEP = Symbol("workflow.step.deactivate");
+
+/**
+ * Stops the workflow before it starts more user code once its actor generation was declared
+ * lost. The engine treats the eviction like a sleep and replays from history in the next
+ * generation.
+ */
+export function throwIfGenerationLost(runCtx: unknown): void {
+	const actor = (
+		runCtx as { [ACTOR_CONTEXT_INTERNAL_SYMBOL]?: { isLost?: boolean } }
+	)[ACTOR_CONTEXT_INTERNAL_SYMBOL];
+	if (actor?.isLost === true) {
+		throw new EvictedError();
+	}
+}
 
 /**
  * The context handed to a workflow step (`step` / `tryStep` callbacks). This is
@@ -994,6 +1010,7 @@ export class WorkflowContext<
 			TQueues
 		>(this.#runCtx, () => this.#markGuardTriggered());
 
+		throwIfGenerationLost(this.#runCtx);
 		try {
 			return await run(stepCtx);
 		} finally {
@@ -1044,6 +1061,7 @@ export class WorkflowContext<
 			TEvents,
 			TQueues
 		>(this.#runCtx, () => this.#markGuardTriggered());
+		throwIfGenerationLost(this.#runCtx);
 		try {
 			await rollback(stepCtx, output);
 		} finally {
@@ -1097,6 +1115,8 @@ export class WorkflowContext<
 		TEvents,
 		TQueues
 	> {
+		// Every try, loop, join, and race body runs through a child context.
+		throwIfGenerationLost(this.#runCtx);
 		return new WorkflowContext(ctx, this.#runCtx);
 	}
 }
