@@ -7,6 +7,7 @@ use std::{
 
 use rivet_envoy_protocol as protocol;
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 
 use crate::{
 	handle::EnvoyHandle,
@@ -76,6 +77,21 @@ pub trait EnvoyCallbacks: Send + Sync + 'static {
 		config: protocol::ActorConfig,
 		preloaded_kv: Option<protocol::PreloadedKv>,
 	) -> BoxFuture<anyhow::Result<()>>;
+
+	/// Like `on_actor_start`, but also receives the generation's lost signal. envoy-client
+	/// cancels it synchronously when the engine or the envoy itself declares this generation
+	/// lost, before the stop is delivered through `on_actor_stop`.
+	fn on_actor_start_with_lost_signal(
+		&self,
+		handle: EnvoyHandle,
+		actor_id: String,
+		generation: u32,
+		config: protocol::ActorConfig,
+		preloaded_kv: Option<protocol::PreloadedKv>,
+		_lost: CancellationToken,
+	) -> BoxFuture<anyhow::Result<()>> {
+		self.on_actor_start(handle, actor_id, generation, config, preloaded_kv)
+	}
 
 	fn on_actor_stop(
 		&self,

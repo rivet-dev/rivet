@@ -1011,7 +1011,7 @@ async fn streamed_request_remains_cancellable_after_upload_finishes() {
 	let (fetch_dropped_tx, fetch_dropped_rx) = oneshot::channel();
 	let callbacks = Arc::new(TestCallbacks::hanging(fetch_started_tx, fetch_dropped_tx));
 	let (shared, _envoy_rx) = build_shared_context(callbacks);
-	let (actor_tx, _) = create_actor(
+	let (actor_tx, _, _) = create_actor(
 		shared,
 		"actor-finished-upload".to_string(),
 		1,
@@ -1067,7 +1067,7 @@ async fn streamed_request_returns_credit_only_after_handler_consumption() {
 	let (shared, _envoy_rx) = build_shared_context(callbacks);
 	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
 	let session = crate::connection::install_connection(&shared, ws_tx).await;
-	let (actor_tx, _active_http_request_count) = create_actor(
+	let (actor_tx, _lost, _active_http_request_count) = create_actor(
 		shared,
 		"actor-request-window".to_string(),
 		1,
@@ -1139,7 +1139,7 @@ async fn active_http_request_count_spans_streaming_response_drain() {
 	let (shared, _envoy_rx) = build_shared_context(callbacks);
 	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
 	let session = crate::connection::install_connection(&shared, ws_tx).await;
-	let (actor_tx, active_http_request_count) = create_actor(
+	let (actor_tx, _lost, active_http_request_count) = create_actor(
 		shared,
 		"actor-stream".to_string(),
 		1,
@@ -1227,7 +1227,7 @@ async fn connection_close_replays_one_indexed_terminal_abort_after_reconnect() {
 	let (shared, mut envoy_rx) = build_shared_context(callbacks);
 	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
 	let session_one = crate::connection::install_connection(&shared, ws_tx).await;
-	let (actor_tx, active_http_request_count) = create_actor(
+	let (actor_tx, _lost, active_http_request_count) = create_actor(
 		shared.clone(),
 		"actor-session-flap".to_owned(),
 		1,
@@ -1353,7 +1353,7 @@ async fn failed_response_write_queues_terminal_before_connclose_is_processed() {
 	let (shared, mut envoy_rx) = build_shared_context(callbacks);
 	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
 	let session = crate::connection::install_connection(&shared, ws_tx).await;
-	let (actor_tx, active_http_request_count) = create_actor(
+	let (actor_tx, _lost, active_http_request_count) = create_actor(
 		shared.clone(),
 		"actor-write-failure".to_owned(),
 		1,
@@ -1436,7 +1436,7 @@ async fn streamed_response_stalls_at_window_until_gateway_consumes_bytes() {
 	let (shared, _envoy_rx) = build_shared_context(callbacks);
 	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
 	let session = crate::connection::install_connection(&shared, ws_tx).await;
-	let (actor_tx, active_http_request_count) = create_actor(
+	let (actor_tx, _lost, active_http_request_count) = create_actor(
 		shared,
 		"actor-response-window".to_string(),
 		1,

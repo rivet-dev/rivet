@@ -4,6 +4,7 @@ use std::sync::atomic::Ordering;
 use crate::async_counter::AsyncCounter;
 use rivet_envoy_protocol as protocol;
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 
 use crate::context::SharedContext;
 use crate::envoy::{ActorInfo, ToEnvoyMessage};
@@ -451,11 +452,32 @@ impl EnvoyHandle {
 		actor_id: String,
 		entries: Vec<(Vec<u8>, Vec<u8>)>,
 	) -> anyhow::Result<()> {
+		self.put_kv(actor_id, entries, None).await
+	}
+
+	/// Like [`Self::kv_put`], but the write is dropped before transmission if `lost` fires
+	/// while it is queued.
+	pub async fn kv_put_fenced(
+		&self,
+		actor_id: String,
+		entries: Vec<(Vec<u8>, Vec<u8>)>,
+		lost: CancellationToken,
+	) -> anyhow::Result<()> {
+		self.put_kv(actor_id, entries, Some(lost)).await
+	}
+
+	async fn put_kv(
+		&self,
+		actor_id: String,
+		entries: Vec<(Vec<u8>, Vec<u8>)>,
+		lost: Option<CancellationToken>,
+	) -> anyhow::Result<()> {
 		let (keys, values): (Vec<_>, Vec<_>) = entries.into_iter().unzip();
 		let response = self
-			.send_kv_request(
+			.send_fenced_kv_request(
 				actor_id,
 				protocol::KvRequestData::KvPutRequest(protocol::KvPutRequest { keys, values }),
+				lost,
 			)
 			.await?;
 		match response {
@@ -814,12 +836,22 @@ impl EnvoyHandle {
 		actor_id: String,
 		data: protocol::KvRequestData,
 	) -> anyhow::Result<protocol::KvResponseData> {
+		self.send_fenced_kv_request(actor_id, data, None).await
+	}
+
+	async fn send_fenced_kv_request(
+		&self,
+		actor_id: String,
+		data: protocol::KvRequestData,
+		lost: Option<CancellationToken>,
+	) -> anyhow::Result<protocol::KvResponseData> {
 		let (tx, rx) = tokio::sync::oneshot::channel();
 		crate::envoy::send_to_envoy_tx(
 			&self.shared,
 			ToEnvoyMessage::KvRequest {
 				actor_id,
 				data,
+				lost,
 				response_tx: tx,
 			},
 		)

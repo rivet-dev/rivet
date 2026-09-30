@@ -3,6 +3,7 @@ use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::OnceLock;
 use std::sync::atomic::Ordering;
+use tokio_util::sync::CancellationToken;
 
 #[cfg(not(target_arch = "wasm32"))]
 use parking_lot::Mutex;
@@ -93,6 +94,8 @@ pub struct WebSocketRoute {
 
 pub struct ActorEntry {
 	pub handle: mpsc::UnboundedSender<ToActor>,
+	/// Cancelled synchronously when this generation is declared lost.
+	pub lost: CancellationToken,
 	pub active_http_request_count: Arc<AsyncCounter>,
 	pub name: String,
 	pub last_command_idx: i64,
@@ -131,6 +134,8 @@ pub enum ToEnvoyMessage {
 	KvRequest {
 		actor_id: String,
 		data: protocol::KvRequestData,
+		/// Lost signal of the requesting generation. A cancelled request is never sent.
+		lost: Option<CancellationToken>,
 		response_tx: oneshot::Sender<anyhow::Result<protocol::KvResponseData>>,
 	},
 	SqliteRequest {
@@ -235,6 +240,28 @@ impl EnvoyContext {
 		name: String,
 		last_command_idx: i64,
 	) {
+		self.insert_actor_with_lost_signal(
+			actor_id,
+			generation,
+			handle,
+			CancellationToken::new(),
+			active_http_request_count,
+			name,
+			last_command_idx,
+		);
+	}
+
+	/// Registers an actor generation together with the lost signal its actor task observes.
+	pub fn insert_actor_with_lost_signal(
+		&mut self,
+		actor_id: String,
+		generation: u32,
+		handle: mpsc::UnboundedSender<ToActor>,
+		lost: CancellationToken,
+		active_http_request_count: Arc<AsyncCounter>,
+		name: String,
+		last_command_idx: i64,
+	) {
 		let buffered_actor_id = actor_id.clone();
 		let buffered_handle = handle.clone();
 		self.actors
@@ -244,6 +271,7 @@ impl EnvoyContext {
 				generation,
 				ActorEntry {
 					handle: handle.clone(),
+					lost,
 					active_http_request_count: active_http_request_count.clone(),
 					name,
 					last_command_idx,
@@ -490,8 +518,8 @@ async fn envoy_loop(
 					ToEnvoyMessage::SendEvents { events } => {
 						handle_send_events(&mut ctx, events).await;
 					}
-					ToEnvoyMessage::KvRequest { actor_id, data, response_tx } => {
-						handle_kv_request(&mut ctx, actor_id, data, response_tx).await;
+					ToEnvoyMessage::KvRequest { actor_id, data, lost, response_tx } => {
+						handle_kv_request(&mut ctx, actor_id, data, lost, response_tx).await;
 					}
 					ToEnvoyMessage::SqliteRequest { request, response_tx } => {
 						handle_sqlite_request(&mut ctx, request, response_tx).await;
@@ -598,6 +626,7 @@ async fn envoy_loop(
 					tracing::warn!("stopping all actors due to envoy lost threshold");
 					for (_actor_id, gens) in &ctx.actors {
 						for (_g, entry) in gens {
+							entry.lost.cancel();
 							if !entry.handle.is_closed() {
 								let _ = entry.handle.send(ToActor::Lost);
 							}
