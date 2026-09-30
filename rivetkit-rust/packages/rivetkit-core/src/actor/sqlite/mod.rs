@@ -1083,22 +1083,34 @@ impl SqliteDb {
 		error: &anyhow::Error,
 	) {
 		let structured = RivetError::extract(error);
-		let error_chain = error.chain().map(ToString::to_string).collect::<Vec<_>>();
-		tracing::error!(
-			actor_id = self.actor_id.as_deref().unwrap_or("<unknown>"),
-			generation = ?self.generation,
-			backend = ?self.backend,
-			operation,
-			sql,
-			binding_count,
-			statement_count,
-			group = structured.group(),
-			code = structured.code(),
-			error_message = %structured.message(),
-			metadata = ?structured.metadata(),
-			error_chain = ?error_chain,
-			"sqlite operation failed"
-		);
+		// Engine rollouts can disconnect after a mutation was sent but before its response arrives.
+		// The transport already reports the disconnect, so keep this operation-level event compact.
+		if structured.group() == "sqlite" && structured.code() == "remote_indeterminate_result" {
+			tracing::debug!(
+				actor_id = self.actor_id.as_deref().unwrap_or("<unknown>"),
+				generation = ?self.generation,
+				backend = ?self.backend,
+				operation,
+				"sqlite operation result indeterminate after envoy disconnect"
+			);
+		} else {
+			let error_chain = error.chain().map(ToString::to_string).collect::<Vec<_>>();
+			tracing::error!(
+				actor_id = self.actor_id.as_deref().unwrap_or("<unknown>"),
+				generation = ?self.generation,
+				backend = ?self.backend,
+				operation,
+				sql,
+				binding_count,
+				statement_count,
+				group = structured.group(),
+				code = structured.code(),
+				error_message = %structured.message(),
+				metadata = ?structured.metadata(),
+				error_chain = ?error_chain,
+				"sqlite operation failed"
+			);
+		}
 	}
 
 	fn actor_specifier(&self) -> Option<ActorSpecifier> {

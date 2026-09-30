@@ -17,6 +17,7 @@ use rivet_envoy_client::sqlite::{
 };
 use tokio::sync::{Mutex as AsyncMutex, mpsc, oneshot};
 use tracing::field::{Field, Visit};
+use tracing::instrument::WithSubscriber as _;
 use tracing::{Event, Subscriber};
 use tracing_subscriber::layer::{Context as LayerContext, Layer};
 use tracing_subscriber::prelude::*;
@@ -453,6 +454,51 @@ fn remote_lost_response_errors_become_indeterminate_result() {
 	assert_eq!(structured.code(), "remote_indeterminate_result");
 }
 
+#[test]
+fn remote_indeterminate_operation_logs_compact_debug_event() {
+	let (handle, _) = test_envoy_handle();
+	let db = SqliteDb::new_with_remote_sqlite(
+		handle,
+		"actor-sqlite-log",
+		Some("user/1".to_owned()),
+		Some(7),
+		true,
+		true,
+	)
+	.expect("test remote sqlite should be configured");
+	let records = Arc::new(StdMutex::new(Vec::new()));
+	let subscriber = Registry::default().with(SqliteOperationLogLayer {
+		records: records.clone(),
+	});
+	let dispatch = tracing::Dispatch::new(subscriber);
+	let error = SqliteRuntimeError::RemoteIndeterminateResult {
+		operation: "execute".to_owned(),
+	}
+	.build();
+
+	tracing::dispatcher::with_default(&dispatch, || {
+		db.log_operation_error("execute", "UPDATE state SET value = ?", 1, &error);
+	});
+
+	let logs = records.lock().expect("sqlite operation log lock poisoned");
+	assert!(logs.iter().any(|log| {
+		log.level == Some(tracing::Level::DEBUG)
+			&& log.message.as_deref()
+				== Some("sqlite operation result indeterminate after envoy disconnect")
+			&& log.actor_id.as_deref() == Some("actor-sqlite-log")
+			&& log.generation.as_deref() == Some("Some(7)")
+			&& log.backend.as_deref() == Some("RemoteEnvoy")
+			&& log.operation.as_deref() == Some("execute")
+			&& log.sql.is_none()
+			&& log.group.is_none()
+			&& log.code.is_none()
+	}));
+	assert!(
+		logs.iter()
+			.all(|log| log.level != Some(tracing::Level::ERROR))
+	);
+}
+
 #[tokio::test]
 async fn remote_execute_logs_operation_context_at_source() {
 	let (handle, envoy_rx) = test_envoy_handle();
@@ -470,7 +516,6 @@ async fn remote_execute_logs_operation_context_at_source() {
 	let subscriber = Registry::default().with(SqliteOperationLogLayer {
 		records: records.clone(),
 	});
-	let _guard = tracing::subscriber::set_default(subscriber);
 
 	let result = db
 		.execute(
@@ -480,6 +525,7 @@ async fn remote_execute_logs_operation_context_at_source() {
 				BindParam::Text("two".to_owned()),
 			]),
 		)
+		.with_subscriber(subscriber)
 		.await;
 
 	assert!(result.is_err());
