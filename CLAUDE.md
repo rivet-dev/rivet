@@ -370,7 +370,10 @@ When the user asks to track something in a note, store it in `~/.agents/notes/` 
 
 - If you need to look at the documentation for a package, visit `https://docs.rs/{package-name}`. For example, serde docs live at `https://docs.rs/serde/`.
 - When adding new docs pages, update `website/src/sitemap/mod.ts` so the page appears in the sidebar.
-- For the full docs-sync table (limits, config, actor errors, statuses, k8s, landing, sandbox providers, inspector), see `.claude/reference/docs-sync.md`.
+- For the full docs-sync table (limits, config, actor errors, statuses, k8s, landing, sandbox providers, inspector, HTTP API), see `.claude/reference/docs-sync.md`.
+- The HTTP API reference (`docs/api`) is generated. When changing public API paths, parameters, request or response shapes, error codes, HTTP status mappings, or connection protocol messages, regenerate the specs and error artifacts, then run `pnpm docs:gen-api` and commit the output. CI runs `pnpm docs:check-api`.
+- Behavior changes to a public endpoint that the spec does not capture (defaults, limits, side effects, auth rules) must be reflected in the prose in `docs/api/endpoints.json` or the hand-written pages under `docs/api/content/*.mdx`, never in the generated files.
+- Adding, renaming, or removing a `RivetError` rewrites `engine/artifacts/errors/*.json` on the next `cargo check`; commit those artifacts (Rust CI fails otherwise) and run `pnpm docs:gen-api` so `docs/api/error-registry.json` matches.
 
 ## CLAUDE.md conventions
 

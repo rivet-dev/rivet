@@ -1,0 +1,35 @@
+name: docs-api
+
+# Fails when the generated docs/api pages, docs/api/sidebar.json, or
+# docs/api/error-registry.json no longer match docs/api/endpoints.json, the
+# OpenAPI and AsyncAPI specs, the error artifacts, or the Rust status tables. Fix by
+# running `node scripts/docs/gen-api-reference.mjs` and committing the result.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/docs-api-check.yml
+      - "docs/api/**"
+      - "examples/docs/api/**"
+      - "engine/artifacts/openapi.json"
+      - "engine/artifacts/errors/**"
+      - "rivetkit-openapi/**"
+      - "rivetkit-asyncapi/**"
+      - "engine/packages/guard-core/src/utils.rs"
+      - "engine/packages/api-builder/src/error_response.rs"
+      - "rivetkit-rust/packages/rivetkit-core/src/registry/http.rs"
+      - "rivetkit-rust/packages/rivetkit-core/src/error.rs"
+      - "scripts/docs/gen-api-reference.mjs"
+concurrency:
+  group: docs-api-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generated-up-to-date:
+    name: API Reference / Generated Pages Up To Date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: node scripts/docs/gen-api-reference.mjs --check

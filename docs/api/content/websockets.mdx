@@ -1,0 +1,54 @@
+---
+title: "Raw WebSocket"
+description: "Open WebSocket connections to actors through the gateway for realtime events or custom protocols."
+skill: true
+---
+
+The gateway exposes two WebSocket endpoints per actor. Both accept the same [routing](/docs/api/actor-routing) forms as HTTP endpoints, so you can connect by actor ID or by name with `rvt-*` query parameters.
+
+| Endpoint | Speaks to | Use when |
+| --- | --- | --- |
+| `/gateway/{actor}/websocket/{path}` | Your actor's `onWebSocket` handler | You define the wire format |
+| `/gateway/{actor}/connect` | RivetKit's connection protocol | You want actions, events, and connection state without a RivetKit client |
+
+## Authentication
+
+Pass the token as a `rivet_token.{token}` subprotocol, or use the inline `{actor_id}@{token}` path or `rvt-token` query forms. See [WebSocket Requests](/docs/api/authentication#websocket-requests). `rivet_skip_ready_wait` is also accepted as a subprotocol and is equivalent to `rvt-skip-ready-wait=true`.
+
+## Raw WebSockets
+
+`/gateway/{actor}/websocket/{path}` upgrades the connection and hands it to the actor's `onWebSocket` handler. The path after `/websocket/` is passed through, so an actor can route on it. Messages are whatever your handler sends and expects.
+
+<CodeGroup>
+
+```javascript Browser
+const ws = new WebSocket(
+  `wss://api.rivet.dev/gateway/${actorId}/websocket/chat`,
+  ["rivet", `rivet_token.${token}`],
+);
+
+ws.onmessage = (event) => console.log(event.data);
+ws.onopen = () => ws.send("hello");
+```
+
+```bash wscat
+wscat -c "wss://api.rivet.dev/gateway/$ACTOR_ID@$RIVET_TOKEN/websocket/chat"
+```
+
+</CodeGroup>
+
+To connect by name instead of ID, add the selector query parameters:
+
+```bash
+wscat -c "wss://api.rivet.dev/gateway/chat-room/websocket/chat?rvt-namespace=$RIVET_NAMESPACE&rvt-method=getOrCreate&rvt-key=room-1&rvt-pool=default&rvt-token=$RIVET_TOKEN"
+```
+
+See [Low-Level WebSocket Handler](/actors/docs/websocket-handler) for the actor side.
+
+## RivetKit Connection Protocol
+
+`/gateway/{actor}/connect` is what `handle.connect()` uses: actions, event subscriptions, and errors multiplexed over one socket. See [Connect](/docs/api/gateway/connect) for the handshake and every message.
+
+## Close Codes
+
+When the gateway rejects or drops a connection, it closes with a reason of the form `{group}.{code}#{ray_id}`. Authentication failures use close code `1008` (policy violation). Normal disconnects use `1000`. Other errors use `1011`. See [Error Codes](/docs/api/error-codes) for the full list of groups and codes.

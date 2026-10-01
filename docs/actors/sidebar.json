@@ -119,10 +119,6 @@
 						{
 							"title": "Low-Level HTTP Handler",
 							"href": "/actors/docs/request-handler"
-						},
-						{
-							"title": "Vanilla HTTP API",
-							"href": "/actors/docs/http-api"
 						}
 					]
 				},
@@ -261,10 +257,6 @@
 			"title": "Reference",
 			"pages": [
 				{
-					"title": "Troubleshooting",
-					"href": "/actors/docs/troubleshooting"
-				},
-				{
 					"title": "Production Checklist",
 					"href": "/actors/docs/production-checklist"
 				},
@@ -285,7 +277,7 @@
 							"href": "/actors/docs/http-server"
 						},
 						{
-							"title": "Environment Variables",
+							"title": "Runtime Environment Variables",
 							"href": "/actors/docs/environment-variables"
 						},
 						{

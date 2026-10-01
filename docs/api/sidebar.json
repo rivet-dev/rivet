@@ -1,0 +1,291 @@
+{
+	"docs": [
+		{
+			"title": "General",
+			"pages": [
+				{
+					"title": "Overview",
+					"href": "/docs/api",
+					"icon": "faSquareInfo"
+				},
+				{
+					"title": "Authentication",
+					"href": "/docs/api/authentication",
+					"icon": "faKey"
+				},
+				{
+					"title": "Actor Keys",
+					"href": "/docs/api/actor-keys",
+					"icon": "faIdCard"
+				},
+				{
+					"title": "Actor Routing",
+					"href": "/docs/api/actor-routing",
+					"icon": "faRoute"
+				},
+				{
+					"title": "Errors",
+					"href": "/docs/api/errors",
+					"icon": "faTriangleExclamation"
+				},
+				{
+					"title": "Error Codes",
+					"href": "/docs/api/error-codes",
+					"icon": "faListUl"
+				}
+			]
+		},
+		{
+			"title": "Manage Actors",
+			"pages": [
+				{
+					"title": "List Actors",
+					"href": "/docs/api/actors/list",
+					"badge": "GET"
+				},
+				{
+					"title": "Create Actor",
+					"href": "/docs/api/actors/create",
+					"badge": "POST"
+				},
+				{
+					"title": "Get or Create Actor",
+					"href": "/docs/api/actors/get-or-create",
+					"badge": "PUT"
+				},
+				{
+					"title": "Destroy Actor",
+					"href": "/docs/api/actors/destroy",
+					"badge": "DELETE"
+				},
+				{
+					"title": "Sleep Actor",
+					"href": "/docs/api/actors/sleep",
+					"badge": "POST"
+				},
+				{
+					"title": "Reschedule Actor",
+					"href": "/docs/api/actors/reschedule",
+					"badge": "POST"
+				},
+				{
+					"title": "List Actor Names",
+					"href": "/docs/api/actors/list-names",
+					"badge": "GET"
+				}
+			]
+		},
+		{
+			"title": "Call Actors",
+			"pages": [
+				{
+					"title": "Call Action",
+					"href": "/docs/api/gateway/call-action",
+					"badge": "POST"
+				},
+				{
+					"title": "Send Queue Message",
+					"href": "/docs/api/gateway/queue",
+					"badge": "POST"
+				},
+				{
+					"title": "Raw HTTP Request",
+					"href": "/docs/api/gateway/request",
+					"badge": "ANY"
+				},
+				{
+					"title": "Raw WebSocket",
+					"href": "/docs/api/websockets",
+					"badge": "WS"
+				},
+				{
+					"title": "Connect",
+					"href": "/docs/api/gateway/connect",
+					"badge": "WS"
+				},
+				{
+					"title": "Check Health",
+					"href": "/docs/api/gateway/health",
+					"badge": "GET"
+				},
+				{
+					"title": "Get Runtime Metadata",
+					"href": "/docs/api/gateway/metadata",
+					"badge": "GET"
+				},
+				{
+					"title": "Inspector",
+					"icon": "faMagnifyingGlass",
+					"pages": [
+						{
+							"title": "Get Summary",
+							"href": "/docs/api/inspector/summary",
+							"badge": "GET"
+						},
+						{
+							"title": "Get State",
+							"href": "/docs/api/inspector/state-get",
+							"badge": "GET"
+						},
+						{
+							"title": "Patch State",
+							"href": "/docs/api/inspector/state-patch",
+							"badge": "PATCH"
+						},
+						{
+							"title": "List Connections",
+							"href": "/docs/api/inspector/connections",
+							"badge": "GET"
+						},
+						{
+							"title": "List Actions",
+							"href": "/docs/api/inspector/rpcs",
+							"badge": "GET"
+						},
+						{
+							"title": "Invoke Action",
+							"href": "/docs/api/inspector/action",
+							"badge": "POST"
+						},
+						{
+							"title": "Get Queue",
+							"href": "/docs/api/inspector/queue-get",
+							"badge": "GET"
+						},
+						{
+							"title": "Enqueue Message",
+							"href": "/docs/api/inspector/queue-post",
+							"badge": "POST"
+						},
+						{
+							"title": "Clear Queue",
+							"href": "/docs/api/inspector/queue-delete",
+							"badge": "DELETE"
+						},
+						{
+							"title": "Get Traces",
+							"href": "/docs/api/inspector/traces",
+							"badge": "GET"
+						},
+						{
+							"title": "Get Workflow History",
+							"href": "/docs/api/inspector/workflow-history",
+							"badge": "GET"
+						},
+						{
+							"title": "Replay Workflow",
+							"href": "/docs/api/inspector/workflow-replay",
+							"badge": "POST"
+						},
+						{
+							"title": "Get Database Schema",
+							"href": "/docs/api/inspector/database-schema",
+							"badge": "GET"
+						},
+						{
+							"title": "Query Database Rows",
+							"href": "/docs/api/inspector/database-rows",
+							"badge": "GET"
+						},
+						{
+							"title": "Execute SQL",
+							"href": "/docs/api/inspector/database-execute",
+							"badge": "POST"
+						},
+						{
+							"title": "Inspector Connect",
+							"href": "/docs/api/inspector-connect",
+							"badge": "WS"
+						}
+					],
+					"collapsible": true
+				}
+			]
+		},
+		{
+			"title": "Tokens",
+			"pages": [
+				{
+					"title": "Create Token",
+					"href": "/docs/api/tokens/create",
+					"badge": "POST"
+				},
+				{
+					"title": "Inspect Token",
+					"href": "/docs/api/tokens/inspect",
+					"badge": "GET"
+				}
+			]
+		},
+		{
+			"title": "Namespaces",
+			"pages": [
+				{
+					"title": "List Namespaces",
+					"href": "/docs/api/namespaces/list",
+					"badge": "GET"
+				},
+				{
+					"title": "Create Namespace",
+					"href": "/docs/api/namespaces/create",
+					"badge": "POST"
+				}
+			]
+		},
+		{
+			"title": "Workers",
+			"pages": [
+				{
+					"title": "List Workers",
+					"href": "/docs/api/workers/list",
+					"badge": "GET"
+				},
+				{
+					"title": "Worker Connection",
+					"href": "/docs/api/worker-connect",
+					"badge": "WS"
+				},
+				{
+					"title": "List Worker Configs",
+					"href": "/docs/api/workers/configs-list",
+					"badge": "GET"
+				},
+				{
+					"title": "Upsert Worker Config",
+					"href": "/docs/api/workers/configs-upsert",
+					"badge": "PUT"
+				},
+				{
+					"title": "Delete Worker Config",
+					"href": "/docs/api/workers/configs-delete",
+					"badge": "DELETE"
+				},
+				{
+					"title": "Refresh Config Metadata",
+					"href": "/docs/api/workers/configs-refresh-metadata",
+					"badge": "POST"
+				},
+				{
+					"title": "Serverless Health Check",
+					"href": "/docs/api/workers/serverless-health-check",
+					"badge": "POST"
+				}
+			]
+		},
+		{
+			"title": "Control Plane",
+			"pages": [
+				{
+					"title": "Get Metadata",
+					"href": "/docs/api/control-plane/metadata",
+					"badge": "GET"
+				},
+				{
+					"title": "List Datacenters",
+					"href": "/docs/api/control-plane/datacenters",
+					"badge": "GET"
+				}
+			]
+		}
+	]
+}

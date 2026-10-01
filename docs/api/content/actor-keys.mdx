@@ -1,0 +1,42 @@
+---
+title: "Actor Keys"
+description: "How the control plane encodes actor keys in the key field of the /actors endpoints."
+skill: true
+---
+
+Actors are identified by a name and a key. In RivetKit a key is an array of strings. The control plane endpoints under `/actors` accept and return the key as a single string in the `key` field, so a multi-part key has to be encoded before it goes on the wire.
+
+## Encoding
+
+Join the parts with `/`. Escape any literal `/` or `\` inside a part with a leading `\`.
+
+| RivetKit key | Control plane `key` |
+| --- | --- |
+| `["my-counter"]` | `my-counter` |
+| `["org-1", "room-2"]` | `org-1/room-2` |
+| `["a/b"]` | `a\/b` |
+| `["a\\b"]` | `a\\b` |
+| `[""]` | `\0` |
+| `[]` | `/` |
+
+A keyless actor is encoded as `/`. Omitting `key` on [Create Actor](/docs/api/actors/create) or [Get or Create Actor](/docs/api/actors/get-or-create) means the same thing.
+
+Escaping is what makes array keys safe to build from user data. `["org", "a/b"]` encodes to `org/a\/b`, which is a different actor from `["org", "a", "b"]` at `org/a/b`.
+
+## Where keys appear
+
+| Endpoint | Field |
+| --- | --- |
+| [List Actors](/docs/api/actors/list) | `key` query parameter, requires `name` |
+| [Create Actor](/docs/api/actors/create) | `key` in the request body |
+| [Get or Create Actor](/docs/api/actors/get-or-create) | `key` in the request body |
+| Every actor response | `key` on the returned actor |
+
+## Keys on gateway URLs
+
+The gateway takes the key as the `rvt-key` query parameter and splits it on commas instead of slashes: `rvt-key=org-1,room-2` is `["org-1", "room-2"]`. There is no escape syntax, so a part that contains a comma cannot be expressed on a gateway URL. Create such actors through the control plane and route to them by actor ID. See [Actor Routing](/docs/api/actor-routing).
+
+## Related
+
+- [Keys](/actors/docs/keys) for how keys work in RivetKit
+- [Actor Routing](/docs/api/actor-routing)

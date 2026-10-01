@@ -41,7 +41,7 @@ The actor's `run` handler threw an unhandled exception or exited unexpectedly. C
 
 ### `no_capacity`
 
-No server was available to run your actor. The cause depends on your [runtime mode](/docs/runtime-modes):
+No server was available to run your actor. The cause depends on your [worker mode](/docs/workers):
 
 **Serverless**:
 
@@ -71,7 +71,7 @@ The actor could not be allocated because the concurrent actor limit was reached.
 
 ### `no_envoys`
 
-No server was available to run your actor. This is equivalent to `no_capacity` on the current allocation path. See the `no_capacity` section above for the causes and fixes for your [runtime mode](/docs/runtime-modes).
+No server was available to run your actor. This is equivalent to `no_capacity` on the current allocation path. See the `no_capacity` section above for the causes and fixes for your [worker mode](/docs/workers).
 
 ### `envoy_no_response`
 
@@ -143,7 +143,7 @@ Fix the error in the relevant lifecycle hook and redeploy.
 
 If your actors are still running old code after deploying a new version, your [versioning](/docs/versions) is likely not configured correctly.
 
-Without versioning, Rivet has no way to distinguish old deployments from new ones. The behavior depends on your [runtime mode](/docs/runtime-modes):
+Without versioning, Rivet has no way to distinguish old deployments from new ones. The behavior depends on your [worker mode](/docs/workers):
 
 - **Serverless**: Old requests may still be open from the previous deployment, so actors continue running on the old version's connection until those requests close.
 - **Runners**: The old runner container is still running and will continue accepting new actors. New actors may be scheduled on the old runner instead of the new one.
@@ -154,7 +154,7 @@ To fix this, configure a version number in your [registry configuration](/actors
 
 See [Actor Statuses](/docs/statuses) for more about this status.
 
-An actor stays in "pending" status when Rivet is waiting for a server to accept it. The cause depends on your [runtime mode](/docs/runtime-modes):
+An actor stays in "pending" status when Rivet is waiting for a server to accept it. The cause depends on your [worker mode](/docs/workers):
 
 **Serverless**:
 

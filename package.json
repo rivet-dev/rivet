@@ -16,7 +16,9 @@
 		"slow-reconnect": "pnpm --dir examples/kitchen-sink slow-reconnect",
 		"lint": "pnpm biome check .",
 		"fmt": "pnpm biome format --write .",
-		"fmt:agent": "node ./scripts/format/agent-format.mjs"
+		"fmt:agent": "node ./scripts/format/agent-format.mjs",
+		"docs:gen-api": "node ./scripts/docs/gen-api-reference.mjs",
+		"docs:check-api": "node ./scripts/docs/gen-api-reference.mjs --check"
 	},
 	"devDependencies": {
 		"@bare-ts/tools": "0.15.0",

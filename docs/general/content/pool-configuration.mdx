@@ -9,7 +9,7 @@ A **runner pool** is the set of runners Rivet manages for a given runner name wi
 There are two pool kinds:
 
 - **`normal`** — runners connect to the control plane themselves (for example a long-running process started by you, Docker, or Kubernetes). The control plane does not start or stop runners.
-- **`serverless`** — the control plane calls an HTTP endpoint to wake runners on demand. Used by serverless platforms (Vercel, Cloudflare Workers, Freestyle, etc.). See [Runtime Modes](/docs/runtime-modes).
+- **`serverless`** — the control plane calls an HTTP endpoint to wake runners on demand. Used by serverless platforms (Vercel, Cloudflare Workers, Freestyle, etc.). See [Workers & Pools](/docs/workers).
 
 ## Setting the Configuration
 
@@ -118,7 +118,7 @@ The following options still parse for backwards compatibility but should not be 
 
 ## Related
 
-- [Runtime Modes](/docs/runtime-modes) — runner vs serverless behavior.
+- [Workers & Pools](/docs/workers) — long-running vs serverless workers.
 - [Versions & Upgrades](/docs/versions) — how `drainOnVersionUpgrade` interacts with version detection.
 - [Limits](/actors/docs/limits) — request lifespan and drain grace period limits.
 - [Debugging](/docs/debugging) — inspect a pool configuration via the API.

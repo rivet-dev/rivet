@@ -1,0 +1,1347 @@
+{
+	"$comment": "Source of truth for the generated HTTP API reference. Run `node scripts/docs/gen-api-reference.mjs` after editing.",
+	"baseUrl": "https://api.rivet.dev",
+	"specs": {
+		"engine": {
+			"file": "engine/artifacts/openapi.json",
+			"auth": {
+				"curlHeaders": [
+					"Authorization: Bearer $RIVET_TOKEN"
+				],
+				"description": "Send your namespace token as a bearer token in the `Authorization` header. Every control plane request also requires the `namespace` query parameter. See [Authentication](/docs/api/authentication)."
+			},
+			"parameters": {
+				"namespace": "Name of the namespace to operate in.",
+				"actor_id": "ID of the actor.",
+				"limit": "Maximum number of results to return.",
+				"cursor": "Pagination cursor. Pass the `pagination.cursor` value from the previous response to fetch the next page.",
+				"pagination.cursor": "Cursor for the next page, or `null` when there are no more results.",
+				"actor.actor_id": "Unique ID of the actor.",
+				"actor.name": "Actor name as registered in your RivetKit registry.",
+				"actor.key": "Actor key. Multi-part keys are joined with `/`, see [Actor Keys](/docs/api/actor-keys).",
+				"actor.namespace_id": "ID of the namespace the actor belongs to.",
+				"actor.datacenter": "Datacenter the actor is scheduled in.",
+				"actor.runner_name_selector": "Pool the actor runs on.",
+				"actor.crash_policy": "What happens when the actor crashes.",
+				"actors[].actor_id": "Unique ID of the actor.",
+				"actors[].name": "Actor name as registered in your RivetKit registry.",
+				"actors[].key": "Actor key. Multi-part keys are joined with `/`, see [Actor Keys](/docs/api/actor-keys).",
+				"actors[].namespace_id": "ID of the namespace the actor belongs to.",
+				"actors[].datacenter": "Datacenter the actor is scheduled in.",
+				"actors[].runner_name_selector": "Pool the actor runs on.",
+				"actors[].crash_policy": "What happens when the actor crashes.",
+				"created": "`true` if this request created the actor, `false` if it already existed.",
+				"names": "Map of actor name to metadata.",
+				"names.metadata": "Free-form metadata attached to the actor name.",
+				"token": "The issued token. Treat it as a secret.",
+				"issued_ts": "When the token was issued, in Unix milliseconds.",
+				"expires_ts": "When the token expires, in Unix milliseconds.",
+				"namespace_id": "ID of the namespace the token is scoped to.",
+				"subject": "Subject attached to the token, if any.",
+				"grants": "Permissions the token carries.",
+				"grants[].resource": "Resource type the grant applies to.",
+				"grants[].target": "`\"any\"` for every resource of this type, or `{ \"id\": \"...\" }` for one resource.",
+				"grants[].operations": "Operations the token may perform on the target.",
+				"value": "Base64-encoded value bytes.",
+				"update_ts": "When the key was last written, in Unix milliseconds."
+			},
+			"authProfiles": {
+				"none": {
+					"curlHeaders": [],
+					"description": "No authentication is required."
+				}
+			}
+		},
+		"rivetkit": {
+			"file": "rivetkit-openapi/openapi.json",
+			"auth": {
+				"curlHeaders": [
+					"x-rivet-token: $RIVET_TOKEN"
+				],
+				"description": "Send a token in the `x-rivet-token` header, inline in the path as `{actor_id}@{token}`, or in the `rvt-token` query parameter. Use a public token (`pk_`) from browsers and a secret token (`sk_`) from trusted backends. See [Authentication](/docs/api/authentication)."
+			},
+			"parameters": {
+				"actor": "Actor ID, actor ID with an inline token (`{actor_id}@{token}`), or actor name combined with the `rvt-*` query parameters.",
+				"rvt-namespace": "Namespace the actor lives in. Required when `{actor}` is an actor name.",
+				"rvt-method": "How to resolve an actor name to an actor. `getOrCreate` requires `rvt-pool`.",
+				"rvt-key": "Actor key. Separate multi-part keys with commas.",
+				"rvt-pool": "Pool to create the actor on when `rvt-method=getOrCreate`. RivetKit registers the `default` pool unless configured otherwise.",
+				"rvt-runner": "Deprecated alias for `rvt-pool`.",
+				"rvt-input": "Base64url-encoded CBOR input passed to `createState` and `onCreate` when `rvt-method=getOrCreate` creates the actor.",
+				"rvt-region": "Preferred region when `rvt-method=getOrCreate` creates the actor.",
+				"rvt-crash-policy": "Crash policy when `rvt-method=getOrCreate` creates the actor. RivetKit defaults to `sleep`.",
+				"rvt-skip-ready-wait": "Return as soon as the actor is resolved instead of waiting for it to be ready.",
+				"rvt-token": "Token to authenticate with. Prefer the `x-rivet-token` header or inline path token when possible.",
+				"args": "Positional arguments passed to the action, in order.",
+				"output": "Value returned by the action. `null` if the action returned `undefined`."
+			},
+			"authProfiles": {
+				"inspector": {
+					"curlHeaders": [
+						"Authorization: Bearer $INSPECTOR_TOKEN"
+					],
+					"description": "Inspector endpoints do not accept namespace tokens. Send the actor's inspector token as a bearer token in the `Authorization` header. Each actor generates its own inspector token on first start and stores it in its KV storage under the single byte `0x03`. Read it through the control plane with `GET /actors/{actor_id}/kv/keys/Aw==?namespace={namespace}` using a namespace token; the response `value` is the token, base64-encoded. The dashboard does this for you."
+				}
+			}
+		},
+		"asyncapi": {
+			"file": "rivetkit-asyncapi/asyncapi.json"
+		}
+	},
+	"errorCodes": {
+		"artifacts": "engine/artifacts/errors",
+		"exclude": [
+			"test"
+		],
+		"output": "error-registry.json",
+		"statusSources": [
+			{
+				"label": "gateway",
+				"file": "engine/packages/guard-core/src/utils.rs"
+			},
+			{
+				"label": "control plane",
+				"file": "engine/packages/api-builder/src/error_response.rs"
+			},
+			{
+				"label": "gateway",
+				"file": "rivetkit-rust/packages/rivetkit-core/src/registry/http.rs"
+			},
+			{
+				"label": "gateway",
+				"file": "rivetkit-rust/packages/rivetkit-core/src/error.rs"
+			}
+		],
+		"groups": {
+			"actor": "Actor lifecycle, addressing, and actions.",
+			"api": "Malformed requests to the control plane.",
+			"auth": "Token validation and permissions.",
+			"connection": "Actor connections opened through the connection protocol.",
+			"guard": "The gateway that routes requests to actors, including request parsing, rate limits, and timeouts.",
+			"kv": "Low-level KV storage inside an actor.",
+			"message": "Message size limits on connections.",
+			"namespace": "Namespace lookup and creation.",
+			"protocol": "Encoding and framing of connection protocol messages.",
+			"queue": "Actor queues.",
+			"user": "Errors thrown by your actor code. The code is whatever you pass to `UserError`.",
+			"validation": "Request validation.",
+			"ws": "WebSocket handling for the connection protocol and `onWebSocket` handlers."
+		}
+	},
+	"groups": [
+		{
+			"title": "General",
+			"pages": [
+				{
+					"title": "Overview",
+					"href": "/docs/api",
+					"icon": "faSquareInfo"
+				},
+				{
+					"title": "Authentication",
+					"href": "/docs/api/authentication",
+					"icon": "faKey"
+				},
+				{
+					"title": "Actor Keys",
+					"href": "/docs/api/actor-keys",
+					"icon": "faIdCard"
+				},
+				{
+					"title": "Actor Routing",
+					"href": "/docs/api/actor-routing",
+					"icon": "faRoute"
+				},
+				{
+					"title": "Errors",
+					"href": "/docs/api/errors",
+					"icon": "faTriangleExclamation"
+				},
+				{
+					"title": "Error Codes",
+					"href": "/docs/api/error-codes",
+					"icon": "faListUl"
+				}
+			]
+		},
+		{
+			"title": "Manage Actors",
+			"dir": "actors",
+			"endpoints": [
+				{
+					"spec": "engine",
+					"method": "get",
+					"path": "/actors",
+					"slug": "list",
+					"title": "List Actors",
+					"description": "List actors in a namespace, optionally filtered by name, key, or ID. Results are paginated.",
+					"notes": "`key` requires `name`. `actor_id` cannot be combined with `name` or `key`. Destroyed actors are excluded unless `include_destroyed` is `true`.",
+					"typescript": "examples/docs/api/actors-list.ts",
+					"parameters": {
+						"name": "Only return actors with this name.",
+						"key": "Only return the actor with this key. Requires `name`. Multi-part keys are joined with `/`, see [Actor Keys](/docs/api/actor-keys).",
+						"actor_id": "Only return actors with these IDs. Repeat the parameter for multiple IDs.",
+						"actor_ids": "Deprecated. Use `actor_id` instead.",
+						"include_destroyed": "Include actors that have been destroyed."
+					},
+					"examples": {
+						"query": {
+							"namespace": "$RIVET_NAMESPACE",
+							"name": "counter"
+						}
+					},
+					"responses": {
+						"200": "Matching actors and a cursor for the next page. `pagination.cursor` is `null` on the last page."
+					}
+				},
+				{
+					"spec": "engine",
+					"method": "post",
+					"path": "/actors",
+					"slug": "create",
+					"title": "Create Actor",
+					"description": "Create a new actor. Fails if an actor with the same name and key already exists.",
+					"notes": "Prefer [Get or Create Actor](/docs/api/actors/get-or-create) for idempotent access by key. Use this endpoint when you need a fresh actor every time, for example with a random key.",
+					"typescript": "examples/docs/api/actors-create.ts",
+					"parameters": {
+						"name": "Name of the actor as registered in your RivetKit registry.",
+						"key": "Key identifying this actor within its name. Multi-part keys are joined with `/`, see [Actor Keys](/docs/api/actor-keys). Omit for a keyless actor.",
+						"runner_name_selector": "Pool that runs the actor. RivetKit registers the `default` pool unless configured otherwise.",
+						"crash_policy": "What happens when the actor crashes. RivetKit defaults to `sleep`.",
+						"datacenter": "Datacenter to create the actor in. Defaults to the datacenter serving the request.",
+						"input": "Base64url-encoded CBOR input passed to the actor's `createState` and `onCreate` hooks."
+					},
+					"examples": {
+						"query": {
+							"namespace": "$RIVET_NAMESPACE"
+						},
+						"body": {
+							"name": "counter",
+							"key": "my-counter",
+							"runner_name_selector": "default",
+							"crash_policy": "sleep"
+						}
+					}
+				},
+				{
+					"spec": "engine",
+					"method": "put",
+					"path": "/actors",
+					"slug": "get-or-create",
+					"title": "Get or Create Actor",
+					"description": "Return the actor with the given name and key, creating it if it does not exist. This is the HTTP equivalent of client.actor.getOrCreate(key).",
+					"notes": "The response includes `created`, which is `true` when this call created the actor. Gateway endpoints can perform the same lookup inline with the `rvt-*` selector parameters, so you only need this endpoint when you want the `actor_id` up front.",
+					"typescript": "examples/docs/api/actors-get-or-create.ts",
+					"parameters": {
+						"name": "Name of the actor as registered in your RivetKit registry.",
+						"key": "Key identifying this actor within its name. Multi-part keys are joined with `/`, see [Actor Keys](/docs/api/actor-keys).",
+						"runner_name_selector": "Pool that runs the actor. RivetKit registers the `default` pool unless configured otherwise.",
+						"crash_policy": "What happens when the actor crashes. RivetKit defaults to `sleep`.",
+						"datacenter": "Datacenter to create the actor in if it does not exist. Defaults to the datacenter serving the request.",
+						"input": "Base64url-encoded CBOR input passed to the actor's `createState` and `onCreate` hooks when the actor is created."
+					},
+					"examples": {
+						"query": {
+							"namespace": "$RIVET_NAMESPACE"
+						},
+						"body": {
+							"name": "counter",
+							"key": "my-counter",
+							"runner_name_selector": "default",
+							"crash_policy": "sleep"
+						}
+					}
+				},
+				{
+					"spec": "engine",
+					"method": "delete",
+					"path": "/actors/{actor_id}",
+					"slug": "destroy",
+					"title": "Destroy Actor",
+					"description": "Destroy an actor. The actor's onDestroy hook runs, then its state is deleted permanently.",
+					"typescript": "examples/docs/api/actors-destroy.ts",
+					"examples": {
+						"query": {
+							"namespace": "$RIVET_NAMESPACE"
+						}
+					},
+					"related": [
+						{
+							"title": "Destroying Actors",
+							"href": "/actors/docs/destroy"
+						}
+					]
+				},
+				{
+					"spec": "engine",
+					"method": "post",
+					"path": "/actors/{actor_id}/sleep",
+					"slug": "sleep",
+					"title": "Sleep Actor",
+					"description": "Put an actor to sleep. The actor runs its shutdown sequence and persists its state, then wakes on the next request.",
+					"typescript": "examples/docs/api/actors-sleep.ts",
+					"examples": {
+						"query": {
+							"namespace": "$RIVET_NAMESPACE"
+						},
+						"body": {}
+					},
+					"related": [
+						{
+							"title": "Lifecycle",
+							"href": "/actors/docs/lifecycle"
+						}
+					]
+				},
+				{
+					"spec": "engine",
+					"method": "post",
+					"path": "/actors/{actor_id}/reschedule",
+					"slug": "reschedule",
+					"title": "Reschedule Actor",
+					"description": "Move an actor to a different worker. The actor runs its shutdown sequence, then restarts elsewhere with its persisted state.",
+					"typescript": "examples/docs/api/actors-reschedule.ts",
+					"examples": {
+						"query": {
+							"namespace": "$RIVET_NAMESPACE"
+						},
+						"body": {}
+					},
+					"related": [
+						{
+							"title": "Lifecycle",
+							"href": "/actors/docs/lifecycle"
+						}
+					]
+				},
+				{
+					"spec": "engine",
+					"method": "get",
+					"path": "/actors/names",
+					"slug": "list-names",
+					"title": "List Actor Names",
+					"description": "List the distinct actor names that have been created in a namespace.",
+					"typescript": "examples/docs/api/actors-list-names.ts",
+					"examples": {
+						"query": {
+							"namespace": "$RIVET_NAMESPACE"
+						}
+					}
+				}
+			]
+		},
+		{
+			"title": "Call Actors",
+			"dir": "gateway",
+			"spec": "asyncapi",
+			"endpoints": [
+				{
+					"spec": "rivetkit",
+					"method": "post",
+					"path": "/gateway/{actor}/action/{action}",
+					"slug": "call-action",
+					"title": "Call Action",
+					"description": "Invoke an action defined on an actor and return its result. This is the HTTP equivalent of calling a method on an actor handle in the RivetKit client.",
+					"notes": "Arguments are passed as a JSON array in `args` and spread into the action's parameters. The action's return value comes back in `output`. Actions that return `undefined` respond with `{ \"output\": null }`.",
+					"typescript": "examples/docs/api/gateway-call-action.ts",
+					"parameters": {
+						"action": "Name of the action as defined in the actor's `actions` map."
+					},
+					"examples": {
+						"path": {
+							"actor": "counter",
+							"action": "increment"
+						},
+						"selector": {
+							"rvt-namespace": "$RIVET_NAMESPACE",
+							"rvt-method": "getOrCreate",
+							"rvt-key": "my-counter",
+							"rvt-pool": "default"
+						},
+						"body": {
+							"args": [
+								1
+							]
+						},
+						"response": {
+							"output": 1
+						}
+					},
+					"related": [
+						{
+							"title": "Actions",
+							"href": "/actors/docs/actions"
+						},
+						{
+							"title": "Actor Routing",
+							"href": "/docs/api/actor-routing"
+						}
+					]
+				},
+				{
+					"spec": "rivetkit",
+					"method": "any",
+					"path": "/gateway/{actor}/request/{path}",
+					"slug": "request",
+					"title": "Raw HTTP Request",
+					"description": "Forward a raw HTTP request to an actor's onRequest handler. The method, headers, body, and the path after /request/ are passed through unchanged.",
+					"notes": "Use this when an actor exposes its own HTTP routes, streams responses (for example Server-Sent Events), or needs to accept non-JSON payloads. The response is whatever the actor's `onRequest` handler returns.",
+					"typescript": "examples/docs/api/gateway-request.ts",
+					"parameters": {
+						"path": "Path forwarded to the actor. The actor sees a request whose URL path is `/{path}`."
+					},
+					"examples": {
+						"method": "post",
+						"path": {
+							"actor": "counter",
+							"path": "increment"
+						},
+						"selector": {
+							"rvt-namespace": "$RIVET_NAMESPACE",
+							"rvt-method": "getOrCreate",
+							"rvt-key": "my-counter",
+							"rvt-pool": "default"
+						}
+					},
+					"responses": {
+						"200": "The response returned by the actor's `onRequest` handler."
+					},
+					"related": [
+						{
+							"title": "Low-Level HTTP Handler",
+							"href": "/actors/docs/request-handler"
+						},
+						{
+							"title": "Raw WebSocket",
+							"href": "/docs/api/websockets"
+						}
+					]
+				},
+				{
+					"spec": "rivetkit",
+					"method": "get",
+					"path": "/gateway/{actor}/health",
+					"slug": "health",
+					"title": "Check Health",
+					"description": "Check that an actor is reachable through the gateway. Resolves the actor, waits for it to be ready unless rvt-skip-ready-wait is set, and returns a plain-text ok.",
+					"typescript": "examples/docs/api/gateway-health.ts",
+					"examples": {
+						"path": {
+							"actor": "$ACTOR_ID"
+						}
+					},
+					"responses": {
+						"200": "The actor is running and reachable. Body is the text `ok`."
+					},
+					"after": "connect"
+				},
+				{
+					"spec": "rivetkit",
+					"method": "post",
+					"path": "/gateway/{actor}/queue/{name}",
+					"slug": "queue",
+					"title": "Send Queue Message",
+					"description": "Enqueue a durable message for an actor. Optionally wait for the actor to complete it and return a response.",
+					"notes": "By default, the request returns after the message is enqueued. Set `wait` to `true` to wait for `message.complete(...)`; `timeout` sets that wait in milliseconds, and a timeout returns `status: \"timedOut\"` without canceling the queued work.",
+					"typescript": "examples/docs/api/gateway-queue.ts",
+					"parameters": {
+						"name": "Name of the queue message as defined in the actor's `queues` map."
+					},
+					"examples": {
+						"path": {
+							"actor": "counter",
+							"name": "increment"
+						},
+						"selector": {
+							"rvt-namespace": "$RIVET_NAMESPACE",
+							"rvt-method": "getOrCreate",
+							"rvt-key": "my-counter",
+							"rvt-pool": "default"
+						},
+						"body": {
+							"body": {
+								"amount": 1
+							},
+							"wait": true,
+							"timeout": 5000
+						},
+						"response": {
+							"status": "completed",
+							"response": {
+								"count": 1
+							}
+						}
+					},
+					"responses": {
+						"200": "The message was enqueued, with its completion status when waiting."
+					},
+					"related": [
+						{
+							"title": "Queues",
+							"href": "/actors/docs/queues"
+						}
+					],
+					"after": "call-action"
+				},
+				{
+					"spec": "rivetkit",
+					"method": "get",
+					"path": "/gateway/{actor}/metadata",
+					"slug": "metadata",
+					"title": "Get Runtime Metadata",
+					"description": "Identify the RivetKit runtime serving an actor.",
+					"typescript": "examples/docs/api/gateway-metadata.ts",
+					"examples": {
+						"path": {
+							"actor": "$ACTOR_ID"
+						},
+						"response": {
+							"runtime": "rivetkit",
+							"version": "1.0.0",
+							"type": "native"
+						}
+					},
+					"responses": {
+						"200": "Runtime name, version, and runtime type."
+					},
+					"after": "health"
+				}
+			],
+			"protocol": [
+				{
+					"slug": "connect",
+					"title": "Connect",
+					"description": "Open a persistent WebSocket connection to an actor. One connection carries action calls, event subscriptions, and errors as JSON messages, which is what handle.connect() does in the RivetKit client.",
+					"url": "wss://api.rivet.dev/gateway/{actor}/connect",
+					"notes": "`{actor}` accepts the same forms as every gateway endpoint: an actor ID, `{actor_id}@{token}`, or an actor name with `rvt-*` query parameters. See [Actor Routing](/docs/api/actor-routing).\n\nConnection options travel as WebSocket subprotocols in the `Sec-WebSocket-Protocol` header because browsers cannot set arbitrary headers on an upgrade. Always include `rivet`, then add any of the prefixed entries below.\n\n| Subprotocol | Purpose |\n| --- | --- |\n| `rivet` | Required. Lets servers that insist on a matching protocol accept the upgrade. |\n| `rivet_encoding.json` | Message encoding. `json` is the default and is documented here. The RivetKit client uses `cbor` or `bare`; the payloads are the same, only the framing differs. |\n| `rivet_token.{token}` | Token to authenticate with. See [WebSocket Requests](/docs/api/authentication#websocket-requests). |\n| `rivet_conn_params.{params}` | Optional connection parameters passed to the actor's `createConnState` and `onBeforeConnect` hooks, as URL-encoded JSON. |\n| `rivet_skip_ready_wait` | Complete the upgrade as soon as the actor is resolved instead of waiting for it to be ready. |\n\nEvery message in both directions is a JSON object of the form `{ \"body\": { \"tag\": \"<Message>\", \"val\": { ... } } }`. The server sends `Init` first; nothing else arrives before it. There is no ping or heartbeat message. Rely on WebSocket ping frames or your own timeout to detect a dead connection.",
+					"sections": [
+						{
+							"title": "Handshake",
+							"notes": "After the upgrade completes, the server sends `Init` before any other message. Store `connectionId` if you need to correlate connection-scoped state; nothing else needs to be sent before calling actions or subscribing to events.",
+							"messages": [
+								"Init"
+							],
+							"snippets": [
+								{
+									"file": "examples/docs/api/connection-connect.ts",
+									"title": "WebSocket"
+								},
+								{
+									"file": "examples/docs/api/connection-connect-client.ts",
+									"title": "TypeScript"
+								}
+							]
+						},
+						{
+							"title": "Actions",
+							"notes": "Send an `ActionRequest` with a client-chosen `id`. The server answers with an `ActionResponse` carrying the same `id`, or with an [`Error`](#errors) whose `actionId` matches. Requests may be pipelined; responses are not guaranteed to arrive in order, so match on `id` rather than position.\n\nThis is the connection equivalent of [Call Action](/docs/api/gateway/call-action) over HTTP. Actions called on a connection can also read connection state set in `createConnState`.",
+							"messages": [
+								"ActionRequest",
+								"ActionResponse"
+							],
+							"snippets": [
+								{
+									"file": "examples/docs/api/connection-actions.ts",
+									"title": "WebSocket"
+								},
+								{
+									"file": "examples/docs/api/connection-actions-client.ts",
+									"title": "TypeScript"
+								}
+							]
+						},
+						{
+							"title": "Events",
+							"notes": "Send a `SubscriptionRequest` with `subscribe: true` to start receiving `Event` messages for an event name, and `subscribe: false` to stop. Subscriptions are per connection and are lost when the connection closes, so resubscribe after reconnecting. The server does not acknowledge subscription changes. If the actor rejects a subscription, the connection is closed with the error as the close reason.\n\nEvents sent by the actor to a connection that has not subscribed to that event name are dropped.",
+							"messages": [
+								"SubscriptionRequest",
+								"Event"
+							],
+							"snippets": [
+								{
+									"file": "examples/docs/api/connection-events.ts",
+									"title": "WebSocket"
+								},
+								{
+									"file": "examples/docs/api/connection-events-client.ts",
+									"title": "TypeScript"
+								}
+							]
+						},
+						{
+							"title": "Errors",
+							"notes": "Errors on an established connection arrive as `Error` messages. `actionId` is set when the error answers a specific `ActionRequest` and `null` for connection-level errors such as a malformed message. The `group` and `code` values are the same ones the HTTP API returns; see [Error Codes](/docs/api/error-codes).\n\nErrors that prevent the connection from being established, such as an invalid token or an actor that does not exist, are reported by closing the WebSocket with a reason of the form `{group}.{code}#{ray_id}`. See [WebSockets](/docs/api/websockets#close-codes).",
+							"messages": [
+								"Error"
+							],
+							"snippets": [
+								{
+									"file": "examples/docs/api/connection-errors.ts",
+									"title": "WebSocket"
+								},
+								{
+									"file": "examples/docs/api/connection-errors-client.ts",
+									"title": "TypeScript"
+								}
+							]
+						}
+					],
+					"fields": {
+						"Init.actorId": "ID of the actor this connection is attached to.",
+						"Init.connectionId": "ID of this connection. Matches `c.conn.id` inside the actor.",
+						"ActionRequest.id": "Client-chosen identifier used to match the response. Any integer that is unique among in-flight requests on this connection.",
+						"ActionRequest.name": "Name of the action as defined in the actor's `actions` map.",
+						"ActionRequest.args": "Positional arguments passed to the action, as a JSON array.",
+						"ActionResponse.id": "The `id` from the matching `ActionRequest`.",
+						"ActionResponse.output": "Value returned by the action. `null` if the action returned `undefined`.",
+						"SubscriptionRequest.eventName": "Name of the event as defined in the actor's `events` map.",
+						"SubscriptionRequest.subscribe": "`true` to subscribe, `false` to unsubscribe.",
+						"Event.name": "Name of the event.",
+						"Event.args": "Arguments passed to `c.broadcast()` or `conn.send()`, as a JSON array.",
+						"Error.group": "Subsystem that produced the error, such as `actor`, `auth`, or `user`.",
+						"Error.code": "Error identifier within the group.",
+						"Error.message": "Human-readable explanation. Do not match on it.",
+						"Error.metadata": "Structured details attached by the actor or gateway, if any.",
+						"Error.actionId": "`id` of the `ActionRequest` this error answers, or `null` for connection-level errors.",
+						"Error.actor": "Actor that handled the message, when known.",
+						"Error.actor.actorId": "ID of the actor.",
+						"Error.actor.generation": "Generation of the actor process. Increments each time the actor restarts.",
+						"Error.actor.key": "Key of the actor, if it has one."
+					},
+					"examples": {
+						"Init": {
+							"actorId": "00000000-0000-0000-0000-000000000000",
+							"connectionId": "00000000-0000-0000-0000-000000000000"
+						},
+						"ActionRequest": {
+							"id": 1,
+							"name": "increment",
+							"args": [
+								1
+							]
+						},
+						"ActionResponse": {
+							"id": 1,
+							"output": 1
+						},
+						"SubscriptionRequest": {
+							"eventName": "countChanged",
+							"subscribe": true
+						},
+						"Event": {
+							"name": "countChanged",
+							"args": [
+								1
+							]
+						},
+						"Error": {
+							"group": "user",
+							"code": "insufficient_funds",
+							"message": "Balance is too low.",
+							"metadata": {
+								"balance": 5
+							},
+							"actionId": 1,
+							"actor": {
+								"actorId": "00000000-0000-0000-0000-000000000000",
+								"generation": 1,
+								"key": "my-counter"
+							}
+						}
+					},
+					"related": [
+						{
+							"title": "Connections",
+							"href": "/actors/docs/connections"
+						},
+						{
+							"title": "Actions",
+							"href": "/actors/docs/actions"
+						},
+						{
+							"title": "Events",
+							"href": "/actors/docs/events"
+						},
+						{
+							"title": "Errors",
+							"href": "/docs/api/errors"
+						},
+						{
+							"title": "Call Action over HTTP",
+							"href": "/docs/api/gateway/call-action"
+						},
+						{
+							"title": "Raw WebSocket",
+							"href": "/docs/api/websockets"
+						},
+						{
+							"title": "AsyncAPI specification",
+							"href": "https://github.com/rivet-dev/rivet/tree/main/rivetkit-asyncapi"
+						}
+					]
+				}
+			],
+			"pages": [
+				{
+					"title": "Raw WebSocket",
+					"href": "/docs/api/websockets",
+					"badge": "WS",
+					"after": "request"
+				}
+			],
+			"children": [
+				{
+					"title": "Inspector",
+					"dir": "inspector",
+					"icon": "faMagnifyingGlass",
+					"notes": "These endpoints power the Rivet dashboard's actor inspector.",
+					"endpoints": [
+						{
+							"spec": "rivetkit",
+							"method": "get",
+							"path": "/gateway/{actor}/inspector/summary",
+							"slug": "summary",
+							"title": "Get Summary",
+							"description": "Get an overview of an actor's state, connections, actions, queue, database, and workflow.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-summary.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								}
+							},
+							"responses": {
+								"200": "The actor inspector summary.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "get",
+							"path": "/gateway/{actor}/inspector/state",
+							"slug": "state-get",
+							"title": "Get State",
+							"description": "Read the actor's current state.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-state-get.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								},
+								"response": {
+									"state": {
+										"count": 1
+									}
+								}
+							},
+							"responses": {
+								"200": "The current actor state.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "patch",
+							"path": "/gateway/{actor}/inspector/state",
+							"slug": "state-patch",
+							"title": "Patch State",
+							"description": "Replace the actor's current state.",
+							"notes": "This writes state directly and bypasses actor actions. Use it only for inspection and recovery.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-state-patch.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								},
+								"body": {
+									"state": {
+										"count": 2
+									}
+								},
+								"response": {
+									"ok": true
+								}
+							},
+							"responses": {
+								"200": "The state was saved.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "get",
+							"path": "/gateway/{actor}/inspector/connections",
+							"slug": "connections",
+							"title": "List Connections",
+							"description": "List the actor's active connections.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-connections.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								}
+							},
+							"responses": {
+								"200": "The active connections.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "get",
+							"path": "/gateway/{actor}/inspector/rpcs",
+							"slug": "rpcs",
+							"title": "List Actions",
+							"description": "List the actions exposed by the actor.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-rpcs.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								}
+							},
+							"responses": {
+								"200": "The actor's action definitions.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "post",
+							"path": "/gateway/{actor}/inspector/action/{name}",
+							"slug": "action",
+							"title": "Invoke Action",
+							"description": "Invoke an actor action through the inspector.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-action.ts",
+							"parameters": {
+								"name": "Name of the action to invoke."
+							},
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID",
+									"name": "increment"
+								},
+								"body": {
+									"args": [
+										1
+									]
+								},
+								"response": {
+									"output": 1
+								}
+							},
+							"responses": {
+								"200": "The action result.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "get",
+							"path": "/gateway/{actor}/inspector/queue",
+							"slug": "queue-get",
+							"title": "Get Queue",
+							"description": "List pending queue messages and queue capacity details.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-queue-get.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								},
+								"query": {
+									"limit": 50
+								}
+							},
+							"responses": {
+								"200": "Queue size, capacity, truncation status, and pending message metadata.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "post",
+							"path": "/gateway/{actor}/inspector/queue",
+							"slug": "queue-post",
+							"title": "Enqueue Message",
+							"description": "Enqueue a message through the inspector.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-queue-post.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								},
+								"body": {
+									"name": "increment",
+									"body": {
+										"amount": 1
+									}
+								}
+							},
+							"responses": {
+								"200": "Metadata for the enqueued message.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "delete",
+							"path": "/gateway/{actor}/inspector/queue",
+							"slug": "queue-delete",
+							"title": "Clear Queue",
+							"description": "Remove all pending messages from the actor's queue.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-queue-delete.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								}
+							},
+							"responses": {
+								"200": "The queue was cleared.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "get",
+							"path": "/gateway/{actor}/inspector/traces",
+							"slug": "traces",
+							"title": "Get Traces",
+							"description": "Get actor trace spans in OTLP JSON format.",
+							"notes": "Trace collection is not implemented yet, so this route currently returns an empty result.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-traces.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								},
+								"query": {
+									"startMs": 0,
+									"limit": 100
+								}
+							},
+							"responses": {
+								"200": "Trace data and whether the requested range was clamped.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "get",
+							"path": "/gateway/{actor}/inspector/workflow-history",
+							"slug": "workflow-history",
+							"title": "Get Workflow History",
+							"description": "Read workflow history and whether workflows are enabled for the actor.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-workflow-history.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								}
+							},
+							"responses": {
+								"200": "Workflow history and availability.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "post",
+							"path": "/gateway/{actor}/inspector/workflow/replay",
+							"slug": "workflow-replay",
+							"title": "Replay Workflow",
+							"description": "Schedule a workflow replay from an optional history entry.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-workflow-replay.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								},
+								"body": {
+									"entryId": "entry-123"
+								}
+							},
+							"responses": {
+								"200": "Workflow history after scheduling the replay.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "get",
+							"path": "/gateway/{actor}/inspector/database/schema",
+							"slug": "database-schema",
+							"title": "Get Database Schema",
+							"description": "List tables, views, and columns in the actor's SQLite database.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-database-schema.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								}
+							},
+							"responses": {
+								"200": "The actor database schema.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "get",
+							"path": "/gateway/{actor}/inspector/database/rows",
+							"slug": "database-rows",
+							"title": "Query Database Rows",
+							"description": "Read a page of rows from an actor database table or view.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-database-rows.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								},
+								"query": {
+									"table": "users",
+									"limit": 100,
+									"offset": 0
+								}
+							},
+							"responses": {
+								"200": "The selected rows.",
+								"401": "The inspector token is missing or invalid."
+							}
+						},
+						{
+							"spec": "rivetkit",
+							"method": "post",
+							"path": "/gateway/{actor}/inspector/database/execute",
+							"slug": "database-execute",
+							"title": "Execute SQL",
+							"description": "Run a SQL statement against the actor's SQLite database.",
+							"notes": "SQL executes directly against actor storage. Use bind parameters for values.",
+							"auth": "inspector",
+							"typescript": "examples/docs/api/inspector-database-execute.ts",
+							"examples": {
+								"path": {
+									"actor": "$ACTOR_ID"
+								},
+								"body": {
+									"sql": "SELECT * FROM users WHERE id = ?",
+									"args": [
+										"user-123"
+									]
+								}
+							},
+							"responses": {
+								"200": "Rows returned by the statement.",
+								"401": "The inspector token is missing or invalid."
+							}
+						}
+					],
+					"pages": [
+						{
+							"title": "Inspector Connect",
+							"href": "/docs/api/inspector-connect",
+							"badge": "WS"
+						}
+					],
+					"notice": "The inspector API powers the Rivet dashboard and is subject to change without notice. Do not build production integrations on it."
+				}
+			]
+		},
+		{
+			"title": "Tokens",
+			"dir": "tokens",
+			"endpoints": [
+				{
+					"spec": "engine",
+					"method": "post",
+					"path": "/auth/tokens",
+					"slug": "create",
+					"title": "Create Token",
+					"description": "Issue a scoped token. Use this to mint short-lived tokens that grant a client access to a single actor instead of sharing your namespace token.",
+					"notes": "Each grant names a resource type, a target (`\"any\"` or a specific `{ \"id\": ... }`), and the operations it allows. The RivetKit client wraps this as `handle.issueToken()`.",
+					"typescript": "examples/docs/api/tokens-create.ts",
+					"parameters": {
+						"namespace": "Namespace the token is valid in.",
+						"duration": "Lifetime in seconds. Omit for the default lifetime.",
+						"subject": "Free-form subject to attach to the token, such as a user ID.",
+						"grants": "Permissions the token carries.",
+						"grants[].resource": "Resource type the grant applies to.",
+						"grants[].target": "`\"any\"` for every resource of this type, or `{ \"id\": \"...\" }` for one resource.",
+						"grants[].operations": "Operations the token may perform on the target."
+					},
+					"examples": {
+						"body": {
+							"namespace": "my-namespace",
+							"subject": "user-123",
+							"duration": 3600,
+							"grants": [
+								{
+									"resource": "actor_gateway",
+									"target": {
+										"id": "00000000-0000-0000-0000-000000000000"
+									},
+									"operations": [
+										"read"
+									]
+								}
+							]
+						}
+					}
+				},
+				{
+					"spec": "engine",
+					"method": "get",
+					"path": "/auth/tokens/inspect",
+					"slug": "inspect",
+					"title": "Inspect Token",
+					"description": "Return the namespace, grants, and expiry of the token used to authenticate the request.",
+					"typescript": "examples/docs/api/tokens-inspect.ts"
+				}
+			]
+		},
+		{
+			"title": "Namespaces",
+			"dir": "namespaces",
+			"endpoints": [
+				{
+					"spec": "engine",
+					"method": "get",
+					"path": "/namespaces",
+					"slug": "list",
+					"title": "List Namespaces",
+					"description": "List namespaces, optionally filtered by name or ID. Results are paginated.",
+					"notes": "Use `namespace_id` for multiple IDs. `namespace_ids` is deprecated.",
+					"typescript": "examples/docs/api/namespaces-list.ts",
+					"parameters": {
+						"name": "Only return namespaces with this name.",
+						"namespace_ids": "Deprecated. Use `namespace_id` instead.",
+						"namespace_id": "Only return namespaces with these IDs. Repeat the parameter for multiple IDs."
+					},
+					"responses": {
+						"200": "Matching namespaces and a cursor for the next page."
+					}
+				},
+				{
+					"spec": "engine",
+					"method": "post",
+					"path": "/namespaces",
+					"slug": "create",
+					"title": "Create Namespace",
+					"description": "Create a namespace with a unique name and a display name.",
+					"typescript": "examples/docs/api/namespaces-create.ts",
+					"parameters": {
+						"name": "Unique name used to identify the namespace.",
+						"display_name": "Human-readable name for the namespace."
+					},
+					"examples": {
+						"body": {
+							"name": "my-app",
+							"display_name": "My App"
+						}
+					},
+					"responses": {
+						"200": "The newly created namespace."
+					}
+				}
+			]
+		},
+		{
+			"title": "Workers",
+			"dir": "workers",
+			"endpoints": [
+				{
+					"spec": "engine",
+					"method": "get",
+					"path": "/envoys",
+					"slug": "list",
+					"title": "List Workers",
+					"description": "List workers connected to the control plane in a namespace, optionally filtered by name or key. Results are paginated.",
+					"typescript": "examples/docs/api/workers-list.ts",
+					"parameters": {
+						"name": "Only return workers with this name.",
+						"envoy_key": "Only return workers with these keys. Repeat the parameter for multiple keys."
+					},
+					"examples": {
+						"query": {
+							"namespace": "$RIVET_NAMESPACE"
+						}
+					},
+					"responses": {
+						"200": "Matching workers and a cursor for the next page."
+					}
+				},
+				{
+					"spec": "engine",
+					"method": "get",
+					"path": "/runner-configs",
+					"slug": "configs-list",
+					"title": "List Worker Configs",
+					"description": "List worker configurations in a namespace, grouped by worker name and datacenter.",
+					"notes": "Filter by `variant` to return only `normal` or `serverless` configurations. Use `runner_name` for multiple names because `runner_names` is deprecated.",
+					"typescript": "examples/docs/api/workers-configs-list.ts",
+					"parameters": {
+						"variant": "Only return configurations with this variant.",
+						"runner_names": "Deprecated. Use `runner_name` instead.",
+						"runner_name": "Only return configurations for these worker names. Repeat the parameter for multiple names."
+					},
+					"examples": {
+						"query": {
+							"namespace": "$RIVET_NAMESPACE"
+						}
+					},
+					"responses": {
+						"200": "Worker configurations grouped by worker name and datacenter."
+					}
+				},
+				{
+					"spec": "engine",
+					"method": "put",
+					"path": "/runner-configs/{runner_name}",
+					"slug": "configs-upsert",
+					"title": "Upsert Worker Config",
+					"description": "Create or replace a worker configuration in each specified datacenter.",
+					"notes": "A `normal` configuration controls workers with direct, persistent connections. A `serverless` configuration starts workers through a URL and requires `url` and `request_lifespan`. Configurations for omitted datacenters are deleted. A failure can occur after some datacenters have already changed.",
+					"typescript": "examples/docs/api/workers-configs-upsert.ts",
+					"parameters": {
+						"runner_name": "Name of the worker pool to configure.",
+						"datacenters": "Map of datacenter names to worker configurations."
+					},
+					"examples": {
+						"path": {
+							"runner_name": "$RUNNER_NAME"
+						},
+						"query": {
+							"namespace": "$RIVET_NAMESPACE"
+						},
+						"body": {
+							"datacenters": {
+								"local": {
+									"normal": {}
+								}
+							}
+						}
+					},
+					"responses": {
+						"200": "Whether the endpoint configuration changed."
+					}
+				},
+				{
+					"spec": "engine",
+					"method": "delete",
+					"path": "/runner-configs/{runner_name}",
+					"slug": "configs-delete",
+					"title": "Delete Worker Config",
+					"description": "Delete a worker configuration from every configured datacenter.",
+					"notes": "A failure can occur after the configuration has already been deleted from some datacenters.",
+					"typescript": "examples/docs/api/workers-configs-delete.ts",
+					"parameters": {
+						"runner_name": "Name of the worker pool whose configuration will be deleted."
+					},
+					"examples": {
+						"path": {
+							"runner_name": "$RUNNER_NAME"
+						},
+						"query": {
+							"namespace": "$RIVET_NAMESPACE"
+						}
+					},
+					"responses": {
+						"200": "The configuration was deleted."
+					}
+				},
+				{
+					"spec": "engine",
+					"method": "post",
+					"path": "/runner-configs/{runner_name}/refresh-metadata",
+					"slug": "configs-refresh-metadata",
+					"title": "Refresh Config Metadata",
+					"description": "Fetch and store fresh metadata for a serverless worker configuration.",
+					"notes": "The endpoint refreshes the first serverless configuration it finds across datacenters. It fails when the worker name has no serverless configuration.",
+					"typescript": "examples/docs/api/workers-configs-refresh-metadata.ts",
+					"parameters": {
+						"runner_name": "Name of the worker pool whose metadata will be refreshed."
+					},
+					"examples": {
+						"path": {
+							"runner_name": "$RUNNER_NAME"
+						},
+						"query": {
+							"namespace": "$RIVET_NAMESPACE"
+						},
+						"body": {}
+					},
+					"responses": {
+						"200": "The metadata was refreshed."
+					}
+				},
+				{
+					"spec": "engine",
+					"method": "post",
+					"path": "/runner-configs/serverless-health-check",
+					"slug": "serverless-health-check",
+					"title": "Serverless Health Check",
+					"description": "Probe a serverless URL and return the protocol version reported by its metadata endpoint.",
+					"notes": "Metadata fetch failures are returned as a `failure` result in a successful HTTP response.",
+					"typescript": "examples/docs/api/workers-serverless-health-check.ts",
+					"parameters": {
+						"url": "Serverless URL to probe.",
+						"headers": "Headers to include in the metadata request."
+					},
+					"examples": {
+						"query": {
+							"namespace": "$RIVET_NAMESPACE"
+						},
+						"body": {
+							"url": "https://workers.example.com",
+							"headers": {}
+						}
+					},
+					"responses": {
+						"200": "A success result with the reported version or a failure result with error details."
+					}
+				}
+			],
+			"pages": [
+				{
+					"title": "Worker Connection",
+					"href": "/docs/api/worker-connect",
+					"badge": "WS",
+					"after": "list"
+				}
+			]
+		},
+		{
+			"title": "Control Plane",
+			"dir": "control-plane",
+			"endpoints": [
+				{
+					"spec": "engine",
+					"method": "get",
+					"path": "/metadata",
+					"slug": "metadata",
+					"title": "Get Metadata",
+					"description": "Get build, runtime, compiler, and fleet protocol metadata for the control plane.",
+					"notes": "The protocol versions are the versions agreed on by the fleet, which can differ from the versions compiled into the responding node.",
+					"typescript": "examples/docs/api/control-plane-metadata.ts",
+					"auth": "none",
+					"responses": {
+						"200": "Build and protocol metadata for the responding node and its fleet."
+					}
+				},
+				{
+					"spec": "engine",
+					"method": "get",
+					"path": "/datacenters",
+					"slug": "datacenters",
+					"title": "List Datacenters",
+					"description": "List the datacenters configured for the control plane.",
+					"typescript": "examples/docs/api/control-plane-datacenters.ts",
+					"responses": {
+						"200": "Configured datacenters and an empty pagination cursor."
+					}
+				}
+			]
+		}
+	]
+}

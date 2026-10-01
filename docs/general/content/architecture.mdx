@@ -1,14 +1,15 @@
 ---
 title: "Architecture"
-description: "How the Rivet control plane, runners, pools, and namespaces fit together, and the vocabulary the rest of these docs use."
+description: "How namespaces, Actors, workers, pools, and the gateway fit together, and the difference between serverless and long-running workers."
 skill: true
 ---
 
-Rivet separates the process that decides *where* work runs from the process that
-*runs* it. Everything else in these docs is a detail of one of those two sides,
-or of the boundary between them.
+export const imgServerless = { src: "https://assets.rivet.dev/website/docs/general/runtime-modes/serverless.png", width: 2533, height: 744, format: "png" };
+export const imgWorkers = { src: "https://assets.rivet.dev/website/docs/general/runtime-modes/runners.png", width: 2568, height: 1553, format: "png" };
 
-<svg viewBox="0 0 720 360" role="img" aria-label="Your client calls the gateway, which routes to a specific workload. The gateway sits above the control plane, which schedules, versions, and persists. The control plane talks to a runner over the runner protocol. The runner is your own process running your code, and it hosts many actors." style="width:100%;max-width:720px;height:auto;display:block;margin:2.5rem auto;font-family:system-ui,sans-serif">
+Rivet separates the process that decides *where* work runs from the process that *runs* it. The **control plane** schedules, routes, and persists. **Workers** are your processes, running your code. Everything else in these docs is a detail of one of those two sides, or of the boundary between them.
+
+<svg viewBox="0 0 720 360" role="img" aria-label="Your client calls the gateway, which routes to a specific Actor. The gateway sits above the control plane, which schedules, versions, and persists. The control plane talks to a worker over the worker protocol. The worker is your own process running your code, and it hosts many Actors." style="width:100%;max-width:720px;height:auto;display:block;margin:2.5rem auto;font-family:system-ui,sans-serif">
   <defs>
     <marker id="arch-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="rgb(var(--site-ink, 27 25 22))"/></marker>
     <marker id="arch-arrow-hl" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="rgb(var(--runtime-highlight, 183 75 35))"/></marker>
@@ -19,16 +20,16 @@ or of the boundary between them.
 
   <rect x="230" y="28" width="470" height="120" rx="8" fill="rgb(var(--site-paper-mid, 227 227 229))" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4"/>
   <text x="252" y="58" font-size="14" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Gateway</text>
-  <text x="252" y="78" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">routes to a specific workload</text>
+  <text x="252" y="78" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">routes to a specific Actor</text>
   <line x1="230" y1="92" x2="700" y2="92" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4"/>
   <text x="252" y="118" font-size="14" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Control plane</text>
   <text x="252" y="138" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">schedules, versions, persists</text>
 
   <line x1="465" y1="149" x2="465" y2="209" stroke="rgb(var(--runtime-highlight, 183 75 35))" stroke-width="1.4" marker-start="url(#arch-arrow-hl)" marker-end="url(#arch-arrow-hl)"/>
-  <text x="479" y="184" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">runner protocol</text>
+  <text x="479" y="184" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">worker protocol</text>
 
   <rect x="230" y="210" width="470" height="122" rx="8" fill="rgb(var(--runtime-highlight, 183 75 35) / 0.14)" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4"/>
-  <text x="252" y="240" font-size="14" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Runner</text>
+  <text x="252" y="240" font-size="14" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Worker</text>
   <text x="252" y="260" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">your process, your code</text>
   <g fill="rgb(var(--site-paper, 239 239 239))" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.3">
     <rect x="252" y="276" width="96" height="38" rx="6"/>
@@ -36,106 +37,86 @@ or of the boundary between them.
     <rect x="476" y="276" width="96" height="38" rx="6"/>
   </g>
   <g text-anchor="middle" font-size="12" fill="rgb(var(--site-ink, 27 25 22))">
-    <text x="300" y="300">actor</text>
-    <text x="412" y="300">actor</text>
-    <text x="524" y="300">actor</text>
+    <text x="300" y="300">Actor</text>
+    <text x="412" y="300">Actor</text>
+    <text x="524" y="300">Actor</text>
   </g>
   <text x="600" y="300" font-size="13" fill="rgb(var(--site-ink-faint, 138 132 120))">…</text>
 </svg>
 
-## Control plane
+## Control Plane
 
-The control plane is a single Rust binary, `rivet-engine`. It tracks every
-workload, decides which runner each one is allocated to, routes requests to it,
-and persists its state. It is the only stateful component you operate.
+The control plane is a single Rust binary. It tracks every Actor, decides which worker each one runs on, routes requests to it, and persists its state. It is the only stateful component you operate, and it never runs your code.
 
-In local development it listens on `http://localhost:6420` with no
-authentication. RivetKit starts one for you automatically, so a first run needs
-no configuration at all. See [Environment Variables](/docs/environment-variables)
-for the variables that control that behavior, and
-[Deploy](/docs/deploy) for running one yourself.
+Use it on [Rivet Cloud](/docs/deploy/cloud), inside your own account with [BYOC](/docs/deploy/byoc), or [self-host](/docs/deploy/self-host/control-plane) it. In local development, RivetKit starts one for you at `http://localhost:6420` with no authentication.
 
-The control plane never runs your code.
+## Namespaces
 
-## Runner
+A namespace is the tenancy boundary. Actor IDs and keys, worker names, pools, and tokens are all scoped to one namespace. Use namespaces to separate production from staging, or one customer from another. Every connection names a namespace, defaulting to `default`.
 
-A runner is a process you operate that has your code loaded and the Rivet SDK
-running inside it. It is the only place your code executes.
+See [Namespaces](/docs/namespaces).
 
-Runners connect *outbound* to the control plane, so they need no public URL and
-no inbound firewall rule. There are two ways that connection is established, and
-which one you use is the single biggest deployment decision:
+## Actors
 
-- **Runner mode** holds a long-lived connection open and waits for work. Use it
-  for containers, VMs, and bare metal.
-- **Serverless mode** has no persistent process. The control plane calls an HTTP
-  endpoint to wake one on demand. Use it for Vercel, Cloudflare Workers, and
-  similar platforms.
+An Actor is one schedulable unit of work with its own durable state and its own address. The control plane's view of every Actor is the same regardless of type: it has an ID, a key, a status, and the worker it is currently allocated to.
 
-See [Runtime Modes](/docs/runtime-modes) for both, and
-[Container Runner](/docs/container-runner) for running a container that is not a
-RivetKit application at all.
+An Actor is created on demand, runs until it goes idle, hibernates with its state intact, and wakes on the next request. It does not move between regions. Workflows, agentOS, and Dynamic Apps are Actors with a job already built in.
 
-## Workloads
+See [Actor Statuses](/docs/statuses) for the lifecycle the control plane exposes.
 
-A workload is one schedulable unit of work with its own durable state and its
-own address. Rivet Actors are the workload type these docs are mostly about, but
-the control plane's view of one is the same either way: it has an ID, a key, a
-status, and a runner it is currently allocated to.
+## Workers
 
-A workload is created on demand, runs until it goes idle, hibernates with its
-state intact, and wakes on the next request. It does not move between regions.
-See [Statuses](/docs/statuses) for the lifecycle the control plane exposes.
+A worker is a process you operate that has your code loaded and the Rivet SDK running inside it. It is the only place your code executes. Workers connect *outbound* to the control plane, so they need no public URL and no inbound firewall rule.
 
-## Pool
+Each worker reports a version number. The control plane prefers the highest version it can see when allocating new Actors, which is what makes a rolling deploy work without coordination. See [Versions & Upgrades](/docs/versions).
 
-A pool is the set of runners registered under one runner name within a
-namespace. Pools are how you route work to the right hardware: a `gpu-workers`
-pool and a `default` pool can serve the same application.
+## Worker Pools
 
-Each pool has a kind that matches how its runners attach. `normal` pools hold
-runners that connect themselves; the control plane never starts or stops them.
-`serverless` pools are woken by the control plane over HTTP. Scaling, drain
-behavior, and eviction rate limits are per-pool. See
-[Pool Configuration](/docs/pool-configuration).
+A pool is the set of workers registered under one name within a namespace. Pools route Actors to the right hardware: a `gpu-workers` pool and a `default` pool can serve the same application, and a client names the pool when it creates an Actor.
 
-## Namespace
+A pool's kind matches how its workers attach. `normal` pools hold long-running workers that connect themselves. `serverless` pools are woken by the control plane over HTTP. Scaling, drain behavior, and eviction rate limits are set per pool.
 
-A namespace is the tenancy boundary. Workload IDs, keys, runner names, and pools
-are all scoped to one, and so are tokens. A namespace is the unit you would use
-to separate production from staging, or one customer from another.
-
-Every connection names a namespace, defaulting to `default`. Tokens come in two
-kinds: `sk_` secret keys for server-side use, and `pk_` public keys that are safe
-to ship to a browser. See [Endpoints](/docs/endpoints) for how both are supplied.
-
-## Datacenter
-
-A datacenter is one control plane deployment with its own hostname. A
-multi-region deployment runs one per region over a shared database and pub/sub
-layer, and each region must be reachable at its own hostname so a client can
-address a specific one. Workloads are placed in a datacenter at creation and stay
-there. See [Regions & Multi-Region](/docs/regions).
+See [Workers & Pools](/docs/workers) for running them and [Pool Configuration](/docs/pool-configuration) for the options.
 
 ## Gateway
 
-The gateway is the part of the control plane that accepts client traffic and
-proxies it to whichever runner currently holds the target workload. It speaks
-plain HTTP and WebSocket:
+The gateway is the part of the control plane that accepts client traffic and proxies it to whichever worker currently holds the target Actor. It speaks plain HTTP and WebSocket:
 
 ```
 {RIVET_ENDPOINT}/gateway/{actor_id}/{path}
 ```
 
-Because it resolves the target on every request, a client holds no knowledge of
-where a workload is running, and a workload that is rescheduled onto a different
-runner keeps serving the same address. See
-[Debugging](/docs/debugging) for addressing workloads directly.
+Because it resolves the target on every request, a client never needs to know where an Actor is running, and an Actor that is rescheduled onto a different worker keeps the same address. See [Connect](/docs/connect) for the endpoint and [Management API](/docs/debugging) for addressing Actors directly.
 
-## Versions
+## Serverless vs. Long-Running Workers
 
-Every runner reports a version number. The control plane prefers the highest
-version it can see when allocating new work, which is what makes a rolling
-deploy work without coordination: old and new runners coexist, new workloads go
-to the new version, and existing ones drain across on their own schedule. See
-[Versions & Upgrades](/docs/versions).
+How a worker connects to the control plane is the biggest deployment decision. There are two options, and they can coexist in different pools of the same namespace.
+
+### Long-Running Workers
+
+The worker starts as a normal process, opens a persistent connection to the control plane, and waits for work. When a client creates an Actor, the control plane sends a command over that connection to start it. This is the default mode, used for local development and for containers, VMs, and bare metal (Kubernetes, Railway, AWS ECS, Hetzner).
+
+<img src={imgWorkers.src} alt="Long-running worker architecture diagram" />
+
+You control how many workers run and how they scale. Nothing needs to be publicly reachable.
+
+### Serverless Workers
+
+There is no persistent process. When a client creates an Actor, the control plane calls `GET /api/rivet/start` on your serverless deployment, and that invocation becomes a worker for the length of the request. Use it for Vercel, Cloudflare Workers, Supabase, and AWS Lambda. Rivet Cloud deploys in this mode.
+
+<img src={imgServerless.src} alt="Serverless worker architecture diagram" />
+
+Serverless workers scale to zero, follow your platform's autoscaling, and work with preview deployments. Function timeouts are handled by migrating Actors between invocations with their state intact, so you write code as if it runs forever.
+
+| | Long-running | Serverless |
+| --- | --- | --- |
+| Process | Always on, connects out | Started by the control plane per request |
+| Public endpoint | Not required | Required |
+| Scaling | You manage it | Platform autoscaling, scale to zero |
+| Typical hosts | Kubernetes, Docker, VMs | Vercel, Cloudflare, Supabase, Lambda |
+
+See [Workers & Pools](/docs/workers) for starting a worker in either mode and [Deploy Workers](/docs/deploy/self-host/workers) for per-platform guides.
+
+## Regions
+
+A datacenter is one control plane deployment with its own hostname. A multi-region deployment runs one per region over a shared database, and Actors are placed in a datacenter at creation and stay there. See [Regions & Multi-Region](/docs/regions).

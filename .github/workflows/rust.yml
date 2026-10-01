@@ -72,6 +72,18 @@ jobs:
           # Deny warnings
           RUSTFLAGS: --cfg tokio_unstable -D warnings -A unsafe-op-in-unsafe-fn
 
+      # The RivetError macros write engine/artifacts/errors/*.json while
+      # compiling. Those files feed the published error codes reference
+      # (docs/api/error-registry.json), so a commit that changes an error
+      # without committing the artifact would publish stale docs.
+      - name: Check error artifacts are committed
+        run: |
+          if [ -n "$(git status --porcelain engine/artifacts/errors)" ]; then
+            git status --porcelain engine/artifacts/errors
+            echo "::error::engine/artifacts/errors changed during cargo check. Run cargo check and commit the artifacts, then run pnpm docs:gen-api."
+            exit 1
+          fi
+
       - name: Check Rust publish surface
         run: |
           cargo check -p rivetkit --no-default-features --features rivetkit-core/sqlite-remote

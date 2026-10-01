@@ -1,0 +1,101 @@
+---
+title: "Authentication"
+description: "How to authenticate HTTP requests to the Rivet gateway and control plane."
+skill: true
+---
+
+Every request carries a token. Where it goes depends on whether you are calling the gateway or the control plane.
+
+## Tokens
+
+| Prefix | Name | Use from | Can do |
+| --- | --- | --- | --- |
+| `sk_` | Secret token | Trusted backends only | Everything in the namespace, including control plane calls |
+| `pk_` | Public token | Browsers, mobile apps, untrusted clients | Resolve actors by name and call them through the gateway |
+| none | Scoped token | Anywhere | Only the grants it was issued with, typically one actor |
+
+Find your namespace tokens in the dashboard under **Settings > Advanced > Backend Configuration**. They are the credential portion of your endpoint URL:
+
+```bash
+RIVET_ENDPOINT=https://my-namespace:sk_xxxxx@api.rivet.dev
+RIVET_PUBLIC_ENDPOINT=https://my-namespace:pk_xxxxx@api.rivet.dev
+```
+
+Scoped tokens are minted with [Create Token](/docs/api/tokens/create) and are the right choice for handing a browser access to a single actor. See [Authentication](/actors/docs/authentication) for how this fits with your own user auth.
+
+<Warning>
+Never ship an `sk_` token to a browser or mobile app. Anyone holding it can create, destroy, and read every actor in the namespace.
+</Warning>
+
+## Gateway Requests
+
+Gateway requests (`/gateway/{actor}/...`) accept a token in any of these places. If more than one is present, the path or query token wins over the header.
+
+<Tabs>
+
+<Tab title="Header">
+
+The default. Works for every HTTP request.
+
+```bash
+curl "https://api.rivet.dev/gateway/$ACTOR_ID/action/increment" \
+  -H "x-rivet-token: $RIVET_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"args": [1]}'
+```
+
+</Tab>
+
+<Tab title="Inline Path">
+
+Append `@{token}` to the actor ID. Useful for environments where you cannot set headers, such as `EventSource` or `<img>` tags. Only allowed with actor IDs, not actor names.
+
+```bash
+curl "https://api.rivet.dev/gateway/$ACTOR_ID@$RIVET_TOKEN/request/stream"
+```
+
+</Tab>
+
+<Tab title="Query Parameter">
+
+Pass `rvt-token` alongside the other `rvt-*` selector parameters when addressing an actor by name.
+
+```bash
+curl "https://api.rivet.dev/gateway/counter/action/increment?rvt-namespace=$RIVET_NAMESPACE&rvt-method=get&rvt-key=my-counter&rvt-token=$RIVET_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"args": [1]}'
+```
+
+</Tab>
+
+</Tabs>
+
+Tokens are URL-encoded when placed in the path or query string. `sk_` and `pk_` tokens contain only URL-safe characters, so in practice you can paste them as-is.
+
+## WebSocket Requests
+
+Browsers cannot set headers on a WebSocket upgrade, so WebSocket endpoints read the token from the `Sec-WebSocket-Protocol` header instead. Send the plain `rivet` protocol so servers that require a matching protocol accept the upgrade, then add the token as a second entry prefixed with `rivet_token.`:
+
+```javascript
+const ws = new WebSocket(
+  `wss://api.rivet.dev/gateway/${actorId}/websocket/chat`,
+  ["rivet", `rivet_token.${token}`],
+);
+```
+
+The inline `{actor_id}@{token}` path form and the `rvt-token` query parameter also work on gateway WebSockets, and are simpler for clients that cannot set subprotocols. This applies to [Raw WebSocket](/docs/api/websockets), [Connect](/docs/api/gateway/connect), [Inspector Connect](/docs/api/inspector-connect), and [Worker Connection](/docs/api/worker-connect).
+
+## Control Plane Requests
+
+Control plane requests use a bearer header and require the `namespace` query parameter on every call.
+
+```bash
+curl "https://api.rivet.dev/actors?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
+```
+
+Use an `sk_` token here. Public tokens can resolve actors but cannot list, destroy, or manage them.
+
+## Authentication Errors
+
+Rejected tokens return `401` with `auth.invalid_token` or `auth.token_expired`, and `403` with `auth.insufficient_permissions` when the token is valid but lacks a grant. See [Error Codes](/docs/api/error-codes#group-auth) for the full list and [Errors](/docs/api/errors) for the response format.
