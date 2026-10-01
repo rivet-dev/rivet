@@ -93,6 +93,16 @@ export const RIVET_DEV_PACKAGES = new Set<string>([
 	"@rivet-dev/pi",
 ]);
 
+/**
+ * Packages released on their own version line. A release keeps the version in
+ * their package.json instead of writing the release version, so npm skips them
+ * as already published until that version changes.
+ */
+export const INDEPENDENT_VERSION_PACKAGES = new Set<string>([
+	"@rivet-dev/pi",
+	"@rivet-dev/sandbox-adapter",
+]);
+
 export const RELEASE_ONLY_PACKAGES = new Set<string>([
 	"@rivetkit/rivetkit-napi-win32-x64-msvc",
 	"@rivetkit/engine-cli-win32-x64",
@@ -106,9 +116,9 @@ function isPublishable(pkg: { name?: string; private?: boolean }): boolean {
 	return true;
 }
 
-function readPackageJson(
+export function readPackageJson(
 	dir: string,
-): { name?: string; private?: boolean } | null {
+): { name?: string; private?: boolean; version?: string } | null {
 	const pkgPath = join(dir, "package.json");
 	if (!existsSync(pkgPath)) return null;
 	try {
