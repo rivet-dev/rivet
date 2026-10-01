@@ -24,7 +24,9 @@ import { scoped } from "./logger.js";
 import {
 	buildMetaPlatformMap,
 	discoverPackages,
+	INDEPENDENT_VERSION_PACKAGES,
 	type Package,
+	readPackageJson,
 } from "./packages.js";
 import {
 	packageFamily,
@@ -148,6 +150,12 @@ export interface BumpOptions {
 	 * version. Omit for a full run. Ignored in `versionOnly` mode.
 	 */
 	targets?: TargetGroup[];
+	/**
+	 * Branch preview run. Previews write the preview version to every package,
+	 * including `INDEPENDENT_VERSION_PACKAGES`, so a preview never publishes
+	 * their release version.
+	 */
+	preview?: boolean;
 }
 
 export function githubRepositoryUrl(repository: string): string {
@@ -198,6 +206,14 @@ export async function bumpPackageJsons(
 	const metaPlatformMap = buildMetaPlatformMap(packages);
 	const versionOnly = opts.versionOnly ?? false;
 	const catalog = await loadDefaultCatalog(repoRoot);
+	const versionOf = new Map(
+		packages.map((p) => [
+			p.name,
+			!opts.preview && INDEPENDENT_VERSION_PACKAGES.has(p.name)
+				? (readPackageJson(p.dir)?.version ?? version)
+				: version,
+		]),
+	);
 
 	// Cache `npm view <pkg> version` lookups for out-of-scope dependencies so a
 	// dep referenced by several packages is only resolved once.
@@ -222,7 +238,7 @@ export async function bumpPackageJsons(
 		const raw = await fs.readFile(pkgJsonPath, "utf8");
 		const pkgJson: PackageJson = JSON.parse(raw);
 
-		pkgJson.version = version;
+		pkgJson.version = versionOf.get(pkg.name) ?? version;
 
 		if (!versionOnly) {
 			pkgJson.repository = {
@@ -282,7 +298,7 @@ export async function bumpPackageJsons(
 						);
 						continue;
 					}
-					deps[dep] = version;
+					deps[dep] = versionOf.get(dep) ?? version;
 				}
 			}
 
