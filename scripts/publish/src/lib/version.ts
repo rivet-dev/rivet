@@ -298,7 +298,13 @@ export async function bumpPackageJsons(
 						);
 						continue;
 					}
-					deps[dep] = versionOf.get(dep) ?? version;
+					// An independent package can stay published across many releases, so it
+					// accepts any later release of the shared-version packages it uses.
+					deps[dep] =
+						INDEPENDENT_VERSION_PACKAGES.has(pkg.name) &&
+						!INDEPENDENT_VERSION_PACKAGES.has(dep)
+							? `^${version}`
+							: (versionOf.get(dep) ?? version);
 				}
 			}
 

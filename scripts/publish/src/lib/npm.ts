@@ -10,6 +10,7 @@ import { scoped } from "./logger.js";
 import {
 	assertDiscoverySanity,
 	discoverPackages,
+	INDEPENDENT_VERSION_PACKAGES,
 	META_PACKAGES,
 	type Package,
 } from "./packages.js";
@@ -329,7 +330,14 @@ export async function publishAll(
 	const packages = discoverPackages(repoRoot, {
 		includeReleaseOnly: opts.includeReleaseOnlyPackages,
 		families,
-	});
+	}).filter(
+		// Independent packages ship only in `latest` releases, so their stable
+		// versions never depend on an rc rivetkit.
+		(p) =>
+			!opts.releaseMode ||
+			tag === "latest" ||
+			!INDEPENDENT_VERSION_PACKAGES.has(p.name),
+	);
 	assertDiscoverySanity(packages, families);
 
 	log.info(
