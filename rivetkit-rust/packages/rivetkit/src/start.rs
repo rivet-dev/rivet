@@ -390,6 +390,7 @@ async fn handle_actor_event<A: Actor>(
 			invocation_telemetry: _,
 			reply,
 		} => {
+			let ctx = ctx.with_request(Some(request.clone()));
 			if let Some(http_pools) = http_pools {
 				let class = A::classify_http_request(&request);
 				let Some(permit) = http_pools.try_acquire(class) else {
@@ -419,10 +420,13 @@ async fn handle_actor_event<A: Actor>(
 			name,
 			body,
 			conn,
+			request,
 			reply,
 			..
 		} => {
-			let handler_ctx = ctx.with_conn(Some(ConnCtx::from(conn)));
+			let handler_ctx = ctx
+				.with_request(Some(request))
+				.with_conn(Some(ConnCtx::from(conn)));
 			match <A::Queue as QueueSet<A>>::dispatch(
 				actor,
 				handler_ctx.clone(),
@@ -444,6 +448,7 @@ async fn handle_actor_event<A: Actor>(
 		ActorEvent::WebSocketOpen {
 			ws, request, reply, ..
 		} => {
+			let ctx = ctx.with_request(request.clone());
 			reply.send(
 				actor
 					.on_websocket(ctx, ws, request.unwrap_or_default())
@@ -453,9 +458,11 @@ async fn handle_actor_event<A: Actor>(
 		ActorEvent::ConnectionPreflight {
 			conn,
 			params,
+			request,
 			reply,
 			..
 		} => {
+			let ctx = ctx.with_request(request);
 			let result = async {
 				let params = decode_conn_params::<A>(&params)?;
 				actor
@@ -859,6 +866,10 @@ mod tests {
 			ctx: Ctx<Self>,
 			params: &Self::ConnParams,
 		) -> Result<()> {
+			if let Some(request) = ctx.request() {
+				assert_eq!(request.headers()["cookie"], "session=test-session");
+				ctx.state_mut().log.push("before_request".into());
+			}
 			if !params.allow {
 				anyhow::bail!("connection rejected");
 			}
@@ -870,15 +881,23 @@ mod tests {
 
 		async fn create_conn_state(
 			self: Arc<Self>,
-			_ctx: Ctx<Self>,
+			ctx: Ctx<Self>,
 			params: Self::ConnParams,
 		) -> Result<Self::ConnState> {
+			if let Some(request) = ctx.request() {
+				assert_eq!(request.headers()["cookie"], "session=test-session");
+				ctx.state_mut().log.push("state_request".into());
+			}
 			Ok(ConnState {
 				value: params.value + 1,
 			})
 		}
 
 		async fn on_connect(self: Arc<Self>, ctx: Ctx<Self>, conn: ConnCtx<Self>) -> Result<()> {
+			if let Some(request) = ctx.request() {
+				assert_eq!(request.headers()["cookie"], "session=test-session");
+				ctx.state_mut().log.push("connect_request".into());
+			}
 			let conn_state = conn.state()?;
 			ctx.state_mut()
 				.log
@@ -887,6 +906,10 @@ mod tests {
 		}
 
 		async fn on_disconnect(self: Arc<Self>, ctx: Ctx<Self>, conn: ConnCtx<Self>) {
+			assert!(
+				ctx.request().is_none(),
+				"handshake must not leak into later callbacks"
+			);
 			ctx.state_mut()
 				.log
 				.push(format!("on_disconnect:{}", conn.id()));
@@ -1412,7 +1435,15 @@ mod tests {
 		tx.send(ActorEvent::ConnectionPreflight {
 			conn: conn.clone(),
 			params: cbor(&params),
-			request: None,
+			request: Some(
+				Request::from_parts(
+					"GET",
+					"/connect",
+					[("cookie".into(), "session=test-session".into())].into(),
+					Vec::new(),
+				)
+				.unwrap(),
+			),
 			reply: reply_tx.into(),
 		})
 		.expect("send connection preflight");
@@ -1433,6 +1464,9 @@ mod tests {
 
 		let log = &ctx.state().log;
 		assert!(log.contains(&"on_before_connect:41".to_owned()));
+		for hook in ["before_request", "state_request", "connect_request"] {
+			assert!(log.iter().any(|entry| entry == hook), "missing {hook}");
+		}
 		assert!(log.contains(&"on_connect:conn-hooks:42".to_owned()));
 		assert!(log.contains(&"on_disconnect:conn-hooks".to_owned()));
 	}

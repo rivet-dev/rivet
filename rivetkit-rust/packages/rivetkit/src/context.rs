@@ -35,6 +35,7 @@ pub struct Ctx<A: Actor> {
 	state: Arc<StateCell<A::State>>,
 	client: Arc<OnceLock<Client>>,
 	conn: Option<ConnCtx<A>>,
+	request: Option<Arc<rivetkit_core::Request>>,
 	_p: PhantomData<fn() -> A>,
 }
 
@@ -160,6 +161,7 @@ impl<A: Actor> Clone for Ctx<A> {
 			state: self.state.clone(),
 			client: self.client.clone(),
 			conn: self.conn.clone(),
+			request: self.request.clone(),
 			_p: PhantomData,
 		}
 	}
@@ -172,6 +174,7 @@ impl<A: Actor> Ctx<A> {
 			state: Arc::new(StateCell::empty()),
 			client: Arc::new(OnceLock::new()),
 			conn: None,
+			request: None,
 			_p: PhantomData,
 		}
 	}
@@ -182,6 +185,7 @@ impl<A: Actor> Ctx<A> {
 			state: Arc::new(StateCell::with_value(state)),
 			client: Arc::new(OnceLock::new()),
 			conn: None,
+			request: None,
 			_p: PhantomData,
 		}
 	}
@@ -192,12 +196,28 @@ impl<A: Actor> Ctx<A> {
 			state: self.state.clone(),
 			client: self.client.clone(),
 			conn,
+			request: self.request.clone(),
 			_p: PhantomData,
 		}
 	}
 
 	pub fn conn(&self) -> Option<&ConnCtx<A>> {
 		self.conn.as_ref()
+	}
+
+	/// The request associated with this callback, matching TypeScript's `c.request`.
+	/// Available during connection authentication (including WebSocket handshakes),
+	/// raw HTTP/WebSocket callbacks, and queue publishing. It is absent for callbacks
+	/// without a request, such as actions on an established WebSocket connection.
+	/// Copy any identity needed by subsequent actions into connection state.
+	pub fn request(&self) -> Option<&rivetkit_core::Request> {
+		self.request.as_deref()
+	}
+
+	pub(crate) fn with_request(&self, request: Option<rivetkit_core::Request>) -> Self {
+		let mut ctx = self.clone();
+		ctx.request = request.map(Arc::new);
+		ctx
 	}
 
 	pub fn state(&self) -> StateRef<'_, A::State> {
