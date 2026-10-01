@@ -205,11 +205,6 @@ impl<A: Actor> Ctx<A> {
 		self.conn.as_ref()
 	}
 
-	/// The request associated with this callback, matching TypeScript's `c.request`.
-	/// Available during connection authentication (including WebSocket handshakes),
-	/// raw HTTP/WebSocket callbacks, and queue publishing. It is absent for callbacks
-	/// without a request, such as actions on an established WebSocket connection.
-	/// Copy any identity needed by subsequent actions into connection state.
 	pub fn request(&self) -> Option<&rivetkit_core::Request> {
 		self.request.as_deref()
 	}
