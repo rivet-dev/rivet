@@ -1,6 +1,6 @@
 {
 	"name": "@rivet-dev/pi",
-	"version": "2.3.20",
+	"version": "0.1.0",
 	"description": "Run the Pi coding agent as a durable Rivet Actor",
 	"license": "Apache-2.0",
 	"publishConfig": {
@@ -25,13 +25,13 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
-		"@earendil-works/pi-coding-agent": "0.87.1",
+		"@earendil-works/pi-coding-agent": "1.0.0",
 		"@opentelemetry/api": "^1.1.0",
 		"@rivet-dev/sandbox-adapter": "workspace:*",
 		"rivetkit": "workspace:*"
 	},
 	"devDependencies": {
-		"@earendil-works/pi-ai": "0.87.1",
+		"@earendil-works/pi-ai": "1.0.0",
 		"@opentelemetry/sdk-trace-node": "2.11.0",
 		"@types/node": "^24.0.0",
 		"typescript": "^5.9.2",

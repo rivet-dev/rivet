@@ -81,6 +81,7 @@ export interface PiActions {
 	supportsThinking: SessionMethodAction<"supportsThinking">;
 
 	getActiveToolNames: SessionMethodAction<"getActiveToolNames">;
+	getCallableToolNames: SessionMethodAction<"getCallableToolNames">;
 	getAllTools: SessionMethodAction<"getAllTools">;
 	setActiveToolsByName: SessionMethodAction<"setActiveToolsByName">;
 	executeBash: (
@@ -182,6 +183,8 @@ export function createPiActions(options: PiSessionOptions): PiActions {
 
 		getActiveToolNames: (c) =>
 			read(c, ({ session }) => session.getActiveToolNames()),
+		getCallableToolNames: (c) =>
+			read(c, ({ session }) => session.getCallableToolNames()),
 		getAllTools: (c) => read(c, ({ session }) => session.getAllTools()),
 		setActiveToolsByName: (c, ...args) =>
 			mutate(c, ({ session }) => session.setActiveToolsByName(...args)),
