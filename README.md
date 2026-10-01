@@ -1,26 +1,22 @@
+<a href="https://rivet.dev">
+  <img src="./.github/media/banner.png" alt="Rivet: The orchestrator for agentic workloads. Run agents, workflows, and sandboxes as durable Actors. Open-source and self-hostable." />
+</a>
+
 <div align="center">
-  <a href="https://www.rivet.dev">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="./.github/media/logo/icon-text-white.svg" alt="Rivet">
-      <img src="./.github/media/logo/icon-text-black.svg" alt="Rivet" height="75">
-    </picture>
-  </a>
-  <br/>
-  <br/>
-  <h3>Rivet Actors are the primitive for stateful workloads.</h3>
-  <p>Built for AI agents, collaborative apps, and durable execution.</p>
+  <h3>The orchestrator for agentic workloads.</h3>
+  <p>A fast, high-density and scalable orchestrator for every workload an agent needs. Run agents, workflows, and sandboxes as durable Actors.</p>
   <p>
-    <a href="https://www.rivet.dev/docs">Quickstart</a> •
-    <a href="https://www.rivet.dev/docs/actors">Documentation</a> •
-    <a href="https://www.rivet.dev/changelog">Changelog</a> •
-    <a href="https://www.rivet.dev/discord">Discord</a> •
+    <a href="https://rivet.dev/docs/">Quickstart</a> •
+    <a href="https://rivet.dev/actors/docs/">Documentation</a> •
+    <a href="https://rivet.dev/blog/">Blog</a> •
+    <a href="https://rivet.dev/discord">Discord</a> •
     <a href="https://x.com/rivet_dev">X</a>
   </p>
 </div>
 
 ## What is Rivet?
 
-Rivet Actors are long-running, lightweight processes designed for stateful workloads. State lives in-memory with automatic persistence. Create one per agent, per session, or per user — with built-in workflows, queues, and scheduling.
+Rivet is an open-source orchestrator for agentic workloads. Everything it runs is a Rivet Actor: a long-running, lightweight process with in-memory state and automatic persistence. Create one per agent, per session, or per user — with built-in workflows, queues, and scheduling.
 
 **Backend**
 
