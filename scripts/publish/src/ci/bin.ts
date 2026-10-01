@@ -204,6 +204,7 @@ program
 			dryRun: !!opts.dryRun,
 			includeReleaseOnlyPackages: ctx.trigger === "release",
 			versionOnly: !!opts.versionOnly,
+			preview: ctx.trigger !== "release",
 			repository: opts.repository ?? process.env.GITHUB_REPOSITORY,
 			targets: ctx.targets,
 		});
