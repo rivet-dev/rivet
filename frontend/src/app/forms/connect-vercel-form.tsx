@@ -128,7 +128,7 @@ export const IntegrationCode = ({ plan }: { plan: string }) => {
 			<p>
 				If you have not created a project, see the{" "}
 				<a
-					href="https://www.rivet.dev/docs/actors/quickstart/next-js/"
+					href="https://rivet.dev/actors/docs/quickstart/next-js/"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="underline hover:text-foreground"

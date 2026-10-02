@@ -1,8 +1,13 @@
 import { faCopy, Icon } from "@rivet-gg/icons";
-import { deployOptions, type Provider } from "@rivetkit/shared-data";
+import {
+	deployOptions,
+	type Provider,
+	workerDeployGuideUrl,
+} from "@rivetkit/shared-data";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { MANAGED_SERVICES_POOL } from "@/app/managed-services";
 import {
 	Badge,
 	Button,
@@ -29,7 +34,6 @@ import {
 } from "@/content/agent-prompts";
 import { cloudEnv, getMcpUrl, getRivetRunUrl } from "@/lib/env";
 import { features } from "@/lib/features";
-import { MANAGED_SERVICES_POOL } from "@/app/managed-services";
 import { usePublishableToken } from "@/queries/accessors";
 import { useRivetDsn } from "./env-variables";
 
@@ -71,8 +75,8 @@ export function useAgentInstructionsCode({
 		: undefined;
 	const providerStr =
 		providerDetails?.displayName ?? provider ?? "your chosen provider";
-	const providerDocUrl = providerDetails?.href
-		? `https://rivet.dev${providerDetails.href}`
+	const providerDocUrl = providerDetails
+		? workerDeployGuideUrl(providerDetails.name)
 		: undefined;
 	// Follow the user's runner/serverless selection. Rivet Compute always
 	// deploys serverless (it sets the mode on deploy); every other provider uses

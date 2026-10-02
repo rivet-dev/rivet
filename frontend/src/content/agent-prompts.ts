@@ -401,7 +401,7 @@ Once deployed, the app is publicly reachable at its Rivet Run URL, \`${rivetRunU
 
 **Serving a frontend:** \`registry.start()\` serves static files automatically. Put the frontend build output in a \`public/\` directory and it is served with zero extra wiring. If the build outputs somewhere else (e.g. \`dist/\`), set \`RIVETKIT_PUBLIC_DIR\` to that directory.
 
-See https://rivet.dev/docs/general/runtime-modes for local vs. serverless modes and https://rivet.dev/docs/connect/rivet-compute for the full Compute integration guide.
+See https://rivet.dev/docs/workers/ for local vs. serverless modes and https://rivet.dev/docs/deploy/cloud/compute/ for the full Rivet Cloud deploy guide.
 
 ## Step 3: Create Dockerfile
 
@@ -516,7 +516,7 @@ Verify actors work end-to-end:
 
 - Deployment and logs are done with \`npx @rivetkit/cli deploy\` and \`npx @rivetkit/cli logs\`. Both default to the \`production\` namespace, so always pass \`--namespace ${namespace}\`. Actor creation and health checks are done via HTTP APIs (curl) as shown in Step 5.
 - Architecture: \`@rivetkit/cli deploy\` builds your Docker image and pushes it to Rivet. Rivet runs the container serverlessly. When you create an actor, Rivet communicates with the \`/api/rivet/*\` endpoint inside the container to manage its lifecycle.
-- For more troubleshooting help, see: https://rivet.dev/docs/actors/troubleshooting`;
+- For more troubleshooting help, see: https://rivet.dev/docs/troubleshooting/`;
 }
 
 export function getAgentInstructionsPrompt({
@@ -574,7 +574,7 @@ export function getAgentInstructionsPrompt({
 		: "";
 	const docLine = providerDocUrl
 		? `Review the deploy guide for ${providerStr}: ${providerDocUrl}`
-		: `Review the deploy guide for ${providerStr} at https://rivet.dev/docs/connect/`;
+		: `Review the deploy guide for ${providerStr} at https://rivet.dev/docs/deploy/self-host/workers/`;
 	// `RIVET_ENDPOINT` embeds the namespace admin token, so it needs the same
 	// handling discipline the Compute addendum applies to `RIVET_CLOUD_TOKEN`.
 	const deployEnv = `  RIVET_PUBLIC_ENDPOINT=${publishableToken}\n  RIVET_ENDPOINT=${secretToken}${poolLine}
@@ -640,7 +640,7 @@ Run the project, start one workflow instance, and verify its steps complete in o
 
 ${deploySteps}
 
-${mcpSection}After deployment, run the same workflow operation against the deployed environment and confirm the expected state. For troubleshooting, use https://rivet.dev/docs/actors/troubleshooting and include the workflow name, failed step name, runtime, and package version in the report.`;
+${mcpSection}After deployment, run the same workflow operation against the deployed environment and confirm the expected state. For troubleshooting, use https://rivet.dev/docs/troubleshooting/ and include the workflow name, failed step name, runtime, and package version in the report.`;
 	}
 
 	if (target === "dynamic-apps") {
@@ -794,15 +794,15 @@ Then ask:
 ${deploySteps}
 
 Link docs:
-- Actors: https://rivet.dev/docs/actors
-- Clients: https://rivet.dev/docs/clients
-- Troubleshooting: https://rivet.dev/docs/actors/troubleshooting
+- Actors: https://rivet.dev/actors/docs/
+- Clients: https://rivet.dev/actors/docs/clients/javascript/
+- Troubleshooting: https://rivet.dev/docs/troubleshooting/
 
 ---
 
 ${mcpSection}## If you get stuck
 
-Check https://rivet.dev/docs/actors/troubleshooting. If that doesn't help, point the user at:
+Check https://rivet.dev/docs/troubleshooting/. If that doesn't help, point the user at:
 - Discord: https://rivet.dev/discord
 - GitHub issues: https://github.com/rivet-dev/rivet
 

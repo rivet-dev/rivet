@@ -223,5 +223,5 @@ Once everything is built and verified, tell the user they can browse more tools,
 
 ## If You Get Stuck
 
-agentOS is in beta. See https://agentos-sdk.dev/docs/, the troubleshooting guide at https://rivet.dev/docs/actors/troubleshooting, or the Rivet Discord (https://rivet.dev/discord).`;
+agentOS is in beta. See https://agentos-sdk.dev/docs/, the troubleshooting guide at https://rivet.dev/docs/troubleshooting/, or the Rivet Discord (https://rivet.dev/discord).`;
 }
