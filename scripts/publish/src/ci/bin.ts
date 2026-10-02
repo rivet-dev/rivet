@@ -179,6 +179,12 @@ program
 		const packages = discoverPackages(findRepoRoot());
 		const failures: string[] = [];
 		for (const pkg of packages) {
+			// These first-time packages are bootstrapped manually; npm cannot
+			// exchange a trusted-publishing token until their names exist.
+			if (pkg.name === "@rivet-dev/pi" || pkg.name === "@rivet-dev/sandbox-adapter") {
+				log.warn(`npm OIDC bootstrap pending: ${pkg.name}`);
+				continue;
+			}
 			try {
 				const escapedName = pkg.name.replace("/", "%2f");
 				const response = await fetch(
