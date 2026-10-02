@@ -173,6 +173,10 @@
 							"href": "/actors/docs/logging"
 						},
 						{
+							"title": "Performance Monitoring & Tuning",
+							"href": "/actors/docs/performance-monitoring"
+						},
+						{
 							"title": "Errors",
 							"href": "/actors/docs/errors"
 						},
