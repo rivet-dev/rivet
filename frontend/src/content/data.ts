@@ -1,15 +1,15 @@
 export const docsLinks = {
 	gettingStarted: {
-		js: "https://www.rivet.dev/docs/clients/javascript/",
-		react: "https://www.rivet.dev/docs/clients/react/",
-		nextjs: "https://www.rivet.dev/docs/clients/next-js/",
+		js: "https://rivet.dev/actors/docs/clients/javascript/",
+		react: "https://rivet.dev/actors/docs/clients/react/",
+		nextjs: "https://rivet.dev/actors/docs/clients/javascript/",
 	},
-	runners: "https://www.rivet.dev/docs/self-hosting/connect-backend",
+	runners: "https://rivet.dev/docs/deploy/self-host/workers/",
 	quickstart: {
-		backend: "https://www.rivet.dev/docs/actors/quickstart/backend",
-		react: "https://www.rivet.dev/docs/actors/quickstart/react",
-		nextjs: "https://www.rivet.dev/docs/actors/quickstart/next-js",
+		backend: "https://rivet.dev/actors/docs/quickstart/backend/",
+		react: "https://rivet.dev/actors/docs/quickstart/react/",
+		nextjs: "https://rivet.dev/actors/docs/quickstart/next-js/",
 	},
-	runtimeModes: "https://www.rivet.dev/docs/general/runtime-modes/",
-	runnersSetup: "https://www.rivet.dev/docs/connect/",
+	runtimeModes: "https://rivet.dev/docs/workers/",
+	runnersSetup: "https://rivet.dev/docs/deploy/self-host/workers/",
 };

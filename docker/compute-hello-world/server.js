@@ -5,7 +5,7 @@ const path = require("node:path");
 const html = fs.readFileSync(path.join(__dirname, "index.html"));
 const port = Number(process.env.PORT) || 8080;
 
-console.log("Hello from Rivet Compute! Waiting for you to deploy an image. See rivet.dev/docs/connect/rivet-compute to learn more");
+console.log("Hello from Rivet Compute! Waiting for you to deploy an image. See rivet.dev/docs/deploy/cloud/compute to learn more");
 
 const server = http.createServer((req, res) => {
 	if (req.url === "/" || req.url === "/index.html") {

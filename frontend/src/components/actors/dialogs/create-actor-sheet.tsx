@@ -275,7 +275,7 @@ function DialogFooter({ onCancel }: { onCancel: () => void }) {
 							<Icon icon={faCopy} className="size-3.5" />
 						</button>
 						<a
-							href="https://www.rivet.dev/docs/clients"
+							href="https://rivet.dev/actors/docs/clients/javascript/"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors"
