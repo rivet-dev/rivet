@@ -36,7 +36,7 @@ export function Header({
 		<Flex direction="col" justify="end" gap="6">
 			<NavItem asChild>
 				<a
-					href="https://ww.rivet.dev/docs"
+					href="https://rivet.dev/docs"
 					target="_blank"
 					rel="noreferrer"
 				>

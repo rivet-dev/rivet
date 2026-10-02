@@ -40,10 +40,10 @@ const defaultValue = {
 	},
 	links: {
 		gettingStarted: {
-			node: "https://www.rivet.dev/docs/actors/quickstart/backend/",
-			react: "https://www.rivet.dev/docs/actors/quickstart/react/",
+			node: "https://rivet.dev/actors/docs/quickstart/backend/",
+			react: "https://rivet.dev/actors/docs/quickstart/react/",
 		},
-		state: "https://www.rivet.dev/docs/actors/state/",
+		state: "https://rivet.dev/actors/docs/state/",
 	},
 	canCreate: true,
 };

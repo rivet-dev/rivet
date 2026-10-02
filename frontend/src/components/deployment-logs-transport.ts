@@ -13,7 +13,7 @@ const BASE_DELAY_MS = 1_000;
 const CLOUD_RUN_HELLO_SUFFIX =
 	"Hello from Cloud Run! The container started successfully and is listening for HTTP requests on port 8080";
 const RIVET_COMPUTE_HELLO =
-	"Hello from Rivet Compute! Waiting for you to deploy an image. See rivet.dev/docs/connect/rivet-compute to learn more.";
+	"Hello from Rivet Compute! Waiting for you to deploy an image. See rivet.dev/docs/deploy/cloud/compute to learn more.";
 
 export function rewriteLogEntry<T extends { message: string; stream?: string }>(
 	data: T,

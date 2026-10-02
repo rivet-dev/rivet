@@ -1,5 +1,5 @@
 import type { Rivet } from "@rivetkit/engine-api-full";
-import { deployOptions, type Provider } from "@rivetkit/shared-data";
+import { type Provider, workerDeployGuideUrl } from "@rivetkit/shared-data";
 import {
 	useMutation,
 	usePrefetchInfiniteQuery,
@@ -229,16 +229,13 @@ function Step1({ provider }: { provider: Provider }) {
 }
 
 function Step2({ provider }: { provider: Provider }) {
-	const providerOptions = deployOptions.find(
-		(option) => option.name === provider,
-	);
 	const runnerName = useWatch({ name: "runnerName" });
 
 	return (
 		<>
 			<p>
 				<a
-					href={`https://www.rivet.dev/${providerOptions?.href || "docs/getting-started"}`}
+					href={workerDeployGuideUrl(provider)}
 					className="underline"
 					target="_blank"
 					rel="noopener"

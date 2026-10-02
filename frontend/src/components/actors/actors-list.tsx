@@ -648,7 +648,7 @@ function QuickstartEmptyState({ hasNameFilter }: { hasNameFilter: boolean }) {
 
 				<div className="px-8 py-4 border-t border-foreground/10 flex flex-wrap items-center justify-between gap-6">
 					<a
-						href="https://www.rivet.dev/docs/actors/quickstart/"
+						href="https://rivet.dev/actors/docs/"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="group inline-flex items-center gap-2 text-sm font-medium text-foreground hover:text-foreground/80"

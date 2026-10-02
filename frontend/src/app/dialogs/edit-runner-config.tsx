@@ -208,7 +208,7 @@ function ServerfulModeNotice() {
 			This is a Runner configuration. Runners connect to Rivet directly
 			using the runner SDK. No additional configuration is required here.{" "}
 			<a
-				href="https://www.rivet.dev/docs/general/runtime-modes/"
+				href="https://rivet.dev/docs/workers/"
 				target="_blank"
 				rel="noopener noreferrer"
 				className="underline"
