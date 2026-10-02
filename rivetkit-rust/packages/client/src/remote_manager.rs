@@ -14,7 +14,7 @@ use rivetkit_client_protocol::telemetry_headers::{
 };
 use serde::{Deserialize, Serialize};
 use serde_cbor;
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::OnceCell;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
@@ -30,6 +30,36 @@ use crate::{
 	protocol::query::ActorQuery,
 };
 
+/// Default bound on establishing a TCP connection or completing a WebSocket
+/// handshake.
+pub(crate) const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Network timeouts applied to every request the manager makes.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Timeouts {
+	/// Bounds TCP connect for HTTP and the full WebSocket handshake.
+	pub(crate) connect: Duration,
+	/// Bounds an entire HTTP request, or `None` for no overall limit.
+	pub(crate) request: Option<Duration>,
+}
+
+impl Default for Timeouts {
+	fn default() -> Self {
+		Self {
+			connect: DEFAULT_CONNECT_TIMEOUT,
+			request: None,
+		}
+	}
+}
+
+fn build_http_client(timeouts: Timeouts) -> reqwest::Client {
+	let mut builder = reqwest::Client::builder().connect_timeout(timeouts.connect);
+	if let Some(request) = timeouts.request {
+		builder = builder.timeout(request);
+	}
+	builder.build().expect("failed to build reqwest client")
+}
+
 #[derive(Clone)]
 pub struct RemoteManager {
 	endpoint: String,
@@ -39,6 +69,7 @@ pub struct RemoteManager {
 	headers: HashMap<String, String>,
 	max_input_size: usize,
 	disable_metadata_lookup: bool,
+	connect_timeout: Duration,
 	resolved_config: Arc<OnceCell<ResolvedClientConfig>>,
 	client: reqwest::Client,
 }
@@ -136,12 +167,14 @@ impl RemoteManager {
 			headers: HashMap::new(),
 			max_input_size: default_max_input_size(),
 			disable_metadata_lookup: false,
+			connect_timeout: Timeouts::default().connect,
 			resolved_config: Arc::new(OnceCell::new()),
-			client: reqwest::Client::new(),
+			client: build_http_client(Timeouts::default()),
 		}
 	}
 
-	pub fn from_config(
+	#[allow(clippy::too_many_arguments)]
+	pub(crate) fn from_config(
 		endpoint: String,
 		token: Option<String>,
 		namespace: Option<String>,
@@ -149,6 +182,7 @@ impl RemoteManager {
 		headers: Option<HashMap<String, String>>,
 		max_input_size: Option<usize>,
 		disable_metadata_lookup: bool,
+		timeouts: Timeouts,
 	) -> Self {
 		Self {
 			endpoint,
@@ -158,8 +192,9 @@ impl RemoteManager {
 			headers: headers.unwrap_or_default(),
 			max_input_size: max_input_size.unwrap_or_else(default_max_input_size),
 			disable_metadata_lookup,
+			connect_timeout: timeouts.connect,
 			resolved_config: Arc::new(OnceCell::new()),
-			client: reqwest::Client::new(),
+			client: build_http_client(timeouts),
 		}
 	}
 
@@ -759,7 +794,9 @@ impl RemoteManager {
 			.insert("Sec-WebSocket-Protocol", protocols.join(", ").parse()?);
 		self.apply_websocket_headers(request.headers_mut())?;
 
-		let (ws_stream, _) = connect_async(request).await?;
+		let (ws_stream, _) = tokio::time::timeout(self.connect_timeout, connect_async(request))
+			.await
+			.context("websocket handshake timed out")??;
 		Ok(ws_stream)
 	}
 
@@ -803,7 +840,9 @@ impl RemoteManager {
 			.insert("Sec-WebSocket-Protocol", all_protocols.join(", ").parse()?);
 		self.apply_websocket_headers(request.headers_mut())?;
 
-		let (ws_stream, _) = connect_async(request).await?;
+		let (ws_stream, _) = tokio::time::timeout(self.connect_timeout, connect_async(request))
+			.await
+			.context("websocket handshake timed out")??;
 		Ok(ws_stream)
 	}
 
