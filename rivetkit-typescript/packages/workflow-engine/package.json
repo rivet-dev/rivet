@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/workflow-engine",
-	"version": "2.3.22",
+	"version": "2.3.23",
 	"description": "Durable workflow engine with reentrant execution",
 	"license": "Apache-2.0",
 	"keywords": [
