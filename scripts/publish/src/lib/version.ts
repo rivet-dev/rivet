@@ -301,6 +301,7 @@ export async function bumpPackageJsons(
 					// An independent package can stay published across many releases, so it
 					// accepts any later release of the shared-version packages it uses.
 					deps[dep] =
+						!opts.preview &&
 						INDEPENDENT_VERSION_PACKAGES.has(pkg.name) &&
 						!INDEPENDENT_VERSION_PACKAGES.has(dep)
 							? `^${version}`
