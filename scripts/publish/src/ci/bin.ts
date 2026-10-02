@@ -32,6 +32,7 @@ import {
 } from "../lib/git.js";
 import { scoped } from "../lib/logger.js";
 import { publishAll, repairBranchPreviewLatestTags } from "../lib/npm.js";
+import { discoverPackages } from "../lib/packages.js";
 import {
 	copyPrefix,
 	uploadDir,
@@ -150,6 +151,64 @@ function parseCratesIoRateLimitRetry(output: string): Date | undefined {
 
 const program = new Command();
 program.name("ci").description("CI subcommands for the publish flow");
+
+// Check every release package against npm before starting the artifact builds.
+program
+	.command("check-npm-oidc")
+	.description("Check trusted publishing for every npm release package")
+	.action(async () => {
+		const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+		const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+		if (!requestUrl || !requestToken) {
+			throw new Error("GitHub OIDC token request is unavailable");
+		}
+
+		const url = new URL(requestUrl);
+		url.searchParams.append("audience", "npm:registry.npmjs.org");
+		const tokenResponse = await fetch(url, {
+			headers: { Authorization: `Bearer ${requestToken}` },
+		});
+		if (!tokenResponse.ok) {
+			throw new Error(`GitHub OIDC token request failed: HTTP ${tokenResponse.status}`);
+		}
+		const tokenBody = (await tokenResponse.json()) as { value?: string };
+		if (!tokenBody.value) {
+			throw new Error("GitHub did not return an OIDC token");
+		}
+
+		const packages = discoverPackages(findRepoRoot());
+		const failures: string[] = [];
+		for (const pkg of packages) {
+			try {
+				const escapedName = pkg.name.replace("/", "%2f");
+				const response = await fetch(
+					`https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/${escapedName}`,
+					{
+						method: "POST",
+						headers: { Authorization: `Bearer ${tokenBody.value}` },
+					},
+				);
+				if (response.status === 201) {
+					log.info(`npm OIDC OK: ${pkg.name}`);
+					continue;
+				}
+				const body = (await response.json().catch(() => ({}))) as {
+					message?: string;
+				};
+				const failure = `${pkg.name}: HTTP ${response.status} ${body.message ?? response.statusText}`;
+				log.error(`npm OIDC FAILED: ${failure}`);
+				failures.push(failure);
+			} catch (error) {
+				const failure = `${pkg.name}: ${error instanceof Error ? error.message : String(error)}`;
+				log.error(`npm OIDC FAILED: ${failure}`);
+				failures.push(failure);
+			}
+		}
+		log.info(`npm OIDC preflight: ${packages.length - failures.length}/${packages.length} passed`);
+		if (failures.length > 0) {
+			throw new Error(`${failures.length} npm package(s) failed OIDC exchange`);
+		}
+	});
 
 // ---------------------------------------------------------------------------
 // context-output — resolve once, write to $GITHUB_OUTPUT for downstream steps
