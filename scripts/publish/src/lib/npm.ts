@@ -12,6 +12,7 @@ import {
 	discoverPackages,
 	INDEPENDENT_VERSION_PACKAGES,
 	META_PACKAGES,
+	readPackageJson,
 	type Package,
 } from "./packages.js";
 import { scopedFamilies, type TargetGroup } from "./scope.js";
@@ -195,6 +196,22 @@ async function publishOne(
 		Pick<PublishAllOptions, "tag" | "retries" | "initialBackoffMs">
 	>,
 ): Promise<PublishResult> {
+	// npm can reject an existing version with ENEEDAUTH before reporting that it
+	// already exists (notably for packages bootstrapped outside CI).
+	const version = readPackageJson(pkg.dir)?.version;
+	if (!version) {
+		return { pkg, status: "failed", attempts: 0, lastError: "missing package version" };
+	}
+	try {
+		const name = encodeURIComponent(pkg.name);
+		const response = await fetch(`https://registry.npmjs.org/${name}/${encodeURIComponent(version)}`);
+		if (response.ok) return { pkg, status: "already-exists", attempts: 0 };
+		if (response.status !== 404) {
+			return { pkg, status: "failed", attempts: 0, lastError: `npm registry returned HTTP ${response.status}` };
+		}
+	} catch (error) {
+		return { pkg, status: "failed", attempts: 0, lastError: String(error) };
+	}
 	for (let attempt = 1; attempt <= opts.retries + 1; attempt++) {
 		const { code, output } = await runNpmPublish(pkg, opts.tag);
 		if (code === 0) {
