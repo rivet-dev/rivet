@@ -73,24 +73,34 @@ Create one Actor per agent, per session, per user, or per tenant. Run it on plai
 **Backend**
 
 ```typescript
+import { actor } from "rivetkit";
+import { db } from "rivetkit/db";
+
 const agent = actor({
-  // In-memory, persisted state for the Actor
-  state: { messages: [] as Message[] },
+  // Per-Actor SQLite database, persisted across restarts and hibernation
+  db: db({
+    onMigrate: async (db) => {
+      // Apply the SQLite schema
+      await db.execute(`CREATE TABLE IF NOT EXISTS messages (role TEXT, content TEXT)`);
+    },
+  }),
 
-  // Long-running Actor process
-  run: async (c) => {
-    // Process incoming messages from the queue
-    for await (const msg of c.queue.iter()) {
-      c.state.messages.push({ role: "user", content: msg.body.text });
-      const response = streamText({ model: openai("gpt-5"), messages: c.state.messages });
+  actions: {
+    chat: async (c, text: string) => {
+      // Durably save the message
+      await c.db.execute("INSERT INTO messages VALUES (?, ?)", "user", text);
+      const messages = await c.db.execute("SELECT role, content FROM messages");
 
-      // Stream realtime events to all connected clients
+      const response = streamText({ model: openai("gpt-5"), messages });
+
+      // Stream tokens to every connected client for multiplayer
       for await (const delta of response.textStream) {
         c.broadcast("token", delta);
       }
 
-      c.state.messages.push({ role: "assistant", content: await response.text });
-    }
+      // Durably save the response
+      await c.db.execute("INSERT INTO messages VALUES (?, ?)", "assistant", await response.text);
+    },
   },
 });
 ```
@@ -104,8 +114,8 @@ const agent = client.agent.getOrCreate("agent-123").connect();
 // Listen for realtime events
 agent.on("token", delta => process.stdout.write(delta));
 
-// Send message to Actor
-await agent.queue.send("how many r's in strawberry?");
+// Call an action on the Actor
+await agent.chat("how many r's in strawberry?");
 ```
 
 ## Actor types
