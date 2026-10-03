@@ -1,16 +1,16 @@
-use anyhow::{anyhow, Context, Result};
-use base64::{engine::general_purpose, engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use anyhow::{Context, Result, anyhow};
+use base64::{Engine as _, engine::general_purpose, engine::general_purpose::URL_SAFE_NO_PAD};
 use bytes::Bytes;
 use opentelemetry::baggage::BaggageExt as _;
 use opentelemetry::propagation::TextMapPropagator as _;
 use opentelemetry_http::HeaderInjector;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use reqwest::{
-	header::{HeaderMap, HeaderName, HeaderValue, USER_AGENT},
 	Method,
+	header::{HeaderMap, HeaderName, HeaderValue, USER_AGENT},
 };
 use rivetkit_client_protocol::telemetry_headers::{
-	bounded_ray_id, HEADER_RIVET_RAY_ID, HEADER_TRACEPARENT, HEADER_TRACESTATE, RAY_BAGGAGE_KEY,
+	HEADER_RIVET_RAY_ID, HEADER_TRACEPARENT, HEADER_TRACESTATE, RAY_BAGGAGE_KEY, bounded_ray_id,
 };
 use serde::{Deserialize, Serialize};
 use serde_cbor;
@@ -21,11 +21,11 @@ use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 use crate::{
 	common::{
-		serialize_actor_key, ActorKey, EncodingKind, RawWebSocket, HEADER_RIVET_ACTOR,
-		HEADER_RIVET_NAMESPACE, HEADER_RIVET_TARGET, HEADER_RIVET_TOKEN, PATH_CONNECT_WEBSOCKET,
-		PATH_WEBSOCKET_PREFIX, USER_AGENT_VALUE, WS_PROTOCOL_ACTOR, WS_PROTOCOL_CONN_ID,
-		WS_PROTOCOL_CONN_PARAMS, WS_PROTOCOL_CONN_TOKEN, WS_PROTOCOL_ENCODING,
-		WS_PROTOCOL_STANDARD, WS_PROTOCOL_TARGET, WS_PROTOCOL_TOKEN,
+		ActorKey, EncodingKind, HEADER_RIVET_ACTOR, HEADER_RIVET_NAMESPACE, HEADER_RIVET_TARGET,
+		HEADER_RIVET_TOKEN, PATH_CONNECT_WEBSOCKET, PATH_WEBSOCKET_PREFIX, RawWebSocket,
+		USER_AGENT_VALUE, WS_PROTOCOL_ACTOR, WS_PROTOCOL_CONN_ID, WS_PROTOCOL_CONN_PARAMS,
+		WS_PROTOCOL_CONN_TOKEN, WS_PROTOCOL_ENCODING, WS_PROTOCOL_STANDARD, WS_PROTOCOL_TARGET,
+		WS_PROTOCOL_TOKEN, serialize_actor_key,
 	},
 	protocol::query::ActorQuery,
 };
@@ -656,8 +656,15 @@ impl RemoteManager {
 		push_query_param(&mut params, "rvt-namespace", &config.namespace);
 		push_query_param(&mut params, "rvt-method", method);
 		if let Some(key) = key {
-			if !key.is_empty() {
-				push_query_param(&mut params, "rvt-key", &key.join(","));
+			// Each component is sent as its own `rvt-key-part` occurrence
+			// instead of being comma-joined into a single `rvt-key` value.
+			// A comma-joined value cannot distinguish a component
+			// containing a literal comma from multiple components, so
+			// `rvt-key` remains only as a legacy fallback for older
+			// gateways. `rvt-key-part` has no such ambiguity: each
+			// occurrence is one already-final component.
+			for part in key {
+				push_query_param(&mut params, "rvt-key-part", part);
 			}
 		}
 		if let Some(input) = input {
@@ -881,4 +888,115 @@ fn is_trace_context_header(name: &str) -> bool {
 	[HEADER_TRACEPARENT, HEADER_TRACESTATE]
 		.iter()
 		.any(|header| header.eq_ignore_ascii_case(name))
+}
+
+// Tests are inline because `build_actor_query_gateway_url` and
+// `ResolvedClientConfig` are private and cannot be reached from the
+// integration `tests/` directory without widening visibility. Keep these in
+// sync with the TypeScript equivalent at
+// rivetkit-typescript/packages/rivetkit/tests/actor-gateway-url.test.ts and
+// the guard-side decode tests at
+// engine/packages/guard/tests/parse_actor_path.rs.
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn test_config() -> ResolvedClientConfig {
+		ResolvedClientConfig {
+			endpoint: "https://api.rivet.dev".to_string(),
+			token: None,
+			namespace: "default".to_string(),
+		}
+	}
+
+	fn key_parts_of(url: &str) -> Vec<String> {
+		let query = url.split_once('?').map(|(_, q)| q).unwrap_or("");
+		query
+			.split('&')
+			.filter_map(|pair| pair.split_once('='))
+			.filter(|(k, _)| *k == "rvt-key-part")
+			.map(|(_, v)| urlencoding::decode(v).unwrap().into_owned())
+			.collect()
+	}
+
+	#[test]
+	fn sends_one_rvt_key_part_per_component() {
+		let manager = RemoteManager::new("https://api.rivet.dev", None);
+		let key: ActorKey = vec!["part/one".to_string(), "shard-2".to_string()];
+		let url = manager
+			.build_actor_query_gateway_url(
+				&test_config(),
+				"lobby",
+				"get",
+				Some(&key),
+				None,
+				None,
+				None,
+				"",
+			)
+			.unwrap();
+
+		assert_eq!(key_parts_of(&url), vec!["part/one", "shard-2"]);
+		assert!(!url.contains("rvt-key="));
+	}
+
+	#[test]
+	fn distinguishes_comma_containing_component_from_two_components() {
+		// Regression coverage for https://github.com/rivet-dev/rivet/issues/5807.
+		let manager = RemoteManager::new("https://api.rivet.dev", None);
+		let single: ActorKey = vec!["tenant,admin".to_string()];
+		let two: ActorKey = vec!["tenant".to_string(), "admin".to_string()];
+
+		let single_url = manager
+			.build_actor_query_gateway_url(
+				&test_config(),
+				"lobby",
+				"get",
+				Some(&single),
+				None,
+				None,
+				None,
+				"",
+			)
+			.unwrap();
+		let two_url = manager
+			.build_actor_query_gateway_url(
+				&test_config(),
+				"lobby",
+				"get",
+				Some(&two),
+				None,
+				None,
+				None,
+				"",
+			)
+			.unwrap();
+
+		let single_parts = key_parts_of(&single_url);
+		let two_parts = key_parts_of(&two_url);
+		assert_eq!(single_parts, vec!["tenant,admin"]);
+		assert_eq!(two_parts, vec!["tenant", "admin"]);
+		assert_ne!(single_parts, two_parts);
+	}
+
+	#[test]
+	fn omits_key_params_for_empty_key() {
+		let manager = RemoteManager::new("https://api.rivet.dev", None);
+		let key: ActorKey = vec![];
+		let url = manager
+			.build_actor_query_gateway_url(
+				&test_config(),
+				"lobby",
+				"get",
+				Some(&key),
+				None,
+				None,
+				None,
+				"",
+			)
+			.unwrap();
+
+		assert!(!url.contains("rvt-key-part"));
+		assert!(!url.contains("rvt-key="));
+	}
 }
