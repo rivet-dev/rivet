@@ -600,6 +600,10 @@ export class NapiCoreRuntime implements CoreRuntime {
 		return asNativeActorContext(ctx).actorId();
 	}
 
+	actorGeneration(ctx: ActorContextHandle): number | undefined {
+		return asNativeActorContext(ctx).generation() ?? undefined;
+	}
+
 	runWithActorInvocationContext<T>(ctx: ActorContextHandle, run: () => T): T {
 		return this.#runAs(asNativeActorContext(ctx), run);
 	}

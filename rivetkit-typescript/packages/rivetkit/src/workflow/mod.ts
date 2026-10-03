@@ -178,13 +178,28 @@ export function workflow<
 	type WorkflowInspectorRegistration = ReturnType<
 		typeof createWorkflowInspectorAdapter
 	> & { control?: RunControl };
+	// Keyed by actor id and generation so a lost generation that is still running cannot rebind
+	// the control or state of the generation that replaced it.
 	const workflowInspectors = new Map<string, WorkflowInspectorRegistration>();
 
-	function getWorkflowInspector(actorId: string) {
-		let workflowInspector = workflowInspectors.get(actorId);
+	function workflowInspectorKey(
+		actorId: string,
+		actorGeneration: number | undefined,
+	): string {
+		return actorGeneration === undefined
+			? actorId
+			: `${actorId}#${actorGeneration}`;
+	}
+
+	function getWorkflowInspector(
+		actorId: string,
+		actorGeneration: number | undefined,
+	) {
+		const key = workflowInspectorKey(actorId, actorGeneration);
+		let workflowInspector = workflowInspectors.get(key);
 		if (!workflowInspector) {
 			workflowInspector = createWorkflowInspectorAdapter();
-			workflowInspectors.set(actorId, workflowInspector);
+			workflowInspectors.set(key, workflowInspector);
 		}
 		return workflowInspector;
 	}
@@ -207,7 +222,11 @@ export function workflow<
 			}
 		)[ACTOR_CONTEXT_INTERNAL_SYMBOL];
 		invariant(actor, "workflow() requires an actor instance");
-		const workflowInspector = getWorkflowInspector(actor.id);
+		const actorGeneration = (actor as { generation?: number }).generation;
+		const workflowInspector = getWorkflowInspector(
+			actor.id,
+			actorGeneration,
+		);
 
 		const driver = new ActorWorkflowDriver(actor, runCtx);
 		const controlDriver = new ActorWorkflowControlDriver(actor, runCtx);
@@ -302,16 +321,20 @@ export function workflow<
 	return defineRunHandler(run, {
 		icon: "diagram-project",
 		inspectorKind: "workflow",
-		createInspector: ({ actorId, control }) => {
-			const workflowInspector = getWorkflowInspector(actorId);
+		createInspector: ({ actorId, actorGeneration, control }) => {
+			const key = workflowInspectorKey(actorId, actorGeneration);
+			const workflowInspector = getWorkflowInspector(
+				actorId,
+				actorGeneration,
+			);
 			workflowInspector.control = control;
 			return {
 				inspector: { workflow: workflowInspector.adapter },
 				dispose: () => {
 					// Do not let a stale disposer remove a newly-created adapter for
-					// the same actor id.
-					if (workflowInspectors.get(actorId) === workflowInspector) {
-						workflowInspectors.delete(actorId);
+					// the same actor generation.
+					if (workflowInspectors.get(key) === workflowInspector) {
+						workflowInspectors.delete(key);
 					}
 				},
 			};
