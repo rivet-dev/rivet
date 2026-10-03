@@ -66,7 +66,7 @@ Create one Actor per agent, per session, per user, or per tenant. Run it on plai
 - **12 ms cold starts**: A cold start includes scheduling the Actor, loading its state, and serving the first request. No image pull, no container boot.
 - **Billions of Actors on one control plane**: Actors are scheduled independently, so adding capacity means adding machines. The same control plane runs a thousand Actors or a billion.
 - **Hibernates when idle, wakes on demand**: An idle Actor writes its state and unloads. The next request brings it back in 12 ms with nothing lost.
-- **Durable state for every workload**: Every Actor gets a SQLite database and a POSIX filesystem, tiered to S3. Idle Actors cost nothing, so millions can sit parked with their state intact.
+- **SQLite or a POSIX filesystem per Actor**: Every Actor gets a SQLite database or a POSIX filesystem, tiered to S3. Idle Actors cost nothing, so millions can sit parked with their state intact.
 - **Run code agents generate at runtime**: Each piece of new, untrusted code gets an Actor of its own, with its own database and filesystem and no reach into anyone else's.
 - **Works with the tools you already use**: Typed SDKs for your backend and React hooks for your frontend. No custom runtime, so your existing packages, tooling, and tests work unchanged.
 
