@@ -13,9 +13,11 @@ import * as Rivetkit from "rivetkit";
 import type * as RivetkitDb from "rivetkit/db";
 import type * as Action from "./Action.ts";
 import * as Client from "./Client.ts";
+import type * as Event from "./Event.ts";
 import * as ActionDispatcher from "./internal/ActionDispatcher.ts";
 import * as ActorInstanceManager from "./internal/ActorInstanceManager.ts";
 import * as ActorStateAdapter from "./internal/ActorStateAdapter.ts";
+import * as EventBroadcaster_ from "./internal/EventBroadcaster.ts";
 import { makeActorLogAnnotations } from "./internal/logging.ts";
 import type * as StateOptions from "./internal/StateOptions.ts";
 import * as Registry from "./Registry.ts";
@@ -150,6 +152,14 @@ export type WakeOptions<
 	readonly rawRivetkitContext: Rivetkit.WakeContextOf<ActorDefinition>;
 };
 
+/**
+ * Schema-typed view over an actor's declared events. Available inside
+ * `Actor.toLayer`'s wake options as `events`. See
+ * `EventBroadcaster.EventBroadcaster`.
+ */
+export type EventBroadcaster<Events extends Event.Any> =
+	EventBroadcaster_.EventBroadcaster<Events>;
+
 type RawWakeContextFor<
 	State extends StateOptions.Any,
 	Database extends RivetkitDb.AnyDatabaseProvider,
@@ -168,8 +178,15 @@ type RawWakeContextFor<
 type WakeOptionsFor<
 	StateDefinition extends StateOptions.Any,
 	Database extends RivetkitDb.AnyDatabaseProvider,
+	Events extends Event.Any = never,
 > = {
 	readonly rawRivetkitContext: RawWakeContextFor<StateDefinition, Database>;
+	/**
+	 * Schema-typed broadcast for this actor's declared events. Encodes
+	 * the payload through the matching event's schema, then calls
+	 * RivetKit's raw `broadcast`.
+	 */
+	readonly events: EventBroadcaster<Events>;
 } & ([StateDefinition] extends [never]
 	? unknown
 	: {
@@ -239,16 +256,18 @@ type ToLayerRequirements<
 	| Registry.Registry;
 
 /**
- * A Rivet Actor contract. It carries the action schemas and
+ * A Rivet Actor contract. It carries the action and event schemas and
  * display options, but no server implementation.
  */
 export interface Actor<
 	Name extends string,
 	Actions extends Action.Any = never,
+	Events extends Event.Any = never,
 > {
 	readonly [TypeId]: typeof TypeId;
 	readonly name: Name;
 	readonly actions: ReadonlyArray<Actions>;
+	readonly events: ReadonlyArray<Events>;
 
 	of<ActionHandlers extends ActionHandlersFrom<Actions>>(
 		actionHandlers: ActionHandlers,
@@ -260,7 +279,12 @@ export interface Actor<
 		R = never,
 		RX = never,
 	>(
-		wake: Wake<ActionHandlers, R, RX, WakeOptionsFor<never, Database>>,
+		wake: Wake<
+			ActionHandlers,
+			R,
+			RX,
+			WakeOptionsFor<never, Database, Events>
+		>,
 		options: StatelessOptions<Database>,
 	): Layer.Layer<
 		never,
@@ -273,7 +297,12 @@ export interface Actor<
 		R = never,
 		RX = never,
 	>(
-		wake: Wake<ActionHandlers, R, RX, WakeOptionsFor<never, undefined>>,
+		wake: Wake<
+			ActionHandlers,
+			R,
+			RX,
+			WakeOptionsFor<never, undefined, Events>
+		>,
 	): Layer.Layer<
 		never,
 		never,
@@ -287,7 +316,12 @@ export interface Actor<
 		R = never,
 		RX = never,
 	>(
-		wake: Wake<ActionHandlers, R, RX, WakeOptionsFor<State, Database>>,
+		wake: Wake<
+			ActionHandlers,
+			R,
+			RX,
+			WakeOptionsFor<State, Database, Events>
+		>,
 		options: StatefulOptions<State, Database>,
 	): Layer.Layer<
 		never,
@@ -304,7 +338,12 @@ export interface Actor<
 	readonly client: Effect.Effect<Accessor<Actions>, never, Client.Client>;
 }
 
-export type Any = Actor<string, Action.AnyWithProps>;
+// `Events` is `any` here (not `Event.AnyWithProps`) so `Any` structurally
+// accepts every actor regardless of its specific declared events. The
+// `events` field's `ReadonlyArray<Events>` makes `Events` invariant for
+// exact-type comparisons, so a fixed non-`any` Events type would reject
+// actors with a different (but equally valid) events union.
+export type Any = Actor<string, Action.AnyWithProps, any>;
 
 export type ActionHandlersFrom<Actions extends Action.Any> = {
 	readonly [A in Actions as A["_tag"]]: (
@@ -312,18 +351,24 @@ export type ActionHandlersFrom<Actions extends Action.Any> = {
 	) => Action.ResultFrom<A, any>;
 };
 
-const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
+const Proto: Omit<Actor<any, any, any>, "name" | "actions" | "events"> = {
 	[TypeId]: TypeId,
 	toLayer<
 		Actions extends Action.AnyWithProps,
+		Events extends Event.AnyWithProps,
 		ActionHandlers extends ActionHandlersFrom<Actions>,
 		State extends StateOptions.Any = never,
 		Database extends RivetkitDb.AnyDatabaseProvider = undefined,
 		R = never,
 		RX = never,
 	>(
-		this: Actor<string, Actions>,
-		wake: Wake<ActionHandlers, R, RX, WakeOptionsFor<State, Database>>,
+		this: Actor<string, Actions, Events>,
+		wake: Wake<
+			ActionHandlers,
+			R,
+			RX,
+			WakeOptionsFor<State, Database, Events>
+		>,
 		options: Options<State, Database> = {},
 	) {
 		return makeRivetkitActor({
@@ -332,7 +377,7 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 				ActionHandlers,
 				R,
 				RX,
-				WakeOptionsFor<State, Database>
+				WakeOptionsFor<State, Database, Events>
 			>(wake),
 			options,
 		}).pipe(
@@ -365,15 +410,18 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 export const make = <
 	const Name extends string,
 	const Actions extends ReadonlyArray<Action.AnyWithProps> = readonly [],
+	const Events extends ReadonlyArray<Event.AnyWithProps> = readonly [],
 >(
 	name: Name,
 	options?: {
 		readonly actions?: Actions;
+		readonly events?: Events;
 	},
-): Actor<Name, Actions[number]> => {
+): Actor<Name, Actions[number], Events[number]> => {
 	const self = Object.create(Proto);
 	self.name = name;
 	self.actions = options?.actions ?? [];
+	self.events = options?.events ?? [];
 	return self;
 };
 
@@ -484,6 +532,7 @@ export function toWakeHandler<
 const makeRivetkitActor = Effect.fnUntraced(function* <
 	Name extends string,
 	Actions extends Action.AnyWithProps,
+	Events extends Event.AnyWithProps,
 	ActionHandlers extends ActionHandlersFrom<Actions>,
 	RX,
 	State extends StateOptions.Any = never,
@@ -493,9 +542,9 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	wakeHandler,
 	options,
 }: {
-	readonly actor: Actor<Name, Actions>;
+	readonly actor: Actor<Name, Actions, Events>;
 	readonly wakeHandler: (
-		wakeOptions: WakeOptionsFor<State, Database>,
+		wakeOptions: WakeOptionsFor<State, Database, Events>,
 	) => Effect.Effect<ActionHandlers, never, RX>;
 	readonly options: Options<State, Database>;
 }) {
@@ -509,7 +558,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		ActionHandlers,
 		State,
 		Database,
-		WakeOptionsFor<State, Database>
+		WakeOptionsFor<State, Database, Events>
 	>({
 		wakeHandler: (wakeOptions) =>
 			wakeHandler(wakeOptions).pipe(
@@ -534,8 +583,12 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		makeWakeOptions: (c, state) =>
 			({
 				rawRivetkitContext: c,
+				events: EventBroadcaster_.make<Events>(
+					actor.events,
+					(name, ...args) => c.broadcast(name, ...args),
+				),
 				...(state === undefined ? {} : { state }),
-			}) as WakeOptionsFor<State, Database>,
+			}) as WakeOptionsFor<State, Database, Events>,
 	});
 
 	const actions = ActionDispatcher.make<
@@ -548,6 +601,11 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		getInstance: instanceManager.get,
 	});
 
+	const events: Record<string, Rivetkit.EventSchemaConfig[string]> = {};
+	for (const event of actor.events) {
+		events[event._tag] = Rivetkit.event();
+	}
+
 	return Rivetkit.actor<
 		StateOptions.Encoded<State>,
 		undefined,
@@ -555,7 +613,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		undefined,
 		undefined,
 		Database,
-		Record<never, never>,
+		typeof events,
 		Record<never, never>,
 		any
 	>({
@@ -565,6 +623,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		...(stateAdapter
 			? { createState: stateAdapter.createInitialState }
 			: {}),
+		events,
 		actions,
 		...(instanceManager.onStateChange
 			? { onStateChange: instanceManager.onStateChange }
