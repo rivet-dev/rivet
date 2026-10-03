@@ -262,6 +262,7 @@ When the user asks to track something in a note, store it in `~/.agents/notes/` 
 - In `rivetkit-core` `ActorTask::run`, bind inbox `recv()` calls as raw `Option`s and log the closed channel before terminating. `Some(...) = recv()` plus `else => break` hides which inbox died.
 - In `rivetkit-typescript/packages/rivetkit/src/common/utils.ts::deconstructError`, only passthrough canonical structured errors (`instanceof RivetError` or tagged `__type: "RivetError"` with full fields). Plain-object lookalikes must still be classified and sanitized.
 - Actor-owned lifecycle / dispatch / lifecycle-event inbox producers use `try_reserve` helpers and return `actor.overloaded`. Do not await bounded `mpsc::Sender::send`.
+- A Lost actor generation must stop immediately: no user sleep hooks, no final save, and no storage writes after the lost signal fires. Never treat Lost as a graceful sleep.
 
 ## Performance
 

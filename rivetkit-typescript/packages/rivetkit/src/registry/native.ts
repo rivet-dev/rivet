@@ -541,8 +541,11 @@ async function cleanupNativeSleepRuntimeState(
 		void runtime
 			.actorWaitForTrackedShutdownWorkUnbounded(ctx)
 			.then(async () => {
-				await afterTrackedWorkDrained?.();
-				clearNativeRuntimeState(runtime, ctx);
+				try {
+					await afterTrackedWorkDrained?.();
+				} finally {
+					clearNativeRuntimeState(runtime, ctx);
+				}
 			})
 			.catch((error) => {
 				logger().warn({
@@ -553,10 +556,31 @@ async function cleanupNativeSleepRuntimeState(
 		return;
 	}
 
-	await afterTrackedWorkDrained?.();
+	try {
+		await afterTrackedWorkDrained?.();
+	} finally {
+		try {
+			await closeNativeDatabaseClient(runtime, ctx);
+			await closeNativeSqlDatabase(runtime, ctx);
+		} finally {
+			clearNativeRuntimeState(runtime, ctx);
+		}
+	}
+}
+
+async function cleanupNativeLostRuntimeState(
+	runtime: CoreRuntime,
+	ctx: ActorContextHandle,
+): Promise<void> {
+	// Core has already abandoned a lost generation's user work, so this does not wait for it.
+	// A custom database client's `close` is user code, so a lost generation drops the client
+	// without calling it. The native database underneath is closed by the runtime.
 	await closeNativeDatabaseClient(runtime, ctx);
-	await closeNativeSqlDatabase(runtime, ctx);
-	clearNativeRuntimeState(runtime, ctx);
+	try {
+		await closeNativeSqlDatabase(runtime, ctx);
+	} finally {
+		clearNativeRuntimeState(runtime, ctx);
+	}
 }
 
 function closeNativeSqlDatabase(
@@ -585,6 +609,11 @@ async function closeNativeDatabaseClient(
 
 	runtimeState.databaseClient = undefined;
 
+	// `close` is user code from a database provider. Cleanup paths await before reaching this,
+	// so check here: a lost generation drops the client without calling it.
+	if (callNativeSync(() => runtime.actorIsLost(ctx))) {
+		return;
+	}
 	if (
 		entry.client &&
 		typeof entry.client === "object" &&
@@ -1301,6 +1330,76 @@ function wrapNativeCallback<Args extends Array<unknown>, Result>(
 	};
 }
 
+/**
+ * Callbacks that still run for a lost generation. They release the generation's runtime
+ * resources and skip the user hook themselves.
+ */
+const LOST_GENERATION_CLEANUP_CALLBACKS = new Set(["onSleep", "onDestroy"]);
+
+/**
+ * Refuses to start a user callback for a generation that was declared lost. Call it right
+ * before the callback, after any other user code such as schema validation.
+ */
+function throwIfActorLost(runtime: CoreRuntime, ctx: ActorContextHandle): void {
+	if (callNativeSync(() => runtime.actorIsLost(ctx))) {
+		throw actorGenerationLostError();
+	}
+}
+
+function actorGenerationLostError(): RivetError {
+	return new RivetError(
+		"actor",
+		"stopping",
+		"Actor generation was declared lost; it starts no new user callbacks.",
+	);
+}
+
+/**
+ * Refuses every runtime callback for a generation that has been declared lost. Runtime
+ * callbacks can be queued or spawned before the loss and only start afterward, so the check
+ * runs when JS actually enters the callback.
+ */
+export function refuseCallbacksAfterLost<T extends Record<string, unknown>>(
+	runtime: CoreRuntime,
+	callbacks: T,
+): T {
+	const guard = (callback: (...args: unknown[]) => unknown) => {
+		return async (...args: unknown[]) => {
+			const ctx = (args[1] as { ctx?: ActorContextHandle } | undefined)
+				?.ctx;
+			if (
+				ctx !== undefined &&
+				callNativeSync(() => runtime.actorIsLost(ctx))
+			) {
+				throw encodeNativeCallbackError(actorGenerationLostError());
+			}
+			return await callback(...args);
+		};
+	};
+	const guarded: Record<string, unknown> = {};
+	for (const [name, value] of Object.entries(callbacks)) {
+		if (LOST_GENERATION_CLEANUP_CALLBACKS.has(name)) {
+			guarded[name] = value;
+		} else if (typeof value === "function") {
+			guarded[name] = guard(value as (...args: unknown[]) => unknown);
+		} else if (
+			name === "actions" &&
+			value !== null &&
+			typeof value === "object"
+		) {
+			guarded[name] = Object.fromEntries(
+				Object.entries(value).map(([actionName, handler]) => [
+					actionName,
+					guard(handler as (...args: unknown[]) => unknown),
+				]),
+			);
+		} else {
+			guarded[name] = value;
+		}
+	}
+	return guarded as T;
+}
+
 function decodeArgs(value?: RuntimeBytes | null): unknown[] {
 	const decoded = decodeValue<unknown>(value);
 	return normalizeArgs(decoded);
@@ -1880,9 +1979,26 @@ class NativeQueueAdapter {
 		this.#schemas = schemas;
 	}
 
+	// Queue results arrive after awaits, and their schema validation is user code, so each
+	// validation checks that the generation was not lost first.
+	#validateBody(name: string, body: unknown): unknown {
+		throwIfActorLost(this.#runtime, this.#ctx);
+		return validateQueueBody(this.#schemas, name, body);
+	}
+
+	#validateComplete(name: string, response: unknown): unknown {
+		throwIfActorLost(this.#runtime, this.#ctx);
+		return validateQueueComplete(this.#schemas, name, response);
+	}
+
+	#wrap(message: Parameters<typeof wrapQueueMessage>[0]) {
+		throwIfActorLost(this.#runtime, this.#ctx);
+		return wrapQueueMessage(message, this.#schemas);
+	}
+
 	async send(name: string, body: unknown) {
-		const validatedBody = validateQueueBody(this.#schemas, name, body);
-		return wrapQueueMessage(
+		const validatedBody = this.#validateBody(name, body);
+		return this.#wrap(
 			await callNative(() =>
 				this.#runtime.actorQueueSend(
 					this.#ctx,
@@ -1890,7 +2006,6 @@ class NativeQueueAdapter {
 					encodeValue(validatedBody),
 				),
 			),
-			this.#schemas,
 		);
 	}
 
@@ -1948,9 +2063,7 @@ class NativeQueueAdapter {
 					token,
 				),
 			);
-			const wrapped = messages.map((message) =>
-				wrapQueueMessage(message, this.#schemas),
-			);
+			const wrapped = messages.map((message) => this.#wrap(message));
 			return completable
 				? wrapped.map((message) =>
 						this.#makeCompletableMessage(message),
@@ -1975,7 +2088,7 @@ class NativeQueueAdapter {
 		);
 
 		try {
-			return wrapQueueMessage(
+			return this.#wrap(
 				await callNative(() =>
 					this.#runtime.actorQueueWaitForNames(
 						this.#ctx,
@@ -1987,7 +2100,6 @@ class NativeQueueAdapter {
 						token,
 					),
 				),
-				this.#schemas,
 			);
 		} finally {
 			cleanup?.();
@@ -2032,8 +2144,7 @@ class NativeQueueAdapter {
 		message: { id: number | bigint; name: string },
 		response?: unknown,
 	): Promise<void> {
-		const validatedResponse = validateQueueComplete(
-			this.#schemas,
+		const validatedResponse = this.#validateComplete(
 			message.name,
 			response,
 		);
@@ -2056,7 +2167,7 @@ class NativeQueueAdapter {
 			signal?: AbortSignal;
 		},
 	) {
-		const validatedBody = validateQueueBody(this.#schemas, name, body);
+		const validatedBody = this.#validateBody(name, body);
 		const { token, cleanup } = await createCancellationTokenHandle(
 			this.#runtime,
 			options?.signal,
@@ -2076,11 +2187,7 @@ class NativeQueueAdapter {
 			);
 			return response === undefined || response === null
 				? undefined
-				: validateQueueComplete(
-						this.#schemas,
-						name,
-						decodeValue(response),
-					);
+				: this.#validateComplete(name, decodeValue(response));
 		} finally {
 			cleanup?.();
 		}
@@ -2583,6 +2690,12 @@ class TrackedWebSocketHandleAdapter implements UniversalWebSocket {
 		handler: TrackedWebSocketListener,
 		event: any,
 	): void {
+		// Messages and opens start new user work, so a lost generation drops them. Each listener
+		// is checked because an earlier one can run while the generation is lost. Close and
+		// error still reach listeners, like the abort signal, so user code can wind down.
+		if ((type === "message" || type === "open") && this.#ctx.isLost) {
+			return;
+		}
 		try {
 			const result = handler(event);
 			if (!this.#isPromiseLike(result)) {
@@ -2967,6 +3080,11 @@ export class ActorContextHandleAdapter {
 		return callNativeSync(() => this.#runtime.actorGeneration(this.#ctx));
 	}
 
+	/** Whether this generation was declared lost. A lost generation starts no new user code. */
+	get isLost(): boolean {
+		return callNativeSync(() => this.#runtime.actorIsLost(this.#ctx));
+	}
+
 	get name(): string {
 		return callNativeSync(() => this.#runtime.actorName(this.#ctx));
 	}
@@ -3100,6 +3218,10 @@ export class ActorContextHandleAdapter {
 		}
 
 		const actorId = this.actorId;
+		// `createClient` is user code from a database provider.
+		if (this.isLost) {
+			throw actorGenerationLostError();
+		}
 		const createdClient = await this.#databaseProvider.createClient({
 			actorId,
 			kv: {
@@ -3277,9 +3399,12 @@ export class ActorContextHandleAdapter {
 			return;
 		}
 
-		await this.#databaseProvider.onMigrate(
-			(await this.ensureDatabaseClient()) as never,
-		);
+		const client = await this.ensureDatabaseClient();
+		// Creating the client awaits, and the generation can be lost meanwhile.
+		if (this.isLost) {
+			throw actorGenerationLostError();
+		}
+		await this.#databaseProvider.onMigrate(client as never);
 	}
 
 	async closeDatabase(): Promise<void> {
@@ -3614,7 +3739,8 @@ export class ActorContextHandleAdapter {
 			this.#runtime.actorRequestSave(this.#ctx, { immediate: false }),
 		);
 
-		if (!this.#onStateChange) {
+		// State changes are flushed asynchronously and can land after the generation was lost.
+		if (!this.#onStateChange || this.isLost) {
 			return;
 		}
 
@@ -3665,6 +3791,11 @@ class NativeWorkflowRuntimeAdapter {
 	readonly id: string;
 	/** Actor generation, used to keep workflow registrations of different generations apart. */
 	readonly generation: number | undefined;
+
+	/** Whether this generation was declared lost. Workflow code checks it before each user callback. */
+	get isLost(): boolean {
+		return this.#ctx.isLost;
+	}
 	readonly driver: {
 		kvBatchGet: (
 			actorId: string,
@@ -4108,19 +4239,29 @@ export function buildNativeFactory(
 			? new RunHandlerCoordinator(config.run)
 			: undefined;
 	const getNativeWorkflowInspector = (ctx: ActorContextHandle) => {
+		// Inspector workflow calls run user code (history, state, replay). A lost generation
+		// exposes no workflow inspector.
+		if (callNativeSync(() => runtime.actorIsLost(ctx))) {
+			return undefined;
+		}
 		const actorId = callNativeSync(() => runtime.actorId(ctx));
 		const restart = () =>
 			callNativeSync(() => runtime.actorRestartRunHandler(ctx));
 		const actorGeneration = callNativeSync(() =>
 			runtime.actorGeneration(ctx),
 		);
-		return (runHandlerCoordinator?.getInspector(
+		const inspector = (runHandlerCoordinator?.getInspector(
 			actorId,
 			restart,
 			actorGeneration,
 		)?.workflow ?? getRunInspectorConfig(config.run, actorId)?.workflow) as
 			| NativeWorkflowInspectorConfig
 			| undefined;
+		// Building the inspector can run a user factory, and the generation can be lost meanwhile.
+		if (callNativeSync(() => runtime.actorIsLost(ctx))) {
+			return undefined;
+		}
+		return inspector;
 	};
 	const onStateChange =
 		typeof config.onStateChange === "function"
@@ -4240,6 +4381,11 @@ export function buildNativeFactory(
 			}
 		}
 
+		// Reading connection params runs the user schema, and authentication awaited before this.
+		const inspectorConnParams = (conn: { params: unknown }) => {
+			throwIfActorLost(runtime, ctx);
+			return conn.params;
+		};
 		const workflowHistory = () =>
 			serializeWorkflowHistoryForJson(
 				getNativeWorkflowInspector(ctx)?.getHistory() ?? null,
@@ -4278,7 +4424,7 @@ export function buildNativeFactory(
 							id: conn.id,
 							details: {
 								type: null,
-								params: conn.params,
+								params: inspectorConnParams(conn),
 								stateEnabled: true,
 								state: conn.state,
 								subscriptions: 0,
@@ -4538,7 +4684,7 @@ export function buildNativeFactory(
 							id: conn.id,
 							details: {
 								type: null,
-								params: conn.params,
+								params: inspectorConnParams(conn),
 								stateEnabled: true,
 								state: conn.state,
 								subscriptions: 0,
@@ -4600,15 +4746,22 @@ export function buildNativeFactory(
 					body.properties !== undefined
 						? [body.properties]
 						: normalizeArgs(body.args);
-				try {
-					const output = await action(
-						actorCtx,
-						...validateActionArgs(
-							schemaConfig.actionInputSchemas,
-							actionName,
-							args,
-						),
+				// Authentication and body parsing may finish after the generation was lost.
+				if (callNativeSync(() => runtime.actorIsLost(ctx))) {
+					return jsonResponse(
+						{ error: "actor generation was declared lost" },
+						{ status: 503 },
 					);
+				}
+				try {
+					const validatedArgs = validateActionArgs(
+						schemaConfig.actionInputSchemas,
+						actionName,
+						args,
+					);
+					// Schema validation is user code and can run while the generation is lost.
+					throwIfActorLost(runtime, ctx);
+					const output = await action(actorCtx, ...validatedArgs);
 					return jsonResponse({ output });
 				} catch (error) {
 					logger().error({
@@ -4750,7 +4903,14 @@ export function buildNativeFactory(
 									await actorCtx.closeDatabase();
 								}
 								await actorCtx.runDatabaseMigrations();
-								if (typeof config.onMigrate === "function") {
+								// Migrations may finish after the generation was lost, and a lost
+								// generation starts no new user hooks.
+								if (
+									typeof config.onMigrate === "function" &&
+									!callNativeSync(() =>
+										runtime.actorIsLost(ctx),
+									)
+								) {
 									await config.onMigrate(actorCtx, isNew);
 								}
 							} catch (error) {
@@ -4806,10 +4966,38 @@ export function buildNativeFactory(
 				const { ctx } = unwrapTsfnPayload(error, payload);
 				const actorCtx = makeActorCtx(ctx);
 				const actorId = callNativeSync(() => runtime.actorId(ctx));
+				const actorGeneration = callNativeSync(() =>
+					runtime.actorGeneration(ctx),
+				);
+				// The engine can declare this generation lost before or during `onSleep`.
+				// A lost generation releases its own runtime resources only: no user hook,
+				// no state save, and nothing keyed by actor id alone.
+				const isLost = () =>
+					callNativeSync(() => runtime.actorIsLost(ctx));
+				if (isLost()) {
+					try {
+						await cleanupNativeLostRuntimeState(runtime, ctx);
+					} finally {
+						runHandlerCoordinator?.destroy(
+							actorId,
+							actorGeneration,
+							{
+								disposeInspector: false,
+							},
+						);
+						await actorCtx.dispose();
+					}
+					return;
+				}
 				// TODO: Move this save hook into cleanupNativeSleepRuntimeState
 				// so immediate and deferred sleep cleanup share one save-state
 				// path instead of passing a callback through cleanup.
 				const saveActorState = async () => {
+					// Cleanup waits on tracked work first, and the generation can be lost
+					// during that wait.
+					if (isLost()) {
+						return;
+					}
 					if (runtime.kind === "wasm") {
 						// Wasm cannot use the native context save helper here because
 						// the runtime owns the serialized state handoff.
@@ -4830,17 +5018,26 @@ export function buildNativeFactory(
 					await saveActorState();
 				} finally {
 					try {
-						await cleanupNativeSleepRuntimeState(
-							runtime,
-							ctx,
-							saveActorState,
-						);
+						if (isLost()) {
+							await cleanupNativeLostRuntimeState(runtime, ctx);
+						} else {
+							await cleanupNativeSleepRuntimeState(
+								runtime,
+								ctx,
+								saveActorState,
+							);
+						}
 					} finally {
 						runHandlerCoordinator?.destroy(
 							actorId,
-							callNativeSync(() => runtime.actorGeneration(ctx)),
+							actorGeneration,
+							{
+								disposeInspector: !isLost(),
+							},
 						);
-						disposeRunInspector(config.run, actorId);
+						if (!isLost()) {
+							disposeRunInspector(config.run, actorId);
+						}
 						await actorCtx.dispose();
 					}
 				}
@@ -4851,15 +5048,22 @@ export function buildNativeFactory(
 				const { ctx } = unwrapTsfnPayload(error, payload);
 				const actorCtx = makeActorCtx(ctx);
 				const actorId = callNativeSync(() => runtime.actorId(ctx));
+				// A lost generation still releases its runtime state but starts no user hook. Loss
+				// is rechecked before each user callback because it can happen while one runs.
+				const isLost = () =>
+					callNativeSync(() => runtime.actorIsLost(ctx));
 				// Close run control before user cleanup so replay cannot race actor
 				// destruction. Recreating this actor id receives a fresh controller.
 				runHandlerCoordinator?.destroy(
 					actorId,
 					callNativeSync(() => runtime.actorGeneration(ctx)),
+					{ disposeInspector: !isLost() },
 				);
-				disposeRunInspector(config.run, actorId);
+				if (!isLost()) {
+					disposeRunInspector(config.run, actorId);
+				}
 				try {
-					if (typeof config.onDestroy === "function") {
+					if (typeof config.onDestroy === "function" && !isLost()) {
 						await config.onDestroy(actorCtx);
 					}
 				} finally {
@@ -4897,12 +5101,16 @@ export function buildNativeFactory(
 									: undefined,
 							);
 							try {
+								const validatedParams = validateConnParams(
+									schemaConfig.connParamsSchema,
+									decodeValue(params),
+								);
+								// Schema validation is user code and can run while the
+								// generation is lost.
+								throwIfActorLost(runtime, ctx);
 								await config.onBeforeConnect(
 									actorCtx,
-									validateConnParams(
-										schemaConfig.connParamsSchema,
-										decodeValue(params),
-									),
+									validatedParams,
 								);
 							} finally {
 								await actorCtx.dispose();
@@ -4950,15 +5158,25 @@ export function buildNativeFactory(
 								() => actorCtx.assertCanMutateState(),
 							);
 							try {
-								const nextConnState = hasStaticConnState
-									? structuredClone(config.connState)
-									: await config.createConnState(
+								let nextConnState: unknown;
+								if (hasStaticConnState) {
+									nextConnState = structuredClone(
+										config.connState,
+									);
+								} else {
+									const validatedParams = validateConnParams(
+										schemaConfig.connParamsSchema,
+										decodeValue(params),
+									);
+									// Schema validation is user code and can run while the
+									// generation is lost.
+									throwIfActorLost(runtime, ctx);
+									nextConnState =
+										await config.createConnState(
 											actorCtx,
-											validateConnParams(
-												schemaConfig.connParamsSchema,
-												decodeValue(params),
-											),
+											validatedParams,
 										);
+								}
 								connAdapter.initializeState(nextConnState);
 								return encodeValue(nextConnState);
 							} finally {
@@ -5117,6 +5335,13 @@ export function buildNativeFactory(
 						) => {
 							const { ctx, name, args, output } =
 								unwrapTsfnPayload(error, payload);
+							// The action may finish after its generation was lost, and a lost
+							// generation starts no new user callbacks.
+							if (
+								callNativeSync(() => runtime.actorIsLost(ctx))
+							) {
+								return output;
+							}
 							const actorCtx = makeActorCtx(ctx);
 							try {
 								return encodeValue(
@@ -5214,6 +5439,9 @@ export function buildNativeFactory(
 								}
 							};
 							try {
+								// Inspector routing awaits, and the generation can be lost
+								// meanwhile. Schema validation is user code.
+								throwIfActorLost(runtime, ctx);
 								const connParams = validateConnParams(
 									schemaConfig.connParamsSchema,
 									rawConnParams
@@ -5251,6 +5479,14 @@ export function buildNativeFactory(
 											"abort",
 											abortRequest,
 										);
+								}
+								// Connection setup awaits, and the generation can be lost meanwhile.
+								if (
+									callNativeSync(() =>
+										runtime.actorIsLost(ctx),
+									)
+								) {
+									throw actorGenerationLostError();
 								}
 								const response = await config.onRequest(
 									requestCtx,
@@ -5352,6 +5588,11 @@ export function buildNativeFactory(
 					const { ctx } = unwrapTsfnPayload(error, payload);
 					const actorId = callNativeSync(() => runtime.actorId(ctx));
 					const executeRun = async () => {
+						// The coordinator can hold `run` behind other run work until after the
+						// generation was lost.
+						if (callNativeSync(() => runtime.actorIsLost(ctx))) {
+							return;
+						}
 						const actorCtx = makeActorCtx(ctx);
 						try {
 							await run(actorCtx);
@@ -5444,14 +5685,18 @@ export function buildNativeFactory(
 								: makeActorCtx(ctx, undefined, cancelToken);
 						const runAction = async () => {
 							try {
+								const validatedArgs = validateActionArgs(
+									schemaConfig.actionInputSchemas,
+									name,
+									decodeArgs(args),
+								);
+								// Schema validation is user code and can run while the
+								// generation is lost.
+								throwIfActorLost(runtime, ctx);
 								return encodeValue(
 									await handler(
 										actorCtx,
-										...validateActionArgs(
-											schemaConfig.actionInputSchemas,
-											name,
-											decodeArgs(args),
-										),
+										...validatedArgs,
 										...(scheduledFire
 											? [scheduledFire]
 											: []),
@@ -5530,6 +5775,9 @@ export function buildNativeFactory(
 							if (canPublish && !(await canPublish(actorCtx))) {
 								throw forbiddenError();
 							}
+							// `canPublish` can finish after the generation was lost, and
+							// sending validates the body with user schema code.
+							throwIfActorLost(runtime, ctx);
 
 							const decodedBody = decodeValue(body);
 							if (wait) {
@@ -5603,7 +5851,7 @@ export function buildNativeFactory(
 	};
 
 	return runtime.createActorFactory(
-		callbacks,
+		refuseCallbacksAfterLost(runtime, callbacks),
 		buildActorConfig(definition, registryConfig, runtime.kind),
 	);
 }

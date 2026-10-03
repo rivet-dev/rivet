@@ -14,16 +14,12 @@ import { createClient } from "../../src/client/mod";
 import { getOrStartSharedEngine, TOKEN } from "./shared-harness";
 
 interface HookEvent {
-	hook: "createVars" | "onSleep" | "onSleepDone" | "clearRuntimeState";
+	hook: "createVars" | "onSleep" | "clearRuntimeState";
 	boot: string | undefined;
 }
 
 // The registry runs in this process, so hooks and runtime cleanup report straight to the test.
 const hookEvents: HookEvent[] = [];
-
-// Holds one generation's `onSleep` open so the next generation starts while it is still shutting
-// down, which is the overlap seen in production.
-let heldSleep: { boot: string; released: Promise<void> } | undefined;
 
 const lostVarsActor = actor({
 	state: {},
@@ -34,10 +30,6 @@ const lostVarsActor = actor({
 	},
 	onSleep: async (c) => {
 		hookEvents.push({ hook: "onSleep", boot: c.vars.boot });
-		if (heldSleep?.boot === c.vars.boot) {
-			await heldSleep.released;
-		}
-		hookEvents.push({ hook: "onSleepDone", boot: c.vars.boot });
 	},
 	actions: {
 		readBoot: (c) => c.vars.boot,
@@ -247,7 +239,7 @@ async function withTimeout<T>(
 }
 
 describe("Serverless Lost generation", () => {
-	test("a Lost generation's cleanup does not clear the next generation's state", async () => {
+	test("a Lost generation stops without user hooks and leaves the next generation's state intact", async () => {
 		const engine = await getOrStartSharedEngine();
 		const namespace = `serverless-lost-${crypto.randomUUID()}`;
 		const poolName = `serverless-lost-${crypto.randomUUID()}`;
@@ -307,24 +299,25 @@ describe("Serverless Lost generation", () => {
 				handle.readBoot(),
 			);
 
-			let releaseOldSleep = () => {};
-			heldSleep = {
-				boot: firstBoot,
-				released: new Promise<void>((resolve) => {
-					releaseOldSleep = resolve;
-				}),
-			};
-
 			// Reset the engine's `/start` stream for the running generation. The engine treats
-			// that as the envoy being lost, sends `StopActor { reason: Lost }` to the still
-			// connected envoy, and the old generation starts its graceful sleep.
+			// that as the envoy being lost and sends `StopActor { reason: Lost }` to the still
+			// connected envoy, then starts the next generation on it when the actor is woken.
 			expect(proxy.resetEngineConnections()).toBeGreaterThan(0);
-			await waitFor("old generation onSleep", 30_000, async () =>
-				hasEvent("onSleep", firstBoot) ? true : undefined,
-			);
 
-			// Waking the actor starts the next generation on the same envoy while the old one is
-			// still inside `onSleep`.
+			// The lost generation releases its own runtime state without running user hooks.
+			const oldGenerationClear = await waitFor(
+				"lost generation runtime cleanup",
+				30_000,
+				async () =>
+					hookEvents.find(
+						(event) =>
+							event.hook === "clearRuntimeState" &&
+							event.boot === firstBoot,
+					),
+			);
+			expect(oldGenerationClear.boot).toBe(firstBoot);
+			expect(hasEvent("onSleep", firstBoot)).toBe(false);
+
 			const secondBoot = await waitFor(
 				"second generation",
 				30_000,
@@ -333,22 +326,15 @@ describe("Serverless Lost generation", () => {
 					return boot === firstBoot ? undefined : boot;
 				},
 			);
-			expect(hasEvent("onSleepDone", firstBoot)).toBe(false);
 
-			// Let the old generation finish and wait for the runtime-state clear its cleanup runs.
-			const eventsBeforeRelease = hookEvents.length;
-			releaseOldSleep();
-			const oldGenerationClear = await waitFor(
-				"old generation runtime cleanup",
-				30_000,
-				async () =>
-					hookEvents
-						.slice(eventsBeforeRelease)
-						.find((event) => event.hook === "clearRuntimeState"),
-			);
-
-			// The old generation's cleanup must clear its own state, not the new generation's.
-			expect(oldGenerationClear.boot).toBe(firstBoot);
+			// The lost generation's cleanup must not have cleared the new generation's state.
+			expect(
+				hookEvents.some(
+					(event) =>
+						event.hook === "clearRuntimeState" &&
+						event.boot === secondBoot,
+				),
+			).toBe(false);
 			await expect(withTimeout(handle.hasVars(), 10_000)).resolves.toBe(
 				true,
 			);
@@ -357,7 +343,6 @@ describe("Serverless Lost generation", () => {
 			);
 		} finally {
 			stopObservingClears();
-			heldSleep = undefined;
 			await proxy.close();
 			await new Promise<void>((resolve) => {
 				if (runner) {

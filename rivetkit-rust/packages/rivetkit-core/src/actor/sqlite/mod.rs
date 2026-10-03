@@ -450,13 +450,23 @@ impl SqliteDb {
 
 	#[cfg(feature = "sqlite-local")]
 	async fn local_exec(&self, sql: String) -> Result<QueryResult> {
-		self.open().await?;
+		self.ensure_not_lost(&sql)?;
+		let opened = self.open().await;
+		// Opening can wait on the open lock and the depot, so the generation may have been lost
+		// meanwhile. Recheck right before submitting to the native worker.
+		self.ensure_not_lost(&sql)?;
+		opened?;
 		self.map_local_worker_result(self.native_db_handle()?.exec(sql).await)
 	}
 
 	#[cfg(feature = "sqlite-local")]
 	async fn local_exec_profiled(&self, sql: String) -> Result<SqliteWorkerResult<QueryResult>> {
-		self.open().await?;
+		self.ensure_not_lost(&sql)?;
+		let opened = self.open().await;
+		// Opening can wait on the open lock and the depot, so the generation may have been lost
+		// meanwhile. Recheck right before submitting to the native worker.
+		self.ensure_not_lost(&sql)?;
+		opened?;
 		self.map_local_worker_result(self.native_db_handle()?.exec_profiled(sql).await)
 	}
 
@@ -471,7 +481,12 @@ impl SqliteDb {
 		sql: String,
 		params: Option<Vec<BindParam>>,
 	) -> Result<ExecuteResult> {
-		self.open().await?;
+		self.ensure_not_lost(&sql)?;
+		let opened = self.open().await;
+		// Opening can wait on the open lock and the depot, so the generation may have been lost
+		// meanwhile. Recheck right before submitting to the native worker.
+		self.ensure_not_lost(&sql)?;
+		opened?;
 		self.map_local_worker_result(self.native_db_handle()?.execute(sql, params).await)
 	}
 
@@ -481,7 +496,12 @@ impl SqliteDb {
 		sql: String,
 		params: Option<Vec<BindParam>>,
 	) -> Result<SqliteWorkerResult<ExecuteResult>> {
-		self.open().await?;
+		self.ensure_not_lost(&sql)?;
+		let opened = self.open().await;
+		// Opening can wait on the open lock and the depot, so the generation may have been lost
+		// meanwhile. Recheck right before submitting to the native worker.
+		self.ensure_not_lost(&sql)?;
+		opened?;
 		self.map_local_worker_result(self.native_db_handle()?.execute_profiled(sql, params).await)
 	}
 
@@ -1130,6 +1150,7 @@ impl SqliteDb {
 	}
 
 	async fn remote_exec(&self, sql: String) -> Result<QueryResult> {
+		self.ensure_not_lost(&sql)?;
 		let config = self.remote_config()?;
 		let response = config
 			.handle
@@ -1157,6 +1178,7 @@ impl SqliteDb {
 		sql: String,
 		expected_session: Option<u64>,
 	) -> Result<(QueryResult, u64)> {
+		self.ensure_not_lost(&sql)?;
 		let config = self.remote_config()?;
 		let (response, session) = config
 			.handle
@@ -1186,6 +1208,7 @@ impl SqliteDb {
 		sql: String,
 		params: Option<Vec<BindParam>>,
 	) -> Result<ExecuteResult> {
+		self.ensure_not_lost(&sql)?;
 		let config = self.remote_config()?;
 		let response = config
 			.handle
@@ -1213,6 +1236,9 @@ impl SqliteDb {
 		&self,
 		statements: Vec<SqliteBatchStatement>,
 	) -> Result<Vec<ExecuteResult>> {
+		for statement in &statements {
+			self.ensure_not_lost(&statement.sql)?;
+		}
 		let config = self.remote_config()?;
 		let response = config
 			.handle
@@ -1249,6 +1275,7 @@ impl SqliteDb {
 		params: Option<Vec<BindParam>>,
 		expected_session: Option<u64>,
 	) -> Result<(ExecuteResult, u64)> {
+		self.ensure_not_lost(&sql)?;
 		let config = self.remote_config()?;
 		let (response, session) = config
 			.handle

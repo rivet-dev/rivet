@@ -24,7 +24,7 @@ import { isActorAbortedError, RivetError } from "@/actor/errors";
 import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import { stringifyError } from "@/utils";
-import { WorkflowContext } from "./context";
+import { throwIfGenerationLost, WorkflowContext } from "./context";
 import { ActorWorkflowControlDriver, ActorWorkflowDriver } from "./driver";
 import { createWorkflowInspectorAdapter } from "./inspector";
 
@@ -265,7 +265,10 @@ export function workflow<
 
 		const handle = runWorkflow(
 			actor.id,
-			async (ctx) => await fn(new WorkflowContext(ctx, runCtx)),
+			async (ctx) => {
+				throwIfGenerationLost(runCtx);
+				return await fn(new WorkflowContext(ctx, runCtx));
+			},
 			undefined,
 			driver,
 			{
@@ -275,7 +278,15 @@ export function workflow<
 				logger: runCtx.log as RunWorkflowOptions["logger"],
 				onHistoryUpdated: workflowInspector.update,
 				onError: onError
-					? async (event) => await onError(runCtx, event)
+					? async (event) => {
+							// A lost generation starts no new user hook.
+							if (
+								(actor as { isLost?: boolean }).isLost === true
+							) {
+								return;
+							}
+							await onError(runCtx, event);
+						}
 					: undefined,
 			},
 		);

@@ -49,6 +49,15 @@ When the grace deadline elapses before `can_finalize_sleep()` returns true:
 - The NAPI `RunGracefulCleanup` task observes `shutdown_deadline_token()` via `tokio::select!` and aborts its in-flight `onSleep` / `onDestroy` call so SQLite and KV cleanup in `teardown_sleep_state` do not race against mid-commit user work.
 - Foreign-runtime adapters that run user cleanup callbacks must observe the shutdown deadline token the same way.
 
+## Lost generations
+
+- `StopActor { reason: Lost }` or an envoy-side lost timeout means the engine has given up on the generation and may already be running the next one. envoy-client cancels a per-generation lost `CancellationToken` synchronously, before the stop is queued, and passes it to core through `on_actor_start_with_lost_signal`.
+- Core adopts the token as the context lost signal (`ActorContext::is_lost`). Once it fires, `SqliteDb` rejects every statement except `ROLLBACK` and `LegacyActorKv` rejects writes, so state, KV, queue, and workflow writes from the lost generation are revoked without waiting on the task.
+- `ActorTask` observes the token in `run_live`, in graceful shutdown, and in serialization waits, and jumps to `abort_lost()`. That path runs no user sleep hooks, skips the final save and alarm sync, dispatches runtime cleanup once, and bounds every wait by `LOST_SHUTDOWN_GRACE_PERIOD`. Cleanup that has not finished stays owned by its retained task.
+- The final `ActorStateStopped` for a lost generation is always `StopCode::Error` with "envoy connection lost", including when Lost escalates a pending graceful stop. `StopCode::Ok` would make the engine destroy the actor.
+- Already-submitted SQLite commits cannot be recalled. Depot generation checks are the backstop for those.
+- A lost generation starts no new user callback. Every runtime callback passes through `refuseCallbacksAfterLost` in `registry/native.ts` when JS enters it, except the `onSleep` and `onDestroy` cleanup wrappers, which release runtime state and skip the user hook themselves. Callbacks the framework starts on its own (workflow steps, run, inspector workflow calls, deferred `onStateChange`, WebSocket open and message listeners, database provider hooks) check the lost state first. Continuations inside a user call that is already running, and abort or close listeners, are not blocked.
+
 ## Guarding lifecycle requests
 
 - `ctx.sleep()` and `ctx.destroy()` return `Result<()>`. They fail with `actor/starting` if called before startup completes and `actor/stopping` if the request flag has already been swapped to true for this generation. An atomic `swap(true, ...)` on `sleep_requested` / `destroy_requested` enforces single-shot request semantics per generation.
