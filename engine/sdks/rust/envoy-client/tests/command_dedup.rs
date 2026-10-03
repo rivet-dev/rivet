@@ -480,3 +480,90 @@ async fn live_actor_is_reacked_on_each_tick() {
 	assert_eq!(second[0].actor_id, "actor-a");
 	assert_eq!(second[0].index, 3);
 }
+
+#[tokio::test]
+async fn lost_stop_command_cancels_the_generation_signal_before_delivery() {
+	let mut ctx = new_envoy_context();
+	let (actor_tx, mut actor_rx) = mpsc::unbounded_channel::<ToActor>();
+	let old_lost = tokio_util::sync::CancellationToken::new();
+	let new_lost = tokio_util::sync::CancellationToken::new();
+	ctx.insert_actor_with_lost_signal(
+		"actor-lost".to_string(),
+		1,
+		actor_tx.clone(),
+		old_lost.clone(),
+		Arc::new(AsyncCounter::new()),
+		"actor-lost".to_string(),
+		-1,
+	);
+	ctx.insert_actor_with_lost_signal(
+		"actor-lost".to_string(),
+		2,
+		actor_tx,
+		new_lost.clone(),
+		Arc::new(AsyncCounter::new()),
+		"actor-lost".to_string(),
+		-1,
+	);
+
+	let mut lost_stop = stop_command("actor-lost", 1, 5);
+	lost_stop.inner = protocol::Command::CommandStopActor(protocol::CommandStopActor {
+		reason: protocol::StopActorReason::Lost,
+	});
+	handle_commands(&mut ctx, vec![lost_stop]).await;
+
+	assert!(
+		old_lost.is_cancelled(),
+		"a lost stop must signal its generation synchronously"
+	);
+	assert!(
+		!new_lost.is_cancelled(),
+		"a lost stop must not signal other generations of the same actor"
+	);
+	assert!(matches!(
+		actor_rx.try_recv(),
+		Ok(ToActor::Stop {
+			reason: protocol::StopActorReason::Lost,
+			..
+		})
+	));
+}
+
+/// A KV write queued before its generation was declared lost must never be transmitted, even
+/// when the queue is flushed later.
+#[tokio::test]
+async fn queued_kv_write_is_dropped_once_its_generation_is_lost() {
+	let mut ctx = new_envoy_context();
+	let lost = tokio_util::sync::CancellationToken::new();
+	let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+	// No connection is open, so the request stays queued.
+	rivet_envoy_client::kv::handle_kv_request(
+		&mut ctx,
+		"actor-lost-kv".to_string(),
+		protocol::KvRequestData::KvPutRequest(protocol::KvPutRequest {
+			keys: vec![b"key".to_vec()],
+			values: vec![b"value".to_vec()],
+		}),
+		Some(lost.clone()),
+		response_tx,
+	)
+	.await;
+	let request_id = *ctx
+		.kv_requests
+		.keys()
+		.next()
+		.expect("request should be queued");
+
+	lost.cancel();
+	rivet_envoy_client::kv::send_single_kv_request(&mut ctx, request_id).await;
+
+	assert!(
+		ctx.kv_requests.is_empty(),
+		"the lost request must be dropped"
+	);
+	let error = response_rx
+		.await
+		.expect("the caller must get a response")
+		.expect_err("the lost request must fail");
+	assert!(format!("{error:#}").contains("declared lost"));
+}
