@@ -75,49 +75,6 @@
 		animation: twinkle 1.8s ease-in-out infinite;
 	}
 
-	/*
-	 * Conic gradient rotation used by the Create Organization page. Registering
-	 * `--gradient-angle` via `@property` lets the browser smoothly interpolate
-	 * an `<angle>` value — without this, animating a CSS custom property does
-	 * nothing visible.
-	 */
-	@property --gradient-angle {
-		syntax: "<angle>";
-		initial-value: 0deg;
-		inherits: false;
-	}
-	@keyframes conic-rotate {
-		to {
-			--gradient-angle: 360deg;
-		}
-	}
-	@keyframes conic-rotate-reverse {
-		from {
-			--gradient-angle: 360deg;
-		}
-		to {
-			--gradient-angle: 0deg;
-		}
-	}
-	.animate-conic-rotate {
-		animation: conic-rotate 8s linear infinite;
-	}
-	.animate-conic-rotate-reverse {
-		animation: conic-rotate-reverse 14s linear infinite;
-	}
-	@keyframes orb-breathe {
-		0%,
-		100% {
-			transform: scale(1);
-		}
-		50% {
-			transform: scale(1.04);
-		}
-	}
-	.animate-orb-breathe {
-		animation: orb-breathe 4s ease-in-out infinite;
-	}
-
 	/* Translucent surface with backdrop blur. Foundry's signature card style. */
 	.glass {
 		@apply bg-white/[0.02] backdrop-blur-md border border-white/10;
