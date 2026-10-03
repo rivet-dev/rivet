@@ -953,6 +953,12 @@ impl ActorContext {
 		&self.0.actor_id
 	}
 
+	/// Returns the envoy generation this context was started for, or `None` before an envoy is
+	/// configured.
+	pub fn generation(&self) -> Option<u32> {
+		self.sleep_generation()
+	}
+
 	pub fn name(&self) -> &str {
 		&self.0.name
 	}
