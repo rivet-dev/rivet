@@ -127,6 +127,8 @@ impl Registry {
 	/// implicit runtime to keep the process alive. For programmatic lifecycle
 	/// control (tests, embedding), drive [`serve`](Self::serve) with your own
 	/// [`CancellationToken`] instead.
+	///
+	/// Flushes pending telemetry spans before returning.
 	pub async fn start(self) -> Result<()> {
 		self.start_with_config(ServeConfig::from_env()?).await
 	}
@@ -137,11 +139,15 @@ impl Registry {
 	/// mirroring the TypeScript `registry.start()`. `Envoy` (default) holds one
 	/// long-lived outbound envoy; `Serverless` runs an HTTP listener that lazily
 	/// starts and caches an envoy on the first request.
+	///
+	/// Flushes pending telemetry spans before returning.
 	pub async fn start_with_config(self, config: ServeConfig) -> Result<()> {
-		match RuntimeMode::from_env() {
+		let result = match RuntimeMode::from_env() {
 			RuntimeMode::Envoy => self.start_envoy(config).await,
 			RuntimeMode::Serverless => self.start_serverless(config).await,
-		}
+		};
+		crate::telemetry::shutdown().await;
+		result
 	}
 
 	/// Persistent-envoy `start`: serves until SIGINT/SIGTERM, then drains.

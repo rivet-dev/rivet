@@ -244,8 +244,21 @@ export function toRivetError(
 	);
 }
 
-export function encodeBridgeRivetError(error: RivetErrorLike): string {
-	return `${BRIDGE_RIVET_ERROR_PREFIX}${JSON.stringify({
+/** A structured error encoded for the bridge to Core. */
+export interface EncodedBridgeError {
+	readonly encoded: string;
+	/** Set when JSON could not encode the metadata, which was dropped. */
+	readonly droppedMetadataCause?: unknown;
+}
+
+/**
+ * Encodes a structured error for the bridge to Core. Metadata that JSON cannot
+ * encode, such as a `bigint`, is dropped so the error itself still crosses.
+ */
+export function encodeBridgeRivetError(
+	error: RivetErrorLike,
+): EncodedBridgeError {
+	const payload = {
 		group: error.group,
 		code: error.code,
 		message: error.message,
@@ -254,7 +267,17 @@ export function encodeBridgeRivetError(error: RivetErrorLike): string {
 		public: error.public,
 		statusCode: error.statusCode,
 		actor: error.actor,
-	})}`;
+	};
+	try {
+		return {
+			encoded: `${BRIDGE_RIVET_ERROR_PREFIX}${JSON.stringify(payload)}`,
+		};
+	} catch (cause) {
+		return {
+			encoded: `${BRIDGE_RIVET_ERROR_PREFIX}${JSON.stringify({ ...payload, metadata: undefined })}`,
+			droppedMetadataCause: cause,
+		};
+	}
 }
 
 /**
@@ -264,7 +287,7 @@ export function encodeBridgeRivetError(error: RivetErrorLike): string {
  */
 export function encodeErrorForBridge(error: unknown): string {
 	if (isCanonicalStructuredRivetError(error)) {
-		return encodeBridgeRivetError(error);
+		return encodeBridgeRivetError(error).encoded;
 	}
 	return String(error);
 }

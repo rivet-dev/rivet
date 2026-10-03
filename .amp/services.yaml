@@ -3,7 +3,8 @@ services:
     command: >-
       PATH="$HOME/.local/bin:$PATH"
       VITE_APP_API_URL=https://api.staging.rivet.dev/
-      VITE_APP_CLOUD_API_URL=https://cloud-api.staging.rivet.dev/
+      CLOUD_API_PROXY_TARGET=https://cloud-api.staging.rivet.dev
+      VITE_APP_CLOUD_API_URL="https://$__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS/cloud-api"
       VITE_DEPLOYMENT_TYPE=staging
       pnpm --dir frontend dev --host 0.0.0.0 --port "$PORT" --strictPort
     port: 43708

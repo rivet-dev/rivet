@@ -7,7 +7,10 @@ import { features } from "./features";
 
 const createClient = () =>
 	createAuthClient({
-		baseURL: cloudEnv().VITE_APP_CLOUD_API_URL,
+		// Spell out the auth path: better-auth only appends `/api/auth` to a
+		// bare origin, and the cloud API URL may carry a path prefix (the
+		// `/cloud-api` dev proxy in vite.config.ts).
+		baseURL: `${cloudEnv().VITE_APP_CLOUD_API_URL.replace(/\/+$/, "")}/api/auth`,
 		fetchOptions: { credentials: "include" },
 		plugins: [organizationClient(), adminClient(), oauthProviderClient()],
 	});

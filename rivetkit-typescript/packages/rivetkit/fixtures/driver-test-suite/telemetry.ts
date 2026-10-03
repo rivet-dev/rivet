@@ -123,7 +123,10 @@ export const telemetryRunConsumerActor = actor({
 	actions: {},
 });
 
-/** Waits for two messages and logs when it sleeps, so a test can send the second one after the sleep. */
+/**
+ * Waits for two messages and logs when it sleeps, so a test can send the second one after the sleep.
+ * The declined charge carries `bigint` metadata, which JSON cannot encode.
+ */
 export const workflowTracedActor = actor({
 	state: { chargeAttempts: 0, wakes: 0 },
 	db: db(),
@@ -141,7 +144,12 @@ export const workflowTracedActor = actor({
 		);
 	},
 	run: workflow(async (ctx) => {
+		ctx.log.warn(
+			{ workflow_run_log_key: ctx.key[0] },
+			"waiting for approval",
+		);
 		await ctx.queue.next("wait-approve", { names: ["approve"] });
+		ctx.log.warn({ workflow_run_log_key: ctx.key[0] }, "approved");
 		await ctx.step("reserve-stock", async (c) => {
 			c.log.warn({ workflow_log_key: c.key[0] }, "reserving stock");
 			await c.db.execute("SELECT 'reserve-stock' AS step");
@@ -157,6 +165,7 @@ export const workflowTracedActor = actor({
 				if (c.state.chargeAttempts <= 2) {
 					throw new UserError("card declined", {
 						code: "card_declined",
+						metadata: { amountCents: 1999n },
 					});
 				}
 			},

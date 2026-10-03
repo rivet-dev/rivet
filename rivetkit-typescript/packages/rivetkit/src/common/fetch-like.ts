@@ -47,3 +47,17 @@ function isHeadersLike(value: unknown): value is HeadersLike {
 		typeof (value as HeadersLike).entries === "function"
 	);
 }
+
+/**
+ * Reads a request body into bytes. Aborting the request's signal cancels the
+ * body and rejects the read.
+ */
+export function readRequestBody(request: Request): Promise<ArrayBuffer> {
+	// Firefox has no Request.body.
+	if (!request.body) return request.arrayBuffer();
+	return new Response(
+		request.body.pipeThrough(new TransformStream(), {
+			signal: request.signal,
+		}),
+	).arrayBuffer();
+}

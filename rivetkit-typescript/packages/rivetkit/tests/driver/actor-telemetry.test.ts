@@ -348,6 +348,47 @@ describeDriverMatrix(
 			}
 		}, 60_000);
 
+		test("logs from a workflow function carry the received message's ray when trace export is off", async () => {
+			const runtime = await driverTestConfig.start();
+			const client = createClient<typeof registry>({
+				endpoint: runtime.endpoint,
+				namespace: runtime.namespace,
+				poolName: runtime.runnerName,
+				encoding: driverTestConfig.encoding,
+				disableMetadataLookup: true,
+			});
+			try {
+				const actorKey = `workflow-untraced-${crypto.randomUUID()}`;
+				const approveRayId = `approve-${crypto.randomUUID().slice(0, 8)}`;
+				await withRayBaggage(approveRayId, () =>
+					client.workflowTracedActor
+						.getOrCreate([actorKey])
+						.send("approve", { id: "approve" }),
+				);
+				let line: string | undefined;
+				// The workflow logs after it receives the message, which the send does not wait for.
+				await vi.waitFor(
+					() => {
+						line = runtime
+							.getRuntimeOutput?.()
+							.split("\n")
+							.find(
+								(candidate) =>
+									candidate.includes(
+										`workflow_run_log_key=${actorKey}`,
+									) && candidate.includes("approved"),
+							);
+						expect(line).toBeDefined();
+					},
+					{ timeout: 15_000, interval: 100 },
+				);
+				expect(line).toContain(`rayId=${approveRayId}`);
+			} finally {
+				await client.dispose();
+				await runtime.cleanup();
+			}
+		}, 60_000);
+
 		/**
 		 * One traced runtime and actor shared by every test that asserts on
 		 * exported spans. Each test filters the shared export by the ids it
@@ -1174,7 +1215,20 @@ describeDriverMatrix(
 					expect(line).toContain(`rayId=${approveRayId}`);
 				});
 
-				test("reports each attempt of a retried step under its own run", () => {
+				test("logs written by the workflow function after a receive carry the message's ray", () => {
+					const line = traced.runtime
+						.getRuntimeOutput?.()
+						.split("\n")
+						.find(
+							(candidate) =>
+								candidate.includes(
+									`workflow_run_log_key=${actorKey}`,
+								) && candidate.includes("approved"),
+						);
+					expect(line).toContain(`rayId=${approveRayId}`);
+				});
+
+				test("reports each attempt of a retried step under its own run, even when the error metadata is not JSON", () => {
 					const attempts = named(`${actorName}/charge-card`);
 					expect(
 						attempts.map((attempt) => [

@@ -1,0 +1,185 @@
+---
+title: "Performance Monitoring & Tuning"
+description: "Monitor worker load, inspect an actor's page cache, and tune SQLite performance."
+skill: true
+---
+
+Expose [Prometheus metrics](/actors/docs/environment-variables#metrics) on your worker to collect these metrics.
+
+Queries below group by worker scrape target (`instance`) and `actor_name`.
+
+## Actors
+
+Check your hosting platform's worker CPU and memory charts alongside these metrics.
+
+| What to monitor | PromQL |
+| --- | --- |
+| Running actors | `sum by (instance, actor_name) (rivet_rivetkit_actor_active_count)` |
+| Open connections | `sum by (instance, actor_name) (rivet_rivetkit_actor_connections_active)` |
+| Requests in progress | `sum by (instance, actor_name) (rivet_rivetkit_actor_http_requests_active)` |
+| Work waiting to run | `sum by (instance, actor_name) (rivet_rivetkit_actor_inbox_depth)` |
+
+## SQLite
+
+Rivet predictively preloads an actor's SQLite data into memory to speed up queries. These cache settings usually do not need tuning.
+
+### Specific query performance
+
+For a slow statement or transaction, compare:
+
+- **p95 latency** by query fingerprint.
+- **Time waiting, executing SQL, and accessing storage** to find the bottleneck.
+- **Storage round trips and pages fetched** to spot expensive reads.
+
+See [SQLite profiling and query metrics](/actors/docs/sqlite-profiling#query-metrics) for Prometheus queries and finding the SQL behind a fingerprint.
+
+### Page cache aggregate metrics
+
+#### Cache hits/sec
+
+Includes hits in the write buffer.
+
+```promql
+sum by (instance, actor_name) (
+  rate(rivet_rivetkit_actor_sqlite_vfs_resolve_pages_cache_hits_total[5m])
+)
+```
+
+#### Cache misses/sec
+
+```promql
+sum by (instance, actor_name) (
+  rate(rivet_rivetkit_actor_sqlite_vfs_resolve_pages_cache_misses_total[5m])
+)
+```
+
+#### Bytes fetched/sec
+
+```promql
+sum by (instance, actor_name) (
+  rate(rivet_rivetkit_actor_sqlite_vfs_bytes_fetched_total[5m])
+)
+```
+
+#### Predictive preload bytes/sec
+
+```promql
+sum by (instance, actor_name) (
+  rate(rivet_rivetkit_actor_sqlite_vfs_prefetch_bytes_total[5m])
+)
+```
+
+#### p95 page-fetch latency (seconds)
+
+```promql
+histogram_quantile(
+  0.95,
+  sum by (le, instance, actor_name) (
+    rate(rivet_rivetkit_actor_sqlite_vfs_get_pages_duration_seconds_bucket[5m])
+  )
+)
+```
+
+### Manual per-actor page cache metrics
+
+Log a snapshot to inspect one actor's Rivet page cache. These snapshots are not exported as per-actor Prometheus series, keeping metric cardinality low.
+
+| Field (TypeScript / Rust) | Meaning |
+| --- | --- |
+| `pageCacheEntries` / `page_cache_entries` | Retained page entries. |
+| `pageCacheCapacityPages` / `page_cache_capacity_pages` | Configured capacity of each cache, in pages. |
+| `writeBufferDirtyPages` / `write_buffer_dirty_pages` | Modified pages waiting to be committed. |
+
+Log after a query. Snapshots require local native SQLite (`sqlite-local` in Rust); remote SQLite returns no snapshot. Page counts are not total memory usage.
+
+<Tabs>
+<Tab title="TypeScript">
+
+Set `RIVET_LOG_LEVEL=info`, then call the `logCache` action. The actor logger includes its ID.
+
+<CodeSnippet file="examples/docs/actors-performance-monitoring/log-cache.ts" />
+
+</Tab>
+<Tab title="Rust">
+
+Call this helper with your actor's context after a query:
+
+```rust
+use rivetkit::{Actor, Ctx};
+
+pub fn log_cache<A: Actor>(ctx: &Ctx<A>) {
+    if let Some(metrics) = ctx.sql().metrics() {
+        println!("actor={} sqlite_cache={metrics:?}", ctx.id());
+    }
+}
+```
+
+</Tab>
+</Tabs>
+
+### Tuning page caches
+
+Test with one actor and change one setting at a time.
+
+#### Page cache capacity
+
+`RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES` (default: `50000` pages)
+
+- **Benefit of increasing:** Higher cache hit rates when a larger database's frequently read pages do not fit in the cache.
+- **Cost of increasing:** More RAM.
+- **Metrics to observe:** `rivet_rivetkit_actor_sqlite_vfs_resolve_pages_cache_hits_total` and `rivet_rivetkit_actor_sqlite_vfs_resolve_pages_cache_misses_total`, per-actor `pageCacheEntries` / `page_cache_entries`, and worker memory.
+
+#### Page cache mode
+
+`RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE` (default: `all`)
+
+- **Recommendation:** Leave this at `all`. Use `off` to compare performance with Rivet's page cache disabled, rather than tuning the intermediate modes.
+- **Cost of disabling:** More storage reads and potentially higher query latency.
+- **Metrics to observe:** `rivet_rivetkit_actor_sqlite_vfs_resolve_pages_cache_misses_total`, bytes fetched/sec, query p95 latency, and worker memory.
+
+#### Page retention time
+
+`RIVETKIT_SQLITE_OPT_VFS_STAGING_CACHE_TTL_MS` (default: `30000`, or 30 seconds)
+
+- **Benefit of increasing:** Retains pages longer for actors that stay awake through idle periods or revisit sparse datasets. The default suits actors that sleep between bursts; a longer TTL does not retain pages across sleep.
+- **Cost of increasing:** Holds RAM longer, including pages the actor may not read again.
+- **Metrics to observe:** `rivet_rivetkit_actor_sqlite_vfs_resolve_pages_cache_misses_total` when reads resume, per-actor cache entries, and worker memory.
+
+#### Read-ahead mode
+
+`RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE` (default: `adaptive`; options: `off`, `bounded`, `adaptive`)
+
+- **Benefit of more read-ahead:** Moving from `off` or `bounded` to `adaptive` can reduce storage round trips for sequential reads. Keep the default unless measurements show wasted preloading.
+- **Cost of more read-ahead:** More network traffic and RAM for pages that may go unused.
+- **Metrics to observe:** Predictive preload bytes/sec, `rivet_rivetkit_actor_sqlite_vfs_resolve_pages_cache_misses_total`, and query p95 latency.
+
+#### Startup preload budget
+
+`RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES` (default: `2097152`, or 2 MiB)
+
+- **Benefit of increasing:** Can improve startup and initial query speed by preloading more useful pages, increasing early cache hit rates. Check for cache misses during startup before increasing it.
+- **Cost of increasing:** More RAM and network traffic at startup; loading unused pages can slow startup down.
+- **Metrics to observe:** Startup and initial query latency, `rivet_rivetkit_actor_sqlite_vfs_resolve_pages_cache_misses_total` during startup, worker memory, and network throughput.
+
+#### First pages to preload
+
+`RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGE_COUNT` (default: `128` pages)
+
+- **Benefit of increasing:** May reduce initial query cache misses for very large indexes. Usually leave this at the default; increase it only if those queries still have cache misses.
+- **Cost of increasing:** More startup RAM and network traffic, within the startup preload budget.
+- **Metrics to observe:** Initial query latency, `rivet_rivetkit_actor_sqlite_vfs_resolve_pages_cache_misses_total` during startup, worker memory, and network throughput.
+
+#### Performance tuning with agentic hill climbing
+
+Agents are well suited to repeatedly testing settings and measuring a target metric to find the best value for your workload. This example tunes `RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES` (page cache capacity) to reduce **p95 latency for one SQLite query**:
+
+> Use the [Performance Monitoring & Tuning guide](/actors/docs/performance-monitoring) and [SQLite Profiling guide](/actors/docs/sqlite-profiling) to reduce p95 latency for my slowest SQLite query. Identify its fingerprint and use that same query throughout the experiment.
+>
+> Tune only `RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES`, searching between `25000` and `100000`. Keep worker memory below 512 MiB and do not increase the error rate. Keep all other settings fixed.
+>
+> Use my production setup or a test worker with the same infrastructure. Do not use local development for these measurements: its local filesystem has significantly different performance characteristics.
+>
+> 1. Record a baseline with a repeatable workload. Keep data, concurrency, warm-up, and test duration consistent across trials.
+> 2. Test values above and below the current setting, restarting the worker after each change. Record query p95 latency, memory, cache misses, network usage, and errors.
+> 3. Keep the best value that meets the limits, then test nearby values with smaller steps. Revert regressions. Stop when repeated trials show no meaningful improvement.
+> 4. Repeat the baseline and winning configuration to confirm the improvement. Apply the winning setting and report the tested values, measurements, and side effects in a comparison table. If nothing improves, restore the original setting.

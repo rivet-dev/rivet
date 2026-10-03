@@ -170,3 +170,32 @@ export function deployOptionsForRole(role: DeployRole): DeployOption[] {
 		(option) => option.support[role] !== "unsupported",
 	);
 }
+
+/**
+ * Index of the worker deploy guides on rivet.dev. Used as the fallback when a
+ * provider has no dedicated guide.
+ */
+export const WORKER_DEPLOY_GUIDES_URL =
+	"https://rivet.dev/docs/deploy/self-host/workers/";
+
+/**
+ * Dashboard provider names that have no `deployOptions` entry of their own
+ * and reuse another platform's guide. Hetzner is plain VMs.
+ */
+const PROVIDER_GUIDE_ALIASES: Record<string, Provider> = {
+	hetzner: "vm",
+};
+
+/**
+ * Absolute URL of the worker deploy guide for a provider. Accepts any string
+ * because dashboard dialogs pass provider names (such as `hetzner`) that are
+ * not part of the `Provider` union; unknown names fall back to the guide index.
+ */
+export function workerDeployGuideUrl(provider?: string): string {
+	if (!provider) return WORKER_DEPLOY_GUIDES_URL;
+	const name = PROVIDER_GUIDE_ALIASES[provider] ?? provider;
+	const option = deployOptions.find((o) => o.name === name);
+	return option
+		? `${WORKER_DEPLOY_GUIDES_URL}${option.slug}`
+		: WORKER_DEPLOY_GUIDES_URL;
+}
