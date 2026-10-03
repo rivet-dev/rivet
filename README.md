@@ -108,7 +108,7 @@ agent.on("token", delta => process.stdout.write(delta));
 await agent.queue.send("how many r's in strawberry?");
 ```
 
-## Whatever the workload, there's an Actor for it
+## Actor types
 
 Every product Rivet ships is an Actor, scheduled by the same control plane.
 
@@ -160,7 +160,7 @@ Routing, scheduling, types, and telemetry, built in.
 - **No Kubernetes operator**: One control plane behind a load balancer, speaking plain HTTP inside your VPC. No CRDs, no operator, no service mesh to keep alive.
 - **Open source**: Apache 2.0, self-hostable in full. The managed service runs the same control plane you can run yourself.
 
-## Start local. Deploy when ready.
+## Deployment Options
 
 <table>
 <tr>
