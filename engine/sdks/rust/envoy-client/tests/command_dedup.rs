@@ -9,7 +9,9 @@ use rivet_envoy_client::config::{
 	WebSocketSender,
 };
 use rivet_envoy_client::context::{SharedContext, WsTxMessage};
-use rivet_envoy_client::envoy::EnvoyContext;
+use rivet_envoy_client::envoy::{
+	EnvoyContext, declare_actors_lost, engine_ping_silence_deadline_ms, engine_ping_silence_expired,
+};
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::sqlite::{
 	RemoteSqliteRequest, fail_sent_remote_sqlite_requests_with_indeterminate_result,
@@ -566,4 +568,65 @@ async fn queued_kv_write_is_dropped_once_its_generation_is_lost() {
 		.expect("the caller must get a response")
 		.expect_err("the lost request must fail");
 	assert!(format!("{error:#}").contains("declared lost"));
+}
+
+/// The engine declares actors lost `envoy_lost_threshold` after its last ping refresh. The envoy
+/// gives up a safety margin earlier, measured from the last ping it received, so its actors stop
+/// before the engine can start them elsewhere.
+#[tokio::test]
+async fn engine_ping_silence_expires_before_the_engine_lost_threshold() {
+	let ctx = new_envoy_context();
+	assert_eq!(
+		engine_ping_silence_deadline_ms(&ctx),
+		None,
+		"no deadline before the first engine ping"
+	);
+
+	*ctx.shared.protocol_metadata.lock().await = Some(protocol::ProtocolMetadata {
+		envoy_lost_threshold: 15_000,
+		actor_stop_threshold: 1_800_000,
+		max_response_payload_size: 20_971_520,
+	});
+	let last_ping_ts = 1_700_000_000_000;
+	ctx.shared
+		.last_ping_ts
+		.store(last_ping_ts, std::sync::atomic::Ordering::Release);
+
+	let deadline = engine_ping_silence_deadline_ms(&ctx).expect("deadline after a ping");
+	assert!(
+		deadline < last_ping_ts + 15_000,
+		"the envoy must give up before the engine's threshold"
+	);
+	assert!(
+		deadline > last_ping_ts + 3_000,
+		"the envoy must tolerate several missed ping intervals"
+	);
+	assert!(!engine_ping_silence_expired(&ctx, deadline - 1));
+	assert!(engine_ping_silence_expired(&ctx, deadline));
+}
+
+#[tokio::test]
+async fn declaring_actors_lost_signals_every_generation_before_delivery() {
+	let mut ctx = new_envoy_context();
+	let (actor_tx, mut actor_rx) = mpsc::unbounded_channel::<ToActor>();
+	let first = tokio_util::sync::CancellationToken::new();
+	let second = tokio_util::sync::CancellationToken::new();
+	for (actor_id, lost) in [("actor-a", first.clone()), ("actor-b", second.clone())] {
+		ctx.insert_actor_with_lost_signal(
+			actor_id.to_string(),
+			1,
+			actor_tx.clone(),
+			lost,
+			Arc::new(AsyncCounter::new()),
+			actor_id.to_string(),
+			-1,
+		);
+	}
+
+	declare_actors_lost(&mut ctx, "test");
+
+	assert!(first.is_cancelled() && second.is_cancelled());
+	assert!(ctx.actors.is_empty());
+	assert!(matches!(actor_rx.try_recv(), Ok(ToActor::Lost)));
+	assert!(matches!(actor_rx.try_recv(), Ok(ToActor::Lost)));
 }
