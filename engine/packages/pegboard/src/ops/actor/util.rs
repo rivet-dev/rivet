@@ -185,7 +185,7 @@ pub async fn build_actors_from_workflows(
 			None
 		};
 
-		let actor = match actor_state {
+		let mut actor = match actor_state {
 			ActorState::V1(s) => Actor {
 				actor_id,
 				name: s.name.clone(),
@@ -226,6 +226,18 @@ pub async fn build_actors_from_workflows(
 			},
 		};
 
+		if crate::actor_lease::enabled() {
+			let lease = ctx
+				.op(crate::actor_lease::Input {
+					actor_id,
+					action: crate::actor_lease::Action::Read,
+				})
+				.await?;
+			actor.start_ts = lease.start_ts;
+			actor.sleep_ts = lease.sleep_ts;
+			actor.connectable_ts = lease.connectable_ts;
+			actor.destroy_ts = lease.destroy_ts;
+		}
 		actors.push(actor);
 	}
 

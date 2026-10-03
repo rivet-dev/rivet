@@ -1,6 +1,7 @@
 use gas::prelude::*;
 
 pub mod actor_kv;
+pub mod actor_lease;
 pub mod actor_sqlite;
 pub mod envoy_expire_scheduler;
 pub mod errors;

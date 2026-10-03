@@ -19,6 +19,8 @@ struct Channel {
 pub struct ActorEventDemuxer {
 	ctx: StandaloneCtx,
 	envoy_key: String,
+	namespace_id: Id,
+	connection_id: Id,
 	channels: HashMap<Id, Channel>,
 	last_gc: Instant,
 	gc_interval: Duration,
@@ -28,7 +30,7 @@ pub struct ActorEventDemuxer {
 }
 
 impl ActorEventDemuxer {
-	pub fn new(ctx: StandaloneCtx, envoy_key: String) -> Self {
+	pub fn new(ctx: StandaloneCtx, envoy_key: String, namespace_id: Id, connection_id: Id) -> Self {
 		let pegboard_config = ctx.config().pegboard();
 		let gc_interval = Duration::from_millis(pegboard_config.envoy_event_demuxer_gc_interval());
 		let max_last_seen =
@@ -39,6 +41,8 @@ impl ActorEventDemuxer {
 		Self {
 			ctx,
 			envoy_key,
+			namespace_id,
+			connection_id,
 			channels: HashMap::new(),
 			last_gc: Instant::now(),
 			gc_interval,
@@ -66,6 +70,8 @@ impl ActorEventDemuxer {
 			let handle = tokio::spawn(channel_handler(
 				self.ctx.clone(),
 				self.envoy_key.clone(),
+				self.namespace_id,
+				self.connection_id,
 				self.cancellation_token.clone(),
 				actor_id,
 				rx,
@@ -127,6 +133,8 @@ impl ActorEventDemuxer {
 async fn channel_handler(
 	ctx: StandaloneCtx,
 	envoy_key: String,
+	namespace_id: Id,
+	connection_id: Id,
 	cancellation_token: CancellationToken,
 	actor_id: Id,
 	mut rx: mpsc::UnboundedReceiver<protocol::EventWrapper>,
@@ -141,7 +149,7 @@ async fn channel_handler(
 					break;
 				}
 
-				if let Err(err) = dispatch_events(&ctx, &envoy_key, actor_id, buffer).await {
+				if let Err(err) = dispatch_events(&ctx, &envoy_key, namespace_id, connection_id, actor_id, buffer).await {
 					tracing::error!(%envoy_key, ?actor_id, ?err, "actor event processor failed");
 					break;
 				}
@@ -155,11 +163,26 @@ async fn channel_handler(
 async fn dispatch_events(
 	ctx: &StandaloneCtx,
 	envoy_key: &str,
+	namespace_id: Id,
+	connection_id: Id,
 	actor_id: Id,
 	events: Vec<protocol::EventWrapper>,
 ) -> Result<()> {
 	tracing::debug!(%envoy_key, ?actor_id, count=?events.len(), "actor demuxer dispatch");
 
+	if pegboard::actor_lease::enabled() {
+		ctx.op(pegboard::actor_lease::Input {
+			actor_id,
+			action: pegboard::actor_lease::Action::Events {
+				namespace_id,
+				envoy_key: envoy_key.to_owned(),
+				connection_id,
+				events,
+			},
+		})
+		.await?;
+		return Ok(());
+	}
 	let res = ctx
 		.signal(pegboard::workflows::actor2::Events {
 			envoy_key: envoy_key.to_string(),

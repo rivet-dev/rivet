@@ -10,7 +10,7 @@ mod newest_ping_timestamp;
 mod random_full_range;
 mod random_ping_timestamp;
 
-pub(super) async fn allocate_serverful(
+pub(crate) async fn allocate_serverful(
 	namespace_id: Id,
 	pool_name: &str,
 	tx: &universaldb::Transaction,
