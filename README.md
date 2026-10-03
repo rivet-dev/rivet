@@ -58,13 +58,13 @@ Works with Claude Code, Cursor, Windsurf, and other AI coding tools.
 
 ## What is Rivet?
 
-Rivet is an orchestrator for agentic workloads. Where Kubernetes schedules pods, Rivet schedules Actors: long-lived processes with durable state, a SQLite database, a queue, realtime connections, and scheduling, each addressed by key. An Actor starts in 12 ms, weighs 72 KB, and hibernates when idle, so one control plane runs a thousand agents or a billion.
+Rivet is an orchestrator for agentic workloads. Where Kubernetes schedules pods, Rivet schedules Actors: long-lived processes with durable state, a SQLite database, a queue, realtime connections, and scheduling, each addressed by key.
 
 Create one Actor per agent, per session, per user, or per tenant. Run it on plain Node.js, Bun, or Rust. Open source and self-hostable.
 
-- **Run 2,829× more workloads per server**: An Actor lives inside a worker process you already run, not in its own container or VM. A server that held hundreds of pods holds hundreds of thousands of Actors.
-- **Start in milliseconds, not minutes**: A cold start includes scheduling the Actor, loading its state, and serving the first request. No image pull, no container boot.
-- **Built for scale**: Actors are scheduled independently, so adding capacity means adding machines. The same control plane runs a thousand Actors or a billion.
+- **72 KB per Actor**: An Actor lives inside a worker process you already run, not in its own container or VM. A server that held hundreds of pods holds hundreds of thousands of Actors.
+- **12 ms cold starts**: A cold start includes scheduling the Actor, loading its state, and serving the first request. No image pull, no container boot.
+- **Billions of Actors on one control plane**: Actors are scheduled independently, so adding capacity means adding machines. The same control plane runs a thousand Actors or a billion.
 - **Hibernates when idle, wakes on demand**: An idle Actor writes its state and unloads. The next request brings it back in 12 ms with nothing lost.
 - **Durable state for every workload**: Every Actor gets a SQLite database and a POSIX filesystem, tiered to S3. Idle Actors cost nothing, so millions can sit parked with their state intact.
 - **Run code agents generate at runtime**: Each piece of new, untrusted code gets an Actor of its own, with its own database and filesystem and no reach into anyone else's.
