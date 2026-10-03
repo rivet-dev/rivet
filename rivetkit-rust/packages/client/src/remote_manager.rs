@@ -34,12 +34,18 @@ use crate::{
 /// handshake.
 pub(crate) const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Network timeouts applied to every request the manager makes.
+/// Default bound on a control request, from send until the response body has
+/// been read.
+pub(crate) const DEFAULT_CONTROL_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Network timeouts applied to the requests the manager makes.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Timeouts {
 	/// Bounds TCP connect for HTTP and the full WebSocket handshake.
 	pub(crate) connect: Duration,
-	/// Bounds an entire HTTP request, or `None` for no overall limit.
+	/// Bounds each control request end to end, including the response.
+	pub(crate) control: Duration,
+	/// Bounds each user request end to end, or `None` for no overall limit.
 	pub(crate) request: Option<Duration>,
 }
 
@@ -47,17 +53,20 @@ impl Default for Timeouts {
 	fn default() -> Self {
 		Self {
 			connect: DEFAULT_CONNECT_TIMEOUT,
+			control: DEFAULT_CONTROL_TIMEOUT,
 			request: None,
 		}
 	}
 }
 
-fn build_http_client(timeouts: Timeouts) -> reqwest::Client {
-	let mut builder = reqwest::Client::builder().connect_timeout(timeouts.connect);
-	if let Some(request) = timeouts.request {
-		builder = builder.timeout(request);
-	}
-	builder.build().expect("failed to build reqwest client")
+/// Builds the shared HTTP client. Only the connect timeout is set here. Control
+/// and user requests apply their own end-to-end bound per request, so neither
+/// overrides the other.
+fn build_http_client(connect_timeout: Duration) -> reqwest::Client {
+	reqwest::Client::builder()
+		.connect_timeout(connect_timeout)
+		.build()
+		.expect("failed to build reqwest client")
 }
 
 #[derive(Clone)]
@@ -69,7 +78,7 @@ pub struct RemoteManager {
 	headers: HashMap<String, String>,
 	max_input_size: usize,
 	disable_metadata_lookup: bool,
-	connect_timeout: Duration,
+	timeouts: Timeouts,
 	resolved_config: Arc<OnceCell<ResolvedClientConfig>>,
 	client: reqwest::Client,
 }
@@ -167,9 +176,9 @@ impl RemoteManager {
 			headers: HashMap::new(),
 			max_input_size: default_max_input_size(),
 			disable_metadata_lookup: false,
-			connect_timeout: Timeouts::default().connect,
+			timeouts: Timeouts::default(),
 			resolved_config: Arc::new(OnceCell::new()),
-			client: build_http_client(Timeouts::default()),
+			client: build_http_client(Timeouts::default().connect),
 		}
 	}
 
@@ -192,9 +201,9 @@ impl RemoteManager {
 			headers: headers.unwrap_or_default(),
 			max_input_size: max_input_size.unwrap_or_else(default_max_input_size),
 			disable_metadata_lookup,
-			connect_timeout: timeouts.connect,
+			timeouts,
 			resolved_config: Arc::new(OnceCell::new()),
-			client: build_http_client(timeouts),
+			client: build_http_client(timeouts.connect),
 		}
 	}
 
@@ -225,10 +234,21 @@ impl RemoteManager {
 			.cloned()
 	}
 
+	/// Starts a control request. Control requests are short Engine calls the
+	/// client makes on its own behalf, so they are always bounded end to end by
+	/// the control timeout. That bound includes the response, which keeps a peer
+	/// that accepts the connection and then never answers from hanging the call.
+	fn control_request(&self, method: Method, url: &str) -> reqwest::RequestBuilder {
+		self.client
+			.request(method, url)
+			.timeout(self.timeouts.control)
+	}
+
 	async fn lookup_metadata(&self) -> Result<ResolvedClientConfig> {
 		let base_config = self.base_config();
 		let url = combine_url_path(&base_config.endpoint, "/metadata");
-		let req = self.apply_common_headers_with(self.client.get(&url), &base_config)?;
+		let req =
+			self.apply_common_headers_with(self.control_request(Method::GET, &url), &base_config)?;
 		let res = req.send().await?;
 
 		if !res.status().is_success() {
@@ -288,7 +308,8 @@ impl RemoteManager {
 			urlencoding::encode(actor_id)
 		);
 
-		let req = self.apply_common_headers_with(self.client.get(&url), &config)?;
+		let req =
+			self.apply_common_headers_with(self.control_request(Method::GET, &url), &config)?;
 
 		let res = req.send().await?;
 
@@ -322,7 +343,8 @@ impl RemoteManager {
 			urlencoding::encode(&key_str)
 		);
 
-		let req = self.apply_common_headers_with(self.client.get(&url), &config)?;
+		let req =
+			self.apply_common_headers_with(self.control_request(Method::GET, &url), &config)?;
 
 		let res = req.send().await?;
 
@@ -370,13 +392,15 @@ impl RemoteManager {
 		};
 
 		let req = self.apply_common_headers_with(
-			self.client
-				.put(format!(
+			self.control_request(
+				Method::PUT,
+				&format!(
 					"{}/actors?namespace={}",
 					config.endpoint,
 					urlencoding::encode(&config.namespace)
-				))
-				.json(&request_body),
+				),
+			)
+			.json(&request_body),
 			&config,
 		)?;
 
@@ -435,13 +459,15 @@ impl RemoteManager {
 		};
 
 		let req = self.apply_common_headers_with(
-			self.client
-				.post(format!(
+			self.control_request(
+				Method::POST,
+				&format!(
 					"{}/actors?namespace={}",
 					config.endpoint,
 					urlencoding::encode(&config.namespace)
-				))
-				.json(&request_body),
+				),
+			)
+			.json(&request_body),
 			&config,
 		)?;
 
@@ -529,6 +555,11 @@ impl RemoteManager {
 		let url = self.build_gateway_url(&config, target, path)?;
 
 		let mut builder = self.client.request(method, &url);
+		// User requests such as actions and queue waits can legitimately run for
+		// minutes, so they are only bounded when the caller opts in.
+		if let Some(request) = self.timeouts.request {
+			builder = builder.timeout(request);
+		}
 		// Query targets are resolved by the gateway from the URL, so no actor
 		// headers are sent.
 		if let GatewayTarget::Direct { actor_id } = target {
@@ -794,7 +825,7 @@ impl RemoteManager {
 			.insert("Sec-WebSocket-Protocol", protocols.join(", ").parse()?);
 		self.apply_websocket_headers(request.headers_mut())?;
 
-		let (ws_stream, _) = tokio::time::timeout(self.connect_timeout, connect_async(request))
+		let (ws_stream, _) = tokio::time::timeout(self.timeouts.connect, connect_async(request))
 			.await
 			.context("websocket handshake timed out")??;
 		Ok(ws_stream)
@@ -840,7 +871,7 @@ impl RemoteManager {
 			.insert("Sec-WebSocket-Protocol", all_protocols.join(", ").parse()?);
 		self.apply_websocket_headers(request.headers_mut())?;
 
-		let (ws_stream, _) = tokio::time::timeout(self.connect_timeout, connect_async(request))
+		let (ws_stream, _) = tokio::time::timeout(self.timeouts.connect, connect_async(request))
 			.await
 			.context("websocket handshake timed out")??;
 		Ok(ws_stream)

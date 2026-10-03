@@ -7,7 +7,7 @@ use crate::{
 	common::{ActorKey, EncodingKind, TransportKind},
 	handle::ActorHandle,
 	protocol::query::*,
-	remote_manager::{DEFAULT_CONNECT_TIMEOUT, RemoteManager, Timeouts},
+	remote_manager::{DEFAULT_CONNECT_TIMEOUT, DEFAULT_CONTROL_TIMEOUT, RemoteManager, Timeouts},
 };
 
 #[derive(Default)]
@@ -50,14 +50,35 @@ pub struct ClientConfig {
 	pub disable_metadata_lookup: bool,
 	/// Bounds TCP connect for HTTP requests and the full WebSocket handshake.
 	/// Defaults to 10 seconds.
-	pub connect_timeout: Duration,
-	/// Bounds an entire HTTP request, from send until the response is received.
 	///
-	/// Defaults to `None` (no overall limit) on purpose. Queue `send_and_wait`
-	/// calls and long-running actions can legitimately take minutes, so a
-	/// finite default would break them. Set this when you want a hard upper
-	/// bound for your workload. It does not apply to established WebSocket
-	/// connections.
+	/// It does not bound waiting for an HTTP response once connected. See
+	/// `control_timeout` and `request_timeout` for that.
+	pub connect_timeout: Duration,
+	/// Bounds each control request end to end, from send until the response body
+	/// has been read. Defaults to 30 seconds.
+	///
+	/// Control requests are the short Engine calls the client makes on its own
+	/// behalf: the `/metadata` lookup and the actor get, get-or-create, create,
+	/// and list calls. They back `resolve`, `resolve_handle`, and
+	/// `resolve_optional`, and they run before every action, queue send, `fetch`,
+	/// and WebSocket call. Because the bound includes the response, a peer that
+	/// accepts the connection and then never answers makes the call fail instead
+	/// of hang.
+	///
+	/// It never applies to user requests (see `request_timeout`) or to
+	/// established WebSocket connections.
+	pub control_timeout: Duration,
+	/// Bounds each user request end to end, from send until the response body has
+	/// been read.
+	///
+	/// User requests are HTTP actions, queue `send` and `send_and_wait`, `fetch`,
+	/// and `reload`. Defaults to `None` (no limit) on purpose, because a queue
+	/// wait or a long-running action can legitimately take minutes. Actions and
+	/// queue waits are therefore not bounded unless this is set. Set it when you
+	/// want a hard upper bound for your workload.
+	///
+	/// It does not apply to control requests (see `control_timeout`) or to
+	/// established WebSocket connections.
 	pub request_timeout: Option<Duration>,
 }
 
@@ -74,6 +95,7 @@ impl ClientConfig {
 			max_input_size: None,
 			disable_metadata_lookup: false,
 			connect_timeout: DEFAULT_CONNECT_TIMEOUT,
+			control_timeout: DEFAULT_CONTROL_TIMEOUT,
 			request_timeout: None,
 		}
 	}
@@ -137,8 +159,16 @@ impl ClientConfig {
 		self
 	}
 
-	/// Sets an overall limit for each HTTP request. Unset by default, so
-	/// long-running actions and queue waits are not cut off.
+	/// Sets how long a control request may take, including its response.
+	/// Defaults to 30 seconds. See [`ClientConfig::control_timeout`].
+	pub fn control_timeout(mut self, timeout: Duration) -> Self {
+		self.control_timeout = timeout;
+		self
+	}
+
+	/// Sets an end-to-end limit for each user request such as an action, queue
+	/// send, or `fetch`. Unset by default, so long-running actions and queue
+	/// waits are not cut off. See [`ClientConfig::request_timeout`].
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = Some(timeout);
 		self
@@ -184,6 +214,7 @@ impl Client {
 			config.disable_metadata_lookup,
 			Timeouts {
 				connect: config.connect_timeout,
+				control: config.control_timeout,
 				request: config.request_timeout,
 			},
 		);
