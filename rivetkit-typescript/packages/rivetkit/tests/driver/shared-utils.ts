@@ -38,6 +38,7 @@ export async function setupDriverTest(
 	endpoint: string;
 	metricsEndpoint?: string;
 	namespace: string;
+	poolName: string;
 	hardCrashActor?: (actorId: string) => Promise<void>;
 	hardCrashRuntime?: () => Promise<void>;
 	hardCrashPreservesData: boolean;
@@ -98,6 +99,7 @@ export async function setupDriverTest(
 		endpoint,
 		metricsEndpoint,
 		namespace,
+		poolName: runnerName,
 		hardCrashActor,
 		hardCrashRuntime,
 		hardCrashPreservesData: hardCrashPreservesData ?? false,
