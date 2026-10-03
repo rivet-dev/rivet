@@ -22,7 +22,7 @@ import {
 	Input,
 } from "@/components";
 import { authClient } from "@/lib/auth";
-import { paletteForLetter } from "@/lib/org-palette";
+import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import { queryClient } from "@/queries/global";
 
 const formSchema = z.object({
@@ -138,40 +138,17 @@ function GradientAvatar({
 	letter: string;
 }) {
 	return (
-		<div className="relative h-16 w-16 animate-orb-breathe">
-			<div className="absolute inset-0 overflow-hidden rounded-full">
-				<div
-					className="absolute -inset-2 animate-conic-rotate"
-					style={{
-						background: `conic-gradient(from var(--gradient-angle, 0deg) at 50% 50%, ${palette.c1}, ${palette.c2}, ${palette.c3}, ${palette.c4}, ${palette.c2}, ${palette.c1})`,
-						filter: "blur(4px) saturate(0.95) contrast(1.05)",
-						transition: "background 600ms ease",
-					}}
-				/>
-				<div
-					className="absolute -inset-2 animate-conic-rotate-reverse"
-					style={{
-						background: `conic-gradient(from var(--gradient-angle, 0deg) at 50% 50%, transparent, ${palette.accent}, transparent, ${palette.c4}, transparent)`,
-						filter: "blur(10px)",
-						mixBlendMode: "overlay",
-						opacity: 0.55,
-						transition: "background 600ms ease",
-					}}
-				/>
-				<div
-					className="absolute inset-0 pointer-events-none"
-					style={{
-						background:
-							"radial-gradient(circle at 30% 22%, hsl(0 0% 100% / 0.4) 0%, hsl(0 0% 100% / 0) 38%), radial-gradient(circle at 72% 82%, hsl(0 0% 0% / 0.45) 0%, hsl(0 0% 0% / 0) 65%)",
-					}}
-				/>
-			</div>
+		<div
+			className="flex h-16 w-16 items-center justify-center rounded-full"
+			style={{
+				backgroundImage: orgConicGradient(palette),
+				transition: "background-image 300ms ease",
+			}}
+		>
 			{letter ? (
-				<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-					<span className="text-2xl font-semibold text-white">
-						{letter}
-					</span>
-				</div>
+				<span className="text-2xl font-semibold text-white">
+					{letter}
+				</span>
 			) : null}
 		</div>
 	);
