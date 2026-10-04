@@ -193,6 +193,49 @@ describeDriverMatrix("Actor Conn Hibernation", (driverTestConfig) => {
 				await conn2.dispose();
 			});
 
+			test("events sent during onWake reach a hibernated connection", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const connection = client.hibernationSleepWindowActor
+					.getOrCreate(["wake-events"])
+					.connect();
+
+				// Poll until the connection handshake finishes because connect() has no ready promise.
+				await vi.waitFor(
+					async () => {
+						expect(connection.isConnected).toBe(true);
+					},
+					{
+						timeout: CONNECTION_READY_TIMEOUT_MS,
+						interval: 100,
+					},
+				);
+
+				const woke = new Promise<number>((resolve) => {
+					connection.once("woke", resolve);
+				});
+				const sleeping = new Promise<void>((resolve) => {
+					connection.once("sleeping", () => {
+						resolve();
+					});
+				});
+				await connection.triggerSleep();
+				await sleeping;
+
+				// This call wakes the actor, and onWake sends to the connection before its WebSocket is restored.
+				const counts = await connection.getActorCounts();
+				expect(counts.wakeCount).toBe(2);
+				const result = await Promise.race([
+					woke,
+					(async () => {
+						await waitFor(driverTestConfig, 3000);
+						return "timed_out" as const;
+					})(),
+				]);
+				expect(result).toBe(2);
+
+				await connection.dispose();
+			});
+
 			test("messages sent on a hibernating connection during onSleep resolve after wake", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 

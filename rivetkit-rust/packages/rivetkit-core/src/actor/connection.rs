@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::ops::Bound::{Excluded, Unbounded};
 use std::sync::Arc;
@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use futures::future::BoxFuture;
-use parking_lot::{RwLock, RwLockReadGuard};
+use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 use rivet_error::RivetError;
 use rivetkit_actor_persist::{generated::v4 as persist_v4, versioned as persist_versioned};
 use serde::Serialize;
@@ -32,6 +32,16 @@ pub(crate) type EventSendCallback = Arc<dyn Fn(OutgoingEvent) -> Result<()> + Se
 pub(crate) type DisconnectCallback =
 	Arc<dyn Fn(Option<String>) -> BoxFuture<'static, Result<()>> + Send + Sync>;
 type StateChangeCallback = Arc<dyn Fn(&ConnHandle) + Send + Sync>;
+
+/// Where a connection's events go. A hibernatable connection restored from
+/// storage has no transport until its WebSocket reconnects, which happens after
+/// `onWake`, so events sent before then wait in order and are flushed first.
+/// The queue lives only until then: a restored connection whose WebSocket is
+/// gone is closed during the same restore, which drops the queue with it.
+enum EventDelivery {
+	Waiting(VecDeque<OutgoingEvent>),
+	Sending(EventSendCallback),
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct OutgoingEvent {
@@ -157,7 +167,8 @@ struct ConnHandleInner {
 	subscriptions: RwLock<BTreeSet<String>>,
 	hibernation: RwLock<Option<HibernatableConnectionMetadata>>,
 	state_change_handler: RwLock<Option<StateChangeCallback>>,
-	event_sender: RwLock<Option<EventSendCallback>>,
+	// Forced-sync: `send` is a synchronous method called from foreign runtimes.
+	event_delivery: Mutex<EventDelivery>,
 	transport_disconnect_handler: RwLock<Option<DisconnectCallback>>,
 	disconnect_handler: RwLock<Option<DisconnectCallback>>,
 }
@@ -178,7 +189,7 @@ impl ConnHandle {
 			subscriptions: RwLock::new(BTreeSet::new()),
 			hibernation: RwLock::new(None),
 			state_change_handler: RwLock::new(None),
-			event_sender: RwLock::new(None),
+			event_delivery: Mutex::new(EventDelivery::Waiting(VecDeque::new())),
 			transport_disconnect_handler: RwLock::new(None),
 			disconnect_handler: RwLock::new(None),
 		}))
@@ -251,8 +262,28 @@ impl ConnHandle {
 		handler(reason.map(str::to_owned)).await
 	}
 
+	/// Sets the transport's event sender and first delivers, in order, every
+	/// event that waited for it.
 	pub(crate) fn configure_event_sender(&self, event_sender: Option<EventSendCallback>) {
-		*self.0.event_sender.write() = event_sender;
+		let mut delivery = self.0.event_delivery.lock();
+		let Some(sender) = event_sender else {
+			*delivery = EventDelivery::Waiting(VecDeque::new());
+			return;
+		};
+		if let EventDelivery::Waiting(pending) = &mut *delivery {
+			for event in pending.drain(..) {
+				let name = event.name.clone();
+				if let Err(error) = sender(event) {
+					tracing::error!(
+						?error,
+						conn_id = self.id(),
+						event_name = name,
+						"failed to send event queued while the connection was hibernated"
+					);
+				}
+			}
+		}
+		*delivery = EventDelivery::Sending(sender);
 	}
 
 	pub(crate) fn configure_disconnect_handler(
@@ -358,19 +389,21 @@ impl ConnHandle {
 	}
 
 	pub(crate) fn try_send(&self, name: &str, args: &[u8]) -> Result<()> {
-		let event_sender = self.event_sender()?;
-		event_sender(OutgoingEvent {
+		let event = OutgoingEvent {
 			name: name.to_owned(),
 			args: args.to_vec(),
-		})
-	}
-
-	fn event_sender(&self) -> Result<EventSendCallback> {
-		self.0
-			.event_sender
-			.read()
-			.clone()
-			.ok_or_else(|| connection_not_configured("event sender"))
+		};
+		// The lock is held while sending so an event cannot overtake the queue
+		// that `configure_event_sender` is flushing.
+		let mut delivery = self.0.event_delivery.lock();
+		match &mut *delivery {
+			EventDelivery::Sending(sender) => sender(event),
+			EventDelivery::Waiting(pending) if self.0.is_hibernatable => {
+				pending.push_back(event);
+				Ok(())
+			}
+			EventDelivery::Waiting(_) => Err(connection_not_configured("event sender")),
+		}
 	}
 
 	fn disconnect_handler(&self) -> Result<DisconnectCallback> {

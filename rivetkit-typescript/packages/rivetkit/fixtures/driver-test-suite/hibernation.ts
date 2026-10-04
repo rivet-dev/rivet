@@ -86,9 +86,14 @@ export const hibernationSleepWindowActor = actor({
 	connState: {},
 	events: {
 		sleeping: event<void>(),
+		woke: event<number>(),
 	},
 	onWake: (c) => {
 		c.state.wakeCount += 1;
+		// Hibernated connections are restored before their WebSockets are.
+		for (const conn of c.conns.values()) {
+			conn.send("woke", c.state.wakeCount);
+		}
 	},
 	onSleep: async (c) => {
 		c.state.sleepCount += 1;
