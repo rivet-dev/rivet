@@ -838,6 +838,169 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
+	async fn unparsable_recurring_row_does_not_consume_other_due_work() {
+		let ctx = context("actor-unparsable-recurring-row");
+		let mut delivered = record_scheduled_actions(&ctx);
+		let one_shot = ctx.at(BASE_TIME, "oneShotAction", &[1]).await.unwrap();
+		ctx.cron_every("a", 5_000, "aAction", &[], Some(10))
+			.await
+			.unwrap();
+		ctx.cron_set("b", "0 0 * * *", None, "bAction", &[], Some(10))
+			.await
+			.unwrap();
+		// The row still decodes as a cron schedule, so it fails while the pass
+		// computes its next trigger rather than while the due rows are read.
+		ctx.sql()
+			.execute(
+				"UPDATE _rivet_schedule_events SET cron_expression = 'not a cron', trigger_at = ? WHERE event_id = 'cron:b'",
+				Some(vec![crate::sqlite::BindParam::Integer(BASE_TIME + 5_000)]),
+			)
+			.await
+			.unwrap();
+
+		ctx.set_schedule_time_for_tests(BASE_TIME + 5_000);
+		assert!(run_dispatch_pass(&ctx).await.is_err());
+		assert!(delivered.try_recv().is_err());
+		assert!(ctx.get_scheduled_event(&one_shot).await.unwrap().is_some());
+		assert_eq!(
+			ctx.cron_get("a").await.unwrap().unwrap().next_run_at,
+			BASE_TIME + 5_000
+		);
+		assert!(ctx.cron_history("a", None).await.unwrap().is_empty());
+
+		assert!(ctx.cron_delete("b").await.unwrap());
+		for offset in [5_000, 10_000] {
+			ctx.set_schedule_time_for_tests(BASE_TIME + offset);
+			run_dispatch_pass(&ctx).await.unwrap();
+		}
+
+		let delivered: Vec<_> = std::iter::from_fn(|| delivered.try_recv().ok()).collect();
+		let one_shot_runs: Vec<_> = delivered
+			.iter()
+			.filter(|(kind, id, _)| *kind == "at" && *id == one_shot)
+			.map(|(_, _, args)| args.clone())
+			.collect();
+		assert_eq!(one_shot_runs, vec![vec![1]], "delivered: {delivered:?}");
+		let history: Vec<_> = ctx
+			.cron_history("a", None)
+			.await
+			.unwrap()
+			.into_iter()
+			.map(|fire| fire.result)
+			.collect();
+		assert_eq!(history, vec!["ok", "ok"]);
+	}
+
+	#[tokio::test]
+	async fn mixed_dispatch_pass_claims_one_shots_and_tracks_each_recurring_run() {
+		let ctx = context("actor-mixed-dispatch-pass");
+		ctx.cron_every("busy", 5_000, "busyAction", &[], Some(10))
+			.await
+			.unwrap();
+		ctx.set_schedule_time_for_tests(BASE_TIME + 5_000);
+		// Leave this run in flight so the next fire of `busy` overlaps it.
+		let in_flight = ctx.take_due_schedule_dispatches().await.unwrap();
+		assert_eq!(in_flight.len(), 1);
+
+		ctx.cron_every("idle", 5_000, "idleAction", &[2], Some(10))
+			.await
+			.unwrap();
+		// More one-shots than fit in one claim statement.
+		for index in 0..130u8 {
+			ctx.at(BASE_TIME + 6_000, "oneShotAction", &[index])
+				.await
+				.unwrap();
+		}
+
+		ctx.set_schedule_time_for_tests(BASE_TIME + 10_000);
+		let dispatches = ctx.take_due_schedule_dispatches().await.unwrap();
+		let mut one_shot_args: Vec<_> = dispatches
+			.iter()
+			.filter(|dispatch| dispatch.fire.kind == ScheduleKind::At)
+			.map(|dispatch| dispatch.args.clone())
+			.collect();
+		one_shot_args.sort();
+		assert_eq!(
+			one_shot_args,
+			(0..130u8).map(|index| vec![index]).collect::<Vec<_>>()
+		);
+		assert!(ctx.list_scheduled_events().await.unwrap().is_empty());
+		let recurring: Vec<_> = dispatches
+			.iter()
+			.filter_map(|dispatch| dispatch.fire.name.as_deref())
+			.collect();
+		assert_eq!(recurring, vec!["idle"]);
+
+		for dispatch in dispatches.iter().chain(&in_flight) {
+			ctx.finish_schedule_dispatch(&dispatch.event_id, dispatch.history_id, None)
+				.await;
+		}
+		let results = |history: Vec<CronFire>| {
+			history
+				.into_iter()
+				.map(|fire| fire.result)
+				.collect::<Vec<_>>()
+		};
+		assert_eq!(
+			results(ctx.cron_history("idle", None).await.unwrap()),
+			vec!["ok"]
+		);
+		assert_eq!(
+			results(ctx.cron_history("busy", None).await.unwrap()),
+			vec!["skipped", "ok"]
+		);
+
+		// Finished runs release their markers, so neither job is skipped next.
+		ctx.set_schedule_time_for_tests(BASE_TIME + 15_000);
+		let next = ctx.take_due_schedule_dispatches().await.unwrap();
+		let names: Vec<_> = next
+			.iter()
+			.filter_map(|dispatch| dispatch.fire.name.as_deref())
+			.collect();
+		assert_eq!(names, vec!["busy", "idle"]);
+	}
+
+	#[tokio::test]
+	async fn global_history_pruning_counts_inserts_within_one_pass() {
+		let ctx = context("actor-global-history-prune-in-pass");
+		ctx.sql()
+			.execute(
+				"WITH RECURSIVE n(value) AS (SELECT 1 UNION ALL SELECT value + 1 FROM n WHERE value < 9950) INSERT INTO _rivet_schedule_history (schedule_id, action, scheduled_at, fired_at, finished_at, result, error_group, error_code, error_message, error_metadata) SELECT 'cron:seed', 'seed', value, value, value, 1, NULL, NULL, NULL, NULL FROM n",
+				None,
+			)
+			.await
+			.unwrap();
+		for _ in 1..GLOBAL_HISTORY_PRUNE_INTERVAL {
+			ctx.record_schedule_history_inserted();
+		}
+		ctx.cron_every("a", 5_000, "tick", &[], Some(10))
+			.await
+			.unwrap();
+		ctx.cron_every("b", 5_000, "tick", &[], Some(10))
+			.await
+			.unwrap();
+
+		// The first insert of this pass is not on a prune boundary and the
+		// second one is.
+		ctx.set_schedule_time_for_tests(BASE_TIME + 5_000);
+		assert_eq!(ctx.take_due_schedule_dispatches().await.unwrap().len(), 2);
+
+		let count = ctx
+			.sql()
+			.query("SELECT COUNT(*) FROM _rivet_schedule_history", None)
+			.await
+			.unwrap();
+		assert_eq!(
+			count.rows,
+			vec![vec![crate::sqlite::ColumnValue::Integer(9_900)]]
+		);
+		assert_eq!(
+			ctx.0.schedule_history_insert_count.load(Ordering::SeqCst),
+			GLOBAL_HISTORY_PRUNE_INTERVAL + 1
+		);
+	}
+
+	#[tokio::test]
 	async fn running_history_is_recovered_as_interrupted() {
 		let ctx = context("actor-interrupted");
 		ctx.cron_every("tick", 5_000, "tick", &[], Some(10))

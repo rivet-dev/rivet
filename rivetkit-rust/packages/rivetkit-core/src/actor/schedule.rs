@@ -613,7 +613,9 @@ impl ActorContext {
 			.iter()
 			.map(|row| read_due_schedule(row))
 			.collect::<Result<Vec<_>>>()?;
-		let claim_statements = due_schedules
+		// Every claim, advance, and history write for this pass commits in one
+		// batch so a failure cannot consume due work without dispatching it.
+		let mut statements = due_schedules
 			.iter()
 			.filter(|(event, _)| event.kind == ScheduleKind::At)
 			.collect::<Vec<_>>()
@@ -631,39 +633,42 @@ impl ActorContext {
 				}
 			})
 			.collect::<Vec<_>>();
-		if !claim_statements.is_empty() {
-			self.sql()
-				.execute_batch(claim_statements)
-				.await
-				.context("claim due one-shot schedules")?;
-		}
-		let mut dispatches = Vec::new();
+		let history_insert_count = self.0.schedule_history_insert_count.load(Ordering::Relaxed);
+		let mut pass_history_inserts = 0;
+		let mut planned = Vec::new();
 		for (event, trace_context) in due_schedules {
 			if event.kind == ScheduleKind::At {
-				dispatches.push(DueScheduleDispatch {
-					event_id: event.event_id.clone(),
-					action: event.action,
-					args: event.args,
-					fire: ScheduledFireInfo {
-						kind: ScheduleKind::At,
-						id: event.event_id,
-						name: None,
-						scheduled_at: event.trigger_at,
-						fired_at: now_ms,
+				planned.push((
+					DueScheduleDispatch {
+						event_id: event.event_id.clone(),
+						action: event.action,
+						args: event.args,
+						fire: ScheduledFireInfo {
+							kind: ScheduleKind::At,
+							id: event.event_id,
+							name: None,
+							scheduled_at: event.trigger_at,
+							fired_at: now_ms,
+						},
+						history_id: None,
+						trace_context,
 					},
-					history_id: None,
-					trace_context,
-				});
+					None,
+				));
 				continue;
 			}
 
 			let next_trigger_at = next_recurring_trigger(&event, now_ms)?;
+			let name = cron_name(&event.event_id)?.to_owned();
+			// Only dispatch passes insert running markers, and they hold
+			// schedule_mutation_lock, so a marker absent here stays absent until
+			// this pass inserts it after commit.
 			let is_running = self
 				.0
 				.schedule_running
-				.insert_sync(event.event_id.clone())
-				.is_err();
-			let mut statements = vec![SqliteBatchStatement {
+				.contains_async(&event.event_id)
+				.await;
+			statements.push(SqliteBatchStatement {
 				sql: if is_running {
 					ADVANCE_SKIPPED_SCHEDULE_SQL.to_owned()
 				} else {
@@ -681,13 +686,17 @@ impl ActorContext {
 						BindParam::Text(event.event_id.clone()),
 					]
 				}),
-			}];
+			});
 			let history_result = if is_running {
 				HISTORY_SKIPPED
 			} else {
 				HISTORY_RUNNING
 			};
-			let prune_global_history = event.max_history > 0 && self.should_prune_global_history();
+			// Matches pruning on every GLOBAL_HISTORY_PRUNE_INTERVAL-th committed
+			// history insert, counting the inserts planned earlier in this pass.
+			let prune_global_history = event.max_history > 0
+				&& (history_insert_count + pass_history_inserts)
+					.is_multiple_of(GLOBAL_HISTORY_PRUNE_INTERVAL);
 			let history_index = append_history_statements(
 				&mut statements,
 				&event,
@@ -695,39 +704,54 @@ impl ActorContext {
 				history_result,
 				prune_global_history,
 			)?;
-			let results = match self.sql().execute_batch(statements).await {
-				Ok(results) => results,
-				Err(error) => {
-					if !is_running {
-						self.0.schedule_running.remove_sync(&event.event_id);
-					}
-					return Err(error).context("advance due recurring schedule");
-				}
-			};
 			if event.max_history > 0 {
-				self.record_schedule_history_inserted();
+				pass_history_inserts += 1;
 			}
 			if is_running {
 				continue;
 			}
-			let history_id = history_index
+			planned.push((
+				DueScheduleDispatch {
+					event_id: event.event_id.clone(),
+					action: event.action,
+					args: event.args,
+					fire: ScheduledFireInfo {
+						kind: event.kind,
+						id: name.clone(),
+						name: Some(name),
+						scheduled_at: event.trigger_at,
+						fired_at: now_ms,
+					},
+					history_id: None,
+					trace_context,
+				},
+				history_index,
+			));
+		}
+		let results = if statements.is_empty() {
+			Vec::new()
+		} else {
+			self.sql()
+				.execute_batch(statements)
+				.await
+				.context("claim due schedules")?
+		};
+		self.0
+			.schedule_history_insert_count
+			.fetch_add(pass_history_inserts, Ordering::Relaxed);
+		let mut dispatches = Vec::with_capacity(planned.len());
+		for (mut dispatch, history_index) in planned {
+			if dispatch.fire.kind != ScheduleKind::At {
+				let _ = self
+					.0
+					.schedule_running
+					.insert_async(dispatch.event_id.clone())
+					.await;
+			}
+			dispatch.history_id = history_index
 				.and_then(|index| results.get(index))
 				.and_then(|result| result.last_insert_row_id);
-			let name = cron_name(&event.event_id)?.to_owned();
-			dispatches.push(DueScheduleDispatch {
-				event_id: event.event_id.clone(),
-				action: event.action,
-				args: event.args,
-				fire: ScheduledFireInfo {
-					kind: event.kind,
-					id: name.clone(),
-					name: Some(name),
-					scheduled_at: event.trigger_at,
-					fired_at: now_ms,
-				},
-				history_id,
-				trace_context,
-			});
+			dispatches.push(dispatch);
 		}
 		self.mark_schedule_dirty();
 		if !result.rows.is_empty() {
@@ -817,11 +841,13 @@ impl ActorContext {
 		Ok(())
 	}
 
+	#[cfg(test)]
 	fn should_prune_global_history(&self) -> bool {
 		self.0.schedule_history_insert_count.load(Ordering::Relaxed) % GLOBAL_HISTORY_PRUNE_INTERVAL
 			== 0
 	}
 
+	#[cfg(test)]
 	fn record_schedule_history_inserted(&self) {
 		self.0
 			.schedule_history_insert_count
