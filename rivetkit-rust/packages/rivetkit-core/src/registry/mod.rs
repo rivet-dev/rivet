@@ -35,7 +35,7 @@ use vbare::OwnedVersionedData;
 
 use crate::actor::action::ActionDispatchError;
 use crate::actor::config::CanHibernateWebSocket;
-use crate::actor::connection::{ConnHandle, HibernatableConnectionMetadata};
+use crate::actor::connection::{ConnHandle, DisconnectOnDrop, HibernatableConnectionMetadata};
 use crate::actor::context::{ActorContext, InspectorAttachGuard};
 use crate::actor::factory::ActorFactory;
 use crate::actor::kv::LegacyActorKv;

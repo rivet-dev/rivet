@@ -1070,3 +1070,82 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 		);
 	});
 });
+
+// Gateway3 tells the actor when a caller disconnects before the response starts.
+describeDriverMatrix(
+	"Actor Sleep with Gateway3",
+	(driverTestConfig) => {
+		test("an aborted rpc lets the actor sleep once it finishes", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const key = [crypto.randomUUID()];
+
+			// A connection only observes that the rpc started, then leaves.
+			const observer = client.sleepWithLongRpc.getOrCreate(key).connect();
+			const started = new Promise((resolve) =>
+				observer.once("waiting", resolve),
+			);
+			// The subscription and this call share one ordered connection, so the subscription is active before the rpc starts.
+			await observer.getCounts();
+			const caller = new AbortController();
+			const aborted = client.sleepWithLongRpc.getOrCreate(key).action({
+				name: "longRunningRpc",
+				args: [],
+				signal: caller.signal,
+			});
+			await started;
+			await observer.dispose();
+			caller.abort();
+			await expect(aborted).rejects.toThrow();
+
+			// The rpc keeps running after the abort. Once it finishes, nothing is left to keep the actor awake.
+			await client.sleepWithLongRpc
+				.getOrCreate(key)
+				.finishLongRunningRpc();
+			await waitFor(driverTestConfig, SLEEP_TIMEOUT + 250);
+
+			const { startCount, sleepCount } = await client.sleepWithLongRpc
+				.getOrCreate(key)
+				.getCounts();
+			expect(sleepCount).toBe(1);
+			expect(startCount).toBe(2);
+		});
+
+		test("a caller that leaves during onConnect lets the actor sleep", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const key = [crypto.randomUUID()];
+
+			// A connection only observes that onConnect started, then leaves.
+			const observer = client.sleepWithSlowConnect
+				.getOrCreate(key)
+				.connect();
+			const connecting = new Promise((resolve) =>
+				observer.once("connecting", resolve),
+			);
+			// The subscription and this call share one ordered connection, so the subscription is active before the call below connects.
+			await observer.ping();
+			const caller = new AbortController();
+			const aborted = client.sleepWithSlowConnect
+				.getOrCreate(key, { params: { holdConnect: true } })
+				.action({ name: "ping", args: [], signal: caller.signal });
+			await connecting;
+			await observer.dispose();
+			caller.abort();
+			await expect(aborted).rejects.toThrow();
+
+			// onConnect finishes after the caller left. Nothing is left to keep the actor awake.
+			await client.sleepWithSlowConnect.getOrCreate(key).releaseConnect();
+			await waitFor(driverTestConfig, SLEEP_TIMEOUT + 250);
+
+			const { startCount, sleepCount } = await client.sleepWithSlowConnect
+				.getOrCreate(key)
+				.getCounts();
+			expect(sleepCount).toBe(1);
+			expect(startCount).toBe(2);
+		});
+	},
+	{
+		runtimes: ["native"],
+		encodings: ["bare"],
+		config: { engine: { gateway3: true } },
+	},
+);

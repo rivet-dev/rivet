@@ -25,6 +25,7 @@ use crate::actor::persist::{
 };
 use crate::actor::state::RequestSaveOpts;
 use crate::error::ActorRuntime;
+use crate::runtime::RuntimeSpawner;
 use crate::time::timeout;
 use crate::types::ConnId;
 
@@ -151,6 +152,46 @@ pub(crate) fn decode_persisted_connection(payload: &[u8]) -> Result<PersistedCon
 		"persisted connection",
 	)?;
 	Ok(connection)
+}
+
+/// Disconnects a connection when dropped, unless it was disconnected or
+/// disarmed first. A caller that goes away drops its future at any await, and
+/// a connection left registered keeps the actor awake forever.
+pub(crate) struct DisconnectOnDrop {
+	conn: Option<ConnHandle>,
+}
+
+impl DisconnectOnDrop {
+	pub(crate) fn new(conn: ConnHandle) -> Self {
+		Self { conn: Some(conn) }
+	}
+
+	pub(crate) async fn disconnect(mut self) -> Result<()> {
+		match self.conn.take() {
+			Some(conn) => conn.disconnect(None).await,
+			None => Ok(()),
+		}
+	}
+
+	pub(crate) fn disarm(mut self) {
+		self.conn = None;
+	}
+}
+
+impl Drop for DisconnectOnDrop {
+	fn drop(&mut self) {
+		if let Some(conn) = self.conn.take() {
+			RuntimeSpawner::spawn(async move {
+				if let Err(error) = conn.disconnect(None).await {
+					tracing::warn!(
+						conn_id = conn.id(),
+						?error,
+						"failed to disconnect a connection whose caller went away"
+					);
+				}
+			});
+		}
+	}
 }
 
 #[derive(Clone)]
@@ -724,10 +765,14 @@ impl ActorContext {
 			.await?;
 		self.insert_existing(conn.clone());
 
+		// The caller can go away while onConnect runs.
+		let opening = DisconnectOnDrop::new(conn.clone());
 		if let Err(error) = self.emit_connection_open(&conn, request).await {
+			opening.disarm();
 			self.remove_existing(conn.id());
 			return Err(error);
 		}
+		opening.disarm();
 		self.0.metrics.inc_connections_total();
 		self.record_connections_updated();
 		self.reset_sleep_timer();

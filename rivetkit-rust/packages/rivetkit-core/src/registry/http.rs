@@ -241,6 +241,7 @@ impl RegistryDispatcher {
 				);
 			}
 		};
+		let request_connection = DisconnectOnDrop::new(conn.clone());
 
 		let dispatch_result = with_action_dispatch_timeout(
 			config.action_timeout,
@@ -253,7 +254,7 @@ impl RegistryDispatcher {
 			),
 		)
 		.await;
-		let disconnect_result = conn.disconnect(None).await;
+		let disconnect_result = request_connection.disconnect().await;
 
 		match dispatch_result {
 			Ok(output) => {
@@ -362,6 +363,7 @@ impl RegistryDispatcher {
 				);
 			}
 		};
+		let request_connection = DisconnectOnDrop::new(conn.clone());
 
 		let incoming =
 			crate::telemetry::IncomingInvocationContext::from_http_headers(request.headers());
@@ -391,7 +393,7 @@ impl RegistryDispatcher {
 			}
 			Err(error) => Err(error),
 		};
-		let disconnect_result = conn.disconnect(None).await;
+		let disconnect_result = request_connection.disconnect().await;
 
 		match queue_result {
 			Ok(result) => {

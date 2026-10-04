@@ -176,6 +176,42 @@ export const sleepWithLongRpc = actor({
 	},
 });
 
+export const sleepWithSlowConnect = actor({
+	state: { startCount: 0, sleepCount: 0 },
+	createVars: () => ({}) as { releaseConnect?: () => void },
+	onWake: (c) => {
+		c.state.startCount += 1;
+	},
+	onSleep: (c) => {
+		c.state.sleepCount += 1;
+	},
+	onConnect: async (c, conn) => {
+		if (
+			!(conn.params as { holdConnect?: boolean } | undefined)?.holdConnect
+		)
+			return;
+		const { promise, resolve } = promiseWithResolvers<void>((reason) =>
+			c.log.warn({ msg: "unhandled held connect rejection", reason }),
+		);
+		c.vars.releaseConnect = resolve;
+		c.broadcast("connecting");
+		await promise;
+	},
+	actions: {
+		getCounts: (c) => {
+			return {
+				startCount: c.state.startCount,
+				sleepCount: c.state.sleepCount,
+			};
+		},
+		ping: () => "pong",
+		releaseConnect: (c) => c.vars.releaseConnect?.(),
+	},
+	options: {
+		sleepTimeout: SLEEP_TIMEOUT,
+	},
+});
+
 export const sleepWithWaitUntilMessage = actor({
 	state: {
 		startCount: 0,

@@ -126,6 +126,7 @@ import {
 	sleepWithNoSleepOption,
 	sleepWithRawHttp,
 	sleepWithRawWebSocket,
+	sleepWithSlowConnect,
 	sleepWithWaitUntilInOnWake,
 	sleepWithWaitUntilMessage,
 } from "./sleep";
@@ -225,6 +226,7 @@ export const registry = setup({
 		// From sleep.ts
 		sleep,
 		sleepWithLongRpc,
+		sleepWithSlowConnect,
 		sleepWithRawHttp,
 		sleepWithRawWebSocket,
 		sleepWithNoSleepOption,
