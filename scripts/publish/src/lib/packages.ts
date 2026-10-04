@@ -88,20 +88,14 @@ export const META_PACKAGES: readonly MetaPackageSpec[] = [
  * scope is mostly private infrastructure, so it is opt-in by name rather than
  * by prefix. Absent from a workspace (OSS checkouts) they are simply skipped.
  */
-export const RIVET_DEV_PACKAGES = new Set<string>([
-	"@rivet-dev/workflow-world",
-	"@rivet-dev/pi",
-]);
+export const RIVET_DEV_PACKAGES = new Set<string>(["@rivet-dev/workflow-world"]);
 
 /**
  * Packages released on their own version line. A release keeps the version in
  * their package.json instead of writing the release version, so npm skips them
  * as already published until that version changes.
  */
-export const INDEPENDENT_VERSION_PACKAGES = new Set<string>([
-	"@rivet-dev/pi",
-	"@rivet-dev/sandbox-adapter",
-]);
+export const INDEPENDENT_VERSION_PACKAGES = new Set<string>([]);
 
 export const RELEASE_ONLY_PACKAGES = new Set<string>([
 	"@rivetkit/rivetkit-napi-win32-x64-msvc",
