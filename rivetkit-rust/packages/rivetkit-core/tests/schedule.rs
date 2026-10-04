@@ -699,6 +699,144 @@ mod moved_tests {
 		);
 	}
 
+	/// Stands in for the actor event loop. Records every scheduled action it
+	/// receives as `(kind, id, args)` and completes it successfully.
+	fn record_scheduled_actions(
+		ctx: &ActorContext,
+	) -> tokio::sync::mpsc::UnboundedReceiver<(&'static str, String, Vec<u8>)> {
+		let (events_tx, mut events_rx) = tokio::sync::mpsc::unbounded_channel();
+		ctx.configure_actor_events(Some(events_tx));
+		let (delivered_tx, delivered_rx) = tokio::sync::mpsc::unbounded_channel();
+		tokio::spawn(async move {
+			while let Some(event) = events_rx.recv().await {
+				if let crate::actor::messages::ActorEvent::Action {
+					args,
+					scheduled_fire: Some(fire),
+					reply,
+					..
+				} = event
+				{
+					let _ = delivered_tx.send((fire.kind.as_str(), fire.id, args));
+					reply.send(Ok(Vec::new()));
+				}
+			}
+		});
+		delivered_rx
+	}
+
+	/// Runs one alarm dispatch pass through the actor's dispatch path and waits
+	/// for every dispatched action to finish.
+	async fn run_dispatch_pass(ctx: &ActorContext) -> anyhow::Result<()> {
+		let result = ctx.drain_overdue_scheduled_events().await;
+		ctx.wait_for_tracked_shutdown_work_unbounded().await;
+		result
+	}
+
+	#[tokio::test]
+	async fn failed_dispatch_pass_does_not_lose_due_one_shot() {
+		let ctx = context("actor-failed-pass-one-shot");
+		let mut delivered = record_scheduled_actions(&ctx);
+		let one_shot = ctx
+			.at(BASE_TIME + 1_000, "oneShotAction", &[1])
+			.await
+			.unwrap();
+		ctx.cron_every("tick", 5_000, "tickAction", &[], Some(10))
+			.await
+			.unwrap();
+		ctx.sql()
+			.execute(
+				"CREATE TRIGGER fail_schedule_history_insert BEFORE INSERT ON _rivet_schedule_history BEGIN SELECT RAISE(FAIL, 'injected history failure'); END;",
+				None,
+			)
+			.await
+			.unwrap();
+
+		// Both schedules are due. The recurring history insert fails after the
+		// due one-shot has been claimed.
+		ctx.set_schedule_time_for_tests(BASE_TIME + 5_000);
+		let failed_pass = run_dispatch_pass(&ctx).await;
+
+		ctx.sql()
+			.execute("DROP TRIGGER fail_schedule_history_insert;", None)
+			.await
+			.unwrap();
+		run_dispatch_pass(&ctx).await.unwrap();
+
+		let delivered: Vec<_> = std::iter::from_fn(|| delivered.try_recv().ok()).collect();
+		let one_shot_runs: Vec<_> = delivered
+			.iter()
+			.filter(|(kind, id, _)| *kind == "at" && *id == one_shot)
+			.map(|(_, _, args)| args.clone())
+			.collect();
+		assert_eq!(
+			one_shot_runs,
+			vec![vec![1]],
+			"due one-shot must be dispatched exactly once (failed pass error: {:?}, delivered: {delivered:?})",
+			failed_pass.err().map(|error| format!("{error:#}")),
+		);
+	}
+
+	#[tokio::test]
+	async fn failed_dispatch_pass_does_not_strand_recurring_job() {
+		let ctx = context("actor-failed-pass-recurring");
+		let mut delivered = record_scheduled_actions(&ctx);
+		ctx.cron_every("first", 5_000, "firstAction", &[], Some(10))
+			.await
+			.unwrap();
+		ctx.cron_every("second", 5_000, "secondAction", &[], Some(10))
+			.await
+			.unwrap();
+		// Only `second` fails. Rows due at the same time are processed in
+		// event_id order, so `cron:first` is handled before `cron:second`.
+		ctx.sql()
+			.execute(
+				"CREATE TRIGGER fail_second_history_insert BEFORE INSERT ON _rivet_schedule_history WHEN NEW.schedule_id = 'cron:second' BEGIN SELECT RAISE(FAIL, 'injected history failure'); END;",
+				None,
+			)
+			.await
+			.unwrap();
+
+		ctx.set_schedule_time_for_tests(BASE_TIME + 5_000);
+		let failed_pass = run_dispatch_pass(&ctx).await;
+
+		ctx.sql()
+			.execute("DROP TRIGGER fail_second_history_insert;", None)
+			.await
+			.unwrap();
+		// Every pass waits for its actions to finish, so no run of `first` is
+		// still in flight when the next one becomes due.
+		for offset in [5_000, 10_000, 15_000] {
+			ctx.set_schedule_time_for_tests(BASE_TIME + offset);
+			run_dispatch_pass(&ctx).await.unwrap();
+		}
+
+		let delivered: Vec<_> = std::iter::from_fn(|| delivered.try_recv().ok()).collect();
+		let first_runs = delivered.iter().filter(|(_, id, _)| id == "first").count();
+		let history: Vec<_> = ctx
+			.cron_history("first", None)
+			.await
+			.unwrap()
+			.into_iter()
+			.map(|fire| fire.result)
+			.collect();
+		let details = format!(
+			"failed pass error: {:?}, first history (newest first): {history:?}, delivered: {delivered:?}",
+			failed_pass.err().map(|error| format!("{error:#}")),
+		);
+		assert!(
+			first_runs > 0,
+			"recurring job was never dispatched; {details}"
+		);
+		assert!(
+			!history.iter().any(|result| result == "skipped"),
+			"recurring job was skipped without an overlapping run; {details}"
+		);
+		assert!(
+			!history.iter().any(|result| result == "running"),
+			"recurring job kept a running history row with no dispatch; {details}"
+		);
+	}
+
 	#[tokio::test]
 	async fn running_history_is_recovered_as_interrupted() {
 		let ctx = context("actor-interrupted");
