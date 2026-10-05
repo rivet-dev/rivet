@@ -75,6 +75,7 @@ export const hibernationActor = actor({
 	},
 	options: {
 		sleepTimeout: HIBERNATION_SLEEP_TIMEOUT,
+		canHibernateWebSocket: true,
 	},
 });
 
@@ -108,5 +109,6 @@ export const hibernationSleepWindowActor = actor({
 	},
 	options: {
 		sleepTimeout: HIBERNATION_SLEEP_TIMEOUT,
+		canHibernateWebSocket: true,
 	},
 });

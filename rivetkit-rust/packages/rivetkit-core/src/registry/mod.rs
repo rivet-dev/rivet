@@ -69,7 +69,6 @@ mod runner_config;
 mod websocket;
 
 use inspector::build_actor_inspector;
-use websocket::is_actor_connect_path;
 
 #[derive(Default)]
 pub struct CoreRegistry {
@@ -1276,10 +1275,6 @@ impl RegistryDispatcher {
 
 impl RegistryDispatcher {
 	fn can_hibernate(&self, actor_id: &str, request: &HttpRequest) -> bool {
-		if matches!(is_actor_connect_path(&request.path), Ok(true)) {
-			return true;
-		}
-
 		let Some(instance) = self
 			.actor_instances
 			.read_sync(actor_id, |_, state| state.active_instance())
