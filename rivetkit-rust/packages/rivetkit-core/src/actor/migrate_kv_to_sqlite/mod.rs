@@ -31,7 +31,7 @@ const LEGACY_SCAN_END: &[u8] = &[0xff];
 pub(crate) async fn import_core_state_if_needed(ctx: &ActorContext) -> Result<()> {
 	let result = import_core_state_if_needed_inner(ctx).await;
 	if let Err(error) = &result {
-		tracing::error!(
+		tracing::warn!(
 			actor_id = %ctx.actor_id(),
 			phase = "legacy_kv_import",
 			%error,

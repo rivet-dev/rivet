@@ -304,7 +304,7 @@ pub(crate) async fn ws_send_for_session(
 			.ws_tx_lock_hold_duration_seconds
 			.with_label_values(&[message_kind])
 			.observe(hold_start.elapsed().as_secs_f64());
-		tracing::error!("websocket not available for sending");
+		tracing::debug!("websocket not available for sending");
 		return WsSendResult::Unavailable;
 	};
 

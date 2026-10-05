@@ -571,7 +571,7 @@ pub(crate) fn err_to_close_frame(err: anyhow::Error, ray_id: &str) -> CloseFrame
 					_ => false,
 				}
 			}) {
-				tracing::warn!(?err, "websocket failed");
+				tracing::debug!(?err, "websocket failed");
 			} else if rivet_err.group() == "core" && rivet_err.code() == "internal_error" {
 				tracing::error!(?err, "websocket failed");
 			} else {

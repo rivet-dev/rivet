@@ -822,7 +822,7 @@ impl ActorTask {
 					tracing::error!(?error, operation, "core dispatched hook failed");
 				}
 				Err(error) => {
-					tracing::error!(?error, operation, "core dispatched hook reply dropped");
+					tracing::debug!(?error, operation, "core dispatched hook reply dropped");
 				}
 			}
 			ctx.mark_core_dispatched_hook_completed();
@@ -1882,11 +1882,11 @@ impl ActorTask {
 				Vec::new()
 			}
 			Ok(Err(error)) => {
-				tracing::error!(?error, "serializeState reply dropped");
+				tracing::warn!(?error, "serializeState reply dropped");
 				Vec::new()
 			}
 			Err(_) => {
-				tracing::error!(
+				tracing::warn!(
 					actor_id = %self.ctx.actor_id(),
 					cap_ms = cap.as_millis() as u64,
 					"serializeState timed out; saving with empty deltas, prior persisted state retained"
