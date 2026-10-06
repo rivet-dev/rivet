@@ -458,6 +458,54 @@ fn vfs_staging_cache_retains_only_speculative_pages() {
 }
 
 #[test]
+fn committed_page_eviction_never_exposes_stale_read_cache() {
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		..VfsConfig::default()
+	};
+	for kind in [PageCacheInsertKind::Prefetch, PageCacheInsertKind::Startup] {
+		let mut state = VfsState::new(&config, false);
+		state.cache_page(&config, kind, 2, vec![1; DEFAULT_PAGE_SIZE].into());
+		state.cache_committed_page(&config, 2, vec![2; DEFAULT_PAGE_SIZE].into());
+		assert_eq!(
+			state.cached_page(&config, 2).unwrap().0.as_slice(),
+			&[2; DEFAULT_PAGE_SIZE]
+		);
+
+		// Deterministically exercise the fallback after capacity/TTL eviction.
+		state.committed_page_cache.invalidate(&2);
+		assert!(
+			state.cached_page(&config, 2).is_none(),
+			"stale page survived commit"
+		);
+	}
+}
+
+#[test]
+fn committed_page_invalidates_startup_header_when_cache_disabled() {
+	for config in [
+		VfsConfig {
+			page_cache_mode: SqliteVfsPageCacheMode::Off,
+			..VfsConfig::default()
+		},
+		VfsConfig {
+			staging_cache_ttl_ms: 0,
+			..VfsConfig::default()
+		},
+	] {
+		let mut state = VfsState::new(&config, false);
+		state.cache_page(
+			&config,
+			PageCacheInsertKind::Startup,
+			1,
+			vec![1; DEFAULT_PAGE_SIZE].into(),
+		);
+		state.cache_committed_page(&config, 1, vec![2; DEFAULT_PAGE_SIZE].into());
+		assert!(state.cached_page(&config, 1).is_none());
+	}
+}
+
+#[test]
 fn disabled_profiling_skips_prefetch_tracking() {
 	let config = VfsConfig {
 		page_cache_mode: SqliteVfsPageCacheMode::All,
@@ -1407,6 +1455,42 @@ fn initial_page_fetch_inside_block_in_place_can_use_runtime_handle() {
 
 		assert!(initial_main_page.is_none());
 	});
+}
+
+#[test]
+fn committed_page_eviction_reads_latest_sql_update() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let db = harness.open_db(&runtime);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE cache_probe (value TEXT); INSERT INTO cache_probe VALUES ('before');",
+	)
+	.unwrap();
+	let ctx = direct_vfs_ctx(&db);
+	let old_page = ctx.resolve_pages(&[2], false).unwrap()[&2].clone().unwrap();
+	ctx.state.write().cache_page(
+		&ctx.config,
+		PageCacheInsertKind::Prefetch,
+		2,
+		old_page.clone(),
+	);
+	sqlite_exec(db.as_ptr(), "UPDATE cache_probe SET value = 'after';").unwrap();
+	ctx.state.read().committed_page_cache.invalidate(&2);
+	let page = ctx.resolve_pages(&[2], false).unwrap()[&2].clone().unwrap();
+	assert_ne!(
+		page, old_page,
+		"committed UPDATE must not resolve to prefetched old page"
+	);
+	sqlite_exec(db.as_ptr(), "PRAGMA shrink_memory;").unwrap();
+	assert_eq!(
+		sqlite_query_text(db.as_ptr(), "SELECT value FROM cache_probe;").unwrap(),
+		"after"
+	);
+	assert_eq!(
+		sqlite_query_text(db.as_ptr(), "PRAGMA integrity_check;").unwrap(),
+		"ok"
+	);
 }
 
 #[test]

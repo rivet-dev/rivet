@@ -1304,6 +1304,8 @@ impl VfsState {
 	}
 
 	fn cache_committed_page(&mut self, config: &VfsConfig, pgno: u32, bytes: Vec<u8>) {
+		// Evict older copies before the committed entry can itself be evicted.
+		self.evict_target_read_pages(&[pgno]);
 		if config.staging_cache_ttl_ms == 0 || !config.page_cache_mode.caches_any_pages() {
 			return;
 		}
