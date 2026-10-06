@@ -71,4 +71,32 @@ describe("sendHttpRequestToGateway", () => {
 		);
 		expect((await reader?.read())?.done).toBe(true);
 	});
+
+	test("uses a custom fetch and caller fetch options", async () => {
+		const calls: RequestInit[] = [];
+		const fetchImpl = vi.fn(
+			async (_input: RequestInfo | URL, init?: RequestInit) => {
+			calls.push(init ?? {});
+				return new Response("ok");
+			},
+		);
+		vi.stubGlobal("fetch", vi.fn());
+
+		await sendHttpRequestToGateway(
+			{
+				headers: {},
+				fetch: fetchImpl,
+				fetchOptions: { credentials: "include" },
+			} as ClientConfig,
+			"http://gateway.test/actors/actor-id",
+			new Request("http://actor/request", { method: "POST", body: "hi" }),
+		);
+
+		expect(fetchImpl).toHaveBeenCalledOnce();
+		expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+		expect(calls[0]).toMatchObject({
+			credentials: "include",
+			method: "POST",
+		});
+	});
 });
