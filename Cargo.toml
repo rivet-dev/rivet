@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-  "container-runner",
   "engine/packages/auth",
   "engine/packages/auth-jwt",
   "engine/packages/auth-policy",

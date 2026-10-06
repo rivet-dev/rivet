@@ -9,20 +9,16 @@
  */
 
 /** User-facing target groups selected via the `targets` workflow_dispatch input. */
-export type TargetGroup = "rivetkit" | "container-runner" | "engine" | "cli";
+export type TargetGroup = "rivetkit" | "engine" | "cli";
 
 /** Native artifacts produced by the `build` matrix (matrix `build_target`). */
-export type BuildTarget = "rivetkit-napi" | "engine" | "container-runner" | "cli";
+export type BuildTarget = "rivetkit-napi" | "engine" | "cli";
 
-/**
- * npm package families. `container-runner` has no npm package (it ships as an
- * R2 binary only), so it is not a family.
- */
+/** npm package families. */
 export type PackageFamily = "rivetkit" | "engine" | "cli";
 
 export const ALL_GROUPS: readonly TargetGroup[] = [
 	"rivetkit",
-	"container-runner",
 	"engine",
 	"cli",
 ];
@@ -110,9 +106,6 @@ export function buildScope(groups: readonly TargetGroup[]): BuildScope {
 	if (groups.includes("cli")) {
 		targets.add("cli");
 		targets.add("engine");
-	}
-	if (groups.includes("container-runner")) {
-		targets.add("container-runner");
 	}
 	return { buildTargets: [...targets], buildWasm, buildDocker };
 }
