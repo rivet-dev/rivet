@@ -11,6 +11,9 @@
 # Base image: docker/builder-base/windows-mingw.Dockerfile
 FROM ghcr.io/rivet-dev/rivet/builder-base-windows-mingw:0e33ceb98
 
+RUN apt-get update && apt-get install -y --no-install-recommends nasm && \
+    rm -rf /var/lib/apt/lists/*
+
 ARG BUILD_TARGET=engine
 ARG BUILD_MODE=release
 ARG BUILD_FRONTEND=false
