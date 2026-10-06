@@ -17,7 +17,7 @@ export type Message = typeof Message.Type;
 // A typed, schema-validated error. It travels through the action's error
 // channel and arrives on the caller as a real tagged instance that can be
 // matched with `Effect.catchTag`, not a string or an opaque exception.
-export class EmptyMessageError extends Schema.TaggedErrorClass<EmptyMessageError>()(
+export class EmptyMessageError extends Schema.TaggedError<EmptyMessageError>()(
 	"EmptyMessageError",
 	{
 		message: Schema.String,

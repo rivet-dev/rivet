@@ -11,19 +11,19 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@effect/platform-node": "4.0.0-beta.66",
+		"@effect/platform-node": "4.0.0",
 		"@rivetkit/effect": "workspace:*",
-		"effect": "4.0.0-beta.66",
+		"effect": "4.0.0",
 		"pino": "9.9.5",
 		"pino-pretty": "13.1.2",
 		"rivetkit": "workspace:*"
 	},
 	"devDependencies": {
-		"@effect/vitest": "4.0.0-beta.66",
+		"@effect/vitest": "4.0.0",
 		"@types/node": "^22.13.9",
 		"tsx": "^4.20.5",
 		"typescript": "^5.5.2",
-		"vitest": "^4.1.5"
+		"vitest": "^5.0.3"
 	},
 	"template": {
 		"noFrontend": true,

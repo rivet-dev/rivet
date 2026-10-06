@@ -1,6 +1,6 @@
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { Config, Layer } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 
 // The LLM is wired as a Layer so it can be swapped without touching the actor.
 // The actor's action handlers require the `LanguageModel` service; this Layer
@@ -18,8 +18,8 @@ export const OpenAiModelLayer = OpenAiLanguageModel.layer({
 }).pipe(
 	Layer.provide(
 		OpenAiClient.layerConfig({
-			apiKey: Config.redacted("OPENAI_API_KEY"),
-			apiUrl: Config.string("OPENAI_BASE_URL").pipe(
+			apiKey: Config.Redacted("OPENAI_API_KEY"),
+			apiUrl: Config.String("OPENAI_BASE_URL").pipe(
 				Config.withDefault("https://api.openai.com/v1"),
 			),
 		}),

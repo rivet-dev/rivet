@@ -2,11 +2,11 @@ import {
 	Config,
 	Context,
 	Effect,
+	Record as EffectRecord,
 	Logger,
+	type LogLevel,
 	Option,
 	Predicate,
-	Record as EffectRecord,
-	type LogLevel,
 	References,
 } from "effect";
 import type * as Rivetkit from "rivetkit";
@@ -51,7 +51,7 @@ const RivetkitLevelByEffectLevel = {
 	All: "trace",
 } as Record<LogLevel.LogLevel, RivetkitLog.LogLevel>;
 
-const rivetLogLevelFromEnv = Config.string("RIVET_LOG_LEVEL").pipe(
+const rivetLogLevelFromEnv = Config.String("RIVET_LOG_LEVEL").pipe(
 	Effect.option,
 	Effect.map((maybeRivetLogLevel) => {
 		if (Option.isNone(maybeRivetLogLevel)) return Option.none();

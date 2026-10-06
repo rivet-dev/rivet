@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { LanguageModel, Prompt } from "effect/unstable/ai";
+import { LanguageModel, type Prompt } from "effect/ai";
 import { Agent, EmptyMessageError, Message } from "./api.ts";
 
 // The system prompt is applied on every call but never persisted as a turn.

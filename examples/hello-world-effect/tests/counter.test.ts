@@ -16,7 +16,9 @@ const TestLayer = Registry.test.pipe(
 layer(TestLayer)("hello-world-effect", (it) => {
 	it.effect("increments and reads the count back", () =>
 		Effect.gen(function* () {
-			const counter = (yield* Counter.client).getOrCreate("t-increment");
+			const counter = (yield* Counter.client).getOrCreate(
+				`t-increment-${crypto.randomUUID()}`,
+			);
 			assert.strictEqual(yield* counter.Increment({ amount: 1 }), 1);
 			assert.strictEqual(yield* counter.Increment({ amount: 5 }), 6);
 			assert.strictEqual(yield* counter.GetCount(), 6);
@@ -26,8 +28,9 @@ layer(TestLayer)("hello-world-effect", (it) => {
 	it.effect("isolates state across keys", () =>
 		Effect.gen(function* () {
 			const client = yield* Counter.client;
-			const a = client.getOrCreate("t-iso-a");
-			const b = client.getOrCreate("t-iso-b");
+			const key = crypto.randomUUID();
+			const a = client.getOrCreate(`t-iso-${key}-a`);
+			const b = client.getOrCreate(`t-iso-${key}-b`);
 			yield* a.Increment({ amount: 2 });
 			yield* b.Increment({ amount: 7 });
 			assert.strictEqual(yield* a.GetCount(), 2);
