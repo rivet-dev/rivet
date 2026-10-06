@@ -40,7 +40,6 @@ export async function sendHttpRequestToGateway(
 
 	const fetchImpl = runConfig.fetch ?? fetch;
 	return fetchImpl(gatewayUrl, {
-		...runConfig.fetchOptions,
 		method: actorRequest.method,
 		headers: guardHeaders,
 		body: bodyToSend,
