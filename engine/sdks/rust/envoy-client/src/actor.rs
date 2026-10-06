@@ -8,6 +8,7 @@ use rivet_envoy_protocol as protocol;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
 use crate::connection::ws_send;
@@ -115,12 +116,27 @@ struct ActorContext {
 	ws_entries: BufferMap<WsEntry>,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	active_http_request_count: Arc<AsyncCounter>,
+	/// Cancelled when this generation is declared lost, by the engine or by the envoy itself.
+	lost: CancellationToken,
 }
 
 struct PendingStop {
 	completion_rx: oneshot::Receiver<anyhow::Result<()>>,
 	stop_code: protocol::StopCode,
 	stop_message: Option<String>,
+}
+
+const LOST_STOP_MESSAGE: &str = "envoy connection lost";
+
+impl PendingStop {
+	/// A stop that escalates to lost must still report `Stopped(Error)`, even if it started as a
+	/// graceful stop. See `begin_stop` for why `Stopped(Ok)` would destroy the actor.
+	fn mark_lost(&mut self) {
+		self.stop_code = protocol::StopCode::Error;
+		if self.stop_message.is_none() {
+			self.stop_message = Some(LOST_STOP_MESSAGE.to_string());
+		}
+	}
 }
 
 enum StopProgress {
@@ -135,8 +151,13 @@ pub fn create_actor(
 	config: protocol::ActorConfig,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
-) -> (mpsc::UnboundedSender<ToActor>, Arc<AsyncCounter>) {
+) -> (
+	mpsc::UnboundedSender<ToActor>,
+	CancellationToken,
+	Arc<AsyncCounter>,
+) {
 	let (tx, rx) = mpsc::unbounded_channel();
+	let lost = CancellationToken::new();
 	let active_http_request_count = Arc::new(AsyncCounter::new());
 	spawn_detached(actor_inner(
 		shared,
@@ -148,8 +169,9 @@ pub fn create_actor(
 		tx.clone(),
 		rx,
 		active_http_request_count.clone(),
+		lost.clone(),
 	));
-	(tx, active_http_request_count)
+	(tx, lost, active_http_request_count)
 }
 
 #[tracing::instrument(
@@ -171,6 +193,7 @@ async fn actor_inner(
 	tx: mpsc::UnboundedSender<ToActor>,
 	mut rx: mpsc::UnboundedReceiver<ToActor>,
 	active_http_request_count: Arc<AsyncCounter>,
+	lost: CancellationToken,
 ) {
 	let handle = EnvoyHandle {
 		shared: shared.clone(),
@@ -191,6 +214,7 @@ async fn actor_inner(
 		ws_entries: BufferMap::new(),
 		hibernating_requests,
 		active_http_request_count,
+		lost,
 	};
 	let mut http_request_tasks = JoinSet::new();
 	let mut pending_stop: Option<PendingStop> = None;
@@ -200,12 +224,13 @@ async fn actor_inner(
 	let start_result = shared
 		.config
 		.callbacks
-		.on_actor_start(
+		.on_actor_start_with_lost_signal(
 			handle.clone(),
 			actor_id.clone(),
 			generation,
 			config,
 			preloaded_kv,
+			ctx.lost.clone(),
 		)
 		.await;
 
@@ -290,11 +315,20 @@ async fn actor_inner(
 						command_idx,
 						reason,
 					} => {
-						if pending_stop.is_some() {
-							tracing::warn!(
-								command_idx,
-								"ignoring duplicate stop while actor teardown is in progress"
-							);
+						if let Some(pending) = pending_stop.as_mut() {
+							if matches!(reason, protocol::StopActorReason::Lost) {
+								tracing::warn!(
+									command_idx,
+									"lost stop escalates actor teardown already in progress"
+								);
+								ctx.lost.cancel();
+								pending.mark_lost();
+							} else {
+								tracing::warn!(
+									command_idx,
+									"ignoring duplicate stop while actor teardown is in progress"
+								);
+							}
 							continue;
 						}
 						if command_idx <= ctx.command_idx {
@@ -308,20 +342,23 @@ async fn actor_inner(
 						}
 					}
 					ToActor::Lost => {
-						if pending_stop.is_some() {
-							tracing::warn!(
-								"ignoring lost signal while actor teardown is in progress"
-							);
+						ctx.lost.cancel();
+						if let Some(pending) = pending_stop.as_mut() {
+							tracing::warn!("lost signal escalates actor teardown already in progress");
+							pending.mark_lost();
 							continue;
 						}
 
 						ctx.error = Some("actor lost due to timeout".to_string());
 
+						// The engine treats this generation as lost once the envoy has been
+						// disconnected past the lost threshold, so stop it the same way as an
+						// engine-sent Lost.
 						match begin_stop(
 							&mut ctx,
 							&handle,
 							&mut http_request_tasks,
-							protocol::StopActorReason::SleepIntent,
+							protocol::StopActorReason::Lost,
 						)
 						.await
 						{
@@ -447,10 +484,10 @@ async fn begin_stop(
 	// `envoy_lost_threshold`.
 	let (mut stop_code, mut stop_message) = if let Some(err) = ctx.error.clone() {
 		(protocol::StopCode::Error, Some(err))
-	} else if matches!(reason, protocol::StopActorReason::Lost) {
+	} else if matches!(reason, protocol::StopActorReason::Lost) || ctx.lost.is_cancelled() {
 		(
 			protocol::StopCode::Error,
-			Some("envoy connection lost".to_string()),
+			Some(LOST_STOP_MESSAGE.to_string()),
 		)
 	} else {
 		(protocol::StopCode::Ok, None)
@@ -540,9 +577,17 @@ fn send_stopped_event_for_result(
 
 fn send_stopped_event(
 	ctx: &mut ActorContext,
-	stop_code: protocol::StopCode,
-	stop_message: Option<String>,
+	mut stop_code: protocol::StopCode,
+	mut stop_message: Option<String>,
 ) {
+	// The lost token is cancelled synchronously before the Lost command is queued, so a graceful
+	// stop can complete after the generation was lost but before this task consumed the command.
+	// Recheck here so a lost generation never reports Stopped(Ok), which the engine treats as a
+	// destroy.
+	if ctx.lost.is_cancelled() && matches!(stop_code, protocol::StopCode::Ok) {
+		stop_code = protocol::StopCode::Error;
+		stop_message = Some(LOST_STOP_MESSAGE.to_string());
+	}
 	send_event(
 		ctx,
 		protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
@@ -1717,6 +1762,33 @@ mod tests {
 		.expect("timed out waiting for tunnel message")
 	}
 
+	async fn wait_for_stopped_code(
+		envoy_rx: &mut mpsc::UnboundedReceiver<ToEnvoyMessage>,
+	) -> protocol::StopCode {
+		tokio::time::timeout(Duration::from_secs(2), async {
+			loop {
+				let Some(msg) = envoy_rx.recv().await else {
+					panic!("envoy channel closed before stopped event");
+				};
+				let ToEnvoyMessage::SendEvents { events } = msg else {
+					continue;
+				};
+				for event in events {
+					if let protocol::Event::EventActorStateUpdate(
+						protocol::EventActorStateUpdate {
+							state: protocol::ActorState::ActorStateStopped(stopped),
+						},
+					) = event.inner
+					{
+						return stopped.code;
+					}
+				}
+			}
+		})
+		.await
+		.expect("timed out waiting for stopped event")
+	}
+
 	pub(super) async fn wait_for_stopped_event(
 		envoy_rx: &mut mpsc::UnboundedReceiver<ToEnvoyMessage>,
 	) {
@@ -1823,7 +1895,7 @@ mod tests {
 			release_fetch.clone(),
 		));
 		let (shared, mut envoy_rx) = build_shared_context(callbacks);
-		let (actor_tx, active_http_request_count) = create_actor(
+		let (actor_tx, _lost, active_http_request_count) = create_actor(
 			shared,
 			"actor-1".to_string(),
 			1,
@@ -1864,7 +1936,7 @@ mod tests {
 		let (fetch_dropped_tx, fetch_dropped_rx) = oneshot::channel();
 		let callbacks = Arc::new(TestCallbacks::hanging(fetch_started_tx, fetch_dropped_tx));
 		let (shared, mut envoy_rx) = build_shared_context(callbacks);
-		let (actor_tx, active_http_request_count) = create_actor(
+		let (actor_tx, _lost, active_http_request_count) = create_actor(
 			shared,
 			"actor-2".to_string(),
 			1,
@@ -1909,7 +1981,7 @@ mod tests {
 			stop_handle_tx: Mutex::new(Some(stop_handle_tx)),
 		});
 		let (shared, mut envoy_rx) = build_shared_context(callbacks);
-		let (actor_tx, _active_http_request_count) = create_actor(
+		let (actor_tx, _lost, _active_http_request_count) = create_actor(
 			shared,
 			"actor-3".to_string(),
 			1,
@@ -1942,7 +2014,7 @@ mod tests {
 			stop_handle_tx: Mutex::new(Some(stop_handle_tx)),
 		});
 		let (shared, mut envoy_rx) = build_shared_context(callbacks);
-		let (actor_tx, _active_http_request_count) = create_actor(
+		let (actor_tx, _lost, _active_http_request_count) = create_actor(
 			shared,
 			"actor-4".to_string(),
 			1,
@@ -1978,6 +2050,112 @@ mod tests {
 
 		assert!(stop_handle.complete(), "stop handle should complete once");
 		assert_alarm_before_stopped_event(&mut envoy_rx, Some(123)).await;
+	}
+	#[tokio::test]
+	async fn lost_signal_cancels_the_generation_token() {
+		let (stop_handle_tx, _stop_handle_rx) = oneshot::channel();
+		let callbacks = Arc::new(DeferredStopCallbacks {
+			stop_handle_tx: Mutex::new(Some(stop_handle_tx)),
+		});
+		let (shared, _envoy_rx) = build_shared_context(callbacks);
+		let (actor_tx, lost, _active_http_request_count) = create_actor(
+			shared,
+			"actor-lost-token".to_string(),
+			1,
+			actor_config(),
+			Vec::new(),
+			None,
+		);
+		assert!(!lost.is_cancelled());
+
+		actor_tx.send(ToActor::Lost).expect("failed to send lost");
+		tokio::time::timeout(Duration::from_secs(2), lost.cancelled())
+			.await
+			.expect("lost signal should cancel the generation token");
+	}
+
+	#[tokio::test]
+	async fn lost_during_graceful_stop_reports_stopped_error() {
+		let (stop_handle_tx, stop_handle_rx) = oneshot::channel();
+		let callbacks = Arc::new(DeferredStopCallbacks {
+			stop_handle_tx: Mutex::new(Some(stop_handle_tx)),
+		});
+		let (shared, mut envoy_rx) = build_shared_context(callbacks);
+		let (actor_tx, lost, _active_http_request_count) = create_actor(
+			shared,
+			"actor-lost-escalation".to_string(),
+			1,
+			actor_config(),
+			Vec::new(),
+			None,
+		);
+
+		actor_tx
+			.send(ToActor::Stop {
+				command_idx: 1,
+				reason: protocol::StopActorReason::SleepIntent,
+			})
+			.expect("failed to send sleep stop");
+		let stop_handle = tokio::time::timeout(Duration::from_secs(2), stop_handle_rx)
+			.await
+			.expect("timed out waiting for stop handle")
+			.expect("stop handle sender dropped");
+
+		// The engine gives up on the generation while its graceful sleep is still running.
+		actor_tx
+			.send(ToActor::Stop {
+				command_idx: 2,
+				reason: protocol::StopActorReason::Lost,
+			})
+			.expect("failed to send lost stop");
+		tokio::time::timeout(Duration::from_secs(2), lost.cancelled())
+			.await
+			.expect("lost stop should cancel the generation token");
+
+		assert!(stop_handle.complete(), "stop handle should complete once");
+		assert_eq!(
+			wait_for_stopped_code(&mut envoy_rx).await,
+			protocol::StopCode::Error,
+			"an escalated stop must not report Stopped(Ok), which the engine treats as a destroy"
+		);
+	}
+
+	#[tokio::test]
+	async fn graceful_stop_completing_before_lost_command_is_consumed_reports_error() {
+		let (stop_handle_tx, stop_handle_rx) = oneshot::channel();
+		let callbacks = Arc::new(DeferredStopCallbacks {
+			stop_handle_tx: Mutex::new(Some(stop_handle_tx)),
+		});
+		let (shared, mut envoy_rx) = build_shared_context(callbacks);
+		let (actor_tx, lost, _active_http_request_count) = create_actor(
+			shared,
+			"actor-lost-race".to_string(),
+			1,
+			actor_config(),
+			Vec::new(),
+			None,
+		);
+
+		actor_tx
+			.send(ToActor::Stop {
+				command_idx: 1,
+				reason: protocol::StopActorReason::SleepIntent,
+			})
+			.expect("failed to send sleep stop");
+		let stop_handle = tokio::time::timeout(Duration::from_secs(2), stop_handle_rx)
+			.await
+			.expect("timed out waiting for stop handle")
+			.expect("stop handle sender dropped");
+
+		// The command path cancels the token before queueing Lost. Complete the graceful stop in
+		// that window, before the actor task sees the Lost command.
+		lost.cancel();
+		assert!(stop_handle.complete(), "stop handle should complete once");
+		assert_eq!(
+			wait_for_stopped_code(&mut envoy_rx).await,
+			protocol::StopCode::Error,
+			"a lost generation must not report Stopped(Ok) even if the Lost command was not consumed"
+		);
 	}
 }
 

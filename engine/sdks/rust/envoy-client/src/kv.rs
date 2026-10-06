@@ -1,5 +1,6 @@
 use rivet_envoy_protocol as protocol;
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 
 use crate::connection::ws_send;
 use crate::envoy::EnvoyContext;
@@ -9,6 +10,8 @@ pub struct KvRequestEntry {
 	pub actor_id: String,
 	pub data: protocol::KvRequestData,
 	pub response_tx: oneshot::Sender<anyhow::Result<protocol::KvResponseData>>,
+	/// Lost signal of the requesting generation. Checked right before transmission.
+	pub lost: Option<CancellationToken>,
 	pub sent: bool,
 	pub timestamp: crate::time::Instant,
 }
@@ -20,6 +23,7 @@ pub async fn handle_kv_request(
 	ctx: &mut EnvoyContext,
 	actor_id: String,
 	data: protocol::KvRequestData,
+	lost: Option<CancellationToken>,
 	response_tx: oneshot::Sender<anyhow::Result<protocol::KvResponseData>>,
 ) {
 	let request_id = ctx.next_kv_request_id;
@@ -29,6 +33,7 @@ pub async fn handle_kv_request(
 		actor_id,
 		data,
 		response_tx,
+		lost,
 		sent: false,
 		timestamp: crate::time::Instant::now(),
 	};
@@ -73,6 +78,21 @@ pub async fn send_single_kv_request(ctx: &mut EnvoyContext, request_id: u32) {
 	let request = ctx.kv_requests.get_mut(&request_id);
 	let Some(request) = request else { return };
 	if request.sent {
+		return;
+	}
+	// A request queued before its generation was declared lost must not reach storage, even
+	// when it is resent after a reconnect.
+	if request
+		.lost
+		.as_ref()
+		.is_some_and(CancellationToken::is_cancelled)
+	{
+		if let Some(request) = ctx.kv_requests.remove(&request_id) {
+			METRICS.kv_requests_inflight.dec();
+			let _ = request.response_tx.send(Err(anyhow::anyhow!(
+				"actor generation was declared lost; kv request dropped before sending"
+			)));
+		}
 		return;
 	}
 
