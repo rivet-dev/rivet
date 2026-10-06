@@ -72,7 +72,7 @@ describe("sendHttpRequestToGateway", () => {
 		expect((await reader?.read())?.done).toBe(true);
 	});
 
-	test("uses a custom fetch instead of the global fetch", async () => {
+	test("uses a custom fetch and forwards the request credentials", async () => {
 		const fetchImpl = vi.fn(async () => new Response("ok"));
 		vi.stubGlobal("fetch", vi.fn());
 
@@ -82,11 +82,18 @@ describe("sendHttpRequestToGateway", () => {
 				fetch: fetchImpl,
 			} as ClientConfig,
 			"http://gateway.test/actors/actor-id",
-			new Request("http://actor/request", { method: "POST", body: "hi" }),
+			new Request("http://actor/request", {
+				method: "POST",
+				body: "hi",
+				credentials: "include",
+			}),
 		);
 
 		expect(fetchImpl).toHaveBeenCalledOnce();
 		expect(vi.mocked(fetch)).not.toHaveBeenCalled();
-		expect(fetchImpl.mock.calls[0]?.[1]).toMatchObject({ method: "POST" });
+		expect(fetchImpl.mock.calls[0]?.[1]).toMatchObject({
+			method: "POST",
+			credentials: "include",
+		});
 	});
 });
