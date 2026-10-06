@@ -26,7 +26,7 @@ Standard actor endpoints (health, actions, requests) and inspector endpoints hav
 
 | Environment | Authentication |
 |---|---|
-| **Local development** | No authentication required. |
+| **Local development** | The local engine requires its admin token. It is `default` unless you set `RIVET__AUTH__ADMIN_TOKEN` before starting the server. |
 | **Self-hosted engine** | The Rivet control plane handles authentication at the gateway level. |
 | **Rivet Cloud** | Authentication is handled by the Rivet Cloud platform at the gateway level. |
 

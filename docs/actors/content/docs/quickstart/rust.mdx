@@ -138,6 +138,10 @@ Your server now connects to the Rivet control plane on `http://localhost:6420`. 
 Visit [http://localhost:6420](http://localhost:6420) in your browser (or point your AI agent at it) to open the Rivet developer tools and inspect your actors live.
 
 <Note>
+If the developer tools ask for an admin token, enter `default`. This is the local engine's admin token unless you set `RIVET__AUTH__ADMIN_TOKEN` before starting the server.
+</Note>
+
+<Note>
 Already have a control plane binary? Set `RIVET_ENGINE_BINARY_PATH=/path/to/rivet-engine` to point at it instead. If you are working inside the [Rivet monorepo](https://github.com/rivet-dev/rivet), a local `cargo build -p rivet-engine` is discovered automatically from `target/debug`.
 </Note>
 
