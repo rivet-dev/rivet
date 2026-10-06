@@ -1,3 +1,4 @@
+import { describe, expectTypeOf, it, test } from "@effect/vitest";
 import { Action, Actor, Client, type State } from "@rivetkit/effect";
 import {
 	Context,
@@ -8,7 +9,6 @@ import {
 } from "effect";
 import type { RawAccess } from "rivetkit/db";
 import { db } from "rivetkit/db";
-import { describe, expectTypeOf, it, test } from "@effect/vitest";
 
 class SomeDep extends Context.Service<SomeDep, { readonly x: number }>()(
 	"SomeDep",
@@ -43,7 +43,7 @@ const TagsCsv = Schema.String.pipe(
 const ServiceDependentNumber = Schema.Number.pipe(
 	Schema.decodeTo(
 		Schema.Number,
-		SchemaTransformation.transformOrFail({
+		SchemaTransformation.transformEffect({
 			decode: (n: number) =>
 				Effect.gen(function* () {
 					const dep = yield* SomeDep;
@@ -58,7 +58,7 @@ const ServiceDependentNumber = Schema.Number.pipe(
 	),
 );
 
-class ServiceDependentError extends Schema.TaggedErrorClass<ServiceDependentError>()(
+class ServiceDependentError extends Schema.TaggedError<ServiceDependentError>()(
 	"ServiceDependentError",
 	{
 		limit: ServiceDependentNumber,

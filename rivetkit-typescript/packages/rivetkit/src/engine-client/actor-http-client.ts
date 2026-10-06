@@ -38,11 +38,19 @@ export async function sendHttpRequestToGateway(
 		}
 	}
 
-	return fetch(gatewayUrl, {
+	const fetchImpl = runConfig.fetch ?? fetch;
+	return fetchImpl(gatewayUrl, {
 		method: actorRequest.method,
 		headers: guardHeaders,
 		body: bodyToSend,
 		signal: actorRequest.signal,
+		mode: actorRequest.mode,
+		credentials: actorRequest.credentials,
+		redirect: actorRequest.redirect,
+		referrer: actorRequest.referrer,
+		referrerPolicy: actorRequest.referrerPolicy,
+		integrity: actorRequest.integrity,
+		keepalive: actorRequest.keepalive,
 	});
 }
 

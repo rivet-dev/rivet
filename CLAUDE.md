@@ -34,6 +34,8 @@ When talking about "Rivet Actors" make sure to capitalize "Rivet Actor" as a pro
 
 ## Commands
 
+- Before running a repository task, check the root `justfile` for a matching recipe and use it when available.
+
 ### Build + test
 
 ```bash

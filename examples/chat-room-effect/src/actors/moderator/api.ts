@@ -1,7 +1,7 @@
 import { Action, Actor } from "@rivetkit/effect";
 import { Schema } from "effect";
 
-export class BannedWordsError extends Schema.TaggedErrorClass<BannedWordsError>()(
+export class BannedWordsError extends Schema.TaggedError<BannedWordsError>()(
 	"BannedWordsError",
 	{
 		message: Schema.String,

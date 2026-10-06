@@ -6,7 +6,7 @@ import { Schema } from "effect";
 // A typed, schema-validated error. It travels through the action's error
 // channel and arrives on the caller as a real tagged instance that can be
 // matched with `Effect.catchTag`, not a string or an opaque exception.
-export class NegativeAmountError extends Schema.TaggedErrorClass<NegativeAmountError>()(
+export class NegativeAmountError extends Schema.TaggedError<NegativeAmountError>()(
 	"NegativeAmountError",
 	{
 		amount: Schema.Number,

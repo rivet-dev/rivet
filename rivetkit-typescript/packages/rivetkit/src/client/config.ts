@@ -88,6 +88,9 @@ export const ClientConfigSchemaBase = z.object({
 	// `proxyWebSocket`
 	getUpgradeWebSocket: z.custom<GetUpgradeWebSocket>().optional(),
 
+	/** Replaces global fetch for actor HTTP gateway requests. */
+	fetch: z.custom<typeof globalThis.fetch>().optional(),
+
 	/** Whether to automatically perform health checks when the client is created. */
 	disableMetadataLookup: z.boolean().optional().default(false),
 

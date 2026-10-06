@@ -1,6 +1,6 @@
 import { NodeRuntime } from "@effect/platform-node";
 import { Client } from "@rivetkit/effect";
-import { Effect, Random } from "effect";
+import { Effect } from "effect";
 import {
 	type BannedWordsError,
 	ChatRoom,
@@ -11,9 +11,7 @@ import { TelemetryLayer } from "./telemetry.ts";
 const program = Effect.gen(function* () {
 	// `Actor.client` yields a typed accessor backed by the Effect SDK client layer.
 	const chatRoomClient = yield* ChatRoom.client;
-	const room = chatRoomClient.getOrCreate(
-		`chatroom_${yield* Random.nextUUIDv4}`,
-	);
+	const room = chatRoomClient.getOrCreate(`chatroom_${crypto.randomUUID()}`);
 
 	yield* Effect.addFinalizer(
 		Effect.fnUntraced(function* () {

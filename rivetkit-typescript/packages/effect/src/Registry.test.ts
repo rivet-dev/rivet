@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Action, Actor, Registry, RivetLogger } from "@rivetkit/effect";
 import { Effect, Layer } from "effect";
-import { HttpEffect } from "effect/unstable/http";
+import { HttpEffect } from "effect/http";
 import * as RivetkitLog from "rivetkit/log";
 import { vi } from "vitest";
 

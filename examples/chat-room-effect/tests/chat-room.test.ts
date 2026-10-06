@@ -1,21 +1,21 @@
 import { assert, layer } from "@effect/vitest";
-import { Registry } from "@rivetkit/effect";
-import { Effect, Layer, Random } from "effect";
+import { Client, Registry } from "@rivetkit/effect";
+import { Effect, Layer } from "effect";
 import { ChatRoom, MemberNotInRoomError } from "../src/actors/chat-room/api.ts";
 import { ChatRoomLive, RoomPolicyLive } from "../src/actors/chat-room/live.ts";
 import { BannedWordsError } from "../src/actors/moderator/api.ts";
 import { ModeratorLive } from "../src/actors/moderator/live.ts";
 
-// `Registry.test` boots the actors in-process against a local engine. With no
-// endpoint configured on `Registry.layer`, it auto-spawns a `rivet-engine` for
-// the duration of the suite, the same way `setupTest` does for the other
-// examples. It also provides `Client`, so `ChatRoom.client` resolves here.
+// `Registry.test` boots the actors in-process against a local engine. Its
+// client serves the tests; the chat room also needs its own client to call the
+// moderator actor. Point that client at the same engine port as the test runtime.
+const endpoint = `http://127.0.0.1:${process.env.RIVET_RUN_ENGINE_PORT ?? "6420"}`;
 const TestLayer = Registry.test.pipe(
 	Layer.provideMerge(
 		Layer.mergeAll(
 			ModeratorLive,
 			ChatRoomLive.pipe(Layer.provide(RoomPolicyLive)),
-		),
+		).pipe(Layer.provide(Client.layer({ endpoint }))),
 	),
 	Layer.provide(Registry.layer()),
 );
@@ -23,7 +23,7 @@ const TestLayer = Registry.test.pipe(
 // A fresh room key per test keeps actor state from bleeding across cases.
 const freshRoom = Effect.gen(function* () {
 	const client = yield* ChatRoom.client;
-	return client.getOrCreate(`chatroom_${yield* Random.nextUUIDv4}`);
+	return client.getOrCreate(`chatroom_${crypto.randomUUID()}`);
 });
 
 layer(TestLayer)("chat-room-effect", (it) => {

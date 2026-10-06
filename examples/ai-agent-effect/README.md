@@ -30,7 +30,7 @@ npm run client
 ## Features
 
 - **Persistent conversation memory**: Every user and assistant turn is stored in persisted actor state (a `Schema.Array` of role/content messages), so the model sees the full history on each call, even after the actor sleeps or restarts
-- **Effect AI integration**: The agent calls `LanguageModel.generateText` from `effect/unstable/ai` with the running history as the prompt
+- **Effect AI integration**: The agent calls `LanguageModel.generateText` from `effect/ai` with the running history as the prompt
 - **Swappable model via Layer**: The actor requires the `LanguageModel` service but never constructs it. The concrete model is provided as an Effect `Layer` where the actor is composed: a real OpenAI model in `dev`, a mock model in tests
 - **Effect-native actor**: Defined with `Actor.make` and implemented with `toLayer`, returning action handlers from an Effect wake scope
 - **Typed errors across the wire**: `SendMessage` declares an `EmptyMessageError` that arrives on the caller as a real tagged instance, caught with `Effect.catchTag`
