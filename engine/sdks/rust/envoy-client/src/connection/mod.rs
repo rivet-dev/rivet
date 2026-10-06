@@ -64,6 +64,9 @@ pub(crate) async fn install_connection_with_http(
 		.next_connection_session
 		.fetch_add(1, Ordering::AcqRel)
 		.saturating_add(1);
+	// A ping from an earlier connection says nothing about this one. Clearing it keeps the engine
+	// ping silence check disabled until this connection receives its first ping.
+	shared.last_ping_ts.store(0, Ordering::Release);
 	shared.connection_session.store(session, Ordering::Release);
 	*guard = Some(tx);
 	*http_guard = Some(HttpConnectionTx {
@@ -237,14 +240,26 @@ async fn forward_to_envoy(shared: &SharedContext, session: u64, message: protoco
 
 	match message {
 		protocol::ToEnvoy::ToEnvoyPing(ping) => {
-			shared
+			let previous_ping_ts = shared
 				.last_ping_ts
-				.store(crate::time::now_millis(), Ordering::Release);
+				.swap(crate::time::now_millis(), Ordering::AcqRel);
 			ws_send(
 				shared,
 				protocol::ToRivet::ToRivetPong(protocol::ToRivetPong { ts: ping.ts }),
 			)
 			.await;
+			// The envoy loop does not arm the engine ping silence check while no ping is
+			// recorded. Wake it on the first ping so the check arms without waiting for an
+			// unrelated event.
+			if previous_ping_ts == 0 {
+				let _ = crate::envoy::send_to_envoy_tx(
+					shared,
+					ToEnvoyMessage::ConnMessage {
+						message: protocol::ToEnvoy::ToEnvoyPing(ping),
+						session,
+					},
+				);
+			}
 		}
 		other => {
 			let _ = crate::envoy::send_to_envoy_tx(

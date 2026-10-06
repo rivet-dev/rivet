@@ -771,7 +771,8 @@ async fn handle_conn_message(
 			handle_tunnel_message(ctx, session, tunnel_msg).await;
 		}
 		protocol::ToEnvoy::ToEnvoyPing(_) => {
-			// Should be handled by connection task
+			// The connection task records pings. It forwards only the first ping of a connection,
+			// so this loop takes a turn and arms the engine ping silence check.
 		}
 	}
 
