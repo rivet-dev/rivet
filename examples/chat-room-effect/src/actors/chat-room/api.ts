@@ -4,7 +4,7 @@ import { BannedWordsError } from "../moderator/api.ts";
 
 // --- Errors ---
 
-export class MemberNotInRoomError extends Schema.TaggedErrorClass<MemberNotInRoomError>()(
+export class MemberNotInRoomError extends Schema.TaggedError<MemberNotInRoomError>()(
 	"MemberNotInRoomError",
 	{
 		name: Schema.String,

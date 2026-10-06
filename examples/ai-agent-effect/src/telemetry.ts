@@ -1,7 +1,7 @@
-import { RivetLogger } from "@rivetkit/effect";
 import { NodeHttpClient } from "@effect/platform-node";
+import { RivetLogger } from "@rivetkit/effect";
 import { Layer } from "effect";
-import { OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
+import { OtlpSerialization, OtlpTracer } from "effect/observability";
 import { pino } from "pino";
 
 // This layer adds a custom Pino logger for Effect.log* calls and the underlying

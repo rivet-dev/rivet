@@ -5,9 +5,9 @@ import {
 	type HttpServerError,
 	type HttpServerRequest,
 	type HttpServerResponse,
-} from "effect/unstable/http";
+} from "effect/http";
 import * as Rivetkit from "rivetkit";
-import * as RivetkitLog from "rivetkit/log";
+import type * as RivetkitLog from "rivetkit/log";
 import * as Client from "./Client.ts";
 import { BaseLogger, getOrCreateBaseLogger } from "./internal/logging.ts";
 import * as RivetLogger from "./RivetLogger.ts";

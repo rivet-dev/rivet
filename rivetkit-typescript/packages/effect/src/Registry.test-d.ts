@@ -4,7 +4,7 @@ import type {
 	HttpServerError,
 	HttpServerRequest,
 	HttpServerResponse,
-} from "effect/unstable/http";
+} from "effect/http";
 import { describe, expectTypeOf, test } from "vitest";
 
 const TestActor = Actor.make("TestActor", {

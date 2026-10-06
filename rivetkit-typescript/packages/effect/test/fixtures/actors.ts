@@ -4,7 +4,6 @@ import {
 	DateTime,
 	Effect,
 	Layer,
-	Option,
 	Ref,
 	Schema,
 	SchemaIssue,
@@ -14,7 +13,7 @@ import { db } from "rivetkit/db";
 
 // --- Counter ---
 
-export class CounterOverflowError extends Schema.TaggedErrorClass<CounterOverflowError>()(
+export class CounterOverflowError extends Schema.TaggedError<CounterOverflowError>()(
 	"CounterOverflowError",
 	{
 		limit: Schema.Number,
@@ -90,7 +89,7 @@ export const Compute = Action.make("Compute", {
 });
 
 // Service that the codec schema below depends on. Yielding it from
-// inside a `transformOrFail` puts `Multiplier` into the schema's
+// inside a `transformEffect` puts `Multiplier` into the schema's
 // `DecodingServices` / `EncodingServices`, which in turn surfaces in
 // `Action.ServicesServer` / `Action.ServicesClient` for any action
 // referencing the codec.
@@ -106,7 +105,7 @@ export class Multiplier extends Context.Service<
 const ScaledNumber = Schema.Number.pipe(
 	Schema.decodeTo(
 		Schema.Number,
-		SchemaTransformation.transformOrFail({
+		SchemaTransformation.transformEffect({
 			decode: (n: number) =>
 				Effect.gen(function* () {
 					const m = yield* Multiplier;
@@ -121,7 +120,7 @@ const ScaledNumber = Schema.Number.pipe(
 	),
 );
 
-export class ScaledOverflowError extends Schema.TaggedErrorClass<ScaledOverflowError>()(
+export class ScaledOverflowError extends Schema.TaggedError<ScaledOverflowError>()(
 	"ScaledOverflowError",
 	{
 		limit: ScaledNumber,
@@ -672,17 +671,17 @@ export const WakeDecodeFailLive = WakeDecodeFail.toLayer(
 			schema: Schema.Number.pipe(
 				Schema.decodeTo(
 					Schema.Number,
-					SchemaTransformation.transformOrFail({
+					SchemaTransformation.transformEffect({
 						decode: (n: number) =>
 							n >= 0
 								? Effect.succeed(n)
 								: Effect.fail(
 										new SchemaIssue.InvalidValue(
-											Option.some(n),
 											{
 												message:
 													"decode rejects negative",
 											},
+											n,
 										),
 									),
 						encode: (n: number) => Effect.succeed(n),

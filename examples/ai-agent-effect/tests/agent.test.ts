@@ -2,15 +2,15 @@ import { LLMock } from "@copilotkit/llmock";
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { assert, layer } from "@effect/vitest";
 import { Registry } from "@rivetkit/effect";
-import { Effect, Layer, Random, Redacted } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { Effect, Layer, Redacted } from "effect";
+import { FetchHttpClient } from "effect/http";
 import { Agent } from "../src/actors/agent/api.ts";
 import { AgentLive } from "../src/actors/agent/live.ts";
 
 // Per repo rules there is no module mocking: a real OpenAI-compatible mock LLM
 // server runs in-process and the Effect AI provider is pointed at its base URL.
 //
-// `@effect/ai-openai` (effect 4 beta) speaks the OpenAI Responses API
+// `@effect/ai-openai` speaks the OpenAI Responses API
 // (`POST /v1/responses`), so we mount a small real HTTP handler that returns a
 // Responses-shaped payload. The agent's memory is proven by sending two turns
 // and asserting both the reply and the persisted history.
@@ -111,7 +111,7 @@ const TestLayer = Registry.test.pipe(
 // A fresh agent key per test keeps actor state from bleeding across cases.
 const freshAgent = Effect.gen(function* () {
 	const client = yield* Agent.client;
-	return client.getOrCreate(`agent_${yield* Random.nextUUIDv4}`);
+	return client.getOrCreate(`agent_${crypto.randomUUID()}`);
 });
 
 layer(TestLayer)("ai-agent-effect", (it) => {
