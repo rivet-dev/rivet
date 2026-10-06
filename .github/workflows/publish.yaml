@@ -17,8 +17,8 @@
 #                                       paths use `{sha}-release` so they never overwrite the
 #                                       debug preview of the same commit
 #
-# Selective preview builds: the `targets` input (all | rivetkit | container-runner
-# | engine | cli) narrows a preview to one target family so unrelated builds are
+# Selective preview builds: the `targets` input (all | rivetkit | engine |
+# cli) narrows a preview to one target family so unrelated builds are
 # skipped. The `context` job resolves it into `build_targets` / `build_wasm` /
 # `build_docker` outputs that gate the matrix and jobs. Skipped npm families have
 # their inbound dependency (rivetkit-family → @rivetkit/engine-cli) repinned to the
@@ -50,7 +50,6 @@ on:
         options:
           - all
           - rivetkit
-          - container-runner
           - engine
           - cli
       preview_name:
@@ -193,23 +192,6 @@ jobs:
             upload_prefix: engine
             platform: windows-x64
             release_only: true
-          # Container runner binary: static musl builds only. The runner only ever
-          # runs inside Linux containers, where users curl the released binary into
-          # their image.
-          - name: container-runner (linux-x64-musl)
-            build_target: container-runner
-            docker: docker/build/linux-x64-musl.Dockerfile
-            artifact: rivet-container-runner-x86_64-unknown-linux-musl
-            upload_prefix: container-runner
-            platform: linux-x64-musl
-            release_only: false
-          - name: container-runner (linux-arm64-musl)
-            build_target: container-runner
-            docker: docker/build/linux-arm64-musl.Dockerfile
-            artifact: rivet-container-runner-aarch64-unknown-linux-musl
-            upload_prefix: container-runner
-            platform: linux-arm64-musl
-            release_only: false
           # Rivet Cloud CLI: 4 platforms for preview, 5 for release. The publish
           # job also places the matching rivet-engine artifact next to the CLI
           # binary so `rivet dev` works from the npm package.
@@ -477,13 +459,6 @@ jobs:
           path: cli-artifacts
           pattern: cli-*
           merge-multiple: true
-      - name: Download container runner artifacts
-        if: contains(needs.context.outputs.targets, 'container-runner')
-        uses: actions/download-artifact@v4
-        with:
-          path: container-runner-artifacts
-          pattern: container-runner-*
-          merge-multiple: true
       - name: Download wasm package artifact
         if: needs.context.outputs.build_wasm == 'true'
         uses: actions/download-artifact@v4
@@ -650,13 +625,6 @@ jobs:
           R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
         run: pnpm --filter=publish exec tsx src/ci/bin.ts upload-r2 --source "$GITHUB_WORKSPACE/engine-artifacts" --sha ${{ needs.context.outputs.sha }}
 
-      - name: Upload container runner binaries to R2
-        if: contains(needs.context.outputs.targets, 'container-runner')
-        env:
-          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
-          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
-        run: pnpm --filter=publish exec tsx src/ci/bin.ts upload-r2 --source "$GITHUB_WORKSPACE/container-runner-artifacts" --sha ${{ needs.context.outputs.sha }} --name container-runner
-
       - name: Copy R2 artifacts to version path
         if: needs.context.outputs.trigger == 'release'
         env:
@@ -667,11 +635,6 @@ jobs:
             --sha ${{ needs.context.outputs.sha }} \
             --version ${{ needs.context.outputs.version }} \
             --latest ${{ needs.context.outputs.latest }}
-          pnpm --filter=publish exec tsx src/ci/bin.ts copy-r2 \
-            --sha ${{ needs.context.outputs.sha }} \
-            --version ${{ needs.context.outputs.version }} \
-            --latest ${{ needs.context.outputs.latest }} \
-            --name container-runner
 
       # The Inspector UI lives in frontend/dist, outside the rivetkit-core
       # crate, so it must be built and staged into the crate before packaging.

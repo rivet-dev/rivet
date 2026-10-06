@@ -1,5 +1,5 @@
-//! Tests for `EnvoyHandle::wait_actors_drained`, used by the container-runner to flush
-//! an in-flight actor stop before the envoy announces it is going away.
+//! Tests for `EnvoyHandle::wait_actors_drained`, which flushes an in-flight actor stop
+//! before the envoy announces it is going away.
 
 use std::collections::HashMap;
 use std::sync::Arc;

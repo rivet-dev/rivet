@@ -76,11 +76,6 @@ RUN --mount=type=cache,id=cargo-registry-linux-arm64-musl,target=/usr/local/carg
             cargo build -p rivet-cli --bin rivet $CARGO_FLAG --target aarch64-unknown-linux-musl && \
         /opt/aarch64-linux-musl-cross/bin/aarch64-linux-musl-strip target/aarch64-unknown-linux-musl/$PROFILE_DIR/rivet && \
         cp target/aarch64-unknown-linux-musl/$PROFILE_DIR/rivet /artifacts/rivet-aarch64-unknown-linux-musl; \
-    elif [ "$BUILD_TARGET" = "container-runner" ]; then \
-        RUSTFLAGS="-C target-feature=+crt-static -C link-arg=-static-libgcc" \
-            cargo build -p rivet-container-runner --bin rivet-container-runner $CARGO_FLAG --target aarch64-unknown-linux-musl && \
-        /opt/aarch64-linux-musl-cross/bin/aarch64-linux-musl-strip target/aarch64-unknown-linux-musl/$PROFILE_DIR/rivet-container-runner && \
-        cp target/aarch64-unknown-linux-musl/$PROFILE_DIR/rivet-container-runner /artifacts/rivet-container-runner-aarch64-unknown-linux-musl; \
     elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
         cd rivetkit-typescript/packages/rivetkit-napi && \
         RUSTFLAGS="--cfg tokio_unstable -C target-feature=-crt-static" \

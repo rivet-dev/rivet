@@ -3,10 +3,6 @@
 
 * text eol=lf
 
-# Vendored Unity packages ship CRLF upstream and are committed with raw bytes
-# via jj, so keep them out of eol normalization to avoid permanent churn.
-container-runner/examples/unity-demo/Packages/** -text
-
 *.png binary
 *.jpg binary
 *.jpeg binary
@@ -46,7 +42,6 @@ website/**/*.tsx linguist-generated=true
 website/**/*.js linguist-generated=true
 website/**/*.jsx linguist-generated=true
 examples/**/* linguist-generated=true
-container-runner/examples/unity-demo/**/*.cs linguist-generated=true
 
 frontend/**/*.ts linguist-generated=true
 frontend/**/*.tsx linguist-generated=true

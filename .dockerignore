@@ -55,16 +55,3 @@ LICENSE*
 !shared/typescript/*/dist/
 
 
-# Container runner examples: e2e local state + Unity editor artifacts. The Unity Linux
-# server build stays included: Dockerfile.unity copies Builds/ServerLinux/ into the image.
-container-runner/examples/e2e-test/.bin/
-container-runner/examples/e2e-test/.host-data/
-container-runner/examples/e2e-test/.host-logs/
-container-runner/examples/e2e-test/.rivet-data/
-container-runner/examples/unity-demo/Library/
-container-runner/examples/unity-demo/Temp/
-container-runner/examples/unity-demo/Obj/
-container-runner/examples/unity-demo/Logs/
-container-runner/examples/unity-demo/UserSettings/
-container-runner/examples/unity-demo/Builds/DemoMac/
-container-runner/examples/unity-demo/Builds/ServerMac/

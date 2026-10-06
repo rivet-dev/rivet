@@ -319,7 +319,6 @@ No. Rivet only needs a standard process that connects to the control plane over 
 | ↳ [Gasoline](./engine/packages/gasoline) | Durable execution engine |
 | ↳ [Guard](./engine/packages/guard) | Traffic routing proxy |
 | ↳ [Epoxy](./engine/packages/epoxy) | Multi-region KV store (EPaxos) |
-| [Container Runner](./container-runner) | Runs Actors as containers |
 | [Dashboard](./frontend) | Inspector for debugging Actors |
 | [Documentation](./docs) | Source for [rivet.dev/actors/docs](https://www.rivet.dev/actors/docs) |
 | [Examples](./examples) | Runnable examples |
