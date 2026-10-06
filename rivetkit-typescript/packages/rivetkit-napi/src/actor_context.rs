@@ -608,6 +608,11 @@ impl ActorContext {
 	}
 
 	#[napi]
+	pub fn generation(&self) -> Option<u32> {
+		self.inner.generation()
+	}
+
+	#[napi]
 	pub async fn wait_for_destroy_completion(&self) {
 		self.inner.wait_for_destroy_completion_public().await;
 	}

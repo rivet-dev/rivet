@@ -1281,6 +1281,11 @@ impl WasmActorContext {
 		self.inner.actor_id().to_owned()
 	}
 
+	#[wasm_bindgen(js_name = generation)]
+	pub fn generation(&self) -> Option<u32> {
+		self.inner.generation()
+	}
+
 	#[wasm_bindgen]
 	pub fn name(&self) -> String {
 		self.inner.name().to_owned()

@@ -2963,6 +2963,10 @@ export class ActorContextHandleAdapter {
 		return callNativeSync(() => this.#runtime.actorId(this.#ctx));
 	}
 
+	get actorGeneration(): number | undefined {
+		return callNativeSync(() => this.#runtime.actorGeneration(this.#ctx));
+	}
+
 	get name(): string {
 		return callNativeSync(() => this.#runtime.actorName(this.#ctx));
 	}
@@ -3658,6 +3662,14 @@ class NativeWorkflowRuntimeAdapter {
 	#onMessagesReceived: () => void;
 	#completions = new Map<string, (response?: unknown) => Promise<void>>();
 
+	/**
+	 * Actor generation, used to keep workflow registrations of different generations apart. Read
+	 * lazily because most contexts never run a workflow.
+	 */
+	get generation(): number | undefined {
+		return this.#ctx.actorGeneration;
+	}
+
 	readonly id: string;
 	readonly driver: {
 		kvBatchGet: (
@@ -4104,9 +4116,14 @@ export function buildNativeFactory(
 		const actorId = callNativeSync(() => runtime.actorId(ctx));
 		const restart = () =>
 			callNativeSync(() => runtime.actorRestartRunHandler(ctx));
-		return (runHandlerCoordinator?.getInspector(actorId, restart)
-			?.workflow ??
-			getRunInspectorConfig(config.run, actorId)?.workflow) as
+		const actorGeneration = callNativeSync(() =>
+			runtime.actorGeneration(ctx),
+		);
+		return (runHandlerCoordinator?.getInspector(
+			actorId,
+			restart,
+			actorGeneration,
+		)?.workflow ?? getRunInspectorConfig(config.run, actorId)?.workflow) as
 			| NativeWorkflowInspectorConfig
 			| undefined;
 	};
@@ -4824,7 +4841,10 @@ export function buildNativeFactory(
 							saveActorState,
 						);
 					} finally {
-						runHandlerCoordinator?.destroy(actorId);
+						runHandlerCoordinator?.destroy(
+							actorId,
+							callNativeSync(() => runtime.actorGeneration(ctx)),
+						);
 						disposeRunInspector(config.run, actorId);
 						await actorCtx.dispose();
 					}
@@ -4838,7 +4858,10 @@ export function buildNativeFactory(
 				const actorId = callNativeSync(() => runtime.actorId(ctx));
 				// Close run control before user cleanup so replay cannot race actor
 				// destruction. Recreating this actor id receives a fresh controller.
-				runHandlerCoordinator?.destroy(actorId);
+				runHandlerCoordinator?.destroy(
+					actorId,
+					callNativeSync(() => runtime.actorGeneration(ctx)),
+				);
 				disposeRunInspector(config.run, actorId);
 				try {
 					if (typeof config.onDestroy === "function") {
@@ -5349,6 +5372,7 @@ export function buildNativeFactory(
 									runtime.actorRestartRunHandler(ctx),
 								),
 							executeRun,
+							callNativeSync(() => runtime.actorGeneration(ctx)),
 						);
 						// Only a start suppressed behind a failed replay must preserve a
 						// consumed durable wake. Closed actors must remain closed.

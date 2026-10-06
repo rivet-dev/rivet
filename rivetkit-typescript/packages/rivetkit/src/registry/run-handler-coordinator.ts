@@ -11,6 +11,8 @@ import { RivetError } from "@/actor/errors";
 type RunHandler = ((...args: any[]) => any) | { run: (...args: any[]) => any };
 
 interface ActorRunState {
+	/** Actor generation that owns this state, when the runtime reports one. */
+	actorGeneration: number | undefined;
 	active: boolean;
 	closed: boolean;
 	exclusive: boolean;
@@ -46,6 +48,26 @@ function notifyStateChanged(state: ActorRunState): void {
 	}
 }
 
+function createRunState(actorGeneration: number | undefined): ActorRunState {
+	return {
+		actorGeneration,
+		active: false,
+		closed: false,
+		exclusive: false,
+		exclusiveGeneration: 0,
+		inspectorInitialized: false,
+		queued: 0,
+		waiters: new Set(),
+	};
+}
+
+function closeRunState(state: ActorRunState): void {
+	state.closed = true;
+	state.inspector?.dispose?.();
+	state.inspector = undefined;
+	notifyStateChanged(state);
+}
+
 function waitForStateChange(state: ActorRunState): Promise<void> {
 	return new Promise((resolve) => {
 		state.waiters.add(resolve);
@@ -69,8 +91,14 @@ export class RunHandlerCoordinator {
 		actorId: string,
 		restart: () => void | Promise<void>,
 		callback: () => void | Promise<void>,
+		actorGeneration?: number,
 	): Promise<RunHandlerOutcome> {
-		const state = this.#getOrCreate(actorId);
+		const state = this.#getOrCreate(actorId, actorGeneration);
+		// Closed state belongs to a superseded generation. It must not initialize an inspector,
+		// which would rebind the workflow registration of the current generation.
+		if (state.closed) {
+			return "closed";
+		}
 		state.restart = restart;
 		this.#initializeInspector(actorId, state);
 		state.queued += 1;
@@ -110,21 +138,33 @@ export class RunHandlerCoordinator {
 	getInspector(
 		actorId: string,
 		restart: () => void | Promise<void>,
+		actorGeneration?: number,
 	): RunInspectorConfig | undefined {
-		const state = this.#getOrCreate(actorId);
+		const state = this.#getOrCreate(actorId, actorGeneration);
+		if (state.closed) {
+			return undefined;
+		}
 		state.restart = restart;
 		this.#initializeInspector(actorId, state);
 		return state.inspector?.inspector;
 	}
 
-	destroy(actorId: string): void {
+	/**
+	 * Closes the run state for `actorId`. With `actorGeneration`, only state owned by that
+	 * generation is closed, so an older generation's late cleanup cannot close a newer one.
+	 */
+	destroy(actorId: string, actorGeneration?: number): void {
 		const state = this.#states.get(actorId);
 		if (!state) return;
+		if (
+			actorGeneration !== undefined &&
+			state.actorGeneration !== undefined &&
+			state.actorGeneration !== actorGeneration
+		) {
+			return;
+		}
 
-		state.closed = true;
-		state.inspector?.dispose?.();
-		state.inspector = undefined;
-		notifyStateChanged(state);
+		closeRunState(state);
 		this.#states.delete(actorId);
 	}
 
@@ -173,18 +213,32 @@ export class RunHandlerCoordinator {
 		};
 	}
 
-	#getOrCreate(actorId: string): ActorRunState {
+	#getOrCreate(
+		actorId: string,
+		actorGeneration: number | undefined,
+	): ActorRunState {
 		let state = this.#states.get(actorId);
+		if (
+			state &&
+			actorGeneration !== undefined &&
+			state.actorGeneration !== undefined &&
+			state.actorGeneration !== actorGeneration
+		) {
+			if (actorGeneration < state.actorGeneration) {
+				// A superseded generation gets closed, detached state so it cannot run or
+				// block the current generation.
+				const detached = createRunState(actorGeneration);
+				detached.closed = true;
+				return detached;
+			}
+			// A newer generation replaces state left by an older one, which may still be
+			// marked active because its JS callback cannot be cancelled.
+			closeRunState(state);
+			this.#states.delete(actorId);
+			state = undefined;
+		}
 		if (!state) {
-			state = {
-				active: false,
-				closed: false,
-				exclusive: false,
-				exclusiveGeneration: 0,
-				inspectorInitialized: false,
-				queued: 0,
-				waiters: new Set(),
-			};
+			state = createRunState(actorGeneration);
 			this.#states.set(actorId, state);
 		}
 		return state;
@@ -194,6 +248,7 @@ export class RunHandlerCoordinator {
 		if (state.inspectorInitialized) return;
 		const inspector = createRunInspector(this.#run, {
 			actorId,
+			actorGeneration: state.actorGeneration,
 			control: this.#control(actorId, state),
 		});
 		if (this.inspectorKind === "workflow") {
