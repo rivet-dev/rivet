@@ -102,6 +102,7 @@ fn build_shared(stopped: bool) -> Arc<SharedContext> {
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(0),
+		engine_liveness: Default::default(),
 		stopped_tx: tokio::sync::watch::channel(stopped).0,
 	})
 }

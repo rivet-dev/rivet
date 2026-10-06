@@ -125,6 +125,7 @@ fn test_envoy_handle() -> (EnvoyHandle, mpsc::UnboundedReceiver<ToEnvoyMessage>)
 		protocol_metadata: Arc::new(AsyncMutex::new(None)),
 		shutting_down: AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
+		engine_liveness: Default::default(),
 		stopped_tx: tokio::sync::watch::channel(true).0,
 	});
 

@@ -208,6 +208,7 @@ fn test_envoy_handle(endpoint: String) -> (EnvoyHandle, mpsc::UnboundedReceiver<
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
+		engine_liveness: Default::default(),
 		stopped_tx: tokio::sync::watch::channel(true).0,
 	});
 	(EnvoyHandle::from_shared(shared), envoy_rx)
