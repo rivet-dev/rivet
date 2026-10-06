@@ -13,7 +13,7 @@ use rivet_error::{
 	ActorSpecifier, MacroMarker, RivetError as RivetTransportError, RivetErrorKind,
 	RivetErrorSchema,
 };
-use rivetkit_core::error::public_error_status_code;
+use rivetkit_core::error::{ActorLifecycle, public_error_status_code};
 use rivetkit_core::inspector::InspectorAuth;
 use rivetkit_core::{
 	ActorConfig, ActorConfigInput, ActorEvent, ActorFactory as CoreActorFactory, ActorHttpResponse,
@@ -633,6 +633,10 @@ fn start_run_handler(callbacks: &WasmCallbacks, ctx: &WasmActorContext) -> Resul
 	if ctx.inner.run_handler_active() {
 		return Err(anyhow!("wasm run handler is already active"));
 	}
+	// A lost generation starts no new user code, including a restarted `run`.
+	if ctx.inner.is_lost() {
+		return Ok(());
+	}
 	let ctx = ctx.clone();
 	ctx.inner.begin_run_handler();
 	spawn_local(async move {
@@ -651,6 +655,17 @@ fn start_run_handler(callbacks: &WasmCallbacks, ctx: &WasmActorContext) -> Resul
 	Ok(())
 }
 
+/// A generation lost during its startup preamble starts no further user hook. A hook that was
+/// already running finishes, but nothing after it is dispatched.
+fn ensure_preamble_not_lost(ctx: &WasmActorContext) -> Result<()> {
+	if ctx.inner.is_lost() {
+		return Err(ActorLifecycle::Stopping
+			.build()
+			.context("actor generation was declared lost during its startup preamble"));
+	}
+	Ok(())
+}
+
 async fn run_preamble(
 	callbacks: &WasmCallbacks,
 	ctx: &WasmActorContext,
@@ -659,6 +674,7 @@ async fn run_preamble(
 	snapshot: Option<Vec<u8>>,
 ) -> Result<()> {
 	if let Some(callback) = &callbacks.on_migrate {
+		ensure_preamble_not_lost(ctx)?;
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 		set_anyhow(&payload, "isNew", JsValue::from_bool(is_new))?;
@@ -667,6 +683,7 @@ async fn run_preamble(
 
 	if is_new {
 		if let Some(callback) = &callbacks.create_state {
+			ensure_preamble_not_lost(ctx)?;
 			let payload = object();
 			set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 			if let Some(input) = input.as_ref() {
@@ -676,6 +693,7 @@ async fn run_preamble(
 			ctx.inner.set_state_initial(state);
 		}
 		if let Some(callback) = &callbacks.on_create {
+			ensure_preamble_not_lost(ctx)?;
 			let payload = object();
 			set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 			if let Some(input) = input.as_ref() {
@@ -686,6 +704,7 @@ async fn run_preamble(
 	} else if let Some(snapshot) = snapshot {
 		ctx.inner.set_state_initial(snapshot);
 	} else if let Some(callback) = &callbacks.create_state {
+		ensure_preamble_not_lost(ctx)?;
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 		if let Some(input) = input.as_ref() {
@@ -699,23 +718,28 @@ async fn run_preamble(
 	}
 
 	if let Some(callback) = &callbacks.create_vars {
+		ensure_preamble_not_lost(ctx)?;
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 		call_callback(callback, &payload.into()).await?;
 	}
 
 	if let Some(callback) = &callbacks.on_wake {
+		ensure_preamble_not_lost(ctx)?;
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 		call_callback(callback, &payload.into()).await?;
 	}
 
 	if let Some(callback) = &callbacks.on_before_actor_start {
+		ensure_preamble_not_lost(ctx)?;
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 		call_callback(callback, &payload.into()).await?;
 	}
 
+	// The last startup hook may finish after the generation was lost. `run` must not start then.
+	ensure_preamble_not_lost(ctx)?;
 	Ok(())
 }
 
@@ -760,7 +784,12 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 					}
 					let mut output = call_callback_bytes(&callback, &payload.into()).await?;
 
-					if let Some(callback) = &on_before_action_response {
+					// The action may finish after its generation was lost, and a lost
+					// generation starts no new user callbacks.
+					if let Some(callback) = on_before_action_response
+						.as_ref()
+						.filter(|_| !ctx.is_lost())
+					{
 						let payload = object();
 						set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 						set_anyhow(&payload, "name", JsValue::from_str(&name))?;
@@ -1081,6 +1110,8 @@ async fn run_connection_preflight(
 	}
 
 	if let Some(callback) = &callbacks.create_conn_state {
+		// `onBeforeConnect` may finish after the generation was lost.
+		ensure_preamble_not_lost(ctx)?;
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 		set_anyhow(
@@ -1284,6 +1315,11 @@ impl WasmActorContext {
 	#[wasm_bindgen(js_name = generation)]
 	pub fn generation(&self) -> Option<u32> {
 		self.inner.generation()
+	}
+
+	#[wasm_bindgen(js_name = isLost)]
+	pub fn is_lost(&self) -> bool {
+		self.inner.is_lost()
 	}
 
 	#[wasm_bindgen]

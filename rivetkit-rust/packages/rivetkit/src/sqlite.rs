@@ -1,6 +1,7 @@
 use std::{future::Future, time::Duration};
 
 use anyhow::Result;
+use rivetkit_core::error::ActorLifecycle;
 use rivetkit_core::{SqliteDb, SqliteTransaction};
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -37,6 +38,13 @@ impl SqliteDbExt for SqliteDb {
 		let transaction = self
 			.begin_named_transaction(options.name, options.timeout)
 			.await?;
+		// Beginning awaits, and the generation can be lost meanwhile. Do not start the callback.
+		if self.is_lost() {
+			let _ = transaction.rollback().await;
+			return Err(ActorLifecycle::Stopping
+				.build()
+				.context("actor generation was declared lost"));
+		}
 		match callback(transaction.clone()).await {
 			Ok(value) => {
 				if let Err(error) = transaction.commit().await {

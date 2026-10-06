@@ -40,6 +40,7 @@ use futures::FutureExt;
 use parking_lot::Mutex;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinHandle};
+use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, instrument::WithSubscriber};
 
 use crate::actor::action::ActionDispatchError;
@@ -70,6 +71,10 @@ pub type HttpDispatchResult = Result<ActorHttpResponse>;
 const SERIALIZE_STATE_SHUTDOWN_SANITY_CAP: Duration = Duration::from_secs(15);
 #[cfg(test)]
 const LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD: Duration = Duration::from_secs(1);
+// Bounds a lost generation's whole teardown: runtime cleanup, joining its event loop, and
+// resource cleanup. The engine may already be running the next generation, so user work is never
+// awaited past this.
+const LOST_SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(2);
 const INSPECTOR_SERIALIZE_STATE_INTERVAL: Duration = Duration::from_millis(50);
 const INSPECTOR_OVERLAY_CHANNEL_CAPACITY: usize = 32;
 
@@ -308,7 +313,11 @@ impl PartialEq for LifecycleEvent {
 impl Eq for LifecycleEvent {}
 
 enum LiveExit {
-	Shutdown { reason: ShutdownKind },
+	Shutdown {
+		reason: ShutdownKind,
+	},
+	/// The generation's lost signal fired; tear down through `abort_lost`.
+	Lost,
 	Terminated,
 }
 
@@ -393,6 +402,17 @@ pub struct ActorTask {
 	/// Active sleep-grace idle wait. Polled by the main loop so grace keeps the
 	/// same inbox/timer handling as the started actor.
 	sleep_grace: Option<SleepGraceState>,
+
+	// === LOST ===
+	/// Fires when this generation is declared lost. Observed by the live loop and by graceful
+	/// finalization, both of which hand off to `abort_lost`.
+	lost: CancellationToken,
+	/// Whether the runtime cleanup event (`RunGracefulCleanup`) was already dispatched, so the
+	/// abort path does not dispatch it twice.
+	runtime_cleanup_dispatched: bool,
+	/// Final resource cleanup, spawned once and retained so an interrupted graceful shutdown and
+	/// the abort path share it instead of starting a second close.
+	shutdown_cleanup: Option<JoinHandle<Result<()>>>,
 }
 
 impl ActorTask {
@@ -406,6 +426,7 @@ impl ActorTask {
 		ctx: ActorContext,
 		start_input: Option<Vec<u8>>,
 	) -> Self {
+		let lost = ctx.lost_signal();
 		let (actor_event_tx, actor_event_rx) = mpsc::unbounded_channel();
 		let (inspector_overlay_tx, _) = broadcast::channel(INSPECTOR_OVERLAY_CHANNEL_CAPACITY);
 		let inspector_attach_count = Arc::new(AtomicU32::new(0));
@@ -442,6 +463,9 @@ impl ActorTask {
 			sleep_deadline: None,
 			shutdown_reply: None,
 			sleep_grace: None,
+			lost,
+			runtime_cleanup_dispatched: false,
+			shutdown_cleanup: None,
 		}
 	}
 
@@ -455,18 +479,33 @@ impl ActorTask {
 	)]
 	pub async fn run(mut self) -> Result<()> {
 		let exit = self.run_live().await;
-		let LiveExit::Shutdown { reason } = exit else {
-			self.record_inbox_depths();
-			self.ctx.metrics().record_actor_stopped();
-			return Ok(());
-		};
-
-		let result = match AssertUnwindSafe(self.run_shutdown(reason))
-			.catch_unwind()
-			.await
-		{
-			Ok(result) => result,
-			Err(_) => Err(anyhow!("shutdown panicked during {reason:?}")),
+		let (reason, result) = match exit {
+			LiveExit::Terminated => {
+				self.record_inbox_depths();
+				self.ctx.metrics().record_actor_stopped();
+				return Ok(());
+			}
+			LiveExit::Lost => (ShutdownKind::Sleep, self.abort_lost().await),
+			LiveExit::Shutdown { reason } => {
+				// Graceful finalization is abandoned for the abort path if the generation is
+				// declared lost part way through. Every step of `run_shutdown` leaves its
+				// resources owned by `self`, so dropping it here loses nothing.
+				let lost = self.lost.clone();
+				let graceful = {
+					let shutdown = AssertUnwindSafe(self.run_shutdown(reason)).catch_unwind();
+					tokio::select! {
+						biased;
+						_ = lost.cancelled() => None,
+						result = shutdown => Some(result),
+					}
+				};
+				let result = match graceful {
+					Some(Ok(result)) => result,
+					Some(Err(_)) => Err(anyhow!("shutdown panicked during {reason:?}")),
+					None => self.abort_lost().await,
+				};
+				(reason, result)
+			}
 		};
 		self.deliver_shutdown_reply(reason, &result);
 		self.transition_to(LifecycleState::Terminated);
@@ -477,22 +516,39 @@ impl ActorTask {
 
 	async fn run_live(&mut self) -> LiveExit {
 		let activity_notify = self.ctx.sleep_activity_notify();
+		let lost = self.lost.clone();
 
 		loop {
 			if self.ctx.acknowledge_activity_dirty() {
-				if let Some(exit) = self.on_activity_signal().await {
-					return exit;
+				match unless_lost(&lost, self.on_activity_signal()).await {
+					Some(Some(exit)) => return exit,
+					Some(None) => {}
+					None => return LiveExit::Lost,
 				}
 			}
 			// TODO: Sample inbox depths periodically instead of on every loop iteration.
 			self.record_inbox_depths();
 			tokio::select! {
 				biased;
+				_ = lost.cancelled() => {
+					return LiveExit::Lost;
+				}
 				lifecycle_command = self.lifecycle_inbox.recv() => {
 					match lifecycle_command {
 						Some(command) => {
-							if let Some(exit) = self.handle_lifecycle(command).await {
-								return exit;
+							// Startup owns resources that nothing else retains until it returns,
+							// such as a SQLite database that is still opening, so it is not
+							// dropped on loss. It observes loss itself while waiting on the
+							// runtime preamble.
+							let exit = if matches!(command, LifecycleCommand::Start { .. }) {
+								Some(self.handle_lifecycle(command).await)
+							} else {
+								unless_lost(&lost, self.handle_lifecycle(command)).await
+							};
+							match exit {
+								Some(Some(exit)) => return exit,
+								Some(None) => {}
+								None => return LiveExit::Lost,
 							}
 						}
 						None => {
@@ -506,7 +562,11 @@ impl ActorTask {
 				}
 				lifecycle_event = self.lifecycle_events.recv() => {
 					match lifecycle_event {
-						Some(event) => self.handle_event(event).await,
+						Some(event) => {
+							if unless_lost(&lost, self.handle_event(event)).await.is_none() {
+								return LiveExit::Lost;
+							}
+						}
 						None => {
 							self.log_closed_channel(
 								"lifecycle_events",
@@ -518,18 +578,26 @@ impl ActorTask {
 				}
 				_ = activity_notify.notified() => {
 					self.ctx.acknowledge_activity_dirty();
-					if let Some(exit) = self.on_activity_signal().await {
-						return exit;
+					match unless_lost(&lost, self.on_activity_signal()).await {
+						Some(Some(exit)) => return exit,
+						Some(None) => {}
+						None => return LiveExit::Lost,
 					}
 				}
 				_ = Self::sleep_grace_tick(self.sleep_grace.as_ref().map(|grace| grace.deadline)), if self.sleep_grace.is_some() => {
-					if let Some(exit) = self.on_sleep_grace_deadline().await {
-						return exit;
+					match unless_lost(&lost, self.on_sleep_grace_deadline()).await {
+						Some(Some(exit)) => return exit,
+						Some(None) => {}
+						None => return LiveExit::Lost,
 					}
 				}
 				dispatch_command = self.dispatch_inbox.recv(), if self.accepting_dispatch() => {
 					match dispatch_command {
-						Some(command) => self.handle_dispatch(command).await,
+						Some(command) => {
+							if unless_lost(&lost, self.handle_dispatch(command)).await.is_none() {
+								return LiveExit::Lost;
+							}
+						}
 						None => {
 							self.log_closed_channel(
 								"dispatch_inbox",
@@ -545,13 +613,19 @@ impl ActorTask {
 					}
 				}
 				_ = Self::state_save_tick(self.state_save_deadline), if self.state_save_timer_active() => {
-					self.on_state_save_tick().await;
+					if unless_lost(&lost, self.on_state_save_tick()).await.is_none() {
+						return LiveExit::Lost;
+					}
 				}
 				_ = Self::inspector_serialize_state_tick(self.inspector_serialize_state_deadline), if self.inspector_serialize_timer_active() => {
-					self.on_inspector_serialize_state_tick().await;
+					if unless_lost(&lost, self.on_inspector_serialize_state_tick()).await.is_none() {
+						return LiveExit::Lost;
+					}
 				}
 				_ = Self::sleep_tick(self.sleep_deadline), if self.sleep_timer_active() => {
-					self.on_sleep_tick().await;
+					if unless_lost(&lost, self.on_sleep_tick()).await.is_none() {
+						return LiveExit::Lost;
+					}
 				}
 			}
 
@@ -577,6 +651,12 @@ impl ActorTask {
 			LifecycleCommand::Start { reply } => {
 				let result = self.start_actor().await;
 				let failed = result.is_err();
+				if failed && self.ctx.is_lost() {
+					// A lost generation tears down through the bounded abort path rather than
+					// waiting on a run handler that may never finish its preamble.
+					self.reply_lifecycle_command(command_kind, reason, reply, result);
+					return Some(LiveExit::Lost);
+				}
 				if failed {
 					self.finish_failed_startup().await;
 				}
@@ -801,6 +881,7 @@ impl ActorTask {
 			}
 		}
 
+		self.runtime_cleanup_dispatched = true;
 		self.ctx.begin_core_dispatched_hook();
 		let reply = self.core_dispatched_hook_reply("run_graceful_cleanup");
 		if let Err(error) = self.send_actor_event(
@@ -857,6 +938,9 @@ impl ActorTask {
 	}
 
 	async fn flush_workflow_state(&mut self, writes: Vec<WorkflowKvWrite>) -> Result<()> {
+		if self.ctx.is_lost() {
+			return Err(ActorLifecycleError::Stopping.build());
+		}
 		if !matches!(
 			self.lifecycle,
 			LifecycleState::Started | LifecycleState::SleepGrace
@@ -874,9 +958,10 @@ impl ActorTask {
 					reply: Reply::from(reply_tx),
 				},
 			)?;
-			let deltas = reply_rx
-				.await
-				.context("receive workflow flush serialize-state reply")??;
+			let Some(reply) = unless_lost(&self.lost, reply_rx).await else {
+				return Err(ActorLifecycleError::Stopping.build());
+			};
+			let deltas = reply.context("receive workflow flush serialize-state reply")??;
 			if self
 				.ctx
 				.save_state_and_workflow_batch_at_transaction_epoch(
@@ -1152,6 +1237,10 @@ impl ActorTask {
 
 	fn dispatch_lifecycle_error(&self) -> Option<anyhow::Error> {
 		// TODO: Share admission policy with RegistryDispatcher::active_actor.
+		if self.ctx.is_lost() {
+			self.ctx.warn_work_sent_to_stopping_instance("dispatch");
+			return Some(ActorLifecycleError::Stopping.build());
+		}
 		if self.ctx.destroy_requested() {
 			self.ctx.warn_work_sent_to_stopping_instance("dispatch");
 			return Some(ActorLifecycleError::Destroying.build());
@@ -1387,8 +1476,15 @@ impl ActorTask {
 			.with_subscriber(run_dispatch),
 		));
 		if let Some(startup_ready_rx) = startup_ready_rx {
-			startup_ready_rx
-				.await
+			// The run handle is retained in `self.run_handle`, so giving up on the preamble only
+			// cancels this wait.
+			let lost = self.lost.clone();
+			let Some(ready) = unless_lost(&lost, startup_ready_rx).await else {
+				return Err(ActorLifecycleError::Stopping.build()).context(
+					"actor generation was declared lost during the runtime startup preamble",
+				);
+			};
+			ready
 				.context("receive runtime startup ready reply")?
 				.context("runtime startup preamble")?;
 		}
@@ -1675,21 +1771,167 @@ impl ActorTask {
 		})
 	}
 
-	async fn join_aborted_run_handle(&mut self) {
-		let Some(mut run_handle) = self.run_handle.take() else {
+	/// Joins the actor event loop without taking the handle out first, so an interrupted join
+	/// leaves it owned by `self` for the abort path.
+	async fn join_run_handle_in_place(&mut self) {
+		let Some(run_handle) = self.run_handle.as_mut() else {
 			return;
 		};
-		match (&mut run_handle).await {
-			Ok(Ok(())) => {}
-			Ok(Err(error)) => {
-				log_actor_error(&error, "actor run handler failed during shutdown");
+		let result = run_handle.await;
+		self.run_handle = None;
+		log_run_handle_shutdown_result(result);
+	}
+
+	/// Awaits final resource cleanup. The cleanup runs in a spawned task retained on `self`, so
+	/// an interrupted wait neither cancels it nor lets a later caller start a second one.
+	async fn await_shutdown_cleanup(&mut self, reason: ShutdownKind) -> Result<()> {
+		let ctx = self.ctx.clone();
+		let cleanup = self
+			.shutdown_cleanup
+			.get_or_insert_with(|| spawn_shutdown_cleanup(ctx, reason));
+		let result = (&mut *cleanup).await;
+		self.shutdown_cleanup = None;
+		shutdown_cleanup_result(reason, result)
+	}
+
+	/// Tears down a generation the engine declared lost. The engine may already be running the
+	/// next generation, so no user hook runs, no state is written, and every wait is bounded by
+	/// one deadline. Storage writes are already revoked by the lost signal. Work that does not
+	/// finish in time keeps running in retained tasks; it is not treated as finished.
+	async fn abort_lost(&mut self) -> Result<()> {
+		let started_at = Instant::now();
+		let deadline = started_at + LOST_SHUTDOWN_GRACE_PERIOD;
+		tracing::warn!(
+			actor_id = %self.ctx.actor_id(),
+			lifecycle = ?self.lifecycle,
+			"actor generation declared lost, aborting it without user hooks"
+		);
+
+		self.sleep_grace = None;
+		self.state_save_deadline = None;
+		self.inspector_serialize_state_deadline = None;
+		self.sleep_deadline = None;
+		self.ctx.suspend_alarm_dispatch();
+		self.ctx.cancel_local_alarm_timeouts();
+		self.ctx.set_local_alarm_callback(None);
+		self.ctx.cancel_sleep_timer();
+		self.ctx.cancel_actor_abort_signal();
+		// Teardown of tracked work switches to cancellation instead of draining.
+		self.ctx.mark_shutdown_deadline_reached();
+		if !matches!(
+			self.lifecycle,
+			LifecycleState::SleepFinalize | LifecycleState::Destroying | LifecycleState::Terminated
+		) {
+			self.transition_to(LifecycleState::SleepFinalize);
+		}
+
+		// Runtime adapters release their per-generation resources in the cleanup hook. They
+		// check `ActorContext::is_lost` and skip user callbacks.
+		// A generation lost during startup may have no run handler yet to receive the event.
+		if !self.runtime_cleanup_dispatched
+			&& self.actor_event_tx.is_some()
+			&& self.run_handle.is_some()
+		{
+			self.runtime_cleanup_dispatched = true;
+			self.ctx.begin_core_dispatched_hook();
+			let reply = self.core_dispatched_hook_reply("run_lost_cleanup");
+			if let Err(error) = self.send_actor_event(
+				"lost_run_cleanup",
+				ActorEvent::RunGracefulCleanup {
+					reason: ShutdownKind::Sleep,
+					reply,
+				},
+			) {
+				tracing::error!(?error, "failed to enqueue lost runtime cleanup event");
 			}
-			Err(error) => {
-				if !error.is_cancelled() {
-					tracing::error!(?error, "actor run handler join failed during shutdown");
+		}
+		if !self.wait_for_core_dispatched_hooks(deadline).await {
+			tracing::warn!(
+				actor_id = %self.ctx.actor_id(),
+				core_dispatched_hook_count = self.ctx.core_dispatched_hook_count(),
+				"lost actor runtime cleanup did not finish before the lost deadline"
+			);
+		}
+		// Adapters still waiting on a user hook stop waiting.
+		self.ctx.cancel_shutdown_deadline();
+
+		self.close_actor_event_channel();
+		self.join_lost_run_handle(deadline).await;
+
+		// The storage fence holds the generation until SQLite is really released, which can
+		// outlive this task when a statement is stuck. A bounded close can return with the native
+		// worker still running, so finish with a strict close.
+		let ctx = self.ctx.clone();
+		let cleanup = self
+			.shutdown_cleanup
+			.take()
+			.unwrap_or_else(|| spawn_shutdown_cleanup(ctx.clone(), ShutdownKind::Sleep));
+		let generation_hold = ctx.hold_generation();
+		let mut storage_fence = RuntimeSpawner::spawn(
+			async move {
+				let _generation_hold = generation_hold;
+				let result = shutdown_cleanup_result(ShutdownKind::Sleep, cleanup.await);
+				if let Err(error) = ctx.sql().close_and_wait().await {
+					tracing::warn!(
+						actor_id = %ctx.actor_id(),
+						?error,
+						"lost actor sqlite close failed"
+					);
 				}
+				result
+			}
+			.in_current_span()
+			.with_current_subscriber(),
+		);
+		let result = match timeout(
+			deadline.saturating_duration_since(Instant::now()),
+			&mut storage_fence,
+		)
+		.await
+		{
+			Ok(result) => shutdown_cleanup_result(ShutdownKind::Sleep, result),
+			Err(_) => {
+				tracing::warn!(
+					actor_id = %self.ctx.actor_id(),
+					"lost actor storage cleanup is still running after the lost deadline, likely a stuck sqlite statement; newer generations wait for it"
+				);
+				Ok(())
 			}
 		};
+		self.ctx
+			.record_shutdown_wait(ShutdownKind::Sleep, started_at.elapsed());
+		result
+	}
+
+	async fn wait_for_core_dispatched_hooks(&self, deadline: Instant) -> bool {
+		self.ctx.wait_for_core_dispatched_hooks(deadline).await
+	}
+
+	/// Joins the event loop of a lost generation, aborting it at `deadline`. Runtime adapters
+	/// drain registered tasks after their event channel closes, which can wait on user promises
+	/// indefinitely.
+	async fn join_lost_run_handle(&mut self, deadline: Instant) {
+		let Some(run_handle) = self.run_handle.as_mut() else {
+			return;
+		};
+		let result = match timeout(
+			deadline.saturating_duration_since(Instant::now()),
+			&mut *run_handle,
+		)
+		.await
+		{
+			Ok(result) => result,
+			Err(_) => {
+				tracing::warn!(
+					actor_id = %self.ctx.actor_id(),
+					"lost actor event loop did not exit before the lost deadline, aborting it"
+				);
+				run_handle.abort();
+				(&mut *run_handle).await
+			}
+		};
+		self.run_handle = None;
+		log_run_handle_shutdown_result(result);
 	}
 
 	#[cfg(test)]
@@ -1814,8 +2056,8 @@ impl ActorTask {
 		let result: Result<()> = async {
 			self.save_final_state().await?;
 			self.close_actor_event_channel();
-			self.join_aborted_run_handle().await;
-			Self::finish_shutdown_cleanup_with_ctx(self.ctx.clone(), reason).await
+			self.join_run_handle_in_place().await;
+			self.await_shutdown_cleanup(reason).await
 		}
 		.await;
 		if result.is_ok() && matches!(reason, ShutdownKind::Destroy) {
@@ -1836,7 +2078,7 @@ impl ActorTask {
 		if let Some(run_handle) = self.run_handle.as_mut() {
 			run_handle.abort();
 		}
-		self.join_aborted_run_handle().await;
+		self.join_run_handle_in_place().await;
 		// Failed startup has no grace period. Treat it as an elapsed shutdown
 		// deadline so abortable waitUntil/registered work cannot hold teardown.
 		self.ctx.mark_shutdown_deadline_reached();
@@ -1920,13 +2162,16 @@ impl ActorTask {
 			step = "wait_for_pending_state_writes",
 			"actor shutdown cleanup step completed"
 		);
-		ctx.sync_alarm_logged().await;
-		tracing::debug!(
-			actor_id = %actor_id,
-			reason = reason_label,
-			step = "sync_alarm",
-			"actor shutdown cleanup step completed"
-		);
+		// A lost generation leaves the persisted alarm to the next generation.
+		if !ctx.is_lost() {
+			ctx.sync_alarm_logged().await;
+			tracing::debug!(
+				actor_id = %actor_id,
+				reason = reason_label,
+				step = "sync_alarm",
+				"actor shutdown cleanup step completed"
+			);
+		}
 		// Destroy cancels the engine alarm here so the persist it spawns is awaited by
 		// `wait_for_pending_alarm_writes` below and cannot race the SQLite teardown.
 		match reason {
@@ -2057,10 +2302,11 @@ impl ActorTask {
 	async fn on_state_save_tick(&mut self) {
 		self.state_save_deadline = None;
 		self.inspector_serialize_state_deadline = None;
-		if !matches!(
-			self.lifecycle,
-			LifecycleState::Started | LifecycleState::SleepGrace
-		) || !self.ctx.save_requested()
+		if self.ctx.is_lost()
+			|| !matches!(
+				self.lifecycle,
+				LifecycleState::Started | LifecycleState::SleepGrace
+			) || !self.ctx.save_requested()
 		{
 			return;
 		}
@@ -2083,7 +2329,10 @@ impl ActorTask {
 			}
 		}
 
-		match reply_rx.await {
+		let Some(reply) = unless_lost(&self.lost, reply_rx).await else {
+			return;
+		};
+		match reply {
 			Ok(Ok(deltas)) => {
 				let serialized_bytes = state_delta_payload_bytes(&deltas);
 				tracing::debug!(
@@ -2168,7 +2417,10 @@ impl ActorTask {
 			}
 		}
 
-		match reply_rx.await {
+		let Some(reply) = unless_lost(&self.lost, reply_rx).await else {
+			return;
+		};
+		match reply {
 			Ok(Ok(deltas)) => {
 				tracing::debug!(
 					actor_id = %self.ctx.actor_id(),
@@ -2332,6 +2584,54 @@ impl ActorTask {
 			lifecycle,
 			LifecycleState::Started | LifecycleState::SleepGrace
 		));
+	}
+}
+
+/// Spawns final resource cleanup so its owner survives an interrupted wait. The task keeps the
+/// caller's span and tracing subscriber so its logs stay attributed to the actor.
+fn spawn_shutdown_cleanup(ctx: ActorContext, reason: ShutdownKind) -> JoinHandle<Result<()>> {
+	RuntimeSpawner::spawn(
+		ActorTask::finish_shutdown_cleanup_with_ctx(ctx, reason)
+			.in_current_span()
+			.with_current_subscriber(),
+	)
+}
+
+/// Maps the cleanup task's join result to the shutdown result, keeping the historical error for
+/// a panic during shutdown.
+fn shutdown_cleanup_result(
+	reason: ShutdownKind,
+	result: std::result::Result<Result<()>, JoinError>,
+) -> Result<()> {
+	match result {
+		Ok(result) => result,
+		Err(error) if error.is_panic() => Err(anyhow!("shutdown panicked during {reason:?}")),
+		Err(error) => Err(error).context("join actor shutdown cleanup"),
+	}
+}
+
+/// Runs `future` unless the generation is declared lost first. Live-loop handlers run inside a
+/// `select!` arm, where the loop's own lost arm cannot interrupt them. Only use this where every
+/// resource the future owns is also retained elsewhere, so dropping it cancels only the wait.
+async fn unless_lost<F: Future>(lost: &CancellationToken, future: F) -> Option<F::Output> {
+	tokio::select! {
+		biased;
+		_ = lost.cancelled() => None,
+		output = future => Some(output),
+	}
+}
+
+fn log_run_handle_shutdown_result(result: std::result::Result<Result<()>, JoinError>) {
+	match result {
+		Ok(Ok(())) => {}
+		Ok(Err(error)) => {
+			log_actor_error(&error, "actor run handler failed during shutdown");
+		}
+		Err(error) => {
+			if !error.is_cancelled() {
+				tracing::error!(?error, "actor run handler join failed during shutdown");
+			}
+		}
 	}
 }
 

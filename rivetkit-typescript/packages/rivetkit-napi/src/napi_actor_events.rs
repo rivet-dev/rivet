@@ -244,6 +244,7 @@ async fn run_preamble(
 	// Run database migrations before any user lifecycle hook so `c.db` is
 	// usable from createState, onCreate, and createVars.
 	if let Some(callback) = &bindings.on_migrate {
+		ensure_preamble_not_lost(ctx)?;
 		with_timeout(
 			"onMigrate",
 			config.on_migrate_timeout,
@@ -254,6 +255,7 @@ async fn run_preamble(
 
 	if is_new {
 		if let Some(callback) = &bindings.create_state {
+			ensure_preamble_not_lost(ctx)?;
 			let bytes = with_timeout(
 				"createState",
 				config.create_state_timeout,
@@ -263,6 +265,7 @@ async fn run_preamble(
 			ctx.set_state_initial(bytes)?;
 		}
 		if let Some(callback) = &bindings.on_create {
+			ensure_preamble_not_lost(ctx)?;
 			with_timeout(
 				"onCreate",
 				config.on_create_timeout,
@@ -274,6 +277,7 @@ async fn run_preamble(
 	} else if let Some(snapshot) = snapshot {
 		ctx.set_state_initial(snapshot)?;
 	} else if let Some(callback) = &bindings.create_state {
+		ensure_preamble_not_lost(ctx)?;
 		let bytes = with_timeout(
 			"createState",
 			config.create_state_timeout,
@@ -297,6 +301,7 @@ async fn run_preamble(
 	}
 
 	if let Some(callback) = &bindings.create_vars {
+		ensure_preamble_not_lost(ctx)?;
 		with_timeout(
 			"createVars",
 			config.create_vars_timeout,
@@ -306,6 +311,7 @@ async fn run_preamble(
 	}
 
 	if let Some(callback) = &bindings.on_wake {
+		ensure_preamble_not_lost(ctx)?;
 		with_timeout(
 			"onWake",
 			config.on_wake_timeout,
@@ -315,6 +321,7 @@ async fn run_preamble(
 	}
 
 	if let Some(callback) = &bindings.on_before_actor_start {
+		ensure_preamble_not_lost(ctx)?;
 		with_timeout(
 			"onBeforeActorStart",
 			config.on_before_actor_start_timeout,
@@ -323,6 +330,8 @@ async fn run_preamble(
 		.await?;
 	}
 
+	// The last startup hook may finish after the generation was lost. `run` must not start then.
+	ensure_preamble_not_lost(ctx)?;
 	let run_handler = configure_run_handler(bindings, ctx);
 	if bindings.run.is_some() {
 		tokio::task::yield_now().await;
@@ -585,6 +594,8 @@ pub(crate) async fn dispatch_event(
 				}
 
 				if let Some(callback) = create_conn_state {
+					// `onBeforeConnect` may finish after the generation was lost.
+					ensure_preamble_not_lost(&ctx)?;
 					let state = with_timeout(
 						"createConnState",
 						create_conn_state_timeout,
@@ -996,6 +1007,10 @@ fn spawn_run_handler(
 ) -> JoinHandle<()> {
 	let run_handler_active = RunHandlerActiveGuard::new(ctx.inner().clone());
 	tokio::spawn(async move {
+		// A lost generation starts no new user code, including a restarted `run`.
+		if ctx.is_lost() {
+			return;
+		}
 		let result = call_run(&callback, &ctx).await;
 		match result {
 			Ok(callback_accepted) => {
@@ -1410,6 +1425,16 @@ fn action_not_found(name: String) -> anyhow::Error {
 
 fn actor_shutting_down() -> anyhow::Error {
 	ActorLifecycle::Stopping.build()
+}
+
+/// A generation lost during its startup preamble starts no further user hook. A hook that was
+/// already running finishes, but nothing after it is dispatched.
+fn ensure_preamble_not_lost(ctx: &ActorContext) -> Result<()> {
+	if ctx.is_lost() {
+		return Err(actor_shutting_down()
+			.context("actor generation was declared lost during its startup preamble"));
+	}
+	Ok(())
 }
 
 fn missing_callback(name: &str) -> anyhow::Error {

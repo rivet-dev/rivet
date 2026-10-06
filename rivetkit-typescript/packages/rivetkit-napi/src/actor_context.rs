@@ -613,6 +613,11 @@ impl ActorContext {
 	}
 
 	#[napi]
+	pub fn is_lost(&self) -> bool {
+		self.inner.is_lost()
+	}
+
+	#[napi]
 	pub async fn wait_for_destroy_completion(&self) {
 		self.inner.wait_for_destroy_completion_public().await;
 	}

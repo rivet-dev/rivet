@@ -216,14 +216,26 @@ pub async fn run_actor<A: Actor>(start: Start<A>) -> Result<()> {
 		};
 		ctx.set_initial_state(state);
 
+		// Each hook can finish after the generation was lost, so check before starting the next.
+		ensure_not_lost(&ctx)?;
 		let actor = Arc::new(A::create(&ctx).await?);
 		if is_new {
+			ensure_not_lost(&ctx)?;
 			actor.clone().on_create(ctx.clone()).await?;
 		}
+		ensure_not_lost(&ctx)?;
 		actor.clone().on_start(ctx.clone()).await?;
 		Ok::<_, anyhow::Error>(actor)
-	}
-	.await;
+	};
+	// A lost generation runs no more user code, so in-flight callbacks are dropped as soon as the
+	// engine gives up on it instead of when core aborts this adapter.
+	let lost = ctx.inner().lost_signal();
+	let startup = tokio::select! {
+		biased;
+		_ = lost.cancelled() => Err(ActorLifecycle::Stopping.build())
+			.context("actor generation was declared lost during startup"),
+		startup = startup => startup,
+	};
 
 	let actor = match startup {
 		Ok(actor) => {
@@ -245,8 +257,11 @@ pub async fn run_actor<A: Actor>(start: Start<A>) -> Result<()> {
 	let http_pools = HttpCallbackPools::for_actor::<A>();
 
 	while let Some(event) = events.recv_raw().await {
-		let should_stop =
-			handle_actor_event(actor.clone(), ctx.clone(), http_pools.as_ref(), event).await?;
+		let should_stop = tokio::select! {
+			biased;
+			_ = lost.cancelled() => break,
+			should_stop = handle_actor_event(actor.clone(), ctx.clone(), http_pools.as_ref(), event) => should_stop?,
+		};
 		if should_stop {
 			break;
 		}
@@ -301,8 +316,16 @@ fn spawn_run_task<A: Actor>(
 	ctx: Ctx<A>,
 	cancel: CancellationToken,
 ) -> JoinHandle<Result<()>> {
+	// Core can abort this adapter's event loop when the generation is lost, which detaches this
+	// task. It stops on the lost signal itself, and holds the generation so a newer generation
+	// does not start until it has ended.
+	let generation_hold = ctx.inner().hold_generation();
+	let lost = ctx.inner().lost_signal();
 	tokio::spawn(async move {
+		let _generation_hold = generation_hold;
 		let result = tokio::select! {
+			biased;
+			_ = lost.cancelled() => return Ok(()),
 			_ = cancel.cancelled() => return Ok(()),
 			result = AssertUnwindSafe(actor.run(ctx.clone())).catch_unwind() => result,
 		};
@@ -401,6 +424,10 @@ async fn handle_actor_event<A: Actor>(
 					return Ok(false);
 				};
 
+				if let Err(error) = ensure_not_lost(&ctx) {
+					reply.send(Err(error));
+					return Ok(false);
+				}
 				let admission = actor.admit_http_request(&ctx, &request);
 				let release = match admission {
 					HttpCallbackAdmission::Untracked => None,
@@ -469,9 +496,11 @@ async fn handle_actor_event<A: Actor>(
 					.clone()
 					.on_before_connect(ctx.clone(), &params)
 					.await?;
+				ensure_not_lost(&ctx)?;
 				let conn_state = actor.clone().create_conn_state(ctx.clone(), params).await?;
 				let conn = ConnCtx::from(conn);
 				conn.set_state(&conn_state)?;
+				ensure_not_lost(&ctx)?;
 				actor.on_connect(ctx, conn).await
 			}
 			.await;
@@ -508,6 +537,9 @@ async fn handle_actor_event<A: Actor>(
 		}
 		ActorEvent::RunGracefulCleanup { reason, reply } => {
 			let result = match reason {
+				// A lost generation runs no user hooks because the engine may already be
+				// running the next generation.
+				ShutdownKind::Sleep if ctx.inner().is_lost() => Ok(()),
 				ShutdownKind::Sleep => actor.on_sleep(ctx).await,
 				ShutdownKind::Destroy => actor.on_destroy(ctx).await,
 			};
@@ -550,9 +582,17 @@ fn spawn_action_reply<A: Actor>(
 	reply: Reply<Vec<u8>>,
 	future: crate::action::BoxActionFuture,
 ) {
+	// Like the run task, this detached task stops on Lost and holds the generation until it ends.
+	let generation_hold = ctx.inner().hold_generation();
+	let lost = ctx.inner().lost_signal();
 	tokio::spawn(async move {
+		let _generation_hold = generation_hold;
 		let abort = ctx.abort_signal();
 		tokio::select! {
+			biased;
+			_ = lost.cancelled() => {
+				reply.send(Err(ActorLifecycle::Stopping.build()));
+			}
 			_ = abort.cancelled() => {
 				reply.send(Err(ActorLifecycle::Stopping.build()));
 			}
@@ -568,9 +608,15 @@ fn spawn_queue_reply<A: Actor>(
 	reply: Reply<QueueSendResult>,
 	future: crate::queue::BoxQueueFuture,
 ) {
+	// Like the run task, this detached task stops on Lost and holds the generation until it ends.
+	let generation_hold = ctx.inner().hold_generation();
+	let lost = ctx.inner().lost_signal();
 	tokio::spawn(async move {
+		let _generation_hold = generation_hold;
 		let abort = ctx.abort_signal();
 		let result = tokio::select! {
+			biased;
+			_ = lost.cancelled() => Err(ActorLifecycle::Stopping.build()),
 			_ = abort.cancelled() => Err(ActorLifecycle::Stopping.build()),
 			result = future => result.map(|response| QueueSendResult {
 				status: QueueSendStatus::Completed,
@@ -579,6 +625,16 @@ fn spawn_queue_reply<A: Actor>(
 		};
 		reply.send(result);
 	});
+}
+
+/// Refuses to start another user callback for a generation that was declared lost.
+fn ensure_not_lost<A: Actor>(ctx: &Ctx<A>) -> Result<()> {
+	if ctx.inner().is_lost() {
+		return Err(ActorLifecycle::Stopping
+			.build()
+			.context("actor generation was declared lost"));
+	}
+	Ok(())
 }
 
 fn not_configured(component: impl Into<String>) -> anyhow::Error {
@@ -654,7 +710,7 @@ mod tests {
 	use std::pin::Pin;
 	use std::sync::{
 		OnceLock,
-		atomic::{AtomicUsize, Ordering},
+		atomic::{AtomicBool, AtomicUsize, Ordering},
 	};
 
 	use async_trait::async_trait;
@@ -2240,6 +2296,183 @@ mod tests {
 		async fn run(self: Arc<Self>, _ctx: Ctx<Self>) -> Result<()> {
 			anyhow::bail!("boom in run")
 		}
+	}
+
+	static HUNG_SLEEP_STARTED: AtomicBool = AtomicBool::new(false);
+	static HUNG_SLEEP_DROPPED: AtomicBool = AtomicBool::new(false);
+
+	struct HungSleepDropFlag;
+
+	impl Drop for HungSleepDropFlag {
+		fn drop(&mut self) {
+			HUNG_SLEEP_DROPPED.store(true, Ordering::SeqCst);
+		}
+	}
+
+	struct HungSleepActor;
+
+	#[async_trait]
+	impl Actor for HungSleepActor {
+		type State = ();
+		type Input = ();
+		type Actions = ();
+		type Events = ();
+		type Queue = ();
+		type ConnParams = ();
+		type ConnState = ();
+		type Action = action::Raw;
+
+		async fn create_state(_ctx: &Ctx<Self>, (): Self::Input) -> Result<Self::State> {
+			Ok(())
+		}
+
+		async fn create(_ctx: &Ctx<Self>) -> Result<Self> {
+			Ok(Self)
+		}
+
+		async fn on_sleep(self: Arc<Self>, _ctx: Ctx<Self>) -> Result<()> {
+			let _dropped = HungSleepDropFlag;
+			HUNG_SLEEP_STARTED.store(true, Ordering::SeqCst);
+			std::future::pending::<()>().await;
+			Ok(())
+		}
+	}
+
+	#[tokio::test]
+	async fn lost_generation_drops_an_in_flight_sleep_hook() {
+		let (tx, rx) = unbounded_channel();
+		let (start, ctx) = unit_start_with_ctx::<HungSleepActor>(rx.into());
+		let actor = tokio::spawn(run_actor::<HungSleepActor>(start));
+		let (reply_tx, _reply_rx) = oneshot::channel();
+		tx.send(ActorEvent::RunGracefulCleanup {
+			reason: ShutdownKind::Sleep,
+			reply: reply_tx.into(),
+		})
+		.expect("send sleep cleanup");
+		for _ in 0..1000 {
+			if HUNG_SLEEP_STARTED.load(Ordering::SeqCst) {
+				break;
+			}
+			tokio::task::yield_now().await;
+		}
+		assert!(
+			HUNG_SLEEP_STARTED.load(Ordering::SeqCst),
+			"on_sleep should start"
+		);
+
+		ctx.inner().lost_signal().cancel();
+
+		tokio::time::timeout(Duration::from_secs(1), actor)
+			.await
+			.expect("the adapter must stop as soon as the generation is lost")
+			.expect("run_actor joins")
+			.expect("run_actor returns");
+		assert!(
+			HUNG_SLEEP_DROPPED.load(Ordering::SeqCst),
+			"the in-flight sleep hook must be dropped, not resumed"
+		);
+		drop(tx);
+	}
+
+	static LOST_RUN_STARTED: AtomicBool = AtomicBool::new(false);
+	static LOST_RUN_DROPPED: AtomicBool = AtomicBool::new(false);
+
+	struct LostRunDropFlag;
+
+	impl Drop for LostRunDropFlag {
+		fn drop(&mut self) {
+			LOST_RUN_DROPPED.store(true, Ordering::SeqCst);
+		}
+	}
+
+	struct LostRunActor;
+
+	#[async_trait]
+	impl Actor for LostRunActor {
+		type State = ();
+		type Input = ();
+		type Actions = ();
+		type Events = ();
+		type Queue = ();
+		type ConnParams = ();
+		type ConnState = ();
+		type Action = action::Raw;
+
+		async fn create_state(_ctx: &Ctx<Self>, (): Self::Input) -> Result<Self::State> {
+			Ok(())
+		}
+
+		async fn create(_ctx: &Ctx<Self>) -> Result<Self> {
+			Ok(Self)
+		}
+
+		async fn run(self: Arc<Self>, _ctx: Ctx<Self>) -> Result<()> {
+			let _dropped = LostRunDropFlag;
+			LOST_RUN_STARTED.store(true, Ordering::SeqCst);
+			std::future::pending::<()>().await;
+			Ok(())
+		}
+	}
+
+	#[tokio::test]
+	async fn lost_generation_stops_the_run_task_after_its_event_loop_is_aborted() {
+		let (tx, rx) = unbounded_channel();
+		let (start, ctx) = unit_start_with_ctx::<LostRunActor>(rx.into());
+		ctx.inner().set_started(true);
+		let actor = tokio::spawn(run_actor::<LostRunActor>(start));
+		for _ in 0..1000 {
+			if LOST_RUN_STARTED.load(Ordering::SeqCst) {
+				break;
+			}
+			tokio::task::yield_now().await;
+		}
+		assert!(LOST_RUN_STARTED.load(Ordering::SeqCst), "run should start");
+
+		ctx.inner().lost_signal().cancel();
+		// Core aborts the adapter event loop after the lost deadline, detaching the run task.
+		actor.abort();
+		for _ in 0..1000 {
+			if LOST_RUN_DROPPED.load(Ordering::SeqCst) {
+				break;
+			}
+			tokio::task::yield_now().await;
+		}
+		assert!(
+			LOST_RUN_DROPPED.load(Ordering::SeqCst),
+			"a lost generation's run task must stop even when its event loop is aborted"
+		);
+		drop(tx);
+	}
+
+	#[tokio::test]
+	async fn lost_generation_stops_pending_action_and_queue_replies() {
+		let (_tx, rx) = unbounded_channel();
+		let (_start, ctx) = unit_start_with_ctx::<LostRunActor>(rx.into());
+		let (action_tx, action_rx) = oneshot::channel();
+		spawn_action_reply(
+			ctx.clone(),
+			action_tx.into(),
+			Box::pin(std::future::pending::<Result<Vec<u8>>>()),
+		);
+		let (queue_tx, queue_rx) = oneshot::channel();
+		spawn_queue_reply(
+			ctx.clone(),
+			queue_tx.into(),
+			Box::pin(std::future::pending::<Result<Option<Vec<u8>>>>()),
+		);
+
+		ctx.inner().lost_signal().cancel();
+
+		let action = tokio::time::timeout(Duration::from_secs(1), action_rx)
+			.await
+			.expect("a lost generation's pending action must stop")
+			.expect("action reply should be sent");
+		assert!(action.is_err());
+		let queue = tokio::time::timeout(Duration::from_secs(1), queue_rx)
+			.await
+			.expect("a lost generation's pending queue send must stop")
+			.expect("queue reply should be sent");
+		assert!(queue.is_err());
 	}
 
 	struct PanickingRunActor;

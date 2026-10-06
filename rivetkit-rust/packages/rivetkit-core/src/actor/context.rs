@@ -169,6 +169,13 @@ pub(crate) struct ActorContextInner {
 	destroy_requested: AtomicBool,
 	destroy_completed: AtomicBool,
 	destroy_completion_notify: Notify,
+	/// Outstanding holds on this generation. The actor task holds one, and a lost generation's
+	/// storage cleanup holds another until SQLite is released. The registry waits for zero
+	/// before starting a newer generation.
+	generation_holds: AtomicUsize,
+	generation_finished_notify: Notify,
+	// Forced-sync: read by synchronous accessors and bound before the actor task starts.
+	lost: Mutex<CancellationToken>,
 	abort_signal: Mutex<CancellationToken>,
 	shutdown_deadline: CancellationToken,
 	// Forced-sync: runtime wiring slots are configured through synchronous
@@ -429,6 +436,9 @@ impl ActorContext {
 		let max_schedules = config.max_schedules;
 		let abort_signal = CancellationToken::new();
 		let shutdown_deadline = CancellationToken::new();
+		let lost = CancellationToken::new();
+		sql.set_lost_signal(lost.clone());
+		legacy_kv.set_lost_signal(lost.clone());
 		let sleep = SleepState::new(config.clone());
 		let user_kv = ActorKv { sql: sql.clone() };
 		let inner = Arc::new(ActorContextInner {
@@ -508,6 +518,9 @@ impl ActorContext {
 			destroy_requested: AtomicBool::new(false),
 			destroy_completed: AtomicBool::new(false),
 			destroy_completion_notify: Notify::new(),
+			generation_holds: AtomicUsize::new(0),
+			generation_finished_notify: Notify::new(),
+			lost: Mutex::new(lost),
 			abort_signal: Mutex::new(abort_signal),
 			shutdown_deadline,
 			inspector: RwLock::new(None),
@@ -772,6 +785,31 @@ impl ActorContext {
 
 		self.request_stop_from_envoy();
 		Ok(())
+	}
+
+	/// Adopts the lost signal envoy-client created for this generation. envoy-client cancels it
+	/// synchronously when the engine or the envoy declares the generation lost, which revokes
+	/// SQLite writes immediately and wakes the actor task into its abort path.
+	pub(crate) fn configure_lost_signal(&self, lost: CancellationToken) {
+		self.sql().set_lost_signal(lost.clone());
+		self.0.legacy_kv.set_lost_signal(lost.clone());
+		*self.0.lost.lock() = lost;
+	}
+
+	/// Returns this generation's lost signal.
+	pub fn lost_signal(&self) -> CancellationToken {
+		self.0.lost.lock().clone()
+	}
+
+	/// Declares this generation lost. Idempotent.
+	pub(crate) fn mark_lost(&self) {
+		self.0.lost.lock().cancel();
+	}
+
+	/// Returns whether this generation was declared lost. Foreign-runtime shutdown hooks must
+	/// skip user callbacks and state saves when this is set, and only release runtime resources.
+	pub fn is_lost(&self) -> bool {
+		self.0.lost.lock().is_cancelled()
 	}
 
 	pub fn mark_destroy_requested(&self) {
@@ -1531,6 +1569,31 @@ impl ActorContext {
 		self.destroy_requested()
 	}
 
+	/// Keeps this generation from counting as finished until the returned hold is dropped.
+	/// Runtime wrappers hold it for tasks they spawn outside the actor task.
+	#[doc(hidden)]
+	pub fn hold_generation(&self) -> GenerationHold {
+		self.0.generation_holds.fetch_add(1, Ordering::SeqCst);
+		GenerationHold(self.clone())
+	}
+
+	pub(crate) fn is_generation_finished(&self) -> bool {
+		self.0.generation_holds.load(Ordering::SeqCst) == 0
+	}
+
+	pub(crate) async fn wait_for_generation_finished(&self) {
+		loop {
+			let notified = self.0.generation_finished_notify.notified();
+			tokio::pin!(notified);
+			// Register before checking so a finish between the check and the await is not missed.
+			notified.as_mut().enable();
+			if self.is_generation_finished() {
+				return;
+			}
+			notified.await;
+		}
+	}
+
 	pub(crate) async fn wait_for_destroy_completion(&self) {
 		if self.0.destroy_completed.load(Ordering::SeqCst) {
 			return;
@@ -2172,6 +2235,17 @@ impl std::fmt::Debug for ActorContext {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
+/// A hold on an actor generation. See [`ActorContext::hold_generation`].
+pub struct GenerationHold(ActorContext);
+
+impl Drop for GenerationHold {
+	fn drop(&mut self) {
+		if self.0.0.generation_holds.fetch_sub(1, Ordering::SeqCst) == 1 {
+			self.0.0.generation_finished_notify.notify_waiters();
+		}
+	}
+}
+
 #[cfg(test)]
 #[path = "../../tests/context.rs"]
 pub(crate) mod tests;

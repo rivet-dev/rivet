@@ -200,6 +200,10 @@ class FakeActorContext {
 		return null;
 	}
 
+	isLost(): boolean {
+		return false;
+	}
+
 	restartRunHandler(): void {
 		this.scenario.runRestarts += 1;
 	}

@@ -294,6 +294,18 @@ impl ActorContext {
 			&& self.pending_disconnect_count() == 0
 	}
 
+	/// Waits until every core-dispatched hook has replied, or `deadline` passes. Waits on the hook
+	/// counter itself. The sleep activity signal only fires when its dirty flag flips, which the
+	/// lost abort path never acknowledges, so it can miss a hook completing.
+	pub(crate) async fn wait_for_core_dispatched_hooks(&self, deadline: Instant) -> bool {
+		self.0
+			.sleep
+			.work
+			.core_dispatched_hooks
+			.wait_zero(deadline)
+			.await
+	}
+
 	/// Spawn the fallback sleep timer used by `ActorContext`s that are not
 	/// bound to an `ActorTask`.
 	///
@@ -530,6 +542,13 @@ impl ActorContext {
 		}
 
 		let policy = kind.policy();
+		if policy.aborts_at_shutdown_deadline && self.is_lost() {
+			tracing::warn!(
+				kind = kind.label(),
+				"actor work spawned after the generation was lost; dropping it"
+			);
+			return false;
+		}
 		if policy.aborts_at_shutdown_deadline {
 			let mut shutdown_tasks = self.0.sleep.work.shutdown_tasks.lock();
 			if self.0.sleep.work.teardown_started.load(Ordering::Acquire) {
@@ -582,7 +601,19 @@ impl ActorContext {
 			let _region = region;
 			if policy.aborts_at_shutdown_deadline {
 				let shutdown_deadline = ctx.shutdown_deadline_token();
+				// A lost generation runs no more user code, so its work is dropped as soon as the
+				// engine gives up on it. Loss wins over a future that is also ready.
+				let lost = ctx.lost_signal();
 				tokio::select! {
+					biased;
+					_ = lost.cancelled() => {
+						tracing::debug!(
+							actor_id = %ctx.actor_id(),
+							kind = kind.label(),
+							reason = "generation_lost",
+							"actor work cancelled because the generation was lost"
+						);
+					}
 					_ = fut => {}
 					_ = shutdown_deadline.cancelled() => {
 						tracing::warn!(
@@ -636,6 +667,9 @@ impl ActorContext {
 				let task = async move {
 					let _region = region;
 					if policy.aborts_at_shutdown_deadline {
+						// Wasm work wraps JS promises that loss cannot stop, so it keeps only the
+						// shutdown-deadline policy. Lost wasm generations are fenced by storage
+						// revocation and the generation hold instead.
 						let shutdown_deadline = ctx_for_task.shutdown_deadline_token();
 						tokio::select! {
 							_ = fut => {}

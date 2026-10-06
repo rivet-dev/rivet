@@ -238,7 +238,18 @@ where
 			match wrap_start::<A>(core_start) {
 				Ok(mut start) => {
 					start.startup_ready = startup_ready;
-					entry(start).await
+					// A lost generation runs no more user code, so the custom entry is dropped
+					// as soon as the engine gives up on it.
+					let lost = start.ctx.inner().lost_signal();
+					// Calling the entry can run user code before its future is polled.
+					if lost.is_cancelled() {
+						return Ok(());
+					}
+					tokio::select! {
+						biased;
+						_ = lost.cancelled() => Ok(()),
+						result = entry(start) => result,
+					}
 				}
 				Err(error) => {
 					if let Some(reply) = startup_ready {

@@ -373,6 +373,7 @@ export declare class ActorContext {
   destroy(): void
   destroyRequested(): boolean
   generation(): number | null
+  isLost(): boolean
   waitForDestroyCompletion(): Promise<void>
   setPreventSleep(preventSleep: boolean): void
   preventSleep(): boolean

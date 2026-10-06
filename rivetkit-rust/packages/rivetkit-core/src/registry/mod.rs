@@ -27,7 +27,7 @@ use scc::{HashMap as SccHashMap, hash_map::Entry as SccEntry};
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use serde_json::{Value as JsonValue, json};
-use tokio::sync::{Mutex as TokioMutex, Notify, broadcast, mpsc, oneshot};
+use tokio::sync::{Mutex as TokioMutex, broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use url::Url;
@@ -165,23 +165,29 @@ struct PendingStop {
 	stop_handle: ActorStopHandle,
 }
 
-/// Outcome of attempting to transition the actor instance under an id to stopping
-/// for a specific generation.
+/// Identifies one generation of an actor. Registry records are per generation so a lost
+/// generation that is still shutting down stays reachable after the next generation starts.
+type InstanceKey = (String, u32);
+
+fn instance_key(actor_id: &str, generation: u32) -> InstanceKey {
+	(actor_id.to_owned(), generation)
+}
+
+/// Outcome of attempting to transition one actor generation to stopping.
 enum TransitionResult {
-	/// The current instance matches the requested generation and was moved to stopping.
+	/// The generation was registered and is now stopping.
 	Transitioned(ActiveActorInstance),
-	/// An instance exists but for a different generation than the stop targets, so it
-	/// was left untouched. The stop must not be applied to it.
-	Stale,
-	/// No instance is registered for the actor id.
+	/// No instance is registered for the generation.
 	Vacant,
 }
 
 pub(crate) struct RegistryDispatcher {
 	pub(crate) factories: HashMap<String, Arc<ActorFactory>>,
-	actor_instances: SccHashMap<String, ActorInstanceState>,
-	starting_instances: SccHashMap<String, Arc<Notify>>,
-	pending_stops: SccHashMap<String, PendingStop>,
+	actor_instances: SccHashMap<InstanceKey, ActorInstanceState>,
+	/// Newest registered generation per actor id. Dispatch routes only to this generation.
+	current_generations: SccHashMap<String, u32>,
+	starting_instances: SccHashMap<InstanceKey, ActorContext>,
+	pending_stops: SccHashMap<InstanceKey, PendingStop>,
 	region: String,
 	handle_inspector_http_in_runtime: bool,
 }
@@ -478,6 +484,11 @@ struct InspectorSummaryJson {
 	workflow_history: Option<JsonValue>,
 }
 
+/// How long a new generation waits for older generations of the same actor on this runner to
+/// finish. Lost generations abort within two seconds, so this only expires if an older task is
+/// stuck, and the new generation then fails to start rather than overlap it.
+const OLDER_GENERATION_STOP_TIMEOUT: Duration = Duration::from_secs(10);
+
 const WS_PROTOCOL_ENCODING: &str = "rivet_encoding.";
 const WS_PROTOCOL_CONN_PARAMS: &str = "rivet_conn_params.";
 
@@ -737,6 +748,7 @@ impl RegistryDispatcher {
 		Self {
 			factories,
 			actor_instances: SccHashMap::new(),
+			current_generations: SccHashMap::new(),
 			starting_instances: SccHashMap::new(),
 			pending_stops: SccHashMap::new(),
 			region: env::var("RIVET_REGION").unwrap_or_default(),
@@ -803,26 +815,43 @@ fn build_actor_metadata_map_from_factories(
 
 impl RegistryDispatcher {
 	async fn start_actor(self: &Arc<Self>, request: StartActorRequest) -> Result<()> {
-		let startup_notify = Arc::new(Notify::new());
+		let key = instance_key(&request.actor_id, request.generation);
+		// The actor task owns this hold. It is released when the task ends, or when startup is
+		// abandoned before a task exists.
+		let generation_hold = request.ctx.hold_generation();
 		let _ = self
 			.starting_instances
-			.insert_async(request.actor_id.clone(), startup_notify.clone())
+			.insert_async(key.clone(), request.ctx.clone())
 			.await;
-		// Test-only seam: lets a test hold a generation in the "starting" window so it
-		// can deterministically deliver a stop for a previous generation that parks
-		// under the actor id and gets consumed by this startup.
-		#[cfg(test)]
-		test_hooks::wait_for_startup_gate(&request.actor_id).await;
-		let factory = self
-			.factories
-			.get(&request.actor_name)
-			.cloned()
-			.ok_or_else(|| {
-				ActorRuntime::NotRegistered {
-					actor_name: request.actor_name.clone(),
-				}
-				.build()
-			})?;
+		let prepared = async {
+			self.wait_for_older_generations(&request.actor_id, request.generation)
+				.await?;
+			// Test-only seam: lets a test hold a generation in the "starting" window so it
+			// can deterministically deliver stops while the generation is starting.
+			#[cfg(test)]
+			test_hooks::wait_for_startup_gate(&request.actor_id).await;
+			if request.ctx.is_lost() {
+				return Err(ActorLifecycleError::Stopping.build())
+					.context("actor generation was declared lost before it started");
+			}
+			self.factories
+				.get(&request.actor_name)
+				.cloned()
+				.ok_or_else(|| {
+					ActorRuntime::NotRegistered {
+						actor_name: request.actor_name.clone(),
+					}
+					.build()
+				})
+		}
+		.await;
+		let factory = match prepared {
+			Ok(factory) => factory,
+			Err(error) => {
+				self.abandon_startup(&key).await;
+				return Err(error);
+			}
+		};
 		let (lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
 		let (dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
 		let (lifecycle_events_tx, lifecycle_events_rx) = mpsc::unbounded_channel();
@@ -857,7 +886,10 @@ impl RegistryDispatcher {
 			request.ctx.clone(),
 			request.input,
 		);
-		let join = RuntimeSpawner::spawn(task.run());
+		let join = RuntimeSpawner::spawn(async move {
+			let _generation_hold = generation_hold;
+			task.run().await
+		});
 
 		let (start_tx, start_rx) = oneshot::channel();
 		let result: Result<Arc<ActorTaskHandle>> = async {
@@ -886,104 +918,253 @@ impl RegistryDispatcher {
 
 		match result {
 			Ok(instance) => {
+				// Hold the starting entry while consuming the parked stop and registering the
+				// instance. `stop_actor` parks under the same entry, so a stop either parks
+				// before this point and is consumed here, or finds the registered instance.
+				let starting = self.starting_instances.entry_async(key.clone()).await;
 				let pending_stop = self
 					.pending_stops
-					.remove_async(&request.actor_id.clone())
+					.remove_async(&key)
 					.await
 					.map(|(_, pending_stop)| pending_stop);
-				// Only apply a parked stop if it targets the generation we just started.
-				// A stop parked for a previous generation is stale: complete its handle
-				// so teardown finalizes, but leave the new generation running.
-				let pending_stop = match pending_stop {
-					Some(pending_stop) if pending_stop.generation == request.generation => {
-						Some(pending_stop)
-					}
-					Some(stale_stop) => {
-						let _ = stale_stop.stop_handle.complete();
-						None
-					}
-					None => None,
-				};
-				if let Some(pending_stop) = pending_stop {
-					let actor_id = request.actor_id.clone();
-					let stop_reason = map_envoy_stop_reason(&pending_stop.reason);
-					if matches!(stop_reason, ShutdownKind::Destroy) {
-						instance.ctx.mark_destroy_requested();
-					}
-					self.set_actor_instance_state(
-						actor_id.clone(),
-						ActorInstanceState::Stopping {
-							instance: instance.clone(),
-							reason: stop_reason,
-						},
-					)
-					.await;
-					let _ = self
-						.starting_instances
-						.remove_async(&request.actor_id.clone())
-						.await;
-
-					let dispatcher = self.clone();
-					RuntimeSpawner::spawn(async move {
-						if let Err(error) = dispatcher
-							.shutdown_started_instance(
-								&actor_id,
-								instance.clone(),
-								pending_stop.reason,
-								pending_stop.stop_handle,
-							)
-							.await
-						{
-							tracing::error!(
-								actor_id,
-								?error,
-								"failed to stop actor queued during startup"
-							);
+				match pending_stop {
+					Some(pending_stop) => {
+						let actor_id = request.actor_id.clone();
+						let stop_reason = map_envoy_stop_reason(&pending_stop.reason);
+						if matches!(stop_reason, ShutdownKind::Destroy) {
+							instance.ctx.mark_destroy_requested();
 						}
-						dispatcher
-							.remove_stopping_actor_instance(&actor_id, &instance)
-							.await;
-					});
-					startup_notify.notify_waiters();
-
-					Ok(())
-				} else {
-					self.set_actor_instance_state(
-						request.actor_id.clone(),
-						ActorInstanceState::Active(instance),
-					)
-					.await;
-					let _ = self
-						.starting_instances
-						.remove_async(&request.actor_id.clone())
+						self.register_actor_instance(
+							key.clone(),
+							ActorInstanceState::Stopping {
+								instance: instance.clone(),
+								reason: stop_reason,
+							},
+						)
 						.await;
-					startup_notify.notify_waiters();
-					Ok(())
+						remove_starting_entry(starting);
+
+						let dispatcher = self.clone();
+						RuntimeSpawner::spawn(async move {
+							if let Err(error) = dispatcher
+								.shutdown_started_instance(
+									&actor_id,
+									instance.clone(),
+									pending_stop.reason,
+									pending_stop.stop_handle,
+								)
+								.await
+							{
+								tracing::error!(
+									actor_id,
+									?error,
+									"failed to stop actor queued during startup"
+								);
+							}
+							dispatcher
+								.remove_stopping_actor_instance_when_finished(&actor_id, &instance)
+								.await;
+						});
+					}
+					None => {
+						self.register_actor_instance(
+							key.clone(),
+							ActorInstanceState::Active(instance),
+						)
+						.await;
+						remove_starting_entry(starting);
+					}
 				}
+				self.complete_stops_for_older_generations(&request.actor_id, request.generation)
+					.await;
+				Ok(())
 			}
 			Err(error) => {
-				let _ = self
-					.starting_instances
-					.remove_async(&request.actor_id.clone())
-					.await;
-				// A stop parked while this start was in flight would otherwise leak its
-				// ActorStopHandle in the map (the map holds the sender alive, hanging the
-				// caller). Drain and complete it since there is no instance to stop.
-				if let Some((_, pending_stop)) = self
-					.pending_stops
-					.remove_async(&request.actor_id.clone())
+				// A generation lost during startup drops its start reply while its task is still
+				// aborting. Keep it registered as starting until the task finishes so envoy-client
+				// does not report it stopped, and a newer generation does not start, too early.
+				if request.ctx.is_lost()
+					&& timeout(
+						OLDER_GENERATION_STOP_TIMEOUT,
+						request.ctx.wait_for_generation_finished(),
+					)
 					.await
+					.is_err()
 				{
-					let _ = pending_stop.stop_handle.complete();
+					tracing::warn!(
+						actor_id = %request.actor_id,
+						generation = request.generation,
+						"lost actor generation did not finish aborting its startup in time, likely stuck storage; keeping it registered until it finishes"
+					);
+					// Keep the starting record so newer generations still see this one and
+					// refuse to start until it really finishes.
+					let dispatcher = self.clone();
+					let ctx = request.ctx.clone();
+					RuntimeSpawner::spawn(async move {
+						ctx.wait_for_generation_finished().await;
+						dispatcher.abandon_startup(&key).await;
+					});
+					return Err(error);
 				}
-				startup_notify.notify_waiters();
+				self.abandon_startup(&key).await;
 				Err(error)
 			}
 		}
 	}
 
-	async fn set_actor_instance_state(&self, actor_id: String, state: ActorInstanceState) {
-		match self.actor_instances.entry_async(actor_id).await {
+	/// Removes a generation whose startup failed. A stop parked while the start was in flight
+	/// would otherwise leak its ActorStopHandle in the map and hang the caller, so complete it
+	/// since there is no instance to stop.
+	async fn abandon_startup(&self, key: &InstanceKey) {
+		let starting = self.starting_instances.entry_async(key.clone()).await;
+		if let Some((_, pending_stop)) = self.pending_stops.remove_async(key).await {
+			let _ = pending_stop.stop_handle.complete();
+		}
+		remove_starting_entry(starting);
+	}
+
+	/// Registers a started generation and makes it the dispatch target unless a newer
+	/// generation is already registered.
+	async fn register_actor_instance(&self, key: InstanceKey, state: ActorInstanceState) {
+		let (actor_id, generation) = key.clone();
+		self.set_actor_instance_state(key, state).await;
+		match self.current_generations.entry_async(actor_id).await {
+			SccEntry::Occupied(mut entry) => {
+				if *entry.get() < generation {
+					entry.insert(generation);
+				}
+			}
+			SccEntry::Vacant(entry) => {
+				entry.insert_entry(generation);
+			}
+		}
+	}
+
+	/// Completes stops parked for generations older than `generation`. Generations only
+	/// increase, so such a generation will never start and its stop has nothing left to do.
+	async fn complete_stops_for_older_generations(&self, actor_id: &str, generation: u32) {
+		let mut stale_stops = Vec::new();
+		self.pending_stops
+			.retain_async(|(pending_actor_id, pending_generation), pending_stop| {
+				if pending_actor_id == actor_id && *pending_generation < generation {
+					stale_stops.push(pending_stop.stop_handle.clone());
+					false
+				} else {
+					true
+				}
+			})
+			.await;
+		for stop_handle in stale_stops {
+			let _ = stop_handle.complete();
+		}
+	}
+
+	async fn newer_generation_exists(&self, actor_id: &str, generation: u32) -> bool {
+		let is_newer = |(other_actor_id, other_generation): &InstanceKey| {
+			other_actor_id == actor_id && *other_generation > generation
+		};
+		// Each check releases its entry before the next one runs.
+		let newer_starting = self
+			.starting_instances
+			.any_async(|key, _| is_newer(key))
+			.await
+			.is_some();
+		if newer_starting {
+			return true;
+		}
+		self.actor_instances
+			.any_async(|key, _| is_newer(key))
+			.await
+			.is_some()
+	}
+
+	/// Contexts of older generations of `actor_id` that are starting or registered on this
+	/// runner.
+	async fn older_generation_contexts(
+		&self,
+		actor_id: &str,
+		generation: u32,
+	) -> Vec<ActorContext> {
+		let mut older = Vec::new();
+		self.starting_instances
+			.iter_async(|(starting_actor_id, starting_generation), ctx| {
+				if starting_actor_id == actor_id && *starting_generation < generation {
+					older.push(ctx.clone());
+				}
+				true
+			})
+			.await;
+		self.actor_instances
+			.iter_async(|(instance_actor_id, instance_generation), state| {
+				if instance_actor_id == actor_id && *instance_generation < generation {
+					older.push(state.instance().ctx.clone());
+				}
+				true
+			})
+			.await;
+		older
+	}
+
+	/// Keeps two generations of one actor from running on this runner at once. The engine only
+	/// starts a generation after giving up on every older one, so older generations still here
+	/// are lost: mark them lost so they abort, then wait for their tasks to finish. If one does
+	/// not finish in time, fail this start rather than overlap it.
+	async fn wait_for_older_generations(&self, actor_id: &str, generation: u32) -> Result<()> {
+		// Start callbacks run in independent tasks, so a newer generation can register first.
+		// Generations only increase, so this one has already been superseded and must not run.
+		// Both starts insert their starting record before scanning, so at least one sees the
+		// other.
+		if self.newer_generation_exists(actor_id, generation).await {
+			tracing::warn!(
+				actor_id,
+				generation,
+				"refusing to start an actor generation that a newer generation already superseded"
+			);
+			return Err(ActorLifecycleError::Stopping.build())
+				.context("a newer generation of this actor is already running on this runner");
+		}
+		let older = self.older_generation_contexts(actor_id, generation).await;
+		if older.is_empty() {
+			return Ok(());
+		}
+		for ctx in &older {
+			if !ctx.is_lost() {
+				tracing::warn!(
+					actor_id,
+					generation,
+					"newer actor generation is starting while an older one still runs; marking the older generation lost"
+				);
+				ctx.mark_lost();
+			}
+		}
+		let all_finished = async {
+			for ctx in &older {
+				ctx.wait_for_generation_finished().await;
+			}
+		};
+		if timeout(OLDER_GENERATION_STOP_TIMEOUT, all_finished)
+			.await
+			.is_err()
+		{
+			tracing::error!(
+				actor_id,
+				generation,
+				"an older actor generation is still running on this runner, likely a stuck task; refusing to start the new generation"
+			);
+			return Err(ActorLifecycleError::Stopping.build())
+				.context("an older generation of this actor is still running on this runner");
+		}
+		Ok(())
+	}
+
+	async fn current_generation(&self, actor_id: &str) -> Option<u32> {
+		self.current_generations
+			.read_async(actor_id, |_, generation| *generation)
+			.await
+	}
+
+	async fn set_actor_instance_state(&self, key: InstanceKey, state: ActorInstanceState) {
+		match self.actor_instances.entry_async(key).await {
 			SccEntry::Occupied(mut entry) => {
 				entry.insert(state);
 			}
@@ -999,16 +1180,13 @@ impl RegistryDispatcher {
 		generation: u32,
 		reason: ShutdownKind,
 	) -> TransitionResult {
-		match self.actor_instances.entry_async(actor_id.to_owned()).await {
+		match self
+			.actor_instances
+			.entry_async(instance_key(actor_id, generation))
+			.await
+		{
 			SccEntry::Occupied(mut entry) => {
 				let instance = entry.get().instance();
-				// A stop is scoped to the generation it was issued for. If the currently
-				// registered instance is a different generation (e.g. a lost previous
-				// generation whose replacement is already running), the stop is stale and
-				// must not tear down the newer generation.
-				if instance.generation != generation {
-					return TransitionResult::Stale;
-				}
 				if matches!(entry.get(), ActorInstanceState::Active(_)) {
 					entry.insert(ActorInstanceState::Stopping {
 						instance: instance.clone(),
@@ -1028,8 +1206,36 @@ impl RegistryDispatcher {
 		}
 	}
 
+	/// Removes a stopped generation's record once the generation has finished. A lost
+	/// generation's storage cleanup can outlive its task, and the record must stay visible to
+	/// newer generations until it does.
+	async fn remove_stopping_actor_instance_when_finished(
+		self: &Arc<Self>,
+		actor_id: &str,
+		expected: &ActiveActorInstance,
+	) {
+		if expected.ctx.is_generation_finished() {
+			self.remove_stopping_actor_instance(actor_id, expected)
+				.await;
+			return;
+		}
+		let dispatcher = self.clone();
+		let actor_id = actor_id.to_owned();
+		let expected = expected.clone();
+		RuntimeSpawner::spawn(async move {
+			expected.ctx.wait_for_generation_finished().await;
+			dispatcher
+				.remove_stopping_actor_instance(&actor_id, &expected)
+				.await;
+		});
+	}
+
 	async fn remove_stopping_actor_instance(&self, actor_id: &str, expected: &ActiveActorInstance) {
-		match self.actor_instances.entry_async(actor_id.to_owned()).await {
+		let removed = match self
+			.actor_instances
+			.entry_async(instance_key(actor_id, expected.generation))
+			.await
+		{
 			SccEntry::Occupied(entry) => {
 				let should_remove = match entry.get() {
 					ActorInstanceState::Stopping { instance, .. } => {
@@ -1040,20 +1246,37 @@ impl RegistryDispatcher {
 				if should_remove {
 					let _ = entry.remove_entry();
 				}
+				should_remove
 			}
 			SccEntry::Vacant(entry) => {
 				drop(entry);
+				false
 			}
+		};
+		if removed {
+			// Only clear the dispatch target if no newer generation has replaced it.
+			let _ = self
+				.current_generations
+				.remove_if_async(actor_id, |generation| *generation == expected.generation)
+				.await;
 		}
 	}
 
 	async fn active_actor(&self, actor_id: &str) -> Result<Arc<ActorTaskHandle>> {
-		if let Some(instance) = self.actor_instances.get_async(&actor_id.to_owned()).await {
+		let instance = match self.current_generation(actor_id).await {
+			Some(generation) => {
+				self.actor_instances
+					.get_async(&instance_key(actor_id, generation))
+					.await
+			}
+			None => None,
+		};
+		if let Some(instance) = instance {
 			match instance.get() {
 				ActorInstanceState::Active(instance) => {
 					let instance = instance.clone();
 					// TODO: Share admission policy with ActorTask::dispatch_lifecycle_error.
-					if instance.ctx.started() {
+					if instance.ctx.started() && !instance.ctx.is_lost() {
 						if instance.ctx.destroy_requested() {
 							instance
 								.ctx
@@ -1068,7 +1291,7 @@ impl RegistryDispatcher {
 						.warn_work_sent_to_stopping_instance("active_actor");
 					return Err(if instance.ctx.destroy_requested() {
 						ActorLifecycleError::Destroying.build()
-					} else if instance.ctx.sleep_requested() {
+					} else if instance.ctx.sleep_requested() || instance.ctx.is_lost() {
 						ActorLifecycleError::Stopping.build()
 					} else {
 						ActorLifecycleError::Starting.build()
@@ -1077,7 +1300,13 @@ impl RegistryDispatcher {
 				ActorInstanceState::Stopping { instance, reason } => {
 					let instance = instance.clone();
 					match reason {
-						ShutdownKind::Sleep if instance.ctx.started() => return Ok(instance),
+						// A lost generation takes no new work; the engine routes it to the next
+						// generation.
+						ShutdownKind::Sleep
+							if instance.ctx.started() && !instance.ctx.is_lost() =>
+						{
+							return Ok(instance);
+						}
 						ShutdownKind::Sleep => {
 							instance
 								.ctx
@@ -1104,33 +1333,36 @@ impl RegistryDispatcher {
 	}
 
 	async fn stop_actor(
-		&self,
+		self: &Arc<Self>,
 		actor_id: &str,
 		generation: u32,
 		reason: protocol::StopActorReason,
 		stop_handle: ActorStopHandle,
 	) -> Result<()> {
-		if self
-			.starting_instances
-			.get_async(&actor_id.to_owned())
-			.await
-			.is_some()
-		{
-			// The target generation is still starting. Park the stop with its generation
-			// so startup can decide whether it belongs to the generation being started.
-			let _ = self
-				.pending_stops
-				.insert_async(
-					actor_id.to_owned(),
-					PendingStop {
-						generation,
-						reason,
-						stop_handle,
-					},
-				)
-				.await;
-			return Ok(());
-		}
+		let key = instance_key(actor_id, generation);
+		let pending_stop = PendingStop {
+			generation,
+			reason,
+			stop_handle,
+		};
+		let pending_stop = match self.starting_instances.entry_async(key.clone()).await {
+			SccEntry::Occupied(starting) => {
+				// The generation is still starting. Park the stop under the starting entry so
+				// its startup consumes it.
+				self.park_stop(key, pending_stop).await;
+				drop(starting);
+				return Ok(());
+			}
+			SccEntry::Vacant(starting) => {
+				drop(starting);
+				pending_stop
+			}
+		};
+		let PendingStop {
+			reason,
+			stop_handle,
+			..
+		} = pending_stop;
 
 		let task_stop_reason = map_envoy_stop_reason(&reason);
 		match self
@@ -1141,31 +1373,45 @@ impl RegistryDispatcher {
 				let result = self
 					.shutdown_started_instance(actor_id, instance.clone(), reason, stop_handle)
 					.await;
-				self.remove_stopping_actor_instance(actor_id, &instance)
+				self.remove_stopping_actor_instance_when_finished(actor_id, &instance)
 					.await;
 				result
 			}
-			TransitionResult::Stale => {
-				// The running instance is a different generation; this stop targets a
-				// generation that is already gone. Complete the handle so envoy-client
-				// finalizes teardown cleanly instead of warning about a dropped handle.
-				let _ = stop_handle.complete();
-				Ok(())
-			}
 			TransitionResult::Vacant => {
-				let _ = self
-					.pending_stops
-					.insert_async(
-						actor_id.to_owned(),
-						PendingStop {
-							generation,
-							reason,
-							stop_handle,
-						},
-					)
-					.await;
+				match self.current_generation(actor_id).await {
+					Some(current) if current > generation => {
+						// A newer generation is registered, so this generation already finished
+						// tearing down. Complete the handle so envoy-client finalizes the stop.
+						let _ = stop_handle.complete();
+					}
+					Some(_) | None => {
+						// The stop can arrive before its generation's start reaches the
+						// registry. Park it for that startup.
+						self.park_stop(
+							key,
+							PendingStop {
+								generation,
+								reason,
+								stop_handle,
+							},
+						)
+						.await;
+					}
+				}
 				Ok(())
 			}
+		}
+	}
+
+	async fn park_stop(&self, key: InstanceKey, pending_stop: PendingStop) {
+		if let Err((_, duplicate)) = self.pending_stops.insert_async(key, pending_stop).await {
+			// envoy-client sends one stop per generation. A duplicate adds nothing, so complete
+			// it rather than dropping its handle.
+			tracing::warn!(
+				generation = duplicate.generation,
+				"duplicate stop parked for an actor generation"
+			);
+			let _ = duplicate.stop_handle.complete();
 		}
 	}
 
@@ -1180,6 +1426,11 @@ impl RegistryDispatcher {
 
 		if matches!(task_stop_reason, ShutdownKind::Destroy) {
 			instance.ctx.mark_destroy_requested();
+		}
+		if matches!(reason, protocol::StopActorReason::Lost) {
+			// envoy-client normally fires the lost signal before this stop arrives. Marking it
+			// here as well covers stops that reach core by other paths.
+			instance.ctx.mark_lost();
 		}
 
 		tracing::debug!(
@@ -1205,6 +1456,19 @@ impl RegistryDispatcher {
 				.context("receive actor task stop reply")
 				.and_then(|result| result),
 			Err(error) => Err(error),
+		};
+		// A lost generation aborts on its lost signal without waiting for this stop, so the task
+		// may already have exited and dropped the command. Its outcome is its join result below.
+		let shutdown_result = match shutdown_result {
+			Err(error) if instance.ctx.is_lost() => {
+				tracing::debug!(
+					actor_id,
+					%error,
+					"lost actor task finished before its stop command was handled"
+				);
+				Ok(())
+			}
+			result => result,
 		};
 
 		if matches!(task_stop_reason, ShutdownKind::Destroy) {
@@ -1274,15 +1538,34 @@ impl RegistryDispatcher {
 	}
 }
 
+fn remove_starting_entry(starting: SccEntry<'_, InstanceKey, ActorContext>) {
+	match starting {
+		SccEntry::Occupied(entry) => {
+			let _ = entry.remove_entry();
+		}
+		SccEntry::Vacant(entry) => {
+			drop(entry);
+		}
+	}
+}
+
 impl RegistryDispatcher {
 	fn can_hibernate(&self, actor_id: &str, request: &HttpRequest) -> bool {
 		if matches!(is_actor_connect_path(&request.path), Ok(true)) {
 			return true;
 		}
 
+		let Some(generation) = self
+			.current_generations
+			.read_sync(actor_id, |_, generation| *generation)
+		else {
+			return false;
+		};
 		let Some(instance) = self
 			.actor_instances
-			.read_sync(actor_id, |_, state| state.active_instance())
+			.read_sync(&instance_key(actor_id, generation), |_, state| {
+				state.active_instance()
+			})
 			.flatten()
 		else {
 			return false;
