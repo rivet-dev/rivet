@@ -40,10 +40,14 @@ actor, not before shipping it.
 - **Review action timeout configuration.** The default `actionTimeout` is 60 seconds. Increase it if you have long-running actions like API calls or file processing. See [Actor Configuration](/actors/docs/actor-configuration).
 - **Review message size limits.** The default `maxIncomingMessageSize` is 64 KiB and `maxOutgoingMessageSize` is 1 MiB. Increase if your actors send or receive large JSON payloads. See [Registry Configuration](/actors/docs/registry-configuration).
 
+### Backward Compatibility
+
+- **Check that actor APIs remain backward compatible.** Test existing action calls, queue messages, and event subscribers against the new actor code. Keep the old API version available while older clients or queued messages still use it. See [Backward Compatibility](/actors/docs/backward-compatibility).
+
 ### Queues
 
 - **Review queue limits.** The default `maxQueueSize` is 1,000 messages and `maxQueueMessageSize` is 64 KiB. Increase if you expect burst traffic or large queue payloads. See [Actor Configuration](/actors/docs/actor-configuration).
-- **Ensure queue handlers are idempotent.** If processing fails before `message.complete()`, the message will be retried. See [Queues](/actors/docs/queues).
+- **Ensure completable queue handlers are idempotent.** A message remains queued until `message.complete()` and can be received again. Ordinary receives remove messages when received. See [Queues](/actors/docs/queues).
 
 ### Workflows
 

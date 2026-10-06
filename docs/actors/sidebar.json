@@ -101,6 +101,10 @@
 					"href": "/actors/docs/design-patterns"
 				},
 				{
+					"title": "Backward Compatibility",
+					"href": "/actors/docs/backward-compatibility"
+				},
+				{
 					"title": "Communication & Networking",
 					"collapsible": true,
 					"pages": [
