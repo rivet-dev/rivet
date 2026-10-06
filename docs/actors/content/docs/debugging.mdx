@@ -38,12 +38,13 @@ Inspector endpoints always require the actor's inspector token, including in loc
 
 | Environment | Authentication |
 |---|---|
-| **Local development** | Bearer the actor's inspector token in the `Authorization` header. Fetch it through the management KV endpoint (see below). |
+| **Local development** | Bearer the actor's inspector token in the `Authorization` header, and pass the local control plane's admin token in the `x-rivet-token` header so the request passes the gateway. Fetch the inspector token through the management KV endpoint (see below). |
 | **Self-hosted engine** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically; for direct API access, fetch it through the management KV endpoint (see below). |
 | **Rivet Cloud** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically; for direct API access, fetch it through the management KV endpoint (see below). |
 
 ```bash
 curl "$RIVET_API/gateway/{actor_id}/inspector/summary" \
+  -H "x-rivet-token: $RIVET_TOKEN" \
   -H 'Authorization: Bearer YOUR_INSPECTOR_TOKEN'
 ```
 
@@ -65,6 +66,7 @@ INSPECTOR_TOKEN=$(echo "$RESPONSE" | jq -r '.value' | base64 -d)
 
 # Use it to call inspector endpoints
 curl "$RIVET_API/gateway/$ACTOR_ID/inspector/summary" \
+  -H "x-rivet-token: $RIVET_TOKEN" \
   -H "Authorization: Bearer $INSPECTOR_TOKEN"
 ```
 
@@ -122,7 +124,7 @@ If `wait: true` and the timeout is reached, `status` is `"timedOut"`.
 
 The inspector HTTP API exposes JSON endpoints for querying and modifying actor internals at runtime. These are designed for agent-based debugging and tooling.
 
-Every inspector endpoint requires the actor's inspector token as a bearer token, including in local development. The examples below omit the `Authorization` header for brevity, but you must add `-H "Authorization: Bearer $INSPECTOR_TOKEN"` to each request. See [Retrieving the Inspector Token](#retrieving-the-inspector-token) above.
+Every inspector endpoint requires the actor's inspector token as a bearer token, including in local development. The examples below omit the authentication headers for brevity, but you must add `-H "Authorization: Bearer $INSPECTOR_TOKEN"` to each request. In local development, also add `-H "x-rivet-token: $RIVET_TOKEN"` so the request passes the gateway. See [Retrieving the Inspector Token](#retrieving-the-inspector-token) above.
 
 ### Get State
 
