@@ -290,6 +290,7 @@ mod moved_tests {
 				// Zero means no engine ping has been received yet, which
 				// `is_ping_healthy` treats as unhealthy.
 				last_ping_ts: AtomicI64::new(0),
+				engine_liveness: Default::default(),
 				stopped_tx: tokio::sync::watch::channel(true).0,
 			});
 

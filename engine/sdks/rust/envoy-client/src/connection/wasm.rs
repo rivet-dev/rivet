@@ -104,6 +104,7 @@ mod imp {
 	) -> anyhow::Result<(u64, Option<crate::utils::ParsedCloseReason>)> {
 		let url = super::super::ws_url(shared);
 		let protocols = protocols(&shared.config.token);
+		let connect_started_at = crate::time::Instant::now();
 		let ws = WebSocket::new_with_str_sequence(&url, protocols.as_ref())
 			.map_err(|error| anyhow::anyhow!("failed to create websocket: {}", js_error(error)))?;
 		ws.set_binary_type(BinaryType::Arraybuffer);
@@ -177,9 +178,14 @@ mod imp {
 		let (http_ws_tx, mut http_ws_rx) =
 			mpsc::channel::<HttpWsTxMessage>(super::super::HTTP_WS_MESSAGE_CAPACITY);
 		let http_byte_budget = Arc::new(Semaphore::new(super::super::HTTP_WS_BYTE_CAPACITY));
-		let session =
-			super::super::install_connection_with_http(shared, ws_tx, http_ws_tx, http_byte_budget)
-				.await;
+		let session = super::super::install_connection_with_http(
+			shared,
+			ws_tx,
+			http_ws_tx,
+			http_byte_budget,
+			connect_started_at,
+		)
+		.await;
 
 		tracing::info!(
 			endpoint = %shared.config.endpoint,

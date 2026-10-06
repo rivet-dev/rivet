@@ -49,7 +49,14 @@ pub(crate) async fn install_connection(
 			let _ = message.written.send(result);
 		}
 	});
-	install_connection_with_http(shared, tx, http_tx, http_byte_budget).await
+	install_connection_with_http(
+		shared,
+		tx,
+		http_tx,
+		http_byte_budget,
+		crate::time::Instant::now(),
+	)
+	.await
 }
 
 pub(crate) async fn install_connection_with_http(
@@ -57,6 +64,9 @@ pub(crate) async fn install_connection_with_http(
 	tx: tokio::sync::mpsc::UnboundedSender<WsTxMessage>,
 	http_tx: tokio::sync::mpsc::Sender<HttpWsTxMessage>,
 	http_byte_budget: std::sync::Arc<tokio::sync::Semaphore>,
+	// When the client started opening this connection. The engine can only claim the connection
+	// after that, so it is a safe lower bound for the claim even when the install itself is late.
+	connect_started_at: crate::time::Instant,
 ) -> u64 {
 	let mut guard = shared.ws_tx.lock().await;
 	let mut http_guard = shared.http_ws_tx.lock().await;
@@ -64,9 +74,9 @@ pub(crate) async fn install_connection_with_http(
 		.next_connection_session
 		.fetch_add(1, Ordering::AcqRel)
 		.saturating_add(1);
-	// A ping from an earlier connection says nothing about this one. Clearing it keeps the engine
-	// ping silence check disabled until this connection receives its first ping.
-	shared.last_ping_ts.store(0, Ordering::Release);
+	shared
+		.engine_liveness
+		.connection_installed(connect_started_at);
 	shared.connection_session.store(session, Ordering::Release);
 	*guard = Some(tx);
 	*http_guard = Some(HttpConnectionTx {
@@ -240,18 +250,20 @@ async fn forward_to_envoy(shared: &SharedContext, session: u64, message: protoco
 
 	match message {
 		protocol::ToEnvoy::ToEnvoyPing(ping) => {
-			let previous_ping_ts = shared
+			shared
 				.last_ping_ts
-				.swap(crate::time::now_millis(), Ordering::AcqRel);
+				.store(crate::time::now_millis(), Ordering::Release);
+			let newly_claimed = shared
+				.engine_liveness
+				.ping_received(crate::time::Instant::now());
 			ws_send(
 				shared,
 				protocol::ToRivet::ToRivetPong(protocol::ToRivetPong { ts: ping.ts }),
 			)
 			.await;
-			// The envoy loop does not arm the engine ping silence check while no ping is
-			// recorded. Wake it on the first ping so the check arms without waiting for an
-			// unrelated event.
-			if previous_ping_ts == 0 {
+			// The first ping on a connection moves the engine ping silence baseline. The envoy
+			// loop computes the silence wait only when a turn starts, so wake it.
+			if newly_claimed {
 				let _ = crate::envoy::send_to_envoy_tx(
 					shared,
 					ToEnvoyMessage::ConnMessage {
@@ -262,6 +274,11 @@ async fn forward_to_envoy(shared: &SharedContext, session: u64, message: protoco
 			}
 		}
 		other => {
+			if matches!(other, protocol::ToEnvoy::ToEnvoyCommands(_)) {
+				// Recorded before forwarding so the envoy loop sees the claim when it handles the
+				// commands.
+				shared.engine_liveness.commands_received();
+			}
 			let _ = crate::envoy::send_to_envoy_tx(
 				shared,
 				ToEnvoyMessage::ConnMessage {

@@ -104,6 +104,8 @@ pub struct ActorEntry {
 	pub name: String,
 	pub last_command_idx: i64,
 	pub received_stop: bool,
+	/// When this generation was added. The engine ping silence deadline never counts from earlier.
+	pub created_at: crate::time::Instant,
 }
 
 #[derive(Default)]
@@ -280,6 +282,7 @@ impl EnvoyContext {
 					name,
 					last_command_idx,
 					received_stop: false,
+					created_at: crate::time::Instant::now(),
 				},
 			);
 		self.shared
@@ -440,6 +443,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(0),
+		engine_liveness: Default::default(),
 		stopped_tx,
 	});
 
@@ -619,7 +623,7 @@ async fn envoy_loop(
 				}
 			} => {
 				branch = "lost_timeout";
-				declare_actors_lost(&mut ctx, "stopping all actors due to envoy lost threshold");
+				declare_actors_lost(&mut ctx, "envoy_lost_threshold");
 				lost_timeout = None;
 			}
 			_ = async {
@@ -629,12 +633,9 @@ async fn envoy_loop(
 				}
 			}, if !ctx.actors.is_empty() => {
 				branch = "engine_ping_silence";
-				// A ping may have arrived while this branch slept.
-				if engine_ping_silence_expired(&ctx, crate::time::now_millis()) {
-					declare_actors_lost(
-						&mut ctx,
-						"stopping all actors because the engine stopped pinging and is about to declare them lost",
-					);
+				// A ping may have arrived while this branch slept, so this rechecks each deadline.
+				declare_silent_actors_lost(&mut ctx, crate::time::Instant::now());
+				if ctx.actors.is_empty() {
 					lost_timeout = None;
 				}
 			}
@@ -772,7 +773,7 @@ async fn handle_conn_message(
 		}
 		protocol::ToEnvoy::ToEnvoyPing(_) => {
 			// The connection task records pings. It forwards only the first ping of a connection,
-			// so this loop takes a turn and arms the engine ping silence check.
+			// so this loop takes a turn and recomputes the engine ping silence wait.
 		}
 	}
 
@@ -801,36 +802,90 @@ fn envoy_lost_threshold_ms(ctx: &EnvoyContext) -> i64 {
 		.unwrap_or(10_000)
 }
 
-/// When the envoy stops trusting its actors after the last engine ping. The engine refreshes its
-/// envoy liveness timestamp right before sending each ping and declares the envoy's actors lost
-/// once that timestamp is older than `envoy_lost_threshold`, then may start them elsewhere. The
-/// envoy receives each ping after that refresh, so giving up a margin before the threshold normally
-/// stops the actors before the engine can reallocate them. A ping delayed in transit by more than
-/// the margin can still let the engine give up first. This also covers half-open connections that
-/// never report a close.
-pub fn engine_ping_silence_deadline_ms(ctx: &EnvoyContext) -> Option<i64> {
-	let last_ping_ts = ctx.shared.last_ping_ts.load(Ordering::Acquire);
-	if last_ping_ts == 0 {
-		return None;
-	}
+/// When the envoy stops trusting a generation created at `created_at`. The engine declares the
+/// envoy's actors lost once its liveness timestamp is older than `envoy_lost_threshold`, then may
+/// start them elsewhere. The deadline counts from `EngineLiveness::baseline`, the latest time the
+/// envoy knows the engine refreshed that timestamp, and gives up a margin before the threshold, so
+/// the envoy normally stops its actors first. This also covers half-open connections that never
+/// report a close. A ping delayed in transit by more than the margin can still let the engine give
+/// up first.
+///
+/// A generation created after the baseline counts from its creation instead. The engine only
+/// assigns it over a connection it has claimed, which refreshed its timestamp no earlier than the
+/// creation, so judging it against a stale baseline would stop a freshly started actor at once.
+pub fn engine_ping_silence_deadline(
+	ctx: &EnvoyContext,
+	created_at: crate::time::Instant,
+) -> Option<crate::time::Instant> {
+	let baseline = ctx.shared.engine_liveness.baseline()?;
 	let threshold = envoy_lost_threshold_ms(ctx);
 	let margin = LOST_THRESHOLD_SAFETY_MARGIN_MS.min(threshold / 2);
-	Some(last_ping_ts + threshold - margin)
+	Some(
+		baseline.max(created_at)
+			+ std::time::Duration::from_millis((threshold - margin).max(0) as u64),
+	)
 }
 
-pub fn engine_ping_silence_expired(ctx: &EnvoyContext, now_ms: i64) -> bool {
-	engine_ping_silence_deadline_ms(ctx).is_some_and(|deadline| now_ms >= deadline)
+/// The earliest engine ping silence deadline among this envoy's actors.
+fn next_engine_ping_silence_deadline(ctx: &EnvoyContext) -> Option<crate::time::Instant> {
+	ctx.actors
+		.values()
+		.flat_map(|generations| generations.values())
+		.filter_map(|entry| engine_ping_silence_deadline(ctx, entry.created_at))
+		.min()
 }
 
 fn engine_ping_silence_wait(ctx: &EnvoyContext) -> Option<std::time::Duration> {
-	let deadline = engine_ping_silence_deadline_ms(ctx)?;
-	let remaining = (deadline - crate::time::now_millis()).max(0);
-	Some(std::time::Duration::from_millis(remaining as u64))
+	let deadline = next_engine_ping_silence_deadline(ctx)?;
+	Some(deadline.saturating_duration_since(crate::time::Instant::now()))
+}
+
+/// Stops the generations whose engine ping silence deadline has passed. When every generation
+/// expired, this is the same as `declare_actors_lost`.
+pub fn declare_silent_actors_lost(ctx: &mut EnvoyContext, now: crate::time::Instant) {
+	let mut total = 0;
+	let mut expired = Vec::new();
+	for (actor_id, generations) in &ctx.actors {
+		for (generation, entry) in generations {
+			total += 1;
+			if engine_ping_silence_deadline(ctx, entry.created_at)
+				.is_some_and(|deadline| now >= deadline)
+			{
+				expired.push((actor_id.clone(), *generation));
+			}
+		}
+	}
+	if expired.is_empty() {
+		return;
+	}
+	if expired.len() == total {
+		declare_actors_lost(ctx, "engine_ping_silence");
+		return;
+	}
+
+	tracing::warn!(
+		actor_count = expired.len(),
+		reason = "engine_ping_silence",
+		"declaring envoy actors lost"
+	);
+	for (actor_id, generation) in expired {
+		if let Some(entry) = ctx
+			.actors
+			.get(&actor_id)
+			.and_then(|generations| generations.get(&generation))
+		{
+			entry.lost.cancel();
+			if !entry.handle.is_closed() {
+				let _ = entry.handle.send(ToActor::Lost);
+			}
+		}
+		ctx.remove_actor(&actor_id, generation);
+	}
 }
 
 /// Stops every actor on this envoy because the engine has given up on them. The lost token is
 /// cancelled first so each generation stops writing storage before its task sees the message.
-pub fn declare_actors_lost(ctx: &mut EnvoyContext, message: &'static str) {
+pub fn declare_actors_lost(ctx: &mut EnvoyContext, reason: &'static str) {
 	for (_id, request) in ctx.kv_requests.drain() {
 		METRICS.kv_requests_inflight.dec();
 		let _ = request
@@ -845,7 +900,7 @@ pub fn declare_actors_lost(ctx: &mut EnvoyContext, message: &'static str) {
 	}
 	tracing::warn!(
 		actor_count = ctx.actors.len(),
-		reason = message,
+		reason,
 		"declaring envoy actors lost"
 	);
 	for (_actor_id, gens) in &ctx.actors {

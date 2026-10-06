@@ -10,7 +10,7 @@ use rivet_envoy_client::config::{
 };
 use rivet_envoy_client::context::{SharedContext, WsTxMessage};
 use rivet_envoy_client::envoy::{
-	EnvoyContext, declare_actors_lost, engine_ping_silence_deadline_ms, engine_ping_silence_expired,
+	EnvoyContext, declare_actors_lost, declare_silent_actors_lost, engine_ping_silence_deadline,
 };
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::sqlite::{
@@ -107,6 +107,7 @@ fn new_envoy_context() -> EnvoyContext {
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(0),
+		engine_liveness: Default::default(),
 		stopped_tx: tokio::sync::watch::channel(true).0,
 	});
 	EnvoyContext {
@@ -570,16 +571,16 @@ async fn queued_kv_write_is_dropped_once_its_generation_is_lost() {
 	assert!(format!("{error:#}").contains("declared lost"));
 }
 
-/// The engine declares actors lost `envoy_lost_threshold` after its last ping refresh. The envoy
-/// gives up a safety margin earlier, measured from the last ping it received, so its actors stop
-/// before the engine can start them elsewhere.
+/// The engine declares actors lost `envoy_lost_threshold` after its last liveness refresh. The
+/// envoy gives up a safety margin earlier, counting from the latest time it knows the engine
+/// refreshed, so its actors stop before the engine can start them elsewhere.
 #[tokio::test]
 async fn engine_ping_silence_expires_before_the_engine_lost_threshold() {
 	let ctx = new_envoy_context();
-	assert_eq!(
-		engine_ping_silence_deadline_ms(&ctx),
-		None,
-		"no deadline before the first engine ping"
+	let created_at = std::time::Instant::now();
+	assert!(
+		engine_ping_silence_deadline(&ctx, created_at).is_none(),
+		"no deadline before the first connection"
 	);
 
 	*ctx.shared.protocol_metadata.lock().await = Some(protocol::ProtocolMetadata {
@@ -587,22 +588,79 @@ async fn engine_ping_silence_expires_before_the_engine_lost_threshold() {
 		actor_stop_threshold: 1_800_000,
 		max_response_payload_size: 20_971_520,
 	});
-	let last_ping_ts = 1_700_000_000_000;
-	ctx.shared
-		.last_ping_ts
-		.store(last_ping_ts, std::sync::atomic::Ordering::Release);
+	ctx.shared.engine_liveness.connection_installed(created_at);
+	let pinged_at = created_at + std::time::Duration::from_secs(1);
+	ctx.shared.engine_liveness.ping_received(pinged_at);
 
-	let deadline = engine_ping_silence_deadline_ms(&ctx).expect("deadline after a ping");
+	let deadline = engine_ping_silence_deadline(&ctx, created_at).expect("deadline after a ping");
 	assert!(
-		deadline < last_ping_ts + 15_000,
+		deadline < pinged_at + std::time::Duration::from_secs(15),
 		"the envoy must give up before the engine's threshold"
 	);
 	assert!(
-		deadline > last_ping_ts + 3_000,
+		deadline > pinged_at + std::time::Duration::from_secs(3),
 		"the envoy must tolerate several missed ping intervals"
 	);
-	assert!(!engine_ping_silence_expired(&ctx, deadline - 1));
-	assert!(engine_ping_silence_expired(&ctx, deadline));
+
+	// A generation created after the baseline counts from its creation instead.
+	let started_late = pinged_at + std::time::Duration::from_secs(20);
+	assert_eq!(
+		engine_ping_silence_deadline(&ctx, started_late),
+		Some(started_late + (deadline - pinged_at)),
+	);
+}
+
+/// Only generations whose own deadline passed are stopped. An actor started after a stale
+/// baseline, for example by a serverless start while the WebSocket is down, keeps running.
+#[tokio::test]
+async fn ping_silence_stops_only_generations_past_their_own_deadline() {
+	let mut ctx = new_envoy_context();
+	let (actor_tx, mut actor_rx) = mpsc::unbounded_channel::<ToActor>();
+	let old_lost = tokio_util::sync::CancellationToken::new();
+	let new_lost = tokio_util::sync::CancellationToken::new();
+	let installed_at = std::time::Instant::now();
+	ctx.shared
+		.engine_liveness
+		.connection_installed(installed_at);
+	ctx.shared.engine_liveness.ping_received(installed_at);
+	for (actor_id, lost) in [
+		("actor-old", old_lost.clone()),
+		("actor-new", new_lost.clone()),
+	] {
+		ctx.insert_actor_with_lost_signal(
+			actor_id.to_string(),
+			1,
+			actor_tx.clone(),
+			lost,
+			Arc::new(AsyncCounter::new()),
+			actor_id.to_string(),
+			-1,
+		);
+	}
+	let old_deadline = engine_ping_silence_deadline(&ctx, installed_at).expect("deadline");
+	// Treat the old actor as created at the baseline and the new one as created after it.
+	ctx.actors
+		.get_mut("actor-old")
+		.and_then(|generations| generations.get_mut(&1))
+		.expect("old actor")
+		.created_at = installed_at;
+	ctx.actors
+		.get_mut("actor-new")
+		.and_then(|generations| generations.get_mut(&1))
+		.expect("new actor")
+		.created_at = old_deadline;
+
+	declare_silent_actors_lost(&mut ctx, old_deadline);
+
+	assert!(old_lost.is_cancelled(), "the expired generation is stopped");
+	assert!(
+		!new_lost.is_cancelled(),
+		"the newer generation keeps running"
+	);
+	assert!(ctx.get_actor("actor-old", Some(1)).is_none());
+	assert!(ctx.get_actor("actor-new", Some(1)).is_some());
+	assert!(matches!(actor_rx.try_recv(), Ok(ToActor::Lost)));
+	assert!(actor_rx.try_recv().is_err());
 }
 
 #[tokio::test]

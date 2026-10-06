@@ -116,6 +116,17 @@ async fn recv(ws: &mut WebSocketStream<TcpStream>) -> protocol::ToRivet {
 	}
 }
 
+/// Waits for the actor to report stopped. Unacknowledged events, such as an earlier running
+/// state, are replayed on a new connection and skipped here.
+async fn recv_actor_stopped(ws: &mut WebSocketStream<TcpStream>) -> protocol::ActorState {
+	loop {
+		let state = recv_actor_state(ws).await;
+		if matches!(state, protocol::ActorState::ActorStateStopped(_)) {
+			return state;
+		}
+	}
+}
+
 async fn recv_actor_state(ws: &mut WebSocketStream<TcpStream>) -> protocol::ActorState {
 	loop {
 		if let protocol::ToRivet::ToRivetEvents(events) = recv(ws).await {
@@ -158,8 +169,7 @@ fn start_actor() -> protocol::ToEnvoy {
 	}])
 }
 
-#[tokio::test]
-async fn ping_from_previous_connection_does_not_stop_actor_started_after_reconnect() {
+async fn start_envoy() -> (TcpListener, EnvoyHandle) {
 	let listener = TcpListener::bind("127.0.0.1:0")
 		.await
 		.expect("bind fake engine");
@@ -175,6 +185,28 @@ async fn ping_from_previous_connection_does_not_stop_actor_started_after_reconne
 		debug_latency_ms: None,
 		callbacks: Arc::new(IdleCallbacks),
 	});
+	(listener, handle)
+}
+
+async fn ping(ws: &mut WebSocketStream<TcpStream>) {
+	send(
+		ws,
+		protocol::ToEnvoy::ToEnvoyPing(protocol::ToEnvoyPing { ts: 0 }),
+	)
+	.await;
+	while !matches!(recv(ws).await, protocol::ToRivet::ToRivetPong(_)) {}
+}
+
+fn assert_stopped_with_error(state: protocol::ActorState) {
+	let protocol::ActorState::ActorStateStopped(stopped) = state else {
+		panic!("expected a stopped actor, got {state:?}");
+	};
+	assert_eq!(stopped.code, protocol::StopCode::Error);
+}
+
+#[tokio::test]
+async fn ping_from_previous_connection_does_not_stop_actor_started_after_reconnect() {
+	let (listener, handle) = start_envoy().await;
 
 	// The first connection is pinged once, then the engine drops it.
 	let mut first = accept(&listener).await;
@@ -226,6 +258,127 @@ async fn ping_from_previous_connection_does_not_stop_actor_started_after_reconne
 		panic!("expected a stopped actor, got {state:?}");
 	};
 	assert_eq!(stopped.code, protocol::StopCode::Error);
+
+	handle.shutdown(true);
+}
+
+/// The engine claims a connection and sends commands, then the link goes half-open before its
+/// first ping. The silence check must still stop the actor, counting from the new connection.
+#[tokio::test]
+async fn half_open_connection_before_first_ping_still_stops_actors() {
+	let (listener, handle) = start_envoy().await;
+
+	let mut ws = accept(&listener).await;
+	let installed_at = Instant::now();
+	send(&mut ws, init()).await;
+	send(&mut ws, start_actor()).await;
+	assert!(matches!(
+		recv_actor_state(&mut ws).await,
+		protocol::ActorState::ActorStateRunning
+	));
+
+	// No ping ever arrives and the connection never reports a close.
+	let state = tokio::time::timeout(Duration::from_secs(5), recv_actor_state(&mut ws))
+		.await
+		.expect("actor should stop even though the connection was never pinged");
+	assert!(
+		installed_at.elapsed() >= SILENCE_DEADLINE - Duration::from_millis(100),
+		"actor stopped {:?} after the connection opened, before the silence deadline",
+		installed_at.elapsed()
+	);
+	assert_stopped_with_error(state);
+
+	handle.shutdown(true);
+}
+
+/// After a reconnect the engine sends Init before it claims the connection, and only the claim
+/// refreshes its liveness timestamp. If the claim never happens, the engine is still counting from
+/// the last ping on the previous connection, so the envoy must stop its actors on that deadline.
+#[tokio::test]
+async fn unclaimed_reconnect_stops_actors_on_the_previous_ping_deadline() {
+	let (listener, handle) = start_envoy().await;
+
+	let mut first = accept(&listener).await;
+	send(&mut first, init()).await;
+	send(&mut first, start_actor()).await;
+	assert!(matches!(
+		recv_actor_state(&mut first).await,
+		protocol::ActorState::ActorStateRunning
+	));
+	ping(&mut first).await;
+	let old_ping_at = Instant::now();
+	drop(first);
+
+	// The envoy reconnects and receives Init, but the engine never claims the connection: no
+	// commands and no ping follow.
+	let mut second = accept(&listener).await;
+	send(&mut second, init()).await;
+
+	let state = tokio::time::timeout(Duration::from_secs(5), recv_actor_stopped(&mut second))
+		.await
+		.expect("actor should stop on the previous ping's deadline");
+	assert!(
+		old_ping_at.elapsed() < SILENCE_DEADLINE + Duration::from_millis(500),
+		"actor stopped {:?} after the last ping, later than the engine's view allows",
+		old_ping_at.elapsed()
+	);
+	assert_stopped_with_error(state);
+
+	handle.shutdown(true);
+}
+
+/// A serverless start injected over HTTP while the WebSocket is not yet claimed must not be judged
+/// against the stale baseline. The actor runs and stops only at its own silence deadline.
+#[tokio::test]
+async fn serverless_start_on_unclaimed_connection_counts_from_its_creation() {
+	let (listener, handle) = start_envoy().await;
+
+	let mut first = accept(&listener).await;
+	send(&mut first, init()).await;
+	ping(&mut first).await;
+	let old_ping_at = Instant::now();
+	drop(first);
+
+	// The new connection receives Init but is never claimed.
+	let mut second = accept(&listener).await;
+	send(&mut second, init()).await;
+	tokio::time::sleep_until(old_ping_at + SILENCE_DEADLINE + Duration::from_millis(200)).await;
+
+	let mut payload = protocol::PROTOCOL_VERSION.to_le_bytes().to_vec();
+	payload.extend(
+		protocol::versioned::ToEnvoy::wrap_latest(start_actor())
+			.serialize(protocol::PROTOCOL_VERSION)
+			.expect("encode serverless start"),
+	);
+	handle
+		.start_serverless_actor(&payload)
+		.await
+		.expect("inject serverless start");
+	let started_at = Instant::now();
+	assert!(matches!(
+		recv_actor_state(&mut second).await,
+		protocol::ActorState::ActorStateRunning
+	));
+
+	let early = tokio::time::timeout(
+		SILENCE_DEADLINE - Duration::from_millis(300),
+		recv_actor_stopped(&mut second),
+	)
+	.await;
+	assert!(
+		early.is_err(),
+		"actor stopped against the stale baseline: {early:?}"
+	);
+
+	let state = tokio::time::timeout(Duration::from_secs(5), recv_actor_stopped(&mut second))
+		.await
+		.expect("actor should stop at its own silence deadline");
+	assert!(
+		started_at.elapsed() >= SILENCE_DEADLINE - Duration::from_millis(100),
+		"actor stopped {:?} after it started, before its silence deadline",
+		started_at.elapsed()
+	);
+	assert_stopped_with_error(state);
 
 	handle.shutdown(true);
 }

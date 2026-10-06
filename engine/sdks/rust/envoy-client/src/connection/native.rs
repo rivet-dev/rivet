@@ -125,6 +125,7 @@ async fn single_connection(
 		.body(())
 		.map_err(|e| anyhow::anyhow!("failed to build ws request: {e}"))?;
 
+	let connect_started_at = crate::time::Instant::now();
 	let (ws_stream, _) =
 		tokio_tungstenite::connect_async_with_config(request, Some(websocket_config()), false)
 			.await?;
@@ -136,8 +137,14 @@ async fn single_connection(
 	let (http_ws_tx, mut http_ws_rx) =
 		mpsc::channel::<HttpWsTxMessage>(super::HTTP_WS_MESSAGE_CAPACITY);
 	let http_byte_budget = Arc::new(Semaphore::new(super::HTTP_WS_BYTE_CAPACITY));
-	let session =
-		super::install_connection_with_http(shared, ws_tx, http_ws_tx, http_byte_budget).await;
+	let session = super::install_connection_with_http(
+		shared,
+		ws_tx,
+		http_ws_tx,
+		http_byte_budget,
+		connect_started_at,
+	)
+	.await;
 
 	tracing::info!(
 		endpoint = %shared.config.endpoint,
