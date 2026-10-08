@@ -1,3 +1,5 @@
+import type { Rivet } from "@rivet-gg/cloud";
+
 /** Human-readable plan names. `pro` is presented as "Hobby". */
 export const PLAN_LABELS: Record<string, string> = {
 	free: "Free",
@@ -148,3 +150,136 @@ export const getPlan = (id: PlanId) => {
 	}
 	return plan;
 };
+
+/** Rivet project (pallet) plans. A plan sets the engine node count and SLA. */
+export const PALLET_PLANS = [
+	{
+		id: "free",
+		monthlyUsd: 0,
+		description: "For prototyping.",
+		nodes: 1,
+		sla: null,
+		highlights: ["1 node", "No SLA", "Community support"],
+	},
+	{
+		id: "pro",
+		monthlyUsd: 20,
+		description: "For side projects that need to stay up.",
+		nodes: 1,
+		sla: "99.5%",
+		highlights: ["1 node", "99.5% uptime SLA", "Email support"],
+	},
+	{
+		id: "team",
+		monthlyUsd: 200,
+		description: "For production workloads and growing teams.",
+		nodes: 3,
+		sla: "99.9%",
+		highlights: [
+			"3 nodes, high availability",
+			"99.9% uptime SLA",
+			"Slack & email support",
+		],
+	},
+	{
+		id: "enterprise",
+		monthlyUsd: 1500,
+		description: "For compliance, SSO, audit logs, and dedicated support.",
+		nodes: 3,
+		sla: "99.99%",
+		highlights: [
+			"3 nodes, high availability",
+			"99.99% uptime SLA",
+			"Dedicated support",
+		],
+	},
+] as const;
+
+/** Engine node sizes, keyed by the cloud API v2 `node_size`. */
+export const PALLET_NODE_SIZES = [
+	{
+		id: "small",
+		label: "R-10",
+		vcpu: 1 / 8,
+		memoryGb: 1,
+		storageGb: 20,
+		monthlyUsdPerNode: 8,
+	},
+	{
+		id: "medium",
+		label: "R-40",
+		vcpu: 1 / 2,
+		memoryGb: 4,
+		storageGb: 80,
+		monthlyUsdPerNode: 26,
+	},
+	{
+		id: "large",
+		label: "R-160",
+		vcpu: 2,
+		memoryGb: 16,
+		storageGb: 320,
+		monthlyUsdPerNode: 90,
+	},
+] as const satisfies readonly {
+	id: Rivet.v2.RegionsUpsertRequest.NodeSize;
+	[key: string]: unknown;
+}[];
+
+/** Clouds a project can run on. `multiplier` scales node prices against AWS. */
+export const PALLET_CLOUDS = [
+	{
+		id: "aws",
+		label: "AWS",
+		description: "Graviton instances.",
+		multiplier: 1,
+		regions: [
+			{ id: "us-east-1", city: "N. Virginia", country: "US" },
+			{ id: "us-west-2", city: "Oregon", country: "US" },
+			{ id: "eu-west-1", city: "Ireland", country: "IE" },
+			{ id: "eu-central-1", city: "Frankfurt", country: "DE" },
+			{ id: "ap-southeast-1", city: "Singapore", country: "SG" },
+			{ id: "ap-northeast-1", city: "Tokyo", country: "JP" },
+		],
+	},
+	{
+		id: "gcp",
+		label: "Google Cloud",
+		description: "Tau T2A machine family.",
+		multiplier: 1.05,
+		regions: [
+			{ id: "us-central1", city: "Iowa", country: "US" },
+			{ id: "us-east4", city: "N. Virginia", country: "US" },
+			{ id: "europe-west1", city: "Belgium", country: "BE" },
+			{ id: "europe-west3", city: "Frankfurt", country: "DE" },
+			{ id: "asia-southeast1", city: "Singapore", country: "SG" },
+			{ id: "asia-east1", city: "Taiwan", country: "TW" },
+		],
+	},
+	{
+		id: "azure",
+		label: "Azure",
+		description: "Ampere Altra series.",
+		multiplier: 1.1,
+		regions: [
+			{ id: "eastus", city: "Virginia", country: "US" },
+			{ id: "westus2", city: "Washington", country: "US" },
+			{ id: "westeurope", city: "Netherlands", country: "NL" },
+			{ id: "northeurope", city: "Ireland", country: "IE" },
+			{ id: "southeastasia", city: "Singapore", country: "SG" },
+			{ id: "japaneast", city: "Tokyo", country: "JP" },
+		],
+	},
+] as const satisfies readonly {
+	id: Rivet.v2.RegionsUpsertRequest.Cloud;
+	[key: string]: unknown;
+}[];
+
+/** Allowances included with every project and their overage rates. */
+export const PALLET_ALLOWANCES = {
+	includedEgressGb: 100,
+	egressUsdPerGb: 0.06,
+	extraStorageUsdPerGb: 0.25,
+	objectStorageMultiplier: 5,
+	extraObjectStorageUsdPerGb: 0.02,
+} as const;

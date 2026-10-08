@@ -1,5 +1,5 @@
 import { faChevronRight, faPlus, Icon } from "@rivet-gg/icons";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { PlanBadge } from "@/app/billing/billing-plan-badge";
 import { RouteError } from "@/app/route-error";
@@ -61,6 +61,10 @@ function ProjectList() {
 		...dataProvider.currentOrgClustersQueryOptions(),
 		enabled: features.byoc,
 	});
+	const { data: palletClusters } = useQuery({
+		...dataProvider.currentOrgPalletClustersQueryOptions(),
+		enabled: features.pallet,
+	});
 
 	return (
 		<div className="flex flex-col border rounded-md w-full">
@@ -101,6 +105,18 @@ function ProjectList() {
 			{hasNextClustersPage && !isFetchingNextClustersPage ? (
 				<VisibilitySensor onChange={fetchNextClustersPage} />
 			) : null}
+			{palletClusters?.map((cluster) => (
+				<Link
+					key={cluster.cluster}
+					className="p-2 border-b last:border-0 w-full flex text-left items-center gap-2 hover:bg-accent rounded-md transition-colors"
+					to="/orgs/$organization/clusters/$cluster"
+					from="/orgs/$organization/projects/"
+					params={{ cluster: cluster.cluster }}
+				>
+					<span className="flex-1 truncate">{cluster.cluster}</span>
+					<Icon icon={faChevronRight} />
+				</Link>
+			))}
 			<Link
 				from="/orgs/$organization/projects/"
 				to="."

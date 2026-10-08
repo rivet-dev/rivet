@@ -6,10 +6,12 @@ import {
 	CardDescription,
 	CardHeader,
 	CardTitle,
+	describeError,
 } from "@/components";
 import { RouteLayout } from "./route-layout";
 
 export const RouteError = ({ error }: ErrorComponentProps) => {
+	const { title, description } = describeError(error);
 	return (
 		<RouteLayout>
 			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
@@ -18,23 +20,9 @@ export const RouteError = ({ error }: ErrorComponentProps) => {
 						<Card>
 							<CardHeader>
 								<CardTitle className="flex items-center">
-									{"statusCode" in error &&
-									error.statusCode === 404
-										? "Resource not found"
-										: "body" in error &&
-												error.body &&
-												typeof error.body ===
-													"object" &&
-												"message" in error.body
-											? String(error.body.message)
-											: error.message}
+									{title}
 								</CardTitle>
-								<CardDescription>
-									{"statusCode" in error &&
-									error.statusCode === 404
-										? "The resource you are looking for does not exist or you do not have access to it."
-										: "An unexpected error occurred. Please try again later."}
-								</CardDescription>
+								<CardDescription>{description}</CardDescription>
 							</CardHeader>
 							<CardContent>
 								<Button asChild variant="secondary">

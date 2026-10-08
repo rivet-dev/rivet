@@ -15,6 +15,7 @@ import {
 } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { Skeleton } from "@/components/ui/skeleton";
+import { describeError } from "../lib/describe-error";
 import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
 import {
@@ -313,27 +314,13 @@ function DialogErrorFallback({
 	resetError: () => void;
 	error: Error;
 }) {
+	const { title, description } = describeError(error);
 	return (
 		<>
 			<Header>
-				<Title>
-					{"statusCode" in error && error.statusCode === 404
-						? "Resource not found"
-						: "body" in error &&
-								error.body &&
-								typeof error.body === "object" &&
-								"message" in error.body
-							? String(error.body.message)
-							: error.message}
-				</Title>
+				<Title>{title}</Title>
 			</Header>
-			<Content>
-				{"statusCode" in error && error.statusCode === 404
-					? "The resource you are looking for does not exist or you do not have access to it."
-					: "description" in error
-						? String(error.description)
-						: "An unexpected error occurred. Please try again later."}
-			</Content>
+			<Content>{description}</Content>
 			<Footer>
 				<Button variant="secondary" onClick={resetError}>
 					Retry

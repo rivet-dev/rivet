@@ -5,7 +5,7 @@ import {
 	faUserPlus,
 	Icon,
 } from "@rivet-gg/icons";
-import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
@@ -60,6 +60,10 @@ export function OrgLanding({ organization }: { organization: string }) {
 	} = useInfiniteQuery({
 		...dataProvider.currentOrgClustersQueryOptions(),
 		enabled: features.byoc,
+	});
+	const { data: palletClusters = [] } = useQuery({
+		...dataProvider.currentOrgPalletClustersQueryOptions(),
+		enabled: features.pallet,
 	});
 	const { data: org } = authClient.useActiveOrganization();
 	const { data: session } = authClient.useSession();
@@ -125,7 +129,9 @@ export function OrgLanding({ organization }: { organization: string }) {
 							<h2 className="text-base font-semibold text-foreground">
 								Projects
 							</h2>
-							{sorted.length > 0 || clusters.length > 0 ? (
+							{sorted.length > 0 ||
+							clusters.length > 0 ||
+							palletClusters.length > 0 ? (
 								<Button
 									variant="outline"
 									size="sm"
@@ -151,7 +157,8 @@ export function OrgLanding({ organization }: { organization: string }) {
 
 						{!isLoading &&
 						sorted.length === 0 &&
-						clusters.length === 0 ? (
+						clusters.length === 0 &&
+						palletClusters.length === 0 ? (
 							<div className="flex flex-col items-center gap-3 rounded-md border border-dashed bg-card/50 px-6 py-10 text-center">
 								<H1 className="text-base">No projects yet</H1>
 								<SmallText className="text-muted-foreground max-w-md">
@@ -286,6 +293,37 @@ export function OrgLanding({ organization }: { organization: string }) {
 												plan="byoc"
 												className="absolute top-3 right-3 min-w-12"
 											/>
+										</Link>
+									))}
+									{palletClusters.map((cluster) => (
+										<Link
+											key={cluster.cluster}
+											to="/orgs/$organization/clusters/$cluster"
+											params={{
+												organization,
+												cluster: cluster.cluster,
+											}}
+											className={cn(
+												"group relative flex min-h-[130px] flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-all duration-150",
+												"hover:border-foreground/25 hover:bg-foreground/[0.06] hover:shadow-sm hover:-translate-y-0.5",
+												"active:translate-y-0 active:shadow-none",
+												"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+												"cursor-pointer",
+											)}
+										>
+											<div className="font-medium text-sm leading-tight truncate w-full">
+												{cluster.cluster}
+											</div>
+											<SmallText className="text-muted-foreground text-xs leading-tight font-mono-console truncate w-full">
+												{cluster.domain}
+											</SmallText>
+											<SmallText className="text-muted-foreground text-[11px] mt-auto pt-1">
+												{cluster.status.deleting
+													? "Deleting"
+													: cluster.status.ready
+														? "Ready"
+														: "Provisioning"}
+											</SmallText>
 										</Link>
 									))}
 								</div>

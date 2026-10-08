@@ -18,6 +18,7 @@ export * from "./hooks";
 export * from "./lib/config";
 export * from "./lib/constants";
 export * from "./lib/create-schema-form";
+export * from "./lib/describe-error";
 export * from "./lib/emoji";
 export * from "./lib/exit-signals";
 export * from "./lib/filesize";

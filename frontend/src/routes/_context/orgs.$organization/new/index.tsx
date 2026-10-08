@@ -3,7 +3,10 @@ import { zodValidator } from "@tanstack/zod-adapter";
 import z from "zod";
 import CreateProjectFrameContent from "@/app/dialogs/create-project-frame";
 import { SidebarlessHeader } from "@/app/layout";
+import { CreateProject } from "@/app/pallet/create-project";
+import { RouteLayout } from "@/app/route-layout";
 import { Card } from "@/components";
+import { features } from "@/lib/features";
 import { TEST_IDS } from "@/utils/test-ids";
 
 export const Route = createFileRoute("/_context/orgs/$organization/new/")({
@@ -21,6 +24,16 @@ function RouteComponent() {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
 	const params = Route.useParams();
+
+	if (features.pallet) {
+		return (
+			<RouteLayout>
+				<div className="h-full overflow-auto">
+					<CreateProject organization={params.organization} />
+				</div>
+			</RouteLayout>
+		);
+	}
 
 	return (
 		<div className="h-screen flex flex-col overflow-hidden">
