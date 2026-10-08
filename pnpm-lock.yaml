@@ -22,7 +22,7 @@ overrides:
   react-dom: 19.1.0
   '@rivet-gg/components': workspace:*
   '@rivet-gg/icons': workspace:*
-  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1297
+  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1330
   '@rivet-gg/cloud-actors>rivetkit': 2.3.16
   '@rivet-gg/cloud-api>rivetkit': 2.3.16
   '@rivet-gg/cloud-registry-proxy>rivetkit': 2.3.16
@@ -372,8 +372,8 @@ importers:
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1297
-        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1297
+        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1330
+        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1330
       '@rivetkit/engine-api-full':
         specifier: workspace:*
         version: link:../../engine/sdks/typescript/api-full
@@ -2667,8 +2667,8 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1297
-        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1297
+        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1330
+        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1330
       '@rivet-gg/icons':
         specifier: workspace:*
         version: link:packages/icons
@@ -9114,8 +9114,8 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1297':
-    resolution: {tarball: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1297}
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1330':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1330}
     version: 0.0.0
 
   '@rivetkit/bare-ts@0.6.2':
@@ -25911,7 +25911,7 @@ snapshots:
       '@rivet-dev/services-linux-x64-musl': 0.1.6
       '@rivet-dev/services-win32-x64': 0.1.6
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1297':
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1330':
     dependencies:
       cross-fetch: 4.1.0
       form-data: 4.0.5
