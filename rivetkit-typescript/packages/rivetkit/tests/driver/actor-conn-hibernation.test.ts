@@ -140,6 +140,48 @@ describeDriverMatrix("Actor Conn Hibernation", (driverTestConfig) => {
 				await hibernatingActor.dispose();
 			});
 
+			test("without canHibernateWebSocket, a connection closes when its actor sleeps and the client reconnects", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const connection = client.sleep
+					.getOrCreate(["no-hibernation"])
+					.connect();
+
+				let openCount = 0;
+				connection.onOpen(() => {
+					openCount += 1;
+				});
+
+				// Poll until the connection handshake finishes and the async onOpen callback has fired.
+				await vi.waitFor(
+					() => {
+						expect(connection.isConnected).toBe(true);
+						expect(openCount).toBe(1);
+					},
+					{
+						timeout: CONNECTION_READY_TIMEOUT_MS,
+						interval: 100,
+					},
+				);
+
+				await connection.triggerSleep();
+				// The client reconnects on its own after the sleep closes its WebSocket.
+				await vi.waitFor(
+					() => {
+						expect(openCount).toBe(2);
+					},
+					{
+						timeout: CONNECTION_READY_TIMEOUT_MS,
+						interval: 100,
+					},
+				);
+				expect(await connection.getCounts()).toEqual({
+					startCount: 2,
+					sleepCount: 1,
+				});
+
+				await connection.dispose();
+			});
+
 			test("closing connection during hibernation", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 

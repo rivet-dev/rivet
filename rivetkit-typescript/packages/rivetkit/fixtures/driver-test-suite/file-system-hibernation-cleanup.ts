@@ -33,5 +33,6 @@ export const fileSystemHibernationCleanupActor = actor({
 	},
 	options: {
 		sleepTimeout: 500,
+		canHibernateWebSocket: true,
 	},
 });

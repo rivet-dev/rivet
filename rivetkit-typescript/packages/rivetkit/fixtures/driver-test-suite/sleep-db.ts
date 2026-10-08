@@ -403,6 +403,7 @@ export const sleepWithDbAction = actor({
 	},
 	options: {
 		sleepTimeout: SLEEP_DB_TIMEOUT,
+		canHibernateWebSocket: true,
 	},
 });
 
