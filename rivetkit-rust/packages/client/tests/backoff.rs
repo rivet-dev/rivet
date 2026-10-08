@@ -134,6 +134,31 @@ fn backoff_with_jitter_stays_within_bounds() {
 }
 
 #[test]
+fn backoff_with_jitter_clamped_to_max_delay() {
+	let config = BackoffConfig::new(Duration::from_millis(500), Duration::from_millis(500))
+		.multiplier(2.0)
+		.jitter_factor(0.5); // base is 500ms, +/- 50% jitter would reach 750ms without clamping
+	let mut backoff = Backoff::from_config(config);
+
+	let mut seen_values = std::collections::HashSet::new();
+	for _ in 0..100 {
+		let dur = backoff.step().expect("step");
+		assert!(
+			dur <= Duration::from_millis(500),
+			"jittered duration {dur:?} exceeded max_delay of 500ms"
+		);
+		seen_values.insert(dur.as_millis());
+		backoff.reset();
+	}
+
+	assert!(
+		seen_values.len() > 1,
+		"expected multiple distinct jitter durations below cap, got only {}",
+		seen_values.len()
+	);
+}
+
+#[test]
 fn client_config_reconnect_builder_integration() {
 	let client_config = ClientConfig::new("http://127.0.0.1:6420")
 		.reconnect_delays(Duration::from_millis(250), Duration::from_secs(15));
@@ -360,6 +385,210 @@ async fn integration_handle_connect_with_backoff_override() {
 		attempts.load(Ordering::SeqCst),
 		2,
 		"connect_with_backoff override should permit 2 attempts (1 initial + 1 retry)"
+	);
+
+	server.abort();
+}
+
+#[tokio::test]
+async fn integration_disable_reconnect_stops_after_connection_closes() {
+	use axum::{
+		extract::ws::{Message as AxumWsMessage, WebSocket, WebSocketUpgrade},
+		routing::any,
+		Router,
+	};
+	use futures_util::SinkExt;
+	use rivetkit_client::GetOrCreateOptions;
+	use rivetkit_client_protocol as wire;
+	use std::sync::{
+		atomic::{AtomicUsize, Ordering},
+		Arc,
+	};
+	use tokio::{net::TcpListener, time::sleep};
+	use vbare::OwnedVersionedData;
+
+	let connect_count = Arc::new(AtomicUsize::new(0));
+	let connect_count_handler = connect_count.clone();
+
+	let app = Router::new().route(
+		"/gateway/{actor_id}/connect",
+		any(move |ws: WebSocketUpgrade| {
+			let count = connect_count_handler.clone();
+			async move {
+				count.fetch_add(1, Ordering::SeqCst);
+				ws.protocols(["rivet"])
+					.on_upgrade(|mut socket: WebSocket| async move {
+						let payload = wire::versioned::ToClient::wrap_latest(wire::ToClient {
+							body: wire::ToClientBody::Init(wire::Init {
+								actor_id: "test-actor".to_owned(),
+								connection_id: "conn-1".to_owned(),
+							}),
+						})
+						.serialize_with_embedded_version(wire::PROTOCOL_VERSION)
+						.unwrap();
+						socket
+							.send(AxumWsMessage::Binary(payload.into()))
+							.await
+							.unwrap();
+						// Close connection from server side
+						let _ = socket.close().await;
+					})
+			}
+		}),
+	);
+
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	let server = tokio::spawn(async move {
+		axum::serve(listener, app).await.unwrap();
+	});
+
+	let client_config = ClientConfig::new(format!("http://{addr}"))
+		.disable_metadata_lookup(true)
+		.disable_reconnect();
+
+	let client = Client::new(client_config);
+	let actor = client
+		.get_or_create(
+			"test-actor",
+			vec!["key1".to_string()],
+			GetOrCreateOptions::default(),
+		)
+		.unwrap();
+
+	let _conn = actor.connect();
+
+	// Wait for the connection to establish, close, and verify no reconnection occurs
+	sleep(Duration::from_millis(200)).await;
+
+	assert_eq!(
+		connect_count.load(Ordering::SeqCst),
+		1,
+		"disable_reconnect should not reconnect after established connection closes"
+	);
+
+	server.abort();
+}
+
+#[tokio::test]
+async fn integration_reconnect_after_healthy_close_respects_initial_delay() {
+	use axum::{
+		extract::ws::{Message as AxumWsMessage, WebSocket, WebSocketUpgrade},
+		routing::any,
+		Router,
+	};
+	use futures_util::SinkExt;
+	use rivetkit_client::GetOrCreateOptions;
+	use rivetkit_client_protocol as wire;
+	use std::sync::{
+		atomic::{AtomicUsize, Ordering},
+		Arc,
+	};
+	use tokio::{
+		net::TcpListener,
+		sync::mpsc,
+		time::{sleep, timeout, Instant},
+	};
+	use vbare::OwnedVersionedData;
+
+	let attempts = Arc::new(AtomicUsize::new(0));
+	let attempts_handler = attempts.clone();
+
+	let (closed_tx, mut closed_rx) = mpsc::unbounded_channel::<Instant>();
+	let closed_tx = Arc::new(tokio::sync::Mutex::new(Some(closed_tx)));
+
+	let (reconnect_tx, mut reconnect_rx) = mpsc::unbounded_channel::<Instant>();
+	let reconnect_tx = Arc::new(reconnect_tx);
+
+	let app = Router::new().route(
+		"/gateway/{actor_id}/connect",
+		any(move |ws: WebSocketUpgrade| {
+			let attempts = attempts_handler.clone();
+			let closed_tx = closed_tx.clone();
+			let reconnect_tx = reconnect_tx.clone();
+			async move {
+				let attempt_num = attempts.fetch_add(1, Ordering::SeqCst);
+				if attempt_num == 0 {
+					ws.protocols(["rivet"])
+						.on_upgrade(move |mut socket: WebSocket| async move {
+							let payload = wire::versioned::ToClient::wrap_latest(wire::ToClient {
+								body: wire::ToClientBody::Init(wire::Init {
+									actor_id: "test-actor".to_owned(),
+									connection_id: "conn-1".to_owned(),
+								}),
+							})
+							.serialize_with_embedded_version(wire::PROTOCOL_VERSION)
+							.unwrap();
+							socket
+								.send(AxumWsMessage::Binary(payload.into()))
+								.await
+								.unwrap();
+
+							// Server closes the connection and records timestamp
+							let _ = socket.close().await;
+							if let Some(tx) = closed_tx.lock().await.take() {
+								let _ = tx.send(Instant::now());
+							}
+						})
+				} else {
+					let _ = reconnect_tx.send(Instant::now());
+					ws.protocols(["rivet"])
+						.on_upgrade(|_socket: WebSocket| async move {})
+				}
+			}
+		}),
+	);
+
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	let server = tokio::spawn(async move {
+		axum::serve(listener, app).await.unwrap();
+	});
+
+	let client_config = ClientConfig::new(format!("http://{addr}"))
+		.disable_metadata_lookup(true)
+		.reconnect_backoff(
+			BackoffConfig::default()
+				.initial_delay(Duration::from_millis(100))
+				.max_delay(Duration::from_millis(500))
+				.jitter_factor(0.0), // zero jitter for deterministic delay assertion
+		);
+
+	let client = Client::new(client_config);
+	let actor = client
+		.get_or_create(
+			"test-actor",
+			vec!["key1".to_string()],
+			GetOrCreateOptions::default(),
+		)
+		.unwrap();
+
+	let _conn = actor.connect();
+
+	// Wait for the first connection to close
+	let closed_at = timeout(Duration::from_secs(2), closed_rx.recv())
+		.await
+		.expect("first connection did not close in time")
+		.expect("channel closed");
+
+	// At 25ms, reconnect attempt must NOT have happened yet (initial_delay is 100ms)
+	sleep(Duration::from_millis(25)).await;
+	assert_eq!(
+		attempts.load(Ordering::SeqCst),
+		1,
+		"reconnect must not happen immediately after healthy connection closes"
+	);
+
+	// Wait for reconnect attempt to occur
+	let reconnected_at = timeout(Duration::from_secs(2), reconnect_rx.recv())
+		.await
+		.expect("reconnect did not occur within timeout")
+		.expect("channel closed");
+
+	let elapsed = reconnected_at.duration_since(closed_at);
+	assert!(
+		elapsed >= Duration::from_millis(80),
+		"reconnect happened too fast ({elapsed:?}), expected >= 80ms for 100ms initial_delay"
 	);
 
 	server.abort();

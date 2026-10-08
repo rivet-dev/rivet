@@ -722,6 +722,32 @@ pub fn start_connection(
 
 				if attempt.did_open {
 					backoff.reset();
+
+					// After a successful connection that later closed, check
+					// if the retry budget allows another reconnect cycle.
+					// This is how disable_reconnect() (max_retries=0) stops
+					// reconnection after the initial connection drops.
+					if !backoff.can_retry() {
+						break 'keepalive;
+					}
+
+					let mut dc_rx = conn.dc_watch.0.subscribe();
+
+					tokio::select! {
+						waited = backoff.tick() => {
+							if !waited {
+								break 'keepalive;
+							}
+						}
+						_ = dc_rx.wait_for(|x| *x) => {
+							break 'keepalive;
+						}
+						_ = shutdown_rx.recv() => {
+							debug!("Received shutdown signal, stopping connection attempts");
+							break 'keepalive;
+						}
+					}
+
 					break 'retry;
 				}
 

@@ -190,7 +190,9 @@ impl Backoff {
 		let sleep_duration = if self.config.jitter_factor > 0.0 {
 			let jitter_offset = (rand::random::<f64>() * 2.0 - 1.0) * self.config.jitter_factor;
 			let factor = (1.0 + jitter_offset).max(0.0);
-			Duration::from_secs_f64((base.as_secs_f64() * factor).max(0.0))
+			let max_secs = self.config.max_delay.as_secs_f64();
+			let jittered = (base.as_secs_f64() * factor).clamp(0.0, max_secs);
+			Duration::from_secs_f64(jittered)
 		} else {
 			base
 		};
@@ -211,115 +213,5 @@ impl Backoff {
 	pub fn reset(&mut self) {
 		self.delay = self.config.initial_delay;
 		self.attempt = 0;
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_default_progression() {
-		let mut backoff = Backoff::new(Duration::from_secs(1), Duration::from_secs(4));
-		assert_eq!(backoff.delay(), Duration::from_secs(1));
-		assert_eq!(backoff.attempt(), 0);
-		assert!(backoff.can_retry());
-
-		let step1 = backoff.step().expect("step 1");
-		assert_eq!(step1, Duration::from_secs(1));
-		assert_eq!(backoff.delay(), Duration::from_secs(2));
-		assert_eq!(backoff.attempt(), 1);
-
-		let step2 = backoff.step().expect("step 2");
-		assert_eq!(step2, Duration::from_secs(2));
-		assert_eq!(backoff.delay(), Duration::from_secs(4));
-		assert_eq!(backoff.attempt(), 2);
-
-		let step3 = backoff.step().expect("step 3");
-		assert_eq!(step3, Duration::from_secs(4));
-		// Capped at max_delay
-		assert_eq!(backoff.delay(), Duration::from_secs(4));
-		assert_eq!(backoff.attempt(), 3);
-	}
-
-	#[test]
-	fn test_max_retries() {
-		let config = BackoffConfig::new(Duration::from_millis(100), Duration::from_secs(1))
-			.max_retries(Some(2));
-		let mut backoff = Backoff::from_config(config);
-
-		assert!(backoff.can_retry());
-		assert!(backoff.step().is_some()); // attempt 1
-		assert!(backoff.can_retry());
-		assert!(backoff.step().is_some()); // attempt 2
-		assert!(!backoff.can_retry());
-		assert!(backoff.step().is_none()); // attempt 3 blocked
-	}
-
-	#[test]
-	fn test_reset() {
-		let mut backoff = Backoff::new(Duration::from_secs(1), Duration::from_secs(10));
-		backoff.step();
-		backoff.step();
-		assert_eq!(backoff.attempt(), 2);
-		assert_eq!(backoff.delay(), Duration::from_secs(4));
-
-		backoff.reset();
-		assert_eq!(backoff.attempt(), 0);
-		assert_eq!(backoff.delay(), Duration::from_secs(1));
-	}
-
-	#[test]
-	fn test_jitter_bounds() {
-		let config = BackoffConfig::new(Duration::from_millis(1000), Duration::from_secs(10))
-			.jitter_factor(0.2);
-		let mut backoff = Backoff::from_config(config);
-
-		let mut seen_values = std::collections::HashSet::new();
-		for _ in 0..50 {
-			let dur = backoff.step().expect("step");
-			// jitter_factor=0.2 gives base * [0.8, 1.2], so 800ms..1200ms
-			assert!(
-				dur >= Duration::from_millis(800) && dur <= Duration::from_millis(1200),
-				"jittered duration {dur:?} outside [800ms, 1200ms]"
-			);
-			seen_values.insert(dur.as_millis());
-			backoff.reset();
-		}
-		// Verify jitter is actually producing varying values
-		assert!(
-			seen_values.len() > 1,
-			"jitter should produce varying durations, but all {len} iterations returned the same value",
-			len = seen_values.len()
-		);
-	}
-
-	#[test]
-	fn test_clamping_behavior() {
-		let config = BackoffConfig::default()
-			.multiplier(0.5) // should clamp to 1.0
-			.jitter_factor(-0.5); // should clamp to 0.0
-		assert_eq!(config.multiplier, 1.0);
-		assert_eq!(config.jitter_factor, 0.0);
-
-		let config2 = BackoffConfig::default().jitter_factor(5.0); // should clamp to 1.0
-		assert_eq!(config2.jitter_factor, 1.0);
-	}
-
-	#[test]
-	fn test_direct_struct_normalization() {
-		// Directly instantiate struct bypassing builder methods
-		let unvalidated = BackoffConfig {
-			initial_delay: Duration::from_secs(10),
-			max_delay: Duration::from_secs(1), // invalid: max < initial
-			multiplier: -50.0,                 // invalid: < 1.0
-			max_retries: None,
-			jitter_factor: 500.0, // invalid: > 1.0
-		};
-
-		let backoff = Backoff::from_config(unvalidated);
-		assert_eq!(backoff.config().max_delay, Duration::from_secs(10)); // normalized to initial_delay
-		assert_eq!(backoff.config().multiplier, 1.0); // normalized to 1.0
-		assert_eq!(backoff.config().jitter_factor, 1.0); // normalized to 1.0
 	}
 }
