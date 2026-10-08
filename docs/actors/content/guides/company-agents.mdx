@@ -1,0 +1,33 @@
+---
+title: "Company-Specific Agents"
+description: "Run agents against internal data, inside your own network, on Rivet Actors."
+---
+
+An agent that works on internal data is constrained less by the model than by where the data is allowed to go. Rivet answers that by keeping each agent's memory in the agent itself and letting you run the whole control plane inside your own network.
+
+## Memory lives in the agent
+
+Give every conversation its own Actor, keyed by agent or conversation id. The transcript and status live in the Actor's persistent [state](/actors/docs/state), and each model call rebuilds the prompt from that state plus a system prompt. Memory and inference input are the same data, with no vector store or session table beside it. Prompts arrive on the Actor's [queue](/actors/docs/queues) and the `run` hook consumes them serially, so one conversation never has two model calls in flight. Tokens stream back to clients as [events](/actors/docs/events).
+
+Because the memory is the Actor, the blast radius of any single agent is one Actor: it can only read what its own tools hand it, and its transcript is never pooled with another tenant's.
+
+## It runs where your data is
+
+Internal agents usually cannot call out to a vendor's control plane. Two deployments keep everything inside your perimeter:
+
+- [Bring Your Own Cloud](/docs/deploy/byoc/): Rivet deploys and operates the control plane inside your VPC. No inbound management connection, and you choose whether it is reachable publicly or only privately.
+- [Self-host](/docs/deploy/self-host/control-plane/): you run the control plane yourself on Kubernetes, ECS, Docker Compose, or a VM.
+
+## Start from the example
+
+<CardGroup>
+  <Card title="AI Agent" href="https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent" target="_blank">
+    Queue-driven Actor agents with streaming Vercel AI SDK responses, one Actor per agent.
+  </Card>
+</CardGroup>
+
+## Next steps
+
+- [AI Agent](/guides/ai-agent): the memory, queue, and streaming patterns in depth.
+- [Authentication](/docs/authentication): gate which users reach which agent.
+- [BYOC quickstart](/docs/deploy/byoc/quickstart): stand up the control plane in your own VPC.
