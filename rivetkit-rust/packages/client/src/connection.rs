@@ -7,7 +7,6 @@ use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
-use std::time::Duration;
 use tokio::sync::{broadcast, oneshot, watch, Mutex};
 
 use crate::{
@@ -137,6 +136,7 @@ pub struct ActorConnectionInner {
 		watch::Receiver<ConnectionStatus>,
 	),
 	disconnection_rx: Mutex<Option<oneshot::Receiver<()>>>,
+	backoff_config: crate::backoff::BackoffConfig,
 }
 
 impl ActorConnectionInner {
@@ -146,6 +146,7 @@ impl ActorConnectionInner {
 		transport_kind: TransportKind,
 		encoding_kind: EncodingKind,
 		parameters: Option<Value>,
+		backoff_config: crate::backoff::BackoffConfig,
 	) -> ActorConnection {
 		Arc::new(Self {
 			remote_manager,
@@ -169,6 +170,7 @@ impl ActorConnectionInner {
 			dc_watch: watch::channel(false),
 			status_watch: watch::channel(ConnectionStatus::Idle),
 			disconnection_rx: Mutex::new(None),
+			backoff_config,
 		})
 	}
 
@@ -703,7 +705,7 @@ pub fn start_connection(
 
 		'keepalive: loop {
 			debug!("Attempting to reconnect");
-			let mut backoff = Backoff::new(Duration::from_secs(1), Duration::from_secs(30));
+			let mut backoff = Backoff::from_config(conn.backoff_config.clone());
 			let mut retry_attempt = 0;
 			'retry: loop {
 				retry_attempt += 1;
@@ -719,14 +721,23 @@ pub fn start_connection(
 				}
 
 				if attempt.did_open {
+					backoff.reset();
 					break 'retry;
 				}
 
 				let mut dc_rx = conn.dc_watch.0.subscribe();
 
 				tokio::select! {
-					_ = backoff.tick() => {},
-					_ = dc_rx.wait_for(|x| *x == true) => {
+					waited = backoff.tick() => {
+						if !waited {
+							debug!(
+								"Max reconnect attempts ({}) reached, stopping connection",
+								retry_attempt
+							);
+							break 'keepalive;
+						}
+					},
+					_ = dc_rx.wait_for(|x| *x) => {
 						break 'keepalive;
 					}
 					_ = shutdown_rx.recv() => {
