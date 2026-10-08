@@ -436,19 +436,12 @@ function ClusterSegmentPopover({
 	currentCluster: string;
 }) {
 	const [open, setOpen] = useState(false);
-	const { data } = useQuery(
-		useCloudDataProvider().currentOrgClusterQueryOptions({
-			cluster: currentCluster,
-		}),
-	);
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<div className="flex items-center">
 				<span className="flex h-auto items-center px-2 py-1 text-sm font-medium text-foreground">
-					<span className="truncate">
-						{data?.name ?? currentCluster}
-					</span>
+					<span className="truncate">{currentCluster}</span>
 				</span>
 				<PopoverTrigger asChild>
 					<Button
@@ -529,6 +522,53 @@ function ClusterListItems({
 			) : null}
 		</>
 	);
+}
+
+function PalletClusterListItems({
+	organization,
+	currentCluster,
+	onClose,
+	onHover,
+}: {
+	organization: string;
+	currentCluster?: string;
+	onClose?: () => void;
+	onHover?: (name: string | null) => void;
+}) {
+	const navigate = useNavigate();
+	const { data } = useQuery(
+		useCloudDataProvider().currentOrgPalletClustersQueryOptions(),
+	);
+
+	return data?.map((cluster) => (
+		<CommandItem
+			key={cluster.cluster}
+			value={cluster.cluster}
+			className="static w-full"
+			onMouseEnter={() => onHover?.(null)}
+			onSelect={() => {
+				onClose?.();
+				authClient.organization.setActive({
+					organizationSlug: organization,
+				});
+				void navigate({
+					to: "/orgs/$organization/clusters/$cluster",
+					params: { organization, cluster: cluster.cluster },
+				});
+			}}
+		>
+			<Icon
+				icon={faCheck}
+				className={cn(
+					"mr-2 size-3 shrink-0 text-primary",
+					cluster.cluster === currentCluster
+						? "opacity-100"
+						: "opacity-0",
+				)}
+			/>
+			<span className="truncate flex-1">{cluster.cluster}</span>
+		</CommandItem>
+	));
 }
 
 function ProjectSegmentPopover({
@@ -1403,6 +1443,14 @@ function ProjectList({
 							})}
 						{features.byoc ? (
 							<ClusterListItems
+								organization={organization}
+								currentCluster={project}
+								onClose={onClose}
+								onHover={onHover}
+							/>
+						) : null}
+						{features.pallet ? (
+							<PalletClusterListItems
 								organization={organization}
 								currentCluster={project}
 								onClose={onClose}

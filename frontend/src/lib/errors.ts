@@ -1,4 +1,5 @@
 import type { RivetError } from "@rivetkit/engine-api-full";
+import { toast } from "@/components";
 
 export function isRivetApiError(
 	error: unknown,
@@ -30,4 +31,49 @@ export function isAuthError(error: unknown): boolean {
 		body?.group === "acl" &&
 		(body.code === "token_not_found" || body.code === "token_expired")
 	);
+}
+
+export function isNotFoundError(error: unknown): boolean {
+	return isRivetApiError(error) && error.statusCode === 404;
+}
+
+export interface ApiFieldError {
+	field?: string;
+	message: string;
+}
+
+export function getApiFieldErrors(error: unknown): ApiFieldError[] {
+	if (!isRivetApiError(error)) return [];
+	const errors = (error.body as { errors?: unknown } | undefined)?.errors;
+	if (!Array.isArray(errors)) return [];
+	return errors.filter(
+		(e): e is ApiFieldError =>
+			typeof e === "object" &&
+			e !== null &&
+			typeof e.message === "string" &&
+			(e.field === undefined || typeof e.field === "string"),
+	);
+}
+
+export function getStructuredApiErrorMessage(
+	error: unknown,
+): string | undefined {
+	// Error responses without a JSON body, such as a bare 500, have no `body`.
+	const bodyMessage = isRivetApiError(error)
+		? (error.body as { message?: unknown } | undefined)?.message
+		: undefined;
+	return typeof bodyMessage === "string" ? bodyMessage : undefined;
+}
+
+function getApiErrorMessage(error: unknown): string | undefined {
+	return (
+		getStructuredApiErrorMessage(error) ??
+		(error instanceof Error ? error.message : undefined)
+	);
+}
+
+export function toastApiError(error: unknown, description?: string) {
+	toast.error("Operation failed", {
+		description: description ?? getApiErrorMessage(error),
+	});
 }

@@ -3,13 +3,14 @@ import { match } from "ts-pattern";
 import { OrgLanding, OrgLandingPending } from "@/app/org-landing";
 import { RouteError } from "@/app/route-error";
 import { RouteLayout } from "@/app/route-layout";
+import { isAuthError } from "@/lib/errors";
 import { features } from "@/lib/features";
 
 export const Route = createFileRoute("/_context/orgs/$organization/")({
 	loader: async ({ context, params }) => {
 		return match(context)
 			.with({ __type: "cloud" }, async () => {
-				const [projects, clusters] = await Promise.all([
+				const [projects, clusters, palletClusters] = await Promise.all([
 					context.queryClient.fetchInfiniteQuery(
 						context.dataProvider.currentOrgProjectsQueryOptions(),
 					),
@@ -18,11 +19,22 @@ export const Route = createFileRoute("/_context/orgs/$organization/")({
 								context.dataProvider.currentOrgClustersQueryOptions(),
 							)
 						: undefined,
+					features.pallet
+						? context.queryClient
+								.fetchQuery(
+									context.dataProvider.currentOrgPalletClustersQueryOptions(),
+								)
+								.catch((error: unknown) => {
+									if (isAuthError(error)) throw error;
+									return [];
+								})
+						: undefined,
 				]);
 
 				const hasContent =
 					(projects.pages[0].projects?.length ?? 0) > 0 ||
-					(clusters?.pages[0].clusters?.length ?? 0) > 0;
+					(clusters?.pages[0].clusters?.length ?? 0) > 0 ||
+					(palletClusters?.length ?? 0) > 0;
 
 				// New orgs go straight to onboarding. Orgs with projects or
 				// clusters land on the org dashboard so users can pick one (or

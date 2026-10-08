@@ -15,8 +15,7 @@ import {
 	persistQueryClientRestore,
 	persistQueryClientSubscribe,
 } from "@tanstack/react-query-persist-client";
-import { toast } from "@/components";
-import { isAuthError, isRivetApiError } from "@/lib/errors";
+import { isAuthError, toastApiError } from "@/lib/errors";
 import { posthog } from "@/lib/posthog";
 import { modal } from "@/utils/modal-utils";
 import { Changelog } from "./types";
@@ -95,13 +94,7 @@ const mutationCache = new MutationCache({
 		if (mutation.meta?.hideErrorToast) {
 			return;
 		}
-		const description = isRivetApiError(error)
-			? error.body.message
-			: error.message;
-
-		toast.error("Operation failed", {
-			description,
-		});
+		toastApiError(error);
 	},
 });
 

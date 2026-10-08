@@ -65,6 +65,9 @@ export const useDialog = {
 	UpsertDeployment: createDialogHook(
 		() => import("@/app/dialogs/upsert-deployment-frame"),
 	),
+	DeployPalletBuild: createDialogHook(
+		() => import("@/app/dialogs/deploy-pallet-build-frame"),
+	),
 	OrgMembers: createDialogHook(
 		() => import("@/app/dialogs/org-members-frame"),
 	),

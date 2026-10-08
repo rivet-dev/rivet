@@ -35,6 +35,7 @@ if (features.platform) {
 | `datacenter` | Datacenter-related UI. |
 | `danger-zone` | Destructive settings actions (`features.dangerZone`). |
 | `byoc` | Bring Your Own Cloud (`features.byoc`): the BYOC option in the create-project flow, BYOC clusters in the project lists, and the `/orgs/$org/clusters/$cluster` page. Requires `platform`. |
+| `pallet` | v3 dashboard ("pallet") backed by cloud API v2: the single-page create cluster screen that replaces the create-project dialog and the `/orgs/$org/new` page, and pallet clusters on `/orgs/$org/clusters/$cluster` (checked before BYOC). Requires `platform`. |
 | `services` | Managed services (`features.services`): the Services section of the onboarding product picker, the Durable Streams onboarding path, and the Services tab on the namespace settings drawer. Independent of `platform` (cloud hands out a managed service URL, self-host runs the worker container). |
 | `mcp` | MCP connection settings card on the namespace settings drawer. Flavor-dependent content: `platform` renders the hosted `mcp.rivet.dev` endpoint pinned to this namespace, everything else renders the local stdio (`npx @rivet-dev/mcp`) config. |
 

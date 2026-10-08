@@ -19,6 +19,16 @@ import {
 } from "./engine-data-provider";
 import { no404Retry } from "./utilities";
 
+// The fetcher retries 5xx on its own; leave retries to react-query.
+const V2_REQUEST = { maxRetries: 0 };
+
+const v2Retry = () => ({
+	retry: (failureCount: number, error: { statusCode?: number }) =>
+		(error.statusCode === undefined ||
+			(error.statusCode >= 500 && error.statusCode !== 501)) &&
+		failureCount < 1,
+});
+
 function createClient() {
 	return new RivetClient({
 		baseUrl: () => cloudEnv().VITE_APP_CLOUD_API_URL,
@@ -32,7 +42,7 @@ function createClient() {
 			});
 			return await fetcher({
 				...args,
-				maxRetries: 1,
+				maxRetries: args.maxRetries ?? 1,
 				withCredentials: true,
 			});
 		},
@@ -731,6 +741,128 @@ export const createOrganizationContext = ({
 			},
 		});
 
+	const createPalletClusterMutationOptions = () =>
+		mutationOptions({
+			mutationKey: ["v2", "clusters", "create"],
+			mutationFn: async ({
+				name,
+				region,
+				...config
+			}: Rivet.v2.RegionsUpsertRequest & {
+				name: string;
+				region: string;
+			}) => {
+				const cluster = await client.v2.clusters.upsert(name);
+				await client.v2.regions.upsert(name, region, config);
+				return cluster;
+			},
+		});
+
+	const palletClustersQueryOptions = (opts: { organization: string }) =>
+		queryOptions({
+			queryKey: [opts, "v2", "clusters"],
+			queryFn: async () =>
+				(await client.v2.clusters.list(V2_REQUEST)).items,
+			...v2Retry(),
+		});
+
+	const palletClusterQueryOptions = (opts: { cluster: string }) =>
+		queryOptions({
+			queryKey: [opts, "v2", "cluster"],
+			queryFn: async (): Promise<Rivet.v2.ClustersGetResponse | null> => {
+				try {
+					return await client.v2.clusters.get(
+						opts.cluster,
+						V2_REQUEST,
+					);
+				} catch (error) {
+					if (
+						error &&
+						typeof error === "object" &&
+						"statusCode" in error &&
+						error.statusCode === 404
+					) {
+						return null;
+					}
+					throw error;
+				}
+			},
+			...v2Retry(),
+		});
+
+	const palletClusterRegionsQueryOptions = (opts: { cluster: string }) =>
+		queryOptions({
+			queryKey: [opts, "v2", "cluster", "regions"],
+			queryFn: async () =>
+				(await client.v2.regions.list(opts.cluster, V2_REQUEST)).items,
+			...v2Retry(),
+		});
+
+	const palletClusterWorkerPoolsQueryOptions = (opts: { cluster: string }) =>
+		queryOptions({
+			queryKey: [opts, "v2", "cluster", "worker-pools"],
+			queryFn: async () =>
+				(
+					await client.v2.workerPools.workerPoolsList(
+						opts.cluster,
+						{},
+						V2_REQUEST,
+					)
+				).items,
+			...v2Retry(),
+		});
+
+	const palletClusterBuildsQueryOptions = (opts: { cluster: string }) =>
+		queryOptions({
+			queryKey: [opts, "v2", "cluster", "builds"],
+			queryFn: async () =>
+				(await client.v2.builds.list(opts.cluster, V2_REQUEST)).items,
+			...v2Retry(),
+		});
+
+	const palletClusterNodesQueryOptions = (opts: { cluster: string }) =>
+		queryOptions({
+			queryKey: [opts, "v2", "cluster", "nodes"],
+			queryFn: async () =>
+				(await client.v2.nodes.list(opts.cluster, {}, V2_REQUEST))
+					.items,
+			...v2Retry(),
+		});
+
+	const palletClusterNamespacesQueryOptions = (opts: { cluster: string }) =>
+		queryOptions({
+			queryKey: [opts, "v2", "cluster", "namespaces"],
+			queryFn: async () =>
+				(await client.v2.namespaces.list(opts.cluster, V2_REQUEST))
+					.items,
+			...v2Retry(),
+		});
+
+	const deployPalletBuildMutationOptions = () =>
+		mutationOptions({
+			mutationKey: ["v2", "worker-pools", "deploy"],
+			mutationFn: ({
+				cluster,
+				namespace,
+				region,
+				pool,
+				...request
+			}: Rivet.v2.WorkerPoolsUpsertRequest & {
+				cluster: string;
+				namespace: string;
+				region: string;
+				pool: string;
+			}) =>
+				client.v2.workerPools.workerPoolsUpsert(
+					cluster,
+					namespace,
+					region,
+					pool,
+					request,
+					V2_REQUEST,
+				),
+		});
+
 	const setProjectBillingPlanMutationOptions = () =>
 		mutationOptions({
 			mutationKey: ["billing", "set-plan"],
@@ -789,6 +921,16 @@ export const createOrganizationContext = ({
 			});
 		},
 		createClusterMutationOptions,
+		createPalletClusterMutationOptions,
+		currentOrgPalletClustersQueryOptions: () =>
+			palletClustersQueryOptions({ organization }),
+		palletClusterQueryOptions,
+		palletClusterRegionsQueryOptions,
+		palletClusterWorkerPoolsQueryOptions,
+		palletClusterBuildsQueryOptions,
+		palletClusterNodesQueryOptions,
+		palletClusterNamespacesQueryOptions,
+		deployPalletBuildMutationOptions,
 		createOtelTokenMutationOptions,
 		revokeOtelTokenMutationOptions,
 		setProjectBillingPlanMutationOptions,

@@ -1,9 +1,11 @@
 import * as Sentry from "@sentry/react";
 import {
 	createFileRoute,
+	Navigate,
 	Outlet,
 	redirect,
 	useNavigate,
+	useParams,
 	useSearch,
 } from "@tanstack/react-router";
 import posthog from "posthog-js";
@@ -184,6 +186,22 @@ function EngineModals() {
 	);
 }
 
+function PalletCreateProjectRedirect() {
+	const search = useSearch({ strict: false });
+	const params = useParams({ strict: false });
+	const organization = search?.organization ?? params.organization;
+
+	if (search?.modal !== "create-project") {
+		return null;
+	}
+
+	if (!organization) {
+		return <Navigate to="/new" />;
+	}
+
+	return <Navigate to="/orgs/$organization/new" params={{ organization }} />;
+}
+
 function CloudModals() {
 	const navigate = useNavigate();
 	const search = useSearch({ strict: false });
@@ -194,21 +212,28 @@ function CloudModals() {
 
 	return (
 		<>
-			<CreateProjectDialog
-				organization={search?.organization}
-				dialogContentProps={{ className: "sm:max-w-5xl" }}
-				dialogProps={{
-					open: search?.modal === "create-project",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({ ...old, modal: undefined }),
-							});
-						}
-					},
-				}}
-			/>
+			{features.pallet ? (
+				<PalletCreateProjectRedirect />
+			) : (
+				<CreateProjectDialog
+					organization={search?.organization}
+					dialogContentProps={{ className: "sm:max-w-5xl" }}
+					dialogProps={{
+						open: search?.modal === "create-project",
+						onOpenChange: (value) => {
+							if (!value) {
+								return navigate({
+									to: ".",
+									search: (old) => ({
+										...old,
+										modal: undefined,
+									}),
+								});
+							}
+						},
+					}}
+				/>
+			)}
 			<CreateOrganizationDialog
 				dialogProps={{
 					open: search?.modal === "create-organization",

@@ -48,6 +48,9 @@ export const features = {
 	// `agentOs` gates the agentOS (coding-agent VM) onboarding template. Beta.
 	agentOs: isEnabled("agent-os"),
 	byoc: isEnabled("byoc") && platform,
+	// `pallet` gates the v3 dashboard backed by cloud API v2. Requires
+	// `platform`.
+	pallet: isEnabled("pallet") && platform,
 	// `services` gates managed services (Durable Streams): the Services
 	// section of the product picker, its onboarding path, and the Services
 	// namespace settings tab.
