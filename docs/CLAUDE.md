@@ -17,7 +17,7 @@ docs/
     sidebar.json
     content/
       docs/**.mdx         -> /actors/docs/...
-      learn/**.mdx        -> /guides/...          (re-rooted by the website)
+      guides/*.mdx        -> /guides/...          (merged with other products' guides)
   general/                -> /docs/...
     sidebar.json
     content/**.mdx        -> /docs/...
@@ -110,19 +110,37 @@ not objects, so this repo needs no dependency on the website's icon package.
       { "title": "Introduction", "href": "/actors/docs", "icon": "faSquareInfo" }
     ]}
   ],
-  "learn": []
+  "guides": [
+    { "title": "Guides", "pages": [
+      { "title": "Chat Room", "href": "/guides/chat-room" }
+    ]}
+  ]
 }
 ```
 
-- One key per content directory. `docs/actors` uses `docs` and `learn`; the other
-  bundles use `docs` alone.
+- One key per content directory. `docs/actors` uses `docs` and `guides`; the
+  other bundles use `docs` alone.
 - `href` is the full site path the page renders at, so it differs per bundle:
-  `/actors/docs/...`, `/docs/...`, `/integrations/...`, `/docs/api/...`. The `learn` section is the
-  exception: author it as `/actors/learn/...` and the website re-roots it onto
-  `/guides/...`.
+  `/actors/docs/...`, `/guides/...`, `/docs/...`, `/integrations/...`, `/docs/api/...`.
 - Adding a page to `content/` does not add it to the nav. Add it here too.
 - The Deploy and Self-Host sections are **not** in these files. They are
   website-owned and generated there.
+
+## Guides
+
+The Guides tab at `/guides/` merges the guides of every product repo (this
+repo's Actors bundle, `rivet-dev/agents`, and so on). A guide lives in the repo
+whose code it teaches, so its `<CodeSnippet>` paths resolve against that repo's
+`examples/`.
+
+- Put a guide in `content/guides/<slug>.mdx` and link it from the `guides` key
+  as `/guides/<slug>`. Slugs share one namespace across repos, and the website
+  build fails on a duplicate.
+- `guides` is a list of groups. The website lists every repo's groups in product
+  order and merges groups with the same title, so name groups by topic
+  (`Solutions`, `Architecture`), not by product.
+- Do not add an overview page or link. The website owns `/guides/` and builds
+  its cards from the merged sidebar.
 
 ## Code
 

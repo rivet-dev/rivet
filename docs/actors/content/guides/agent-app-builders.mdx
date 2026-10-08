@@ -1,0 +1,29 @@
+---
+title: "Agent App Builders"
+description: "Ship a backend per user the moment the agent generates one, on Rivet Actors."
+---
+
+When your product's output is an app, the backend has to appear the moment the agent writes it. It needs one per user, isolated from every other user, live enough to click on in the same chat turn. Rivet gives each generated app its own Actor and its own persistence, so provisioning is a key lookup rather than a deploy pipeline.
+
+## Two shapes, depending on whose code it is
+
+**Run the generated code in place.** A code agent Actor keeps the chat history and the current revision of the generated source in its own [SQLite database](/actors/docs/sqlite), so every key has an isolated transcript and an isolated codebase. A dynamic Actor fetches that source from the matching code agent and executes it in a [Secure Exec](/secure-exec) sandbox, so the user can call their app the moment it compiles and iterate on it without a redeploy.
+
+**Deploy it into its own namespace.** For code that should outlive the chat, create a Rivet namespace per user, package the generated `registry.ts` and frontend into a project, deploy it to a serverless host such as [Freestyle](/docs/deploy/self-host/workers/freestyle), and configure that host as the namespace's worker. Each user's Actors then run under their own credentials, in their own namespace, with nothing shared but the control plane.
+
+## Start from the examples
+
+<CardGroup>
+  <Card title="AI-Generated Actor" href="https://github.com/rivet-dev/rivet/tree/main/examples/ai-generated-actor" target="_blank">
+    Chat, a Monaco editor, and a live test panel: generate Actor code, persist it in per-Actor SQLite, and invoke it in an isolated dynamic runtime.
+  </Card>
+  <Card title="User and AI Generated Actors with Freestyle" href="https://github.com/rivet-dev/rivet/tree/main/examples/ai-and-user-generated-actors-freestyle" target="_blank">
+    Provision a namespace per user, package the generated source, and deploy it to Freestyle as that namespace's worker.
+  </Card>
+</CardGroup>
+
+## Next steps
+
+- [Dynamic Apps](/dynamic-apps/docs): the managed version of this pattern: deploy a generated app and backend per user, with SQLite, workflows, and multiplayer built in.
+- [Actor Keys](/actors/docs/keys): how one key per user becomes one backend per user.
+- [Deploy](/docs/deploy/): Rivet Cloud, your own cloud, or self-hosted.

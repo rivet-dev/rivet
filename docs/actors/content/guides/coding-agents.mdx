@@ -1,0 +1,28 @@
+---
+title: "Coding Agents"
+description: "Give each coding session a sandbox, a filesystem, and durable memory on Rivet Actors."
+---
+
+A coding agent needs somewhere to run commands and somewhere to remember what it already did. On Rivet both belong to the same object: one Actor per coding session, holding the transcript and owning a sandbox whose filesystem survives between turns.
+
+## One Actor per session
+
+Key the agent Actor by session id, so `agent.getOrCreate([sessionId])` always reaches the same conversation (see [Actor Keys](/actors/docs/keys)). The transcript, the run status, and the sandbox session id live in that Actor's persistent [state](/actors/docs/state), so a restart resumes the session instead of starting a new one. There is no separate session database to keep in sync.
+
+## The sandbox is an Actor too
+
+The sandbox comes from `rivetkit/sandbox` and shares the agent's key, which makes the agent-to-sandbox mapping implicit in the key space. It runs the coding agent (Codex by default) inside Docker, Daytona, or E2B, and owns the filesystem and process state for that session. The agent Actor submits a prompt, awaits the sandbox round trip, and broadcasts the result to connected clients as an [event](/actors/docs/events).
+
+## Start from the example
+
+<CardGroup>
+  <Card title="Sandbox Coding Agent" href="https://github.com/rivet-dev/rivet/tree/main/examples/sandbox-coding-agent" target="_blank">
+    A React chat UI backed by a `rivetkit/sandbox` Actor: one sandbox, filesystem, and resumable session per coding agent.
+  </Card>
+</CardGroup>
+
+## Next steps
+
+- [AI Agent](/guides/ai-agent): memory, queued message handling, and streaming responses in depth.
+- [Sandboxes](/agentos/docs/sandboxes): what a sandbox can run and how it is isolated.
+- [Deploy](/docs/deploy/): run this on Rivet Cloud, in your own cloud, or self-hosted.

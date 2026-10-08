@@ -293,51 +293,67 @@
 			]
 		}
 	],
-	"learn": [
-		{
-			"title": "General",
-			"pages": [
-				{
-					"title": "Overview",
-					"href": "/actors/learn",
-					"icon": "faSquareInfo"
-				}
-			]
-		},
+	"guides": [
 		{
 			"title": "Guides",
 			"pages": [
 				{
 					"title": "AI Agent",
-					"href": "/actors/learn/ai-agent"
+					"href": "/guides/ai-agent"
 				},
 				{
 					"title": "Authenticate Users End to End",
-					"href": "/actors/learn/authentication"
+					"href": "/guides/authentication"
 				},
 				{
 					"title": "Chat Room",
-					"href": "/actors/learn/chat-room"
+					"href": "/guides/chat-room"
 				},
 				{
 					"title": "Collaborative Text Editor",
-					"href": "/actors/learn/collaborative-text-editor"
+					"href": "/guides/collaborative-text-editor"
 				},
 				{
 					"title": "Cron Jobs and Scheduled Tasks",
-					"href": "/actors/learn/cron-jobs"
+					"href": "/guides/cron-jobs"
 				},
 				{
 					"title": "Database per Tenant",
-					"href": "/actors/learn/per-tenant-database"
+					"href": "/guides/per-tenant-database"
 				},
 				{
 					"title": "Live Cursors and Presence",
-					"href": "/actors/learn/live-cursors"
+					"href": "/guides/live-cursors"
 				},
 				{
 					"title": "Multiplayer Game",
-					"href": "/actors/learn/multiplayer-game"
+					"href": "/guides/multiplayer-game"
+				}
+			]
+		},
+		{
+			"title": "Solutions",
+			"pages": [
+				{
+					"title": "Coding Agents",
+					"href": "/guides/coding-agents"
+				},
+				{
+					"title": "Agent App Builders",
+					"href": "/guides/agent-app-builders"
+				},
+				{
+					"title": "Company-Specific Agents",
+					"href": "/guides/company-agents"
+				}
+			]
+		},
+		{
+			"title": "Architecture",
+			"pages": [
+				{
+					"title": "A Radically Simpler Architecture",
+					"href": "/guides/a-radically-simpler-architecture"
 				}
 			]
 		}
