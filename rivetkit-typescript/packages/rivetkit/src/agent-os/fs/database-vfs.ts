@@ -175,10 +175,13 @@ export function createDatabaseVfs(
 	async function getChildEntries(dirPath: string): Promise<FsRow[]> {
 		// Find direct children by matching paths that are one level deeper.
 		// A direct child of "/foo" has path like "/foo/bar" but NOT "/foo/bar/baz".
+		// Compare the prefix literally. `LIKE` treats `_` and `%` in path names
+		// as wildcards and ignores ASCII case, which matches sibling paths.
 		const prefix = dirPath === "/" ? "/" : `${dirPath}/`;
 		const rows = await db.execute<FsRow>(
-			"SELECT * FROM agent_os_fs_entries WHERE path LIKE ? AND path != ?",
-			`${prefix}%`,
+			"SELECT * FROM agent_os_fs_entries WHERE substr(path, 1, length(?)) = ? AND path != ?",
+			prefix,
+			prefix,
 			dirPath,
 		);
 		// Filter to direct children only.
@@ -421,8 +424,9 @@ export function createDatabaseVfs(
 
 				// Get all descendants first, then update them.
 				const descendants = await db.execute<FsRow>(
-					"SELECT path FROM agent_os_fs_entries WHERE path LIKE ?",
-					`${prefix}%`,
+					"SELECT path FROM agent_os_fs_entries WHERE substr(path, 1, length(?)) = ?",
+					prefix,
+					prefix,
 				);
 
 				for (const desc of descendants) {
