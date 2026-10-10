@@ -257,8 +257,16 @@ fn to_client_from_json_value(value: &JsonValue) -> Result<to_client::ToClient> {
 			group: json_string(value, "group")?,
 			code: json_string(value, "code")?,
 			message: json_string(value, "message")?,
-			metadata: value.get("metadata").map(serde_cbor::to_vec).transpose()?,
-			action_id: value.get("actionId").map(parse_json_u64).transpose()?,
+			metadata: value
+				.get("metadata")
+				.filter(|value| !value.is_null())
+				.map(serde_cbor::to_vec)
+				.transpose()?,
+			action_id: value
+				.get("actionId")
+				.filter(|value| !value.is_null())
+				.map(parse_json_u64)
+				.transpose()?,
 		}),
 		"ActionResponse" => to_client::ToClientBody::ActionResponse(to_client::ActionResponse {
 			id: parse_json_u64(
@@ -415,5 +423,68 @@ mod tests {
 			u16::from_le_bytes([payload[0], payload[1]]),
 			wire::PROTOCOL_VERSION
 		);
+	}
+
+	fn null_optionals_error_json() -> JsonValue {
+		json!({
+			"body": {
+				"tag": "Error",
+				"val": {
+					"group": "a",
+					"code": "b",
+					"message": "c",
+					"actionId": null,
+					"metadata": null,
+				},
+			},
+		})
+	}
+
+	fn assert_connection_error_without_optionals(message: to_client::ToClient) {
+		let to_client::ToClientBody::Error(error) = message.body else {
+			panic!("expected error body");
+		};
+		assert_eq!(error.group, "a");
+		assert_eq!(error.code, "b");
+		assert_eq!(error.message, "c");
+		assert_eq!(error.action_id, None);
+		assert_eq!(error.metadata, None);
+	}
+
+	#[test]
+	fn json_connection_error_accepts_null_optionals() {
+		let payload = serde_json::to_vec(&null_optionals_error_json()).unwrap();
+		let message = decode_to_client(EncodingKind::Json, &payload).unwrap();
+		assert_connection_error_without_optionals(message);
+	}
+
+	#[test]
+	fn cbor_connection_error_accepts_null_optionals() {
+		let payload = serde_cbor::to_vec(&null_optionals_error_json()).unwrap();
+		let message = decode_to_client(EncodingKind::Cbor, &payload).unwrap();
+		assert_connection_error_without_optionals(message);
+	}
+
+	#[test]
+	fn json_connection_error_keeps_present_action_id() {
+		let payload = serde_json::to_vec(&json!({
+			"body": {
+				"tag": "Error",
+				"val": {
+					"group": "a",
+					"code": "b",
+					"message": "c",
+					"actionId": 7,
+					"metadata": { "k": 1 },
+				},
+			},
+		}))
+		.unwrap();
+		let message = decode_to_client(EncodingKind::Json, &payload).unwrap();
+		let to_client::ToClientBody::Error(error) = message.body else {
+			panic!("expected error body");
+		};
+		assert_eq!(error.action_id, Some(7));
+		assert!(error.metadata.is_some());
 	}
 }
