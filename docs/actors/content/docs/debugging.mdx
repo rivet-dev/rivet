@@ -26,7 +26,7 @@ Standard actor endpoints (health, actions, requests) and inspector endpoints hav
 
 | Environment | Authentication |
 |---|---|
-| **Local development** | No authentication required. |
+| **Local development** | Pass the local control plane's admin token in the `x-rivet-token` header. It is `default` unless you set `RIVET__AUTH__ADMIN_TOKEN`. |
 | **Self-hosted engine** | The Rivet control plane handles authentication at the gateway level. |
 | **Rivet Cloud** | Authentication is handled by the Rivet Cloud platform at the gateway level. |
 
@@ -38,12 +38,13 @@ Inspector endpoints always require the actor's inspector token, including in loc
 
 | Environment | Authentication |
 |---|---|
-| **Local development** | Bearer the actor's inspector token in the `Authorization` header. Fetch it through the management KV endpoint (see below). |
+| **Local development** | Bearer the actor's inspector token in the `Authorization` header, and pass the local control plane's admin token in the `x-rivet-token` header so the request passes the gateway. Fetch the inspector token through the management KV endpoint (see below). |
 | **Self-hosted engine** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically; for direct API access, fetch it through the management KV endpoint (see below). |
 | **Rivet Cloud** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically; for direct API access, fetch it through the management KV endpoint (see below). |
 
 ```bash
 curl "$RIVET_API/gateway/{actor_id}/inspector/summary" \
+  -H "x-rivet-token: $RIVET_TOKEN" \
   -H 'Authorization: Bearer YOUR_INSPECTOR_TOKEN'
 ```
 
@@ -65,6 +66,7 @@ INSPECTOR_TOKEN=$(echo "$RESPONSE" | jq -r '.value' | base64 -d)
 
 # Use it to call inspector endpoints
 curl "$RIVET_API/gateway/$ACTOR_ID/inspector/summary" \
+  -H "x-rivet-token: $RIVET_TOKEN" \
   -H "Authorization: Bearer $INSPECTOR_TOKEN"
 ```
 
@@ -74,28 +76,34 @@ These are the built-in actor endpoints available through the gateway:
 
 ```bash
 # Health check
-curl $RIVET_API/gateway/{actor_id}/health
+curl $RIVET_API/gateway/{actor_id}/health \
+  -H "x-rivet-token: $RIVET_TOKEN"
 
 # Metadata
-curl $RIVET_API/gateway/{actor_id}/metadata
+curl $RIVET_API/gateway/{actor_id}/metadata \
+  -H "x-rivet-token: $RIVET_TOKEN"
 
 # Call an action
 curl -X POST $RIVET_API/gateway/{actor_id}/action/myAction \
+  -H "x-rivet-token: $RIVET_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"args": [1, 2, 3]}'
 
 # Send queue message (queue name in path)
 curl -X POST $RIVET_API/gateway/{actor_id}/queue/jobs \
+  -H "x-rivet-token: $RIVET_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"body":{"id":"job-1"}}'
 
 # Send queue message and wait for completion (optional timeout in ms)
 curl -X POST $RIVET_API/gateway/{actor_id}/queue/jobs \
+  -H "x-rivet-token: $RIVET_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"body":{"id":"job-1"},"wait":true,"timeout":5000}'
 
 # Forward an HTTP request to the actor's onRequest handler
-curl $RIVET_API/gateway/{actor_id}/request/my/custom/path
+curl $RIVET_API/gateway/{actor_id}/request/my/custom/path \
+  -H "x-rivet-token: $RIVET_TOKEN"
 ```
 
 Queue send responses always include a `status` field:
@@ -116,7 +124,7 @@ If `wait: true` and the timeout is reached, `status` is `"timedOut"`.
 
 The inspector HTTP API exposes JSON endpoints for querying and modifying actor internals at runtime. These are designed for agent-based debugging and tooling.
 
-Every inspector endpoint requires the actor's inspector token as a bearer token, including in local development. The examples below omit the `Authorization` header for brevity, but you must add `-H "Authorization: Bearer $INSPECTOR_TOKEN"` to each request. See [Retrieving the Inspector Token](#retrieving-the-inspector-token) above.
+Every inspector endpoint requires the actor's inspector token as a bearer token, including in local development. The examples below omit the authentication headers for brevity, but you must add `-H "Authorization: Bearer $INSPECTOR_TOKEN"` to each request. In local development, also add `-H "x-rivet-token: $RIVET_TOKEN"` so the request passes the gateway. See [Retrieving the Inspector Token](#retrieving-the-inspector-token) above.
 
 ### Get State
 
