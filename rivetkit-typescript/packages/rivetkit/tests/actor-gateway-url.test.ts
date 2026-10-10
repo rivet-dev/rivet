@@ -288,4 +288,33 @@ describe("gateway URL builders", () => {
 		expect(urlObj.searchParams.get("rvt-namespace")).toBe("default");
 		expect(urlObj.searchParams.get("rvt-method")).toBe("get");
 	});
+
+	test("keeps a literal ? inside the request query", () => {
+		const directUrl = buildActorGatewayUrl(
+			"https://api.rivet.dev/manager",
+			"actor-1",
+			undefined,
+			"/request/callback?next=/done?ok=1",
+		);
+		expect(new URL(directUrl).searchParams.get("next")).toBe("/done?ok=1");
+
+		const queryUrl = buildActorQueryGatewayUrl(
+			"https://api.rivet.dev/manager",
+			"default",
+			{
+				getForKey: {
+					name: "lobby",
+					key: ["room"],
+				},
+			},
+			"tok",
+			"/request/callback?next=/done?ok=1",
+		);
+		const params = new URL(queryUrl).searchParams;
+		expect(params.get("next")).toBe("/done?ok=1");
+		expect(params.get("rvt-namespace")).toBe("default");
+		expect(params.get("rvt-method")).toBe("get");
+		expect(params.get("rvt-key")).toBe("room");
+		expect(params.get("rvt-token")).toBe("tok");
+	});
 });
