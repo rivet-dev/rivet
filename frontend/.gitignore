@@ -1,3 +1,6 @@
 
 # Vite config bundling temp files
 vite.config.ts.timestamp-*
+
+# Amp orb portal state
+.amp/

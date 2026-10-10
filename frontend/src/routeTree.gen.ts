@@ -19,6 +19,8 @@ import { Route as AcceptInvitationRouteImport } from './routes/accept-invitation
 import { Route as ContextRouteImport } from './routes/_context'
 import { Route as ContextIndexRouteImport } from './routes/_context/index'
 import { Route as OauthConsentRouteImport } from './routes/oauth.consent'
+import { Route as MockClusterOnboardingRouteImport } from './routes/mock.cluster-onboarding'
+import { Route as MockClusterMapLabRouteImport } from './routes/mock.cluster-map-lab'
 import { Route as ContextNewIndexRouteImport } from './routes/_context/new/index'
 import { Route as ContextNewOrgIndexRouteImport } from './routes/_context/new-org/index'
 import { Route as ContextOrgsOrganizationRouteImport } from './routes/_context/orgs.$organization'
@@ -89,6 +91,16 @@ const ContextIndexRoute = ContextIndexRouteImport.update({
 const OauthConsentRoute = OauthConsentRouteImport.update({
   id: '/oauth/consent',
   path: '/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MockClusterOnboardingRoute = MockClusterOnboardingRouteImport.update({
+  id: '/mock/cluster-onboarding',
+  path: '/mock/cluster-onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MockClusterMapLabRoute = MockClusterMapLabRouteImport.update({
+  id: '/mock/cluster-map-lab',
+  path: '/mock/cluster-map-lab',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContextNewIndexRoute = ContextNewIndexRouteImport.update({
@@ -237,6 +249,8 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email-pending': typeof VerifyEmailPendingRoute
+  '/mock/cluster-map-lab': typeof MockClusterMapLabRoute
+  '/mock/cluster-onboarding': typeof MockClusterOnboardingRoute
   '/oauth/consent': typeof OauthConsentRoute
   '/ns/$namespace': typeof ContextNsNamespaceRouteWithChildren
   '/orgs/$organization': typeof ContextOrgsOrganizationRouteWithChildren
@@ -269,6 +283,8 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email-pending': typeof VerifyEmailPendingRoute
+  '/mock/cluster-map-lab': typeof MockClusterMapLabRoute
+  '/mock/cluster-onboarding': typeof MockClusterOnboardingRoute
   '/oauth/consent': typeof OauthConsentRoute
   '/': typeof ContextIndexRoute
   '/new-org': typeof ContextNewOrgIndexRoute
@@ -300,6 +316,8 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email-pending': typeof VerifyEmailPendingRoute
+  '/mock/cluster-map-lab': typeof MockClusterMapLabRoute
+  '/mock/cluster-onboarding': typeof MockClusterOnboardingRoute
   '/oauth/consent': typeof OauthConsentRoute
   '/_context/': typeof ContextIndexRoute
   '/_context/ns/$namespace': typeof ContextNsNamespaceRouteWithChildren
@@ -336,6 +354,8 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reset-password'
     | '/verify-email-pending'
+    | '/mock/cluster-map-lab'
+    | '/mock/cluster-onboarding'
     | '/oauth/consent'
     | '/ns/$namespace'
     | '/orgs/$organization'
@@ -368,6 +388,8 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reset-password'
     | '/verify-email-pending'
+    | '/mock/cluster-map-lab'
+    | '/mock/cluster-onboarding'
     | '/oauth/consent'
     | '/'
     | '/new-org'
@@ -398,6 +420,8 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reset-password'
     | '/verify-email-pending'
+    | '/mock/cluster-map-lab'
+    | '/mock/cluster-onboarding'
     | '/oauth/consent'
     | '/_context/'
     | '/_context/ns/$namespace'
@@ -433,6 +457,8 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   VerifyEmailPendingRoute: typeof VerifyEmailPendingRoute
+  MockClusterMapLabRoute: typeof MockClusterMapLabRoute
+  MockClusterOnboardingRoute: typeof MockClusterOnboardingRoute
   OauthConsentRoute: typeof OauthConsentRoute
 }
 
@@ -506,6 +532,20 @@ declare module '@tanstack/react-router' {
       path: '/oauth/consent'
       fullPath: '/oauth/consent'
       preLoaderRoute: typeof OauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mock/cluster-onboarding': {
+      id: '/mock/cluster-onboarding'
+      path: '/mock/cluster-onboarding'
+      fullPath: '/mock/cluster-onboarding'
+      preLoaderRoute: typeof MockClusterOnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mock/cluster-map-lab': {
+      id: '/mock/cluster-map-lab'
+      path: '/mock/cluster-map-lab'
+      fullPath: '/mock/cluster-map-lab'
+      preLoaderRoute: typeof MockClusterMapLabRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_context/new/': {
@@ -789,6 +829,8 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   VerifyEmailPendingRoute: VerifyEmailPendingRoute,
+  MockClusterMapLabRoute: MockClusterMapLabRoute,
+  MockClusterOnboardingRoute: MockClusterOnboardingRoute,
   OauthConsentRoute: OauthConsentRoute,
 }
 export const routeTree = rootRouteImport

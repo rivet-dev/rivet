@@ -1,5 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
+import {
+	createRootRouteWithContext,
+	Outlet,
+	redirect,
+} from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import type {
 	CloudContext,
@@ -66,7 +70,17 @@ interface RootRouteContext {
 	) => EngineNamespaceContext;
 }
 
+// Demo builds: `VITE_DEMO_ROUTE=/mock/...` (e.g. in a gitignored `.env.local`)
+// sends the bare `/` to a design mock instead of the login flow, so a shared
+// link lands on the demo without a session. Unset in real production builds.
+const demoRoute = import.meta.env.VITE_DEMO_ROUTE as string | undefined;
+
 export const Route = createRootRouteWithContext<RootRouteContext>()({
 	component: features.auth && features.platform ? CloudRoute : RootRoute,
 	pendingComponent: FullscreenLoading,
+	beforeLoad: ({ location }) => {
+		if (demoRoute && location.pathname === "/") {
+			throw redirect({ href: demoRoute });
+		}
+	},
 });
