@@ -1049,9 +1049,16 @@ export class ActorConnRaw {
 			}
 		}
 
-		// Clean up empty listener sets
-		if (listeners.size === 0) {
+		// Clean up empty listener sets and stop the server from sending this
+		// event, matching what unsubscribing the last listener does. A listener
+		// may have already unsubscribed or resubscribed during dispatch, in
+		// which case the map no longer holds this set.
+		if (
+			listeners.size === 0 &&
+			this.#eventSubscriptions.get(name) === listeners
+		) {
 			this.#eventSubscriptions.delete(name);
+			this.#sendSubscription(name, false);
 		}
 	}
 
