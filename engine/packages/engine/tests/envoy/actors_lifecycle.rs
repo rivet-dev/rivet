@@ -1112,6 +1112,80 @@ fn envoy_actor_pending_allocation_no_envoys() {
 }
 
 #[test]
+fn envoy_actor_no_envoys_stops_reallocating_after_retry_duration_threshold() {
+	const RETRY_DURATION_THRESHOLD_MS: i64 = 1_000;
+
+	// Mirror the retry settings the local dev engine uses so failed allocations retry quickly.
+	let opts = common::TestOpts::new(1)
+		.with_timeout(30)
+		.with_pegboard_config(|pegboard| {
+			pegboard.base_retry_timeout = Some(100);
+			pegboard.retry_reset_duration = Some(100);
+			pegboard.reschedule_backoff_max_exponent = Some(1);
+			pegboard.actor_retry_duration_threshold = Some(RETRY_DURATION_THRESHOLD_MS);
+		});
+
+	common::run(opts, |ctx| async move {
+		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+		let pool_name = "orphaned-envoy";
+
+		// Prime the pool's Envoy protocol version, then disconnect so the actor is
+		// created as actor2 with no envoy that could ever allocate it.
+		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+			builder
+				.with_pool_name(pool_name)
+				.with_actor_behavior("test-actor", |_| {
+					Box::new(common::test_envoy::EchoActor::new())
+				})
+		})
+		.await;
+		envoy.shutdown().await;
+
+		let res = common::create_actor(
+			ctx.leader_dc().guard_port(),
+			&namespace,
+			"test-actor",
+			pool_name,
+			rivet_types::actors::CrashPolicy::Sleep,
+		)
+		.await;
+		let actor_id = res.actor.actor_id.to_string();
+
+		// Every failed reallocation rewrites `sleep_ts`, so it only settles once the
+		// workflow gives up retrying and parks the actor.
+		let read_sleep_ts = || async {
+			common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
+				.await
+				.expect("failed to get actor")
+				.expect("actor should exist")
+				.sleep_ts
+		};
+
+		tokio::time::sleep(std::time::Duration::from_millis(
+			(RETRY_DURATION_THRESHOLD_MS * 3) as u64,
+		))
+		.await;
+		let first_sleep_ts = read_sleep_ts().await;
+		assert!(
+			first_sleep_ts.is_some(),
+			"actor should be marked sleeping after failed allocations"
+		);
+
+		tokio::time::sleep(std::time::Duration::from_millis(
+			(RETRY_DURATION_THRESHOLD_MS * 2) as u64,
+		))
+		.await;
+		let second_sleep_ts = read_sleep_ts().await;
+
+		assert_eq!(
+			first_sleep_ts, second_sleep_ts,
+			"actor with no envoys should stop reallocating once it has retried longer than \
+			 actor_retry_duration_threshold"
+		);
+	});
+}
+
+#[test]
 fn envoy_multiple_pending_allocations_start_after_envoy_reconnect() {
 	common::run(
 		common::TestOpts::new(1).with_timeout(45),

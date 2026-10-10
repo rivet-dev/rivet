@@ -719,7 +719,18 @@ pub async fn handle_stopped(
 		Decision::Backoff => {
 			let now = ctx.activity(GetTsInput {}).await?;
 
-			state.transition = Transition::Reallocating { since_ts: now };
+			match ctx.check_version(2).await? {
+				1 => {
+					state.transition = Transition::Reallocating { since_ts: now };
+				}
+				_latest => {
+					// Keep the original `since_ts` across repeated failed allocations so the retry
+					// loop in the main workflow can give up after `actor_retry_duration_threshold`.
+					if !matches!(state.transition, Transition::Reallocating { .. }) {
+						state.transition = Transition::Reallocating { since_ts: now };
+					}
+				}
+			}
 
 			StoppedResult::Continue
 		}
