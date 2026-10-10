@@ -14,6 +14,7 @@ pub mod handle;
 pub mod protocol;
 mod remote_manager;
 
+pub use backoff::{Backoff, BackoffConfig};
 pub use client::{
 	Client, ClientConfig, CreateOptions, GetOptions, GetOrCreateOptions, GetWithIdOptions,
 };

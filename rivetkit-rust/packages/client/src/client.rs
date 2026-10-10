@@ -48,6 +48,7 @@ pub struct ClientConfig {
 	pub headers: Option<HashMap<String, String>>,
 	pub max_input_size: Option<usize>,
 	pub disable_metadata_lookup: bool,
+	pub reconnect_backoff: Option<crate::backoff::BackoffConfig>,
 }
 
 impl ClientConfig {
@@ -62,6 +63,7 @@ impl ClientConfig {
 			headers: None,
 			max_input_size: None,
 			disable_metadata_lookup: false,
+			reconnect_backoff: None,
 		}
 	}
 
@@ -116,12 +118,39 @@ impl ClientConfig {
 		self.disable_metadata_lookup = disable;
 		self
 	}
+
+	pub fn reconnect_backoff(mut self, mut backoff: crate::backoff::BackoffConfig) -> Self {
+		backoff.normalize();
+		self.reconnect_backoff = Some(backoff);
+		self
+	}
+
+	pub fn reconnect_delays(
+		mut self,
+		initial: std::time::Duration,
+		max: std::time::Duration,
+	) -> Self {
+		self.reconnect_backoff = Some(crate::backoff::BackoffConfig::new(initial, max));
+		self
+	}
+
+	/// Disables automatic reconnection after a connection drops.
+	///
+	/// The initial connection attempt via `connect()` will still be made.
+	/// This only prevents retries if that initial connection (or a later
+	/// established connection) fails or disconnects.
+	pub fn disable_reconnect(mut self) -> Self {
+		self.reconnect_backoff =
+			Some(crate::backoff::BackoffConfig::default().max_retries(Some(0)));
+		self
+	}
 }
 
 pub struct Client {
 	remote_manager: RemoteManager,
 	encoding_kind: EncodingKind,
 	transport_kind: TransportKind,
+	reconnect_backoff: crate::backoff::BackoffConfig,
 	shutdown_tx: Arc<tokio::sync::broadcast::Sender<()>>,
 }
 
@@ -131,6 +160,7 @@ impl Clone for Client {
 			remote_manager: self.remote_manager.clone(),
 			encoding_kind: self.encoding_kind,
 			transport_kind: self.transport_kind,
+			reconnect_backoff: self.reconnect_backoff.clone(),
 			shutdown_tx: self.shutdown_tx.clone(),
 		}
 	}
@@ -141,6 +171,7 @@ impl std::fmt::Debug for Client {
 		f.debug_struct("Client")
 			.field("encoding_kind", &self.encoding_kind)
 			.field("transport_kind", &self.transport_kind)
+			.field("reconnect_backoff", &self.reconnect_backoff)
 			.finish_non_exhaustive()
 	}
 }
@@ -157,10 +188,14 @@ impl Client {
 			config.disable_metadata_lookup,
 		);
 
+		let mut reconnect_backoff = config.reconnect_backoff.unwrap_or_default();
+		reconnect_backoff.normalize();
+
 		Self {
 			remote_manager,
 			encoding_kind: config.encoding,
 			transport_kind: config.transport,
+			reconnect_backoff,
 			shutdown_tx: Arc::new(tokio::sync::broadcast::channel(1).0),
 		}
 	}
@@ -170,16 +205,15 @@ impl Client {
 	}
 
 	fn create_handle(&self, params: Option<JsonValue>, query: ActorQuery) -> ActorHandle {
-		let handle = ActorHandle::new(
+		ActorHandle::new(
 			self.remote_manager.clone(),
 			params,
 			query,
 			self.shutdown_tx.clone(),
 			self.transport_kind,
 			self.encoding_kind,
-		);
-
-		handle
+			self.reconnect_backoff.clone(),
+		)
 	}
 
 	pub fn get(&self, name: &str, key: ActorKey, opts: GetOptions) -> Result<ActorHandle> {
