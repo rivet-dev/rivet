@@ -212,7 +212,11 @@ describeDriverMatrix("Gateway Routing", (driverTestConfig) => {
 				expect(data.url).not.toContain("rvt-runner");
 			});
 
-			test("supports multi-component keys via comma-separated rvt-key", async (c) => {
+			test("supports multi-component keys via legacy comma-separated rvt-key", async (c) => {
+				// Legacy encoding, kept for backward compatibility with
+				// clients that predate rvt-key-part. Cannot express a
+				// component containing a literal comma; see the
+				// rvt-key-part tests below for the fix.
 				const { client, endpoint } = await setupDriverTest(
 					c,
 					driverTestConfig,
@@ -241,6 +245,63 @@ describeDriverMatrix("Gateway Routing", (driverTestConfig) => {
 				expect(response.ok).toBe(true);
 				const data = await response.json();
 				expect(data).toEqual({ message: "Hello from actor!" });
+			});
+
+			test("supports multi-component keys via repeated rvt-key-part", async (c) => {
+				const { client, endpoint } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+
+				const handle = client.rawHttpActor.getOrCreate([
+					"tenant-part",
+					"room-part",
+				]);
+				await handle.fetch("api/hello");
+
+				const gatewayUrl = await handle.getGatewayUrl();
+				const parsedUrl = new URL(gatewayUrl);
+				const namespace = parsedUrl.searchParams.get("rvt-namespace")!;
+				const runner = parsedUrl.searchParams.get("rvt-runner")!;
+				expect(parsedUrl.searchParams.getAll("rvt-key-part")).toEqual([
+					"tenant-part",
+					"room-part",
+				]);
+
+				const queryUrl = new URL(
+					`${endpoint}/gateway/rawHttpActor/request/api/hello`,
+				);
+				queryUrl.searchParams.set("rvt-namespace", namespace);
+				queryUrl.searchParams.set("rvt-method", "getOrCreate");
+				queryUrl.searchParams.append("rvt-key-part", "tenant-part");
+				queryUrl.searchParams.append("rvt-key-part", "room-part");
+				queryUrl.searchParams.set("rvt-runner", runner);
+
+				const response = await fetch(queryUrl.toString());
+				expect(response.ok).toBe(true);
+				const data = await response.json();
+				expect(data).toEqual({ message: "Hello from actor!" });
+			});
+
+			test("distinguishes a comma-containing component from a two-component key (issue #5807)", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				// One component containing a literal comma.
+				const singlePart = client.rawHttpActor.getOrCreate([
+					"tenant-x,admin-x",
+				]);
+				await singlePart.fetch("api/hello");
+				const singlePartId = await singlePart.resolve();
+
+				// Two components, no literal comma.
+				const twoParts = client.rawHttpActor.getOrCreate([
+					"tenant-x",
+					"admin-x",
+				]);
+				await twoParts.fetch("api/hello");
+				const twoPartsId = await twoParts.resolve();
+
+				expect(singlePartId).not.toBe(twoPartsId);
 			});
 		});
 	});
