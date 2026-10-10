@@ -6062,7 +6062,6 @@ dependencies = [
  "anyhow",
  "rivet-config",
  "sentry",
- "serde_json",
  "uuid",
 ]
 
