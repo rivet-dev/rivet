@@ -155,25 +155,7 @@ export function actor<
 	TDatabase extends AnyDatabaseProvider,
 	TEvents extends EventSchemaConfig = Record<never, never>,
 	TQueues extends QueueSchemaConfig = Record<never, never>,
-	TActions extends Actions<
-		TState,
-		TConnParams,
-		TConnState,
-		TVars,
-		TInput,
-		TDatabase,
-		TEvents,
-		TQueues
-	> = Actions<
-		TState,
-		TConnParams,
-		TConnState,
-		TVars,
-		TInput,
-		TDatabase,
-		TEvents,
-		TQueues
-	>,
+	TActions extends Record<string, unknown> = Record<never, never>,
 >(
 	input: ActorConfigInput<
 		TState,
@@ -195,7 +177,18 @@ export function actor<
 	TDatabase,
 	TEvents,
 	TQueues,
-	TActions
+	TActions extends Actions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	>
+		? TActions
+		: never
 > {
 	warnDeprecatedOptionKeys(
 		(input as { options?: unknown } | undefined)?.options,
@@ -209,7 +202,18 @@ export function actor<
 		TDatabase,
 		TEvents,
 		TQueues,
-		TActions
+		TActions extends Actions<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>
+			? TActions
+			: never
 	>;
 	flattenActionHandlers(config.actions);
 	flattenActionInputSchemas(config.actions, config.actionInputSchemas);
