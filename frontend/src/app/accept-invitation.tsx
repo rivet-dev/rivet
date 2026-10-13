@@ -1,7 +1,6 @@
 import { faGoogle, Icon } from "@rivet-gg/icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { isRedirect, useNavigate, useSearch } from "@tanstack/react-router";
-import { attemptAsync } from "es-toolkit";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -11,13 +10,15 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { authClient, redirectToOrganization } from "@/lib/auth";
+import { authClient } from "@/lib/auth";
 
 type InvitationDetails = {
 	id: string;
 	email: string;
 	role: string;
+	organizationId: string;
 	organizationName: string;
+	organizationSlug: string;
 	status: string;
 	expiresAt: string;
 };
@@ -63,7 +64,9 @@ export function AcceptInvitation() {
 			}
 			return data;
 		},
-		enabled: !!resolvedInvitationId,
+		// `getInvitation` requires a session; without one it answers 401
+		// "Not authenticated", which must not be shown as an invalid invite.
+		enabled: !!resolvedInvitationId && !!session,
 		retry: false,
 	});
 
@@ -77,12 +80,23 @@ export function AcceptInvitation() {
 					result.error.message ?? "Failed to accept invitation",
 				);
 			}
-			const [error] = await attemptAsync(
-				async () => await redirectToOrganization(),
-			);
-			if (error && isRedirect(error)) {
-				await navigate(error.options);
+			// `acceptInvitation` updates the session row but does not refresh
+			// the session cookie cache, so `getSession()` would still report
+			// the previous active organization. `setActive` rewrites the
+			// cookie and returns the organization we should land on.
+			const active = await authClient.organization.setActive({
+				organizationId: result.data.invitation.organizationId,
+			});
+			if (active.error || !active.data) {
+				throw new Error(
+					active.error?.message ??
+						"Failed to switch to the organization",
+				);
 			}
+			await navigate({
+				to: "/orgs/$organization",
+				params: { organization: active.data.slug },
+			});
 		},
 	});
 
@@ -102,36 +116,12 @@ export function AcceptInvitation() {
 		});
 	};
 
-	if (sessionPending || invitationPending) {
-		return (
-			<div className="flex min-h-screen items-center justify-center bg-background">
-				<p className="text-muted-foreground text-sm">Loading…</p>
-			</div>
-		);
+	if (sessionPending) {
+		return <Loading />;
 	}
 
-	if (!resolvedInvitationId || invitationError) {
-		return (
-			<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4 px-4">
-				<Card className="w-full max-w-md">
-					<CardHeader>
-						<CardTitle>Invitation unavailable</CardTitle>
-						<CardDescription>
-							{invitationError?.message ??
-								"No invitation ID found in this link."}
-						</CardDescription>
-					</CardHeader>
-					<CardFooter>
-						<Button
-							variant="outline"
-							onClick={() => navigate({ to: "/" })}
-						>
-							Go to dashboard
-						</Button>
-					</CardFooter>
-				</Card>
-			</div>
-		);
+	if (!resolvedInvitationId) {
+		return <Unavailable message="No invitation ID found in this link." />;
 	}
 
 	if (!session) {
@@ -141,9 +131,8 @@ export function AcceptInvitation() {
 					<CardHeader>
 						<CardTitle>You've been invited</CardTitle>
 						<CardDescription>
-							{invitation
-								? `Sign in or create an account to join ${invitation.organizationName}.`
-								: "Sign in or create an account to accept this invitation."}
+							Sign in or create an account to accept this
+							invitation.
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="grid gap-y-3">
@@ -187,15 +176,29 @@ export function AcceptInvitation() {
 		);
 	}
 
+	if (invitationPending) {
+		return <Loading />;
+	}
+
+	if (invitationError || !invitation) {
+		return (
+			<Unavailable
+				message={
+					invitationError?.message ??
+					"This invitation link is invalid, expired, or has already been used."
+				}
+			/>
+		);
+	}
+
 	return (
 		<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4 px-4">
 			<Card className="w-full max-w-md">
 				<CardHeader>
 					<CardTitle>You've been invited</CardTitle>
 					<CardDescription>
-						{invitation
-							? `You've been invited to join ${invitation.organizationName} as ${invitation.role}.`
-							: "Accept the invitation to join the organization."}
+						You've been invited to join{" "}
+						{invitation.organizationName} as {invitation.role}.
 					</CardDescription>
 				</CardHeader>
 				{acceptMutation.error && (
@@ -218,6 +221,36 @@ export function AcceptInvitation() {
 						isLoading={rejectMutation.isPending}
 					>
 						Decline
+					</Button>
+				</CardFooter>
+			</Card>
+		</div>
+	);
+}
+
+function Loading() {
+	return (
+		<div className="flex min-h-screen items-center justify-center bg-background">
+			<p className="text-muted-foreground text-sm">Loading…</p>
+		</div>
+	);
+}
+
+function Unavailable({ message }: { message: string }) {
+	const navigate = useNavigate();
+	return (
+		<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4 px-4">
+			<Card className="w-full max-w-md">
+				<CardHeader>
+					<CardTitle>Invitation unavailable</CardTitle>
+					<CardDescription>{message}</CardDescription>
+				</CardHeader>
+				<CardFooter>
+					<Button
+						variant="outline"
+						onClick={() => navigate({ to: "/" })}
+					>
+						Go to dashboard
 					</Button>
 				</CardFooter>
 			</Card>
