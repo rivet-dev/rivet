@@ -107,6 +107,7 @@ Each row: `[native] [wasm] <file> | <suite description>`
 - [ ] [ ] manager-driver | Manager Driver Tests
 - [ ] [ ] actor-conn | Actor Connection Tests
 - [ ] [ ] actor-conn-state | Actor Connection State Tests
+- [ ] [ ] actor-conn-reconnect | Actor Conn Reconnect
 - [ ] [ ] conn-error-serialization | Connection Error Serialization Tests
 - [ ] [ ] actor-destroy | Actor Destroy Tests
 - [ ] [ ] request-access | Request Access in Lifecycle Hooks
@@ -207,6 +208,7 @@ Replace `<FILE>` with the file name stem (part before the `|` in the progress fi
 | manager-driver | Manager Driver Tests |
 | actor-conn | Actor Connection Tests |
 | actor-conn-state | Actor Connection State Tests |
+| actor-conn-reconnect | Actor Conn Reconnect |
 | conn-error-serialization | Connection Error Serialization Tests |
 | actor-destroy | Actor Destroy Tests |
 | request-access | Request Access in Lifecycle Hooks |
