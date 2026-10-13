@@ -487,7 +487,6 @@ fn is_retryable_guard_http_error(code: &str) -> bool {
 			| "tunnel_request_aborted"
 			| "tunnel_message_timeout"
 			| "tunnel_response_closed"
-			| "gateway_response_start_timeout"
 	)
 }
 

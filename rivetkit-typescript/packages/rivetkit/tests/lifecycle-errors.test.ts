@@ -10,7 +10,6 @@ describe("lifecycle error retry classification", () => {
 		"tunnel_request_aborted",
 		"tunnel_message_timeout",
 		"tunnel_response_closed",
-		"gateway_response_start_timeout",
 	])("classifies guard.%s as retryable", (code) => {
 		expect(
 			isRetryableLifecycleRequestError(
