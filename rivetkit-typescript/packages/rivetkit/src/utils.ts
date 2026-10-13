@@ -360,10 +360,11 @@ export function combineUrlPath(
 ): string {
 	const baseUrl = new URL(endpoint);
 
-	// Extract path and query from the provided path
-	const pathParts = path.split("?");
-	const pathOnly = pathParts[0];
-	const existingQuery = pathParts[1] || "";
+	// Extract path and query from the provided path. Only the first ? starts
+	// the query, since a literal ? is valid inside a query string.
+	const queryIndex = path.indexOf("?");
+	const pathOnly = queryIndex === -1 ? path : path.slice(0, queryIndex);
+	const existingQuery = queryIndex === -1 ? "" : path.slice(queryIndex + 1);
 
 	// Remove trailing slash from base path and ensure path starts with /
 	const basePath = baseUrl.pathname.replace(/\/$/, "");
