@@ -122,7 +122,22 @@ pub struct Client {
 	remote_manager: RemoteManager,
 	encoding_kind: EncodingKind,
 	transport_kind: TransportKind,
-	shutdown_tx: Arc<tokio::sync::broadcast::Sender<()>>,
+	/// Shared by every clone and every `ActorHandle`. Signals shutdown only
+	/// when the last owner drops.
+	shutdown: Arc<ShutdownGuard>,
+}
+
+/// Owns the shutdown channel and signals it when the last `Client` clone or
+/// `ActorHandle` is dropped.
+pub(crate) struct ShutdownGuard {
+	pub(crate) shutdown_tx: tokio::sync::broadcast::Sender<()>,
+}
+
+impl Drop for ShutdownGuard {
+	fn drop(&mut self) {
+		// Notify all subscribers to shutdown
+		let _ = self.shutdown_tx.send(());
+	}
 }
 
 impl Clone for Client {
@@ -131,7 +146,7 @@ impl Clone for Client {
 			remote_manager: self.remote_manager.clone(),
 			encoding_kind: self.encoding_kind,
 			transport_kind: self.transport_kind,
-			shutdown_tx: self.shutdown_tx.clone(),
+			shutdown: self.shutdown.clone(),
 		}
 	}
 }
@@ -161,7 +176,9 @@ impl Client {
 			remote_manager,
 			encoding_kind: config.encoding,
 			transport_kind: config.transport,
-			shutdown_tx: Arc::new(tokio::sync::broadcast::channel(1).0),
+			shutdown: Arc::new(ShutdownGuard {
+				shutdown_tx: tokio::sync::broadcast::channel(1).0,
+			}),
 		}
 	}
 
@@ -174,7 +191,7 @@ impl Client {
 			self.remote_manager.clone(),
 			params,
 			query,
-			self.shutdown_tx.clone(),
+			self.shutdown.clone(),
 			self.transport_kind,
 			self.encoding_kind,
 		);
@@ -258,8 +275,12 @@ impl Client {
 		Ok(handle)
 	}
 
+	/// Stops every connection created from this client or any of its clones.
+	///
+	/// This is an explicit teardown and applies even while other clones are
+	/// alive. Plain `drop` only signals shutdown once the last clone is gone.
 	pub fn disconnect(self) {
-		drop(self)
+		let _ = self.shutdown.shutdown_tx.send(());
 	}
 
 	pub fn dispose(self) {
@@ -267,9 +288,7 @@ impl Client {
 	}
 }
 
-impl Drop for Client {
-	fn drop(&mut self) {
-		// Notify all subscribers to shutdown
-		let _ = self.shutdown_tx.send(());
-	}
-}
+// The tests need private shutdown state, per the CLAUDE.md exception for tests that need private access.
+#[cfg(test)]
+#[path = "../tests/modules/client_drop.rs"]
+mod drop_tests;
