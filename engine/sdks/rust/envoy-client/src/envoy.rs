@@ -44,9 +44,8 @@ use crate::tunnel::{
 };
 use crate::utils::{BufferMap, EnvoyShutdownError, SleepFuture, boxed_sleep, spawn_detached};
 
-/// Process-wide envoy slot. Holds the handle inside a mutex so a stopped
-/// handle (e.g. from a shutdown-during-build race in serverless mode) can be
-/// replaced on the next `start_envoy_sync` call.
+/// Process-wide envoy slot. The cached handle is cleared after cleanup so it
+/// does not keep callback state alive after shutdown.
 #[cfg(not(target_arch = "wasm32"))]
 static GLOBAL_ENVOY: OnceLock<Mutex<Option<EnvoyHandle>>> = OnceLock::new();
 
@@ -385,6 +384,22 @@ pub fn start_envoy_sync(config: EnvoyConfig) -> EnvoyHandle {
 	}
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn clear_global_envoy(shared: &Arc<SharedContext>) {
+	let Some(slot) = GLOBAL_ENVOY.get() else {
+		return;
+	};
+
+	let mut guard = slot.lock();
+	let is_current = match guard.as_ref() {
+		Some(handle) => Arc::ptr_eq(&handle.shared, shared),
+		None => false,
+	};
+	if is_current {
+		*guard = None;
+	}
+}
+
 fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 	let (envoy_tx, envoy_rx) = mpsc::unbounded_channel::<ToEnvoyMessage>();
 	let (start_tx, start_rx) = tokio::sync::watch::channel(());
@@ -644,6 +659,8 @@ async fn envoy_loop(
 	tracing::info!("envoy stopped");
 
 	ctx.shared.config.callbacks.on_shutdown();
+	#[cfg(not(target_arch = "wasm32"))]
+	clear_global_envoy(&ctx.shared);
 
 	// Latched signal: waiters on `EnvoyHandle::wait_stopped` observe this and
 	// any future callers of `wait_stopped` resolve immediately because watch
