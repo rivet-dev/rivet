@@ -509,6 +509,20 @@
             "in": "query",
             "required": false,
             "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
               "type": "string"
             },
             "name": "rvt-pool",
@@ -655,6 +669,20 @@
             },
             "name": "rvt-key",
             "description": "Comma-separated actor key components for actor-name resolution."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
           },
           {
             "in": "query",
@@ -840,6 +868,20 @@
             "in": "query",
             "required": false,
             "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
               "type": "string"
             },
             "name": "rvt-pool",
@@ -977,6 +1019,20 @@
             },
             "name": "rvt-key",
             "description": "Comma-separated actor key components for actor-name resolution."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
           },
           {
             "in": "query",
@@ -1124,6 +1180,20 @@
             "in": "query",
             "required": false,
             "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
               "type": "string"
             },
             "name": "rvt-pool",
@@ -1261,6 +1331,20 @@
             },
             "name": "rvt-key",
             "description": "Comma-separated actor key components for actor-name resolution."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
           },
           {
             "in": "query",
@@ -1408,6 +1492,20 @@
             "in": "query",
             "required": false,
             "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
               "type": "string"
             },
             "name": "rvt-pool",
@@ -1545,6 +1643,20 @@
             },
             "name": "rvt-key",
             "description": "Comma-separated actor key components for actor-name resolution."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
           },
           {
             "in": "query",
@@ -1692,6 +1804,20 @@
             "in": "query",
             "required": false,
             "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
               "type": "string"
             },
             "name": "rvt-pool",
@@ -1831,6 +1957,20 @@
             },
             "name": "rvt-key",
             "description": "Comma-separated actor key components for actor-name resolution."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
           },
           {
             "in": "query",
@@ -1986,6 +2126,20 @@
             },
             "name": "rvt-key",
             "description": "Comma-separated actor key components for actor-name resolution."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
           },
           {
             "in": "query",
@@ -2165,6 +2319,20 @@
             "in": "query",
             "required": false,
             "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
               "type": "string"
             },
             "name": "rvt-pool",
@@ -2322,6 +2490,20 @@
             },
             "name": "rvt-key",
             "description": "Comma-separated actor key components for actor-name resolution."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
           },
           {
             "in": "query",
@@ -2490,6 +2672,20 @@
             },
             "name": "rvt-key",
             "description": "Comma-separated actor key components for actor-name resolution."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
           },
           {
             "in": "query",
@@ -2672,6 +2868,20 @@
             },
             "name": "rvt-key",
             "description": "Comma-separated actor key components for actor-name resolution."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
           },
           {
             "in": "query",
@@ -3029,6 +3239,20 @@
             "in": "query",
             "required": false,
             "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
               "type": "string"
             },
             "name": "rvt-pool",
@@ -3191,6 +3415,20 @@
             "in": "query",
             "required": false,
             "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
               "type": "string"
             },
             "name": "rvt-pool",
@@ -3346,6 +3584,20 @@
             },
             "name": "rvt-key",
             "description": "Comma-separated actor key components for actor-name resolution."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
           },
           {
             "in": "query",
@@ -3526,6 +3778,20 @@
             "in": "query",
             "required": false,
             "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
               "type": "string"
             },
             "name": "rvt-pool",
@@ -3693,6 +3959,20 @@
             },
             "name": "rvt-key",
             "description": "Comma-separated actor key components for actor-name resolution."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
           },
           {
             "in": "query",
@@ -3894,6 +4174,20 @@
             "in": "query",
             "required": false,
             "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
               "type": "string"
             },
             "name": "rvt-pool",
@@ -4052,6 +4346,20 @@
             },
             "name": "rvt-key",
             "description": "Comma-separated actor key components for actor-name resolution."
+          },
+          {
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "name": "rvt-key-part",
+            "description": "Actor key components for actor-name resolution, one query occurrence per component. Preferred over the legacy comma-separated rvt-key; takes precedence when both are present."
           },
           {
             "in": "query",

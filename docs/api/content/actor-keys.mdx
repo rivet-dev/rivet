@@ -34,7 +34,9 @@ Escaping is what makes array keys safe to build from user data. `["org", "a/b"]`
 
 ## Keys on gateway URLs
 
-The gateway takes the key as the `rvt-key` query parameter and splits it on commas instead of slashes: `rvt-key=org-1,room-2` is `["org-1", "room-2"]`. There is no escape syntax, so a part that contains a comma cannot be expressed on a gateway URL. Create such actors through the control plane and route to them by actor ID. See [Actor Routing](/docs/api/actor-routing).
+The gateway takes the key as one or more `rvt-key-part` query parameters, one occurrence per part: `rvt-key-part=org-1&rvt-key-part=room-2` is `["org-1", "room-2"]`. Each occurrence is a complete, independently percent-encoded part, so a part containing a comma, slash, or any other character is expressed exactly as given, with no escaping needed.
+
+The gateway also accepts the legacy `rvt-key` parameter, which splits a single value on commas: `rvt-key=org-1,room-2` is `["org-1", "room-2"]`. This form cannot express a part that contains a comma, since it becomes indistinguishable from two separate parts. It is kept only for older clients; new clients should always send `rvt-key-part`. See [Actor Routing](/docs/api/actor-routing).
 
 ## Related
 
