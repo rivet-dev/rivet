@@ -1427,10 +1427,14 @@ dependencies = [
  "anyhow",
  "async-trait",
  "depot",
+ "gasoline",
  "rivet-depot-client",
  "rivet-envoy-protocol",
  "rivet-error",
+ "rivet-pools",
+ "tempfile",
  "tokio",
+ "universaldb",
 ]
 
 [[package]]
