@@ -52,3 +52,7 @@ xxhash-rust.workspace = true
 
 pegboard.workspace = true
 namespace.workspace = true
+
+[dev-dependencies]
+rivet-cache.workspace = true
+rivet-test-deps.workspace = true

@@ -114,6 +114,10 @@ impl ActorEventDemuxer {
 			.map(|(_, channel)| channel.handle)
 			.collect::<Vec<_>>();
 
+		// Handlers still drain buffered events, but stop retrying failed dispatches.
+		// The envoy resends unacknowledged events when it reconnects.
+		self.cancellation_token.cancel();
+
 		// Await remaining tasks
 		for handle in handles {
 			let _ = handle.await;
@@ -134,19 +138,33 @@ async fn channel_handler(
 	loop {
 		let mut buffer = Vec::new();
 
-		// Batch process events
-		tokio::select! {
-			count = rx.recv_many(&mut buffer, 1024) => {
-				if count == 0 {
-					break;
-				}
+		// Batch process events. This returns 0 only once every sender is dropped,
+		// so events buffered before shutdown still dispatch.
+		if rx.recv_many(&mut buffer, 1024).await == 0 {
+			break;
+		}
 
-				if let Err(err) = dispatch_events(&ctx, &envoy_key, actor_id, buffer).await {
-					tracing::error!(%envoy_key, ?actor_id, ?err, "actor event processor failed");
-					break;
+		// Retry the same batch until it lands so later events never skip past it.
+		// The actor workflow ignores events it already received.
+		let mut backoff = rivet_util::throttle::Backoff::new(5, None, 250, 250);
+		loop {
+			match dispatch_events(&ctx, &envoy_key, actor_id, &buffer).await {
+				Ok(()) => break,
+				Err(err) => {
+					tracing::warn!(
+						%envoy_key,
+						?actor_id,
+						?err,
+						attempt = backoff.tick_index(),
+						count = buffer.len(),
+						"actor event dispatch failed, retrying, storage may be unavailable"
+					);
+					tokio::select! {
+						_ = backoff.tick() => {}
+						_ = cancellation_token.cancelled() => return,
+					}
 				}
 			}
-			_ = cancellation_token.cancelled() => break,
 		}
 	}
 }
@@ -156,14 +174,14 @@ async fn dispatch_events(
 	ctx: &StandaloneCtx,
 	envoy_key: &str,
 	actor_id: Id,
-	events: Vec<protocol::EventWrapper>,
+	events: &[protocol::EventWrapper],
 ) -> Result<()> {
 	tracing::debug!(%envoy_key, ?actor_id, count=?events.len(), "actor demuxer dispatch");
 
 	let res = ctx
 		.signal(pegboard::workflows::actor2::Events {
 			envoy_key: envoy_key.to_string(),
-			events,
+			events: events.to_vec(),
 		})
 		.to_workflow::<pegboard::workflows::actor2::Workflow>()
 		.tag("actor_id", actor_id)

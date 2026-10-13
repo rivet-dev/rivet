@@ -13,7 +13,7 @@ use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use universalpubsub::PublishOpts;
 
-mod actor_event_demuxer;
+pub mod actor_event_demuxer;
 mod actor_kv_task;
 mod actor_lifecycle;
 mod actor_remote_sqlite_task;
