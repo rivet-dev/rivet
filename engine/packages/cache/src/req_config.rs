@@ -95,7 +95,7 @@ impl RequestConfig {
 		getter: Getter,
 		encoder: Encoder,
 		decoder: Decoder,
-	) -> Result<Vec<(Key, Value)>>
+	) -> Result<GetterCtx<Key, Value>>
 	where
 		Key: CacheKey + Send + Sync,
 		Value: Debug + Send + Sync,
@@ -109,7 +109,7 @@ impl RequestConfig {
 
 		// Ignore empty keys
 		if keys.is_empty() {
-			return Ok(Vec::new());
+			return Ok(GetterCtx::new(Vec::new()));
 		}
 
 		metrics::CACHE_REQUEST_TOTAL
@@ -130,7 +130,7 @@ impl RequestConfig {
 				.with_label_values(&[&base_key])
 				.inc_by(ctx.unresolved_keys().len() as u64);
 
-			return Ok(ctx.into_values());
+			return Ok(ctx);
 		};
 
 		// Build driver-specific cache keys
@@ -335,7 +335,7 @@ impl RequestConfig {
 					.with_label_values(&[&base_key])
 					.inc_by(ctx.unresolved_keys().len() as u64);
 
-				Ok(ctx.into_values())
+				Ok(ctx)
 			}
 			Err(err) => {
 				tracing::error!(
@@ -360,7 +360,7 @@ impl RequestConfig {
 					.with_label_values(&[&base_key])
 					.inc_by(ctx.unresolved_keys().len() as u64);
 
-				Ok(ctx.into_values())
+				Ok(ctx)
 			}
 		}
 	}
@@ -504,10 +504,9 @@ impl RequestConfig {
 		Getter: Fn(GetterCtx<Key, Value>, Vec<Key>) -> Fut + Clone,
 		Fut: Future<Output = Result<GetterCtx<Key, Value>>>,
 	{
-		self.fetch_all_json_with_keys::<Key, Value, Getter, Fut>(base_key, keys, getter)
+		self.fetch_all_json_ctx::<Key, Value, Getter, Fut>(base_key, keys, getter)
 			.await
-			// TODO: Find a way to not allocate another vec here
-			.map(|x| x.into_iter().map(|(_, v)| v).collect::<Vec<_>>())
+			.map(|ctx| ctx.into_values_only())
 	}
 
 	pub async fn fetch_all_json_with_keys<Key, Value, Getter, Fut>(
@@ -516,6 +515,23 @@ impl RequestConfig {
 		keys: impl IntoIterator<Item = Key>,
 		getter: Getter,
 	) -> Result<Vec<(Key, Value)>>
+	where
+		Key: CacheKey + Send + Sync,
+		Value: Serialize + DeserializeOwned + Debug + Send + Sync,
+		Getter: Fn(GetterCtx<Key, Value>, Vec<Key>) -> Fut + Clone,
+		Fut: Future<Output = Result<GetterCtx<Key, Value>>>,
+	{
+		self.fetch_all_json_ctx::<Key, Value, Getter, Fut>(base_key, keys, getter)
+			.await
+			.map(|ctx| ctx.into_values())
+	}
+
+	async fn fetch_all_json_ctx<Key, Value, Getter, Fut>(
+		self,
+		base_key: impl Display + Debug,
+		keys: impl IntoIterator<Item = Key>,
+		getter: Getter,
+	) -> Result<GetterCtx<Key, Value>>
 	where
 		Key: CacheKey + Send + Sync,
 		Value: Serialize + DeserializeOwned + Debug + Send + Sync,

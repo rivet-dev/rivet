@@ -56,6 +56,14 @@ where
 			.collect()
 	}
 
+	pub(super) fn into_values_only(self) -> Vec<V> {
+		self.entries
+			.into_iter()
+			.filter_map(|(_, x)| x.value)
+			.collect()
+	}
+
+
 	/// All entries.
 	pub(super) fn entries(&self) -> impl Iterator<Item = (&K, &GetterCtxEntry<V>)> {
 		self.entries.iter()
