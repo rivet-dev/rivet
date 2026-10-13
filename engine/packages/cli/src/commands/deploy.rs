@@ -96,6 +96,7 @@ pub struct Opts {
 
 impl Opts {
 	pub async fn execute(self) -> Result<()> {
+		let env_map = parse_env_vars(&self.env_vars)?;
 		let token = resolve_token(self.token.as_deref())?;
 		if let Some(token) = &self.token {
 			write_credentials(token)?;
@@ -219,7 +220,6 @@ impl Opts {
 				"tag": tag,
 			});
 		}
-		let env_map = parse_env_vars(&self.env_vars)?;
 		if !env_map.is_empty() {
 			pool_body["environment"] = serde_json::to_value(env_map)?;
 		}
