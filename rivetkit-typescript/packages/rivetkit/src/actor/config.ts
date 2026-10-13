@@ -1567,16 +1567,7 @@ interface BaseActorConfig<
 	TDatabase extends AnyDatabaseProvider,
 	TEvents extends EventSchemaConfig,
 	TQueues extends QueueSchemaConfig,
-	TActions extends Actions<
-		TState,
-		TConnParams,
-		TConnState,
-		TVars,
-		TInput,
-		TDatabase,
-		TEvents,
-		TQueues
-	>,
+	TActions extends Record<string, unknown>,
 > {
 	/**
 	 * Called when the actor is first initialized.
@@ -2059,16 +2050,7 @@ export type ActorConfigInput<
 	TDatabase extends AnyDatabaseProvider = undefined,
 	TEvents extends EventSchemaConfig = Record<never, never>,
 	TQueues extends QueueSchemaConfig = Record<never, never>,
-	TActions extends Actions<
-		TState,
-		TConnParams,
-		TConnState,
-		TVars,
-		TInput,
-		TDatabase,
-		TEvents,
-		TQueues
-	> = Record<never, never>,
+	TActions extends Record<string, unknown> = Record<never, never>,
 > = {
 	types?: ActorTypes<
 		TState,
@@ -2105,18 +2087,34 @@ export type ActorConfigInput<
 	| "createVars"
 	| "db"
 > &
-	BaseActorConfig<
-		TState,
-		TConnParams,
-		TConnState,
-		TVars,
-		TInput,
-		TDatabase,
-		TEvents,
-		TQueues,
-		TActions
-	> &
-	CreateState<
+	Omit<
+		BaseActorConfig<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues,
+			TActions
+		>,
+		"actions"
+	> & {
+		// Typing `c` here rather than through a constraint on `TActions` lets
+		// `c.conn.state` take the type that `createConnState` returns.
+		actions?: TActions &
+			Actions<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+			>;
+	} & CreateState<
 		TState,
 		TConnParams,
 		TConnState,
