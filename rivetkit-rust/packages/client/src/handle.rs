@@ -357,6 +357,7 @@ pub struct ActorHandle {
 	client_shutdown_tx: Arc<tokio::sync::broadcast::Sender<()>>,
 	transport_kind: crate::TransportKind,
 	encoding_kind: EncodingKind,
+	reconnect_backoff: crate::backoff::BackoffConfig,
 }
 
 impl ActorHandle {
@@ -367,6 +368,7 @@ impl ActorHandle {
 		client_shutdown_tx: Arc<tokio::sync::broadcast::Sender<()>>,
 		transport_kind: TransportKind,
 		encoding_kind: EncodingKind,
+		reconnect_backoff: crate::backoff::BackoffConfig,
 	) -> Self {
 		let handle = ActorHandleStateless::new(
 			remote_manager.clone(),
@@ -383,16 +385,30 @@ impl ActorHandle {
 			client_shutdown_tx,
 			transport_kind,
 			encoding_kind,
+			reconnect_backoff,
 		}
 	}
 
+	pub fn reconnect_backoff(&self) -> &crate::backoff::BackoffConfig {
+		&self.reconnect_backoff
+	}
+
 	pub fn connect(&self) -> ActorConnection {
+		self.connect_with_backoff(self.reconnect_backoff.clone())
+	}
+
+	pub fn connect_with_backoff(
+		&self,
+		mut backoff: crate::backoff::BackoffConfig,
+	) -> ActorConnection {
+		backoff.normalize();
 		let conn = ActorConnectionInner::new(
 			self.remote_manager.clone(),
 			self.query.clone(),
 			self.transport_kind,
 			self.encoding_kind,
 			self.params.clone(),
+			backoff,
 		);
 
 		let rx = self.client_shutdown_tx.subscribe();

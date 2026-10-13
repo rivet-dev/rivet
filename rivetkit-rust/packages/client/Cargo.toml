@@ -17,6 +17,7 @@ opentelemetry = { version = "0.28", default-features = false, features = ["trace
 opentelemetry-http.workspace = true
 opentelemetry_sdk = { version = "0.28", default-features = false, features = ["trace"] }
 parking_lot.workspace = true
+rand = { workspace = true }
 reqwest = { version = "0.12.12", default-features = false, features = ["json", "charset", "http2", "macos-system-configuration", "rustls-tls-native-roots", "rustls-tls-webpki-roots"] }
 rivetkit-client-protocol.workspace = true
 scc.workspace = true
