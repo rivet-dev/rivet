@@ -17,7 +17,7 @@ use crate::{
 	remote_manager::RemoteManager,
 	EncodingKind, TransportKind,
 };
-use tracing::debug;
+use tracing::{debug, warn};
 
 type RpcResponse = Result<to_client::ActionResponse, to_client::Error>;
 type EventCallback = dyn Fn(Event) + Send + Sync;
@@ -320,7 +320,7 @@ impl ActorConnectionInner {
 				}
 			}
 			to_client::ToClientBody::Event(ev) => {
-				let args = decode_event_args(&ev.args);
+				let args = decode_event_args(&ev.name, &ev.args);
 
 				let callbacks = {
 					self.event_subscriptions
@@ -751,14 +751,19 @@ impl Debug for ActorConnectionInner {
 	}
 }
 
-fn decode_event_args(raw_args: &[u8]) -> Vec<Value> {
+fn decode_event_args(event_name: &str, raw_args: &[u8]) -> Vec<Value> {
 	match serde_cbor::from_slice::<Vec<Value>>(raw_args) {
 		Ok(args) => args,
 		Err(vector_error) => match serde_cbor::from_slice::<Value>(raw_args) {
 			Ok(Value::Array(args)) => args,
 			Ok(value) => vec![value],
 			Err(value_error) => {
-				debug!(?vector_error, ?value_error, "failed to decode event args");
+				warn!(
+					event = event_name,
+					?vector_error,
+					?value_error,
+					"failed to decode event args, delivering empty args"
+				);
 				Vec::new()
 			}
 		},
