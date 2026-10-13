@@ -14,12 +14,14 @@ const TypeId = "~@rivetkit/effect/Client";
 
 /**
  * Connection options for the Rivet Engine client transport. Mirrors
- * the `(endpoint, token, namespace)` subset of rivetkit's
- * `ClientConfigInput`.
+ * the `(endpoint, token, getToken, namespace)` subset of rivetkit's
+ * `ClientConfigInput`. `getToken` is included alongside `token` so
+ * callers can supply short-lived, scoped tokens that are fetched (and
+ * refreshed on reconnect) on demand instead of a single static token.
  */
 export type Options = Pick<
 	RivetkitClient.ClientConfigInput,
-	"endpoint" | "token" | "namespace"
+	"endpoint" | "token" | "getToken" | "namespace"
 >;
 
 /**
@@ -37,7 +39,7 @@ export interface Client {
 	readonly [TypeId]: typeof TypeId;
 
 	readonly makeActorAccessor: <Actions extends Action.AnyWithProps>(
-		actor: Actor.Actor<string, Actions>,
+		actor: Actor.Actor<string, Actions, any>,
 	) => Actor.Accessor<Actions>;
 }
 

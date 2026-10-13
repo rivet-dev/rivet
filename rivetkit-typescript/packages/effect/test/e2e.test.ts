@@ -6,6 +6,8 @@ import { createClient } from "rivetkit/client";
 import * as RawRivetErrors from "rivetkit/errors";
 import { inject } from "vitest";
 import {
+	Broadcaster,
+	BroadcasterLive,
 	BuildSetRejected,
 	BuildSetRejectedLive,
 	Counter,
@@ -75,6 +77,7 @@ const TestLayer = ReadyForEnvoy.pipe(
 				Layer.mergeAll(
 					CounterLive,
 					PingerLive,
+					BroadcasterLive,
 					FailingActorLive,
 					FailingWakeCleanupLive,
 					StrictLive,
@@ -154,6 +157,47 @@ layer(TestLayer)("end-to-end", (it) => {
 
 			assert.strictEqual(error.group, "request");
 			assert.strictEqual(error.code, "invalid");
+		}),
+	);
+
+	it.effect("broadcasts a schema-encoded event to a raw connection", () =>
+		Effect.gen(function* () {
+			const client = yield* Effect.acquireRelease(
+				Effect.sync(() => createClient({ endpoint, token, namespace })),
+				(client) => Effect.promise(() => client.dispose()),
+			);
+			const handle = client.Broadcaster.getOrCreate(["t-broadcast"]);
+			// Dispatching `SendChime` on the connection itself (rather than a
+			// separate stateless client call) guarantees the connection is
+			// already established before the broadcast fires, so the `on`
+			// listener registered just below is never in a race with it.
+			const connection = yield* Effect.acquireRelease(
+				Effect.sync(() => handle.connect()),
+				(connection) => Effect.promise(() => connection.dispose()),
+			);
+
+			const chimePromise = new Promise<unknown>((resolve) => {
+				connection.on("Chime", (payload: unknown) => resolve(payload));
+			});
+
+			// Raw dispatch bypasses the Effect wrapper's payload encoding, so
+			// `at` is already the JSON-codec shape (an ISO string) that
+			// `SendChime`'s decode step expects on the wire.
+			yield* Effect.promise(() =>
+				connection.SendChime({
+					count: 3,
+					at: "2024-01-01T00:00:00.000Z",
+				}),
+			);
+
+			const chime = yield* Effect.promise(() => chimePromise);
+			// The received payload is `Chime`'s own JSON-codec encoding of
+			// what `events.broadcast` was called with, proving the payload
+			// went through schema encoding rather than being forwarded raw.
+			assert.deepStrictEqual(chime, {
+				count: 3,
+				at: "2024-01-01T00:00:00.000Z",
+			});
 		}),
 	);
 
