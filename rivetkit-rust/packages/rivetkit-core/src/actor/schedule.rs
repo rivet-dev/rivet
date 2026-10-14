@@ -903,7 +903,7 @@ impl ActorContext {
 		if self
 			.0
 			.schedule_sync_alarm_failures
-			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+			.try_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
 				remaining.checked_sub(1)
 			})
 			.is_ok()

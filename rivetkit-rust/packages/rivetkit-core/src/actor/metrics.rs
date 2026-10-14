@@ -2066,7 +2066,7 @@ impl ActorMetrics {
 	fn reserve_sqlite_series(&self, cost: usize) -> bool {
 		SQLITE_PROFILE_ADMISSION
 			.series
-			.fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+			.try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
 				(current.saturating_add(cost) <= self.inner.sqlite_profiling.max_prometheus_series)
 					.then_some(current + cost)
 			})
@@ -2207,7 +2207,7 @@ impl ActorMetrics {
 			}
 		}
 		if count
-			.fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+			.try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
 				(current < cap).then_some(current + 1)
 			})
 			.is_err()

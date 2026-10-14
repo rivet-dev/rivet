@@ -31,6 +31,10 @@ pub enum ResourceKind {
 	Datacenter,
 	ActorGateway,
 	ActorKv,
+	ActorStream,
+	DurableStream,
+	ApplicationToken,
+	WebhookSigning,
 	Jwt,
 }
 
@@ -40,6 +44,10 @@ impl fmt::Display for ResourceKind {
 			ResourceKind::Actor => "actors",
 			ResourceKind::ActorGateway => "actor gateways",
 			ResourceKind::ActorKv => "actor KVs",
+			ResourceKind::ActorStream => "actor primary streams",
+			ResourceKind::DurableStream => "durable streams",
+			ResourceKind::ApplicationToken => "application tokens",
+			ResourceKind::WebhookSigning => "webhook signing",
 			ResourceKind::Jwt => "JWTs",
 			ResourceKind::Runner => "runners",
 			ResourceKind::RunnerConfig => "runner configs",
@@ -56,6 +64,10 @@ impl ResourceKind {
 			ResourceKind::Actor => "actor",
 			ResourceKind::ActorGateway => "actor-gateway",
 			ResourceKind::ActorKv => "actor-kv",
+			ResourceKind::ActorStream => "actor-stream",
+			ResourceKind::DurableStream => "durable-stream",
+			ResourceKind::ApplicationToken => "application-token",
+			ResourceKind::WebhookSigning => "webhook-signing",
 			ResourceKind::Jwt => "jwt",
 			ResourceKind::Runner => "runner",
 			ResourceKind::RunnerConfig => "runner-config",
@@ -88,6 +100,8 @@ pub enum OperationKind {
 	List,
 	Create,
 	Delete,
+	Append,
+	Close,
 }
 
 impl fmt::Display for OperationKind {
@@ -98,6 +112,8 @@ impl fmt::Display for OperationKind {
 			OperationKind::Update => "update",
 			OperationKind::Delete => "delete",
 			OperationKind::List => "list",
+			OperationKind::Append => "append",
+			OperationKind::Close => "close",
 		})
 	}
 }

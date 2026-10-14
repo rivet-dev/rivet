@@ -40,6 +40,15 @@ use crate::{
 		metadata::get,
 		auth::tokens::create,
 		auth::tokens::inspect,
+		auth::jwks::get,
+		auth::application_tokens::create,
+		auth::webhook_keys::ensure,
+		auth::webhook_keys::get,
+		auth::webhook_keys::rotate,
+		auth::webhook_keys::revoke,
+		auth::webhook_signing::sign,
+		auth::webhook_discovery::jwks,
+		auth::webhook_discovery::metadata,
 	),
 	components(
 		schemas(rivet_types::keys::namespace::runner_config::RunnerConfigVariant)
@@ -70,6 +79,10 @@ pub async fn router(
 			)
 			// MARK: Metadata
 			.route("/metadata", axum::routing::get(metadata::get))
+			.route(
+				"/.well-known/jwks.json",
+				axum::routing::get(auth::jwks::get),
+			)
 			// MARK: Namespaces
 			.route("/namespaces", axum::routing::get(namespaces::list))
 			.route("/namespaces", axum::routing::post(namespaces::create))
@@ -81,6 +94,38 @@ pub async fn router(
 			.route(
 				"/auth/tokens/inspect",
 				axum::routing::get(auth::tokens::inspect),
+			)
+			.route(
+				"/auth/application-tokens",
+				axum::routing::post(auth::application_tokens::create),
+			)
+			.route(
+				"/auth/webhooks/ensure",
+				axum::routing::post(auth::webhook_keys::ensure),
+			)
+			.route(
+				"/auth/webhooks/sign",
+				axum::routing::post(auth::webhook_signing::sign),
+			)
+			.route(
+				"/namespaces/{namespace}/auth/webhook-keys",
+				axum::routing::get(auth::webhook_keys::get),
+			)
+			.route(
+				"/namespaces/{namespace}/auth/webhook-keys/rotate",
+				axum::routing::post(auth::webhook_keys::rotate),
+			)
+			.route(
+				"/namespaces/{namespace}/auth/webhook-keys/revoke",
+				axum::routing::post(auth::webhook_keys::revoke),
+			)
+			.route(
+				"/namespaces/{namespace}/auth/webhooks/jwks.json",
+				axum::routing::get(auth::webhook_discovery::jwks),
+			)
+			.route(
+				"/namespaces/{namespace}/auth/webhooks",
+				axum::routing::get(auth::webhook_discovery::metadata),
 			)
 			.route("/runner-configs", axum::routing::get(runner_configs::list))
 			.route(

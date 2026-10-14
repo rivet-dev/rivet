@@ -7,6 +7,12 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[tracing::instrument(skip_all)]
+pub async fn exists_authoritative(ctx: ApiCtx, (namespace_id,): (Id,), _query: ()) -> Result<bool> {
+	ctx.op(namespace::ops::exists_authoritative::Input { namespace_id })
+		.await
+}
+
+#[tracing::instrument(skip_all)]
 pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListResponse> {
 	let namespace_ids = [
 		query.namespace_id,

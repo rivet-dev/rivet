@@ -41,8 +41,13 @@ impl ApiCtx {
 	) -> Result<()> {
 		self.authentication_handled.store(true, Ordering::Relaxed);
 		if self.config().insecure_allow_unauthenticated()
-			&& !matches!(resource, ResourceKind::Token | ResourceKind::Jwt)
-		{
+			&& !matches!(
+				resource,
+				ResourceKind::Token
+					| ResourceKind::Jwt
+					| ResourceKind::ApplicationToken
+					| ResourceKind::WebhookSigning
+			) {
 			return Ok(());
 		}
 		let token = self

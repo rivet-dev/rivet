@@ -30,8 +30,13 @@ pub async fn list(Extension(ctx): Extension<ApiCtx>, Query(query): Query<ListQue
 }
 
 async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
+	let namespace_scope = if let Some(name) = &query.name {
+		AccessNamespaceScope::Name(name.clone())
+	} else {
+		AccessNamespaceScope::Any
+	};
 	ctx.auth(
-		AccessNamespaceScope::Any,
+		namespace_scope,
 		ResourceKind::Namespace,
 		TargetScope::Any,
 		if query.namespace_ids.is_none() && query.namespace_id.is_empty() && query.name.is_none() {

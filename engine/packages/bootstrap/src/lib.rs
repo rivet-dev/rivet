@@ -29,6 +29,13 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 
 	// Must happen after coordinator is reconfigured
 	setup_auth_jwt_key_rotation(&ctx).await?;
+	if ctx.config().is_leader() {
+		ctx.workflow(rivet_auth_jwt::workflows::webhook_recovery::Input)
+			.tag("auth", "webhook-recovery")
+			.unique()
+			.dispatch()
+			.await?;
+	}
 
 	Ok(())
 }

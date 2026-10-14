@@ -23,7 +23,7 @@ impl HttpResponseFlowMetrics {
 	}
 
 	pub(crate) fn consume(&self, bytes: usize) {
-		let result = self.buffered_bytes.fetch_update(
+		let result = self.buffered_bytes.try_update(
 			std::sync::atomic::Ordering::AcqRel,
 			std::sync::atomic::Ordering::Acquire,
 			|buffered| buffered.checked_sub(bytes as u64),

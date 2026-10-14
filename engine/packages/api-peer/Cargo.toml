@@ -21,6 +21,8 @@ pegboard.workspace = true
 rivet-api-builder.workspace = true
 rivet-api-types.workspace = true
 rivet-api-util.workspace = true
+rivet-auth-jwt = { workspace = true, features = ["service"] }
+rivet-auth-policy.workspace = true
 rivet-config.workspace = true
 rivet-error.workspace = true
 rivet-pools.workspace = true

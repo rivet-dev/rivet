@@ -53,8 +53,8 @@ Content type: `application/json`.
 | --- | --- | --- | --- |
 | `duration` | `integer \| null` | No | Lifetime in seconds. Omit for the default lifetime. |
 | `grants` | `object[]` | Yes | Permissions the token carries. |
-| `grants[].operations` | `("read" \| "update" \| "list" \| "create" \| "delete")[]` | Yes | Operations the token may perform on the target. |
-| `grants[].resource` | `"namespace" \| "actor" \| "runner" \| "runner_config" \| "datacenter" \| "actor_gateway" \| "actor_kv"` | Yes | Resource type the grant applies to. |
+| `grants[].operations` | `("read" \| "update" \| "list" \| "create" \| "delete" \| "append" \| "close")[]` | Yes | Operations the token may perform on the target. |
+| `grants[].resource` | `"namespace" \| "actor" \| "runner" \| "runner_config" \| "datacenter" \| "actor_gateway" \| "actor_kv" \| "actor_stream" \| "durable_stream" \| "application_token" \| "webhook_signing"` | Yes | Resource type the grant applies to. |
 | `grants[].target` | `"any" \| object` | Yes | `"any"` for every resource of this type, or `{ "id": "..." }` for one resource. |
 | `namespace` | `string` | Yes | Namespace the token is valid in. |
 | `subject` | `string \| null` | No | Free-form subject to attach to the token, such as a user ID. |

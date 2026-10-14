@@ -34,8 +34,8 @@ Send your namespace token as a bearer token in the `Authorization` header. Every
 | --- | --- | --- |
 | `expires_ts` | `integer` | When the token expires, in Unix milliseconds. |
 | `grants` | `object[]` | Permissions the token carries. |
-| `grants[].operations` | `("read" \| "update" \| "list" \| "create" \| "delete")[]` | Operations the token may perform on the target. |
-| `grants[].resource` | `"namespace" \| "actor" \| "runner" \| "runner_config" \| "datacenter" \| "actor_gateway" \| "actor_kv"` | Resource type the grant applies to. |
+| `grants[].operations` | `("read" \| "update" \| "list" \| "create" \| "delete" \| "append" \| "close")[]` | Operations the token may perform on the target. |
+| `grants[].resource` | `"namespace" \| "actor" \| "runner" \| "runner_config" \| "datacenter" \| "actor_gateway" \| "actor_kv" \| "actor_stream" \| "durable_stream" \| "application_token" \| "webhook_signing"` | Resource type the grant applies to. |
 | `grants[].target` | `"any" \| object` | `"any"` for every resource of this type, or `{ "id": "..." }` for one resource. |
 | `issued_ts` | `integer` | When the token was issued, in Unix milliseconds. |
 | `namespace_id` | `string` | ID of the namespace the token is scoped to. |

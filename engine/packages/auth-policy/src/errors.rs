@@ -35,3 +35,29 @@ pub enum Auth {
 	)]
 	IssuanceDisabled,
 }
+
+#[derive(RivetError, Debug, Deserialize, Serialize)]
+#[error("signing")]
+pub enum Signing {
+	#[error("invalid_input", "Invalid signing request.")]
+	InvalidInput,
+	#[error(
+		"payload_too_large",
+		"The signing payload or token exceeds its size limit."
+	)]
+	PayloadTooLarge,
+	#[error("unavailable", "The signing service is temporarily unavailable.")]
+	Unavailable,
+	#[error(
+		"throttled",
+		"The namespace signing quota or service capacity is exhausted."
+	)]
+	Throttled,
+	#[error(
+		"conflict",
+		"The signing key generation or request ID conflicts with current state."
+	)]
+	Conflict,
+	#[error("not_found", "The namespace signing keys have not been provisioned.")]
+	NotFound,
+}

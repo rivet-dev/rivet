@@ -326,7 +326,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					if let Some(routing_output) = phase_timeout(
 						route_dispatch_phase("api_public_header"),
 						ctx.config().guard().route_dispatch_timeout(),
-						api_public::route_request(&ctx, &shared_state, &target),
+						api_public::route_request(&ctx, &shared_state, &target, req_ctx.path()),
 						|elapsed, timeout| {
 							route_dispatch_timeout("api_public_header", elapsed, timeout)
 						},
@@ -342,7 +342,12 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					if let Some(routing_output) = phase_timeout(
 						route_dispatch_phase("api_public_default"),
 						ctx.config().guard().route_dispatch_timeout(),
-						api_public::route_request(&ctx, &shared_state, "api-public"),
+						api_public::route_request(
+							&ctx,
+							&shared_state,
+							"api-public",
+							req_ctx.path(),
+						),
 						|elapsed, timeout| {
 							route_dispatch_timeout("api_public_default", elapsed, timeout)
 						},

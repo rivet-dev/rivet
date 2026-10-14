@@ -15,10 +15,35 @@ use crate::{errors, metrics};
 
 struct ApiPublicService {
 	router: axum::Router,
+	stream_signing: bool,
 }
 
 #[async_trait]
 impl CustomServeTrait for ApiPublicService {
+	fn streams_request_body(&self) -> bool {
+		self.stream_signing
+	}
+
+	async fn handle_streaming_request(
+		&self,
+		req: Request<hyper::body::Incoming>,
+		_ctx: &mut RequestContext,
+	) -> Result<Response<ResponseBody>> {
+		// Signing handlers authenticate and reserve capacity before polling the original body.
+		// Guard must neither prebuffer these bytes nor automatically replay a signing operation.
+		let response = self
+			.router
+			.clone()
+			.call(req.map(axum::body::Body::new))
+			.await?;
+		let (parts, body) = response.into_parts();
+		let bytes = body.collect().await?.to_bytes();
+		Ok(Response::from_parts(
+			parts,
+			ResponseBody::Full(Full::new(bytes)),
+		))
+	}
+
 	#[tracing::instrument(skip_all)]
 	async fn handle_request(
 		&self,
@@ -54,6 +79,7 @@ pub async fn route_request(
 	ctx: &StandaloneCtx,
 	shared_state: &crate::shared_state::SharedState,
 	target: &str,
+	request_path: &str,
 ) -> Result<Option<RoutingOutput>> {
 	// Check target
 	if target != "api-public" {
@@ -79,7 +105,14 @@ pub async fn route_request(
 	)
 	.await?;
 
-	let service = Arc::new(ApiPublicService { router });
+	let path = request_path.split('?').next().unwrap_or(request_path);
+	let stream_signing = path == "/auth/application-tokens"
+		|| path.starts_with("/auth/webhooks/")
+		|| (path.starts_with("/namespaces/") && path.contains("/auth/webhook-keys"));
+	let service = Arc::new(ApiPublicService {
+		router,
+		stream_signing,
+	});
 
 	return Ok(Some(RoutingOutput::CustomServe(service)));
 }

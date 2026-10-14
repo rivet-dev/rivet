@@ -1,0 +1,5 @@
+{
+  "code": "payload_too_large",
+  "group": "signing",
+  "message": "The signing payload or token exceeds its size limit."
+}

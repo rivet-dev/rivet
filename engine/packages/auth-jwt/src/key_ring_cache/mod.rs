@@ -147,6 +147,13 @@ impl KeyRingCache {
 		result
 	}
 
+	/// Publish the verification cache's public keys without extending its freshness lease.
+	pub async fn public_snapshot(
+		self: &Arc<Self>,
+	) -> Result<VerificationSnapshot, VerificationFailure> {
+		Ok(self.usable_snapshot().await?.verification.clone())
+	}
+
 	async fn verify_inner(
 		self: &Arc<Self>,
 		token: &str,

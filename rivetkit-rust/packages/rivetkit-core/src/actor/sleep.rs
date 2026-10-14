@@ -220,7 +220,7 @@ impl ActorContext {
 
 	#[doc(hidden)]
 	pub fn end_run_handler(&self) {
-		match self.0.sleep.run_handler_active_count.fetch_update(
+		match self.0.sleep.run_handler_active_count.try_update(
 			Ordering::SeqCst,
 			Ordering::SeqCst,
 			|count| count.checked_sub(1),

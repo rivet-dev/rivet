@@ -368,7 +368,7 @@ impl PegboardGateway3 {
 					let Ok(bytes) = u64::try_from(bytes) else {
 						return;
 					};
-					let Ok(previous) = response_consumed_bytes.fetch_update(
+					let Ok(previous) = response_consumed_bytes.try_update(
 						Ordering::AcqRel,
 						Ordering::Acquire,
 						|current| current.checked_add(bytes),

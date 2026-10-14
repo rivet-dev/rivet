@@ -11,9 +11,31 @@
       "name": "Apache-2.0",
       "identifier": "Apache-2.0"
     },
-    "version": "2.3.19"
+    "version": "2.3.20"
   },
   "paths": {
+    "/.well-known/jwks.json": {
+      "get": {
+        "tags": [
+          "auth::jwks"
+        ],
+        "summary": "Publishes only the public halves of Rivet's currently valid signing keys.",
+        "operationId": "auth_jwks_get",
+        "responses": {
+          "200": {
+            "description": "Public JSON Web Key Set",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
     "/actors": {
       "get": {
         "tags": [
@@ -458,6 +480,41 @@
         ]
       }
     },
+    "/auth/application-tokens": {
+      "post": {
+        "tags": [
+          "auth::application_tokens"
+        ],
+        "operationId": "auth_application_tokens_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthApplicationTokenCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthApplicationTokenCreateResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/auth/tokens": {
       "post": {
         "tags": [
@@ -506,6 +563,71 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AuthTokenInspectResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/auth/webhooks/ensure": {
+      "post": {
+        "tags": [
+          "auth::webhook_keys"
+        ],
+        "operationId": "auth_webhooks_ensure",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthWebhookMetadata"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/auth/webhooks/sign": {
+      "post": {
+        "tags": [
+          "auth::webhook_signing"
+        ],
+        "operationId": "auth_webhooks_sign",
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthWebhookSignResponse"
                 }
               }
             }
@@ -763,6 +885,198 @@
             "bearer_auth": []
           }
         ]
+      }
+    },
+    "/namespaces/{namespace}/auth/webhook-keys": {
+      "get": {
+        "tags": [
+          "auth::webhook_keys"
+        ],
+        "operationId": "auth_webhook_keys_get",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthWebhookKeyStatus"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/namespaces/{namespace}/auth/webhook-keys/revoke": {
+      "post": {
+        "tags": [
+          "auth::webhook_keys"
+        ],
+        "operationId": "auth_webhook_keys_revoke",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthWebhookRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthWebhookKeyStatus"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/namespaces/{namespace}/auth/webhook-keys/rotate": {
+      "post": {
+        "tags": [
+          "auth::webhook_keys"
+        ],
+        "operationId": "auth_webhook_keys_rotate",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthWebhookRotateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthWebhookKeyStatus"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/namespaces/{namespace}/auth/webhooks": {
+      "get": {
+        "tags": [
+          "auth::webhook_discovery"
+        ],
+        "operationId": "auth_webhooks_metadata",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Immutable namespace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthWebhookMetadata"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/namespaces/{namespace}/auth/webhooks/jwks.json": {
+      "get": {
+        "tags": [
+          "auth::webhook_discovery"
+        ],
+        "operationId": "auth_webhooks_jwks",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Immutable namespace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/jwk-set+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthWebhookJwks"
+                }
+              }
+            }
+          }
+        },
+        "security": []
       }
     },
     "/runner-configs": {
@@ -1475,6 +1789,65 @@
         "type": "object",
         "additionalProperties": false
       },
+      "AuthApplicationTokenCreateRequest": {
+        "type": "object",
+        "required": [
+          "audience",
+          "purpose",
+          "claims"
+        ],
+        "properties": {
+          "audience": {
+            "type": "string"
+          },
+          "claims": {
+            "type": "object",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "duration": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthApplicationTokenCreateResponse": {
+        "type": "object",
+        "required": [
+          "token",
+          "issued_ts",
+          "expires_ts"
+        ],
+        "properties": {
+          "expires_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issued_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
       "AuthOperationKind": {
         "type": "string",
         "enum": [
@@ -1482,7 +1855,9 @@
           "update",
           "list",
           "create",
-          "delete"
+          "delete",
+          "append",
+          "close"
         ]
       },
       "AuthTokenCreateRequest": {
@@ -1607,7 +1982,11 @@
           "runner_config",
           "datacenter",
           "actor_gateway",
-          "actor_kv"
+          "actor_kv",
+          "actor_stream",
+          "durable_stream",
+          "application_token",
+          "webhook_signing"
         ]
       },
       "AuthTokenTargetScope": {
@@ -1630,6 +2009,177 @@
             }
           }
         ]
+      },
+      "AuthWebhookJwks": {
+        "type": "object",
+        "required": [
+          "keys"
+        ],
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthWebhookPublicKey"
+            }
+          }
+        }
+      },
+      "AuthWebhookKeyStatus": {
+        "type": "object",
+        "required": [
+          "generation",
+          "active_kid"
+        ],
+        "properties": {
+          "active_kid": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "last_emergency_generation": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "last_emergency_request_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pending_kid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "AuthWebhookMetadata": {
+        "type": "object",
+        "required": [
+          "namespace_id",
+          "alg",
+          "kid",
+          "jwks_url",
+          "generation"
+        ],
+        "properties": {
+          "alg": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "jwks_url": {
+            "type": "string"
+          },
+          "kid": {
+            "type": "string"
+          },
+          "namespace_id": {
+            "$ref": "#/components/schemas/RivetId"
+          }
+        }
+      },
+      "AuthWebhookPublicKey": {
+        "type": "object",
+        "required": [
+          "kty",
+          "crv",
+          "kid",
+          "use",
+          "alg",
+          "x"
+        ],
+        "properties": {
+          "alg": {
+            "type": "string"
+          },
+          "crv": {
+            "type": "string"
+          },
+          "kid": {
+            "type": "string"
+          },
+          "kty": {
+            "type": "string"
+          },
+          "use": {
+            "type": "string"
+          },
+          "x": {
+            "type": "string"
+          }
+        }
+      },
+      "AuthWebhookRevokeRequest": {
+        "type": "object",
+        "required": [
+          "request_id",
+          "expected_generation",
+          "kids"
+        ],
+        "properties": {
+          "expected_generation": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "kids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthWebhookRotateRequest": {
+        "type": "object",
+        "required": [
+          "expected_generation"
+        ],
+        "properties": {
+          "expected_generation": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthWebhookSignResponse": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "kid",
+          "signature"
+        ],
+        "properties": {
+          "kid": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string",
+            "description": "Unpadded base64url Ed25519 signature of timestamp + '.' + raw request body."
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Canonical decimal Unix seconds, generated by the control plane."
+          }
+        }
       },
       "CrashPolicy": {
         "type": "string",

@@ -1,6 +1,6 @@
 use rivet_api_builder::{create_router, prelude::*};
 
-use crate::{actors, depot_inspect, envoys, internal, namespaces, runner_configs, runners};
+use crate::{actors, auth, depot_inspect, envoys, internal, namespaces, runner_configs, runners};
 
 #[tracing::instrument(level = "debug", skip_all)]
 pub async fn router(
@@ -10,8 +10,25 @@ pub async fn router(
 	create_router("api-peer", config, pools, |mut router| {
 		router = epoxy::http_routes::mount_routes(router);
 		router
+			.route("/auth/webhooks/mutate", post(auth::webhooks::mutate))
+			.route(
+				"/auth/webhooks/{namespace_id}/status",
+				get(auth::webhooks::get),
+			)
+			.route(
+				"/auth/webhooks/{namespace_id}/discovery",
+				get(auth::webhooks::discovery),
+			)
+			.route(
+				"/auth/webhooks/{namespace_id}/sign",
+				axum::routing::post(auth::webhook_signing::sign),
+			)
 			// MARK: Namespaces
 			.route("/namespaces", get(namespaces::list))
+			.route(
+				"/namespaces/{namespace_id}/exists-authoritative",
+				get(namespaces::exists_authoritative),
+			)
 			.route("/namespaces", post(namespaces::create))
 			// MARK: Runner configs
 			.route("/runner-configs", get(runner_configs::list))

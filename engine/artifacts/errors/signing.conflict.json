@@ -1,0 +1,5 @@
+{
+  "code": "conflict",
+  "group": "signing",
+  "message": "The signing key generation or request ID conflicts with current state."
+}

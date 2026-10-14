@@ -11,6 +11,7 @@ service = [
 	"dep:epoxy",
 	"dep:epoxy-protocol",
 	"dep:gas",
+	"dep:namespace",
 	"dep:futures-util",
 	"dep:lazy_static",
 	"dep:rivet-config",
@@ -30,6 +31,7 @@ epoxy-protocol = { workspace = true, optional = true }
 gas = { workspace = true, optional = true }
 futures-util = { workspace = true, optional = true }
 jsonwebtoken.workspace = true
+namespace = { workspace = true, optional = true }
 lazy_static = { workspace = true, optional = true }
 rand.workspace = true
 rivet-auth-policy.workspace = true
@@ -51,3 +53,4 @@ zeroize.workspace = true
 
 [dev-dependencies]
 hex.workspace = true
+url.workspace = true

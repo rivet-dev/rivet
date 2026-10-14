@@ -860,7 +860,7 @@ impl ActorContext {
 	}
 
 	pub fn on_state_change_finished(&self) {
-		let previous = self.0.on_state_change_in_flight.fetch_update(
+		let previous = self.0.on_state_change_in_flight.try_update(
 			Ordering::SeqCst,
 			Ordering::SeqCst,
 			|count| count.checked_sub(1),

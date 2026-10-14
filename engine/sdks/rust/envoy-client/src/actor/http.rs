@@ -171,7 +171,7 @@ impl RequestBodyReceiveWindow {
 			"HTTP request body frame exceeds maximum size"
 		);
 		self.received_bytes
-			.fetch_update(
+			.try_update(
 				std::sync::atomic::Ordering::AcqRel,
 				std::sync::atomic::Ordering::Acquire,
 				|received| {
@@ -190,7 +190,7 @@ impl RequestBodyReceiveWindow {
 	fn consume(&self, bytes: u64) -> anyhow::Result<u64> {
 		let previous = self
 			.consumed_bytes
-			.fetch_update(
+			.try_update(
 				std::sync::atomic::Ordering::AcqRel,
 				std::sync::atomic::Ordering::Acquire,
 				|consumed| {

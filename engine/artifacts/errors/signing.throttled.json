@@ -1,0 +1,5 @@
+{
+  "code": "throttled",
+  "group": "signing",
+  "message": "The namespace signing quota or service capacity is exhausted."
+}

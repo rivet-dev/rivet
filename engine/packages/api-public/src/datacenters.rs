@@ -29,8 +29,14 @@ pub async fn list(Extension(ctx): Extension<ApiCtx>) -> Response {
 
 #[tracing::instrument(level = "debug", skip_all)]
 async fn list_inner(ctx: ApiCtx) -> Result<ListResponse> {
+	let namespace_scope = match ctx.authenticate().await?.as_ref() {
+		rivet_auth::AuthenticatedCredential::AdminToken => AccessNamespaceScope::Any,
+		rivet_auth::AuthenticatedCredential::Jwt(jwt) => {
+			AccessNamespaceScope::Id(jwt.verified().token.namespace_id)
+		}
+	};
 	ctx.auth(
-		AccessNamespaceScope::Any,
+		namespace_scope,
 		ResourceKind::Datacenter,
 		TargetScope::Any,
 		OperationKind::List,

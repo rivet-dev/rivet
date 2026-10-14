@@ -1,3 +1,4 @@
+pub mod application;
 mod claims;
 mod codec;
 mod error;
@@ -8,9 +9,12 @@ mod persistence;
 mod planner;
 mod token_id;
 mod verified_jwt;
+pub mod webhook;
 
 #[cfg(feature = "service")]
 pub mod issuer;
+#[cfg(feature = "service")]
+pub mod jwks;
 #[cfg(feature = "service")]
 pub mod key_ring_cache;
 #[cfg(feature = "service")]
@@ -25,7 +29,7 @@ pub mod workflows;
 pub use claims::{CLAIMS_VERSION, Claims, PROTOCOL_CLOCK_SKEW, PROTOCOL_MAX_TTL};
 pub use codec::{
 	DecodeOptions, DecodedToken, MAX_SUBJECT_BYTES, MAX_TOKEN_BYTES, TokenHeader, decode, encode,
-	is_reserved_token, peek_header,
+	is_application_token, is_reserved_token, peek_header,
 };
 pub use error::TokenError;
 pub use grants::{

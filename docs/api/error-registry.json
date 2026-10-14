@@ -1479,6 +1479,42 @@
 			]
 		},
 		{
+			"name": "signing",
+			"description": null,
+			"errors": [
+				{
+					"code": "conflict",
+					"message": "The signing key generation or request ID conflicts with current state.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_input",
+					"message": "Invalid signing request.",
+					"statuses": []
+				},
+				{
+					"code": "not_found",
+					"message": "The namespace signing keys have not been provisioned.",
+					"statuses": []
+				},
+				{
+					"code": "payload_too_large",
+					"message": "The signing payload or token exceeds its size limit.",
+					"statuses": []
+				},
+				{
+					"code": "throttled",
+					"message": "The namespace signing quota or service capacity is exhausted.",
+					"statuses": []
+				},
+				{
+					"code": "unavailable",
+					"message": "The signing service is temporarily unavailable.",
+					"statuses": []
+				}
+			]
+		},
+		{
 			"name": "sqlite",
 			"description": null,
 			"errors": [

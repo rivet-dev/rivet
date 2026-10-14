@@ -13,6 +13,10 @@ pub enum Resource {
 	Datacenter,
 	ActorGateway,
 	ActorKv,
+	ActorStream,
+	DurableStream,
+	ApplicationToken,
+	WebhookSigning,
 }
 
 impl From<Resource> for ResourceKind {
@@ -25,6 +29,10 @@ impl From<Resource> for ResourceKind {
 			Resource::Datacenter => Self::Datacenter,
 			Resource::ActorGateway => Self::ActorGateway,
 			Resource::ActorKv => Self::ActorKv,
+			Resource::ActorStream => Self::ActorStream,
+			Resource::DurableStream => Self::DurableStream,
+			Resource::ApplicationToken => Self::ApplicationToken,
+			Resource::WebhookSigning => Self::WebhookSigning,
 		}
 	}
 }
@@ -41,6 +49,10 @@ impl TryFrom<ResourceKind> for Resource {
 			ResourceKind::Datacenter => Ok(Self::Datacenter),
 			ResourceKind::ActorGateway => Ok(Self::ActorGateway),
 			ResourceKind::ActorKv => Ok(Self::ActorKv),
+			ResourceKind::ActorStream => Ok(Self::ActorStream),
+			ResourceKind::DurableStream => Ok(Self::DurableStream),
+			ResourceKind::ApplicationToken => Ok(Self::ApplicationToken),
+			ResourceKind::WebhookSigning => Ok(Self::WebhookSigning),
 			_ => Err(()),
 		}
 	}

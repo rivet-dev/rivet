@@ -1,0 +1,5 @@
+{
+  "code": "invalid_input",
+  "group": "signing",
+  "message": "Invalid signing request."
+}

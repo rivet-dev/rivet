@@ -1,0 +1,44 @@
+type Any void
+
+type Id data
+
+type TargetScope union {
+	Any |
+	Id
+}
+
+type ResourceKind enum {
+	NAMESPACE
+	ACTOR
+	RUNNER
+	RUNNER_CONFIG
+	TOKEN
+	RESERVED
+	DATACENTER
+	ACTOR_GATEWAY
+	ACTOR_KV
+	ACTOR_STREAM
+	DURABLE_STREAM
+	APPLICATION_TOKEN
+	WEBHOOK_SIGNING
+}
+
+type OperationKind enum {
+	READ
+	UPDATE
+	LIST
+	CREATE
+	DELETE
+	APPEND
+	CLOSE
+}
+
+type Grant struct {
+	resource: ResourceKind
+	target: TargetScope
+	operations: list<OperationKind>
+}
+
+type Data struct {
+	grants: list<Grant>
+}

@@ -112,6 +112,16 @@ pub fn peek_header(token: &str) -> Result<TokenHeader, TokenError> {
 }
 
 pub fn is_reserved_token(token: &str) -> bool {
+	has_token_type(token, |typ| {
+		matches!(typ, TOKEN_TYPE | crate::application::TOKEN_TYPE)
+	})
+}
+
+pub fn is_application_token(token: &str) -> bool {
+	has_token_type(token, |typ| typ == crate::application::TOKEN_TYPE)
+}
+
+fn has_token_type(token: &str, matches_type: fn(&str) -> bool) -> bool {
 	let bytes = token.as_bytes();
 	let Some(first_dot) = bytes
 		.iter()
@@ -149,11 +159,12 @@ pub fn is_reserved_token(token: &str) -> bool {
 
 	let reserved = Cell::new(false);
 	let mut deserializer = serde_json::Deserializer::from_slice(&header);
-	let _ = de::Deserializer::deserialize_map(&mut deserializer, TypVisitor(&reserved));
+	let _ =
+		de::Deserializer::deserialize_map(&mut deserializer, TypVisitor(&reserved, matches_type));
 	reserved.get()
 }
 
-struct TypVisitor<'a>(&'a Cell<bool>);
+struct TypVisitor<'a>(&'a Cell<bool>, fn(&str) -> bool);
 
 impl<'de> de::Visitor<'de> for TypVisitor<'_> {
 	type Value = ();
@@ -169,7 +180,7 @@ impl<'de> de::Visitor<'de> for TypVisitor<'_> {
 		while let Some(key) = map.next_key::<String>()? {
 			if key == "typ" {
 				let value = map.next_value::<serde_json::Value>()?;
-				if value.as_str() == Some(TOKEN_TYPE) {
+				if value.as_str().is_some_and(self.1) {
 					self.0.set(true);
 				}
 			} else {

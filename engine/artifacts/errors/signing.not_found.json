@@ -1,0 +1,5 @@
+{
+  "code": "not_found",
+  "group": "signing",
+  "message": "The namespace signing keys have not been provisioned."
+}

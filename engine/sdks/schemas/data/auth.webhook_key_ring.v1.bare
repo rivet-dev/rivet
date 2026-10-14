@@ -1,0 +1,13 @@
+type EmergencyReceipt struct {
+    requestId: data
+    expectedGeneration: u64
+    committedGeneration: u64
+    requestedKids: list<str>
+}
+
+type Data struct {
+    namespaceId: data
+    # A complete versioned AuthJwtKeyRingData value; the shared data library owns that schema.
+    ring: data
+    lastEmergency: optional<EmergencyReceipt>
+}

@@ -2113,11 +2113,9 @@ impl Drop for InspectorAttachGuard {
 		let Some(attach_count) = self.ctx.inspector_attach_count_arc() else {
 			return;
 		};
-		let Ok(previous) =
-			attach_count.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
-				current.checked_sub(1)
-			})
-		else {
+		let Ok(previous) = attach_count.try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+			current.checked_sub(1)
+		}) else {
 			return;
 		};
 		let current = previous.saturating_sub(1);

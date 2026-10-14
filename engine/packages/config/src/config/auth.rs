@@ -283,11 +283,13 @@ mod tests {
 		assert!(serde_json::from_str::<Auth>(r#"{"disable_admin_token":true}"#).is_err());
 		let auth: Auth = serde_json::from_str(r#"{"admin_token":""}"#).unwrap();
 		assert!(auth.validate(ISSUER).is_err());
-		let auth: Auth = serde_json::from_str(
-			r#"{"admin_token":"","insecure_allow_unauthenticated":true}"#,
-		)
-		.unwrap();
-		assert_eq!(auth.validate(ISSUER).unwrap_err().to_string(), "auth.admin_token cannot be empty");
+		let auth: Auth =
+			serde_json::from_str(r#"{"admin_token":"","insecure_allow_unauthenticated":true}"#)
+				.unwrap();
+		assert_eq!(
+			auth.validate(ISSUER).unwrap_err().to_string(),
+			"auth.admin_token cannot be empty"
+		);
 	}
 
 	#[test]
