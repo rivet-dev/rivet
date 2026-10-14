@@ -1,10 +1,10 @@
-import { MessageId, QueuePayloadSchema, parseQueueName } from "@workflow/world";
+import { MessageId, QueuePayloadSchema } from "@workflow/world";
 import type { Ctx } from "./shared.js";
 
 type DispatchRow = {
 	message_id: string;
 	queue_name: string;
-	route: "flow" | "step";
+	route: "flow";
 	runtime_url: string;
 	body: string;
 	headers: Record<string, string>;
@@ -153,8 +153,10 @@ function normalizeRuntimeUrl(value: string) {
 	return value.replace(/\/+$/, "");
 }
 
-function queueRoute(queueName: string): "flow" | "step" {
-	return parseQueueName(queueName).kind === "workflow" ? "flow" : "step";
+// Workflow continuations and queued steps both travel on the workflow topic and
+// are served by the combined flow handler. There is no step route.
+function queueRoute(_queueName: string): "flow" {
+	return "flow";
 }
 
 export async function claimNextDispatch(c: Ctx): Promise<DispatchRow | null> {
@@ -192,7 +194,9 @@ export async function claimNextDispatch(c: Ctx): Promise<DispatchRow | null> {
 	return {
 		message_id: String(row.message_id),
 		queue_name: String(row.queue_name),
-		route: row.route === "step" ? "step" : "flow",
+		// Rows enqueued by a release that still had a step route are delivered to
+		// the flow handler too.
+		route: "flow",
 		runtime_url: String(row.runtime_url),
 		body: String(row.body),
 		headers:

@@ -332,9 +332,18 @@ export const coordinator = actor({
 				where.push("workflow_name = ?");
 				args.push(params.workflowName);
 			}
-			if (params?.status) {
-				where.push("status = ?");
-				args.push(params.status);
+			if (params?.status !== undefined) {
+				// An array matches any listed status; an empty array matches nothing,
+				// like SQL `IN ()`.
+				const statuses = Array.isArray(params.status)
+					? params.status
+					: [params.status];
+				if (statuses.length === 0) {
+					where.push("0");
+				} else {
+					where.push(`status IN (${statuses.map(() => "?").join(", ")})`);
+					args.push(...statuses);
+				}
 			}
 			const rows = await c.db.execute(
 				`
