@@ -133,6 +133,7 @@ Each row: `[native] [wasm] <file> | <suite description>`
 - [ ] [ ] actor-db-pragma-migration | Actor Database Pragma Migration
 - [ ] [ ] actor-state-zod-coercion | Actor State Zod Coercion
 - [ ] [ ] actor-conn-status | Connection Status Changes
+- [ ] [ ] actor-conn-drain | Connection Drain
 - [ ] [ ] gateway-routing | Gateway Routing
 - [ ] [ ] lifecycle-hooks | Lifecycle Hooks
 - [ ] [ ] serverless-handler | Serverless Handler Tests
@@ -233,6 +234,7 @@ Replace `<FILE>` with the file name stem (part before the `|` in the progress fi
 | actor-db-pragma-migration | Actor Database Pragma Migration |
 | actor-state-zod-coercion | Actor State Zod Coercion |
 | actor-conn-status | Connection Status Changes |
+| actor-conn-drain | Connection Drain |
 | gateway-routing | Gateway Routing |
 | lifecycle-hooks | Lifecycle Hooks |
 | serverless-handler | Serverless Handler Tests |

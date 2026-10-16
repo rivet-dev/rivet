@@ -49,4 +49,10 @@ const { registry: nativeRegistry, serveConfig } = await buildConfiguredRegistry(
 	registry.parseConfig(),
 );
 
+// Production hosts drain on SIGTERM through `registry.start()`. This is opt-in
+// so other driver tests keep a fast hard stop on cleanup.
+if (process.env.RIVETKIT_TEST_DRAIN_ON_SIGTERM === "1") {
+	process.once("SIGTERM", () => void nativeRegistry.shutdown());
+}
+
 await nativeRegistry.serve(serveConfig);
