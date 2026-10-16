@@ -70,6 +70,17 @@ pub(crate) mod moved_tests {
 		assert_eq!(counter.load(Ordering::SeqCst), expected);
 	}
 
+	async fn wait_for_grace_hooks_done(ctx: &ActorContext) {
+		for _ in 0..50 {
+			if ctx.core_dispatched_hook_count() == 0 {
+				return;
+			}
+			sleep(Duration::from_millis(10)).await;
+		}
+
+		assert_eq!(ctx.core_dispatched_hook_count(), 0);
+	}
+
 	async fn wait_for_state(ctx: &ActorContext, expected: &[u8]) {
 		for _ in 0..50 {
 			if ctx.state() == expected {
@@ -828,6 +839,42 @@ pub(crate) mod moved_tests {
 								}
 							}
 							reply.send(Ok(()));
+						}
+						_ => {}
+					}
+				}
+				Ok(())
+			})
+		}))
+	}
+
+	/// Like `sleep_grace_factory`, but the graceful cleanup replies only after
+	/// `release` is notified, so a test can act while the app's onSleep still runs.
+	fn held_cleanup_factory(
+		config: ActorConfig,
+		cleanup_started: Arc<AtomicUsize>,
+		release: Arc<Notify>,
+		action_count: Arc<AtomicUsize>,
+	) -> Arc<ActorFactory> {
+		Arc::new(ActorFactory::new(config, move |start| {
+			let cleanup_started = cleanup_started.clone();
+			let release = release.clone();
+			let action_count = action_count.clone();
+			Box::pin(async move {
+				let mut events = start.events;
+				while let Some(event) = events.recv().await {
+					match event {
+						ActorEvent::Action { reply, .. } => {
+							action_count.fetch_add(1, Ordering::SeqCst);
+							reply.send(Ok(vec![7, 7, 7]));
+						}
+						ActorEvent::RunGracefulCleanup { reply, .. } => {
+							cleanup_started.fetch_add(1, Ordering::SeqCst);
+							let release = release.clone();
+							tokio::spawn(async move {
+								release.notified().await;
+								reply.send(Ok(()));
+							});
 						}
 						_ => {}
 					}
@@ -3709,7 +3756,7 @@ pub(crate) mod moved_tests {
 	}
 
 	#[tokio::test]
-	async fn sleep_grace_keeps_dispatch_open_and_second_sleep_is_idempotent() {
+	async fn sleep_grace_refuses_dispatch_after_cleanup_and_second_sleep_is_idempotent() {
 		let ctx = new_with_kv(
 			"actor-sleep-grace-dispatch",
 			"task-sleep-grace-dispatch",
@@ -3776,6 +3823,8 @@ pub(crate) mod moved_tests {
 			.expect("second sleep reply should send")
 			.expect("second sleep should no-op");
 		assert_eq!(begin_sleep_count.load(Ordering::SeqCst), 1);
+		// The cleanup replied, so the app's onSleep is done; keep-awake work still holds grace.
+		wait_for_grace_hooks_done(&ctx).await;
 
 		let (action_tx, action_rx) = oneshot::channel();
 		dispatch_tx
@@ -3787,14 +3836,13 @@ pub(crate) mod moved_tests {
 				reply: action_tx,
 			})
 			.expect("action should send during sleep grace");
-		assert_eq!(
-			action_rx
-				.await
-				.expect("action reply should send")
-				.expect("sleep grace should accept new dispatch"),
-			vec![7, 7, 7]
-		);
-		assert_eq!(action_count.load(Ordering::SeqCst), 1);
+		let error = action_rx
+			.await
+			.expect("action reply should send")
+			.expect_err("sleep grace should refuse dispatch once cleanup finished");
+		let error = rivet_error::RivetError::extract(&error);
+		assert_eq!((error.group(), error.code()), ("actor", "restarting"));
+		assert_eq!(action_count.load(Ordering::SeqCst), 0);
 		assert_eq!(destroy_count.load(Ordering::SeqCst), 0);
 
 		release_tx.send(()).expect("keep-awake release should send");
@@ -3806,6 +3854,78 @@ pub(crate) mod moved_tests {
 			.await
 			.expect("keep-awake task should finish after release");
 		assert_eq!(destroy_count.load(Ordering::SeqCst), 0);
+		run.await
+			.expect("task run should finish")
+			.expect("task run should succeed");
+	}
+
+	#[tokio::test]
+	async fn sleep_grace_accepts_dispatch_while_cleanup_runs() {
+		let ctx = new_with_kv(
+			"actor-sleep-grace-cleanup-dispatch",
+			"task-sleep-grace-cleanup-dispatch",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let (mut task, lifecycle_tx, dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
+		let cleanup_started = Arc::new(AtomicUsize::new(0));
+		let release = Arc::new(Notify::new());
+		let action_count = Arc::new(AtomicUsize::new(0));
+		task.factory = held_cleanup_factory(
+			ActorConfig {
+				sleep_grace_period: Duration::from_secs(5),
+				sleep_grace_period_overridden: true,
+				..ActorConfig::default()
+			},
+			cleanup_started.clone(),
+			release.clone(),
+			action_count.clone(),
+		);
+		let run = tokio::spawn(task.run());
+
+		let (start_tx, start_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Start { reply: start_tx })
+			.expect("start command should send");
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+
+		let (sleep_tx, sleep_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Stop {
+				reason: ShutdownKind::Sleep,
+				reply: sleep_tx,
+			})
+			.expect("sleep stop should send");
+		wait_for_count(&cleanup_started, 1).await;
+
+		let (action_tx, action_rx) = oneshot::channel();
+		dispatch_tx
+			.send(DispatchCommand::Action {
+				name: "ping".to_owned(),
+				args: Vec::new(),
+				incoming: IncomingInvocationContext::default(),
+				conn: ConnHandle::new("conn-cleanup", Vec::new(), Vec::new(), false),
+				reply: action_tx,
+			})
+			.expect("action should send during sleep grace");
+		assert_eq!(
+			action_rx
+				.await
+				.expect("action reply should send")
+				.expect("sleep grace should accept dispatch while cleanup runs"),
+			vec![7, 7, 7]
+		);
+		assert_eq!(action_count.load(Ordering::SeqCst), 1);
+
+		release.notify_one();
+		sleep_rx
+			.await
+			.expect("sleep reply should send")
+			.expect("sleep should succeed");
 		run.await
 			.expect("task run should finish")
 			.expect("task run should succeed");
@@ -3837,10 +3957,8 @@ pub(crate) mod moved_tests {
 			.await
 			.expect("action reply should send")
 			.expect_err("sleep finalize should reject new dispatch");
-		assert!(
-			format!("{error:#}").contains("Actor is stopping"),
-			"expected actor stopping error, got {error:#}"
-		);
+		let error = rivet_error::RivetError::extract(&error);
+		assert_eq!((error.group(), error.code()), ("actor", "restarting"));
 	}
 
 	#[cfg(not(debug_assertions))]

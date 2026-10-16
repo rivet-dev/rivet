@@ -1158,8 +1158,16 @@ impl ActorTask {
 		}
 
 		match self.lifecycle {
-			LifecycleState::Started | LifecycleState::SleepGrace => None,
-			LifecycleState::SleepFinalize | LifecycleState::DestroyGrace => {
+			LifecycleState::Started => None,
+			// The app's onSleep and connection cleanup still run, so the actor still serves work.
+			LifecycleState::SleepGrace if self.ctx.core_dispatched_hook_count() > 0 => None,
+			// The app has released its resources. The work never ran here, so the client
+			// retries it and the next generation serves it.
+			LifecycleState::SleepGrace | LifecycleState::SleepFinalize => {
+				self.ctx.warn_work_sent_to_stopping_instance("dispatch");
+				Some(ActorLifecycleError::Restarting.build())
+			}
+			LifecycleState::DestroyGrace => {
 				self.ctx.warn_work_sent_to_stopping_instance("dispatch");
 				Some(ActorLifecycleError::Stopping.build())
 			}

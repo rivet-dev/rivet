@@ -28,6 +28,7 @@ pub fn public_error_status_code(group: &str, code: &str) -> Option<u16> {
 		("actor", "method_not_allowed") => Some(405),
 		("actor", "action_timed_out") => Some(408),
 		("actor", "aborted") => Some(400),
+		("actor", "restarting") => Some(503),
 		(
 			"actor_runtime_socket",
 			"unsupported" | "not_enabled" | "closed" | "database_unavailable",
@@ -172,6 +173,9 @@ pub enum ActorLifecycle {
 
 	#[error("stopping", "Actor is stopping.")]
 	Stopping,
+
+	#[error("restarting", "Actor is restarting. Retry the request.")]
+	Restarting,
 
 	#[error("destroying", "Actor is destroying.")]
 	Destroying,
