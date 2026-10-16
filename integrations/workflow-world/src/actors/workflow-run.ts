@@ -36,6 +36,7 @@ import {
 import { actor } from "rivetkit";
 import { monotonicFactory } from "ulid";
 import { decodeValue, encodeValue } from "../codec.js";
+import { exposeWorldErrors } from "../world-errors.js";
 import type { CoordinatorIndexUpdate } from "./coordinator.js";
 import { workflowDb } from "./db.js";
 import {
@@ -650,7 +651,7 @@ export const workflowRun = actor({
 			hookSideEffects?: HookSideEffects,
 		): Promise<EventResult> => {
 			const wfc = asWorkflowContext(c);
-			return withRecoveryWriter(wfc, async () => {
+			return exposeWorldErrors(() => withRecoveryWriter(wfc, async () => {
 			const actorRunId = wfc.key[0];
 			if (!actorRunId) throw new Error("workflowRun actor key is missing");
 			if (runIdOrNull != null) assertRunKey(wfc, runIdOrNull);
@@ -1316,34 +1317,36 @@ export const workflowRun = actor({
 			await wfc.schedule.after(0, "wake");
 			startPendingDrain(wfc);
 			return result;
-			});
+			}));
 		},
-		getRun: async (c, runId: string, params?: GetWorkflowRunParams) => {
-			assertRunKey(c, runId);
-			return filterData(
-				await requireRun(c, runId),
-				params?.resolveData,
-			) as WorkflowRun;
-		},
-		getEvent: async (
+		getRun: (c, runId: string, params?: GetWorkflowRunParams) =>
+			exposeWorldErrors(async () => {
+				assertRunKey(c, runId);
+				return filterData(
+					await requireRun(c, runId),
+					params?.resolveData,
+				) as WorkflowRun;
+			}),
+		getEvent: (
 			c,
 			runId: string,
 			eventId: string,
 			params?: GetEventParams,
-		) => {
-			assertRunKey(c, runId);
-			const row = await one(
-				c,
-				`
-				SELECT * FROM workflow_events
-				WHERE run_id = ? AND event_id = ?
-				`,
-				runId,
-				eventId,
-			);
-			if (!row) throw new WorkflowWorldError(`Event not found: ${eventId}`);
-			return stripEventDataRefs(rowToEvent(row), params?.resolveData ?? "all");
-		},
+		) =>
+			exposeWorldErrors(async () => {
+				assertRunKey(c, runId);
+				const row = await one(
+					c,
+					`
+					SELECT * FROM workflow_events
+					WHERE run_id = ? AND event_id = ?
+					`,
+					runId,
+					eventId,
+				);
+				if (!row) throw new WorkflowWorldError(`Event not found: ${eventId}`);
+				return stripEventDataRefs(rowToEvent(row), params?.resolveData ?? "all");
+			}),
 		listEvents: async (c, params: ListEventsParams) => {
 			assertRunKey(c, params.runId);
 			const limit = params.pagination?.limit ?? 100;
@@ -1399,22 +1402,23 @@ export const workflowRun = actor({
 				hasMore: rows.length > limit,
 			};
 		},
-		getStep: async (
+		getStep: (
 			c,
 			runId: string,
 			stepId: string,
 			params?: GetStepParams,
-		) => {
-			assertRunKey(c, runId);
-			const row = await one(
-				c,
-				"SELECT * FROM workflow_steps WHERE run_id = ? AND step_id = ?",
-				runId,
-				stepId,
-			);
-			if (!row) throw new WorkflowWorldError(`Step not found: ${stepId}`);
-			return filterData(rowToStep(row), params?.resolveData) as Step;
-		},
+		) =>
+			exposeWorldErrors(async () => {
+				assertRunKey(c, runId);
+				const row = await one(
+					c,
+					"SELECT * FROM workflow_steps WHERE run_id = ? AND step_id = ?",
+					runId,
+					stepId,
+				);
+				if (!row) throw new WorkflowWorldError(`Step not found: ${stepId}`);
+				return filterData(rowToStep(row), params?.resolveData) as Step;
+			}),
 		listSteps: async (c, params: ListWorkflowRunStepsParams) => {
 			assertRunKey(c, params.runId);
 			const limit = params.pagination?.limit ?? 20;
@@ -1440,15 +1444,16 @@ export const workflowRun = actor({
 				hasMore: rows.length > limit,
 			};
 		},
-		getHook: async (c, hookId: string, params?: GetHookParams) => {
-			const row = await one(
-				c,
-				"SELECT * FROM workflow_hooks WHERE hook_id = ?",
-				hookId,
-			);
-			if (!row) throw new HookNotFoundError(hookId);
-			return filterHookData(rowToHook(row), params?.resolveData) as Hook;
-		},
+		getHook: (c, hookId: string, params?: GetHookParams) =>
+			exposeWorldErrors(async () => {
+				const row = await one(
+					c,
+					"SELECT * FROM workflow_hooks WHERE hook_id = ?",
+					hookId,
+				);
+				if (!row) throw new HookNotFoundError(hookId);
+				return filterHookData(rowToHook(row), params?.resolveData) as Hook;
+			}),
 		ownsHook: async (c, hookId: string, token: string) => {
 			const runId = c.key[0];
 			if (!runId) throw new Error("workflowRun actor key is missing");

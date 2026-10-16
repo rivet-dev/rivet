@@ -34,6 +34,7 @@ import { setup, type Registry } from "rivetkit";
 import { createClient, type Client } from "rivetkit/client";
 import { monotonicFactory } from "ulid";
 import { registry, workflowWorldActors } from "./actors.js";
+import { withWorldErrors } from "./world-errors.js";
 
 export type RivetWorldConfig = {
 	/** The application's combined registry, including `workflowWorldActors`. */
@@ -204,7 +205,7 @@ function actorEventParams(
 }
 
 function runActor(client: Client<typeof registry>, runId: string) {
-	return client.workflowRun.getOrCreate([runId]);
+	return withWorldErrors(client.workflowRun.getOrCreate([runId]));
 }
 
 type RegistryWithReadiness = Registry<any> & {
