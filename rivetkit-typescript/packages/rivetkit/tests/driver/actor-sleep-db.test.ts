@@ -434,6 +434,37 @@ describeDriverMatrix(
 				expect(events).toContain("sleep-end");
 			});
 
+			test("an action in flight when sleep starts finishes before onSleep runs", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const handle = client.sleepWithDbAction.getOrCreate([
+					"in-flight-action-before-on-sleep",
+				]);
+				const connection = handle.connect();
+				await waitForConnectionReady(connection);
+
+				const slowStarted = new Promise<void>((resolve) => {
+					connection.once("slowStarted", () => resolve());
+				});
+				const slow = connection.slowInsert("slow", 300);
+				await slowStarted;
+				await connection.triggerSleep();
+				await slow;
+				await connection.dispose();
+
+				await waitForAction(handle.getCounts, (counts) => {
+					expect(counts.sleepCount).toBe(1);
+					expect(counts.startCount).toBe(2);
+				});
+				const events = (await handle.getLogEntries()).map(
+					(entry: LogEntry) => entry.event,
+				);
+				expect(events).toContain("slow-end");
+				expect(events.indexOf("slow-end")).toBeLessThan(
+					events.indexOf("sleep-start"),
+				);
+			});
+
 			test("action via handle during sleep shutdown is not queued", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 

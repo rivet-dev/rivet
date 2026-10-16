@@ -531,9 +531,10 @@ async function cleanupNativeSleepRuntimeState(
 ): Promise<void> {
 	// The bounded wait gives shutdown work one grace-period chance to finish.
 	// Drained means all tracked shutdown work completed before the deadline, so
-	// we can save final state and clear runtime state immediately. If it did not
-	// drain, close database handles now, then defer the final save and clear until
-	// the tracked work finishes without a deadline.
+	// we can save final state and clear runtime state immediately. Core then
+	// syncs the alarm and closes SQLite. If it did not drain, close database
+	// handles now so late work cannot write after shutdown, then defer the
+	// final save and clear until the tracked work finishes without a deadline.
 	const drained = await runtime.actorWaitForTrackedShutdownWork(ctx);
 	if (!drained) {
 		await closeNativeDatabaseClient(runtime, ctx);
@@ -554,8 +555,6 @@ async function cleanupNativeSleepRuntimeState(
 	}
 
 	await afterTrackedWorkDrained?.();
-	await closeNativeDatabaseClient(runtime, ctx);
-	await closeNativeSqlDatabase(runtime, ctx);
 	clearNativeRuntimeState(runtime, ctx);
 }
 

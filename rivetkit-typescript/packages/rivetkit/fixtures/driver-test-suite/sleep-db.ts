@@ -348,6 +348,7 @@ export const sleepWithDbAction = actor({
 	}),
 	events: {
 		sleeping: event<void>(),
+		slowStarted: event<void>(),
 	},
 	onWake: async (c) => {
 		c.state.startCount += 1;
@@ -398,6 +399,16 @@ export const sleepWithDbAction = actor({
 		insertLogEntry: async (c, event: string) => {
 			await c.db.execute(
 				`INSERT INTO sleep_log (event, created_at) VALUES ('${event}', ${Date.now()})`,
+			);
+		},
+		slowInsert: async (c, event: string, ms: number) => {
+			await c.db.execute(
+				`INSERT INTO sleep_log (event, created_at) VALUES ('${event}-start', ${Date.now()})`,
+			);
+			c.broadcast("slowStarted", undefined);
+			await new Promise((resolve) => setTimeout(resolve, ms));
+			await c.db.execute(
+				`INSERT INTO sleep_log (event, created_at) VALUES ('${event}-end', ${Date.now()})`,
 			);
 		},
 	},
