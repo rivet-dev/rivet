@@ -14,11 +14,11 @@
 		"hono": "^4.12.25",
 		"nitro": "3.0.260610-beta",
 		"rollup": "^4.62.2",
-		"workflow": "5.0.0-beta.35"
+		"workflow": "5.2.2"
 	},
 	"devDependencies": {
 		"@types/node": "^24.0.0",
-		"@workflow/vitest": "5.0.0-beta.35",
+		"@workflow/vitest": "5.0.5",
 		"typescript": "^5.9.3",
 		"vite": "^7.0.0",
 		"vitest": "^4.1.9"

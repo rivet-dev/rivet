@@ -28,8 +28,9 @@
 		"test:conformance": "pnpm run build && tsx scripts/conformance/run.ts"
 	},
 	"dependencies": {
-		"@workflow/errors": "5.0.0-beta.11",
-		"@workflow/world": "5.0.0-beta.21",
+		"@workflow/errors": "5.0.4",
+		"@workflow/utils": "5.0.2",
+		"@workflow/world": "5.0.4",
 		"cbor-x": "^1.6.0",
 		"rivetkit": "workspace:*",
 		"ulid": "~3.0.1"
@@ -39,7 +40,7 @@
 		"@rivetkit/engine-cli-linux-x64-musl": "2.3.5",
 		"@rivetkit/rivetkit-napi-linux-x64-gnu": "2.3.5",
 		"@types/node": "^24.0.0",
-		"@workflow/world-testing": "5.0.0-beta.35",
+		"@workflow/world-testing": "5.0.5",
 		"tsx": "^4.20.0",
 		"typescript": "^5.5.2",
 		"vite": "^7.0.0",

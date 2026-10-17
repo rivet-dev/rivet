@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { setupTest } from "rivetkit/test";
 import { afterEach, describe, expect, test } from "vitest";
-import { SPEC_VERSION_CURRENT } from "@workflow/world";
+import {
+	FIRST_EVENT_SLOT,
+	SPEC_VERSION_CURRENT,
+	eventIdToSlot,
+} from "@workflow/world";
 import { registry } from "../../src/actors.ts";
 
 const uid = () => randomUUID().slice(0, 8);
@@ -112,12 +116,14 @@ describe("workflowRun event dedup + materialization", () => {
 		}
 
 		const first = await runActor(client, runId).listEventsByCorrelationId({
+			runId,
 			correlationId,
 			pagination: { limit: 2 },
 		});
 		expect(first.data).toHaveLength(2);
 		expect(first.hasMore).toBe(true);
 		const second = await runActor(client, runId).listEventsByCorrelationId({
+			runId,
 			correlationId,
 			pagination: { limit: 2, cursor: first.cursor ?? undefined },
 		});
@@ -219,12 +225,21 @@ describe("workflowRun event dedup + materialization", () => {
 				.filter((event) => event.correlationId === stepId)
 				.map((event) => event.eventType),
 		).toEqual(["step_created", "step_started"]);
-		const replay = await runActor(client, runId).appendEvent(runId, {
+		// A second lazy start lost the create-claim: it must not get the step,
+		// or it would run the body again.
+		await expect(
+			runActor(client, runId).appendEvent(runId, {
 				eventType: "step_started",
 				specVersion: SPEC_VERSION_CURRENT,
 				correlationId: stepId,
 				eventData: { stepName: "lazy", input: { value: 1 } },
-			});
+			}),
+		).rejects.toThrow(/already created/);
+		const replay = await runActor(client, runId).appendEvent(runId, {
+			eventType: "step_started",
+			specVersion: SPEC_VERSION_CURRENT,
+			correlationId: stepId,
+		});
 		expect(replay.step?.status).toBe("running");
 		expect(replay.step?.attempt).toBe(1);
 
@@ -322,5 +337,121 @@ describe("workflowRun event dedup + materialization", () => {
 			pagination: { limit: 100 },
 		});
 		expect(steps.data.filter((s) => s.stepId === stepId)).toHaveLength(1);
+	});
+
+	test("event ids are dense slots from 1, even under concurrent appends", async (c) => {
+		const { client } = await setupTest(c, registry);
+		const runId = `wrun_${uid()}`;
+		await createRun(client, runId);
+		await Promise.all(
+			Array.from({ length: 12 }, (_, i) =>
+				runActor(client, runId).appendEvent(runId, {
+					eventType: "step_created",
+					specVersion: SPEC_VERSION_CURRENT,
+					correlationId: `step-${i}-${uid()}`,
+					eventData: { stepName: "fanout", input: { i } },
+				}),
+			),
+		);
+		const events = await runActor(client, runId).listEvents({
+			runId,
+			pagination: { limit: 100 },
+		});
+		const slots = events.data.map((e) => eventIdToSlot(e.eventId));
+		expect(slots).toEqual(
+			Array.from({ length: 13 }, (_, i) => FIRST_EVENT_SLOT + i),
+		);
+	});
+
+	test("a write behind the log commits at the next slot and reports the skipped events", async (c) => {
+		const { client } = await setupTest(c, registry);
+		const runId = `wrun_${uid()}`;
+		await createRun(client, runId);
+		const stepIds = [`step-a-${uid()}`, `step-b-${uid()}`];
+		for (const stepId of stepIds) {
+			await runActor(client, runId).appendEvent(runId, {
+				eventType: "step_created",
+				specVersion: SPEC_VERSION_CURRENT,
+				correlationId: stepId,
+				eventData: { stepName: "s", input: {} },
+			});
+		}
+		// The writer only saw run_created, so it expected slot 2.
+		const stale = await runActor(client, runId).appendEvent(
+			runId,
+			{
+				eventType: "wait_created",
+				specVersion: SPEC_VERSION_CURRENT,
+				correlationId: `wait-${uid()}`,
+				eventData: { resumeAt: new Date(Date.now() + 60_000) },
+			},
+			{ eventCount: 1 },
+		);
+		expect(eventIdToSlot(stale.event?.eventId ?? "")).toBe(4);
+		expect(stale.events?.map((e) => e.correlationId)).toEqual(stepIds);
+		expect(stale.hasMore).toBe(false);
+
+		// A writer that is current gets no report.
+		const current = await runActor(client, runId).appendEvent(
+			runId,
+			{
+				eventType: "step_created",
+				specVersion: SPEC_VERSION_CURRENT,
+				correlationId: `step-c-${uid()}`,
+				eventData: { stepName: "s", input: {} },
+			},
+			{ eventCount: 4 },
+		);
+		expect(eventIdToSlot(current.event?.eventId ?? "")).toBe(5);
+		expect(current.events).toBeUndefined();
+	});
+
+	test("a finished run accepts a running step's outcome but refuses new starts", async (c) => {
+		const { client } = await setupTest(c, registry);
+		const runId = `wrun_${uid()}`;
+		await createRun(client, runId);
+		const running = `step-running-${uid()}`;
+		const pending = `step-pending-${uid()}`;
+		for (const stepId of [running, pending]) {
+			await runActor(client, runId).appendEvent(runId, {
+				eventType: "step_created",
+				specVersion: SPEC_VERSION_CURRENT,
+				correlationId: stepId,
+				eventData: { stepName: "s", input: {} },
+			});
+		}
+		await runActor(client, runId).appendEvent(runId, {
+			eventType: "step_started",
+			specVersion: SPEC_VERSION_CURRENT,
+			correlationId: running,
+		});
+		await runActor(client, runId).appendEvent(runId, {
+			eventType: "run_cancelled",
+			specVersion: SPEC_VERSION_CURRENT,
+		});
+
+		// Redelivered start of the step that was already running.
+		await expect(
+			runActor(client, runId).appendEvent(runId, {
+				eventType: "step_started",
+				specVersion: SPEC_VERSION_CURRENT,
+				correlationId: running,
+			}),
+		).rejects.toThrow(/terminal state/);
+		await expect(
+			runActor(client, runId).appendEvent(runId, {
+				eventType: "step_started",
+				specVersion: SPEC_VERSION_CURRENT,
+				correlationId: pending,
+			}),
+		).rejects.toThrow(/terminal state/);
+
+		const completed = await runActor(client, runId).appendEvent(runId, {
+			eventType: "step_completed",
+			specVersion: SPEC_VERSION_CURRENT,
+			correlationId: running,
+			eventData: { result: { ok: true } },
+		});
+		expect(completed.step?.status).toBe("completed");
 	});
 });
