@@ -31,6 +31,7 @@ import {
 	dbActorRuntimeSocketDisabled,
 	dbRemoteLifecycleProbe,
 } from "./actor-db-raw";
+import { dbActorSync, dbActorSyncAwaited } from "./actor-db-sync";
 import { onStateChangeActor } from "./actor-onstatechange";
 import { connErrorSerializationActor } from "./conn-error-serialization";
 import { counterWithParams } from "./conn-params";
@@ -367,6 +368,9 @@ export const registry = setup({
 		dbActorManualWarningsDisabled,
 		actorRuntimeSocketWithoutDb,
 		dbActorRaw,
+		// From actor-db-sync.ts
+		dbActorSync,
+		dbActorSyncAwaited,
 		dbActorRuntimeSocketDisabled,
 		dbRemoteLifecycleProbe,
 		// From actor-db-drizzle-transaction.ts

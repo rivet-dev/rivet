@@ -56,6 +56,27 @@ class FakeNativeDatabase implements JsNativeDatabaseLike {
 		return null;
 	}
 
+	execSync(): never {
+		throw new Error("fake native database has no synchronous API");
+	}
+
+	executeSync(): never {
+		throw new Error("fake native database has no synchronous API");
+	}
+
+	beginTransactionSync(): never {
+		throw new Error("fake native database has no synchronous API");
+	}
+
+	async open() {}
+
+	commitTicket() {
+		return 0;
+	}
+
+	async whenDurable() {}
+	abortGeneration() {}
+
 	async close() {
 		this.closed = true;
 	}

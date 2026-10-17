@@ -111,6 +111,8 @@ export interface JsActorConfig {
   icon?: string
   hasDatabase?: boolean
   remoteSqlite?: boolean
+  /** Internal. Set by rivetkit when the actor's database provider opts into deferred commits. */
+  sqliteDeferredCommits?: boolean
   sqliteProfiling?: JsSqliteProfilingConfig
   tracing?: JsActorTracingConfig
   enableActorRuntimeSocket?: boolean
@@ -460,6 +462,18 @@ export declare class JsNativeDatabase {
   executeBatch(statements: Array<JsSqliteBatchStatement>): Promise<Array<NativeExecuteResult>>
   exec(sql: string): Promise<QueryResult>
   close(): Promise<void>
+  /** Opens the database so later synchronous calls never fetch its first pages. */
+  open(): Promise<void>
+  executeSync(sql: string, params?: Array<JsBindParam> | undefined | null): NativeExecuteResult
+  execSync(sql: string): QueryResult
+  beginTransactionSync(timeoutMs?: number | undefined | null, name?: string | undefined | null): JsSqliteTransaction
+  /**
+   * Returns the latest local commit as a ticket. Tickets stay below 2^53 for any
+   * realistic generation, so they cross to JavaScript as numbers.
+   */
+  commitTicket(): number
+  abortGeneration(reason: string): void
+  whenDurable(ticket: number): Promise<void>
   beginTransaction(timeoutMs?: number | undefined | null, name?: string | undefined | null): Promise<JsSqliteTransaction>
 }
 export declare class JsSqliteTransaction {
@@ -467,6 +481,10 @@ export declare class JsSqliteTransaction {
   exec(sql: string): Promise<QueryResult>
   commit(): Promise<void>
   rollback(): Promise<void>
+  executeSync(sql: string, params?: Array<JsBindParam> | undefined | null): NativeExecuteResult
+  execSync(sql: string): QueryResult
+  commitSync(): void
+  rollbackSync(): void
 }
 export declare class JsActorStateTransaction {
   execute(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<NativeExecuteResult>

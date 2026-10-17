@@ -24,6 +24,8 @@ pub const VFS_PAGE_CACHE_CAPACITY_PAGES_ENV: &str =
 pub const VFS_PROTECTED_CACHE_PAGES_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES";
 pub const VFS_STAGING_CACHE_TTL_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_STAGING_CACHE_TTL_MS";
 pub const PAGER_CACHE_SIZE_KIB_ENV: &str = "RIVETKIT_SQLITE_OPT_PAGER_CACHE_SIZE_KIB";
+pub const READ_CACHE_MAX_BYTES_ENV: &str = "RIVETKIT_SQLITE_OPT_READ_CACHE_MAX_BYTES";
+pub const READ_MISS_DEADLINE_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_READ_MISS_DEADLINE_MS";
 pub const FLUSH_RETRY_DEADLINE_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_FLUSH_RETRY_DEADLINE_MS";
 pub const FLUSH_RETRY_BACKOFF_MIN_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_FLUSH_RETRY_BACKOFF_MIN_MS";
 pub const FLUSH_RETRY_BACKOFF_MAX_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_FLUSH_RETRY_BACKOFF_MAX_MS";
@@ -43,6 +45,8 @@ pub const MAX_PAGER_CACHE_SIZE_KIB: u64 = 256 * 1024;
 pub const DEFAULT_FLUSH_RETRY_DEADLINE_MS: u64 = 30_000;
 pub const DEFAULT_FLUSH_RETRY_BACKOFF_MIN_MS: u64 = 50;
 pub const DEFAULT_FLUSH_RETRY_BACKOFF_MAX_MS: u64 = 2_000;
+pub const DEFAULT_READ_CACHE_MAX_BYTES: u64 = 64 * 1024 * 1024;
+pub const DEFAULT_READ_MISS_DEADLINE_MS: u64 = 2_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SqliteReadAheadMode {
@@ -119,6 +123,14 @@ pub struct SqliteOptimizationFlags {
 	pub flush_retry_deadline_ms: u64,
 	pub flush_retry_backoff_min_ms: u64,
 	pub flush_retry_backoff_max_ms: u64,
+	/// Byte cap of the per-actor clean page cache. Read pages stay cached up to this cap, and
+	/// databases at or under it load every page at open. Only deferred commit mode uses it. Zero
+	/// keeps the default read path.
+	pub read_cache_max_bytes: u64,
+	/// A page read that waits on depot longer than this breaks the generation, so a synchronous
+	/// caller never holds its thread on the network for long. Only deferred commit mode uses it.
+	/// Zero disables it.
+	pub read_miss_deadline_ms: u64,
 }
 
 impl Default for SqliteOptimizationFlags {
@@ -150,6 +162,8 @@ impl Default for SqliteOptimizationFlags {
 			flush_retry_deadline_ms: DEFAULT_FLUSH_RETRY_DEADLINE_MS,
 			flush_retry_backoff_min_ms: DEFAULT_FLUSH_RETRY_BACKOFF_MIN_MS,
 			flush_retry_backoff_max_ms: DEFAULT_FLUSH_RETRY_BACKOFF_MAX_MS,
+			read_cache_max_bytes: DEFAULT_READ_CACHE_MAX_BYTES,
+			read_miss_deadline_ms: DEFAULT_READ_MISS_DEADLINE_MS,
 		}
 	}
 }
@@ -239,6 +253,14 @@ impl SqliteOptimizationFlags {
 			flush_retry_backoff_max_ms: u64_by_default(
 				read_env(FLUSH_RETRY_BACKOFF_MAX_MS_ENV).as_deref(),
 				DEFAULT_FLUSH_RETRY_BACKOFF_MAX_MS,
+			),
+			read_cache_max_bytes: u64_by_default(
+				read_env(READ_CACHE_MAX_BYTES_ENV).as_deref(),
+				DEFAULT_READ_CACHE_MAX_BYTES,
+			),
+			read_miss_deadline_ms: u64_by_default(
+				read_env(READ_MISS_DEADLINE_MS_ENV).as_deref(),
+				DEFAULT_READ_MISS_DEADLINE_MS,
 			),
 		}
 	}

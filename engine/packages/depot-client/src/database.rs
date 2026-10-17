@@ -340,6 +340,10 @@ impl NativeDatabaseHandle {
 		}
 	}
 
+	pub fn commit_mode(&self) -> CommitMode {
+		self.vfs.commit_mode()
+	}
+
 	pub fn commit_seq(&self) -> u64 {
 		self.vfs.commit_seq()
 	}
@@ -365,6 +369,12 @@ impl NativeDatabaseHandle {
 	/// Whether the last failed local commit failed because the backlog was full. Clears the flag.
 	pub fn take_backlog_full(&self) -> bool {
 		self.vfs.take_backlog_full()
+	}
+
+	/// Breaks the database: every later statement fails and flush waits reject. Pending local
+	/// commits never become durable.
+	pub fn break_database(&self, reason: String) {
+		self.vfs.break_database(reason);
 	}
 
 	pub async fn wait_for_flush(&self, seq: u64) -> std::result::Result<(), FlushError> {

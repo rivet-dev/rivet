@@ -343,4 +343,39 @@ pub(crate) enum SqliteRuntimeError {
 		"SQLite deferred commits require local native SQLite. Turn off remote SQLite for this actor, or do not opt it into deferred commits."
 	)]
 	DeferredCommitsUnsupported,
+
+	#[error(
+		"statement_failed",
+		"SQLite statement failed.",
+		"SQLite statement failed: {message} (SQLite result code {code})"
+	)]
+	StatementFailed { message: String, code: i32 },
+
+	#[error(
+		"sync_unsupported",
+		"Synchronous SQLite is unavailable.",
+		"Synchronous SQLite is unavailable because {reason}."
+	)]
+	SyncUnsupported { reason: String },
+
+	#[error(
+		"storage_behind",
+		"SQLite storage is behind.",
+		"SQLite storage is behind on saving earlier writes. Retry the write."
+	)]
+	StorageBehind,
+
+	#[error(
+		"durability_failed",
+		"SQLite commits could not be made durable.",
+		"SQLite commits could not be made durable, so the actor is restarting: {message}"
+	)]
+	DurabilityFailed { message: String },
+
+	#[error(
+		"invalid_commit_ticket",
+		"Invalid SQLite commit ticket.",
+		"SQLite commit ticket {ticket} is ahead of the latest commit {current}."
+	)]
+	InvalidCommitTicket { ticket: u64, current: u64 },
 }

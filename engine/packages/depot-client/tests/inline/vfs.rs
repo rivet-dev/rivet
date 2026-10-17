@@ -62,6 +62,8 @@ fn vfs_config_wires_optimization_flags() {
 		flush_retry_deadline_ms: 30_000,
 		flush_retry_backoff_min_ms: 50,
 		flush_retry_backoff_max_ms: 2_000,
+		read_cache_max_bytes: 0,
+		read_miss_deadline_ms: 0,
 	};
 
 	let config = VfsConfig::from_optimization_flags(flags);
@@ -9019,5 +9021,184 @@ fn deferred_random() {
 		engine,
 		&model.local,
 		&format!("seed {seed}: final durability oracle"),
+	);
+}
+
+const READS_PASS: u8 = 0;
+const READS_REJECTED: u8 = 1;
+const READS_HELD: u8 = 2;
+
+/// Passes page reads to depot, rejects them, or holds them forever. Commits always pass.
+struct ReadGateTransport {
+	inner: DirectDepotTransport,
+	reads: std::sync::atomic::AtomicU8,
+}
+
+impl ReadGateTransport {
+	fn new(engine: Arc<DirectStorage>) -> Self {
+		Self {
+			inner: DirectDepotTransport::new(engine),
+			reads: std::sync::atomic::AtomicU8::new(READS_PASS),
+		}
+	}
+
+	fn set_reads(&self, mode: u8) {
+		self.reads.store(mode, Ordering::SeqCst);
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for ReadGateTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		match self.reads.load(Ordering::SeqCst) {
+			READS_REJECTED => anyhow::bail!("depot reads are rejected by the test"),
+			READS_HELD => std::future::pending().await,
+			_ => self.inner.get_pages(request).await,
+		}
+	}
+
+	async fn commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		self.inner.commit(request).await
+	}
+
+	async fn commit_stage_begin(
+		&self,
+		request: protocol::SqliteCommitStageBeginRequest,
+	) -> anyhow::Result<protocol::SqliteCommitStageBeginResponse> {
+		self.inner.commit_stage_begin(request).await
+	}
+
+	async fn commit_stage_segment(
+		&self,
+		request: protocol::SqliteCommitStageSegmentRequest,
+	) -> anyhow::Result<protocol::SqliteCommitStageSegmentResponse> {
+		self.inner.commit_stage_segment(request).await
+	}
+
+	async fn commit_finalize(
+		&self,
+		request: protocol::SqliteCommitFinalizeRequest,
+	) -> anyhow::Result<protocol::SqliteCommitFinalizeResponse> {
+		self.inner.commit_finalize(request).await
+	}
+}
+
+/// Writes about 2 MiB of rows through a deferred database and closes it durably. The startup
+/// preload covers only the first 128 pages, so a cold reopen must read the rest from depot.
+fn seed_two_mib_database(
+	runtime: &tokio::runtime::Runtime,
+	harness: &DirectEngineHarness,
+	engine: Arc<DirectStorage>,
+) {
+	let db = harness.open_db_on_engine(runtime, engine, &harness.actor_id, deferred_test_config());
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE cold_rows (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);
+		 INSERT INTO cold_rows (payload)
+		 SELECT randomblob(4000) FROM (WITH RECURSIVE s(x) AS
+		 (SELECT 1 UNION ALL SELECT x + 1 FROM s WHERE x < 512) SELECT x FROM s);",
+	)
+	.expect("seed rows should commit locally");
+	wait_for_deferred_flush(runtime, &db);
+	close_deferred_database(runtime, db);
+}
+
+fn read_cache_config(read_cache_max_bytes: u64) -> VfsConfig {
+	VfsConfig {
+		read_cache_max_bytes,
+		..deferred_test_config()
+	}
+}
+
+#[test]
+fn database_under_read_cache_cap_serves_reads_and_writes_without_depot_reads() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	seed_two_mib_database(&runtime, &harness, engine.clone());
+
+	let transport = Arc::new(ReadGateTransport::new(engine.clone()));
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport.clone(),
+		&harness.actor_id,
+		read_cache_config(64 * 1024 * 1024),
+	);
+	transport.set_reads(READS_REJECTED);
+
+	assert_eq!(
+		sqlite_query_i64(db.as_ptr(), "SELECT sum(length(payload)) FROM cold_rows;")
+			.expect("a full scan should not need depot"),
+		512 * 4000
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO cold_rows (payload) VALUES (randomblob(4000));
+		 UPDATE cold_rows SET payload = randomblob(10) WHERE id % 7 = 0;",
+	)
+	.expect("writes should not need depot reads");
+	wait_for_deferred_flush(&runtime, &db);
+	assert_eq!(
+		sqlite_query_text(db.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity_check should not need depot"),
+		"ok"
+	);
+	close_deferred_database(&runtime, db);
+
+	// The same database without the read cache must read from depot after open, so the
+	// assertions above depend on the cache.
+	let transport = Arc::new(ReadGateTransport::new(engine));
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport.clone(),
+		&harness.actor_id,
+		read_cache_config(0),
+	);
+	transport.set_reads(READS_REJECTED);
+	assert!(sqlite_query_i64(db.as_ptr(), "SELECT sum(length(payload)) FROM cold_rows;").is_err());
+}
+
+#[test]
+fn read_held_past_deadline_fails_the_statement_and_pending_durability() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	seed_two_mib_database(&runtime, &harness, engine.clone());
+
+	let transport = Arc::new(ReadGateTransport::new(engine));
+	let hooks = transport.inner.direct_hooks();
+	let config = VfsConfig {
+		read_miss_deadline: Some(Duration::from_millis(200)),
+		..read_cache_config(64 * 1024)
+	};
+	let db = harness.open_db_with_transport(&runtime, transport.clone(), &harness.actor_id, config);
+	hooks.hang_next_commit();
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO cold_rows (payload) VALUES (randomblob(10));",
+	)
+	.expect("a local commit should not wait on depot");
+	let pending_seq = db.commit_seq();
+	transport.set_reads(READS_HELD);
+
+	let started_at = Instant::now();
+	let scan = sqlite_query_i64(db.as_ptr(), "SELECT sum(length(payload)) FROM cold_rows;");
+	assert!(scan.is_err(), "a held read should fail the statement");
+	assert!(
+		started_at.elapsed() < Duration::from_secs(2),
+		"the statement should fail near the deadline, took {:?}",
+		started_at.elapsed()
+	);
+	assert!(
+		runtime
+			.block_on(db._vfs.wait_for_flush(pending_seq))
+			.is_err(),
+		"durability of the pending commit should reject"
 	);
 }

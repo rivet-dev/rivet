@@ -229,12 +229,24 @@ pub struct VfsConfig {
 	pub retain_read_cache: bool,
 	pub commit_mode: CommitMode,
 	pub deferred_commit: DeferredCommitConfig,
+	/// See `SqliteOptimizationFlags::read_cache_max_bytes`. Only deferred commit mode uses it.
+	pub read_cache_max_bytes: u64,
+	/// See `SqliteOptimizationFlags::read_miss_deadline_ms`. Only deferred commit mode uses it.
+	pub read_miss_deadline: Option<Duration>,
 	#[cfg(test)]
 	pub max_commit_dirty_pages: usize,
 	#[cfg(test)]
 	pub assert_batch_atomic: bool,
 	#[cfg(test)]
 	pub advertise_batch_atomic: bool,
+}
+
+impl VfsConfig {
+	/// Deferred mode keeps every clean page it reads in a byte-capped cache instead of dropping
+	/// target pages after the first read.
+	fn keeps_clean_pages(&self) -> bool {
+		self.commit_mode == CommitMode::Deferred && self.read_cache_max_bytes > 0
+	}
 }
 
 impl Default for VfsConfig {
@@ -292,6 +304,11 @@ impl VfsConfig {
 				retry_deadline: Duration::from_millis(flags.flush_retry_deadline_ms),
 				retry_backoff_min: Duration::from_millis(flags.flush_retry_backoff_min_ms),
 				retry_backoff_max: Duration::from_millis(flags.flush_retry_backoff_max_ms),
+			},
+			read_cache_max_bytes: flags.read_cache_max_bytes,
+			read_miss_deadline: match flags.read_miss_deadline_ms {
+				0 => None,
+				ms => Some(Duration::from_millis(ms)),
 			},
 			#[cfg(test)]
 			max_commit_dirty_pages: depot_client_types::MAX_COMMIT_DIRTY_PAGES,
@@ -1475,6 +1492,10 @@ impl VfsState {
 	}
 
 	fn cache_committed_page(&mut self, config: &VfsConfig, pgno: u32, bytes: Vec<u8>) {
+		if config.keeps_clean_pages() {
+			self.page_cache.insert(pgno, bytes);
+			return;
+		}
 		if config.staging_cache_ttl_ms == 0 || !config.page_cache_mode.caches_any_pages() {
 			return;
 		}
@@ -1526,6 +1547,17 @@ impl VfsState {
 }
 
 fn build_page_cache(config: &VfsConfig) -> Cache<u32, Vec<u8>> {
+	if config.keeps_clean_pages() {
+		// Clean pages stay until the byte cap evicts them. There is no TTL, because a deferred
+		// actor is the only writer and its local commits update the cache. LRU admits every new
+		// page. The default TinyLFU policy rejects new pages once the cache is full, so a scan
+		// larger than the cap lost its read-ahead and paid one round trip per page.
+		return Cache::builder()
+			.eviction_policy(moka::policy::EvictionPolicy::lru())
+			.weigher(|_, bytes: &Vec<u8>| bytes.len().try_into().unwrap_or(u32::MAX))
+			.max_capacity(config.read_cache_max_bytes)
+			.build();
+	}
 	let mut page_cache_builder = Cache::builder().max_capacity(config.cache_capacity_pages);
 	if config.staging_cache_ttl_ms > 0 {
 		page_cache_builder =
@@ -1566,6 +1598,9 @@ fn cache_page(
 }
 
 fn should_cache_page(config: &VfsConfig, kind: PageCacheInsertKind, pgno: u32) -> bool {
+	if config.keeps_clean_pages() {
+		return true;
+	}
 	match kind {
 		PageCacheInsertKind::Target => false,
 		PageCacheInsertKind::Prefetch => {
@@ -2273,14 +2308,37 @@ impl VfsContext {
 		// Transport rejection, including envoy shutdown while a VFS callback is
 		// active, becomes GetPagesError here. The SQLite callback maps that to
 		// SQLITE_IOERR_* because VFS has no richer async transport error channel.
-		let response =
-			self.runtime
-				.block_on(self.transport.get_pages(protocol::SqliteGetPagesRequest {
-					actor_id: self.actor_id.clone(),
-					pgnos: to_fetch.clone(),
-					expected_generation: None,
-					expected_head_txid,
-				}));
+		let fetch = self.transport.get_pages(protocol::SqliteGetPagesRequest {
+			actor_id: self.actor_id.clone(),
+			pgnos: to_fetch.clone(),
+			expected_generation: None,
+			expected_head_txid,
+		});
+		let read_miss_deadline = match self.config.commit_mode {
+			CommitMode::Deferred => self.config.read_miss_deadline,
+			CommitMode::Awaited => None,
+		};
+		let response = match read_miss_deadline {
+			None => self.runtime.block_on(fetch),
+			Some(deadline) => {
+				match self
+					.runtime
+					.block_on(async { tokio::time::timeout(deadline, fetch).await })
+				{
+					Ok(response) => response,
+					Err(_) => {
+						// A read that waits this long holds the caller, and a sync caller holds
+						// every actor that shares its thread. Break the generation instead.
+						let message = format!(
+							"sqlite page read waited longer than its {}ms deadline",
+							deadline.as_millis()
+						);
+						self.handle_read_fatal(message.clone());
+						return Err(GetPagesError::Other(message));
+					}
+				}
+			}
+		};
 		let get_pages_duration_ns = get_pages_start.elapsed().as_nanos() as u64;
 		if let Some(metrics) = &self.metrics {
 			metrics.observe_get_pages_duration(get_pages_duration_ns);
@@ -3193,8 +3251,109 @@ pub(crate) async fn fetch_initial_pages_for_registration(
 		.startup_preload_first_page_count
 		.min(page_count_from_bytes as u32)
 		.max(1);
-	fetch_initial_pages(transport, actor_id.to_string(), generation, page_count).await
+	let initial = fetch_initial_pages(
+		transport.clone(),
+		actor_id.to_string(),
+		generation,
+		page_count,
+	)
+	.await?;
+	if !config.keeps_clean_pages() {
+		return Ok(initial);
+	}
+	load_small_database(transport, actor_id, generation, config, initial).await
 }
+
+/// Fetches every page the preload did not cover when the database fits in the read cache, so
+/// reads after open never wait on depot. Larger databases keep the lazy read path.
+async fn load_small_database(
+	transport: SqliteTransportHandle,
+	actor_id: &str,
+	generation: u64,
+	config: &VfsConfig,
+	mut initial: InitialPages,
+) -> std::result::Result<InitialPages, String> {
+	let Some(head_txid) = initial.head_txid else {
+		return Ok(initial);
+	};
+	let Some(main_page) = initial.pages.iter().find(|(pgno, _)| *pgno == 1) else {
+		return Ok(initial);
+	};
+	let (Some(page_size), Some(db_size_pages)) = (
+		sqlite_header_page_size(&main_page.1),
+		sqlite_header_db_size_pages(&main_page.1),
+	) else {
+		return Ok(initial);
+	};
+	let db_bytes = u64::from(db_size_pages).saturating_mul(page_size as u64);
+	if db_bytes > config.read_cache_max_bytes {
+		tracing::info!(
+			actor_id,
+			generation,
+			db_bytes,
+			read_cache_max_bytes = config.read_cache_max_bytes,
+			"sqlite database is larger than the read cache, reads stay lazy"
+		);
+		return Ok(initial);
+	}
+
+	let started_at = Instant::now();
+	let have: HashSet<u32> = initial.pages.iter().map(|(pgno, _)| *pgno).collect();
+	let missing: Vec<u32> = (1..=db_size_pages)
+		.filter(|pgno| !have.contains(pgno))
+		.collect();
+	let mut chunks = missing.chunks(LOAD_PAGES_PER_REQUEST);
+	let mut requests = tokio::task::JoinSet::new();
+	loop {
+		while requests.len() < LOAD_REQUESTS_IN_FLIGHT {
+			let Some(chunk) = chunks.next() else {
+				break;
+			};
+			let transport = transport.clone();
+			let request = protocol::SqliteGetPagesRequest {
+				actor_id: actor_id.to_string(),
+				pgnos: chunk.to_vec(),
+				expected_generation: None,
+				expected_head_txid: Some(head_txid),
+			};
+			requests.spawn(async move { transport.get_pages(request).await });
+		}
+		let Some(joined) = requests.join_next().await else {
+			break;
+		};
+		let response = joined
+			.map_err(|err| format!("sqlite database load task failed: {err}"))?
+			.map_err(|err| format!("sqlite database load failed: {err}"))?;
+		match response {
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) => {
+				initial.pages.extend(
+					ok.pages
+						.into_iter()
+						.filter_map(|page| page.bytes.map(|bytes| (page.pgno, bytes))),
+				);
+			}
+			protocol::SqliteGetPagesResponse::SqliteErrorResponse(error) => {
+				return Err(format!("sqlite database load failed: {}", error.message));
+			}
+		}
+	}
+	tracing::info!(
+		actor_id,
+		generation,
+		db_size_pages,
+		db_bytes,
+		duration_ms = started_at.elapsed().as_millis() as u64,
+		"sqlite database loaded into the read cache"
+	);
+	Ok(initial)
+}
+
+/// Every actor in the process shares one envoy WebSocket, and each response crosses it as one
+/// frame. Small load requests keep another actor's request from queueing behind megabytes of
+/// pages, and several in flight keep the load fast. 8,192-page requests raised another actor's
+/// ping p99 to 164-190 ms during a 32 MiB load. 256 pages with 8 in flight kept it at 22-32 ms.
+const LOAD_PAGES_PER_REQUEST: usize = 256;
+const LOAD_REQUESTS_IN_FLIGHT: usize = 8;
 
 async fn fetch_initial_pages(
 	transport: SqliteTransportHandle,
@@ -4471,6 +4630,10 @@ impl SqliteVfs {
 	/// Whether the last failed local commit failed because the backlog was full. Clears the flag.
 	pub fn take_backlog_full(&self) -> bool {
 		self.ctx.backlog_full.swap(false, Ordering::AcqRel)
+	}
+
+	pub fn break_database(&self, reason: String) {
+		self.ctx.break_database(FlushError::Aborted(reason));
 	}
 
 	pub async fn wait_for_flush(&self, seq: u64) -> std::result::Result<(), FlushError> {

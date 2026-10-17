@@ -5,7 +5,7 @@ use std::{
 	future::Future,
 	sync::{
 		Arc,
-		atomic::{AtomicU64, Ordering},
+		atomic::{AtomicU64, AtomicUsize, Ordering},
 	},
 	time::Duration,
 };
@@ -38,7 +38,7 @@ static UNNAMED_TRANSACTION_WARNINGS: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone)]
 pub struct SqliteTransaction {
-	db: SqliteDb,
+	pub(super) db: SqliteDb,
 	key: String,
 }
 
@@ -80,6 +80,8 @@ pub(super) struct TransactionCoordinator {
 	pub(super) state: AsyncMutex<TransactionCoordinatorState>,
 	epoch: AtomicU64,
 	waiters: AtomicU64,
+	/// Transactions owned by a foreign runtime's host thread, open or waiting for the writer.
+	host_thread_leases: Arc<AtomicUsize>,
 }
 
 pub(super) struct TransactionCoordinatorState {
@@ -100,8 +102,25 @@ pub(super) struct ActiveTransaction {
 	gate_guard: Option<OwnedRwLockWriteGuard<()>>,
 	operation: Arc<AsyncMutex<()>>,
 	timeout_task: Option<CancellationToken>,
+	_host_thread_lease: Option<HostThreadLease>,
 	#[cfg(feature = "sqlite-local")]
 	profile: Option<TransactionProfile>,
+}
+
+/// Counts one host-thread transaction from the start of its begin until it ends.
+pub(super) struct HostThreadLease(Arc<AtomicUsize>);
+
+impl HostThreadLease {
+	fn new(count: &Arc<AtomicUsize>) -> Self {
+		count.fetch_add(1, Ordering::AcqRel);
+		Self(Arc::clone(count))
+	}
+}
+
+impl Drop for HostThreadLease {
+	fn drop(&mut self) {
+		self.0.fetch_sub(1, Ordering::AcqRel);
+	}
 }
 
 #[derive(Clone, Copy)]
@@ -173,7 +192,14 @@ impl Default for TransactionCoordinator {
 			}),
 			epoch: AtomicU64::new(0),
 			waiters: AtomicU64::new(0),
+			host_thread_leases: Arc::new(AtomicUsize::new(0)),
 		}
+	}
+}
+
+impl TransactionCoordinator {
+	pub(super) fn host_thread_lease_count(&self) -> usize {
+		self.host_thread_leases.load(Ordering::Acquire)
 	}
 }
 
@@ -320,6 +346,9 @@ impl SqliteDb {
 	) -> Result<SqliteTransaction> {
 		#[cfg(feature = "sqlite-local")]
 		let transaction_wait_started_at = started_at.map(|_| crate::time::Instant::now());
+		let host_thread_lease = self
+			.host_thread
+			.then(|| HostThreadLease::new(&self.transaction_coordinator.host_thread_leases));
 		let epoch = self.transaction_coordinator.epoch.load(Ordering::Acquire);
 		let permit = self.try_transaction_admission()?;
 		let wait = CoordinatorWaitGuard::new(self);
@@ -403,6 +432,7 @@ impl SqliteDb {
 				gate_guard: Some(gate_guard),
 				operation,
 				timeout_task: None,
+				_host_thread_lease: host_thread_lease,
 				#[cfg(feature = "sqlite-local")]
 				profile: started_at.map(|started_at| {
 					let mut profile = TransactionProfile::new(

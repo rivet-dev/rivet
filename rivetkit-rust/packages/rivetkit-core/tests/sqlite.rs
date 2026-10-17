@@ -1601,6 +1601,7 @@ struct MemorySqliteState {
 	pages: BTreeMap<u32, Vec<u8>>,
 	db_size_pages: u32,
 	head_txid: u64,
+	staged: BTreeMap<u32, Vec<u8>>,
 }
 
 #[cfg(feature = "sqlite-local")]
@@ -1643,14 +1644,7 @@ impl depot_client::vfs::SqliteTransport for MemorySqliteTransport {
 			.is_some_and(|expected| expected != state.head_txid)
 		{
 			return Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
-				protocol::SqliteErrorResponse {
-					group: HEAD_FENCE_MISMATCH_GROUP.to_owned(),
-					code: HEAD_FENCE_MISMATCH_CODE.to_owned(),
-					message: format!(
-						"expected head txid {:?}, current head txid {}",
-						request.expected_head_txid, state.head_txid
-					),
-				},
+				head_fence_mismatch(request.expected_head_txid, state.head_txid),
 			));
 		}
 		state.db_size_pages = request.db_size_pages;
@@ -1659,38 +1653,166 @@ impl depot_client::vfs::SqliteTransport for MemorySqliteTransport {
 			state.pages.insert(page.pgno, page.bytes);
 		}
 		state.head_txid += 1;
-		let head_txid = if self.wrong_next_commit_head.swap(false, Ordering::SeqCst) {
-			u64::MAX
-		} else {
-			state.head_txid
-		};
 		Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
 			protocol::SqliteCommitOk {
-				head_txid: Some(head_txid),
+				head_txid: Some(self.acked_head(state.head_txid)),
 			},
 		))
 	}
 
 	async fn commit_stage_begin(
 		&self,
-		_request: protocol::SqliteCommitStageBeginRequest,
+		request: protocol::SqliteCommitStageBeginRequest,
 	) -> anyhow::Result<protocol::SqliteCommitStageBeginResponse> {
-		anyhow::bail!("memory sqlite test transport does not stage commits")
+		self.commits.fetch_add(1, Ordering::SeqCst);
+		let mut held = self.held.subscribe();
+		held.wait_for(|held| !*held)
+			.await
+			.expect("memory sqlite hold channel stays open");
+		let mut state = self.state.lock().expect("memory sqlite state poisoned");
+		if request
+			.expected_head_txid
+			.is_some_and(|expected| expected != state.head_txid)
+		{
+			return Ok(
+				protocol::SqliteCommitStageBeginResponse::SqliteErrorResponse(
+					head_fence_mismatch(request.expected_head_txid, state.head_txid),
+				),
+			);
+		}
+		state.staged.clear();
+		Ok(
+			protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(
+				protocol::SqliteCommitStageBeginOk {
+					txid: state.head_txid + 1,
+				},
+			),
+		)
 	}
 
 	async fn commit_stage_segment(
 		&self,
-		_request: protocol::SqliteCommitStageSegmentRequest,
+		request: protocol::SqliteCommitStageSegmentRequest,
 	) -> anyhow::Result<protocol::SqliteCommitStageSegmentResponse> {
-		anyhow::bail!("memory sqlite test transport does not stage commits")
+		let mut state = self.state.lock().expect("memory sqlite state poisoned");
+		let staged_bytes = request
+			.dirty_pages
+			.iter()
+			.map(|page| page.bytes.len() as u64)
+			.sum();
+		for page in request.dirty_pages {
+			state.staged.insert(page.pgno, page.bytes);
+		}
+		Ok(
+			protocol::SqliteCommitStageSegmentResponse::SqliteCommitStageSegmentOk(
+				protocol::SqliteCommitStageSegmentOk { staged_bytes },
+			),
+		)
 	}
 
 	async fn commit_finalize(
 		&self,
-		_request: protocol::SqliteCommitFinalizeRequest,
+		request: protocol::SqliteCommitFinalizeRequest,
 	) -> anyhow::Result<protocol::SqliteCommitFinalizeResponse> {
-		anyhow::bail!("memory sqlite test transport does not stage commits")
+		let mut state = self.state.lock().expect("memory sqlite state poisoned");
+		if request.txid != state.head_txid + 1 {
+			return Ok(protocol::SqliteCommitFinalizeResponse::SqliteErrorResponse(
+				head_fence_mismatch(Some(request.txid - 1), state.head_txid),
+			));
+		}
+		let staged = std::mem::take(&mut state.staged);
+		state.db_size_pages = request.new_db_size_pages;
+		state.pages.retain(|pgno, _| *pgno <= request.new_db_size_pages);
+		state.pages.extend(staged);
+		state.head_txid = request.txid;
+		Ok(
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					head_txid: Some(self.acked_head(state.head_txid)),
+				},
+			),
+		)
 	}
+}
+
+#[cfg(feature = "sqlite-local")]
+impl MemorySqliteTransport {
+	/// Returns the head to acknowledge, or a head the actor never wrote when the test asked for one.
+	fn acked_head(&self, head_txid: u64) -> u64 {
+		if self.wrong_next_commit_head.swap(false, Ordering::SeqCst) {
+			u64::MAX
+		} else {
+			head_txid
+		}
+	}
+}
+
+#[cfg(feature = "sqlite-local")]
+fn head_fence_mismatch(expected: Option<u64>, head_txid: u64) -> protocol::SqliteErrorResponse {
+	protocol::SqliteErrorResponse {
+		group: HEAD_FENCE_MISMATCH_GROUP.to_owned(),
+		code: HEAD_FENCE_MISMATCH_CODE.to_owned(),
+		message: format!("expected head txid {expected:?}, current head txid {head_txid}"),
+	}
+}
+
+#[cfg(feature = "sqlite-local")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn abort_generation_reports_one_crash_and_revokes_writes() {
+	let transport = Arc::new(MemorySqliteTransport::default());
+	let native = depot_client::database::open_database_from_transport(
+		transport,
+		"abort-generation".to_owned(),
+		1,
+		tokio::runtime::Handle::current(),
+		None,
+		CommitMode::Deferred,
+	)
+	.await
+	.expect("memory-backed native sqlite database should open");
+	let (handle, mut envoy_rx) = test_envoy_handle();
+	let db = SqliteDb {
+		handle: Some(handle),
+		actor_id: Some("abort-generation".to_owned()),
+		generation: Some(1),
+		backend: SqliteBackend::LocalNative,
+		enabled: true,
+		db: Arc::new(parking_lot::Mutex::new(Some(native))),
+		..SqliteDb::default()
+	};
+	db.execute("CREATE TABLE abort_rows (id INTEGER PRIMARY KEY)", None)
+		.await
+		.expect("writes succeed before the abort");
+
+	db.abort_generation("output gate broke");
+	db.abort_generation("a second abort");
+
+	let message = tokio::time::timeout(Duration::from_secs(5), envoy_rx.recv())
+		.await
+		.expect("an abort must report a crash to the engine")
+		.expect("envoy channel should stay open");
+	let ToEnvoyMessage::ActorIntent {
+		intent,
+		error: Some(error),
+		..
+	} = message
+	else {
+		panic!("expected an actor intent carrying the abort reason");
+	};
+	assert_eq!(intent, protocol::ActorIntent::ActorIntentSleep);
+	assert_eq!(error, "actor aborted: output gate broke");
+	assert!(
+		tokio::time::timeout(Duration::from_millis(500), envoy_rx.recv())
+			.await
+			.is_err(),
+		"a repeated abort must not report a second crash"
+	);
+	assert!(
+		db.execute("INSERT INTO abort_rows VALUES (1)", None)
+			.await
+			.is_err(),
+		"an aborted generation rejects later writes"
+	);
 }
 
 #[cfg(feature = "sqlite-local")]
@@ -1849,6 +1971,30 @@ async fn only_actors_that_opt_into_deferred_commits_return_before_depot_commits(
 	.await
 	.expect("an opted-in actor's write must not wait on depot")
 	.expect("the write commits locally");
+	tokio::time::timeout(
+		Duration::from_secs(2),
+		on_host_thread({
+			let deferred = deferred.clone();
+			move || deferred.execute_sync("INSERT INTO rows VALUES (2)", None)
+		}),
+	)
+	.await
+	.expect("an opted-in actor's sync write must not wait on depot")
+	.expect("an opted-in actor allows sync calls");
+
+	let commits = awaited_depot.commits.load(Ordering::SeqCst);
+	let error = on_host_thread({
+		let awaited = awaited.clone();
+		move || awaited.execute_sync("INSERT INTO rows VALUES (2)", None)
+	})
+	.await
+	.expect_err("a sync write on an actor without the opt-in would wait on depot");
+	assert_eq!(error_code(&error), "sqlite.sync_unsupported", "{error:#}");
+	assert_eq!(
+		awaited_depot.commits.load(Ordering::SeqCst),
+		commits,
+		"a rejected sync call sends nothing to depot"
+	);
 
 	let awaited_write = tokio::spawn({
 		let awaited = awaited.clone();
@@ -1866,6 +2012,16 @@ async fn only_actors_that_opt_into_deferred_commits_return_before_depot_commits(
 		.expect("write task joins")
 		.expect("the write succeeds once depot commits");
 	deferred_depot.release_commits();
+	let rows = awaited
+		.execute("SELECT id FROM rows ORDER BY id", None)
+		.await
+		.expect("rows should be readable")
+		.rows;
+	assert_eq!(
+		rows,
+		vec![vec![ColumnValue::Integer(1)]],
+		"the rejected sync write left no row"
+	);
 }
 
 #[test]
@@ -1879,4 +2035,309 @@ fn remote_sqlite_actors_cannot_opt_into_deferred_commits() {
 		(error.group(), error.code()),
 		("sqlite", "deferred_commits_unsupported")
 	);
+}
+
+#[cfg(feature = "sqlite-local")]
+async fn open_memory_sqlite(transport: Arc<MemorySqliteTransport>, mode: CommitMode) -> SqliteDb {
+	static NEXT_ACTOR: AtomicU64 = AtomicU64::new(0);
+	let actor_id = format!("sync-sqlite-{}", NEXT_ACTOR.fetch_add(1, Ordering::Relaxed));
+	let native = depot_client::database::open_database_from_transport(
+		transport,
+		actor_id.clone(),
+		1,
+		tokio::runtime::Handle::current(),
+		None,
+		mode,
+	)
+	.await
+	.expect("memory-backed native sqlite database should open");
+	SqliteDb {
+		actor_id: Some(actor_id),
+		generation: Some(1),
+		backend: SqliteBackend::LocalNative,
+		enabled: true,
+		db: Arc::new(parking_lot::Mutex::new(Some(native))),
+		..SqliteDb::default()
+	}
+	.for_host_thread()
+}
+
+/// Runs `f` on a plain OS thread that entered the runtime, the way a JavaScript host thread
+/// calls into core.
+#[cfg(feature = "sqlite-local")]
+async fn on_host_thread<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+	let runtime = tokio::runtime::Handle::current();
+	let (result_tx, result_rx) = oneshot::channel();
+	std::thread::spawn(move || {
+		let _entered = runtime.enter();
+		let _ = result_tx.send(f());
+	});
+	result_rx.await.expect("host thread should finish")
+}
+
+#[cfg(feature = "sqlite-local")]
+fn error_code(error: &anyhow::Error) -> String {
+	let error = rivet_error::RivetError::extract(error);
+	format!("{}.{}", error.group(), error.code())
+}
+
+/// Writes 2,048 rows of 4,000 bytes, about 2,048 SQLite pages, as one statement.
+#[cfg(feature = "sqlite-local")]
+const BULK_INSERT: &str = "INSERT INTO bulk (v) SELECT randomblob(4000) FROM (WITH RECURSIVE s(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM s WHERE x < 2048) SELECT x FROM s)";
+
+#[cfg(feature = "sqlite-local")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn async_writes_wait_for_storage_instead_of_failing_when_the_backlog_fills() {
+	let transport = Arc::new(MemorySqliteTransport::default());
+	let db = open_memory_sqlite(transport.clone(), CommitMode::Deferred).await;
+	db.execute("CREATE TABLE bulk (k INTEGER PRIMARY KEY, v BLOB)", None)
+		.await
+		.expect("table should be created");
+	transport.hold_commits();
+
+	// Past half the backlog limit, the next asynchronous write must wait for storage.
+	let mut waiting = None;
+	for _ in 0..20 {
+		let write = tokio::spawn({
+			let db = db.clone();
+			async move { db.execute(BULK_INSERT, None).await }
+		});
+		match tokio::time::timeout(Duration::from_millis(500), write).await {
+			Ok(joined) => {
+				joined
+					.expect("write task joins")
+					.expect("an asynchronous write must not fail while storage is behind");
+			}
+			Err(_) => {
+				waiting = Some(());
+				break;
+			}
+		}
+	}
+	assert!(
+		waiting.is_some(),
+		"an asynchronous write must wait once the backlog is large"
+	);
+
+	transport.release_commits();
+	tokio::time::timeout(Duration::from_secs(30), db.execute(BULK_INSERT, None))
+		.await
+		.expect("writes resume once storage catches up")
+		.expect("the write succeeds after storage catches up");
+}
+
+#[cfg(feature = "sqlite-local")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sync_writes_fail_fast_with_storage_behind_when_the_backlog_fills() {
+	let transport = Arc::new(MemorySqliteTransport::default());
+	let db = open_memory_sqlite(transport.clone(), CommitMode::Deferred).await;
+	db.execute("CREATE TABLE bulk (k INTEGER PRIMARY KEY, v BLOB)", None)
+		.await
+		.expect("table should be created");
+	transport.hold_commits();
+
+	let host_db = db.for_host_thread();
+	let (error, slowest) = on_host_thread(move || {
+		let mut slowest = Duration::ZERO;
+		for _ in 0..40 {
+			let started = std::time::Instant::now();
+			let result = host_db.execute_sync(BULK_INSERT, None);
+			slowest = slowest.max(started.elapsed());
+			if let Err(error) = result {
+				return (Some(error), slowest);
+			}
+		}
+		(None, slowest)
+	})
+	.await;
+	transport.release_commits();
+
+	let error = error.expect("a synchronous write must fail once the backlog is full");
+	assert_eq!(error_code(&error), "sqlite.storage_behind", "{error:#}");
+	assert!(
+		slowest < Duration::from_secs(5),
+		"a synchronous write must never wait for storage, slowest took {slowest:?}"
+	);
+}
+
+#[cfg(feature = "sqlite-local")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sync_write_returns_while_depot_is_unresponsive_and_becomes_durable_later() {
+	let transport = Arc::new(MemorySqliteTransport::default());
+	let db = open_memory_sqlite(transport.clone(), CommitMode::Deferred).await;
+	db.execute("CREATE TABLE sync_rows (id INTEGER PRIMARY KEY)", None)
+		.await
+		.unwrap();
+	db.when_durable(db.commit_ticket()).await.unwrap();
+
+	transport.hold_commits();
+	let (rows, ticket) = tokio::time::timeout(
+		Duration::from_secs(2),
+		on_host_thread({
+			let db = db.clone();
+			move || {
+				db.execute_sync("INSERT INTO sync_rows VALUES (1)", None)
+					.expect("a sync write must not wait on depot");
+				let rows = db
+					.execute_sync("SELECT id FROM sync_rows", None)
+					.expect("a sync read sees the local commit")
+					.rows;
+				(rows, db.commit_ticket())
+			}
+		}),
+	)
+	.await
+	.expect("the host thread must not block on held commits");
+	assert_eq!(rows, vec![vec![ColumnValue::Integer(1)]]);
+
+	let durable = tokio::spawn({
+		let db = db.clone();
+		async move { db.when_durable(ticket).await }
+	});
+	tokio::time::sleep(Duration::from_millis(50)).await;
+	assert!(!durable.is_finished(), "the ticket waits for depot");
+	transport.release_commits();
+	durable
+		.await
+		.unwrap()
+		.expect("the ticket resolves after depot commits");
+}
+
+#[cfg(feature = "sqlite-local")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sync_call_fails_fast_while_a_host_thread_transaction_is_open() {
+	let transport = Arc::new(MemorySqliteTransport::default());
+	let db = open_memory_sqlite(transport, CommitMode::Deferred).await;
+	db.execute("CREATE TABLE sync_rows (id INTEGER PRIMARY KEY)", None)
+		.await
+		.unwrap();
+	let transaction = db
+		.begin_transaction(None)
+		.await
+		.expect("host-thread transaction should begin");
+
+	let error = tokio::time::timeout(
+		Duration::from_secs(2),
+		on_host_thread({
+			let db = db.clone();
+			move || db.execute_sync("INSERT INTO sync_rows VALUES (1)", None)
+		}),
+	)
+	.await
+	.expect("the sync call must not wait for a transaction only the host thread can finish")
+	.expect_err("the writer is held by the host-thread transaction");
+	assert_eq!(error_code(&error), "sqlite.writer_busy");
+
+	transaction.rollback().await.unwrap();
+	on_host_thread({
+		let db = db.clone();
+		move || db.execute_sync("INSERT INTO sync_rows VALUES (2)", None)
+	})
+	.await
+	.expect("the writer is free once the transaction ends");
+}
+
+#[cfg(feature = "sqlite-local")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sync_call_waits_for_an_internal_transaction_without_joining_it() {
+	let transport = Arc::new(MemorySqliteTransport::default());
+	let db = open_memory_sqlite(transport, CommitMode::Deferred).await;
+	db.execute("CREATE TABLE sync_rows (id INTEGER PRIMARY KEY)", None)
+		.await
+		.unwrap();
+	// State saves and Actor Runtime Socket clients begin transactions on handles that do not
+	// run on the host thread.
+	let internal = SqliteDb {
+		host_thread: false,
+		..db.clone()
+	};
+	let transaction = internal.begin_transaction(None).await.unwrap();
+	transaction
+		.execute("INSERT INTO sync_rows VALUES (1)", None)
+		.await
+		.unwrap();
+
+	let sync_write = on_host_thread({
+		let db = db.clone();
+		move || db.execute_sync("INSERT INTO sync_rows VALUES (2)", None)
+	});
+	tokio::pin!(sync_write);
+	assert!(
+		tokio::time::timeout(Duration::from_millis(100), &mut sync_write)
+			.await
+			.is_err(),
+		"the sync call waits for the internal transaction"
+	);
+	transaction.rollback().await.unwrap();
+	sync_write
+		.await
+		.expect("the sync call runs after the internal transaction");
+
+	let rows = db
+		.execute("SELECT id FROM sync_rows ORDER BY id", None)
+		.await
+		.unwrap()
+		.rows;
+	assert_eq!(
+		rows,
+		vec![vec![ColumnValue::Integer(2)]],
+		"the sync write is not part of the rolled-back transaction"
+	);
+}
+
+#[cfg(feature = "sqlite-local")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sqlite_statement_errors_reach_the_caller_with_their_message() {
+	let transport = Arc::new(MemorySqliteTransport::default());
+	let db = open_memory_sqlite(transport, CommitMode::Awaited).await;
+	db.execute("CREATE TABLE unique_rows (id INTEGER PRIMARY KEY)", None)
+		.await
+		.unwrap();
+	db.execute("INSERT INTO unique_rows VALUES (1)", None)
+		.await
+		.unwrap();
+
+	// The primary result code is the low byte of SQLite's extended code: 19 is
+	// SQLITE_CONSTRAINT and 1 is SQLITE_ERROR.
+	for (sql, expected, primary_code) in [
+		(
+			"INSERT INTO unique_rows VALUES (1)",
+			"UNIQUE constraint failed",
+			Some(19),
+		),
+		(
+			"SELECT * FROM missing_table",
+			"no such table: missing_table",
+			Some(1),
+		),
+		("SELEC 1", "syntax error", Some(1)),
+		(
+			"SELECT 1; SELECT 2",
+			"only supports a single statement",
+			None,
+		),
+	] {
+		let error = db
+			.execute(sql, None)
+			.await
+			.expect_err("the statement should fail");
+		let error = rivet_error::RivetError::extract(&error);
+		assert_eq!(
+			format!("{}.{}", error.group(), error.code()),
+			"sqlite.statement_failed",
+			"{sql}"
+		);
+		assert!(
+			error.message().contains(expected),
+			"{sql}: unexpected message {}",
+			error.message()
+		);
+		if let Some(primary_code) = primary_code {
+			let code = error
+				.metadata()
+				.and_then(|metadata| metadata.get("code").and_then(|code| code.as_i64()))
+				.unwrap_or_else(|| panic!("{sql}: the error must carry the SQLite result code"));
+			assert_eq!(code & 0xff, primary_code, "{sql}");
+		}
+	}
 }

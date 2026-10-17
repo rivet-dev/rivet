@@ -106,6 +106,8 @@ pub struct JsActorConfig {
 	pub icon: Option<String>,
 	pub has_database: Option<bool>,
 	pub remote_sqlite: Option<bool>,
+	/// Internal. Set by rivetkit when the actor's database provider opts into deferred commits.
+	pub sqlite_deferred_commits: Option<bool>,
 	pub sqlite_profiling: Option<JsSqliteProfilingConfig>,
 	pub tracing: Option<JsActorTracingConfig>,
 	pub enable_actor_runtime_socket: Option<bool>,
@@ -1021,7 +1023,7 @@ impl From<JsActorConfig> for ActorConfigInput {
 			icon: value.icon,
 			has_database: value.has_database,
 			remote_sqlite: value.remote_sqlite,
-			sqlite_deferred_commits: None,
+			sqlite_deferred_commits: value.sqlite_deferred_commits,
 			sqlite_profiling: value.sqlite_profiling.map(Into::into),
 			tracing: value.tracing.map(Into::into),
 			enable_actor_runtime_socket: value.enable_actor_runtime_socket,

@@ -1,0 +1,5 @@
+{
+  "code": "storage_behind",
+  "group": "sqlite",
+  "message": "SQLite storage is behind."
+}

@@ -201,6 +201,68 @@ impl JsNativeDatabase {
 		self.db.close().await.map_err(crate::napi_anyhow_error)
 	}
 
+	/// Opens the database so later synchronous calls never fetch its first pages.
+	#[napi]
+	pub async fn open(&self) -> napi::Result<()> {
+		self.db.open().await.map_err(crate::napi_anyhow_error)
+	}
+
+	#[napi]
+	pub fn execute_sync(
+		&self,
+		sql: String,
+		params: Option<Vec<JsBindParam>>,
+	) -> napi::Result<NativeExecuteResult> {
+		let params = params.map(js_bind_params_to_core).transpose()?;
+		self.db
+			.execute_sync(sql, params)
+			.map(core_execute_result_to_js)
+			.map_err(crate::napi_anyhow_error)
+	}
+
+	#[napi]
+	pub fn exec_sync(&self, sql: String) -> napi::Result<QueryResult> {
+		self.db
+			.exec_sync(sql)
+			.map(core_query_result_to_js)
+			.map_err(crate::napi_anyhow_error)
+	}
+
+	#[napi]
+	pub fn begin_transaction_sync(
+		&self,
+		timeout_ms: Option<f64>,
+		name: Option<String>,
+	) -> napi::Result<JsSqliteTransaction> {
+		let timeout = timeout_ms.map(transaction_timeout).transpose()?;
+		let transaction = self
+			.db
+			.begin_transaction_sync(name, timeout)
+			.map_err(crate::napi_anyhow_error)?;
+		Ok(JsSqliteTransaction { transaction })
+	}
+
+	/// Returns the latest local commit as a ticket. Tickets stay below 2^53 for any
+	/// realistic generation, so they cross to JavaScript as numbers.
+	#[napi]
+	pub fn commit_ticket(&self) -> f64 {
+		self.db.commit_ticket() as f64
+	}
+
+	#[napi]
+	pub fn abort_generation(&self, reason: String) {
+		self.db.abort_generation(reason);
+	}
+
+	#[napi]
+	pub async fn when_durable(&self, ticket: f64) -> napi::Result<()> {
+		let ticket = commit_ticket_from_js(ticket)?;
+		self.db
+			.when_durable(ticket)
+			.await
+			.map_err(crate::napi_anyhow_error)
+	}
+
 	#[napi]
 	pub async fn begin_transaction(
 		&self,
@@ -257,6 +319,41 @@ impl JsSqliteTransaction {
 			.await
 			.map_err(crate::napi_anyhow_error)
 	}
+
+	#[napi]
+	pub fn execute_sync(
+		&self,
+		sql: String,
+		params: Option<Vec<JsBindParam>>,
+	) -> napi::Result<NativeExecuteResult> {
+		let params = params.map(js_bind_params_to_core).transpose()?;
+		self.transaction
+			.execute_sync(sql, params)
+			.map(core_execute_result_to_js)
+			.map_err(crate::napi_anyhow_error)
+	}
+
+	#[napi]
+	pub fn exec_sync(&self, sql: String) -> napi::Result<QueryResult> {
+		self.transaction
+			.exec_sync(sql)
+			.map(core_query_result_to_js)
+			.map_err(crate::napi_anyhow_error)
+	}
+
+	#[napi]
+	pub fn commit_sync(&self) -> napi::Result<()> {
+		self.transaction
+			.commit_sync()
+			.map_err(crate::napi_anyhow_error)
+	}
+
+	#[napi]
+	pub fn rollback_sync(&self) -> napi::Result<()> {
+		self.transaction
+			.rollback_sync()
+			.map_err(crate::napi_anyhow_error)
+	}
 }
 
 #[napi]
@@ -311,6 +408,20 @@ pub(crate) fn transaction_timeout(timeout_ms: f64) -> napi::Result<Duration> {
 			.build(),
 		)
 	})
+}
+
+fn commit_ticket_from_js(ticket: f64) -> napi::Result<u64> {
+	if !ticket.is_finite() || ticket < 0.0 || ticket.fract() != 0.0 || ticket > (1_u64 << 53) as f64
+	{
+		return Err(napi_anyhow_error(
+			NapiInvalidArgument {
+				argument: "ticket".to_owned(),
+				reason: "must be a non-negative safe integer".to_owned(),
+			}
+			.build(),
+		));
+	}
+	Ok(ticket as u64)
 }
 
 fn js_bind_params_to_core(params: Vec<JsBindParam>) -> napi::Result<Vec<BindParam>> {
