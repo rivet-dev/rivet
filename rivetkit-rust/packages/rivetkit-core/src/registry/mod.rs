@@ -1316,7 +1316,8 @@ impl RegistryDispatcher {
 				Some(generation as u64),
 				factory.config().has_database,
 				factory.config().remote_sqlite,
-			)?,
+			)?
+			.with_deferred_commits(factory.config().sqlite_deferred_commits)?,
 		);
 		ctx.configure_envoy(handle, Some(generation));
 		Ok(ctx)

@@ -238,6 +238,7 @@ impl From<WasmActorConfig> for ActorConfigInput {
 			icon: config.icon,
 			has_database: config.has_database,
 			remote_sqlite: config.remote_sqlite,
+			sqlite_deferred_commits: None,
 			sqlite_profiling: config.sqlite_profiling.map(Into::into),
 			tracing: None,
 			enable_actor_runtime_socket: config.enable_actor_runtime_socket,

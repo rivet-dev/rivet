@@ -55,7 +55,7 @@ use crate::runtime::RuntimeSpawner;
 #[cfg(feature = "sqlite-local")]
 use depot_client::{
 	database::{NativeDatabaseHandle, open_database_from_transport},
-	vfs::{SqliteVfsMetrics, SqliteVfsMetricsSnapshot},
+	vfs::{CommitMode, DatabaseFailure, SqliteVfsMetrics, SqliteVfsMetricsSnapshot},
 	worker::{
 		SQLITE_WORKER_QUEUE_CAPACITY, SqliteWorkerCloseTimeoutError, SqliteWorkerClosingError,
 		SqliteWorkerDeadError, SqliteWorkerFatalError, SqliteWorkerOverloadedError,
@@ -238,6 +238,9 @@ pub struct SqliteDb {
 	/// always sets up sqlite storage under the hood, so handle/actor_id are
 	/// not a reliable signal for whether the user opted in; this flag is.
 	enabled: bool,
+	/// Opens the native database in `CommitMode::Deferred`. See
+	/// `ActorConfig::sqlite_deferred_commits`.
+	deferred_commits: bool,
 	invocation_telemetry: Option<crate::ActorInvocationTelemetry>,
 	#[cfg(feature = "sqlite-local")]
 	// Forced-sync: native SQLite handles are used inside spawn_blocking and
@@ -268,6 +271,7 @@ impl Default for SqliteDb {
 				SqliteBackend::RemoteEnvoy
 			},
 			enabled: false,
+			deferred_commits: false,
 			invocation_telemetry: None,
 			#[cfg(feature = "sqlite-local")]
 			db: Default::default(),
@@ -305,6 +309,7 @@ impl SqliteDb {
 			generation,
 			backend: select_sqlite_backend(remote_sqlite)?,
 			enabled,
+			deferred_commits: false,
 			invocation_telemetry: None,
 			#[cfg(feature = "sqlite-local")]
 			db: Default::default(),
@@ -319,6 +324,16 @@ impl SqliteDb {
 			#[cfg(feature = "sqlite-local")]
 			profiling: Default::default(),
 		})
+	}
+
+	/// Opts the database into deferred commits. Fails unless the backend is local native SQLite,
+	/// because only the native VFS can commit locally.
+	pub fn with_deferred_commits(mut self, enabled: bool) -> Result<Self> {
+		if enabled && self.backend != SqliteBackend::LocalNative {
+			return Err(SqliteRuntimeError::DeferredCommitsUnsupported.build());
+		}
+		self.deferred_commits = enabled;
+		Ok(self)
 	}
 
 	#[cfg(feature = "sqlite-local")]
@@ -425,6 +440,11 @@ impl SqliteDb {
 								.ok_or_else(|| sqlite_not_configured("generation"))?,
 							rt_handle,
 							vfs_metrics,
+							if self.deferred_commits {
+								CommitMode::Deferred
+							} else {
+								CommitMode::Awaited
+							},
 						)
 						.await,
 					)?;
@@ -1020,13 +1040,19 @@ impl SqliteDb {
 		self.abort_worker_failure_monitor();
 		let reported = Arc::clone(&self.worker_fatal_reported);
 		let task = RuntimeSpawner::spawn(async move {
-			if native_db.wait_for_worker_failure().await {
-				report_sqlite_worker_fatal(
-					&reported,
-					config,
-					"sqlite worker thread stopped unexpectedly".to_string(),
-				);
-			}
+			let message = match native_db.wait_for_failure().await {
+				DatabaseFailure::Closed => return,
+				DatabaseFailure::WorkerStopped => {
+					"sqlite worker thread stopped unexpectedly".to_string()
+				}
+				DatabaseFailure::Flush(error) => {
+					// Commits that callers already observed can never become durable. The database
+					// is already broken, so every later write fails, including the final state
+					// save. Report a crash so the engine restarts the actor from durable state.
+					format!("sqlite durability failed: {error}")
+				}
+			};
+			report_sqlite_worker_fatal(&reported, config, message);
 		});
 		*self.worker_failure_task.lock() = Some(task);
 	}

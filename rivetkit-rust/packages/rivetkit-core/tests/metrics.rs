@@ -603,6 +603,7 @@ mod moved_tests {
 			1,
 			tokio::runtime::Handle::current(),
 			Some(metric_sink.clone()),
+			depot_client::vfs::CommitMode::Awaited,
 		)
 		.await
 		.expect("native database should open");
@@ -709,6 +710,7 @@ mod moved_tests {
 			2,
 			tokio::runtime::Handle::current(),
 			Some(metric_sink.clone()),
+			depot_client::vfs::CommitMode::Awaited,
 		)
 		.await
 		.expect("native database should reopen");

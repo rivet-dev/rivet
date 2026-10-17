@@ -30,7 +30,7 @@ use crate::{
 // Keep the first worker version intentionally fixed-size. A full queue maps to
 // actor.overloaded so callers get explicit backpressure instead of hidden work.
 pub const SQLITE_WORKER_QUEUE_CAPACITY: usize = 128;
-const SQLITE_WORKER_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
+pub(crate) const SQLITE_WORKER_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
 // Transactions slower than this are logged at warn so operators can spot SQLite
 // work that is stalling on engine round trips. Everything below still logs at
 // debug and records its round trip count to the histogram.
@@ -254,7 +254,7 @@ impl SqliteWorkerHandle {
 		self.close_with_timeout(None).await
 	}
 
-	async fn close_with_timeout(&self, close_timeout: Option<Duration>) -> Result<()> {
+	pub(crate) async fn close_with_timeout(&self, close_timeout: Option<Duration>) -> Result<()> {
 		let start = Instant::now();
 		if self.inner.mark_closing() {
 			// Close is a control path, not SQL work, so it must bypass the bounded
