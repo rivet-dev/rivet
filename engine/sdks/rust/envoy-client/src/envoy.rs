@@ -39,7 +39,7 @@ use crate::sqlite::{
 	process_unsent_sqlite_requests,
 };
 use crate::tunnel::{
-	HttpRequestCancellationKey, handle_tunnel_message, make_ws_key,
+	CompletedHttpRequests, HttpRequestCancellationKey, handle_tunnel_message, make_ws_key,
 	resend_buffered_tunnel_messages, send_hibernatable_ws_message_ack,
 };
 use crate::utils::{BufferMap, EnvoyShutdownError, SleepFuture, boxed_sleep, spawn_detached};
@@ -68,6 +68,9 @@ pub struct EnvoyContext {
 	/// Recently cancelled exact-generation requests. This prevents a delayed
 	/// `RequestStart` from reaching the actor after its cancellation arrived.
 	pub http_request_cancellations: HashMap<HttpRequestCancellationKey, crate::time::Instant>,
+	/// Recently finished requests. Gateway can still send body frames, its own body cancel,
+	/// or response credit for them, and those frames must not abort the finished response.
+	pub completed_http_requests: CompletedHttpRequests,
 	pub buffered_messages: Vec<protocol::ToRivetTunnelMessage>,
 	/// Highest command index processed per `(actor_id, generation)`, used to
 	/// drop replayed commands from `pegboard-envoy` after a reconnect. Persists
@@ -434,6 +437,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		http_request_routes: BufferMap::new(),
 		http_message_indices: BufferMap::new(),
 		http_request_cancellations: HashMap::new(),
+		completed_http_requests: CompletedHttpRequests::default(),
 		buffered_messages: Vec::new(),
 		processed_command_idx: HashMap::new(),
 	};
@@ -531,8 +535,7 @@ async fn envoy_loop(
 						let _ = response_tx.send(rebound);
 					}
 					ToEnvoyMessage::HttpRequestComplete { gateway_id, request_id } => {
-						ctx.http_request_routes.remove(&[&gateway_id, &request_id]);
-						ctx.http_message_indices.remove(&[&gateway_id, &request_id]);
+						crate::tunnel::complete_http_request(&mut ctx, gateway_id, request_id);
 					}
 					ToEnvoyMessage::GetActor { actor_id, generation, response_tx } => {
 						let info = ctx.get_actor(&actor_id, generation).map(|entry| {

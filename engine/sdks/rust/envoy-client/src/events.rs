@@ -251,6 +251,7 @@ mod tests {
 				http_request_routes: crate::utils::BufferMap::new(),
 				http_message_indices: crate::utils::BufferMap::new(),
 				http_request_cancellations: HashMap::new(),
+				completed_http_requests: Default::default(),
 				buffered_messages: Vec::new(),
 				processed_command_idx: HashMap::new(),
 			},

@@ -52,6 +52,7 @@ fn empty_envoy_context(shared: Arc<crate::context::SharedContext>) -> EnvoyConte
 		http_request_routes: BufferMap::new(),
 		http_message_indices: BufferMap::new(),
 		http_request_cancellations: HashMap::new(),
+		completed_http_requests: Default::default(),
 		buffered_messages: Vec::new(),
 		processed_command_idx: HashMap::new(),
 	}
@@ -454,6 +455,143 @@ async fn rejected_streamed_request_drains_pipelined_body_without_a_second_respon
 			.is_none()
 	);
 	assert!(ws_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn late_frames_for_a_completed_request_are_dropped_without_aborting() {
+	let (body_tx_tx, body_tx_rx) = oneshot::channel();
+	let callbacks = Arc::new(StreamingCallbacks {
+		body_tx: Mutex::new(Some(body_tx_tx)),
+	});
+	let (shared, mut envoy_rx) = build_shared_context(callbacks);
+	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
+	let session = crate::connection::install_connection(&shared, ws_tx).await;
+	let mut ctx = empty_envoy_context(shared.clone());
+	let (actor_tx, active_http_request_count) = create_actor(
+		shared,
+		"test-actor".to_string(),
+		1,
+		actor_config(),
+		Vec::new(),
+		None,
+	);
+	ctx.insert_actor(
+		"test-actor".to_owned(),
+		1,
+		actor_tx,
+		active_http_request_count.clone(),
+		"test-actor-1".to_owned(),
+		0,
+	);
+
+	// The handler drops the request body unread and streams its response, so the actor
+	// finishes the request while Gateway can still send upload frames and response credit.
+	let mut start = request_start();
+	start.method = "POST".to_owned();
+	start.stream = true;
+	crate::tunnel::handle_tunnel_message(
+		&mut ctx,
+		session,
+		protocol::ToEnvoyTunnelMessage {
+			message_id: message_id(),
+			message_kind: protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(start),
+		},
+	)
+	.await;
+	let body_tx = tokio::time::timeout(Duration::from_secs(2), body_tx_rx)
+		.await
+		.expect("timed out waiting for response body sender")
+		.expect("response body sender dropped");
+	body_tx
+		.send(ResponseChunk::Data {
+			data: vec![7; 16],
+			finish: true,
+		})
+		.await
+		.expect("finish response stream");
+	loop {
+		let msg = recv_ws_tunnel_msg(&mut ws_rx).await;
+		if matches!(
+			msg.message_kind,
+			protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(
+				protocol::ToRivetResponseChunk { finish: true, .. }
+			)
+		) {
+			break;
+		}
+	}
+	wait_for_zero(&active_http_request_count).await;
+
+	// Apply the completion exactly as the envoy loop does.
+	let (gateway_id, request_id) = tokio::time::timeout(Duration::from_secs(2), async {
+		loop {
+			match envoy_rx.recv().await {
+				Some(ToEnvoyMessage::HttpRequestComplete {
+					gateway_id,
+					request_id,
+				}) => break (gateway_id, request_id),
+				Some(_) => {}
+				None => panic!("envoy channel closed before request completion"),
+			}
+		}
+	})
+	.await
+	.expect("timed out waiting for request completion");
+	crate::tunnel::complete_http_request(&mut ctx, gateway_id, request_id);
+	while ws_rx.try_recv().is_ok() {}
+
+	let late_frames = [
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(protocol::ToEnvoyRequestChunk {
+			body: vec![1; 64],
+			finish: false,
+		}),
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestBodyCancel,
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyResponseBodyWindowUpdate(
+			protocol::ToEnvoyResponseBodyWindowUpdate { consumed_bytes: 16 },
+		),
+	];
+	for (index, message_kind) in late_frames.into_iter().enumerate() {
+		let mut late_id = message_id();
+		late_id.message_index = index as u16 + 1;
+		crate::tunnel::handle_tunnel_message(
+			&mut ctx,
+			session,
+			protocol::ToEnvoyTunnelMessage {
+				message_id: late_id,
+				message_kind,
+			},
+		)
+		.await;
+	}
+	assert!(
+		ws_rx.try_recv().is_err(),
+		"late frames for a completed request must not abort its response",
+	);
+
+	// A request Gateway never started still gets the unknown-request abort.
+	let mut unknown_id = message_id();
+	unknown_id.request_id = [9, 9, 9, 9];
+	unknown_id.message_index = 1;
+	crate::tunnel::handle_tunnel_message(
+		&mut ctx,
+		session,
+		protocol::ToEnvoyTunnelMessage {
+			message_id: unknown_id,
+			message_kind: protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(
+				protocol::ToEnvoyRequestChunk {
+					body: vec![1],
+					finish: false,
+				},
+			),
+		},
+	)
+	.await;
+	let abort = recv_ws_tunnel_msg(&mut ws_rx).await;
+	assert_eq!(abort.message_id.request_id, [9, 9, 9, 9]);
+	assert!(matches!(
+		abort.message_kind,
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(_)
+	));
 }
 
 #[tokio::test]
