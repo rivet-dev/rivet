@@ -319,7 +319,7 @@ export const ActorsActorDetails = memo(function ActorsActorDetails({
 						Switch back
 					</Button>
 				</div>
-				<div className="flex-1 min-h-0">{legacy}</div>
+				<div className="flex flex-col flex-1 min-h-0">{legacy}</div>
 			</div>
 		);
 	}
