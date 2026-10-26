@@ -84,6 +84,15 @@ jobs:
       build_wasm: ${{ steps.ctx.outputs.build_wasm }}
       build_docker: ${{ steps.ctx.outputs.build_docker }}
     steps:
+      # Every build and publish job needs this one, so failing here stops the
+      # whole run before anything is built or uploaded. 654560183 is the
+      # immutable ID of rivet-dev/rivet, so a copy of this workflow in any other
+      # repository never publishes.
+      - name: Refuse to publish outside the OSS repository
+        if: github.repository_id != '654560183'
+        run: |
+          echo "::error::publish.yaml only publishes from rivet-dev/rivet (repository ID 654560183), not ${{ github.repository }}."
+          exit 1
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
@@ -338,7 +347,8 @@ jobs:
   # ---------------------------------------------------------------------------
   docker-images:
     needs: [context]
-    if: needs.context.outputs.build_docker == 'true'
+    # This ID identifies the OSS repository and remains stable across renames.
+    if: needs.context.outputs.build_docker == 'true' && github.repository_id == '654560183'
     name: "Docker ${{ matrix.arch_suffix }}"
     strategy:
       fail-fast: false
@@ -429,6 +439,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - uses: ./.github/actions/docker-setup
+        if: github.repository_id == '654560183'
         with:
           docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
           docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
@@ -673,7 +684,7 @@ jobs:
             --allow-dirty
 
       - name: Create Docker multi-arch manifests
-        if: needs.context.outputs.build_docker == 'true'
+        if: needs.context.outputs.build_docker == 'true' && github.repository_id == '654560183'
         run: pnpm --filter=publish exec tsx src/ci/bin.ts docker-manifest --sha ${{ needs.context.outputs.sha }}
 
       # ---- release-only tail ----
@@ -690,7 +701,7 @@ jobs:
 
 
       - name: Retag Docker manifests to version
-        if: needs.context.outputs.trigger == 'release'
+        if: needs.context.outputs.trigger == 'release' && github.repository_id == '654560183'
         run: |
           pnpm --filter=publish exec tsx src/ci/bin.ts docker-retag \
             --sha ${{ needs.context.outputs.sha }} \
