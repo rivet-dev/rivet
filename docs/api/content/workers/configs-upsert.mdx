@@ -8,7 +8,7 @@ description: "Create or replace a worker configuration in each specified datacen
 A `normal` configuration controls workers with direct, persistent connections. A `serverless` configuration starts workers through a URL and requires `url` and `request_lifespan`. Configurations for omitted datacenters are deleted. A failure can occur after some datacenters have already changed.
 
 ```http
-PUT https://api.rivet.dev/runner-configs/{runner_name}
+PUT https://rivet.example.com/runner-configs/{runner_name}
 ```
 
 ## Examples
@@ -16,7 +16,7 @@ PUT https://api.rivet.dev/runner-configs/{runner_name}
 <CodeGroup>
 
 ```bash cURL
-curl -X PUT "https://api.rivet.dev/runner-configs/$RUNNER_NAME?namespace=$RIVET_NAMESPACE" \
+curl -X PUT "https://rivet.example.com/runner-configs/$RUNNER_NAME?namespace=$RIVET_NAMESPACE" \
   -H "Authorization: Bearer $RIVET_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

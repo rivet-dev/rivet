@@ -113,7 +113,7 @@ ws.addEventListener("open", () => {
 
 ### Via HTTP API
 
-This handler can be accessed with raw WebSockets using `wss://api.rivet.dev/gateway/{actorId}@{token}/websocket/{...path}`.
+This handler can be accessed with raw WebSockets using `wss://rivet.example.com/gateway/{actorId}@{token}/websocket/{...path}`.
 
 For example, to connect to the chat actor above:
 
@@ -125,7 +125,7 @@ const actorId = "your-actor-id";
 const token = "your-token";
 
 const ws = new WebSocket(
-    `wss://api.rivet.dev/gateway/${actorId}@${token}/websocket/`
+    `wss://rivet.example.com/gateway/${actorId}@${token}/websocket/`
 );
 
 ws.addEventListener("message", (event) => {
@@ -139,7 +139,7 @@ ws.addEventListener("open", () => {
 ```
 
 ```bash
-wscat -c "wss://api.rivet.dev/gateway/{actorId}@{token}/websocket/"
+wscat -c "wss://rivet.example.com/gateway/{actorId}@{token}/websocket/"
 ```
 
 </CodeGroup>
@@ -154,17 +154,17 @@ const actorId = "your-actor-id";
 const token = "your-token";
 
 const ws = new WebSocket(
-    `wss://api.rivet.dev/gateway/${actorId}@${token}/websocket/admin`
+    `wss://rivet.example.com/gateway/${actorId}@${token}/websocket/admin`
 );
 ```
 
 ```bash
-wscat -c "wss://api.rivet.dev/gateway/{actorId}@{token}/websocket/admin"
+wscat -c "wss://rivet.example.com/gateway/{actorId}@{token}/websocket/admin"
 ```
 
 </CodeGroup>
 
-See the [HTTP API reference](/docs/api/websockets) for more information on WebSocket routing and authentication.
+See the [HTTP API reference](/actors/docs/http-api) for more information on WebSocket routing and authentication.
 
 ### Via Proxying Connections
 

@@ -8,7 +8,7 @@ description: "Create a new actor. Fails if an actor with the same name and key a
 Prefer [Get or Create Actor](/docs/api/actors/get-or-create) for idempotent access by key. Use this endpoint when you need a fresh actor every time, for example with a random key.
 
 ```http
-POST https://api.rivet.dev/actors
+POST https://rivet.example.com/actors
 ```
 
 ## Examples
@@ -16,7 +16,7 @@ POST https://api.rivet.dev/actors
 <CodeGroup>
 
 ```bash cURL
-curl -X POST "https://api.rivet.dev/actors?namespace=$RIVET_NAMESPACE" \
+curl -X POST "https://rivet.example.com/actors?namespace=$RIVET_NAMESPACE" \
   -H "Authorization: Bearer $RIVET_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

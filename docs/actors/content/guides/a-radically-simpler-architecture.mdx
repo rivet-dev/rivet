@@ -37,11 +37,9 @@ This tradeoff made sense when CPU and memory were severely limited, but the patt
 
 Those constraints from forty years ago no longer apply to today's servers. Modern CPUs are orders of magnitude faster, and memory is abundant and cheap. **Application bottlenecks have shifted from local compute to network latency and locks.**
 
-This is best demonstrated with a simple comparison between a real-world Postgres query over the network versus a SQLite query on the same machine: A Postgres query over the network takes 1-10ms over LAN. The same query on a local SQLite database running in the same process as your application takes 0.01-0.1ms, **roughly 100x faster**. (These benchmarks are heavily dependent on the workload, this is a conservative performance number for SQLite.)
+Rivet keeps each Actor's state in its own durable volume. SQLite runs with your code, reads can use nearby caches, and durable writes go through the control plane's replicated storage. Data can move with the Actor when it wakes on another node.
 
-That 100x difference is not about switching to a marginally different database, it's about rethinking your architecture for modern computers by eliminating the centralized database completely in favor of databases colocated with your compute. **Combining compute and state removes the biggest sources of latency in modern applications.**
-
----
+This reduces the need to coordinate application state across a shared database, cache, and queue. Network access still matters: a cache miss can fetch pages over the network, and a durable write waits for replication. See [Benchmarking](/docs/benchmarking) for measured warm reads, reads after sleep, and writes.
 
 ## The Actor Model: Combining Compute and State
 
@@ -51,7 +49,7 @@ Each actor's **state is isolated to itself** and cannot be read by any other act
 
 They're like mini-servers: they can accept and respond to network requests and even send network requests themselves. They remain running as a long-lived process with in-memory state until they decide to go to sleep.
 
-In addition to performance and complexity benefits, this architecture **eliminates entire categories of bugs by design.** No network to the database means no network partitions. No shared state means no race conditions. No locks means no deadlocks.
+Actor-owned state gives each Actor a clear ownership boundary. Network failures, retries, and concurrent application work still need to be handled. Durable storage and Actor routing are provided by the control plane.
 
 <img src="https://assets.rivet.dev/website/learn/act-1/scene-1/actor-arch.png" alt="Actor architecture showing compute and state combined in isolated actors" className="max-h-[500px] theme-diagram-invert" />
 
@@ -122,7 +120,6 @@ The truth is that actors _are_ used widely, just not visibly. Large enterprises 
 - X
 - Pinterest
 - PayPal
-- FoundationDB (powering Apple, Snowflake, DataDog)
 
 So why hasn't the actor model spread to smaller teams and mainstream development?
 

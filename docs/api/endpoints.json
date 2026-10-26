@@ -1,6 +1,6 @@
 {
 	"$comment": "Source of truth for the generated HTTP API reference. Run `node scripts/docs/gen-api-reference.mjs` after editing.",
-	"baseUrl": "https://api.rivet.dev",
+	"baseUrl": "https://rivet.example.com",
 	"specs": {
 		"engine": {
 			"file": "engine/artifacts/openapi.json",
@@ -58,7 +58,7 @@
 				"curlHeaders": [
 					"x-rivet-token: $RIVET_TOKEN"
 				],
-				"description": "Send a token in the `x-rivet-token` header, inline in the path as `{actor_id}@{token}`, or in the `rvt-token` query parameter. Use a public token (`pk_`) from browsers and a secret token (`sk_`) from trusted backends. See [Authentication](/docs/api/authentication)."
+				"description": "Send a token in the `x-rivet-token` header, inline in the path as `{actor_id}@{token}`, or in the `rvt-token` query parameter. Use a [scoped token](/docs/jwt) from browsers and your Rivet token from trusted backends. See [Authentication](/docs/api/authentication)."
 			},
 			"parameters": {
 				"actor": "Actor ID, actor ID with an inline token (`{actor_id}@{token}`), or actor name combined with the `rvt-*` query parameters.",
@@ -80,7 +80,7 @@
 					"curlHeaders": [
 						"Authorization: Bearer $INSPECTOR_TOKEN"
 					],
-					"description": "Inspector endpoints do not accept namespace tokens. Send the actor's inspector token as a bearer token in the `Authorization` header. Each actor generates its own inspector token on first start and stores it in its KV storage under the single byte `0x03`. Read it through the control plane with `GET /actors/{actor_id}/kv/keys/Aw==?namespace={namespace}` using a namespace token; the response `value` is the token, base64-encoded. The dashboard does this for you."
+					"description": "Inspector endpoints do not accept namespace tokens. Send the actor's inspector token as a bearer token in the `Authorization` header. {/* TODO(code): document how to read an Actor's inspector token once an API returns it (ACT-6493). */}"
 				}
 			}
 		},
@@ -512,7 +512,7 @@
 					"slug": "connect",
 					"title": "Connect",
 					"description": "Open a persistent WebSocket connection to an actor. One connection carries action calls, event subscriptions, and errors as JSON messages, which is what handle.connect() does in the RivetKit client.",
-					"url": "wss://api.rivet.dev/gateway/{actor}/connect",
+					"url": "wss://rivet.example.com/gateway/{actor}/connect",
 					"notes": "`{actor}` accepts the same forms as every gateway endpoint: an actor ID, `{actor_id}@{token}`, or an actor name with `rvt-*` query parameters. See [Actor Routing](/docs/api/actor-routing).\n\nConnection options travel as WebSocket subprotocols in the `Sec-WebSocket-Protocol` header because browsers cannot set arbitrary headers on an upgrade. Always include `rivet`, then add any of the prefixed entries below.\n\n| Subprotocol | Purpose |\n| --- | --- |\n| `rivet` | Required. Lets servers that insist on a matching protocol accept the upgrade. |\n| `rivet_encoding.json` | Message encoding. `json` is the default and is documented here. The RivetKit client uses `cbor` or `bare`; the payloads are the same, only the framing differs. |\n| `rivet_token.{token}` | Token to authenticate with. See [WebSocket Requests](/docs/api/authentication#websocket-requests). |\n| `rivet_conn_params.{params}` | Optional connection parameters passed to the actor's `createConnState` and `onBeforeConnect` hooks, as URL-encoded JSON. |\n| `rivet_skip_ready_wait` | Complete the upgrade as soon as the actor is resolved instead of waiting for it to be ready. |\n\nEvery message in both directions is a JSON object of the form `{ \"body\": { \"tag\": \"<Message>\", \"val\": { ... } } }`. The server sends `Init` first; nothing else arrives before it. There is no ping or heartbeat message. Rely on WebSocket ping frames or your own timeout to detect a dead connection.",
 					"sections": [
 						{
@@ -694,7 +694,7 @@
 					"title": "Inspector",
 					"dir": "inspector",
 					"icon": "faMagnifyingGlass",
-					"notes": "These endpoints power the Rivet dashboard's actor inspector.",
+					"notes": "These endpoints power the actor inspector.",
 					"endpoints": [
 						{
 							"spec": "rivetkit",
@@ -1044,7 +1044,7 @@
 							"badge": "WS"
 						}
 					],
-					"notice": "The inspector API powers the Rivet dashboard and is subject to change without notice. Do not build production integrations on it."
+					"notice": "The inspector API is subject to change without notice. Do not build production integrations on it."
 				}
 			]
 		},

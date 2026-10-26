@@ -1,11 +1,11 @@
 ---
 title: "Debugging Actors"
-description: "Inspect a running Rivet Actor through its gateway endpoints and the actor inspector API, including state, connections, and workflow history."
+description: "Inspect a running Rivet Actor through its gateway endpoints."
 skill: true
 ---
 
 Every endpoint here is reached through the gateway using an actor ID. To find
-actor IDs, list runners, or read provider config, see [Debugging](/docs/debugging)
+actor IDs or check on your nodes, see [Debugging](/docs/debugging)
 in the platform docs. That page also defines the `$RIVET_API`, `$RIVET_NAMESPACE`,
 and `$RIVET_TOKEN` shell variables used throughout the examples below.
 
@@ -16,31 +16,32 @@ All actor-level endpoints are accessed through the gateway. The gateway routes r
 {RIVET_API}/gateway/{actor_id}/{path}
 ```
 
-The gateway only accepts actor IDs, not names. Use `GET /actors?name=...` from the management API to look up actor IDs first.
+The gateway can also find an actor by name and key from query parameters. See [Actor Routing](/docs/api/actor-routing).
 
 ## Authentication
 
-Standard actor endpoints (health, actions, requests) and inspector endpoints have separate authentication requirements.
+Standard actor endpoints (health, actions, requests) use the same authentication as the rest of the gateway.
 
 ### Standard Endpoints
 
 | Environment | Authentication |
 |---|---|
 | **Local development** | No authentication required. |
-| **Self-hosted engine** | The Rivet control plane handles authentication at the gateway level. |
+| **Self-hosted** | The Rivet control plane handles authentication at the gateway level. |
 | **Rivet Cloud** | Authentication is handled by the Rivet Cloud platform at the gateway level. |
+
+{/* TODO(code): restore when the control plane exposes an API to read an Actor's inspector token. Tracked in ACT-6493.
 
 ### Inspector Endpoints
 
-Each actor generates a unique inspector token on first start and persists it in internal SQLite storage. It is also mirrored to legacy KV key `0x03` (base64 `Aw==`) for dashboard compatibility. Pass it as a bearer token in the `Authorization` header.
+Each actor generates a unique inspector token on first start and stores it with its data. Pass it as a bearer token in the `Authorization` header.
 
 Inspector endpoints always require the actor's inspector token, including in local development. There is no local-development bypass.
 
 | Environment | Authentication |
 |---|---|
-| **Local development** | Bearer the actor's inspector token in the `Authorization` header. Fetch it through the management KV endpoint (see below). |
-| **Self-hosted engine** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically; for direct API access, fetch it through the management KV endpoint (see below). |
-| **Rivet Cloud** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically; for direct API access, fetch it through the management KV endpoint (see below). |
+| **Local development** | Bearer the actor's inspector token in the `Authorization` header. |
+| **Self-hosted** | Bearer the actor's inspector token in the `Authorization` header. |
 
 ```bash
 curl "$RIVET_API/gateway/{actor_id}/inspector/summary" \
@@ -49,24 +50,7 @@ curl "$RIVET_API/gateway/{actor_id}/inspector/summary" \
 
 ### Retrieving the Inspector Token
 
-Each actor generates a unique inspector token on first start and persists it in internal SQLite storage. The token is also mirrored to the legacy KV key below so the Rivet dashboard can continue to retrieve it through the management KV endpoint. This applies in every environment, including local development.
-
-The inspector token is stored at internal KV key `0x03` (base64: `Aw==`). The response value is also base64-encoded.
-
-```bash
-# Fetch the inspector token for a specific actor
-ACTOR_ID="your-actor-id"
-
-RESPONSE=$(curl -s "$RIVET_API/actors/$ACTOR_ID/kv/keys/Aw==" \
-  -H "Authorization: Bearer $RIVET_TOKEN")
-
-# Extract and decode the base64 value
-INSPECTOR_TOKEN=$(echo "$RESPONSE" | jq -r '.value' | base64 -d)
-
-# Use it to call inspector endpoints
-curl "$RIVET_API/gateway/$ACTOR_ID/inspector/summary" \
-  -H "Authorization: Bearer $INSPECTOR_TOKEN"
-```
+*/}
 
 ## Standard Actor Endpoints
 
@@ -111,6 +95,8 @@ The `response` field is only present when the queue handler returns a value:
 ```
 
 If `wait: true` and the timeout is reached, `status` is `"timedOut"`.
+
+{/* TODO(code): restore when the control plane exposes an API to read an Actor's inspector token. Tracked in ACT-6493.
 
 ## Inspector Endpoints
 
@@ -394,3 +380,4 @@ When workflow history is present in `/inspector/summary`, `workflowHistory` is r
 
 Inspector endpoints are safe to poll. For live monitoring, poll at 1-5 second intervals. The `/inspector/summary` endpoint is useful for periodic snapshots since it returns all data in a single request.
 
+*/}

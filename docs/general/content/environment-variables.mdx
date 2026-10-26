@@ -1,6 +1,6 @@
 ---
 title: "Environment Variables"
-description: "Connect a backend to a Rivet control plane with environment variables for endpoints, authentication, runner pools, and the local engine."
+description: "Connect a node to a Rivet control plane with environment variables for endpoints, authentication, node pools and the local control plane."
 skill: true
 ---
 
@@ -17,31 +17,23 @@ in the Actors docs.
 | `RIVET_TOKEN` | Authentication token for Rivet control plane |
 | `RIVET_NAMESPACE` | Namespace to use (default: "default") |
 
-## Public Endpoint
-
-These variables configure how clients connect to your actors.
+## Nodes
 
 | Environment Variable | Description |
 |---------------------|-------------|
-| `RIVET_PUBLIC_ENDPOINT` | Public endpoint for client connections. Supports [URL auth syntax](/docs/connect#url-auth-syntax). |
-| `RIVET_PUBLIC_TOKEN` | Public token for client authentication |
+| `RIVET_POOL` | Node pool to join (default: "default"). See [Architecture](/docs/architecture#node-pools). |
+| `RIVET_ENVOY_VERSION` | Version number of this node. Increase it on every deploy. See [Versions & Upgrades](/docs/versions#setting-the-version). |
 
-## Runner Configuration
 
-| Environment Variable | Description |
-|---------------------|-------------|
-| `RIVET_POOL` | Pool name (default: "default") |
-| `RIVET_RUNNER_VERSION` | Version number for the runner. See [Versions & Upgrades](/docs/versions). |
-| `RIVET_RUNNER_KIND` | Type of runner |
-| `RIVET_TOTAL_SLOTS` | Total actor slots available (default: 100000) |
+## Local Control Plane
 
-## Engine
+In development, RivetKit starts a local control plane for you. These variables override that behavior.
 
 | Environment Variable | Description |
 |---------------------|-------------|
-| `RIVET_RUN_ENGINE` | Set to `1` to spawn the control plane process |
-| `RIVET_RUN_ENGINE_HOST` | Host to bind the spawned local engine process to. Defaults to `127.0.0.1`. |
-| `RIVET_RUN_ENGINE_PORT` | Port to bind the spawned local engine process to. Defaults to `6420`. |
-| `RIVET_RUN_ENGINE_VERSION` | Version of engine to download |
-| `RIVET_RUN_SERVICES` | Set to `1` to run Services with a local Engine, or `0` to disable it. By default, Services follows RivetKit's local-Engine decision. |
+| `RIVET_RUN_ENGINE` | Set to `1` to start a local control plane |
+| `RIVET_RUN_ENGINE_HOST` | Host the local control plane binds to. Defaults to `127.0.0.1`. |
+| `RIVET_RUN_ENGINE_PORT` | Port the local control plane binds to. Defaults to `6420`. |
+| `RIVET_RUN_ENGINE_VERSION` | Version of the local control plane to download |
+| `RIVET_RUN_SERVICES` | Set to `1` to run Services with the local control plane, or `0` to disable it. By default, Services runs whenever the local control plane does. |
 | `RIVET_SERVICES_BINARY` | Path to a local `rivet-services` binary. |

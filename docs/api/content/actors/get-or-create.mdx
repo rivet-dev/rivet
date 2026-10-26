@@ -8,7 +8,7 @@ description: "Return the actor with the given name and key, creating it if it do
 The response includes `created`, which is `true` when this call created the actor. Gateway endpoints can perform the same lookup inline with the `rvt-*` selector parameters, so you only need this endpoint when you want the `actor_id` up front.
 
 ```http
-PUT https://api.rivet.dev/actors
+PUT https://rivet.example.com/actors
 ```
 
 ## Examples
@@ -16,7 +16,7 @@ PUT https://api.rivet.dev/actors
 <CodeGroup>
 
 ```bash cURL
-curl -X PUT "https://api.rivet.dev/actors?namespace=$RIVET_NAMESPACE" \
+curl -X PUT "https://rivet.example.com/actors?namespace=$RIVET_NAMESPACE" \
   -H "Authorization: Bearer $RIVET_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

@@ -1,155 +1,120 @@
 ---
-title: "JWTs"
-seoTitle: "Scoped JWT Authentication for Rivet"
-description: "Mint short-lived, grant-scoped JWTs on your backend so a browser can reach one Rivet Actor without holding a secret, and renew them automatically from RivetKit."
+title: "Scoped Tokens"
+description: "Issue short-lived JWTs with explicit permissions in one namespace."
 skill: true
 ---
 
-A Rivet JWT is a short-lived credential you mint on your backend and hand to an untrusted client. It carries grants saying exactly what the holder may reach, and the control plane verifies it before routing any request.
+A scoped token is a JWT that gives its holder selected permissions in one namespace. Issue it on your backend with your Rivet token, using the RivetKit client or the HTTP API, then return only the scoped token to the application.
 
-Use one whenever a browser or mobile app talks to Rivet directly. For which credential to use where, see [Authentication](/docs/authentication).
+## Issue a token
 
-<svg viewBox="0 0 800 470" role="img" aria-label="Sequence: the browser logs in to your backend, your backend mints a scoped JWT from the Rivet control plane, the browser connects to Rivet with that JWT, and the control plane routes it to the user's Actor." style="width:100%;max-width:800px;height:auto;display:block;margin:2.5rem auto;font-family:system-ui,sans-serif">
-  <defs>
-    <marker id="auth-seq-call" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="rgb(var(--site-ink, 27 25 22))"/></marker>
-    <marker id="auth-seq-return" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="rgb(var(--runtime-highlight, 183 75 35))"/></marker>
-  </defs>
-  <g stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4" fill="rgb(var(--site-paper-mid, 227 227 229))">
-    <rect x="24" y="20" width="142" height="48" rx="7"/>
-    <rect x="226" y="20" width="148" height="48" rx="7"/>
-    <rect x="436" y="20" width="168" height="48" rx="7" fill="rgb(var(--runtime-highlight, 183 75 35) / 0.14)"/>
-    <rect x="652" y="20" width="126" height="48" rx="7"/>
-  </g>
-  <g text-anchor="middle" fill="rgb(var(--site-ink, 27 25 22))" font-size="13" font-weight="600">
-    <text x="95" y="49">Browser</text>
-    <text x="300" y="49">Your backend</text>
-    <text x="520" y="49">Rivet control plane</text>
-    <text x="715" y="49">User Actor</text>
-  </g>
-  <g stroke="rgb(var(--site-ink-faint, 138 132 120))" stroke-width="1.3" stroke-dasharray="5 5">
-    <line x1="95" y1="68" x2="95" y2="440"/>
-    <line x1="300" y1="68" x2="300" y2="440"/>
-    <line x1="520" y1="68" x2="520" y2="440"/>
-    <line x1="715" y1="68" x2="715" y2="440"/>
-  </g>
-  <g font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))" text-anchor="middle">
-    <text x="197" y="105">POST /login</text>
-    <text x="410" y="151">issueToken()</text>
-    <text x="410" y="167" font-size="10" fill="rgb(var(--site-ink-faint, 138 132 120))">grant: actor_gateway read on user:alice</text>
-    <text x="410" y="211">JWT, expires in 1h</text>
-    <text x="197" y="255">session + JWT</text>
-    <text x="410" y="305">connect with JWT</text>
-    <text x="617" y="349">verify + check grants</text>
-    <text x="410" y="401">actions &amp; events</text>
-  </g>
-  <g stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4">
-    <line x1="95" y1="116" x2="298" y2="116" marker-end="url(#auth-seq-call)"/>
-    <line x1="300" y1="178" x2="518" y2="178" marker-end="url(#auth-seq-call)"/>
-    <line x1="95" y1="316" x2="518" y2="316" marker-end="url(#auth-seq-call)"/>
-    <line x1="520" y1="360" x2="713" y2="360" marker-end="url(#auth-seq-call)"/>
-  </g>
-  <g stroke="rgb(var(--runtime-highlight, 183 75 35))" stroke-width="1.4" stroke-dasharray="5 4">
-    <line x1="520" y1="222" x2="302" y2="222" marker-end="url(#auth-seq-return)"/>
-    <line x1="300" y1="266" x2="97" y2="266" marker-end="url(#auth-seq-return)"/>
-    <line x1="713" y1="412" x2="97" y2="412" marker-start="url(#auth-seq-return)" marker-end="url(#auth-seq-return)"/>
-  </g>
-</svg>
+<Tabs>
+<Tab title="RivetKit">
 
-## Quickstart
+Create a client on your backend with your Rivet token in the endpoint:
 
-<Steps>
+<CodeSnippet file="examples/docs/general-jwt/issue-token.ts" region="client" />
 
-<Step title="Issue a token on your backend">
+For one Actor, call `issueToken` on its handle. Without `permissions`, the token can only send traffic to that Actor:
 
-Authenticate the user however you already do, then call `issueToken` on the actor they own. It defaults to gateway read access scoped to that one actor, so there is nothing to spell out. Return only the token to the client.
+<CodeSnippet file="examples/docs/general-jwt/issue-token.ts" region="actor" />
 
-<CodeGroup workspace>
-<CodeSnippet file="examples/docs/general-jwt/quickstart/server.ts" title="server.ts" />
-<CodeSnippet file="examples/docs/general-jwt/quickstart/registry.ts" title="registry.ts" />
-</CodeGroup>
+Pass `permissions` to replace the default. The handle accepts `actor_gateway` and `actor` permissions and scopes each grant to the Actor's ID:
 
-</Step>
+<CodeSnippet file="examples/docs/general-jwt/issue-token.ts" region="permissions" />
 
-<Step title="Use the token in RivetKit">
+For namespace-wide grants, such as creating Actors, call `client.auth.issueToken` with an explicit grant list:
 
-Pass `getToken` to `createClient`. RivetKit calls it whenever it needs a credential, caches the result, and calls it again when the token expires.
+<CodeSnippet file="examples/docs/general-jwt/issue-token.ts" region="namespace" />
 
-<CodeSnippet file="examples/docs/general-jwt/quickstart/client.ts" title="client.ts" />
+`expiresIn` is in seconds. `issuedAt` and `expiresAt` are Unix timestamps in milliseconds.
 
-</Step>
+</Tab>
+<Tab title="HTTP API">
 
-<Step title="Verify the scope">
+Call `POST /auth/tokens` with your Rivet token. This grants traffic to every Actor in the `production` namespace; use `{"id":"<actor-id>"}` as the target for one Actor.
 
-Point the same token at a different actor. The control plane rejects it before your code runs:
+```bash
+export RIVET_API=https://rivet.example.com
 
-```sh
-curl -i -H "Authorization: Bearer $TOKEN" \
-  "$RIVET_ENDPOINT/gateway/$SOME_OTHER_ACTOR_ID/"
+curl -X POST "$RIVET_API/auth/tokens" \
+  -H "Authorization: Bearer $RIVET_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "namespace": "production",
+    "subject": "user-123",
+    "duration": 900,
+    "grants": [
+      {"resource":"actor_gateway","target":"any","operations":["read"]}
+    ]
+  }'
 ```
 
+The response contains `token`, `issued_ts` and `expires_ts`. Timestamps are Unix milliseconds; `duration` is seconds. See [Create token](/docs/api/tokens/create).
+
+</Tab>
+</Tabs>
+
+Return only the scoped token to the client. Never send your Rivet token to a browser.
+
+## Use the token
+
+<Tabs>
+<Tab title="RivetKit">
+
+Give the browser client a `getToken` function that asks your backend for a token. The client calls it on first use and again when the token expires.
+
+<CodeSnippet file="examples/docs/general-jwt/use-token.ts" />
+
+</Tab>
+<Tab title="HTTP API">
+
+Send the token as a bearer token. This request reaches the Actor's [request handler](/actors/docs/request-handler):
+
+```bash
+curl "$RIVET_API/gateway/$ACTOR_ID/request/" \
+  -H "Authorization: Bearer $SCOPED_TOKEN"
 ```
-HTTP/1.1 403 Forbidden
-x-rivet-error: auth.insufficient_permissions
-```
 
-</Step>
+</Tab>
+</Tabs>
 
-</Steps>
-
-Issuing needs a credential that already holds the grants being handed out, so it only works from a server-side client. `expiresIn` is in seconds and defaults to the control plane's lifetime, capped at 24 hours. `subject` is your user identifier, opaque to Rivet, and shows up in token inspection. `issuedAt` and `expiresAt` come back as Unix milliseconds.
+A gateway grant does not allow Actor creation, listing, node registration or pool management.
 
 ## Grants
 
-`actor.issueToken` covers the common case. Pass `permissions` to widen what the holder may do to that actor; every grant stays scoped to its resolved ID. For namespace-wide operations such as creating actors, use `client.auth.issueToken` with an explicit grant list, which adds nothing on its own.
+Each grant names a `resource`, a `target`, and `operations` drawn from `create`, `read`, `update`, `delete`, and `list`. A target is `"any"` or an object such as `{"id":"<actor-id>"}`. Replace the placeholder with the resolved Actor ID.
 
-| Resource | Gates |
+| Resource | Purpose |
 | --- | --- |
-| `actor_gateway` | Connecting to an actor by ID: actions, events, and raw HTTP or WebSocket handlers. |
-| `actor` | Resolving or creating actors by key, and the actors API. |
-| `actor_kv` | Reading an actor's raw KV, which the [inspector](/actors/docs/debugging) needs. |
-| `namespace`, `runner`, `runner_config`, `datacenter` | Control-plane management APIs. |
+| `actor` | Create, resolve, list, or manage Actors. |
+| `actor_gateway` | Reach an Actor's actions, events, or HTTP handlers. |
+| `node` | Register or inspect nodes. |
+| `pool` | Read or manage node pool configuration. |
 
-A grant is a resource, a `target` of `"any"` or `{ id }`, and operations drawn from `create`, `read`, `update`, `delete`, and `list`. A grant set is capped at 32 grants, 5 operations each, and 2048 bytes encoded.
+Actor management and gateway access require separate grants. Permission to reach one Actor does not allow the holder to create other Actors. Namespace administration and token issuance require your Rivet token.
 
-<CodeSnippet file="examples/docs/general-jwt/grants.ts" />
+## Inspect and renew
 
-### Resolving Versus Connecting
+```bash
+curl "$RIVET_API/auth/tokens/inspect" \
+  -H "Authorization: Bearer $SCOPED_TOKEN"
+```
 
-These are different grants, and confusing them is the most common mistake. `getOrCreate(key)` and `get(key)` route through the query path, which checks `actor` with `create` and `read`. Connecting to an actor you already have the ID for checks `actor_gateway` with `read` on that ID.
+The response contains the namespace slug, grants, subject, and issue and expiry timestamps. Renew expiring credentials through your authenticated backend. Do not give clients your Rivet token to renew tokens themselves.
 
-That distinction is what makes tight scoping possible. A token holding only `actor_gateway` `read` on one ID can reach that actor and nothing else. Resolve the ID on your backend, where you still hold the admin token, then grant against it.
+## Signing keys
 
-## Expiration and Renewal
+The control plane signs tokens with keys it rotates automatically every 7 days. A token lasts 1 hour by default and at most 24 hours.
 
-Expiry is enforced mid-flight, not just at connection time. When a token's `exp` passes, the control plane cancels in-flight requests and closes open WebSockets with code `1008` and `auth.token_expired`.
+To revoke every outstanding token at once, rotate the signing keys immediately. Run these on any control plane instance; they read the instance's configuration:
 
-With `getToken` wired up this is invisible: RivetKit catches the close, calls `getToken({ forceRefresh: true })`, and reconnects. With a static `token` the connection dies and does not come back, so **always use `getToken` for connections that outlive the token**.
+```bash
+rivet-engine depot jwt show
+rivet-engine depot jwt emergency-rotate \
+  --request-id <new-uuid> \
+  --expected-coordinator-epoch <epoch-from-show> \
+  --expected-ring-version <version-from-show>
+```
 
-There is no revocation, so a leaked token is valid until it expires. Keep durations short and let renewal do the work.
-
-## Inspecting a Token
-
-`GET /auth/tokens/inspect`, called with the token itself, returns the namespace, subject, grants, and timestamps it actually carries. Use it when a request is rejected and you want to see what the holder was granted.
-
-## Errors
-
-| Error | Status | Cause |
-| --- | --- | --- |
-| `auth.invalid_token` | 401 | Malformed, unsigned, or signed by a key this cluster does not know. |
-| `auth.token_expired` | 401 | Past `exp`. Refresh and retry. |
-| `auth.insufficient_permissions` | 403 | Valid token, but no grant covers this resource, target, and operation. |
-| `auth.issuance_disabled` | 400 | `auth.jwt.issuance_enabled` is off, so issuance will not mint. |
-
-Over HTTP the code arrives in the JSON body and, through the gateway, in the `x-rivet-error` response header. On a WebSocket it arrives in the close reason.
-
-## Configuration
-
-Issuance and verification are on by default when a self-hosted control plane has an [admin token](/docs/deploy/self-host/control-plane/configuration#admin-token). Tokens are signed with `EdDSA`, the issuer is derived from the leader datacenter's public URL, and signing keys rotate every seven days with no operator action. Tune `auth.jwt.default_duration`, `auth.jwt.max_duration`, and `auth.jwt.audience` if the defaults do not suit you.
-
-## Not Your Application's JWTs
-
-This page is about credentials Rivet issues and verifies. Tokens from Clerk, Auth0, Supabase, or your own issuer are never seen by Rivet. Pass them as connection parameters and verify them inside the actor. See [Permissions](/actors/docs/permissions).
-
-The two compose: a Rivet JWT decides which actor a client may reach, and your own token decides who the user is once they are there.
-
-[`examples/jwt-counter`](https://github.com/rivet-dev/rivet/tree/main/examples/jwt-counter) is a runnable backend, client, and smoke test covering issuance, scoped access, and renewal.
+Every instance stops accepting the old tokens within 5 minutes. If the command's reply is lost, run `show` again and retry with the same request ID.

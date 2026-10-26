@@ -57,7 +57,7 @@ Use `.getGatewayUrl()` to get the raw gateway URL for the actor. This is useful 
 
 ### Via HTTP API
 
-This handler can be accessed with raw HTTP using `https://api.rivet.dev/gateway/{actorId}/request/{...path}`.
+This handler can be accessed with raw HTTP using `https://rivet.example.com/gateway/{actorId}/request/{...path}`.
 
 For example, to call `POST /increment` on the counter actor above:
 
@@ -66,7 +66,7 @@ For example, to call `POST /increment` on the counter actor above:
 <CodeSnippet file="examples/docs/actors-request-handler/http-api-fetch.ts" region="fetch" />
 
 ```bash
-curl -X POST "https://api.rivet.dev/gateway/{actorId}/request/increment" \
+curl -X POST "https://rivet.example.com/gateway/{actorId}/request/increment" \
   -H "x-rivet-token: {token}"
 ```
 
@@ -78,7 +78,7 @@ The request is routed to the actor's `onRequest` handler where:
 - `request.url` ends with `/increment` (the path after `/request/`)
 - Headers, body, and other request properties are passed through unchanged
 
-See the [HTTP API reference](/docs/api/gateway/request) for more information on HTTP routing and [Authentication](/docs/api/authentication).
+See the [HTTP API reference](/actors/docs/http-api) for more information on HTTP routing and authentication.
 
 ### Via Proxying Requests
 

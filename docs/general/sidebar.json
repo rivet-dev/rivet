@@ -30,13 +30,8 @@
 							"href": "/docs/authentication"
 						},
 						{
-							"title": "JWTs",
+							"title": "Scoped Tokens",
 							"href": "/docs/jwt"
-						},
-						{
-							"title": "ACL",
-							"href": "/docs/deploy/self-host/control-plane/rbac",
-							"badge": "Enterprise"
 						}
 					]
 				}
@@ -50,20 +45,12 @@
 					"href": "/docs/namespaces"
 				},
 				{
-					"title": "Workers & Pools",
-					"href": "/docs/workers"
+					"title": "Nodes & Node Pools",
+					"href": "/docs/nodes"
 				},
 				{
 					"title": "Versions & Upgrades",
 					"href": "/docs/versions"
-				},
-				{
-					"title": "Regions & Multi-Region",
-					"href": "/docs/regions"
-				},
-				{
-					"title": "Pool Configuration",
-					"href": "/docs/pool-configuration"
 				},
 				{
 					"title": "Monitoring",
@@ -72,14 +59,6 @@
 						{
 							"title": "OpenTelemetry",
 							"href": "/docs/tracing"
-						},
-						{
-							"title": "Actor Statuses",
-							"href": "/docs/statuses"
-						},
-						{
-							"title": "Troubleshooting",
-							"href": "/docs/troubleshooting"
 						},
 						{
 							"title": "Management API",
@@ -117,6 +96,16 @@
 							"title": "AsyncAPI",
 							"href": "https://github.com/rivet-dev/rivet/tree/main/rivetkit-asyncapi",
 							"external": true
+						}
+					]
+				},
+				{
+					"title": "Advanced",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "Benchmarking",
+							"href": "/docs/benchmarking"
 						}
 					]
 				}

@@ -176,14 +176,16 @@ Applies to everything published on the website.
 
 - The service that routes, schedules, and persists is the **control plane**.
   Never "engine", "server", or "orchestrator".
-- A process running user code with the Rivet SDK is a **worker**. Never "envoy",
-  "runner", "node", "compute", or "data plane".
+- A process running user code with the Rivet SDK is a **node**; nodes sharing a
+  pool name form a **node pool**. Never "envoy", "runner", "worker", "compute" or
+  "data plane". Say "Node.js" for the runtime, "Kubernetes node" for cluster
+  machines, and "control plane instance" for one control plane process.
 - **Never use "agent" as a deployment noun.** Rivet ships agentOS and Actors is
   "where agents live"; the collision is unrecoverable.
 - **"envoy" never appears in docs.** Envoy Proxy is a top-tier CNCF project.
   Internal code keeps its own names.
-- **"Rivet Compute" is retired.** Where prose must name the managed offering it
-  is **Rivet Cloud**, and it links to <https://dashboard.rivet.dev>.
+- **Rivet Cloud** is the managed offering. There is no Rivet dashboard; never link one.
+  Keep its deployment documentation, including managed backend hosting.
 - Spell the product `agentOS`, never `AgentOS`. Capitalize **Rivet Actor** as a
   proper noun, lowercase generic "actor".
 - Always `rivet.dev`, never `rivet.gg`.

@@ -8,7 +8,7 @@ description: "Probe a serverless URL and return the protocol version reported by
 Metadata fetch failures are returned as a `failure` result in a successful HTTP response.
 
 ```http
-POST https://api.rivet.dev/runner-configs/serverless-health-check
+POST https://rivet.example.com/runner-configs/serverless-health-check
 ```
 
 ## Examples
@@ -16,7 +16,7 @@ POST https://api.rivet.dev/runner-configs/serverless-health-check
 <CodeGroup>
 
 ```bash cURL
-curl -X POST "https://api.rivet.dev/runner-configs/serverless-health-check?namespace=$RIVET_NAMESPACE" \
+curl -X POST "https://rivet.example.com/runner-configs/serverless-health-check?namespace=$RIVET_NAMESPACE" \
   -H "Authorization: Bearer $RIVET_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

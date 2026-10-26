@@ -39,16 +39,6 @@
 							"href": "/actors/docs/quickstart/effect",
 							"icon": "faLayerGroup",
 							"badge": "Beta"
-						},
-						{
-							"title": "Cloudflare Workers",
-							"href": "/actors/docs/quickstart/cloudflare",
-							"icon": "faCloudflare"
-						},
-						{
-							"title": "Supabase Functions",
-							"href": "/actors/docs/quickstart/supabase",
-							"icon": "faSupabase"
 						}
 					]
 				}
@@ -199,10 +189,6 @@
 						{
 							"title": "Icons & Names",
 							"href": "/actors/docs/appearance"
-						},
-						{
-							"title": "Custom Inspector Tabs",
-							"href": "/actors/docs/inspector-tabs"
 						},
 						{
 							"title": "Actor Runtime Socket",

@@ -29,19 +29,9 @@ import RegistryConfigSchema from "@/components/docs/RegistryConfigSchemaClient.a
 
 After configuring your registry, start it:
 
-<CodeGroup>
-
 <CodeSnippet file="examples/docs/general-registry-configuration/registry-start.ts" title="registry.start()" />
 
-<CodeSnippet file="examples/docs/general-registry-configuration/serverless.ts" title="Serverless" />
-
-<CodeSnippet file="examples/docs/general-registry-configuration/serverless-with-router.ts" title="Serverless-with-Router" />
-
-<CodeSnippet file="examples/docs/general-registry-configuration/envoy.ts" title="Envoy" />
-
-</CodeGroup>
-
-See [Workers & Pools](/docs/workers) for details on when to use each mode.
+`registry.start()` runs your process as a node. See [Architecture](/docs/architecture#actor-nodes).
 
 ## Environment Variables
 

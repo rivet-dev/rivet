@@ -8,7 +8,7 @@ description: "Delete a worker configuration from every configured datacenter."
 A failure can occur after the configuration has already been deleted from some datacenters.
 
 ```http
-DELETE https://api.rivet.dev/runner-configs/{runner_name}
+DELETE https://rivet.example.com/runner-configs/{runner_name}
 ```
 
 ## Examples
@@ -16,7 +16,7 @@ DELETE https://api.rivet.dev/runner-configs/{runner_name}
 <CodeGroup>
 
 ```bash cURL
-curl -X DELETE "https://api.rivet.dev/runner-configs/$RUNNER_NAME?namespace=$RIVET_NAMESPACE" \
+curl -X DELETE "https://rivet.example.com/runner-configs/$RUNNER_NAME?namespace=$RIVET_NAMESPACE" \
   -H "Authorization: Bearer $RIVET_TOKEN"
 ```
 

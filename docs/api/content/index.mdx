@@ -7,7 +7,7 @@ skill: true
 Everything the RivetKit client does happens over HTTP. This reference documents those requests so you can call actors from any language, curl, or a platform without a Rivet SDK. Every endpoint page shows the raw request next to the equivalent TypeScript.
 
 ```http
-https://api.rivet.dev
+https://rivet.example.com
 ```
 
 Self-hosted deployments use the endpoint from your `RIVET_ENDPOINT` URL instead. See [Endpoints](/docs/endpoints).
@@ -21,7 +21,7 @@ The API has two parts that use different authentication and addressing rules.
 | Path prefix | `/gateway/{actor}/...` | `/actors`, `/auth/tokens`, ... |
 | Purpose | Talk to a running actor: call actions, send HTTP requests, open realtime connections | Manage actors: list, create, destroy, sleep, and issue tokens |
 | Authentication | `x-rivet-token` header, `{actor_id}@{token}` path, or `rvt-token` query | `Authorization: Bearer` header plus `namespace` query parameter |
-| Safe from browsers | Yes, with a public (`pk_`) or scoped token | No, requires a secret (`sk_`) token |
+| Safe from browsers | Yes, with a scoped token | No, requires your Rivet token |
 
 Most applications only need the gateway. The RivetKit client resolves actors by name and key inline on each gateway request, so you rarely need to create actors or look up IDs through the control plane first.
 
@@ -38,7 +38,6 @@ Most applications only need the gateway. The RivetKit client resolves actors by 
 | `handle.resolve()` | [`PUT /actors`](/docs/api/actors/get-or-create) |
 | `client.counter.create(["key"])` | [`POST /actors`](/docs/api/actors/create) |
 | `handle.issueToken()` | [`POST /auth/tokens`](/docs/api/tokens/create) |
-| Dashboard "Destroy" | [`DELETE /actors/{actor_id}`](/docs/api/actors/destroy) |
 
 ## When to Use HTTP Directly
 

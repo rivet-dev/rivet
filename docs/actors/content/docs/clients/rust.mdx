@@ -348,18 +348,18 @@ use rivetkit::client::ClientConfig;
 
 let config = ClientConfig::new("http://localhost:6420")
 	.namespace("default")
-	.token("pk_...")
+	.token("<scoped-token>")
 	.pool_name("my-pool")
 	.header("x-custom", "value");
 ```
 
 - `namespace` - target namespace (defaults to the control plane's configured namespace).
 - `token` - authentication token for the control plane.
-- `pool_name` - runner pool to target.
+- `pool_name` - node pool to target.
 - `header` / `headers` - extra HTTP headers sent with each request.
 - `max_input_size` - cap on encoded action input size.
 
-For serverless deployments, set the endpoint to your app's `/api/rivet` URL. See [Connect](/docs/connect) for details.
+See [Endpoints](/docs/connect) for details.
 
 ## API Reference
 
