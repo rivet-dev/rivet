@@ -26,6 +26,7 @@ concurrency:
 jobs:
   generated-up-to-date:
     name: API Reference / Generated Pages Up To Date
+    if: github.repository == 'rivet-dev/rivet'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
