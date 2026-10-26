@@ -32,6 +32,10 @@ use crate::types::ConnId;
 pub(crate) type EventSendCallback = Arc<dyn Fn(OutgoingEvent) -> Result<()> + Send + Sync>;
 pub(crate) type DisconnectCallback =
 	Arc<dyn Fn(Option<String>) -> BoxFuture<'static, Result<()>> + Send + Sync>;
+
+/// Close reason for connections closed while the actor shuts down. Clients
+/// classify it as reconnect-only.
+pub(crate) const WS_GOING_AWAY_CLOSE_REASON: &str = "ws.going_away";
 type StateChangeCallback = Arc<dyn Fn(&ConnHandle) + Send + Sync>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -426,11 +430,11 @@ impl ConnHandle {
 		self.disconnect_handler()
 	}
 
-	pub(crate) async fn disconnect_transport_only(&self) -> Result<()> {
+	pub(crate) async fn disconnect_transport_only(&self, reason: Option<String>) -> Result<()> {
 		let Some(handler) = self.transport_disconnect_handler() else {
 			return Ok(());
 		};
-		handler(None).await
+		handler(reason).await
 	}
 
 	fn transport_disconnect_handler(&self) -> Option<DisconnectCallback> {
@@ -952,9 +956,14 @@ impl ActorContext {
 			.collect();
 		let mut disconnected_ids = Vec::new();
 		let mut failures = Vec::new();
+		let reason = if self.actor_aborted() {
+			Some(WS_GOING_AWAY_CLOSE_REASON.to_owned())
+		} else {
+			None
+		};
 
 		for conn in &connections {
-			match conn.disconnect_transport_only().await {
+			match conn.disconnect_transport_only(reason.clone()).await {
 				Ok(()) => {
 					tracing::debug!(
 						actor_id = %self.actor_id(),

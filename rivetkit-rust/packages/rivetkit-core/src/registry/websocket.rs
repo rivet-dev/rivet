@@ -2,6 +2,7 @@ use super::actor_connect::*;
 use super::dispatch::*;
 use super::inspector::encode_json_as_cbor;
 use super::*;
+use crate::actor::connection::WS_GOING_AWAY_CLOSE_REASON;
 use crate::error::ProtocolError;
 use crate::telemetry::IncomingInvocationContext;
 use crate::time::timeout;
@@ -712,7 +713,11 @@ fn configure_actor_connect_connection(
 		let transport_disconnect_sender = transport_disconnect_sender.clone();
 		Box::pin(async move {
 			if !transport_closed.swap(true, Ordering::SeqCst) {
-				transport_disconnect_sender.close(Some(1000), reason);
+				let code = match reason.as_deref() {
+					Some(WS_GOING_AWAY_CLOSE_REASON) => 1001,
+					_ => 1000,
+				};
+				transport_disconnect_sender.close(Some(code), reason);
 			}
 			Ok(())
 		})

@@ -968,13 +968,16 @@ export class ActorConnRaw {
 
 			this.#rejectPendingPromises(error, false);
 
-			// Dispatch to error handler if it's an ActorError
-			if (error instanceof errors.ActorError) {
+			// A lifecycle close that the reconnect recovers from is a state change, not an error.
+			const willReconnect = wasConnected && this.#authRetryAvailable;
+			if (
+				error instanceof errors.ActorError &&
+				!(willReconnect && isRetryableLifecycleReconnectSignal(error))
+			) {
 				this.#dispatchActorError(error);
 			}
 
-			// Automatically reconnect if we were connected
-			if (wasConnected && this.#authRetryAvailable) {
+			if (willReconnect) {
 				logger().debug({
 					msg: "triggering reconnect",
 					connId: this.#connId,
