@@ -289,8 +289,14 @@ export function buildActorQueryGatewayUrl(
 }
 
 function pushKeyQueryParams(params: URLSearchParams, key: string[]): void {
-	if (key.length > 0) {
-		params.append("rvt-key", key.join(","));
+	// Each component is sent as its own `rvt-key-part` occurrence instead of
+	// being comma-joined into a single `rvt-key` value. A comma-joined value
+	// cannot distinguish a component containing a literal comma from
+	// multiple components, so `rvt-key` is kept only as a legacy fallback
+	// for older gateways/clients. `rvt-key-part` has no such ambiguity: each
+	// occurrence is one already-final component, percent-encoded normally.
+	for (const part of key) {
+		params.append("rvt-key-part", part);
 	}
 }
 

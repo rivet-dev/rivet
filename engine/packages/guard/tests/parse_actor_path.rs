@@ -1,5 +1,8 @@
-// Keep this test suite in sync with the TypeScript equivalent at
-// rivetkit-typescript/packages/rivetkit/tests/parse-actor-path.test.ts
+// Keep this test suite in sync with the TypeScript equivalents at
+// rivetkit-typescript/packages/rivetkit/tests/actor-gateway-url.test.ts
+// (URL builder) and
+// rivetkit-typescript/packages/rivetkit/tests/driver/gateway-routing.test.ts
+// (end-to-end).
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use rivet_guard::routing::actor_path::{
 	ParsedActorPath, QueryActorQuery, is_actor_gateway_path, parse_actor_path,
@@ -191,6 +194,105 @@ fn parses_simple_multi_component_keys() {
 					namespace: "default".to_string(),
 					name: "lobby".to_string(),
 					key: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+					skip_ready_wait: false,
+				}
+			);
+		}
+		ParsedActorPath::Direct(_) => panic!("expected query actor path"),
+	}
+}
+
+#[test]
+fn parses_repeated_key_part_params_in_order() {
+	let path =
+		"/gateway/lobby?rvt-namespace=default&rvt-method=get&rvt-key-part=tenant&rvt-key-part=room";
+	let result = parse_actor_path(path).unwrap().unwrap();
+
+	match result {
+		ParsedActorPath::Query(path) => {
+			assert_eq!(
+				path.query,
+				QueryActorQuery::Get {
+					namespace: "default".to_string(),
+					name: "lobby".to_string(),
+					key: vec!["tenant".to_string(), "room".to_string()],
+					skip_ready_wait: false,
+				}
+			);
+		}
+		ParsedActorPath::Direct(_) => panic!("expected query actor path"),
+	}
+}
+
+#[test]
+fn rvt_key_part_takes_precedence_over_legacy_rvt_key() {
+	let path =
+		"/gateway/lobby?rvt-namespace=default&rvt-method=get&rvt-key=ignored&rvt-key-part=tenant";
+	let result = parse_actor_path(path).unwrap().unwrap();
+
+	match result {
+		ParsedActorPath::Query(path) => {
+			assert_eq!(
+				path.query,
+				QueryActorQuery::Get {
+					namespace: "default".to_string(),
+					name: "lobby".to_string(),
+					key: vec!["tenant".to_string()],
+					skip_ready_wait: false,
+				}
+			);
+		}
+		ParsedActorPath::Direct(_) => panic!("expected query actor path"),
+	}
+}
+
+#[test]
+fn distinguishes_comma_containing_component_from_two_components() {
+	// Regression coverage for https://github.com/rivet-dev/rivet/issues/5807:
+	// a component containing a literal comma must not collide with a
+	// two-component key once encoded via rvt-key-part.
+	let single_part_with_comma =
+		"/gateway/lobby?rvt-namespace=default&rvt-method=get&rvt-key-part=tenant%2Cadmin";
+	let two_parts = "/gateway/lobby?rvt-namespace=default&rvt-method=get&rvt-key-part=tenant&rvt-key-part=admin";
+
+	let single_result = parse_actor_path(single_part_with_comma).unwrap().unwrap();
+	let two_result = parse_actor_path(two_parts).unwrap().unwrap();
+
+	let single_key = match single_result {
+		ParsedActorPath::Query(path) => match path.query {
+			QueryActorQuery::Get { key, .. } => key,
+			QueryActorQuery::GetOrCreate { .. } => panic!("expected get query"),
+		},
+		ParsedActorPath::Direct(_) => panic!("expected query actor path"),
+	};
+	let two_key = match two_result {
+		ParsedActorPath::Query(path) => match path.query {
+			QueryActorQuery::Get { key, .. } => key,
+			QueryActorQuery::GetOrCreate { .. } => panic!("expected get query"),
+		},
+		ParsedActorPath::Direct(_) => panic!("expected query actor path"),
+	};
+
+	assert_eq!(single_key, vec!["tenant,admin".to_string()]);
+	assert_eq!(two_key, vec!["tenant".to_string(), "admin".to_string()]);
+	assert_ne!(single_key, two_key);
+}
+
+#[test]
+fn parses_empty_key_part_components() {
+	// An empty rvt-key-part occurrence is a real component (empty string),
+	// distinct from omitting the param entirely.
+	let path = "/gateway/lobby?rvt-namespace=default&rvt-method=get&rvt-key-part=&rvt-key-part=b";
+	let result = parse_actor_path(path).unwrap().unwrap();
+
+	match result {
+		ParsedActorPath::Query(path) => {
+			assert_eq!(
+				path.query,
+				QueryActorQuery::Get {
+					namespace: "default".to_string(),
+					name: "lobby".to_string(),
+					key: vec!["".to_string(), "b".to_string()],
 					skip_ready_wait: false,
 				}
 			);
