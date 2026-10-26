@@ -1,163 +1,141 @@
 ---
 title: "Live Cursors and Presence"
-description: "Live cursors and multiplayer presence with Rivet Actors: per-connection cursor state, realtime updates over events or raw WebSockets, and throttling."
-templates: ["cursors", "cursors-raw-websocket"]
+description: "Build live cursors and presence for a shared canvas, where one room Actor tracks who is connected and broadcasts every cursor move."
+templates: ["cursors"]
 ---
 
-Patterns for building live cursors, multiplayer presence, and realtime cursor sharing with RivetKit. One room actor fans cursor positions out to every connected client, keyed per room with [actor keys](/actors/docs/keys).
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
-## Starter Code
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/cursors" />
 
-Start with one of the two working variants on GitHub. Both implement the same collaborative cursor canvas with persistent text labels; they differ only in transport.
+<Diagram
+  id="live-cursors"
+  label="Browser A connects to the cursorRoom Actor for its room and calls getRoomState to load the cursors and text labels already there. On every mouse move it calls updateCursor, which stores the cursor in that connection's connState. The room broadcasts the cursorMoved event to every connection, so Browser B draws the new position. When Browser A closes its tab, onDisconnect broadcasts cursorRemoved and Browser B removes that cursor. Text labels are saved in the Actor's persistent state. The numbers show the order of the calls. There is one cursorRoom Actor per room."
+  stackLabel="One per room"
+  nodes={[
+    { id: "a", x: 20, y: 60, title: "Browser A", subtitle: "moves the mouse" },
+    { id: "b", x: 20, y: 240, title: "Browser B", subtitle: "draws cursors" },
+    { id: "room", x: 600, y: 150, w: 190, product: "actors", stack: true, title: "`cursorRoom`", subtitle: "cursors in `connState`" },
+    { id: "state", x: 920, y: 150, w: 150, title: "`c.state`", subtitle: "`textLabels`, saved" },
+  ]}
+  edges={[
+    { from: "a", to: "room", fromSide: "top", toSide: "top", via: [[105, 25], [670, 25]], toOffset: -25, label: "`getRoomState` on join", step: 1 },
+    { from: "a", to: "room", fromOffset: 0, toOffset: -12, via: [[400, 90], [400, 168]], label: "`updateCursor`", labelAt: [290, 82], step: 2 },
+    { from: "room", to: "b", kind: "reply", fromOffset: 12, via: [[450, 192], [450, 270]], label: "`cursorMoved` to all", labelAt: [320, 262], step: 3 },
+    { from: "room", to: "b", kind: "reply", fromSide: "bottom", toSide: "bottom", via: [[695, 340], [105, 340]], label: "`cursorRemoved` when A leaves", step: 4 },
+    { from: "room", to: "state", label: "`updateText`" },
+  ]}
+/>
 
-| Variant | Starter Code | Transport | Presence Storage |
-| --- | --- | --- | --- |
-| `cursors` | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/cursors) | Typed [actions](/actors/docs/actions) and [events](/actors/docs/events) over the RivetKit connection | `connState` per connection |
-| `cursors-raw-websocket` | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/cursors-raw-websocket) | Raw [`onWebSocket` handler](/actors/docs/websocket-handler) with a custom JSON message protocol | Socket map in `createVars` |
+What we'll build:
 
-Use `cursors` by default: typed actions, typed events, and automatic connection tracking cover most apps with less code. Use `cursors-raw-websocket` when you need full control of the wire format, for example a custom JSON or binary protocol, or clients that do not use the RivetKit client library.
+- A `cursorRoom` Actor per room, keyed by the room name, that every browser in the room connects to.
+- Cursor presence stored per connection, so a cursor disappears the moment its tab closes.
+- Text labels on the canvas that are saved in the Actor's state and survive restarts.
+- A React client that sends its cursor on every mouse move and draws everyone else's.
 
-## Connection State vs Persistent State
+<Steps>
 
-Presence is ephemeral by definition. A cursor position is only meaningful while its connection is alive, so it belongs in per-connection storage, not in persistent actor state. Persistent state is reserved for data that must survive disconnects and actor restarts.
+<Step title="Install">
 
-| Data | Where It Lives | Why |
-| --- | --- | --- |
-| Cursor position | `connState` (`cursors`) or the `createVars` socket map (`cursors-raw-websocket`) | Scoped to one connection and discarded with it. Stale presence cannot accumulate in storage. |
-| Text labels (`textLabels`) | Persistent actor `state` in both variants | Canvas content must survive disconnects and actor restarts. |
-
-In the `cursors` variant, `updateCursor` writes `c.conn.state.cursor` and `getRoomState` rebuilds the presence snapshot by iterating `c.conns.values()`, so the cursor map is always derived from live connections rather than stored. See [Connections](/actors/docs/connections) for `connState` and [State](/actors/docs/state) for persistence semantics.
-
-## Presence Lifecycle
-
-- **Join**: The `cursors-raw-websocket` variant pushes an `init` message with the current `{ cursors, textLabels }` snapshot as soon as a socket connects. The `cursors` variant has no explicit join broadcast; the client calls the `getRoomState` action once after connecting to seed its local maps, and peers first see a new user on that user's first `cursorMoved` broadcast.
-- **Move**: Every `updateCursor` call writes the connection's presence entry, then broadcasts `cursorMoved` to all connections, including the sender.
-- **Leave**: The `cursors` variant handles leave in `onDisconnect`, broadcasting `cursorRemoved` with the connection's last cursor. The raw variant does the same from the socket `close` listener, then deletes the session from the `vars.websockets` map. Clients delete that user from their local cursor map, so stale cursors disappear the moment a tab closes.
-
-See [Lifecycle](/actors/docs/lifecycle) for `onDisconnect` and `createVars`.
-
-## Update Throttling
-
-Neither example throttles. Both frontends send a cursor update on every raw `mousemove` event with no debounce or interval cap. That is fine for a demo, but a fast mouse on a high-refresh display can emit hundreds of events per second per user. The patterns below are recommended production hardening on top of the starter code, not something the examples implement.
-
-| Layer | Pattern | Guidance |
-| --- | --- | --- |
-| Client (smoothness) | Throttle to 20-30Hz | Sample the latest pointer position every 33-50ms and send only that. Drop intermediate moves, but always flush the final position so cursors settle at the true location. Interpolate between received positions on the rendering side. |
-| Server (enforcement) | Per-connection rate limit | Track the last accepted update timestamp per connection and drop or coalesce updates arriving faster than your cap. Client throttles are cooperative; the actor is the enforcement boundary. |
-
-## Actors
-
-<AccordionGroup>
-<Accordion title="cursorRoom[roomId] (cursors)">
-
-- **Key**: `cursorRoom[roomId]` (the frontend defaults `roomId` to `"general"`)
-- **Responsibility**: Holds per-connection cursor presence in `connState`, persists shared text labels in actor state, and broadcasts cursor and text updates to all connections.
-- **Actions**
-  - `updateCursor`
-  - `updateText`
-  - `removeText`
-  - `getRoomState`
-- **Events**
-  - `cursorMoved`
-  - `cursorRemoved`
-  - `textUpdated`
-  - `textRemoved`
-- **Queues**
-  - None
-- **State**
-  - JSON
-  - `textLabels` (persistent)
-  - `connState.cursor` per connection (ephemeral)
-
-</Accordion>
-<Accordion title="cursorRoom[roomId] (cursors-raw-websocket)">
-
-- **Key**: `cursorRoom[roomId]` (resolved via `client.cursorRoom.getOrCreate(roomId)`)
-- **Responsibility**: Exposes a raw WebSocket endpoint, tracks live sockets and their cursors in a `createVars` map keyed by a `sessionId` query parameter, persists text labels, and manually fans JSON frames out to every socket.
-- **Actions**
-  - `getOrCreate` (stub returning `{ status: "ok" }`; the frontend resolves the actor ID with the client handle's `getOrCreate(roomId).resolve()`, which creates the actor without dispatching this action)
-  - `getRoomState`
-- **Queues**
-  - None
-- **State**
-  - JSON
-  - `textLabels` (persistent)
-  - `vars.websockets` map of `sessionId` to socket and cursor (in-memory, lost on restart)
-
-</Accordion>
-</AccordionGroup>
-
-The raw variant defines no RivetKit events. Its message names are `type` fields on raw JSON frames:
-
-| Direction | Message `type` | Payload |
-| --- | --- | --- |
-| Client to server | `updateCursor` | `{ userId, x, y }` |
-| Client to server | `updateText` | `{ id, userId, text, x, y }` |
-| Client to server | `removeText` | `{ id }` |
-| Server to client | `init` | `{ cursors, textLabels }` snapshot on connect |
-| Server to client | `cursorMoved`, `textUpdated`, `textRemoved`, `cursorRemoved` | The corresponding cursor, label, or ID payload |
-
-## Lifecycle
-
-<Tabs>
-<Tab title="cursors (Actions + Events)">
-
-```mermaid
-sequenceDiagram
-	participant A as Client A
-	participant R as cursorRoom
-	participant B as Other Clients
-
-	A->>R: connect via useActor (cursorRoom[roomId])
-	A->>R: getRoomState()
-	R-->>A: {cursors, textLabels}
-	loop every mouse move
-		A->>R: updateCursor(userId, x, y)
-		Note over R: write c.conn.state.cursor
-		R-->>B: cursorMoved (broadcast)
-	end
-	A->>R: updateText(id, userId, text, x, y)
-	Note over R: upsert persistent state.textLabels
-	R-->>B: textUpdated (broadcast)
-	Note over A: tab closes
-	Note over R: onDisconnect reads conn.state.cursor
-	R-->>B: cursorRemoved (broadcast)
+```sh
+npm add rivetkit @rivetkit/react
 ```
 
-</Tab>
-<Tab title="cursors-raw-websocket">
+</Step>
 
-```mermaid
-sequenceDiagram
-	participant A as Client A
-	participant R as cursorRoom
-	participant B as Other Clients
+<Step title="Create the room Actor">
 
-	A->>R: getOrCreate(roomId).resolve()
-	R-->>A: actorId
-	A->>R: open WebSocket /gateway/{actorId}/websocket?sessionId=...
-	Note over R: close 1008 if sessionId is missing
-	Note over R: store socket in vars.websockets
-	R-->>A: init {cursors, textLabels}
-	loop every mouse move
-		A->>R: {type: "updateCursor"} frame
-		Note over R: update session cursor in vars
-		R-->>B: cursorMoved frame
-	end
-	Note over A: socket closes
-	R-->>B: cursorRemoved frame
-	Note over R: delete session from vars.websockets
+Each room is its own `cursorRoom` Actor. It keeps two kinds of data: the text labels, which belong to the room, and the cursors, which belong to whoever is connected right now:
+
+<CodeSnippet file="examples/cursors/src/index.ts" title="index.ts" highlight="room,registry" />
+
+- `state.textLabels` is persistent [state](/actors/docs/state). It is saved automatically and is still there after everyone leaves and the Actor sleeps or restarts.
+- `connState.cursor` is [connection state](/actors/docs/connections#connection-state). Each connection gets its own copy, and it is thrown away when the connection closes. Presence only means something while the user is connected, so keeping it here means stale cursors can never pile up in storage.
+- `events` declares the four typed [events](/actors/docs/events) the room broadcasts. The React client gets the same payload types through `typeof registry`.
+- The client picks the room with the [key](/actors/docs/keys) `[roomId]`. Two tabs with the same room name reach the same Actor, and different rooms never share cursors or labels.
+
+</Step>
+
+<Step title="Broadcast cursor moves">
+
+`updateCursor` is the hot path. Every browser calls it on every mouse move:
+
+<CodeSnippet file="examples/cursors/src/index.ts" title="index.ts" highlight="cursor" />
+
+- It writes the cursor to `c.conn.state`, the calling connection's own state, then broadcasts `cursorMoved` to every connection in the room, including the sender.
+- The position is in a fixed 1920x1080 canvas space, not screen pixels. Each client scales the canvas to its window, so cursors line up across screen sizes.
+
+<Warning>
+The example sends an update on every raw `mousemove` and the Actor accepts all of them. A fast mouse on a high refresh rate display can send hundreds of updates per second per user. In production, throttle on both sides:
+
+- **Client**: send the latest position every 33 to 50ms (20 to 30Hz) and drop the moves in between. Always send the final position so cursors settle where the mouse stopped, and interpolate between received positions when drawing.
+- **Actor**: keep the time of the last accepted update in `connState` and drop updates that arrive faster than your cap. A client throttle is only a courtesy, so the Actor is where the limit is enforced.
+</Warning>
+
+<Warning>
+`userId` comes from the client. In the example it is a random string the browser makes up, so any client can send moves as another user. In production, key presence by `c.conn.id` or by a user id from [authentication](/guides/authentication), and clamp `x` and `y` to the canvas bounds.
+</Warning>
+
+</Step>
+
+<Step title="Track who joins and leaves">
+
+Presence has three moments: join, move, and leave. Move is `updateCursor`. Join and leave are these two:
+
+<CodeSnippet file="examples/cursors/src/index.ts" title="index.ts" highlight="presence" />
+
+- **Join**: there is no join broadcast. A new client calls `getRoomState` once after it connects to load the cursors and labels already in the room. Other users first see the newcomer on their first `cursorMoved`.
+- `getRoomState` builds the cursor map from `c.conns.values()`, the live connections, instead of reading a stored list. The answer always matches who is connected.
+- **Leave**: `onDisconnect` runs when a connection closes and broadcasts `cursorRemoved` with that connection's last cursor. Clients delete it from their map, so the cursor disappears as soon as the tab closes. See [Lifecycle](/actors/docs/lifecycle) for when `onDisconnect` runs.
+
+</Step>
+
+<Step title="Save text labels">
+
+Clicking the canvas places a text label that everyone sees and that stays after the page reloads:
+
+<CodeSnippet file="examples/cursors/src/index.ts" title="index.ts" highlight="labels" />
+
+- `updateText` inserts or replaces a label by `id` in `c.state.textLabels` and broadcasts `textUpdated`. The client calls it on every keystroke, so others watch the text being typed.
+- `removeText` filters the label out and broadcasts `textRemoved` with its id. The client calls it when the user presses Escape or finishes with an empty label.
+
+<Warning>
+Any client can edit or remove any label, because `updateText` trusts the `id` and `userId` it is given and `removeText` trusts the `id`. In production, check that the caller owns the label, cap the text length, and cap the number of labels so the persistent state cannot grow without bound.
+</Warning>
+
+</Step>
+
+<Step title="Connect the browser">
+
+The React client connects with `useActor`, loads the room once, then keeps its maps up to date from events:
+
+<CodeSnippet file="examples/cursors/frontend/App.tsx" title="App.tsx" region="client" highlight="connect,events,move" />
+
+- `useActor({ name: "cursorRoom", key: [roomId] })` connects to the room's Actor and creates it if it does not exist yet. The room input defaults to `general`, and changing it reconnects to a different Actor.
+- Once `cursorRoom.connection` is ready, the client calls `getRoomState` to seed `cursors` and `textLabels`. From then on, `useEvent` handlers apply `cursorMoved`, `cursorRemoved`, `textUpdated`, and `textRemoved` as they arrive.
+- `handleMouseMove` converts the mouse position to canvas space and calls `updateCursor`. This is where a client throttle would go.
+- The client draws its own cursor from the `cursorMoved` echo, labeled "you", so what a user sees is what everyone else sees.
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/cursors
+pnpm install
+pnpm dev
 ```
 
-</Tab>
-</Tabs>
+Open `http://localhost:5173` in two windows side by side. Move the mouse in one and its cursor moves in the other. Click the canvas, type, and press Enter to leave a label. Close one window and its cursor disappears from the other. Reload, and the labels are still there. Change the room name to get an empty canvas of your own.
 
-## Security Checklist
+</Step>
 
-Both examples ship without authentication so the presence pattern stays readable. Everything below is recommended hardening for production, not behavior the examples implement.
+</Steps>
 
-- **Identity**: Bind presence identity to the connection (`c.conn.id` in the actions variant, a server-generated session ID in the raw variant). Never trust a client-supplied `userId`; in the examples it is a random client-generated string, so any client can impersonate or remove any cursor.
-- **Authorization**: Authorize label mutations by owner. In the examples, `updateText` accepts arbitrary `id` and `userId` arguments and `removeText` accepts an arbitrary `id`, so any client can edit or delete any label.
-- **Input validation**: Clamp `x` and `y` to canvas bounds, cap text label length, and cap the total `textLabels` count so persistent state cannot grow unbounded.
-- **Rate limiting**: Enforce a per-connection cap on `updateCursor` (for example 30Hz) and on label writes, as described in [Update Throttling](#update-throttling).
-- **Protocol strictness (raw variant)**: Validate message shape before use and close the socket on malformed JSON instead of logging and continuing. Reject duplicate `sessionId` values rather than silently overwriting another session's socket entry.
+## Next steps
+
+- [Connections](/actors/docs/connections): connection params, `createConnState`, and `onBeforeConnect` for checking who connects.
+- [Chat Room](/guides/chat-room): the same one Actor per room pattern with saved message history.
+- [WebSocket Handler](/actors/docs/websocket-handler): send your own message format over a raw WebSocket instead of actions and events.

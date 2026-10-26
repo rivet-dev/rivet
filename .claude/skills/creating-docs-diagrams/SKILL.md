@@ -7,6 +7,8 @@ description: "Creates accessible hand-authored inline SVG architecture and seque
 
 Create literal, responsive raw SVG that fits Rivet's self-hosted perimeter aesthetic.
 
+Architecture diagrams are the exception: draw them with the website's global `<Diagram>` MDX component (`rivet-dev/website`, `src/components/docs/diagram/Diagram.tsx`), not raw SVG. The `/guides/personal-agent/` diagram is the reference. Extend the component when it cannot draw something. Use the raw SVG workflow below only for sequence diagrams and other figures the component does not cover.
+
 ## Scope
 
 - Apply raw SVG conversion only to documentation pages under `website/src/content/docs/**/*.mdx`.

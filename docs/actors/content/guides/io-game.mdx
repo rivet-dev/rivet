@@ -1,0 +1,144 @@
+---
+title: "IO Game"
+description: "Build an IO game like Agar.io or Slither.io, where players drop into an open lobby at any time and the server moves everyone."
+---
+
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
+
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/io-style" />
+
+<Diagram
+  id="io-game"
+  label="The game client sends findLobby to the ioStyleMatchmaker Actor, which keeps lobbies and seat reservations in its SQLite tables. If every lobby is full, the matchmaker creates an ioStyleMatch Actor. It replies with a matchId and playerId. The client connects to the match with its playerId, and the match claims the seat by sending pendingPlayerConnected to the matchmaker. The client then sends setInput when its direction changes, and the match broadcasts a snapshot event every tick. The numbers show the order of the calls. There is one matchmaker and one ioStyleMatch Actor per match."
+  stackLabel="One per match"
+  nodes={[
+    { id: "client", x: 20, y: 80, w: 150, title: "Game client", subtitle: "browser canvas" },
+    { id: "mm", x: 330, y: 80, w: 230, product: "actors", title: "`ioStyleMatchmaker`", subtitle: "one, keyed `main`" },
+    { id: "db", x: 330, y: 210, w: 230, title: "Matchmaker SQLite", subtitle: "`matches`, `pending_players`" },
+    { id: "match", x: 760, y: 80, w: 190, product: "actors", stack: true, title: "`ioStyleMatch`", subtitle: "10 tps simulation" },
+  ]}
+  edges={[
+    { from: "client", to: "mm", fromOffset: -10, toOffset: -10, label: "`findLobby`", step: 1 },
+    { from: "mm", to: "match", fromOffset: -10, toOffset: -10, label: "`create`", step: 2 },
+    { from: "mm", to: "client", kind: "reply", fromOffset: 12, toOffset: 12, label: "`matchId`, `playerId`", labelAt: [247, 144], step: 3 },
+    { from: "client", to: "match", fromSide: "top", toSide: "top", via: [[95, 30], [855, 30]], label: "`connect` with `playerId`", step: 4 },
+    { from: "match", to: "mm", fromOffset: 12, toOffset: 12, label: "`pendingPlayerConnected`", labelAt: [659, 144], step: 5 },
+    { from: "mm", to: "db", fromSide: "bottom", toSide: "top", label: "`c.db.execute`", labelAt: [455, 180], labelAnchor: "start" },
+    { from: "client", to: "match", fromSide: "bottom", toSide: "bottom", fromOffset: -20, toOffset: -10, via: [[75, 310], [845, 310]], label: "`setInput` on key change", step: 6 },
+    { from: "match", to: "client", kind: "reply", fromSide: "bottom", toSide: "bottom", fromOffset: 14, toOffset: 20, via: [[869, 345], [115, 345]], label: "`snapshot` every tick", step: 7 },
+  ]}
+/>
+
+What we'll build:
+
+- An `ioStyleMatchmaker` Actor that sends each player to the fullest lobby with room, and opens a new lobby when every lobby is full.
+- An `ioStyleMatch` Actor per lobby that moves every player on the server 10 times per second.
+- Clients that only send which way they want to go. The server decides where everyone is.
+- Interpolation in the browser, so 10 snapshots per second still draw smoothly.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add rivetkit
+```
+
+</Step>
+
+<Step title="Create the matchmaker">
+
+One `ioStyleMatchmaker` Actor, keyed `["main"]`, decides which lobby each player joins. It keeps lobbies and seat reservations in its SQLite database:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/io-style/matchmaker.ts" title="matchmaker.ts" highlight="queue,find-lobby" />
+
+- Every request is a queue message, and `run` handles one message at a time. Two players asking at the same moment can't both take the last seat. `findLobby`, `pendingPlayerConnected`, `updateMatch`, and `closeMatch` are all queues.
+- `processFindLobby` picks the lobby with the most players that is still below `CAPACITY` (32). There is no "started" flag, because an IO lobby never closes to new players. If every lobby is full, it inserts a row and creates the `ioStyleMatch` Actor with the match id as its input.
+- It returns a new `playerId` and saves it in `pending_players` for 15 seconds. `player_count` counts pending players as well as connected ones, so a burst of players can't overfill a lobby before they connect.
+- A reservation that is never claimed expires at the start of the next message, in `expirePendingPlayers`, which frees the seat.
+
+</Step>
+
+<Step title="Create the match">
+
+Each lobby is its own `ioStyleMatch` Actor, keyed by the match id. A player joins by connecting with the `playerId` the matchmaker gave them:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/io-style/match.ts" title="match.ts" highlight="connect" />
+
+- `onConnect` reads `playerId` from the connection params. A new player has to be claimed from the matchmaker with `pendingPlayerConnected` first. An unknown or expired id is disconnected with `player_not_pending`.
+- `claimPendingPlayer` waits for the matchmaker's answer for at most 3 seconds and treats a timeout as a rejection, so a busy matchmaker can't hang a join.
+- New players spawn at a random point. A player who reconnects keeps their position, with the new connection id.
+- After every join and leave, `updateMatchmaker` sends `updateMatch` with the number of seats in use, so the matchmaker's counts stay correct as players come and go.
+
+<Warning>
+The `playerId` is the only credential in this example. Anyone who knows it can connect as that player. In production, have the matchmaker issue a signed token and check it in the match, or use [authentication](/guides/authentication).
+</Warning>
+
+</Step>
+
+<Step title="Simulate movement on the server">
+
+The match moves every player itself. Clients only tell it which way they want to go:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/io-style/match.ts" title="match.ts" highlight="tick" />
+
+- `interval(TICK_MS)` ticks every 100 ms until `c.aborted`. Each tick moves every player by `SPEED` in their input direction, keeps them inside the world, and broadcasts one `snapshot` of the lobby.
+- `setInput` stores a direction between -1 and 1 on each axis. That is all a client controls, so it can't move faster than `SPEED` or leave the map, and the server has nothing else to check.
+- A player who has been disconnected for `DISCONNECT_GRACE_MS` (5 seconds) is removed during a tick, and the match tells the matchmaker so the seat opens up.
+- A player sees their own move about one round trip after pressing a key. That is fine at IO game speeds. For instant response, put the movement step in a shared function that the client runs for prediction and the server runs for real.
+
+<Note>
+The example moves dots without collisions. For eating, growing, or Slither-style bodies, keep the movement simple and use a spatial index such as `d3-quadtree` to find nearby players instead of comparing every pair. Reach for a physics engine like `@dimforge/rapier2d` only when the shapes get complex. On a large map, send each connection only the players in view with `conn.send(...)` instead of broadcasting the whole lobby.
+</Note>
+
+</Step>
+
+<Step title="Register the Actors">
+
+Add both Actors to the registry and start it:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/index.ts" title="actors/index.ts" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/index.ts" title="index.ts" />
+</CodeGroup>
+
+The example registers every game type in one registry. An IO game only needs `ioStyleMatchmaker` and `ioStyleMatch`. Each Actor file imports `type { registry }` so that `c.client<typeof registry>()` is typed when the match calls the matchmaker and the matchmaker creates a match.
+
+</Step>
+
+<Step title="Connect players">
+
+The menu asks the matchmaker for a lobby, then the game connects to it, sends input, and draws the snapshots:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/io-style/menu.tsx" title="menu.tsx" highlight="find-lobby" />
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/io-style/io-game.ts" title="io-game.ts" highlight="connect,input,interpolate" />
+</CodeGroup>
+
+- `mm.send("findLobby", {}, { wait: true })` waits for the queue's reply. The menu disposes the matchmaker connection right after, because the player now talks only to the match.
+- The game uses `ioStyleMatch.get(...)`, not `getOrCreate`, because only the matchmaker creates lobbies. `playerId` goes in `params`, which is where `onConnect` reads it.
+- `sendInput` runs on key down and key up, and only calls `setInput` when the direction actually changes. Holding a key sends one message, not one per frame.
+- Each `snapshot` updates the target position of every player. The draw loop moves each dot 20% of the way to its target every frame, which hides the gaps between ticks.
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/multiplayer-game-patterns
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173`, pick **IO-Style**, and click **Find Match**. Move with WASD or the arrow keys. Open a second tab and find a match again: it joins the same lobby, because that lobby is the fullest one with room. Click **Add Bot** to fill the map with players that wander around.
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+- [Battle Royale](/guides/battle-royale): the same lobby flow, with a start countdown and combat.
+- [Lifecycle](/actors/docs/lifecycle): how `run` and `c.aborted` drive a tick loop.
+- [Events](/actors/docs/events): broadcast to everyone or send to one connection.

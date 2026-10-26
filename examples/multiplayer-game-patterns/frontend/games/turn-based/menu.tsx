@@ -85,6 +85,7 @@ export function TurnBasedMenu({
 		}
 	};
 
+	// docs:start create-game
 	const createGame = async () => {
 		if (!name.trim()) return;
 		setStatus("loading");
@@ -130,6 +131,7 @@ export function TurnBasedMenu({
 			setStatus("error");
 		}
 	};
+	// docs:end create-game
 
 	const isWaiting = status === "waiting";
 	const isLoading = status === "loading";

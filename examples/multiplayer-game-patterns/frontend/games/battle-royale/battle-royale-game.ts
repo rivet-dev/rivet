@@ -59,6 +59,7 @@ export class BattleRoyaleGame {
 		private matchInfo: BattleRoyaleMatchInfo,
 		private options: { bot?: boolean } = {},
 	) {
+		// docs:start connect
 		this.conn = client.battleRoyaleMatch
 			.get([matchInfo.matchId], {
 				params: {
@@ -116,6 +117,7 @@ export class BattleRoyaleGame {
 				createdAt: performance.now(),
 			});
 		});
+		// docs:end connect
 
 		if (options.bot) {
 			this.botInterval = window.setInterval(() => {
@@ -218,12 +220,14 @@ export class BattleRoyaleGame {
 					),
 				);
 			}
+			// docs:start send
 			if (now - this.lastSendTime >= SEND_RATE_MS) {
 				this.lastSendTime = now;
 				this.conn
 					.updatePosition({ x: this.localX, y: this.localY })
 					.catch(() => {});
 			}
+			// docs:end send
 		}
 
 		// Camera.

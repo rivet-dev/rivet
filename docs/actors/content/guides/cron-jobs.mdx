@@ -1,68 +1,159 @@
 ---
 title: "Cron Jobs and Scheduled Tasks"
-description: "Patterns for durable one-shot, calendar, and fixed-interval work on Rivet Actors."
+description: "Run a daily report on a cron schedule inside a Rivet Actor, then add one-shot and fixed-interval jobs that survive sleep, restarts, and deploys."
 templates: ["scheduling"]
 ---
 
-Rivet Actor schedules are durable actor-local timers. They survive actor sleep, restarts, upgrades, deploys, and crashes without a separate cron service.
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
-## Choose a schedule type
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/scheduling" />
+
+<Diagram
+  id="cron-jobs"
+  label="Your app's first call creates the reminderActor, and its onCreate hook calls cron.set to install the daily-report cron job with the expression 0 9 * * *. The job is a durable schedule stored with the Actor, so it survives sleep, restarts, upgrades, deploys, and crashes. Every day at 9:00 the job calls the sendDailyReport action on the same Actor. sendDailyReport saves the report as lastReport in the Actor's state and broadcasts the dailyReport event to connected clients. The numbers show the order of the calls. There is one reminderActor per key, such as one per user."
+  stackLabel="One per key"
+  nodes={[
+    { id: "app", x: 20, y: 80, w: 150, title: "Your app", subtitle: "any client" },
+    { id: "actor", x: 300, y: 80, w: 240, product: "actors", stack: true, title: "`reminderActor`", subtitle: "`onCreate`, `sendDailyReport`" },
+    { id: "schedule", x: 700, y: 80, title: "Cron `daily-report`", subtitle: "`0 9 * * *`" },
+    { id: "state", x: 700, y: 190, title: "`c.state`", subtitle: "`lastReport`" },
+  ]}
+  edges={[
+    { from: "app", to: "actor", label: "first call", step: 1 },
+    { from: "actor", to: "schedule", label: "`cron.set`", step: 2 },
+    { from: "schedule", to: "actor", fromSide: "top", toSide: "top", via: [[785, 30], [420, 30]], label: "`sendDailyReport` daily at 9:00", step: 3 },
+    { from: "actor", to: "state", fromSide: "bottom", via: [[420, 220]], label: "saves the report", step: 4 },
+    { from: "actor", to: "app", kind: "reply", fromSide: "bottom", toSide: "bottom", fromOffset: -60, via: [[360, 238], [95, 238]], label: "`dailyReport` event", step: 5 },
+  ]}
+/>
+
+Rivet Actor schedules are durable timers that live with the Actor. They survive sleep, restarts, upgrades, deploys, and crashes, so you do not need a separate cron service or a job queue to run work on time.
+
+This guide adds a daily report to a reminders app. A `reminderActor` stores reminders that fire once, and a cron job on the same Actor sums them up every morning.
+
+What we'll build:
+
+- A `reminderActor` per key that stores reminders and the last daily report in its state.
+- A `daily-report` cron job, installed when the Actor is created, that runs every day at 9:00 Los Angeles time.
+- A `sendDailyReport` action that the job calls to build the report, save it, and broadcast it to connected clients.
+- One-shot reminders scheduled with `c.schedule.after` and `c.schedule.at`, and cancelled with `c.schedule.cancel`.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add rivetkit @rivetkit/react
+```
+
+</Step>
+
+<Step title="Create the reminder Actor">
+
+The Actor's state holds the reminders and the bookkeeping the daily report needs:
+
+<CodeSnippet file="examples/scheduling/src/index.ts" title="index.ts" highlight="state,registry" />
+
+- `reminders` and `completedCount` belong to the one-shot reminders you add in the last step. `lastReportAt` and `lastReport` belong to the daily report. All of it is [state](/actors/docs/state), saved automatically.
+- `lastReportAt` starts at `0`, so the first report covers everything that happened before it.
+- `events` declares `reminderTriggered` and `dailyReport`, the two typed [events](/actors/docs/events) the Actor broadcasts.
+- Every schedule belongs to one Actor, so the [key](/actors/docs/keys) decides the scope of the job. The example uses a single key, `["main"]`, which gives one global job. Use one key per user or per resource for reminders, trials, billing periods, and other per-entity jobs.
+
+</Step>
+
+<Step title="Install the daily job">
+
+`onCreate` installs the cron job the first time the Actor is created:
+
+<CodeSnippet file="examples/scheduling/src/index.ts" title="index.ts" highlight="install" />
+
+- `c.cron.set` stores a named recurring job on the Actor. `0 9 * * *` is a standard five-field cron expression for 9:00 every day.
+- `timezone` takes an IANA name and defaults to UTC. The job keeps firing at 9:00 local time across daylight saving changes.
+- `action` names an action on the same Actor. The name is fixed in your code, never taken from a client.
+- `name` is unique per Actor. Calling `cron.set` again with the same name updates the job instead of adding a second one, so there is no need to re-arm a one-shot schedule after every run.
+- The Actor does not stay awake between runs. It can [sleep](/actors/docs/lifecycle#sleeping) as usual, and Rivet wakes it when the job is due.
+
+<Note>
+`onCreate` runs once per Actor, so a new expression in your code only reaches Actors created after the deploy. To update Actors that already exist, call the same `cron.set` from `onWake`, which runs on every start. Calling it with an unchanged expression keeps the next run time as it is.
+</Note>
+
+</Step>
+
+<Step title="Build the report">
+
+The cron job calls `sendDailyReport`, an ordinary action:
+
+<CodeSnippet file="examples/scheduling/src/index.ts" title="index.ts" highlight="report" />
+
+- When a schedule calls an action, it appends a `ScheduledFireInfo` object after the action's own arguments. It carries `kind`, `id`, `name`, `scheduledAt`, and `firedAt`.
+- The report covers the window from `lastReportAt` to `fire.scheduledAt`. Using the planned time instead of `Date.now()` keeps every window exactly one day long, even when a run starts a little late.
+- If the window was already reported, the action returns the saved report and changes nothing. Running it twice for the same occurrence is harmless, so a manual retry is safe.
+- It saves the report to `c.state.lastReport` and broadcasts `dailyReport`, so connected clients see it right away.
+- A run that is still going when the next one is due makes the next one skip. Failed runs are not retried; the job continues at its next normal time. See [Execution behavior](/actors/docs/schedule#execution-behavior).
+
+<Warning>
+`sendDailyReport` is a public action, so any client that can reach the Actor can call it with any arguments. In production, check who connects with `onBeforeConnect` (see [Authentication](/guides/authentication)) and keep scheduled actions idempotent like this one.
+</Warning>
+
+<Warning>
+Renaming or removing `sendDailyReport` deletes the `daily-report` job the next time it is due, because a recurring job is removed when its action no longer exists. Rename the action and the `action` field of `cron.set` in the same deploy, and call `cron.set` from `onWake` so existing Actors pick up the new name.
+</Warning>
+
+</Step>
+
+<Step title="Check on the job">
+
+`getDailyReport` returns the last report, the job's next run time, and its recent runs:
+
+<CodeSnippet file="examples/scheduling/src/index.ts" title="index.ts" highlight="read" />
+
+- `c.cron.get` returns the job's settings and `nextRunAt`, the Unix time in milliseconds of the next run.
+- `c.cron.history` returns recent runs, newest first. Each entry has a `result` of `running`, `ok`, `error`, or `skipped`, plus the error when a run failed. Since failed runs are not retried, this is where you find them and build your own retry if you need one.
+- A job keeps 100 history entries by default. Pass `maxHistory` to `cron.set` to keep up to 1,000, or `0` to turn history off.
+
+</Step>
+
+<Step title="Add one-shot jobs, intervals, and cancellation">
+
+The reminders are one-shot schedules. Each one calls `triggerReminder` once and keeps the schedule ID so it can be cancelled:
+
+<CodeSnippet file="examples/scheduling/src/index.ts" title="index.ts" highlight="one-shot,cancel" />
+
+- `scheduleReminder` uses `c.schedule.after` with a delay in milliseconds. `scheduleReminderAt` uses `c.schedule.at` with a Unix timestamp in milliseconds.
+- Both return a schedule ID, which the reminder stores as `scheduleId`. `cancelReminder` passes it to `c.schedule.cancel`, which returns `false` if the reminder already fired.
+- Like the cron job, the target action name `triggerReminder` is fixed in code, and the reminder ID is passed as its argument.
+
+Pick the API by how often the work runs:
 
 | API | Use it for |
 | --- | --- |
-| `c.schedule.after(delayMs, action, ...args)` | One-time work after a relative delay. |
-| `c.schedule.at(timestamp, action, ...args)` | One-time work at an exact Unix timestamp in milliseconds. |
-| `c.cron.set({ ... })` | Named calendar recurrence in an IANA timezone. |
-| `c.cron.every({ ... })` | Named fixed intervals of at least 5 seconds. |
+| `c.schedule.after(delayMs, action, ...args)` | Run once after a delay. Returns an ID for `c.schedule.cancel`. |
+| `c.schedule.at(timestamp, action, ...args)` | Run once at a Unix timestamp in milliseconds. Returns an ID for `c.schedule.cancel`. |
+| `c.cron.set({ name, expression, action })` | Run on a calendar schedule, in a timezone. |
+| `c.cron.every({ name, interval, action })` | Run every `interval` milliseconds, at least 5,000. Use it for frequent work such as presence sweeps or cache refreshes. Runs stay on their planned times, so a slow run does not push the next one later. |
+| `c.cron.delete(name)` | Stop a recurring job. Recurring jobs are managed by name, and calling `cron.set` or `cron.every` again with the same name replaces the job. |
 
-All callbacks are ordinary actions on the same actor. Keep the action name fixed in your code rather than accepting an arbitrary action name from a client.
+See [Schedule & Cron](/actors/docs/schedule) for `c.schedule.list`, `c.cron.list`, and the full set of options.
 
-See [Schedule & Cron](/actors/docs/schedule) for the full API, history, cancellation, failure behavior, and limits.
+</Step>
 
-## Calendar job
+<Step title="Try it">
 
-Use `cron.set` instead of manually re-arming a one-shot action:
-
-<CodeSnippet file="examples/docs/cookbook-cron-jobs/daily-report.ts" />
-
-Install fixed background jobs in `onCreate` so setup runs once per actor. The job name remains an upsert key, so a later `cron.set` call updates the existing job rather than creating a duplicate. `cron.set` also handles timezone and daylight-saving transitions.
-
-## Fixed-interval job
-
-Use `cron.every` for frequent work such as presence sweeps or cache refreshes:
-
-```ts
-await c.cron.every({
-  name: "presence-sweep",
-	interval: 15_000, // Minimum 5 seconds.
-  action: "sweepPresence",
-  maxHistory: 25,
-});
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/scheduling
+pnpm install
+pnpm dev
 ```
 
-Intervals remain anchored to scheduled deadlines rather than drifting by the action's runtime. If a previous run is still active, the overlapping occurrence is skipped.
+Open `http://localhost:5173`. Schedule a reminder 5 seconds out and watch it move to completed when it fires. Schedule another and cancel it before it fires. The daily report runs at 9:00 Los Angeles time; `getDailyReport` shows its `nextRunAt` and, after the first run, the report and its history entry.
 
-## Cancellation and updates
+</Step>
 
-Keep the ID returned by a one-shot schedule when it may need cancellation:
+</Steps>
 
-```ts
-const id = await c.schedule.after(60_000, "expireSession", sessionId);
-await c.schedule.cancel(id);
-```
+## Next steps
 
-Recurring jobs are managed by name:
-
-```ts
-await c.cron.delete("presence-sweep");
-```
-
-Calling `cron.set` or `cron.every` again with the same name replaces its configuration.
-
-## Failure and idempotency
-
-Keep scheduled actions idempotent when duplicate work would be harmful. See [Execution behavior](/actors/docs/schedule#execution-behavior) for retry behavior and workflow guidance.
-
-## Topology
-
-Use a singleton actor key for one global job, such as `jobs["daily-report"]`. Use an actor per user or resource for isolated reminders, trials, billing periods, or other per-entity schedules.
+- [Schedule & Cron](/actors/docs/schedule): every schedule and cron API, run history, and execution behavior.
+- [Lifecycle](/actors/docs/lifecycle): when `onCreate` and `onWake` run, and how Actors sleep between scheduled runs.
+- [Workflows](/workflows/docs): durable multi-step work for jobs that must finish even when a step fails.

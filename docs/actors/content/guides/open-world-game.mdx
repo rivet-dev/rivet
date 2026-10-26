@@ -1,0 +1,156 @@
+---
+title: "Open World Game"
+description: "Build a Minecraft-style open world that is split into chunks, with one Rivet Actor per chunk and players walking between them."
+---
+
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
+
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/open-world" />
+
+<Diagram
+  id="open-world-game"
+  label="Each player's game client connects to the openWorldChunk Actor for the chunk it stands in, keyed by world id and chunk coordinates, and calls enterChunk and setInput on it. The other player does the same on the next chunk. Every chunk runs a tick loop and sends a snapshot event to every connected client, including clients that only watch it from a neighboring chunk. When the player walks off the edge, the client calls enterChunk on the next chunk, then leaveChunk on the old one. The numbers show the order of the calls. There is one openWorldChunk Actor per chunk."
+  stackLabel="One per chunk"
+  nodes={[
+    { id: "a", x: 20, y: 60, w: 170, title: "Player", subtitle: "standing in chunk 0, 0" },
+    { id: "b", x: 20, y: 210, w: 170, title: "Other player", subtitle: "standing in chunk 1, 0" },
+    { id: "c00", x: 600, y: 60, w: 190, product: "actors", stack: true, title: "`openWorldChunk`", subtitle: "key `default, 0, 0`" },
+    { id: "c10", x: 600, y: 210, w: 190, product: "actors", stack: true, title: "`openWorldChunk`", subtitle: "key `default, 1, 0`" },
+  ]}
+  edges={[
+    { from: "a", to: "c00", fromOffset: -12, toOffset: -12, label: "`enterChunk`, `setInput`", step: 1 },
+    { from: "b", to: "c10", fromOffset: 8, toOffset: 8, label: "`enterChunk`, `setInput`", step: 1 },
+    { from: "c00", to: "a", kind: "reply", fromOffset: 14, toOffset: 14, label: "`snapshot` every tick", step: 2 },
+    { from: "c10", to: "a", kind: "reply", fromSide: "top", toSide: "bottom", fromOffset: -20, toOffset: -20, via: [[675, 180], [85, 180]], label: "`snapshot` to watchers", labelAt: [395, 197], step: 2 },
+    { from: "a", to: "c10", fromSide: "bottom", toSide: "top", fromOffset: 20, toOffset: 20, via: [[125, 160], [715, 160]], label: "`enterChunk` at the edge", labelAt: [415, 152], step: 3 },
+    { from: "a", to: "c00", fromSide: "top", toSide: "top", via: [[105, 25], [695, 25]], label: "`leaveChunk`", step: 4 },
+  ]}
+/>
+
+What we'll build:
+
+- An `openWorldChunk` Actor per chunk, keyed by world id and chunk coordinates.
+- A 10 tick per second loop in each chunk that moves its players and sends snapshots.
+- Blocks that players place and remove, saved in the chunk's state.
+- A browser client that watches every chunk in view and moves the player to the next chunk at an edge.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add rivetkit
+```
+
+</Step>
+
+<Step title="Create the chunk Actor">
+
+Each chunk of the world is its own `openWorldChunk` Actor. A connection can watch a chunk, and becomes a player in it with `enterChunk`:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/open-world/chunk.ts" title="chunk.ts" highlight="chunk,membership" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/open-world/config.ts" title="config.ts" />
+</CodeGroup>
+
+- The key is `[worldId, chunkX, chunkY]`. `createState` reads the coordinates from `c.key`, so a chunk knows where it is without any input. There is no matchmaker: whoever knows a position can compute its chunk key.
+- A connection is not a player. `onConnect` records the `playerId` from the connection params with `inChunk: false`, so a client can watch a chunk without standing in it. `enterChunk` adds the player at a spawn point clamped to the chunk, and `leaveChunk` removes it. `addPlayer` and `removePlayer` do the same thing.
+- `setInput` only accepts input from the connection that controls the player in this chunk, and clamps each axis to -1 to 1. The client sends a direction, never a position.
+- Positions are local to the chunk, from 0 to `CHUNK_SIZE` (1200). The world position is `chunkX * CHUNK_SIZE + x`.
+
+<Warning>
+The client chooses its `playerId` and its spawn point, so it can claim another player's id or enter any chunk at any spot. In production, issue the player id from your [authentication](/guides/authentication), and have the old chunk hand the player to the next one instead of trusting the client's position.
+</Warning>
+
+</Step>
+
+<Step title="Run the tick loop">
+
+Each chunk simulates only its own players, in a loop in `run`:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/open-world/chunk.ts" title="chunk.ts" highlight="tick,snapshot" />
+
+- `run` starts when the Actor wakes and waits on `interval(TICK_MS)` until `c.aborted` is set. Every 100 ms it moves each player by `SPEED`, or 2.5 times that while sprinting, and clamps them to the chunk edges.
+- Load grows with the number of chunks in use, not the size of the world. A chunk nobody has visited has no Actor.
+- `broadcastSnapshot` loops over `c.conns` and calls `conn.send` instead of `c.broadcast`, because each snapshot sets `selfPlayerId` only for the connection that controls that player.
+- Every snapshot holds the whole chunk: all players and all blocks. That is fine for a small chunk. For busy chunks, send a full snapshot when a client connects and only the changes after that.
+
+<Note>
+The server owns movement and clients smooth toward the positions it sends. A sandbox game can let the client move the player and send its position instead, as long as the chunk checks each update: cap the distance moved per update by elapsed time, reject teleports, keep the player inside the chunk, and limit how often a connection can send updates.
+</Note>
+
+</Step>
+
+<Step title="Save blocks in the chunk">
+
+Players build on a 24 by 24 grid in each chunk:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/open-world/chunk.ts" title="chunk.ts" region="blocks" />
+
+- Blocks live in `c.state.blocks`, which maps `"gridX,gridY"` to the color of the player who placed the block. Actor state is saved, so a chunk keeps its blocks when it sleeps and wakes. Players are not kept: `onDisconnect` removes them.
+- `placeBlock` only works for a player standing in this chunk and rejects cells outside the grid. `removeBlock` only checks that the caller is connected, so a client watching from the next chunk can remove blocks. Check it the same way as `placeBlock` if you don't want that.
+- Both actions send a snapshot only when a block actually changed.
+
+<Note>
+JSON state works for a small grid per chunk. For bigger worlds, with many blocks, inventories, or anything you need to query, store it in the chunk's [SQLite](/actors/docs/sqlite) database and index it by position.
+</Note>
+
+</Step>
+
+<Step title="Register the Actors">
+
+Add the chunk Actor to the registry and start it:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/index.ts" title="actors/index.ts" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/index.ts" title="index.ts" />
+</CodeGroup>
+
+- `openWorldChunk` is the only Actor this game needs.
+- The example registers every game type in one registry. In your own project, `setup({ use: { openWorldChunk } })` is enough.
+- `registry.start()` serves the Actors. The example's browser client connects to `http://localhost:6420`.
+
+</Step>
+
+<Step title="Connect players">
+
+The client opens one connection per chunk in view, with the same `playerId` on each:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/open-world/open-world-game.ts" title="open-world-game.ts" highlight="connect,neighbors" />
+
+- `connectToChunk` calls `getOrCreate([WORLD_ID, String(cx), String(cy)])`, which creates the chunk on first use. The shared `playerId` lets each chunk match the connection to its player.
+- `updateAdjacentChunks` keeps a connection open to every chunk the camera can see and disposes the rest. Zooming out opens more. This is the interest management: a client only gets snapshots from chunks it is connected to.
+- Snapshots only set target positions. The `requestAnimationFrame` draw loop moves each player 20% (`LERP_FACTOR`) toward its target every frame, outside React state.
+
+When the player walks into an edge, the client moves them to the next chunk:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/open-world/open-world-game.ts" title="open-world-game.ts" highlight="primary,transfer" />
+
+- The snapshot handler calls `initiateTransfer` when the player is at an edge and still pushing toward it. It converts to world coordinates, steps one unit past the edge, and resolves the new chunk key.
+- `setPrimaryChunk` calls `enterChunk` on the new chunk and waits up to 1.5 seconds for a snapshot whose `selfPlayerId` is this player. Only then does it call `leaveChunk` on the old chunk, so the player is never missing from both. If the wait times out, it leaves the new chunk and stays where it was.
+- Input is stored per chunk, so it sends the current direction to the new chunk right away.
+
+</Step>
+
+<Step title="Try it">
+
+Run the example:
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/multiplayer-game-patterns
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173`, choose **Open World**, and click **Enter World**. Move with WASD, sprint with Shift, and zoom with + and -. Left click places a block and right click removes it. Walk past a chunk edge and the HUD at the top switches to the new chunk, while the list on the right shows every chunk you are connected to. Click **Add Bot**, or open a second tab, to see other players in nearby chunks.
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+- [2D Physics Game](/guides/physics-2d-game): run a physics engine in a world Actor's tick loop.
+- [Lifecycle](/actors/docs/lifecycle): how `run` loops start and stop.
+- [SQLite](/actors/docs/sqlite): store large chunk data with queries and indexes.

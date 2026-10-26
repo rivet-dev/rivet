@@ -1,0 +1,144 @@
+---
+title: "Battle Royale"
+description: "Build a battle royale game like Fortnite, Apex Legends, or PUBG, where players fill a lobby and fight in a shrinking zone until one is left."
+---
+
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
+
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/battle-royale" />
+
+<Diagram
+  id="battle-royale"
+  label="The game client sends findMatch to the battleRoyaleMatchmaker Actor, which keeps lobbies and seat reservations in its SQLite tables. If no lobby is open, the matchmaker creates a battleRoyaleMatch Actor. It replies with a matchId and playerId. The client connects to the match with its playerId, and the match claims the seat by sending pendingPlayerConnected to the matchmaker. The client then sends updatePosition and shoot, and the match broadcasts snapshot and shoot events back. The numbers show the order of the calls. There is one matchmaker and one battleRoyaleMatch Actor per match."
+  stackLabel="One per match"
+  nodes={[
+    { id: "client", x: 20, y: 80, w: 150, title: "Game client", subtitle: "browser canvas" },
+    { id: "mm", x: 330, y: 80, w: 230, product: "actors", title: "`battleRoyaleMatchmaker`", subtitle: "one, keyed `main`" },
+    { id: "db", x: 330, y: 210, w: 230, title: "Matchmaker SQLite", subtitle: "`matches`, `pending_players`" },
+    { id: "match", x: 760, y: 80, w: 190, product: "actors", stack: true, title: "`battleRoyaleMatch`", subtitle: "lobby, zone, combat" },
+  ]}
+  edges={[
+    { from: "client", to: "mm", fromOffset: -10, toOffset: -10, label: "`findMatch`", step: 1 },
+    { from: "mm", to: "match", fromOffset: -10, toOffset: -10, label: "`create`", step: 2 },
+    { from: "mm", to: "client", kind: "reply", fromOffset: 12, toOffset: 12, label: "`matchId`, `playerId`", labelAt: [247, 144], step: 3 },
+    { from: "client", to: "match", fromSide: "top", toSide: "top", via: [[95, 30], [855, 30]], label: "`connect` with `playerId`", step: 4 },
+    { from: "match", to: "mm", fromOffset: 12, toOffset: 12, label: "`pendingPlayerConnected`", labelAt: [659, 144], step: 5 },
+    { from: "mm", to: "db", fromSide: "bottom", toSide: "top", label: "`c.db.execute`", labelAt: [455, 180], labelAnchor: "start" },
+    { from: "client", to: "match", fromSide: "bottom", toSide: "bottom", fromOffset: -20, toOffset: -10, via: [[75, 310], [845, 310]], label: "`updatePosition`, `shoot`", step: 6 },
+    { from: "match", to: "client", kind: "reply", fromSide: "bottom", toSide: "bottom", fromOffset: 14, toOffset: 20, via: [[869, 345], [115, 345]], label: "`snapshot`, `shoot` events", step: 7 },
+  ]}
+/>
+
+What we'll build:
+
+- A `battleRoyaleMatchmaker` Actor that puts each player in the fullest lobby that has not started, and opens a new lobby when none has room.
+- A `battleRoyaleMatch` Actor per match that runs the lobby countdown, the shrinking zone, and eliminations on a loop of 10 ticks per second.
+- Movement that the client owns and the server checks, and shots that only the server resolves.
+- A browser client that finds a match, moves with WASD, and shoots with a click.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add rivetkit
+```
+
+</Step>
+
+<Step title="Create the matchmaker">
+
+One `battleRoyaleMatchmaker` Actor, keyed `["main"]`, decides which lobby each player joins. It keeps lobbies and seat reservations in its SQLite database:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/battle-royale/matchmaker.ts" title="matchmaker.ts" highlight="queue,find-match" />
+
+- Every request is a queue message, and `run` handles one message at a time. Two players asking at the same moment can't both take the last seat. `findMatch`, `pendingPlayerConnected`, `updateMatch`, and `closeMatch` are all queues.
+- `processFindMatch` picks the open lobby with the most players, and the oldest one on a tie. If there is none, it inserts a row and creates the `battleRoyaleMatch` Actor with the match id as its input.
+- It returns a new `playerId` and saves it in `pending_players` for 15 seconds. `player_count` counts pending players as well as connected ones, so a lobby that is still filling is never handed out past `LOBBY_CAPACITY` (16).
+- A reservation that is never claimed expires at the start of the next message, in `expirePendingPlayers`, which frees the seat.
+
+</Step>
+
+<Step title="Create the match">
+
+Each match is its own `battleRoyaleMatch` Actor, keyed by the match id. A player joins by connecting with the `playerId` the matchmaker gave them:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/battle-royale/match.ts" title="match.ts" highlight="connect" />
+
+- `onConnect` reads `playerId` from the connection params. A new player has to be claimed from the matchmaker with `pendingPlayerConnected` first. An unknown or expired id is disconnected with `player_not_pending`.
+- `claimPendingPlayer` waits for the matchmaker's answer for at most 3 seconds and treats a timeout as a rejection, so a busy matchmaker can't hang a join.
+- A player who reconnects keeps their seat, with the new connection id. During the lobby, a player who stays away for 5 seconds is removed.
+- After every join and leave, `updateMatchmaker` sends `updateMatch` with the player count and whether the match has started. The matchmaker stops sending players to a match once `is_started` is set.
+
+<Warning>
+The `playerId` is the only credential in this example. Anyone who knows it can connect as that player. In production, have the matchmaker issue a signed token and check it in the match, or use [authentication](/guides/authentication).
+</Warning>
+
+</Step>
+
+<Step title="Shrink the zone and resolve hits">
+
+The match runs a fixed loop in `run`. Movement and shots arrive as actions between ticks:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/battle-royale/match.ts" title="match.ts" highlight="tick,combat" />
+
+- `interval(TICK_MS)` ticks every 100 ms until `c.aborted`. Ten ticks per second is enough for a zone that moves slowly and for lobby checks. Each tick ends with one `snapshot` broadcast of the whole match.
+- In the lobby, the countdown starts once 16 players are connected and lasts 3 seconds. `startGame` then places everyone inside the zone at full health. Once the match is live, the zone shrinks after 50 ticks, and a player outside it loses 1 HP per tick.
+- The client owns movement. `updatePosition` takes the client's position, but limits the distance to `MAX_SPEED` times the time since the last update and keeps it inside the world. A client that tries to teleport only moves as far as it could have walked.
+- The server owns combat. `shoot` finds the closest living player within `SHOOT_RANGE` and `SHOOT_ANGLE` of the aim, applies the damage, records the placement, and broadcasts `shoot` so every client can draw the shot.
+
+<Note>
+Every player receives every other player's position. On a large map, send each connection only the players near it with `conn.send(...)`, using a spatial index such as `rbush` or `d3-quadtree` to find them. For walls, cover, or bullets that travel, run `@dimforge/rapier2d` (top-down) or `@dimforge/rapier3d` inside the match. Also limit how often each connection may call `updatePosition` and `shoot`. The example client sends positions at most 20 times per second.
+</Note>
+
+</Step>
+
+<Step title="Register the Actors">
+
+Add both Actors to the registry and start it:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/index.ts" title="actors/index.ts" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/index.ts" title="index.ts" />
+</CodeGroup>
+
+The example registers every game type in one registry. A battle royale only needs `battleRoyaleMatchmaker` and `battleRoyaleMatch`. Each Actor file imports `type { registry }` so that `c.client<typeof registry>()` is typed when the match calls the matchmaker and the matchmaker creates a match.
+
+</Step>
+
+<Step title="Connect players">
+
+The menu asks the matchmaker for a match, then the game connects to it with the player id it got back:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/battle-royale/menu.tsx" title="menu.tsx" highlight="find-match" />
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/battle-royale/battle-royale-game.ts" title="battle-royale-game.ts" highlight="connect,send" />
+</CodeGroup>
+
+- `mm.send("findMatch", {}, { wait: true })` waits for the queue's reply. The menu disposes the matchmaker connection right after, because the player now talks only to the match.
+- The game uses `battleRoyaleMatch.get(...)`, not `getOrCreate`, because only the matchmaker creates matches. `playerId` goes in `params`, which is where `onConnect` reads it.
+- The client moves its own player every frame and sends `updatePosition` at most every 50 ms. If a `snapshot` puts it more than 40 pixels from where it thinks it is, it snaps to the server's position. Other players are smoothed toward their latest position.
+- Game state lives in a class that draws to a canvas with `requestAnimationFrame`. React only renders the menu and buttons.
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/multiplayer-game-patterns
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173`, pick **Battle Royale**, and click **Find Match**. The header shows `LOBBY 1/16 players`. Click **Add Bot** 15 times to fill the lobby. After a 3-second countdown the header switches to `LIVE 16 alive` and the zone starts to close. Move with WASD and click to shoot. The last player alive wins.
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+- [IO Game](/guides/io-game): open lobbies that players join and leave at any time.
+- [Queues](/actors/docs/queues): how the matchmaker handles one request at a time.
+- [Connections](/actors/docs/connections): connection params, `onConnect`, and per-connection state.

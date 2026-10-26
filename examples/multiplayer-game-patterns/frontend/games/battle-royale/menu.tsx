@@ -18,6 +18,7 @@ export function BattleRoyaleMenu({
 	const [status, setStatus] = useState<"idle" | "matching" | "error">("idle");
 	const [error, setError] = useState("");
 
+	// docs:start find-match
 	const findMatch = async () => {
 		setStatus("matching");
 		try {
@@ -40,6 +41,7 @@ export function BattleRoyaleMenu({
 			setStatus("error");
 		}
 	};
+	// docs:end find-match
 
 	return (
 		<div className="app">

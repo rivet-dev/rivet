@@ -1,5 +1,6 @@
-import { actor, event, setup } from "rivetkit";
+import { actor, event, type ScheduledFireInfo, setup } from "rivetkit";
 
+// docs:start state
 interface Reminder {
 	id: string;
 	scheduleId: string;
@@ -8,21 +9,89 @@ interface Reminder {
 	completedAt?: number;
 }
 
+interface DailyReport {
+	from: number;
+	to: number;
+	completed: number;
+	pending: number;
+}
+
 interface ReminderActorState {
 	reminders: Reminder[];
 	completedCount: number;
+	lastReportAt: number;
+	lastReport?: DailyReport;
 }
 
 const reminderActor = actor({
 	state: {
 		reminders: [] as Reminder[],
 		completedCount: 0,
+		lastReportAt: 0,
 	} satisfies ReminderActorState as ReminderActorState,
 	events: {
 		reminderTriggered: event<Reminder>(),
+		dailyReport: event<DailyReport>(),
 	},
+	// docs:end state
+
+	// docs:start install
+	// Install the daily report job when the Actor is created.
+	onCreate: async (c) => {
+		await c.cron.set({
+			name: "daily-report",
+			expression: "0 9 * * *",
+			timezone: "America/Los_Angeles",
+			action: "sendDailyReport",
+		});
+	},
+	// docs:end install
 
 	actions: {
+		// docs:start report
+		// Called by the daily-report cron job every day at 9:00.
+		sendDailyReport: (c, fire: ScheduledFireInfo) => {
+			const from = c.state.lastReportAt;
+			const to = fire.scheduledAt;
+
+			// Skip a run whose window was already reported.
+			if (to <= from) return c.state.lastReport;
+
+			const report: DailyReport = {
+				from,
+				to,
+				completed: c.state.reminders.filter(
+					(r) =>
+						r.completedAt !== undefined &&
+						r.completedAt >= from &&
+						r.completedAt < to,
+				).length,
+				pending: c.state.reminders.filter(
+					(r) => r.completedAt === undefined,
+				).length,
+			};
+
+			c.state.lastReportAt = to;
+			c.state.lastReport = report;
+			c.broadcast("dailyReport", report);
+			return report;
+		},
+		// docs:end report
+
+		// docs:start read
+		// Return the last report, the next run time, and recent runs.
+		getDailyReport: async (c) => {
+			const job = await c.cron.get("daily-report");
+			const history = await c.cron.history("daily-report", { limit: 7 });
+			return {
+				lastReport: c.state.lastReport,
+				nextRunAt: job?.nextRunAt,
+				history,
+			};
+		},
+		// docs:end read
+
+		// docs:start one-shot
 		// Schedule a reminder with a delay in milliseconds
 		scheduleReminder: async (c, message: string, delayMs: number) => {
 			const id = `reminder-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -80,12 +149,14 @@ const reminderActor = actor({
 
 			console.log(`reminder triggered: ${reminder.message}`);
 		},
+		// docs:end one-shot
 
 		// Get all reminders
 		getReminders: (c): Reminder[] => {
 			return c.state.reminders;
 		},
 
+		// docs:start cancel
 		// Cancel a pending scheduled reminder.
 		cancelReminder: async (c, reminderId: string) => {
 			const reminder = c.state.reminders.find((r) => r.id === reminderId);
@@ -100,6 +171,7 @@ const reminderActor = actor({
 
 			return { success: cancelled };
 		},
+		// docs:end cancel
 
 		// Get statistics about reminders
 		getStats: (c) => {
@@ -116,11 +188,13 @@ const reminderActor = actor({
 	},
 });
 
+// docs:start registry
 export const registry = setup({
 	use: { reminderActor },
 });
+// docs:end registry
 
 export type Registry = typeof registry;
-export type { Reminder };
+export type { DailyReport, Reminder };
 
 registry.start();

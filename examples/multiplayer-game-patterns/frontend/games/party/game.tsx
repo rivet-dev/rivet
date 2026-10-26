@@ -43,6 +43,7 @@ export function PartyGame({
 		conn?.dispose();
 	}, []);
 
+	// docs:start connect
 	useEffect(() => {
 		const conn = client.partyMatch
 			.get([matchInfo.matchId], {
@@ -70,6 +71,7 @@ export function PartyGame({
 			botsRef.current = [];
 		};
 	}, [client, matchInfo, cleanup]);
+	// docs:end connect
 
 	const onNameChange = (value: string) => {
 		setNameInput(value);
@@ -83,6 +85,7 @@ export function PartyGame({
 		botsRef.current.push(new PartyBot(client, matchInfo.partyCode));
 	};
 
+	// docs:start connect
 	const toggleReady = () => {
 		connRef.current?.toggleReady().catch(() => {});
 	};
@@ -94,6 +97,7 @@ export function PartyGame({
 	const finishGame = () => {
 		connRef.current?.finishGame().catch(() => {});
 	};
+	// docs:end connect
 
 	const myMember = snapshot?.members[matchInfo.playerId];
 	const isHost = myMember?.isHost ?? false;

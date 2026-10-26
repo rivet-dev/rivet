@@ -48,6 +48,7 @@ export const idleWorld = actor({
 		initialized: false as boolean,
 	} satisfies State,
 	actions: {
+		// docs:start build
 		initialize: async (c, input: { playerName: string; playerId?: string }) => {
 			if (c.state.initialized) {
 				broadcastState(c);
@@ -100,6 +101,8 @@ export const idleWorld = actor({
 			);
 			broadcastState(c);
 		},
+		// docs:end build
+		// docs:start collect
 		collectProduction: (c, input: { buildingId: string }) => {
 			const building = c.state.buildings.find(
 				(b: BuildingEntry) => b.id === input.buildingId,
@@ -128,6 +131,7 @@ export const idleWorld = actor({
 			updateLeaderboard(c);
 			broadcastState(c);
 		},
+		// docs:end collect
 		getState: (c): IdleSnapshot => buildSnapshot(c),
 		getLeaderboard: async (c) => {
 			const client = c.client<typeof registry>();
@@ -138,6 +142,7 @@ export const idleWorld = actor({
 	},
 });
 
+// docs:start schedule
 async function scheduleCollection(
 	c: ActorContextOf<typeof idleWorld>,
 	buildingId: string,
@@ -151,7 +156,9 @@ async function scheduleCollection(
 		maxHistory: 0,
 	});
 }
+// docs:end schedule
 
+// docs:start leaderboard
 function updateLeaderboard(c: ActorContextOf<typeof idleWorld>) {
 	const client = c.client<typeof registry>();
 	client.idleLeaderboard
@@ -163,6 +170,7 @@ function updateLeaderboard(c: ActorContextOf<typeof idleWorld>) {
 		})
 		.catch(() => {});
 }
+// docs:end leaderboard
 
 function buildSnapshot(c: ActorContextOf<typeof idleWorld>): IdleSnapshot {
 	return {

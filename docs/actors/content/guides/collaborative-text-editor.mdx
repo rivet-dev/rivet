@@ -1,163 +1,175 @@
 ---
-title: "Collaborative Text Editor"
-description: "Build a collaborative text editor backend with Yjs CRDTs and Rivet Actors: per-document actors relay sync and awareness updates and persist snapshots."
+title: "Collaborative Text Editor (CRDT)"
+description: "Build a collaborative text editor such as Google Docs or Notion with Yjs, where one Actor per document relays edits and presence and saves the document."
 templates: ["collaborative-document"]
 ---
 
-Patterns for building a Yjs server on RivetKit: CRDT document sync, presence and cursors, and snapshot persistence, with one Rivet Actor per document acting as a relay.
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
-## Starter Code
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/collaborative-document" />
 
-Start with the working example on [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/collaborative-document) and adapt it to your editor. It ships a React frontend with a plain textarea, remote cursor overlays, and a workspace document index.
+<Diagram
+  id="collaborative-text-editor"
+  label="Editor A calls createDocument on the documentList Actor for its workspace, which creates a document Actor for the new document. Each editor connects to the document Actor and sends every local Yjs change with applyUpdate. The document Actor merges the change into its own Y.Doc, saves a full snapshot to the yjs:doc key in its KV storage with kv.put, and broadcasts the change as sync and awareness events to every editor. The numbers show the order of the calls. There is one documentList Actor per workspace and one document Actor per document."
+  stackLabel="One per document"
+  nodes={[
+    { id: "a", x: 20, y: 40, title: "Editor A", subtitle: "types an edit" },
+    { id: "b", x: 20, y: 220, title: "Editor B", subtitle: "sees the edit" },
+    { id: "list", x: 330, y: 40, w: 200, product: "actors", title: "`documentList`", subtitle: "workspace index" },
+    { id: "doc", x: 640, y: 140, product: "actors", stack: true, title: "`document`", subtitle: "live `Y.Doc`" },
+    { id: "kv", x: 640, y: 300, title: "Actor KV", subtitle: "`yjs:doc` snapshot" },
+  ]}
+  edges={[
+    { from: "a", to: "list", label: "`createDocument`", step: 1 },
+    { from: "list", to: "doc", toSide: "top", via: [[725, 70]], label: "`create`", step: 2 },
+    { from: "a", to: "doc", fromSide: "bottom", toOffset: -10, via: [[105, 160]], label: "`applyUpdate`", step: 3 },
+    { from: "doc", to: "kv", label: "`kv.put`", labelAt: [737, 255], labelAnchor: "start", step: 4 },
+    { from: "doc", to: "b", kind: "reply", fromOffset: 15, via: [[560, 185], [560, 250]], label: "`sync` and `awareness` events", step: 5 },
+  ]}
+/>
 
-| Use Case | Starter Code | Common Examples |
-| --- | --- | --- |
-| Shared document editing | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/collaborative-document) | Notion-style docs, shared notes, pair-writing tools, form co-editing |
+What we'll build:
 
-## CRDT vs OT
+- A `document` Actor per document that keeps the merged Yjs document and relays every edit to the other editors.
+- Live cursors and names over the Yjs Awareness protocol, cleaned up when someone closes the tab.
+- A snapshot of the document in the Actor's KV storage, so it survives restarts.
+- A `documentList` Actor per workspace that creates documents and lists them.
+- A React editor that syncs a local `Y.Doc` with the Actor.
 
-Two families of algorithms solve concurrent text editing. The choice decides what your server has to do.
+<Note>
+This guide uses a CRDT. Yjs merges edits in any order on any client, so the server only relays and stores updates and never has to understand them. The other approach is operational transformation (OT), where one server orders and rewrites every operation. It suits editors that need a single authoritative order, but the server has to implement a transform for every operation type and long offline sessions are hard to merge. See [Collaborative Text Editor (OT)](/guides/collaborative-text-editor-ot).
+</Note>
 
-| Dimension | CRDT (Yjs) | Operational Transformation |
-| --- | --- | --- |
-| Conflict resolution model | Commutative merges. Updates apply in any order on any peer and converge to the same result. | Server transforms each operation against every concurrent operation. Correctness depends on a central sequencer. |
-| Offline support | Strong. Clients keep editing locally and merge buffered updates on reconnect. | Weak. Long-lived divergence makes transformation chains complex and fragile. |
-| Server role | Relay plus persistence. The server applies opaque updates and rebroadcasts them. It never needs to understand document semantics. | Authoritative transformer. The server must implement transformation logic for every operation type. |
-| Library maturity | Yjs is mature and widely deployed, with bindings for ProseMirror, CodeMirror, Monaco, and others. | Production-grade implementations are mostly proprietary (Google Docs) or aging (ShareDB). |
+<Steps>
 
-The example uses Yjs because CRDTs let the server stay a relay-style Rivet Actor. The actor applies each incoming update to a server-side `Y.Doc` so it can persist the merged state and serve late joiners, but it never transforms operations or arbitrates conflicts. Ordering does not matter because Yjs merges are commutative.
+<Step title="Install">
 
-## Document Actor Model
-
-| Topic | Summary |
-| --- | --- |
-| Topology | One `document[workspaceId, documentId]` actor per document plus one `documentList[workspaceId]` coordinator per workspace. |
-| Sync model | Each client holds a local `Y.Doc`. The document actor relays incremental Yjs updates as broadcast [events](/actors/docs/events) and keeps a server-side merged copy in vars. |
-| Persistence | Full merged Yjs snapshot overwritten in one binary [actor KV](/actors/docs/kv) key (`yjs:doc`) on every sync update. Document metadata lives in JSON [state](/actors/docs/state). |
-| Queues | None. The example is purely [actions](/actors/docs/actions) plus broadcast events. |
-| Presence | Yjs Awareness relayed through the same `applyUpdate` action. Per-connection `connState` tracks asserted awareness clientIds for disconnect cleanup. |
-
-The two-actor split follows the coordinator pattern from [Design Patterns](/actors/docs/design-patterns): the coordinator owns discovery and creation, and each document actor owns one document's realtime state. Multi-part [keys](/actors/docs/keys) scope both actors to a workspace.
-
-**Actors**
-
-<AccordionGroup>
-<Accordion title="document[workspaceId, documentId]">
-
-- **Key**: `document[workspaceId, documentId]`
-- **Responsibility**: Applies incoming sync and awareness updates to a server-side `Y.Doc` and `Awareness`, persists the merged Yjs snapshot to actor KV, and broadcasts updates to all connected collaborators.
-- **Actions**
-  - `getContent`
-  - `applyUpdate`
-  - `getAwareness`
-- **Queues**
-  - None
-- **State**
-  - JSON metadata only: `title`, `createdAt`, `updatedAt`
-  - Binary KV key `yjs:doc` holding the full merged Yjs snapshot
-  - Ephemeral vars: the live `Y.Doc` and `Awareness`, created in `createVars` and rehydrated from KV on actor start
-  - Per-connection `connState`: `clientIds` of awareness clients asserted by that connection
-
-</Accordion>
-<Accordion title="documentList[workspaceId]">
-
-- **Key**: `documentList[workspaceId]`
-- **Responsibility**: Coordinator for one workspace. Creates document actors through the actor-to-actor client and maintains the index of document summaries.
-- **Actions**
-  - `createDocument`
-  - `listDocuments`
-  - `deleteDocument`
-- **Queues**
-  - None
-- **State**
-  - JSON
-  - `documents` array of `DocumentSummary` entries (`id`, `title`, `createdAt`, `updatedAt`)
-
-</Accordion>
-</AccordionGroup>
-
-The coordinator's `createDocument` generates a UUID, then explicitly creates the document actor with `c.client<typeof registry>()` and passes `{ title, createdAt }` as creation [input](/actors/docs/input), which the document actor's `createState` consumes. See [Communicating Between Actors](/actors/docs/communicating-between-actors) for the actor-to-actor client.
-
-## Update Relay
-
-A single `applyUpdate(update, kind, clientId?)` action handles both update kinds. Updates cross the action boundary as `number[]` byte arrays and are converted back to `Uint8Array` on each side.
-
-| Kind | Server Applies To | Persists | Broadcasts |
-| --- | --- | --- | --- |
-| `"sync"` | `c.vars.doc` via `Y.applyUpdate` with origin `"client"` | Full merged snapshot to KV key `yjs:doc`, then bumps `updatedAt` | `sync` event carrying the incremental update |
-| `"awareness"` | `c.vars.awareness` via `applyAwarenessUpdate` with origin `"client"` | Nothing. Presence is ephemeral. | `awareness` event carrying the update |
-
-Note the asymmetry on the sync branch: the broadcast carries only the small incremental update, while the KV write stores the full merged document re-encoded with `Y.encodeStateAsUpdate`.
-
-Yjs origin tags are the echo guards that keep the relay loop-free:
-
-| Origin Tag | Set Where | Effect |
-| --- | --- | --- |
-| `"local"` | Client edits inside `doc.transact(..., "local")` | The client's update listener fires and sends `applyUpdate` to the actor. |
-| `"client"` | Server applying an incoming update to its `Y.Doc` or `Awareness` | Marks the change as client-originated on the server copy. |
-| `"remote"` | Client applying broadcast events or initial sync data | Update listeners early-return on `"remote"`, so a client never re-sends its own echo. |
-
-On connect or reconnect, the client calls `getContent` and `getAwareness`, then applies both results to its local `Y.Doc` and `Awareness` with origin `"remote"`. After that, every change flows through `applyUpdate` and the broadcast events.
-
-## Awareness And Presence
-
-Presence (user names, colors, cursor positions) rides on the Yjs Awareness protocol instead of actor state:
-
-- Clients set presence with `awareness.setLocalStateField` for the `user` and `cursor` fields. The awareness update listener encodes the change and sends `applyUpdate(update, "awareness", awareness.clientID)`.
-- The actor records each asserted `clientId` in that connection's `connState.clientIds`, applies the update to the server-side `Awareness`, and broadcasts the `awareness` event to all peers. See [Connections](/actors/docs/connections) for per-connection state.
-- `onDisconnect` reads the connection's `clientIds`, calls `removeAwarenessStates` on the server-side `Awareness`, and broadcasts the encoded removal so every remaining client drops the departed user's cursor. See [Lifecycle](/actors/docs/lifecycle) for the hook.
-
-Because the actor tracks which awareness clientIds belong to which connection, presence cleanup is automatic on disconnect with no client cooperation required.
-
-## Persistence And Compaction
-
-The example persists with a full-snapshot overwrite: on every `"sync"` update, the actor re-encodes the entire merged document with `Y.encodeStateAsUpdate` and overwrites the single binary KV key `yjs:doc`. There is no append-only update log and no separate compaction job. Compaction is implicit because `Y.encodeStateAsUpdate` emits one compact merged representation of the document, so Yjs merge semantics keep the stored blob compact on their own.
-
-| Property | Full-Snapshot Overwrite (the example) |
-| --- | --- |
-| Write cost | One full-document KV write per sync update, so every keystroke rewrites the whole blob. |
-| Read cost | One binary KV read in `createVars` rehydrates the document on actor start. |
-| Crash safety | The last completed `applyUpdate` is durable. No log replay needed. |
-| Sweet spot | Small to medium documents where simplicity beats write amplification. |
-
-**Recommended extension (not in the example)**: for large documents or very high edit rates, switch to appending incremental updates to a KV update log and writing a merged snapshot only periodically (for example every N updates). Boot becomes snapshot plus log replay, and the snapshot write becomes the explicit compaction step that truncates the log. Adopt this only when full-snapshot writes become the measured bottleneck or the blob approaches KV value size limits.
-
-## Lifecycle
-
-```mermaid
-sequenceDiagram
-	participant A as Client A
-	participant B as Client B
-	participant DL as documentList
-	participant D as document
-
-	A->>DL: listDocuments()
-	A->>DL: createDocument(title)
-	DL->>D: create([workspaceId, documentId], input)
-	DL-->>A: DocumentSummary
-	A->>D: connect
-	B->>D: connect
-	Note over D: createVars rehydrates Y.Doc from KV "yjs:doc"
-	A->>D: getContent() + getAwareness()
-	D-->>A: encoded doc + awareness state
-	Note over A: local edit with origin "local"
-	A->>D: applyUpdate(update, "sync")
-	Note over D: apply with origin "client", overwrite KV snapshot
-	D-->>B: sync event (incremental update)
-	Note over B: apply with origin "remote", no echo
-	A->>D: applyUpdate(update, "awareness", clientId)
-	D-->>B: awareness event
-	B-->>D: disconnect
-	Note over D: onDisconnect removes B's awareness clientIds
-	D-->>A: awareness event (removal)
+```sh
+npm add rivetkit @rivetkit/react yjs y-protocols
 ```
 
-## Security Checklist
+</Step>
 
-The example ships with no authentication or authorization. Harden it with this baseline before production. None of these are implemented in the example.
+<Step title="Create the document Actor">
 
-- **Authenticate before connect**: Anyone who knows or guesses a workspace ID can connect, and because `useActor` implicitly getOrCreates, connecting with a nonexistent workspace ID silently creates a blank `documentList` coordinator. Add connection auth so unauthenticated clients never reach an actor. See [Permissions](/actors/docs/permissions).
-- **Per-document access control**: Validate that the authenticated user is allowed to access the specific `[workspaceId, documentId]` key, not just any document.
-- **Cap and rate limit `applyUpdate`**: Update payloads are unvalidated `number[]` arrays with no size limit, and the example client sends one action per keystroke and per cursor move with zero throttling. Enforce payload size caps and per-connection rate limits on the server, and debounce on the client.
-- **Do not trust client-asserted awareness clientIds**: The `clientId` argument to `applyUpdate` is client-supplied and trusted as-is. Derive or verify presence identity from connection-scoped server state instead.
-- **Destroy actors and KV on delete**: `deleteDocument` only filters the entry out of the coordinator's index. The document actor and its KV snapshot are orphaned. On delete, also destroy the document actor and its storage, with a permission check on who may delete.
+Each document is its own `document` Actor, keyed by `[workspaceId, documentId]`:
+
+<CodeSnippet file="examples/collaborative-document/src/index.ts" title="index.ts" region="document" />
+
+- `createState` holds only metadata: `title`, `createdAt`, and `updatedAt`. It reads the title from the creation [input](/actors/docs/input) that `documentList` passes in.
+- The live `Y.Doc` and its `Awareness` live in [vars](/actors/docs/state#ephemeral-state), because they are class instances that cannot be saved as JSON state. `createVars` rebuilds them every time the Actor starts by loading the binary `yjs:doc` key from [KV storage](/actors/docs/kv).
+- `connState` gives every connection its own list of awareness client ids, which is used to clean up presence on disconnect.
+- The multi-part [key](/actors/docs/keys) scopes the document to its workspace, so two workspaces can never reach each other's documents by id.
+
+</Step>
+
+<Step title="Relay Yjs updates">
+
+Clients sync through one action and one event:
+
+<CodeSnippet file="examples/collaborative-document/src/index.ts" title="index.ts" region="relay" highlight="sync" />
+
+- `getContent` returns the whole merged document as one Yjs update. A client calls it once on connect to catch up.
+- `applyUpdate(update, "sync")` applies a client's change to the server's `Y.Doc` with origin `"client"` and broadcasts the same small update as the `sync` [event](/actors/docs/events). The server never transforms or orders edits. Yjs merges are commutative, so every client ends up with the same text no matter which update arrives first.
+- Updates cross the action boundary as `number[]`, because action arguments are serialized. `toBytes` and `toNumbers` convert them back and forth on both sides.
+- The broadcast reaches the sender too. The client applies it with origin `"remote"`, which Yjs ignores because it already has the change, and the client's listener skips `"remote"` updates, so nothing is sent twice.
+
+<Warning>
+`applyUpdate` accepts any `number[]` of any size, and the example client sends one action per keystroke. In production, cap the payload size, rate limit each connection, and batch edits on the client.
+</Warning>
+
+</Step>
+
+<Step title="Share presence">
+
+Names, colors, and cursor positions travel over the Yjs Awareness protocol, through the same action with kind `"awareness"`:
+
+<CodeSnippet file="examples/collaborative-document/src/index.ts" title="index.ts" region="presence" highlight="disconnect,awareness" />
+
+- `applyUpdate(update, "awareness", clientId)` applies the change to the server's `Awareness`, remembers `clientId` in that connection's `connState`, and broadcasts the `awareness` event. Presence is never saved.
+- `getAwareness` returns everyone's current presence, so a client that joins late sees the other cursors right away.
+- `onDisconnect` removes every awareness client the connection asserted and broadcasts the removal, so the cursor disappears even if the tab closed without saying goodbye. See [Connections](/actors/docs/connections).
+
+<Warning>
+The `clientId` comes from the client and is trusted as is, so one connection could remove another user's cursor by claiming its id. In production, check it against state the server owns for that connection.
+</Warning>
+
+</Step>
+
+<Step title="Persist snapshots">
+
+Every `"sync"` update also saves the whole document:
+
+<CodeSnippet file="examples/collaborative-document/src/index.ts" title="index.ts" region="sync" highlight="persist" />
+
+- `Y.encodeStateAsUpdate` encodes the merged document as one compact update, and `c.kv.put` overwrites the single `yjs:doc` key with it. There is no update log, so there is nothing to replay on start and no separate compaction job. Encoding the merged state is the compaction.
+- The write finishes before the broadcast, so an edit that other clients have seen is already saved. If the Actor crashes or moves, `createVars` loads the last snapshot.
+- Every keystroke rewrites the whole document. That is simple and fine for small and medium documents.
+
+<Warning>
+A single KV value is limited to 128 KiB (see [Limits](/actors/docs/limits)). Once the encoded document grows past that, `kv.put` throws, so `applyUpdate` fails before the broadcast and edits are neither saved nor relayed.
+</Warning>
+
+<Note>
+For large documents or high edit rates, append each incremental update to an update log under its own key and write a merged snapshot only every N updates, then delete the log entries it covers. Start then loads the snapshot and replays the log. Only switch once the full-snapshot write is the measured bottleneck or the document nears the value limit.
+</Note>
+
+</Step>
+
+<Step title="Index documents per workspace">
+
+A `documentList` Actor per workspace creates documents and lists them. The registry starts both Actors:
+
+<CodeSnippet file="examples/collaborative-document/src/index.ts" title="index.ts" region="list" />
+
+- This is the coordinator pattern from [Design Patterns](/actors/docs/design-patterns): `documentList` owns discovery, and each `document` Actor owns one document's realtime state.
+- `createDocument` creates the `document` Actor explicitly with `c.client<typeof registry>()` and passes `{ title, createdAt }` as input. See [Communicating Between Actors](/actors/docs/communicating-between-actors).
+- `deleteDocument` only removes the entry from the list. The `document` Actor and its snapshot stay behind. To delete a document for real, also [destroy](/actors/docs/destroy) the Actor.
+
+<Warning>
+The example has no authentication. Anyone who knows a workspace id can list and open its documents, and connecting with a new workspace id creates an empty `documentList`. In production, authenticate connections and check that the user may open each `[workspaceId, documentId]`. See [Authentication](/guides/authentication) and [Permissions](/actors/docs/permissions).
+</Warning>
+
+</Step>
+
+<Step title="Connect the editor">
+
+Each open document creates its own `Y.Doc` in the browser and sends every local change to the Actor:
+
+<CodeSnippet file="examples/collaborative-document/frontend/App.tsx" title="App.tsx" region="send" />
+
+Then, every time the connection opens, it catches up and listens for changes from others:
+
+<CodeSnippet file="examples/collaborative-document/frontend/App.tsx" title="App.tsx" region="connect" />
+
+- `useActor({ name: "document", key: [workspaceId, document.id] })` connects to the document's Actor. The text lives in `doc.getText("content")`.
+- Typing calls `doc.transact(..., "local")`, which fires `handleDocUpdate`, which sends the update with `applyUpdate`. Changes from the Actor are applied with origin `"remote"`, so they update the screen but are not sent back.
+- On connect and reconnect, the client applies `getContent` and `getAwareness` before the `sync` and `awareness` events take over. The awareness listener sends local cursor moves the same way as edits.
+- Edits made while the connection is down stay in the local `Y.Doc` and are not sent on reconnect. To keep them, send `Y.encodeStateAsUpdate(doc)` after the catch-up, and Yjs merges whatever the Actor is missing.
+
+<Note>
+The example edits a plain `<textarea>` and replaces the whole text on every change, so two people typing at the same moment can end up with both versions of the text. A real editor should use a Yjs binding that applies small edits, such as y-prosemirror, y-codemirror, or y-monaco. The Actor does not change.
+</Note>
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/collaborative-document
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173` in two tabs and change the **Name** in one of them. Click **Create** in the first tab to make a document. The list does not update live, so reload the second tab and click **Open** on the new document. Type in either tab and the text shows up in both, with the other person's cursor marked by their name and listed under **Active collaborators**.
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+- [Collaborative Text Editor (OT)](/guides/collaborative-text-editor-ot): the same editor with operational transformation.
+- [Live Cursors and Presence](/guides/live-cursors): cursors and presence without a document.
+- [Authentication](/guides/authentication): sign users in before they open a document.
