@@ -1,6 +1,14 @@
 name: publish-from-run
 
 on:
+  workflow_call:
+    inputs:
+      source_run_id:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       source_run_id:
