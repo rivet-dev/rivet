@@ -14,7 +14,7 @@ async function fetchToken(): Promise<{ actorId: string; token: string }> {
 const { actorId } = await fetchToken();
 
 const client = createClient<typeof registry>({
-	endpoint: "https://api.rivet.dev",
+	endpoint: "https://rivet.example.com",
 	namespace: "production",
 
 	// Called whenever RivetKit needs a credential, including after one expires.
