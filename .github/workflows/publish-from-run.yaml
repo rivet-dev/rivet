@@ -1,0 +1,219 @@
+name: publish-from-run
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Completed publish workflow run containing build artifacts"
+        required: true
+        type: string
+      version:
+        description: "Prerelease version to publish"
+        required: true
+        type: string
+
+jobs:
+  publish:
+    name: "Publish"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      pull-requests: write
+      packages: read
+      actions: read
+    steps:
+      - name: Refuse to publish outside the OSS repository
+        if: github.repository_id != '654560183'
+        run: |
+          echo "::error::publish-from-run.yaml only publishes from rivet-dev/rivet (repository ID 654560183), not ${{ github.repository }}."
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+      - name: Resolve source run SHA
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "sha=$(gh api repos/${{ github.repository }}/actions/runs/${{ inputs.source_run_id }} --jq .head_sha)" >> "$GITHUB_OUTPUT"
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/docker-setup
+        if: github.repository_id == '654560183'
+        with:
+          docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
+          docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ---- download + place native + engine artifacts ----
+      - name: Download native artifacts
+        if: ${{ true }}
+        uses: actions/download-artifact@v4
+        with:
+          path: native-artifacts
+          pattern: native-*
+          merge-multiple: true
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+      - name: Download engine artifacts
+        if: ${{ true }}
+        uses: actions/download-artifact@v4
+        with:
+          path: engine-artifacts
+          pattern: engine-*
+          merge-multiple: true
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+      - name: Download wasm package artifact
+        if: ${{ true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-package
+          path: rivetkit-typescript/packages/rivetkit-wasm/pkg
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+      - name: Place native binaries in platform packages
+        if: ${{ true }}
+        run: |
+          NATIVE_DIR=rivetkit-typescript/packages/rivetkit-napi
+          for f in native-artifacts/*.node; do
+            filename=$(basename "$f")
+            platform="${filename#rivetkit-napi.}"
+            platform="${platform%.node}"
+            mkdir -p "${NATIVE_DIR}/npm/${platform}"
+            cp "$f" "${NATIVE_DIR}/npm/${platform}/"
+            echo "Placed $filename -> npm/${platform}/"
+          done
+
+      - name: Place engine binaries in engine-cli platform packages
+        if: ${{ true }}
+        run: bash scripts/publish/stage-engine-packages.sh engine-artifacts
+
+      - name: Bump package versions for build
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts bump-versions \
+            --version ${{ inputs.version }} \
+            --version-only
+
+      # ---- build TypeScript packages (turbo dep graph picks up native) ----
+      - name: Build TypeScript packages
+        if: ${{ true }}
+        env:
+          SKIP_NAPI_BUILD: "1"
+          SKIP_WASM_BUILD: "1"
+        run: |
+          pnpm build -F rivetkit
+          pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/rivetkit-napi' -F '!@rivetkit/rivetkit-wasm'
+          pnpm build -F '@rivet-dev/workflow-world'
+
+      # ---- shared publish (runs for all triggers) ----
+      - name: Finalize package versions for publish
+        run: pnpm --filter=publish exec tsx src/ci/bin.ts bump-versions --version ${{ inputs.version }}
+
+      - name: Publish npm packages
+        env:
+          # setup-node provides a dummy token value; clear it so token-only
+          # post-publish operations stay disabled for trusted publishing.
+          NODE_AUTH_TOKEN: ""
+          SKIP_WASM_BUILD: "1"
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts publish-npm \
+            --tag next \
+            --parallel 16 \
+            --retries 3 \
+            --release-mode
+
+      - name: Generate engine checksum manifest
+        if: ${{ true }}
+        run: |
+          (
+            cd engine-artifacts
+            sha256sum rivet-engine-* > SHA256SUMS
+          )
+
+      - name: Upload engine binaries to R2
+        if: ${{ true }}
+        env:
+          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+        run: pnpm --filter=publish exec tsx src/ci/bin.ts upload-r2 --source "$GITHUB_WORKSPACE/engine-artifacts" --sha ${{ steps.source.outputs.sha }}
+
+      - name: Copy R2 artifacts to version path
+        if: ${{ true }}
+        env:
+          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts copy-r2 \
+            --sha ${{ steps.source.outputs.sha }} \
+            --version ${{ inputs.version }} \
+            --latest false
+
+      - name: Dry-run Rust crate publish
+        if: ${{ false }}
+        # Branch previews publish npm/R2/Docker artifacts only. Unlike npm,
+        # crates.io has no movable dist-tags, and every published preview
+        # version stays permanently visible, even if later yanked.
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts publish-crates \
+            --version ${{ inputs.version }} \
+            --dry-run \
+            --allow-dirty
+
+      - name: Publish Rust crates
+        if: ${{ true }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts publish-crates \
+            --version ${{ inputs.version }} \
+            --allow-dirty
+
+      - name: Create Docker multi-arch manifests
+        if: github.repository_id == '654560183'
+        run: pnpm --filter=publish exec tsx src/ci/bin.ts docker-manifest --sha ${{ steps.source.outputs.sha }}
+
+      # ---- release-only tail ----
+      - name: Upload install scripts
+        if: ${{ true }}
+        env:
+          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts upload-install-scripts \
+            --scripts-dir "$GITHUB_WORKSPACE/scripts/publish/static" \
+            --version ${{ inputs.version }} \
+            --latest false
+
+
+      - name: Retag Docker manifests to version
+        if: github.repository_id == '654560183'
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts docker-retag \
+            --sha ${{ steps.source.outputs.sha }} \
+            --version ${{ inputs.version }} \
+            --latest false
+
+      - name: Create git tag
+        if: ${{ true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          pnpm --filter=publish exec tsx src/ci/bin.ts git-tag --version ${{ inputs.version }}
+
+      - name: Create GitHub release
+        if: ${{ true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm --filter=publish exec tsx src/ci/bin.ts gh-release --version ${{ inputs.version }}
