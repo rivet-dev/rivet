@@ -3,40 +3,172 @@ title: "Collaborative Text Editor (OT)"
 description: "Build a collaborative text editor with operational transformation, where one Actor per document orders every edit and keeps the operation log."
 ---
 
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
+
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/collaborative-document-ot" />
+
 <Diagram
   id="collaborative-text-editor-ot"
-  label="Editor A sends each operation with the revision number it was based on to the document Actor for that document. The Actor transforms the operation against every concurrent operation committed since that revision, assigns it the next revision, and appends it to the operation log in its SQLite database. It then broadcasts the transformed operation back to every editor, which also tells the sender that its operation was accepted. The numbers show the order of the calls. There is one document Actor per document."
+  label="Editor A connects to the document Actor for its document and calls getSnapshot to load the current text and revision. Each local edit becomes an operation, which Editor A sends with submitOperation together with the revision it was based on. Inside one SQLite transaction, the Actor transforms the operation against every operation in its operations log committed since that revision, appends the result at the next revision, and updates the snapshot row. It then broadcasts the transformed operation as the operation event to every editor. Editor B applies it, and Editor A treats it as the acknowledgment for its operation. The numbers show the order of the calls. There is one document Actor per document."
   stackLabel="One per document"
   nodes={[
-    { id: "a", x: 20, y: 40, title: "Editor A", subtitle: "sends an operation" },
-    { id: "b", x: 20, y: 200, title: "Editor B", subtitle: "applies it" },
-    { id: "doc", x: 340, y: 120, w: 190, product: "actors", stack: true, title: "`document`", subtitle: "transforms and orders" },
-    { id: "sqlite", x: 750, y: 120, title: "SQLite", subtitle: "operation log" },
+    { id: "a", x: 20, y: 80, title: "Editor A", subtitle: "sends an operation" },
+    { id: "b", x: 20, y: 220, title: "Editor B", subtitle: "applies it" },
+    { id: "doc", x: 420, y: 80, w: 200, product: "actors", stack: true, title: "`document`", subtitle: "transforms and orders" },
+    { id: "sqlite", x: 820, y: 80, w: 200, title: "SQLite", subtitle: "`operations`, `snapshot`" },
   ]}
   edges={[
-    { from: "a", to: "doc", toSide: "top", via: [[435, 70]], label: "operation and revision", step: 1 },
-    { from: "doc", to: "sqlite", label: "append at next revision", step: 2 },
-    { from: "doc", to: "b", kind: "reply", fromSide: "bottom", via: [[435, 230]], label: "transformed operation", step: 3 },
+    { from: "a", to: "doc", fromSide: "top", toSide: "top", via: [[105, 30], [520, 30]], label: "`getSnapshot` on connect", step: 1 },
+    { from: "a", to: "doc", fromOffset: -12, toOffset: -12, label: "`submitOperation`", step: 2 },
+    { from: "doc", to: "sqlite", label: "transform, append", step: 3 },
+    { from: "doc", to: "a", kind: "reply", fromOffset: 12, toOffset: 12, label: "`operation` (ack)", labelAt: [305, 142], step: 4 },
+    { from: "doc", to: "b", kind: "reply", fromSide: "bottom", via: [[520, 250]], label: "`operation` to all", step: 4 },
   ]}
 />
 
-## TODO
+Operational transformation (OT) keeps one authoritative order of edits. Every edit goes through one place that decides its position in the history and rewrites it so it still makes sense after the edits that got there first. On Rivet, that place is a Rivet Actor per document.
 
-This page is not written yet. The outline below is what it will cover.
+What we'll build:
 
-### What we'll build
-
+- A small OT library for plain text with insert and delete, written from scratch with no dependencies.
 - A `document` Actor per document that is the single sequencer for its edits.
-- Clients that send each operation with the revision it was based on, and keep sending later edits only after the last one is acknowledged.
-- A transform step that rewrites an incoming operation against every operation committed since its revision, then assigns it the next revision.
-- An operation log in the Actor's SQLite database, with periodic snapshots so late joiners and restarts do not replay the whole history.
-- A browser client that applies transformed operations from other editors and rebases its own pending edits on top.
+- An operation log and the latest text in the Actor's SQLite database, so late joiners load one row instead of replaying history.
+- A browser client that applies its own edits right away, keeps one operation in flight, and rebases pending edits on top of edits from others.
 
-### Similar tools
+<Note>
+This guide uses OT. The other approach is a CRDT, where every client can merge edits in any order and the server only relays and stores them. A CRDT needs no central ordering and handles long offline sessions well, at the cost of larger document metadata. See [Collaborative Text Editor (CRDT)](/guides/collaborative-text-editor).
+</Note>
 
-This is the same job as ShareDB, Google Docs-style OT servers, Firepad, or Liveblocks. On Rivet each document is an Actor, so one place orders every edit for that document without a separate database lock, and the Actor sleeps when nobody has it open. For the CRDT approach, where the server only relays and stores updates, see [Collaborative Text Editor (CRDT)](/guides/collaborative-text-editor).
+<Steps>
 
-### Open questions
+<Step title="Install">
 
-- No OT example exists yet. The guide needs one in `examples/` before its steps can embed real code.
-- Which OT library the example would use, such as ot.js or ShareDB's json0, decides the operation format and whether rich text is supported.
+```sh
+npm add rivetkit @rivetkit/react
+```
+
+The OT code is part of the example, so there is no OT package to install.
+
+</Step>
+
+<Step title="Represent edits as operations">
+
+An operation describes one edit as a walk over the whole document:
+
+<CodeSnippet file="examples/collaborative-document-ot/src/ot.ts" title="ot.ts" region="types" />
+
+<CodeSnippet file="examples/collaborative-document-ot/src/ot.ts" title="ot.ts" region="apply" />
+
+- `retain` keeps characters, `insert` adds text at the current position, and `delete` removes characters. Turning `"hello"` into `"hello world"` is `[{ retain: 5 }, { insert: " world" }]`.
+- The retained and deleted counts always add up to the length of the text the operation was made against. `apply` checks this and throws on a mismatch, so an operation can never be applied to the wrong version of the text.
+- Operations are plain JSON, so they cross the action boundary as is and can be stored in SQLite as a string.
+
+</Step>
+
+<Step title="Transform concurrent operations">
+
+`transform` is the heart of OT. It takes two operations made against the same text and rewrites each one so it can be applied after the other:
+
+<CodeSnippet file="examples/collaborative-document-ot/src/ot.ts" title="ot.ts" region="transform" />
+
+- It walks both operations at once. Text that one side inserted is new to the other side, so the other side retains it. That is how two inserts in different places both survive.
+- When both sides insert at the same position, the text of `a` goes first. The rule only has to be deterministic, and the Actor and the clients always pass the uncommitted operation as `a`, so every copy picks the same order.
+- When one side deletes text the other side retained, only the delete is kept. When both sides deleted the same text, neither deletes it again. An insert inside a range that someone else deleted is kept, because inserts are handled before deletes.
+- The guarantee is that applying `a` then `b2` gives the same text as applying `b` then `a2`. The example's tests check this on hundreds of random edit pairs.
+
+</Step>
+
+<Step title="Create the document Actor">
+
+Each document is its own `document` Actor, keyed by the document id. Its SQLite database holds two tables:
+
+<CodeSnippet file="examples/collaborative-document-ot/src/index.ts" title="index.ts" region="document" highlight="setup,snapshot" />
+
+- `operations` is the operation log. Each row is one committed operation, already transformed, at its revision. The Actor reads it to transform operations that were based on an older revision.
+- `snapshot` is a single row with the current text and revision. It is updated with every operation, so `getSnapshot` is one read no matter how long the history is, and nothing is replayed when the Actor restarts.
+- `onMigrate` creates the tables and the empty snapshot the first time the Actor starts. See [SQLite](/actors/docs/sqlite).
+- `events` declares the `operation` [event](/actors/docs/events) that carries every committed operation to the editors.
+
+</Step>
+
+<Step title="Transform and append each operation">
+
+Clients call `submitOperation` with their id, the revision their operation was based on, and the operation:
+
+<CodeSnippet file="examples/collaborative-document-ot/src/index.ts" title="index.ts" region="submit" highlight="transform,append" />
+
+- `assertOperation` checks the shape of the client's operation, and the base revision must be one the Actor has already reached.
+- The Actor loads every operation committed after `baseRevision` and transforms the incoming operation past each one in order. The result applies cleanly to the current text.
+- It appends the transformed operation at the next revision and updates the snapshot.
+- All of this runs inside `c.db.transaction`. Actions run concurrently, but transactions on one Actor run one at a time, so no other operation can commit between reading the log and appending to it. That makes the Actor a single sequencer without any lock of its own.
+
+<Warning>
+`clientId` comes from the client and is only used to recognize acknowledgments, so a client could claim another client's id. The example also has no authentication, no limit on operation size, and no rate limit. In production, use a connection or user id the server owns, cap the operation size, and check who may edit each document. See [Authentication](/guides/authentication).
+</Warning>
+
+<Note>
+The log grows by one row per edit. It is only read for operations newer than the oldest base revision a client still has, so you can delete rows older than a cutoff, such as the last 1,000 revisions, and reject operations based on anything older. Such a client reloads the snapshot.
+</Note>
+
+</Step>
+
+<Step title="Broadcast the transformed operation">
+
+Once the transaction commits, the Actor tells every editor:
+
+<CodeSnippet file="examples/collaborative-document-ot/src/index.ts" title="index.ts" region="submit" highlight="broadcast" />
+
+- The `operation` event carries the new revision, the sender's id, and the transformed operation. Every editor applies events in revision order, so they all apply the same operations in the same order.
+- The event goes to the sender too. The sender does not apply it again, because it already applied the edit locally. It uses the event as the acknowledgment that its operation was accepted.
+- The broadcast happens after the commit, so an operation that anyone has seen is already saved.
+
+</Step>
+
+<Step title="Send edits from the client">
+
+`DocumentSync` keeps one editor's copy of the document in sync. It turns every change into an operation and sends at most one at a time:
+
+<CodeSnippet file="examples/collaborative-document-ot/frontend/sync.ts" title="sync.ts" highlight="edit,rebase" />
+
+- `edit` builds an operation from the old and new text with `diff`, applies it locally right away, and queues it in `pending`. Typing never waits for the network.
+- `flush` sends only `pending[0]`, with the last revision the client has seen as its base. The next one goes out when the acknowledgment arrives, already rebased on everything the client received in the meantime, so the client never has two operations in flight to reconcile.
+- When another editor's operation arrives, `applyEvent` transforms it past every pending operation and rebases those operations on top of it. The client then applies the transformed remote operation, so local edits that are still in flight are never lost.
+- If the Actor rejects an operation, the client throws away its pending edits and reloads the snapshot.
+
+</Step>
+
+<Step title="Connect the editor">
+
+The React editor creates a `DocumentSync` for every connection and feeds it events:
+
+<CodeSnippet file="examples/collaborative-document-ot/frontend/App.tsx" title="App.tsx" region="connect" />
+
+<CodeSnippet file="examples/collaborative-document-ot/frontend/sync.ts" title="sync.ts" region="load" />
+
+- `useActor({ name: "document", key: [documentId] })` connects to the document's Actor and creates it if needed.
+- Each connection gets a new client id and calls `getSnapshot`. Events that arrive before the snapshot are buffered, and `load` drops the ones the snapshot already includes.
+- `receive` applies events strictly in revision order and holds any that arrive early. The textarea calls `edit` on every change, and the editor moves the caret past remote inserts and deletes with `transformIndex`, so it does not jump while someone else types.
+- On reconnect, the client starts over from a fresh snapshot. Edits that were still pending when the connection dropped are discarded.
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/collaborative-document-ot
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173` in two tabs. Type in both at the same time, even at the same spot, and both tabs end up with the same text. The header shows the current revision and how many of your operations are still waiting for the Actor. Reload a tab and the text comes back from the snapshot. Change the **Document** field to open a different document.
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+- [Collaborative Text Editor (CRDT)](/guides/collaborative-text-editor): the same kind of editor with Yjs, where the server only relays and stores updates.
+- [SQLite](/actors/docs/sqlite): transactions, queries, and migrations in the Actor's database.
+- [Live Cursors and Presence](/guides/live-cursors): show who else is in the document and where their cursor is.

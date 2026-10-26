@@ -2,7 +2,7 @@ import { setupTest } from "rivetkit/test";
 import { expect, test } from "vitest";
 import { registry } from "../src/index.ts";
 
-test("Company data is isolated by actor key", async (ctx) => {
+test("Each company key gets its own SQLite database", async (ctx) => {
 	const { client } = await setupTest(ctx, registry);
 	const alpha = client.companyDatabase.getOrCreate(["Alpha Co"]);
 	const beta = client.companyDatabase.getOrCreate(["Beta Co"]);
@@ -22,9 +22,17 @@ test("Company data is isolated by actor key", async (ctx) => {
 	expect(betaEmployees[0].name).toBe("Ben");
 	expect(alphaProjects).toHaveLength(1);
 	expect(betaProjects).toHaveLength(0);
+
+	// Each tenant has its own tables, so both AUTOINCREMENT sequences start at 1.
+	expect(alphaEmployees[0].id).toBe(1);
+	expect(betaEmployees[0].id).toBe(1);
+
+	const betaStats = await beta.getStats();
+	expect(betaStats.employee_count).toBe(1);
+	expect(betaStats.project_count).toBe(0);
 });
 
-test("Stats reflect per-company state", async (ctx) => {
+test("Stats reflect per-company rows", async (ctx) => {
 	const { client } = await setupTest(ctx, registry);
 	const company = client.companyDatabase.getOrCreate(["Stats Co"]);
 
