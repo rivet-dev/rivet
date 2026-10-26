@@ -882,26 +882,33 @@ impl PegboardGateway2 {
 					},
 				);
 
-				if let Err(err) = in_flight_req.send_message(close_message, true).await {
-					tracing::warn!(?err, "error sending close message");
-				} else {
-					metrics::CLOSE_SENT_TOTAL
-						.with_label_values(&[
-							self.namespace_id.to_string().as_str(),
-							self.pool_name.as_str(),
-							RequestProtocol::WebSocket.to_string().as_str(),
-							close_reason_label,
-						])
-						.inc();
-				}
-
 				let stop_result = match &lifecycle_res {
 					Ok(LifecycleResult::ServerClose(_)) => RequestStopResult::Success,
 					Ok(LifecycleResult::ClientClose(_)) => RequestStopResult::ClientDisconnect,
 					Ok(LifecycleResult::Aborted) => RequestStopResult::RequestTimeout,
 					Err(_) => RequestStopResult::EnvoyError,
 				};
-				in_flight_req.stop(stop_result).await;
+				let close_sent = metrics::CLOSE_SENT_TOTAL.with_label_values(&[
+					self.namespace_id.to_string().as_str(),
+					self.pool_name.as_str(),
+					RequestProtocol::WebSocket.to_string().as_str(),
+					close_reason_label,
+				]);
+				let in_flight_req = in_flight_req.clone();
+				let close_envoy = async move {
+					match in_flight_req.send_message(close_message, true).await {
+						Ok(()) => close_sent.inc(),
+						Err(err) => tracing::warn!(?err, "error sending close message"),
+					}
+					in_flight_req.stop(stop_result).await;
+				};
+				// On a server close the envoy closed first and may already be gone,
+				// so its acknowledgment must not hold the client's close frame.
+				if matches!(lifecycle_res, Ok(LifecycleResult::ServerClose(_))) {
+					tokio::spawn(close_envoy.in_current_span());
+				} else {
+					close_envoy.await;
+				}
 			} else {
 				in_flight_req.start_hibernation().await?;
 			}
