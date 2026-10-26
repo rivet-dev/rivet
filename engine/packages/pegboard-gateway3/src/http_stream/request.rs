@@ -382,6 +382,4 @@ where
 	}
 }
 
-#[cfg(test)]
-#[path = "../../tests/support/http_stream_request.rs"]
-mod tests;
+

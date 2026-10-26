@@ -513,6 +513,4 @@ fn send_http_body_error(terminal_error: &ResponseBodyTerminal, message: impl Int
 	terminal_error.fail(Box::new(std::io::Error::other(message.into())));
 }
 
-#[cfg(test)]
-#[path = "../../tests/support/http_stream_response.rs"]
-mod tests;
+

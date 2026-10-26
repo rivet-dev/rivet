@@ -5,6 +5,7 @@ pub mod commands;
 pub mod config;
 pub mod connection;
 pub mod context;
+pub mod deadlines;
 pub mod envoy;
 pub mod events;
 pub mod handle;
@@ -15,8 +16,11 @@ pub mod metrics;
 pub mod sqlite;
 pub mod stringify;
 pub(crate) mod time {
+	// Tokio's clock is the monotonic clock in production and follows a paused runtime's
+	// simulated time, so request deadlines expire on the same clock their timers sleep on.
+	// Reconnect jitter and ping health still read real randomness and wall time.
 	#[cfg(not(target_arch = "wasm32"))]
-	pub use std::time::Instant;
+	pub use tokio::time::Instant;
 	#[cfg(target_arch = "wasm32")]
 	pub use web_time::Instant;
 

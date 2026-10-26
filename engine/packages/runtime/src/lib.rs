@@ -1,3 +1,10 @@
+//! Process bootstrap: builds the Tokio runtime that the production `Env` runs on and samples
+//! its metrics. It sits below the environment boundary, so it uses the runtime APIs directly.
+#![allow(
+	clippy::disallowed_methods,
+	reason = "process bootstrap owns the Tokio runtime below the Env boundary"
+)]
+
 use std::{
 	env,
 	future::Future,
@@ -10,53 +17,62 @@ use std::{
 };
 
 use rivet_metrics_server::init_otel_providers;
-use tokio::sync::{Notify, OnceCell};
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+mod malloc_trim;
 mod metrics;
 mod traces;
 
-mod term_signal;
+pub use traces::{reload_log_filter, sentry_layer};
 
-pub use term_signal::TermSignal;
-pub use traces::reload_log_filter;
-
-static SHUTDOWN: OnceCell<Arc<Notify>> = OnceCell::const_new();
-
-/// Returns `None` if the runtime was shut down manually.
-pub fn run<F: Future>(f: F) -> Option<F::Output> {
-	// Build runtime
+/// Builds the process runtime, installs tracing and runtime metrics, and runs `f` to completion.
+pub fn run<F: Future>(f: F) -> F::Output {
 	let mut rt_builder = build_tokio_runtime_builder();
 	let rt = rt_builder.build().expect("failed to build tokio runtime");
-	let output = rt.block_on(async move {
-		let notify = SHUTDOWN
-			.get_or_init(|| std::future::ready(Arc::new(Notify::new())))
-			.await
-			.clone();
-
+	rt.block_on(async move {
 		// Must be called from within a tokio context
 		let providers = init_otel_providers();
 		traces::init_tracing_subscriber(&providers);
 
 		tokio::spawn(sample_runtime_metrics(tokio::runtime::Handle::current()));
-
-		tokio::select! {
-			_ = notify.notified() => {
-				tracing::info!("shutting down runtime");
-				None
-			},
-			res = f => Some(res),
+		#[cfg(all(target_os = "linux", target_env = "gnu"))]
+		if let Some(interval) = malloc_trim::trim_interval() {
+			tokio::spawn(malloc_trim::trim_malloc_periodically(interval));
 		}
-	});
 
-	output
+		f.await
+	})
 }
 
-/// Shuts down the entire rivet runtime, if one is running.
-pub async fn shutdown() {
-	if let Some(shutdown) = SHUTDOWN.get() {
-		shutdown.notify_one();
-	} else {
-		tracing::error!("no runtime to shutdown");
-	};
+/// Polls on one worker thread between reads of the poll time histogram.
+const POLL_SAMPLE_INTERVAL: u32 = 1024;
+
+thread_local! {
+	static POLLS_SINCE_SAMPLE: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+	/// This worker's thread CPU time when it last unparked.
+	static WORKER_CPU_AT_UNPARK: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+}
+
+/// CPU time the calling thread has used, or `None` where the platform cannot report it.
+fn thread_cpu_time() -> Option<Duration> {
+	#[cfg(unix)]
+	{
+		let mut spec = libc::timespec {
+			tv_sec: 0,
+			tv_nsec: 0,
+		};
+		// SAFETY: `spec` is a valid, writable timespec and the clock id is a constant.
+		let result = unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut spec) };
+		if result != 0 {
+			return None;
+		}
+		let seconds = u64::try_from(spec.tv_sec).ok()?;
+		let nanos = u32::try_from(spec.tv_nsec).ok()?;
+		Some(Duration::new(seconds, nanos))
+	}
+	#[cfg(not(unix))]
+	{
+		None
+	}
 }
 
 fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
@@ -73,9 +89,33 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 	rt_builder.on_task_spawn(move |_| metrics::TOKIO_TASK_TOTAL.inc());
 
 	if env::var("TOKIO_RUNTIME_METRICS").is_ok() {
+		// Worker CPU between unpark and park, against the busy wall time sampled from the
+		// runtime, shows whether busy workers compute or wait inside their polls.
+		rt_builder.on_thread_unpark(|| {
+			WORKER_CPU_AT_UNPARK.with(|at| at.set(thread_cpu_time()));
+		});
+		rt_builder.on_thread_park(|| {
+			let unparked = WORKER_CPU_AT_UNPARK.with(|at| at.take());
+			if let (Some(unparked), Some(now)) = (unparked, thread_cpu_time()) {
+				metrics::TOKIO_WORKER_BUSY_CPU_SECONDS_TOTAL
+					.inc_by(now.saturating_sub(unparked).as_secs_f64());
+			}
+		});
+
 		let last_seen_poll_counts = Arc::new(OnceLock::new());
 
 		rt_builder.on_before_task_poll(move |_| {
+			// Tokio's bucket counts are cumulative, so reading them on a fraction of
+			// polls still exports every poll. Reading all workers' buckets on every
+			// poll cost several percent of the process's CPU under load.
+			let sample = POLLS_SINCE_SAMPLE.with(|polls| {
+				let next = polls.get().wrapping_add(1);
+				polls.set(next % POLL_SAMPLE_INTERVAL);
+				next == POLL_SAMPLE_INTERVAL
+			});
+			if !sample {
+				return;
+			}
 			let metrics = tokio::runtime::Handle::current().metrics();
 			let buckets = metrics.poll_time_histogram_num_buckets();
 			let last_seen_poll_counts = last_seen_poll_counts
@@ -94,7 +134,7 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 							let observe_value = poll_bucket_observe_value(range);
 
 							for _ in 0..diff {
-								metrics::TOKIO_TASK_POLL_DURATION.observe(observe_value);
+								metrics::TOKIO_TASK_POLL_DURATION_SECONDS.observe(observe_value);
 							}
 						}
 					}
@@ -118,7 +158,7 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 	if let Ok(thread_stack_size) = env::var("TOKIO_THREAD_STACK_SIZE") {
 		rt_builder.thread_stack_size(thread_stack_size.parse().unwrap());
 	} else {
-		// async-nats requires a fat stack
+		// Leave stack headroom for Engine service futures.
 		rt_builder.thread_stack_size(8 * 1024 * 1024);
 	}
 
@@ -199,7 +239,7 @@ async fn sample_runtime_metrics(handle: tokio::runtime::Handle) {
 			let busy_nanos = metrics.worker_total_busy_duration(worker).as_nanos() as u64;
 			let delta_nanos = busy_nanos.saturating_sub(*last_busy_nanos);
 			*last_busy_nanos = busy_nanos;
-			metrics::TOKIO_WORKER_BUSY_DURATION_TOTAL
+			metrics::TOKIO_WORKER_BUSY_DURATION_SECONDS_TOTAL
 				.with_label_values(&labels)
 				.inc_by(delta_nanos as f64 / 1_000_000_000.0);
 		}

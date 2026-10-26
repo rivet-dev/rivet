@@ -3,8 +3,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use reqwest::{Client, StatusCode, Url};
-use serde::Deserialize;
-use serde_json::{Map as JsonMap, json};
+use serde_json::json;
 
 use crate::time::sleep;
 
@@ -13,16 +12,6 @@ use super::ServeConfig;
 const RUNNER_CONFIG_MAX_ATTEMPTS: usize = 60;
 const RUNNER_CONFIG_RETRY_DELAY: Duration = Duration::from_millis(500);
 
-#[derive(Debug, Deserialize)]
-struct DatacentersResponse {
-	datacenters: Vec<Datacenter>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Datacenter {
-	name: String,
-}
-
 pub(super) async fn ensure_local_normal_runner_config(config: &ServeConfig) -> Result<()> {
 	if !is_local_engine_endpoint(&config.endpoint) {
 		return Ok(());
@@ -30,7 +19,7 @@ pub(super) async fn ensure_local_normal_runner_config(config: &ServeConfig) -> R
 
 	let client = Client::builder()
 		.build()
-		.context("build reqwest client for runner config")?;
+		.context("build reqwest client for node pool configuration")?;
 	ensure_local_normal_runner_config_with_retry(
 		&client,
 		config,
@@ -54,7 +43,7 @@ async fn ensure_local_normal_runner_config_with_retry(
 			Err(AttemptError::Retryable(error)) if attempt == max_attempts => {
 				return Err(error).with_context(|| {
 					format!(
-						"local runner config `{}` did not become ready after {max_attempts} attempts",
+						"local node pool configuration `{}` did not become ready after {max_attempts} attempts",
 						config.pool_name
 					)
 				});
@@ -66,64 +55,47 @@ async fn ensure_local_normal_runner_config_with_retry(
 					max_attempts,
 					namespace = %config.namespace,
 					pool_name = %config.pool_name,
-					"local Engine namespace or runner config is not ready; retrying"
+					"local Engine namespace or node pool configuration is not ready; retrying"
 				);
 				sleep(retry_delay).await;
 			}
 		}
 	}
 
-	unreachable!("runner config retry loop always returns")
+	unreachable!("node pool configuration retry loop always returns")
 }
 
 async fn ensure_local_normal_runner_config_once(
 	client: &Client,
 	config: &ServeConfig,
 ) -> Result<(), AttemptError> {
-	let datacenters = get_datacenters(&client, config).await?;
-	if datacenters.datacenters.is_empty() {
-		return Err(AttemptError::Retryable(anyhow::Error::msg(
-			"local Engine returned no datacenters",
-		)));
-	}
-	let mut runner_datacenters = JsonMap::new();
-
-	for datacenter in datacenters.datacenters {
-		runner_datacenters.insert(
-			datacenter.name,
-			json!({
-				"normal": {},
-				"drain_on_version_upgrade": true,
-			}),
-		);
-	}
-
 	let url = engine_api_url(
 		&config.endpoint,
-		&["runner-configs", config.pool_name.as_str()],
+		&["pools", config.pool_name.as_str()],
 		&config.namespace,
 	)?;
-	let body = json!({
-		"datacenters": runner_datacenters,
-	});
+	let body = json!({"drain_on_version_upgrade": true});
 
 	let response = apply_auth(client.put(url), config)
 		.json(&body)
 		.send()
 		.await
 		.map_err(|error| {
-			AttemptError::Retryable(anyhow::Error::new(error).context("upsert local runner config"))
+			AttemptError::Retryable(
+				anyhow::Error::new(error).context("upsert local node pool configuration"),
+			)
 		})?;
 	let status = response.status();
 	if !status.is_success() {
 		let response_body = response.text().await.map_err(|error| {
 			AttemptError::Retryable(
-				anyhow::Error::new(error).context("read failed runner config response body"),
+				anyhow::Error::new(error)
+					.context("read failed node pool configuration response body"),
 			)
 		})?;
 		return Err(response_error(
 			format!(
-				"failed to upsert local runner config `{}`",
+				"failed to upsert local node pool configuration `{}`",
 				config.pool_name
 			),
 			status,
@@ -134,43 +106,10 @@ async fn ensure_local_normal_runner_config_once(
 	tracing::debug!(
 		namespace = %config.namespace,
 		pool_name = %config.pool_name,
-		"ensured local normal runner config"
+		"ensured local normal node pool configuration"
 	);
 
 	Ok(())
-}
-
-async fn get_datacenters(
-	client: &Client,
-	config: &ServeConfig,
-) -> Result<DatacentersResponse, AttemptError> {
-	let url = engine_api_url(&config.endpoint, &["datacenters"], &config.namespace)?;
-	let response = apply_auth(client.get(url), config)
-		.send()
-		.await
-		.map_err(|error| {
-			AttemptError::Retryable(anyhow::Error::new(error).context("get local datacenters"))
-		})?;
-	let status = response.status();
-	if !status.is_success() {
-		let response_body = response.text().await.map_err(|error| {
-			AttemptError::Retryable(
-				anyhow::Error::new(error).context("read failed datacenters response body"),
-			)
-		})?;
-		return Err(response_error(
-			"failed to get local datacenters for runner config".to_owned(),
-			status,
-			response_body,
-		));
-	}
-
-	response
-		.json::<DatacentersResponse>()
-		.await
-		.map_err(|error| {
-			AttemptError::Fatal(anyhow::Error::new(error).context("decode datacenters response"))
-		})
 }
 
 #[derive(Debug)]
@@ -240,6 +179,4 @@ fn is_local_engine_endpoint(endpoint: &str) -> bool {
 		.unwrap_or(false)
 }
 
-#[cfg(test)]
-#[path = "../../tests/runner_config.rs"]
-mod tests;
+

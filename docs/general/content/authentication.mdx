@@ -1,22 +1,23 @@
 ---
 title: "Authentication"
-description: "How clients authenticate to Rivet: secrets for your backend, short-lived JWTs for public clients, and ACL tokens for long-lived scoped access."
+description: "Choose credentials for a self-hosted control plane or Rivet Cloud."
 skill: true
 ---
 
-Every request to Rivet carries a credential, and the control plane checks what that credential may reach before routing it to an actor. This page covers the kinds available. To authorize a caller after it is connected, see [Permissions](/actors/docs/permissions).
+The control plane checks credentials before serving management requests or routing Actor traffic. Application-level authorization still belongs in your Actor. See [Authentication](/actors/docs/authentication).
 
-Authentication is required by default. On a self-hosted control plane, `auth.insecure_allow_unauthenticated` restores the old unauthenticated behavior for a trusted network; do not enable it on anything publicly reachable.
+## Self-hosted control plane
 
-## Choosing a Credential
+The configured `auth.admin_token` grants every operation in every namespace. Keep it in your backend or secret store. Use it to create namespaces and issue [scoped JWTs](/docs/jwt) for applications.
 
-| | Lifetime | Scope | Revoke | Available in |
-| --- | --- | --- | --- | --- |
-| [Admin token](/docs/deploy/self-host/control-plane/configuration#admin-token) | Static | Everything, every namespace | Rotate the secret and restart | Self-hosted |
-| [Secret key](/docs/deploy/cloud#tokens) | Static | One namespace | Delete the key | Rivet Cloud |
-| [JWT](/docs/jwt) | 1 hour by default, 24 hour maximum | One namespace, one grant set | Wait for expiry | Self-hosted, Rivet Cloud |
-| [ACL token](/docs/deploy/self-host/control-plane/rbac) | Long-lived | Roles built from reusable policies | Delete the token | Enterprise |
+A JWT grants access to one namespace and an explicit set of resources and operations. Give browser clients only the permissions they need, and keep tokens that can register nodes or manage pools on your backend.
 
-Your backend can hold a secret, so it uses one directly. A browser or mobile app cannot, because anyone can read it out of the bundle, so mint a short-lived [JWT](/docs/jwt) per user on your backend and hand that out instead. Reach for [ACL](/docs/deploy/self-host/control-plane/rbac) when a credential has to outlive a session and stay revocable.
+Pass credentials in `Authorization: Bearer <token>`, or use an [endpoint URL](/docs/endpoints) such as `https://production:<token>@rivet.mycompany.com`.
 
-On Rivet Cloud the secret, publishable, and connection keys are created from the dashboard or the CLI. See [Tokens](/docs/deploy/cloud#tokens).
+## Rivet Cloud
+
+Get your namespace endpoints and credentials from the [Rivet Cloud dashboard](https://dashboard.rivet.dev). Keep secret credentials on your backend. See [Rivet Cloud](/docs/deploy/cloud/) for managed deployment and token settings.
+
+## Inspector
+
+The Actor inspector has a separate credential. See [Debugging Actors](/actors/docs/debugging#inspector-endpoints).

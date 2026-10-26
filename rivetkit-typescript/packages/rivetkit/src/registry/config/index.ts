@@ -158,7 +158,7 @@ export const RegistryConfigSchema = z
 		// // created or must be imported async using `await import(...)`
 		// getUpgradeWebSocket: z.custom<GetUpgradeWebSocket>().optional(),
 
-		// MARK: Runner Configuration
+		// MARK: Node Configuration
 		/**
 		 * Endpoint to connect to for Rivet Engine.
 		 *
@@ -251,14 +251,14 @@ export const RegistryConfigSchema = z
 			.default(() => getRivetRunEngineVersion() ?? VERSION),
 		/**
 		 * Starts the first-party Services actor host when RivetKit manages
-		 * a local engine. Defaults to the local-engine decision. Set
-		 * RIVET_RUN_SERVICES=0 or 1 to override it.
+		 * a local engine. Disabled by default. Set RIVET_RUN_SERVICES=1
+		 * or startServices: true to enable it.
 		 */
 		startServices: z.boolean().optional(),
 		/**
 		 * @experimental
 		 *
-		 * Automatically configure serverless envoys in the engine.
+		 * Automatically configure serverless nodes in the engine.
 		 */
 		configurePool: ConfigurePoolSchema.optional(),
 
@@ -266,7 +266,7 @@ export const RegistryConfigSchema = z
 		serverless: ServerlessConfigSchema.optional().default(() =>
 			ServerlessConfigSchema.parse({}),
 		),
-		envoy: EnvoyConfigSchema.optional().default(() =>
+		node: EnvoyConfigSchema.optional().default(() =>
 			EnvoyConfigSchema.parse({}),
 		),
 
@@ -274,9 +274,9 @@ export const RegistryConfigSchema = z
 		/**
 		 * Graceful shutdown configuration for SIGINT/SIGTERM.
 		 *
-		 * When a persistent envoy is running (Mode A, started via `registry.start()`),
+		 * When a persistent node is running (Mode A, started via `registry.start()`),
 		 * rivetkit installs Node SIGINT/SIGTERM handlers that call into core's
-		 * `shutdown()` and wait up to `gracePeriodMs` for the envoy to drain
+		 * `shutdown()` and wait up to `gracePeriodMs` for the node to drain
 		 * before re-raising the signal to let Node exit via its default path.
 		 *
 		 * Handlers are NOT installed when `handler(request)` is used alone
@@ -289,9 +289,11 @@ export const RegistryConfigSchema = z
 				/**
 				 * Wait this many milliseconds for the serve promise to resolve
 				 * after calling `CoreRegistry::shutdown()`. Defaults to the
-				 * engine-provided actor stop threshold once the envoy connects.
+				 * engine-provided actor stop threshold once the node connects. A
+				 * signal-driven shutdown of a managed local development engine waits
+				 * one second by default so a file watcher can restart promptly.
 				 *
-				 * Must be long enough for rivetkit-core to drain the envoy.
+				 * Set a longer period when a complete graceful node drain is required.
 				 */
 				gracePeriodMs: z.number().int().min(1_000).optional(),
 				/**
@@ -348,12 +350,12 @@ export const RegistryConfigSchema = z
 			});
 		}
 
-		// configurePool requires an engine (via endpoint or startEngine).
-		if (config.configurePool && !parsedEndpoint && !config.startEngine) {
+		// Serverless pool configuration is disabled for v3.
+		if (config.configurePool) {
 			ctx.addIssue({
 				code: "custom",
-				message:
-					"configurePool requires either endpoint or startEngine",
+				message: "serverless is disabled in this version",
+				path: ["configurePool"],
 			});
 		}
 
@@ -366,13 +368,7 @@ export const RegistryConfigSchema = z
 			? localEngineEndpoint
 			: (parsedEndpoint?.endpoint ??
 				(isDevEnv ? localEngineEndpoint : undefined));
-		// Services is another local development actor host. Its default
-		// follows the same local-endpoint decision that causes core to manage the
-		// Engine, while explicit config and RIVET_RUN_SERVICES take precedence.
-		const startServices =
-			config.startServices ??
-			getRivetRunServices() ??
-			Boolean(endpoint && isLocalEngineEndpoint(endpoint));
+		const startServices = config.startServices ?? getRivetRunServices();
 		const validateServerlessEndpoint = Boolean(
 			config.startEngine || parsedEndpoint,
 		);
@@ -422,6 +418,7 @@ export const RegistryConfigSchema = z
 			...config,
 			sqlite,
 			endpoint,
+			engineSpawn: !parsedEndpoint && Boolean(endpoint),
 			startServices,
 			namespace,
 			token,
@@ -468,10 +465,10 @@ export function buildActorNames(
 
 export const DocConfigurePoolSchema = z
 	.object({
-		name: z.string().optional().describe("Name of the runner pool."),
+		name: z.string().optional().describe("Name of the node pool."),
 		url: z
 			.string()
-			.describe("URL of the serverless platform to configure runners."),
+			.describe("URL of the serverless platform to configure nodes."),
 		headers: z
 			.record(z.string(), z.string())
 			.optional()
@@ -504,7 +501,7 @@ export const DocConfigurePoolSchema = z
 			.boolean()
 			.optional()
 			.describe(
-				"Drain runners when a new version is deployed. Defaults to true.",
+				"Drain nodes when a new version is deployed. Defaults to true.",
 			),
 	})
 	.optional();
@@ -547,17 +544,17 @@ export const DocEnvoyConfigSchema = z
 		poolName: z
 			.string()
 			.optional()
-			.describe("Name of this envoy pool. Default: 'default'"),
-		envoyKey: z
+			.describe("Name of this node pool. Default: 'default'"),
+		nodeKey: z
 			.string()
 			.optional()
-			.describe("Deprecated. Authentication key for the envoy."),
+			.describe("Deprecated. Authentication key for the node."),
 		version: z
 			.number()
 			.optional()
-			.describe("Version number of this envoy. Default: 1"),
+			.describe("Version number of this node. Default: 1"),
 	})
-	.describe("Configuration for envoy mode.");
+	.describe("Configuration for node mode.");
 
 export const DocSqliteConfigSchema = z
 	.object({
@@ -658,12 +655,12 @@ export const DocRegistryConfigSchema = z
 			.boolean()
 			.optional()
 			.describe(
-				"Starts Services when RivetKit manages a local Engine. Defaults to the local-Engine decision. Set RIVET_RUN_SERVICES=0 or 1 to override.",
+				"Starts Services when RivetKit manages a local Engine. Disabled by default. Set RIVET_RUN_SERVICES=1 or startServices: true to enable.",
 			),
 		configurePool: DocConfigurePoolSchema.describe(
-			"Automatically configure serverless runners in the engine.",
+			"Automatically configure serverless nodes in the engine.",
 		),
 		serverless: DocServerlessConfigSchema.optional(),
-		envoy: DocEnvoyConfigSchema.optional(),
+		node: DocEnvoyConfigSchema.optional(),
 	})
 	.describe("RivetKit registry configuration.");

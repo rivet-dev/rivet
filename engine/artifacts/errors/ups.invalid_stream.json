@@ -1,0 +1,5 @@
+{
+  "code": "invalid_stream",
+  "group": "ups",
+  "message": "The packet stream is malformed or ended without a terminal frame."
+}

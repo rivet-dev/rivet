@@ -35,10 +35,19 @@ pub struct EnvoyClientMetrics {
 	pub ws_reconnect_total: IntCounterVec,
 	pub ws_session_duration_seconds: Histogram,
 	pub envoy_tx_depth: IntGauge,
+	pub http_detached_sends_inflight: IntGauge,
+	pub http_detached_sends_capacity: IntGauge,
+	pub http_detached_send_dropped_total: IntCounter,
 	pub ws_read_handler_duration: Histogram,
 	pub ws_decode_duration: Histogram,
 	pub ws_rx_bytes_total: IntCounter,
 	pub ws_rx_messages_total: IntCounter,
+	pub stopped_floors: IntGauge,
+	pub stopped_floors_capacity: IntGauge,
+	pub actor_start_seconds: Histogram,
+	pub actor_queued_requests: IntGauge,
+	pub actor_queued_requests_capacity: IntGauge,
+	pub actor_queued_requests_overloaded_total: IntCounter,
 }
 
 impl EnvoyClientMetrics {
@@ -154,6 +163,24 @@ impl EnvoyClientMetrics {
 		)
 		.expect("create envoy_client_envoy_tx_depth gauge");
 
+		let http_detached_sends_inflight = IntGauge::new(
+			"rivetkit_envoy_client_http_detached_sends_inflight",
+			"current detached tasks sending terminal HTTP frames while the HTTP stream is saturated",
+		)
+		.expect("create envoy_client_http_detached_sends_inflight gauge");
+
+		let http_detached_sends_capacity = IntGauge::new(
+			"rivetkit_envoy_client_http_detached_sends_capacity",
+			"maximum detached terminal HTTP frame sends per WebSocket session",
+		)
+		.expect("create envoy_client_http_detached_sends_capacity gauge");
+
+		let http_detached_send_dropped_total = IntCounter::new(
+			"rivetkit_envoy_client_http_detached_send_dropped_total",
+			"total terminal HTTP frames dropped because the detached send budget was exhausted",
+		)
+		.expect("create envoy_client_http_detached_send_dropped_total counter");
+
 		let ws_read_handler_duration = Histogram::with_opts(
 			HistogramOpts::new(
 				"rivetkit_envoy_client_ws_read_handler_duration",
@@ -224,10 +251,67 @@ impl EnvoyClientMetrics {
 			ws_session_duration_seconds.clone(),
 		);
 		register(&rivet_metrics::REGISTRY, envoy_tx_depth.clone());
+		register(
+			&rivet_metrics::REGISTRY,
+			http_detached_sends_inflight.clone(),
+		);
+		register(
+			&rivet_metrics::REGISTRY,
+			http_detached_sends_capacity.clone(),
+		);
+		register(
+			&rivet_metrics::REGISTRY,
+			http_detached_send_dropped_total.clone(),
+		);
 		register(&rivet_metrics::REGISTRY, ws_read_handler_duration.clone());
 		register(&rivet_metrics::REGISTRY, ws_decode_duration.clone());
 		register(&rivet_metrics::REGISTRY, ws_rx_bytes_total.clone());
 		register(&rivet_metrics::REGISTRY, ws_rx_messages_total.clone());
+		let stopped_floors = IntGauge::new(
+			"rivetkit_envoy_client_stopped_floors",
+			"actors whose highest stopped generation this Envoy remembers",
+		)
+		.expect("create envoy_client_stopped_floors gauge");
+		let stopped_floors_capacity = IntGauge::new(
+			"rivetkit_envoy_client_stopped_floors_capacity",
+			"configured cap on remembered stopped generation floors",
+		)
+		.expect("create envoy_client_stopped_floors_capacity gauge");
+		register(&rivet_metrics::REGISTRY, stopped_floors.clone());
+		register(&rivet_metrics::REGISTRY, stopped_floors_capacity.clone());
+		let actor_start_seconds = Histogram::with_opts(
+			HistogramOpts::new(
+				"rivetkit_envoy_client_actor_start_seconds",
+				"time from receiving CommandStartActor to sending the actor's Running event, including the runtime's on_actor_start",
+			)
+			.buckets(rivet_metrics::START_BUCKETS.to_vec()),
+		)
+		.expect("create envoy_client_actor_start_seconds histogram");
+		register(&rivet_metrics::REGISTRY, actor_start_seconds.clone());
+		let actor_queued_requests = IntGauge::new(
+			"rivetkit_envoy_client_actor_queued_requests",
+			"HTTP requests admitted to actors on this process and not yet taken by their actor tasks, including requests waiting for an actor to start",
+		)
+		.expect("create envoy_client_actor_queued_requests gauge");
+		let actor_queued_requests_capacity = IntGauge::new(
+			"rivetkit_envoy_client_actor_queued_requests_capacity",
+			"configured cap on queued HTTP requests per actor",
+		)
+		.expect("create envoy_client_actor_queued_requests_capacity gauge");
+		let actor_queued_requests_overloaded_total = IntCounter::new(
+			"rivetkit_envoy_client_actor_queued_requests_overloaded_total",
+			"HTTP requests refused because their actor already had the configured number queued",
+		)
+		.expect("create envoy_client_actor_queued_requests_overloaded_total counter");
+		register(&rivet_metrics::REGISTRY, actor_queued_requests.clone());
+		register(
+			&rivet_metrics::REGISTRY,
+			actor_queued_requests_capacity.clone(),
+		);
+		register(
+			&rivet_metrics::REGISTRY,
+			actor_queued_requests_overloaded_total.clone(),
+		);
 
 		Self {
 			sqlite_request_expired_total,
@@ -243,10 +327,19 @@ impl EnvoyClientMetrics {
 			ws_reconnect_total,
 			ws_session_duration_seconds,
 			envoy_tx_depth,
+			http_detached_sends_inflight,
+			http_detached_sends_capacity,
+			http_detached_send_dropped_total,
 			ws_read_handler_duration,
 			ws_decode_duration,
 			ws_rx_bytes_total,
 			ws_rx_messages_total,
+			stopped_floors,
+			stopped_floors_capacity,
+			actor_start_seconds,
+			actor_queued_requests,
+			actor_queued_requests_capacity,
+			actor_queued_requests_overloaded_total,
 		}
 	}
 }

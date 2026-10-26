@@ -1,5 +1,0 @@
-{
-  "code": "shard_cache_corrupt",
-  "group": "depot",
-  "message": "SQLite shard cache is corrupt."
-}

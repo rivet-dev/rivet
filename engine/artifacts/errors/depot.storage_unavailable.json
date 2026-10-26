@@ -1,0 +1,5 @@
+{
+  "code": "storage_unavailable",
+  "group": "depot",
+  "message": "Depot storage is not available in this build."
+}

@@ -1,0 +1,71 @@
+---
+title: "Troubleshooting"
+description: "Diagnose common Rivet Actors setup, connection, deployment, and runtime problems with targeted checks and corrective steps."
+skill: true
+---
+
+## Common Steps
+
+Before diving into specific errors, try these general troubleshooting steps:
+
+- Check your server logs for `level=ERROR` or `level=WARN` messages.
+- Check if any of your backend processes have crashed or restarted unexpectedly.
+- If you need more diagnostics, set `RIVET_LOG_LEVEL=DEBUG` for verbose logging. See [Logging](/actors/docs/logging) for more options.
+
+## Reporting Issues
+
+If you're stuck, reach out on [Discord](https://rivet.dev/discord) or file an issue on [GitHub](https://github.com/rivet-dev/rivet/issues).
+
+When reporting, please include:
+
+- **Symptoms**
+  - Whether this is happening in local dev, deployed, or both
+  - The error you're seeing (screenshot or error message)
+  - Relevant source code related to the issue
+- **What you've tried to solve it**
+- **Environment**
+  - RivetKit version
+  - Runtime (Node, Bun, etc.) including version
+  - If applicable, hosting platform in use (e.g. Kubernetes, Railway, AWS ECS)
+  - If applicable, HTTP router in use (e.g. Hono, Express, Elysia)
+
+## Actor status is crashed
+
+See [Actor Statuses](/docs/statuses) for more about this status.
+
+The dashboard will show the specific failure reason. Common errors include:
+
+### `crashed`
+
+The actor's `run` handler threw an unhandled exception or exited unexpectedly. Check your actor logs for the error message and stack trace.
+
+{/* TODO(code): list the allocation failure reasons the control plane reports for a Rivet Actor once it records them. Today only a crash in your own code is reported. */}
+
+### `internal_error`
+
+An unexpected error occurred within Rivet. If this persists, please [contact support](https://rivet.dev/actors/docs).
+
+## Actors crashing immediately on startup
+
+If your actors are being created and then immediately destroyed or crashing, there is likely an error being thrown in your `createState` or `onCreate` lifecycle hooks. These hooks run during actor initialization before the actor is marked as ready.
+
+Check your server logs for the error message and stack trace. Common causes include:
+
+- An exception thrown in `createState` (e.g. invalid input, failed validation, or a runtime error when computing initial state)
+- An exception thrown in `onCreate` (e.g. a failing external API call, missing configuration, or invalid setup logic)
+
+Fix the error in the relevant lifecycle hook and redeploy.
+
+## Actors not upgrading to new code
+
+During a rollout, old and new nodes both run Rivet Actors until the old nodes stop. A Rivet Actor started on an old node keeps running the old code until it sleeps or its node stops. Finish the rollout by stopping every old node. See [Versions & Upgrades](/docs/versions).
+
+## Actor status is pending
+
+See [Actor Statuses](/docs/statuses) for more about this status.
+
+An actor stays in "pending" status while no node in its node pool is connected to accept it.
+
+- Check that at least one node is running and that its `RIVET_ENDPOINT` points at the right control plane and namespace.
+- Check that the node joined the node pool the actor runs in. A node joins the pool named by `RIVET_POOL`, or `default`.
+- Check your node logs for connection errors.

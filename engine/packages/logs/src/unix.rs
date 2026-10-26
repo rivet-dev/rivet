@@ -1,3 +1,9 @@
+#![allow(
+	clippy::disallowed_methods,
+	clippy::disallowed_types,
+	reason = "host diagnostic log rotation is outside simulated application storage"
+)]
+
 use std::{os::fd::AsFd, path::PathBuf};
 
 use anyhow::*;

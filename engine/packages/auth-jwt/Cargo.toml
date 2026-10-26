@@ -5,49 +5,39 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
-[features]
-default = []
-service = [
-	"dep:epoxy",
-	"dep:epoxy-protocol",
-	"dep:gas",
-	"dep:futures-util",
-	"dep:lazy_static",
-	"dep:rivet-config",
-	"dep:rivet-metrics",
-	"dep:rivet-util",
-	"dep:tokio",
-	"dep:tracing",
-	"dep:universaldb",
-]
-
 [dependencies]
 anyhow.workspace = true
 base64.workspace = true
 ed25519-dalek.workspace = true
-epoxy = { workspace = true, optional = true }
-epoxy-protocol = { workspace = true, optional = true }
-gas = { workspace = true, optional = true }
-futures-util = { workspace = true, optional = true }
 jsonwebtoken.workspace = true
-lazy_static = { workspace = true, optional = true }
 rand.workspace = true
 rivet-auth-policy.workspace = true
-rivet-config = { workspace = true, optional = true }
+rivet-config.workspace = true
 rivet-data.workspace = true
-rivet-metrics = { workspace = true, optional = true }
-rivet-util = { workspace = true, optional = true }
 rivet-util-id.workspace = true
 serde.workspace = true
-serde_bare.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, optional = true }
-tracing = { workspace = true, optional = true }
-universaldb = { workspace = true, optional = true }
+tokio.workspace = true
 vbare.workspace = true
 zeroize.workspace = true
 
-[dev-dependencies]
-hex.workspace = true
+object_store.workspace = true
+rivet-env.workspace = true
+rivet-keys.workspace = true
+rivet-singleton-coordinator.workspace = true
+tracing.workspace = true
+tokio-util.workspace = true
+
+parking_lot.workspace = true
+rivet-state-machine.workspace = true
+rivet-state-machine-ephemeral.workspace = true
+rivet-state-machine-util.workspace = true
+rivet-object-store-util.workspace = true
+
+universalpubsub.workspace = true
+rivet-topology.workspace = true
+uuid.workspace = true
+subtle.workspace = true
+

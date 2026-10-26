@@ -14,6 +14,11 @@ use rustls::ClientConfig;
 /// # Returns
 ///
 /// A configured `ClientConfig` for use with tokio-postgres-rustls
+#[allow(
+	clippy::disallowed_methods,
+	clippy::disallowed_types,
+	reason = "production TLS bootstrap loads certificates from host files"
+)]
 pub fn build_tls_config(
 	ssl_root_cert_path: Option<&PathBuf>,
 	ssl_client_cert_path: Option<&PathBuf>,

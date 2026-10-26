@@ -15,6 +15,7 @@ import {
 	type Package,
 } from "./packages.js";
 import { scopedFamilies, type TargetGroup } from "./scope.js";
+import { releaseLatest } from "./version.js";
 
 const log = scoped("npm");
 
@@ -35,7 +36,7 @@ export interface PublishAllOptions {
 	 * "you forgot to bump the version" error.
 	 */
 	releaseMode?: boolean;
-	/** Include release-only packages like Windows engine-cli artifacts. */
+	/** Include any packages reserved for release builds. */
 	includeReleaseOnlyPackages?: boolean;
 	/**
 	 * Selected target groups. When set, only in-scope package families are
@@ -325,6 +326,9 @@ export async function publishAll(
 	const retries = opts.retries ?? 3;
 	const initialBackoffMs = opts.initialBackoffMs ?? 2000;
 	const tag = opts.tag;
+	if (opts.releaseMode && opts.version && !releaseLatest(opts.version, true) && tag !== "next") {
+		throw new Error(`prerelease ${opts.version} must use npm dist-tag next`);
+	}
 
 	const families = opts.targets ? scopedFamilies(opts.targets) : undefined;
 	const packages = discoverPackages(repoRoot, {

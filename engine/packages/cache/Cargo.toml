@@ -16,7 +16,7 @@ rivet-cache-result.workspace = true
 rivet-config.workspace = true
 rivet-env.workspace = true
 rivet-metrics.workspace = true
-rivet-pools.workspace = true
+rivet-engine-context.workspace = true
 rivet-util.workspace = true
 scc.workspace = true
 serde_json.workspace = true
@@ -27,5 +27,3 @@ tracing.workspace = true
 universalpubsub.workspace = true
 uuid.workspace = true
 
-[dev-dependencies]
-rand.workspace = true

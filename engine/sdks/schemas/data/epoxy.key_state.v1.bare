@@ -1,0 +1,66 @@
+# One durable record per Epoxy logical key and regional replica. It is the acceptor state of
+# the key's single-decree Paxos instances: every version is one instance, and only the instance
+# after the newest committed version is open.
+type Ballot struct {
+	counter: u64
+	replicaId: u64
+	proposalIncarnation: u64
+}
+
+# A promise made for one version's instance.
+type Promise struct {
+	ballot: Ballot
+	version: u64
+}
+
+type AcceptedValue struct {
+	value: optional<data>
+	ballot: Ballot
+	version: u64
+	mutable: bool
+}
+
+type CommittedValue struct {
+	value: optional<data>
+	version: u64
+	mutable: bool
+}
+
+# The regions that vote on the key, sorted and unique.
+type Scope struct {
+	replicaIds: list<u64>
+}
+
+# Nothing committed, promised or accepted.
+type KeyEmpty void
+
+# The newest chosen version is recorded and its successor's instance is untouched.
+type KeyCommitted struct {
+	committed: CommittedValue
+}
+
+# The open instance, the version after the committed one, has a promise and no accepted value.
+type KeyPromised struct {
+	committed: optional<CommittedValue>
+	promise: Promise
+}
+
+# The open instance has an accepted value; the promise is at least its ballot.
+type KeyAccepted struct {
+	committed: optional<CommittedValue>
+	accepted: AcceptedValue
+	promise: Promise
+}
+
+type KeyPhase union {
+	KeyEmpty |
+	KeyCommitted |
+	KeyPromised |
+	KeyAccepted
+}
+
+type Data struct {
+	phase: KeyPhase
+	scope: optional<Scope>
+	configEpoch: u64
+}

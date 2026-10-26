@@ -44,7 +44,7 @@ use crate::actor::metrics::ActorMetrics;
 use crate::actor::queue::{QueueInspectorUpdateCallback, QueueMetadata, QueueWaitActivityCallback};
 use crate::actor::schedule::{InternalKeepAwakeCallback, LocalAlarmCallback};
 use crate::actor::sleep::{CanSleep, SleepState};
-use crate::actor::state::{PendingSave, PersistedActor, RequestSaveOpts};
+use crate::actor::state::{PendingSave, PersistedActor, RequestSaveOpts, StateTransactionSlot};
 use crate::actor::task::LifecycleEvent;
 use crate::actor::task_types::UserTaskKind;
 use crate::actor::work_registry::{ActorWorkKind, CountGuard, RegionGuard};
@@ -78,10 +78,29 @@ pub struct ActorKv {
 	sql: SqliteDb,
 }
 
+/// The startup commit that runs while the actor serves its first requests.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct StartupCommit {
+	/// Startup commits still in flight: one for a new local actor, otherwise none.
+	pub(crate) pending: usize,
+	/// Whether one of them failed. The actor is then stopping with an error.
+	pub(crate) failed: bool,
+	/// Whether startup has returned. A commit that fails before then fails the startup itself;
+	/// one that fails after stops the running actor with an error.
+	pub(crate) returned: bool,
+}
+
 pub(crate) struct ActorContextInner {
 	pub(super) legacy_kv: LegacyActorKv,
 	user_kv: ActorKv,
 	sql: SqliteDb,
+	/// Set when the start command reported an empty actor keyspace, which the engine sends only
+	/// on an actor's first generation. Startup consumes it once.
+	new_actor_storage: AtomicBool,
+	/// When the runtime received this generation's start, for the `before_storage` startup
+	/// phase. Startup consumes it once.
+	// Forced-sync: set once before the actor task starts and taken by its startup.
+	start_received_at: parking_lot::Mutex<Option<crate::time::Instant>>,
 	#[cfg(feature = "sqlite-local")]
 	actor_runtime_socket: ActorRuntimeSocketEndpoint,
 	// Forced-sync: actor state snapshots are exposed through synchronous
@@ -96,6 +115,9 @@ pub(crate) struct ActorContextInner {
 	pub(super) state_revision: AtomicU64,
 	pub(super) save_request_revision: AtomicU64,
 	pub(super) save_completed_revision: AtomicU64,
+	/// Every save request revision at or below this fails unless written; shutdown sets it
+	/// to `u64::MAX` once no later save can run.
+	pub(super) save_failed_revision: AtomicU64,
 	pub(super) save_completion: Notify,
 	pub(super) save_requested: AtomicBool,
 	pub(super) save_requested_immediate: AtomicBool,
@@ -105,8 +127,13 @@ pub(crate) struct ActorContextInner {
 	pub(super) pending_save: Mutex<Option<PendingSave>>,
 	pub(super) tracked_persist: Mutex<Option<JoinHandle<()>>>,
 	pub(super) save_guard: Arc<AsyncMutex<()>>,
+	// Forced-sync: the slot is also cleared from the transaction owner's `Drop`.
+	pub(super) state_transaction: Mutex<StateTransactionSlot>,
 	pub(super) state_transaction_epoch: AtomicU64,
 	pub(super) in_flight_state_writes: AtomicUsize,
+	/// The startup state commit that runs while the actor serves its first requests. Responses
+	/// wait for it, so none reports state that is not yet durable.
+	pub(super) startup_commit: tokio::sync::watch::Sender<StartupCommit>,
 	pub(super) state_write_completion: Notify,
 	pub(super) on_state_change_in_flight: AtomicUsize,
 	pub(super) on_state_change_idle: Notify,
@@ -130,6 +157,8 @@ pub(crate) struct ActorContextInner {
 	pub(super) schedule_pending_alarm_writes: Mutex<Vec<oneshot::Receiver<()>>>,
 	pub(super) schedule_local_alarm_epoch: AtomicU64,
 	pub(super) schedule_alarm_push_epoch: AtomicU64,
+	/// Serializes the persists of acknowledged alarm pushes.
+	pub(super) schedule_alarm_persist_lock: AsyncMutex<()>,
 	pub(super) schedule_alarm_dispatch_enabled: AtomicBool,
 	pub(super) schedule_dirty_since_push: AtomicBool,
 	pub(super) schedule_mutation_lock: AsyncMutex<()>,
@@ -138,10 +167,8 @@ pub(crate) struct ActorContextInner {
 	pub(super) max_schedules: u32,
 	#[cfg(any(test, feature = "test-support"))]
 	pub(super) schedule_now_override: AtomicI64,
-	#[cfg(test)]
-	pub(super) schedule_driver_alarm_cancel_count: AtomicUsize,
-	#[cfg(test)]
-	pub(super) schedule_sync_alarm_failures: AtomicUsize,
+	
+	
 	// Forced-sync: queue config is read from sync public methods before blocking
 	// on async queue work.
 	pub(super) queue_config: Mutex<ActorConfig>,
@@ -372,34 +399,20 @@ impl ActorContext {
 		Arc::ptr_eq(&self.0, &other.0)
 	}
 
-	#[cfg(test)]
-	pub(crate) fn new(
-		actor_id: impl Into<String>,
-		name: impl Into<String>,
-		key: ActorKey,
-		region: impl Into<String>,
-	) -> Self {
-		tests::new_with_kv(actor_id, name, key, region, LegacyActorKv::new_in_memory())
+	/// Identifies the running actor generation this handle belongs to. Every handle of one
+	/// generation returns the same value, and no two live generations share one, even when they
+	/// have the same actor id. A value may be reused only after every handle of its generation
+	/// has dropped.
+	#[doc(hidden)]
+	pub fn instance_key(&self) -> usize {
+		Arc::as_ptr(&self.0) as usize
 	}
 
-	#[cfg(test)]
-	pub(crate) fn new_with_kv(
-		actor_id: impl Into<String>,
-		name: impl Into<String>,
-		key: ActorKey,
-		region: impl Into<String>,
-		legacy_kv: LegacyActorKv,
-	) -> Self {
-		tests::new_with_kv(actor_id, name, key, region, legacy_kv)
-	}
+	
 
-	#[cfg(test)]
-	pub(crate) fn new_for_state_tests(legacy_kv: LegacyActorKv, config: ActorConfig) -> Self {
-		let ctx = tests::new_with_kv("state-test", "state-test", Vec::new(), "local", legacy_kv);
-		ctx.configure_connection_runtime(config.clone());
-		ctx.configure_queue(config);
-		ctx
-	}
+	
+
+	
 
 	pub(crate) fn build(
 		actor_id: String,
@@ -435,6 +448,8 @@ impl ActorContext {
 			legacy_kv,
 			user_kv,
 			sql,
+			new_actor_storage: AtomicBool::new(false),
+			start_received_at: parking_lot::Mutex::new(None),
 			#[cfg(feature = "sqlite-local")]
 			actor_runtime_socket,
 			current_state: RwLock::new(Vec::new()),
@@ -447,6 +462,7 @@ impl ActorContext {
 			state_revision: AtomicU64::new(0),
 			save_request_revision: AtomicU64::new(0),
 			save_completed_revision: AtomicU64::new(0),
+			save_failed_revision: AtomicU64::new(0),
 			save_completion: Notify::new(),
 			save_requested: AtomicBool::new(false),
 			save_requested_immediate: AtomicBool::new(false),
@@ -455,8 +471,10 @@ impl ActorContext {
 			pending_save: Mutex::new(None),
 			tracked_persist: Mutex::new(None),
 			save_guard: Arc::new(AsyncMutex::new(())),
+			state_transaction: Mutex::new(StateTransactionSlot::Idle),
 			state_transaction_epoch: AtomicU64::new(0),
 			in_flight_state_writes: AtomicUsize::new(0),
+			startup_commit: tokio::sync::watch::Sender::new(StartupCommit::default()),
 			state_write_completion: Notify::new(),
 			on_state_change_in_flight: AtomicUsize::new(0),
 			on_state_change_idle: Notify::new(),
@@ -473,6 +491,7 @@ impl ActorContext {
 			schedule_pending_alarm_writes: Mutex::new(Vec::new()),
 			schedule_local_alarm_epoch: AtomicU64::new(0),
 			schedule_alarm_push_epoch: AtomicU64::new(0),
+			schedule_alarm_persist_lock: AsyncMutex::new(()),
 			schedule_alarm_dispatch_enabled: AtomicBool::new(true),
 			// A fresh actor context has no in-process record of a successful
 			// envoy alarm push yet, so the first sync must always push.
@@ -483,10 +502,8 @@ impl ActorContext {
 			max_schedules,
 			#[cfg(any(test, feature = "test-support"))]
 			schedule_now_override: AtomicI64::new(i64::MIN),
-			#[cfg(test)]
-			schedule_driver_alarm_cancel_count: AtomicUsize::new(0),
-			#[cfg(test)]
-			schedule_sync_alarm_failures: AtomicUsize::new(0),
+			
+			
 			queue_config: Mutex::new(config.clone()),
 			queue_abort_signal: Mutex::new(abort_signal.clone()),
 			queue_initialize: OnceCell::new(),
@@ -600,6 +617,29 @@ impl ActorContext {
 
 	pub fn sql(&self) -> &SqliteDb {
 		&self.0.sql
+	}
+
+	/// Records whether the start command showed this actor's storage was never written.
+	pub(crate) fn set_new_actor_storage(&self, new_actor_storage: bool) {
+		self.0
+			.new_actor_storage
+			.store(new_actor_storage, Ordering::Release);
+	}
+
+	/// Records when the runtime received this generation's start.
+	pub(crate) fn set_start_received_at(&self, received_at: crate::time::Instant) {
+		*self.0.start_received_at.lock() = Some(received_at);
+	}
+
+	/// When the runtime received this generation's start, at most once.
+	pub(crate) fn take_start_received_at(&self) -> Option<crate::time::Instant> {
+		self.0.start_received_at.lock().take()
+	}
+
+	/// Whether the start command showed this actor's storage was never written. Returns true
+	/// at most once, so a restart within this context probes storage again.
+	pub(crate) fn take_new_actor_storage(&self) -> bool {
+		self.0.new_actor_storage.swap(false, Ordering::AcqRel)
 	}
 
 	#[cfg(feature = "sqlite-local")]
@@ -988,6 +1028,22 @@ impl ActorContext {
 		self.0.metrics.observe_create_state(duration);
 	}
 
+	/// Runs a foreign runtime's startup preamble callback and records how long it took, so a
+	/// slow start can be attributed to the callback that held it.
+	#[doc(hidden)]
+	pub async fn time_runtime_callback<T>(
+		&self,
+		callback: &'static str,
+		future: impl std::future::Future<Output = T>,
+	) -> T {
+		let started_at = Instant::now();
+		let result = future.await;
+		self.0
+			.metrics
+			.observe_runtime_callback(callback, started_at.elapsed());
+		result
+	}
+
 	#[doc(hidden)]
 	pub fn record_startup_create_vars(&self, duration: Duration) {
 		self.0.metrics.observe_create_vars(duration);
@@ -1131,12 +1187,7 @@ impl ActorContext {
 		}
 	}
 
-	#[cfg(test)]
-	pub(crate) fn add_conn(&self, conn: ConnHandle) {
-		self.insert_existing(conn);
-		self.record_connections_updated();
-		self.reset_sleep_timer();
-	}
+	
 
 	pub(crate) fn remove_conn(&self, conn_id: &str) -> Option<ConnHandle> {
 		let removed = self.remove_existing(conn_id);
@@ -1336,13 +1387,7 @@ impl ActorContext {
 		Ok(is_live)
 	}
 
-	#[cfg(test)]
-	pub(crate) fn set_hibernated_connection_liveness_override<I>(&self, pairs: I)
-	where
-		I: IntoIterator<Item = (Vec<u8>, Vec<u8>)>,
-	{
-		*self.0.hibernated_connection_liveness_override.write() = Some(pairs.into_iter().collect());
-	}
+	
 
 	pub(super) fn prepare_state_deltas(
 		&self,
@@ -1483,12 +1528,7 @@ impl ActorContext {
 		InspectorAttachGuard::new(self.clone())
 	}
 
-	#[cfg(test)]
-	pub(crate) fn inspector_attach_count(&self) -> u32 {
-		self.inspector_attach_count_arc()
-			.map(|attach_count| attach_count.load(Ordering::SeqCst))
-			.unwrap_or(0)
-	}
+	
 
 	pub(crate) fn subscribe_inspector(&self) -> Option<broadcast::Receiver<Arc<Vec<u8>>>> {
 		self.0
@@ -1830,22 +1870,7 @@ impl ActorContext {
 		}
 	}
 
-	#[cfg(test)]
-	pub(crate) async fn save_state_and_workflow_batch_with_revision(
-		&self,
-		deltas: Vec<StateDelta>,
-		workflow_writes: Vec<WorkflowKvWrite>,
-		save_request_revision: u64,
-	) -> Result<()> {
-		self.save_state_and_workflow_batch_with_revision_inner(
-			deltas,
-			workflow_writes,
-			save_request_revision,
-			None,
-		)
-		.await
-		.map(|_| ())
-	}
+	
 
 	pub(crate) async fn save_state_and_workflow_batch_at_transaction_epoch(
 		&self,
@@ -2113,11 +2138,9 @@ impl Drop for InspectorAttachGuard {
 		let Some(attach_count) = self.ctx.inspector_attach_count_arc() else {
 			return;
 		};
-		let Ok(previous) =
-			attach_count.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
-				current.checked_sub(1)
-			})
-		else {
+		let Ok(previous) = attach_count.try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+			current.checked_sub(1)
+		}) else {
 			return;
 		};
 		let current = previous.saturating_sub(1);
@@ -2166,6 +2189,4 @@ impl std::fmt::Debug for ActorContext {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/context.rs"]
-pub(crate) mod tests;
+

@@ -7,9 +7,85 @@ import { db } from "rivetkit/db";
 
 type AgentConcurrent2Request =
 	| { type: "agent2_resume"; version: number }
-	| { type: "agent2_connect"; clientId: string; staggerHandleMs?: number }
+	| {
+			type: "agent2_connect";
+			clientId: string;
+			staggerHandleMs?: number;
+			growBytes?: number;
+			maxDbBytes?: number;
+	  }
+	| { type: "agent2_read_recent"; limit: number }
+	| {
+			type: "agent2_insert_messages";
+			clientId: string;
+			count: number;
+			messageBytes: number;
+	  }
+	| { type: "agent2_stage"; stage: AgentConcurrent2Stage }
+	| ({ type: "agent2_iterate" } & AgentIterationOptions)
 	| { type: "force_sleep" }
 	| { type: "ping"; id?: number };
+
+/**
+ * Single-actor latency stages that mirror the system sim's wake ladder: 50 rows at random
+ * places, the 50 oldest rows, a full scan of every message, and one 16 MiB transaction that
+ * overwrites contiguous messages in place so the database keeps its size. The large-database
+ * stages add a 100 MiB transaction of the same shape (under the 128 MiB transaction cap), an
+ * index build over every message (the index is dropped again in its own statement after it is
+ * timed) and a `VACUUM` of the whole database.
+ */
+type AgentConcurrent2Stage =
+	| "random"
+	| "oldest"
+	| "scan"
+	| "txn"
+	| "txn_large"
+	| "index"
+	| "vacuum"
+	| AgentConcurrent2BenchStage;
+
+const STAGE_ROWS = 50;
+const STAGE_TXN_BYTES = 16 * 1024 * 1024;
+const STAGE_TXN_LARGE_BYTES = 100 * 1024 * 1024;
+const LARGE_DB_STAGES: readonly AgentConcurrent2Stage[] = [
+	"txn_large",
+	"index",
+	"vacuum",
+];
+
+/**
+ * Stages with the August native SQLite suite's workload shapes, on their own `bench_rows`
+ * table of 4,096-byte payloads (a leaf cell plus one overflow page per row): `bench_seed` grows
+ * the table by up to 8 MiB per call until it holds `BENCH_ROWS` rows (512 MiB of file), and the others
+ * time each operation inside the actor so the result excludes the client's round trip.
+ */
+type AgentConcurrent2BenchStage =
+	| "bench_seed"
+	| "bench_point"
+	| "bench_adjacent"
+	| "bench_range16"
+	| "bench_scan"
+	| "bench_autocommit"
+	| "bench_batch";
+
+const BENCH_STAGES: readonly AgentConcurrent2Stage[] = [
+	"bench_seed",
+	"bench_point",
+	"bench_adjacent",
+	"bench_range16",
+	"bench_scan",
+	"bench_autocommit",
+	"bench_batch",
+];
+
+const BENCH_ROW_BYTES = 4096;
+const BENCH_ROWS = 116_480;
+const BENCH_SEED_ROWS_PER_CALL = 2048;
+const BENCH_READ_OPS = 1000;
+const BENCH_RANGE_OPS = 200;
+const BENCH_WRITE_OPS = 100;
+const BENCH_BATCH_OPS = 20;
+const BENCH_BATCH_ROWS = 100;
 
 interface AgentConcurrent2Step {
 	name: string;
@@ -53,6 +129,20 @@ interface AgentConcurrent2ResultMessage {
 	totalMs: number;
 	results: AgentConcurrent2WorkloadResult[];
 	stats: AgentConcurrent2StatsSnapshot;
+	/** Database size (`page_count * page_size`) after the cycle. */
+	dbBytes: number;
+	/** Approximate payload bytes appended by thread growth this cycle. */
+	grewBytes: number;
+}
+
+interface AgentConcurrent2GrowthOptions {
+	growBytes: number;
+	maxDbBytes: number;
+}
+
+interface AgentConcurrent2RunOptions {
+	growBytes?: number;
+	maxDbBytes?: number;
 }
 
 interface AgentConcurrent2ErrorMessage {
@@ -67,6 +157,7 @@ interface AgentConcurrent2Vars {
 	wakeStats: AgentConcurrent2QueryStats | null;
 	wakeStartedAt: number | null;
 	wakeIteration: number;
+	iterationSchemaReady?: boolean;
 }
 
 interface RawRivetDB {
@@ -224,6 +315,28 @@ const TOOL_CALL_RESULT_BYTES = 2_700;
 const EXECUTOR_TOOL_SCHEMA_BYTES = 550;
 const SLOW_QUERY_MS = 1_000;
 
+/** Default cap on thread growth. Growth stops once the database reaches it. */
+const DEFAULT_MAX_DB_BYTES = 52_428_800;
+/** Upper bound on payload bytes appended inside one growth transaction. */
+const GROW_TRANSACTION_BYTES = 1_048_576;
+/** Rows per multi-row INSERT statement during growth. */
+const GROW_INSERT_BATCH_ROWS = 50;
+/** Thread events replayed to a reconnecting client, newest first. */
+const CATCHUP_EVENT_LIMIT = 256;
+/** Recent top-level assistant messages checked for unresolved tool calls. */
+const UNRESOLVED_MESSAGE_WINDOW = 50;
+/** Most messages one `agent2_read_recent` may return. */
+const MAX_READ_RECENT_LIMIT = 1_000;
+/** Most messages one `agent2_insert_messages` may insert. */
+const MAX_INSERT_MESSAGES = 10_000;
+/** Largest message content one `agent2_insert_messages` may write. */
+const MAX_INSERT_MESSAGE_BYTES = 1_048_576;
+/** Payload bytes in one grown turn: three messages, one tool result, and four events. */
+const GROW_TURN_PAYLOAD_BYTES =
+	3 * MESSAGE_CONTENT_BYTES +
+	TOOL_CALL_RESULT_BYTES +
+	4 * THREAD_EVENT_PAYLOAD_BYTES;
+
 function send(
 	websocket: UniversalWebSocket,
 	message:
@@ -261,6 +374,7 @@ export const loadTestAgent2 = actor({
 	onWebSocket: (c, websocket: UniversalWebSocket) => {
 		send(websocket, {
 			type: "connected",
+			actorId: c.actorId,
 			timestamp: Date.now(),
 		});
 
@@ -274,7 +388,11 @@ export const loadTestAgent2 = actor({
 		});
 	},
 	actions: {
-		run: async (c, clientId?: string) => {
+		run: async (
+			c,
+			clientId?: string,
+			options?: AgentConcurrent2RunOptions,
+		) => {
 			const runtime = ensureAgentConcurrent2Runtime(c);
 			c.state.runCount++;
 			runtime.vars.wakeIteration++;
@@ -288,6 +406,7 @@ export const loadTestAgent2 = actor({
 				runtime.sql,
 				clientId ?? `agent2-action-${c.state.runCount}`,
 				0,
+				parseGrowthOptions((options ?? {}) as Record<string, unknown>),
 				stats,
 			);
 			return {
@@ -309,6 +428,7 @@ async function handleAgentConcurrent2Message(
 		vars: AgentConcurrent2Vars;
 		state: AgentConcurrent2State;
 		sleep: () => void;
+		saveState: (opts: { immediate?: boolean }) => Promise<void>;
 	},
 	websocket: UniversalWebSocket,
 	data: unknown,
@@ -344,6 +464,81 @@ async function handleAgentConcurrent2Message(
 			c.state.queryStats,
 		);
 
+		if (request.type === "agent2_iterate") {
+			if (!c.vars.iterationSchemaReady) {
+				await ensureIterationSchema(c.db);
+				c.vars.iterationSchemaReady = true;
+			}
+			const result = await runAgentIteration(
+				runtime.sql,
+				request,
+				stats,
+				async () => {
+					c.state.runCount++;
+					await c.saveState({ immediate: true });
+				},
+			);
+			send(websocket, {
+				...result,
+				stats: snapshotAgentConcurrent2Stats(c, cycleStats),
+			});
+			return;
+		}
+
+		if (request.type === "agent2_read_recent") {
+			const startedAt = performance.now();
+			const read = await runReadRecentMessages(
+				runtime.sql,
+				request.limit,
+				stats,
+			);
+			send(websocket, {
+				type: "agent2_read_result",
+				rows: read.rows,
+				bytes: read.bytes,
+				readMs: performance.now() - startedAt,
+				stats: snapshotAgentConcurrent2Stats(c, cycleStats),
+			});
+			return;
+		}
+
+		if (request.type === "agent2_stage") {
+			const startedAt = performance.now();
+			const result = await runStage(runtime.sql, request.stage, stats);
+			send(websocket, {
+				type: "agent2_stage_result",
+				stage: request.stage,
+				rows: result.rows,
+				bytes: result.bytes,
+				opMs: result.opMs ?? null,
+				stageMs: performance.now() - startedAt,
+			});
+			return;
+		}
+
+		if (request.type === "agent2_insert_messages") {
+			const startedAt = performance.now();
+			const inserted = await runInsertMessages(
+				runtime.sql,
+				request.clientId,
+				request.count,
+				request.messageBytes,
+				stats,
+			);
+			const insertMs = performance.now() - startedAt;
+			const dbBytes = await readDbBytes(runtime.sql);
+			send(websocket, {
+				type: "agent2_insert_result",
+				inserted: inserted.messages,
+				bytes: inserted.bytes,
+				transactions: inserted.transactions,
+				insertMs,
+				dbBytes,
+				stats: snapshotAgentConcurrent2Stats(c, cycleStats),
+			});
+			return;
+		}
+
 		if (request.type === "agent2_resume") {
 			const startedAt = performance.now();
 			const result = await runCatchupSnapshot(
@@ -351,12 +546,15 @@ async function handleAgentConcurrent2Message(
 				request.version,
 				stats,
 			);
+			const dbBytes = await readDbBytes(runtime.sql);
 			send(websocket, {
 				type: "agent2_result",
 				trigger: request.type,
 				totalMs: Math.round(performance.now() - startedAt),
 				results: [result],
 				stats: snapshotAgentConcurrent2Stats(c, cycleStats),
+				dbBytes,
+				grewBytes: 0,
 			});
 			return;
 		}
@@ -365,6 +563,10 @@ async function handleAgentConcurrent2Message(
 			runtime.sql,
 			request.clientId,
 			request.staggerHandleMs ?? 0,
+			{
+				growBytes: request.growBytes ?? 0,
+				maxDbBytes: request.maxDbBytes ?? DEFAULT_MAX_DB_BYTES,
+			},
 			stats,
 		);
 		send(websocket, {
@@ -410,6 +612,66 @@ function parseAgentConcurrent2Request(data: unknown): AgentConcurrent2Request {
 			version: numberField(request, "version"),
 		};
 	}
+	if (request.type === "agent2_stage") {
+		const stage = request.stage;
+		if (
+			stage !== "random" &&
+			stage !== "oldest" &&
+			stage !== "scan" &&
+			stage !== "txn" &&
+			!LARGE_DB_STAGES.includes(stage) &&
+			!BENCH_STAGES.includes(stage)
+		) {
+			throw new Error(
+				`agent concurrent 2 stage must be random, oldest, scan, txn, ${LARGE_DB_STAGES.join(", ")} or one of ${BENCH_STAGES.join(", ")}`,
+			);
+		}
+		return { type: "agent2_stage", stage };
+	}
+	if (request.type === "agent2_read_recent") {
+		const limit = numberField(request, "limit");
+		if (
+			!Number.isInteger(limit) ||
+			limit < 0 ||
+			limit > MAX_READ_RECENT_LIMIT
+		) {
+			throw new Error(
+				`agent concurrent 2 request limit must be an integer from 0 to ${MAX_READ_RECENT_LIMIT}`,
+			);
+		}
+		return { type: "agent2_read_recent", limit };
+	}
+	if (request.type === "agent2_insert_messages") {
+		const count = numberField(request, "count");
+		const messageBytes = numberField(request, "messageBytes");
+		if (
+			!Number.isInteger(count) ||
+			count < 0 ||
+			count > MAX_INSERT_MESSAGES
+		) {
+			throw new Error(
+				`agent concurrent 2 request count must be an integer from 0 to ${MAX_INSERT_MESSAGES}`,
+			);
+		}
+		if (
+			!Number.isInteger(messageBytes) ||
+			messageBytes < 1 ||
+			messageBytes > MAX_INSERT_MESSAGE_BYTES
+		) {
+			throw new Error(
+				`agent concurrent 2 request messageBytes must be an integer from 1 to ${MAX_INSERT_MESSAGE_BYTES}`,
+			);
+		}
+		return {
+			type: "agent2_insert_messages",
+			clientId: stringField(request, "clientId"),
+			count,
+			messageBytes,
+		};
+	}
+	if (request.type === "agent2_iterate") {
+		return { type: "agent2_iterate", ...parseIterationOptions(request) };
+	}
 	if (request.type === "agent2_connect") {
 		return {
 			type: "agent2_connect",
@@ -417,11 +679,38 @@ function parseAgentConcurrent2Request(data: unknown): AgentConcurrent2Request {
 			...(typeof request.staggerHandleMs === "number"
 				? { staggerHandleMs: request.staggerHandleMs }
 				: {}),
+			...parseGrowthOptions(request),
 		};
 	}
 	throw new Error(
 		`unknown agent concurrent 2 request type: ${String(request.type)}`,
 	);
+}
+
+/** Validates the optional growth knobs shared by `agent2_connect` and the `run` action. */
+function parseGrowthOptions(
+	record: Record<string, unknown>,
+): AgentConcurrent2GrowthOptions {
+	const growBytes = optionalNumberField(record, "growBytes") ?? 0;
+	const maxDbBytes =
+		optionalNumberField(record, "maxDbBytes") ?? DEFAULT_MAX_DB_BYTES;
+	if (growBytes < 0) {
+		throw new Error("agent concurrent 2 request growBytes must be >= 0");
+	}
+	if (maxDbBytes <= 0) {
+		throw new Error("agent concurrent 2 request maxDbBytes must be > 0");
+	}
+	return { growBytes, maxDbBytes };
+}
+
+function optionalNumberField(
+	record: Record<string, unknown>,
+	field: string,
+): number | undefined {
+	if (record[field] === undefined || record[field] === null) {
+		return undefined;
+	}
+	return numberField(record, field);
 }
 
 function stringField(record: Record<string, unknown>, field: string): string {
@@ -541,11 +830,12 @@ async function runAgentConcurrent2Workload(
 	sql: AgentConcurrent2Db,
 	clientId: string,
 	staggerHandleMs: number,
+	growth: AgentConcurrent2GrowthOptions,
 	stats: AgentConcurrent2QueryStatsSet,
 ): Promise<Omit<AgentConcurrent2ResultMessage, "type" | "trigger" | "stats">> {
 	const startedAt = performance.now();
 	const buildToolPlanContext = runBuildToolPlanContext(sql, stats);
-	const catchupSnapshot = runCatchupSnapshot(sql, 0, stats);
+	const catchupSnapshot = runCatchupSnapshot(sql, null, stats);
 	const recoverToolCalls = runRecoverToolCalls(sql, stats);
 	const mutationMix = runMutationMix(sql, clientId, stats);
 	const handleExecutorConnect = delay(staggerHandleMs).then(() =>
@@ -559,9 +849,22 @@ async function runAgentConcurrent2Workload(
 		recoverToolCalls,
 		mutationMix,
 	]);
+
+	// Thread growth runs after the normal workload so the read mix above
+	// measures the database as it stood when the client connected.
+	let grewBytes = 0;
+	if (growth.growBytes > 0) {
+		const grown = await runGrowThread(sql, clientId, growth, stats);
+		grewBytes = grown.grewBytes;
+		results.push(grown.result);
+	}
+	const dbBytes = await readDbBytes(sql);
+
 	return {
 		totalMs: Math.round(performance.now() - startedAt),
 		results,
+		dbBytes,
+		grewBytes,
 	};
 }
 
@@ -698,13 +1001,17 @@ async function runBuildToolPlanContext(
 		"find-unresolved-assistant-message",
 		`SELECT m.*
 			FROM message_tool_refs AS tool_use
-			JOIN messages AS m
+			JOIN (
+				SELECT * FROM messages
+				WHERE parent_tool_use_id IS NULL
+					AND role = 'assistant'
+					AND cancelled = 0
+				ORDER BY created_at DESC
+				LIMIT ?
+			) AS m
 				ON m.message_id = tool_use.assistant_message_id
 			WHERE tool_use.block_type = 'tool_use'
 				AND tool_use.cancelled = 0
-				AND m.cancelled = 0
-				AND m.role = 'assistant'
-				AND m.parent_tool_use_id IS NULL
 				AND NOT EXISTS (
 					SELECT 1
 					FROM message_tool_refs AS tool_result
@@ -719,6 +1026,7 @@ async function runBuildToolPlanContext(
 			GROUP BY m.message_id
 			ORDER BY m.created_at DESC
 			LIMIT 1`,
+		UNRESOLVED_MESSAGE_WINDOW,
 	);
 	const unresolvedMessageId = unresolvedRows[0]?.message_id;
 	if (typeof unresolvedMessageId === "string") {
@@ -773,22 +1081,41 @@ async function runBuildToolPlanContext(
 	};
 }
 
+/**
+ * Loads the catchup snapshot for a client. A `version` resumes from that seq
+ * one page at a time. `null` is a fresh connect and replays only the newest
+ * events, as a client would before paging older history on demand.
+ */
 async function runCatchupSnapshot(
 	sql: AgentConcurrent2Db,
-	version: number,
+	version: number | null,
 	stats: AgentConcurrent2QueryStatsSet,
 ): Promise<AgentConcurrent2WorkloadResult> {
 	const startedAt = performance.now();
 	const steps: AgentConcurrent2Step[] = [];
+	const threadEventsQuery =
+		version === null
+			? timedQuery(
+					sql,
+					stats,
+					steps,
+					"thread-events-list-since-version",
+					`SELECT seq, event_type, payload, created_at FROM (
+						SELECT seq, event_type, payload, created_at FROM thread_events ORDER BY seq DESC LIMIT ?
+					) ORDER BY seq ASC`,
+					CATCHUP_EVENT_LIMIT,
+				)
+			: timedQuery(
+					sql,
+					stats,
+					steps,
+					"thread-events-list-since-version",
+					`SELECT seq, event_type, payload, created_at FROM thread_events WHERE seq > ? ORDER BY seq ASC LIMIT ?`,
+					version,
+					CATCHUP_EVENT_LIMIT,
+				);
 	await Promise.all([
-		timedQuery(
-			sql,
-			stats,
-			steps,
-			"thread-events-list-since-version",
-			`SELECT seq, event_type, payload, created_at FROM thread_events WHERE seq > ? ORDER BY seq ASC`,
-			version,
-		),
+		threadEventsQuery,
 		timedQuery(
 			sql,
 			stats,
@@ -1067,6 +1394,753 @@ async function runMutationMix(
 	};
 }
 
+/**
+ * Reads the database size as `page_count * page_size`. These queries are
+ * untracked so per-cycle query stats keep the same shape with or without
+ * growth.
+ */
+async function readDbBytes(sql: AgentConcurrent2Db): Promise<number> {
+	const pageCount = await sql<{ page_count: number }>(`PRAGMA page_count`);
+	const pageSize = await sql<{ page_size: number }>(`PRAGMA page_size`);
+	return (
+		Number(pageCount[0]?.page_count ?? 0) *
+		Number(pageSize[0]?.page_size ?? 0)
+	);
+}
+
+/**
+ * Appends roughly `growBytes` of resolved agent turns in transactions of at
+ * most `GROW_TRANSACTION_BYTES`, stopping early once the database reaches
+ * `maxDbBytes`.
+ */
+async function runGrowThread(
+	sql: AgentConcurrent2Db,
+	clientId: string,
+	growth: AgentConcurrent2GrowthOptions,
+	stats: AgentConcurrent2QueryStatsSet,
+): Promise<{ result: AgentConcurrent2WorkloadResult; grewBytes: number }> {
+	const startedAt = performance.now();
+	const steps: AgentConcurrent2Step[] = [];
+	const nextText = createTextGenerator(hashString(clientId) ^ Date.now());
+	let grewBytes = 0;
+	let dbBytes = await readDbBytes(sql);
+
+	while (grewBytes < growth.growBytes && dbBytes < growth.maxDbBytes) {
+		const budget = Math.min(
+			GROW_TRANSACTION_BYTES,
+			growth.growBytes - grewBytes,
+			growth.maxDbBytes - dbBytes,
+		);
+		const transactionStartedAt = performance.now();
+		const appended = await sql.withTransaction(stats, (tx) =>
+			appendThreadTurns(tx, clientId, budget, stats, nextText),
+		);
+		steps.push({
+			name: "grow-transaction",
+			durationMs: Math.round(performance.now() - transactionStartedAt),
+			rowCount: appended.turns,
+		});
+		grewBytes += appended.bytes;
+		dbBytes = await readDbBytes(sql);
+	}
+
+	return {
+		result: {
+			name: "grow-thread",
+			totalMs: Math.round(performance.now() - startedAt),
+			steps,
+		},
+		grewBytes,
+	};
+}
+
+/**
+ * Inserts enough complete turns to cover `budget` payload bytes. Each turn is
+ * a user prompt, an assistant tool call with its completed result, and the
+ * tool result message, with matching tool refs, thread events, and
+ * message-added rows so the read queries see a consistent thread.
+ */
+async function appendThreadTurns(
+	tx: AgentConcurrent2Db,
+	clientId: string,
+	budget: number,
+	stats: AgentConcurrent2QueryStatsSet,
+	nextText: (bytes: number) => string,
+): Promise<{ turns: number; bytes: number }> {
+	// Per-statement steps are dropped; the caller records one step per transaction.
+	const steps: AgentConcurrent2Step[] = [];
+	const seqRows = await timedQuery(
+		tx,
+		stats,
+		steps,
+		"grow-select-next-thread-event-seq",
+		`SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM thread_events`,
+	);
+	let seq = Number(seqRows[0]?.seq ?? 1);
+	const turnCount = Math.max(1, Math.ceil(budget / GROW_TURN_PAYLOAD_BYTES));
+	const suffix = safeId(clientId);
+	// Wall-clock timestamps keep grown rows ordered with the rows that later
+	// cycles write. Rows inserted in the same millisecond share a timestamp.
+	const nextTimestamp = () => new Date().toISOString();
+
+	const messageRows: SQLPrimitive[][] = [];
+	const toolRefRows: SQLPrimitive[][] = [];
+	const toolCallRows: SQLPrimitive[][] = [];
+	const eventRows: SQLPrimitive[][] = [];
+	const messageAddedRows: SQLPrimitive[][] = [];
+	let bytes = 0;
+
+	const addEvent = (
+		eventType: string,
+		fields: Record<string, string>,
+	): number => {
+		const payload = JSON.stringify({
+			type: eventType,
+			...fields,
+			body: nextText(THREAD_EVENT_PAYLOAD_BYTES),
+		});
+		const eventSeq = seq;
+		seq++;
+		eventRows.push([eventSeq, eventType, payload, nextTimestamp()]);
+		bytes += payload.length;
+		return eventSeq;
+	};
+
+	const addMessage = (
+		id: string,
+		role: "user" | "assistant",
+		toolResultForMessageId: string | null,
+	): void => {
+		const content = nextText(MESSAGE_CONTENT_BYTES);
+		messageRows.push([
+			id,
+			role,
+			content,
+			JSON.stringify({ clientId }),
+			null,
+			nextTimestamp(),
+			0,
+			null,
+			null,
+			toolResultForMessageId,
+		]);
+		bytes += content.length;
+		const eventSeq = addEvent("message_added", { messageId: id });
+		messageAddedRows.push([id, eventSeq]);
+	};
+
+	for (let turn = 0; turn < turnCount; turn++) {
+		const turnId = `${suffix}-${seq}`;
+		const userMessageId = `agent2-grow-user-${turnId}`;
+		const assistantMessageId = `agent2-grow-assistant-${turnId}`;
+		const resultMessageId = `agent2-grow-result-${turnId}`;
+		const toolUseId = `agent2-grow-tool-${turnId}`;
+		const toolCallId = `agent2-grow-call-${turnId}`;
+
+		addMessage(userMessageId, "user", null);
+		addMessage(assistantMessageId, "assistant", null);
+		toolRefRows.push([
+			assistantMessageId,
+			assistantMessageId,
+			toolUseId,
+			"tool_use",
+			0,
+		]);
+
+		const issuedAt = nextTimestamp();
+		const result = JSON.stringify({
+			ok: true,
+			run: { status: "done", result: nextText(TOOL_CALL_RESULT_BYTES) },
+		});
+		toolCallRows.push([
+			toolCallId,
+			`provider-${toolCallId}`,
+			`tool_${turn % 21}`,
+			JSON.stringify({ path: `/workspace/src/file-${seq}.ts` }),
+			"seed-executor",
+			assistantMessageId,
+			issuedAt,
+			null,
+			"completed",
+			result,
+			null,
+			nextTimestamp(),
+		]);
+		bytes += result.length;
+		addEvent("tool_call_completed", { toolCallId });
+
+		addMessage(resultMessageId, "user", assistantMessageId);
+		toolRefRows.push([
+			resultMessageId,
+			assistantMessageId,
+			toolUseId,
+			"tool_result",
+			0,
+		]);
+	}
+
+	await insertRows(
+		tx,
+		stats,
+		steps,
+		"grow-insert-messages",
+		`INSERT INTO messages (message_id, role, content, meta, user_state, created_at, cancelled, read_at, parent_tool_use_id, tool_result_for_message_id)`,
+		messageRows,
+	);
+	await insertRows(
+		tx,
+		stats,
+		steps,
+		"grow-insert-message-tool-refs",
+		`INSERT INTO message_tool_refs (source_message_id, assistant_message_id, tool_use_id, block_type, cancelled)`,
+		toolRefRows,
+	);
+	await insertRows(
+		tx,
+		stats,
+		steps,
+		"grow-insert-tool-calls",
+		`INSERT INTO tool_calls (id, provider_tool_use_id, tool_name, args, executor_id, message_id, issued_at, expires_at, state, result, progress, completed_at)`,
+		toolCallRows,
+	);
+	await insertRows(
+		tx,
+		stats,
+		steps,
+		"grow-insert-thread-events",
+		`INSERT INTO thread_events (seq, event_type, payload, created_at)`,
+		eventRows,
+	);
+	await insertRows(
+		tx,
+		stats,
+		steps,
+		"grow-insert-message-added-events",
+		`INSERT INTO message_added_events (message_id, seq)`,
+		messageAddedRows,
+	);
+
+	return { turns: turnCount, bytes };
+}
+
+/**
+ * Reads the newest top-level messages with their content, the way an agent
+ * loads recent history into context after a wake.
+ */
+async function runReadRecentMessages(
+	sql: AgentConcurrent2Db,
+	limit: number,
+	stats: AgentConcurrent2QueryStatsSet,
+): Promise<{ rows: number; bytes: number }> {
+	const steps: AgentConcurrent2Step[] = [];
+	const rows = await timedQuery<{ content: string | null }>(
+		sql,
+		stats,
+		steps,
+		"read-recent-messages",
+		`SELECT message_id, role, content, meta, created_at FROM messages WHERE parent_tool_use_id IS NULL AND cancelled = 0 ORDER BY created_at DESC LIMIT ?`,
+		limit,
+	);
+	let bytes = 0;
+	for (const row of rows) {
+		bytes += String(row.content ?? "").length;
+	}
+	return { rows: rows.length, bytes };
+}
+
+/** Runs one latency stage and returns the rows it touched and their content bytes. */
+async function runStage(
+	sql: AgentConcurrent2Db,
+	stage: AgentConcurrent2Stage,
+	stats: AgentConcurrent2QueryStatsSet,
+): Promise<{ rows: number; bytes: number; opMs?: number[] }> {
+	if (BENCH_STAGES.includes(stage)) {
+		return runBenchStage(sql, stage as AgentConcurrent2BenchStage, stats);
+	}
+	const steps: AgentConcurrent2Step[] = [];
+	const maxRows = await timedQuery<{ max: number | null }>(
+		sql,
+		stats,
+		steps,
+		"stage-max-rowid",
+		`SELECT MAX(rowid) AS max FROM messages`,
+	);
+	const maxRowid = Number(maxRows[0]?.max ?? 0);
+	if (maxRowid === 0) {
+		throw new Error("agent concurrent 2 stage needs a preloaded database");
+	}
+
+	switch (stage) {
+		case "random": {
+			let bytes = 0;
+			for (let index = 0; index < STAGE_ROWS; index++) {
+				const rowid = 1 + Math.floor(Math.random() * maxRowid);
+				const rows = await timedQuery<{ content: string | null }>(
+					sql,
+					stats,
+					steps,
+					"stage-random-row",
+					`SELECT message_id, content FROM messages WHERE rowid = ?`,
+					rowid,
+				);
+				bytes += String(rows[0]?.content ?? "").length;
+			}
+			return { rows: STAGE_ROWS, bytes };
+		}
+		case "oldest": {
+			const rows = await timedQuery<{ content: string | null }>(
+				sql,
+				stats,
+				steps,
+				"stage-oldest-rows",
+				`SELECT message_id, content FROM messages ORDER BY rowid ASC LIMIT ?`,
+				STAGE_ROWS,
+			);
+			let bytes = 0;
+			for (const row of rows) {
+				bytes += String(row.content ?? "").length;
+			}
+			return { rows: rows.length, bytes };
+		}
+		case "scan": {
+			const rows = await timedQuery<{ rows: number; bytes: number | null }>(
+				sql,
+				stats,
+				steps,
+				"stage-full-scan",
+				`SELECT COUNT(*) AS rows, SUM(LENGTH(content)) AS bytes FROM messages`,
+			);
+			return {
+				rows: Number(rows[0]?.rows ?? 0),
+				bytes: Number(rows[0]?.bytes ?? 0),
+			};
+		}
+		case "index": {
+			// An expression index forces a read of every message's content, the shape of an
+			// index build on a large table, while the index itself stays small.
+			await timedQuery(
+				sql,
+				stats,
+				steps,
+				"stage-index-drop-stale",
+				`DROP INDEX IF EXISTS idx_messages_c97_content_length`,
+			);
+			const startedAt = performance.now();
+			await timedQuery(
+				sql,
+				stats,
+				steps,
+				"stage-index-create",
+				`CREATE INDEX idx_messages_c97_content_length ON messages(length(content))`,
+			);
+			const createMs = performance.now() - startedAt;
+			await timedQuery(
+				sql,
+				stats,
+				steps,
+				"stage-index-drop",
+				`DROP INDEX idx_messages_c97_content_length`,
+			);
+			return { rows: maxRowid, bytes: 0, opMs: [createMs] };
+		}
+		case "vacuum": {
+			const startedAt = performance.now();
+			await timedQuery(sql, stats, steps, "stage-vacuum", `VACUUM`);
+			return { rows: maxRowid, bytes: 0, opMs: [performance.now() - startedAt] };
+		}
+		case "txn":
+		case "txn_large": {
+			const txnBytes =
+				stage === "txn_large" ? STAGE_TXN_LARGE_BYTES : STAGE_TXN_BYTES;
+			const sample = await timedQuery<{ bytes: number | null }>(
+				sql,
+				stats,
+				steps,
+				"stage-message-bytes",
+				`SELECT LENGTH(content) AS bytes FROM messages WHERE rowid = ?`,
+				maxRowid,
+			);
+			const messageBytes = Math.max(1, Number(sample[0]?.bytes ?? 16_384));
+			const count = Math.min(
+				maxRowid,
+				Math.ceil(txnBytes / messageBytes),
+			);
+			const first = 1 + Math.floor(Math.random() * (maxRowid - count + 1));
+			const nextText = createTextGenerator(Date.now());
+			const bytes = await sql.withTransaction(stats, async (tx) => {
+				let written = 0;
+				for (let rowid = first; rowid < first + count; rowid++) {
+					const content = nextText(messageBytes);
+					await timedQuery(
+						tx,
+						stats,
+						steps,
+						"stage-txn-update",
+						`UPDATE messages SET content = ? WHERE rowid = ?`,
+						content,
+						rowid,
+					);
+					written += content.length;
+				}
+				return written;
+			});
+			return { rows: count, bytes };
+		}
+	}
+}
+
+/** Runs one `bench_*` stage; see `AgentConcurrent2BenchStage`. */
+async function runBenchStage(
+	sql: AgentConcurrent2Db,
+	stage: AgentConcurrent2BenchStage,
+	stats: AgentConcurrent2QueryStatsSet,
+): Promise<{ rows: number; bytes: number; opMs: number[] }> {
+	await sql(
+		`CREATE TABLE IF NOT EXISTS bench_rows (id INTEGER PRIMARY KEY, payload TEXT NOT NULL, revision INTEGER NOT NULL)`,
+	);
+	const maxRows = await sql<{ max: number | null }>(
+		`SELECT MAX(id) AS max FROM bench_rows`,
+	);
+	const rows = Number(maxRows[0]?.max ?? 0);
+	const opMs: number[] = [];
+	const randomId = () => 1 + Math.floor(Math.random() * rows);
+	const timed = async <T>(fn: () => Promise<T>): Promise<T> => {
+		const startedAt = performance.now();
+		const result = await fn();
+		opMs.push(performance.now() - startedAt);
+		return result;
+	};
+
+	if (stage === "bench_seed") {
+		const target = Math.min(BENCH_ROWS, rows + BENCH_SEED_ROWS_PER_CALL);
+		const payload = "x".repeat(BENCH_ROW_BYTES);
+		await timed(() =>
+			sql.withTransaction(stats, async (tx) => {
+				for (let id = rows + 1; id <= target; id++) {
+					await tx(
+						`INSERT INTO bench_rows (id, payload, revision) VALUES (?, ?, 0)`,
+						id,
+						payload,
+					);
+				}
+			}),
+		);
+		return { rows: target, bytes: (target - rows) * BENCH_ROW_BYTES, opMs };
+	}
+	if (rows < BENCH_ROWS) {
+		throw new Error(`bench_rows holds ${rows} of ${BENCH_ROWS} rows; run bench_seed first`);
+	}
+
+	let bytes = 0;
+	switch (stage) {
+		case "bench_point": {
+			for (let index = 0; index < BENCH_READ_OPS; index++) {
+				const id = randomId();
+				const found = await timed(() =>
+					sql<{ payload: string }>(`SELECT payload FROM bench_rows WHERE id = ?`, id),
+				);
+				bytes += found[0]?.payload.length ?? 0;
+			}
+			return { rows: BENCH_READ_OPS, bytes, opMs };
+		}
+		case "bench_adjacent": {
+			const first = 1 + Math.floor(Math.random() * (rows - BENCH_READ_OPS));
+			for (let id = first; id < first + BENCH_READ_OPS; id++) {
+				const found = await timed(() =>
+					sql<{ payload: string }>(`SELECT payload FROM bench_rows WHERE id = ?`, id),
+				);
+				bytes += found[0]?.payload.length ?? 0;
+			}
+			return { rows: BENCH_READ_OPS, bytes, opMs };
+		}
+		case "bench_range16": {
+			for (let index = 0; index < BENCH_RANGE_OPS; index++) {
+				const low = 1 + Math.floor(Math.random() * (rows - 16));
+				const found = await timed(() =>
+					sql<{ payload: string }>(
+						`SELECT payload FROM bench_rows WHERE id >= ? AND id < ? ORDER BY id`,
+						low,
+						low + 16,
+					),
+				);
+				for (const row of found) bytes += row.payload.length;
+			}
+			return { rows: BENCH_RANGE_OPS * 16, bytes, opMs };
+		}
+		case "bench_scan": {
+			const found = await timed(() =>
+				sql<{ rows: number; bytes: number }>(
+					`SELECT COUNT(*) AS rows, SUM(LENGTH(payload)) AS bytes FROM bench_rows NOT INDEXED`,
+				),
+			);
+			return { rows: Number(found[0]?.rows ?? 0), bytes: Number(found[0]?.bytes ?? 0), opMs };
+		}
+		case "bench_autocommit": {
+			for (let index = 0; index < BENCH_WRITE_OPS; index++) {
+				const id = randomId();
+				await timed(() =>
+					sql(`UPDATE bench_rows SET revision = revision + 1 WHERE id = ?`, id),
+				);
+			}
+			return { rows: BENCH_WRITE_OPS, bytes: 0, opMs };
+		}
+		case "bench_batch": {
+			for (let index = 0; index < BENCH_BATCH_OPS; index++) {
+				await timed(() =>
+					sql.withTransaction(stats, async (tx) => {
+						for (let row = 0; row < BENCH_BATCH_ROWS; row++) {
+							await tx(
+								`UPDATE bench_rows SET revision = revision + 1 WHERE id = ?`,
+								randomId(),
+							);
+						}
+					}),
+				);
+			}
+			return { rows: BENCH_BATCH_OPS * BENCH_BATCH_ROWS, bytes: 0, opMs };
+		}
+		case "bench_seed":
+			throw new Error("bench_seed is handled above");
+	}
+}
+
+/**
+ * Inserts `count` alternating user and assistant messages of `messageBytes`
+ * content each, with their thread and message-added events, in transactions of
+ * at most `GROW_TRANSACTION_BYTES` of content.
+ */
+async function runInsertMessages(
+	sql: AgentConcurrent2Db,
+	clientId: string,
+	count: number,
+	messageBytes: number,
+	stats: AgentConcurrent2QueryStatsSet,
+): Promise<{ messages: number; bytes: number; transactions: number }> {
+	const nextText = createTextGenerator(hashString(clientId) ^ Date.now());
+	const perTransaction = Math.max(
+		1,
+		Math.floor(GROW_TRANSACTION_BYTES / messageBytes),
+	);
+	let messages = 0;
+	let bytes = 0;
+	let transactions = 0;
+
+	while (messages < count) {
+		const batch = Math.min(perTransaction, count - messages);
+		bytes += await sql.withTransaction(stats, (tx) =>
+			appendMessages(tx, clientId, batch, messageBytes, stats, nextText),
+		);
+		messages += batch;
+		transactions++;
+	}
+
+	return { messages, bytes, transactions };
+}
+
+/** Inserts one transaction's messages and returns their content bytes. */
+async function appendMessages(
+	tx: AgentConcurrent2Db,
+	clientId: string,
+	count: number,
+	messageBytes: number,
+	stats: AgentConcurrent2QueryStatsSet,
+	nextText: (bytes: number) => string,
+): Promise<number> {
+	// Per-statement steps are dropped; the caller reports totals only.
+	const steps: AgentConcurrent2Step[] = [];
+	const seqRows = await timedQuery(
+		tx,
+		stats,
+		steps,
+		"insert-select-next-thread-event-seq",
+		`SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM thread_events`,
+	);
+	let seq = Number(seqRows[0]?.seq ?? 1);
+	const suffix = safeId(clientId);
+
+	const messageRows: SQLPrimitive[][] = [];
+	const eventRows: SQLPrimitive[][] = [];
+	const messageAddedRows: SQLPrimitive[][] = [];
+	let bytes = 0;
+
+	for (let index = 0; index < count; index++) {
+		const id = `agent2-message-${suffix}-${seq}`;
+		const role = index % 2 === 0 ? "user" : "assistant";
+		const content = nextText(messageBytes);
+		const createdAt = new Date().toISOString();
+		messageRows.push([
+			id,
+			role,
+			content,
+			JSON.stringify({ clientId }),
+			null,
+			createdAt,
+			0,
+			null,
+			null,
+			null,
+		]);
+		const payload = JSON.stringify({
+			type: "message_added",
+			messageId: id,
+		});
+		eventRows.push([seq, "message_added", payload, createdAt]);
+		messageAddedRows.push([id, seq]);
+		seq++;
+		bytes += content.length;
+	}
+
+	await insertRows(
+		tx,
+		stats,
+		steps,
+		"insert-messages",
+		`INSERT INTO messages (message_id, role, content, meta, user_state, created_at, cancelled, read_at, parent_tool_use_id, tool_result_for_message_id)`,
+		messageRows,
+	);
+	await insertRows(
+		tx,
+		stats,
+		steps,
+		"insert-thread-events",
+		`INSERT INTO thread_events (seq, event_type, payload, created_at)`,
+		eventRows,
+	);
+	await insertRows(
+		tx,
+		stats,
+		steps,
+		"insert-message-added-events",
+		`INSERT INTO message_added_events (message_id, seq)`,
+		messageAddedRows,
+	);
+
+	return bytes;
+}
+
+/** Inserts rows with multi-row `INSERT ... VALUES` statements of bounded size. */
+async function insertRows(
+	tx: AgentConcurrent2Db,
+	stats: AgentConcurrent2QueryStatsSet,
+	steps: AgentConcurrent2Step[],
+	name: string,
+	insertPrefix: string,
+	rows: SQLPrimitive[][],
+): Promise<void> {
+	const columnCount = rows[0]?.length ?? 0;
+	if (columnCount === 0) {
+		return;
+	}
+	const rowPlaceholder = `(${Array(columnCount).fill("?").join(",")})`;
+	for (let index = 0; index < rows.length; index += GROW_INSERT_BATCH_ROWS) {
+		const chunk = rows.slice(index, index + GROW_INSERT_BATCH_ROWS);
+		const placeholders = chunk.map(() => rowPlaceholder).join(",");
+		await timedQuery(
+			tx,
+			stats,
+			steps,
+			name,
+			`${insertPrefix} VALUES ${placeholders}`,
+			...chunk.flat(),
+		);
+	}
+}
+
+const TEXT_WORDS = [
+	"the",
+	"agent",
+	"reads",
+	"file",
+	"function",
+	"returns",
+	"value",
+	"error",
+	"build",
+	"test",
+	"request",
+	"response",
+	"thread",
+	"message",
+	"update",
+	"config",
+	"module",
+	"import",
+	"export",
+	"const",
+	"async",
+	"await",
+	"state",
+	"actor",
+	"query",
+	"index",
+	"table",
+	"schema",
+	"commit",
+	"branch",
+	"diff",
+	"patch",
+	"line",
+	"column",
+	"string",
+	"number",
+	"object",
+	"array",
+	"promise",
+	"handler",
+	"server",
+	"client",
+	"socket",
+	"stream",
+	"buffer",
+	"cache",
+	"token",
+	"model",
+	"prompt",
+	"output",
+	"input",
+	"path",
+	"directory",
+	"process",
+	"signal",
+	"timeout",
+	"retry",
+	"status",
+	"ready",
+	"done",
+	"pending",
+	"running",
+	"because",
+	"and",
+];
+
+/**
+ * Returns a generator of word-based filler text. Unlike the repeated
+ * characters in the seed rows, it compresses roughly like real conversation
+ * text, so page compression in the storage layer does not hide growth.
+ */
+function createTextGenerator(seed: number): (bytes: number) => string {
+	let state = seed >>> 0 || 1;
+	return (bytes: number) => {
+		const words: string[] = [];
+		let length = 0;
+		while (length < bytes) {
+			state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
+			const word = TEXT_WORDS[(state >>> 16) % TEXT_WORDS.length] ?? "x";
+			words.push(word);
+			length += word.length + 1;
+		}
+		return words.join(" ").slice(0, bytes);
+	};
+}
+
+function hashString(value: string): number {
+	let hash = 2_166_136_261;
+	for (let index = 0; index < value.length; index++) {
+		hash = Math.imul(hash ^ value.charCodeAt(index), 16_777_619);
+	}
+	return hash >>> 0;
+}
+
 async function timedQuery<T = Record<string, SQLPrimitive>>(
 	sql: AgentConcurrent2Db,
 	stats: AgentConcurrent2QueryStatsSet,
@@ -1303,6 +2377,9 @@ async function createAgentConcurrent2Schema(
 	await database.execute(
 		`CREATE INDEX IF NOT EXISTS idx_messages_role_created_at ON messages(role, created_at)`,
 	);
+	await database.execute(
+		`CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)`,
+	);
 	await database.execute(`CREATE TABLE IF NOT EXISTS message_tool_refs (
 		source_message_id TEXT NOT NULL,
 		assistant_message_id TEXT NOT NULL,
@@ -1342,6 +2419,9 @@ async function createAgentConcurrent2Schema(
 	);
 	await database.execute(
 		`CREATE INDEX IF NOT EXISTS idx_tool_calls_state ON tool_calls(state)`,
+	);
+	await database.execute(
+		`CREATE INDEX IF NOT EXISTS idx_tool_calls_issued_at ON tool_calls(issued_at)`,
 	);
 	await database.execute(
 		`CREATE INDEX IF NOT EXISTS idx_tool_calls_expires_at ON tool_calls(expires_at) WHERE state IN ('queued', 'pending_reconnect', 'pending_ack', 'running')`,
@@ -1387,10 +2467,11 @@ async function createAgentConcurrent2Schema(
 }
 
 async function seedAgentConcurrent2Data(database: RawRivetDB): Promise<void> {
+	// EXISTS stops at the first row; COUNT(*) would scan the whole table on every wake.
 	const existing = await database.execute(
-		`SELECT COUNT(*) AS count FROM messages`,
+		`SELECT EXISTS(SELECT 1 FROM messages) AS seeded`,
 	);
-	if (Number(existing[0]?.count ?? 0) > 0) {
+	if (Number(existing[0]?.seeded ?? 0) > 0) {
 		return;
 	}
 
@@ -1604,4 +2685,455 @@ function toolUseID(index: number): string {
 
 function safeId(value: string): string {
 	return value.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80);
+}
+
+// ---------------------------------------------------------------------------
+// Agent iteration workload
+//
+// Mirrors one loop iteration of a production thread actor: the commits that
+// run between "the model finished streaming" and "the next inference starts",
+// in order, with the reads that run between them. `serial` issues the commits
+// one after another as the production actor does (13 commits). `merged`
+// folds the writes into two transactions, the shape a batching rewrite of the
+// actor would have.
+// ---------------------------------------------------------------------------
+
+interface AgentIterationOptions {
+	clientId: string;
+	iteration: number;
+	toolCalls: number;
+	assistantBytes: number;
+	toolResultBytes: number;
+	/** Simulated billing HTTP call between the delivery INSERT and its UPDATE. */
+	billingHttpMs: number;
+	/** Simulated tool run time. */
+	toolMs: number;
+	/** SELECTs the tick loop issues in one planning pass. */
+	planReads: number;
+	/** Rows read when the actor rebuilds the transcript for the next request. */
+	transcriptLimit: number;
+	/** Immediate actor state saves per iteration, one at the end of each tick pass. */
+	stateSaves: number;
+	mode: "serial" | "merged";
+}
+
+interface AgentIterationResult {
+	type: "agent2_iterate_result";
+	mode: "serial" | "merged";
+	iteration: number;
+	totalMs: number;
+	/** Named critical-path commits in order, with milliseconds. */
+	commits: Array<[string, number]>;
+	/** Plain reads that did not directly follow a commit. */
+	reads: number[];
+	/** Reads that ran directly after a commit. */
+	readsAfterCommit: number[];
+	/** Immediate actor state saves, as `flushDirtyState` runs after each tick. */
+	stateSaves: number[];
+	planMs: number;
+	transcriptMs: number;
+	transcriptRows: number;
+	dbBytes: number;
+}
+
+function parseIterationOptions(
+	request: Record<string, unknown>,
+): AgentIterationOptions {
+	const bounded = (field: string, fallback: number, max: number): number => {
+		const value = optionalNumberField(request, field) ?? fallback;
+		if (!Number.isFinite(value) || value < 0 || value > max) {
+			throw new Error(
+				`agent concurrent 2 request ${field} must be from 0 to ${max}`,
+			);
+		}
+		return value;
+	};
+	const mode = request.mode === "merged" ? "merged" : "serial";
+	return {
+		clientId: stringField(request, "clientId"),
+		iteration: bounded("iteration", 0, 1_000_000_000),
+		toolCalls: Math.max(1, bounded("toolCalls", 1, 16)),
+		assistantBytes: bounded("assistantBytes", 4_000, 1_048_576),
+		toolResultBytes: bounded("toolResultBytes", 2_700, 1_048_576),
+		billingHttpMs: bounded("billingHttpMs", 94, 60_000),
+		toolMs: bounded("toolMs", 115, 600_000),
+		planReads: bounded("planReads", 30, 500),
+		transcriptLimit: bounded("transcriptLimit", 500, 10_000),
+		stateSaves: bounded("stateSaves", 3, 16),
+		mode,
+	};
+}
+
+async function ensureIterationSchema(database: RawRivetDB): Promise<void> {
+	await database.execute(
+		`CREATE TABLE IF NOT EXISTS inference_requests (id TEXT PRIMARY KEY, state TEXT NOT NULL, provider_response_id TEXT, created_at TEXT NOT NULL)`,
+	);
+	await database.execute(
+		`CREATE TABLE IF NOT EXISTS pending_inference_messages (request_id TEXT NOT NULL, message_id TEXT NOT NULL, PRIMARY KEY (request_id, message_id))`,
+	);
+	await database.execute(
+		`CREATE TABLE IF NOT EXISTS billing_deliveries (id TEXT PRIMARY KEY, request_id TEXT NOT NULL, state TEXT NOT NULL, attempts INTEGER NOT NULL, created_at TEXT NOT NULL, completed_at TEXT)`,
+	);
+	await database.execute(
+		`CREATE TABLE IF NOT EXISTS usage_records (id TEXT PRIMARY KEY, request_id TEXT NOT NULL, input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL, cost_micros INTEGER NOT NULL, created_at TEXT NOT NULL)`,
+	);
+}
+
+async function runAgentIteration(
+	sql: AgentConcurrent2Db,
+	options: AgentIterationOptions,
+	stats: AgentConcurrent2QueryStatsSet,
+	saveState: () => Promise<void>,
+): Promise<AgentIterationResult> {
+	const startedAt = performance.now();
+	const nextText = createTextGenerator(
+		hashString(options.clientId) ^ options.iteration,
+	);
+	const suffix = `${safeId(options.clientId)}-${options.iteration}`;
+	const commits: Array<[string, number]> = [];
+	const reads: number[] = [];
+	const readsAfterCommit: number[] = [];
+	const stateSaves: number[] = [];
+	let stateSavesLeft = options.stateSaves;
+	/** Ends a tick pass: the actor flushes its dirty state with an immediate save. */
+	const endTick = async () => {
+		if (stateSavesLeft <= 0) return;
+		stateSavesLeft--;
+		const t0 = performance.now();
+		await saveState();
+		stateSaves.push(performance.now() - t0);
+	};
+	const nowIso = () => new Date().toISOString();
+
+	const timed = async <T>(fn: () => Promise<T>): Promise<[T, number]> => {
+		const t0 = performance.now();
+		const value = await fn();
+		return [value, performance.now() - t0];
+	};
+	const commit = async (name: string, fn: () => Promise<unknown>) => {
+		const [, ms] = await timed(fn);
+		commits.push([name, ms]);
+	};
+	const readAfterCommit = async () => {
+		const [, ms] = await timed(() =>
+			sql(
+				`SELECT key, value FROM thread_meta_kv WHERE key = 'archived'`,
+			),
+		);
+		readsAfterCommit.push(ms);
+	};
+	/** A planning pass: indexed SELECTs like the tick loop's, no writes. */
+	const planningPass = async (count: number): Promise<number> => {
+		const t0 = performance.now();
+		for (let index = 0; index < count; index++) {
+			const [, ms] = await timed(() => {
+				switch (index % 5) {
+					case 0:
+						return sql(
+							`SELECT key, value FROM thread_meta_kv WHERE key = 'agent_state'`,
+						);
+					case 1:
+						return sql(
+							`SELECT id, state, executor_id FROM tool_calls WHERE state IN ('queued','pending_ack','running') LIMIT 20`,
+						);
+					case 2:
+						return sql(
+							`SELECT message_id, role FROM messages WHERE parent_tool_use_id IS NULL ORDER BY created_at DESC LIMIT 1`,
+						);
+					case 3:
+						return sql(
+							`SELECT artifact_key FROM executor_artifacts WHERE tool_call_id = ? LIMIT 5`,
+							`tc-${suffix}`,
+						);
+					default:
+						return sql(
+							`SELECT id, state FROM inference_requests ORDER BY created_at DESC LIMIT 1`,
+						);
+				}
+			});
+			reads.push(ms);
+		}
+		return performance.now() - t0;
+	};
+
+	// Setup, not timed: the request row the previous iteration left behind.
+	const requestId = `ir-${suffix}`;
+	const previousRequest = await sql<{ id: string }>(
+		`SELECT id FROM inference_requests WHERE state = 'streaming' ORDER BY created_at DESC LIMIT 1`,
+	);
+	const currentRequest = previousRequest[0]?.id ?? `ir-seed-${suffix}`;
+	if (!previousRequest[0]) {
+		await sql(
+			`INSERT INTO inference_requests (id, state, provider_response_id, created_at) VALUES (?, 'streaming', NULL, ?)`,
+			currentRequest,
+			nowIso(),
+		);
+	}
+	const seqRows = await sql<{ seq: number }>(
+		`SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM thread_events`,
+	);
+	let seq = Number(seqRows[0]?.seq ?? 1);
+	const assistantId = `agent-iter-a-${suffix}`;
+	const toolIds = Array.from(
+		{ length: options.toolCalls },
+		(_, index) => `tc-${suffix}-${index}`,
+	);
+
+	const setAgentState = (tx: AgentConcurrent2Db, state: string) =>
+		tx(
+			`INSERT INTO thread_meta_kv (key, value, updated_at) VALUES ('agent_state', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+			state,
+			nowIso(),
+		);
+	const pushEvent = (tx: AgentConcurrent2Db, type: string, payload: string) =>
+		tx(
+			`INSERT INTO thread_events (seq, event_type, payload, created_at) VALUES (?, ?, ?, ?)`,
+			seq++,
+			type,
+			payload,
+			nowIso(),
+		);
+	const persistAssistant = async (tx: AgentConcurrent2Db) => {
+		await tx(
+			`INSERT INTO messages (message_id, role, content, meta, created_at) VALUES (?, 'assistant', ?, ?, ?)`,
+			assistantId,
+			nextText(options.assistantBytes),
+			JSON.stringify({ clientId: options.clientId }),
+			nowIso(),
+		);
+		for (const toolId of toolIds) {
+			await tx(
+				`INSERT INTO message_tool_refs (source_message_id, assistant_message_id, tool_use_id, block_type, cancelled) VALUES (?, ?, ?, 'tool_use', 0)`,
+				assistantId,
+				assistantId,
+				toolId,
+			);
+		}
+		await tx(
+			`INSERT INTO message_added_events (message_id, seq) VALUES (?, ?)`,
+			assistantId,
+			seq,
+		);
+		await pushEvent(tx, "message_added", JSON.stringify({ id: assistantId }));
+		await tx(
+			`UPDATE inference_requests SET state = 'completed' WHERE id = ?`,
+			currentRequest,
+		);
+	};
+	const recordUsage = (tx: AgentConcurrent2Db) =>
+		tx(
+			`INSERT INTO usage_records (id, request_id, input_tokens, output_tokens, cost_micros, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			`u-${suffix}`,
+			currentRequest,
+			12_000 + options.iteration,
+			600,
+			4_200,
+			nowIso(),
+		);
+	const queueToolCalls = async (tx: AgentConcurrent2Db, state: string) => {
+		for (const toolId of toolIds) {
+			await tx(
+				`INSERT INTO tool_calls (id, provider_tool_use_id, tool_name, args, message_id, issued_at, state, executor_id) VALUES (?, ?, 'shell_command', ?, ?, ?, ?, ?)`,
+				toolId,
+				`toolu-${toolId}`,
+				JSON.stringify({ command: "ls -la" }),
+				assistantId,
+				nowIso(),
+				state,
+				state === "queued" ? null : "executor-1",
+			);
+		}
+	};
+	const completeToolCalls = async (tx: AgentConcurrent2Db) => {
+		for (const toolId of toolIds) {
+			await tx(
+				`UPDATE tool_calls SET state = 'completed', result = ?, completed_at = ? WHERE id = ?`,
+				nextText(options.toolResultBytes),
+				nowIso(),
+				toolId,
+			);
+		}
+	};
+	const insertNextRequest = async (tx: AgentConcurrent2Db) => {
+		const toolResultId = `agent-iter-r-${suffix}`;
+		await tx(
+			`INSERT INTO messages (message_id, role, content, meta, created_at, tool_result_for_message_id) VALUES (?, 'user', ?, ?, ?, ?)`,
+			toolResultId,
+			nextText(options.toolResultBytes),
+			JSON.stringify({ clientId: options.clientId }),
+			nowIso(),
+			assistantId,
+		);
+		await tx(
+			`INSERT INTO inference_requests (id, state, provider_response_id, created_at) VALUES (?, 'streaming', NULL, ?)`,
+			requestId,
+			nowIso(),
+		);
+		await tx(
+			`INSERT INTO pending_inference_messages (request_id, message_id) VALUES (?, ?)`,
+			requestId,
+			toolResultId,
+		);
+	};
+	const readTranscript = async (): Promise<[number, number]> => {
+		const [rows, ms] = await timed(() =>
+			sql(
+				`SELECT message_id, role, content FROM messages ORDER BY created_at DESC LIMIT ?`,
+				options.transcriptLimit,
+			),
+		);
+		return [ms, rows.length];
+	};
+	/** The executor's lease acknowledgement arrives while the tool runs. */
+	const ackAndRunTool = async () => {
+		const ack = async () => {
+			for (const toolId of toolIds) {
+				await sql(
+					`UPDATE tool_calls SET state = 'running', expires_at = ? WHERE id = ?`,
+					nowIso(),
+					toolId,
+				);
+			}
+		};
+		await Promise.all([ack(), delay(options.toolMs)]);
+	};
+
+	let planMs = 0;
+	let transcriptMs = 0;
+	let transcriptRows = 0;
+
+	if (options.mode === "serial") {
+		// Model finished: provider id, billing delivery.
+		await commit("provider-response-id", () =>
+			sql(
+				`UPDATE inference_requests SET provider_response_id = ? WHERE id = ?`,
+				`resp-${suffix}`,
+				currentRequest,
+			),
+		);
+		await commit("billing-insert", () =>
+			sql(
+				`INSERT INTO billing_deliveries (id, request_id, state, attempts, created_at) VALUES (?, ?, 'pending', 1, ?)`,
+				`bd-${suffix}`,
+				currentRequest,
+				nowIso(),
+			),
+		);
+		await delay(options.billingHttpMs);
+		await commit("billing-complete", () =>
+			sql(
+				`UPDATE billing_deliveries SET state = 'completed', completed_at = ? WHERE id = ?`,
+				nowIso(),
+				`bd-${suffix}`,
+			),
+		);
+		await commit("assistant-message", () =>
+			sql.withTransaction(stats, persistAssistant),
+		);
+		await commit("state-tool-use", () =>
+			sql.withTransaction(stats, async (tx) => {
+				await setAgentState(tx, "tool_use");
+				await pushEvent(tx, "agent_state", '{"state":"tool_use"}');
+			}),
+		);
+		await readAfterCommit();
+		await commit("usage", () => sql.withTransaction(stats, recordUsage));
+		await readAfterCommit();
+		await commit("state-running-tools", () =>
+			sql.withTransaction(stats, async (tx) => {
+				await setAgentState(tx, "running_tools");
+				await pushEvent(tx, "agent_state", '{"state":"running_tools"}');
+			}),
+		);
+		await readAfterCommit();
+		await commit("tool-calls-insert", () =>
+			sql.withTransaction(stats, (tx) => queueToolCalls(tx, "queued")),
+		);
+		planMs += await planningPass(options.planReads);
+		for (const toolId of toolIds) {
+			await commit("lease-executor", () =>
+				sql(
+					`UPDATE tool_calls SET state = 'pending_ack', executor_id = 'executor-1' WHERE id = ?`,
+					toolId,
+				),
+			);
+			await commit("lease-expiry", () =>
+				sql(
+					`UPDATE tool_calls SET expires_at = ? WHERE id = ?`,
+					nowIso(),
+					toolId,
+				),
+			);
+		}
+		await endTick();
+		await ackAndRunTool();
+		await commit("tool-complete", () => completeToolCalls(sql));
+		await endTick();
+		planMs += await planningPass(Math.round(options.planReads * 1.5));
+		[transcriptMs, transcriptRows] = await readTranscript();
+		await commit("next-request-insert", () =>
+			sql.withTransaction(stats, insertNextRequest),
+		);
+		await commit("state-streaming", () =>
+			sql.withTransaction(stats, async (tx) => {
+				await setAgentState(tx, "streaming");
+				await pushEvent(tx, "agent_state", '{"state":"streaming"}');
+			}),
+		);
+		await readAfterCommit();
+		await endTick();
+	} else {
+		// Merged: one transaction for everything after inference, one after the tool.
+		await commit("post-inference", () =>
+			sql.withTransaction(stats, async (tx) => {
+				await tx(
+					`UPDATE inference_requests SET provider_response_id = ? WHERE id = ?`,
+					`resp-${suffix}`,
+					currentRequest,
+				);
+				await tx(
+					`INSERT INTO billing_deliveries (id, request_id, state, attempts, created_at) VALUES (?, ?, 'pending', 1, ?)`,
+					`bd-${suffix}`,
+					currentRequest,
+					nowIso(),
+				);
+				await persistAssistant(tx);
+				await recordUsage(tx);
+				await setAgentState(tx, "running_tools");
+				await pushEvent(tx, "agent_state", '{"state":"running_tools"}');
+				await queueToolCalls(tx, "pending_ack");
+			}),
+		);
+		await readAfterCommit();
+		planMs += await planningPass(options.planReads);
+		await endTick();
+		await ackAndRunTool();
+		planMs += await planningPass(Math.round(options.planReads * 1.5));
+		[transcriptMs, transcriptRows] = await readTranscript();
+		await commit("post-tool", () =>
+			sql.withTransaction(stats, async (tx) => {
+				await completeToolCalls(tx);
+				await insertNextRequest(tx);
+				await setAgentState(tx, "streaming");
+				await pushEvent(tx, "agent_state", '{"state":"streaming"}');
+			}),
+		);
+		await readAfterCommit();
+		await endTick();
+	}
+
+	return {
+		type: "agent2_iterate_result",
+		mode: options.mode,
+		iteration: options.iteration,
+		totalMs: performance.now() - startedAt,
+		commits,
+		reads,
+		readsAfterCommit,
+		stateSaves,
+		planMs,
+		transcriptMs,
+		transcriptRows,
+		dbBytes: await readDbBytes(sql),
+	};
 }

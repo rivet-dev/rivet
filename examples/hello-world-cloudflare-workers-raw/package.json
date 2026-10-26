@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "npx @rivetkit/cli dev --provider cloudflare",
+		"dev": "wrangler dev",
 		"client": "tsx scripts/client.ts",
 		"check-types": "tsc --noEmit",
 		"deploy": "wrangler deploy"
@@ -21,8 +21,14 @@
 	},
 	"stableVersion": "0.8.0",
 	"template": {
-		"technologies": ["rivet", "cloudflare", "typescript"],
-		"tags": ["serverless"],
+		"technologies": [
+			"rivet",
+			"cloudflare",
+			"typescript"
+		],
+		"tags": [
+			"serverless"
+		],
 		"noFrontend": true,
 		"skipVercel": true
 	},

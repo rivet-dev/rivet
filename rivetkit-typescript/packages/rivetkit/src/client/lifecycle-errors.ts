@@ -1,4 +1,5 @@
 import { ActorError, HttpRequestError } from "./errors";
+import { type RetryBudget, retryAfterMs, retryDelayMs } from "./retry-budget";
 
 export interface LifecycleBoundaryInfo {
 	kind: "request_retry" | "reconnect_only";
@@ -271,6 +272,11 @@ async function waitWithSignal(ms: number, signal?: AbortSignal) {
 	});
 }
 
+/**
+ * Runs `run`, retrying retryable lifecycle and refusal errors with jittered exponential backoff
+ * that honors the service's `retry_after_ms` hint. With a `budget`, the call credits it once and
+ * every retry spends a token; a spent budget returns the error instead of retrying.
+ */
 export async function retryOnLifecycleBoundary<T>(
 	run: () => Promise<T>,
 	opts?: {
@@ -278,11 +284,13 @@ export async function retryOnLifecycleBoundary<T>(
 		initialDelayMs?: number;
 		maxDelayMs?: number;
 		signal?: AbortSignal;
+		budget?: RetryBudget;
 	},
 ): Promise<T> {
 	const maxAttempts = opts?.maxAttempts ?? 5;
 	const initialDelayMs = opts?.initialDelayMs ?? 25;
 	const maxDelayMs = opts?.maxDelayMs ?? 200;
+	opts?.budget?.deposit();
 
 	let lastError: unknown;
 	for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -299,8 +307,15 @@ export async function retryOnLifecycleBoundary<T>(
 			if (attempt === maxAttempts - 1) {
 				break;
 			}
+			if (opts?.budget && !opts.budget.tryWithdraw()) {
+				break;
+			}
 
-			const delayMs = Math.min(initialDelayMs * 2 ** attempt, maxDelayMs);
+			const delayMs = retryDelayMs(attempt, {
+				initialDelayMs,
+				maxDelayMs,
+				hintMs: retryAfterMs(error),
+			});
 			await waitWithSignal(delayMs, opts?.signal);
 		}
 	}

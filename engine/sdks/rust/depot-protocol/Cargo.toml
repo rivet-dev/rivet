@@ -1,16 +1,12 @@
 [package]
-name = "rivet-depot-protocol"
+name = "depot-protocol"
 publish = false
 version.workspace = true
 authors.workspace = true
-license.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
-anyhow.workspace = true
-serde_bare.workspace = true
-serde.workspace = true
+rivet-data.workspace = true
+rivet-keys.workspace = true
 vbare.workspace = true
-
-[build-dependencies]
-vbare-compiler.workspace = true

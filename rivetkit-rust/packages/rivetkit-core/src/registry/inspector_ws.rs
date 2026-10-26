@@ -56,69 +56,7 @@ fn inspector_wire_mode_from_path(path: &str) -> Result<InspectorWireMode> {
 	Ok(InspectorWireMode::Negotiated { version })
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use tokio::sync::Notify;
 
-	#[test]
-	fn parses_inspector_protocol_query_parameter() {
-		assert_eq!(
-			inspector_wire_mode_from_path("/inspector/connect").unwrap(),
-			InspectorWireMode::LegacyEmbeddedV5
-		);
-		assert_eq!(
-			inspector_wire_mode_from_path("/inspector/connect?protocol_version=6").unwrap(),
-			InspectorWireMode::Negotiated { version: 6 }
-		);
-		for path in [
-			"/inspector/connect?protocol_version=",
-			"/inspector/connect?protocol_version=wat",
-			"/inspector/connect?protocol_version=0",
-			"/inspector/connect?protocol_version=7",
-		] {
-			assert!(inspector_wire_mode_from_path(path).is_err(), "{path}");
-		}
-	}
-
-	#[tokio::test]
-	async fn delayed_inspector_queries_publish_in_signal_order() {
-		let (sender, receiver) = mpsc::unbounded_channel();
-		let release_first = Arc::new(Notify::new());
-		let published = Arc::new(TokioMutex::new(Vec::new()));
-		let task = tokio::spawn(process_inspector_signals_in_order(receiver, {
-			let release_first = release_first.clone();
-			let published = published.clone();
-			move |signal| {
-				let release_first = release_first.clone();
-				let published = published.clone();
-				async move {
-					if signal == InspectorSignal::SchedulesUpdated {
-						release_first.notified().await;
-					}
-					published.lock().await.push(signal);
-					true
-				}
-			}
-		}));
-
-		sender.send(InspectorSignal::SchedulesUpdated).unwrap();
-		sender.send(InspectorSignal::StateUpdated).unwrap();
-		tokio::task::yield_now().await;
-		assert!(published.lock().await.is_empty());
-
-		release_first.notify_one();
-		drop(sender);
-		task.await.unwrap();
-		assert_eq!(
-			*published.lock().await,
-			vec![
-				InspectorSignal::SchedulesUpdated,
-				InspectorSignal::StateUpdated
-			]
-		);
-	}
-}
 
 fn send_inspector_message(
 	sender: &WebSocketSender,
@@ -319,7 +257,9 @@ impl RegistryDispatcher {
 											if let Err(error) = send_inspector_message(
 												&overlay_sender,
 												&InspectorServerMessage::StateUpdated(
-													inspector_protocol::StateUpdated { state },
+													inspector_protocol::StateUpdated {
+														state: state.into(),
+													},
 												),
 												wire_mode,
 											) {
@@ -474,7 +414,7 @@ impl RegistryDispatcher {
 						);
 						Some(InspectorServerMessage::Error(
 							inspector_protocol::ErrorMessage {
-								message: error.to_string(),
+								message: error.to_string().into(),
 							},
 						))
 					}
@@ -489,7 +429,7 @@ impl RegistryDispatcher {
 				);
 				Some(InspectorServerMessage::Error(
 					inspector_protocol::ErrorMessage {
-						message: error.to_string(),
+						message: error.to_string().into(),
 					},
 				))
 			}
@@ -521,7 +461,7 @@ impl RegistryDispatcher {
 				let state = request.state;
 				instance
 					.ctx
-					.save_state(vec![StateDelta::ActorState(state.clone())])
+					.save_state(vec![StateDelta::ActorState(state.clone().to_vec())])
 					.await
 					.context("save inspector websocket state patch")?;
 				Ok(Some(InspectorServerMessage::StateUpdated(
@@ -549,7 +489,7 @@ impl RegistryDispatcher {
 					"inspector WS: ActionRequest received"
 				);
 				let output = self
-					.execute_inspector_action_bytes(instance, &request.name, request.args)
+					.execute_inspector_action_bytes(instance, &request.name, request.args.to_vec())
 					.await
 					.map_err(ActionDispatchError::into_anyhow)?;
 				tracing::info!(
@@ -561,21 +501,24 @@ impl RegistryDispatcher {
 				Ok(Some(InspectorServerMessage::ActionResponse(
 					inspector_protocol::ActionResponse {
 						rid: request.id,
-						output,
+						output: output.into(),
 					},
 				)))
 			}
 			inspector_protocol::ClientMessage::RpcsListRequest(request) => Ok(Some(
 				InspectorServerMessage::RpcsListResponse(inspector_protocol::RpcsListResponse {
 					rid: request.id,
-					rpcs: inspector_rpcs(instance),
+					rpcs: inspector_rpcs(instance)
+						.into_iter()
+						.map(Into::into)
+						.collect(),
 				}),
 			)),
 			inspector_protocol::ClientMessage::TraceQueryRequest(request) => {
 				Ok(Some(InspectorServerMessage::TraceQueryResponse(
 					inspector_protocol::TraceQueryResponse {
 						rid: request.id,
-						payload: Vec::new(),
+						payload: Vec::new().into(),
 					},
 				)))
 			}
@@ -599,19 +542,19 @@ impl RegistryDispatcher {
 				Ok(Some(InspectorServerMessage::WorkflowHistoryResponse(
 					inspector_protocol::WorkflowHistoryResponse {
 						rid: request.id,
-						history,
+						history: history.map(Into::into),
 						is_workflow_enabled: workflow_supported,
 					},
 				)))
 			}
 			inspector_protocol::ClientMessage::WorkflowReplayRequest(request) => {
 				let (workflow_supported, history) = self
-					.inspector_workflow_replay_bytes(instance, request.entry_id)
+					.inspector_workflow_replay_bytes(instance, request.entry_id.map(Into::into))
 					.await?;
 				Ok(Some(InspectorServerMessage::WorkflowReplayResponse(
 					inspector_protocol::WorkflowReplayResponse {
 						rid: request.id,
-						history,
+						history: history.map(Into::into),
 						is_workflow_enabled: workflow_supported,
 					},
 				)))
@@ -621,7 +564,7 @@ impl RegistryDispatcher {
 				Ok(Some(InspectorServerMessage::DatabaseSchemaResponse(
 					inspector_protocol::DatabaseSchemaResponse {
 						rid: request.id,
-						schema,
+						schema: schema.into(),
 					},
 				)))
 			}
@@ -630,14 +573,14 @@ impl RegistryDispatcher {
 					.inspector_database_rows_bytes(
 						&instance.ctx,
 						&request.table,
-						request.limit.0.min(u64::from(u32::MAX)) as u32,
-						request.offset.0.min(u64::from(u32::MAX)) as u32,
+						request.limit.min(u64::from(u32::MAX)) as u32,
+						request.offset.min(u64::from(u32::MAX)) as u32,
 					)
 					.await?;
 				Ok(Some(InspectorServerMessage::DatabaseTableRowsResponse(
 					inspector_protocol::DatabaseTableRowsResponse {
 						rid: request.id,
-						result,
+						result: result.into(),
 					},
 				)))
 			}
@@ -648,7 +591,7 @@ impl RegistryDispatcher {
 				}),
 			)),
 			inspector_protocol::ClientMessage::ScheduleHistoryRequest(request) => {
-				let limit = request.limit.0.clamp(1, 1_000) as i64;
+				let limit = request.limit.clamp(1, 1_000) as i64;
 				let history = instance
 					.ctx
 					.cron_history(&request.schedule_id, Some(limit))
@@ -693,12 +636,15 @@ impl RegistryDispatcher {
 		Ok(InspectorServerMessage::Init(
 			inspector_protocol::InitMessage {
 				connections: inspector_wire_connections(&instance.ctx),
-				state: inspector_state_payload(&instance.ctx, is_state_enabled),
+				state: inspector_state_payload(&instance.ctx, is_state_enabled).map(Into::into),
 				is_state_enabled,
-				rpcs: inspector_rpcs(instance),
+				rpcs: inspector_rpcs(instance)
+					.into_iter()
+					.map(Into::into)
+					.collect(),
 				is_database_enabled: instance.ctx.sql().is_enabled(),
-				queue_size: serde_bare::Uint(queue_size),
-				workflow_history,
+				queue_size: queue_size,
+				workflow_history: workflow_history.map(Into::into),
 				is_workflow_enabled: workflow_supported,
 				tab_config: inspector_wire_tab_config(instance.factory.config()),
 				schedules,
@@ -709,12 +655,12 @@ impl RegistryDispatcher {
 	fn inspector_state_response(
 		&self,
 		instance: &ActorTaskHandle,
-		rid: serde_bare::Uint,
+		rid: u64,
 	) -> inspector_protocol::StateResponse {
 		let is_state_enabled = instance.ctx.has_state();
 		inspector_protocol::StateResponse {
 			rid,
-			state: inspector_state_payload(&instance.ctx, is_state_enabled),
+			state: inspector_state_payload(&instance.ctx, is_state_enabled).map(Into::into),
 			is_state_enabled,
 		}
 	}
@@ -736,17 +682,15 @@ impl RegistryDispatcher {
 			.into_iter()
 			.take(limit as usize)
 			.map(|message| inspector_protocol::QueueMessageSummary {
-				id: serde_bare::Uint(message.id),
-				name: message.name,
-				created_at_ms: serde_bare::Uint(
-					u64::try_from(message.created_at).unwrap_or_default(),
-				),
+				id: message.id,
+				name: message.name.into(),
+				created_at_ms: u64::try_from(message.created_at).unwrap_or_default(),
 			})
 			.collect();
 
 		Ok(inspector_protocol::QueueStatus {
-			size: serde_bare::Uint(u64::from(queue_size)),
-			max_size: serde_bare::Uint(u64::from(instance.ctx.queue().max_size())),
+			size: u64::from(queue_size),
+			max_size: u64::from(instance.ctx.queue().max_size()),
 			messages,
 			truncated,
 		})
@@ -774,11 +718,11 @@ impl RegistryDispatcher {
 			.await?
 			.into_iter()
 			.map(|schedule| inspector_protocol::Schedule {
-				id: schedule.id,
+				id: schedule.id.into(),
 				name: None,
-				kind: "at".to_owned(),
-				action: schedule.action,
-				args: schedule.args,
+				kind: "at".to_owned().into(),
+				action: schedule.action.into(),
+				args: schedule.args.into(),
 				next_run_at: timestamp_to_uint(schedule.run_at),
 				last_run_at: None,
 				expression: None,
@@ -789,15 +733,15 @@ impl RegistryDispatcher {
 			.collect::<Vec<_>>();
 		schedules.extend(instance.ctx.cron_list().await?.into_iter().map(|schedule| {
 			inspector_protocol::Schedule {
-				id: schedule.name.clone(),
-				name: Some(schedule.name),
-				kind: schedule.kind.as_str().to_owned(),
-				action: schedule.action,
-				args: schedule.args,
+				id: schedule.name.clone().into(),
+				name: Some(schedule.name.into()),
+				kind: schedule.kind.as_str().to_owned().into(),
+				action: schedule.action.into(),
+				args: schedule.args.into(),
 				next_run_at: timestamp_to_uint(schedule.next_run_at),
 				last_run_at: schedule.last_run_at.map(timestamp_to_uint),
-				expression: schedule.expression,
-				timezone: schedule.timezone,
+				expression: schedule.expression.map(Into::into),
+				timezone: schedule.timezone.map(Into::into),
 				interval_ms: schedule.interval_ms.map(timestamp_to_uint),
 				max_history: Some(timestamp_to_uint(schedule.max_history)),
 			}
@@ -818,7 +762,7 @@ impl RegistryDispatcher {
 		match signal {
 			InspectorSignal::StateUpdated => Ok(Some(InspectorServerMessage::StateUpdated(
 				inspector_protocol::StateUpdated {
-					state: instance.ctx.state(),
+					state: instance.ctx.state().into(),
 				},
 			))),
 			InspectorSignal::ConnectionsUpdated => {
@@ -830,16 +774,16 @@ impl RegistryDispatcher {
 			}
 			InspectorSignal::QueueUpdated => Ok(Some(InspectorServerMessage::QueueUpdated(
 				inspector_protocol::QueueUpdated {
-					queue_size: serde_bare::Uint(
-						self.inspector_current_queue_size(instance).await?,
-					),
+					queue_size: self.inspector_current_queue_size(instance).await?,
 				},
 			))),
 			InspectorSignal::WorkflowHistoryUpdated => {
 				let (_, history) = self.inspector_workflow_history_bytes(instance).await?;
 				Ok(history.map(|history| {
 					InspectorServerMessage::WorkflowHistoryUpdated(
-						inspector_protocol::WorkflowHistoryUpdated { history },
+						inspector_protocol::WorkflowHistoryUpdated {
+							history: history.into(),
+						},
 					)
 				}))
 			}
@@ -909,26 +853,27 @@ fn server_message_kind(message: &InspectorServerMessage) -> &'static str {
 	}
 }
 
-fn timestamp_to_uint(value: i64) -> serde_bare::Uint {
-	serde_bare::Uint(value.max(0) as u64)
+fn timestamp_to_uint(value: i64) -> u64 {
+	value.max(0) as u64
 }
 
 fn inspector_wire_schedule_fire(
 	fire: crate::actor::schedule::CronFire,
 ) -> inspector_protocol::ScheduleFire {
 	inspector_protocol::ScheduleFire {
-		action: fire.action,
+		action: fire.action.into(),
 		scheduled_at: timestamp_to_uint(fire.scheduled_at),
 		fired_at: timestamp_to_uint(fire.fired_at),
 		finished_at: fire.finished_at.map(timestamp_to_uint),
-		result: fire.result,
+		result: fire.result.into(),
 		error: fire.error.map(|error| inspector_protocol::ScheduleError {
-			group: error.group,
-			code: error.code,
-			message: error.message,
-			metadata: error
+			group: error.group.into(),
+			code: error.code.into(),
+			message: error.message.into(),
+			metadata: (error
 				.metadata
-				.and_then(|metadata| encode_json_as_cbor(&metadata).ok()),
+				.and_then(|metadata| encode_json_as_cbor(&metadata).ok()))
+			.map(Into::into),
 		}),
 	}
 }

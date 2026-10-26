@@ -1,5 +1,0 @@
-{
-  "code": "response_body_too_large",
-  "group": "guard",
-  "message": "Response body too large."
-}

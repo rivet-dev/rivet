@@ -1,12 +1,5 @@
-pub mod actor;
-pub mod actor_kv;
-pub mod envoy;
+//! Pegboard's formal keys: volume addresses, rows inside volumes, Epoxy keys and UPS subjects.
 pub mod epoxy;
-pub mod hibernating_request;
-pub mod ns;
-pub mod runner;
-pub mod runner_config;
-
-pub fn subspace() -> universaldb::utils::Subspace {
-	rivet_types::keys::pegboard::subspace()
-}
+pub mod kv;
+pub mod partition;
+pub mod ups;

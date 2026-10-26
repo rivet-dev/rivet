@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use axum::{
 	extract::{Request, State},
 	middleware::{self, Next},
-	response::{IntoResponse, Redirect, Response},
+	response::{IntoResponse, Response},
 };
 use reqwest::header::{AUTHORIZATION, HeaderMap};
 use rivet_api_builder::{create_router, extract::FailedExtraction};
@@ -10,8 +10,7 @@ use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 
 use crate::{
-	actors, auth, ctx, datacenters, envoys, health, metadata, namespaces, runner_configs, runners,
-	ui,
+	actors, auth, ctx, datacenters, health, metadata, namespaces, runner_pools, runners,
 };
 
 #[derive(OpenApi)]
@@ -26,15 +25,13 @@ use crate::{
 		actors::sleep::sleep,
 		actors::reschedule::reschedule,
 		runners::list,
-		runners::list_names,
-		envoys::list,
 		namespaces::list,
 		namespaces::create,
-		runner_configs::list::list,
-		runner_configs::upsert::upsert,
-		runner_configs::delete::delete,
-		runner_configs::serverless_health_check::serverless_health_check,
-		runner_configs::refresh_metadata::refresh_metadata,
+		runner_pools::list::list,
+		runner_pools::upsert::upsert,
+		runner_pools::delete::delete,
+		runner_pools::serverless_health_check::serverless_health_check,
+		runner_pools::refresh_metadata::refresh_metadata,
 		datacenters::list,
 		health::fanout,
 		metadata::get,
@@ -42,7 +39,7 @@ use crate::{
 		auth::tokens::inspect,
 	),
 	components(
-		schemas(rivet_types::keys::namespace::runner_config::RunnerConfigVariant)
+		schemas(rivet_types::keys::namespace::envoy_pool::EnvoyPoolVariant)
 	),
 	security( ("bearer_auth" = []) ),
 	modifiers(&SecurityAddon),
@@ -52,7 +49,7 @@ pub struct ApiDoc;
 #[tracing::instrument(level = "debug", skip_all)]
 pub async fn router(
 	config: rivet_config::Config,
-	pools: rivet_pools::Pools,
+	ctx: rivet_engine_context::EngineContext,
 	jwt_key_ring_cache: Option<std::sync::Arc<rivet_auth_jwt::key_ring_cache::KeyRingCache>>,
 ) -> Result<axum::Router> {
 	tracing::debug!("creating api-public router");
@@ -61,13 +58,8 @@ pub async fn router(
 		bail!("API Public JWT verifier configuration does not match auth.jwt.enabled");
 	}
 
-	create_router("api-public", config, pools, move |router| {
+	create_router("api-public", config, ctx, move |router| {
 		router
-			// Root redirect
-			.route(
-				"/",
-				axum::routing::get(|| async { Redirect::permanent("/ui/") }),
-			)
 			// MARK: Metadata
 			.route("/metadata", axum::routing::get(metadata::get))
 			// MARK: Namespaces
@@ -82,22 +74,22 @@ pub async fn router(
 				"/auth/tokens/inspect",
 				axum::routing::get(auth::tokens::inspect),
 			)
-			.route("/runner-configs", axum::routing::get(runner_configs::list))
+			.route("/runner-pools", axum::routing::get(runner_pools::list))
 			.route(
-				"/runner-configs/serverless-health-check",
-				axum::routing::post(runner_configs::serverless_health_check),
+				"/runner-pools/serverless-health-check",
+				axum::routing::post(runner_pools::serverless_health_check),
 			)
 			.route(
-				"/runner-configs/{runner_name}",
-				axum::routing::put(runner_configs::upsert),
+				"/runner-pools/{pool_name}",
+				axum::routing::put(runner_pools::upsert),
 			)
 			.route(
-				"/runner-configs/{runner_name}",
-				axum::routing::delete(runner_configs::delete),
+				"/runner-pools/{pool_name}",
+				axum::routing::delete(runner_pools::delete),
 			)
 			.route(
-				"/runner-configs/{runner_name}/refresh-metadata",
-				axum::routing::post(runner_configs::refresh_metadata),
+				"/runner-pools/{pool_name}/refresh-metadata",
+				axum::routing::post(runner_pools::refresh_metadata),
 			)
 			// MARK: Actors
 			.route("/actors", axum::routing::get(actors::list::list))
@@ -128,17 +120,10 @@ pub async fn router(
 			)
 			// MARK: Runners
 			.route("/runners", axum::routing::get(runners::list))
-			// MARK: Envoys
-			.route("/envoys", axum::routing::get(envoys::list))
-			.route("/runners/names", axum::routing::get(runners::list_names))
 			// MARK: Datacenters
 			.route("/datacenters", axum::routing::get(datacenters::list))
 			// MARK: Health
 			.route("/health/fanout", axum::routing::get(health::fanout))
-			// MARK: UI
-			.route("/ui", axum::routing::get(ui::serve_index))
-			.route("/ui/", axum::routing::get(ui::serve_index))
-			.route("/ui/{*path}", axum::routing::get(ui::serve_ui))
 			// MARK: Middleware (must go after all routes)
 			// Add CORS layer that mirrors the request origin
 			.layer(
@@ -170,7 +155,13 @@ async fn auth_middleware(
 	let ctx = req
 		.extensions()
 		.get::<rivet_api_builder::ApiCtx>()
-		.ok_or_else(|| "ctx should exist".into_response())?;
+		.ok_or_else(|| {
+			(
+				reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+				"API request context is unavailable",
+			)
+				.into_response()
+		})?;
 
 	// Extract token
 	let token = headers
@@ -192,9 +183,6 @@ async fn auth_middleware(
 	if res.extensions().get::<FailedExtraction>().is_none()
 		&& method != reqwest::Method::OPTIONS
 		&& res.status() != reqwest::StatusCode::METHOD_NOT_ALLOWED
-		&& path != "/"
-		&& path != "/ui"
-		&& !path.starts_with("/ui/")
 		&& !ctx.is_auth_handled()
 	{
 		return Err((

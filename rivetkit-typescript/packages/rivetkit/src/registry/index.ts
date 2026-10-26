@@ -30,6 +30,11 @@ type ShutdownSignal = "SIGINT" | "SIGTERM";
 
 const REGISTRY_READY_TIMEOUT_MS = 30_000;
 
+// Serverless is disabled for v3; keep the implementation for a later release.
+function rejectServerless(): void {
+	throw new Error("serverless is disabled in this version");
+}
+
 function signalExitCode(signal: ShutdownSignal): number {
 	switch (signal) {
 		case "SIGINT":
@@ -190,6 +195,7 @@ export class Registry<A extends RegistryActors> {
 		config: RegistryConfig,
 	): Promise<void> | undefined {
 		if (!config.configurePool) return undefined;
+		rejectServerless();
 
 		if (!this.#configureServerlessPoolPromise) {
 			this.#configureServerlessPoolPromise = configureServerlessPool(
@@ -215,6 +221,7 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public async handler(request: Request): Promise<Response> {
+		rejectServerless();
 		const config = this.parseConfig();
 		this.#printWelcome(config, "serverless");
 
@@ -413,6 +420,7 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public serve(): ServerlessHandler {
+		rejectServerless();
 		return {
 			fetch: (request) => this.handler(request),
 		};
@@ -438,6 +446,9 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public async listen(opts: RegistryListenOptions = {}): Promise<void> {
+		if (!opts.application) {
+			rejectServerless();
+		}
 		const port = opts.port ?? parsePortEnv(process.env.RIVET_PORT) ?? 3000;
 		const publicDir = opts.publicDir ?? getRivetkitPublicDir();
 		const config = this.parseConfig();
@@ -554,6 +565,7 @@ export class Registry<A extends RegistryActors> {
 	 * Returns serverless metadata suitable for mounting in a user-owned router.
 	 */
 	async #metadataRoute(): Promise<Response> {
+		rejectServerless();
 		const configured = await this.#activeConfiguredRegistry();
 		if (!configured) {
 			return new Response("registry not started\n", {
@@ -626,7 +638,7 @@ export class Registry<A extends RegistryActors> {
 	 */
 	#startEnvoy(config: RegistryConfig, printWelcome: boolean) {
 		if (!this.#runtimeServePromise) {
-			const configuredEnvoyVersion = this.#config.envoy?.version;
+			const configuredEnvoyVersion = this.#config.node?.version;
 			const envoyVersionSource =
 				configuredEnvoyVersion !== undefined
 					? "config"
@@ -637,7 +649,7 @@ export class Registry<A extends RegistryActors> {
 			logger().info({
 				msg: "starting rivetkit envoy",
 				rivetkitVersion: VERSION,
-				envoyVersion: config.envoy.version,
+				envoyVersion: config.node.version,
 				envoyVersionSource,
 			});
 
@@ -646,8 +658,8 @@ export class Registry<A extends RegistryActors> {
 				getNodeEnv() === "production"
 			) {
 				logger().error({
-					msg: "envoy version defaulted because neither config.envoy.version nor RIVET_ENVOY_VERSION is set; actors will not drain automatically across deploys. See https://rivet.dev/docs/actors/versions",
-					envoyVersion: config.envoy.version,
+					msg: "node version defaulted because neither config.node.version nor RIVET_NODE_VERSION is set; actors will not drain automatically across deploys. See https://rivet.dev/docs/actors/versions",
+					envoyVersion: config.node.version,
 					envoyVersionSource,
 				});
 			}
@@ -666,7 +678,13 @@ export class Registry<A extends RegistryActors> {
 					// rejection unhandled. Downstream awaits (e.g. #runShutdown's
 					// Promise.race) attach their own catches and still observe
 					// resolution via the race.
-					logger().warn({ error }, "runtime registry serve errored");
+					logger().error({ error }, "runtime registry serve errored");
+					if (
+						typeof process !== "undefined" &&
+						typeof process.exit === "function"
+					) {
+						process.exit(1);
+					}
 				});
 			// Install signal handlers once an envoy lifecycle has begun. Only
 			// Mode A ever reaches here. Mode B (handler(request)) intentionally
@@ -714,7 +732,7 @@ export class Registry<A extends RegistryActors> {
 			finishShutdownSignal(signal);
 			return;
 		}
-		this.#shutdownInFlight = this.#drain(config)
+		this.#shutdownInFlight = this.#drain(config, true)
 			.catch((err) => {
 				logger().warn({ err }, "shutdown error");
 			})
@@ -757,18 +775,28 @@ export class Registry<A extends RegistryActors> {
 		return this.#shutdownInFlight;
 	}
 
-	async #drain(config: RegistryConfig): Promise<void> {
+	async #drain(config: RegistryConfig, signalDriven = false): Promise<void> {
 		const modeAPromise = this.#runtimeServeConfiguredPromise;
 		const modeBPromise = this.#runtimeServerlessPromise;
 		const runtimes = new Set<CoreRuntime>();
 
-		const gracePeriodMs =
-			config.shutdown?.gracePeriodMs ??
-			(await this.#actorStopThresholdMs(modeAPromise ?? modeBPromise)) ??
-			30 * 60 * 1000;
+		const localDevSignal =
+			signalDriven &&
+			getNodeEnv() !== "production" &&
+			config.engineSpawn &&
+			config.endpoint !== undefined &&
+			isLocalEngineEndpoint(config.endpoint);
+		let gracePeriodMs = config.shutdown?.gracePeriodMs;
+		if (gracePeriodMs === undefined) {
+			gracePeriodMs = localDevSignal
+				? 1_000
+				: ((await this.#actorStopThresholdMs(
+						modeAPromise ?? modeBPromise,
+					)) ?? 30 * 60 * 1000);
+		}
 		// Race the entire drain sequence (both modes + serve promise) against
-		// a single grace ceiling. By default, this uses the engine-provided
-		// actor stop threshold, matching Pegboard's hard cutoff for actors.
+		// a single grace ceiling. Local dev signal shutdowns allow the watcher
+		// to restart promptly; other shutdowns use the engine's actor stop threshold.
 		const drain = async () => {
 			// Shut down every live `CoreRegistry` we know about. Mode A
 			// (`start()`) and Mode B (`handler()`) each build a separate
@@ -887,12 +915,16 @@ export class Registry<A extends RegistryActors> {
 			);
 		}
 		if (this.#runtimeReadyPromise) return this.#runtimeReadyPromise;
-		if (getRivetkitRuntimeMode() === "serverless") {
-			return Promise.reject(
-				new Error(
-					"registry.startAndWait() requires envoy runtime mode; serverless registries become ready per request",
-				),
-			);
+		try {
+			if (getRivetkitRuntimeMode() === "serverless") {
+				return Promise.reject(
+					new Error(
+						"registry.startAndWait() requires envoy runtime mode; serverless registries become ready per request",
+					),
+				);
+			}
+		} catch (error) {
+			return Promise.reject(error);
 		}
 
 		const config = this.parseConfig();

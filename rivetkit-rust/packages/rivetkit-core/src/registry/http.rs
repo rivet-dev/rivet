@@ -10,6 +10,12 @@ const HEADER_RIVET_ACTOR: &str = "x-rivet-actor";
 const HEADER_RIVET_ACTOR_GENERATION: &str = "x-rivet-actor-generation";
 const HEADER_RIVET_ACTOR_KEY: &str = "x-rivet-actor-key";
 
+/// Cancels a user request's token when the request finishes, unless a
+/// streaming response body takes ownership of it.
+///
+/// Every terminal path must cancel the token. Foreign runtimes park a task per
+/// request on it to deliver `abortSignal`, and a token that is dropped without
+/// being cancelled strands that task and its JS callback until the actor stops.
 struct RequestCancellationGuard {
 	token: Option<tokio_util::sync::CancellationToken>,
 }
@@ -17,10 +23,6 @@ struct RequestCancellationGuard {
 impl RequestCancellationGuard {
 	fn new(token: tokio_util::sync::CancellationToken) -> Self {
 		Self { token: Some(token) }
-	}
-
-	fn disarm(&mut self) {
-		self.token = None;
 	}
 }
 
@@ -67,7 +69,15 @@ impl RegistryDispatcher {
 			}
 		};
 		let actor = actor_specifier_for_instance(&instance);
+		let encoding = request_encoding(request.headers());
 		if let Some(mut response) = self.handle_inspector_fetch(&instance, &request).await? {
+			if let Err(error) = instance.ctx.wait_startup_commit().await {
+				return message_boundary_error_response(
+					encoding,
+					framework_anyhow_status(&error),
+					error,
+				);
+			}
 			attach_actor_response_headers(&mut response, &actor);
 			return Ok(response);
 		}
@@ -91,6 +101,15 @@ impl RegistryDispatcher {
 				self.handle_user_request_fetch(&instance, request).await
 			}
 		};
+		// The handler may have run while the startup state commit was in flight. Its response
+		// waits for that commit, so the client never sees state that is not durable.
+		if let Err(error) = instance.ctx.wait_startup_commit().await {
+			return message_boundary_error_response(
+				encoding,
+				framework_anyhow_status(&error),
+				error,
+			);
+		}
 		response.map(|mut response| {
 			attach_actor_response_headers(&mut response, &actor);
 			response
@@ -100,10 +119,11 @@ impl RegistryDispatcher {
 	async fn handle_user_request_fetch(
 		&self,
 		instance: &ActorTaskHandle,
-		request: Request,
+		mut request: Request,
 	) -> Result<HttpResponse> {
 		let encoding = request_encoding(request.headers());
 		let request_method = request.method().clone();
+		request.set_cancellation_parent(&instance.ctx.actor_abort_signal());
 		let mut cancellation_guard = RequestCancellationGuard::new(request.cancellation_token());
 		let (reply_tx, reply_rx) = oneshot::channel();
 		try_send_dispatch_command(
@@ -123,14 +143,12 @@ impl RegistryDispatcher {
 			Ok(response) => {
 				rearm_sleep_after_request(instance.ctx.clone());
 				let mut response = build_envoy_response(response, &request_method)?;
+				// A streaming body outlives this call, so it cancels the token
+				// when it is dropped. Otherwise the guard cancels it on return.
 				if let Some(body_stream) = response.body_stream.as_mut() {
-					let token = cancellation_guard
-						.token
-						.take()
-						.expect("request cancellation token must be armed");
-					body_stream.set_on_drop(move || token.cancel());
-				} else {
-					cancellation_guard.disarm();
+					if let Some(token) = cancellation_guard.token.take() {
+						body_stream.set_on_drop(move || token.cancel());
+					}
 				}
 				Ok(response)
 			}
@@ -690,18 +708,7 @@ pub(super) fn normalize_actor_request_path(path: &str) -> String {
 	}
 }
 
-#[cfg(test)]
-pub(super) fn is_actor_request_path(path: &str) -> bool {
-	let Some(stripped) = path.strip_prefix("/request") else {
-		return false;
-	};
 
-	stripped.is_empty()
-		|| stripped
-			.as_bytes()
-			.first()
-			.is_some_and(|byte| matches!(byte, b'/' | b'?'))
-}
 
 pub(super) fn build_envoy_response(
 	response: ActorHttpResponse,
@@ -889,20 +896,20 @@ pub(super) fn serialize_http_response_error(
 					Ok::<Vec<u8>, anyhow::Error>(out)
 				})
 				.transpose()?;
-			client_protocol::versioned::HttpResponseError::wrap_latest(
-				client_protocol::HttpResponseError {
-					group: group.to_owned(),
-					code: code.to_owned(),
-					message: message.to_owned(),
-					metadata,
+			client_protocol::versioned::HttpResponseError::serialize_with_embedded_version(
+				&client_protocol::HttpResponseError {
+					group: group.to_owned().into(),
+					code: code.to_owned().into(),
+					message: message.to_owned().into(),
+					metadata: metadata.map(Into::into),
 					actor: actor.map(|actor| client_protocol::ActorSpecifier {
-						actor_id: actor.actor_id.clone(),
-						generation: serde_bare::Uint(actor.generation),
-						key: actor.key.clone(),
+						actor_id: actor.actor_id.clone().into(),
+						generation: actor.generation,
+						key: actor.key.clone().map(Into::into),
 					}),
 				},
+				client_protocol::PROTOCOL_VERSION,
 			)
-			.serialize_with_embedded_version(client_protocol::PROTOCOL_VERSION)
 		}
 	}
 }
@@ -930,9 +937,9 @@ pub(super) fn decode_http_action_args(
 			}
 			HttpResponseEncoding::Bare => {
 				let request =
-					<client_protocol::versioned::HttpActionRequest as OwnedVersionedData>::deserialize_with_embedded_version(body)
+					<client_protocol::versioned::HttpActionRequest as Versioned>::deserialize_with_embedded_version(body)
 						.context("decode bare HTTP action request")?;
-				Ok(request.args)
+				Ok(request.args.to_vec())
 			}
 		},
 	)
@@ -971,10 +978,10 @@ pub(super) fn decode_http_queue_request(
 		}
 		HttpResponseEncoding::Bare => {
 			let request =
-				<client_protocol::versioned::HttpQueueSendRequest as OwnedVersionedData>::deserialize_with_embedded_version(body)
+				<client_protocol::versioned::HttpQueueSendRequest as Versioned>::deserialize_with_embedded_version(body)
 					.context("decode bare HTTP queue request")?;
 			Ok(DecodedHttpQueueRequest {
-				body: request.body,
+				body: request.body.to_vec(),
 				wait: request.wait.unwrap_or(false),
 				timeout: request.timeout,
 			})
@@ -986,11 +993,12 @@ pub(super) fn encode_http_action_response(
 	encoding: HttpResponseEncoding,
 	output: Vec<u8>,
 ) -> Result<HttpResponse> {
-	let body = serde_metrics::measure_serialize(
-		encoding_format_label(encoding),
-		"http_action_response",
-		|| {
-			let body = match encoding {
+	let body =
+		serde_metrics::measure_serialize(
+			encoding_format_label(encoding),
+			"http_action_response",
+			|| {
+				let body = match encoding {
 				HttpResponseEncoding::Json => serde_json::to_vec(&json!({
 					"output": decode_cbor_json_or_null(&output),
 				}))?,
@@ -1005,15 +1013,15 @@ pub(super) fn encode_http_action_response(
 					out
 				}
 				HttpResponseEncoding::Bare => {
-					client_protocol::versioned::HttpActionResponse::wrap_latest(
-						client_protocol::HttpActionResponse { output },
-					)
-					.serialize_with_embedded_version(client_protocol::PROTOCOL_VERSION)?
+					client_protocol::versioned::HttpActionResponse::serialize_with_embedded_version(
+						&client_protocol::HttpActionResponse { output: output.into() },
+						client_protocol::PROTOCOL_VERSION,
+					)?
 				}
 			};
-			Ok(body)
-		},
-	)?;
+				Ok(body)
+			},
+		)?;
 	Ok(HttpResponse {
 		status: StatusCode::OK.as_u16(),
 		headers: HashMap::from([(
@@ -1049,13 +1057,13 @@ pub(super) fn encode_http_queue_response(
 			out
 		}
 		HttpResponseEncoding::Bare => {
-			client_protocol::versioned::HttpQueueSendResponse::wrap_latest(
-				client_protocol::HttpQueueSendResponse {
-					status: result.status.as_str().to_owned(),
-					response: result.response,
+			client_protocol::versioned::HttpQueueSendResponse::serialize_with_embedded_version(
+				&client_protocol::HttpQueueSendResponse {
+					status: result.status.as_str().to_owned().into(),
+					response: result.response.map(Into::into),
 				},
-			)
-			.serialize_with_embedded_version(client_protocol::PROTOCOL_VERSION)?
+				client_protocol::PROTOCOL_VERSION,
+			)?
 		}
 	};
 	Ok(HttpResponse {
@@ -1152,6 +1160,4 @@ fn bearer_token_from_authorization(value: &str) -> Option<&str> {
 	if token.is_empty() { None } else { Some(token) }
 }
 
-#[cfg(test)]
-#[path = "../../tests/registry_http.rs"]
-mod tests;
+

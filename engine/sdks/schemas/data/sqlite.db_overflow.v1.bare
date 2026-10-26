@@ -1,0 +1,19 @@
+# One run of a SQLite overflow chain, in its database's `main.db-overflow` KV inode, keyed by the
+# run's first page as a big-endian u32. A run is the pages `start + i * step` for `i < len`, and
+# a chain is its runs in chain order. The chain's first run also lists every other run, so one
+# point read of the chain's head page gives the whole chain.
+type RunRef struct {
+	start: u32
+	len: u32
+	step: u16
+}
+
+type OverflowRun struct {
+	len: u32
+	step: u16
+	chainFirst: u32
+	offsetInChain: u32
+	chainPages: u32
+	learnedTxid: u64
+	rest: list<RunRef>
+}

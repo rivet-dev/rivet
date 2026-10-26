@@ -1,0 +1,32 @@
+# UPS routing fence is the existing singleton coordinator tenure, not a JWT identity.
+type KeyId data[16]
+
+type EmergencyRotateRequest struct {
+    requestId: data[16]
+    expectedCoordinatorEpoch: u64
+    expectedRingVersion: u64
+    revokeKids: list<KeyId>
+}
+
+# The admin credential is checked at the UPS boundary and never enters the state machine.
+type OperatorRequest struct {
+    adminToken: str
+    rotation: EmergencyRotateRequest
+}
+
+type Committed struct {
+    ringVersion: u64
+    revokedKids: list<KeyId>
+}
+
+type Rejected enum {
+    NOT_COORDINATOR
+    BUSY
+    VERSION_CHANGED
+    INVALID_REQUEST
+    REQUEST_ID_REUSED
+    UNAVAILABLE
+    UNAUTHORIZED
+}
+
+type EmergencyRotateResponse union { Committed | Rejected }

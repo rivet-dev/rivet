@@ -1,0 +1,9 @@
+#import "depot.tablet_manifest.v1.bare"
+
+# Written into the frozen parent's final checkpoint before zero-copy index inheritance.
+# The exact split identity prevents a retry from reinterpreting a shared snapshot.
+type SplitSnapshot struct {
+    parentId: UuidV4
+    hashRange: PartitionKeyHashRange
+    split: TabletSplit
+}

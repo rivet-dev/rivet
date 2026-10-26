@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use rivet_envoy_protocol as protocol;
@@ -6,7 +7,7 @@ use rivet_envoy_protocol as protocol;
 	all(feature = "wasm-transport", target_arch = "wasm32")
 ))]
 use std::collections::HashMap;
-use vbare::OwnedVersionedData;
+use vbare::Versioned;
 
 use crate::context::{HttpConnectionTx, HttpWsTxMessage, SharedContext, WsTxMessage};
 #[cfg(any(
@@ -31,35 +32,37 @@ pub(crate) enum WsSendResult {
 
 pub(crate) const HTTP_WS_MESSAGE_CAPACITY: usize = 256;
 pub(crate) const HTTP_WS_BYTE_CAPACITY: usize = 16 * 1024 * 1024;
+/// Maximum detached terminal-frame sends waiting on one saturated HTTP session.
+/// Frames beyond it are dropped, and the engine times out those requests.
+pub(crate) const HTTP_WS_DETACHED_SEND_CAPACITY: usize = 1024;
 
-#[cfg(test)]
-pub(crate) async fn install_connection(
-	shared: &SharedContext,
-	tx: tokio::sync::mpsc::UnboundedSender<WsTxMessage>,
-) -> u64 {
-	let (http_tx, mut http_rx) =
-		tokio::sync::mpsc::channel::<HttpWsTxMessage>(HTTP_WS_MESSAGE_CAPACITY);
-	let http_byte_budget = std::sync::Arc::new(tokio::sync::Semaphore::new(HTTP_WS_BYTE_CAPACITY));
-	let relay_tx = tx.clone();
-	tokio::spawn(async move {
-		while let Some(message) = http_rx.recv().await {
-			let result = relay_tx
-				.send(WsTxMessage::Send(message.data))
-				.map_err(|_| anyhow::anyhow!("test WebSocket receiver closed"));
-			let _ = message.written.send(result);
-		}
-	});
-	install_connection_with_http(shared, tx, http_tx, http_byte_budget).await
+/// Uses the last advertised threshold while disconnected. Before the first init, no actors
+/// can be lost and the envoy loop uses the same 10 second fallback for its lost timer.
+pub(crate) async fn reconnect_lost_threshold_ms(shared: &SharedContext) -> u64 {
+	shared
+		.protocol_metadata
+		.lock()
+		.await
+		.as_ref()
+		.map(|metadata| metadata.envoy_lost_threshold as u64)
+		.unwrap_or(10_000)
 }
 
+
+
+/// Installs a session, or returns zero if shutdown has already started.
 pub(crate) async fn install_connection_with_http(
 	shared: &SharedContext,
 	tx: tokio::sync::mpsc::UnboundedSender<WsTxMessage>,
 	http_tx: tokio::sync::mpsc::Sender<HttpWsTxMessage>,
-	http_byte_budget: std::sync::Arc<tokio::sync::Semaphore>,
+	http_byte_budget: Arc<tokio::sync::Semaphore>,
 ) -> u64 {
 	let mut guard = shared.ws_tx.lock().await;
 	let mut http_guard = shared.http_ws_tx.lock().await;
+	if shared.shutting_down.load(Ordering::Acquire) {
+		return 0;
+	}
+	record_contact_before_install(shared);
 	let session = shared
 		.next_connection_session
 		.fetch_add(1, Ordering::AcqRel)
@@ -70,18 +73,38 @@ pub(crate) async fn install_connection_with_http(
 		session,
 		tx: http_tx,
 		byte_budget: http_byte_budget,
+		detached_send_budget: Arc::new(tokio::sync::Semaphore::new(HTTP_WS_DETACHED_SEND_CAPACITY)),
 	});
+	METRICS
+		.http_detached_sends_capacity
+		.set(HTTP_WS_DETACHED_SEND_CAPACITY as i64);
 	drop(http_guard);
 	drop(guard);
 	shared.connection_session_tx.send_replace(session);
 	session
 }
 
-#[cfg(test)]
-pub(crate) async fn remove_connection(shared: &SharedContext) {
-	let session = shared.connection_session.load(Ordering::Acquire);
-	remove_connection_for_session(shared, session).await;
+/// Records the envoy's last contact with the engine before the new connection can deliver a
+/// ping or init. The engine pings a connection as soon as it opens, ahead of its init, so the
+/// contact must be captured here; the envoy loop judges the silence later, when it handles the
+/// init and would resume its actors. The earliest contact wins if connections are installed
+/// again before an init is handled.
+fn record_contact_before_install(shared: &SharedContext) {
+	let last_contact_ms = shared.last_contact_ms.load(Ordering::Acquire);
+	if last_contact_ms == 0 {
+		return;
+	}
+	let _ = shared.contact_before_install_ms.try_update(
+		Ordering::AcqRel,
+		Ordering::Acquire,
+		|pending| match pending {
+			0 => Some(last_contact_ms),
+			pending => Some(pending.min(last_contact_ms)),
+		},
+	);
 }
+
+
 
 pub(crate) async fn remove_connection_for_session(shared: &SharedContext, session: u64) {
 	let mut guard = shared.ws_tx.lock().await;
@@ -104,41 +127,11 @@ pub(crate) async fn ws_send_http_for_session(
 	message: protocol::ToRivet,
 	expected_session: u64,
 ) -> WsSendResult {
-	if tracing::enabled!(tracing::Level::DEBUG) {
-		tracing::debug!(
-			data = stringify_to_rivet(&message),
-			"sending HTTP tunnel message"
-		);
-	}
-
-	let encoded = crate::protocol::versioned::ToRivet::wrap_latest(message)
-		.serialize(protocol::PROTOCOL_VERSION)
-		.expect("failed to encode HTTP tunnel message");
-	let Ok(encoded_len) = u32::try_from(encoded.len()) else {
-		return WsSendResult::Unavailable;
-	};
-	if encoded.len() > HTTP_WS_BYTE_CAPACITY {
-		return WsSendResult::Unavailable;
-	}
-
-	let connection = {
-		let guard = shared.http_ws_tx.lock().await;
-		let current = shared.connection_session.load(Ordering::Acquire);
-		if current != expected_session {
-			return WsSendResult::StaleSession {
-				current: (current != 0).then_some(current),
-			};
-		}
-		let Some(connection) = guard.as_ref() else {
-			return WsSendResult::Unavailable;
+	let (encoded, encoded_len, connection) =
+		match prepare_http_send(shared, message, expected_session).await {
+			Ok(prepared) => prepared,
+			Err(result) => return result,
 		};
-		if connection.session != expected_session {
-			return WsSendResult::StaleSession {
-				current: Some(connection.session),
-			};
-		}
-		connection.clone()
-	};
 
 	let Ok(byte_permit) = connection
 		.byte_budget
@@ -174,6 +167,152 @@ pub(crate) async fn ws_send_http_for_session(
 	}
 }
 
+/// Sends a fire-and-forget HTTP frame without waiting on the HTTP byte budget,
+/// the bounded writer queue, or the socket write.
+///
+/// The envoy main loop uses this for terminal frames such as 503 responses and
+/// aborts, so a saturated HTTP stream cannot stall KV, SQLite, and command
+/// dispatch for every actor. When the queue has capacity the frame is enqueued
+/// in order on its session. Otherwise a detached task performs the waiting send,
+/// so that frame may be written after frames enqueued later. At most
+/// [`HTTP_WS_DETACHED_SEND_CAPACITY`] detached sends wait per session; beyond
+/// that the frame is dropped.
+///
+/// Callers only send frames for requests that have no live route on this
+/// session, so no body chunks of the same stream are queued behind the byte
+/// budget. Tokio semaphores also hand released permits to queued waiters
+/// before `try_acquire`, so the fast path does not take budget from a queued
+/// sender.
+pub(crate) async fn ws_send_http_for_session_detached(
+	shared: &Arc<SharedContext>,
+	message: protocol::ToRivet,
+	expected_session: u64,
+) {
+	let (encoded, encoded_len, connection) =
+		match prepare_http_send(shared, message.clone(), expected_session).await {
+			Ok(prepared) => prepared,
+			Err(_) => return,
+		};
+
+	let byte_permit = match connection
+		.byte_budget
+		.clone()
+		.try_acquire_many_owned(encoded_len)
+	{
+		Ok(byte_permit) => byte_permit,
+		Err(tokio::sync::TryAcquireError::Closed) => return,
+		Err(tokio::sync::TryAcquireError::NoPermits) => {
+			spawn_waiting_http_send(shared, &connection, message, expected_session);
+			return;
+		}
+	};
+	let (written, _written_rx) = tokio::sync::oneshot::channel();
+	match connection.tx.try_send(HttpWsTxMessage {
+		data: encoded,
+		_byte_permit: byte_permit,
+		written,
+	}) {
+		Ok(()) => {}
+		Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {}
+		Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+			spawn_waiting_http_send(shared, &connection, message, expected_session);
+		}
+	}
+}
+
+/// Sends a terminal frame from a detached task bounded by the session's
+/// detached send budget, or drops it when that budget is exhausted.
+fn spawn_waiting_http_send(
+	shared: &Arc<SharedContext>,
+	connection: &HttpConnectionTx,
+	message: protocol::ToRivet,
+	expected_session: u64,
+) {
+	let permit = match connection.detached_send_budget.clone().try_acquire_owned() {
+		Ok(permit) => permit,
+		Err(_) => {
+			METRICS.http_detached_send_dropped_total.inc();
+			tracing::debug!(
+				expected_session,
+				capacity = HTTP_WS_DETACHED_SEND_CAPACITY,
+				"detached HTTP send budget exhausted, dropping terminal frame"
+			);
+			return;
+		}
+	};
+	if connection.detached_send_budget.available_permits() == 0 {
+		tracing::warn!(
+			expected_session,
+			capacity = HTTP_WS_DETACHED_SEND_CAPACITY,
+			"detached HTTP sends reached capacity; the HTTP stream to the engine is saturated and further terminal frames are dropped"
+		);
+	} else {
+		tracing::debug!(
+			expected_session,
+			"HTTP WebSocket queue is full, sending terminal frame from a detached task"
+		);
+	}
+
+	let shared = shared.clone();
+	let inflight = rivet_metrics::GaugeGuardExt::inc_guard(&METRICS.http_detached_sends_inflight);
+	crate::utils::spawn_detached(async move {
+		let _ = ws_send_http_for_session(&shared, message, expected_session).await;
+		drop(inflight);
+		drop(permit);
+	});
+}
+
+/// Encodes an HTTP frame and resolves the connection for its session.
+///
+/// The `http_ws_tx` guard is held only for the session check and is released
+/// before returning, so callers never hold it across the budget or queue waits.
+async fn prepare_http_send(
+	shared: &SharedContext,
+	message: protocol::ToRivet,
+	expected_session: u64,
+) -> Result<(Vec<u8>, u32, HttpConnectionTx), WsSendResult> {
+	if tracing::enabled!(tracing::Level::DEBUG) {
+		tracing::debug!(
+			data = stringify_to_rivet(&message),
+			"sending HTTP tunnel message"
+		);
+	}
+
+	let encoded = match crate::protocol::versioned::ToRivet::serialize(
+		&message,
+		protocol::PROTOCOL_VERSION,
+	) {
+		Ok(encoded) => encoded,
+		Err(error) => {
+			tracing::error!(?error, "failed to encode HTTP tunnel message");
+			return Err(WsSendResult::Unavailable);
+		}
+	};
+	let Ok(encoded_len) = u32::try_from(encoded.len()) else {
+		return Err(WsSendResult::Unavailable);
+	};
+	if encoded.len() > HTTP_WS_BYTE_CAPACITY {
+		return Err(WsSendResult::Unavailable);
+	}
+
+	let guard = shared.http_ws_tx.lock().await;
+	let current = shared.connection_session.load(Ordering::Acquire);
+	if current != expected_session {
+		return Err(WsSendResult::StaleSession {
+			current: (current != 0).then_some(current),
+		});
+	}
+	let Some(connection) = guard.as_ref() else {
+		return Err(WsSendResult::Unavailable);
+	};
+	if connection.session != expected_session {
+		return Err(WsSendResult::StaleSession {
+			current: Some(connection.session),
+		});
+	}
+	Ok((encoded, encoded_len, connection.clone()))
+}
+
 #[cfg(all(feature = "native-transport", feature = "wasm-transport"))]
 compile_error!(
 	"`native-transport` and `wasm-transport` are mutually exclusive. Enable exactly one envoy-client transport."
@@ -204,8 +343,9 @@ async fn send_initial_metadata(shared: &SharedContext) {
 		prepopulate_map.insert(
 			name.clone(),
 			protocol::ActorName {
-				metadata: serde_json::to_string(&actor.metadata)
-					.unwrap_or_else(|_| "{}".to_string()),
+				metadata: (serde_json::to_string(&actor.metadata)
+					.unwrap_or_else(|_| "{}".to_string()))
+				.into(),
 			},
 		);
 	}
@@ -219,8 +359,13 @@ async fn send_initial_metadata(shared: &SharedContext) {
 	ws_send(
 		shared,
 		protocol::ToRivet::ToRivetMetadata(protocol::ToRivetMetadata {
-			prepopulate_actor_names: Some(prepopulate_map),
-			metadata: metadata_json,
+			prepopulate_actor_names: Some(
+				prepopulate_map
+					.into_iter()
+					.map(|(k, v)| (k.into(), v))
+					.collect(),
+			),
+			metadata: metadata_json.map(Into::into),
 		}),
 	)
 	.await;
@@ -236,10 +381,22 @@ async fn forward_to_envoy(shared: &SharedContext, session: u64, message: protoco
 	}
 
 	match message {
-		protocol::ToEnvoy::ToEnvoyPing(ping) => {
+		protocol::ToEnvoy::ToEnvoyInit(init) => {
 			shared
-				.last_ping_ts
+				.last_contact_ms
 				.store(crate::time::now_millis(), Ordering::Release);
+			let _ = crate::envoy::send_to_envoy_tx(
+				shared,
+				ToEnvoyMessage::ConnMessage {
+					message: protocol::ToEnvoy::ToEnvoyInit(init),
+					session,
+				},
+			);
+		}
+		protocol::ToEnvoy::ToEnvoyPing(ping) => {
+			let now = crate::time::now_millis();
+			shared.last_ping_ts.store(now, Ordering::Release);
+			shared.last_contact_ms.store(now, Ordering::Release);
 			ws_send(
 				shared,
 				protocol::ToRivet::ToRivetPong(protocol::ToRivetPong { ts: ping.ts }),
@@ -254,6 +411,22 @@ async fn forward_to_envoy(shared: &SharedContext, session: u64, message: protoco
 					session,
 				},
 			);
+		}
+	}
+}
+
+/// Records a ping and encodes its pong, for a transport that writes pongs ahead of its queue.
+#[cfg(feature = "native-transport")]
+fn encode_pong(shared: &SharedContext, ping: protocol::ToEnvoyPing) -> Option<Vec<u8>> {
+	shared
+		.last_ping_ts
+		.store(crate::time::now_millis(), Ordering::Release);
+	let pong = protocol::ToRivet::ToRivetPong(protocol::ToRivetPong { ts: ping.ts });
+	match crate::protocol::versioned::ToRivet::serialize(&pong, protocol::PROTOCOL_VERSION) {
+		Ok(encoded) => Some(encoded),
+		Err(error) => {
+			tracing::error!(?error, "failed to encode pong");
+			None
 		}
 	}
 }
@@ -304,13 +477,20 @@ pub(crate) async fn ws_send_for_session(
 			.ws_tx_lock_hold_duration_seconds
 			.with_label_values(&[message_kind])
 			.observe(hold_start.elapsed().as_secs_f64());
-		tracing::error!("websocket not available for sending");
+		tracing::debug!("websocket not available for sending");
 		return WsSendResult::Unavailable;
 	};
 
-	let encoded = crate::protocol::versioned::ToRivet::wrap_latest(message)
-		.serialize(protocol::PROTOCOL_VERSION)
-		.expect("failed to encode message");
+	let encoded = match crate::protocol::versioned::ToRivet::serialize(
+		&message,
+		protocol::PROTOCOL_VERSION,
+	) {
+		Ok(encoded) => encoded,
+		Err(error) => {
+			tracing::error!(?error, "failed to encode message");
+			return WsSendResult::Unavailable;
+		}
+	};
 	if tx.send(WsTxMessage::Send(encoded)).is_err() {
 		return WsSendResult::Unavailable;
 	}
@@ -366,4 +546,15 @@ fn ws_url(shared: &SharedContext) -> String {
 		urlencoding::encode(&shared.config.version.to_string()),
 		urlencoding::encode(&shared.config.pool_name),
 	)
+}
+
+// Test shim keeps moved tests in crate-root tests/ with private-module access.
+
+
+/// A missing or malformed optional diagnostic header leaves session attribution unknown.
+#[cfg(all(not(target_arch = "wasm32"), any(feature = "native-transport", test)))]
+fn sqlite_trace_connection(value: Option<&[u8]>) -> Option<uuid::Uuid> {
+	value
+		.filter(|value| value.len() == 36)
+		.and_then(|value| uuid::Uuid::try_parse_ascii(value).ok())
 }

@@ -21,7 +21,7 @@ const app = new Hono();
 app.get("/", (c) => c.text("Hello from Hono + Rivet Actors!"));
 
 app.post("/increment/:name", async (c) => {
-	// `createClient` reads RIVET_ENDPOINT from the environment. `rivet dev`
+	// `createClient` reads RIVET_ENDPOINT from the environment. the configured environment
 	// passes it automatically; in production set it as a Worker var or secret. It
 	// falls back to the local engine at http://localhost:6420 when unset.
 	const client = createClient<typeof registry>();

@@ -1,0 +1,5 @@
+{
+  "code": "not_ready",
+  "group": "engine",
+  "message": "Engine did not become ready."
+}

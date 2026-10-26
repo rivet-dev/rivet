@@ -5,37 +5,31 @@ use std::sync::LazyLock;
 
 pub mod api_peer;
 pub mod auth;
-pub mod cache;
-pub mod clickhouse;
-pub mod db;
-pub mod features;
+pub mod depot;
+pub mod epoxy;
 pub mod guard;
 pub mod logs;
 pub mod metrics;
+pub mod object_storage;
 pub mod outbound;
 pub mod pegboard;
 pub mod pubsub;
-pub mod pyroscope;
 pub mod runtime;
-pub mod sqlite;
 pub mod telemetry;
 pub mod topology;
 
 pub use api_peer::*;
 pub use auth::*;
-pub use cache::*;
-pub use clickhouse::*;
-pub use db::Database;
-pub use features::*;
+pub use depot::*;
+pub use epoxy::*;
 pub use guard::*;
 pub use logs::*;
 pub use metrics::*;
+pub use object_storage::*;
 pub use outbound::*;
 pub use pegboard::*;
 pub use pubsub::PubSub;
-pub use pyroscope::*;
 pub use runtime::*;
-pub use sqlite::*;
 pub use telemetry::*;
 pub use topology::*;
 
@@ -56,14 +50,6 @@ pub use topology::*;
 //
 // This means that a lot of properties like enums cannot be overridden.
 //
-// For example:
-//
-// Default config: { "memory": {} }
-// User config: { "file_system": {} }
-// Will merge to: { "memory: {}, "file_system": {} }
-//
-// This is because `Config` is not intelligent enough to know that `Database` is an enum.
-//
 // By using `Option`, we can manually implement our own default using methods + `LazyLock` (for
 // performance).
 
@@ -77,13 +63,20 @@ pub struct Root {
 	pub guard: Option<Guard>,
 
 	#[serde(default)]
+	#[serde(rename = "storage")]
+	pub depot: Option<DepotConfig>,
+
+	#[serde(default)]
+	pub object_storage: Option<ObjectStorageConfig>,
+
+	#[serde(default)]
 	pub api_peer: Option<ApiPeer>,
 
 	#[serde(default)]
 	pub pegboard: Option<Pegboard>,
 
 	#[serde(default)]
-	pub features: Option<Features>,
+	pub epoxy: Option<Epoxy>,
 
 	#[serde(default)]
 	pub logs: Option<Logs>,
@@ -91,17 +84,8 @@ pub struct Root {
 	#[serde(default)]
 	pub topology: Option<Topology>,
 
-	#[serde(default, flatten)]
-	pub database: Option<Database>,
-
-	#[serde(default, flatten)]
+	#[serde(default)]
 	pub pubsub: Option<PubSub>,
-
-	#[serde(default)]
-	pub cache: Option<Cache>,
-
-	#[serde(default)]
-	pub clickhouse: Option<ClickHouse>,
 
 	#[serde(default)]
 	pub telemetry: Telemetry,
@@ -110,13 +94,7 @@ pub struct Root {
 	pub runtime: Runtime,
 
 	#[serde(default)]
-	pub sqlite: Option<Sqlite>,
-
-	#[serde(default)]
 	pub metrics: Metrics,
-
-	#[serde(default)]
-	pub pyroscope: Option<Pyroscope>,
 
 	#[serde(default)]
 	pub outbound: Option<Outbound>,
@@ -127,20 +105,17 @@ impl Default for Root {
 		Root {
 			auth: None,
 			guard: None,
+			depot: None,
+			object_storage: None,
 			api_peer: None,
 			pegboard: None,
-			features: None,
+			epoxy: None,
 			logs: None,
 			topology: None,
-			database: None,
 			pubsub: None,
-			cache: None,
-			clickhouse: None,
 			telemetry: Default::default(),
 			runtime: Default::default(),
-			sqlite: None,
 			metrics: Default::default(),
-			pyroscope: None,
 			outbound: None,
 		}
 	}
@@ -158,6 +133,16 @@ impl Root {
 		self.guard.as_ref().unwrap_or(&DEFAULT)
 	}
 
+	pub fn depot(&self) -> &DepotConfig {
+		static DEFAULT: LazyLock<DepotConfig> = LazyLock::new(DepotConfig::default);
+		self.depot.as_ref().unwrap_or(&DEFAULT)
+	}
+
+	pub fn object_storage(&self) -> &ObjectStorageConfig {
+		static DEFAULT: LazyLock<ObjectStorageConfig> = LazyLock::new(ObjectStorageConfig::default);
+		self.object_storage.as_ref().unwrap_or(&DEFAULT)
+	}
+
 	pub fn api_peer(&self) -> &ApiPeer {
 		static DEFAULT: LazyLock<ApiPeer> = LazyLock::new(ApiPeer::default);
 		self.api_peer.as_ref().unwrap_or(&DEFAULT)
@@ -168,14 +153,14 @@ impl Root {
 		self.outbound.as_ref().unwrap_or(&DEFAULT)
 	}
 
+	pub fn epoxy(&self) -> &Epoxy {
+		static DEFAULT: LazyLock<Epoxy> = LazyLock::new(Epoxy::default);
+		self.epoxy.as_ref().unwrap_or(&DEFAULT)
+	}
+
 	pub fn pegboard(&self) -> &Pegboard {
 		static DEFAULT: LazyLock<Pegboard> = LazyLock::new(Pegboard::default);
 		self.pegboard.as_ref().unwrap_or(&DEFAULT)
-	}
-
-	pub fn features(&self) -> &Features {
-		static DEFAULT: LazyLock<Features> = LazyLock::new(Features::default);
-		self.features.as_ref().unwrap_or(&DEFAULT)
 	}
 
 	pub fn logs(&self) -> &Logs {
@@ -188,74 +173,12 @@ impl Root {
 		self.topology.as_ref().unwrap_or(&DEFAULT)
 	}
 
-	pub fn database(&self) -> &Database {
-		static DEFAULT: LazyLock<Database> = LazyLock::new(Database::default);
-		self.database.as_ref().unwrap_or(&DEFAULT)
-	}
-
 	pub fn pubsub(&self) -> &PubSub {
 		static DEFAULT: LazyLock<PubSub> = LazyLock::new(PubSub::default);
 		self.pubsub.as_ref().unwrap_or(&DEFAULT)
 	}
 
-	pub fn sqlite(&self) -> &Sqlite {
-		static DEFAULT: LazyLock<Sqlite> = LazyLock::new(Sqlite::default);
-		self.sqlite.as_ref().unwrap_or(&DEFAULT)
-	}
 
-	/// Cluster-wide byte-rate budget for one UniversalDB throttle axis, in bytes per second. `kind` is
-	/// `"read"` or `"write"`. `None` leaves the axis unthrottled.
-	///
-	/// The depot compaction throttle predates the generic map and keeps its own configuration keys, so
-	/// those are consulted first and the map only fills in what they leave unset. It always resolves
-	/// to a budget: compaction is bulk background work that must never run unbounded just because
-	/// nothing was configured.
-	pub fn udb_throttle_bytes_per_second(&self, name: &str, kind: &str) -> Option<u64> {
-		if name == DEPOT_COMPACTION_THROTTLE {
-			let sqlite = self.sqlite();
-			let explicit = match kind {
-				"read" => sqlite.compaction_read_bytes_per_second,
-				"write" => sqlite.compaction_write_bytes_per_second,
-				_ => None,
-			};
-			if let Some(bytes_per_second) = explicit {
-				return Some(bytes_per_second);
-			}
-
-			return Some(
-				self.runtime
-					.udb_throttle_bytes_per_second(name, kind)
-					.unwrap_or(match kind {
-						"read" => sqlite.compaction_read_bytes_per_second(),
-						"write" => sqlite.compaction_write_bytes_per_second(),
-						_ => return None,
-					}),
-			);
-		}
-
-		if name == DEPOT_ACTOR_THROTTLE {
-			let sqlite = self.sqlite();
-			let explicit = match kind {
-				"read" => sqlite.actor_read_bytes_per_second,
-				"write" => sqlite.actor_write_bytes_per_second,
-				_ => None,
-			};
-			// No fallback default: unset leaves the actor path unthrottled, as it was before this
-			// throttle existed. Unlike compaction, this lane carries user-visible commits.
-			return explicit.or_else(|| self.runtime.udb_throttle_bytes_per_second(name, kind));
-		}
-
-		self.runtime.udb_throttle_bytes_per_second(name, kind)
-	}
-
-	pub fn cache(&self) -> &Cache {
-		static DEFAULT: LazyLock<Cache> = LazyLock::new(Cache::default);
-		self.cache.as_ref().unwrap_or(&DEFAULT)
-	}
-
-	pub fn clickhouse(&self) -> Option<&ClickHouse> {
-		self.clickhouse.as_ref()
-	}
 
 	pub fn validate_and_set_defaults(&mut self) -> Result<()> {
 		let auth = self
@@ -265,30 +188,13 @@ impl Root {
 		let desired_issuer = auth::derive_issuer(self)?;
 		auth.validate(&desired_issuer)?;
 
-		// When UDB runs on Postgres without an explicit NATS config, inherit the UPS NATS config if
-		// one is set. The presence of NATS is what selects UDB multi-node mode, so this lets a
-		// single `pubsub: nats` config drive both UPS and UDB across nodes.
-		if let Some(PubSub::Nats(nats)) = self.pubsub.clone()
-			&& let Some(Database::Postgres(pg)) = &mut self.database
-			&& pg.nats.is_none()
-		{
-			pg.nats = Some(nats);
-		}
+		self.pubsub().validate()?;
 
-		self.guard().validate()?;
+		self.depot().validate()?;
 		self.pegboard().validate()?;
-		self.features().validate()?;
+		self.epoxy().validate()?;
 		self.runtime.validate()?;
-		self.sqlite().validate()?;
-
-		// A zero budget stalls whatever charges the axis outright rather than meaning "unlimited".
-		// Remove the entry to leave an axis unthrottled.
-		for (name, kind, bytes_per_second) in self.runtime.udb_throttle_budgets() {
-			if bytes_per_second == 0 {
-				bail!("runtime.udb_throttle_bytes_per_second.{name}.{kind} must be greater than 0");
-			}
-		}
-
+		self.metrics.hardware.validate()?;
 		// Validate that all datacenters have valid_hosts configured when there's more than one datacenter
 		let topology = self.topology();
 		if topology.datacenters.len() > 1 {

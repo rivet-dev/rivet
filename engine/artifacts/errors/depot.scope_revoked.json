@@ -1,0 +1,5 @@
+{
+  "code": "scope_revoked",
+  "group": "depot",
+  "message": "The caller scope ended; submitted work may still complete."
+}

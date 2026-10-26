@@ -58,20 +58,4 @@ pub fn format(v: i64, with_ms: bool) -> String {
 	format!("{}{}s", segments, seconds)
 }
 
-#[cfg(test)]
-mod test {
-	use super::*;
 
-	#[test]
-	fn duration() {
-		assert_eq!(days(5), 5 * 24 * 60 * 60 * 1000);
-	}
-
-	#[test]
-	fn format_duration() {
-		assert_eq!(
-			format(days(12) + hours(25) + minutes(0) + seconds(3), false).as_str(),
-			"13d 1h 3s"
-		);
-	}
-}

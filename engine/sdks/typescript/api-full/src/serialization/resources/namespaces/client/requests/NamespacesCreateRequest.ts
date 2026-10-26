@@ -10,13 +10,11 @@ export const NamespacesCreateRequest: core.serialization.Schema<
     serializers.NamespacesCreateRequest.Raw,
     Rivet.NamespacesCreateRequest
 > = core.serialization.object({
-    displayName: core.serialization.property("display_name", core.serialization.string()),
     name: core.serialization.string(),
 });
 
 export declare namespace NamespacesCreateRequest {
     export interface Raw {
-        display_name: string;
         name: string;
     }
 }

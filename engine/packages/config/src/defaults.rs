@@ -1,8 +1,8 @@
 pub mod hosts {
-	use std::net::{IpAddr, Ipv6Addr};
+	use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 	pub const GUARD: IpAddr = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
-	pub const API_PEER: IpAddr = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
+	pub const API_PEER: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 	pub const METRICS: IpAddr = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
 }
 

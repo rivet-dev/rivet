@@ -1,0 +1,5 @@
+{
+  "code": "nodes_connected",
+  "group": "pool",
+  "message": "The node pool still has connected nodes."
+}

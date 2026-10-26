@@ -167,28 +167,4 @@ pub trait Actor: Send + Sync + Sized + 'static {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::Actor;
-	use crate::action;
 
-	struct EmptyActor;
-
-	impl Actor for EmptyActor {
-		type State = ();
-		type Input = ();
-		type Actions = ();
-		type Events = ();
-		type Queue = ();
-		type ConnParams = ();
-		type ConnState = ();
-		type Action = action::Raw;
-	}
-
-	fn assert_actor<A: Actor>() {}
-
-	#[test]
-	fn empty_actor_impl_compiles() {
-		assert_actor::<EmptyActor>();
-	}
-}

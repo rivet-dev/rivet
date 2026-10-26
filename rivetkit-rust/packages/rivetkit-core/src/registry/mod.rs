@@ -15,7 +15,7 @@ use rivet_envoy_client::config::{
 	ActorStopHandle, BoxFuture as EnvoyBoxFuture, EnvoyCallbacks, HttpRequest, HttpResponse,
 	WebSocketHandler, WebSocketMessage, WebSocketSender,
 };
-use rivet_envoy_client::envoy::start_envoy;
+use rivet_envoy_client::envoy::start_envoy_sync;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
 use rivet_error::{ActorSpecifier, RivetError};
@@ -27,11 +27,11 @@ use scc::{HashMap as SccHashMap, hash_map::Entry as SccEntry};
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use serde_json::{Value as JsonValue, json};
-use tokio::sync::{Mutex as TokioMutex, Notify, broadcast, mpsc, oneshot};
+use tokio::sync::{Mutex as TokioMutex, broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use url::Url;
-use vbare::OwnedVersionedData;
+use vbare::Versioned;
 
 use crate::actor::action::ActionDispatchError;
 use crate::actor::config::CanHibernateWebSocket;
@@ -69,6 +69,8 @@ mod runner_config;
 mod websocket;
 
 use inspector::build_actor_inspector;
+
+const ENVOY_START_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Default)]
 pub struct CoreRegistry {
@@ -164,6 +166,18 @@ struct PendingStop {
 	stop_handle: ActorStopHandle,
 }
 
+/// An actor id whose start is in flight on this process.
+///
+/// A stop that arrives during the start parks in this entry, so checking for the
+/// start and parking the stop are one atomic map operation. Only a stop for
+/// `generation` parks here; a stop for any other generation is stale and is
+/// completed immediately. The start takes the parked stop when it removes the
+/// entry, after it has published the instance.
+struct StartingInstance {
+	generation: u32,
+	pending_stop: Option<PendingStop>,
+}
+
 /// Outcome of attempting to transition the actor instance under an id to stopping
 /// for a specific generation.
 enum TransitionResult {
@@ -179,10 +193,14 @@ enum TransitionResult {
 pub(crate) struct RegistryDispatcher {
 	pub(crate) factories: HashMap<String, Arc<ActorFactory>>,
 	actor_instances: SccHashMap<String, ActorInstanceState>,
-	starting_instances: SccHashMap<String, Arc<Notify>>,
+	starting_instances: SccHashMap<String, StartingInstance>,
 	pending_stops: SccHashMap<String, PendingStop>,
 	region: String,
 	handle_inspector_http_in_runtime: bool,
+	/// One bounded pool of OS threads runs every native SQLite database of this runtime.
+	/// It spawns threads only when databases need them.
+	#[cfg(feature = "sqlite-local")]
+	sqlite_pool: sqlite_embedded::worker::SqlitePool,
 }
 
 pub(crate) struct RegistryCallbacks {
@@ -350,60 +368,42 @@ impl Default for HttpActionRequestJson {
 	}
 }
 
-pub(crate) fn should_manage_engine(endpoint: &str, spawn_mode: EngineSpawnMode) -> Result<bool> {
+/// Only config resolution can opt into managing a local development engine.
+/// A supplied endpoint is connect-only, including loopback addresses.
+pub(crate) fn should_manage_engine(spawn_mode: EngineSpawnMode) -> bool {
 	match spawn_mode {
-		EngineSpawnMode::Always => Ok(true),
-		EngineSpawnMode::Never => Ok(false),
-		EngineSpawnMode::Auto => is_loopback_endpoint(endpoint),
+		EngineSpawnMode::Always => true,
+		EngineSpawnMode::Auto | EngineSpawnMode::Never => false,
 	}
 }
 
-fn is_loopback_endpoint(endpoint: &str) -> Result<bool> {
-	let url =
-		Url::parse(endpoint).with_context(|| format!("parse engine endpoint `{endpoint}`"))?;
-	let Some(host) = url.host_str() else {
-		anyhow::bail!("engine endpoint `{endpoint}` is invalid: missing host");
-	};
-
-	if host == "localhost" || host.ends_with(".localhost") {
-		return Ok(true);
+/// Resolves the environment's spawn preference against an explicit engine endpoint.
+fn resolve_engine_spawn(
+	has_explicit_endpoint: bool,
+	spawn_mode: EngineSpawnMode,
+) -> Result<EngineSpawnMode> {
+	if has_explicit_endpoint {
+		if spawn_mode == EngineSpawnMode::Always {
+			return Err(EngineSpawnEndpointConflict.build());
+		}
+		return Ok(EngineSpawnMode::Never);
 	}
-
-	let ip_host = host
-		.strip_prefix('[')
-		.and_then(|value| value.strip_suffix(']'))
-		.unwrap_or(host);
-
-	Ok(ip_host
-		.parse::<std::net::IpAddr>()
-		.map(|ip| ip.is_loopback() || ip.is_unspecified())
-		.unwrap_or(false))
+	Ok(match spawn_mode {
+		EngineSpawnMode::Auto | EngineSpawnMode::Always => EngineSpawnMode::Always,
+		EngineSpawnMode::Never => EngineSpawnMode::Never,
+	})
 }
 
-#[cfg(test)]
-mod engine_spawn_tests {
-	use super::{EngineSpawnMode, should_manage_engine};
+#[derive(RivetError)]
+#[error(
+	"engine",
+	"spawn_endpoint_conflict",
+	"Engine spawn conflicts with the configured endpoint",
+	"RIVETKIT_ENGINE_SPAWN=always cannot be used with RIVET_ENDPOINT. Remove one setting."
+)]
+struct EngineSpawnEndpointConflict;
 
-	#[test]
-	fn auto_manages_loopback_endpoints() {
-		assert!(should_manage_engine("http://127.0.0.1:6420", EngineSpawnMode::Auto).unwrap());
-		assert!(should_manage_engine("http://localhost:6420", EngineSpawnMode::Auto).unwrap());
-		assert!(should_manage_engine("http://dev.localhost:6420", EngineSpawnMode::Auto).unwrap());
-		assert!(should_manage_engine("http://[::1]:6420", EngineSpawnMode::Auto).unwrap());
-	}
 
-	#[test]
-	fn auto_leaves_remote_endpoints_connect_only() {
-		assert!(!should_manage_engine("https://api.rivet.dev", EngineSpawnMode::Auto).unwrap());
-		assert!(!should_manage_engine("http://192.0.2.10:6420", EngineSpawnMode::Auto).unwrap());
-	}
-
-	#[test]
-	fn explicit_spawn_mode_overrides_endpoint_shape() {
-		assert!(should_manage_engine("https://api.rivet.dev", EngineSpawnMode::Always).unwrap());
-		assert!(!should_manage_engine("http://127.0.0.1:6420", EngineSpawnMode::Never).unwrap());
-	}
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -617,6 +617,9 @@ impl CoreRegistry {
 		shutdown: CancellationToken,
 		on_handle: impl FnOnce(CoreEnvoyHandle) + Send + 'static,
 	) -> Result<()> {
+		#[cfg(feature = "sqlite-local")]
+		sqlite_embedded::vfs::verify_batch_atomic_writes_at_process_startup().await?;
+
 		crate::metrics::record_rivetkit_info(
 			config.serverless_package_version.clone(),
 			config.version,
@@ -627,7 +630,7 @@ impl CoreRegistry {
 		crate::tokio_runtime_metrics::ensure_sampler_started();
 
 		let dispatcher = self.into_dispatcher(&config);
-		let manage_engine = should_manage_engine(&config.endpoint, config.engine_spawn)?;
+		let manage_engine = should_manage_engine(config.engine_spawn);
 		#[cfg(feature = "native-runtime")]
 		let development_processes = if manage_engine {
 			Some(DevelopmentProcessManager::start(&config).await?)
@@ -640,7 +643,21 @@ impl CoreRegistry {
 		}
 
 		#[cfg(feature = "native-runtime")]
-		runner_config::ensure_local_normal_runner_config(&config).await?;
+		{
+			let pool_ready: Result<bool> = tokio::select! {
+				biased;
+				_ = shutdown.cancelled() => Ok(false),
+				result = timeout(ENVOY_START_TIMEOUT, runner_config::ensure_local_normal_runner_config(&config)) => {
+					result.context("local node pool configuration timed out").and_then(|result| result).map(|_| true)
+				}
+			};
+			if !matches!(&pool_ready, Ok(true)) {
+				if let Some(development_processes) = development_processes {
+					development_processes.shutdown().await;
+				}
+				return pool_ready.map(|_| ());
+			}
+		}
 		let callbacks = Arc::new(RegistryCallbacks {
 			dispatcher: dispatcher.clone(),
 		});
@@ -650,7 +667,7 @@ impl CoreRegistry {
 			.into_iter()
 			.map(|(name, metadata)| (name, rivet_envoy_client::config::ActorName { metadata }))
 			.collect();
-		let handle = start_envoy(rivet_envoy_client::config::EnvoyConfig {
+		let handle = start_envoy_sync(rivet_envoy_client::config::EnvoyConfig {
 			version: config.version,
 			endpoint: config.endpoint,
 			token: config.token,
@@ -662,9 +679,30 @@ impl CoreRegistry {
 			})),
 			not_global: false,
 			debug_latency_ms: None,
+			max_queued_requests_per_actor:
+				rivet_envoy_client::config::DEFAULT_MAX_QUEUED_REQUESTS_PER_ACTOR,
+			stopped_generation_floor_ttl:
+				rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_TTL,
+			stopped_generation_floor_capacity:
+				rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_CAPACITY,
 			callbacks,
-		})
-		.await;
+			connector: None,
+		});
+		let envoy_ready: Result<bool> = tokio::select! {
+			biased;
+			_ = shutdown.cancelled() => Ok(false),
+			result = timeout(ENVOY_START_TIMEOUT, handle.started()) => {
+				result.context("serverful envoy startup timed out").and_then(|result| result).map(|_| true)
+			}
+		};
+		if !matches!(&envoy_ready, Ok(true)) {
+			handle.shutdown_and_wait(true).await;
+			#[cfg(feature = "native-runtime")]
+			if let Some(development_processes) = development_processes {
+				development_processes.shutdown().await;
+			}
+			return envoy_ready.map(|_| ());
+		}
 		on_handle(CoreEnvoyHandle::new(handle.clone()));
 
 		// Do not install `tokio::signal::ctrl_c()` here. It calls
@@ -675,6 +713,51 @@ impl CoreRegistry {
 		shutdown.cancelled().await;
 
 		let shutdown_envoy = async {
+			if manage_engine {
+				// Remove the old host from the engine's active pool before sleeping
+				// actors. Otherwise a request racing the stopped report can start the
+				// next generation on this host just before it exits. Keep the socket
+				// open until the stopped reports have been acknowledged.
+				if !handle.mark_stopping().await {
+					tracing::warn!("could not mark local development envoy as stopping");
+				}
+				// A local dev reload replaces this host while keeping its engine. Ask
+				// each running actor to sleep so the engine can receive its stopped
+				// report and wake it on the new host.
+				let mut actors = Vec::new();
+				dispatcher
+					.actor_instances
+					.iter_async(|actor_id, state| {
+						if let Some(instance) = state.active_instance() {
+							actors.push((actor_id.clone(), instance.generation));
+						}
+						true
+					})
+					.await;
+				let actor_count = actors.len();
+				tracing::info!(
+					actors = actor_count,
+					"sleeping local development actors for shutdown"
+				);
+				for (actor_id, generation) in actors {
+					handle.sleep_actor(actor_id, Some(generation), None);
+				}
+				if actor_count > 0 {
+					// A stopped report sent just before closing the socket may not
+					// reach the engine. Wait for its acknowledgement before exiting.
+					let acknowledged = timeout(Duration::from_secs(3), async {
+						handle.wait_actors_drained().await;
+						handle.wait_for_events_acked().await
+					})
+					.await;
+					if !matches!(acknowledged, Ok(true)) {
+						tracing::warn!(
+							"local development actor stops were not acknowledged before shutdown"
+						);
+					}
+				}
+			}
+
 			// TODO: Move into envoy-client since timing out has to do with protocol compliance
 			// Read threshold from protocol metadata, fall back to 30 min
 			let stop_threshold = handle
@@ -740,6 +823,10 @@ impl RegistryDispatcher {
 			pending_stops: SccHashMap::new(),
 			region: env::var("RIVET_REGION").unwrap_or_default(),
 			handle_inspector_http_in_runtime,
+			#[cfg(feature = "sqlite-local")]
+			sqlite_pool: sqlite_embedded::worker::SqlitePool::from_env(Some(Arc::new(
+				crate::actor::sqlite::pool_metrics::PoolMetrics,
+			))),
 		}
 	}
 
@@ -802,16 +889,6 @@ fn build_actor_metadata_map_from_factories(
 
 impl RegistryDispatcher {
 	async fn start_actor(self: &Arc<Self>, request: StartActorRequest) -> Result<()> {
-		let startup_notify = Arc::new(Notify::new());
-		let _ = self
-			.starting_instances
-			.insert_async(request.actor_id.clone(), startup_notify.clone())
-			.await;
-		// Test-only seam: lets a test hold a generation in the "starting" window so it
-		// can deterministically deliver a stop for a previous generation that parks
-		// under the actor id and gets consumed by this startup.
-		#[cfg(test)]
-		test_hooks::wait_for_startup_gate(&request.actor_id).await;
 		let factory = self
 			.factories
 			.get(&request.actor_name)
@@ -822,6 +899,20 @@ impl RegistryDispatcher {
 				}
 				.build()
 			})?;
+		let _ = self
+			.starting_instances
+			.insert_async(
+				request.actor_id.clone(),
+				StartingInstance {
+					generation: request.generation,
+					pending_stop: None,
+				},
+			)
+			.await;
+		// Test-only seam: lets a test hold a generation in the "starting" window so it
+		// can deterministically deliver a stop for a previous generation that parks
+		// under the actor id and gets consumed by this startup.
+		
 		let (lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
 		let (dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
 		let (lifecycle_events_tx, lifecycle_events_rx) = mpsc::unbounded_channel();
@@ -885,100 +976,111 @@ impl RegistryDispatcher {
 
 		match result {
 			Ok(instance) => {
-				let pending_stop = self
+				// Publish the instance before leaving the starting window. A stop that
+				// no longer finds the starting entry then finds this instance instead.
+				self.set_actor_instance_state(
+					request.actor_id.clone(),
+					ActorInstanceState::Active(instance),
+				)
+				.await;
+				let parked_during_start = self
+					.starting_instances
+					.remove_async(&request.actor_id)
+					.await
+					.and_then(|(_, starting)| starting.pending_stop);
+				let parked_before_start = self
 					.pending_stops
-					.remove_async(&request.actor_id.clone())
+					.remove_async(&request.actor_id)
 					.await
 					.map(|(_, pending_stop)| pending_stop);
+
 				// Only apply a parked stop if it targets the generation we just started.
 				// A stop parked for a previous generation is stale: complete its handle
 				// so teardown finalizes, but leave the new generation running.
-				let pending_stop = match pending_stop {
-					Some(pending_stop) if pending_stop.generation == request.generation => {
-						Some(pending_stop)
+				let mut current_generation_stop = None;
+				for pending_stop in [parked_before_start, parked_during_start]
+					.into_iter()
+					.flatten()
+				{
+					if pending_stop.generation == request.generation
+						&& current_generation_stop.is_none()
+					{
+						current_generation_stop = Some(pending_stop);
+					} else {
+						let _ = pending_stop.stop_handle.complete();
 					}
-					Some(stale_stop) => {
-						let _ = stale_stop.stop_handle.complete();
-						None
-					}
-					None => None,
-				};
-				if let Some(pending_stop) = pending_stop {
-					let actor_id = request.actor_id.clone();
-					let stop_reason = map_envoy_stop_reason(&pending_stop.reason);
-					if matches!(stop_reason, ShutdownKind::Destroy) {
-						instance.ctx.mark_destroy_requested();
-					}
-					self.set_actor_instance_state(
-						actor_id.clone(),
-						ActorInstanceState::Stopping {
-							instance: instance.clone(),
-							reason: stop_reason,
-						},
-					)
-					.await;
-					let _ = self
-						.starting_instances
-						.remove_async(&request.actor_id.clone())
-						.await;
-
-					let dispatcher = self.clone();
-					RuntimeSpawner::spawn(async move {
-						if let Err(error) = dispatcher
-							.shutdown_started_instance(
-								&actor_id,
-								instance.clone(),
-								pending_stop.reason,
-								pending_stop.stop_handle,
-							)
-							.await
-						{
-							tracing::error!(
-								actor_id,
-								?error,
-								"failed to stop actor queued during startup"
-							);
-						}
-						dispatcher
-							.remove_stopping_actor_instance(&actor_id, &instance)
-							.await;
-					});
-					startup_notify.notify_waiters();
-
-					Ok(())
-				} else {
-					self.set_actor_instance_state(
-						request.actor_id.clone(),
-						ActorInstanceState::Active(instance),
-					)
-					.await;
-					let _ = self
-						.starting_instances
-						.remove_async(&request.actor_id.clone())
-						.await;
-					startup_notify.notify_waiters();
-					Ok(())
 				}
+
+				if let Some(pending_stop) = current_generation_stop {
+					self.apply_stop_queued_during_startup(&request.actor_id, pending_stop)
+						.await;
+				}
+				Ok(())
 			}
 			Err(error) => {
-				let _ = self
-					.starting_instances
-					.remove_async(&request.actor_id.clone())
-					.await;
 				// A stop parked while this start was in flight would otherwise leak its
 				// ActorStopHandle in the map (the map holds the sender alive, hanging the
 				// caller). Drain and complete it since there is no instance to stop.
-				if let Some((_, pending_stop)) = self
-					.pending_stops
-					.remove_async(&request.actor_id.clone())
-					.await
+				if let Some((_, starting)) = self
+					.starting_instances
+					.remove_async(&request.actor_id)
+					.await && let Some(pending_stop) = starting.pending_stop
 				{
 					let _ = pending_stop.stop_handle.complete();
 				}
-				startup_notify.notify_waiters();
+				if let Some((_, pending_stop)) =
+					self.pending_stops.remove_async(&request.actor_id).await
+				{
+					let _ = pending_stop.stop_handle.complete();
+				}
 				Err(error)
 			}
 		}
+	}
+
+	/// Stops a just-started instance for a stop that targeted its generation
+	/// before it was published. Shutdown runs on its own task so startup returns.
+	async fn apply_stop_queued_during_startup(
+		self: &Arc<Self>,
+		actor_id: &str,
+		pending_stop: PendingStop,
+	) {
+		let stop_reason = map_envoy_stop_reason(&pending_stop.reason);
+		let instance = match self
+			.transition_actor_to_stopping(actor_id, pending_stop.generation, stop_reason)
+			.await
+		{
+			TransitionResult::Transitioned(instance) => instance,
+			TransitionResult::Stale | TransitionResult::Vacant => {
+				// The instance was replaced or removed after it was published, so
+				// there is nothing left for this stop to tear down.
+				let _ = pending_stop.stop_handle.complete();
+				return;
+			}
+		};
+
+		let dispatcher = self.clone();
+		let actor_id = actor_id.to_owned();
+		RuntimeSpawner::spawn(async move {
+			if let Err(error) = dispatcher
+				.shutdown_started_instance(
+					&actor_id,
+					instance.clone(),
+					pending_stop.reason,
+					pending_stop.stop_handle,
+				)
+				.await
+			{
+				tracing::error!(
+					actor_id,
+					?error,
+					"failed to stop actor queued during startup"
+				);
+			}
+			dispatcher
+				.remove_stopping_actor_instance(&actor_id, &instance)
+				.await;
+		});
 	}
 
 	async fn set_actor_instance_state(&self, actor_id: String, state: ActorInstanceState) {
@@ -1109,62 +1211,106 @@ impl RegistryDispatcher {
 		reason: protocol::StopActorReason,
 		stop_handle: ActorStopHandle,
 	) -> Result<()> {
-		if self
-			.starting_instances
-			.get_async(&actor_id.to_owned())
-			.await
-			.is_some()
-		{
-			// The target generation is still starting. Park the stop with its generation
-			// so startup can decide whether it belongs to the generation being started.
-			let _ = self
-				.pending_stops
-				.insert_async(
-					actor_id.to_owned(),
-					PendingStop {
-						generation,
-						reason,
-						stop_handle,
-					},
-				)
-				.await;
-			return Ok(());
-		}
+		let mut pending_stop = PendingStop {
+			generation,
+			reason,
+			stop_handle,
+		};
+		loop {
+			// While a start is in flight, park the stop in its entry so startup can
+			// decide whether it belongs to the generation being started.
+			match self
+				.starting_instances
+				.entry_async(actor_id.to_owned())
+				.await
+			{
+				SccEntry::Occupied(mut entry) => {
+					let starting = entry.get_mut();
+					let rejected = if starting.generation != pending_stop.generation {
+						// The stop targets a generation other than the one being
+						// started, so it is stale. It must not displace a parked stop
+						// for the starting generation.
+						Some(pending_stop)
+					} else if starting.pending_stop.is_some() {
+						// A stop for this generation is already parked and will be
+						// applied by startup. Keep the first one.
+						Some(pending_stop)
+					} else {
+						starting.pending_stop = Some(pending_stop);
+						None
+					};
+					drop(entry);
 
-		let task_stop_reason = map_envoy_stop_reason(&reason);
-		match self
-			.transition_actor_to_stopping(actor_id, generation, task_stop_reason)
-			.await
-		{
-			TransitionResult::Transitioned(instance) => {
-				let result = self
-					.shutdown_started_instance(actor_id, instance.clone(), reason, stop_handle)
-					.await;
-				self.remove_stopping_actor_instance(actor_id, &instance)
-					.await;
-				result
+					if let Some(rejected) = rejected {
+						let _ = rejected.stop_handle.complete();
+					}
+					return Ok(());
+				}
+				SccEntry::Vacant(entry) => {
+					drop(entry);
+				}
 			}
-			TransitionResult::Stale => {
-				// The running instance is a different generation; this stop targets a
-				// generation that is already gone. Complete the handle so envoy-client
-				// finalizes teardown cleanly instead of warning about a dropped handle.
-				let _ = stop_handle.complete();
-				Ok(())
+
+			let task_stop_reason = map_envoy_stop_reason(&pending_stop.reason);
+			match self
+				.transition_actor_to_stopping(actor_id, pending_stop.generation, task_stop_reason)
+				.await
+			{
+				TransitionResult::Transitioned(instance) => {
+					let result = self
+						.shutdown_started_instance(
+							actor_id,
+							instance.clone(),
+							pending_stop.reason,
+							pending_stop.stop_handle,
+						)
+						.await;
+					self.remove_stopping_actor_instance(actor_id, &instance)
+						.await;
+					return result;
+				}
+				TransitionResult::Stale => {
+					// The running instance is a different generation; this stop targets a
+					// generation that is already gone. Complete the handle so envoy-client
+					// finalizes teardown cleanly instead of warning about a dropped handle.
+					let _ = pending_stop.stop_handle.complete();
+					return Ok(());
+				}
+				TransitionResult::Vacant => {}
 			}
-			TransitionResult::Vacant => {
-				let _ = self
-					.pending_stops
-					.insert_async(
-						actor_id.to_owned(),
-						PendingStop {
-							generation,
-							reason,
-							stop_handle,
-						},
-					)
-					.await;
-				Ok(())
+
+			
+
+			// No instance is registered, so park the stop for the next start of this
+			// actor id. A start publishes its instance before it drains this map, so
+			// if one drained the map before this insert, its instance is visible now
+			// and the stop is reclaimed and retried against it.
+			if self
+				.pending_stops
+				.insert_async(actor_id.to_owned(), pending_stop)
+				.await
+				.is_err()
+			{
+				return Ok(());
 			}
+			if !self
+				.actor_instances
+				.contains_async(&actor_id.to_owned())
+				.await
+			{
+				return Ok(());
+			}
+			let Some((_, reclaimed)) = self
+				.pending_stops
+				.remove_if_async(&actor_id.to_owned(), |parked| {
+					parked.generation == generation
+				})
+				.await
+			else {
+				// A start drained the stop concurrently and now owns it.
+				return Ok(());
+			};
+			pending_stop = reclaimed;
 		}
 	}
 
@@ -1300,6 +1446,17 @@ impl RegistryDispatcher {
 		factory: &ActorFactory,
 	) -> Result<ActorContext> {
 		let formatted_key = format_actor_key(&key);
+		#[cfg_attr(not(feature = "sqlite-local"), allow(unused_mut))]
+		let mut sql = SqliteDb::new_with_remote_sqlite(
+			handle.clone(),
+			actor_id.to_owned(),
+			Some(formatted_key),
+			Some(generation as u64),
+			factory.config().has_database,
+			factory.config().remote_sqlite,
+		)?;
+		#[cfg(feature = "sqlite-local")]
+		sql.set_worker_pool(self.sqlite_pool.clone());
 		let ctx = ActorContext::build(
 			actor_id.to_owned(),
 			actor_name.to_owned(),
@@ -1309,14 +1466,7 @@ impl RegistryDispatcher {
 			handle.get_envoy_key().to_owned(),
 			factory.config().clone(),
 			LegacyActorKv::new(handle.clone(), actor_id.to_owned()),
-			SqliteDb::new_with_remote_sqlite(
-				handle.clone(),
-				actor_id.to_owned(),
-				Some(formatted_key),
-				Some(generation as u64),
-				factory.config().has_database,
-				factory.config().remote_sqlite,
-			)?,
+			sql,
 		);
 		ctx.configure_envoy(handle, Some(generation));
 		Ok(ctx)
@@ -1345,46 +1495,8 @@ fn map_envoy_stop_reason(reason: &protocol::StopActorReason) -> ShutdownKind {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/registry.rs"]
-pub(crate) mod tests;
+
 
 // Test-only hooks used by the moved registry tests to deterministically drive the
 // generation-stop race. Gated behind `cfg(test)` so there is no production impact.
-#[cfg(test)]
-pub(crate) mod test_hooks {
-	use std::sync::{Arc, OnceLock};
 
-	use scc::HashMap as SccHashMap;
-	use tokio::sync::Semaphore;
-
-	static STARTUP_GATES: OnceLock<SccHashMap<String, Arc<Semaphore>>> = OnceLock::new();
-
-	fn gates() -> &'static SccHashMap<String, Arc<Semaphore>> {
-		STARTUP_GATES.get_or_init(SccHashMap::new)
-	}
-
-	/// Arms a gate so `start_actor` pauses for `actor_id` after registering as
-	/// starting, until `release_startup_gate` is called.
-	pub(crate) fn arm_startup_gate(actor_id: &str) {
-		let _ = gates().insert_sync(actor_id.to_owned(), Arc::new(Semaphore::new(0)));
-	}
-
-	/// Releases a previously armed gate, letting the paused `start_actor` continue.
-	pub(crate) fn release_startup_gate(actor_id: &str) {
-		if let Some(sem) = gates().read_sync(actor_id, |_, sem| sem.clone()) {
-			sem.add_permits(1);
-		}
-	}
-
-	/// Called from inside `start_actor`. Blocks only if a gate is armed for the
-	/// actor. Order-independent: a release before this runs still lets it through.
-	pub(crate) async fn wait_for_startup_gate(actor_id: &str) {
-		let sem = gates().read_sync(actor_id, |_, sem| sem.clone());
-		if let Some(sem) = sem {
-			let permit = sem.acquire().await.expect("startup gate semaphore closed");
-			permit.forget();
-			let _ = gates().remove_sync(actor_id);
-		}
-	}
-}

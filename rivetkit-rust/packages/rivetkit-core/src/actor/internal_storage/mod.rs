@@ -34,6 +34,8 @@ const QUEUE_METADATA_PAGE_ROWS: usize = 128;
 const QUEUE_MESSAGE_IDS_PER_QUERY: usize = 128;
 const WORKFLOW_KV_VALUE_LIMIT: usize = 256 * 1024;
 pub(crate) const RUN_WAKE_AT_META_KEY: &str = "run_wake_at";
+/// The `_rivet_meta` key of the legacy KV import marker.
+pub(crate) const KV_IMPORT_STATE_META_KEY: &str = "kv_import_state";
 const RUN_WAKE_AT_VERSION: u16 = 1;
 const WORKFLOW_TRACE_CONTEXT_VERSION: u16 = 1;
 
@@ -83,32 +85,72 @@ pub(crate) struct InternalActorSnapshot {
 	pub run_wake_at: Option<i64>,
 }
 
-pub(crate) async fn load_actor_snapshot(db: &SqliteDb) -> Result<Option<InternalActorSnapshot>> {
-	let actor_rows = db
-		.query(LOAD_ACTOR_SNAPSHOT_SQL, None)
-		.await
-		.context("load internal actor rows")?;
-
-	let Some(row) = actor_rows.rows.first() else {
-		return Ok(None);
-	};
-	let has_initialized = read_bool(row, 0, "has_initialized")?;
-	let input = read_optional_blob(row, 1, "input")?;
-	let state = read_blob(row, 2, "state")?;
-	let last_pushed_alarm = load_last_pushed_alarm(db).await?;
-	let run_wake_at = load_run_wake_at(db).await?;
-
-	Ok(Some(InternalActorSnapshot {
-		actor: PersistedActor {
-			input,
-			has_initialized,
-			state,
-			scheduled_events: Vec::new(),
-		},
-		last_pushed_alarm,
-		run_wake_at,
-	}))
+/// What a start of an existing actor reads before user code runs.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ActorStartupRead {
+	/// The legacy KV import marker.
+	pub import_state: Option<String>,
+	pub snapshot: Option<InternalActorSnapshot>,
+	pub inspector_token: Option<String>,
 }
+
+/// Reads an existing actor's startup data in one statement.
+pub(crate) async fn load_actor_startup(db: &SqliteDb) -> Result<ActorStartupRead> {
+	let rows = db
+		.query(
+			LOAD_ACTOR_STARTUP_SQL,
+			Some(vec![
+				BindParam::Text(KV_IMPORT_STATE_META_KEY.to_owned()),
+				BindParam::Text(RUN_WAKE_AT_META_KEY.to_owned()),
+			]),
+		)
+		.await
+		.context("load internal actor startup rows")?;
+	let row = rows
+		.rows
+		.first()
+		.context("actor startup query returned no row")?;
+
+	let import_state = match read_optional_blob(row, 0, "kv import state")? {
+		Some(bytes) => Some(String::from_utf8(bytes).context("decode internal meta text")?),
+		None => None,
+	};
+	let inspector_token = read_optional_text(row, 5, "inspector_token")?;
+	let snapshot = match row.get(1) {
+		Some(ColumnValue::Null) | None => None,
+		Some(_) => {
+			let has_initialized = read_bool(row, 1, "has_initialized")?;
+			let input = read_optional_blob(row, 2, "input")?;
+			let state = read_blob(row, 3, "state")?;
+			let last_pushed_alarm = read_optional_i64(row, 4, "last_pushed_alarm")?;
+			let run_wake_at =
+				match read_optional_blob(row, 6, "run wake deadline")? {
+					Some(payload) => decode_latest_with_embedded_version::<
+						persist_versioned::RunWakeAt,
+					>(&payload, "run wake deadline")?,
+					None => None,
+				};
+			Some(InternalActorSnapshot {
+				actor: PersistedActor {
+					input: input.map(Into::into),
+					has_initialized,
+					state: state.into(),
+					scheduled_events: Vec::new(),
+				},
+				last_pushed_alarm,
+				run_wake_at,
+			})
+		}
+	};
+
+	Ok(ActorStartupRead {
+		import_state,
+		snapshot,
+		inspector_token,
+	})
+}
+
+
 
 pub(crate) async fn persist_actor_snapshot(db: &SqliteDb, actor: &PersistedActor) -> Result<()> {
 	let statements = vec![
@@ -116,12 +158,12 @@ pub(crate) async fn persist_actor_snapshot(db: &SqliteDb, actor: &PersistedActor
 			sql: UPSERT_ACTOR_SQL.to_owned(),
 			params: Some(vec![
 				BindParam::Integer(if actor.has_initialized { 1 } else { 0 }),
-				optional_blob_param(actor.input.clone()),
+				optional_blob_param(actor.input.clone().map(Into::into)),
 			]),
 		},
 		SqliteBatchStatement {
 			sql: UPSERT_ACTOR_STATE_SQL.to_owned(),
-			params: Some(vec![BindParam::Blob(actor.state.clone())]),
+			params: Some(vec![BindParam::Blob(actor.state.clone().to_vec())]),
 		},
 	];
 
@@ -144,12 +186,12 @@ pub(crate) async fn import_legacy_actor_snapshot(
 			sql: UPSERT_ACTOR_SQL.to_owned(),
 			params: Some(vec![
 				BindParam::Integer(if actor.has_initialized { 1 } else { 0 }),
-				optional_blob_param(actor.input.clone()),
+				optional_blob_param(actor.input.clone().map(Into::into)),
 			]),
 		},
 		SqliteBatchStatement {
 			sql: UPSERT_ACTOR_STATE_SQL.to_owned(),
-			params: Some(vec![BindParam::Blob(actor.state.clone())]),
+			params: Some(vec![BindParam::Blob(actor.state.clone().to_vec())]),
 		},
 		SqliteBatchStatement {
 			sql: RESET_SCHEDULES_FOR_LEGACY_IMPORT_SQL.to_owned(),
@@ -158,10 +200,10 @@ pub(crate) async fn import_legacy_actor_snapshot(
 	];
 	for event in &actor.scheduled_events {
 		let mut params = vec![
-			BindParam::Text(event.event_id.clone()),
+			BindParam::Text(event.event_id.clone().to_string()),
 			BindParam::Integer(event.timestamp),
-			BindParam::Text(event.action.clone()),
-			optional_blob_param(event.args.clone()),
+			BindParam::Text(event.action.clone().to_string()),
+			optional_blob_param(event.args.clone().map(Into::into)),
 			BindParam::Integer(0),
 			BindParam::Null,
 			BindParam::Null,
@@ -234,12 +276,12 @@ pub(crate) fn build_actor_core_and_connection_statements(
 			sql: UPSERT_ACTOR_SQL.to_owned(),
 			params: Some(vec![
 				BindParam::Integer(if actor.has_initialized { 1 } else { 0 }),
-				optional_blob_param(actor.input.clone()),
+				optional_blob_param(actor.input.clone().map(Into::into)),
 			]),
 		});
 		statements.push(SqliteBatchStatement {
 			sql: UPSERT_ACTOR_STATE_SQL.to_owned(),
-			params: Some(vec![BindParam::Blob(actor.state.clone())]),
+			params: Some(vec![BindParam::Blob(actor.state.clone().to_vec())]),
 		});
 	}
 
@@ -254,13 +296,7 @@ pub(crate) fn build_actor_core_and_connection_statements(
 	Ok(statements)
 }
 
-#[cfg(test)]
-pub(crate) async fn persist_connection_snapshot(
-	db: &SqliteDb,
-	connection: &PersistedConnection,
-) -> Result<()> {
-	persist_connection_snapshots(db, std::slice::from_ref(connection)).await
-}
+
 
 /// Persists imported connection snapshots in bounded transactions. A legacy
 /// connection is at most one actor-KV value, but a migration page can contain
@@ -331,19 +367,24 @@ pub(crate) async fn load_connections(db: &SqliteDb) -> Result<Vec<PersistedConne
 			let request_headers: HashMap<String, String> =
 				decode_cbor_blob(row, 9, "connection request headers")?;
 			Ok(PersistedConnection {
-				id: read_text(row, 0, "conn_id")?,
-				parameters: read_blob(row, 1, "connection parameters")?,
-				state: read_blob(row, 2, "connection state")?,
+				id: (read_text(row, 0, "conn_id")?).into(),
+				parameters: (read_blob(row, 1, "connection parameters")?).into(),
+				state: (read_blob(row, 2, "connection state")?).into(),
 				subscriptions: subscriptions
 					.into_iter()
-					.map(|event_name| PersistedSubscription { event_name })
+					.map(|event_name| PersistedSubscription {
+						event_name: event_name.into(),
+					})
 					.collect(),
 				gateway_id: read_fixed_4(row, 4, "connection gateway_id")?,
 				request_id: read_fixed_4(row, 5, "connection request_id")?,
 				server_message_index: read_u16(row, 6, "server_message_index")?,
 				client_message_index: read_u16(row, 7, "client_message_index")?,
-				request_path: read_text(row, 8, "connection request_path")?,
-				request_headers,
+				request_path: (read_text(row, 8, "connection request_path")?).into(),
+				request_headers: request_headers
+					.into_iter()
+					.map(|(k, v)| (k.into(), v.into()))
+					.collect(),
 			})
 		})
 		.collect()
@@ -392,8 +433,8 @@ pub(crate) async fn persist_queue_message(
 	let next_id = i64::try_from(next_id).context("queue next id exceeds sqlite integer range")?;
 	let mut params = vec![
 		BindParam::Integer(id),
-		BindParam::Text(message.name.clone()),
-		BindParam::Blob(message.body.clone()),
+		BindParam::Text(message.name.clone().to_string()),
+		BindParam::Blob(message.body.clone().to_vec()),
 		BindParam::Integer(message.created_at),
 	];
 	params.extend(trace_context_params(trace_context));
@@ -429,8 +470,8 @@ pub(crate) async fn persist_queue_messages(
 				BindParam::Integer(
 					i64::try_from(*id).context("queue message id exceeds sqlite integer range")?,
 				),
-				BindParam::Text(message.name.clone()),
-				BindParam::Blob(message.body.clone()),
+				BindParam::Text(message.name.clone().to_string()),
+				BindParam::Blob(message.body.clone().to_vec()),
 				BindParam::Integer(message.created_at),
 			];
 			params.extend(trace_context_params(IncomingTraceContext::default()));
@@ -642,8 +683,8 @@ fn decode_queue_message_rows(rows: &[Vec<ColumnValue>]) -> Result<Vec<QueueMessa
 				id: u64::try_from(read_i64(row, 0, "queue message id")?)
 					.context("invalid queue message id")?,
 				message: PersistedQueueMessage {
-					name: read_text(row, 1, "queue message name")?,
-					body: read_blob(row, 2, "queue message body")?,
+					name: (read_text(row, 1, "queue message name")?).into(),
+					body: (read_blob(row, 2, "queue message body")?).into(),
 					created_at: read_i64(row, 3, "queue message created_at")?,
 					failure_count: None,
 					available_at: None,
@@ -990,19 +1031,19 @@ fn push_connection_statements(
 	statements.push(SqliteBatchStatement {
 		sql: INSERT_CONNECTION_SQL.to_owned(),
 		params: Some(vec![
-			BindParam::Text(connection.id.clone()),
-			BindParam::Blob(connection.parameters.clone()),
+			BindParam::Text(connection.id.clone().to_string()),
+			BindParam::Blob(connection.parameters.clone().to_vec()),
 			BindParam::Blob(connection.gateway_id.to_vec()),
 			BindParam::Blob(connection.request_id.to_vec()),
-			BindParam::Text(connection.request_path.clone()),
+			BindParam::Text(connection.request_path.clone().to_string()),
 			BindParam::Blob(request_headers),
 		]),
 	});
 	statements.push(SqliteBatchStatement {
 		sql: UPSERT_CONNECTION_STATE_SQL.to_owned(),
 		params: Some(vec![
-			BindParam::Text(connection.id.clone()),
-			BindParam::Blob(connection.state.clone()),
+			BindParam::Text(connection.id.clone().to_string()),
+			BindParam::Blob(connection.state.clone().to_vec()),
 			BindParam::Integer(i64::from(connection.server_message_index)),
 			BindParam::Integer(i64::from(connection.client_message_index)),
 			BindParam::Blob(subscriptions),
@@ -1022,16 +1063,7 @@ fn push_delete_connection_statements(statements: &mut Vec<SqliteBatchStatement>,
 	});
 }
 
-pub(crate) async fn load_last_pushed_alarm(db: &SqliteDb) -> Result<Option<i64>> {
-	let result = db
-		.query(LOAD_LAST_PUSHED_ALARM_SQL, None)
-		.await
-		.context("load internal last pushed alarm")?;
-	let Some(row) = result.rows.first() else {
-		return Ok(None);
-	};
-	read_optional_i64(row, 0, "last_pushed_alarm")
-}
+
 
 pub(crate) async fn persist_last_pushed_alarm(db: &SqliteDb, alarm_ts: Option<i64>) -> Result<()> {
 	db.execute(
@@ -1047,23 +1079,7 @@ pub(crate) async fn persist_last_pushed_alarm(db: &SqliteDb, alarm_ts: Option<i6
 	Ok(())
 }
 
-pub(crate) async fn load_run_wake_at(db: &SqliteDb) -> Result<Option<i64>> {
-	let result = db
-		.query(
-			LOAD_RUN_WAKE_AT_SQL,
-			Some(vec![BindParam::Text(RUN_WAKE_AT_META_KEY.to_owned())]),
-		)
-		.await
-		.context("load internal run wake deadline")?;
-	let Some(row) = result.rows.first() else {
-		return Ok(None);
-	};
-	let payload = read_blob(row, 0, "run wake deadline")?;
-	decode_latest_with_embedded_version::<persist_versioned::RunWakeAt>(
-		&payload,
-		"run wake deadline",
-	)
-}
+
 
 pub(crate) async fn persist_run_wake_at(db: &SqliteDb, wake_at: Option<i64>) -> Result<()> {
 	let payload = encode_latest_with_embedded_version::<persist_versioned::RunWakeAt>(
@@ -1428,6 +1444,4 @@ fn decode_cbor_blob<T: serde::de::DeserializeOwned>(
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../../tests/internal_storage.rs"]
-pub(crate) mod tests;
+

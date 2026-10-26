@@ -1,0 +1,5 @@
+{
+  "code": "malformed_message",
+  "group": "envoy",
+  "message": "The message could not be decoded."
+}

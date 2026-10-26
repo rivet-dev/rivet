@@ -1,5 +1,0 @@
-{
-  "code": "route_auth_check_timeout",
-  "group": "guard",
-  "message": "Timed out checking route authorization."
-}

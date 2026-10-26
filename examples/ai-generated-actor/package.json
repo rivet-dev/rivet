@@ -40,8 +40,15 @@
 	},
 	"stableVersion": "0.8.0",
 	"template": {
-		"technologies": ["react", "typescript"],
-		"tags": ["ai", "dynamic-actors", "real-time"],
+		"technologies": [
+			"react",
+			"typescript"
+		],
+		"tags": [
+			"ai",
+			"dynamic-actors",
+			"real-time"
+		],
 		"frontendPort": 5173
 	},
 	"license": "MIT"

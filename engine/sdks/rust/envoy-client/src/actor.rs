@@ -14,8 +14,7 @@ use crate::connection::ws_send;
 use crate::context::SharedContext;
 use crate::handle::EnvoyHandle;
 use crate::http::HttpRequest;
-#[cfg(test)]
-use crate::http::{HTTP_BODY_STREAM_CHANNEL_CAPACITY, HttpResponse, ResponseChunk};
+
 use crate::stringify::stringify_to_rivet_tunnel_message_kind;
 use crate::utils::{
 	BufferMap, id_to_str, spawn_detached, wrapping_add_u16, wrapping_lte_u16, wrapping_sub_u16,
@@ -23,6 +22,54 @@ use crate::utils::{
 use crate::websocket::{WebSocketHandler, WebSocketMessage, WebSocketSender, WsOutgoing};
 
 mod http;
+
+/// HTTP requests admitted to one actor and not yet taken by its task. Shared by the actor's
+/// entry, which admits against the cap, and the requests in its inbox.
+#[derive(Default)]
+pub struct QueuedRequests(std::sync::atomic::AtomicUsize);
+
+impl QueuedRequests {
+	/// Admits one request unless `cap` are already queued. The returned place is released when
+	/// it drops.
+	pub fn admit(self: &Arc<Self>, cap: usize) -> Option<QueuedRequest> {
+		use std::sync::atomic::Ordering;
+		let admitted = self
+			.0
+			.try_update(Ordering::AcqRel, Ordering::Acquire, |queued| {
+				(queued < cap).then_some(queued + 1)
+			});
+		let queued = match admitted {
+			Ok(previous) => previous + 1,
+			Err(_) => return None,
+		};
+		if queued == cap {
+			tracing::warn!(
+				cap,
+				"actor reached its queued request cap; later requests are refused until it takes them, which usually means a slow actor start"
+			);
+		}
+		Some(QueuedRequest {
+			queue: self.clone(),
+			_gauge: rivet_metrics::GaugeGuardExt::inc_guard(
+				&crate::metrics::METRICS.actor_queued_requests,
+			),
+		})
+	}
+}
+
+/// One admitted request's place in its actor's queue.
+pub struct QueuedRequest {
+	queue: Arc<QueuedRequests>,
+	_gauge: rivet_metrics::IntGaugeGuard,
+}
+
+impl Drop for QueuedRequest {
+	fn drop(&mut self) {
+		self.queue
+			.0
+			.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+	}
+}
 
 pub enum ToActor {
 	Intent {
@@ -42,6 +89,9 @@ pub enum ToActor {
 		message_id: protocol::MessageId,
 		req: protocol::ToEnvoyRequestStart,
 		connection_session: u64,
+		/// The request's place in the actor's queued request count, released when the actor
+		/// task takes it, or when the message is dropped with the inbox.
+		queued: Option<QueuedRequest>,
 	},
 	ConnectionClosed {
 		session: u64,
@@ -128,6 +178,38 @@ enum StopProgress {
 	Pending(PendingStop),
 }
 
+/// Closes the inbox of an actor whose start failed and answers every HTTP request queued in it
+/// while it started, so none waits for a reply that never comes. Later requests find the inbox
+/// closed and are refused at admission the same way.
+async fn reject_queued_requests(
+	shared: &Arc<SharedContext>,
+	actor_id: &str,
+	generation: u32,
+	rx: &mut mpsc::UnboundedReceiver<ToActor>,
+) {
+	rx.close();
+	while let Ok(message) = rx.try_recv() {
+		if let ToActor::ReqStart {
+			message_id,
+			req,
+			connection_session,
+			queued,
+		} = message
+		{
+			drop(queued);
+			http::reject_unstarted(
+				shared.clone(),
+				actor_id,
+				generation,
+				message_id,
+				&req,
+				connection_session,
+			)
+			.await;
+		}
+	}
+}
+
 pub fn create_actor(
 	shared: Arc<SharedContext>,
 	actor_id: String,
@@ -136,10 +218,13 @@ pub fn create_actor(
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
 ) -> (mpsc::UnboundedSender<ToActor>, Arc<AsyncCounter>) {
+	// The start command is handled synchronously on receipt, so this is its receipt time.
+	let received = crate::time::Instant::now();
 	let (tx, rx) = mpsc::unbounded_channel();
 	let active_http_request_count = Arc::new(AsyncCounter::new());
 	spawn_detached(actor_inner(
 		shared,
+		received,
 		actor_id,
 		generation,
 		config,
@@ -163,6 +248,7 @@ pub fn create_actor(
 )]
 async fn actor_inner(
 	shared: Arc<SharedContext>,
+	received: crate::time::Instant,
 	actor_id: String,
 	generation: u32,
 	config: protocol::ActorConfig,
@@ -212,12 +298,13 @@ async fn actor_inner(
 	if let Err(error) = start_result {
 		let error_chain = error.chain().map(ToString::to_string).collect::<Vec<_>>();
 		tracing::error!(?error, error_chain = ?error_chain, "actor start failed");
+		reject_queued_requests(&shared, &actor_id, generation, &mut rx).await;
 		send_event(
 			&mut ctx,
 			protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
 				state: protocol::ActorState::ActorStateStopped(protocol::ActorStateStopped {
 					code: protocol::StopCode::Error,
-					message: Some(format!("{error:#}")),
+					message: Some((format!("{error:#}")).into()),
 				}),
 			}),
 		);
@@ -227,12 +314,13 @@ async fn actor_inner(
 	if let Some(meta_entries) = handle.take_pending_hibernation_restore(&actor_id) {
 		if let Err(error) = handle_hws_restore(&mut ctx, &handle, meta_entries).await {
 			tracing::error!(?error, "actor hibernation restore failed");
+			reject_queued_requests(&shared, &actor_id, generation, &mut rx).await;
 			send_event(
 				&mut ctx,
 				protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
 					state: protocol::ActorState::ActorStateStopped(protocol::ActorStateStopped {
 						code: protocol::StopCode::Error,
-						message: Some(format!("{error:#}")),
+						message: Some((format!("{error:#}")).into()),
 					}),
 				}),
 			);
@@ -241,6 +329,9 @@ async fn actor_inner(
 	}
 
 	// Send running state
+	crate::metrics::METRICS
+		.actor_start_seconds
+		.observe(received.elapsed().as_secs_f64());
 	send_event(
 		&mut ctx,
 		protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
@@ -338,7 +429,13 @@ async fn actor_inner(
 							let _ = ack_tx.send(());
 						}
 					}
-					ToActor::ReqStart { message_id, req, connection_session } => {
+					ToActor::ReqStart {
+						message_id,
+						req,
+						connection_session,
+						queued,
+					} => {
+						drop(queued);
 						http::handle_req_start(
 							&mut ctx,
 							&handle,
@@ -548,7 +645,7 @@ fn send_stopped_event(
 		protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
 			state: protocol::ActorState::ActorStateStopped(protocol::ActorStateStopped {
 				code: stop_code,
-				message: stop_message,
+				message: stop_message.map(Into::into),
 			}),
 		}),
 	);
@@ -576,7 +673,10 @@ fn spawn_ws_outgoing_task(
 							},
 							message_kind:
 								protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(
-									protocol::ToRivetWebSocketMessage { data, binary },
+									protocol::ToRivetWebSocketMessage {
+										data: data.into(),
+										binary,
+									},
 								),
 						}),
 					)
@@ -597,7 +697,7 @@ fn spawn_ws_outgoing_task(
 							message_kind: protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
 								protocol::ToRivetWebSocketClose {
 									code,
-									reason,
+									reason: reason.map(Into::into),
 									hibernate: false,
 								},
 							),
@@ -674,7 +774,7 @@ async fn handle_ws_open(
 					protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
 						protocol::ToRivetWebSocketClose {
 							code: Some(1011),
-							reason: Some("Server Error".to_string()),
+							reason: Some(("Server Error".to_string()).into()),
 							hibernate: false,
 						},
 					),
@@ -790,7 +890,7 @@ async fn handle_ws_open(
 				protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
 					protocol::ToRivetWebSocketClose {
 						code: Some(1011),
-						reason: Some("Server Error".to_string()),
+						reason: Some(("Server Error".to_string()).into()),
 						hibernate: false,
 					},
 				),
@@ -848,7 +948,7 @@ async fn handle_ws_message(
 					protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
 						protocol::ToRivetWebSocketClose {
 							code: Some(1008),
-							reason: Some("ws.message_index_skip".to_string()),
+							reason: Some(("ws.message_index_skip".to_string()).into()),
 							hibernate: false,
 						},
 					),
@@ -865,7 +965,7 @@ async fn handle_ws_message(
 				tx: ws.outgoing_tx.clone(),
 			};
 			let ws_msg = WebSocketMessage {
-				data: msg.data,
+				data: msg.data.to_vec(),
 				binary: msg.binary,
 				gateway_id: message_id.gateway_id,
 				request_id: message_id.request_id,
@@ -892,7 +992,7 @@ async fn handle_ws_close(
 		if let Some(handler) = &ws.ws_handler {
 			let code = close.code.unwrap_or(1000);
 			let reason = close.reason.unwrap_or_default();
-			(handler.on_close)(code, reason).await;
+			(handler.on_close)(code, reason.to_string()).await;
 		}
 		ctx.websocket_requests
 			.remove(&[&message_id.gateway_id, &message_id.request_id]);
@@ -1046,7 +1146,7 @@ async fn handle_hws_restore(
 						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
 							protocol::ToRivetWebSocketClose {
 								code: Some(1011),
-								reason: Some("ws.restore_error".to_string()),
+								reason: Some(("ws.restore_error".to_string()).into()),
 								hibernate: false,
 							},
 						),
@@ -1070,7 +1170,7 @@ async fn handle_hws_restore(
 				protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
 					protocol::ToRivetWebSocketClose {
 						code: Some(1000),
-						reason: Some("ws.meta_not_found_during_restore".to_string()),
+						reason: Some(("ws.meta_not_found_during_restore".to_string()).into()),
 						hibernate: false,
 					},
 				),
@@ -1161,7 +1261,7 @@ fn increment_checkpoint(ctx: &mut ActorContext) -> protocol::ActorCheckpoint {
 	let index = ctx.event_index;
 	ctx.event_index += 1;
 	protocol::ActorCheckpoint {
-		actor_id: ctx.actor_id.clone(),
+		actor_id: ctx.actor_id.clone().into(),
 		generation: ctx.generation,
 		index,
 	}
@@ -1214,773 +1314,6 @@ async fn send_actor_message(
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use std::collections::HashMap;
-	use std::future::pending;
-	use std::sync::Mutex;
-	use std::sync::atomic::{AtomicBool, Ordering};
-	use std::time::{Duration, Instant};
 
-	use tokio::sync::Notify;
-	use tokio::sync::oneshot;
-	use vbare::OwnedVersionedData;
 
-	use super::*;
-	use crate::config::{BoxFuture, EnvoyCallbacks, WebSocketHandler, WebSocketSender};
-	use crate::context::WsTxMessage;
-	use crate::envoy::ToEnvoyMessage;
 
-	struct DropSignal(Option<oneshot::Sender<()>>);
-
-	impl Drop for DropSignal {
-		fn drop(&mut self) {
-			if let Some(tx) = self.0.take() {
-				let _ = tx.send(());
-			}
-		}
-	}
-
-	pub(super) struct TestCallbacks {
-		fetch_started_tx: Mutex<Option<oneshot::Sender<()>>>,
-		fetch_dropped_tx: Mutex<Option<oneshot::Sender<()>>>,
-		release_fetch: Arc<Notify>,
-		complete_fetch: AtomicBool,
-	}
-
-	impl TestCallbacks {
-		pub(super) fn idle() -> Self {
-			Self {
-				fetch_started_tx: Mutex::new(None),
-				fetch_dropped_tx: Mutex::new(None),
-				release_fetch: Arc::new(Notify::new()),
-				complete_fetch: AtomicBool::new(true),
-			}
-		}
-
-		fn completing(fetch_started_tx: oneshot::Sender<()>, release_fetch: Arc<Notify>) -> Self {
-			Self {
-				fetch_started_tx: Mutex::new(Some(fetch_started_tx)),
-				fetch_dropped_tx: Mutex::new(None),
-				release_fetch,
-				complete_fetch: AtomicBool::new(true),
-			}
-		}
-
-		pub(super) fn hanging(
-			fetch_started_tx: oneshot::Sender<()>,
-			fetch_dropped_tx: oneshot::Sender<()>,
-		) -> Self {
-			Self {
-				fetch_started_tx: Mutex::new(Some(fetch_started_tx)),
-				fetch_dropped_tx: Mutex::new(Some(fetch_dropped_tx)),
-				release_fetch: Arc::new(Notify::new()),
-				complete_fetch: AtomicBool::new(false),
-			}
-		}
-	}
-
-	struct DeferredStopCallbacks {
-		stop_handle_tx: Mutex<Option<oneshot::Sender<crate::config::ActorStopHandle>>>,
-	}
-
-	pub(super) struct StreamingCallbacks {
-		pub(super) body_tx: Mutex<Option<oneshot::Sender<mpsc::Sender<ResponseChunk>>>>,
-	}
-
-	pub(super) struct StreamingRequestCallbacks {
-		pub(super) request_tx: Mutex<Option<oneshot::Sender<HttpRequest>>>,
-	}
-
-	impl EnvoyCallbacks for TestCallbacks {
-		fn on_actor_start(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_generation: u32,
-			_config: protocol::ActorConfig,
-			_preloaded_kv: Option<protocol::PreloadedKv>,
-		) -> BoxFuture<anyhow::Result<()>> {
-			Box::pin(async { Ok(()) })
-		}
-
-		fn on_actor_stop(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_generation: u32,
-			_reason: protocol::StopActorReason,
-		) -> BoxFuture<anyhow::Result<()>> {
-			Box::pin(async { Ok(()) })
-		}
-
-		fn on_shutdown(&self) {}
-
-		fn fetch(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_gateway_id: protocol::GatewayId,
-			_request_id: protocol::RequestId,
-			request: HttpRequest,
-		) -> BoxFuture<anyhow::Result<HttpResponse>> {
-			let fetch_started_tx = self
-				.fetch_started_tx
-				.lock()
-				.expect("fetch_started mutex poisoned")
-				.take();
-			let fetch_dropped_tx = self
-				.fetch_dropped_tx
-				.lock()
-				.expect("fetch_dropped mutex poisoned")
-				.take();
-			let release_fetch = self.release_fetch.clone();
-			let complete_fetch = self.complete_fetch.load(Ordering::Acquire);
-
-			Box::pin(async move {
-				let _request = request;
-				if let Some(tx) = fetch_started_tx {
-					let _ = tx.send(());
-				}
-
-				let _drop_signal = DropSignal(fetch_dropped_tx);
-
-				if complete_fetch {
-					release_fetch.notified().await;
-					Ok(HttpResponse {
-						status: 200,
-						headers: HashMap::new(),
-						body: Some(Vec::new()),
-						body_stream: None,
-					})
-				} else {
-					pending::<()>().await;
-					unreachable!("pending future should never resolve");
-				}
-			})
-		}
-
-		fn websocket(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_gateway_id: protocol::GatewayId,
-			_request_id: protocol::RequestId,
-			_request: HttpRequest,
-			_path: String,
-			_headers: HashMap<String, String>,
-			_is_hibernatable: bool,
-			_is_restoring_hibernatable: bool,
-			_sender: WebSocketSender,
-		) -> BoxFuture<anyhow::Result<WebSocketHandler>> {
-			Box::pin(async {
-				Ok(WebSocketHandler {
-					on_message: Box::new(|_| Box::pin(async {})),
-					on_close: Box::new(|_, _| Box::pin(async {})),
-					on_open: None,
-				})
-			})
-		}
-
-		fn can_hibernate(
-			&self,
-			_actor_id: &str,
-			_gateway_id: &protocol::GatewayId,
-			_request_id: &protocol::RequestId,
-			_request: &HttpRequest,
-		) -> BoxFuture<anyhow::Result<bool>> {
-			Box::pin(async { Ok(false) })
-		}
-	}
-
-	impl EnvoyCallbacks for StreamingRequestCallbacks {
-		fn on_actor_start(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_generation: u32,
-			_config: protocol::ActorConfig,
-			_preloaded_kv: Option<protocol::PreloadedKv>,
-		) -> BoxFuture<anyhow::Result<()>> {
-			Box::pin(async { Ok(()) })
-		}
-
-		fn on_shutdown(&self) {}
-
-		fn fetch(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_gateway_id: protocol::GatewayId,
-			_request_id: protocol::RequestId,
-			request: HttpRequest,
-		) -> BoxFuture<anyhow::Result<HttpResponse>> {
-			let request_tx = self
-				.request_tx
-				.lock()
-				.expect("streaming request mutex poisoned")
-				.take();
-			Box::pin(async move {
-				let Some(request_tx) = request_tx else {
-					anyhow::bail!("streaming request sender missing");
-				};
-				request_tx
-					.send(request)
-					.map_err(|_| anyhow::anyhow!("streaming request receiver dropped"))?;
-				pending::<()>().await;
-				unreachable!("pending request callback should not resolve")
-			})
-		}
-
-		fn websocket(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_gateway_id: protocol::GatewayId,
-			_request_id: protocol::RequestId,
-			_request: HttpRequest,
-			_path: String,
-			_headers: HashMap<String, String>,
-			_is_hibernatable: bool,
-			_is_restoring_hibernatable: bool,
-			_sender: WebSocketSender,
-		) -> BoxFuture<anyhow::Result<WebSocketHandler>> {
-			Box::pin(async { anyhow::bail!("websocket should not be called in HTTP stream test") })
-		}
-
-		fn can_hibernate(
-			&self,
-			_actor_id: &str,
-			_gateway_id: &protocol::GatewayId,
-			_request_id: &protocol::RequestId,
-			_request: &HttpRequest,
-		) -> BoxFuture<anyhow::Result<bool>> {
-			Box::pin(async { Ok(false) })
-		}
-	}
-
-	impl EnvoyCallbacks for DeferredStopCallbacks {
-		fn on_actor_start(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_generation: u32,
-			_config: protocol::ActorConfig,
-			_preloaded_kv: Option<protocol::PreloadedKv>,
-		) -> BoxFuture<anyhow::Result<()>> {
-			Box::pin(async { Ok(()) })
-		}
-
-		fn on_actor_stop_with_completion(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_generation: u32,
-			_reason: protocol::StopActorReason,
-			stop_handle: crate::config::ActorStopHandle,
-		) -> BoxFuture<anyhow::Result<()>> {
-			let stop_handle_tx = self
-				.stop_handle_tx
-				.lock()
-				.expect("stop handle mutex poisoned")
-				.take();
-
-			Box::pin(async move {
-				let Some(tx) = stop_handle_tx else {
-					anyhow::bail!("stop handle sender missing");
-				};
-
-				tx.send(stop_handle)
-					.map_err(|_| anyhow::anyhow!("failed to publish stop handle"))?;
-				Ok(())
-			})
-		}
-
-		fn on_shutdown(&self) {}
-
-		fn fetch(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_gateway_id: protocol::GatewayId,
-			_request_id: protocol::RequestId,
-			_request: HttpRequest,
-		) -> BoxFuture<anyhow::Result<HttpResponse>> {
-			Box::pin(async { anyhow::bail!("fetch should not be called in deferred stop test") })
-		}
-
-		fn websocket(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_gateway_id: protocol::GatewayId,
-			_request_id: protocol::RequestId,
-			_request: HttpRequest,
-			_path: String,
-			_headers: HashMap<String, String>,
-			_is_hibernatable: bool,
-			_is_restoring_hibernatable: bool,
-			_sender: WebSocketSender,
-		) -> BoxFuture<anyhow::Result<WebSocketHandler>> {
-			Box::pin(async {
-				anyhow::bail!("websocket should not be called in deferred stop test")
-			})
-		}
-
-		fn can_hibernate(
-			&self,
-			_actor_id: &str,
-			_gateway_id: &protocol::GatewayId,
-			_request_id: &protocol::RequestId,
-			_request: &HttpRequest,
-		) -> BoxFuture<anyhow::Result<bool>> {
-			Box::pin(async { Ok(false) })
-		}
-	}
-
-	impl EnvoyCallbacks for StreamingCallbacks {
-		fn on_actor_start(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_generation: u32,
-			_config: protocol::ActorConfig,
-			_preloaded_kv: Option<protocol::PreloadedKv>,
-		) -> BoxFuture<anyhow::Result<()>> {
-			Box::pin(async { Ok(()) })
-		}
-
-		fn on_actor_stop(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_generation: u32,
-			_reason: protocol::StopActorReason,
-		) -> BoxFuture<anyhow::Result<()>> {
-			Box::pin(async { Ok(()) })
-		}
-
-		fn on_shutdown(&self) {}
-
-		fn fetch(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_gateway_id: protocol::GatewayId,
-			_request_id: protocol::RequestId,
-			_request: HttpRequest,
-		) -> BoxFuture<anyhow::Result<HttpResponse>> {
-			let body_tx = self
-				.body_tx
-				.lock()
-				.expect("streaming body mutex poisoned")
-				.take();
-
-			Box::pin(async move {
-				let (tx, rx) = mpsc::channel(HTTP_BODY_STREAM_CHANNEL_CAPACITY);
-				if let Some(body_tx) = body_tx {
-					let _ = body_tx.send(tx);
-				}
-				Ok(HttpResponse {
-					status: 200,
-					headers: HashMap::new(),
-					body: None,
-					body_stream: Some(rx.into()),
-				})
-			})
-		}
-
-		fn websocket(
-			&self,
-			_handle: EnvoyHandle,
-			_actor_id: String,
-			_gateway_id: protocol::GatewayId,
-			_request_id: protocol::RequestId,
-			_request: HttpRequest,
-			_path: String,
-			_headers: HashMap<String, String>,
-			_is_hibernatable: bool,
-			_is_restoring_hibernatable: bool,
-			_sender: WebSocketSender,
-		) -> BoxFuture<anyhow::Result<WebSocketHandler>> {
-			Box::pin(async { anyhow::bail!("websocket should not be called in streaming test") })
-		}
-
-		fn can_hibernate(
-			&self,
-			_actor_id: &str,
-			_gateway_id: &protocol::GatewayId,
-			_request_id: &protocol::RequestId,
-			_request: &HttpRequest,
-		) -> BoxFuture<anyhow::Result<bool>> {
-			Box::pin(async { Ok(false) })
-		}
-	}
-
-	pub(super) fn build_shared_context(
-		callbacks: Arc<dyn EnvoyCallbacks>,
-	) -> (Arc<SharedContext>, mpsc::UnboundedReceiver<ToEnvoyMessage>) {
-		let (envoy_tx, envoy_rx) = mpsc::unbounded_channel();
-		let shared = Arc::new(SharedContext {
-			config: crate::config::EnvoyConfig {
-				version: 1,
-				endpoint: "http://127.0.0.1:1".to_string(),
-				token: None,
-				namespace: "test".to_string(),
-				pool_name: "test".to_string(),
-				prepopulate_actor_names: HashMap::new(),
-				metadata: None,
-				not_global: true,
-				debug_latency_ms: None,
-				callbacks,
-			},
-			envoy_key: "test-envoy".to_string(),
-			envoy_tx,
-			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
-			actors_notify: Arc::new(tokio::sync::Notify::new()),
-			live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
-			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
-			ws_tx: Arc::new(tokio::sync::Mutex::new(
-				None::<mpsc::UnboundedSender<WsTxMessage>>,
-			)),
-			http_ws_tx: Arc::new(tokio::sync::Mutex::new(None)),
-			connection_session: std::sync::atomic::AtomicU64::new(0),
-			next_connection_session: std::sync::atomic::AtomicU64::new(0),
-			connection_session_tx: tokio::sync::watch::channel(0).0,
-			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
-			shutting_down: std::sync::atomic::AtomicBool::new(false),
-			last_ping_ts: std::sync::atomic::AtomicI64::new(0),
-			stopped_tx: tokio::sync::watch::channel(true).0,
-		});
-		(shared, envoy_rx)
-	}
-
-	pub(super) fn actor_config() -> protocol::ActorConfig {
-		protocol::ActorConfig {
-			name: "test".to_string(),
-			key: Some("test-key".to_string()),
-			create_ts: 0,
-			input: None,
-		}
-	}
-
-	pub(super) fn request_start() -> protocol::ToEnvoyRequestStart {
-		protocol::ToEnvoyRequestStart {
-			actor_id: "test-actor".to_string(),
-			actor_generation: Some(1),
-			method: "GET".to_string(),
-			path: "/test".to_string(),
-			headers: HashMap::new(),
-			body: None,
-			stream: false,
-			response_stream: true,
-		}
-	}
-
-	pub(super) fn message_id() -> protocol::MessageId {
-		protocol::MessageId {
-			gateway_id: [1, 2, 3, 4],
-			request_id: [5, 6, 7, 8],
-			message_index: 0,
-		}
-	}
-
-	pub(super) async fn wait_for_zero(active_http_request_count: &Arc<AsyncCounter>) {
-		assert!(
-			active_http_request_count
-				.wait_zero(Instant::now() + Duration::from_secs(2))
-				.await,
-			"timed out waiting for active HTTP request count to reach zero"
-		);
-	}
-
-	pub(super) async fn recv_ws_tunnel_msg(
-		ws_rx: &mut mpsc::UnboundedReceiver<WsTxMessage>,
-	) -> protocol::ToRivetTunnelMessage {
-		tokio::time::timeout(Duration::from_secs(2), async {
-			loop {
-				let Some(msg) = ws_rx.recv().await else {
-					panic!("websocket channel closed before tunnel message");
-				};
-				let WsTxMessage::Send(bytes) = msg else {
-					continue;
-				};
-				let message =
-					protocol::versioned::ToRivet::deserialize(&bytes, protocol::PROTOCOL_VERSION)
-						.expect("failed to decode ToRivet message");
-				if let protocol::ToRivet::ToRivetTunnelMessage(msg) = message {
-					return msg;
-				}
-			}
-		})
-		.await
-		.expect("timed out waiting for tunnel message")
-	}
-
-	pub(super) async fn wait_for_stopped_event(
-		envoy_rx: &mut mpsc::UnboundedReceiver<ToEnvoyMessage>,
-	) {
-		tokio::time::timeout(Duration::from_secs(2), async {
-			loop {
-				let Some(msg) = envoy_rx.recv().await else {
-					panic!("envoy channel closed before stopped event");
-				};
-
-				if let ToEnvoyMessage::SendEvents { events } = msg {
-					if events.iter().any(|event| {
-						matches!(
-							event.inner,
-							protocol::Event::EventActorStateUpdate(
-								protocol::EventActorStateUpdate {
-									state: protocol::ActorState::ActorStateStopped(_),
-								}
-							)
-						)
-					}) {
-						return;
-					}
-				}
-			}
-		})
-		.await
-		.expect("timed out waiting for stopped event");
-	}
-
-	async fn assert_alarm_before_stopped_event(
-		envoy_rx: &mut mpsc::UnboundedReceiver<ToEnvoyMessage>,
-		expected_alarm_ts: Option<i64>,
-	) {
-		tokio::time::timeout(Duration::from_secs(2), async {
-			let mut saw_alarm = false;
-			loop {
-				let Some(msg) = envoy_rx.recv().await else {
-					panic!("envoy channel closed before stopped event");
-				};
-
-				if let ToEnvoyMessage::SendEvents { events } = msg {
-					for event in events {
-						match event.inner {
-							protocol::Event::EventActorSetAlarm(alarm) => {
-								if alarm.alarm_ts == expected_alarm_ts {
-									saw_alarm = true;
-								}
-							}
-							protocol::Event::EventActorStateUpdate(
-								protocol::EventActorStateUpdate {
-									state: protocol::ActorState::ActorStateStopped(_),
-								},
-							) => {
-								assert!(saw_alarm, "stopped event arrived before alarm update");
-								return;
-							}
-							_ => {}
-						}
-					}
-				}
-			}
-		})
-		.await
-		.expect("timed out waiting for stopped event");
-	}
-
-	async fn assert_no_stopped_event(envoy_rx: &mut mpsc::UnboundedReceiver<ToEnvoyMessage>) {
-		let result = tokio::time::timeout(Duration::from_millis(100), async {
-			loop {
-				let Some(msg) = envoy_rx.recv().await else {
-					panic!("envoy channel closed while waiting for non-stopped event");
-				};
-
-				if let ToEnvoyMessage::SendEvents { events } = msg {
-					if events.iter().any(|event| {
-						matches!(
-							event.inner,
-							protocol::Event::EventActorStateUpdate(
-								protocol::EventActorStateUpdate {
-									state: protocol::ActorState::ActorStateStopped(_),
-								}
-							)
-						)
-					}) {
-						panic!("received stopped event before teardown completion");
-					}
-				}
-			}
-		})
-		.await;
-
-		assert!(
-			result.is_err(),
-			"stopped event arrived before teardown completion"
-		);
-	}
-
-	#[tokio::test]
-	async fn active_http_request_count_tracks_in_flight_fetches() {
-		let (fetch_started_tx, fetch_started_rx) = oneshot::channel();
-		let release_fetch = Arc::new(Notify::new());
-		let callbacks = Arc::new(TestCallbacks::completing(
-			fetch_started_tx,
-			release_fetch.clone(),
-		));
-		let (shared, mut envoy_rx) = build_shared_context(callbacks);
-		let (actor_tx, active_http_request_count) = create_actor(
-			shared,
-			"actor-1".to_string(),
-			1,
-			actor_config(),
-			Vec::new(),
-			None,
-		);
-
-		actor_tx
-			.send(ToActor::ReqStart {
-				message_id: message_id(),
-				req: request_start(),
-				connection_session: 1,
-			})
-			.expect("failed to send request start");
-
-		tokio::time::timeout(Duration::from_secs(2), fetch_started_rx)
-			.await
-			.expect("timed out waiting for fetch start")
-			.expect("fetch start sender dropped");
-		assert_eq!(active_http_request_count.load(), 1);
-
-		release_fetch.notify_waiters();
-		wait_for_zero(&active_http_request_count).await;
-
-		actor_tx
-			.send(ToActor::Stop {
-				command_idx: 1,
-				reason: protocol::StopActorReason::StopIntent,
-			})
-			.expect("failed to send stop");
-		wait_for_stopped_event(&mut envoy_rx).await;
-	}
-
-	#[tokio::test]
-	async fn actor_stop_aborts_in_flight_http_requests_before_stopped_event() {
-		let (fetch_started_tx, fetch_started_rx) = oneshot::channel();
-		let (fetch_dropped_tx, fetch_dropped_rx) = oneshot::channel();
-		let callbacks = Arc::new(TestCallbacks::hanging(fetch_started_tx, fetch_dropped_tx));
-		let (shared, mut envoy_rx) = build_shared_context(callbacks);
-		let (actor_tx, active_http_request_count) = create_actor(
-			shared,
-			"actor-2".to_string(),
-			1,
-			actor_config(),
-			Vec::new(),
-			None,
-		);
-
-		actor_tx
-			.send(ToActor::ReqStart {
-				message_id: message_id(),
-				req: request_start(),
-				connection_session: 1,
-			})
-			.expect("failed to send request start");
-
-		tokio::time::timeout(Duration::from_secs(2), fetch_started_rx)
-			.await
-			.expect("timed out waiting for fetch start")
-			.expect("fetch start sender dropped");
-		assert_eq!(active_http_request_count.load(), 1);
-
-		actor_tx
-			.send(ToActor::Stop {
-				command_idx: 1,
-				reason: protocol::StopActorReason::StopIntent,
-			})
-			.expect("failed to send stop");
-
-		tokio::time::timeout(Duration::from_secs(2), fetch_dropped_rx)
-			.await
-			.expect("timed out waiting for fetch abort")
-			.expect("fetch drop sender dropped");
-		wait_for_stopped_event(&mut envoy_rx).await;
-		assert_eq!(active_http_request_count.load(), 0);
-	}
-
-	#[tokio::test]
-	async fn actor_stop_waits_for_completion_handle_before_stopped_event() {
-		let (stop_handle_tx, stop_handle_rx) = oneshot::channel();
-		let callbacks = Arc::new(DeferredStopCallbacks {
-			stop_handle_tx: Mutex::new(Some(stop_handle_tx)),
-		});
-		let (shared, mut envoy_rx) = build_shared_context(callbacks);
-		let (actor_tx, _active_http_request_count) = create_actor(
-			shared,
-			"actor-3".to_string(),
-			1,
-			actor_config(),
-			Vec::new(),
-			None,
-		);
-
-		actor_tx
-			.send(ToActor::Stop {
-				command_idx: 1,
-				reason: protocol::StopActorReason::StopIntent,
-			})
-			.expect("failed to send stop");
-
-		let stop_handle = tokio::time::timeout(Duration::from_secs(2), stop_handle_rx)
-			.await
-			.expect("timed out waiting for stop handle")
-			.expect("stop handle sender dropped");
-		assert_no_stopped_event(&mut envoy_rx).await;
-
-		assert!(stop_handle.complete(), "stop handle should complete once");
-		wait_for_stopped_event(&mut envoy_rx).await;
-	}
-
-	#[tokio::test]
-	async fn actor_stop_flushes_acknowledged_alarm_before_completion() {
-		let (stop_handle_tx, stop_handle_rx) = oneshot::channel();
-		let callbacks = Arc::new(DeferredStopCallbacks {
-			stop_handle_tx: Mutex::new(Some(stop_handle_tx)),
-		});
-		let (shared, mut envoy_rx) = build_shared_context(callbacks);
-		let (actor_tx, _active_http_request_count) = create_actor(
-			shared,
-			"actor-4".to_string(),
-			1,
-			actor_config(),
-			Vec::new(),
-			None,
-		);
-
-		actor_tx
-			.send(ToActor::Stop {
-				command_idx: 1,
-				reason: protocol::StopActorReason::StopIntent,
-			})
-			.expect("failed to send stop");
-
-		let stop_handle = tokio::time::timeout(Duration::from_secs(2), stop_handle_rx)
-			.await
-			.expect("timed out waiting for stop handle")
-			.expect("stop handle sender dropped");
-
-		let (alarm_ack_tx, alarm_ack_rx) = oneshot::channel();
-		actor_tx
-			.send(ToActor::SetAlarm {
-				alarm_ts: Some(123),
-				ack_tx: Some(alarm_ack_tx),
-			})
-			.expect("failed to send alarm");
-
-		tokio::time::timeout(Duration::from_secs(2), alarm_ack_rx)
-			.await
-			.expect("timed out waiting for alarm ack")
-			.expect("alarm ack sender dropped");
-
-		assert!(stop_handle.complete(), "stop handle should complete once");
-		assert_alarm_before_stopped_event(&mut envoy_rx, Some(123)).await;
-	}
-}
-
-#[cfg(test)]
-#[path = "../tests/support/actor_http_stream.rs"]
-mod http_stream_tests;

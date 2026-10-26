@@ -1,0 +1,5 @@
+{
+  "code": "storage",
+  "group": "depot_kv",
+  "message": "A block device read failed."
+}

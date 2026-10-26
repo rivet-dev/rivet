@@ -1,0 +1,5 @@
+{
+  "code": "invalid_key_encoding",
+  "group": "actor",
+  "message": "Actor key is not in the canonical slash-separated form produced by serializeActorKey."
+}

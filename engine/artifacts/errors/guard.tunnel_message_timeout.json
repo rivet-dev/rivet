@@ -1,5 +1,0 @@
-{
-  "code": "tunnel_message_timeout",
-  "group": "guard",
-  "message": "Actor tunnel message timed out."
-}

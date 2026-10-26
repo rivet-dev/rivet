@@ -1,13 +1,15 @@
+use rivet_auth::*;
 use anyhow::Result;
 use axum::response::{IntoResponse, Response};
-use indexmap::IndexSet;
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
 };
-use rivet_api_types::{pagination::Pagination, runners::list::*, runners::list_names::*};
+use rivet_api_types::{
+	pagination::Pagination,
+	runners::{Runner, list::*},
+};
 use rivet_api_util::fanout_to_datacenters;
-use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 
 use crate::ctx::ApiCtx;
 
@@ -34,7 +36,7 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 		AccessNamespaceScope::Name(query.namespace.clone()),
 		ResourceKind::Runner,
 		TargetScope::Any,
-		if query.runner_ids.is_none() && query.runner_id.is_empty() {
+		if query.runner_key.is_empty() {
 			OperationKind::List
 		} else {
 			OperationKind::Read
@@ -43,91 +45,39 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 	.await?;
 
 	// Fanout to all datacenters
-	let mut runners =
-		fanout_to_datacenters::<ListResponse, _, _, _, _, Vec<rivet_types::runners::Runner>>(
-			&ctx,
-			"/runners",
-			query.clone(),
-			|ctx, query| async move { rivet_api_peer::runners::list(ctx, (), query).await },
-			|_, res, agg| agg.extend(res.runners),
-		)
-		.await?;
-
-	// Sort by create ts desc
-	runners.sort_by_cached_key(|x| std::cmp::Reverse(x.create_ts));
-
-	// Shorten array since returning all runners from all regions could end up returning `regions *
-	// limit` results, which is a lot.
-	runners.truncate(query.limit.unwrap_or(100));
-
-	let cursor = runners.last().map(|x| x.create_ts.to_string());
-
-	Ok(ListResponse {
-		runners,
-		pagination: Pagination { cursor },
-	})
-}
-
-/// ## Datacenter Round Trips
-///
-/// 2 round trips:
-/// - GET /runners/names (fanout)
-/// - [api-peer] namespace::ops::resolve_for_name_global
-#[utoipa::path(
-	get,
-	operation_id = "runners_list_names",
-	path = "/runners/names",
-	params(ListNamesQuery),
-	responses(
-		(status = 200, body = ListNamesResponse),
-	),
-	security(("bearer_auth" = [])),
-)]
-#[tracing::instrument(skip_all)]
-pub async fn list_names(
-	Extension(ctx): Extension<ApiCtx>,
-	Query(query): Query<ListNamesQuery>,
-) -> Response {
-	match list_names_inner(ctx, query).await {
-		Ok(response) => Json(response).into_response(),
-		Err(err) => ApiError::from(err).into_response(),
-	}
-}
-
-#[tracing::instrument(level = "debug", skip_all)]
-async fn list_names_inner(ctx: ApiCtx, query: ListNamesQuery) -> Result<ListNamesResponse> {
-	ctx.auth(
-		AccessNamespaceScope::Name(query.namespace.clone()),
-		ResourceKind::Runner,
-		TargetScope::Any,
-		OperationKind::List,
+	let mut envoys = fanout_to_datacenters::<
+		rivet_api_types::envoys::list::ListResponse,
+		_,
+		_,
+		_,
+		_,
+		Vec<rivet_types::envoys::Envoy>,
+	>(
+		&ctx,
+		"/envoys",
+		rivet_api_types::envoys::list::ListQuery {
+			namespace: query.namespace.clone(),
+			name: query.name.clone(),
+			envoy_key: query.runner_key.clone(),
+			limit: query.limit,
+			cursor: query.cursor.clone(),
+		},
+		|ctx, query| async move { rivet_api_peer::envoys::list(ctx, (), query).await },
+		|_, res, agg| agg.extend(res.envoys),
 	)
 	.await?;
 
-	// Prepare peer query for local handler
-	let limit = query.limit.unwrap_or(100);
+	// Sort by create ts desc
+	envoys.sort_by_cached_key(|x| std::cmp::Reverse(x.create_ts));
 
-	// Fanout to all datacenters
-	let mut all_names = fanout_to_datacenters::<ListNamesResponse, _, _, _, _, IndexSet<String>>(
-		&ctx,
-		"/runners/names",
-		query,
-		|ctx, query| async move { rivet_api_peer::runners::list_names(ctx, (), query).await },
-		|_, res, agg| agg.extend(res.names),
-	)
-	.await?
-	.into_iter()
-	// Apply limit
-	.take(limit)
-	.collect::<IndexSet<_>>();
+	// Shorten array since returning all envoys from all regions could end up returning `regions *
+	// limit` results, which is a lot.
+	envoys.truncate(query.limit.unwrap_or(100));
 
-	// Sort by name for consistency
-	all_names.sort();
+	let cursor = envoys.last().map(|x| x.create_ts.to_string());
 
-	let cursor = all_names.last().map(|x: &String| x.to_string());
-
-	Ok(ListNamesResponse {
-		names: all_names.into_iter().collect(),
+	Ok(ListResponse {
+		runners: envoys.into_iter().map(Runner::from).collect(),
 		pagination: Pagination { cursor },
 	})
 }

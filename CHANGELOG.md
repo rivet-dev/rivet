@@ -2,10 +2,27 @@
 
 ## Unreleased
 
-- Engine now requires an admin token for self-hosted deployments. Set `auth.admin_token` and
-  send it as a Bearer token. To restore legacy unauthenticated access behavior for actor
-  management and routing, also set `auth.insecure_allow_unauthenticated: true`. The admin token
-  remains required, and token issuance stays authenticated.
+- **Authentication configuration is now required.** Deployments that previously omitted `auth`
+  must configure an explicit production secret before upgrading:
+
+  ```yaml
+  auth:
+    admin_token: "${RIVET_ADMIN_TOKEN}"
+  ```
+
+  Checked-in development environments continue to use the explicit `dev` token automatically.
+
+  Rivet JWT verification, issuance, and key rotation are enabled by default. The issuer is derived
+  from the leader datacenter's `public_url`; remove the former `issuer`, `verification_enabled`,
+  and `leader_epoch` JWT settings. For an issuer URL migration, first declare the overlap with
+  `accepted_issuers`, then increment `issuer_generation` when activating the new leader URL.
+  Increment it for a signing-leader datacenter change even when both leaders use the same public
+  URL. Keep the old issuer configured until `rivet auth jwt status` reports that its retirement
+  deadline has passed.
+
+- To restore legacy unauthenticated access behavior for actor management and routing, set
+  `auth.insecure_allow_unauthenticated: true`. The admin token remains required, and token
+  issuance stays authenticated.
 
 - The Rust SDK now supports actor action sets containing up to 128 action types, increased from 16. TypeScript actor definitions remain unrestricted.
 

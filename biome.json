@@ -2,11 +2,8 @@
 	"$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
 	"files": {
 		"includes": [
-			"frontend/**/*.{tsx,ts,js}",
-			"!frontend/packages",
 			"!**/*.gen.*",
 			"rivetkit-typescript/**/*.{tsx,ts,css}",
-			"!rivetkit-typescript/packages/engine-runner-protocol/**",
 			"!rivetkit-typescript/packages/rivetkit/src/common/bare/generated/**",
 			"!rivetkit-typescript/packages/rivetkit-napi/index.d.ts",
 			"!rivetkit-typescript/packages/rivetkit-wasm/index.d.ts",
@@ -15,7 +12,6 @@
 			"engine/sdks/typescript/**/*.ts",
 			"!engine/sdks/typescript/api-*/**",
 			"!engine/sdks/typescript/envoy-protocol/**",
-			"!engine/sdks/typescript/runner-protocol/**",
 			"!/**/node_modules"
 		],
 		"ignoreUnknown": true

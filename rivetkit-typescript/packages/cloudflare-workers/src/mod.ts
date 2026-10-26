@@ -39,7 +39,7 @@ export interface CreateHandlerOptions {
 	/**
 	 * Path the Rivet manager API is mounted at. Defaults to `/api/rivet`.
 	 *
-	 * `rivet dev` and the engine poll `<managerPath>/metadata`, so changing this
+	 * The engine polls `<managerPath>/metadata`, so changing this
 	 * also requires configuring the engine-side serverless runner URL to match.
 	 */
 	managerPath?: string;

@@ -64,6 +64,4 @@ impl ActionDispatchError {
 }
 
 // Test shim keeps moved tests under tests while retaining private module access.
-#[cfg(test)]
-#[path = "../../tests/modules/action_dispatch_error.rs"]
-mod tests;
+

@@ -1,5 +1,0 @@
-{
-  "code": "complete_not_configured",
-  "group": "queue",
-  "message": "Queue message does not support completion"
-}

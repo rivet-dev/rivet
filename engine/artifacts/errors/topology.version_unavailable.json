@@ -1,0 +1,5 @@
+{
+  "code": "version_unavailable",
+  "group": "topology",
+  "message": "No version of this family is both readable by every storage worker and writable here."
+}

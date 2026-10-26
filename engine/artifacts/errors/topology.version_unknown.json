@@ -1,0 +1,5 @@
+{
+  "code": "version_unknown",
+  "group": "topology",
+  "message": "The storage workers that read persisted data are unknown."
+}

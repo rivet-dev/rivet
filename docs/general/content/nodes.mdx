@@ -1,0 +1,112 @@
+---
+title: "Nodes & Node Pools"
+description: "Run your registry as a node, configure the node pool it joins, and add capacity."
+skill: true
+---
+
+A node is a long-running process running your app with the Rivet SDK. Start it with `registry.start()`. It connects outbound to the control plane and hosts the Actors assigned to it.
+
+A node pool groups nodes by name within a [namespace](/docs/namespaces). For example, use `default` for general workloads and `gpu` for Actors that need GPUs.
+
+## Quickstart
+
+<Steps>
+<Step title="Create the pool">
+
+Set `$RIVET_API` to your control plane URL, `$RIVET_NAMESPACE` to the namespace slug, and `$RIVET_TOKEN` to your Rivet token:
+
+```bash
+curl -X PUT "$RIVET_API/pools/default?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
+
+The control plane refuses a node whose pool does not exist. Local development is the exception: when the endpoint is on `localhost`, RivetKit creates the pool itself.
+
+</Step>
+<Step title="Connect nodes">
+
+Set the namespace and pool on each node that should serve this workload:
+
+```bash
+RIVET_ENDPOINT=https://production:<rivet-token>@rivet.mycompany.com
+RIVET_POOL=default
+```
+
+`RIVET_POOL` defaults to `default`. Start your registry with `registry.start()`.
+
+</Step>
+</Steps>
+
+Actor traffic uses the outbound connection, so nodes need no public URL or inbound port. Your app can expose its own [health and metrics routes](/actors/docs/http-server#add-health-and-metrics-routes).
+
+## Configure a pool
+
+A pool's configuration persists whether or not nodes are connected. Attach your own JSON `metadata` of up to 16 KiB to describe it:
+
+```bash
+curl -X PUT "$RIVET_API/pools/gpu?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"metadata":{"hardware":"gpu"}}'
+```
+
+`PUT` replaces the whole configuration, so send every field you want to keep. Metadata describes the pool; it does not provision hardware. Run the pool's nodes on the machines you want to use.
+
+### Pool settings
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `drain_on_version_upgrade` | `bool` | `false` | When nodes with a newer version connect, stop the older nodes' actors so they wake on the new version. See [Versions & Upgrades](/docs/versions#drain-on-version-upgrade). |
+| `actor_eviction_delay` | `u32` (seconds) | `0` | Delay before actor eviction begins after a drain starts. Gives clients time to see the drain before actors move. |
+| `actor_eviction_period` | `u32` (seconds) | `0` | Window over which evictions are batched. Used with `actor_eviction_rate` to smooth the load on the rest of the pool. |
+| `actor_eviction_rate` | `f32` (actors/sec) | `1.0` | Maximum number of actors evicted per second once eviction is underway. Set it higher for fast cutovers and lower to spread reschedule load. |
+| `metadata` | `object` | none | Your own JSON metadata, up to 16 KiB. |
+
+### Tuning eviction
+
+Eviction runs when nodes are drained, most often during a version upgrade with `drain_on_version_upgrade` enabled. A typical starting point:
+
+- `actor_eviction_delay: 5` gives clients a five-second head start before actors move.
+- `actor_eviction_period: 60` batches evictions over one minute.
+- `actor_eviction_rate: 1` evicts one actor per second.
+
+Raise `actor_eviction_rate` for small pools where a full cutover finishes in seconds. Lower it for large pools to avoid bursts of reschedule traffic.
+
+## Read pools and nodes
+
+```bash
+# One pool
+curl "$RIVET_API/pools/gpu?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
+
+# All pools in the namespace
+curl "$RIVET_API/pools?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
+
+# Connected nodes in one pool
+curl "$RIVET_API/pools/gpu/nodes?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
+```
+
+The single-pool response has a `pool` object. The pool list has a `pools` array, and the node list has a `nodes` array; both include a `pagination.cursor` for the next page.
+
+## Add capacity
+
+Run more copies of your app with the same namespace and pool. Use your hosting platform's autoscaler to change the number of node processes. Keep spare capacity so Actors can wake while another node restarts.
+
+When a node stops, its Actors sleep and can wake on another node in the pool. See [Versions & Upgrades](/docs/versions) for rolling deployments.
+
+## Remove a pool
+
+Stop the pool's nodes first. The control plane refuses to delete a pool while nodes are connected.
+
+```bash
+curl -X DELETE "$RIVET_API/pools/gpu?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
+```
+
+## Deploy
+
+Use the shared [node deployment guides](/docs/deploy/self-host/nodes/) for Kubernetes, Docker, virtual machines, and other platforms that run a persistent process. Nodes can connect to Rivet Cloud or a self-hosted control plane.

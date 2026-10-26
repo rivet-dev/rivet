@@ -1,0 +1,5 @@
+{
+  "code": "connect_unavailable",
+  "group": "envoy",
+  "message": "Storage could not register the runner yet. Retry after the hint."
+}

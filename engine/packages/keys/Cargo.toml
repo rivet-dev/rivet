@@ -1,0 +1,18 @@
+[package]
+name = "rivet-keys"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+bytes.workspace = true
+foundationdb-tuple.workspace = true
+object_store.workspace = true
+percent-encoding = "2.3.2"
+rivet-util-id.workspace = true
+rivet-data.workspace = true
+vbare.workspace = true
+uuid.workspace = true

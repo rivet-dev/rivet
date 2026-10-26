@@ -38,9 +38,9 @@ pub struct SigningKeyRecord {
 }
 
 impl SigningKeyRecord {
-	pub fn generate(created_ts: i64) -> Self {
-		let signing_key = SigningKey::generate();
-		Self {
+	pub fn generate(created_ts: i64) -> Result<Self> {
+		let signing_key = SigningKey::generate()?;
+		Ok(Self {
 			public: PublicKeyRecord {
 				kid: signing_key.kid(),
 				algorithm: Algorithm::Ed25519,
@@ -48,7 +48,7 @@ impl SigningKeyRecord {
 				created_ts,
 			},
 			signing_key,
-		}
+		})
 	}
 
 	pub fn validate(&self) -> Result<()> {
@@ -115,6 +115,8 @@ pub struct EmergencyReceipt {
 	pub expected_generation: u64,
 	pub committed_generation: u64,
 	pub revoked_kids: Vec<KeyId>,
+	/// Exact canonical operator body, excluding the routing tenure.
+	pub requested_revoked_kids: Vec<KeyId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -299,6 +301,18 @@ impl SigningKeyRing {
 			ensure!(
 				receipt.revoked_kids.len() <= ABSOLUTE_KEY_LIMIT,
 				"emergency receipt has too many revoked key ids"
+			);
+			ensure!(
+				receipt.requested_revoked_kids.len() <= ABSOLUTE_KEY_LIMIT
+					&& receipt
+						.requested_revoked_kids
+						.windows(2)
+						.all(|pair| pair[0] < pair[1])
+					&& receipt
+						.requested_revoked_kids
+						.iter()
+						.all(|kid| receipt.revoked_kids.contains(kid)),
+				"invalid original emergency request key ids"
 			);
 			let unique = receipt
 				.revoked_kids

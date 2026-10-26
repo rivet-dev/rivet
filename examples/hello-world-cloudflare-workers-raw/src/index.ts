@@ -27,7 +27,7 @@ export default createHandler(registry, {
 
 		const increment = url.pathname.match(/^\/increment\/(.+)$/);
 		if (request.method === "POST" && increment) {
-			// `createClient` reads RIVET_ENDPOINT from the environment. `rivet dev`
+			// `createClient` reads RIVET_ENDPOINT from the environment. the configured environment
 			// passes it automatically; in production set it as a Worker var or
 			// secret. It falls back to the local engine when unset.
 			const client = createClient<typeof registry>();

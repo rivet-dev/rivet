@@ -27,6 +27,27 @@ interface GrowInput {
 	budgetMs?: number;
 }
 
+interface AppendInput {
+	rows?: number;
+	rowBytes?: number;
+}
+
+interface AppendResult {
+	rows: number;
+	rowBytes: number;
+}
+
+interface ReadRandomInput {
+	count?: number;
+}
+
+interface ReadRandomResult {
+	count: number;
+	hits: number;
+	bytes: number;
+	maxId: number;
+}
+
 interface StorageStats {
 	pageCount: number;
 	pageSize: number;
@@ -168,6 +189,60 @@ export const growDb = actor({
 			};
 		},
 		stats: async (c): Promise<StorageStats> => storageStats(c.db),
+		// One small committed insert, used by the live-traffic driver to imitate
+		// steady production writes against an already seeded database. Unlike
+		// grow() it never loops toward a size target, so each call is exactly
+		// one commit (one FDB delta) regardless of the current size.
+		append: async (c, input: AppendInput = {}): Promise<AppendResult> => {
+			const rows = finiteInt(input.rows, 1);
+			const rowBytes = finiteInt(input.rowBytes, DEFAULT_ROW_BYTES);
+			const placeholders = new Array(rows)
+				.fill("(?, randomblob(?), ?)")
+				.join(", ");
+			const now = Date.now();
+			const args: unknown[] = [];
+			for (let i = 0; i < rows; i += 1) {
+				args.push(-1, rowBytes, now);
+			}
+			// A single autocommit statement rather than BEGIN/COMMIT: append() calls
+			// on one actor run concurrently, and an explicit BEGIN while another
+			// append's transaction is open fails with a nested-transaction error.
+			await c.db.execute(
+				`INSERT INTO grow_rows (batch, payload, created_at) VALUES ${placeholders}`,
+				...args,
+			);
+			return { rows, rowBytes };
+		},
+		// Point reads of random rows, used by the live-traffic driver to imitate
+		// production reads. Each row lives on its own overflow pages, so every
+		// hit pulls a handful of pages through the depot VFS instead of a
+		// whole-table scan.
+		readRandom: async (
+			c,
+			input: ReadRandomInput = {},
+		): Promise<ReadRandomResult> => {
+			const count = finiteInt(input.count, 1);
+			const maxRow = await queryOne<{ max_id: number | null }>(
+				c.db,
+				"SELECT max(id) AS max_id FROM grow_rows",
+			);
+			const maxId = maxRow.max_id ?? 0;
+			let bytes = 0;
+			let hits = 0;
+			for (let i = 0; i < count; i += 1) {
+				const id =
+					maxId === 0 ? 0 : 1 + Math.floor(Math.random() * maxId);
+				const rows = (await c.db.execute(
+					"SELECT length(payload) AS n FROM grow_rows WHERE id = ?",
+					id,
+				)) as Array<{ n: number }>;
+				if (rows[0]) {
+					hits += 1;
+					bytes += rows[0].n;
+				}
+			}
+			return { count, hits, bytes, maxId };
+		},
 		// Full-database verification for the compaction rig. This reads every
 		// page through the depot VFS, so it exercises PIDX resolution across
 		// folded shards and any remaining unfolded deltas. Deliberately not

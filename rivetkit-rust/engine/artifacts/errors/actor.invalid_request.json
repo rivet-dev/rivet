@@ -1,5 +1,0 @@
-{
-  "code": "invalid_request",
-  "group": "actor",
-  "message": "Invalid hibernatable websocket connection ID"
-}

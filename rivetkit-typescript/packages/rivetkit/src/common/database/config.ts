@@ -52,7 +52,13 @@ export interface SqliteTransactionOptions {
  * to change without notice.
  */
 export interface SqliteProfilingOptions {
-	enabled?: boolean;
+	/** Exact SQL statements to give fingerprint labels. Profiling defaults to actor
+	 * aggregates without fingerprint labels. Profile logs remain enabled.
+	 * RIVETKIT_SQLITE_PROFILING overrides selection with a JSON object containing
+	 * queries and/or fingerprints arrays. An empty object clears fingerprint selection. */
+	queries?: string[];
+	/** Exact query fingerprints to label separately, as reported in profile logs. */
+	fingerprints?: string[];
 	maxTrackedStatementFingerprints?: number;
 	maxTrackedTransactionFingerprints?: number;
 	maxPrometheusSeries?: number;

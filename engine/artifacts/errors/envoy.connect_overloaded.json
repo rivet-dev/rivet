@@ -1,0 +1,5 @@
+{
+  "code": "connect_overloaded",
+  "group": "envoy",
+  "message": "Too many runners are connecting at once. Retry after the hint."
+}

@@ -5,9 +5,9 @@ use std::time::Duration;
 use crate::connection::ws_send;
 use crate::envoy::{BufferedActorMessage, EnvoyContext, HttpRequestRoute, WebSocketRoute};
 
-const HTTP_REQUEST_CANCELLATION_TTL: Duration = Duration::from_secs(60);
+pub(crate) const HTTP_REQUEST_CANCELLATION_TTL: Duration = Duration::from_secs(60);
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct HttpRequestCancellationKey {
 	gateway_id: protocol::GatewayId,
 	request_id: protocol::RequestId,
@@ -43,11 +43,24 @@ fn request_abort_cancellation_key(
 	}
 }
 
-fn prune_http_request_cancellations(ctx: &mut EnvoyContext) {
-	let now = crate::time::Instant::now();
-	ctx.http_request_cancellations.retain(|_, cancelled_at| {
-		now.duration_since(*cancelled_at) < HTTP_REQUEST_CANCELLATION_TTL
-	});
+/// Forgets one recorded cancellation once its TTL passed. A cancellation recorded again
+/// since its deadline was set is scheduled again instead.
+pub(crate) fn expire_http_request_cancellation(
+	ctx: &mut EnvoyContext,
+	key: HttpRequestCancellationKey,
+	now: crate::time::Instant,
+) {
+	let Some(cancelled_at) = ctx.http_request_cancellations.get(&key).copied() else {
+		return;
+	};
+	if now.saturating_duration_since(cancelled_at) < HTTP_REQUEST_CANCELLATION_TTL {
+		ctx.deadlines.schedule(
+			crate::deadlines::DeadlineKey::HttpCancellation(key),
+			cancelled_at + HTTP_REQUEST_CANCELLATION_TTL,
+		);
+		return;
+	}
+	ctx.http_request_cancellations.remove(&key);
 }
 
 pub(crate) fn make_ws_key(
@@ -193,6 +206,17 @@ pub async fn handle_tunnel_message(
 			}
 		}
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyResponseBodyWindowUpdate(update) => {
+			// The gateway releases response credit as its client reads the body, which can be
+			// after this Envoy finished the request and forgot it. Credit for a finished
+			// response has no effect, so it is dropped instead of answered as a violation.
+			let key: [&[u8]; 2] = [&message_id.gateway_id, &message_id.request_id];
+			if ctx.http_message_indices.get(&key).is_none() {
+				tracing::debug!(
+					message_index = message_id.message_index,
+					"dropping response credit for an HTTP request this Envoy already finished"
+				);
+				return;
+			}
 			if advance_http_message_index(ctx, &message_id) {
 				handle_response_body_window_update(ctx, message_id, update.consumed_bytes);
 			} else {
@@ -256,7 +280,7 @@ async fn send_response_abort_for_session(
 	detail: &'static str,
 ) {
 	message_id.message_index = 0;
-	let _ = crate::connection::ws_send_http_for_session(
+	crate::connection::ws_send_http_for_session_detached(
 		&ctx.shared,
 		protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
 			message_id,
@@ -264,7 +288,7 @@ async fn send_response_abort_for_session(
 				protocol::ToRivetResponseAbort {
 					reason: protocol::HttpStreamAbortReason {
 						kind: protocol::HttpStreamAbortReasonKind::InternalError,
-						detail: Some(detail.to_owned()),
+						detail: Some(detail.to_owned().into()),
 					},
 				},
 			),
@@ -352,13 +376,16 @@ async fn handle_request_start(
 		.await;
 		return;
 	}
-	prune_http_request_cancellations(ctx);
 	if let Some(actor_generation) = actor_generation {
 		let cancellation_key = request_cancellation_key(&message_id, &actor_id, actor_generation);
+		// An entry past its TTL whose deadline has not fired yet no longer counts.
+		let now = crate::time::Instant::now();
 		if ctx
 			.http_request_cancellations
-			.contains_key(&cancellation_key)
-		{
+			.get(&cancellation_key)
+			.is_some_and(|cancelled_at| {
+				now.saturating_duration_since(*cancelled_at) < HTTP_REQUEST_CANCELLATION_TTL
+			}) {
 			tracing::debug!(
 				%actor_id,
 				actor_generation,
@@ -384,9 +411,40 @@ async fn handle_request_start(
 		.await;
 		return;
 	}
-	let actor_handle = ctx
+	// The cap bounds requests waiting in the actor's inbox, mostly while it starts.
+	let cap = ctx.shared.config.max_queued_requests_per_actor;
+	let admitted = ctx
 		.get_actor_for_admission(&actor_id, actor_generation)
-		.map(|actor| actor.handle.clone());
+		.map(|actor| (actor.handle.clone(), actor.queued_requests.admit(cap)));
+	let (actor_handle, queued) = match admitted {
+		Some((handle, Some(queued))) => (Some(handle), Some(queued)),
+		Some((_, None)) => {
+			crate::metrics::METRICS
+				.actor_queued_requests_overloaded_total
+				.inc();
+			if request_stream {
+				drain_rejected_upload(
+					ctx,
+					connection_session,
+					&message_id,
+					&actor_id,
+					actor_generation,
+				);
+			}
+			send_error_response(
+				ctx,
+				response_stream.then_some(connection_session),
+				message_id.gateway_id,
+				message_id.request_id,
+				"envoy.actor_overloaded",
+				"Actor has too many queued requests",
+				actor_generation.map(|generation| (actor_id.as_str(), generation)),
+			)
+			.await;
+			return;
+		}
+		None => (None, None),
+	};
 
 	let Some(actor_handle) = actor_handle else {
 		let generation_mismatch =
@@ -405,21 +463,13 @@ async fn handle_request_start(
 			tracing::warn!(actor_id = %actor_id, ?actor_generation, "received request for unknown actor");
 			("envoy.actor_not_found", "Actor not found")
 		};
-		// RequestStart is deliberately not application-acknowledged, so body frames may already be
-		// in flight when this rejection reaches Gateway. Keep a short-lived drain route only for a
-		// streamed upload; its finish, cancellation, abort, or connection close removes the state.
 		if request_stream {
-			ctx.http_message_indices.insert(&key, 1);
-			ctx.http_request_routes.insert(
-				&key,
-				HttpRequestRoute {
-					actor_id: actor_id.clone(),
-					actor_generation,
-					actor_admitted: false,
-					session: connection_session,
-					gateway_id: message_id.gateway_id,
-					request_id: message_id.request_id,
-				},
+			drain_rejected_upload(
+				ctx,
+				connection_session,
+				&message_id,
+				&actor_id,
+				actor_generation,
 			);
 		}
 		send_error_response(
@@ -440,7 +490,7 @@ async fn handle_request_start(
 	ctx.http_request_routes.insert(
 		&[&message_id.gateway_id, &message_id.request_id],
 		HttpRequestRoute {
-			actor_id: actor_id.clone(),
+			actor_id: actor_id.clone().to_string(),
 			actor_generation,
 			actor_admitted: true,
 			session: connection_session,
@@ -454,6 +504,7 @@ async fn handle_request_start(
 			message_id: message_id.clone(),
 			req,
 			connection_session,
+			queued,
 		})
 		.is_err()
 	{
@@ -472,6 +523,32 @@ async fn handle_request_start(
 		)
 		.await;
 	}
+}
+
+/// Keeps a short-lived drain route for a streamed upload whose start was refused.
+/// RequestStart is deliberately not application-acknowledged, so body frames may already be in
+/// flight when the rejection reaches Gateway; its finish, cancellation, abort, or connection
+/// close removes the state.
+fn drain_rejected_upload(
+	ctx: &mut EnvoyContext,
+	connection_session: u64,
+	message_id: &protocol::MessageId,
+	actor_id: &str,
+	actor_generation: Option<u32>,
+) {
+	let key: [&[u8]; 2] = [&message_id.gateway_id, &message_id.request_id];
+	ctx.http_message_indices.insert(&key, 1);
+	ctx.http_request_routes.insert(
+		&key,
+		HttpRequestRoute {
+			actor_id: actor_id.to_string(),
+			actor_generation,
+			actor_admitted: false,
+			session: connection_session,
+			gateway_id: message_id.gateway_id,
+			request_id: message_id.request_id,
+		},
+	);
 }
 
 async fn handle_request_chunk(
@@ -553,9 +630,12 @@ fn handle_request_abort(
 		}
 	}
 	if let Some(cancellation_key) = cancellation_key {
-		prune_http_request_cancellations(ctx);
-		ctx.http_request_cancellations
-			.insert(cancellation_key, crate::time::Instant::now());
+		let now = crate::time::Instant::now();
+		ctx.deadlines.schedule(
+			crate::deadlines::DeadlineKey::HttpCancellation(cancellation_key.clone()),
+			now + HTTP_REQUEST_CANCELLATION_TTL,
+		);
+		ctx.http_request_cancellations.insert(cancellation_key, now);
 		tracing::debug!(
 			gateway_id = ?message_id.gateway_id,
 			request_id = ?message_id.request_id,
@@ -602,7 +682,7 @@ async fn handle_ws_open(
 				message_kind: protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
 					protocol::ToRivetWebSocketClose {
 						code: Some(1011),
-						reason: Some(reason.to_string()),
+						reason: Some(reason.to_string().into()),
 						hibernate: false,
 					},
 				),
@@ -615,7 +695,7 @@ async fn handle_ws_open(
 	ctx.request_to_actor.insert(
 		&[&message_id.gateway_id, &message_id.request_id],
 		WebSocketRoute {
-			actor_id: actor_id.clone(),
+			actor_id: actor_id.clone().to_string(),
 			actor_generation,
 		},
 	);
@@ -625,20 +705,20 @@ async fn handle_ws_open(
 		.expect("shared live tunnel request registry poisoned")
 		.insert(
 			make_ws_key(&message_id.gateway_id, &message_id.request_id),
-			actor_id.clone(),
+			actor_id.clone().to_string(),
 		);
 
 	// Convert HashMap headers to BTreeMap for the actor message
 	let headers = open
 		.headers
 		.iter()
-		.map(|(k, v)| (k.clone(), v.clone()))
+		.map(|(k, v)| (k.to_string(), v.to_string()))
 		.collect();
 
 	if actor_handle
 		.send(crate::actor::ToActor::WsOpen {
 			message_id: message_id.clone(),
-			path: open.path,
+			path: open.path.to_string(),
 			headers,
 		})
 		.is_err()
@@ -657,7 +737,7 @@ async fn handle_ws_open(
 				message_kind: protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
 					protocol::ToRivetWebSocketClose {
 						code: Some(1011),
-						reason: Some("envoy.actor_not_found".to_string()),
+						reason: Some(("envoy.actor_not_found".to_string()).into()),
 						hibernate: false,
 					},
 				),
@@ -822,16 +902,19 @@ async fn send_error_response(
 		message_kind: protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(
 			protocol::ToRivetResponseStart {
 				status: 503,
-				headers,
-				body: Some(body),
+				headers: headers
+					.into_iter()
+					.map(|(k, v)| (k.into(), v.into()))
+					.collect(),
+				body: Some(body.into()),
 				stream: false,
 			},
 		),
 	});
 	match connection_session {
 		Some(session) => {
-			let _ =
-				crate::connection::ws_send_http_for_session(&ctx.shared, response, session).await;
+			crate::connection::ws_send_http_for_session_detached(&ctx.shared, response, session)
+				.await;
 		}
 		None => {
 			ws_send(&ctx.shared, response).await;

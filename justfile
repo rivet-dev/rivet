@@ -8,11 +8,7 @@ preview-publish REF:
 
 [group('docker')]
 docker-build:
-	docker build -f engine/docker/universal/Dockerfile --target engine-full -t rivetdev/engine:local --platform linux/x86_64 .
-
-[group('docker')]
-docker-build-frontend:
-	docker build -f engine/docker/universal/Dockerfile --target engine-full -t rivetdev/engine:local --platform linux/x86_64 --build-arg BUILD_FRONTEND=true .
+	docker build -f docker/engine/universal/Dockerfile --target engine-full -t rivetdev/engine:local --platform linux/x86_64 .
 
 [group('docker')]
 docker-run:
@@ -23,9 +19,21 @@ docker-stop:
 	docker run -p 6420:6420 -e RIVET__AUTH__ADMIN_TOKEN=dev -e RUST_LOG=debug rivetdev/engine:local
 
 [group('skill-evals')]
-skill-eval name *args:
-	cd scripts/skill-evals && npx tsx src/index.ts --eval {{name}} {{args}}
+object-store-regenerate *args:
+	python3 vendor/object_store/regenerate.py "$@"
 
-[group('skill-evals')]
-skill-eval-clean:
-	rm -rf scripts/skill-evals/results
+# Regenerate the committed SlateDB source from its pinned release and patch series.
+[group('dependencies')]
+[positional-arguments]
+slatedb-regenerate *args:
+	python3 vendor/slatedb/regenerate.py "$@"
+
+# Fail if the committed SlateDB source differs from its patch series.
+[group('dependencies')]
+[positional-arguments]
+slatedb-check *args:
+	python3 vendor/slatedb/regenerate.py --check "$@"
+
+# Azure fleet deployment recipes live with the deployment configuration.
+[group('deploy')]
+[positional-arguments]

@@ -38,13 +38,6 @@ Actions can be called in different ways depending on your use case:
 Learn more about [communicating with actors from the frontend](/actors/docs/communicating-between-actors).
 
 </Tab>
-<Tab title="Backend (registry.handler)">
-
-<CodeSnippet file="examples/docs/actors-actions/calling-backend.ts" title="server.ts" />
-
-Learn more about [communicating with actors from the backend](/actors/docs/communicating-between-actors).
-
-</Tab>
 <Tab title="Actor-to-Actor (c.client())">
 
 <CodeSnippet file="examples/docs/actors-actions/calling-actor.ts" title="actor.ts" />
@@ -128,8 +121,12 @@ Rivet provides the `ActionContextOf` utility type for exactly this purpose:
 
 See [types](/actors/docs/types) for more details on using `ActionContextOf` and other utility types.
 
+{/* TODO(code): restore when the control plane exposes an API to read an Actor's inspector token. Tracked in ACT-6493.
+
 ## Debugging
 
 - `GET /inspector/rpcs` lists all available actions on an actor.
 - `POST /inspector/action/:name` executes an action with JSON args and returns output.
 - In non-dev mode, inspector endpoints require authorization.
+
+*/}

@@ -17,15 +17,14 @@
 #                                       paths use `{sha}-release` so they never overwrite the
 #                                       debug preview of the same commit
 #
-# Selective preview builds: the `targets` input (all | rivetkit | engine |
-# cli) narrows a preview to one target family so unrelated builds are
+# Selective preview builds: the `targets` input (all | rivetkit | engine)
+# narrows a preview to one target family so unrelated builds are
 # skipped. The `context` job resolves it into `build_targets` / `build_wasm` /
 # `build_docker` outputs that gate the matrix and jobs. Skipped npm families have
 # their inbound dependency (rivetkit-family → @rivetkit/engine-cli) repinned to the
 # latest published version so previews still install. Releases always build every
 # target; a partial `targets` on a release is rejected.
 #
-# See ~/.agents/specs/publish-flow-unification.md for the design.
 # ============================================================================
 
 name: publish
@@ -51,7 +50,6 @@ on:
           - all
           - rivetkit
           - engine
-          - cli
       preview_name:
         description: "Preview only: custom name for the version label + npm dist-tag (default: sanitized branch). Ignored on release."
         required: false
@@ -117,142 +115,78 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # rivetkit-napi addon: 7 platforms (gnu + musl Linux, darwin,
-          # windows-msvc is produced via cargo-xwin in the base image).
+          # rivetkit-napi addon: 6 platforms (gnu + musl Linux, darwin).
           - name: rivetkit-napi (linux-x64-gnu)
             build_target: rivetkit-napi
             docker: docker/build/linux-x64-gnu.Dockerfile
             artifact: rivetkit-napi.linux-x64-gnu.node
             upload_prefix: native
             platform: linux-x64-gnu
-            release_only: false
           - name: rivetkit-napi (linux-x64-musl)
             build_target: rivetkit-napi
             docker: docker/build/linux-x64-musl.Dockerfile
             artifact: rivetkit-napi.linux-x64-musl.node
             upload_prefix: native
             platform: linux-x64-musl
-            release_only: false
           - name: rivetkit-napi (linux-arm64-gnu)
             build_target: rivetkit-napi
             docker: docker/build/linux-arm64-gnu.Dockerfile
             artifact: rivetkit-napi.linux-arm64-gnu.node
             upload_prefix: native
             platform: linux-arm64-gnu
-            release_only: false
           - name: rivetkit-napi (linux-arm64-musl)
             build_target: rivetkit-napi
             docker: docker/build/linux-arm64-musl.Dockerfile
             artifact: rivetkit-napi.linux-arm64-musl.node
             upload_prefix: native
             platform: linux-arm64-musl
-            release_only: false
           - name: rivetkit-napi (darwin-x64)
             build_target: rivetkit-napi
             docker: docker/build/darwin-x64.Dockerfile
             artifact: rivetkit-napi.darwin-x64.node
             upload_prefix: native
             platform: darwin-x64
-            release_only: false
           - name: rivetkit-napi (darwin-arm64)
             build_target: rivetkit-napi
             docker: docker/build/darwin-arm64.Dockerfile
             artifact: rivetkit-napi.darwin-arm64.node
             upload_prefix: native
             platform: darwin-arm64
-            release_only: false
-          # engine binary: 4 platforms for preview (musl, darwin), 5 for release
-          # (adds windows-x64). Windows is gated via release_only and skipped
-          # at the step level on preview triggers.
+          # engine binary: musl Linux and darwin platforms.
           - name: engine (linux-x64-musl)
             build_target: engine
             docker: docker/build/linux-x64-musl.Dockerfile
             artifact: rivet-engine-x86_64-unknown-linux-musl
             upload_prefix: engine
             platform: linux-x64-musl
-            release_only: false
           - name: engine (linux-arm64-musl)
             build_target: engine
             docker: docker/build/linux-arm64-musl.Dockerfile
             artifact: rivet-engine-aarch64-unknown-linux-musl
             upload_prefix: engine
             platform: linux-arm64-musl
-            release_only: false
           - name: engine (darwin-x64)
             build_target: engine
             docker: docker/build/darwin-x64.Dockerfile
             artifact: rivet-engine-x86_64-apple-darwin
             upload_prefix: engine
             platform: darwin-x64
-            release_only: false
           - name: engine (darwin-arm64)
             build_target: engine
             docker: docker/build/darwin-arm64.Dockerfile
             artifact: rivet-engine-aarch64-apple-darwin
             upload_prefix: engine
             platform: darwin-arm64
-            release_only: false
-          # Windows engine binary. Slow (~13 min due to MinGW ld). Only built
-          # on release triggers so preview publishes stay fast.
-          - name: engine (windows-x64)
-            build_target: engine
-            docker: docker/build/windows-x64.Dockerfile
-            artifact: rivet-engine-x86_64-pc-windows-gnu.exe
-            upload_prefix: engine
-            platform: windows-x64
-            release_only: true
-          # Rivet Cloud CLI: 4 platforms for preview, 5 for release. The publish
-          # job also places the matching rivet-engine artifact next to the CLI
-          # binary so `rivet dev` works from the npm package.
-          - name: cli (linux-x64-musl)
-            build_target: cli
-            docker: docker/build/linux-x64-musl.Dockerfile
-            artifact: rivet-x86_64-unknown-linux-musl
-            upload_prefix: cli
-            platform: linux-x64-musl
-            release_only: false
-          - name: cli (linux-arm64-musl)
-            build_target: cli
-            docker: docker/build/linux-arm64-musl.Dockerfile
-            artifact: rivet-aarch64-unknown-linux-musl
-            upload_prefix: cli
-            platform: linux-arm64-musl
-            release_only: false
-          - name: cli (darwin-x64)
-            build_target: cli
-            docker: docker/build/darwin-x64.Dockerfile
-            artifact: rivet-x86_64-apple-darwin
-            upload_prefix: cli
-            platform: darwin-x64
-            release_only: false
-          - name: cli (darwin-arm64)
-            build_target: cli
-            docker: docker/build/darwin-arm64.Dockerfile
-            artifact: rivet-aarch64-apple-darwin
-            upload_prefix: cli
-            platform: darwin-arm64
-            release_only: false
-          - name: cli (windows-x64)
-            build_target: cli
-            docker: docker/build/windows-x64.Dockerfile
-            artifact: rivet-x86_64-pc-windows-gnu.exe
-            upload_prefix: cli
-            platform: windows-x64
-            release_only: true
     runs-on: depot-ubuntu-24.04-8
     permissions:
       contents: read
       id-token: write # required for depot OIDC trust
       packages: read
     steps:
-      - name: Skip release-only and out-of-scope targets
+      - name: Skip out-of-scope targets
         id: gate
         run: |
           skip=false
-          # Release-only targets (e.g. Windows) only build on release triggers.
-          if [ "${{ matrix.release_only }}" = "true" ] && [ "${{ needs.context.outputs.trigger }}" != "release" ]; then
-            skip=true
-          fi
           # Selective preview: skip build targets not in the resolved scope.
           case " ${{ needs.context.outputs.build_targets }} " in
             *" ${{ matrix.build_target }} "*) : ;;
@@ -287,7 +221,6 @@ jobs:
             --secret id=DEPOT_TOKEN,env=DEPOT_TOKEN \
             --build-arg BUILD_TARGET=${{ matrix.build_target }} \
             --build-arg BUILD_MODE=${{ steps.mode.outputs.build_mode }} \
-            --build-arg BUILD_FRONTEND=${{ matrix.build_target == 'engine' && 'true' || 'false' }} \
             -f ${{ matrix.docker }} \
             -t builder-${{ matrix.build_target }}-${{ matrix.platform }} \
             --load \
@@ -370,10 +303,8 @@ jobs:
         run: |
           if [ "${{ needs.context.outputs.trigger }}" = "release" ] || [ "${{ inputs.release_build }}" = "true" ]; then
             echo "cargo_build_mode=release" >> $GITHUB_OUTPUT
-            echo "build_frontend=true" >> $GITHUB_OUTPUT
           else
             echo "cargo_build_mode=debug" >> $GITHUB_OUTPUT
-            echo "build_frontend=true" >> $GITHUB_OUTPUT
           fi
       - uses: ./.github/actions/docker-setup
         with:
@@ -390,7 +321,6 @@ jobs:
           target: engine-full
           platforms: ${{ matrix.platform }}
           build-args: |
-            BUILD_FRONTEND=${{ steps.mode.outputs.build_frontend }}
             CARGO_BUILD_MODE=${{ steps.mode.outputs.cargo_build_mode }}
       - name: Build & Push (rivetdev/engine:slim)
         uses: docker/build-push-action@v4
@@ -402,7 +332,6 @@ jobs:
           target: engine-slim
           platforms: ${{ matrix.platform }}
           build-args: |
-            BUILD_FRONTEND=${{ steps.mode.outputs.build_frontend }}
             CARGO_BUILD_MODE=${{ steps.mode.outputs.cargo_build_mode }}
 
   # ---------------------------------------------------------------------------
@@ -453,21 +382,12 @@ jobs:
           path: native-artifacts
           pattern: native-*
           merge-multiple: true
-      # Engine binaries are also needed by the `cli` group (bundled into CLI
-      # platform packages), so key this off build_targets, not the group.
       - name: Download engine artifacts
         if: contains(needs.context.outputs.build_targets, 'engine')
         uses: actions/download-artifact@v4
         with:
           path: engine-artifacts
           pattern: engine-*
-          merge-multiple: true
-      - name: Download CLI artifacts
-        if: contains(needs.context.outputs.targets, 'cli')
-        uses: actions/download-artifact@v4
-        with:
-          path: cli-artifacts
-          pattern: cli-*
           merge-multiple: true
       - name: Download wasm package artifact
         if: needs.context.outputs.build_wasm == 'true'
@@ -489,103 +409,8 @@ jobs:
           done
 
       - name: Place engine binaries in engine-cli platform packages
-        run: |
-          ENGINE_CLI_DIR=rivetkit-typescript/packages/engine-cli/npm
-          declare -A TRIPLE_TO_PLATFORM=(
-            [rivet-engine-x86_64-unknown-linux-musl]=linux-x64-musl
-            [rivet-engine-aarch64-unknown-linux-musl]=linux-arm64-musl
-            [rivet-engine-x86_64-apple-darwin]=darwin-x64
-            [rivet-engine-aarch64-apple-darwin]=darwin-arm64
-            [rivet-engine-x86_64-pc-windows-gnu.exe]=win32-x64
-          )
-          for f in engine-artifacts/rivet-engine-*; do
-            [ -e "$f" ] || continue
-            filename=$(basename "$f")
-            platform="${TRIPLE_TO_PLATFORM[$filename]:-}"
-            if [ -z "$platform" ]; then
-              echo "Skipping engine artifact not mapped to a platform package: $filename"
-              continue
-            fi
-            dest="${ENGINE_CLI_DIR}/${platform}"
-            if [ ! -d "$dest" ]; then
-              echo "Missing engine-cli platform dir: $dest" >&2
-              exit 1
-            fi
-            if [ "$platform" = "win32-x64" ]; then
-              cp "$f" "$dest/rivet-engine.exe"
-              echo "Placed $filename -> npm/${platform}/rivet-engine.exe"
-            else
-              cp "$f" "$dest/rivet-engine"
-              chmod +x "$dest/rivet-engine"
-              echo "Placed $filename -> npm/${platform}/rivet-engine"
-            fi
-          done
-
-      - name: Place CLI binaries in CLI platform packages
-        run: |
-          CLI_DIR=rivetkit-typescript/packages/cli/npm
-          declare -A TRIPLE_TO_PLATFORM=(
-            [rivet-x86_64-unknown-linux-musl]=linux-x64-musl
-            [rivet-aarch64-unknown-linux-musl]=linux-arm64-musl
-            [rivet-x86_64-apple-darwin]=darwin-x64
-            [rivet-aarch64-apple-darwin]=darwin-arm64
-            [rivet-x86_64-pc-windows-gnu.exe]=win32-x64
-          )
-          for f in cli-artifacts/rivet-*; do
-            [ -e "$f" ] || continue
-            filename=$(basename "$f")
-            platform="${TRIPLE_TO_PLATFORM[$filename]:-}"
-            if [ -z "$platform" ]; then
-              echo "Skipping CLI artifact not mapped to a platform package: $filename"
-              continue
-            fi
-            dest="${CLI_DIR}/${platform}"
-            if [ ! -d "$dest" ]; then
-              echo "Missing CLI platform dir: $dest" >&2
-              exit 1
-            fi
-            if [ "$platform" = "win32-x64" ]; then
-              cp "$f" "$dest/rivet.exe"
-              echo "Placed $filename -> npm/${platform}/rivet.exe"
-            else
-              cp "$f" "$dest/rivet"
-              chmod +x "$dest/rivet"
-              echo "Placed $filename -> npm/${platform}/rivet"
-            fi
-          done
-
-      - name: Place bundled engine in CLI platform packages
-        run: |
-          CLI_DIR=rivetkit-typescript/packages/cli/npm
-          declare -A ENGINE_TO_PLATFORM=(
-            [rivet-engine-x86_64-unknown-linux-musl]=linux-x64-musl
-            [rivet-engine-aarch64-unknown-linux-musl]=linux-arm64-musl
-            [rivet-engine-x86_64-apple-darwin]=darwin-x64
-            [rivet-engine-aarch64-apple-darwin]=darwin-arm64
-            [rivet-engine-x86_64-pc-windows-gnu.exe]=win32-x64
-          )
-          for f in engine-artifacts/rivet-engine-*; do
-            [ -e "$f" ] || continue
-            filename=$(basename "$f")
-            platform="${ENGINE_TO_PLATFORM[$filename]:-}"
-            if [ -z "$platform" ]; then
-              echo "Skipping engine artifact not mapped to a CLI platform package: $filename"
-              continue
-            fi
-            dest="${CLI_DIR}/${platform}"
-            if [ ! -d "$dest" ]; then
-              echo "Missing CLI platform dir: $dest" >&2
-              exit 1
-            fi
-            if [ "$platform" = "win32-x64" ]; then
-              cp "$f" "$dest/rivet-engine.exe"
-              echo "Placed $filename -> npm/${platform}/rivet-engine.exe"
-            else
-              cp "$f" "$dest/rivet-engine"
-              chmod +x "$dest/rivet-engine"
-              echo "Placed $filename -> npm/${platform}/rivet-engine"
-            fi
-          done
+        if: contains(needs.context.outputs.targets, 'engine')
+        run: bash scripts/publish/stage-engine-packages.sh engine-artifacts
 
       - name: Bump package versions for build
         run: |
@@ -597,10 +422,11 @@ jobs:
       - name: Build TypeScript packages
         if: contains(needs.context.outputs.targets, 'rivetkit')
         env:
+          SKIP_NAPI_BUILD: "1"
           SKIP_WASM_BUILD: "1"
         run: |
           pnpm build -F rivetkit
-          pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/rivetkit-napi' -F '!@rivetkit/rivetkit-wasm'
+          pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/rivetkit-napi' -F '!@rivetkit/rivetkit-wasm'
           pnpm build -F '@rivet-dev/workflow-world'
 
       # ---- shared publish (runs for all triggers) ----
@@ -645,23 +471,6 @@ jobs:
             --sha ${{ needs.context.outputs.sha }} \
             --version ${{ needs.context.outputs.version }} \
             --latest ${{ needs.context.outputs.latest }}
-
-      # The Inspector UI lives in frontend/dist, outside the rivetkit-core
-      # crate, so it must be built and staged into the crate before packaging.
-      # Otherwise the published crate embeds the empty fallback and serves
-      # inspector.ui_asset_not_found. Runs for every trigger so branch previews
-      # gate the crate the same way release does.
-      - name: Build Inspector UI bundle
-        env:
-          SKIP_NAPI_BUILD: "1"
-          SKIP_WASM_BUILD: "1"
-        run: npx turbo build:inspector-ui -F @rivetkit/engine-frontend
-
-      - name: Stage Inspector UI into rivetkit-core
-        run: node rivetkit-rust/packages/rivetkit-core/scripts/stage-inspector-bundle.mjs
-
-      - name: Verify Inspector UI ships in the crate
-        run: node rivetkit-rust/packages/rivetkit-core/scripts/verify-inspector-bundle.mjs
 
       - name: Dry-run Rust crate publish
         if: needs.context.outputs.trigger != 'release'

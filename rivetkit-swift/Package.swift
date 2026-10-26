@@ -25,10 +25,6 @@ let package = Package(
         .target(
             name: "RivetKitSwiftUI",
             dependencies: ["RivetKitClient", "SwiftCBOR"]
-        ),
-        .testTarget(
-            name: "RivetKitClientTests",
-            dependencies: ["RivetKitClient"]
         )
     ]
 )

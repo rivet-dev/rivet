@@ -1,5 +1,0 @@
-{
-  "code": "restore_not_found",
-  "group": "connection",
-  "message": "Hibernatable connection restore target was not found"
-}

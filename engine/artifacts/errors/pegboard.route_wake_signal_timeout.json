@@ -1,5 +1,0 @@
-{
-  "code": "route_wake_signal_timeout",
-  "group": "pegboard",
-  "message": "Timed out sending actor wake signal."
-}

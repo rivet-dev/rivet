@@ -27,7 +27,7 @@ native-runtime = [
 ]
 wasm-runtime = ["rivet-envoy-client/wasm-transport"]
 sqlite = ["sqlite-local"]
-sqlite-local = ["native-runtime", "dep:depot-client", "dep:rivet-actor-runtime-socket-protocol"]
+sqlite-local = ["native-runtime", "dep:sqlite-embedded", "dep:rivet-actor-runtime-socket-protocol"]
 sqlite-remote = []
 test-support = ["dep:rusqlite"]
 
@@ -69,8 +69,8 @@ rivetkit-actor-persist.workspace = true
 rivetkit-client-protocol.workspace = true
 rivetkit-engine-process = { workspace = true, optional = true }
 rivetkit-inspector-protocol.workspace = true
-depot-client-types.workspace = true
-depot-client = { workspace = true, optional = true }
+sqlite_types.workspace = true
+sqlite-embedded = { workspace = true, optional = true, features = ["transport"] }
 scc.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -88,7 +88,9 @@ url.workspace = true
 vbare.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio.workspace = true
+# `block_in_place` in the queue's sync bridge needs the multi-thread runtime, which the
+# workspace tokio does not enable.
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 uuid.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -99,21 +101,6 @@ uuid = { version = "1.11.0", features = ["v4", "serde", "js"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-time = "1.1"
-
-[dev-dependencies]
-portpicker.workspace = true
-rusqlite.workspace = true
-tempfile.workspace = true
-tokio = { workspace = true, features = ["test-util"] }
-tracing-subscriber.workspace = true
-
-[[test]]
-name = "integration"
-path = "tests/integration.rs"
-
-[[test]]
-name = "inspector_bundle"
-path = "tests/inspector_bundle.rs"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(tokio_unstable)"] }

@@ -35,6 +35,7 @@ pub struct JsServeConfig {
 	pub engine_binary_path: Option<String>,
 	pub start_services: Option<bool>,
 	pub services_binary_path: Option<String>,
+	pub engine_spawn: Option<bool>,
 	pub engine_host: Option<String>,
 	pub engine_port: Option<u16>,
 	pub handle_inspector_http_in_runtime: Option<bool>,
@@ -842,7 +843,11 @@ fn serve_config_from_js(
 		services_binary_path: config.services_binary_path.map(PathBuf::from),
 		engine_host: config.engine_host,
 		engine_port: config.engine_port,
-		engine_spawn: EngineSpawnMode::Auto,
+		engine_spawn: if config.engine_spawn.unwrap_or(false) {
+			EngineSpawnMode::Always
+		} else {
+			EngineSpawnMode::Never
+		},
 		engine_auto_download: false,
 		handle_inspector_http_in_runtime: config
 			.handle_inspector_http_in_runtime

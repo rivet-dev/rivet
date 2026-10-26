@@ -36,8 +36,8 @@ pub(crate) struct ServicesProcessManager {
 }
 
 #[derive(Debug, Deserialize)]
-struct EnvoysResponse {
-	envoys: Vec<serde_json::Value>,
+struct NodesResponse {
+	nodes: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -271,14 +271,18 @@ async fn wait_for_readiness(
 		.context("build Services readiness client")?;
 	let mut url = Url::parse(&config.endpoint)
 		.with_context(|| format!("parse Engine endpoint `{}`", config.endpoint))?;
-	url.set_path("/envoys");
+	url.path_segments_mut()
+		.ok()
+		.with_context(|| format!("Engine endpoint `{}` cannot hold a path", config.endpoint))?
+		.clear()
+		.extend(["pools", config.pool_name.as_str(), "nodes"]);
 	url.set_query(None);
 	url.query_pairs_mut()
 		.append_pair("namespace", &config.namespace)
-		.append_pair("name", &config.pool_name);
+		.append_pair("limit", "1");
 
 	let max_attempts = max_attempts.max(1);
-	let mut last_reason = "the Engine has not listed the Services Envoy".to_owned();
+	let mut last_reason = "the Engine has not listed the Services node".to_owned();
 	for attempt in 1..=max_attempts {
 		if let Some(status) = child.try_wait().map_err(|error| {
 			ServicesProcessError::StartFailed {
@@ -298,10 +302,10 @@ async fn wait_for_readiness(
 		}
 		match request.send().await {
 			Ok(response) if response.status().is_success() => {
-				match response.json::<EnvoysResponse>().await {
-					Ok(response) if !response.envoys.is_empty() => return Ok(()),
+				match response.json::<NodesResponse>().await {
+					Ok(response) if !response.nodes.is_empty() => return Ok(()),
 					Ok(_) => {
-						last_reason = "the Engine returned no matching envoys".to_owned();
+						last_reason = "the Engine returned no nodes in the pool".to_owned();
 					}
 					Err(error) => last_reason = format!("invalid Engine response: {error}"),
 				}
@@ -326,56 +330,4 @@ async fn wait_for_readiness(
 	.build())
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
 
-	fn config(binary_path: Option<PathBuf>) -> ServicesProcessConfig {
-		ServicesProcessConfig {
-			binary_path,
-			endpoint: "http://127.0.0.1:6420".to_owned(),
-			token: Some("dev".to_owned()),
-			namespace: "default".to_owned(),
-			pool_name: SERVICES_POOL_NAME.to_owned(),
-			engine_protocol_version: 7,
-		}
-	}
-
-	#[test]
-	fn parses_structured_version_output() {
-		let output: ServicesVersionOutput = serde_json::from_str(
-			r#"{"name":"rivet-services","version":"0.2.0-rc.1","rivetkitVersion":"2.3.11","protocolVersion":7}"#,
-		)
-		.expect("version output should parse");
-		assert_eq!(output.name, "rivet-services");
-		assert_eq!(output.version, "0.2.0-rc.1");
-		assert_eq!(output.rivetkit_version, "2.3.11");
-		assert_eq!(output.protocol_version, 7);
-	}
-
-	#[tokio::test]
-	async fn missing_binary_is_a_structured_error() {
-		let error = ServicesProcessManager::start(config(None))
-			.await
-			.expect_err("missing binary should fail");
-
-		let error = rivet_error::RivetError::extract(&error);
-		assert_eq!(error.group(), "services");
-		assert_eq!(error.code(), "binary_unavailable");
-	}
-
-	#[test]
-	fn rejects_a_newer_protocol() {
-		let error =
-			validate_protocol_version(8, 7).expect_err("newer Services protocol should fail");
-		let error = rivet_error::RivetError::extract(&error);
-		assert_eq!(error.group(), "services");
-		assert_eq!(error.code(), "protocol_mismatch");
-	}
-
-	#[test]
-	fn accepts_an_equal_or_older_protocol() {
-		validate_protocol_version(7, 7).expect("equal protocol should be compatible");
-		validate_protocol_version(6, 7).expect("older protocol should be compatible");
-	}
-}

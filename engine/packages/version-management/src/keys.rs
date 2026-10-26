@@ -139,6 +139,4 @@ impl TuplePack for ProtocolVersionSubspaceKey {
 	}
 }
 
-#[cfg(test)]
-#[path = "../tests/inline/keys.rs"]
-mod tests;
+

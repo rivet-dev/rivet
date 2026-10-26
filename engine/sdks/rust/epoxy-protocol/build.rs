@@ -1,3 +1,8 @@
+#![allow(
+	clippy::disallowed_methods,
+	reason = "build-time schema generation reads and writes Cargo output files outside the runtime environment"
+)]
+
 use std::{
 	fs,
 	path::{Path, PathBuf},
@@ -29,7 +34,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("cargo:rerun-if-changed={}", highest_version_path.display());
 
-	let cfg = vbare_compiler::Config::default();
+	let cfg = vbare_compiler::Config {
+		vbare: vbare_gen::Config::default().with_serde(true),
+	};
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;
 
 	// Append protocol version constant to generated file

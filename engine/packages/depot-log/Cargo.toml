@@ -1,0 +1,30 @@
+[package]
+name = "depot-log"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+uuid.workspace = true
+lazy_static.workspace = true
+rivet-metrics.workspace = true
+rivet-data.workspace = true
+anyhow.workspace = true
+bytes = { workspace = true, features = ["serde"] }
+depot-types = { path = "../depot-types" }
+rivet-env.workspace = true
+rivet-keys.workspace = true
+rivet-state-machine.workspace = true
+rivet-state-machine-ephemeral.workspace = true
+serde.workspace = true
+serde_bare.workspace = true
+rivet-topology.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+parking_lot.workspace = true
+vbare.workspace = true
+hashbrown.workspace = true
+crc32c.workspace = true
+

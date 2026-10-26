@@ -9,6 +9,7 @@ import {
 	parseTargetGroups,
 	type TargetGroup,
 } from "./scope.js";
+import { releaseLatest } from "./version.js";
 
 /**
  * Publish context. Resolved once per workflow run by the `context-output` CI
@@ -159,7 +160,7 @@ function computeNpmTag(
 		return sanitizeBranch(branch);
 	}
 	// release
-	if (version.includes("-rc.")) return "rc";
+	if (!releaseLatest(version, true)) return "next";
 	return latest ? "latest" : "next";
 }
 
@@ -238,6 +239,7 @@ export async function resolveContext(
 		latest = parseBoolInput(input, false);
 	}
 	if (trigger !== "release") latest = false;
+	else latest = releaseLatest(version, latest);
 
 	const npmTag = computeNpmTag(trigger, version, latest, label);
 

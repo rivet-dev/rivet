@@ -152,12 +152,10 @@ pub async fn find_dc_for_actor_creation(
 	};
 
 	let res = ctx
-		.op(
-			pegboard::ops::runner::list_runner_config_enabled_dcs::Input {
-				namespace_id,
-				runner_name: runner_name.into(),
-			},
-		)
+		.op(pegboard::ops::runner::list_envoy_pool_enabled_dcs::Input {
+			namespace_id,
+			runner_name: runner_name.into(),
+		})
 		.await?;
 
 	let target_dc_label = if let Some(requested_dc_label) = requested_dc_label {
@@ -169,7 +167,7 @@ pub async fn find_dc_for_actor_creation(
 	};
 
 	target_dc_label.ok_or_else(|| {
-		pegboard::errors::Actor::NoRunnerConfigConfigured {
+		pegboard::errors::Actor::NoEnvoyPoolConfigured {
 			namespace: namespace_name.into(),
 			pool_name: runner_name.into(),
 		}

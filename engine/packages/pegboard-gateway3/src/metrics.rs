@@ -23,7 +23,7 @@ impl HttpResponseFlowMetrics {
 	}
 
 	pub(crate) fn consume(&self, bytes: usize) {
-		let result = self.buffered_bytes.fetch_update(
+		let result = self.buffered_bytes.try_update(
 			std::sync::atomic::Ordering::AcqRel,
 			std::sync::atomic::Ordering::Acquire,
 			|buffered| buffered.checked_sub(bytes as u64),
@@ -51,8 +51,8 @@ impl Drop for HttpResponseFlowMetrics {
 }
 
 lazy_static::lazy_static! {
-	pub static ref TUNNEL_PING_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		"gateway3_tunnel_ping_duration",
+	pub static ref TUNNEL_PING_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		"gateway3_tunnel_ping_duration_seconds",
 		"RTT of messages from gateway to pegboard.",
 		&["namespace_id", "pool_name", "protocol"],
 		BUCKETS.to_vec(),

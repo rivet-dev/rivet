@@ -30,14 +30,15 @@ export const getRivetRunEnginePort = (): number | undefined => {
 };
 export const getRivetRunEngineVersion = (): string | undefined =>
 	getEnvUniversal("RIVET_RUN_ENGINE_VERSION");
-export const getRivetRunServices = (): boolean | undefined => {
-	const value = getEnvUniversal("RIVET_RUN_SERVICES");
-	return value === undefined ? undefined : value === "1";
-};
+export const getRivetRunServices = (): boolean =>
+	getEnvUniversal("RIVET_RUN_SERVICES") === "1";
 export const getRivetEnvoyKind = (): string | undefined =>
-	getEnvUniversal("RIVET_ENVOY_KIND");
+	getEnvUniversal("RIVET_NODE_KIND") ?? getEnvUniversal("RIVET_ENVOY_KIND");
 export const getRivetEnvoyVersion = (): number | undefined => {
-	const value = getEnvUniversal("RIVET_ENVOY_VERSION");
+	// The legacy platform deployment still sets the old name.
+	const value =
+		getEnvUniversal("RIVET_NODE_VERSION") ??
+		getEnvUniversal("RIVET_ENVOY_VERSION");
 	return value !== undefined ? parseInt(value, 10) : undefined;
 };
 export const getRivetPublicEndpoint = (): string | undefined =>
@@ -54,14 +55,18 @@ export const getRivetkitStoragePath = (): string | undefined =>
 	getEnvUniversal("RIVETKIT_STORAGE_PATH");
 export const getRivetkitRuntime = (): string | undefined =>
 	getEnvUniversal("RIVETKIT_RUNTIME");
-export type RuntimeMode = "envoy" | "serverless";
+export type RuntimeMode = "node" | "serverless";
 
 export const getRivetkitRuntimeMode = (): RuntimeMode => {
 	const value = getEnvUniversal("RIVETKIT_RUNTIME_MODE");
-	if (value === undefined) return "envoy";
-	if (value === "envoy" || value === "serverless") return value;
+	if (value === undefined || value === "envoy") return "node";
+	// Serverless is disabled for v3.
+	if (value === "serverless") {
+		throw new Error("serverless is disabled in this version");
+	}
+	if (value === "node") return value;
 	throw new Error(
-		`RIVETKIT_RUNTIME_MODE env var must be "envoy" or "serverless"; got "${value}"`,
+		`RIVETKIT_RUNTIME_MODE env var must be "node" or "serverless"; got "${value}"`,
 	);
 };
 

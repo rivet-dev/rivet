@@ -17,9 +17,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends nasm && \
 
 ARG BUILD_TARGET=engine
 ARG BUILD_MODE=release
-ARG BUILD_FRONTEND=false
-ARG VITE_APP_API_URL=__SAME__
-ARG VITE_FEATURE_FLAGS=
 
 # Windows-specific build flags:
 # - lld linker is ~5x faster than MinGW's default ld for big Rust binaries.
@@ -42,18 +39,11 @@ RUN RUST_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
     rustup default "${RUST_TOOLCHAIN}" && \
     rustup target add x86_64-pc-windows-gnu
 
-RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
+RUN if [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \
         export SKIP_NAPI_BUILD=1 && \
         export SKIP_WASM_BUILD=1 && \
-        pnpm install --ignore-scripts && \
-        VITE_APP_API_URL="${VITE_APP_API_URL}" VITE_FEATURE_FLAGS="${VITE_FEATURE_FLAGS}" npx turbo build:engine -F @rivetkit/engine-frontend; \
-    elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
-        export NODE_OPTIONS="--max-old-space-size=8192" && \
-        export SKIP_NAPI_BUILD=1 && \
-        export SKIP_WASM_BUILD=1 && \
-        pnpm install --ignore-scripts && \
-        npx turbo build:inspector-ui -F @rivetkit/engine-frontend; \
+        pnpm install --frozen-lockfile --ignore-scripts; \
     fi
 
 RUN --mount=type=cache,id=cargo-registry-windows-x64,target=/usr/local/cargo/registry,sharing=locked \
@@ -81,9 +71,6 @@ RUN --mount=type=cache,id=cargo-registry-windows-x64,target=/usr/local/cargo/reg
     if [ "$BUILD_TARGET" = "engine" ]; then \
         cargo build -p rivet-engine --bin rivet-engine $CARGO_FLAG --target x86_64-pc-windows-gnu && \
         cp target/x86_64-pc-windows-gnu/$PROFILE_DIR/rivet-engine.exe /artifacts/rivet-engine-x86_64-pc-windows-gnu.exe; \
-    elif [ "$BUILD_TARGET" = "cli" ]; then \
-        cargo build -p rivet-cli --bin rivet $CARGO_FLAG --target x86_64-pc-windows-gnu && \
-        cp target/x86_64-pc-windows-gnu/$PROFILE_DIR/rivet.exe /artifacts/rivet-x86_64-pc-windows-gnu.exe; \
     elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
         cd rivetkit-typescript/packages/rivetkit-napi && \
         napi build --platform $CARGO_FLAG --target x86_64-pc-windows-gnu && \

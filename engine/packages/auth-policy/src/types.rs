@@ -25,8 +25,10 @@ use utoipa::ToSchema;
 pub enum ResourceKind {
 	Namespace,
 	Actor,
+	#[serde(rename = "node", alias = "runner")]
 	Runner,
-	RunnerConfig,
+	#[serde(rename = "pool", alias = "runner_pool", alias = "runner_config")]
+	RunnerPool,
 	Token,
 	Datacenter,
 	ActorGateway,
@@ -42,7 +44,7 @@ impl fmt::Display for ResourceKind {
 			ResourceKind::ActorKv => "actor KVs",
 			ResourceKind::Jwt => "JWTs",
 			ResourceKind::Runner => "runners",
-			ResourceKind::RunnerConfig => "runner configs",
+			ResourceKind::RunnerPool => "runner pools",
 			ResourceKind::Token => "tokens",
 			ResourceKind::Namespace => "namespaces",
 			ResourceKind::Datacenter => "datacenters",
@@ -58,7 +60,7 @@ impl ResourceKind {
 			ResourceKind::ActorKv => "actor-kv",
 			ResourceKind::Jwt => "jwt",
 			ResourceKind::Runner => "runner",
-			ResourceKind::RunnerConfig => "runner-config",
+			ResourceKind::RunnerPool => "runner-pool",
 			ResourceKind::Token => "token",
 			ResourceKind::Namespace => "namespace",
 			ResourceKind::Datacenter => "datacenter",

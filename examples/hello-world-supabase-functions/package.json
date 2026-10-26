@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "npx @rivetkit/cli dev --provider supabase",
+		"dev": "supabase functions serve",
 		"client": "tsx scripts/client.ts",
 		"check-types": "tsc --noEmit",
 		"deploy": "npx supabase functions deploy rivet"
@@ -20,8 +20,14 @@
 	},
 	"stableVersion": "0.8.0",
 	"template": {
-		"technologies": ["rivet", "supabase", "typescript"],
-		"tags": ["serverless"],
+		"technologies": [
+			"rivet",
+			"supabase",
+			"typescript"
+		],
+		"tags": [
+			"serverless"
+		],
 		"noFrontend": true,
 		"skipVercel": true
 	},

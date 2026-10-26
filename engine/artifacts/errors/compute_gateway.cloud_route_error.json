@@ -1,5 +1,0 @@
-{
-  "code": "cloud_route_error",
-  "group": "compute_gateway",
-  "message": "Failed to resolve route from cloud."
-}

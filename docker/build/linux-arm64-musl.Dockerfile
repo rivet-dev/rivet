@@ -7,9 +7,6 @@ FROM ghcr.io/rivet-dev/rivet/builder-base-linux-musl:0e33ceb98
 
 ARG BUILD_TARGET=engine
 ARG BUILD_MODE=release
-ARG BUILD_FRONTEND=false
-ARG VITE_APP_API_URL=__SAME__
-ARG VITE_FEATURE_FLAGS=
 
 ENV OPENSSL_DIR=/musl-aarch64 \
     OPENSSL_INCLUDE_DIR=/musl-aarch64/include \
@@ -31,18 +28,11 @@ RUN RUST_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
     rustup default "${RUST_TOOLCHAIN}" && \
     rustup target add aarch64-unknown-linux-musl
 
-RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
+RUN if [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \
         export SKIP_NAPI_BUILD=1 && \
         export SKIP_WASM_BUILD=1 && \
-        pnpm install --ignore-scripts && \
-        VITE_APP_API_URL="${VITE_APP_API_URL}" VITE_FEATURE_FLAGS="${VITE_FEATURE_FLAGS}" npx turbo build:engine -F @rivetkit/engine-frontend; \
-    elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
-        export NODE_OPTIONS="--max-old-space-size=8192" && \
-        export SKIP_NAPI_BUILD=1 && \
-        export SKIP_WASM_BUILD=1 && \
-        pnpm install --ignore-scripts && \
-        npx turbo build:inspector-ui -F @rivetkit/engine-frontend; \
+        pnpm install --frozen-lockfile --ignore-scripts; \
     fi
 
 RUN --mount=type=cache,id=cargo-registry-linux-arm64-musl,target=/usr/local/cargo/registry,sharing=locked \
@@ -72,11 +62,6 @@ RUN --mount=type=cache,id=cargo-registry-linux-arm64-musl,target=/usr/local/carg
             cargo build -p rivet-engine --bin rivet-engine $CARGO_FLAG --target aarch64-unknown-linux-musl && \
         /opt/aarch64-linux-musl-cross/bin/aarch64-linux-musl-strip target/aarch64-unknown-linux-musl/$PROFILE_DIR/rivet-engine && \
         cp target/aarch64-unknown-linux-musl/$PROFILE_DIR/rivet-engine /artifacts/rivet-engine-aarch64-unknown-linux-musl; \
-    elif [ "$BUILD_TARGET" = "cli" ]; then \
-        RUSTFLAGS="-C target-feature=+crt-static -C link-arg=-static-libgcc" \
-            cargo build -p rivet-cli --bin rivet $CARGO_FLAG --target aarch64-unknown-linux-musl && \
-        /opt/aarch64-linux-musl-cross/bin/aarch64-linux-musl-strip target/aarch64-unknown-linux-musl/$PROFILE_DIR/rivet && \
-        cp target/aarch64-unknown-linux-musl/$PROFILE_DIR/rivet /artifacts/rivet-aarch64-unknown-linux-musl; \
     elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
         cd rivetkit-typescript/packages/rivetkit-napi && \
         RUSTFLAGS="--cfg tokio_unstable -C target-feature=-crt-static" \

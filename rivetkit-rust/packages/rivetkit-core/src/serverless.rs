@@ -6,7 +6,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use http::StatusCode;
 use rivet_envoy_client::config::{ActorName as EnvoyActorName, EnvoyConfig};
-use rivet_envoy_client::envoy::start_envoy as start_envoy_client;
+use rivet_envoy_client::envoy::start_envoy_sync;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
 use rivetkit_shared_types::serverless_metadata::{
@@ -26,7 +26,7 @@ use crate::registry::{
 	should_manage_engine,
 };
 use crate::runtime::RuntimeSpawner;
-use crate::time::{sleep, timeout};
+use crate::time::{Instant, sleep, timeout};
 
 const DEFAULT_BASE_PATH: &str = "/api/rivet";
 const SSE_PING_INTERVAL: Duration = Duration::from_secs(1);
@@ -36,15 +36,29 @@ const SSE_STOPPING_FRAME: &[u8] = b"event: stopping\ndata:\n\n";
 /// reach the engine (reconnect loop stuck), we fall back to immediate `Stop`
 /// rather than hanging indefinitely. Must stay below the outer TS grace ceiling.
 const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(20);
+/// Bound on waiting for a new envoy to receive the engine's init message. A
+/// start that misses it is torn down so the next `/start` retries from scratch.
+const ENVOY_START_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Clone)]
 pub struct CoreServerlessRuntime {
 	settings: Arc<ServerlessSettings>,
 	dispatcher: Arc<RegistryDispatcher>,
-	envoy: Arc<TokioMutex<Option<EnvoyHandle>>>,
+	envoy: Arc<TokioMutex<Option<CachedEnvoy>>>,
 	#[cfg(feature = "native-runtime")]
 	development_processes: Arc<TokioMutex<Option<DevelopmentProcessManager>>>,
 	shutting_down: Arc<AtomicBool>,
+}
+
+/// A cached envoy and the deadline for its first engine init message.
+///
+/// Every `/start` request that shares the envoy waits against the same
+/// deadline, so an earlier request cannot time out and stop an envoy that a
+/// later request is still waiting on with time left.
+#[derive(Clone)]
+struct CachedEnvoy {
+	handle: EnvoyHandle,
+	start_deadline: Instant,
 }
 
 #[derive(Clone, Debug)]
@@ -151,12 +165,26 @@ struct IncomingMessageTooLong {
 )]
 struct RuntimeShutDown;
 
+#[derive(rivet_error::RivetError, Serialize)]
+#[error(
+	"registry",
+	"envoy_start_failed",
+	"Envoy failed to connect to the engine.",
+	"Envoy failed to connect to the engine: {reason}"
+)]
+struct EnvoyStartFailed {
+	reason: String,
+}
+
 impl CoreServerlessRuntime {
 	pub(crate) async fn new(
 		factories: HashMap<String, Arc<ActorFactory>>,
 		config: ServeConfig,
 	) -> Result<Self> {
-		let manage_engine = should_manage_engine(&config.endpoint, config.engine_spawn)?;
+		#[cfg(feature = "sqlite-local")]
+		sqlite_embedded::vfs::verify_batch_atomic_writes_at_process_startup().await?;
+
+		let manage_engine = should_manage_engine(config.engine_spawn);
 		#[cfg(feature = "native-runtime")]
 		let development_processes = if manage_engine {
 			Some(DevelopmentProcessManager::start(&config).await?)
@@ -212,7 +240,7 @@ impl CoreServerlessRuntime {
 	/// timeout (e.g. engine unreachable), falls back to an immediate `Stop`.
 	pub async fn shutdown(&self) {
 		self.shutting_down.store(true, Ordering::Release);
-		let handle = { self.envoy.lock().await.take() };
+		let handle = { self.envoy.lock().await.take() }.map(|cached| cached.handle);
 		#[cfg(feature = "native-runtime")]
 		let development_processes = { self.development_processes.lock().await.take() };
 		let shutdown_envoy = async move {
@@ -245,7 +273,7 @@ impl CoreServerlessRuntime {
 	/// reaches the engine before `shutdown` announces the envoy is going away. Otherwise
 	/// that announcement becomes a `GoingAway` that overrides the destroy and reallocates.
 	pub async fn wait_actors_drained(&self, timeout_dur: Duration) {
-		let handle = { self.envoy.lock().await.as_ref().cloned() };
+		let handle = { self.cached_envoy_handle().await };
 		let Some(handle) = handle else { return };
 		let _ = timeout(
 			timeout_dur,
@@ -261,16 +289,22 @@ impl CoreServerlessRuntime {
 	}
 
 	pub async fn active_envoy_status(&self) -> Option<CoreEnvoyStatus> {
+		self.cached_envoy_handle()
+			.await
+			.map(|handle| CoreEnvoyHandle::new(handle).status())
+	}
+
+	pub async fn active_envoy_actor_stop_threshold_ms(&self) -> Option<i64> {
+		let handle = self.cached_envoy_handle().await?;
+		CoreEnvoyHandle::new(handle).actor_stop_threshold_ms().await
+	}
+
+	async fn cached_envoy_handle(&self) -> Option<EnvoyHandle> {
 		self.envoy
 			.lock()
 			.await
 			.as_ref()
-			.map(|handle| CoreEnvoyHandle::new(handle.clone()).status())
-	}
-
-	pub async fn active_envoy_actor_stop_threshold_ms(&self) -> Option<i64> {
-		let handle = self.envoy.lock().await.as_ref().cloned()?;
-		CoreEnvoyHandle::new(handle).actor_stop_threshold_ms().await
+			.map(|cached| cached.handle.clone())
 	}
 
 	/// Listener-side body cap; reuses the `/start` payload limit.
@@ -331,13 +365,13 @@ impl CoreServerlessRuntime {
 				// recent engine ping. Unhealthy only when an envoy exists but has not
 				// received a recent ping. 503 is the conventional "recycle me" signal
 				// for container hosts running behind an HTTP health probe.
-				let runtime_healthy = {
-					let guard = self.envoy.lock().await;
-					guard
-						.as_ref()
-						.map(|handle| handle.is_ping_healthy())
-						.unwrap_or(true)
-				};
+				// An envoy that is still waiting for the engine's init message is
+				// reported healthy. `ensure_envoy` bounds that wait and evicts an
+				// envoy that never starts.
+				let handle = { self.cached_envoy_handle().await };
+				let runtime_healthy = handle
+					.map(|handle| !handle.has_started() || handle.is_ping_healthy())
+					.unwrap_or(true);
 				if runtime_healthy {
 					Ok(json_response(
 						StatusCode::OK,
@@ -519,46 +553,95 @@ impl CoreServerlessRuntime {
 		Ok(())
 	}
 
+	/// Returns a started envoy for these start headers.
+	///
+	/// The envoy mutex is held only to read or install the cached handle, never
+	/// while waiting for the engine. `/health`, other `/start` requests and
+	/// `shutdown` therefore stay responsive while a cold start waits for init.
 	async fn ensure_envoy(&self, headers: &StartHeaders) -> Result<EnvoyHandle> {
 		if self.shutting_down.load(Ordering::Acquire) {
 			return Err(RuntimeShutDown.build());
 		}
 		if !self.settings.cache_envoy {
-			return self.start_envoy(headers).await;
-		}
-		let mut guard = self.envoy.lock().await;
-		if let Some(handle) = guard.as_ref() {
-			// The start request token authenticates the serverless callback. It is not part
-			// of envoy identity, and may differ from the token used for the engine connection.
-			if !endpoints_match(handle.endpoint(), &headers.endpoint)
-				|| handle.namespace() != headers.namespace
-				|| handle.pool_name() != headers.pool_name
-			{
-				anyhow::bail!("serverless start headers do not match active envoy");
+			let handle = start_envoy_sync(self.envoy_config(headers));
+			let start_deadline = Instant::now() + ENVOY_START_TIMEOUT;
+			if let Err(reason) = wait_for_envoy_start(&handle, start_deadline).await {
+				return Err(self.stop_failed_envoy(&handle, reason).await);
 			}
-			return Ok(handle.clone());
+			return Ok(handle);
 		}
 
-		let handle = self.start_envoy(headers).await?;
-		// Re-check under the lock: shutdown may have run while we were awaiting
-		// `start_envoy`. If so, tear down the freshly-built envoy rather than
-		// installing it into the cache.
-		if self.shutting_down.load(Ordering::Acquire) {
-			drop(guard);
-			match timeout(SHUTDOWN_DRAIN_TIMEOUT, handle.shutdown_and_wait(false)).await {
-				Ok(()) => {}
-				Err(_) => {
-					handle.shutdown(true);
-					handle.wait_stopped().await;
+		let cached = {
+			let mut guard = self.envoy.lock().await;
+			// `shutdown` sets the flag before it takes the cached handle under this
+			// lock, so checking here guarantees it either sees the handle installed
+			// below or this call sees the flag.
+			if self.shutting_down.load(Ordering::Acquire) {
+				return Err(RuntimeShutDown.build());
+			}
+			match guard.as_ref() {
+				Some(cached) => {
+					// The start request token authenticates the serverless callback. It is
+					// not part of envoy identity, and may differ from the token used for
+					// the engine connection.
+					let handle = &cached.handle;
+					if !endpoints_match(handle.endpoint(), &headers.endpoint)
+						|| handle.namespace() != headers.namespace
+						|| handle.pool_name() != headers.pool_name
+					{
+						anyhow::bail!("serverless start headers do not match active envoy");
+					}
+					cached.clone()
+				}
+				None => {
+					let cached = CachedEnvoy {
+						handle: start_envoy_sync(self.envoy_config(headers)),
+						start_deadline: Instant::now() + ENVOY_START_TIMEOUT,
+					};
+					*guard = Some(cached.clone());
+					cached
 				}
 			}
-			return Err(RuntimeShutDown.build());
+		};
+
+		if let Err(reason) = wait_for_envoy_start(&cached.handle, cached.start_deadline).await {
+			// Evict before stopping, so `/start` requests that arrive while the
+			// failed envoy drains start a fresh one instead of receiving it.
+			{
+				let mut guard = self.envoy.lock().await;
+				let is_cached = guard.as_ref().is_some_and(|current| {
+					current.handle.get_envoy_key() == cached.handle.get_envoy_key()
+				});
+				if is_cached {
+					*guard = None;
+				}
+			}
+			return Err(self.stop_failed_envoy(&cached.handle, reason).await);
 		}
-		*guard = Some(handle.clone());
-		Ok(handle)
+		Ok(cached.handle)
 	}
 
-	async fn start_envoy(&self, headers: &StartHeaders) -> Result<EnvoyHandle> {
+	/// Stops an envoy that missed its start deadline so its reconnect loop does
+	/// not outlive the request, and returns the error for the caller.
+	async fn stop_failed_envoy(&self, handle: &EnvoyHandle, reason: String) -> anyhow::Error {
+		handle.shutdown(true);
+		if timeout(SHUTDOWN_DRAIN_TIMEOUT, handle.wait_stopped())
+			.await
+			.is_err()
+		{
+			tracing::warn!(
+				"serverless envoy did not stop after a failed start; the engine may be unreachable"
+			);
+		}
+
+		if self.shutting_down.load(Ordering::Acquire) {
+			return RuntimeShutDown.build();
+		}
+		tracing::warn!(%reason, "serverless envoy failed to start; check engine reachability");
+		EnvoyStartFailed { reason }.build()
+	}
+
+	fn envoy_config(&self, headers: &StartHeaders) -> EnvoyConfig {
 		let callbacks = Arc::new(RegistryCallbacks {
 			dispatcher: self.dispatcher.clone(),
 		});
@@ -570,9 +653,9 @@ impl CoreServerlessRuntime {
 			.collect();
 		// not_global: true to avoid caching the handle in the process-wide
 		// `GLOBAL_ENVOY` OnceLock. Without this, a shutdown-during-build race
-		// (spec §3 step 7) leaves a dead handle cached for the life of the
-		// process and any subsequent consumer gets it back.
-		Ok(start_envoy_client(EnvoyConfig {
+		// leaves a dead handle cached for the life of the process and any
+		// subsequent consumer gets it back.
+		EnvoyConfig {
 			version: self.settings.version,
 			endpoint: headers.endpoint.clone(),
 			token: headers.token.clone(),
@@ -584,9 +667,15 @@ impl CoreServerlessRuntime {
 			})),
 			not_global: true,
 			debug_latency_ms: None,
+			max_queued_requests_per_actor:
+				rivet_envoy_client::config::DEFAULT_MAX_QUEUED_REQUESTS_PER_ACTOR,
+			stopped_generation_floor_ttl:
+				rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_TTL,
+			stopped_generation_floor_capacity:
+				rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_CAPACITY,
 			callbacks,
-		})
-		.await)
+			connector: None,
+		}
 	}
 }
 
@@ -760,6 +849,7 @@ fn serverless_error_status(group: &str, code: &str) -> StatusCode {
 	match (group, code) {
 		("auth", "forbidden") => StatusCode::FORBIDDEN,
 		("message", "incoming_too_long") => StatusCode::PAYLOAD_TOO_LARGE,
+		("registry", "envoy_start_failed") => StatusCode::SERVICE_UNAVAILABLE,
 		_ => StatusCode::BAD_REQUEST,
 	}
 }
@@ -801,6 +891,23 @@ fn normalized_endpoint_candidates(value: &str) -> Vec<String> {
 		.collect()
 }
 
+/// Waits until `start_deadline` for the engine's init message and returns the
+/// failure reason when it does not arrive.
+async fn wait_for_envoy_start(
+	handle: &EnvoyHandle,
+	start_deadline: Instant,
+) -> std::result::Result<(), String> {
+	let remaining = start_deadline.saturating_duration_since(Instant::now());
+	match timeout(remaining, handle.started()).await {
+		Ok(Ok(())) => Ok(()),
+		Ok(Err(error)) => Err(format!("{error:#}")),
+		Err(_) => Err(format!(
+			"no init message within {} ms",
+			ENVOY_START_TIMEOUT.as_millis()
+		)),
+	}
+}
+
 pub fn endpoints_match(a: &str, b: &str) -> bool {
 	let a_candidates = normalized_endpoint_candidates(a);
 	let b_candidates = normalized_endpoint_candidates(b);
@@ -828,6 +935,4 @@ fn is_loopback_address(hostname: &str) -> bool {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../tests/serverless.rs"]
-mod tests;
+

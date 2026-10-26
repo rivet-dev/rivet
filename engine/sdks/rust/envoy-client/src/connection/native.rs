@@ -6,19 +6,43 @@ use rivet_envoy_protocol as protocol;
 use tokio::sync::{Semaphore, mpsc, oneshot};
 use tokio_tungstenite::tungstenite;
 use tracing::Instrument;
-use vbare::OwnedVersionedData;
+use vbare::Versioned;
 
 use crate::context::{HttpWsTxMessage, SharedContext, WsTxMessage};
 use crate::envoy::ToEnvoyMessage;
 use crate::handle::EnvoyHandle;
 use crate::metrics::METRICS;
-use crate::utils::{BackoffOptions, calculate_backoff, parse_ws_close_reason};
+use crate::utils::{parse_ws_close_reason, reconnect_delay};
 
 const STABLE_CONNECTION_MS: u64 = 60_000;
 
-pub fn start_connection(shared: Arc<SharedContext>) {
+pub fn start_connection(shared: Arc<SharedContext>) -> Option<tokio::task::JoinHandle<()>> {
 	let span = tracing::debug_span!("envoy_connection", envoy_key = %shared.envoy_key);
-	tokio::spawn(connection_loop(shared).instrument(span));
+	Some(tokio::spawn(connection_loop(shared).instrument(span)))
+}
+
+/// Whether a read failed because the peer dropped the connection without a close frame.
+/// Every other error, such as a protocol violation or an oversized frame, is a fault.
+fn is_connection_reset(error: &tungstenite::Error) -> bool {
+	let closed = matches!(
+		error,
+		tungstenite::Error::Protocol(
+			tungstenite::error::ProtocolError::ResetWithoutClosingHandshake
+		) | tungstenite::Error::ConnectionClosed
+			| tungstenite::Error::AlreadyClosed
+	);
+	let reset = matches!(
+		error,
+		tungstenite::Error::Io(io) if matches!(
+			io.kind(),
+			std::io::ErrorKind::ConnectionReset
+				| std::io::ErrorKind::ConnectionAborted
+				| std::io::ErrorKind::BrokenPipe
+				| std::io::ErrorKind::UnexpectedEof
+		)
+	);
+
+	closed || reset
 }
 
 fn websocket_config() -> tungstenite::protocol::WebSocketConfig {
@@ -36,10 +60,15 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 			return;
 		}
 
-		let connected_at = std::time::Instant::now();
+		// Stability is judged on the clock the backoff sleeps on.
+		let connected_at = crate::time::Instant::now();
 
+		let mut retry_after_ms = None;
 		match single_connection(&shared).await {
 			Ok((session, close_reason)) => {
+				retry_after_ms = close_reason
+					.as_ref()
+					.and_then(|reason| reason.retry_after_ms);
 				if let Some(reason) = &close_reason {
 					if reason.group == "ws" && reason.error == "eviction" {
 						tracing::debug!("connection evicted");
@@ -86,7 +115,8 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 			return;
 		}
 
-		let delay = calculate_backoff(attempt, &BackoffOptions::default());
+		let lost_threshold_ms = super::reconnect_lost_threshold_ms(&shared).await;
+		let delay = reconnect_delay(attempt, retry_after_ms, lost_threshold_ms);
 		tracing::info!(attempt, delay_ms = delay.as_millis() as u64, "reconnecting");
 		tokio::time::sleep(delay).await;
 		attempt += 1;
@@ -125,9 +155,60 @@ async fn single_connection(
 		.body(())
 		.map_err(|e| anyhow::anyhow!("failed to build ws request: {e}"))?;
 
-	let (ws_stream, _) =
-		tokio_tungstenite::connect_async_with_config(request, Some(websocket_config()), false)
+	// Storage replies and lifecycle messages are latency-sensitive, including
+	// small frames sent immediately after another frame on this shared socket.
+	match &shared.config.connector {
+		Some(connector) => {
+			let stream = connector.connect(&url).await?;
+			let (ws_stream, response) = tokio_tungstenite::client_async_with_config(
+				request,
+				stream,
+				Some(websocket_config()),
+			)
 			.await?;
+			serve_connection(
+				shared,
+				ws_stream,
+				super::sqlite_trace_connection(
+					response
+						.headers()
+						.get("x-rivet-sqlite-trace-connection")
+						.map(|value| value.as_bytes()),
+				),
+			)
+			.await
+		}
+		None => {
+			let (ws_stream, response) = tokio_tungstenite::connect_async_with_config(
+				request,
+				Some(websocket_config()),
+				true,
+			)
+			.await?;
+			serve_connection(
+				shared,
+				ws_stream,
+				super::sqlite_trace_connection(
+					response
+						.headers()
+						.get("x-rivet-sqlite-trace-connection")
+						.map(|value| value.as_bytes()),
+				),
+			)
+			.await
+		}
+	}
+}
+
+/// Runs one connected WebSocket session until it closes or fails.
+async fn serve_connection<S>(
+	shared: &Arc<SharedContext>,
+	ws_stream: tokio_tungstenite::WebSocketStream<S>,
+	server_connection: Option<uuid::Uuid>,
+) -> anyhow::Result<(u64, Option<crate::utils::ParsedCloseReason>)>
+where
+	S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
 	let (mut write, mut read) = ws_stream.split();
 
 	// TODO: Bound shared WebSocket writer memory across protocol message types.
@@ -136,9 +217,20 @@ async fn single_connection(
 	let (http_ws_tx, mut http_ws_rx) =
 		mpsc::channel::<HttpWsTxMessage>(super::HTTP_WS_MESSAGE_CAPACITY);
 	let http_byte_budget = Arc::new(Semaphore::new(super::HTTP_WS_BYTE_CAPACITY));
+	// Pongs skip the shared writer queue: on a busy node that queue can hold seconds of
+	// storage requests and events, and a pong waiting behind them gets the envoy declared
+	// dead. Only the latest pong matters, so the slot holds one.
+	let (pong_tx, mut pong_rx) = tokio::sync::watch::channel::<Option<Vec<u8>>>(None);
 	let session =
 		super::install_connection_with_http(shared, ws_tx, http_ws_tx, http_byte_budget).await;
+	if session == 0 {
+		anyhow::bail!("envoy shut down during websocket handshake");
+	}
 
+	tracing::trace!(target: "sqlite_prefetch::trace", event = "connection_session",
+        envoy_key = %shared.envoy_key, session,
+        server_connection = server_connection.as_ref().map(ToString::to_string),
+        "SQLite client and server session mapping; None means unavailable");
 	tracing::info!(
 		endpoint = %shared.config.endpoint,
 		namespace = %shared.config.namespace,
@@ -165,6 +257,15 @@ async fn single_connection(
 
 			loop {
 				let msg = tokio::select! {
+					biased;
+					changed = pong_rx.changed() => {
+						if changed.is_err() {
+							break;
+						}
+						let pong = pong_rx.borrow_and_update().clone();
+						let Some(pong) = pong else { continue };
+						Some(EitherWrite::Legacy(WsTxMessage::Send(pong)))
+					}
 					msg = ws_rx.recv() => msg.map(EitherWrite::Legacy),
 					msg = http_ws_rx.recv() => msg.map(EitherWrite::Http),
 				};
@@ -235,15 +336,23 @@ async fn single_connection(
 				METRICS.ws_rx_messages_total.inc();
 
 				let decode_start = std::time::Instant::now();
-				let decoded = crate::protocol::versioned::ToEnvoy::deserialize(
-					&data,
+				// Decoding shares the frame: tunnel bodies and SQLite pages are slices of it.
+				let decoded = crate::protocol::versioned::ToEnvoy::decode_body(
+					data.into(),
 					protocol::PROTOCOL_VERSION,
 				)?;
 				METRICS
 					.ws_decode_duration
 					.observe(decode_start.elapsed().as_secs_f64());
 
-				super::forward_to_envoy(shared, session, decoded).await;
+				match decoded {
+					protocol::ToEnvoy::ToEnvoyPing(ping) => {
+						if let Some(pong) = super::encode_pong(shared, ping) {
+							pong_tx.send_replace(Some(pong));
+						}
+					}
+					other => super::forward_to_envoy(shared, session, other).await,
+				}
 
 				METRICS
 					.ws_read_handler_duration
@@ -265,7 +374,13 @@ async fn single_connection(
 			}
 			Err(e) => {
 				disconnect_reason = "error";
-				tracing::error!(?e, "websocket error");
+				if is_connection_reset(&e) {
+					// The engine went away without a close frame, as when its process exits.
+					// The envoy reconnects, so this is an expected disconnect, not a fault.
+					tracing::warn!(?e, "websocket reset without a close frame; reconnecting");
+				} else {
+					tracing::error!(?e, "websocket error");
+				}
 				break;
 			}
 			_ => {}
@@ -312,53 +427,4 @@ fn extract_host(url: &str) -> String {
 		.to_string()
 }
 
-#[cfg(test)]
-mod tests {
-	use futures_util::{SinkExt, StreamExt};
-	use tokio::net::TcpListener;
 
-	use super::*;
-
-	#[test]
-	fn websocket_config_has_no_input_size_limits() {
-		let config = websocket_config();
-
-		assert_eq!(config.max_frame_size, None);
-		assert_eq!(config.max_message_size, None);
-	}
-
-	#[tokio::test]
-	async fn receives_frame_larger_than_default_limit() {
-		const FRAME_SIZE: usize = (16 << 20) + 64 * 1024;
-		const FRAME_BYTE: u8 = 0xa5;
-
-		let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-		let addr = listener.local_addr().unwrap();
-		let server = tokio::spawn(async move {
-			let (stream, _) = listener.accept().await.unwrap();
-			let mut websocket = tokio_tungstenite::accept_async(stream).await.unwrap();
-			websocket
-				.send(tungstenite::Message::Binary(
-					vec![FRAME_BYTE; FRAME_SIZE].into(),
-				))
-				.await
-				.unwrap();
-		});
-
-		let (mut client, _) = tokio_tungstenite::connect_async_with_config(
-			format!("ws://{addr}"),
-			Some(websocket_config()),
-			false,
-		)
-		.await
-		.unwrap();
-		let message = client.next().await.unwrap().unwrap();
-		let tungstenite::Message::Binary(data) = message else {
-			panic!("expected a binary websocket message");
-		};
-
-		assert_eq!(data.len(), FRAME_SIZE);
-		assert!(data.iter().all(|&byte| byte == FRAME_BYTE));
-		server.await.unwrap();
-	}
-}

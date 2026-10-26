@@ -1,5 +1,0 @@
-{
-  "code": "request_body_too_large",
-  "group": "guard",
-  "message": "Request body too large."
-}

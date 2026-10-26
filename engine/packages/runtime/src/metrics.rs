@@ -49,14 +49,19 @@ lazy_static::lazy_static! {
 		&["worker"],
 		*REGISTRY
 	).unwrap();
-	pub static ref TOKIO_WORKER_BUSY_DURATION_TOTAL: CounterVec = register_counter_vec_with_registry!(
-		"tokio_worker_busy_duration_total",
+	pub static ref TOKIO_WORKER_BUSY_DURATION_SECONDS_TOTAL: CounterVec = register_counter_vec_with_registry!(
+		"tokio_worker_busy_duration_seconds_total",
 		"Seconds a worker has spent polling tasks. Its rate against wall clock time is the worker's busy fraction, which separates a saturated runtime from one whose workers are parked.",
 		&["worker"],
 		*REGISTRY
 	).unwrap();
-	pub static ref TOKIO_TASK_POLL_DURATION: Histogram = register_histogram_with_registry!(
-		"tokio_task_poll_duration",
+	pub static ref TOKIO_WORKER_BUSY_CPU_SECONDS_TOTAL: Counter = register_counter_with_registry!(
+		"tokio_worker_busy_cpu_seconds_total",
+		"CPU time worker threads used between unpark and park, summed over workers. Against tokio_worker_busy_duration_seconds_total, the wall time workers were busy, the gap is time busy workers spent blocked in a syscall or lock or waiting for a CPU instead of computing.",
+		*REGISTRY
+	).unwrap();
+	pub static ref TOKIO_TASK_POLL_DURATION_SECONDS: Histogram = register_histogram_with_registry!(
+		"tokio_task_poll_duration_seconds",
 		"Duration to poll a task.",
 		TASK_POLL_BUCKETS.to_vec(),
 		*REGISTRY

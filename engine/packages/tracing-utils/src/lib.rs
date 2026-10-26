@@ -56,7 +56,7 @@ impl<T: Future> Future for CustomInstrumented<T> {
 				if let Some(metadata) = metadata {
 					if let (Some(file), Some(line)) = (metadata.file(), metadata.line()) {
 						let location = format!("{file}:{line}");
-						metrics::INSTRUMENTED_FUTURE_DURATION
+						metrics::INSTRUMENTED_FUTURE_DURATION_SECONDS
 							.with_label_values(&[location.as_str(), metadata.name()])
 							.observe(this.start.elapsed().as_secs_f64());
 					}
@@ -72,8 +72,8 @@ mod metrics {
 	use rivet_metrics::{MICRO_BUCKETS, REGISTRY, prometheus::*};
 
 	lazy_static::lazy_static! {
-		pub static ref INSTRUMENTED_FUTURE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-			"instrumented_future_duration",
+		pub static ref INSTRUMENTED_FUTURE_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+			"instrumented_future_duration_seconds",
 			"Duration of a future.",
 			&["location", "name"],
 			MICRO_BUCKETS.to_vec(),

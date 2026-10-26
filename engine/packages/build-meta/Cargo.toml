@@ -9,8 +9,8 @@ edition.workspace = true
 [dependencies]
 epoxy-protocol.workspace = true
 rivet-config.workspace = true
+rivet-data.workspace = true
 rivet-envoy-protocol.workspace = true
-rivet-universaldb-commit.workspace = true
 rivet-ups-protocol.workspace = true
 
 [build-dependencies]

@@ -24,11 +24,6 @@
 							"icon": "faReact"
 						},
 						{
-							"title": "Next.js",
-							"href": "/actors/docs/quickstart/next-js",
-							"icon": "faNextjs"
-						},
-						{
 							"title": "Rust",
 							"href": "/actors/docs/quickstart/rust",
 							"icon": "faRust",
@@ -39,16 +34,6 @@
 							"href": "/actors/docs/quickstart/effect",
 							"icon": "faLayerGroup",
 							"badge": "Beta"
-						},
-						{
-							"title": "Cloudflare Workers",
-							"href": "/actors/docs/quickstart/cloudflare",
-							"icon": "faCloudflare"
-						},
-						{
-							"title": "Supabase Functions",
-							"href": "/actors/docs/quickstart/supabase",
-							"icon": "faSupabase"
 						}
 					]
 				}
@@ -105,6 +90,14 @@
 					"collapsible": true,
 					"pages": [
 						{
+							"title": "Authentication",
+							"href": "/actors/docs/authentication"
+						},
+						{
+							"title": "Access Control",
+							"href": "/actors/docs/access-control"
+						},
+						{
 							"title": "Connections",
 							"href": "/actors/docs/connections"
 						},
@@ -129,10 +122,6 @@
 						{
 							"title": "Lifecycle",
 							"href": "/actors/docs/lifecycle"
-						},
-						{
-							"title": "Permissions",
-							"href": "/actors/docs/permissions"
 						},
 						{
 							"title": "Input Parameters",
@@ -173,10 +162,6 @@
 							"href": "/actors/docs/logging"
 						},
 						{
-							"title": "Performance Monitoring & Tuning",
-							"href": "/actors/docs/performance-monitoring"
-						},
-						{
 							"title": "Errors",
 							"href": "/actors/docs/errors"
 						},
@@ -199,10 +184,6 @@
 						{
 							"title": "Icons & Names",
 							"href": "/actors/docs/appearance"
-						},
-						{
-							"title": "Custom Inspector Tabs",
-							"href": "/actors/docs/inspector-tabs"
 						},
 						{
 							"title": "Actor Runtime Socket",
@@ -261,6 +242,10 @@
 			"title": "Reference",
 			"pages": [
 				{
+					"title": "Troubleshooting",
+					"href": "/actors/docs/troubleshooting"
+				},
+				{
 					"title": "Production Checklist",
 					"href": "/actors/docs/production-checklist"
 				},
@@ -281,7 +266,7 @@
 							"href": "/actors/docs/http-server"
 						},
 						{
-							"title": "Runtime Environment Variables",
+							"title": "Environment Variables",
 							"href": "/actors/docs/environment-variables"
 						},
 						{
@@ -298,8 +283,8 @@
 			"title": "Guides",
 			"pages": [
 				{
-					"title": "Authenticate Users End to End",
-					"href": "/guides/authentication"
+					"title": "AI Agent",
+					"href": "/guides/ai-agent"
 				},
 				{
 					"title": "Chat Room",
@@ -324,32 +309,6 @@
 				{
 					"title": "Multiplayer Game",
 					"href": "/guides/multiplayer-game"
-				}
-			]
-		},
-		{
-			"title": "Solutions",
-			"pages": [
-				{
-					"title": "Coding Agents",
-					"href": "/guides/coding-agents"
-				},
-				{
-					"title": "Agent App Builders",
-					"href": "/guides/agent-app-builders"
-				},
-				{
-					"title": "Company-Specific Agents",
-					"href": "/guides/company-agents"
-				}
-			]
-		},
-		{
-			"title": "Architecture",
-			"pages": [
-				{
-					"title": "A Radically Simpler Architecture",
-					"href": "/guides/a-radically-simpler-architecture"
 				}
 			]
 		}

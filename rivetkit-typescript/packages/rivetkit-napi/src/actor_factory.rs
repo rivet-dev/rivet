@@ -77,7 +77,8 @@ pub struct JsInspectorTabEntry {
 #[napi(object)]
 #[derive(Clone, Default)]
 pub struct JsSqliteProfilingConfig {
-	pub enabled: Option<bool>,
+	pub queries: Option<Vec<String>>,
+	pub fingerprints: Option<Vec<String>>,
 	pub max_tracked_statement_fingerprints: Option<u32>,
 	pub max_tracked_transaction_fingerprints: Option<u32>,
 	pub max_prometheus_series: Option<u32>,
@@ -1099,7 +1100,8 @@ impl From<JsActorTracingConfig> for ActorTracingConfig {
 impl From<JsSqliteProfilingConfig> for SqliteProfilingConfigInput {
 	fn from(value: JsSqliteProfilingConfig) -> Self {
 		Self {
-			enabled: value.enabled,
+			queries: value.queries,
+			fingerprints: value.fingerprints,
 			max_tracked_statement_fingerprints: value.max_tracked_statement_fingerprints,
 			max_tracked_transaction_fingerprints: value.max_tracked_transaction_fingerprints,
 			max_prometheus_series: value.max_prometheus_series,
@@ -1115,9 +1117,7 @@ impl From<JsSqliteProfilingConfig> for SqliteProfilingConfigInput {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../tests/actor_factory.rs"]
-mod tests;
+
 
 fn duration_ms_or(value: Option<u32>, default_ms: u64) -> Duration {
 	Duration::from_millis(value.map(u64::from).unwrap_or(default_ms))

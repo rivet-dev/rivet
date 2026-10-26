@@ -176,7 +176,14 @@ fn test_envoy_handle(endpoint: String) -> (EnvoyHandle, mpsc::UnboundedReceiver<
 			metadata: None,
 			not_global: true,
 			debug_latency_ms: None,
+			max_queued_requests_per_actor:
+				rivet_envoy_client::config::DEFAULT_MAX_QUEUED_REQUESTS_PER_ACTOR,
+			stopped_generation_floor_ttl:
+				rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_TTL,
+			stopped_generation_floor_capacity:
+				rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_CAPACITY,
 			callbacks: Arc::new(IdleEnvoyCallbacks),
+			connector: None,
 		},
 		envoy_key: "test-envoy".to_owned(),
 		envoy_tx,
@@ -194,6 +201,8 @@ fn test_envoy_handle(endpoint: String) -> (EnvoyHandle, mpsc::UnboundedReceiver<
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
+		last_contact_ms: std::sync::atomic::AtomicI64::new(0),
+		contact_before_install_ms: std::sync::atomic::AtomicI64::new(0),
 		stopped_tx: tokio::sync::watch::channel(true).0,
 	});
 	(EnvoyHandle::from_shared(shared), envoy_rx)
@@ -272,9 +281,9 @@ fn execute_sqlite_batch(
 		),
 		Err(error) => protocol::SqliteExecuteBatchResponse::SqliteErrorResponse(
 			protocol::SqliteErrorResponse {
-				group: "sqlite".to_owned(),
-				code: "internal_error".to_owned(),
-				message: error.to_string(),
+				group: ("sqlite".to_owned()).into(),
+				code: ("internal_error".to_owned()).into(),
+				message: error.to_string().into(),
 			},
 		),
 	}
@@ -290,9 +299,9 @@ fn execute_sqlite(
 		}
 		Err(error) => {
 			protocol::SqliteExecuteResponse::SqliteErrorResponse(protocol::SqliteErrorResponse {
-				group: "sqlite".to_owned(),
-				code: "internal_error".to_owned(),
-				message: error.to_string(),
+				group: ("sqlite".to_owned()).into(),
+				code: ("internal_error".to_owned()).into(),
+				message: error.to_string().into(),
 			})
 		}
 	}
@@ -329,7 +338,7 @@ fn execute_sqlite_inner(
 		}
 	}
 	Ok(protocol::SqliteExecuteResult {
-		columns,
+		columns: columns.into_iter().map(Into::into).collect(),
 		rows: result_rows,
 		changes: conn.changes() as i64,
 		last_insert_row_id: Some(conn.last_insert_rowid()),
@@ -343,8 +352,8 @@ fn sqlite_param_value(param: protocol::SqliteBindParam) -> Value {
 		protocol::SqliteBindParam::SqliteValueFloat(value) => {
 			Value::Real(f64::from_bits(u64::from_be_bytes(value.value)))
 		}
-		protocol::SqliteBindParam::SqliteValueText(value) => Value::Text(value.value),
-		protocol::SqliteBindParam::SqliteValueBlob(value) => Value::Blob(value.value),
+		protocol::SqliteBindParam::SqliteValueText(value) => Value::Text(value.value.to_string()),
+		protocol::SqliteBindParam::SqliteValueBlob(value) => Value::Blob(value.value.to_vec()),
 	}
 }
 
@@ -361,12 +370,12 @@ fn sqlite_column_value(value: ValueRef<'_>) -> protocol::SqliteColumnValue {
 		}
 		ValueRef::Text(value) => {
 			protocol::SqliteColumnValue::SqliteValueText(protocol::SqliteValueText {
-				value: String::from_utf8_lossy(value).into_owned(),
+				value: String::from_utf8_lossy(value).into_owned().into(),
 			})
 		}
 		ValueRef::Blob(value) => {
 			protocol::SqliteColumnValue::SqliteValueBlob(protocol::SqliteValueBlob {
-				value: value.to_vec(),
+				value: value.to_vec().into(),
 			})
 		}
 	}

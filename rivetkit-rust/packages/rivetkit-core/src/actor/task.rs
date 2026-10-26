@@ -26,20 +26,18 @@
 //! `ActorContext`, and only `ActorTask` forwards accepted work into the
 //! actor-event stream consumed by user code.
 
+use std::collections::VecDeque;
 use std::future;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
-#[cfg(test)]
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use futures::FutureExt;
-#[cfg(test)]
-use parking_lot::Mutex;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::{JoinError, JoinHandle};
+use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, instrument::WithSubscriber};
 
 use crate::actor::action::ActionDispatchError;
@@ -56,10 +54,8 @@ use crate::actor::state::{PersistedActor, RequestSaveOpts};
 use crate::actor::task_types::ShutdownKind;
 use crate::actor::work_registry::ActorWorkKind;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
-use crate::runtime::RuntimeSpawner;
+use crate::runtime::{RuntimeBoxFuture, RuntimeSpawner, boxed_runtime_future};
 use crate::telemetry::{ActorInvocation, IncomingInvocationContext};
-#[cfg(test)]
-use crate::time::sleep;
 use crate::time::{Instant, sleep_until, timeout};
 use crate::types::{SaveStateOpts, format_actor_key};
 use crate::websocket::WebSocket;
@@ -68,95 +64,17 @@ pub type ActionDispatchResult = std::result::Result<Vec<u8>, ActionDispatchError
 pub type HttpDispatchResult = Result<ActorHttpResponse>;
 
 const SERIALIZE_STATE_SHUTDOWN_SANITY_CAP: Duration = Duration::from_secs(15);
-#[cfg(test)]
-const LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD: Duration = Duration::from_secs(1);
 const INSPECTOR_SERIALIZE_STATE_INTERVAL: Duration = Duration::from_millis(50);
 const INSPECTOR_OVERLAY_CHANNEL_CAPACITY: usize = 32;
 
 pub use crate::actor::task_types::LifecycleState;
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/task.rs"]
-mod tests;
 
-#[cfg(test)]
-#[path = "../../tests/modules/task_lifecycle.rs"]
-mod lifecycle_tests;
 
-#[cfg(test)]
-type ShutdownCleanupHook = Arc<dyn Fn(&ActorContext, &'static str) + Send + Sync>;
 
-#[cfg(test)]
-// Forced-sync: test hooks are installed and cleared from synchronous guard APIs.
-static SHUTDOWN_CLEANUP_HOOK: OnceLock<Mutex<Option<ShutdownCleanupHook>>> = OnceLock::new();
 
-#[cfg(test)]
-pub(crate) struct ShutdownCleanupHookGuard;
 
-#[cfg(test)]
-type ShutdownReplyHook = Arc<dyn Fn(&ActorContext, ShutdownKind) + Send + Sync>;
-
-#[cfg(test)]
-// Forced-sync: test hooks are installed and cleared from synchronous guard APIs.
-static SHUTDOWN_REPLY_HOOK: OnceLock<Mutex<Option<ShutdownReplyHook>>> = OnceLock::new();
-
-#[cfg(test)]
-pub(crate) struct ShutdownReplyHookGuard;
-
-#[cfg(test)]
-pub(crate) fn install_shutdown_cleanup_hook(hook: ShutdownCleanupHook) -> ShutdownCleanupHookGuard {
-	*SHUTDOWN_CLEANUP_HOOK
-		.get_or_init(|| Mutex::new(None))
-		.lock() = Some(hook);
-	ShutdownCleanupHookGuard
-}
-
-#[cfg(test)]
-impl Drop for ShutdownCleanupHookGuard {
-	fn drop(&mut self) {
-		if let Some(hooks) = SHUTDOWN_CLEANUP_HOOK.get() {
-			*hooks.lock() = None;
-		}
-	}
-}
-
-#[cfg(test)]
-fn run_shutdown_cleanup_hook(ctx: &ActorContext, reason: &'static str) {
-	let hook = SHUTDOWN_CLEANUP_HOOK
-		.get_or_init(|| Mutex::new(None))
-		.lock()
-		.clone();
-	if let Some(hook) = hook {
-		hook(ctx, reason);
-	}
-}
-
-#[cfg(test)]
-pub(crate) fn install_shutdown_reply_hook(hook: ShutdownReplyHook) -> ShutdownReplyHookGuard {
-	*SHUTDOWN_REPLY_HOOK.get_or_init(|| Mutex::new(None)).lock() = Some(hook);
-	ShutdownReplyHookGuard
-}
-
-#[cfg(test)]
-impl Drop for ShutdownReplyHookGuard {
-	fn drop(&mut self) {
-		if let Some(hooks) = SHUTDOWN_REPLY_HOOK.get() {
-			*hooks.lock() = None;
-		}
-	}
-}
-
-#[cfg(test)]
-fn run_shutdown_reply_hook(ctx: &ActorContext, reason: ShutdownKind) {
-	let hook = SHUTDOWN_REPLY_HOOK
-		.get_or_init(|| Mutex::new(None))
-		.lock()
-		.clone();
-	if let Some(hook) = hook {
-		hook(ctx, reason);
-	}
-}
 
 pub enum LifecycleCommand {
 	Start {
@@ -269,6 +187,9 @@ pub enum LifecycleEvent {
 	InspectorSerializeRequested,
 	InspectorAttachmentsChanged,
 	SleepTick,
+	/// A state transaction released the state-save exclusion. The task resumes
+	/// saves and workflow flushes it deferred while the transaction was open.
+	StateTransactionFinished,
 }
 
 impl LifecycleEvent {
@@ -279,6 +200,7 @@ impl LifecycleEvent {
 			Self::InspectorSerializeRequested => "inspector_serialize_requested",
 			Self::InspectorAttachmentsChanged => "inspector_attachments_changed",
 			Self::SleepTick => "sleep_tick",
+			Self::StateTransactionFinished => "state_transaction_finished",
 		}
 	}
 }
@@ -301,6 +223,7 @@ impl PartialEq for LifecycleEvent {
 				matches!(other, Self::InspectorAttachmentsChanged)
 			}
 			Self::SleepTick => matches!(other, Self::SleepTick),
+			Self::StateTransactionFinished => matches!(other, Self::StateTransactionFinished),
 		}
 	}
 }
@@ -321,6 +244,8 @@ struct PersistedStartup {
 	actor: PersistedActor,
 	last_pushed_alarm: Option<i64>,
 	run_wake_at: Option<i64>,
+	/// The stored inspector token, so the start need not read it again.
+	inspector_token: Option<String>,
 }
 
 struct PendingLifecycleReply {
@@ -366,6 +291,14 @@ pub struct ActorTask {
 	/// Join handle for the user `run` task spawned by `spawn_run_handle`.
 	/// Awaited as a `select!` arm; cleared on shutdown abort/await.
 	run_handle: Option<JoinHandle<Result<()>>>,
+	/// One owned state-save or workflow attempt, retaining revision and transaction
+	/// epoch until persistence answers. Shutdown joins it after revoking execution.
+	pending_persistence: Option<PendingPersistence>,
+	/// Set when shutdown joined a persistence-bound serialization that was not written.
+	unpersisted_serialization: bool,
+	/// An owned, read-only serialization reply. Dropping it during shutdown cannot
+	/// discard a storage operation; the external adapter may still retain its sender.
+	pending_inspector: Option<RuntimeBoxFuture<Result<Vec<StateDelta>>>>,
 
 	// === INSPECTOR ===
 	/// Live count of attached inspector websockets. Read from request-save
@@ -376,7 +309,7 @@ pub struct ActorTask {
 	inspector_overlay_tx: broadcast::Sender<Arc<Vec<u8>>>,
 
 	// === TIMERS ===
-	/// Next deadline at which `on_state_save_tick` should flush a deferred
+	/// Next deadline at which `start_state_save` should flush a deferred
 	/// state save. Cleared while no save is requested.
 	pub state_save_deadline: Option<Instant>,
 	/// Next deadline at which an inspector-driven `SerializeState` should
@@ -393,6 +326,28 @@ pub struct ActorTask {
 	/// Active sleep-grace idle wait. Polled by the main loop so grace keeps the
 	/// same inbox/timer handling as the started actor.
 	sleep_grace: Option<SleepGraceState>,
+	/// Workflow flushes that arrived while a state transaction held the
+	/// state-save exclusion, in arrival order. Drained when the transaction
+	/// finishes, and rejected at shutdown.
+	deferred_workflow_flushes: VecDeque<(Vec<WorkflowKvWrite>, Reply<()>)>,
+	/// Explicit SQLite transaction state watched while a state save is deferred
+	/// behind an open transaction, such as a manual `BEGIN`. The save is re-armed
+	/// once the connection returns to autocommit.
+	explicit_transaction_wait: Option<watch::Receiver<bool>>,
+}
+
+/// One storage operation at a time preserves state/workflow serialization order.
+struct PendingPersistence {
+	future: RuntimeBoxFuture<Result<bool>>,
+	completion: PersistenceCompletion,
+}
+
+enum PersistenceCompletion {
+	StateSave,
+	Workflow {
+		writes: Vec<WorkflowKvWrite>,
+		reply: Reply<()>,
+	},
 }
 
 impl ActorTask {
@@ -435,6 +390,9 @@ impl ActorTask {
 			actor_event_tx: Some(actor_event_tx),
 			actor_event_rx: Some(actor_event_rx),
 			run_handle: None,
+			pending_persistence: None,
+			unpersisted_serialization: false,
+			pending_inspector: None,
 			inspector_attach_count,
 			inspector_overlay_tx,
 			state_save_deadline: None,
@@ -442,6 +400,8 @@ impl ActorTask {
 			sleep_deadline: None,
 			shutdown_reply: None,
 			sleep_grace: None,
+			deferred_workflow_flushes: VecDeque::new(),
+			explicit_transaction_wait: None,
 		}
 	}
 
@@ -454,8 +414,22 @@ impl ActorTask {
 		),
 	)]
 	pub async fn run(mut self) -> Result<()> {
+		// Every exit, including a panic, releases save waiters this task can no longer serve.
+		let _unpersisted_saves = FailUnpersistedSavesOnDrop(self.ctx.clone());
 		let exit = self.run_live().await;
 		let LiveExit::Shutdown { reason } = exit else {
+			// Closed inboxes have no grace timer to revoke the adapter or its pending
+			// serializer. Revoke first, but still join any dispatched storage operation.
+			self.ctx.cancel_actor_abort_signal();
+			self.ctx.cancel_shutdown_deadline();
+			self.ctx.mark_shutdown_deadline_reached();
+			if let Some(handle) = self.run_handle.as_mut() {
+				handle.abort();
+			}
+			self.pending_inspector = None;
+			self.finish_pending_persistence().await;
+			self.ctx.fail_unpersisted_save_requests();
+			self.join_aborted_run_handle().await;
 			self.record_inbox_depths();
 			self.ctx.metrics().record_actor_stopped();
 			return Ok(());
@@ -544,11 +518,23 @@ impl ActorTask {
 						return exit;
 					}
 				}
+				outcome = Self::wait_for_persistence(self.pending_persistence.as_mut()), if self.pending_persistence.is_some() => {
+					self.complete_persistence(outcome);
+					self.drain_deferred_workflow_flushes().await;
+					if let Some(exit) = self.try_finish_grace() { return exit; }
+				}
+				outcome = Self::wait_for_inspector(self.pending_inspector.as_mut()), if self.pending_inspector.is_some() => {
+					self.pending_inspector = None;
+					self.on_inspector_finished(outcome);
+				}
 				_ = Self::state_save_tick(self.state_save_deadline), if self.state_save_timer_active() => {
-					self.on_state_save_tick().await;
+					self.start_state_save();
+				}
+				_ = Self::explicit_transaction_finished(self.explicit_transaction_wait.as_mut()), if self.explicit_transaction_wait.is_some() => {
+					self.on_explicit_transaction_finished();
 				}
 				_ = Self::inspector_serialize_state_tick(self.inspector_serialize_state_deadline), if self.inspector_serialize_timer_active() => {
-					self.on_inspector_serialize_state_tick().await;
+					self.start_inspector_serialize_state();
 				}
 				_ = Self::sleep_tick(self.sleep_deadline), if self.sleep_timer_active() => {
 					self.on_sleep_tick().await;
@@ -638,65 +624,7 @@ impl ActorTask {
 		}
 	}
 
-	#[cfg(test)]
-	async fn handle_stop(&mut self, reason: ShutdownKind) -> Result<()> {
-		let (reply_tx, reply_rx) = oneshot::channel();
-		self.register_shutdown_reply("stop", Some(shutdown_reason_label(reason)), reply_tx);
-		self.begin_grace(reason).await;
-		loop {
-			if self.ctx.acknowledge_activity_dirty() {
-				if let Some(exit) = self.on_activity_signal().await {
-					let LiveExit::Shutdown { reason } = exit else {
-						return Ok(());
-					};
-					let result = match AssertUnwindSafe(self.run_shutdown(reason))
-						.catch_unwind()
-						.await
-					{
-						Ok(result) => result,
-						Err(_) => Err(anyhow!("shutdown panicked during {reason:?}")),
-					};
-					self.deliver_shutdown_reply(reason, &result);
-					self.transition_to(LifecycleState::Terminated);
-					return match reply_rx.await {
-						Ok(result) => result,
-						Err(_) => Err(ActorLifecycleError::DroppedReply.build()),
-					};
-				}
-			}
-
-			let Some(deadline) = self.sleep_grace.as_ref().map(|grace| grace.deadline) else {
-				return Err(anyhow!("stop grace ended without shutdown exit"));
-			};
-			let activity_notify = self.ctx.sleep_activity_notify();
-			let activity = activity_notify.notified();
-			tokio::pin!(activity);
-
-			tokio::select! {
-				_ = &mut activity => {}
-				_ = Self::sleep_grace_tick(Some(deadline)) => {
-					if let Some(exit) = self.on_sleep_grace_deadline().await {
-						let LiveExit::Shutdown { reason } = exit else {
-							return Ok(());
-						};
-						let result = match AssertUnwindSafe(self.run_shutdown(reason))
-							.catch_unwind()
-							.await
-						{
-							Ok(result) => result,
-							Err(_) => Err(anyhow!("shutdown panicked during {reason:?}")),
-						};
-						self.deliver_shutdown_reply(reason, &result);
-						self.transition_to(LifecycleState::Terminated);
-						return match reply_rx.await {
-							Ok(result) => result,
-							Err(_) => Err(ActorLifecycleError::DroppedReply.build()),
-						};
-					}
-				}
-			}
-		}
-	}
+	
 
 	async fn begin_stop(
 		&mut self,
@@ -770,6 +698,9 @@ impl ActorTask {
 			reason = shutdown_reason_label(reason),
 			"actor grace shutdown started"
 		);
+		// Teardown is background work on the shared SQLite pool: starting and serving actors go
+		// ahead of it.
+		self.ctx.sql().mark_background();
 		self.ctx.suspend_alarm_dispatch();
 		self.ctx.cancel_local_alarm_timeouts();
 		self.ctx.set_local_alarm_callback(None);
@@ -822,7 +753,7 @@ impl ActorTask {
 					tracing::error!(?error, operation, "core dispatched hook failed");
 				}
 				Err(error) => {
-					tracing::error!(?error, operation, "core dispatched hook reply dropped");
+					tracing::debug!(?error, operation, "core dispatched hook reply dropped");
 				}
 			}
 			ctx.mark_core_dispatched_hook_completed();
@@ -844,7 +775,15 @@ impl ActorTask {
 				self.sync_inspector_serialize_deadline();
 			}
 			LifecycleEvent::WorkflowFlushRequested { writes, reply } => {
-				reply.send(self.flush_workflow_state(writes).await);
+				self.deferred_workflow_flushes.push_back((writes, reply));
+				self.drain_deferred_workflow_flushes().await;
+			}
+			LifecycleEvent::StateTransactionFinished => {
+				if self.ctx.save_requested() {
+					self.schedule_state_save(self.ctx.save_requested_immediate());
+					self.sync_inspector_serialize_deadline();
+				}
+				self.drain_deferred_workflow_flushes().await;
 			}
 			LifecycleEvent::InspectorSerializeRequested
 			| LifecycleEvent::InspectorAttachmentsChanged => {
@@ -856,39 +795,102 @@ impl ActorTask {
 		}
 	}
 
-	async fn flush_workflow_state(&mut self, writes: Vec<WorkflowKvWrite>) -> Result<()> {
+	/// Dispatches one workflow flush, preserving arrival order without waiting in
+	/// the lifecycle loop. Open state transactions defer it until their notification.
+	async fn drain_deferred_workflow_flushes(&mut self) {
+		if self.pending_persistence.is_some() {
+			return;
+		}
 		if !matches!(
 			self.lifecycle,
 			LifecycleState::Started | LifecycleState::SleepGrace
 		) {
-			return Err(ActorLifecycleError::NotReady.build());
+			for (_, reply) in self.deferred_workflow_flushes.drain(..) {
+				reply.send(Err(ActorLifecycleError::NotReady.build()));
+			}
+			return;
 		}
-		loop {
-			let save_request_revision = self.ctx.save_request_revision();
-			let state_transaction_epoch = self.ctx.state_transaction_epoch();
-			let (reply_tx, reply_rx) = oneshot::channel();
-			self.send_actor_event(
-				"workflow_flush_serialize_state",
-				ActorEvent::SerializeState {
-					reason: SerializeStateReason::Save,
-					reply: Reply::from(reply_tx),
-				},
-			)?;
-			let deltas = reply_rx
-				.await
-				.context("receive workflow flush serialize-state reply")??;
-			if self
-				.ctx
-				.save_state_and_workflow_batch_at_transaction_epoch(
+		if self.ctx.state_transaction_active() {
+			return;
+		}
+		let Some((writes, reply)) = self.deferred_workflow_flushes.pop_front() else {
+			return;
+		};
+		let save_request_revision = self.ctx.save_request_revision();
+		let state_transaction_epoch = self.ctx.state_transaction_epoch();
+		let (reply_tx, reply_rx) = oneshot::channel();
+		if let Err(error) = self.send_actor_event(
+			"workflow_flush_serialize_state",
+			ActorEvent::SerializeState {
+				reason: SerializeStateReason::Save,
+				reply: Reply::from(reply_tx),
+			},
+		) {
+			reply.send(Err(error));
+			// A closed adapter cannot serialize any of the remaining queued writes.
+			for (_, reply) in self.deferred_workflow_flushes.drain(..) {
+				reply.send(Err(ActorLifecycleError::NotReady.build()));
+			}
+			return;
+		}
+		let ctx = self.ctx.clone();
+		let pending_writes = writes.clone();
+		let serialize_cap = self.shutdown_serialize_cap();
+		self.pending_persistence = Some(PendingPersistence {
+			completion: PersistenceCompletion::Workflow { writes, reply },
+			future: boxed_runtime_future(async move {
+				let deltas = await_save_serialization(
+					ctx.shutdown_deadline_token(),
+					reply_rx,
+					serialize_cap,
+					"receive workflow flush serialize-state reply",
+				)
+				.await?;
+				ctx.save_state_and_workflow_batch_at_transaction_epoch(
 					deltas,
-					writes.clone(),
+					pending_writes,
 					save_request_revision,
 					state_transaction_epoch,
 				)
-				.await?
-			{
-				return Ok(());
-			}
+				.await
+			}),
+		});
+	}
+
+	/// Completes the persistence the select arm just polled to its outcome.
+	fn complete_persistence(&mut self, outcome: Result<bool>) {
+		let Some(pending) = self.pending_persistence.take() else {
+			tracing::error!(
+				actor_id = %self.ctx.actor_id(),
+				"persistence finished without a pending operation"
+			);
+			return;
+		};
+		self.on_persistence_finished(pending.completion, outcome);
+	}
+
+	fn on_persistence_finished(
+		&mut self,
+		completion: PersistenceCompletion,
+		outcome: Result<bool>,
+	) {
+		match completion {
+			PersistenceCompletion::StateSave => self.on_state_save_finished(outcome),
+			PersistenceCompletion::Workflow { writes, reply } => match outcome {
+				Ok(true) => reply.send(Ok(())),
+				Ok(false) => {
+					// The serialized state was discarded, so the retried flush must serialize it again.
+					self.ctx.request_save(RequestSaveOpts {
+						immediate: true,
+						max_wait_ms: None,
+					});
+					self.deferred_workflow_flushes.push_front((writes, reply));
+				}
+				Err(error) => {
+					reply.send(Err(error));
+					self.request_resave_after_failed_persistence();
+				}
+			},
 		}
 	}
 
@@ -1185,10 +1187,34 @@ impl ActorTask {
 		self.ensure_actor_event_channel();
 		self.ctx.configure_actor_events(self.actor_event_tx.clone());
 
+		self.ctx.begin_startup_commits();
 		let schema_started_at = Instant::now();
-		crate::actor::internal_storage::schema::ensure_internal_schema(self.ctx.sql())
+		// Recorded once the start knows whether the actor is new.
+		let before_storage = self
+			.ctx
+			.take_start_received_at()
+			.map(|received_at| schema_started_at.saturating_duration_since(received_at));
+		let storage_result = crate::actor::migrate_kv_to_sqlite::ensure_startup_storage(&self.ctx)
 			.await
-			.context("initialize internal sqlite schema")?;
+			.context("initialize internal sqlite schema");
+		let storage_elapsed = schema_started_at.elapsed();
+		// A failed start never learns whether the actor is new, so failures are recorded
+		// at once with no label; successful steps are recorded once `is_new` is known.
+		let mut storage = match storage_result {
+			Ok(storage) => storage,
+			Err(error) => {
+				self.ctx.metrics().observe_startup_phase(
+					StartupPhase::StartupStorage,
+					None,
+					"error",
+					storage_elapsed,
+				);
+				return Err(error);
+			}
+		};
+		let inspector_token_initialized = storage.inspector_token_initialized;
+		let bootstrapped = storage.bootstrapped;
+		let first_generation = storage.first_generation;
 		tracing::debug!(
 			actor_id = %actor_id,
 			duration_ms = duration_ms_f64(schema_started_at.elapsed()),
@@ -1196,20 +1222,57 @@ impl ActorTask {
 		);
 
 		let load_state_started_at = Instant::now();
-		let load_state_result = self.load_persisted_startup().await;
-		let persisted = self.ctx.metrics().observe_startup_phase_result(
-			StartupPhase::LoadPersisted,
-			None,
-			load_state_started_at,
-			load_state_result,
-		)?;
+		let load_state_result = self.load_persisted_startup(bootstrapped).await;
+		let load_state_elapsed = load_state_started_at.elapsed();
+		let persisted = match load_state_result {
+			Ok(persisted) => persisted,
+			Err(error) => {
+				self.ctx.metrics().observe_startup_phase(
+					StartupPhase::LoadPersisted,
+					None,
+					"error",
+					load_state_elapsed,
+				);
+				return Err(error);
+			}
+		};
 		let is_new = !persisted.actor.has_initialized;
+		let stored_inspector_token = persisted.inspector_token.clone();
 		startup_timer.set_is_new(is_new);
+		self.ctx.metrics().observe_startup_storage(
+			is_new,
+			storage_elapsed,
+			&storage.phases,
+			load_state_elapsed,
+		);
+		if let Some(before_storage) = before_storage {
+			self.ctx.metrics().observe_startup_phase(
+				StartupPhase::BeforeStorage,
+				Some(is_new),
+				"success",
+				before_storage,
+			);
+		}
 		tracing::debug!(
 			actor_id = %actor_id,
 			duration_ms = duration_ms_f64(load_state_started_at.elapsed()),
 			"perf internal: loadStateMs"
 		);
+
+		// A new actor's startup writes, from its staged bootstrap through the runtime's schema
+		// migrations to its initial state, stay in memory until PostReady makes them durable
+		// as one commit. A start that fails first commits what it wrote when the database
+		// closes, as separate commits would have.
+		let startup_corked = if is_new {
+			self.ctx
+				.sql()
+				.cork_commits()
+				.await
+				.context("hold new actor startup commits")?
+		} else {
+			false
+		};
+		let inspector_mirror_token = storage.inspector_mirror_token.take();
 
 		self.ctx.metrics().set_startup_phase(StartupPhase::CoreInit);
 		let core_init_started_at = Instant::now();
@@ -1228,22 +1291,37 @@ impl ActorTask {
 					.context("persist actor initialization")?;
 			}
 			let init_inspector_token_started_at = Instant::now();
-			crate::inspector::auth::init_inspector_token(&self.ctx)
-				.await
-				.context("initialize inspector token")?;
+			// A stored token is authoritative, so the start does not wait on the check of its
+			// dashboard mirror; the mirror is checked and repaired in the background.
+			match (&stored_inspector_token, inspector_token_initialized) {
+				(_, true) => {}
+				(Some(token), false) => spawn_inspector_mirror_check(&self.ctx, token.clone()),
+				(None, false) => crate::inspector::auth::init_inspector_token(&self.ctx)
+					.await
+					.context("initialize inspector token")?,
+			}
 			tracing::debug!(
 				actor_id = %actor_id,
 				duration_ms = duration_ms_f64(init_inspector_token_started_at.elapsed()),
 				"perf internal: initInspectorTokenMs"
 			);
-			self.ctx
-				.restore_hibernatable_connections()
-				.await
-				.context("restore hibernatable connections")?;
+			// A just-bootstrapped actor has no connections, schedule events or history, so it
+			// reads none of them and its staged bootstrap commits with its first transaction.
+			if !bootstrapped {
+				self.ctx
+					.restore_hibernatable_connections()
+					.await
+					.context("restore hibernatable connections")?;
+			}
 			Self::settle_hibernated_connections(self.ctx.clone())
 				.await
 				.context("settle hibernated connections")?;
-			self.ctx.init_alarms().await;
+			if bootstrapped {
+				self.ctx
+					.init_alarms_for_bootstrapped_actor(first_generation);
+			} else {
+				self.ctx.init_alarms().await;
+			}
 			Ok(())
 		}
 		.await;
@@ -1284,8 +1362,20 @@ impl ActorTask {
 					.await
 					.context("persist actor startup state")?;
 			}
+			if startup_corked {
+				self.spawn_startup_commit(inspector_mirror_token);
+			} else if let Some(token) = inspector_mirror_token {
+				spawn_inspector_mirror(&self.ctx, token);
+			}
 			self.reset_sleep_deadline().await;
-			self.ctx.drain_overdue_scheduled_events().await?;
+			// A just-bootstrapped actor had no schedule before this start, and anything its
+			// preamble scheduled arms its own alarm. Skipping the read keeps startup from
+			// queueing behind the startup commit that its first requests overlap.
+			if !bootstrapped {
+				self.ctx.drain_overdue_scheduled_events().await?;
+			}
+			// A startup commit that already failed fails the start, as an awaited one did.
+			self.ctx.finish_startup_commits()?;
 			Ok(())
 		}
 		.await;
@@ -1305,28 +1395,95 @@ impl ActorTask {
 		Ok(())
 	}
 
-	async fn load_persisted_startup(&mut self) -> Result<PersistedStartup> {
-		crate::actor::migrate_kv_to_sqlite::import_core_state_if_needed(&self.ctx)
+	/// Makes a new actor's held startup writes durable as one commit in the background, so its
+	/// first requests run while the commit is in flight. Responses wait for it. The inspector
+	/// token mirror is written once the commit is durable.
+	fn spawn_startup_commit(&self, inspector_mirror_token: Option<String>) {
+		let ctx = self.ctx.clone();
+		self.ctx.run_startup_commit(async move {
+			let started_at = Instant::now();
+			let vfs_before = ctx.sql().metrics();
+			let result = ctx
+				.sql()
+				.uncork_commits()
+				.await
+				.context("commit new actor startup writes");
+			let outcome = match &result {
+				Ok(()) => "success",
+				Err(_) => "error",
+			};
+			ctx.metrics().observe_startup_phase(
+				StartupPhase::StartupCommit,
+				Some(true),
+				outcome,
+				started_at.elapsed(),
+			);
+			result?;
+			// The VFS sums each commit's transport time, so the startup commit's own round trip
+			// is the difference across it when it was the only commit.
+			if let (Some(before), Some(after)) = (vfs_before, ctx.sql().metrics())
+				&& after.commit_count == before.commit_count + 1
+			{
+				let transport_ns = after.transport_ns.saturating_sub(before.transport_ns);
+				ctx.metrics().observe_startup_phase(
+					StartupPhase::StartupCommitTransport,
+					Some(true),
+					"success",
+					Duration::from_nanos(transport_ns),
+				);
+			}
+			if let Some(token) = inspector_mirror_token {
+				spawn_inspector_mirror(&ctx, token);
+			}
+			Ok(())
+		});
+	}
+
+	/// Loads the persisted actor. A fresh actor whose storage this startup just bootstrapped
+	/// has a finished legacy import and no snapshot, so it reads neither.
+	async fn load_persisted_startup(&mut self, bootstrapped: bool) -> Result<PersistedStartup> {
+		if bootstrapped {
+			return Ok(self.fresh_startup());
+		}
+		// One read covers the import marker and the snapshot. Only an actor whose legacy KV
+		// import is unfinished imports it and reads again.
+		let mut read = crate::actor::internal_storage::load_actor_startup(self.ctx.sql())
 			.await
-			.context("import legacy core actor storage to sqlite")?;
-		if let Some(snapshot) = crate::actor::internal_storage::load_actor_snapshot(self.ctx.sql())
-			.await
-			.context("load persisted actor startup data from sqlite")?
+			.context("load persisted actor startup data from sqlite")?;
+		if read.import_state.as_deref()
+			!= Some(crate::actor::migrate_kv_to_sqlite::KV_IMPORT_STATE_DONE)
 		{
+			crate::actor::migrate_kv_to_sqlite::import_core_state_if_needed(&self.ctx)
+				.await
+				.context("import legacy core actor storage to sqlite")?;
+			read = crate::actor::internal_storage::load_actor_startup(self.ctx.sql())
+				.await
+				.context("load persisted actor startup data from sqlite")?;
+		}
+		if let Some(snapshot) = read.snapshot {
 			return Ok(PersistedStartup {
 				actor: snapshot.actor,
 				last_pushed_alarm: snapshot.last_pushed_alarm,
 				run_wake_at: snapshot.run_wake_at,
+				inspector_token: read.inspector_token,
 			});
 		}
-		Ok(PersistedStartup {
+		let mut fresh = self.fresh_startup();
+		fresh.inspector_token = read.inspector_token;
+		Ok(fresh)
+	}
+
+	/// The startup state of an actor with no persisted snapshot.
+	fn fresh_startup(&self) -> PersistedStartup {
+		PersistedStartup {
 			actor: PersistedActor {
-				input: self.start_input.clone(),
+				input: self.start_input.clone().map(Into::into),
 				..PersistedActor::default()
 			},
 			last_pushed_alarm: None,
 			run_wake_at: None,
-		})
+			inspector_token: None,
+		}
 	}
 
 	fn ensure_actor_event_channel(&mut self) {
@@ -1356,7 +1513,7 @@ impl ActorTask {
 		};
 		let start = ActorStart {
 			ctx: self.ctx.clone(),
-			input: self.ctx.persisted_actor().input.clone(),
+			input: self.ctx.persisted_actor().input.clone().map(Into::into),
 			is_new,
 			snapshot: (!is_new).then(|| self.ctx.state()),
 			hibernated: self
@@ -1630,6 +1787,10 @@ impl ActorTask {
 	}
 
 	fn try_finish_grace(&mut self) -> Option<LiveExit> {
+		// Keep the grace timer live while serialization or persistence is unresolved.
+		if self.pending_persistence.is_some() {
+			return None;
+		}
 		let Some(grace) = self.sleep_grace.as_ref() else {
 			return None;
 		};
@@ -1692,43 +1853,6 @@ impl ActorTask {
 		};
 	}
 
-	#[cfg(test)]
-	async fn drain_tracked_work(
-		&mut self,
-		reason: ShutdownKind,
-		phase: &'static str,
-		deadline: Instant,
-	) -> bool {
-		Self::drain_tracked_work_with_ctx(self.ctx.clone(), reason, phase, deadline).await
-	}
-
-	#[cfg(test)]
-	async fn drain_tracked_work_with_ctx(
-		ctx: ActorContext,
-		reason: ShutdownKind,
-		phase: &'static str,
-		deadline: Instant,
-	) -> bool {
-		let started_at = Instant::now();
-		tokio::select! {
-			result = ctx.wait_for_shutdown_tasks(deadline) => result,
-			_ = sleep(LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD) => {
-				if ctx.wait_for_shutdown_tasks(Instant::now()).await {
-					true
-				} else {
-					tracing::warn!(
-						actor_id = %ctx.actor_id(),
-						reason = reason.as_metric_label(),
-						phase,
-						elapsed_ms = Instant::now().duration_since(started_at).as_millis() as u64,
-						"actor shutdown drain is taking longer than expected"
-					);
-					ctx.wait_for_shutdown_tasks(deadline).await
-				}
-			}
-		}
-	}
-
 	fn log_lifecycle_command_received(&self, command: &'static str, reason: Option<&'static str>) {
 		tracing::debug!(
 			actor_id = %self.ctx.actor_id(),
@@ -1782,8 +1906,7 @@ impl ActorTask {
 	}
 
 	fn deliver_shutdown_reply(&mut self, reason: ShutdownKind, result: &Result<()>) {
-		#[cfg(test)]
-		run_shutdown_reply_hook(&self.ctx, reason);
+		
 
 		let Some(pending) = self.shutdown_reply.take() else {
 			return;
@@ -1811,8 +1934,27 @@ impl ActorTask {
 			ShutdownKind::Sleep => LifecycleState::SleepFinalize,
 			ShutdownKind::Destroy => LifecycleState::Destroying,
 		});
+		// Cancellation cannot roll back an already-dispatched SQLite commit. Retain and
+		// join that exact save before final state persistence or closing its resources.
+		self.pending_inspector = None;
+		self.finish_pending_persistence().await;
+		// Workflow flushes still waiting on a state transaction are rejected now
+		// that the lifecycle has left the started states.
+		self.drain_deferred_workflow_flushes().await;
+		self.explicit_transaction_wait = None;
 		let result: Result<()> = async {
-			self.save_final_state().await?;
+			self.ctx.close_state_transactions().await;
+			if let Err(error) = self.ctx.sql().rollback_manual_transaction().await {
+				tracing::error!(
+					actor_id = %self.ctx.actor_id(),
+					?error,
+					"failed to roll back manual sqlite transaction before the final state save"
+				);
+			}
+			let final_save = self.save_final_state().await;
+			// No later save can run, so outstanding waiters learn their state was not written.
+			self.ctx.fail_unpersisted_save_requests();
+			final_save?;
 			self.close_actor_event_channel();
 			self.join_aborted_run_handle().await;
 			Self::finish_shutdown_cleanup_with_ctx(self.ctx.clone(), reason).await
@@ -1852,11 +1994,14 @@ impl ActorTask {
 				"actor resource cleanup failed after startup failure",
 			);
 		}
-		trim_native_allocator_after_shutdown(self.ctx.actor_id(), "startup_failed");
+		self.ctx.sql().request_allocator_trim();
 		self.transition_to(LifecycleState::Terminated);
 	}
 
 	async fn save_final_state(&mut self) -> Result<()> {
+		// Capture the revision before serializing, so a save requested while the snapshot is
+		// in flight is not reported as written by a snapshot that predates it.
+		let save_request_revision = self.ctx.save_request_revision();
 		let (reply_tx, reply_rx) = oneshot::channel();
 		if let Err(error) = self.send_actor_event(
 			"shutdown_serialize_state",
@@ -1866,36 +2011,42 @@ impl ActorTask {
 			},
 		) {
 			tracing::error!(?error, "shutdown serialize-state enqueue failed");
-			return self.ctx.save_state(Vec::new()).await;
+			return Ok(());
 		}
 
-		// Cap at the larger of the default sanity bound or the user-configured
-		// sleep grace period. Without this, an actor with `sleepGracePeriod`
-		// raised above the default would silently truncate large state writes
-		// to empty deltas inside the user's own grace budget.
-		let cap = SERIALIZE_STATE_SHUTDOWN_SANITY_CAP
-			.max(self.factory.config().effective_sleep_grace_period());
+		// Without a serialized snapshot nothing is written and the prior persisted state is
+		// kept. Saving empty deltas here would report outstanding save requests as complete.
+		let cap = self.shutdown_serialize_cap();
 		let deltas = match timeout(cap, reply_rx).await {
 			Ok(Ok(Ok(deltas))) => deltas,
 			Ok(Ok(Err(error))) => {
 				tracing::error!(?error, "serializeState callback returned error");
-				Vec::new()
+				return Ok(());
 			}
 			Ok(Err(error)) => {
-				tracing::error!(?error, "serializeState reply dropped");
-				Vec::new()
+				tracing::warn!(?error, "serializeState reply dropped");
+				return Ok(());
 			}
 			Err(_) => {
-				tracing::error!(
+				tracing::warn!(
 					actor_id = %self.ctx.actor_id(),
 					cap_ms = cap.as_millis() as u64,
-					"serializeState timed out; saving with empty deltas, prior persisted state retained"
+					"serializeState timed out; prior persisted state retained"
 				);
-				Vec::new()
+				return Ok(());
 			}
 		};
+		if deltas.is_empty() && self.unpersisted_serialization {
+			tracing::warn!(
+				actor_id = %self.ctx.actor_id(),
+				"final serialization is empty after an unwritten save; prior persisted state retained"
+			);
+			return Ok(());
+		}
 
-		self.ctx.save_state(deltas).await
+		self.ctx
+			.save_state_with_revision(deltas, save_request_revision)
+			.await
 	}
 
 	async fn finish_shutdown_cleanup_with_ctx(
@@ -1911,8 +2062,7 @@ impl ActorTask {
 			step = "teardown_sleep_state",
 			"actor shutdown cleanup step completed"
 		);
-		#[cfg(test)]
-		run_shutdown_cleanup_hook(&ctx, reason_label);
+		
 		ctx.wait_for_pending_state_writes().await;
 		tracing::debug!(
 			actor_id = %actor_id,
@@ -1920,16 +2070,19 @@ impl ActorTask {
 			step = "wait_for_pending_state_writes",
 			"actor shutdown cleanup step completed"
 		);
-		ctx.sync_alarm_logged().await;
-		tracing::debug!(
-			actor_id = %actor_id,
-			reason = reason_label,
-			step = "sync_alarm",
-			"actor shutdown cleanup step completed"
-		);
-		// Destroy cancels the engine alarm here so the persist it spawns is awaited by
+		// Sleep resyncs the engine alarm so it can wake the actor. Destroy cancels it instead,
+		// with no resync first, so the persist it spawns is awaited by
 		// `wait_for_pending_alarm_writes` below and cannot race the SQLite teardown.
 		match reason {
+			ShutdownKind::Sleep => {
+				ctx.sync_alarm_before_sleep_logged().await;
+				tracing::debug!(
+					actor_id = %actor_id,
+					reason = reason_label,
+					step = "sync_alarm",
+					"actor shutdown cleanup step completed"
+				);
+			}
 			ShutdownKind::Destroy => {
 				ctx.cancel_driver_alarm_logged();
 				tracing::debug!(
@@ -1939,7 +2092,6 @@ impl ActorTask {
 					"actor shutdown cleanup step completed"
 				);
 			}
-			ShutdownKind::Sleep => {}
 		}
 		ctx.wait_for_pending_alarm_writes().await;
 		tracing::debug!(
@@ -1954,7 +2106,9 @@ impl ActorTask {
 			.cleanup_for_shutdown(reason == ShutdownKind::Sleep)
 			.await
 			.with_context(|| format!("cleanup sqlite during {reason_label} shutdown"))?;
-		trim_native_allocator_after_shutdown(&actor_id, reason_label);
+		// Closing the database freed its native memory; the pool returns it to the OS,
+		// coalescing the trims of a burst of shutdowns.
+		ctx.sql().request_allocator_trim();
 		tracing::debug!(
 			actor_id = %actor_id,
 			reason = reason_label,
@@ -2003,11 +2157,13 @@ impl ActorTask {
 	}
 
 	fn state_save_timer_active(&self) -> bool {
-		self.state_save_deadline.is_some()
+		self.state_save_deadline.is_some() && self.pending_persistence.is_none()
 	}
 
 	fn inspector_serialize_timer_active(&self) -> bool {
 		self.inspector_serialize_state_deadline.is_some()
+			&& self.pending_persistence.is_none()
+			&& self.pending_inspector.is_none()
 	}
 
 	fn schedule_state_save(&mut self, immediate: bool) {
@@ -2045,6 +2201,25 @@ impl ActorTask {
 		sleep_until(deadline).await;
 	}
 
+	/// Resolves once the watched connection is back in autocommit mode, or
+	/// once the database that published the state is gone.
+	async fn explicit_transaction_finished(wait: Option<&mut watch::Receiver<bool>>) {
+		let Some(wait) = wait else {
+			future::pending::<()>().await;
+			return;
+		};
+
+		let _ = wait.wait_for(|open| !*open).await;
+	}
+
+	fn on_explicit_transaction_finished(&mut self) {
+		self.explicit_transaction_wait = None;
+		if self.ctx.save_requested() {
+			self.schedule_state_save(self.ctx.save_requested_immediate());
+			self.sync_inspector_serialize_deadline();
+		}
+	}
+
 	async fn inspector_serialize_state_tick(deadline: Option<Instant>) {
 		let Some(deadline) = deadline else {
 			future::pending::<()>().await;
@@ -2054,7 +2229,10 @@ impl ActorTask {
 		sleep_until(deadline).await;
 	}
 
-	async fn on_state_save_tick(&mut self) {
+	fn start_state_save(&mut self) {
+		if self.pending_persistence.is_some() {
+			return;
+		}
 		self.state_save_deadline = None;
 		self.inspector_serialize_state_deadline = None;
 		if !matches!(
@@ -2062,6 +2240,26 @@ impl ActorTask {
 			LifecycleState::Started | LifecycleState::SleepGrace
 		) || !self.ctx.save_requested()
 		{
+			return;
+		}
+		// A user state transaction owns the state-save exclusion. Leave the save
+		// requested and let `LifecycleEvent::StateTransactionFinished` re-arm it
+		// instead of waiting on the guard here.
+		if self.ctx.state_transaction_active() {
+			return;
+		}
+		// A transaction left open on the SQLite connection, such as a manual
+		// `BEGIN` issued through ordinary statements, would make persistence
+		// wait inside the coordinator and stall this loop. Leave the save
+		// requested and re-arm it when the connection returns to autocommit.
+		if let Some(mut explicit_transaction) = self.ctx.sql().subscribe_explicit_transaction()
+			&& *explicit_transaction.borrow_and_update()
+		{
+			tracing::debug!(
+				actor_id = %self.ctx.actor_id(),
+				"sqlite transaction is open, deferring actor state save until autocommit"
+			);
+			self.explicit_transaction_wait = Some(explicit_transaction);
 			return;
 		}
 
@@ -2083,65 +2281,110 @@ impl ActorTask {
 			}
 		}
 
-		match reply_rx.await {
-			Ok(Ok(deltas)) => {
+		let ctx = self.ctx.clone();
+		let serialize_cap = self.shutdown_serialize_cap();
+		self.pending_persistence = Some(PendingPersistence {
+			completion: PersistenceCompletion::StateSave,
+			future: boxed_runtime_future(async move {
+				// Once the reply arrives, persistence runs to its real outcome even after
+				// revocation, because the adapter has already consumed its dirty state.
+				let deltas = await_save_serialization(
+					ctx.shutdown_deadline_token(),
+					reply_rx,
+					serialize_cap,
+					"actor save tick reply dropped",
+				)
+				.await?;
 				let serialized_bytes = state_delta_payload_bytes(&deltas);
 				tracing::debug!(
-					actor_id = %self.ctx.actor_id(),
+					actor_id = %ctx.actor_id(),
 					reason = SerializeStateReason::Save.label(),
 					delta_count = deltas.len(),
 					serialized_bytes,
 					save_request_revision,
 					"actor serializeState completed"
 				);
-				// Skip the overlay broadcast on the save path. save_state_with_revision
-				// triggers record_state_updated after persist, which the inspector
-				// websocket signal subscriber forwards as StateUpdated. Broadcasting
-				// the overlay here too would deliver a duplicate message.
-				match self
-					.ctx
-					.save_state_with_revision_at_transaction_epoch(
-						deltas,
-						save_request_revision,
-						state_transaction_epoch,
-					)
-					.await
-				{
-					Ok(true) => {
-						if self.ctx.save_requested() {
-							self.schedule_state_save(self.ctx.save_requested_immediate());
-							self.sync_inspector_serialize_deadline();
-						}
-					}
-					Ok(false) => {
-						self.ctx.request_save(RequestSaveOpts {
-							immediate: true,
-							max_wait_ms: None,
-						});
-						self.schedule_state_save(true);
-						self.sync_inspector_serialize_deadline();
-					}
-					Err(error) => {
-						tracing::error!(?error, "failed to persist actor save tick");
-						self.schedule_state_save(true);
-						self.sync_inspector_serialize_deadline();
-					}
+				// Persist exactly the revision and transaction epoch captured at dispatch.
+				// The context emits StateUpdated only after this operation succeeds.
+				ctx.save_state_with_revision_at_transaction_epoch(
+					deltas,
+					save_request_revision,
+					state_transaction_epoch,
+				)
+				.await
+			}),
+		});
+	}
+
+	async fn wait_for_persistence(save: Option<&mut PendingPersistence>) -> Result<bool> {
+		let Some(save) = save else {
+			return future::pending().await;
+		};
+		(&mut save.future).await
+	}
+
+	fn on_state_save_finished(&mut self, outcome: Result<bool>) {
+		match outcome {
+			Ok(true) => {
+				if self.ctx.save_requested() {
+					self.schedule_state_save(self.ctx.save_requested_immediate());
+					self.sync_inspector_serialize_deadline();
 				}
 			}
-			Ok(Err(error)) => {
-				tracing::error!(?error, "actor save tick failed");
+			Ok(false) => {
+				self.ctx.request_save(RequestSaveOpts {
+					immediate: true,
+					max_wait_ms: None,
+				});
 				self.schedule_state_save(true);
 				self.sync_inspector_serialize_deadline();
 			}
 			Err(error) => {
-				tracing::error!(?error, "actor save tick reply dropped");
-				self.schedule_state_save(true);
-				self.sync_inspector_serialize_deadline();
+				tracing::error!(?error, "failed to persist actor save tick");
+				self.request_resave_after_failed_persistence();
 			}
 		}
 	}
 
-	async fn on_inspector_serialize_state_tick(&mut self) {
+	/// Marks the actor dirty again after a persistence-bound serialization was not persisted.
+	/// The adapter consumed its dirty bit when it serialized, so without this the next
+	/// serialization, including the final one at shutdown, would report nothing to save.
+	/// The retry waits for the normal save throttle, so a failure that repeats (state the
+	/// adapter cannot encode, or storage that keeps refusing the write) cannot spin.
+	fn request_resave_after_failed_persistence(&mut self) {
+		self.ctx.throttle_failed_save_request();
+		self.ctx.request_save(RequestSaveOpts {
+			immediate: false,
+			max_wait_ms: None,
+		});
+		self.schedule_state_save(false);
+		self.sync_inspector_serialize_deadline();
+	}
+
+	/// The longest a persistence-bound serialization reply may pend once shutdown has begun.
+	/// It is the larger of the sanity cap and the configured grace period, so large state
+	/// writes are not truncated inside the user's own grace budget.
+	fn shutdown_serialize_cap(&self) -> Duration {
+		SERIALIZE_STATE_SHUTDOWN_SANITY_CAP
+			.max(self.factory.config().effective_sleep_grace_period())
+	}
+
+	async fn finish_pending_persistence(&mut self) {
+		if let Some(save) = self.pending_persistence.take() {
+			let outcome = save.future.await;
+			if outcome.is_err() {
+				// The adapter may have cleared its dirty state for a snapshot that was never
+				// written, so an empty final snapshot no longer proves there is nothing to save.
+				self.unpersisted_serialization = true;
+			}
+			self.on_persistence_finished(save.completion, outcome);
+		}
+	}
+
+	fn start_inspector_serialize_state(&mut self) {
+		if self.pending_inspector.is_some() {
+			return;
+		}
 		self.inspector_serialize_state_deadline = None;
 		if !matches!(
 			self.lifecycle,
@@ -2168,8 +2411,28 @@ impl ActorTask {
 			}
 		}
 
-		match reply_rx.await {
-			Ok(Ok(deltas)) => {
+		let deadline = self.ctx.shutdown_deadline_token();
+		self.pending_inspector = Some(boxed_runtime_future(async move {
+			tokio::select! {
+				biased;
+				_ = deadline.cancelled() => Err(ActorLifecycleError::NotReady.build()),
+				reply = reply_rx => reply.context("actor inspector serialize tick reply dropped")?,
+			}
+		}));
+	}
+
+	async fn wait_for_inspector(
+		save: Option<&mut RuntimeBoxFuture<Result<Vec<StateDelta>>>>,
+	) -> Result<Vec<StateDelta>> {
+		let Some(save) = save else {
+			return future::pending().await;
+		};
+		save.await
+	}
+
+	fn on_inspector_finished(&mut self, outcome: Result<Vec<StateDelta>>) {
+		match outcome {
+			Ok(deltas) => {
 				tracing::debug!(
 					actor_id = %self.ctx.actor_id(),
 					reason = SerializeStateReason::Inspector.label(),
@@ -2179,12 +2442,8 @@ impl ActorTask {
 				);
 				self.broadcast_inspector_overlay(&deltas);
 			}
-			Ok(Err(error)) => {
-				tracing::error!(?error, "actor inspector serialize tick failed");
-				self.sync_inspector_serialize_deadline();
-			}
 			Err(error) => {
-				tracing::error!(?error, "actor inspector serialize tick reply dropped");
+				tracing::error!(?error, "actor inspector serialize tick failed");
 				self.sync_inspector_serialize_deadline();
 			}
 		}
@@ -2342,24 +2601,6 @@ fn shutdown_reason_label(reason: ShutdownKind) -> &'static str {
 	}
 }
 
-#[cfg(all(unix, target_env = "gnu"))]
-fn trim_native_allocator_after_shutdown(actor_id: &str, reason: &str) {
-	unsafe extern "C" {
-		fn malloc_trim(pad: usize) -> i32;
-	}
-
-	let rc = unsafe { malloc_trim(0) };
-	tracing::debug!(
-		actor_id,
-		reason,
-		rc,
-		"trimmed native allocator after actor shutdown"
-	);
-}
-
-#[cfg(not(all(unix, target_env = "gnu")))]
-fn trim_native_allocator_after_shutdown(_actor_id: &str, _reason: &str) {}
-
 fn clone_shutdown_result(result: &Result<()>) -> Result<()> {
 	match result {
 		Ok(()) => Ok(()),
@@ -2389,10 +2630,86 @@ fn result_outcome<T>(result: &Result<T>) -> &'static str {
 	}
 }
 
+/// Fails outstanding save requests when the actor task ends by any path.
+struct FailUnpersistedSavesOnDrop(ActorContext);
+
+impl Drop for FailUnpersistedSavesOnDrop {
+	fn drop(&mut self) {
+		self.0.fail_unpersisted_save_requests();
+	}
+}
+
+/// Waits for a persistence-bound serialization reply. The adapter consumes its dirty state
+/// when it serializes, so a reply is never dropped at the shutdown deadline while it may still
+/// carry that state: after the deadline it is awaited for `cap`, the bound the final save also
+/// allows, and a reply that is already ready always wins over the deadline.
+async fn await_save_serialization(
+	shutdown_deadline: CancellationToken,
+	mut reply_rx: oneshot::Receiver<Result<Vec<StateDelta>>>,
+	cap: Duration,
+	dropped_context: &'static str,
+) -> Result<Vec<StateDelta>> {
+	let reply = tokio::select! {
+		biased;
+		reply = &mut reply_rx => reply,
+		_ = shutdown_deadline.cancelled() => match timeout(cap, &mut reply_rx).await {
+			Ok(reply) => reply,
+			Err(_) => return Err(ActorLifecycleError::ShutdownTimeout.build()),
+		},
+	};
+	reply.context(dropped_context)?
+}
+
 fn state_delta_payload_bytes(deltas: &[StateDelta]) -> usize {
 	deltas.iter().map(StateDelta::payload_len).sum()
 }
 
 fn duration_ms_f64(duration: Duration) -> f64 {
 	duration.as_secs_f64() * 1000.0
+}
+
+/// Writes a fresh actor's inspector token KV mirror in the background once its bootstrap is
+/// durable. The mirror only serves the token to the dashboard, so a failed write is logged
+/// and the next start's inspector init repairs it from SQLite.
+fn spawn_inspector_mirror(ctx: &ActorContext, token: String) {
+	let task_ctx = ctx.clone();
+	ctx.wait_until(async move {
+		let started_at = Instant::now();
+		let result =
+			crate::inspector::auth::persist_inspector_token_mirror(&task_ctx, &token).await;
+		let outcome = match &result {
+			Ok(()) => "success",
+			Err(_) => "error",
+		};
+		task_ctx.metrics().observe_startup_phase(
+			StartupPhase::InspectorToken,
+			Some(true),
+			outcome,
+			started_at.elapsed(),
+		);
+		if let Err(error) = result {
+			tracing::warn!(
+				actor_id = %task_ctx.actor_id(),
+				?error,
+				"inspector token mirror write failed, the next start repairs it"
+			);
+		}
+	});
+}
+
+/// Checks a stored inspector token's KV mirror in the background and rewrites it when it is
+/// missing or stale. The mirror only serves the token to the dashboard.
+fn spawn_inspector_mirror_check(ctx: &ActorContext, token: String) {
+	let task_ctx = ctx.clone();
+	ctx.wait_until(async move {
+		if let Err(error) =
+			crate::inspector::auth::ensure_inspector_token_mirror(&task_ctx, &token).await
+		{
+			tracing::warn!(
+				actor_id = %task_ctx.actor_id(),
+				?error,
+				"inspector token mirror check failed, the next start checks it again"
+			);
+		}
+	});
 }

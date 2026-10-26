@@ -1,5 +1,0 @@
-{
-  "code": "websocket_hibernation_not_supported",
-  "group": "guard",
-  "message": "The requested service does not support websocket hibernation."
-}

@@ -1,0 +1,5 @@
+{
+  "code": "serverless_unsupported",
+  "group": "pool",
+  "message": "Serverless node pools are not supported."
+}

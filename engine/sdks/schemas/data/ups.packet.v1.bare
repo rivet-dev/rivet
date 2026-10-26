@@ -1,0 +1,13 @@
+type Packet data
+type End void
+type Error str
+
+type Body union {
+	Packet |
+	End |
+	Error
+}
+
+type Data struct {
+	body: Body
+}

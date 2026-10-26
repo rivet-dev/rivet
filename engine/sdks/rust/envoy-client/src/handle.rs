@@ -27,10 +27,11 @@ pub struct ServerlessActorStart {
 impl EnvoyHandle {
 	#[doc(hidden)]
 	pub fn from_shared(shared: Arc<SharedContext>) -> Self {
-		Self {
-			shared,
-			started_rx: tokio::sync::watch::channel(()).1,
-		}
+		// A handle built from an existing shared context describes an envoy
+		// that is already running, so it reports as started.
+		let (started_tx, started_rx) = tokio::sync::watch::channel(());
+		started_tx.send_replace(());
+		Self { shared, started_rx }
 	}
 
 	pub fn shutdown(&self, immediate: bool) {
@@ -41,6 +42,19 @@ impl EnvoyHandle {
 		} else {
 			let _ = crate::envoy::send_to_envoy_tx(&self.shared, ToEnvoyMessage::Shutdown);
 		}
+	}
+
+	/// Withdraw this envoy from new allocations while keeping its connection
+	/// open to finish and acknowledge actor stops. Used by local development
+	/// reloads before they request actor sleep.
+	pub async fn mark_stopping(&self) -> bool {
+		let (response_tx, response_rx) = oneshot::channel();
+		if crate::envoy::send_to_envoy_tx(&self.shared, ToEnvoyMessage::MarkStopping(response_tx))
+			.is_err()
+		{
+			return false;
+		}
+		response_rx.await.unwrap_or(false)
 	}
 
 	/// True once the envoy loop has finished its cleanup block. Latched: stays
@@ -140,6 +154,12 @@ impl EnvoyHandle {
 
 	pub fn pool_name(&self) -> &str {
 		&self.shared.config.pool_name
+	}
+
+	/// True once the engine has sent its init message. Latched: stays true after
+	/// the envoy loop exits.
+	pub fn has_started(&self) -> bool {
+		self.started_rx.borrow().has_changed()
 	}
 
 	pub async fn started(&self) -> anyhow::Result<()> {
@@ -254,6 +274,19 @@ impl EnvoyHandle {
 		}
 	}
 
+	/// Waits until the engine acknowledges every actor event queued before this
+	/// call. A clean host exit can use this after draining actors so their stopped
+	/// reports are durable before the Envoy connection closes.
+	pub async fn wait_for_events_acked(&self) -> bool {
+		let (tx, rx) = oneshot::channel();
+		if crate::envoy::send_to_envoy_tx(&self.shared, ToEnvoyMessage::WaitForEventsAcked(tx))
+			.is_err()
+		{
+			return false;
+		}
+		rx.await.is_ok()
+	}
+
 	pub fn http_request_counter(
 		&self,
 		actor_id: &str,
@@ -350,7 +383,9 @@ impl EnvoyHandle {
 		let response = self
 			.send_kv_request(
 				actor_id,
-				protocol::KvRequestData::KvGetRequest(protocol::KvGetRequest { keys }),
+				protocol::KvRequestData::KvGetRequest(protocol::KvGetRequest {
+					keys: keys.into_iter().map(Into::into).collect(),
+				}),
 			)
 			.await?;
 
@@ -361,7 +396,7 @@ impl EnvoyHandle {
 					let mut found = false;
 					for (i, resp_key) in resp.keys.iter().enumerate() {
 						if requested_key == resp_key {
-							result.push(Some(resp.values[i].clone()));
+							result.push(Some(resp.values[i].to_vec()));
 							found = true;
 							break;
 						}
@@ -412,8 +447,8 @@ impl EnvoyHandle {
 				actor_id,
 				protocol::KvRequestData::KvListRequest(protocol::KvListRequest {
 					query: protocol::KvListQuery::KvListRangeQuery(protocol::KvListRangeQuery {
-						start,
-						end,
+						start: start.into(),
+						end: end.into(),
 						exclusive,
 					}),
 					reverse,
@@ -436,7 +471,7 @@ impl EnvoyHandle {
 				actor_id,
 				protocol::KvRequestData::KvListRequest(protocol::KvListRequest {
 					query: protocol::KvListQuery::KvListPrefixQuery(protocol::KvListPrefixQuery {
-						key: prefix,
+						key: prefix.into(),
 					}),
 					reverse,
 					limit,
@@ -455,7 +490,10 @@ impl EnvoyHandle {
 		let response = self
 			.send_kv_request(
 				actor_id,
-				protocol::KvRequestData::KvPutRequest(protocol::KvPutRequest { keys, values }),
+				protocol::KvRequestData::KvPutRequest(protocol::KvPutRequest {
+					keys: keys.into_iter().map(Into::into).collect(),
+					values: values.into_iter().map(Into::into).collect(),
+				}),
 			)
 			.await?;
 		match response {
@@ -469,7 +507,9 @@ impl EnvoyHandle {
 		let response = self
 			.send_kv_request(
 				actor_id,
-				protocol::KvRequestData::KvDeleteRequest(protocol::KvDeleteRequest { keys }),
+				protocol::KvRequestData::KvDeleteRequest(protocol::KvDeleteRequest {
+					keys: keys.into_iter().map(Into::into).collect(),
+				}),
 			)
 			.await?;
 		match response {
@@ -489,8 +529,8 @@ impl EnvoyHandle {
 			.send_kv_request(
 				actor_id,
 				protocol::KvRequestData::KvDeleteRangeRequest(protocol::KvDeleteRangeRequest {
-					start,
-					end,
+					start: start.into(),
+					end: end.into(),
 				}),
 			)
 			.await?;
@@ -761,7 +801,7 @@ impl EnvoyHandle {
 fn decode_serverless_actor_start_payload(
 	payload: &[u8],
 ) -> anyhow::Result<(protocol::ToEnvoy, ServerlessActorStart)> {
-	use vbare::OwnedVersionedData;
+	use vbare::Versioned;
 
 	if payload.len() < 2 {
 		anyhow::bail!("serverless start payload too short");
@@ -775,20 +815,7 @@ fn decode_serverless_actor_start_payload(
 		);
 	}
 
-	let message = match crate::protocol::versioned::ToEnvoy::deserialize(&payload[2..], version) {
-		Ok(message) => message,
-		Err(err) if version == protocol::PROTOCOL_VERSION => {
-			tracing::debug!(
-				?err,
-				"serverless start payload failed current-version decode, retrying as v1-compatible body"
-			);
-			crate::protocol::versioned::ToEnvoy::deserialize(
-				&payload[2..],
-				protocol::PROTOCOL_VERSION - 1,
-			)?
-		}
-		Err(err) => return Err(err),
-	};
+	let message = crate::protocol::versioned::ToEnvoy::deserialize(&payload[2..], version)?;
 
 	let protocol::ToEnvoy::ToEnvoyCommands(ref commands) = message else {
 		anyhow::bail!("invalid serverless payload: expected ToEnvoyCommands");
@@ -801,7 +828,7 @@ fn decode_serverless_actor_start_payload(
 	}
 
 	let actor_start = ServerlessActorStart {
-		actor_id: commands[0].checkpoint.actor_id.clone(),
+		actor_id: commands[0].checkpoint.actor_id.clone().to_string(),
 		generation: commands[0].checkpoint.generation,
 	};
 
@@ -836,6 +863,7 @@ impl EnvoyHandle {
 		crate::envoy::send_to_envoy_tx(
 			&self.shared,
 			ToEnvoyMessage::SqliteRequest {
+				trace: crate::sqlite::SqliteTrace::capture(),
 				request,
 				response_tx: tx,
 			},
@@ -915,9 +943,12 @@ fn parse_list_response(
 	response: protocol::KvResponseData,
 ) -> anyhow::Result<Vec<(Vec<u8>, Vec<u8>)>> {
 	match response {
-		protocol::KvResponseData::KvListResponse(resp) => {
-			Ok(resp.keys.into_iter().zip(resp.values).collect())
-		}
+		protocol::KvResponseData::KvListResponse(resp) => Ok(resp
+			.keys
+			.into_iter()
+			.zip(resp.values)
+			.map(|(key, value)| (key.to_vec(), value.to_vec()))
+			.collect()),
 		protocol::KvResponseData::KvErrorResponse(e) => anyhow::bail!("{}", e.message),
 		_ => anyhow::bail!("unexpected KV response type"),
 	}

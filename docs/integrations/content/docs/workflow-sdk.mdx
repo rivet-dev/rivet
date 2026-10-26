@@ -169,14 +169,13 @@ rejects requests without it.
 
 ## Deploying
 
-Deploy the app as a Rivet worker like any other. See [Self-Host](/docs/deploy/self-host/workers)
-for the per-platform guides. Two constraints come from this World specifically:
+Deploy the app as a Rivet node like any other. See [Deploy nodes](/docs/deploy/self-host/workers/).
+Two constraints come from this World specifically:
 
 - **The process must be long-lived.** The first World operation opens a
-  persistent worker connection and waits for it. This World does not use
-  RivetKit's serverless request handler, so a host that only runs per-request
-  functions cannot serve it.
-- **`WORKFLOW_RUNTIME_URL` must be reachable from your workers**, not just from
+  persistent connection to the control plane and waits for it, so a host that
+  only runs per-request functions cannot serve it.
+- **`WORKFLOW_RUNTIME_URL` must be reachable from your nodes**, not just from
   browsers. The dispatcher calls it to run every queued step. Point it at the
   app's load-balanced base URL when running more than one replica, and secure the
   route as described in [HTTP routes](#http-routes) once it is publicly

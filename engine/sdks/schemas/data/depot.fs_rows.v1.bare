@@ -1,0 +1,11 @@
+#import "shared/depot.fs.v1.bare"
+
+# Formal keys select one row envelope. Deletion remains a versioned value.
+type FormatRow union { FsFormat | FsDeleted }
+type InodeRow union { FsInode | FsDeleted }
+type DentryRow union { FsDentry | FsDeleted }
+type LinkRow union { FsPresent | FsDeleted }
+type XattrRow union { FsBytes | FsDeleted }
+type KvRow union { FsBytes | FsDeleted }
+type OrphanRow union { FsPresent | FsDeleted }
+type ChunkRow union { FsBytes | FsDeleted }

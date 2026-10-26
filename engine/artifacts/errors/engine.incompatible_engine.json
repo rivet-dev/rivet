@@ -1,0 +1,5 @@
+{
+  "code": "incompatible_engine",
+  "group": "engine",
+  "message": "An incompatible engine is already running on the endpoint."
+}

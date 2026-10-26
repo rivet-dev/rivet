@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "rivet-api-public",
-    "description": "",
+    "description": "HTTP API of the Rivet control plane.",
     "contact": {
       "name": "Rivet Gaming, LLC",
       "email": "developer@rivet.dev"
@@ -13,447 +13,53 @@
     },
     "version": "2.3.30"
   },
+  "servers": [
+    {
+      "url": "https://api.rivet.dev"
+    }
+  ],
   "paths": {
-    "/actors": {
+    "/metadata": {
       "get": {
         "tags": [
-          "actors::list"
+          "metadata"
         ],
-        "summary": " ## Datacenter Round Trips",
-        "description": " **If key is some & `include_destroyed` is false**\n\n 2 round trips:\n - namespace::ops::resolve_for_name_global\n - GET /actors (multiple DCs based on actor IDs)\n\n\tThis path is optimized because we can read the actor IDs fro the key directly from Epoxy with\n\tstale consistency to determine which datacenter the actor lives in. Under most circumstances,\n\tthis means we don't need to fan out to all datacenters (like normal list does).\n\n\tThe reason `include_destroyed` has to be false is Epoxy only stores currently active actors. If\n\t`include_destroyed` is true, we show all previous iterations of actors with the same key.\n\n **Otherwise**\n\n 2 round trips:\n - namespace::ops::resolve_for_name_global\n - GET /actors (fanout)\n\n ## Optimized Alternative Routes",
-        "operationId": "actors_list",
-        "parameters": [
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "name",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "key",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "actor_ids",
-            "in": "query",
-            "description": "Deprecated.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "actor_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/RivetId"
-              }
-            }
-          },
-          {
-            "name": "include_destroyed",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "summary": "Returns the runtime and version of the control plane. Requests with the admin token also receive the actor names served by the default namespace.",
+        "operationId": "metadata_get",
         "responses": {
           "200": {
-            "description": "",
+            "description": "Runtime and version metadata.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ActorsListResponse"
+                  "$ref": "#/components/schemas/MetadataGetResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure. Details are only logged on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
                 }
               }
             }
           }
         },
         "security": [
+          {},
           {
             "bearer_auth": []
-          }
-        ]
-      },
-      "put": {
-        "tags": [
-          "actors::get_or_create"
-        ],
-        "summary": "## Datacenter Round Trips",
-        "description": "**If actor exists**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- GET /actors/{}\n\n**If actor does not exist and is created in the current datacenter:**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\n**If actor does not exist and is created in a different datacenter:**\n\n3 round trips:\n- namespace::ops::resolve_for_name_global\n- POST /actors to remote datacenter\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\nactor::get will always be in the same datacenter.\n\n## Optimized Alternative Routes",
-        "operationId": "actors_get_or_create",
-        "parameters": [
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ActorsGetOrCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActorsGetOrCreateResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "actors::create"
-        ],
-        "summary": "## Datacenter Round Trips",
-        "description": "**If actor is created in the current datacenter:**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\n**If actor is created in a different datacenter:**\n\n3 round trips:\n- namespace::ops::resolve_for_name_global\n- POST /actors to remote datacenter\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\nactor::get will always be in the same datacenter.",
-        "operationId": "actors_create",
-        "parameters": [
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ActorsCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActorsCreateResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          }
-        ]
-      }
-    },
-    "/actors/names": {
-      "get": {
-        "tags": [
-          "actors::list_names"
-        ],
-        "summary": "## Datacenter Round Trips",
-        "description": "2 round trips:\n- GET /actors/names (fanout)\n- [api-peer] namespace::ops::resolve_for_name_global",
-        "operationId": "actors_list_names",
-        "parameters": [
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           },
           {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActorsListNamesResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          }
-        ]
-      }
-    },
-    "/actors/{actor_id}": {
-      "delete": {
-        "tags": [
-          "actors::delete"
-        ],
-        "summary": "## Datacenter Round Trips",
-        "description": "2 round trip:\n- DELETE /actors/{}\n- [api-peer] namespace::ops::resolve_for_name_global",
-        "operationId": "actors_delete",
-        "parameters": [
-          {
-            "name": "actor_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/RivetId"
-            }
-          },
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActorsDeleteResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          }
-        ]
-      }
-    },
-    "/actors/{actor_id}/kv/keys/{key}": {
-      "get": {
-        "tags": [
-          "actors::kv_get"
-        ],
-        "operationId": "actors_kv_get",
-        "parameters": [
-          {
-            "name": "actor_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/RivetId"
-            }
-          },
-          {
-            "name": "key",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActorsKvGetResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          }
-        ]
-      }
-    },
-    "/actors/{actor_id}/reschedule": {
-      "post": {
-        "tags": [
-          "actors::reschedule"
-        ],
-        "operationId": "actors_reschedule",
-        "parameters": [
-          {
-            "name": "actor_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/RivetId"
-            }
-          },
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ActorsRescheduleRequestBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActorsRescheduleResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          }
-        ]
-      }
-    },
-    "/actors/{actor_id}/sleep": {
-      "post": {
-        "tags": [
-          "actors::sleep"
-        ],
-        "operationId": "actors_sleep",
-        "parameters": [
-          {
-            "name": "actor_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/RivetId"
-            }
-          },
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ActorsSleepRequestBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActorsSleepResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
+            "rivet_token_header": []
           }
         ]
       }
@@ -463,24 +69,135 @@
         "tags": [
           "auth::tokens"
         ],
+        "summary": "Issues a namespace-scoped JWT. Requires the admin token, even when the deployment allows unauthenticated requests.",
         "operationId": "auth_tokens_create",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AuthTokenCreateRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
-            "description": "",
+            "description": "The issued token. The response carries `Cache-Control: no-store`.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AuthTokenCreateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation.invalid_input`: the subject exceeds 256 UTF-8 bytes, the duration is outside the allowed range, or the grant set is invalid (empty, more than 32 grants, a grant without operations or with more than 5, or a `token` or `jwt` resource). `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "validation",
+                    "code": "invalid_input",
+                    "message": "subject exceeds 256 UTF-8 bytes"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request does not carry the admin token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.issuance_disabled`: JWT issuance is not enabled for this deployment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "issuance_disabled",
+                    "message": "JWT issuance is not enabled for this deployment."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "not_found",
+                    "message": "The namespace does not exist."
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The request is missing the `Content-Type: application/json` header. Returned as plain text.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The JSON body does not match the request schema, for example a missing required field, a wrong type or an unknown field where unknown fields are rejected. Returned as plain text.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure, including a deployment without authentication configured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.issuance_unavailable`: the signing service is temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "issuance_unavailable",
+                    "message": "The server could not issue an authentication token because the signing service is temporarily unavailable. Retry the request."
+                  }
                 }
               }
             }
@@ -489,6 +206,9 @@
         "security": [
           {
             "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
           }
         ]
       }
@@ -498,14 +218,60 @@
         "tags": [
           "auth::tokens"
         ],
+        "summary": "Returns the namespace, subject, grants and lifetime of the JWT that authenticates the request.",
         "operationId": "auth_tokens_inspect",
         "responses": {
           "200": {
-            "description": "",
+            "description": "The token's claims. The response carries `Cache-Control: no-store`.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AuthTokenInspectResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, the token is not valid, or it is the admin token rather than a JWT. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure. Details are only logged on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
                 }
               }
             }
@@ -514,6 +280,9 @@
         "security": [
           {
             "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
           }
         ]
       }
@@ -523,10 +292,11 @@
         "tags": [
           "datacenters"
         ],
+        "summary": "Lists the datacenters of the deployment. This version serves a single datacenter named `default`.",
         "operationId": "datacenters_list",
         "responses": {
           "200": {
-            "description": "",
+            "description": "The datacenters.",
             "content": {
               "application/json": {
                 "schema": {
@@ -534,62 +304,115 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure. Details are only logged on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
           {
             "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
           }
         ]
       }
     },
-    "/envoys": {
+    "/pools": {
       "get": {
         "tags": [
-          "envoys"
+          "pools"
         ],
-        "operationId": "envoys_list",
+        "summary": "Lists a page of the namespace's configured node pools, ordered by name. A pool is listed once it is configured, whether or not any node is connected.",
+        "operationId": "pools_list",
         "parameters": [
           {
             "name": "namespace",
             "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "name",
-            "in": "query",
             "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
             "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "envoy_key",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
             }
           },
           {
             "name": "limit",
             "in": "query",
             "required": false,
+            "description": "Maximum number of results to return, from 1 to 100. Defaults to 100.",
             "schema": {
               "type": "integer",
-              "minimum": 0
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
             }
           },
           {
             "name": "cursor",
             "in": "query",
             "required": false,
+            "description": "Name of the last pool on the previous page. Pass the `pagination.cursor` value from the previous response.",
             "schema": {
               "type": "string"
             }
@@ -597,11 +420,101 @@
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "A page of node pools.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EnvoysListResponse"
+                  "$ref": "#/components/schemas/PoolsListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`actor.invalid_limit`: `limit` is not an integer from 1 to 100. `envoy.invalid_pool_name`: `cursor` is not a valid pool name. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "invalid_limit",
+                    "message": "The actor listing limit must be an integer from 1 to 100."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "not_found",
+                    "message": "The namespace does not exist."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure. Details are only logged on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
                 }
               }
             }
@@ -610,23 +523,142 @@
         "security": [
           {
             "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
           }
         ]
       }
     },
-    "/health/fanout": {
+    "/pools/{pool}": {
       "get": {
         "tags": [
-          "health"
+          "pools"
         ],
-        "operationId": "health_fanout",
+        "summary": "Returns a node pool's configuration.",
+        "operationId": "pools_get",
+        "parameters": [
+          {
+            "name": "pool",
+            "in": "path",
+            "required": true,
+            "description": "Name of the node pool. A DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
+            "schema": {
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "The node pool.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HealthFanoutResponse"
+                  "$ref": "#/components/schemas/PoolResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`envoy.invalid_pool_name`: the pool name is not valid. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "envoy",
+                    "code": "invalid_pool_name",
+                    "message": "Pool name must be a DNS label of 1 to 63 lowercase letters, digits and hyphens."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`pool.not_found`: the node pool does not exist. `namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "pool",
+                    "code": "not_found",
+                    "message": "The node pool does not exist."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure. Details are only logged on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
                 }
               }
             }
@@ -635,29 +667,495 @@
         "security": [
           {
             "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
           }
         ]
-      }
-    },
-    "/metadata": {
-      "get": {
+      },
+      "put": {
         "tags": [
-          "metadata"
+          "pools"
         ],
-        "summary": "Returns metadata about the API including runtime and version",
-        "operationId": "metadata_get",
+        "summary": "Creates or replaces a node pool's configuration. Omitted fields take their defaults. Nodes pick up the new configuration on their next connection.",
+        "operationId": "pools_upsert",
+        "parameters": [
+          {
+            "name": "pool",
+            "in": "path",
+            "required": true,
+            "description": "Name of the node pool. A DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
+            "schema": {
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PoolUpsertRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "",
+            "description": "The stored node pool.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MetadataGetResponse"
+                  "$ref": "#/components/schemas/PoolResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`pool.invalid`: the body has an unknown field or a value out of range. `pool.serverless_unsupported`: the body sets `serverless` or `kind: \"serverless\"`. `envoy.invalid_pool_name`: the pool name is not valid. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens. A body that is not valid JSON is rejected with a plain-text 400.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "pool",
+                    "code": "invalid",
+                    "message": "Node pool configuration is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "not_found",
+                    "message": "The namespace does not exist."
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The request is missing the `Content-Type: application/json` header. Returned as plain text.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure. Details are only logged on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "pools"
+        ],
+        "summary": "Deletes a node pool. Fails while any node of the pool is connected.",
+        "operationId": "pools_delete",
+        "parameters": [
+          {
+            "name": "pool",
+            "in": "path",
+            "required": true,
+            "description": "Name of the node pool. A DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
+            "schema": {
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The node pool was deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolsDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`envoy.invalid_pool_name`: the pool name is not valid. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "envoy",
+                    "code": "invalid_pool_name",
+                    "message": "Pool name must be a DNS label of 1 to 63 lowercase letters, digits and hyphens."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`pool.not_found`: the node pool does not exist. `namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "pool",
+                    "code": "not_found",
+                    "message": "The node pool does not exist."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`pool.nodes_connected`: the node pool still has connected nodes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "pool",
+                    "code": "nodes_connected",
+                    "message": "The node pool still has connected nodes."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure. Details are only logged on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
+          }
+        ]
+      }
+    },
+    "/pools/{pool}/nodes": {
+      "get": {
+        "tags": [
+          "pools"
+        ],
+        "summary": "Lists a page of the pool's live nodes in node key order. A node is listed while its heartbeat is recent enough for it to receive actors.",
+        "operationId": "pools_list_nodes",
+        "parameters": [
+          {
+            "name": "pool",
+            "in": "path",
+            "required": true,
+            "description": "Name of the node pool. A DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
+            "schema": {
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of results to return, from 1 to 100. Defaults to 100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque cursor from the previous response's `pagination.cursor`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of live nodes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolsListNodesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`actor.invalid_limit`: `limit` is not an integer from 1 to 100. `actor.invalid_cursor`: `cursor` is malformed. `envoy.invalid_pool_name`: the pool name is not valid. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "invalid_limit",
+                    "message": "The actor listing limit must be an integer from 1 to 100."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "not_found",
+                    "message": "The namespace does not exist."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure. Details are only logged on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
+          }
+        ]
       }
     },
     "/namespaces": {
@@ -665,57 +1163,46 @@
         "tags": [
           "namespaces"
         ],
+        "summary": "Lists namespaces in name order, or looks up one namespace by name. Requires the admin token.",
         "operationId": "namespaces_list",
         "parameters": [
           {
-            "name": "limit",
+            "name": "name",
             "in": "query",
             "required": false,
+            "description": "Only return the namespace with this name. The response then holds zero or one namespace, `pagination.cursor` is `null`, and `limit` and `cursor` are ignored.",
             "schema": {
-              "type": "integer",
-              "minimum": 0
+              "type": "string",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
             }
           },
           {
             "name": "cursor",
             "in": "query",
             "required": false,
+            "description": "Name of the last namespace on the previous page. Pass the `pagination.cursor` value from the previous response.",
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "name",
+            "name": "limit",
             "in": "query",
             "required": false,
+            "description": "Maximum number of namespaces to return, from 1 to 100. Defaults to 100.",
             "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "namespace_ids",
-            "in": "query",
-            "description": "Deprecated.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "namespace_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/RivetId"
-              }
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "A page of namespaces.",
             "content": {
               "application/json": {
                 "schema": {
@@ -723,11 +1210,89 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "`namespace.invalid`: `limit` is outside 1 to 100. `envoy.invalid_namespace_name`: `name` or `cursor` is not a valid namespace name. A query string with any other parameter, or a `limit` that is not a non-negative integer, is rejected with a plain-text 400.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "invalid",
+                    "message": "Namespace list limit must be between 1 and 100."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request. Namespace management is only available to the admin token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure. Details are only logged on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
           {
             "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
           }
         ]
       },
@@ -735,20 +1300,21 @@
         "tags": [
           "namespaces"
         ],
+        "summary": "Creates a namespace. Requires the admin token.",
         "operationId": "namespaces_create",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/NamespacesCreateRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
-            "description": "",
+            "description": "The created namespace.",
             "content": {
               "application/json": {
                 "schema": {
@@ -756,351 +1322,211 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "`envoy.invalid_namespace_name`: `name` is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "envoy",
+                    "code": "invalid_namespace_name",
+                    "message": "Namespace name must be a DNS label of 1 to 63 lowercase letters, digits and hyphens."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request. Namespace management is only available to the admin token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`namespace.name_not_unique`: a namespace with this name already exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "name_not_unique",
+                    "message": "A namespace with this name already exists."
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The request is missing the `Content-Type: application/json` header. Returned as plain text.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The JSON body does not match the request schema, for example a missing required field, a wrong type or an unknown field where unknown fields are rejected. Returned as plain text.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure. Details are only logged on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
           {
             "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
           }
         ]
       }
     },
-    "/runner-configs": {
+    "/actors": {
       "get": {
         "tags": [
-          "runner_configs::list"
+          "actors::list"
         ],
-        "operationId": "runner_configs_list",
+        "summary": "Lists actors by IDs, by name and key, or by name. Only a listing by name is paginated.",
+        "operationId": "actors_list",
         "parameters": [
           {
             "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
             "in": "query",
             "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
             "schema": {
-              "type": "integer",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "variant",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/RunnerConfigVariant"
-            }
-          },
-          {
-            "name": "runner_names",
-            "in": "query",
-            "description": "Deprecated.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "runner_name",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunnerConfigsListResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          }
-        ]
-      }
-    },
-    "/runner-configs/serverless-health-check": {
-      "post": {
-        "tags": [
-          "runner_configs::serverless_health_check"
-        ],
-        "operationId": "runner_configs_serverless_health_check",
-        "parameters": [
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RunnerConfigsServerlessHealthCheckRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunnerConfigsServerlessHealthCheckResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          }
-        ]
-      }
-    },
-    "/runner-configs/{runner_name}": {
-      "put": {
-        "tags": [
-          "runner_configs::upsert"
-        ],
-        "operationId": "runner_configs_upsert",
-        "parameters": [
-          {
-            "name": "runner_name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RunnerConfigsUpsertRequestBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunnerConfigsUpsertResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "runner_configs::delete"
-        ],
-        "operationId": "runner_configs_delete",
-        "parameters": [
-          {
-            "name": "runner_name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunnerConfigsDeleteResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          }
-        ]
-      }
-    },
-    "/runner-configs/{runner_name}/refresh-metadata": {
-      "post": {
-        "tags": [
-          "runner_configs::refresh_metadata"
-        ],
-        "operationId": "runner_configs_refresh_metadata",
-        "parameters": [
-          {
-            "name": "runner_name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RunnerConfigsRefreshMetadataRequestBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunnerConfigsRefreshMetadataResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          }
-        ]
-      }
-    },
-    "/runners": {
-      "get": {
-        "tags": [
-          "runners"
-        ],
-        "operationId": "runners_list",
-        "parameters": [
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
             }
           },
           {
             "name": "name",
             "in": "query",
             "required": false,
+            "description": "Actor name. Required unless `actor_ids` or `actor_id` is set. Without `key`, lists every actor with this name, newest first.",
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "runner_ids",
+            "name": "key",
             "in": "query",
-            "description": "Deprecated.",
             "required": false,
+            "description": "Actor key in slash-separated form. Requires `name`. Returns at most one actor.",
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "runner_id",
+            "name": "actor_ids",
             "in": "query",
             "required": false,
+            "description": "Comma-separated actor IDs to look up. Takes precedence over `actor_id`, `name` and `key`. IDs of missing actors or of actors in another namespace are skipped.",
             "schema": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/RivetId"
-              }
+              "type": "string"
             }
           },
           {
-            "name": "include_stopped",
+            "name": "actor_id",
             "in": "query",
             "required": false,
+            "description": "Same as `actor_ids`, used when `actor_ids` is absent.",
             "schema": {
-              "type": "boolean"
+              "type": "string"
+            }
+          },
+          {
+            "name": "include_destroyed",
+            "in": "query",
+            "required": false,
+            "description": "Include destroyed actors. Must be exactly `true` or `false`.",
+            "schema": {
+              "type": "boolean",
+              "default": false
             }
           },
           {
             "name": "limit",
             "in": "query",
             "required": false,
+            "description": "Maximum number of actors to return for a listing by name, from 1 to 100. Defaults to 100. A page can hold fewer actors even when more remain.",
             "schema": {
               "type": "integer",
-              "minimum": 0
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
             }
           },
           {
             "name": "cursor",
             "in": "query",
             "required": false,
+            "description": "Opaque cursor from the previous response's `pagination.cursor`. Only used for a listing by name.",
             "schema": {
               "type": "string"
             }
@@ -1108,11 +1534,101 @@
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "The matching actors.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunnersListResponse"
+                  "$ref": "#/components/schemas/ActorsListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`actor.invalid_listing`: neither `name` nor actor IDs were given. `actor.invalid_include_destroyed`, `actor.invalid_limit`, `actor.invalid_cursor`: the parameter is malformed. `actor.invalid_key_encoding`: `key` is not in canonical slash-separated form. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "invalid_listing",
+                    "message": "Listing actors requires a name or actor IDs."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "not_found",
+                    "message": "The namespace does not exist."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure, including an actor ID that is not a valid Rivet ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
                 }
               }
             }
@@ -1121,52 +1637,174 @@
         "security": [
           {
             "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
           }
         ]
-      }
-    },
-    "/runners/names": {
-      "get": {
+      },
+      "post": {
         "tags": [
-          "runners"
+          "actors::create"
         ],
-        "summary": "## Datacenter Round Trips",
-        "description": "2 round trips:\n- GET /runners/names (fanout)\n- [api-peer] namespace::ops::resolve_for_name_global",
-        "operationId": "runners_list_names",
+        "summary": "Creates an actor and waits until its record exists. Fails if a live actor with the same name and key exists.",
+        "operationId": "actors_create",
         "parameters": [
           {
             "name": "namespace",
             "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
             "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
             "schema": {
-              "type": "integer",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorsCreateRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "",
+            "description": "The created actor.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunnersListNamesResponse"
+                  "$ref": "#/components/schemas/ActorsCreateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`actor.invalid_name`: `name` is empty or longer than 64 bytes. `actor.invalid_key`: `key` is longer than 1024 bytes. `actor.invalid_key_encoding`: `key` is not in canonical slash-separated form. `actor.key_owned_elsewhere`: another datacenter owns the key. `envoy.invalid_pool_name`: `pool` is not a valid pool name. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "invalid_name",
+                    "message": "Actor name must be 1 to 64 bytes."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "not_found",
+                    "message": "The namespace does not exist."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`actor.duplicate_key`: a live actor with this name and key already exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "duplicate_key",
+                    "message": "Actor key already in use."
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The request is missing the `Content-Type: application/json` header. Returned as plain text.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The JSON body does not match the request schema, for example a missing required field, a wrong type or an unknown field where unknown fields are rejected. Returned as plain text.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure, including `input` that is not valid base64 and a create that did not finish within 30 seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
                 }
               }
             }
@@ -1175,6 +1813,869 @@
         "security": [
           {
             "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "actors::get_or_create"
+        ],
+        "summary": "Returns the live actor with the given name and key, or creates it. Waking a sleeping actor is part of the lookup. Without a key, a new actor is always created.",
+        "operationId": "actors_get_or_create",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
+            "schema": {
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorsGetOrCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The existing or created actor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsGetOrCreateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`actor.invalid_name`: `name` is empty or longer than 64 bytes. `actor.invalid_key`: `key` is longer than 1024 bytes. `actor.invalid_key_encoding`: `key` is not in canonical slash-separated form. `actor.key_owned_elsewhere`: another datacenter owns the key. `envoy.invalid_pool_name`: `pool` is not a valid pool name. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "invalid_name",
+                    "message": "Actor name must be 1 to 64 bytes."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "not_found",
+                    "message": "The namespace does not exist."
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The request is missing the `Content-Type: application/json` header. Returned as plain text.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The JSON body does not match the request schema, for example a missing required field, a wrong type or an unknown field where unknown fields are rejected. Returned as plain text.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure, including `input` that is not valid base64 and a create that did not finish within 30 seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
+          }
+        ]
+      }
+    },
+    "/actors/names": {
+      "get": {
+        "tags": [
+          "actors::list_names"
+        ],
+        "summary": "Lists the actor names that the namespace's connected nodes accept.",
+        "operationId": "actors_list_names",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
+            "schema": {
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The actor names.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsListNamesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "envoy",
+                    "code": "invalid_namespace_name",
+                    "message": "Namespace name must be a DNS label of 1 to 63 lowercase letters, digits and hyphens."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "not_found",
+                    "message": "The namespace does not exist."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure. Details are only logged on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
+          }
+        ]
+      }
+    },
+    "/actors/{actor_id}": {
+      "get": {
+        "tags": [
+          "actors::get"
+        ],
+        "summary": "Returns one live actor.",
+        "operationId": "actors_get",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the actor.",
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
+            "schema": {
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The actor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsGetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "envoy",
+                    "code": "invalid_namespace_name",
+                    "message": "Namespace name must be a DNS label of 1 to 63 lowercase letters, digits and hyphens."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request. For a namespace token this is also returned when the actor does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`actor.not_found`: the actor does not exist, was destroyed, or belongs to another namespace. `namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "not_found",
+                    "message": "The actor does not exist or was destroyed."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure, including an `actor_id` that is not a valid Rivet ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "actors::delete"
+        ],
+        "summary": "Destroys an actor.",
+        "operationId": "actors_delete",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the actor.",
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
+            "schema": {
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The destroy was accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "envoy",
+                    "code": "invalid_namespace_name",
+                    "message": "Namespace name must be a DNS label of 1 to 63 lowercase letters, digits and hyphens."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request. For a namespace token this is also returned when the actor does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`actor.not_found`: the actor does not exist or belongs to another namespace. `namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "not_found",
+                    "message": "The actor does not exist or was destroyed."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure, including an `actor_id` that is not a valid Rivet ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
+          }
+        ]
+      }
+    },
+    "/actors/{actor_id}/sleep": {
+      "post": {
+        "tags": [
+          "actors::sleep"
+        ],
+        "summary": "Puts an actor to sleep. The request body is ignored.",
+        "operationId": "actors_sleep",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the actor.",
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
+            "schema": {
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The sleep was accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsSleepResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "envoy",
+                    "code": "invalid_namespace_name",
+                    "message": "Namespace name must be a DNS label of 1 to 63 lowercase letters, digits and hyphens."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request. For a namespace token this is also returned when the actor does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`actor.not_found`: the actor does not exist or belongs to another namespace. `namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "not_found",
+                    "message": "The actor does not exist or was destroyed."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure, including an `actor_id` that is not a valid Rivet ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
+          }
+        ]
+      }
+    },
+    "/actors/{actor_id}/reschedule": {
+      "post": {
+        "tags": [
+          "actors::reschedule"
+        ],
+        "summary": "Moves an actor to a new allocation. A running or stopping actor is stopped and allocated again, and a sleeping actor is allocated now. An actor that is still starting, or is destroyed, is left as is. The request body is ignored.",
+        "operationId": "actors_reschedule",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the actor.",
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
+            "schema": {
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The reschedule was accepted, or there was nothing to move.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsRescheduleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "envoy",
+                    "code": "invalid_namespace_name",
+                    "message": "Namespace name must be a DNS label of 1 to 63 lowercase letters, digits and hyphens."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not cover this request. For a namespace token this is also returned when the actor does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`actor.not_found`: the actor does not exist, has no record yet, or belongs to another namespace. `namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "not_found",
+                    "message": "The actor does not exist or was destroyed."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure, including an `actor_id` that is not a valid Rivet ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
           }
         ]
       }
@@ -1187,88 +2688,41 @@
         "required": [
           "actor_id",
           "name",
-          "namespace_id",
-          "datacenter",
-          "runner_name_selector",
-          "crash_policy",
-          "create_ts"
+          "key",
+          "namespace",
+          "pool",
+          "create_ts",
+          "start_ts",
+          "pending_allocation_ts",
+          "connectable_ts",
+          "sleep_ts",
+          "reschedule_ts",
+          "destroy_ts"
         ],
         "properties": {
           "actor_id": {
             "$ref": "#/components/schemas/RivetId"
           },
-          "connectable_ts": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "Denotes when the actor was last connectable. Null if actor is not running."
+          "name": {
+            "type": "string",
+            "description": "Actor name."
           },
-          "crash_policy": {
-            "$ref": "#/components/schemas/CrashPolicy"
+          "key": {
+            "type": "string",
+            "description": "Actor key in slash-separated form. An empty string for an actor without a key."
+          },
+          "namespace": {
+            "type": "string",
+            "description": "Name of the namespace the actor belongs to."
+          },
+          "pool": {
+            "type": "string",
+            "description": "Name of the node pool the actor runs in."
           },
           "create_ts": {
             "type": "integer",
             "format": "int64",
-            "description": "Denotes when the actor was first created."
-          },
-          "datacenter": {
-            "type": "string"
-          },
-          "destroy_ts": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "Denotes when the actor was destroyed."
-          },
-          "error": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "Error details if the actor failed to start."
-          },
-          "key": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "name": {
-            "type": "string"
-          },
-          "namespace_id": {
-            "$ref": "#/components/schemas/RivetId"
-          },
-          "pending_allocation_ts": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "Denotes when the actor started waiting for an allocation."
-          },
-          "reschedule_ts": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "Denotes when the actor will try to allocate again. If this is set, the actor will not attempt to\nallocate until the given timestamp."
-          },
-          "runner_name_selector": {
-            "type": "string"
-          },
-          "sleep_ts": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "Denotes when the actor entered a sleeping state."
+            "description": "When the actor was created, in Unix milliseconds."
           },
           "start_ts": {
             "type": [
@@ -1276,9 +2730,50 @@
               "null"
             ],
             "format": "int64",
-            "description": "Denotes when the actor was first made connectable. Null if never."
+            "description": "When the actor first started. Not recorded by this version, so always `null`."
+          },
+          "pending_allocation_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "When the actor started waiting for a node. Not recorded by this version, so always `null`."
+          },
+          "connectable_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "When the actor last became connectable. Not recorded by this version, so always `null`."
+          },
+          "sleep_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "When the actor went to sleep. Not recorded by this version, so always `null`."
+          },
+          "reschedule_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "When the actor will next try to allocate. Not recorded by this version, so always `null`."
+          },
+          "destroy_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "When the actor was destroyed, in Unix milliseconds. Only set in listings that include destroyed actors; otherwise `null`."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ActorName": {
         "type": "object",
@@ -1289,101 +2784,109 @@
           "metadata": {
             "type": "object",
             "additionalProperties": {},
-            "propertyNames": {
-              "type": "string"
-            }
+            "description": "Metadata for the actor name. Currently always empty."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ActorsCreateRequest": {
         "type": "object",
+        "description": "Unknown fields are ignored.",
         "required": [
-          "name",
-          "runner_name_selector",
-          "crash_policy"
+          "name"
         ],
         "properties": {
-          "crash_policy": {
-            "$ref": "#/components/schemas/CrashPolicy"
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Actor name, 1 to 64 bytes."
           },
-          "datacenter": {
+          "key": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 1024,
+            "description": "Actor key in canonical slash-separated form, at most 1024 bytes. Omit for an actor without a key."
           },
           "input": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Arbitrary base64 encoded binary data."
+            "description": "Actor input as standard base64 (with padding)."
           },
-          "key": {
+          "pool": {
             "type": [
               "string",
               "null"
-            ]
-          },
-          "name": {
-            "type": "string"
-          },
-          "runner_name_selector": {
-            "type": "string"
+            ],
+            "default": "default",
+            "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+            "description": "Name of the node pool to run the actor in. Defaults to `default`."
           }
-        },
-        "additionalProperties": false
+        }
       },
       "ActorsCreateResponse": {
         "type": "object",
         "required": [
-          "actor"
+          "actor",
+          "created"
         ],
         "properties": {
           "actor": {
             "$ref": "#/components/schemas/Actor"
+          },
+          "created": {
+            "type": "boolean",
+            "description": "Always `true`."
           }
         },
         "additionalProperties": false
       },
       "ActorsDeleteResponse": {
-        "type": "object"
+        "type": "object",
+        "additionalProperties": false
       },
       "ActorsGetOrCreateRequest": {
         "type": "object",
+        "description": "Unknown fields are ignored.",
         "required": [
-          "name",
-          "key",
-          "runner_name_selector",
-          "crash_policy"
+          "name"
         ],
         "properties": {
-          "crash_policy": {
-            "$ref": "#/components/schemas/CrashPolicy"
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Actor name, 1 to 64 bytes."
           },
-          "datacenter": {
+          "key": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 1024,
+            "description": "Actor key in canonical slash-separated form, at most 1024 bytes. Without a key, a new actor is always created."
           },
           "input": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Actor input as standard base64 (with padding)."
           },
-          "key": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "runner_name_selector": {
-            "type": "string"
+          "pool": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": "default",
+            "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+            "description": "Name of the node pool to run the actor in. Defaults to `default`."
           }
-        },
-        "additionalProperties": false
+        }
       },
       "ActorsGetOrCreateResponse": {
         "type": "object",
@@ -1396,24 +2899,20 @@
             "$ref": "#/components/schemas/Actor"
           },
           "created": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "`true` if this request created the actor, `false` if it already existed."
           }
         },
         "additionalProperties": false
       },
-      "ActorsKvGetResponse": {
+      "ActorsGetResponse": {
         "type": "object",
         "required": [
-          "value",
-          "update_ts"
+          "actor"
         ],
         "properties": {
-          "update_ts": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "value": {
-            "type": "string"
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
           }
         },
         "additionalProperties": false
@@ -1421,8 +2920,7 @@
       "ActorsListNamesResponse": {
         "type": "object",
         "required": [
-          "names",
-          "pagination"
+          "names"
         ],
         "properties": {
           "names": {
@@ -1432,10 +2930,8 @@
             },
             "propertyNames": {
               "type": "string"
-            }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/Pagination"
+            },
+            "description": "Map from actor name to its metadata."
           }
         },
         "additionalProperties": false
@@ -1459,15 +2955,7 @@
         },
         "additionalProperties": false
       },
-      "ActorsRescheduleRequestBody": {
-        "type": "object",
-        "additionalProperties": false
-      },
       "ActorsRescheduleResponse": {
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ActorsSleepRequestBody": {
         "type": "object",
         "additionalProperties": false
       },
@@ -1485,132 +2973,21 @@
           "delete"
         ]
       },
-      "AuthTokenCreateRequest": {
-        "type": "object",
-        "required": [
-          "namespace",
-          "grants"
-        ],
-        "properties": {
-          "duration": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "minimum": 0
-          },
-          "grants": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AuthTokenGrant"
-            }
-          },
-          "namespace": {
-            "type": "string"
-          },
-          "subject": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "additionalProperties": false
-      },
-      "AuthTokenCreateResponse": {
-        "type": "object",
-        "required": [
-          "token",
-          "issued_ts",
-          "expires_ts"
-        ],
-        "properties": {
-          "expires_ts": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "issued_ts": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "token": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "AuthTokenGrant": {
-        "type": "object",
-        "required": [
-          "resource",
-          "target",
-          "operations"
-        ],
-        "properties": {
-          "operations": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AuthOperationKind"
-            }
-          },
-          "resource": {
-            "$ref": "#/components/schemas/AuthTokenResource"
-          },
-          "target": {
-            "$ref": "#/components/schemas/AuthTokenTargetScope"
-          }
-        },
-        "additionalProperties": false
-      },
-      "AuthTokenInspectResponse": {
-        "type": "object",
-        "required": [
-          "namespace_id",
-          "grants",
-          "issued_ts",
-          "expires_ts"
-        ],
-        "properties": {
-          "expires_ts": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "grants": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AuthTokenGrant"
-            }
-          },
-          "issued_ts": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "namespace_id": {
-            "$ref": "#/components/schemas/RivetId"
-          },
-          "subject": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "additionalProperties": false
-      },
-      "AuthTokenResource": {
+      "AuthResourceKind": {
         "type": "string",
         "enum": [
           "namespace",
           "actor",
-          "runner",
-          "runner_config",
+          "node",
+          "pool",
           "datacenter",
           "actor_gateway",
           "actor_kv"
-        ]
+        ],
+        "description": "Resource type a grant applies to."
       },
-      "AuthTokenTargetScope": {
+      "AuthTargetScope": {
+        "description": "`\"any\"` for every resource of the type, or `{ \"id\": \"...\" }` for one resource.",
         "oneOf": [
           {
             "type": "string",
@@ -1627,199 +3004,159 @@
               "id": {
                 "$ref": "#/components/schemas/RivetId"
               }
-            }
+            },
+            "additionalProperties": false
           }
         ]
       },
-      "CrashPolicy": {
-        "type": "string",
-        "enum": [
-          "restart",
-          "sleep",
-          "destroy"
-        ]
+      "AuthTokenCreateRequest": {
+        "type": "object",
+        "required": [
+          "namespace",
+          "grants"
+        ],
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+            "description": "Name of the namespace the token is scoped to. It must exist."
+          },
+          "duration": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 1,
+            "description": "Token lifetime in seconds, from 1 to the deployment's maximum. Defaults to the deployment's configured duration."
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque identifier of the end user, at most 256 UTF-8 bytes. Only used for correlation."
+          },
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthTokenGrant"
+            },
+            "minItems": 1,
+            "maxItems": 32,
+            "description": "Access the token carries within its namespace."
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthTokenCreateResponse": {
+        "type": "object",
+        "required": [
+          "token",
+          "issued_ts",
+          "expires_ts"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The signed JWT.",
+            "example": "eyJ..."
+          },
+          "issued_ts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the token was issued, in Unix milliseconds."
+          },
+          "expires_ts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the token expires, in Unix milliseconds."
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthTokenGrant": {
+        "type": "object",
+        "required": [
+          "resource",
+          "target",
+          "operations"
+        ],
+        "properties": {
+          "resource": {
+            "$ref": "#/components/schemas/AuthResourceKind"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AuthTargetScope"
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthOperationKind"
+            },
+            "minItems": 1,
+            "maxItems": 5,
+            "description": "Operations the grant allows on the target."
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthTokenInspectResponse": {
+        "type": "object",
+        "required": [
+          "namespace",
+          "subject",
+          "grants",
+          "issued_ts",
+          "expires_ts"
+        ],
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "description": "Name of the namespace the token is scoped to."
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Subject attached to the token, or `null`."
+          },
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthTokenGrant"
+            },
+            "description": "Access the token carries."
+          },
+          "issued_ts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the token was issued, in Unix milliseconds."
+          },
+          "expires_ts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the token expires, in Unix milliseconds."
+          }
+        },
+        "additionalProperties": false
       },
       "Datacenter": {
         "type": "object",
         "required": [
-          "label",
-          "name",
-          "url"
+          "name"
         ],
         "properties": {
-          "label": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
           "name": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
+            "type": "string",
+            "description": "Datacenter name.",
+            "example": "default"
           }
         },
         "additionalProperties": false
-      },
-      "DatacenterHealth": {
-        "type": "object",
-        "required": [
-          "datacenter_label",
-          "datacenter_name",
-          "status"
-        ],
-        "properties": {
-          "datacenter_label": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "datacenter_name": {
-            "type": "string"
-          },
-          "error": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "response": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/HealthResponse"
-              }
-            ]
-          },
-          "rtt_ms": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "status": {
-            "$ref": "#/components/schemas/HealthStatus"
-          }
-        }
       },
       "DatacentersListResponse": {
-        "type": "object",
-        "required": [
-          "datacenters",
-          "pagination"
-        ],
-        "properties": {
-          "datacenters": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Datacenter"
-            }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/Pagination"
-          }
-        },
-        "additionalProperties": false
-      },
-      "Envoy": {
-        "type": "object",
-        "required": [
-          "envoy_key",
-          "namespace_id",
-          "datacenter",
-          "pool_name",
-          "version",
-          "slots",
-          "create_ts",
-          "last_ping_ts",
-          "last_rtt"
-        ],
-        "properties": {
-          "create_ts": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "datacenter": {
-            "type": "string"
-          },
-          "envoy_key": {
-            "type": "string"
-          },
-          "last_connected_ts": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "last_ping_ts": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "last_rtt": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "metadata": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": {},
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "namespace_id": {
-            "$ref": "#/components/schemas/RivetId"
-          },
-          "pool_name": {
-            "type": "string"
-          },
-          "slots": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          },
-          "stop_ts": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "version": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          }
-        },
-        "additionalProperties": false
-      },
-      "EnvoysListResponse": {
-        "type": "object",
-        "required": [
-          "envoys",
-          "pagination"
-        ],
-        "properties": {
-          "envoys": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Envoy"
-            }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/Pagination"
-          }
-        },
-        "additionalProperties": false
-      },
-      "HealthFanoutResponse": {
         "type": "object",
         "required": [
           "datacenters"
@@ -1828,111 +3165,95 @@
           "datacenters": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/DatacenterHealth"
+              "$ref": "#/components/schemas/Datacenter"
             }
           }
-        }
+        },
+        "additionalProperties": false
       },
-      "HealthResponse": {
+      "ErrorResponse": {
         "type": "object",
+        "description": "A structured error. The response also carries an `x-rivet-error: <group>.<code>` header.",
         "required": [
-          "runtime",
-          "status",
-          "version"
+          "group",
+          "code",
+          "message"
         ],
         "properties": {
-          "runtime": {
-            "type": "string"
+          "group": {
+            "type": "string",
+            "description": "Error group, for example `actor`."
           },
-          "status": {
-            "type": "string"
+          "code": {
+            "type": "string",
+            "description": "Error code within the group, for example `not_found`."
           },
-          "version": {
-            "type": "string"
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message."
+          },
+          "metadata": {
+            "description": "Extra details. Only present on some errors raised while authenticating or authorizing the request."
           }
         }
-      },
-      "HealthStatus": {
-        "type": "string",
-        "enum": [
-          "ok",
-          "error"
-        ]
       },
       "MetadataGetResponse": {
         "type": "object",
         "required": [
           "runtime",
           "version",
-          "git_sha",
-          "build_timestamp",
-          "rustc_version",
-          "rustc_host",
-          "cargo_target",
-          "cargo_profile",
-          "epoxy_protocol_version",
-          "envoy_protocol_version"
+          "envoyProtocolVersion"
         ],
         "properties": {
-          "build_timestamp": {
-            "type": "string"
-          },
-          "cargo_profile": {
-            "type": "string"
-          },
-          "cargo_target": {
-            "type": "string"
-          },
-          "envoy_protocol_version": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "epoxy_protocol_version": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "git_sha": {
-            "type": "string"
-          },
           "runtime": {
-            "type": "string"
-          },
-          "rustc_host": {
-            "type": "string"
-          },
-          "rustc_version": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "engine"
+            ],
+            "description": "Always `engine`."
           },
           "version": {
-            "type": "string"
+            "type": "string",
+            "description": "Version of the control plane."
+          },
+          "envoyProtocolVersion": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "description": "Version of the protocol nodes use to connect to the control plane."
+          },
+          "actorNames": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ActorName"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "description": "Actor names the default namespace's connected nodes accept. Only present for requests made with the admin token."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "Namespace": {
         "type": "object",
         "required": [
-          "namespace_id",
           "name",
-          "display_name",
           "create_ts"
         ],
         "properties": {
+          "name": {
+            "type": "string",
+            "description": "Namespace name.",
+            "example": "my-namespace"
+          },
           "create_ts": {
             "type": "integer",
-            "format": "int64"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "namespace_id": {
-            "$ref": "#/components/schemas/RivetId"
+            "format": "int64",
+            "description": "When the namespace was created, in Unix milliseconds."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "NamespaceListResponse": {
         "type": "object",
@@ -1956,15 +3277,14 @@
       "NamespacesCreateRequest": {
         "type": "object",
         "required": [
-          "name",
-          "display_name"
+          "name"
         ],
         "properties": {
-          "display_name": {
-            "type": "string"
-          },
           "name": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+            "maxLength": 63,
+            "description": "Immutable namespace name. A DNS label of 1 to 63 lowercase letters, digits and hyphens."
           }
         },
         "additionalProperties": false
@@ -1981,558 +3301,238 @@
         },
         "additionalProperties": false
       },
+      "Node": {
+        "type": "object",
+        "required": [
+          "key",
+          "pool",
+          "namespace",
+          "datacenter",
+          "create_ts",
+          "last_ping_ts",
+          "connected",
+          "stopping"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Node key, unique within the pool.",
+            "example": "node-1"
+          },
+          "pool": {
+            "type": "string",
+            "description": "Name of the node pool."
+          },
+          "namespace": {
+            "type": "string",
+            "description": "Name of the namespace."
+          },
+          "datacenter": {
+            "type": "string",
+            "description": "Datacenter name.",
+            "example": "default"
+          },
+          "create_ts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the node connected, in Unix milliseconds."
+          },
+          "last_ping_ts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the node last sent a heartbeat, in Unix milliseconds."
+          },
+          "connected": {
+            "type": "boolean",
+            "description": "Whether the node is connected."
+          },
+          "stopping": {
+            "type": "boolean",
+            "description": "Whether the node is shutting down."
+          }
+        },
+        "additionalProperties": false
+      },
       "Pagination": {
         "type": "object",
+        "required": [
+          "cursor"
+        ],
         "properties": {
           "cursor": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Cursor for the next page, or `null` when there are no more results."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Pool": {
+        "type": "object",
+        "required": [
+          "name",
+          "drain_on_version_upgrade",
+          "actor_eviction_delay",
+          "actor_eviction_period",
+          "actor_eviction_rate",
+          "metadata"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the node pool.",
+            "example": "default"
+          },
+          "drain_on_version_upgrade": {
+            "type": "boolean",
+            "description": "Drain nodes running an older version when a newer version connects."
+          },
+          "actor_eviction_delay": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 86400,
+            "description": "Seconds to wait before evicting actors from a draining node."
+          },
+          "actor_eviction_period": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 86400,
+            "description": "Seconds over which actors are evicted from a draining node."
+          },
+          "actor_eviction_rate": {
+            "type": "number",
+            "format": "double",
+            "exclusiveMinimum": 0,
+            "description": "Rate at which actors are evicted from a draining node. Must be finite and greater than 0."
+          },
+          "metadata": {
+            "description": "Opaque JSON stored with the pool, or `null` when unset.",
+            "example": null
+          }
+        },
+        "additionalProperties": false
+      },
+      "PoolResponse": {
+        "type": "object",
+        "required": [
+          "pool"
+        ],
+        "properties": {
+          "pool": {
+            "$ref": "#/components/schemas/Pool"
+          }
+        }
+      },
+      "PoolUpsertRequest": {
+        "type": "object",
+        "description": "Every field is optional. Unknown fields are rejected.",
+        "properties": {
+          "drain_on_version_upgrade": {
+            "type": "boolean",
+            "default": false,
+            "description": "Drain nodes running an older version when a newer version connects."
+          },
+          "actor_eviction_delay": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 86400,
+            "default": 0,
+            "description": "Seconds to wait before evicting actors from a draining node."
+          },
+          "actor_eviction_period": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 86400,
+            "default": 0,
+            "description": "Seconds over which actors are evicted from a draining node."
+          },
+          "actor_eviction_rate": {
+            "type": "number",
+            "format": "double",
+            "exclusiveMinimum": 0,
+            "default": 1,
+            "description": "Rate at which actors are evicted from a draining node. Must be finite and greater than 0."
+          },
+          "metadata": {
+            "description": "Opaque JSON stored with the pool, at most 16 KiB when serialized."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PoolsDeleteResponse": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "PoolsListNodesResponse": {
+        "type": "object",
+        "required": [
+          "nodes",
+          "pagination"
+        ],
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Node"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PoolsListResponse": {
+        "type": "object",
+        "required": [
+          "pools",
+          "pagination"
+        ],
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "pools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Pool"
+            }
           }
         },
         "additionalProperties": false
       },
       "RivetId": {
-        "type": "string"
-      },
-      "Runner": {
-        "type": "object",
-        "required": [
-          "runner_id",
-          "namespace_id",
-          "datacenter",
-          "name",
-          "key",
-          "version",
-          "total_slots",
-          "remaining_slots",
-          "create_ts",
-          "last_ping_ts",
-          "last_rtt"
-        ],
-        "properties": {
-          "create_ts": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "datacenter": {
-            "type": "string"
-          },
-          "drain_ts": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "key": {
-            "type": "string"
-          },
-          "last_connected_ts": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "last_ping_ts": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "last_rtt": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "metadata": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": {},
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "name": {
-            "type": "string"
-          },
-          "namespace_id": {
-            "$ref": "#/components/schemas/RivetId"
-          },
-          "remaining_slots": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "runner_id": {
-            "$ref": "#/components/schemas/RivetId"
-          },
-          "stop_ts": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "total_slots": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "version": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          }
-        },
-        "additionalProperties": false
-      },
-      "RunnerConfig": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/RunnerConfigKind"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "drain_on_version_upgrade": {
-                "type": [
-                  "boolean",
-                  "null"
-                ],
-                "description": "Deprecated."
-              },
-              "metadata": {}
-            }
-          }
-        ]
-      },
-      "RunnerConfigKind": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "normal"
-            ],
-            "properties": {
-              "normal": {
-                "type": "object",
-                "properties": {
-                  "actor_eviction_delay": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "int32",
-                    "description": "Seconds.",
-                    "minimum": 0
-                  },
-                  "actor_eviction_period": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "int32",
-                    "description": "Seconds.",
-                    "minimum": 0
-                  },
-                  "actor_eviction_rate": {
-                    "type": [
-                      "number",
-                      "null"
-                    ],
-                    "format": "float",
-                    "description": "Actors per second."
-                  },
-                  "drain_on_version_upgrade": {
-                    "type": [
-                      "boolean",
-                      "null"
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "serverless"
-            ],
-            "properties": {
-              "serverless": {
-                "type": "object",
-                "required": [
-                  "url",
-                  "request_lifespan"
-                ],
-                "properties": {
-                  "actor_eviction_delay": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "int32",
-                    "description": "Seconds.",
-                    "minimum": 0
-                  },
-                  "actor_eviction_period": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "int32",
-                    "description": "Seconds.",
-                    "minimum": 0
-                  },
-                  "actor_eviction_rate": {
-                    "type": [
-                      "number",
-                      "null"
-                    ],
-                    "format": "float",
-                    "description": "Actors per second."
-                  },
-                  "drain_grace_period": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "int32",
-                    "description": "Seconds.",
-                    "minimum": 0
-                  },
-                  "drain_on_version_upgrade": {
-                    "type": [
-                      "boolean",
-                      "null"
-                    ]
-                  },
-                  "headers": {
-                    "type": [
-                      "object",
-                      "null"
-                    ],
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "propertyNames": {
-                      "type": "string"
-                    }
-                  },
-                  "max_concurrent_actors": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "int64",
-                    "minimum": 0
-                  },
-                  "max_runners": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "int32",
-                    "description": "Deprecated.",
-                    "minimum": 0
-                  },
-                  "metadata_poll_interval": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "int64",
-                    "description": "Milliseconds between metadata polling. If not set, uses the global default.",
-                    "minimum": 0
-                  },
-                  "min_runners": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "int32",
-                    "description": "Deprecated.",
-                    "minimum": 0
-                  },
-                  "request_lifespan": {
-                    "type": "integer",
-                    "format": "int32",
-                    "description": "Seconds.",
-                    "minimum": 0
-                  },
-                  "runners_margin": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "int32",
-                    "description": "Deprecated.",
-                    "minimum": 0
-                  },
-                  "slots_per_runner": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "int32",
-                    "description": "Deprecated.",
-                    "minimum": 0
-                  },
-                  "url": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        ]
-      },
-      "RunnerConfigResponse": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/RunnerConfig"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "protocol_version": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "int32",
-                "minimum": 0
-              },
-              "runner_pool_error": {
-                "type": [
-                  "object",
-                  "null"
-                ]
-              }
-            }
-          }
-        ]
-      },
-      "RunnerConfigVariant": {
         "type": "string",
-        "enum": [
-          "serverless",
-          "normal"
-        ]
-      },
-      "RunnerConfigsDeleteResponse": {
-        "type": "object"
-      },
-      "RunnerConfigsListResponse": {
-        "type": "object",
-        "required": [
-          "runner_configs",
-          "pagination"
-        ],
-        "properties": {
-          "pagination": {
-            "$ref": "#/components/schemas/Pagination"
-          },
-          "runner_configs": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/RunnerConfigsListResponseRunnerConfigsValue"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          }
-        },
-        "additionalProperties": false
-      },
-      "RunnerConfigsListResponseRunnerConfigsValue": {
-        "type": "object",
-        "required": [
-          "datacenters"
-        ],
-        "properties": {
-          "datacenters": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/RunnerConfigResponse"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "RunnerConfigsRefreshMetadataRequestBody": {
-        "type": "object",
-        "additionalProperties": false
-      },
-      "RunnerConfigsRefreshMetadataResponse": {
-        "type": "object",
-        "additionalProperties": false
-      },
-      "RunnerConfigsServerlessHealthCheckRequest": {
-        "type": "object",
-        "required": [
-          "url"
-        ],
-        "properties": {
-          "headers": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "url": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "RunnerConfigsServerlessHealthCheckResponse": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "success"
-            ],
-            "properties": {
-              "success": {
-                "type": "object",
-                "required": [
-                  "version"
-                ],
-                "properties": {
-                  "version": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "failure"
-            ],
-            "properties": {
-              "failure": {
-                "type": "object",
-                "required": [
-                  "error"
-                ],
-                "properties": {
-                  "error": {
-                    "$ref": "#/components/schemas/RunnerConfigsServerlessMetadataError"
-                  }
-                }
-              }
-            }
-          }
-        ]
-      },
-      "RunnerConfigsServerlessMetadataError": {
-        "type": "object",
-        "description": "Wire-format envelope for serverless metadata errors.\n\nSurfaced to API clients with a stable `{message, details, metadata}` shape\nregardless of which internal `ServerlessMetadataError` variant produced it.\n`metadata.kind` discriminates the variant; per-variant fields live alongside\n`kind`.",
-        "required": [
-          "message"
-        ],
-        "properties": {
-          "details": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "message": {
-            "type": "string"
-          },
-          "metadata": {}
-        }
-      },
-      "RunnerConfigsUpsertRequestBody": {
-        "type": "object",
-        "required": [
-          "datacenters"
-        ],
-        "properties": {
-          "datacenters": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/RunnerConfig"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          }
-        },
-        "additionalProperties": false
-      },
-      "RunnerConfigsUpsertResponse": {
-        "type": "object",
-        "required": [
-          "endpoint_config_changed"
-        ],
-        "properties": {
-          "endpoint_config_changed": {
-            "type": "boolean"
-          }
-        }
-      },
-      "RunnersListNamesResponse": {
-        "type": "object",
-        "required": [
-          "names",
-          "pagination"
-        ],
-        "properties": {
-          "names": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/Pagination"
-          }
-        },
-        "additionalProperties": false
-      },
-      "RunnersListResponse": {
-        "type": "object",
-        "required": [
-          "runners",
-          "pagination"
-        ],
-        "properties": {
-          "pagination": {
-            "$ref": "#/components/schemas/Pagination"
-          },
-          "runners": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Runner"
-            }
-          }
-        },
-        "additionalProperties": false
+        "description": "A Rivet ID: 30 lowercase base36 characters.",
+        "example": "d97pbq1nyqxw1w5qdwz0iirbqiblh2"
       }
     },
     "securitySchemes": {
       "bearer_auth": {
         "type": "http",
-        "scheme": "bearer"
+        "scheme": "bearer",
+        "description": "The admin token or a namespace JWT from `POST /auth/tokens`."
+      },
+      "rivet_token_header": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-rivet-token",
+        "description": "The same token sent in the `x-rivet-token` header instead of `Authorization`."
       }
     }
   },
   "security": [
     {
       "bearer_auth": []
+    },
+    {
+      "rivet_token_header": []
     }
   ]
 }

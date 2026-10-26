@@ -10,6 +10,7 @@
  */
 import { $ } from "execa";
 import { scoped } from "./logger.js";
+import { releaseLatest } from "./version.js";
 
 const log = scoped("docker");
 
@@ -29,6 +30,20 @@ export const DOCKER_IMAGES: readonly DockerImage[] = [
 	{ repo: "rivetdev/engine", prefix: "slim", main: true },
 	{ repo: "rivetdev/engine", prefix: "full" },
 ] as const;
+
+export function dockerVersionTags(img: DockerImage, version: string, latest: boolean): string[] {
+	const tags = [`${img.prefix}-${version}`];
+	if (img.main) tags.push(version);
+	if (!releaseLatest(version, true)) {
+		tags.push(`${img.prefix}-next`);
+		if (img.main) tags.push("next");
+	}
+	if (releaseLatest(version, latest)) {
+		tags.push(`${img.prefix}-latest`);
+		if (img.main) tags.push("latest");
+	}
+	return tags;
+}
 
 /**
  * Create a multi-arch manifest for every image at the given sha from its
@@ -61,15 +76,8 @@ export async function retagManifestsToVersion(
 	for (const img of DOCKER_IMAGES) {
 		const source = `${img.repo}:${img.prefix}-${fromSha}`;
 
-		await imagetoolsCreate(img.repo, source, `${img.prefix}-${version}`);
-		if (img.main) {
-			await imagetoolsCreate(img.repo, source, version);
-		}
-		if (latest) {
-			await imagetoolsCreate(img.repo, source, `${img.prefix}-latest`);
-			if (img.main) {
-				await imagetoolsCreate(img.repo, source, "latest");
-			}
+		for (const tag of dockerVersionTags(img, version, latest)) {
+			await imagetoolsCreate(img.repo, source, tag);
 		}
 	}
 }

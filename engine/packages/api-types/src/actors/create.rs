@@ -18,6 +18,7 @@ pub struct CreateRequest {
 	pub key: Option<String>,
 	/// Arbitrary base64 encoded binary data.
 	pub input: Option<String>,
+	#[serde(rename = "pool", alias = "runner_name_selector")]
 	pub runner_name_selector: String,
 	pub crash_policy: rivet_types::actors::CrashPolicy,
 }

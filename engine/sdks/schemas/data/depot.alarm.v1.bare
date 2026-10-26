@@ -1,0 +1,7 @@
+#import "shared/depot.alarms.v1.bare"
+
+# Canonical volume state; its MVCC key supplies the history position.
+type AlarmValue struct { pending: optional<AlarmSet> }
+type AlarmRetryRecord struct { revision: AlarmRevision nextUnixMs: i64 attempt: u32 ownerId: UuidV4 nextBootMs: u64 }
+type AlarmCurrent struct { summary: AlarmSummary retry: optional<AlarmRetryRecord> }
+type AlarmTimeRecord struct { volumeLogKey: VolumeLogKey summary: AlarmSummary retry: optional<AlarmRetryRecord> }

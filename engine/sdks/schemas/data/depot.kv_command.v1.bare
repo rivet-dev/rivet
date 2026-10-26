@@ -1,0 +1,138 @@
+#import "shared/depot.types.v1.bare"
+
+# Typed commands run on the maintainer of the database volume.
+# Tags select the immutable command registry; bodies use this protocol's version.
+type KvCommandRequest struct {
+	volumeKey: VolumeKey
+	operationId: UuidV4
+	tag: u32
+	body: data
+	# Creates the volume inside the host's first open when it is missing. Reads leave it
+	# unset so a miss never allocates a durable volume.
+	createIfMissing: bool
+}
+
+type CommandResult struct {
+	body: data
+}
+
+# Why the storage host refused to admit a command. Nothing ran, so the request's edge may send
+# it again after `retryAfterMs`.
+type OverloadReason enum {
+	# Every command handler slot on the host is in use.
+	COMMAND_CAPACITY
+	# The host's admitted command bytes are at their cap.
+	COMMAND_BYTES
+	# The host holds its maximum of open volumes and none can be closed now.
+	VOLUMES_BUSY
+	# The volume is opening, closing, reopening or being deleted on this host.
+	VOLUME_TRANSITION
+	# The volume's filesystem refused the work for memory, pending work or read sessions.
+	FILESYSTEM_OVERLOADED
+	# The tablet maintainer's inbox is full.
+	MAINTAINER_INBOX
+	# The request's UPS window to the host is full.
+	TRANSPORT_WINDOW
+}
+
+type Overloaded struct {
+	reason: OverloadReason
+	retryAfterMs: u64
+}
+
+# Why an admitted command could not finish. Its outcome may be unknown, so the edge does not
+# send it again as a new operation.
+type UnavailableReason enum {
+	# The command or its volume open passed its deadline.
+	TIMED_OUT
+	# Opening the volume or its filesystem failed.
+	OPEN_FAILED
+	# The volume's log or cold store could not confirm or serve the operation.
+	STORAGE_FAILED
+	# The host failed for an internal reason, such as encoding or a missing clock.
+	INTERNAL
+	# The request did not get an answer from the host.
+	TRANSPORT
+}
+
+type Unavailable struct {
+	reason: UnavailableReason
+}
+
+# The volume's command authority moved to another grant or maintainer, possibly after the
+# command committed. The caller sends the same operation id along the refreshed route after
+# `retryAfterMs`, so the new maintainer deduplicates it.
+type AuthorityMoved struct {
+	retryAfterMs: u64
+}
+
+# A newer owner holds the volume. Never retried.
+type Fenced void
+
+# The volume's stored data failed a consistency check. Never retried.
+type Corrupt void
+
+# The command conflicted with a concurrent change to the volume. Final.
+type Conflict void
+
+type ApplicationError struct {
+	group: str
+	code: str
+	message: str
+}
+
+type CommandTooLarge void
+
+type NotMaintainer void
+
+type UnknownCommand void
+
+type VolumeNotFound void
+
+type VolumeDeleted void
+
+type KvCommandResponse union {
+	CommandResult |
+	Overloaded |
+	Unavailable |
+	AuthorityMoved |
+	Fenced |
+	Corrupt |
+	Conflict |
+	NotMaintainer |
+	UnknownCommand |
+	CommandTooLarge |
+	VolumeNotFound |
+	VolumeDeleted |
+	ApplicationError
+}
+
+# Repeating a read selects the latest committed snapshot again.
+type KvGet struct {
+	key: data
+}
+
+type KvGetResponse struct {
+	value: optional<data>
+}
+
+type Put struct {
+	key: data
+	value: data
+}
+
+type Delete struct {
+	key: data
+}
+
+type Mutation union {
+	Put |
+	Delete
+}
+
+# Fixed puts and deletes are idempotent; conditions belong in application commands.
+type KvApply struct {
+	mutations: list<Mutation>
+}
+
+type KvApplyResponse void

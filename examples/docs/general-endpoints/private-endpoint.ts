@@ -7,5 +7,5 @@ const myActor = actor({
 
 const registry = setup({
   use: { myActor },
-  endpoint: "https://my-namespace:sk_xxxxx@api.rivet.dev",
+  endpoint: "https://my-namespace:<rivet-token>@rivet.example.com",
 });

@@ -1,0 +1,26 @@
+#import "shared/uuid_v4.v1.bare"
+
+# The capacity class the stream is admitted under on both sides. Trusted, because UPS traffic
+# is engine-internal.
+type RequestClass enum {
+	DEPOT_LOG
+	DEPOT_VOLUME
+	DEPOT_KV_COMMAND
+	DEPOT_COORDINATOR
+	DEPOT_STOP_READINESS
+	ENVOY_COMMAND
+	GATEWAY_HTTP
+	GATEWAY_WEB_SOCKET
+	ACTOR_START_NOTICE
+}
+
+type Data struct {
+	sourceWorkerId: UuidV4
+	workerId: UuidV4
+	instanceId: UuidV4
+	subject: data
+	# Budgets remaining on the sender's monotonic clock when it encodes this header.
+	openRemainingMs: u64
+	lifetimeRemainingMs: optional<u64>
+	class: RequestClass
+}

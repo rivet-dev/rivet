@@ -1,0 +1,5 @@
+{
+  "code": "wrong_worker",
+  "group": "ups",
+  "message": "The target worker incarnation has changed."
+}

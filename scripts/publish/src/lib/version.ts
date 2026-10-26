@@ -16,7 +16,7 @@
  * - `resolveVersion` / `shouldTagAsLatest` — semver helpers for the local cut.
  */
 import * as fs from "node:fs/promises";
-import { join, resolve as resolvePath } from "node:path";
+import { join, relative, resolve as resolvePath } from "node:path";
 import { $ } from "execa";
 import { glob } from "glob";
 import * as semver from "semver";
@@ -112,8 +112,8 @@ const PUBLISHED_RUST_WORKSPACE_DEPS = new Set([
 	"rivet-metrics",
 	"rivet-util-serde",
 	"rivet-actor-runtime-socket-protocol",
-	"depot-client-types",
-	"depot-client",
+	"sqlite_types",
+	"sqlite-embedded",
 	"rivet-envoy-protocol",
 	"rivetkit-shared-types",
 	"rivet-envoy-client",
@@ -129,7 +129,7 @@ const PUBLISHED_RUST_WORKSPACE_DEPS = new Set([
 export interface BumpOptions {
 	/** If true, report actions but do not write. */
 	dryRun?: boolean;
-	/** Include release-only packages like Windows engine-cli artifacts. */
+	/** Include any packages reserved for release builds. */
 	includeReleaseOnlyPackages?: boolean;
 	/**
 	 * When true, only rewrite the `version` field. Does not touch dependency
@@ -279,7 +279,9 @@ export async function bumpPackageJsons(
 					}
 					const isWorkspace =
 						typeof spec === "string" && spec.startsWith("workspace:");
-					if (!isWorkspace) continue;
+					const isPinnedInternal =
+						packageNames.has(dep) && semver.valid(spec) !== null;
+					if (!isWorkspace && !isPinnedInternal) continue;
 					const isOurPkg =
 						packageNames.has(dep) ||
 						dep.startsWith("@rivetkit/") ||
@@ -390,7 +392,16 @@ export async function bumpCargoVersions(
 export async function updateSourceFiles(
 	repoRoot: string,
 	version: string,
+	opts: Pick<BumpOptions, "dryRun"> = {},
 ): Promise<void> {
+	// Serverless examples are disabled for v3; pnpm workspace exclusions own the list.
+	const workspaceYaml = await fs
+		.readFile(join(repoRoot, "pnpm-workspace.yaml"), "utf8")
+		.catch(() => "");
+	const disabledExampleGlobs = Array.from(
+		workspaceYaml.matchAll(/^\s*-\s+'!(examples\/[^']+)'/gm),
+		(match) => `${match[1]}/**`,
+	);
 	const findReplace: Array<{
 		path: string;
 		find: RegExp;
@@ -416,7 +427,7 @@ export async function updateSourceFiles(
 	for (const { path: globPath, find, replace, required = true } of findReplace) {
 		const paths = await glob(globPath, {
 			cwd: repoRoot,
-			ignore: ["**/node_modules/**"],
+			ignore: ["**/node_modules/**", ...disabledExampleGlobs],
 		});
 		if (paths.length === 0) {
 			if (required) {
@@ -441,9 +452,78 @@ export async function updateSourceFiles(
 
 			find.lastIndex = 0;
 			const newFile = file.replace(find, replace);
-			await fs.writeFile(filePath, newFile);
-			log.info(`updated ${fileRelPath}`);
+			if (opts.dryRun) {
+				log.info(`[dry-run] would update ${fileRelPath}`);
+			} else {
+				await fs.writeFile(filePath, newFile);
+				log.info(`updated ${fileRelPath}`);
+			}
 		}
+	}
+}
+
+/** Keep pinned example dependencies installable before their new version reaches npm. */
+export async function bumpExampleLockfile(
+	repoRoot: string,
+	version: string,
+	opts: Pick<BumpOptions, "dryRun"> = {},
+): Promise<void> {
+	const lockPath = join(repoRoot, "pnpm-lock.yaml");
+	let lockfile = await fs.readFile(lockPath, "utf8");
+	const packageDirs = new Map(
+		discoverPackages(repoRoot, { includeReleaseOnly: true }).map((pkg) => [pkg.name, pkg.dir]),
+	);
+	const rootManifest = JSON.parse(await fs.readFile(join(repoRoot, "package.json"), "utf8").catch(() => "{}"));
+	const overrides: Record<string, string> = rootManifest.pnpm?.overrides ?? {};
+	const workspaceYaml = await fs.readFile(join(repoRoot, "pnpm-workspace.yaml"), "utf8");
+	const disabledExampleGlobs = Array.from(
+		workspaceYaml.matchAll(/^\s*-\s+'!(examples\/[^']+)'/gm),
+		(match) => `${match[1]}/**`,
+	);
+	const activeExamples = new Set(await glob("examples/**/package.json", {
+		cwd: repoRoot,
+		ignore: ["**/node_modules/**", ...disabledExampleGlobs],
+	}));
+	const importers = [...lockfile.matchAll(/^  (examples\/[^:\n]+):\n/gm)];
+	let changed = 0;
+	for (const importer of importers.reverse()) {
+		const importerPath = importer[1];
+		if (!activeExamples.has(`${importerPath}/package.json`)) continue;
+		const importerDir = join(repoRoot, importerPath);
+		const manifest = readPackageJson(importerDir) as PackageJson | null;
+		if (!manifest) continue;
+		const start = importer.index;
+		const next = /^  [^ \n].*:\n/gm;
+		next.lastIndex = start + importer[0].length;
+		const end = next.exec(lockfile)?.index ?? lockfile.length;
+		let section = lockfile.slice(start, end);
+		for (const field of DEP_FIELDS) {
+			for (const [name, specifier] of Object.entries(manifest[field] ?? {})) {
+				if (!/^(?:@rivetkit\/|rivetkit$)/.test(name) ||
+					!/^\^?\d+\.\d+\.\d+(?:-[^\s]+)?$/.test(specifier)) continue;
+				if (overrides[name]) continue;
+				const packageDir = packageDirs.get(name);
+				if (!packageDir) throw new Error(`no publish package found for ${name}`);
+				const yamlName = name.startsWith("@") ? `'${name}'` : name;
+				const entry = new RegExp(
+					`(^      ${yamlName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\n)        specifier: [^\\n]+\\n        version: [^\\n]+`,
+					"m",
+				);
+				if (!entry.test(section)) {
+					throw new Error(`missing ${name} lockfile entry in ${importerPath}`);
+				}
+				const link = relative(importerDir, packageDir).replaceAll("\\", "/");
+				section = section.replace(entry,
+					`$1        specifier: ^${version}\n        version: link:${link}`);
+				changed++;
+			}
+		}
+		lockfile = lockfile.slice(0, start) + section + lockfile.slice(end);
+	}
+	if (opts.dryRun) log.info(`[dry-run] would update ${changed} example lockfile entries`);
+	else {
+		await fs.writeFile(lockPath, lockfile);
+		log.info(`updated ${changed} example lockfile entries`);
 	}
 }
 
@@ -494,6 +574,13 @@ export async function shouldTagAsLatest(version: string): Promise<boolean> {
 	const latest = await getLatestGitVersion();
 	if (!latest) return true;
 	return semver.gt(version, latest);
+}
+
+/** Prereleases can have versioned artifacts, but must never move latest. */
+export function releaseLatest(version: string, requested: boolean): boolean {
+	const parsed = semver.parse(version);
+	if (!parsed) throw new Error(`invalid semantic version: ${version}`);
+	return requested && parsed.prerelease.length === 0;
 }
 
 export interface ResolveVersionOpts {

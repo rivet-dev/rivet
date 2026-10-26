@@ -19,7 +19,7 @@ pub struct GetResponse {
 	cargo_target: String,
 	cargo_profile: String,
 	epoxy_protocol_version: u16,
-	envoy_protocol_version: u16,
+	runner_protocol_version: u16,
 }
 
 /// Returns metadata about the API including runtime and version
@@ -57,6 +57,6 @@ pub async fn get_inner(ctx: ApiCtx) -> Result<GetResponse> {
 		// Advertise what the fleet has agreed to speak. A client that took this binary's compiled
 		// version would be rejected by any pod still running older code.
 		epoxy_protocol_version: protocols.epoxy.version(),
-		envoy_protocol_version: protocols.envoy.version(),
+		runner_protocol_version: protocols.envoy.version(),
 	})
 }

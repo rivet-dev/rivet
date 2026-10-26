@@ -1,0 +1,5 @@
+{
+  "code": "unsupported_version",
+  "group": "topology",
+  "message": "The peer does not read any version of this family that this binary writes."
+}

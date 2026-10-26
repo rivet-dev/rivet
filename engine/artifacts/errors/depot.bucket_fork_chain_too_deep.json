@@ -1,5 +1,0 @@
-{
-  "code": "bucket_fork_chain_too_deep",
-  "group": "depot",
-  "message": "Bucket branch fork chain is too deep."
-}

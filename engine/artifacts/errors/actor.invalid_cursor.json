@@ -1,0 +1,5 @@
+{
+  "code": "invalid_cursor",
+  "group": "actor",
+  "message": "The actor listing cursor is malformed."
+}

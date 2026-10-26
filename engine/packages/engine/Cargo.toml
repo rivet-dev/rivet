@@ -5,96 +5,70 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
+autolib = false
+# Integration tests are declared explicitly below.
+autotests = false
 
 [[bin]]
 name = "rivet-engine"
 path = "src/main.rs"
 
+[features]
+# Load-run builds: sampled jemalloc heap profiling, dumped on SIGUSR2.
+heap-profile = ["tikv-jemallocator/profiling", "tikv-jemalloc-sys/profiling"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tikv-jemallocator = { workspace = true, features = ["stats"] }
+tikv-jemalloc-sys = { workspace = true, features = ["stats"] }
+
 [dependencies]
-anyhow.workspace = true
-base64.workspace = true
-chrono.workspace = true
-clap.workspace = true
-rand.workspace = true
-colored_json.workspace = true
+rivet-auth-jwt.workspace = true
+prometheus.workspace = true
+vbare.workspace = true
+depot-protocol.workspace = true
+foundationdb-tuple.workspace = true
+axum.workspace = true
+tower.workspace = true
+async-trait.workspace = true
+tokio-util.workspace = true
 epoxy.workspace = true
-epoxy-protocol.workspace = true
-futures-util.workspace = true
-gas.workspace = true
-hex.workspace = true
-include_dir.workspace = true
-lz4_flex.workspace = true
-once_cell.workspace = true
-pegboard-outbound.workspace = true
-pegboard-runner.workspace = true
-pegboard.workspace = true
-reqwest.workspace = true
+bytes.workspace = true
+rivet-keys.workspace = true
+depot-client.workspace = true
+depot-fs-core.workspace = true
 rivet-api-peer.workspace = true
-rivet-bootstrap.workspace = true
+depot-types = { path = "../depot-types" }
+depot-volume = { path = "../depot-volume" }
+rivet-data.workspace = true
+rivet-singleton-coordinator.workspace = true
+rivet-metrics.workspace = true
+rivet-metrics-server.workspace = true
+object_store.workspace = true
+lazy_static.workspace = true
+rivet-env.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+rivet-topology.workspace = true
+depot-worker.workspace = true
+futures-util.workspace = true
+hex.workspace = true
+pegboard.workspace = true
 rivet-build-meta.workspace = true
-rivet-cache-purge.workspace = true
-rivet-cache.workspace = true
-rivet-auth-jwt = { workspace = true, features = ["service"] }
 rivet-config.workspace = true
-rivet-dynamic-config.workspace = true
+rivet-cluster-config.workspace = true
 rivet-guard.workspace = true
-rivet-logs.workspace = true
-rivet-profiling.workspace = true
-rivet-pools.workspace = true
+rivet-engine-context.workspace = true
 rivet-runtime.workspace = true
 rivet-service-manager.workspace = true
-rivet-version-management.workspace = true
 rivet-telemetry.workspace = true
-rivet-term.workspace = true
-rivet-types.workspace = true
-rivet-util.workspace = true
-rivet-workflow-worker.workspace = true
-rustyline.workspace = true
-serde_bare.workspace = true
 serde_json.workspace = true
-serde_yaml.workspace = true
-serde.workspace = true
-sha2.workspace = true
-rusqlite.workspace = true
-depot.workspace = true
-depot-client.workspace = true
-depot-client-embedded.workspace = true
-depot-client-types.workspace = true
-strum.workspace = true
-tabled.workspace = true
-tempfile.workspace = true
-thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-universaldb.workspace = true
 universalpubsub.workspace = true
-url.workspace = true
 uuid.workspace = true
 
-lazy_static.workspace = true
+[[example]]
+name = "actor-v3-cluster"
+path = "../../tests/actor-v3/cluster.rs"
 
-[dev-dependencies]
-async-trait.workspace = true
-axum.workspace = true
-base64.workspace = true
-chrono.workspace = true
-futures-util.workspace = true
-namespace.workspace = true
-portpicker.workspace = true
-rand.workspace = true
-pegboard-envoy.workspace = true
-rivet-api-public.workspace = true
-rivet-api-types.workspace = true
-rivet-envoy-protocol.workspace = true
-rivet-runner-protocol.workspace = true
-rivet-test-envoy.workspace = true
-rivet-test-deps.workspace = true
-rivet-util.workspace = true
-rusqlite.workspace = true
-serde_html_form.workspace = true
-test-snapshot-gen.workspace = true
-tokio-tungstenite.workspace = true
-tracing-subscriber.workspace = true
-urlencoding.workspace = true
-universalpubsub.workspace = true
-vbare.workspace = true
+# Runs the actor v3 cluster example as a subprocess, so `cargo test` builds the example first.

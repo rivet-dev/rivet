@@ -275,7 +275,7 @@ export class RivetClientWorld {
 								endpoint: registryConfig.endpoint,
 								headers: registryConfig.headers,
 								namespace: registryConfig.namespace,
-								poolName: registryConfig.envoy.poolName,
+								poolName: registryConfig.node.poolName,
 								token: registryConfig.token,
 							}
 						: undefined,

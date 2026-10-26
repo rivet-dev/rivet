@@ -1,5 +1,0 @@
-{
-  "code": "gateway_response_start_timeout",
-  "group": "guard",
-  "message": "Timed out waiting for actor response start."
-}

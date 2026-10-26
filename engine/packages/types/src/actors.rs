@@ -12,6 +12,7 @@ pub struct Actor {
 
 	pub namespace_id: Id,
 	pub datacenter: String,
+	#[serde(rename = "pool", alias = "runner_name_selector")]
 	pub runner_name_selector: String,
 	pub crash_policy: CrashPolicy,
 

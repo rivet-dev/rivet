@@ -12,7 +12,7 @@ npx supabase start
 npm run dev
 ```
 
-`supabase functions serve` requires the local Supabase stack, so `npx supabase start` must run first. `rivet dev` then runs a local Rivet engine and spawns `supabase functions serve` for you.
+`supabase functions serve` requires the local Supabase stack, so `npx supabase start` must run first. Set `RIVET_ENDPOINT` to the Rivet endpoint for your namespace, then run `supabase functions serve`.
 
 Call the actor from another terminal:
 
@@ -27,7 +27,7 @@ npm run client
 
 ## Implementation
 
-The function calls `serve` from `@rivetkit/supabase`, which loads the WebAssembly runtime and serves the Rivet handler. `RIVET_ENDPOINT` is the only required variable, and `rivet dev` passes it to the function automatically.
+The function calls `serve` from `@rivetkit/supabase`, which loads the WebAssembly runtime and serves the Rivet handler. `RIVET_ENDPOINT` is the only required variable, and you must pass it to the function environment.
 
 The edge runtime runs in a container, so it reaches the engine on the host at `http://host.docker.internal:6420` rather than loopback. `supabase functions serve` supplies the required `host-gateway` mapping on Linux, and Docker Desktop provides the alias on macOS and Windows, so this works across platforms. Set `RIVET_ENDPOINT` yourself only to override that.
 

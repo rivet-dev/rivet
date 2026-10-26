@@ -12,6 +12,9 @@
 	"files": [
 		"rivet-engine"
 	],
+	"bin": {
+		"rivet-engine": "rivet-engine"
+	},
 	"engines": {
 		"node": ">= 20.0.0"
 	}

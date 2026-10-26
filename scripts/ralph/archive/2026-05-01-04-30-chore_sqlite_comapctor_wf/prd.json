@@ -1,8 +1,0 @@
-{
-  "project": "depot-sqlite-workflow-compaction",
-  "branchName": "04-29-feat_sqlite_pitr_forking",
-  "description": "Implement `.agent/specs/sqlite-workflow-compaction-architecture.md` and `.agent/specs/depot-dual-purpose-shards.md` in the `depot` package. Optimize for a working version quickly: keep commits direct to FDB, use workflow compaction as the only publish/delete authority, treat FDB SHARD rows as both cold-upload inputs and cold-backed cache entries, add interval PITR restore coverage, rename bookmarks to restore points, rename Depot-local namespaces to buckets, and remove legacy compatibility code because this has not shipped. Read both specs first. Do not route commits through workflows. Use versioned BARE for persisted or workflow wire payloads. Prefer small, verifiable slices and keep each story focused enough for one Ralph iteration. For every bug-fix or regression story, first add or identify a test/check that fails on the current code, record the failing command or test name in `notes`, then implement the fix and make that same test/check pass.",
-  "userStories": [
-	  "POLL THIS FILE TO WAIT FOR THE STORIES TO POPULATE, THIS WILL TAKE A MINUTE"
-  ]
-}

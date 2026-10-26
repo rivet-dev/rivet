@@ -1,0 +1,58 @@
+#import "shared/uuid_v4.v1.bare"
+#import "ups.request.v1.bare"
+
+# The first frame on a channel, in each direction's first write. It names the exact worker
+# incarnation the channel is for, as a stream's open header does.
+type ChannelOpen struct {
+	sourceWorkerId: UuidV4
+	workerId: UuidV4
+	instanceId: UuidV4
+}
+
+# One unary request. The id is unique among the sender's pending requests on this channel and
+# correlates the reply and any cancel.
+type ChannelRequest struct {
+	id: u64
+	class: RequestClass
+	subject: data
+	# Budget remaining on the caller's monotonic clock when it encodes this frame.
+	remainingMs: u64
+	payload: data
+}
+
+# The handler's reply.
+type ChannelPayload data
+
+# The request failed. `code` is the UPS error code, such as `no_responders` or `timeout`.
+type ChannelError struct {
+	code: str
+}
+
+type ChannelBody union {
+	ChannelPayload |
+	ChannelError
+}
+
+# The one answer to a request.
+type ChannelResponse struct {
+	id: u64
+	body: ChannelBody
+}
+
+# The caller stopped waiting. The server cancels the handler if it still runs; a cancel for an
+# id that already answered is ignored.
+type ChannelCancel struct {
+	id: u64
+}
+
+type Frame union {
+	ChannelOpen |
+	ChannelRequest |
+	ChannelResponse |
+	ChannelCancel
+}
+
+# One length-prefixed frame on a channel. Many frames share one write.
+type ChannelMessage struct {
+	frame: Frame
+}

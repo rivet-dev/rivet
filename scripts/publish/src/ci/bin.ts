@@ -38,7 +38,7 @@ import {
 	uploadFile,
 	uploadInstallScripts,
 } from "../lib/r2.js";
-import { bumpCargoVersions, bumpPackageJsons } from "../lib/version.js";
+import { bumpCargoVersions, bumpPackageJsons, releaseLatest } from "../lib/version.js";
 
 const log = scoped("ci");
 
@@ -48,12 +48,12 @@ const RUST_CRATES = [
 	"rivet-metrics",
 	"rivet-util-serde",
 	"rivet-actor-runtime-socket-protocol",
-	// rivet-envoy-protocol must precede rivet-depot-client, which pins it as an
-	// exact dependency. Publishing depot-client first makes cargo fail to
+	// rivet-envoy-protocol must precede sqlite-embedded, which pins it as an
+	// exact dependency. Publishing sqlite-embedded first makes cargo fail to
 	// resolve rivet-envoy-protocol because it is not yet on crates.io.
 	"rivet-envoy-protocol",
-	"rivet-depot-client-types",
-	"rivet-depot-client",
+	"rivet-sqlite-types",
+	"sqlite-embedded",
 	"rivetkit-shared-types",
 	"rivet-envoy-client",
 	"rivetkit-actor-persist",
@@ -330,8 +330,8 @@ program
 		const ctx = await resolveContext();
 		const sha: string = opts.sha ?? ctx.sha;
 		const version: string = opts.version ?? ctx.version;
-		const latest =
-			opts.latest !== undefined ? opts.latest === "true" : ctx.latest;
+		const latest = releaseLatest(version,
+			opts.latest !== undefined ? opts.latest === "true" : ctx.latest);
 		const source = `rivet/${sha}/${opts.name}/`;
 		await copyPrefix(source, `rivet/${version}/${opts.name}/`);
 		if (latest) {
@@ -340,23 +340,20 @@ program
 	});
 
 // ---------------------------------------------------------------------------
-// upload-install-scripts — template install.sh/ps1 with the release version
+// upload-install-scripts — template install.sh with the release version
 // ---------------------------------------------------------------------------
 program
 	.command("upload-install-scripts")
-	.description("Upload install.sh/install.ps1 templated with the version")
-	.requiredOption("--scripts-dir <dir>", "Directory containing install.sh and install.ps1")
+	.description("Upload install.sh templated with the version")
+	.requiredOption("--scripts-dir <dir>", "Directory containing install.sh")
 	.option("--version <version>", "Version to template (defaults to context)")
 	.option("--latest <bool>", "Also upload to /latest/")
 	.action(async (opts) => {
 		const ctx = await resolveContext();
 		const version: string = opts.version ?? ctx.version;
-		const latest =
-			opts.latest !== undefined ? opts.latest === "true" : ctx.latest;
-		const scripts = [
-			resolvePath(opts.scriptsDir, "install.sh"),
-			resolvePath(opts.scriptsDir, "install.ps1"),
-		];
+		const latest = releaseLatest(version,
+			opts.latest !== undefined ? opts.latest === "true" : ctx.latest);
+		const scripts = [resolvePath(opts.scriptsDir, "install.sh")];
 		await uploadInstallScripts(scripts, version);
 		if (latest) await uploadInstallScripts(scripts, "latest");
 	});
@@ -375,8 +372,8 @@ program
 		const ctx = await resolveContext();
 		const sha = opts.sha ?? ctx.sha;
 		const version: string = opts.version ?? ctx.version;
-		const latest =
-			opts.latest !== undefined ? opts.latest === "true" : ctx.latest;
+		const latest = releaseLatest(version,
+			opts.latest !== undefined ? opts.latest === "true" : ctx.latest);
 		log.info("building @rivetkit/devtools");
 		await $({ stdio: "inherit", cwd: repoRoot })`pnpm build -F @rivetkit/devtools`;
 		const dist = resolvePath(
@@ -423,8 +420,8 @@ program
 		const ctx = await resolveContext();
 		const sha: string = opts.sha ?? ctx.sha;
 		const version: string = opts.version ?? ctx.version;
-		const latest =
-			opts.latest !== undefined ? opts.latest === "true" : ctx.latest;
+		const latest = releaseLatest(version,
+			opts.latest !== undefined ? opts.latest === "true" : ctx.latest);
 		await retagManifestsToVersion(sha, version, latest);
 	});
 
@@ -486,7 +483,7 @@ program
 			"",
 			`All packages published as \`${version}\` with tag \`${tag}\`.`,
 			"",
-			"Engine binary is shipped via `@rivetkit/engine-cli` on linux-x64-musl, linux-arm64-musl, darwin-x64, and darwin-arm64. `@rivetkit/cli` ships the `rivet` binary plus bundled engine on the same platforms. Windows users should use release versions or set `RIVET_ENGINE_BINARY` / `RIVET_CLI_BINARY`.",
+			"Engine binary is shipped via `@rivetkit/engine-cli` on linux-x64-musl, linux-arm64-musl, darwin-x64, and darwin-arm64. Windows users can set `RIVET_ENGINE_BINARY` to a local build.",
 			"",
 			"Docker images:",
 			"```sh",

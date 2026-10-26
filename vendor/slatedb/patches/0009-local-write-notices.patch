@@ -1,0 +1,629 @@
+--- a/src/compactions_store.rs
++++ b/src/compactions_store.rs
+@@ -20,6 +20,7 @@
+ use std::ops::RangeBounds;
+ use std::sync::Arc;
+ use std::time::Duration;
++use tokio::sync::watch;
+ 
+ /// Represents the compactions stored in the object store. This type tracks the current
+ /// contents and id of the stored compactions state, and allows callers to read and update
+@@ -215,6 +216,11 @@
+         self.checked.clone()
+     }
+ 
++    /// Follows `.compactions` versions written through this store.
++    pub(crate) fn subscribe_writes(&self) -> watch::Receiver<u64> {
++        self.checked.subscribe_writes()
++    }
++
+     pub(crate) async fn advance_boundary(&self, id: u64) -> Result<(), SlateDBError> {
+         Ok(self.checked.advance(MonotonicId::new(id)).await?)
+     }
+--- a/src/compaction_worker.rs
++++ b/src/compaction_worker.rs
+@@ -71,11 +71,12 @@
+ use crate::compactor_state::{Compaction, CompactionContext, CompactionStatus, WorkerSpec};
+ use crate::config::CompactionWorkerOptions;
+ use crate::db_state::SortedRun;
+-use crate::dispatcher::{MessageHandler, MessageHandlerExecutor, MessageTickerDef};
++use crate::dispatcher::{MessageHandler, MessageHandlerExecutor, MessageTickerDef, Notifier};
+ use crate::error::SlateDBError;
+ use crate::manifest::store::ManifestStore;
+ use crate::manifest::ManifestCore;
+ use crate::merge_operator::MergeOperatorType;
++use crate::sequenced_store::{WriteNotifier, MIN_WRITE_NOTICE_INTERVAL};
+ use crate::subcompaction::Subcompaction;
+ use crate::tablestore::TableStore;
+ use crate::utils::{format_bytes_si, IdGenerator};
+@@ -107,6 +108,9 @@
+     },
+     /// Ticker-triggered message to poll `.compactions` for claimable jobs.
+     PollCompactions,
++    /// A component sharing this process's `.compactions` store, such as the embedded
++    /// coordinator after scheduling a job, wrote version `id`.
++    CompactionsWritten { id: u64 },
+     /// Ticker-triggered message to refresh liveness for all jobs this worker
+     /// currently owns.
+     HeartbeatOwnedJobs,
+@@ -731,6 +735,18 @@
+         ]
+     }
+ 
++    fn notifiers(&mut self) -> Vec<Box<dyn Notifier<WorkerMessage>>> {
++        // A job scheduled in this process is claimed without waiting for the next poll.
++        vec![Box::new(WriteNotifier::new(
++            self.compactions_store.subscribe_writes(),
++            self.clock.clone(),
++            self.options
++                .compactions_poll_interval
++                .min(MIN_WRITE_NOTICE_INTERVAL),
++            |id| WorkerMessage::CompactionsWritten { id },
++        ))]
++    }
++
+     async fn handle(&mut self, message: WorkerMessage) -> Result<(), SlateDBError> {
+         if !self.ensure_loaded().await? {
+             warn!(
+@@ -743,6 +759,13 @@
+             WorkerMessage::PollCompactions => {
+                 self.poll_and_claim().await?;
+             }
++            WorkerMessage::CompactionsWritten { id } => {
++                // This worker's own claims and heartbeats are already in its view.
++                let seen = self.stored.as_ref().expect(Self::EXPECT_LOADED).id();
++                if id > seen {
++                    self.poll_and_claim().await?;
++                }
++            }
+             WorkerMessage::HeartbeatOwnedJobs => {
+                 self.heartbeat_owned_jobs().await?;
+             }
+--- a/src/compactor.rs
++++ b/src/compactor.rs
+@@ -79,11 +79,12 @@
+ use crate::config::CompactorOptions;
+ use crate::db_state::{SortedRun, SsTableView};
+ use crate::db_status::ClosedResultWriter;
+-use crate::dispatcher::{MessageHandler, MessageHandlerExecutor, MessageTickerDef};
++use crate::dispatcher::{MessageHandler, MessageHandlerExecutor, MessageTickerDef, Notifier};
+ use crate::error::{Error, SlateDBError};
+ use crate::manifest::store::ManifestStore;
+ use crate::manifest::{LsmTreeState, ManifestCore};
+ use crate::merge_operator::MergeOperatorType;
++use crate::sequenced_store::{WriteNotifier, MIN_WRITE_NOTICE_INTERVAL};
+ use crate::tablestore::TableStore;
+ use crate::utils::{format_bytes_si, IdGenerator};
+ use slatedb_common::clock::SystemClock;
+@@ -277,6 +278,9 @@
+     /// Fast ticker to commit any `Compacted` entries written by workers without
+     /// waiting for the full `poll_interval` cycle.
+     CommitCompacted,
++    /// A component sharing this process's manifest store, such as the database writer
++    /// after a flush, wrote manifest version `id`.
++    ManifestWritten { id: u64 },
+ }
+ 
+ /// The compactor is responsible for taking groups of sorted runs (this doc uses the term
+@@ -546,10 +550,26 @@
+         ]
+     }
+ 
++    fn notifiers(&mut self) -> Vec<Box<dyn Notifier<CompactorMessage>>> {
++        // A flush written in this process is scheduled without waiting for the next poll.
++        vec![Box::new(WriteNotifier::new(
++            self.state_writer.subscribe_manifest_writes(),
++            self.system_clock.clone(),
++            self.options.poll_interval.min(MIN_WRITE_NOTICE_INTERVAL),
++            |id| CompactorMessage::ManifestWritten { id },
++        ))]
++    }
++
+     async fn handle(&mut self, message: CompactorMessage) -> Result<(), SlateDBError> {
+         match message {
+             CompactorMessage::LogStats => self.handle_log_ticker(),
+             CompactorMessage::PollManifest => self.handle_ticker().await?,
++            CompactorMessage::ManifestWritten { id } => {
++                // The compactor's own manifest writes are already in its view.
++                if id > self.state_writer.manifest_id() {
++                    self.handle_ticker().await?;
++                }
++            }
+             CompactorMessage::CommitCompacted => {
+                 // A remote worker can only produce a new Compacted result for a
+                 // job the coordinator already tracks as active. When there are no
+--- a/src/compactor_state_protocols.rs
++++ b/src/compactor_state_protocols.rs
+@@ -267,6 +267,16 @@
+         Ok(())
+     }
+ 
++    /// The manifest version this writer last read or wrote.
++    pub(crate) fn manifest_id(&self) -> u64 {
++        self.manifest.manifest().0
++    }
++
++    /// Follows manifest versions written in this process by any component sharing the store.
++    pub(crate) fn subscribe_manifest_writes(&self) -> tokio::sync::watch::Receiver<u64> {
++        self.manifest.subscribe_writes()
++    }
++
+     /// Refreshes compactions first, then manifests, to preserve a consistent ordering.
+     ///
+     /// ## Returns
+--- a/src/manifest/store.rs
++++ b/src/manifest/store.rs
+@@ -23,11 +23,14 @@
+ use std::ops::RangeBounds;
+ use std::sync::Arc;
+ use std::time::Duration;
++use tokio::sync::watch;
+ use uuid::Uuid;
+ 
+ pub(crate) struct FenceableManifest {
+     clock: Arc<dyn SystemClock>,
+     inner: FenceableTransactionalObject<Manifest>,
++    /// Versions written through this database's store in this process.
++    writes: watch::Receiver<u64>,
+ }
+ 
+ // This type wraps StoredManifest, and fences other conflicting writers by incrementing
+@@ -40,6 +43,7 @@
+         system_clock: Arc<dyn SystemClock>,
+     ) -> Result<Self, SlateDBError> {
+         let clock = system_clock.clone();
++        let writes = stored_manifest.writes;
+         // Initialize generic fenceable record using writer epoch
+         let fr = FenceableTransactionalObject::init(
+             stored_manifest.inner,
+@@ -49,7 +53,11 @@
+             |m: &mut Manifest, e: u64| m.writer_epoch = e,
+         )
+         .await?;
+-        Ok(Self { inner: fr, clock })
++        Ok(Self {
++            inner: fr,
++            clock,
++            writes,
++        })
+     }
+ 
+     pub(crate) async fn init_compactor(
+@@ -58,6 +66,7 @@
+         system_clock: Arc<dyn SystemClock>,
+     ) -> Result<Self, SlateDBError> {
+         let clock = system_clock.clone();
++        let writes = stored_manifest.writes;
+         let fr = FenceableTransactionalObject::init(
+             stored_manifest.inner,
+             manifest_update_timeout,
+@@ -66,7 +75,11 @@
+             |m: &mut Manifest, e: u64| m.compactor_epoch = e,
+         )
+         .await?;
+-        Ok(Self { inner: fr, clock })
++        Ok(Self {
++            inner: fr,
++            clock,
++            writes,
++        })
+     }
+ 
+     pub(crate) async fn init_writer_with_epoch(
+@@ -76,6 +89,7 @@
+         epoch: std::num::NonZeroU64,
+     ) -> Result<Self, SlateDBError> {
+         let clock = system_clock.clone();
++        let writes = stored_manifest.writes;
+         let inner = FenceableTransactionalObject::init_with_epoch(
+             stored_manifest.inner,
+             manifest_update_timeout,
+@@ -85,7 +99,11 @@
+             |m: &mut Manifest, e| m.writer_epoch = e,
+         )
+         .await?;
+-        Ok(Self { inner, clock })
++        Ok(Self {
++            inner,
++            clock,
++            writes,
++        })
+     }
+ 
+     pub(crate) async fn init_compactor_with_epoch(
+@@ -95,6 +113,7 @@
+         epoch: std::num::NonZeroU64,
+     ) -> Result<Self, SlateDBError> {
+         let clock = system_clock.clone();
++        let writes = stored_manifest.writes;
+         let inner = FenceableTransactionalObject::init_with_epoch(
+             stored_manifest.inner,
+             manifest_update_timeout,
+@@ -104,7 +123,11 @@
+             |m: &mut Manifest, e| m.compactor_epoch = e,
+         )
+         .await?;
+-        Ok(Self { inner, clock })
++        Ok(Self {
++            inner,
++            clock,
++            writes,
++        })
+     }
+ 
+     pub(crate) fn manifest(&self) -> (u64, &Manifest) {
+@@ -115,6 +138,11 @@
+         self.inner.local_epoch()
+     }
+ 
++    /// Follows manifest versions written in this process by any component sharing the store.
++    pub(crate) fn subscribe_writes(&self) -> watch::Receiver<u64> {
++        self.writes.clone()
++    }
++
+     pub(crate) async fn refresh(&mut self) -> Result<&Manifest, SlateDBError> {
+         Ok(self.inner.refresh().await?)
+     }
+@@ -219,13 +247,19 @@
+ pub(crate) struct StoredManifest {
+     inner: SimpleTransactionalObject<Manifest>,
+     clock: Arc<dyn SystemClock>,
++    writes: watch::Receiver<u64>,
+ }
+ 
+ impl StoredManifest {
+-    fn new(inner: SimpleTransactionalObject<Manifest>, clock: Arc<dyn SystemClock>) -> Self {
++    fn new(
++        inner: SimpleTransactionalObject<Manifest>,
++        clock: Arc<dyn SystemClock>,
++        writes: watch::Receiver<u64>,
++    ) -> Self {
+         Self {
+             inner: inner.with_invariants(manifest_invariants()),
+             clock,
++            writes,
+         }
+     }
+ 
+@@ -240,7 +274,7 @@
+             manifest.clone(),
+         )
+         .await?;
+-        Ok(Self::new(inner, clock))
++        Ok(Self::new(inner, clock, store.subscribe_writes()))
+     }
+ 
+     /// Create the initial manifest for a new database.
+@@ -274,7 +308,7 @@
+         else {
+             return Ok(None);
+         };
+-        Ok(Some(Self::new(inner, clock)))
++        Ok(Some(Self::new(inner, clock, store.subscribe_writes())))
+     }
+ 
+     /// Load the current manifest from the supplied manifest store. If successful,
+@@ -532,6 +566,11 @@
+         self.checked.clone()
+     }
+ 
++    /// Follows manifest versions written through this store.
++    pub(crate) fn subscribe_writes(&self) -> watch::Receiver<u64> {
++        self.checked.subscribe_writes()
++    }
++
+     pub(crate) async fn advance_boundary(&self, id: u64) -> Result<(), SlateDBError> {
+         Ok(self.checked.advance(MonotonicId::new(id)).await?)
+     }
+--- a/src/memtable_flusher/manifest_writer.rs
++++ b/src/memtable_flusher/manifest_writer.rs
+@@ -25,6 +25,7 @@
+ use crate::manifest::store::FenceableManifest;
+ use crate::manifest::Manifest;
+ use crate::oracle::Oracle;
++use crate::sequenced_store::{WriteNotifier, MIN_WRITE_NOTICE_INTERVAL};
+ use crate::utils::IdGenerator;
+ use crate::utils::SafeSender;
+ use crate::VersionedManifest;
+@@ -70,6 +71,9 @@
+     },
+     /// The WAL durable sequence advanced; retry any batch blocked on WAL durability.
+     DurableSeqAdvanced,
++    /// A component sharing this process's manifest store, such as the embedded compactor,
++    /// wrote manifest version `id`.
++    ManifestWritten { id: u64 },
+ }
+ 
+ impl std::fmt::Debug for ManifestWriterCommand {
+@@ -90,6 +94,7 @@
+             }
+             Self::PollManifest { .. } => write!(f, "PollManifest"),
+             Self::DurableSeqAdvanced => write!(f, "DurableSeqAdvanced"),
++            Self::ManifestWritten { id } => write!(f, "ManifestWritten({id})"),
+         }
+     }
+ }
+@@ -226,9 +231,19 @@
+     }
+ 
+     fn notifiers(&mut self) -> Vec<Box<dyn crate::dispatcher::Notifier<ManifestWriterCommand>>> {
+-        vec![Box::new(DurableSeqNotifier {
+-            rx: self.db_status_rx.clone(),
+-        })]
++        vec![
++            Box::new(DurableSeqNotifier {
++                rx: self.db_status_rx.clone(),
++            }),
++            // Compaction results written in this process are merged without waiting for
++            // the next poll, so L0 drains at compaction speed whatever the poll interval.
++            Box::new(WriteNotifier::new(
++                self.manifest.subscribe_writes(),
++                self.db.system_clock.clone(),
++                self.manifest_poll_interval.min(MIN_WRITE_NOTICE_INTERVAL),
++                |id| ManifestWriterCommand::ManifestWritten { id },
++            )),
++        ]
+     }
+ 
+     async fn handle(&mut self, command: ManifestWriterCommand) -> Result<(), SlateDBError> {
+@@ -254,6 +269,12 @@
+                 self.refresh_manifest_progress(done).await?;
+             }
+             ManifestWriterCommand::DurableSeqAdvanced => {}
++            ManifestWriterCommand::ManifestWritten { id } => {
++                // This writer's own manifest writes are already in its view.
++                if id > self.manifest.manifest().0 {
++                    self.refresh_manifest_progress(None).await?;
++                }
++            }
+         }
+         self.process_ready_work().await
+     }
+--- a/src/sequenced_store.rs
++++ b/src/sequenced_store.rs
+@@ -28,6 +28,11 @@
+ //! the new boundary is dropped as soon as the advance is durable, before anything below it is
+ //! deleted. For that collector the timing argument is only a second line of defense; it is
+ //! the whole argument only for a collector in another process.
++//!
++//! The store also announces each version it writes, so the writer, the compactor and the
++//! compaction worker that share it learn of each other's writes without waiting for their
++//! next poll. A notice only makes a component run the poll it would otherwise run later;
++//! polls stay as the fallback for writers in other processes.
+ 
+ use chrono::{DateTime, Utc};
+ use log::warn;
+@@ -38,8 +43,10 @@
+ };
+ use std::sync::Arc;
+ use std::time::Duration;
++use tokio::sync::watch;
+ 
+ use crate::config::{GarbageCollectorDirectoryOptions, GarbageCollectorOptions};
++use crate::dispatcher::Notifier;
+ 
+ /// How much of the collector's `min_age` one full check covers.
+ const WINDOW_FRACTION_OF_MIN_AGE: u32 = 5;
+@@ -85,6 +92,8 @@
+     inner: Arc<dyn SequencedStorageProtocol<T>>,
+     reuse: Option<BoundaryReuse>,
+     checked: Mutex<Option<CheckedLatest>>,
++    /// The highest version written through this store.
++    written: watch::Sender<u64>,
+ }
+ 
+ impl<T> SequencedStore<T> {
+@@ -92,13 +101,31 @@
+         inner: Arc<dyn SequencedStorageProtocol<T>>,
+         reuse: Option<BoundaryReuse>,
+     ) -> Self {
++        let (written, _) = watch::channel(0);
+         Self {
+             inner,
+             reuse,
+             checked: Mutex::new(None),
++            written,
+         }
+     }
+ 
++    /// Follows the highest version written through this store.
++    pub(crate) fn subscribe_writes(&self) -> watch::Receiver<u64> {
++        self.written.subscribe()
++    }
++
++    fn announce(&self, id: MonotonicId) {
++        self.written.send_if_modified(|latest| {
++            if id.id() > *latest {
++                *latest = id.id();
++                true
++            } else {
++                false
++            }
++        });
++    }
++
+     fn now(&self) -> Option<DateTime<Utc>> {
+         self.reuse.as_ref().map(|reuse| reuse.clock.now())
+     }
+@@ -159,6 +186,7 @@
+         let started_at = self.now();
+         let id = self.inner.write(current_id, new_value).await?;
+         self.record(id, started_at);
++        self.announce(id);
+         Ok(id)
+     }
+ 
+@@ -188,6 +216,62 @@
+     }
+ }
+ 
++/// The most often writes elsewhere in this process trigger an extra poll in one component.
++/// Components whose own poll is faster use their poll interval instead.
++pub(crate) const MIN_WRITE_NOTICE_INTERVAL: Duration = Duration::from_secs(1);
++
++/// Turns versions written in this process into poll messages for a component that shares
++/// the store. Notices closer together than `min_interval` are coalesced into one, so a burst
++/// of writes costs at most one extra poll per interval.
++pub(crate) struct WriteNotifier<M> {
++    writes: watch::Receiver<u64>,
++    clock: Arc<dyn SystemClock>,
++    min_interval: Duration,
++    last_notified_at: Option<DateTime<Utc>>,
++    message: fn(u64) -> M,
++}
++
++impl<M> WriteNotifier<M> {
++    pub(crate) fn new(
++        writes: watch::Receiver<u64>,
++        clock: Arc<dyn SystemClock>,
++        min_interval: Duration,
++        message: fn(u64) -> M,
++    ) -> Self {
++        Self {
++            writes,
++            clock,
++            min_interval,
++            last_notified_at: None,
++            message,
++        }
++    }
++}
++
++#[async_trait::async_trait]
++impl<M: Send> Notifier<M> for WriteNotifier<M> {
++    async fn notify(&mut self) -> M {
++        // The sender lives as long as the store; once it is gone the database is closing and
++        // the dispatcher's cancellation ends the loop.
++        if self.writes.changed().await.is_err() {
++            std::future::pending::<()>().await;
++        }
++        if let Some(last) = self.last_notified_at {
++            let next = last + self.min_interval;
++            let now = self.clock.now();
++            if now < next {
++                // A wall clock that stepped backward never stretches the wait past the interval.
++                if let Ok(wait) = (next - now).to_std() {
++                    self.clock.sleep(wait.min(self.min_interval)).await;
++                }
++            }
++        }
++        self.last_notified_at = Some(self.clock.now());
++        let id = *self.writes.borrow_and_update();
++        (self.message)(id)
++    }
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+@@ -436,4 +520,110 @@
+         stored.update(dirty).await.unwrap();
+         assert_eq!(reads + 1, f.objects.reads());
+     }
++
++    #[tokio::test(start_paused = true)]
++    async fn notices_coalesce_a_burst_of_writes() {
++        let f = fixture().await;
++        let clock: Arc<dyn SystemClock> = Arc::new(slatedb_common::clock::DefaultSystemClock::new());
++        let mut notifier = WriteNotifier::new(
++            f.store.subscribe_writes(),
++            clock.clone(),
++            Duration::from_secs(1),
++            |id| id,
++        );
++        let mut stored = StoredManifest::load(f.store.clone(), f.clock.clone())
++            .await
++            .unwrap();
++        async fn write(stored: &mut StoredManifest) {
++            let dirty = stored.prepare_dirty().unwrap();
++            stored.update(dirty).await.unwrap();
++        }
++
++        // The first write after a quiet period is announced at once.
++        write(&mut stored).await;
++        let started = clock.now();
++        assert_eq!(2, notifier.notify().await);
++        assert_eq!(started, clock.now());
++
++        // A burst inside the interval becomes one notice for its last version.
++        write(&mut stored).await;
++        write(&mut stored).await;
++        write(&mut stored).await;
++        assert_eq!(5, notifier.notify().await);
++        assert!(clock.now() - started >= chrono::Duration::seconds(1));
++
++        // Nothing new: no notice.
++        let quiet = tokio::time::timeout(Duration::from_secs(60), notifier.notify()).await;
++        assert!(quiet.is_err());
++    }
++
++    #[tokio::test]
++    async fn notices_ignore_writes_to_other_stores() {
++        let f = fixture().await;
++        let mut writes = f.store.subscribe_writes();
++        writes.borrow_and_update();
++        write_elsewhere(f.objects.inner.clone(), 1).await;
++        assert!(!writes.has_changed().unwrap());
++    }
++
++    /// With polls an hour apart, L0 must still drain: the compactor learns of each flush,
++    /// the worker of each job and the writer of each result from the notices alone.
++    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
++    async fn compactor_drains_l0_without_polling() {
++        use crate::config::{CompactorOptions, FlushOptions, FlushType, Settings};
++        use crate::Db;
++
++        let hour = Duration::from_secs(3600);
++        let mut compactor = CompactorOptions {
++            poll_interval: hour,
++            commit_compacted_interval: Duration::from_millis(50),
++            ..Default::default()
++        };
++        if let Some(worker) = compactor.worker.as_mut() {
++            worker.compactions_poll_interval = hour;
++        }
++        let settings = Settings {
++            flush_interval: None,
++            manifest_poll_interval: hour,
++            l0_max_ssts: 6,
++            compactor_options: Some(compactor),
++            ..Default::default()
++        };
++        let db = Db::builder("/tmp/notice_drain", Arc::new(InMemory::new()))
++            .with_settings(settings)
++            .build()
++            .await
++            .unwrap();
++        let flush = FlushOptions {
++            flush_type: FlushType::MemTable,
++        };
++        let result = tokio::time::timeout(Duration::from_secs(60), async {
++            // Without notices the seventh flush would wait for a poll an hour away.
++            for i in 0..24u32 {
++                db.put(i.to_be_bytes(), [7u8; 64]).await.unwrap();
++                db.flush_with_options(flush.clone()).await.unwrap();
++                assert!(db.manifest().l0().len() <= 6);
++            }
++            loop {
++                let manifest = db.manifest();
++                if !manifest.compacted().is_empty() && manifest.l0().len() < 4 {
++                    break;
++                }
++                tokio::time::sleep(Duration::from_millis(20)).await;
++            }
++        })
++        .await;
++        assert!(
++            result.is_ok(),
++            "L0 {} after the writes",
++            db.manifest().l0().len()
++        );
++        for i in 0..24u32 {
++            assert_eq!(
++                Some(bytes::Bytes::from(vec![7u8; 64])),
++                db.get(i.to_be_bytes()).await.unwrap()
++            );
++        }
++        db.close().await.unwrap();
++    }
+ }

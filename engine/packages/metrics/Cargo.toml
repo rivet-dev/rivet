@@ -10,4 +10,6 @@ description = "Prometheus metric helpers for Rivet crates"
 
 [dependencies]
 lazy_static.workspace = true
-prometheus.workspace = true
+parking_lot.workspace = true
+# The process collector exports this process's RSS, CPU and file descriptors on Linux.
+prometheus = { workspace = true, features = ["process"] }

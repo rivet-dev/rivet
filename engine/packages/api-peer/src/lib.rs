@@ -1,30 +1,10 @@
-use std::net::SocketAddr;
+//! Internal APIs served on each worker's API-peer listener. The repair routes require the admin
+//! token; every other route is served without authentication.
 
-use anyhow::*;
-
-pub mod actors;
-pub mod depot_inspect;
-pub mod envoys;
-pub mod internal;
-pub mod namespaces;
+pub mod filesystem;
+pub mod operator;
+pub mod repair;
 pub mod router;
-pub mod runner_configs;
-pub mod runners;
+pub mod volumes;
 
 pub use router::router as create_router;
-
-#[tracing::instrument(skip_all)]
-pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
-	let host = config.api_peer().host();
-	let port = config.api_peer().port();
-	let addr = SocketAddr::from((host, port));
-
-	let router = router::router(config, pools).await?;
-
-	let listener = tokio::net::TcpListener::bind(addr).await?;
-	tracing::info!(?host, ?port, "api-peer server listening");
-
-	axum::serve(listener, router).await?;
-
-	Ok(())
-}

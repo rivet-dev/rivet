@@ -8,7 +8,7 @@ use std::{
 
 use rivet_envoy_protocol as protocol;
 use tokio::{
-	sync::{Mutex, mpsc, watch},
+	sync::{Mutex, mpsc},
 	task::{AbortHandle, JoinError, JoinSet},
 };
 use tracing::Instrument;
@@ -19,9 +19,8 @@ use crate::{
 	connection::ws_send,
 	handle::EnvoyHandle,
 	http::{
-		HTTP_BODY_MAX_CHUNK_SIZE, HTTP_BODY_STREAM_CHANNEL_CAPACITY, HttpBodySendWindow,
-		HttpRequest, HttpRequestBodyError, HttpRequestBodyQueue, HttpRequestBodyStream,
-		HttpResponse, RequestBodyEvent, ResponseChunk,
+		HTTP_BODY_MAX_CHUNK_SIZE, HttpBodySendWindow, HttpRequest, HttpRequestBodyError,
+		HttpRequestBodyQueue, HttpRequestBodyStream, HttpResponse, RequestBodyEvent, ResponseChunk,
 	},
 	utils::{BufferMap, spawn_detached},
 };
@@ -41,8 +40,6 @@ impl HttpRequests {
 struct PendingHttpRequest {
 	message_id: protocol::MessageId,
 	connection_session: Option<u64>,
-	body_tx: Option<mpsc::Sender<Vec<u8>>>,
-	body_abort_tx: Option<watch::Sender<Option<HttpRequestBodyError>>>,
 	body_queue: Option<Arc<HttpRequestBodyQueue>>,
 	task_abort_handle: Option<AbortHandle>,
 	body_rejected: bool,
@@ -143,7 +140,7 @@ impl HttpTunnelSender {
 			protocol::ToRivetResponseAbort {
 				reason: protocol::HttpStreamAbortReason {
 					kind: protocol::HttpStreamAbortReasonKind::InternalError,
-					detail: Some("gateway tunnel connection closed".to_owned()),
+					detail: Some(("gateway tunnel connection closed".to_owned()).into()),
 				},
 			},
 		))
@@ -171,7 +168,7 @@ impl RequestBodyReceiveWindow {
 			"HTTP request body frame exceeds maximum size"
 		);
 		self.received_bytes
-			.fetch_update(
+			.try_update(
 				std::sync::atomic::Ordering::AcqRel,
 				std::sync::atomic::Ordering::Acquire,
 				|received| {
@@ -190,7 +187,7 @@ impl RequestBodyReceiveWindow {
 	fn consume(&self, bytes: u64) -> anyhow::Result<u64> {
 		let previous = self
 			.consumed_bytes
-			.fetch_update(
+			.try_update(
 				std::sync::atomic::Ordering::AcqRel,
 				std::sync::atomic::Ordering::Acquire,
 				|consumed| {
@@ -254,13 +251,11 @@ pub(super) fn handle_req_start(
 		req.response_stream.then_some(connection_session),
 	);
 	let response_stream = req.response_stream;
-	let request_body_window = (req.stream && response_stream).then(RequestBodyReceiveWindow::new);
+	let request_body_window = req.stream.then(RequestBodyReceiveWindow::new);
 	let response_body_window = HttpBodySendWindow::new();
 	let pending = PendingHttpRequest {
 		message_id: message_id.clone(),
 		connection_session: response_stream.then_some(connection_session),
-		body_tx: None,
-		body_abort_tx: None,
 		body_queue: None,
 		task_abort_handle: None,
 		body_rejected: false,
@@ -274,10 +269,14 @@ pub(super) fn handle_req_start(
 		.pending
 		.insert(&[&message_id.gateway_id, &message_id.request_id], pending);
 
-	let headers: HashMap<String, String> = req.headers.into_iter().collect();
-	let body_stream = if req.stream {
-		let (body_event_tx, body_event_rx) = mpsc::unbounded_channel();
-		if let Some(request_body_window) = request_body_window.clone() {
+	let headers: HashMap<String, String> = req
+		.headers
+		.into_iter()
+		.map(|(name, value)| (name.to_string(), value.to_string()))
+		.collect();
+	let body_stream = match request_body_window.clone() {
+		Some(request_body_window) => {
+			let (body_event_tx, body_event_rx) = mpsc::unbounded_channel();
 			let body_queue = HttpRequestBodyQueue::new();
 			if let Some(pending) = ctx
 				.http_requests
@@ -299,28 +298,15 @@ pub(super) fn handle_req_start(
 				body_queue,
 				body_event_tx,
 			))
-		} else {
-			let (body_tx, body_rx) = mpsc::channel(HTTP_BODY_STREAM_CHANNEL_CAPACITY);
-			let (body_abort_tx, body_abort_rx) = watch::channel(None);
-			if let Some(pending) = ctx
-				.http_requests
-				.pending
-				.get_mut(&[&message_id.gateway_id, &message_id.request_id])
-			{
-				pending.body_tx = Some(body_tx);
-				pending.body_abort_tx = Some(body_abort_tx);
-			}
-			Some(HttpRequestBodyStream::new(body_rx, body_abort_rx))
 		}
-	} else {
-		None
+		None => None,
 	};
 
 	let request = HttpRequest {
-		method: req.method,
-		path: req.path,
+		method: req.method.to_string(),
+		path: req.path.to_string(),
 		headers,
-		body: req.body,
+		body: req.body.map(Into::into),
 		body_stream,
 	};
 
@@ -450,7 +436,6 @@ pub(super) fn handle_req_chunk(
 ) {
 	let finish = chunk.finish;
 	let key: [&[u8]; 2] = [&message_id.gateway_id, &message_id.request_id];
-	let mut response_aborted = false;
 	match ctx.http_requests.pending.get_mut(&key) {
 		Some(pending) if pending.body_rejected => {}
 		Some(pending) => {
@@ -460,7 +445,7 @@ pub(super) fn handle_req_chunk(
 				{
 					let reason = protocol::HttpStreamAbortReason {
 						kind: protocol::HttpStreamAbortReasonKind::InternalError,
-						detail: Some(error.to_string()),
+						detail: Some(error.to_string().into()),
 					};
 					let tunnel_sender = pending.tunnel_sender.clone();
 					reject_pending_request(pending, &reason);
@@ -472,34 +457,9 @@ pub(super) fn handle_req_chunk(
 					return;
 				}
 				if let Some(body_queue) = &pending.body_queue {
-					if !body_queue.push(chunk.body) {
+					if !body_queue.push(&chunk.body) {
 						tracing::debug!("streamed request body consumer closed");
 						pending.body_queue = None;
-					}
-				} else if let Some(body_tx) = pending.body_tx.clone() {
-					match body_tx.try_send(chunk.body) {
-						Ok(()) => {}
-						Err(mpsc::error::TrySendError::Closed(_)) => {
-							tracing::debug!("streamed request body consumer closed");
-							pending.body_tx = None;
-						}
-						Err(mpsc::error::TrySendError::Full(_)) => {
-							let reason = protocol::HttpStreamAbortReason {
-								kind: protocol::HttpStreamAbortReasonKind::InternalError,
-								detail: Some(
-									"request body consumer did not keep up with the upload"
-										.to_owned(),
-								),
-							};
-							tracing::warn!("streamed request body channel overloaded");
-							reject_pending_request(pending, &reason);
-							response_aborted = true;
-
-							let tunnel_sender = pending.tunnel_sender.clone();
-							spawn_detached(async move {
-								send_response_abort(&tunnel_sender, reason).await;
-							});
-						}
 					}
 				} else {
 					tracing::warn!("received chunk for pending request without stream controller");
@@ -526,10 +486,7 @@ pub(super) fn handle_req_chunk(
 		{
 			body_queue.finish();
 		}
-		complete_phase(ctx, message_id.clone(), RequestPhase::Upload);
-	}
-	if response_aborted {
-		complete_phase(ctx, message_id, RequestPhase::Response);
+		complete_phase(ctx, message_id, RequestPhase::Upload);
 	}
 }
 
@@ -557,7 +514,7 @@ pub(super) async fn handle_response_body_window_update(
 		tracing::warn!(?error, "invalid HTTP response body window update");
 		let reason = protocol::HttpStreamAbortReason {
 			kind: protocol::HttpStreamAbortReasonKind::InternalError,
-			detail: Some(error.to_string()),
+			detail: Some(error.to_string().into()),
 		};
 		handle_req_abort(ctx, message_id, reason.clone());
 		send_response_abort(&tunnel_sender, reason).await;
@@ -569,17 +526,13 @@ pub(super) fn handle_req_body_cancel(ctx: &mut ActorContext, message_id: protoco
 	if let Some(pending) = ctx.http_requests.pending.get_mut(&key) {
 		let reason = protocol::HttpStreamAbortReason {
 			kind: protocol::HttpStreamAbortReasonKind::Cancelled,
-			detail: Some("gateway cancelled the request body".to_owned()),
+			detail: Some(("gateway cancelled the request body".to_owned()).into()),
 		};
 		if let Some(body_queue) = pending.body_queue.take() {
 			body_queue.abort(HttpRequestBodyError {
 				reason: reason.clone(),
 			});
 		}
-		if let Some(body_abort_tx) = pending.body_abort_tx.take() {
-			body_abort_tx.send_replace(Some(HttpRequestBodyError { reason }));
-		}
-		pending.body_tx = None;
 	}
 	complete_phase(ctx, message_id, RequestPhase::Upload);
 }
@@ -593,15 +546,9 @@ fn reject_pending_request(
 			reason: reason.clone(),
 		});
 	}
-	if let Some(body_abort_tx) = pending.body_abort_tx.take() {
-		body_abort_tx.send_replace(Some(HttpRequestBodyError {
-			reason: reason.clone(),
-		}));
-	}
 	if let Some(task_abort_handle) = pending.task_abort_handle.take() {
 		task_abort_handle.abort();
 	}
-	pending.body_tx = None;
 	pending.body_rejected = true;
 }
 
@@ -617,8 +564,6 @@ fn complete_phase(ctx: &mut ActorContext, message_id: protocol::MessageId, phase
 	match phase {
 		RequestPhase::Upload => {
 			pending.upload_complete = true;
-			pending.body_tx = None;
-			pending.body_abort_tx = None;
 			pending.body_queue = None;
 		}
 		RequestPhase::Response => pending.response_complete = true,
@@ -652,9 +597,6 @@ pub(super) fn handle_req_abort(
 				reason: reason.clone(),
 			});
 		}
-		if let Some(body_abort_tx) = pending.body_abort_tx.take() {
-			body_abort_tx.send_replace(Some(HttpRequestBodyError { reason }));
-		}
 		if let Some(task_abort_handle) = pending.task_abort_handle.take() {
 			task_abort_handle.abort();
 		}
@@ -673,7 +615,7 @@ pub(super) async fn handle_protocol_violation(
 		.map(|pending| pending.tunnel_sender.clone());
 	let reason = protocol::HttpStreamAbortReason {
 		kind: protocol::HttpStreamAbortReasonKind::InternalError,
-		detail: Some(detail),
+		detail: Some(detail.into()),
 	};
 	handle_req_abort(ctx, message_id, reason.clone());
 	if let Some(tunnel_sender) = tunnel_sender {
@@ -684,7 +626,7 @@ pub(super) async fn handle_protocol_violation(
 pub(super) async fn handle_connection_closed(ctx: &mut ActorContext, session: u64) {
 	let reason = protocol::HttpStreamAbortReason {
 		kind: protocol::HttpStreamAbortReasonKind::InternalError,
-		detail: Some("gateway tunnel connection closed".to_owned()),
+		detail: Some(("gateway tunnel connection closed".to_owned()).into()),
 	};
 	let requests = ctx
 		.http_requests
@@ -699,11 +641,6 @@ pub(super) async fn handle_connection_closed(ctx: &mut ActorContext, session: u6
 			body_queue.abort(HttpRequestBodyError {
 				reason: reason.clone(),
 			});
-		}
-		if let Some(body_abort_tx) = pending.body_abort_tx.take() {
-			body_abort_tx.send_replace(Some(HttpRequestBodyError {
-				reason: reason.clone(),
-			}));
 		}
 		pending.tunnel_sender.queue_transport_abort().await;
 		let _ = crate::envoy::send_to_envoy_tx(
@@ -765,8 +702,11 @@ async fn send_response(
 			.send(protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(
 				protocol::ToRivetResponseStart {
 					status,
-					headers,
-					body: Some(buffered),
+					headers: headers
+						.into_iter()
+						.map(|(k, v)| (k.into(), v.into()))
+						.collect(),
+					body: Some(buffered.into()),
 					stream: false,
 				},
 			))
@@ -787,8 +727,15 @@ async fn send_response(
 		.send(protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(
 			protocol::ToRivetResponseStart {
 				status,
-				headers,
-				body: if is_streaming { None } else { body.clone() },
+				headers: headers
+					.into_iter()
+					.map(|(k, v)| (k.into(), v.into()))
+					.collect(),
+				body: if is_streaming {
+					None
+				} else {
+					body.clone().map(Into::into)
+				},
 				stream: is_streaming,
 			},
 		))
@@ -821,7 +768,7 @@ async fn send_response(
 					tunnel_sender,
 					protocol::HttpStreamAbortReason {
 						kind: protocol::HttpStreamAbortReasonKind::HandlerError,
-						detail: Some(detail),
+						detail: Some(detail.into()),
 					},
 				)
 				.await;
@@ -838,7 +785,7 @@ async fn send_response(
 			tunnel_sender,
 			protocol::HttpStreamAbortReason {
 				kind: protocol::HttpStreamAbortReasonKind::HandlerError,
-				detail: Some("response body stream closed before finish".to_owned()),
+				detail: Some(("response body stream closed before finish".to_owned()).into()),
 			},
 		)
 		.await;
@@ -876,7 +823,10 @@ async fn send_response_chunk(
 ) -> bool {
 	tunnel_sender
 		.send(protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(
-			protocol::ToRivetResponseChunk { body, finish },
+			protocol::ToRivetResponseChunk {
+				body: body.into(),
+				finish,
+			},
 		))
 		.await
 }
@@ -888,6 +838,55 @@ async fn send_response_abort(
 	let _ = tunnel_sender
 		.send(protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(
 			protocol::ToRivetResponseAbort { reason },
+		))
+		.await;
+}
+
+/// Answers a request the actor never took because its start failed. The reply proves the actor
+/// did not admit it, so the gateway may route the request again.
+pub(super) async fn reject_unstarted(
+	shared: Arc<crate::context::SharedContext>,
+	actor_id: &str,
+	generation: u32,
+	message_id: protocol::MessageId,
+	req: &protocol::ToEnvoyRequestStart,
+	connection_session: u64,
+) {
+	let tunnel_sender = HttpTunnelSender::new(
+		shared,
+		message_id.gateway_id,
+		message_id.request_id,
+		req.response_stream.then_some(connection_session),
+	);
+	let body = serde_json::to_vec(&serde_json::json!({
+		"group": "envoy",
+		"code": "actor_not_found",
+		"message": "Actor failed to start before accepting the request",
+		"actor": {
+			"actorId": actor_id,
+			"generation": generation,
+		},
+	}))
+	.unwrap_or_default();
+	let headers = HashMap::from([
+		("content-type".to_owned(), "application/json".to_owned()),
+		("content-length".to_owned(), body.len().to_string()),
+		(
+			"x-rivet-error".to_owned(),
+			"envoy.actor_not_found".to_owned(),
+		),
+	]);
+	let _ = tunnel_sender
+		.send(protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(
+			protocol::ToRivetResponseStart {
+				status: 503,
+				headers: headers
+					.into_iter()
+					.map(|(k, v)| (k.into(), v.into()))
+					.collect(),
+				body: Some(body.into()),
+				stream: false,
+			},
 		))
 		.await;
 }
@@ -906,8 +905,11 @@ async fn send_fetch_error_response(tunnel_sender: &HttpTunnelSender) {
 		.send(protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(
 			protocol::ToRivetResponseStart {
 				status: 500,
-				headers,
-				body: Some(body),
+				headers: headers
+					.into_iter()
+					.map(|(k, v)| (k.into(), v.into()))
+					.collect(),
+				body: Some(body.into()),
 				stream: false,
 			},
 		))

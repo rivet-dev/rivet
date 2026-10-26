@@ -1,5 +1,0 @@
-# Ralph Progress Log
-Started:
----
-
-## Codebase Patterns

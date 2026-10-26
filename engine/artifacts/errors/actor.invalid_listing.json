@@ -1,0 +1,5 @@
+{
+  "code": "invalid_listing",
+  "group": "actor",
+  "message": "Listing actors requires a name or actor IDs."
+}

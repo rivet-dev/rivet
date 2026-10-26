@@ -1,4 +1,5 @@
 {
+	"license": "MIT",
 	"name": "docs-snippets",
 	"version": "2.0.21",
 	"private": true,
@@ -11,10 +12,7 @@
 		"rivetkit": "workspace:*",
 		"@rivetkit/react": "workspace:*",
 		"@rivetkit/engine-api-full": "workspace:*",
-		"@rivetkit/next-js": "workspace:*",
-		"@rivetkit/cloudflare-workers": "workspace:*",
 		"@rivetkit/rivetkit-wasm": "workspace:*",
-		"@rivetkit/supabase": "workspace:*",
 		"@rivetkit/effect": "workspace:*",
 		"effect": "4.0.0",
 		"@effect/platform-node": "4.0.0",

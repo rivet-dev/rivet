@@ -1,10 +1,7 @@
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::body::Incoming as BodyIncoming;
-use std::{
-	future::Future,
-	sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 pub type ResponseBodyError = Box<dyn std::error::Error + Send + Sync>;
@@ -69,6 +66,8 @@ pub enum ResponseBody {
 	Full(Full<Bytes>),
 	/// Streaming response body
 	Incoming(BodyIncoming),
+	/// Response body produced by an axum router
+	Axum(axum::body::Body),
 	/// Channel-backed streaming response body
 	Channel(mpsc::Receiver<Result<Bytes, ResponseBodyError>>),
 	/// Bounded channel with an out-of-band terminal error slot.
@@ -85,10 +84,6 @@ pub enum ResponseBody {
 	WithConsumption {
 		body: Box<ResponseBody>,
 		callback: ConsumptionCallback,
-	},
-	AuthorizationDeadline {
-		body: Option<Box<ResponseBody>>,
-		deadline: std::pin::Pin<Box<tokio::time::Sleep>>,
 	},
 }
 
@@ -128,18 +123,6 @@ impl ResponseBody {
 			callback: ConsumptionCallback(std::sync::Arc::new(callback)),
 		}
 	}
-
-	pub fn with_authorization_deadline(self, deadline: Option<u64>) -> Self {
-		let Some(deadline) = deadline else {
-			return self;
-		};
-		let delay = crate::utils::authorization_deadline_delay(deadline);
-		let body = (!delay.is_zero()).then(|| Box::new(self));
-		Self::AuthorizationDeadline {
-			body,
-			deadline: Box::pin(tokio::time::sleep(delay)),
-		}
-	}
 }
 
 impl http_body::Body for ResponseBody {
@@ -151,21 +134,6 @@ impl http_body::Body for ResponseBody {
 		cx: &mut std::task::Context<'_>,
 	) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
 		match self.get_mut() {
-			ResponseBody::AuthorizationDeadline { body, deadline } => {
-				if body.is_none() {
-					return std::task::Poll::Ready(None);
-				}
-				if deadline.as_mut().poll(cx).is_ready() {
-					// Dropping the underlying body cancels upstream streaming after headers have already
-					// been sent. At this point an HTTP status/body replacement is no longer possible.
-					body.take();
-					return std::task::Poll::Ready(None);
-				}
-				let Some(body) = body else {
-					return std::task::Poll::Ready(None);
-				};
-				std::pin::Pin::new(body.as_mut()).poll_frame(cx)
-			}
 			ResponseBody::Full(body) => {
 				let pin = std::pin::Pin::new(body);
 				match pin.poll_frame(cx) {
@@ -180,6 +148,19 @@ impl http_body::Body for ResponseBody {
 				}
 			}
 			ResponseBody::Incoming(body) => {
+				let pin = std::pin::Pin::new(body);
+				match pin.poll_frame(cx) {
+					std::task::Poll::Ready(Some(Ok(frame))) => {
+						std::task::Poll::Ready(Some(Ok(frame)))
+					}
+					std::task::Poll::Ready(Some(Err(e))) => {
+						std::task::Poll::Ready(Some(Err(Box::new(e))))
+					}
+					std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
+					std::task::Poll::Pending => std::task::Poll::Pending,
+				}
+			}
+			ResponseBody::Axum(body) => {
 				let pin = std::pin::Pin::new(body);
 				match pin.poll_frame(cx) {
 					std::task::Poll::Ready(Some(Ok(frame))) => {
@@ -242,11 +223,9 @@ impl http_body::Body for ResponseBody {
 
 	fn is_end_stream(&self) -> bool {
 		match self {
-			ResponseBody::AuthorizationDeadline { body, .. } => {
-				body.as_ref().is_none_or(|body| body.is_end_stream())
-			}
 			ResponseBody::Full(body) => body.is_end_stream(),
 			ResponseBody::Incoming(body) => body.is_end_stream(),
+			ResponseBody::Axum(body) => body.is_end_stream(),
 			ResponseBody::Channel(rx) => rx.is_closed() && rx.is_empty(),
 			ResponseBody::ChannelWithTerminal { body, terminal } => {
 				body.is_closed()
@@ -264,9 +243,9 @@ impl http_body::Body for ResponseBody {
 
 	fn size_hint(&self) -> http_body::SizeHint {
 		match self {
-			ResponseBody::AuthorizationDeadline { .. } => http_body::SizeHint::default(),
 			ResponseBody::Full(body) => body.size_hint(),
 			ResponseBody::Incoming(body) => body.size_hint(),
+			ResponseBody::Axum(body) => body.size_hint(),
 			ResponseBody::Channel(_) => http_body::SizeHint::default(),
 			ResponseBody::ChannelWithTerminal { .. } => http_body::SizeHint::default(),
 			ResponseBody::WithCompletion { body, .. } => body.size_hint(),
@@ -274,7 +253,3 @@ impl http_body::Body for ResponseBody {
 		}
 	}
 }
-
-#[cfg(test)]
-#[path = "../tests/support/response_body.rs"]
-mod tests;

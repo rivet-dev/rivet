@@ -99,7 +99,9 @@ fn ensure_rivetkit_info_recorded() {
 		return;
 	}
 
-	let envoy_version = std::env::var("RIVET_ENVOY_VERSION")
+	// The legacy platform deployment still sets the old name.
+	let envoy_version = std::env::var("RIVET_NODE_VERSION")
+		.or_else(|_| std::env::var("RIVET_ENVOY_VERSION"))
 		.ok()
 		.and_then(|value| value.parse().ok())
 		.unwrap_or(1);

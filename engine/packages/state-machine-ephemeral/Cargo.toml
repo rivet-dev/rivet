@@ -1,0 +1,19 @@
+[package]
+name = "rivet-state-machine-ephemeral"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+
+[dependencies]
+anyhow.workspace = true
+parking_lot.workspace = true
+rivet-env.workspace = true
+rivet-metrics.workspace = true
+rivet-state-machine.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+

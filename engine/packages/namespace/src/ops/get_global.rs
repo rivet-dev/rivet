@@ -15,7 +15,7 @@ pub async fn namespace_get_global(ctx: &OperationCtx, input: &Input) -> Result<V
 		.await
 	} else {
 		let leader_dc = ctx.config().leader_dc()?;
-		let client = rivet_pools::reqwest::client().await?;
+		let client = rivet_engine_context::reqwest::client().await?;
 
 		ctx.cache()
 			.clone()

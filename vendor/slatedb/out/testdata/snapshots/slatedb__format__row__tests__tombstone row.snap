@@ -1,0 +1,20 @@
+---
+source: src/row_codec.rs
+expression: output
+snapshot_kind: text
+---
+(
+    "tombstone row",
+    "\0\u{4}\0\u{4}tomb\0\0\0\0\0\0\0\u{1}\u{7}\0\0\0\0\0\0\0\u{1}\0\0\0\0\0\0\0\u{2}",
+    SstRowEntry {
+        key_prefix_len: 4,
+        key_suffix: b"tomb",
+        seq: 1,
+        expire_ts: None,
+        create_ts: Some(
+            2,
+        ),
+        value: Tombstone,
+    },
+    b"deadtomb",
+)

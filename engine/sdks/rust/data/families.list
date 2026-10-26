@@ -1,0 +1,39 @@
+# Stable version family IDs, one per top-level vbare schema in engine/sdks/schemas/data.
+# Format: `<id> <schema identifier>`. An ID is permanent: never reuse or renumber one, even
+# after its schema is deleted, because heartbeats and persisted version marks carry it.
+# The build fails when a schema has no ID or an ID names no schema.
+6 auth.grants
+7 auth.jwt_key_ring
+8 depot.client_protocol
+9 depot.durable_state_machine
+10 depot.fs_entry
+11 depot.fs_rows
+12 depot.kv_command
+13 depot.log_shard
+14 depot.maintainer_log
+15 depot.operator_command
+16 depot.storage_worker_protocol
+17 depot.tablet_coordinator_protocol
+18 depot.tablet_manifest
+19 epoxy.control_state
+20 epoxy.key_state
+21 pegboard.actor
+# 22 pegboard.namespace.actor_by_key (retired: schema deleted)
+# 23 pegboard.namespace.actor_name (retired: schema deleted)
+# 24 pegboard.namespace.envoy_pool (retired: schema deleted)
+# 25 pegboard.namespace.runner_alloc_idx (retired: schema deleted)
+# 26 pegboard.namespace.runner_by_key (retired: schema deleted)
+# 27 pegboard.runner.metadata (retired: schema deleted)
+28 rivet.cluster_config
+29 rivet.singleton_coordinator
+30 topology.worker_heartbeat
+31 ups.channel
+32 ups.packet
+33 ups.request
+34 depot.alarm
+35 pegboard.actor_alarm
+36 pegboard.actor_state
+38 depot.split_snapshot
+40 sqlite.db_overflow
+41 sqlite.db_recent
+42 auth.jwt_rotation

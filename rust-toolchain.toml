@@ -1,8 +1,8 @@
 # Single Rust version for CI, local development, and release builds. The
-# Dockerfiles under docker/ read the channel from this file. 1.91.1 is the
+# Dockerfiles under docker/ read the channel from this file. Pinned; the
 # version release binaries were already built with.
 [toolchain]
-channel = "1.91.1"
+channel = "1.99.0"
 components = ["rustfmt", "clippy"]
 targets = ["wasm32-unknown-unknown"]
 profile = "minimal"

@@ -1,0 +1,37 @@
+[package]
+name = "sqlite-prefetch"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
+description = "SQLite page prefetch planning for the actor page protocol server"
+
+[lib]
+name = "sqlite_prefetch"
+crate-type = ["lib"]
+
+[features]
+# The testing VFS, the trace log parser and the workload suite. Only tests and benchmarks
+# enable it.
+harness = ["dep:rusqlite", "dep:libsqlite3-sys", "dep:flate2", "dep:futures", "dep:parking_lot", "dep:tempfile", "dep:serde_json"]
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+lazy_static.workspace = true
+rivet-data.workspace = true
+rivet-metrics.workspace = true
+tracing.workspace = true
+vbare.workspace = true
+
+serde_json = { workspace = true, optional = true }
+flate2 = { version = "1.1", optional = true }
+futures = { workspace = true, optional = true }
+parking_lot = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
+libsqlite3-sys = { version = "0.30", features = ["bundled"], optional = true }
+rusqlite = { workspace = true, optional = true }
+

@@ -14,6 +14,7 @@ pub mod math;
 pub mod metric;
 pub mod metrics;
 pub mod req;
+pub mod rng;
 pub mod serde;
 pub mod size;
 pub mod sort;
@@ -66,7 +67,7 @@ macro_rules! observe {
 		let __dt = __start.elapsed().as_secs_f64();
 
 		let __location = format!("{}:{}:{}", file!(), line!(), column!());
-		$crate::metrics::LONG_OBSERVATION_DURATION.with_label_values(&[&__location])
+		$crate::metrics::LONG_OBSERVATION_DURATION_SECONDS.with_label_values(&[&__location])
 			.observe(__dt);
 
 		__res
@@ -78,7 +79,7 @@ macro_rules! observe {
 		let __dt = __start.elapsed().as_secs_f64();
 
 		let __location = format!("{}:{}:{}", file!(), line!(), column!());
-		$crate::metrics::OBSERVATION_DURATION.with_label_values(&[&__location])
+		$crate::metrics::OBSERVATION_DURATION_SECONDS.with_label_values(&[&__location])
 			.observe(__dt);
 
 		__res
@@ -114,7 +115,7 @@ macro_rules! observe_with {
 
 		($cb)(__dt, __location.as_str());
 
-		$crate::metrics::LONG_OBSERVATION_DURATION.with_label_values(&[__location.as_str()])
+		$crate::metrics::LONG_OBSERVATION_DURATION_SECONDS.with_label_values(&[__location.as_str()])
 			.observe(__dt);
 
 		__res
@@ -129,7 +130,7 @@ macro_rules! observe_with {
 
 		($cb)(__dt, __location.as_str());
 
-		$crate::metrics::OBSERVATION_DURATION.with_label_values(&[__location.as_str()])
+		$crate::metrics::OBSERVATION_DURATION_SECONDS.with_label_values(&[__location.as_str()])
 			.observe(__dt);
 
 		__res

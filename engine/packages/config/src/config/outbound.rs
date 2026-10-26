@@ -1,11 +1,11 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Policy for outbound HTTP requests to user-configured destinations, such as serverless runner
+/// Policy for outbound HTTP requests to user-configured destinations, such as serverless node
 /// URLs.
 ///
 /// These requests originate from inside the trusted engine network, so without restrictions a
-/// caller who can configure a runner can reach internal-only services. The defaults deny every
+/// caller who can configure a node can reach internal-only services. The defaults deny every
 /// non-globally-routable destination except loopback.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -18,7 +18,7 @@ pub struct Outbound {
 	/// Allow destinations that resolve to private, link-local, shared (CGNAT), or otherwise
 	/// non-globally-routable addresses.
 	///
-	/// Self-hosted deployments that point runners at addresses on their own network, such as a
+	/// Self-hosted deployments that point nodes at addresses on their own network, such as a
 	/// Docker Compose service name, need this enabled.
 	pub allow_private_networks: Option<bool>,
 	/// Allow plaintext `http://` destinations. When disabled only `https://` is permitted.
@@ -33,7 +33,7 @@ pub struct Outbound {
 	///
 	/// Matched exactly and case-insensitively, with no wildcards. Use this for a first-party
 	/// service whose address is not known ahead of time, such as a Kubernetes service name.
-	/// Anything served at a listed host becomes reachable by every runner config, so list
+	/// Anything served at a listed host becomes reachable by every node config, so list
 	/// individual hosts rather than a shared entry point.
 	pub allow_hosts: Option<Vec<String>>,
 	/// Maximum number of redirects to follow. Every hop is re-checked against this policy.

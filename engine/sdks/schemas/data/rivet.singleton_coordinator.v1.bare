@@ -1,0 +1,22 @@
+#import "shared/uuid_v4.v1.bare"
+
+# One regional singleton tenure. Release preserves the generation floor.
+# An operator's PENDING request makes the holder announce a step-down at its next manifest
+# read; the holder's release clears it.
+type ReleaseRequest enum {
+	NONE
+	PENDING
+}
+
+type Data struct {
+	workerId: UuidV4
+	workerInstanceId: UuidV4
+	coordinatorGeneration: u64
+	claimId: UuidV4
+	released: bool
+	releaseRequest: ReleaseRequest
+	commitId: UuidV4
+	# Milliseconds after this object's Last-Modified at which the owner stops serving and a
+	# candidate may claim without waiting for its heartbeat to expire; 0 when not stepping down.
+	stepDownMs: u64
+}

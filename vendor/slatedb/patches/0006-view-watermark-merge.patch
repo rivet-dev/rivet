@@ -1,0 +1,80 @@
+--- a/src/manifest/mod.rs
++++ b/src/manifest/mod.rs
+@@ -109,19 +109,16 @@
+                     .iter()
+                     .cloned()
+                     .take_while(|view| {
+-                        // Match by view ID first (V2 manifests), then fall back
+-                        // to SST ID (V1).
+-                        if let Some(id) = last_compacted_view {
+-                            if view.id == id {
+-                                return false;
+-                            }
++                        // Match by view ID (V2 manifests), and by SST ID only
++                        // when no view ID is known (V1). A projected clone can
++                        // hold several L0 views of one SST, so matching a V2
++                        // watermark by SST ID would also drop the uncompacted
++                        // newer views of that SST.
++                        match (last_compacted_view, last_compacted_sst) {
++                            (Some(id), _) => view.id != id,
++                            (None, Some(id)) => view.sst.id.value() != id,
++                            (None, None) => true,
+                         }
+-                        if let Some(id) = last_compacted_sst {
+-                            if view.sst.id.value() == id {
+-                                return false;
+-                            }
+-                        }
+-                        true
+                     })
+                     .collect()
+             } else {
+@@ -5182,6 +5179,48 @@
+     }
+ 
+     #[test]
++    fn test_merge_keeps_newer_views_of_a_partly_compacted_sst() {
++        // given: a writer L0 holding two cut views of one SST, newest first,
++        // and a compactor that compacted only the older view
++        let id = SsTableId::from(Ulid::new());
++        let handle = SsTableHandle::new(
++            id,
++            SST_FORMAT_VERSION_LATEST,
++            SsTableInfo {
++                first_entry: Some(Bytes::from_static(b"a")),
++                last_entry: Some(Bytes::from_static(b"z")),
++                ..SsTableInfo::default()
++            },
++        );
++        let newer = SsTableView::new_projected(
++            id.value(),
++            handle.clone(),
++            Some(BytesRange::from_ref("b".."d")),
++        );
++        let older = SsTableView::new_projected(
++            Ulid::new(),
++            handle,
++            Some(BytesRange::from_ref("m".."p")),
++        );
++        let writer = LsmTreeState {
++            l0: VecDeque::from([newer.clone(), older.clone()]),
++            ..LsmTreeState::default()
++        };
++        let compactor = LsmTreeState {
++            last_compacted_l0_sst_view_id: Some(older.id),
++            last_compacted_l0_sst_id: Some(id.value()),
++            ..LsmTreeState::default()
++        };
++
++        // when
++        let merged = LsmTreeState::merge_writer_and_compactor(&writer, &compactor);
++
++        // then: the newer view of the same SST is still in L0
++        assert_eq!(merged.l0.len(), 1);
++        assert_eq!(merged.l0[0].id, newer.id);
++    }
++
++    #[test]
+     fn test_projected_preserves_empty_prefix_segment_under_extractor() {
+         // A source with `Some(extractor)` and a `""` segment must keep
+         // that segment in `core.segments` after projection — projection

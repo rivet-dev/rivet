@@ -50,6 +50,7 @@ import {
 import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
 import * as errors from "./errors";
 import { isRetryableLifecycleReconnectSignal } from "./lifecycle-errors";
+import { retryAfterMs } from "./retry-budget";
 import { logger } from "./log";
 import { isInvalidToken } from "./token-provider";
 import { outboundTelemetryHeaders } from "./outbound-telemetry";
@@ -103,6 +104,21 @@ interface EventSubscriptions<Args extends Array<unknown>> {
  * @typedef {Function} EventUnsubscribe
  */
 export type EventUnsubscribe = () => void;
+
+/**
+ * How long a connection attempt may wait for the actor's Init before it is abandoned and
+ * retried. Longer than the engine's own WebSocket open deadline (15 s by default), so an engine
+ * that answers with a typed close wins, while a socket that never settles is still retried.
+ */
+const CONNECT_TIMEOUT_MS = 20_000;
+
+function isConnectionOpenTimeout(error: unknown): boolean {
+	return (
+		error instanceof errors.ActorError &&
+		error.group === "client" &&
+		error.code === "connection_open_timeout"
+	);
+}
 
 /**
  * A function that handles connection errors.
@@ -182,6 +198,8 @@ export class ActorConnRaw {
 
 	/** Promise used to indicate the socket has connected successfully. This will be rejected if the connection fails. */
 	#onOpenPromise?: ReturnType<typeof promiseWithResolvers<undefined>>;
+	/** Sockets given up on by the connect timeout. Their late events are ignored. */
+	#abandonedSockets = new WeakSet<UniversalWebSocket>();
 
 	#websocket?: UniversalWebSocket;
 	#authRetryAvailable = true;
@@ -457,12 +475,17 @@ export class ActorConnRaw {
 			minTimeout: 250,
 			maxTimeout: 30_000,
 
-			onFailedAttempt: (error) => {
+			onFailedAttempt: async (error) => {
 				logger().warn({
 					msg: "failed to reconnect",
 					attempt: error.attemptNumber,
 					error: stringifyError(error),
 				});
+				// A close that carried the service's retry hint waits at least that long.
+				const hintMs = retryAfterMs(error);
+				if (hintMs !== undefined) {
+					await new Promise((resolve) => setTimeout(resolve, hintMs));
+				}
 			},
 
 			// Cancel retry if aborted
@@ -498,7 +521,7 @@ export class ActorConnRaw {
 			await this.#connectWebSocket();
 
 			// Wait for result
-			await this.#onOpenPromise.promise;
+			await this.#waitForOpen(this.#onOpenPromise.promise);
 		} catch (error) {
 			if (this.#shouldRetryConnectionOpenError(error)) {
 				throw error;
@@ -529,9 +552,64 @@ export class ActorConnRaw {
 		}
 	}
 
+	/**
+	 * Waits for the actor's Init on the current socket, up to {@link CONNECT_TIMEOUT_MS}. A socket
+	 * can stay connecting with no open, error or close event, as when the engine holds the
+	 * upgrade or a refused connect reports only an error. On timeout the socket is abandoned
+	 * and closed, and the retryable `client.connection_open_timeout` starts the next attempt.
+	 */
+	async #waitForOpen(open: Promise<undefined>) {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const timedOut = new Promise<never>((_, reject) => {
+			timer = setTimeout(() => {
+				reject(
+					new errors.ActorError(
+						"client",
+						"connection_open_timeout",
+						`Connection did not open within ${CONNECT_TIMEOUT_MS} ms`,
+					),
+				);
+			}, CONNECT_TIMEOUT_MS);
+		});
+		try {
+			await Promise.race([open, timedOut]);
+		} catch (error) {
+			if (isConnectionOpenTimeout(error)) {
+				this.#abandonCurrentSocket();
+			}
+			throw error;
+		} finally {
+			clearTimeout(timer);
+		}
+	}
+
+	#abandonCurrentSocket() {
+		const ws = this.#websocket;
+		if (!ws) return;
+		this.#websocket = undefined;
+		this.#abandonedSockets.add(ws);
+		logger().warn({
+			msg: "connection did not open in time, retrying",
+			connId: this.#connId,
+			readyState: ws.readyState,
+			timeoutMs: CONNECT_TIMEOUT_MS,
+		});
+		try {
+			ws.close(1000, "Connect timeout");
+		} catch (err) {
+			logger().debug({
+				msg: "failed to close abandoned websocket",
+				error: stringifyError(err),
+			});
+		}
+	}
+
 	#shouldRetryConnectionOpenError(error: unknown): boolean {
 		if (error instanceof errors.ActorConnDisposed) {
 			return false;
+		}
+		if (isConnectionOpenTimeout(error)) {
+			return true;
 		}
 		if (
 			error instanceof errors.ActorError &&
@@ -614,12 +692,14 @@ export class ActorConnRaw {
 		});
 		this.#websocket = ws;
 		ws.addEventListener("open", () => {
+			if (this.#abandonedSockets.has(ws)) return;
 			logger().debug({
 				msg: "client websocket open",
 				connId: this.#connId,
 			});
 		});
 		ws.addEventListener("message", async (ev: { data: ConnMessage }) => {
+			if (this.#abandonedSockets.has(ws)) return;
 			try {
 				await this.#handleOnMessage(ev.data);
 			} catch (err) {
@@ -630,6 +710,7 @@ export class ActorConnRaw {
 			}
 		});
 		ws.addEventListener("close", async (ev: Event | CloseEventLike) => {
+			if (this.#abandonedSockets.has(ws)) return;
 			try {
 				await this.#handleOnClose(ev);
 			} catch (err) {
@@ -640,6 +721,7 @@ export class ActorConnRaw {
 			}
 		});
 		ws.addEventListener("error", () => {
+			if (this.#abandonedSockets.has(ws)) return;
 			try {
 				this.#handleOnError();
 			} catch (err) {
@@ -894,7 +976,11 @@ export class ActorConnRaw {
 			const parsed = parseWebSocketCloseReason(reason);
 
 			if (parsed) {
-				const { group, code, rayId } = parsed;
+				const { group, code, rayId, retryAfterMs } = parsed;
+				const closeOptions =
+					retryAfterMs === undefined
+						? { rayId }
+						: { rayId, metadata: { retry_after_ms: retryAfterMs } };
 				if (
 					isInvalidToken(group, code) &&
 					closeEvent.code === 1008 &&
@@ -923,7 +1009,7 @@ export class ActorConnRaw {
 							group,
 							code,
 							`Connection closed: ${reason}`,
-							{ rayId },
+							closeOptions,
 						),
 					);
 					return;
@@ -946,7 +1032,7 @@ export class ActorConnRaw {
 							group,
 							code,
 							`Connection closed: ${reason}`,
-							{ rayId },
+							closeOptions,
 						);
 					}
 				} else {
@@ -954,7 +1040,7 @@ export class ActorConnRaw {
 						group,
 						code,
 						`Connection closed: ${reason}`,
-						{ rayId },
+						closeOptions,
 					);
 				}
 

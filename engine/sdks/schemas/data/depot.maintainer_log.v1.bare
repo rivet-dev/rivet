@@ -1,0 +1,96 @@
+#import "shared/depot.types.v1.bare"
+#import "shared/depot.fs.v1.bare"
+#import "depot.client_protocol.v1.bare"
+
+# Where a volume's own log stood when the tablet maintainer decided an op of that volume.
+# The maintainer holds the volume's apply at this position until the op is applied, and
+# replay applies the op when the volume's apply reaches it again, so the two logs merge in
+# the order the live maintainer applied them.
+type MaintainerOpTarget struct {
+	volumeLogKey: VolumeLogKey
+	after: VolumeLogPosition
+}
+
+# A checkpoint create, delete or retention change made without a holder. The op is the
+# intent: replay runs the same guarded store change, at `target`, with the logged time.
+type CheckpointOp struct {
+	request: VolumeCheckpointRequest
+	createdAtUnixMs: i64
+	# Absent for a change of a retired incarnation, which has no volume log.
+	target: optional<MaintainerOpTarget>
+}
+
+# A retention checkpoint the maintainer takes on its schedule, at the target's position.
+type RetentionCheckpointOp struct {
+	target: MaintainerOpTarget
+	createdAtUnixMs: i64
+}
+
+# A fork source change at a parent in this tablet: an acquire, which pins the parent at the
+# target, or a release a destination asked for.
+type ForkReferenceOp struct {
+	request: FsForkReferenceRequest
+	createdAtUnixMs: i64
+	target: optional<MaintainerOpTarget>
+}
+
+# Publishes a fork destination, or a restore's new incarnation over the one it replaces. The copied
+# metadata pages are not in the log, so a replay that cannot find the publication in the store
+# prepares the fork again with `image` and copies the pages again from the parent, whose hold keeps
+# them, before the destination serves. A restore's op is logged after its drain claimed the replaced
+# incarnation's replicas and names that incarnation, at the image position when the image is its own
+# checkpoint: replay publishes only once the replaced incarnation is registered and its apply
+# reached the image again, because the replaced log stays live until a pass covers the publication.
+#
+# `incarnationEpoch` orders the published incarnation among its name's incarnations. It is
+# drawn when the op is made, so every replay publishes the same one.
+type ForkPublishOp struct {
+	spec: FsForkSpec
+	image: FsForkImage
+	target: optional<MaintainerOpTarget>
+	incarnationEpoch: u64
+}
+
+# Fails a fork whose publication was logged. The client is told it failed only once this op
+# commits, so a replay skips the earlier publication of the same spec and fails it again.
+type ForkFailOp struct {
+	spec: FsForkSpec
+	error: FsForkError
+}
+
+# An operator repair call's audit, logged before the call's effect with no outcome and again
+# after it with the outcome. Its apply writes the row beside the volume's own rows, keyed by
+# the call's operation id, so the last logged state of each call is listable, moves with a
+# split and survives a maintainer restart. It changes nothing else.
+type RepairAuditOp struct {
+	row: RepairAuditRow
+}
+
+type MaintainerOp union {
+	CheckpointOp | RetentionCheckpointOp | ForkReferenceOp | ForkPublishOp | ForkFailOp | RepairAuditOp
+}
+
+# The payload of one maintainer log entry: every op batched into one append.
+type MaintainerEntry struct {
+	ops: list<MaintainerOp>
+}
+
+# The tablet store's record of its maintainer log, written by ordinary passes. Trims of
+# the log never pass `cold`.
+type MaintainerLogRecord struct {
+	tabletId: UuidV4
+	cold: VolumeLogPosition
+	# The highest version of each family written into this tablet's SlateDB data, raised in the
+	# same pass write as the first row at a higher version and copied to split children.
+	versionMarks: list<VersionMark>
+}
+
+# What a volume's creating load stores in its replicas' state, so a maintainer that finds
+# the volume before its first record reached cold still knows how it was created.
+type VolumeCreation struct {
+	# The record's `incarnationEpoch`, which orders the incarnations of one name.
+	incarnationEpoch: u64
+	# A fork destination's links to the volumes it reads through.
+	baseChain: list<FsBaseLink>
+	retention: optional<FsRetentionPolicy>
+}

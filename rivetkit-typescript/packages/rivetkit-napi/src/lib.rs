@@ -75,9 +75,9 @@ pub(crate) fn napi_anyhow_error(error: anyhow::Error) -> napi::Error {
 }
 
 fn anyhow_to_bridge_rivet_error_payload(error: anyhow::Error) -> serde_json::Value {
-	let bridge_context = error
-		.chain()
-		.find_map(|cause| cause.downcast_ref::<crate::actor_factory::BridgeRivetErrorContext>());
+	// The bridge attaches this context with `.context(...)`, which anyhow stores as a private
+	// wrapper type, so it is found through `Error::downcast_ref` and never through `chain()`.
+	let bridge_context = error.downcast_ref::<crate::actor_factory::BridgeRivetErrorContext>();
 	let error = RivetTransportError::extract(&error);
 	let promoted_status_code = public_error_status_code(error.group(), error.code());
 	let should_promote = promoted_status_code.is_some_and(|_| match bridge_context {

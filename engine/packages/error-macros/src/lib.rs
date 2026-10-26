@@ -573,6 +573,11 @@ impl syn::parse::Parse for ErrorArgs {
 	}
 }
 
+#[allow(
+	clippy::disallowed_methods,
+	clippy::disallowed_types,
+	reason = "proc-macro code generation reads and writes host files at build time"
+)]
 fn write_error_doc(group: &str, code: &str, message: &str) -> std::io::Result<()> {
 	use std::fs;
 	use std::io::Write;
@@ -609,6 +614,11 @@ fn write_error_doc(group: &str, code: &str, message: &str) -> std::io::Result<()
 	Ok(())
 }
 
+#[allow(
+	clippy::disallowed_methods,
+	clippy::disallowed_types,
+	reason = "proc-macro code generation reads and writes host files at build time"
+)]
 fn find_workspace_root() -> std::io::Result<std::path::PathBuf> {
 	use std::path::Path;
 

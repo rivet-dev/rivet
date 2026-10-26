@@ -1,0 +1,5 @@
+{
+  "code": "invalid_key",
+  "group": "depot_kv",
+  "message": "The key or range is invalid."
+}

@@ -1,0 +1,655 @@
+#import "shared/depot.types.v1.bare"
+#import "shared/depot.fs.v1.bare"
+#import "depot.log_shard.v1.bare"
+#import "depot.alarm.v1.bare"
+#import "shared/depot.fs_read.v1.bare"
+#import "depot.fs_entry.v1.bare"
+
+# Only states returned by this load attempt after cold-floor reconciliation.
+type MemberReplicaState struct { workerId: UuidV4 state: VolumeLogReplicaState }
+
+type VolumeCreateRequest struct {
+	volumeKey: VolumeKey
+	clientIncarnation: UuidV4
+    retention: optional<FsRetentionPolicy>
+	# The creating process, kept with the claim the create grants; see VolumeOpenRequest.
+	holder: VolumeHolder
+}
+
+type VolumeCreateResponse struct {
+	record: FsVolumeRecord
+	openClaim: optional<OpenClaim>
+	states: list<MemberReplicaState>
+}
+
+type VolumeDeleteRequest struct {
+	volumeLogKey: VolumeLogKey
+}
+
+type VolumeDeleteResponse void
+
+# Keys of the KV file named `file` under the volume's root.
+type VolumeReadKeys struct {
+	file: data
+	keys: list<data>
+}
+
+# Opens at the higher of the stored cold floor and in-sync replica progress.
+# Missing replicas beside a loaded volume require repair before voting.
+# Reads rows through the maintainer's SlateDB, including its memtable, without
+# waiting for a cold-store flush. Repeating the request is harmless.
+# `initial` are the opener's first writes when this open creates the volume: each replica writes
+# them with its creation and the open claim in one disk write and sync, at the sequences after
+# cold and the claim's epoch. Ignored when the volume exists, when they exceed the maintainer's
+# budget, or when the creation already granted a different open.
+# `read` names keys of one KV file whose committed values the open returns when it finds the
+# volume existing with no log tail; see `VolumeOpenResponse.read`.
+type VolumeCreateOptions struct {
+	retention: optional<FsRetentionPolicy>
+	initial: list<PayloadWrite>
+	read: optional<VolumeReadKeys>
+}
+type VolumeOpenRequest struct {
+	volumeKey: VolumeKey
+	clientIncarnation: UuidV4
+	# The opening process. Its worker must be the request's transport source.
+	holder: VolumeHolder
+	# None requires an existing volume. Some creates only when absent, preserving
+	# the existing incarnation and retention policy on retries.
+	createIfAbsent: optional<VolumeCreateOptions>
+}
+
+# The maintainer's applied position above the record's cold, with the facts an opener's
+# recovery would otherwise read from every entry at or below it. Applied entries are committed,
+# so the opener replays the log only from `applied`, whose entry it checks against this position.
+# `epochs` holds the first position of each client epoch among the entries from just above the
+# record's cold through `applied`, ascending; the first is the entry just above cold.
+# `recentWrites` holds the newest 64 write receipts at or below `applied`, in client order.
+type VolumeAppliedHistory struct {
+	applied: VolumeLogPosition
+	epochs: list<VolumeLogPosition>
+	recentWrites: list<FsWriteReceipt>
+}
+
+# Returns current volume facts, combining replica progress with the stored cold floor.
+# Clients route from their cached tablet manifest.
+# `created` is set when this open created the volume with its initial writes: the writes are
+# committed through this position under the open claim, and the opener appends after it with no
+# claim entry. Set only when a quorum of the replica set holds them in sync, claimed for this open.
+# Unset otherwise; the recovered history may then hold none, all or a prefix of these writes,
+# or another opener's, so the opener reads the volume before writing again.
+# `openClaim` is unset when initial entries were sent under it but `created` is unset: some
+# replicas may hold them and others not, so the opener claims above every epoch it observes.
+# `read` answers `VolumeCreateOptions.read`, one value per key in order, absent keys unset. It is
+# set only when the open found the volume existing and every member of its replica set held the
+# same appended position, which the maintainer had applied: nothing above it can become
+# committed, so these are the values the opener's recovery starts from. Unset otherwise; the
+# opener then reads after its recovery.
+# `applied` is set when the maintainer has applied entries above the record's cold and knows the
+# epochs of all of them; see VolumeAppliedHistory.
+type VolumeOpenResponse struct {
+	record: FsVolumeRecord
+	openClaim: optional<OpenClaim>
+	states: list<MemberReplicaState>
+	created: optional<VolumeLogPosition>
+	read: optional<list<optional<data>>>
+	applied: optional<VolumeAppliedHistory>
+}
+
+# Lets the maintainer promptly write to cold and unload, freeing memory on three workers.
+# Correctness does not depend on close: idle volumes are recovered before unloading.
+type VolumeCloseRequest struct {
+	# None releases a never-claimed create; otherwise name the exact replica claim.
+	client: optional<ClientIdentity>
+	volumeLogKey: VolumeLogKey
+}
+
+type VolumeCloseResponse void
+
+type TabletSplitting void # The tablet is frozen for a split; retry after a short backoff.
+
+# The answering worker does not hold the tablet's maintainer grant. Nothing ran; refresh the
+# route and send again no sooner than retryAfterMs, within the caller's deadline.
+type NotMaintainer struct {
+	retryAfterMs: u64
+}
+type VolumeNotFound void
+type VolumeExists void
+type VolumeDeleted void
+# The maintainer refused the request at admission under load. Nothing ran; send again no
+# sooner than retryAfterMs, within the caller's deadline.
+type Overloaded struct {
+	retryAfterMs: u64
+}
+# The store holds no record for the volume's current incarnation and no maintainer can rebuild
+# one, so the name serves nothing until that incarnation is deleted. Nothing ran, and sending
+# the request again cannot help; delete the incarnation named here to free the name.
+type VolumeRecordMissing struct {
+	volumeIncarnation: UuidV4
+}
+
+# An operator repair claim holds the volume: opens, creates and deletes of the name are refused
+# until it is released or expires. Nothing ran; send again no sooner than retryAfterMs.
+# `operationId` names the repair call that took the claim.
+type VolumeUnderRepair struct {
+	retryAfterMs: u64
+	operationId: UuidV4
+}
+
+type VolumeRejectResponse union {
+	NotMaintainer | TabletSplitting | VolumeNotFound | VolumeExists | VolumeDeleted | Overloaded | VolumeRecordMissing |
+	VolumeUnderRepair
+}
+
+# Checkpoint administration never opens or takes over an exclusive writer.
+type CheckpointPosition struct { volumeIncarnation: UuidV4 position: VolumeLogPosition }
+type CheckpointCreate struct {
+    name: data
+    # Some confirms an already committed log operation, after continuous apply reaches it.
+    minimum: optional<CheckpointPosition>
+}
+type CheckpointInspect struct { name: data }
+type CheckpointList struct { after: optional<data> limit: u32 }
+type CheckpointDelete struct {
+    volumeIncarnation: UuidV4
+    name: data
+    # Some confirms the holder's committed FsCheckpointRelease at this position, after
+    # continuous apply reaches it. None asks the maintainer to make the change itself.
+    minimum: optional<CheckpointPosition>
+}
+type CheckpointSetRetention struct {
+    retention: optional<FsRetentionPolicy>
+    # As for CheckpointDelete, for the holder's committed FsRetentionSet.
+    minimum: optional<CheckpointPosition>
+}
+type CheckpointOperation union {
+    CheckpointCreate | CheckpointInspect | CheckpointList | CheckpointDelete | CheckpointSetRetention
+}
+type VolumeCheckpointRequest struct { volumeKey: VolumeKey operation: CheckpointOperation }
+type CheckpointInspection struct {
+    volumeIncarnation: UuidV4
+    checkpoint: optional<FsCheckpointInfo>
+    namedCount: u32
+    maxNamed: u32
+}
+type CheckpointPage struct { checkpoints: list<FsCheckpointInfo> after: optional<data> }
+type CheckpointUpdated void
+type CheckpointError enum {
+    NOT_FOUND NAME_IN_USE TOO_MANY_NAMED INVALID VOLUME_NOT_FOUND INCARNATION_CHANGED LAGGING
+}
+type VolumeCheckpointResponse union {
+    FsCheckpointInfo | CheckpointInspection | CheckpointPage | CheckpointUpdated | CheckpointError
+}
+
+# Immutable operation bodies fence delayed acquisition and release retries.
+type FsForkRequest struct { spec: FsForkSpec }
+type FsForkResponse union { FsVolumeRecord | FsForkError }
+
+type FsForkAcquire struct { spec: FsForkSpec }
+type FsForkRelease struct { spec: FsForkSpec }
+type FsForkCheck struct { spec: FsForkSpec }
+type FsForkReferenceRequest union { FsForkAcquire | FsForkRelease | FsForkCheck }
+type FsForkReleased void
+type FsForkReferenceResponse union { FsForkReceipt | FsForkPresence | FsForkReleased | FsForkError }
+
+# Cold-write progress of one replica, as a status probe reports it.
+type ReplicaNoticeColdWrite struct {
+	firstWriteUnixMs: i64
+	committedBytes: u64
+	diskPressure: bool
+}
+
+# One replica's state after a synced change, as a status probe would read it. An absent
+# state means the replica is no longer loaded on the shard.
+type ReplicaStatusNotice struct {
+	volumeLogKey: VolumeLogKey
+	state: optional<VolumeLogReplicaState>
+	coldWrite: optional<ReplicaNoticeColdWrite>
+	# Synced entries this replica learned are committed since its previous notice, in order
+	# and ending at its committed position, when they are small and still in memory; empty
+	# otherwise. They are exactly what a read of the replica from the first one would
+	# return, so a maintainer that applied through the entry before applies them without
+	# reading the replica.
+	entries: list<VolumeLogEntry>
+}
+
+# The notices of one tablet, with the grant and replica set the shard last synced for it.
+type ReplicaStatusNoticeTablet struct {
+	tabletId: UuidV4
+	tabletGrantEpoch: u64
+	tabletReplicaSetVersion: u64
+	notices: list<ReplicaStatusNotice>
+}
+
+# Pushed by a log shard to a tablet maintainer worker when its replicas' states change.
+# A notice that fails, times out or is refused is resent by the shard after a backoff.
+type ReplicaStatusNoticeRequest struct {
+	workerId: UuidV4
+	tablets: list<ReplicaStatusNoticeTablet>
+}
+
+# Tablets whose notices the maintainer worker could not queue: `refusedTablets` because
+# their maintainer is not serving yet or its inbox was full, `unknownTablets` because this
+# worker does not run them.
+# The shard resends only their replicas, after a backoff, and refreshes its routing view for
+# an unknown tablet; every other tablet's notices were queued.
+type ReplicaStatusNoticeResponse struct {
+	refusedTablets: list<UuidV4>
+	unknownTablets: list<UuidV4>
+}
+
+# Operator requests for one storage worker, sent on its volume command subject. Each acts on the
+# tablets the worker maintains: `tablet` names one of them, unset means all of them.
+#
+# Tier asks every volume with applied data above cold for a prompt cold write, and runs a cold
+# pass for pending rows. The reply confirms the requests were queued, not that cold writes
+# completed; repeat it until `tierRequested` is zero to wait for them.
+type OperatorTierRequest struct {
+	tablet: optional<UuidV4>
+}
+
+# Drop caches begins the unload of at most `limit` loaded volumes per tablet (capped per request)
+# that received no request for `quietMs`, raised to the maintainer's holder check interval so a
+# volume with a live client is not chosen, then empties the worker's SlateDB block and metadata
+# caches and removes the named tablets' disk-cached object parts. Closed volumes unload on their
+# own once tiered. Repeat until `loadedVolumes` is zero to wait for unloads.
+type OperatorDropCachesRequest struct {
+	tablet: optional<UuidV4>
+	quietMs: u64
+	limit: u32
+}
+
+# What one maintainer did for an operator request, and what it still holds afterwards.
+type OperatorTabletReport struct {
+	tabletId: UuidV4
+	tierRequested: u64
+	unloadsStarted: u64
+	loadedVolumes: u64
+	unloadingVolumes: u64
+}
+
+type OperatorTabletRejected struct {
+	tabletId: UuidV4
+	reason: VolumeRejectResponse
+}
+
+type OperatorTabletOutcome union { OperatorTabletReport | OperatorTabletRejected }
+
+type OperatorDroppedCaches struct {
+	# Bytes the process-wide block and metadata caches held; every tablet loses them.
+	memoryBytes: u64
+	diskFiles: u64
+	diskBytes: u64
+}
+
+type OperatorCachesFailed struct {
+	message: str
+}
+
+type OperatorCachesOutcome union { OperatorDroppedCaches | OperatorCachesFailed }
+
+# `caches` is set only for drop caches.
+type OperatorResponse struct {
+	tablets: list<OperatorTabletOutcome>
+	caches: optional<OperatorCachesOutcome>
+}
+
+# Operator repair inspection of one name: what its tablet maintainer holds in memory for every
+# loaded incarnation, beside what the maintainer's store holds for the name. Reading changes
+# nothing, loads nothing and fences nothing. Answered only by a serving maintainer.
+type RepairInspectRequest struct {
+	volumeKey: VolumeKey
+}
+
+# One member replica as the maintainer last observed it, with whether its worker is listed.
+type RepairMemberView struct {
+	workerId: UuidV4
+	state: VolumeLogReplicaState
+	listed: bool
+}
+
+# The maintainer's view of one loaded incarnation.
+# `stored` is the incarnation's own record row as the inspection read it from the store.
+# `known` is the last record this maintainer read from or wrote to the store for it.
+# `evidence` is the record its replicas' creation evidence and cold positions describe, which is
+# what an unload or a first record would write when no stored record exists.
+# `applied` is set while the incarnation is registered for filesystem apply.
+# `idleMs` is the time since the last client activity or committed advance.
+type RepairIncarnationView struct {
+	volumeLogKey: VolumeLogKey
+	stored: optional<FsVolumeRecord>
+	known: optional<FsVolumeRecord>
+	evidence: optional<FsVolumeRecord>
+	registered: bool
+	applied: optional<VolumeLogPosition>
+	members: list<RepairMemberView>
+	recordMissing: bool
+	deleting: bool
+	unloading: bool
+	awaitingReplay: bool
+	holder: optional<VolumeHolder>
+	idleMs: u64
+}
+
+# `pointer` is the name's pointer row in the store. `pendingOpen` says an open, create or
+# delete of the name is in progress; `pendingFork` is a fork or restore the store holds
+# prepared for the name. `incarnations` lists only incarnations loaded in this maintainer.
+type RepairInspection struct {
+	tabletId: UuidV4
+	tabletGrantEpoch: u64
+	replicaSet: TabletReplicaSet
+	pointer: optional<FsVolumeRecord>
+	pendingFork: optional<FsPendingFork>
+	pendingOpen: bool
+	incarnations: list<RepairIncarnationView>
+}
+
+# The envelope of every mutating repair request. `operationId` names the call: a retry with the
+# same id and body answers the first outcome, and the same id with another body is refused.
+# `dryRun` plans without changing anything; a real call must carry the digest of the plan its
+# dry run returned, and is refused when the plan changed since. `reason` and `principal` are
+# kept in the call's audit rows; `principal` names the credential, never its secret.
+# `tabletId`, `tabletGrantEpoch` and `volumeLogKey` fence the call: a maintainer of another
+# tablet or under another grant, or a name whose incarnation changed, refuses it.
+type RepairEnvelope struct {
+	operationId: UuidV4
+	dryRun: bool
+	reason: str
+	principal: str
+	tabletId: UuidV4
+	tabletGrantEpoch: u64
+	volumeLogKey: VolumeLogKey
+	planDigest: optional<data[32]>
+}
+
+# Quarantine repair: write a record for a quarantined incarnation (one whose stored record is
+# lost) from its replicas' creation evidence at their cold position, through the ordinary
+# cold pass, and serve it again. `expectedCold` must be the cold position the plan names.
+# The rebuilt record holds no write receipts, so a client retrying a write at or below that
+# cold position is not deduplicated. `allowMissingEvidence` is an explicit operator override
+# when the store lacks its format row or root inode; the repair audit keeps this choice.
+type RepairRebuildRecord struct {
+	expectedCold: VolumeLogPosition
+	allowMissingEvidence: bool
+}
+
+# Takes a repair claim: the maintainer claims the volume at an epoch it issues, which fences the
+# current writer, recovers the log's tail, commits a claim entry and keeps the claim open. While
+# it is held the maintainer refuses opens, creates and deletes of the name with
+# `VolumeUnderRepair`, so the claim is the volume's only writer. The claim ends on release,
+# after `ttlMs` with no call naming it, on a change of the tablet's replica set, or when the
+# maintainer loses its grant, whose successor's epochs sort above it. A volume whose newest
+# claim names a holder process is refused unless `fenceHolder` is set. `expectedAppended`, when
+# set, must equal the highest appended position among the maintainer's view of the members.
+type RepairClaimAcquire struct {
+	ttlMs: u64
+	fenceHolder: bool
+	expectedAppended: optional<VolumeLogPosition>
+}
+
+# Ends a repair claim, which closes its client: opens of the name are admitted again.
+type RepairClaimRelease struct {
+	claim: ClientIdentity
+}
+
+# One row an append expects at the claim's tail before it runs: `valueDigest` is the SHA-256 of
+# the row's stored value bytes, or absent when the row must be absent.
+type RepairPreimage struct {
+	key: FsRowKey
+	valueDigest: optional<data[32]>
+}
+
+# Appends one corrective filesystem entry under a held repair claim. It lands just above the
+# claim's tail, which must be `expectedAppended`; the normal apply writes a new version of each
+# row it changes, and an ordinary pass makes it cold. Older positions still read the old
+# versions. `entry` holds only KV puts, deletes and range deletes, or aborts a transaction
+# left pending. Every preimage must match the row at the tail, which the maintainer must have
+# applied.
+type RepairAppend struct {
+	claim: ClientIdentity
+	expectedAppended: VolumeLogPosition
+	entry: FsEntry
+	preimages: list<RepairPreimage>
+}
+
+# Asks the maintainer's member reload to load `worker`'s missing replica as repairing at an
+# in-sync member's cold position; the serving client's repair then catches it up.
+type RepairReplicaReload struct {
+	worker: UuidV4
+}
+
+# Cancels the incarnation's unload the way a reopen does, before any replica was forgotten:
+# the volume stays loaded and its idle check starts over.
+type RepairAbortUnload void
+
+# Fires the incarnation's own pending retry deadlines now (an unload's forget or recovery
+# backoff, a filesystem apply backoff, a member reload backoff), so each state machine reissues
+# its own idempotent work. It adds no transition and fires nothing that is not pending.
+type RepairRedrive void
+
+# Forgets `worker`'s replica of the incarnation, which must be a worker outside the tablet's
+# replica set, such as a removed member's leftover. The shard forgets it only while that
+# replica still has `replicaIncarnation`, its appended and cold positions both equal
+# `expectedAppended`, its claim equals `expectedClaim` and it lost no entries, and while the
+# shard sees the tablet's replica set stable at the plan's version without the worker. So the
+# forget never drops data above cold or a replica that a member, a newer load or a newer set
+# counts. A replica the shard no longer holds counts as forgotten.
+type RepairReplicaForget struct {
+	worker: UuidV4
+	replicaIncarnation: UuidV4
+	expectedAppended: VolumeLogPosition
+	expectedClaim: optional<ClientIdentity>
+}
+
+type RepairBody union {
+	RepairRebuildRecord | RepairClaimAcquire | RepairClaimRelease | RepairAppend | RepairReplicaReload |
+	RepairAbortUnload | RepairRedrive | RepairReplicaForget
+}
+
+type RepairRequest struct {
+	envelope: RepairEnvelope
+	body: RepairBody
+}
+
+# What a record rebuild writes, and what the store holds for the incarnation at that cold
+# position: its format row and its root inode, which every written volume has.
+type RepairRebuildPlan struct {
+	record: FsVolumeRecord
+	formatRowPresent: bool
+	rootInodePresent: bool
+}
+
+# What a claim acquire fences: the process holding the volume's newest claim, if one is
+# recorded. The members' positions move while a writer is live, so they are not part of the
+# plan; an inspection shows them, and `expectedAppended` fences them when the caller names it.
+type RepairClaimPlan struct {
+	holder: optional<VolumeHolder>
+}
+
+type RepairReleasePlan struct {
+	claim: ClientIdentity
+}
+
+# One row an append changes: its stored value at the claim's tail, absent when the row is.
+type RepairRowChange struct {
+	key: FsRowKey
+	before: optional<data>
+}
+
+type RepairAppendPlan struct {
+	lands: VolumeLogPosition
+	rows: list<RepairRowChange>
+}
+
+type RepairReloadPlan struct {
+	worker: UuidV4
+	# The in-sync member whose cold position and claim the load copies.
+	source: UuidV4
+	cold: VolumeLogPosition
+}
+
+# Why the unload being aborted began.
+type RepairAbortUnloadPlan struct {
+	reason: str
+}
+
+# The retry deadlines a redrive fires, by name.
+type RepairRedrivePlan struct {
+	retries: list<str>
+}
+
+# The stable replica set version a forget names to the shard.
+type RepairForgetPlan struct {
+	replicaSetVersion: u64
+}
+
+type RepairPlan union {
+	RepairRebuildPlan | RepairClaimPlan | RepairReleasePlan | RepairAppendPlan | RepairReloadPlan |
+	RepairAbortUnloadPlan | RepairRedrivePlan | RepairForgetPlan
+}
+
+# What an applied claim acquire holds: the claim's identity, its committed claim entry, and the
+# members that acknowledged the entry or did not.
+type RepairClaimGranted struct {
+	claim: ClientIdentity
+	claimEntry: VolumeLogPosition
+	inSync: list<UuidV4>
+	incomplete: list<UuidV4>
+}
+type RepairAppended struct { position: VolumeLogPosition }
+type RepairDetail union { RepairClaimGranted | RepairAppended }
+
+type RepairRefusalCode enum {
+	GRANT_CHANGED
+	INCARNATION_CHANGED
+	POSITION_CHANGED
+	PLAN_CHANGED
+	PLAN_REQUIRED
+	OPERATION_CONFLICT
+	OPERATION_IN_PROGRESS
+	REPAIR_BUSY
+	NOT_QUARANTINED
+	DELETING
+	NO_EVIDENCE
+	NO_QUORUM
+	LIVE_HOLDER
+	CLAIM_HELD
+	CLAIM_LOST
+	NOT_LOADED
+	NOT_STABLE
+	LAGGING
+	PREIMAGE_MISMATCH
+	INVALID_ENTRY
+	NOT_A_MEMBER
+	NOT_MISSING
+	CLAIM_FAILED
+	NOT_UNLOADING
+	FORGET_STARTED
+	NOTHING_TO_REDRIVE
+	ASSIGNED_MEMBER
+	REPLICA_CHANGED
+}
+
+# `current` describes the fact that changed, where one did.
+type RepairRefused struct {
+	code: RepairRefusalCode
+	retryAfterMs: optional<u64>
+	message: str
+	current: optional<RepairPlan>
+}
+type RepairPlanned struct { plan: RepairPlan planDigest: data[32] }
+type RepairApplied struct { plan: RepairPlan planDigest: data[32] detail: optional<RepairDetail> }
+# The effect may have run, for example when the maintainer lost its grant after the call's
+# intent was logged. Resending the same operation id answers from the audit rows.
+type RepairUnknown struct { message: str }
+type RepairOutcome union { RepairApplied | RepairRefused | RepairUnknown }
+type RepairResult union { RepairPlanned | RepairApplied | RepairRefused | RepairUnknown }
+# `alreadyApplied` says the result is a stored outcome of an earlier call with this id.
+type RepairResponse struct {
+	operationId: UuidV4
+	alreadyApplied: bool
+	result: RepairResult
+}
+
+# One repair call's audit: the request as sent, when the maintainer took it, the digest of the
+# plan it ran, and its outcome once known. The intent is written before the call's effect and
+# the outcome after it; a row without an outcome is a call whose effect may have run.
+type RepairAuditRow struct {
+	request: RepairRequest
+	requestedAtUnixMs: i64
+	planDigest: data[32]
+	outcome: optional<RepairOutcome>
+}
+
+# Lists the repair audit rows of one name, ordered by operation id, after `after`.
+type RepairAuditListRequest struct {
+	volumeKey: VolumeKey
+	after: optional<UuidV4>
+	limit: u32
+}
+type RepairAuditPage struct {
+	audits: list<RepairAuditRow>
+	after: optional<UuidV4>
+}
+
+# A bounded, read-only page of one incarnation's lifecycle metadata, answered by its serving
+# maintainer: its fork holds, its read sessions (pins), the pending lifecycle work of every
+# incarnation of the name, its alarm row, the name's current and archived incarnation records,
+# or what the maintainer is doing for it now (activity). `after` is the previous page's cursor,
+# opaque to callers; `limit` is at most 100. A page that skipped rows can be empty and still
+# carry a cursor.
+type RepairDiagnosticsKind enum { FORKS PINS PENDING ALARMS INCARNATIONS ACTIVITY }
+type RepairDiagnosticsRequest struct {
+	volumeLogKey: VolumeLogKey
+	kind: RepairDiagnosticsKind
+	after: optional<data>
+	limit: u32
+}
+type RepairPin struct {
+	sessionId: UuidV4
+	asOf: u64
+	applied: VolumeLogPosition
+	expiresBootMs: u64
+	baseChain: list<FsBaseLink>
+}
+type RepairPendingDelete struct { incarnation: UuidV4 }
+# Ephemeral observations under one tablet grant. Shared work carries no other volume's
+# identity or payload. Operation IDs name executor attempts; repairOperationId names an
+# audited repair or fork. Neither is a mutation capability.
+type RepairActivity struct {
+	tabletId: UuidV4
+	tabletGrantEpoch: u64
+	operationId: optional<u64>
+	repairOperationId: optional<UuidV4>
+	kind: str
+	phase: str
+	shared: bool
+}
+type RepairDiagnosticValue union {
+	FsForkHold | FsPendingFork | FsPendingForkCheck | FsPendingForkRelease |
+	FsPendingMaterialize | FsPendingSweep | RepairPendingDelete | RepairPin | AlarmCurrent | FsVolumeRecord | FsIncarnationRecord | RepairActivity
+}
+type RepairDiagnosticRow struct {
+	key: data
+	raw: data
+	decoded: optional<RepairDiagnosticValue>
+	decodeError: optional<str>
+}
+type RepairDiagnosticsPage struct {
+	rows: list<RepairDiagnosticRow>
+	after: optional<data>
+}
+
+type ClientRequest union {
+    FsReadRequest | VolumeCheckpointRequest | FsForkReferenceRequest | FsForkRequest |
+	VolumeCreateRequest | VolumeDeleteRequest | VolumeOpenRequest | VolumeCloseRequest |
+	ReplicaStatusNoticeRequest | OperatorTierRequest | OperatorDropCachesRequest |
+	RepairInspectRequest | RepairRequest | RepairAuditListRequest | RepairDiagnosticsRequest
+}
+
+type ClientResponse union {
+    FsReadResponse | VolumeCheckpointResponse | FsForkReferenceResponse | FsForkResponse |
+	VolumeCreateResponse | VolumeDeleteResponse | VolumeOpenResponse | VolumeCloseResponse | VolumeRejectResponse |
+	ReplicaStatusNoticeResponse | OperatorTabletReport | OperatorResponse | RepairInspection |
+	RepairResponse | RepairAuditPage | RepairDiagnosticsPage
+}

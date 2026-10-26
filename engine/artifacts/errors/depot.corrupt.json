@@ -1,0 +1,5 @@
+{
+  "code": "corrupt",
+  "group": "depot",
+  "message": "The volume's stored data failed a consistency check."
+}

@@ -130,6 +130,70 @@ export const largeCommitDb = actor({
 		},
 	}),
 	actions: {
+		// Fairness scanner table: 116,480 4-KiB payloads occupy roughly 512 MiB with
+		// SQLite leaf/overflow pages. Each call adds at most 8 MiB, so retries
+		// resume from committed rows and never resend the database over HTTP.
+		seedFairnessScan: async (c) => {
+			await c.db.execute(
+				"CREATE TABLE IF NOT EXISTS bench_rows (id INTEGER PRIMARY KEY, payload TEXT NOT NULL, revision INTEGER NOT NULL)",
+			);
+			const before = await queryOne<{ n: number }>(
+				c.db,
+				"SELECT coalesce(max(id), 0) AS n FROM bench_rows",
+			);
+			const target = Math.min(116_480, before.n + 2048);
+			if (target > before.n) {
+				await c.db.execute(
+					`INSERT INTO bench_rows (id, payload, revision)
+					 WITH RECURSIVE seq(id) AS (
+					   SELECT ? UNION ALL SELECT id + 1 FROM seq WHERE id < ?
+					 ) SELECT id, replace(hex(zeroblob(2048)), '0', 'x'), 0 FROM seq`,
+					before.n + 1,
+					target,
+				);
+			}
+			return {
+				...(await storageStats(c.db)),
+				scanRows: target,
+				complete: target === 116_480,
+			};
+		},
+
+		// Compare every byte inside SQLite. Length-only scans can skip overflow
+		// contents; full equality consumes them while returning only scalars.
+		// The same actor owns both tables, so both scans share placement.
+		scanFairness: async (c, kind: "large-row" | "table") => {
+			if (kind !== "large-row" && kind !== "table") {
+				throw new Error("expected large-row or table scanner");
+			}
+			const started = performance.now();
+			const table = kind === "large-row" ? "big_rows" : "bench_rows";
+			const expected =
+				kind === "large-row"
+					? payloadExpr("id", 64 * 1024 * 1024)
+					: "replace(hex(zeroblob(2048)), '0', 'x')";
+			const result = await queryOne<{
+				rows: number;
+				bytes: number;
+				mismatches: number;
+			}>(
+				c.db,
+				`SELECT count(*) AS rows, coalesce(sum(length(payload)), 0) AS bytes,
+				 coalesce(sum(CASE WHEN payload = ${expected} THEN 0 ELSE 1 END), 0) AS mismatches
+				 FROM ${table} NOT INDEXED`,
+			);
+			const expectedRows = kind === "large-row" ? 1 : 116_480;
+			const expectedBytes =
+				kind === "large-row" ? 64 * 1024 * 1024 : 116_480 * 4096;
+			return {
+				...result,
+				ok:
+					result.rows === expectedRows &&
+					result.bytes === expectedBytes &&
+					result.mismatches === 0,
+				elapsedMs: performance.now() - started,
+			};
+		},
 		// Appends `rows` deterministic rows, in `batches` transactions.
 		//
 		// With batches=1 this is the whole point of the actor: one commit whose
@@ -325,7 +389,11 @@ export const largeCommitDb = actor({
 			const deleteStartedAt = performance.now();
 			for (let id = before.rows; id > keepRows; id -= deleteBatch) {
 				const lower = Math.max(keepRows, id - deleteBatch);
-				await c.db.execute("DELETE FROM big_rows WHERE id > ? AND id <= ?", lower, id);
+				await c.db.execute(
+					"DELETE FROM big_rows WHERE id > ? AND id <= ?",
+					lower,
+					id,
+				);
 			}
 			const deleteMs = Math.round(performance.now() - deleteStartedAt);
 

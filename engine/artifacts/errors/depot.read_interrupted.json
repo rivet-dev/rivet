@@ -1,0 +1,5 @@
+{
+  "code": "read_interrupted",
+  "group": "depot",
+  "message": "The storage read was interrupted; retry after the hinted delay."
+}

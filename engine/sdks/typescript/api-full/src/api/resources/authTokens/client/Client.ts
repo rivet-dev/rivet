@@ -4,8 +4,8 @@
 
 import * as core from "../../../../core";
 import * as Rivet from "../../../index";
-import * as serializers from "../../../../serialization/index";
 import urlJoin from "url-join";
+import * as serializers from "../../../../serialization/index";
 import * as errors from "../../../../errors/index";
 
 export declare namespace AuthTokens {
@@ -32,24 +32,7 @@ export declare namespace AuthTokens {
 export class AuthTokens {
     constructor(protected readonly _options: AuthTokens.Options) {}
 
-    /**
-     * @param {Rivet.AuthTokenCreateRequest} request
-     * @param {AuthTokens.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @example
-     *     await client.authTokens.create({
-     *         grants: [{
-     *                 operations: ["read"],
-     *                 resource: "namespace",
-     *                 target: "any"
-     *             }],
-     *         namespace: "namespace"
-     *     })
-     */
-    public async create(
-        request: Rivet.AuthTokenCreateRequest,
-        requestOptions?: AuthTokens.RequestOptions,
-    ): Promise<Rivet.AuthTokenCreateResponse> {
+    public async create(request: Rivet.AuthTokenCreateRequest, requestOptions?: AuthTokens.RequestOptions): Promise<Rivet.AuthTokenCreateResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.baseUrl)) ??
@@ -66,7 +49,12 @@ export class AuthTokens {
             },
             contentType: "application/json",
             requestType: "json",
-            body: serializers.AuthTokenCreateRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
+            body: {
+                namespace: request.namespace,
+                duration: request.duration,
+                subject: request.subject,
+                grants: request.grants.map((grant) => serializers.AuthTokenGrant.jsonOrThrow(grant)),
+            },
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
             abortSignal: requestOptions?.abortSignal,
@@ -103,12 +91,6 @@ export class AuthTokens {
         }
     }
 
-    /**
-     * @param {AuthTokens.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @example
-     *     await client.authTokens.inspect()
-     */
     public async inspect(requestOptions?: AuthTokens.RequestOptions): Promise<Rivet.AuthTokenInspectResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(

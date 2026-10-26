@@ -1,0 +1,5 @@
+{
+  "code": "kv_key_too_large",
+  "group": "actor",
+  "message": "A KV key is too large."
+}

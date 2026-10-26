@@ -6,8 +6,12 @@ use std::time::Duration;
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
+// Callers outside this crate pass the standard clock's deadlines, so this API keeps it.
+#[cfg(target_arch = "wasm32")]
 use crate::time::Instant;
 use crate::utils::sleep;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
 
 pub struct AsyncCounter {
 	value: AtomicUsize,

@@ -1,0 +1,8 @@
+# Every worker, including stateless ones, reads rivet/cluster/config directly, and version
+# selection does not count stateless readers. So after release, a new version of this schema
+# ships in two deploys: the first binary reads the new version but still writes the old one,
+# and only the second binary writes the new one. Skipping the first deploy is unsupported.
+type Data struct {
+	# JSON-encoded rivet_config::DynamicConfigUpdate; this field has no inner vbare header.
+	dynamic: optional<data>
+}

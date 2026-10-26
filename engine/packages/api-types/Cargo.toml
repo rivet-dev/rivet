@@ -11,7 +11,6 @@ anyhow.workspace = true
 gas.workspace = true
 rivet-api-builder.workspace = true
 rivet-auth-policy.workspace = true
-rivet-runner-protocol.workspace = true
 rivet-types.workspace = true
 rivet-util.workspace = true
 serde_json.workspace = true

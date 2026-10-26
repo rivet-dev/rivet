@@ -6,7 +6,7 @@ export const ActorSchema = z.object({
 	name: z.string(),
 	key: z.string(),
 	namespace_id: RivetIdSchema,
-	runner_name_selector: z.string(),
+	pool: z.string(),
 	create_ts: z.number(),
 	connectable_ts: z.number().nullable().optional(),
 	destroy_ts: z.number().nullable().optional(),
@@ -31,7 +31,7 @@ export type ActorsListResponse = z.infer<typeof ActorsListResponseSchema>;
 export const ActorsCreateRequestSchema = z.object({
 	datacenter: z.string().optional(),
 	name: z.string(),
-	runner_name_selector: z.string(),
+	pool: z.string(),
 	crash_policy: z.string(),
 	key: z.string().nullable().optional(),
 	input: z.string().nullable().optional(),
@@ -48,7 +48,7 @@ export const ActorsGetOrCreateRequestSchema = z.object({
 	datacenter: z.string().optional(),
 	name: z.string(),
 	key: z.string(),
-	runner_name_selector: z.string(),
+	pool: z.string(),
 	crash_policy: z.string(),
 	input: z.string().nullable().optional(),
 });

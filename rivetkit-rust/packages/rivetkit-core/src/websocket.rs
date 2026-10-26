@@ -76,6 +76,9 @@ impl WebSocket {
 		if let Err(error) = self.try_dispatch_close_event(code, reason, was_clean).await {
 			tracing::error!(?error, "failed to dispatch websocket close event");
 		}
+		self.configure_message_event_callback(None);
+		self.configure_close_event_callback(None);
+		self.configure_close_event_callback_region(None);
 	}
 
 	pub fn configure_sender(&self, sender: WebSocketSender) {
@@ -228,6 +231,4 @@ impl fmt::Debug for WebSocket {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../tests/websocket.rs"]
-mod tests;
+

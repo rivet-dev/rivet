@@ -16,10 +16,9 @@ serde_bare.workspace = true
 serde.workspace = true
 serde_bytes.workspace = true
 utoipa.workspace = true
-vbare.workspace = true
+vbare = { workspace = true, features = ["serde"] }
 
 [build-dependencies]
 vbare-compiler.workspace = true
+vbare-gen.workspace = true
 
-[dev-dependencies]
-uuid.workspace = true

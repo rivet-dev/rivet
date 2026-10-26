@@ -1,0 +1,117 @@
+#import "shared/uuid_v4.v1.bare"
+
+# The highest version of one family written into a piece of persisted data. A binary refuses
+# to open data whose mark exceeds the highest version it reads, or names a family it does not
+# know. Writers raise a mark, never lower it, before the first record at a higher version.
+type VersionMark struct {
+	family: u16
+	version: u16
+}
+
+# Related named volumes share the partition key and always route together.
+type VolumeKey struct {
+	partitionKey: data
+	name: optional<data>
+}
+
+# Big-endian XXH3-128 of partitionKey; names do not affect placement.
+type PartitionKeyHash data[16]
+
+# Half-open interval. No end means 2^128, including the largest hash.
+type PartitionKeyHashRange struct {
+    start: PartitionKeyHash
+    end: optional<PartitionKeyHash>
+}
+
+# Identifies one incarnation of a volume log.
+type VolumeLogKey struct {
+	volumeKey: VolumeKey
+	volumeIncarnation: UuidV4
+}
+
+# One client's fencing epoch and process incarnation.
+type ClientIdentity struct {
+	clientEpoch: u64
+	# Random identity distinguishes clients choosing the same epoch (ClientConflict).
+	# Each client chooses one above every epoch observed in cold, claims and entries.
+	clientIncarnation: UuidV4
+}
+
+# The process that holds a volume: its topology worker and that worker's process
+# incarnation. A worker keeps its id across restarts, so only the pair names one process.
+type VolumeHolder struct {
+	workerId: UuidV4
+	workerIncarnation: UuidV4
+}
+
+# Optional ordinary-open claim, bound to the installed stable replica set.
+type OpenClaim struct {
+	client: ClientIdentity
+	tabletReplicaSetVersion: u64
+	# The opener's process, kept with the claim so a maintainer can tell whether it is gone.
+	holder: optional<VolumeHolder>
+}
+
+# The epoch identifies the history at this volume position.
+type VolumeLogPosition struct {
+	volumeSeq: u64
+	clientEpoch: u64
+}
+
+# Health, not tablet membership (which belongs to the coordinator's manifest).
+# IN_SYNC holds the whole history through appended; its acknowledgements count.
+# REPAIRING lacks history above cold and cannot count toward a quorum. Corruption
+# recovery or a repairing truncate sets it; MarkInSync restores IN_SYNC.
+# The maintainer sets DELETED while deleting a volume.
+type VolumeLogReplicaStatus enum {
+	IN_SYNC
+	REPAIRING
+	# TODO(1a): 1a.1 will enforce deletion fencing.
+	DELETED
+}
+
+type Stable void
+
+# Learners are next minus members; only members vote.
+type Learning struct {
+	next: list<UuidV4>
+}
+
+# In Joint, members and next must each independently reach a majority, never
+# one majority of their union. Both quorums bridge the change between sets.
+# Replacing one member of a three-member set accepts every 3-of-4 quorum,
+# but also the two shared members alone. They keep committing when the removed
+# member is dead and the new member is slow or down. Joint also permits replacing
+# several members in one change.
+type Joint struct {
+	next: list<UuidV4>
+}
+
+type TabletPhase union {
+	Stable | Learning | Joint
+}
+
+# One worker's intact storage lifetime. A wiped disk gets a new incarnation even
+# when the worker ID remains unchanged; it is lost until replacement admits it.
+type StorageWorkerDisk struct {
+ workerId: UuidV4
+ diskIncarnation: UuidV4
+}
+
+# The version increases on every replica set write, including phase changes and aborts.
+type TabletReplicaSet struct {
+	# Exactly the member and learner disks admitted by the coordinator.
+	disks: list<StorageWorkerDisk>
+	tabletReplicaSetVersion: u64
+	members: list<UuidV4>
+	phase: TabletPhase
+}
+
+# Fresh stop-readiness diagnostics. Missing/failed observations have no status.
+type VolumeBlocker struct {
+ volumeLogKey: VolumeLogKey
+ member: UuidV4
+ status: optional<VolumeLogReplicaStatus>
+ appendedSeq: u64
+ committedSeq: u64
+}

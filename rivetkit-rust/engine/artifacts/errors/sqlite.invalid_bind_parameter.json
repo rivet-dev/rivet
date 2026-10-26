@@ -1,5 +1,0 @@
-{
-  "code": "invalid_bind_parameter",
-  "group": "sqlite",
-  "message": "Invalid SQLite bind parameter."
-}

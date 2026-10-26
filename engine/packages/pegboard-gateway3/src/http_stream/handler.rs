@@ -83,10 +83,9 @@ impl PegboardGateway3 {
 			})
 			.collect();
 		req_ctx.forward_ray(&mut headers);
-		let (mut stopped_sub, _) = tokio::try_join!(
-			ctx.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", self.actor_id)),
-			pegboard::utils::ensure_ns_metrics_exporter_for_namespace(ctx, self.namespace_id),
-		)?;
+		let mut stopped_sub = ctx
+			.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", self.actor_id))
+			.await?;
 
 		let tunnel_subject = pegboard::pubsub_subjects::EnvoyReceiverSubject::new(
 			self.namespace_id,
@@ -368,7 +367,7 @@ impl PegboardGateway3 {
 					let Ok(bytes) = u64::try_from(bytes) else {
 						return;
 					};
-					let Ok(previous) = response_consumed_bytes.fetch_update(
+					let Ok(previous) = response_consumed_bytes.try_update(
 						Ordering::AcqRel,
 						Ordering::Acquire,
 						|current| current.checked_add(bytes),

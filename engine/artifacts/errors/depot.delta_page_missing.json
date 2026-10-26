@@ -1,5 +1,0 @@
-{
-  "code": "delta_page_missing",
-  "group": "depot",
-  "message": "SQLite delta does not carry a page it owns."
-}

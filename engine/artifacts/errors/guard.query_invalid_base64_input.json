@@ -1,5 +1,0 @@
-{
-  "code": "query_invalid_base64_input",
-  "group": "guard",
-  "message": "invalid base64url in query gateway input"
-}

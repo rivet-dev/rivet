@@ -22,11 +22,7 @@ js-sys = { version = "0.3", optional = true }
 rand.workspace = true
 rivet-envoy-protocol.workspace = true
 rivet-metrics.workspace = true
-rivet-util-serde.workspace = true
 rustls = { workspace = true, optional = true }
-scc.workspace = true
-serde.workspace = true
-serde_bare.workspace = true
 serde_json.workspace = true
 tokio-tungstenite = { workspace = true, optional = true }
 tracing.workspace = true
@@ -46,9 +42,6 @@ web-sys = { version = "0.3", optional = true, features = [
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio.workspace = true
 uuid.workspace = true
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-tracing-subscriber.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }

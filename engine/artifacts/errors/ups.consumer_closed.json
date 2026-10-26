@@ -1,0 +1,5 @@
+{
+  "code": "consumer_closed",
+  "group": "ups",
+  "message": "The consumer closed without replying; the operation may have executed."
+}

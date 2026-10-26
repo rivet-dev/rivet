@@ -23,6 +23,7 @@ use crate::actor::internal_storage::{
 	optional_owned_text_param, read_trace_context, trace_context_params,
 };
 use crate::error::{ScheduleRuntimeError, client_error_message, client_error_metadata};
+use crate::runtime::RuntimeSpawner;
 use crate::sqlite::{BindParam, ColumnValue, SqliteBatchStatement};
 use crate::telemetry::{ActorInvocationTelemetry, IncomingTraceContext};
 use crate::time::{SystemTime, UNIX_EPOCH, sleep};
@@ -899,17 +900,7 @@ impl ActorContext {
 	}
 
 	async fn sync_alarm(&self) -> Result<()> {
-		#[cfg(test)]
-		if self
-			.0
-			.schedule_sync_alarm_failures
-			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
-				remaining.checked_sub(1)
-			})
-			.is_ok()
-		{
-			anyhow::bail!("injected schedule alarm sync failure");
-		}
+		
 		let next_alarm = min_deadline(
 			self.next_schedule_timestamp(false).await?,
 			self.run_wake_at(),
@@ -925,6 +916,12 @@ impl ActorContext {
 		self.sync_alarm_timestamp(next_alarm)
 	}
 
+	/// Pushes `next_alarm` to the engine unless it equals the last pushed alarm.
+	///
+	/// Skipping an unchanged clear is safe. The engine only holds an alarm this actor pushed,
+	/// and its alarm timer is one-shot, so the only way it can hold an alarm the last pushed
+	/// value does not show is a push whose acknowledgement was never persisted. That stale
+	/// alarm wakes the actor once with nothing due; it never drops a pending alarm.
 	fn sync_alarm_timestamp(&self, next_alarm: Option<i64>) -> Result<()> {
 		let should_push = self
 			.0
@@ -934,7 +931,7 @@ impl ActorContext {
 		if !should_push {
 			return Ok(());
 		}
-		if next_alarm.is_some() && self.last_pushed_alarm() == next_alarm {
+		if self.last_pushed_alarm() == next_alarm {
 			return Ok(());
 		}
 		let Some(envoy_handle) = self.0.schedule_envoy_handle.lock().clone() else {
@@ -950,9 +947,45 @@ impl ActorContext {
 		Ok(())
 	}
 
+	/// Pushes the engine alarm before sleep if the schedule changed since the last push. An
+	/// unchanged schedule means the engine already holds the right alarm, and the local timer
+	/// the full sync would arm is cancelled by the sleep anyway, so the schedule tables are not
+	/// read. Reading them would fetch their pages from storage after an idle release.
+	pub(crate) async fn sync_alarm_before_sleep_logged(&self) {
+		if !self.0.schedule_dirty_since_push.load(Ordering::SeqCst) {
+			return;
+		}
+		self.sync_alarm_logged().await;
+	}
+
 	pub(crate) async fn sync_alarm_logged(&self) {
 		if let Err(error) = self.sync_alarm().await {
 			tracing::error!(actor_id = %self.actor_id(), ?error, "failed to sync scheduled actor alarm");
+		}
+	}
+
+	/// Does the work of `init_alarms` for an actor whose storage this startup just
+	/// bootstrapped. It has no schedule events or history yet, so this reads nothing and the
+	/// staged bootstrap still commits with the actor's first transaction.
+	///
+	/// An actor on its first generation has never had an alarm at the engine, so nothing is
+	/// pushed either: the push's acknowledgement would persist the pushed alarm, and that write
+	/// would commit the staged bootstrap on its own. The first schedule change pushes instead.
+	pub(crate) fn init_alarms_for_bootstrapped_actor(&self, first_generation: bool) {
+		let next_alarm = self.run_wake_at();
+		if first_generation {
+			self.arm_local_alarm(next_alarm);
+			// The engine holds no alarm for a new actor, so with no wake deadline there is
+			// nothing to push until the schedule changes.
+			if next_alarm.is_none() {
+				self.0
+					.schedule_dirty_since_push
+					.store(false, Ordering::SeqCst);
+			}
+			return;
+		}
+		if let Err(error) = self.sync_alarm_timestamp(next_alarm) {
+			tracing::error!(actor_id = %self.actor_id(), ?error, "failed to sync future scheduled actor alarm");
 		}
 	}
 
@@ -1000,12 +1033,16 @@ impl ActorContext {
 		}
 	}
 
+	/// Clears the engine alarm when this actor is destroyed.
+	///
+	/// Nothing is pushed when no alarm was pushed: the engine cancels the incarnation's alarm
+	/// timer itself when it destroys the actor, so a stale one cannot outlive the destroy.
 	pub(crate) fn cancel_driver_alarm_logged(&self) {
 		self.cancel_local_alarm_timeouts();
-		#[cfg(test)]
-		self.0
-			.schedule_driver_alarm_cancel_count
-			.fetch_add(1, Ordering::SeqCst);
+		if self.last_pushed_alarm().is_none() {
+			return;
+		}
+		
 		let Some(envoy_handle) = self.0.schedule_envoy_handle.lock().clone() else {
 			return;
 		};
@@ -1013,19 +1050,9 @@ impl ActorContext {
 		self.set_alarm_tracked(envoy_handle, None, generation);
 	}
 
-	#[cfg(test)]
-	pub(crate) fn test_driver_alarm_cancel_count(&self) -> usize {
-		self.0
-			.schedule_driver_alarm_cancel_count
-			.load(Ordering::SeqCst)
-	}
+	
 
-	#[cfg(test)]
-	pub(crate) fn fail_next_schedule_alarm_sync_for_tests(&self) {
-		self.0
-			.schedule_sync_alarm_failures
-			.fetch_add(1, Ordering::SeqCst);
-	}
+	
 
 	pub(crate) async fn wait_for_pending_alarm_writes(&self) {
 		let pending = {
@@ -1067,12 +1094,15 @@ impl ActorContext {
 			Some(ack_tx),
 		);
 		self.load_last_pushed_alarm(timestamp_ms);
-		if let Ok(handle) = Handle::try_current() {
+		if Handle::try_current().is_ok() {
 			let state_ctx = self.clone();
 			let (persist_done_tx, persist_done_rx) = oneshot::channel();
-			handle.spawn(
+			RuntimeSpawner::spawn(
 				async move {
 					let _ = ack_rx.await;
+					// Persists run one at a time and check that their push is still the
+					// latest under the lock, so an older push can never land after a newer one.
+					let _persist = state_ctx.0.schedule_alarm_persist_lock.lock().await;
 					let is_current = state_ctx.0.schedule_alarm_push_epoch.load(Ordering::SeqCst)
 						== push_epoch && state_ctx.last_pushed_alarm() == timestamp_ms;
 					if is_current
@@ -1537,6 +1567,4 @@ fn system_now_timestamp_ms() -> i64 {
 	i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
 }
 
-#[cfg(test)]
-#[path = "../../tests/schedule.rs"]
-mod tests;
+

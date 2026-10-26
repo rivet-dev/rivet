@@ -1,0 +1,16 @@
+#import "shared/uuid_v4.v1.bare"
+
+type CompareAndSetRequest struct {
+	key: data
+	expected: optional<data>
+	value: optional<data>
+}
+
+type CompareAndSetResponse struct {
+	applied: bool
+	value: optional<data>
+}
+
+type MutationTag struct {
+	operationId: UuidV4
+}

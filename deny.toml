@@ -16,10 +16,14 @@ ignore = [
 	"RUSTSEC-2020-0163",
 	"RUSTSEC-2024-0370",
 	"RUSTSEC-2024-0384",
+	# SlateDB currently pulls in bincode 1, which is unmaintained without a patched release.
+	"RUSTSEC-2025-0141",
 ]
 
 [licenses]
 allow = [
+	# Proprietary license for this repository's own workspace crates. See LICENSE.
+	"LicenseRef-RivetEnterprise",
 	"Apache-2.0",
 	"0BSD",
 	"BSD-2-Clause",
@@ -38,6 +42,10 @@ allow = [
 	"CDLA-Permissive-2.0",
 ]
 unused-allowed-license = "allow"
+
+[[licenses.exceptions]]
+name = "epaint_default_fonts"
+allow = ["OFL-1.1", "Ubuntu-font-1.0"]
 
 [[licenses.exceptions]]
 name = "unicode-ident"

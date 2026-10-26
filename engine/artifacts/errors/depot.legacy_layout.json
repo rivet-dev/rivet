@@ -1,0 +1,5 @@
+{
+  "code": "legacy_layout",
+  "group": "depot",
+  "message": "The actor volume predates the /actor layout and must be reinitialized."
+}

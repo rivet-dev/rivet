@@ -1,0 +1,5 @@
+{
+  "code": "volume_deleted",
+  "group": "depot",
+  "message": "The KV database volume was deleted."
+}

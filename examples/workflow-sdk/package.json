@@ -6,8 +6,7 @@
 	"scripts": {
 		"build": "nitro build",
 		"check-types": "tsc --noEmit",
-		"dev": "nitro dev",
-		"test": "RIVET_RUN_ENGINE_PORT=16420 RIVETKIT_STORAGE_PATH=$PWD/.workflow-data vitest --config vitest.integration.config.ts run"
+		"dev": "nitro dev"
 	},
 	"dependencies": {
 		"@rivet-dev/workflow-world": "workspace:*",
@@ -18,17 +17,21 @@
 	},
 	"devDependencies": {
 		"@types/node": "^24.0.0",
-		"@workflow/vitest": "5.0.0-beta.35",
 		"typescript": "^5.9.3",
-		"vite": "^7.0.0",
-		"vitest": "^4.1.9"
+		"vite": "^7.0.0"
 	},
 	"engines": {
 		"node": ">=22.0.0"
 	},
 	"template": {
-		"technologies": ["typescript", "workflow-sdk"],
-		"tags": ["workflow", "durable"],
+		"technologies": [
+			"typescript",
+			"workflow-sdk"
+		],
+		"tags": [
+			"workflow",
+			"durable"
+		],
 		"noFrontend": true,
 		"skipVercel": true
 	},

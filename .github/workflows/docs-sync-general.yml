@@ -9,14 +9,13 @@ on:
     paths:
       - "docs/general/**"
       - "examples/docs/**"
-      - "self-host/workers/**"
-      - "self-host/control-plane/**"
       - "engine/artifacts/**"
       - "rivetkit-openapi/**"
   workflow_dispatch:
 
 jobs:
   sync:
+    if: github.repository == 'rivet-dev/rivet'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +26,5 @@ jobs:
           token: ${{ secrets.RIVET_WEBSITE_TOKEN }}
           extra-paths: >-
             examples/docs
-            self-host/workers
-            self-host/control-plane
             engine/artifacts/config-schema.json
             rivetkit-openapi/openapi.json

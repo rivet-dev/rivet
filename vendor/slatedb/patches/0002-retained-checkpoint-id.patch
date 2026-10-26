@@ -1,0 +1,175 @@
+--- a/src/admin.rs
++++ b/src/admin.rs
+@@ -505,6 +505,7 @@
+         &self,
+         options: &CheckpointOptions,
+     ) -> Result<CheckpointCreateResult, crate::Error> {
++        options.validate()?;
+         let manifest_store = Arc::new(self.manifest_store());
+         let mut stored_manifest =
+             StoredManifest::load(manifest_store, self.system_clock.clone()).await?;
+@@ -514,7 +515,9 @@
+             .db_state()
+             .validate_wal_object_store_uri(configured_wal_uri.as_deref())?;
+ 
+-        let checkpoint_id = self.rand.rng().gen_uuid();
++        let checkpoint_id = options
++            .checkpoint_id
++            .unwrap_or_else(|| self.rand.rng().gen_uuid());
+         let checkpoint = stored_manifest
+             .write_checkpoint(checkpoint_id, options)
+             .await?;
+--- a/src/checkpoint.rs
++++ b/src/checkpoint.rs
+@@ -15,6 +15,17 @@
+     pub name: Option<String>,
+ }
+ 
++impl Checkpoint {
++    pub(crate) fn validate_retained_identity(&self) -> Result<(), crate::error::SlateDBError> {
++        if self.expire_time.is_some() || self.name.is_some() {
++            return Err(crate::error::SlateDBError::InvalidConfiguration(
++                "checkpoint identity already exists with incompatible retention or name".into(),
++            ));
++        }
++        Ok(())
++    }
++}
++
+ #[non_exhaustive]
+ #[derive(Debug, Clone)]
+ pub struct CheckpointCreateResult {
+@@ -32,6 +43,7 @@
+         scope: CheckpointScope,
+         options: &CheckpointOptions,
+     ) -> Result<CheckpointCreateResult, crate::Error> {
++        options.validate()?;
+         let target = match scope {
+             CheckpointScope::All => {
+                 self.inner.request_batch_writer_flush(true).await?;
+--- a/src/clone.rs
++++ b/src/clone.rs
+@@ -249,6 +249,7 @@
+                 .write_checkpoint(
+                     final_checkpoint_id,
+                     &CheckpointOptions {
++                        checkpoint_id: None,
+                         lifetime: None,
+                         source: Some(external_db.source_checkpoint_id),
+                         name: None,
+@@ -430,6 +431,7 @@
+                 .write_checkpoint(
+                     checkpoint_id,
+                     &CheckpointOptions {
++                        checkpoint_id: None,
+                         lifetime: Some(Duration::from_secs(300)),
+                         source: None,
+                         name: None,
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -661,6 +661,13 @@
+ /// Specify options to provide when creating a checkpoint.
+ #[derive(Debug, Clone, Default)]
+ pub struct CheckpointOptions {
++    /// Optional caller-chosen identity for an idempotent, retained checkpoint. Reusing this ID
++    /// returns the original checkpoint even if newer writes have since become durable. The caller
++    /// must never reuse it for another logical checkpoint or delete it while retries are possible.
++    /// This mode requires lifetime, source and name to be None and rejects the nil UUID.
++    /// None preserves the existing behavior of allocating a fresh ID for each invocation.
++    pub checkpoint_id: Option<Uuid>,
++
+     /// Optionally specifies the lifetime of the checkpoint to create. The expire time will be
+     /// set to the current wallclock time plus the specified lifetime. If lifetime is None, then
+     /// the checkpoint is created without an expiry time.
+@@ -675,6 +682,20 @@
+     pub name: Option<String>,
+ }
+ 
++impl CheckpointOptions {
++    pub(crate) fn validate(&self) -> Result<(), SlateDBError> {
++        if self.checkpoint_id.is_some_and(|id| id.is_nil())
++            || (self.checkpoint_id.is_some()
++                && (self.lifetime.is_some() || self.source.is_some() || self.name.is_some()))
++        {
++            return Err(SlateDBError::InvalidConfiguration(
++                "caller-chosen checkpoint IDs require a non-nil ID and retained, unnamed, source-free options".into(),
++            ));
++        }
++        Ok(())
++    }
++}
++
+ /// Settings represents the configuration options that a user can tweak to customize
+ /// the database engine to their use case.
+ ///
+--- a/src/garbage_collector/detach_gc.rs
++++ b/src/garbage_collector/detach_gc.rs
+@@ -267,6 +267,7 @@
+             .write_checkpoint(
+                 final_checkpoint_id,
+                 &CheckpointOptions {
++                    checkpoint_id: None,
+                     lifetime: None,
+                     source: None,
+                     name: None,
+@@ -381,6 +382,7 @@
+             .write_checkpoint(
+                 Uuid::new_v4(),
+                 &CheckpointOptions {
++                    checkpoint_id: None,
+                     lifetime: None,
+                     source: None,
+                     name: None,
+--- a/src/manifest/store.rs
++++ b/src/manifest/store.rs
+@@ -174,6 +174,12 @@
+     ) -> Result<Checkpoint, SlateDBError> {
+         let clock = self.clock.clone();
+         self.maybe_apply_update(|fm| {
++            if options.checkpoint_id.is_some() {
++                if let Some(existing) = fm.object().core.find_checkpoint(checkpoint_id) {
++                    existing.validate_retained_identity()?;
++                    return Ok(None);
++                }
++            }
+             let checkpoint = Self::make_new_checkpoint(clock.clone(), fm, checkpoint_id, options)?;
+             let mut dirty = fm.prepare_dirty()?;
+             dirty.value.core.checkpoints.push(checkpoint);
+@@ -345,6 +351,12 @@
+         let clock = Arc::clone(&self.clock);
+         self.inner
+             .maybe_apply_update(|sr| {
++                if options.checkpoint_id.is_some() {
++                    if let Some(existing) = sr.object().core.find_checkpoint(checkpoint_id) {
++                        existing.validate_retained_identity()?;
++                        return Ok(None);
++                    }
++                }
+                 let mut new_val = sr.object().clone();
+                 let checkpoint = Self::new_checkpoint(
+                     &new_val,
+--- a/src/memtable_flusher/manifest_writer.rs
++++ b/src/memtable_flusher/manifest_writer.rs
+@@ -594,7 +594,21 @@
+         let mut dirty = self.clone_local_manifest_for_write();
+         let mut checkpoint_results = Vec::new();
+         for options in checkpoint_options {
+-            let id = self.db.rand.rng().gen_uuid();
++            let id = options
++                .checkpoint_id
++                .unwrap_or_else(|| self.db.rand.rng().gen_uuid());
++            // Check this dirty batch too: two callers can request the same identity while waiting
++            // for one flush. Neither a duplicate request nor a CAS retry may move its original cut.
++            if options.checkpoint_id.is_some() {
++                if let Some(existing) = dirty.value.core.find_checkpoint(id) {
++                    existing.validate_retained_identity()?;
++                    checkpoint_results.push(CheckpointCreateResult {
++                        id,
++                        manifest_id: existing.manifest_id,
++                    });
++                    continue;
++                }
++            }
+             let checkpoint = self.manifest.new_checkpoint(id, options)?;
+             let manifest_id = checkpoint.manifest_id;
+             dirty.value.core.checkpoints.push(checkpoint);

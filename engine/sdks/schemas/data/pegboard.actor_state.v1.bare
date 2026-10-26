@@ -1,0 +1,6 @@
+#import "pegboard.actor.v1.bare"
+
+type ActorAlarmCheckpoint struct { generation: u32 index: i64 }
+type ActorPendingWake struct { scheduleRevision: u64 wakingGeneration: u32 retryAfterUnixMs: i64 retryAttempt: u32 }
+type ActorAlarmState struct { scheduleRevision: u64 lastAlarmCheckpoint: optional<ActorAlarmCheckpoint> pendingWake: optional<ActorPendingWake> }
+type ActorMachineState struct { state: ActorState alarm: ActorAlarmState }

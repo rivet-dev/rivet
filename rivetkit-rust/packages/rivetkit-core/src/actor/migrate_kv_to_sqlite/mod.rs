@@ -1,20 +1,25 @@
 use anyhow::{Context, Result, bail};
 
+use std::time::Duration;
+
 use crate::ActorContext;
 use crate::actor::connection::decode_persisted_connection;
 use crate::actor::internal_storage;
+use crate::actor::internal_storage::KV_IMPORT_STATE_META_KEY;
 use crate::actor::keys::{
 	CONN_PREFIX, INSPECTOR_TOKEN_KEY, KV_PREFIX, LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY,
-	QUEUE_MESSAGES_PREFIX, QUEUE_METADATA_KEY, QUEUE_STORAGE_PREFIX, TRACES_STORAGE_PREFIX,
-	WORKFLOW_STORAGE_PREFIX, decode_queue_message_key,
+	QUEUE_MESSAGES_PREFIX, QUEUE_METADATA_KEY, QUEUE_STORAGE_PREFIX, TRACES_PREFIX,
+	TRACES_STORAGE_PREFIX, WORKFLOW_STORAGE_PREFIX, decode_queue_message_key,
 };
+use crate::actor::metrics::startup_phase::StartupPhase;
 use crate::actor::queue::{decode_queue_message, decode_queue_metadata};
 use crate::actor::state::{decode_last_pushed_alarm, decode_persisted_actor};
+use crate::sqlite::{BindParam, SqliteBatchStatement};
+use crate::time::Instant;
 use crate::types::ListOpts;
 
-const KV_IMPORT_STATE_META_KEY: &str = "kv_import_state";
 const KV_IMPORT_STATE_IMPORTING: &str = "importing";
-const KV_IMPORT_STATE_DONE: &str = "done";
+pub(crate) const KV_IMPORT_STATE_DONE: &str = "done";
 
 /// Page size for legacy KV scans. The engine caps listings without an explicit
 /// limit at 16,384 keys, so unpaginated scans would silently truncate large
@@ -28,10 +33,137 @@ const IMPORT_PROGRESS_BYTE_INTERVAL: usize = 16 * 1024 * 1024;
 /// all of them.
 const LEGACY_SCAN_END: &[u8] = &[0xff];
 
+/// What `ensure_startup_storage` did: whether the inspector token and its mirror are both
+/// durable, and how long each of its steps took.
+pub(crate) struct StartupStorage {
+	pub(crate) inspector_token_initialized: bool,
+	/// This call bootstrapped a fresh actor, so its storage holds exactly the bootstrap rows:
+	/// the legacy import is done and no actor snapshot exists. The rows are staged to commit
+	/// with the database's first transaction.
+	pub(crate) bootstrapped: bool,
+	/// The start command showed the actor's storage was never written: this is its first
+	/// generation.
+	pub(crate) first_generation: bool,
+	/// The steps that ran, in order, for `rivetkit_actor_startup_phase_duration_seconds`.
+	pub(crate) phases: Vec<(StartupPhase, Duration)>,
+	/// The inspector token a fresh bootstrap staged, which still needs its KV mirror. The start
+	/// writes the mirror once the bootstrap is durable.
+	pub(crate) inspector_mirror_token: Option<String>,
+}
+
+/// Bootstraps a fresh actor's framework rows together before any user code runs.
+/// `inspector_token_initialized` is true only when the inspector token and its mirror are both
+/// durable. Nonempty legacy actors retain the resumable import path below.
+///
+/// When the start command showed the actor's storage was never written, the actor is fresh
+/// without reading the schema or probing legacy KV. If that report is ever wrong, the
+/// transaction carrying the bootstrap fails as a whole because its migrations create tables
+/// that already exist, so no existing row is overwritten and the start fails instead.
+pub(crate) async fn ensure_startup_storage(ctx: &ActorContext) -> Result<StartupStorage> {
+	let schema = ctx.sql();
+	let mut phases = Vec::new();
+
+	let first_generation = ctx.take_new_actor_storage();
+	// Whether the schema probe found the internal schema, when it ran.
+	let mut found_schema = false;
+	let fresh = if first_generation {
+		tracing::debug!(
+			actor_id = %ctx.actor_id(),
+			"new actor storage, skipping the schema check and legacy kv probe"
+		);
+		true
+	} else {
+		let started = Instant::now();
+		let has_schema = internal_storage::schema::has_internal_schema(schema).await?;
+		phases.push((StartupPhase::SchemaCheck, started.elapsed()));
+		found_schema = has_schema;
+
+		if has_schema {
+			false
+		} else {
+			let started = Instant::now();
+			let empty = legacy_bootstrap_range_empty(ctx).await?;
+			phases.push((StartupPhase::KvProbe, started.elapsed()));
+			empty
+		}
+	};
+
+	if fresh {
+		let token = crate::inspector::auth::new_inspector_token();
+		let mut statements = internal_storage::schema::bootstrap_statements()?;
+		statements.push(SqliteBatchStatement {
+			sql: internal_storage::UPSERT_META_TEXT_SQL.to_owned(),
+			params: Some(vec![
+				BindParam::Text(KV_IMPORT_STATE_META_KEY.to_owned()),
+				BindParam::Blob(KV_IMPORT_STATE_DONE.as_bytes().to_vec()),
+			]),
+		});
+		if let Some(token) = &token {
+			statements.push(SqliteBatchStatement {
+				sql: internal_storage::UPSERT_INSPECTOR_TOKEN_SQL.to_owned(),
+				params: Some(vec![
+					BindParam::Null,
+					BindParam::Text(token.clone()),
+					BindParam::Integer(1),
+				]),
+			});
+		}
+		// The bootstrap commits with the database's first transaction, normally the actor's
+		// first state save, instead of in a commit of its own. SQLite holds the authoritative
+		// token, and the KV mirror only serves it to the dashboard, so the start writes the
+		// mirror in the background after the bootstrap is durable. A bootstrap without its
+		// mirror gets the mirror repaired by the next start's inspector init.
+		schema.defer_bootstrap(statements);
+		let started = Instant::now();
+		let open = if first_generation {
+			schema.open_new().await
+		} else {
+			schema.open().await
+		};
+		let open_elapsed = started.elapsed();
+		open.context("open fresh actor database")?;
+		phases.push((StartupPhase::DatabaseOpen, open_elapsed));
+		return Ok(StartupStorage {
+			inspector_token_initialized: true,
+			bootstrapped: true,
+			first_generation,
+			phases,
+			inspector_mirror_token: token,
+		});
+	}
+	internal_storage::schema::ensure_probed_internal_schema(schema, found_schema).await?;
+	Ok(StartupStorage {
+		inspector_token_initialized: false,
+		bootstrapped: false,
+		first_generation,
+		phases,
+		inspector_mirror_token: None,
+	})
+}
+
+/// One bounded read covers every legacy namespace that can affect the import.
+/// Start below the first reserved key so even older exclusive-start range
+/// implementations include actor state at [1]. Trace-only actors remain empty.
+async fn legacy_bootstrap_range_empty(ctx: &ActorContext) -> Result<bool> {
+	Ok(ctx
+		.legacy_kv()
+		.list_range(
+			&[],
+			&TRACES_PREFIX,
+			ListOpts {
+				reverse: false,
+				limit: Some(1),
+			},
+		)
+		.await
+		.context("probe legacy actor storage before bootstrap")?
+		.is_empty())
+}
+
 pub(crate) async fn import_core_state_if_needed(ctx: &ActorContext) -> Result<()> {
 	let result = import_core_state_if_needed_inner(ctx).await;
 	if let Err(error) = &result {
-		tracing::error!(
+		tracing::warn!(
 			actor_id = %ctx.actor_id(),
 			phase = "legacy_kv_import",
 			%error,
@@ -69,8 +201,21 @@ async fn import_core_state_if_needed_inner(ctx: &ActorContext) -> Result<()> {
 		None => false,
 	};
 
-	let legacy_core_values = load_legacy_core_values(ctx).await?;
-	if legacy_core_values.iter().all(Option::is_none) && legacy_prefixes_empty(ctx).await? {
+	// Fresh actors have no legacy KV at all. Probe the entire actor namespace once
+	// before issuing the individual key and prefix reads needed by existing actors.
+	// Interrupted imports deliberately keep using the full migration path.
+	let legacy_core_values = if !is_retry && legacy_actor_kv_empty(ctx).await? {
+		None
+	} else {
+		let values = load_legacy_core_values(ctx).await?;
+		if values.iter().all(Option::is_none) && legacy_prefixes_empty(ctx).await? {
+			None
+		} else {
+			Some(values)
+		}
+	};
+
+	let Some(legacy_core_values) = legacy_core_values else {
 		tracing::debug!(actor_id = %ctx.actor_id(), result = "empty", "legacy kv import probe completed");
 		internal_storage::persist_meta_text(
 			ctx.sql(),
@@ -80,7 +225,7 @@ async fn import_core_state_if_needed_inner(ctx: &ActorContext) -> Result<()> {
 		.await
 		.context("mark empty legacy core actor kv import complete")?;
 		return Ok(());
-	}
+	};
 	tracing::info!(actor_id = %ctx.actor_id(), result = "import_needed", "legacy kv import probe completed");
 
 	if !is_retry {
@@ -334,6 +479,13 @@ async fn load_legacy_core_values(ctx: &ActorContext) -> Result<Vec<Option<Vec<u8
 		.context("load legacy core actor kv records for sqlite import")
 }
 
+async fn legacy_actor_kv_empty(ctx: &ActorContext) -> Result<bool> {
+	Ok(list_legacy_prefix_with_limit(ctx, &[], Some(1))
+		.await
+		.context("probe complete legacy actor kv for sqlite import")?
+		.is_empty())
+}
+
 async fn legacy_prefixes_empty(ctx: &ActorContext) -> Result<bool> {
 	for prefix in [
 		CONN_PREFIX.as_slice(),
@@ -504,6 +656,4 @@ impl ImportProgress {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../../tests/migrate_kv_to_sqlite.rs"]
-pub(crate) mod tests;
+

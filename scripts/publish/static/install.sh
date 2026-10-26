@@ -32,7 +32,11 @@ elif [ "$(printf '%s' "$UNAME" | cut -c 1-5)" = "Linux" ]; then
 	echo
 	echo "> Detected Linux ($(getconf LONG_BIT) bit)"
 
-	FILE_NAME="rivet-engine-x86_64-unknown-linux-musl"
+	case "$ARCH" in
+		x86_64) FILE_NAME="rivet-engine-x86_64-unknown-linux-musl" ;;
+		aarch64|arm64) FILE_NAME="rivet-engine-aarch64-unknown-linux-musl" ;;
+		*) echo "Unknown arch $ARCH" 1>&2; exit 1 ;;
+	esac
 else
 	echo "Unable to determine platform" 1>&2
 	exit 1

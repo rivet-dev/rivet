@@ -1,5 +1,0 @@
-type Json str
-
-type Data struct {
-	metadata: str
-}

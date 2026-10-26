@@ -8,18 +8,55 @@ use std::{
 	time::Duration,
 };
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Result, ensure};
 use futures_util::{StreamExt, stream::FuturesUnordered};
-use tokio::task::JoinHandle;
+use rivet_env::TaskHandle;
+
+/// Keep force-shutdown policy active across startup, service execution, and cleanup.
+pub async fn with_shutdown<F: Future>(
+	env: Arc<dyn rivet_env::Env>,
+	mut shutdown: rivet_env::capabilities::shutdown::Shutdown,
+	force_after: Duration,
+	work: F,
+) -> F::Output {
+	let watchdog = async {
+		use rivet_env::capabilities::shutdown::ShutdownEvent;
+		let result = async {
+			if shutdown.recv().await? == ShutdownEvent::Force {
+				return Ok::<(), rivet_env::ClockError>(());
+			}
+			let deadline = shutdown.deadline(force_after)?;
+			let clock = env.clock();
+			loop {
+				rivet_env::select_biased!("force requests and the original deadline bound shutdown",
+					event = shutdown.recv() => {
+						if event? == ShutdownEvent::Force { return Ok(()); }
+					},
+					result = clock.sleep_until(deadline) => return result,
+				);
+			}
+		}
+		.await;
+		if let Err(error) = result {
+			tracing::error!(%error, "shutdown clock failed");
+		}
+		tracing::warn!("forcing process shutdown");
+		env.exit(1).await
+	};
+	rivet_env::select_biased!("force shutdown remains active even while startup or cleanup is blocked",
+		never = watchdog => match never {},
+		output = work => output,
+	)
+}
 
 #[derive(Clone)]
 pub struct Service {
 	pub name: &'static str,
-	pub kind: ServiceKind,
+	pub class: ServiceClass,
 	pub run: Arc<
 		dyn Fn(
 				rivet_config::Config,
-				rivet_pools::Pools,
+				rivet_engine_context::EngineContext,
 			) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>
 			+ Send
 			+ Sync,
@@ -30,82 +67,39 @@ pub struct Service {
 impl Service {
 	pub fn new<F, Fut>(
 		name: &'static str,
-		kind: ServiceKind,
+		class: ServiceClass,
 		run: F,
 		requires_graceful_shutdown: bool,
 	) -> Self
 	where
-		F: Fn(rivet_config::Config, rivet_pools::Pools) -> Fut + Send + Sync + 'static,
+		F: Fn(rivet_config::Config, rivet_engine_context::EngineContext) -> Fut
+			+ Send
+			+ Sync
+			+ 'static,
 		Fut: Future<Output = Result<()>> + Send + 'static,
 	{
 		Self {
 			name,
-			kind,
-			run: Arc::new(move |config, pools| Box::pin(run(config, pools))),
+			class,
+			run: Arc::new(move |config, context| Box::pin(run(config, context))),
 			requires_graceful_shutdown,
 		}
 	}
 }
 
-/// Defines the type of the service. Used for filtering service types to run.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ServiceKind {
-	ApiPublic,
-	ApiPeer,
-	Standalone,
-	Singleton,
-	Oneshot,
-	Cron(CronConfig),
-	/// Run no matter what.
-	Core,
-}
-
-impl ServiceKind {
-	fn behavior(&self) -> ServiceBehavior {
-		use ServiceKind::*;
-
-		match self {
-			ApiPublic | ApiPeer | Standalone | Singleton | Core => ServiceBehavior::Service,
-			Oneshot => ServiceBehavior::Oneshot,
-			Cron(config) => ServiceBehavior::Cron(config.clone()),
-		}
-	}
-
-	pub fn eq(&self, other: &Self) -> bool {
-		use ServiceKind::*;
-
-		match (self, other) {
-			(ApiPublic, ApiPublic)
-			| (ApiPeer, ApiPeer)
-			| (Standalone, Standalone)
-			| (Singleton, Singleton)
-			| (Oneshot, Oneshot)
-			| (Core, Core) => true,
-			(Cron(_), Cron(_)) => true,
-			_ => false,
-		}
-	}
-}
-
-/// Defines how a service should be ran.
-#[derive(Debug, Clone, PartialEq)]
-enum ServiceBehavior {
-	/// Spawns a service that will run indefinitely.
-	///
-	/// If crashes or exits, will be restarted.
-	Service,
-	/// Runs a task that will exit upon completion.
-	///
-	/// If crashes, it will be retried indefinitely.
-	Oneshot,
-	/// Runs a task on a schedule.
-	Cron(CronConfig),
-}
-
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct CronConfig {
-	pub run_immediately: bool,
-	pub schedule: String,
+/// Controls service selection and execution lifetime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceClass {
+	/// Selected for stateless workloads.
+	Stateless,
+	/// Selected for storage workloads.
+	Storage,
+	/// Runs regardless of the selected workload.
+	Always,
+	/// Runs only inside an exclusive scope granted by a cluster singleton host.
+	ClusterSingleton,
+	/// Retries until successful, then stops for this process lifetime.
+	Once,
 }
 
 pub type RunConfig = Arc<RunConfigData>;
@@ -131,8 +125,62 @@ impl RunConfigData {
 
 struct ServiceTask {
 	name: String,
-	handle: JoinHandle<()>,
+	handle: Option<TaskHandle>,
 	requires_graceful_shutdown: bool,
+}
+
+/// Run services within the caller's ownership lifetime. Dropping this future
+/// drops every service future; no detached tasks survive loss of that ownership.
+pub async fn run_scoped(
+	config: rivet_config::Config,
+	context: rivet_engine_context::EngineContext,
+	services: Vec<Service>,
+) -> Result<()> {
+	let shutting_down = Arc::new(AtomicBool::new(false));
+	let mut running = services
+		.into_iter()
+		.map(|service| {
+			supervise(
+				service,
+				config.clone(),
+				context.clone(),
+				shutting_down.clone(),
+			)
+		})
+		.collect::<FuturesUnordered<_>>();
+	while running.next().await.is_some() {}
+	std::future::pending().await
+}
+
+async fn supervise(
+	service: Service,
+	config: rivet_config::Config,
+	context: rivet_engine_context::EngineContext,
+	shutting_down: Arc<AtomicBool>,
+) {
+	use futures_util::FutureExt;
+	loop {
+		// Catch panics as well as returned errors without detaching the future.
+		let result = std::panic::AssertUnwindSafe(async {
+			(service.run)(config.clone(), context.clone()).await
+		})
+		.catch_unwind()
+		.await;
+		if shutting_down.load(Ordering::SeqCst) {
+			return;
+		}
+		match &result {
+			Ok(Ok(())) => tracing::warn!(
+				service = service.name,
+				"service returned before shutdown; restarting"
+			),
+			Ok(Err(error)) => {
+				tracing::error!(service = service.name, ?error, "service failed; restarting")
+			}
+			Err(_) => tracing::error!(service = service.name, "service panicked; restarting"),
+		}
+		restart_delay(&context).await;
+	}
 }
 
 /// Runs services & waits for completion.
@@ -141,271 +189,162 @@ struct ServiceTask {
 /// run.
 pub async fn start(
 	config: rivet_config::Config,
-	pools: rivet_pools::Pools,
+	context: rivet_engine_context::EngineContext,
 	mut services: Vec<Service>,
+	registration: Option<rivet_topology::WorkerRegistration>,
 ) -> Result<()> {
+	ensure!(
+		services
+			.iter()
+			.all(|s| s.class != ServiceClass::ClusterSingleton),
+		"singleton services must be scheduled through a singleton host"
+	);
 	services.push(Service::new(
 		"metrics",
-		ServiceKind::Core,
-		|config, _pools| rivet_metrics_server::run_standalone(config),
+		ServiceClass::Always,
+		|config, _context| rivet_metrics_server::run_standalone(config),
 		false,
 	));
+
+	let mut startup_shutdown = context.shutdown();
+	let background = rivet_env::select_biased!("termination cancels registration before any service starts",
+		signal = startup_shutdown.recv() => { signal?; return Ok(()); },
+		result = context.start_background(registration) => result?,
+	);
 
 	// Spawn services
 	tracing::info!(services=?services.len(), "starting services");
 	let mut running_services = Vec::new();
-	let cron_schedule = tokio_cron_scheduler::JobScheduler::new().await?;
+	let env = context.env().clone();
+	let scope = env.task_scope();
 
-	let mut term_signal = rivet_runtime::TermSignal::get();
+	let mut term_signal = context.shutdown();
 	let shutting_down = Arc::new(AtomicBool::new(false));
 
 	for service in services {
-		match service.kind.behavior() {
-			ServiceBehavior::Service => {
+		match service.class {
+			ServiceClass::Stateless
+			| ServiceClass::Storage
+			| ServiceClass::Always
+			| ServiceClass::ClusterSingleton => {
 				let config = config.clone();
-				let pools = pools.clone();
+				let context = context.clone();
 				let shutting_down = shutting_down.clone();
 				let task_name = format!("rivet::service::{}", service.name);
+				let requires_graceful_shutdown = service.requires_graceful_shutdown;
 
-				let join_handle = tokio::task::Builder::new()
-					.name(&task_name)
-					.spawn(async move {
-						tracing::debug!(service=%service.name, "starting service");
-
-						loop {
-							match (service.run)(config.clone(), pools.clone()).await {
-								Result::Ok(_) => {
-									if shutting_down.load(Ordering::SeqCst) {
-										tracing::info!(service=%service.name, "service exited");
-										break;
-									} else {
-										tracing::error!(service=%service.name, "service exited unexpectedly");
-									}
-								}
-								Err(err) => {
-									tracing::error!(service=%service.name, ?err, "service crashed");
-
-									if shutting_down.load(Ordering::SeqCst) {
-										break;
-									}
-								}
-							}
-
-							tokio::time::sleep(Duration::from_secs(1)).await;
-
-							tracing::info!(service=%service.name, "restarting service");
-						}
-					})
-					.context("failed to spawn service")?;
+				let join_handle = scope.spawn(async move {
+					supervise(service, config, context, shutting_down).await;
+				});
 
 				running_services.push(ServiceTask {
 					name: task_name,
-					handle: join_handle,
-					requires_graceful_shutdown: service.requires_graceful_shutdown,
+					handle: Some(join_handle),
+					requires_graceful_shutdown,
 				});
 			}
-			ServiceBehavior::Oneshot => {
+			ServiceClass::Once => {
 				let config = config.clone();
-				let pools = pools.clone();
+				let context = context.clone();
 				let shutting_down = shutting_down.clone();
 				let task_name = format!("rivet::oneoff::{}", service.name);
 
-				let join_handle = tokio::task::Builder::new()
-					.name(&task_name)
-					.spawn(async move {
-						tracing::debug!(oneoff=%service.name, "starting oneoff");
+				let join_handle = scope.spawn(async move {
+					tracing::debug!(oneoff=%service.name, "starting oneoff");
 
-						loop {
-							match (service.run)(config.clone(), pools.clone()).await {
-								Result::Ok(_) => {
-									tracing::debug!(oneoff=%service.name, "oneoff finished");
+					loop {
+						match (service.run)(config.clone(), context.clone()).await {
+							Result::Ok(_) => {
+								tracing::debug!(oneoff=%service.name, "oneoff finished");
+								break;
+							}
+							Err(err) => {
+								tracing::error!(oneoff=%service.name, ?err, "oneoff crashed");
+
+								if shutting_down.load(Ordering::SeqCst) {
 									break;
-								}
-								Err(err) => {
-									tracing::error!(oneoff=%service.name, ?err, "oneoff crashed");
+								} else {
+									restart_delay(&context).await;
 
-									if shutting_down.load(Ordering::SeqCst) {
-										break;
-									} else {
-										tokio::time::sleep(Duration::from_secs(1)).await;
-
-										tracing::info!(oneoff=%service.name, "restarting oneoff");
-									}
+									tracing::info!(oneoff=%service.name, "restarting oneoff");
 								}
 							}
 						}
-					})
-					.context("failed to spawn oneoff")?;
-
-				running_services.push(ServiceTask {
-					name: task_name,
-					handle: join_handle,
-					requires_graceful_shutdown: service.requires_graceful_shutdown,
+					}
 				});
-			}
-			ServiceBehavior::Cron(cron_config) => {
-				// Spawn immediate task
-				if cron_config.run_immediately {
-					let service = service.clone();
-					let config = config.clone();
-					let pools = pools.clone();
-					let shutting_down = shutting_down.clone();
-					let task_name = format!("rivet::cron_immediate::{}", service.name);
-
-					let join_handle = tokio::task::Builder::new()
-						.name(&task_name)
-						.spawn(async move {
-							tracing::debug!(cron=%service.name, "starting immediate cron");
-
-							for attempt in 1..=8 {
-								match (service.run)(config.clone(), pools.clone()).await {
-									Result::Ok(_) => {
-										tracing::debug!(cron=%service.name, ?attempt, "cron finished");
-										break;
-									}
-									Err(err) => {
-										tracing::error!(cron=%service.name, ?attempt, ?err, "cron crashed");
-
-										if shutting_down.load(Ordering::SeqCst) {
-											return;
-										} else {
-											tokio::time::sleep(Duration::from_secs(1)).await;
-
-											tracing::info!(cron=%service.name, ?attempt, "restarting cron");
-										}
-									}
-								}
-							}
-
-							tracing::error!(cron=%service.name, "cron failed all restart attempts");
-						})
-						.context("failed to spawn cron")?;
-
-					running_services.push(ServiceTask {
-						name: task_name,
-						handle: join_handle,
-						requires_graceful_shutdown: service.requires_graceful_shutdown,
-					});
-				}
-
-				// Spawn cron
-				let config = config.clone();
-				let pools = pools.clone();
-				let service2 = service.clone();
-				let shutting_down = shutting_down.clone();
-				let task_name = format!("rivet::cron_dummy::{}", service.name);
-
-				cron_schedule
-					.add(tokio_cron_scheduler::Job::new_async_tz(
-						&cron_config.schedule,
-						chrono::Utc,
-						move |notification, _| {
-							let config = config.clone();
-							let pools = pools.clone();
-							let service = service2.clone();
-							let shutting_down = shutting_down.clone();
-							Box::pin(async move {
-								tracing::debug!(cron=%service.name, ?notification, "running cron");
-
-								for attempt in 1..=8 {
-									match (service.run)(config.clone(), pools.clone()).await {
-										Result::Ok(_) => {
-											tracing::debug!(cron=%service.name, ?attempt, "cron finished");
-											return;
-										}
-										Err(err) => {
-											tracing::error!(cron=%service.name, ?attempt, ?err, "cron crashed");
-
-											if shutting_down.load(Ordering::SeqCst) {
-												return;
-											} else {
-												tokio::time::sleep(Duration::from_secs(1)).await;
-
-												tracing::info!(cron=%service.name, ?attempt, "restarting cron");
-											}
-										}
-									}
-								}
-
-								tracing::error!(cron=%service.name, "cron failed all restart attempts");
-							})
-						},
-					)?)
-					.await?;
-
-				// Add dummy task to prevent start command from stopping if theres a cron
-				let join_handle = tokio::task::Builder::new()
-					.name(&task_name)
-					.spawn(std::future::pending())
-					.context("failed creating dummy cron task")?;
 
 				running_services.push(ServiceTask {
 					name: task_name,
-					handle: join_handle,
-					requires_graceful_shutdown: false,
+					handle: Some(join_handle),
+					requires_graceful_shutdown: service.requires_graceful_shutdown,
 				});
 			}
 		}
 	}
-
-	cron_schedule.start().await?;
 
 	loop {
 		// Waits for all service tasks to complete
 		let join_fut = async {
 			let mut handle_futs = running_services
 				.iter_mut()
-				.filter_map(|task| (!task.handle.is_finished()).then_some(&mut task.handle))
+				.filter(|task| task.handle.is_some())
+				.map(|task| async move {
+					let result = task.handle.as_mut().expect("unjoined task").await;
+					task.handle.take();
+					if let Err(error) = result {
+						if !error.is_cancelled() {
+							tracing::error!(name = %task.name, %error, "service task failed");
+						}
+					}
+				})
 				.collect::<FuturesUnordered<_>>();
 
 			while let Some(_) = handle_futs.next().await {}
 		};
 
-		tokio::select! {
+		rivet_env::select! { env.rng("services.shutdown.select");
 			_ = join_fut => {
 				tracing::info!("all services finished");
 				break;
-			}
-			abort = term_signal.recv() => {
-				if !shutting_down.load(Ordering::SeqCst) {
-					// Spawn force exit task in case of a lingering task
-					let force_shutdown_duration = config.runtime.force_shutdown_duration();
-					tokio::spawn(async move {
-						tracing::info!(?force_shutdown_duration, "force shutdown timer started");
-						tokio::time::sleep(force_shutdown_duration).await;
-						tracing::warn!("force shutdown timeout reached, exiting process, this indicates a bug");
-						std::process::exit(1);
-					});
-				}
+			},
+			event = term_signal.recv() => {
+				event?;
 
 				shutting_down.store(true, Ordering::SeqCst);
 
 				// Abort services that don't require graceful shutdown
-				running_services.retain(|task| {
+				for task in &running_services {
 					if !task.requires_graceful_shutdown {
 						tracing::debug!(name=%task.name, "aborting service");
-						task.handle.abort();
+						if let Some(handle) = &task.handle { handle.abort(); }
 					}
 
-					task.requires_graceful_shutdown
-				});
+				}
 
-				if abort {
-					// Give time for services to handle final abort
-					tokio::time::sleep(Duration::from_millis(50)).await;
-					rivet_runtime::shutdown().await;
+			}
+		}
+	}
 
-					break;
+	scope.shutdown().await;
+	for task in &mut running_services {
+		if let Some(handle) = task.handle.take() {
+			if let Err(error) = handle.await {
+				if !error.is_cancelled() {
+					tracing::error!(name = %task.name, %error, "service task failed during shutdown");
 				}
 			}
 		}
 	}
 
-	// Shut down udb
-	pools.udb()?.shutdown().await;
-
-	// Stops term signal handler bg task
-	rivet_runtime::TermSignal::stop();
-
+	background.shutdown().await?;
 	Ok(())
+}
+
+async fn restart_delay(context: &rivet_engine_context::EngineContext) {
+	if let Err(error) =
+		rivet_env::sleep(context.env().clock().as_ref(), Duration::from_secs(1)).await
+	{
+		tracing::error!(%error, "service restart clock failed");
+		context.env().exit(1).await;
+	}
 }

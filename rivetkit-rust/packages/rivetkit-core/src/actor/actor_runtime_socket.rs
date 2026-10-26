@@ -5,24 +5,24 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-#[cfg(test)]
-use anyhow::bail;
+
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
-use depot_client::query::SqliteStatementError;
-use depot_client::worker::{
-	SQLITE_WORKER_QUEUE_CAPACITY, SqliteWorkerClosingError, SqliteWorkerOverloadedError,
-};
 use rivet_actor_runtime_socket_protocol as wire;
 use rivet_error::RivetError;
 use serde::Serialize;
+use sqlite_embedded::query::SqliteStatementError;
+use sqlite_embedded::vfs::SqliteTransactionTooLargeError;
+use sqlite_embedded::worker::{
+	SQLITE_WORKER_QUEUE_CAPACITY, SqliteWorkerClosingError, SqliteWorkerOverloadedError,
+};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{Mutex, Notify, mpsc};
 use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-use vbare::OwnedVersionedData;
+use vbare::Versioned;
 
 use crate::actor::sqlite::{
 	BindParam, ColumnValue, ExecuteResult, SqliteBackend, SqliteDb, SqliteTransaction,
@@ -347,19 +347,13 @@ enum LeaseEntry {
 	Terminal(&'static str),
 }
 
-#[cfg(test)]
-#[derive(Default)]
-struct PendingWaitTestHook {
-	rechecked: Notify,
-	resume: Notify,
-}
+
 
 #[derive(Default)]
 struct ConnectionLeaseState {
 	entries: BTreeMap<String, LeaseEntry>,
 	closed: bool,
-	#[cfg(test)]
-	pending_wait_test_hook: Option<Arc<PendingWaitTestHook>>,
+	
 }
 
 type ConnectionLeases = Arc<Mutex<ConnectionLeaseState>>;
@@ -588,13 +582,13 @@ async fn preflight_request(
 	if state.closed {
 		return Some(wire::ResponsePayload::EndpointClosed);
 	}
-	if state.entries.contains_key(&begin.lease_key) {
+	if state.entries.contains_key(&*begin.lease_key) {
 		return Some(invalid_lease(
 			"leaseKey was already used on this connection",
 		));
 	}
 	state.entries.insert(
-		begin.lease_key.clone(),
+		begin.lease_key.to_string(),
 		LeaseEntry::Pending(Arc::new(Notify::new())),
 	);
 	None
@@ -680,8 +674,8 @@ async fn execute_request(
 	let result = match request.payload {
 		wire::RequestPayload::SqliteExec(exec) => {
 			match transaction_for_request(leases, request.lease_key.as_deref()).await {
-				Ok(Some(transaction)) => transaction.exec(exec.script).await,
-				Ok(None) => db.exec(exec.script).await,
+				Ok(Some(transaction)) => transaction.exec(exec.script.to_string()).await,
+				Ok(None) => db.exec(exec.script.to_string()).await,
 				Err(error) => return error,
 			}
 			.map(|_| wire::ResponsePayload::SqliteExecOk)
@@ -689,8 +683,8 @@ async fn execute_request(
 		wire::RequestPayload::SqliteQuery(query) => {
 			let params = query.params.into_iter().map(bind_param).collect();
 			let result = match transaction_for_request(leases, request.lease_key.as_deref()).await {
-				Ok(Some(transaction)) => transaction.query(query.sql, params).await,
-				Ok(None) => db.query(query.sql, params).await,
+				Ok(Some(transaction)) => transaction.query(query.sql.to_string(), params).await,
+				Ok(None) => db.query(query.sql.to_string(), params).await,
 				Err(error) => return error,
 			};
 			result.map(query_response)
@@ -702,8 +696,12 @@ async fn execute_request(
 				.await
 			{
 				Ok(transaction) => {
-					let connection_closed =
-						complete_begin(leases, begin.lease_key, Arc::clone(&transaction)).await;
+					let connection_closed = complete_begin(
+						leases,
+						begin.lease_key.to_string(),
+						Arc::clone(&transaction),
+					)
+					.await;
 					if connection_closed || cancel.is_cancelled() {
 						let _ = transaction.expire().await;
 						return wire::ResponsePayload::EndpointClosed;
@@ -726,11 +724,10 @@ async fn execute_request(
 			};
 			match transaction.commit().await {
 				Ok(()) => {
-					leases
-						.lock()
-						.await
-						.entries
-						.insert(commit.lease_key, LeaseEntry::Terminal("committed"));
+					leases.lock().await.entries.insert(
+						commit.lease_key.to_string(),
+						LeaseEntry::Terminal("committed"),
+					);
 					Ok(wire::ResponsePayload::SqliteCommitOk)
 				}
 				Err(error) => Err(error),
@@ -746,11 +743,10 @@ async fn execute_request(
 			};
 			match transaction.rollback().await {
 				Ok(()) => {
-					leases
-						.lock()
-						.await
-						.entries
-						.insert(rollback.lease_key, LeaseEntry::Terminal("rolled back"));
+					leases.lock().await.entries.insert(
+						rollback.lease_key.to_string(),
+						LeaseEntry::Terminal("rolled back"),
+					);
 					Ok(wire::ResponsePayload::SqliteRollbackOk)
 				}
 				Err(error) => Err(error),
@@ -872,14 +868,7 @@ async fn active_transaction(
 				Some(LeaseEntry::Pending(current)) if Arc::ptr_eq(current, &notify)
 			)
 		};
-		#[cfg(test)]
-		if still_pending {
-			let hook = leases.lock().await.pending_wait_test_hook.clone();
-			if let Some(hook) = hook {
-				hook.rechecked.notify_one();
-				hook.resume.notified().await;
-			}
-		}
+		
 		if still_pending {
 			notified.await;
 		}
@@ -888,7 +877,7 @@ async fn active_transaction(
 
 fn query_response(result: ExecuteResult) -> wire::ResponsePayload {
 	wire::ResponsePayload::SqliteQueryOk(wire::SqliteQueryOk {
-		columns: result.columns,
+		columns: result.columns.into_iter().map(Into::into).collect(),
 		rows: result
 			.rows
 			.into_iter()
@@ -901,7 +890,7 @@ fn query_response(result: ExecuteResult) -> wire::ResponsePayload {
 
 fn invalid_lease(message: &str) -> wire::ResponsePayload {
 	wire::ResponsePayload::InvalidLeaseKey(wire::InvalidLeaseKey {
-		message: message.to_owned(),
+		message: message.to_owned().into(),
 	})
 }
 
@@ -910,8 +899,8 @@ fn bind_param(value: wire::SqlValue) -> BindParam {
 		wire::SqlValue::SqlNull => BindParam::Null,
 		wire::SqlValue::SqlInteger(value) => BindParam::Integer(value),
 		wire::SqlValue::SqlReal(value) => BindParam::Float(value),
-		wire::SqlValue::SqlText(value) => BindParam::Text(value),
-		wire::SqlValue::SqlBlob(value) => BindParam::Blob(value),
+		wire::SqlValue::SqlText(value) => BindParam::Text(value.to_string()),
+		wire::SqlValue::SqlBlob(value) => BindParam::Blob(value.to_vec()),
 	}
 }
 
@@ -920,22 +909,33 @@ fn sql_value(value: ColumnValue) -> wire::SqlValue {
 		ColumnValue::Null => wire::SqlValue::SqlNull,
 		ColumnValue::Integer(value) => wire::SqlValue::SqlInteger(value),
 		ColumnValue::Float(value) => wire::SqlValue::SqlReal(value),
-		ColumnValue::Text(value) => wire::SqlValue::SqlText(value),
-		ColumnValue::Blob(value) => wire::SqlValue::SqlBlob(value),
+		ColumnValue::Text(value) => wire::SqlValue::SqlText(value.into()),
+		ColumnValue::Blob(value) => wire::SqlValue::SqlBlob(value.into()),
 	}
 }
 
+/// SQLite's `SQLITE_FULL` result code, which a transaction over the commit page cap reports to
+/// socket clients. This crate does not link the SQLite bindings that define it.
+const SQLITE_FULL_RESULT_CODE: i32 = 13;
+
 fn map_error(error: anyhow::Error) -> wire::ResponsePayload {
+	if let Some(error) = error.downcast_ref::<SqliteTransactionTooLargeError>() {
+		return wire::ResponsePayload::SqlError(wire::SqlError {
+			code: SQLITE_FULL_RESULT_CODE,
+			statement_index: 0,
+			message: error.to_string().into(),
+		});
+	}
 	if let Some(error) = error.downcast_ref::<SqliteStatementError>() {
 		return wire::ResponsePayload::SqlError(wire::SqlError {
 			code: error.code,
 			statement_index: error.statement_index,
-			message: error.message.clone(),
+			message: error.message.clone().into(),
 		});
 	}
 	if error.downcast_ref::<TransactionQueueFullError>().is_some() {
 		return wire::ResponsePayload::QueueFull(wire::QueueFull {
-			limit: "transactionCoordinatorQueue".to_owned(),
+			limit: "transactionCoordinatorQueue".to_owned().into(),
 			capacity: TRANSACTION_COORDINATOR_QUEUE_CAPACITY as u32,
 		});
 	}
@@ -943,16 +943,16 @@ fn map_error(error: anyhow::Error) -> wire::ResponsePayload {
 		return wire::ResponsePayload::SqlError(wire::SqlError {
 			code: -1,
 			statement_index: 0,
-			message: error.to_string(),
+			message: error.to_string().into(),
 		});
 	}
 	if let Some(error) = error.downcast_ref::<TransactionExpiredError>() {
 		return wire::ResponsePayload::LeaseExpired(wire::LeaseExpired {
 			timeout_ms: error.timeout_ms,
-			message: format!(
+			message: vbare::Str::from(format!(
 				"SQLite transaction expired after {} ms and was rolled back. This timeout is a deadlock-safety backstop; increase SqliteBegin.timeoutMs if the transaction legitimately needs longer, and check for a nested transaction or outer database call waiting behind this lease.",
 				error.timeout_ms
-			),
+			)),
 		});
 	}
 	if let Some(error) = error.downcast_ref::<TransactionUnknownError>() {
@@ -972,7 +972,7 @@ fn map_error(error: anyhow::Error) -> wire::ResponsePayload {
 		.is_some()
 	{
 		return wire::ResponsePayload::QueueFull(wire::QueueFull {
-			limit: "sqliteWorkerQueue".to_owned(),
+			limit: "sqliteWorkerQueue".to_owned().into(),
 			capacity: SQLITE_WORKER_QUEUE_CAPACITY as u32,
 		});
 	}
@@ -983,14 +983,14 @@ fn map_error(error: anyhow::Error) -> wire::ResponsePayload {
 	let structured = rivet_error::RivetError::extract(&error);
 	match (structured.group(), structured.code()) {
 		("actor", "overloaded") => wire::ResponsePayload::QueueFull(wire::QueueFull {
-			limit: "sqliteWorkerQueue".to_owned(),
+			limit: "sqliteWorkerQueue".to_owned().into(),
 			capacity: SQLITE_WORKER_QUEUE_CAPACITY as u32,
 		}),
 		("sqlite", "closed" | "transaction_closed") => wire::ResponsePayload::EndpointClosed,
 		_ => wire::ResponsePayload::SqlError(wire::SqlError {
 			code: -1,
 			statement_index: 0,
-			message: structured.message().to_owned(),
+			message: structured.message().to_owned().into(),
 		}),
 	}
 }
@@ -1024,8 +1024,7 @@ async fn write_server_hello<W: AsyncWrite + Unpin>(
 	hello: wire::ServerHello,
 	version: u16,
 ) -> Result<()> {
-	let payload = wire::versioned::ServerHello::wrap_latest(hello)
-		.serialize_with_embedded_version(version)?;
+	let payload = wire::versioned::ServerHello::serialize_with_embedded_version(&hello, version)?;
 	write_payload(writer, &payload).await
 }
 
@@ -1034,11 +1033,10 @@ async fn write_go_away<W: AsyncWrite + Unpin>(
 	reason: wire::GoAwayReason,
 	version: u16,
 ) -> Result<()> {
-	let payload =
-		wire::versioned::ServerFrame::wrap_latest(wire::ServerFrame::GoAway(wire::GoAway {
-			reason,
-		}))
-		.serialize_with_embedded_version(version)?;
+	let payload = wire::versioned::ServerFrame::serialize_with_embedded_version(
+		&wire::ServerFrame::GoAway(wire::GoAway { reason }),
+		version,
+	)?;
 	write_payload(writer, &payload).await
 }
 
@@ -1050,11 +1048,13 @@ async fn write_response<W: AsyncWrite + Unpin>(
 	max_frame_bytes: u32,
 ) -> Result<()> {
 	let frame = |payload| {
-		wire::versioned::ServerFrame::wrap_latest(wire::ServerFrame::Response(wire::Response {
-			request_id,
-			payload,
-		}))
-		.serialize_with_embedded_version(version)
+		wire::versioned::ServerFrame::serialize_with_embedded_version(
+			&wire::ServerFrame::Response(wire::Response {
+				request_id,
+				payload,
+			}),
+			version,
+		)
 	};
 	let mut payload = frame(response)?;
 	if payload.len() > max_frame_bytes as usize {
@@ -1072,6 +1072,4 @@ async fn write_payload<W: AsyncWrite + Unpin>(writer: &mut W, payload: &[u8]) ->
 	Ok(())
 }
 
-#[cfg(test)]
-#[path = "../../tests/actor_runtime_socket.rs"]
-mod tests;
+

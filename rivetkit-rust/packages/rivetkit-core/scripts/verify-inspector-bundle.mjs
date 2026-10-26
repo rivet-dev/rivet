@@ -15,11 +15,10 @@
  *      crates.io, which are not published yet at this point in the ordered
  *      publish run. `--list` uses the workspace path deps, so it never touches
  *      the registry while reporting the same file set.
- *   2. Runtime serving: build the crate and assert `GET /inspector/ui/` returns
- *      index.html, not the `ui_asset_not_found` JSON error, via the
- *      `inspector_bundle` integration test (gated on
- *      RIVETKIT_ASSERT_INSPECTOR_BUNDLE so ordinary `cargo test` runs without a
- *      built frontend still pass).
+ *   2. Runtime serving (when the integration test is present): build the crate
+ *      and assert `GET /inspector/ui/` returns index.html, not the
+ *      `ui_asset_not_found` JSON error. OSS releases omit test sources, so the
+ *      package file check above is the release gate there.
  *
  * Run `node scripts/stage-inspector-bundle.mjs` first.
  */
@@ -86,15 +85,19 @@ console.log("ok: rivetkit-core packages inspector-ui/index.html and inspector-ta
 
 // --- 2. Runtime serving ----------------------------------------------------
 
-console.log("asserting GET /inspector/ui/ serves index.html...");
-execFileSync(
-	"cargo",
-	["test", "-p", "rivetkit-core", "--test", "inspector_bundle"],
-	{
-		cwd: repoRoot,
-		stdio: "inherit",
-		env: { ...process.env, RIVETKIT_ASSERT_INSPECTOR_BUNDLE: "1" },
-	},
-);
+if (existsSync(join(crateDir, "tests", "inspector_bundle.rs"))) {
+	console.log("asserting GET /inspector/ui/ serves index.html...");
+	execFileSync(
+		"cargo",
+		["test", "-p", "rivetkit-core", "--test", "inspector_bundle"],
+		{
+			cwd: repoRoot,
+			stdio: "inherit",
+			env: { ...process.env, RIVETKIT_ASSERT_INSPECTOR_BUNDLE: "1" },
+		},
+	);
+} else {
+	console.log("inspector_bundle test is absent; package file check passed");
+}
 
 console.log("verify-inspector-bundle: ok");

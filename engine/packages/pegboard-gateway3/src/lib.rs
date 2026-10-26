@@ -136,10 +136,9 @@ impl PegboardGateway3 {
 		}
 		req_ctx.forward_ray(&mut request_headers);
 
-		let (mut stopped_sub, _) = tokio::try_join!(
-			ctx.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", self.actor_id)),
-			pegboard::utils::ensure_ns_metrics_exporter_for_namespace(ctx, self.namespace_id),
-		)?;
+		let mut stopped_sub = ctx
+			.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", self.actor_id))
+			.await?;
 
 		// Build subject to publish to
 		let tunnel_subject = pegboard::pubsub_subjects::EnvoyReceiverSubject::new(

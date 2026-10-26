@@ -19,7 +19,11 @@ export interface ParsedCloseReason {
 	group: string;
 	code: string;
 	rayId?: string;
+	/** The service's retry hint, from a `#retry_after_ms=<ms>` suffix. */
+	retryAfterMs?: number;
 }
+
+const RETRY_AFTER_SUFFIX = /^retry_after_ms=(\d+)$/;
 
 /**
  * Parses WebSocket close reason string into structured data.
@@ -27,13 +31,15 @@ export interface ParsedCloseReason {
  * Expected format examples:
  *   - "guard.actor_runner_failed#t1s80so6h3irenp8ymzltfoittcl00"
  *   - "ws.client_closed"
+ *   - "guard.service_unavailable#retry_after_ms=1000", a refusal with its retry hint. The hint
+ *     rides after `#` so older clients still read the retryable `<group>.<code>`.
  *
  * Returns undefined if the format is invalid
  */
 export function parseWebSocketCloseReason(
 	reason: string,
 ): ParsedCloseReason | undefined {
-	const [mainPart, rayId] = reason.split("#");
+	const [mainPart, suffix] = reason.split("#");
 	const [group, code] = mainPart.split(".");
 
 	if (!group || !code) {
@@ -41,10 +47,15 @@ export function parseWebSocketCloseReason(
 		return undefined;
 	}
 
+	const retryAfter = suffix?.match(RETRY_AFTER_SUFFIX);
+	if (retryAfter) {
+		return { group, code, retryAfterMs: Number(retryAfter[1]) };
+	}
+
 	return {
 		group,
 		code,
-		rayId,
+		rayId: suffix,
 	};
 }
 

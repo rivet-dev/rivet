@@ -1,0 +1,35 @@
+[package]
+name = "depot-volume"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[features]
+
+[[example]]
+name = "depot-process-client"
+path = "tests/support/process_client.rs"
+
+[dependencies]
+vbare.workspace = true
+parking_lot.workspace = true
+scc.workspace = true
+depot-types = { path = "../depot-types" }
+anyhow.workspace = true
+rivet-data.workspace = true
+rivet-env.workspace = true
+rivet-topology.workspace = true
+rivet-state-machine.workspace = true
+rivet-state-machine-ephemeral.workspace = true
+serde = { workspace = true, features = ["rc"] }
+tokio.workspace = true
+tracing.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+lazy_static.workspace = true
+rivet-metrics.workspace = true
+universalpubsub.workspace = true
+rivet-error.workspace = true
+

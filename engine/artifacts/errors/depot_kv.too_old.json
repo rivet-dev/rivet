@@ -1,0 +1,5 @@
+{
+  "code": "too_old",
+  "group": "depot_kv",
+  "message": "The snapshot is too old."
+}

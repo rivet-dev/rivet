@@ -1,0 +1,5 @@
+{
+  "code": "transport",
+  "group": "ups",
+  "message": "Worker transport failed; the operation may have executed."
+}

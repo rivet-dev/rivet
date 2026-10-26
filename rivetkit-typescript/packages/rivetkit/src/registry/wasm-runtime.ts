@@ -66,7 +66,9 @@ type WasmWebSocketHandle = object;
 interface WasmCancellationToken {
 	aborted(): boolean;
 	cancel(): void;
-	onCancelled(callback: (...args: unknown[]) => unknown): void;
+	onCancelled(callback: (...args: unknown[]) => unknown): {
+		release(): void;
+	};
 }
 
 interface WasmCoreRegistry {
@@ -390,10 +392,11 @@ export class WasmCoreRuntime implements CoreRuntime {
 	onCancellationTokenCancelled(
 		token: CancellationTokenHandle,
 		callback: (...args: unknown[]) => unknown,
-	): void {
-		callWasmSync(() =>
+	): () => void {
+		const listener = callWasmSync(() =>
 			asWasmCancellationToken(token).onCancelled(callback),
 		);
+		return () => callWasmSync(() => listener.release());
 	}
 
 	actorState(ctx: ActorContextHandle): RuntimeBytes {

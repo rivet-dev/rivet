@@ -60,6 +60,8 @@ const TRACES_STORAGE_PREFIX = concatPrefix(
 	STORAGE_VERSION_BYTES.TRACES,
 );
 
+// The slash key form the actor REST API and the actor runtime use. The engine translates it to
+// the canonical form (`encodeActorKey`) at those boundaries.
 export function serializeActorKey(key: ActorKey): string {
 	// Use a special marker for empty key arrays
 	if (key.length === 0) {
@@ -143,6 +145,90 @@ export function deserializeActorKey(keyString: string | undefined): ActorKey {
 	}
 
 	return parts;
+}
+
+// The canonical actor key: parts joined with `,`, with `\` and `,` escaped by a backslash, an
+// empty part written as `\0`, and the empty key as the empty string. The engine hashes, stores
+// and compares only canonical keys, and the gateway's `rvt-key` carries one. The Rust twin is
+// `rivetkit_shared_types::actor_key`; both run the vectors in
+// `rivetkit-rust/packages/shared-types/tests/fixtures/actor_key_vectors.json`.
+const CANONICAL_SEPARATOR = ",";
+const CANONICAL_EMPTY_PART = "\\0";
+
+/** Encodes `key` in the canonical form. */
+export function encodeActorKey(key: ActorKey): string {
+	return key
+		.map((part) => {
+			if (part === "") {
+				return CANONICAL_EMPTY_PART;
+			}
+			return part.replace(/\\/g, "\\\\").replace(/,/g, "\\,");
+		})
+		.join(CANONICAL_SEPARATOR);
+}
+
+/**
+ * Decodes a canonical key, or an unescaped `rvt-key` value from an earlier client. Only `\\` and
+ * `\,` are escapes; any other backslash is literal, and a part written as exactly `\0` is empty.
+ */
+export function decodeActorKey(key: string): ActorKey {
+	if (key === "") {
+		return [];
+	}
+
+	const parts: string[] = [];
+	let raw = "";
+	let current = "";
+	const finishPart = () => {
+		parts.push(raw === CANONICAL_EMPTY_PART ? "" : current);
+		raw = "";
+		current = "";
+	};
+	for (let i = 0; i < key.length; i++) {
+		const char = key[i];
+		if (char === CANONICAL_SEPARATOR) {
+			finishPart();
+			continue;
+		}
+
+		raw += char;
+		if (char !== "\\") {
+			current += char;
+			continue;
+		}
+
+		const next = key[i + 1];
+		if (next === "\\" || next === CANONICAL_SEPARATOR) {
+			raw += next;
+			current += next;
+			i++;
+		} else {
+			current += char;
+		}
+	}
+	finishPart();
+	return parts;
+}
+
+/**
+ * The gateway's `rvt-key` query value for `key`: the canonical key, or `undefined` when the
+ * parameter is omitted, as it is for the empty key.
+ */
+export function actorKeyToGatewayQuery(key: ActorKey): string | undefined {
+	if (key.length === 0) {
+		return undefined;
+	}
+	return encodeActorKey(key);
+}
+
+/** Reads the gateway's `rvt-key` query value. A missing value is the empty key. */
+export function actorKeyFromGatewayQuery(
+	rvtKey: string | null | undefined,
+): ActorKey {
+	if (rvtKey === undefined || rvtKey === null) {
+		return [];
+	}
+	return decodeActorKey(rvtKey);
 }
 
 export function makePrefixedKey(key: Uint8Array): Uint8Array {

@@ -1,0 +1,169 @@
+#import "shared/depot.types.v1.bare"
+#import "depot.tablet_manifest.v1.bare"
+
+# A report advances Learning only while both the grant and observed phase version
+# still match. A delayed report from another grant or replacement is rejected.
+type CatchUpReport struct {
+	tabletId: UuidV4
+	tabletGrantEpoch: u64
+	tabletReplicaSetVersion: u64
+}
+
+# Operator commands are admitted by the current coordinator and persisted through
+# conditional manifest writes. Acceptance does not imply execution has finished.
+type CreateTablet struct {
+	hashRange: PartitionKeyHashRange
+	members: list<StorageWorkerDisk>
+}
+
+type GrantTablet struct {
+	tabletId: UuidV4
+	maintainer: UuidV4
+}
+
+type MoveTablet struct {
+	tabletId: UuidV4
+	maintainer: UuidV4
+}
+
+type ReplaceReplica struct {
+	tabletId: UuidV4
+	leaving: UuidV4
+	joining: StorageWorkerDisk
+}
+
+type AbortReconfiguration struct {
+	tabletId: UuidV4
+}
+
+# Carries an alarm-index readiness report through the command queue; the coordinator
+# rejects it from any other sender.
+type Repair struct {
+	tabletId: UuidV4
+}
+
+# The right child starts at splitKeyHash.
+type SplitTablet struct {
+	tabletId: UuidV4
+	splitKeyHash: PartitionKeyHash
+}
+
+# From the frozen maintainer once the checkpoint and both clones exist; publishes the children.
+type SplitPrepared struct {
+	tabletId: UuidV4
+	tabletGrantEpoch: u64
+	checkpointId: data[16]
+}
+
+# From the current maintainer of the live range containing the retired first hash.
+# Its grant must still match before the coordinator removes the retired record.
+type RetiredTabletDeleted struct {
+	maintainer: UuidV4
+	tabletGrantEpoch: u64
+	tabletId: UuidV4
+}
+
+# From a split child's current maintainer once the parent's maintainer log ops are logged in
+# the child's own log, so the parent's log replicas may be forgotten once every child says so.
+# Its grant must still match. Accepted and idempotent once recorded or once the retired
+# record is gone.
+type ParentLogImported struct {
+	tabletId: UuidV4
+	maintainer: UuidV4
+	tabletGrantEpoch: u64
+	parentTabletId: UuidV4
+}
+
+# From the current maintainer once its tablet data's version marks rose above the manifest's.
+# Its grant must still match. The coordinator merges the marks, so a delayed report never
+# lowers one, and never grants the tablet to a worker that cannot read them.
+type VersionMarksReport struct {
+	tabletId: UuidV4
+	maintainer: UuidV4
+	tabletGrantEpoch: u64
+	versionMarks: list<VersionMark>
+}
+
+# Holds the balancer's discretionary actions off one tablet until ResumeTablet; repair
+# still runs. See TabletPause. Idempotent.
+type PauseTablet struct {
+	tabletId: UuidV4
+}
+
+type ResumeTablet struct {
+	tabletId: UuidV4
+}
+
+type RequestStop struct { workerId: UuidV4 instanceId: UuidV4 }
+
+# One grant whose tablet store its owner can no longer open.
+type SpentTabletGrant struct {
+	tabletId: UuidV4
+	tabletGrantEpoch: u64
+}
+
+# Only the authenticated current owner may ask for fresh grants. Each grant must still be the
+# tablet's current one, so a replay never replaces a newer grant; a grant that is not is
+# skipped. One request names every grant a storage worker needs replaced, such as all of
+# them when its process starts, so they are written in one manifest update.
+type RecoverTablets struct {
+	maintainer: UuidV4
+	grants: list<SpentTabletGrant>
+}
+type StopPermitted void
+type StopBlockReason enum { GRANT_NOT_MOVED MAINTAINER_OPENING REPLICA_BEHIND PEER_DOWN PEER_STOPPING }
+type StopBlocker struct {
+ tabletId: UuidV4
+ reason: StopBlockReason
+ volumesBehind: u64
+ detail: optional<VolumeBlocker>
+}
+type StopPending struct { blockers: list<StopBlocker> totalBlockingTablets: u64 }
+
+type TabletCoordinatorRequest union {
+ RequestStop |
+	RecoverTablets |
+	CatchUpReport | CreateTablet | GrantTablet | MoveTablet | ReplaceReplica | AbortReconfiguration | Repair | SplitTablet | SplitPrepared | RetiredTabletDeleted |
+	VersionMarksReport | ParentLogImported | PauseTablet | ResumeTablet
+}
+
+type Accepted struct {
+	tabletManifestVersion: u64
+}
+
+type StaleTabletGrantEpoch struct {
+	tabletGrantEpoch: u64
+}
+
+type StaleTabletReplicaSet struct {
+	tabletReplicaSetVersion: u64
+}
+
+type NotCoordinator void
+type UnknownTablet void
+# A second replica change, or a split, is refused while the tablet is Learning or Joint.
+type ReconfigurationInProgress void
+# A replica change, or a different split, on a tablet with a split record.
+type SplitInProgress void
+type InvalidCommand void
+type Overloaded void
+# A grant to a worker that cannot read the tablet's data: its advertised range is below the
+# tablet's mark for `family`, or its versions are unknown (`maxRead` absent).
+type VersionUnreadable struct {
+	family: u16
+	mark: u16
+	maxRead: optional<u16>
+}
+
+type TabletCoordinatorRejectResponse union {
+	StaleTabletGrantEpoch | StaleTabletReplicaSet | NotCoordinator | UnknownTablet | ReconfigurationInProgress | SplitInProgress | InvalidCommand | Overloaded |
+	VersionUnreadable
+}
+
+type TabletCoordinatorResponse union {
+	StopPermitted | StopPending | Accepted | TabletCoordinatorRejectResponse
+}
+
+type AlarmSplitPrepared struct { report: SplitPrepared manifestId: u64 maintainer: UuidV4 }
+type AlarmIndexReady struct { tabletId: UuidV4 tabletGrantEpoch: u64 maintainer: UuidV4 source: AlarmIndexSource }
+type AlarmCoordinatorRequest union { TabletCoordinatorRequest | AlarmSplitPrepared | AlarmIndexReady }

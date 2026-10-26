@@ -8,14 +8,14 @@ mod imp {
 	use rivet_envoy_protocol as protocol;
 	use tokio::sync::{Semaphore, mpsc, oneshot};
 	use tracing::Instrument;
-	use vbare::OwnedVersionedData;
+	use vbare::Versioned;
 	use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 	use wasm_bindgen_futures::JsFuture;
 	use web_sys::{BinaryType, CloseEvent, ErrorEvent, Event, MessageEvent, WebSocket};
 
 	use crate::context::{HttpWsTxMessage, SharedContext, WsTxMessage};
 	use crate::envoy::ToEnvoyMessage;
-	use crate::utils::{BackoffOptions, calculate_backoff, parse_ws_close_reason};
+	use crate::utils::{parse_ws_close_reason, reconnect_delay};
 
 	const STABLE_CONNECTION_MS: u64 = 60_000;
 	const NORMAL_CLOSE_CODE: u16 = 1000;
@@ -28,9 +28,10 @@ mod imp {
 		WriteFailed,
 	}
 
-	pub fn start_connection(shared: Arc<SharedContext>) {
+	pub fn start_connection(shared: Arc<SharedContext>) -> Option<tokio::task::JoinHandle<()>> {
 		let span = tracing::debug_span!("envoy_connection", envoy_key = %shared.envoy_key);
 		wasm_bindgen_futures::spawn_local(connection_loop(shared).instrument(span));
+		None
 	}
 
 	async fn connection_loop(shared: Arc<SharedContext>) {
@@ -44,8 +45,12 @@ mod imp {
 
 			let connected_at_ms = js_sys::Date::now();
 
+			let mut retry_after_ms = None;
 			match single_connection(&shared).await {
 				Ok((session, close_reason)) => {
+					retry_after_ms = close_reason
+						.as_ref()
+						.and_then(|reason| reason.retry_after_ms);
 					if let Some(reason) = &close_reason {
 						if reason.group == "ws" && reason.error == "eviction" {
 							tracing::debug!("connection evicted");
@@ -92,7 +97,8 @@ mod imp {
 				return;
 			}
 
-			let delay = calculate_backoff(attempt, &BackoffOptions::default());
+			let lost_threshold_ms = super::super::reconnect_lost_threshold_ms(&shared).await;
+			let delay = reconnect_delay(attempt, retry_after_ms, lost_threshold_ms);
 			tracing::info!(attempt, delay_ms = delay.as_millis() as u64, "reconnecting");
 			sleep(delay).await;
 			attempt += 1;
@@ -121,7 +127,7 @@ mod imp {
 		let onmessage = {
 			let event_tx = event_tx.clone();
 			let envoy_key = shared.envoy_key.clone();
-			Closure::<dyn FnMut(MessageEvent)>::wrap(Box::new(move |event| {
+			Closure::<dyn FnMut(MessageEvent)>::wrap(Box::new(move |event: MessageEvent| {
 				let data = event.data();
 				let Some(bytes) = decode_message_data(data) else {
 					tracing::warn!(%envoy_key, "received non-binary websocket message");
@@ -134,7 +140,7 @@ mod imp {
 
 		let onclose = {
 			let event_tx = event_tx.clone();
-			Closure::<dyn FnMut(CloseEvent)>::wrap(Box::new(move |event| {
+			Closure::<dyn FnMut(CloseEvent)>::wrap(Box::new(move |event: CloseEvent| {
 				let _ = event_tx.send(ConnectionEvent::Close {
 					code: event.code(),
 					reason: event.reason(),
@@ -145,7 +151,7 @@ mod imp {
 
 		let onerror = {
 			let event_tx = event_tx.clone();
-			Closure::<dyn FnMut(ErrorEvent)>::wrap(Box::new(move |event| {
+			Closure::<dyn FnMut(ErrorEvent)>::wrap(Box::new(move |event: ErrorEvent| {
 				let _ = event_tx.send(ConnectionEvent::Error(event.message()));
 			}))
 		};
@@ -180,6 +186,16 @@ mod imp {
 		let session =
 			super::super::install_connection_with_http(shared, ws_tx, http_ws_tx, http_byte_budget)
 				.await;
+		if session == 0 {
+			close_if_open(&ws);
+			ws.set_onopen(None);
+			ws.set_onmessage(None);
+			ws.set_onclose(None);
+			ws.set_onerror(None);
+			return Err(anyhow::anyhow!(
+				"envoy shut down during websocket handshake"
+			));
+		}
 
 		tracing::info!(
 			endpoint = %shared.config.endpoint,
@@ -266,8 +282,9 @@ mod imp {
 						}
 					}
 
-					let decoded = crate::protocol::versioned::ToEnvoy::deserialize(
-						&data,
+					// Decoding shares the frame instead of copying it.
+					let decoded = crate::protocol::versioned::ToEnvoy::decode_body(
+						data.into(),
 						protocol::PROTOCOL_VERSION,
 					)?;
 
@@ -377,7 +394,7 @@ mod imp {
 	use crate::context::SharedContext;
 	use crate::envoy::ToEnvoyMessage;
 
-	pub fn start_connection(shared: Arc<SharedContext>) {
+	pub fn start_connection(shared: Arc<SharedContext>) -> Option<tokio::task::JoinHandle<()>> {
 		let _ = crate::envoy::send_to_envoy_tx(
 			&shared,
 			ToEnvoyMessage::ConnClose {
@@ -386,6 +403,7 @@ mod imp {
 			},
 		);
 		tracing::error!("wasm envoy transport requires the wasm32 target");
+		None
 	}
 }
 

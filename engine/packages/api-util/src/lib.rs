@@ -37,7 +37,7 @@ pub async fn request_remote_datacenter_raw(
 		.dc_for_label(dc_label)
 		.ok_or_else(|| errors::Datacenter::NotFound.build())?;
 
-	let client = rivet_pools::reqwest::client().await?;
+	let client = rivet_engine_context::reqwest::client().await?;
 	let mut url = dc.peer_url.join(endpoint)?;
 
 	// NOTE: We don't use reqwest's `.query` because it doesn't support list query parameters
@@ -75,7 +75,7 @@ where
 		.dc_for_label(dc_label)
 		.ok_or_else(|| errors::Datacenter::NotFound.build())?;
 
-	let client = rivet_pools::reqwest::client().await?;
+	let client = rivet_engine_context::reqwest::client().await?;
 	let mut url = dc.peer_url.join(endpoint)?;
 
 	// NOTE: We don't use reqwest's `.query` because it doesn't support list query parameters

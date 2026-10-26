@@ -1,0 +1,78 @@
+# Durable membership-management state for the coordinator and replica state machines.
+# "Control" distinguishes membership/learning from per-key consensus and KV data.
+# CoordinatorData and ReplicaData live at separate typed keys with independent CAS
+# revisions; sharing this schema does not make them one record or transaction.
+type ReplicaStatus enum { Joining Learning Active }
+
+type Member struct {
+	replicaId: u64
+	status: ReplicaStatus
+	apiPeerUrl: str
+	guardUrl: str
+}
+
+type Config struct {
+	coordinatorReplicaId: u64
+	epoch: u64
+	replicas: list<Member>
+}
+
+# Epoxy topology is global cross-region replica membership. Depot topology instead
+# describes storage workers and tablet placement. Epochs/status belong to Config.
+type TopologyReplica struct {
+	replicaId: u64
+	apiPeerUrl: str
+	guardUrl: str
+}
+
+type EpoxyTopology struct {
+	initialCoordinatorReplicaId: u64
+	replicas: list<TopologyReplica>
+}
+
+type Delivery struct {
+	replicaId: u64
+	configGeneration: u64
+	# Zero means no learning required; otherwise the stable attempt identity.
+	learningAttempt: u64
+	# BeginLearning acceptance, not completion. Completion is reported as Active.
+	learningAccepted: u64
+}
+
+type BroadcastState struct {
+	generation: u64
+	replicas: list<Delivery>
+}
+
+type CoordinatorDesired struct {
+	replicaId: u64
+	topology: optional<EpoxyTopology>
+}
+
+type CoordinatorActual struct {
+	config: optional<Config>
+	broadcast: optional<BroadcastState>
+}
+
+type CoordinatorData struct {
+	revision: u64
+	desired: CoordinatorDesired
+	actual: CoordinatorActual
+}
+
+type ReplicaDesired struct {
+	replicaId: u64
+	learningAttempt: optional<u64>
+}
+
+type ReplicaActual struct {
+	config: optional<Config>
+	configGeneration: u64
+	completedLearningAttempt: optional<u64>
+}
+
+type ReplicaData struct {
+	revision: u64
+	desired: ReplicaDesired
+	actual: ReplicaActual
+}

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::Ordering;
 
+use anyhow::Context;
 #[cfg(not(target_arch = "wasm32"))]
 use parking_lot::Mutex;
 
@@ -14,27 +15,25 @@ use tokio::sync::oneshot;
 use tracing::Instrument;
 
 use crate::actor::ToActor;
-use crate::commands::{ACK_COMMANDS_INTERVAL_MS, handle_commands, send_command_ack};
+use crate::commands::handle_commands;
 use crate::config::EnvoyConfig;
 use crate::connection::{start_connection, ws_send};
 use crate::context::{SharedContext, WsTxMessage};
+use crate::deadlines::sleep_until_deadline;
 use crate::events::{handle_ack_events, handle_send_events, resend_unacknowledged_events};
 use crate::handle::EnvoyHandle;
 use crate::kv::{
-	KV_CLEANUP_INTERVAL_MS, KvRequestEntry, cleanup_old_kv_requests, handle_kv_request,
-	handle_kv_response, process_unsent_kv_requests,
+	KvRequestEntry, handle_kv_request, handle_kv_response, process_unsent_kv_requests,
 };
 use crate::metrics::METRICS;
 use crate::sqlite::{
 	RemoteSqliteRequest, RemoteSqliteRequestEntry, RemoteSqliteResponseEnvelope, SqliteRequest,
-	SqliteRequestEntry, SqliteResponse, cleanup_old_remote_sqlite_requests,
-	cleanup_old_sqlite_requests, fail_remote_sqlite_requests_with_shutdown,
-	fail_sent_remote_sqlite_requests_with_indeterminate_result,
-	fail_sent_sqlite_requests_with_indeterminate_result, fail_sqlite_requests_with_shutdown,
-	handle_remote_sqlite_exec_response, handle_remote_sqlite_execute_batch_response,
-	handle_remote_sqlite_execute_response, handle_remote_sqlite_request,
-	handle_sqlite_commit_finalize_response, handle_sqlite_commit_response,
-	handle_sqlite_commit_stage_begin_response, handle_sqlite_commit_stage_segment_response,
+	SqliteRequestEntry, SqliteResponse, fail_remote_sqlite_requests_with_shutdown,
+	fail_sqlite_requests_with_shutdown, handle_remote_sqlite_exec_response,
+	handle_remote_sqlite_execute_batch_response, handle_remote_sqlite_execute_response,
+	handle_remote_sqlite_request, handle_sqlite_commit_finalize_response,
+	handle_sqlite_commit_response, handle_sqlite_commit_stage_begin_response,
+	handle_sqlite_commit_stage_segment_response, handle_sqlite_connection_closed,
 	handle_sqlite_get_pages_response, handle_sqlite_request, process_unsent_remote_sqlite_requests,
 	process_unsent_sqlite_requests,
 };
@@ -55,6 +54,7 @@ pub struct EnvoyContext {
 	pub shutting_down: bool,
 	pub actors: HashMap<String, HashMap<u32, ActorEntry>>,
 	pub pending_events: HashMap<(String, u32), PendingActorEvents>,
+	pub pending_events_ack_waiters: Vec<oneshot::Sender<()>>,
 	pub buffered_actor_messages: HashMap<String, Vec<BufferedActorMessage>>,
 	pub kv_requests: HashMap<u32, KvRequestEntry>,
 	pub next_kv_request_id: u32,
@@ -69,11 +69,16 @@ pub struct EnvoyContext {
 	/// `RequestStart` from reaching the actor after its cancellation arrived.
 	pub http_request_cancellations: HashMap<HttpRequestCancellationKey, crate::time::Instant>,
 	pub buffered_messages: Vec<protocol::ToRivetTunnelMessage>,
+	/// Highest stopped generation per actor, so a late duplicate start is dropped.
+	pub stopped_generation_floors: crate::commands::StoppedGenerationFloors,
 	/// Highest command index processed per `(actor_id, generation)`, used to
-	/// drop replayed commands from `pegboard-envoy` after a reconnect. Persists
-	/// across `remove_actor` so a replayed `CommandStartActor` for an
-	/// already-stopped actor cannot resurrect it.
+	/// drop repeated commands for a hosted generation. `remove_actor` forgets the
+	/// actor's entries and `handle_commands` forgets entries of generations it
+	/// does not host, so the map is bounded by the hosted generations.
 	pub processed_command_idx: HashMap<(String, u32), i64>,
+	/// Deadlines of in-flight requests and retired event sets. The loop sleeps until the
+	/// earliest one.
+	pub deadlines: crate::deadlines::Deadlines,
 }
 
 pub struct HttpRequestRoute {
@@ -97,6 +102,8 @@ pub struct ActorEntry {
 	pub name: String,
 	pub last_command_idx: i64,
 	pub received_stop: bool,
+	/// HTTP requests admitted to this generation and still in its inbox.
+	pub queued_requests: Arc<crate::actor::QueuedRequests>,
 }
 
 #[derive(Default)]
@@ -134,6 +141,7 @@ pub enum ToEnvoyMessage {
 		response_tx: oneshot::Sender<anyhow::Result<protocol::KvResponseData>>,
 	},
 	SqliteRequest {
+		trace: Option<crate::sqlite::SqliteTrace>,
 		request: SqliteRequest,
 		response_tx: oneshot::Sender<anyhow::Result<SqliteResponse>>,
 	},
@@ -178,6 +186,8 @@ pub enum ToEnvoyMessage {
 		generation: Option<u32>,
 		response_tx: oneshot::Sender<Option<ActorInfo>>,
 	},
+	WaitForEventsAcked(oneshot::Sender<()>),
+	MarkStopping(oneshot::Sender<bool>),
 	Shutdown,
 	Stop,
 }
@@ -248,6 +258,7 @@ impl EnvoyContext {
 					name,
 					last_command_idx,
 					received_stop: false,
+					queued_requests: Default::default(),
 				},
 			);
 		self.shared
@@ -281,6 +292,18 @@ impl EnvoyContext {
 	}
 
 	pub fn remove_actor(&mut self, actor_id: &str, generation: u32) {
+		// The floor, not the per-generation index, keeps a stopped generation from
+		// starting again, so every index entry of this actor can go.
+		self.processed_command_idx
+			.retain(|(id, _), _| id != actor_id);
+		self.stopped_generation_floors.record(
+			actor_id,
+			generation,
+			crate::time::Instant::now(),
+			self.shared.config.stopped_generation_floor_ttl,
+			self.shared.config.stopped_generation_floor_capacity,
+		);
+		crate::events::retire(self, actor_id, generation);
 		if let Some(generations) = self.actors.get_mut(actor_id) {
 			generations.remove(&generation);
 			if generations.is_empty() {
@@ -351,13 +374,19 @@ impl EnvoyContext {
 	}
 }
 
-pub async fn start_envoy(config: EnvoyConfig) -> EnvoyHandle {
+/// Starts an envoy and waits until the engine has sent its init message.
+///
+/// Returns an error if the envoy loop exits before init, for example when the
+/// engine evicts the connection. The wait is unbounded while the engine stays
+/// unreachable, so callers that must stay responsive should use
+/// [`start_envoy_sync`] and bound [`EnvoyHandle::started`] themselves.
+pub async fn start_envoy(config: EnvoyConfig) -> anyhow::Result<EnvoyHandle> {
 	let handle = start_envoy_sync(config);
 	handle
 		.started()
 		.await
-		.expect("envoy failed to start before returning handle");
-	handle
+		.context("envoy failed to start before returning handle")?;
+	Ok(handle)
 }
 
 pub fn start_envoy_sync(config: EnvoyConfig) -> EnvoyHandle {
@@ -386,6 +415,9 @@ pub fn start_envoy_sync(config: EnvoyConfig) -> EnvoyHandle {
 }
 
 fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
+	crate::metrics::METRICS
+		.actor_queued_requests_capacity
+		.set(config.max_queued_requests_per_actor as i64);
 	let (envoy_tx, envoy_rx) = mpsc::unbounded_channel::<ToEnvoyMessage>();
 	let (start_tx, start_rx) = tokio::sync::watch::channel(());
 	let (stopped_tx, _stopped_rx) = tokio::sync::watch::channel(false);
@@ -408,6 +440,8 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(0),
+		contact_before_install_ms: std::sync::atomic::AtomicI64::new(0),
+		last_contact_ms: std::sync::atomic::AtomicI64::new(0),
 		stopped_tx,
 	});
 
@@ -416,13 +450,14 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		started_rx: start_rx,
 	};
 
-	start_connection(shared.clone());
+	let connection_task = start_connection(shared.clone());
 
 	let ctx = EnvoyContext {
 		shared: shared.clone(),
 		shutting_down: false,
 		actors: HashMap::new(),
 		pending_events: HashMap::new(),
+		pending_events_ack_waiters: Vec::new(),
 		buffered_actor_messages: HashMap::new(),
 		kv_requests: HashMap::new(),
 		next_kv_request_id: 0,
@@ -435,12 +470,14 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		http_message_indices: BufferMap::new(),
 		http_request_cancellations: HashMap::new(),
 		buffered_messages: Vec::new(),
+		stopped_generation_floors: Default::default(),
 		processed_command_idx: HashMap::new(),
+		deadlines: Default::default(),
 	};
 
 	tracing::info!(envoy_key = %shared.envoy_key, "starting envoy");
 	let span = tracing::info_span!("envoy_client", envoy_key = %shared.envoy_key);
-	spawn_detached(envoy_loop(ctx, envoy_rx, start_tx).instrument(span));
+	spawn_detached(envoy_loop(ctx, envoy_rx, start_tx, connection_task).instrument(span));
 
 	handle
 }
@@ -449,10 +486,8 @@ async fn envoy_loop(
 	mut ctx: EnvoyContext,
 	mut rx: mpsc::UnboundedReceiver<ToEnvoyMessage>,
 	start_tx: tokio::sync::watch::Sender<()>,
+	connection_task: Option<tokio::task::JoinHandle<()>>,
 ) {
-	let mut ack_tick = boxed_sleep(std::time::Duration::from_millis(ACK_COMMANDS_INTERVAL_MS));
-	let mut kv_cleanup_tick = boxed_sleep(std::time::Duration::from_millis(KV_CLEANUP_INTERVAL_MS));
-
 	let mut lost_timeout: Option<SleepFuture> = None;
 
 	loop {
@@ -479,8 +514,7 @@ async fn envoy_loop(
 								let _ = actor.handle.send(ToActor::ConnectionClosed { session });
 							}
 						}
-						fail_sent_remote_sqlite_requests_with_indeterminate_result(&mut ctx);
-						fail_sent_sqlite_requests_with_indeterminate_result(&mut ctx);
+						handle_sqlite_connection_closed(&mut ctx, session);
 						lost_timeout = handle_conn_close(&ctx, lost_timeout);
 						if evict {
 							observe_envoy_loop_iteration(branch, iter_start);
@@ -493,8 +527,8 @@ async fn envoy_loop(
 					ToEnvoyMessage::KvRequest { actor_id, data, response_tx } => {
 						handle_kv_request(&mut ctx, actor_id, data, response_tx).await;
 					}
-					ToEnvoyMessage::SqliteRequest { request, response_tx } => {
-						handle_sqlite_request(&mut ctx, request, response_tx).await;
+					ToEnvoyMessage::SqliteRequest { request, response_tx, trace } => {
+						handle_sqlite_request(&mut ctx, request, response_tx, trace).await;
 					}
 					ToEnvoyMessage::RemoteSqliteRequest { request, expected_session, response_tx } => {
 						handle_remote_sqlite_request(&mut ctx, request, expected_session, response_tx).await;
@@ -557,6 +591,17 @@ async fn envoy_loop(
 						});
 						let _ = response_tx.send(info);
 					}
+					ToEnvoyMessage::WaitForEventsAcked(response_tx) => {
+						if ctx.pending_events.is_empty() {
+							let _ = response_tx.send(());
+						} else {
+							ctx.pending_events_ack_waiters.push(response_tx);
+						}
+					}
+					ToEnvoyMessage::MarkStopping(response_tx) => {
+						let sent = !ws_send(&ctx.shared, protocol::ToRivet::ToRivetStopping).await;
+						let _ = response_tx.send(sent);
+					}
 					ToEnvoyMessage::Shutdown => {
 						handle_shutdown(&mut ctx).await;
 					}
@@ -566,18 +611,9 @@ async fn envoy_loop(
 					}
 				}
 			}
-			_ = ack_tick.as_mut() => {
-				branch = "ack_tick";
-				send_command_ack(&mut ctx).await;
-				ack_tick = boxed_sleep(std::time::Duration::from_millis(ACK_COMMANDS_INTERVAL_MS));
-			}
-			_ = kv_cleanup_tick.as_mut() => {
-				branch = "cleanup_tick";
-				cleanup_old_kv_requests(&mut ctx);
-				cleanup_old_sqlite_requests(&mut ctx);
-				cleanup_old_remote_sqlite_requests(&mut ctx);
-				crate::events::cleanup_expired_terminal_events(&mut ctx);
-				kv_cleanup_tick = boxed_sleep(std::time::Duration::from_millis(KV_CLEANUP_INTERVAL_MS));
+			_ = sleep_until_deadline(ctx.deadlines.next_at()) => {
+				branch = "request_deadline";
+				crate::deadlines::expire_due(&mut ctx);
 			}
 			_ = async {
 				match lost_timeout.as_mut() {
@@ -586,31 +622,7 @@ async fn envoy_loop(
 				}
 			} => {
 				branch = "lost_timeout";
-				// Lost timeout fired
-				for (_id, request) in ctx.kv_requests.drain() {
-					METRICS.kv_requests_inflight.dec();
-					let _ = request.response_tx.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
-				}
-				fail_sqlite_requests_with_shutdown(&mut ctx);
-				fail_remote_sqlite_requests_with_shutdown(&mut ctx);
-
-				if !ctx.actors.is_empty() {
-					tracing::warn!("stopping all actors due to envoy lost threshold");
-					for (_actor_id, gens) in &ctx.actors {
-						for (_g, entry) in gens {
-							if !entry.handle.is_closed() {
-								let _ = entry.handle.send(ToActor::Lost);
-							}
-						}
-					}
-					ctx.actors.clear();
-					ctx.shared
-						.actors
-						.lock()
-						.expect("shared actor registry poisoned")
-						.clear();
-				}
-
+				stop_all_actors_lost(&mut ctx);
 				lost_timeout = None;
 			}
 		}
@@ -624,9 +636,16 @@ async fn envoy_loop(
 			let _ = tx.send(WsTxMessage::Close);
 		}
 	}
+	if let Some(connection_task) = connection_task {
+		connection_task.abort();
+		let _ = connection_task.await;
+	}
+	let session = ctx.shared.connection_session.load(Ordering::Acquire);
+	if session != 0 {
+		crate::connection::remove_connection_for_session(&ctx.shared, session).await;
+	}
 
 	for (_id, request) in ctx.kv_requests.drain() {
-		METRICS.kv_requests_inflight.dec();
 		let _ = request
 			.response_tx
 			.send(Err(anyhow::anyhow!("envoy shutting down")));
@@ -648,7 +667,9 @@ async fn envoy_loop(
 	// Latched signal: waiters on `EnvoyHandle::wait_stopped` observe this and
 	// any future callers of `wait_stopped` resolve immediately because watch
 	// retains the last value.
-	let _ = ctx.shared.stopped_tx.send(true);
+	// A local development shutdown may finish before its caller starts waiting.
+	// Keep the stopped state even when no receiver is subscribed yet.
+	ctx.shared.stopped_tx.send_replace(true);
 }
 
 pub(crate) fn remove_http_routes_for_session(ctx: &mut EnvoyContext, session: u64) {
@@ -699,6 +720,30 @@ async fn handle_conn_message(
 				*guard = Some(init.metadata.clone());
 			}
 			tracing::info!(?init.metadata, "received init");
+
+			// An envoy that went its lost threshold without a ping, for example while its
+			// process was paused or its network partitioned, may notice the close only now
+			// and reconnect before its lost timer runs out. The engine may already have ended
+			// the epochs it holds, so they stop before anything resumes on this connection.
+			// The silence is judged now, when the actors would resume, so it covers every
+			// delay between the close and this init.
+			let contact_ms = ctx
+				.shared
+				.contact_before_install_ms
+				.swap(0, Ordering::AcqRel);
+			let silence_ms = if contact_ms == 0 {
+				0
+			} else {
+				crate::time::now_millis().saturating_sub(contact_ms)
+			};
+			if silence_ms > init.metadata.envoy_lost_threshold {
+				tracing::warn!(
+					silence_ms,
+					lost_threshold_ms = init.metadata.envoy_lost_threshold,
+					"reconnected after the envoy lost threshold without a ping; stopping all actors"
+				);
+				stop_all_actors_lost(ctx);
+			}
 
 			lost_timeout = None;
 			resend_unacknowledged_events(ctx).await;
@@ -751,6 +796,36 @@ async fn handle_conn_message(
 	}
 
 	lost_timeout
+}
+
+/// Stops every actor because the envoy went its lost threshold without the engine: in-flight
+/// KV and SQLite requests fail, and each actor is told it is lost and forgotten. Their
+/// unacknowledged events are still resent; they name ended epochs, which the engine ignores.
+fn stop_all_actors_lost(ctx: &mut EnvoyContext) {
+	for (_id, request) in ctx.kv_requests.drain() {
+		let _ = request
+			.response_tx
+			.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
+	}
+	fail_sqlite_requests_with_shutdown(ctx);
+	fail_remote_sqlite_requests_with_shutdown(ctx);
+
+	if !ctx.actors.is_empty() {
+		tracing::warn!("stopping all actors due to envoy lost threshold");
+		for (_actor_id, gens) in &ctx.actors {
+			for (_g, entry) in gens {
+				if !entry.handle.is_closed() {
+					let _ = entry.handle.send(ToActor::Lost);
+				}
+			}
+		}
+		ctx.actors.clear();
+		ctx.shared
+			.actors
+			.lock()
+			.expect("shared actor registry poisoned")
+			.clear();
+	}
 }
 
 fn handle_conn_close(ctx: &EnvoyContext, lost_timeout: Option<SleepFuture>) -> Option<SleepFuture> {

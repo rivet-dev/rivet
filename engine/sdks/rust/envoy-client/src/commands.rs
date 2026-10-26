@@ -1,13 +1,115 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::time::Duration;
 
 use rivet_envoy_protocol as protocol;
 
 use crate::actor::create_actor;
 use crate::connection::ws_send;
 use crate::envoy::EnvoyContext;
+use crate::metrics::METRICS;
 use crate::stringify::stringify_command_wrapper;
+use crate::time::Instant;
 
-pub const ACK_COMMANDS_INTERVAL_MS: u64 = 5 * 60 * 1000;
+/// The highest stopped generation of each recently stopped actor. Generations only grow
+/// per actor, so a start at or below the floor is a late duplicate of a stopped
+/// generation and is dropped.
+///
+/// A late start can only arrive within a bounded window: the engine drops a start whose
+/// sender's deadline passed before forwarding it, and the connection's lost threshold
+/// bounds how long a forwarded start can wait. So a floor expires after
+/// `EnvoyConfig::stopped_generation_floor_ttl`, which must exceed that window. Expired
+/// floors are pruned lazily when another floor is recorded.
+/// `EnvoyConfig::stopped_generation_floor_capacity` is a memory backstop; at the cap the
+/// least recently stopped actor is forgotten early, with a warning.
+#[derive(Default)]
+pub struct StoppedGenerationFloors {
+	floors: HashMap<String, (u32, (Instant, u64))>,
+	/// Recency order: (stopped at, stamp) to actor. The oldest entry expires first.
+	order: BTreeMap<(Instant, u64), String>,
+	next_stamp: u64,
+	/// Whether the near-cap warning was logged since usage last fell below the threshold.
+	warned: bool,
+}
+
+impl StoppedGenerationFloors {
+	/// Records that `generation` of `actor_id` stopped at `now`, keeping the higher floor,
+	/// and forgets floors older than `ttl`.
+	pub fn record(
+		&mut self,
+		actor_id: &str,
+		generation: u32,
+		now: Instant,
+		ttl: Duration,
+		capacity: usize,
+	) {
+		self.expire(now, ttl);
+
+		let key = (now, self.next_stamp);
+		self.next_stamp += 1;
+		let floor = match self.floors.remove(actor_id) {
+			Some((floor, old_key)) => {
+				self.order.remove(&old_key);
+				floor.max(generation)
+			}
+			None => generation,
+		};
+		self.floors.insert(actor_id.to_owned(), (floor, key));
+		self.order.insert(key, actor_id.to_owned());
+
+		// The cap is a backstop for stop rates the TTL cannot bound.
+		while self.floors.len() > capacity.max(1) {
+			let Some((_, evicted)) = self.order.pop_first() else {
+				break;
+			};
+			self.floors.remove(&evicted);
+		}
+		self.observe(capacity);
+	}
+
+	/// Forgets every floor recorded `ttl` or longer before `now`.
+	fn expire(&mut self, now: Instant, ttl: Duration) {
+		while let Some(entry) = self.order.first_entry() {
+			let (stopped_at, _) = *entry.key();
+			if now.saturating_duration_since(stopped_at) < ttl {
+				break;
+			}
+			let actor_id = entry.remove();
+			self.floors.remove(&actor_id);
+		}
+	}
+
+	/// Whether a start for `generation` of `actor_id` repeats a stopped generation.
+	pub fn blocks(&self, actor_id: &str, generation: u32) -> bool {
+		self.floors
+			.get(actor_id)
+			.is_some_and(|(floor, _)| generation <= *floor)
+	}
+
+	pub fn len(&self) -> usize {
+		self.floors.len()
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.floors.is_empty()
+	}
+
+	fn observe(&mut self, capacity: usize) {
+		let usage = self.floors.len();
+		METRICS.stopped_floors.set(usage as i64);
+		METRICS.stopped_floors_capacity.set(capacity as i64);
+		let near_cap = usage.saturating_mul(10) >= capacity.saturating_mul(9);
+		if near_cap && !self.warned {
+			self.warned = true;
+			tracing::warn!(
+				usage,
+				capacity,
+				"stopped generation floors are near their cap; many actors stopped on this Envoy within the floor TTL, so raise stopped_generation_floor_capacity"
+			);
+		} else if !near_cap && usage.saturating_mul(10) < capacity.saturating_mul(8) {
+			self.warned = false;
+		}
+	}
+}
 
 pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::CommandWrapper>) {
 	tracing::info!(command_count = commands.len(), "received commands");
@@ -22,19 +124,44 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 	// (skipped) command is still re-acked instead of being replayed forever.
 	let batch_actors: Vec<(String, u32)> = commands
 		.iter()
-		.map(|c| (c.checkpoint.actor_id.clone(), c.checkpoint.generation))
+		.map(|c| (c.checkpoint.actor_id.to_string(), c.checkpoint.generation))
 		.collect();
 
 	for command_wrapper in commands {
 		let checkpoint = command_wrapper.checkpoint;
-		let dedup_key = (checkpoint.actor_id.clone(), checkpoint.generation);
+		let dedup_key = (checkpoint.actor_id.to_string(), checkpoint.generation);
 
-		// Drop replayed commands. `pegboard-envoy` re-streams every unacked
-		// command on reconnect, and the command index is monotonic per
+		// A start for a generation that already stopped here is a late duplicate. Starting
+		// it again would run a generation the engine no longer tracks.
+		if matches!(
+			command_wrapper.inner,
+			protocol::Command::CommandStartActor(_)
+		) && ctx
+			.stopped_generation_floors
+			.blocks(&checkpoint.actor_id, checkpoint.generation)
+		{
+			tracing::debug!(
+				actor_id = %checkpoint.actor_id,
+				generation = checkpoint.generation,
+				"dropping start for a stopped generation"
+			);
+			continue;
+		}
+
+		// Drop repeated commands. The command index is monotonic per
 		// `(actor_id, generation)`, so any index at or below the highest one
-		// we have already processed is a duplicate.
-		if let Some(&last_idx) = ctx.processed_command_idx.get(&dedup_key) {
+		// already processed for a hosted generation is a duplicate. A live actor
+		// owns its checkpoint, including while its asynchronous startup is pending.
+		let last_idx = ctx.processed_command_idx.get(&dedup_key).copied().max(
+			ctx.actors
+				.get(&*checkpoint.actor_id)
+				.and_then(|generations| generations.get(&checkpoint.generation))
+				.map(|entry| entry.last_command_idx),
+		);
+		if let Some(last_idx) = last_idx {
 			if checkpoint.index <= last_idx {
+				// Restore the cache entry so the batch ack also covers this replay.
+				ctx.processed_command_idx.insert(dedup_key, last_idx);
 				tracing::debug!(
 					actor_id = %checkpoint.actor_id,
 					generation = checkpoint.generation,
@@ -53,7 +180,7 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 				let actor_name = val.config.name.clone();
 				let (handle, active_http_request_count) = create_actor(
 					ctx.shared.clone(),
-					checkpoint.actor_id.clone(),
+					checkpoint.actor_id.clone().to_string(),
 					checkpoint.generation,
 					val.config,
 					val.hibernating_requests,
@@ -61,11 +188,11 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 				);
 
 				ctx.insert_actor(
-					checkpoint.actor_id.clone(),
+					checkpoint.actor_id.to_string(),
 					checkpoint.generation,
 					handle,
 					active_http_request_count,
-					actor_name,
+					actor_name.to_string(),
 					checkpoint.index,
 				);
 			}
@@ -80,31 +207,94 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 						reason: val.reason,
 					});
 				} else {
-					tracing::warn!(
+					tracing::debug!(
 						actor_id = %checkpoint.actor_id,
 						generation = checkpoint.generation,
-						"received stop actor command for unknown actor"
+						"stop for a generation this envoy does not host; reporting it stopped"
 					);
+					report_unhosted_generation_stopped(
+						ctx,
+						&checkpoint.actor_id,
+						checkpoint.generation,
+					)
+					.await;
 				}
 			}
 		}
 	}
 
-	// Ack the whole batch immediately. Anything left unacked stays in the
-	// engine's `ActorCommandKey` subspace, and `envoy_conn_prepare` re-streams
-	// that subspace on every reconnect, so a start that waits for the periodic
-	// tick can be replayed for up to `ACK_COMMANDS_INTERVAL_MS` and resurrect a
-	// stopped actor or replace a live one. Scope to just this batch's actors
-	// instead of a full-state ack, and do not clear dedup; the tick handles
-	// full re-acks, recovery, and clearing.
+	// Ack the whole batch immediately, scoped to this batch's actors. Engines that
+	// replay unacked commands on reconnect stop replaying them once acked; engines
+	// that do not replay ignore the ack.
 	if !batch_actors.is_empty() {
 		send_batch_command_acks(ctx, &batch_actors).await;
 	}
+
+	// A command for a generation this Envoy does not host leaves nothing to
+	// protect once acked. Hosted generations are forgotten by `remove_actor`.
+	for key in &batch_actors {
+		let hosted = ctx
+			.actors
+			.get(&key.0)
+			.is_some_and(|generations| generations.contains_key(&key.1));
+		if !hosted {
+			ctx.processed_command_idx.remove(key);
+		}
+	}
 }
 
-/// Ack only the given actors' latest processed command index. Used for the
-/// immediate post-batch ack. Does not clear dedup (see the race note in
-/// `send_command_ack`); a failed send is retried by the replayed batch or tick.
+/// Answers a stop for a generation this Envoy does not run with a stopped event, so the
+/// engine ends the epoch now; it would otherwise keep resending the stop. The generation either never
+/// started here or already stopped, and the engine sends a generation's commands only to the
+/// Envoy it allocated, so no other Envoy runs it either.
+///
+/// The stopped floor is recorded first: a start for this generation that the stop overtook
+/// is then dropped on arrival instead of running an epoch the engine has ended. A repeated
+/// stop reports again, which the engine ignores once the epoch moved on.
+async fn report_unhosted_generation_stopped(
+	ctx: &mut EnvoyContext,
+	actor_id: &str,
+	generation: u32,
+) {
+	ctx.stopped_generation_floors.record(
+		actor_id,
+		generation,
+		Instant::now(),
+		ctx.shared.config.stopped_generation_floor_ttl,
+		ctx.shared.config.stopped_generation_floor_capacity,
+	);
+
+	// Follow any unacknowledged events of the generation, so acking one cannot drop the other.
+	let index = ctx
+		.pending_events
+		.get(&(actor_id.to_owned(), generation))
+		.and_then(|pending| {
+			pending
+				.events
+				.iter()
+				.map(|event| event.checkpoint.index)
+				.max()
+		})
+		.map_or(0, |index| index + 1);
+
+	let event = protocol::EventWrapper {
+		checkpoint: protocol::ActorCheckpoint {
+			actor_id: actor_id.to_owned().into(),
+			generation,
+			index,
+		},
+		inner: protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
+			state: protocol::ActorState::ActorStateStopped(protocol::ActorStateStopped {
+				code: protocol::StopCode::Ok,
+				message: None,
+			}),
+		}),
+	};
+	crate::events::handle_send_events(ctx, vec![event]).await;
+}
+
+/// Ack only the given actors' latest processed command index. A failed send is
+/// retried by the next delivery of the same batch.
 async fn send_batch_command_acks(ctx: &EnvoyContext, actors: &[(String, u32)]) {
 	let mut highest: HashMap<(String, u32), i64> = HashMap::new();
 	for key in actors {
@@ -120,64 +310,12 @@ async fn send_batch_command_acks(ctx: &EnvoyContext, actors: &[(String, u32)]) {
 	send_ack_checkpoints(ctx, checkpoints_from(highest)).await;
 }
 
-pub async fn send_command_ack(ctx: &mut EnvoyContext) {
-	// Merge live actors and the dedup map, highest index per actor-generation.
-	// Live actors are re-acked every tick (recovers an ack accepted locally but
-	// never committed by the server); the dedup map covers stops whose actor was
-	// already removed and is cleared once acked.
-	let mut highest: HashMap<(String, u32), i64> = HashMap::new();
-	for (actor_id, generations) in &ctx.actors {
-		for (generation, entry) in generations {
-			if entry.last_command_idx >= 0 {
-				highest.insert((actor_id.clone(), *generation), entry.last_command_idx);
-			}
-		}
-	}
-	for ((actor_id, generation), &index) in &ctx.processed_command_idx {
-		highest
-			.entry((actor_id.clone(), *generation))
-			.and_modify(|existing| *existing = (*existing).max(index))
-			.or_insert(index);
-	}
-
-	if highest.is_empty() {
-		return;
-	}
-
-	let last_command_checkpoints = checkpoints_from(highest);
-	let send_failed = send_ack_checkpoints(ctx, last_command_checkpoints.clone()).await;
-
-	// Skip the dedup clear if the ack never left this process. Otherwise
-	// `pegboard-envoy` would replay the commands on reconnect with no dedup
-	// state to suppress them.
-	if send_failed {
-		return;
-	}
-
-	// TODO: Race condition. We clear `processed_command_idx` as soon as the
-	// ack bytes leave this process, not when `pegboard-envoy` actually
-	// commits the matching `clear_range` over `ActorCommandKey` entries. If
-	// the WS drops between `ws_send` returning and the server applying the
-	// ack, on reconnect `pegboard-envoy` will replay these commands and the
-	// dedup map will no longer be populated to drop them, allowing a
-	// stopped actor to be resurrected or a live actor to be replaced. The
-	// window is narrow (the gap between OS-accepted bytes and the FDB
-	// commit), but a strictly correct fix needs an ack-of-ack from
-	// `pegboard-envoy` so we only clear after positive confirmation.
-	// This now also applies to removed actors whose stops are acked here: a
-	// short-lived actor can be resurrected in the same window. Same fix.
-	for cp in &last_command_checkpoints {
-		ctx.processed_command_idx
-			.remove(&(cp.actor_id.clone(), cp.generation));
-	}
-}
-
 fn checkpoints_from(highest: HashMap<(String, u32), i64>) -> Vec<protocol::ActorCheckpoint> {
 	highest
 		.into_iter()
 		.map(
 			|((actor_id, generation), index)| protocol::ActorCheckpoint {
-				actor_id,
+				actor_id: actor_id.into(),
 				generation,
 				index,
 			},

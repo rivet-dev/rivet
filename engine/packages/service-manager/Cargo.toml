@@ -7,14 +7,12 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
+rivet-env.workspace = true
+rivet-topology.workspace = true
 anyhow.workspace = true
-chrono.workspace = true
 futures-util.workspace = true
-include_dir.workspace = true
 rivet-config.workspace = true
 rivet-metrics-server.workspace = true
-rivet-pools.workspace = true
-rivet-runtime.workspace = true
-tokio-cron-scheduler.workspace = true
+rivet-engine-context.workspace = true
 tokio.workspace = true
 tracing.workspace = true

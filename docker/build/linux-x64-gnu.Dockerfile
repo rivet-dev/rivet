@@ -5,8 +5,6 @@
 # Build args:
 #   BUILD_TARGET    - "engine" or "rivetkit-napi"
 #   BUILD_MODE      - "debug" (fast) or "release" (optimized)
-#   BUILD_FRONTEND  - "true" or "false" (engine only)
-#   VITE_FEATURE_FLAGS - comma-separated frontend features. Empty means engine UI.
 #
 # Base image: docker/builder-base/linux-gnu.Dockerfile
 # Rebuild base: scripts/docker-builder-base/build-push.sh linux-gnu --push
@@ -14,9 +12,6 @@ FROM ghcr.io/rivet-dev/rivet/builder-base-linux-gnu:0e33ceb98
 
 ARG BUILD_TARGET=engine
 ARG BUILD_MODE=release
-ARG BUILD_FRONTEND=false
-ARG VITE_APP_API_URL=__SAME__
-ARG VITE_FEATURE_FLAGS=
 
 ENV RUSTFLAGS="--cfg tokio_unstable"
 
@@ -33,19 +28,12 @@ RUN RUST_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
     rustup default "${RUST_TOOLCHAIN}" && \
     rustup target add x86_64-unknown-linux-gnu
 
-# Build frontend if building engine with frontend enabled.
-RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
+# Build the Inspector UI for the native binding.
+RUN if [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \
         export SKIP_NAPI_BUILD=1 && \
         export SKIP_WASM_BUILD=1 && \
-        pnpm install --ignore-scripts && \
-        VITE_APP_API_URL="${VITE_APP_API_URL}" VITE_FEATURE_FLAGS="${VITE_FEATURE_FLAGS}" npx turbo build:engine -F @rivetkit/engine-frontend; \
-    elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
-        export NODE_OPTIONS="--max-old-space-size=8192" && \
-        export SKIP_NAPI_BUILD=1 && \
-        export SKIP_WASM_BUILD=1 && \
-        pnpm install --ignore-scripts && \
-        npx turbo build:inspector-ui -F @rivetkit/engine-frontend; \
+        pnpm install --frozen-lockfile --ignore-scripts; \
     fi
 
 # Build binary.

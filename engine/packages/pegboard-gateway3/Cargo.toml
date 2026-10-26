@@ -38,5 +38,3 @@ universaldb.workspace = true
 universalpubsub.workspace = true
 vbare.workspace = true
 
-[dev-dependencies]
-rivet-ups-protocol.workspace = true

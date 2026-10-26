@@ -43,6 +43,13 @@ pub struct SharedContext {
 	/// `EnvoyHandle::is_ping_healthy` to surface a dead engine link to upstream health checks.
 	/// Zero means no ping has been received yet.
 	pub last_ping_ts: AtomicI64,
+	/// The envoy's last contact with the engine before a connection was installed, recorded
+	/// before that connection reads any frame and kept at the earliest such contact until the
+	/// envoy loop takes it while handling an init. Zero when nothing is pending.
+	pub contact_before_install_ms: AtomicI64,
+	/// Wall-clock milliseconds of the last ping or init received on any connection. Zero until
+	/// the first one.
+	pub last_contact_ms: AtomicI64,
 	// Latched signal fired by `envoy_loop` after its cleanup block completes.
 	// Waiters observing `true` are guaranteed that the loop has exited and
 	// every pending KV/SQLite request has been resolved (with `EnvoyShutdownError`
@@ -61,6 +68,9 @@ pub struct HttpConnectionTx {
 	pub session: u64,
 	pub tx: mpsc::Sender<HttpWsTxMessage>,
 	pub byte_budget: Arc<Semaphore>,
+	/// Bounds the detached tasks that send terminal frames for this session
+	/// while the HTTP stream is saturated.
+	pub detached_send_budget: Arc<Semaphore>,
 }
 
 pub struct HttpWsTxMessage {

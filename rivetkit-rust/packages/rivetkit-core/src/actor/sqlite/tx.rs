@@ -4,13 +4,14 @@ use std::{
 	fmt,
 	future::Future,
 	sync::{
-		Arc,
+		Arc, LazyLock,
 		atomic::{AtomicU64, Ordering},
 	},
 	time::Duration,
 };
 
 use anyhow::{Context, Result};
+use rivet_metrics::prometheus::{IntCounter, IntGauge};
 use serde::Serialize;
 #[cfg(target_arch = "wasm32")]
 use tokio::sync::oneshot;
@@ -33,6 +34,9 @@ pub const DEFAULT_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_TRANSACTION_NAME_BYTES: usize = 128;
 pub const TRANSACTION_COORDINATOR_QUEUE_CAPACITY: usize = 128;
 pub(super) const TRANSACTION_TERMINAL_CAPACITY: usize = 1024;
+/// Maximum expired transaction keys each actor remembers so stale handles get
+/// an "expired" error. Older keys are evicted first.
+pub(super) const TRANSACTION_EXPIRED_CAPACITY: usize = 1024;
 #[cfg(feature = "sqlite-local")]
 static UNNAMED_TRANSACTION_WARNINGS: AtomicU64 = AtomicU64::new(0);
 
@@ -80,15 +84,146 @@ pub(super) struct TransactionCoordinator {
 	pub(super) state: AsyncMutex<TransactionCoordinatorState>,
 	epoch: AtomicU64,
 	waiters: AtomicU64,
+	/// Coordinated begins currently parked behind a manual transaction.
+	pub(super) manual_transaction_waiters: AtomicU64,
+	/// Cancelled when the coordinator closes so begins parked behind a manual
+	/// transaction stop waiting.
+	closed_token: CancellationToken,
 }
 
 pub(super) struct TransactionCoordinatorState {
 	pub(super) active: Option<ActiveTransaction>,
 	pub(super) terminal: BTreeMap<String, TransactionTerminalState>,
 	pub(super) terminal_order: VecDeque<String>,
-	pub(super) poisoned: BTreeMap<String, Duration>,
+	pub(super) poisoned: BTreeMap<String, ExpiredKey>,
+	pub(super) poisoned_order: VecDeque<String>,
 	pub(super) last_expired_timeout: Option<Duration>,
 	pub(super) closed: bool,
+}
+
+/// An expired transaction key, counted on the process-wide expired key gauge while it is kept.
+pub(super) struct ExpiredKey {
+	pub(super) timeout: Duration,
+	_metric: rivet_metrics::IntGaugeGuard,
+}
+
+/// Process-wide usage of the per-actor expired transaction key maps. The
+/// usage gauge is summed over every actor in the process.
+struct ExpiredKeyMetrics {
+	keys: IntGauge,
+	evicted_total: IntCounter,
+}
+
+static EXPIRED_KEY_METRICS: LazyLock<ExpiredKeyMetrics> = LazyLock::new(|| {
+	let keys = IntGauge::new(
+		"rivetkit_sqlite_transaction_expired_keys",
+		"expired SQLite transaction keys remembered across all actors in the process",
+	)
+	.expect("create rivetkit_sqlite_transaction_expired_keys gauge");
+	let capacity = IntGauge::new(
+		"rivetkit_sqlite_transaction_expired_keys_capacity",
+		"maximum expired SQLite transaction keys remembered per actor",
+	)
+	.expect("create rivetkit_sqlite_transaction_expired_keys_capacity gauge");
+	let evicted_total = IntCounter::new(
+		"rivetkit_sqlite_transaction_expired_keys_evicted_total",
+		"total expired SQLite transaction keys evicted because an actor reached the cap",
+	)
+	.expect("create rivetkit_sqlite_transaction_expired_keys_evicted_total counter");
+	capacity.set(TRANSACTION_EXPIRED_CAPACITY as i64);
+
+	for collector in [
+		Box::new(keys.clone()) as Box<dyn rivet_metrics::prometheus::core::Collector>,
+		Box::new(capacity),
+		Box::new(evicted_total.clone()),
+	] {
+		if let Err(error) = rivet_metrics::REGISTRY.register(collector) {
+			tracing::warn!(
+				?error,
+				"sqlite transaction metric registration failed, using existing collector"
+			);
+		}
+	}
+
+	ExpiredKeyMetrics {
+		keys,
+		evicted_total,
+	}
+});
+
+/// Process-wide visibility into coordinated transactions that wait for a
+/// manual transaction (`BEGIN` through ordinary statements) to finish.
+struct ManualTransactionWaitMetrics {
+	waiters: IntGauge,
+	timeouts_total: IntCounter,
+}
+
+static MANUAL_TRANSACTION_WAIT_METRICS: LazyLock<ManualTransactionWaitMetrics> = LazyLock::new(
+	|| {
+		let waiters = IntGauge::new(
+			"rivetkit_sqlite_manual_transaction_waiters",
+			"coordinated SQLite transactions waiting for a manual transaction to finish across all actors in the process",
+		)
+		.expect("create rivetkit_sqlite_manual_transaction_waiters gauge");
+		let timeouts_total = IntCounter::new(
+			"rivetkit_sqlite_manual_transaction_wait_timeouts_total",
+			"total coordinated SQLite transactions that timed out waiting for a manual transaction to finish",
+		)
+		.expect("create rivetkit_sqlite_manual_transaction_wait_timeouts_total counter");
+
+		for collector in [
+			Box::new(waiters.clone()) as Box<dyn rivet_metrics::prometheus::core::Collector>,
+			Box::new(timeouts_total.clone()),
+		] {
+			if let Err(error) = rivet_metrics::REGISTRY.register(collector) {
+				tracing::warn!(
+					?error,
+					"sqlite manual transaction metric registration failed, using existing collector"
+				);
+			}
+		}
+
+		ManualTransactionWaitMetrics {
+			waiters,
+			timeouts_total,
+		}
+	},
+);
+
+/// Counts one coordinated begin parked behind a manual transaction.
+struct ManualTransactionWaitGuard<'a> {
+	coordinator: &'a TransactionCoordinator,
+	_metric: rivet_metrics::IntGaugeGuard,
+}
+
+impl<'a> ManualTransactionWaitGuard<'a> {
+	fn new(db: &'a SqliteDb, timeout: Duration) -> Self {
+		let coordinator = db.transaction_coordinator.as_ref();
+		let previous = coordinator
+			.manual_transaction_waiters
+			.fetch_add(1, Ordering::AcqRel);
+		if previous == 0 {
+			tracing::warn!(
+				actor_id = db.actor_id.as_deref().unwrap_or("unknown"),
+				timeout_ms = duration_millis(timeout),
+				"sqlite transaction is waiting for a manual transaction to finish; a BEGIN issued through ordinary statements has not reached COMMIT or ROLLBACK, so actor state persistence and db.transaction() are delayed"
+			);
+		}
+		Self {
+			coordinator,
+			_metric: rivet_metrics::GaugeGuardExt::inc_guard(
+				&MANUAL_TRANSACTION_WAIT_METRICS.waiters,
+			),
+		}
+	}
+}
+
+impl Drop for ManualTransactionWaitGuard<'_> {
+	fn drop(&mut self) {
+		self.coordinator
+			.manual_transaction_waiters
+			.fetch_sub(1, Ordering::AcqRel);
+	}
 }
 
 pub(super) struct ActiveTransaction {
@@ -124,9 +259,6 @@ struct CoordinatorWaitGuard<'a> {
 impl<'a> CoordinatorWaitGuard<'a> {
 	#[cfg(feature = "sqlite-local")]
 	fn new(db: &'a SqliteDb) -> Option<Self> {
-		if !db.profiling.config.enabled {
-			return None;
-		}
 		let metrics = db.vfs_metrics.as_ref()?;
 		let _depth = db
 			.transaction_coordinator
@@ -168,11 +300,14 @@ impl Default for TransactionCoordinator {
 				terminal: BTreeMap::new(),
 				terminal_order: VecDeque::new(),
 				poisoned: BTreeMap::new(),
+				poisoned_order: VecDeque::new(),
 				last_expired_timeout: None,
 				closed: false,
 			}),
 			epoch: AtomicU64::new(0),
 			waiters: AtomicU64::new(0),
+			manual_transaction_waiters: AtomicU64::new(0),
+			closed_token: CancellationToken::new(),
 		}
 	}
 }
@@ -187,6 +322,17 @@ impl SqliteDb {
 	}
 
 	pub(super) async fn begin_regular_operation(&self) -> Result<RegularOperationGuard> {
+		// A statement outside a transaction must not run before the staged schema exists. The
+		// commit is boxed so every statement's future stays small.
+		if self.has_deferred_bootstrap() {
+			Box::pin(self.commit_deferred_bootstrap()).await?;
+		}
+		self.begin_admitted_operation().await
+	}
+
+	/// Admits a statement outside a transaction without committing a staged bootstrap first.
+	/// Only a caller that carries the staged statements itself may use it.
+	pub(super) async fn begin_admitted_operation(&self) -> Result<RegularOperationGuard> {
 		let epoch = self.transaction_coordinator.epoch.load(Ordering::Acquire);
 		let permit = self.try_transaction_admission()?;
 		let wait = CoordinatorWaitGuard::new(self);
@@ -261,9 +407,8 @@ impl SqliteDb {
 		timeout: Option<Duration>,
 	) -> Result<SqliteTransaction> {
 		#[cfg(feature = "sqlite-local")]
-		let started_at = (self.profiling.config.enabled
-			&& self.backend() == super::SqliteBackend::LocalNative)
-			.then(crate::time::Instant::now);
+		let started_at =
+			(self.backend() == super::SqliteBackend::LocalNative).then(crate::time::Instant::now);
 		let key = key.into();
 		let timeout = timeout.unwrap_or(DEFAULT_TRANSACTION_TIMEOUT);
 		if key.is_empty() {
@@ -294,22 +439,7 @@ impl SqliteDb {
 		self.traced(SqliteOperation::TransactionBegin, task).await
 	}
 
-	#[cfg(test)]
-	pub(super) async fn begin_transaction_inner(
-		&self,
-		key: String,
-		timeout: Duration,
-	) -> Result<SqliteTransaction> {
-		self.begin_transaction_profiled_inner(
-			key,
-			timeout,
-			None,
-			#[cfg(feature = "sqlite-local")]
-			(self.profiling.config.enabled && self.backend() == super::SqliteBackend::LocalNative)
-				.then(crate::time::Instant::now),
-		)
-		.await
-	}
+	
 
 	async fn begin_transaction_profiled_inner(
 		&self,
@@ -323,9 +453,9 @@ impl SqliteDb {
 		let epoch = self.transaction_coordinator.epoch.load(Ordering::Acquire);
 		let permit = self.try_transaction_admission()?;
 		let wait = CoordinatorWaitGuard::new(self);
-		let gate_guard = Arc::clone(&self.transaction_coordinator.gate)
-			.write_owned()
-			.await;
+		let gate_guard = self
+			.acquire_gate_outside_manual_transaction(timeout)
+			.await?;
 		drop(wait);
 		#[cfg(feature = "sqlite-local")]
 		let transaction_wait = transaction_wait_started_at.map(|started| started.elapsed());
@@ -409,13 +539,14 @@ impl SqliteDb {
 						_name,
 						started_at,
 						self.profiling.config.max_statements_per_transaction_trace,
+						self.profiling.selection.tracks_transactions(),
 					);
 					profile.transaction_wait_ns = transaction_wait
 						.unwrap_or_default()
 						.as_nanos()
 						.try_into()
 						.unwrap_or(u64::MAX);
-					let default_profile = depot_client::vfs::SqliteOperationProfile::default();
+					let default_profile = sqlite_embedded::vfs::SqliteOperationProfile::default();
 					profile.record_control(
 						begin_profile.as_ref().unwrap_or(&default_profile),
 						begin_duration
@@ -447,10 +578,63 @@ impl SqliteDb {
 			remote_session,
 		);
 
+		// A staged schema rides the first transaction, ahead of the caller's statements.
+		if self.has_deferred_bootstrap() {
+			Box::pin(self.apply_deferred_bootstrap(&key)).await?;
+		}
+
 		Ok(SqliteTransaction {
 			db: self.clone(),
 			key,
 		})
+	}
+
+	/// Acquires the exclusive gate once the connection is in autocommit mode.
+	///
+	/// A manual transaction (`BEGIN` sent through ordinary statements) leaves
+	/// the connection outside autocommit without owning the gate. Starting a
+	/// coordinated transaction then would fail with "cannot start a transaction
+	/// within a transaction", or would fold coordinated writes into the manual
+	/// transaction so its `ROLLBACK` discarded them. The gate is released while
+	/// waiting because the manual transaction finishes through ordinary
+	/// statements that need the shared gate. The state is checked while holding
+	/// the gate, when no ordinary statement can change it.
+	///
+	/// The wait is bounded by the transaction `timeout` and ends early when the
+	/// coordinator closes. Backends that cannot report the connection state
+	/// never wait.
+	async fn acquire_gate_outside_manual_transaction(
+		&self,
+		timeout: Duration,
+	) -> Result<OwnedRwLockWriteGuard<()>> {
+		let deadline = crate::time::Instant::now() + timeout;
+		let mut wait_guard = None;
+		loop {
+			let gate_guard = Arc::clone(&self.transaction_coordinator.gate)
+				.write_owned()
+				.await;
+			let Some(mut explicit_transaction) = self.subscribe_explicit_transaction() else {
+				return Ok(gate_guard);
+			};
+			if !*explicit_transaction.borrow_and_update() {
+				return Ok(gate_guard);
+			}
+			drop(gate_guard);
+
+			if wait_guard.is_none() {
+				wait_guard = Some(ManualTransactionWaitGuard::new(self, timeout));
+			}
+			tokio::select! {
+				_ = explicit_transaction.wait_for(|open| !*open) => {}
+				_ = self.transaction_coordinator.closed_token.cancelled() => {
+					return Err(transaction_coordinator_closed_error());
+				}
+				_ = crate::time::sleep_until(deadline) => {
+					MANUAL_TRANSACTION_WAIT_METRICS.timeouts_total.inc();
+					return Err(manual_transaction_open_error(timeout));
+				}
+			}
+		}
 	}
 
 	async fn transaction_operation(&self, key: &str) -> Result<(Arc<AsyncMutex<()>>, Option<u64>)> {
@@ -505,9 +689,8 @@ impl SqliteDb {
 
 	async fn transaction_exec_inner(&self, key: &str, sql: String) -> Result<QueryResult> {
 		#[cfg(feature = "sqlite-local")]
-		let started_at = (self.profiling.config.enabled
-			&& self.backend() == super::SqliteBackend::LocalNative)
-			.then(crate::time::Instant::now);
+		let started_at =
+			(self.backend() == super::SqliteBackend::LocalNative).then(crate::time::Instant::now);
 		let (operation, remote_session) = self.transaction_operation(key).await?;
 		let _operation = operation.lock().await;
 		#[cfg(feature = "sqlite-local")]
@@ -555,16 +738,15 @@ impl SqliteDb {
 		self.traced(SqliteOperation::TransactionExecute, task).await
 	}
 
-	async fn transaction_execute_inner(
+	pub(super) async fn transaction_execute_inner(
 		&self,
 		key: &str,
 		sql: String,
 		params: Option<Vec<BindParam>>,
 	) -> Result<ExecuteResult> {
 		#[cfg(feature = "sqlite-local")]
-		let started_at = (self.profiling.config.enabled
-			&& self.backend() == super::SqliteBackend::LocalNative)
-			.then(crate::time::Instant::now);
+		let started_at =
+			(self.backend() == super::SqliteBackend::LocalNative).then(crate::time::Instant::now);
 		let (operation, remote_session) = self.transaction_operation(key).await?;
 		let _operation = operation.lock().await;
 		#[cfg(feature = "sqlite-local")]
@@ -600,6 +782,31 @@ impl SqliteDb {
 		}
 	}
 
+	/// Runs framework-owned `statements` inside the transaction `key`. A local database runs
+	/// them as one worker command, so a busy pool delays the batch once instead of once per
+	/// statement. The remote backend sends them one at a time inside the transaction.
+	pub(super) async fn transaction_execute_statements_inner(
+		&self,
+		key: &str,
+		statements: Vec<super::SqliteBatchStatement>,
+	) -> Result<()> {
+		if self.backend() != super::SqliteBackend::LocalNative {
+			for statement in statements {
+				self.transaction_execute_inner(key, statement.sql, statement.params)
+					.await?;
+			}
+			return Ok(());
+		}
+
+		let (operation, _) = self.transaction_operation(key).await?;
+		let _operation = operation.lock().await;
+		self.ensure_active_transaction(key).await?;
+		match self.local_execute_batch(statements).await {
+			Ok(()) => Ok(()),
+			Err(error) => Err(self.handle_transaction_backend_error(key, error).await),
+		}
+	}
+
 	#[cfg(feature = "sqlite-local")]
 	async fn record_transaction_statement(
 		&self,
@@ -629,16 +836,15 @@ impl SqliteDb {
 		self.traced(operation, task).await
 	}
 
-	async fn finish_transaction_inner(&self, key: &str, commit: bool) -> Result<()> {
+	pub(super) async fn finish_transaction_inner(&self, key: &str, commit: bool) -> Result<()> {
 		let (operation, remote_session) = self.transaction_operation(key).await?;
 		let _operation = operation.lock().await;
 		self.ensure_active_transaction(key).await?;
 
 		let statement = if commit { "COMMIT" } else { "ROLLBACK" };
 		#[cfg(feature = "sqlite-local")]
-		let control_started_at = (self.profiling.config.enabled
-			&& self.backend() == super::SqliteBackend::LocalNative)
-			.then(crate::time::Instant::now);
+		let control_started_at =
+			(self.backend() == super::SqliteBackend::LocalNative).then(crate::time::Instant::now);
 		#[cfg(feature = "sqlite-local")]
 		let (result, control_profile) = if control_started_at.is_some() {
 			let profiled = self
@@ -706,6 +912,9 @@ impl SqliteDb {
 			return Err(self.attach_actor(primary));
 		}
 
+		if commit {
+			self.deferred_bootstrap_committed(key);
+		}
 		self.release_transaction(
 			key,
 			if commit {
@@ -723,14 +932,14 @@ impl SqliteDb {
 	async fn record_transaction_control(
 		&self,
 		key: &str,
-		profile: Option<&depot_client::vfs::SqliteOperationProfile>,
+		profile: Option<&sqlite_embedded::vfs::SqliteOperationProfile>,
 		duration: Duration,
 		is_commit: bool,
 	) {
 		let mut state = self.transaction_coordinator.state.lock().await;
 		if let Some(active) = state.active.as_mut().filter(|active| active.key == key) {
 			if let Some(transaction_profile) = &mut active.profile {
-				let default_profile = depot_client::vfs::SqliteOperationProfile::default();
+				let default_profile = sqlite_embedded::vfs::SqliteOperationProfile::default();
 				transaction_profile.record_control(
 					profile.unwrap_or(&default_profile),
 					duration.as_nanos().try_into().unwrap_or(u64::MAX),
@@ -883,6 +1092,7 @@ impl SqliteDb {
 		state.closed |= close;
 		if close {
 			self.transaction_coordinator.admission.close();
+			self.transaction_coordinator.closed_token.cancel();
 			if let Ok(config) = self.runtime_config() {
 				report_sqlite_worker_fatal(
 					&self.worker_fatal_reported,
@@ -901,7 +1111,7 @@ impl SqliteDb {
 			&& let Some(profile) = profile
 		{
 			let (fingerprint, fingerprint_source) = profile.fingerprint();
-			if profile.name.is_none() {
+			if self.profiling.selection.tracks_transactions() && profile.name.is_none() {
 				let warning = UNNAMED_TRANSACTION_WARNINGS.fetch_add(1, Ordering::Relaxed);
 				if warning == 0 || warning.is_power_of_two() {
 					tracing::warn!(
@@ -922,7 +1132,7 @@ impl SqliteDb {
 					.saturating_sub(profile.worker_wait_ns)
 					.saturating_sub(profile.storage_ns)
 					.saturating_sub(profile.local_work_ns);
-				let metric = depot_client::vfs::SqliteTransactionMetric {
+				let metric = sqlite_embedded::vfs::SqliteTransactionMetric {
 					fingerprint,
 					fingerprint_source,
 					shape_fingerprint: profile.shape_fingerprint(),
@@ -957,11 +1167,24 @@ impl SqliteDb {
 						FINGERPRINT_FORMAT_VERSION,
 					);
 				}
-				metrics.emit_transaction_diagnostic_event(
-					self.actor_id.as_deref().unwrap_or("unknown"),
-					self.generation,
-					&metric,
-				);
+				if metrics.transaction_diagnostic_selected(&metric) {
+					let mut diagnostic = metric;
+					(diagnostic.fingerprint, diagnostic.fingerprint_source) =
+						profile.diagnostic_fingerprint();
+					if self.profiling.mark_cataloged(&diagnostic.fingerprint) {
+						metrics.record_fingerprint_catalog(
+							"transaction",
+							&diagnostic.fingerprint,
+							profile.name.as_deref().unwrap_or(&diagnostic.fingerprint),
+							FINGERPRINT_FORMAT_VERSION,
+						);
+					}
+					metrics.emit_transaction_diagnostic_event(
+						self.actor_id.as_deref().unwrap_or("unknown"),
+						self.generation,
+						&diagnostic,
+					);
+				}
 			}
 		}
 	}
@@ -970,6 +1193,7 @@ impl SqliteDb {
 		let active_operation = {
 			let mut state = self.transaction_coordinator.state.lock().await;
 			state.closed = true;
+			self.transaction_coordinator.closed_token.cancel();
 			state.active.as_ref().map(|active| {
 				(
 					active.key.clone(),
@@ -1015,6 +1239,43 @@ impl SqliteDb {
 			.write_owned()
 			.await
 	}
+
+	/// Rolls back a manual transaction left open at shutdown so the final state
+	/// save can commit on its own. Returns whether a manual transaction was
+	/// rolled back.
+	///
+	/// Holding the exclusive gate keeps ordinary statements from running while
+	/// the connection state is checked and rolled back. A coordinated
+	/// transaction cannot be active while this holds the gate.
+	pub(crate) async fn rollback_manual_transaction(&self) -> Result<bool> {
+		let Some(explicit_transaction) = self.subscribe_explicit_transaction() else {
+			return Ok(false);
+		};
+		if !*explicit_transaction.borrow() {
+			return Ok(false);
+		}
+		let _gate = Arc::clone(&self.transaction_coordinator.gate)
+			.write_owned()
+			.await;
+		if !*explicit_transaction.borrow() {
+			return Ok(false);
+		}
+
+		tracing::warn!(
+			actor_id = self.actor_id.as_deref().unwrap_or("unknown"),
+			"rolling back manual sqlite transaction left open at shutdown; the action that issued BEGIN did not reach COMMIT or ROLLBACK within the grace period"
+		);
+		match self
+			.execute_backend_in_session("ROLLBACK".to_owned(), None, None)
+			.await
+		{
+			Ok(_) => Ok(true),
+			Err(error) if is_no_active_transaction_error(&error) => Ok(false),
+			Err(error) => Err(self
+				.attach_actor(error)
+				.context("roll back manual sqlite transaction at shutdown")),
+		}
+	}
 }
 
 #[derive(rivet_error::RivetError, Debug, Serialize)]
@@ -1033,6 +1294,29 @@ impl fmt::Display for TransactionQueueFullError {
 }
 
 impl Error for TransactionQueueFullError {}
+
+#[derive(rivet_error::RivetError, Debug, Serialize)]
+#[error(
+	"sqlite",
+	"manual_transaction_open",
+	"SQLite manual transaction stayed open.",
+	"Waited {timeout_ms} ms for a manual SQLite transaction to finish. A BEGIN issued through ordinary statements must reach COMMIT or ROLLBACK before actor state persistence or db.transaction() can start; prefer db.transaction() for multi-statement transactions."
+)]
+pub struct ManualTransactionOpenError {
+	pub timeout_ms: u64,
+}
+
+impl fmt::Display for ManualTransactionOpenError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(
+			f,
+			"waited {} ms for a manual sqlite transaction to finish; a BEGIN issued through ordinary statements must reach COMMIT or ROLLBACK before actor state persistence or db.transaction() can start",
+			self.timeout_ms
+		)
+	}
+}
+
+impl Error for ManualTransactionOpenError {}
 
 #[derive(rivet_error::RivetError, Debug, Serialize)]
 #[error(
@@ -1275,8 +1559,31 @@ pub(super) fn insert_terminal_state(
 	key: String,
 	terminal: TransactionTerminalState,
 ) {
+	// Expired keys are bounded separately so a burst of committed transactions
+	// cannot evict them and turn a stale handle's "expired" error into
+	// "unknown transaction".
 	if let TransactionTerminalState::Expired(timeout) = terminal {
-		state.poisoned.insert(key, timeout);
+		let expired = ExpiredKey {
+			timeout,
+			_metric: rivet_metrics::GaugeGuardExt::inc_guard(&EXPIRED_KEY_METRICS.keys),
+		};
+		if state.poisoned.insert(key.clone(), expired).is_none() {
+			state.poisoned_order.push_back(key);
+			if state.poisoned_order.len() == TRANSACTION_EXPIRED_CAPACITY + 1 {
+				tracing::warn!(
+					capacity = TRANSACTION_EXPIRED_CAPACITY,
+					"expired sqlite transaction keys reached capacity; transactions keep timing out, and the oldest stale handles will report unknown transaction"
+				);
+			}
+		}
+		while state.poisoned_order.len() > TRANSACTION_EXPIRED_CAPACITY {
+			let Some(evicted_key) = state.poisoned_order.pop_front() else {
+				break;
+			};
+			if state.poisoned.remove(&evicted_key).is_some() {
+				EXPIRED_KEY_METRICS.evicted_total.inc();
+			}
+		}
 		return;
 	}
 	if state.terminal.insert(key.clone(), terminal).is_none() {
@@ -1293,7 +1600,7 @@ fn transaction_known_state_error(
 	state: &TransactionCoordinatorState,
 	key: &str,
 ) -> Option<anyhow::Error> {
-	if let Some(timeout) = state.poisoned.get(key).copied() {
+	if let Some(timeout) = state.poisoned.get(key).map(|expired| expired.timeout) {
 		return Some(transaction_expired_owner_error(key, timeout));
 	}
 	state
@@ -1323,6 +1630,13 @@ fn transaction_queue_full_error() -> anyhow::Error {
 	TransactionQueueFullError
 		.build()
 		.context(TransactionQueueFullError)
+}
+
+fn manual_transaction_open_error(timeout: Duration) -> anyhow::Error {
+	let error = || ManualTransactionOpenError {
+		timeout_ms: duration_millis(timeout),
+	};
+	error().build().context(error())
 }
 
 fn transaction_coordinator_closed_error() -> anyhow::Error {

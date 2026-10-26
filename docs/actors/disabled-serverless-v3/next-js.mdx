@@ -1,0 +1,65 @@
+---
+title: "Next.js Quickstart"
+description: "Connect a Next.js client component to Rivet Actors running in a separate node process."
+skill: true
+---
+
+import { Hosting } from "@/components/docs/Hosting";
+import { InstallPackage } from "@/components/docs/InstallPackage";
+
+Run your Rivet registry as a separate node process alongside Next.js. Client components connect to the control plane.
+
+## Quickstart
+
+<Steps>
+<Step title="Install RivetKit">
+
+In your Next.js project, install the SDK and client integration:
+
+<InstallPackage name="rivetkit @rivetkit/next-js" />
+
+</Step>
+<Step title="Define an Actor and start the node">
+
+Create the registry and a separate entry point under `src/rivet/`:
+
+<CodeGroup workspace>
+<CodeSnippet file="examples/docs/actors-quickstart-next-js/rivet/registry.ts" title="src/rivet/registry.ts" />
+<CodeSnippet file="examples/docs/actors-quickstart-next-js/rivet/node.ts" title="src/rivet/node.ts" />
+</CodeGroup>
+
+</Step>
+<Step title="Add a client component">
+
+Create `src/rivet/Counter.tsx` and render it from `src/app/page.tsx`:
+
+<CodeGroup workspace>
+<CodeSnippet file="examples/docs/actors-quickstart-next-js/rivet/Counter.tsx" title="src/rivet/Counter.tsx" />
+<CodeSnippet file="examples/docs/actors-quickstart-next-js/app/page.tsx" title="src/app/page.tsx" />
+</CodeGroup>
+
+</Step>
+<Step title="Run the node and Next.js">
+
+Start the node in one terminal, then your Next.js app in another:
+
+```sh
+npx tsx --watch src/rivet/node.ts
+```
+
+```sh
+npm run dev
+```
+
+Open your Next.js app and click **Increment**. Open `http://localhost:6420` to inspect the Actor in the local developer tools.
+
+</Step>
+</Steps>
+
+## Deploy
+
+Deploy the node as a long-running process. Set its private `RIVET_ENDPOINT` and your Next.js app's `NEXT_PUBLIC_RIVET_ENDPOINT` to the corresponding [production endpoints](/docs/endpoints). Keep the private token on the node.
+
+<Hosting product="actors" />
+
+See the [React Client API Reference](/actors/docs/clients/react) for hooks and event subscriptions.

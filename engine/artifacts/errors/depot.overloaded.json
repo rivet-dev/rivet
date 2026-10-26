@@ -1,0 +1,5 @@
+{
+  "code": "overloaded",
+  "group": "depot",
+  "message": "The storage host refused the command; retry after the hinted delay."
+}

@@ -7,13 +7,11 @@ skill: true
 
 For a high-level overview of where to store actor data, including when to use `c.state` versus SQLite, see [State & Storage](/actors/docs/state).
 
-For cache metrics and tuning, see [Performance Monitoring & Tuning](/actors/docs/performance-monitoring#tuning-page-caches).
-
 ## What is SQLite?
 
 - **Database per actor**: each actor instance has its own SQLite database, scoped to that actor.
-- **High performance**: Rivet Actors keep compute and storage together, so queries avoid network round trips to an external database.
-- **Larger-than-memory storage**: SQLite stores data on disk, so you can work with datasets that do not fit in actor memory.
+- **High performance**: queries run inside the actor's own process, against pages cached next to it, with no external database server in between.
+- **Durable and larger than memory**: the database lives in the actor's durable volume, replicated on every commit, so it survives restarts and moves and can hold datasets that do not fit in actor memory.
 - **Embedded relational database**: use tables, indexes, and SQL queries directly inside actor logic.
 
 ### SQLite features
@@ -119,6 +117,8 @@ It's recommended to use queues for mutations and actions for read-only queries. 
 <CodeSnippet file="examples/docs/actors-sqlite/queues/client.ts" title="client.ts" />
 </CodeGroup>
 
+{/* TODO(code): restore when the control plane exposes an API to read an Actor's inspector token. Tracked in ACT-6493.
+
 ## Debugging
 
 - `GET /inspector/summary` includes `isDatabaseEnabled` so you can confirm SQLite is configured.
@@ -127,6 +127,8 @@ It's recommended to use queues for mutations and actions for read-only queries. 
 - `POST /inspector/database/execute` lets you run ad-hoc SQL for debugging and data fixes with positional `args` or named `properties`.
 - Keep a small read-only action for quick query verification while debugging.
 - In non-dev mode, inspector endpoints require authorization.
+
+*/}
 
 ## Profiling
 

@@ -9,19 +9,6 @@ mod planner;
 mod token_id;
 mod verified_jwt;
 
-#[cfg(feature = "service")]
-pub mod issuer;
-#[cfg(feature = "service")]
-pub mod key_ring_cache;
-#[cfg(feature = "service")]
-pub mod metrics;
-#[cfg(feature = "service")]
-pub mod ops;
-#[cfg(feature = "service")]
-pub mod storage_keys;
-#[cfg(feature = "service")]
-pub mod workflows;
-
 pub use claims::{CLAIMS_VERSION, Claims, PROTOCOL_CLOCK_SKEW, PROTOCOL_MAX_TTL};
 pub use codec::{
 	DecodeOptions, DecodedToken, MAX_SUBJECT_BYTES, MAX_TOKEN_BYTES, TokenHeader, decode, encode,
@@ -54,7 +41,11 @@ pub const ALGORITHM: &str = "EdDSA";
 /// from protocol clock skew; changing it requires upgrading verifiers before issuers.
 pub const SIGNING_CACHE_LEASE: std::time::Duration = std::time::Duration::from_secs(5);
 
-#[cfg(feature = "service")]
-pub fn registry() -> gas::prelude::WorkflowResult<gas::prelude::Registry> {
-	workflows::registry()
-}
+pub mod key_ring_machine;
+pub mod runtime;
+
+mod store;
+
+mod validation;
+
+pub mod rotation;

@@ -115,12 +115,16 @@ If an actor has a `run` handler, it does not sleep while that handler is activel
 
 This means you can run normal code in `run` without worrying about sleep interrupting it mid-call.
 
+{/* TODO(code): restore when the control plane exposes an API to read an Actor's inspector token. Tracked in ACT-6493.
+
 ## Debugging
 
 - `GET /inspector/queue?limit=50` returns queue size and pending message metadata.
 - `GET /inspector/summary` includes `queueSize` for quick queue health checks.
 - `POST /queue/:name` with `wait: true` is useful to verify completable/request-response behavior.
 - In non-dev mode, inspector endpoints require authorization.
+
+*/}
 
 ## Recommendations
 

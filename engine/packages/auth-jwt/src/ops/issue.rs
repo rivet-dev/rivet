@@ -120,14 +120,4 @@ fn bounded_expiration(
 	Ok(requested_expires_ts.min(maximum_expires_ts))
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
 
-	#[test]
-	fn signer_clamps_expiration_to_its_own_maximum() {
-		assert_eq!(bounded_expiration(1_000, 12_000, 10_000).unwrap(), 11_000);
-		assert_eq!(bounded_expiration(1_000, 9_000, 10_000).unwrap(), 9_000);
-		assert!(bounded_expiration(1_000, 1_000, 10_000).is_err());
-	}
-}

@@ -2,7 +2,10 @@ use gas::prelude::*;
 
 mod backfill;
 
-pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
+pub async fn start(
+	config: rivet_config::Config,
+	pools: rivet_engine_context::EngineContext,
+) -> Result<()> {
 	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 	let ctx = StandaloneCtx::new(
 		db::DatabaseKv::new(config.clone(), pools.clone()).await?,
@@ -29,7 +32,6 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 
 	// Must happen after coordinator is reconfigured
 	setup_auth_jwt_key_rotation(&ctx).await?;
-
 	Ok(())
 }
 

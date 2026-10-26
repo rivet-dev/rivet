@@ -1,0 +1,10 @@
+#import "shared/depot.fs.v1.bare"
+
+# A transaction id is a client-owned formal key, compared as opaque bytes.
+type FsTxnPending struct { id: data }
+type FsTxnCommit struct { id: data }
+type FsTxnAbort struct { id: data }
+type FsTxn union { FsTxnPending | FsTxnCommit | FsTxnAbort }
+
+# Standalone entries apply alone; transactions become visible at their commit.
+type FsEntry struct { ops: list<FsOp> txn: optional<FsTxn> }

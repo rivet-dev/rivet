@@ -1,5 +1,7 @@
 use anyhow::{Result, bail};
-use vbare::OwnedVersionedData;
+use vbare::{
+	Bytes, Converter, DecodeError, DecodeErrorKind, Encode, EncodeError, Message, Sink, Versioned,
+};
 
 use crate::generated::{v1, v2, v3, v4};
 
@@ -10,7 +12,9 @@ pub enum ToClient {
 	V4(v4::ToClient),
 }
 
-impl OwnedVersionedData for ToClient {
+impl Versioned for ToClient {
+	const LATEST: u16 = 4;
+
 	type Latest = v4::ToClient;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
@@ -24,33 +28,48 @@ impl OwnedVersionedData for ToClient {
 		}
 	}
 
-	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+	fn decode_version(version: u16, payload: Bytes) -> std::result::Result<Self, DecodeError> {
 		match version {
-			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
-			2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
-			3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
-			4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
-			_ => bail!("invalid client protocol version: {version}"),
+			1 => Ok(Self::V1(Message::decode(payload)?)),
+			2 => Ok(Self::V2(Message::decode(payload)?)),
+			3 => Ok(Self::V3(Message::decode(payload)?)),
+			4 => Ok(Self::V4(Message::decode(payload)?)),
+			_ => Err(unsupported_version(format!(
+				"invalid client protocol version: {version}"
+			))),
 		}
 	}
 
-	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+	fn encode_version<S: Sink>(
+		&self,
+		version: u16,
+		out: &mut S,
+	) -> std::result::Result<(), EncodeError> {
 		match (self, version) {
-			(Self::V1(data), 1) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
-			(_, version) => bail!("unexpected client protocol version: {version}"),
+			(Self::V1(data), 1) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V2(data), 2) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V3(data), 3) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V4(data), 4) => {
+				data.encode(out);
+				Ok(())
+			}
+			(_, version) => Err(EncodeError::UnsupportedVersion(version)),
 		}
 	}
 
-	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4]
-	}
+	const UPGRADES: &'static [Converter<Self>] = &[Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4];
 
-	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
-	}
+	const DOWNGRADES: &'static [Converter<Self>] =
+		&[Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1];
 }
 
 impl ToClient {
@@ -174,7 +193,7 @@ impl ToClient {
 			v2::ToClientBody::Init(init) => v1::ToClientBody::Init(v1::Init {
 				actor_id: init.actor_id,
 				connection_id: init.connection_id,
-				connection_token: String::new(),
+				connection_token: String::new().into(),
 			}),
 			v2::ToClientBody::Error(error) => v1::ToClientBody::Error(v1::Error {
 				group: error.group,
@@ -396,7 +415,9 @@ macro_rules! impl_versioned_manual {
 			V4($v4_ty),
 		}
 
-		impl OwnedVersionedData for $name {
+		impl Versioned for $name {
+			const LATEST: u16 = 4;
+
 			type Latest = $latest_ty;
 
 			fn wrap_latest(latest: Self::Latest) -> Self {
@@ -410,39 +431,53 @@ macro_rules! impl_versioned_manual {
 				}
 			}
 
-			fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+			fn decode_version(
+				version: u16,
+				payload: Bytes,
+			) -> std::result::Result<Self, DecodeError> {
 				match version {
-					1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
-					2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
-					3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
-					4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
-					_ => bail!(
+					1 => Ok(Self::V1(Message::decode(payload)?)),
+					2 => Ok(Self::V2(Message::decode(payload)?)),
+					3 => Ok(Self::V3(Message::decode(payload)?)),
+					4 => Ok(Self::V4(Message::decode(payload)?)),
+					_ => Err(unsupported_version(format!(
 						"invalid client protocol version for {}: {version}",
 						stringify!($name)
-					),
+					))),
 				}
 			}
 
-			fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+			fn encode_version<S: Sink>(
+				&self,
+				version: u16,
+				out: &mut S,
+			) -> std::result::Result<(), EncodeError> {
 				match (self, version) {
-					(Self::V1(data), 1) => serde_bare::to_vec(&data).map_err(Into::into),
-					(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
-					(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
-					(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
-					(_, version) => bail!(
-						"unexpected client protocol version for {}: {version}",
-						stringify!($name)
-					),
+					(Self::V1(data), 1) => {
+						data.encode(out);
+						Ok(())
+					}
+					(Self::V2(data), 2) => {
+						data.encode(out);
+						Ok(())
+					}
+					(Self::V3(data), 3) => {
+						data.encode(out);
+						Ok(())
+					}
+					(Self::V4(data), 4) => {
+						data.encode(out);
+						Ok(())
+					}
+					(_, version) => Err(EncodeError::UnsupportedVersion(version)),
 				}
 			}
 
-			fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-				vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4]
-			}
+			const UPGRADES: &'static [Converter<Self>] =
+				&[Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4];
 
-			fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-				vec![Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
-			}
+			const DOWNGRADES: &'static [Converter<Self>] =
+				&[Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1];
 		}
 
 		impl $name {
@@ -498,7 +533,9 @@ macro_rules! impl_versioned_v3_only {
 			V4($latest_ty),
 		}
 
-		impl OwnedVersionedData for $name {
+		impl Versioned for $name {
+			const LATEST: u16 = 4;
+
 			type Latest = $latest_ty;
 
 			fn wrap_latest(latest: Self::Latest) -> Self {
@@ -512,35 +549,41 @@ macro_rules! impl_versioned_v3_only {
 				}
 			}
 
-			fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+			fn decode_version(
+				version: u16,
+				payload: Bytes,
+			) -> std::result::Result<Self, DecodeError> {
 				match version {
-					3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
-					4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
-					_ => bail!(
+					3 => Ok(Self::V3(Message::decode(payload)?)),
+					4 => Ok(Self::V4(Message::decode(payload)?)),
+					_ => Err(unsupported_version(format!(
 						"{} only exists in client protocol v3, got {version}",
 						stringify!($name)
-					),
+					))),
 				}
 			}
 
-			fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+			fn encode_version<S: Sink>(
+				&self,
+				version: u16,
+				out: &mut S,
+			) -> std::result::Result<(), EncodeError> {
 				match (self, version) {
-					(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
-					(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
-					(_, version) => bail!(
-						"{} only exists in client protocol v3, got {version}",
-						stringify!($name)
-					),
+					(Self::V3(data), 3) => {
+						data.encode(out);
+						Ok(())
+					}
+					(Self::V4(data), 4) => {
+						data.encode(out);
+						Ok(())
+					}
+					(_, version) => Err(EncodeError::UnsupportedVersion(version)),
 				}
 			}
 
-			fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-				vec![Ok, Ok, Self::v3_to_v4]
-			}
+			const UPGRADES: &'static [Converter<Self>] = &[Ok, Ok, Self::v3_to_v4];
 
-			fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-				vec![Self::v4_to_v3, Ok, Ok]
-			}
+			const DOWNGRADES: &'static [Converter<Self>] = &[Self::v4_to_v3, Ok, Ok];
 		}
 
 		impl $name {
@@ -603,7 +646,9 @@ pub enum HttpResponseError {
 	V4(v4::HttpResponseError),
 }
 
-impl OwnedVersionedData for HttpResponseError {
+impl Versioned for HttpResponseError {
+	const LATEST: u16 = 4;
+
 	type Latest = v4::HttpResponseError;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
@@ -617,35 +662,48 @@ impl OwnedVersionedData for HttpResponseError {
 		}
 	}
 
-	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+	fn decode_version(version: u16, payload: Bytes) -> std::result::Result<Self, DecodeError> {
 		match version {
-			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
-			2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
-			3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
-			4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
-			_ => bail!("invalid client protocol version for HttpResponseError: {version}"),
+			1 => Ok(Self::V1(Message::decode(payload)?)),
+			2 => Ok(Self::V2(Message::decode(payload)?)),
+			3 => Ok(Self::V3(Message::decode(payload)?)),
+			4 => Ok(Self::V4(Message::decode(payload)?)),
+			_ => Err(unsupported_version(format!(
+				"invalid client protocol version for HttpResponseError: {version}"
+			))),
 		}
 	}
 
-	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+	fn encode_version<S: Sink>(
+		&self,
+		version: u16,
+		out: &mut S,
+	) -> std::result::Result<(), EncodeError> {
 		match (self, version) {
-			(Self::V1(data), 1) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
-			(_, version) => {
-				bail!("unexpected client protocol version for HttpResponseError: {version}")
+			(Self::V1(data), 1) => {
+				data.encode(out);
+				Ok(())
 			}
+			(Self::V2(data), 2) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V3(data), 3) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V4(data), 4) => {
+				data.encode(out);
+				Ok(())
+			}
+			(_, version) => return Err(EncodeError::UnsupportedVersion(version)),
 		}
 	}
 
-	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4]
-	}
+	const UPGRADES: &'static [Converter<Self>] = &[Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4];
 
-	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
-	}
+	const DOWNGRADES: &'static [Converter<Self>] =
+		&[Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1];
 }
 
 impl HttpResponseError {
@@ -701,4 +759,9 @@ impl HttpResponseError {
 		};
 		Ok(Self::V1(data.into()))
 	}
+}
+
+/// The error for a version this envelope cannot decode.
+fn unsupported_version(detail: String) -> DecodeError {
+	DecodeError::with_detail(DecodeErrorKind::UnsupportedVersion, 0, detail)
 }

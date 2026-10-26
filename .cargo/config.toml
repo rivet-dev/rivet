@@ -19,4 +19,13 @@ rustflags = [
 ]
 
 [env]
-LIBSQLITE3_FLAGS = "SQLITE_ENABLE_BATCH_ATOMIC_WRITE"
+# SQLite otherwise reads overflow pages straight from the file, bypassing its page cache. The VFS
+# hands each buffered page over once, so large rows would go back to the engine on every read.
+LIBSQLITE3_FLAGS = "SQLITE_ENABLE_BATCH_ATOMIC_WRITE SQLITE_DIRECT_OVERFLOW_READ=0"
+
+# Browser builds of the simulator. getrandom needs its JS backend selected explicitly.
+[target.wasm32-unknown-unknown]
+rustflags = [
+    "--cfg", "tokio_unstable",
+    "--cfg", 'getrandom_backend="wasm_js"',
+]

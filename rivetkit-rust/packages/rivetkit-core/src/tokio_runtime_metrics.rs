@@ -104,9 +104,9 @@ static WORKER_OVERFLOW_COUNT: LazyLock<IntGaugeVec> = LazyLock::new(|| {
 	.unwrap()
 });
 
-static WORKER_BUSY_DURATION_TOTAL: LazyLock<CounterVec> = LazyLock::new(|| {
+static WORKER_BUSY_DURATION_SECONDS_TOTAL: LazyLock<CounterVec> = LazyLock::new(|| {
 	register_counter_vec_with_registry!(
-		"tokio_worker_busy_duration_total",
+		"tokio_worker_busy_duration_seconds_total",
 		"Seconds a worker has spent polling tasks. Its rate against wall clock time is the worker's busy fraction, which separates a saturated runtime from one whose workers are parked.",
 		WORKER_LABELS,
 		*REGISTRY
@@ -177,7 +177,7 @@ async fn sample(handle: tokio::runtime::Handle) {
 			let busy_nanos = metrics.worker_total_busy_duration(worker).as_nanos() as u64;
 			let delta_nanos = busy_nanos.saturating_sub(*last_busy_nanos);
 			*last_busy_nanos = busy_nanos;
-			WORKER_BUSY_DURATION_TOTAL
+			WORKER_BUSY_DURATION_SECONDS_TOTAL
 				.with_label_values(&labels)
 				.inc_by(delta_nanos as f64 / 1_000_000_000.0);
 		}

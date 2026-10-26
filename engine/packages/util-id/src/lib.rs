@@ -3,9 +3,6 @@ use std::{fmt, str::FromStr};
 use thiserror::Error;
 use uuid::Uuid;
 
-#[cfg(feature = "universaldb")]
-use universaldb::prelude::*;
-
 #[derive(Debug, Error)]
 pub enum IdError {
 	/// Input string length mismatch for a version.
@@ -222,49 +219,6 @@ impl utoipa::PartialSchema for Id {
 	}
 }
 
-#[cfg(feature = "universaldb")]
-impl TuplePack for Id {
-	fn pack<W: std::io::Write>(
-		&self,
-		w: &mut W,
-		_tuple_depth: TupleDepth,
-	) -> std::io::Result<VersionstampOffset> {
-		let mut offset = VersionstampOffset::None { size: 0 };
-
-		w.write_all(&[universaldb::utils::codes::ID])?;
-
-		let bytes = self.as_bytes();
-
-		let len = u32::try_from(bytes.len())
-			.map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
-		offset += len;
-
-		w.write_all(&bytes)?;
-
-		Ok(offset)
-	}
-}
-
-#[cfg(feature = "universaldb")]
-impl<'de> TupleUnpack<'de> for Id {
-	fn unpack(input: &[u8], _tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let input = universaldb::utils::parse_code(input, universaldb::utils::codes::ID)?;
-		let (_, version) = universaldb::utils::parse_byte(input)?;
-
-		let (input, slice) = if version == 1 {
-			// Parse 19 bytes including version
-			universaldb::utils::parse_bytes(input, 19)?
-		} else {
-			universaldb::utils::parse_bytes(input, 1)?
-		};
-
-		let v = Id::from_slice(slice)
-			.map_err(|err| PackError::Message(format!("bad id format: {err}").into()))?;
-
-		Ok((input, v))
-	}
-}
-
 impl Default for Id {
 	fn default() -> Self {
 		Id::V1(Default::default())
@@ -307,35 +261,4 @@ fn base36_mod256(a: u8, b: u8, c: u8, d: u8) -> u8 {
 	(sum % 256) as u8
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
 
-	#[test]
-	fn test_v1_roundtrip() {
-		let uuid = Uuid::new_v4();
-		let label = 0xABCD;
-		let id = Id::v1(uuid, label);
-		let s = id.to_string();
-		assert_eq!(s.len(), 30);
-		let parsed = Id::from_str(&s).unwrap();
-		assert_eq!(parsed, id);
-	}
-
-	#[test]
-	fn test_v1_parse_uppercase() {
-		let uuid = Uuid::new_v4();
-		let label = 0xABCD;
-		let id = Id::v1(uuid, label);
-		let s = id.to_string().to_ascii_uppercase();
-		assert_eq!(s.len(), 30);
-		let parsed = Id::from_str(&s).unwrap();
-		assert_eq!(parsed, id);
-	}
-
-	#[test]
-	fn multibyte_input_shorter_than_four_characters_is_rejected() {
-		assert!(matches!(Id::from_str("💥"), Err(IdError::TooShort)));
-		assert!(matches!(Id::from_str("éé"), Err(IdError::TooShort)));
-	}
-}

@@ -196,7 +196,7 @@ pub async fn http_logging_middleware(
 		} else {
 			String::new()
 		};
- 			metrics::API_REQUEST_DURATION
+ 			metrics::API_REQUEST_DURATION_SECONDS
 			.with_label_values(&[router_name, method.as_str(), path.as_str(), status.as_str(), error_str.as_str()])
 			.observe(duration);
 

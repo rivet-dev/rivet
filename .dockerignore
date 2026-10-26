@@ -1,5 +1,8 @@
 # MARK: Docker-specific
 .git/
+# The jj store mutates on every snapshot, so including it would invalidate
+# every COPY of the repository on every build.
+.jj/
 .gitignore
 .gitattributes
 .dockerignore
@@ -37,6 +40,7 @@ LICENSE*
 
 # JavaScript
 **/*.log*
+!engine/sdks/schemas/**/*.bare
 **/.cache/
 **/.next/
 **/.turbo
@@ -46,12 +50,30 @@ LICENSE*
 **/target
 
 # Frontend
-!frontend/dist/
-!frontend/packages/icons/dist/
 
 # RivetKit packages (need pre-built dist for screenshot generation)
 !rivetkit-typescript/packages/*/dist/
 !engine/sdks/typescript/*/dist/
 !shared/typescript/*/dist/
 
+# pnpm content-addressable store (large, not needed for build)
+.pnpm-store/
 
+# Test snapshots (large LFS-tracked binaries, not needed for build)
+engine/packages/test-snapshot-gen/snapshots/
+
+# Credentials and secrets
+secrets/
+
+# BYOC customer state and generated installation inputs must never enter a build.
+byoc/
+**/rivet-credentials.json
+
+# Not needed to build the engine binary
+website/
+# required when BUILD_FRONTEND=true.
+!website/public/examples/
+
+# mcp-hub depends on rivet-website (the website package), which is excluded
+# above. Exclude mcp-hub so the pnpm workspace stays consistent.
+rivetkit-typescript/packages/mcp-hub/

@@ -76,7 +76,7 @@ You can constrain the hosted endpoint with organization, project, and namespace 
 | `https://mcp.rivet.dev/mcp?organization=ORG&project=PROJECT` | One project. |
 | `https://mcp.rivet.dev/mcp?organization=ORG&project=PROJECT&namespace=NS` | One namespace. |
 
-Replace the placeholders with the same slugs used in your [dashboard](https://dashboard.rivet.dev) URL: `/orgs/ORG/projects/PROJECT/ns/NS`. If you omit the values, your client asks you to choose and stays on that selection for the rest of the session.
+Replace the placeholders with your organization, project, and namespace slugs. If you omit the values, your client asks you to choose and stays on that selection for the rest of the session.
 
 ### Security model
 
@@ -106,7 +106,7 @@ Rivet MCP uses `search` to find `rivet.actor.action`, calls the `getHistory` act
 
 <CodeSnippet file="examples/docs/mcp/inspect-actor-inline.txt" title="Prompt" />
 
-The same Actor view available in the dashboard opens inside the conversation. It includes the **State**, **Connections**, **Queue**, **Workflow**, and **Database** tabs. The inline view is limited to the Actor you requested and disappears with the conversation. Clients that cannot render the Inspector receive the same details as text.
+An Actor view opens inside the conversation. It includes the **State**, **Connections**, **Queue**, **Workflow**, and **Database** tabs. The inline view is limited to the Actor you requested and disappears with the conversation. Clients that cannot render the Inspector receive the same details as text.
 
 ## One request, two tools
 
