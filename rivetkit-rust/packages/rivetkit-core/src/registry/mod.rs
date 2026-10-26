@@ -789,7 +789,10 @@ impl CoreRegistry {
 			}
 		};
 		#[cfg(feature = "native-runtime")]
-		tokio::join!(shutdown_envoy, shutdown_development_processes);
+		{
+			shutdown_envoy.await;
+			shutdown_development_processes.await;
+		}
 		#[cfg(not(feature = "native-runtime"))]
 		shutdown_envoy.await;
 

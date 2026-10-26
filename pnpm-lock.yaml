@@ -1940,6 +1940,8 @@ importers:
         specifier: ^5.5.2
         version: 5.9.3
 
+  shared/typescript/shared-data: {}
+
   shared/typescript/virtual-websocket:
     devDependencies:
       '@types/node':

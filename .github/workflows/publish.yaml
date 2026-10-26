@@ -32,10 +32,6 @@ name: publish
 on:
   workflow_dispatch:
     inputs:
-      source_run_id:
-        description: "Publish from artifacts in this completed run, without rebuilding"
-        required: false
-        type: string
       version:
         description: "Version to release (e.g. 2.5.0 or 2.5.0-rc.1). Leave empty for preview publish on the dispatched branch."
         required: false
@@ -74,7 +70,6 @@ jobs:
   # ---------------------------------------------------------------------------
   context:
     name: "Context"
-    if: inputs.source_run_id == ''
     runs-on: ubuntu-24.04
     outputs:
       trigger: ${{ steps.ctx.outputs.trigger }}
@@ -109,21 +104,6 @@ jobs:
       - id: ctx
         name: Resolve publish context
         run: pnpm --filter=publish exec tsx src/ci/bin.ts context-output
-
-  publish-from-run:
-    name: "Publish from run"
-    if: inputs.source_run_id != ''
-    permissions:
-      contents: write
-      id-token: write
-      pull-requests: write
-      packages: read
-      actions: read
-    uses: ./.github/workflows/publish-from-run.yaml
-    with:
-      source_run_id: ${{ inputs.source_run_id }}
-      version: ${{ inputs.version }}
-    secrets: inherit
 
   # ---------------------------------------------------------------------------
   # build — matrix of native/engine artifacts
@@ -446,7 +426,7 @@ jobs:
           SKIP_WASM_BUILD: "1"
         run: |
           pnpm build -F rivetkit
-          pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/rivetkit-napi' -F '!@rivetkit/rivetkit-wasm'
+          pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/rivetkit-napi' -F '!@rivetkit/rivetkit-wasm'
           pnpm build -F '@rivet-dev/workflow-world'
 
       # ---- shared publish (runs for all triggers) ----

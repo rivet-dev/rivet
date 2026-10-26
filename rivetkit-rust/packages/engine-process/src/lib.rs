@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::io::AsyncReadExt;
 use tokio::process::{Child, Command};
+use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 mod error;
@@ -114,33 +115,20 @@ pub enum EngineStartup {
 
 /// Manages the rivet-engine subprocess.
 ///
-/// The engine is intentionally orphaned: dropping the manager (or having the
-/// host process exit) must NOT terminate the engine. This lets a dev-server
-/// restart of the rivetkit host reattach to the same long-lived engine and
-/// keep all in-flight actor state. To honor that contract:
-///
-/// - `Command::kill_on_drop` is left at its default (false) so the tokio
-///   `Child` does not send SIGKILL on drop.
-/// - Stdout and stderr are routed to log files at spawn time so the engine's
-///   write fds remain valid after the host's pipes close.
-/// - On startup we probe the configured endpoint and reuse a healthy engine
-///   instead of spawning a duplicate.
-///
-/// When we spawn the engine, `watcher` holds a tokio task that owns the
-/// `Child` and awaits `child.wait()` so we get a log line if the engine dies
-/// while rivetkit is still running. On Drop we abort the watcher; aborting
-/// drops the `Child` without killing it (kill_on_drop=false), so the engine
-/// stays running and gets reparented to init when rivetkit exits.
-///
-/// `watcher` is `None` when we attached to an already-running engine.
+/// A spawned engine belongs to this host and is stopped on shutdown. An engine
+/// found at the endpoint is only reused, never stopped by this manager.
 #[derive(Debug)]
 pub struct EngineProcessManager {
 	watcher: Option<JoinHandle<()>>,
+	stop: Option<oneshot::Sender<()>>,
 	startup: EngineStartup,
 }
 
 impl EngineProcessManager {
 	pub async fn start_or_reuse(config: EngineResolverConfig) -> Result<Self> {
+		// Remove a dead process's record before deciding whether to attach or spawn.
+		// The endpoint probe below is still authoritative for a live engine.
+		let _ = read_engine_stamp();
 		let resolved = resolve_engine_binary(&config).await?;
 		Self::start_resolved(resolved, &config).await
 	}
@@ -148,6 +136,15 @@ impl EngineProcessManager {
 	/// How the engine was obtained: freshly spawned or reused.
 	pub fn startup(&self) -> &EngineStartup {
 		&self.startup
+	}
+
+	pub async fn shutdown(mut self) {
+		if let Some(stop) = self.stop.take() {
+			let _ = stop.send(());
+		}
+		if let Some(watcher) = self.watcher.take() {
+			let _ = watcher.await;
+		}
 	}
 
 	async fn start_resolved(
@@ -162,6 +159,7 @@ impl EngineProcessManager {
 			);
 			return Ok(Self {
 				watcher: None,
+				stop: None,
 				startup: EngineStartup::Reused {
 					stamp: read_engine_stamp(),
 				},
@@ -181,6 +179,7 @@ impl EngineProcessManager {
 			);
 			return Ok(Self {
 				watcher: None,
+				stop: None,
 				startup: EngineStartup::Reused {
 					stamp: read_engine_stamp(),
 				},
@@ -224,13 +223,26 @@ impl EngineProcessManager {
 			.stdout(Stdio::from(stdout_file))
 			.stderr(Stdio::from(stderr_file));
 
-		// Put the engine in its own process group so terminal signals
-		// (Ctrl+C, Ctrl+Z, SIGHUP on terminal close) targeting our foreground
-		// process group do not reach the engine. Combined with no-kill-on-drop
-		// and file-fd stdio, this gives the engine a real "intentional orphan"
-		// lifetime that survives the host being killed for any reason.
+		// Do not send terminal signals to the engine twice: the host drains its
+		// actors first, then asks the watcher to stop the engine.
 		#[cfg(unix)]
 		command.process_group(0);
+		// A file watcher can terminate its child without running Rust destructors.
+		// Linux still sends the engine SIGTERM when that host process disappears.
+		#[cfg(target_os = "linux")]
+		unsafe {
+			use std::os::unix::process::CommandExt;
+			let parent_pid = libc::getpid();
+			command.as_std_mut().pre_exec(move || {
+				if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) != 0 {
+					return Err(std::io::Error::last_os_error());
+				}
+				if libc::getppid() != parent_pid {
+					libc::raise(libc::SIGTERM);
+				}
+				Ok(())
+			});
+		}
 
 		let mut child = command
 			.spawn()
@@ -244,7 +256,7 @@ impl EngineProcessManager {
 			path = %binary_path.display(),
 			endpoint = %endpoint,
 			data_path = %data_path.display(),
-			"spawned engine process (intentionally orphaned, will outlive this process)"
+			"spawned engine process"
 		);
 		tracing::info!(
 			stdout_log = %stdout_log_path.display(),
@@ -312,8 +324,10 @@ impl EngineProcessManager {
 			tracing::warn!(?error, "failed to write engine runtime stamp");
 		}
 
+		let (watcher, stop) = spawn_engine_watcher(child, pid);
 		Ok(Self {
-			watcher: Some(spawn_engine_watcher(child, pid)),
+			watcher: Some(watcher),
+			stop: Some(stop),
 			startup: EngineStartup::Spawned,
 		})
 	}
@@ -446,9 +460,17 @@ fn write_engine_stamp(stamp: &EngineRuntimeStamp) -> Result<()> {
 /// treated as unknown for the same reason.
 fn read_engine_stamp() -> Option<EngineRuntimeStamp> {
 	let path = engine_stamp_path().ok()?;
-	let contents = std::fs::read(&path).ok()?;
+	read_engine_stamp_from(&path)
+}
+
+fn read_engine_stamp_from(path: &Path) -> Option<EngineRuntimeStamp> {
+	let contents = std::fs::read(path).ok()?;
 	let stamp: EngineRuntimeStamp = serde_json::from_slice(&contents).ok()?;
-	pid_is_alive(stamp.pid).then_some(stamp)
+	if !pid_is_alive(stamp.pid) {
+		let _ = std::fs::remove_file(path);
+		return None;
+	}
+	Some(stamp)
 }
 
 #[cfg(unix)]
@@ -865,16 +887,8 @@ fn make_executable(path: &Path) -> Result<()> {
 
 impl Drop for EngineProcessManager {
 	fn drop(&mut self) {
-		if let Some(handle) = self.watcher.take() {
-			// Aborting drops the `Child` owned by the task. With
-			// `kill_on_drop=false`, dropping the `Child` does NOT signal the
-			// engine, so the engine survives and gets reparented to init.
-			// We give up our crash-detection log line here, but if we are
-			// being dropped the rivetkit host is shutting down anyway.
-			handle.abort();
-			tracing::debug!(
-				"aborted engine watcher; engine continues running (intentional orphan)"
-			);
+		if let Some(stop) = self.stop.take() {
+			let _ = stop.send(());
 		}
 	}
 }
@@ -883,9 +897,37 @@ impl Drop for EngineProcessManager {
 /// log a clear message if the engine dies while rivetkit is still up. Taking
 /// the `Child` into the task also reaps it via `waitpid` on exit, so a
 /// crashed engine never lingers as a zombie in our process table.
-fn spawn_engine_watcher(mut child: Child, pid: u32) -> JoinHandle<()> {
-	tokio::spawn(async move {
-		match child.wait().await {
+fn spawn_engine_watcher(mut child: Child, pid: u32) -> (JoinHandle<()>, oneshot::Sender<()>) {
+	let (stop, stop_rx) = oneshot::channel();
+	let watcher = tokio::spawn(async move {
+		let exit = tokio::select! {
+			exit = child.wait() => Some(exit),
+			_ = stop_rx => None,
+		};
+		if exit.is_none() {
+			if matches!(child.try_wait(), Ok(None)) {
+				#[cfg(unix)]
+				unsafe {
+					libc::kill(pid as libc::pid_t, libc::SIGTERM);
+				}
+				#[cfg(not(unix))]
+				let _ = child.start_kill();
+			}
+			match tokio::time::timeout(Duration::from_secs(15), child.wait()).await {
+				Ok(Ok(_)) => {}
+				result => {
+					tracing::warn!(
+						pid,
+						?result,
+						"engine did not stop after SIGTERM; killing it"
+					);
+					let _ = child.start_kill();
+					let _ = child.wait().await;
+				}
+			}
+			return;
+		}
+		match exit.expect("checked above") {
 			Ok(status) if status.success() => {
 				tracing::warn!(
 					pid,
@@ -909,7 +951,8 @@ fn spawn_engine_watcher(mut child: Child, pid: u32) -> JoinHandle<()> {
 				);
 			}
 		}
-	})
+	});
+	(watcher, stop)
 }
 
 /// Probes the configured endpoint for an already-running, healthy engine.

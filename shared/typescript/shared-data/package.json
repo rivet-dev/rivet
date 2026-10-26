@@ -1,0 +1,13 @@
+{
+	"license": "Apache-2.0",
+	"name": "@rivetkit/shared-data",
+	"private": true,
+	"version": "2.2.1",
+	"type": "module",
+	"exports": {
+		".": {
+			"import": "./src/index.ts"
+		}
+	},
+	"dependencies": {}
+}

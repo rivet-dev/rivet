@@ -55,5 +55,6 @@ impl DevelopmentProcessManager {
 		if let Some(services) = self.services.take() {
 			services.shutdown().await;
 		}
+		self._engine.shutdown().await;
 	}
 }
