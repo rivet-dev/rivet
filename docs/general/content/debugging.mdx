@@ -6,7 +6,7 @@ skill: true
 
 ## Connecting to Rivet
 
-All debugging endpoints in this guide are available both locally and in production. In local development, the base URL is `http://localhost:6420` with no authentication. In production (Rivet Cloud or self-hosted), you connect to your Rivet control plane endpoint with a token.
+All debugging endpoints in this guide are available both locally and in production. In local development, the base URL is `http://localhost:6420` and the token is the local control plane's admin token, which is `default` unless you set `RIVET__AUTH__ADMIN_TOKEN`. In production (Rivet Cloud or self-hosted), you connect to your Rivet control plane endpoint with a token.
 
 ### Setup
 
@@ -20,6 +20,8 @@ export RIVET_TOKEN="sk_abc123"
 
 # For local development:
 # export RIVET_API="http://localhost:6420"
+# export RIVET_NAMESPACE="default"
+# export RIVET_TOKEN="default" # or your RIVET__AUTH__ADMIN_TOKEN value
 ```
 
 Rivet Cloud issues two token types: `sk_` (secret key, server-side only) and `pk_` (public key, client-safe). For debugging, always use `sk_`. See [Connect](/docs/connect) for more details.
@@ -32,7 +34,7 @@ The management API runs on the manager base path (default root path) and is used
 
 | Environment | Authentication |
 |---|---|
-| **Local development** | No authentication required. All endpoints are accessible without tokens. |
+| **Local development** | Pass the local control plane's admin token as `Authorization: Bearer default`. Replace `default` with your value if you set `RIVET__AUTH__ADMIN_TOKEN`. |
 | **Self-hosted engine** | Set `RIVET_TOKEN` to enable authenticated access to restricted endpoints like KV. |
 | **Rivet Cloud** | Authentication is enforced by your deployment entrypoint. For manager KV access, use the bearer token header below when enabled. |
 
