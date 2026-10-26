@@ -113,12 +113,15 @@ fn anyhow_to_bridge_rivet_error_payload(error: anyhow::Error) -> serde_json::Val
 pub(crate) fn init_tracing(log_level: Option<&str>) {
 	INIT_TRACING.call_once(|| {
 		// Priority: explicit config > RIVET_LOG_LEVEL > LOG_LEVEL > RUST_LOG > "warn"
+		// plus download progress.
 		let filter = log_level
 			.map(String::from)
 			.or_else(|| std::env::var("RIVET_LOG_LEVEL").ok())
 			.or_else(|| std::env::var("LOG_LEVEL").ok())
 			.or_else(|| std::env::var("RUST_LOG").ok())
-			.unwrap_or_else(|| "warn".to_string());
+			// Binary download progress is shown by default because a first
+			// local run can otherwise stall silently for a minute.
+			.unwrap_or_else(|| "warn,rivetkit_engine_process::download=info".to_string());
 
 		let log_filter = format!("{filter},rivetkit::telemetry=off");
 		let log_format = LogFormat::from_env();

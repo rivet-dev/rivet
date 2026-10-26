@@ -1,0 +1,5 @@
+{
+  "code": "lock_timeout",
+  "group": "binary_download",
+  "message": "Timed out waiting for another binary download."
+}

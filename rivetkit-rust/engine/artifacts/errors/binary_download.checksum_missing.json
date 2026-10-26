@@ -1,0 +1,5 @@
+{
+  "code": "checksum_missing",
+  "group": "binary_download",
+  "message": "Binary checksum is missing from the release manifest."
+}

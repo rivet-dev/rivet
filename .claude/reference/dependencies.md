@@ -22,7 +22,8 @@
 - For runtime-only dependencies, use dynamic loading so bundlers do not eagerly include them.
 - Build the module specifier from string parts (for example with `["pkg", "name"].join("-")` or `["@scope", "pkg"].join("/")`) instead of a single string literal.
 - Prefer this pattern for modules like `@rivetkit/rivetkit-napi/wrapper`, `sandboxed-node`, and `isolated-vm`.
-- The TypeScript registry's native envoy path dynamically loads `@rivetkit/rivetkit-napi` and `@rivetkit/engine-cli` so browser and serverless bundles do not eagerly pull native-only modules.
+- The TypeScript registry's native envoy path dynamically loads `@rivetkit/rivetkit-napi` so browser and serverless bundles do not eagerly pull native-only modules.
+- `rivetkit` does not depend on the Engine or Services binaries. `rivetkit-engine-process::download` fetches them on demand from releases.rivet.dev at exact pinned versions, verified against `SHA256SUMS`; bump `SERVICES_VERSION` in `rivetkit-core/src/services_process.rs` to move Services.
 - If loading by resolved file path, resolve first and then import via `pathToFileURL(...).href`.
 
 ## Version bumps

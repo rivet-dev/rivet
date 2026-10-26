@@ -147,10 +147,16 @@ impl EnvoyCallbacks for RegistryCallbacks {
 
 impl ServeSettings {
 	fn from_env() -> anyhow::Result<Self> {
-		let engine_host = env::var("RIVET_RUN_ENGINE_HOST").ok();
+		// The default endpoint follows the local Engine bind address. The
+		// development process resolver reads the same variables for binding.
+		let engine_host = env::var("RIVET_RUN_ENGINE_HOST")
+			.ok()
+			.filter(|value| !value.trim().is_empty());
 		let engine_port = env::var("RIVET_RUN_ENGINE_PORT")
 			.ok()
-			.and_then(|value| value.parse().ok());
+			.filter(|value| !value.trim().is_empty())
+			.map(|value| parse_engine_port(&value))
+			.transpose()?;
 		// Only a configured endpoint goes through auth parsing and URL
 		// validation, mirroring the TypeScript config transform. The built
 		// local default is used verbatim.
@@ -195,16 +201,7 @@ impl ServeSettings {
 				.or(env_namespace)
 				.unwrap_or_else(|| "default".to_owned()),
 			pool_name: env::var("RIVET_POOL_NAME").unwrap_or_else(|_| "rivetkit-rust".to_owned()),
-			engine_binary_path: env::var_os("RIVET_ENGINE_BINARY_PATH").map(PathBuf::from),
-			start_services: matches!(env::var("RIVET_RUN_SERVICES").as_deref(), Ok("1")),
-			services_binary_path: env::var_os("RIVET_SERVICES_BINARY").map(PathBuf::from),
-			engine_host,
-			engine_port,
 			engine_spawn: super::EngineSpawnMode::from_env(),
-			engine_auto_download: matches!(
-				env::var("RIVETKIT_ENGINE_AUTO_DOWNLOAD").as_deref(),
-				Ok("1") | Ok("true") | Ok("TRUE") | Ok("yes") | Ok("YES")
-			),
 			handle_inspector_http_in_runtime: false,
 			serverless_base_path: None,
 			serverless_package_version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -292,13 +289,9 @@ impl ServeConfig {
 			token: settings.token,
 			namespace: settings.namespace,
 			pool_name: settings.pool_name,
-			engine_binary_path: settings.engine_binary_path,
-			start_services: settings.start_services,
-			services_binary_path: settings.services_binary_path,
-			engine_host: settings.engine_host,
-			engine_port: settings.engine_port,
+			// Local Engine and Services settings stay unset so they resolve from
+			// the environment exactly like the NAPI host.
 			engine_spawn: settings.engine_spawn,
-			engine_auto_download: settings.engine_auto_download,
 			handle_inspector_http_in_runtime: settings.handle_inspector_http_in_runtime,
 			serverless_base_path: settings.serverless_base_path,
 			serverless_package_version: settings.serverless_package_version,

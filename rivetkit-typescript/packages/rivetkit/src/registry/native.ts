@@ -773,23 +773,6 @@ function decodeNativeKvValue<T extends NativeKvValueType = "text">(
 	}
 }
 
-async function loadEngineCli(): Promise<typeof import("@rivetkit/engine-cli")> {
-	// LOAD-BEARING: the specifier is computed (`.join("/")`) on purpose. Do NOT
-	// "simplify" it to a literal `import("@rivetkit/engine-cli")`. Edge adapters
-	// (e.g. @rivetkit/supabase) pre-bundle this module for Deno; a literal
-	// dynamic import is statically resolvable, so Deno's eszip bundler would
-	// snapshot the ~117 MB engine-cli binary into the deploy and 413. The
-	// computed specifier keeps it opaque to static analysis so it is never
-	// bundled. Enforced by scripts/ci/check-edge-native-closure.mjs.
-	return import(["@rivetkit", "engine-cli"].join("/"));
-}
-
-async function loadServices(): Promise<typeof import("@rivet-dev/services")> {
-	// Keep the native binary opaque to edge bundlers for the same reason as
-	// engine-cli above.
-	return import(["@rivet-dev", "services"].join("/"));
-}
-
 function decodeValue<T>(value?: RuntimeBytes | null): T {
 	if (!value || value.length === 0) {
 		return undefined as T;
@@ -5591,7 +5574,7 @@ export function buildNativeFactory(
 
 export async function buildServeConfig(
 	config: RegistryConfig,
-	resolveServicesBinary = true,
+	canStartServices = true,
 ): Promise<RuntimeServeConfig> {
 	if (!config.endpoint) {
 		throw nativeEndpointNotConfiguredError();
@@ -5603,7 +5586,9 @@ export async function buildServeConfig(
 		token: config.token,
 		namespace: config.namespace,
 		poolName: config.envoy.poolName,
-		startServices: resolveServicesBinary && config.startServices,
+		// Only values set in code are passed. The core resolves environment
+		// variables and defaults for local Engine and Services startup.
+		startServices: canStartServices ? config.startServices : false,
 		handleInspectorHttpInRuntime: true,
 		serverlessBasePath: config.serverless.basePath,
 		serverlessPackageVersion: VERSION,
@@ -5614,40 +5599,11 @@ export async function buildServeConfig(
 		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
 	};
 
-	// Always best-effort resolve the npm-installed engine binary and hand its
-	// path to the core. The core alone decides whether to actually spawn a local
-	// engine (its `should_manage_engine`, based on the endpoint + spawn mode), so
-	// JS must not duplicate that decision here. Only JS knows the npm
-	// `node_modules` layout, so it resolves the path; if no binary is available
-	// (remote-only install, unsupported platform, optional deps skipped), leave
-	// it unset and let the core report `engine.binary_unavailable` if it actually
-	// needs one.
-	try {
-		const { getEnginePath } = await loadEngineCli();
-		serveConfig.engineBinaryPath = getEnginePath();
-	} catch (error) {
-		// The npm-installed engine binary could not be resolved. The core still
-		// decides whether it needs to spawn a local engine; if it does, it will
-		// fail with engine.binary_unavailable (auto-download is off in the napi
-		// runtime). Warn so the cause is actionable.
-		logger().warn({
-			msg: "could not resolve a local engine binary; if a local engine must be spawned it will fail with engine.binary_unavailable — set RIVET_ENGINE_BINARY_PATH or install the @rivetkit/engine-cli platform package",
-			error: stringifyError(error),
-		});
-	}
-	if (resolveServicesBinary && config.startServices) {
-		try {
-			const { getServicesPath } = await loadServices();
-			serveConfig.servicesBinaryPath = getServicesPath();
-		} catch (error) {
-			logger().warn({
-				msg: "could not resolve the Services binary; a local engine will fail with services.binary_unavailable — set RIVET_RUN_SERVICES=0 to disable Services or RIVET_SERVICES_BINARY to a local rivet-services binary",
-				error: stringifyError(error),
-			});
-		}
-	}
+	// The core resolves the local Engine and Services binaries itself, only
+	// when it actually spawns them.
 	serveConfig.engineHost = config.engineHost;
 	serveConfig.enginePort = config.enginePort;
+	serveConfig.engineVersion = config.engineVersion;
 	if (config.test?.enabled) {
 		serveConfig.inspectorTestToken =
 			getEnvUniversal("_RIVET_TEST_INSPECTOR_TOKEN") ?? "token";

@@ -580,16 +580,6 @@
 					"statuses": []
 				},
 				{
-					"code": "checksum_mismatch",
-					"message": "Engine binary checksum mismatch.",
-					"statuses": []
-				},
-				{
-					"code": "download_failed",
-					"message": "Engine binary download failed.",
-					"statuses": []
-				},
-				{
 					"code": "health_check_failed",
 					"message": "Engine health check failed.",
 					"statuses": []

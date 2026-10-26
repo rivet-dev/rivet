@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use reqwest::{Client, Url};
 use rivet_error::RivetError;
+use rivetkit_engine_process::download::{self, ReleaseBinary};
 use serde::{Deserialize, Serialize};
 use tokio::process::{Child, Command};
 
@@ -12,6 +13,15 @@ use crate::time::sleep;
 
 /// Dedicated pool used by the first-party services actor host.
 pub(crate) const SERVICES_POOL_NAME: &str = "services";
+
+/// Services release this RivetKit build runs in local development. It is
+/// downloaded on demand from `releases.rivet.dev/services/{version}/services/`.
+/// Bump it whenever RivetKit should run a newer Services release.
+pub(crate) const SERVICES_VERSION: &str = "0.2.3";
+const SERVICES_VERSION_ENV: &str = "RIVETKIT_SERVICES_VERSION";
+const SERVICES_BINARY_ENV: &str = "RIVET_SERVICES_BINARY";
+const SERVICES_RELEASES_ENDPOINT_ENV: &str = "RIVETKIT_SERVICES_RELEASES_ENDPOINT";
+const SERVICES_DOWNLOAD_ALTERNATIVE: &str = "set RIVET_RUN_SERVICES=0 to run without Services.";
 
 const READINESS_MAX_ATTEMPTS: usize = 60;
 const READINESS_RETRY_DELAY: Duration = Duration::from_millis(500);
@@ -28,6 +38,8 @@ pub(crate) struct ServicesProcessConfig {
 	pub namespace: String,
 	pub pool_name: String,
 	pub engine_protocol_version: u16,
+	/// Whether a missing binary may be downloaded from releases.rivet.dev.
+	pub auto_download: bool,
 }
 
 #[derive(Debug)]
@@ -55,14 +67,14 @@ enum ServicesProcessError {
 	#[error(
 		"binary_unavailable",
 		"Services binary is unavailable.",
-		"No Services binary was provided. Install @rivet-dev/services, set RIVET_SERVICES_BINARY, or set RIVET_RUN_SERVICES=0 to disable Services."
+		"Rivet Services {version} is not cached and downloading it is turned off by RIVETKIT_ENGINE_AUTO_DOWNLOAD or ServeConfig::engine_auto_download. Set RIVET_SERVICES_BINARY to a rivet-services binary, turn downloads back on with RIVETKIT_ENGINE_AUTO_DOWNLOAD=1 or engine_auto_download, or set RIVET_RUN_SERVICES=0 to disable Services."
 	)]
-	BinaryUnavailable,
+	BinaryUnavailable { version: String },
 
 	#[error(
 		"binary_not_found",
 		"Services binary was not found.",
-		"Services binary was not found at '{path}'."
+		"Services binary was not found at '{path}'. Point RIVET_SERVICES_BINARY at an existing rivet-services binary, unset it so RivetKit downloads Services, or set RIVET_RUN_SERVICES=0 to disable Services."
 	)]
 	BinaryNotFound { path: String },
 
@@ -76,7 +88,7 @@ enum ServicesProcessError {
 	#[error(
 		"protocol_mismatch",
 		"Services is newer than the local Engine protocol.",
-		"Services uses Envoy protocol {services_protocol_version}, but this RivetKit Engine supports {engine_protocol_version}. Upgrade RivetKit or install an older @rivet-dev/services version."
+		"Services uses Envoy protocol {services_protocol_version}, but this RivetKit Engine supports {engine_protocol_version}. Upgrade RivetKit or point RIVET_SERVICES_BINARY at an older rivet-services binary."
 	)]
 	ProtocolMismatch {
 		services_protocol_version: u16,
@@ -100,10 +112,8 @@ enum ServicesProcessError {
 
 impl ServicesProcessManager {
 	pub(crate) async fn start(config: ServicesProcessConfig) -> Result<Self> {
-		let binary_path = config
-			.binary_path
-			.as_deref()
-			.ok_or_else(|| ServicesProcessError::BinaryUnavailable.build())?;
+		let binary_path = resolve_services_binary(&config).await?;
+		let binary_path = binary_path.as_path();
 		if !binary_path.exists() {
 			return Err(ServicesProcessError::BinaryNotFound {
 				path: binary_path.display().to_string(),
@@ -189,6 +199,115 @@ impl ServicesProcessManager {
 	}
 }
 
+/// Resolves the Services binary: the configured path (which already includes
+/// `RIVET_SERVICES_BINARY`), then the pinned release from the per-user cache,
+/// downloading it on first use.
+async fn resolve_services_binary(config: &ServicesProcessConfig) -> Result<PathBuf> {
+	if let Some(path) = &config.binary_path {
+		return Ok(path.clone());
+	}
+
+	let release = services_release_binary(
+		&std::env::var(SERVICES_VERSION_ENV).unwrap_or_else(|_| SERVICES_VERSION.to_owned()),
+		&std::env::var(SERVICES_RELEASES_ENDPOINT_ENV)
+			.unwrap_or_else(|_| download::RELEASES_ENDPOINT.to_owned()),
+	)?;
+	let cache_root = download::binary_cache_root()?;
+	// `auto_download` is already false when RIVET_DISABLE_BINARY_DOWNLOAD is
+	// set, which the downloader reports with its own error.
+	if !config.auto_download
+		&& !download::download_disabled_by_env()
+		&& !release.is_cached(&cache_root)
+	{
+		return Err(ServicesProcessError::BinaryUnavailable {
+			version: release.version.clone(),
+		}
+		.build());
+	}
+	download::ensure_release_binary(
+		&release,
+		&cache_root,
+		config.auto_download && !download::download_disabled_by_env(),
+		"RivetKit runs Services next to the local Rivet Engine",
+	)
+	.await
+}
+
+/// Whether to run without Services because no Services binary is published for
+/// this platform, no binary was provided, and Services was not explicitly
+/// requested. Logs a warning with the ways to enable or silence it.
+pub(crate) fn skip_unsupported_services(config: &ServicesProcessConfig, required: bool) -> bool {
+	if !should_skip_services(
+		required,
+		services_artifact().is_some(),
+		config.binary_path.is_some(),
+	) {
+		return false;
+	}
+	tracing::warn!(
+		os = std::env::consts::OS,
+		arch = std::env::consts::ARCH,
+		musl = cfg!(target_env = "musl"),
+		hint = "set RIVET_SERVICES_BINARY to a rivet-services binary built for this platform, or set RIVET_RUN_SERVICES=0 to hide this warning",
+		"Rivet Services is not published for this platform, so RivetKit is running without Services"
+	);
+	true
+}
+
+fn should_skip_services(required: bool, platform_supported: bool, has_binary: bool) -> bool {
+	!required && !platform_supported && !has_binary
+}
+
+/// Describes the pinned Services release binary for this host.
+fn services_release_binary(version: &str, releases_endpoint: &str) -> Result<ReleaseBinary> {
+	let artifact = services_artifact().ok_or_else(|| {
+		download::unsupported_platform(
+			"Rivet Services",
+			SERVICES_BINARY_ENV,
+			SERVICES_DOWNLOAD_ALTERNATIVE,
+		)
+	})?;
+	download::validate_pinned_version("Rivet Services", version)?;
+	let platform = artifact
+		.trim_start_matches("rivet-services-")
+		.trim_end_matches(".exe");
+	Ok(ReleaseBinary {
+		display_name: "Rivet Services",
+		cache_name: "services",
+		version: version.to_owned(),
+		platform: platform.to_owned(),
+		base_url: format!(
+			"{}/services/{version}/services",
+			releases_endpoint.trim_end_matches('/')
+		),
+		artifact: artifact.to_owned(),
+		file_name: if cfg!(windows) {
+			"rivet-services.exe".to_owned()
+		} else {
+			"rivet-services".to_owned()
+		},
+		override_env: SERVICES_BINARY_ENV,
+		alternative: SERVICES_DOWNLOAD_ALTERNATIVE,
+	})
+}
+
+/// Release artifact name of the Services binary for this host, or `None` when
+/// no release binary is published for it. Services ships glibc builds only,
+/// so musl hosts are unsupported.
+fn services_artifact() -> Option<&'static str> {
+	if cfg!(target_env = "musl") {
+		return None;
+	}
+	match (std::env::consts::OS, std::env::consts::ARCH) {
+		("linux", "x86_64") => Some("rivet-services-linux-x64-gnu"),
+		("linux", "aarch64") => Some("rivet-services-linux-arm64-gnu"),
+		("macos", "x86_64") => Some("rivet-services-darwin-x64"),
+		("macos", "aarch64") => Some("rivet-services-darwin-arm64"),
+		("windows", "x86_64") => Some("rivet-services-win32-x64.exe"),
+		_ => None,
+	}
+}
+
 async fn validate_binary_compatibility(
 	binary_path: &Path,
 	config: &ServicesProcessConfig,
@@ -209,9 +328,9 @@ async fn validate_binary_compatibility(
 		engine_protocol_version = config.engine_protocol_version,
 		"validated Services binary metadata"
 	);
-	// This protocol comparison is the compatibility safeguard. Services package
-	// semver is diagnostic only and must be bumped whenever its Envoy protocol
-	// version changes so package resolution can select a compatible binary.
+	// This protocol comparison is the compatibility safeguard. The Services
+	// version is diagnostic only, so bump `SERVICES_VERSION` to a release whose
+	// Envoy protocol this RivetKit supports.
 	validate_protocol_version(output.protocol_version, config.engine_protocol_version)
 }
 
@@ -327,55 +446,5 @@ async fn wait_for_readiness(
 }
 
 #[cfg(test)]
-mod tests {
-	use super::*;
-
-	fn config(binary_path: Option<PathBuf>) -> ServicesProcessConfig {
-		ServicesProcessConfig {
-			binary_path,
-			endpoint: "http://127.0.0.1:6420".to_owned(),
-			token: Some("dev".to_owned()),
-			namespace: "default".to_owned(),
-			pool_name: SERVICES_POOL_NAME.to_owned(),
-			engine_protocol_version: 7,
-		}
-	}
-
-	#[test]
-	fn parses_structured_version_output() {
-		let output: ServicesVersionOutput = serde_json::from_str(
-			r#"{"name":"rivet-services","version":"0.2.0-rc.1","rivetkitVersion":"2.3.11","protocolVersion":7}"#,
-		)
-		.expect("version output should parse");
-		assert_eq!(output.name, "rivet-services");
-		assert_eq!(output.version, "0.2.0-rc.1");
-		assert_eq!(output.rivetkit_version, "2.3.11");
-		assert_eq!(output.protocol_version, 7);
-	}
-
-	#[tokio::test]
-	async fn missing_binary_is_a_structured_error() {
-		let error = ServicesProcessManager::start(config(None))
-			.await
-			.expect_err("missing binary should fail");
-
-		let error = rivet_error::RivetError::extract(&error);
-		assert_eq!(error.group(), "services");
-		assert_eq!(error.code(), "binary_unavailable");
-	}
-
-	#[test]
-	fn rejects_a_newer_protocol() {
-		let error =
-			validate_protocol_version(8, 7).expect_err("newer Services protocol should fail");
-		let error = rivet_error::RivetError::extract(&error);
-		assert_eq!(error.group(), "services");
-		assert_eq!(error.code(), "protocol_mismatch");
-	}
-
-	#[test]
-	fn accepts_an_equal_or_older_protocol() {
-		validate_protocol_version(7, 7).expect("equal protocol should be compatible");
-		validate_protocol_version(6, 7).expect("older protocol should be compatible");
-	}
-}
+#[path = "../tests/services_process.rs"]
+mod tests;

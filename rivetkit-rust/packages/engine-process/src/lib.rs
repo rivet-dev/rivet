@@ -6,20 +6,28 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
 
+pub mod download;
 mod error;
 
+pub use download::{BinaryDownloadError, ReleaseBinary};
 pub use error::EngineProcessError;
 
 const ENGINE_RUNTIME: &str = "engine";
 const RIVETKIT_RUNTIME: &str = "rivetkit";
-const ENGINE_VERSION_ENV: &str = "RIVETKIT_ENGINE_VERSION";
+/// Deprecated alias for `RIVET_RUN_ENGINE_VERSION`.
+const LEGACY_ENGINE_VERSION_ENV: &str = "RIVETKIT_ENGINE_VERSION";
+const RUN_ENGINE_VERSION_ENV: &str = "RIVET_RUN_ENGINE_VERSION";
 const RELEASES_ENDPOINT_ENV: &str = "RIVETKIT_ENGINE_RELEASES_ENDPOINT";
-const RELEASES_ENDPOINT: &str = "https://releases.rivet.dev";
-const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+const ENGINE_BINARY_PATH_ENV: &str = "RIVET_ENGINE_BINARY_PATH";
+/// Publish commit whose Engine a preview build downloads from
+/// `{releases}/rivet/{ref}/engine/`. CI sets it only for preview builds that
+/// also publish Engine binaries. Releases leave it unset and download by version.
+const PREVIEW_ENGINE_REF: Option<&str> = option_env!("RIVET_ENGINE_RELEASE_REF");
+const ENGINE_DOWNLOAD_ALTERNATIVE: &str =
+	"set RIVET_ENDPOINT to a remote Rivet Engine so no local Engine is needed.";
 
 #[derive(Debug, Deserialize)]
 struct EngineHealthResponse {
@@ -37,6 +45,8 @@ pub struct EngineResolverConfig {
 	pub public_url: Option<String>,
 	pub auto_download: bool,
 	pub version: String,
+	/// Preview publish commit to download the Engine from instead of `version`.
+	pub preview_ref: Option<String>,
 	pub releases_endpoint: String,
 }
 
@@ -55,12 +65,45 @@ impl EngineResolverConfig {
 			bind_port,
 			public_url: None,
 			auto_download,
-			version: std::env::var(ENGINE_VERSION_ENV)
-				.unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_owned()),
+			version: env!("CARGO_PKG_VERSION").to_owned(),
+			preview_ref: PREVIEW_ENGINE_REF
+				.filter(|value| !value.is_empty())
+				.map(str::to_owned),
 			releases_endpoint: std::env::var(RELEASES_ENDPOINT_ENV)
-				.unwrap_or_else(|_| RELEASES_ENDPOINT.to_owned()),
+				.unwrap_or_else(|_| download::RELEASES_ENDPOINT.to_owned()),
 		}
+		.with_engine_version(engine_version_override(None, |key| std::env::var(key).ok()))
 	}
+
+	/// Pins the Engine release to download. An explicit version always wins
+	/// over the build default, including a preview build's commit.
+	pub fn with_engine_version(mut self, version: Option<String>) -> Self {
+		if let Some(version) = version.filter(|value| !value.trim().is_empty()) {
+			self.version = version.trim().to_owned();
+			self.preview_ref = None;
+		}
+		self
+	}
+}
+
+/// The Engine release to download instead of the build default, or `None`
+/// to use the build default.
+///
+/// Precedence is the explicit config value, then `RIVET_RUN_ENGINE_VERSION`,
+/// then the deprecated `RIVETKIT_ENGINE_VERSION`. Empty values are ignored.
+pub fn engine_version_override(
+	explicit: Option<String>,
+	env: impl Fn(&str) -> Option<String>,
+) -> Option<String> {
+	[
+		explicit,
+		env(RUN_ENGINE_VERSION_ENV),
+		env(LEGACY_ENGINE_VERSION_ENV),
+	]
+	.into_iter()
+	.flatten()
+	.map(|value| value.trim().to_owned())
+	.find(|value| !value.is_empty())
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -515,7 +558,7 @@ pub async fn resolve_engine_binary(config: &EngineResolverConfig) -> Result<Reso
 		return verify_binary_path(path);
 	}
 
-	if let Some(path) = std::env::var_os("RIVET_ENGINE_BINARY_PATH").map(PathBuf::from) {
+	if let Some(path) = std::env::var_os(ENGINE_BINARY_PATH_ENV).map(PathBuf::from) {
 		return verify_binary_path(&path);
 	}
 
@@ -524,8 +567,8 @@ pub async fn resolve_engine_binary(config: &EngineResolverConfig) -> Result<Reso
 	}
 
 	let local_roots = local_engine_search_roots();
-	let cached = cached_engine_path(&config.version)?;
-	resolve_engine_binary_after_probe(config, false, &local_roots, cached).await
+	let cache_root = download::binary_cache_root()?;
+	resolve_engine_binary_after_probe(config, false, &local_roots, &cache_root).await
 }
 
 /// Resolves the engine binary path without probing for an already-running
@@ -540,14 +583,14 @@ pub async fn resolve_engine_binary_path(config: &EngineResolverConfig) -> Result
 		return Ok(path.clone());
 	}
 
-	if let Some(path) = std::env::var_os("RIVET_ENGINE_BINARY_PATH").map(PathBuf::from) {
+	if let Some(path) = std::env::var_os(ENGINE_BINARY_PATH_ENV).map(PathBuf::from) {
 		verify_binary_path(&path)?;
 		return Ok(path);
 	}
 
 	let local_roots = local_engine_search_roots();
-	let cached = cached_engine_path(&config.version)?;
-	match resolve_engine_binary_after_probe(config, false, &local_roots, cached).await? {
+	let cache_root = download::binary_cache_root()?;
+	match resolve_engine_binary_after_probe(config, false, &local_roots, &cache_root).await? {
 		ResolvedEngine::Binary(path) => Ok(path),
 		ResolvedEngine::Existing => {
 			unreachable!("no-probe resolution never returns Existing")
@@ -559,7 +602,7 @@ async fn resolve_engine_binary_after_probe(
 	config: &EngineResolverConfig,
 	existing_engine: bool,
 	local_roots: &[PathBuf],
-	cached: PathBuf,
+	cache_root: &Path,
 ) -> Result<ResolvedEngine> {
 	if existing_engine {
 		return Ok(ResolvedEngine::Existing);
@@ -569,19 +612,65 @@ async fn resolve_engine_binary_after_probe(
 		return Ok(ResolvedEngine::Binary(path));
 	}
 
-	if cached.exists() {
-		return Ok(ResolvedEngine::Binary(cached));
-	}
-
-	if !config.auto_download {
+	let release = engine_release_binary(config)?;
+	// `RIVET_DISABLE_BINARY_DOWNLOAD` is reported by the downloader, which
+	// names the variable and the workarounds.
+	if !config.auto_download
+		&& !download::download_disabled_by_env()
+		&& !release.is_cached(cache_root)
+	{
 		return Err(EngineProcessError::BinaryUnavailable {
 			version: config.version.clone(),
 		}
 		.build());
 	}
 
-	download_engine_binary(config, &cached).await?;
-	Ok(ResolvedEngine::Binary(cached))
+	let path = download::ensure_release_binary(
+		&release,
+		cache_root,
+		config.auto_download && !download::download_disabled_by_env(),
+		"no local Rivet Engine is running and no engine binary was provided",
+	)
+	.await?;
+	Ok(ResolvedEngine::Binary(path))
+}
+
+/// Describes the release engine binary for this host and the configured
+/// version, published at `{releases}/rivet/{version}/engine/`.
+pub fn engine_release_binary(config: &EngineResolverConfig) -> Result<ReleaseBinary> {
+	let (platform, artifact) = engine_artifact().ok_or_else(|| {
+		download::unsupported_platform(
+			"Rivet Engine",
+			ENGINE_BINARY_PATH_ENV,
+			ENGINE_DOWNLOAD_ALTERNATIVE,
+		)
+	})?;
+	// Preview builds download the Engine published for their own commit, and
+	// releases download the Engine published for their exact version.
+	let release = match &config.preview_ref {
+		Some(preview_ref) => {
+			download::validate_version("Rivet Engine", preview_ref)?;
+			preview_ref
+		}
+		None => {
+			download::validate_pinned_version("Rivet Engine", &config.version)?;
+			&config.version
+		}
+	};
+	Ok(ReleaseBinary {
+		display_name: "Rivet Engine",
+		cache_name: "engine",
+		version: release.clone(),
+		platform: platform.to_owned(),
+		base_url: format!(
+			"{}/rivet/{release}/engine",
+			config.releases_endpoint.trim_end_matches('/'),
+		),
+		artifact: artifact.to_owned(),
+		file_name: exe_name("rivet-engine"),
+		override_env: ENGINE_BINARY_PATH_ENV,
+		alternative: ENGINE_DOWNLOAD_ALTERNATIVE,
+	})
 }
 
 fn verify_binary_path(path: &Path) -> Result<ResolvedEngine> {
@@ -616,139 +705,17 @@ fn find_local_engine_binary_in_roots(roots: &[PathBuf]) -> Option<PathBuf> {
 	None
 }
 
-fn cached_engine_path(version: &str) -> Result<PathBuf> {
-	Ok(storage_root()?
-		.join("engine")
-		.join(version)
-		.join(engine_artifact_name()))
-}
-
-async fn download_engine_binary(config: &EngineResolverConfig, destination: &Path) -> Result<()> {
-	let artifact = engine_artifact_name();
-	let base = config.releases_endpoint.trim_end_matches('/');
-	let artifact_url = format!("{base}/rivet/{}/engine/{artifact}", config.version);
-	let manifest_url = format!("{base}/rivet/{}/engine/SHA256SUMS", config.version);
-	let client = Client::builder()
-		.timeout(DOWNLOAD_TIMEOUT)
-		.build()
-		.context("build reqwest client for engine download")?;
-
-	let manifest = fetch_text(&client, &manifest_url).await?;
-	let expected = checksum_for_artifact(&manifest, &artifact).ok_or_else(|| {
-		EngineProcessError::DownloadFailed {
-			url: manifest_url.clone(),
-			reason: format!("manifest does not contain `{artifact}`"),
-		}
-		.build()
-	})?;
-
-	let bytes = fetch_bytes(&client, &artifact_url).await?;
-	let received = sha256_hex(&bytes);
-	if !received.eq_ignore_ascii_case(&expected) {
-		return Err(EngineProcessError::ChecksumMismatch {
-			artifact,
-			expected,
-			received,
-		}
-		.build());
+/// Returns the platform label and release artifact name of the engine binary
+/// for this host, or `None` when no release binary is published for it.
+fn engine_artifact() -> Option<(&'static str, &'static str)> {
+	match (std::env::consts::OS, std::env::consts::ARCH) {
+		("linux", "x86_64") => Some(("linux-x64", "rivet-engine-x86_64-unknown-linux-musl")),
+		("linux", "aarch64") => Some(("linux-arm64", "rivet-engine-aarch64-unknown-linux-musl")),
+		("macos", "x86_64") => Some(("darwin-x64", "rivet-engine-x86_64-apple-darwin")),
+		("macos", "aarch64") => Some(("darwin-arm64", "rivet-engine-aarch64-apple-darwin")),
+		("windows", "x86_64") => Some(("win32-x64", "rivet-engine-x86_64-pc-windows-gnu.exe")),
+		_ => None,
 	}
-
-	let parent = destination
-		.parent()
-		.context("engine cache destination has no parent")?;
-	ensure_dir(parent)?;
-	std::fs::write(destination, bytes)
-		.with_context(|| format!("write engine binary `{}`", destination.display()))?;
-	make_executable(destination)?;
-	Ok(())
-}
-
-async fn fetch_text(client: &Client, url: &str) -> Result<String> {
-	let response = client.get(url).send().await.map_err(|error| {
-		EngineProcessError::DownloadFailed {
-			url: url.to_owned(),
-			reason: error.to_string(),
-		}
-		.build()
-	})?;
-	if !response.status().is_success() {
-		let status = response.status();
-		return Err(EngineProcessError::DownloadFailed {
-			url: url.to_owned(),
-			reason: format!("unexpected status {status}"),
-		}
-		.build());
-	}
-	response.text().await.map_err(|error| {
-		EngineProcessError::DownloadFailed {
-			url: url.to_owned(),
-			reason: error.to_string(),
-		}
-		.build()
-	})
-}
-
-async fn fetch_bytes(client: &Client, url: &str) -> Result<Vec<u8>> {
-	let response = client.get(url).send().await.map_err(|error| {
-		EngineProcessError::DownloadFailed {
-			url: url.to_owned(),
-			reason: error.to_string(),
-		}
-		.build()
-	})?;
-	if !response.status().is_success() {
-		let status = response.status();
-		return Err(EngineProcessError::DownloadFailed {
-			url: url.to_owned(),
-			reason: format!("unexpected status {status}"),
-		}
-		.build());
-	}
-	response
-		.bytes()
-		.await
-		.map(|bytes| bytes.to_vec())
-		.map_err(|error| {
-			EngineProcessError::DownloadFailed {
-				url: url.to_owned(),
-				reason: error.to_string(),
-			}
-			.build()
-		})
-}
-
-fn checksum_for_artifact(manifest: &str, artifact: &str) -> Option<String> {
-	manifest.lines().find_map(|line| {
-		let mut parts = line.split_whitespace();
-		let checksum = parts.next()?;
-		let name = parts.next()?.trim_start_matches('*');
-		(checksum.len() == 64 && name == artifact).then(|| checksum.to_owned())
-	})
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-	let digest = Sha256::digest(bytes);
-	let mut out = String::with_capacity(digest.len() * 2);
-	for byte in digest {
-		use std::fmt::Write;
-		let _ = write!(&mut out, "{byte:02x}");
-	}
-	out
-}
-
-fn engine_artifact_name() -> String {
-	let arch = match std::env::consts::ARCH {
-		"x86_64" => "x86_64",
-		"aarch64" => "aarch64",
-		other => other,
-	};
-	let target = match std::env::consts::OS {
-		"linux" => format!("{arch}-unknown-linux-musl"),
-		"macos" => format!("{arch}-apple-darwin"),
-		"windows" => format!("{arch}-pc-windows-gnu.exe"),
-		other => format!("{arch}-{other}"),
-	};
-	format!("rivet-engine-{target}")
 }
 
 fn exe_name(base: &str) -> String {
@@ -757,24 +724,6 @@ fn exe_name(base: &str) -> String {
 	} else {
 		base.to_owned()
 	}
-}
-
-fn make_executable(path: &Path) -> Result<()> {
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::PermissionsExt;
-		let mut permissions = std::fs::metadata(path)
-			.with_context(|| format!("read metadata for `{}`", path.display()))?
-			.permissions();
-		permissions.set_mode(0o755);
-		std::fs::set_permissions(path, permissions)
-			.with_context(|| format!("mark `{}` executable", path.display()))?;
-	}
-	#[cfg(not(unix))]
-	{
-		let _ = path;
-	}
-	Ok(())
 }
 
 impl Drop for EngineProcessManager {
@@ -997,243 +946,5 @@ fn invalid_endpoint(endpoint: &str, reason: &str) -> anyhow::Error {
 }
 
 #[cfg(test)]
-mod tests {
-	use std::collections::HashMap;
-
-	use tokio::io::{AsyncReadExt, AsyncWriteExt};
-	use tokio::net::TcpListener;
-
-	use super::*;
-
-	fn test_config(releases_endpoint: String, auto_download: bool) -> EngineResolverConfig {
-		EngineResolverConfig {
-			endpoint: "http://127.0.0.1:1".to_owned(),
-			explicit_binary_path: None,
-			bind_host: None,
-			bind_port: None,
-			public_url: None,
-			auto_download,
-			version: "test-version".to_owned(),
-			releases_endpoint,
-		}
-	}
-
-	fn stamp_with_bind(bind_host: &str) -> EngineRuntimeStamp {
-		EngineRuntimeStamp {
-			pid: 1,
-			endpoint: "http://127.0.0.1:6420".to_owned(),
-			bind_host: bind_host.to_owned(),
-			public_url: None,
-		}
-	}
-
-	#[test]
-	fn binds_loopback_only_detects_loopback_addresses() {
-		assert!(stamp_with_bind("127.0.0.1").binds_loopback_only());
-		assert!(stamp_with_bind("localhost").binds_loopback_only());
-		assert!(stamp_with_bind("::1").binds_loopback_only());
-	}
-
-	#[test]
-	fn binds_loopback_only_false_for_reachable_addresses() {
-		assert!(!stamp_with_bind("0.0.0.0").binds_loopback_only());
-		assert!(!stamp_with_bind("::").binds_loopback_only());
-		assert!(!stamp_with_bind("192.168.1.5").binds_loopback_only());
-	}
-
-	#[test]
-	fn resolve_bind_host_prefers_override_then_endpoint() {
-		let mut config = test_config(String::new(), false);
-		config.endpoint = "http://127.0.0.1:6420".to_owned();
-		assert_eq!(resolve_bind_host(&config).unwrap(), "127.0.0.1");
-		config.bind_host = Some("0.0.0.0".to_owned());
-		assert_eq!(resolve_bind_host(&config).unwrap(), "0.0.0.0");
-	}
-
-	#[test]
-	fn engine_env_uses_development_defaults() {
-		let env = engine_env(&test_config(String::new(), false)).expect("build engine env");
-		let env = env.into_iter().collect::<HashMap<_, _>>();
-
-		assert_eq!(env["RIVET__PEGBOARD__RETRY_RESET_DURATION"], "100");
-		assert_eq!(env["RIVET__PEGBOARD__BASE_RETRY_TIMEOUT"], "100");
-		assert_eq!(env["RIVET__PEGBOARD__RESCHEDULE_BACKOFF_MAX_EXPONENT"], "1");
-		assert_eq!(env["RIVET__PEGBOARD__RUNNER_ELIGIBLE_THRESHOLD"], "5000");
-		assert_eq!(env["RIVET__PEGBOARD__RUNNER_LOST_THRESHOLD"], "7000");
-		assert_eq!(env["RIVET__PEGBOARD__ENVOY_ELIGIBLE_THRESHOLD"], "5000");
-		assert_eq!(env["RIVET__PEGBOARD__ENVOY_LOST_THRESHOLD"], "7000");
-		assert_eq!(env["RIVET__PEGBOARD__MIN_METADATA_POLL_INTERVAL"], "1000");
-		assert_eq!(env["RIVET__AUTH__ADMIN_TOKEN"], "default");
-		assert_eq!(env["RIVET__FEATURES__GUARD_GATEWAY_V3__MODE"], "on");
-		assert_eq!(env["RIVET__FEATURES__GUARD_GATEWAY_V3__PERCENTAGE"], "100");
-		assert_eq!(env["RIVET__RUNTIME__WORKER_SHUTDOWN_DURATION"], "1");
-		assert_eq!(env["RIVET__RUNTIME__GUARD_SHUTDOWN_DURATION"], "1");
-		assert_eq!(env["RIVET__RUNTIME__FORCE_SHUTDOWN_DURATION"], "2");
-	}
-
-	#[cfg(unix)]
-	#[test]
-	fn pid_is_alive_true_for_self_false_for_missing() {
-		assert!(pid_is_alive(std::process::id()));
-		// PID 0 targets the process group on unix, so use a very high, unused PID.
-		assert!(!pid_is_alive(0x7FFF_FFFF));
-	}
-
-	#[tokio::test]
-	async fn resolver_prefers_existing_engine_before_filesystem_paths() {
-		let temp = tempfile::tempdir().expect("create temp dir");
-		let local = temp
-			.path()
-			.join("target")
-			.join("debug")
-			.join(exe_name("rivet-engine"));
-		std::fs::create_dir_all(local.parent().expect("local parent")).expect("create local dir");
-		std::fs::write(&local, b"local").expect("write local binary");
-		let cached = temp.path().join("cache").join(exe_name("rivet-engine"));
-
-		let resolved = resolve_engine_binary_after_probe(
-			&test_config("http://127.0.0.1:1".to_owned(), false),
-			true,
-			&[temp.path().to_path_buf()],
-			cached,
-		)
-		.await
-		.expect("resolve engine");
-
-		assert_eq!(resolved, ResolvedEngine::Existing);
-	}
-
-	#[tokio::test]
-	async fn resolver_prefers_local_binary_before_cached_binary() {
-		let temp = tempfile::tempdir().expect("create temp dir");
-		let local = temp
-			.path()
-			.join("target")
-			.join("debug")
-			.join(exe_name("rivet-engine"));
-		std::fs::create_dir_all(local.parent().expect("local parent")).expect("create local dir");
-		std::fs::write(&local, b"local").expect("write local binary");
-		let cached = temp.path().join("cache").join(exe_name("rivet-engine"));
-		std::fs::create_dir_all(cached.parent().expect("cached parent")).expect("create cache dir");
-		std::fs::write(&cached, b"cached").expect("write cached binary");
-
-		let resolved = resolve_engine_binary_after_probe(
-			&test_config("http://127.0.0.1:1".to_owned(), false),
-			false,
-			&[temp.path().to_path_buf()],
-			cached,
-		)
-		.await
-		.expect("resolve engine");
-
-		assert_eq!(resolved, ResolvedEngine::Binary(local));
-	}
-
-	#[tokio::test]
-	async fn resolver_reuses_cached_binary_without_download() {
-		let temp = tempfile::tempdir().expect("create temp dir");
-		let cached = temp.path().join("cache").join(exe_name("rivet-engine"));
-		std::fs::create_dir_all(cached.parent().expect("cached parent")).expect("create cache dir");
-		std::fs::write(&cached, b"cached").expect("write cached binary");
-
-		let resolved = resolve_engine_binary_after_probe(
-			&test_config("http://127.0.0.1:1".to_owned(), false),
-			false,
-			&[],
-			cached.clone(),
-		)
-		.await
-		.expect("resolve engine");
-
-		assert_eq!(resolved, ResolvedEngine::Binary(cached));
-	}
-
-	#[tokio::test]
-	async fn resolver_reports_actionable_error_without_binary_or_download() {
-		let temp = tempfile::tempdir().expect("create temp dir");
-		let cached = temp.path().join("cache").join(exe_name("rivet-engine"));
-
-		let error = resolve_engine_binary_after_probe(
-			&test_config("http://127.0.0.1:1".to_owned(), false),
-			false,
-			&[],
-			cached,
-		)
-		.await
-		.expect_err("missing binary should fail");
-		let message = error.to_string();
-
-		assert!(message.contains("No usable engine binary was found"));
-		assert!(message.contains("Build `rivet-engine`"));
-		assert!(message.contains("RIVET_ENGINE_BINARY_PATH"));
-	}
-
-	#[tokio::test]
-	async fn resolver_download_checks_manifest_checksum() {
-		let temp = tempfile::tempdir().expect("create temp dir");
-		let cached = temp.path().join("cache").join(exe_name("rivet-engine"));
-		let artifact = engine_artifact_name();
-		let expected = sha256_hex(b"different bytes");
-		let manifest = format!("{expected}  {artifact}\n");
-		let releases_endpoint = spawn_download_server(HashMap::from([
-			(
-				format!("/rivet/test-version/engine/SHA256SUMS"),
-				manifest.into_bytes(),
-			),
-			(
-				format!("/rivet/test-version/engine/{artifact}"),
-				b"actual bytes".to_vec(),
-			),
-		]))
-		.await;
-
-		let error = resolve_engine_binary_after_probe(
-			&test_config(releases_endpoint, true),
-			false,
-			&[],
-			cached,
-		)
-		.await
-		.expect_err("checksum mismatch should fail");
-
-		assert!(
-			error
-				.to_string()
-				.contains("Engine binary checksum mismatch")
-		);
-	}
-
-	async fn spawn_download_server(routes: HashMap<String, Vec<u8>>) -> String {
-		let listener = TcpListener::bind("127.0.0.1:0")
-			.await
-			.expect("bind download server");
-		let addr = listener.local_addr().expect("download server address");
-		tokio::spawn(async move {
-			for _ in 0..routes.len() {
-				let (mut socket, _) = listener.accept().await.expect("accept download request");
-				let mut buffer = [0_u8; 2048];
-				let n = socket
-					.read(&mut buffer)
-					.await
-					.expect("read download request");
-				let request = String::from_utf8_lossy(&buffer[..n]);
-				let path = request
-					.split_whitespace()
-					.nth(1)
-					.expect("request path")
-					.to_owned();
-				let body = routes.get(&path).expect("route body");
-				let header = format!(
-					"HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
-					body.len()
-				);
-				socket
-					.write_all(header.as_bytes())
-					.await
-					.expect("write response header");
-				socket.write_all(body).await.expect("write response body");
-			}
-		});
-		format!("http://{addr}")
-	}
-}
+#[path = "../tests/unit/lib.rs"]
+mod tests;

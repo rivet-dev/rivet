@@ -7,9 +7,6 @@ import type {
 	SqliteNativeMetrics,
 	SqliteProfilingOptions,
 } from "@/common/database/config";
-import { stringifyError } from "@/common/utils";
-import type { RegistryConfig } from "./config";
-import { logger } from "./log";
 
 declare const handleBrand: unique symbol;
 
@@ -385,10 +382,13 @@ export interface RuntimeServeConfig {
 	namespace: string;
 	poolName: string;
 	engineBinaryPath?: string;
+	/** Whether to run Services with a local Engine, if set in code. */
 	startServices?: boolean;
 	servicesBinaryPath?: string;
 	engineHost?: string;
 	enginePort?: number;
+	/** Exact Engine release to download for a local Engine, if set in code. */
+	engineVersion?: string;
 	handleInspectorHttpInRuntime?: boolean;
 	inspectorTestToken?: string;
 	serverlessBasePath?: string;
@@ -874,68 +874,4 @@ export interface CoreRuntime {
 
 export interface RuntimeBundle {
 	runtime: CoreRuntime;
-}
-
-export async function buildServeConfig(
-	config: RegistryConfig,
-	loadEnginePath: () => Promise<string>,
-	version: string,
-	loadServicesPath: () => Promise<string>,
-): Promise<RuntimeServeConfig> {
-	if (!config.endpoint) {
-		throw new Error("registry endpoint is required");
-	}
-
-	const serveConfig: RuntimeServeConfig = {
-		version: config.envoy.version,
-		endpoint: config.endpoint,
-		token: config.token,
-		namespace: config.namespace,
-		poolName: config.envoy.poolName,
-		startServices: config.startServices,
-		handleInspectorHttpInRuntime: true,
-		serverlessBasePath: config.serverless.basePath,
-		serverlessPackageVersion: version,
-		serverlessClientEndpoint: config.publicEndpoint,
-		serverlessClientNamespace: config.publicNamespace,
-		serverlessClientToken: config.publicToken,
-		serverlessValidateEndpoint: config.validateServerlessEndpoint,
-		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
-	};
-
-	// Always best-effort resolve the engine binary path and hand it to the core.
-	// The core alone decides whether to actually spawn a local engine, so JS must
-	// not duplicate that decision here. `loadEnginePath` throws when no binary is
-	// available (remote-only install, unsupported platform, optional deps
-	// skipped); in that case leave it unset and let the core report
-	// `engine.binary_unavailable` only if it actually needs one.
-	try {
-		serveConfig.engineBinaryPath = await loadEnginePath();
-	} catch (error) {
-		// The engine binary could not be resolved. The core still decides whether
-		// it needs to spawn a local engine; if it does, it will fail with
-		// engine.binary_unavailable (auto-download is off in the napi runtime).
-		logger().warn({
-			msg: "could not resolve a local engine binary; if a local engine must be spawned it will fail with engine.binary_unavailable — set RIVET_ENGINE_BINARY_PATH or install the @rivetkit/engine-cli platform package",
-			error: stringifyError(error),
-		});
-	}
-	if (config.startServices) {
-		try {
-			serveConfig.servicesBinaryPath = await loadServicesPath();
-		} catch (error) {
-			logger().warn({
-				msg: "could not resolve the Services binary; a local Engine will fail with services.binary_unavailable — set RIVET_RUN_SERVICES=0 to disable Services or RIVET_SERVICES_BINARY to a local rivet-services binary",
-				error: stringifyError(error),
-			});
-		}
-	}
-	serveConfig.engineHost = config.engineHost;
-	serveConfig.enginePort = config.enginePort;
-	if (config.test?.enabled) {
-		serveConfig.inspectorTestToken =
-			process.env._RIVET_TEST_INSPECTOR_TOKEN ?? "token";
-	}
-
-	return serveConfig;
 }

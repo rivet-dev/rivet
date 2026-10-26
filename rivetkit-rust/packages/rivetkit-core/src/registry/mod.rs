@@ -205,13 +205,7 @@ struct ServeSettings {
 	token: Option<String>,
 	namespace: String,
 	pool_name: String,
-	engine_binary_path: Option<PathBuf>,
-	start_services: bool,
-	services_binary_path: Option<PathBuf>,
-	engine_host: Option<String>,
-	engine_port: Option<u16>,
 	engine_spawn: EngineSpawnMode,
-	engine_auto_download: bool,
 	handle_inspector_http_in_runtime: bool,
 	serverless_base_path: Option<String>,
 	serverless_package_version: String,
@@ -231,7 +225,8 @@ pub enum EngineSpawnMode {
 }
 
 impl EngineSpawnMode {
-	pub(crate) fn from_env() -> Self {
+	/// Reads `RIVETKIT_ENGINE_SPAWN` (`always`, `never`, or unset for `Auto`).
+	pub fn from_env() -> Self {
 		match env::var("RIVETKIT_ENGINE_SPAWN") {
 			Ok(value) if value.eq_ignore_ascii_case("always") => Self::Always,
 			Ok(value) if value.eq_ignore_ascii_case("never") => Self::Never,
@@ -267,13 +262,31 @@ pub struct ServeConfig {
 	pub token: Option<String>,
 	pub namespace: String,
 	pub pool_name: String,
+	// The local development fields below are explicit overrides. `None` falls
+	// back to the environment and then the default, resolved in one place by
+	// `development_process::LocalProcessSettings`.
+	/// Engine binary to run. Falls back to `RIVET_ENGINE_BINARY_PATH`.
 	pub engine_binary_path: Option<PathBuf>,
-	pub start_services: bool,
+	/// Whether to run Services with a local Engine. Falls back to
+	/// `RIVET_RUN_SERVICES`, then on.
+	pub start_services: Option<bool>,
+	/// Services binary to run. Falls back to `RIVET_SERVICES_BINARY`.
 	pub services_binary_path: Option<PathBuf>,
+	/// Host the local Engine binds. Falls back to `RIVET_RUN_ENGINE_HOST`, then
+	/// the endpoint host.
 	pub engine_host: Option<String>,
+	/// Port the local Engine binds. Falls back to `RIVET_RUN_ENGINE_PORT`, then
+	/// the endpoint port.
 	pub engine_port: Option<u16>,
 	pub engine_spawn: EngineSpawnMode,
-	pub engine_auto_download: bool,
+	/// Whether missing binaries may be downloaded. Falls back to
+	/// `RIVETKIT_ENGINE_AUTO_DOWNLOAD`, then on. `RIVET_DISABLE_BINARY_DOWNLOAD=1`
+	/// always turns downloads off.
+	pub engine_auto_download: Option<bool>,
+	/// Exact Engine release to download. Falls back to
+	/// `RIVET_RUN_ENGINE_VERSION`, then `RIVETKIT_ENGINE_VERSION`, then this
+	/// build's release.
+	pub engine_version: Option<String>,
 	pub handle_inspector_http_in_runtime: bool,
 	pub serverless_base_path: Option<String>,
 	pub serverless_package_version: String,
@@ -348,6 +361,18 @@ impl Default for HttpActionRequestJson {
 			args: JsonValue::Array(Vec::new()),
 		}
 	}
+}
+
+/// Parses `RIVET_RUN_ENGINE_PORT`.
+pub(crate) fn parse_engine_port(value: &str) -> Result<u16> {
+	value
+		.trim()
+		.parse::<u16>()
+		.ok()
+		.filter(|port| *port != 0)
+		.with_context(|| {
+			format!("RIVET_RUN_ENGINE_PORT must be an integer between 1 and 65535, got `{value}`")
+		})
 }
 
 pub(crate) fn should_manage_engine(endpoint: &str, spawn_mode: EngineSpawnMode) -> Result<bool> {
@@ -630,7 +655,15 @@ impl CoreRegistry {
 		let manage_engine = should_manage_engine(&config.endpoint, config.engine_spawn)?;
 		#[cfg(feature = "native-runtime")]
 		let development_processes = if manage_engine {
-			Some(DevelopmentProcessManager::start(&config).await?)
+			// Starting may download binaries, so honor a shutdown request that
+			// arrives first. Dropping the start future removes partial downloads.
+			tokio::select! {
+				processes = DevelopmentProcessManager::start(&config) => Some(processes?),
+				_ = shutdown.cancelled() => {
+					tracing::info!("shutdown requested while starting local development processes");
+					return Ok(());
+				}
+			}
 		} else {
 			None
 		};

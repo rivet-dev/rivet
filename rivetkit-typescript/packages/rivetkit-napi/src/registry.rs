@@ -33,10 +33,13 @@ pub struct JsServeConfig {
 	pub namespace: String,
 	pub pool_name: String,
 	pub engine_binary_path: Option<String>,
+	/// Whether to run Services with a local Engine, if set in code.
 	pub start_services: Option<bool>,
 	pub services_binary_path: Option<String>,
 	pub engine_host: Option<String>,
 	pub engine_port: Option<u16>,
+	/// Exact Engine release to download for a local Engine, if set in code.
+	pub engine_version: Option<String>,
 	pub handle_inspector_http_in_runtime: Option<bool>,
 	pub serverless_base_path: Option<String>,
 	pub serverless_package_version: String,
@@ -838,12 +841,15 @@ fn serve_config_from_js(
 		namespace: config.namespace,
 		pool_name: config.pool_name,
 		engine_binary_path: config.engine_binary_path.map(PathBuf::from),
-		start_services: config.start_services.unwrap_or(false),
+		// Local Engine and Services fields carry only values set in code. Core
+		// resolves the environment and defaults, matching Rust hosts.
+		start_services: config.start_services,
 		services_binary_path: config.services_binary_path.map(PathBuf::from),
 		engine_host: config.engine_host,
 		engine_port: config.engine_port,
-		engine_spawn: EngineSpawnMode::Auto,
-		engine_auto_download: false,
+		engine_spawn: EngineSpawnMode::from_env(),
+		engine_auto_download: None,
+		engine_version: config.engine_version,
 		handle_inspector_http_in_runtime: config
 			.handle_inspector_http_in_runtime
 			.unwrap_or(default_handle_inspector_http_in_runtime),

@@ -127,10 +127,10 @@ Replace `counter` with your crate name (the package `name` in `Cargo.toml`, with
 
 <Step title="Run The Server">
 
-The Rust runtime connects to the Rivet control plane. Setting `RIVETKIT_ENGINE_AUTO_DOWNLOAD=1` lets the runtime download and cache a matching engine binary the first time you run, so there is nothing else to install:
+The Rust runtime connects to the Rivet control plane. The first time you run, it downloads and caches a matching engine binary and the Rivet Services binary, so there is nothing else to install:
 
 ```sh
-RIVETKIT_ENGINE_AUTO_DOWNLOAD=1 cargo run
+cargo run
 ```
 
 Your server now connects to the Rivet control plane on `http://localhost:6420`. Clients connect directly to the control plane on this port.
@@ -138,7 +138,7 @@ Your server now connects to the Rivet control plane on `http://localhost:6420`. 
 Visit [http://localhost:6420](http://localhost:6420) in your browser (or point your AI agent at it) to open the Rivet developer tools and inspect your actors live.
 
 <Note>
-Already have a control plane binary? Set `RIVET_ENGINE_BINARY_PATH=/path/to/rivet-engine` to point at it instead. If you are working inside the [Rivet monorepo](https://github.com/rivet-dev/rivet), a local `cargo build -p rivet-engine` is discovered automatically from `target/debug`.
+Already have a control plane binary? Set `RIVET_ENGINE_BINARY_PATH=/path/to/rivet-engine` to point at it instead. Set `RIVET_RUN_SERVICES=0` to run without Services, or `RIVET_DISABLE_BINARY_DOWNLOAD=1` to turn off downloads. If you are working inside the [Rivet monorepo](https://github.com/rivet-dev/rivet), a local `cargo build -p rivet-engine` is discovered automatically from `target/debug`.
 </Note>
 
 </Step>

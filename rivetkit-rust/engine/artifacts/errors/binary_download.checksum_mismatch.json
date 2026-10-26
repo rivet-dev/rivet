@@ -1,0 +1,5 @@
+{
+  "code": "checksum_mismatch",
+  "group": "binary_download",
+  "message": "Binary checksum mismatch."
+}

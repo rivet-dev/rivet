@@ -194,7 +194,7 @@ By default the namespace must already exist. Pass `--create-namespace` to create
 
 ## Engine binary resolution
 
-`rivet dev` and `rivet engine` resolve the `rivet-engine` binary from, in order: `--engine-binary`, `RIVET_ENGINE_BINARY_PATH`, a binary bundled next to the CLI, a local `target/{debug,release}` build, then an auto-downloaded release. Set `RIVETKIT_ENGINE_AUTO_DOWNLOAD=0` to require a local binary.
+`rivet dev` and `rivet engine` resolve the `rivet-engine` binary from, in order: `--engine-binary`, `RIVET_ENGINE_BINARY_PATH`, a binary bundled next to the CLI, a local `target/{debug,release}` build, then an auto-downloaded release. The downloaded release matches the CLI version unless `RIVET_RUN_ENGINE_VERSION` names an exact version. Set `RIVET_DISABLE_BINARY_DOWNLOAD=1` to require a local binary.
 
 ## Related
 

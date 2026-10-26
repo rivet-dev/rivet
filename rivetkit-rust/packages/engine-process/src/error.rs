@@ -7,34 +7,16 @@ pub enum EngineProcessError {
 	#[error(
 		"binary_not_found",
 		"Engine binary was not found.",
-		"Engine binary was not found at '{path}'."
+		"Engine binary was not found at '{path}'. Point RIVET_ENGINE_BINARY_PATH at an existing rivet-engine binary, or unset it so RivetKit downloads the Engine."
 	)]
 	BinaryNotFound { path: String },
 
 	#[error(
 		"binary_unavailable",
 		"Engine binary is unavailable.",
-		"No usable engine binary was found for version '{version}'. Build `rivet-engine`, set `RIVET_ENGINE_BINARY_PATH`, or enable `RIVETKIT_ENGINE_AUTO_DOWNLOAD=1`."
+		"No usable engine binary was found for version '{version}' and downloading it is turned off. Build `rivet-engine`, set `RIVET_ENGINE_BINARY_PATH`, turn downloads back on with `RIVETKIT_ENGINE_AUTO_DOWNLOAD=1` (or `engine_auto_download` in a Rust `ServeConfig`), or set `RIVET_ENDPOINT` to a remote Rivet Engine."
 	)]
 	BinaryUnavailable { version: String },
-
-	#[error(
-		"download_failed",
-		"Engine binary download failed.",
-		"Engine binary download failed for '{url}': {reason}"
-	)]
-	DownloadFailed { url: String, reason: String },
-
-	#[error(
-		"checksum_mismatch",
-		"Engine binary checksum mismatch.",
-		"Engine binary checksum mismatch for '{artifact}': expected {expected}, received {received}."
-	)]
-	ChecksumMismatch {
-		artifact: String,
-		expected: String,
-		received: String,
-	},
 
 	#[error(
 		"invalid_endpoint",

@@ -1,0 +1,5 @@
+{
+  "code": "unsupported_platform",
+  "group": "binary_download",
+  "message": "No release binary exists for this platform."
+}

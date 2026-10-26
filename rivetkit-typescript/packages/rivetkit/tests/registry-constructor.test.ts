@@ -3,14 +3,6 @@ import { actor, setup } from "@/mod";
 import { RegistryConfigSchema } from "@/registry/config";
 import { buildNativeRegistry, buildServeConfig } from "../src/registry/native";
 
-vi.mock("@rivetkit/engine-cli", () => ({
-	getEnginePath: () => "/tmp/rivet-engine",
-}));
-
-vi.mock("@rivet-dev/services", () => ({
-	getServicesPath: () => "/tmp/rivet-services",
-}));
-
 const testActor = actor({
 	state: {},
 	actions: {},
@@ -97,8 +89,57 @@ describe("Registry constructor", () => {
 		expect(serveConfig.endpoint).toBe("http://127.0.0.1:7654");
 		expect(serveConfig.engineHost).toBe("127.0.0.1");
 		expect(serveConfig.enginePort).toBe(7654);
+		// Unset values stay unset so the core resolves env and defaults.
+		expect(serveConfig.startServices).toBeUndefined();
+		// The core resolves or downloads binaries only when it spawns them.
+		expect(serveConfig.engineBinaryPath).toBeUndefined();
+		expect(serveConfig.servicesBinaryPath).toBeUndefined();
+		expect(serveConfig.engineVersion).toBeUndefined();
+	});
+
+	test("passes explicitly requested Services to the core", async () => {
+		const config = RegistryConfigSchema.parse({
+			use: { test: testActor },
+			startEngine: true,
+			startServices: true,
+		});
+
+		const serveConfig = await buildServeConfig(config);
+
 		expect(serveConfig.startServices).toBe(true);
-		expect(serveConfig.servicesBinaryPath).toBe("/tmp/rivet-services");
+	});
+
+	test("passes the configured Engine version to the core", async () => {
+		const config = RegistryConfigSchema.parse({
+			use: { test: testActor },
+			startEngine: true,
+			engineVersion: "2.3.29",
+		});
+
+		const serveConfig = await buildServeConfig(config);
+
+		expect(serveConfig.engineVersion).toBe("2.3.29");
+	});
+
+	test("leaves local Engine and Services env vars to the core", async () => {
+		vi.stubEnv("RIVET_RUN_ENGINE_VERSION", "2.3.28");
+		vi.stubEnv("RIVET_RUN_SERVICES", "0");
+		vi.stubEnv("RIVET_RUN_ENGINE_HOST", "127.0.0.1");
+		vi.stubEnv("RIVET_RUN_ENGINE_PORT", "7656");
+		const config = RegistryConfigSchema.parse({
+			use: { test: testActor },
+			startEngine: true,
+		});
+
+		const serveConfig = await buildServeConfig(config);
+
+		// The endpoint still follows the run-engine host and port so the
+		// in-process client can reach the spawned Engine.
+		expect(serveConfig.endpoint).toBe("http://127.0.0.1:7656");
+		expect(serveConfig.engineVersion).toBeUndefined();
+		expect(serveConfig.startServices).toBeUndefined();
+		expect(serveConfig.engineHost).toBeUndefined();
+		expect(serveConfig.enginePort).toBeUndefined();
 	});
 
 	test("allows Services to be disabled", async () => {
@@ -112,25 +153,6 @@ describe("Registry constructor", () => {
 
 		expect(serveConfig.startServices).toBe(false);
 		expect(serveConfig.servicesBinaryPath).toBeUndefined();
-	});
-
-	test("does not enable Services for a remote Engine by default", () => {
-		const config = RegistryConfigSchema.parse({
-			use: { test: testActor },
-			endpoint: "https://api.rivet.dev",
-		});
-
-		expect(config.startServices).toBe(false);
-	});
-
-	test("RIVET_RUN_SERVICES can disable services for a local engine", () => {
-		vi.stubEnv("RIVET_RUN_SERVICES", "0");
-		const config = RegistryConfigSchema.parse({
-			use: { test: testActor },
-			startEngine: true,
-		});
-
-		expect(config.startServices).toBe(false);
 	});
 
 	test("does not resolve Services for the wasm runtime", async () => {

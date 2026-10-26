@@ -288,6 +288,7 @@ jobs:
             --build-arg BUILD_TARGET=${{ matrix.build_target }} \
             --build-arg BUILD_MODE=${{ steps.mode.outputs.build_mode }} \
             --build-arg BUILD_FRONTEND=${{ matrix.build_target == 'engine' && 'true' || 'false' }} \
+            --build-arg RIVET_ENGINE_RELEASE_REF=${{ needs.context.outputs.trigger != 'release' && contains(needs.context.outputs.targets, 'engine') && needs.context.outputs.sha || '' }} \
             -f ${{ matrix.docker }} \
             -t builder-${{ matrix.build_target }}-${{ matrix.platform }} \
             --load \
@@ -607,19 +608,9 @@ jobs:
       - name: Finalize package versions for publish
         run: pnpm --filter=publish exec tsx src/ci/bin.ts bump-versions --version ${{ needs.context.outputs.version }}
 
-      - name: Publish npm packages
-        env:
-          # setup-node provides a dummy token value; clear it so token-only
-          # post-publish operations stay disabled for trusted publishing.
-          NODE_AUTH_TOKEN: ""
-          SKIP_WASM_BUILD: "1"
-        run: |
-          pnpm --filter=publish exec tsx src/ci/bin.ts publish-npm \
-            --tag ${{ needs.context.outputs.npm_tag }} \
-            --parallel 16 \
-            --retries 3 \
-            ${{ needs.context.outputs.trigger == 'release' && '--release-mode' || '' }}
-
+      # RivetKit downloads the Engine from releases.rivet.dev on demand, so the
+      # binaries must be published before npm. A failed upload stops the job
+      # before any npm package can point at a missing Engine.
       - name: Generate engine checksum manifest
         if: contains(needs.context.outputs.targets, 'engine')
         run: |
@@ -645,6 +636,19 @@ jobs:
             --sha ${{ needs.context.outputs.sha }} \
             --version ${{ needs.context.outputs.version }} \
             --latest ${{ needs.context.outputs.latest }}
+
+      - name: Publish npm packages
+        env:
+          # setup-node provides a dummy token value; clear it so token-only
+          # post-publish operations stay disabled for trusted publishing.
+          NODE_AUTH_TOKEN: ""
+          SKIP_WASM_BUILD: "1"
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts publish-npm \
+            --tag ${{ needs.context.outputs.npm_tag }} \
+            --parallel 16 \
+            --retries 3 \
+            ${{ needs.context.outputs.trigger == 'release' && '--release-mode' || '' }}
 
       # The Inspector UI lives in frontend/dist, outside the rivetkit-core
       # crate, so it must be built and staged into the crate before packaging.

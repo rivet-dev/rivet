@@ -29,13 +29,10 @@ pub fn engine_config(engine_binary: Option<PathBuf>) -> EngineResolverConfig {
 }
 
 /// Whether the CLI may download a release engine binary when none is found
-/// locally. Enabled by default for the CLI; set `RIVETKIT_ENGINE_AUTO_DOWNLOAD`
-/// to `0` or `false` to require a local binary.
+/// locally. Enabled by default for the CLI; set `RIVET_DISABLE_BINARY_DOWNLOAD=1`
+/// or `RIVETKIT_ENGINE_AUTO_DOWNLOAD=0` to require a local binary.
 fn engine_auto_download() -> bool {
-	match env::var("RIVETKIT_ENGINE_AUTO_DOWNLOAD") {
-		Ok(value) => !matches!(value.trim(), "0" | "false" | ""),
-		Err(_) => true,
-	}
+	rivetkit_engine_process::download::auto_download_from_env(true)
 }
 
 /// Path to a rivet-engine binary distributed next to this CLI binary.

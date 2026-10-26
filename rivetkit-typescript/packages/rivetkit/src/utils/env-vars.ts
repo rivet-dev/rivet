@@ -28,12 +28,8 @@ export const getRivetRunEnginePort = (): number | undefined => {
 	const value = getEnvUniversal("RIVET_RUN_ENGINE_PORT");
 	return value !== undefined ? parseInt(value, 10) : undefined;
 };
-export const getRivetRunEngineVersion = (): string | undefined =>
-	getEnvUniversal("RIVET_RUN_ENGINE_VERSION");
-export const getRivetRunServices = (): boolean | undefined => {
-	const value = getEnvUniversal("RIVET_RUN_SERVICES");
-	return value === undefined ? undefined : value === "1";
-};
+// RIVET_RUN_ENGINE_VERSION, RIVET_RUN_SERVICES, binary paths, and download
+// settings are resolved by the native core, not here.
 export const getRivetEnvoyKind = (): string | undefined =>
 	getEnvUniversal("RIVET_ENVOY_KIND");
 export const getRivetEnvoyVersion = (): number | undefined => {

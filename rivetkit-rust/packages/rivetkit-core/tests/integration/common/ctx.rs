@@ -100,7 +100,7 @@ impl IntegrationCtx {
 			pool_name: DEFAULT_POOL.to_owned(),
 			engine_binary_path: None,
 			engine_spawn: EngineSpawnMode::Never,
-			engine_auto_download: false,
+			engine_auto_download: Some(false),
 			..ServeConfig::default()
 		};
 		let task = tokio::spawn({

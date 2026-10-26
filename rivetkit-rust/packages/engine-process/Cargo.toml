@@ -11,6 +11,7 @@ description = "Resolves, spawns, and reuses the rivet-engine subprocess for loca
 
 [dependencies]
 anyhow.workspace = true
+dirs.workspace = true
 reqwest.workspace = true
 rivet-error.workspace = true
 serde.workspace = true

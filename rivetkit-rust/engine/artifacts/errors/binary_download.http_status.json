@@ -1,0 +1,5 @@
+{
+  "code": "http_status",
+  "group": "binary_download",
+  "message": "Binary download returned an HTTP error."
+}

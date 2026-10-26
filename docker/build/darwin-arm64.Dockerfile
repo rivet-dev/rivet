@@ -7,6 +7,8 @@ FROM ghcr.io/rivet-dev/rivet/builder-base-osxcross:0e33ceb98
 
 ARG BUILD_TARGET=engine
 ARG BUILD_MODE=release
+# Publish commit whose Engine a preview rivetkit-napi build downloads. Empty for releases.
+ARG RIVET_ENGINE_RELEASE_REF=
 ARG BUILD_FRONTEND=false
 ARG VITE_APP_API_URL=__SAME__
 ARG VITE_FEATURE_FLAGS=

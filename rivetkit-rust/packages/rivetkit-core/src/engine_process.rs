@@ -3,6 +3,7 @@
 //! same resolution, spawn, reuse, and orphan-lifetime logic. This module
 //! re-exports it for existing in-crate callers.
 
+pub use rivetkit_engine_process::download::auto_download_from_env;
 pub use rivetkit_engine_process::{
 	EngineProcessError, EngineProcessManager, EngineResolverConfig, ResolvedEngine, engine_db_path,
 	engine_env, resolve_engine_binary, resolve_engine_binary_path,

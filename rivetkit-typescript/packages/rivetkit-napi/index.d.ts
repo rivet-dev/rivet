@@ -227,10 +227,13 @@ export interface JsServeConfig {
   namespace: string
   poolName: string
   engineBinaryPath?: string
+  /** Whether to run Services with a local Engine, if set in code. */
   startServices?: boolean
   servicesBinaryPath?: string
   engineHost?: string
   enginePort?: number
+  /** Exact Engine release to download for a local Engine, if set in code. */
+  engineVersion?: string
   handleInspectorHttpInRuntime?: boolean
   serverlessBasePath?: string
   serverlessPackageVersion: string

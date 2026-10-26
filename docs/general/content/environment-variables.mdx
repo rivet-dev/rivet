@@ -40,8 +40,16 @@ These variables configure how clients connect to your actors.
 | Environment Variable | Description |
 |---------------------|-------------|
 | `RIVET_RUN_ENGINE` | Set to `1` to spawn the control plane process |
-| `RIVET_RUN_ENGINE_HOST` | Host to bind the spawned local engine process to. Defaults to `127.0.0.1`. |
-| `RIVET_RUN_ENGINE_PORT` | Port to bind the spawned local engine process to. Defaults to `6420`. |
-| `RIVET_RUN_ENGINE_VERSION` | Version of engine to download |
-| `RIVET_RUN_SERVICES` | Set to `1` to run Services with a local Engine, or `0` to disable it. By default, Services follows RivetKit's local-Engine decision. |
-| `RIVET_SERVICES_BINARY` | Path to a local `rivet-services` binary. |
+| `RIVET_RUN_ENGINE_HOST` | Host to bind the spawned local engine process to. Defaults to the host of the local endpoint (`127.0.0.1`). |
+| `RIVET_RUN_ENGINE_PORT` | Port to bind the spawned local engine process to. Defaults to the port of the local endpoint (`6420`). |
+| `RIVET_RUN_ENGINE_VERSION` | Exact Engine version to download for local development, such as `2.3.30`. Defaults to the installed RivetKit version. Aliases such as `latest` are rejected. `RIVETKIT_ENGINE_VERSION` is a deprecated alias. |
+| `RIVET_RUN_SERVICES` | Set to `1` to run Services with a local Engine, or `0` to disable it. Services runs by default whenever RivetKit runs a local Engine. Without an explicit `1`, platforms without a Services build (such as Alpine) run without it after a warning. |
+| `RIVET_ENGINE_BINARY_PATH` | Path to a local `rivet-engine` binary. Skips the download. |
+| `RIVET_SERVICES_BINARY` | Path to a local `rivet-services` binary. Skips the download. |
+| `RIVET_DISABLE_BINARY_DOWNLOAD` | Set to `1` to never download the Engine or Services binaries, for offline or locked-down environments. Provide the binaries with the variables above instead. Overrides every other download setting. |
+| `RIVETKIT_ENGINE_AUTO_DOWNLOAD` | Set to `0` to stop downloading binaries that are not already cached. Defaults to `1`. |
+| `RIVET_BINARY_CACHE_DIR` | Directory for downloaded binaries. Defaults to the user cache directory (`$XDG_CACHE_HOME/rivet` or `~/.cache/rivet` on Linux, `~/Library/Caches/rivet` on macOS, `%LOCALAPPDATA%\rivet` on Windows). |
+
+When RivetKit runs a local Engine for development, it downloads the Engine that matches your RivetKit version and the Services release pinned by it from `releases.rivet.dev` on first use, verifies their SHA-256 checksums, and caches them for later runs. Nothing is downloaded when `RIVET_ENDPOINT` points at a remote Engine.
+
+TypeScript and Rust apps resolve these variables the same way. A value set in code (such as `engineVersion`, `startServices`, `engineHost`, or `enginePort` in the TypeScript registry config) takes precedence over its environment variable, which takes precedence over the default.
