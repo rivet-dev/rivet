@@ -68,6 +68,10 @@ pub type ActionDispatchResult = std::result::Result<Vec<u8>, ActionDispatchError
 pub type HttpDispatchResult = Result<ActorHttpResponse>;
 
 const SERIALIZE_STATE_SHUTDOWN_SANITY_CAP: Duration = Duration::from_secs(15);
+/// Sleep grace keeps the last quarter of the grace period for onSleep, connection
+/// disconnects, and the final save, so in-flight work cannot use up the whole window.
+/// It scales with the configured grace period: the 15 second default leaves 3.75 seconds.
+const SLEEP_HOOK_RESERVE_DIVISOR: u32 = 4;
 #[cfg(test)]
 const LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD: Duration = Duration::from_secs(1);
 const INSPECTOR_SERIALIZE_STATE_INTERVAL: Duration = Duration::from_millis(50);
@@ -315,6 +319,18 @@ enum LiveExit {
 struct SleepGraceState {
 	deadline: Instant,
 	reason: ShutdownKind,
+	hooks: GraceHooks,
+}
+
+/// Whether onSleep and the connection disconnect hooks have run in this grace period.
+#[derive(Clone, Copy)]
+enum GraceHooks {
+	/// Sleep waits for work that started before grace, and runs the hooks at
+	/// `deadline` if that work is still running.
+	Pending {
+		deadline: Instant,
+	},
+	Emitted,
 }
 
 struct PersistedStartup {
@@ -486,6 +502,7 @@ impl ActorTask {
 			}
 			// TODO: Sample inbox depths periodically instead of on every loop iteration.
 			self.record_inbox_depths();
+			let hooks_deadline = self.pending_hooks_deadline();
 			tokio::select! {
 				biased;
 				lifecycle_command = self.lifecycle_inbox.recv() => {
@@ -519,6 +536,12 @@ impl ActorTask {
 				_ = activity_notify.notified() => {
 					self.ctx.acknowledge_activity_dirty();
 					if let Some(exit) = self.on_activity_signal().await {
+						return exit;
+					}
+				}
+				_ = Self::sleep_grace_tick(hooks_deadline), if hooks_deadline.is_some() => {
+					self.emit_grace_hooks();
+					if let Some(exit) = self.try_finish_grace() {
 						return exit;
 					}
 				}
@@ -672,8 +695,12 @@ impl ActorTask {
 			let activity = activity_notify.notified();
 			tokio::pin!(activity);
 
+			let hooks_deadline = self.pending_hooks_deadline();
 			tokio::select! {
 				_ = &mut activity => {}
+				_ = Self::sleep_grace_tick(hooks_deadline), if hooks_deadline.is_some() => {
+					self.emit_grace_hooks();
+				}
 				_ = Self::sleep_grace_tick(Some(deadline)) => {
 					if let Some(exit) = self.on_sleep_grace_deadline().await {
 						let LiveExit::Shutdown { reason } = exit else {
@@ -778,7 +805,37 @@ impl ActorTask {
 			ShutdownKind::Destroy => LifecycleState::DestroyGrace,
 		});
 		self.start_grace(reason);
+		match reason {
+			ShutdownKind::Sleep => self.try_emit_grace_hooks(),
+			ShutdownKind::Destroy => self.emit_grace_hooks(),
+		}
+	}
+
+	/// Runs the grace hooks once work that started before grace has finished.
+	/// The hooks deadline arm runs them otherwise.
+	fn try_emit_grace_hooks(&mut self) {
+		if self.ctx.shutdown_task_count() == 0 && self.ctx.websocket_callback_count() == 0 {
+			self.emit_grace_hooks();
+		}
+	}
+
+	fn emit_grace_hooks(&mut self) {
+		let Some(grace) = self.sleep_grace.as_mut() else {
+			return;
+		};
+		if matches!(grace.hooks, GraceHooks::Emitted) {
+			return;
+		}
+		grace.hooks = GraceHooks::Emitted;
+		let reason = grace.reason;
 		self.emit_grace_events(reason);
+	}
+
+	fn pending_hooks_deadline(&self) -> Option<Instant> {
+		match self.sleep_grace.as_ref()?.hooks {
+			GraceHooks::Pending { deadline } => Some(deadline),
+			GraceHooks::Emitted => None,
+		}
 	}
 
 	fn emit_grace_events(&mut self, reason: ShutdownKind) {
@@ -1159,10 +1216,10 @@ impl ActorTask {
 
 		match self.lifecycle {
 			LifecycleState::Started => None,
-			// The app's onSleep and connection cleanup still run, so the actor still serves work.
-			LifecycleState::SleepGrace if self.ctx.core_dispatched_hook_count() > 0 => None,
-			// The app has released its resources. The work never ran here, so the client
-			// retries it and the next generation serves it.
+			// Work admitted before onSleep runs is waited for before onSleep starts.
+			LifecycleState::SleepGrace if self.pending_hooks_deadline().is_some() => None,
+			// onSleep has started releasing the app's resources. The work never ran here,
+			// so the client retries it and the next generation serves it.
 			LifecycleState::SleepGrace | LifecycleState::SleepFinalize => {
 				self.ctx.warn_work_sent_to_stopping_instance("dispatch");
 				Some(ActorLifecycleError::Restarting.build())
@@ -1604,9 +1661,13 @@ impl ActorTask {
 		self.sleep_deadline = None;
 		self.ctx.cancel_sleep_timer();
 		self.ctx.cancel_actor_abort_signal();
+		let deadline = Instant::now() + grace_period;
 		self.sleep_grace = Some(SleepGraceState {
-			deadline: Instant::now() + grace_period,
+			deadline,
 			reason,
+			hooks: GraceHooks::Pending {
+				deadline: deadline - grace_period / SLEEP_HOOK_RESERVE_DIVISOR,
+			},
 		});
 		self.ctx.reset_sleep_timer();
 	}
@@ -1638,10 +1699,14 @@ impl ActorTask {
 	}
 
 	fn try_finish_grace(&mut self) -> Option<LiveExit> {
+		self.try_emit_grace_hooks();
 		let Some(grace) = self.sleep_grace.as_ref() else {
 			return None;
 		};
-		if self.ctx.can_finalize_shutdown(grace.reason) {
+		// Before the hooks run, the hook count is zero, so finalizing would skip onSleep.
+		if matches!(grace.hooks, GraceHooks::Emitted)
+			&& self.ctx.can_finalize_shutdown(grace.reason)
+		{
 			let reason = grace.reason;
 			self.sleep_grace = None;
 			return Some(LiveExit::Shutdown { reason });

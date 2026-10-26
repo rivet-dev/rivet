@@ -347,21 +347,24 @@ When WebSocket hibernation is enabled, connections are preserved across sleep cy
 
 When an actor sleeps or is destroyed, it enters the graceful shutdown window:
 
-1. `c.abortSignal` fires and `c.aborted` becomes `true`. New connections and dispatch are rejected. Alarm timeouts are cancelled. On sleep, scheduled events are persisted and will be re-armed when the actor wakes.
-2. `onSleep` or `onDestroy` and `onDisconnect` for each closing connection run during the same window. User `waitUntil` promises and async raw WebSocket handlers are drained. Hibernatable WebSocket connections are preserved on sleep and closed on destroy.
-3. Once graceful work has completed, state is saved and final cleanup runs.
+1. `c.abortSignal` fires and `c.aborted` becomes `true`. New connections are rejected. Alarm timeouts are cancelled. On sleep, scheduled events are persisted and will be re-armed when the actor wakes.
+2. On sleep, actions, `keepAwake`, `waitUntil`, and WebSocket handlers that are already running finish before `onSleep` runs. Action results still reach the client. If this work does not finish within the first three quarters of `sleepGracePeriod`, `onSleep` runs anyway. On destroy, this step is skipped.
+3. `onSleep` or `onDestroy` and `onDisconnect` for each closing connection run during the same window. User `waitUntil` promises and async raw WebSocket handlers are drained. Hibernatable WebSocket connections are preserved on sleep and closed on destroy.
+4. Once graceful work has completed, state is saved and final cleanup runs.
 
 The entire window is bounded by `sleepGracePeriod` on both sleep and destroy. Defaults to 15 seconds. If the window is exceeded, the actor proceeds to state save anyway.
 
 #### Graceful shutdown window
 
-During steps 1 through 6, the actor is still fully functional. Database access, `broadcast`, `waitUntil`, `queue.send`, and `schedule.after` all work. State mutations are persisted at step 7. Actions invoked by pre-existing connections or lifecycle hooks continue to execute normally.
+During steps 1 through 3, the actor is still fully functional. Database access, `broadcast`, `waitUntil`, `queue.send`, and `schedule.after` all work. State mutations are persisted at step 4.
+
+On sleep, actions that arrive before `onSleep` runs can still run on the current instance. After that, actions sent through a handle are held and run on the next instance of the actor. An action sent through a connection while the connection closes fails with `ws.going_away`. It did not run, so it is safe to retry. On destroy, new actions are refused as soon as the shutdown sequence begins.
 
 New connections and raw WebSocket upgrades are rejected as soon as the shutdown sequence begins. New requests that arrive during shutdown are held until the actor wakes up again. The caller does not need to retry.
 
 If `schedule.after` is called during shutdown, the event is persisted so it survives the sleep/wake cycle, but no local timeout is scheduled. The event will fire after the actor wakes.
 
-In-flight actions are **not** waited on during shutdown. If an action must complete before the actor stops, wrap the critical work with `c.waitUntil()`.
+Raw `onRequest` handlers and queue sends do not delay `onSleep`. If that work must complete before the actor stops, wrap it with `c.waitUntil()`.
 
 ## Options
 

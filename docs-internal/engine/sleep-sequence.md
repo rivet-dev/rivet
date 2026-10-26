@@ -40,7 +40,9 @@ Removing `preventSleep` deleted both predicate branches. Any future sleep-affect
 - `start_grace(reason)` fires at the start of `SleepGrace` / `DestroyGrace`. It cancels the sleep idle timer, cancels the actor abort signal (`actor_abort_signal`), installs a `SleepGraceState` with the effective grace deadline, and resets the sleep timer to arm the grace tick.
 - The actor abort signal is a soft signal: "shutdown has started, please wrap up." User code observes it via `c.abortSignal`. It does not force-stop work.
 - Destroy requests also use the normal grace path. The actor abort signal fires when destroy grace starts.
-- Sleep grace admits new work only while its hooks still run: the app's `onSleep` and connection disconnects, counted in `core_dispatched_hooks`. After they finish, the app has released its resources (the TypeScript sleep hook also closes SQLite and clears runtime state), so dispatch refuses with `actor/restarting` and the client retries against the next generation. `SleepFinalize` refuses the same way.
+- Sleep grace runs `onSleep` and connection disconnects only after tracked work that drains shutdown grace (actions, `keepAwake`, `waitUntil`, registered tasks, WebSocket callbacks) finishes, or at the hooks deadline, which keeps the last quarter of the grace period for the hooks and the final save. Raw `onRequest` handlers and `run` are not waited for. Destroy grace runs its hooks at once.
+- Sleep grace admits new work until the hooks run. After that, dispatch refuses with `actor/restarting` and the client retries against the next generation. `SleepFinalize` refuses the same way.
+- Core owns SQLite teardown: it syncs the alarm and then closes SQLite in final cleanup. The TypeScript sleep cleanup closes SQLite itself only when tracked work outlives the grace deadline, so that work cannot write after shutdown.
 
 ## Grace deadline enforcement
 
