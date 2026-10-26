@@ -41,6 +41,7 @@ Removing `preventSleep` deleted both predicate branches. Any future sleep-affect
 - The actor abort signal is a soft signal: "shutdown has started, please wrap up." User code observes it via `c.abortSignal`. It does not force-stop work.
 - Destroy requests also use the normal grace path. The actor abort signal fires when destroy grace starts.
 - Sleep grace runs `onSleep` and connection disconnects only after tracked work that drains shutdown grace (actions, `keepAwake`, `waitUntil`, registered tasks, WebSocket callbacks) finishes, or at the hooks deadline, which keeps the last quarter of the grace period for the hooks and the final save. Raw `onRequest` handlers and `run` are not waited for. Destroy grace runs its hooks at once.
+- Non-hibernatable connections stay attached until the sleep hooks run, so in-flight results still reach clients. Destroy grace closes them at grace start. The grace deadline closes any that are still attached.
 - Sleep grace admits new work until the hooks run. After that, dispatch refuses with `actor/restarting` and the client retries against the next generation. `SleepFinalize` refuses the same way.
 - Core owns SQLite teardown: it syncs the alarm and then closes SQLite in final cleanup. The TypeScript sleep cleanup closes SQLite itself only when tracked work outlives the grace deadline, so that work cannot write after shutdown.
 

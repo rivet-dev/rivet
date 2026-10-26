@@ -841,9 +841,7 @@ impl ActorTask {
 	fn emit_grace_events(&mut self, reason: ShutdownKind) {
 		let conns: Vec<_> = self.ctx.conns().collect();
 		for conn in conns {
-			let hibernatable_sleep =
-				matches!(reason, ShutdownKind::Sleep) && conn.is_hibernatable();
-			if hibernatable_sleep {
+			if !closes_on_grace(reason, &conn) {
 				self.ctx.request_hibernation_transport_save(conn.id());
 				continue;
 			}
@@ -1718,6 +1716,18 @@ impl ActorTask {
 		let Some(grace) = self.sleep_grace.take() else {
 			return None;
 		};
+		// Hooks dispatched now would never be awaited, so close transports directly.
+		if let Err(error) = self
+			.ctx
+			.disconnect_conns(|conn| closes_on_grace(grace.reason, conn))
+			.await
+		{
+			tracing::warn!(
+				actor_id = %self.ctx.actor_id(),
+				?error,
+				"failed to close connections at the grace deadline"
+			);
+		}
 		if let Some(run_handle) = self.run_handle.as_mut() {
 			run_handle.abort();
 		}
@@ -2413,6 +2423,11 @@ fn shutdown_reason_label(reason: ShutdownKind) -> &'static str {
 		ShutdownKind::Sleep => "sleep",
 		ShutdownKind::Destroy => "destroy",
 	}
+}
+
+/// Hibernatable connections survive sleep, so sleep grace leaves them open.
+fn closes_on_grace(reason: ShutdownKind, conn: &ConnHandle) -> bool {
+	!(matches!(reason, ShutdownKind::Sleep) && conn.is_hibernatable())
 }
 
 #[cfg(all(unix, target_env = "gnu"))]

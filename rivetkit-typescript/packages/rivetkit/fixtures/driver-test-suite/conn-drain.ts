@@ -15,6 +15,11 @@ export const connDrainActor = actor({
 			c.broadcast("hangStarted");
 			await new Promise((resolve) => setTimeout(resolve, 3_000));
 		},
+		work: async (c) => {
+			c.broadcast("workStarted");
+			await new Promise((resolve) => setTimeout(resolve, 300));
+			return "done";
+		},
 	},
 	options: {
 		// Shorter than `hang`, so the drain closes the socket while it runs.
