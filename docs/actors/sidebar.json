@@ -288,21 +288,8 @@
 					"href": "/guides/a-radically-simpler-architecture"
 				},
 				{
-					"title": "Stateful Backend for Next.js",
-					"href": "/guides/nextjs-stateful-backend"
-				},
-				{
 					"title": "Authenticate Users End to End",
 					"href": "/guides/authentication"
-				}
-			]
-		},
-		{
-			"title": "Agents",
-			"pages": [
-				{
-					"title": "Rate Limit LLM Calls",
-					"href": "/guides/rate-limit-llm-calls"
 				}
 			]
 		},
@@ -312,10 +299,6 @@
 				{
 					"title": "Database per Tenant",
 					"href": "/guides/per-tenant-database"
-				},
-				{
-					"title": "Database per User",
-					"href": "/guides/database-per-user"
 				}
 			]
 		},
@@ -365,52 +348,6 @@
 			]
 		},
 		{
-			"title": "Security & Compliance",
-			"pages": [
-				{
-					"title": "GDPR with multi-region data residency",
-					"href": "/guides/gdpr-data-residency"
-				},
-				{
-					"title": "Per-tenant audit log",
-					"href": "/guides/tenant-audit-log"
-				},
-				{
-					"title": "Private networking and VPC peering",
-					"href": "/guides/private-networking"
-				},
-				{
-					"title": "Static egress IPs",
-					"href": "/guides/static-egress-ips"
-				},
-				{
-					"title": "mTLS and workload identity between services",
-					"href": "/guides/workload-identity"
-				}
-			]
-		},
-		{
-			"title": "Platforms",
-			"pages": [
-				{
-					"title": "Usage metering and chargeback",
-					"href": "/guides/usage-metering"
-				},
-				{
-					"title": "Multi-tenant SaaS architecture",
-					"href": "/guides/multi-tenant-saas-architecture"
-				},
-				{
-					"title": "Organizations, teams, and RBAC",
-					"href": "/guides/organizations-rbac"
-				},
-				{
-					"title": "Cross-tenant analytics without breaking isolation",
-					"href": "/guides/cross-tenant-analytics"
-				}
-			]
-		},
-		{
 			"title": "Workflows",
 			"pages": [
 				{
@@ -437,15 +374,6 @@
 				{
 					"title": "Collaborative Text Editor (OT)",
 					"href": "/guides/collaborative-text-editor-ot"
-				}
-			]
-		},
-		{
-			"title": "IoT",
-			"pages": [
-				{
-					"title": "IoT digital twin per device",
-					"href": "/guides/iot-digital-twin"
 				}
 			]
 		}
