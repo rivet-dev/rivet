@@ -6,6 +6,26 @@ templates: ["per-tenant-database"]
 
 Patterns for database-per-tenant architectures with RivetKit. Instead of one shared database with a `tenant_id` column on every table, each tenant gets its own Rivet Actor, and that actor owns the tenant's entire dataset.
 
+<Diagram
+  id="per-tenant-database"
+  label="The tenant dashboard connects with useActor to the companyDatabase Actor whose key is the company name, and createState seeds that tenant's dataset on first creation. The dashboard loads with listEmployees, listProjects, and getStats, then writes with addEmployee and addProject. Each write pushes the record into the Actor's JSON state of employees and projects, then broadcasts employeeAdded or projectAdded to every connected client of that tenant. In production, your auth provides a verified tenant id that the Actor checks against its key; the example skips this. The numbers show the order of the calls. There is one companyDatabase Actor per tenant."
+  stackLabel="One per tenant"
+  nodes={[
+    { id: "auth", x: 20, y: 20, optional: true, title: "Your auth", subtitle: "JWT tenant claim" },
+    { id: "dashboard", x: 20, y: 140, h: 80, title: "Tenant dashboard", subtitle: "each open client" },
+    { id: "db", x: 500, y: 140, h: 80, product: "actors", stack: true, title: "`companyDatabase`", subtitle: "one tenant's data" },
+    { id: "state", x: 840, y: 150, title: "Actor state", subtitle: "`employees`, `projects`" },
+  ]}
+  edges={[
+    { from: "auth", to: "dashboard", kind: "optional", label: "verified tenant id", labelAt: [117, 116], labelAnchor: "start" },
+    { from: "dashboard", to: "db", fromOffset: -24, toOffset: -24, label: "`useActor` with `key: [companyName]`", step: 1 },
+    { from: "dashboard", to: "db", label: "`listEmployees`, `listProjects`, `getStats`", step: 2 },
+    { from: "dashboard", to: "db", fromOffset: 24, toOffset: 24, label: "`addEmployee`, `addProject`", step: 3 },
+    { from: "db", to: "state", label: "push record", step: 4 },
+    { from: "db", to: "dashboard", kind: "reply", fromSide: "bottom", toSide: "bottom", via: [[585, 290], [105, 290]], label: "`employeeAdded`, `projectAdded` to every client", step: 5 },
+  ]}
+/>
+
 ## Starter Code
 
 Start with the working example on [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/per-tenant-database) and adapt it. The example stores each tenant's dataset in JSON actor state and serves a React dashboard with live event updates.

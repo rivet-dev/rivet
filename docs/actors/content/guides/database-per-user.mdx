@@ -1,0 +1,41 @@
+---
+title: "Database per User"
+description: "Give every user their own SQLite database, created at sign-up and reached by user id, with no shared tables."
+---
+
+<Diagram
+  id="database-per-user"
+  label="When someone signs up, your app calls the /signup route of your API server, which calls create on the user Actor keyed by the new user id. Later requests go to routes such as /api/notes, which call actions like addNote and listNotes on the same user Actor by user id. The user Actor reads and writes its own SQLite database through c.db, and the schema migrates in onMigrate when the Actor wakes. The numbers show the order of the calls. There is one user Actor and one SQLite database per user."
+  stackLabel="One per user"
+  nodes={[
+    { id: "app", x: 20, y: 70, w: 150, h: 100, title: "Your app", subtitle: "signed-in user" },
+    { id: "server", kind: "group", x: 300, y: 40, w: 170, h: 140, title: "API server" },
+    { id: "signup", kind: "slot", x: 315, y: 75, w: 140, h: 36, title: "`/signup`" },
+    { id: "notes", kind: "slot", x: 315, y: 130, w: 140, h: 36, title: "`/api/notes`" },
+    { id: "user", x: 640, y: 70, h: 100, product: "actors", stack: true, title: "`user`", subtitle: "one user's data" },
+    { id: "sqlite", x: 960, y: 90, stack: true, title: "SQLite database", subtitle: "migrates on wake" },
+  ]}
+  edges={[
+    { from: "app", to: "signup", fromOffset: -27, label: "sign up", step: 1 },
+    { from: "signup", to: "user", toOffset: -27, label: "`create`", step: 2 },
+    { from: "app", to: "notes", fromOffset: 28, label: "request", step: 3 },
+    { from: "notes", to: "user", toOffset: 28, label: "`addNote`, `listNotes`", step: 4 },
+    { from: "user", to: "sqlite", label: "`c.db` queries", step: 5 },
+  ]}
+/>
+
+## TODO
+
+This page is not written yet. The outline below is what it will cover.
+
+### What we'll build
+
+- A `user` Actor per user, created at sign-up and keyed by the user id from your auth provider.
+- A SQLite database inside each `user` Actor that holds only that user's rows.
+- API routes that look up the user id from the session and call actions on that user's Actor.
+- Schema migrations in `onMigrate` that run on each user's database the next time it wakes.
+- Data access with no shared table, no `user_id` filter on every query, and no row-level security policies.
+
+### Similar tools
+
+This is the same job as a Turso database per user, Neon branches per user, Supabase row-level security, or Cloudflare Durable Objects with SQLite. On Rivet the database lives inside the Actor that serves it, so queries run next to the data, and an idle user's Actor sleeps until the next request wakes it.

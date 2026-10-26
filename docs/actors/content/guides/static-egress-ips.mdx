@@ -1,0 +1,41 @@
+---
+title: "Static Egress IPs"
+description: "Call a partner API that only accepts requests from allowlisted IP addresses."
+---
+
+<Diagram
+  id="static-egress-ips"
+  label="Your app calls syncOrders on the partnerSync Actor for an account. The Actor runs on your workers in your cloud and sends its outbound HTTPS requests through a NAT gateway with fixed public IPs. The partner API sees every request coming from one of those IPs and accepts it because they are on its allowlist. The numbers show the order of the calls. There is one partnerSync Actor per account."
+  stackLabel="One per account"
+  nodes={[
+    { id: "app", x: 20, y: 70, w: 150, title: "Your app", subtitle: "starts a sync" },
+    { id: "cloud", kind: "boundary", x: 320, y: 20, w: 600, h: 150, title: "Your cloud" },
+    { id: "actor", x: 360, y: 70, product: "actors", stack: true, title: "`partnerSync`", subtitle: "on your workers" },
+    { id: "nat", x: 720, y: 70, title: "NAT gateway", subtitle: "fixed public IPs" },
+    { id: "partner", x: 1070, y: 70, w: 150, title: "Partner API", subtitle: "IP allowlist" },
+  ]}
+  edges={[
+    { from: "app", to: "actor", label: "`syncOrders`", labelAt: [200, 92], labelAnchor: "start", step: 1 },
+    { from: "actor", to: "nat", label: "outbound HTTPS", step: 2 },
+    { from: "nat", to: "partner", label: "from a fixed IP", labelAt: [965, 92], labelAnchor: "start", step: 3 },
+  ]}
+/>
+
+## TODO
+
+This page is not written yet. The outline below is what it will cover.
+
+### What we'll build
+
+- A `partnerSync` Actor per account that calls a partner API which only accepts allowlisted IPs.
+- Workers in a private subnet whose outbound traffic leaves through a NAT gateway with one or two fixed public IPs.
+- The list of IPs to send to the partner, and a test that confirms requests arrive from them.
+- Retries in the Actor for partner calls that fail while the allowlist is being updated.
+
+### Similar tools
+
+This is the same job as Vercel Static IPs, Heroku Private Spaces, or a QuotaGuard proxy. On Rivet the Actor code runs on workers you deploy, so the fixed IPs come from your own network setup instead of a proxy add-on.
+
+### Open questions
+
+- Rivet Cloud does not publish egress IPs. Confirm whether calls made from Actor code ever leave from Rivet-managed infrastructure, or always from your workers.

@@ -100,6 +100,7 @@ export class OpenWorldGame {
 		}
 	}
 
+	// docs:start connect
 	private connectToChunk(cx: number, cy: number): ChunkConnection {
 		const key = chunkKey(cx, cy);
 		const existing = this.chunks.get(key);
@@ -167,7 +168,9 @@ export class OpenWorldGame {
 		this.chunks.set(key, chunk);
 		return chunk;
 	}
+	// docs:end connect
 
+	// docs:start primary
 	private async setPrimaryChunk(
 		cx: number,
 		cy: number,
@@ -215,6 +218,7 @@ export class OpenWorldGame {
 			})
 			.catch(() => {});
 	}
+	// docs:end primary
 
 	private async waitForSelfInChunk(cx: number, cy: number): Promise<boolean> {
 		const key = chunkKey(cx, cy);
@@ -254,6 +258,7 @@ export class OpenWorldGame {
 		};
 	}
 
+	// docs:start neighbors
 	private updateAdjacentChunks() {
 		const { minCx, maxCx, minCy, maxCy } = this.getVisibleChunkRange();
 
@@ -283,7 +288,9 @@ export class OpenWorldGame {
 			}
 		}
 	}
+	// docs:end neighbors
 
+	// docs:start transfer
 	private async initiateTransfer(localX: number, localY: number) {
 		this.transferring = true;
 		try {
@@ -310,6 +317,7 @@ export class OpenWorldGame {
 			this.sendInput();
 		}
 	}
+	// docs:end transfer
 
 	destroy() {
 		this.stopped = true;

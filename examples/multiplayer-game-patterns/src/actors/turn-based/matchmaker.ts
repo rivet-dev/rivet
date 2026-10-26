@@ -89,6 +89,7 @@ export const turnBasedMatchmaker = actor({
 	run: async (c) => {
 		for await (const message of c.queue.iter({ completable: true })) {
 			if (message.name === "createGame") {
+				// docs:start invite
 				const matchId = crypto.randomUUID();
 				const inviteCode = generateInviteCode();
 				const playerId = crypto.randomUUID();
@@ -145,6 +146,7 @@ export const turnBasedMatchmaker = actor({
 				);
 
 				await message.complete({ matchId: row.match_id, playerId });
+				// docs:end invite
 			} else if (message.name === "queueForMatch") {
 				await processQueueEntry(c, message.body);
 				await message.complete();
@@ -188,6 +190,7 @@ async function processQueueEntry(
 	await attemptPairing(c);
 }
 
+// docs:start queue
 async function attemptPairing(
 	c: ActorContextOf<typeof turnBasedMatchmaker>,
 ): Promise<void> {
@@ -252,6 +255,7 @@ async function attemptPairing(
 		} satisfies TurnBasedAssignment);
 	}
 }
+// docs:end queue
 
 async function migrateTables(dbHandle: RawAccess) {
 	await dbHandle.execute(`

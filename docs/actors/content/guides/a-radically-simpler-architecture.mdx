@@ -19,7 +19,23 @@ Worse, these are bugs you can't unit test for. They're emergent behaviors that o
 
 Yet it's accepted as _the way things must be_. Nobody got fired for adding Kafka, Redis, and RabbitMQ to the stack. The fact that each one brings its own failure modes is assumed to be the growing pains of any successful business.
 
-<img src="https://assets.rivet.dev/website/learn/act-1/scene-1/old-arch.png" alt="Traditional backend architecture with separate layers for web server, cache, database, and message queue" className="theme-diagram-invert" />
+<Diagram
+  id="simpler-architecture-old"
+  label="A traditional backend. A client sends a request to a stateless web server. The web server reads from a Redis cache, queries a Postgres database, and enqueues jobs on a Kafka queue, each over the network as a separate layer."
+  nodes={[
+    { id: "client", x: 20, y: 150, w: 150, title: "Client", subtitle: "browser or app" },
+    { id: "server", x: 300, y: 150, title: "Web server", subtitle: "stateless compute" },
+    { id: "redis", x: 600, y: 40, title: "Redis", subtitle: "cache" },
+    { id: "postgres", x: 600, y: 150, title: "Postgres", subtitle: "database" },
+    { id: "kafka", x: 600, y: 260, title: "Kafka", subtitle: "queue" },
+  ]}
+  edges={[
+    { from: "client", to: "server", label: "request" },
+    { from: "server", to: "redis", fromSide: "top", via: [[385, 70]], label: "read cache" },
+    { from: "server", to: "postgres", label: "query" },
+    { from: "server", to: "kafka", fromSide: "bottom", via: [[385, 290]], label: "enqueue" },
+  ]}
+/>
 
 ---
 
@@ -51,7 +67,21 @@ They're like mini-servers: they can accept and respond to network requests and e
 
 Actor-owned state gives each Actor a clear ownership boundary. Network failures, retries, and concurrent application work still need to be handled. Durable storage and Actor routing are provided by the control plane.
 
-<img src="https://assets.rivet.dev/website/learn/act-1/scene-1/actor-arch.png" alt="Actor architecture showing compute and state combined in isolated actors" className="max-h-[500px] theme-diagram-invert" />
+<Diagram
+  id="simpler-architecture-actors"
+  label="Two Rivet Actors, user and order. Each one holds its state and runs its compute in the same place. The user Actor calls an action on the order Actor over the network."
+  nodes={[
+    { id: "user-actor", kind: "group", x: 20, y: 30, w: 230, h: 136 },
+    { id: "user", x: 35, y: 45, w: 200, h: 56, product: "actors", title: "`user`", subtitle: "alice" },
+    { id: "user-state", kind: "slot", x: 35, y: 113, w: 95, h: 38, title: "State" },
+    { id: "user-compute", kind: "slot", x: 140, y: 113, w: 95, h: 38, title: "Compute" },
+    { id: "order-actor", kind: "group", x: 400, y: 30, w: 230, h: 136 },
+    { id: "order", x: 415, y: 45, w: 200, h: 56, product: "actors", title: "`order`", subtitle: "ord-1" },
+    { id: "order-state", kind: "slot", x: 415, y: 113, w: 95, h: 38, title: "State" },
+    { id: "order-compute", kind: "slot", x: 520, y: 113, w: 95, h: 38, title: "Compute" },
+  ]}
+  edges={[{ from: "user-actor", to: "order-actor", label: "action" }]}
+/>
 
 ## The 4 Properties That Eliminate Complexity
 
@@ -67,7 +97,26 @@ Debugging becomes straightforward: the actor's state is the single source of tru
 
 As your app grows, new features affect a limited number of actors which have a limited scope. Changes don't ripple through shared state across services or risk breaking unrelated parts of your system.
 
-<img src="https://assets.rivet.dev/website/learn/act-1/scene-1/isolated-state.png" alt="Diagram showing actors with isolated state that cannot be accessed by other processes" className="max-h-[500px]" />
+<Diagram
+  id="simpler-architecture-isolated-state"
+  label="Two Rivet Actors with isolated state. The user Actor for alice is the only one that reads and writes its balance and email. The order Actor for ord-1 is the only one that reads and writes its items and status. Separate state means no conflicts."
+  nodes={[
+    { id: "user-actor", kind: "group", x: 20, y: 20, w: 510, h: 90 },
+    { id: "user", x: 35, y: 35, product: "actors", title: "`user`", subtitle: "alice" },
+    { id: "user-state", x: 345, y: 35, title: "State", subtitle: "balance, email" },
+    { id: "order-actor", kind: "group", x: 20, y: 140, w: 510, h: 90 },
+    { id: "order", x: 35, y: 155, product: "actors", title: "`order`", subtitle: "ord-1" },
+    { id: "order-state", x: 345, y: 155, title: "State", subtitle: "items, status" },
+  ]}
+  edges={[
+    { from: "user", to: "user-state", both: true, label: "read, write" },
+    { from: "order", to: "order-state", both: true, label: "read, write" },
+  ]}
+  notes={[
+    { x: 560, y: 66, text: "Only this actor can read or write it" },
+    { x: 560, y: 186, text: "Separate state means no conflicts" },
+  ]}
+/>
 
 ### Message-Based Communication
 
@@ -77,7 +126,23 @@ Messages sent to actors are **automatically queued and processed sequentially**.
 
 Crucially, **actors frequently talk to each other** to build larger systems that scale well. We'll be talking a lot about patterns like this in this course.
 
-<img src="https://assets.rivet.dev/website/learn/act-1/scene-1/message-passing.png" alt="Diagram showing actors communicating through messages and events" className="max-h-[500px]" />
+<Diagram
+  id="simpler-architecture-messages"
+  label="Message passing between Rivet Actors. A client calls an action on the user Actor. The user Actor calls getStatus on the order Actor, where the message waits in the order Actor's queue and runs one at a time. The order Actor replies paid, and sends an event back to the client."
+  nodes={[
+    { id: "client", x: 20, y: 60, w: 150, title: "Client", subtitle: "your app" },
+    { id: "user", x: 300, y: 60, product: "actors", title: "`user`", subtitle: "alice" },
+    { id: "order-actor", kind: "group", x: 600, y: 20, w: 200, h: 138 },
+    { id: "order", x: 615, y: 35, w: 170, h: 56, product: "actors", title: "`order`", subtitle: "ord-1" },
+    { id: "queue", kind: "slot", x: 615, y: 104, w: 170, h: 38, title: "queue, one at a time" },
+  ]}
+  edges={[
+    { from: "client", to: "user", label: "action", step: 1 },
+    { from: "user", to: "order-actor", fromOffset: -12, toOffset: -11, label: "`getStatus`", step: 2 },
+    { from: "order-actor", to: "user", fromOffset: 13, toOffset: 12, kind: "reply", label: "paid", step: 3 },
+    { from: "order-actor", to: "client", fromSide: "bottom", toSide: "bottom", via: [[700, 200], [95, 200]], kind: "reply", label: "event", step: 4 },
+  ]}
+/>
 
 ### Location Transparency
 
@@ -85,7 +150,23 @@ Actors can run on any machine in a cluster and still **send messages between act
 
 The same code will run whether you have 1 or 1,000 machines without complex network configuration, DNS, or pub/sub systems.
 
-<img src="https://assets.rivet.dev/website/learn/act-1/scene-1/location-transparency.png" alt="Diagram showing actors communicating across different machines in a cluster" />
+<Diagram
+  id="simpler-architecture-location"
+  label="Location transparency. Your code calls updateProfile on the user Actors for alice and joe. Alice runs on machine 1 next to bob, and joe runs on machine 2 next to dave. Rivet routes each call to the right machine, so the code is the same either way."
+  nodes={[
+    { id: "m1", kind: "boundary", x: 320, y: 20, w: 210, h: 200, title: "Machine 1" },
+    { id: "m2", kind: "boundary", x: 600, y: 20, w: 210, h: 200, title: "Machine 2" },
+    { id: "code", x: 20, y: 60, w: 150, title: "Your code", subtitle: "RivetKit client" },
+    { id: "alice", x: 340, y: 60, product: "actors", title: "`user`", subtitle: "alice" },
+    { id: "bob", x: 340, y: 140, product: "actors", title: "`user`", subtitle: "bob" },
+    { id: "dave", x: 620, y: 60, product: "actors", title: "`user`", subtitle: "dave" },
+    { id: "joe", x: 620, y: 140, product: "actors", title: "`user`", subtitle: "joe" },
+  ]}
+  edges={[
+    { from: "code", to: "alice", label: "`updateProfile`" },
+    { from: "code", to: "joe", fromSide: "bottom", toSide: "bottom", via: [[95, 250], [705, 250]], label: "`updateProfile`" },
+  ]}
+/>
 
 ### Horizontal Scaling
 
@@ -93,7 +174,20 @@ Actors are designed to transparently interact with other actors regardless of wh
 
 Load spreads naturally since actors are small, lightweight units. No complex sharding logic or coordination needed.
 
-<img src="https://assets.rivet.dev/website/learn/act-1/scene-1/horizontal-scaling.png" alt="Diagram showing actors distributed across multiple machines for horizontal scaling" className="max-h-[500px]" />
+<Diagram
+  id="simpler-architecture-scaling"
+  label="Horizontal scaling. Machine 1 runs the user Actors for dave and alice and the order Actor for ord-1. Adding machine 2 adds capacity, and the user Actor for joe and the order Actor for ord-2 run there. Actions still route between actors on different machines."
+  nodes={[
+    { id: "m1", kind: "boundary", x: 20, y: 20, w: 360, h: 200, title: "Machine 1" },
+    { id: "m2", kind: "boundary", x: 500, y: 20, w: 190, h: 200, title: "Machine 2, added" },
+    { id: "dave", x: 40, y: 60, w: 150, product: "actors", title: "`user`", subtitle: "dave" },
+    { id: "alice", x: 210, y: 60, w: 150, product: "actors", title: "`user`", subtitle: "alice" },
+    { id: "ord1", x: 40, y: 140, w: 150, product: "actors", title: "`order`", subtitle: "ord-1" },
+    { id: "joe", x: 520, y: 60, w: 150, product: "actors", title: "`user`", subtitle: "joe" },
+    { id: "ord2", x: 520, y: 140, w: 150, product: "actors", title: "`order`", subtitle: "ord-2" },
+  ]}
+  edges={[{ from: "alice", to: "joe", label: "action" }]}
+/>
 
 ---
 

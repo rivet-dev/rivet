@@ -281,61 +281,171 @@
 	],
 	"guides": [
 		{
-			"title": "Guides",
+			"title": "Architecture",
 			"pages": [
+				{
+					"title": "A Radically Simpler Architecture",
+					"href": "/guides/a-radically-simpler-architecture"
+				},
+				{
+					"title": "Stateful Backend for Next.js",
+					"href": "/guides/nextjs-stateful-backend"
+				},
 				{
 					"title": "Authenticate Users End to End",
 					"href": "/guides/authentication"
-				},
+				}
+			]
+		},
+		{
+			"title": "Agents",
+			"pages": [
 				{
-					"title": "Chat Room",
-					"href": "/guides/chat-room"
-				},
-				{
-					"title": "Collaborative Text Editor",
-					"href": "/guides/collaborative-text-editor"
-				},
-				{
-					"title": "Cron Jobs and Scheduled Tasks",
-					"href": "/guides/cron-jobs"
-				},
+					"title": "Rate Limit LLM Calls",
+					"href": "/guides/rate-limit-llm-calls"
+				}
+			]
+		},
+		{
+			"title": "Databases",
+			"pages": [
 				{
 					"title": "Database per Tenant",
 					"href": "/guides/per-tenant-database"
+				},
+				{
+					"title": "Database per User",
+					"href": "/guides/database-per-user"
+				}
+			]
+		},
+		{
+			"title": "Games",
+			"pages": [
+				{
+					"title": "Battle Royale",
+					"href": "/guides/battle-royale"
+				},
+				{
+					"title": "IO Game",
+					"href": "/guides/io-game"
+				},
+				{
+					"title": "Arena Game",
+					"href": "/guides/arena-game"
+				},
+				{
+					"title": "Turn-Based Game",
+					"href": "/guides/turn-based-game"
+				},
+				{
+					"title": "Open World Game",
+					"href": "/guides/open-world-game"
+				},
+				{
+					"title": "Party Game",
+					"href": "/guides/party-game"
+				},
+				{
+					"title": "Ranked Matchmaking",
+					"href": "/guides/ranked-game"
+				},
+				{
+					"title": "Idle Game",
+					"href": "/guides/idle-game"
+				},
+				{
+					"title": "2D Physics Game",
+					"href": "/guides/physics-2d-game"
+				},
+				{
+					"title": "3D Physics Game",
+					"href": "/guides/physics-3d-game"
+				}
+			]
+		},
+		{
+			"title": "Security & Compliance",
+			"pages": [
+				{
+					"title": "GDPR with multi-region data residency",
+					"href": "/guides/gdpr-data-residency"
+				},
+				{
+					"title": "Per-tenant audit log",
+					"href": "/guides/tenant-audit-log"
+				},
+				{
+					"title": "Private networking and VPC peering",
+					"href": "/guides/private-networking"
+				},
+				{
+					"title": "Static egress IPs",
+					"href": "/guides/static-egress-ips"
+				},
+				{
+					"title": "mTLS and workload identity between services",
+					"href": "/guides/workload-identity"
+				}
+			]
+		},
+		{
+			"title": "Platforms",
+			"pages": [
+				{
+					"title": "Usage metering and chargeback",
+					"href": "/guides/usage-metering"
+				},
+				{
+					"title": "Multi-tenant SaaS architecture",
+					"href": "/guides/multi-tenant-saas-architecture"
+				},
+				{
+					"title": "Organizations, teams, and RBAC",
+					"href": "/guides/organizations-rbac"
+				},
+				{
+					"title": "Cross-tenant analytics without breaking isolation",
+					"href": "/guides/cross-tenant-analytics"
+				}
+			]
+		},
+		{
+			"title": "Workflows",
+			"pages": [
+				{
+					"title": "Cron Jobs and Scheduled Tasks",
+					"href": "/guides/cron-jobs"
+				}
+			]
+		},
+		{
+			"title": "Realtime",
+			"pages": [
+				{
+					"title": "Chat Room",
+					"href": "/guides/chat-room"
 				},
 				{
 					"title": "Live Cursors and Presence",
 					"href": "/guides/live-cursors"
 				},
 				{
-					"title": "Multiplayer Game",
-					"href": "/guides/multiplayer-game"
+					"title": "Collaborative Text Editor (CRDT)",
+					"href": "/guides/collaborative-text-editor"
+				},
+				{
+					"title": "Collaborative Text Editor (OT)",
+					"href": "/guides/collaborative-text-editor-ot"
 				}
 			]
 		},
 		{
-			"title": "Solutions",
+			"title": "IoT",
 			"pages": [
 				{
-					"title": "Coding Agents",
-					"href": "/guides/coding-agents"
-				},
-				{
-					"title": "Agent App Builders",
-					"href": "/guides/agent-app-builders"
-				},
-				{
-					"title": "Company-Specific Agents",
-					"href": "/guides/company-agents"
-				}
-			]
-		},
-		{
-			"title": "Architecture",
-			"pages": [
-				{
-					"title": "A Radically Simpler Architecture",
-					"href": "/guides/a-radically-simpler-architecture"
+					"title": "IoT digital twin per device",
+					"href": "/guides/iot-digital-twin"
 				}
 			]
 		}

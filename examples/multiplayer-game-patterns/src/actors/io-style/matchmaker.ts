@@ -31,6 +31,7 @@ export const ioStyleMatchmaker = actor({
 		updateMatch: queue<{ matchId: string; connectedPlayerCount: number }>(),
 		closeMatch: queue<{ matchId: string }>(),
 	},
+	// docs:start queue
 	run: async (c) => {
 		for await (const message of c.queue.iter({ completable: true })) {
 			const now = Date.now();
@@ -68,8 +69,10 @@ export const ioStyleMatchmaker = actor({
 			}
 		}
 	},
+	// docs:end queue
 });
 
+// docs:start find-lobby
 async function processFindLobby(
 	c: ActorContextOf<typeof ioStyleMatchmaker>,
 	now: number,
@@ -109,6 +112,7 @@ async function processFindLobby(
 
 	return { matchId, playerId };
 }
+// docs:end find-lobby
 
 async function processPendingPlayerConnected(
 	c: ActorContextOf<typeof ioStyleMatchmaker>,

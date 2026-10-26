@@ -50,6 +50,7 @@ export const physics2dWorld = actor({
 	events: {
 		snapshot: event<Snapshot>(),
 	},
+	// docs:start world
 	onBeforeConnect: (_c, params: { name?: string }) => {
 		const name = params?.name?.trim();
 		if (!name) {
@@ -103,6 +104,8 @@ export const physics2dWorld = actor({
 		player.disconnectedAt = Date.now();
 		broadcastSnapshot(c);
 	},
+	// docs:end world
+	// docs:start tick
 	run: async (c) => {
 		await RAPIER.init();
 
@@ -214,7 +217,9 @@ export const physics2dWorld = actor({
 			broadcastSnapshot(c);
 		}
 	},
+	// docs:end tick
 	actions: {
+		// docs:start input
 		setInput: (c, input: { inputX: number; jump?: boolean }) => {
 			const player = c.vars.players[c.conn.id];
 			if (!player) return;
@@ -243,6 +248,7 @@ export const physics2dWorld = actor({
 			c.vars.dynamicSizes[id] = { hw, hh };
 			broadcastSnapshot(c);
 		},
+		// docs:end input
 		getSnapshot: (c) => buildSnapshot(c),
 	},
 });

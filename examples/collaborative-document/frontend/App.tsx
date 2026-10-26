@@ -124,6 +124,7 @@ function DocumentEditor({
 		setContent("");
 		setPresence([]);
 
+		// docs:start send
 		const doc = new Y.Doc();
 		const text = doc.getText("content");
 		const awareness = new Awareness(doc);
@@ -142,6 +143,7 @@ function DocumentEditor({
 			}
 			connection.applyUpdate(toNumbers(update), "sync");
 		};
+		// docs:end send
 
 		const handleAwarenessUpdate = (
 			{
@@ -193,6 +195,7 @@ function DocumentEditor({
 		});
 	}, [username, userColor]);
 
+	// docs:start connect
 	useEffect(() => {
 		const connection = documentActor.connection;
 		const doc = docRef.current;
@@ -247,6 +250,7 @@ function DocumentEditor({
 		applyAwarenessUpdate(awareness, toBytes(event.update), "remote");
 		setPresence(buildPresence(awareness));
 	});
+	// docs:end connect
 
 	const updateLocalCursor = () => {
 		const awareness = awarenessRef.current;

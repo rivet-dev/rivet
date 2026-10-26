@@ -64,6 +64,7 @@ export class Physics2dGame {
 		client: GameClient,
 		matchInfo: Physics2dMatchInfo,
 	) {
+		// docs:start connect
 		const handle = client.physics2dWorld.getOrCreate(["main"], {
 			params: { name: matchInfo.name },
 		});
@@ -114,6 +115,7 @@ export class Physics2dGame {
 				}
 			}
 		});
+		// docs:end connect
 
 		this.canvas.addEventListener("mousedown", this.onMouseDown);
 		window.addEventListener("keydown", this.onKeyDown);
@@ -147,6 +149,7 @@ export class Physics2dGame {
 		this.sendInput();
 	};
 
+	// docs:start input
 	private sendInput() {
 		let ix = 0;
 		if (this.keys.a || this.keys.A || this.keys.ArrowLeft) ix -= 1;
@@ -162,6 +165,7 @@ export class Physics2dGame {
 			this.lastJump = false;
 		}
 	}
+	// docs:end input
 
 	private draw = () => {
 		if (this.stopped) return;
@@ -172,6 +176,7 @@ export class Physics2dGame {
 		ctx.fillStyle = "#000000";
 		ctx.fillRect(0, 0, W, H);
 
+		// docs:start smoothing
 		// Lerp display positions toward server targets.
 		for (const [id, target] of Object.entries(this.targets)) {
 			const d = this.display[id]!;
@@ -184,6 +189,7 @@ export class Physics2dGame {
 			if (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
 			d.angle += angleDiff * CORRECTION_ALPHA;
 		}
+		// docs:end smoothing
 
 		// Draw static bodies.
 		ctx.fillStyle = "#3a3a3c";

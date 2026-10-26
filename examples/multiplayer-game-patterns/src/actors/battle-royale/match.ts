@@ -65,6 +65,7 @@ export const battleRoyaleMatch = actor({
 		winnerId: null,
 		lobbyCountdown: null,
 	}),
+	// docs:start connect
 	onConnect: async (c, conn) => {
 		const params = (conn.params as ConnParams | null) ?? {};
 		const playerId = params.playerId;
@@ -99,6 +100,7 @@ export const battleRoyaleMatch = actor({
 		await updateMatchmaker(c);
 		broadcastSnapshot(c);
 	},
+	// docs:end connect
 	onDisconnect: async (c, conn) => {
 		const found = findPlayerByConnId(c.state, conn.id);
 		if (!found) return;
@@ -115,6 +117,7 @@ export const battleRoyaleMatch = actor({
 			.getOrCreate(["main"])
 			.send("closeMatch", { matchId: c.state.matchId });
 	},
+	// docs:start tick
 	run: async (c) => {
 		const tick = interval(TICK_MS);
 		while (!c.aborted) {
@@ -200,7 +203,9 @@ export const battleRoyaleMatch = actor({
 			broadcastSnapshot(c);
 		}
 	},
+	// docs:end tick
 	actions: {
+		// docs:start combat
 		updatePosition: (c, input: { x: number; y: number }) => {
 			const found = findPlayerByConnId(c.state, c.conn.id);
 			if (!found) {
@@ -309,6 +314,7 @@ export const battleRoyaleMatch = actor({
 				broadcastSnapshot(c);
 			}
 		},
+		// docs:end combat
 		getSnapshot: (c) => buildSnapshot(c),
 	},
 });
@@ -364,6 +370,7 @@ async function updateMatchmaker(c: ActorContextOf<typeof battleRoyaleMatch>) {
 		});
 }
 
+// docs:start connect
 async function claimPendingPlayer(
 	c: ActorContextOf<typeof battleRoyaleMatch>,
 	playerId: string,
@@ -384,6 +391,7 @@ async function claimPendingPlayer(
 	}
 	return result.response?.accepted === true;
 }
+// docs:end connect
 
 function countAlivePlayers(state: State): number {
 	return Object.values(state.players).filter((p) => p.alive).length;

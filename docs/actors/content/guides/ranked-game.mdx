@@ -1,0 +1,157 @@
+---
+title: "Ranked Matchmaking"
+description: "Build a ranked queue that pairs players by rating, runs each duel in its own match Actor, and updates ratings and a leaderboard when it ends."
+---
+
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
+
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/ranked" />
+
+<Diagram
+  id="ranked-game"
+  label="The player calls queueForMatch on the rankedMatchmaker Actor. The matchmaker reads the player's rating with getRating from that player's rankedPlayer Actor, pairs two players whose rating windows overlap, creates a rankedMatch Actor, and sends assignmentReady back. The player calls updatePosition and shoot on the match, which broadcasts snapshot events. When someone reaches the score limit, the match sends matchCompleted with the new ratings to the matchmaker, which calls applyMatchResult on both rankedPlayer Actors and updatePlayer on the rankedLeaderboard Actor. The numbers show the order of the calls. There is one rankedPlayer Actor per username and one rankedMatch Actor per match."
+  stackLabel="One per match or username"
+  nodes={[
+    { id: "client", x: 20, y: 40, w: 130, h: 240, title: "Player", subtitle: "browser client" },
+    { id: "mm", x: 380, y: 40, w: 200, product: "actors", title: "`rankedMatchmaker`", subtitle: "rating queue" },
+    { id: "match", x: 380, y: 220, w: 200, product: "actors", stack: true, title: "`rankedMatch`", subtitle: "20 ticks per second" },
+    { id: "player", x: 750, y: 40, w: 200, product: "actors", stack: true, title: "`rankedPlayer`", subtitle: "rating, wins, losses" },
+    { id: "lb", x: 750, y: 160, w: 200, product: "actors", title: "`rankedLeaderboard`", subtitle: "top 20 in SQLite" },
+  ]}
+  edges={[
+    { from: "client", to: "mm", fromOffset: -100, toOffset: -10, label: "`queueForMatch`", step: 1 },
+    { from: "mm", to: "player", fromOffset: -10, toOffset: -10, label: "`getRating`", step: 2 },
+    { from: "mm", to: "client", kind: "reply", fromOffset: 12, toOffset: -78, label: "`assignmentReady`", labelAt: [265, 100], step: 3 },
+    { from: "client", to: "match", fromOffset: 80, toOffset: -10, label: "`updatePosition`, `shoot`", step: 4 },
+    { from: "match", to: "client", kind: "reply", fromOffset: 12, toOffset: 102, label: "`snapshot`", labelAt: [265, 280], step: 5 },
+    { from: "match", to: "mm", fromSide: "top", toSide: "bottom", label: "`matchCompleted`", labelAt: [470, 165], labelAnchor: "end", step: 6 },
+    { from: "mm", to: "player", fromOffset: 12, toOffset: 12, label: "`applyMatchResult`", labelAt: [665, 100], step: 7 },
+    { from: "mm", to: "lb", fromSide: "bottom", fromOffset: 75, toSide: "left", via: [[555, 190]], label: "`updatePlayer`", labelAt: [652, 184], step: 8 },
+  ]}
+/>
+
+What we'll build:
+
+- A `rankedPlayer` Actor per username that stores the player's rating, wins, and losses.
+- A `rankedMatchmaker` Actor that pairs players by rating and widens each player's search window the longer they wait.
+- A `rankedMatch` Actor per duel that runs a 20 tick per second loop, checks movement, and resolves shots.
+- Elo rating updates and a `rankedLeaderboard` Actor that keeps the top 20 players.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add rivetkit
+```
+
+</Step>
+
+<Step title="Create the matchmaker">
+
+One `rankedMatchmaker` Actor, keyed `["main"]`, owns the queue. It stores waiting players in a `player_pool` table in its SQLite database and pairs them by rating:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/ranked/matchmaker.ts" title="matchmaker.ts" highlight="run-loop,queue,pairing" />
+
+- The client only sends a username. The matchmaker reads the rating itself with `getRating` on that player's `rankedPlayer` Actor, so a client cannot queue with a made-up rating.
+- Each player's window starts at 50 rating points and grows by 25 per second of waiting, up to 500. Two players match only if their difference fits inside both windows. The player who has waited longest is paired first, with the closest opponent that fits.
+- `run` waits for the next queue message with a 2 second timeout. When nothing arrives, it runs `attemptPairing` anyway, because the windows keep growing while nobody new joins.
+- Writes go through the queue, so `queueForMatch`, `unqueueForMatch`, and `matchCompleted` never interleave. `onDisconnect` removes a player who closes the tab.
+
+A second loop, started with `c.waitUntil(...)`, sends every connection its own `queueUpdate` once a second. A queued player gets their wait time and current rating range. It uses `conn.send(...)` instead of `c.broadcast(...)` because each player gets different numbers.
+
+</Step>
+
+<Step title="Create the match">
+
+When two players pair, the matchmaker creates a `rankedMatch` Actor with both usernames and ratings as input, then broadcasts `assignmentReady`. The match is a short realtime duel, first to 5 hits:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/ranked/match.ts" title="match.ts" highlight="tick,validate" />
+
+- The match starts in `waiting` and switches to `live` in `onConnect` once both players are connected. A connection whose `username` param is not one of the two assigned players is dropped with `invalid_player`.
+- `run` ticks every 50 ms (`TICK_MS`). Each tick checks the win condition and broadcasts a `snapshot`.
+- The client owns its own movement and sends positions, so movement feels instant. `updatePosition` never trusts them: it caps the distance by `MAX_SPEED` times the time since the last update and clamps to the world bounds. A teleport turns into a normal step.
+- Combat is decided on the server. `shoot` takes only a direction and checks range and angle against the server's positions, so a client cannot claim a hit.
+
+<Note>
+This is hybrid netcode: the client predicts its own movement and the server validates it, while hits and scores are server-authoritative. The duel only needs distance and angle checks. If your game needs real collisions, run a physics engine such as `@dimforge/rapier2d` inside the match and keep the client's copy for prediction only.
+</Note>
+
+</Step>
+
+<Step title="Update ratings and the leaderboard">
+
+When someone reaches the score limit, the match computes both new ratings and reports them to the matchmaker:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/ranked/match.ts" title="match.ts" region="elo" />
+
+- `calculateElo` uses a K-factor of 32 with the ratings the players had when they were paired.
+- `resultReported` makes sure the result is sent once, even though both the tick loop and `onDestroy` check it. If the match is destroyed without a winner, it sends an empty `matchCompleted` so the matchmaker still deletes the match's rows.
+
+The matchmaker then writes the result to each player and to the leaderboard:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/ranked/matchmaker.ts" title="matchmaker.ts" region="completed" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/ranked/player.ts" title="player.ts" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/ranked/leaderboard.ts" title="leaderboard.ts" />
+</CodeGroup>
+
+- `rankedPlayer` keeps the rating in `c.state`, keyed by username, so it outlives every match. `applyMatchResult` sets the new rating, counts the win or loss, and broadcasts `stateUpdate` to anyone watching that profile.
+- `rankedLeaderboard` is one Actor keyed `["main"]`. The `updatePlayer` action only enqueues. The `run` loop upserts one row at a time into the `leaderboard` table, then broadcasts the top 20 as `leaderboardUpdate`.
+- The leaderboard copies rating, wins, and losses from `getProfile`. The `rankedPlayer` Actor stays the source of truth.
+
+<Warning>
+Usernames are not authenticated in this example, so anyone can queue as any username and play on its rating. In production, key `rankedPlayer` by a user id from your sign-in and check it on connect with [authentication](/guides/authentication).
+</Warning>
+
+</Step>
+
+<Step title="Register the Actors">
+
+Add the four ranked Actors to the registry and start it:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/index.ts" title="actors/index.ts" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/index.ts" title="index.ts" />
+</CodeGroup>
+
+The example registers every game type in one registry. Ranked play needs `rankedMatchmaker`, `rankedMatch`, `rankedPlayer`, and `rankedLeaderboard`. Each Actor file imports `type { registry }` so that `c.client<typeof registry>()` is typed when one Actor calls another.
+
+</Step>
+
+<Step title="Connect players">
+
+The menu queues through the matchmaker and waits for an assignment. The game then connects to the match:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/ranked/menu.tsx" title="menu.tsx" region="queue" />
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/ranked/ranked-game.ts" title="ranked-game.ts" highlight="connect,send" />
+</CodeGroup>
+
+- `queueForMatch` returns the connection id. `waitForAssignment` ignores any `assignmentReady` for another connection, so two tabs with the same username do not both take the match. It also calls `getAssignment` once, in case the event fired before the listener was attached.
+- The game connects with `params: { username }`, which is how `onConnect` finds the player.
+- The local player moves every frame and sends `updatePosition` every 50 ms. When a `snapshot` puts the player more than 40 pixels away, the client snaps to the server's position. Other players are drawn with interpolation toward their last snapshot position.
+- The game is drawn on a canvas with `requestAnimationFrame`. React state is only used for menus.
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/multiplayer-game-patterns
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173` and pick **Ranked**. Click **Queue for Match**, then **Add Bot** to queue a bot, or queue from a second tab with another username. While you wait, the queue panel shows your match window, such as `match window: ±75 (1125 - 1275)`, growing every second. Move with WASD and click to shoot. After someone reaches 5 hits, click **Leave**. The menu's leaderboard and your profile show the new ratings.
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+- [Turn-Based Game](/guides/turn-based-game): invite codes and a match that waits between moves.
+- [Idle Game](/guides/idle-game): a per-player Actor with a shared leaderboard.
+- [Queues](/actors/docs/queues): how queue messages keep the matchmaker's writes in order.

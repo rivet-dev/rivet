@@ -50,6 +50,7 @@ export const partyMatchmaker = actor({
 	},
 	run: async (c) => {
 		for await (const message of c.queue.iter({ completable: true })) {
+			// docs:start create-join
 			if (message.name === "createParty") {
 				const now = Date.now();
 				const matchId = crypto.randomUUID();
@@ -134,7 +135,9 @@ export const partyMatchmaker = actor({
 					joinToken,
 					playerName,
 				});
+				// docs:end create-join
 			} else if (message.name === "verifyJoin") {
+				// docs:start verify-join
 				const rows = await c.db.execute<{
 					player_name: string;
 					host_player_id: string;
@@ -158,6 +161,7 @@ export const partyMatchmaker = actor({
 					playerName: row.player_name,
 					isHost: row.host_player_id === message.body.playerId,
 				});
+				// docs:end verify-join
 			} else if (message.name === "updatePartySize") {
 				await c.db.execute(
 					`UPDATE parties SET player_count = ? WHERE match_id = ?`,

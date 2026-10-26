@@ -22,6 +22,7 @@ export function PartyMenu({
 	const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
 	const [error, setError] = useState("");
 
+	// docs:start create-join
 	const createParty = async () => {
 		setStatus("loading");
 		setError("");
@@ -62,6 +63,7 @@ export function PartyMenu({
 			setStatus("error");
 		}
 	};
+	// docs:end create-join
 
 	return (
 		<div className="app">

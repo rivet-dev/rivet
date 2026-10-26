@@ -1,0 +1,39 @@
+---
+title: "IoT Digital Twin per Device"
+description: "Give every device a live twin that holds its latest telemetry, desired state, and pending commands."
+---
+
+<Diagram
+  id="iot-digital-twin"
+  label="Each device publishes telemetry over MQTT to a bridge, or connects over a WebSocket, which calls reportTelemetry on the device Actor for that device. The Actor stores the latest telemetry and broadcasts telemetry events to dashboards that are subscribed to it. A dashboard calls setDesiredState, and the Actor sends the queued commands back to the device. A schedule in the Actor marks the device offline when it stops reporting. The numbers show the order of the calls. There is one device Actor per device."
+  stackLabel="One per device"
+  nodes={[
+    { id: "device", x: 20, y: 60, w: 150, title: "Device", subtitle: "sensor or machine" },
+    { id: "dashboard", x: 20, y: 170, w: 150, h: 80, title: "Dashboard", subtitle: "operators" },
+    { id: "bridge", x: 310, y: 60, title: "MQTT bridge", subtitle: "or WebSocket" },
+    { id: "twin", x: 640, y: 60, h: 190, product: "actors", stack: true, title: "`device`", subtitle: "twin and commands" },
+  ]}
+  edges={[
+    { from: "device", to: "bridge", label: "telemetry", step: 1 },
+    { from: "bridge", to: "twin", toOffset: -65, label: "`reportTelemetry`", step: 2 },
+    { from: "twin", to: "dashboard", kind: "reply", fromOffset: 67, toOffset: 12, label: "`telemetry`, `offline` events", labelAt: [405, 244], step: 3 },
+    { from: "dashboard", to: "twin", fromOffset: -12, toOffset: 43, label: "`setDesiredState`", step: 4 },
+    { from: "twin", to: "device", fromSide: "top", toSide: "top", via: [[725, 30], [95, 30]], label: "queued commands", step: 5 },
+  ]}
+/>
+
+## TODO
+
+This page is not written yet. The outline below is what it will cover.
+
+### What we'll build
+
+- A `device` Actor per device that stores the latest telemetry, the desired state, and a queue of pending commands.
+- An MQTT bridge that forwards each device's messages to its Actor, plus a direct WebSocket option for devices that can hold one open.
+- A dashboard that subscribes to a device's events and sees telemetry as it arrives.
+- Commands sent from the dashboard that wait in the queue until the device reconnects.
+- A schedule that marks a device offline when it misses its reporting window.
+
+### Similar tools
+
+This is the same job as AWS IoT Device Shadow, Azure Digital Twins, or Cloudflare Durable Objects used as device state. On Rivet the twin, the command queue, and the offline timer all live in one Actor per device, and an idle device's Actor sleeps until its next message.

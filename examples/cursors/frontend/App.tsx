@@ -45,10 +45,13 @@ export function App() {
 	const canvasRef = useRef<HTMLDivElement>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 
+	// docs:start client
+	// docs:start connect
 	const cursorRoom = useActor({
 		name: "cursorRoom",
 		key: [roomId],
 	});
+	// docs:end connect
 
 	// Calculate scale factor to fit canvas in viewport
 	useEffect(() => {
@@ -71,6 +74,7 @@ export function App() {
 		return () => window.removeEventListener("resize", updateScale);
 	}, []);
 
+	// docs:start events
 	// Load initial state
 	useEffect(() => {
 		if (cursorRoom.connection) {
@@ -121,6 +125,7 @@ export function App() {
 			return newCursors;
 		});
 	});
+	// docs:end events
 
 	// Convert screen coordinates to canvas coordinates
 	const screenToCanvas = (screenX: number, screenY: number) => {
@@ -133,6 +138,7 @@ export function App() {
 		return { x, y };
 	};
 
+	// docs:start move
 	// Handle mouse movement on canvas
 	const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
 		if (cursorRoom.connection && canvasRef.current) {
@@ -140,6 +146,8 @@ export function App() {
 			cursorRoom.connection.updateCursor(userId, x, y);
 		}
 	};
+	// docs:end move
+	// docs:end client
 
 	// Handle canvas click
 	const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {

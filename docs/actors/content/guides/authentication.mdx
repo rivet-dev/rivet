@@ -1,23 +1,52 @@
 ---
 title: "Authenticate Users End to End"
-description: "Wire a login endpoint to Rivet Actors: authenticate the user, mint a scoped JWT on your backend, connect from the browser, and authorize actions inside the actor."
+description: "Log users in on your backend, mint a JWT scoped to each user's Rivet Actor, connect from the browser with it, and authorize actions inside the Actor."
 ---
 
-This guide connects both halves of Rivet authentication in one working flow. A user logs in, your backend mints a JWT that reaches only that user's actor, the browser connects with it, and the actor authorizes what the user may do once connected.
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
-Read [Authentication](/docs/authentication) first for the two-layer model. This guide is the runnable version of it.
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/jwt-counter" />
 
-## What You Are Building
+<Diagram
+  id="authentication"
+  label="The browser logs in by calling POST /token on your backend. The backend checks the user's session, resolves the user's userProfile Actor, and calls issueToken, which asks the Rivet control plane for a JWT scoped to that one Actor. The backend returns the JWT and the Actor ID to the browser. The browser connects with the JWT. The control plane verifies the JWT and its grants, then routes actions such as recordVisit to the Actor, which checks what the caller may do. The numbers show the order of the calls. There is one userProfile Actor per user."
+  stackLabel="One per user"
+  nodes={[
+    { id: "browser", x: 20, y: 42, w: 150, title: "Browser", subtitle: "your app" },
+    { id: "server", kind: "group", x: 300, y: 20, w: 200, h: 84, title: "Your backend" },
+    { id: "token", kind: "slot", x: 315, y: 54, w: 170, h: 36, title: "`POST /token`" },
+    { id: "control", x: 300, y: 180, w: 200, title: "Rivet control plane", subtitle: "verifies the JWT" },
+    { id: "profile", x: 640, y: 180, product: "actors", stack: true, title: "`userProfile`", subtitle: "authorizes actions" },
+  ]}
+  edges={[
+    { from: "browser", to: "token", fromOffset: -8, toOffset: -8, label: "log in", step: 1 },
+    { from: "token", to: "control", fromSide: "bottom", toSide: "top", label: "`issueToken`", labelAt: [414, 147], labelAnchor: "start", step: 2 },
+    { from: "token", to: "browser", kind: "reply", fromOffset: 8, toOffset: 8, label: "JWT", labelAt: [242, 100], step: 3 },
+    { from: "browser", to: "control", fromSide: "bottom", via: [[95, 210]], label: "`connect` with the JWT", step: 4 },
+    { from: "control", to: "profile", label: "`recordVisit`", step: 5 },
+  ]}
+/>
 
-A per-user profile actor. Alice can reach `user:alice` and nothing else, enforced by the control plane before her request touches your code. Inside the actor, an admin flag decides who may edit.
+What we'll build:
 
-## Steps
+- A `/token` route that logs the user in with your existing session system and mints a Rivet JWT for that user.
+- A JWT that reaches one `userProfile` Actor and nothing else, enforced before a request touches your code.
+- A browser client that connects with the JWT and renews it automatically when it expires.
+- A permission check inside the Actor that decides what a connected user may do.
 
 <Steps>
 
+<Step title="Install">
+
+```sh
+npm add rivetkit hono
+```
+
+</Step>
+
 <Step title="Keep the Rivet token on the backend">
 
-Only your server holds a credential that can mint tokens. Set it once:
+Only your backend holds a credential that can mint tokens. Set it once:
 
 ```sh
 export RIVET_ENDPOINT="http://localhost:6420"
@@ -25,49 +54,84 @@ export RIVET_NAMESPACE="production"
 export RIVET_ADMIN_TOKEN="$(openssl rand -hex 32)"
 ```
 
-This is your Rivet token, the control plane's `auth.admin_token` value. It works in every namespace, so it never leaves your backend. See [Configuration](/docs/deploy/self-host/control-plane/configuration#rivet-token).
+- The [Rivet token](/docs/deploy/self-host/control-plane/configuration#rivet-token) is the control plane's `auth.admin_token` value. It works in every namespace, so it never leaves your backend. On Rivet Cloud, use a [secret key](/docs/deploy/cloud#tokens) instead.
+- A browser cannot hold a secret, because anyone can read it out of the bundle. That is why it gets a short-lived JWT instead. See [Authentication](/docs/authentication) for which credential to use where.
+- Issuing and verifying JWTs is on by default when a self-hosted control plane has a Rivet token.
 
 </Step>
 
 <Step title="Mint a scoped token at login">
 
-Authenticate the user with your existing session system, resolve the actor they own, then request a JWT that grants `actor_gateway` `read` on that single actor ID.
+The `/token` route authenticates the user, resolves the Actor they own, and asks for a JWT that reaches only that Actor:
 
 <CodeGroup workspace>
 <CodeSnippet file="examples/docs/general-jwt/quickstart/server.ts" title="server.ts" />
 <CodeSnippet file="examples/docs/general-jwt/quickstart/registry.ts" title="registry.ts" />
 </CodeGroup>
 
-Resolving the ID on the backend is what makes the grant tight. The client never names an actor, so it cannot ask for someone else's.
+- Replace `authenticateUser` with your own session check. A request without a user gets a `401` and no token.
+- `getOrCreate(["user", userId])` runs on the backend, so the client never names an Actor and cannot ask for someone else's. `issueToken` defaults to `actor_gateway` `read` on that one resolved ID.
+- `expiresIn` is in seconds, so this token lasts 15 minutes. It is capped at 24 hours. `subject` is your user ID. Rivet does not interpret it, but it shows up when you inspect the token.
+- The response carries `actorId` from `resolve()` along with the token, and `Cache-Control: no-store` keeps it out of caches.
 
 </Step>
 
 <Step title="Connect from the browser">
 
-Give the client `getToken` instead of a static token. RivetKit calls it when it needs a credential and again when one expires, so a 15 minute token supports a connection that stays open for hours.
+Give the client `getToken` instead of a static token, and connect to the Actor by the ID your backend returned:
 
 <CodeSnippet file="examples/docs/general-jwt/quickstart/client.ts" title="client.ts" />
 
+- `fetchToken` calls your own `/token` route, never the Rivet control plane directly.
+- RivetKit calls `getToken` when it first needs a credential and again when one expires. A 15 minute token supports a connection that stays open for hours.
+- Use `getForId`, not `getOrCreate`. Connecting by ID checks `actor_gateway` `read`, which the token has. Resolving by key checks the `actor` grant, which it does not.
+
+<Warning>
+Expiry is enforced on open connections. When a token expires, the control plane closes the WebSocket with code `1008` and `auth.token_expired`. With `getToken`, RivetKit fetches a new token and reconnects. With a static `token`, the connection stays closed. There is no revocation, so keep tokens short and let renewal do the work.
+</Warning>
+
 </Step>
 
-<Step title="Authorize inside the actor">
+<Step title="Authorize actions inside the Actor">
 
-The token decides which actor Alice reaches. It cannot decide what she may do there, because the control plane does not know what your actions mean. Check that in the actor.
+The token decides which Actor a user reaches. It cannot decide what they may do there, because the control plane does not know what your actions mean. `actor_gateway` `read` allows every action, including ones that change state. Check that inside the Actor:
 
 <CodeSnippet file="examples/docs/actors-permissions/quickstart/index.ts" title="document.ts" />
 
+- The client passes your app's own session token as `authToken` in the connection params. That token is separate from the Rivet JWT, and Rivet never sees it.
+- `createConnState` verifies it once, when the user connects, and stores the user ID and role on `c.conn.state`. Throwing `invalid_token` rejects the connection.
+- `edit` checks `c.conn.state.role` and throws a `UserError` with the code `forbidden`. The client gets the code and the message `Admins only`.
+- Use `getParams` instead of `params` on the client when the session token can change between reconnects.
+
 </Step>
 
-<Step title="Confirm both layers reject">
+<Step title="Try it">
 
-Point the token at another actor and the control plane refuses before your code runs:
+The `jwt-counter` example runs this flow with a counter Actor. It has no login, so its `/api/token` route hands any visitor a token for one shared counter. Point it at an Engine with JWT issuance enabled:
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet
+pnpm install
+export RIVET_ENDPOINT="http://default:YOUR_TOKEN@127.0.0.1:6420"
+pnpm --filter jwt-counter-example dev
+```
+
+Open `http://localhost:5173`, click **Connect to counter**, then **Increment**. Its tokens last 30 seconds, so **Refreshes** goes up about once a minute while the counter stays connected. Run `pnpm --filter jwt-counter-example smoke` to check issuance, Actor isolation, expiry, and renewal.
+
+Then confirm that both layers reject. Point a token at another Actor, and the control plane refuses before your code runs:
+
+```sh
+curl -i -H "Authorization: Bearer $TOKEN" \
+  "$RIVET_ENDPOINT/gateway/$SOME_OTHER_ACTOR_ID/"
+```
 
 ```
 HTTP/1.1 403 Forbidden
 x-rivet-error: auth.insufficient_permissions
 ```
 
-Call an admin-only action as a member and the actor refuses:
+Call an admin-only action as a member, and the Actor refuses:
 
 ```
 ActorError: Admins only
@@ -77,8 +141,8 @@ ActorError: Admins only
 
 </Steps>
 
-## Where to Go Next
+## Next steps
 
-- [JWTs](/docs/jwt) for the full grant vocabulary, expiry behavior, and renewal.
-- [Permissions](/actors/docs/permissions) for queue and event gating and deny-by-default patterns.
-- [`examples/jwt-counter`](https://github.com/rivet-dev/rivet/tree/main/examples/jwt-counter) for a complete project with a smoke test covering renewal and rejection.
+- [JWTs](/docs/jwt): the full grant list, expiry, renewal, and token inspection.
+- [Permissions](/actors/docs/permissions): gate queues and events, and deny by default.
+- [`examples/jwt-better-auth`](https://github.com/rivet-dev/rivet/tree/main/examples/jwt-better-auth): the same flow with signup and login through Better Auth.

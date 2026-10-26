@@ -1,0 +1,144 @@
+---
+title: "Arena Game"
+description: "Build an arena game such as a team deathmatch, a free-for-all, or a Rocket League style match, where players queue for a mode and play a fixed-size match."
+---
+
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
+
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/arena" />
+
+<Diagram
+  id="arena-game"
+  label="The game client calls queueForMatch on the arenaMatchmaker Actor with a mode, and the matchmaker adds the player to its player_pool table. Once enough players are queued for that mode, the matchmaker creates an arenaMatch Actor with the roster and teams, saves the assignments, and sends the assignmentReady event to the client. The client connects to the match with its playerId, then sends updatePosition and shoot. The match broadcasts snapshot and shoot events back. When the match is destroyed, it sends matchCompleted to the matchmaker. The numbers show the order of the calls. There is one matchmaker and one arenaMatch Actor per match."
+  stackLabel="One per match"
+  nodes={[
+    { id: "client", x: 20, y: 80, w: 150, title: "Game client", subtitle: "browser canvas" },
+    { id: "mm", x: 330, y: 80, w: 230, product: "actors", title: "`arenaMatchmaker`", subtitle: "one, keyed `main`" },
+    { id: "db", x: 330, y: 210, w: 230, title: "Matchmaker SQLite", subtitle: "`player_pool`, `assignments`" },
+    { id: "match", x: 760, y: 80, w: 190, product: "actors", stack: true, title: "`arenaMatch`", subtitle: "teams and score" },
+  ]}
+  edges={[
+    { from: "client", to: "mm", fromOffset: -10, toOffset: -10, label: "`queueForMatch`", step: 1 },
+    { from: "mm", to: "match", fromOffset: -10, toOffset: -10, label: "`create` with teams", step: 2 },
+    { from: "mm", to: "client", kind: "reply", fromOffset: 12, toOffset: 12, label: "`assignmentReady`", labelAt: [247, 144], step: 3 },
+    { from: "client", to: "match", fromSide: "top", toSide: "top", via: [[95, 30], [855, 30]], label: "`connect` with `playerId`", step: 4 },
+    { from: "mm", to: "db", fromSide: "bottom", toSide: "top", label: "`c.db.execute`", labelAt: [455, 180], labelAnchor: "start" },
+    { from: "client", to: "match", fromSide: "bottom", toSide: "bottom", fromOffset: -20, toOffset: -10, via: [[75, 310], [845, 310]], label: "`updatePosition`, `shoot`", step: 5 },
+    { from: "match", to: "client", kind: "reply", fromSide: "bottom", toSide: "bottom", fromOffset: 14, toOffset: 20, via: [[869, 345], [115, 345]], label: "`snapshot`, `shoot` events", step: 6 },
+    { from: "match", to: "mm", fromOffset: 12, toOffset: 12, label: "`matchCompleted`", labelAt: [659, 144], step: 7 },
+  ]}
+/>
+
+What we'll build:
+
+- An `arenaMatchmaker` Actor with one queue per mode (`1v1`, `ffa`, `duo`, and `squad`) that only creates a match once enough players are waiting.
+- Teams assigned by the matchmaker before the match exists, or no teams for free-for-all.
+- An `arenaMatch` Actor per match that waits for every player, then runs at 20 ticks per second until a side reaches 10 kills.
+- Movement that the client owns and the server checks, and hits that only the server resolves.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add rivetkit
+```
+
+</Step>
+
+<Step title="Create the matchmaker">
+
+One `arenaMatchmaker` Actor, keyed `["main"]`, holds a waiting pool per mode and builds full matches from it. The pool, matches, and assignments live in its SQLite database:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/arena/matchmaker.ts" title="matchmaker.ts" highlight="queue,fill-match" />
+
+- `queueForMatch` is an action. It creates the `playerId`, records `c.conn.id`, and puts a message on the internal `queueForMatch` queue. It returns right away. The match arrives later as an event, because nobody knows how long the wait will be.
+- `run` handles one queue message at a time, so two players joining at once can't both fill the last slot. Each entry goes into `player_pool`, the new counts go out as `queueUpdate`, and `fillMatch` runs once the mode reaches its `MODE_CONFIG` capacity.
+- `fillMatch` takes the players who have waited longest and assigns teams by position (`idx % teams`, or `-1` for free-for-all). It creates the `arenaMatch` Actor with the roster as input, saves each row in `assignments`, and broadcasts `assignmentReady`.
+- `onDisconnect` sends `unqueueForMatch`, so a player who closes the tab leaves the pool.
+
+<Warning>
+`assignmentReady` is broadcast to every client connected to the matchmaker, and the `playerId` in it is enough to connect as that player. In production, send each assignment only to its owner with `conn.send(...)` (the row already stores `conn_id`), and check a signed token in the match.
+</Warning>
+
+</Step>
+
+<Step title="Create the match">
+
+Each match is its own `arenaMatch` Actor, keyed by the match id. It starts with the full roster and goes live once everyone has connected:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/arena/match.ts" title="match.ts" region="connect" />
+
+- `createState` seeds every assigned player from the input with their team, color, and a random spawn point. The roster is fixed, so `onConnect` doesn't need to ask the matchmaker. An id that isn't on the roster is disconnected with `invalid_player`.
+- The match stays in `waiting` until every assigned player has a connection, then switches to `live`. Nobody starts a 4v4 with three players.
+- A disconnect only clears the player's connection id. Their seat and score stay, so they can reconnect into the same match.
+
+</Step>
+
+<Step title="Validate movement and score hits">
+
+The match runs a 20 tick per second loop, and checks every move and shot that arrives between ticks:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/arena/match.ts" title="match.ts" highlight="tick,combat" />
+
+- `interval(TICK_MS)` ticks every 50 ms, twice as often as the battle royale, because arena fights are short and close. Ticks are skipped until the match is `live`. Each live tick checks the win condition and broadcasts one `snapshot`.
+- The client owns movement. `updatePosition` limits each move to `MAX_SPEED` times the time since the last update and keeps the player inside the world, so a client that teleports only moves as far as it could have run.
+- The server owns combat. `shoot` skips teammates, finds the closest enemy within `SHOOT_RANGE` and `SHOOT_ANGLE` of the aim, gives the shooter a point, respawns the victim at a random spot, and broadcasts `shoot`.
+- `checkWinCondition` ends a free-for-all when one player reaches `SCORE_LIMIT`, and a team match when a team's combined score does. When the match Actor is destroyed, `onDestroy` sends `matchCompleted` so the matchmaker deletes its row.
+
+<Note>
+For a Rocket League style match, the ball is shared by both teams, so simulate it on the server with `@dimforge/rapier3d` and let each client predict only its own car. Also limit how often each connection may call `updatePosition` and `shoot`. The example client sends positions at most 20 times per second.
+</Note>
+
+</Step>
+
+<Step title="Register the Actors">
+
+Add both Actors to the registry and start it:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/index.ts" title="actors/index.ts" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/index.ts" title="index.ts" />
+</CodeGroup>
+
+The example registers every game type in one registry. An arena game only needs `arenaMatchmaker` and `arenaMatch`. Each Actor file imports `type { registry }` so that `c.client<typeof registry>()` is typed when the matchmaker creates a match and the match reports back.
+
+</Step>
+
+<Step title="Connect players">
+
+The menu queues for a mode and waits for an assignment, then the game connects to the match:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/arena/menu.tsx" title="menu.tsx" region="queue" />
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/arena/wait-for-assignment.ts" title="wait-for-assignment.ts" />
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/arena/arena-game.ts" title="arena-game.ts" highlight="connect,send" />
+</CodeGroup>
+
+- The menu keeps its matchmaker connection open while queued, because the assignment arrives as an event. `queueUpdate` drives the "players in queue" counter.
+- `waitForAssignment` listens for `assignmentReady` with this player's id and also calls `getAssignment` once, in case the event fired before the listener was attached. `getAssignment` only returns a row whose `conn_id` matches the caller's connection.
+- The game connects with `arenaMatch.get(...)` and `playerId` in `params`, the same id the matchmaker put on the roster.
+- The client moves its own player every frame and sends `updatePosition` at most every 50 ms. If a `snapshot` puts it more than 40 pixels from where it thinks it is, it snaps to the server's position.
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/multiplayer-game-patterns
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173`, pick **Arena**, choose **FFA**, and click **Queue**. The counter shows `1/4` players in queue. Click **Add Bot** three times. The menu shows **Match Found!**, then the match goes live once all four players connect. Move with WASD and click to shoot. The first player to 10 kills wins. Pick **Duo** or **Squad** to see teams.
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+- [Ranked Game](/guides/ranked-game): pair players by rating instead of first come, first served.
+- [Queues](/actors/docs/queues): how the matchmaker handles one request at a time.
+- [Events](/actors/docs/events): broadcast to everyone or send to one connection.

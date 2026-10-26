@@ -131,6 +131,7 @@ export function RankedMenu({
 		setStatus("idle");
 	}, [cleanup]);
 
+	// docs:start queue
 	const queueForMatch = async () => {
 		if (!username.trim()) return;
 		setStatus("queuing");
@@ -201,6 +202,7 @@ export function RankedMenu({
 			setStatus("error");
 		}
 	};
+	// docs:end queue
 
 	const addBot = () => {
 		const bot = new RankedBot(client);

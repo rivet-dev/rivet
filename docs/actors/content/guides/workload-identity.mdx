@@ -1,0 +1,43 @@
+---
+title: "mTLS and Workload Identity"
+description: "Let an Actor prove who it is to your internal services with a short-lived certificate or token instead of a shared secret."
+---
+
+<Diagram
+  id="workload-identity"
+  label="Your app calls an action on the payments Actor. The Actor attests to an identity issuer, such as SPIRE or AWS IAM, which returns a short-lived mTLS certificate or OIDC token for that workload. The Actor calls your internal service over mTLS or with the token. The internal service verifies the identity against the issuer's trust bundle. The numbers show the order of the calls. There is one payments Actor per account."
+  stackLabel="One per account"
+  nodes={[
+    { id: "app", x: 20, y: 180, w: 150, title: "Your app", subtitle: "calls an action" },
+    { id: "issuer", x: 330, y: 30, title: "Identity issuer", subtitle: "SPIRE or AWS IAM" },
+    { id: "actor", x: 330, y: 180, product: "actors", stack: true, title: "`payments`", subtitle: "holds its identity" },
+    { id: "service", x: 690, y: 180, title: "Internal service", subtitle: "checks the caller" },
+  ]}
+  edges={[
+    { from: "app", to: "actor", label: "action", step: 1 },
+    { from: "actor", to: "issuer", fromOffset: -30, toOffset: -30, label: "attest", labelAt: [375, 139], labelAnchor: "end", step: 2 },
+    { from: "issuer", to: "actor", kind: "reply", fromOffset: 30, toOffset: 30, label: "cert or token", labelAt: [475, 139], labelAnchor: "start", step: 3 },
+    { from: "actor", to: "service", label: "mTLS or token", step: 4 },
+    { from: "service", to: "issuer", fromSide: "top", toSide: "right", via: [[775, 60]], label: "trust bundle", step: 5 },
+  ]}
+/>
+
+## TODO
+
+This page is not written yet. The outline below is what it will cover.
+
+### What we'll build
+
+- A `payments` Actor that gets a short-lived X.509 certificate from SPIRE, or an OIDC token from AWS IAM, when it starts.
+- Renewal of the certificate or token before it expires, without dropping in-flight calls.
+- Calls from the Actor to an internal service over mTLS, or with the token in a header.
+- A check in the internal service that accepts only the identity of the Actor type it expects.
+
+### Similar tools
+
+This is the same job as SPIFFE and SPIRE, Istio service identity, or Teleport Workload Identity. On Rivet the identity would belong to the Actor type rather than to a pod, so many Actors on one worker can each prove what they are.
+
+### Open questions
+
+- Rivet has no workload identity support. The guide would attest the worker process, not the individual Actor, until Rivet can issue or vouch for per-Actor identities.
+- Confirm how SPIRE node and workload attestation work when Actors run on serverless hosts where you do not control the node agent.

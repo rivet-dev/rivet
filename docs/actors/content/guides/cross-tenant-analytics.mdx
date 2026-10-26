@@ -1,0 +1,43 @@
+---
+title: "Cross-Tenant Analytics Without Breaking Isolation"
+description: "Run analytics across all tenants in a warehouse while each tenant's live data stays in its own Actor."
+---
+
+<Diagram
+  id="cross-tenant-analytics"
+  label="Your app calls actions on the tenant Actor for each tenant, which serves reads and writes from its own SQLite database and records a change event for each write. The exportChanges workflow batches new change events and loads them into your warehouse, such as BigQuery, ClickHouse, or Snowflake. BI dashboards run cross-tenant queries against the warehouse, never against the tenant Actors. The numbers show the order of the calls. There is one tenant Actor and one exportChanges workflow per tenant."
+  stackLabel="One per tenant"
+  nodes={[
+    { id: "app", x: 20, y: 40, w: 150, title: "Your app", subtitle: "tenant traffic" },
+    { id: "tenant", x: 320, y: 40, product: "actors", stack: true, title: "`tenant`", subtitle: "serves from SQLite" },
+    { id: "export", x: 640, y: 40, product: "workflows", stack: true, title: "`exportChanges`", subtitle: "batches events" },
+    { id: "warehouse", x: 960, y: 40, w: 190, title: "Warehouse", subtitle: "BigQuery, ClickHouse" },
+    { id: "bi", x: 960, y: 170, w: 190, title: "BI dashboards", subtitle: "all tenants at once" },
+  ]}
+  edges={[
+    { from: "app", to: "tenant", label: "actions", step: 1 },
+    { from: "tenant", to: "export", label: "change events", step: 2 },
+    { from: "export", to: "warehouse", label: "load batch", step: 3 },
+    { from: "bi", to: "warehouse", label: "cross-tenant SQL", labelAt: [1069, 139], labelAnchor: "start", step: 4 },
+  ]}
+/>
+
+## TODO
+
+This page is not written yet. The outline below is what it will cover.
+
+### What we'll build
+
+- A `tenant` Actor per tenant that writes a change event to an outbox table in the same transaction as each write.
+- An `exportChanges` workflow that reads new events, loads them into BigQuery, ClickHouse, or Snowflake in batches, and marks them sent.
+- A warehouse schema with a tenant id column, used only for analytics and never for serving.
+- Dashboards that query across tenants in the warehouse without touching any tenant Actor.
+
+### Similar tools
+
+This is the same job as Fivetran, Airbyte, Neon logical replication, or Supabase ETL. On Rivet each tenant's data stays in its own Actor for serving, and the export copies only change events, so cross-tenant queries never run on the serving path.
+
+### Open questions
+
+- Rivet has no export or change data capture from Actor SQLite. The guide builds an outbox table and export workflow by hand.
+- Confirm how to backfill the warehouse for tenants that existed before the export was added.

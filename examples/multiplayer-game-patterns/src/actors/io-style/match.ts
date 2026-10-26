@@ -37,6 +37,7 @@ export const ioStyleMatch = actor({
 		tick: 0,
 		players: {},
 	}),
+	// docs:start connect
 	onConnect: async (c, conn) => {
 		const params = (conn.params as ConnParams | null) ?? {};
 		const playerId = params.playerId;
@@ -68,6 +69,7 @@ export const ioStyleMatch = actor({
 		await updateMatchmaker(c);
 		broadcastSnapshot(c);
 	},
+	// docs:end connect
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
 		await client.ioStyleMatchmaker
@@ -86,6 +88,7 @@ export const ioStyleMatch = actor({
 		await updateMatchmaker(c);
 		broadcastSnapshot(c);
 	},
+	// docs:start tick
 	run: async (c) => {
 		const tick = interval(TICK_MS);
 		while (!c.aborted) {
@@ -121,7 +124,9 @@ export const ioStyleMatch = actor({
 			broadcastSnapshot(c);
 		}
 	},
+	// docs:end tick
 	actions: {
+		// docs:start tick
 		setInput: (c, input: { inputX: number; inputY: number }) => {
 			const found = findPlayerByConnId(c.state, c.conn.id);
 			if (!found) {
@@ -133,6 +138,7 @@ export const ioStyleMatch = actor({
 			player.inputX = Math.max(-1, Math.min(1, input.inputX));
 			player.inputY = Math.max(-1, Math.min(1, input.inputY));
 		},
+		// docs:end tick
 		getSnapshot: (c) => buildSnapshot(c),
 	},
 });
@@ -149,6 +155,7 @@ async function updateMatchmaker(c: ActorContextOf<typeof ioStyleMatch>) {
 	});
 }
 
+// docs:start connect
 async function claimPendingPlayer(
 	c: ActorContextOf<typeof ioStyleMatch>,
 	playerId: string,
@@ -167,6 +174,7 @@ async function claimPendingPlayer(
 	}
 	return result.response?.accepted === true;
 }
+// docs:end connect
 
 interface Snapshot {
 	matchId: string;

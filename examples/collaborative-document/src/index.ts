@@ -26,6 +26,7 @@ type UpdateKind = "sync" | "awareness";
 const toNumbers = (update: Uint8Array) => Array.from(update);
 const toBytes = (update: number[]) => Uint8Array.from(update);
 
+// docs:start document
 export const document = actor({
 	// Track client awareness IDs per connection.
 	connState: {
@@ -53,7 +54,10 @@ export const document = actor({
 		const awareness = new Awareness(doc);
 		return { doc, awareness };
 	},
+	// docs:end document
 
+	// docs:start presence
+	// docs:start disconnect
 	onDisconnect: (c, conn) => {
 		const clientIds = conn.state.clientIds;
 		if (clientIds.length === 0) {
@@ -64,8 +68,11 @@ export const document = actor({
 		c.broadcast("awareness", { update: toNumbers(update) });
 		conn.state.clientIds = [];
 	},
+	// docs:end disconnect
 
+	// docs:start relay
 	actions: {
+		// docs:start sync
 		getContent: (c) => {
 			const update = Y.encodeStateAsUpdate(c.vars.doc);
 			return toNumbers(update);
@@ -79,13 +86,17 @@ export const document = actor({
 			if (kind === "sync") {
 				const bytes = toBytes(update);
 				Y.applyUpdate(c.vars.doc, bytes, "client");
+				// docs:start persist
 				const snapshot = Y.encodeStateAsUpdate(c.vars.doc);
 				await c.kv.put("yjs:doc", snapshot);
 				c.state.updatedAt = Date.now();
+				// docs:end persist
 				c.broadcast("sync", { update });
 				return;
 			}
+			// docs:end sync
 
+			// docs:start awareness
 			const bytes = toBytes(update);
 			applyAwarenessUpdate(c.vars.awareness, bytes, "client");
 			if (typeof clientId === "number" && c.conn) {
@@ -101,9 +112,13 @@ export const document = actor({
 			const update = encodeAwarenessUpdate(c.vars.awareness, clients);
 			return toNumbers(update);
 		},
+		// docs:end awareness
 	},
+	// docs:end relay
+	// docs:end presence
 });
 
+// docs:start list
 export const documentList = actor({
 	// One coordinator per workspace that indexes document actors.
 	state: {
@@ -151,3 +166,4 @@ export const registry = setup({
 });
 
 registry.start();
+// docs:end list

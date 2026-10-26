@@ -6,6 +6,26 @@ templates: ["chat-room"]
 
 Patterns for building a chat room backend with RivetKit: room-scoped actors, persistent message history, and realtime delivery over WebSocket connections.
 
+<Diagram
+  id="chat-room"
+  label="Client A connects to the chatRoom Actor keyed by the room id, calls getHistory to load the backlog, then calls sendMessage. The Actor inserts the message into the messages table in its SQLite database, which getHistory also reads in id order. The Actor then broadcasts the newMessage event over WebSocket to every connected client, including Client A and Client B. As an optional extension, the room can forward each message to a userInbox Actor per member. The numbers show the order of the calls. There is one chatRoom Actor per room."
+  stackLabel="One per room"
+  nodes={[
+    { id: "a", x: 20, y: 40, w: 170, title: "Client A", subtitle: "`useActor`, `useEvent`" },
+    { id: "b", x: 20, y: 175, w: 170, title: "Client B", subtitle: "same room key" },
+    { id: "room", x: 400, y: 40, product: "actors", stack: true, title: "`chatRoom`", subtitle: "one chat room" },
+    { id: "messages", x: 720, y: 40, title: "`messages` table", subtitle: "the Actor's SQLite" },
+    { id: "inbox", x: 720, y: 175, optional: true, title: "`userInbox`", subtitle: "extension" },
+  ]}
+  edges={[
+    { from: "a", to: "room", fromOffset: -10, toOffset: -10, label: "`getHistory`, `sendMessage`", step: 1 },
+    { from: "room", to: "messages", toOffset: -10, fromOffset: -10, label: "insert, read", step: 2 },
+    { from: "room", to: "a", kind: "reply", fromOffset: 14, toOffset: 14, label: "`newMessage`", labelAt: [295, 98], step: 3 },
+    { from: "room", to: "b", kind: "reply", fromSide: "bottom", toSide: "right", via: [[485, 205]], label: "`newMessage`", step: 3 },
+    { from: "room", to: "inbox", kind: "optional", fromOffset: 14, via: [[650, 84], [650, 205]], label: "forward", labelAt: [662, 155], labelAnchor: "start" },
+  ]}
+/>
+
 ## Starter Code
 
 Start with the working example on [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/chat-room) and adapt it. The backend is a single `chatRoom` actor; the frontend is a React app using `@rivetkit/react` (see the [React quickstart](/actors/docs/quickstart/react)).

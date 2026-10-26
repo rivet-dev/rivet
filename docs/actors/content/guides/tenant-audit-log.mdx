@@ -1,0 +1,40 @@
+---
+title: "Per-Tenant Audit Log"
+description: "Record every action taken in a tenant, ship the records to your SIEM, and let tenant admins search them."
+---
+
+<Diagram
+  id="tenant-audit-log"
+  label="Your tenant app calls actions on the tenant Actor for that tenant. Each action appends an entry to the audit_log table in the Actor's SQLite database. The shipAuditLog workflow reads new entries and ships them in batches to your SIEM. Tenant admins read the log through the getAuditLog action. The numbers show the order of the calls. There is one tenant Actor, audit table, and workflow per tenant."
+  stackLabel="One per tenant"
+  nodes={[
+    { id: "app", x: 20, y: 40, w: 150, title: "Tenant app", subtitle: "user actions" },
+    { id: "admin", x: 20, y: 150, w: 150, title: "Admin console", subtitle: "reviews the log" },
+    { id: "tenant", x: 320, y: 40, h: 170, product: "actors", stack: true, title: "`tenant`", subtitle: "every action logs" },
+    { id: "workflow", x: 640, y: 40, product: "workflows", stack: true, title: "`shipAuditLog`", subtitle: "durable batches" },
+    { id: "table", x: 640, y: 150, stack: true, title: "`audit_log` table", subtitle: "append only SQLite" },
+    { id: "siem", x: 930, y: 40, w: 150, title: "SIEM", subtitle: "Splunk, Datadog" },
+  ]}
+  edges={[
+    { from: "app", to: "tenant", toOffset: -55, label: "any action", step: 1 },
+    { from: "tenant", to: "table", fromOffset: 55, label: "append entry", step: 2 },
+    { from: "table", to: "workflow", label: "new entries", labelAt: [757, 131], labelAnchor: "start", step: 3 },
+    { from: "workflow", to: "siem", label: "ship batch", step: 4 },
+    { from: "admin", to: "tenant", toOffset: 55, label: "`getAuditLog`", step: 5 },
+  ]}
+/>
+
+## TODO
+
+This page is not written yet. The outline below is what it will cover.
+
+### What we'll build
+
+- A `tenant` Actor per tenant whose actions each append who did what, when, and to which record to an `audit_log` table in its SQLite database.
+- An append-only table with no update or delete action, so entries cannot be changed after they are written.
+- A `shipAuditLog` workflow that sends new entries to a SIEM in batches and retries until each batch is accepted.
+- A `getAuditLog` action that lets tenant admins filter the log by user, action, and time range.
+
+### Similar tools
+
+This is the same job as WorkOS Audit Logs, Retraced, or Datadog Audit Trail. On Rivet each tenant's log lives in the same Actor that runs the actions, so an entry is written in the same place and at the same time as the change it records.

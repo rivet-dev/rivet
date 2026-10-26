@@ -50,6 +50,7 @@ export function IdleGame({
 		lb?.dispose();
 	}, []);
 
+	// docs:start connect
 	useEffect(() => {
 		const world = client.idleWorld
 			.getOrCreate([matchInfo.playerId])
@@ -100,6 +101,7 @@ export function IdleGame({
 	const buildBuilding = (typeId: string) => {
 		worldRef.current?.build({ buildingTypeId: typeId }).catch(() => {});
 	};
+	// docs:end connect
 
 	return (
 		<div className="app">

@@ -6,6 +6,24 @@ templates: ["scheduling"]
 
 Rivet Actor schedules are durable actor-local timers. They survive actor sleep, restarts, upgrades, deploys, and crashes without a separate cron service.
 
+<Diagram
+  id="cron-jobs"
+  label="Your app's first call creates the dailyReport Actor, and its onCreate hook calls cron.set to install the daily-report cron job with the expression 0 9 * * *. The job is a durable schedule stored with the Actor, so it survives sleep, restarts, upgrades, deploys, and crashes. Every day at 9:00 the schedule calls the runReport action on the same Actor, and runReport records lastRunAt in the Actor's state. The numbers show the order of the calls. There is one dailyReport Actor per key: a single key for one global job, or one key per user or resource."
+  stackLabel="One per job or per user"
+  nodes={[
+    { id: "app", x: 20, y: 80, w: 150, title: "Your app", subtitle: "any client" },
+    { id: "actor", x: 300, y: 80, w: 190, product: "actors", stack: true, title: "`dailyReport`", subtitle: "`onCreate`, `runReport`" },
+    { id: "schedule", x: 650, y: 80, title: "Cron `daily-report`", subtitle: "`0 9 * * *`" },
+    { id: "state", x: 650, y: 190, title: "Actor state", subtitle: "`lastRunAt`" },
+  ]}
+  edges={[
+    { from: "app", to: "actor", label: "first call", step: 1 },
+    { from: "actor", to: "schedule", label: "`cron.set`", step: 2 },
+    { from: "schedule", to: "actor", fromSide: "top", toSide: "top", via: [[735, 30], [395, 30]], label: "`runReport` daily at 9:00", step: 3 },
+    { from: "actor", to: "state", fromSide: "bottom", via: [[395, 220]], label: "records the run", step: 4 },
+  ]}
+/>
+
 ## Choose a schedule type
 
 | API | Use it for |

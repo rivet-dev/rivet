@@ -1,0 +1,42 @@
+---
+title: "Collaborative Text Editor (OT)"
+description: "Build a collaborative text editor with operational transformation, where one Actor per document orders every edit and keeps the operation log."
+---
+
+<Diagram
+  id="collaborative-text-editor-ot"
+  label="Editor A sends each operation with the revision number it was based on to the document Actor for that document. The Actor transforms the operation against every concurrent operation committed since that revision, assigns it the next revision, and appends it to the operation log in its SQLite database. It then broadcasts the transformed operation back to every editor, which also tells the sender that its operation was accepted. The numbers show the order of the calls. There is one document Actor per document."
+  stackLabel="One per document"
+  nodes={[
+    { id: "a", x: 20, y: 40, title: "Editor A", subtitle: "sends an operation" },
+    { id: "b", x: 20, y: 200, title: "Editor B", subtitle: "applies it" },
+    { id: "doc", x: 340, y: 120, w: 190, product: "actors", stack: true, title: "`document`", subtitle: "transforms and orders" },
+    { id: "sqlite", x: 750, y: 120, title: "SQLite", subtitle: "operation log" },
+  ]}
+  edges={[
+    { from: "a", to: "doc", toSide: "top", via: [[435, 70]], label: "operation and revision", step: 1 },
+    { from: "doc", to: "sqlite", label: "append at next revision", step: 2 },
+    { from: "doc", to: "b", kind: "reply", fromSide: "bottom", via: [[435, 230]], label: "transformed operation", step: 3 },
+  ]}
+/>
+
+## TODO
+
+This page is not written yet. The outline below is what it will cover.
+
+### What we'll build
+
+- A `document` Actor per document that is the single sequencer for its edits.
+- Clients that send each operation with the revision it was based on, and keep sending later edits only after the last one is acknowledged.
+- A transform step that rewrites an incoming operation against every operation committed since its revision, then assigns it the next revision.
+- An operation log in the Actor's SQLite database, with periodic snapshots so late joiners and restarts do not replay the whole history.
+- A browser client that applies transformed operations from other editors and rebases its own pending edits on top.
+
+### Similar tools
+
+This is the same job as ShareDB, Google Docs-style OT servers, Firepad, or Liveblocks. On Rivet each document is an Actor, so one place orders every edit for that document without a separate database lock, and the Actor sleeps when nobody has it open. For the CRDT approach, where the server only relays and stores updates, see [Collaborative Text Editor (CRDT)](/guides/collaborative-text-editor).
+
+### Open questions
+
+- No OT example exists yet. The guide needs one in `examples/` before its steps can embed real code.
+- Which OT library the example would use, such as ot.js or ShareDB's json0, decides the operation format and whether rich text is supported.
