@@ -9,7 +9,7 @@ skill: false
 ## Features
 
 - **Long-Lived, Stateful Compute**: Each unit of compute is like a tiny server that remembers things between requests – no need to re-fetch data from a database or worry about timeouts. Like AWS Lambda, but with memory and no timeouts.
-- **Blazing-Fast Reads & Writes**: State is stored on the same machine as your compute, so reads and writes are ultra-fast. No database round trips, no latency spikes. State is persisted to Rivet for long term storage, so it survives server restarts.
+- **Blazing-Fast Reads & Writes**: State lives in memory next to your code, so reads are instant and writes return without waiting on a separate database. Every actor's data is persisted to a durable, replicated volume, so it survives restarts and moves between nodes.
 - **Realtime**: Update state and broadcast changes in realtime with WebSockets. No external pub/sub systems, no polling – just built-in low-latency events.
 - **Infinitely Scalable**: Automatically scale from zero to millions of concurrent actors. Pay only for what you use with instant scaling and no cold starts.
 - **Fault Tolerant**: Built-in error handling and recovery. Actors automatically restart on failure while preserving state integrity and continuing operations.
@@ -245,7 +245,7 @@ Create one actor per user, document, or room. Use compound keys to scope entitie
 
 ### Coordinator & Data Actors
 
-**Data actors** handle core logic (chat rooms, game sessions, user data). **Coordinator actors** track and manage collections of data actors—think of them as an index.
+**Data actors** handle core logic (chat rooms, game sessions, user data). **Coordinator actors** track and manage collections of data actors. think of them as an index.
 
 <CodeGroup>
 <CodeSnippet file="examples/docs/actors-crash-course/coordinator/index.ts" title="index.ts" />
@@ -277,11 +277,11 @@ Use this pattern for long-lived, durable workflows that initialize resources, pr
 - Use `c.conn.state` to securely identify users in actions rather than trusting action parameters.
 - For cross-origin access, validate the request origin in `onBeforeConnect`.
 
-[Authentication Documentation](/docs/authentication) · [Permissions Documentation](/actors/docs/permissions) · [CORS Documentation](/actors/docs/cors)
+[Authentication Documentation](/actors/docs/permissions) · [CORS Documentation](/actors/docs/cors)
 
 ### Versions & Upgrades
 
-When deploying new code, set a version number so Rivet can route new actors to the latest runner and optionally drain old ones. Use a build timestamp, git commit count, or CI build number as the version. It is very important to [configure versioning](/docs/versions) before deploying to production. Without versioning, actors can regress by running on older runner versions, and existing actors will never be forced to migrate to new runners. They will continue running indefinitely on the old runners until they exit.
+Deploy new code by rolling your nodes. When a node stops, its actors sleep and wake on a running node with their state intact, so keep each deploy compatible with the state the previous one wrote. See [Versions & Upgrades](/docs/versions).
 
 [Documentation](/docs/versions)
 

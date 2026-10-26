@@ -9,7 +9,7 @@ When your product's output is an app, the backend has to appear the moment the a
 
 **Run the generated code in place.** A code agent Actor keeps the chat history and the current revision of the generated source in its own [SQLite database](/actors/docs/sqlite), so every key has an isolated transcript and an isolated codebase. A dynamic Actor fetches that source from the matching code agent and executes it in a [Secure Exec](/secure-exec) sandbox, so the user can call their app the moment it compiles and iterate on it without a redeploy.
 
-**Deploy it into its own namespace.** For code that should outlive the chat, create a Rivet namespace per user, package the generated `registry.ts` and frontend into a project, deploy it to a serverless host such as [Freestyle](/docs/deploy/self-host/workers/freestyle), and configure that host as the namespace's worker. Each user's Actors then run under their own credentials, in their own namespace, with nothing shared but the control plane.
+**Deploy it into its own namespace.** For code that should outlive the chat, create a Rivet namespace per user, package the generated `registry.ts` and frontend into a project, deploy it as a [long-running node](/docs/deploy/self-host/nodes/), and connect it to a configured node pool in that namespace. Each user's Actors then run under their own credentials, in their own namespace, with nothing shared but the control plane.
 
 ## Start from the examples
 

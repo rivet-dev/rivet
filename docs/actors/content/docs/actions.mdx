@@ -128,8 +128,12 @@ Rivet provides the `ActionContextOf` utility type for exactly this purpose:
 
 See [types](/actors/docs/types) for more details on using `ActionContextOf` and other utility types.
 
+{/* TODO(code): restore when the control plane exposes an API to read an Actor's inspector token. Tracked in ACT-6493.
+
 ## Debugging
 
 - `GET /inspector/rpcs` lists all available actions on an actor.
 - `POST /inspector/action/:name` executes an action with JSON args and returns output.
 - In non-dev mode, inspector endpoints require authorization.
+
+*/}

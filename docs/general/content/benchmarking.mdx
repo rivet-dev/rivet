@@ -1,0 +1,61 @@
+---
+title: "Benchmarking"
+description: "How we benchmark Rivet: the cluster setup, what each number measures, and how to reproduce it."
+skill: true
+---
+
+These measurements come from the October 25, 2026 Rivet Actors benchmark. Use the setup and method below to compare your own cluster. Results depend on the workload and hardware.
+
+## Setup
+
+| | |
+| --- | --- |
+| **Region** | Azure `eastus2`, three availability zones |
+| **Control plane** | 3 instances, one per zone, each `Standard_L8as_v5`: 8 vCPU, 64 GiB RAM, about 1.7 TB local NVMe (ext4, `noatime`) |
+| **Durability** | Every write is acknowledged by 2 of 3 instances, and at least one of those is in another zone |
+| **Node and client** | 1 node VM, `Standard_D16as_v7`: 16 vCPU, in the first zone. The load generator runs on the same VM. |
+| **Software** | Debian 13, Node.js 24, release builds |
+| **Object storage** | Azure Blob Storage in the same region, with locally redundant storage (LRS) |
+
+Requests use plain HTTP inside the region over reused connections, with one request in flight. Create and wake requests have 20 ms gaps. Each row reports all successful samples from its condition, with nearest-rank percentiles and no trimming. All conditions below completed without errors.
+
+## Results
+
+Milliseconds, p50 / p99.
+
+| Measurement | Samples | p50 | p99 | What it measures |
+| --- | ---: | ---: | ---: | --- |
+| **Create** | 1,500 | 6.92 | 8.11 | Client send to full first ping reply from a new keyed Rivet Actor. Includes scheduling, storage creation, and framework startup. |
+| **Wake** | 1,200 | 4.37 | 6.80 | Client send to full ping reply from a Rivet Actor asleep for at least 10 seconds. |
+| **Durable insert** | 1,200 | 0.69 | 0.80 | One 128-byte SQLite row inserted in autocommit mode. Timed around the query on the node, including the write to a majority of disks across zones. |
+| **Warm read** | 1,200 | 0.059 | 0.080 | A primary-key read of one 128-byte row from SQLite's memory cache, timed around the query. |
+
+## Reproducing it
+
+<Steps>
+
+<Step title="Deploy the control plane">
+
+Run three control plane instances on VMs in three zones of one region, each on raw local NVMe, with a bucket in the same region. Follow the [VM](/docs/deploy/self-host/control-plane/vm/) guide. Kubernetes does not give pods raw NVMe, so it cannot reproduce these numbers.
+
+</Step>
+
+<Step title="Deploy one node">
+
+Run one node in the first zone, with a Rivet Actor that has a `ping` action and a SQLite table, and a load generator on the same machine. See [Deploy nodes](/docs/deploy/self-host/nodes/).
+
+</Step>
+
+<Step title="Measure each condition">
+
+Use the sample counts and pacing above, with a new key for each create. For wakes, explicitly sleep each Actor and wait at least 10 seconds.
+
+</Step>
+
+<Step title="Report every sample">
+
+Sort the successful samples and take nearest-rank percentiles. Report the sample count and every failure next to each result.
+
+</Step>
+
+</Steps>

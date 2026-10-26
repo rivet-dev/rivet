@@ -8,7 +8,7 @@ description: "List worker configurations in a namespace, grouped by worker name 
 Filter by `variant` to return only `normal` or `serverless` configurations. Use `runner_name` for multiple names because `runner_names` is deprecated.
 
 ```http
-GET https://api.rivet.dev/runner-configs
+GET https://rivet.example.com/runner-configs
 ```
 
 ## Examples
@@ -16,7 +16,7 @@ GET https://api.rivet.dev/runner-configs
 <CodeGroup>
 
 ```bash cURL
-curl "https://api.rivet.dev/runner-configs?namespace=$RIVET_NAMESPACE" \
+curl "https://rivet.example.com/runner-configs?namespace=$RIVET_NAMESPACE" \
   -H "Authorization: Bearer $RIVET_TOKEN"
 ```
 

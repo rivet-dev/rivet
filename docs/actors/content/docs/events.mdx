@@ -142,12 +142,16 @@ function ConditionalListener() {
 
 </CodeGroup>
 
+{/* TODO(code): restore when the control plane exposes an API to read an Actor's inspector token. Tracked in ACT-6493.
+
 ## Debugging
 
 - `GET /inspector/connections` shows active connections and connection metadata.
 - Use this to confirm clients are connected before expecting broadcasts.
 - `GET /inspector/summary` provides connections, RPCs, and queue size in one response.
 - In non-dev mode, inspector endpoints require authorization.
+
+*/}
 
 ## More About Connections
 

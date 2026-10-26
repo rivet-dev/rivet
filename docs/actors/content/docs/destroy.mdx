@@ -10,7 +10,7 @@ skill: true
 - Cleaning up temporary resources
 - GDPR/compliance data removal
 
-Actors sleep when idle, so destruction is only needed to permanently remove data — not to save compute.
+Actors sleep when idle, so destruction is only needed to permanently remove data; not to save compute.
 
 ## Destroying An Actor
 
@@ -22,10 +22,7 @@ To destroy an actor, use `c.destroy()` like this:
 
 ### Destroy via HTTP
 
-Send a DELETE request to destroy an actor. This requires a token for authentication:
-
-- **Rivet Cloud**: Use the service key (`sk_*`) from your `RIVET_ENDPOINT` URL. Find this in the dashboard under **Settings > Advanced > Backend Configuration** (e.g. the `sk_...` portion of `https://default:sk_abc123@api.rivet.dev`).
-- **Self-hosted**: Use an admin token.
+Send a DELETE request to your control plane to destroy an actor. Authenticate with your Rivet token.
 
 <CodeGroup>
 
@@ -34,7 +31,7 @@ const actorId = "your-actor-id";
 const namespace = "default";
 const token = "your-token";
 
-await fetch(`https://api.rivet.dev/actors/${actorId}?namespace=${namespace}`, {
+await fetch(`https://rivet.example.com/actors/${actorId}?namespace=${namespace}`, {
   method: "DELETE",
   headers: {
     Authorization: `Bearer ${token}`,
@@ -43,21 +40,17 @@ await fetch(`https://api.rivet.dev/actors/${actorId}?namespace=${namespace}`, {
 ```
 
 ```bash
-curl -X DELETE "https://api.rivet.dev/actors/{actorId}?namespace={namespace}" \
+curl -X DELETE "https://rivet.example.com/actors/{actorId}?namespace={namespace}" \
   -H "Authorization: Bearer {token}"
 ```
 </CodeGroup>
 
-To find the actor ID, you can list actors first:
+To find the actor ID, list the actors with that name first:
 
 ```bash
-curl "https://api.rivet.dev/actors?namespace={namespace}" \
+curl "https://rivet.example.com/actors?namespace={namespace}&name={actor-name}" \
   -H "Authorization: Bearer {token}"
 ```
-
-### Destroy via Dashboard
-
-To destroy an actor via the dashboard, navigate to the actor and press the red "X" in the top right.
 
 ## Lifecycle Hook
 

@@ -237,7 +237,7 @@ const poller = actor({
 
 ## Embedded SQLite
 
-`c.db` is a SQLite database scoped to each actor and stored on disk. Use it for queryable, relational, or larger-than-memory data. Because compute and storage live together, queries run locally with no network round trips.
+`c.db` is a SQLite database scoped to each actor and stored in the actor's durable volume. Use it for queryable, relational, or larger-than-memory data. Queries run in the actor's own process against pages cached next to it, and every committed write is replicated before it is acknowledged, so the database survives the actor moving to another node.
 
 A common pattern is to treat SQLite as the source of truth and keep a working copy in `c.vars`: load rows in `createVars`, serve reads from memory, and write changes back to `c.db`.
 

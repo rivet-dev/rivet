@@ -8,7 +8,7 @@ description: "List actors in a namespace, optionally filtered by name, key, or I
 `key` requires `name`. `actor_id` cannot be combined with `name` or `key`. Destroyed actors are excluded unless `include_destroyed` is `true`.
 
 ```http
-GET https://api.rivet.dev/actors
+GET https://rivet.example.com/actors
 ```
 
 ## Examples
@@ -16,7 +16,7 @@ GET https://api.rivet.dev/actors
 <CodeGroup>
 
 ```bash cURL
-curl "https://api.rivet.dev/actors?namespace=$RIVET_NAMESPACE&name=counter" \
+curl "https://rivet.example.com/actors?namespace=$RIVET_NAMESPACE&name=counter" \
   -H "Authorization: Bearer $RIVET_TOKEN"
 ```
 

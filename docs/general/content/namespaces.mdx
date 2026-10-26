@@ -1,44 +1,66 @@
 ---
 title: "Namespaces"
-description: "Namespaces isolate Rivet Actors, workers, pools, and tokens so environments and tenants never share state."
+description: "Separate production, staging, or tenants with namespace slugs."
 skill: true
 ---
 
-A namespace is an isolated environment inside the Rivet control plane. Every Actor, worker, pool, token, and configuration setting belongs to exactly one namespace, and nothing crosses the boundary: an Actor key in `staging` never collides with the same key in `production`, and a `production` token cannot read `staging`.
+A namespace separates Actors, Actor keys, and node pools on one control plane. Each namespace has a unique slug, such as `production` or `staging`. Use that slug in endpoints and API requests.
 
-## What Lives in a Namespace
+## Quickstart
 
-- **Actors**: Actor IDs and keys are unique within a namespace. Looking up an Actor by key always resolves within the namespace of the token making the request.
-- **Workers and pools**: Workers register under a pool name inside a namespace. Actors are only scheduled onto workers in their own namespace. See [Workers & Pools](/docs/workers).
-- **Pool configuration**: Scaling, drain, and eviction settings are stored per pool per namespace. See [Pool Configuration](/docs/pool-configuration).
-- **Tokens**: Secret, public, and connection tokens are minted for one namespace and only grant access to it. See [Connect](/docs/connect).
+<Steps>
+<Step title="Create a namespace">
 
-If you are running a local control plane or a fresh self-hosted deployment, everything lands in the `default` namespace until you create more.
-
-## Common Layouts
-
-Namespaces are cheap, so create as many as your workflow needs:
-
-- **One per environment**: `production`, `staging`, and `development` each get their own namespace and their own tokens, so a bad deploy to staging cannot touch production Actors.
-- **One per customer**: For multi-tenant products that need hard isolation, a namespace per customer keeps Actor keys, data, and tokens separated without any application code.
-- **One per branch**: CI can mint a namespace for each pull request, run its tests against real Actors, and throw it away when the branch merges.
-
-## Creating a Namespace
-
-Create namespaces from the [dashboard](https://dashboard.rivet.dev) or mint a token with `--create-namespace` to create the namespace on the fly:
+Use your Rivet token, the `auth.admin_token` value from your control plane config:
 
 ```bash
-rivet token create --kind secret --namespace preview-123 --create-namespace
+curl -X POST "$RIVET_API/namespaces" \
+  -H "Authorization: Bearer $RIVET_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"staging"}'
 ```
 
-Both approaches produce the same namespace. The CLI form is convenient in scripts and CI. See the [CLI reference](/docs/cli#rivet-token) for the full set of flags.
+```json
+{"namespace":{"name":"staging","create_ts":1790000000000}}
+```
 
-## Selecting a Namespace
+</Step>
+<Step title="Configure a node pool">
 
-Your backend and clients select a namespace through the Rivet endpoint URL, which embeds the namespace name and a token scoped to it:
+Create a pool in the namespace before connecting nodes:
 
 ```bash
-RIVET_ENDPOINT=https://production:sk_xxxxx@api.rivet.dev
+curl -X PUT "$RIVET_API/pools/default?namespace=staging" \
+  -H "Authorization: Bearer $RIVET_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"metadata":{"environment":"staging"}}'
 ```
 
-The [Management API](/docs/debugging) takes the namespace as a `?namespace=` query parameter on every request, and the CLI takes `--namespace`. In each case the token you present must belong to that namespace.
+See [Nodes & Node Pools](/docs/nodes) for pool settings.
+
+</Step>
+<Step title="Connect your app">
+
+Set the namespace slug in the node's private endpoint and start the registry with `registry.start()`:
+
+```bash
+RIVET_ENDPOINT=https://staging:<rivet-token>@rivet.mycompany.com
+```
+
+</Step>
+</Steps>
+
+## List namespaces
+
+```bash
+curl "$RIVET_API/namespaces?limit=100" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
+```
+
+The response contains `namespaces` and `pagination.cursor`. Pass the cursor as `cursor` on the next request. Filter a single namespace with `?name=staging`.
+
+## Choose a namespace
+
+An endpoint can include the slug, as above, or you can set `RIVET_NAMESPACE=staging` separately. Management API requests use `?namespace=staging`.
+
+The `default` namespace is provided for local development. On a shared control plane, create a namespace for each environment before connecting nodes or creating Actors.

@@ -8,7 +8,7 @@ description: "Forward a raw HTTP request to an actor's onRequest handler. The me
 Use this when an actor exposes its own HTTP routes, streams responses (for example Server-Sent Events), or needs to accept non-JSON payloads. The response is whatever the actor's `onRequest` handler returns.
 
 ```http
-ANY https://api.rivet.dev/gateway/{actor}/request/{path}
+ANY https://rivet.example.com/gateway/{actor}/request/{path}
 ```
 
 Accepts `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`.
@@ -18,7 +18,7 @@ Accepts `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`.
 <CodeGroup>
 
 ```bash cURL
-curl -X POST "https://api.rivet.dev/gateway/counter/request/increment?rvt-namespace=$RIVET_NAMESPACE&rvt-method=getOrCreate&rvt-key=my-counter&rvt-pool=default" \
+curl -X POST "https://rivet.example.com/gateway/counter/request/increment?rvt-namespace=$RIVET_NAMESPACE&rvt-method=getOrCreate&rvt-key=my-counter&rvt-pool=default" \
   -H "x-rivet-token: $RIVET_TOKEN"
 ```
 
@@ -28,7 +28,7 @@ curl -X POST "https://api.rivet.dev/gateway/counter/request/increment?rvt-namesp
 
 ## Authentication
 
-Send a token in the `x-rivet-token` header, inline in the path as `{actor_id}@{token}`, or in the `rvt-token` query parameter. Use a public token (`pk_`) from browsers and a secret token (`sk_`) from trusted backends. See [Authentication](/docs/api/authentication).
+Send a token in the `x-rivet-token` header, inline in the path as `{actor_id}@{token}`, or in the `rvt-token` query parameter. Use a [scoped token](/docs/jwt) from browsers and your Rivet token from trusted backends. See [Authentication](/docs/api/authentication).
 
 ## Path Parameters
 

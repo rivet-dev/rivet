@@ -4,13 +4,13 @@ description: "Open the Inspector WebSocket used for live actor inspection."
 ---
 
 <Note>
-The inspector API powers the Rivet dashboard and is subject to change without notice. Do not build production integrations on it.
+The inspector API is subject to change without notice. Do not build production integrations on it.
 </Note>
 
-The inspector connection exposes the same live data used by the Rivet dashboard. `{actor}` is an actor ID. See [Actor Routing](/docs/api/actor-routing).
+The inspector connection streams live data about one actor. `{actor}` is an actor ID. See [Actor Routing](/docs/api/actor-routing).
 
 ```http
-GET wss://api.rivet.dev/gateway/{actor}/inspector/connect?protocol_version=6
+GET wss://rivet.example.com/gateway/{actor}/inspector/connect?protocol_version=6
 ```
 
 ## Handshake
@@ -26,7 +26,7 @@ Pass these WebSocket subprotocols in this order:
 | `rivet_token.{token}` | Authenticates the gateway request. |
 | `rivet_inspector_token.{token}` | Authenticates access to the inspector. |
 
-Each actor stores its inspector token in its KV storage under the single byte `0x03`. Read it through the control plane with `GET /actors/{actor_id}/kv/keys/Aw==?namespace={namespace}` using a namespace token, then base64-decode the response `value` before adding it to `rivet_inspector_token.<token>`.
+{/* TODO(code): document how to read an Actor's inspector token once an API returns it (ACT-6493). */}
 
 Set `protocol_version=6` for the message shapes on this page. Supported values are `1` through `6`. Omitting the parameter selects the legacy version 5 framing, which embeds a version in every message.
 
@@ -41,7 +41,7 @@ import {
 } from "rivetkit/inspector/client";
 
 const ws = new WebSocket(
-  `wss://api.rivet.dev/gateway/${actorId}/inspector/connect?protocol_version=${CURRENT_VERSION}`,
+  `wss://rivet.example.com/gateway/${actorId}/inspector/connect?protocol_version=${CURRENT_VERSION}`,
   [
     "rivet",
     "rivet_target.actor",

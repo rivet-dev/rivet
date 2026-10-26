@@ -15,7 +15,7 @@ A per-user profile actor. Alice can reach `user:alice` and nothing else, enforce
 
 <Steps>
 
-<Step title="Keep the admin token on the backend">
+<Step title="Keep the Rivet token on the backend">
 
 Only your server holds a credential that can mint tokens. Set it once:
 
@@ -25,7 +25,7 @@ export RIVET_NAMESPACE="production"
 export RIVET_ADMIN_TOKEN="$(openssl rand -hex 32)"
 ```
 
-The admin token reaches every actor in every namespace, so it never leaves your backend. See [Configuration](/docs/deploy/self-host/control-plane/configuration#admin-token).
+This is your Rivet token, the control plane's `auth.admin_token` value. It works in every namespace, so it never leaves your backend. See [Configuration](/docs/deploy/self-host/control-plane/configuration#rivet-token).
 
 </Step>
 

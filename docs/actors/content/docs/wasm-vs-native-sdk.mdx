@@ -1,15 +1,15 @@
 ---
 title: "WASM vs Native SDK"
-description: "Compare native and WebAssembly RivetKit runtimes, including platform compatibility, performance tradeoffs, and deployment constraints."
+description: "Compare the native and WebAssembly RivetKit runtimes and when to use each."
 skill: true
 ---
 
 RivetKit ships two runtimes for executing actor logic. Most projects use the
-native runtime automatically. Edge and serverless platforms that cannot run
-native binaries use the WebAssembly runtime.
+native runtime automatically. Runtimes that cannot load native binaries use
+the WebAssembly runtime.
 
 - **Native**: Default. Runs on Node.js and Bun via native bindings. Best performance.
-- **WebAssembly (wasm)**: Runs anywhere a `WebAssembly.Module` can be instantiated, including Cloudflare Workers, Supabase Edge Functions, and Deno Deploy.
+- **WebAssembly (wasm)**: Runs anywhere a `WebAssembly.Module` can be instantiated.
 
 ## Native runtime
 
@@ -21,35 +21,10 @@ support on Node.js and Bun.
 
 ## WebAssembly runtime
 
-Edge platforms run on isolates (V8, Deno) that cannot load native binaries, so
-RivetKit provides a WebAssembly build of its core runtime in the
-`@rivetkit/rivetkit-wasm` package. You select it with `runtime: "wasm"` and pass
-the wasm bindings and binary through the `wasm` option.
-
-### Recommended: use a platform package
-
-For supported platforms, use the dedicated package instead of wiring the wasm
-runtime by hand. They install the wasm runtime, load the binary, and (on
-Cloudflare) provide the outbound WebSocket the control plane tunnel needs.
-
-- **Cloudflare Workers**: [`@rivetkit/cloudflare-workers`](/actors/docs/quickstart/cloudflare)
-- **Supabase Edge Functions**: [`@rivetkit/supabase`](/actors/docs/quickstart/supabase)
-
-```typescript @nocheck
-// Cloudflare Workers
-import { actor } from "rivetkit";
-import { createHandler } from "@rivetkit/cloudflare-workers";
-
-const counter = actor({ state: { count: 0 }, actions: {} });
-
-export default createHandler({ use: { counter } });
-```
-
-### Manual configuration
-
-For platforms without a dedicated package, configure the wasm runtime directly.
-Pass the bindings from `@rivetkit/rivetkit-wasm` and the wasm binary as
-`initInput`. `initInput` accepts a `Uint8Array`, `URL`, `Response`, or a
+Some runtimes cannot load native binaries, so RivetKit provides a WebAssembly
+build of its core runtime in the `@rivetkit/rivetkit-wasm` package. Select it
+with `runtime: "wasm"` and pass the wasm bindings and binary through the `wasm`
+option. `initInput` accepts a `Uint8Array`, `URL`, `Response`, or a
 `WebAssembly.Module`.
 
 ```typescript @nocheck
@@ -66,13 +41,9 @@ const registry = setup({
 });
 ```
 
-On platforms without an outbound `new WebSocket(url)` constructor (such as
-Cloudflare Workers), you must also install a fetch-based `globalThis.WebSocket`
-shim so the actor can open its tunnel to the control plane. The platform packages handle
-this for you, which is why they are recommended.
+The process still runs as a long-lived node that keeps an outbound WebSocket to
+the control plane, so the runtime must provide `new WebSocket(url)`.
 
 ## Related
 
-- [Workers & Pools](/docs/workers)
-- [Cloudflare Workers Quickstart](/actors/docs/quickstart/cloudflare)
-- [Supabase Functions Quickstart](/actors/docs/quickstart/supabase)
+- [Architecture](/docs/architecture)

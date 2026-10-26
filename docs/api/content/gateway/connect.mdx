@@ -20,7 +20,7 @@ Connection options travel as WebSocket subprotocols in the `Sec-WebSocket-Protoc
 Every message in both directions is a JSON object of the form `{ "body": { "tag": "<Message>", "val": { ... } } }`. The server sends `Init` first; nothing else arrives before it. There is no ping or heartbeat message. Rely on WebSocket ping frames or your own timeout to detect a dead connection.
 
 ```http
-GET wss://api.rivet.dev/gateway/{actor}/connect
+GET wss://rivet.example.com/gateway/{actor}/connect
 ```
 
 ## Handshake

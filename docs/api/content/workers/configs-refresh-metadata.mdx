@@ -8,7 +8,7 @@ description: "Fetch and store fresh metadata for a serverless worker configurati
 The endpoint refreshes the first serverless configuration it finds across datacenters. It fails when the worker name has no serverless configuration.
 
 ```http
-POST https://api.rivet.dev/runner-configs/{runner_name}/refresh-metadata
+POST https://rivet.example.com/runner-configs/{runner_name}/refresh-metadata
 ```
 
 ## Examples
@@ -16,7 +16,7 @@ POST https://api.rivet.dev/runner-configs/{runner_name}/refresh-metadata
 <CodeGroup>
 
 ```bash cURL
-curl -X POST "https://api.rivet.dev/runner-configs/$RUNNER_NAME/refresh-metadata?namespace=$RIVET_NAMESPACE" \
+curl -X POST "https://rivet.example.com/runner-configs/$RUNNER_NAME/refresh-metadata?namespace=$RIVET_NAMESPACE" \
   -H "Authorization: Bearer $RIVET_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}'

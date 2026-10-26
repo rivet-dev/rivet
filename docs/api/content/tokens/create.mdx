@@ -8,7 +8,7 @@ description: "Issue a scoped token. Use this to mint short-lived tokens that gra
 Each grant names a resource type, a target (`"any"` or a specific `{ "id": ... }`), and the operations it allows. The RivetKit client wraps this as `handle.issueToken()`.
 
 ```http
-POST https://api.rivet.dev/auth/tokens
+POST https://rivet.example.com/auth/tokens
 ```
 
 ## Examples
@@ -16,7 +16,7 @@ POST https://api.rivet.dev/auth/tokens
 <CodeGroup>
 
 ```bash cURL
-curl -X POST "https://api.rivet.dev/auth/tokens" \
+curl -X POST "https://rivet.example.com/auth/tokens" \
   -H "Authorization: Bearer $RIVET_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -73,6 +73,6 @@ Content type: `application/json`.
 {
   "expires_ts": 1700000000000,
   "issued_ts": 1700000000000,
-  "token": "sk_..."
+  "token": "<token>"
 }
 ```
