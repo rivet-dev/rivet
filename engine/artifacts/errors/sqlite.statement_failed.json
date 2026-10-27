@@ -1,0 +1,5 @@
+{
+  "code": "statement_failed",
+  "group": "sqlite",
+  "message": "SQLite statement failed."
+}
