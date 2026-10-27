@@ -1043,8 +1043,23 @@
 					"statuses": []
 				},
 				{
+					"code": "deferred_commits_unsupported",
+					"message": "SQLite deferred commits are unavailable.",
+					"statuses": []
+				},
+				{
+					"code": "durability_failed",
+					"message": "SQLite commits could not be made durable.",
+					"statuses": []
+				},
+				{
 					"code": "invalid_bind_parameter",
 					"message": "Invalid SQLite bind parameter.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_commit_ticket",
+					"message": "Invalid SQLite commit ticket.",
 					"statuses": []
 				},
 				{
@@ -1075,6 +1090,16 @@
 				{
 					"code": "remote_unavailable",
 					"message": "Remote SQLite is unavailable.",
+					"statuses": []
+				},
+				{
+					"code": "statement_failed",
+					"message": "SQLite statement failed.",
+					"statuses": []
+				},
+				{
+					"code": "sync_unsupported",
+					"message": "Synchronous SQLite is unavailable.",
 					"statuses": []
 				},
 				{

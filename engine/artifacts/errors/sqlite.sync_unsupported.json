@@ -1,0 +1,5 @@
+{
+  "code": "sync_unsupported",
+  "group": "sqlite",
+  "message": "Synchronous SQLite is unavailable."
+}
