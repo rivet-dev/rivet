@@ -315,7 +315,7 @@ impl ActorContext {
 	#[napi]
 	pub fn sql(&self) -> JsNativeDatabase {
 		JsNativeDatabase::new(
-			self.inner.invocation_sql(),
+			self.inner.invocation_sql().for_host_thread(),
 			Some(self.inner.actor_id().to_owned()),
 		)
 	}

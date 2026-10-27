@@ -90,7 +90,12 @@ export interface SqliteDatabase {
 		sql: string,
 		callback?: (row: unknown[], columns: string[]) => void,
 	): Promise<void>;
+	execSync?(
+		sql: string,
+		callback?: (row: unknown[], columns: string[]) => void,
+	): void;
 	execute(sql: string, params?: SqliteBindings): Promise<SqliteExecuteResult>;
+	executeSync?(sql: string, params?: SqliteBindings): SqliteExecuteResult;
 	executeBatch(
 		statements: SqliteBatchStatement[],
 	): Promise<SqliteExecuteResult[]>;
@@ -98,12 +103,31 @@ export interface SqliteDatabase {
 		timeoutMs?: number,
 		name?: string,
 	): Promise<SqliteTransactionDatabase>;
+	beginTransactionSync?(
+		timeoutMs?: number,
+		name?: string,
+	): SynchronousSqliteTransactionDatabase;
 	run(sql: string, params?: SqliteBindings): Promise<void>;
 	query(sql: string, params?: SqliteBindings): Promise<SqliteQueryResult>;
 	nativeMetrics?():
 		| SqliteNativeMetrics
 		| Promise<SqliteNativeMetrics | null>
 		| null;
+	/**
+	 * Returns the ticket of the latest local commit. Synchronous writes return before they are
+	 * durable; pass the ticket to `whenDurable` before releasing output that depends on them.
+	 */
+	commitTicket?(): number;
+	/**
+	 * Resolves once the commit `ticket` names and every earlier commit are durable. Rejects with
+	 * `sqlite.durability_failed` once the database broke and the actor is restarting.
+	 */
+	whenDurable?(ticket: number): Promise<void>;
+	/**
+	 * Restarts the owning actor from durable state. Every later write fails, including the final
+	 * state save. For native database providers whose in-memory state can no longer be trusted.
+	 */
+	abortGeneration?(reason: string): void;
 	close(): Promise<void>;
 }
 
@@ -112,10 +136,25 @@ export interface SqliteTransactionDatabase {
 		sql: string,
 		callback?: (row: unknown[], columns: string[]) => void,
 	): Promise<void>;
+	execSync?(
+		sql: string,
+		callback?: (row: unknown[], columns: string[]) => void,
+	): void;
 	execute(sql: string, params?: SqliteBindings): Promise<SqliteExecuteResult>;
+	executeSync?(sql: string, params?: SqliteBindings): SqliteExecuteResult;
 	commit(): Promise<void>;
 	rollback(): Promise<void>;
 }
+
+export type SynchronousSqliteTransactionDatabase = SqliteTransactionDatabase & {
+	execSync(
+		sql: string,
+		callback?: (row: unknown[], columns: string[]) => void,
+	): void;
+	executeSync(sql: string, params?: SqliteBindings): SqliteExecuteResult;
+	commitSync(): void;
+	rollbackSync(): void;
+};
 
 /**
  * Provider for opening native databases from the active runtime.
