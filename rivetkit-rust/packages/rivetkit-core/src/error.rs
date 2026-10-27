@@ -360,4 +360,45 @@ pub(crate) enum SqliteRuntimeError {
 		"Remote SQLite generation is stale: {reason}"
 	)]
 	RemoteFenceMismatch { reason: String },
+
+	#[error(
+		"deferred_commits_unsupported",
+		"SQLite deferred commits are unavailable.",
+		"SQLite deferred commits require local native SQLite. Turn off remote SQLite for this actor, or do not opt it into deferred commits."
+	)]
+	DeferredCommitsUnsupported,
+
+	#[error(
+		"statement_failed",
+		"SQLite statement failed.",
+		"SQLite statement failed: {message} (SQLite result code {code}, error offset {offset:?})"
+	)]
+	StatementFailed {
+		message: String,
+		/// SQLite's extended result code.
+		code: i32,
+		/// Byte offset into the SQL of the token SQLite blamed, when it named one.
+		offset: Option<u32>,
+	},
+
+	#[error(
+		"sync_unsupported",
+		"Synchronous SQLite is unavailable.",
+		"Synchronous SQLite is unavailable because {reason}."
+	)]
+	SyncUnsupported { reason: String },
+
+	#[error(
+		"durability_failed",
+		"SQLite commits could not be made durable.",
+		"SQLite commits could not be made durable, so the actor is restarting: {message}"
+	)]
+	DurabilityFailed { message: String },
+
+	#[error(
+		"invalid_commit_ticket",
+		"Invalid SQLite commit ticket.",
+		"SQLite commit ticket {ticket} is ahead of the latest commit {current}."
+	)]
+	InvalidCommitTicket { ticket: u64, current: u64 },
 }
