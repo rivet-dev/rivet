@@ -163,6 +163,7 @@ pub fn execute_statement(
 	let c_sql = CString::new(sql).map_err(|err| anyhow!(err.to_string()))?;
 	let mut stmt = ptr::null_mut();
 	let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
+	let _stmt = FinalizeOnDrop(stmt);
 	if rc != SQLITE_OK {
 		return Err(sqlite_error(db, 0, "failed to prepare sqlite statement"));
 	}
@@ -170,32 +171,24 @@ pub fn execute_statement(
 		return Ok(ExecResult { changes: 0 });
 	}
 
-	let result = (|| {
-		refuse_oversize_vacuum(db, stmt)?;
-		if let Some(params) = params {
-			bind_params(db, stmt, params)?;
-		}
-
-		loop {
-			let step_rc = unsafe { sqlite3_step(stmt) };
-			if step_rc == SQLITE_DONE {
-				break;
-			}
-			if step_rc != SQLITE_ROW {
-				return Err(sqlite_error(db, 0, "failed to execute sqlite statement"));
-			}
-		}
-
-		Ok(ExecResult {
-			changes: unsafe { sqlite3_changes(db) as i64 },
-		})
-	})();
-
-	unsafe {
-		sqlite3_finalize(stmt);
+	refuse_oversize_vacuum(db, stmt)?;
+	if let Some(params) = params {
+		bind_params(db, stmt, params)?;
 	}
 
-	result
+	loop {
+		let step_rc = unsafe { sqlite3_step(stmt) };
+		if step_rc == SQLITE_DONE {
+			break;
+		}
+		if step_rc != SQLITE_ROW {
+			return Err(sqlite_error(db, 0, "failed to execute sqlite statement"));
+		}
+	}
+
+	Ok(ExecResult {
+		changes: unsafe { sqlite3_changes(db) as i64 },
+	})
 }
 
 pub fn query_statement(
@@ -206,6 +199,7 @@ pub fn query_statement(
 	let c_sql = CString::new(sql).map_err(|err| anyhow!(err.to_string()))?;
 	let mut stmt = ptr::null_mut();
 	let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
+	let _stmt = FinalizeOnDrop(stmt);
 	if rc != SQLITE_OK {
 		return Err(sqlite_error(db, 0, "failed to prepare sqlite query"));
 	}
@@ -216,39 +210,31 @@ pub fn query_statement(
 		});
 	}
 
-	let result = (|| {
-		refuse_oversize_vacuum(db, stmt)?;
-		if let Some(params) = params {
-			bind_params(db, stmt, params)?;
-		}
-
-		let columns = collect_columns(stmt);
-		let mut rows = Vec::new();
-
-		loop {
-			let step_rc = unsafe { sqlite3_step(stmt) };
-			if step_rc == SQLITE_DONE {
-				break;
-			}
-			if step_rc != SQLITE_ROW {
-				return Err(sqlite_error(db, 0, "failed to step sqlite query"));
-			}
-
-			let mut row = Vec::with_capacity(columns.len());
-			for index in 0..columns.len() {
-				row.push(column_value(stmt, index as i32));
-			}
-			rows.push(row);
-		}
-
-		Ok(QueryResult { columns, rows })
-	})();
-
-	unsafe {
-		sqlite3_finalize(stmt);
+	refuse_oversize_vacuum(db, stmt)?;
+	if let Some(params) = params {
+		bind_params(db, stmt, params)?;
 	}
 
-	result
+	let columns = collect_columns(stmt);
+	let mut rows = Vec::new();
+
+	loop {
+		let step_rc = unsafe { sqlite3_step(stmt) };
+		if step_rc == SQLITE_DONE {
+			break;
+		}
+		if step_rc != SQLITE_ROW {
+			return Err(sqlite_error(db, 0, "failed to step sqlite query"));
+		}
+
+		let mut row = Vec::with_capacity(columns.len());
+		for index in 0..columns.len() {
+			row.push(column_value(stmt, index as i32));
+		}
+		rows.push(row);
+	}
+
+	Ok(QueryResult { columns, rows })
 }
 
 /// Runs one statement and collects its rows. With `max_result_bytes`, the statement stops with
@@ -263,6 +249,7 @@ pub fn execute_single_statement(
 	let mut stmt = ptr::null_mut();
 	let mut tail = ptr::null();
 	let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, &mut tail) };
+	let _stmt = FinalizeOnDrop(stmt);
 	if rc != SQLITE_OK {
 		return Err(sqlite_error(
 			db,
@@ -271,11 +258,6 @@ pub fn execute_single_statement(
 		));
 	}
 	if has_non_whitespace_tail(tail) {
-		if !stmt.is_null() {
-			unsafe {
-				sqlite3_finalize(stmt);
-			}
-		}
 		return Err(SqliteStatementError {
 			code: -1,
 			statement_index: 0,
@@ -292,45 +274,37 @@ pub fn execute_single_statement(
 		});
 	}
 
-	let result = (|| {
-		refuse_oversize_vacuum(db, stmt)?;
-		if let Some(params) = params {
-			bind_params(db, stmt, params)?;
-		}
-
-		let columns = collect_columns(stmt);
-		let mut rows = Vec::new();
-		let mut budget = ResultBudget::new(max_result_bytes);
-		loop {
-			let step_rc = unsafe { sqlite3_step(stmt) };
-			if step_rc == SQLITE_DONE {
-				break;
-			}
-			if step_rc != SQLITE_ROW {
-				return Err(sqlite_error(
-					db,
-					0,
-					"failed to step sqlite execute statement",
-				));
-			}
-
-			rows.push(read_row(stmt, columns.len(), &mut budget)?);
-		}
-
-		let changes = unsafe { sqlite3_changes(db) as i64 };
-		Ok(ExecuteResult {
-			columns,
-			rows,
-			changes,
-			last_insert_row_id: (changes > 0).then(|| unsafe { sqlite3_last_insert_rowid(db) }),
-		})
-	})();
-
-	unsafe {
-		sqlite3_finalize(stmt);
+	refuse_oversize_vacuum(db, stmt)?;
+	if let Some(params) = params {
+		bind_params(db, stmt, params)?;
 	}
 
-	result
+	let columns = collect_columns(stmt);
+	let mut rows = Vec::new();
+	let mut budget = ResultBudget::new(max_result_bytes);
+	loop {
+		let step_rc = unsafe { sqlite3_step(stmt) };
+		if step_rc == SQLITE_DONE {
+			break;
+		}
+		if step_rc != SQLITE_ROW {
+			return Err(sqlite_error(
+				db,
+				0,
+				"failed to step sqlite execute statement",
+			));
+		}
+
+		rows.push(read_row(stmt, columns.len(), &mut budget)?);
+	}
+
+	let changes = unsafe { sqlite3_changes(db) as i64 };
+	Ok(ExecuteResult {
+		columns,
+		rows,
+		changes,
+		last_insert_row_id: (changes > 0).then(|| unsafe { sqlite3_last_insert_rowid(db) }),
+	})
 }
 
 /// Like [`execute_single_statement`], also returning the statement's profile.
@@ -344,6 +318,7 @@ pub fn execute_single_statement_profiled(
 	let mut stmt = ptr::null_mut();
 	let mut tail = ptr::null();
 	let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, &mut tail) };
+	let _stmt = FinalizeOnDrop(stmt);
 	if rc != SQLITE_OK {
 		return Err(sqlite_error(
 			db,
@@ -352,11 +327,6 @@ pub fn execute_single_statement_profiled(
 		));
 	}
 	if has_non_whitespace_tail(tail) {
-		if !stmt.is_null() {
-			unsafe {
-				sqlite3_finalize(stmt);
-			}
-		}
 		return Err(SqliteStatementError {
 			code: -1,
 			statement_index: 0,
@@ -376,56 +346,48 @@ pub fn execute_single_statement_profiled(
 		));
 	}
 
-	let result = (|| {
-		refuse_oversize_vacuum(db, stmt)?;
-		let mut profile = SqliteQueryProfile::default();
-		if let Some(params) = params {
-			bind_params_profiled(db, stmt, params, &mut profile)?;
-		}
-
-		let columns = collect_columns(stmt);
-		profile.result_columns = columns.len() as u64;
-		let mut rows = Vec::new();
-		let mut budget = ResultBudget::new(max_result_bytes);
-		loop {
-			let step_rc = unsafe { sqlite3_step(stmt) };
-			if step_rc == SQLITE_DONE {
-				break;
-			}
-			if step_rc != SQLITE_ROW {
-				return Err(sqlite_error(
-					db,
-					0,
-					"failed to step sqlite execute statement",
-				));
-			}
-
-			rows.push(read_row_profiled(
-				stmt,
-				columns.len(),
-				&mut budget,
-				&mut profile,
-			)?);
-			profile.result_rows = profile.result_rows.saturating_add(1);
-		}
-
-		let changes = unsafe { sqlite3_changes(db) as i64 };
-		Ok((
-			ExecuteResult {
-				columns,
-				rows,
-				changes,
-				last_insert_row_id: (changes > 0).then(|| unsafe { sqlite3_last_insert_rowid(db) }),
-			},
-			profile,
-		))
-	})();
-
-	unsafe {
-		sqlite3_finalize(stmt);
+	refuse_oversize_vacuum(db, stmt)?;
+	let mut profile = SqliteQueryProfile::default();
+	if let Some(params) = params {
+		bind_params_profiled(db, stmt, params, &mut profile)?;
 	}
 
-	result
+	let columns = collect_columns(stmt);
+	profile.result_columns = columns.len() as u64;
+	let mut rows = Vec::new();
+	let mut budget = ResultBudget::new(max_result_bytes);
+	loop {
+		let step_rc = unsafe { sqlite3_step(stmt) };
+		if step_rc == SQLITE_DONE {
+			break;
+		}
+		if step_rc != SQLITE_ROW {
+			return Err(sqlite_error(
+				db,
+				0,
+				"failed to step sqlite execute statement",
+			));
+		}
+
+		rows.push(read_row_profiled(
+			stmt,
+			columns.len(),
+			&mut budget,
+			&mut profile,
+		)?);
+		profile.result_rows = profile.result_rows.saturating_add(1);
+	}
+
+	let changes = unsafe { sqlite3_changes(db) as i64 };
+	Ok((
+		ExecuteResult {
+			columns,
+			rows,
+			changes,
+			last_insert_row_id: (changes > 0).then(|| unsafe { sqlite3_last_insert_rowid(db) }),
+		},
+		profile,
+	))
 }
 
 /// Runs every statement in `sql` and returns the rows of the last one that has columns or
@@ -447,6 +409,7 @@ pub fn exec_statements(
 		let mut stmt = ptr::null_mut();
 		let mut tail = ptr::null();
 		let rc = unsafe { sqlite3_prepare_v2(db, remaining, -1, &mut stmt, &mut tail) };
+		let _stmt = FinalizeOnDrop(stmt);
 		if rc != SQLITE_OK {
 			return Err(sqlite_error(
 				db,
@@ -472,35 +435,26 @@ pub fn exec_statements(
 			};
 		}
 
-		let result = (|| {
-			refuse_oversize_vacuum(db, stmt)?;
-			let columns = collect_columns(stmt);
-			let mut rows = Vec::new();
-			let mut budget = ResultBudget::new(max_result_bytes);
-			loop {
-				let step_rc = unsafe { sqlite3_step(stmt) };
-				if step_rc == SQLITE_DONE {
-					break;
-				}
-				if step_rc != SQLITE_ROW {
-					return Err(sqlite_error(
-						db,
-						statement_index,
-						"failed to step sqlite exec statement",
-					));
-				}
-
-				rows.push(read_row(stmt, columns.len(), &mut budget)?);
+		refuse_oversize_vacuum(db, stmt)?;
+		let columns = collect_columns(stmt);
+		let mut rows = Vec::new();
+		let mut budget = ResultBudget::new(max_result_bytes);
+		loop {
+			let step_rc = unsafe { sqlite3_step(stmt) };
+			if step_rc == SQLITE_DONE {
+				break;
+			}
+			if step_rc != SQLITE_ROW {
+				return Err(sqlite_error(
+					db,
+					statement_index,
+					"failed to step sqlite exec statement",
+				));
 			}
 
-			Ok((columns, rows))
-		})();
-
-		unsafe {
-			sqlite3_finalize(stmt);
+			rows.push(read_row(stmt, columns.len(), &mut budget)?);
 		}
 
-		let (columns, rows) = result?;
 		if !columns.is_empty() || !rows.is_empty() {
 			final_result = QueryResult { columns, rows };
 		}
@@ -534,6 +488,7 @@ pub fn exec_statements_profiled(
 		let mut stmt = ptr::null_mut();
 		let mut tail = ptr::null();
 		let rc = unsafe { sqlite3_prepare_v2(db, remaining, -1, &mut stmt, &mut tail) };
+		let _stmt = FinalizeOnDrop(stmt);
 		if rc != SQLITE_OK {
 			return Err(sqlite_error(
 				db,
@@ -559,45 +514,36 @@ pub fn exec_statements_profiled(
 			};
 		}
 
-		let result = (|| {
-			refuse_oversize_vacuum(db, stmt)?;
-			let columns = collect_columns(stmt);
-			let mut profile = SqliteQueryProfile {
-				result_columns: columns.len() as u64,
-				..Default::default()
-			};
-			let mut rows = Vec::new();
-			let mut budget = ResultBudget::new(max_result_bytes);
-			loop {
-				let step_rc = unsafe { sqlite3_step(stmt) };
-				if step_rc == SQLITE_DONE {
-					break;
-				}
-				if step_rc != SQLITE_ROW {
-					return Err(sqlite_error(
-						db,
-						statement_index,
-						"failed to step sqlite exec statement",
-					));
-				}
-
-				rows.push(read_row_profiled(
-					stmt,
-					columns.len(),
-					&mut budget,
-					&mut profile,
-				)?);
-				profile.result_rows = profile.result_rows.saturating_add(1);
+		refuse_oversize_vacuum(db, stmt)?;
+		let columns = collect_columns(stmt);
+		let mut profile = SqliteQueryProfile {
+			result_columns: columns.len() as u64,
+			..Default::default()
+		};
+		let mut rows = Vec::new();
+		let mut budget = ResultBudget::new(max_result_bytes);
+		loop {
+			let step_rc = unsafe { sqlite3_step(stmt) };
+			if step_rc == SQLITE_DONE {
+				break;
+			}
+			if step_rc != SQLITE_ROW {
+				return Err(sqlite_error(
+					db,
+					statement_index,
+					"failed to step sqlite exec statement",
+				));
 			}
 
-			Ok((columns, rows, profile))
-		})();
-
-		unsafe {
-			sqlite3_finalize(stmt);
+			rows.push(read_row_profiled(
+				stmt,
+				columns.len(),
+				&mut budget,
+				&mut profile,
+			)?);
+			profile.result_rows = profile.result_rows.saturating_add(1);
 		}
 
-		let (columns, rows, profile) = result?;
 		if !columns.is_empty() || !rows.is_empty() {
 			final_result = QueryResult { columns, rows };
 			final_profile = profile;
@@ -897,18 +843,29 @@ fn sql_words(sql: &str) -> Vec<&str> {
 fn pragma_i64(db: *mut sqlite3, sql: &CStr) -> Option<i64> {
 	let mut stmt = ptr::null_mut();
 	let rc = unsafe { sqlite3_prepare_v2(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
+	let _stmt = FinalizeOnDrop(stmt);
 	if rc != SQLITE_OK || stmt.is_null() {
 		return None;
 	}
-	let value = if unsafe { sqlite3_step(stmt) } == SQLITE_ROW {
+	if unsafe { sqlite3_step(stmt) } == SQLITE_ROW {
 		Some(unsafe { sqlite3_column_int64(stmt, 0) })
 	} else {
 		None
-	};
-	unsafe {
-		sqlite3_finalize(stmt);
 	}
-	value
+}
+
+/// Finalizes a prepared statement when its owner leaves scope, including by an error return or
+/// a panic, so no statement outlives the call that prepared it.
+struct FinalizeOnDrop(*mut sqlite3_stmt);
+
+impl Drop for FinalizeOnDrop {
+	fn drop(&mut self) {
+		// SAFETY: the statement was prepared by the call that owns this guard and is used by no
+		// one else. Finalizing a null statement is a no-op.
+		unsafe {
+			sqlite3_finalize(self.0);
+		}
+	}
 }
 
 fn has_non_whitespace_tail(tail: *const c_char) -> bool {
