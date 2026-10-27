@@ -1022,6 +1022,7 @@ impl From<JsActorConfig> for ActorConfigInput {
 			icon: value.icon,
 			has_database: value.has_database,
 			remote_sqlite: value.remote_sqlite,
+			sqlite_deferred_commits: None,
 			sqlite_profiling: value.sqlite_profiling.map(Into::into),
 			tracing: value.tracing.map(Into::into),
 			enable_actor_runtime_socket: value.enable_actor_runtime_socket,

@@ -1,0 +1,5 @@
+{
+  "code": "invalid_commit_ticket",
+  "group": "sqlite",
+  "message": "Invalid SQLite commit ticket."
+}

@@ -1951,7 +1951,14 @@ impl ActorTask {
 					"failed to roll back manual sqlite transaction before the final state save"
 				);
 			}
-			let final_save = self.save_final_state().await;
+			// A generation that reported a SQLite crash cannot persist, so its final save would
+			// only fail and skip the cleanup below that releases SQLite. The engine restarts the
+			// actor from durable state.
+			let final_save = if self.ctx.sql().generation_failed() {
+				Ok(())
+			} else {
+				self.save_final_state().await
+			};
 			// No later save can run, so outstanding waiters learn their state was not written.
 			self.ctx.fail_unpersisted_save_requests();
 			final_save?;

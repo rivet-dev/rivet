@@ -218,6 +218,10 @@ pub struct ActorConfig {
 	/// on the TS side). Gates the inspector database tab.
 	pub has_database: bool,
 	pub remote_sqlite: bool,
+	/// Commits SQLite writes locally and makes them durable in the background, so writes and
+	/// state saves resolve before they are durable. Only for embedders that gate every output
+	/// on `SqliteDb::when_durable`. Not user-facing. Requires local native SQLite.
+	pub sqlite_deferred_commits: bool,
 	pub sqlite_profiling: SqliteProfilingConfig,
 	pub tracing: Arc<ActorTracingConfig>,
 	/// Enables the experimental Actor Runtime Socket.
@@ -258,6 +262,7 @@ pub struct ActorConfigInput {
 	pub icon: Option<String>,
 	pub has_database: Option<bool>,
 	pub remote_sqlite: Option<bool>,
+	pub sqlite_deferred_commits: Option<bool>,
 	pub sqlite_profiling: Option<SqliteProfilingConfigInput>,
 	pub tracing: Option<ActorTracingConfig>,
 	pub enable_actor_runtime_socket: Option<bool>,
@@ -291,6 +296,7 @@ impl ActorConfig {
 			icon: config.icon,
 			has_database: config.has_database.unwrap_or(false),
 			remote_sqlite: config.remote_sqlite.unwrap_or(false),
+			sqlite_deferred_commits: config.sqlite_deferred_commits.unwrap_or(false),
 			sqlite_profiling: config
 				.sqlite_profiling
 				.map(SqliteProfilingConfig::from_input)
@@ -411,6 +417,7 @@ impl Default for ActorConfig {
 			icon: None,
 			has_database: false,
 			remote_sqlite: false,
+			sqlite_deferred_commits: false,
 			sqlite_profiling: SqliteProfilingConfig::default(),
 			tracing: Arc::default(),
 			enable_actor_runtime_socket: false,
