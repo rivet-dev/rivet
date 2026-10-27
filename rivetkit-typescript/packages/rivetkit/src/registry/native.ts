@@ -61,7 +61,11 @@ import {
 	db as defaultDb,
 	registerNativeStateTransactionOpener,
 } from "@/common/database/mod";
-import { wrapJsNativeDatabase } from "@/common/database/native-database";
+import {
+	type JsNativeDatabaseLike,
+	type JsNativeSynchronousTransactionLike,
+	wrapJsNativeDatabase,
+} from "@/common/database/native-database";
 import { assertJsonCompatValue, type JsonCompatValue } from "@/common/encoding";
 import { isResponseLike } from "@/common/fetch-like";
 import {
@@ -125,6 +129,7 @@ import type {
 	RuntimeScheduledFireInfo,
 	RuntimeServeConfig,
 	RuntimeStateDeltaPayload,
+	SqliteTransactionHandle,
 	WebSocketHandle,
 } from "./runtime";
 import { servicesBinaryUnavailable } from "./runtime";
@@ -655,6 +660,26 @@ async function closeNativeDatabaseClient(
 	}
 }
 
+function createNativeSqlTransaction(
+	runtime: CoreRuntime,
+	transaction: SqliteTransactionHandle,
+): JsNativeSynchronousTransactionLike {
+	return {
+		exec: (sql) => runtime.actorSqlTransactionExec(transaction, sql),
+		execSync: (sql) =>
+			runtime.actorSqlTransactionExecSync(transaction, sql),
+		execute: (sql, params) =>
+			runtime.actorSqlTransactionExecute(transaction, sql, params),
+		executeSync: (sql, params) =>
+			runtime.actorSqlTransactionExecuteSync(transaction, sql, params),
+		commit: () => runtime.actorSqlTransactionCommit(transaction),
+		commitSync: () => runtime.actorSqlTransactionCommitSync(transaction),
+		rollback: () => runtime.actorSqlTransactionRollback(transaction),
+		rollbackSync: () =>
+			runtime.actorSqlTransactionRollbackSync(transaction),
+	};
+}
+
 function getOrCreateNativeSqlDatabase(
 	runtime: CoreRuntime,
 	ctx: ActorContextHandle,
@@ -665,9 +690,12 @@ function getOrCreateNativeSqlDatabase(
 		return cachedDatabase;
 	}
 
-	const database = wrapJsNativeDatabase({
+	const bindings: JsNativeDatabaseLike = {
 		exec: (sql) => runtime.actorSqlExec(ctx, sql),
+		execSync: (sql) => runtime.actorSqlExecSync(ctx, sql),
 		execute: (sql, params) => runtime.actorSqlExecute(ctx, sql, params),
+		executeSync: (sql, params) =>
+			runtime.actorSqlExecuteSync(ctx, sql, params),
 		executeBatch: (statements) =>
 			runtime.actorSqlExecuteBatch(ctx, statements),
 		beginTransaction: async (timeoutMs, name) => {
@@ -676,19 +704,15 @@ function getOrCreateNativeSqlDatabase(
 				timeoutMs,
 				name,
 			);
-			return {
-				exec: (sql) =>
-					runtime.actorSqlTransactionExec(transaction, sql),
-				execute: (sql, params) =>
-					runtime.actorSqlTransactionExecute(
-						transaction,
-						sql,
-						params,
-					),
-				commit: () => runtime.actorSqlTransactionCommit(transaction),
-				rollback: () =>
-					runtime.actorSqlTransactionRollback(transaction),
-			};
+			return createNativeSqlTransaction(runtime, transaction);
+		},
+		beginTransactionSync: (timeoutMs, name) => {
+			const transaction = runtime.actorSqlBeginTransactionSync(
+				ctx,
+				timeoutMs,
+				name,
+			);
+			return createNativeSqlTransaction(runtime, transaction);
 		},
 		beginStateTransaction: async (timeoutMs, context) => {
 			const scope = context as NativeStateTransactionScope | undefined;
@@ -728,8 +752,14 @@ function getOrCreateNativeSqlDatabase(
 		run: (sql, params) => runtime.actorSqlRun(ctx, sql, params),
 		metrics: () => runtime.actorSqlMetrics(ctx),
 		takeLastKvError: () => runtime.actorSqlTakeLastKvError(ctx),
+		open: () => runtime.actorSqlOpen(ctx),
+		commitTicket: () => runtime.actorSqlCommitTicket(ctx),
+		whenDurable: (ticket) => runtime.actorSqlWhenDurable(ctx, ticket),
+		abortGeneration: (reason) =>
+			runtime.actorSqlAbortGeneration(ctx, reason),
 		close: () => runtime.actorSqlClose(ctx),
-	});
+	};
+	const database = wrapJsNativeDatabase(bindings);
 	runtimeState.sql = database;
 	return database;
 }
@@ -3185,10 +3215,12 @@ export class ActorContextHandleAdapter {
 				{
 					open: async (requestedActorId) => {
 						void requestedActorId;
-						return getOrCreateNativeSqlDatabase(
+						const database = getOrCreateNativeSqlDatabase(
 							this.#runtime,
 							this.#ctx,
 						);
+						await database.open();
+						return database;
 					},
 				},
 				async (timeoutMs, context) =>
@@ -3985,6 +4017,8 @@ function buildActorTracingConfig(
 	};
 }
 
+const SQLITE_DEFERRED_COMMITS = Symbol.for("rivetkit.sqlite.deferredCommits");
+
 function buildActorConfig(
 	definition: AnyActorDefinition,
 	registryConfig: RegistryConfig,
@@ -3998,12 +4032,18 @@ function buildActorConfig(
 	const sqliteProfiling = (
 		config.db as { sqliteProfiling?: SqliteProfilingOptions } | undefined
 	)?.sqliteProfiling;
+	// Internal opt-in for embedders, such as Open Orange, that gate outputs on `whenDurable`.
+	const sqliteDeferredCommits =
+		(config.db as Record<symbol, unknown> | undefined)?.[
+			SQLITE_DEFERRED_COMMITS
+		] === true;
 
 	return {
 		name: options.name as string | undefined,
 		icon: options.icon as string | undefined,
 		hasDatabase: true,
 		remoteSqlite: usesRemoteSqlite,
+		sqliteDeferredCommits: sqliteDeferredCommits || undefined,
 		sqliteProfiling,
 		tracing: buildActorTracingConfig(
 			definition.config.actions,
