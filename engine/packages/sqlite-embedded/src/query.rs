@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::ffi::{CStr, CString};
 use std::fmt;
-use std::os::raw::c_char;
+use std::os::raw::{c_char, c_int};
 use std::ptr;
 
 use anyhow::{Result, anyhow};
@@ -29,9 +29,14 @@ pub struct SqliteQueryProfile {
 
 #[derive(Debug)]
 pub struct SqliteStatementError {
+	/// SQLite's extended result code, or -1 when the error did not come from SQLite.
 	pub code: i32,
 	pub statement_index: u32,
 	pub message: String,
+	/// SQLite's own message, without the operation that failed.
+	pub detail: String,
+	/// Byte offset into the statement's SQL of the token SQLite blamed, when it named one.
+	pub offset: Option<u32>,
 }
 
 impl fmt::Display for SqliteStatementError {
@@ -262,6 +267,8 @@ pub fn execute_single_statement(
 			code: -1,
 			statement_index: 0,
 			message: "sqlite execute only supports a single statement".to_owned(),
+			detail: "sqlite execute only supports a single statement".to_owned(),
+			offset: None,
 		}
 		.into());
 	}
@@ -331,6 +338,8 @@ pub fn execute_single_statement_profiled(
 			code: -1,
 			statement_index: 0,
 			message: "sqlite execute only supports a single statement".to_owned(),
+			detail: "sqlite execute only supports a single statement".to_owned(),
+			offset: None,
 		}
 		.into());
 	}
@@ -877,16 +886,23 @@ fn has_non_whitespace_tail(tail: *const c_char) -> bool {
 	bytes.iter().any(|byte| !byte.is_ascii_whitespace())
 }
 
+// The bundled SQLite has `sqlite3_error_offset`, but libsqlite3-sys's default bindings target an
+// older SQLite that predates it.
+unsafe extern "C" {
+	fn sqlite3_error_offset(db: *mut sqlite3) -> c_int;
+}
+
 fn sqlite_error(db: *mut sqlite3, statement_index: u32, context: &str) -> anyhow::Error {
-	let (code, detail) = unsafe {
+	let (code, detail, offset) = unsafe {
 		if db.is_null() {
-			(-1, "unknown sqlite error".to_string())
+			(-1, "unknown sqlite error".to_string(), -1)
 		} else {
 			(
 				sqlite3_extended_errcode(db),
 				CStr::from_ptr(sqlite3_errmsg(db))
 					.to_string_lossy()
 					.into_owned(),
+				sqlite3_error_offset(db),
 			)
 		}
 	};
@@ -894,6 +910,8 @@ fn sqlite_error(db: *mut sqlite3, statement_index: u32, context: &str) -> anyhow
 		code,
 		statement_index,
 		message: format!("{context}: {detail}"),
+		detail,
+		offset: u32::try_from(offset).ok(),
 	}
 	.into()
 }

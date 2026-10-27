@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
 use std::slice;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use crate::page_buffer::{PageBudget, PageBuffer, PageTrace};
@@ -19,6 +19,8 @@ use parking_lot::{Mutex, RwLock};
 use rivet_envoy_protocol as protocol;
 use sqlite_types::{PageBytes, is_head_fence_mismatch};
 use tokio::runtime::Handle;
+use tokio::sync::{Notify, watch};
+use tokio::task::JoinHandle;
 use tracing::Instrument;
 
 use crate::optimization_flags::{
@@ -148,6 +150,79 @@ fn sqlite_now_ms() -> Result<i64> {
 		.try_into()?)
 }
 
+/// When a SQLite commit becomes durable.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CommitMode {
+	/// A commit returns once depot acknowledged it.
+	#[default]
+	Awaited,
+	/// A commit returns once the VFS holds it locally. A background flusher sends held commits
+	/// to depot in order, and `wait_for_flush` reports when a commit became durable.
+	Deferred,
+}
+
+/// Why deferred commits stopped becoming durable. Every error is terminal for the database.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FlushError {
+	/// Depot did not accept a flush before the retry deadline.
+	RetryDeadlineExceeded { attempts: u32, last_error: String },
+	/// Depot's head is not one this VFS's own commits could have produced, so another writer
+	/// changed the database or durable state went backwards.
+	HeadDiverged {
+		expected: Option<u64>,
+		actual: Option<u64>,
+	},
+	/// The flusher stopped before the commits became durable.
+	Aborted(String),
+	/// A caller asked about a commit this generation never made.
+	InvalidSequence { requested: u64, current: u64 },
+}
+
+impl std::fmt::Display for FlushError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::RetryDeadlineExceeded {
+				attempts,
+				last_error,
+			} => write!(
+				f,
+				"sqlite flush retry deadline exceeded after {attempts} attempts: {last_error}"
+			),
+			Self::HeadDiverged { expected, actual } => write!(
+				f,
+				"sqlite durable head diverged: expected {expected:?}, engine has {actual:?}"
+			),
+			Self::Aborted(reason) => write!(f, "sqlite flusher aborted: {reason}"),
+			Self::InvalidSequence { requested, current } => write!(
+				f,
+				"sqlite flush sequence {requested} is ahead of commit sequence {current}"
+			),
+		}
+	}
+}
+
+impl std::error::Error for FlushError {}
+
+/// Why a database stopped serving its generation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DatabaseFailure {
+	/// The database closed normally.
+	Closed,
+	/// The worker thread that owns SQLite stopped.
+	WorkerStopped,
+	/// Locally committed transactions can never become durable.
+	Flush(FlushError),
+}
+
+/// Retry policy of the deferred-commit flusher.
+#[derive(Clone, Debug)]
+pub struct DeferredCommitConfig {
+	/// How long one flush may keep retrying before the database breaks.
+	pub retry_deadline: Duration,
+	pub retry_backoff_min: Duration,
+	pub retry_backoff_max: Duration,
+}
+
 #[derive(Debug, Clone)]
 pub struct VfsConfig {
 	/// The process-wide budget this database's page buffers share. A database opened on a
@@ -161,7 +236,8 @@ pub struct VfsConfig {
 	/// The most pages one transaction may change. Values above Depot's own commit cap,
 	/// `sqlite_types::MAX_COMMIT_DIRTY_PAGES`, are clamped to it.
 	pub max_commit_dirty_pages: usize,
-	
+	pub commit_mode: CommitMode,
+	pub deferred_commit: DeferredCommitConfig,
 }
 
 impl Default for VfsConfig {
@@ -202,7 +278,12 @@ impl VfsConfig {
 			max_pages_per_stage: DEFAULT_MAX_PAGES_PER_STAGE,
 			idle_release_ms: flags.idle_release_ms,
 			max_commit_dirty_pages: sqlite_types::MAX_COMMIT_DIRTY_PAGES,
-			
+			commit_mode: CommitMode::Awaited,
+			deferred_commit: DeferredCommitConfig {
+				retry_deadline: Duration::from_millis(flags.flush_retry_deadline_ms),
+				retry_backoff_min: Duration::from_millis(flags.flush_retry_backoff_min_ms),
+				retry_backoff_max: Duration::from_millis(flags.flush_retry_backoff_max_ms),
+			},
 		}
 	}
 }
@@ -735,10 +816,9 @@ pub struct VfsContext {
 	/// ran the statement to return instead of SQLite's generic message.
 	storage_error: Mutex<Option<SqliteStorageError>>,
 	fatal_error: RwLock<Option<String>>,
-	
-	
-	
-	
+	/// Deferred-commit flush progress. Unused in awaited mode.
+	flush: FlushController,
+	failure_tx: watch::Sender<Option<DatabaseFailure>>,
 	commit_atomic_count: AtomicU64,
 	/// Diagnostic attempts, distinct even when a refused/timed-out commit did not advance commit_total.
 	trace_commit_attempts: AtomicU64,
@@ -802,6 +882,75 @@ struct VfsState {
 	/// hold, so commits discard them instead of sending them. A `SqliteVfs` serves one
 	/// connection for its lifetime, so the flag never outlives the connection that set it.
 	closing: bool,
+	/// Transactions committed locally in deferred mode that depot has not acknowledged yet.
+	/// Reads see these pages before any cache. In deferred mode `head_txid` is the head depot
+	/// last acknowledged, not the head of the newest local commit.
+	overlay: Overlay,
+}
+
+#[derive(Debug, Clone, Default)]
+struct Overlay {
+	pages: BTreeMap<u32, OverlayPage>,
+	/// Sequence of the newest local commit. Commit tickets are these sequences.
+	commit_seq: u64,
+	/// Database size after the newest local commit.
+	db_size_pages: u32,
+	/// Whether a flush of the overlay is on its way to depot, so depot's head may already be
+	/// past `head_txid`.
+	in_flight: bool,
+}
+
+#[derive(Debug, Clone)]
+struct OverlayPage {
+	bytes: PageBytes,
+	/// The local commit that last wrote the page.
+	seq: u64,
+}
+
+/// A snapshot of the overlay on its way to depot as one commit.
+struct FlushBatch {
+	seq: u64,
+	expected_head_txid: Option<u64>,
+	db_size_pages: u32,
+	pages: Vec<BufferedDirtyPage>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct FlushProgress {
+	flushed_seq: u64,
+	error: Option<FlushError>,
+}
+
+struct FlushController {
+	// Forced-sync: read from SQLite VFS callbacks and updated by the flusher without awaiting.
+	progress: Mutex<FlushProgress>,
+	/// Bumped after every change to `progress`, so waiters can await the next one.
+	progress_changed: watch::Sender<u64>,
+	wake: Arc<Notify>,
+	shutdown: AtomicBool,
+	/// Set once the database closes, so a flush failure during close is reported by the close
+	/// instead of as a generation failure.
+	closing: AtomicBool,
+	// Forced-sync: set at registration and taken once at close.
+	task: Mutex<Option<JoinHandle<()>>>,
+}
+
+impl FlushController {
+	fn new() -> Self {
+		Self {
+			progress: Mutex::new(FlushProgress::default()),
+			progress_changed: watch::Sender::new(0),
+			wake: Arc::new(Notify::new()),
+			shutdown: AtomicBool::new(false),
+			closing: AtomicBool::new(false),
+			task: Mutex::new(None),
+		}
+	}
+
+	fn publish_change(&self) {
+		self.progress_changed
+			.send_modify(|version| *version = version.wrapping_add(1));
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -874,7 +1023,8 @@ unsafe impl Sync for VfsContext {}
 pub struct SqliteVfs {
 	_registration: SqliteVfsRegistration,
 	_name: CString,
-	ctx: Box<VfsContext>,
+	/// Shared with the deferred-commit flusher, which holds only a weak reference.
+	ctx: Arc<VfsContext>,
 }
 
 unsafe impl Send for SqliteVfs {}
@@ -934,6 +1084,7 @@ impl VfsState {
 			corked_db_size_pages: 0,
 			closing: false,
 			refused_write_pending: false,
+			overlay: Overlay::default(),
 		};
 		state.cache_page(
 			config,
@@ -1150,6 +1301,7 @@ impl VfsContext {
 		for (pgno, page) in initial_pages.pages {
 			state.seed_page(&config, PageCacheInsertKind::Startup, pgno, page);
 		}
+		state.overlay.db_size_pages = state.db_size_pages;
 
 		Ok(Self {
 			actor_id,
@@ -1165,10 +1317,8 @@ impl VfsContext {
 			transaction_too_large: Mutex::new(None),
 			storage_error: Mutex::new(None),
 			fatal_error: RwLock::new(None),
-			
-			
-			
-			
+			flush: FlushController::new(),
+			failure_tx: watch::Sender::new(None),
 			commit_atomic_count: AtomicU64::new(0),
 			trace_commit_attempts: AtomicU64::new(0),
 			io_methods: Box::new(io_methods),
@@ -1619,9 +1769,201 @@ impl VfsContext {
 	fn mark_fatal(&self, message: String) {
 		self.set_last_error(message.clone());
 		self.state.write().dead = true;
-		let mut fatal_error = self.fatal_error.write();
-		if fatal_error.is_none() {
-			*fatal_error = Some(message);
+		{
+			let mut fatal_error = self.fatal_error.write();
+			if fatal_error.is_none() {
+				*fatal_error = Some(message);
+			}
+		}
+		// A deferred flusher fails the commits it still holds once it sees the database dead.
+		self.flush.wake.notify_one();
+	}
+
+	/// Moves the finished transaction in the write buffer into the overlay as one local commit
+	/// and wakes the flusher. Nothing is sent. A commit that would take the overlay past what
+	/// one depot commit carries first waits for the flusher to drain it, so storage that falls
+	/// behind slows writers down instead of letting the overlay grow without bound.
+	fn commit_locally(&self) -> std::result::Result<(), CommitBufferError> {
+		let page_cap = self.config.commit_page_cap();
+		loop {
+			let mut state = self.state.write();
+			if state.dead {
+				return Err(CommitBufferError::Other(
+					"sqlite actor lost its fence".to_string(),
+				));
+			}
+			let new_pages = state
+				.write_buffer
+				.dirty
+				.keys()
+				.filter(|pgno| !state.overlay.pages.contains_key(pgno))
+				.count();
+			let unflushed_pages = state.overlay.pages.len();
+			if unflushed_pages + new_pages > page_cap {
+				if unflushed_pages == 0 {
+					return Err(self.transaction_too_large_commit_error());
+				}
+				let seq = state.overlay.commit_seq;
+				drop(state);
+				tracing::warn!(
+					actor_id = %self.actor_id,
+					unflushed_pages,
+					new_pages,
+					"sqlite deferred commit backlog is full, waiting for storage to catch up"
+				);
+				self.runtime
+					.block_on(self.wait_for_flush(seq))
+					.map_err(|error| CommitBufferError::Other(error.to_string()))?;
+				continue;
+			}
+
+			let seq = state.overlay.commit_seq.saturating_add(1);
+			let dirty = std::mem::take(&mut state.write_buffer.dirty);
+			for (pgno, bytes) in dirty {
+				state.overlay.pages.insert(pgno, OverlayPage { bytes, seq });
+			}
+			let db_size_pages = state.db_size_pages;
+			// A shrink drops the pages past the new end, which depot truncates with the flush.
+			state
+				.overlay
+				.pages
+				.split_off(&db_size_pages.saturating_add(1));
+			state.overlay.db_size_pages = db_size_pages;
+			state.overlay.commit_seq = seq;
+			state.committed_db_size_pages = db_size_pages;
+			state.write_buffer.in_atomic_write = false;
+			state.refused_write_pending = false;
+			drop(state);
+			self.flush.wake.notify_one();
+			return Ok(());
+		}
+	}
+
+	/// Breaks a deferred database: every later statement fails, every flush wait rejects, and
+	/// the commits it holds locally never become durable.
+	fn break_database(&self, error: FlushError) {
+		let first = {
+			let mut progress = self.flush.progress.lock();
+			let first = progress.error.is_none();
+			if first {
+				progress.error = Some(error.clone());
+			}
+			first
+		};
+		if first {
+			tracing::error!(
+				actor_id = %self.actor_id,
+				generation = ?self.generation,
+				%error,
+				"sqlite deferred commits cannot become durable, breaking the database"
+			);
+		}
+		self.mark_fatal(error.to_string());
+		self.flush.publish_change();
+		if first && !self.flush.closing.load(Ordering::Acquire) {
+			self.failure_tx
+				.send_replace(Some(DatabaseFailure::Flush(error)));
+		}
+	}
+
+	/// A read that found another writer's head ends the generation. In deferred mode it also
+	/// fails the commits held locally, which can no longer become durable.
+	fn handle_read_fence_mismatch(&self, message: String) {
+		match self.config.commit_mode {
+			CommitMode::Awaited => self.mark_fatal(message),
+			CommitMode::Deferred => self.break_database(FlushError::Aborted(message)),
+		}
+	}
+
+	fn commit_seq(&self) -> u64 {
+		self.state.read().overlay.commit_seq
+	}
+
+	fn flushed_seq(&self) -> u64 {
+		self.flush.progress.lock().flushed_seq
+	}
+
+	/// Resolves once the local commit `seq` and every earlier one are durable. An awaited
+	/// database never holds commits, so it resolves at once.
+	async fn wait_for_flush(&self, seq: u64) -> std::result::Result<(), FlushError> {
+		let current = self.commit_seq();
+		if seq > current {
+			return Err(FlushError::InvalidSequence {
+				requested: seq,
+				current,
+			});
+		}
+		let mut changed = self.flush.progress_changed.subscribe();
+		loop {
+			// Marking the version seen before reading progress means a change published after
+			// the read wakes the wait below.
+			changed.borrow_and_update();
+			{
+				let progress = self.flush.progress.lock();
+				if let Some(error) = &progress.error {
+					return Err(error.clone());
+				}
+				if progress.flushed_seq >= seq {
+					return Ok(());
+				}
+			}
+			changed
+				.changed()
+				.await
+				.map_err(|_| FlushError::Aborted("flush progress channel closed".to_string()))?;
+		}
+	}
+
+	/// Checks the head an unfenced deferred-mode read saw. Depot's head may be the head this
+	/// VFS last flushed or, while a flush is on its way, a later head that flush produced.
+	/// Depot sets each commit's head from its own sequence, which can jump by more than one,
+	/// so the check only requires the head to never go back and to only move ahead while a
+	/// flush is in flight.
+	fn check_unfenced_read_head(
+		&self,
+		head_at_request: Option<u64>,
+		head: u64,
+	) -> std::result::Result<(), GetPagesError> {
+		let mut state = self.state.write();
+		let behind = head_at_request.is_some_and(|at_request| head < at_request);
+		let ahead =
+			state.head_txid.is_some_and(|durable| head > durable) && !state.overlay.in_flight;
+		if !behind && !ahead {
+			return Ok(());
+		}
+		// Marking the database dead under the guard keeps a concurrent acknowledgement from
+		// publishing durable progress before the break below.
+		state.dead = true;
+		drop(state);
+		let error = FlushError::HeadDiverged {
+			expected: head_at_request,
+			actual: Some(head),
+		};
+		let message = error.to_string();
+		self.break_database(error);
+		Err(GetPagesError::FenceMismatch(message))
+	}
+
+	/// Whether a page a deferred-mode read fetched must stay out of the caches: the overlay or
+	/// the write buffer holds a newer copy, or a flush became durable during the read, so a
+	/// page depot sent as read-ahead may predate it.
+	fn fetched_page_is_stale(
+		&self,
+		pgno: u32,
+		kind: PageCacheInsertKind,
+		head_at_request: Option<u64>,
+	) -> bool {
+		let state = self.state.read();
+		state.overlay.pages.contains_key(&pgno)
+			|| state.write_buffer.dirty.contains_key(&pgno)
+			|| (kind == PageCacheInsertKind::Prefetch && state.head_txid != head_at_request)
+	}
+
+	async fn wait_for_failure(&self) -> DatabaseFailure {
+		let mut failure = self.failure_tx.subscribe();
+		match failure.wait_for(Option::is_some).await {
+			Ok(failure) => failure.clone().unwrap_or(DatabaseFailure::Closed),
+			Err(_) => DatabaseFailure::Closed,
 		}
 	}
 
@@ -1666,6 +2008,10 @@ impl VfsContext {
 				}
 				if let Some(bytes) = state.corked_page(pgno) {
 					resolved.insert(pgno, Some(bytes.clone()));
+					continue;
+				}
+				if let Some(page) = state.overlay.pages.get(&pgno) {
+					resolved.insert(pgno, Some(page.bytes.clone()));
 					continue;
 				}
 				if let Some((bytes, was_prefetched)) =
@@ -1723,15 +2069,21 @@ impl VfsContext {
 				.saturating_add(missing.len() as u64);
 		});
 
-		let (to_fetch, page_size, db_size_pages, expected_head_txid) = {
+		let deferred = self.config.commit_mode == CommitMode::Deferred;
+		let (to_fetch, page_size, db_size_pages, expected_head_txid, head_at_request, unflushed) = {
 			let state = self.state.read();
 			// The page server plans every prefetch; the client asks for what SQLite missed.
 			let to_fetch = missing.clone();
+			// While local commits are unflushed, a flush can move depot's head during the read,
+			// so the read carries no fence and the response's head is checked below instead.
+			let unflushed = deferred && state.overlay.commit_seq > self.flushed_seq();
 			(
 				to_fetch,
 				state.page_size.max(1),
 				state.db_size_pages,
+				if unflushed { None } else { state.head_txid },
 				state.head_txid,
+				unflushed,
 			)
 		};
 
@@ -1785,6 +2137,8 @@ impl VfsContext {
 		} else {
 			1
 		};
+		let never_committed =
+			self.commit_total.load(Relaxed) == 0 && self.state.read().overlay.commit_seq == 0;
 		let response = match response {
 			Ok(response) => response,
 			Err(err) => {
@@ -1850,7 +2204,11 @@ impl VfsContext {
 				}
 				let response_head_txid = ok.head_txid;
 				if let Some(head_txid) = response_head_txid {
-					self.state.write().head_txid = Some(head_txid);
+					if unflushed {
+						self.check_unfenced_read_head(head_at_request, head_txid)?;
+					} else {
+						self.state.write().head_txid = Some(head_txid);
+					}
 				}
 				let missing_pages = missing.iter().copied().collect::<HashSet<_>>();
 				let prefetch_buffer = self.state.read().prefetch_buffer.clone();
@@ -1882,8 +2240,7 @@ impl VfsContext {
 						}
 					}
 					let bytes = if fetched.bytes.is_none()
-						&& self.commit_total.load(Relaxed) == 0
-						&& missing_pages.contains(&fetched.pgno)
+						&& never_committed && missing_pages.contains(&fetched.pgno)
 						&& fetched.pgno == 1
 					{
 						// An empty file can already have a nonzero inode version. Its
@@ -1905,9 +2262,13 @@ impl VfsContext {
 						} else {
 							PageCacheInsertKind::Prefetch
 						};
+						let stale_for_deferred = deferred
+							&& self.fetched_page_is_stale(fetched.pgno, kind, head_at_request);
 						if kind == PageCacheInsertKind::Prefetch {
 							server_prefetched += 1;
-							if should_cache_page(&self.config, kind, fetched.pgno) {
+							if should_cache_page(&self.config, kind, fetched.pgno)
+								&& !stale_for_deferred
+							{
 								prefetch_buffer.insert_prefetched_traced(
 									fetched.pgno,
 									bytes.clone(),
@@ -1922,16 +2283,20 @@ impl VfsContext {
 							if let Some(trace) = delivered {
 								trace.disposition("consumed");
 							}
-							cache_page(
-								&self.config,
-								&prefetch_buffer,
-								kind,
-								fetched.pgno,
-								bytes.clone(),
-							);
+							if !stale_for_deferred {
+								cache_page(
+									&self.config,
+									&prefetch_buffer,
+									kind,
+									fetched.pgno,
+									bytes.clone(),
+								);
+							}
 						}
 					}
-					resolved.insert(fetched.pgno, bytes);
+					// A requested page already resolved from the write buffer, the cork or the
+					// overlay is newer than depot's copy.
+					resolved.entry(fetched.pgno).or_insert(bytes);
 				}
 				self.prefetch_pages_total
 					.fetch_add(server_prefetched, Relaxed);
@@ -1988,7 +2353,7 @@ impl VfsContext {
 						self.profile_request_limit(),
 					);
 				});
-				if self.commit_total.load(Relaxed) == 0
+				if never_committed
 					&& missing.contains(&1)
 					&& is_initial_main_page_missing(&error.message)
 				{
@@ -2066,6 +2431,11 @@ impl VfsContext {
 						CorkOutcome::Overflow => Err(self.transaction_too_large_commit_error()),
 					};
 				}
+			}
+			if self.config.commit_mode == CommitMode::Deferred {
+				drop(state);
+				self.commit_locally()?;
+				return Ok(CommitWait::Completed(None));
 			}
 
 			BufferedCommitRequest {
@@ -2214,6 +2584,11 @@ impl VfsContext {
 					};
 				}
 			}
+			if self.config.commit_mode == CommitMode::Deferred {
+				drop(state);
+				self.commit_locally()?;
+				return Ok(CommitWait::Completed(()));
+			}
 
 			BufferedCommitRequest {
 				actor_id: self.actor_id.clone(),
@@ -2342,6 +2717,11 @@ impl VfsContext {
 	/// of going to depot. SQLite and its readers see the transactions as committed; none is
 	/// durable until uncorking commits them all at once.
 	fn cork(&self) {
+		// Deferred commits are already held locally and flushed together, so there is nothing
+		// to hold back.
+		if self.config.commit_mode == CommitMode::Deferred {
+			return;
+		}
 		let mut state = self.state.write();
 		if state.corked.is_none() {
 			state.corked = Some(BTreeMap::new());
@@ -2400,6 +2780,292 @@ impl Drop for VfsContext {
 			page_cache_capacity_pages = self.config.page_budget.capacity_pages(),
 			"sqlite vfs close summary"
 		);
+	}
+}
+
+/// Breaks the database if the flusher exits without finishing, for example on a panic.
+struct FlusherExitGuard {
+	ctx: Weak<VfsContext>,
+	armed: bool,
+}
+
+impl Drop for FlusherExitGuard {
+	fn drop(&mut self) {
+		if self.armed
+			&& let Some(ctx) = self.ctx.upgrade()
+		{
+			ctx.break_database(FlushError::Aborted(
+				"background flusher exited unexpectedly".to_string(),
+			));
+		}
+	}
+}
+
+/// Sends the overlay to depot, one commit at a time and in order, until the database closes.
+/// Each flush carries every page the overlay holds, so commits made while one flush is in
+/// flight ride the next one together.
+async fn flusher_task(weak_ctx: Weak<VfsContext>) {
+	let mut guard = FlusherExitGuard {
+		ctx: weak_ctx.clone(),
+		armed: true,
+	};
+	loop {
+		let Some(ctx) = weak_ctx.upgrade() else {
+			guard.armed = false;
+			return;
+		};
+		let batch = {
+			let flushed_seq = ctx.flushed_seq();
+			let mut state = ctx.state.write();
+			if state.dead || state.overlay.commit_seq == flushed_seq {
+				None
+			} else {
+				state.overlay.in_flight = true;
+				Some(FlushBatch {
+					seq: state.overlay.commit_seq,
+					expected_head_txid: state.head_txid,
+					db_size_pages: state.overlay.db_size_pages,
+					pages: state
+						.overlay
+						.pages
+						.iter()
+						.map(|(pgno, page)| BufferedDirtyPage {
+							pgno: *pgno,
+							bytes: page.bytes.clone(),
+						})
+						.collect(),
+				})
+			}
+		};
+
+		let Some(batch) = batch else {
+			if ctx.is_dead() {
+				// Commits still held can never become durable, so their waiters must learn it.
+				if ctx.commit_seq() > ctx.flushed_seq() {
+					let reason = ctx
+						.clone_fatal_error()
+						.unwrap_or_else(|| "sqlite database is broken".to_string());
+					ctx.break_database(FlushError::Aborted(reason));
+				}
+				guard.armed = false;
+				return;
+			}
+			if ctx.flush.shutdown.load(Ordering::Acquire) {
+				guard.armed = false;
+				return;
+			}
+			// `notify_one` stores a permit when nobody waits, so a commit made after the check
+			// above still wakes this wait.
+			let wake = Arc::clone(&ctx.flush.wake);
+			drop(ctx);
+			wake.notified().await;
+			continue;
+		};
+
+		let started_at = Instant::now();
+		let result = ship_flush_batch(&ctx, &batch).await;
+		let head = match result {
+			Ok(head) => head,
+			Err(error) => {
+				ctx.break_database(error);
+				guard.armed = false;
+				return;
+			}
+		};
+
+		let mut state = ctx.state.write();
+		// Durable state and progress publish together. A break that won first keeps every
+		// acknowledgement-side change, including the `flushed_seq` advance, from happening.
+		let mut progress = ctx.flush.progress.lock();
+		if state.dead || progress.error.is_some() {
+			guard.armed = false;
+			return;
+		}
+		state.head_txid = Some(head);
+		for page in &batch.pages {
+			let acknowledged = state
+				.overlay
+				.pages
+				.get(&page.pgno)
+				.is_some_and(|overlay| overlay.seq <= batch.seq);
+			if acknowledged {
+				state.overlay.pages.remove(&page.pgno);
+				state.note_committed_page(&ctx.config, page.pgno, &page.bytes);
+			}
+		}
+		state.overlay.in_flight = false;
+		progress.flushed_seq = batch.seq;
+		drop(progress);
+		drop(state);
+		ctx.commit_total.fetch_add(1, Ordering::Relaxed);
+		if let Some(metrics) = &ctx.metrics {
+			metrics.record_commit(batch.pages.len() as u64);
+		}
+		tracing::debug!(
+			actor_id = %ctx.actor_id,
+			seq = batch.seq,
+			head_txid = head,
+			dirty_pages = batch.pages.len(),
+			duration_ms = started_at.elapsed().as_millis() as u64,
+			"sqlite deferred commits flushed"
+		);
+		ctx.flush.publish_change();
+	}
+}
+
+/// Commits one flush batch and returns depot's new head.
+///
+/// Depot's head is the sequence of the filesystem entry a commit wrote, which grows by an
+/// unknown amount per commit, so the head depot returns is taken as is and only has to move
+/// ahead. A flush whose reply was lost is retried with the same fence. The actor
+/// single-writer invariant means only this flusher moves the head, and only one batch is in
+/// flight, so a head past the batch's fence after an attempt with an unknown outcome is that
+/// attempt having applied.
+async fn ship_flush_batch(
+	ctx: &VfsContext,
+	batch: &FlushBatch,
+) -> std::result::Result<u64, FlushError> {
+	let config = &ctx.config.deferred_commit;
+	let deadline = tokio::time::Instant::now() + config.retry_deadline;
+	let mut backoff = config.retry_backoff_min;
+	let mut attempts = 0_u32;
+	let mut outcome_unknown = false;
+	let mut last_error = "flush did not complete".to_string();
+	loop {
+		attempts = attempts.saturating_add(1);
+		let request = BufferedCommitRequest {
+			actor_id: ctx.actor_id.clone(),
+			new_db_size_pages: batch.db_size_pages,
+			dirty_pages: batch.pages.clone(),
+			expected_head_txid: batch.expected_head_txid,
+		};
+		let commit = commit_buffered_pages(&*ctx.transport, request, ctx.config.commit_page_cap());
+		let mut retry_after = None;
+		match tokio::time::timeout_at(deadline, commit).await {
+			Ok(Ok((outcome, _))) => {
+				let head = match outcome.head_txid {
+					Some(head) => head,
+					None => probe_depot_head(ctx.transport.clone(), ctx.actor_id.clone())
+						.await?
+						.ok_or(FlushError::HeadDiverged {
+							expected: batch.expected_head_txid,
+							actual: None,
+						})?,
+				};
+				return accept_flushed_head(batch.expected_head_txid, head);
+			}
+			Ok(Err(CommitBufferError::FenceMismatch(message))) => {
+				let actual = probe_depot_head(ctx.transport.clone(), ctx.actor_id.clone()).await?;
+				if outcome_unknown
+					&& let Some(head) = actual
+					&& batch
+						.expected_head_txid
+						.is_none_or(|expected| head > expected)
+				{
+					tracing::info!(
+						actor_id = %ctx.actor_id,
+						expected_head_txid = ?batch.expected_head_txid,
+						head_txid = head,
+						attempts,
+						"sqlite flush with a lost reply had applied"
+					);
+					return Ok(head);
+				}
+				tracing::error!(
+					actor_id = %ctx.actor_id,
+					expected_head_txid = ?batch.expected_head_txid,
+					actual_head_txid = ?actual,
+					%message,
+					"sqlite flush hit a head fence mismatch; another writer changed the database"
+				);
+				return Err(FlushError::HeadDiverged {
+					expected: batch.expected_head_txid,
+					actual,
+				});
+			}
+			Ok(Err(error)) => {
+				let class = match &error {
+					CommitBufferError::Indeterminate(message) => {
+						outcome_unknown = true;
+						last_error = message.clone();
+						"indeterminate"
+					}
+					CommitBufferError::Other(message) => {
+						// A transport failure may have happened after the request was sent.
+						outcome_unknown = true;
+						last_error = message.clone();
+						"transport"
+					}
+					CommitBufferError::Storage(storage) => {
+						if let SqliteStorageError::Overloaded { retry_after_ms, .. } = storage {
+							retry_after = Some(Duration::from_millis(*retry_after_ms));
+						}
+						last_error = storage.to_string();
+						"storage"
+					}
+					CommitBufferError::FenceMismatch(_) => {
+						unreachable!("fence mismatches return above")
+					}
+				};
+				tracing::warn!(
+					actor_id = %ctx.actor_id,
+					class,
+					attempt = attempts,
+					%last_error,
+					"retrying deferred sqlite flush"
+				);
+			}
+			Err(_) => {
+				return Err(FlushError::RetryDeadlineExceeded {
+					attempts,
+					last_error,
+				});
+			}
+		}
+
+		let wait = retry_after.map_or(backoff, |retry_after| retry_after.max(backoff));
+		if tokio::time::timeout_at(deadline, tokio::time::sleep(wait))
+			.await
+			.is_err()
+		{
+			return Err(FlushError::RetryDeadlineExceeded {
+				attempts,
+				last_error,
+			});
+		}
+		backoff = backoff.saturating_mul(2).min(config.retry_backoff_max);
+	}
+}
+
+fn accept_flushed_head(expected: Option<u64>, head: u64) -> std::result::Result<u64, FlushError> {
+	if expected.is_some_and(|expected| head <= expected) {
+		return Err(FlushError::HeadDiverged {
+			expected,
+			actual: Some(head),
+		});
+	}
+	Ok(head)
+}
+
+/// Reads depot's current head without a fence.
+async fn probe_depot_head(
+	transport: SqliteTransportHandle,
+	actor_id: String,
+) -> std::result::Result<Option<u64>, FlushError> {
+	let response = transport
+		.get_pages(protocol::SqliteGetPagesRequest {
+			actor_id: actor_id.into(),
+			pgnos: vec![1],
+			expected_generation: None,
+			expected_head_txid: None,
+		})
+		.await
+		.map_err(|error| FlushError::Aborted(format!("read sqlite head: {error}")))?;
+	match response {
+		protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) => Ok(ok.head_txid),
+		protocol::SqliteGetPagesResponse::SqliteErrorResponse(error) => Err(FlushError::Aborted(
+			format!("read sqlite head: {}", error.message),
+		)),
 	}
 }
 
@@ -2788,19 +3454,26 @@ async fn commit_staged_pages(
 		}
 	};
 
-	let segments = sqlite_types::cut_page_segments(&dirty_pages, |page| page.pgno);
-	let segment_first_pgnos = segments.iter().map(|(first_pgno, _)| *first_pgno).collect();
-	// Each segment spans at most five shards. Buffered requests cap their combined page bytes,
-	// while ordered responses preserve the first failure and finalize waits for every admission.
-	let responses = stream::iter(segments)
+	// Segments own their pages, so the request futures borrow nothing from `dirty_pages` and
+	// stay `Send` for the deferred flusher's spawned task.
+	let segments = sqlite_types::cut_page_segments(&dirty_pages, |page| page.pgno)
+		.into_iter()
 		.map(|(first_pgno, segment)| {
-			let dirty_pages = segment
+			let pages = segment
 				.iter()
 				.map(|page| protocol::SqliteDirtyPage {
 					pgno: page.pgno,
 					bytes: page.bytes.clone().into_bytes(),
 				})
-				.collect();
+				.collect::<Vec<_>>();
+			(first_pgno, pages)
+		})
+		.collect::<Vec<_>>();
+	let segment_first_pgnos = segments.iter().map(|(first_pgno, _)| *first_pgno).collect();
+	// Each segment spans at most five shards. Buffered requests cap their combined page bytes,
+	// while ordered responses preserve the first failure and finalize waits for every admission.
+	let responses = stream::iter(segments)
+		.map(|(first_pgno, dirty_pages)| {
 			let actor_id = request.actor_id.clone();
 			async move {
 				match transport
@@ -3059,7 +3732,7 @@ unsafe extern "C" fn io_read(
 					error = %message,
 					"sqlite xRead hit fatal sqlite error"
 				);
-				ctx.mark_fatal(message);
+				ctx.handle_read_fence_mismatch(message);
 				return SQLITE_IOERR_READ;
 			}
 			Err(GetPagesError::Storage(error)) => {
@@ -3253,7 +3926,7 @@ unsafe extern "C" fn io_write(
 				resolved = match ctx.resolve_pages(&pages_to_resolve, false) {
 					Ok(pages) => pages,
 					Err(GetPagesError::FenceMismatch(message)) => {
-						ctx.mark_fatal(message);
+						ctx.handle_read_fence_mismatch(message);
 						return SQLITE_IOERR_WRITE;
 					}
 					Err(GetPagesError::Storage(error)) => {
@@ -3747,6 +4420,110 @@ unsafe extern "C" fn vfs_get_last_error(
 }
 
 impl SqliteVfs {
+	pub fn commit_mode(&self) -> CommitMode {
+		self.ctx.config.commit_mode
+	}
+
+	/// The newest local commit's sequence. Always zero in awaited mode, where every commit is
+	/// durable when it returns.
+	pub fn commit_seq(&self) -> u64 {
+		self.ctx.commit_seq()
+	}
+
+	/// The newest local commit depot acknowledged.
+	pub fn flushed_seq(&self) -> u64 {
+		self.ctx.flushed_seq()
+	}
+
+	/// Pages committed locally that are not durable yet.
+	pub fn unflushed_pages(&self) -> usize {
+		self.ctx.state.read().overlay.pages.len()
+	}
+
+	pub fn flush_error(&self) -> Option<FlushError> {
+		self.ctx.flush.progress.lock().error.clone()
+	}
+
+	/// Resolves once local commit `seq` and every earlier one are durable.
+	pub async fn wait_for_flush(&self, seq: u64) -> std::result::Result<(), FlushError> {
+		self.ctx.wait_for_flush(seq).await
+	}
+
+	/// Resolves once deferred commits can no longer become durable. Never resolves for an
+	/// awaited database or one that closes cleanly.
+	pub async fn wait_for_failure(&self) -> DatabaseFailure {
+		self.ctx.wait_for_failure().await
+	}
+
+	/// Breaks the database. Every later statement fails, and commits held locally never
+	/// become durable.
+	pub fn break_database(&self, reason: String) {
+		self.ctx.break_database(FlushError::Aborted(reason));
+	}
+
+	/// Marks the database as closing, so a flush failure from here on is reported by the close
+	/// instead of as a generation failure.
+	pub fn begin_close(&self) {
+		self.ctx.flush.closing.store(true, Ordering::Release);
+	}
+
+	/// How long a close waits for held commits: one flush's whole retry window.
+	pub fn close_flush_timeout(&self) -> Duration {
+		let config = &self.ctx.config.deferred_commit;
+		config
+			.retry_deadline
+			.saturating_add(config.retry_backoff_max)
+	}
+
+	/// Waits for every held commit to become durable, then stops the flusher. A flush that
+	/// does not finish in `timeout` breaks the database; that flush's outcome is unknown.
+	pub async fn drain_flusher(&self, timeout: Duration) -> std::result::Result<(), FlushError> {
+		if self.commit_mode() == CommitMode::Awaited {
+			return Ok(());
+		}
+		self.ctx.flush.shutdown.store(true, Ordering::Release);
+		self.ctx.flush.wake.notify_one();
+		let target = self.commit_seq();
+		let result = match tokio::time::timeout(timeout, self.wait_for_flush(target)).await {
+			Ok(result) => result,
+			Err(_) => {
+				let error = FlushError::Aborted("close deadline".to_string());
+				self.ctx.break_database(error.clone());
+				Err(error)
+			}
+		};
+		let task = self.ctx.flush.task.lock().take();
+		if let Some(mut task) = task {
+			if result.is_err() {
+				task.abort();
+			}
+			if tokio::time::timeout(timeout, &mut task).await.is_err() {
+				tracing::error!(
+					actor_id = %self.ctx.actor_id,
+					"deferred sqlite flusher did not stop after close, aborting it"
+				);
+				task.abort();
+			}
+		}
+		result
+	}
+
+	/// Breaks the database and stops the flusher without waiting for held commits. A flush in
+	/// flight has an unknown outcome.
+	pub async fn abort_flusher(&self, reason: &str) {
+		if self.commit_mode() == CommitMode::Awaited {
+			return;
+		}
+		self.ctx.flush.shutdown.store(true, Ordering::Release);
+		self.ctx
+			.break_database(FlushError::Aborted(reason.to_string()));
+		let task = self.ctx.flush.task.lock().take();
+		if let Some(task) = task {
+			task.abort();
+			let _ = task.await;
+		}
+	}
+
 	pub(crate) fn take_last_error(&self) -> Option<String> {
 		self.ctx.take_last_error()
 	}
@@ -3817,7 +4594,7 @@ impl SqliteVfs {
 		let generation = name
 			.rsplit_once("-g")
 			.and_then(|(_, generation)| generation.parse::<u64>().ok());
-		let mut ctx = Box::new(VfsContext::new(
+		let ctx = Arc::new(VfsContext::new(
 			actor_id,
 			generation,
 			runtime,
@@ -3829,7 +4606,7 @@ impl SqliteVfs {
 		)?);
 		tracing::trace!(target: "sqlite_prefetch::trace", event = "open",
             stream_id = %format_args!("sqlite-{:p}", &*ctx), actor_id = %ctx.actor_id, generation = ctx.generation);
-		let ctx_ptr = (&mut *ctx) as *mut VfsContext;
+		let ctx_ptr = Arc::as_ptr(&ctx).cast_mut();
 		let name_cstring = CString::new(name).map_err(|err| err.to_string())?;
 
 		let mut vfs: sqlite3_vfs = unsafe { std::mem::zeroed() };
@@ -3848,6 +4625,10 @@ impl SqliteVfs {
 		vfs.xGetLastError = Some(vfs_get_last_error);
 
 		let registration = SqliteVfsRegistration::register(vfs)?;
+		if ctx.config.commit_mode == CommitMode::Deferred {
+			let task = ctx.runtime.spawn(flusher_task(Arc::downgrade(&ctx)));
+			*ctx.flush.task.lock() = Some(task);
+		}
 
 		Ok(Self {
 			_registration: registration,
