@@ -642,6 +642,7 @@ impl ActorContext {
 		if let Err(error) = self.recover_interrupted_schedule_history().await {
 			tracing::error!(?error, "failed to recover interrupted schedule history");
 		}
+		self.force_next_alarm_push();
 		self.sync_future_alarm_logged().await;
 	}
 

@@ -53,7 +53,7 @@ Legacy traces under `[7, 1, ...]` are intentionally skipped and are not copied t
 ## Schedule + alarms
 
 - `Schedule` alarm sync is guarded by `dirty_since_push`. Fresh schedules start dirty, mutations set dirty, and unchanged shutdown syncs must not re-push identical envoy alarms.
-- Persisted driver-alarm dedup stores the last pushed `Option<i64>` in `_rivet_runtime.last_pushed_alarm`. Startup loads it from SQLite and skips identical future alarm pushes.
+- Persisted driver-alarm dedup stores the last pushed `Option<i64>` in `_rivet_runtime.last_pushed_alarm`. It only dedupes identical pushes within one generation. Startup always re-pushes the next alarm, because a previous generation's push can be acked locally and then lost before the engine records it.
 
 ## Transport helpers
 
