@@ -834,6 +834,16 @@ impl ActorContext {
 			.store(true, Ordering::SeqCst);
 	}
 
+	/// Forces the next alarm sync to push to the engine even when it matches the
+	/// persisted `last_pushed_alarm`. A new generation cannot know whether the
+	/// engine still holds that alarm, because a push can be acked locally and
+	/// then lost during a drain or generation change, and the engine clears its
+	/// alarm once it fires. The marker only dedupes pushes within a generation.
+	pub(crate) fn force_next_alarm_push(&self) {
+		self.mark_schedule_dirty();
+		self.load_last_pushed_alarm(None);
+	}
+
 	/// Sets the durable Unix-millisecond deadline that should ensure the foreign
 	/// run handler is active, starting it if inactive. This deadline shares one
 	/// physical alarm with scheduled actions, but remains independently

@@ -2670,7 +2670,7 @@ pub(crate) mod moved_tests {
 	}
 
 	#[tokio::test]
-	async fn startup_skips_future_alarm_push_when_last_pushed_matches() {
+	async fn startup_repushes_future_alarm_when_last_pushed_matches() {
 		let kv = new_in_memory();
 		let future_ts = 4_102_444_800_000;
 		let persisted = PersistedActor {
@@ -2696,9 +2696,11 @@ pub(crate) mod moved_tests {
 		.await
 		.expect("last pushed alarm should seed");
 
+		// The persisted marker matches, but a previous generation's push may have
+		// been acked locally and then lost, so a new generation must push again.
 		let ctx = new_with_kv(
-			"actor-startup-skip-alarm",
-			"task-startup-skip-alarm",
+			"actor-startup-repush-alarm",
+			"task-startup-repush-alarm",
 			Vec::new(),
 			"local",
 			kv,
@@ -2715,6 +2717,10 @@ pub(crate) mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
+		assert_eq!(
+			recv_alarm_now(&mut rx, "actor-startup-repush-alarm", Some(11)),
+			Some(future_ts)
+		);
 		assert_no_alarm(&mut rx);
 	}
 
