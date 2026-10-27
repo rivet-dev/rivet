@@ -280,10 +280,15 @@ export interface RuntimeSqlRunResult {
 
 export interface RuntimeSqlDatabase {
 	exec(sql: string): Promise<RuntimeSqlExecResult>;
+	execSync(sql: string): RuntimeSqlExecResult;
 	execute(
 		sql: string,
 		params?: RuntimeSqlBindParams,
 	): Promise<RuntimeSqlExecuteResult>;
+	executeSync(
+		sql: string,
+		params?: RuntimeSqlBindParams,
+	): RuntimeSqlExecuteResult;
 	executeBatch(
 		statements: RuntimeSqlBatchStatement[],
 	): Promise<RuntimeSqlExecuteResult[]>;
@@ -299,19 +304,33 @@ export interface RuntimeSqlDatabase {
 		timeoutMs?: number,
 		name?: string,
 	): Promise<RuntimeSqlTransactionDatabase>;
+	beginTransactionSync(
+		timeoutMs?: number,
+		name?: string,
+	): RuntimeSqlTransactionDatabase;
 	metrics?(): SqliteNativeMetrics | null;
 	takeLastKvError?(): string | null;
+	open(): Promise<void>;
+	commitTicket(): number;
+	whenDurable(ticket: number): Promise<void>;
 	close(): Promise<void>;
 }
 
 export interface RuntimeSqlTransactionDatabase {
 	exec(sql: string): Promise<RuntimeSqlExecResult>;
+	execSync(sql: string): RuntimeSqlExecResult;
 	execute(
 		sql: string,
 		params?: RuntimeSqlBindParams,
 	): Promise<RuntimeSqlExecuteResult>;
+	executeSync(
+		sql: string,
+		params?: RuntimeSqlBindParams,
+	): RuntimeSqlExecuteResult;
 	commit(): Promise<void>;
+	commitSync(): void;
 	rollback(): Promise<void>;
+	rollbackSync(): void;
 }
 
 /** Sample rates for the traces an actor starts, in the shape core takes. */
@@ -326,6 +345,7 @@ export interface RuntimeActorConfig {
 	icon?: string;
 	hasDatabase?: boolean;
 	remoteSqlite?: boolean;
+	sqliteDeferredCommits?: boolean;
 	sqliteProfiling?: SqliteProfilingOptions;
 	tracing?: RuntimeActorTracingConfig;
 	hasState?: boolean;
@@ -697,11 +717,20 @@ export interface CoreRuntime {
 		ctx: ActorContextHandle,
 		sql: string,
 	): Promise<RuntimeSqlExecResult>;
+	actorSqlExecSync(
+		ctx: ActorContextHandle,
+		sql: string,
+	): RuntimeSqlExecResult;
 	actorSqlExecute(
 		ctx: ActorContextHandle,
 		sql: string,
 		params?: RuntimeSqlBindParams,
 	): Promise<RuntimeSqlExecuteResult>;
+	actorSqlExecuteSync(
+		ctx: ActorContextHandle,
+		sql: string,
+		params?: RuntimeSqlBindParams,
+	): RuntimeSqlExecuteResult;
 	actorSqlExecuteBatch(
 		ctx: ActorContextHandle,
 		statements: RuntimeSqlBatchStatement[],
@@ -711,21 +740,37 @@ export interface CoreRuntime {
 		timeoutMs?: number,
 		name?: string,
 	): Promise<SqliteTransactionHandle>;
+	actorSqlBeginTransactionSync(
+		ctx: ActorContextHandle,
+		timeoutMs?: number,
+		name?: string,
+	): SqliteTransactionHandle;
 	actorSqlTransactionExec(
 		transaction: SqliteTransactionHandle,
 		sql: string,
 	): Promise<RuntimeSqlExecResult>;
+	actorSqlTransactionExecSync(
+		transaction: SqliteTransactionHandle,
+		sql: string,
+	): RuntimeSqlExecResult;
 	actorSqlTransactionExecute(
 		transaction: SqliteTransactionHandle,
 		sql: string,
 		params?: RuntimeSqlBindParams,
 	): Promise<RuntimeSqlExecuteResult>;
+	actorSqlTransactionExecuteSync(
+		transaction: SqliteTransactionHandle,
+		sql: string,
+		params?: RuntimeSqlBindParams,
+	): RuntimeSqlExecuteResult;
 	actorSqlTransactionCommit(
 		transaction: SqliteTransactionHandle,
 	): Promise<void>;
+	actorSqlTransactionCommitSync(transaction: SqliteTransactionHandle): void;
 	actorSqlTransactionRollback(
 		transaction: SqliteTransactionHandle,
 	): Promise<void>;
+	actorSqlTransactionRollbackSync(transaction: SqliteTransactionHandle): void;
 	actorBeginStateTransaction(
 		ctx: ActorContextHandle,
 		timeoutMs?: number,
@@ -754,6 +799,13 @@ export interface CoreRuntime {
 	): Promise<RuntimeSqlRunResult>;
 	actorSqlMetrics(ctx: ActorContextHandle): SqliteNativeMetrics | null;
 	actorSqlTakeLastKvError(ctx: ActorContextHandle): string | null;
+	/** Opens the actor database so later synchronous calls never fetch its first pages. */
+	actorSqlOpen(ctx: ActorContextHandle): Promise<void>;
+	/** Returns the ticket of the latest local commit. */
+	actorSqlCommitTicket(ctx: ActorContextHandle): number;
+	/** Resolves once the commit `ticket` names and every earlier commit are durable. */
+	actorSqlWhenDurable(ctx: ActorContextHandle, ticket: number): Promise<void>;
+	actorSqlAbortGeneration(ctx: ActorContextHandle, reason: string): void;
 	actorSqlClose(ctx: ActorContextHandle): Promise<void>;
 
 	actorQueueSend(
