@@ -1,11 +1,59 @@
 use rivet_envoy_protocol as protocol;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Duration;
 
 use crate::connection::ws_send;
 use crate::envoy::{BufferedActorMessage, EnvoyContext, HttpRequestRoute, WebSocketRoute};
 
 pub(crate) const HTTP_REQUEST_CANCELLATION_TTL: Duration = Duration::from_secs(60);
+/// Covers frames Gateway sent before it saw the end of the response. A later frame still gets
+/// the unknown-request handling, which Gateway ignores once its response drain has finished.
+const HTTP_COMPLETED_REQUEST_TTL: Duration = Duration::from_secs(10);
+
+/// Requests the actor finished recently, so trailing frames for them are dropped.
+#[derive(Default)]
+pub struct CompletedHttpRequests {
+	keys: HashSet<[u8; 8]>,
+	expirations: VecDeque<(crate::time::Instant, [u8; 8])>,
+}
+
+impl CompletedHttpRequests {
+	fn insert(&mut self, key: [u8; 8]) {
+		let now = crate::time::Instant::now();
+		self.prune(now);
+		if self.keys.insert(key) {
+			self.expirations
+				.push_back((now + HTTP_COMPLETED_REQUEST_TTL, key));
+		}
+	}
+
+	fn contains(&mut self, key: &[u8; 8]) -> bool {
+		self.prune(crate::time::Instant::now());
+		self.keys.contains(key)
+	}
+
+	fn prune(&mut self, now: crate::time::Instant) {
+		while let Some((expires_at, key)) = self.expirations.front() {
+			if *expires_at > now {
+				break;
+			}
+			self.keys.remove(key);
+			self.expirations.pop_front();
+		}
+	}
+}
+
+/// Releases routing state once the actor finished both the upload and the response.
+pub(crate) fn complete_http_request(
+	ctx: &mut EnvoyContext,
+	gateway_id: protocol::GatewayId,
+	request_id: protocol::RequestId,
+) {
+	ctx.http_request_routes.remove(&[&gateway_id, &request_id]);
+	ctx.http_message_indices.remove(&[&gateway_id, &request_id]);
+	ctx.completed_http_requests
+		.insert(make_ws_key(&gateway_id, &request_id));
+}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct HttpRequestCancellationKey {
@@ -116,6 +164,23 @@ pub async fn handle_tunnel_message(
 			| protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestBodyCancel
 			| protocol::ToEnvoyTunnelMessageKind::ToEnvoyResponseBodyWindowUpdate(_)
 	);
+	if is_http_continuation
+		&& !ctx
+			.http_request_routes
+			.contains_key(&[&message_id.gateway_id, &message_id.request_id])
+		&& ctx
+			.completed_http_requests
+			.contains(&make_ws_key(&message_id.gateway_id, &message_id.request_id))
+	{
+		// The actor can finish a request while Gateway is still uploading, for example when a
+		// handler answers without reading the body, or while Gateway still returns response
+		// credit for bytes its client has not read yet.
+		tracing::debug!(
+			message_index = message_id.message_index,
+			"dropping HTTP tunnel message for a completed request"
+		);
+		return;
+	}
 	if is_http_continuation
 		&& let Some(route) = ctx
 			.http_request_routes
