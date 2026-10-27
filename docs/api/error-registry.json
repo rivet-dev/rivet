@@ -1381,8 +1381,23 @@
 					"statuses": []
 				},
 				{
+					"code": "deferred_commits_unsupported",
+					"message": "SQLite deferred commits are unavailable.",
+					"statuses": []
+				},
+				{
+					"code": "durability_failed",
+					"message": "SQLite commits could not be made durable.",
+					"statuses": []
+				},
+				{
 					"code": "invalid_bind_parameter",
 					"message": "Invalid SQLite bind parameter.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_commit_ticket",
+					"message": "Invalid SQLite commit ticket.",
 					"statuses": []
 				},
 				{
@@ -1421,6 +1436,11 @@
 					"statuses": []
 				},
 				{
+					"code": "statement_failed",
+					"message": "SQLite statement failed.",
+					"statuses": []
+				},
+				{
 					"code": "storage_overloaded",
 					"message": "SQLite storage is overloaded.",
 					"statuses": []
@@ -1428,6 +1448,11 @@
 				{
 					"code": "storage_timeout",
 					"message": "SQLite storage timed out.",
+					"statuses": []
+				},
+				{
+					"code": "sync_unsupported",
+					"message": "Synchronous SQLite is unavailable.",
 					"statuses": []
 				},
 				{
