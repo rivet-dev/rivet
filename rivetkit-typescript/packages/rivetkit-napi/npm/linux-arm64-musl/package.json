@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/rivetkit-napi-linux-arm64-musl",
-	"version": "2.3.30",
+	"version": "3.0.0-preview.3",
 	"os": [
 		"linux"
 	],

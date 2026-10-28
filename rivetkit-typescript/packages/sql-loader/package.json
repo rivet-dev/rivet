@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/sql-loader",
-	"version": "2.3.30",
+	"version": "3.0.0-preview.3",
 	"description": "SQL file loader and migration utilities for RivetKit",
 	"license": "Apache-2.0",
 	"sideEffects": [

@@ -135,8 +135,8 @@ importers:
   examples/actor-actions:
     dependencies:
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -181,8 +181,8 @@ importers:
         specifier: ^0.0.66
         version: 0.0.66(zod@4.3.6)
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@4.3.6)
@@ -350,8 +350,8 @@ importers:
   examples/collaborative-document:
     dependencies:
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -399,8 +399,8 @@ importers:
   examples/cross-actor-actions:
     dependencies:
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -442,8 +442,8 @@ importers:
   examples/cursors:
     dependencies:
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -485,8 +485,8 @@ importers:
   examples/cursors-raw-websocket:
     dependencies:
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -625,8 +625,8 @@ importers:
         specifier: https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8b
         version: https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8b
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@4.1.13)
@@ -717,8 +717,8 @@ importers:
   examples/hello-world:
     dependencies:
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1042,8 +1042,8 @@ importers:
   examples/native-websockets:
     dependencies:
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1091,8 +1091,8 @@ importers:
   examples/per-tenant-database:
     dependencies:
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1134,8 +1134,8 @@ importers:
   examples/raw-websocket-handler:
     dependencies:
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1177,8 +1177,8 @@ importers:
   examples/react:
     dependencies:
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1343,8 +1343,8 @@ importers:
   examples/state:
     dependencies:
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1386,8 +1386,8 @@ importers:
   examples/stream:
     dependencies:
       '@rivetkit/react':
-        specifier: ^2.3.30
-        version: 2.3.30(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^3.0.0-preview.3
+        version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
         version: 19.1.0

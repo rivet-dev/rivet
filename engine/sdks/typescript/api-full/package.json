@@ -1,7 +1,7 @@
 {
 	"license": "Apache-2.0",
 	"name": "@rivetkit/engine-api-full",
-	"version": "2.3.30",
+	"version": "3.0.0-preview.3",
 	"repository": "https://github.com/rivet-dev/rivet/tree/main/engine/sdks/typescript",
 	"files": [
 		"dist",
