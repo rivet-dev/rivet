@@ -164,6 +164,7 @@ Routing, scheduling, types, and telemetry, built in.
 
 - **Fault tolerance by design**: A node going down reschedules its Actors elsewhere with their state intact. No replay harness or checkpointing of your own.
 - **Keep state with each Actor**: Every Actor gets its own SQLite database and key-value storage. The control plane replicates writes and moves data to object storage, so you never size a disk for an Actor.
+- **Multi-region** (coming soon): Place Actors near the users and data they serve, and route requests to wherever each one currently lives.
 - **HTTP & WebSocket networking**: Address an Actor directly over HTTP or hold a live WebSocket to it. No queue or broker in between.
 - **End-to-end type safety**: Actor definitions generate their own client types, so a signature change breaks the build rather than production.
 - **React SDK**: First-party hooks that subscribe a component to an Actor's state and keep it live as the Actor updates.
@@ -330,6 +331,7 @@ No. Rivet only needs a standard process that connects to the control plane over 
 | ↳ [Pegboard](./engine/packages/pegboard) | Actor scheduling & networking |
 | ↳ [Gasoline](./engine/packages/gasoline) | Durable execution engine |
 | ↳ [Guard](./engine/packages/guard) | Traffic routing proxy |
+| ↳ [Epoxy](./engine/packages/epoxy) | Multi-region KV store (EPaxos) |
 | [Dashboard](./frontend) | Inspector for debugging Actors |
 | [Documentation](./docs) | Source for [rivet.dev/actors/docs](https://www.rivet.dev/actors/docs) |
 | [Examples](./examples) | Runnable examples |
