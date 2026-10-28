@@ -48,7 +48,6 @@ Works with Claude Code, Cursor, Windsurf, and other AI coding tools.
 - [Next.js](https://www.rivet.dev/actors/docs/quickstart/next-js)
 - [Rust](https://www.rivet.dev/actors/docs/quickstart/rust)
 - [Effect](https://www.rivet.dev/actors/docs/quickstart/effect)
-- [Cloudflare Workers](https://www.rivet.dev/docs/deploy/self-host/workers/cloudflare/)
 
 [View documentation →](https://www.rivet.dev/docs)
 
@@ -123,10 +122,11 @@ await agent.chat("how many r's in strawberry?");
 
 Every product Rivet ships is an Actor, scheduled by the same control plane.
 
-- **[Actors](https://www.rivet.dev/actors/docs)**: Give every agent a durable process to live in.
+- **[Actors](https://www.rivet.dev/actors/docs)**: Long-lived processes with state, realtime, and scheduling built in.
+- **[Agents](https://www.rivet.dev/agents/docs)**: A durable process per agent, with memory that survives restarts.
 - **[Workflows](https://www.rivet.dev/workflows/docs)**: Multi-step operations that replay instead of starting over.
 - **[Sandboxes (agentOS)](https://www.rivet.dev/agentos/docs)**: A filesystem, shell, and network for code you did not write.
-- **[Dynamic Apps](https://www.rivet.dev/dynamic-apps/docs)**: A backend per user, deployed the moment it is generated.
+- **[Dynamic Apps](https://www.rivet.dev/dynamic-apps/docs)** (preview): A backend per user, deployed the moment it is generated.
 
 ## Built for everything agents need
 
@@ -187,7 +187,7 @@ Routing, scheduling, types, and telemetry, built in.
 Install Actors and run it locally while you build. When you ship, run the same open-source control plane as a container on vanilla Docker, Kubernetes, or a VM, with a bucket for durable storage.
 
 ```bash
-npm install rivetkit
+npm install rivetkit@next
 ```
 
 [Open the quickstart →](https://www.rivet.dev/actors/docs/quickstart/backend)
@@ -223,7 +223,7 @@ The whole stack runs inside your VPC, and Rivet manages it for you over an outbo
 
 Typed SDKs for your backend and React hooks for your frontend. Rivet runs on native Node.js and Bun with no custom runtime, so your existing packages, tooling, and tests work unchanged.
 
-**Deploy nodes on**: [Vercel](https://www.rivet.dev/docs/deploy/self-host/workers/vercel/) • [Railway](https://www.rivet.dev/docs/deploy/self-host/workers/railway/) • [AWS ECS](https://www.rivet.dev/docs/deploy/self-host/workers/aws-ecs/) • [AWS Lambda](https://www.rivet.dev/docs/deploy/self-host/workers/aws-lambda/) • [GCP Cloud Run](https://www.rivet.dev/docs/deploy/self-host/workers/gcp-cloud-run/) • [Cloudflare](https://www.rivet.dev/docs/deploy/self-host/workers/cloudflare/) • [Kubernetes](https://www.rivet.dev/docs/deploy/self-host/workers/kubernetes/) • [Docker](https://www.rivet.dev/docs/deploy/self-host/workers/docker-compose/)
+**Deploy nodes on**: [Docker Compose](https://www.rivet.dev/docs/deploy/self-host/nodes/docker-compose/) • [Kubernetes](https://www.rivet.dev/docs/deploy/self-host/nodes/kubernetes/) • [VM & bare metal](https://www.rivet.dev/docs/deploy/self-host/nodes/vm/) • [Hetzner](https://www.rivet.dev/docs/deploy/self-host/nodes/hetzner/) • [AWS ECS](https://www.rivet.dev/docs/deploy/self-host/nodes/aws-ecs/) • [Railway](https://www.rivet.dev/docs/deploy/self-host/nodes/railway/) • [Render](https://www.rivet.dev/docs/deploy/self-host/nodes/render/)
 
 **Frameworks**: [React](https://www.rivet.dev/actors/docs/clients/react) • [Next.js](https://www.rivet.dev/actors/docs/quickstart/next-js) • [Hono](./examples/hono) • [Elysia](./examples/elysia) • [tRPC](./examples/trpc) • [Effect](./examples/ai-agent-effect)
 
@@ -245,7 +245,7 @@ Yes. Rivet deploys into your own cloud account, including air-gapped environment
 <details>
 <summary><b>Does Rivet have a cloud?</b></summary>
 
-Yes. Rivet Cloud is fully managed. It can run your Actors for you on [Rivet Compute](https://www.rivet.dev/docs/deploy/cloud/compute/), with preview deployments and auto-scaling in edge regions, or you can [bring your own nodes](https://www.rivet.dev/docs/deploy/self-host/workers/) and run Actors on your compute while Rivet Cloud provides the control plane and routing layer.
+Yes. Rivet Cloud is fully managed. It can run your Actors for you on [Rivet Compute](https://www.rivet.dev/docs/deploy/cloud/compute/), with preview deployments and auto-scaling in edge regions, or you can [bring your own nodes](https://www.rivet.dev/docs/deploy/self-host/nodes/) and run Actors on your compute while Rivet Cloud provides the control plane and routing layer.
 
 </details>
 
