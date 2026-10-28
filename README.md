@@ -10,8 +10,8 @@
   <h3>Fast, high-density, scalable orchestration for agentic workloads.</h3>
   <p>
     Rivet Actors are durable processes for agents, workflows, and sandboxes.<br/>
-    6.9 ms cold starts, 72 KB per Actor, bottomless storage on S3.<br/>
-    One stateless binary. Open source and self-hostable.
+    6.9 ms cold starts, 72 KB per Actor, billions on one control plane.<br/>
+    One Rust binary and a bucket. No database, no message bus. Open source and self-hostable.
   </p>
   <p>
     <a href="https://www.rivet.dev/docs">Quickstart</a> •
@@ -66,8 +66,8 @@ Create one Actor per agent, per session, per user, or per tenant. Run it on plai
 - **6.9 ms cold starts**: A cold start includes scheduling the Actor, creating its storage, and serving the first request. No image pull, no container boot.
 - **Billions of Actors on one control plane**: Actors are scheduled independently, so adding capacity means adding machines. The same control plane runs a thousand Actors or a billion.
 - **Hibernates when idle, wakes on demand**: An idle Actor writes its state and unloads. The next request brings it back in 4.4 ms with nothing lost.
-- **Bottomless SQLite per Actor**: Every Actor gets its own SQLite database on WarpDrive. Writes land on local disk in three availability zones and offload to S3 in the background, so storage never runs out and S3 never sits on the write path.
-- **One stateless binary**: S3 is the only dependency. No Postgres, FoundationDB, or NATS to run. Point the control plane at a bucket and it is ready.
+- **Keep state with each Actor**: Every Actor gets its own SQLite database and key-value storage. The control plane replicates writes to the disks of several instances before acknowledging them, then moves data to object storage in the background. Storage never runs out and the bucket never sits on the write path.
+- **One Rust binary and a bucket**: There is no database to run and no message bus. Control plane instances are identical, run every service, and find each other through the bucket.
 - **Run code agents generate at runtime**: Each piece of new, untrusted code gets an Actor of its own, with its own database and filesystem and no reach into anyone else's.
 - **Works with the tools you already use**: Typed SDKs for your backend and React hooks for your frontend. No custom runtime, so your existing packages, tooling, and tests work unchanged.
 
@@ -123,14 +123,14 @@ await agent.chat("how many r's in strawberry?");
 
 Rivet 3.0 is built on **WarpDrive**, a new storage engine that gives every Actor bottomless storage on S3 with the speed of an SSD. [Read the announcement →](https://www.rivet.dev/changelog/2026-10-26-introducing-rivet-3-0-preview/)
 
-- **Bottomless storage with the speed of an SSD**: When an Actor writes, the write lands on disk in three availability zones and is acknowledged as soon as a majority have it. Data is offloaded to S3 in the background, so storage never runs out. Reads come from memory when hot and from local disk when not. S3 never sits on the write path.
-- **One stateless binary**: Rivet 2.x needed Postgres or FoundationDB plus NATS. In 3.0, WarpDrive replaces the database and S3 replaces the message broker. Control plane instances are ephemeral and find each other through the bucket.
-- **Any object store**: Amazon S3, Google Cloud Storage, Azure Blob Storage, and Cloudflare R2. For a setup with no cloud at all, run against MinIO or a local filesystem.
+- **Bottomless storage with the speed of an SSD**: Each Actor's data lives in its own durable volume holding its SQLite database and key-value data. A write is acknowledged once a majority of the instances holding that volume have it on disk, so losing one instance loses no acknowledged write. The bucket receives the durable copy in the background, shortly after, so storage never runs out and the bucket never sits on the write path.
+- **No database, no message bus**: Rivet 2.x needed Postgres or FoundationDB plus NATS. In 3.0, WarpDrive replaces the database and the bucket replaces the message broker. Control plane instances find each other through the bucket.
+- **Any object store**: Amazon S3, Google Cloud Storage, Azure Blob Storage, or any S3-compatible store such as MinIO, Cloudflare R2, and Hetzner Object Storage. A local filesystem backend is available for trying Rivet on one machine.
 - **No code changes**: 3.0 uses the same RivetKit SDK and protocol as 2.x. The upgrade is entirely in the storage engine underneath.
 
 | SQLite on WarpDrive | p50 | p99 |
 |---|:---:|:---:|
-| **Durable insert** (128-byte row, majority of disks across 3 zones) | **0.69 ms** | 0.80 ms |
+| **Durable insert** (128-byte row, written to a majority of disks across 3 zones) | **0.69 ms** | 0.80 ms |
 | **Warm read** (primary-key read from SQLite's memory cache) | **0.059 ms** | 0.080 ms |
 
 Rivet 3.0 is in preview. Multi-region, serverless, and ACLs have not landed in 3.0 yet; if you depend on them, stay on 2.x, which remains supported. A migration tool will move 2.x deployments to 3.0 with zero downtime.
@@ -161,7 +161,7 @@ Every product Rivet ships is an Actor, scheduled by the same control plane.
 | **Memory per instance** | **72.4 KB** | ~200 MB |
 | **Memory while idle** | **0 MB** (hibernates) | Always resident |
 | **Scale** | **Billions** of Actors on one control plane | ~5k nodes per cluster |
-| **Storage** | **Bottomless** SQLite on S3 | Persistent volume per pod |
+| **Storage** | **Bottomless** SQLite, replicated and moved to your bucket | Persistent volume per pod |
 
 <details>
 <summary>Benchmark details & methodology</summary>
@@ -179,13 +179,13 @@ Every product Rivet ships is an Actor, scheduled by the same control plane.
 Routing, scheduling, types, and telemetry, built in.
 
 - **Fault tolerance by design**: A node going down reschedules its Actors elsewhere with their state intact. No replay harness or checkpointing of your own.
-- **Bottomless storage**: Every Actor's SQLite database lives on WarpDrive, replicated across three availability zones and offloaded to your bucket. Never size a disk for an Actor.
+- **Keep state with each Actor**: Every Actor gets its own SQLite database and key-value storage. The control plane replicates writes and moves data to object storage, so you never size a disk for an Actor.
 - **Multi-region**: Place Actors near the users and data they serve, and route requests to wherever each one currently lives.
 - **HTTP & WebSocket networking**: Address an Actor directly over HTTP or hold a live WebSocket to it. No queue or broker in between.
 - **End-to-end type safety**: Actor definitions generate their own client types, so a signature change breaks the build rather than production.
 - **React SDK**: First-party hooks that subscribe a component to an Actor's state and keep it live as the Actor updates.
 - **OpenTelemetry & observability**: Traces, metrics, and structured logs emitted in OTel format, into the collector you already run.
-- **One stateless binary**: The control plane ships as one static Rust binary with S3 as its only dependency. No Postgres, FoundationDB, or NATS to stand up first.
+- **Single Rust binary**: The control plane ships as one static binary. Run a few identical instances behind a load balancer with an object storage bucket: no database and no message bus to stand up first.
 - **Cron & scheduling**: Wake an Actor on a schedule or at a timestamp it sets for itself, without a separate scheduler.
 - **Sleeps when idle**: Idle Actors release their resources and wake with durable state intact when the next request arrives.
 - **Actor-to-Actor calls**: Actors address each other by key and call across the cluster as if the other one were local.
@@ -200,7 +200,7 @@ Routing, scheduling, types, and telemetry, built in.
 
 ### Local & Self-Host
 
-Install Actors and run it locally while you build. When you ship, run the same open-source control plane as a single container on vanilla Docker, Kubernetes, or a VM. Point it at a bucket and it is ready.
+Install Actors and run it locally while you build. When you ship, run the same open-source control plane as a container on vanilla Docker, Kubernetes, or a VM, with a bucket for durable storage.
 
 ```bash
 npm install rivetkit
@@ -214,9 +214,9 @@ npm install rivetkit
 
 ### Rivet Cloud
 
-Create a project on the dashboard and deploy. There is nothing to operate. Or bring your own nodes and run Actors on your compute while Rivet Cloud provides the control plane and routing layer.
+Create a project and deploy. There is nothing to operate. Or bring your own nodes and run Actors on your compute while Rivet Cloud provides the control plane and routing layer.
 
-[Open the dashboard →](https://dashboard.rivet.dev)
+[Get started with Rivet Cloud →](https://dashboard.rivet.dev)
 
 </td>
 <td width="33%" valign="top">
@@ -231,7 +231,7 @@ The whole stack runs inside your VPC, and Rivet manages it for you over an outbo
 </tr>
 </table>
 
-**Every option runs the same binary. The only difference is who operates it.** The control plane is one stateless Rust binary: one process to install, monitor, and upgrade, with no database and no message bus. Each instance keeps recent writes on a local disk and offloads them to your bucket on S3, Google Cloud Storage, Azure Blob Storage, Cloudflare R2, or MinIO. Run one instance to try it, or three or more across availability zones for production. Local dev matches production: the same binary, APIs, and control-plane behavior from laptop to production.
+**Every option runs the same binary. The only difference is who operates it.** Self-hosting means running four things: identical control plane instances (one to try it, three or more in production), a persistent disk per instance that holds recent writes and the instance's identity, one bucket per cluster on S3, Google Cloud Storage, Azure Blob Storage, or any S3-compatible store, and the nodes that run your Actors. There is no database to run and no message bus. Local dev matches production: the same binary, APIs, and control-plane behavior from laptop to production.
 
 **Open source, permissively licensed**: Apache 2.0 means you own your infrastructure. The managed service runs the same control plane you can run yourself. [Talk to an engineer →](https://www.rivet.dev/talk-to-an-engineer)
 
@@ -268,28 +268,28 @@ Yes. Rivet Cloud is fully managed. It can run your Actors for you on [Rivet Comp
 <details>
 <summary><b>Can I self-host Rivet?</b></summary>
 
-Yes. Rivet is fully self-hostable; see the [self-hosting docs](https://www.rivet.dev/docs/deploy/self-host/control-plane/). Rivet runs anywhere a container runs, including Kubernetes, Amazon ECS, and plain VMs. For enterprise support with a self-hosted deployment, [contact us](https://www.rivet.dev/enterprise/).
+Yes. Rivet is fully self-hostable; see the [self-hosting docs](https://www.rivet.dev/docs/deploy/self-host/control-plane/). The control plane runs anywhere a container runs, with guides for Docker Compose, Kubernetes, VMs and bare metal, Hetzner, Railway, Render, and AWS ECS. For enterprise support with a self-hosted deployment, [contact us](https://www.rivet.dev/enterprise/).
 
 </details>
 
 <details>
 <summary><b>Do I still need Postgres, FoundationDB, or NATS?</b></summary>
 
-No. As of Rivet 3.0, an object storage bucket is the only dependency. WarpDrive replaces the database and S3 replaces the message broker, so the control plane is one stateless binary. Rivet works with Amazon S3, Google Cloud Storage, Azure Blob Storage, and Cloudflare R2. For a fully self-hosted setup, use MinIO, or offload to a local filesystem instead of an object store.
+No. As of Rivet 3.0, an object storage bucket is the only dependency: there is no database to run and no message bus, and control plane instances find each other through the bucket. Rivet works with Amazon S3, Google Cloud Storage, Azure Blob Storage, and any S3-compatible store such as MinIO, Cloudflare R2, or Hetzner Object Storage. A local filesystem backend is available for trying Rivet on one machine.
 
 </details>
 
 <details>
 <summary><b>Do reads and writes wait on S3?</b></summary>
 
-No. A write is acknowledged once it is durable on disk in a majority of three availability zones, and data is offloaded to S3 later in the background. Reads are served from memory or from WarpDrive's disks. If S3 becomes unavailable, writes and reads of recent data stay fully available; only reads of older Actors whose data has been offloaded wait for S3 to come back.
+No. A write is acknowledged once a majority of the instances holding that Actor's volume have it on disk; the bucket receives the durable copy in the background, shortly after. Reads are served from memory or from the instance's local disk. If the bucket becomes unavailable, writes and reads of recent data stay available; only reads of older Actors whose data has already moved to the bucket wait for it to come back.
 
 </details>
 
 <details>
-<summary><b>Are control plane instances stateful?</b></summary>
+<summary><b>What do I need to run to self-host?</b></summary>
 
-No. Instances can be ephemeral, and there is no minimum hardware requirement; Rivet runs on a single node. Giving instances persistent volumes improves cache hit rates but is not required. For high availability, run at least three instances spread across three availability zones.
+Four things: control plane instances, a disk per instance, a bucket, and nodes. Every instance runs the same image and every service; run one to try Rivet and three or more in production. Each instance gets its own persistent block-storage disk for recent writes and its identity, never shared between instances. One bucket per cluster holds the durable copy of every Actor's data, and nodes run your Actors. There is no database to run and no message bus. Losing one instance out of three loses nothing: the other instances keep serving and rebuild the missing replicas.
 
 </details>
 
