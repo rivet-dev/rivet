@@ -66,10 +66,7 @@ export const make = <
 				const traceMeta = readTraceMeta(meta);
 
 				const instance = getInstance(c.actorId);
-				if (!instance) {
-					if (c.abortSignal.aborted) throw makeActorAbortedError();
-					throw new Error("actor instance missing");
-				}
+				if (!instance) throw makeActorAbortedError();
 
 				const actionEffect = Effect.gen(function* () {
 					// The handler map is keyed by the same action
