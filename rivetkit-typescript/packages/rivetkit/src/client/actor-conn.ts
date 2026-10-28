@@ -72,6 +72,13 @@ interface CloseEventLike {
 	wasClean?: boolean;
 }
 
+/** `client.connection_lost`: the socket closed without a structured reason from the server. */
+const CONNECTION_LOST_CODE = "connection_lost";
+
+function isConnectionLost(error: errors.ActorError): boolean {
+	return error.group === "client" && error.code === CONNECTION_LOST_CODE;
+}
+
 /**
  * Connection status for an actor connection.
  *
@@ -88,6 +95,8 @@ export type ActorConnStatus =
 
 interface ActionInFlight {
 	name: string;
+	/** The request went out on a socket. If that socket drops, the outcome is unknown. */
+	sent: boolean;
 	resolve: (response: { id: bigint; output: unknown }) => void;
 	reject: (error: Error) => void;
 }
@@ -144,6 +153,9 @@ export class ActorConnRaw {
 	#abortController = new AbortController();
 
 	#connStatus: ActorConnStatus = "idle";
+
+	/** The error that stopped reconnecting. Later calls reject with it instead of queueing. */
+	#stoppedError?: errors.ActorError;
 
 	#actorId?: string;
 	#connId?: string;
@@ -340,6 +352,10 @@ export class ActorConnRaw {
 		}
 		logger().debug({ msg: "action", name: opts.name, args: opts.args });
 
+		if (this.#stoppedError) {
+			throw this.#stoppedError;
+		}
+
 		// If we have an active connection, use the websockactionId
 		const actionId = this.#actionIdCounter;
 		this.#actionIdCounter += 1;
@@ -355,6 +371,7 @@ export class ActorConnRaw {
 		);
 		this.#actionsInFlight.set(actionId, {
 			name: opts.name,
+			sent: false,
 			resolve,
 			reject,
 		});
@@ -456,6 +473,7 @@ export class ActorConnRaw {
 			forever: true,
 			minTimeout: 250,
 			maxTimeout: 30_000,
+			randomize: true,
 
 			onFailedAttempt: (error) => {
 				logger().warn({
@@ -500,6 +518,9 @@ export class ActorConnRaw {
 			// Wait for result
 			await this.#onOpenPromise.promise;
 		} catch (error) {
+			if (this.#disposed) {
+				throw new AbortError("connection disposed");
+			}
 			if (this.#shouldRetryConnectionOpenError(error)) {
 				throw error;
 			}
@@ -514,10 +535,7 @@ export class ActorConnRaw {
 							{ error: stringifyError(error) },
 						);
 
-			this.#clearQueuedMessages();
-			this.#rejectPendingPromises(actorError, false);
-			this.#dispatchActorError(actorError);
-			this.#setConnStatus("idle");
+			this.#stop(actorError);
 
 			throw new AbortError(
 				error instanceof Error
@@ -532,6 +550,9 @@ export class ActorConnRaw {
 	#shouldRetryConnectionOpenError(error: unknown): boolean {
 		if (error instanceof errors.ActorConnDisposed) {
 			return false;
+		}
+		if (error instanceof errors.ActorError && isConnectionLost(error)) {
+			return true;
 		}
 		if (
 			error instanceof errors.ActorError &&
@@ -559,6 +580,19 @@ export class ActorConnRaw {
 		}
 
 		return isRetryableLifecycleReconnectSignal(error);
+	}
+
+	/**
+	 * Ends the connection for good. The error is set before any callback runs,
+	 * so a call made from `onError` or `onStatusChange` rejects instead of
+	 * waiting in the queue.
+	 */
+	#stop(error: errors.ActorError) {
+		this.#stoppedError = error;
+		this.#clearQueuedMessages();
+		this.#rejectPendingPromises(error, false);
+		this.#setConnStatus("idle");
+		this.#dispatchActorError(error);
 	}
 
 	#clearQueuedMessages() {
@@ -886,10 +920,12 @@ export class ActorConnRaw {
 			// Use ActorConnDisposed error and prevent unhandled rejection
 			this.#rejectPendingPromises(new errors.ActorConnDisposed(), true);
 		} else {
-			this.#setConnStatus("disconnected");
+			if (!this.#stoppedError) {
+				this.#setConnStatus("disconnected");
+			}
 
 			// Build error from close event
-			let error: Error;
+			let error: errors.ActorError;
 			const reason = closeEvent.reason || "";
 			const parsed = parseWebSocketCloseReason(reason);
 
@@ -959,22 +995,37 @@ export class ActorConnRaw {
 				}
 
 				this.#invalidateActorIfStale(group, code);
+			} else if (closeEvent.code === 1008) {
+				// A policy rejection from something in front of Rivet, such as a
+				// proxy. It does not go away on retry.
+				error = new errors.ActorError(
+					"client",
+					"connection_rejected",
+					`Connection rejected (code: 1008, reason: ${reason})`,
+					{ closeCode: closeEvent.code },
+				);
 			} else {
-				// Default error for non-structured close reasons
-				error = new Error(
+				error = new errors.ActorError(
+					"client",
+					CONNECTION_LOST_CODE,
 					`${wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${reason})`,
+					{ closeCode: closeEvent.code },
 				);
 			}
 
-			this.#rejectPendingPromises(error, false);
+			if (wasConnected && !this.#shouldRetryConnectionOpenError(error)) {
+				this.#stop(error);
+				return;
+			}
 
-			// Dispatch to error handler if it's an ActorError
-			if (error instanceof errors.ActorError) {
+			this.#rejectPendingPromises(error, false, { keepUnsent: true });
+
+			if (!isConnectionLost(error)) {
 				this.#dispatchActorError(error);
 			}
 
 			// Automatically reconnect if we were connected
-			if (wasConnected && this.#authRetryAvailable) {
+			if (wasConnected) {
 				logger().debug({
 					msg: "triggering reconnect",
 					connId: this.#connId,
@@ -984,7 +1035,17 @@ export class ActorConnRaw {
 		}
 	}
 
-	#rejectPendingPromises(error: Error, suppressUnhandled: boolean) {
+	/**
+	 * Rejects the pending open and pending actions. With `keepUnsent`, actions
+	 * still waiting in the queue stay pending: they were never sent, so they go
+	 * out after the reconnect. Sent actions always reject, because the socket
+	 * that carried them is gone and their outcome is unknown.
+	 */
+	#rejectPendingPromises(
+		error: Error,
+		suppressUnhandled: boolean,
+		opts: { keepUnsent?: boolean } = {},
+	) {
 		if (this.#onOpenPromise) {
 			if (suppressUnhandled) {
 				this.#onOpenPromise.promise.catch(() => {});
@@ -992,10 +1053,11 @@ export class ActorConnRaw {
 			this.#onOpenPromise.reject(error);
 		}
 
-		for (const actionInfo of this.#actionsInFlight.values()) {
+		for (const [id, actionInfo] of this.#actionsInFlight) {
+			if (opts.keepUnsent && !actionInfo.sent) continue;
 			actionInfo.reject(error);
+			this.#actionsInFlight.delete(id);
 		}
-		this.#actionsInFlight.clear();
 	}
 
 	/** Called by the onerror event from drivers. */
@@ -1323,6 +1385,12 @@ export class ActorConnRaw {
 						},
 					);
 					this.#websocket.send(messageSerialized);
+					if (message.body.tag === "ActionRequest") {
+						const inFlight = this.#actionsInFlight.get(
+							Number(message.body.val.id),
+						);
+						if (inFlight) inFlight.sent = true;
+					}
 					const serializedLength = messageLength(messageSerialized);
 					logger().trace({
 						msg: "sent websocket message",
