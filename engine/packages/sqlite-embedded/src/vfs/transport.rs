@@ -4056,18 +4056,9 @@ impl Drop for NativeDatabase {
 
 			// Every committed transaction is now in Depot or discarded. SQLite's rollback of an
 			// open transaction during close only restores that state, so nothing it writes is
-			// sent. Statements still prepared are finalized first, because `sqlite3_close_v2`
-			// would otherwise defer the close and that rollback until they are finalized, which
-			// never happens once the connection's owner is gone.
+			// sent. Every statement the connection's callers prepare is finalized before their
+			// call returns, so the close is never deferred by a statement nobody owns.
 			ctx.state.write().closing = true;
-			let finalized_statements = finalize_outstanding_statements(self.db);
-			if finalized_statements > 0 {
-				tracing::warn!(
-					actor_id = %ctx.actor_id,
-					finalized_statements,
-					"finalized statements left prepared on a closing sqlite database"
-				);
-			}
 			let rc = unsafe { sqlite3_close_v2(self.db) };
 			if rc != SQLITE_OK {
 				tracing::warn!(
@@ -4079,29 +4070,6 @@ impl Drop for NativeDatabase {
 			self.db = ptr::null_mut();
 		}
 	}
-}
-
-/// Finalizes every statement still prepared on a connection whose owner is dropping it, and
-/// returns how many there were. Every statement on the connection belongs to a caller that
-/// borrowed the connection, so none can be used once the connection is gone. A statement
-/// left prepared, for example by a panic between prepare and finalize, would otherwise keep
-/// `sqlite3_close_v2` from closing the connection until it is finalized, deferring the
-/// rollback of an open transaction and the release of the connection indefinitely.
-fn finalize_outstanding_statements(db: *mut sqlite3) -> usize {
-	let mut finalized = 0;
-	loop {
-		// SAFETY: `db` is a live connection owned by the caller, and the statement it returns
-		// has no other user because the connection's owner is dropping it.
-		let stmt = unsafe { sqlite3_next_stmt(db, ptr::null_mut()) };
-		if stmt.is_null() {
-			break;
-		}
-		unsafe {
-			sqlite3_finalize(stmt);
-		}
-		finalized += 1;
-	}
-	finalized
 }
 
 /// Whether the connection holds a write transaction SQLite has not committed: an explicit
