@@ -164,7 +164,6 @@ Routing, scheduling, types, and telemetry, built in.
 
 - **Fault tolerance by design**: A node going down reschedules its Actors elsewhere with their state intact. No replay harness or checkpointing of your own.
 - **Keep state with each Actor**: Every Actor gets its own SQLite database and key-value storage. The control plane replicates writes and moves data to object storage, so you never size a disk for an Actor.
-- **Multi-region**: Place Actors near the users and data they serve, and route requests to wherever each one currently lives.
 - **HTTP & WebSocket networking**: Address an Actor directly over HTTP or hold a live WebSocket to it. No queue or broker in between.
 - **End-to-end type safety**: Actor definitions generate their own client types, so a signature change breaks the build rather than production.
 - **React SDK**: First-party hooks that subscribe a component to an Actor's state and keep it live as the Actor updates.
@@ -245,7 +244,7 @@ Yes. Rivet deploys into your own cloud account, including air-gapped environment
 <details>
 <summary><b>Does Rivet have a cloud?</b></summary>
 
-Yes. Rivet Cloud is fully managed. It can run your Actors for you on [Rivet Compute](https://www.rivet.dev/docs/deploy/cloud/compute/), with preview deployments and auto-scaling in edge regions, or you can [bring your own nodes](https://www.rivet.dev/docs/deploy/self-host/nodes/) and run Actors on your compute while Rivet Cloud provides the control plane and routing layer.
+Yes. Rivet Cloud is fully managed. It can run your app's Docker image as [actor nodes on a Rivet Cloud cluster](https://www.rivet.dev/docs/deploy/cloud/compute/), or you can [bring your own nodes](https://www.rivet.dev/docs/deploy/self-host/nodes/) and run Actors on your compute while Rivet Cloud provides the control plane and routing layer.
 
 </details>
 
@@ -308,7 +307,7 @@ Yes. Rivet Actors work with Effect; see the [Effect agent example](./examples/ai
 <details>
 <summary><b>Is Rivet like Erlang, Akka, or Orleans?</b></summary>
 
-Rivet implements the virtual actor pattern, which is closest to Orleans, but focuses on what modern workloads need: SQLite persistence instead of simple JSON stores, multi-region routing, and support for modern runtimes. Erlang and Akka do not provide virtual actors out of the box, though ecosystem packages exist that offer functionality comparable to Rivet Actors.
+Rivet implements the virtual actor pattern, which is closest to Orleans, but focuses on what modern workloads need: SQLite persistence instead of simple JSON stores and support for modern runtimes. Erlang and Akka do not provide virtual actors out of the box, though ecosystem packages exist that offer functionality comparable to Rivet Actors.
 
 </details>
 
@@ -331,7 +330,6 @@ No. Rivet only needs a standard process that connects to the control plane over 
 | ↳ [Pegboard](./engine/packages/pegboard) | Actor scheduling & networking |
 | ↳ [Gasoline](./engine/packages/gasoline) | Durable execution engine |
 | ↳ [Guard](./engine/packages/guard) | Traffic routing proxy |
-| ↳ [Epoxy](./engine/packages/epoxy) | Multi-region KV store (EPaxos) |
 | [Dashboard](./frontend) | Inspector for debugging Actors |
 | [Documentation](./docs) | Source for [rivet.dev/actors/docs](https://www.rivet.dev/actors/docs) |
 | [Examples](./examples) | Runnable examples |
