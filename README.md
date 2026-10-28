@@ -119,22 +119,6 @@ agent.on("token", delta => process.stdout.write(delta));
 await agent.chat("how many r's in strawberry?");
 ```
 
-## What's new in Rivet 3.0
-
-Rivet 3.0 is built on **WarpDrive**, a new storage engine that gives every Actor bottomless storage on S3 with the speed of an SSD. [Read the announcement →](https://www.rivet.dev/changelog/2026-10-26-introducing-rivet-3-0-preview/)
-
-- **Bottomless storage with the speed of an SSD**: Each Actor's data lives in its own durable volume holding its SQLite database and key-value data. A write is acknowledged once a majority of the instances holding that volume have it on disk, so losing one instance loses no acknowledged write. The bucket receives the durable copy in the background, shortly after, so storage never runs out and the bucket never sits on the write path.
-- **No database, no message bus**: Rivet 2.x needed Postgres or FoundationDB plus NATS. In 3.0, WarpDrive replaces the database and the bucket replaces the message broker. Control plane instances find each other through the bucket.
-- **Any object store**: Amazon S3, Google Cloud Storage, Azure Blob Storage, or any S3-compatible store such as MinIO, Cloudflare R2, and Hetzner Object Storage. A local filesystem backend is available for trying Rivet on one machine.
-- **No code changes**: 3.0 uses the same RivetKit SDK and protocol as 2.x. The upgrade is entirely in the storage engine underneath.
-
-| SQLite on WarpDrive | p50 | p99 |
-|---|:---:|:---:|
-| **Durable insert** (128-byte row, written to a majority of disks across 3 zones) | **0.69 ms** | 0.80 ms |
-| **Warm read** (primary-key read from SQLite's memory cache) | **0.059 ms** | 0.080 ms |
-
-Rivet 3.0 is in preview. Multi-region, serverless, and ACLs have not landed in 3.0 yet; if you depend on them, stay on 2.x, which remains supported. A migration tool will move 2.x deployments to 3.0 with zero downtime.
-
 ## Actor types
 
 Every product Rivet ships is an Actor, scheduled by the same control plane.
@@ -275,28 +259,7 @@ Yes. Rivet is fully self-hostable; see the [self-hosting docs](https://www.rivet
 <details>
 <summary><b>Do I still need Postgres, FoundationDB, or NATS?</b></summary>
 
-No. As of Rivet 3.0, an object storage bucket is the only dependency: there is no database to run and no message bus, and control plane instances find each other through the bucket. Rivet works with Amazon S3, Google Cloud Storage, Azure Blob Storage, and any S3-compatible store such as MinIO, Cloudflare R2, or Hetzner Object Storage. A local filesystem backend is available for trying Rivet on one machine.
-
-</details>
-
-<details>
-<summary><b>Do reads and writes wait on S3?</b></summary>
-
-No. A write is acknowledged once a majority of the instances holding that Actor's volume have it on disk; the bucket receives the durable copy in the background, shortly after. Reads are served from memory or from the instance's local disk. If the bucket becomes unavailable, writes and reads of recent data stay available; only reads of older Actors whose data has already moved to the bucket wait for it to come back.
-
-</details>
-
-<details>
-<summary><b>What do I need to run to self-host?</b></summary>
-
-Four things: control plane instances, a disk per instance, a bucket, and nodes. Every instance runs the same image and every service; run one to try Rivet and three or more in production. Each instance gets its own persistent block-storage disk for recent writes and its identity, never shared between instances. One bucket per cluster holds the durable copy of every Actor's data, and nodes run your Actors. There is no database to run and no message bus. Losing one instance out of three loses nothing: the other instances keep serving and rebuild the missing replicas.
-
-</details>
-
-<details>
-<summary><b>What does the 3.0 preview mean, and do I need to change my code?</b></summary>
-
-No code changes. Rivet 3.0 uses the same RivetKit SDK and protocol as 2.x; the upgrade is entirely in the storage engine. 3.0 is in preview because multi-region, serverless, and ACLs have not landed yet, and it is still being hardened under production load. Rivet 2.x stays supported while 3.0 is in preview, and a migration tool will move 2.x deployments to 3.0 with zero downtime.
+No. An object storage bucket is the only dependency: there is no database to run and no message bus, and control plane instances find each other through the bucket. Rivet works with Amazon S3, Google Cloud Storage, Azure Blob Storage, and any S3-compatible store such as MinIO, Cloudflare R2, or Hetzner Object Storage. A local filesystem backend is available for trying Rivet on one machine.
 
 </details>
 
