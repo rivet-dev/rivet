@@ -32,6 +32,3 @@ sqlite_types.workspace = true
 lru = "0.18.5"
 parking_lot.workspace = true
 
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
