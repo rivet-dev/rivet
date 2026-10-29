@@ -50,6 +50,11 @@ const EMPTY_DB_PAGE_HEADER_PREFIX: [u8; 108] = [
 ];
 
 static NEXT_TEMP_AUX_ID: AtomicU64 = AtomicU64::new(1);
+// The probe checks build and VFS settings that are the same for every database
+// in the process, so one successful probe covers all later opens. A failure is
+// not cached, because it can come from a transient storage error.
+#[cfg(not(test))]
+static BATCH_ATOMIC_VERIFIED: AtomicBool = AtomicBool::new(false);
 
 unsafe extern "C" {
 	fn sqlite3_close_v2(db: *mut sqlite3) -> c_int;
@@ -4106,21 +4111,27 @@ pub fn verify_batch_atomic_writes(
 	vfs: &SqliteVfs,
 	file_name: &str,
 ) -> std::result::Result<(), String> {
+	// Unit tests probe on every open that asks for it, so each test sees the
+	// same commit history no matter which test ran first.
 	#[cfg(test)]
-	let assert_batch_atomic = vfs.ctx.config.assert_batch_atomic;
-	#[cfg(not(test))]
-	let assert_batch_atomic = true;
-	if assert_batch_atomic {
-		if let Err(err) = assert_batch_atomic_probe(db, &vfs) {
-			tracing::error!(
-				file_name,
-				%err,
-				last_error = ?vfs.clone_last_error(),
-				"failed to verify sqlite batch atomic writes"
-			);
-			return Err(err);
-		}
+	if !vfs.ctx.config.assert_batch_atomic {
+		return Ok(());
 	}
+	#[cfg(not(test))]
+	if BATCH_ATOMIC_VERIFIED.load(Ordering::Acquire) {
+		return Ok(());
+	}
+	if let Err(err) = assert_batch_atomic_probe(db, vfs) {
+		tracing::error!(
+			file_name,
+			%err,
+			last_error = ?vfs.clone_last_error(),
+			"failed to verify sqlite batch atomic writes"
+		);
+		return Err(err);
+	}
+	#[cfg(not(test))]
+	BATCH_ATOMIC_VERIFIED.store(true, Ordering::Release);
 
 	Ok(())
 }

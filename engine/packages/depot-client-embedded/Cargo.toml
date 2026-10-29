@@ -19,3 +19,9 @@ depot-client.workspace = true
 rivet-envoy-protocol.workspace = true
 rivet-error.workspace = true
 tokio.workspace = true
+
+[dev-dependencies]
+gas.workspace = true
+rivet-pools.workspace = true
+tempfile.workspace = true
+universaldb.workspace = true
