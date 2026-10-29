@@ -132,6 +132,10 @@ pub enum ToEnvoyMessage {
 		evict: bool,
 		session: u64,
 	},
+	PoolNotFound {
+		session: u64,
+		ray_id: Option<String>,
+	},
 	SendEvents {
 		events: Vec<protocol::EventWrapper>,
 	},
@@ -439,6 +443,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		connection_session_tx,
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
+		terminal_error: std::sync::Mutex::new(None),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(0),
 		contact_before_install_ms: std::sync::atomic::AtomicI64::new(0),
 		last_contact_ms: std::sync::atomic::AtomicI64::new(0),
@@ -520,6 +525,30 @@ async fn envoy_loop(
 							observe_envoy_loop_iteration(branch, iter_start);
 							break;
 						}
+					}
+					ToEnvoyMessage::PoolNotFound { session, ray_id } => {
+						remove_http_routes_for_session(&mut ctx, session);
+						let error = format!(
+							"node pool `{}` in namespace `{}` was not found (pool.not_found); restore the Engine's storage or recreate the pool with its intended configuration, then restart the runner",
+							ctx.shared.config.pool_name,
+							ctx.shared.config.namespace,
+						);
+						tracing::error!(%error, ?ray_id, "envoy cannot register");
+						*ctx.shared.terminal_error.lock().expect("terminal error poisoned") = Some(error);
+						ctx.shared.shutting_down.store(true, Ordering::Release);
+						let actors: Vec<_> = ctx.actors.values().flat_map(|generations| generations.values())
+							.map(|entry| entry.handle.clone()).collect();
+						stop_all_actors_lost(&mut ctx);
+						// Never reconnect against a newly created pool while old generations run.
+						// Bound teardown so the host can exit even if an actor fails to stop.
+						tokio::select! {
+							_ = futures_util::future::join_all(actors.iter().map(|actor| actor.closed())) => {},
+							_ = boxed_sleep(std::time::Duration::from_secs(5)) => {
+								tracing::warn!("actors did not stop after missing pool rejection; host must exit");
+							}
+						}
+						observe_envoy_loop_iteration(branch, iter_start);
+						break;
 					}
 					ToEnvoyMessage::SendEvents { events } => {
 						handle_send_events(&mut ctx, events).await;

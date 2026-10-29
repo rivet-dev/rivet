@@ -69,7 +69,17 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 				retry_after_ms = close_reason
 					.as_ref()
 					.and_then(|reason| reason.retry_after_ms);
-				if let Some(reason) = &close_reason {
+				if let Some(reason) = close_reason {
+					if reason.group == "pool" && reason.error == "not_found" {
+						let _ = crate::envoy::send_to_envoy_tx(
+							&shared,
+							ToEnvoyMessage::PoolNotFound {
+								session,
+								ray_id: reason.ray_id,
+							},
+						);
+						return;
+					}
 					if reason.group == "ws" && reason.error == "eviction" {
 						tracing::debug!("connection evicted");
 						let _ = crate::envoy::send_to_envoy_tx(

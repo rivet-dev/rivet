@@ -710,10 +710,20 @@ impl CoreRegistry {
 		// host's default SIGINT handling when rivetkit-core is embedded in
 		// Node via NAPI and leaves the host process unable to exit. Callers
 		// trip the `shutdown` token instead.
-		shutdown.cancelled().await;
+		let terminal_error = tokio::select! {
+			biased;
+			_ = shutdown.cancelled() => None,
+			_ = handle.wait_stopped() => match handle.terminal_error() {
+				Some(error) => Some(error),
+				None => {
+					shutdown.cancelled().await;
+					None
+				}
+			},
+		};
 
 		let shutdown_envoy = async {
-			if manage_engine {
+			if manage_engine && terminal_error.is_none() {
 				// Remove the old host from the engine's active pool before sleeping
 				// actors. Otherwise a request racing the stopped report can start the
 				// next generation on this host just before it exits. Keep the socket
@@ -796,7 +806,10 @@ impl CoreRegistry {
 		#[cfg(not(feature = "native-runtime"))]
 		shutdown_envoy.await;
 
-		Ok(())
+		match terminal_error {
+			Some(error) => Err(anyhow::anyhow!(error)),
+			None => Ok(()),
+		}
 	}
 
 	fn into_dispatcher(self, config: &ServeConfig) -> Arc<RegistryDispatcher> {
