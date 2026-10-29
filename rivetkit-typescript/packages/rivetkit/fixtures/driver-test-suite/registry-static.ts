@@ -32,6 +32,7 @@ import {
 	dbRemoteLifecycleProbe,
 } from "./actor-db-raw";
 import { onStateChangeActor } from "./actor-onstatechange";
+import { connDrainActor } from "./conn-drain";
 import { connErrorSerializationActor } from "./conn-error-serialization";
 import { counterWithParams } from "./conn-params";
 import { connPreflightVisibilityActor } from "./conn-preflight-visibility";
@@ -281,6 +282,8 @@ export const registry = setup({
 		connStateActor,
 		// From conn-preflight-visibility.ts
 		connPreflightVisibilityActor,
+		// From conn-drain.ts
+		connDrainActor,
 		// From metadata.ts
 		metadataActor,
 		// From vars.ts
