@@ -2,8 +2,8 @@ import {
 	MessageId,
 	QueuePayloadSchema,
 	ValidQueueName as ValidQueueNameSchema,
-	SPEC_VERSION_CURRENT,
 	getQueueTopicPrefix,
+	mintedSpecVersion,
 	resolveQueueNamespace,
 	type CreateEventParams,
 	type CreateEventRequest,
@@ -29,10 +29,12 @@ import {
 	type World,
 } from "@workflow/world";
 import { HookNotFoundError, WorkflowWorldError } from "@workflow/errors";
+import { globalSingleton } from "@workflow/utils";
 import { setup, type Registry } from "rivetkit";
 import { createClient, type Client } from "rivetkit/client";
 import { monotonicFactory } from "ulid";
 import { registry, workflowWorldActors } from "./actors.js";
+import { withWorldErrors } from "./world-errors.js";
 
 export type RivetWorldConfig = {
 	/** The application's combined registry, including `workflowWorldActors`. */
@@ -180,8 +182,30 @@ function verifyWorkflowBearer(req: Request) {
 	return Response.json({ error: "Unauthorized" }, { status: 401 });
 }
 
+/**
+ * The subset of `CreateEventParams` the run actor reads. Params also carry
+ * process-local values (`replayEventObserver` is a function) that cannot cross
+ * the actor RPC, so only these are forwarded.
+ */
+function actorEventParams(
+	params: CreateEventParams | undefined,
+): CreateEventParams | undefined {
+	if (!params) return undefined;
+	return {
+		...(params.resolveData === undefined
+			? {}
+			: { resolveData: params.resolveData }),
+		...(params.eventCount === undefined
+			? {}
+			: { eventCount: params.eventCount }),
+		...(params.skipPreload === undefined
+			? {}
+			: { skipPreload: params.skipPreload }),
+	};
+}
+
 function runActor(client: Client<typeof registry>, runId: string) {
-	return client.workflowRun.getOrCreate([runId]);
+	return withWorldErrors(client.workflowRun.getOrCreate([runId]));
 }
 
 type RegistryWithReadiness = Registry<any> & {
@@ -246,10 +270,21 @@ function withRegistryReadiness(
 	}) as Client<typeof registry>;
 }
 
-const ulid = monotonicFactory();
+// Process-wide rather than per module instance: a host that bundles this
+// package (Next.js compiles the World into each server layer) would otherwise
+// get one monotonic factory per layer.
+const ids = globalSingleton("@rivet-dev/workflow-world//ids", 1, () => ({
+	ulid: monotonicFactory(),
+}));
+const ulid = () => ids.ulid();
 
 export class RivetClientWorld {
-	readonly specVersion = SPEC_VERSION_CURRENT;
+	// The spec version stamped on every run this World creates: the sealed-log
+	// version by default, slot identity under `WORKFLOW_SEALED_LOG=0`. Read per
+	// World so one process can create Worlds in both modes. Event ids are
+	// allocated at the commit (see `insertEvent`), so the log never has holes
+	// and this World never writes a `noop`.
+	readonly specVersion = mintedSpecVersion();
 	readonly #client: Client<typeof registry>;
 	readonly #registry: RegistryWithReadiness | undefined;
 	readonly #ownsRegistry: boolean;
@@ -311,27 +346,8 @@ export class RivetClientWorld {
 	};
 
 	steps = {
-		get: async (
-			runId: string | undefined,
-			stepId: string,
-			params?: GetStepParams,
-		) => {
-			const effectiveRunId =
-				runId ??
-				(await resolveDerivedRunId(() =>
-					this.#client.coordinator
-						.getOrCreate(["coordinator"])
-						.getRunIdByCorrelation(stepId),
-				));
-			if (!effectiveRunId) {
-				throw new WorkflowWorldError(`Step not found: ${stepId}`);
-			}
-			return runActor(this.#client, effectiveRunId).getStep(
-				effectiveRunId,
-				stepId,
-				params,
-			);
-		},
+		get: async (runId: string, stepId: string, params?: GetStepParams) =>
+			runActor(this.#client, runId).getStep(runId, stepId, params),
 		list: async (params: ListWorkflowRunStepsParams) =>
 			runActor(this.#client, params.runId).listSteps(params),
 	};
@@ -411,7 +427,7 @@ export class RivetClientWorld {
 						input: dataToStore.eventData.input,
 						deploymentId: dataToStore.eventData.deploymentId,
 						workflowName: dataToStore.eventData.workflowName,
-						specVersion: dataToStore.specVersion ?? SPEC_VERSION_CURRENT,
+						specVersion: dataToStore.specVersion ?? this.specVersion,
 						...(executionContext == null ? {} : { executionContext }),
 						...(dataToStore.eventData.attributes == null
 							? {}
@@ -437,7 +453,7 @@ export class RivetClientWorld {
 				result = await runActor(this.#client, actorRunId).appendEvent(
 					actorRunId,
 					dataToStore,
-					params,
+					actorEventParams(params),
 					initialDispatch,
 					{
 						...(reservationToConfirm == null
@@ -484,13 +500,10 @@ export class RivetClientWorld {
 			runActor(this.#client, runId).getEvent(runId, eventId, params),
 		list: async (params: ListEventsParams) =>
 			runActor(this.#client, params.runId).listEvents(params),
-		listByCorrelationId: async (params: ListEventsByCorrelationIdParams) => {
-			const runId = await this.#client.coordinator
-				.getOrCreate(["coordinator"])
-				.getRunIdByCorrelation(params.correlationId);
-			if (!runId) return { data: [], cursor: null, hasMore: false };
-			return runActor(this.#client, runId).listEventsByCorrelationId(params);
-		},
+		// A correlation id names a step, hook or wait within one run, so the
+		// lookup goes straight to that run's actor.
+		listByCorrelationId: async (params: ListEventsByCorrelationIdParams) =>
+			runActor(this.#client, params.runId).listEventsByCorrelationId(params),
 	};
 
 	hooks = {
@@ -582,7 +595,7 @@ export class RivetClientWorld {
 
 	createQueueHandler(
 		queueNamePrefix: QueuePrefix,
-		handler: (message: unknown, meta: any) => Promise<void | { timeoutSeconds: number }>,
+		handler: (message: unknown, meta: any) => Promise<unknown>,
 	) {
 		return async (req: Request) => {
 			const unauthorized = verifyWorkflowBearer(req);
@@ -620,8 +633,10 @@ export class RivetClientWorld {
 					queueName,
 					messageId: parsedMessageId,
 				});
-				if (typeof result?.timeoutSeconds === "number") {
-					return Response.json({ timeoutSeconds: result.timeoutSeconds });
+				const timeoutSeconds = (result as { timeoutSeconds?: unknown } | undefined)
+					?.timeoutSeconds;
+				if (typeof timeoutSeconds === "number") {
+					return Response.json({ timeoutSeconds });
 				}
 				return Response.json({ ok: true });
 			} catch (error) {

@@ -59,3 +59,15 @@ package is left to Node at runtime. Next.js rejects a package asked to do both.
 
 This package only implements orchestration. Sandbox selection, including
 agentOS, stays in Vercel Eve's sandbox configuration.
+
+## Workflow SDK compatibility
+
+This package implements the Workflow SDK 5 World contract and requires
+`workflow` 5.2 or newer. Event ids are positions in the run's log
+(`evnt_00000000000000000000000001` is a run's first event), allocated inside
+the run actor's transaction that appends the event.
+
+Runs created by an earlier release of this package numbered their events with
+ULIDs, and the Workflow SDK 5 runtime refuses to replay them. Every run is
+served by the deployment at `WORKFLOW_RUNTIME_URL`, so let in-flight runs
+finish on the previous release before upgrading.

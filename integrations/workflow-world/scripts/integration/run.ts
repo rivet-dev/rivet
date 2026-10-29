@@ -641,14 +641,14 @@ async function runChecks(
 			input: { source: "integration" },
 		},
 	});
-	const globalStep = await world.steps.get(undefined, stepId, {
+	const scopedStep = await world.steps.get(stepLookupRunId, stepId, {
 		resolveData: "none",
 	});
 	assert(
-		globalStep.stepId === stepId && globalStep.runId === stepLookupRunId,
-		"Expected steps.get without runId to resolve via correlation index",
+		scopedStep.stepId === stepId && scopedStep.runId === stepLookupRunId,
+		"Expected steps.get to resolve the step within its run",
 	);
-	log("global step lookup check passed");
+	log("run-scoped step lookup check passed");
 
 	const waitCreated = await world.events.create(null, {
 		eventType: "run_created",
