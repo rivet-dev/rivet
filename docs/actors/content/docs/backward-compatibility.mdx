@@ -1,0 +1,49 @@
+---
+title: "Backward Compatibility"
+description: "Evolve Rivet Actor APIs and stored data while old clients, workers, and queued messages are still in use."
+skill: true
+---
+
+A new deployment does not update every client or actor at once. A browser tab can keep running old code, an actor can still be running on an older worker, and a queued message can outlive the code that sent it. Plan for these versions to meet during an upgrade.
+
+The [worker version](/docs/versions) controls where actors run and when older workers drain. It does not version action arguments, queue messages, events, or stored data.
+
+## Version the public API
+
+Treat an actor's actions, queues, and events as one public contract. For a new public API, publish `v1` names from the start. Add compatible operations and optional fields within that version when clients can safely ignore them. Keep `v1` available while introducing `v2` for a breaking change.
+
+RivetKit supports nested [action groups](/actors/docs/actions#nested-actions), so action calls can use `handle.v1.get()` and `handle.v2.get()`. Queue and event names are flat; prefix them consistently, such as `v1.add` and `v2.changed`. If you already published names without a prefix, keep those names as the v1 contract until existing callers migrate. RivetKit does not automatically select an API version or convert payloads between versions.
+
+<CodeSnippet file="examples/docs/actors-backward-compatibility/versioned-api.ts" title="actor.ts" />
+
+Both versions can call the same internal logic. Keep their inputs and outputs stable independently: a v1 caller must still receive the v1 response shape, even after v2 is available. Validate public inputs at runtime when callers can send data without your TypeScript types.
+
+## Account for version skew
+
+| What can meet | What to preserve |
+| --- | --- |
+| Old client, new actor | The v1 actions, queue names, and event payloads the client uses. |
+| New client, old actor | Wait until workers serving old code have drained before making v2 calls. A new client cannot assume an old actor understands v2. |
+| Old queued message, new actor | The v1 queue name and decoder until every v1 message has been handled. |
+| Old stored data, new actor | A migration or reader for the old state and SQLite schema. |
+
+During a rolling deployment, the same client may reach code from different deployments, and one actor may call another actor running older code. A deployment number cannot make an incompatible request work. Use a contract supported by **both** sides during the overlap. Keep existing connections and actor-to-actor callers in mind, not just newly loaded browser tabs.
+
+## Keep queued messages readable
+
+A queue message retains the name and body it had when it was sent. A `v1.add` message that was stored before deployment is still `v1.add` when a newer actor receives it. Continue consuming v1 and v2 names and decode each body using its corresponding schema. If a queue has a completion response, preserve the response shape expected by its sender too.
+
+For ordinary queue receives, messages are removed when received; a handler failure does not automatically put the message back. Completable receives keep messages until `message.complete()` and can deliver them again. Make those handlers idempotent. Test old queued payloads against the new consumer before deploying. See [Queues](/actors/docs/queues#completable-messages) for details.
+
+## Roll out a breaking change
+
+1. **Expand the actor:** deploy code that serves v1 and v2 and can consume messages from both queues. Broadcast both event versions while subscribers need them.
+2. **Let old workers drain:** confirm actors can run the new code before clients begin sending v2 calls or messages. See [Versions & Upgrades](/docs/versions#drain-on-version-upgrade).
+3. **Move callers:** update browsers, services, and actor-to-actor calls to v2. Old clients can continue using v1 during the transition.
+4. **Retire v1 deliberately:** remove it only after v1 callers and subscriptions are gone and no v1 queue messages remain. A completed worker rollout alone does not prove this.
+
+## Migrate stored data separately
+
+API versions describe what callers send and receive. Actor state and SQLite have their own migration lifecycle. Use [`onMigrate` and SQLite migrations](/docs/versions#upgrading-actor-state) so an actor waking on new code can read data written before the upgrade. Do not use the worker deployment number as a database schema version.
+
+If a durable workflow resumes on new code, preserve its recorded control flow with `getVersion()` around incompatible workflow changes. That decision is separate from the public action or queue version.
