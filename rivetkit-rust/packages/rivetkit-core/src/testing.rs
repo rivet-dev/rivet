@@ -200,6 +200,7 @@ fn test_envoy_handle(endpoint: String) -> (EnvoyHandle, mpsc::UnboundedReceiver<
 		connection_session_tx: tokio::sync::watch::channel(1).0,
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
+		terminal_error: std::sync::Mutex::new(None),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
 		last_contact_ms: std::sync::atomic::AtomicI64::new(0),
 		contact_before_install_ms: std::sync::atomic::AtomicI64::new(0),

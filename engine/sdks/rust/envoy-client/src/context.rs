@@ -39,6 +39,8 @@ pub struct SharedContext {
 	pub connection_session_tx: watch::Sender<u64>,
 	pub protocol_metadata: Arc<Mutex<Option<protocol::ProtocolMetadata>>>,
 	pub shutting_down: AtomicBool,
+	/// Fatal connection error, retained after the envoy stops for its host to report.
+	pub terminal_error: StdMutex<Option<String>>,
 	/// Epoch ms timestamp of the most recent ping packet received from the engine. Used by
 	/// `EnvoyHandle::is_ping_healthy` to surface a dead engine link to upstream health checks.
 	/// Zero means no ping has been received yet.

@@ -80,6 +80,15 @@ impl EnvoyHandle {
 		let _ = rx.changed().await;
 	}
 
+	/// The reason the envoy stopped, if the engine rejected its pool registration.
+	pub fn terminal_error(&self) -> Option<String> {
+		self.shared
+			.terminal_error
+			.lock()
+			.expect("terminal error poisoned")
+			.clone()
+	}
+
 	/// Convenience: signal shutdown then await `wait_stopped`.
 	pub async fn shutdown_and_wait(&self, immediate: bool) {
 		self.shutdown(immediate);
@@ -167,7 +176,10 @@ impl EnvoyHandle {
 			.clone()
 			.changed()
 			.await
-			.map_err(|_| anyhow::anyhow!("envoy stopped before startup completed"))?;
+			.map_err(|_| match self.terminal_error() {
+				Some(error) => anyhow::anyhow!(error),
+				None => anyhow::anyhow!("envoy stopped before startup completed"),
+			})?;
 		Ok(())
 	}
 

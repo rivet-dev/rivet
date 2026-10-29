@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Nodes now stop with an actionable error when the Engine rejects their pool registration with `pool.not_found`, rather than reconnecting indefinitely while unregistered. Restore Engine storage or recreate the intended pool configuration before restarting the node.
+
 - **Authentication configuration is now required.** Deployments that previously omitted `auth`
   must configure an explicit production secret before upgrading:
 

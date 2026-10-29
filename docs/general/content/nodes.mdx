@@ -24,6 +24,8 @@ curl -X PUT "$RIVET_API/pools/default?namespace=$RIVET_NAMESPACE" \
 
 The control plane refuses a node whose pool does not exist. Local development is the exception: when the endpoint is on `localhost`, RivetKit creates the pool itself.
 
+If the control plane later rejects a reconnect with `pool.not_found`, RivetKit stops the node and reports an error rather than remaining alive outside the pool. Check the namespace and control-plane storage; restore the original storage or recreate the pool with its intended configuration before restarting the node. Recreating the pool does not restore lost Actor data. A local node creates its pool at startup; production pool configuration must be managed separately.
+
 </Step>
 <Step title="Connect nodes">
 
