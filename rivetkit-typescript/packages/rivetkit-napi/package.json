@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/rivetkit-napi",
-	"version": "3.0.0-preview.3",
+	"version": "3.0.0-preview.4",
 	"description": "Native N-API addon for RivetKit providing envoy client and SQLite access",
 	"license": "Apache-2.0",
 	"main": "index.js",

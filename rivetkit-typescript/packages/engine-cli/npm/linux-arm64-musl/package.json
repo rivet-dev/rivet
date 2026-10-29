@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/engine-cli-linux-arm64-musl",
-	"version": "3.0.0-preview.3",
+	"version": "3.0.0-preview.4",
 	"description": "Rivet Engine binary for Linux arm64 musl (static)",
 	"license": "Apache-2.0",
 	"os": [

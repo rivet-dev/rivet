@@ -92,7 +92,7 @@ members = [
 ]
 
   [workspace.package]
-  version = "3.0.0-preview.3"
+  version = "3.0.0-preview.4"
   edition = "2024"
   authors = [ "Rivet Gaming, LLC <developer@rivet.dev>" ]
   license = "Apache-2.0"
@@ -441,7 +441,7 @@ members = [
     [workspace.dependencies.sqlite-embedded]
     default-features = false
     path = "engine/packages/sqlite-embedded"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.sqlite-prefetch]
     path = "engine/packages/sqlite-prefetch"
@@ -452,7 +452,7 @@ members = [
     [workspace.dependencies.sqlite_types]
     package = "rivet-sqlite-types"
     path = "engine/packages/rivet-sqlite-types"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.depot-client]
     path = "engine/packages/depot-client"
@@ -480,11 +480,11 @@ members = [
 
     [workspace.dependencies.rivet-error]
     path = "engine/packages/error"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivet-error-macros]
     path = "engine/packages/error-macros"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivet-guard]
     path = "engine/packages/guard"
@@ -497,7 +497,7 @@ members = [
 
     [workspace.dependencies.rivet-metrics]
     path = "engine/packages/metrics"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivet-metrics-server]
     path = "engine/packages/metrics-server"
@@ -560,14 +560,14 @@ members = [
 
     [workspace.dependencies.rivet-util-serde]
     path = "engine/packages/util-serde"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivet-version-management]
     path = "engine/packages/version-management"
 
     [workspace.dependencies.rivet-actor-runtime-socket-protocol]
     path = "engine/sdks/rust/actor-runtime-socket-protocol"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivet-data]
     path = "engine/sdks/rust/data"
@@ -593,43 +593,43 @@ members = [
     [workspace.dependencies.rivet-envoy-client]
     path = "engine/sdks/rust/envoy-client"
     default-features = false
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivet-envoy-protocol]
     path = "engine/sdks/rust/envoy-protocol"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivetkit-client-protocol]
     path = "rivetkit-rust/packages/client-protocol"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivetkit-client]
     path = "rivetkit-rust/packages/client"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivetkit-actor-persist]
     path = "rivetkit-rust/packages/actor-persist"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivetkit-inspector-protocol]
     path = "rivetkit-rust/packages/inspector-protocol"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivetkit]
     path = "rivetkit-rust/packages/rivetkit"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivetkit-core]
     path = "rivetkit-rust/packages/rivetkit-core"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivetkit-shared-types]
     path = "rivetkit-rust/packages/shared-types"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.rivetkit-engine-process]
     path = "rivetkit-rust/packages/engine-process"
-    version = "=3.0.0-preview.3"
+    version = "=3.0.0-preview.4"
 
     [workspace.dependencies.epoxy-protocol]
     path = "engine/sdks/rust/epoxy-protocol"

@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/engine-envoy-protocol",
-	"version": "3.0.0-preview.3",
+	"version": "3.0.0-preview.4",
 	"license": "Apache-2.0",
 	"type": "module",
 	"exports": {
