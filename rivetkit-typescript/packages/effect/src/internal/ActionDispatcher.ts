@@ -34,7 +34,7 @@ export const make = <
 	actor,
 	getInstance,
 }: {
-	readonly actor: Actor<Name, Actions>;
+	readonly actor: Actor<Name, Actions, any>;
 	readonly getInstance: (
 		actorId: string,
 	) => Instance<ActionHandlers> | undefined;

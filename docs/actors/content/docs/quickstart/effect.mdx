@@ -213,13 +213,51 @@ The Effect SDK wraps the most common actor features with typed, schema-validated
 | Sleep request | `Actor.Sleep` | Typed |
 | Actor address (`actorId` / `name` / `key`) | `Actor.CurrentAddress` | Typed |
 | Registry serve / test / web handler | `Registry` | Typed |
-| [Events & broadcast](/actors/docs/events) | Not yet wrapped | `rawRivetkitContext.broadcast(...)` |
+| [Events & broadcast](/actors/docs/events) | `Event.make`, `events.broadcast` in wake options | Typed (broadcast only; no typed client subscription yet) |
 | [Schedule](/actors/docs/schedule) | Not yet wrapped | `rawRivetkitContext.schedule.*` |
 | [Embedded SQLite](/actors/docs/sqlite) | Not yet wrapped | `rawRivetkitContext.db.execute(...)` |
 | [Destroy](/actors/docs/lifecycle) | Not yet wrapped | `rawRivetkitContext.destroy()` |
 | Queues, connections, vars, alarms | Not yet wrapped | `rawRivetkitContext.*` |
 | Lifecycle hooks (`onSleep` / `onDestroy`) | Not yet wrapped | `rawRivetkitContext.*` |
 | Raw HTTP / WebSocket handlers | Not yet wrapped | `rawRivetkitContext.*` |
+
+### Typed Events
+
+Declare events with `Event.make` and add them to `Actor.make`'s `events` option. The wake function's `events.broadcast` argument encodes the payload through the event's schema before calling RivetKit's broadcast, matching the guarantees actions already get:
+
+```ts src/actors/counter/api.ts @nocheck
+import { Action, Actor, Event } from "@rivetkit/effect";
+import { Schema } from "effect";
+
+export const NewCount = Event.make("NewCount", {
+	payload: { count: Schema.Number },
+});
+
+export const Counter = Actor.make("Counter", {
+	actions: [Increment, GetCount],
+	events: [NewCount],
+});
+```
+
+```ts src/actors/counter/live.ts @nocheck
+export const CounterLive = Counter.toLayer(
+	Effect.fnUntraced(function* ({ events, state }) {
+		return Counter.of({
+			Increment: Effect.fnUntraced(function* ({ payload }) {
+				const next = yield* State.updateAndGet(state, (current) => ({
+					count: current.count + payload.amount,
+				})).pipe(Effect.orDie);
+
+				yield* events.broadcast("NewCount", { count: next.count });
+
+				return next.count;
+			}),
+		});
+	}),
+	{
+```
+
+There is no typed client subscription yet — a client listens for `NewCount` the same way it would for any RivetKit event, through the raw connection's `.on("NewCount", ...)`.
 
 ### Raw Escape Hatch
 
@@ -236,7 +274,6 @@ export const CounterLive = Counter.toLayer(
 				})).pipe(Effect.orDie);
 
 				// Untyped features run through the raw context
-				rawRivetkitContext.broadcast("newCount", next.count);
 				rawRivetkitContext.schedule.after(1_000, "tick", {});
 
 				return next.count;
