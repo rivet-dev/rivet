@@ -151,6 +151,7 @@ fn new_envoy_context() -> EnvoyContext {
 		http_request_routes: BufferMap::new(),
 		http_message_indices: BufferMap::new(),
 		http_request_cancellations: HashMap::new(),
+		completed_http_requests: Default::default(),
 		buffered_messages: Vec::new(),
 		processed_command_idx: HashMap::new(),
 	}
