@@ -1,0 +1,133 @@
+---
+title: "Turso"
+description: "Give each Rivet Actor its own Turso Cloud database."
+skill: false
+---
+
+[Turso Cloud](https://turso.tech) hosts SQLite-compatible databases you reach over the network, and you can create as many as you need through its Platform API. That fits Rivet Actors well: each actor creates its own Turso database, opens a client to it in `createVars`, and deletes the database when the actor is destroyed.
+
+<Diagram
+  id="turso"
+  label="A client calls actions on the todoList Actor whose key is the list id. Each todoList Actor loads and writes its rows in its own Turso database. There is one todoList Actor, and one Turso database, per list."
+  stackLabel="One per list"
+  nodes={[
+    { id: "client", x: 20, y: 20, w: 110, title: "Client" },
+    { id: "list", x: 190, y: 20, w: 160, product: "actors", stack: true, title: "`todoList`", subtitle: "key is the list id" },
+    { id: "turso", x: 480, y: 20, w: 150, vendor: "turso", stack: true, title: "Turso", subtitle: "database" },
+  ]}
+  edges={[
+    { from: "client", to: "list", label: "actions" },
+    { from: "list", to: "turso", label: "loads and writes", both: true },
+  ]}
+/>
+
+## Quickstart
+
+<Steps>
+
+<Step title="Create a Platform API token">
+
+Install the [Turso CLI](https://docs.turso.tech/cli/installation), sign in, and find your organization slug:
+
+```sh
+turso auth login
+turso org list
+```
+
+Mint a Platform API token. The actor uses it to create and delete databases:
+
+```sh
+turso auth api-tokens mint rivet-todos
+```
+
+</Step>
+
+<Step title="Install">
+
+```sh
+npm install rivetkit @libsql/client @tursodatabase/api
+```
+
+`@tursodatabase/api` calls the Platform API. `@libsql/client` queries a database. The Platform API creates [libSQL](https://docs.turso.tech/libsql) databases by default, which use that driver.
+
+</Step>
+
+<Step title="Configure Turso">
+
+Create `.env` with your organization slug and token:
+
+<CodeSnippet file="examples/turso/.env.example" title=".env" />
+
+</Step>
+
+<Step title="Define the actor">
+
+Each `todoList` actor owns one list and one Turso database.
+
+<CodeSnippet file="examples/turso/src/index.ts" title="src/index.ts" />
+
+</Step>
+
+<Step title="Run it">
+
+Start the server, then call the actor from a client:
+
+```sh
+npx tsx --env-file=.env src/index.ts
+```
+
+<CodeSnippet file="examples/turso/scripts/client.ts" title="scripts/client.ts" />
+
+```sh
+npx tsx scripts/client.ts
+```
+
+</Step>
+
+</Steps>
+
+## Database lifecycle
+
+| Hook | What it does |
+| --- | --- |
+| `createState` | Runs once, when the actor is created. Creates the actor's database and a token scoped to it, and saves both in [state](/actors/docs/state). A database left over from a failed creation attempt is reused. |
+| `createVars` | Runs on every start. Opens a client to the database on `c.vars` and creates the table if it does not exist. When the actor sleeps, `c.vars` is dropped, and the next wake opens a new client. |
+| `onDestroy` | Deletes the database. |
+
+The client lives on `c.vars` because it is a live object. [Ephemeral variables](/actors/docs/state#ephemeral-state) are never persisted, so each start gets a fresh client.
+
+Databases are named `todos-<actor id>`, so a new actor with a reused key gets a new database. Each one counts toward your Turso plan's database limit.
+
+## Why the client is never closed
+
+Every action awaits its statement. `execute()` resolves only after the server returns the result, so the write is committed before the action returns.
+
+In Node, `@libsql/client` sends `libsql://` URLs over HTTP. Each statement opens a stream and closes it when its result arrives, and connections come from Node's shared `fetch` pool. An idle client holds no connections, so dropping `c.vars` releases it.
+
+Calling `close()` in `onSleep` or `onDestroy` would not release anything more, and it can break writes. `close()` is synchronous and does not flush: it rejects statements the client has not sent yet. `onSleep` and `onDestroy` run alongside in-flight actions during the [shutdown sequence](/actors/docs/lifecycle#shutdown-sequence), so a write that is still queued would fail.
+
+This relies on the HTTP transport. A `wss://` URL keeps a WebSocket open, and an interactive transaction holds a server-side stream until it commits or rolls back. Close those explicitly, after every statement that uses them has settled.
+
+`onDestroy` is best effort: if the process crashes during destroy, the database stays and must be deleted with the Turso CLI or Platform API.
+
+## Credentials
+
+The Platform API token can create and delete every database in its organization, so it stays in the server's environment. Each actor keeps only the token for its own database in its state.
+
+## Startup timeout
+
+`createVars` must finish within `createVarsTimeout`, which defaults to 5 seconds. Its first query opens the connection to Turso, so a node far from the database's region spends part of that budget on the round trip. Raise `options.createVarsTimeout` if starts time out. See [Options](/actors/docs/lifecycle#options).
+
+## Testing
+
+The test creates real Turso databases, so it reads the same environment variables and is skipped without them. It checks that each list gets its own database and that destroying a list deletes it:
+
+<CodeSnippet file="examples/turso/tests/turso.test.ts" title="tests/turso.test.ts" />
+
+See the [Turso Platform API](https://docs.turso.tech/api-reference/introduction) and [TypeScript reference](https://docs.turso.tech/sdk/ts/reference) for the full APIs.
+
+## Local disk
+
+This guide queries Turso Cloud over the network, so nodes need no local disk. Turso's local options keep a database file on the node's disk instead: [embedded replicas](https://docs.turso.tech/features/embedded-replicas/introduction), `@tursodatabase/database`, and `@tursodatabase/sync`.
+
+If you use one of them, verify that your platform gives nodes a local disk. Some serverless platforms do not by default. Google Cloud Run, for example, uses an [in-memory file system](https://cloud.google.com/run/docs/container-contract#filesystem), so the database file uses the instance's memory and is lost when the instance stops. Rivet Cloud provides local disk to nodes, so local Turso databases work there without extra setup.

@@ -8,6 +8,7 @@ on:
       - "docs/integrations/**"
       - "examples/docs/**"
       - "examples/workflow-sdk/**"
+      - "examples/turso/**"
   workflow_dispatch:
 
 jobs:
@@ -23,3 +24,4 @@ jobs:
           extra-paths: >-
             examples/docs
             examples/workflow-sdk
+            examples/turso
