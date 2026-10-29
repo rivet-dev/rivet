@@ -95,7 +95,13 @@ export const Route = createFileRoute("/_context")({
 					to: "/login",
 					search: (old) => ({
 						...old,
-						from: route.location.pathname,
+						// Keep a `from` we are already carrying (e.g. the
+						// email-verification callback `/?from=…`) so the
+						// user ends up where they started, not at `/`.
+						from:
+							typeof old.from === "string"
+								? old.from
+								: route.location.href,
 					}),
 				});
 			}

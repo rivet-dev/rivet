@@ -17,7 +17,10 @@ export const Route = createFileRoute("/login")({
 			toast.success("Email verified successfully. You can now sign in.", {
 				position: "top-center",
 			});
-			throw redirect({ to: ".", search: { emailVerified: undefined } });
+			throw redirect({
+				to: ".",
+				search: (old) => ({ ...old, emailVerified: undefined }),
+			});
 		}
 
 		if (features.auth) {
