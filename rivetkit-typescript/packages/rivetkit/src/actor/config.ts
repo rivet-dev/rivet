@@ -1567,16 +1567,7 @@ interface BaseActorConfig<
 	TDatabase extends AnyDatabaseProvider,
 	TEvents extends EventSchemaConfig,
 	TQueues extends QueueSchemaConfig,
-	TActions extends Actions<
-		TState,
-		TConnParams,
-		TConnState,
-		TVars,
-		TInput,
-		TDatabase,
-		TEvents,
-		TQueues
-	>,
+	TActions extends Record<string, unknown>,
 > {
 	/**
 	 * Called when the actor is first initialized.
@@ -1910,19 +1901,19 @@ interface BaseActorConfig<
 		websocket: UniversalWebSocket,
 	) => void | Promise<void>;
 
-	actions?: TActions;
-
 	/**
 	 * Optional schemas for validating action argument tuples in native runtimes.
 	 * May mirror nested action groups or use dot-separated low-level action names.
 	 */
 	actionInputSchemas?: ActionInputSchemas;
 
+	// `NoInfer` keeps the action names in `tracing.actions` from becoming the
+	// inferred `TActions` when `tracing` is declared before `actions`.
 	/**
 	 * How much of this actor's work is recorded in traces. Defaults to the
 	 * process sampler from `OTEL_TRACES_SAMPLER`.
 	 */
-	tracing?: ActorTracingOptions<TActions>;
+	tracing?: ActorTracingOptions<NoInfer<TActions>>;
 
 	/**
 	 * Optional schema for validating connection params in native runtimes.
@@ -2016,8 +2007,7 @@ export type ActorConfig<
 		TEvents,
 		TQueues,
 		TActions
-	> &
-	CreateState<
+	> & { actions?: TActions } & CreateState<
 		TState,
 		TConnParams,
 		TConnState,
@@ -2069,6 +2059,29 @@ export type ActorConfigInput<
 		TEvents,
 		TQueues
 	> = Record<never, never>,
+> = ActorConfigInputBase<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues,
+	TActions
+> & { actions?: TActions };
+
+/** Every field of {@link ActorConfigInput} except `actions`. */
+export type ActorConfigInputBase<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig,
+	TQueues extends QueueSchemaConfig,
+	TActions extends Record<string, unknown>,
 > = {
 	types?: ActorTypes<
 		TState,

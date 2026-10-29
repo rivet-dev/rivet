@@ -9,6 +9,7 @@ import {
 	type Actions,
 	type ActorConfig,
 	type ActorConfigInput,
+	type ActorConfigInputBase,
 	ActorConfigSchema,
 } from "./config";
 import { loggerWithoutContext } from "./log";
@@ -146,6 +147,76 @@ export function isStaticActorInstance(
 	return true;
 }
 
+// `actor` has two overloads.
+//
+// The first types `c` in actions through the intersection on `actions`. This
+// lets TypeScript infer `c.conn.state` from a `createConnState` declared before
+// `actions`. Typing `c` this way fixes every type parameter that `c` uses, so
+// the first overload rejects a config that declares `actions` before a hook
+// with an annotated `params` or `input`.
+//
+// The second overload types `c` through the `TActions` constraint, which does
+// not fix type parameters. It accepts those configs, and `c.conn.state` is
+// `unknown` when TypeScript cannot infer it.
+export function actor<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+	TActions extends Record<string, unknown> = Record<never, never>,
+>(
+	input: ActorConfigInputBase<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues,
+		TActions
+	> & {
+		// `NoInfer` keeps an annotated `c` in an action from driving the inference
+		// of these type parameters, so a wrong annotation errors on that action.
+		actions?: TActions &
+			Actions<
+				NoInfer<TState>,
+				NoInfer<TConnParams>,
+				NoInfer<TConnState>,
+				NoInfer<TVars>,
+				NoInfer<TInput>,
+				NoInfer<TDatabase>,
+				NoInfer<TEvents>,
+				NoInfer<TQueues>
+			>;
+	},
+): ActorDefinition<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues,
+	Extract<
+		TActions,
+		Actions<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>
+	>
+>;
 export function actor<
 	TState,
 	TConnParams,
@@ -196,21 +267,16 @@ export function actor<
 	TEvents,
 	TQueues,
 	TActions
-> {
+>;
+export function actor(
+	input: ActorConfigInput<any, any, any, any, any, any, any, any, any>,
+): AnyStaticActorDefinition {
 	warnDeprecatedOptionKeys(
 		(input as { options?: unknown } | undefined)?.options,
 	);
-	const config = ActorConfigSchema.parse(input) as ActorConfig<
-		TState,
-		TConnParams,
-		TConnState,
-		TVars,
-		TInput,
-		TDatabase,
-		TEvents,
-		TQueues,
-		TActions
-	>;
+	const config = ActorConfigSchema.parse(
+		input,
+	) as AnyStaticActorDefinition["config"];
 	flattenActionHandlers(config.actions);
 	flattenActionInputSchemas(config.actions, config.actionInputSchemas);
 	flattenActionTraceSamplers(config.actions, config.tracing?.actions);
