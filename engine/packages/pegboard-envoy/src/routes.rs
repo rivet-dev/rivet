@@ -195,7 +195,7 @@ pub async fn connect(
 			)
 			.await
 			{
-				if ended_by_shutdown_or_supersede(&err) {
+				if ended_by_shutdown_or_reconnect(&err) {
 					tracing::info!(%err, "envoy connection closed");
 				} else {
 					tracing::warn!(%err, "Envoy connection closed");
@@ -216,14 +216,16 @@ fn trace_connection_id(allocate: impl FnOnce() -> uuid::Uuid) -> Option<uuid::Uu
 }
 
 /// Whether a connection ended for an expected reason: this process cancelled its tasks while
-/// shutting down, or a newer connection of the same envoy superseded it. The envoy reconnects
-/// in both cases, so neither is a fault.
-fn ended_by_shutdown_or_supersede(error: &anyhow::Error) -> bool {
+/// shutting down, a newer connection superseded it, or its pool admission must be
+/// obtained again through a fresh connection.
+fn ended_by_shutdown_or_reconnect(error: &anyhow::Error) -> bool {
 	let cancelled = error
 		.downcast_ref::<JoinError>()
 		.is_some_and(JoinError::is_cancelled);
 
-	cancelled || error.is::<crate::envoy_record::Superseded>()
+	cancelled
+		|| error.is::<crate::envoy_record::Superseded>()
+		|| error.is::<crate::envoy_record::PoolAdmissionLost>()
 }
 
 

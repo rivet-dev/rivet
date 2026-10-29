@@ -487,7 +487,7 @@ pub(crate) fn operation_footprint(operation: &Operation) -> StoreFootprint {
 			.fold(StoreFootprint::none(), |footprint, record| {
 				footprint.with(record, VolumeAccess::Unpublished)
 			}),
-		Operation::FilesystemLoad { key } | Operation::FilesystemApply { key, .. } => {
+		Operation::FilesystemLoad { key, .. } | Operation::FilesystemApply { key, .. } => {
 			StoreFootprint::volume(&key.0.volume_key, VolumeAccess::Keyed)
 		}
 		Operation::ReadOpenKeys { .. } | Operation::Repair(_) => StoreFootprint::none(),
@@ -558,7 +558,7 @@ pub(crate) fn work_footprint(work: &StoreWork, state: &MaintainerState) -> Store
 		StoreWork::ReadUnloadRow { key } | StoreWork::ReadDeleteRow { key } => {
 			StoreFootprint::volume(&key.0.volume_key, VolumeAccess::Lookup)
 		}
-		StoreWork::FilesystemLoad { key } | StoreWork::FilesystemApply { key } => {
+		StoreWork::FilesystemLoad { key, .. } | StoreWork::FilesystemApply { key } => {
 			StoreFootprint::volume(&key.0.volume_key, VolumeAccess::Keyed)
 		}
 		// A queued flush selects its records at dispatch. Its ordering footprint is

@@ -160,6 +160,10 @@ async fn supervise(
 ) {
 	use futures_util::FutureExt;
 	loop {
+		// Termination can arrive while the previous attempt waits to restart.
+		if shutting_down.load(Ordering::SeqCst) {
+			return;
+		}
 		// Catch panics as well as returned errors without detaching the future.
 		let result = std::panic::AssertUnwindSafe(async {
 			(service.run)(config.clone(), context.clone()).await
@@ -170,16 +174,49 @@ async fn supervise(
 			return;
 		}
 		match &result {
-			Ok(Ok(())) => tracing::warn!(
-				service = service.name,
-				"service returned before shutdown; restarting"
-			),
+			Ok(Ok(())) => {}
 			Ok(Err(error)) => {
 				tracing::error!(service = service.name, ?error, "service failed; restarting")
 			}
 			Err(_) => tracing::error!(service = service.name, "service panicked; restarting"),
 		}
 		restart_delay(&context).await;
+		// Services can observe termination before the manager consumes the same signal.
+		// Report a clean-return restart only once the backoff ends and it is still needed.
+		if !shutting_down.load(Ordering::SeqCst) && matches!(result, Ok(Ok(()))) {
+			tracing::warn!(
+				service = service.name,
+				"service returned before shutdown; restarting"
+			);
+		}
+	}
+}
+
+async fn supervise_once(
+	service: Service,
+	config: rivet_config::Config,
+	ctx: rivet_engine_context::EngineContext,
+	shutting_down: Arc<AtomicBool>,
+) {
+	tracing::debug!(oneoff=%service.name, "starting oneoff");
+	loop {
+		if shutting_down.load(Ordering::SeqCst) {
+			return;
+		}
+		match (service.run)(config.clone(), ctx.clone()).await {
+			Ok(()) => {
+				tracing::debug!(oneoff=%service.name, "oneoff finished");
+				break;
+			}
+			Err(err) => {
+				tracing::error!(oneoff=%service.name, ?err, "oneoff crashed");
+				if shutting_down.load(Ordering::SeqCst) {
+					break;
+				}
+				restart_delay(&ctx).await;
+				tracing::info!(oneoff=%service.name, "restarting oneoff");
+			}
+		}
 	}
 }
 
@@ -248,35 +285,16 @@ pub async fn start(
 				let context = context.clone();
 				let shutting_down = shutting_down.clone();
 				let task_name = format!("rivet::oneoff::{}", service.name);
+				let requires_graceful_shutdown = service.requires_graceful_shutdown;
 
 				let join_handle = scope.spawn(async move {
-					tracing::debug!(oneoff=%service.name, "starting oneoff");
-
-					loop {
-						match (service.run)(config.clone(), context.clone()).await {
-							Result::Ok(_) => {
-								tracing::debug!(oneoff=%service.name, "oneoff finished");
-								break;
-							}
-							Err(err) => {
-								tracing::error!(oneoff=%service.name, ?err, "oneoff crashed");
-
-								if shutting_down.load(Ordering::SeqCst) {
-									break;
-								} else {
-									restart_delay(&context).await;
-
-									tracing::info!(oneoff=%service.name, "restarting oneoff");
-								}
-							}
-						}
-					}
+					supervise_once(service, config, context, shutting_down).await;
 				});
 
 				running_services.push(ServiceTask {
 					name: task_name,
 					handle: Some(join_handle),
-					requires_graceful_shutdown: service.requires_graceful_shutdown,
+					requires_graceful_shutdown,
 				});
 			}
 		}
@@ -348,3 +366,5 @@ async fn restart_delay(context: &rivet_engine_context::EngineContext) {
 		context.env().exit(1).await;
 	}
 }
+
+

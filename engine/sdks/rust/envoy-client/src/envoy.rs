@@ -45,7 +45,8 @@ use crate::utils::{BufferMap, EnvoyShutdownError, SleepFuture, boxed_sleep, spaw
 
 /// Process-wide envoy slot. Holds the handle inside a mutex so a stopped
 /// handle (e.g. from a shutdown-during-build race in serverless mode) can be
-/// replaced on the next `start_envoy_sync` call.
+/// replaced on the next `start_envoy_sync` call. Registration rejections stay
+/// cached until process restart.
 #[cfg(not(target_arch = "wasm32"))]
 static GLOBAL_ENVOY: OnceLock<Mutex<Option<EnvoyHandle>>> = OnceLock::new();
 
@@ -131,6 +132,22 @@ pub enum ToEnvoyMessage {
 	ConnClose {
 		evict: bool,
 		session: u64,
+	},
+	/// **When**
+	///
+	/// A transport receives `pool.not_found` while registering its current session.
+	///
+	/// **State**
+	///
+	/// Retains a terminal diagnostic, disables reconnection, and retires hosted generations.
+	///
+	/// **Effects**
+	///
+	/// Fails pending storage requests, tells actors they are lost, and closes the transport.
+	/// The host reports the error and must restart before registering again.
+	RegistrationRejected {
+		session: u64,
+		ray_id: Option<String>,
 	},
 	SendEvents {
 		events: Vec<protocol::EventWrapper>,
@@ -404,7 +421,8 @@ pub fn start_envoy_sync(config: EnvoyConfig) -> EnvoyHandle {
 		let slot = GLOBAL_ENVOY.get_or_init(|| Mutex::new(None));
 		let mut guard = slot.lock();
 		if let Some(handle) = guard.as_ref() {
-			if !handle.is_stopped() {
+			// A rejected registration requires a host restart.
+			if !handle.is_stopped() || handle.terminal_error().is_some() {
 				return handle.clone();
 			}
 		}
@@ -419,7 +437,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		.actor_queued_requests_capacity
 		.set(config.max_queued_requests_per_actor as i64);
 	let (envoy_tx, envoy_rx) = mpsc::unbounded_channel::<ToEnvoyMessage>();
-	let (start_tx, start_rx) = tokio::sync::watch::channel(());
+	let (start_tx, start_rx) = tokio::sync::watch::channel(None);
 	let (stopped_tx, _stopped_rx) = tokio::sync::watch::channel(false);
 	let (connection_session_tx, _connection_session_rx) = tokio::sync::watch::channel(0);
 
@@ -485,7 +503,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 async fn envoy_loop(
 	mut ctx: EnvoyContext,
 	mut rx: mpsc::UnboundedReceiver<ToEnvoyMessage>,
-	start_tx: tokio::sync::watch::Sender<()>,
+	start_tx: tokio::sync::watch::Sender<Option<String>>,
 	connection_task: Option<tokio::task::JoinHandle<()>>,
 ) {
 	let mut lost_timeout: Option<SleepFuture> = None;
@@ -520,6 +538,19 @@ async fn envoy_loop(
 							observe_envoy_loop_iteration(branch, iter_start);
 							break;
 						}
+					}
+					ToEnvoyMessage::RegistrationRejected { session, ray_id } => {
+						remove_http_routes_for_session(&mut ctx, session);
+						let message = format!(
+							"node pool `{}` in namespace `{}` was not found (pool.not_found); check the namespace and pool configuration or restore the original engine storage before restarting the node. Recreating a pool does not restore lost actor data.",
+							ctx.shared.config.pool_name, ctx.shared.config.namespace,
+						);
+						tracing::error!(%message, ?ray_id, "node registration rejected");
+						start_tx.send_replace(Some(message));
+						ctx.shared.shutting_down.store(true, Ordering::Release);
+						stop_all_actors_lost(&mut ctx);
+						observe_envoy_loop_iteration(branch, iter_start);
+						break;
 					}
 					ToEnvoyMessage::SendEvents { events } => {
 						handle_send_events(&mut ctx, events).await;
@@ -708,7 +739,7 @@ pub fn send_to_envoy_tx(
 
 async fn handle_conn_message(
 	ctx: &mut EnvoyContext,
-	start_tx: &tokio::sync::watch::Sender<()>,
+	start_tx: &tokio::sync::watch::Sender<Option<String>>,
 	mut lost_timeout: Option<SleepFuture>,
 	message: protocol::ToEnvoy,
 	session: u64,
@@ -752,7 +783,7 @@ async fn handle_conn_message(
 			process_unsent_remote_sqlite_requests(ctx).await;
 			resend_buffered_tunnel_messages(ctx).await;
 
-			let _ = start_tx.send(());
+			let _ = start_tx.send(None);
 		}
 		protocol::ToEnvoy::ToEnvoyCommands(commands) => {
 			handle_commands(ctx, commands).await;
@@ -798,9 +829,10 @@ async fn handle_conn_message(
 	lost_timeout
 }
 
-/// Stops every actor because the envoy went its lost threshold without the engine: in-flight
-/// KV and SQLite requests fail, and each actor is told it is lost and forgotten. Their
-/// unacknowledged events are still resent; they name ended epochs, which the engine ignores.
+/// Stops every actor after registration is rejected or the engine's lost threshold expires.
+/// In-flight KV and SQLite requests fail, and each actor is told it is lost and forgotten.
+/// If reconnection remains enabled, unacknowledged events are resent; they name ended epochs,
+/// which the engine ignores.
 fn stop_all_actors_lost(ctx: &mut EnvoyContext) {
 	for (_id, request) in ctx.kv_requests.drain() {
 		let _ = request
@@ -811,7 +843,7 @@ fn stop_all_actors_lost(ctx: &mut EnvoyContext) {
 	fail_remote_sqlite_requests_with_shutdown(ctx);
 
 	if !ctx.actors.is_empty() {
-		tracing::warn!("stopping all actors due to envoy lost threshold");
+		tracing::warn!("stopping all actors after losing the engine connection or registration");
 		for (_actor_id, gens) in &ctx.actors {
 			for (_g, entry) in gens {
 				if !entry.handle.is_closed() {

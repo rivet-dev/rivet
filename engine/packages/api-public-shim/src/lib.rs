@@ -5,9 +5,13 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::{delete, get, post, put},
 };
-use hyper::StatusCode;
+use hyper::{
+	StatusCode,
+	header::{HeaderName, RETRY_AFTER},
+};
 use rivet_engine_context::EngineContext;
-use rivet_guard_core::auth;
+use rivet_guard_core::{X_RIVET_RAY_ID, auth, errors::X_RIVET_ERROR};
+use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 
 mod routes;
 mod tokens;
@@ -46,6 +50,22 @@ pub fn router(ctx: &EngineContext) -> Router {
 		.route("/auth/tokens", post(tokens::create))
 		.route("/auth/tokens/inspect", get(tokens::inspect))
 		.merge(protected)
+		// Outermost, so preflights are answered before authentication. RivetKit clients send
+		// every request with credentials, which rejects wildcards, so the request's own values
+		// are mirrored and the readable headers are listed.
+		.layer(
+			CorsLayer::new()
+				.allow_origin(AllowOrigin::mirror_request())
+				.allow_methods(AllowMethods::mirror_request())
+				.allow_headers(AllowHeaders::mirror_request())
+				.allow_credentials(true)
+				.expose_headers([
+					HeaderName::from_static(X_RIVET_RAY_ID),
+					HeaderName::from_static(X_RIVET_ERROR),
+					RETRY_AFTER,
+				])
+				.max_age(std::time::Duration::from_secs(86_400)),
+		)
 		.with_state(ctx.clone())
 }
 

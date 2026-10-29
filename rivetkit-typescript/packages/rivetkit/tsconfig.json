@@ -18,7 +18,6 @@
 	},
 	"include": [
 		"src/**/*",
-		"tests/**/*",
 		"runtime/index.ts",
 		"tests/token-issuance.types.ts"
 	],

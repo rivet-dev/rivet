@@ -5,7 +5,7 @@
 	"type": "module",
 	"packageManager": "pnpm@10.13.1",
 	"scripts": {
-		"dev": "RIVET_KITCHEN_SINK_MODE=serverful VITE_RIVET_ENDPOINT=http://127.0.0.1:6420 concurrently -n server,vite \"node --import @rivetkit/sql-loader --import tsx src/server.ts\" \"vite\"",
+		"dev": "RIVET_KITCHEN_SINK_MODE=serverful VITE_RIVET_ENDPOINT=http://default:dev@127.0.0.1:6420 concurrently -n server,vite \"node --import @rivetkit/sql-loader --import tsx src/server.ts\" \"vite\"",
 		"dev:serverless": "node -e \"throw new Error('serverless is disabled in this version')\"",
 		"dev:serverless:configure": "node -e \"throw new Error('serverless is disabled in this version')\"",
 		"check-types": "echo 'skipped - workflow history types broken'",

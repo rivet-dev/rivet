@@ -15,7 +15,8 @@ use crate::tunnel::HibernatingWebSocketMetadata;
 #[derive(Clone)]
 pub struct EnvoyHandle {
 	pub(crate) shared: Arc<SharedContext>,
-	pub(crate) started_rx: tokio::sync::watch::Receiver<()>,
+	// A version change with None signals init; Some retains a fatal registration error.
+	pub(crate) started_rx: tokio::sync::watch::Receiver<Option<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,8 +30,8 @@ impl EnvoyHandle {
 	pub fn from_shared(shared: Arc<SharedContext>) -> Self {
 		// A handle built from an existing shared context describes an envoy
 		// that is already running, so it reports as started.
-		let (started_tx, started_rx) = tokio::sync::watch::channel(());
-		started_tx.send_replace(());
+		let (started_tx, started_rx) = tokio::sync::watch::channel(None);
+		started_tx.send_replace(None);
 		Self { shared, started_rx }
 	}
 
@@ -78,6 +79,11 @@ impl EnvoyHandle {
 			return;
 		}
 		let _ = rx.changed().await;
+	}
+
+	/// Fatal registration failure, if any. The diagnostic stays available after shutdown.
+	pub fn terminal_error(&self) -> Option<String> {
+		self.started_rx.borrow().clone()
 	}
 
 	/// Convenience: signal shutdown then await `wait_stopped`.
@@ -156,18 +162,19 @@ impl EnvoyHandle {
 		&self.shared.config.pool_name
 	}
 
-	/// True once the engine has sent its init message. Latched: stays true after
-	/// the envoy loop exits.
+	/// True after init unless a later registration attempt was rejected.
 	pub fn has_started(&self) -> bool {
-		self.started_rx.borrow().has_changed()
+		let status = self.started_rx.borrow();
+		status.has_changed() && status.is_none()
 	}
 
 	pub async fn started(&self) -> anyhow::Result<()> {
-		self.started_rx
-			.clone()
-			.changed()
-			.await
-			.map_err(|_| anyhow::anyhow!("envoy stopped before startup completed"))?;
+		let started = self.started_rx.clone().changed().await;
+		// Init is latched, but a later registration rejection remains terminal.
+		if let Some(error) = self.terminal_error() {
+			return Err(anyhow::anyhow!(error));
+		}
+		started.map_err(|_| anyhow::anyhow!("envoy stopped before startup completed"))?;
 		Ok(())
 	}
 

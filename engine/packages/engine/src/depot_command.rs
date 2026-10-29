@@ -369,14 +369,28 @@ pub(crate) async fn execute(ctx: &EngineContext, command: Command) -> Result<Val
 /// including uncertain writes and their retry tokens.
 async fn routed<T, E: Into<anyhow::Error>, F: Future<Output = Result<T, E>>>(
 	ctx: &EngineContext,
-	mut request: impl FnMut() -> F,
+	request: impl FnMut() -> F,
 ) -> Result<T> {
 	let clock = ctx.env().clock();
 	let deadline = rivet_env::deadline_after(
 		clock.as_ref(),
 		Duration::from_millis(ctx.config().depot().volume_request_timeout_ms()),
 	)?;
+	routed_until(clock.as_ref(), deadline, request).await
+}
+
+/// Retries only refused attempts within the original admission budget. An admitted
+/// command keeps its own outcome: expiry never turns an uncertain mutation into a refusal.
+async fn routed_until<T, E: Into<anyhow::Error>, F: Future<Output = Result<T, E>>>(
+	clock: &dyn rivet_env::Clock,
+	deadline_boot_ms: u64,
+	mut request: impl FnMut() -> F,
+) -> Result<T> {
 	loop {
+		// A delayed wakeup must not start a fresh command after this edge's budget.
+		if clock.observe()?.boot_ms >= deadline_boot_ms {
+			bail!("volume admission deadline exceeded; command was not executed");
+		}
 		let error = match request().await {
 			Ok(result) => return Ok(result),
 			Err(error) => error.into(),
@@ -384,16 +398,25 @@ async fn routed<T, E: Into<anyhow::Error>, F: Future<Output = Result<T, E>>>(
 		let Some(wait_ms) = refusal_wait_ms(&error) else {
 			return Err(error);
 		};
-		if clock.observe()?.boot_ms >= deadline {
+		let Some(retry_at_boot_ms) = clock
+			.observe()?
+			.boot_ms
+			.checked_add(wait_ms)
+			.filter(|retry_at| *retry_at < deadline_boot_ms)
+		else {
+			// Do not shorten the server's hint to squeeze another attempt into the budget.
 			bail!("volume admission deadline exceeded; command was not executed");
-		}
-		rivet_env::sleep(clock.as_ref(), Duration::from_millis(wait_ms)).await?;
+		};
+		clock.sleep_until(retry_at_boot_ms).await?;
 	}
 }
 
 /// How long the operator waits before sending a command again that was refused without being
 /// executed, or `None` when the error is final or its outcome may be unknown.
 fn refusal_wait_ms(error: &anyhow::Error) -> Option<u64> {
+	if let Some(wait_ms) = depot_client::retry_after_ms(error) {
+		return Some(wait_ms);
+	}
 	let volume_error = error.downcast_ref::<VolumeError>()?;
 	let refused = matches!(
 		volume_error,

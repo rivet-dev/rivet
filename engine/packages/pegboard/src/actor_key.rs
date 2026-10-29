@@ -57,6 +57,19 @@ pub(crate) async fn reserve(
 	bytes.copy_from_slice(&digest[..16]);
 	let reservation_id = Id::v1(uuid::Uuid::from_bytes(bytes), ctx.config().dc_label());
 
+	// Reservations are immutable. An existing key can be recreated under its original
+	// reservation without proposing another conditional write. A missing read still takes
+	// the compare-and-set path below, which resolves concurrent first reservations.
+	if let Some(existing) = get(ctx, &namespace, &name, &key).await? {
+		return Ok(if existing == reservation_id {
+			ReserveResult::Reserved {}
+		} else {
+			ReserveResult::AlreadyReserved {
+				reservation_id: existing,
+			}
+		});
+	}
+
 	let epoxy_key = ActorKeyKey::new(namespace, name, key);
 	let value = epoxy_key
 		.serialize(wire::EpoxyActorByKeyEntry {

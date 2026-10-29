@@ -391,6 +391,12 @@ pub async fn run(
 						);
 						return Err(error);
 					}
+					Err(error) if error.is::<crate::envoy_record::PoolAdmissionLost>() => {
+						tracing::info!(
+							"closing node connection whose pool admission expired; the runtime reconnects for fresh admission"
+						);
+						return Err(error);
+					}
 					Err(error) => {
 						tracing::debug!(
 							?error,
@@ -1185,12 +1191,13 @@ async fn register_pool_connection(
 	let reply =
 		pegboard::catalog::pool(ctx, &conn.scope.namespace, &conn.scope.pool_name, operation)
 			.await?;
-	if !matches!(reply.status, wire::PoolStatus::Ok) {
-		return Err(pegboard::validation::PoolNotFound.build());
+	match (reply.status, reply.config) {
+		(wire::PoolStatus::Ok, Some(config)) => Ok(config),
+		// Renewal cannot revive an expired or removed admission. Retrying on the
+		// same live socket would keep pongs flowing but never restore scheduling.
+		_ if renew => Err(crate::envoy_record::PoolAdmissionLost.into()),
+		_ => Err(pegboard::validation::PoolNotFound.build()),
 	}
-	reply
-		.config
-		.ok_or_else(|| pegboard::validation::PoolNotFound.build())
 }
 
 /// Captures the pool configuration, writes the connection's record and indexes, then asks

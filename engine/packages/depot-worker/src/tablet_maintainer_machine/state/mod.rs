@@ -357,6 +357,7 @@ pub(crate) enum Operation {
 	},
 	FilesystemLoad {
 		key: VolumeLogKey,
+		purpose: filesystem::LoadPurpose,
 	},
 	FilesystemRead {
 		key: VolumeLogKey,

@@ -14,6 +14,9 @@
 //! The load creates the replica in `Repairing` status at the cold position of an in-sync
 //! member, fenced by that member's claimed client. It never votes until the serving client
 //! matches its suffix and marks it in sync through the client's own repair.
+//! A completed stop barrier may instead prove an exact-cold quorum and reload an absent
+//! survivor at the durable row with the newest known fence. That load remains Repairing;
+//! stop readiness must observe its result in another fresh barrier before counting it.
 
 use super::{MaintainerPhase, MaintainerState, Operation, lifecycle::ReplicaOpenStep};
 use crate::tablet_maintainer_machine::types::MEMBER_REPAIR_MAX_BACKOFF_MS;
@@ -51,13 +54,8 @@ enum MemberRepair {
 	Waiting { attempt: u32 },
 }
 
-/// The in-sync member a repair load copies its fence and cold position from, or `None`
-/// when the maintainer must not reload `worker` for `key` now.
-fn eligible<'a>(
-	state: &'a MaintainerState,
-	key: &VolumeLogKey,
-	worker: &WorkerId,
-) -> Option<&'a rivet_data::generated::depot_log_shard_v1::VolumeLogReplicaState> {
+/// Whether lifecycle ownership permits a missing-member load, independently of its source.
+fn may_reload(state: &MaintainerState, key: &VolumeLogKey, worker: &WorkerId) -> bool {
 	// Repair runs while the replica set changes too, so a member an open could not reload, or
 	// one a cancelled close forgot after the open answered, does not stay missing until the
 	// change ends. A Learning-only destination is not a voter yet; catch-up fills it.
@@ -66,9 +64,11 @@ fn eligible<'a>(
 		|| !state.members().contains(worker)
 		|| !super::membership::voter(&state.tablet.replica_set, worker)
 	{
-		return None;
+		return false;
 	}
-	let volume = state.loaded_volumes.get(key)?;
+	let Some(volume) = state.loaded_volumes.get(key) else {
+		return false;
+	};
 	// An open loads every member itself, and unloads, deletions, operator repairs and
 	// learner copies own the volume's replicas while they run.
 	if volume.members.contains_key(worker)
@@ -90,8 +90,23 @@ fn eligible<'a>(
 		|| super::repair::holds_key(state, &key.0.volume_key)
 		|| super::catch_up::holds_key(state, &key.0.volume_key)
 	{
+		return false;
+	}
+	volume
+		.row(key)
+		.is_some_and(|row| row.status == FsVolumeStatus::Live)
+}
+
+/// The in-sync member an ordinary repair copies, when a voting quorum still serves it.
+fn eligible<'a>(
+	state: &'a MaintainerState,
+	key: &VolumeLogKey,
+	worker: &WorkerId,
+) -> Option<&'a rivet_data::generated::depot_log_shard_v1::VolumeLogReplicaState> {
+	if !may_reload(state, key, worker) {
 		return None;
 	}
+	let volume = state.loaded_volumes.get(key)?;
 	// Only a volume a quorum serves is missing a member; a minority is orphan cleanup's.
 	let in_sync = |w: &WorkerId| {
 		volume
@@ -103,9 +118,6 @@ fn eligible<'a>(
 		return None;
 	}
 	volume
-		.row(key)
-		.filter(|row| row.status == FsVolumeStatus::Live)?;
-	volume
 		.members
 		.values()
 		.filter(|replica| replica.status == Status::InSync)
@@ -115,6 +127,38 @@ fn eligible<'a>(
 				replica.cold.volume_seq,
 			)
 		})
+}
+
+/// A load's immutable cold floor and client fence. A stop barrier supplies the stored row's
+/// position separately from the newest observed claim, whose replica may lag that position.
+pub(super) struct LoadSource {
+	pub cold: rivet_data::generated::shared_depot_types_v1::VolumeLogPosition,
+	pub claimed_client: Option<rivet_data::generated::shared_depot_types_v1::ClientIdentity>,
+	pub claimed_holder: Option<rivet_data::generated::shared_depot_types_v1::VolumeHolder>,
+}
+
+/// Uses a complete stop barrier's exact-cold proof to restore an absent survivor as Repairing.
+/// The proof is used immediately, never queued: when slots are full a later barrier retries.
+pub(super) fn absent_at_cold(
+	state: &mut MaintainerState,
+	key: VolumeLogKey,
+	worker: WorkerId,
+	source: LoadSource,
+	fx: &mut Effects,
+) {
+	if !matches!(
+		state.tablet.replica_set.phase,
+		rivet_data::generated::shared_depot_types_v1::TabletPhase::Stable
+	) || !may_reload(state, &key, &worker)
+		|| state
+			.member_repairs
+			.entries
+			.contains_key(&(key.clone(), worker.clone()))
+		|| state.member_repairs.loading >= state.config.tuning().max_member_repair_loads
+	{
+		return;
+	}
+	begin_load(state, key, worker, 0, source, fx);
 }
 
 /// The in-sync member a reload of `worker` for `key` would copy, with its cold position, when
@@ -219,48 +263,12 @@ fn start_ready(state: &mut MaintainerState, fx: &mut Effects) {
 			state.member_repairs.entries.remove(&id);
 			continue;
 		};
-		let Some(disk_incarnation) = state.disk_incarnation(&worker) else {
-			state.member_repairs.entries.remove(&id);
-			continue;
+		let source = LoadSource {
+			cold: source.cold,
+			claimed_client: source.claimed_client,
+			claimed_holder: source.claimed_holder,
 		};
-		let request = Request::LoadVolumeRequest(wire::LoadVolumeRequest {
-			creation: state.loaded_volumes.get(&key).and_then(|volume| {
-				volume.creation_evidence(state.config.write_versions.maintainer_log)
-			}),
-			open_claim: None,
-			learner_replica_set_version: None,
-			disk_incarnation,
-			claimed_client: source.claimed_client.clone(),
-			claimed_holder: source.claimed_holder.clone(),
-			header: wire::ReplicaRequestHeader::MaintainerRequestHeader(
-				wire::MaintainerRequestHeader {
-					volume_log_key: key.0.clone(),
-					tablet_grant: state.grant(),
-				},
-			),
-			cold: source.cold.clone(),
-			status: Status::Repairing,
-			initial_entries: Vec::new(),
-		});
-		let op_id = state.begin(
-			Operation::Load {
-				step: ReplicaOpenStep::MissingMember,
-				worker: worker.clone(),
-				key,
-			},
-			fx,
-		);
-		state
-			.member_repairs
-			.entries
-			.insert(id, MemberRepair::Loading { attempt, op_id });
-		state.member_repairs.loading += 1;
-		crate::metrics::record_member_repair("started");
-		fx.execute(Fx::ReplicaRequest {
-			op_id,
-			worker_id: worker,
-			request,
-		});
+		begin_load(state, key, worker, attempt, source, fx);
 	}
 	if !state.member_repairs.ready.is_empty() {
 		tracing::debug!(
@@ -269,6 +277,58 @@ fn start_ready(state: &mut MaintainerState, fx: &mut Effects) {
 			"missing member reloads wait for a load slot"
 		);
 	}
+}
+
+/// Starts one bounded, correlated load after its caller has checked ownership and capacity.
+fn begin_load(
+	state: &mut MaintainerState,
+	key: VolumeLogKey,
+	worker: WorkerId,
+	attempt: u32,
+	source: LoadSource,
+	fx: &mut Effects,
+) {
+	let Some(disk_incarnation) = state.disk_incarnation(&worker) else {
+		return;
+	};
+	let request = Request::LoadVolumeRequest(wire::LoadVolumeRequest {
+		creation: state.loaded_volumes.get(&key).and_then(|volume| {
+			volume.creation_evidence(state.config.write_versions.maintainer_log)
+		}),
+		open_claim: None,
+		learner_replica_set_version: None,
+		disk_incarnation,
+		claimed_client: source.claimed_client.clone(),
+		claimed_holder: source.claimed_holder.clone(),
+		header: wire::ReplicaRequestHeader::MaintainerRequestHeader(
+			wire::MaintainerRequestHeader {
+				volume_log_key: key.0.clone(),
+				tablet_grant: state.grant(),
+			},
+		),
+		cold: source.cold.clone(),
+		status: Status::Repairing,
+		initial_entries: Vec::new(),
+	});
+	let op_id = state.begin(
+		Operation::Load {
+			step: ReplicaOpenStep::MissingMember,
+			worker: worker.clone(),
+			key: key.clone(),
+		},
+		fx,
+	);
+	state.member_repairs.entries.insert(
+		(key.clone(), worker.clone()),
+		MemberRepair::Loading { attempt, op_id },
+	);
+	state.member_repairs.loading += 1;
+	crate::metrics::record_member_repair("started");
+	fx.execute(Fx::ReplicaRequest {
+		op_id,
+		worker_id: worker,
+		request,
+	});
 }
 
 /// Applies the reply or timeout of repair load `op_id`. A loaded replica becomes a member

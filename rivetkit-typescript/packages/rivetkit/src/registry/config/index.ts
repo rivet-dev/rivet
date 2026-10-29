@@ -291,7 +291,8 @@ export const RegistryConfigSchema = z
 				 * after calling `CoreRegistry::shutdown()`. Defaults to the
 				 * engine-provided actor stop threshold once the node connects. A
 				 * signal-driven shutdown of a managed local development engine waits
-				 * one second by default so a file watcher can restart promptly.
+				 * four seconds by default so actors can acknowledge stopping before
+				 * a file watcher restarts the process.
 				 *
 				 * Set a longer period when a complete graceful node drain is required.
 				 */

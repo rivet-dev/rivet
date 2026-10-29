@@ -28,5 +28,6 @@ rivetkit-shared-types.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 tokio.workspace = true
+tower-http.workspace = true
 tracing.workspace = true
 

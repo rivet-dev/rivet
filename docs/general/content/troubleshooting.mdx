@@ -12,6 +12,18 @@ Before diving into specific errors, try these general troubleshooting steps:
 - Check if any of your backend processes have crashed or restarted unexpectedly.
 - If you need more diagnostics, set `RIVET_LOG_LEVEL=DEBUG` for verbose logging. See [Logging](/actors/docs/logging) for more options.
 
+## Persistent logs require durable object storage
+
+If startup reports `storage.log_directory requires durable object_storage.primary`, configure a durable primary object store. Setting `storage.log_directory` alone persists log shards, but cluster metadata and cold data live in `object_storage.primary`. Its default, `in_memory`, loses those objects when the control plane process exits.
+
+For a single control plane process, set `RIVET__OBJECT_STORAGE__PRIMARY__FILE_SYSTEM__PATH` to a directory on a persistent volume. Multiple control plane processes must share a durable object store such as S3, GCS, or Azure Blob Storage. See [Storage](/docs/deploy/self-host/control-plane/storage/).
+
+### Missing records after a restart
+
+If logs report `a volume has no stored record but a replica reports a cold position above zero` and requests fail with `depot.corrupt`, the primary object store is missing data that the surviving log shards expect. This can happen after restarting with an in-memory primary store, or after pointing an existing deployment at an empty store.
+
+Preserve the log directory and any remaining object storage before attempting recovery. If the original durable object store still exists, check its configured location, bucket or container, and prefix. Pointing at a new empty store does not recover existing data. Storage inspection and repair cannot reconstruct cold data that has already been lost and trimmed from the log shards. Contact support with the configuration and logs before changing stored data.
+
 ## Reporting Issues
 
 If you're stuck, reach out on [Discord](https://rivet.dev/discord) or file an issue on [GitHub](https://github.com/rivet-dev/rivet/issues).

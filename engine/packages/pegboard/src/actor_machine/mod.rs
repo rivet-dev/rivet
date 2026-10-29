@@ -946,7 +946,8 @@ fn set_alarm(
 /// Brings the actor back up for a wake request: the alarm firing, or a try start or create.
 /// A sleeping actor allocates. An actor stopping for a sleep is reallocated instead, and one on
 /// its way up drops a pending sleep so it is not stopped on arrival; a pending destroy is kept
-/// either way. A running actor needs nothing, and a destroyed one is not revived here.
+/// either way. A starting actor resends its committed command in case its previous host lost
+/// the dispatch. A running actor needs nothing, and a destroyed one is not revived here.
 fn wake(
 	state: &mut wire::ActorState,
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
@@ -968,6 +969,17 @@ fn wake(
 			// a pending destroy, which must win.
 			if let wire::PendingAction::PendingSleep = state.pending_action {
 				state.pending_action = wire::PendingAction::PendingNone;
+			}
+			if let wire::ActorPhase::Starting(phase) = &state.phase {
+				// Revocation can cancel the old host after Starting commits but before Start
+				// is dispatched. Replay the same committed allocation and command identity;
+				// keep the original timer so repeated wakes cannot extend the start attempt.
+				effects.nondurable_execute(Effect::Start {
+					epoch: state.epoch,
+					command_index: state.command_index,
+					allocation: phase.allocation.clone(),
+					new_storage: state.command_index == 1,
+				});
 			}
 		}
 		wire::ActorPhase::Running(_)

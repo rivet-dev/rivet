@@ -50,8 +50,16 @@ impl ActorContextHarness {
 	/// Constructs a harness whose actor clients use the provided engine endpoint.
 	pub fn with_client_endpoint(endpoint: impl Into<String>) -> Self {
 		let (handle, receiver) = test_envoy_handle(endpoint.into());
-		spawn_remote_sqlite(receiver);
+		spawn_remote_sqlite(receiver, None);
 		Self { handle }
+	}
+
+	/// Keeps actor intent messages observable while servicing SQLite requests.
+	pub fn with_intents() -> (Self, mpsc::UnboundedReceiver<ToEnvoyMessage>) {
+		let (handle, receiver) = test_envoy_handle("http://127.0.0.1:1".to_owned());
+		let (intent_tx, intent_rx) = mpsc::unbounded_channel();
+		spawn_remote_sqlite(receiver, Some(intent_tx));
+		(Self { handle }, intent_rx)
 	}
 
 	pub fn context(
@@ -208,7 +216,10 @@ fn test_envoy_handle(endpoint: String) -> (EnvoyHandle, mpsc::UnboundedReceiver<
 	(EnvoyHandle::from_shared(shared), envoy_rx)
 }
 
-fn spawn_remote_sqlite(mut receiver: mpsc::UnboundedReceiver<ToEnvoyMessage>) {
+fn spawn_remote_sqlite(
+	mut receiver: mpsc::UnboundedReceiver<ToEnvoyMessage>,
+	intent_tx: Option<mpsc::UnboundedSender<ToEnvoyMessage>>,
+) {
 	std::thread::spawn(move || {
 		let conn =
 			rusqlite::Connection::open_in_memory().expect("test sqlite connection should open");
@@ -226,6 +237,11 @@ fn spawn_remote_sqlite(mut receiver: mpsc::UnboundedReceiver<ToEnvoyMessage>) {
 					response_tx,
 				} = message
 				else {
+					if matches!(message, ToEnvoyMessage::ActorIntent { .. }) {
+						if let Some(sender) = &intent_tx {
+							let _ = sender.send(message);
+						}
+					}
 					continue;
 				};
 				let response = match request {
@@ -380,3 +396,6 @@ fn sqlite_column_value(value: ValueRef<'_>) -> protocol::SqliteColumnValue {
 		}
 	}
 }
+
+#[path = "../tests/support/legacy_migration.rs"]
+mod legacy_migration;

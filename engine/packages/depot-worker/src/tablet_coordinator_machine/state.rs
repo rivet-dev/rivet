@@ -1067,7 +1067,15 @@ fn grant_authorized(
 		.stopping
 		.iter()
 		.any(|entry| entry.worker_id == maintainer)
-	{
+		&& !(matches!(authority, GrantAuthority::StoppedOwnerReady)
+			&& manifest
+				.tablets
+				.iter()
+				.find(|tablet| tablet.id == id)
+				.and_then(|tablet| tablet.maintainer)
+				.is_some_and(|source| {
+					regrant::pending_stop_successor(manifest, &source, &maintainer)
+				})) {
 		return Err(Reject::InvalidCommand);
 	}
 	if matches!(authority, GrantAuthority::Ordinary)

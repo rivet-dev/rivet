@@ -1,9 +1,13 @@
 use anyhow::Result;
 use axum::{Router, extract::Json, routing::get};
 use hyper::service::service_fn;
-use hyper::{Request, Response, body::Incoming, header::HeaderName};
+use hyper::{
+	Request, Response,
+	body::Incoming,
+	header::{HeaderName, HeaderValue},
+};
 use rivet_engine_context::EngineContext;
-use rivet_guard_core::{ProxyState, RequestContext, ResponseBody};
+use rivet_guard_core::{ProxyState, RequestContext, ResponseBody, X_RIVET_RAY_ID};
 use rivet_util::rng::RngStreamIdExt;
 use std::{net::SocketAddr, sync::Arc};
 use tokio_util::sync::CancellationToken;
@@ -222,7 +226,17 @@ async fn serve_request(
 	req.extensions_mut().insert(req_ctx);
 
 	// Route request
-	let Ok(res) = router.oneshot(req).await;
+	let Ok(mut res) = router.oneshot(req).await;
+
+	// Clients report the ray id with their errors so a failed request can be traced.
+	match HeaderValue::from_str(&ray_id.to_string()) {
+		Ok(value) => {
+			res.headers_mut().insert(X_RIVET_RAY_ID, value);
+		}
+		Err(error) => {
+			tracing::warn!(?error, %ray_id, "ray id is not a valid header value");
+		}
+	}
 
 	let kind = if is_websocket {
 		"websocket_upgrade"

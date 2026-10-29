@@ -324,11 +324,18 @@ pub async fn start(
 			let handover = handovers.borrow().clone();
 			match handover {
 				Some(handover) if handover_fits => {
+					let has_successor = context
+						.topology()
+						.snapshot()?
+						.storage_workers
+						.iter()
+						.any(|worker| worker.id != context.worker_identity().worker_id);
 					wait_for_singleton_handover(
 						&shutdown,
 						clock.as_ref(),
 						config.runtime.force_shutdown_duration(),
 						config.depot().stop_teardown_ms(),
+						has_successor,
 						handover.step_down(),
 					)
 					.await
@@ -399,14 +406,23 @@ async fn prepare_shutdown(
 }
 
 /// Bound the singleton handover within the original shutdown budget, leaving time for storage
-/// teardown even if the coordinator never reports that it stopped.
+/// teardown even if the coordinator never reports that it stopped. Without a discovered
+/// successor, storage close joins singleton services and conditionally releases the tenure.
+/// Discovery only avoids the announcement delay; it never authorizes a stop or an early release.
 async fn wait_for_singleton_handover(
 	shutdown: &rivet_env::capabilities::shutdown::Shutdown,
 	clock: &dyn rivet_env::Clock,
 	force_after: Duration,
 	teardown_ms: u64,
+	has_successor: bool,
 	handover: impl Future<Output = Result<()>>,
 ) -> Result<()> {
+	if !has_successor {
+		tracing::info!(
+			"no other storage worker discovered; storage close releases the singleton tenure"
+		);
+		return Ok(());
+	}
 	let deadline = shutdown.deadline(force_after)?.saturating_sub(teardown_ms);
 	rivet_env::timeout_at(clock, deadline, handover).await?
 }

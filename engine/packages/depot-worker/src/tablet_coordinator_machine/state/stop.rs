@@ -31,6 +31,15 @@ fn affected(manifest: &TabletManifest, worker: &[u8; 16]) -> Vec<Tablet> {
 		.collect()
 }
 
+/// A configured single replica has no successor. Keep its grant for restart, but still
+/// require its maintainer to quiesce admitted creates and report readiness before the
+/// permit is persisted. Discovery alone must never turn a replicated tablet into this case.
+fn single_replica_owner(tablet: &Tablet, worker: &[u8; 16]) -> bool {
+	tablet.maintainer == Some(*worker)
+		&& tablet.replica_set.phase == TabletPhase::Stable
+		&& tablet.replica_set.members.as_slice() == [*worker]
+}
+
 impl State {
 	pub(super) fn request_stop(&mut self, command: Command, effects: &mut Effects) {
 		let Phase::Ready(stored) = &self.phase else {
@@ -110,8 +119,8 @@ impl State {
 					return;
 				}
 			}
-			// One serialized manifest mutation moves all of this worker's grants. Later
-			// stop requests cannot select it as a target, even while readiness is pending.
+			// Ordinary placement excludes this stopping worker. A readiness-authorized
+			// handoff may still use it while unpermitted and later in durable intent order.
 			let owned: Vec<_> = manifest
 				.tablets
 				.iter()
@@ -121,6 +130,9 @@ impl State {
 				// a raced create without authority to initialize the missing voters.
 				// Progress checks below still drive this phase during the drain.
 				.filter(|t| matches!(t.replica_set.phase, TabletPhase::Stable))
+				// Its own stop-readiness round quiesces a single replica; there is no
+				// grant change that needs a separate pre-handoff barrier.
+				.filter(|t| !single_replica_owner(t, &request.worker_id))
 				.cloned()
 				.collect();
 			// Persist the intent before asking the old owner to close create admission.
@@ -181,6 +193,7 @@ impl State {
 					&request.worker_id,
 					topology,
 					None,
+					true,
 				);
 				if let Some(target) = target {
 					if grant_authorized(
@@ -228,7 +241,8 @@ impl State {
 					// until promotion: its permit would block that very phase change.
 					Some(Reason::MaintainerOpening)
 				} else if tablet.maintainer.is_none()
-					|| tablet.maintainer == Some(request.worker_id)
+					|| (tablet.maintainer == Some(request.worker_id)
+						&& !single_replica_owner(tablet, &request.worker_id))
 				{
 					Some(Reason::GrantNotMoved)
 				} else if tablet.replica_set.disks.iter().any(|disk| {

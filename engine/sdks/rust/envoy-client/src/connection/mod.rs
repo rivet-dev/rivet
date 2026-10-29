@@ -36,6 +36,34 @@ pub(crate) const HTTP_WS_BYTE_CAPACITY: usize = 16 * 1024 * 1024;
 /// Frames beyond it are dropped, and the engine times out those requests.
 pub(crate) const HTTP_WS_DETACHED_SEND_CAPACITY: usize = 1024;
 
+/// Reports the close through the envoy owner and tells either transport whether to stop
+/// reconnecting. Missing pools require operator intervention; transient failures still retry.
+#[cfg(any(
+	feature = "native-transport",
+	all(feature = "wasm-transport", target_arch = "wasm32")
+))]
+fn report_connection_close(
+	shared: &SharedContext,
+	session: u64,
+	reason: Option<crate::utils::ParsedCloseReason>,
+) -> bool {
+	if let Some(reason) = &reason {
+		if reason.group == "pool" && reason.error == "not_found" {
+			let _ = crate::envoy::send_to_envoy_tx(
+				shared,
+				ToEnvoyMessage::RegistrationRejected {
+					session,
+					ray_id: reason.ray_id.clone(),
+				},
+			);
+			return true;
+		}
+	}
+	let evict = reason.is_some_and(|reason| reason.group == "ws" && reason.error == "eviction");
+	let _ = crate::envoy::send_to_envoy_tx(shared, ToEnvoyMessage::ConnClose { evict, session });
+	evict
+}
+
 /// Uses the last advertised threshold while disconnected. Before the first init, no actors
 /// can be lost and the envoy loop uses the same 10 second fallback for its lost timer.
 pub(crate) async fn reconnect_lost_threshold_ms(shared: &SharedContext) -> u64 {
@@ -418,9 +446,9 @@ async fn forward_to_envoy(shared: &SharedContext, session: u64, message: protoco
 /// Records a ping and encodes its pong, for a transport that writes pongs ahead of its queue.
 #[cfg(feature = "native-transport")]
 fn encode_pong(shared: &SharedContext, ping: protocol::ToEnvoyPing) -> Option<Vec<u8>> {
-	shared
-		.last_ping_ts
-		.store(crate::time::now_millis(), Ordering::Release);
+	let now = crate::time::now_millis();
+	shared.last_ping_ts.store(now, Ordering::Release);
+	shared.last_contact_ms.store(now, Ordering::Release);
 	let pong = protocol::ToRivet::ToRivetPong(protocol::ToRivetPong { ts: ping.ts });
 	match crate::protocol::versioned::ToRivet::serialize(&pong, protocol::PROTOCOL_VERSION) {
 		Ok(encoded) => Some(encoded),

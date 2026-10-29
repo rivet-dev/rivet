@@ -386,7 +386,7 @@ impl OperationIndex {
 				};
 				mark(&mut self.filesystem_applies, key.clone(), id, add);
 			}
-			Operation::FilesystemLoad { key } => {
+			Operation::FilesystemLoad { key, .. } => {
 				mark(&mut self.filesystem_loads, key.clone(), id, add);
 			}
 			Operation::FilesystemFlush { records, stage, .. } => {

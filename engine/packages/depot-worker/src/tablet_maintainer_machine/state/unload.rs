@@ -982,7 +982,7 @@ fn operation_scope(operation: &Operation) -> UnloadScope {
 		| Operation::ReadDeleteRow { key }
 		| Operation::FilesystemRead { key, .. }
 		| Operation::FilesystemApply { key, .. }
-		| Operation::FilesystemLoad { key }
+		| Operation::FilesystemLoad { key, .. }
 		| Operation::Load { key, .. }
 		| Operation::ForgetOrphan { key, .. } => log_key(key),
 		Operation::ReadRow { volume_key } | Operation::ReadOpenKeys { volume_key, .. } => {

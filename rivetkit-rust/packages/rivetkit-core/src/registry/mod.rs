@@ -677,7 +677,8 @@ impl CoreRegistry {
 			metadata: Some(json!({
 				"rivetkit": { "version": config.serverless_package_version },
 			})),
-			not_global: false,
+			// Each registry owns its dispatcher, endpoint, and shutdown lifetime.
+			not_global: true,
 			debug_latency_ms: None,
 			max_queued_requests_per_actor:
 				rivet_envoy_client::config::DEFAULT_MAX_QUEUED_REQUESTS_PER_ACTOR,
@@ -710,9 +711,22 @@ impl CoreRegistry {
 		// host's default SIGINT handling when rivetkit-core is embedded in
 		// Node via NAPI and leaves the host process unable to exit. Callers
 		// trip the `shutdown` token instead.
-		shutdown.cancelled().await;
+		tokio::select! {
+			_ = shutdown.cancelled() => {},
+			_ = async {
+				handle.wait_stopped().await;
+				if handle.terminal_error().is_none() {
+					// Keep existing host-controlled shutdown behavior for ordinary eviction.
+					shutdown.cancelled().await;
+				}
+			} => {},
+		}
 
 		let shutdown_envoy = async {
+			if handle.terminal_error().is_some() {
+				handle.wait_stopped().await;
+				return;
+			}
 			if manage_engine {
 				// Remove the old host from the engine's active pool before sleeping
 				// actors. Otherwise a request racing the stopped report can start the
@@ -796,7 +810,10 @@ impl CoreRegistry {
 		#[cfg(not(feature = "native-runtime"))]
 		shutdown_envoy.await;
 
-		Ok(())
+		match handle.terminal_error() {
+			Some(error) => Err(anyhow::anyhow!(error)),
+			None => Ok(()),
+		}
 	}
 
 	fn into_dispatcher(self, config: &ServeConfig) -> Arc<RegistryDispatcher> {

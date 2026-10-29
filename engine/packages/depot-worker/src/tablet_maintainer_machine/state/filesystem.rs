@@ -28,6 +28,15 @@ use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::ops::Bound;
 
+/// The authority a record lookup may use when the exact incarnation has no stored row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum LoadPurpose {
+	/// Normal apply registration, with the existing quorum/creation recovery rules.
+	Register,
+	/// Stop recovery accepts a persisted record only; absence grants no creation authority.
+	StopProof,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Volume {
 	pub record: super::record::SharedRecord,
@@ -336,6 +345,16 @@ pub fn mark_candidate(state: &mut MaintainerState, key: &VolumeLogKey) {
 /// lookup of its record. Every change that can make a loaded volume eligible calls this;
 /// a registered volume returns after one map lookup.
 pub(crate) fn load(state: &mut MaintainerState, key: VolumeLogKey) {
+	load_for(state, key, LoadPurpose::Register);
+}
+
+/// Reads the durable record of a recovered volume that lacks an in-sync quorum. The
+/// result supplies metadata only; later status barriers still own every stop proof.
+pub(crate) fn load_stop_record(state: &mut MaintainerState, key: VolumeLogKey) {
+	load_for(state, key, LoadPurpose::StopProof);
+}
+
+fn load_for(state: &mut MaintainerState, key: VolumeLogKey, purpose: LoadPurpose) {
 	if state.filesystem.volumes.contains_key(&key) {
 		return;
 	}
@@ -360,6 +379,7 @@ pub(crate) fn load(state: &mut MaintainerState, key: VolumeLogKey) {
 	// the delete fixed that tail from a quorum, and other members may already be forgotten.
 	if loaded.creation.is_none()
 		&& loaded.stored_row.is_none()
+		&& purpose == LoadPurpose::Register
 		&& !draining
 		&& !super::membership::quorum(&state.tablet.replica_set, |worker| {
 			loaded
@@ -374,31 +394,32 @@ pub(crate) fn load(state: &mut MaintainerState, key: VolumeLogKey) {
 		.get(&key)
 		.and_then(|v| v.creation.as_ref())
 		.filter(|v| v.acknowledged)
+		.filter(|_| purpose == LoadPurpose::Register)
 		.map(|v| v.row.clone())
 	{
 		register(state, key, record, false);
 		return;
 	}
-	if state
-		.store_queue
-		.contains(&StoreWork::FilesystemLoad { key: key.clone() })
-		|| state.operations.index().filesystem_loads.contains_key(&key)
+	if state.store_queue.contains(&StoreWork::FilesystemLoad {
+		key: key.clone(),
+		purpose: LoadPurpose::Register,
+	}) || state.operations.index().filesystem_loads.contains_key(&key)
 	{
 		return;
 	}
 	state
 		.store_queue
-		.push_back(StoreWork::FilesystemLoad { key });
+		.push_back(StoreWork::FilesystemLoad { key, purpose });
 }
 /// Whether `key`'s registration for filesystem apply is running: its record lookup is queued
 /// or in flight. It offers the volume for registration first, so an eligible volume starts
 /// one now and a volume that registers at once returns false.
 pub(crate) fn registering(state: &mut MaintainerState, key: &VolumeLogKey) -> bool {
 	load(state, key.clone());
-	state
-		.store_queue
-		.contains(&StoreWork::FilesystemLoad { key: key.clone() })
-		|| state.operations.index().filesystem_loads.contains_key(key)
+	state.store_queue.contains(&StoreWork::FilesystemLoad {
+		key: key.clone(),
+		purpose: LoadPurpose::Register,
+	}) || state.operations.index().filesystem_loads.contains_key(key)
 }
 
 /// Re-evaluates a volume after a member observation was recorded outside
@@ -684,7 +705,7 @@ pub(crate) fn loaded(
 	) {
 		return;
 	}
-	let Some(Operation::FilesystemLoad { key }) = state.finish(id, fx) else {
+	let Some(Operation::FilesystemLoad { key, purpose }) = state.finish(id, fx) else {
 		unreachable!()
 	};
 	if retiring(state, &key) || !state.loaded_volumes.contains_key(&key) {
@@ -693,6 +714,15 @@ pub(crate) fn loaded(
 	// A lookup queued before the incarnation was quarantined answers late; the quarantine
 	// stands, since nothing it decided has changed.
 	if is_record_missing(state, &key) {
+		return;
+	}
+	if purpose == LoadPurpose::StopProof && !matches!(&result, Ok(Some(_))) {
+		// A stop lookup cannot synthesize a cold-zero row from creation evidence. A lost
+		// durable record retains the usual quarantine; transient read failure only blocks
+		// this stop and leaves the next fresh barrier to retry, without fencing the grant.
+		if matches!(&result, Ok(None)) && record_lost(state, &key) {
+			mark_record_missing(state, &key, fx);
+		}
 		return;
 	}
 	// The lookup reads this incarnation's own record, so it never names another one.
@@ -917,10 +947,10 @@ pub(crate) fn stored(
 
 pub(crate) fn owns(state: &MaintainerState, key: &VolumeLogKey) -> bool {
 	state.filesystem.volumes.contains_key(key)
-		|| state
-			.store_queue
-			.contains(&StoreWork::FilesystemLoad { key: key.clone() })
-		|| state.operations.index().filesystem_loads.contains_key(key)
+		|| state.store_queue.contains(&StoreWork::FilesystemLoad {
+			key: key.clone(),
+			purpose: LoadPurpose::Register,
+		}) || state.operations.index().filesystem_loads.contains_key(key)
 }
 /// A hint asks for fresh status; the hinted seq itself never supplies a commitment proof.
 /// A parked claim read's floor is proof, but it counts through `committed_on` while that read
@@ -2502,7 +2532,14 @@ pub(crate) fn quiesce(state: &mut MaintainerState, key: &VolumeLogKey, fx: &mut 
 	release_owed(state, key);
 	state.filesystem.pages.retain(|p| &p.key != key);
 	state.store_queue.remove_all(&[
-		StoreWork::FilesystemLoad { key: key.clone() },
+		StoreWork::FilesystemLoad {
+			key: key.clone(),
+			purpose: LoadPurpose::StopProof,
+		},
+		StoreWork::FilesystemLoad {
+			key: key.clone(),
+			purpose: LoadPurpose::Register,
+		},
 		StoreWork::FilesystemApply { key: key.clone() },
 	]);
 	fx.cancel_timer(MaintainerTimer::FilesystemDue(key.clone()));
@@ -2547,7 +2584,14 @@ pub(crate) fn forget(state: &mut MaintainerState, key: &VolumeLogKey, fx: &mut E
 	state.filesystem.candidates.remove(key);
 	state.filesystem.pages.retain(|p| &p.key != key);
 	state.store_queue.remove_all(&[
-		StoreWork::FilesystemLoad { key: key.clone() },
+		StoreWork::FilesystemLoad {
+			key: key.clone(),
+			purpose: LoadPurpose::StopProof,
+		},
+		StoreWork::FilesystemLoad {
+			key: key.clone(),
+			purpose: LoadPurpose::Register,
+		},
 		StoreWork::FilesystemApply { key: key.clone() },
 	]);
 	fx.cancel_timer(MaintainerTimer::FilesystemDue(key.clone()));

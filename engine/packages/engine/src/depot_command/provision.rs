@@ -225,9 +225,9 @@ pub async fn create_missing(
 	send_all(requests, creates, concurrency).await
 }
 
-/// Grants every planned tablet that has no maintainer to its first member. Safe to repeat:
-/// granted tablets are skipped.
-pub async fn grant_ungranted(
+/// Grants every planned tablet to its first member. Safe to repeat after an accepted grant:
+/// tablets already maintained by their planned member are skipped.
+pub async fn grant_planned(
 	ctx: &rivet_engine_context::EngineContext,
 	requests: &depot_worker::coordinator_requests::CoordinatorRequests,
 	disks: &[StorageWorkerDisk],
@@ -236,17 +236,26 @@ pub async fn grant_ungranted(
 ) -> Result<()> {
 	let workers = worker_ids(disks);
 	let created = super::read_manifest(ctx).await?;
-	check_partial(&created, planned, &workers)?;
+	let grants = grants_needed(&created, planned, &workers)?;
+	send_all(requests, grants, concurrency).await
+}
 
+/// The planned grants still missing from an otherwise unchanged layout.
+fn grants_needed(
+	manifest: &TabletManifest,
+	planned: &[PlannedTablet],
+	workers: &[Uuid],
+) -> Result<Vec<TabletCoordinatorRequest>> {
+	check_partial(manifest, planned, workers)?;
 	// Tablet IDs are drawn by the coordinator, so grants are matched to the plan by range start.
 	let mut grants = Vec::with_capacity(planned.len());
 	for want in planned {
-		let tablet = created
+		let tablet = manifest
 			.tablets
 			.iter()
 			.find(|tablet| tablet.hash_range.start == want.start.to_be_bytes())
 			.with_context(|| format!("created partition at {} is missing", want.start))?;
-		if tablet.maintainer.is_some() {
+		if tablet.maintainer == Some(*workers[want.members[0]].as_bytes()) {
 			continue;
 		}
 		grants.push(TabletCoordinatorRequest::GrantTablet(GrantTablet {
@@ -254,7 +263,43 @@ pub async fn grant_ungranted(
 			maintainer: *workers[want.members[0]].as_bytes(),
 		}));
 	}
-	send_all(requests, grants, concurrency).await
+	Ok(grants)
+}
+
+/// Reconciles the static placement within one injected-clock deadline. A successful grant
+/// may already have been replaced by automatic failover using a startup discovery snapshot.
+async fn reconcile_grants<Read, ReadFuture, Send, SendFuture>(
+	clock: &dyn rivet_env::Clock,
+	deadline_boot_ms: u64,
+	planned: &[PlannedTablet],
+	workers: &[Uuid],
+	mut read: Read,
+	mut send: Send,
+) -> Result<TabletManifest>
+where
+	Read: FnMut() -> ReadFuture,
+	ReadFuture: std::future::Future<Output = Result<TabletManifest>>,
+	Send: FnMut(Vec<TabletCoordinatorRequest>) -> SendFuture,
+	SendFuture: std::future::Future<Output = Result<()>>,
+{
+	rivet_env::timeout_at(clock, deadline_boot_ms, async {
+		let mut delay_ms = 20;
+		loop {
+			let manifest = read().await?;
+			let grants = grants_needed(&manifest, planned, workers)?;
+			if grants.is_empty() {
+				verify(&manifest, planned, workers)?;
+				return Ok(manifest);
+			}
+			// A transport error has an unknown outcome: return it rather than retrying.
+			// Only accepted grants may be reconciled against another manifest snapshot.
+			send(grants).await?;
+			rivet_env::sleep(clock, std::time::Duration::from_millis(delay_ms)).await?;
+			delay_ms = (delay_ms * 2).min(1_000);
+		}
+	})
+	.await
+	.context("provisioning placement did not converge before the deadline")?
 }
 
 /// Verifies the manifest matches the plan and summarizes its placement.
@@ -298,6 +343,23 @@ pub async fn provision(
 	);
 
 	create_missing(ctx, requests, &disks, &planned, concurrency).await?;
-	grant_ungranted(ctx, requests, &disks, &planned, concurrency).await?;
-	verify_placement(ctx, &disks, &planned).await
+	let clock = ctx.env().clock();
+	let deadline = rivet_env::deadline_after(
+		clock.as_ref(),
+		std::time::Duration::from_millis(ctx.config().depot().volume_request_timeout_ms()),
+	)?;
+	let manifest = reconcile_grants(
+		clock.as_ref(),
+		deadline,
+		&planned,
+		&worker_ids(&disks),
+		|| super::read_manifest(ctx),
+		|grants| send_all(requests, grants, concurrency),
+	)
+	.await?;
+	Ok(
+		json!({ "partitionManifestVersion": manifest.tablet_manifest_version, "placement": placement_json(&manifest) }),
+	)
 }
+
+

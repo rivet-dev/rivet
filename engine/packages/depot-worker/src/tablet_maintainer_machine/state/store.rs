@@ -73,6 +73,7 @@ pub(crate) enum StoreWork {
 	},
 	FilesystemLoad {
 		key: depot_types::VolumeLogKey,
+		purpose: super::filesystem::LoadPurpose,
 	},
 	FilesystemApply {
 		key: depot_types::VolumeLogKey,
@@ -190,7 +191,7 @@ impl StoreQueue {
 	/// Whether `work` is queued. Kinds the index tracks by key answer without a scan.
 	pub(crate) fn contains(&self, work: &StoreWork) -> bool {
 		match work {
-			StoreWork::FilesystemLoad { key } => self.index.loads.contains_key(key),
+			StoreWork::FilesystemLoad { key, .. } => self.index.loads.contains_key(key),
 			StoreWork::FilesystemApply { key } => self.index.applies.contains_key(key),
 			StoreWork::ReadUnloadRow { key } => self.index.unload_reads.contains_key(key),
 			StoreWork::Checkpoint { request_id } => self.index.checkpoints.contains_key(request_id),
@@ -379,7 +380,7 @@ impl StoreQueueIndex {
 				count(&mut counts.opens, add);
 				count_key(&mut self.queries, request_id, add);
 			}
-			StoreWork::FilesystemLoad { key } => {
+			StoreWork::FilesystemLoad { key, .. } => {
 				count(&mut counts.loads, add);
 				count_key(&mut self.loads, key, add);
 			}
@@ -892,7 +893,7 @@ fn prioritize_waiting_opens(state: &mut MaintainerState) {
 		.collect();
 	// Opens themselves always move: each observes only its own volume.
 	let required = |work: &StoreWork| {
-		let StoreWork::FilesystemLoad { key } = work else {
+		let StoreWork::FilesystemLoad { key, .. } = work else {
 			return true;
 		};
 		waiting.contains(&key.0.volume_key)
@@ -1299,8 +1300,14 @@ fn drive_queue(state: &mut MaintainerState, effects: &mut Effects, resume: bool)
 			StoreWork::FilesystemQuery { request_id } => {
 				super::filesystem_reads::dispatch(state, request_id, effects);
 			}
-			StoreWork::FilesystemLoad { key } => {
-				let op_id = state.begin(Operation::FilesystemLoad { key: key.clone() }, effects);
+			StoreWork::FilesystemLoad { key, purpose } => {
+				let op_id = state.begin(
+					Operation::FilesystemLoad {
+						key: key.clone(),
+						purpose,
+					},
+					effects,
+				);
 				effects.execute(MaintainerEffect::FilesystemLoadRequest { op_id, key });
 			}
 			StoreWork::FilesystemApply { key } => {

@@ -10,7 +10,7 @@ use depot_types::VolumeLogKey;
 use rivet_data::generated::{
 	depot_log_shard_v1::VolumeLogReplicaState,
 	depot_storage_worker_protocol_v1::{
-		NotReady, StaleTabletGrantEpoch, StaleTabletReplicaSet, StopReadiness,
+		NotReady, ReadinessPurpose, StaleTabletGrantEpoch, StaleTabletReplicaSet, StopReadiness,
 		StopReadinessResponse as Response,
 	},
 	shared_depot_fs_v1::FsVolumeStatus,
@@ -357,6 +357,9 @@ pub(crate) fn observe(
 /// Called only after all status requests in the round have completed or timed out.
 /// Volumes admitted during the round must also have fresh observations or block it.
 pub(crate) fn completed(state: &mut MaintainerState, effects: &mut Effects) {
+	let mut tiering = BTreeSet::new();
+	let mut reloads = BTreeMap::new();
+	let mut records = BTreeSet::new();
 	let done: Vec<_> = state
 		.stop_checks
 		.pending
@@ -397,6 +400,24 @@ pub(crate) fn completed(state: &mut MaintainerState, effects: &mut Effects) {
 					continue;
 				}
 				blocked = true;
+				if volume.stored_row.is_none()
+					&& matches!(request.purpose, ReadinessPurpose::Stop)
+					&& observations.is_some_and(|answers| {
+						answers.iter().any(|(worker, replica)| {
+							state.disk_incarnation(worker).is_some()
+								&& super::membership::voter(&state.tablet.replica_set, worker)
+								&& !replica.lost_entries && replica.status
+								!= VolumeLogReplicaStatus::Deleted
+						})
+					}) {
+					records.insert(key.clone());
+				}
+				if observed.is_none()
+					&& matches!(request.purpose, ReadinessPurpose::Stop)
+					&& let Some(source) = cold_reload_source(state, key, volume, observations)
+				{
+					reloads.insert((key.clone(), WorkerId::from_bytes(*worker)), source);
+				}
 				if sample.len() < 16 {
 					sample.push(VolumeBlocker {
 						volume_log_key: key.0.clone(),
@@ -409,6 +430,14 @@ pub(crate) fn completed(state: &mut MaintainerState, effects: &mut Effects) {
 				}
 			}
 			blocking_volumes += u64::from(blocked);
+			if blocked
+				&& matches!(request.purpose, ReadinessPurpose::Stop)
+				&& state.filesystem.volumes.get(key).is_some_and(|volume| {
+					volume.applied.volume_seq > volume.record.cold.volume_seq
+						|| !volume.record_persisted
+				}) {
+				tiering.insert(key.clone());
+			}
 			if !volume
 				.creation
 				.as_ref()
@@ -461,7 +490,98 @@ pub(crate) fn completed(state: &mut MaintainerState, effects: &mut Effects) {
 			},
 		);
 	}
+	// A closed writer may never reopen to repair a survivor. Move its already-applied
+	// data through ordinary throttled tiering so recovery can catch up, instead of
+	// holding the stop for the full batching age. Readiness still needs fresh proof.
+	for key in tiering {
+		super::filesystem::request_due_flush(state, &key, effects);
+	}
+	for key in records {
+		super::filesystem::load_stop_record(state, key);
+	}
+	// A closed client's cold-only quorum may never reopen to restore an absent survivor.
+	// Reload it without making it a voter; a later complete barrier must observe it before
+	// issuing permission. Never queue this round's proof beyond its immediate dispatch.
+	for ((key, worker), source) in reloads {
+		super::member_repair::absent_at_cold(state, key, worker, source, effects);
+	}
 	state.stop_checks.observations.clear();
+}
+
+/// A durable row and a fresh intact replica authorize nonvoting reconstruction only. Existing
+/// replicas are returned unchanged by Load, including an unseen suffix. Only the later fresh
+/// quorum proof in `caught_up_to_cold` may count the reconstructed replica for permission.
+fn cold_reload_source(
+	state: &MaintainerState,
+	key: &VolumeLogKey,
+	volume: &super::LoadedVolume,
+	observations: Option<&BTreeMap<WorkerId, VolumeLogReplicaState>>,
+) -> Option<super::member_repair::LoadSource> {
+	if !matches!(state.tablet.replica_set.phase, TabletPhase::Stable) {
+		return None;
+	}
+	let observations = observations?;
+	let row = volume.stored_row.as_deref()?;
+	let within_row = |replica: &VolumeLogReplicaState| {
+		replica.status != VolumeLogReplicaStatus::Deleted
+			&& replica.appended.volume_seq <= row.cold.volume_seq
+			&& replica.known_committed_volume_seq <= row.cold.volume_seq
+	};
+	if row.status != FsVolumeStatus::Live
+		|| row.volume_incarnation != key.0.volume_incarnation
+		|| super::filesystem::known_committed(state, key) > row.cold.volume_seq
+		|| volume
+			.members
+			.values()
+			.chain(observations.values())
+			.any(|replica| !within_row(replica))
+	{
+		return None;
+	}
+	let cold_quorum = observations.iter().any(|(worker, replica)| {
+		caught_up_to_cold(
+			state,
+			key,
+			volume,
+			Some(observations),
+			*worker.as_bytes(),
+			replica,
+		)
+	});
+	let in_sync_source = observations.iter().any(|(worker, replica)| {
+		super::membership::voter(&state.tablet.replica_set, worker)
+			&& state.disk_incarnation(worker).is_some()
+			&& replica.status == VolumeLogReplicaStatus::InSync
+			&& !replica.lost_entries
+			&& replica.cold == row.cold
+			&& replica.appended == row.cold
+	});
+	if !cold_quorum && !in_sync_source {
+		return None;
+	}
+	let mut fence = None;
+	for replica in volume.members.values().chain(observations.values()) {
+		let Some(client) = replica.claimed_client.as_ref() else {
+			continue;
+		};
+		if let Some((previous, holder)) = fence {
+			let previous: &rivet_data::generated::shared_depot_types_v1::ClientIdentity = previous;
+			if previous.client_epoch == client.client_epoch
+				&& (previous != client || holder != replica.claimed_holder.as_ref())
+			{
+				return None;
+			}
+			if previous.client_epoch > client.client_epoch {
+				continue;
+			}
+		}
+		fence = Some((client, replica.claimed_holder.as_ref()));
+	}
+	Some(super::member_repair::LoadSource {
+		cold: volume.stored_row.as_deref()?.cold.clone(),
+		claimed_client: fence.map(|(client, _)| client.clone()),
+		claimed_holder: fence.and_then(|(_, holder)| holder.cloned()),
+	})
 }
 
 /// Whether `worker`'s `Repairing` replica of `key`, observed in this round, held every

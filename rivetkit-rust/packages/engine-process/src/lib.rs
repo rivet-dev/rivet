@@ -169,7 +169,17 @@ impl EngineProcessManager {
 		let ResolvedEngine::Binary(binary_path) = resolved else {
 			unreachable!("existing engine handled above");
 		};
-		if let Some(health) = probe_existing_engine(endpoint).await? {
+		let mut health = probe_existing_engine(endpoint).await?;
+		if health.is_none() {
+			if let Some(stamp) = read_engine_stamp().filter(|stamp| stamp.endpoint == *endpoint) {
+				// Shutdown closes the listener before releasing the storage locks.
+				// A watcher may restart its app while that Engine is still draining.
+				wait_for_engine_exit(stamp.pid, Duration::from_secs(20)).await?;
+				// Another app may have completed startup while we waited.
+				health = probe_existing_engine(endpoint).await?;
+			}
+		}
+		if let Some(health) = health {
 			tracing::info!(
 				endpoint = %endpoint,
 				status = ?health.status,
@@ -333,8 +343,31 @@ impl EngineProcessManager {
 	}
 }
 
+/// Waits without signalling a previous Engine that may still own storage locks.
+async fn wait_for_engine_exit(pid: u32, timeout: Duration) -> Result<()> {
+	tracing::info!(
+		pid,
+		"waiting for the previous local engine to finish stopping"
+	);
+	tokio::time::timeout(timeout, async {
+		while pid_is_alive(pid) {
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	})
+	.await
+	.with_context(|| {
+		format!(
+			"previous local Engine process {pid} is still stopping; refusing to start another Engine against its storage"
+		)
+	})?;
+	Ok(())
+}
+
 /// How long the `--runtime-info` probe may run before the binary is treated as incompatible.
-const RUNTIME_INFO_TIMEOUT: Duration = Duration::from_secs(5);
+// A freshly linked native binary can spend several seconds in the OS loader
+// before reaching main (notably macOS first-launch validation). Keep the probe
+// bounded without rejecting a compatible Engine just because its launch is cold.
+const RUNTIME_INFO_TIMEOUT: Duration = Duration::from_secs(15);
 /// The largest `--runtime-info` response read from a probed binary.
 const RUNTIME_INFO_MAX_BYTES: usize = 8192;
 

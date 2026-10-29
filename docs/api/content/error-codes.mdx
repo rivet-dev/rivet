@@ -1,0 +1,15 @@
+---
+title: "Error Codes"
+description: "Every error group and code the Rivet HTTP API and connection protocol can return."
+skill: true
+---
+
+import ErrorCodes from "@/components/docs/ErrorCodes.astro";
+
+Errors are identified by `group` and `code`. See [Errors](/docs/api/errors) for the response format and [Connect](/docs/api/gateway/connect#errors) for how they arrive over a WebSocket connection.
+
+The Status column shows the HTTP status the error is returned with. When the gateway and the control plane disagree, both are listed. Codes without a status use the default for where they were raised: `400` from the control plane and gateway, and `500` from inside the actor runtime, where the message is also replaced with a generic internal error unless the code is listed here with a status. Errors thrown by your own actor code with `UserError` use the `user` group with whatever `code` you supply, and always return `400`.
+
+Messages may contain placeholders in braces that are filled in at runtime. Match on `group` and `code`, not on `message`.
+
+<ErrorCodes />

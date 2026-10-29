@@ -51,26 +51,9 @@ mod imp {
 					retry_after_ms = close_reason
 						.as_ref()
 						.and_then(|reason| reason.retry_after_ms);
-					if let Some(reason) = &close_reason {
-						if reason.group == "ws" && reason.error == "eviction" {
-							tracing::debug!("connection evicted");
-							let _ = crate::envoy::send_to_envoy_tx(
-								&shared,
-								ToEnvoyMessage::ConnClose {
-									evict: true,
-									session,
-								},
-							);
-							return;
-						}
+					if super::super::report_connection_close(&shared, session, close_reason) {
+						return;
 					}
-					let _ = crate::envoy::send_to_envoy_tx(
-						&shared,
-						ToEnvoyMessage::ConnClose {
-							evict: false,
-							session,
-						},
-					);
 				}
 				Err(error) => {
 					tracing::error!(?error, "connection failed");

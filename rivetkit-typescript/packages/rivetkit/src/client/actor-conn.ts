@@ -613,6 +613,13 @@ export class ActorConnRaw {
 		}
 		if (
 			error instanceof errors.ActorError &&
+			error.group === "client" &&
+			error.code === "connection_open_interrupted"
+		) {
+			return true;
+		}
+		if (
+			error instanceof errors.ActorError &&
 			isInvalidToken(error.group, error.code) &&
 			this.#driver.refreshAuthToken &&
 			this.#authRetryAvailable
@@ -692,16 +699,18 @@ export class ActorConnRaw {
 		});
 		this.#websocket = ws;
 		ws.addEventListener("open", () => {
-			if (this.#abandonedSockets.has(ws)) return;
+			if (this.#websocket !== ws || this.#abandonedSockets.has(ws))
+				return;
 			logger().debug({
 				msg: "client websocket open",
 				connId: this.#connId,
 			});
 		});
 		ws.addEventListener("message", async (ev: { data: ConnMessage }) => {
-			if (this.#abandonedSockets.has(ws)) return;
+			if (this.#websocket !== ws || this.#abandonedSockets.has(ws))
+				return;
 			try {
-				await this.#handleOnMessage(ev.data);
+				await this.#handleOnMessage(ev.data, ws);
 			} catch (err) {
 				logger().error({
 					msg: "error in websocket message handler",
@@ -710,7 +719,8 @@ export class ActorConnRaw {
 			}
 		});
 		ws.addEventListener("close", async (ev: Event | CloseEventLike) => {
-			if (this.#abandonedSockets.has(ws)) return;
+			if (this.#websocket !== ws || this.#abandonedSockets.has(ws))
+				return;
 			try {
 				await this.#handleOnClose(ev);
 			} catch (err) {
@@ -721,7 +731,8 @@ export class ActorConnRaw {
 			}
 		});
 		ws.addEventListener("error", () => {
-			if (this.#abandonedSockets.has(ws)) return;
+			if (this.#websocket !== ws || this.#abandonedSockets.has(ws))
+				return;
 			try {
 				this.#handleOnError();
 			} catch (err) {
@@ -803,7 +814,7 @@ export class ActorConnRaw {
 	}
 
 	/** Called by the onmessage event from drivers. */
-	async #handleOnMessage(data: any) {
+	async #handleOnMessage(data: any, socket: UniversalWebSocket) {
 		logger().trace({
 			msg: "received message",
 			dataType: typeof data,
@@ -812,6 +823,10 @@ export class ActorConnRaw {
 		});
 
 		const response = await this.#parseMessage(data as ConnMessage);
+		// Decoding can yield while this socket closes and another connects. Apply
+		// the message only while its socket still owns the connection.
+		if (this.#websocket !== socket || this.#abandonedSockets.has(socket))
+			return;
 		logger().trace(
 			getLogMessage()
 				? {
@@ -897,6 +912,12 @@ export class ActorConnRaw {
 						this.#actorResolutionState,
 						this.#driver,
 					);
+					if (
+						this.#websocket !== socket ||
+						this.#abandonedSockets.has(socket)
+					) {
+						return;
+					}
 					if (schedulingError) {
 						errorToThrow = schedulingError;
 					}
@@ -1047,9 +1068,17 @@ export class ActorConnRaw {
 				this.#invalidateActorIfStale(group, code);
 			} else {
 				// Default error for non-structured close reasons
-				error = new Error(
-					`${wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${reason})`,
-				);
+				const message = `${wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${reason})`;
+				// A transport loss during the handshake can outlast an Engine
+				// restart. Retry opening without replaying actions with unknown outcomes.
+				error =
+					!wasConnected && closeEvent.code === 1006
+						? new errors.ActorError(
+								"client",
+								"connection_open_interrupted",
+								message,
+							)
+						: new Error(message);
 			}
 
 			this.#rejectPendingPromises(error, false);

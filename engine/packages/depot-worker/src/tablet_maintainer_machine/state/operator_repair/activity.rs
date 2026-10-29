@@ -294,7 +294,7 @@ fn describe(
 					.is_some_and(|request| request.volume_key() == name),
 			false,
 		),
-		Operation::FilesystemLoad { key } => ("filesystem_load", "IN_FLIGHT", own(key), false),
+		Operation::FilesystemLoad { key, .. } => ("filesystem_load", "IN_FLIGHT", own(key), false),
 		Operation::FilesystemRead { key, .. } => ("filesystem_read", "IN_FLIGHT", own(key), false),
 		Operation::FilesystemApply { key, .. } => {
 			("filesystem_apply", "IN_FLIGHT", own(key), false)

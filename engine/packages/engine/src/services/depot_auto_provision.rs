@@ -162,7 +162,7 @@ impl Provisioning {
 
 	/// Grants the planned tablets that have no maintainer.
 	async fn grant(&self) -> Result<()> {
-		provision::grant_ungranted(
+		provision::grant_planned(
 			&self.ctx,
 			&self.requests,
 			&self.disks,

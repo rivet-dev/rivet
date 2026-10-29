@@ -29,6 +29,13 @@ import type {
 type ShutdownSignal = "SIGINT" | "SIGTERM";
 
 const REGISTRY_READY_TIMEOUT_MS = 30_000;
+// A managed Engine restart can wait for the old process to release storage and
+// for its worker lease to expire before the replacement can register.
+const LOCAL_ENGINE_READY_TIMEOUT_MS = 60_000;
+// Core gives local actors three seconds to drain and acknowledge their stopped
+// reports. Leave time to close the node connection after that, while staying
+// below the five-second force-kill ceiling used by tsx watch.
+const LOCAL_DEV_SHUTDOWN_GRACE_PERIOD_MS = 4_000;
 
 // Serverless is disabled for v3; keep the implementation for a later release.
 function rejectServerless(): void {
@@ -789,7 +796,7 @@ export class Registry<A extends RegistryActors> {
 		let gracePeriodMs = config.shutdown?.gracePeriodMs;
 		if (gracePeriodMs === undefined) {
 			gracePeriodMs = localDevSignal
-				? 1_000
+				? LOCAL_DEV_SHUTDOWN_GRACE_PERIOD_MS
 				: ((await this.#actorStopThresholdMs(
 						modeAPromise ?? modeBPromise,
 					)) ?? 30 * 60 * 1000);
@@ -942,16 +949,22 @@ export class Registry<A extends RegistryActors> {
 			throw new Error("registry envoy startup did not initialize");
 		}
 
+		const readyTimeoutMs =
+			config.engineSpawn &&
+			config.endpoint !== undefined &&
+			isLocalEngineEndpoint(config.endpoint)
+				? LOCAL_ENGINE_READY_TIMEOUT_MS
+				: REGISTRY_READY_TIMEOUT_MS;
 		let timeout: ReturnType<typeof setTimeout> | undefined;
 		const timeoutPromise = new Promise<never>((_resolve, reject) => {
 			timeout = setTimeout(
 				() =>
 					reject(
 						new Error(
-							`RivetKit registry did not register with the Engine within ${REGISTRY_READY_TIMEOUT_MS}ms`,
+							`RivetKit registry did not register with the Engine within ${readyTimeoutMs}ms`,
 						),
 					),
-				REGISTRY_READY_TIMEOUT_MS,
+				readyTimeoutMs,
 			);
 			timeout.unref?.();
 		});

@@ -28,6 +28,19 @@ impl std::fmt::Display for Superseded {
 
 impl std::error::Error for Superseded {}
 
+/// The pool rejected renewal of this connection's admission. It cannot be
+/// renewed again; the runtime must reconnect and obtain a fresh admission.
+#[derive(Debug)]
+pub(crate) struct PoolAdmissionLost;
+
+impl std::fmt::Display for PoolAdmissionLost {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("node pool admission is no longer valid")
+	}
+}
+
+impl std::error::Error for PoolAdmissionLost {}
+
 impl RecordState {
 	/// The state of a new connection that read `stored` before connecting. The record keeps the
 	/// envoy's creation time across connections and advances its connection epoch.

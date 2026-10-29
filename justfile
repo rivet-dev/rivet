@@ -8,15 +8,15 @@ preview-publish REF:
 
 [group('docker')]
 docker-build:
-	docker build -f docker/engine/universal/Dockerfile --target engine-full -t rivetdev/engine:local --platform linux/x86_64 .
+	docker build -f docker/engine/Dockerfile --target engine-full -t rivetdev/engine:local .
 
 [group('docker')]
 docker-run:
-	docker run -p 6420:6420 -e RIVET__AUTH__ADMIN_TOKEN=dev -e RUST_LOG=debug rivetdev/engine:local
+	docker compose -f self-host/control-plane/docker-compose/docker-compose.yml up -d --wait
 
 [group('docker')]
 docker-stop:
-	docker run -p 6420:6420 -e RIVET__AUTH__ADMIN_TOKEN=dev -e RUST_LOG=debug rivetdev/engine:local
+	docker compose -f self-host/control-plane/docker-compose/docker-compose.yml stop
 
 [group('skill-evals')]
 object-store-regenerate *args:

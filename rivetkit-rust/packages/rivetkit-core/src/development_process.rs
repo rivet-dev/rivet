@@ -6,12 +6,10 @@ use crate::services_process::{SERVICES_POOL_NAME, ServicesProcessConfig, Service
 
 /// Owns the processes RivetKit starts for a local development environment.
 ///
-/// The Engine and actor hosts have deliberately different lifetimes: the Engine
-/// is reusable and outlives the application process, while Services is
-/// tied to this host and shuts down with it. Keeping the orchestration here
-/// prevents serverful and serverless runtimes from growing separate startup
-/// behavior without forcing those incompatible lifetime rules into one generic
-/// subprocess abstraction.
+/// After the registry drains, shutdown stops Services and any Engine this host
+/// spawned. An Engine reused from another host keeps its existing owner and
+/// remains running. Keeping this orchestration here gives serverful and
+/// serverless runtimes the same process ownership rules.
 #[derive(Debug)]
 pub(crate) struct DevelopmentProcessManager {
 	_engine: EngineProcessManager,

@@ -366,13 +366,17 @@ impl CoreServerlessRuntime {
 				// received a recent ping. 503 is the conventional "recycle me" signal
 				// for container hosts running behind an HTTP health probe.
 				// An envoy that is still waiting for the engine's init message is
-				// reported healthy. `ensure_envoy` bounds that wait and evicts an
-				// envoy that never starts.
+				// reported healthy. `ensure_envoy` bounds that wait. A terminal
+				// registration rejection stays unhealthy until the host restarts.
 				let handle = { self.cached_envoy_handle().await };
-				let runtime_healthy = handle
-					.map(|handle| !handle.has_started() || handle.is_ping_healthy())
-					.unwrap_or(true);
-				if runtime_healthy {
+				let status = match handle {
+					Some(handle) if handle.terminal_error().is_some() => "registration_rejected",
+					Some(handle) if handle.has_started() && !handle.is_ping_healthy() => {
+						"engine_ping_stale"
+					}
+					_ => "ok",
+				};
+				if status == "ok" {
 					Ok(json_response(
 						StatusCode::OK,
 						json!({
@@ -385,7 +389,7 @@ impl CoreServerlessRuntime {
 					Ok(json_response(
 						StatusCode::SERVICE_UNAVAILABLE,
 						json!({
-							"status": "engine_ping_stale",
+							"status": status,
 							"runtime": "rivetkit",
 							"version": self.settings.package_version,
 						}),
@@ -605,6 +609,11 @@ impl CoreServerlessRuntime {
 		};
 
 		if let Err(reason) = wait_for_envoy_start(&cached.handle, cached.start_deadline).await {
+			// Registration rejection is terminal for this runtime. Keep the diagnostic
+			// cached until restart, so another request cannot register a replacement.
+			if let Some(error) = cached.handle.terminal_error() {
+				return Err(anyhow::anyhow!(error));
+			}
 			// Evict before stopping, so `/start` requests that arrive while the
 			// failed envoy drains start a fresh one instead of receiving it.
 			{
@@ -621,8 +630,8 @@ impl CoreServerlessRuntime {
 		Ok(cached.handle)
 	}
 
-	/// Stops an envoy that missed its start deadline so its reconnect loop does
-	/// not outlive the request, and returns the error for the caller.
+	/// Stops an envoy that cannot serve a start request so its reconnect loop does not
+	/// outlive the request. Preserves terminal registration errors for the caller.
 	async fn stop_failed_envoy(&self, handle: &EnvoyHandle, reason: String) -> anyhow::Error {
 		handle.shutdown(true);
 		if timeout(SHUTDOWN_DRAIN_TIMEOUT, handle.wait_stopped())
@@ -636,6 +645,9 @@ impl CoreServerlessRuntime {
 
 		if self.shutting_down.load(Ordering::Acquire) {
 			return RuntimeShutDown.build();
+		}
+		if let Some(error) = handle.terminal_error() {
+			return anyhow::anyhow!(error);
 		}
 		tracing::warn!(%reason, "serverless envoy failed to start; check engine reachability");
 		EnvoyStartFailed { reason }.build()
@@ -892,7 +904,7 @@ fn normalized_endpoint_candidates(value: &str) -> Vec<String> {
 }
 
 /// Waits until `start_deadline` for the engine's init message and returns the
-/// failure reason when it does not arrive.
+/// failure reason when it does not arrive or registration is rejected.
 async fn wait_for_envoy_start(
 	handle: &EnvoyHandle,
 	start_deadline: Instant,

@@ -5,6 +5,7 @@ use axum::{
 use rivet_engine_context::EngineContext;
 
 mod acquire;
+mod cors;
 mod http_tunnel;
 mod raw_rest_path;
 mod retry_budget;
@@ -55,6 +56,8 @@ pub fn router(ctx: &EngineContext, waits: &std::sync::Arc<start_waits::StartWait
 		.layer(axum::Extension(std::sync::Arc::new(
 			retry_budget::RetryBudget::from_config(ctx),
 		)))
+		// Outermost, so preflights are answered before any lookup, wake or auth.
+		.layer(axum::middleware::from_fn(cors::cors))
 		.with_state(ctx.clone())
 }
 

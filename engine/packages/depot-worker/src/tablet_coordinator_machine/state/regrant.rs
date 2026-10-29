@@ -21,15 +21,18 @@ pub(super) struct Regrants {
 	pub no_member: BTreeSet<[u8; 16]>,
 }
 
-/// The live member of `tablet` that may maintain it, other than `leaving`, with the fewest
-/// grants in `manifest`, then the lowest worker ID. Stopping workers are never chosen, nor
-/// are workers whose advertised versions cannot read the tablet's data.
+/// A live member of `tablet` that may maintain it, other than `leaving`. Prefer non-stopping
+/// workers, then the fewest grants in `manifest`, then the lowest worker ID. Ordinary placement excludes
+/// stopping workers; all targets must advertise readable tablet versions.
+/// A readiness-authorized stop may temporarily use a later pending stop; strictly
+/// increasing intent order prevents cycles when every worker drains together.
 pub(super) fn least_loaded_target(
 	manifest: &TabletManifest,
 	tablet: &Tablet,
 	leaving: &[u8; 16],
 	discovery: &StopTopology,
 	available: Option<&BTreeMap<[u8; 16], crate::tablet_coordinator_machine::placement::Worker>>,
+	stop_handoff: bool,
 ) -> Option<[u8; 16]> {
 	tablet
 		.replica_set
@@ -47,10 +50,10 @@ pub(super) fn least_loaded_target(
 								&& disk.disk_incarnation == observed.disk_incarnation
 						})
 					})
-				}) && !manifest
-				.stopping
-				.iter()
-				.any(|entry| &entry.worker_id == *worker)
+				}) && !manifest.stopping.iter().any(|entry| {
+				&entry.worker_id == *worker
+					&& !(stop_handoff && pending_stop_successor(manifest, leaving, worker))
+			})
 		})
 		.min_by_key(|worker| {
 			let grants = manifest
@@ -58,9 +61,38 @@ pub(super) fn least_loaded_target(
 				.iter()
 				.filter(|tablet| tablet.maintainer == Some(**worker))
 				.count();
-			(grants, **worker)
+			(
+				manifest
+					.stopping
+					.iter()
+					.any(|entry| entry.worker_id == **worker),
+				grants,
+				**worker,
+			)
 		})
 		.copied()
+}
+
+/// Pending workers remain Active until a durable permit. A stopped-owner-ready
+/// handoff may use one later in the durable drain order; it must never point back
+/// to an earlier drain or to a process already permitted to exit.
+pub(super) fn pending_stop_successor(
+	manifest: &TabletManifest,
+	source: &[u8; 16],
+	target: &[u8; 16],
+) -> bool {
+	let stop = |worker: &[u8; 16]| {
+		manifest
+			.stopping
+			.iter()
+			.find(|entry| &entry.worker_id == worker && entry.permitted_at.is_none())
+	};
+	match (stop(source), stop(target)) {
+		(Some(source), Some(target)) => {
+			(source.requested_at, source.worker_id) < (target.requested_at, target.worker_id)
+		}
+		_ => false,
+	}
 }
 
 /// Moves every grant held by a worker missing from `discovery`, or by a listed worker that
@@ -96,7 +128,8 @@ pub(super) fn regrant(
 		else {
 			continue;
 		};
-		let Some(target) = least_loaded_target(manifest, tablet, &maintainer, discovery, available)
+		let Some(target) =
+			least_loaded_target(manifest, tablet, &maintainer, discovery, available, false)
 		else {
 			regrants.no_member.insert(tablet_id);
 			continue;
