@@ -13,6 +13,7 @@ const DEFAULT_WEBSOCKET_SETUP_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_WEBSOCKET_CONNECT_ATTEMPT_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_WEBSOCKET_SEND_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_WEBSOCKET_FLUSH_TIMEOUT_MS: u64 = 2_000;
+const DEFAULT_WEBSOCKET_KEEPALIVE_INTERVAL_MS: u64 = 30_000;
 const DEFAULT_HTTP_CLIENT_POOL_IDLE_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_ADMISSION_CLIENT_STATE_CACHE_CAPACITY: u64 = 10_000;
 const DEFAULT_ADMISSION_CLIENT_STATE_CACHE_IDLE_TIMEOUT_MS: u64 = 60 * 60 * 1_000;
@@ -83,6 +84,11 @@ pub struct Guard {
 	/// Timeout for flushing forwarded WebSocket messages in milliseconds.
 	#[schemars(range(min = 1))]
 	pub websocket_flush_timeout_ms: Option<u64>,
+	/// Interval in milliseconds at which Guard sends a ping frame on every client WebSocket.
+	/// Keeps idle connections alive through proxies that close quiet WebSockets.
+	/// Defaults to 30000 ms.
+	#[schemars(range(min = 1))]
+	pub websocket_keepalive_interval_ms: Option<u64>,
 	/// Idle timeout for pooled upstream HTTP connections in milliseconds.
 	#[schemars(range(min = 1))]
 	pub http_client_pool_idle_timeout_ms: Option<u64>,
@@ -148,6 +154,10 @@ impl Guard {
 			(
 				"websocket_flush_timeout_ms",
 				self.websocket_flush_timeout_ms,
+			),
+			(
+				"websocket_keepalive_interval_ms",
+				self.websocket_keepalive_interval_ms,
 			),
 			(
 				"http_client_pool_idle_timeout_ms",
@@ -301,6 +311,13 @@ impl Guard {
 		)
 	}
 
+	pub fn websocket_keepalive_interval(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(
+			self.websocket_keepalive_interval_ms
+				.unwrap_or(DEFAULT_WEBSOCKET_KEEPALIVE_INTERVAL_MS),
+		)
+	}
+
 	pub fn http_client_pool_idle_timeout(&self) -> std::time::Duration {
 		std::time::Duration::from_millis(
 			self.http_client_pool_idle_timeout_ms
@@ -405,6 +422,10 @@ mod tests {
 		assert_eq!(
 			guard.websocket_flush_timeout(),
 			std::time::Duration::from_secs(2)
+		);
+		assert_eq!(
+			guard.websocket_keepalive_interval(),
+			std::time::Duration::from_secs(30)
 		);
 		assert_eq!(
 			guard.http_client_pool_idle_timeout(),

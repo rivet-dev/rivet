@@ -34,6 +34,8 @@ These limits affect actions that use `.connect()` and [low-level WebSockets](/ac
 
 WebSocket connections close when the actor sleeps. Clients reconnect, which wakes the actor.
 
+The control plane sends WebSocket ping frames every 30 seconds to keep quiet client connections alive through idle-timeout proxies. Self-hosted deployments can change this interval with `guard.websocket_keepalive_interval_ms`, which must be greater than zero. These transport pings do not replace application-level health checks.
+
 ### HTTP
 
 These limits affect actions that do not use `.connect()` and [low-level HTTP requests](/actors/docs/request-handler).
