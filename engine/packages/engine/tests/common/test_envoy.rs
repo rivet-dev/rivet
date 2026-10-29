@@ -269,8 +269,7 @@ impl Envoy {
 			.await
 			.as_ref()
 			.context("envoy is not running")?
-			.get_envoy_key()
-			.to_string())
+			.get_envoy_key())
 	}
 
 	pub async fn sqlite_get_pages(

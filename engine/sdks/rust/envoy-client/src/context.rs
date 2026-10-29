@@ -19,7 +19,10 @@ pub struct SharedActorEntry {
 
 pub struct SharedContext {
 	pub config: EnvoyConfig,
-	pub envoy_key: String,
+	/// Registration key the engine knows this process by. Rotated by the envoy loop when the lost
+	/// threshold discards every actor, so the engine treats the old registration as a dead envoy
+	/// instead of believing those actors still run here. Read it through `envoy_key()`.
+	pub envoy_key: parking_lot::RwLock<String>,
 	pub envoy_tx: mpsc::UnboundedSender<ToEnvoyMessage>,
 	pub actors: Arc<StdMutex<HashMap<String, HashMap<u32, SharedActorEntry>>>>,
 	pub actors_notify: Arc<Notify>,
@@ -48,6 +51,22 @@ pub struct SharedContext {
 	// every pending KV/SQLite request has been resolved (with `EnvoyShutdownError`
 	// if it didn't complete naturally).
 	pub stopped_tx: watch::Sender<bool>,
+}
+
+impl SharedContext {
+	/// Current registration key. Clone it rather than holding the guard; the envoy loop may rotate it.
+	pub fn envoy_key(&self) -> String {
+		self.envoy_key.read().clone()
+	}
+
+	/// Replaces the registration key with a fresh one and returns `(old, new)`. The next websocket
+	/// connection registers under the new key; the engine expires the old key like a dead envoy.
+	pub(crate) fn rotate_envoy_key(&self) -> (String, String) {
+		let new_key = uuid::Uuid::new_v4().to_string();
+		let mut guard = self.envoy_key.write();
+		let old_key = std::mem::replace(&mut *guard, new_key.clone());
+		(old_key, new_key)
+	}
 }
 
 #[derive(Debug)]

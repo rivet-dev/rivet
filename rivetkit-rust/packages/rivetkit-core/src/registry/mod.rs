@@ -1306,7 +1306,7 @@ impl RegistryDispatcher {
 			key,
 			self.region.clone(),
 			Some(generation),
-			handle.get_envoy_key().to_owned(),
+			handle.get_envoy_key(),
 			factory.config().clone(),
 			LegacyActorKv::new(handle.clone(), actor_id.to_owned()),
 			SqliteDb::new_with_remote_sqlite(

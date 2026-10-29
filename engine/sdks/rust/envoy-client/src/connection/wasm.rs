@@ -29,7 +29,7 @@ mod imp {
 	}
 
 	pub fn start_connection(shared: Arc<SharedContext>) {
-		let span = tracing::debug_span!("envoy_connection", envoy_key = %shared.envoy_key);
+		let span = tracing::debug_span!("envoy_connection", envoy_key = %shared.envoy_key());
 		wasm_bindgen_futures::spawn_local(connection_loop(shared).instrument(span));
 	}
 
@@ -120,7 +120,7 @@ mod imp {
 
 		let onmessage = {
 			let event_tx = event_tx.clone();
-			let envoy_key = shared.envoy_key.clone();
+			let envoy_key = shared.envoy_key();
 			Closure::<dyn FnMut(MessageEvent)>::wrap(Box::new(move |event| {
 				let data = event.data();
 				let Some(bytes) = decode_message_data(data) else {
@@ -184,7 +184,7 @@ mod imp {
 		tracing::info!(
 			endpoint = %shared.config.endpoint,
 			namespace = %shared.config.namespace,
-			envoy_key = %shared.envoy_key,
+			envoy_key = %shared.envoy_key(),
 			has_token = shared.config.token.is_some(),
 			"websocket connected"
 		);
@@ -194,7 +194,8 @@ mod imp {
 			let shared = shared.clone();
 			let ws = ws.clone();
 			let event_tx = event_tx.clone();
-			let write_span = tracing::debug_span!("envoy_ws_write", envoy_key = %shared.envoy_key);
+			let write_span =
+				tracing::debug_span!("envoy_ws_write", envoy_key = %shared.envoy_key());
 			async move {
 				tokio::select! {
 					_ = write_shutdown_rx => {}

@@ -155,7 +155,7 @@ pub fn create_actor(
 #[tracing::instrument(
 	skip_all,
 	fields(
-		envoy_key = %shared.envoy_key,
+		envoy_key = %shared.envoy_key(),
 		actor_id = %actor_id,
 		generation = generation,
 		actor_key = %config.key.as_deref().unwrap_or(""),
@@ -1634,7 +1634,7 @@ mod tests {
 				debug_latency_ms: None,
 				callbacks,
 			},
-			envoy_key: "test-envoy".to_string(),
+			envoy_key: parking_lot::RwLock::new("test-envoy".to_string()),
 			envoy_tx,
 			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			actors_notify: Arc::new(tokio::sync::Notify::new()),

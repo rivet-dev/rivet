@@ -362,7 +362,7 @@ fn ws_url(shared: &SharedContext) -> String {
 		base_url,
 		protocol::PROTOCOL_VERSION,
 		urlencoding::encode(&shared.config.namespace),
-		urlencoding::encode(&shared.envoy_key),
+		urlencoding::encode(&shared.envoy_key()),
 		urlencoding::encode(&shared.config.version.to_string()),
 		urlencoding::encode(&shared.config.pool_name),
 	)

@@ -39,6 +39,7 @@ pub struct EnvoyClientMetrics {
 	pub ws_decode_duration: Histogram,
 	pub ws_rx_bytes_total: IntCounter,
 	pub ws_rx_messages_total: IntCounter,
+	pub envoy_key_rotation_total: IntCounter,
 }
 
 impl EnvoyClientMetrics {
@@ -184,6 +185,12 @@ impl EnvoyClientMetrics {
 		)
 		.expect("create envoy_client_ws_rx_messages_total counter");
 
+		let envoy_key_rotation_total = IntCounter::new(
+			"rivetkit_envoy_client_envoy_key_rotation_total",
+			"times the envoy minted a new registration key after the lost threshold discarded its actors",
+		)
+		.expect("create envoy_client_envoy_key_rotation_total counter");
+
 		register(
 			&rivet_metrics::REGISTRY,
 			sqlite_request_expired_total.clone(),
@@ -228,6 +235,7 @@ impl EnvoyClientMetrics {
 		register(&rivet_metrics::REGISTRY, ws_decode_duration.clone());
 		register(&rivet_metrics::REGISTRY, ws_rx_bytes_total.clone());
 		register(&rivet_metrics::REGISTRY, ws_rx_messages_total.clone());
+		register(&rivet_metrics::REGISTRY, envoy_key_rotation_total.clone());
 
 		Self {
 			sqlite_request_expired_total,
@@ -247,6 +255,7 @@ impl EnvoyClientMetrics {
 			ws_decode_duration,
 			ws_rx_bytes_total,
 			ws_rx_messages_total,
+			envoy_key_rotation_total,
 		}
 	}
 }

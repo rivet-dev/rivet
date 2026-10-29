@@ -394,7 +394,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 	let envoy_key = uuid::Uuid::new_v4().to_string();
 	let shared = Arc::new(SharedContext {
 		config,
-		envoy_key,
+		envoy_key: parking_lot::RwLock::new(envoy_key),
 		envoy_tx: envoy_tx.clone(),
 		actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
 		actors_notify: Arc::new(tokio::sync::Notify::new()),
@@ -438,8 +438,8 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		processed_command_idx: HashMap::new(),
 	};
 
-	tracing::info!(envoy_key = %shared.envoy_key, "starting envoy");
-	let span = tracing::info_span!("envoy_client", envoy_key = %shared.envoy_key);
+	tracing::info!(envoy_key = %shared.envoy_key(), "starting envoy");
+	let span = tracing::info_span!("envoy_client", envoy_key = %shared.envoy_key());
 	spawn_detached(envoy_loop(ctx, envoy_rx, start_tx).instrument(span));
 
 	handle
@@ -586,31 +586,7 @@ async fn envoy_loop(
 				}
 			} => {
 				branch = "lost_timeout";
-				// Lost timeout fired
-				for (_id, request) in ctx.kv_requests.drain() {
-					METRICS.kv_requests_inflight.dec();
-					let _ = request.response_tx.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
-				}
-				fail_sqlite_requests_with_shutdown(&mut ctx);
-				fail_remote_sqlite_requests_with_shutdown(&mut ctx);
-
-				if !ctx.actors.is_empty() {
-					tracing::warn!("stopping all actors due to envoy lost threshold");
-					for (_actor_id, gens) in &ctx.actors {
-						for (_g, entry) in gens {
-							if !entry.handle.is_closed() {
-								let _ = entry.handle.send(ToActor::Lost);
-							}
-						}
-					}
-					ctx.actors.clear();
-					ctx.shared
-						.actors
-						.lock()
-						.expect("shared actor registry poisoned")
-						.clear();
-				}
-
+				handle_lost_timeout(&mut ctx).await;
 				lost_timeout = None;
 			}
 		}
@@ -683,6 +659,87 @@ pub fn send_to_envoy_tx(
 		}
 		Err(e) => Err(e),
 	}
+}
+
+/// Runs when the engine has been unreachable for the `envoy_lost_threshold` it advertised in the
+/// init packet. Every in-flight request is failed, every actor is stopped locally, and the
+/// registration key is rotated.
+///
+/// The rotation is what makes this visible to the engine. The engine only declares an envoy lost
+/// when one of its 15 s liveness samples happens to observe a ping gap longer than the threshold,
+/// so a process that discards its actors and then reconnects under the same key a few seconds
+/// later usually leaves the engine believing those actors still run here, and nothing ever
+/// reconciles that. Under a fresh key the old registration stops pinging, the engine marks it lost,
+/// and its actors are rescheduled through the same path that handles a dead pod.
+pub async fn handle_lost_timeout(ctx: &mut EnvoyContext) {
+	for (_id, request) in ctx.kv_requests.drain() {
+		METRICS.kv_requests_inflight.dec();
+		let _ = request
+			.response_tx
+			.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
+	}
+	fail_sqlite_requests_with_shutdown(ctx);
+	fail_remote_sqlite_requests_with_shutdown(ctx);
+
+	if !ctx.actors.is_empty() {
+		tracing::warn!("stopping all actors due to envoy lost threshold");
+		for (_actor_id, gens) in &ctx.actors {
+			for (_g, entry) in gens {
+				if !entry.handle.is_closed() {
+					let _ = entry.handle.send(ToActor::Lost);
+				}
+			}
+		}
+		ctx.actors.clear();
+		ctx.shared
+			.actors
+			.lock()
+			.expect("shared actor registry poisoned")
+			.clear();
+	}
+
+	rotate_registration(ctx).await;
+}
+
+/// Mints a new registration key and drops every piece of state that only meant something to the
+/// old one: unacked events and replayed-command bookkeeping are keyed by the old registration's
+/// generations, and buffered tunnel traffic belongs to gateway requests the engine already failed.
+/// A websocket that is mid-handshake under the old key is closed so the reconnect uses the new one.
+async fn rotate_registration(ctx: &mut EnvoyContext) {
+	let (old_envoy_key, new_envoy_key) = ctx.shared.rotate_envoy_key();
+
+	ctx.pending_events.clear();
+	ctx.buffered_actor_messages.clear();
+	ctx.request_to_actor = BufferMap::new();
+	ctx.http_request_routes = BufferMap::new();
+	ctx.http_message_indices = BufferMap::new();
+	ctx.http_request_cancellations.clear();
+	ctx.buffered_messages.clear();
+	ctx.processed_command_idx.clear();
+	ctx.shared
+		.live_tunnel_requests
+		.lock()
+		.expect("shared live tunnel request registry poisoned")
+		.clear();
+	ctx.shared
+		.pending_hibernation_restores
+		.lock()
+		.expect("shared hibernation restore registry poisoned")
+		.clear();
+
+	{
+		let guard = ctx.shared.ws_tx.lock().await;
+		if let Some(tx) = guard.as_ref() {
+			let _ = tx.send(WsTxMessage::Close);
+		}
+	}
+
+	METRICS.envoy_key_rotation_total.inc();
+	tracing::warn!(
+		%old_envoy_key,
+		%new_envoy_key,
+		"rotated envoy key after lost threshold; the engine will expire the old registration and reschedule its actors"
+	);
 }
 
 async fn handle_conn_message(
@@ -798,7 +855,7 @@ async fn handle_shutdown(ctx: &mut EnvoyContext) {
 	let shutdown_span = tracing::debug_span!(
 		parent: tracing::Span::current(),
 		"envoy_graceful_shutdown",
-		envoy_key = %ctx.shared.envoy_key,
+		envoy_key = %ctx.shared.envoy_key(),
 	);
 	spawn_detached(
 		async move {

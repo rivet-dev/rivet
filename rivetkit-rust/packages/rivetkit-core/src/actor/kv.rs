@@ -220,7 +220,7 @@ impl LegacyActorKv {
 	#[cfg(test)]
 	pub(crate) fn test_identity(&self) -> usize {
 		match &self.backend {
-			LegacyActorKvBackend::Envoy { handle, .. } => handle.get_envoy_key().as_ptr() as usize,
+			LegacyActorKvBackend::Envoy { handle, .. } => handle.identity(),
 			LegacyActorKvBackend::InMemory(store) => Arc::as_ptr(store) as usize,
 		}
 	}

@@ -91,8 +91,15 @@ impl EnvoyHandle {
 		crate::time::now_millis() - last < Self::PING_HEALTHY_THRESHOLD_MS
 	}
 
-	pub fn get_envoy_key(&self) -> &str {
-		&self.shared.envoy_key
+	/// Current registration key. It changes after the envoy lost threshold fires, so do not cache it
+	/// as an identity; use `identity()` for that.
+	pub fn get_envoy_key(&self) -> String {
+		self.shared.envoy_key()
+	}
+
+	/// Stable identity of this envoy instance for the lifetime of the process.
+	pub fn identity(&self) -> usize {
+		Arc::as_ptr(&self.shared) as usize
 	}
 
 	pub fn endpoint(&self) -> &str {
@@ -723,7 +730,7 @@ impl EnvoyHandle {
 	/// The payload is a u16 LE protocol version followed by a serialized ToEnvoy message.
 	pub async fn start_serverless_actor(&self, payload: &[u8]) -> anyhow::Result<()> {
 		tracing::debug!(
-			envoy_key = %self.shared.envoy_key,
+			envoy_key = %self.shared.envoy_key(),
 			payload_len = payload.len(),
 			"received serverless start request"
 		);
@@ -733,7 +740,7 @@ impl EnvoyHandle {
 		self.started().await?;
 
 		tracing::debug!(
-			envoy_key = %self.shared.envoy_key,
+			envoy_key = %self.shared.envoy_key(),
 			data = crate::stringify::stringify_to_envoy(&message),
 			"received serverless start"
 		);

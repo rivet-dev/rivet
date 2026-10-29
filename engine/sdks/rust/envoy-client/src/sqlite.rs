@@ -667,7 +667,7 @@ mod tests {
 				debug_latency_ms: None,
 				callbacks: Arc::new(IdleCallbacks),
 			},
-			envoy_key: "test-envoy".to_string(),
+			envoy_key: parking_lot::RwLock::new("test-envoy".to_string()),
 			envoy_tx,
 			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			actors_notify: Arc::new(tokio::sync::Notify::new()),

@@ -17,7 +17,7 @@ use crate::utils::{BackoffOptions, calculate_backoff, parse_ws_close_reason};
 const STABLE_CONNECTION_MS: u64 = 60_000;
 
 pub fn start_connection(shared: Arc<SharedContext>) {
-	let span = tracing::debug_span!("envoy_connection", envoy_key = %shared.envoy_key);
+	let span = tracing::debug_span!("envoy_connection", envoy_key = %shared.envoy_key());
 	tokio::spawn(connection_loop(shared).instrument(span));
 }
 
@@ -142,7 +142,7 @@ async fn single_connection(
 	tracing::info!(
 		endpoint = %shared.config.endpoint,
 		namespace = %shared.config.namespace,
-		envoy_key = %shared.envoy_key,
+		envoy_key = %shared.envoy_key(),
 		has_token = shared.config.token.is_some(),
 		"websocket connected"
 	);
@@ -156,7 +156,7 @@ async fn single_connection(
 
 	// Spawn write task
 	let shared2 = shared.clone();
-	let write_span = tracing::debug_span!("envoy_ws_write", envoy_key = %shared2.envoy_key);
+	let write_span = tracing::debug_span!("envoy_ws_write", envoy_key = %shared2.envoy_key());
 	let (write_failed_tx, mut write_failed_rx) = oneshot::channel();
 	let write_handle = tokio::spawn(
 		async move {
@@ -281,7 +281,7 @@ async fn single_connection(
 		.with_label_values(&[disconnect_reason])
 		.inc();
 	tracing::info!(
-		envoy_key = %shared.envoy_key,
+		envoy_key = %shared.envoy_key(),
 		reason = disconnect_reason,
 		session_duration_ms = session_duration.as_millis() as u64,
 		"websocket session ended"

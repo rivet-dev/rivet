@@ -644,7 +644,7 @@ mod moved_tests {
 					debug_latency_ms: None,
 					callbacks: Arc::new(IdleEnvoyCallbacks),
 				},
-				envoy_key: "test-envoy".to_string(),
+				envoy_key: parking_lot::RwLock::new("test-envoy".to_string()),
 				envoy_tx,
 				actors: Arc::new(EnvoySharedMutex::new(HashMap::new())),
 				actors_notify: Arc::new(tokio::sync::Notify::new()),

@@ -173,7 +173,7 @@ pub(crate) mod moved_tests {
 			key,
 			region.into(),
 			Some(1),
-			sql_handle.get_envoy_key().to_owned(),
+			sql_handle.get_envoy_key(),
 			ActorConfig::default(),
 			kv,
 			SqliteDb::new_with_remote_sqlite(
@@ -427,7 +427,7 @@ pub(crate) mod moved_tests {
 				debug_latency_ms: None,
 				callbacks: Arc::new(IdleEnvoyCallbacks),
 			},
-			envoy_key: "test-envoy".to_string(),
+			envoy_key: parking_lot::RwLock::new("test-envoy".to_string()),
 			envoy_tx,
 			actors: Arc::new(Mutex::new(HashMap::new())),
 			actors_notify: Arc::new(tokio::sync::Notify::new()),
