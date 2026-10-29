@@ -871,12 +871,13 @@ impl SqliteDb {
 		let result = if self.backend == SqliteBackend::RemoteEnvoy {
 			self.remote_execute_batch_with_bootstrap(statements).await
 		} else {
-			async {
-				let transaction = self
-					.clone()
-					.with_invocation_telemetry(None)
-					.begin_transaction(None)
-					.await?;
+			// The batch runs as its own task because its transaction holds the
+			// coordinator gate. An actor task that stops polling this future to
+			// await another statement would otherwise wait on its own gate until
+			// the transaction expires.
+			let db = self.clone().with_invocation_telemetry(None);
+			let batch = async move {
+				let transaction = db.begin_transaction(None).await?;
 				let mut results = Vec::with_capacity(statements.len());
 				for statement in statements {
 					match transaction.execute(statement.sql, statement.params).await {
@@ -898,8 +899,8 @@ impl SqliteDb {
 					.await
 					.context("commit sqlite batch transaction")?;
 				Ok(results)
-			}
-			.await
+			};
+			run_detached_transaction_task(batch, "sqlite batch transaction task failed").await
 		};
 
 		match result {
