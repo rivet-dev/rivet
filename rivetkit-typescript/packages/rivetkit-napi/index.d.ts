@@ -440,7 +440,28 @@ export declare class CancellationToken {
   constructor()
   aborted(): boolean
   cancel(): void
-  onCancelled(callback: (...args: any[]) => any): void
+  /**
+   * Calls `callback` once when the token is cancelled.
+   *
+   * The returned listener must be released when the caller stops caring
+   * about cancellation. Releasing ends the waiting task and frees the
+   * threadsafe function, which otherwise stays alive (with its libuv handle
+   * and JS closure) until the token is cancelled.
+   */
+  onCancelled(callback: (...args: any[]) => any): CancellationListener
+}
+/**
+ * Registration returned by `CancellationToken.onCancelled`.
+ *
+ * Dropping the JS object does not release the listener, because the callback
+ * must still fire if the caller keeps no reference to the registration.
+ */
+export declare class CancellationListener {
+  /**
+   * Stops waiting for cancellation without calling the callback.
+   * Idempotent, and a no-op after the callback has fired.
+   */
+  release(): void
 }
 export declare class ConnHandle {
   id(): string

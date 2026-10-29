@@ -1166,13 +1166,43 @@ impl WasmCancellationToken {
 		self.inner.cancel();
 	}
 
+	/// Calls `callback` once when the token is cancelled. Release the returned
+	/// listener when cancellation no longer matters; otherwise the waiting task
+	/// and the callback stay alive until the token is cancelled.
 	#[wasm_bindgen(js_name = onCancelled)]
-	pub fn on_cancelled(&self, callback: Function) {
-		let token = self.inner.clone();
+	pub fn on_cancelled(&self, callback: Function) -> WasmCancellationListener {
+		// The waiter wakes when either the token or the listener's release cancels
+		// its child token, and the release flag tells the two apart.
+		let wake = self.inner.child_token();
+		let released = Rc::new(Cell::new(false));
+		let listener = WasmCancellationListener {
+			wake: wake.clone(),
+			released: released.clone(),
+		};
 		spawn_local(async move {
-			token.cancelled().await;
-			let _ = callback.call0(&JsValue::UNDEFINED);
+			wake.cancelled().await;
+			if !released.get() {
+				let _ = callback.call0(&JsValue::UNDEFINED);
+			}
 		});
+		listener
+	}
+}
+
+/// Registration returned by `CancellationToken.onCancelled`.
+#[wasm_bindgen(js_name = CancellationListener)]
+pub struct WasmCancellationListener {
+	wake: CoreCancellationToken,
+	released: Rc<Cell<bool>>,
+}
+
+#[wasm_bindgen(js_class = CancellationListener)]
+impl WasmCancellationListener {
+	/// Stops waiting for cancellation without calling the callback.
+	#[wasm_bindgen]
+	pub fn release(&self) {
+		self.released.set(true);
+		self.wake.cancel();
 	}
 }
 

@@ -532,10 +532,15 @@ export interface CoreRuntime {
 	createCancellationToken(): CancellationTokenHandle;
 	cancellationTokenAborted(token: CancellationTokenHandle): boolean;
 	cancelCancellationToken(token: CancellationTokenHandle): void;
+	/**
+	 * Calls `callback` once when `token` is cancelled. Returns a release
+	 * function that drops the registration without calling `callback`; call it
+	 * once cancellation no longer matters so the native listener is freed.
+	 */
 	onCancellationTokenCancelled(
 		token: CancellationTokenHandle,
 		callback: (...args: unknown[]) => unknown,
-	): void;
+	): () => void;
 
 	actorState(ctx: ActorContextHandle): RuntimeBytes;
 	actorBeginOnStateChange(ctx: ActorContextHandle): void;
