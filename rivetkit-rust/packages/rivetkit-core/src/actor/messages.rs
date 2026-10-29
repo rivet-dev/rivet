@@ -111,6 +111,13 @@ impl Request {
 		self.cancel_token.clone()
 	}
 
+	/// Replaces the request token with a child of `parent`, so cancelling the
+	/// parent (for example the actor abort signal) also cancels this request.
+	/// Call it before any clone of the token is handed out.
+	pub(crate) fn set_cancellation_parent(&mut self, parent: &CancellationToken) {
+		self.cancel_token = parent.child_token();
+	}
+
 	pub async fn into_buffered(mut self) -> Result<Self> {
 		if let Some(body_stream) = &self.body_stream {
 			let mut body_stream = body_stream.lock().take();
