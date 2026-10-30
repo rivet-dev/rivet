@@ -7,6 +7,7 @@ on:
       - frontend/**
       - engine/sdks/typescript/**
       - rivetkit-typescript/**
+      - integrations/workflow-world/**
 concurrency:
   group: frontend-${{ github.ref }}
   cancel-in-progress: true
@@ -88,8 +89,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec turbo run build --filter='./rivetkit-typescript/packages/*'
-      - run: pnpm exec turbo run check-types --filter='./rivetkit-typescript/packages/*'
+      - run: pnpm exec turbo run build --filter='./rivetkit-typescript/packages/*' --filter=@rivet-dev/workflow-world
+      - run: pnpm exec turbo run check-types --filter='./rivetkit-typescript/packages/*' --filter=@rivet-dev/workflow-world
+      - run: pnpm --filter @rivet-dev/workflow-world test:unit
   rivetkit-edge-budget:
     name: RivetKit / Edge Bundle Budget
     runs-on: ubuntu-latest
