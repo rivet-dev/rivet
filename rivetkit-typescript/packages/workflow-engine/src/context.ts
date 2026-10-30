@@ -1207,6 +1207,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			entry = existing;
 			state = loopData.state as S;
 			iteration = loopData.iteration;
+			this.markEarlierIterationsVisited(location, iteration);
 			if (rollbackMode) {
 				rollbackOutput = loopData.output as T | undefined;
 				rollbackIterationRan = rollbackOutput !== undefined;
@@ -1346,6 +1347,37 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 				// Defer the flush to run in parallel with the next iteration
 				deferredFlush = this.flushStorageWithDeletions(deletions);
+			}
+		}
+	}
+
+	/**
+	 * Mark the retained history of iterations before `resumeIteration` as
+	 * visited.
+	 *
+	 * A resumed loop does not replay iterations it already finished, but their
+	 * entries stay in history until pruning. Without this, an enclosing
+	 * branch's validateComplete or getVersion treats them as leftovers from
+	 * changed workflow code.
+	 */
+	private markEarlierIterationsVisited(
+		loopLocation: Location,
+		resumeIteration: number,
+	): void {
+		const loopSegment = loopLocation[loopLocation.length - 1];
+		for (const [key, entry] of this.storage.history.entries) {
+			if (!isLocationPrefix(loopLocation, entry.location)) {
+				continue;
+			}
+
+			const iterationSegment = entry.location[loopLocation.length];
+			if (
+				iterationSegment &&
+				typeof iterationSegment !== "number" &&
+				iterationSegment.loop === loopSegment &&
+				iterationSegment.iteration < resumeIteration
+			) {
+				this.markVisited(key);
 			}
 		}
 	}
