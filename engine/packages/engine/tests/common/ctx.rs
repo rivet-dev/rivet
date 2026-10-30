@@ -1,9 +1,12 @@
 use anyhow::*;
 use gas::prelude::*;
 use rivet_service_manager::{Service, ServiceKind};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 pub const TEST_ADMIN_TOKEN: &str = "default";
+
+pub type PegboardConfigOverride =
+	Arc<dyn Fn(&mut rivet_config::config::pegboard::Pegboard) + Send + Sync>;
 
 pub struct TestOpts {
 	pub datacenters: usize,
@@ -12,6 +15,7 @@ pub struct TestOpts {
 	pub auth_admin_token: Option<String>,
 	pub insecure_allow_unauthenticated: bool,
 	pub network_faults: bool,
+	pub pegboard_config: Option<PegboardConfigOverride>,
 }
 
 impl TestOpts {
@@ -23,6 +27,7 @@ impl TestOpts {
 			auth_admin_token: Some(TEST_ADMIN_TOKEN.to_owned()),
 			insecure_allow_unauthenticated: false,
 			network_faults: false,
+			pegboard_config: None,
 		}
 	}
 
@@ -50,6 +55,14 @@ impl TestOpts {
 		self.network_faults = true;
 		self
 	}
+
+	pub fn with_pegboard_config(
+		mut self,
+		f: impl Fn(&mut rivet_config::config::pegboard::Pegboard) + Send + Sync + 'static,
+	) -> Self {
+		self.pegboard_config = Some(Arc::new(f));
+		self
+	}
 }
 
 impl Default for TestOpts {
@@ -61,6 +74,7 @@ impl Default for TestOpts {
 			auth_admin_token: Some(TEST_ADMIN_TOKEN.to_owned()),
 			insecure_allow_unauthenticated: false,
 			network_faults: false,
+			pegboard_config: None,
 		}
 	}
 }
@@ -113,6 +127,7 @@ impl TestCtx {
 				opts.pegboard_outbound,
 				opts.auth_admin_token.clone(),
 				opts.insecure_allow_unauthenticated,
+				opts.pegboard_config.clone(),
 			)
 		});
 		let mut dcs: Vec<TestDatacenter> =
@@ -137,17 +152,23 @@ impl TestCtx {
 		include_pegboard_outbound: bool,
 		auth_admin_token: Option<String>,
 		insecure_allow_unauthenticated: bool,
+		pegboard_config: Option<PegboardConfigOverride>,
 	) -> Result<TestDatacenter> {
 		test_deps
 			.config()
 			.set_protocols(rivet_build_meta::compiled_runtime_protocols());
-		let config = if let Some(admin_token) = auth_admin_token {
+		let config = if auth_admin_token.is_some() || pegboard_config.is_some() {
 			let mut root = (**test_deps.config()).clone();
-			root.auth = Some(rivet_config::config::auth::Auth {
-				admin_token: rivet_config::secret::Secret::new(admin_token),
-				insecure_allow_unauthenticated,
-				jwt: Default::default(),
-			});
+			if let Some(admin_token) = auth_admin_token {
+				root.auth = Some(rivet_config::config::auth::Auth {
+					admin_token: rivet_config::secret::Secret::new(admin_token),
+					insecure_allow_unauthenticated,
+					jwt: Default::default(),
+				});
+			}
+			if let Some(pegboard_config) = pegboard_config {
+				pegboard_config(root.pegboard.get_or_insert_with(Default::default));
+			}
 			rivet_config::Config::from_root(root)
 		} else {
 			test_deps.config().clone()
