@@ -385,15 +385,17 @@ export class ActorWorkflowDriver implements EngineDriver {
 		);
 	}
 
+	// The run wake-at shares the actor's one engine alarm with scheduled
+	// events, so schedule changes keep the workflow deadline armed. Round up
+	// because a fractional sleep duration gives a fractional deadline.
 	async setAlarm(_workflowId: string, wakeAt: number): Promise<void> {
 		await this.#runCtx.internalKeepAwake(
-			this.#actor.driver.setAlarm(this.#actor, wakeAt),
+			this.#runCtx.run.setWakeAt(Math.ceil(wakeAt)),
 		);
 	}
 
 	async clearAlarm(_workflowId: string): Promise<void> {
-		// No dedicated clear alarm support in actor drivers.
-		return;
+		await this.#runCtx.internalKeepAwake(this.#runCtx.run.setWakeAt(null));
 	}
 
 	waitForMessages(
