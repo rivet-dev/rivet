@@ -62,6 +62,7 @@ import {
 } from "./destroy";
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
 import { fileSystemHibernationCleanupActor } from "./file-system-hibernation-cleanup";
+import { responseStartTimeoutActor } from "./gateway-response-start-timeout";
 import { hibernationActor, hibernationSleepWindowActor } from "./hibernation";
 import { kvActor } from "./kv";
 import { largePayloadActor, largePayloadConnActor } from "./large-payloads";
@@ -264,6 +265,8 @@ export const registry = setup({
 		manyQueueRunParentActor,
 		// From action-inputs.ts
 		inputActor,
+		// From gateway-response-start-timeout.ts
+		responseStartTimeoutActor,
 		// From action-timeout.ts
 		shortTimeoutActor,
 		longTimeoutActor,

@@ -166,8 +166,7 @@ function isRetryableGuardGatewayHttpError(code: string): boolean {
 		code === "actor_stopped_while_waiting" ||
 		code === "tunnel_request_aborted" ||
 		code === "tunnel_message_timeout" ||
-		code === "tunnel_response_closed" ||
-		code === "gateway_response_start_timeout"
+		code === "tunnel_response_closed"
 	);
 }
 

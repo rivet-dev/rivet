@@ -40,6 +40,7 @@ export interface SharedTestEngine {
 
 export interface SharedTestEngineOptions {
 	gateway3?: boolean;
+	gatewayResponseStartTimeoutMs?: number;
 }
 
 interface SharedEngineFiles {
@@ -57,7 +58,10 @@ let sharedEngineProfile: string | undefined;
 let sharedEngineFiles: SharedEngineFiles | undefined;
 
 function resolveSharedEngineProfile(options: SharedTestEngineOptions): string {
-	return JSON.stringify({ gateway3: options.gateway3 ?? false });
+	return JSON.stringify({
+		gateway3: options.gateway3 ?? false,
+		gatewayResponseStartTimeoutMs: options.gatewayResponseStartTimeoutMs,
+	});
 }
 
 function resolveSharedEngineFiles(profile: string): SharedEngineFiles {
@@ -289,13 +293,19 @@ async function spawnSharedEngine(
 					},
 				},
 			},
-			pegboard: options.gateway3
-				? {
-						gateway_update_ping_interval_ms: 250,
-						gateway_tunnel_ping_timeout_ms: 2_000,
-						gateway_response_start_timeout_ms: 3_000,
-					}
-				: undefined,
+			// JSON.stringify drops undefined fields, and an empty pegboard
+			// section is the same as none.
+			pegboard: {
+				...(options.gateway3
+					? {
+							gateway_update_ping_interval_ms: 250,
+							gateway_tunnel_ping_timeout_ms: 2_000,
+						}
+					: {}),
+				gateway_response_start_timeout_ms:
+					options.gatewayResponseStartTimeoutMs ??
+					(options.gateway3 ? 3_000 : undefined),
+			},
 			features: options.gateway3
 				? {
 						guard_gateway_v3: {
