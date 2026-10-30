@@ -58,6 +58,7 @@ import { dbStressActor } from "./db-stress";
 import {
 	destroyAbortSignalActor,
 	destroyActor,
+	destroyDbActor,
 	destroyObserver,
 } from "./destroy";
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
@@ -311,6 +312,7 @@ export const registry = setup({
 		destroyActor,
 		destroyObserver,
 		destroyAbortSignalActor,
+		destroyDbActor,
 		// From hibernation.ts
 		hibernationActor,
 		hibernationSleepWindowActor,

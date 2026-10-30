@@ -4846,7 +4846,6 @@ export function buildNativeFactory(
 					}
 				} finally {
 					resolveNativeDestroy(runtime, ctx);
-					await actorCtx.closeDatabase();
 					clearNativeRuntimeState(runtime, ctx);
 					await actorCtx.dispose();
 				}

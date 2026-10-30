@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { actor, queue } from "rivetkit";
+import { db } from "@/common/database/mod";
 import type { registry } from "./registry-static";
 
 export const destroyObserver = actor({
@@ -83,6 +84,27 @@ export const destroyActor = actor({
 			return message?.body ?? null;
 		},
 		destroy: (c) => {
+			c.destroy();
+		},
+	},
+});
+
+export const destroyDbActor = actor({
+	state: { value: 0 },
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute("CREATE TABLE IF NOT EXISTS entries (value TEXT)");
+		},
+	}),
+	actions: {
+		getValue: (c) => {
+			return c.state.value;
+		},
+		destroy: (c) => {
+			c.destroy();
+		},
+		setValueThenDestroy: (c, newValue: number) => {
+			c.state.value = newValue;
 			c.destroy();
 		},
 	},

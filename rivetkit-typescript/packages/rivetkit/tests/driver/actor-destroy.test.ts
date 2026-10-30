@@ -433,5 +433,56 @@ describeDriverMatrix("Actor Destroy", (driverTestConfig) => {
 			expect(await handle.getValue()).toBe(0);
 			expect(await handle.resolve()).toBe(await recreated.resolve());
 		});
+
+		type DriverTestClient = Awaited<
+			ReturnType<typeof setupDriverTest>
+		>["client"];
+
+		async function startDbActor(client: DriverTestClient, name: string) {
+			const actorKey = `test-destroy-db-${name}-${crypto.randomUUID()}`;
+			const handle = client.destroyDbActor.getOrCreate([actorKey]);
+			expect(await handle.getValue()).toBe(0);
+			const actorId = await handle.resolve();
+			return { actorKey, actorId, handle };
+		}
+
+		async function expectDbActorDestroyed(
+			client: DriverTestClient,
+			{ actorKey, actorId }: { actorKey: string; actorId: string },
+		) {
+			// Poll because actor lookup only turns into not_found once destroy teardown fully completes.
+			await vi.waitFor(async () => {
+				let actorRunning = false;
+				try {
+					await client.destroyDbActor.getForId(actorId).getValue();
+					actorRunning = true;
+				} catch (error) {
+					expectActorNotFound(error);
+				}
+				expect(actorRunning, "actor still running").toBeFalsy();
+			});
+
+			const recreated = client.destroyDbActor.getOrCreate([actorKey]);
+			expect(await recreated.getValue()).toBe(0);
+			expect(await recreated.resolve()).not.toBe(actorId);
+		}
+
+		test("actor with a database destroys with clean state", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const dbActor = await startDbActor(client, "clean-state");
+
+			await dbActor.handle.destroy();
+
+			await expectDbActorDestroyed(client, dbActor);
+		});
+
+		test("actor with a database destroys after an unsaved state change", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const dbActor = await startDbActor(client, "unsaved-state");
+
+			await dbActor.handle.setValueThenDestroy(7);
+
+			await expectDbActorDestroyed(client, dbActor);
+		});
 	});
 });
