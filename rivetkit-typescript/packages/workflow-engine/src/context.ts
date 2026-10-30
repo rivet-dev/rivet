@@ -2399,7 +2399,15 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			branchStatus.error = undefined;
 			entry.dirty = true;
 
-			const branchPromise = branch.run(branchCtx).then(
+			// Validate inside the run promise so a divergence reaches the
+			// rejection handler below instead of being dropped by allSettled.
+			const runBranch = async () => {
+				const output = await branch.run(branchCtx);
+				branchCtx.validateComplete();
+				return output;
+			};
+
+			const branchPromise = runBranch().then(
 				async (output) => {
 					if (hasWinner) {
 						// This branch completed after a winner was determined
@@ -2422,8 +2430,6 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					hasWinner = true;
 					winnerName = branch.name;
 					winnerValue = output;
-
-					branchCtx.validateComplete();
 
 					branchStatus.status = "completed";
 					branchStatus.output = output;
