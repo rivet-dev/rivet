@@ -46,7 +46,8 @@ mod typescript {
 				.and_then(|stem| stem.to_str())
 				.expect("schema has valid UTF-8 file stem");
 			let output_path = output_dir.join(format!("{version}.ts"));
-			let output = Command::new(&cli_js_path)
+			let output = Command::new("node")
+				.arg(&cli_js_path)
 				.arg("compile")
 				.arg("--generator")
 				.arg("ts")

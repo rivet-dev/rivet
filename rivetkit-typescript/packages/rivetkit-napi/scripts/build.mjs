@@ -3,6 +3,27 @@
  * Build wrapper for rivetkit-napi.
  */
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const packageDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const require = createRequire(import.meta.url);
+
+function resolveNapiCliBin() {
+	try {
+		const packageJsonPath = require.resolve("@napi-rs/cli/package.json", {
+			paths: [packageDir],
+		});
+		const { bin } = require(packageJsonPath);
+		return join(dirname(packageJsonPath), bin.napi);
+	} catch (err) {
+		throw new Error(
+			"Missing @napi-rs/cli dependency. Run pnpm install before building @rivetkit/rivetkit-napi.",
+			{ cause: err },
+		);
+	}
+}
 
 const args = process.argv.slice(2);
 const extraFlags = args.includes("--release") ? ["--release"] : [];
@@ -25,5 +46,7 @@ if (process.env.SKIP_NAPI_BUILD === "1") {
 // for local builds run `pnpm -F @rivetkit/engine-frontend build:inspector-ui`
 // (or `turbo build:inspector-ui`) first.
 const cmd = ["build", "--platform", ...extraFlags];
+const napiCliBin = resolveNapiCliBin();
+
 console.log(`[rivetkit-napi/build] running: napi ${cmd.join(" ")}`);
-execFileSync("napi", cmd, { stdio: "inherit" });
+execFileSync(process.execPath, [napiCliBin, ...cmd], { stdio: "inherit" });

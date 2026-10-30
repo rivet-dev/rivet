@@ -28,6 +28,7 @@ rivet-tracing-utils.workspace = true
 rivet-util-serde.workspace = true
 rivet-util-id = { workspace = true, features = ["universaldb"] }
 serde.workspace = true
+socket2.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 url.workspace = true

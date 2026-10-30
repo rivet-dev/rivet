@@ -4,6 +4,7 @@ use anyhow::*;
 use hyper::{
 	Body, Request, Response, Server,
 	header::CONTENT_TYPE,
+	server::{Builder, conn::AddrIncoming},
 	service::{make_service_fn, service_fn},
 };
 use rivet_metrics::prometheus::{Encoder, TextEncoder};
@@ -14,7 +15,7 @@ pub async fn run_standalone(config: rivet_config::Config) -> Result<()> {
 	let port = config.metrics.port();
 	let addr = SocketAddr::from((host, port));
 
-	let server = match Server::try_bind(&addr) {
+	let server = match bind_server(addr) {
 		Ok(x) => x,
 		Err(err) => {
 			tracing::error!(?host, ?port, ?err, "failed to bind metrics server");
@@ -32,6 +33,11 @@ pub async fn run_standalone(config: rivet_config::Config) -> Result<()> {
 	server.await?;
 
 	Ok(())
+}
+
+fn bind_server(addr: SocketAddr) -> Result<Builder<AddrIncoming>> {
+	let listener = rivet_util::net::bind_std_tcp_listener(addr)?;
+	Ok(Server::from_tcp(listener)?)
 }
 
 #[tracing::instrument(level = "debug", skip_all)]

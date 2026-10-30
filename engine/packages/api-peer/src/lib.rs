@@ -21,7 +21,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 
 	let router = router::router(config, pools).await?;
 
-	let listener = tokio::net::TcpListener::bind(addr).await?;
+	let listener = rivet_util::net::bind_tcp_listener(addr)?;
 	tracing::info!(?host, ?port, "api-peer server listening");
 
 	axum::serve(listener, router).await?;

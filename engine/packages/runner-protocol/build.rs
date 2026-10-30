@@ -62,7 +62,8 @@ mod typescript {
 
 		let output_path = src_dir.join("index.ts");
 
-		let output = Command::new(repo_root.join("node_modules/@bare-ts/tools/dist/bin/cli.js"))
+		let output = Command::new("node")
+			.arg(repo_root.join("node_modules/@bare-ts/tools/dist/bin/cli.js"))
 			.arg("compile")
 			.arg("--generator")
 			.arg("ts")

@@ -7,12 +7,11 @@ import { fileURLToPath } from "node:url";
 import { getEnginePath } from "@rivetkit/engine-cli";
 import getPort from "get-port";
 import { createClient } from "../../src/client/mod";
+import { REPO_ENGINE_BINARY } from "../repo-engine-binary";
 
 const TEST_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PACKAGE_DIR = dirname(TEST_DIR);
-const REPO_ENGINE_BINARY =
-	process.env.ENGINE_BINARY ??
-	join(PACKAGE_DIR, "../../../target/debug/rivet-engine");
+const ENGINE_BINARY = process.env.ENGINE_BINARY ?? REPO_ENGINE_BINARY;
 const SERVERLESS_RUNTIME_PATH = join(
 	TEST_DIR,
 	"fixtures/engine-restart-serverless-runtime.ts",
@@ -491,8 +490,8 @@ async function main() {
 }
 
 function resolveEngineBinaryPath(): string {
-	if (existsSync(REPO_ENGINE_BINARY)) {
-		return REPO_ENGINE_BINARY;
+	if (existsSync(ENGINE_BINARY)) {
+		return ENGINE_BINARY;
 	}
 
 	return getEnginePath();

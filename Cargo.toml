@@ -162,6 +162,7 @@ members = [
   slog = "2.7"
   slog-async = "2.8"
   slog-term = "2.9"
+  socket2 = "0.6"
   scopeguard = "1.2"
   statrs = "0.18"
   subtle = "2"

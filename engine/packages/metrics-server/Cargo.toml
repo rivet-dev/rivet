@@ -17,5 +17,6 @@ opentelemetry_sdk.workspace = true
 rivet-config.workspace = true
 rivet-env.workspace = true
 rivet-metrics.workspace = true
+rivet-util.workspace = true
 tokio.workspace = true
 tracing.workspace = true

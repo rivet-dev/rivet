@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { getEnginePath } from "@rivetkit/engine-cli";
 import getPort from "get-port";
 import { describe, expect, test } from "vitest";
+import { REPO_ENGINE_BINARY } from "../repo-engine-binary";
 import {
 	buildPlatformSqliteCounterActorSource,
 	createPlatformServerlessRunner,
@@ -32,7 +33,6 @@ import {
 const SUPABASE_VERSION = "2.95.4";
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(TEST_DIR, "../../../../..");
-const REPO_ENGINE_BINARY = resolve(REPO_ROOT, "target/debug/rivet-engine");
 const RIVETKIT_PACKAGE_DIR = resolve(
 	REPO_ROOT,
 	"rivetkit-typescript/packages/rivetkit",

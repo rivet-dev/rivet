@@ -1,17 +1,10 @@
 import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { getEnginePath } from "@rivetkit/engine-cli";
 import { z } from "zod/v4";
 import { db } from "../../src/db/mod";
 import { actor, event, queue, setup, UserError } from "../../src/mod";
 import { buildNativeRegistry } from "../../src/registry/native";
-
-const fixtureDir = dirname(fileURLToPath(import.meta.url));
-const repoEngineBinary = resolve(
-	fixtureDir,
-	"../../../../../target/debug/rivet-engine",
-);
+import { REPO_ENGINE_BINARY } from "../repo-engine-binary";
 
 const endpoint = process.env.RIVETKIT_TEST_ENDPOINT ?? "http://127.0.0.1:6642";
 const connParamsSchema = z.object({
@@ -30,8 +23,8 @@ const jobSchema = z.object({
 });
 
 function resolveEngineBinaryPath(): string {
-	if (existsSync(repoEngineBinary)) {
-		return repoEngineBinary;
+	if (existsSync(REPO_ENGINE_BINARY)) {
+		return REPO_ENGINE_BINARY;
 	}
 
 	return getEnginePath();

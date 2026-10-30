@@ -15,12 +15,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getEnginePath } from "@rivetkit/engine-cli";
 import getPort from "get-port";
+import { REPO_ENGINE_BINARY } from "./repo-engine-binary";
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_ENGINE_BINARY = join(
-	TEST_DIR,
-	"../../../../target/debug/rivet-engine",
-);
 const TIMING_ENABLED = process.env.RIVETKIT_DRIVER_TEST_TIMING === "1";
 const ENGINE_START_LOCK_STALE_MS = 120_000;
 

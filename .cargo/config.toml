@@ -18,5 +18,11 @@ rustflags = [
     "-C", "link-arg=dynamic_lookup",
 ]
 
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = [
+    "--cfg", "tokio_unstable",
+    "-C", "link-arg=/STACK:8388608",
+]
+
 [env]
 LIBSQLITE3_FLAGS = "SQLITE_ENABLE_BATCH_ATOMIC_WRITE"

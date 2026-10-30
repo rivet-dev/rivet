@@ -37,7 +37,7 @@ pub async fn run_server(
 		routing_fn.clone(),
 		cache_key_fn.clone(),
 	));
-	let http_listener = tokio::net::TcpListener::bind(http_addr).await?;
+	let http_listener = rivet_util::net::bind_tcp_listener(http_addr)?;
 
 	// Set up HTTPS server (if configured)
 	let (https_addr, https_factory, https_listener, https_acceptor) = if let Some(https) =
@@ -49,7 +49,7 @@ pub async fn run_server(
 			routing_fn.clone(),
 			cache_key_fn.clone(),
 		));
-		let listener = tokio::net::TcpListener::bind(https_addr).await?;
+		let listener = rivet_util::net::bind_tcp_listener(https_addr)?;
 
 		// Configure TLS if resolver function is provided
 		let acceptor = if let Some(resolver_fn) = cert_resolver_fn {

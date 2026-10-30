@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 
+const require = createRequire(import.meta.url);
 const root = git(["rev-parse", "--show-toplevel"]) || process.cwd();
 process.chdir(root);
 
@@ -19,8 +21,8 @@ const biomeFiles = existingFiles.filter(isBiomeFile);
 const rustFiles = existingFiles.filter((path) => path.endsWith(".rs"));
 
 if (biomeFiles.length > 0) {
-	run("pnpm", [
-		"biome",
+	run(process.execPath, [
+		resolvePackageBin("@biomejs/biome", "biome"),
 		"format",
 		"--write",
 		"--files-ignore-unknown=true",
@@ -86,7 +88,15 @@ function normalizeRepoPath(path) {
 	const absolute = isAbsolute(path) ? path : resolve(root, path);
 	const relativePath = relative(root, absolute);
 	if (!relativePath || relativePath.startsWith("..")) return null;
-	return relativePath;
+	return relativePath.split(sep).join("/");
+}
+
+function resolvePackageBin(packageName, binName) {
+	const packageJsonPath = require.resolve(`${packageName}/package.json`, {
+		paths: [root],
+	});
+	const { bin } = require(packageJsonPath);
+	return join(dirname(packageJsonPath), bin[binName]);
 }
 
 function isGeneratedOutput(path) {

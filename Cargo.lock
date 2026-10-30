@@ -5904,6 +5904,7 @@ dependencies = [
  "rivet-config",
  "rivet-env",
  "rivet-metrics",
+ "rivet-util",
  "tokio",
  "tracing",
 ]
@@ -6202,6 +6203,7 @@ dependencies = [
  "rivet-util-id",
  "rivet-util-serde",
  "serde",
+ "socket2 0.6.0",
  "tokio",
  "tracing",
  "url",

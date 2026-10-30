@@ -20,6 +20,8 @@ const ENGINE_VERSION_ENV: &str = "RIVETKIT_ENGINE_VERSION";
 const RELEASES_ENDPOINT_ENV: &str = "RIVETKIT_ENGINE_RELEASES_ENDPOINT";
 const RELEASES_ENDPOINT: &str = "https://releases.rivet.dev";
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Deserialize)]
 struct EngineHealthResponse {
@@ -116,6 +118,8 @@ pub enum EngineStartup {
 ///   `Child` does not send SIGKILL on drop.
 /// - Stdout and stderr are routed to log files at spawn time so the engine's
 ///   write fds remain valid after the host's pipes close.
+/// - The engine runs in its own process group on Unix and with its own hidden
+///   console on Windows, so terminal signals aimed at the host skip it.
 /// - On startup we probe the configured endpoint and reuse a healthy engine
 ///   instead of spawning a duplicate.
 ///
@@ -225,6 +229,13 @@ impl EngineProcessManager {
 		// lifetime that survives the host being killed for any reason.
 		#[cfg(unix)]
 		command.process_group(0);
+
+		// Windows gives a console program started by a windowed host, such as
+		// Electron, a visible console window of its own. A hidden console avoids
+		// that window, and like the Unix process group above it keeps Ctrl+C in
+		// the host's terminal from reaching the engine.
+		#[cfg(windows)]
+		command.creation_flags(CREATE_NO_WINDOW);
 
 		let mut child = command
 			.spawn()
