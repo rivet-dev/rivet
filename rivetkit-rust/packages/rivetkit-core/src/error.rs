@@ -336,4 +336,11 @@ pub(crate) enum SqliteRuntimeError {
 		"Remote SQLite generation is stale: {reason}"
 	)]
 	RemoteFenceMismatch { reason: String },
+
+	#[error(
+		"deferred_commits_unsupported",
+		"SQLite deferred commits are unavailable.",
+		"SQLite deferred commits require local native SQLite. Turn off remote SQLite for this actor, or do not opt it into deferred commits."
+	)]
+	DeferredCommitsUnsupported,
 }

@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
@@ -9,13 +9,13 @@ use tokio::runtime::Handle;
 use crate::{
 	query::{BindParam, ExecResult, ExecuteResult, QueryResult},
 	vfs::{
-		NativeVfsHandle, SqliteOpenPhase, SqliteTransportHandle, SqliteVfs, SqliteVfsMetrics,
-		SqliteVfsMetricsSnapshot, VfsConfig, VfsPreloadHintSnapshot,
-		fetch_initial_pages_for_registration,
+		CommitMode, DatabaseFailure, FlushError, NativeVfsHandle, SqliteOpenPhase,
+		SqliteTransportHandle, SqliteVfs, SqliteVfsMetrics, SqliteVfsMetricsSnapshot, VfsConfig,
+		VfsPreloadHintSnapshot, fetch_initial_pages_for_registration,
 	},
 	worker::{
-		SqliteWorkerCloseTimeoutError, SqliteWorkerFatalError, SqliteWorkerHandle,
-		SqliteWorkerResult,
+		SQLITE_WORKER_CLOSE_TIMEOUT, SqliteWorkerCloseTimeoutError, SqliteWorkerFatalError,
+		SqliteWorkerHandle, SqliteWorkerResult,
 	},
 };
 
@@ -83,10 +83,12 @@ pub async fn open_database_from_transport(
 	generation: u64,
 	rt_handle: Handle,
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+	commit_mode: CommitMode,
 ) -> Result<NativeDatabaseHandle> {
 	let open_timer = SqliteOpenTimer::new(&metrics);
 	let vfs_name = vfs_name_for_actor_database(&actor_id, generation);
-	let config = VfsConfig::default();
+	let mut config = VfsConfig::default();
+	config.commit_mode = commit_mode;
 	let transport: SqliteTransportHandle = Arc::new(GenerationFencedTransport {
 		inner: transport,
 		generation,
@@ -284,34 +286,89 @@ impl NativeDatabaseHandle {
 	}
 
 	pub async fn close(&self) -> Result<()> {
-		self.map_worker_close_result(self.worker.close().await)
+		self.close_with_timeouts(
+			Some(SQLITE_WORKER_CLOSE_TIMEOUT),
+			self.vfs.close_flush_timeout(),
+		)
+		.await
 	}
 
 	/// Closes the database without returning while its worker still owns SQLite.
 	/// Any returned error is reported only after the worker thread has terminated.
 	pub async fn close_and_wait(&self) -> Result<()> {
-		self.map_worker_close_result(self.worker.close_and_wait().await)
+		self.close_with_timeouts(None, self.vfs.close_flush_timeout())
+			.await
 	}
 
-	fn map_worker_close_result(&self, result: Result<()>) -> Result<()> {
-		match result {
-			Ok(()) => Ok(()),
-			// The caller uses this concrete outcome to retain the native handle for
-			// a later strict join. Never hide it behind a previously recorded VFS
-			// failure while the worker may still own SQLite.
-			Err(error)
-				if error
-					.downcast_ref::<SqliteWorkerCloseTimeoutError>()
-					.is_some() =>
-			{
-				Err(error)
-			}
-			Err(error) => Err(self.fatal_error().unwrap_or(error)),
+	/// Closes the worker, then drains unflushed commits. `worker_timeout` of `None` joins the
+	/// worker thread without a bound.
+	pub(crate) async fn close_with_timeouts(
+		&self,
+		worker_timeout: Option<Duration>,
+		flush_timeout: Duration,
+	) -> Result<()> {
+		self.vfs.begin_close();
+		let worker_result = self.worker.close_with_timeout(worker_timeout).await;
+		if worker_result.as_ref().err().is_some_and(|error| {
+			error
+				.downcast_ref::<SqliteWorkerCloseTimeoutError>()
+				.is_some()
+		}) {
+			// The worker may still own SQLite. Keep the concrete timeout so the caller can retain
+			// the handle for a later strict join.
+			self.vfs.abort_flusher_for_worker_timeout().await;
+			return worker_result;
+		}
+		let flush_result = self.vfs.drain_and_shutdown_flusher(flush_timeout).await;
+		match (worker_result, flush_result) {
+			(Ok(()), Ok(())) => Ok(()),
+			(_, Err(error)) => Err(anyhow!(error)),
+			(Err(error), Ok(())) => Err(self.fatal_error().unwrap_or(error)),
 		}
 	}
 
-	pub async fn wait_for_worker_failure(&self) -> bool {
-		self.worker.wait_for_failure().await
+	pub async fn wait_for_failure(&self) -> DatabaseFailure {
+		tokio::select! {
+			reason = self.vfs.wait_for_failure() => reason,
+			failed = self.worker.wait_for_failure() => {
+				if failed {
+					DatabaseFailure::WorkerStopped
+				} else {
+					DatabaseFailure::Closed
+				}
+			}
+		}
+	}
+
+	pub fn commit_seq(&self) -> u64 {
+		self.vfs.commit_seq()
+	}
+
+	pub fn flushed_seq(&self) -> u64 {
+		self.vfs.flushed_seq()
+	}
+
+	pub fn flush_error(&self) -> Option<FlushError> {
+		self.vfs.flush_error()
+	}
+
+	/// Pages committed locally that are not durable yet.
+	pub fn unflushed_pages(&self) -> usize {
+		self.vfs.unflushed_pages()
+	}
+
+	/// Most pages one commit, or the unflushed backlog, may hold.
+	pub fn max_commit_dirty_pages(&self) -> usize {
+		self.vfs.max_commit_dirty_pages()
+	}
+
+	/// Whether the last failed local commit failed because the backlog was full. Clears the flag.
+	pub fn take_backlog_full(&self) -> bool {
+		self.vfs.take_backlog_full()
+	}
+
+	pub async fn wait_for_flush(&self, seq: u64) -> std::result::Result<(), FlushError> {
+		self.vfs.wait_for_flush(seq).await
 	}
 
 	pub fn take_last_kv_error(&self) -> Option<String> {
