@@ -1,7 +1,10 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use super::*;
 use crate::actor::config::ActorConfig;
+use crate::actor::context::ActorContext;
+use crate::actor::messages::{ActorEvent, Response};
 
 #[test]
 fn actor_metadata_does_not_request_legacy_kv_preload_probes() {
@@ -274,5 +277,170 @@ async fn stop_for_current_generation_stops_it() {
 				.map(|entry| entry.get()),
 		),
 		"a stop for the current generation must stop it",
+	);
+}
+
+/// Builds a dispatcher whose actor answers every raw request with a buffered
+/// response. For each request it parks a task on the request cancellation
+/// token, the way foreign runtimes wait to deliver `abortSignal`, and hands
+/// that task's handle to the test.
+fn request_waiter_dispatcher(
+	waiters: tokio::sync::mpsc::UnboundedSender<tokio::task::JoinHandle<()>>,
+	hang_until_cancelled: bool,
+) -> Arc<RegistryDispatcher> {
+	let mut factories = HashMap::new();
+	factories.insert(
+		"counter".to_owned(),
+		Arc::new(ActorFactory::new(ActorConfig::default(), move |start| {
+			let waiters = waiters.clone();
+			Box::pin(async move {
+				let mut start = start;
+				if let Some(ready) = start.startup_ready.take() {
+					let _ = ready.send(Ok(()));
+				}
+				let mut events = start.events;
+				while let Some(event) = events.recv().await {
+					let ActorEvent::HttpRequest { request, reply, .. } = event else {
+						continue;
+					};
+					let token = request.cancellation_token();
+					let waiter = tokio::spawn({
+						let token = token.clone();
+						async move { token.cancelled().await }
+					});
+					let _ = waiters.send(waiter);
+					if hang_until_cancelled {
+						tokio::spawn(async move {
+							token.cancelled().await;
+							reply.send(Ok(Response::from(
+								::http::Response::builder()
+									.status(::http::StatusCode::SERVICE_UNAVAILABLE)
+									.body(Vec::new())
+									.expect("build response"),
+							)
+							.into()));
+						});
+					} else {
+						reply.send(Ok(Response::from(
+							::http::Response::builder()
+								.status(::http::StatusCode::OK)
+								.body(b"pong".to_vec())
+								.expect("build response"),
+						)
+						.into()));
+					}
+				}
+				Ok(())
+			})
+		})),
+	);
+	Arc::new(RegistryDispatcher::new(factories, false))
+}
+
+fn raw_ping_request() -> rivet_envoy_client::config::HttpRequest {
+	rivet_envoy_client::config::HttpRequest {
+		method: "GET".to_owned(),
+		path: "/request/ping".to_owned(),
+		headers: HashMap::new(),
+		body: None,
+		body_stream: None,
+	}
+}
+
+/// Regression test for a per-request task leak. A buffered response used to
+/// drop the request token without cancelling it, so every task waiting on it
+/// (one per `onRequest` in the TypeScript runtime) stayed alive until the
+/// actor stopped and the live task count grew by one per request.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn buffered_raw_requests_release_request_cancellation_waiters() {
+	const REQUESTS: usize = 500;
+
+	let (waiters_tx, mut waiters_rx) = tokio::sync::mpsc::unbounded_channel();
+	let dispatcher = request_waiter_dispatcher(waiters_tx, false);
+	let actor_id = "actor-request-leak";
+	dispatcher
+		.start_actor(StartActorRequest {
+			actor_id: actor_id.to_owned(),
+			generation: 1,
+			actor_name: "counter".to_owned(),
+			input: None,
+			ctx: ActorContext::new(actor_id, "counter", Vec::new(), "local"),
+		})
+		.await
+		.expect("actor should start");
+
+	let metrics = tokio::runtime::Handle::current().metrics();
+	let baseline_tasks = metrics.num_alive_tasks();
+
+	for _ in 0..REQUESTS {
+		let response = dispatcher
+			.handle_fetch(actor_id, raw_ping_request())
+			.await
+			.expect("raw request should succeed");
+		assert_eq!(response.status, ::http::StatusCode::OK.as_u16());
+		assert_eq!(response.body.as_deref(), Some(&b"pong"[..]));
+	}
+
+	for _ in 0..REQUESTS {
+		let waiter = waiters_rx.recv().await.expect("one waiter per request");
+		tokio::time::timeout(Duration::from_secs(5), waiter)
+			.await
+			.expect("request token must be cancelled once the response is returned")
+			.expect("waiter task should not panic");
+	}
+
+	let live_tasks = metrics.num_alive_tasks();
+	assert!(
+		live_tasks <= baseline_tasks + 2,
+		"live tasks should return to baseline after {REQUESTS} requests: baseline={baseline_tasks} live={live_tasks}",
+	);
+}
+
+/// Request tokens are children of the actor abort signal, so stopping the
+/// actor cancels requests that are still in flight.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actor_abort_signal_cancels_in_flight_raw_requests() {
+	let (waiters_tx, mut waiters_rx) = tokio::sync::mpsc::unbounded_channel();
+	let dispatcher = request_waiter_dispatcher(waiters_tx, true);
+	let actor_id = "actor-request-abort";
+	let ctx = ActorContext::new(actor_id, "counter", Vec::new(), "local");
+	dispatcher
+		.start_actor(StartActorRequest {
+			actor_id: actor_id.to_owned(),
+			generation: 1,
+			actor_name: "counter".to_owned(),
+			input: None,
+			ctx: ctx.clone(),
+		})
+		.await
+		.expect("actor should start");
+
+	let fetch = tokio::spawn({
+		let dispatcher = dispatcher.clone();
+		async move { dispatcher.handle_fetch(actor_id, raw_ping_request()).await }
+	});
+	let waiter = waiters_rx
+		.recv()
+		.await
+		.expect("request should reach the actor");
+	assert!(
+		!waiter.is_finished(),
+		"request must stay in flight until aborted"
+	);
+
+	ctx.cancel_actor_abort_signal();
+
+	tokio::time::timeout(Duration::from_secs(5), waiter)
+		.await
+		.expect("actor abort must cancel the in-flight request token")
+		.expect("waiter task should not panic");
+	let response = tokio::time::timeout(Duration::from_secs(5), fetch)
+		.await
+		.expect("aborted request should complete")
+		.expect("fetch task should not panic")
+		.expect("fetch should return a response");
+	assert_eq!(
+		response.status,
+		::http::StatusCode::SERVICE_UNAVAILABLE.as_u16()
 	);
 }

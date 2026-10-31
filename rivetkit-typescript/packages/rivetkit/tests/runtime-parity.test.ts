@@ -105,6 +105,7 @@ class ParityScenario {
 
 class FakeActorContext {
 	stateBytes = Buffer.alloc(0);
+	abortSignalCalls = 0;
 	readonly runtimeBag = {};
 	readonly registeredTasks: Array<Promise<void>> = [];
 	readonly abortController = new AbortController();
@@ -187,6 +188,7 @@ class FakeActorContext {
 	}
 
 	abortSignal(): AbortSignal {
+		this.abortSignalCalls += 1;
 		return this.abortController.signal;
 	}
 
@@ -209,6 +211,10 @@ class FakeCancellationToken {
 	#cancelled = false;
 	#callbacks: Array<() => void> = [];
 
+	get listenerCount(): number {
+		return this.#callbacks.length;
+	}
+
 	aborted(): boolean {
 		return this.#cancelled;
 	}
@@ -220,8 +226,15 @@ class FakeCancellationToken {
 		}
 	}
 
-	onCancelled(callback: () => void): void {
+	onCancelled(callback: () => void): { release(): void } {
 		this.#callbacks.push(callback);
+		return {
+			release: () => {
+				this.#callbacks = this.#callbacks.filter(
+					(registered) => registered !== callback,
+				);
+			},
+		};
 	}
 }
 
@@ -461,6 +474,38 @@ async function invokePromotedStatus(
 }
 
 describe("CoreRuntime NAPI and wasm parity", () => {
+	test.each([
+		"napi",
+		"wasm",
+	] as const)("%s releases completed action listeners and shares one actor abort signal", async (kind) => {
+		const runtimeCase = createRuntimeCase(kind);
+		const definition = actor({
+			actions: {
+				inspectSignal: (c) => c.abortSignal.aborted,
+			},
+		});
+		const factory = buildNativeFactory(
+			runtimeCase.runtime,
+			registryConfig(definition),
+			definition,
+		) as unknown as FakeActorFactory;
+		const ctx = new FakeActorContext(runtimeCase.scenario);
+
+		for (let i = 0; i < 100; i++) {
+			const cancelToken = new FakeCancellationToken();
+			await factory.callbacks.actions.inspectSignal(null, {
+				ctx,
+				conn: null,
+				name: "inspectSignal",
+				args: encodeValue([]),
+				cancelToken,
+			});
+			expect(cancelToken.listenerCount).toBe(0);
+		}
+
+		expect(ctx.abortSignalCalls).toBe(1);
+	});
+
 	test.each([
 		["napi", 42n, 42],
 		["wasm", 42n, 42],

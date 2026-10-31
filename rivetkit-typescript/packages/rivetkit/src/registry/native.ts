@@ -347,6 +347,11 @@ type NativeDestroyGate = {
 type NativeDatabaseClientState = {
 	client: unknown;
 };
+type NativeActorAbort = {
+	signal: AbortSignal;
+	listeners: Set<() => void>;
+};
+
 type NativeActorRuntimeState = {
 	sql?: ReturnType<typeof wrapJsNativeDatabase>;
 	databaseClient?: NativeDatabaseClientState;
@@ -354,6 +359,12 @@ type NativeActorRuntimeState = {
 	vars?: unknown;
 	destroyGate?: NativeDestroyGate;
 	persistState?: NativePersistActorState;
+	// One native actor abort signal shared by every context of the actor. Each
+	// native signal parks a task and a callback handle until the actor stops,
+	// so creating one per request or action leaks both. Per-context listeners
+	// live in `listeners` so the shared signal never collects one listener per
+	// in-flight request.
+	actorAbort?: NativeActorAbort;
 };
 
 // Keep JS-only actor caches on the NAPI ActorContext runtime-state bag instead
@@ -3022,22 +3033,28 @@ export class ActorContextHandleAdapter {
 
 	get abortSignal(): AbortSignal {
 		if (!this.#abortSignal) {
-			const actorSignal = this.#createActorAbortSignal();
+			const actorAbort = this.#actorAbort();
+			const actorSignal = actorAbort.signal;
 			if (this.#dispatchCancelToken === undefined) {
 				this.#abortSignal = actorSignal;
 			} else {
 				const controller = new AbortController();
 				let cleanedUp = false;
+				let releaseDispatchListener: (() => void) | undefined;
 				const onActorAbort = () => {
 					cleanup();
 					controller.abort();
 				};
+				// Releasing the native listener on dispose frees it even when the
+				// dispatch token is never cancelled.
 				const cleanup = () => {
 					if (cleanedUp) {
 						return;
 					}
 					cleanedUp = true;
-					actorSignal.removeEventListener("abort", onActorAbort);
+					actorAbort.listeners.delete(onActorAbort);
+					releaseDispatchListener?.();
+					releaseDispatchListener = undefined;
 					this.#abortSignalCleanup = undefined;
 				};
 
@@ -3051,10 +3068,8 @@ export class ActorContextHandleAdapter {
 				} else {
 					const dispatchCancelToken = this.#dispatchCancelToken;
 					this.#abortSignalCleanup = cleanup;
-					actorSignal.addEventListener("abort", onActorAbort, {
-						once: true,
-					});
-					callNativeSync(() =>
+					actorAbort.listeners.add(onActorAbort);
+					releaseDispatchListener = callNativeSync(() =>
 						this.#runtime.onCancellationTokenCancelled(
 							dispatchCancelToken,
 							() => {
@@ -3511,19 +3526,37 @@ export class ActorContextHandleAdapter {
 		this.#abortSignalCleanup?.();
 	}
 
-	#createActorAbortSignal(): AbortSignal {
+	#actorAbort(): NativeActorAbort {
+		// An aborted cached signal may belong to a previous generation, so
+		// only a live one is reused.
+		const runtimeState = getNativeRuntimeState(this.#runtime, this.#ctx);
+		const cached = runtimeState.actorAbort;
+		if (cached && !cached.signal.aborted) {
+			return cached;
+		}
+
 		const nativeSignal = callNativeSync(() =>
 			this.#runtime.actorAbortSignal(this.#ctx),
 		);
 		const controller = new AbortController();
-		if (nativeSignal.aborted) {
+		const actorAbort: NativeActorAbort = {
+			signal: controller.signal,
+			listeners: new Set(),
+		};
+		const abort = () => {
 			controller.abort();
+			for (const listener of actorAbort.listeners) {
+				listener();
+			}
+			actorAbort.listeners.clear();
+		};
+		if (nativeSignal.aborted) {
+			abort();
 		} else {
-			nativeSignal.addEventListener("abort", () => controller.abort(), {
-				once: true,
-			});
+			nativeSignal.addEventListener("abort", abort, { once: true });
 		}
-		return controller.signal;
+		runtimeState.actorAbort = actorAbort;
+		return actorAbort;
 	}
 
 	#readState(): unknown {

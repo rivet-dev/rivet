@@ -194,6 +194,8 @@ async fn forward_application_request(
 		Ok(response) => into_application_response(response, request_token),
 		Err(error) => {
 			tracing::error!(?error, "application request handler failed");
+			// The handler may have registered cancellation listeners on the token.
+			request_token.cancel();
 			(
 				StatusCode::INTERNAL_SERVER_ERROR,
 				[("content-type", "text/plain; charset=utf-8")],
@@ -258,6 +260,8 @@ async fn forward_request(
 		Ok(response) => into_application_response(response, request_token),
 		Err(error) => {
 			tracing::error!(?error, "application request handler failed");
+			// The handler may have registered cancellation listeners on the token.
+			request_token.cancel();
 			(
 				StatusCode::INTERNAL_SERVER_ERROR,
 				[("content-type", "text/plain; charset=utf-8")],

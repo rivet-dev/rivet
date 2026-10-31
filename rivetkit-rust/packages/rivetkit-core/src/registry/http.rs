@@ -10,6 +10,12 @@ const HEADER_RIVET_ACTOR: &str = "x-rivet-actor";
 const HEADER_RIVET_ACTOR_GENERATION: &str = "x-rivet-actor-generation";
 const HEADER_RIVET_ACTOR_KEY: &str = "x-rivet-actor-key";
 
+/// Cancels a user request's token when the request finishes, unless a
+/// streaming response body takes ownership of it.
+///
+/// Every terminal path must cancel the token. Foreign runtimes park a task per
+/// request on it to deliver `abortSignal`, and a token that is dropped without
+/// being cancelled strands that task and its JS callback until the actor stops.
 struct RequestCancellationGuard {
 	token: Option<tokio_util::sync::CancellationToken>,
 }
@@ -17,10 +23,6 @@ struct RequestCancellationGuard {
 impl RequestCancellationGuard {
 	fn new(token: tokio_util::sync::CancellationToken) -> Self {
 		Self { token: Some(token) }
-	}
-
-	fn disarm(&mut self) {
-		self.token = None;
 	}
 }
 
@@ -100,10 +102,11 @@ impl RegistryDispatcher {
 	async fn handle_user_request_fetch(
 		&self,
 		instance: &ActorTaskHandle,
-		request: Request,
+		mut request: Request,
 	) -> Result<HttpResponse> {
 		let encoding = request_encoding(request.headers());
 		let request_method = request.method().clone();
+		request.set_cancellation_parent(&instance.ctx.actor_abort_signal());
 		let mut cancellation_guard = RequestCancellationGuard::new(request.cancellation_token());
 		let (reply_tx, reply_rx) = oneshot::channel();
 		try_send_dispatch_command(
@@ -123,14 +126,14 @@ impl RegistryDispatcher {
 			Ok(response) => {
 				rearm_sleep_after_request(instance.ctx.clone());
 				let mut response = build_envoy_response(response, &request_method)?;
+				// A streaming body outlives this call, so it cancels the token
+				// when it is dropped. Otherwise the guard cancels it on return.
 				if let Some(body_stream) = response.body_stream.as_mut() {
 					let token = cancellation_guard
 						.token
 						.take()
 						.expect("request cancellation token must be armed");
 					body_stream.set_on_drop(move || token.cancel());
-				} else {
-					cancellation_guard.disarm();
 				}
 				Ok(response)
 			}

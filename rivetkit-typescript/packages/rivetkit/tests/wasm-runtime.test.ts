@@ -213,8 +213,15 @@ class FakeCancellationToken {
 		}
 	}
 
-	onCancelled(callback: () => void): void {
+	onCancelled(callback: () => void): { release(): void } {
 		this.#callbacks.push(callback);
+		return {
+			release: () => {
+				this.#callbacks = this.#callbacks.filter(
+					(registered) => registered !== callback,
+				);
+			},
+		};
 	}
 }
 
