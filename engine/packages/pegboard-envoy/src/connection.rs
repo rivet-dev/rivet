@@ -957,9 +957,24 @@ async fn handle_sub_stream(
 							};
 
 							let reply_is_final = reply.is_final()?;
+							let actor_close = reply.actor_websocket_close()?;
 							let payload = reply.into_payload()?;
 
 							Box::pin(stream_tx.send(payload)).await?;
+
+							// The actor's close handler runs only when a close comes back to it,
+							// as for a client close. This stream ends with the actor's close, so
+							// the gateway cannot answer it, and the close returns from here.
+							if let Some(close) = actor_close {
+								last_message_id.message_index = last_message_id.message_index.wrapping_add(1);
+								let _ = Box::pin(conn.to_envoy_tx.send(p::ToEnvoy::ToEnvoyTunnelMessage(
+									p::ToEnvoyTunnelMessage {
+										message_id: last_message_id.clone(),
+										message_kind: p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(close),
+									},
+								)))
+								.await;
+							}
 
 							if reply_is_final {
 								stream_finalized_by_reply = true;
@@ -2250,6 +2265,54 @@ impl TunnelReply {
 					| p::ToRivetTunnelMessageKindRef::ToRivetWebSocketOpen(_)
 					| p::ToRivetTunnelMessageKindRef::ToRivetWebSocketMessage(_)
 					| p::ToRivetTunnelMessageKindRef::ToRivetWebSocketMessageAck(_) => false,
+				}
+			}
+		})
+	}
+
+	/// The close to return to the actor when this reply is the actor closing its WebSocket. A
+	/// close that hibernates the WebSocket does not end it for the actor.
+	fn actor_websocket_close(&self) -> Result<Option<p::ToEnvoyWebSocketClose>> {
+		Ok(match self {
+			Self::Message(reply) => match &reply.message_kind {
+				p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) if !close.hibernate => {
+					Some(p::ToEnvoyWebSocketClose {
+						code: close.code,
+						reason: close.reason.clone(),
+					})
+				}
+				p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(_)
+				| p::ToRivetTunnelMessageKind::ToRivetResponseStart(_)
+				| p::ToRivetTunnelMessageKind::ToRivetResponseChunk(_)
+				| p::ToRivetTunnelMessageKind::ToRivetResponseAbort(_)
+				| p::ToRivetTunnelMessageKind::ToRivetRequestBodyWindowUpdate(_)
+				| p::ToRivetTunnelMessageKind::ToRivetRequestBodyCancel
+				| p::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
+				| p::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(_)
+				| p::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_) => None,
+			},
+			Self::Encoded(view) => {
+				let p::ToRivetRef::ToRivetTunnelMessage(reply) = view.get() else {
+					bail!("encoded tunnel reply holds another message");
+				};
+				match reply.message_kind() {
+					p::ToRivetTunnelMessageKindRef::ToRivetWebSocketClose(close)
+						if !close.hibernate() =>
+					{
+						Some(p::ToEnvoyWebSocketClose {
+							code: close.code(),
+							reason: close.reason().map(|reason| reason.to_owned().into()),
+						})
+					}
+					p::ToRivetTunnelMessageKindRef::ToRivetWebSocketClose(_)
+					| p::ToRivetTunnelMessageKindRef::ToRivetResponseStart(_)
+					| p::ToRivetTunnelMessageKindRef::ToRivetResponseChunk(_)
+					| p::ToRivetTunnelMessageKindRef::ToRivetResponseAbort(_)
+					| p::ToRivetTunnelMessageKindRef::ToRivetRequestBodyWindowUpdate(_)
+					| p::ToRivetTunnelMessageKindRef::ToRivetRequestBodyCancel
+					| p::ToRivetTunnelMessageKindRef::ToRivetWebSocketOpen(_)
+					| p::ToRivetTunnelMessageKindRef::ToRivetWebSocketMessage(_)
+					| p::ToRivetTunnelMessageKindRef::ToRivetWebSocketMessageAck(_) => None,
 				}
 			}
 		})
