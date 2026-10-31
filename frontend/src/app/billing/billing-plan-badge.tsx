@@ -21,9 +21,12 @@ const PLAN_COLORS: Record<string, string> = {
 
 export function PlanBadge({
 	plan,
+	label,
 	className,
 }: {
 	plan: string;
+	/** Overrides the plan's default label. */
+	label?: string;
 	className?: string;
 }) {
 	return (
@@ -35,7 +38,7 @@ export function PlanBadge({
 				className,
 			)}
 		>
-			{PLAN_LABELS[plan] ?? plan}
+			{label ?? PLAN_LABELS[plan] ?? plan}
 		</Badge>
 	);
 }
