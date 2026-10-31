@@ -257,8 +257,19 @@ fn to_client_from_json_value(value: &JsonValue) -> Result<to_client::ToClient> {
 			group: json_string(value, "group")?,
 			code: json_string(value, "code")?,
 			message: json_string(value, "message")?,
-			metadata: value.get("metadata").map(serde_cbor::to_vec).transpose()?,
-			action_id: value.get("actionId").map(parse_json_u64).transpose()?,
+			// The server encodes connection-level errors (errors not tied to an
+			// action) with `null` `actionId` and `metadata` fields, so treat
+			// `null` the same as a missing field.
+			metadata: value
+				.get("metadata")
+				.filter(|value| !value.is_null())
+				.map(serde_cbor::to_vec)
+				.transpose()?,
+			action_id: value
+				.get("actionId")
+				.filter(|value| !value.is_null())
+				.map(parse_json_u64)
+				.transpose()?,
 		}),
 		"ActionResponse" => to_client::ToClientBody::ActionResponse(to_client::ActionResponse {
 			id: parse_json_u64(
@@ -415,5 +426,112 @@ mod tests {
 			u16::from_le_bytes([payload[0], payload[1]]),
 			wire::PROTOCOL_VERSION
 		);
+	}
+
+	// The server encodes connection-level errors (errors not tied to an action)
+	// with `"actionId": null` and `"metadata": null` in the JSON and CBOR
+	// encodings. See rivetkit-core `actor_connect.rs`.
+	#[test]
+	fn json_error_with_null_action_id_decodes() {
+		let payload = serde_json::to_vec(&json!({
+			"body": {
+				"tag": "Error",
+				"val": {
+					"group": "a",
+					"code": "b",
+					"message": "c",
+					"actionId": null,
+					"metadata": null,
+				},
+			},
+		}))
+		.unwrap();
+
+		let message = decode_to_client(EncodingKind::Json, &payload).unwrap();
+		let to_client::ToClientBody::Error(error) = message.body else {
+			panic!("expected error message");
+		};
+
+		assert_eq!(error.group, "a");
+		assert_eq!(error.code, "b");
+		assert_eq!(error.message, "c");
+		assert_eq!(error.action_id, None);
+		assert_eq!(error.metadata, None);
+	}
+
+	#[test]
+	fn cbor_error_with_null_action_id_decodes() {
+		let payload = serde_cbor::to_vec(&json!({
+			"body": {
+				"tag": "Error",
+				"val": {
+					"group": "a",
+					"code": "b",
+					"message": "c",
+					"actionId": null,
+					"metadata": null,
+				},
+			},
+		}))
+		.unwrap();
+
+		let message = decode_to_client(EncodingKind::Cbor, &payload).unwrap();
+		let to_client::ToClientBody::Error(error) = message.body else {
+			panic!("expected error message");
+		};
+
+		assert_eq!(error.group, "a");
+		assert_eq!(error.code, "b");
+		assert_eq!(error.message, "c");
+		assert_eq!(error.action_id, None);
+		assert_eq!(error.metadata, None);
+	}
+
+	#[test]
+	fn json_error_with_missing_optional_fields_decodes() {
+		let payload = serde_json::to_vec(&json!({
+			"body": {
+				"tag": "Error",
+				"val": {
+					"group": "a",
+					"code": "b",
+					"message": "c",
+				},
+			},
+		}))
+		.unwrap();
+
+		let message = decode_to_client(EncodingKind::Json, &payload).unwrap();
+		let to_client::ToClientBody::Error(error) = message.body else {
+			panic!("expected error message");
+		};
+
+		assert_eq!(error.action_id, None);
+		assert_eq!(error.metadata, None);
+	}
+
+	#[test]
+	fn json_error_with_action_id_decodes() {
+		let payload = serde_json::to_vec(&json!({
+			"body": {
+				"tag": "Error",
+				"val": {
+					"group": "a",
+					"code": "b",
+					"message": "c",
+					"actionId": 123,
+					"metadata": { "key": "value" },
+				},
+			},
+		}))
+		.unwrap();
+
+		let message = decode_to_client(EncodingKind::Json, &payload).unwrap();
+		let to_client::ToClientBody::Error(error) = message.body else {
+			panic!("expected error message");
+		};
+
+		assert_eq!(error.action_id, Some(123));
+		assert!(error.metadata.is_some());
 	}
 }
