@@ -1,0 +1,51 @@
+--- a/src/db.rs
++++ b/src/db.rs
+@@ -341,8 +341,10 @@
+             );
+ 
+             if total_mem_size_bytes >= self.settings.max_unflushed_bytes {
++                // Every waiting write logs each pass, so a slow store would flood the log at
++                // warn. The counters carry the signal.
+                 self.db_stats.backpressure_count.increment(1);
+-                warn!(
++                debug!(
+                     "unflushed WAL and memtable size exceeds max_unflushed_bytes. applying backpressure. [total_mem_size_bytes={}, active_memtable_size_bytes={}, imm_memtable_size_bytes={}, wal_size_bytes={}, max_unflushed_bytes={}]",
+                     format_bytes_si(total_mem_size_bytes as u64),
+                     format_bytes_si(active_memtable_size_bytes as u64),
+@@ -392,7 +394,8 @@
+                     result = await_memtable_uploaded => result?,
+                     result = await_flush_wal => result?,
+                     _ = timeout_fut => {
+-                        warn!("backpressure timeout: waited 30s, no memtable/WAL flushed yet");
++                        self.db_stats.backpressure_timeout_count.increment(1);
++                        debug!("backpressure timeout: waited 30s, no memtable/WAL flushed yet");
+                     }
+                 };
+             } else {
+--- a/src/db_stats.rs
++++ b/src/db_stats.rs
+@@ -18,6 +18,8 @@
+ pub const WRITE_OPS: &str = db_stat_name!("write_ops");
+ pub const WRITE_BATCH_COUNT: &str = db_stat_name!("write_batch_count");
+ pub const BACKPRESSURE_COUNT: &str = db_stat_name!("backpressure_count");
++/// Backpressure waits that reached their 30 s timeout without any flush finishing.
++pub const BACKPRESSURE_TIMEOUT_COUNT: &str = db_stat_name!("backpressure_timeout_count");
+ pub const L0_STALL_COUNT: &str = db_stat_name!("l0_stall_count");
+ pub const L0_STALL_TYPE_LABEL: &str = "type";
+ pub const L0_STALL_TYPE_NUM_SSTS: &str = "num_ssts";
+@@ -60,6 +62,7 @@
+     pub(crate) sst_filter_range_positives: Arc<dyn CounterFn>,
+     pub(crate) sst_filter_range_negatives: Arc<dyn CounterFn>,
+     pub(crate) backpressure_count: Arc<dyn CounterFn>,
++    pub(crate) backpressure_timeout_count: Arc<dyn CounterFn>,
+     pub(crate) l0_stall_count_num_ssts: Arc<dyn CounterFn>,
+     pub(crate) l0_stall_count_num_ssts_per_key: Arc<dyn CounterFn>,
+     pub(crate) get_requests: Arc<dyn CounterFn>,
+@@ -135,6 +138,7 @@
+                 .labels(&[(FILTER_KIND_LABEL, FILTER_KIND_RANGE)])
+                 .register(),
+             backpressure_count: recorder.counter(BACKPRESSURE_COUNT).register(),
++            backpressure_timeout_count: recorder.counter(BACKPRESSURE_TIMEOUT_COUNT).register(),
+             l0_stall_count_num_ssts: recorder
+                 .counter(L0_STALL_COUNT)
+                 .labels(&[(L0_STALL_TYPE_LABEL, L0_STALL_TYPE_NUM_SSTS)])

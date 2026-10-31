@@ -359,28 +359,34 @@ impl ConnHandle {
 		let hibernation = self.0.hibernation.read().clone()?;
 
 		Some(PersistedConnection {
-			id: self.id().to_owned(),
-			parameters: self.params(),
-			state,
+			id: self.id().to_owned().into(),
+			parameters: self.params().into(),
+			state: state.into(),
 			subscriptions: self
 				.subscriptions()
 				.into_iter()
-				.map(|event_name| PersistedSubscription { event_name })
+				.map(|event_name| PersistedSubscription {
+					event_name: event_name.into(),
+				})
 				.collect(),
 			gateway_id: hibernation.gateway_id,
 			request_id: hibernation.request_id,
 			server_message_index: hibernation.server_message_index,
 			client_message_index: hibernation.client_message_index,
-			request_path: hibernation.request_path,
-			request_headers: hibernation.request_headers.into_iter().collect(),
+			request_path: hibernation.request_path.into(),
+			request_headers: hibernation
+				.request_headers
+				.into_iter()
+				.map(|(name, value)| (name.into(), value.into()))
+				.collect(),
 		})
 	}
 
 	pub(crate) fn from_persisted(persisted: PersistedConnection) -> Self {
 		let conn = Self::new(
-			persisted.id.clone(),
-			persisted.parameters,
-			persisted.state,
+			persisted.id.to_string(),
+			persisted.parameters.to_vec(),
+			persisted.state.to_vec(),
 			true,
 		);
 		conn.configure_hibernation(Some(HibernatableConnectionMetadata {
@@ -388,8 +394,12 @@ impl ConnHandle {
 			request_id: persisted.request_id,
 			server_message_index: persisted.server_message_index,
 			client_message_index: persisted.client_message_index,
-			request_path: persisted.request_path,
-			request_headers: persisted.request_headers.into_iter().collect(),
+			request_path: persisted.request_path.to_string(),
+			request_headers: persisted
+				.request_headers
+				.into_iter()
+				.map(|(name, value)| (name.to_string(), value.to_string()))
+				.collect(),
 		}));
 		for subscription in persisted.subscriptions {
 			conn.subscribe(subscription.event_name);
@@ -858,10 +868,7 @@ impl ActorContext {
 		self.0.connection_config.read().clone()
 	}
 
-	#[cfg(test)]
-	pub(crate) fn connection_config_for_tests(&self) -> ActorConfig {
-		self.connection_config()
-	}
+	
 
 	async fn disconnect_managed(&self, conn_id: &str, reason: Option<String>) -> Result<()> {
 		let Some(conn) = self.remove_existing_for_disconnect(conn_id) else {
@@ -1037,6 +1044,4 @@ fn disconnect_message(conn_id: &str, reason: Option<&str>) -> String {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/connection.rs"]
-mod tests;
+

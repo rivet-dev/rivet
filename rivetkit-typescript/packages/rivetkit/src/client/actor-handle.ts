@@ -61,6 +61,7 @@ import {
 import { type ClientRaw, CREATE_ACTOR_CONN_PROXY } from "./client";
 import { ActorError, isSchedulingError } from "./errors";
 import { retryOnLifecycleBoundary } from "./lifecycle-errors";
+import { RetryBudget, retryAfterMs, retryDelayMs } from "./retry-budget";
 import { logger } from "./log";
 import { outboundTelemetryHeaders } from "./outbound-telemetry";
 import {
@@ -94,6 +95,7 @@ export class ActorHandleRaw {
 	#queueSendMutex = new AsyncMutex();
 	#currentActorInvocation?: CurrentActorInvocation;
 	#startCallSpan?: StartCallSpan;
+	#retryBudget: RetryBudget;
 
 	/**
 	 * Do not call this directly.
@@ -113,6 +115,7 @@ export class ActorHandleRaw {
 		signal?: AbortSignal,
 		currentActorInvocation?: CurrentActorInvocation,
 		startCallSpan?: StartCallSpan,
+		retryBudget: RetryBudget = new RetryBudget(),
 	) {
 		this.#client = client;
 		this.#driver = driver;
@@ -124,6 +127,7 @@ export class ActorHandleRaw {
 		this.#signal = signal;
 		this.#currentActorInvocation = currentActorInvocation;
 		this.#startCallSpan = startCallSpan;
+		this.#retryBudget = retryBudget;
 	}
 
 	async #resolveConnectionParams(): Promise<unknown> {
@@ -166,6 +170,7 @@ export class ActorHandleRaw {
 				this.#actorResolutionState,
 			);
 
+			this.#retryBudget.deposit();
 			for (let attempt = 0; attempt < maxAttempts; attempt++) {
 				let actorId: string | undefined;
 				try {
@@ -205,9 +210,19 @@ export class ActorHandleRaw {
 							metadata,
 							attempt,
 							maxAttempts,
-						)
+						) &&
+						this.#retryBudget.tryWithdraw()
 					) {
-						await this.#waitForRetryWindow();
+						await new Promise((resolve) =>
+							setTimeout(
+								resolve,
+								retryDelayMs(attempt, {
+									initialDelayMs: 25,
+									maxDelayMs: 1_000,
+									hintMs: retryAfterMs(err),
+								}),
+							),
+						);
 						continue;
 					}
 
@@ -309,7 +324,10 @@ export class ActorHandleRaw {
 			if (opts.name === "destroy") {
 				return await run();
 			}
-			return await retryOnLifecycleBoundary(run, { signal });
+			return await retryOnLifecycleBoundary(run, {
+				signal,
+				budget: this.#retryBudget,
+			});
 		};
 		if (!call) {
 			return await send();

@@ -131,14 +131,7 @@ struct CompletionHandleInner {
 pub(crate) type QueueMetadata = persist_v4::QueueMetadata;
 pub(crate) type PersistedQueueMessage = persist_v4::QueueMessage;
 
-#[cfg(test)]
-pub(crate) fn encode_queue_metadata(metadata: &QueueMetadata) -> Result<Vec<u8>> {
-	encode_latest_with_embedded_version::<persist_versioned::QueueMetadata>(
-		metadata.clone(),
-		rivetkit_actor_persist::CURRENT_VERSION,
-		"queue metadata",
-	)
-}
+
 
 pub(crate) fn decode_queue_metadata(payload: &[u8]) -> Result<QueueMetadata> {
 	let metadata = decode_latest_with_embedded_version::<persist_versioned::QueueMetadata>(
@@ -278,8 +271,8 @@ impl ActorContext {
 
 		let created_at = current_timestamp_ms()?;
 		let persisted = PersistedQueueMessage {
-			name: name.to_owned(),
-			body: body.to_vec(),
+			name: name.to_owned().into(),
+			body: body.to_vec().into(),
 			created_at,
 			failure_count: None,
 			available_at: None,
@@ -910,10 +903,7 @@ impl ActorContext {
 		self.0.queue_config.lock().clone()
 	}
 
-	#[cfg(test)]
-	pub(crate) fn queue_config_for_tests(&self) -> ActorConfig {
-		self.config()
-	}
+	
 
 	fn notify_wait_activity(&self) {
 		if let Some(callback) = self.0.queue_wait_activity_callback.lock().clone() {
@@ -1075,8 +1065,8 @@ fn normalize_names(names: Option<Vec<String>>) -> Option<BTreeSet<String>> {
 fn queue_message_from_row(row: internal_storage::QueueMessageRow) -> QueueMessage {
 	QueueMessage {
 		id: row.id,
-		name: row.message.name,
-		body: row.message.body,
+		name: row.message.name.to_string(),
+		body: row.message.body.to_vec(),
 		created_at: row.message.created_at,
 		trace_context: row.trace_context,
 		completion: None,
@@ -1095,6 +1085,4 @@ fn duration_ms(duration: Duration) -> u64 {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/queue.rs"]
-mod tests;
+

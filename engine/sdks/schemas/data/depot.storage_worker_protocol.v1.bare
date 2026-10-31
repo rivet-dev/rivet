@@ -1,0 +1,471 @@
+#import "shared/depot.types.v1.bare"
+#import "depot.log_shard.v1.bare"
+
+# Maintainer fencing uses this tablet ID, independently of the volume key.
+type TabletGrant struct {
+	tabletId: UuidV4
+	tabletGrantEpoch: u64
+}
+
+# Client requests carry the replica set version used to route the request.
+type ClientRequestHeader struct {
+	volumeLogKey: VolumeLogKey
+	client: ClientIdentity
+	tabletReplicaSetVersion: u64
+}
+
+# Maintainer requests name the tablet whose grant authorizes them.
+type MaintainerRequestHeader struct {
+	volumeLogKey: VolumeLogKey
+	tabletGrant: TabletGrant
+}
+
+# A tablet maintainer writing a log it owns, its maintainer log. The shard checks the tablet
+# grant as for a maintainer header and the client claim as for a client header, so a writer of
+# a superseded grant is refused even when it holds the newest claim.
+type GrantClientRequestHeader struct {
+	volumeLogKey: VolumeLogKey
+	tabletGrant: TabletGrant
+	client: ClientIdentity
+}
+
+# The shard admits client and maintainer headers using their own authority checks.
+type ReplicaRequestHeader union {
+	ClientRequestHeader | MaintainerRequestHeader | GrantClientRequestHeader
+}
+
+# Client authority: write this client's claim to disk before replying.
+type ClaimRequest struct {
+	header: ReplicaRequestHeader
+	# The claiming client's process. A maintainer's fencing claim has none.
+	holder: optional<VolumeHolder>
+}
+
+# Every append contains at least one entry. Matching previous with appended orders entries
+# without timing assumptions; a duplicate suffix already held by the replica is accepted.
+# Maintainer authority copies only committed entries under the current tablet grant.
+type AppendRequest struct {
+	header: ReplicaRequestHeader
+	previous: VolumeLogPosition
+	entries: list<VolumeLogEntry>
+	committedVolumeSeq: u64
+}
+
+# Announces the quorum of acknowledgements only the client can observe. This learn
+# step also rides on appends and is sent separately when appends stop. The maintainer
+# writes to cold only through progress a replica knows is committed.
+type AdvanceCommittedRequest struct {
+	header: ClientRequestHeader
+	committedVolumeSeq: u64
+}
+
+type TruncateRequest struct {
+	header: ReplicaRequestHeader
+    # Operator resync also compares the physical replica incarnation in the same mutation.
+    expectedReplicaIncarnation: optional<UuidV4>
+	expectedAppended: VolumeLogPosition
+	keepThroughVolumeSeq: u64
+	# Keeps only cold, marks repairing, and draws a new incarnation. Old repair proofs
+	# and MarkInSync requests cannot count a replica that was emptied beneath them.
+	# Neither form of truncate moves cold.
+	markRepairing: bool
+}
+
+# Deliberately unfenced: callers validate the returned state and their authority.
+type ReadVolumeLogEntriesRequest struct {
+	volumeLogKey: VolumeLogKey
+	firstVolumeSeq: u64            # inclusive
+	maxBytes: u32
+	# Also reads the tail a deleted replica retains. Only the maintainer sets it, to apply a
+	# deleted volume's final tail; every other reader is refused with VolumeLogReplicaDeleted.
+	includeDeleted: bool
+}
+
+# Deliberately unfenced status probe for many volumes in one request. Each key is answered
+# exactly as ReadVolumeLogEntriesRequest with firstVolumeSeq 0 and maxBytes 0 would be, so it
+# never reads segment bytes.
+type ReadVolumeLogStatusRequest struct {
+	volumeLogKeys: list<VolumeLogKey>
+}
+
+# More entries follow while the last returned volume seq is below state.appended.volumeSeq.
+type ReadVolumeLogEntriesResponse struct {
+	entries: list<VolumeLogEntry>
+	state: VolumeLogReplicaState
+}
+
+# Completes repair only for the replica incarnation and appended position observed.
+type MarkInSyncRequest struct {
+	header: ReplicaRequestHeader
+	replicaIncarnation: UuidV4
+	expectedAppended: VolumeLogPosition
+}
+
+# TabletGrant authority. Initialize cold and appended to this same VolumeLogPosition:
+# (0, 0) for a new volume, or the cold position when creating a learner.
+type LoadVolumeRequest struct {
+	# Ordinary open only. Ignored for an existing replica; never combined with claimedClient.
+	openClaim: optional<OpenClaim>
+	# Present only for a learner: replace once for this Learning generation.
+	learnerReplicaSetVersion: optional<u64>
+	# Must match this shard's FORMAT, fencing delayed loads after disk replacement.
+	diskIncarnation: UuidV4
+	# Copied with cold from an in-sync member only when creating a learner.
+	# Lets the current client append without a claim entry. Learners cannot form a quorum;
+	# later quorums still need a member that fences an older client.
+	# Creates and reopens omit it, retaining the fence at the cold position.
+	claimedClient: optional<ClientIdentity>
+	# Copied with claimedClient, so a learner keeps the holder of the claim it copies.
+	claimedHolder: optional<VolumeHolder>
+	header: ReplicaRequestHeader
+	cold: VolumeLogPosition
+	status: VolumeLogReplicaStatus
+	# A create's first entries, written after the replica's state frame in the same disk write and
+	# sync. The write is not atomic: a torn write may keep a prefix. Valid only with openClaim on a
+	# replica this request creates; each entry carries the claim's client epoch and they start
+	# right after cold. The maintainer sends entries under a claim for one client and one set of
+	# bytes only. Dropped, and counted, when the claim did not take or they do not fit the write.
+	initialEntries: list<VolumeLogEntry>
+	# Maintainer-owned creation evidence kept in the state of a replica this request creates
+	# and ignored otherwise. The shard never interprets it.
+	creation: optional<data>
+}
+
+# Only the maintainer raises cold, after the blocks are in the cold store.
+# Truncate never moves this position, even when marking a replica repairing.
+type TrimRequest struct {
+	header: ReplicaRequestHeader
+	cold: VolumeLogPosition
+	# Copied from an in-sync member. Raises an older claim so a lagging replica
+	# rejoins the current client without a new claim. Stale values never lower it.
+	claimedClient: optional<ClientIdentity>
+}
+
+# TabletGrant authority. Retains a deletion marker and fences every client. Entries above
+# cold stay readable and are released by trims, so a deleted volume's final tail survives
+# until the maintainer has written it to cold.
+type MarkVolumeDeletedRequest struct {
+	header: ReplicaRequestHeader
+}
+
+# The replica and replica set an operator forget observed.
+type ForgetObservation struct {
+	replicaIncarnation: UuidV4
+	tabletReplicaSetVersion: u64
+}
+
+# An expected position unloads only when it equals both appended and cold.
+# A conditional forget of a deleted replica answers VolumeLogReplicaDeleted; deletion cleanup uses an unconditional forget.
+# Absent for an unconditional forget. VolumeNotLoaded means cleanup is already complete.
+# A conditional forget under a maintainer header also unloads only when the replica's claim
+# equals expectedClaim, absent meaning unclaimed; otherwise it answers AppendedMismatch with the
+# replica's state. A late forget therefore cannot drop a replica whose load installed a newer
+# claim after the maintainer observed it. A load installs an open's claim only while this
+# shard sees a stable replica set, so outside one a late forget can still drop the replica
+# before its opener claims it. Ignored when unconditional, and under a granted client header,
+# which checks that client's claim instead.
+# An operator forget of a nonmember replica also sends an observation, admitted only under the
+# tablet grant while this shard's effective set is stable at that version and excludes this
+# worker, and while any loaded replica still has the observed incarnation; otherwise the shard
+# answers NotServing. Retirement does not refuse it, since it only removes a replica.
+type ForgetVolumeRequest struct {
+	header: ReplicaRequestHeader
+	expectedAppended: optional<VolumeLogPosition>
+	expectedClaim: optional<ClientIdentity>
+	observation: optional<ForgetObservation>
+}
+
+# Pages the loaded volume replicas this shard holds for one tablet, with their states.
+# Listing a quorum at the grant epoch fences the previous maintainer. Only replicas
+# whose partition key hash is in hashRange are listed.
+# A split child names its parent in retiredParent: the shard raises the parent to the
+# retired grant epoch and the child to its grant epoch in one write to disk before
+# answering, so the parent is refused for every key from then on.
+# Pages follow partition key hash order, then encoded VolumeLogKey order within one hash,
+# so a page visits only the tablet's own replicas. after is an exclusive cursor in that order.
+type ListTabletReplicasRequest struct {
+	# Reply only after installing at least this replica set version on disk.
+	tabletReplicaSetVersion: u64
+	tabletGrant: TabletGrant
+	hashRange: PartitionKeyHashRange
+	retiredParent: optional<UuidV4>
+	after: optional<VolumeLogKey>
+	maxReplicas: u32
+}
+
+type ListTabletReplicasResponse struct {
+	# Highest installed version on disk; a Joint listing establishes the old-member fence.
+	tabletReplicaSetVersion: u64
+	# A different incarnation is disk loss, never evidence that volumes are unloaded.
+	diskIncarnation: UuidV4
+	replicas: list<StateFrame>
+}
+
+# All mutating operations return the replica's full disk state, including Forget.
+type ReplicaStateResponse struct {
+	state: VolumeLogReplicaState
+}
+
+type StaleClientEpoch struct {
+	state: VolumeLogReplicaState
+}
+
+type ClientConflict struct {
+	state: VolumeLogReplicaState
+}
+
+type NotClaimed struct {
+	state: VolumeLogReplicaState
+}
+
+# previous is ahead of appended, leaving a hole: resend entries in order.
+type VolumeSeqGap struct {
+	state: VolumeLogReplicaState
+}
+
+# The same volume seq has a different client epoch: repair needs a truncate.
+type Diverged struct {
+	state: VolumeLogReplicaState
+}
+
+type AppendedMismatch struct {
+	state: VolumeLogReplicaState
+}
+
+# Scheduling hints from the disk-committed suffix; absent when there is no suffix.
+type ColdWriteStatus struct {
+	firstWriteUnixMs: i64
+	committedBytes: u64
+	diskPressure: bool
+}
+
+type BelowCold struct {
+	coldWrite: optional<ColdWriteStatus>
+	state: VolumeLogReplicaState
+}
+
+type VolumeLogReplicaIncarnationMismatch struct {
+	state: VolumeLogReplicaState
+}
+
+# Clients cannot mutate a replica once the maintainer has marked it deleted.
+type VolumeLogReplicaDeleted struct {
+	state: VolumeLogReplicaState
+}
+
+# Includes the phase so stale clients learn about learners and joint quorums.
+type StaleTabletReplicaSet struct {
+	replicaSet: TabletReplicaSet
+}
+
+type StaleTabletGrantEpoch struct {
+	tabletGrantEpoch: u64
+}
+
+# No replica is loaded here: the volume is unloaded, this worker is not a tablet member,
+# or the caller's log key is stale. Only the tablet maintainer holds the volume row
+# with existence, cold position, and fence epoch, so the shard cannot create a replica.
+# The client reopens through VolumeOpen, which recreates replicas at the cold position.
+type VolumeNotLoaded void
+# A bounded queue is full right now, or requests waited in it past the shard's admission
+# bound. Nothing was done; retry no sooner than retryAfterMs, within the caller's deadline.
+# A refusal is never evidence about the replica, so it must not trigger repair or fencing.
+type Overloaded struct {
+	retryAfterMs: u64
+}
+
+# The shard is not accepting requests; treat this log replica as unavailable.
+type NotServing void
+
+# This request cannot fit in one write or in the entire memory byte budget; each frame must fit one batch.
+type RequestTooLarge struct {
+	maxBytes: u32
+}
+
+# The shard already holds its configured maximum number of log replicas.
+type TooManyLoadedVolumes struct {
+	maxLoadedVolumes: u32
+}
+
+# Uncold data fills the disk budget. Nothing was written; retry no sooner than retryAfterMs,
+# after the maintainer writes to cold and trims. Like Overloaded, it is never evidence about
+# the replica.
+type DiskFull struct {
+	retryAfterMs: u64
+}
+
+# An entry's payload family and version are not readable by this shard's binary, or name a
+# family it does not know. Persisting it would raise the shard's FORMAT mark past what the
+# shard itself can open, so nothing was done. The writer must encode at a version every
+# storage worker reads; maxRead is 0 for an unknown family.
+type UnsupportedPayloadVersion struct {
+	payloadFamily: u16
+	payloadVersion: u16
+	maxRead: u16
+}
+
+# The variant determines the required payload; Repairing is reported in state.
+# A delayed load cannot create a replica on a replacement disk.
+type DiskIncarnationMismatch struct {
+ diskIncarnation: UuidV4
+}
+
+type RejectResponse union {
+ DiskIncarnationMismatch |
+	StaleClientEpoch | ClientConflict | NotClaimed | VolumeSeqGap | Diverged |
+	AppendedMismatch | BelowCold | VolumeLogReplicaIncarnationMismatch | VolumeLogReplicaDeleted |
+	StaleTabletReplicaSet | StaleTabletGrantEpoch | VolumeNotLoaded | Overloaded |
+	NotServing | RequestTooLarge | TooManyLoadedVolumes | DiskFull | UnsupportedPayloadVersion
+}
+
+# Used by placement to capture the disk identity before admitting a member.
+type GetDiskIncarnationRequest void
+
+type GetDiskIncarnationResponse struct {
+ diskIncarnation: UuidV4
+}
+
+# One status per requested key, in request order.
+type VolumeLogStatus union { BelowCold | VolumeLogReplicaDeleted | VolumeNotLoaded | NotServing }
+
+type ReadVolumeLogStatusResponse struct {
+	statuses: list<VolumeLogStatus>
+}
+
+# One conditional forget in a ForgetVolumesRequest.
+type ForgetVolume struct {
+	volumeLogKey: VolumeLogKey
+	expectedAppended: VolumeLogPosition
+	expectedClaim: optional<ClientIdentity>
+}
+
+# Unloads many fully cold replicas under one tablet grant check. Each volume is forgotten
+# exactly as a conditional ForgetVolumeRequest with the same expected position and claim would be,
+# and every result waits for one shared disk write. A batch above the shard's limit is
+# rejected as RequestTooLarge, and a stale grant rejects the whole batch.
+type ForgetVolumesRequest struct {
+	tabletGrant: TabletGrant
+	volumes: list<ForgetVolume>
+}
+
+# What a single replica request of that volume, a conditional forget or a trim, would have
+# answered.
+type ForgetVolumeResult union { ReplicaStateResponse | RejectResponse }
+
+# One result per requested volume, in request order.
+type ForgetVolumesResponse struct {
+	results: list<ForgetVolumeResult>
+}
+
+# One trim in a TrimVolumesRequest, with the fields of a TrimRequest for that volume.
+type TrimVolume struct {
+	volumeLogKey: VolumeLogKey
+	cold: VolumeLogPosition
+	claimedClient: optional<ClientIdentity>
+}
+
+# Raises the cold position of many replicas under one tablet grant check, after a cold
+# write published them. Each volume is trimmed exactly as a TrimRequest with the same
+# fields would be, and every result waits for one shared disk write. A batch above the
+# shard's limit is rejected as RequestTooLarge, and a stale grant rejects the whole batch.
+type TrimVolumesRequest struct {
+	tabletGrant: TabletGrant
+	volumes: list<TrimVolume>
+}
+
+# One result per requested volume, in request order, as its single TrimRequest would have
+# answered.
+type TrimVolumesResponse struct {
+	results: list<ForgetVolumeResult>
+}
+
+# A request a client may coalesce into a batch: every replica request, but never another batch.
+type StorageWorkerBatchItem union {
+ GetDiskIncarnationRequest |
+	ClaimRequest | AppendRequest | AdvanceCommittedRequest | TruncateRequest | ReadVolumeLogEntriesRequest |
+	MarkInSyncRequest | LoadVolumeRequest | MarkVolumeDeletedRequest | TrimRequest | ForgetVolumeRequest | ListTabletReplicasRequest |
+	ReadVolumeLogStatusRequest | ForgetVolumesRequest | TrimVolumesRequest
+}
+
+# What the shard would have answered had the item arrived alone.
+type StorageWorkerBatchItemResponse union {
+ GetDiskIncarnationResponse |
+	ReplicaStateResponse | ReadVolumeLogEntriesResponse | ListTabletReplicasResponse | RejectResponse |
+	ReadVolumeLogStatusResponse | ForgetVolumesResponse | TrimVolumesResponse
+}
+
+# Requests a client coalesced for one destination worker while earlier requests to it were in
+# flight. The shard admits and answers each item exactly as if it had arrived alone.
+type StorageWorkerBatchRequest struct {
+	requests: list<StorageWorkerBatchItem>
+}
+
+# One response per batched request, in request order.
+type StorageWorkerBatchResponse struct {
+	responses: list<StorageWorkerBatchItemResponse>
+}
+
+type StorageWorkerRequest union {
+ GetDiskIncarnationRequest |
+	ClaimRequest | AppendRequest | AdvanceCommittedRequest | TruncateRequest | ReadVolumeLogEntriesRequest |
+	MarkInSyncRequest | LoadVolumeRequest | MarkVolumeDeletedRequest | TrimRequest | ForgetVolumeRequest | ListTabletReplicasRequest |
+	ReadVolumeLogStatusRequest | ForgetVolumesRequest | TrimVolumesRequest | StorageWorkerBatchRequest
+}
+
+type StorageWorkerResponse union {
+ GetDiskIncarnationResponse |
+	ReplicaStateResponse | ReadVolumeLogEntriesResponse | ListTabletReplicasResponse | RejectResponse |
+	ReadVolumeLogStatusResponse | ForgetVolumesResponse | TrimVolumesResponse | StorageWorkerBatchResponse
+}
+
+# A real stopping process has already closed its volume clients.
+type Stop void
+
+# An ordinary grant handoff preserves existing clients. Its create barrier lasts until
+# a newer global manifest version fences every CAS prepared against this version.
+type Handoff struct {
+ tabletManifestVersion: u64
+}
+
+# The coordinator confirmed a manifest at this version that changes the named tablet's grant,
+# and the receiver was its maintainer before or is its maintainer now. Best effort: the receiver
+# only reads the manifest at once if its own view is older, never acting on this message, and a
+# lost notice leaves the manifest poll to deliver the grant. The worker incarnation is unused.
+type GrantWritten struct {
+ tabletManifestVersion: u64
+}
+
+type ReadinessPurpose union { Stop | Handoff | GrantWritten }
+
+# Served on the maintainer subject, independently of the disk shard.
+type StopReadiness struct {
+ tabletId: UuidV4
+ tabletGrantEpoch: u64
+ # Grant epochs do not change with membership. Never check an older voting set.
+ tabletReplicaSetVersion: u64
+ workerId: UuidV4
+  # The named process is stopping for Stop, or the current owner for Handoff. A stopping
+  # process closed its volume clients before requesting the stop, so a volume whose newest
+  # claim this process holds has no holder left.
+ workerIncarnation: UuidV4
+ purpose: ReadinessPurpose
+}
+type Ready void
+type NotReady struct { blockingVolumes: u64 sample: list<VolumeBlocker> }
+type StopReadinessResponse union { Ready | NotReady | StaleTabletGrantEpoch | StaleTabletReplicaSet | NotServing | Overloaded }
+
+# Only a handoff reply can certify the create-admission barrier. A plain Ready has no
+# capability or global-manifest fence and must never stand in for this proof.
+type HandoffReady void
+type HandoffNotReady void
+type HandoffNotServing void
+type HandoffReadinessResult union { HandoffReady | HandoffNotReady | HandoffNotServing }
+type HandoffReadinessResponse struct {
+ tabletId: UuidV4
+ tabletGrantEpoch: u64
+ tabletReplicaSetVersion: u64
+ workerId: UuidV4
+ workerIncarnation: UuidV4
+ tabletManifestVersion: u64
+ result: HandoffReadinessResult
+}

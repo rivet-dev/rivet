@@ -1,0 +1,18 @@
+# A SQLite database's recent-page rows, in its `main.db-recent` KV inode. The row `early` holds
+# the pages the last opening read first; the row `frequent` holds the pages read most often
+# across openings. The early pages are delta-coded: each page is the zigzag LEB128 varint of its
+# difference from the page before it, so adjacent pages cost one byte.
+type Frequent struct {
+	pgno: u32
+	count: u32
+}
+
+type Early struct {
+	pages: data
+}
+
+type FrequentSet struct {
+	entries: list<Frequent>
+}
+
+type Data union { Early | FrequentSet }

@@ -1,6 +1,9 @@
 use anyhow::{Result, bail};
-use serde::{Deserialize, Serialize};
-use vbare::OwnedVersionedData;
+use vbare::{
+	Body, Bytes, Converter, DecodeError, DecodeErrorKind, Encode, EncodeError, Message, Sink,
+	Versioned,
+	wire::{self, Wire},
+};
 
 use crate::generated::{v1, v2, v3, v4};
 
@@ -11,8 +14,29 @@ pub enum Actor {
 	V4(v4::Actor),
 }
 
-impl OwnedVersionedData for Actor {
+impl Versioned for Actor {
+	const LATEST: u16 = 4;
+
 	type Latest = v4::Actor;
+
+	/// Latest-version bodies also go through the legacy raw schedule args fallback, so this
+	/// replaces the provided method, which decodes them directly.
+	fn decode_body(body: Bytes, version: u16) -> std::result::Result<Self::Latest, DecodeError> {
+		if version == Self::LATEST {
+			return Self::decode_v4_with_legacy_raw_args_fallback(body)
+				.map_err(DecodeError::conversion);
+		}
+		if version == 0 || version > Self::LATEST {
+			return Err(unsupported_version(format!(
+				"invalid actor persist version: {version}"
+			)));
+		}
+		let mut value = Self::decode_version(version, body)?;
+		for upgrade in Self::UPGRADES.iter().skip(usize::from(version) - 1) {
+			value = upgrade(value).map_err(DecodeError::conversion)?;
+		}
+		value.unwrap_latest().map_err(DecodeError::conversion)
+	}
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
 		Self::V4(latest)
@@ -25,39 +49,55 @@ impl OwnedVersionedData for Actor {
 		}
 	}
 
-	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+	fn decode_version(version: u16, payload: Bytes) -> std::result::Result<Self, DecodeError> {
 		match version {
-			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
-			2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
-			3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
-			4 => Ok(Self::V4(Self::decode_v4_with_legacy_raw_args_fallback(
-				payload,
-			)?)),
-			_ => bail!("invalid actor persist version: {version}"),
+			1 => Ok(Self::V1(Message::decode(payload)?)),
+			2 => Ok(Self::V2(Message::decode(payload)?)),
+			3 => Ok(Self::V3(Message::decode(payload)?)),
+			4 => Ok(Self::V4(
+				Self::decode_v4_with_legacy_raw_args_fallback(payload)
+					.map_err(DecodeError::conversion)?,
+			)),
+			_ => Err(unsupported_version(format!(
+				"invalid actor persist version: {version}"
+			))),
 		}
 	}
 
-	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+	fn encode_version<S: Sink>(
+		&self,
+		version: u16,
+		out: &mut S,
+	) -> std::result::Result<(), EncodeError> {
 		match (self, version) {
-			(Self::V1(data), 1) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
-			(_, version) => bail!("unexpected actor persist version: {version}"),
+			(Self::V1(data), 1) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V2(data), 2) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V3(data), 3) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V4(data), 4) => {
+				data.encode(out);
+				Ok(())
+			}
+			(_, version) => Err(EncodeError::UnsupportedVersion(version)),
 		}
 	}
 
-	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4]
-	}
+	const UPGRADES: &'static [Converter<Self>] = &[Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4];
 
-	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
-	}
+	const DOWNGRADES: &'static [Converter<Self>] =
+		&[Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1];
 }
 
 impl Actor {
-	fn decode_v4_with_legacy_raw_args_fallback(payload: &[u8]) -> Result<v4::Actor> {
+	fn decode_v4_with_legacy_raw_args_fallback(payload: Bytes) -> Result<v4::Actor> {
 		#[derive(serde::Deserialize)]
 		struct LegacyRawV4Actor {
 			input: Option<Vec<u8>>,
@@ -74,38 +114,33 @@ impl Actor {
 			args: Vec<u8>,
 		}
 
-		// serde_bare accepts any nonzero bool as true, so legacy raw args can
-		// sometimes decode as current v4. Only accept canonical current-v4 bytes.
-		let current_error = match serde_bare::from_slice::<v4::Actor>(payload) {
-			Ok(actor) => {
-				if serde_bare::to_vec(&actor).is_ok_and(|encoded| encoded == payload) {
-					return Ok(actor);
-				}
-				None
-			}
-			Err(error) => Some(error),
+		// Legacy raw args can look like current v4 to a lenient decoder. The decoder accepts only
+		// canonical bytes, such as bools of exactly 0 or 1, so a legacy payload never decodes here.
+		let current_error = match v4::Actor::decode(payload.clone()) {
+			Ok(actor) => return Ok(actor),
+			Err(error) => error,
 		};
 
 		// A short-lived v4 writer stored schedule args as raw `data` while
 		// the fixed v4 schema expects `optional<Cbor>`. Decode that reused
 		// version so actors persisted by the bad writer can restart.
-		match serde_bare::from_slice::<LegacyRawV4Actor>(payload) {
+		match serde_bare::from_slice::<LegacyRawV4Actor>(&payload) {
 			Ok(actor) => Ok(v4::Actor {
-				input: actor.input,
+				input: actor.input.map(Into::into),
 				has_initialized: actor.has_initialized,
-				state: actor.state,
+				state: actor.state.into(),
 				scheduled_events: actor
 					.scheduled_events
 					.into_iter()
 					.map(|event| v4::ScheduleEvent {
-						event_id: event.event_id,
+						event_id: event.event_id.into(),
 						timestamp: event.timestamp_ms,
-						action: event.action,
-						args: (!event.args.is_empty()).then_some(event.args),
+						action: event.action.into(),
+						args: (!event.args.is_empty()).then_some(event.args.into()),
 					})
 					.collect(),
 			}),
-			Err(legacy_error) => Err(current_error.unwrap_or(legacy_error).into()),
+			Err(_) => Err(current_error.into()),
 		}
 	}
 
@@ -312,7 +347,9 @@ macro_rules! impl_v4_only {
 			V4($latest_ty),
 		}
 
-		impl OwnedVersionedData for $name {
+		impl Versioned for $name {
+			const LATEST: u16 = 4;
+
 			type Latest = $latest_ty;
 
 			fn wrap_latest(latest: Self::Latest) -> Self {
@@ -325,33 +362,36 @@ macro_rules! impl_v4_only {
 				}
 			}
 
-			fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+			fn decode_version(
+				version: u16,
+				payload: Bytes,
+			) -> std::result::Result<Self, DecodeError> {
 				match version {
-					4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
-					_ => bail!(
+					4 => Ok(Self::V4(Message::decode(payload)?)),
+					_ => Err(unsupported_version(format!(
 						concat!($label, " only exists in actor persist v4, got {}"),
 						version
-					),
+					))),
 				}
 			}
 
-			fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+			fn encode_version<S: Sink>(
+				&self,
+				version: u16,
+				out: &mut S,
+			) -> std::result::Result<(), EncodeError> {
 				match (self, version) {
-					(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
-					(_, version) => bail!(
-						concat!($label, " only exists in actor persist v4, got {}"),
-						version
-					),
+					(Self::V4(data), 4) => {
+						data.encode(out);
+						Ok(())
+					}
+					(_, version) => Err(EncodeError::UnsupportedVersion(version)),
 				}
 			}
 
-			fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-				vec![Ok, Ok, Ok]
-			}
+			const UPGRADES: &'static [Converter<Self>] = &[Ok, Ok, Ok];
 
-			fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-				vec![Ok, Ok, Ok]
-			}
+			const DOWNGRADES: &'static [Converter<Self>] = &[Ok, Ok, Ok];
 		}
 	};
 }
@@ -364,7 +404,9 @@ pub enum Conn {
 	V4(v4::Conn),
 }
 
-impl OwnedVersionedData for Conn {
+impl Versioned for Conn {
+	const LATEST: u16 = 4;
+
 	type Latest = v4::Conn;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
@@ -378,29 +420,37 @@ impl OwnedVersionedData for Conn {
 		}
 	}
 
-	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+	fn decode_version(version: u16, payload: Bytes) -> std::result::Result<Self, DecodeError> {
 		match version {
-			3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
-			4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
-			_ => bail!("connection only exists in actor persist v3+, got {version}"),
+			3 => Ok(Self::V3(Message::decode(payload)?)),
+			4 => Ok(Self::V4(Message::decode(payload)?)),
+			_ => Err(unsupported_version(format!(
+				"connection only exists in actor persist v3+, got {version}"
+			))),
 		}
 	}
 
-	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+	fn encode_version<S: Sink>(
+		&self,
+		version: u16,
+		out: &mut S,
+	) -> std::result::Result<(), EncodeError> {
 		match (self, version) {
-			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
-			(_, version) => bail!("connection only exists in actor persist v3+, got {version}"),
+			(Self::V3(data), 3) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V4(data), 4) => {
+				data.encode(out);
+				Ok(())
+			}
+			(_, version) => Err(EncodeError::UnsupportedVersion(version)),
 		}
 	}
 
-	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Self::v3_to_v4]
-	}
+	const UPGRADES: &'static [Converter<Self>] = &[Ok, Ok, Self::v3_to_v4];
 
-	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v4_to_v3, Ok, Ok]
-	}
+	const DOWNGRADES: &'static [Converter<Self>] = &[Self::v4_to_v3, Ok, Ok];
 }
 
 impl Conn {
@@ -453,45 +503,56 @@ impl Conn {
 	}
 }
 
+/// Implements [`Versioned`] for a single-version envelope `enum $name { V1($latest) }` whose
+/// latest value is a [`vbare::Body`] but not a generated message.
+macro_rules! impl_v1_body {
+	($name:ident, $latest:ty, $label:literal) => {
+		impl Versioned for $name {
+			const LATEST: u16 = 1;
+
+			type Latest = $latest;
+
+			fn wrap_latest(latest: Self::Latest) -> Self {
+				Self::V1(latest)
+			}
+
+			fn unwrap_latest(self) -> Result<Self::Latest> {
+				let Self::V1(latest) = self;
+				Ok(latest)
+			}
+
+			fn decode_version(
+				version: u16,
+				_payload: Bytes,
+			) -> std::result::Result<Self, DecodeError> {
+				Err(unsupported_version(format!(
+					concat!("invalid ", $label, " version: {}"),
+					version
+				)))
+			}
+
+			fn encode_version<S: Sink>(
+				&self,
+				version: u16,
+				out: &mut S,
+			) -> std::result::Result<(), EncodeError> {
+				if version != 1 {
+					return Err(EncodeError::UnsupportedVersion(version));
+				}
+				let Self::V1(latest) = self;
+				latest.put_body(out);
+				Ok(())
+			}
+		}
+	};
+}
+
+/// The physical alarm last pushed to the engine, stored as BARE `optional<i64>`.
 pub enum LastPushedAlarm {
 	V1(Option<i64>),
 }
 
-impl OwnedVersionedData for LastPushedAlarm {
-	type Latest = Option<i64>;
-
-	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V1(latest)
-	}
-
-	fn unwrap_latest(self) -> Result<Self::Latest> {
-		match self {
-			Self::V1(data) => Ok(data),
-		}
-	}
-
-	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-		match version {
-			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
-			_ => bail!("invalid last pushed alarm version: {version}"),
-		}
-	}
-
-	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
-		match (self, version) {
-			(Self::V1(data), 1) => serde_bare::to_vec(&data).map_err(Into::into),
-			(_, version) => bail!("unexpected last pushed alarm version: {version}"),
-		}
-	}
-
-	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		Vec::<fn(Self) -> Result<Self>>::new()
-	}
-
-	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		Vec::<fn(Self) -> Result<Self>>::new()
-	}
-}
+impl_v1_body!(LastPushedAlarm, Option<i64>, "last pushed alarm");
 
 /// Logical run-handler deadline stored separately from the shared physical
 /// alarm. This uses its own versioned type so its persisted meaning cannot be
@@ -501,86 +562,73 @@ pub enum RunWakeAt {
 	V1(Option<i64>),
 }
 
-impl OwnedVersionedData for RunWakeAt {
-	type Latest = Option<i64>;
+impl_v1_body!(RunWakeAt, Option<i64>, "run wake deadline");
 
-	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V1(latest)
-	}
-
-	fn unwrap_latest(self) -> Result<Self::Latest> {
-		match self {
-			Self::V1(data) => Ok(data),
-		}
-	}
-
-	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-		match version {
-			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
-			_ => bail!("invalid run wake deadline version: {version}"),
-		}
-	}
-
-	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
-		match (self, version) {
-			(Self::V1(data), 1) => serde_bare::to_vec(&data).map_err(Into::into),
-			(_, version) => bail!("unexpected run wake deadline version: {version}"),
-		}
-	}
-
-	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		Vec::<fn(Self) -> Result<Self>>::new()
-	}
-
-	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		Vec::<fn(Self) -> Result<Self>>::new()
-	}
-}
-
-/// The span and ray of the last workflow run, which the next run continues.
-#[derive(Debug, Default, Serialize, Deserialize)]
+/// The span and ray of the last workflow run, which the next run continues. It is stored as
+/// three BARE `optional<str>` fields in declaration order.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WorkflowTraceContextV1 {
 	pub ray_id: Option<String>,
 	pub traceparent: Option<String>,
 	pub tracestate: Option<String>,
 }
 
+impl WorkflowTraceContextV1 {
+	fn fields(&self) -> [&Option<String>; 3] {
+		[&self.ray_id, &self.traceparent, &self.tracestate]
+	}
+}
+
+impl Body for WorkflowTraceContextV1 {
+	fn body_len(&self) -> usize {
+		self.fields()
+			.into_iter()
+			.map(|field| match field {
+				Some(value) => {
+					1 + <wire::Uint as Wire>::encoded_len(&(value.len() as u64)) + value.len()
+				}
+				None => 1,
+			})
+			.sum()
+	}
+
+	fn put_body<S: Sink>(&self, out: &mut S) {
+		for field in self.fields() {
+			match field {
+				Some(value) => {
+					out.put_u8(1);
+					vbare::varint::put_uint(out, value.len() as u64);
+					out.put_slice(value.as_bytes());
+				}
+				None => out.put_u8(0),
+			}
+		}
+	}
+
+	fn from_body(bytes: Bytes) -> std::result::Result<Self, DecodeError> {
+		type OptionalStr = wire::Optional<wire::Str>;
+
+		vbare::decode_with(&bytes, |v| {
+			Ok(WorkflowTraceContextV1 {
+				ray_id: OptionalStr::verify_owned(v)?.map(String::from),
+				traceparent: OptionalStr::verify_owned(v)?.map(String::from),
+				tracestate: OptionalStr::verify_owned(v)?.map(String::from),
+			})
+		})
+	}
+}
+
 pub enum WorkflowTraceContext {
 	V1(WorkflowTraceContextV1),
 }
 
-impl OwnedVersionedData for WorkflowTraceContext {
-	type Latest = WorkflowTraceContextV1;
+impl_v1_body!(
+	WorkflowTraceContext,
+	WorkflowTraceContextV1,
+	"workflow trace context"
+);
 
-	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V1(latest)
-	}
-
-	fn unwrap_latest(self) -> Result<Self::Latest> {
-		match self {
-			Self::V1(data) => Ok(data),
-		}
-	}
-
-	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-		match version {
-			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
-			_ => bail!("invalid workflow trace context version: {version}"),
-		}
-	}
-
-	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
-		match (self, version) {
-			(Self::V1(data), 1) => serde_bare::to_vec(&data).map_err(Into::into),
-			(_, version) => bail!("unexpected workflow trace context version: {version}"),
-		}
-	}
-
-	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		Vec::<fn(Self) -> Result<Self>>::new()
-	}
-
-	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		Vec::<fn(Self) -> Result<Self>>::new()
-	}
+/// The error for a version this envelope cannot decode.
+fn unsupported_version(detail: String) -> DecodeError {
+	DecodeError::with_detail(DecodeErrorKind::UnsupportedVersion, 0, detail)
 }

@@ -1,11 +1,10 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
-use reqwest::Method;
 
 use crate::{
-	DEFAULT_CLOUD_API, DEFAULT_NAMESPACE,
-	cloud::{CloudClient, TokenInspectResponse, create_token, ensure_namespace, get_namespace},
-	credentials::resolve_token,
+	DEFAULT_NAMESPACE,
+	cloud::{create_token, ensure_namespace, get_namespace},
+	target::{CloudArgs, ProjectTarget},
 };
 
 #[derive(Parser)]
@@ -52,9 +51,8 @@ impl TokenKind {
 
 #[derive(Parser)]
 pub struct CreateOpts {
-	/// Rivet Cloud API token used to authorize the mint.
-	#[arg(long)]
-	token: Option<String>,
+	#[command(flatten)]
+	cloud: CloudArgs,
 	/// Namespace to mint the token for.
 	#[arg(long, default_value = DEFAULT_NAMESPACE)]
 	namespace: String,
@@ -65,29 +63,18 @@ pub struct CreateOpts {
 	/// namespace must exist.
 	#[arg(long)]
 	create_namespace: bool,
-	/// Override project from /tokens/api/inspect.
-	#[arg(long)]
-	project: Option<String>,
-	/// Override organization from /tokens/api/inspect.
-	#[arg(long)]
-	org: Option<String>,
-	/// Cloud API endpoint.
-	#[arg(long, default_value = DEFAULT_CLOUD_API)]
-	cloud_api: String,
 }
 
 impl CreateOpts {
 	pub async fn execute(self) -> Result<()> {
-		let token = resolve_token(self.token.as_deref())?;
-
-		let cloud = CloudClient::new(&self.cloud_api, token)?;
-		tracing::info!("inspecting Rivet Cloud token");
-		let inspect: TokenInspectResponse = cloud
-			.request(Method::GET, "/tokens/api/inspect", None)
-			.await?
-			.context("token inspect returned no body")?;
-		let project = self.project.unwrap_or(inspect.project);
-		let organization = self.org.unwrap_or(inspect.organization);
+		let (
+			cloud,
+			_,
+			ProjectTarget {
+				org: organization,
+				project,
+			},
+		) = self.cloud.connect_project().await?;
 
 		let namespace = if self.create_namespace {
 			ensure_namespace(&cloud, &project, &organization, &self.namespace).await?

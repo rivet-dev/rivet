@@ -20,7 +20,6 @@ use rivet_envoy_client::protocol;
 use rivet_envoy_client::sqlite::{
 	RemoteSqliteRequest, RemoteSqliteResponse, RemoteSqliteResponseEnvelope,
 };
-use rusqlite::types::{Value, ValueRef};
 use tokio::sync::mpsc;
 
 use crate::ActorConfig;
@@ -28,6 +27,10 @@ use crate::actor::context::ActorContext;
 use crate::actor::kv::LegacyActorKv;
 use crate::sqlite::SqliteDb;
 use crate::types::ActorKey;
+
+#[path = "../tests/support/sqlite_wire.rs"]
+mod sqlite_wire;
+use sqlite_wire::{execute_sqlite, execute_sqlite_batch};
 
 /// Reusable in-memory SQLite store for constructing fully configured contexts.
 /// Contexts created from the same harness observe the same database.
@@ -50,8 +53,16 @@ impl ActorContextHarness {
 	/// Constructs a harness whose actor clients use the provided engine endpoint.
 	pub fn with_client_endpoint(endpoint: impl Into<String>) -> Self {
 		let (handle, receiver) = test_envoy_handle(endpoint.into());
-		spawn_remote_sqlite(receiver);
+		spawn_remote_sqlite(receiver, None);
 		Self { handle }
+	}
+
+	/// Keeps actor intent messages observable while servicing SQLite requests.
+	pub fn with_intents() -> (Self, mpsc::UnboundedReceiver<ToEnvoyMessage>) {
+		let (handle, receiver) = test_envoy_handle("http://127.0.0.1:1".to_owned());
+		let (intent_tx, intent_rx) = mpsc::unbounded_channel();
+		spawn_remote_sqlite(receiver, Some(intent_tx));
+		(Self { handle }, intent_rx)
 	}
 
 	pub fn context(
@@ -89,7 +100,7 @@ impl ActorContextHarness {
 			key,
 			region.into(),
 			generation,
-			self.handle.get_envoy_key(),
+			self.handle.get_envoy_key().to_owned(),
 			config,
 			LegacyActorKv::new(self.handle.clone(), actor_id),
 			sql,
@@ -176,9 +187,16 @@ fn test_envoy_handle(endpoint: String) -> (EnvoyHandle, mpsc::UnboundedReceiver<
 			metadata: None,
 			not_global: true,
 			debug_latency_ms: None,
+			max_queued_requests_per_actor:
+				rivet_envoy_client::config::DEFAULT_MAX_QUEUED_REQUESTS_PER_ACTOR,
+			stopped_generation_floor_ttl:
+				rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_TTL,
+			stopped_generation_floor_capacity:
+				rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_CAPACITY,
 			callbacks: Arc::new(IdleEnvoyCallbacks),
+			connector: None,
 		},
-		envoy_key: parking_lot::RwLock::new("test-envoy".to_owned()),
+		envoy_key: "test-envoy".to_owned(),
 		envoy_tx,
 		actors: Default::default(),
 		actors_notify: Arc::new(tokio::sync::Notify::new()),
@@ -194,12 +212,20 @@ fn test_envoy_handle(endpoint: String) -> (EnvoyHandle, mpsc::UnboundedReceiver<
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
-		stopped_tx: tokio::sync::watch::channel(true).0,
+		last_contact_ms: std::sync::atomic::AtomicI64::new(0),
+		contact_before_install_ms: std::sync::atomic::AtomicI64::new(0),
+		stopped_tx: tokio::sync::watch::channel(
+			rivet_envoy_client::context::StopStatus::Interrupted,
+		)
+		.0,
 	});
 	(EnvoyHandle::from_shared(shared), envoy_rx)
 }
 
-fn spawn_remote_sqlite(mut receiver: mpsc::UnboundedReceiver<ToEnvoyMessage>) {
+fn spawn_remote_sqlite(
+	mut receiver: mpsc::UnboundedReceiver<ToEnvoyMessage>,
+	intent_tx: Option<mpsc::UnboundedSender<ToEnvoyMessage>>,
+) {
 	std::thread::spawn(move || {
 		let conn =
 			rusqlite::Connection::open_in_memory().expect("test sqlite connection should open");
@@ -217,6 +243,11 @@ fn spawn_remote_sqlite(mut receiver: mpsc::UnboundedReceiver<ToEnvoyMessage>) {
 					response_tx,
 				} = message
 				else {
+					if matches!(message, ToEnvoyMessage::ActorIntent { .. }) {
+						if let Some(sender) = &intent_tx {
+							let _ = sender.send(message);
+						}
+					}
 					continue;
 				};
 				let response = match request {
@@ -237,137 +268,5 @@ fn spawn_remote_sqlite(mut receiver: mpsc::UnboundedReceiver<ToEnvoyMessage>) {
 	});
 }
 
-fn execute_sqlite_batch(
-	conn: &rusqlite::Connection,
-	request: protocol::SqliteExecuteBatchRequest,
-) -> protocol::SqliteExecuteBatchResponse {
-	let result = (|| {
-		conn.execute_batch("BEGIN")?;
-		let mut results = Vec::with_capacity(request.statements.len());
-		for statement in request.statements {
-			let result = execute_sqlite_inner(
-				conn,
-				protocol::SqliteExecuteRequest {
-					namespace_id: request.namespace_id.clone(),
-					actor_id: request.actor_id.clone(),
-					generation: request.generation,
-					sql: statement.sql,
-					params: statement.params,
-				},
-			);
-			match result {
-				Ok(result) => results.push(result),
-				Err(error) => {
-					let _ = conn.execute_batch("ROLLBACK");
-					return Err(error);
-				}
-			}
-		}
-		conn.execute_batch("COMMIT")?;
-		Ok(results)
-	})();
-	match result {
-		Ok(results) => protocol::SqliteExecuteBatchResponse::SqliteExecuteBatchOk(
-			protocol::SqliteExecuteBatchOk { results },
-		),
-		Err(error) => protocol::SqliteExecuteBatchResponse::SqliteErrorResponse(
-			protocol::SqliteErrorResponse {
-				group: "sqlite".to_owned(),
-				code: "internal_error".to_owned(),
-				message: error.to_string(),
-			},
-		),
-	}
-}
-
-fn execute_sqlite(
-	conn: &rusqlite::Connection,
-	request: protocol::SqliteExecuteRequest,
-) -> protocol::SqliteExecuteResponse {
-	match execute_sqlite_inner(conn, request) {
-		Ok(result) => {
-			protocol::SqliteExecuteResponse::SqliteExecuteOk(protocol::SqliteExecuteOk { result })
-		}
-		Err(error) => {
-			protocol::SqliteExecuteResponse::SqliteErrorResponse(protocol::SqliteErrorResponse {
-				group: "sqlite".to_owned(),
-				code: "internal_error".to_owned(),
-				message: error.to_string(),
-			})
-		}
-	}
-}
-
-fn execute_sqlite_inner(
-	conn: &rusqlite::Connection,
-	request: protocol::SqliteExecuteRequest,
-) -> rusqlite::Result<protocol::SqliteExecuteResult> {
-	let params = request
-		.params
-		.unwrap_or_default()
-		.into_iter()
-		.map(sqlite_param_value)
-		.collect::<Vec<_>>();
-	let mut statement = conn.prepare(&request.sql)?;
-	let columns = statement
-		.column_names()
-		.into_iter()
-		.map(ToOwned::to_owned)
-		.collect::<Vec<_>>();
-	let mut result_rows = Vec::new();
-	if statement.column_count() == 0 {
-		statement.execute(rusqlite::params_from_iter(params.iter()))?;
-	} else {
-		let column_count = statement.column_count();
-		let mut rows = statement.query(rusqlite::params_from_iter(params.iter()))?;
-		while let Some(row) = rows.next()? {
-			let mut values = Vec::with_capacity(column_count);
-			for index in 0..column_count {
-				values.push(sqlite_column_value(row.get_ref(index)?));
-			}
-			result_rows.push(values);
-		}
-	}
-	Ok(protocol::SqliteExecuteResult {
-		columns,
-		rows: result_rows,
-		changes: conn.changes() as i64,
-		last_insert_row_id: Some(conn.last_insert_rowid()),
-	})
-}
-
-fn sqlite_param_value(param: protocol::SqliteBindParam) -> Value {
-	match param {
-		protocol::SqliteBindParam::SqliteValueNull => Value::Null,
-		protocol::SqliteBindParam::SqliteValueInteger(value) => Value::Integer(value.value),
-		protocol::SqliteBindParam::SqliteValueFloat(value) => {
-			Value::Real(f64::from_bits(u64::from_be_bytes(value.value)))
-		}
-		protocol::SqliteBindParam::SqliteValueText(value) => Value::Text(value.value),
-		protocol::SqliteBindParam::SqliteValueBlob(value) => Value::Blob(value.value),
-	}
-}
-
-fn sqlite_column_value(value: ValueRef<'_>) -> protocol::SqliteColumnValue {
-	match value {
-		ValueRef::Null => protocol::SqliteColumnValue::SqliteValueNull,
-		ValueRef::Integer(value) => {
-			protocol::SqliteColumnValue::SqliteValueInteger(protocol::SqliteValueInteger { value })
-		}
-		ValueRef::Real(value) => {
-			protocol::SqliteColumnValue::SqliteValueFloat(protocol::SqliteValueFloat {
-				value: value.to_bits().to_be_bytes(),
-			})
-		}
-		ValueRef::Text(value) => {
-			protocol::SqliteColumnValue::SqliteValueText(protocol::SqliteValueText {
-				value: String::from_utf8_lossy(value).into_owned(),
-			})
-		}
-		ValueRef::Blob(value) => {
-			protocol::SqliteColumnValue::SqliteValueBlob(protocol::SqliteValueBlob {
-				value: value.to_vec(),
-			})
-		}
-	}
-}
+#[path = "../tests/support/legacy_migration.rs"]
+mod legacy_migration;

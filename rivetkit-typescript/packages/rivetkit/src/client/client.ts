@@ -14,6 +14,7 @@ import {
 import { type ActorHandle, ActorHandleRaw } from "./actor-handle";
 import { logger } from "./log";
 import { resolveGatewayTarget } from "./resolve-gateway-target";
+import { type RetryBudgetOptions, RetryBudget } from "./retry-budget";
 
 export type { ClientConfig, ClientConfigInput } from "./config";
 
@@ -181,6 +182,8 @@ export const CREATE_ACTOR_CONN_PROXY = Symbol("createActorConnProxy");
 export interface ClientRawOptions {
 	encoding?: Encoding;
 	gateway?: ActorGatewayOptions;
+	/** Bounds retries of refused requests across every handle of this client. */
+	retryBudget?: RetryBudgetOptions;
 }
 
 /** Runtime-supplied wiring for clients created inside an actor. Set only by the native runtime. */
@@ -211,6 +214,7 @@ export class ClientRaw {
 	#gatewayOptions: ActorGatewayOptions;
 	#currentActorInvocation?: CurrentActorInvocation;
 	#startCallSpan?: StartCallSpan;
+	#retryBudget: RetryBudget;
 
 	/**
 	 * Creates an instance of Client.
@@ -228,6 +232,7 @@ export class ClientRaw {
 		this.#gatewayOptions = options.gateway ?? {};
 		this.#currentActorInvocation = options.currentActorInvocation;
 		this.#startCallSpan = options.startCallSpan;
+		this.#retryBudget = new RetryBudget(options.retryBudget);
 	}
 
 	/**
@@ -431,6 +436,7 @@ export class ClientRaw {
 			signal,
 			this.#currentActorInvocation,
 			this.#startCallSpan,
+			this.#retryBudget,
 		);
 	}
 

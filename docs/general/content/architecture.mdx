@@ -4,38 +4,30 @@ description: "How object storage, the control plane, and nodes work together to 
 skill: true
 ---
 
-Rivet has three parts: **object storage** keeps Actor data, the **control plane** schedules Actors and routes requests, and **actor nodes** run your code.
+Rivet has three parts: **object storage** keeps Actor data, the **control plane** schedules Actors and routes requests, and **nodes** run your code.
 
-<svg viewBox="0 0 640 292" role="img" aria-label="Clients send requests to the backend's control plane. Actor nodes running your code connect bidirectionally to the control plane, which persists Actor data to object storage such as S3." style="width:100%;max-width:640px;height:auto;display:block;margin:2.5rem auto;font-family:system-ui,sans-serif">
-  <defs><marker id="architecture-overview-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="rgb(var(--site-pine, 46 64 52))"/></marker></defs>
-  <rect x="20" y="140" width="600" height="132" rx="10" fill="rgb(var(--site-paper-mid, 250 248 243))" stroke="rgb(var(--site-pine, 46 64 52))" stroke-width="1.4" stroke-dasharray="7 6"/>
-  <text x="36" y="161" font-size="11" font-family="ui-monospace,monospace" font-weight="600" letter-spacing="0.14em" fill="rgb(var(--site-pine, 46 64 52))">BACKEND</text>
-  <rect x="245" y="20" width="150" height="84" rx="7" fill="rgb(var(--site-surface, 255 255 255))" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4"/>
-  <g transform="translate(310 33)" stroke="rgb(var(--site-pine, 46 64 52))" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="0" y="2" width="20" height="13" rx="2"/><path d="M7 19h6M10 15v4"/></g>
-  <text x="320" y="73" text-anchor="middle" font-size="13" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Clients</text>
-  <text x="320" y="90" text-anchor="middle" font-size="11" fill="rgb(var(--site-ink-soft, 86 82 74))">Browsers, apps</text>
-  <rect x="40" y="172" width="150" height="84" rx="7" fill="rgb(var(--site-surface, 255 255 255))" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4"/>
-  <g transform="translate(105 185)" stroke="rgb(var(--site-pine, 46 64 52))" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="12" height="12" rx="2"/><rect x="8" y="8" width="4" height="4"/><path d="M7 1v3M13 1v3M7 16v3M13 16v3M1 7h3M1 13h3M16 7h3M16 13h3"/></g>
-  <text x="115" y="225" text-anchor="middle" font-size="13" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Actor nodes</text>
-  <text x="115" y="242" text-anchor="middle" font-size="11" fill="rgb(var(--site-ink-soft, 86 82 74))">Your code</text>
-  <rect x="245" y="172" width="150" height="84" rx="7" fill="rgb(var(--site-pine, 46 64 52) / 0.12)" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4"/>
-  <g transform="translate(310 185)" stroke="rgb(var(--site-pine, 46 64 52))" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="3"/><circle cx="3" cy="3" r="2"/><circle cx="17" cy="3" r="2"/><circle cx="3" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M4.5 4.5L8 8M15.5 4.5L12 8M4.5 15.5L8 12M15.5 15.5L12 12"/></g>
-  <text x="320" y="225" text-anchor="middle" font-size="13" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Control plane</text>
-  <text x="320" y="242" text-anchor="middle" font-size="11" fill="rgb(var(--site-ink-soft, 86 82 74))">Schedule, route, persist</text>
-  <rect x="450" y="172" width="150" height="84" rx="7" fill="rgb(var(--site-surface, 255 255 255))" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4"/>
-  <g transform="translate(515 185)" stroke="rgb(var(--site-pine, 46 64 52))" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="10" cy="4" rx="8" ry="3"/><path d="M2 4v12c0 1.7 3.6 3 8 3s8-1.3 8-3V4M2 10c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
-  <text x="525" y="225" text-anchor="middle" font-size="13" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Object storage</text>
-  <text x="525" y="242" text-anchor="middle" font-size="11" fill="rgb(var(--site-ink-soft, 86 82 74))">S3, GCS or Azure</text>
-  <g stroke="rgb(var(--site-pine, 46 64 52))" stroke-width="1.4" fill="none">
-    <line x1="320" y1="105" x2="320" y2="171" marker-end="url(#architecture-overview-arrow)"/>
-    <line x1="191" y1="214" x2="244" y2="214" marker-start="url(#architecture-overview-arrow)" marker-end="url(#architecture-overview-arrow)"/>
-    <line x1="396" y1="214" x2="449" y2="214" marker-end="url(#architecture-overview-arrow)"/>
+<svg viewBox="0 0 760 150" role="img" aria-label="Object storage such as S3 connects bidirectionally to the control plane, which connects bidirectionally to nodes running your code." style="width:100%;max-width:760px;height:auto;display:block;margin:2rem auto;font-family:inherit">
+  <defs><marker id="architecture-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="rgb(var(--runtime-highlight))"/></marker></defs>
+  <g fill="none" stroke="rgb(var(--runtime-highlight))" stroke-width="1.5">
+    <rect x="10" y="30" width="190" height="85" rx="8"/>
+    <rect x="285" y="30" width="190" height="85" rx="8"/>
+    <rect x="560" y="30" width="190" height="85" rx="8"/>
+    <path d="M205 72 H280" marker-start="url(#architecture-arrow)" marker-end="url(#architecture-arrow)"/>
+    <path d="M480 72 H555" marker-start="url(#architecture-arrow)" marker-end="url(#architecture-arrow)"/>
+  </g>
+  <g text-anchor="middle" fill="currentColor">
+    <text x="105" y="65" font-size="16" font-weight="600">Object storage</text>
+    <text x="105" y="88" font-size="13">S3, GCS, or Azure</text>
+    <text x="380" y="65" font-size="16" font-weight="600">Control plane</text>
+    <text x="380" y="88" font-size="13">Schedule, route, persist</text>
+    <text x="655" y="65" font-size="16" font-weight="600">Nodes</text>
+    <text x="655" y="88" font-size="13">Your code</text>
   </g>
 </svg>
 
-## Actor nodes
+## Nodes
 
-An actor node is a process running your app with the Rivet SDK, started with `registry.start()`. It opens an outbound connection to the control plane and hosts the Actors assigned to it. Nodes need no public URL or inbound port for Actor traffic. Add nodes when you need more capacity.
+A node is a process running your app with the Rivet SDK, started with `registry.start()`. It opens an outbound connection to the control plane and hosts the Actors assigned to it. Nodes need no public URL or inbound port for Actor traffic. Add nodes when you need more capacity.
 
 ## Control plane
 
@@ -55,4 +47,4 @@ A namespace separates Actors, keys, and node pools. For example, use `production
 
 ## Node pools
 
-A node pool groups nodes by name within a namespace. Configure a pool before connecting nodes to it. A node joins the pool selected by `RIVET_POOL`, which defaults to `default`. For example, create a `gpu` pool for Actors that need GPUs alongside a `default` pool for the rest. See [Nodes & Node Pools](/docs/nodes).
+A node pool groups nodes by name within a namespace. Configure a pool before connecting nodes to it. A node joins the pool selected by `RIVET_POOL`, which defaults to `default`. For example, create a `gpu` pool for Actors that need GPUs alongside a `default` pool for the rest. See [Node Pool Configuration](/docs/pool-configuration).

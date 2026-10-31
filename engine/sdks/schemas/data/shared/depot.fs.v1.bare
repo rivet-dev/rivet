@@ -1,0 +1,187 @@
+#import "shared/depot.types.v1.bare"
+
+type FsKind enum { FILE DIR SYMLINK FIFO SOCKET CHARDEV BLOCKDEV KV }
+type FsTimes struct { atime: i64 mtime: i64 ctime: i64 }
+type FsInode struct {
+    kind: FsKind
+    mode: u32
+    uid: u32
+    gid: u32
+    rdev: u64
+    size: u64
+    nlink: u64
+    times: FsTimes
+    parent: u64
+    inline: optional<data>
+    # Highest inherited byte exclusive. Shrink only lowers this; seq-0 copies
+    # remain inherited, while positive-seq local writes take precedence.
+    inheritedLimit: optional<u64>
+    target: data
+    entries: u64
+    xattrs: u64
+}
+type FsDentry struct { child: u64 kind: FsKind }
+type FsDeleted void
+type FsPresent void
+type FsBytes data
+
+type FsInodeUpdate struct { ino: u64 inode: FsInode }
+type FsChunkUpdate struct { index: u64 bytes: data }
+
+# Complete postimages avoid replay-time reads of partially updated inodes.
+type FsCreate struct { parent: FsInodeUpdate name: data inode: FsInode }
+type FsMkdir struct { parent: FsInodeUpdate name: data inode: FsInode }
+type FsSymlink struct { parent: FsInodeUpdate name: data inode: FsInode }
+type FsMknod struct { parent: FsInodeUpdate name: data inode: FsInode }
+# Immutable filesystem format, persisted atomically with the initial root.
+type FsFormat struct { inlineMaxBytes: u64 }
+type FsRoot struct { inode: FsInode format: FsFormat }
+type FsLink struct { parent: FsInodeUpdate name: data target: FsInodeUpdate }
+type FsUnlink struct { parent: FsInodeUpdate name: data target: FsInodeUpdate }
+type FsRename struct {
+    fromParent: FsInodeUpdate
+    fromName: data
+    toParent: FsInodeUpdate
+    toName: data
+    target: FsInodeUpdate
+    replaced: optional<FsInodeUpdate>
+}
+type FsSetAttr struct { target: FsInodeUpdate chunks: list<FsChunkUpdate> dropChunksFrom: optional<u64> }
+type FsWrite struct { target: FsInodeUpdate chunks: list<FsChunkUpdate> }
+type FsSetXattr struct { target: FsInodeUpdate name: data value: data }
+type FsRemoveXattr struct { target: FsInodeUpdate name: data }
+type FsReclaim struct { ino: u64 }
+type FsKvPut struct { ino: u64 key: data value: data }
+type FsKvDelete struct { ino: u64 key: data }
+type FsKvDeleteRange struct { ino: u64 start: data end: optional<data> }
+type FsCheckpoint struct { name: data createdAt: i64 }
+
+
+type FsVolumeCheckpoint struct { named: bool retention: bool createdAt: i64 clientEpoch: u64 }
+type FsForkHold struct { forkVolumeKey: VolumeKey forkRegion: u16 createdAt: i64 }
+type FsBaseLink struct {
+    volumeKey: VolumeKey
+    incarnation: UuidV4
+    checkpointName: data
+    position: VolumeLogPosition
+    region: optional<u16>
+}
+type FsVolumeStatus enum { LIVE DELETED }
+type FsRetentionPolicy struct { intervalMs: u64 count: u32 }
+# Last 64 mutation identities, ordered by client sequence. Flushed atomically with
+# the cold watermark so trimming cannot erase proof of an uncertain write.
+type FsWriteReceipt struct { clientSeq: u64 requestId: UuidV4 payloadDigest: data[16] volumeSeq: u64 }
+type FsVolumeRecord struct {
+    partitionKey: data
+    name: optional<data>
+    volumeIncarnation: UuidV4
+    status: FsVolumeStatus
+    cold: VolumeLogPosition
+    baseChain: list<FsBaseLink>
+    retention: optional<FsRetentionPolicy>
+    recentWrites: list<FsWriteReceipt>
+    # Orders the incarnations of one name: drawn from the tablet's claim epoch counter when
+    # the incarnation is created, so a later incarnation always has a higher one. The name's
+    # pointer row holds the stored record with the highest.
+    incarnationEpoch: u64
+}
+
+# Discovery is an index into the exact ForkReference receipt, which owns the
+# destination region and resolved checkpoint. It never resolves a selector again.
+type FsPendingForkCheck struct { forkIncarnation: UuidV4 createdAt: i64 }
+type FsChunkPosition struct { ino: u64 index: u64 }
+# Enumerate sparse chunk keys one base layer at a time. Every candidate is
+# resolved through the complete fixed image before copying it at sequence zero.
+type FsMaterializeCursor struct { layer: u32 after: optional<FsChunkPosition> completeImage: bool }
+type FsPendingMaterialize struct { incarnation: UuidV4 cursor: FsMaterializeCursor }
+type FsPendingSweep struct { incarnation: UuidV4 cursor: optional<data> }
+type FsDirectoryCursor struct {
+    incarnation: UuidV4
+    session: UuidV4
+    directory: u64
+    appliedSeq: u64
+    lastName: data
+}
+
+# Exact identity remains available after writer changes and across restore.
+type FsCheckpointInfo struct {
+    name: data
+    volumeIncarnation: UuidV4
+    position: VolumeLogPosition
+    checkpoint: FsVolumeCheckpoint
+}
+
+
+# Fork commands use topology's regional datacenter label, never a worker ID.
+# The operation ID is also the new incarnation and remains stable across retries.
+type FsForkLatest void
+type FsForkNamed struct { incarnation: optional<UuidV4> name: data }
+type FsForkAtTime struct { unixMs: i64 }
+type FsForkSelector union { FsForkLatest | FsForkNamed | FsForkAtTime }
+type FsForkMinimum struct { incarnation: UuidV4 position: VolumeLogPosition }
+type FsForkSpec struct {
+    operationId: UuidV4
+    parentVolumeKey: VolumeKey
+    parentRegion: u16
+    destinationVolumeKey: VolumeKey
+    destinationRegion: u16
+    selector: FsForkSelector
+    minimum: optional<FsForkMinimum>
+    # A restore must still replace this exact incarnation at publication.
+    restore: optional<UuidV4>
+}
+# Administrative ops, each applied in log order by the cold apply, so a crash replays them
+# with the entries around them. Each stands alone in its entry, outside any transaction.
+#
+# Clears the `named` flag of checkpoint `name` of `incarnation` (this volume's or an older
+# one). The last hold removes the row; an older incarnation nothing else retains is then
+# marked for sweeping.
+type FsCheckpointRelease struct { name: data incarnation: UuidV4 }
+# Sets this volume's retention policy; absent restores the default.
+type FsRetentionSet struct { policy: optional<FsRetentionPolicy> }
+# Removes the hold this fork has on this volume. With no reference it keeps the terminal
+# `Released` receipt that fences a late acquire.
+type FsForkHoldRelease struct { spec: FsForkSpec }
+# Removes only the pending check of a fork the check found present.
+type FsForkCheckDone struct { spec: FsForkSpec }
+
+type FsOp union {
+    FsRoot | FsCreate | FsMkdir | FsSymlink | FsMknod | FsLink | FsUnlink |
+    FsRename | FsSetAttr | FsWrite | FsSetXattr | FsRemoveXattr | FsReclaim |
+    FsKvPut | FsKvDelete | FsKvDeleteRange | FsCheckpoint |
+    FsCheckpointRelease | FsRetentionSet | FsForkHoldRelease | FsForkCheckDone
+}
+type FsForkImage struct { link: FsBaseLink parentBase: list<FsBaseLink> }
+type FsForkReceipt struct { spec: FsForkSpec image: FsForkImage }
+# This receipt survives removal of the discovery check. A delayed duplicate
+# AddForkReference must not resolve Latest against a newer source incarnation.
+type FsForkReferenceHeld struct { receipt: FsForkReceipt createdAt: i64 }
+# A terminal receipt rejects late duplicate acquires after the fork was deleted.
+type FsForkReferenceReleased struct { spec: FsForkSpec }
+type FsForkReference union { FsForkReferenceHeld | FsForkReferenceReleased }
+type FsForkAcquirePending void
+type FsForkCopying struct { image: FsForkImage cursor: optional<data> }
+type FsForkReady struct { image: FsForkImage }
+type FsForkPreparation union { FsForkAcquirePending | FsForkCopying | FsForkReady }
+type FsPendingFork struct { spec: FsForkSpec preparation: FsForkPreparation }
+# The current record is authoritative while it names this incarnation. On
+# replacement or logical deletion this archive retains its exact source chain.
+type FsIncarnationRecord struct { record: FsVolumeRecord creation: optional<FsForkReceipt> }
+# Written atomically with removal of links, deleted only after source confirms.
+type FsPendingForkRelease struct { spec: FsForkSpec }
+
+
+type FsForkError enum {
+    INVALID BUSY DESTINATION_EXISTS OPERATION_CONFLICT FORK_DELETED
+    VOLUME_NOT_FOUND VOLUME_DELETED INCARNATION_CHANGED LAGGING
+    CHECKPOINT_NOT_FOUND CHECKPOINT_NOT_REACHABLE CHECKPOINT_AMBIGUOUS
+    FORK_OUT_OF_RETENTION FORK_CHAIN_TOO_DEEP BASE_UNAVAILABLE REGION_UNAVAILABLE
+}
+
+# A point from the source enumeration with its fully resolved image bytes.
+type FsMaterializedChunk struct { position: FsChunkPosition bytes: optional<data> }
+
+# Terminal negative identity survives releasing the logical destination name.
+type FsForkFailure struct { spec: FsForkSpec error: FsForkError }
+
+type FsForkPresence enum { PREPARING PRESENT ABSENT }

@@ -43,10 +43,16 @@ export interface DiscoverPackagesOptions {
  * `publishAll`, and any future consumer.
  */
 export const EXCLUDED = new Set<string>([
+	// Serverless is disabled for v3; retain the package sources for later.
+	"@rivetkit/cloudflare-workers",
+	"@rivetkit/supabase",
+	"@rivetkit/next-js",
 	"@rivetkit/shared-data",
 	"@rivetkit/engine-frontend",
 	"@rivetkit/sqlite-native",
 	"@rivetkit/sqlite-wasm",
+	"@rivet-dev/services",
+	"@rivet-dev/mcp",
 ]);
 
 /**
@@ -86,7 +92,9 @@ export const META_PACKAGES: readonly MetaPackageSpec[] = [
  * scope is mostly private infrastructure, so it is opt-in by name rather than
  * by prefix. Absent from a workspace (OSS checkouts) they are simply skipped.
  */
-export const RIVET_DEV_PACKAGES = new Set<string>(["@rivet-dev/workflow-world"]);
+export const RIVET_DEV_PACKAGES = new Set<string>([
+	"@rivet-dev/workflow-world",
+]);
 
 /**
  * Packages released on their own version line. A release keeps the version in
@@ -95,11 +103,7 @@ export const RIVET_DEV_PACKAGES = new Set<string>(["@rivet-dev/workflow-world"])
  */
 export const INDEPENDENT_VERSION_PACKAGES = new Set<string>([]);
 
-export const RELEASE_ONLY_PACKAGES = new Set<string>([
-	"@rivetkit/rivetkit-napi-win32-x64-msvc",
-	"@rivetkit/engine-cli-win32-x64",
-	"@rivetkit/cli-win32-x64",
-]);
+export const RELEASE_ONLY_PACKAGES = new Set<string>();
 
 function isPublishable(pkg: { name?: string; private?: boolean }): boolean {
 	if (!pkg.name) return false;

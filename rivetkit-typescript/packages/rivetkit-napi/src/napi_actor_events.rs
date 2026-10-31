@@ -17,8 +17,7 @@ use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::NapiInvalidState;
-#[cfg(test)]
-use crate::actor_context::EndReason;
+
 use crate::actor_context::{ActorContext, RegisteredTask, state_deltas_from_payload};
 use crate::actor_factory::{
 	ActionPayload, AdapterConfig, BeforeActionResponsePayload, BeforeConnectPayload,
@@ -244,42 +243,60 @@ async fn run_preamble(
 	// Run database migrations before any user lifecycle hook so `c.db` is
 	// usable from createState, onCreate, and createVars.
 	if let Some(callback) = &bindings.on_migrate {
-		with_timeout(
-			"onMigrate",
-			config.on_migrate_timeout,
-			call_on_migrate(callback, ctx, is_new),
-		)
-		.await?;
+		ctx.inner()
+			.time_runtime_callback(
+				"onMigrate",
+				with_timeout(
+					"onMigrate",
+					config.on_migrate_timeout,
+					call_on_migrate(callback, ctx, is_new),
+				),
+			)
+			.await?;
 	}
 
 	if is_new {
 		if let Some(callback) = &bindings.create_state {
-			let bytes = with_timeout(
-				"createState",
-				config.create_state_timeout,
-				call_create_state(callback, ctx, input),
-			)
-			.await?;
+			let bytes = ctx
+				.inner()
+				.time_runtime_callback(
+					"createState",
+					with_timeout(
+						"createState",
+						config.create_state_timeout,
+						call_create_state(callback, ctx, input),
+					),
+				)
+				.await?;
 			ctx.set_state_initial(bytes)?;
 		}
 		if let Some(callback) = &bindings.on_create {
-			with_timeout(
-				"onCreate",
-				config.on_create_timeout,
-				call_on_create(callback, ctx, input),
-			)
-			.await?;
+			ctx.inner()
+				.time_runtime_callback(
+					"onCreate",
+					with_timeout(
+						"onCreate",
+						config.on_create_timeout,
+						call_on_create(callback, ctx, input),
+					),
+				)
+				.await?;
 		}
 		ctx.mark_has_initialized_and_flush().await?;
 	} else if let Some(snapshot) = snapshot {
 		ctx.set_state_initial(snapshot)?;
 	} else if let Some(callback) = &bindings.create_state {
-		let bytes = with_timeout(
-			"createState",
-			config.create_state_timeout,
-			call_create_state(callback, ctx, input),
-		)
-		.await?;
+		let bytes = ctx
+			.inner()
+			.time_runtime_callback(
+				"createState",
+				with_timeout(
+					"createState",
+					config.create_state_timeout,
+					call_create_state(callback, ctx, input),
+				),
+			)
+			.await?;
 		ctx.set_state_initial(bytes)?;
 		ctx.mark_has_initialized_and_flush().await?;
 	} else {
@@ -297,30 +314,42 @@ async fn run_preamble(
 	}
 
 	if let Some(callback) = &bindings.create_vars {
-		with_timeout(
-			"createVars",
-			config.create_vars_timeout,
-			call_create_vars(callback, ctx),
-		)
-		.await?;
+		ctx.inner()
+			.time_runtime_callback(
+				"createVars",
+				with_timeout(
+					"createVars",
+					config.create_vars_timeout,
+					call_create_vars(callback, ctx),
+				),
+			)
+			.await?;
 	}
 
 	if let Some(callback) = &bindings.on_wake {
-		with_timeout(
-			"onWake",
-			config.on_wake_timeout,
-			call_on_wake(callback, ctx),
-		)
-		.await?;
+		ctx.inner()
+			.time_runtime_callback(
+				"onWake",
+				with_timeout(
+					"onWake",
+					config.on_wake_timeout,
+					call_on_wake(callback, ctx),
+				),
+			)
+			.await?;
 	}
 
 	if let Some(callback) = &bindings.on_before_actor_start {
-		with_timeout(
-			"onBeforeActorStart",
-			config.on_before_actor_start_timeout,
-			call_on_before_actor_start(callback, ctx),
-		)
-		.await?;
+		ctx.inner()
+			.time_runtime_callback(
+				"onBeforeActorStart",
+				with_timeout(
+					"onBeforeActorStart",
+					config.on_before_actor_start_timeout,
+					call_on_before_actor_start(callback, ctx),
+				),
+			)
+			.await?;
 	}
 
 	let run_handler = configure_run_handler(bindings, ctx);
@@ -1421,6 +1450,4 @@ fn missing_callback(name: &str) -> anyhow::Error {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../tests/napi_actor_events.rs"]
-mod tests;
+

@@ -1,5 +1,0 @@
-{
-  "code": "websocket_service_hibernate",
-  "group": "guard",
-  "message": "Initiate WebSocket service hibernation."
-}

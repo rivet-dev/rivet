@@ -1,0 +1,5 @@
+{
+  "code": "dispatch_rejected",
+  "group": "ups",
+  "message": "The caller revoked the request before dispatch."
+}

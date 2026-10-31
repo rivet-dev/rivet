@@ -5,7 +5,7 @@
 //! it decides which destinations are reachable, and supplies the resolver and redirect policy that
 //! enforce that decision at connect time.
 //!
-//! Clients are built in `rivet_pools::reqwest`, which owns every `reqwest::Client` in the process.
+//! Clients are built in `rivet_engine_context::reqwest`, which owns every `reqwest::Client` in the process.
 
 mod client;
 mod policy;

@@ -1,12 +1,10 @@
 # Rust
 lib/**/Cargo.lock
 !lib/bolt/Cargo.lock
-
 # Allows symlinking target instead of being a directory
 **/target
 **/target/
 **/*.rustfmt
-
 # Turborepo
 **/.turbo
 
@@ -29,8 +27,6 @@ pnpm-debug.log*
 # TypeScript
 *.tsbuildinfo
 dist/
-frontend/build/
-!frontend/packages/icons/dist/
 
 # IDE
 .vscode/
@@ -44,17 +40,11 @@ Thumbs.db
 
 secrets/**/*
 
-tf/.terraform/**/*
-tf/.terraform.lock.hcl
+*.tfstate*
+**/.terraform/**/*
+**/.terraform.lock.hcl
 
 # Frontend
-frontend/.env.*
-frontend/dist/
-frontend/node_modules/
-frontend/.tanstack
-frontend/.auth/
-frontend/playwright-report/
-frontend/test-results/
 
 # Site
 website/out/
@@ -90,9 +80,16 @@ scripts/ralph/codex-streams/
 # Agent working files now live user-scoped in ~/.agents (or $AGENTS_DIR).
 # This entry is a safety net so a stray in-repo .agent/ never gets committed.
 .agent/
-.amp/*
-!.amp/services.yaml
+
+# Claude Code session lock (ephemeral, recreated per session).
 
 # Python bytecode caches.
 __pycache__/
 *.pyc
+
+# Local caches/state left by the former deployment-tooling checkout.
+/byoc/
+
+# Temporary source trees used while regenerating the committed object-store dependency.
+/vendor/object_store/.object_store-*/
+

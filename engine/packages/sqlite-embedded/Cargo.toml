@@ -1,0 +1,34 @@
+[package]
+name = "sqlite-embedded"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
+description = "Native SQLite VFS client for Rivet actors"
+
+[lib]
+name = "sqlite_embedded"
+crate-type = ["lib"]
+
+[features]
+default = ["transport"]
+transport = []
+
+[dependencies]
+futures-util.workspace = true
+
+anyhow.workspace = true
+rivet-error.workspace = true
+bytes.workspace = true
+async-trait.workspace = true
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+tokio.workspace = true
+tracing.workspace = true
+getrandom = "0.2"
+rivet-envoy-protocol.workspace = true
+sqlite_types.workspace = true
+lru = "0.18.5"
+parking_lot.workspace = true
+

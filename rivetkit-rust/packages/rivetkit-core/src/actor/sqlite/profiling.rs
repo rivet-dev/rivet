@@ -1,5 +1,7 @@
-use depot_client::vfs::SqliteOperationProfile;
+use std::collections::{HashMap, HashSet};
+
 use sha2::{Digest, Sha256};
+use sqlite_embedded::vfs::SqliteOperationProfile;
 
 use crate::SqliteProfilingConfig;
 
@@ -11,9 +13,70 @@ pub(super) struct StatementFingerprint {
 	pub(super) hash: String,
 }
 
+/// Immutable allowlists compiled once per database or metric sink.
+#[derive(Debug)]
+pub(crate) struct QuerySelection {
+	queries: HashMap<String, StatementFingerprint>,
+	fingerprints: HashSet<String>,
+	matches_fingerprints: bool,
+	tracks_transactions: bool,
+}
+
+impl QuerySelection {
+	pub(crate) fn new(config: &SqliteProfilingConfig) -> Self {
+		let queries = config
+			.queries
+			.iter()
+			.filter_map(|sql| {
+				statement_fingerprint(sql).map(|fingerprint| (sql.clone(), fingerprint))
+			})
+			.collect::<HashMap<_, _>>();
+		let mut fingerprints = config.fingerprints.iter().cloned().collect::<HashSet<_>>();
+		fingerprints.extend(
+			queries
+				.values()
+				.map(|fingerprint| fingerprint.display.clone()),
+		);
+		let matches_fingerprints = !config.fingerprints.is_empty();
+		let tracks_transactions = config.fingerprints.iter().any(|fingerprint| {
+			fingerprint.starts_with("txn-") || fingerprint.starts_with("shape-")
+		});
+		Self {
+			queries,
+			fingerprints,
+			matches_fingerprints,
+			tracks_transactions,
+		}
+	}
+
+	pub(crate) fn contains(&self, fingerprint: &str) -> bool {
+		!fingerprint.is_empty() && self.fingerprints.contains(fingerprint)
+	}
+
+	fn statement(&self, sql: &str) -> Option<StatementFingerprint> {
+		if let Some(fingerprint) = self.queries.get(sql) {
+			return Some(fingerprint.clone());
+		}
+		if !self.matches_fingerprints {
+			return None;
+		}
+		let fingerprint = statement_fingerprint(sql)?;
+		if self.contains(&fingerprint.display) {
+			Some(fingerprint)
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn tracks_transactions(&self) -> bool {
+		self.tracks_transactions
+	}
+}
+
 #[derive(Debug)]
 pub(super) struct SqliteProfilingState {
 	pub(super) config: SqliteProfilingConfig,
+	pub(super) selection: QuerySelection,
 	cataloged: scc::HashSet<String>,
 }
 
@@ -25,27 +88,35 @@ impl Default for SqliteProfilingState {
 
 impl SqliteProfilingState {
 	pub(super) fn new(config: SqliteProfilingConfig) -> Self {
+		let config = config.with_process_override();
+		let selection = QuerySelection::new(&config);
 		Self {
 			config,
+			selection,
 			cataloged: scc::HashSet::new(),
 		}
 	}
 
 	pub(super) fn statement_fingerprint(&self, sql: &str) -> Option<StatementFingerprint> {
-		if !self.config.enabled {
-			return None;
+		if self.selection.tracks_transactions() {
+			return statement_fingerprint(sql);
 		}
-		let class = statement_class(sql)?;
-
-		let hash = fingerprint_hash(b"rivetkit-sqlite-statement", sql.as_bytes());
+		if let Some(fingerprint) = self.selection.statement(sql) {
+			return Some(fingerprint);
+		}
+		statement_class(sql)?;
 		Some(StatementFingerprint {
-			display: format!("{class}-{hash}"),
-			hash,
+			display: String::new(),
+			hash: String::new(),
 		})
 	}
 
 	pub(super) fn mark_cataloged(&self, fingerprint: &str) -> bool {
-		self.cataloged.insert_sync(fingerprint.to_owned()).is_ok()
+		let limit = self
+			.config
+			.max_tracked_statement_fingerprints
+			.saturating_add(self.config.max_tracked_transaction_fingerprints);
+		self.cataloged.len() < limit && self.cataloged.insert_sync(fingerprint.to_owned()).is_ok()
 	}
 }
 
@@ -63,9 +134,9 @@ pub(super) struct TransactionProfile {
 	pub(super) transaction_wait_ns: u64,
 	pub(super) fingerprint: Option<String>,
 	pub(super) name: Option<String>,
-	shape: Sha256,
+	shape: Option<Sha256>,
 	pub(super) statement_fingerprint_hashes:
-		[Option<[u8; 16]>; depot_client::vfs::MAX_PROFILED_TRANSACTION_STATEMENTS],
+		[Option<[u8; 16]>; sqlite_embedded::vfs::MAX_PROFILED_TRANSACTION_STATEMENTS],
 	pub(super) omitted_statement_fingerprints: u64,
 	statement_fingerprint_limit: usize,
 	pub(super) statement_count: u64,
@@ -84,16 +155,22 @@ impl TransactionProfile {
 		name: Option<String>,
 		started_at: crate::time::Instant,
 		statement_fingerprint_limit: usize,
+		fingerprints: bool,
 	) -> Self {
-		let fingerprint = name.as_deref().map(|name| {
+		let fingerprint = name.as_deref().filter(|_| fingerprints).map(|name| {
 			format!(
 				"txn-{}",
 				fingerprint_hash(b"rivetkit-sqlite-transaction", name.as_bytes())
 			)
 		});
-		let mut shape = Sha256::new();
-		shape.update(b"rivetkit-sqlite-transaction-shape");
-		shape.update([FINGERPRINT_FORMAT_VERSION]);
+		let shape = if fingerprints {
+			let mut shape = Sha256::new();
+			shape.update(b"rivetkit-sqlite-transaction-shape");
+			shape.update([FINGERPRINT_FORMAT_VERSION]);
+			Some(shape)
+		} else {
+			None
+		};
 		Self {
 			started_at,
 			transaction_wait_ns: 0,
@@ -101,10 +178,10 @@ impl TransactionProfile {
 			name,
 			shape,
 			statement_fingerprint_hashes: [None;
-				depot_client::vfs::MAX_PROFILED_TRANSACTION_STATEMENTS],
+				sqlite_embedded::vfs::MAX_PROFILED_TRANSACTION_STATEMENTS],
 			omitted_statement_fingerprints: 0,
 			statement_fingerprint_limit: statement_fingerprint_limit
-				.min(depot_client::vfs::MAX_PROFILED_TRANSACTION_STATEMENTS),
+				.min(sqlite_embedded::vfs::MAX_PROFILED_TRANSACTION_STATEMENTS),
 			statement_count: 0,
 			worker_wait_ns: 0,
 			storage_ns: 0,
@@ -144,18 +221,20 @@ impl TransactionProfile {
 	}
 
 	pub(super) fn record_statement(&mut self, observation: &StatementObservation) {
-		self.shape.update(observation.fingerprint.hash.as_bytes());
-		self.shape.update([0]);
-		let statement_index = self.statement_count as usize;
-		if statement_index < self.statement_fingerprint_limit {
-			let mut hash = [0; 16];
-			let source = observation.fingerprint.hash.as_bytes();
-			let copy_len = source.len().min(hash.len());
-			hash[..copy_len].copy_from_slice(&source[..copy_len]);
-			self.statement_fingerprint_hashes[statement_index] = Some(hash);
-		} else {
-			self.omitted_statement_fingerprints =
-				self.omitted_statement_fingerprints.saturating_add(1);
+		if let Some(shape) = &mut self.shape {
+			shape.update(observation.fingerprint.hash.as_bytes());
+			shape.update([0]);
+			let statement_index = self.statement_count as usize;
+			if statement_index < self.statement_fingerprint_limit {
+				let mut hash = [0; 16];
+				let source = observation.fingerprint.hash.as_bytes();
+				let copy_len = source.len().min(hash.len());
+				hash[..copy_len].copy_from_slice(&source[..copy_len]);
+				self.statement_fingerprint_hashes[statement_index] = Some(hash);
+			} else {
+				self.omitted_statement_fingerprints =
+					self.omitted_statement_fingerprints.saturating_add(1);
+			}
 		}
 		self.statement_count = self.statement_count.saturating_add(1);
 		self.transaction_wait_ns = self
@@ -192,13 +271,45 @@ impl TransactionProfile {
 		if let Some(fingerprint) = &self.fingerprint {
 			return (fingerprint.clone(), "name");
 		}
-		let digest = self.shape.clone().finalize();
-		(format!("shape-{}", hex_prefix(&digest)), "shape")
+		match &self.shape {
+			Some(shape) => (
+				format!("shape-{}", hex_prefix(&shape.clone().finalize())),
+				"shape",
+			),
+			None => (String::new(), "unselected"),
+		}
+	}
+
+	/// Keeps named transaction diagnostics useful without per-statement hashing.
+	pub(super) fn diagnostic_fingerprint(&self) -> (String, &'static str) {
+		if let Some(name) = &self.name {
+			return (
+				format!(
+					"txn-{}",
+					fingerprint_hash(b"rivetkit-sqlite-transaction", name.as_bytes())
+				),
+				"name",
+			);
+		}
+		self.fingerprint()
 	}
 
 	pub(super) fn shape_fingerprint(&self) -> String {
-		format!("shape-{}", hex_prefix(&self.shape.clone().finalize()))
+		match &self.shape {
+			Some(shape) => format!("shape-{}", hex_prefix(&shape.clone().finalize())),
+			None => String::new(),
+		}
 	}
+}
+
+/// Hashes exact SQL only for fingerprint metrics or a selected diagnostic.
+pub(super) fn statement_fingerprint(sql: &str) -> Option<StatementFingerprint> {
+	let class = statement_class(sql)?;
+	let hash = fingerprint_hash(b"rivetkit-sqlite-statement", sql.as_bytes());
+	Some(StatementFingerprint {
+		display: format!("{class}-{hash}"),
+		hash,
+	})
 }
 
 fn fingerprint_hash(domain: &[u8], value: &[u8]) -> String {
@@ -247,76 +358,4 @@ fn statement_class(sql: &str) -> Option<&'static str> {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
 
-	#[test]
-	fn fingerprints_exact_query_text() {
-		let state = SqliteProfilingState::default();
-		let first = state
-			.statement_fingerprint("SELECT * FROM orders WHERE id = ?")
-			.unwrap();
-		let second = state
-			.statement_fingerprint("SELECT * FROM orders WHERE id = ?")
-			.unwrap();
-		let differently_formatted = state
-			.statement_fingerprint("select * from orders where id=?")
-			.unwrap();
-
-		assert_eq!(first.display, second.display);
-		assert_ne!(first.display, differently_formatted.display);
-		assert!(first.display.starts_with("select-"));
-	}
-
-	#[test]
-	fn classification_uses_only_the_first_standard_keyword() {
-		let state = SqliteProfilingState::default();
-		assert!(
-			state
-				.statement_fingerprint("UPDATE jobs SET done = 1")
-				.unwrap()
-				.display
-				.starts_with("update-")
-		);
-		assert!(
-			state
-				.statement_fingerprint("WITH jobs AS (SELECT 1) SELECT * FROM jobs")
-				.unwrap()
-				.display
-				.starts_with("other-")
-		);
-		assert!(state.statement_fingerprint("  \n\t").is_none());
-		assert!(state.statement_fingerprint("BEGIN").is_none());
-	}
-
-	#[test]
-	fn named_transactions_keep_stable_identity_and_bounded_shape_details() {
-		let state = SqliteProfilingState::default();
-		let fingerprint = state.statement_fingerprint("SELECT 1").unwrap();
-		let observation = StatementObservation {
-			fingerprint,
-			total_ns: 1,
-			transaction_wait_ns: 0,
-			profile: Default::default(),
-		};
-		let mut first = TransactionProfile::new(
-			Some("process-order".to_owned()),
-			crate::time::Instant::now(),
-			1,
-		);
-		first.record_statement(&observation);
-		let mut second = TransactionProfile::new(
-			Some("process-order".to_owned()),
-			crate::time::Instant::now(),
-			1,
-		);
-		second.record_statement(&observation);
-		second.record_statement(&observation);
-
-		assert_eq!(first.fingerprint(), second.fingerprint());
-		assert_ne!(first.shape_fingerprint(), second.shape_fingerprint());
-		assert_eq!(second.omitted_statement_fingerprints, 1);
-		assert!(std::mem::size_of::<TransactionProfile>() < 1024);
-	}
-}

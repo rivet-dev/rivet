@@ -39,7 +39,7 @@ Send your namespace token as a bearer token in the `Authorization` header. Every
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `namespace` | `string` | Yes | Name of the namespace to operate in. |
+| `namespace` | `string` | No | Name of the namespace to operate in. |
 
 ## Request Body
 
@@ -47,56 +47,176 @@ Content type: `application/json`.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `crash_policy` | `"restart" \| "sleep" \| "destroy"` | Yes | What happens when the actor crashes. RivetKit defaults to `sleep`. |
-| `datacenter` | `string \| null` | No | Datacenter to create the actor in if it does not exist. Defaults to the datacenter serving the request. |
-| `input` | `string \| null` | No | Base64url-encoded CBOR input passed to the actor's `createState` and `onCreate` hooks when the actor is created. |
-| `key` | `string` | Yes | Key identifying this actor within its name. Multi-part keys are joined with `/`, see [Actor Keys](/docs/api/actor-keys). |
 | `name` | `string` | Yes | Name of the actor as registered in your RivetKit registry. |
-| `runner_name_selector` | `string` | Yes | Pool that runs the actor. RivetKit registers the `default` pool unless configured otherwise. |
+| `key` | `string \| null` | No | Key identifying this actor within its name. Multi-part keys are joined with `/`, see [Actor Keys](/docs/api/actor-keys). |
+| `input` | `string \| null` | No | Base64url-encoded CBOR input passed to the actor's `createState` and `onCreate` hooks when the actor is created. |
+| `pool` | `string \| null` | No | Name of the node pool to run the actor in. Defaults to `default`. |
 
 ## Responses
 
 ### 200
 
+The existing or created actor.
+
 | Field | Type | Description |
 | --- | --- | --- |
 | `actor` | `object` |  |
 | `actor.actor_id` | `string` | Unique ID of the actor. |
-| `actor.connectable_ts` | `integer \| null` | Denotes when the actor was last connectable. Null if actor is not running. |
-| `actor.crash_policy` | `"restart" \| "sleep" \| "destroy"` | What happens when the actor crashes. |
-| `actor.create_ts` | `integer` | Denotes when the actor was first created. |
-| `actor.datacenter` | `string` | Datacenter the actor is scheduled in. |
-| `actor.destroy_ts` | `integer \| null` | Denotes when the actor was destroyed. |
-| `actor.error` | `object \| null` | Error details if the actor failed to start. |
-| `actor.key` | `string \| null` | Actor key. Multi-part keys are joined with `/`, see [Actor Keys](/docs/api/actor-keys). |
 | `actor.name` | `string` | Actor name as registered in your RivetKit registry. |
-| `actor.namespace_id` | `string` | ID of the namespace the actor belongs to. |
-| `actor.pending_allocation_ts` | `integer \| null` | Denotes when the actor started waiting for an allocation. |
-| `actor.reschedule_ts` | `integer \| null` | Denotes when the actor will try to allocate again. If this is set, the actor will not attempt to allocate until the given timestamp. |
-| `actor.runner_name_selector` | `string` | Pool the actor runs on. |
-| `actor.sleep_ts` | `integer \| null` | Denotes when the actor entered a sleeping state. |
-| `actor.start_ts` | `integer \| null` | Denotes when the actor was first made connectable. Null if never. |
+| `actor.key` | `string` | Actor key. Multi-part keys are joined with `/`, see [Actor Keys](/docs/api/actor-keys). |
+| `actor.namespace` | `string` | Name of the namespace the actor belongs to. |
+| `actor.pool` | `string` | Name of the node pool the actor runs in. |
+| `actor.create_ts` | `integer` | When the actor was created, in Unix milliseconds. |
+| `actor.start_ts` | `integer \| null` | When the actor first started. Not recorded by this version, so always `null`. |
+| `actor.pending_allocation_ts` | `integer \| null` | When the actor started waiting for a node. Not recorded by this version, so always `null`. |
+| `actor.connectable_ts` | `integer \| null` | When the actor last became connectable. Not recorded by this version, so always `null`. |
+| `actor.sleep_ts` | `integer \| null` | When the actor went to sleep. Not recorded by this version, so always `null`. |
+| `actor.reschedule_ts` | `integer \| null` | When the actor will next try to allocate. Not recorded by this version, so always `null`. |
+| `actor.destroy_ts` | `integer \| null` | When the actor was destroyed, in Unix milliseconds. Only set in listings that include destroyed actors; otherwise `null`. |
 | `created` | `boolean` | `true` if this request created the actor, `false` if it already existed. |
 
 ```json
 {
   "actor": {
-    "actor_id": "00000000-0000-0000-0000-000000000000",
-    "connectable_ts": null,
-    "crash_policy": "restart",
-    "create_ts": 1700000000000,
-    "datacenter": "us-east",
-    "destroy_ts": null,
-    "error": null,
-    "key": null,
+    "actor_id": "d97pbq1nyqxw1w5qdwz0iirbqiblh2",
     "name": "my-actor",
-    "namespace_id": "00000000-0000-0000-0000-000000000000",
+    "key": "my-key",
+    "namespace": "my-namespace",
+    "pool": "default",
+    "create_ts": 1700000000000,
+    "start_ts": null,
     "pending_allocation_ts": null,
-    "reschedule_ts": null,
-    "runner_name_selector": "default",
+    "connectable_ts": null,
     "sleep_ts": null,
-    "start_ts": null
+    "reschedule_ts": null,
+    "destroy_ts": null
   },
   "created": false
+}
+```
+
+### 400
+
+`actor.invalid_name`: `name` is empty or longer than 64 bytes. `actor.invalid_key`: `key` is longer than 1024 bytes. `actor.invalid_key_encoding`: `key` is not in canonical slash-separated form. `actor.key_owned_elsewhere`: another datacenter owns the key. `envoy.invalid_pool_name`: `pool` is not a valid pool name. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "actor",
+  "code": "invalid_name",
+  "message": "Actor name must be 1 to 64 bytes."
+}
+```
+
+### 401
+
+`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "auth",
+  "code": "invalid_token",
+  "message": "Authentication token is invalid."
+}
+```
+
+### 403
+
+`auth.insufficient_permissions`: the token's grants do not cover this request.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "auth",
+  "code": "insufficient_permissions",
+  "message": "Insufficient permissions to access this resource."
+}
+```
+
+### 404
+
+`namespace.not_found`: the namespace does not exist.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "namespace",
+  "code": "not_found",
+  "message": "The namespace does not exist."
+}
+```
+
+### 415
+
+The request is missing the `Content-Type: application/json` header. Returned as plain text.
+
+Content type: `text/plain`.
+
+### 422
+
+The JSON body does not match the request schema, for example a missing required field, a wrong type or an unknown field where unknown fields are rejected. Returned as plain text.
+
+Content type: `text/plain`.
+
+### 500
+
+`core.internal_error`: an unexpected failure, including `input` that is not valid base64 and a create that did not finish within 30 seconds.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "core",
+  "code": "internal_error",
+  "message": "An internal error occurred"
+}
+```
+
+### 503
+
+`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "auth",
+  "code": "verification_unavailable",
+  "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
 }
 ```

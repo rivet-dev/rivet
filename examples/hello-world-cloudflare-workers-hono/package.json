@@ -22,8 +22,15 @@
 	},
 	"stableVersion": "0.8.0",
 	"template": {
-		"technologies": ["rivet", "cloudflare", "hono", "typescript"],
-		"tags": ["serverless"],
+		"technologies": [
+			"rivet",
+			"cloudflare",
+			"hono",
+			"typescript"
+		],
+		"tags": [
+			"serverless"
+		],
 		"noFrontend": true,
 		"skipVercel": true
 	},

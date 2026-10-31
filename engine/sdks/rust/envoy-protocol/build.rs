@@ -1,3 +1,9 @@
+#![allow(
+	clippy::disallowed_methods,
+	clippy::disallowed_types,
+	reason = "build-time code generation reads and writes host files outside the runtime environment"
+)]
+
 use std::{
 	fs,
 	path::{Path, PathBuf},
@@ -16,7 +22,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let schema_dir = manifest_dir.join("schemas");
 
 	// Rust SDK generation
-	let cfg = vbare_compiler::Config::default();
+	let cfg = vbare_compiler::Config {
+		vbare: vbare_gen::Config::default().with_serde(true),
+	};
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;
 
 	// Append protocol version constant to generated file

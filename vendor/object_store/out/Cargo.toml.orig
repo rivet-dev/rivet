@@ -1,0 +1,153 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+[package]
+name = "object_store"
+version = "0.14.2"
+edition = "2024"
+license = "MIT/Apache-2.0"
+readme = "README.md"
+description = "A generic object store interface for uniformly interacting with AWS S3, Google Cloud Storage, Azure Blob Storage and local files."
+keywords = ["object", "storage", "cloud"]
+repository = "https://github.com/apache/arrow-rs-object-store"
+rust-version = "1.85"
+include = ["src/**/*.rs", "README.md", "LICENSE.txt", "NOTICE.txt", "Cargo.toml"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies] # In alphabetical order
+async-trait = "0.1.53"
+bytes = "1.0"
+chrono = { version = "0.4.34", default-features = false, features = ["clock"] }
+futures-core = "0.3"
+futures-util = { version = "0.3", features = ["sink"] }
+http = "1.2.0"
+humantime = "2.1"
+itertools = "0.15.0"
+parking_lot = { version = "0.12" }
+percent-encoding = "2.1"
+thiserror = "2.0.2"
+url = "2.2"
+walkdir = { version = "2", optional = true }
+
+# Cloud storage support
+base64 = { version = "0.23", default-features = false, features = ["std"], optional = true }
+crc-fast = { version = "1.6" , optional = true }
+form_urlencoded = { version = "1.2", optional = true }
+http-body-util = { version = "0.1.2", optional = true }
+httparse = { version = "1.8.0", default-features = false, features = ["std"], optional = true }
+hyper = { version = "1.2", default-features = false, optional = true }
+md-5 = { version = "0.11.0", default-features = false, optional = true }
+quick-xml = { version = "0.41.0", features = ["serialize", "overlapped-lists"], optional = true }
+rand = { version = "0.10", default-features = false, features = ["std", "std_rng", "thread_rng"], optional = true }
+reqwest = { version = "0.13", default-features = false, features = ["http2"], optional = true }
+ring = { version = "0.17", default-features = false, features = ["std"], optional = true }
+aws-lc-rs = { version = "1.15", default-features = false, optional = true }
+rustls-pki-types = { version = "1.9", default-features = false, features = ["std"], optional = true }
+serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
+serde_json = { version = "1.0", default-features = false, features = ["std"], optional = true }
+serde_urlencoded = { version = "0.7", optional = true }
+
+# Optional tokio feature
+tokio = { version = "1.29.0", features = ["sync", "macros", "rt", "time", "io-util"], optional = true }
+tracing = { version = "0.1", optional = true }
+
+[target.'cfg(target_family="unix")'.dependencies]
+nix = { version = "0.31.1", default-features = false, optional = true }
+
+[target.'cfg(target_family="windows")'.dependencies]
+windows-sys = { version = "0.61.2", default-features = false, features = ["Win32_Foundation"], optional = true }
+
+[target.'cfg(target_family="unix")'.dev-dependencies]
+nix = { version = "0.31.1", features = ["fs"] }
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+web-time = { version = "1.1.0" }
+wasm-bindgen-futures = "0.4.18"
+futures-channel = {version = "0.3", features = ["sink"]}
+
+[features]
+default = ["fs"]
+
+# Shared cloud/provider implementation dependencies.
+# This intentionally does NOT include reqwest or a bundled crypto provider.
+cloud-base = ["serde", "serde_json", "quick-xml", "hyper", "chrono/serde", "base64", "rand", "http-body-util", "form_urlencoded", "serde_urlencoded", "tokio"]
+
+# Built-in reqwest-based HTTP transport.
+reqwest = ["dep:reqwest", "reqwest/stream"]
+
+# Bundled crypto providers.
+# Selecting one provides the default `CryptoProvider`; otherwise a custom
+# provider must be supplied at runtime.
+aws-lc-rs = ["dep:aws-lc-rs", "rustls-pki-types"]
+ring = ["dep:ring", "rustls-pki-types"]
+
+# Implementation base features.
+# These compile provider logic without forcing reqwest or a crypto provider.
+azure-base = ["cloud-base", "httparse"]
+gcp-base = ["cloud-base"]
+aws-base = ["cloud-base", "crc-fast", "md-5"]
+http-base = ["cloud-base"]
+
+# "Batteries-included" implementation features.
+# Each enables the default `reqwest` transport (with rustls) and `aws-lc-rs`.
+# This keeps object_store's bundled crypto provider aligned with reqwest/rustls,
+# which uses aws-lc-rs for TLS by default.
+azure = ["azure-base", "reqwest", "reqwest/rustls", "aws-lc-rs"]
+gcp = ["gcp-base", "reqwest", "reqwest/rustls", "aws-lc-rs"]
+aws = ["aws-base", "reqwest", "reqwest/rustls", "aws-lc-rs"]
+# HTTP/WebDAV doesn't sign object_store requests, but reqwest/rustls uses aws-lc-rs by default.
+http = ["http-base", "reqwest", "reqwest/rustls", "aws-lc-rs"]
+
+fs = ["walkdir", "tokio", "nix", "windows-sys"]
+integration = ["rand", "tokio"]
+tokio = ["dep:tokio", "dep:tracing"]
+
+[dev-dependencies] # In alphabetical order
+futures-executor = "0.3"
+hyper = { version = "1.2", features = ["server"] }
+hyper-util = "0.1"
+rand = "0.10"
+tempfile = "3.1.0"
+regex = "1.11.1"
+webpki-root-certs = "1"
+# The "gzip" feature for reqwest is enabled for an integration test.
+reqwest = { version = "0.13", default-features = false, features = ["gzip"] }
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dev-dependencies]
+wasm-bindgen-test = "0.3.50"
+
+[dev-dependencies.getrandom_v04]
+package = "getrandom"
+version = "0.4"
+features = ["wasm_js"]
+
+[dev-dependencies.getrandom_v03]
+package = "getrandom"
+version = "0.3"
+features = ["wasm_js"]
+
+[dev-dependencies.getrandom_v02]
+package = "getrandom"
+version = "0.2"
+features = ["js"]
+
+[[test]]
+name = "get_range_file"
+path = "tests/get_range_file.rs"
+required-features = ["fs"]

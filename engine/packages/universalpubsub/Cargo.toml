@@ -6,35 +6,25 @@ authors.workspace = true
 license.workspace = true
 edition.workspace = true
 
+[features]
+
 [dependencies]
+rivet-env.workspace = true
+rivet-topology.workspace = true
+tokio-util.workspace = true
 anyhow.workspace = true
-async-nats.workspace = true
-async-trait.workspace = true
+axum.workspace = true
+bytes.workspace = true
 futures-util.workspace = true
 lazy_static.workspace = true
-rand.workspace = true
+parking_lot.workspace = true
+scc.workspace = true
 rivet-config.workspace = true
+rivet-data.workspace = true
 rivet-error.workspace = true
 rivet-metrics.workspace = true
-rivet-perf.workspace = true
-rivet-ups-protocol.workspace = true
-rivet-util.workspace = true
-scc.workspace = true
-serde_json.workspace = true
-serde.workspace = true
-tokio-util.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 uuid.workspace = true
 vbare.workspace = true
 
-[dev-dependencies]
-rivet-env.workspace = true
-tabled.workspace = true
-tempfile.workspace = true
-tracing-subscriber.workspace = true
-rivet-test-deps-docker.workspace = true
-
-[[bench]]
-name = "simple"
-harness = false

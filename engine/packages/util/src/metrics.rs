@@ -1,15 +1,15 @@
 use rivet_metrics::{BUCKETS, MICRO_BUCKETS, REGISTRY, prometheus::*};
 
 lazy_static::lazy_static! {
-	pub static ref OBSERVATION_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		"observation_duration",
+	pub static ref OBSERVATION_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		"observation_duration_seconds",
 		"Duration of any code observation.",
 		&["location"],
 		MICRO_BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
-	pub static ref LONG_OBSERVATION_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		"long_observation_duration",
+	pub static ref LONG_OBSERVATION_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		"long_observation_duration_seconds",
 		"Duration of any long code observation.",
 		&["location"],
 		BUCKETS.to_vec(),

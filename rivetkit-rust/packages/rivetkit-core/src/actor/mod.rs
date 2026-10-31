@@ -20,9 +20,7 @@ pub mod persist;
 pub mod queue;
 pub mod schedule;
 pub mod sleep;
-#[cfg(test)]
-#[path = "../../tests/sql_efficiency.rs"]
-mod sql_efficiency;
+
 pub mod sqlite;
 pub mod state;
 pub mod task;

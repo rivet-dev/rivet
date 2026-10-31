@@ -7,9 +7,6 @@ FROM ghcr.io/rivet-dev/rivet/builder-base-osxcross:0e33ceb98
 
 ARG BUILD_TARGET=engine
 ARG BUILD_MODE=release
-ARG BUILD_FRONTEND=false
-ARG VITE_APP_API_URL=__SAME__
-ARG VITE_FEATURE_FLAGS=
 
 ENV BINDGEN_EXTRA_CLANG_ARGS_x86_64_apple_darwin="--sysroot=/root/osxcross/target/SDK/MacOSX11.3.sdk -isystem /root/osxcross/target/SDK/MacOSX11.3.sdk/usr/include" \
     CFLAGS_x86_64_apple_darwin="-B/root/osxcross/target/bin" \
@@ -38,18 +35,11 @@ RUN RUST_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
     rustup default "${RUST_TOOLCHAIN}" && \
     rustup target add x86_64-apple-darwin
 
-RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
+RUN if [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \
         export SKIP_NAPI_BUILD=1 && \
         export SKIP_WASM_BUILD=1 && \
-        pnpm install --ignore-scripts && \
-        VITE_APP_API_URL="${VITE_APP_API_URL}" VITE_FEATURE_FLAGS="${VITE_FEATURE_FLAGS}" npx turbo build:engine -F @rivetkit/engine-frontend; \
-    elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
-        export NODE_OPTIONS="--max-old-space-size=8192" && \
-        export SKIP_NAPI_BUILD=1 && \
-        export SKIP_WASM_BUILD=1 && \
-        pnpm install --ignore-scripts && \
-        npx turbo build:inspector-ui -F @rivetkit/engine-frontend; \
+        pnpm install --frozen-lockfile --ignore-scripts; \
     fi
 
 RUN --mount=type=cache,id=cargo-registry-darwin-x64,target=/usr/local/cargo/registry,sharing=locked \

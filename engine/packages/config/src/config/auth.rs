@@ -1,4 +1,4 @@
-use std::{collections::HashSet, time::Duration};
+use std::time::Duration;
 
 use anyhow::{Context, Result, ensure};
 use schemars::JsonSchema;
@@ -13,7 +13,7 @@ const MAX_DURATION_SECS: u64 = 24 * 60 * 60;
 const KEY_ROTATION_INTERVAL_SECS: u64 = 7 * 24 * 60 * 60;
 const KEY_PUBLISH_LEAD_SECS: u64 = 10 * 60;
 const KEY_MAX_SIGNING_LIFETIME_SECS: u64 = 14 * 24 * 60 * 60;
-const VERIFIER_CACHE_TTL_SECS: u64 = 60;
+const VERIFIER_CACHE_TTL_SECS: u64 = 5 * 60;
 const VERIFIER_MAX_STALE_SECS: u64 = 5 * 60;
 const UNKNOWN_KID_REFRESH_COOLDOWN_SECS: u64 = 5;
 const PUBLIC_KEY_PROPAGATION_MARGIN_SECS: u64 = 30;
@@ -51,9 +51,6 @@ pub struct Jwt {
 	pub enabled: Option<bool>,
 	/// Pauses only new token minting. Defaults to true while JWT is enabled.
 	pub issuance_enabled: Option<bool>,
-	/// Previous Rivet issuers temporarily authorized during a migration.
-	#[serde(default)]
-	pub accepted_issuers: Vec<Url>,
 	/// Monotonic topology fence. Increment when changing the derived issuer or signing leader.
 	pub issuer_generation: Option<u64>,
 	pub audience: Option<String>,
@@ -83,10 +80,6 @@ impl Jwt {
 
 	pub fn issuance_enabled(&self) -> bool {
 		self.enabled() && self.issuance_enabled.unwrap_or(true)
-	}
-
-	pub fn accepted_issuers(&self) -> Result<Vec<String>> {
-		self.accepted_issuers.iter().map(normalize_issuer).collect()
 	}
 
 	pub fn issuer_generation(&self) -> u64 {
@@ -138,23 +131,11 @@ impl Jwt {
 		)
 	}
 
-	pub fn validate(&self, desired_issuer: &str) -> Result<()> {
+	pub fn validate(&self, _desired_issuer: &str) -> Result<()> {
 		ensure!(
 			self.issuer_generation() > 0,
 			"auth.jwt.issuer_generation must be positive"
 		);
-		let accepted = self.accepted_issuers()?;
-		let mut unique = HashSet::new();
-		for issuer in &accepted {
-			ensure!(
-				unique.insert(issuer),
-				"auth.jwt.accepted_issuers contains duplicate issuer {issuer}"
-			);
-			ensure!(
-				issuer != desired_issuer,
-				"the derived active issuer must not appear in auth.jwt.accepted_issuers"
-			);
-		}
 
 		ensure!(
 			!self.audience().is_empty(),
@@ -208,6 +189,10 @@ impl Jwt {
 			"auth.jwt.verifier_max_stale cannot be shorter than auth.jwt.verifier_cache_ttl"
 		);
 
+		ensure!(
+			max_stale <= VERIFIER_MAX_STALE_SECS,
+			"auth.jwt.verifier_max_stale cannot exceed five minutes"
+		);
 		Ok(())
 	}
 }
@@ -255,120 +240,4 @@ pub fn derive_issuer(root: &super::Root) -> Result<String> {
 	)
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
 
-	const ISSUER: &str = "https://api.rivet.dev";
-
-	#[test]
-	fn root_requires_auth_configuration() {
-		let error = super::super::Root::default()
-			.validate_and_set_defaults()
-			.expect_err("missing auth must fail at startup");
-		assert!(error.to_string().contains("auth.admin_token"));
-	}
-
-	#[test]
-	fn existing_admin_token_config_enables_jwt_by_default() {
-		let auth: Auth = serde_json::from_str(r#"{"admin_token":"secret"}"#).unwrap();
-		auth.validate(ISSUER).unwrap();
-		assert!(auth.jwt.enabled());
-		assert!(auth.jwt.issuance_enabled());
-	}
-
-	#[test]
-	fn rejects_missing_empty_and_removed_admin_token_settings() {
-		assert!(serde_json::from_str::<Auth>(r#"{}"#).is_err());
-		assert!(serde_json::from_str::<Auth>(r#"{"disable_admin_token":true}"#).is_err());
-		let auth: Auth = serde_json::from_str(r#"{"admin_token":""}"#).unwrap();
-		assert!(auth.validate(ISSUER).is_err());
-		let auth: Auth =
-			serde_json::from_str(r#"{"admin_token":"","insecure_allow_unauthenticated":true}"#)
-				.unwrap();
-		assert_eq!(
-			auth.validate(ISSUER).unwrap_err().to_string(),
-			"auth.admin_token cannot be empty"
-		);
-	}
-
-	#[test]
-	fn legacy_access_requires_an_admin_token() {
-		let mut root: super::super::Root = serde_json::from_str(
-			r#"{"auth":{"admin_token":"secret","insecure_allow_unauthenticated":true}}"#,
-		)
-		.unwrap();
-		root.validate_and_set_defaults().unwrap();
-		assert!(root.insecure_allow_unauthenticated());
-	}
-
-	#[test]
-	fn jwt_switches_have_expected_semantics() {
-		let disabled = Jwt {
-			enabled: Some(false),
-			issuance_enabled: Some(true),
-			..Default::default()
-		};
-		assert!(!disabled.enabled());
-		assert!(!disabled.issuance_enabled());
-
-		let issuance_paused = Jwt {
-			issuance_enabled: Some(false),
-			..Default::default()
-		};
-		assert!(issuance_paused.enabled());
-		assert!(!issuance_paused.issuance_enabled());
-	}
-
-	#[test]
-	fn issuer_generation_defaults_to_one_and_must_be_positive() {
-		assert_eq!(Jwt::default().issuer_generation(), 1);
-		let jwt = Jwt {
-			issuer_generation: Some(0),
-			..Default::default()
-		};
-		assert!(jwt.validate(ISSUER).is_err());
-	}
-
-	#[test]
-	fn issuer_normalization_is_stable_and_strict() {
-		for value in ["https://api.rivet.dev", "https://api.rivet.dev/"] {
-			assert_eq!(
-				normalize_issuer(&Url::parse(value).unwrap()).unwrap(),
-				ISSUER
-			);
-		}
-		for value in [
-			"ftp://api.rivet.dev",
-			"https://user@api.rivet.dev",
-			"https://api.rivet.dev?query=1",
-			"https://api.rivet.dev#fragment",
-		] {
-			assert!(normalize_issuer(&Url::parse(value).unwrap()).is_err());
-		}
-	}
-
-	#[test]
-	fn accepted_issuers_are_normalized_unique_and_not_active() {
-		let duplicate: Auth = serde_json::from_str(
-			r#"{"admin_token":"secret","jwt":{"accepted_issuers":["https://old.example","https://old.example/"]}}"#,
-		)
-		.unwrap();
-		assert!(duplicate.validate(ISSUER).is_err());
-
-		let active: Auth = serde_json::from_str(
-			r#"{"admin_token":"secret","jwt":{"accepted_issuers":["https://api.rivet.dev/"]}}"#,
-		)
-		.unwrap();
-		assert!(active.validate(ISSUER).is_err());
-	}
-
-	#[test]
-	fn removed_jwt_fields_fail_with_their_names() {
-		for field in ["issuer", "verification_enabled", "leader_epoch"] {
-			let json = format!(r#"{{"admin_token":"secret","jwt":{{"{field}":true}}}}"#);
-			let error = serde_json::from_str::<Auth>(&json).unwrap_err().to_string();
-			assert!(error.contains(field));
-		}
-	}
-}

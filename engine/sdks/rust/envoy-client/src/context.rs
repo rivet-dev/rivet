@@ -17,12 +17,21 @@ pub struct SharedActorEntry {
 	pub active_http_request_count: Arc<AsyncCounter>,
 }
 
+/// Latched transport termination outcome, published only after loop cleanup.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StopStatus {
+	/// The loop is still running or draining; no termination outcome is published.
+	#[default]
+	Running,
+	/// All accepted generations finished locally and their events were acknowledged.
+	Acknowledged,
+	/// A deadline, explicit immediate stop, eviction, or terminal error ended the loop.
+	Interrupted,
+}
+
 pub struct SharedContext {
 	pub config: EnvoyConfig,
-	/// Registration key the engine knows this process by. Rotated by the envoy loop when the lost
-	/// threshold discards every actor, so the engine treats the old registration as a dead envoy
-	/// instead of believing those actors still run here. Read it through `envoy_key()`.
-	pub envoy_key: parking_lot::RwLock<String>,
+	pub envoy_key: String,
 	pub envoy_tx: mpsc::UnboundedSender<ToEnvoyMessage>,
 	pub actors: Arc<StdMutex<HashMap<String, HashMap<u32, SharedActorEntry>>>>,
 	pub actors_notify: Arc<Notify>,
@@ -46,27 +55,18 @@ pub struct SharedContext {
 	/// `EnvoyHandle::is_ping_healthy` to surface a dead engine link to upstream health checks.
 	/// Zero means no ping has been received yet.
 	pub last_ping_ts: AtomicI64,
+	/// The envoy's last contact with the engine before a connection was installed, recorded
+	/// before that connection reads any frame and kept at the earliest such contact until the
+	/// envoy loop takes it while handling an init. Zero when nothing is pending.
+	pub contact_before_install_ms: AtomicI64,
+	/// Wall-clock milliseconds of the last ping or init received on any connection. Zero until
+	/// the first one.
+	pub last_contact_ms: AtomicI64,
 	// Latched signal fired by `envoy_loop` after its cleanup block completes.
-	// Waiters observing `true` are guaranteed that the loop has exited and
+	// Waiters observing a terminal outcome know that the loop has exited and
 	// every pending KV/SQLite request has been resolved (with `EnvoyShutdownError`
 	// if it didn't complete naturally).
-	pub stopped_tx: watch::Sender<bool>,
-}
-
-impl SharedContext {
-	/// Current registration key. Clone it rather than holding the guard; the envoy loop may rotate it.
-	pub fn envoy_key(&self) -> String {
-		self.envoy_key.read().clone()
-	}
-
-	/// Replaces the registration key with a fresh one and returns `(old, new)`. The next websocket
-	/// connection registers under the new key; the engine expires the old key like a dead envoy.
-	pub(crate) fn rotate_envoy_key(&self) -> (String, String) {
-		let new_key = uuid::Uuid::new_v4().to_string();
-		let mut guard = self.envoy_key.write();
-		let old_key = std::mem::replace(&mut *guard, new_key.clone());
-		(old_key, new_key)
-	}
+	pub stopped_tx: watch::Sender<StopStatus>,
 }
 
 #[derive(Debug)]
@@ -80,6 +80,9 @@ pub struct HttpConnectionTx {
 	pub session: u64,
 	pub tx: mpsc::Sender<HttpWsTxMessage>,
 	pub byte_budget: Arc<Semaphore>,
+	/// Bounds the detached tasks that send terminal frames for this session
+	/// while the HTTP stream is saturated.
+	pub detached_send_budget: Arc<Semaphore>,
 }
 
 pub struct HttpWsTxMessage {

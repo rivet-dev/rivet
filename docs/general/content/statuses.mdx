@@ -1,0 +1,18 @@
+---
+title: "Actor Statuses"
+description: "Understand the lifecycle statuses of Rivet Actors, what they mean, and how to troubleshoot common issues."
+skill: true
+---
+
+## Statuses
+
+| Status | Description |
+|---|---|
+| **Starting** | The Rivet Actor has been created but is not yet accepting connections. |
+| **Running** | The Rivet Actor is live and accepting connections. |
+| **Sleeping** | The Rivet Actor went to sleep after a period of inactivity. It wakes automatically on the next request. |
+| **Pending** | The Rivet Actor is waiting for a node. This happens when no node in its node pool is connected. See [Troubleshooting](/actors/docs/troubleshooting#actor-status-is-pending) for common causes. |
+| **Crashed** | The Rivet Actor failed to start or hit a fatal error. See [Troubleshooting](/actors/docs/troubleshooting#actor-status-is-crashed) for common failure reasons. |
+| **Destroyed** | The Rivet Actor was destroyed. |
+
+{/* TODO(code): document the status timestamps in the actor API (`create_ts` plus start, sleep and destroy times) once the control plane returns them. Today `GET /actors` returns only `create_ts`, and destroyed Rivet Actors are not listed. Also confirm whether "Crash Loop Backoff" still exists. */}

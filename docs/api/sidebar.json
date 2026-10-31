@@ -89,16 +89,6 @@
 					"badge": "POST"
 				},
 				{
-					"title": "Raw HTTP Request",
-					"href": "/docs/api/gateway/request",
-					"badge": "ANY"
-				},
-				{
-					"title": "Raw WebSocket",
-					"href": "/docs/api/websockets",
-					"badge": "WS"
-				},
-				{
 					"title": "Connect",
 					"href": "/docs/api/gateway/connect",
 					"badge": "WS"
@@ -112,6 +102,11 @@
 					"title": "Get Runtime Metadata",
 					"href": "/docs/api/gateway/metadata",
 					"badge": "GET"
+				},
+				{
+					"title": "Raw WebSocket",
+					"href": "/docs/api/websockets",
+					"badge": "WS"
 				},
 				{
 					"title": "Inspector",
@@ -236,39 +231,9 @@
 			"title": "Workers",
 			"pages": [
 				{
-					"title": "List Workers",
-					"href": "/docs/api/workers/list",
-					"badge": "GET"
-				},
-				{
 					"title": "Worker Connection",
 					"href": "/docs/api/worker-connect",
 					"badge": "WS"
-				},
-				{
-					"title": "List Worker Configs",
-					"href": "/docs/api/workers/configs-list",
-					"badge": "GET"
-				},
-				{
-					"title": "Upsert Worker Config",
-					"href": "/docs/api/workers/configs-upsert",
-					"badge": "PUT"
-				},
-				{
-					"title": "Delete Worker Config",
-					"href": "/docs/api/workers/configs-delete",
-					"badge": "DELETE"
-				},
-				{
-					"title": "Refresh Config Metadata",
-					"href": "/docs/api/workers/configs-refresh-metadata",
-					"badge": "POST"
-				},
-				{
-					"title": "Serverless Health Check",
-					"href": "/docs/api/workers/serverless-health-check",
-					"badge": "POST"
 				}
 			]
 		},

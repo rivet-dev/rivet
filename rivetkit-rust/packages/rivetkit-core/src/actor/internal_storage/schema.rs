@@ -166,10 +166,106 @@ const MIGRATION_V2: &[&str] = &[
 	"ALTER TABLE _rivet_queue ADD COLUMN tracestate TEXT",
 ];
 
-pub(crate) async fn ensure_internal_schema(db: &SqliteDb) -> Result<()> {
-	db.execute(CREATE_META_TABLE, None)
+/// Returns a row when the bootstrap root exists.
+pub(crate) const HAS_INTERNAL_SCHEMA_SQL: &str =
+	"SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = '_rivet_meta'";
+
+/// Checks the bootstrap root without performing a write on an existing actor.
+pub(crate) async fn has_internal_schema(db: &SqliteDb) -> Result<bool> {
+	let metadata = db
+		.query(HAS_INTERNAL_SCHEMA_SQL, None)
 		.await
-		.context("create rivet internal schema metadata table")?;
+		.context("probe rivet internal schema metadata table")?;
+	Ok(!metadata.rows.is_empty())
+}
+
+// Tables a later migration altered, created directly with their current columns. A fresh
+// database has no history to replay, and each `ALTER TABLE` makes SQLite rewrite and reparse
+// the whole schema, which took most of a new actor's bootstrap time. Columns keep the order
+// the ladder gives them, so both paths produce the same tables.
+const FRESH_SCHEDULE_EVENTS: &str = r#"
+CREATE TABLE _rivet_schedule_events (
+    event_id         TEXT PRIMARY KEY,
+    trigger_at       INTEGER NOT NULL,
+    action           TEXT NOT NULL,
+    args             BLOB,
+    kind             INTEGER NOT NULL,
+    cron_expression  TEXT,
+    timezone         TEXT,
+    interval_ms      INTEGER,
+    last_started_at  INTEGER,
+    max_history      INTEGER NOT NULL,
+    ray_id           TEXT,
+    traceparent      TEXT,
+    tracestate       TEXT
+) STRICT, WITHOUT ROWID
+"#;
+
+const FRESH_QUEUE: &str = r#"
+CREATE TABLE _rivet_queue (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL,
+    body        BLOB NOT NULL,
+    created_at  INTEGER NOT NULL,
+    ray_id      TEXT,
+    traceparent TEXT,
+    tracestate  TEXT
+) STRICT
+"#;
+
+/// The schema a fresh database is created with: the first migration with the tables later
+/// migrations altered replaced by their current definitions. Later migrations that only add
+/// columns to those tables are covered by the replacement; any other kind of migration must
+/// be added here too, which `fresh_schema_matches_the_migration_ladder` checks.
+fn fresh_schema() -> impl Iterator<Item = &'static str> {
+	MIGRATION_V1.iter().map(|sql| {
+		if sql.contains("CREATE TABLE _rivet_schedule_events") {
+			FRESH_SCHEDULE_EVENTS
+		} else if sql.contains("CREATE TABLE _rivet_queue ") {
+			FRESH_QUEUE
+		} else {
+			sql
+		}
+	})
+}
+
+/// One atomic bootstrap batch; callers may append framework-owned initial rows.
+pub(crate) fn bootstrap_statements() -> Result<Vec<SqliteBatchStatement>> {
+	let mut statements = vec![SqliteBatchStatement {
+		sql: CREATE_META_TABLE.to_owned(),
+		params: None,
+	}];
+	statements.extend(fresh_schema().map(|sql| SqliteBatchStatement {
+		sql: sql.to_owned(),
+		params: None,
+	}));
+	statements.push(SqliteBatchStatement {
+		sql: UPSERT_META_TEXT_SQL.to_owned(),
+		params: Some(vec![
+			BindParam::Text(SCHEMA_VERSION_KEY.to_owned()),
+			BindParam::Blob(encode_schema_version(INTERNAL_SCHEMA_VERSION)),
+		]),
+	});
+	Ok(statements)
+}
+
+
+
+
+
+
+
+/// [`ensure_internal_schema`] for a caller that already probed for the schema, so a start does
+/// not read the schema table twice.
+pub(crate) async fn ensure_probed_internal_schema(db: &SqliteDb, has_schema: bool) -> Result<()> {
+	if !has_schema {
+		// A fresh database has no migration checkpoint to preserve. Interruption
+		// leaves either no schema or the complete schema and version marker.
+		db.execute_batch(bootstrap_statements()?)
+			.await
+			.context("bootstrap rivet internal schema")?;
+		return Ok(());
+	}
 
 	let current_version = read_schema_version(db).await?;
 	if current_version > INTERNAL_SCHEMA_VERSION {
@@ -270,6 +366,4 @@ pub(crate) fn initialize_test_schema(conn: &rusqlite::Connection) -> Result<()> 
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../../tests/internal_schema.rs"]
-pub(crate) mod tests;
+

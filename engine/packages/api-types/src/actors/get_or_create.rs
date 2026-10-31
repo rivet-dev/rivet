@@ -17,6 +17,7 @@ pub struct GetOrCreateRequest {
 	pub name: String,
 	pub key: String,
 	pub input: Option<String>,
+	#[serde(rename = "pool", alias = "runner_name_selector")]
 	pub runner_name_selector: String,
 	pub crash_policy: rivet_types::actors::CrashPolicy,
 }

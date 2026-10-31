@@ -1,8 +1,8 @@
 use epoxy_protocol::protocol;
 use serde::{Deserialize, Serialize};
 
-// IMPORTANT: We cannot use the protocol types in the workflow engine because generated BARE code
-// does not allow us to preserve backwards-compatible workflow state.
+// Stable JSON names for peer inspection and configuration endpoints. Generated BARE types
+// use their own enum representation and remain the binary protocol boundary.
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Hash)]
 pub struct ClusterConfig {
@@ -55,8 +55,8 @@ impl From<protocol::ReplicaConfig> for ReplicaConfig {
 		Self {
 			replica_id: config.replica_id,
 			status: config.status.into(),
-			api_peer_url: config.api_peer_url,
-			guard_url: config.guard_url,
+			api_peer_url: config.api_peer_url.to_string(),
+			guard_url: config.guard_url.to_string(),
 		}
 	}
 }
@@ -66,8 +66,8 @@ impl From<ReplicaConfig> for protocol::ReplicaConfig {
 		Self {
 			replica_id: config.replica_id,
 			status: config.status.into(),
-			api_peer_url: config.api_peer_url,
-			guard_url: config.guard_url,
+			api_peer_url: config.api_peer_url.into(),
+			guard_url: config.guard_url.into(),
 		}
 	}
 }

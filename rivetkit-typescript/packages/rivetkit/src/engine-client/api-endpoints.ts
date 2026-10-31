@@ -167,17 +167,6 @@ export interface RunnerConfigsResponse {
 	runner_configs: Record<string, RunnerConfigDatacenters>;
 }
 
-export async function getRunnerConfig(
-	config: ClientConfig,
-	name: string,
-): Promise<RunnerConfigsResponse> {
-	return apiCall<never, RunnerConfigsResponse>(
-		config,
-		"GET",
-		`/runner-configs?runner_name=${name}`,
-	);
-}
-
 // MARK: Update runner config
 export interface RegistryConfigRequest {
 	datacenters: Record<
@@ -212,11 +201,11 @@ export async function updateRunnerConfig(
 	runnerName: string,
 	request: RegistryConfigRequest,
 ): Promise<void> {
-	return apiCall<RegistryConfigRequest, void>(
+	return apiCall<unknown, void>(
 		config,
 		"PUT",
-		`/runner-configs/${runnerName}`,
-		request,
+		`/pools/${encodeURIComponent(runnerName)}`,
+		Object.values(request.datacenters)[0],
 	);
 }
 
@@ -236,4 +225,45 @@ export async function kvGet(
 		"GET",
 		`/actors/${encodeURIComponent(actorId)}/kv/keys/${encodeURIComponent(key)}`,
 	);
+}
+
+/** Pool changes apply when each node next connects. */
+export interface PoolConfig {
+	drain_on_version_upgrade?: boolean;
+	actor_eviction_delay?: number;
+	actor_eviction_period?: number;
+	actor_eviction_rate?: number;
+	metadata?: unknown;
+}
+
+export function upsertPool(
+	config: ClientConfig,
+	name: string,
+	pool: PoolConfig,
+): Promise<{ pool: PoolConfig & { name: string } }> {
+	return apiCall(config, "PUT", `/pools/${encodeURIComponent(name)}`, pool);
+}
+
+export function getPool(
+	config: ClientConfig,
+	name: string,
+): Promise<{ pool: PoolConfig & { name: string } }> {
+	return apiCall(config, "GET", `/pools/${encodeURIComponent(name)}`);
+}
+
+export function listPools(
+	config: ClientConfig,
+	page?: { limit?: number; cursor?: string },
+): Promise<{
+	pools: Array<PoolConfig & { name: string }>;
+	pagination: { cursor: string | null };
+}> {
+	const query = new URLSearchParams();
+	if (page?.limit !== undefined) query.set("limit", String(page.limit));
+	if (page?.cursor !== undefined) query.set("cursor", page.cursor);
+	return apiCall(config, "GET", `/pools?${query}`);
+}
+
+export function deletePool(config: ClientConfig, name: string): Promise<void> {
+	return apiCall(config, "DELETE", `/pools/${encodeURIComponent(name)}`);
 }

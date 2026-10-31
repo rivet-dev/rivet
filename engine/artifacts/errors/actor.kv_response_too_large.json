@@ -1,0 +1,5 @@
+{
+  "code": "kv_response_too_large",
+  "group": "actor",
+  "message": "The KV response is too large. Read fewer keys per request."
+}

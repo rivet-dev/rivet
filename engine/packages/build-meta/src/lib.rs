@@ -64,10 +64,6 @@ pub fn compiled_runtime_protocols() -> rivet_config::RuntimeProtocols {
 			rivet_config::RuntimeProtocolKind::Ups,
 			rivet_ups_protocol::PROTOCOL_VERSION,
 		),
-		universaldb_commit: rivet_config::RuntimeProtocol::new(
-			rivet_config::RuntimeProtocolKind::UniversaldbCommit,
-			rivet_universaldb_commit::PROTOCOL_VERSION,
-		),
 		epoxy: rivet_config::RuntimeProtocol::new(
 			rivet_config::RuntimeProtocolKind::Epoxy,
 			epoxy_protocol::PROTOCOL_VERSION,

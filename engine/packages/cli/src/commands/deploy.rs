@@ -1,40 +1,44 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use clap::Parser;
-use reqwest::Method;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::{
-	DEFAULT_CLOUD_API, DEFAULT_NAMESPACE,
+	DEFAULT_NAMESPACE,
+	auth::Auth,
 	cloud::{
-		CloudClient, TokenInspectResponse, create_or_update_pool, dashboard_endpoint,
-		ensure_namespace, pool_exists, registry_endpoint, wait_for_pool,
+		CloudClient, create_or_update_pool, create_registry_token, dashboard_endpoint,
+		ensure_namespace, pool_exists, registry_endpoint, revoke_api_token, wait_for_pool,
 	},
-	credentials::{resolve_token, write_credentials},
+	credentials::store_cloud_token,
+	target::{CloudArgs, ClusterTarget, ProjectTarget, Target},
 	util::{
 		build_resources, build_runner_config, default_image_tag, docker_build, docker_login,
 		encode, parse_env_vars, run_command,
 	},
 };
 
+mod cluster;
+
 #[derive(Parser)]
 pub struct Opts {
-	/// Rivet Cloud API token. Also writes ~/.rivet/credentials for later commands.
+	#[command(flatten)]
+	cloud: CloudArgs,
+	/// Cloud namespace to deploy to. Defaults to `production`. Projects only.
 	#[arg(long)]
-	token: Option<String>,
-	/// Cloud namespace to deploy to.
-	#[arg(long, default_value = DEFAULT_NAMESPACE)]
-	namespace: String,
-	/// Cloud compute pool to deploy to.
+	namespace: Option<String>,
+	/// Compute pool to deploy to. On a cluster, the runner pool.
 	#[arg(long, default_value = crate::POOL_NAME)]
 	pool: String,
-	/// Override project from /tokens/api/inspect.
+	/// Cluster region to deploy to. Defaults to the cluster's only region.
+	/// Clusters only.
 	#[arg(long)]
-	project: Option<String>,
-	/// Override organization from /tokens/api/inspect.
+	region: Option<String>,
+	/// Roll out an existing build instead of building and uploading a new one.
+	/// Clusters only.
 	#[arg(long)]
-	org: Option<String>,
+	build: Option<String>,
 	/// Dockerfile to build.
 	#[arg(long, default_value = "Dockerfile")]
 	dockerfile: PathBuf,
@@ -47,9 +51,6 @@ pub struct Opts {
 	/// Skip prompts.
 	#[arg(long)]
 	yes: bool,
-	/// Cloud API endpoint.
-	#[arg(long, default_value = DEFAULT_CLOUD_API)]
-	cloud_api: String,
 	/// Image repository name in Rivet's registry. Defaults to the project slug.
 	#[arg(long)]
 	image: Option<String>,
@@ -96,12 +97,11 @@ pub struct Opts {
 
 impl Opts {
 	pub async fn execute(self) -> Result<()> {
-		let token = resolve_token(self.token.as_deref())?;
-		if let Some(token) = &self.token {
-			write_credentials(token)?;
+		if let Some(token) = &self.cloud.token {
+			store_cloud_token(token)?;
 		}
 
-		if !self.reuse_image && !self.dockerfile.exists() {
+		if !self.reuse_image && self.build.is_none() && !self.dockerfile.exists() {
 			bail!("Dockerfile not found: {}", self.dockerfile.display());
 		}
 
@@ -119,21 +119,87 @@ impl Opts {
 			self.drain_on_version_upgrade,
 		)?;
 
-		let cloud = CloudClient::new(&self.cloud_api, token.clone())?;
-		tracing::info!("inspecting Rivet Cloud token");
-		let inspect: TokenInspectResponse = cloud
-			.request(Method::GET, "/tokens/api/inspect", None)
-			.await?
-			.context("token inspect returned no body")?;
-		let project = self.project.unwrap_or(inspect.project);
-		let organization = self.org.unwrap_or(inspect.organization);
-		let namespace = ensure_namespace(&cloud, &project, &organization, &self.namespace).await?;
+		let (cloud, auth, target) = self.cloud.connect().await?;
+		match target {
+			Target::Project(project) => {
+				reject_flags(
+					"project",
+					&[
+						("--region", self.region.is_some()),
+						("--build", self.build.is_some()),
+					],
+				)?;
+				self.deploy_project(cloud, auth, project, resources, runner_config)
+					.await
+			}
+			Target::Cluster(ClusterTarget { cluster, .. }) => {
+				reject_flags(
+					"cluster",
+					&[
+						("--namespace", self.namespace.is_some()),
+						("--env", !self.env_vars.is_empty()),
+						("--cpu", self.cpu.is_some()),
+						("--memory", self.memory.is_some()),
+						("--min-scale", self.min_scale.is_some()),
+						("--max-scale", self.max_scale.is_some()),
+						(
+							"--max-concurrent-actors",
+							self.max_concurrent_actors.is_some(),
+						),
+						("--drain-grace-period", self.drain_grace_period.is_some()),
+						(
+							"--drain-on-version-upgrade",
+							self.drain_on_version_upgrade.is_some(),
+						),
+						(
+							"--instance-request-concurrency",
+							self.instance_request_concurrency.is_some(),
+						),
+						("--reuse-image", self.reuse_image),
+					],
+				)?;
+				cluster::deploy(
+					&cloud,
+					cluster::ClusterDeploy {
+						cluster,
+						pool: self.pool,
+						region: self.region,
+						build: self.build,
+						dockerfile: self.dockerfile,
+						build_context: self.build_context,
+						image: self.image,
+						tag: self.tag,
+					},
+				)
+				.await
+			}
+		}
+	}
+
+	async fn deploy_project(
+		self,
+		cloud: CloudClient,
+		auth: Auth,
+		ProjectTarget {
+			org: organization,
+			project,
+		}: ProjectTarget,
+		resources: Option<Value>,
+		runner_config: Option<Value>,
+	) -> Result<()> {
+		let namespace = ensure_namespace(
+			&cloud,
+			&project,
+			&organization,
+			self.namespace.as_deref().unwrap_or(DEFAULT_NAMESPACE),
+		)
+		.await?;
 
 		// Surface the pool in logs only when it is not the default, so the common
 		// single-pool case stays uncluttered. A `None` field is omitted by tracing.
 		let pool_field = (self.pool != crate::POOL_NAME).then_some(self.pool.as_str());
 
-		let dashboard = dashboard_endpoint(&self.cloud_api)?;
+		let dashboard = dashboard_endpoint(&self.cloud.cloud_api)?;
 		let dashboard_url = format!(
 			"{dashboard}/orgs/{}/projects/{}/ns/{}?skipOnboarding=1",
 			encode(&organization),
@@ -192,19 +258,38 @@ impl Opts {
 			);
 			None
 		} else {
-			let registry = registry_endpoint(&self.cloud_api)?;
+			let registry = registry_endpoint(&self.cloud.cloud_api)?;
 			let image_name = self.image.unwrap_or_else(|| project.clone());
 			let tag = self.tag.unwrap_or_else(default_image_tag);
 			let image_ref = format!("{registry}/{image_name}:{tag}");
 
-			tracing::info!("logging in to Rivet registry");
-			docker_login(&registry, &token)?;
-
-			tracing::info!("building Docker image");
-			docker_build(&self.build_context, &self.dockerfile, &image_ref)?;
-
-			tracing::info!("pushing Docker image");
-			run_command("docker", &["push", &image_ref], None)?;
+			// The registry only accepts Cloud API tokens, so a login session
+			// pushes with a short-lived token that is revoked afterwards.
+			let registry_token = if auth.is_login() {
+				Some(create_registry_token(&cloud, &project, &organization).await?)
+			} else {
+				None
+			};
+			let pushed = build_and_push(
+				&registry,
+				registry_token
+					.as_ref()
+					.map_or(auth.token.as_str(), |token| token.token.as_str()),
+				&self.build_context,
+				&self.dockerfile,
+				&image_ref,
+			);
+			if let Some(token) = &registry_token {
+				if let Err(error) =
+					revoke_api_token(&cloud, &project, &organization, &token.id).await
+				{
+					tracing::warn!(
+						?error,
+						"could not revoke the temporary registry token; it expires on its own"
+					);
+				}
+			}
+			pushed?;
 
 			Some((image_name, tag))
 		};
@@ -253,4 +338,36 @@ impl Opts {
 		println!("{dashboard_url}");
 		Ok(())
 	}
+}
+
+fn reject_flags(target: &str, flags: &[(&str, bool)]) -> Result<()> {
+	let set: Vec<&str> = flags
+		.iter()
+		.filter(|(_, set)| *set)
+		.map(|(name, _)| *name)
+		.collect();
+	if set.is_empty() {
+		return Ok(());
+	}
+	bail!(
+		"{} cannot be used when deploying to a {target}",
+		set.join(", ")
+	)
+}
+
+fn build_and_push(
+	registry: &str,
+	token: &str,
+	build_context: &Path,
+	dockerfile: &Path,
+	image_ref: &str,
+) -> Result<()> {
+	tracing::info!("logging in to Rivet registry");
+	docker_login(registry, token)?;
+
+	tracing::info!("building Docker image");
+	docker_build(build_context, dockerfile, image_ref)?;
+
+	tracing::info!("pushing Docker image");
+	run_command("docker", &["push", image_ref], None)
 }

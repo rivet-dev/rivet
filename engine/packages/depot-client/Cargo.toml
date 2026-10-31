@@ -1,41 +1,41 @@
 [package]
-name = "rivet-depot-client"
+name = "depot-client"
+publish = false
 version.workspace = true
 authors.workspace = true
 license.workspace = true
 homepage.workspace = true
 repository.workspace = true
 edition.workspace = true
-workspace = "../../../"
-description = "Depot-backed native SQLite VFS client"
 
 [lib]
-name = "depot_client"
 crate-type = ["lib"]
 
 [dependencies]
-anyhow.workspace = true
-async-trait.workspace = true
-crossbeam-channel = "0.5"
-libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+rivet-config.workspace = true
+parking_lot.workspace = true
+depot-protocol.workspace = true
+depot-fs-core.workspace = true
+thiserror.workspace = true
+lazy_static.workspace = true
+rivet-metrics.workspace = true
+futures-util.workspace = true
+depot-volume = { path = "../depot-volume" }
+depot-types = { path = "../depot-types" }
+rivet-data.workspace = true
+vbare.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-getrandom = "0.2"
-rivet-envoy-protocol.workspace = true
-depot-client-types.workspace = true
-moka = { version = "0.12", default-features = false, features = ["sync"] }
-parking_lot.workspace = true
+anyhow.workspace = true
+bytes.workspace = true
+rivet-env.workspace = true
+rivet-state-machine.workspace = true
+rivet-state-machine-ephemeral.workspace = true
 scc.workspace = true
-
-[dev-dependencies]
-depot = { workspace = true, features = ["test-faults"] }
-futures-util.workspace = true
-gas.workspace = true
-rivet-config.workspace = true
 rivet-error.workspace = true
-rivet-pools.workspace = true
-rivet-test-deps.workspace = true
-sha2.workspace = true
-tempfile.workspace = true
-universaldb.workspace = true
+serde.workspace = true
+rivet-keys.workspace = true
+foundationdb-tuple.workspace = true
+rivet-topology.workspace = true
 universalpubsub.workspace = true
+

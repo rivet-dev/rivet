@@ -1,0 +1,14 @@
+# Tracks earliest alarm
+type Alarm struct {
+	armId: data[16]
+	deadlineUnixMs: i64
+}
+
+type Data struct {
+	startedMs: optional<i64>
+	alarm: optional<Alarm>
+}
+
+type TimerEntry struct {
+	deadlineUnixMs: i64
+}

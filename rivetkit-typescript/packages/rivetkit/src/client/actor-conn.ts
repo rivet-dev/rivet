@@ -51,7 +51,6 @@ import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
 import * as errors from "./errors";
 import { isRetryableLifecycleReconnectSignal } from "./lifecycle-errors";
 import { logger } from "./log";
-import { isInvalidToken } from "./token-provider";
 import { outboundTelemetryHeaders } from "./outbound-telemetry";
 import {
 	createQueueSender,
@@ -60,6 +59,8 @@ import {
 	type QueueSendResult,
 	type QueueSendWaitOptions,
 } from "./queue";
+import { retryAfterMs } from "./retry-budget";
+import { isInvalidToken } from "./token-provider";
 import {
 	type WebSocketMessage as ConnMessage,
 	messageLength,
@@ -105,6 +106,21 @@ interface EventSubscriptions<Args extends Array<unknown>> {
 export type EventUnsubscribe = () => void;
 
 /**
+ * How long a connection attempt may wait for the actor's Init before it is abandoned and
+ * retried. Longer than the engine's own WebSocket open deadline (15 s by default), so an engine
+ * that answers with a typed close wins, while a socket that never settles is still retried.
+ */
+const CONNECT_TIMEOUT_MS = 20_000;
+
+function isConnectionOpenTimeout(error: unknown): boolean {
+	return (
+		error instanceof errors.ActorError &&
+		error.group === "client" &&
+		error.code === "connection_open_timeout"
+	);
+}
+
+/**
  * A function that handles connection errors.
  *
  * @typedef {Function} ActorErrorCallback
@@ -144,6 +160,8 @@ export class ActorConnRaw {
 	#abortController = new AbortController();
 
 	#connStatus: ActorConnStatus = "idle";
+	/** The opening failure that stopped retries. Later actions must fail instead of queueing. */
+	#connectionOpenError?: errors.ActorError;
 
 	#actorId?: string;
 	#connId?: string;
@@ -182,6 +200,8 @@ export class ActorConnRaw {
 
 	/** Promise used to indicate the socket has connected successfully. This will be rejected if the connection fails. */
 	#onOpenPromise?: ReturnType<typeof promiseWithResolvers<undefined>>;
+	/** Sockets given up on by the connect timeout. Their late events are ignored. */
+	#abandonedSockets = new WeakSet<UniversalWebSocket>();
 
 	#websocket?: UniversalWebSocket;
 	#authRetryAvailable = true;
@@ -338,6 +358,8 @@ export class ActorConnRaw {
 				`Invalid action call: expected an options object { name, args }, got ${typeof opts}. Use conn.actionName(...args) for the shorthand API.`,
 			);
 		}
+		if (this.#disposed) throw new errors.ActorConnDisposed();
+		if (this.#connectionOpenError) throw this.#connectionOpenError;
 		logger().debug({ msg: "action", name: opts.name, args: opts.args });
 
 		// If we have an active connection, use the websockactionId
@@ -448,6 +470,7 @@ export class ActorConnRaw {
 	}
 
 	#connectWithRetry() {
+		this.#connectionOpenError = undefined;
 		this.#setConnStatus("connecting");
 
 		// Attempt to reconnect indefinitely
@@ -457,12 +480,17 @@ export class ActorConnRaw {
 			minTimeout: 250,
 			maxTimeout: 30_000,
 
-			onFailedAttempt: (error) => {
+			onFailedAttempt: async (error) => {
 				logger().warn({
 					msg: "failed to reconnect",
 					attempt: error.attemptNumber,
 					error: stringifyError(error),
 				});
+				// A close that carried the service's retry hint waits at least that long.
+				const hintMs = retryAfterMs(error);
+				if (hintMs !== undefined) {
+					await new Promise((resolve) => setTimeout(resolve, hintMs));
+				}
 			},
 
 			// Cancel retry if aborted
@@ -498,8 +526,13 @@ export class ActorConnRaw {
 			await this.#connectWebSocket();
 
 			// Wait for result
-			await this.#onOpenPromise.promise;
+			await this.#waitForOpen(this.#onOpenPromise.promise);
 		} catch (error) {
+			this.#abandonCurrentSocket(
+				isConnectionOpenTimeout(error)
+					? "Connect timeout"
+					: "Connection opening failed",
+			);
 			if (this.#shouldRetryConnectionOpenError(error)) {
 				throw error;
 			}
@@ -514,7 +547,7 @@ export class ActorConnRaw {
 							{ error: stringifyError(error) },
 						);
 
-			this.#clearQueuedMessages();
+			this.#connectionOpenError = actorError;
 			this.#rejectPendingPromises(actorError, false);
 			this.#dispatchActorError(actorError);
 			this.#setConnStatus("idle");
@@ -529,9 +562,66 @@ export class ActorConnRaw {
 		}
 	}
 
+	/**
+	 * Waits for the actor's Init on the current socket, up to {@link CONNECT_TIMEOUT_MS}. A socket
+	 * can stay connecting with no open, error or close event, as when the engine holds the
+	 * upgrade or a refused connect reports only an error. On timeout the socket is abandoned
+	 * and closed, and the retryable `client.connection_open_timeout` starts the next attempt.
+	 */
+	async #waitForOpen(open: Promise<undefined>) {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const timedOut = new Promise<never>((_, reject) => {
+			timer = setTimeout(() => {
+				reject(
+					new errors.ActorError(
+						"client",
+						"connection_open_timeout",
+						`Connection did not open within ${CONNECT_TIMEOUT_MS} ms`,
+					),
+				);
+			}, CONNECT_TIMEOUT_MS);
+		});
+		try {
+			await Promise.race([open, timedOut]);
+		} finally {
+			clearTimeout(timer);
+		}
+	}
+
+	#abandonCurrentSocket(reason: string) {
+		const ws = this.#websocket;
+		if (!ws) return;
+		this.#websocket = undefined;
+		this.#abandonedSockets.add(ws);
+		logger().debug({
+			msg: "closing failed connection attempt",
+			connId: this.#connId,
+			readyState: ws.readyState,
+			reason,
+		});
+		try {
+			ws.close(1000, reason);
+		} catch (err) {
+			logger().debug({
+				msg: "failed to close abandoned websocket",
+				error: stringifyError(err),
+			});
+		}
+	}
+
 	#shouldRetryConnectionOpenError(error: unknown): boolean {
 		if (error instanceof errors.ActorConnDisposed) {
 			return false;
+		}
+		if (isConnectionOpenTimeout(error)) {
+			return true;
+		}
+		if (
+			error instanceof errors.ActorError &&
+			error.group === "client" &&
+			error.code === "connection_open_interrupted"
+		) {
+			return true;
 		}
 		if (
 			error instanceof errors.ActorError &&
@@ -614,14 +704,18 @@ export class ActorConnRaw {
 		});
 		this.#websocket = ws;
 		ws.addEventListener("open", () => {
+			if (this.#websocket !== ws || this.#abandonedSockets.has(ws))
+				return;
 			logger().debug({
 				msg: "client websocket open",
 				connId: this.#connId,
 			});
 		});
 		ws.addEventListener("message", async (ev: { data: ConnMessage }) => {
+			if (this.#websocket !== ws || this.#abandonedSockets.has(ws))
+				return;
 			try {
-				await this.#handleOnMessage(ev.data);
+				await this.#handleOnMessage(ev.data, ws);
 			} catch (err) {
 				logger().error({
 					msg: "error in websocket message handler",
@@ -630,6 +724,8 @@ export class ActorConnRaw {
 			}
 		});
 		ws.addEventListener("close", async (ev: Event | CloseEventLike) => {
+			if (this.#websocket !== ws || this.#abandonedSockets.has(ws))
+				return;
 			try {
 				await this.#handleOnClose(ev);
 			} catch (err) {
@@ -640,6 +736,8 @@ export class ActorConnRaw {
 			}
 		});
 		ws.addEventListener("error", () => {
+			if (this.#websocket !== ws || this.#abandonedSockets.has(ws))
+				return;
 			try {
 				this.#handleOnError();
 			} catch (err) {
@@ -721,7 +819,7 @@ export class ActorConnRaw {
 	}
 
 	/** Called by the onmessage event from drivers. */
-	async #handleOnMessage(data: any) {
+	async #handleOnMessage(data: any, socket: UniversalWebSocket) {
 		logger().trace({
 			msg: "received message",
 			dataType: typeof data,
@@ -730,6 +828,10 @@ export class ActorConnRaw {
 		});
 
 		const response = await this.#parseMessage(data as ConnMessage);
+		// Decoding can yield while this socket closes and another connects. Apply
+		// the message only while its socket still owns the connection.
+		if (this.#websocket !== socket || this.#abandonedSockets.has(socket))
+			return;
 		logger().trace(
 			getLogMessage()
 				? {
@@ -815,23 +917,19 @@ export class ActorConnRaw {
 						this.#actorResolutionState,
 						this.#driver,
 					);
+					if (
+						this.#websocket !== socket ||
+						this.#abandonedSockets.has(socket)
+					) {
+						return;
+					}
 					if (schedulingError) {
 						errorToThrow = schedulingError;
 					}
 				}
 
-				// If we have an onOpenPromise, reject it with the error
-				if (this.#onOpenPromise) {
-					this.#onOpenPromise.reject(errorToThrow);
-				}
-
 				this.#invalidateActorIfStale(group, code);
-
-				// Reject any in-flight requests
-				for (const [id, inFlight] of this.#actionsInFlight.entries()) {
-					inFlight.reject(errorToThrow);
-					this.#actionsInFlight.delete(id);
-				}
+				this.#rejectPendingPromises(errorToThrow, false);
 
 				this.#dispatchActorError(errorToThrow);
 			}
@@ -894,7 +992,11 @@ export class ActorConnRaw {
 			const parsed = parseWebSocketCloseReason(reason);
 
 			if (parsed) {
-				const { group, code, rayId } = parsed;
+				const { group, code, rayId, retryAfterMs } = parsed;
+				const closeOptions =
+					retryAfterMs === undefined
+						? { rayId }
+						: { rayId, metadata: { retry_after_ms: retryAfterMs } };
 				if (
 					isInvalidToken(group, code) &&
 					closeEvent.code === 1008 &&
@@ -923,7 +1025,7 @@ export class ActorConnRaw {
 							group,
 							code,
 							`Connection closed: ${reason}`,
-							{ rayId },
+							closeOptions,
 						),
 					);
 					return;
@@ -946,7 +1048,7 @@ export class ActorConnRaw {
 							group,
 							code,
 							`Connection closed: ${reason}`,
-							{ rayId },
+							closeOptions,
 						);
 					}
 				} else {
@@ -954,16 +1056,24 @@ export class ActorConnRaw {
 						group,
 						code,
 						`Connection closed: ${reason}`,
-						{ rayId },
+						closeOptions,
 					);
 				}
 
 				this.#invalidateActorIfStale(group, code);
 			} else {
 				// Default error for non-structured close reasons
-				error = new Error(
-					`${wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${reason})`,
-				);
+				const message = `${wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${reason})`;
+				// A transport loss during the handshake can outlast an Engine
+				// restart. Retry opening without replaying actions with unknown outcomes.
+				error =
+					!wasConnected && closeEvent.code === 1006
+						? new errors.ActorError(
+								"client",
+								"connection_open_interrupted",
+								message,
+							)
+						: new Error(message);
 			}
 
 			this.#rejectPendingPromises(error, false);
@@ -985,6 +1095,8 @@ export class ActorConnRaw {
 	}
 
 	#rejectPendingPromises(error: Error, suppressUnhandled: boolean) {
+		// Rejected actions must not survive in the queue and execute after a reconnect.
+		this.#clearQueuedMessages();
 		if (this.#onOpenPromise) {
 			if (suppressUnhandled) {
 				this.#onOpenPromise.promise.catch(() => {});

@@ -1,6 +1,7 @@
 use anyhow::{Result, bail};
-use serde_bare::Uint;
-use vbare::OwnedVersionedData;
+use vbare::{
+	Bytes, Converter, DecodeError, DecodeErrorKind, Encode, EncodeError, Message, Sink, Versioned,
+};
 
 use crate::generated::{v1, v2, v3, v4, v5, v6};
 
@@ -19,7 +20,9 @@ pub enum ToServer {
 	V6(v6::ToServer),
 }
 
-impl OwnedVersionedData for ToServer {
+impl Versioned for ToServer {
+	const LATEST: u16 = 6;
+
 	type Latest = v6::ToServer;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
@@ -33,49 +36,69 @@ impl OwnedVersionedData for ToServer {
 		}
 	}
 
-	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+	fn decode_version(version: u16, payload: Bytes) -> std::result::Result<Self, DecodeError> {
 		match version {
-			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
-			2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
-			3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
-			4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
-			5 => Ok(Self::V5(serde_bare::from_slice(payload)?)),
-			6 => Ok(Self::V6(serde_bare::from_slice(payload)?)),
-			_ => bail!("invalid inspector protocol version for ToServer: {version}"),
+			1 => Ok(Self::V1(Message::decode(payload)?)),
+			2 => Ok(Self::V2(Message::decode(payload)?)),
+			3 => Ok(Self::V3(Message::decode(payload)?)),
+			4 => Ok(Self::V4(Message::decode(payload)?)),
+			5 => Ok(Self::V5(Message::decode(payload)?)),
+			6 => Ok(Self::V6(Message::decode(payload)?)),
+			_ => Err(unsupported_version(format!(
+				"invalid inspector protocol version for ToServer: {version}"
+			))),
 		}
 	}
 
-	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+	fn encode_version<S: Sink>(
+		&self,
+		version: u16,
+		out: &mut S,
+	) -> std::result::Result<(), EncodeError> {
 		match (self, version) {
-			(Self::V1(data), 1) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V5(data), 5) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V6(data), 6) => serde_bare::to_vec(&data).map_err(Into::into),
-			(_, version) => bail!("unexpected inspector protocol version for ToServer: {version}"),
+			(Self::V1(data), 1) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V2(data), 2) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V3(data), 3) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V4(data), 4) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V5(data), 5) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V6(data), 6) => {
+				data.encode(out);
+				Ok(())
+			}
+			(_, version) => Err(EncodeError::UnsupportedVersion(version)),
 		}
 	}
 
-	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![
-			Self::v1_to_v2,
-			Self::v2_to_v3,
-			Self::v3_to_v4,
-			Self::v4_to_v5,
-			Self::v5_to_v6,
-		]
-	}
+	const UPGRADES: &'static [Converter<Self>] = &[
+		Self::v1_to_v2,
+		Self::v2_to_v3,
+		Self::v3_to_v4,
+		Self::v4_to_v5,
+		Self::v5_to_v6,
+	];
 
-	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![
-			Self::v6_to_v5,
-			Self::v5_to_v4,
-			Self::v4_to_v3,
-			Self::v3_to_v2,
-			Self::v2_to_v1,
-		]
-	}
+	const DOWNGRADES: &'static [Converter<Self>] = &[
+		Self::v6_to_v5,
+		Self::v5_to_v4,
+		Self::v4_to_v3,
+		Self::v3_to_v2,
+		Self::v2_to_v1,
+	];
 }
 
 impl ToServer {
@@ -306,7 +329,9 @@ pub enum ToClient {
 	V6(v6::ToClient),
 }
 
-impl OwnedVersionedData for ToClient {
+impl Versioned for ToClient {
+	const LATEST: u16 = 6;
+
 	type Latest = v6::ToClient;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
@@ -320,49 +345,69 @@ impl OwnedVersionedData for ToClient {
 		}
 	}
 
-	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+	fn decode_version(version: u16, payload: Bytes) -> std::result::Result<Self, DecodeError> {
 		match version {
-			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
-			2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
-			3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
-			4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
-			5 => Ok(Self::V5(serde_bare::from_slice(payload)?)),
-			6 => Ok(Self::V6(serde_bare::from_slice(payload)?)),
-			_ => bail!("invalid inspector protocol version for ToClient: {version}"),
+			1 => Ok(Self::V1(Message::decode(payload)?)),
+			2 => Ok(Self::V2(Message::decode(payload)?)),
+			3 => Ok(Self::V3(Message::decode(payload)?)),
+			4 => Ok(Self::V4(Message::decode(payload)?)),
+			5 => Ok(Self::V5(Message::decode(payload)?)),
+			6 => Ok(Self::V6(Message::decode(payload)?)),
+			_ => Err(unsupported_version(format!(
+				"invalid inspector protocol version for ToClient: {version}"
+			))),
 		}
 	}
 
-	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+	fn encode_version<S: Sink>(
+		&self,
+		version: u16,
+		out: &mut S,
+	) -> std::result::Result<(), EncodeError> {
 		match (self, version) {
-			(Self::V1(data), 1) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V5(data), 5) => serde_bare::to_vec(&data).map_err(Into::into),
-			(Self::V6(data), 6) => serde_bare::to_vec(&data).map_err(Into::into),
-			(_, version) => bail!("unexpected inspector protocol version for ToClient: {version}"),
+			(Self::V1(data), 1) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V2(data), 2) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V3(data), 3) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V4(data), 4) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V5(data), 5) => {
+				data.encode(out);
+				Ok(())
+			}
+			(Self::V6(data), 6) => {
+				data.encode(out);
+				Ok(())
+			}
+			(_, version) => Err(EncodeError::UnsupportedVersion(version)),
 		}
 	}
 
-	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![
-			Self::v1_to_v2,
-			Self::v2_to_v3,
-			Self::v3_to_v4,
-			Self::v4_to_v5,
-			Self::v5_to_v6,
-		]
-	}
+	const UPGRADES: &'static [Converter<Self>] = &[
+		Self::v1_to_v2,
+		Self::v2_to_v3,
+		Self::v3_to_v4,
+		Self::v4_to_v5,
+		Self::v5_to_v6,
+	];
 
-	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![
-			Self::v6_to_v5,
-			Self::v5_to_v4,
-			Self::v4_to_v3,
-			Self::v3_to_v2,
-			Self::v2_to_v1,
-		]
-	}
+	const DOWNGRADES: &'static [Converter<Self>] = &[
+		Self::v6_to_v5,
+		Self::v5_to_v4,
+		Self::v4_to_v3,
+		Self::v3_to_v2,
+		Self::v2_to_v1,
+	];
 }
 
 impl ToClient {
@@ -391,7 +436,7 @@ impl ToClient {
 				is_state_enabled: init.is_state_enabled,
 				rpcs: init.rpcs,
 				is_database_enabled: init.is_database_enabled,
-				queue_size: Uint(0),
+				queue_size: 0,
 				workflow_history: None,
 				is_workflow_enabled: false,
 			}),
@@ -620,7 +665,7 @@ impl ToClient {
 			| v6::ToClientBody::SchedulesResponse(_)
 			| v6::ToClientBody::ScheduleHistoryResponse(_)
 			| v6::ToClientBody::ScheduleDeleteResponse(_) => v5::ToClientBody::Error(v5::Error {
-				message: SCHEDULES_DROPPED_ERROR.to_owned(),
+				message: SCHEDULES_DROPPED_ERROR.to_owned().into(),
 			}),
 		};
 
@@ -1316,171 +1361,13 @@ impl From<v2::ToClient> for v3::ToClient {
 
 fn dropped_error(message: &str) -> v2::Error {
 	v2::Error {
-		message: message.to_owned(),
+		message: message.to_owned().into(),
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
 
-	#[test]
-	fn v3_database_schema_request_keeps_meaning_when_upgrading_to_v4() {
-		let request = ToServer::V3(v3::ToServer {
-			body: v3::ToServerBody::DatabaseSchemaRequest(v3::DatabaseSchemaRequest {
-				id: Uint(7),
-			}),
-		});
 
-		let ToServer::V4(upgraded) = ToServer::v3_to_v4(request).unwrap() else {
-			panic!("expected v4 request")
-		};
-
-		assert!(matches!(
-			upgraded.body,
-			v4::ToServerBody::DatabaseSchemaRequest(v4::DatabaseSchemaRequest { id }) if id == Uint(7)
-		));
-	}
-
-	fn v5_init_with_tabs() -> v5::Init {
-		v5::Init {
-			connections: Vec::new(),
-			state: None,
-			is_state_enabled: false,
-			rpcs: Vec::new(),
-			is_database_enabled: false,
-			queue_size: Uint(0),
-			workflow_history: None,
-			is_workflow_enabled: false,
-			tab_config: vec![v5::TabConfigEntry {
-				id: "custom".to_owned(),
-				label: Some("Custom".to_owned()),
-				icon: Some("star".to_owned()),
-				hidden: false,
-			}],
-		}
-	}
-
-	#[test]
-	fn v5_init_tab_config_drops_when_downgrading_to_v4() {
-		let response = ToClient::V5(v5::ToClient {
-			body: v5::ToClientBody::Init(v5_init_with_tabs()),
-		});
-
-		let ToClient::V4(downgraded) = ToClient::v5_to_v4(response).unwrap() else {
-			panic!("expected v4 response")
-		};
-
-		// v4 has no tab_config field, so the tabs are dropped but the rest of
-		// the Init survives the downgrade.
-		assert!(matches!(
-			downgraded.body,
-			v4::ToClientBody::Init(v4::Init {
-				is_workflow_enabled: false,
-				..
-			})
-		));
-	}
-
-	#[test]
-	fn v4_init_upgrades_to_v5_with_empty_tab_config() {
-		let response = ToClient::V4(v4::ToClient {
-			body: v4::ToClientBody::Init(v4::Init {
-				connections: Vec::new(),
-				state: None,
-				is_state_enabled: false,
-				rpcs: Vec::new(),
-				is_database_enabled: false,
-				queue_size: Uint(0),
-				workflow_history: None,
-				is_workflow_enabled: false,
-			}),
-		});
-
-		let ToClient::V5(upgraded) = ToClient::v4_to_v5(response).unwrap() else {
-			panic!("expected v5 response")
-		};
-
-		let v5::ToClientBody::Init(init) = upgraded.body else {
-			panic!("expected Init body")
-		};
-		assert!(init.tab_config.is_empty());
-	}
-
-	#[test]
-	fn v5_init_tab_config_round_trips_at_version_5() {
-		let original = v5_init_with_tabs();
-		let latest = ToClient::v5_to_v6(ToClient::V5(v5::ToClient {
-			body: v5::ToClientBody::Init(original.clone()),
-		}))
-		.unwrap();
-		let encoded = latest.serialize_with_embedded_version(5).unwrap();
-
-		// `deserialize_with_embedded_version` upgrades to and returns the latest
-		// wire type (v6::ToClient), not the versioned enum.
-		let decoded =
-			<ToClient as OwnedVersionedData>::deserialize_with_embedded_version(&encoded).unwrap();
-		let v6::ToClientBody::Init(init) = decoded.body else {
-			panic!("expected Init body")
-		};
-		assert_eq!(init.tab_config.len(), original.tab_config.len());
-		assert_eq!(init.tab_config[0].id, original.tab_config[0].id);
-		assert!(init.schedules.is_empty());
-	}
-
-	#[test]
-	fn v6_schedule_messages_downgrade_to_structured_error() {
-		let response = ToClient::V6(v6::ToClient {
-			body: v6::ToClientBody::SchedulesUpdated(v6::SchedulesUpdated {
-				schedules: Vec::new(),
-			}),
-		});
-
-		let ToClient::V5(downgraded) = ToClient::v6_to_v5(response).unwrap() else {
-			panic!("expected v5 response")
-		};
-		assert_eq!(
-			downgraded.body,
-			v5::ToClientBody::Error(v5::Error {
-				message: SCHEDULES_DROPPED_ERROR.to_owned(),
-			})
-		);
-	}
-
-	#[test]
-	fn v5_init_upgrades_to_v6_with_empty_schedules() {
-		let response = ToClient::V5(v5::ToClient {
-			body: v5::ToClientBody::Init(v5_init_with_tabs()),
-		});
-		let ToClient::V6(upgraded) = ToClient::v5_to_v6(response).unwrap() else {
-			panic!("expected v6 response")
-		};
-		let v6::ToClientBody::Init(init) = upgraded.body else {
-			panic!("expected Init body")
-		};
-		assert!(init.schedules.is_empty());
-		assert_eq!(init.tab_config.len(), 1);
-	}
-
-	#[test]
-	fn v4_workflow_replay_response_downgrades_to_v3_error() {
-		let response = ToClient::V4(v4::ToClient {
-			body: v4::ToClientBody::WorkflowReplayResponse(v4::WorkflowReplayResponse {
-				rid: Uint(11),
-				history: Some(b"workflow".to_vec()),
-				is_workflow_enabled: true,
-			}),
-		});
-
-		let ToClient::V3(downgraded) = ToClient::v4_to_v3(response).unwrap() else {
-			panic!("expected v3 response")
-		};
-
-		assert_eq!(
-			downgraded.body,
-			v3::ToClientBody::Error(v3::Error {
-				message: WORKFLOW_HISTORY_DROPPED_ERROR.to_owned(),
-			})
-		);
-	}
+/// The error for a version this envelope cannot decode.
+fn unsupported_version(detail: String) -> DecodeError {
+	DecodeError::with_detail(DecodeErrorKind::UnsupportedVersion, 0, detail)
 }

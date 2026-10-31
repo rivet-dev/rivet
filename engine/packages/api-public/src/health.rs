@@ -1,8 +1,8 @@
+use rivet_auth::*;
 use anyhow::{Result, bail};
 use axum::{Json, extract::Extension, response::IntoResponse};
 use futures_util::StreamExt;
 use rivet_api_builder::ApiError;
-use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use utoipa::ToSchema;
@@ -146,7 +146,7 @@ async fn fanout_inner(ctx: ApiCtx) -> Result<FanoutResponse> {
 async fn send_health_checks(
 	dc: &rivet_config::config::topology::Datacenter,
 ) -> Result<HealthResponse> {
-	let client = rivet_pools::reqwest::client().await?;
+	let client = rivet_engine_context::reqwest::client().await?;
 	let peer_url = dc.peer_url.join("/health")?;
 	let proxy_url = dc.proxy_url().join("/health")?;
 

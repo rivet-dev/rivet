@@ -26,6 +26,7 @@ import {
 } from "@/actor/config";
 import type { AnyActorDefinition } from "@/actor/definition";
 import {
+	actorStopping,
 	decodeBridgeRivetError,
 	encodeBridgeRivetError,
 	forbiddenError,
@@ -126,6 +127,7 @@ import type {
 	RuntimeStateDeltaPayload,
 	WebSocketHandle,
 } from "./runtime";
+import { servicesBinaryUnavailable } from "./runtime";
 import { loadWasmRuntime } from "./wasm-runtime";
 import {
 	createWriteThroughProxy,
@@ -347,6 +349,11 @@ type NativeDestroyGate = {
 type NativeDatabaseClientState = {
 	client: unknown;
 };
+type NativeActorAbort = {
+	signal: AbortSignal;
+	listeners: Set<() => void>;
+};
+
 type NativeActorRuntimeState = {
 	sql?: ReturnType<typeof wrapJsNativeDatabase>;
 	databaseClient?: NativeDatabaseClientState;
@@ -354,6 +361,17 @@ type NativeActorRuntimeState = {
 	vars?: unknown;
 	destroyGate?: NativeDestroyGate;
 	persistState?: NativePersistActorState;
+	// One native actor abort signal shared by every context of the actor. Each
+	// native signal parks a task and a callback handle until the actor stops,
+	// so creating one per request or action leaks both. Per-context listeners
+	// live in `listeners` so the shared signal never collects one listener per
+	// in-flight request.
+	actorAbort?: NativeActorAbort;
+	// Set once shutdown cleanup has cleared this generation's caches. Work that
+	// outlives the generation, such as an untracked timer or a late WebSocket
+	// message handler, then fails with `actor.stopping` instead of reading an
+	// empty bag as if `vars` or the database were never initialized.
+	cleared?: true;
 };
 
 // Keep JS-only actor caches on the NAPI ActorContext runtime-state bag instead
@@ -363,9 +381,10 @@ function getNativeRuntimeState(
 	runtime: CoreRuntime,
 	ctx: ActorContextHandle,
 ): NativeActorRuntimeState {
-	const runtimeState = callNativeSync(() =>
-		runtime.actorRuntimeState(ctx),
-	) as NativeActorRuntimeState;
+	const runtimeState = readNativeRuntimeStateBag(runtime, ctx);
+	if (runtimeState.cleared) {
+		throw actorStopping(callNativeSync(() => runtime.actorId(ctx)));
+	}
 	if (!runtimeState.destroyGate) {
 		runtimeState.destroyGate = {};
 	}
@@ -377,6 +396,22 @@ function getNativeRuntimeState(
 		};
 	}
 	return runtimeState;
+}
+
+function readNativeRuntimeStateBag(
+	runtime: CoreRuntime,
+	ctx: ActorContextHandle,
+): NativeActorRuntimeState {
+	return callNativeSync(() =>
+		runtime.actorRuntimeState(ctx),
+	) as NativeActorRuntimeState;
+}
+
+function isNativeRuntimeStateCleared(
+	runtime: CoreRuntime,
+	ctx: ActorContextHandle,
+): boolean {
+	return readNativeRuntimeStateBag(runtime, ctx).cleared === true;
 }
 
 function getNativePersistState(
@@ -521,7 +556,18 @@ function clearNativeRuntimeState(
 	runtime: CoreRuntime,
 	ctx: ActorContextHandle,
 ) {
+	// A coalesced save armed before the clear would otherwise fire against the
+	// cleared bag and throw outside any caller.
+	const pendingSaveHandle = readNativeRuntimeStateBag(runtime, ctx)
+		.persistState?.pendingSaveHandle;
+	if (pendingSaveHandle !== undefined) {
+		clearImmediate(pendingSaveHandle);
+	}
 	callNativeSync(() => runtime.actorClearRuntimeState(ctx));
+	// The runtime hands out a fresh bag after a clear. Each generation has its
+	// own bag, so marking it makes later access from this generation fail typed
+	// without touching any newer generation of the same actor.
+	readNativeRuntimeStateBag(runtime, ctx).cleared = true;
 }
 
 async function cleanupNativeSleepRuntimeState(
@@ -536,8 +582,7 @@ async function cleanupNativeSleepRuntimeState(
 	// the tracked work finishes without a deadline.
 	const drained = await runtime.actorWaitForTrackedShutdownWork(ctx);
 	if (!drained) {
-		await closeNativeDatabaseClient(runtime, ctx);
-		await closeNativeSqlDatabase(runtime, ctx);
+		await detachNativeDatabaseForShutdown(runtime, ctx);
 		void runtime
 			.actorWaitForTrackedShutdownWorkUnbounded(ctx)
 			.then(async () => {
@@ -554,9 +599,24 @@ async function cleanupNativeSleepRuntimeState(
 	}
 
 	await afterTrackedWorkDrained?.();
-	await closeNativeDatabaseClient(runtime, ctx);
-	await closeNativeSqlDatabase(runtime, ctx);
+	await detachNativeDatabaseForShutdown(runtime, ctx);
 	clearNativeRuntimeState(runtime, ctx);
+}
+
+async function detachNativeDatabaseForShutdown(
+	runtime: CoreRuntime,
+	ctx: ActorContextHandle,
+): Promise<void> {
+	const runtimeState = getNativeRuntimeState(runtime, ctx);
+	// Stop JS access without closing the runtime-owned SQLite backend. Rust still
+	// needs it to reconcile scheduled alarms and performs the physical close after
+	// this lifecycle callback returns.
+	await runtimeState.sql?.detachForShutdown();
+	try {
+		await closeNativeDatabaseClient(runtime, ctx);
+	} finally {
+		runtimeState.sql = undefined;
+	}
 }
 
 function closeNativeSqlDatabase(
@@ -784,7 +844,7 @@ async function loadEngineCli(): Promise<typeof import("@rivetkit/engine-cli")> {
 	return import(["@rivetkit", "engine-cli"].join("/"));
 }
 
-async function loadServices(): Promise<typeof import("@rivet-dev/services")> {
+async function loadServices(): Promise<{ getServicesPath: () => string }> {
 	// Keep the native binary opaque to edge bundlers for the same reason as
 	// engine-cli above.
 	return import(["@rivet-dev", "services"].join("/"));
@@ -3022,22 +3082,28 @@ export class ActorContextHandleAdapter {
 
 	get abortSignal(): AbortSignal {
 		if (!this.#abortSignal) {
-			const actorSignal = this.#createActorAbortSignal();
+			const actorAbort = this.#actorAbort();
+			const actorSignal = actorAbort.signal;
 			if (this.#dispatchCancelToken === undefined) {
 				this.#abortSignal = actorSignal;
 			} else {
 				const controller = new AbortController();
 				let cleanedUp = false;
+				let releaseDispatchListener: (() => void) | undefined;
 				const onActorAbort = () => {
 					cleanup();
 					controller.abort();
 				};
+				// Releasing the native listener on dispose frees it even when the
+				// dispatch token is never cancelled.
 				const cleanup = () => {
 					if (cleanedUp) {
 						return;
 					}
 					cleanedUp = true;
-					actorSignal.removeEventListener("abort", onActorAbort);
+					actorAbort.listeners.delete(onActorAbort);
+					releaseDispatchListener?.();
+					releaseDispatchListener = undefined;
 					this.#abortSignalCleanup = undefined;
 				};
 
@@ -3051,10 +3117,8 @@ export class ActorContextHandleAdapter {
 				} else {
 					const dispatchCancelToken = this.#dispatchCancelToken;
 					this.#abortSignalCleanup = cleanup;
-					actorSignal.addEventListener("abort", onActorAbort, {
-						once: true,
-					});
-					callNativeSync(() =>
+					actorAbort.listeners.add(onActorAbort);
+					releaseDispatchListener = callNativeSync(() =>
 						this.#runtime.onCancellationTokenCancelled(
 							dispatchCancelToken,
 							() => {
@@ -3506,24 +3570,49 @@ export class ActorContextHandleAdapter {
 
 	async dispose(): Promise<void> {
 		// Flush any save coalesced for this tick before the context is torn
-		// down so the request-save and onStateChange always run.
-		this.#flushStateChange();
+		// down so the request-save and onStateChange always run. Shutdown
+		// cleanup may already have cleared the generation, which leaves no
+		// pending save to flush.
+		if (!isNativeRuntimeStateCleared(this.#runtime, this.#ctx)) {
+			this.#flushStateChange();
+		}
 		this.#abortSignalCleanup?.();
 	}
 
-	#createActorAbortSignal(): AbortSignal {
+	#actorAbort(): NativeActorAbort {
+		// An aborted cached signal may belong to a previous generation, so
+		// only a live one is reused.
+		const runtimeState = readNativeRuntimeStateBag(
+			this.#runtime,
+			this.#ctx,
+		);
+		const cached = runtimeState.actorAbort;
+		if (cached && !cached.signal.aborted) {
+			return cached;
+		}
+
 		const nativeSignal = callNativeSync(() =>
 			this.#runtime.actorAbortSignal(this.#ctx),
 		);
 		const controller = new AbortController();
-		if (nativeSignal.aborted) {
+		const actorAbort: NativeActorAbort = {
+			signal: controller.signal,
+			listeners: new Set(),
+		};
+		const abort = () => {
 			controller.abort();
+			for (const listener of actorAbort.listeners) {
+				listener();
+			}
+			actorAbort.listeners.clear();
+		};
+		if (nativeSignal.aborted) {
+			abort();
 		} else {
-			nativeSignal.addEventListener("abort", () => controller.abort(), {
-				once: true,
-			});
+			nativeSignal.addEventListener("abort", abort, { once: true });
 		}
-		return controller.signal;
+		runtimeState.actorAbort = actorAbort;
+		return actorAbort;
 	}
 
 	#readState(): unknown {
@@ -4846,7 +4935,7 @@ export function buildNativeFactory(
 					}
 				} finally {
 					resolveNativeDestroy(runtime, ctx);
-					await actorCtx.closeDatabase();
+					await detachNativeDatabaseForShutdown(runtime, ctx);
 					clearNativeRuntimeState(runtime, ctx);
 					await actorCtx.dispose();
 				}
@@ -5598,11 +5687,12 @@ export async function buildServeConfig(
 	}
 
 	const serveConfig: RuntimeServeConfig = {
-		version: config.envoy.version,
+		version: config.node.version,
 		endpoint: config.endpoint,
+		engineSpawn: config.engineSpawn,
 		token: config.token,
 		namespace: config.namespace,
-		poolName: config.envoy.poolName,
+		poolName: config.node.poolName,
 		startServices: resolveServicesBinary && config.startServices,
 		handleInspectorHttpInRuntime: true,
 		serverlessBasePath: config.serverless.basePath,
@@ -5616,7 +5706,7 @@ export async function buildServeConfig(
 
 	// Always best-effort resolve the npm-installed engine binary and hand its
 	// path to the core. The core alone decides whether to actually spawn a local
-	// engine (its `should_manage_engine`, based on the endpoint + spawn mode), so
+	// engine using the resolved spawn decision, so
 	// JS must not duplicate that decision here. Only JS knows the npm
 	// `node_modules` layout, so it resolves the path; if no binary is available
 	// (remote-only install, unsupported platform, optional deps skipped), leave
@@ -5636,14 +5726,16 @@ export async function buildServeConfig(
 		});
 	}
 	if (resolveServicesBinary && config.startServices) {
-		try {
-			const { getServicesPath } = await loadServices();
-			serveConfig.servicesBinaryPath = getServicesPath();
-		} catch (error) {
-			logger().warn({
-				msg: "could not resolve the Services binary; a local engine will fail with services.binary_unavailable — set RIVET_RUN_SERVICES=0 to disable Services or RIVET_SERVICES_BINARY to a local rivet-services binary",
-				error: stringifyError(error),
-			});
+		const servicesBinary = getEnvUniversal("RIVET_SERVICES_BINARY");
+		if (servicesBinary) {
+			serveConfig.servicesBinaryPath = servicesBinary;
+		} else {
+			try {
+				const { getServicesPath } = await loadServices();
+				serveConfig.servicesBinaryPath = getServicesPath();
+			} catch (error) {
+				throw servicesBinaryUnavailable(error);
+			}
 		}
 	}
 	serveConfig.engineHost = config.engineHost;

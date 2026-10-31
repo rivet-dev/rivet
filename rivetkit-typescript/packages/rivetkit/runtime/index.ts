@@ -1,10 +1,7 @@
 import { convertRegistryConfigToClientConfig } from "@/client/config";
 import { isLocalEngineEndpoint } from "@/common/engine";
 import { configureBaseLogger, configureDefaultLogger } from "@/common/log";
-import {
-	getDatacenters,
-	updateRunnerConfig,
-} from "@/engine-client/api-endpoints";
+import { upsertPool } from "@/engine-client/api-endpoints";
 import type { EngineControlClient } from "@/engine-client/driver";
 import { RemoteEngineControlClient } from "@/engine-client/mod";
 import type { Registry } from "@/registry";
@@ -27,18 +24,8 @@ async function ensureLocalRunnerConfig(config: RegistryConfig): Promise<void> {
 	}
 
 	const clientConfig = convertRegistryConfigToClientConfig(config);
-	const dcsRes = await getDatacenters(clientConfig);
-
-	await updateRunnerConfig(clientConfig, config.envoy.poolName, {
-		datacenters: Object.fromEntries(
-			dcsRes.datacenters.map((dc) => [
-				dc.name,
-				{
-					normal: {},
-					drain_on_version_upgrade: true,
-				},
-			]),
-		),
+	await upsertPool(clientConfig, config.node.poolName, {
+		drain_on_version_upgrade: true,
 	});
 }
 

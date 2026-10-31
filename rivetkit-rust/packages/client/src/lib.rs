@@ -1,6 +1,5 @@
 //! Rust client for RivetKit actors.
 //!
-//! See `docs-internal/engine/rivetkit-rust-client.md` for actor-to-actor
 //! client usage and idiomatic cancellation patterns with `tokio::select!`,
 //! dropped futures, websocket handle drop, and optional
 //! `tokio_util::sync::CancellationToken` threading.

@@ -1,0 +1,5 @@
+{
+  "code": "volume_not_found",
+  "group": "depot",
+  "message": "The KV database volume does not exist."
+}

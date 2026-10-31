@@ -254,7 +254,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 					datacenter: region,
 					name,
 					key: serializeActorKey(key),
-					runner_name_selector: poolName ?? this.#config.poolName,
+					pool: poolName ?? this.#config.poolName,
 					input: actorInput
 						? uint8ArrayToBase64(
 								encodeCborCompat(actorInput as JsonCompatValue),
@@ -325,7 +325,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 			createActor(config, {
 				datacenter: region,
 				name,
-				runner_name_selector: poolName ?? this.#config.poolName,
+				pool: poolName ?? this.#config.poolName,
 				key: serializeActorKey(key),
 				input: input
 					? uint8ArrayToBase64(

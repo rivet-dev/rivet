@@ -2,37 +2,37 @@
 name = "pegboard-gateway"
 publish = false
 version.workspace = true
+edition.workspace = true
 authors.workspace = true
 license.workspace = true
-edition.workspace = true
 
 [dependencies]
+rivet-topology.workspace = true
 anyhow.workspace = true
-async-trait.workspace = true
+depot-client.workspace = true
+axum = { workspace = true, features = ["ws"] }
+axum-extra.workspace = true
+base64.workspace = true
 bytes.workspace = true
 futures-util.workspace = true
-gas.workspace = true
-http-body-util.workspace = true
-# TODO: Doesn't match workspace version
-hyper = "1.6"
-hyper-tungstenite.workspace = true
-lazy_static.workspace = true
-namespace.workspace = true
+http.workspace = true
+hyper.workspace = true
 pegboard.workspace = true
-rand.workspace = true
-rivet-config.workspace = true
+rivet-data.workspace = true
+rivet-engine-context.workspace = true
+rivet-env.workspace = true
+rivet-envoy-protocol.workspace = true
 rivet-error.workspace = true
 rivet-guard-core.workspace = true
-rivet-metrics.workspace = true
-rivet-runner-protocol.workspace = true
 rivet-util.workspace = true
-scc.workspace = true
+rivetkit-shared-types.workspace = true
+serde_html_form.workspace = true
 serde_json.workspace = true
 serde.workspace = true
-thiserror.workspace = true
-tokio-tungstenite.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-universaldb.workspace = true
+scc.workspace = true
 universalpubsub.workspace = true
+uuid.workspace = true
 vbare.workspace = true
+

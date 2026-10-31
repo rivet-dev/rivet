@@ -7,8 +7,8 @@ lazy_static::lazy_static! {
 		&["key"],
 		*REGISTRY
 	).unwrap();
-	pub static ref CACHE_REQUEST_ERRORS: IntCounterVec = register_int_counter_vec_with_registry!(
-		"cache_request_errors",
+	pub static ref CACHE_REQUEST_ERRORS_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"cache_request_errors_total",
 		"Total number of cache request errors.",
 		&["key"],
 		*REGISTRY

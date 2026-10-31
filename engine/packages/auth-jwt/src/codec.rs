@@ -32,8 +32,8 @@ pub struct TokenHeader {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DecodedToken {
 	pub claims: Claims,
-	pub namespace_id: Id,
-	pub grants: Vec<OwnedGrant<Id, Id>>,
+	pub namespace: String,
+	pub grants: Vec<OwnedGrant<String, Id>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -90,10 +90,10 @@ pub fn decode(
 			_ => TokenError::InvalidEncoding,
 		})?;
 
-	let (namespace_id, grants) = validate_claims(&token_data.claims, Some(options))?;
+	let (namespace, grants) = validate_claims(&token_data.claims, Some(options))?;
 	Ok(DecodedToken {
 		claims: token_data.claims,
-		namespace_id,
+		namespace,
 		grants,
 	})
 }
@@ -235,7 +235,7 @@ fn decode_segment(
 fn validate_claims(
 	claims: &Claims,
 	options: Option<DecodeOptions<'_>>,
-) -> Result<(Id, Vec<OwnedGrant<Id, Id>>), TokenError> {
+) -> Result<(String, Vec<OwnedGrant<String, Id>>), TokenError> {
 	if claims.rivet_ver != CLAIMS_VERSION
 		|| claims.iss.is_empty()
 		|| claims.aud.is_empty()
@@ -271,7 +271,17 @@ fn validate_claims(
 		}
 	}
 
-	let namespace_id = Id::from_str(&claims.rivet_ns).map_err(|_| TokenError::InvalidClaims)?;
-	let grants = decode_grants(namespace_id, &claims.rivet_grants)?;
-	Ok((namespace_id, grants))
+	let namespace = claims.rivet_ns.clone();
+	if namespace.is_empty()
+		|| namespace.len() > 63
+		|| namespace.starts_with('-')
+		|| namespace.ends_with('-')
+		|| !namespace
+			.bytes()
+			.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+	{
+		return Err(TokenError::InvalidClaims);
+	}
+	let grants = decode_grants(namespace.clone(), &claims.rivet_grants)?;
+	Ok((namespace, grants))
 }

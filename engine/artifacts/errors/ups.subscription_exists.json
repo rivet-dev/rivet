@@ -1,0 +1,5 @@
+{
+  "code": "subscription_exists",
+  "group": "ups",
+  "message": "This worker already has a consumer for the subject."
+}

@@ -15,7 +15,11 @@ use rivet_metrics::prometheus::{
 	CounterVec, HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Opts, Registry,
 };
 #[cfg(feature = "sqlite-local")]
-use rivet_metrics::prometheus::{Histogram, IntCounter, IntGauge};
+use rivet_metrics::prometheus::{
+	Histogram, IntCounter, IntGauge,
+	core::{Collector, Desc},
+	proto::MetricFamily,
+};
 
 use crate::actor::task_types::{ShutdownKind, StateMutationReason, UserTaskKind};
 use crate::time::Instant;
@@ -27,7 +31,8 @@ const WORK_LABELS: &[&str] = &["actor_name", "kind"];
 const SHUTDOWN_LABELS: &[&str] = &["actor_name", "reason"];
 const STATE_MUTATION_LABELS: &[&str] = &["actor_name", "reason"];
 const DIRECT_SHUTDOWN_LABELS: &[&str] = &["actor_name", "subsystem", "operation"];
-const STARTUP_PHASE_LABELS: &[&str] = &["actor_name", "phase", "is_new", "outcome"];
+const RUNTIME_CALLBACK_LABELS: &[&str] = &["actor_name", "callback"];
+const STARTUP_PHASE_LABELS: &[&str] = &["actor_name", "phase", "is_new", "result"];
 const STARTUP_KIND_UNKNOWN: u8 = 0;
 const STARTUP_KIND_NEW: u8 = 1;
 const STARTUP_KIND_EXISTING: u8 = 2;
@@ -42,6 +47,27 @@ pub(crate) mod startup_phase {
 		RuntimePreamble = 3,
 		PostReady = 4,
 		Total = 5,
+		/// `ensure_startup_storage`, before persisted state loads.
+		StartupStorage = 6,
+		/// Probing for the internal SQLite schema.
+		SchemaCheck = 7,
+		/// Probing legacy KV before bootstrapping a fresh actor.
+		KvProbe = 8,
+		/// The fresh actor's inspector token KV mirror write. It runs in the background once
+		/// the startup commit is durable.
+		InspectorToken = 10,
+		/// Opening a fresh actor's database. Its bootstrap commits later, with its first
+		/// transaction.
+		DatabaseOpen = 11,
+		/// From the runtime receiving the start to its first storage request, the start of
+		/// `ensure_startup_storage`: context build, task spawn and the start handoff.
+		BeforeStorage = 12,
+		/// Making a new actor's startup writes durable as one commit: its bootstrap, schema
+		/// migrations and initial state.
+		StartupCommit = 13,
+		/// The startup commit's round trip from the VFS to the engine and back, the part of
+		/// `StartupCommit` spent outside this process.
+		StartupCommitTransport = 14,
 	}
 
 	impl StartupPhase {
@@ -53,6 +79,14 @@ pub(crate) mod startup_phase {
 				StartupPhase::RuntimePreamble => "runtime_preamble",
 				StartupPhase::PostReady => "post_ready",
 				StartupPhase::Total => "total",
+				StartupPhase::StartupStorage => "startup_storage",
+				StartupPhase::SchemaCheck => "schema_check",
+				StartupPhase::KvProbe => "kv_probe",
+				StartupPhase::InspectorToken => "inspector_token",
+				StartupPhase::DatabaseOpen => "database_open",
+				StartupPhase::BeforeStorage => "before_storage",
+				StartupPhase::StartupCommit => "startup_commit",
+				StartupPhase::StartupCommitTransport => "startup_commit_transport",
 			}
 		}
 
@@ -65,6 +99,14 @@ pub(crate) mod startup_phase {
 				3 => StartupPhase::RuntimePreamble,
 				4 => StartupPhase::PostReady,
 				5 => StartupPhase::Total,
+				6 => StartupPhase::StartupStorage,
+				7 => StartupPhase::SchemaCheck,
+				8 => StartupPhase::KvProbe,
+				10 => StartupPhase::InspectorToken,
+				11 => StartupPhase::DatabaseOpen,
+				12 => StartupPhase::BeforeStorage,
+				13 => StartupPhase::StartupCommit,
+				14 => StartupPhase::StartupCommitTransport,
 				_ => StartupPhase::Unknown,
 			}
 		}
@@ -96,7 +138,7 @@ mod actor_lifecycle_bucket {
 #[cfg(feature = "sqlite-local")]
 const SQLITE_COMMIT_PHASE_LABELS: &[&str] = &["actor_name", "phase"];
 #[cfg(feature = "sqlite-local")]
-const SQLITE_OPEN_PHASE_LABELS: &[&str] = &["actor_name", "phase", "is_new", "outcome"];
+const SQLITE_OPEN_PHASE_LABELS: &[&str] = &["actor_name", "phase", "is_new", "result"];
 #[cfg(feature = "sqlite-local")]
 const SQLITE_STARTUP_PRELOAD_PAGE_LABELS: &[&str] = &["actor_name", "is_new", "kind"];
 #[cfg(feature = "sqlite-local")]
@@ -135,9 +177,12 @@ struct ActorMetricInner {
 	#[cfg(feature = "sqlite-local")]
 	sqlite_profiling: crate::SqliteProfilingConfig,
 	#[cfg(feature = "sqlite-local")]
+	sqlite_profile_selection: super::sqlite::profiling::QuerySelection,
+	#[cfg(feature = "sqlite-local")]
 	sqlite_profile_low_card_handles: OnceLock<Option<Arc<SqliteLowCardMetricHandles>>>,
 	state: Mutex<ActorMetricState>,
-	active: AtomicBool,
+	/// Counts this actor on `actor_active_count` until it stops.
+	active: Mutex<Option<rivet_metrics::IntGaugeGuard>>,
 	startup_is_new: AtomicU8,
 	startup_complete: AtomicBool,
 	current_startup_phase: AtomicU8,
@@ -165,6 +210,8 @@ struct ActorMetricState {
 	sqlite_worker_queue_depth: i64,
 	#[cfg(feature = "sqlite-local")]
 	sqlite_workers_active: i64,
+	#[cfg(feature = "sqlite-local")]
+	sqlite_vfs_cached_bytes: i64,
 }
 
 struct ActorMetricCollectors {
@@ -174,6 +221,7 @@ struct ActorMetricCollectors {
 	startup_phase_duration_seconds: HistogramVec,
 	create_state_duration_seconds: HistogramVec,
 	create_vars_duration_seconds: HistogramVec,
+	runtime_callback_duration_seconds: HistogramVec,
 	queue_depth: IntGaugeVec,
 	queue_messages_sent_total: IntCounterVec,
 	queue_messages_received_total: IntCounterVec,
@@ -208,6 +256,8 @@ struct ActorMetricCollectors {
 	#[cfg(feature = "sqlite-local")]
 	sqlite_vfs_prefetch_pages_total: IntCounterVec,
 	#[cfg(feature = "sqlite-local")]
+	sqlite_vfs_prefetch_unused_pages_total: IntCounterVec,
+	#[cfg(feature = "sqlite-local")]
 	sqlite_vfs_bytes_fetched_total: IntCounterVec,
 	#[cfg(feature = "sqlite-local")]
 	sqlite_vfs_prefetch_bytes_total: IntCounterVec,
@@ -216,11 +266,15 @@ struct ActorMetricCollectors {
 	#[cfg(feature = "sqlite-local")]
 	sqlite_vfs_commit_total: IntCounterVec,
 	#[cfg(feature = "sqlite-local")]
+	sqlite_vfs_commit_dirty_pages: HistogramVec,
+	#[cfg(feature = "sqlite-local")]
 	sqlite_vfs_commit_phase_duration_seconds_total: CounterVec,
 	#[cfg(feature = "sqlite-local")]
 	sqlite_vfs_commit_duration_seconds_total: CounterVec,
 	#[cfg(feature = "sqlite-local")]
 	sqlite_worker_queue_depth: IntGaugeVec,
+	#[cfg(feature = "sqlite-local")]
+	sqlite_vfs_cached_bytes: IntGaugeVec,
 	#[cfg(feature = "sqlite-local")]
 	sqlite_workers_active: IntGaugeVec,
 	#[cfg(feature = "sqlite-local")]
@@ -268,12 +322,11 @@ static SQLITE_PROFILE_METRICS: LazyLock<SqliteProfileCollectors> =
 	LazyLock::new(SqliteProfileCollectors::new);
 
 #[cfg(feature = "sqlite-local")]
-const SQLITE_PROFILE_PAGE_KINDS: [&str; 12] = [
+const SQLITE_PROFILE_PAGE_KINDS: [&str; 11] = [
 	"sqlite_requested",
 	"cache_hit",
 	"cache_miss",
 	"depot_demand_requested",
-	"vfs_prefetch_requested",
 	"response_present",
 	"response_missing",
 	"overflow_expansion_extra",
@@ -292,9 +345,8 @@ const SQLITE_PROFILE_BYTE_KINDS: [&str; 4] = [
 #[cfg(feature = "sqlite-local")]
 const SQLITE_PROFILE_REQUEST_ORDINALS: [&str; 6] = ["1", "2", "3", "4", "5-8", "9+"];
 #[cfg(feature = "sqlite-local")]
-const SQLITE_PROFILE_REQUEST_PAGE_KINDS: [&str; 4] = [
+const SQLITE_PROFILE_REQUEST_PAGE_KINDS: [&str; 3] = [
 	"demand_requested",
-	"prefetch_requested",
 	"response_present",
 	"overflow_expansion_extra",
 ];
@@ -548,7 +600,6 @@ struct SqliteProfileAdmission {
 	transactions: scc::HashSet<String>,
 	tuples: scc::HashMap<String, Arc<SqliteFingerprintMetricHandles>>,
 	low_card_tuples: scc::HashMap<String, Arc<SqliteLowCardMetricHandles>>,
-	candidates: scc::HashMap<String, u8>,
 	statement_count: AtomicUsize,
 	transaction_count: AtomicUsize,
 	series: AtomicUsize,
@@ -561,7 +612,6 @@ static SQLITE_PROFILE_ADMISSION: LazyLock<SqliteProfileAdmission> =
 		transactions: scc::HashSet::new(),
 		tuples: scc::HashMap::new(),
 		low_card_tuples: scc::HashMap::new(),
-		candidates: scc::HashMap::new(),
 		statement_count: AtomicUsize::new(0),
 		transaction_count: AtomicUsize::new(0),
 		series: AtomicUsize::new(0),
@@ -575,14 +625,14 @@ enum SqliteDiagnosticEvent {
 		actor_id: String,
 		generation: Option<u64>,
 		actor_name: String,
-		profile: depot_client::vfs::SqliteOperationMetric,
+		profile: sqlite_embedded::vfs::SqliteOperationMetric,
 	},
 	Transaction {
 		invocation_id: u64,
 		actor_id: String,
 		generation: Option<u64>,
 		actor_name: String,
-		profile: depot_client::vfs::SqliteTransactionMetric,
+		profile: sqlite_embedded::vfs::SqliteTransactionMetric,
 	},
 }
 
@@ -744,6 +794,37 @@ fn try_acquire_sqlite_diagnostic_rate(max_events_per_minute: usize) -> bool {
 		{
 			return true;
 		}
+	}
+}
+
+/// The empty fingerprint identifies an actor aggregate internally. Omit its identity
+/// labels when exporting so default series have no query dimension.
+#[cfg(feature = "sqlite-local")]
+#[derive(Clone)]
+struct OptionalFingerprintCollector<C>(C);
+
+#[cfg(feature = "sqlite-local")]
+impl<C: Collector> Collector for OptionalFingerprintCollector<C> {
+	fn desc(&self) -> Vec<&Desc> {
+		self.0.desc()
+	}
+
+	fn collect(&self) -> Vec<MetricFamily> {
+		let mut families = self.0.collect();
+		for family in &mut families {
+			for metric in family.mut_metric() {
+				if metric
+					.get_label()
+					.iter()
+					.any(|label| label.name() == "fingerprint" && label.value().is_empty())
+				{
+					metric.label.retain(|label| {
+						!matches!(label.name(), "fingerprint" | "fingerprint_source")
+					});
+				}
+			}
+		}
+		families
 	}
 }
 
@@ -938,14 +1019,26 @@ impl SqliteProfileCollectors {
 		)
 		.expect("create sqlite coordinator queue depth gauge");
 
-		register_metric(&rivet_metrics::REGISTRY, duration_seconds.clone());
-		register_metric(&rivet_metrics::REGISTRY, phase_duration_seconds.clone());
-		register_metric(&rivet_metrics::REGISTRY, get_pages_round_trips.clone());
 		register_metric(
 			&rivet_metrics::REGISTRY,
-			transaction_statement_count.clone(),
+			OptionalFingerprintCollector(duration_seconds.clone()),
 		);
-		register_metric(&rivet_metrics::REGISTRY, outcome_total.clone());
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			OptionalFingerprintCollector(phase_duration_seconds.clone()),
+		);
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			OptionalFingerprintCollector(get_pages_round_trips.clone()),
+		);
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			OptionalFingerprintCollector(transaction_statement_count.clone()),
+		);
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			OptionalFingerprintCollector(outcome_total.clone()),
+		);
 		register_metric(&rivet_metrics::REGISTRY, local_pages_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, local_bytes_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, get_pages_duration_seconds.clone());
@@ -1033,6 +1126,15 @@ impl ActorMetricCollectors {
 			ACTOR_LABELS,
 		)
 		.expect("create actor_create_vars_duration_seconds histogram");
+		let runtime_callback_duration_seconds = HistogramVec::new(
+			HistogramOpts::new(
+				"rivetkit_actor_runtime_callback_duration_seconds",
+				"foreign runtime lifecycle callback time during the startup preamble in seconds",
+			)
+			.buckets(startup_duration_buckets()),
+			RUNTIME_CALLBACK_LABELS,
+		)
+		.expect("create actor_runtime_callback_duration_seconds histogram");
 		let queue_depth = IntGaugeVec::new(
 			Opts::new("rivetkit_actor_queue_depth", "current actor queue depth"),
 			ACTOR_LABELS,
@@ -1168,6 +1270,15 @@ impl ActorMetricCollectors {
 		)
 		.expect("create actor_sqlite_startup_preload_pages_total counter");
 		#[cfg(feature = "sqlite-local")]
+		let sqlite_vfs_prefetch_unused_pages_total = IntCounterVec::new(
+			Opts::new(
+				"rivetkit_actor_sqlite_vfs_prefetch_unused_pages_total",
+				"prefetched SQLite pages discarded before first use, including close and TTL expiry",
+			),
+			ACTOR_LABELS,
+		)
+		.expect("create sqlite_vfs_prefetch_unused_pages_total counter");
+		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_resolve_pages_total = IntCounterVec::new(
 			Opts::new(
 				"rivetkit_actor_sqlite_vfs_resolve_pages_total",
@@ -1189,7 +1300,7 @@ impl ActorMetricCollectors {
 		let sqlite_vfs_resolve_pages_cache_hits_total = IntCounterVec::new(
 			Opts::new(
 				"rivetkit_actor_sqlite_vfs_resolve_pages_cache_hits_total",
-				"total pages resolved from the VFS page cache or write buffer",
+				"total pages resolved from the VFS page buffers or write buffer",
 			),
 			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
 		)
@@ -1198,7 +1309,7 @@ impl ActorMetricCollectors {
 		let sqlite_vfs_resolve_pages_cache_misses_total = IntCounterVec::new(
 			Opts::new(
 				"rivetkit_actor_sqlite_vfs_resolve_pages_cache_misses_total",
-				"total pages missing from the VFS page cache and write buffer",
+				"total pages missing from the VFS page buffers and write buffer",
 			),
 			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
 		)
@@ -1270,6 +1381,16 @@ impl ActorMetricCollectors {
 		)
 		.expect("create actor_sqlite_vfs_commit_total counter");
 		#[cfg(feature = "sqlite-local")]
+		let sqlite_vfs_commit_dirty_pages = HistogramVec::new(
+			HistogramOpts::new(
+				"rivetkit_actor_sqlite_vfs_commit_dirty_pages",
+				"dirty pages written by each successful VFS commit",
+			)
+			.buckets(rivet_metrics::PAGE_COUNT_BUCKETS.to_vec()),
+			ACTOR_LABELS,
+		)
+		.expect("create actor_sqlite_vfs_commit_dirty_pages histogram");
+		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_commit_phase_duration_seconds_total = CounterVec::new(
 			Opts::new(
 				"rivetkit_actor_sqlite_vfs_commit_phase_duration_seconds_total",
@@ -1296,6 +1417,15 @@ impl ActorMetricCollectors {
 			ACTOR_LABELS,
 		)
 		.expect("create actor_sqlite_worker_queue_depth gauge");
+		#[cfg(feature = "sqlite-local")]
+		let sqlite_vfs_cached_bytes = IntGaugeVec::new(
+			Opts::new(
+				"rivetkit_actor_sqlite_vfs_cached_bytes",
+				"bytes held by native SQLite VFS page buffers",
+			),
+			ACTOR_LABELS,
+		)
+		.expect("create actor_sqlite_vfs_cached_bytes gauge");
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_workers_active = IntGaugeVec::new(
 			Opts::new(
@@ -1396,6 +1526,10 @@ impl ActorMetricCollectors {
 			&rivet_metrics::REGISTRY,
 			create_vars_duration_seconds.clone(),
 		);
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			runtime_callback_duration_seconds.clone(),
+		);
 		register_metric(&rivet_metrics::REGISTRY, queue_depth.clone());
 		register_metric(&rivet_metrics::REGISTRY, queue_messages_sent_total.clone());
 		register_metric(
@@ -1443,6 +1577,10 @@ impl ActorMetricCollectors {
 				&rivet_metrics::REGISTRY,
 				sqlite_vfs_resolve_pages_cache_misses_total.clone(),
 			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_vfs_prefetch_unused_pages_total.clone(),
+			);
 			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_get_pages_total.clone());
 			register_metric(
 				&rivet_metrics::REGISTRY,
@@ -1467,6 +1605,10 @@ impl ActorMetricCollectors {
 			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_commit_total.clone());
 			register_metric(
 				&rivet_metrics::REGISTRY,
+				sqlite_vfs_commit_dirty_pages.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
 				sqlite_vfs_commit_phase_duration_seconds_total.clone(),
 			);
 			register_metric(
@@ -1474,6 +1616,7 @@ impl ActorMetricCollectors {
 				sqlite_vfs_commit_duration_seconds_total.clone(),
 			);
 			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_queue_depth.clone());
+			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_cached_bytes.clone());
 			register_metric(&rivet_metrics::REGISTRY, sqlite_workers_active.clone());
 			register_metric(
 				&rivet_metrics::REGISTRY,
@@ -1513,6 +1656,7 @@ impl ActorMetricCollectors {
 			startup_phase_duration_seconds,
 			create_state_duration_seconds,
 			create_vars_duration_seconds,
+			runtime_callback_duration_seconds,
 			queue_depth,
 			queue_messages_sent_total,
 			queue_messages_received_total,
@@ -1547,6 +1691,8 @@ impl ActorMetricCollectors {
 			#[cfg(feature = "sqlite-local")]
 			sqlite_vfs_prefetch_pages_total,
 			#[cfg(feature = "sqlite-local")]
+			sqlite_vfs_prefetch_unused_pages_total,
+			#[cfg(feature = "sqlite-local")]
 			sqlite_vfs_bytes_fetched_total,
 			#[cfg(feature = "sqlite-local")]
 			sqlite_vfs_prefetch_bytes_total,
@@ -1555,11 +1701,15 @@ impl ActorMetricCollectors {
 			#[cfg(feature = "sqlite-local")]
 			sqlite_vfs_commit_total,
 			#[cfg(feature = "sqlite-local")]
+			sqlite_vfs_commit_dirty_pages,
+			#[cfg(feature = "sqlite-local")]
 			sqlite_vfs_commit_phase_duration_seconds_total,
 			#[cfg(feature = "sqlite-local")]
 			sqlite_vfs_commit_duration_seconds_total,
 			#[cfg(feature = "sqlite-local")]
 			sqlite_worker_queue_depth,
+			#[cfg(feature = "sqlite-local")]
+			sqlite_vfs_cached_bytes,
 			#[cfg(feature = "sqlite-local")]
 			sqlite_workers_active,
 			#[cfg(feature = "sqlite-local")]
@@ -1591,18 +1741,18 @@ impl ActorMetrics {
 		actor_name: impl Into<String>,
 		_sqlite_profiling: crate::SqliteProfilingConfig,
 	) -> Self {
+		let _sqlite_profiling = _sqlite_profiling.with_process_override();
 		let labels = ActorMetricLabels {
 			actor_name: actor_name.into(),
 		};
 		#[cfg(feature = "sqlite-local")]
-		if _sqlite_profiling.enabled {
-			let _ = sqlite_diagnostic_sender(_sqlite_profiling.diagnostic_event_queue_capacity);
-		}
+		let _ = sqlite_diagnostic_sender(_sqlite_profiling.diagnostic_event_queue_capacity);
 		let metrics = &*METRICS;
-		metrics
-			.actor_active_count
-			.with_label_values(&labels.as_label_values())
-			.inc();
+		let active = rivet_metrics::GaugeGuardExt::inc_guard(
+			&metrics
+				.actor_active_count
+				.with_label_values(&labels.as_label_values()),
+		);
 		metrics
 			.actor_started_total
 			.with_label_values(&labels.as_label_values())
@@ -1611,11 +1761,15 @@ impl ActorMetrics {
 			inner: Arc::new(ActorMetricInner {
 				labels,
 				#[cfg(feature = "sqlite-local")]
+				sqlite_profile_selection: super::sqlite::profiling::QuerySelection::new(
+					&_sqlite_profiling,
+				),
+				#[cfg(feature = "sqlite-local")]
 				sqlite_profiling: _sqlite_profiling,
 				#[cfg(feature = "sqlite-local")]
 				sqlite_profile_low_card_handles: OnceLock::new(),
 				state: Mutex::new(ActorMetricState::default()),
-				active: AtomicBool::new(true),
+				active: Mutex::new(Some(active)),
 				startup_is_new: AtomicU8::new(STARTUP_KIND_UNKNOWN),
 				startup_complete: AtomicBool::new(false),
 				current_startup_phase: AtomicU8::new(startup_phase::StartupPhase::Unknown as u8),
@@ -1732,6 +1886,33 @@ impl ActorMetrics {
 			.observe(duration.as_secs_f64());
 	}
 
+	/// Records the storage bootstrap, its steps and the persisted-state load once the start
+	/// knows whether the actor is new. They run before it does, so they are held until then.
+	pub(crate) fn observe_startup_storage(
+		&self,
+		is_new: bool,
+		storage: Duration,
+		storage_phases: &[(startup_phase::StartupPhase, Duration)],
+		load_persisted: Duration,
+	) {
+		let is_new = Some(is_new);
+		self.observe_startup_phase(
+			startup_phase::StartupPhase::StartupStorage,
+			is_new,
+			"success",
+			storage,
+		);
+		for (phase, duration) in storage_phases {
+			self.observe_startup_phase(*phase, is_new, "success", *duration);
+		}
+		self.observe_startup_phase(
+			startup_phase::StartupPhase::LoadPersisted,
+			is_new,
+			"success",
+			load_persisted,
+		);
+	}
+
 	pub(crate) fn observe_startup_phase_result<T, E>(
 		&self,
 		phase: startup_phase::StartupPhase,
@@ -1755,6 +1936,13 @@ impl ActorMetrics {
 		METRICS
 			.create_vars_duration_seconds
 			.with_label_values(&self.actor_labels())
+			.observe(duration.as_secs_f64());
+	}
+
+	pub(crate) fn observe_runtime_callback(&self, callback: &'static str, duration: Duration) {
+		METRICS
+			.runtime_callback_duration_seconds
+			.with_label_values(&[self.actor_labels()[0], callback])
 			.observe(duration.as_secs_f64());
 	}
 
@@ -1953,16 +2141,13 @@ impl Drop for ActorMetricInner {
 
 impl ActorMetricInner {
 	fn record_actor_stopped(&self) {
-		if !self.active.swap(false, Ordering::AcqRel) {
+		let Some(active) = self.active.lock().take() else {
 			return;
-		}
+		};
+		drop(active);
 
 		self.clear_aggregated_gauges();
 		let metrics = &*METRICS;
-		metrics
-			.actor_active_count
-			.with_label_values(&self.labels.as_label_values())
-			.dec();
 		metrics
 			.actor_stopped_total
 			.with_label_values(&self.labels.as_label_values())
@@ -2033,6 +2218,12 @@ impl ActorMetricInner {
 				&labels,
 			);
 			set_aggregated_gauge(
+				&mut state.sqlite_vfs_cached_bytes,
+				0,
+				&METRICS.sqlite_vfs_cached_bytes,
+				&labels,
+			);
+			set_aggregated_gauge(
 				&mut state.sqlite_workers_active,
 				0,
 				&METRICS.sqlite_workers_active,
@@ -2066,7 +2257,7 @@ impl ActorMetrics {
 	fn reserve_sqlite_series(&self, cost: usize) -> bool {
 		SQLITE_PROFILE_ADMISSION
 			.series
-			.fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+			.try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
 				(current.saturating_add(cost) <= self.inner.sqlite_profiling.max_prometheus_series)
 					.then_some(current + cost)
 			})
@@ -2119,7 +2310,7 @@ impl ActorMetrics {
 				operation_type,
 				reason,
 				overflow_observations = count,
-				"SQLite profiling capacity reached; observations are being aggregated or dropped"
+				"SQLite profiling capacity reached; observations are being dropped"
 			);
 		}
 	}
@@ -2136,16 +2327,15 @@ impl ActorMetrics {
 		self.warn_sqlite_profile_capacity(reason, operation_type);
 	}
 
+	/// Explicit selections are admitted immediately, within the existing series caps.
 	fn select_sqlite_fingerprint(
 		&self,
 		operation_type: &'static str,
 		fingerprint: &str,
-		total_ns: u64,
-	) -> (String, bool) {
-		if fingerprint == "other" {
-			return ("other".to_owned(), false);
+	) -> Option<bool> {
+		if !self.inner.sqlite_profile_selection.contains(fingerprint) {
+			return None;
 		}
-
 		let (set, count, cap) = if operation_type == "transaction" {
 			(
 				&SQLITE_PROFILE_ADMISSION.transactions,
@@ -2164,67 +2354,23 @@ impl ActorMetrics {
 			)
 		};
 		if set.contains_sync(fingerprint) {
-			return (fingerprint.to_owned(), false);
-		}
-
-		let candidate_key = format!(
-			"{}\0{operation_type}\0{fingerprint}",
-			self.actor_labels()[0]
-		);
-		let slow_threshold_ns = self
-			.inner
-			.sqlite_profiling
-			.slow_operation_threshold_ms
-			.saturating_mul(1_000_000);
-		if operation_type == "statement" && total_ns < slow_threshold_ns {
-			let candidate_cap = self
-				.inner
-				.sqlite_profiling
-				.max_tracked_statement_fingerprints
-				.saturating_add(
-					self.inner
-						.sqlite_profiling
-						.max_tracked_transaction_fingerprints,
-				)
-				.saturating_mul(4)
-				.max(1);
-			if !SQLITE_PROFILE_ADMISSION
-				.candidates
-				.contains_sync(&candidate_key)
-				&& SQLITE_PROFILE_ADMISSION.candidates.len() >= candidate_cap
-			{
-				self.record_sqlite_fingerprint_overflow(operation_type, "candidate_cap");
-				return ("other".to_owned(), false);
-			}
-			let observation_count = *SQLITE_PROFILE_ADMISSION
-				.candidates
-				.entry_sync(candidate_key.clone())
-				.and_modify(|count| *count = count.saturating_add(1))
-				.or_insert(1)
-				.get();
-			if observation_count < 2 {
-				return ("other".to_owned(), false);
-			}
+			return Some(false);
 		}
 		if count
-			.fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+			.try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
 				(current < cap).then_some(current + 1)
 			})
 			.is_err()
 		{
 			self.record_sqlite_fingerprint_overflow(operation_type, "logical_cap");
-			return ("other".to_owned(), false);
+			return None;
 		}
-		let newly_admitted = if set.insert_sync(fingerprint.to_owned()).is_err() {
+		if set.insert_sync(fingerprint.to_owned()).is_err() {
 			count.fetch_sub(1, Ordering::AcqRel);
-			false
+			Some(false)
 		} else {
-			true
-		};
-		let _ = SQLITE_PROFILE_ADMISSION
-			.candidates
-			.remove_sync(&candidate_key);
-		(fingerprint.to_owned(), newly_admitted)
+			Some(true)
+		}
 	}
 
 	fn rollback_sqlite_logical_admission(&self, operation_type: &'static str, fingerprint: &str) {
@@ -2299,45 +2445,41 @@ impl ActorMetrics {
 		fingerprint_source: &'static str,
 		transaction_mode: &'static str,
 		storage_transport: &'static str,
-		total_ns: u64,
 	) -> Option<AdmittedSqliteProfile<'_>> {
-		let low_card_handles = self.sqlite_low_card_handles(storage_transport)?;
-		let (selected, newly_admitted) =
-			self.select_sqlite_fingerprint(operation_type, fingerprint, total_ns);
+		let (fingerprint, fingerprint_source, newly_admitted) =
+			if self.inner.sqlite_profile_selection.contains(fingerprint) {
+				(
+					fingerprint,
+					fingerprint_source,
+					self.select_sqlite_fingerprint(operation_type, fingerprint)?,
+				)
+			} else {
+				("", "", false)
+			};
+		let Some(low_card_handles) = self.sqlite_low_card_handles(storage_transport) else {
+			if newly_admitted {
+				self.rollback_sqlite_logical_admission(operation_type, fingerprint);
+			}
+			return None;
+		};
 		if let Some(fingerprint_handles) = self.admit_sqlite_fingerprint_tuple(
 			operation_type,
-			&selected,
+			fingerprint,
 			fingerprint_source,
 			transaction_mode,
 			storage_transport,
 		) {
 			return Some(AdmittedSqliteProfile {
-				fingerprint: selected,
+				fingerprint: fingerprint.to_owned(),
 				fingerprint_handles,
 				low_card_handles,
 			});
 		}
 		if newly_admitted {
-			self.rollback_sqlite_logical_admission(operation_type, &selected);
+			self.rollback_sqlite_logical_admission(operation_type, fingerprint);
 		}
-
 		self.record_sqlite_fingerprint_overflow(operation_type, "series_budget");
-		if selected != "other" {
-			let fingerprint_handles = self.admit_sqlite_fingerprint_tuple(
-				operation_type,
-				"other",
-				fingerprint_source,
-				transaction_mode,
-				storage_transport,
-			)?;
-			Some(AdmittedSqliteProfile {
-				fingerprint: "other".to_owned(),
-				fingerprint_handles,
-				low_card_handles,
-			})
-		} else {
-			None
-		}
+		None
 	}
 
 	fn observe_profile_common(
@@ -2358,7 +2500,6 @@ impl ActorMetrics {
 			fingerprint_source,
 			transaction_mode,
 			storage_transport,
-			total_ns,
 		)?;
 		admitted
 			.fingerprint_handles
@@ -2380,7 +2521,7 @@ impl ActorMetrics {
 		&self,
 		operation_type: &'static str,
 		handles: &SqliteLowCardMetricHandles,
-		profile: &depot_client::vfs::SqliteOperationProfile,
+		profile: &sqlite_embedded::vfs::SqliteOperationProfile,
 	) {
 		let operation_index = usize::from(operation_type == "transaction");
 		for (index, pages) in [
@@ -2388,7 +2529,6 @@ impl ActorMetrics {
 			profile.cache_hit_pages,
 			profile.cache_miss_pages,
 			profile.depot_demand_requested_pages,
-			profile.vfs_prefetch_requested_pages,
 			profile.response_present_pages,
 			profile.response_missing_pages,
 			profile.overflow_expansion_extra_pages,
@@ -2420,7 +2560,11 @@ impl ActorMetrics {
 	}
 
 	fn emit_sqlite_diagnostic_event(&self, event: SqliteDiagnosticEvent) {
-		let low_card_handles = self.sqlite_low_card_handles("proxy");
+		let low_card_handles = self
+			.inner
+			.sqlite_profile_low_card_handles
+			.get()
+			.and_then(|handles| handles.as_deref());
 		if !try_acquire_sqlite_diagnostic_rate(
 			self.inner.sqlite_profiling.max_diagnostic_events_per_minute,
 		) {
@@ -2443,10 +2587,13 @@ impl ActorMetrics {
 			handles.event_dropped[1].inc();
 		}
 	}
+}
 
+#[cfg(feature = "sqlite-local")]
+impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 	fn operation_diagnostic_selected(
 		&self,
-		profile: &depot_client::vfs::SqliteOperationMetric,
+		profile: &sqlite_embedded::vfs::SqliteOperationMetric,
 	) -> bool {
 		let slow = profile.total_ns
 			>= self
@@ -2470,7 +2617,7 @@ impl ActorMetrics {
 
 	fn transaction_diagnostic_selected(
 		&self,
-		profile: &depot_client::vfs::SqliteTransactionMetric,
+		profile: &sqlite_embedded::vfs::SqliteTransactionMetric,
 	) -> bool {
 		profile.total_ns
 			>= self
@@ -2482,12 +2629,9 @@ impl ActorMetrics {
 			|| profile.dirty_bytes > 64 * 1024 * 1024
 			|| sqlite_baseline_sample_selected(self.inner.sqlite_profiling.baseline_sample_rate)
 	}
-}
 
-#[cfg(feature = "sqlite-local")]
-impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 	fn profiling_enabled(&self) -> bool {
-		self.inner.sqlite_profiling.enabled
+		true
 	}
 
 	fn max_profiled_get_pages_requests(&self) -> usize {
@@ -2496,11 +2640,8 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 
 	fn observe_operation_profile(
 		&self,
-		profile: &depot_client::vfs::SqliteOperationMetric,
+		profile: &sqlite_embedded::vfs::SqliteOperationMetric,
 	) -> bool {
-		if !self.inner.sqlite_profiling.enabled {
-			return false;
-		}
 		let local_work_ns = profile
 			.total_ns
 			.saturating_sub(profile.transaction_wait_ns)
@@ -2536,7 +2677,6 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 				.observe(ns_to_seconds(request.duration_ns));
 			for (index, pages) in [
 				request.demand_requested,
-				request.prefetch_requested,
 				request.response_present,
 				request.overflow_expansion_extra,
 			]
@@ -2552,16 +2692,13 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 				handles.missing_pages.inc_by(request.response_missing);
 			}
 		}
-		profile.fingerprint != "other" && admitted.fingerprint == profile.fingerprint
+		!admitted.fingerprint.is_empty() && admitted.fingerprint == profile.fingerprint
 	}
 
 	fn observe_transaction_profile(
 		&self,
-		profile: &depot_client::vfs::SqliteTransactionMetric,
+		profile: &sqlite_embedded::vfs::SqliteTransactionMetric,
 	) -> bool {
-		if !self.inner.sqlite_profiling.enabled {
-			return false;
-		}
 		let Some(admitted) = self.observe_profile_common(
 			"transaction",
 			&profile.fingerprint,
@@ -2588,25 +2725,19 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 			.as_ref()
 			.expect("transaction handles include statement count")
 			.observe(profile.statement_count as f64);
-		let mut aggregate = depot_client::vfs::SqliteOperationProfile::default();
+		let mut aggregate = sqlite_embedded::vfs::SqliteOperationProfile::default();
 		aggregate.dirty_pages = profile.dirty_pages;
 		aggregate.dirty_bytes = profile.dirty_bytes;
 		self.record_local_profile_totals("transaction", admitted.low_card_handles, &aggregate);
-		profile.fingerprint != "other" && admitted.fingerprint == profile.fingerprint
+		!admitted.fingerprint.is_empty() && admitted.fingerprint == profile.fingerprint
 	}
 
 	fn emit_operation_diagnostic_event(
 		&self,
 		actor_id: &str,
 		generation: Option<u64>,
-		profile: &depot_client::vfs::SqliteOperationMetric,
+		profile: &sqlite_embedded::vfs::SqliteOperationMetric,
 	) {
-		if !self.inner.sqlite_profiling.enabled {
-			return;
-		}
-		if !self.operation_diagnostic_selected(profile) {
-			return;
-		}
 		self.emit_sqlite_diagnostic_event(SqliteDiagnosticEvent::Operation {
 			invocation_id: SQLITE_DIAGNOSTIC_INVOCATION_ID.fetch_add(1, Ordering::Relaxed),
 			actor_id: actor_id.to_owned(),
@@ -2620,14 +2751,8 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 		&self,
 		actor_id: &str,
 		generation: Option<u64>,
-		profile: &depot_client::vfs::SqliteTransactionMetric,
+		profile: &sqlite_embedded::vfs::SqliteTransactionMetric,
 	) {
-		if !self.inner.sqlite_profiling.enabled {
-			return;
-		}
-		if !self.transaction_diagnostic_selected(profile) {
-			return;
-		}
 		self.emit_sqlite_diagnostic_event(SqliteDiagnosticEvent::Transaction {
 			invocation_id: SQLITE_DIAGNOSTIC_INVOCATION_ID.fetch_add(1, Ordering::Relaxed),
 			actor_id: actor_id.to_owned(),
@@ -2712,7 +2837,7 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 
 	fn observe_open_phase(
 		&self,
-		phase: depot_client::vfs::SqliteOpenPhase,
+		phase: sqlite_embedded::vfs::SqliteOpenPhase,
 		outcome: &'static str,
 		duration_ns: u64,
 	) {
@@ -2736,11 +2861,16 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 			.inc_by(pages);
 	}
 
-	fn record_commit(&self) {
+	fn record_commit(&self, dirty_pages: u64) {
+		let labels = self.actor_labels();
 		METRICS
 			.sqlite_vfs_commit_total
-			.with_label_values(&self.actor_labels())
+			.with_label_values(&labels)
 			.inc();
+		METRICS
+			.sqlite_vfs_commit_dirty_pages
+			.with_label_values(&labels)
+			.observe(dirty_pages as f64);
 	}
 
 	fn observe_commit_phases(
@@ -2778,9 +2908,7 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 			&METRICS.sqlite_worker_queue_depth,
 			&labels,
 		);
-		if self.inner.sqlite_profiling.enabled
-			&& let Some(handles) = self.sqlite_low_card_handles("proxy")
-		{
+		if let Some(Some(handles)) = self.inner.sqlite_profile_low_card_handles.get() {
 			handles.worker_queue_depth.set(u64_to_i64(depth));
 		}
 	}
@@ -2797,17 +2925,31 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 	}
 
 	fn set_worker_inflight(&self, active: bool) {
-		if self.inner.sqlite_profiling.enabled
-			&& let Some(handles) = self.sqlite_low_card_handles("proxy")
-		{
+		if let Some(Some(handles)) = self.inner.sqlite_profile_low_card_handles.get() {
 			handles.worker_inflight.set(if active { 1 } else { 0 });
 		}
 	}
 
+	fn record_prefetch_unused_pages(&self, pages: u64) {
+		METRICS
+			.sqlite_vfs_prefetch_unused_pages_total
+			.with_label_values(&self.actor_labels())
+			.inc_by(pages);
+	}
+
+	fn set_vfs_cached_bytes(&self, bytes: u64) {
+		let labels = self.actor_labels();
+		let mut state = self.inner.state.lock();
+		set_aggregated_gauge(
+			&mut state.sqlite_vfs_cached_bytes,
+			u64_to_i64(bytes),
+			&METRICS.sqlite_vfs_cached_bytes,
+			&labels,
+		);
+	}
+
 	fn set_coordinator_queue_depth(&self, depth: u64) {
-		if self.inner.sqlite_profiling.enabled
-			&& let Some(handles) = self.sqlite_low_card_handles("proxy")
-		{
+		if let Some(Some(handles)) = self.inner.sqlite_profile_low_card_handles.get() {
 			handles.coordinator_queue_depth.set(u64_to_i64(depth));
 		}
 	}
@@ -3000,6 +3142,4 @@ where
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/metrics.rs"]
-mod tests;
+

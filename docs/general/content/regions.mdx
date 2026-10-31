@@ -1,0 +1,23 @@
+---
+title: "Regions"
+description: "Choose the region a Rivet Actor runs in on Rivet Cloud, and how regions work when you self-host."
+skill: true
+---
+
+A Rivet Actor lives in one region for its lifetime, and its data stays in that region.
+
+## Region selection on Rivet Cloud
+
+By default, a Rivet Actor is created in the region nearest the client. Override the region at create time:
+
+<CodeSnippet file="examples/docs/general-edge/client.ts" title="client.ts" />
+
+See [Actor-Actor Communication](/actors/docs/communicating-between-actors) for the full set of create options.
+
+## Where a Rivet Actor stays
+
+A Rivet Actor does not move between regions. Reads and writes to its data never cross a region boundary. A call between Rivet Actors in different regions goes over the network, so treat it like any other remote call.
+
+## Self-hosting
+
+A self-hosted control plane runs in one region. Multi-region self-hosting is coming.

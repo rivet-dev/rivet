@@ -35,28 +35,35 @@ Build and protocol metadata for the responding node and its fleet.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `build_timestamp` | `string` |  |
-| `cargo_profile` | `string` |  |
-| `cargo_target` | `string` |  |
-| `envoy_protocol_version` | `integer` |  |
-| `epoxy_protocol_version` | `integer` |  |
-| `git_sha` | `string` |  |
-| `runtime` | `string` |  |
-| `rustc_host` | `string` |  |
-| `rustc_version` | `string` |  |
-| `version` | `string` |  |
+| `runtime` | `"engine"` | Always `engine`. |
+| `version` | `string` | Version of the control plane. |
+| `envoyProtocolVersion` | `integer` | Version of the protocol nodes use to connect to the control plane. |
+| `actorNames` | `object` | Actor names the default namespace's connected nodes accept. Only present for requests made with the admin token. |
 
 ```json
 {
-  "build_timestamp": "<build_timestamp>",
-  "cargo_profile": "<cargo_profile>",
-  "cargo_target": "<cargo_target>",
-  "envoy_protocol_version": 0,
-  "epoxy_protocol_version": 0,
-  "git_sha": "<git_sha>",
-  "runtime": "<runtime>",
-  "rustc_host": "<rustc_host>",
-  "rustc_version": "<rustc_version>",
-  "version": "<version>"
+  "runtime": "engine",
+  "version": "<version>",
+  "envoyProtocolVersion": 0,
+  "actorNames": {}
+}
+```
+
+### 500
+
+`core.internal_error`: an unexpected failure. Details are only logged on the server.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "core",
+  "code": "internal_error",
+  "message": "An internal error occurred"
 }
 ```

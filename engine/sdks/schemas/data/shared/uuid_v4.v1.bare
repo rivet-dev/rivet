@@ -1,0 +1,2 @@
+# A version 4 UUID encoded as its 16 bytes, without a text representation.
+type UuidV4 data[16]

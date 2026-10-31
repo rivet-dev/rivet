@@ -1,0 +1,5 @@
+{
+  "code": "endpoint_unresolved",
+  "group": "ups",
+  "message": "The worker's endpoint could not be resolved; the request was not sent."
+}

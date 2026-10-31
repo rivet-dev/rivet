@@ -481,8 +481,9 @@ export class NapiCoreRuntime implements CoreRuntime {
 	onCancellationTokenCancelled(
 		token: CancellationTokenHandle,
 		callback: (...args: unknown[]) => unknown,
-	): void {
-		asNativeCancellationToken(token).onCancelled(callback);
+	): () => void {
+		const listener = asNativeCancellationToken(token).onCancelled(callback);
+		return () => listener.release();
 	}
 
 	actorState(ctx: ActorContextHandle): Buffer {

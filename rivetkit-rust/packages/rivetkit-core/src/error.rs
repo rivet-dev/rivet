@@ -326,9 +326,33 @@ pub(crate) enum SqliteRuntimeError {
 	#[error(
 		"remote_indeterminate_result",
 		"Remote SQLite result is indeterminate.",
-		"Remote SQLite {operation} may have completed, but the envoy disconnected before returning a result."
+		"Remote SQLite {operation} may have completed, but its result was lost before it returned, to an envoy disconnect or its deadline."
 	)]
 	RemoteIndeterminateResult { operation: String },
+
+	#[error(
+		"transaction_too_large",
+		"SQLite transaction is too large.",
+		"SQLite transaction is too large: {detail}"
+	)]
+	TransactionTooLarge { detail: String },
+
+	#[error(
+		"storage_overloaded",
+		"SQLite storage is overloaded.",
+		"SQLite storage refused the request before running it; retry after {retry_after_ms} ms: {message}"
+	)]
+	StorageOverloaded {
+		retry_after_ms: u64,
+		message: String,
+	},
+
+	#[error(
+		"storage_timeout",
+		"SQLite storage timed out.",
+		"SQLite storage {operation} timed out before storage answered; nothing was changed."
+	)]
+	StorageTimeout { operation: String },
 
 	#[error(
 		"remote_fence_mismatch",

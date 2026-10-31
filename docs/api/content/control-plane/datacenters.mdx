@@ -35,23 +35,90 @@ Configured datacenters and an empty pagination cursor.
 | Field | Type | Description |
 | --- | --- | --- |
 | `datacenters` | `object[]` |  |
-| `datacenters[].label` | `integer` |  |
-| `datacenters[].name` | `string` |  |
-| `datacenters[].url` | `string` |  |
-| `pagination` | `object` |  |
-| `pagination.cursor` | `string \| null` | Cursor for the next page, or `null` when there are no more results. |
+| `datacenters[].name` | `string` | Datacenter name. |
 
 ```json
 {
   "datacenters": [
     {
-      "label": 0,
-      "name": "my-actor",
-      "url": "<url>"
+      "name": "default"
     }
-  ],
-  "pagination": {
-    "cursor": null
-  }
+  ]
+}
+```
+
+### 401
+
+`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "auth",
+  "code": "invalid_token",
+  "message": "Authentication token is invalid."
+}
+```
+
+### 403
+
+`auth.insufficient_permissions`: the token's grants do not cover this request.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "auth",
+  "code": "insufficient_permissions",
+  "message": "Insufficient permissions to access this resource."
+}
+```
+
+### 500
+
+`core.internal_error`: an unexpected failure. Details are only logged on the server.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "core",
+  "code": "internal_error",
+  "message": "An internal error occurred"
+}
+```
+
+### 503
+
+`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "auth",
+  "code": "verification_unavailable",
+  "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
 }
 ```

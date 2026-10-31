@@ -250,6 +250,4 @@ impl RequestAuthState {
 	}
 }
 
-#[cfg(test)]
-#[path = "../tests/unit/check.rs"]
-mod tests;
+

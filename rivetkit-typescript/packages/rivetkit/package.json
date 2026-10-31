@@ -1,6 +1,6 @@
 {
 	"name": "rivetkit",
-	"version": "2.3.31",
+	"version": "3.0.0-preview.5",
 	"description": "Lightweight libraries for building stateful actors on edge platforms",
 	"license": "Apache-2.0",
 	"keywords": [
@@ -210,7 +210,6 @@
 	"dependencies": {
 		"@hono/zod-openapi": "^1.1.5",
 		"@opentelemetry/api": "^1.1.0",
-		"@rivet-dev/services": "^0.2.3",
 		"@rivetkit/bare-ts": "^0.6.2",
 		"@rivetkit/engine-api-full": "workspace:*",
 		"@rivetkit/engine-cli": "workspace:*",

@@ -5,99 +5,6 @@
 			"cache": false
 		},
 		"build": {
-			"dependsOn": ["^build"],
-			"inputs": [
-				"src/**",
-				"tsconfig.json",
-				"tsup.config.ts",
-				"package.json"
-			],
-			"outputs": ["dist/**"],
-			"env": ["FAST_BUILD", "SKIP_NAPI_BUILD", "SKIP_WASM_BUILD"]
-		},
-		"build:engine": {
-			"dependsOn": ["^build"],
-			"inputs": [
-				"src/**",
-				"tsconfig.json",
-				"package.json"
-			],
-			"outputs": ["dist/**"],
-			"env": ["BASE_URL", "VITE_APP_*", "VITE_FEATURE_FLAGS"]
-		},
-		"build:inspector": {
-			"dependsOn": ["^build"],
-			"inputs": [
-				"src/**",
-				"vite.inspector.config.ts",
-				"tsconfig.json",
-				"package.json"
-			],
-			"outputs": ["dist/**"],
-			"env": ["VITE_APP_*", "VITE_DEPLOYMENT_TYPE"]
-		},
-		"build:inspector-ui": {
-			"dependsOn": ["^build"],
-			"inputs": [
-				"src/**",
-				"apps/inspector-ui/**",
-				"scripts/**",
-				"vite.inspector-ui.config.ts",
-				"tsconfig.json",
-				"package.json"
-			],
-			"outputs": ["dist/inspector-ui/**", "dist/inspector-tab/**"]
-		},
-		// Second native build pass for rivetkit-napi / rivetkit-wasm. Their
-		// build.rs embeds frontend/dist/inspector-ui via include_dir!, but the
-		// inspector UI is built downstream of these packages, so the first
-		// `build` pass embeds an empty bundle. This pass re-runs the native build
-		// after build:inspector-ui has produced the real assets. It is terminal
-		// (nothing depends on it), so it does not create a cycle. Scoped to the two
-		// embedding packages so it is not scheduled for the rest of the workspace.
-		// CAVEAT: running `build` for these packages WITHOUT build:embed (a partial
-		// build, --filter, downstream rebuild) relinks the binary with an empty
-		// inspector bundle -> /inspector/ui/* 404s with ui_asset_not_found. Always
-		// build via `pnpm -w build`, or re-run `... build:force` after a partial
-		// build. See .claude/reference/build-troubleshooting.md.
-		"@rivetkit/rivetkit-napi#build:embed": {
-			"dependsOn": ["build", "@rivetkit/engine-frontend#build:inspector-ui"],
-			"cache": false,
-			"env": ["FAST_BUILD", "SKIP_NAPI_BUILD"]
-		},
-		"@rivetkit/rivetkit-wasm#build:embed": {
-			"dependsOn": ["build", "@rivetkit/engine-frontend#build:inspector-ui"],
-			"cache": false,
-			"env": ["SKIP_WASM_BUILD"]
-		},
-		"@rivet-dev/mcp#build": {
-			"dependsOn": [
-				"^build",
-				"rivetkit#build",
-				"@rivetkit/traces#build",
-				"@rivetkit/shared-data#build",
-				"@rivet-gg/icons#build",
-				"@rivetkit/engine-api-full#build"
-			],
-			"env": [
-				"RIVET_MCP_SENTRY_DSN",
-				"RIVET_MCP_APP_SENTRY_DSN",
-				"SENTRY_AUTH_TOKEN",
-				"SENTRY_BINARY_PATH",
-				"SENTRY_ORG",
-				"MCP_APP_SENTRY_PROJECT"
-			],
-			"inputs": [
-				"src/**",
-				"assets/**",
-				"tsup.config.ts",
-				"package.json"
-			],
-			"outputs": [
-				"dist/**"
-			]
-		},
-		"@rivet-gg/cloud-api#build": {
 			"dependsOn": [
 				"^build"
 			],
@@ -105,29 +12,34 @@
 				"src/**",
 				"build.mjs",
 				"tsconfig.json",
+				"tsdown.config.*",
+				"tsup.config.ts",
 				"package.json"
 			],
 			"outputs": [
 				"dist/**"
 			],
 			"env": [
-				"SENTRY_RELEASE",
-				"SENTRY_ORG",
-				"SENTRY_PROJECT",
-				"SENTRY_PROJECT_MCP"
-			],
-			"passThroughEnv": [
-				"SENTRY_AUTH_TOKEN"
+				"FAST_BUILD",
+				"SKIP_NAPI_BUILD",
+				"SKIP_WASM_BUILD"
 			]
 		},
-		"build:ladle": {
-			"dependsOn": ["^build"],
-			"inputs": [
-				"src/**",
-				"tsconfig.json",
-				"package.json"
-			],
-			"outputs": ["build/**"]
+		// Second native build pass for rivetkit-napi / rivetkit-wasm. Their
+		// `build` pass embeds an empty bundle. This pass re-runs the native build
+		// (nothing depends on it), so it does not create a cycle. Scoped to the two
+		// embedding packages so it is not scheduled for the rest of the workspace.
+		// build, --filter, downstream rebuild) relinks the binary with an empty
+		// build via `pnpm -w build`, or re-run `... build:force` after a partial
+		"@rivetkit/rivetkit-napi#build:embed": {
+			"dependsOn": ["build"],
+			"cache": false,
+			"env": ["FAST_BUILD", "SKIP_NAPI_BUILD"]
+		},
+		"@rivetkit/rivetkit-wasm#build:embed": {
+			"dependsOn": ["build"],
+			"cache": false,
+			"env": ["SKIP_WASM_BUILD"]
 		},
 		"check-types": {
 			"inputs": [
@@ -137,17 +49,53 @@
 				"tsup.config.ts",
 				"package.json"
 			],
-			"dependsOn": ["^build"]
+			"dependsOn": [
+				"^build"
+			]
 		},
 		"dev": {
 			// Both builds & checks types for this repo and all dependencies
 			//
 			// Build after checking types since check types will return errors faster
-			"dependsOn": ["^check-types", "check-types", "build"]
+			"dependsOn": [
+				"^check-types",
+				"check-types",
+				"build"
+			]
+		},
+		"fmt": {
+			"cache": false,
+			"inputs": [
+				"**/*.{ts,tsx,js,jsx,json,md}"
+			],
+			"outputs": []
+		},
+		"db:generate": {
+			"cache": false,
+			"inputs": [
+				"src/schema.ts",
+				"drizzle.config.ts"
+			],
+			"outputs": [
+				"drizzle/**/*.sql"
+			]
+		},
+		"db:migrate": {
+			"dependsOn": [
+				"db:generate"
+			],
+			"cache": false
 		},
 		"test": {
-			"inputs": ["src/**", "tests/**", "package.json"],
-			"dependsOn": ["^build", "check-types"]
+			"inputs": [
+				"src/**",
+				"tests/**",
+				"package.json"
+			],
+			"dependsOn": [
+				"^build",
+				"check-types"
+			]
 		}
 	}
 }

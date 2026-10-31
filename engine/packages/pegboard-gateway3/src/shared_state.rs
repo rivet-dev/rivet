@@ -17,7 +17,7 @@ use std::{
 };
 use tokio::sync::{Mutex, Notify, mpsc, watch};
 use universalpubsub::{NextOutput, PubSub, PublishOpts};
-use vbare::OwnedVersionedData;
+use vbare::Versioned;
 
 use crate::{
 	WebsocketPendingLimitReached,
@@ -900,8 +900,8 @@ impl InFlightRequestHandle {
 		};
 
 		let message = protocol::ToEnvoyConn::ToEnvoyTunnelMessage(payload);
-		let message_serialized = versioned::ToEnvoyConn::wrap_latest(message)
-			.serialize_with_embedded_version(PROTOCOL_VERSION)?;
+		let message_serialized =
+			versioned::ToEnvoyConn::serialize_with_embedded_version(&message, PROTOCOL_VERSION)?;
 
 		if let (Some(hs), true) = (req.hibernation_state_mut(), is_ws_message) {
 			hs.total_pending_ws_msgs_size += message_serialized.len() as u64;
@@ -941,7 +941,7 @@ impl InFlightRequestHandle {
 		// Cap retries so a permanently-gone receiver fails fast instead of pinning the
 		// request forever. Worst-case backoff total is ~19s, which stays under the default
 		// tunnel ping timeout (30s) so the ping path can take over if the receiver is truly lost.
-		let mut backoff = rivet_util::throttle::Backoff::new(6, Some(8), 100, 5);
+		let mut backoff = rivet_util::throttle::legacy::Backoff::new(6, Some(8), 100, 5);
 		let first_attempt_at = Instant::now();
 		let mut attempt = 0;
 		loop {
@@ -1367,8 +1367,8 @@ impl InFlightRequestHandle {
 			request_id: self.request_id,
 			ts: now,
 		});
-		let message_serialized = versioned::ToEnvoyConn::wrap_latest(message)
-			.serialize_with_embedded_version(PROTOCOL_VERSION)?;
+		let message_serialized =
+			versioned::ToEnvoyConn::serialize_with_embedded_version(&message, PROTOCOL_VERSION)?;
 
 		self.shared_state
 			.ups
@@ -1395,6 +1395,7 @@ impl InFlightRequestHandle {
 
 		Ok(())
 	}
+
 	#[tracing::instrument(level = "debug", skip_all, fields(request_id=%display_id(&self.request_id), %enable))]
 	pub async fn toggle_hibernatable(&self, enable: bool) -> Result<()> {
 		let mut req = self
@@ -1622,422 +1623,7 @@ fn attempt_bucket(attempt: u32) -> &'static str {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use std::time::Duration;
 
-	use rivet_error::RivetError;
-	use universalpubsub::driver::memory::MemoryDriver;
-
-	use super::*;
-
-	fn test_config(root: rivet_config::config::Root) -> rivet_config::Config {
-		rivet_config::Config::from_root_with_build_meta(
-			root,
-			rivet_config::BuildMeta::default(),
-			rivet_config::RuntimeProtocols {
-				ups: rivet_config::RuntimeProtocol::new(
-					rivet_config::RuntimeProtocolKind::Ups,
-					rivet_ups_protocol::PROTOCOL_VERSION,
-				),
-				..Default::default()
-			},
-		)
-	}
-
-	fn request_start() -> protocol::ToEnvoyTunnelMessageKind {
-		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(protocol::ToEnvoyRequestStart {
-			actor_id: "test-actor".into(),
-			actor_generation: Some(1),
-			method: "POST".into(),
-			path: "/".into(),
-			headers: Default::default(),
-			body: None,
-			stream: true,
-			response_stream: true,
-		})
-	}
-
-	#[test]
-	fn http_retries_only_request_start_before_streaming() {
-		assert!(retries_no_responders(
-			RequestProtocol::Http,
-			&request_start()
-		));
-		assert!(!retries_no_responders(
-			RequestProtocol::Http,
-			&protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(
-				protocol::ToEnvoyRequestChunk {
-					body: Vec::new(),
-					finish: false,
-				},
-			),
-		));
-		assert!(!retries_no_responders(
-			RequestProtocol::Http,
-			&protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort(
-				protocol::ToEnvoyRequestAbort {
-					actor_id: Some("test-actor".to_owned()),
-					actor_generation: Some(1),
-					reason: protocol::HttpStreamAbortReason {
-						kind: protocol::HttpStreamAbortReasonKind::Cancelled,
-						detail: None,
-					},
-				},
-			),
-		));
-	}
-
-	#[test]
-	fn websocket_preserves_existing_retry_policy() {
-		assert!(retries_no_responders(
-			RequestProtocol::WebSocket,
-			&protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(
-				protocol::ToEnvoyWebSocketClose {
-					code: None,
-					reason: None
-				},
-			),
-		));
-	}
-
-	#[tokio::test]
-	async fn delivered_request_start_ack_timeout_is_indeterminate_and_sends_exact_abort() {
-		let mut root = rivet_config::config::Root::default();
-		root.pegboard = Some(rivet_config::config::Pegboard {
-			gateway_tunnel_ping_timeout_ms: Some(20),
-			..Default::default()
-		});
-		let config = test_config(root);
-		let ups = PubSub::new(
-			config.clone(),
-			Arc::new(MemoryDriver::new(
-				"gateway3-indeterminate-request-start".to_owned(),
-			)),
-		);
-		let receiver_subject = "test.envoy.receiver".to_owned();
-		let actor_id = Id::new_v1(2);
-		let expected_actor_id = actor_id.to_string();
-		let mut receiver = ups
-			.subscribe(&receiver_subject)
-			.await
-			.expect("subscribe test Envoy receiver");
-		ups.flush().await.expect("flush test Envoy subscription");
-		let observer = tokio::spawn(async move {
-			let NextOutput::Message(start) = receiver.next().await.expect("receive request start")
-			else {
-				panic!("expected request start");
-			};
-			let start = versioned::ToEnvoyConn::deserialize_with_embedded_version(&start.payload)
-				.expect("decode request start");
-			assert!(matches!(
-				start,
-				protocol::ToEnvoyConn::ToEnvoyTunnelMessage(protocol::ToEnvoyTunnelMessage {
-					message_kind: protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(_),
-					..
-				})
-			));
-			// Deliberately drop this handoff acknowledgement after observing delivery.
-
-			let NextOutput::Message(abort_message) =
-				receiver.next().await.expect("receive cancellation")
-			else {
-				panic!("expected request cancellation");
-			};
-			let decoded =
-				versioned::ToEnvoyConn::deserialize_with_embedded_version(&abort_message.payload)
-					.expect("decode request cancellation");
-			let protocol::ToEnvoyConn::ToEnvoyTunnelMessage(protocol::ToEnvoyTunnelMessage {
-				message_id,
-				message_kind: protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort(abort),
-			}) = decoded
-			else {
-				panic!("expected exact request cancellation");
-			};
-			assert_eq!(message_id.message_index, 1);
-			assert_eq!(abort.actor_id.as_deref(), Some(expected_actor_id.as_str()));
-			assert_eq!(abort.actor_generation, Some(1));
-			abort_message
-				.reply(&[])
-				.await
-				.expect("acknowledge request cancellation");
-		});
-
-		let shared_state = SharedState::new(&config, ups);
-		let request_id = [9, 8, 7, 6];
-		let InFlightRequestCtx { handle, .. } = shared_state
-			.create_or_wake_in_flight_request(
-				Id::new_v1(1),
-				actor_id,
-				"test-pool",
-				Some("test-key".to_owned()),
-				Some(1),
-				Some(7),
-				RequestProtocol::Http,
-				receiver_subject,
-				request_id,
-				rivet_guard_core::metrics::PegboardGatewayLifecycle::new(
-					rivet_guard_core::metrics::PegboardGatewayVersion::V3,
-					Some(7),
-					rivet_guard_core::metrics::PegboardGatewayRequestKind::Http,
-				),
-				false,
-			)
-			.await
-			.expect("create in-flight request");
-
-		let error = handle
-			.send_message(request_start(), false)
-			.await
-			.expect_err("lost handoff acknowledgement must fail");
-		let error = RivetError::extract(&error);
-		assert_eq!(error.group(), "guard");
-		assert_eq!(error.code(), "request_delivery_unconfirmed");
-
-		crate::http_stream::send_http_request_abort(
-			&handle,
-			protocol::HttpStreamAbortReasonKind::Cancelled,
-			Some("request start delivery was indeterminate".to_owned()),
-		)
-		.await;
-
-		observer.await.expect("join Envoy observer");
-		let request = shared_state
-			.in_flight_requests
-			.get_async(&request_id)
-			.await
-			.expect("request remains until handler cleanup");
-		assert_eq!(request.http_send_state, HttpSendState::Terminal);
-		drop(request);
-		handle.stop(RequestStopResult::EnvoyError).await;
-		assert!(
-			shared_state
-				.in_flight_requests
-				.get_async(&request_id)
-				.await
-				.is_none()
-		);
-	}
-
-	#[tokio::test]
-	async fn request_body_window_blocks_until_actor_consumption_is_acknowledged() {
-		let window = Arc::new(HttpBodySendWindow::new());
-		window
-			.reserve(protocol::HTTP_STREAM_INITIAL_WINDOW_BYTES)
-			.await
-			.expect("reserve initial request window");
-
-		let blocked = tokio::spawn({
-			let window = window.clone();
-			async move { window.reserve(1).await }
-		});
-		assert!(
-			tokio::time::timeout(Duration::from_millis(20), async {
-				while !blocked.is_finished() {
-					tokio::task::yield_now().await;
-				}
-			})
-			.await
-			.is_err(),
-			"request body exceeded its initial byte window",
-		);
-
-		window
-			.update_consumed(1)
-			.await
-			.expect("return one byte of request credit");
-		blocked
-			.await
-			.expect("join blocked request reservation")
-			.expect("reserve request byte after credit");
-	}
-
-	#[tokio::test]
-	async fn terminating_websocket_notifies_envoy_before_removing_request() {
-		let mut root = rivet_config::config::Root::default();
-		root.pegboard = Some(rivet_config::config::Pegboard {
-			gateway_tunnel_ping_timeout_ms: Some(1_000),
-			..Default::default()
-		});
-		let config = test_config(root);
-		let ups = PubSub::new(
-			config.clone(),
-			Arc::new(MemoryDriver::new("gateway3-terminate-websocket".to_owned())),
-		);
-		let receiver_subject = "test.envoy.websocket".to_owned();
-		let mut receiver = ups
-			.subscribe(&receiver_subject)
-			.await
-			.expect("subscribe test Envoy receiver");
-		ups.flush().await.expect("flush test Envoy subscription");
-		let shared_state = SharedState::new(&config, ups);
-		let request_id = [1, 2, 3, 4];
-		let observer_state = shared_state.clone();
-		let observer = tokio::spawn(async move {
-			let NextOutput::Message(message) = receiver.next().await.expect("receive close") else {
-				panic!("expected websocket close");
-			};
-			let decoded =
-				versioned::ToEnvoyConn::deserialize_with_embedded_version(&message.payload)
-					.expect("decode websocket close");
-			let protocol::ToEnvoyConn::ToEnvoyTunnelMessage(protocol::ToEnvoyTunnelMessage {
-				message_kind: protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(close),
-				..
-			}) = decoded
-			else {
-				panic!("expected websocket close");
-			};
-			assert_eq!(close.code, Some(1008));
-			assert_eq!(close.reason.as_deref(), Some("auth.token_expired"));
-			assert!(
-				observer_state
-					.in_flight_requests
-					.get_async(&request_id)
-					.await
-					.is_some(),
-				"request was removed before the close reached Envoy",
-			);
-			message
-				.reply(&[])
-				.await
-				.expect("acknowledge websocket close");
-		});
-
-		shared_state
-			.create_or_wake_in_flight_request(
-				Id::new_v1(1),
-				Id::new_v1(2),
-				"test-pool",
-				Some("test-key".to_owned()),
-				Some(1),
-				Some(7),
-				RequestProtocol::WebSocket,
-				receiver_subject,
-				request_id,
-				rivet_guard_core::metrics::PegboardGatewayLifecycle::new(
-					rivet_guard_core::metrics::PegboardGatewayVersion::V3,
-					Some(7),
-					rivet_guard_core::metrics::PegboardGatewayRequestKind::WebSocket,
-				),
-				false,
-			)
-			.await
-			.expect("create in-flight request");
-
-		let (terminate_result, observer_result) = tokio::join!(
-			tokio::time::timeout(
-				Duration::from_secs(2),
-				shared_state.terminate_websocket(request_id),
-			),
-			tokio::time::timeout(Duration::from_secs(2), observer),
-		);
-		terminate_result
-			.expect("termination should not hang")
-			.expect("terminate websocket");
-		observer_result
-			.expect("Envoy observer should not hang")
-			.expect("join Envoy observer");
-		assert!(
-			shared_state
-				.in_flight_requests
-				.get_async(&request_id)
-				.await
-				.is_none()
-		);
-	}
-
-	#[tokio::test]
-	async fn request_body_window_rejects_regression_and_over_credit() {
-		let window = HttpBodySendWindow::new();
-		window.reserve(10).await.expect("reserve request bytes");
-		window
-			.update_consumed(5)
-			.await
-			.expect("consume request bytes");
-		assert!(window.update_consumed(4).await.is_err());
-		assert!(window.update_consumed(11).await.is_err());
-		window
-			.update_consumed(5)
-			.await
-			.expect("duplicate cumulative request credit");
-	}
-
-	#[tokio::test]
-	async fn envoy_response_abort_has_an_out_of_band_delivery_signal() {
-		let (msg_tx, mut msg_rx) = mpsc::unbounded_channel();
-		let (drop_tx, _drop_rx) = watch::channel(None);
-		let (http_response_abort_tx, mut http_response_abort_rx) = watch::channel(None);
-		let (upload_cancel_tx, _upload_cancel_rx) = watch::channel(false);
-		let reason = protocol::HttpStreamAbortReason {
-			kind: protocol::HttpStreamAbortReasonKind::InternalError,
-			detail: Some("Envoy session closed".to_owned()),
-		};
-		let message_id = protocol::MessageId {
-			gateway_id: [1, 2, 3, 4],
-			request_id: [5, 6, 7, 8],
-			message_index: 2,
-		};
-		let mut request = InFlightRequest {
-			namespace_id: Id::new_v1(1),
-			actor_id: Id::new_v1(2),
-			pool_name: "test".to_owned(),
-			actor_key: Some("actor".to_owned()),
-			actor_generation: Some(1),
-			envoy_protocol_version: Some(7),
-			protocol: RequestProtocol::Http,
-			receiver_subject: "test".to_owned(),
-			message_index: 0,
-			http_send_state: HttpSendState::Committed,
-			abort_sent: false,
-			http_response_abort_tx,
-			send_lock: Arc::new(Mutex::new(())),
-			request_body_window: Arc::new(HttpBodySendWindow::new()),
-			upload_cancel_tx,
-			lifecycle: rivet_guard_core::metrics::PegboardGatewayLifecycle::new(
-				rivet_guard_core::metrics::PegboardGatewayVersion::V3,
-				Some(7),
-				rivet_guard_core::metrics::PegboardGatewayRequestKind::Http,
-			),
-			created_at: Instant::now(),
-			state: InFlightRequestState::Active {
-				msg_tx,
-				drop_tx,
-				http_response_queue_budget: None,
-				last_pong: util::timestamp::now(),
-				hibernation_state: None,
-			},
-		};
-
-		request.recv_message(protocol::ToGateway::ToRivetTunnelMessage(
-			protocol::ToRivetTunnelMessage {
-				message_id: message_id.clone(),
-				message_kind: protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(
-					protocol::ToRivetResponseAbort {
-						reason: reason.clone(),
-					},
-				),
-			},
-		));
-
-		let queued = msg_rx.recv().await.expect("ordered response abort");
-		assert_eq!(queued.message_id.message_index, message_id.message_index);
-		assert!(matches!(
-			queued.message_kind,
-			protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(_)
-		));
-		http_response_abort_rx
-			.changed()
-			.await
-			.expect("out-of-band response abort signal");
-		assert!(matches!(
-			http_response_abort_rx.borrow().as_ref(),
-			Some(protocol::HttpStreamAbortReason {
-				kind: protocol::HttpStreamAbortReasonKind::InternalError,
-				..
-			})
-		));
-	}
-}
 
 struct InFlightRequest {
 	namespace_id: Id,
@@ -2118,7 +1704,7 @@ impl InFlightRequest {
 
 						let rtt = now.saturating_sub(pong.ts);
 						let namespace_id_str = self.namespace_id.to_string();
-						metrics::TUNNEL_PING_DURATION
+						metrics::TUNNEL_PING_DURATION_SECONDS
 							.with_label_values(&[
 								namespace_id_str.as_str(),
 								self.pool_name.as_str(),

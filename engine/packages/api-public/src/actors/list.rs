@@ -1,3 +1,4 @@
+use rivet_auth::*;
 use anyhow::Result;
 use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
@@ -6,7 +7,6 @@ use rivet_api_builder::{
 };
 use rivet_api_types::{actors::list::*, pagination::Pagination};
 use rivet_api_util::fanout_to_datacenters;
-use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
 
 use crate::{actors::utils::fetch_actors_by_ids, ctx::ApiCtx, errors};
 

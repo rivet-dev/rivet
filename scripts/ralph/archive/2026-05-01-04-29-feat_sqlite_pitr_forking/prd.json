@@ -1,8 +1,0 @@
-{
-  "project": "sqlite-review-fixes",
-  "branchName": "05-01-chore_depot_fault_injection_tests",
-  "description": "Address the open issues tracked in `.agent/notes/sqlite-review-issues.md` from the multi-agent adversarial review of the rivetkit-sqlite VFS, depot conveyer/cold-tier/PITR, and driver test suite. For each story: (1) confirm or add a failing regression test that pins the buggy behavior, (2) implement a CLEAN root-cause fix per the issue's `Fix sketch`, (3) confirm the test passes. Read `.agent/notes/sqlite-review-issues.md` for the full per-issue context (Failure mode, Fix sketch, Verified evidence, Regression test). Bug fixes must be CLEAN, not tactical patches: see the `Clean Fixes — Do Not Apply Hacky Patches` section in this directory's CLAUDE.md. If a fix sketch turns out to be wrong on closer inspection, update the issue file and the story `notes` before diverging. Verification: `cargo check -p <pkg>` for Rust; `cargo test -p <pkg> <test_name>` for individual tests; TS work runs `pnpm run check` and the relevant Vitest filter plus `pnpm run check:wait-for-comments`. Do NOT run `cargo fmt` or `./scripts/cargo/fix.sh`. Use conventional-commit messages with no co-author line.",
-  "userStories": [
-	  "POLL THIS FILE WAITING FOR IT TO BE POPULATED"
-  ]
-}

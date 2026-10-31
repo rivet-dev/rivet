@@ -8,11 +8,31 @@ skill: true
 
 No configuration is needed. RivetKit runs a local control plane on your machine.
 
-## Production
+RivetKit runs Rivet Actors entirely on your machine. Configure `RIVET_ENDPOINT` when connecting to a separate control plane.
 
 ### Private endpoint
 
-The private endpoint tells your nodes and backend where the control plane is. It carries a secret token, so keep it server-side.
+Everything that talks to Rivet is configured with one URL, the Rivet endpoint. It carries three pieces of information:
+
+```
+https://<namespace>:<token>@api.rivet.dev
+```
+
+- **Host**: The control plane to connect to. Rivet Cloud is `api.rivet.dev`. Self-hosted deployments use their own host.
+- **Namespace**: The isolated environment your Actors live in, such as `production` or `staging`. See [Namespaces](/docs/namespaces).
+- **Token**: Authenticates the connection and scopes it to that namespace. The token prefix tells you where it is safe to use:
+
+| Prefix | Kind | Where it lives |
+| --- | --- | --- |
+| `sk_` | Secret | Your backend and workers only. Full access to the namespace. |
+| `pk_` | Public | Browsers and mobile apps. Can resolve, create, and connect to Actors. |
+| `ck_` | Connection | Browsers and mobile apps. Can only resolve Actors and open connections. |
+
+Create tokens in the dashboard under your namespace.
+
+## Connect Your Backend
+
+Set `RIVET_ENDPOINT` with a secret token wherever your workers run. This is the only setting most deployments need.
 
 <Tabs>
 
@@ -34,13 +54,15 @@ RIVET_ENDPOINT=https://my-namespace:<rivet-token>@rivet.example.com
 
 ## URL auth syntax
 
-Endpoint URLs carry the namespace and token:
+Clients reach your Actors through the control plane's gateway, never through your backend directly. Point them at the same endpoint with a public token instead of a secret one.
 
-```
-https://namespace:token@host/path
-```
+<img src={imgEndpointEnvVars.src} alt="Diagram showing Client connecting to Rivet, which connects to Your Backend" />
 
-This is the recommended form. Alternatively, set them separately:
+Pass the public endpoint directly when constructing a [JavaScript](/actors/docs/clients/javascript), [React](/actors/docs/clients/react), [Swift](/actors/docs/clients/swift), or [Rust](/actors/docs/clients/rust) client.
+
+## URL Auth Syntax
+
+Embedding the namespace and token in the URL is the recommended form because it is one value to manage. If your platform cannot store credentials inside a URL, the same three values can be set separately:
 
 ```bash
 RIVET_ENDPOINT=https://rivet.example.com
@@ -48,7 +70,11 @@ RIVET_NAMESPACE=my-namespace
 RIVET_TOKEN=<rivet-token>
 ```
 
-On a self-hosted control plane, use your [namespace slug](/docs/namespaces) and your Rivet token, the `auth.admin_token` value from the control plane config. For the `default` namespace: `https://default:<rivet-token>@rivet.example.com`.
+| Environment Variable | Config Option | Description |
+| --- | --- | --- |
+| `RIVET_ENDPOINT` | `endpoint` | Control plane URL for your backend |
+| `RIVET_NAMESPACE` | `namespace` | Namespace to run Actors in |
+| `RIVET_TOKEN` | `token` | Token for the backend connection |
 
 ## Reference
 

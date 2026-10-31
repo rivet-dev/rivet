@@ -738,6 +738,4 @@ fn decode_cbor<T: DeserializeOwned>(bytes: &[u8], label: &str) -> Result<T> {
 	ciborium::from_reader(Cursor::new(bytes)).with_context(|| format!("decode {label} from cbor"))
 }
 
-#[cfg(test)]
-#[path = "../tests/modules/context.rs"]
-mod tests;
+

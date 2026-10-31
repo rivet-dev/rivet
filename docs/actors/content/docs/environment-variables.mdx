@@ -1,6 +1,6 @@
 ---
 title: "Environment Variables"
-description: "Configure RivetKit runtime behavior with environment variables for the inspector, storage, and logging."
+description: "Configure RivetKit runtime behavior with environment variables for the inspector, metrics, storage, and logging."
 skill: true
 ---
 
@@ -14,6 +14,12 @@ platform docs.
 | Environment Variable | Description |
 |---------------------|-------------|
 | `RIVET_INSPECTOR_DISABLE` | Set to `1` to disable the inspector |
+
+## Metrics
+
+| Environment Variable | Description |
+|---------------------|-------------|
+| `_RIVET_METRICS_TOKEN` | Bearer token that gates the per-actor Prometheus `/metrics` endpoint. When unset, `/metrics` is disabled. |
 
 ## Experimental
 

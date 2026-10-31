@@ -3,12 +3,14 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const root = git(["rev-parse", "--show-toplevel"]) || process.cwd();
+const invocationCwd = process.cwd();
+const root = jj(["workspace", "root"]) || git(["rev-parse", "--show-toplevel"]) || invocationCwd;
 process.chdir(root);
 
 const stagedOnly = process.argv.includes("--staged");
+const rustOnly = process.argv.includes("--rust-only");
 const hookFiles = await filesFromHookInput();
-const files = hookFiles.length > 0 ? hookFiles : filesFromGitChanges(stagedOnly);
+const files = hookFiles !== null ? hookFiles : filesFromGitChanges(stagedOnly);
 
 const existingFiles = unique(files)
 	.map((path) => normalizeRepoPath(path))
@@ -18,7 +20,7 @@ const existingFiles = unique(files)
 const biomeFiles = existingFiles.filter(isBiomeFile);
 const rustFiles = existingFiles.filter((path) => path.endsWith(".rs"));
 
-if (biomeFiles.length > 0) {
+if (!rustOnly && biomeFiles.length > 0) {
 	run("pnpm", [
 		"biome",
 		"format",
@@ -30,28 +32,38 @@ if (biomeFiles.length > 0) {
 }
 
 if (rustFiles.length > 0) {
-	run("rustfmt", rustFiles);
+	run("rustfmt", ["--config", "skip_children=true", ...rustFiles]);
 }
 
 async function filesFromHookInput() {
-	if (process.stdin.isTTY) return [];
+	if (process.stdin.isTTY) return null;
 
 	const raw = readFileSync(0, "utf8");
-	if (!raw.trim()) return [];
+	if (!raw.trim()) return null;
 
 	const files = [];
+	let inputCwd = invocationCwd;
 	try {
 		const payload = JSON.parse(raw);
-		collectPathValues(payload, files);
+		if (typeof payload.cwd === "string") inputCwd = payload.cwd;
+		collectPathValues(payload.tool_input, files);
+		if (typeof payload.tool_input?.command === "string") {
+			collectPatchPaths(payload.tool_input.command, files);
+		}
 	} catch {
-		// Some tools pass non-JSON command text. Patch parsing below still helps.
+		collectPatchPaths(raw, files);
 	}
 
-	for (const match of raw.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm)) {
+	return files.map((path) => (isAbsolute(path) ? path : resolve(inputCwd, path)));
+}
+
+function collectPatchPaths(patch, files) {
+	for (const match of patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm)) {
 		files.push(match[1].trim());
 	}
-
-	return files;
+	for (const match of patch.matchAll(/^\*\*\* Move to: (.+)$/gm)) {
+		files.push(match[1].trim());
+	}
 }
 
 function collectPathValues(value, files) {
@@ -92,10 +104,7 @@ function normalizeRepoPath(path) {
 function isGeneratedOutput(path) {
 	return (
 		/^engine\/sdks\/[^/]+\/api-[^/]+\//.test(path) ||
-		/^engine\/sdks\/typescript\/(?:envoy-protocol|runner-protocol)\//.test(
-			path,
-		) ||
-		/^rivetkit-typescript\/packages\/engine-runner-protocol\//.test(path) ||
+		/^engine\/sdks\/typescript\/envoy-protocol\//.test(path) ||
 		/^rivetkit-typescript\/packages\/rivetkit\/src\/common\/bare\/generated\//.test(
 			path,
 		) ||
@@ -114,6 +123,11 @@ function unique(values) {
 
 function git(args) {
 	const result = spawnSync("git", args, { encoding: "utf8" });
+	return result.status === 0 ? result.stdout.trim() : null;
+}
+
+function jj(args) {
+	const result = spawnSync("jj", args, { encoding: "utf8" });
 	return result.status === 0 ? result.stdout.trim() : null;
 }
 

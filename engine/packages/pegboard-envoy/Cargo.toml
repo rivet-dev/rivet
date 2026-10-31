@@ -5,50 +5,48 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
+autotests = false
 
 [dependencies]
-anyhow.workspace = true
+rivet-metrics.workspace = true
 async-trait.workspace = true
+depot-client.workspace = true
+depot-fs-core.workspace = true
+sqlite-embedded = { workspace = true, default-features = false, features = ["transport"] }
+sqlite-embedded-filesystem = { path = "../sqlite-embedded-filesystem" }
+depot-volume = { path = "../depot-volume" }
+sqlite_types.workspace = true
+epoxy.workspace = true
+anyhow.workspace = true
+axum = { workspace = true, features = ["ws"] }
+base64.workspace = true
 bytes.workspace = true
 futures-util.workspace = true
-gas.workspace = true
-http-body.workspace = true
+h2.workspace = true
 http-body-util.workspace = true
-# Idk how to get this working with the workspace version
-hyper = "1.6"
-hyper-tungstenite.workspace = true
-hyper-util = "0.1"
-lazy_static.workspace = true
-rand.workspace = true
-rivet-config.workspace = true
+http.workspace = true
+hyper.workspace = true
+pegboard.workspace = true
 rivet-data.workspace = true
-rivet-error.workspace = true
-rivet-guard-core.workspace = true
-rivet-metrics.workspace = true
-rivet-perf.workspace = true
-rivet-pools.workspace = true
+rivet-engine-context.workspace = true
+rivet-env.workspace = true
 rivet-envoy-protocol.workspace = true
-depot-client.workspace = true
-depot-client-embedded.workspace = true
-rivet-runtime.workspace = true
-rivet-types.workspace = true
-rivet-util.workspace = true
+rivet-error.workspace = true
+rivet-keys.workspace = true
+rivet-util-id.workspace = true
 scc.workspace = true
-serde_bare.workspace = true
+uuid.workspace = true
 serde_json.workspace = true
 serde.workspace = true
-depot.workspace = true
-tempfile.workspace = true
-tokio-tungstenite.workspace = true
-tokio-util.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-universaldb.workspace = true
 universalpubsub.workspace = true
 url.workspace = true
 vbare.workspace = true
-rusqlite.workspace = true
-xxhash-rust.workspace = true
+foundationdb-tuple.workspace = true
+parking_lot.workspace = true
+rivet-guard-core.workspace = true
+rivet-state-machine.workspace = true
+rivet-topology.workspace = true
+rivetkit-shared-types.workspace = true
 
-pegboard.workspace = true
-namespace.workspace = true

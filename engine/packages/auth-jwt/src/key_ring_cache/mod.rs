@@ -193,6 +193,4 @@ impl std::fmt::Debug for KeyRingCache {
 	}
 }
 
-#[cfg(test)]
-#[path = "../../tests/unit/verifier.rs"]
-mod tests;
+

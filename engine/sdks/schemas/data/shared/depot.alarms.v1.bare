@@ -1,0 +1,7 @@
+#import "shared/depot.types.v1.bare"
+
+type AlarmSet struct { armId: UuidV4 deadlineUnixMs: i64 }
+type AlarmRevision struct { volumeIncarnation: UuidV4 armId: UuidV4 }
+# Completed filesystem replay boundary certifying the current timer projection.
+type AlarmSummary struct { lastChangePosition: VolumeLogPosition pending: optional<AlarmSet> }
+type AlarmOwner struct { workerId: UuidV4 tabletId: UuidV4 tabletGrantEpoch: u64 }

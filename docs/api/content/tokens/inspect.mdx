@@ -30,31 +30,90 @@ Send your namespace token as a bearer token in the `Authorization` header. Every
 
 ### 200
 
+The token's claims. The response carries `Cache-Control: no-store`.
+
 | Field | Type | Description |
 | --- | --- | --- |
-| `expires_ts` | `integer` | When the token expires, in Unix milliseconds. |
-| `grants` | `object[]` | Permissions the token carries. |
-| `grants[].operations` | `("read" \| "update" \| "list" \| "create" \| "delete")[]` | Operations the token may perform on the target. |
-| `grants[].resource` | `"namespace" \| "actor" \| "runner" \| "runner_config" \| "datacenter" \| "actor_gateway" \| "actor_kv"` | Resource type the grant applies to. |
-| `grants[].target` | `"any" \| object` | `"any"` for every resource of this type, or `{ "id": "..." }` for one resource. |
-| `issued_ts` | `integer` | When the token was issued, in Unix milliseconds. |
-| `namespace_id` | `string` | ID of the namespace the token is scoped to. |
+| `namespace` | `string` | Name of the namespace to operate in. |
 | `subject` | `string \| null` | Subject attached to the token, if any. |
+| `grants` | `object[]` | Permissions the token carries. |
+| `grants[].resource` | `"namespace" \| "actor" \| "node" \| "pool" \| "datacenter" \| "actor_gateway" \| "actor_kv"` | Resource type the grant applies to. |
+| `grants[].target` | `"any" \| object` | `"any"` for every resource of this type, or `{ "id": "..." }` for one resource. |
+| `grants[].operations` | `("read" \| "update" \| "list" \| "create" \| "delete")[]` | Operations the token may perform on the target. |
+| `issued_ts` | `integer` | When the token was issued, in Unix milliseconds. |
+| `expires_ts` | `integer` | When the token expires, in Unix milliseconds. |
 
 ```json
 {
-  "expires_ts": 1700000000000,
+  "namespace": "my-namespace",
+  "subject": null,
   "grants": [
     {
+      "resource": "namespace",
+      "target": "any",
       "operations": [
         "read"
-      ],
-      "resource": "namespace",
-      "target": "any"
+      ]
     }
   ],
   "issued_ts": 1700000000000,
-  "namespace_id": "00000000-0000-0000-0000-000000000000",
-  "subject": null
+  "expires_ts": 1700000000000
+}
+```
+
+### 401
+
+`auth.invalid_token`: the request carries no token, the token is not valid, or it is the admin token rather than a JWT. `auth.token_expired`: the token has expired.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "auth",
+  "code": "invalid_token",
+  "message": "Authentication token is invalid."
+}
+```
+
+### 500
+
+`core.internal_error`: an unexpected failure. Details are only logged on the server.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "core",
+  "code": "internal_error",
+  "message": "An internal error occurred"
+}
+```
+
+### 503
+
+`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group` | `string` | Error group, for example `actor`. |
+| `code` | `string` | Error code within the group, for example `not_found`. |
+| `message` | `string` | Human-readable error message. |
+| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+
+```json
+{
+  "group": "auth",
+  "code": "verification_unavailable",
+  "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
 }
 ```

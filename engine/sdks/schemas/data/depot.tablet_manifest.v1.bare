@@ -1,0 +1,75 @@
+#import "shared/depot.types.v1.bare"
+
+# A split in flight. The ids are drawn once by SplitTablet so every retry names the same children and checkpoint.
+type TabletSplit struct {
+	splitKeyHash: PartitionKeyHash # The right child's first hash.
+	leftTabletId: UuidV4
+	rightTabletId: UuidV4
+	checkpointId: data[16] # The SlateDB checkpoint the frozen maintainer creates in the parent's cold store.
+}
+
+# A split parent whose files may still be referenced by clones. The maintainer of
+# the live range containing its first hash owns cleanup, through any splits or moves.
+# The parent's maintainer log stays on its replicas until every child logged the parent's
+# ops into its own log; the owner forgets the log's replicas once logImportedBy holds every
+# child, and only then reports the parent deleted.
+type RetiredTablet struct {
+	partitionKeyHashStart: PartitionKeyHash
+	tabletId: UuidV4
+	checkpointId: data[16]
+	children: list<UuidV4>
+	logImportedBy: list<UuidV4>
+}
+
+type Tablet struct {
+	id: UuidV4
+	hashRange: PartitionKeyHashRange
+	maintainer: optional<UuidV4> # none while the tablet is unassigned
+	tabletGrantEpoch: u64          # monotonic, including while unassigned
+	grantedAt: i64                 # Unix milliseconds of the latest grant write
+	replicaSet: TabletReplicaSet
+	phaseStartedAt: i64            # Unix milliseconds of the latest phase write
+	split: optional<TabletSplit> # Set from SplitTablet until the children are published.
+	parentTabletId: optional<UuidV4> # Set on a split child; named as retiredParent in its listings.
+	# Set on a split child: where its parent's range started, which places the parent's
+	# maintainer log. A right child cannot learn it from its own range.
+	parentRangeStart: optional<PartitionKeyHash>
+	# The tablet's data version marks as its maintainer last reported them. The coordinator
+	# never grants the tablet to a worker whose advertised read range is below any of them.
+	versionMarks: list<VersionMark>
+}
+
+# Every conditional manifest write increments tabletManifestVersion. Every replica
+# set write, including a phase change, also increments tabletReplicaSetVersion.
+# Timestamps are diagnostics, not lease authority; grants use topology's lease.
+type WorkerStop struct {
+ workerId: UuidV4
+ instanceId: UuidV4
+ requestedAt: i64
+ permittedAt: optional<i64>
+}
+
+# An operator's hold on a live tablet: the balancer chooses no discretionary action for it,
+# no split, rebalancing replacement or grant move. Repair still runs: a dead or stopping
+# replica is replaced and a short replica set grown, and operator commands, worker stop
+# handoffs, missing-owner failover and the Learning deadline still apply. A pause does not
+# carry over to the tablet's split children.
+type TabletPause struct {
+	tabletId: UuidV4
+	pausedAt: i64 # Unix milliseconds of the pause write
+}
+
+type TabletManifest struct {
+ stopping: list<WorkerStop>
+	tabletManifestVersion: u64
+	tablets: list<Tablet>
+	retiredTablets: list<RetiredTablet> # Split parents whose cold store files are not yet deleted.
+	paused: list<TabletPause> # At most one entry per live tablet.
+}
+
+type AlarmIndexSource struct { parentId: UuidV4 checkpointId: data[16] manifestId: u64 hashRange: PartitionKeyHashRange }
+type AlarmIndexPhase enum { LEGACY_EMPTY NATIVE_EMPTY CLONE_NEEDS_BOOTSTRAP READY }
+type AlarmIndexInitialization struct { phase: AlarmIndexPhase source: optional<AlarmIndexSource> }
+type AlarmIndexHold struct { parentId: UuidV4 leftId: UuidV4 rightId: UuidV4 }
+type AlarmTabletManifest struct { manifest: TabletManifest initialization: map<str><AlarmIndexInitialization> holds: list<AlarmIndexHold> }
+type AlarmIndexProgress struct { source: AlarmIndexSource after: optional<data> ready: bool }

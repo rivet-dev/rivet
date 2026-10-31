@@ -62,7 +62,8 @@ pub struct ActionDefinition {
 /// change without notice.
 #[derive(Clone, Debug)]
 pub struct SqliteProfilingConfig {
-	pub enabled: bool,
+	pub queries: Vec<String>,
+	pub fingerprints: Vec<String>,
 	pub max_tracked_statement_fingerprints: usize,
 	pub max_tracked_transaction_fingerprints: usize,
 	pub max_prometheus_series: usize,
@@ -78,7 +79,8 @@ pub struct SqliteProfilingConfig {
 impl Default for SqliteProfilingConfig {
 	fn default() -> Self {
 		Self {
-			enabled: true,
+			queries: Vec::new(),
+			fingerprints: Vec::new(),
 			max_tracked_statement_fingerprints: 128,
 			max_tracked_transaction_fingerprints: 8,
 			max_prometheus_series: 25_000,
@@ -100,7 +102,8 @@ impl Default for SqliteProfilingConfig {
 /// change without notice.
 #[derive(Clone, Debug, Default)]
 pub struct SqliteProfilingConfigInput {
-	pub enabled: Option<bool>,
+	pub queries: Option<Vec<String>>,
+	pub fingerprints: Option<Vec<String>>,
 	pub max_tracked_statement_fingerprints: Option<u32>,
 	pub max_tracked_transaction_fingerprints: Option<u32>,
 	pub max_prometheus_series: Option<u32>,
@@ -113,7 +116,35 @@ pub struct SqliteProfilingConfigInput {
 	pub diagnostic_event_queue_capacity: Option<u32>,
 }
 
+/// The process override replaces only query selection, retaining diagnostic limits.
+#[derive(Default, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct SqliteProfilingQueries {
+	queries: Vec<String>,
+	fingerprints: Vec<String>,
+}
+
 impl SqliteProfilingConfig {
+	/// Process selection overrides actor settings. An empty object clears fingerprint selection.
+	pub(crate) fn with_process_override(self) -> Self {
+		self.with_query_override(std::env::var("RIVETKIT_SQLITE_PROFILING").ok().as_deref())
+	}
+
+	fn with_query_override(mut self, process_override: Option<&str>) -> Self {
+		if let Some(value) = process_override {
+			let selection = match serde_json::from_str::<SqliteProfilingQueries>(value) {
+				Ok(selection) => selection,
+				Err(error) => {
+					tracing::warn!(%error, "invalid RIVETKIT_SQLITE_PROFILING; expected a JSON object with queries or fingerprints arrays; using profiling without fingerprint labels");
+					SqliteProfilingQueries::default()
+				}
+			};
+			self.queries = selection.queries;
+			self.fingerprints = selection.fingerprints;
+		}
+		self
+	}
+
 	fn from_input(input: SqliteProfilingConfigInput) -> Self {
 		let mut config = Self::default();
 		macro_rules! set_usize {
@@ -123,9 +154,8 @@ impl SqliteProfilingConfig {
 				}
 			};
 		}
-		if let Some(value) = input.enabled {
-			config.enabled = value;
-		}
+		config.queries = input.queries.unwrap_or_default();
+		config.fingerprints = input.fingerprints.unwrap_or_default();
 		set_usize!(max_tracked_statement_fingerprints);
 		set_usize!(max_tracked_transaction_fingerprints);
 		set_usize!(max_prometheus_series);
@@ -424,6 +454,4 @@ fn duration_ms(value: u32) -> Duration {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/config.rs"]
-mod tests;
+

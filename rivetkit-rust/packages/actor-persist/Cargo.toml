@@ -18,3 +18,4 @@ vbare.workspace = true
 
 [build-dependencies]
 vbare-compiler.workspace = true
+

@@ -8,7 +8,7 @@ use crate::{
 	SigningKeyRing,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct RotationPolicy {
 	pub rotation_interval_ms: i64,
 	pub publish_lead_ms: i64,
@@ -291,6 +291,7 @@ pub fn emergency_rotate(
 			expected_generation,
 			committed_generation: target_generation,
 			revoked_kids,
+			requested_revoked_kids: selected.into_iter().collect(),
 		}),
 	};
 	ring.validate_successor(&successor)?;

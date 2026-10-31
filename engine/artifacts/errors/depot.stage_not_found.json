@@ -1,5 +1,0 @@
-{
-  "code": "stage_not_found",
-  "group": "depot",
-  "message": "SQLite staged commit segment is missing."
-}

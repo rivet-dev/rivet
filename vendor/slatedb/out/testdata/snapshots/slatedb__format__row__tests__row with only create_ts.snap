@@ -1,0 +1,22 @@
+---
+source: src/row_codec.rs
+expression: output
+snapshot_kind: text
+---
+(
+    "row with only create_ts",
+    "\0\u{4}\0\u{6}create\0\0\0\0\0\0\02\u{4}\0\0\0\0I�\u{2}�\0\0\0\ntest_value",
+    SstRowEntry {
+        key_prefix_len: 4,
+        key_suffix: b"create",
+        seq: 50,
+        expire_ts: None,
+        create_ts: Some(
+            1234567890,
+        ),
+        value: Value(
+            b"test_value",
+        ),
+    },
+    b"timecreate",
+)

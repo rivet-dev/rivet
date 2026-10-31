@@ -13,8 +13,7 @@ crate-type = ["cdylib"]
 [dependencies]
 napi = { version = "2", default-features = false, features = ["napi6", "async", "serde-json", "dyn-symbols"] }
 napi-derive = "2"
-async-trait.workspace = true
-depot-client.workspace = true
+sqlite-embedded = { workspace = true, features = ["transport"] }
 tokio.workspace = true
 tokio-util.workspace = true
 anyhow.workspace = true
@@ -26,13 +25,9 @@ tracing-stackdriver.workspace = true
 tracing-subscriber.workspace = true
 parking_lot.workspace = true
 scc.workspace = true
-hex.workspace = true
-http.workspace = true
 rivet-error.workspace = true
 rivetkit-core = { workspace = true, features = ["sqlite"] }
 
 [build-dependencies]
 napi-build = "2"
 
-[dev-dependencies]
-rivetkit-core = { workspace = true, features = ["test-support"] }

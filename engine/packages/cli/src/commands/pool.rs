@@ -4,18 +4,16 @@ use std::{
 };
 
 use anstyle::{AnsiColor, Style};
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
-use reqwest::Method;
 use tokio::time::sleep;
 
 use crate::{
-	DEFAULT_CLOUD_API, DEFAULT_NAMESPACE,
+	DEFAULT_NAMESPACE,
 	cloud::{
-		CloudClient, PoolConfig, PoolResources, PoolSummary, TokenInspectResponse, delete_pool,
-		get_namespace, list_pools,
+		CloudClient, PoolConfig, PoolResources, PoolSummary, delete_pool, get_namespace, list_pools,
 	},
-	credentials::resolve_token,
+	target::{CloudArgs, ProjectTarget},
 	util::color_enabled,
 };
 
@@ -35,18 +33,11 @@ enum Commands {
 
 #[derive(Parser)]
 pub struct ListOpts {
-	/// Rivet Cloud API token.
-	#[arg(long)]
-	token: Option<String>,
+	#[command(flatten)]
+	cloud: CloudArgs,
 	/// Cloud namespace to list pools from.
 	#[arg(long, default_value = DEFAULT_NAMESPACE)]
 	namespace: String,
-	/// Override project from /tokens/api/inspect.
-	#[arg(long)]
-	project: Option<String>,
-	/// Override organization from /tokens/api/inspect.
-	#[arg(long)]
-	org: Option<String>,
 	/// Emit raw JSON instead of formatted output.
 	#[arg(long)]
 	json: bool,
@@ -54,33 +45,20 @@ pub struct ListOpts {
 	/// secret and are omitted unless this flag is passed.
 	#[arg(long)]
 	with_env_vars: bool,
-	/// Cloud API endpoint.
-	#[arg(long, default_value = DEFAULT_CLOUD_API)]
-	cloud_api: String,
 }
 
 #[derive(Parser)]
 pub struct DeleteOpts {
 	/// Name of the compute pool to delete.
 	name: String,
-	/// Rivet Cloud API token.
-	#[arg(long)]
-	token: Option<String>,
+	#[command(flatten)]
+	cloud: CloudArgs,
 	/// Cloud namespace the pool belongs to.
 	#[arg(long, default_value = DEFAULT_NAMESPACE)]
 	namespace: String,
-	/// Override project from /tokens/api/inspect.
-	#[arg(long)]
-	project: Option<String>,
-	/// Override organization from /tokens/api/inspect.
-	#[arg(long)]
-	org: Option<String>,
 	/// Skip the confirmation prompt.
 	#[arg(long)]
 	yes: bool,
-	/// Cloud API endpoint.
-	#[arg(long, default_value = DEFAULT_CLOUD_API)]
-	cloud_api: String,
 }
 
 impl Opts {
@@ -94,15 +72,7 @@ impl Opts {
 
 impl ListOpts {
 	pub async fn execute(self) -> Result<()> {
-		let token = resolve_token(self.token.as_deref())?;
-		let cloud = CloudClient::new(&self.cloud_api, token)?;
-
-		let inspect: TokenInspectResponse = cloud
-			.request(Method::GET, "/tokens/api/inspect", None)
-			.await?
-			.context("token inspect returned no body")?;
-		let project = self.project.clone().unwrap_or(inspect.project);
-		let org = self.org.clone().unwrap_or(inspect.organization);
+		let (cloud, _, ProjectTarget { org, project }) = self.cloud.connect_project().await?;
 		let namespace = get_namespace(&cloud, &project, &org, &self.namespace).await?;
 
 		let mut pools = list_pools(&cloud, &project, &org, &namespace.name).await?;
@@ -134,15 +104,7 @@ impl ListOpts {
 
 impl DeleteOpts {
 	pub async fn execute(self) -> Result<()> {
-		let token = resolve_token(self.token.as_deref())?;
-		let cloud = CloudClient::new(&self.cloud_api, token)?;
-
-		let inspect: TokenInspectResponse = cloud
-			.request(Method::GET, "/tokens/api/inspect", None)
-			.await?
-			.context("token inspect returned no body")?;
-		let project = self.project.clone().unwrap_or(inspect.project);
-		let org = self.org.clone().unwrap_or(inspect.organization);
+		let (cloud, _, ProjectTarget { org, project }) = self.cloud.connect_project().await?;
 		let namespace = get_namespace(&cloud, &project, &org, &self.namespace).await?;
 
 		if !self.yes && !confirm(&self.name, &namespace.name)? {

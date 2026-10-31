@@ -1,4 +1,5 @@
 {
+	"license": "Apache-2.0",
 	"name": "@rivetkit/engine-workspace",
 	"private": true,
 	"packageManager": "pnpm@10.13.1",
@@ -6,12 +7,11 @@
 		"node": ">=20"
 	},
 	"scripts": {
-		"start": "npx turbo watch build",
-		"build": "npx turbo build build:embed",
-		"test": "npx turbo test",
-		"test:watch": "npx turbo watch test",
-		"check-types": "npx turbo check-types",
-		"typecheck:platform": "pnpm --filter \"@rivet-gg/cloud-*\" run typecheck",
+		"start": "pnpm exec turbo watch build",
+		"build": "pnpm exec turbo build build:embed --concurrency=1",
+		"test": "pnpm exec turbo test",
+		"test:watch": "pnpm exec turbo watch test",
+		"check-types": "pnpm exec turbo check-types",
 		"counter-latency": "pnpm --dir examples/kitchen-sink counter-latency",
 		"slow-reconnect": "pnpm --dir examples/kitchen-sink slow-reconnect",
 		"lint": "pnpm biome check .",
@@ -39,17 +39,7 @@
 		"handlebars": "^4.7.9"
 	},
 	"resolutions": {
-		"rivetkit": "workspace:*",
-		"@rivetkit/react": "workspace:*",
-		"@rivetkit/next-js": "workspace:*",
-		"@rivetkit/cloudflare-workers": "workspace:*",
-		"@rivetkit/supabase": "workspace:*",
-		"@rivetkit/db": "workspace:*",
 		"@rivetkit/engine-api-full": "workspace:*",
-		"@rivetkit/rivetkit-napi": "workspace:*",
-		"@rivetkit/rivetkit-wasm": "workspace:*",
-		"@rivetkit/engine-cli": "workspace:*",
-		"@rivetkit/effect": "workspace:*",
 		"@types/react": "^19",
 		"@types/react-dom": "^19"
 	},
@@ -57,13 +47,7 @@
 		"overrides": {
 			"react": "19.1.0",
 			"react-dom": "19.1.0",
-			"@rivet-gg/components": "workspace:*",
-			"@rivet-gg/icons": "workspace:*",
-			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@1330",
 			"rivetkit": "workspace:*",
-			"@rivet-gg/cloud-actors>rivetkit": "catalog:platform",
-			"@rivet-gg/cloud-api>rivetkit": "catalog:platform",
-			"@rivet-gg/cloud-registry-proxy>rivetkit": "catalog:platform",
 			"rivetkit>drizzle-orm": "0.45.2",
 			"@rivetkit/engine-api-full": "workspace:*",
 			"@flue/sdk": "1.0.0-beta.9",

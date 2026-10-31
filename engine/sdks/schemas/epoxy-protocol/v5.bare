@@ -1,0 +1,398 @@
+# Versions 1 to 4 are the layouts released with Rivet 2.x. This layout is new, so it starts at 5
+# and a released peer's request fails the version check instead of being misread.
+
+# MARK: Common Types
+type ReplicaId u64
+
+# Counter 1 is a key's fast round, which needs no prepare; prepared rounds start at 2. The
+# proposal incarnation makes ballots of different proposals distinct without a ballot write.
+type Ballot struct {
+	counter: u64
+	replicaId: ReplicaId
+	proposalIncarnation: u64
+}
+
+type CommittedValue struct {
+	value: optional<data>
+	version: u64
+	mutable: bool
+}
+
+type AcceptedValue struct {
+	value: optional<data>
+	ballot: Ballot
+	version: u64
+	mutable: bool
+}
+
+# MARK: Cluster config
+type ReplicaStatus enum {
+	# Receives nothing
+	JOINING
+	# Receives commits, cannot propose, cannot vote
+	LEARNING
+	# Receives commits, can propose, can vote
+	ACTIVE
+}
+
+type ReplicaConfig struct {
+	replicaId: ReplicaId
+	status: ReplicaStatus
+	apiPeerUrl: str
+	guardUrl: str
+}
+
+type ClusterConfig struct {
+	coordinatorReplicaId: ReplicaId
+	epoch: u64
+	replicas: list<ReplicaConfig>
+}
+
+# MARK: Config Change
+type UpdateConfigRequest struct {
+	configGeneration: u64
+	config: ClusterConfig
+}
+
+type UpdateConfigResponse void
+
+# MARK: Recovery
+# `predecessor` is the chosen value of `version - 1`, so a lagging acceptor can catch up.
+# `scope` is the key's sorted voting regions, recorded by the key's first accept or prepare.
+type PrepareRequest struct {
+	key: data
+	ballot: Ballot
+	mutable: bool
+	version: u64
+	predecessor: optional<CommittedValue>
+	scope: list<ReplicaId>
+}
+
+type PrepareResponseOk struct {
+	highestBallot: Ballot
+	acceptedValue: optional<CommittedValue>
+	acceptedBallot: optional<Ballot>
+}
+
+type PrepareResponseAlreadyCommitted struct {
+	committed: CommittedValue
+}
+
+type PrepareResponseHigherBallot struct {
+	ballot: Ballot
+}
+
+# The key records another scope, which every proposal for it must use.
+type PrepareResponseScopeMismatch struct {
+	scope: list<ReplicaId>
+}
+
+type PrepareResponse union {
+	PrepareResponseOk |
+	PrepareResponseAlreadyCommitted |
+	PrepareResponseHigherBallot |
+	PrepareResponseScopeMismatch
+}
+
+# MARK: Proposal
+type PreAcceptRequest struct {
+	key: data
+	value: optional<data>
+	ballot: Ballot
+	mutable: bool
+	version: u64
+}
+
+type PreAcceptResponseOk struct {
+	ballot: Ballot
+}
+
+type PreAcceptResponseAlreadyCommitted struct {
+	value: optional<data>
+}
+
+type PreAcceptResponseHigherBallot struct {
+	ballot: Ballot
+}
+
+type PreAcceptResponse union {
+	PreAcceptResponseOk |
+	PreAcceptResponseAlreadyCommitted |
+	PreAcceptResponseHigherBallot
+}
+
+# `expectOneOf` is the compare-and-set expectation, checked against the committed value of
+# `version - 1`. `scope` is the key's sorted voting regions; an acceptor that is the whole scope
+# commits what it accepts. `predecessor` is the chosen value of `version - 1`.
+type AcceptRequest struct {
+	key: data
+	value: optional<data>
+	ballot: Ballot
+	mutable: bool
+	version: u64
+	expectOneOf: optional<list<optional<data>>>
+	scope: list<ReplicaId>
+	predecessor: optional<CommittedValue>
+}
+
+type AcceptResponseOk struct {
+	ballot: Ballot
+}
+
+# The acceptor is the key's whole scope, so the accepted value was chosen and committed.
+type AcceptResponseCommitted struct {
+	committed: CommittedValue
+}
+
+type AcceptResponseAlreadyCommitted struct {
+	committed: CommittedValue
+}
+
+type AcceptResponseHigherBallot struct {
+	ballot: Ballot
+}
+
+# A fast round found another proposal's promise or accepted value in the instance.
+type AcceptResponseContended struct {
+	promise: optional<Ballot>
+	accepted: optional<AcceptedValue>
+}
+
+# The expectation does not hold for the committed value.
+type AcceptResponseMismatch struct {
+	committed: optional<CommittedValue>
+}
+
+# The key records another scope, which every proposal for it must use.
+type AcceptResponseScopeMismatch struct {
+	scope: list<ReplicaId>
+}
+
+type AcceptResponse union {
+	AcceptResponseOk |
+	AcceptResponseCommitted |
+	AcceptResponseAlreadyCommitted |
+	AcceptResponseHigherBallot |
+	AcceptResponseContended |
+	AcceptResponseMismatch |
+	AcceptResponseScopeMismatch
+}
+
+type CommitRequest struct {
+	key: data
+	value: optional<data>
+	ballot: Ballot
+	mutable: bool
+	version: u64
+}
+
+type CommitResponseOk void
+
+type CommitResponseAlreadyCommitted struct {
+	value: optional<data>
+}
+
+type CommitResponse union {
+	CommitResponseOk |
+	CommitResponseAlreadyCommitted
+}
+
+# MARK: KV Operations
+type KvGetRequest struct {
+	key: data
+}
+
+type KvGetResponse struct {
+	value: optional<CommittedValue>
+}
+
+# MARK: Changelog
+type ChangelogReadRequest struct {
+	afterVersionstamp: optional<data>
+	count: u64
+}
+
+type ChangelogEntry struct {
+	key: data
+	value: optional<data>
+	version: u64
+	mutable: bool
+}
+
+type ChangelogReadResponse struct {
+	entries: list<ChangelogEntry>
+	lastVersionstamp: data
+}
+
+# MARK: Replica Join
+type HealthCheckRequest void
+
+type HealthCheckResponse void
+
+type CoordinatorUpdateReplicaStatusRequest struct {
+	learningAttempt: u64
+	replicaId: ReplicaId
+	status: ReplicaStatus
+}
+
+type CoordinatorUpdateReplicaStatusResponse void
+
+type BeginLearningRequest struct {
+	configGeneration: u64
+	learningAttempt: u64
+	config: ClusterConfig
+}
+
+type BeginLearningResponse void
+
+# Atomic read of committed and accepted state. A ballot establishes a read promise.
+type KvReadStateRequest struct {
+ key: data
+ ballot: optional<Ballot>
+ epoch: u64
+}
+
+type KvReadStateResponse struct {
+ committed: optional<CommittedValue>
+ accepted: optional<AcceptedValue>
+ promised: optional<Ballot>
+}
+
+# MARK: Request/Response
+type RequestKind union {
+	UpdateConfigRequest |
+	PrepareRequest |
+	PreAcceptRequest |
+	AcceptRequest |
+	CommitRequest |
+	ChangelogReadRequest |
+	HealthCheckRequest |
+	CoordinatorUpdateReplicaStatusRequest |
+	BeginLearningRequest |
+	KvGetRequest |
+	KvReadStateRequest
+}
+
+type Request struct {
+	fromReplicaId: ReplicaId
+	toReplicaId: ReplicaId
+	kind: RequestKind
+}
+
+type ResponseKind union {
+	UpdateConfigResponse |
+	PrepareResponse |
+	PreAcceptResponse |
+	AcceptResponse |
+	CommitResponse |
+	ChangelogReadResponse |
+	HealthCheckResponse |
+	CoordinatorUpdateReplicaStatusResponse |
+	BeginLearningResponse |
+	KvGetResponse |
+	KvReadStateResponse
+}
+
+type Response struct {
+	kind: ResponseKind
+}
+
+
+# Membership commands are idempotent through configuration versions; a mutation that changes nothing writes nothing.
+type ControlInitialize struct {
+	config: ClusterConfig
+}
+
+type ControlInstall struct {
+	config: ClusterConfig
+	configGeneration: u64
+}
+
+type ControlLearn struct {
+	config: ClusterConfig
+	configGeneration: u64
+	learningAttempt: u64
+}
+
+type ControlStatus struct {
+	replicaId: u64
+	status: ReplicaStatus
+	learningAttempt: u64
+}
+
+type ControlOverride struct {
+	config: ClusterConfig
+}
+
+type ControlTopology struct {
+	# Versioned coordinator desired topology, owned by the control-state schema.
+	topology: data
+}
+
+type ControlSave struct {
+	coordinator: bool
+	expectedRevision: u64
+	state: data
+}
+
+type ControlEnsure void
+
+type ControlReconfigure void
+
+type ControlOperation union {
+	ControlInitialize |
+	ControlInstall |
+	ControlLearn |
+	ControlStatus |
+	ControlOverride |
+	ControlTopology |
+	ControlSave |
+	ControlEnsure |
+	ControlReconfigure
+}
+
+type ControlCommand struct {
+	replicaId: u64
+	operation: ControlOperation
+}
+
+type ControlResponse void
+
+
+# A key volume's commands. Each is one transition of the key's state machine.
+type InspectReplica void
+
+type GetReplica void
+
+type ReplicaOperation union {
+	InspectReplica |
+	GetReplica |
+	PrepareRequest |
+	AcceptRequest |
+	CommitRequest |
+	KvReadStateRequest
+}
+
+type ReplicaCommand struct {
+	replicaId: u64
+	key: data
+	operation: ReplicaOperation
+}
+
+type ReplicaValue struct {
+	value: optional<CommittedValue>
+}
+
+type ReplicaInspection struct {
+	state: KvReadStateResponse
+}
+
+type ReplicaCommandResponse union {
+	ReplicaValue |
+	ReplicaInspection |
+	PrepareResponse |
+	AcceptResponse |
+	CommitResponse |
+	KvReadStateResponse
+}
+

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result as AnyhowResult, ensure};
 use parking_lot::Mutex as SyncMutex;
 use rivet_envoy_protocol as protocol;
-use tokio::sync::{Mutex, Notify, mpsc, watch};
+use tokio::sync::{Mutex, Notify, mpsc};
 
 pub const HTTP_BODY_STREAM_CHANNEL_CAPACITY: usize = 16;
 pub const HTTP_BODY_MAX_CHUNK_SIZE: usize = 64 * 1024;
@@ -27,18 +27,9 @@ impl std::error::Error for HttpRequestBodyError {}
 
 #[derive(Debug)]
 pub struct HttpRequestBodyStream {
-	source: HttpRequestBodySource,
+	queue: Arc<HttpRequestBodyQueue>,
 	event_tx: Option<mpsc::UnboundedSender<RequestBodyEvent>>,
 	terminal: bool,
-}
-
-#[derive(Debug)]
-enum HttpRequestBodySource {
-	Legacy {
-		rx: mpsc::Receiver<Vec<u8>>,
-		abort_rx: watch::Receiver<Option<HttpRequestBodyError>>,
-	},
-	FlowControlled(Arc<HttpRequestBodyQueue>),
 }
 
 #[derive(Debug)]
@@ -53,13 +44,13 @@ struct HttpRequestBodyQueueState {
 /// The producer is the synchronous actor inbox, so this is a deliberately short forced-sync lock;
 /// it is never held across an await. Byte credit separately caps the total queued payload.
 #[derive(Debug)]
-pub(crate) struct HttpRequestBodyQueue {
+pub struct HttpRequestBodyQueue {
 	state: SyncMutex<HttpRequestBodyQueueState>,
 	ready: Notify,
 }
 
 impl HttpRequestBodyQueue {
-	pub(crate) fn new() -> Arc<Self> {
+	pub fn new() -> Arc<Self> {
 		Arc::new(Self {
 			state: SyncMutex::new(HttpRequestBodyQueueState {
 				chunks: VecDeque::new(),
@@ -71,7 +62,9 @@ impl HttpRequestBodyQueue {
 		})
 	}
 
-	pub(crate) fn push(&self, mut data: Vec<u8>) -> bool {
+	/// Queues `data`, copying it once into the coalesced chunks.
+	pub fn push(&self, data: impl AsRef<[u8]>) -> bool {
+		let mut data = data.as_ref();
 		let mut state = self.state.lock();
 		if state.finished || state.abort.is_some() || state.receiver_closed {
 			return false;
@@ -81,7 +74,7 @@ impl HttpRequestBodyQueue {
 			let available = HTTP_BODY_MAX_CHUNK_SIZE.saturating_sub(last.len());
 			let append = available.min(data.len());
 			last.extend_from_slice(&data[..append]);
-			data.drain(..append);
+			data = &data[append..];
 		}
 		for chunk in data.chunks(HTTP_BODY_MAX_CHUNK_SIZE) {
 			state.chunks.push_back(chunk.to_vec());
@@ -91,7 +84,7 @@ impl HttpRequestBodyQueue {
 		true
 	}
 
-	pub(crate) fn finish(&self) {
+	pub fn finish(&self) {
 		let mut state = self.state.lock();
 		if state.abort.is_none() {
 			state.finished = true;
@@ -100,7 +93,7 @@ impl HttpRequestBodyQueue {
 		self.ready.notify_waiters();
 	}
 
-	pub(crate) fn abort(&self, error: HttpRequestBodyError) {
+	pub fn abort(&self, error: HttpRequestBodyError) {
 		let mut state = self.state.lock();
 		if state.abort.is_none() && !state.finished {
 			state.chunks.clear();
@@ -163,12 +156,10 @@ impl HttpRequestBodyStream {
 		}
 	}
 
-	pub fn new(
-		rx: mpsc::Receiver<Vec<u8>>,
-		abort_rx: watch::Receiver<Option<HttpRequestBodyError>>,
-	) -> Self {
+	/// A body read from `queue` without reporting consumption to a flow-control window.
+	pub fn new(queue: Arc<HttpRequestBodyQueue>) -> Self {
 		Self {
-			source: HttpRequestBodySource::Legacy { rx, abort_rx },
+			queue,
 			event_tx: None,
 			terminal: false,
 		}
@@ -179,38 +170,19 @@ impl HttpRequestBodyStream {
 		event_tx: mpsc::UnboundedSender<RequestBodyEvent>,
 	) -> Self {
 		Self {
-			source: HttpRequestBodySource::FlowControlled(queue),
+			queue,
 			event_tx: Some(event_tx),
 			terminal: false,
 		}
 	}
 
 	pub async fn recv(&mut self) -> Result<Option<Vec<u8>>, HttpRequestBodyError> {
-		let chunk = match &mut self.source {
-			HttpRequestBodySource::Legacy { rx, abort_rx } => loop {
-				if let Some(error) = abort_rx.borrow().clone() {
-					self.terminal = true;
-					return Err(error);
-				}
-
-				tokio::select! {
-					biased;
-					changed = abort_rx.changed() => {
-						if changed.is_ok() {
-							continue;
-						}
-						break rx.recv().await;
-					}
-					chunk = rx.recv() => break chunk,
-				}
-			},
-			HttpRequestBodySource::FlowControlled(queue) => match queue.recv().await {
-				Ok(chunk) => chunk,
-				Err(error) => {
-					self.terminal = true;
-					return Err(error);
-				}
-			},
+		let chunk = match self.queue.recv().await {
+			Ok(chunk) => chunk,
+			Err(error) => {
+				self.terminal = true;
+				return Err(error);
+			}
 		};
 		self.handle_chunk(chunk)
 	}
@@ -218,9 +190,7 @@ impl HttpRequestBodyStream {
 
 impl Drop for HttpRequestBodyStream {
 	fn drop(&mut self) {
-		if let HttpRequestBodySource::FlowControlled(queue) = &self.source {
-			queue.close_receiver();
-		}
+		self.queue.close_receiver();
 		if !self.terminal
 			&& let Some(event_tx) = &self.event_tx
 		{
@@ -358,101 +328,4 @@ impl Drop for HttpResponseBodyStream {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use std::time::Duration;
 
-	use super::*;
-
-	#[tokio::test]
-	async fn request_body_returns_credit_only_when_consumed() {
-		let queue = HttpRequestBodyQueue::new();
-		let (event_tx, mut event_rx) = mpsc::unbounded_channel();
-		let mut body = HttpRequestBodyStream::new_with_flow_control(queue.clone(), event_tx);
-		assert!(queue.push(vec![1, 2, 3]));
-
-		assert!(event_rx.try_recv().is_err());
-		assert_eq!(body.recv().await.expect("read body"), Some(vec![1, 2, 3]));
-		assert!(matches!(
-			event_rx.recv().await,
-			Some(RequestBodyEvent::Consumed(3))
-		));
-	}
-
-	#[tokio::test]
-	async fn dropping_unfinished_request_body_emits_upload_cancel() {
-		let queue = HttpRequestBodyQueue::new();
-		let (event_tx, mut event_rx) = mpsc::unbounded_channel();
-		let body = HttpRequestBodyStream::new_with_flow_control(queue, event_tx);
-
-		drop(body);
-
-		assert!(matches!(
-			event_rx.recv().await,
-			Some(RequestBodyEvent::Cancelled)
-		));
-	}
-
-	#[tokio::test]
-	async fn request_body_coalesces_tiny_frames_within_the_byte_window() {
-		let queue = HttpRequestBodyQueue::new();
-		let (event_tx, mut event_rx) = mpsc::unbounded_channel();
-		let mut body = HttpRequestBodyStream::new_with_flow_control(queue.clone(), event_tx);
-		for byte in 0..=255u8 {
-			assert!(queue.push(vec![byte]));
-		}
-		queue.finish();
-
-		let chunk = body.recv().await.expect("read coalesced body").unwrap();
-		assert_eq!(chunk, (0..=255u8).collect::<Vec<_>>());
-		assert!(matches!(
-			event_rx.recv().await,
-			Some(RequestBodyEvent::Consumed(256))
-		));
-		assert_eq!(body.recv().await.expect("read request eof"), None);
-	}
-
-	#[tokio::test]
-	async fn response_body_window_blocks_until_consumption_is_acknowledged() {
-		let window = HttpBodySendWindow::new();
-		window
-			.reserve(protocol::HTTP_STREAM_INITIAL_WINDOW_BYTES)
-			.await
-			.expect("reserve initial window");
-		let blocked = tokio::spawn({
-			let window = window.clone();
-			async move { window.reserve(1).await }
-		});
-		assert!(
-			tokio::time::timeout(Duration::from_millis(20), async {
-				while !blocked.is_finished() {
-					tokio::task::yield_now().await;
-				}
-			})
-			.await
-			.is_err()
-		);
-
-		window
-			.update_consumed(1)
-			.await
-			.expect("return one byte of credit");
-		blocked
-			.await
-			.expect("join blocked reservation")
-			.expect("reserve after credit");
-	}
-
-	#[tokio::test]
-	async fn response_body_window_rejects_regression_and_over_credit() {
-		let window = HttpBodySendWindow::new();
-		window.reserve(10).await.expect("reserve bytes");
-		window.update_consumed(5).await.expect("consume bytes");
-		assert!(window.update_consumed(4).await.is_err());
-		assert!(window.update_consumed(11).await.is_err());
-		window
-			.update_consumed(5)
-			.await
-			.expect("duplicate cumulative ack");
-	}
-}

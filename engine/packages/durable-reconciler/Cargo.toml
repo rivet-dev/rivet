@@ -1,0 +1,31 @@
+[package]
+name = "rivet-durable-reconciler"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+depot-worker = { path = "../depot-worker" }
+rivet-state-machine-ephemeral.workspace = true
+lazy_static.workspace = true
+futures-util.workspace = true
+rivet-env.workspace = true
+rivet-state-machine.workspace = true
+serde.workspace = true
+prometheus.workspace = true
+parking_lot.workspace = true
+anyhow.workspace = true
+bytes.workspace = true
+depot-client.workspace = true
+rivet-keys.workspace = true
+rivet-metrics.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+vbare-compiler.workspace = true
+vbare-gen.workspace = true
+

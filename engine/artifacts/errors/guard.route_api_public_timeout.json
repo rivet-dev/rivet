@@ -1,5 +1,0 @@
-{
-  "code": "route_api_public_timeout",
-  "group": "guard",
-  "message": "Timed out resolving the api-public route."
-}

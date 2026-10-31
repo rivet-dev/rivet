@@ -1,34 +1,42 @@
 catalog:
   drizzle-orm: "0.45.2"
-
-catalogs:
-  platform:
-    rivetkit: "2.3.16"
-    "@rivetkit/rivetkit-napi": "2.3.16"
+  drizzle-zod: "0.8.3"
 
 packages:
   - engine
-  - self-host/compose/template
   - engine/sdks/typescript/api-full
   - engine/sdks/typescript/envoy-protocol
-  - engine/sdks/typescript/test-envoy
-  - engine/sdks/typescript/test-envoy-native
-  - engine/sdks/typescript/test-runner
-  - engine/tests/*
   - examples/*
-  - frontend
-  - frontend/packages/components/
-  - frontend/packages/icons/
-  - frontend/packages/shared-data/
   - integrations/*
   - integrations/*/examples/*
   - rivetkit-typescript/packages/*
   - rivetkit-swift/examples/*/server
-  - scripts/pipboy
   - scripts/publish
-  - scripts/tests
-  - scripts/vercel-examples
   - shared/typescript/*
+  # Serverless is disabled for v3; keep these sources for a later release.
+  - '!rivetkit-typescript/packages/cloudflare-workers'
+  - '!rivetkit-typescript/packages/supabase'
+  - '!rivetkit-typescript/packages/next-js'
+  - '!examples/ai-and-user-generated-actors-freestyle'
+  - '!examples/custom-serverless'
+  - '!examples/hello-world-cloudflare-workers*'
+  - '!examples/hello-world-supabase-functions'
+  - '!examples/next-js'
+  - '!examples/ai-generated-actor'
+  - '!examples/chat-room-render'
+  - '!examples/dynamic-actors'
+  - '!examples/elysia'
+  - '!examples/hello-world-render'
+  - '!examples/hono'
+  - '!examples/hono-react'
+  - '!examples/raw-fetch-handler'
+  - '!examples/raw-websocket-handler-proxy'
+  - '!examples/react-render'
+  - '!examples/state-render'
+  - '!examples/stream-render'
+  - '!examples/trpc'
+  - '!examples/sandbox'
+  - '!examples/multiplayer-game'
 ignoredBuiltDependencies:
   - '@parcel/watcher'
   - '@sentry/cli'
@@ -38,7 +46,7 @@ ignoredBuiltDependencies:
 onlyBuiltDependencies:
   - '@biomejs/biome'
   - opencode-ai
-  - '@rivet-gg/icons'
+  - bcrypt
   - better-sqlite3
   - cbor-extract
   - esbuild

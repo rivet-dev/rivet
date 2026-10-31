@@ -4,45 +4,21 @@ description: "Issue short-lived JWTs with explicit permissions in one namespace.
 skill: true
 ---
 
-A scoped token is a JWT that gives its holder selected permissions in one namespace. Issue it on your backend with your Rivet token, using the RivetKit client or the HTTP API, then return only the scoped token to the application.
+A scoped token gives its holder selected permissions in one namespace. Issue it on your backend with the control plane's admin credential, then return only the scoped token to the application.
 
-## Issue a token
+## Quickstart
 
-<Tabs>
-<Tab title="RivetKit">
+<Steps>
+<Step title="Issue a token">
 
-Create a client on your backend with your Rivet token in the endpoint:
-
-<CodeSnippet file="examples/docs/general-jwt/issue-token.ts" region="client" />
-
-For one Actor, call `issueToken` on its handle. Without `permissions`, the token can only send traffic to that Actor:
-
-<CodeSnippet file="examples/docs/general-jwt/issue-token.ts" region="actor" />
-
-Pass `permissions` to replace the default. The handle accepts `actor_gateway` and `actor` permissions and scopes each grant to the Actor's ID:
-
-<CodeSnippet file="examples/docs/general-jwt/issue-token.ts" region="permissions" />
-
-For namespace-wide grants, such as creating Actors, call `client.auth.issueToken` with an explicit grant list:
-
-<CodeSnippet file="examples/docs/general-jwt/issue-token.ts" region="namespace" />
-
-`expiresIn` is in seconds. `issuedAt` and `expiresAt` are Unix timestamps in milliseconds.
-
-</Tab>
-<Tab title="HTTP API">
-
-Call `POST /auth/tokens` with your Rivet token. This grants traffic to every Actor in the `production` namespace; use `{"id":"<actor-id>"}` as the target for one Actor.
+This example grants read access to Actor traffic in the `production` namespace. Every holder can reach every Actor in that namespace; use a specific Actor ID for private per-user access.
 
 ```bash
-export RIVET_API=https://rivet.example.com
-
 curl -X POST "$RIVET_API/auth/tokens" \
-  -H "Authorization: Bearer $RIVET_TOKEN" \
+  -H "Authorization: Bearer $RIVET_ADMIN_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
     "namespace": "production",
-    "subject": "user-123",
     "duration": 900,
     "grants": [
       {"resource":"actor_gateway","target":"any","operations":["read"]}
@@ -50,36 +26,22 @@ curl -X POST "$RIVET_API/auth/tokens" \
   }'
 ```
 
-The response contains `token`, `issued_ts` and `expires_ts`. Timestamps are Unix milliseconds; `duration` is seconds. See [Create token](/docs/api/tokens/create).
+The response contains `token`, `issued_ts`, and `expires_ts`. Timestamps are Unix milliseconds; `duration` is seconds.
 
-</Tab>
-</Tabs>
+</Step>
+<Step title="Use the token">
 
-Return only the scoped token to the client. Never send your Rivet token to a browser.
-
-## Use the token
-
-<Tabs>
-<Tab title="RivetKit">
-
-Give the browser client a `getToken` function that asks your backend for a token. The client calls it on first use and again when the token expires.
-
-<CodeSnippet file="examples/docs/general-jwt/use-token.ts" />
-
-</Tab>
-<Tab title="HTTP API">
-
-Send the token as a bearer token. This request reaches the Actor's [request handler](/actors/docs/request-handler):
+Set `$RIVET_TOKEN` to the returned token and call an Actor's gateway endpoint:
 
 ```bash
-curl "$RIVET_API/gateway/$ACTOR_ID/request/" \
-  -H "Authorization: Bearer $SCOPED_TOKEN"
+curl "$RIVET_API/gateway/$ACTOR_ID/health" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
 ```
 
-</Tab>
-</Tabs>
+This grant does not allow Actor creation, listing, node registration, or pool management.
 
-A gateway grant does not allow Actor creation, listing, node registration or pool management.
+</Step>
+</Steps>
 
 ## Grants
 
@@ -92,29 +54,13 @@ Each grant names a `resource`, a `target`, and `operations` drawn from `create`,
 | `node` | Register or inspect nodes. |
 | `pool` | Read or manage node pool configuration. |
 
-Actor management and gateway access require separate grants. Permission to reach one Actor does not allow the holder to create other Actors. Namespace administration and token issuance require your Rivet token.
+Actor management and gateway access require separate grants. Permission to reach one Actor does not allow the holder to create other Actors. Namespace administration and token issuance require the admin credential.
 
 ## Inspect and renew
 
 ```bash
 curl "$RIVET_API/auth/tokens/inspect" \
-  -H "Authorization: Bearer $SCOPED_TOKEN"
+  -H "Authorization: Bearer $RIVET_TOKEN"
 ```
 
-The response contains the namespace slug, grants, subject, and issue and expiry timestamps. Renew expiring credentials through your authenticated backend. Do not give clients your Rivet token to renew tokens themselves.
-
-## Signing keys
-
-The control plane signs tokens with keys it rotates automatically every 7 days. A token lasts 1 hour by default and at most 24 hours.
-
-To revoke every outstanding token at once, rotate the signing keys immediately. Run these on any control plane instance; they read the instance's configuration:
-
-```bash
-rivet-engine depot jwt show
-rivet-engine depot jwt emergency-rotate \
-  --request-id <new-uuid> \
-  --expected-coordinator-epoch <epoch-from-show> \
-  --expected-ring-version <version-from-show>
-```
-
-Every instance stops accepting the old tokens within 5 minutes. If the command's reply is lost, run `show` again and retry with the same request ID.
+The response contains the namespace slug, grants, subject, and issue and expiry timestamps. Renew expiring credentials through your authenticated backend. Do not give clients the admin credential to renew tokens themselves.

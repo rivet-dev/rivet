@@ -4,8 +4,6 @@ use parking_lot::RwLock;
 use rand::RngCore;
 use rivet_error::RivetError as RivetErrorDerive;
 use serde::{Deserialize, Serialize};
-#[cfg(test)]
-use std::sync::Mutex;
 use std::sync::OnceLock;
 use subtle::ConstantTimeEq;
 
@@ -22,11 +20,7 @@ const INSPECTOR_TOKEN_BYTES: usize = 32;
 
 static INSPECTOR_TEST_TOKEN_OVERRIDE: OnceLock<RwLock<Option<String>>> = OnceLock::new();
 
-#[cfg(test)]
-pub(crate) fn test_inspector_env_lock() -> &'static Mutex<()> {
-	static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-	LOCK.get_or_init(|| Mutex::new(()))
-}
+
 
 pub fn set_test_inspector_token_override(token: Option<String>) {
 	*INSPECTOR_TEST_TOKEN_OVERRIDE
@@ -72,7 +66,7 @@ impl InspectorAuth {
 
 /// Ensures the actor has an inspector token persisted in SQLite and, for now,
 /// mirrored in KV so the engine-facing KV API can serve it to the dashboard.
-/// Skips writes when the token already exists. No-ops when the
+/// Skips writes when the token and its mirror match. No-ops when the
 /// `_RIVET_TEST_INSPECTOR_TOKEN` env override is set, since that takes
 /// precedence over any stored token and we do not want to pin a per-actor token
 /// that will never be consulted.
@@ -81,29 +75,57 @@ pub async fn init_inspector_token(ctx: &ActorContext) -> Result<()> {
 		return Ok(());
 	}
 
-	let existing = internal_storage::load_inspector_token(ctx.sql())
+	if let Some(token) = internal_storage::load_inspector_token(ctx.sql())
 		.await
 		.context("load inspector token from sqlite")?
-		.map(String::into_bytes);
-	if existing.is_some() {
-		// Token creation and legacy import both leave the compatibility mirror in
-		// KV, so an existing SQLite token does not need another startup write.
-		return Ok(());
+	{
+		return ensure_inspector_token_mirror(ctx, &token).await;
 	}
 
-	let token = generate_inspector_token();
-	internal_storage::persist_inspector_token(ctx.sql(), &token)
-		.await
-		.context("persist inspector token to sqlite")?;
-	// The dashboard reads the token through the engine's public actor-KV
-	// endpoint. Keep this sole KV write until the dashboard fetches inspector
-	// tokens another way; see ~/.agents/specs/kv-to-sqlite-internal-storage.md.
+	if let Some(token) = new_inspector_token() {
+		let (sqlite, mirror) = futures::join!(
+			internal_storage::persist_inspector_token(ctx.sql(), &token),
+			persist_inspector_token_mirror(ctx, &token),
+		);
+		sqlite.context("persist inspector token to sqlite")?;
+		mirror?;
+		tracing::debug!(actor_id = %ctx.actor_id(), "generated new inspector token");
+	}
+	Ok(())
+}
+
+/// Rewrites the KV mirror of the stored `token` when it is missing or stale. SQLite is
+/// authoritative, and a bootstrap writes the mirror only after its SQLite commit, so a crash
+/// between them leaves the mirror missing.
+pub(crate) async fn ensure_inspector_token_mirror(ctx: &ActorContext, token: &str) -> Result<()> {
+	if configured_test_token().is_some() {
+		return Ok(());
+	}
+	let mirror = ctx
+		.legacy_kv()
+		.batch_get(&[&INSPECTOR_TOKEN_KEY])
+		.await?
+		.pop()
+		.flatten();
+	if mirror.as_deref() != Some(token.as_bytes()) {
+		persist_inspector_token_mirror(ctx, token).await?;
+	}
+	Ok(())
+}
+
+/// Produces bootstrap token material unless the process uses the test override.
+pub(crate) fn new_inspector_token() -> Option<String> {
+	configured_test_token()
+		.is_none()
+		.then(generate_inspector_token)
+}
+
+/// Durably writes the dashboard mirror. SQLite remains authoritative for auth.
+pub(crate) async fn persist_inspector_token_mirror(ctx: &ActorContext, token: &str) -> Result<()> {
 	ctx.legacy_kv()
 		.put(&INSPECTOR_TOKEN_KEY, token.as_bytes())
 		.await
-		.context("persist inspector token mirror to kv")?;
-	tracing::debug!(actor_id = %ctx.actor_id(), "generated new inspector token");
-	Ok(())
+		.context("persist inspector token mirror to kv")
 }
 
 fn generate_inspector_token() -> String {

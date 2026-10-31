@@ -1,0 +1,5 @@
+{
+  "code": "key_owned_elsewhere",
+  "group": "actor",
+  "message": "The actor key is owned by another datacenter."
+}

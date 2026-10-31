@@ -387,6 +387,8 @@ export interface RuntimeServeConfig {
 	engineBinaryPath?: string;
 	startServices?: boolean;
 	servicesBinaryPath?: string;
+	/** Whether config resolution selected a managed local development engine. */
+	engineSpawn?: boolean;
 	engineHost?: string;
 	enginePort?: number;
 	handleInspectorHttpInRuntime?: boolean;
@@ -532,10 +534,15 @@ export interface CoreRuntime {
 	createCancellationToken(): CancellationTokenHandle;
 	cancellationTokenAborted(token: CancellationTokenHandle): boolean;
 	cancelCancellationToken(token: CancellationTokenHandle): void;
+	/**
+	 * Calls `callback` once when `token` is cancelled. Returns a release
+	 * function that drops the registration without calling `callback`; call it
+	 * once cancellation no longer matters so the native listener is freed.
+	 */
 	onCancellationTokenCancelled(
 		token: CancellationTokenHandle,
 		callback: (...args: unknown[]) => unknown,
-	): void;
+	): () => void;
 
 	actorState(ctx: ActorContextHandle): RuntimeBytes;
 	actorBeginOnStateChange(ctx: ActorContextHandle): void;
@@ -876,6 +883,13 @@ export interface RuntimeBundle {
 	runtime: CoreRuntime;
 }
 
+export function servicesBinaryUnavailable(cause: unknown): Error {
+	return new Error(
+		"services.binary_unavailable: Install @rivet-dev/services yourself to run local Services, or set RIVET_SERVICES_BINARY to its executable path.",
+		{ cause },
+	);
+}
+
 export async function buildServeConfig(
 	config: RegistryConfig,
 	loadEnginePath: () => Promise<string>,
@@ -887,11 +901,12 @@ export async function buildServeConfig(
 	}
 
 	const serveConfig: RuntimeServeConfig = {
-		version: config.envoy.version,
+		version: config.node.version,
 		endpoint: config.endpoint,
+		engineSpawn: config.engineSpawn,
 		token: config.token,
 		namespace: config.namespace,
-		poolName: config.envoy.poolName,
+		poolName: config.node.poolName,
 		startServices: config.startServices,
 		handleInspectorHttpInRuntime: true,
 		serverlessBasePath: config.serverless.basePath,
@@ -921,13 +936,15 @@ export async function buildServeConfig(
 		});
 	}
 	if (config.startServices) {
-		try {
-			serveConfig.servicesBinaryPath = await loadServicesPath();
-		} catch (error) {
-			logger().warn({
-				msg: "could not resolve the Services binary; a local Engine will fail with services.binary_unavailable — set RIVET_RUN_SERVICES=0 to disable Services or RIVET_SERVICES_BINARY to a local rivet-services binary",
-				error: stringifyError(error),
-			});
+		const servicesBinary = process.env.RIVET_SERVICES_BINARY;
+		if (servicesBinary) {
+			serveConfig.servicesBinaryPath = servicesBinary;
+		} else {
+			try {
+				serveConfig.servicesBinaryPath = await loadServicesPath();
+			} catch (error) {
+				throw servicesBinaryUnavailable(error);
+			}
 		}
 	}
 	serveConfig.engineHost = config.engineHost;

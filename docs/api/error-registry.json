@@ -30,28 +30,6 @@
 					]
 				},
 				{
-					"code": "creation_rate_limit",
-					"message": "Too many actors created at once. Try again later.",
-					"statuses": [
-						{
-							"status": 429,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "destroyed_during_creation",
-					"message": "Actor was destroyed during creation.",
-					"statuses": []
-				},
-				{
-					"code": "destroyed_while_waiting_for_ready",
-					"message": "Actor was destroyed while waiting for ready state.",
-					"statuses": []
-				},
-				{
 					"code": "destroying",
 					"message": "Actor is destroying.",
 					"statuses": []
@@ -67,13 +45,43 @@
 					"statuses": []
 				},
 				{
-					"code": "empty_key",
-					"message": "Key label cannot be empty.",
+					"code": "input_too_large",
+					"message": "Actor input too large.",
 					"statuses": []
 				},
 				{
-					"code": "input_too_large",
-					"message": "Actor input too large.",
+					"code": "invalid_cursor",
+					"message": "The actor listing cursor is malformed.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_include_destroyed",
+					"message": "The actor listing include_destroyed flag must be true or false.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_key",
+					"message": "Actor key is invalid.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_key_encoding",
+					"message": "Actor key is not in the canonical slash-separated form produced by serializeActorKey.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_limit",
+					"message": "The actor listing limit must be an integer from 1 to 100.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_listing",
+					"message": "Listing actors requires a name or actor IDs.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_name",
+					"message": "Actor name is invalid.",
 					"statuses": []
 				},
 				{
@@ -94,23 +102,13 @@
 					]
 				},
 				{
-					"code": "js_callback_failed",
-					"message": "JavaScript callback failed",
-					"statuses": []
-				},
-				{
 					"code": "js_callback_unavailable",
 					"message": "JavaScript callback unavailable",
 					"statuses": []
 				},
 				{
-					"code": "key_index_scan_limit_exceeded",
-					"message": "Too many index entries for this actor key to resolve it.",
-					"statuses": []
-				},
-				{
-					"code": "key_reserved_in_different_datacenter",
-					"message": "Actor key is already reserved in a different datacenter. Either remove the datacenter constraint to automatically create this actor in the correct datacenter or provide the datacenter that matches.",
+					"code": "key_owned_elsewhere",
+					"message": "The actor key is owned by another datacenter.",
 					"statuses": []
 				},
 				{
@@ -119,13 +117,18 @@
 					"statuses": []
 				},
 				{
-					"code": "kv_key_not_found",
-					"message": "The KV key does not exist for this actor.",
+					"code": "kv_key_too_large",
+					"message": "A KV key is too large.",
 					"statuses": []
 				},
 				{
-					"code": "kv_storage_quota_exceeded",
-					"message": "Not enough space left in storage.",
+					"code": "kv_response_too_large",
+					"message": "The KV response is too large. Read fewer keys per request.",
+					"statuses": []
+				},
+				{
+					"code": "kv_too_many_keys",
+					"message": "The KV request names too many keys.",
 					"statuses": []
 				},
 				{
@@ -143,16 +146,6 @@
 				{
 					"code": "missing_input",
 					"message": "Actor input is missing.",
-					"statuses": []
-				},
-				{
-					"code": "namespace_not_found",
-					"message": "The namespace does not exist.",
-					"statuses": []
-				},
-				{
-					"code": "no_runner_config_configured",
-					"message": "No runner config configured in any datacenter. Validate a provider is listed that matches requested pool name.",
 					"statuses": []
 				},
 				{
@@ -203,18 +196,8 @@
 					"statuses": []
 				},
 				{
-					"code": "state_mutation_reentrant",
-					"message": "Actor state mutation is re-entrant.",
-					"statuses": []
-				},
-				{
 					"code": "stopping",
 					"message": "Actor is stopping.",
-					"statuses": []
-				},
-				{
-					"code": "workflow_in_flight",
-					"message": "Workflow replay is unavailable while the workflow is currently in flight.",
 					"statuses": []
 				}
 			]
@@ -223,16 +206,6 @@
 			"name": "api",
 			"description": "Malformed requests to the control plane.",
 			"errors": [
-				{
-					"code": "bad_request",
-					"message": "Request is invalid",
-					"statuses": []
-				},
-				{
-					"code": "bad_token",
-					"message": "Invalid token provided",
-					"statuses": []
-				},
 				{
 					"code": "forbidden",
 					"message": "Access denied",
@@ -361,22 +334,6 @@
 			]
 		},
 		{
-			"name": "compute_gateway",
-			"description": null,
-			"errors": [
-				{
-					"code": "cloud_route_error",
-					"message": "Failed to resolve route from cloud.",
-					"statuses": []
-				},
-				{
-					"code": "no_route",
-					"message": "No route found.",
-					"statuses": []
-				}
-			]
-		},
-		{
 			"name": "config",
 			"description": null,
 			"errors": [
@@ -439,28 +396,18 @@
 			"description": null,
 			"errors": [
 				{
-					"code": "branch_not_reachable",
-					"message": "Restore point branch is not reachable from this database branch chain.",
+					"code": "command_too_large",
+					"message": "The command exceeds the byte limit.",
 					"statuses": []
 				},
 				{
-					"code": "branch_not_writable",
-					"message": "Database branch is not writable.",
+					"code": "conflict",
+					"message": "The command conflicted with a concurrent change to the volume.",
 					"statuses": []
 				},
 				{
-					"code": "bucket_fork_chain_too_deep",
-					"message": "Bucket branch fork chain is too deep.",
-					"statuses": []
-				},
-				{
-					"code": "cold_object_corrupt",
-					"message": "SQLite cold object does not match the reference that named it.",
-					"statuses": []
-				},
-				{
-					"code": "commit_too_large",
-					"message": "SQLite commit payload is too large.",
+					"code": "corrupt",
+					"message": "The volume's stored data failed a consistency check.",
 					"statuses": []
 				},
 				{
@@ -469,23 +416,8 @@
 					"statuses": []
 				},
 				{
-					"code": "delta_page_missing",
-					"message": "SQLite delta does not carry a page it owns.",
-					"statuses": []
-				},
-				{
-					"code": "fence_mismatch",
-					"message": "Depot debug fence mismatch.",
-					"statuses": []
-				},
-				{
-					"code": "fork_chain_too_deep",
-					"message": "Database branch fork chain is too deep.",
-					"statuses": []
-				},
-				{
-					"code": "fork_out_of_retention",
-					"message": "Cannot fork from a point that has fallen out of retention.",
+					"code": "fenced",
+					"message": "A newer owner holds the volume; the command was not applied by this owner.",
 					"statuses": []
 				},
 				{
@@ -494,18 +426,13 @@
 					"statuses": []
 				},
 				{
-					"code": "invalid_policy_value",
-					"message": "SQLite policy value is invalid.",
+					"code": "legacy_layout",
+					"message": "The actor volume predates the /actor layout and must be reinitialized.",
 					"statuses": []
 				},
 				{
-					"code": "invalid_v1_migration_state",
-					"message": "Invalid SQLite v1 migration state.",
-					"statuses": []
-				},
-				{
-					"code": "meta_missing",
-					"message": "SQLite metadata is missing.",
+					"code": "overloaded",
+					"message": "The storage host refused the command; retry after the hinted delay.",
 					"statuses": []
 				},
 				{
@@ -514,53 +441,99 @@
 					"statuses": []
 				},
 				{
-					"code": "restore_point_expired",
-					"message": "Restore point history is no longer retained.",
+					"code": "read_interrupted",
+					"message": "The storage read was interrupted; retry after the hinted delay.",
 					"statuses": []
 				},
 				{
-					"code": "restore_point_not_found",
-					"message": "Restore point was not found.",
+					"code": "request_deadline_exceeded",
+					"message": "The command deadline elapsed; its outcome may be unknown.",
 					"statuses": []
 				},
 				{
-					"code": "shard_cache_corrupt",
-					"message": "SQLite shard cache is corrupt.",
+					"code": "routing_unavailable",
+					"message": "No tablet maintainer route is available.",
 					"statuses": []
 				},
 				{
-					"code": "shard_coverage_missing",
-					"message": "SQLite shard coverage is missing.",
+					"code": "scope_revoked",
+					"message": "The caller scope ended; submitted work may still complete.",
 					"statuses": []
 				},
 				{
-					"code": "shard_version_cap_exhausted",
-					"message": "SQLite shard version cap is exhausted.",
+					"code": "storage_unavailable",
+					"message": "Depot storage is not available in this build.",
 					"statuses": []
 				},
 				{
-					"code": "stage_not_found",
-					"message": "SQLite staged commit segment is missing.",
+					"code": "unavailable",
+					"message": "The storage host could not finish the command; its outcome may be unknown.",
 					"statuses": []
 				},
 				{
-					"code": "stage_segment_invalid",
-					"message": "SQLite staged commit segment is invalid.",
+					"code": "unknown_command",
+					"message": "The maintainer does not recognize this command.",
 					"statuses": []
 				},
 				{
-					"code": "stale_main_page",
-					"message": "SQLite page one disagrees with the database size at its txid.",
+					"code": "volume_deleted",
+					"message": "The KV database volume was deleted.",
 					"statuses": []
 				},
 				{
-					"code": "too_many_pins",
-					"message": "Bucket has too many restore_points.",
+					"code": "volume_not_found",
+					"message": "The KV database volume does not exist.",
+					"statuses": []
+				}
+			]
+		},
+		{
+			"name": "depot_kv",
+			"description": null,
+			"errors": [
+				{
+					"code": "closed",
+					"message": "The engine is closed.",
 					"statuses": []
 				},
 				{
-					"code": "too_many_restore_points",
-					"message": "Bucket has too many restore points.",
+					"code": "conflict",
+					"message": "The transaction conflicts with a later write.",
+					"statuses": []
+				},
+				{
+					"code": "corrupt",
+					"message": "Stored data failed its integrity checks.",
+					"statuses": []
+				},
+				{
+					"code": "failed",
+					"message": "The write failed.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_key",
+					"message": "The key or range is invalid.",
+					"statuses": []
+				},
+				{
+					"code": "overloaded",
+					"message": "The engine commit queue is full.",
+					"statuses": []
+				},
+				{
+					"code": "storage",
+					"message": "A block device read failed.",
+					"statuses": []
+				},
+				{
+					"code": "too_large",
+					"message": "The transaction exceeds a configured limit.",
+					"statuses": []
+				},
+				{
+					"code": "too_old",
+					"message": "The snapshot is too old.",
 					"statuses": []
 				}
 			]
@@ -595,6 +568,11 @@
 					"statuses": []
 				},
 				{
+					"code": "incompatible_engine",
+					"message": "An incompatible engine is already running on the endpoint.",
+					"statuses": []
+				},
+				{
 					"code": "invalid_endpoint",
 					"message": "Engine endpoint is invalid.",
 					"statuses": []
@@ -605,8 +583,44 @@
 					"statuses": []
 				},
 				{
+					"code": "not_ready",
+					"message": "Engine did not become ready.",
+					"statuses": []
+				},
+				{
 					"code": "port_occupied",
 					"message": "Engine port is occupied by a different runtime.",
+					"statuses": []
+				}
+			]
+		},
+		{
+			"name": "envoy",
+			"description": null,
+			"errors": [
+				{
+					"code": "connect_overloaded",
+					"message": "Too many runners are connecting at once. Retry after the hint.",
+					"statuses": []
+				},
+				{
+					"code": "connect_unavailable",
+					"message": "Storage could not register the runner yet. Retry after the hint.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_namespace_name",
+					"message": "Namespace name is invalid.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_pool_name",
+					"message": "Pool name is invalid.",
+					"statuses": []
+				},
+				{
+					"code": "malformed_message",
+					"message": "The message could not be decoded.",
 					"statuses": []
 				}
 			]
@@ -617,7 +631,7 @@
 			"errors": [
 				{
 					"code": "actor_ready_timeout",
-					"message": "Timed out waiting for actor to become ready. Ensure that the pool selector is accurate and there are envoys available in the namespace you created this actor.",
+					"message": "Timed out waiting for actor to become ready. Ensure that the pool selector is accurate and there are runners available in the namespace you created this actor.",
 					"statuses": [
 						{
 							"status": 503,
@@ -626,11 +640,6 @@
 							]
 						}
 					]
-				},
-				{
-					"code": "actor_runner_failed",
-					"message": "Actor's runner pool is experiencing errors.",
-					"statuses": []
 				},
 				{
 					"code": "actor_stopped_while_waiting",
@@ -645,81 +654,8 @@
 					]
 				},
 				{
-					"code": "actor_stopped_while_waiting_for_websocket_open",
-					"message": "Actor stopped while waiting for WebSocket open.",
-					"statuses": []
-				},
-				{
-					"code": "actor_wake_retries_exceeded",
-					"message": "Actor wake retries exceeded.",
-					"statuses": [
-						{
-							"status": 503,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "connection_error",
-					"message": "Connection error: {error_message}.",
-					"statuses": []
-				},
-				{
-					"code": "gateway_response_start_timeout",
-					"message": "Timed out waiting for actor response start.",
-					"statuses": [
-						{
-							"status": 504,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "http_request_build_failed",
-					"message": "Failed to build HTTP request.",
-					"statuses": []
-				},
-				{
-					"code": "invalid_header",
-					"message": "Invalid header value.",
-					"statuses": []
-				},
-				{
 					"code": "invalid_request",
 					"message": "Invalid request.",
-					"statuses": []
-				},
-				{
-					"code": "invalid_request_body",
-					"message": "Unable to parse request body.",
-					"statuses": [
-						{
-							"status": 413,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "invalid_response_body",
-					"message": "Unable to parse response body.",
-					"statuses": [
-						{
-							"status": 502,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "max_in_flight",
-					"message": "Too many concurrent requests. Try again later.",
 					"statuses": []
 				},
 				{
@@ -728,100 +664,8 @@
 					"statuses": []
 				},
 				{
-					"code": "missing_query_parameter",
-					"message": "Missing query parameter required for routing.",
-					"statuses": []
-				},
-				{
-					"code": "must_use_regional_host",
-					"message": "Request must use a regional URL for this datacenter.",
-					"statuses": []
-				},
-				{
-					"code": "no_route",
-					"message": "No route found.",
-					"statuses": [
-						{
-							"status": 404,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "no_route_targets",
-					"message": "No targets found.",
-					"statuses": []
-				},
-				{
-					"code": "query_ambiguous_runner_configs",
-					"message": "query gateway actor resolution found multiple runner configs for namespace",
-					"statuses": []
-				},
-				{
-					"code": "query_duplicate_param",
-					"message": "duplicate query gateway param",
-					"statuses": []
-				},
-				{
-					"code": "query_empty_actor_name",
-					"message": "query gateway actor name must not be empty",
-					"statuses": []
-				},
-				{
-					"code": "query_get_disallowed_params",
-					"message": "query gateway method=get does not allow rvt-input, rvt-region, rvt-crash-policy, or rvt-pool params",
-					"statuses": []
-				},
-				{
-					"code": "query_invalid_base64_input",
-					"message": "invalid base64url in query gateway input",
-					"statuses": []
-				},
-				{
-					"code": "query_invalid_cbor_input",
-					"message": "invalid query gateway input cbor",
-					"statuses": []
-				},
-				{
 					"code": "query_invalid_params",
 					"message": "invalid query gateway params",
-					"statuses": []
-				},
-				{
-					"code": "query_invalid_percent_encoding",
-					"message": "invalid percent-encoding for query gateway param",
-					"statuses": []
-				},
-				{
-					"code": "query_missing_pool",
-					"message": "query gateway method=getOrCreate requires rvt-pool param",
-					"statuses": []
-				},
-				{
-					"code": "query_missing_runner_name",
-					"message": "query gateway method=getOrCreate requires rvt-runner param",
-					"statuses": []
-				},
-				{
-					"code": "query_no_runner_configs",
-					"message": "query gateway actor resolution found no runner configs for namespace",
-					"statuses": []
-				},
-				{
-					"code": "query_param_missing_equals",
-					"message": "query gateway param is missing '='",
-					"statuses": []
-				},
-				{
-					"code": "query_path_token_syntax",
-					"message": "query gateway paths must not use @token syntax",
-					"statuses": []
-				},
-				{
-					"code": "query_unknown_param",
-					"message": "unknown query gateway param",
 					"statuses": []
 				},
 				{
@@ -830,105 +674,6 @@
 					"statuses": [
 						{
 							"status": 429,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "request_body_too_large",
-					"message": "Request body too large.",
-					"statuses": []
-				},
-				{
-					"code": "request_build_error",
-					"message": "Request build error.",
-					"statuses": []
-				},
-				{
-					"code": "request_delivery_unconfirmed",
-					"message": "Actor did not respond to request start.",
-					"statuses": [
-						{
-							"status": 503,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "request_timeout",
-					"message": "Request timed out.",
-					"statuses": [
-						{
-							"status": 504,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "response_body_too_large",
-					"message": "Response body too large.",
-					"statuses": []
-				},
-				{
-					"code": "retry_attempts_exceeded",
-					"message": "Retry attempts exceeded.",
-					"statuses": [
-						{
-							"status": 502,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "route_api_public_timeout",
-					"message": "Timed out resolving the api-public route.",
-					"statuses": [
-						{
-							"status": 504,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "route_auth_check_timeout",
-					"message": "Timed out checking route authorization.",
-					"statuses": [
-						{
-							"status": 504,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "route_compute_timeout",
-					"message": "Timed out resolving the compute gateway route.",
-					"statuses": [
-						{
-							"status": 504,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "route_dispatch_timeout",
-					"message": "Timed out dispatching route resolution to a routing module.",
-					"statuses": [
-						{
-							"status": 504,
 							"surfaces": [
 								"gateway"
 							]
@@ -946,124 +691,6 @@
 							]
 						}
 					]
-				},
-				{
-					"code": "target_changed",
-					"message": "WebSocket target changed, retry not possible.",
-					"statuses": []
-				},
-				{
-					"code": "tunnel_message_timeout",
-					"message": "Actor tunnel message timed out.",
-					"statuses": [
-						{
-							"status": 504,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "tunnel_request_aborted",
-					"message": "Actor tunnel aborted the request.",
-					"statuses": [
-						{
-							"status": 503,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "tunnel_response_closed",
-					"message": "Actor tunnel closed before sending a response.",
-					"statuses": [
-						{
-							"status": 503,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "upstream_error",
-					"message": "Upstream error.",
-					"statuses": [
-						{
-							"status": 502,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "uri_parse_error",
-					"message": "URI parse error.",
-					"statuses": []
-				},
-				{
-					"code": "websocket_closed_before_open",
-					"message": "WebSocket closed before opening.",
-					"statuses": []
-				},
-				{
-					"code": "websocket_garbage_collected",
-					"message": "WebSocket request was garbage collected.",
-					"statuses": []
-				},
-				{
-					"code": "websocket_hibernation_not_supported",
-					"message": "The requested service does not support websocket hibernation.",
-					"statuses": []
-				},
-				{
-					"code": "websocket_not_supported",
-					"message": "The requested service does not support websockets.",
-					"statuses": []
-				},
-				{
-					"code": "websocket_open_dropped",
-					"message": "WebSocket open was dropped.",
-					"statuses": []
-				},
-				{
-					"code": "websocket_open_response_closed",
-					"message": "WebSocket open response closed.",
-					"statuses": []
-				},
-				{
-					"code": "websocket_open_timeout",
-					"message": "Timed out waiting for WebSocket open.",
-					"statuses": []
-				},
-				{
-					"code": "websocket_pending_limit_reached",
-					"message": "Reached limit on pending websocket messages, aborting connection.",
-					"statuses": []
-				},
-				{
-					"code": "websocket_service_hibernate",
-					"message": "Initiate WebSocket service hibernation.",
-					"statuses": []
-				},
-				{
-					"code": "websocket_tunnel_ping_timeout",
-					"message": "WebSocket tunnel ping timed out.",
-					"statuses": []
-				},
-				{
-					"code": "websocket_tunnel_subscription_closed",
-					"message": "WebSocket tunnel subscription closed.",
-					"statuses": []
-				},
-				{
-					"code": "wrong_addr_protocol",
-					"message": "Attempted to access a address using the wrong protocol.",
-					"statuses": []
 				}
 			]
 		},
@@ -1086,56 +713,7 @@
 		{
 			"name": "kv",
 			"description": "Low-level KV storage inside an actor.",
-			"errors": [
-				{
-					"code": "leader_forwarding_failed",
-					"message": "Failed to forward request to leader.",
-					"statuses": [
-						{
-							"status": 400,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "no_leader_elected",
-					"message": "No leader has been elected yet.",
-					"statuses": [
-						{
-							"status": 400,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "not_leader",
-					"message": "Current node is not the leader.",
-					"statuses": [
-						{
-							"status": 400,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "response_channel_closed",
-					"message": "Failed to receive KV response, channel closed.",
-					"statuses": [
-						{
-							"status": 400,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				}
-			]
+			"errors": []
 		},
 		{
 			"name": "message",
@@ -1172,28 +750,18 @@
 			"description": "Namespace lookup and creation.",
 			"errors": [
 				{
-					"code": "failed_to_create",
-					"message": "Failed to create namespace.",
-					"statuses": []
-				},
-				{
-					"code": "invalid_update",
-					"message": "Failed to update namespace.",
+					"code": "invalid",
+					"message": "Namespace list limit must be between 1 and 100.",
 					"statuses": []
 				},
 				{
 					"code": "name_not_unique",
-					"message": "Namespace name must be unique.",
+					"message": "A namespace with this name already exists.",
 					"statuses": []
 				},
 				{
 					"code": "not_found",
 					"message": "The namespace does not exist.",
-					"statuses": []
-				},
-				{
-					"code": "not_leader",
-					"message": "Attempting to run operation in non-leader datacenter.",
 					"statuses": []
 				}
 			]
@@ -1215,68 +783,28 @@
 			]
 		},
 		{
-			"name": "pegboard",
+			"name": "pool",
 			"description": null,
 			"errors": [
 				{
-					"code": "route_auth_check_timeout",
-					"message": "Timed out checking actor route authorization.",
-					"statuses": [
-						{
-							"status": 504,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
+					"code": "invalid",
+					"message": "Node pool configuration is invalid.",
+					"statuses": []
 				},
 				{
-					"code": "route_fetch_actor_timeout",
-					"message": "Timed out fetching actor routing state.",
-					"statuses": [
-						{
-							"status": 504,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
+					"code": "nodes_connected",
+					"message": "The node pool still has connected nodes.",
+					"statuses": []
 				},
 				{
-					"code": "route_resolve_query_timeout",
-					"message": "Timed out resolving actor query route.",
-					"statuses": [
-						{
-							"status": 504,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
+					"code": "not_found",
+					"message": "The node pool does not exist.",
+					"statuses": []
 				},
 				{
-					"code": "route_subscribe_timeout",
-					"message": "Timed out subscribing to actor routing events.",
-					"statuses": [
-						{
-							"status": 504,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
-				},
-				{
-					"code": "route_wake_signal_timeout",
-					"message": "Timed out sending actor wake signal.",
-					"statuses": [
-						{
-							"status": 504,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
+					"code": "serverless_unsupported",
+					"message": "Serverless node pools are not supported.",
+					"statuses": []
 				}
 			]
 		},
@@ -1447,12 +975,12 @@
 			]
 		},
 		{
-			"name": "runner_config",
+			"name": "runner_pool",
 			"description": null,
 			"errors": [
 				{
 					"code": "invalid",
-					"message": "Invalid runner config.",
+					"message": "Invalid runner pool.",
 					"statuses": []
 				},
 				{
@@ -1466,11 +994,6 @@
 			"name": "serverless_runner_pool",
 			"description": null,
 			"errors": [
-				{
-					"code": "failed_to_fetch_metadata",
-					"message": "Failed to fetch serverless metadata: {reason}.",
-					"statuses": []
-				},
 				{
 					"code": "not_found",
 					"message": "No serverless pool for this runner exists.",
@@ -1490,6 +1013,11 @@
 				{
 					"code": "invalid_bind_parameter",
 					"message": "Invalid SQLite bind parameter.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_compile_options",
+					"message": "SQLite requires SQLITE_ENABLE_BATCH_ATOMIC_WRITE and SQLITE_DIRECT_OVERFLOW_READ=0. Rebuild with LIBSQLITE3_FLAGS=\"SQLITE_ENABLE_BATCH_ATOMIC_WRITE SQLITE_DIRECT_OVERFLOW_READ=0\".",
 					"statuses": []
 				},
 				{
@@ -1525,17 +1053,93 @@
 			]
 		},
 		{
+			"name": "topology",
+			"description": null,
+			"errors": [
+				{
+					"code": "unsupported_version",
+					"message": "The peer does not read any version of this family that this binary writes.",
+					"statuses": []
+				},
+				{
+					"code": "version_unavailable",
+					"message": "No version of this family is both readable by every storage worker and writable here.",
+					"statuses": []
+				},
+				{
+					"code": "version_unknown",
+					"message": "The storage workers that read persisted data are unknown.",
+					"statuses": []
+				}
+			]
+		},
+		{
 			"name": "ups",
 			"description": null,
 			"errors": [
 				{
-					"code": "publish_failed",
-					"message": "Failed to publish message after retries",
+					"code": "consumer_closed",
+					"message": "The consumer closed without replying; the operation may have executed.",
 					"statuses": []
 				},
 				{
-					"code": "request_timeout",
-					"message": "Request timeout.",
+					"code": "dispatch_rejected",
+					"message": "The caller revoked the request before dispatch.",
+					"statuses": []
+				},
+				{
+					"code": "endpoint_unresolved",
+					"message": "The worker's endpoint could not be resolved; the request was not sent.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_message",
+					"message": "The message exceeds the limit or has an invalid subject.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_stream",
+					"message": "The packet stream is malformed or ended without a terminal frame.",
+					"statuses": []
+				},
+				{
+					"code": "no_responders",
+					"message": "The worker has no consumer for this subject.",
+					"statuses": []
+				},
+				{
+					"code": "overloaded",
+					"message": "UPS capacity is full; the operation was not admitted.",
+					"statuses": []
+				},
+				{
+					"code": "subscription_exists",
+					"message": "This worker already has a consumer for the subject.",
+					"statuses": []
+				},
+				{
+					"code": "timeout",
+					"message": "The operation deadline expired; it may still have completed.",
+					"statuses": []
+				},
+				{
+					"code": "transport",
+					"message": "Worker transport failed; the operation may have executed.",
+					"statuses": []
+				},
+				{
+					"code": "unexpected_packet",
+					"message": "Expected exactly one packet followed by the end of the stream.",
+					"statuses": []
+				},
+				{
+					"code": "unknown_worker",
+					"message": "The worker is not in current membership.",
+					"statuses": []
+				},
+				{
+					"code": "wrong_worker",
+					"message": "The target worker incarnation has changed.",
 					"statuses": []
 				}
 			]
@@ -1551,22 +1155,7 @@
 			"errors": [
 				{
 					"code": "invalid_input",
-					"message": "Invalid input provided",
-					"statuses": []
-				},
-				{
-					"code": "no_keys",
-					"message": "No keys provided. At least one key is required.",
-					"statuses": []
-				},
-				{
-					"code": "race_condition",
-					"message": "Race condition detected",
-					"statuses": []
-				},
-				{
-					"code": "too_many_actor_ids",
-					"message": "Too many actor IDs provided",
+					"message": "Invalid input.",
 					"statuses": []
 				}
 			]
@@ -1602,48 +1191,13 @@
 					"statuses": []
 				},
 				{
-					"code": "going_away",
-					"message": "The Rivet Engine is migrating. The websocket should attempt to reconnect as soon as possible.",
-					"statuses": []
-				},
-				{
-					"code": "invalid_initial_packet",
-					"message": "The websocket could not process the initial packet.",
-					"statuses": []
-				},
-				{
-					"code": "invalid_packet",
-					"message": "The websocket could not process the given packet.",
-					"statuses": []
-				},
-				{
 					"code": "invalid_request",
 					"message": "The websocket could not open due to an invalid request.",
 					"statuses": []
 				},
 				{
-					"code": "invalid_url",
-					"message": "The connection URL is invalid.",
-					"statuses": []
-				},
-				{
-					"code": "no_runner_config",
-					"message": "Must create a runner config before connecting an envoy with pool name {pool_name:?}.",
-					"statuses": []
-				},
-				{
-					"code": "registration_expired",
-					"message": "The envoy registration expired while its connection was still active. The websocket should reconnect.",
-					"statuses": []
-				},
-				{
 					"code": "timed_out",
 					"message": "Ping timed out.",
-					"statuses": []
-				},
-				{
-					"code": "timed_out_waiting_for_init",
-					"message": "Timed out waiting for the init packet to be sent.",
 					"statuses": []
 				}
 			]

@@ -29,11 +29,11 @@ pub enum Namespace {
 }
 
 #[derive(RivetError, Debug, Deserialize, Serialize)]
-#[error("runner_config")]
-pub enum RunnerConfig {
-	#[error("invalid", "Invalid runner config.", "Invalid runner config: {reason}")]
+#[error("runner_pool")]
+pub enum EnvoyPool {
+	#[error("invalid", "Invalid runner pool.", "Invalid runner pool: {reason}")]
 	Invalid { reason: String },
 
-	#[error("not_found", "No config for this runner exists.")]
+	#[error("not_found", "No pool for this runner exists.")]
 	NotFound,
 }

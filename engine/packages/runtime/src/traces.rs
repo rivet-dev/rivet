@@ -59,7 +59,7 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 	let registry = registry
 		.with(reload_layer)
 		.with(otel_trace_layer)
-		.with(sentry::integrations::tracing::layer())
+		.with(sentry_layer())
 		.with(SentryOtelLayer);
 
 	// Check if tokio console is enabled
@@ -109,6 +109,16 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 		.init()
 }
 
+/// Reports error events to sentry and records warnings and infos as breadcrumbs, but builds no
+/// sentry spans. Request paths open spans on every call, and turning each into a sentry span
+/// costs far more than the span itself; traces come from the OTel layer instead.
+pub fn sentry_layer<S>() -> sentry::integrations::tracing::SentryLayer<S>
+where
+	S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+	sentry::integrations::tracing::layer().span_filter(|_| false)
+}
+
 /// Replaces sentry's trace id with otel's trace id
 struct SentryOtelLayer;
 
@@ -154,11 +164,10 @@ fn build_filter_from_spec(filter_spec: &str) -> anyhow::Result<EnvFilter> {
 		// Default filter
 		.add_directive("info".parse()?)
 		// Disable verbose logs
-		.add_directive("tokio_cron_scheduler=warn".parse()?)
-		.add_directive("async_nats=warn".parse()?)
 		.add_directive("tokio=warn".parse()?)
 		.add_directive("hyper=warn".parse()?)
-		.add_directive("h2=warn".parse()?);
+		.add_directive("h2=warn".parse()?)
+		.add_directive("slatedb=warn".parse()?);
 
 	// Add user-provided directives
 	for s in filter_spec.split(',').filter(|x| !x.is_empty()) {

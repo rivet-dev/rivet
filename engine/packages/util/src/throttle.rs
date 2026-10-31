@@ -1,110 +1,93 @@
-use rand::Rng;
 use tokio::time::{Duration, Instant};
 
+/// Compatibility adapters for dormant Engine workflows.
+pub mod legacy;
+
+/// Backoff driven by caller-owned time and operational randomness.
+/// The first tick is immediate; subsequent ticks retain the scheduled cadence.
 pub struct Backoff {
-	/// Maximum exponent for the backoff.
+	clock: std::sync::Arc<dyn rivet_env::Clock>,
+	rng: rivet_env::RngStream,
 	max_exponent: usize,
-
-	/// Maximum amount of retries.
 	max_retries: Option<usize>,
-
-	/// Base wait time in ms.
 	wait: usize,
-
-	/// Maximum randomness.
 	randomness: usize,
-
-	/// Iteration of the backoff.
 	i: usize,
-
-	/// Timestamp to sleep until in ms.
-	sleep_until: Instant,
+	next: u64,
 }
 
 impl Backoff {
 	pub fn new(
+		clock: std::sync::Arc<dyn rivet_env::Clock>,
+		rng: rivet_env::RngStream,
 		max_exponent: usize,
 		max_retries: Option<usize>,
 		wait: usize,
 		randomness: usize,
-	) -> Backoff {
-		Backoff {
+	) -> Result<Backoff, rivet_env::ClockError> {
+		let next = clock.observe()?.boot_ms;
+		Ok(Backoff {
+			clock,
+			rng,
 			max_exponent,
 			max_retries,
 			wait,
 			randomness,
 			i: 0,
-			sleep_until: Instant::now(),
-		}
+			next,
+		})
+	}
+}
+
+impl Backoff {
+	pub fn at(mut self, index: usize) -> Self {
+		self.i = index;
+		self
 	}
 
-	pub fn new_at(
-		max_exponent: usize,
-		max_retries: Option<usize>,
-		wait: usize,
-		randomness: usize,
-		i: usize,
-	) -> Backoff {
-		Backoff {
-			max_exponent,
-			max_retries,
-			wait,
-			randomness,
-			i,
-			sleep_until: Instant::now(),
+	pub fn step(&mut self) -> Result<Option<u64>, rivet_env::ClockError> {
+		if self.max_retries.is_some_and(|max| self.i > max) {
+			return Ok(None);
 		}
+		let base = self.current_duration()?;
+		let jitter = if self.randomness == 0 {
+			0
+		} else {
+			self.rng.gen_range(0..self.randomness) as u64
+		};
+		self.next = self
+			.next
+			.checked_add(base)
+			.and_then(|next| next.checked_add(jitter))
+			.ok_or(rivet_env::ClockError::Overflow)?;
+		self.i = self
+			.i
+			.checked_add(1)
+			.ok_or(rivet_env::ClockError::Overflow)?;
+		Ok(Some(self.next))
 	}
 
 	pub fn tick_index(&self) -> usize {
 		self.i
 	}
 
-	/// Waits for the next backoff tick.
-	///
-	/// Returns false if the index is greater than `max_retries`.
-	pub async fn tick(&mut self) -> bool {
-		if self.max_retries.map_or(false, |x| self.i > x) {
-			return false;
+	pub fn current_duration(&self) -> Result<u64, rivet_env::ClockError> {
+		let exponent = u32::try_from(self.i.min(self.max_exponent))
+			.map_err(|_| rivet_env::ClockError::Overflow)?;
+		let base = 1u64
+			.checked_shl(exponent)
+			.and_then(|factor| factor.checked_mul(self.wait as u64))
+			.ok_or(rivet_env::ClockError::Overflow)?;
+		Ok(base)
+	}
+
+	pub async fn tick(&mut self) -> Result<bool, rivet_env::ClockError> {
+		if self.max_retries.is_some_and(|max| self.i > max) {
+			return Ok(false);
 		}
-
-		tokio::time::sleep_until(self.sleep_until).await;
-
-		let next_wait = self.current_duration() + rand::thread_rng().gen_range(0..self.randomness);
-		self.sleep_until += Duration::from_millis(next_wait as u64);
-
-		self.i += 1;
-
-		true
-	}
-
-	/// Returns the instant of the next backoff tick. Does not wait.
-	///
-	/// Returns None if the index is greater than `max_retries`.
-	pub fn step(&mut self) -> Option<Instant> {
-		if self.max_retries.map_or(false, |x| self.i > x) {
-			return None;
-		}
-
-		let next_wait = self.current_duration() + rand::thread_rng().gen_range(0..self.randomness);
-		self.sleep_until += Duration::from_millis(next_wait as u64);
-
-		self.i += 1;
-
-		Some(self.sleep_until)
-	}
-
-	pub fn current_duration(&self) -> usize {
-		self.wait * 2usize.pow(self.i.min(self.max_exponent) as u32)
-	}
-
-	pub fn default_infinite() -> Backoff {
-		Backoff::new(8, None, 1_000, 1_000)
-	}
-}
-
-impl Default for Backoff {
-	fn default() -> Backoff {
-		Backoff::new(5, Some(16), 1_000, 1_000)
+		self.clock.sleep_until(self.next).await?;
+		self.step()?;
+		Ok(true)
 	}
 }
 
@@ -276,8 +259,13 @@ impl RateLimiter {
 					let deficit = 1.0 - *accum_drip;
 					tokio::time::sleep(drip_rate.mul_f32(deficit)).await;
 
-					*last_acquire = Instant::now();
-					*accum_drip = 0.0;
+					let now = Instant::now();
+					// Account for the actual wake time, then debit this acquire's token.
+					*accum_drip += (now - *last_acquire).div_duration_f32(*drip_rate);
+					*last_acquire = now;
+					*requests_remaining =
+						(*accum_drip as u64).min(*requests_limit).saturating_sub(1);
+					*accum_drip = accum_drip.fract();
 				}
 			}
 		}

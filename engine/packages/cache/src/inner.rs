@@ -28,7 +28,7 @@ impl CacheInner {
 	#[tracing::instrument(skip_all)]
 	pub fn from_env(
 		config: &rivet_config::Config,
-		pools: rivet_pools::Pools,
+		pools: rivet_engine_context::EngineContext,
 	) -> Result<Cache, Error> {
 		let ups = pools.ups().ok();
 

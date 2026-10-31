@@ -1,0 +1,24 @@
+---
+source: src/row_codec.rs
+expression: output
+snapshot_kind: text
+---
+(
+    "row with both timestamps",
+    "\0\u{5}\0\u{4}both\0\0\0\0\0\0\0d\u{6}\0\0\0\u{2}L�\u{16}�\0\0\0\0I�\u{2}�\0\0\0\u{5}value",
+    SstRowEntry {
+        key_prefix_len: 5,
+        key_suffix: b"both",
+        seq: 100,
+        expire_ts: Some(
+            9876543210,
+        ),
+        create_ts: Some(
+            1234567890,
+        ),
+        value: Value(
+            b"value",
+        ),
+    },
+    b"test_both",
+)

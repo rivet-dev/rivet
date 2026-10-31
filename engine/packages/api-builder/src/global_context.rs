@@ -6,7 +6,7 @@ use gas::prelude::*;
 pub struct GlobalApiCtx {
 	pub db: gas::prelude::db::DatabaseHandle,
 	pub config: rivet_config::Config,
-	pub pools: rivet_pools::Pools,
+	pub pools: rivet_engine_context::EngineContext,
 	pub cache: rivet_cache::Cache,
 	pub name: &'static str,
 }
@@ -14,7 +14,7 @@ pub struct GlobalApiCtx {
 impl GlobalApiCtx {
 	pub async fn new(
 		config: rivet_config::Config,
-		pools: rivet_pools::Pools,
+		pools: rivet_engine_context::EngineContext,
 		name: &'static str,
 	) -> Result<Self> {
 		let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;

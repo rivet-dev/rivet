@@ -4,7 +4,11 @@
 //! corresponding coverage in `sql_efficiency`. Simple inserts and schema DDL
 //! require correctness or migration coverage instead.
 
-pub(crate) const LOAD_ACTOR_SNAPSHOT_SQL: &str = "SELECT a.has_initialized, a.input, s.state FROM _rivet_actor a JOIN _rivet_actor_state s ON s.id = a.id WHERE a.id = 1";
+/// Everything a start of an existing actor reads before user code, in one statement that
+/// always returns one row: the legacy import marker (first parameter), the actor snapshot
+/// (NULL columns when it has none), the last pushed alarm, the inspector token and the run wake
+/// deadline (second parameter).
+pub(crate) const LOAD_ACTOR_STARTUP_SQL: &str = "SELECT (SELECT value FROM _rivet_meta WHERE key = ?), snap.has_initialized, snap.input, snap.state, (SELECT last_pushed_alarm FROM _rivet_runtime WHERE id = 1), (SELECT inspector_token FROM _rivet_runtime WHERE id = 1), (SELECT value FROM _rivet_meta WHERE key = ?) FROM (SELECT 1) LEFT JOIN (SELECT a.has_initialized, a.input, s.state FROM _rivet_actor a JOIN _rivet_actor_state s ON s.id = a.id WHERE a.id = 1) snap ON 1";
 pub(crate) const UPSERT_ACTOR_SQL: &str = "INSERT INTO _rivet_actor (id, has_initialized, input) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET has_initialized = excluded.has_initialized, input = excluded.input";
 pub(crate) const UPSERT_ACTOR_STATE_SQL: &str = "INSERT INTO _rivet_actor_state (id, state) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET state = excluded.state";
 pub(crate) const LOAD_CONNECTIONS_SQL: &str = "SELECT c.conn_id, c.parameters, s.state, s.subscriptions, c.gateway_id, c.request_id, s.server_message_index, s.client_message_index, c.request_path, c.request_headers FROM _rivet_conns c JOIN _rivet_conn_state s ON s.conn_id = c.conn_id ORDER BY c.conn_id";
@@ -82,9 +86,8 @@ pub(crate) const DELETE_USER_KV_RANGE_SQL: &str =
 pub(crate) const UPSERT_USER_KV_SQL: &str = "INSERT INTO _rivet_user_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
 pub(crate) const UPSERT_WORKFLOW_KV_SQL: &str = "INSERT INTO _rivet_wf_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
 
-pub(crate) const LOAD_LAST_PUSHED_ALARM_SQL: &str =
-	"SELECT last_pushed_alarm FROM _rivet_runtime WHERE id = 1";
-pub(crate) const LOAD_RUN_WAKE_AT_SQL: &str = "SELECT value FROM _rivet_meta WHERE key = ?";
+
+
 pub(crate) const LOAD_INSPECTOR_TOKEN_SQL: &str =
 	"SELECT inspector_token FROM _rivet_runtime WHERE id = 1";
 pub(crate) const UPSERT_QUEUE_NEXT_ID_SQL: &str = "INSERT INTO _rivet_runtime (id, last_pushed_alarm, inspector_token, queue_next_id) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET queue_next_id = excluded.queue_next_id";

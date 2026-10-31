@@ -41,46 +41,49 @@ pub(super) fn encode_actor_connect_message(message: &ActorConnectToClient) -> Re
 	let body = match message {
 		ActorConnectToClient::Init(payload) => {
 			client_protocol::ToClientBody::Init(client_protocol::Init {
-				actor_id: payload.actor_id.clone(),
-				connection_id: payload.connection_id.clone(),
+				actor_id: payload.actor_id.clone().into(),
+				connection_id: payload.connection_id.clone().into(),
 			})
 		}
 		ActorConnectToClient::Error(payload) => {
 			client_protocol::ToClientBody::Error(client_protocol::Error {
-				group: payload.group.clone(),
-				code: payload.code.clone(),
-				message: payload.message.clone(),
-				metadata: payload
+				group: payload.group.clone().into(),
+				code: payload.code.clone().into(),
+				message: payload.message.clone().into(),
+				metadata: (payload
 					.metadata
 					.as_ref()
-					.map(|metadata| metadata.as_ref().to_vec()),
-				action_id: payload.action_id.map(serde_bare::Uint),
+					.map(|metadata| metadata.as_ref().to_vec()))
+				.map(Into::into),
+				action_id: payload.action_id,
 				actor: payload
 					.actor
 					.as_ref()
 					.map(|actor| client_protocol::ActorSpecifier {
-						actor_id: actor.actor_id.clone(),
-						generation: serde_bare::Uint(actor.generation),
-						key: actor.key.clone(),
+						actor_id: actor.actor_id.clone().into(),
+						generation: actor.generation,
+						key: actor.key.clone().map(Into::into),
 					}),
 			})
 		}
 		ActorConnectToClient::ActionResponse(payload) => {
 			client_protocol::ToClientBody::ActionResponse(client_protocol::ActionResponse {
-				id: serde_bare::Uint(payload.id),
-				output: payload.output.as_ref().to_vec(),
+				id: payload.id,
+				output: payload.output.as_ref().to_vec().into(),
 			})
 		}
 		ActorConnectToClient::Event(payload) => {
 			client_protocol::ToClientBody::Event(client_protocol::Event {
-				name: payload.name.clone(),
-				args: payload.args.as_ref().to_vec(),
+				name: payload.name.clone().into(),
+				args: payload.args.as_ref().to_vec().into(),
 			})
 		}
 	};
 
-	client_protocol::versioned::ToClient::wrap_latest(client_protocol::ToClient { body })
-		.serialize_with_embedded_version(client_protocol::PROTOCOL_VERSION)
+	client_protocol::versioned::ToClient::serialize_with_embedded_version(
+		&client_protocol::ToClient { body },
+		client_protocol::PROTOCOL_VERSION,
+	)
 }
 
 pub(super) fn encode_actor_connect_message_json(message: &ActorConnectToClient) -> Result<String> {
@@ -383,7 +386,7 @@ pub(super) fn encode_actor_connect_message_cbor_manual(
 
 pub(super) fn decode_actor_connect_message_bare(payload: &[u8]) -> Result<ActorConnectToServer> {
 	let message =
-		<client_protocol::versioned::ToServer as OwnedVersionedData>::deserialize_with_embedded_version(
+		<client_protocol::versioned::ToServer as Versioned>::deserialize_with_embedded_version(
 			payload,
 		)
 		.context("decode actor websocket bare request")?;
@@ -391,14 +394,14 @@ pub(super) fn decode_actor_connect_message_bare(payload: &[u8]) -> Result<ActorC
 	match message.body {
 		client_protocol::ToServerBody::ActionRequest(request) => Ok(
 			ActorConnectToServer::ActionRequest(ActorConnectActionRequest {
-				id: request.id.0,
-				name: request.name,
+				id: request.id,
+				name: request.name.to_string(),
 				args: ByteBuf::from(request.args),
 			}),
 		),
 		client_protocol::ToServerBody::SubscriptionRequest(request) => Ok(
 			ActorConnectToServer::SubscriptionRequest(ActorConnectSubscriptionRequest {
-				event_name: request.event_name,
+				event_name: request.event_name.to_string(),
 				subscribe: request.subscribe,
 			}),
 		),

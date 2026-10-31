@@ -1,5 +1,0 @@
-{
-  "code": "tunnel_response_closed",
-  "group": "guard",
-  "message": "Actor tunnel closed before sending a response."
-}

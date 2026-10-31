@@ -1,19 +1,14 @@
-function ensureRivetEnvoyVersion(): void {
-	if (process.env.RIVET_ENVOY_VERSION) return;
-
-	if (process.env.RIVET_RUNNER_VERSION) {
-		process.env.RIVET_ENVOY_VERSION = process.env.RIVET_RUNNER_VERSION;
-		return;
-	}
+function ensureRivetNodeVersion(): void {
+	if (process.env.RIVET_NODE_VERSION) return;
 
 	const sha = process.env.RENDER_GIT_COMMIT;
 	if (sha && /^[0-9a-f]{7,40}$/i.test(sha)) {
 		const n = Number.parseInt(sha.slice(0, 8), 16);
-		process.env.RIVET_ENVOY_VERSION = String(n > 0 ? n : 1);
+		process.env.RIVET_NODE_VERSION = String(n > 0 ? n : 1);
 	}
 }
 
-ensureRivetEnvoyVersion();
+ensureRivetNodeVersion();
 
 export const port = Number(process.env.PORT) || 6420;
 

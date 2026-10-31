@@ -3,8 +3,7 @@ use rivet_envoy_client::async_counter::AsyncCounter;
 use rivet_envoy_client::handle::EnvoyHandle;
 use std::future::Future;
 use std::sync::Arc;
-#[cfg(test)]
-use std::sync::atomic::AtomicUsize as TestAtomicUsize;
+
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[cfg(not(feature = "wasm-runtime"))]
 use tokio::runtime::Handle;
@@ -24,11 +23,9 @@ use crate::actor::work_registry::LocalShutdownTask;
 use crate::actor::work_registry::{ActorWorkKind, CountGuard, RegionGuard, WorkRegistry};
 #[cfg(feature = "wasm-runtime")]
 use crate::runtime::RuntimeSpawner;
-#[cfg(test)]
-use crate::time::sleep_until;
+
 use crate::time::{Instant, sleep};
-#[cfg(test)]
-use crate::types::ActorKey;
+
 #[cfg(feature = "wasm-runtime")]
 use futures::channel::oneshot as futures_oneshot;
 #[cfg(feature = "wasm-runtime")]
@@ -51,10 +48,8 @@ pub(crate) struct SleepState {
 	// sent to the envoy. Its presence is what makes the intent a sleep rather
 	// than a destroy.
 	pub(super) stop_error: Mutex<Option<String>>,
-	#[cfg(test)]
-	sleep_request_count: TestAtomicUsize,
-	#[cfg(test)]
-	destroy_request_count: TestAtomicUsize,
+	
+	
 	pub(super) lifecycle_started: AtomicBool,
 	pub(super) run_handler_active_count: AtomicUsize,
 	// Forced-sync: the compatibility sleep timer is aborted from sync paths.
@@ -84,10 +79,8 @@ impl SleepState {
 			generation: Mutex::new(None),
 			http_request_counter: Mutex::new(None),
 			stop_error: Mutex::new(None),
-			#[cfg(test)]
-			sleep_request_count: TestAtomicUsize::new(0),
-			#[cfg(test)]
-			destroy_request_count: TestAtomicUsize::new(0),
+			
+			
 			lifecycle_started: AtomicBool::new(false),
 			run_handler_active_count: AtomicUsize::new(0),
 			sleep_timer: Mutex::new(None),
@@ -131,10 +124,7 @@ impl std::fmt::Debug for SleepState {
 }
 
 impl ActorContext {
-	#[cfg(test)]
-	pub(crate) fn new_for_sleep_tests(actor_id: impl Into<String>) -> Self {
-		Self::new(actor_id, "sleep-test", ActorKey::default(), "local")
-	}
+	
 
 	pub(crate) fn configure_sleep_state(&self, config: ActorConfig) {
 		*self.0.sleep.config.lock() = config;
@@ -143,8 +133,11 @@ impl ActorContext {
 	pub(crate) fn configure_sleep_envoy(&self, envoy_handle: EnvoyHandle, generation: Option<u32>) {
 		*self.0.sleep.envoy_handle.lock() = Some(envoy_handle);
 		*self.0.sleep.generation.lock() = generation;
-		*self.0.sleep.http_request_counter.lock() =
-			self.lookup_http_request_counter(self.actor_id());
+		let counter = self.lookup_http_request_counter(self.actor_id());
+		if let Some(counter) = &counter {
+			self.observe_http_request_counter(counter);
+		}
+		*self.0.sleep.http_request_counter.lock() = counter;
 	}
 
 	pub(crate) fn sleep_envoy_handle(&self) -> Option<EnvoyHandle> {
@@ -156,11 +149,7 @@ impl ActorContext {
 	}
 
 	pub(crate) fn request_sleep_from_envoy(&self) {
-		#[cfg(test)]
-		self.0
-			.sleep
-			.sleep_request_count
-			.fetch_add(1, Ordering::SeqCst);
+		
 		let envoy_handle = self.0.sleep.envoy_handle.lock().clone();
 		let generation = *self.0.sleep.generation.lock();
 		if let Some(envoy_handle) = envoy_handle {
@@ -169,11 +158,7 @@ impl ActorContext {
 	}
 
 	pub(crate) fn request_stop_from_envoy(&self) {
-		#[cfg(test)]
-		self.0
-			.sleep
-			.destroy_request_count
-			.fetch_add(1, Ordering::SeqCst);
+		
 		let envoy_handle = self.0.sleep.envoy_handle.lock().clone();
 		let generation = *self.0.sleep.generation.lock();
 		let error = self.0.sleep.stop_error.lock().take();
@@ -220,7 +205,7 @@ impl ActorContext {
 
 	#[doc(hidden)]
 	pub fn end_run_handler(&self) {
-		match self.0.sleep.run_handler_active_count.fetch_update(
+		match self.0.sleep.run_handler_active_count.try_update(
 			Ordering::SeqCst,
 			Ordering::SeqCst,
 			|count| count.checked_sub(1),
@@ -241,10 +226,7 @@ impl ActorContext {
 		self.0.sleep.run_handler_active_count.load(Ordering::SeqCst) > 0
 	}
 
-	#[cfg(test)]
-	pub(crate) fn sleep_request_count(&self) -> usize {
-		self.0.sleep.sleep_request_count.load(Ordering::SeqCst)
-	}
+	
 
 	pub(crate) async fn can_arm_sleep_timer(&self) -> CanSleep {
 		let config = self.sleep_state_config();
@@ -382,59 +364,9 @@ impl ActorContext {
 			.await
 	}
 
-	#[cfg(test)]
-	pub(crate) async fn wait_for_sleep_idle_window(&self, deadline: Instant) -> bool {
-		loop {
-			let activity = self.sleep_activity_notify();
-			let activity_notified = activity.notified();
-			tokio::pin!(activity_notified);
-			activity_notified.as_mut().enable();
-			let idle = self.0.sleep.work.idle_notify.notified();
-			tokio::pin!(idle);
-			idle.as_mut().enable();
+	
 
-			if self.can_finalize_shutdown(ShutdownKind::Sleep) {
-				return true;
-			}
-
-			tokio::select! {
-				_ = &mut activity_notified => {}
-				_ = &mut idle => {}
-				_ = sleep_until(deadline) => return false,
-			}
-		}
-	}
-
-	#[cfg(test)]
-	pub(crate) async fn wait_for_shutdown_tasks(&self, deadline: Instant) -> bool {
-		loop {
-			let activity = self.sleep_activity_notify();
-			let notified = activity.notified();
-			tokio::pin!(notified);
-			notified.as_mut().enable();
-
-			let shutdown_count = self.shutdown_task_count();
-			let websocket_count = self.websocket_callback_count();
-			if shutdown_count == 0 && websocket_count == 0 {
-				return true;
-			}
-
-			tokio::select! {
-				drained = self.0.sleep.work.shutdown_counter.wait_zero(deadline), if shutdown_count > 0 => {
-					if !drained {
-						return false;
-					}
-				}
-				drained = self.0.sleep.work.websocket_callback.wait_zero(deadline), if websocket_count > 0 => {
-					if !drained {
-						return false;
-					}
-				}
-				_ = &mut notified => {}
-				_ = sleep_until(deadline) => return false,
-			}
-		}
-	}
+	
 
 	pub async fn wait_for_tracked_shutdown_work(&self) -> bool {
 		let shutdown_deadline = self.shutdown_deadline_token();
@@ -888,7 +820,18 @@ impl ActorContext {
 		}
 
 		let counter = self.lookup_http_request_counter(self.actor_id())?;
-		*self.0.sleep.http_request_counter.lock() = Some(counter.clone());
+
+		// Concurrent cache misses can both find the counter. Only the call that
+		// installs it registers observers, so callbacks are not duplicated.
+		{
+			let mut cached = self.0.sleep.http_request_counter.lock();
+			if let Some(existing) = cached.as_ref() {
+				return Some(existing.clone());
+			}
+			*cached = Some(counter.clone());
+		}
+
+		self.observe_http_request_counter(&counter);
 		Some(counter)
 	}
 
@@ -896,25 +839,33 @@ impl ActorContext {
 		let envoy_handle = self.0.sleep.envoy_handle.lock().clone();
 		let generation = *self.0.sleep.generation.lock();
 		let envoy_handle = envoy_handle?;
-		let counter = envoy_handle.http_request_counter(actor_id, generation)?;
+		envoy_handle.http_request_counter(actor_id, generation)
+	}
+
+	/// Hooks this context into an envoy-owned HTTP request counter.
+	///
+	/// The counter can only push registrations, and the context caches the
+	/// counter, so the change callback holds a weak reference. A strong one
+	/// would form a cycle that keeps the context alive after the actor stops.
+	fn observe_http_request_counter(&self, counter: &AsyncCounter) {
 		counter.register_zero_notify(&self.0.sleep.work.idle_notify);
 		// The HTTP counter is owned by envoy-client, so neither increment nor
 		// decrement goes through a rivetkit-core guard. Hook every transition
 		// into the sleep activity notify so the sleep deadline gets
 		// re-evaluated when a request starts or completes.
-		let ctx = self.clone();
+		let weak_ctx = self.downgrade();
 		counter.register_change_callback(Arc::new(move || {
+			let Some(ctx) = ActorContext::from_weak(&weak_ctx) else {
+				return;
+			};
 			ctx.0
 				.metrics
 				.set_http_requests_active(ctx.active_http_request_count());
 			ctx.reset_sleep_timer();
 		}));
 		self.0.metrics.set_http_requests_active(counter.load());
-		Some(counter)
 	}
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/sleep.rs"]
-mod tests;
+

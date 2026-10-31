@@ -1,0 +1,172 @@
+[package]
+name = "slatedb"
+description = "A cloud native embedded storage engine built on object storage."
+readme = "../README.md"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+homepage.workspace = true
+
+[dependencies]
+async-channel = { workspace = true }
+async-trait = { workspace = true }
+atomic = { workspace = true }
+backon = { workspace = true }
+bitflags = { workspace = true }
+bytes = { workspace = true, features = ["serde"] }
+chrono = { workspace = true, features = ["serde"] }
+sysinfo = { workspace = true }
+crc32fast = { workspace = true }
+crossbeam-skiplist = { workspace = true }
+dotenvy = { workspace = true }
+duration-str = { workspace = true, features = [
+    "serde",
+    "time",
+], default-features = false }
+fail-parallel = { workspace = true }
+figment = { workspace = true, features = ["env", "json", "toml", "yaml"] }
+flate2 = { workspace = true, optional = true }
+flatbuffers = { workspace = true }
+foyer = { workspace = true, features = ["serde"], optional = true }
+futures = { workspace = true }
+log = { workspace = true }
+lru = { workspace = true }
+lz4_flex = { workspace = true, optional = true }
+moka = { workspace = true, features = ["future"], optional = true }
+object_store = { workspace = true }
+ouroboros = { workspace = true }
+parking_lot = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true, features = ["derive", "rc"] }
+serde_json = { workspace = true }
+siphasher = { workspace = true }
+smallvec = { workspace = true }
+slatedb-common = { workspace = true, features = ["serde"] }
+slatedb-txn-obj = { workspace = true }
+snap = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [
+    "fs",
+    "macros",
+    "sync",
+    "rt",
+    "rt-multi-thread",
+    "signal",
+] }
+tracing = { workspace = true, features = ["log"] }
+ulid = { workspace = true, features = ["serde"] }
+uuid = { workspace = true, features = ["v4", "serde"] }
+walkdir = { workspace = true }
+zstd = { workspace = true, optional = true }
+tokio-util = { workspace = true, default-features = false, features = [
+    "rt",
+    "join-map",
+] }
+url = "2.5.4"
+
+[dev-dependencies]
+backtrace = "0.3"
+bincode = { workspace = true }
+criterion = { workspace = true, features = ["async_tokio", "html_reports"] }
+ctor = { workspace = true }
+fail-parallel = { workspace = true, features = ["failpoints"] }
+figment = { workspace = true, features = ["test"] }
+filetime = { workspace = true }
+insta = { workspace = true }
+parking_lot = { workspace = true, features = ["deadlock_detection"] }
+proptest = { workspace = true }
+rstest = { workspace = true }
+slatedb-common = { workspace = true, features = ["serde", "test-util"] }
+slatedb-txn-obj = { workspace = true, features = ["test-util"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio-test = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
+
+# our microbenchmarks use pprof, but it doesn't work on windows
+[target.'cfg(not(windows))'.dev-dependencies]
+pprof = { workspace = true, features = ["criterion", "protobuf-codec"] }
+
+[features]
+default = ["aws", "foyer"]
+aws = ["object_store/aws"]
+azure = ["object_store/azure"]
+bencher = ["aws", "azure", "wal_disable", "foyer"]
+compression = ["snappy"]
+gcp = ["object_store/gcp"]
+snappy = ["dep:snap"]
+zlib = ["dep:flate2"]
+lz4 = ["dep:lz4_flex"]
+zstd = ["dep:zstd"]
+wal_disable = []
+moka = ["dep:moka"]
+foyer = ["dep:foyer"]
+bench-internal = []
+test-util = [
+    "tokio/test-util",
+    "slatedb-common/test-util",
+    "slatedb-txn-obj/test-util",
+]
+all = [
+    "aws",
+    "azure",
+    "compression",
+    "gcp",
+    "snappy",
+    "zlib",
+    "lz4",
+    "zstd",
+    "wal_disable",
+    "foyer",
+    "moka",
+    "test-util",
+]
+# Enable compaction filters API.
+# Compaction filters allow user-provided logic to inspect, drop, modify, or convert
+# entries to tombstones during compaction.
+#
+# WARNING: When this feature is enabled AND a CompactionFilterSupplier is configured,
+# snapshot consistency may be affected. Filters may modify or drop entries that active
+# snapshots expect to see, causing snapshot reads to return unexpected results.
+# Users who need consistent snapshots should carefully consider their filter logic.
+compaction_filters = []
+
+[lib]
+# Disable `libtest` harness because it fights with Criterion's `--output-format bencher`
+# See https://bheisler.github.io/criterion.rs/book/faq.html
+bench = false
+
+[[bench]]
+name = "db_operations"
+harness = false
+
+[[bench]]
+name = "scan_prefix_bench"
+harness = false
+required-features = ["foyer"]
+
+[[bench]]
+name = "scan_prefix_large_sorted_run_bench"
+harness = false
+
+[[bench]]
+name = "block_iterator_v2"
+harness = false
+required-features = ["bench-internal"]
+
+[[bench]]
+name = "write_batch"
+harness = false
+required-features = ["bench-internal"]
+
+[[bench]]
+name = "db_transaction"
+harness = false
+
+[lints]
+workspace = true
+
+[[test]]
+name = "foyer_cache_flush"
+required-features = ["foyer"]

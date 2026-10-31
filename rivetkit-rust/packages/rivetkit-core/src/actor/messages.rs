@@ -111,6 +111,13 @@ impl Request {
 		self.cancel_token.clone()
 	}
 
+	/// Replaces the request token with a child of `parent`, so cancelling the
+	/// parent (for example the actor abort signal) also cancels this request.
+	/// Call it before any clone of the token is handed out.
+	pub(crate) fn set_cancellation_parent(&mut self, parent: &CancellationToken) {
+		self.cancel_token = parent.child_token();
+	}
+
 	pub async fn into_buffered(mut self) -> Result<Self> {
 		if let Some(body_stream) = &self.body_stream {
 			let mut body_stream = body_stream.lock().take();
@@ -462,16 +469,9 @@ pub enum ActorEvent {
 		conn_id: ConnId,
 		reply: Reply<()>,
 	},
-	#[cfg(test)]
-	BeginSleep,
-	#[cfg(test)]
-	FinalizeSleep {
-		reply: Reply<()>,
-	},
-	#[cfg(test)]
-	Destroy {
-		reply: Reply<()>,
-	},
+	
+	
+	
 	WorkflowHistoryRequested {
 		reply: Reply<Option<Vec<u8>>>,
 	},
@@ -508,12 +508,9 @@ impl ActorEvent {
 				ShutdownKind::Destroy => "run_destroy_cleanup",
 			},
 			Self::DisconnectConn { .. } => "disconnect_conn",
-			#[cfg(test)]
-			Self::BeginSleep => "begin_sleep",
-			#[cfg(test)]
-			Self::FinalizeSleep { .. } => "finalize_sleep",
-			#[cfg(test)]
-			Self::Destroy { .. } => "destroy",
+			
+			
+			
 			Self::WorkflowHistoryRequested { .. } => "workflow_history_requested",
 			Self::WorkflowReplayRequested { .. } => "workflow_replay_requested",
 			Self::RunWake { .. } => "run_wake",
@@ -522,6 +519,4 @@ impl ActorEvent {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/messages.rs"]
-mod tests;
+

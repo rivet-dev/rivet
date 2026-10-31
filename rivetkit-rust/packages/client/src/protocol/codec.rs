@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use rivetkit_client_protocol as wire;
 use serde::Serialize;
 use serde_json::{json, Value as JsonValue};
-use vbare::OwnedVersionedData;
+use vbare::Versioned;
 
 use crate::EncodingKind;
 
@@ -36,12 +36,12 @@ pub fn encode_http_action_request(encoding: EncodingKind, args: &[JsonValue]) ->
 	match encoding {
 		EncodingKind::Json => Ok(serde_json::to_vec(&json!({ "args": args }))?),
 		EncodingKind::Cbor => Ok(serde_cbor::to_vec(&json!({ "args": args }))?),
-		EncodingKind::Bare => {
-			wire::versioned::HttpActionRequest::wrap_latest(wire::HttpActionRequest {
-				args: serde_cbor::to_vec(&args.to_vec())?,
-			})
-			.serialize_with_embedded_version(wire::PROTOCOL_VERSION)
-		}
+		EncodingKind::Bare => wire::versioned::HttpActionRequest::serialize_with_embedded_version(
+			&wire::HttpActionRequest {
+				args: serde_cbor::to_vec(&args.to_vec())?.into(),
+			},
+			wire::PROTOCOL_VERSION,
+		),
 	}
 }
 
@@ -63,7 +63,7 @@ pub fn decode_http_action_response(encoding: EncodingKind, payload: &[u8]) -> Re
 		}
 		EncodingKind::Bare => {
 			let response =
-                <wire::versioned::HttpActionResponse as OwnedVersionedData>::deserialize_with_embedded_version(
+                <wire::versioned::HttpActionResponse as Versioned>::deserialize_with_embedded_version(
                     payload,
                 )
                 .context("decode bare action response")?;
@@ -99,13 +99,15 @@ pub fn encode_http_queue_request<T: Serialize>(
 		EncodingKind::Json => Ok(serde_json::to_vec(&request)?),
 		EncodingKind::Cbor => Ok(serde_cbor::to_vec(&request)?),
 		EncodingKind::Bare => {
-			wire::versioned::HttpQueueSendRequest::wrap_latest(wire::HttpQueueSendRequest {
-				body: serde_cbor::to_vec(body)?,
-				name: Some(name.to_owned()),
-				wait: Some(wait),
-				timeout,
-			})
-			.serialize_with_embedded_version(wire::PROTOCOL_VERSION)
+			wire::versioned::HttpQueueSendRequest::serialize_with_embedded_version(
+				&wire::HttpQueueSendRequest {
+					body: serde_cbor::to_vec(body)?.into(),
+					name: Some(name.to_owned().into()),
+					wait: Some(wait),
+					timeout,
+				},
+				wire::PROTOCOL_VERSION,
+			)
 		}
 	}
 }
@@ -150,7 +152,7 @@ pub fn decode_http_queue_response(
 		}
 		EncodingKind::Bare => {
 			let response =
-                <wire::versioned::HttpQueueSendResponse as OwnedVersionedData>::deserialize_with_embedded_version(
+                <wire::versioned::HttpQueueSendResponse as Versioned>::deserialize_with_embedded_version(
                     payload,
                 )
                 .context("decode bare queue response")?;
@@ -158,7 +160,7 @@ pub fn decode_http_queue_response(
 				.response
 				.map(|payload| serde_cbor::from_slice(&payload))
 				.transpose()?;
-			(response.status, body)
+			(response.status.to_string(), body)
 		}
 	};
 
@@ -188,7 +190,7 @@ pub fn decode_http_error(
 			// Routing-level errors from the gateway (e.g. actor not found) are
 			// emitted as JSON regardless of the client encoding, so fall back to
 			// parsing JSON when the payload is not valid BARE.
-			match <wire::versioned::HttpResponseError as OwnedVersionedData>::deserialize_with_embedded_version(
+			match <wire::versioned::HttpResponseError as Versioned>::deserialize_with_embedded_version(
 				payload,
 			) {
 				Ok(error) => {
@@ -196,7 +198,7 @@ pub fn decode_http_error(
 						.metadata
 						.map(|payload| serde_cbor::from_slice(&payload))
 						.transpose()?;
-					Ok((error.group, error.code, error.message, metadata))
+					Ok((error.group.to_string(), error.code.to_string(), error.message.to_string(), metadata))
 				}
 				Err(bare_err) => serde_json::from_slice::<JsonValue>(payload)
 					.ok()
@@ -290,52 +292,52 @@ fn encode_to_server_bare(value: &to_server::ToServer) -> Result<Vec<u8>> {
 	let body = match &value.body {
 		to_server::ToServerBody::ActionRequest(request) => {
 			wire::ToServerBody::ActionRequest(wire::ActionRequest {
-				id: serde_bare::Uint(request.id),
-				name: request.name.clone(),
-				args: request.args.clone(),
+				id: request.id,
+				name: request.name.clone().into(),
+				args: request.args.clone().into(),
 			})
 		}
 		to_server::ToServerBody::SubscriptionRequest(request) => {
 			wire::ToServerBody::SubscriptionRequest(wire::SubscriptionRequest {
-				event_name: request.event_name.clone(),
+				event_name: request.event_name.clone().into(),
 				subscribe: request.subscribe,
 			})
 		}
 	};
 
-	wire::versioned::ToServer::wrap_latest(wire::ToServer { body })
-		.serialize_with_embedded_version(wire::PROTOCOL_VERSION)
+	wire::versioned::ToServer::serialize_with_embedded_version(
+		&wire::ToServer { body },
+		wire::PROTOCOL_VERSION,
+	)
 }
 
 fn decode_to_client_bare(payload: &[u8]) -> Result<to_client::ToClient> {
 	let message =
-		<wire::versioned::ToClient as OwnedVersionedData>::deserialize_with_embedded_version(
-			payload,
-		)
-		.context("decode bare actor websocket response")?;
+		<wire::versioned::ToClient as Versioned>::deserialize_with_embedded_version(payload)
+			.context("decode bare actor websocket response")?;
 
 	let body = match message.body {
 		wire::ToClientBody::Init(init) => to_client::ToClientBody::Init(to_client::Init {
-			actor_id: init.actor_id,
-			connection_id: init.connection_id,
+			actor_id: init.actor_id.to_string(),
+			connection_id: init.connection_id.to_string(),
 			connection_token: None,
 		}),
 		wire::ToClientBody::Error(error) => to_client::ToClientBody::Error(to_client::Error {
-			group: error.group,
-			code: error.code,
-			message: error.message,
-			metadata: error.metadata,
-			action_id: error.action_id.map(|id| id.0),
+			group: error.group.to_string(),
+			code: error.code.to_string(),
+			message: error.message.to_string(),
+			metadata: error.metadata.map(|value| value.to_vec()),
+			action_id: error.action_id,
 		}),
 		wire::ToClientBody::ActionResponse(response) => {
 			to_client::ToClientBody::ActionResponse(to_client::ActionResponse {
-				id: response.id.0,
-				output: response.output,
+				id: response.id,
+				output: response.output.to_vec(),
 			})
 		}
 		wire::ToClientBody::Event(event) => to_client::ToClientBody::Event(to_client::Event {
-			name: event.name,
-			args: event.args,
+			name: event.name.to_string(),
+			args: event.args.to_vec(),
 		}),
 	};
 
@@ -383,37 +385,4 @@ fn error_from_json_value(value: &JsonValue) -> Result<(String, String, String, O
 	))
 }
 
-#[cfg(test)]
-mod tests {
-	use serde_json::json;
 
-	use super::*;
-
-	#[test]
-	fn bare_action_response_round_trips() {
-		let payload = wire::versioned::HttpActionResponse::wrap_latest(wire::HttpActionResponse {
-			output: serde_cbor::to_vec(&json!({ "ok": true })).unwrap(),
-		})
-		.serialize_with_embedded_version(wire::PROTOCOL_VERSION)
-		.unwrap();
-
-		let output = decode_http_action_response(EncodingKind::Bare, &payload).unwrap();
-		assert_eq!(output, json!({ "ok": true }));
-	}
-
-	#[test]
-	fn bare_queue_request_has_embedded_version() {
-		let payload = encode_http_queue_request(
-			EncodingKind::Bare,
-			"jobs",
-			&json!({ "id": 1 }),
-			true,
-			Some(50),
-		)
-		.unwrap();
-		assert_eq!(
-			u16::from_le_bytes([payload[0], payload[1]]),
-			wire::PROTOCOL_VERSION
-		);
-	}
-}

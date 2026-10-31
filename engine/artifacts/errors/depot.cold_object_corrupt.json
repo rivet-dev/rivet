@@ -1,5 +1,0 @@
-{
-  "code": "cold_object_corrupt",
-  "group": "depot",
-  "message": "SQLite cold object does not match the reference that named it."
-}

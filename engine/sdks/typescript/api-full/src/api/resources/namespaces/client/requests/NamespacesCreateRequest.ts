@@ -5,11 +5,9 @@
 /**
  * @example
  *     {
- *         displayName: "display_name",
  *         name: "name"
  *     }
  */
 export interface NamespacesCreateRequest {
-    displayName: string;
     name: string;
 }

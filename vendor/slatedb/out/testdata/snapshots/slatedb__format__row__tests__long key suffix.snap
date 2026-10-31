@@ -1,0 +1,20 @@
+---
+source: src/row_codec.rs
+expression: output
+snapshot_kind: text
+---
+(
+    "long key suffix",
+    "\0\u{2}\0dkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\0\0\0\0\0\0\0\u{1}\0\0\0\0\u{5}value",
+    SstRowEntry {
+        key_prefix_len: 2,
+        key_suffix: b"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+        seq: 1,
+        expire_ts: None,
+        create_ts: None,
+        value: Value(
+            b"value",
+        ),
+    },
+    b"lokkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+)

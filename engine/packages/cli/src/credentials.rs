@@ -1,44 +1,63 @@
-use std::{env, fs, path::PathBuf};
+use std::{collections::BTreeMap, fs, path::PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct Credentials {
+	/// Always serialized, even when empty, because older CLI versions require
+	/// the field to parse the file.
+	#[serde(default)]
 	pub rivet_cloud_token: String,
+	/// Login sessions keyed by Cloud API endpoint.
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	pub sessions: BTreeMap<String, Session>,
 }
 
-/// Resolves the Rivet Cloud token from, in order: the flag, the
-/// `RIVET_CLOUD_TOKEN` env var, then `~/.rivet/credentials`.
-pub fn resolve_token(flag: Option<&str>) -> Result<String> {
-	if let Some(token) = flag {
-		return Ok(token.to_string());
-	}
-	if let Ok(token) = env::var("RIVET_CLOUD_TOKEN") {
-		if !token.trim().is_empty() {
-			return Ok(token);
-		}
-	}
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Session {
+	pub access_token: String,
+	pub refresh_token: String,
+	/// Access token expiry as epoch milliseconds.
+	pub expires_at: i64,
+	pub user: SessionUser,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SessionUser {
+	pub id: String,
+	pub email: String,
+	#[serde(default)]
+	pub name: String,
+}
+
+pub fn session_key(cloud_api: &str) -> String {
+	cloud_api.trim_end_matches('/').to_string()
+}
+
+pub fn read_credentials() -> Result<Credentials> {
 	let path = credentials_path()?;
-	if path.exists() {
-		let credentials: Credentials = serde_json::from_str(&fs::read_to_string(&path)?)?;
-		if !credentials.rivet_cloud_token.trim().is_empty() {
-			return Ok(credentials.rivet_cloud_token);
-		}
+	if !path.exists() {
+		return Ok(Credentials::default());
 	}
-	bail!("missing Rivet Cloud token; pass --token or set RIVET_CLOUD_TOKEN")
+	serde_json::from_str(&fs::read_to_string(&path)?)
+		.with_context(|| format!("parse {}", path.display()))
 }
 
-pub fn write_credentials(token: &str) -> Result<()> {
+pub fn write_credentials(credentials: &Credentials) -> Result<()> {
 	let path = credentials_path()?;
 	if let Some(parent) = path.parent() {
 		fs::create_dir_all(parent)?;
 	}
-	let contents = serde_json::to_string_pretty(&Credentials {
-		rivet_cloud_token: token.to_string(),
-	})?;
+	let contents = serde_json::to_string_pretty(credentials)?;
 	write_secret_file(&path, contents.as_bytes())?;
 	Ok(())
+}
+
+pub fn store_cloud_token(token: &str) -> Result<()> {
+	let mut credentials = read_credentials()?;
+	credentials.rivet_cloud_token = token.to_string();
+	write_credentials(&credentials)
 }
 
 #[cfg(unix)]

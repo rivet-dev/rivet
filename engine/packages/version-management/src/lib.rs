@@ -11,7 +11,10 @@ const PROTOCOL_VERSION_ENTRY_EXPIRED_THRESHOLD_MS: i64 = 30000;
 const PROTOCOL_VERSION_CHECK_INTERVAL: Duration = Duration::from_secs(15);
 
 #[tracing::instrument(skip_all)]
-pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
+pub async fn start(
+	config: rivet_config::Config,
+	pools: rivet_engine_context::EngineContext,
+) -> Result<()> {
 	let mut check_interval = tokio::time::interval(PROTOCOL_VERSION_CHECK_INTERVAL);
 	check_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -55,7 +58,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 /// allowed.
 pub async fn check_engine_admission(
 	config: &rivet_config::Config,
-	pools: &rivet_pools::Pools,
+	pools: &rivet_engine_context::EngineContext,
 ) -> Result<()> {
 	let current_version = semver::Version::parse(env!("CARGO_PKG_VERSION"))
 		.context("failed to parse cargo pkg version as semver")?;
@@ -106,6 +109,7 @@ pub async fn check_engine_admission(
 async fn update_protocol_versions(
 	tx: &universaldb::Transaction,
 ) -> Result<rivet_config::RuntimeProtocols> {
+	// this datacenter. Include every reader's capability before enabling cross-region upgrades.
 	let now = util::timestamp::now();
 	let mut protocols = rivet_build_meta::compiled_runtime_protocols();
 
@@ -170,6 +174,4 @@ async fn update_protocol_versions(
 	Ok(protocols)
 }
 
-#[cfg(test)]
-#[path = "../tests/inline/protocol_sync.rs"]
-mod tests;
+

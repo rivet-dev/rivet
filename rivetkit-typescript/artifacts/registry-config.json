@@ -22,6 +22,21 @@
       "description": "Disable the welcome message on startup. Default: false",
       "type": "boolean"
     },
+    "sqlite": {
+      "description": "SQLite runtime configuration.",
+      "type": "object",
+      "properties": {
+        "backend": {
+          "description": "SQLite backend to use. Native defaults to local. Wasm defaults to remote and cannot use local.",
+          "type": "string",
+          "enum": [
+            "local",
+            "remote"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "logging": {
       "description": "Logging configuration.",
       "type": "object",
@@ -88,16 +103,20 @@
       "description": "Version of the local engine package to use. Defaults to the current RivetKit version.",
       "type": "string"
     },
+    "startServices": {
+      "description": "Starts Services when RivetKit manages a local Engine. Defaults to the local-Engine decision. Set RIVET_RUN_SERVICES=0 or 1 to override.",
+      "type": "boolean"
+    },
     "configurePool": {
-      "description": "Automatically configure serverless runners in the engine.",
+      "description": "Automatically configure serverless nodes in the engine.",
       "type": "object",
       "properties": {
         "name": {
-          "description": "Name of the runner pool.",
+          "description": "Name of the node pool.",
           "type": "string"
         },
         "url": {
-          "description": "URL of the serverless platform to configure runners.",
+          "description": "URL of the serverless platform to configure nodes.",
           "type": "string"
         },
         "headers": {
@@ -131,7 +150,7 @@
           "type": "number"
         },
         "drainOnVersionUpgrade": {
-          "description": "Drain runners when a new version is deployed. Defaults to true.",
+          "description": "Drain nodes when a new version is deployed. Defaults to true.",
           "type": "boolean"
         }
       },
@@ -149,7 +168,7 @@
           "type": "string"
         },
         "maxStartPayloadBytes": {
-          "description": "Maximum POST /start body size in bytes. Default: 1048576",
+          "description": "Maximum POST /start body size in bytes. Default: 16777216",
           "type": "number"
         },
         "publicEndpoint": {
@@ -163,8 +182,8 @@
       },
       "additionalProperties": false
     },
-    "envoy": {
-      "description": "Configuration for envoy mode.",
+    "node": {
+      "description": "Configuration for node mode.",
       "type": "object",
       "properties": {
         "totalSlots": {
@@ -172,15 +191,15 @@
           "type": "number"
         },
         "poolName": {
-          "description": "Name of this envoy pool. Default: 'default'",
+          "description": "Name of this node pool. Default: 'default'",
           "type": "string"
         },
-        "envoyKey": {
-          "description": "Deprecated. Authentication key for the envoy.",
+        "nodeKey": {
+          "description": "Deprecated. Authentication key for the node.",
           "type": "string"
         },
         "version": {
-          "description": "Version number of this envoy. Default: 1",
+          "description": "Version number of this node. Default: 1",
           "type": "number"
         }
       },

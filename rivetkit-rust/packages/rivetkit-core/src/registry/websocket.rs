@@ -22,6 +22,9 @@ impl RegistryDispatcher {
 	) -> Result<WebSocketHandler> {
 		tracing::info!(actor_id, path, "handle_websocket: routing");
 		let instance = self.active_actor(actor_id).await?;
+		// A socket opens only once the startup state is durable, so its first message never
+		// reports state a failed startup commit would lose.
+		instance.ctx.wait_startup_commit().await?;
 		if is_inspector_connect_path(path)? {
 			tracing::info!(
 				actor_id,

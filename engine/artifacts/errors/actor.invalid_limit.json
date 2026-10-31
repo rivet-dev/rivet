@@ -1,0 +1,5 @@
+{
+  "code": "invalid_limit",
+  "group": "actor",
+  "message": "The actor listing limit must be an integer from 1 to 100."
+}

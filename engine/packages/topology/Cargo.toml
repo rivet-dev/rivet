@@ -1,0 +1,36 @@
+[package]
+name = "rivet-topology"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[lib]
+path = "src/mod.rs"
+
+[dependencies]
+foundationdb-tuple.workspace = true
+imbl.workspace = true
+rivet-state-machine-util.workspace = true
+rivet-object-store-util.workspace = true
+rivet-state-machine-ephemeral.workspace = true
+rivet-state-machine.workspace = true
+lazy_static.workspace = true
+rivet-env.workspace = true
+rivet-metrics.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+object_store.workspace = true
+rivet-keys.workspace = true
+serde = { workspace = true, features = ["rc"] }
+tokio.workspace = true
+moka.workspace = true
+parking_lot.workspace = true
+tracing.workspace = true
+rivet-data.workspace = true
+scc.workspace = true
+rivet-error.workspace = true
+uuid.workspace = true
+

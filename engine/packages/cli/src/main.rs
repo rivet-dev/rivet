@@ -1,10 +1,12 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+mod auth;
 mod cloud;
 mod commands;
 mod credentials;
 mod engine_runner;
+mod target;
 mod templates;
 mod util;
 
@@ -29,10 +31,24 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+	/// Sign in to Rivet Cloud in the browser.
+	Login(commands::account::LoginOpts),
+	/// Sign out of Rivet Cloud.
+	Logout(commands::account::LogoutOpts),
+	/// Show the signed-in account and linked project.
+	Whoami(commands::account::WhoamiOpts),
+	/// Link the current directory to a Rivet Cloud project.
+	Link(commands::link::LinkOpts),
+	/// Remove the current directory's project link.
+	Unlink(commands::link::UnlinkOpts),
+	/// Make an authenticated request to the Rivet Cloud API.
+	Api(commands::api::Opts),
 	/// Run a local Rivet engine and the dev server for your handler.
 	Dev(commands::dev::Opts),
 	/// Run the bundled rivet-engine binary directly (proxies all arguments).
 	Engine(commands::engine::Opts),
+	/// Manage Rivet Cloud clusters.
+	Cluster(commands::cluster::Opts),
 	/// Build and deploy the current project to Rivet Cloud.
 	Deploy(commands::deploy::Opts),
 	/// View logs for your Rivet Compute instances.
@@ -51,8 +67,15 @@ async fn main() -> Result<()> {
 
 	let cli = Cli::parse();
 	match cli.command {
+		Commands::Login(opts) => opts.execute().await,
+		Commands::Logout(opts) => opts.execute().await,
+		Commands::Whoami(opts) => opts.execute().await,
+		Commands::Link(opts) => opts.execute().await,
+		Commands::Unlink(opts) => opts.execute().await,
+		Commands::Api(opts) => opts.execute().await,
 		Commands::Dev(opts) => opts.execute().await,
 		Commands::Engine(opts) => opts.execute().await,
+		Commands::Cluster(opts) => opts.execute().await,
 		Commands::Deploy(opts) => opts.execute().await,
 		Commands::Logs(opts) => opts.execute().await,
 		Commands::Pool(opts) => opts.execute().await,

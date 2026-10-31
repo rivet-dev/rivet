@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use crate::time::Instant as StdInstant;
@@ -9,10 +9,9 @@ use anyhow::{Context, Result};
 use rivetkit_actor_persist::{generated::v4 as persist_v4, versioned as persist_versioned};
 #[cfg(not(feature = "wasm-runtime"))]
 use tokio::runtime::Handle;
-use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard, mpsc, oneshot};
+use tokio::sync::{Mutex as AsyncMutex, Notify, OwnedMutexGuard, mpsc, oneshot};
 use tokio::task::JoinHandle;
-#[cfg(test)]
-use tokio::time::timeout;
+
 use tracing::Instrument;
 
 use crate::actor::connection::{PersistedConnection, decode_persisted_connection};
@@ -21,30 +20,20 @@ use crate::actor::internal_storage;
 use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::messages::{StateDelta, WorkflowKvWrite};
 use crate::actor::persist::decode_latest_with_embedded_version;
-#[cfg(test)]
-use crate::actor::persist::encode_latest_with_embedded_version;
+
 use crate::actor::task::LifecycleEvent;
 use crate::actor::task_types::StateMutationReason;
-use crate::error::ActorRuntime;
-#[cfg(feature = "wasm-runtime")]
+use crate::error::{ActorLifecycle, ActorRuntime};
 use crate::runtime::RuntimeSpawner;
 use crate::sqlite::{BindParam, ExecuteResult, SqliteTransaction};
 use crate::types::SaveStateOpts;
 
-#[cfg(test)]
-const LAST_PUSHED_ALARM_VERSION: u16 = 1;
+
 
 pub type PersistedScheduleEvent = persist_v4::ScheduleEvent;
 pub type PersistedActor = persist_v4::Actor;
 
-#[cfg(test)]
-pub(crate) fn encode_persisted_actor(actor: &PersistedActor) -> Result<Vec<u8>> {
-	encode_latest_with_embedded_version::<persist_versioned::Actor>(
-		actor.clone(),
-		rivetkit_actor_persist::CURRENT_VERSION,
-		"persisted actor",
-	)
-}
+
 
 pub(crate) fn decode_persisted_actor(payload: &[u8]) -> Result<PersistedActor> {
 	let actor = decode_latest_with_embedded_version::<persist_versioned::Actor>(
@@ -54,14 +43,7 @@ pub(crate) fn decode_persisted_actor(payload: &[u8]) -> Result<PersistedActor> {
 	Ok(actor)
 }
 
-#[cfg(test)]
-pub(crate) fn encode_last_pushed_alarm(alarm_ts: Option<i64>) -> Result<Vec<u8>> {
-	encode_latest_with_embedded_version::<persist_versioned::LastPushedAlarm>(
-		alarm_ts,
-		LAST_PUSHED_ALARM_VERSION,
-		"last pushed alarm",
-	)
-}
+
 
 pub(crate) fn decode_last_pushed_alarm(payload: &[u8]) -> Result<Option<i64>> {
 	decode_latest_with_embedded_version::<persist_versioned::LastPushedAlarm>(
@@ -91,10 +73,63 @@ pub struct ActorStateTransaction {
 	owner: Arc<AsyncMutex<ActorStateTransactionOwner>>,
 }
 
-struct ActorStateTransactionOwner {
+/// Which state transaction, if any, holds the actor's `save_guard`.
+///
+/// The actor task reads this to defer saves and workflow flushes instead of
+/// waiting on a lock that user code owns. Every transition except `Closed`
+/// happens while the guard is held, so a later transaction cannot be
+/// overwritten by an earlier one finishing.
+pub(super) enum StateTransactionSlot {
+	/// No state transaction holds `save_guard`.
+	Idle,
+	/// `begin_state_transaction` holds `save_guard` while it opens the SQLite
+	/// transaction. It moves to `Open` on success or back to `Idle` on failure
+	/// or cancellation.
+	Beginning,
+	/// An open transaction holds `save_guard` until it is committed, rolled back,
+	/// or dropped. Shutdown uses the weak owner to roll it back.
+	Open(Weak<AsyncMutex<ActorStateTransactionOwner>>),
+	/// Shutdown closed state transactions. This state is terminal: new
+	/// transactions are rejected, and a transaction that was beginning rolls
+	/// itself back instead of opening.
+	Closed,
+}
+
+/// Holds the actor's `save_guard` on behalf of one state transaction.
+///
+/// Dropping it returns the slot to `Idle` unless shutdown closed it, releases
+/// the guard, and wakes the actor task to resume saves and workflow flushes it
+/// deferred. This also runs when `begin_state_transaction` is cancelled, so a
+/// dropped begin never leaves the slot stuck in `Beginning`.
+struct StateSaveExclusion {
+	ctx: ActorContext,
+	save_guard: Option<OwnedMutexGuard<()>>,
+}
+
+impl Drop for StateSaveExclusion {
+	fn drop(&mut self) {
+		{
+			let mut slot = self.ctx.0.state_transaction.lock();
+			match *slot {
+				StateTransactionSlot::Closed => {}
+				StateTransactionSlot::Idle
+				| StateTransactionSlot::Beginning
+				| StateTransactionSlot::Open(_) => *slot = StateTransactionSlot::Idle,
+			}
+		}
+
+		// Release the guard before the wakeup so the actor task can take it.
+		self.save_guard.take();
+		self.ctx.notify_state_transaction_finished();
+	}
+}
+
+pub(super) struct ActorStateTransactionOwner {
 	ctx: ActorContext,
 	transaction: SqliteTransaction,
-	save_guard: Option<OwnedMutexGuard<()>>,
+	/// Released after the `Drop` body runs, so connection states are restored
+	/// and the epoch is advanced before a blocked save can take the guard.
+	save_exclusion: Option<StateSaveExclusion>,
 	write_guard: Option<InFlightWrite>,
 	finalized: bool,
 	committed: bool,
@@ -208,7 +243,7 @@ impl ActorStateTransaction {
 		}
 		owner.advance_epoch();
 		owner.write_guard.take();
-		owner.save_guard.take();
+		owner.save_exclusion.take();
 		if result.is_err() {
 			owner.ctx.schedule_save(None);
 		}
@@ -227,7 +262,7 @@ impl ActorStateTransaction {
 		owner.restore_connection_states();
 		owner.advance_epoch();
 		owner.write_guard.take();
-		owner.save_guard.take();
+		owner.save_exclusion.take();
 		owner.ctx.schedule_save(None);
 		result
 	}
@@ -306,6 +341,22 @@ impl ActorContext {
 	) -> Result<ActorStateTransaction> {
 		self.clear_pending_save();
 		let save_guard = Arc::clone(&self.0.save_guard).lock_owned().await;
+		{
+			// Holding the guard means no other transaction occupies the slot.
+			let mut slot = self.0.state_transaction.lock();
+			match *slot {
+				StateTransactionSlot::Closed => {
+					return Err(ActorLifecycle::Stopping.build());
+				}
+				StateTransactionSlot::Idle
+				| StateTransactionSlot::Beginning
+				| StateTransactionSlot::Open(_) => *slot = StateTransactionSlot::Beginning,
+			}
+		}
+		let save_exclusion = StateSaveExclusion {
+			ctx: self.clone(),
+			save_guard: Some(save_guard),
+		};
 		self.0
 			.state_transaction_epoch
 			.fetch_add(1, Ordering::SeqCst);
@@ -322,28 +373,100 @@ impl ActorContext {
 				self.0
 					.state_transaction_epoch
 					.fetch_add(1, Ordering::SeqCst);
-				drop(save_guard);
+				drop(save_exclusion);
 				self.schedule_save(None);
 				return Err(error);
 			}
 		};
 		let write_guard = self.begin_write();
 		let save_request_revision = self.save_request_revision();
-		Ok(ActorStateTransaction {
-			owner: Arc::new(AsyncMutex::new(ActorStateTransactionOwner {
-				ctx: self.clone(),
-				transaction,
-				save_guard: Some(save_guard),
-				write_guard: Some(write_guard),
-				finalized: false,
-				committed: false,
-				save_request_revision,
-				statement_count: 0,
-				bind_payload_bytes: 0,
-				rollback_connection_states,
-			})),
-		})
+		let owner = Arc::new(AsyncMutex::new(ActorStateTransactionOwner {
+			ctx: self.clone(),
+			transaction,
+			save_exclusion: Some(save_exclusion),
+			write_guard: Some(write_guard),
+			finalized: false,
+			committed: false,
+			save_request_revision,
+			statement_count: 0,
+			bind_payload_bytes: 0,
+			rollback_connection_states,
+		}));
+
+		// Shutdown may have closed state transactions while this one was
+		// beginning. It cannot see a transaction that is not open yet, so the
+		// transaction rolls itself back instead of opening.
+		let opened = {
+			let mut slot = self.0.state_transaction.lock();
+			match *slot {
+				StateTransactionSlot::Closed => false,
+				StateTransactionSlot::Idle
+				| StateTransactionSlot::Beginning
+				| StateTransactionSlot::Open(_) => {
+					*slot = StateTransactionSlot::Open(Arc::downgrade(&owner));
+					true
+				}
+			}
+		};
+		let transaction = ActorStateTransaction { owner };
+		if !opened {
+			if let Err(error) = transaction.rollback().await {
+				tracing::debug!(?error, "state transaction rollback at shutdown failed");
+			}
+			return Err(ActorLifecycle::Stopping.build());
+		}
+		Ok(transaction)
 	}
+
+	/// True while a state transaction holds the state-save exclusion.
+	pub(crate) fn state_transaction_active(&self) -> bool {
+		match *self.0.state_transaction.lock() {
+			StateTransactionSlot::Idle | StateTransactionSlot::Closed => false,
+			StateTransactionSlot::Beginning | StateTransactionSlot::Open(_) => true,
+		}
+	}
+
+	/// Closes state transactions for the rest of this actor instance so the
+	/// final save does not wait on user code that never commits.
+	///
+	/// An open transaction is rolled back here, a transaction that is still
+	/// beginning rolls itself back instead of opening, and later begins are
+	/// rejected. A transaction already committing finishes first, and its
+	/// rollback is then a no-op.
+	pub(crate) async fn close_state_transactions(&self) {
+		let previous = std::mem::replace(
+			&mut *self.0.state_transaction.lock(),
+			StateTransactionSlot::Closed,
+		);
+		let owner = match previous {
+			StateTransactionSlot::Open(owner) => owner.upgrade(),
+			StateTransactionSlot::Idle
+			| StateTransactionSlot::Beginning
+			| StateTransactionSlot::Closed => None,
+		};
+		let Some(owner) = owner else {
+			return;
+		};
+
+		tracing::warn!(
+			actor_id = %self.actor_id(),
+			"rolling back state transaction left open at shutdown; the action did not finish within the grace period"
+		);
+		if let Err(error) = (ActorStateTransaction { owner }).rollback().await {
+			tracing::debug!(
+				?error,
+				"state transaction finalized before shutdown rollback"
+			);
+		}
+	}
+
+	/// Wakes the actor task after a state transaction releases `save_guard`.
+	fn notify_state_transaction_finished(&self) {
+		if let Some(sender) = self.lifecycle_event_sender() {
+			let _ = sender.send(LifecycleEvent::StateTransactionFinished);
+		}
+	}
+
 	pub fn state(&self) -> Vec<u8> {
 		self.0.current_state.read().clone()
 	}
@@ -429,10 +552,11 @@ impl ActorContext {
 		let _ = sender.send(LifecycleEvent::SaveRequested { immediate });
 	}
 
+	/// Requests a save and resolves once the state current at the request has been written.
+	/// Fails with `actor/stopping` when the actor shuts down without writing it.
 	pub async fn request_save_and_wait(&self, opts: RequestSaveOpts) -> Result<()> {
 		let save_request_revision = self.request_save_with_revision(opts)?;
-		self.wait_for_save_request(save_request_revision).await;
-		Ok(())
+		self.wait_for_save_request(save_request_revision).await
 	}
 
 	pub async fn save_state(&self, deltas: Vec<StateDelta>) -> Result<()> {
@@ -470,22 +594,7 @@ impl ActorContext {
 			.context("receive workflow flush lifecycle reply")?
 	}
 
-	/// Commits an already serialized snapshot and workflow flush atomically for
-	/// storage-level fault tests. Runtime bridges must use the lifecycle-owned API.
-	#[cfg(test)]
-	pub(crate) async fn commit_serialized_state_and_workflow_batch(
-		&self,
-		deltas: Vec<StateDelta>,
-		workflow_writes: Vec<WorkflowKvWrite>,
-	) -> Result<()> {
-		let save_request_revision = self.save_request_revision();
-		self.save_state_and_workflow_batch_with_revision(
-			deltas,
-			workflow_writes,
-			save_request_revision,
-		)
-		.await
-	}
+	
 
 	pub(crate) fn request_save_with_revision(&self, opts: RequestSaveOpts) -> Result<u64> {
 		let immediate = opts.immediate;
@@ -532,14 +641,37 @@ impl ActorContext {
 			})
 	}
 
-	pub(crate) async fn wait_for_save_request(&self, save_request_revision: u64) {
-		loop {
-			if self.0.save_completed_revision.load(Ordering::SeqCst) >= save_request_revision {
-				return;
-			}
-
-			self.0.save_completion.notified().await;
+	pub(crate) async fn wait_for_save_request(&self, save_request_revision: u64) -> Result<()> {
+		wait_for_notified_condition(&self.0.save_completion, || {
+			self.0.save_completed_revision.load(Ordering::SeqCst) >= save_request_revision
+				|| self.0.save_failed_revision.load(Ordering::SeqCst) >= save_request_revision
+		})
+		.await;
+		if self.0.save_completed_revision.load(Ordering::SeqCst) >= save_request_revision {
+			return Ok(());
 		}
+		Err(ActorLifecycle::Stopping.build())
+	}
+
+	/// Keeps a failed save requested but drops its immediate priority and restarts the save
+	/// throttle from the failure, so a failure that repeats is retried once per save interval
+	/// instead of in a tight loop. The throttle otherwise counts from the last successful
+	/// save, which a failing actor never makes.
+	pub(crate) fn throttle_failed_save_request(&self) {
+		self.0
+			.save_requested_immediate
+			.store(false, Ordering::SeqCst);
+		*self.0.last_save_at.lock() = Some(StdInstant::now());
+	}
+
+	/// Fails every save request that has not been written, including any made later.
+	/// Shutdown calls this once no later save can run, so waiters never resolve as if a
+	/// write had happened and a request made afterwards fails instead of waiting forever.
+	pub(crate) fn fail_unpersisted_save_requests(&self) {
+		self.0
+			.save_failed_revision
+			.store(u64::MAX, Ordering::SeqCst);
+		self.0.save_completion.notify_waiters();
 	}
 
 	pub(crate) fn save_requested(&self) -> bool {
@@ -614,8 +746,25 @@ impl ActorContext {
 			return Ok(true);
 		}
 
+		// The actor task passes an expected epoch and must not wait on a guard
+		// that a user state transaction may hold for as long as its callback
+		// runs. Contention discards the serialized state like an epoch change,
+		// and the task defers the retry until the transaction finishes.
+		let save_guard = match expected_state_transaction_epoch {
+			Some(_) => match self.0.save_guard.try_lock() {
+				Ok(save_guard) => save_guard,
+				Err(_) => {
+					tracing::debug!(
+						save_request_revision,
+						"state save guard is held, deferring actor task save"
+					);
+					return Ok(false);
+				}
+			},
+			None => self.0.save_guard.lock().await,
+		};
 		let prepared = {
-			let _save_guard = self.0.save_guard.lock().await;
+			let _save_guard = save_guard;
 			if expected_state_transaction_epoch.is_some_and(|expected| {
 				self.0.state_transaction_epoch.load(Ordering::SeqCst) != expected
 			}) {
@@ -632,7 +781,7 @@ impl ActorContext {
 					match delta {
 						StateDelta::ActorState(bytes) => {
 							next_state = Some(bytes.clone());
-							persisted.state = bytes;
+							persisted.state = bytes.into();
 						}
 						StateDelta::ConnHibernation { conn: _, bytes } => {
 							connections_to_persist.push(
@@ -701,12 +850,12 @@ impl ActorContext {
 		}
 
 		if let Some(state) = next_state {
-			self.0.persisted.write().state = state.clone();
+			self.0.persisted.write().state = state.clone().into();
 			*self.0.current_state.write() = state;
 		}
 		for connection in &connections_to_persist {
 			if let Some(handle) = self.connection(&connection.id) {
-				handle.set_state_initial(connection.state.clone());
+				handle.set_state_initial(connection.state.clone().to_vec());
 			}
 		}
 
@@ -755,7 +904,7 @@ impl ActorContext {
 				match delta {
 					StateDelta::ActorState(bytes) => {
 						next_state = Some(bytes.clone());
-						persisted.state = bytes;
+						persisted.state = bytes.into();
 					}
 					StateDelta::ConnHibernation { conn: _, bytes } => {
 						connections_to_persist.push(
@@ -794,12 +943,12 @@ impl ActorContext {
 				.context("commit sqlite transaction with actor state")?;
 
 			if let Some(state) = next_state {
-				self.0.persisted.write().state = state.clone();
+				self.0.persisted.write().state = state.clone().into();
 				*self.0.current_state.write() = state;
 			}
 			for connection in &connections_to_persist {
 				if let Some(handle) = self.connection(&connection.id) {
-					handle.set_state_initial(connection.state.clone());
+					handle.set_state_initial(connection.state.clone().to_vec());
 				}
 			}
 			*self.0.last_save_at.lock() = Some(StdInstant::now());
@@ -860,7 +1009,7 @@ impl ActorContext {
 	}
 
 	pub fn on_state_change_finished(&self) {
-		let previous = self.0.on_state_change_in_flight.fetch_update(
+		let previous = self.0.on_state_change_in_flight.try_update(
 			Ordering::SeqCst,
 			Ordering::SeqCst,
 			|count| count.checked_sub(1),
@@ -885,29 +1034,7 @@ impl ActorContext {
 		}
 	}
 
-	#[cfg(test)]
-	#[allow(dead_code)]
-	pub(crate) async fn wait_for_on_state_change_idle(&self, timeout_duration: Duration) -> bool {
-		if self.0.on_state_change_in_flight.load(Ordering::SeqCst) == 0 {
-			return true;
-		}
-
-		timeout(timeout_duration, async {
-			loop {
-				let idle = self.0.on_state_change_idle.notified();
-				tokio::pin!(idle);
-				idle.as_mut().enable();
-
-				if self.0.on_state_change_in_flight.load(Ordering::SeqCst) == 0 {
-					return;
-				}
-
-				idle.await;
-			}
-		})
-		.await
-		.is_ok()
-	}
+	
 
 	pub fn persisted(&self) -> PersistedActor {
 		self.0.persisted.read().clone()
@@ -916,7 +1043,7 @@ impl ActorContext {
 	pub fn load_persisted(&self, persisted: PersistedActor) {
 		let state = persisted.state.clone();
 		*self.0.persisted.write() = persisted;
-		*self.0.current_state.write() = state;
+		*self.0.current_state.write() = state.to_vec();
 		self.0.state_dirty.store(false, Ordering::SeqCst);
 		self.finish_save_request(self.save_request_revision());
 		self.0
@@ -932,12 +1059,12 @@ impl ActorContext {
 		*self.0.last_pushed_alarm.read()
 	}
 
+	/// Persists an acknowledged alarm push. The in-memory value was already set when the
+	/// push was sent, and a newer push may have replaced it since, so this leaves it alone.
 	pub(crate) async fn persist_last_pushed_alarm(&self, alarm_ts: Option<i64>) -> Result<()> {
 		internal_storage::persist_last_pushed_alarm(self.sql(), alarm_ts)
 			.await
-			.context("persist last pushed alarm to sqlite")?;
-		self.load_last_pushed_alarm(alarm_ts);
-		Ok(())
+			.context("persist last pushed alarm to sqlite")
 	}
 
 	pub(crate) fn load_run_wake_at(&self, wake_at: Option<i64>) {
@@ -958,7 +1085,7 @@ impl ActorContext {
 
 	pub(crate) fn set_initial_state(&self, state: Vec<u8>) {
 		*self.0.current_state.write() = state.clone();
-		self.0.persisted.write().state = state;
+		self.0.persisted.write().state = state.into();
 		self.0.state_dirty.store(true, Ordering::SeqCst);
 		self.0.state_revision.fetch_add(1, Ordering::SeqCst);
 	}
@@ -977,7 +1104,7 @@ impl ActorContext {
 	}
 
 	pub fn set_input(&self, input: Option<Vec<u8>>) {
-		self.0.persisted.write().input = input;
+		self.0.persisted.write().input = input.map(Into::into);
 		self.0
 			.metrics
 			.inc_state_mutation(StateMutationReason::InputSet);
@@ -986,7 +1113,7 @@ impl ActorContext {
 	}
 
 	pub fn input(&self) -> Option<Vec<u8>> {
-		self.0.persisted.read().input.clone()
+		self.0.persisted.read().input.clone().map(Into::into)
 	}
 
 	pub fn set_has_initialized(&self, has_initialized: bool) {
@@ -1145,10 +1272,7 @@ impl ActorContext {
 		self.0.tracked_persist.lock().is_some()
 	}
 
-	#[cfg(test)]
-	pub(crate) fn tracked_persist_pending(&self) -> bool {
-		self.has_tracked_persist()
-	}
+	
 
 	async fn persist_if_dirty(&self) -> Result<()> {
 		if !self.is_dirty() {
@@ -1179,18 +1303,104 @@ impl ActorContext {
 		Ok(())
 	}
 
+	/// Runs the startup commit in the background, so the actor's first requests run while it is
+	/// in flight; their responses wait for it in `wait_startup_commit`. A failed commit stops
+	/// the actor with an error, as a failed startup does. The write counts as in flight from
+	/// this call, so a shutdown that follows waits for it.
+	pub(crate) fn run_startup_commit(
+		&self,
+		commit: impl std::future::Future<Output = Result<()>> + Send + 'static,
+	) {
+		self.0
+			.startup_commit
+			.send_modify(|startup| startup.pending += 1);
+		let write = self.begin_write();
+		let ctx = self.clone();
+		RuntimeSpawner::spawn(
+			async move {
+				let result = commit.await;
+				drop(write);
+				let failed = result.is_err();
+				let mut returned = false;
+				ctx.0.startup_commit.send_modify(|startup| {
+					startup.pending = startup.pending.saturating_sub(1);
+					startup.failed |= failed;
+					returned = startup.returned;
+				});
+				if let Err(error) = result {
+					tracing::error!(
+						?error,
+						actor_id = %ctx.actor_id(),
+						"actor startup state commit failed; stopping the actor"
+					);
+					// Before startup returns, its own check fails the start instead.
+					if !returned {
+						return;
+					}
+					if let Err(stop_error) = ctx.stop_with_error(format!("{error:#}")) {
+						tracing::error!(
+							?stop_error,
+							actor_id = %ctx.actor_id(),
+							"failed to report the startup commit failure to the engine"
+						);
+					}
+				}
+			}
+			.in_current_span(),
+		);
+	}
+
+	/// Begins a startup's tracking of its background commits. A restart within this context
+	/// starts over: an earlier generation's failure does not fail it.
+	pub(crate) fn begin_startup_commits(&self) {
+		self.0.startup_commit.send_modify(|startup| {
+			startup.returned = false;
+			startup.failed = false;
+		});
+	}
+
+	/// Marks startup as returned, and reports whether a startup commit already failed, in
+	/// which case the start must fail. A commit that fails later stops the actor itself.
+	pub(crate) fn finish_startup_commits(&self) -> Result<()> {
+		let mut failed = false;
+		self.0.startup_commit.send_modify(|startup| {
+			startup.returned = true;
+			failed = startup.failed;
+		});
+		if failed {
+			return Err(ActorLifecycle::Stopping.build())
+				.context("actor startup state commit failed");
+		}
+		Ok(())
+	}
+
+	/// Waits until every startup commit of this generation is durable. An error means one
+	/// failed and the actor is stopping, so a request served in the meantime must not report
+	/// success.
+	pub(crate) async fn wait_startup_commit(&self) -> Result<()> {
+		let mut startup = self.0.startup_commit.subscribe();
+		let failed = startup
+			.wait_for(|startup| startup.pending == 0)
+			.await
+			.map(|startup| startup.failed);
+		match failed {
+			Ok(false) => Ok(()),
+			Ok(true) | Err(_) => {
+				Err(ActorLifecycle::Stopping.build()).context("actor startup state commit failed")
+			}
+		}
+	}
+
 	fn begin_write(&self) -> InFlightWrite {
 		self.0.in_flight_state_writes.fetch_add(1, Ordering::SeqCst);
 		InFlightWrite { ctx: self.clone() }
 	}
 
 	async fn wait_for_in_flight_writes(&self) {
-		loop {
-			if self.0.in_flight_state_writes.load(Ordering::SeqCst) == 0 {
-				return;
-			}
-			self.0.state_write_completion.notified().await;
-		}
+		wait_for_notified_condition(&self.0.state_write_completion, || {
+			self.0.in_flight_state_writes.load(Ordering::SeqCst) == 0
+		})
+		.await;
 	}
 
 	fn finish_save_request(&self, save_request_revision: u64) {
@@ -1232,8 +1442,28 @@ impl Drop for InFlightWrite {
 			== 1
 		{
 			self.ctx.0.state_write_completion.notify_waiters();
-			self.ctx.0.state_write_completion.notify_one();
 		}
+	}
+}
+
+/// Waits until `ready` returns true, re-checking after each wakeup of `notify`.
+///
+/// Producers must update the state `ready` reads before calling
+/// `notify.notify_waiters()`. The notification is enabled before every check,
+/// so a producer that runs between the check and the await still wakes this
+/// waiter even though `notify_waiters` stores no permit. Every concurrent
+/// waiter is woken, not just one.
+async fn wait_for_notified_condition(notify: &Notify, mut ready: impl FnMut() -> bool) {
+	loop {
+		let notified = notify.notified();
+		tokio::pin!(notified);
+		notified.as_mut().enable();
+
+		if ready() {
+			return;
+		}
+
+		notified.await;
 	}
 }
 
@@ -1251,6 +1481,4 @@ fn throttled_save_delay(
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/state.rs"]
-mod tests;
+

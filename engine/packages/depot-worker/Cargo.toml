@@ -1,0 +1,60 @@
+[package]
+name = "depot-worker"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+sha2.workspace = true
+http.workspace = true
+xxhash-rust.workspace = true
+thiserror.workspace = true
+depot-fs-core.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+depot-log.workspace = true
+depot-protocol.workspace = true
+depot-types.workspace = true
+depot-volume.workspace = true
+futures-util.workspace = true
+hashbrown.workspace = true
+lazy_static.workspace = true
+num-bigint.workspace = true
+object_store.workspace = true
+parking_lot.workspace = true
+scc.workspace = true
+foundationdb-tuple.workspace = true
+rivet-data.workspace = true
+rivet-env.workspace = true
+rivet-error.workspace = true
+rivet-keys.workspace = true
+rivet-metrics.workspace = true
+rivet-singleton-coordinator.workspace = true
+rivet-state-machine-ephemeral.workspace = true
+rivet-state-machine.workspace = true
+rivet-topology.workspace = true
+serde.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+vbare.workspace = true
+
+# Real I/O: SlateDB cold stores, UPS transport, S3 and engine config. The simulator
+# builds only the coordinator state machine for wasm32 and supplies its own I/O.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio-util.workspace = true
+depot-client.workspace = true
+object_store = { workspace = true, features = ["aws", "fs"] }
+rivet-config.workspace = true
+rivet-env = { workspace = true, features = ["slatedb"] }
+slatedb = { version = "0.17.0", features = ["wal_disable", "compaction_filters"] }
+slatedb-common = "0.17.0"
+universalpubsub.workspace = true
+

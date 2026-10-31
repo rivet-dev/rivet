@@ -7,11 +7,8 @@ FROM ghcr.io/rivet-dev/rivet/engine-base-builder:a36b881 AS builder
 # Docker automatically provides TARGETARCH
 ARG TARGETARCH
 
-ARG BUILD_FRONTEND=false
-ARG VITE_FEATURE_FLAGS=
 ARG CARGO_BUILD_MODE=debug
-ARG VITE_APP_API_URL=__SAME__
-ARG VITE_APP_TURNSTILE_SITE_KEY=
+ARG STRIP_BINARY=false
 ARG OVERRIDE_GIT_SHA
 
 WORKDIR /app
@@ -22,20 +19,6 @@ COPY . .
 RUN RUST_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)" && \
     rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal && \
     rustup default "${RUST_TOOLCHAIN}"
-
-# Build frontend. Use --ignore-scripts because the root postinstall runs
-# `lefthook install`, which needs a .git directory (excluded by
-# .dockerignore). lefthook is a dev-only git hook manager and has no
-# place inside the Docker build. SKIP_NAPI_BUILD=1 and SKIP_WASM_BUILD=1 tell
-# the runtime binding packages to skip native artifact builds. The frontend only
-# consumes their TypeScript surfaces, not the runtime binaries.
-RUN if [ "$BUILD_FRONTEND" = "true" ]; then \
-        export NODE_OPTIONS="--max-old-space-size=8192" && \
-        export SKIP_NAPI_BUILD=1 && \
-        export SKIP_WASM_BUILD=1 && \
-        pnpm install --ignore-scripts && \
-        VITE_APP_API_URL="${VITE_APP_API_URL}" VITE_FEATURE_FLAGS="${VITE_FEATURE_FLAGS}" VITE_APP_TURNSTILE_SITE_KEY="${VITE_APP_TURNSTILE_SITE_KEY}" npx turbo build:engine -F @rivetkit/engine-frontend; \
-    fi
 
 # Build and copy all binaries from target directory into an empty image (it is not
 # included in the output because of cache mount)
@@ -53,7 +36,8 @@ RUN \
     # cargo install --locked tokio-console && \
     mkdir /app/dist/ && \
     echo "Copying binary" && \
-    cp target/$CARGO_BUILD_MODE/rivet-engine /app/dist/
+    cp target/$CARGO_BUILD_MODE/rivet-engine /app/dist/ && \
+    if [ "$STRIP_BINARY" = "true" ]; then strip /app/dist/rivet-engine; fi
 
 # MARK: Engine (full, base)
 FROM ghcr.io/rivet-dev/rivet/engine-base-runtime-full:a36b881 AS engine-full-base
@@ -66,7 +50,6 @@ LABEL org.opencontainers.image.source=https://github.com/rivet-dev/rivet
 COPY --from=builder /app/dist/rivet-engine /usr/bin/rivet-engine
 
 ENTRYPOINT ["/usr/bin/rivet-engine"]
-CMD ["start"]
 
 # MARK: Engine (Slim)
 FROM ghcr.io/rivet-dev/rivet/engine-base-runtime-slim:a36b881 AS engine-slim
@@ -76,4 +59,3 @@ LABEL org.opencontainers.image.source=https://github.com/rivet-dev/rivet
 COPY --from=builder /app/dist/rivet-engine /usr/bin/rivet-engine
 
 ENTRYPOINT ["/usr/bin/rivet-engine"]
-CMD ["start"]

@@ -42,6 +42,7 @@ Inspector endpoints always require the actor's inspector token, including in loc
 |---|---|
 | **Local development** | Bearer the actor's inspector token in the `Authorization` header. |
 | **Self-hosted** | Bearer the actor's inspector token in the `Authorization` header. |
+| **Rivet Cloud** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically. |
 
 ```bash
 curl "$RIVET_API/gateway/{actor_id}/inspector/summary" \
@@ -50,7 +51,9 @@ curl "$RIVET_API/gateway/{actor_id}/inspector/summary" \
 
 ### Retrieving the Inspector Token
 
-*/}
+{/* TODO(code): document how to read an actor's inspector token on the current control plane. The actor KV read endpoint this page used is removed, so there is no API route for it today. */}
+
+The Rivet dashboard reads the inspector token for you.
 
 ## Standard Actor Endpoints
 

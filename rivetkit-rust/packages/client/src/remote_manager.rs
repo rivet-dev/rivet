@@ -12,6 +12,7 @@ use reqwest::{
 use rivetkit_client_protocol::telemetry_headers::{
 	bounded_ray_id, HEADER_RIVET_RAY_ID, HEADER_TRACEPARENT, HEADER_TRACESTATE, RAY_BAGGAGE_KEY,
 };
+use rivetkit_shared_types::actor_key;
 use serde::{Deserialize, Serialize};
 use serde_cbor;
 use std::{collections::HashMap, str::FromStr, sync::Arc};
@@ -21,11 +22,11 @@ use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 use crate::{
 	common::{
-		serialize_actor_key, ActorKey, EncodingKind, RawWebSocket, HEADER_RIVET_ACTOR,
-		HEADER_RIVET_NAMESPACE, HEADER_RIVET_TARGET, HEADER_RIVET_TOKEN, PATH_CONNECT_WEBSOCKET,
-		PATH_WEBSOCKET_PREFIX, USER_AGENT_VALUE, WS_PROTOCOL_ACTOR, WS_PROTOCOL_CONN_ID,
-		WS_PROTOCOL_CONN_PARAMS, WS_PROTOCOL_CONN_TOKEN, WS_PROTOCOL_ENCODING,
-		WS_PROTOCOL_STANDARD, WS_PROTOCOL_TARGET, WS_PROTOCOL_TOKEN,
+		ActorKey, EncodingKind, RawWebSocket, HEADER_RIVET_ACTOR, HEADER_RIVET_NAMESPACE,
+		HEADER_RIVET_TARGET, HEADER_RIVET_TOKEN, PATH_CONNECT_WEBSOCKET, PATH_WEBSOCKET_PREFIX,
+		USER_AGENT_VALUE, WS_PROTOCOL_ACTOR, WS_PROTOCOL_CONN_ID, WS_PROTOCOL_CONN_PARAMS,
+		WS_PROTOCOL_CONN_TOKEN, WS_PROTOCOL_ENCODING, WS_PROTOCOL_STANDARD, WS_PROTOCOL_TARGET,
+		WS_PROTOCOL_TOKEN,
 	},
 	protocol::query::ActorQuery,
 };
@@ -78,6 +79,7 @@ struct ActorsGetOrCreateRequest {
 	key: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	input: Option<String>, // base64-encoded CBOR
+	#[serde(rename = "pool")]
 	runner_name_selector: String,
 	crash_policy: String,
 }
@@ -110,6 +112,7 @@ struct ActorsCreateRequest {
 	key: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	input: Option<String>, // base64-encoded CBOR
+	#[serde(rename = "pool")]
 	runner_name_selector: String,
 	crash_policy: String,
 }
@@ -276,9 +279,7 @@ impl RemoteManager {
 
 	pub async fn get_with_key(&self, name: &str, key: &ActorKey) -> Result<Option<String>> {
 		let config = self.resolved_config().await?;
-		// Canonical slash-escaped key format (matches the TS SDK and the
-		// runner-side parser) — NOT JSON (see common::serialize_actor_key).
-		let key_str = serialize_actor_key(key);
+		let key_str = actor_key::slash::serialize(key);
 		let url = format!(
 			"{}/actors?namespace={}&name={}&key={}",
 			config.endpoint,
@@ -315,9 +316,7 @@ impl RemoteManager {
 		pool_name: Option<String>,
 	) -> Result<String> {
 		let config = self.resolved_config().await?;
-		// Canonical slash-escaped key format (matches the TS SDK and the
-		// runner-side parser) — NOT JSON (see common::serialize_actor_key).
-		let key_str = serialize_actor_key(key);
+		let key_str = actor_key::slash::serialize(key);
 
 		let input_encoded = if let Some(inp) = input {
 			let cbor = serde_cbor::to_vec(&inp)?;
@@ -380,9 +379,7 @@ impl RemoteManager {
 		pool_name: Option<String>,
 	) -> Result<String> {
 		let config = self.resolved_config().await?;
-		// Canonical slash-escaped key format (matches the TS SDK and the
-		// runner-side parser) — NOT JSON (see common::serialize_actor_key).
-		let key_str = serialize_actor_key(key);
+		let key_str = actor_key::slash::serialize(key);
 
 		let input_encoded = if let Some(inp) = input {
 			let cbor = serde_cbor::to_vec(&inp)?;
@@ -655,10 +652,8 @@ impl RemoteManager {
 		let mut params = Vec::new();
 		push_query_param(&mut params, "rvt-namespace", &config.namespace);
 		push_query_param(&mut params, "rvt-method", method);
-		if let Some(key) = key {
-			if !key.is_empty() {
-				push_query_param(&mut params, "rvt-key", &key.join(","));
-			}
+		if let Some(rvt_key) = key.and_then(|key| actor_key::to_gateway_query(key)) {
+			push_query_param(&mut params, "rvt-key", &rvt_key);
 		}
 		if let Some(input) = input {
 			let encoded = serde_cbor::to_vec(input)?;

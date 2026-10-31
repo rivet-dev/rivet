@@ -7,53 +7,22 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+rivet-auth-jwt.workspace = true
+rivet-auth-policy.workspace = true
+axum.workspace = true
 anyhow.workspace = true
-async-trait.workspace = true
 bytes.workspace = true
-futures-util.workspace = true
-futures.workspace = true
 http-body-util.workspace = true
 http-body.workspace = true
 http.workspace = true
-# TODO: Make this use workspace version
-hyper = { version = "1.6.0", features = ["full", "http1", "http2"] }
-hyper-rustls.workspace = true
-hyper-tungstenite.workspace = true
-hyper-util = { workspace = true, features = ["full"] }
-indoc.workspace = true
-lazy_static.workspace = true
-moka = { workspace = true, features = ["future"] }
-opentelemetry.workspace = true
-opentelemetry-http.workspace = true
-parking_lot.workspace = true
-rand.workspace = true
-regex.workspace = true
-rivet-api-builder.workspace = true
-rivet-auth.workspace = true
+hyper.workspace = true
 rivet-config.workspace = true
 rivet-error.workspace = true
-rivet-metrics.workspace = true
-rivet-perf.workspace = true
-rivet-runner-protocol.workspace = true
-rivet-runtime.workspace = true
+rivet-engine-context.workspace = true
 rivet-util.workspace = true
-rustls-pemfile.workspace = true
-rustls.workspace = true
-scc.workspace = true
 serde_json.workspace = true
-serde.workspace = true
-tokio-rustls.workspace = true
-tokio-tungstenite.workspace = true
+sha2.workspace = true
+subtle.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
-tracing-opentelemetry.workspace = true
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
-tracing.workspace = true
-url.workspace = true
 
-[dev-dependencies]
-futures-util.workspace = true
-futures.workspace = true
-reqwest.workspace = true
-tokio-stream.workspace = true
-uuid.workspace = true

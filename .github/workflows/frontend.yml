@@ -1,26 +1,16 @@
-name: frontend
+name: rivetkit
 
 on:
   pull_request:
     paths:
       - .github/workflows/frontend.yml
-      - frontend/**
       - engine/sdks/typescript/**
       - rivetkit-typescript/**
 concurrency:
-  group: frontend-${{ github.ref }}
+  group: rivetkit-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  dashboard-quality-check:
-    name: Dashboard / Quality Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: biomejs/setup-biome@v2
-        with:
-          version: 2.3.11
-      - run: biome check ./frontend --formatter-enabled=true --linter-enabled=false --assist-enabled=false --reporter=github
   rivetkit-quality-check:
     name: RivetKit / Quality Check
     runs-on: ubuntu-latest
@@ -39,33 +29,6 @@ jobs:
   #       with:
   #         version: latest
   #     - run: biome check ./website --reporter=github
-  dashboard-type-check:
-    name: Dashboard / Type Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: 'true'
-      # Install the toolchain pinned in rust-toolchain.toml before turbo starts
-      # several cargo builds at once; otherwise they race to auto-install it.
-      - run: rustup toolchain install
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - uses: actions/cache@v4
-        with:
-          path: .turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build --filter='./frontend'
-        env:
-          NODE_OPTIONS: '--max-old-space-size=8192'
-      - run: pnpm check-types
-        working-directory: ./frontend
   rivetkit-type-check:
     name: RivetKit / Type Check
     runs-on: ubuntu-latest
@@ -90,25 +53,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec turbo run build --filter='./rivetkit-typescript/packages/*'
       - run: pnpm exec turbo run check-types --filter='./rivetkit-typescript/packages/*'
-  rivetkit-edge-budget:
-    name: RivetKit / Edge Bundle Budget
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      # Install the toolchain pinned in rust-toolchain.toml before turbo starts
-      # several cargo builds at once; otherwise they race to auto-install it.
-      - run: rustup toolchain install
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec turbo run build --filter=@rivetkit/supabase
-      # Blocks the native dependency closure from re-entering the edge adapter.
-      - run: pnpm --filter @rivetkit/supabase check-edge-closure
-      # Budgets the adapter's bundled JS size.
-      - run: pnpm --filter @rivetkit/supabase size
+  # Serverless edge budgets are disabled for v3 with the adapters.
   # website-type-check:
   #   name: Website / Type Check
   #   runs-on: ubuntu-latest

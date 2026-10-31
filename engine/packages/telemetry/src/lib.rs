@@ -1,4 +1,3 @@
-use rivet_config::config::{CacheDriver, Database, PubSub};
 use uuid::Uuid;
 
 const SENTRY_URL: &str = "https://7602663e43cb9dee8c42d1e5e70293f8@o4504307129188352.ingest.us.sentry.io/4509962797252608";
@@ -26,30 +25,16 @@ fn configure_scope(scope: &mut sentry::Scope, config: &rivet_config::Config) {
 	// Only send fixed, allowlisted labels. Config serialization preserves secrets, and
 	// even ordinary strings (such as server URLs) can contain credentials.
 	scope.set_tag(
-		"database",
-		match config.database() {
-			Database::Postgres(_) => "postgres",
-			Database::FileSystem(_) => "file_system",
+		"object_storage",
+		match &config.object_storage().primary {
+			rivet_config::config::ObjectStoreBackend::InMemory => "in_memory",
+			rivet_config::config::ObjectStoreBackend::FileSystem(_) => "file_system",
+			rivet_config::config::ObjectStoreBackend::S3(_) => "s3",
+			rivet_config::config::ObjectStoreBackend::Azure(_) => "azure",
+			rivet_config::config::ObjectStoreBackend::Gcs(_) => "gcs",
 		},
 	);
-	scope.set_tag(
-		"pubsub",
-		match config.pubsub() {
-			PubSub::Nats(_) => "nats",
-			PubSub::Memory(_) => "memory",
-		},
-	);
-	let cache = config.cache();
-	scope.set_tag(
-		"cache",
-		if cache.enabled {
-			match cache.driver() {
-				CacheDriver::InMemory => "in_memory",
-			}
-		} else {
-			"disabled"
-		},
-	);
+	scope.set_tag("pubsub", "ups");
 }
 
 pub fn capture_error(err: &anyhow::Error) -> Uuid {

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-/// A structured runtime config change, broadcast to every process in the cluster.
+/// A structured runtime config change that every process in the cluster picks up on refresh.
 ///
 /// Runtime reconfiguration is deliberately structured rather than an arbitrary patch over the
 /// config root: only the properties listed here can be changed, so an operator cannot reshape config
@@ -20,91 +20,13 @@ pub struct DynamicConfigUpdate {
 		deserialize_with = "double_option",
 		skip_serializing_if = "Option::is_none"
 	)]
-	pub max_storage_bytes: Option<Option<u64>>,
+	pub tracing_filter: Option<Option<String>>,
 	#[serde(
 		default,
 		deserialize_with = "double_option",
 		skip_serializing_if = "Option::is_none"
 	)]
-	pub compaction_admission_percent: Option<Option<f64>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub compaction_write_bytes_per_second: Option<Option<u64>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub actor_write_bytes_per_second: Option<Option<u64>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub actor_read_bytes_per_second: Option<Option<u64>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub compaction_read_bytes_per_second: Option<Option<u64>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub compaction_hot_fold_direct_to_shard: Option<Option<bool>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub compaction_max_hot_drain_span_txids: Option<Option<u64>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub compaction_stage_throttle_budget_multiplier: Option<Option<f64>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub compaction_stage_throttle_admit_soft_util: Option<Option<f64>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub compaction_stage_throttle_backoff_ms: Option<Option<i64>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub compaction_install_throttle_budget_multiplier: Option<Option<f64>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub compaction_install_throttle_admit_soft_util: Option<Option<f64>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub compaction_reclaim_throttle_budget_multiplier: Option<Option<f64>>,
-	#[serde(
-		default,
-		deserialize_with = "double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub compaction_reclaim_throttle_admit_soft_util: Option<Option<f64>>,
+	pub tracing_sampler_ratio: Option<Option<f64>>,
 	#[serde(
 		default,
 		deserialize_with = "double_option",
@@ -129,6 +51,12 @@ pub struct DynamicConfigUpdate {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub worker_max_wake_condition_clears_per_pull: Option<Option<usize>>,
+	#[serde(
+		default,
+		deserialize_with = "double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub sqlite_server_prefetch: Option<Option<bool>>,
 	/// Per workflow name wake key limits. Unlike the other properties this is keyed, so an absent
 	/// key leaves that workflow name alone, `Some(max)` overrides it, and `None` clears the
 	/// override for that one name. The "default" key applies to all workflow names.
@@ -139,6 +67,17 @@ pub struct DynamicConfigUpdate {
 	/// override for that one name.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub worker_max_concurrent_workflows: Option<HashMap<String, Option<usize>>>,
+	/// Whether the tablet coordinator chooses discretionary placement actions: bootstrapping
+	/// tablets, splits, rebalancing replacements and grant moves. The coordinator picks a
+	/// change up at its next drive. Off, reconfigurations already written to the manifest
+	/// finish, and repair keeps running: dead or stopping replicas are replaced and short
+	/// replica sets grown. Operator commands and missing-owner failover are unaffected.
+	#[serde(
+		default,
+		deserialize_with = "double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub depot_balancing_enabled: Option<Option<bool>>,
 }
 
 /// Deserializes a present `null` as `Some(None)` rather than `None`, so clearing a property stays

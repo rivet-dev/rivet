@@ -1,0 +1,31 @@
+--- a/src/manifest/mod.rs
++++ b/src/manifest/mod.rs
+@@ -866,6 +866,28 @@
+         self.manifest.core.initialized
+     }
+ 
++    /// Checks the data trees of an unopened projected clone against its retained
++    /// source snapshot. This is an identity check before writer activation, not
++    /// a general equivalence test after compaction or application writes.
++    /// Ownership, checkpoint lineage and initialization must be checked separately.
++    pub fn matches_projected_data_from<R: RangeBounds<Bytes> + Clone>(
++        &self,
++        source: &Self,
++        range: R,
++    ) -> Result<bool, crate::Error> {
++        let expected = Manifest::projected(
++            &source.manifest,
++            &ProjectionConfig {
++                global_range: Some(BytesRange::from(range)),
++                segment_filter: None,
++                segment_projection: None,
++            },
++        )?;
++        Ok(self.manifest.core.tree == expected.core.tree
++            && self.manifest.core.segments == expected.core.segments
++            && self.manifest.core.last_l0_seq == expected.core.last_l0_seq)
++    }
++
+     /// Returns the last compacted L0 SST view ID, if any.
+     pub fn last_compacted_l0_sst_view_id(&self) -> Option<ulid::Ulid> {
+         self.manifest.core.tree.last_compacted_l0_sst_view_id

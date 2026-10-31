@@ -1,0 +1,161 @@
+#import "shared/depot.types.v1.bare"
+
+# Latest replica state, written on fencing, truncation, trim, repair and commit progress.
+# Recovery applies states and entries in batch log seq and frame order.
+type VolumeLogReplicaState struct {
+	# Learning generation that created this replica; duplicates never replace it.
+	learnerReplicaSetVersion: u64
+	status: VolumeLogReplicaStatus
+	replicaIncarnation: UuidV4
+	# A new epoch exceeds the claimed client, every held entry, and cold.clientEpoch.
+	# The cold epoch fences clients from before an unload, even with no entries held.
+	claimedClient: optional<ClientIdentity>
+	# The process that holds the claimed client, when an open granted the claim. A claim by any
+	# other client incarnation clears it.
+	claimedHolder: optional<VolumeHolder>
+	# Everything through cold is in the cold store. Only the maintainer's trim raises
+	# this record after flushing application data there; neither form of truncate moves it.
+	cold: VolumeLogPosition
+	appended: VolumeLogPosition
+	knownCommittedVolumeSeq: u64	# as announced by the client; may lag the true committed volume seq
+	# Opaque creation evidence the maintainer stored when it created this replica, such as
+	# the incarnation's ordering epoch. Copied to learners with the claim.
+	creation: optional<data>
+	# Corruption recovery emptied this replica, so it may lack entries it acknowledged. Only
+	# a client's repair, which marks it in sync, clears it. The maintainer never counts such
+	# a replica as evidence that no acknowledged entry lies above cold.
+	lostEntries: bool
+}
+
+# Committing this entry commits the full history beneath it: log matching ensures
+# every replica holding the claim entry holds that history. Recovery prefers a newer
+# client epoch to a longer suffix, which may contain an older client's uncommitted tail.
+type ClaimEntry void
+
+# How a payload's bytes are encoded. Readers decode each entry by its own codec, so a volume
+# keeps every older entry readable after the configured codec changes.
+type PayloadCodec enum {
+	NONE
+	# An LZ4 block with its uncompressed length prepended as a little-endian u32.
+	LZ4
+}
+
+# Opaque application bytes. Shards fence and replicate without interpreting these.
+# `payloadDigest` is the 128-bit xxh3 of the decoded bytes, so it does not depend on the codec.
+# It identifies a retry's bytes beside `requestId` and `clientSeq`; it is not an integrity check.
+# `payloadFamily` and `payloadVersion` name the vbare family and version of the decoded
+# payload, so the shard can raise its FORMAT marks without decoding it. Family 0 marks a
+# payload with no family, which no mark tracks.
+type PayloadWrite struct {
+	payloadFamily: u16
+	payloadVersion: u16
+	clientSeq: u64
+	requestId: UuidV4
+	payloadDigest: data[16]
+	codec: PayloadCodec
+	payload: data
+}
+
+type VolumeLogEntryBody union {
+	ClaimEntry | PayloadWrite
+}
+
+# One write to a volume log, written by the volume client, copied to the cold store by the tablet maintainer.
+type VolumeLogEntry struct {
+	# Scheduling hint, retained unchanged through retries, recovery and repair.
+	# This timestamp never establishes commitment or authority.
+	writtenAtUnixMs: i64
+	volumeSeq: u64
+	clientEpoch: u64
+	body: VolumeLogEntryBody
+}
+
+# A log entry appended to this log replica. It also carries the client's latest committed volume seq,
+# so an append with entries needs no separate state frame for commit progress.
+type EntryFrame struct {
+	volumeLogKey: VolumeLogKey
+	entry: VolumeLogEntry
+	knownCommittedVolumeSeq: u64
+}
+
+# A full replica-state replacement; later entry frames extend this state on replay.
+type StateFrame struct {
+	volumeLogKey: VolumeLogKey
+	state: VolumeLogReplicaState
+}
+
+# A higher maintainer epoch must reach disk before its request is answered, so restart
+# cannot forget the fence. The new maintainer lists a quorum first; every older quorum
+# intersects it and can no longer serve. This is a per-tablet fact fenced by the shard,
+# not a fact belonging to any single volume log.
+# A split parent is retired by raising it to the largest u64, so every later request naming it is refused.
+type TabletGrantFrame struct {
+	tabletId: UuidV4
+	tabletGrantEpoch: u64
+}
+
+# Deleted incarnations retain their load fence after replica removal. A higher
+# tablet grant makes all earlier loads obsolete and permits collecting the fence.
+# Ordinary conditional unloads and learner replacement leave retirement absent.
+type ForgetFrame struct {
+	volumeLogKey: VolumeLogKey
+	retirement: optional<TabletGrantFrame>
+}
+
+# A checkpointed retirement fence. The shard keeps only the XXH3-128 digest of the
+# canonical BARE volume log key, so the checkpoint lists the same digest. A collision can
+# only refuse an unrelated load.
+type RetiredVolumeFrame struct {
+	volumeLogKeyDigest: data[16]
+	retirement: TabletGrantFrame
+}
+
+# Highest installed replica set, synced before a version-fenced acknowledgement.
+# The full set supplies stale-client routing even after recovery of an older manifest.
+type TabletReplicaSetFrame struct {
+	tabletId: UuidV4
+	replicaSet: TabletReplicaSet
+}
+
+# One change to a volume replica or the shard's tablet grant fence, inside an atomic disk batch.
+type Frame union {
+	EntryFrame | StateFrame | ForgetFrame | TabletGrantFrame | TabletReplicaSetFrame
+}
+
+# Written by the log shard executor; read at recovery. Raw BARE at the folder's FORMAT version.
+# Atomic framing is len | crc32c(payload) | crc32c(header) | bare(DiskBatch) | trailer byte:
+# recovery keeps or cuts the whole batch. Log seq numbers batches, not frames. One sync can cover several batches.
+type DiskBatch struct {
+	logSeq: u64					 # strictly increasing per batch within the log shard
+	frames: list<Frame>
+}
+
+# Bounds recovery by replaying only batches after lastIncludedLogSeq. Covered state,
+# forget and grant frames can then be garbage collected. Contains states and grant
+# epochs, no entries; it is independent of the cold store. Installed by write, sync,
+# rename and folder sync inside a LogShardCheckpointEnvelope vbare record.
+#
+# A base checkpoint has no previousLogSeq and lists every replica and retirement. A
+# delta has previousLogSeq and lists only the volume logs whose replica state or
+# retirement changed in batches above it, in changedVolumeLogKeys; a changed key
+# missing from replicas or retiredVolumes has none at lastIncludedLogSeq. A delta
+# applies to any image whose boundary lies in previousLogSeq..lastIncludedLogSeq.
+# Tablet grants and replica sets are always complete. A retirement whose grant the
+# checkpoint's tablet grants supersede is void, so a delta never lists released fences.
+type LogShardCheckpoint struct {
+	retiredVolumes: list<RetiredVolumeFrame>
+	lastIncludedLogSeq: u64		 # batches at or below this are already reflected in the entries below
+	replicas: list<StateFrame>
+	tabletGrants: list<TabletGrantFrame>
+	tabletReplicaSets: list<TabletReplicaSetFrame>
+	previousLogSeq: optional<u64>
+	changedVolumeLogKeys: list<VolumeLogKey>
+}
+
+# Integrity envelope shared by base and delta files. The length-delimited payload is
+# a complete versioned LogShardCheckpoint record. Verify its CRC32C before decoding
+# any replica state or fencing evidence. Integrity failures refuse shard recovery.
+type LogShardCheckpointEnvelope struct {
+	payloadChecksum: u32
+	payload: data
+}

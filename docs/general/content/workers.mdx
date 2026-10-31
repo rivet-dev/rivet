@@ -1,0 +1,30 @@
+---
+title: "Nodes"
+description: "Run your registry as a node, select a node pool, and add capacity."
+skill: true
+---
+
+A node is a long-running process running your app with the Rivet SDK. Start it with `registry.start()`. It connects outbound to the control plane and hosts the Actors assigned to it.
+
+## Connect a node
+
+Create a [namespace](/docs/namespaces) and [node pool](/docs/pool-configuration), then set the node's connection variables:
+
+```bash
+RIVET_ENDPOINT=https://production:<private-token>@rivet.mycompany.com
+RIVET_POOL=default
+```
+
+`RIVET_POOL` defaults to `default`. The pool must be configured in the selected namespace before the node connects.
+
+Actor traffic uses the outbound connection, so nodes need no public URL or inbound port. Your app can expose its own [health and metrics routes](/actors/docs/http-server#add-health-and-metrics-routes).
+
+## Add capacity
+
+Run more copies of your app with the same namespace and pool. Use your hosting platform's autoscaler to change the number of node processes. Keep spare capacity so Actors can wake while another node restarts.
+
+When a node stops, its Actors sleep and can wake on another node in the pool. See [Versions & Upgrades](/docs/versions) for rolling deployments.
+
+## Deploy
+
+Use the shared [node deployment guides](/docs/deploy/self-host/workers/) for Kubernetes, Docker, virtual machines, and other platforms that run a persistent process. Nodes can connect to Rivet Cloud or a self-hosted control plane.

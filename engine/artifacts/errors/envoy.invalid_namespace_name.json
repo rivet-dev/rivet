@@ -1,0 +1,5 @@
+{
+  "code": "invalid_namespace_name",
+  "group": "envoy",
+  "message": "Namespace name is invalid."
+}

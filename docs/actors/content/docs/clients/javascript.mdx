@@ -41,6 +41,8 @@ Use `params` for static connection parameters. Use `getParams` when the value ca
 
 <CodeSnippet file="examples/docs/clients-javascript/connection-lifecycle.ts" />
 
+Transient connection failures trigger reconnection. Actions rejected during a disconnect are removed from the outbound queue; a request already sent can have an unknown outcome. Use application-level idempotency before retrying mutations. A permanent connection-opening failure rejects subsequent calls on that connection; create a new connection after correcting the cause.
+
 ## Low-Level HTTP & WebSocket
 
 For actors that implement `onRequest` or `onWebSocket`, call them directly:
@@ -100,7 +102,7 @@ Endpoints support URL auth syntax:
 https://namespace:token@rivet.example.com
 ```
 
-You can also pass the endpoint without auth and provide `RIVET_NAMESPACE` and `RIVET_TOKEN` separately. See [Endpoints](/docs/connect#url-auth-syntax) for details.
+You can also pass the endpoint without auth and provide `RIVET_NAMESPACE` and `RIVET_TOKEN` separately. See [Endpoints](/docs/endpoints#url-auth-syntax) for details.
 
 ## Advanced
 

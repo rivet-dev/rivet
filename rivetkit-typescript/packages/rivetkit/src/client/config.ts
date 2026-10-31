@@ -88,6 +88,17 @@ export const ClientConfigSchemaBase = z.object({
 	// `proxyWebSocket`
 	getUpgradeWebSocket: z.custom<GetUpgradeWebSocket>().optional(),
 
+	/**
+	 * Bounds retries of refused requests: `percent` retries per 100 requests (default 10), with
+	 * up to `maxTokens` banked for bursts (default 100). A refusal past the budget is thrown.
+	 */
+	retryBudget: z
+		.object({
+			percent: z.number().min(0).max(100).optional(),
+			maxTokens: z.number().int().min(0).optional(),
+		})
+		.optional(),
+
 	/** Replaces global fetch for actor HTTP gateway requests. */
 	fetch: z.custom<typeof globalThis.fetch>().optional(),
 
@@ -166,7 +177,7 @@ export function convertRegistryConfigToClientConfig(
 		token: config.token,
 		getToken: undefined,
 		namespace: config.namespace,
-		poolName: config.envoy.poolName,
+		poolName: config.node.poolName,
 		headers: config.headers,
 		gateway: { skipReadyWait: false },
 		encoding: "bare",

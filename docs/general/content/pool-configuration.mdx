@@ -1,0 +1,69 @@
+---
+title: "Node Pool Configuration"
+description: "Create persistent node pool configuration and connect nodes by pool name."
+skill: true
+---
+
+A node pool groups nodes by name within a namespace. Configure the pool explicitly before connecting nodes to it. For example, use `default` for general workloads and `gpu` for Actors that need GPUs.
+
+## Quickstart
+
+<Steps>
+<Step title="Create a pool">
+
+Set `$RIVET_API` to your control plane URL, `$RIVET_NAMESPACE` to the namespace slug, and `$RIVET_TOKEN` to a token with pool management access:
+
+```bash
+curl -X PUT "$RIVET_API/pools/gpu?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"metadata":{"hardware":"gpu"}}'
+```
+
+Pool configuration persists independently of connected nodes. Repeating `PUT` updates the configuration.
+
+</Step>
+<Step title="Connect nodes">
+
+Set the same namespace and pool on each node that should serve this workload:
+
+```bash
+RIVET_ENDPOINT=https://staging:<private-token>@rivet.mycompany.com
+RIVET_POOL=gpu
+```
+
+Start your registry with `registry.start()`. Metadata describes the pool; it does not provision hardware. Run the nodes on the machines you want to use.
+
+</Step>
+</Steps>
+
+## Read configuration
+
+```bash
+# One pool
+curl "$RIVET_API/pools/gpu?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
+
+# All configured pools in the namespace
+curl "$RIVET_API/pools?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
+```
+
+The single-pool response has a `pool` object. The list response has a `pools` array whose entries include their `name`, plus a `pagination.cursor` for the next page. A configured pool remains listed when no nodes are connected.
+
+## Remove a pool
+
+Stop its nodes before deleting its configuration:
+
+```bash
+curl -X DELETE "$RIVET_API/pools/gpu?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
+```
+
+The control plane rejects deletion while nodes are connected.
+
+## Related
+
+- [Nodes](/docs/workers)
+- [Namespaces](/docs/namespaces)
+- [Deploy Nodes](/docs/deploy/self-host/workers/)

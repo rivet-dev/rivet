@@ -1,0 +1,5 @@
+{
+  "code": "command_too_large",
+  "group": "depot",
+  "message": "The command exceeds the byte limit."
+}

@@ -32,9 +32,10 @@ struct ConfigData {
 	///
 	/// This does not come from the config file or the environment. It lives here so that reading
 	/// build metadata does not require depending on the crate that carries it, which is rebuilt on
-	/// every commit. Unlike `dynamic`, it is process-local and is never broadcast.
+	/// every commit. Unlike `dynamic`, it is process-local and is never shared.
 	build_meta: Arc<BuildMeta>,
-	protocols: RwLock<Arc<RuntimeProtocols>>,
+	/// Stores the current runtime protocols and notifies process-local subscribers of changes.
+	protocols_tx: tokio::sync::watch::Sender<Arc<RuntimeProtocols>>,
 }
 
 #[derive(Clone)]
@@ -47,6 +48,10 @@ impl Config {
 	/// Only the binary that carries those values can supply real ones. Anything else passes
 	/// `Default::default()` and gets the placeholders documented on [`BuildMeta`] and
 	/// [`RuntimeProtocols`].
+	#[allow(
+		clippy::disallowed_methods,
+		reason = "configuration discovery runs at bootstrap before adapters exist"
+	)]
 	pub async fn load<P: AsRef<Path>>(
 		paths: &[P],
 		build_meta: BuildMeta,
@@ -74,9 +79,7 @@ impl Config {
 		settings = settings.add_source(
 			config_loader::Environment::with_prefix("RIVET")
 				.try_parsing(true)
-				.separator("__")
-				.list_separator(",")
-				.with_list_parse_key("foundationdb.addresses"),
+				.separator("__"),
 		);
 
 		// Read config
@@ -96,8 +99,21 @@ impl Config {
 		))
 	}
 
-	/// Builds a config with placeholder build metadata and protocol versions.
-	pub fn from_root(config: config::Root) -> Self {
+	/// Builds a validated config with placeholder build metadata and protocol versions.
+	pub fn try_from_root(mut config: config::Root) -> Result<Self> {
+		config.validate_and_set_defaults()?;
+		Ok(Self::from_root_with_build_meta(
+			config,
+			BuildMeta::default(),
+			RuntimeProtocols::default(),
+		))
+	}
+
+	/// Builds a config without validating or filling defaults.
+	///
+	/// This is for tests and embedded callers that intentionally construct partial roots. Runtime
+	/// configuration should use [`Config::load`] or [`Config::try_from_root`] instead.
+	pub fn from_root_unchecked(config: config::Root) -> Self {
 		Self::from_root_with_build_meta(config, BuildMeta::default(), RuntimeProtocols::default())
 	}
 
@@ -108,11 +124,12 @@ impl Config {
 	) -> Self {
 		let shared = Arc::new(config.clone());
 		let (dynamic_tx, _) = tokio::sync::watch::channel(shared.clone());
+		let (protocols_tx, _) = tokio::sync::watch::channel(Arc::new(protocols));
 		Self(Arc::new(ConfigData {
 			dynamic: RwLock::new(shared),
 			dynamic_tx,
 			build_meta: Arc::new(build_meta),
-			protocols: RwLock::new(Arc::new(protocols)),
+			protocols_tx,
 			config,
 		}))
 	}
@@ -125,7 +142,16 @@ impl Config {
 	}
 
 	pub fn protocols(&self) -> Arc<RuntimeProtocols> {
-		self.0.protocols.read().clone()
+		self.0.protocols_tx.borrow().clone()
+	}
+
+	/// Subscribes to process-local runtime protocol snapshots, retaining only the latest value.
+	///
+	/// The initial value is already considered seen. Reconcile a cloned `borrow_and_update()`
+	/// snapshot before awaiting `changed()`, including on startup at the latest version. Drop the
+	/// borrow before async work so it cannot block publishers. Multiple updates may be coalesced.
+	pub fn protocols_watch(&self) -> tokio::sync::watch::Receiver<Arc<RuntimeProtocols>> {
+		self.0.protocols_tx.subscribe()
 	}
 
 	pub fn auth_required(&self) -> Result<&config::Auth> {
@@ -136,17 +162,29 @@ impl Config {
 			.context("authentication is not configured")
 	}
 
+	/// Authentication configuration for callers using a validated runtime config.
+	pub fn auth(&self) -> &config::Auth {
+		self.auth_required()
+			.expect("validated config must contain authentication configuration")
+	}
+
 	pub fn set_protocols(&self, protocol: RuntimeProtocols) {
-		*self.0.protocols.write() = Arc::new(protocol);
+		self.0.protocols_tx.send_if_modified(|current| {
+			if **current == protocol {
+				return false;
+			}
+			*current = Arc::new(protocol);
+			true
+		});
 	}
 
 	/// The config with runtime changes applied.
 	///
 	/// Reading a property through this instead of dereferencing the `Config` is what opts a call
-	/// site into runtime reconfiguration: `config.sqlite()` always returns the value loaded at
-	/// startup, while `config.dynamic().sqlite()` returns the value currently in effect. Take this
-	/// snapshot once per logical decision rather than holding it, since a later read can return
-	/// different values.
+	/// site into runtime reconfiguration: `config.runtime.worker_poll_interval()` returns the
+	/// startup value, while `config.dynamic().runtime.worker_poll_interval()` returns the current
+	/// value. Take this snapshot once per logical decision rather than holding it, since a later
+	/// read can return different values.
 	pub fn dynamic(&self) -> Arc<config::Root> {
 		self.0.dynamic.read().clone()
 	}
@@ -154,6 +192,12 @@ impl Config {
 	/// Subscribes to dynamic config changes. The receiver always starts with the current config.
 	pub fn dynamic_watch(&self) -> tokio::sync::watch::Receiver<Arc<config::Root>> {
 		self.0.dynamic_tx.subscribe()
+	}
+
+	/// Validates a durable dynamic snapshot without changing the live config.
+	pub fn validate_dynamic(&self, update: &DynamicConfigUpdate) -> Result<()> {
+		Self::from_root_unchecked(self.0.config.clone()).apply_dynamic(update)?;
+		Ok(())
 	}
 
 	/// Applies a runtime config change to every handle sharing this config, and returns the
@@ -167,106 +211,6 @@ impl Config {
 		let mut guard = self.0.dynamic.write();
 		let mut dynamic = (**guard).clone();
 
-		if let Some(value) = update.max_storage_bytes {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.max_storage_bytes = value.or(base.sqlite().max_storage_bytes);
-		}
-		if let Some(value) = update.compaction_admission_percent {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.compaction_admission_percent = value.or(base.sqlite().compaction_admission_percent);
-		}
-		if let Some(value) = update.compaction_write_bytes_per_second {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.compaction_write_bytes_per_second = value.or(base.sqlite().compaction_write_bytes_per_second);
-		}
-		if let Some(value) = update.actor_write_bytes_per_second {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.actor_write_bytes_per_second = value.or(base.sqlite().actor_write_bytes_per_second);
-		}
-		if let Some(value) = update.actor_read_bytes_per_second {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.actor_read_bytes_per_second = value.or(base.sqlite().actor_read_bytes_per_second);
-		}
-		if let Some(value) = update.compaction_read_bytes_per_second {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.compaction_read_bytes_per_second = value.or(base.sqlite().compaction_read_bytes_per_second);
-		}
-		if let Some(value) = update.compaction_hot_fold_direct_to_shard {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.compaction_hot_fold_direct_to_shard =
-				value.or(base.sqlite().compaction_hot_fold_direct_to_shard);
-		}
-		if let Some(value) = update.compaction_max_hot_drain_span_txids {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.compaction_max_hot_drain_span_txids =
-				value.or(base.sqlite().compaction_max_hot_drain_span_txids);
-		}
-
-		if let Some(value) = update.compaction_stage_throttle_budget_multiplier {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.compaction_stage_throttle_budget_multiplier =
-				value.or(base.sqlite().compaction_stage_throttle_budget_multiplier);
-		}
-		if let Some(value) = update.compaction_stage_throttle_admit_soft_util {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.compaction_stage_throttle_admit_soft_util =
-				value.or(base.sqlite().compaction_stage_throttle_admit_soft_util);
-		}
-		if let Some(value) = update.compaction_stage_throttle_backoff_ms {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.compaction_stage_throttle_backoff_ms =
-				value.or(base.sqlite().compaction_stage_throttle_backoff_ms);
-		}
-		if let Some(value) = update.compaction_install_throttle_budget_multiplier {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.compaction_install_throttle_budget_multiplier =
-				value.or(base.sqlite().compaction_install_throttle_budget_multiplier);
-		}
-		if let Some(value) = update.compaction_install_throttle_admit_soft_util {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.compaction_install_throttle_admit_soft_util =
-				value.or(base.sqlite().compaction_install_throttle_admit_soft_util);
-		}
-		if let Some(value) = update.compaction_reclaim_throttle_budget_multiplier {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.compaction_reclaim_throttle_budget_multiplier =
-				value.or(base.sqlite().compaction_reclaim_throttle_budget_multiplier);
-		}
-		if let Some(value) = update.compaction_reclaim_throttle_admit_soft_util {
-			dynamic
-				.sqlite
-				.get_or_insert_with(config::Sqlite::default)
-				.compaction_reclaim_throttle_admit_soft_util =
-				value.or(base.sqlite().compaction_reclaim_throttle_admit_soft_util);
-		}
 		if let Some(value) = update.worker_poll_interval_ms {
 			dynamic.runtime.worker_poll_interval_ms =
 				value.or(base.runtime.worker_poll_interval_ms);
@@ -282,6 +226,16 @@ impl Config {
 		if let Some(value) = update.worker_max_wake_condition_clears_per_pull {
 			dynamic.runtime.worker_max_wake_condition_clears_per_pull =
 				value.or(base.runtime.worker_max_wake_condition_clears_per_pull);
+		}
+		if let Some(value) = update.sqlite_server_prefetch {
+			let base = base
+				.pegboard
+				.as_ref()
+				.and_then(|pegboard| pegboard.sqlite_server_prefetch);
+			dynamic
+				.pegboard
+				.get_or_insert_with(Default::default)
+				.sqlite_server_prefetch = value.or(base);
 		}
 		if let Some(overrides) = &update.worker_max_wake_keys_per_workflow_name_per_pull {
 			let base = base
@@ -337,6 +291,26 @@ impl Config {
 			}
 		}
 
+		if let Some(value) = update.depot_balancing_enabled {
+			let enabled = value.unwrap_or(base.depot().balancing.enabled);
+			dynamic
+				.depot
+				.get_or_insert_with(Default::default)
+				.balancing
+				.enabled = enabled;
+		}
+
+		// Runtime snapshots already contain the names derived at startup. Restore
+		// map input before validation so these are not treated as name overrides.
+		if let Some(topology) = &mut dynamic.topology {
+			if let config::topology::DatacentersRepr::Map(datacenters) = &mut topology.datacenters {
+				for (name, datacenter) in datacenters {
+					if datacenter.name == *name {
+						datacenter.name.clear();
+					}
+				}
+			}
+		}
 		dynamic.validate_and_set_defaults()?;
 
 		let dynamic = Arc::new(dynamic);
@@ -357,6 +331,11 @@ impl Deref for Config {
 
 /// Adds a source to the config builder. If the path is a directory, it reads all config files.
 /// If it's a file, it adds it directly. If the path doesn't exist, it's silently ignored.
+#[allow(
+	clippy::disallowed_methods,
+	clippy::disallowed_types,
+	reason = "configuration files are read at bootstrap before adapters exist"
+)]
 fn add_source<P: AsRef<Path>>(
 	mut settings: config_loader::ConfigBuilder<config_loader::builder::DefaultState>,
 	path: P,
@@ -399,6 +378,11 @@ fn add_source<P: AsRef<Path>>(
 }
 
 /// Adds a single file source to the config builder.
+#[allow(
+	clippy::disallowed_methods,
+	clippy::disallowed_types,
+	reason = "configuration files are read at bootstrap before adapters exist"
+)]
 fn add_file_source<P: AsRef<Path>>(
 	settings: config_loader::ConfigBuilder<config_loader::builder::DefaultState>,
 	path: P,

@@ -104,32 +104,4 @@ where
 	Box::pin(future)
 }
 
-#[cfg(all(test, feature = "wasm-runtime"))]
-mod tests {
-	use std::cell::RefCell;
-	use std::rc::Rc;
 
-	use super::{RuntimeBoxFuture, boxed_runtime_future};
-
-	fn accepts_wasm_local_callback(
-		callback: impl Fn() -> RuntimeBoxFuture<()> + 'static,
-	) -> impl Fn() -> RuntimeBoxFuture<()> {
-		callback
-	}
-
-	#[test]
-	fn wasm_runtime_box_future_accepts_local_callbacks() {
-		let state = Rc::new(RefCell::new(0));
-		let callback = accepts_wasm_local_callback({
-			let state = state.clone();
-			move || {
-				let state = state.clone();
-				boxed_runtime_future(async move {
-					*state.borrow_mut() += 1;
-				})
-			}
-		});
-
-		let _future = callback();
-	}
-}

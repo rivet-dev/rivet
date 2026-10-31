@@ -16,8 +16,12 @@ import * as Rivet from "../../../../index";
  *     }
  */
 export interface AuthTokenCreateRequest {
+    /** Token lifetime in seconds. Defaults to the deployment's configured duration. */
     duration?: number;
+    /** Access the token carries within its namespace. */
     grants: Rivet.AuthTokenGrant[];
-    namespace: string;
+    /** Namespace name whose access is embedded in the token. */
+    namespace?: string;
+    /** Optional opaque end-user identifier used only for correlation. */
     subject?: string;
 }

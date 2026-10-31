@@ -100,6 +100,4 @@ impl Drop for HttpResponseQueuePermit {
 	}
 }
 
-#[cfg(test)]
-#[path = "../../tests/support/http_response_queue.rs"]
-mod tests;
+

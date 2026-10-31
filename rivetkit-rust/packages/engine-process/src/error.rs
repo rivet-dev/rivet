@@ -14,7 +14,7 @@ pub enum EngineProcessError {
 	#[error(
 		"binary_unavailable",
 		"Engine binary is unavailable.",
-		"No usable engine binary was found for version '{version}'. Build `rivet-engine`, set `RIVET_ENGINE_BINARY_PATH`, or enable `RIVETKIT_ENGINE_AUTO_DOWNLOAD=1`."
+		"No usable engine binary was found for version '{version}'. Build `rivet-engine`, set `RIVET_ENGINE_BINARY_PATH`, or install the matching `@rivetkit/engine-cli` platform package."
 	)]
 	BinaryUnavailable { version: String },
 
@@ -59,4 +59,34 @@ pub enum EngineProcessError {
 		"Cannot start engine: endpoint '{endpoint}' is already serving runtime '{runtime}'. Stop that process and retry."
 	)]
 	PortOccupied { endpoint: String, runtime: String },
+
+	#[error(
+		"incompatible_engine",
+		"An incompatible engine is already running on the endpoint.",
+		"Cannot use the engine at '{endpoint}': it is Rivet Engine {version} with architecture '{architecture}', but this RivetKit requires a {required} engine. Stop that engine process (it may have been started by an older RivetKit) and retry, or point RIVET_ENDPOINT at a {required} engine."
+	)]
+	IncompatibleEngine {
+		endpoint: String,
+		version: String,
+		architecture: String,
+		required: String,
+	},
+
+	#[error(
+		"incompatible_binary",
+		"The Engine binary is incompatible with this RivetKit.",
+		"Cannot start Engine binary '{path}': {reason}; this RivetKit requires a {required} engine. Build the matching v3 Engine and configure its executable for local startup (RIVET_ENGINE_BINARY in JavaScript, RIVET_ENGINE_BINARY_PATH in Rust)."
+	)]
+	IncompatibleBinary {
+		path: String,
+		reason: String,
+		required: String,
+	},
+
+	#[error(
+		"not_ready",
+		"Engine did not become ready.",
+		"Engine answered health checks but could not serve actor requests after {attempts} attempts: {reason}"
+	)]
+	NotReady { attempts: u32, reason: String },
 }

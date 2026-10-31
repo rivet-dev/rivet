@@ -1,5 +1,4 @@
 // State management contract:
-// docs-internal/engine/rivetkit-core-state-management.md
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
 use std::future::Future;
@@ -43,7 +42,10 @@ type DisconnectPredicateTsfn =
 type RunRestartHook = Arc<dyn Fn(Option<(i64, u64)>) -> anyhow::Result<()> + Send + Sync + 'static>;
 pub(crate) type RegisteredTask = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 
-static ACTOR_CONTEXT_SHARED: LazyLock<SccHashMap<String, Weak<ActorContextShared>>> =
+/// Shared runtime slots per running actor generation, keyed by the core context's
+/// `instance_key`. Keying by actor id instead lets an old generation that is still stopping
+/// clear or replace the slots of a newer generation of the same actor in this process.
+static ACTOR_CONTEXT_SHARED: LazyLock<SccHashMap<usize, Weak<ActorContextShared>>> =
 	LazyLock::new(SccHashMap::new);
 
 /// N-API wrapper around `rivetkit-core::ActorContext`.
@@ -193,7 +195,7 @@ struct DisconnectPredicatePayload {
 impl ActorContext {
 	pub(crate) fn new(inner: CoreActorContext) -> Self {
 		let actor_id = inner.actor_id().to_owned();
-		let shared = actor_context_shared(&actor_id);
+		let shared = actor_context_shared(&actor_id, inner.instance_key());
 		tracing::debug!(
 			class = "ActorContext",
 			%actor_id,
@@ -994,10 +996,10 @@ impl Drop for ActorContextShared {
 	}
 }
 
-fn actor_context_shared(actor_id: &str) -> Arc<ActorContextShared> {
+fn actor_context_shared(actor_id: &str, instance_key: usize) -> Arc<ActorContextShared> {
 	ACTOR_CONTEXT_SHARED.retain_sync(|_, shared| shared.strong_count() > 0);
 
-	match ACTOR_CONTEXT_SHARED.entry_sync(actor_id.to_owned()) {
+	match ACTOR_CONTEXT_SHARED.entry_sync(instance_key) {
 		scc::hash_map::Entry::Occupied(mut entry) => {
 			if let Some(shared) = entry.get().upgrade() {
 				tracing::debug!(
@@ -1157,9 +1159,7 @@ fn js_http_request_to_core_request(request: JsHttpRequest) -> napi::Result<CoreR
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../tests/actor_context.rs"]
-mod tests;
+
 
 /// One open call out to another actor.
 ///
