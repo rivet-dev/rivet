@@ -535,12 +535,21 @@ impl ProxyService {
 
 							let active_guard = metrics::WEBSOCKET_ACTIVE.inc_guard();
 							let external_ray_id = req_ctx.external_ray_id.clone();
+							let keepalive_interval =
+								self.state.config.guard().websocket_keepalive_interval();
+							let send_timeout = self.state.config.guard().websocket_send_timeout();
 
 							self.state.tasks.spawn(
 								async move {
 									let _active_guard = active_guard;
 
-									let ws_handle = match WebSocketHandle::new(client_ws).await {
+									let ws_handle = match WebSocketHandle::new_with_keepalive(
+										client_ws,
+										keepalive_interval,
+										send_timeout,
+									)
+									.await
+									{
 										Ok(ws_handle) => ws_handle,
 										Err(err) => {
 											tracing::debug!(
@@ -1645,6 +1654,14 @@ impl ProxyService {
 							let mut sink = client_sink;
 							let mut shutdown_rx = shutdown_rx.clone();
 							let authorization_deadline = req_ctx.authorization_deadline();
+							// See `WebSocketHandle::new_with_keepalive` for why idle client sockets need pings.
+							let mut keepalive = tokio::time::interval(
+								state.config.guard().websocket_keepalive_interval(),
+							);
+							keepalive
+								.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+							// The first tick completes immediately; the socket was just opened.
+							keepalive.tick().await;
 
 							loop {
 								tokio::select! {
@@ -1763,6 +1780,35 @@ impl ProxyService {
 											}
 										}
 									}
+									_ = keepalive.tick() => {
+										let send_result = tokio::time::timeout(
+											state.config.guard().websocket_send_timeout(),
+											sink.send(hyper_tungstenite::tungstenite::Message::Ping(bytes::Bytes::new())),
+										).await;
+										match send_result {
+											Ok(Ok(())) => {
+												metrics::WEBSOCKET_KEEPALIVE_PING_TOTAL
+													.with_label_values(&["ok"])
+													.inc();
+											}
+											Ok(Err(err)) => {
+												tracing::trace!(?err, "error sending keepalive ping to client");
+												metrics::WEBSOCKET_KEEPALIVE_PING_TOTAL
+													.with_label_values(&["error"])
+													.inc();
+												let _ = shutdown_tx.send(true);
+												break;
+											}
+											Err(_) => {
+												tracing::trace!("timeout sending keepalive ping to client");
+												metrics::WEBSOCKET_KEEPALIVE_PING_TOTAL
+													.with_label_values(&["timeout"])
+													.inc();
+												let _ = shutdown_tx.send(true);
+												break;
+											}
+										}
+									}
 								}
 							}
 
@@ -1813,9 +1859,13 @@ impl ProxyService {
 						let termination_handler = handler.clone();
 						let termination_req_ctx = req_ctx.clone();
 
-						let ws_handle = WebSocketHandle::new(client_ws)
-							.await
-							.context("failed initiating websocket handle")?;
+						let ws_handle = WebSocketHandle::new_with_keepalive(
+							client_ws,
+							state.config.guard().websocket_keepalive_interval(),
+							state.config.guard().websocket_send_timeout(),
+						)
+						.await
+						.context("failed initiating websocket handle")?;
 
 						let session = async {
 							loop {

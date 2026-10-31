@@ -817,6 +817,15 @@
           "format": "uint64",
           "minimum": 1.0
         },
+        "websocket_keepalive_interval_ms": {
+          "description": "Interval in milliseconds at which Guard sends a ping frame on every client WebSocket. Keeps idle connections alive through proxies that close quiet WebSockets. Defaults to 30000 ms.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 1.0
+        },
         "websocket_max_frame_size": {
           "description": "Max WebSocket frame size in bytes.",
           "type": [

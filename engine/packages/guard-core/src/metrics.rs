@@ -221,6 +221,12 @@ lazy_static! {
 		"Number of WebSocket connections currently open with a client.",
 		*REGISTRY
 	).unwrap();
+	pub static ref WEBSOCKET_KEEPALIVE_PING_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"guard_websocket_keepalive_ping_total",
+		"Total number of keepalive ping attempts on client WebSockets.",
+		&["result"],
+		*REGISTRY
+	).unwrap();
 	pub static ref WEBSOCKET_CLOSE_ERROR_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
 		"guard_websocket_close_errors_total",
 		"Total number of WebSocket connections closed because of an error.",
