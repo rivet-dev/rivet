@@ -1,5 +1,5 @@
 "use client";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import {
@@ -28,6 +28,7 @@ import { LoginWithGoogle } from "./login";
 
 export function SignUp() {
 	const navigate = useNavigate();
+	const { from } = useSearch({ strict: false }) as { from?: string };
 	const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 	const turnstileSiteKey = cloudEnv().VITE_APP_TURNSTILE_SITE_KEY;
 	const handleSubmit: SubmitHandler = async (
@@ -42,12 +43,18 @@ export function SignUp() {
 			return;
 		}
 
+		// Carry `from` through the verification email so a user who signed up
+		// from an invitation link returns to it instead of their own new org.
+		const callbackURL = new URL("/", window.location.origin);
+		callbackURL.searchParams.set("emailVerified", "1");
+		if (from) callbackURL.searchParams.set("from", from);
+
 		const result = await authClient.signUp.email(
 			{
 				email,
 				password,
 				name,
-				callbackURL: `${window.location.origin}/?emailVerified=1`,
+				callbackURL: callbackURL.toString(),
 			},
 			features.captcha && turnstileToken
 				? { headers: { "x-captcha-response": turnstileToken } }
