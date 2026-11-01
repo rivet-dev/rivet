@@ -609,5 +609,3 @@ pub(crate) fn resume_after_unload(state: &mut MaintainerState, fx: &mut Effects)
 		admit(state, id, pending.request, deadline, fx);
 	}
 }
-
-

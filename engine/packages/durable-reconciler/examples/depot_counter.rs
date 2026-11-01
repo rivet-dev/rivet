@@ -11,7 +11,6 @@ use rivet_keys::keys::codec::KeyAddress;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-#[cfg(not(test))]
 #[path = "support/cluster.rs"]
 mod cluster;
 #[path = "support/keys.rs"]
@@ -147,7 +146,6 @@ pub async fn example<S: DurableStore>(depot: S) -> Result<()> {
 	Ok(())
 }
 
-#[cfg(not(test))]
 #[tokio::main]
 async fn main() -> Result<()> {
 	let cluster = cluster::TestCluster::start().await?;

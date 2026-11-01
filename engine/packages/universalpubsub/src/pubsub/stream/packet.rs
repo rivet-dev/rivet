@@ -545,7 +545,3 @@ fn record_packet(direction: &str, bytes: usize) {
 		.with_label_values(&[direction])
 		.inc_by(bytes as u64);
 }
-
-
-
-

@@ -15,8 +15,6 @@ use uuid::Uuid;
 
 type Outcome<T> = Result<std::result::Result<T, FsForkError>>;
 
-
-
 impl FilesystemStore {
 	/// Reads the pending fork row and then the volume record, as two separate reads that
 	/// must not interleave with a writer of either row. The core must reserve the name

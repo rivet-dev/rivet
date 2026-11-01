@@ -11,7 +11,6 @@ use rivetkit_actor_persist::{generated::v4 as persist_v4, versioned as persist_v
 use tokio::runtime::Handle;
 use tokio::sync::{Mutex as AsyncMutex, Notify, OwnedMutexGuard, mpsc, oneshot};
 use tokio::task::JoinHandle;
-
 use tracing::Instrument;
 
 use crate::actor::connection::{PersistedConnection, decode_persisted_connection};
@@ -20,7 +19,6 @@ use crate::actor::internal_storage;
 use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::messages::{StateDelta, WorkflowKvWrite};
 use crate::actor::persist::decode_latest_with_embedded_version;
-
 use crate::actor::task::LifecycleEvent;
 use crate::actor::task_types::StateMutationReason;
 use crate::error::{ActorLifecycle, ActorRuntime};
@@ -28,12 +26,8 @@ use crate::runtime::RuntimeSpawner;
 use crate::sqlite::{BindParam, ExecuteResult, SqliteTransaction};
 use crate::types::SaveStateOpts;
 
-
-
 pub type PersistedScheduleEvent = persist_v4::ScheduleEvent;
 pub type PersistedActor = persist_v4::Actor;
-
-
 
 pub(crate) fn decode_persisted_actor(payload: &[u8]) -> Result<PersistedActor> {
 	let actor = decode_latest_with_embedded_version::<persist_versioned::Actor>(
@@ -42,8 +36,6 @@ pub(crate) fn decode_persisted_actor(payload: &[u8]) -> Result<PersistedActor> {
 	)?;
 	Ok(actor)
 }
-
-
 
 pub(crate) fn decode_last_pushed_alarm(payload: &[u8]) -> Result<Option<i64>> {
 	decode_latest_with_embedded_version::<persist_versioned::LastPushedAlarm>(
@@ -594,8 +586,6 @@ impl ActorContext {
 			.context("receive workflow flush lifecycle reply")?
 	}
 
-	
-
 	pub(crate) fn request_save_with_revision(&self, opts: RequestSaveOpts) -> Result<u64> {
 		let immediate = opts.immediate;
 		let save_request_revision = self.0.save_request_revision.fetch_add(1, Ordering::SeqCst) + 1;
@@ -1034,8 +1024,6 @@ impl ActorContext {
 		}
 	}
 
-	
-
 	pub fn persisted(&self) -> PersistedActor {
 		self.0.persisted.read().clone()
 	}
@@ -1272,8 +1260,6 @@ impl ActorContext {
 		self.0.tracked_persist.lock().is_some()
 	}
 
-	
-
 	async fn persist_if_dirty(&self) -> Result<()> {
 		if !self.is_dirty() {
 			return Ok(());
@@ -1481,4 +1467,3 @@ fn throttled_save_delay(
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

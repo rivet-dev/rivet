@@ -897,5 +897,3 @@ fn sqlite_error(db: *mut sqlite3, statement_index: u32, context: &str) -> anyhow
 	}
 	.into()
 }
-
-

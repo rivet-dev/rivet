@@ -271,5 +271,3 @@ pub(crate) async fn send_event(
 		.command::<pegboard::commands::ActorEvent>(&ActorVolume::new(actor_id).volume_key(), event)
 		.await
 }
-
-

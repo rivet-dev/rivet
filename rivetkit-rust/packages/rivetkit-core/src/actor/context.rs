@@ -1,8 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::sync::Weak;
-#[cfg(any(test, feature = "test-support"))]
-use std::sync::atomic::AtomicI64;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -165,10 +163,6 @@ pub(crate) struct ActorContextInner {
 	pub(super) schedule_running: SccHashSet<String>,
 	pub(super) schedule_history_insert_count: AtomicUsize,
 	pub(super) max_schedules: u32,
-	#[cfg(any(test, feature = "test-support"))]
-	pub(super) schedule_now_override: AtomicI64,
-	
-	
 	// Forced-sync: queue config is read from sync public methods before blocking
 	// on async queue work.
 	pub(super) queue_config: Mutex<ActorConfig>,
@@ -408,12 +402,6 @@ impl ActorContext {
 		Arc::as_ptr(&self.0) as usize
 	}
 
-	
-
-	
-
-	
-
 	pub(crate) fn build(
 		actor_id: String,
 		name: String,
@@ -500,10 +488,6 @@ impl ActorContext {
 			schedule_running: SccHashSet::new(),
 			schedule_history_insert_count: AtomicUsize::new(0),
 			max_schedules,
-			#[cfg(any(test, feature = "test-support"))]
-			schedule_now_override: AtomicI64::new(i64::MIN),
-			
-			
 			queue_config: Mutex::new(config.clone()),
 			queue_abort_signal: Mutex::new(abort_signal.clone()),
 			queue_initialize: OnceCell::new(),
@@ -677,11 +661,14 @@ impl ActorContext {
 	///
 	/// Foreign-runtime adapters should call this during startup after loading
 	/// any persisted schedule state and before accepting user callbacks that rely
-	/// on future alarms being armed.
+	/// on future alarms being armed. The next alarm is pushed on every start, even
+	/// when the persisted marker says an earlier generation pushed it, because
+	/// that push may never have reached the engine.
 	pub async fn init_alarms(&self) {
 		if let Err(error) = self.recover_interrupted_schedule_history().await {
 			tracing::error!(?error, "failed to recover interrupted schedule history");
 		}
+		self.force_next_alarm_push();
 		self.sync_future_alarm_logged().await;
 	}
 
@@ -1187,8 +1174,6 @@ impl ActorContext {
 		}
 	}
 
-	
-
 	pub(crate) fn remove_conn(&self, conn_id: &str) -> Option<ConnHandle> {
 		let removed = self.remove_existing(conn_id);
 		if removed.is_some() {
@@ -1387,8 +1372,6 @@ impl ActorContext {
 		Ok(is_live)
 	}
 
-	
-
 	pub(super) fn prepare_state_deltas(
 		&self,
 		deltas: Vec<StateDelta>,
@@ -1527,8 +1510,6 @@ impl ActorContext {
 	pub(crate) fn inspector_attach(&self) -> Option<InspectorAttachGuard> {
 		InspectorAttachGuard::new(self.clone())
 	}
-
-	
 
 	pub(crate) fn subscribe_inspector(&self) -> Option<broadcast::Receiver<Arc<Vec<u8>>>> {
 		self.0
@@ -1870,8 +1851,6 @@ impl ActorContext {
 		}
 	}
 
-	
-
 	pub(crate) async fn save_state_and_workflow_batch_at_transaction_epoch(
 		&self,
 		deltas: Vec<StateDelta>,
@@ -2189,4 +2168,3 @@ impl std::fmt::Debug for ActorContext {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

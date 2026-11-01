@@ -118,5 +118,3 @@ impl ObjectStore for CloneStore {
 		}
 	}
 }
-
-

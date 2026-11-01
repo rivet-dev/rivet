@@ -62,5 +62,3 @@ impl Drop for IngressGuard {
 		}
 	}
 }
-
-

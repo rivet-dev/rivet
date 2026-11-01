@@ -239,5 +239,3 @@ struct FirstAttemptCutOff {
 struct AmbiguousPrecondition {
 	status: u16,
 }
-
-

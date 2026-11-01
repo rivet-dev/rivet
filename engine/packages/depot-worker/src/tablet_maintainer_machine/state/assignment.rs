@@ -141,5 +141,3 @@ pub(crate) fn update(state: &mut MaintainerState, tablet: Tablet, effects: &mut 
 	// minorities that replacement had to retain.
 	opening::collect_orphans(state, "stable", opening::OrphanScan::Every, effects);
 }
-
-

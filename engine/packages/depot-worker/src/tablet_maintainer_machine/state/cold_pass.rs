@@ -32,10 +32,6 @@ impl PendingRows {
 		self.positions.contains_key(key)
 	}
 
-	
-
-	
-
 	/// Queues `key` at the back and returns whether it was not already queued.
 	pub(crate) fn push_back(&mut self, key: VolumeLogKey) -> bool {
 		let position = self.order.last_key_value().map_or(0, |(last, _)| last + 1);

@@ -1680,11 +1680,3 @@ fn finish(state: &mut MaintainerState, key: VolumeLogKey, fx: &mut Effects) {
 	fx.cancel_timer(MaintainerTimer::UnloadRetry(key.clone()));
 	fx.cancel_timer(MaintainerTimer::UnloadRecoveryRetry(key));
 }
-
-
-
-
-
-
-
-

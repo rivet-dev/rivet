@@ -937,5 +937,3 @@ impl Prefetcher {
 		crate::metrics::ROWS_PER_DATABASE.observe(self.map.cached_rows() as f64);
 	}
 }
-
-

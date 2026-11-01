@@ -17,7 +17,6 @@ use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::NapiInvalidState;
-
 use crate::actor_context::{ActorContext, RegisteredTask, state_deltas_from_payload};
 use crate::actor_factory::{
 	ActionPayload, AdapterConfig, BeforeActionResponsePayload, BeforeConnectPayload,
@@ -1450,4 +1449,3 @@ fn missing_callback(name: &str) -> anyhow::Error {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

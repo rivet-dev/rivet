@@ -1,6 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, env, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use rivetkit_shared_types::endpoint::{is_local_engine_endpoint, parse_endpoint_auth};
 use serde_json::Value as JsonValue;
 
 use crate::{
@@ -38,10 +39,21 @@ pub struct CreateOptions {
 	pub pool_name: Option<String>,
 }
 
+/// Connection settings resolved by [`Client::new`] the same way RivetKit for
+/// TypeScript resolves `createClient` options.
 pub struct ClientConfig {
+	/// Rivet Engine endpoint. Supports URL auth for the namespace and token
+	/// (`https://namespace:token@api.rivet.dev`); the credentials are stripped
+	/// from the endpoint before use.
 	pub endpoint: String,
+	/// Token sent with every request. Falls back to `RIVET_TOKEN`, then to
+	/// `default` for an engine on this machine. A remote endpoint without a
+	/// token connects unauthenticated.
 	pub token: Option<String>,
+	/// Falls back to `RIVET_NAMESPACE`, then `default`.
 	pub namespace: Option<String>,
+	/// Node pool that `get_or_create` and `create` place new actors in. Falls
+	/// back to `RIVET_POOL`, then `default`.
 	pub pool_name: Option<String>,
 	pub encoding: EncodingKind,
 	pub transport: TransportKind,
@@ -145,17 +157,93 @@ impl std::fmt::Debug for Client {
 	}
 }
 
+/// Connection settings after endpoint URL auth, environment fallbacks, and
+/// defaults are applied.
+struct ResolvedConnection {
+	endpoint: String,
+	token: Option<String>,
+	namespace: String,
+	pool_name: String,
+}
+
+/// Mirrors `transformClientConfig` in RivetKit for TypeScript. Credentials in
+/// the endpoint URL win, then the explicit config, then `RIVET_TOKEN`,
+/// `RIVET_NAMESPACE`, and `RIVET_POOL`; giving a credential both in the URL
+/// and separately is an error rather than a silent override.
+fn resolve_connection(config: &ClientConfig) -> Result<ResolvedConnection> {
+	let parsed = parse_endpoint_auth(&config.endpoint).context("invalid endpoint")?;
+	let configured_token = config
+		.token
+		.clone()
+		.or_else(|| env::var("RIVET_TOKEN").ok());
+	let configured_namespace = config
+		.namespace
+		.clone()
+		.or_else(|| env::var("RIVET_NAMESPACE").ok());
+	if parsed.namespace.is_some() && configured_namespace.is_some() {
+		anyhow::bail!(
+			"cannot specify namespace both in the endpoint URL and as a separate config option"
+		);
+	}
+	if parsed.token.is_some() && configured_token.is_some() {
+		anyhow::bail!(
+			"cannot specify token both in the endpoint URL and as a separate config option"
+		);
+	}
+
+	// Only an engine this machine runs gets the built-in `default` token.
+	let token = match parsed.token.or(configured_token) {
+		Some(token) => Some(token),
+		None if is_local_engine_endpoint(&parsed.endpoint) => Some("default".to_owned()),
+		None => None,
+	};
+
+	Ok(ResolvedConnection {
+		endpoint: parsed.endpoint,
+		token,
+		namespace: parsed
+			.namespace
+			.or(configured_namespace)
+			.unwrap_or_else(|| "default".to_owned()),
+		pool_name: config
+			.pool_name
+			.clone()
+			.or_else(|| env::var("RIVET_POOL").ok())
+			.unwrap_or_else(|| "default".to_owned()),
+	})
+}
+
 impl Client {
+	/// Never fails. An endpoint that is not a valid URL, or a credential given
+	/// both in the endpoint URL and as a separate option, makes every request
+	/// from this client return that error instead. See [`ClientConfig`] for
+	/// how the connection settings are resolved.
 	pub fn new(config: ClientConfig) -> Self {
-		let remote_manager = RemoteManager::from_config(
-			config.endpoint,
-			config.token,
-			config.namespace,
-			config.pool_name,
+		let (connection, connection_error) = match resolve_connection(&config) {
+			Ok(connection) => (connection, None),
+			Err(error) => {
+				let connection = ResolvedConnection {
+					endpoint: config.endpoint.clone(),
+					token: config.token.clone(),
+					namespace: "default".to_owned(),
+					pool_name: "default".to_owned(),
+				};
+				(connection, Some(format!("{error:#}")))
+			}
+		};
+
+		let mut remote_manager = RemoteManager::from_config(
+			connection.endpoint,
+			connection.token,
+			connection.namespace,
+			connection.pool_name,
 			config.headers,
 			config.max_input_size,
 			config.disable_metadata_lookup,
 		);
+		if let Some(error) = connection_error {
+			remote_manager = remote_manager.with_connection_error(error);
+		}
 
 		Self {
 			remote_manager,

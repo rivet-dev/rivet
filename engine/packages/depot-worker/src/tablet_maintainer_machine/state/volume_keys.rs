@@ -79,8 +79,6 @@ impl From<VolumeKeys> for StoredVolumeKeys {
 }
 
 impl VolumeKeys {
-	
-
 	fn slot_of(&self, key: &VolumeLogKey) -> Option<u32> {
 		let hash = self.hasher.hash_one(key);
 		self.index
@@ -199,5 +197,3 @@ impl std::hash::Hash for VolumeKeys {
 		self.free.hash(state);
 	}
 }
-
-

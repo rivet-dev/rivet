@@ -1623,8 +1623,6 @@ fn attempt_bucket(attempt: u32) -> &'static str {
 	}
 }
 
-
-
 struct InFlightRequest {
 	namespace_id: Id,
 	actor_id: Id,

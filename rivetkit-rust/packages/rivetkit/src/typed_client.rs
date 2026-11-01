@@ -253,5 +253,3 @@ fn decode_event_args<E: Event>(raw_args: &[u8]) -> Result<E> {
 			.context("decode typed event from legacy payload"),
 	}
 }
-
-

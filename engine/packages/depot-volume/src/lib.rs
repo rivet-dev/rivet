@@ -2,8 +2,6 @@
 
 #![warn(unreachable_pub)]
 
-
-
 pub mod volume_client_machine;
 
 #[cfg(not(target_arch = "wasm32"))]

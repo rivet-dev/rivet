@@ -3272,5 +3272,3 @@ fn anyhow_to_bridge_rivet_error_payload(error: anyhow::Error) -> serde_json::Val
 		"actor": error.actor(),
 	})
 }
-
-

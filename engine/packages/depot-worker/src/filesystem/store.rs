@@ -233,12 +233,6 @@ impl LockOperation {
 	}
 }
 
-
-
-
-
-
-
 /// Snapshots one retention load reads before it gives up on a scope whose concurrent
 /// loaders keep inserting first.
 const MAX_RETENTION_LOAD_ATTEMPTS: usize = 16;

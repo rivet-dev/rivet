@@ -239,5 +239,3 @@ pub fn derive_issuer(root: &super::Root) -> Result<String> {
 			.public_url,
 	)
 }
-
-

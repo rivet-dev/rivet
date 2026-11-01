@@ -647,5 +647,3 @@ fn decode_conn_params<A: Actor>(bytes: &[u8]) -> Result<A::ConnParams> {
 	}
 	decode_cbor(bytes, "connection params")
 }
-
-

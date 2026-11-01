@@ -255,5 +255,3 @@ pub fn incompatibility(
 	}
 	None
 }
-
-

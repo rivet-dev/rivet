@@ -449,5 +449,3 @@ async fn serve(
 	while connections.join_next().await.is_some() {}
 	Ok(())
 }
-
-

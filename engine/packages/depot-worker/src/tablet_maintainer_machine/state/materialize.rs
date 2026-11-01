@@ -579,5 +579,3 @@ fn peer_job(
 		_ => super::fence(state, fx),
 	}
 }
-
-

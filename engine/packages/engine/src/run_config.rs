@@ -426,5 +426,3 @@ async fn wait_for_singleton_handover(
 	let deadline = shutdown.deadline(force_after)?.saturating_sub(teardown_ms);
 	rivet_env::timeout_at(clock, deadline, handover).await?
 }
-
-

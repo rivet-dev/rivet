@@ -384,5 +384,3 @@ fn error_from_json_value(value: &JsonValue) -> Result<(String, String, String, O
 		value.get("metadata").cloned(),
 	))
 }
-
-

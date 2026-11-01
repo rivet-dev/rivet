@@ -191,8 +191,6 @@ pub(crate) fn next_alarm(alarm: Alarm, next: usize, cap: usize) -> (Alarm, Optio
 	(alarm, None)
 }
 
-
-
 pub(crate) struct BufferUsage(Arc<Buffer>, usize);
 
 impl Drop for BufferUsage {

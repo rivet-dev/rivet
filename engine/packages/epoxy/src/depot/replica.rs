@@ -241,8 +241,6 @@ impl Replica {
 	}
 }
 
-
-
 /// The membership of a single-datacenter deployment: `replica_id` alone, active, as its own
 /// coordinator, at the first configuration epoch. Its peer addresses are empty because no
 /// request ever leaves this datacenter.

@@ -2092,9 +2092,7 @@ pub(crate) struct OpenDeadlines {
 	keys: BTreeMap<RequestId, depot_types::VolumeKey>,
 }
 
-impl OpenDeadlines {
-	
-}
+impl OpenDeadlines {}
 
 /// Arms an open's answer deadline, records its key for the expiry, and returns how long the
 /// open may be held.
@@ -2131,7 +2129,3 @@ fn arm_deadline(state: &mut MaintainerState, caller: &OpenVolume, effects: &mut 
 	}
 	budget_ms
 }
-
-
-
-

@@ -18,5 +18,3 @@ pub(super) fn local_deadline_ms(remaining_ms: u64, receiver: Clocks) -> Result<u
 		.checked_add(remaining_ms)
 		.ok_or(rivet_env::ClockError::Overflow)?)
 }
-
-

@@ -7,7 +7,6 @@ license.workspace = true
 edition.workspace = true
 
 [features]
-test-support = []
 
 [dependencies]
 sha2.workspace = true

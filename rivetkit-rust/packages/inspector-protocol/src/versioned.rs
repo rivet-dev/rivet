@@ -1365,8 +1365,6 @@ fn dropped_error(message: &str) -> v2::Error {
 	}
 }
 
-
-
 /// The error for a version this envelope cannot decode.
 fn unsupported_version(detail: String) -> DecodeError {
 	DecodeError::with_detail(DecodeErrorKind::UnsupportedVersion, 0, detail)

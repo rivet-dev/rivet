@@ -225,7 +225,7 @@ Typed SDKs for your backend and React hooks for your frontend. Rivet runs on nat
 
 **Deploy nodes on**: [Docker Compose](https://www.rivet.dev/docs/deploy/self-host/nodes/docker-compose/) • [Kubernetes](https://www.rivet.dev/docs/deploy/self-host/nodes/kubernetes/) • [VM & bare metal](https://www.rivet.dev/docs/deploy/self-host/nodes/vm/) • [Hetzner](https://www.rivet.dev/docs/deploy/self-host/nodes/hetzner/) • [AWS ECS](https://www.rivet.dev/docs/deploy/self-host/nodes/aws-ecs/) • [Railway](https://www.rivet.dev/docs/deploy/self-host/nodes/railway/) • [Render](https://www.rivet.dev/docs/deploy/self-host/nodes/render/)
 
-**Frameworks**: [React](https://www.rivet.dev/actors/docs/clients/react) • [Next.js](https://www.rivet.dev/actors/docs/quickstart/next-js) • [Hono](./examples/hono) • [Elysia](./examples/elysia) • [tRPC](./examples/trpc) • [Effect](./examples/ai-agent-effect)
+**Frameworks**: [React](https://www.rivet.dev/actors/docs/clients/react) • [Effect](./examples/ai-agent-effect)
 
 **Runtimes**: [Node.js](https://www.rivet.dev/actors/docs/quickstart/backend) • [Bun](https://www.rivet.dev/actors/docs/quickstart/backend) • [Rust](https://www.rivet.dev/actors/docs/quickstart/rust)
 

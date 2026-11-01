@@ -43,5 +43,3 @@ impl<'de> TupleUnpack<'de> for SigningKeyRingKey {
 		Ok((input, Self))
 	}
 }
-
-

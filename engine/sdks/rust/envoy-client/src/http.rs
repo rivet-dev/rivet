@@ -327,5 +327,3 @@ impl Drop for HttpResponseBodyStream {
 		}
 	}
 }
-
-

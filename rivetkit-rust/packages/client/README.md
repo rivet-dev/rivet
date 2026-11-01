@@ -34,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
         ClientConfig::new("http://localhost:8080")
             .transport(TransportKind::Ws)
             .encoding(EncodingKind::Json),
-    );
+    )?;
 
     // Connect to a chat room actor
     let chat_room = client.get_or_create(

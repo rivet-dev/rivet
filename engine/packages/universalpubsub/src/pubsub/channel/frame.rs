@@ -221,8 +221,6 @@ impl ByteBudget {
 				.map(|gauge| rivet_metrics::GaugeGuardExt::add_guard(gauge, len as i64)),
 		}
 	}
-
-	
 }
 
 /// Bytes held in a channel's write queue until the frame leaves it.
@@ -258,8 +256,6 @@ impl Drop for WaiterGuard<'_> {
 		self.0.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
 	}
 }
-
-
 
 /// The error a remote handler's failure code stands for. Unknown codes are transport errors.
 pub(super) fn error_from_code(code: &str) -> anyhow::Error {

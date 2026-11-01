@@ -708,8 +708,6 @@ pub(super) fn normalize_actor_request_path(path: &str) -> String {
 	}
 }
 
-
-
 pub(super) fn build_envoy_response(
 	response: ActorHttpResponse,
 	request_method: &http::Method,
@@ -1159,5 +1157,3 @@ fn bearer_token_from_authorization(value: &str) -> Option<&str> {
 	let token = rest.trim_start();
 	if token.is_empty() { None } else { Some(token) }
 }
-
-

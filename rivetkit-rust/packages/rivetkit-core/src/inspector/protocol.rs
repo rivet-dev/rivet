@@ -61,5 +61,3 @@ pub(crate) fn encode_server_payload(message: &ServerMessage, version: u16) -> Re
 		version,
 	)
 }
-
-

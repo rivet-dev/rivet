@@ -520,14 +520,6 @@ impl NativeDatabaseHandle {
 		self.vfs.sqlite_vfs_metrics()
 	}
 
-	
-
-	
-
-	
-
-	
-
 	async fn initialize(&self) -> Result<()> {
 		self.map_worker_result(self.worker.wait_ready().await)
 	}
@@ -562,5 +554,3 @@ impl NativeDatabaseHandle {
 			.map(|message| SqliteWorkerFatalError::new(message).into())
 	}
 }
-
-

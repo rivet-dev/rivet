@@ -439,8 +439,6 @@ impl SqliteDb {
 		self.traced(SqliteOperation::TransactionBegin, task).await
 	}
 
-	
-
 	async fn begin_transaction_profiled_inner(
 		&self,
 		key: String,

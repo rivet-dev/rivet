@@ -339,8 +339,6 @@ fn admission_rejection(start: &protocol::ToRivetResponseStart) -> Result<Option<
 	))
 }
 
-
-
 /// How long a complete response waits to finish its upload half before the final bytes go to
 /// the HTTP caller anyway. A healthy envoy takes the terminal packet at once; a stalled envoy
 /// must not hold a finished response for the whole stream deadline.

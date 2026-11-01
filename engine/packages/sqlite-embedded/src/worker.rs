@@ -134,7 +134,6 @@ struct PoolShared {
 	epoch: Instant,
 	wake: Condvar,
 	metrics: Option<Arc<dyn SqlitePoolMetrics>>,
-	
 }
 
 /// Databases waiting for their idle release, each queued at most once.
@@ -175,8 +174,6 @@ impl<T> IdleQueue<T> {
 	fn head(&self) -> Option<Instant> {
 		self.queue.first().map(|(at, _)| *at)
 	}
-
-	
 
 	/// Removes up to `limit` entries due at `now`. `due_at` reads a live item's current due
 	/// time: one still in the future is queued again at that time, and the rest are returned.
@@ -470,7 +467,6 @@ impl SqlitePool {
 					epoch: Instant::now(),
 					wake: Condvar::new(),
 					metrics,
-					
 				}),
 			}),
 		}
@@ -495,10 +491,6 @@ impl SqlitePool {
 	pub fn max_threads(&self) -> usize {
 		self.owner.shared.max_threads
 	}
-
-	
-
-	
 }
 
 impl Drop for PoolOwner {
@@ -578,7 +570,6 @@ impl PoolShared {
 	fn spawn_thread(self: &Arc<Self>, state: &mut PoolState) -> bool {
 		let shared = Arc::clone(self);
 		let index = state.threads.len();
-		
 		let spawned = std::thread::Builder::new()
 			.name(format!("sqlite-pool-{index}"))
 			.stack_size(SQLITE_WORKER_STACK_BYTES)
@@ -1135,8 +1126,6 @@ enum SqliteCommand {
 	Cork { reply: oneshot::Sender<Result<()>> },
 	/// Sends the corked commits as one; see `NativeDatabase::uncork_commits`.
 	Uncork { reply: oneshot::Sender<Result<()>> },
-	
-	
 }
 
 #[derive(Debug)]
@@ -1463,12 +1452,6 @@ impl SqliteWorkerHandle {
 			}
 		}
 	}
-
-	
-
-	
-
-	
 }
 
 impl SqliteWorkerInner {
@@ -1745,8 +1728,6 @@ fn run_command_inner(
 				*pending_uncork = Some(reply);
 			}
 		}
-		
-		
 	}
 }
 
@@ -1997,8 +1978,6 @@ fn fail_command(command: SqliteCommand) {
 		SqliteCommand::Cork { reply } | SqliteCommand::Uncork { reply } => {
 			let _ = reply.send(Err(sqlite_closing_error()));
 		}
-		
-		
 	}
 }
 
@@ -2108,11 +2087,3 @@ fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
 		"unknown panic".to_string()
 	}
 }
-
-
-
-
-
-
-
-

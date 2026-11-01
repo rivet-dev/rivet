@@ -99,5 +99,3 @@ impl Drop for HttpResponseQueuePermit {
 		self.budget.messages.fetch_sub(1, Ordering::AcqRel);
 	}
 }
-
-

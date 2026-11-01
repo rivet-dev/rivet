@@ -680,5 +680,3 @@ fn retains_stopping(manifest: &TabletManifest, tablet: &Tablet) -> bool {
 			.any(|entry| entry.worker_id == *id && entry.permitted_at.is_none())
 	})
 }
-
-

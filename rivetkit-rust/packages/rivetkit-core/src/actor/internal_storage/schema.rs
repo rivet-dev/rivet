@@ -249,12 +249,6 @@ pub(crate) fn bootstrap_statements() -> Result<Vec<SqliteBatchStatement>> {
 	Ok(statements)
 }
 
-
-
-
-
-
-
 /// [`ensure_internal_schema`] for a caller that already probed for the schema, so a start does
 /// not read the schema table twice.
 pub(crate) async fn ensure_probed_internal_schema(db: &SqliteDb, has_schema: bool) -> Result<()> {
@@ -344,26 +338,4 @@ fn decode_schema_version(value: &[u8]) -> Result<i64> {
 	Ok(i64::from_le_bytes(bytes))
 }
 
-#[cfg(any(test, feature = "test-support"))]
-pub(crate) fn initialize_test_schema(conn: &rusqlite::Connection) -> Result<()> {
-	conn.execute_batch(CREATE_META_TABLE)
-		.context("create test internal schema metadata table")?;
-	for migration in MIGRATIONS {
-		for sql in *migration {
-			conn.execute_batch(sql)
-				.context("apply test internal schema migration")?;
-		}
-	}
-	conn.execute(
-		UPSERT_META_TEXT_SQL,
-		rusqlite::params![
-			SCHEMA_VERSION_KEY,
-			encode_schema_version(INTERNAL_SCHEMA_VERSION)
-		],
-	)
-	.context("record test internal schema version")?;
-	Ok(())
-}
-
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

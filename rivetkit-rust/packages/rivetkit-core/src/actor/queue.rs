@@ -131,8 +131,6 @@ struct CompletionHandleInner {
 pub(crate) type QueueMetadata = persist_v4::QueueMetadata;
 pub(crate) type PersistedQueueMessage = persist_v4::QueueMessage;
 
-
-
 pub(crate) fn decode_queue_metadata(payload: &[u8]) -> Result<QueueMetadata> {
 	let metadata = decode_latest_with_embedded_version::<persist_versioned::QueueMetadata>(
 		payload,
@@ -903,8 +901,6 @@ impl ActorContext {
 		self.0.queue_config.lock().clone()
 	}
 
-	
-
 	fn notify_wait_activity(&self) {
 		if let Some(callback) = self.0.queue_wait_activity_callback.lock().clone() {
 			callback();
@@ -1085,4 +1081,3 @@ fn duration_ms(duration: Duration) -> u64 {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

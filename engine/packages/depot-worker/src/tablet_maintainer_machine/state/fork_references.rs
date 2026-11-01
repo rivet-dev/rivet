@@ -569,8 +569,6 @@ pub(crate) fn drive(state: &mut MaintainerState, fx: &mut Effects) {
 	}
 }
 
-
-
 /// The spec's parent and destination volumes that live in this tablet, deduplicated.
 pub(crate) fn fork_volumes(
 	state: &MaintainerState,

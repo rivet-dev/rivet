@@ -332,5 +332,3 @@ fn advance(previous: u64, current: u64) -> u64 {
 fn saturating_i64(value: u64) -> i64 {
 	i64::try_from(value).unwrap_or(i64::MAX)
 }
-
-

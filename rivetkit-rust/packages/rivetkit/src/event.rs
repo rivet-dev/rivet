@@ -917,5 +917,3 @@ fn warn_dropped_event(variant: &'static str, identifying: impl fmt::Display) {
 		"rivetkit event dropped without replying"
 	);
 }
-
-

@@ -212,5 +212,3 @@ impl<'de> Deserialize<'de> for Members {
 		Ok(map.into_iter().collect())
 	}
 }
-
-

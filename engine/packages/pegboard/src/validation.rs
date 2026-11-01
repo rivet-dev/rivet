@@ -115,8 +115,6 @@ pub fn pool_name(pool: &str) -> Result<()> {
 	Ok(())
 }
 
-
-
 #[derive(Debug, RivetError)]
 #[error("pool", "not_found", "The node pool does not exist.")]
 pub struct PoolNotFound;

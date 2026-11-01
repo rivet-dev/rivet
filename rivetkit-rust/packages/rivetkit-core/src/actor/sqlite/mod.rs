@@ -44,7 +44,6 @@ pub use tx::{
 	TransactionCoordinatorClosedError, TransactionExpiredError, TransactionInvalidArgumentError,
 	TransactionQueueFullError, TransactionTerminalError, TransactionUnknownError,
 };
-
 use tx::{TransactionCoordinator, run_detached_transaction_task};
 
 #[cfg(feature = "sqlite-local")]
@@ -351,8 +350,6 @@ impl SqliteDb {
 	pub(crate) fn set_profiling_config(&mut self, config: crate::SqliteProfilingConfig) {
 		self.profiling = Arc::new(profiling::SqliteProfilingState::new(config));
 	}
-
-	
 
 	pub fn is_enabled(&self) -> bool {
 		self.enabled
@@ -1040,8 +1037,6 @@ impl SqliteDb {
 		}
 		self.close().await
 	}
-
-	
 
 	pub fn take_last_kv_error(&self) -> Option<String> {
 		if self.backend != SqliteBackend::LocalNative {
@@ -1906,5 +1901,3 @@ fn json_type_name(value: &JsonValue) -> &'static str {
 		JsonValue::Object(_) => "object",
 	}
 }
-
-

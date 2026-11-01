@@ -710,5 +710,3 @@ unsafe extern "C" fn x_shrink(cache: *mut sqlite3_pcache) {
 	}
 	pager.release(freed);
 }
-
-

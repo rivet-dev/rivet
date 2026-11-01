@@ -76,8 +76,6 @@ pub(crate) async fn reconnect_lost_threshold_ms(shared: &SharedContext) -> u64 {
 		.unwrap_or(10_000)
 }
 
-
-
 /// Installs a session, or returns zero if shutdown has already started.
 pub(crate) async fn install_connection_with_http(
 	shared: &SharedContext,
@@ -131,8 +129,6 @@ fn record_contact_before_install(shared: &SharedContext) {
 		},
 	);
 }
-
-
 
 pub(crate) async fn remove_connection_for_session(shared: &SharedContext, session: u64) {
 	let mut guard = shared.ws_tx.lock().await;
@@ -577,7 +573,6 @@ fn ws_url(shared: &SharedContext) -> String {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-
 
 /// A missing or malformed optional diagnostic header leaves session attribution unknown.
 #[cfg(all(not(target_arch = "wasm32"), any(feature = "native-transport", test)))]

@@ -540,5 +540,3 @@ impl PreparedAppend {
 		}
 	}
 }
-
-

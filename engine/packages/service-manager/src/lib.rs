@@ -366,5 +366,3 @@ async fn restart_delay(context: &rivet_engine_context::EngineContext) {
 		context.env().exit(1).await;
 	}
 }
-
-

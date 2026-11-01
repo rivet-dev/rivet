@@ -41,6 +41,9 @@ pub struct RemoteManager {
 	max_input_size: usize,
 	disable_metadata_lookup: bool,
 	resolved_config: Arc<OnceCell<ResolvedClientConfig>>,
+	/// Set when the connection settings could not be resolved. Every request
+	/// returns it, because `Client::new` cannot fail.
+	connection_error: Option<String>,
 	client: reqwest::Client,
 }
 
@@ -130,25 +133,13 @@ pub enum GatewayTarget {
 }
 
 impl RemoteManager {
-	pub fn new(endpoint: &str, token: Option<String>) -> Self {
-		Self {
-			endpoint: endpoint.to_string(),
-			token,
-			namespace: default_namespace(),
-			pool_name: default_pool_name(),
-			headers: HashMap::new(),
-			max_input_size: default_max_input_size(),
-			disable_metadata_lookup: false,
-			resolved_config: Arc::new(OnceCell::new()),
-			client: reqwest::Client::new(),
-		}
-	}
-
+	/// Takes connection settings that `Client::new` has already resolved, so
+	/// no defaults are applied here.
 	pub fn from_config(
 		endpoint: String,
 		token: Option<String>,
-		namespace: Option<String>,
-		pool_name: Option<String>,
+		namespace: String,
+		pool_name: String,
 		headers: Option<HashMap<String, String>>,
 		max_input_size: Option<usize>,
 		disable_metadata_lookup: bool,
@@ -156,13 +147,26 @@ impl RemoteManager {
 		Self {
 			endpoint,
 			token,
-			namespace: namespace.unwrap_or_else(default_namespace),
-			pool_name: pool_name.unwrap_or_else(default_pool_name),
+			namespace,
+			pool_name,
 			headers: headers.unwrap_or_default(),
 			max_input_size: max_input_size.unwrap_or_else(default_max_input_size),
 			disable_metadata_lookup,
 			resolved_config: Arc::new(OnceCell::new()),
+			connection_error: None,
 			client: reqwest::Client::new(),
+		}
+	}
+
+	pub(crate) fn with_connection_error(mut self, error: String) -> Self {
+		self.connection_error = Some(error);
+		self
+	}
+
+	fn check_connection(&self) -> Result<()> {
+		match &self.connection_error {
+			Some(error) => Err(anyhow!("invalid client configuration: {error}")),
+			None => Ok(()),
 		}
 	}
 
@@ -183,6 +187,8 @@ impl RemoteManager {
 	}
 
 	async fn resolved_config(&self) -> Result<ResolvedClientConfig> {
+		self.check_connection()?;
+
 		if self.disable_metadata_lookup {
 			return Ok(self.base_config());
 		}
@@ -248,12 +254,14 @@ impl RemoteManager {
 
 	pub async fn get_for_id(&self, name: &str, actor_id: &str) -> Result<Option<String>> {
 		let config = self.resolved_config().await?;
-		let url = format!(
-			"{}/actors?namespace={}&name={}&actor_ids={}",
-			config.endpoint,
-			urlencoding::encode(&config.namespace),
-			urlencoding::encode(name),
-			urlencoding::encode(actor_id)
+		let url = combine_url_path(
+			&config.endpoint,
+			&format!(
+				"/actors?namespace={}&name={}&actor_ids={}",
+				urlencoding::encode(&config.namespace),
+				urlencoding::encode(name),
+				urlencoding::encode(actor_id)
+			),
 		);
 
 		let req = self.apply_common_headers_with(self.client.get(&url), &config)?;
@@ -280,12 +288,14 @@ impl RemoteManager {
 	pub async fn get_with_key(&self, name: &str, key: &ActorKey) -> Result<Option<String>> {
 		let config = self.resolved_config().await?;
 		let key_str = actor_key::slash::serialize(key);
-		let url = format!(
-			"{}/actors?namespace={}&name={}&key={}",
-			config.endpoint,
-			urlencoding::encode(&config.namespace),
-			urlencoding::encode(name),
-			urlencoding::encode(&key_str)
+		let url = combine_url_path(
+			&config.endpoint,
+			&format!(
+				"/actors?namespace={}&name={}&key={}",
+				urlencoding::encode(&config.namespace),
+				urlencoding::encode(name),
+				urlencoding::encode(&key_str)
+			),
 		);
 
 		let req = self.apply_common_headers_with(self.client.get(&url), &config)?;
@@ -335,10 +345,12 @@ impl RemoteManager {
 
 		let req = self.apply_common_headers_with(
 			self.client
-				.put(format!(
-					"{}/actors?namespace={}",
-					config.endpoint,
-					urlencoding::encode(&config.namespace)
+				.put(combine_url_path(
+					&config.endpoint,
+					&format!(
+						"/actors?namespace={}",
+						urlencoding::encode(&config.namespace)
+					),
 				))
 				.json(&request_body),
 			&config,
@@ -398,10 +410,12 @@ impl RemoteManager {
 
 		let req = self.apply_common_headers_with(
 			self.client
-				.post(format!(
-					"{}/actors?namespace={}",
-					config.endpoint,
-					urlencoding::encode(&config.namespace)
+				.post(combine_url_path(
+					&config.endpoint,
+					&format!(
+						"/actors?namespace={}",
+						urlencoding::encode(&config.namespace)
+					),
 				))
 				.json(&request_body),
 			&config,
@@ -549,6 +563,7 @@ impl RemoteManager {
 	}
 
 	pub fn gateway_url(&self, query: &ActorQuery) -> Result<String> {
+		self.check_connection()?;
 		let config = self.base_config();
 		match query {
 			ActorQuery::GetForId { get_for_id } => {
@@ -831,6 +846,9 @@ impl RemoteManager {
 	}
 }
 
+/// Joins a request path onto the endpoint. The resolved endpoint is URL
+/// normalized, so it may end in `/`; every request URL must go through here so
+/// that slash never doubles.
 fn combine_url_path(endpoint: &str, path: &str) -> String {
 	format!("{}{}", endpoint.trim_end_matches('/'), path)
 }
@@ -856,14 +874,6 @@ fn normalize_raw_websocket_path(path: &str) -> String {
 	} else {
 		format!("{PATH_WEBSOCKET_PREFIX}{path_portion}?{query_portion}")
 	}
-}
-
-fn default_namespace() -> String {
-	"default".to_string()
-}
-
-fn default_pool_name() -> String {
-	"default".to_string()
 }
 
 fn default_max_input_size() -> usize {

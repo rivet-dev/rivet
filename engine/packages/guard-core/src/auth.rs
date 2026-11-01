@@ -124,8 +124,6 @@ pub fn close_reason(error: &anyhow::Error) -> String {
 	format!("{}.{}", error.group(), error.code())
 }
 
-
-
 /// Valid credential with JWT namespace and grants retained for per-route authorization.
 #[derive(Clone, Debug)]
 pub enum Credential {

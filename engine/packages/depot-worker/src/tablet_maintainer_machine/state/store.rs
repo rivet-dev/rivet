@@ -173,8 +173,6 @@ impl StoreQueue {
 		self.work.len()
 	}
 
-	
-
 	pub(crate) fn iter(&self) -> std::collections::vec_deque::Iter<'_, StoreWork> {
 		self.work.iter()
 	}
@@ -1004,8 +1002,6 @@ fn drive_session_reads(state: &mut MaintainerState, effects: &mut Effects) {
 	}
 }
 
-
-
 /// `select` continued from `progress`, which it advances as it judges items.
 fn select_resuming(
 	state: &MaintainerState,
@@ -1396,5 +1392,3 @@ fn drive_queue(state: &mut MaintainerState, effects: &mut Effects, resume: bool)
 		}
 	}
 }
-
-

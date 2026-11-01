@@ -254,5 +254,3 @@ fn catch_up_completed(
 	}
 	result.map_err(|error| error.to_string())
 }
-
-

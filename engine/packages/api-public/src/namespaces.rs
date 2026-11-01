@@ -1,4 +1,3 @@
-use rivet_auth::*;
 use anyhow::Result;
 use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
@@ -8,6 +7,7 @@ use rivet_api_builder::{
 use rivet_api_peer::namespaces::*;
 use rivet_api_types::namespaces::list::*;
 use rivet_api_util::request_remote_datacenter;
+use rivet_auth::*;
 
 use crate::ctx::ApiCtx;
 

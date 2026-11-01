@@ -954,5 +954,3 @@ impl FilesystemStore {
 		Ok(Some(position.volume_seq))
 	}
 }
-
-

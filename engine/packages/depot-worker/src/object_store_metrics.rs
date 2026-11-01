@@ -757,5 +757,3 @@ impl ObjectStore for InstrumentedObjectStore {
 fn list_source(prefix: Option<&Path>) -> ObjectSource {
 	prefix.map_or(ObjectSource::Other, ObjectSource::of_path)
 }
-
-

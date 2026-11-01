@@ -82,5 +82,3 @@ pub async fn update_dynamic_config(
 	)
 	.await
 }
-
-

@@ -166,5 +166,3 @@ pub trait Actor: Send + Sync + Sized + 'static {
 		Ok(())
 	}
 }
-
-

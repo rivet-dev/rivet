@@ -1192,5 +1192,3 @@ pub(crate) fn fence(state: &mut MaintainerState, fx: &mut Effects) {
 		}
 	}
 }
-
-

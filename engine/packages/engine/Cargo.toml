@@ -67,8 +67,3 @@ tracing.workspace = true
 universalpubsub.workspace = true
 uuid.workspace = true
 
-[[example]]
-name = "actor-v3-cluster"
-path = "../../tests/actor-v3/cluster.rs"
-
-# Runs the actor v3 cluster example as a subprocess, so `cargo test` builds the example first.

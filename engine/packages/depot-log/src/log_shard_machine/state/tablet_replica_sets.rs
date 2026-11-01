@@ -191,5 +191,3 @@ pub(crate) fn learner_floor(state: &LogShardState, tablet_id: &[u8; 16]) -> u64 
 		set.tablet_replica_set_version
 	}
 }
-
-

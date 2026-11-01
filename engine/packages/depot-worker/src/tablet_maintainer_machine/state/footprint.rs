@@ -300,8 +300,6 @@ impl FootprintVolumes {
 		}
 	}
 
-	
-
 	/// Sets the access of `volume`, replacing an earlier one.
 	fn insert(&mut self, volume: StoreVolume, access: VolumeAccess) {
 		match self {
@@ -869,5 +867,3 @@ pub(crate) fn validate(state: &MaintainerState) -> anyhow::Result<()> {
 	}
 	Ok(())
 }
-
-

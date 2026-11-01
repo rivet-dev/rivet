@@ -64,5 +64,3 @@ pub(crate) async fn execute(ctx: &EngineContext, command: Command) -> Result<Val
 		"coordinatorObservationRequired": true,
 	}))
 }
-
-

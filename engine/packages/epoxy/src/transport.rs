@@ -281,5 +281,3 @@ fn clock_failure(error: &anyhow::Error) -> bool {
 			.downcast_ref::<rivet_env::TimeoutError>()
 			.is_some_and(|error| matches!(error, rivet_env::TimeoutError::Clock(_)))
 }
-
-

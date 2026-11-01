@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use rivet_auth::*;
 use anyhow::Result;
 use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
@@ -12,6 +11,7 @@ use rivet_api_types::{
 	runner_pools::{RunnerPoolResponse, list::*},
 };
 use rivet_api_util::fanout_to_datacenters;
+use rivet_auth::*;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

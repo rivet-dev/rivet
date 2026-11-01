@@ -418,5 +418,3 @@ fn decode(request: &universalpubsub::RequestMessage, actor_id: Id) -> Result<Not
 	);
 	Notice::decode(&notice.kind)
 }
-
-

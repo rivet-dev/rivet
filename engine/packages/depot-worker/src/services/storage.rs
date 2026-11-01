@@ -610,8 +610,6 @@ impl SingletonServices for StorageSingletons {
 	}
 }
 
-
-
 /// The coordinator's automatic placement settings, or none when the operator disabled it.
 ///
 /// A new worker must stay listed longer than a dead worker can stay listed: a worker that

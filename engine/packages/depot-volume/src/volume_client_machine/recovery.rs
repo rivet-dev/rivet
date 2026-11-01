@@ -1318,8 +1318,6 @@ fn probe_result(
 	}
 }
 
-
-
 /// Accepts an open that created the volume with this client's initial writes. The maintainer
 /// wrote them with the replicas and this client's claim, at the sequences after cold, and an
 /// in-sync quorum of members answered holding them. So they are committed history under this

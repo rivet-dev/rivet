@@ -260,5 +260,3 @@ fn telemetry_now() -> Instant {
 	)]
 	Instant::now()
 }
-
-

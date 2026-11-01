@@ -80,28 +80,6 @@ pub trait HolderWatches: Send + Sync + 'static {
 	>;
 }
 
-/// Holder watches for tests that do not exercise holders: every watch starts and none ever
-/// reports its holder gone, so parked volumes stay loaded, as under a live holder.
-#[cfg(any(test, feature = "test-support"))]
-pub struct LiveHolders;
-
-#[cfg(any(test, feature = "test-support"))]
-impl HolderWatches for LiveHolders {
-	fn watch_holder<'a>(
-		&'a self,
-		_holder: &'a rivet_data::generated::shared_depot_types_v1::VolumeHolder,
-	) -> futures_util::future::BoxFuture<
-		'a,
-		anyhow::Result<futures_util::future::BoxFuture<'static, ()>>,
-	> {
-		Box::pin(async {
-			let never: futures_util::future::BoxFuture<'static, ()> =
-				Box::pin(std::future::pending());
-			Ok(never)
-		})
-	}
-}
-
 /// Reports split preparation and retired-store deletion through coordinator discovery.
 /// Retry and completion decisions remain in the maintainer state machine.
 pub trait SplitReporter: Send + Sync + 'static {
@@ -284,7 +262,6 @@ pub struct Maintainer {
 	alarm_tasks: Arc<SyncMutex<BTreeMap<OpId, AbortHandle>>>,
 	kv_host: KvHost,
 	kv_responses: KvResponses,
-	
 	inbox: Option<mpsc::Sender<MaintainerEvent>>,
 	/// Opens queued in the inbox, not yet taken by the runner, at which a new open is
 	/// refused at submit.
@@ -382,8 +359,6 @@ impl Maintainer {
 		let mutation_guard: Arc<dyn rivet_env::MutationGuard> = Arc::new(move || {
 			!guard_closing.load(Ordering::Acquire) && guard_authority.may_serve(&guard_grant)
 		});
-		
-		
 		let (io_done, io_stopped) = oneshot::channel();
 		let storage_env = deps.env.clone();
 		let (reads, read_dispatches) = mpsc::unbounded_channel::<ReadDispatch>();
@@ -444,7 +419,6 @@ impl Maintainer {
 				}
 				// Apply and flush holds pause inside their own task, so the loop keeps
 				// dispatching while one is parked.
-				
 				running.retain(|task| !task.is_finished());
 				if let MaintainerEffect::FilesystemApplyRequest {
 					read_timeout_ms,
@@ -481,10 +455,8 @@ impl Maintainer {
 					let clock = storage_env.clock();
 					let authority = authority.clone();
 					let grant = io_grant.clone();
-					
 					let panic_inbox = inbox.clone();
 					running.push(operations.spawn(fence_on_panic(panic_inbox, async move {
-						
 						let timer = crate::metrics::TABLET_STORE_OPERATION_DURATION
 							.with_label_values(&["filesystem_apply"])
 							.start_timer();
@@ -546,7 +518,6 @@ impl Maintainer {
 									})
 							}),
 						);
-						
 						let event = if authority.may_serve(&grant) {
 							event
 						} else {
@@ -568,10 +539,8 @@ impl Maintainer {
 					let authority = authority.clone();
 					let grant = io_grant.clone();
 					let upload_load = load.load.clone();
-					
 					let panic_inbox = inbox.clone();
 					running.push(operations.spawn(fence_on_panic(panic_inbox, async move {
-						
 						// Stage, report staged, then make the records durable. The
 						// staged report always precedes the flush response.
 						let operation_timer = crate::metrics::TABLET_STORE_OPERATION_DURATION
@@ -599,7 +568,6 @@ impl Maintainer {
 									op_id,
 									result: Err(error.to_string()),
 								};
-								
 								let event = if authority.may_serve(&grant) {
 									event
 								} else {
@@ -632,7 +600,6 @@ impl Maintainer {
 						let result = finished.map(|_| ()).map_err(|e| e.to_string());
 						completion.finish(&result);
 						let event = MaintainerEvent::FilesystemFlushResponse { op_id, result };
-						
 						let event = if authority.may_serve(&grant) {
 							event
 						} else {
@@ -654,7 +621,6 @@ impl Maintainer {
 					let authority = authority.clone();
 					let grant = io_grant.clone();
 					let store_load = load.load.clone();
-					
 					let panic_inbox = inbox.clone();
 					running.push(operations.spawn(fence_on_panic(panic_inbox, async move {
 						let operation_timer = store_operation_label(&effect).map(|operation| {
@@ -674,7 +640,6 @@ impl Maintainer {
 							));
 						}
 						completion.finish(&());
-						
 						if let Some(event) = event {
 							let event = if authority.may_serve(&grant) {
 								event
@@ -770,7 +735,6 @@ impl Maintainer {
 						inbox.clone(),
 					)));
 				}
-				
 				if let Some(event) = event {
 					if let MaintainerEvent::ColdClosed { result } = &event {
 						close_result = result.clone();
@@ -864,7 +828,6 @@ impl Maintainer {
 			alarm_tasks,
 			kv_host,
 			kv_responses,
-			
 			inbox: Some(handle.inbox),
 			max_queued_opens: u64::from(config.max_queued_opens),
 			opens_submitted: AtomicU64::new(0),
@@ -937,8 +900,6 @@ impl Maintainer {
 		};
 		Box::pin(async move { inbox.reserve_owned().await.ok().map(UpdateSlot) })
 	}
-
-	
 
 	/// Queues `event` with `slot` when one is held, and otherwise only if the inbox has room.
 	fn offer_update(
@@ -3337,10 +3298,6 @@ fn open_reply_label(response: &ClientResponse) -> &'static str {
 	}
 }
 
-
-
-
-
 impl ReplicaTransport for depot_volume::ups::UpsLogClient {
 	fn request(
 		&self,
@@ -3444,8 +3401,6 @@ impl Maintainer {
 	}
 }
 
-
-
 impl Maintainer {
 	/// A check waits for a fresh bounded poll round; transport cancellation does not restart it.
 	pub fn stop_readiness(
@@ -3518,7 +3473,3 @@ impl Maintainer {
 		Ok(receive)
 	}
 }
-
-
-
-

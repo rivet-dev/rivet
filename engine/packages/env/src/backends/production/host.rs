@@ -218,5 +218,3 @@ pub(crate) fn parse_diskstats(text: &str, device: &str) -> Option<DiskIo> {
 		})
 	})
 }
-
-

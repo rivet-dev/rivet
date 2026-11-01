@@ -259,5 +259,3 @@ fn decode_handoff_reply(
 	);
 	Ok(proof)
 }
-
-

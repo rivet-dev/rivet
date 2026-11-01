@@ -1,4 +1,3 @@
-use rivet_auth::*;
 use anyhow::Result;
 use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
@@ -10,6 +9,7 @@ use rivet_api_types::{
 	runners::{Runner, list::*},
 };
 use rivet_api_util::fanout_to_datacenters;
+use rivet_auth::*;
 
 use crate::ctx::ApiCtx;
 

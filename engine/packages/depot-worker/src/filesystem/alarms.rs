@@ -258,5 +258,3 @@ impl FilesystemStore {
 		Ok(Some(current))
 	}
 }
-
-

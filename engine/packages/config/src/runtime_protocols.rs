@@ -81,12 +81,7 @@ impl RuntimeProtocols {
 
 	/// Returns every protocol in a fixed order, allowing each to be modified in place.
 	pub fn iter_mut(&mut self) -> std::array::IntoIter<&mut RuntimeProtocol, 3> {
-		[
-			&mut self.envoy,
-			&mut self.ups,
-			&mut self.epoxy,
-		]
-		.into_iter()
+		[&mut self.envoy, &mut self.ups, &mut self.epoxy].into_iter()
 	}
 }
 

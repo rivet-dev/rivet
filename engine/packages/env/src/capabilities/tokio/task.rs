@@ -246,5 +246,3 @@ pub fn request_io<T: Send + 'static>(
 		.recv()
 		.map_err(|_| anyhow::anyhow!("blocking I/O owner ended before replying"))
 }
-
-

@@ -1,4 +1,7 @@
 use rivetkit_shared_types::actor_key;
+use rivetkit_shared_types::endpoint::{
+	ParsedEndpoint, is_local_engine_endpoint, parse_endpoint_auth,
+};
 use tracing::Instrument;
 
 use super::*;
@@ -171,7 +174,7 @@ impl ServeSettings {
 		// local default is used verbatim.
 		let parsed = env::var("RIVET_ENDPOINT")
 			.ok()
-			.map(extract_endpoint_auth)
+			.map(|endpoint| parse_endpoint_auth(&endpoint))
 			.transpose()
 			.context("invalid RIVET_ENDPOINT")?;
 		let env_namespace = env::var("RIVET_NAMESPACE").ok();
@@ -195,6 +198,15 @@ impl ServeSettings {
 			anyhow::bail!("cannot specify token both in the RIVET_ENDPOINT URL and as RIVET_TOKEN");
 		}
 
+		// Only an engine this machine runs gets the built-in `default` token; a
+		// remote engine without configured credentials connects unauthenticated,
+		// matching the TypeScript registry config.
+		let token = match parsed.token.or(env_token) {
+			Some(token) => Some(token),
+			None if is_local_engine_endpoint(&parsed.endpoint) => Some("default".to_owned()),
+			None => None,
+		};
+
 		Ok(Self {
 			// The legacy platform deployment still sets the old name.
 			version: env::var("RIVET_NODE_VERSION")
@@ -203,17 +215,14 @@ impl ServeSettings {
 				.and_then(|value| value.parse().ok())
 				.unwrap_or(1),
 			endpoint: parsed.endpoint,
-			token: Some(
-				parsed
-					.token
-					.or(env_token)
-					.unwrap_or_else(|| "default".to_owned()),
-			),
+			token,
 			namespace: parsed
 				.namespace
 				.or(env_namespace)
 				.unwrap_or_else(|| "default".to_owned()),
-			pool_name: env::var("RIVET_POOL_NAME").unwrap_or_else(|_| "rivetkit-rust".to_owned()),
+			// Clients default to the same pool, so a server started without
+			// configuration serves the quickstart client without configuration.
+			pool_name: env::var("RIVET_POOL").unwrap_or_else(|_| "default".to_owned()),
 			engine_binary_path: env::var_os("RIVET_ENGINE_BINARY_PATH").map(PathBuf::from),
 			start_services: matches!(env::var("RIVET_RUN_SERVICES").as_deref(), Ok("1")),
 			services_binary_path: env::var_os("RIVET_SERVICES_BINARY").map(PathBuf::from),
@@ -234,63 +243,6 @@ impl ServeSettings {
 			serverless_max_start_payload_bytes: 1_048_576,
 		})
 	}
-}
-
-/// An endpoint with URL auth credentials split out and stripped.
-#[derive(Debug)]
-struct ParsedEndpoint {
-	endpoint: String,
-	namespace: Option<String>,
-	token: Option<String>,
-}
-
-/// Parses an endpoint that may carry `https://namespace:token@host` URL auth,
-/// mirroring the TypeScript `tryParseEndpoint` helper. The returned endpoint
-/// is the URL-normalized string with any credentials stripped. Errors on
-/// invalid URLs, query strings, fragments, and a token without a namespace.
-fn extract_endpoint_auth(endpoint: String) -> anyhow::Result<ParsedEndpoint> {
-	let mut url = url::Url::parse(&endpoint).with_context(|| format!("invalid URL: {endpoint}"))?;
-	if url.query().is_some() {
-		anyhow::bail!("endpoint cannot contain a query string");
-	}
-	if url.fragment().is_some() {
-		anyhow::bail!("endpoint cannot contain a fragment");
-	}
-
-	let namespace = if url.username().is_empty() {
-		None
-	} else {
-		Some(decode_url_auth(url.username())?)
-	};
-	let token = match url.password() {
-		None | Some("") => None,
-		Some(password) => Some(decode_url_auth(password)?),
-	};
-	if token.is_some() && namespace.is_none() {
-		anyhow::bail!("endpoint cannot have a token without a namespace");
-	}
-
-	// Only strip credentials when some were parsed. URLs that carry auth
-	// always have an authority component, so clearing cannot fail there,
-	// while opaque-scheme URLs without auth would reject the setters.
-	if namespace.is_some() || token.is_some() {
-		if url.set_username("").is_err() || url.set_password(None).is_err() {
-			anyhow::bail!("endpoint URL does not support credentials");
-		}
-	}
-
-	Ok(ParsedEndpoint {
-		endpoint: url.to_string(),
-		namespace,
-		token,
-	})
-}
-
-// The raw value is intentionally left out of the error because it may be a
-// token.
-fn decode_url_auth(value: &str) -> anyhow::Result<String> {
-	super::http::percent_decode_path_segment(value)
-		.context("invalid percent-encoding in endpoint URL auth")
 }
 
 fn default_engine_endpoint(host: &str, port: u16) -> String {
@@ -343,4 +295,3 @@ fn actor_key_from_protocol(key: Option<String>) -> ActorKey {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

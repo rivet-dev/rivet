@@ -290,8 +290,6 @@ impl LoadedVolume {
 	}
 }
 
-
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) enum Operation {
 	/// One bounded alarm IO or callback attempt, including an immutable delayed retry.
@@ -1385,8 +1383,6 @@ impl SlowStoreWarning {
 		}
 	}
 }
-
-
 
 /// The metric label of a store operation, the operations whose deadline
 /// `store_operation_slow` handles.

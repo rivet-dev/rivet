@@ -71,5 +71,3 @@ pub(super) fn closed(s: &VolumeClientState, result: Result<(), WriteError>, fx: 
 	});
 	fx.execute(Effect::RecoveryResponse { result });
 }
-
-

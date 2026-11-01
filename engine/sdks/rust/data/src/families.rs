@@ -218,5 +218,3 @@ pub fn merge_marks(marks: &mut Vec<VersionMark>, other: &[VersionMark]) -> bool 
 	}
 	changed
 }
-
-

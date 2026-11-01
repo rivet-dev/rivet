@@ -244,5 +244,3 @@ pub(crate) fn validate(envelope: &AlarmTabletManifest) -> anyhow::Result<()> {
 pub(crate) fn key(id: [u8; 16]) -> vbare::Str {
 	uuid::Uuid::from_bytes(id).to_string().into()
 }
-
-

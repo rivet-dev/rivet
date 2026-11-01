@@ -173,5 +173,3 @@ async fn update_protocol_versions(
 
 	Ok(protocols)
 }
-
-

@@ -632,5 +632,3 @@ pub(crate) fn cutoff(
 		i128::from(clock.lower_unix_ms) - i128::from(retention_ms) - 2 * i128::from(uncertainty_ms);
 	i64::try_from(cutoff).ok()
 }
-
-

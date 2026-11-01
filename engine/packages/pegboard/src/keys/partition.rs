@@ -70,5 +70,3 @@ rivet_keys::volume_key! { pub EnvoyPoolIndexVolume(namespace: String) => [ENVOY_
 
 // One catalog per cluster holds every namespace record, keyed by name.
 rivet_keys::volume_key! { pub NamespaceCatalogVolume() => [NAMESPACE_CATALOG]; }
-
-

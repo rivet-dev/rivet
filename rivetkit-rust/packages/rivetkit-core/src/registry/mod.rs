@@ -403,8 +403,6 @@ fn resolve_engine_spawn(
 )]
 struct EngineSpawnEndpointConflict;
 
-
-
 #[derive(Debug, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 struct HttpQueueSendRequestJson {
@@ -867,7 +865,6 @@ impl RegistryDispatcher {
 		// Test-only seam: lets a test hold a generation in the "starting" window so it
 		// can deterministically deliver a stop for a previous generation that parks
 		// under the actor id and gets consumed by this startup.
-		
 		let (lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
 		let (dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
 		let (lifecycle_events_tx, lifecycle_events_rx) = mpsc::unbounded_channel();
@@ -1234,8 +1231,6 @@ impl RegistryDispatcher {
 				TransitionResult::Vacant => {}
 			}
 
-			
-
 			// No instance is registered, so park the stop for the next start of this
 			// actor id. A start publishes its instance before it drains this map, so
 			// if one drained the map before this insert, its instance is visible now
@@ -1451,7 +1446,5 @@ fn map_envoy_stop_reason(reason: &protocol::StopActorReason) -> ShutdownKind {
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
 
-
 // Test-only hooks used by the moved registry tests to deterministically drive the
 // generation-stop race. Gated behind `cfg(test)` so there is no production impact.
-

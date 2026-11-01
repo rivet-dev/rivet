@@ -151,8 +151,6 @@ fn matches_receiver_instance(
 		|| request.worker_incarnation == *receiver.instance_id.as_bytes()
 }
 
-
-
 pub(super) fn deliver(topology: &Topology, reply: Reply) -> Result<()> {
 	let (message, authority, mut response) = reply;
 	if authority.as_ref().is_some_and(|guard| !guard.may_reply()) {

@@ -393,7 +393,3 @@ pub async fn pool(
 		)
 		.await
 }
-
-
-
-

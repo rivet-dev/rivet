@@ -303,5 +303,3 @@ pub(crate) fn reply_listing(
 		},
 	});
 }
-
-

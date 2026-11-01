@@ -9,9 +9,7 @@ use rivet_api_builder::{create_router, extract::FailedExtraction};
 use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 
-use crate::{
-	actors, auth, ctx, datacenters, health, metadata, namespaces, runner_pools, runners,
-};
+use crate::{actors, auth, ctx, datacenters, health, metadata, namespaces, runner_pools, runners};
 
 #[derive(OpenApi)]
 #[openapi(

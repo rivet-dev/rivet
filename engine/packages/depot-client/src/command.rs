@@ -538,5 +538,3 @@ pub fn unavailable_reason_label(reason: UnavailableReason) -> &'static str {
 		UnavailableReason::Transport => "transport",
 	}
 }
-
-

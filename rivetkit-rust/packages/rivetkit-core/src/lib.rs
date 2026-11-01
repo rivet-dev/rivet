@@ -27,8 +27,6 @@ pub use telemetry::{
 	IncomingTraceContext, OutboundCallInvocation, WorkflowRunInvocation, WorkflowRunOutcome,
 	WorkflowStepOutcome, WorkflowStepSpan,
 };
-#[cfg(any(test, feature = "test-support"))]
-pub mod testing;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod tokio_runtime_metrics;
 pub(crate) mod time {

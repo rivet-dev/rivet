@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use rivet_auth::*;
 use anyhow::Result;
 use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
 };
+use rivet_auth::*;
 use serde::{Deserialize, Serialize};
 use utoipa::IntoParams;
 use utoipa::ToSchema;
@@ -18,7 +18,7 @@ use crate::ctx::ApiCtx;
 #[serde(deny_unknown_fields)]
 #[into_params(parameter_in = Query)]
 pub struct ServerlessHealthCheckQuery {
-		pub namespace: String,
+	pub namespace: String,
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]

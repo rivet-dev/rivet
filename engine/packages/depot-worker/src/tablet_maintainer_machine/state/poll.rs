@@ -1085,5 +1085,3 @@ fn record_observation(state: &mut MaintainerState, source: Source, changed: bool
 		}
 	}
 }
-
-

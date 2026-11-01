@@ -13,14 +13,7 @@ mod util;
 pub(crate) const DEFAULT_CLOUD_API: &str = "https://cloud-api.rivet.dev";
 pub(crate) const DEFAULT_ENGINE_ENDPOINT: &str = "http://127.0.0.1:6420";
 pub(crate) const DEFAULT_NAMESPACE: &str = "production";
-pub(crate) const LOCAL_NAMESPACE: &str = "default";
 pub(crate) const POOL_NAME: &str = "default";
-pub(crate) const SUPABASE_FN_DEFAULT: &str = "rivet";
-/// Supabase runs the edge runtime in a container, so the handler reaches the
-/// engine on the host through Docker's host alias instead of loopback.
-/// `supabase functions serve` supplies the `host-gateway` mapping on Linux;
-/// Docker Desktop provides the alias on macOS and Windows.
-pub(crate) const SUPABASE_ENGINE_ENDPOINT: &str = "http://host.docker.internal:6420";
 
 #[derive(Parser)]
 #[command(name = "rivet", version, about = "Rivet CLI")]
@@ -43,8 +36,6 @@ enum Commands {
 	Unlink(commands::link::UnlinkOpts),
 	/// Make an authenticated request to the Rivet Cloud API.
 	Api(commands::api::Opts),
-	/// Run a local Rivet engine and the dev server for your handler.
-	Dev(commands::dev::Opts),
 	/// Run the bundled rivet-engine binary directly (proxies all arguments).
 	Engine(commands::engine::Opts),
 	/// Manage Rivet Cloud clusters.
@@ -73,7 +64,6 @@ async fn main() -> Result<()> {
 		Commands::Link(opts) => opts.execute().await,
 		Commands::Unlink(opts) => opts.execute().await,
 		Commands::Api(opts) => opts.execute().await,
-		Commands::Dev(opts) => opts.execute().await,
 		Commands::Engine(opts) => opts.execute().await,
 		Commands::Cluster(opts) => opts.execute().await,
 		Commands::Deploy(opts) => opts.execute().await,

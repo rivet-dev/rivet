@@ -1114,8 +1114,6 @@ enum Unsettled {
 	ClockFailed,
 }
 
-
-
 /// Uses the shared manifest, lease guard and transport for raw volume clients.
 fn start_client(
 	deps: &Dependencies,

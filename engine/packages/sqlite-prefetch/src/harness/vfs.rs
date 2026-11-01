@@ -827,5 +827,3 @@ unsafe extern "C" fn io_device_characteristics(p_file: *mut sqlite3_file) -> c_i
 		}
 	}
 }
-
-

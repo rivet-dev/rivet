@@ -8,10 +8,6 @@ edition.workspace = true
 
 [features]
 
-[[example]]
-name = "depot-process-client"
-path = "tests/support/process_client.rs"
-
 [dependencies]
 vbare.workspace = true
 parking_lot.workspace = true

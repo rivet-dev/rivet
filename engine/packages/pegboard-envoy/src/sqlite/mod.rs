@@ -721,8 +721,6 @@ impl Sessions {
 		Ok((actor, pages))
 	}
 
-	
-
 	/// Keeps page recovery and execution inside one actor lane the caller already resolved,
 	/// with the volume open injected so tests can supply their own I/O.
 	#[allow(
@@ -1070,5 +1068,3 @@ fn schedule_waking(queue: &mut IndexedDeadlineQueue<Id>, id: Id, at: u64) -> boo
 	queue.schedule(id, at);
 	previous_head.is_none_or(|head| at < head)
 }
-
-

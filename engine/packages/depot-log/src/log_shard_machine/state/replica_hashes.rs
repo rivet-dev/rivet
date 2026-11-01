@@ -117,5 +117,3 @@ fn excluded_lookups(state: &LogShardState, range: &PartitionKeyHashRange) -> (bo
 		}
 	}
 }
-
-

@@ -690,7 +690,3 @@ pub fn handle_sqlite_connection_closed(ctx: &mut EnvoyContext, session: u64) {
 
 	fail_sent_remote_sqlite_requests(ctx, session);
 }
-
-
-
-

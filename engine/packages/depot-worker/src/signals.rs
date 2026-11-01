@@ -402,5 +402,3 @@ impl SignalObserver {
 		);
 	}
 }
-
-

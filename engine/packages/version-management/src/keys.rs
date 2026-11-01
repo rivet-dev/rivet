@@ -138,5 +138,3 @@ impl TuplePack for ProtocolVersionSubspaceKey {
 		t.pack(w, tuple_depth)
 	}
 }
-
-

@@ -171,21 +171,7 @@ struct StoredSchedule {
 }
 
 impl ActorContext {
-	#[cfg(any(test, feature = "test-support"))]
-	pub fn set_schedule_time_for_tests(&self, timestamp_ms: i64) {
-		self.0
-			.schedule_now_override
-			.store(timestamp_ms, Ordering::SeqCst);
-	}
-
 	pub(crate) fn schedule_now_timestamp_ms(&self) -> i64 {
-		#[cfg(any(test, feature = "test-support"))]
-		{
-			let timestamp_ms = self.0.schedule_now_override.load(Ordering::SeqCst);
-			if timestamp_ms != i64::MIN {
-				return timestamp_ms;
-			}
-		}
 		system_now_timestamp_ms()
 	}
 
@@ -835,6 +821,20 @@ impl ActorContext {
 			.store(true, Ordering::SeqCst);
 	}
 
+	/// Forgets which alarm the engine is believed to hold, so the next sync pushes the next
+	/// alarm even when it equals the persisted `last_pushed_alarm`.
+	///
+	/// A new generation cannot trust that marker. The envoy acknowledges a push as soon as it
+	/// is queued locally, so the marker is persisted whether or not the event ever reaches the
+	/// engine: a runner killed or drained past its deadline before the engine acknowledged the
+	/// event, or an envoy that already lost its actors, leaves a marker the engine never saw.
+	/// Trusting it would leave the schedule with no alarm anywhere, and the actor would never
+	/// wake. The marker still dedupes repeated pushes within one generation.
+	pub(crate) fn force_next_alarm_push(&self) {
+		self.mark_schedule_dirty();
+		self.load_last_pushed_alarm(None);
+	}
+
 	/// Sets the durable Unix-millisecond deadline that should ensure the foreign
 	/// run handler is active, starting it if inactive. This deadline shares one
 	/// physical alarm with scheduled actions, but remains independently
@@ -900,7 +900,6 @@ impl ActorContext {
 	}
 
 	async fn sync_alarm(&self) -> Result<()> {
-		
 		let next_alarm = min_deadline(
 			self.next_schedule_timestamp(false).await?,
 			self.run_wake_at(),
@@ -916,12 +915,15 @@ impl ActorContext {
 		self.sync_alarm_timestamp(next_alarm)
 	}
 
-	/// Pushes `next_alarm` to the engine unless it equals the last pushed alarm.
+	/// Pushes `next_alarm` to the engine unless it equals the last alarm this generation
+	/// pushed. A generation starts with no last pushed alarm, so its first sync pushes any
+	/// next alarm; see `force_next_alarm_push`.
 	///
 	/// Skipping an unchanged clear is safe. The engine only holds an alarm this actor pushed,
 	/// and its alarm timer is one-shot, so the only way it can hold an alarm the last pushed
-	/// value does not show is a push whose acknowledgement was never persisted. That stale
-	/// alarm wakes the actor once with nothing due; it never drops a pending alarm.
+	/// value does not show is a push of an earlier generation or one whose acknowledgement
+	/// was never persisted. That stale alarm wakes the actor once with nothing due; it never
+	/// drops a pending alarm.
 	fn sync_alarm_timestamp(&self, next_alarm: Option<i64>) -> Result<()> {
 		let should_push = self
 			.0
@@ -1042,17 +1044,12 @@ impl ActorContext {
 		if self.last_pushed_alarm().is_none() {
 			return;
 		}
-		
 		let Some(envoy_handle) = self.0.schedule_envoy_handle.lock().clone() else {
 			return;
 		};
 		let generation = *self.0.schedule_generation.lock();
 		self.set_alarm_tracked(envoy_handle, None, generation);
 	}
-
-	
-
-	
 
 	pub(crate) async fn wait_for_pending_alarm_writes(&self) {
 		let pending = {
@@ -1566,5 +1563,3 @@ fn system_now_timestamp_ms() -> i64 {
 		.unwrap_or_default();
 	i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
 }
-
-

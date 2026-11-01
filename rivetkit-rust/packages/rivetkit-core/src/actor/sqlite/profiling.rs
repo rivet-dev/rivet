@@ -357,5 +357,3 @@ fn statement_class(sql: &str) -> Option<&'static str> {
 		Some("other")
 	}
 }
-
-

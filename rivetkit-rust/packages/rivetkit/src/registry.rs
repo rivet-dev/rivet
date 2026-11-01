@@ -261,5 +261,3 @@ fn actor_config<A: Actor>(mut config: ActorConfig) -> ActorConfig {
 	}
 	config
 }
-
-

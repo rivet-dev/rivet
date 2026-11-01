@@ -758,5 +758,3 @@ fn entry_json(entry: &rivet_data::generated::depot_log_shard_v1::VolumeLogEntry)
 		"body": body,
 	})
 }
-
-

@@ -124,5 +124,3 @@ impl Default for AsyncCounter {
 		Self::new()
 	}
 }
-
-

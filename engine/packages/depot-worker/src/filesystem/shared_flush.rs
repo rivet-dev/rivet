@@ -94,8 +94,6 @@ impl SharedFlush {
 		self.run(db, cause, ticket).await
 	}
 
-	
-
 	fn ticket(&self) -> u64 {
 		self.requested.fetch_add(1, Ordering::AcqRel) + 1
 	}
@@ -126,5 +124,3 @@ impl SharedFlush {
 		Ok(SharedFlushRole::Led)
 	}
 }
-
-

@@ -10,16 +10,10 @@ macro_rules! envelope {
 	};
 }
 
-#[cfg(not(feature = "test-util"))]
 envelope!(
 	DepotFsEntryData,
 	crate::generated::depot_fs_entry_v1::FsEntry
 );
-
-
-
-
-
 
 envelope!(
 	DepotFsInodeRowData,

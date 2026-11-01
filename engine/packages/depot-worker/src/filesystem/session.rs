@@ -215,8 +215,6 @@ impl<S: LiveSession> SessionTable<S> {
 	}
 }
 
-
-
 pub struct ReadSession {
 	pub id: Uuid,
 	pub scope: keys::Scope,

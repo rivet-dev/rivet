@@ -322,5 +322,3 @@ pub(crate) fn peer(
 	};
 	queue(state, work, action);
 }
-
-

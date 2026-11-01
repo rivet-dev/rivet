@@ -56,8 +56,6 @@ fn inspector_wire_mode_from_path(path: &str) -> Result<InspectorWireMode> {
 	Ok(InspectorWireMode::Negotiated { version })
 }
 
-
-
 fn send_inspector_message(
 	sender: &WebSocketSender,
 	message: &InspectorServerMessage,

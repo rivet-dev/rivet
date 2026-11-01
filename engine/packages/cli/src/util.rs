@@ -274,4 +274,3 @@ pub fn run_command(program: &str, args: &[&str], cwd: Option<&Path>) -> Result<(
 
 // These tests live inline because `rivet-cli` is a binary-only crate, so its
 // items cannot be reached from an integration test under `tests/`.
-

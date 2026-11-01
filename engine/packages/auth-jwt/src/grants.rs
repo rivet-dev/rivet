@@ -28,10 +28,8 @@ impl<N: Clone + Ord> ValidatedGrantSet<N> {
 		}
 		if grants.iter().any(|grant| {
 			!matches!(grant.namespace, Scope::Id(ref id) if *id == namespace_id)
-				|| matches!(
-					grant.resource,
-					ResourceKind::Jwt | ResourceKind::Token
-				) || grant.operations.is_empty()
+				|| matches!(grant.resource, ResourceKind::Jwt | ResourceKind::Token)
+				|| grant.operations.is_empty()
 				|| grant.operations.len() > MAX_OPERATIONS_PER_GRANT
 		}) {
 			return Err(TokenError::InvalidGrants);

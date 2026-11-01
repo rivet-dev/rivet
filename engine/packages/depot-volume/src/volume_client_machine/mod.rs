@@ -336,11 +336,3 @@ impl EphemeralStateMachine for VolumeClientMachine {
 		Ok(())
 	}
 }
-
-
-
-
-
-
-
-

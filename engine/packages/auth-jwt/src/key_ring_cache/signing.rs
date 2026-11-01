@@ -87,5 +87,3 @@ impl CachedSnapshot {
 		})
 	}
 }
-
-

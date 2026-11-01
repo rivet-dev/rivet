@@ -250,5 +250,3 @@ async fn placement(
 		configured_bytes,
 	})
 }
-
-

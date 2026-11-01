@@ -501,8 +501,6 @@ impl VolumeClientState {
 		self.initial_writes.shrink_to_fit();
 	}
 
-	
-
 	fn initialize(
 		config: VolumeClientConfig,
 		volume: VolumeIdentity,
@@ -622,8 +620,6 @@ impl VolumeClientState {
 			read_back: None,
 		})
 	}
-
-	
 
 	/// Starts without serving authority. The start hook opens through the maintainer.
 	fn unopened(
@@ -748,8 +744,6 @@ impl VolumeClientState {
 		}
 	}
 
-	
-
 	/// Reuses completed create/open evidence without another maintainer round trip.
 	fn from_response(
 		config: VolumeClientConfig,
@@ -780,8 +774,6 @@ impl VolumeClientState {
 		state.initial_open_kept = true;
 		Ok(state)
 	}
-
-	
 
 	/// Captures required destinations in the admitted assignment. Success still needs its
 	/// phase quorums and exact matching proofs; the owner retains the attempt deadline.

@@ -216,4 +216,3 @@ pub fn encode_response_payload(payload: &[u8], target_version: u16) -> anyhow::R
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

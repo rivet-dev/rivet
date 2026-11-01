@@ -24,7 +24,7 @@ Nest actions to group related behavior:
 
 <CodeSnippet file="examples/docs/actors-actions/nested-actions.ts" />
 
-Clients use the same path, such as `handle.users.add("Ada")`. Low-level APIs and the Inspector use the dot-separated action name `users.add`.
+Clients use the same path, such as `handle.users.add("Ada")`. Low-level APIs use the dot-separated action name `users.add`.
 
 ## Calling Actions
 
@@ -120,13 +120,3 @@ Rivet provides the `ActionContextOf` utility type for exactly this purpose:
 <CodeSnippet file="examples/docs/actors-actions/action-context.ts" />
 
 See [types](/actors/docs/types) for more details on using `ActionContextOf` and other utility types.
-
-{/* TODO(code): restore when the control plane exposes an API to read an Actor's inspector token. Tracked in ACT-6493.
-
-## Debugging
-
-- `GET /inspector/rpcs` lists all available actions on an actor.
-- `POST /inspector/action/:name` executes an action with JSON args and returns output.
-- In non-dev mode, inspector endpoints require authorization.
-
-*/}

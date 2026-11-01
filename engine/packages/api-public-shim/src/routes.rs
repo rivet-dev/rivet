@@ -1141,7 +1141,3 @@ pub fn actor_json(actor: &wire::ActorData, destroy_unix_ms: Option<i64>) -> Resu
 		"destroy_ts": destroy_unix_ms,
 	}))
 }
-
-
-
-

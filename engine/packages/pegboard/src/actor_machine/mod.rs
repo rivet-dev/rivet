@@ -1469,5 +1469,3 @@ impl rivet_state_machine::EventBody for Event {
 pub struct State(pub wire::ActorState);
 
 impl rivet_state_machine::StateMachineState for State {}
-
-

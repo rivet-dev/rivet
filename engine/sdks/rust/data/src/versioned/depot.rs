@@ -250,5 +250,3 @@ impl_versioned_v1!(
 	DepotVolumeCreationData,
 	crate::generated::depot_maintainer_log_v1::VolumeCreation
 );
-
-

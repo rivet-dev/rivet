@@ -49,5 +49,3 @@ pub(crate) fn validate_lifecycle(
 	}
 	Ok(())
 }
-
-

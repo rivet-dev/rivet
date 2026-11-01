@@ -128,5 +128,3 @@ join_signal!(Main {
 	StartRotation,
 	EmergencyRotate,
 });
-
-

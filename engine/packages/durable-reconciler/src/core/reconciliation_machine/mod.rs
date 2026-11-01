@@ -4,7 +4,6 @@ pub(super) mod executor;
 pub mod snapshot;
 pub mod state;
 pub mod types;
-
 use super::Reconciler;
 use effect::Effect;
 use event::Body;
@@ -179,5 +178,3 @@ impl<R: Reconciler> Reconciliation<R> {
 		}
 	}
 }
-
-

@@ -107,93 +107,6 @@
 					"title": "Raw WebSocket",
 					"href": "/docs/api/websockets",
 					"badge": "WS"
-				},
-				{
-					"title": "Inspector",
-					"icon": "faMagnifyingGlass",
-					"pages": [
-						{
-							"title": "Get Summary",
-							"href": "/docs/api/inspector/summary",
-							"badge": "GET"
-						},
-						{
-							"title": "Get State",
-							"href": "/docs/api/inspector/state-get",
-							"badge": "GET"
-						},
-						{
-							"title": "Patch State",
-							"href": "/docs/api/inspector/state-patch",
-							"badge": "PATCH"
-						},
-						{
-							"title": "List Connections",
-							"href": "/docs/api/inspector/connections",
-							"badge": "GET"
-						},
-						{
-							"title": "List Actions",
-							"href": "/docs/api/inspector/rpcs",
-							"badge": "GET"
-						},
-						{
-							"title": "Invoke Action",
-							"href": "/docs/api/inspector/action",
-							"badge": "POST"
-						},
-						{
-							"title": "Get Queue",
-							"href": "/docs/api/inspector/queue-get",
-							"badge": "GET"
-						},
-						{
-							"title": "Enqueue Message",
-							"href": "/docs/api/inspector/queue-post",
-							"badge": "POST"
-						},
-						{
-							"title": "Clear Queue",
-							"href": "/docs/api/inspector/queue-delete",
-							"badge": "DELETE"
-						},
-						{
-							"title": "Get Traces",
-							"href": "/docs/api/inspector/traces",
-							"badge": "GET"
-						},
-						{
-							"title": "Get Workflow History",
-							"href": "/docs/api/inspector/workflow-history",
-							"badge": "GET"
-						},
-						{
-							"title": "Replay Workflow",
-							"href": "/docs/api/inspector/workflow-replay",
-							"badge": "POST"
-						},
-						{
-							"title": "Get Database Schema",
-							"href": "/docs/api/inspector/database-schema",
-							"badge": "GET"
-						},
-						{
-							"title": "Query Database Rows",
-							"href": "/docs/api/inspector/database-rows",
-							"badge": "GET"
-						},
-						{
-							"title": "Execute SQL",
-							"href": "/docs/api/inspector/database-execute",
-							"badge": "POST"
-						},
-						{
-							"title": "Inspector Connect",
-							"href": "/docs/api/inspector-connect",
-							"badge": "WS"
-						}
-					],
-					"collapsible": true
 				}
 			]
 		},
@@ -228,8 +141,33 @@
 			]
 		},
 		{
-			"title": "Workers",
+			"title": "Pools",
 			"pages": [
+				{
+					"title": "List Pools",
+					"href": "/docs/api/pools/list",
+					"badge": "GET"
+				},
+				{
+					"title": "Get Pool",
+					"href": "/docs/api/pools/get",
+					"badge": "GET"
+				},
+				{
+					"title": "Upsert Pool",
+					"href": "/docs/api/pools/upsert",
+					"badge": "PUT"
+				},
+				{
+					"title": "Delete Pool",
+					"href": "/docs/api/pools/delete",
+					"badge": "DELETE"
+				},
+				{
+					"title": "List Pool Nodes",
+					"href": "/docs/api/pools/list-nodes",
+					"badge": "GET"
+				},
 				{
 					"title": "Worker Connection",
 					"href": "/docs/api/worker-connect",

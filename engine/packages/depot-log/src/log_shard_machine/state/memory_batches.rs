@@ -336,8 +336,6 @@ impl ReadBounds {
 	pub(crate) fn largest(&self) -> Option<u32> {
 		self.counts.last_key_value().map(|(bound, _)| *bound)
 	}
-
-	
 }
 
 /// What `write_bytes` reports for a batch's frames, kept incrementally: the framed size
@@ -1215,5 +1213,3 @@ pub(crate) fn timed_out(state: &mut LogShardState, seq: u64, effects: &mut Effec
 		fail(state, "write to disk timed out".into(), effects);
 	}
 }
-
-

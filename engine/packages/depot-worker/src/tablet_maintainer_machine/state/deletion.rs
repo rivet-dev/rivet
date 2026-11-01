@@ -941,8 +941,6 @@ pub(crate) struct DeletionDrive {
 	pub window_waiting: BTreeSet<VolumeLogKey>,
 }
 
-
-
 /// Marks the deletions of every incarnation of `volume_key`.
 pub(crate) fn mark_volume_key(state: &mut MaintainerState, volume_key: &depot_types::VolumeKey) {
 	let keys = state
@@ -1562,5 +1560,3 @@ fn reply(id: RequestId, fx: &mut Effects) {
 		response: ClientResponse::VolumeDeleteResponse,
 	});
 }
-
-

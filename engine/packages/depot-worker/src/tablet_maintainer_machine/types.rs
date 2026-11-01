@@ -255,18 +255,8 @@ impl MaintainerTuning {
 	};
 }
 
-#[cfg(any(test, feature = "test-support"))]
-impl Default for MaintainerTuning {
-	fn default() -> Self {
-		Self::PRODUCTION
-	}
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MaintainerConfig {
-	/// Overrides of the fixed bounds, for tests only.
-	#[cfg(any(test, feature = "test-support"))]
-	pub tuning: MaintainerTuning,
 	pub alarms: crate::alarms::Limits,
 	/// The versions this grant writes its tablet's data at. The supervisor sets them from
 	/// the topology for every grant; the default is the lowest versions this binary writes.
@@ -351,8 +341,6 @@ pub struct MaintainerConfig {
 impl Default for MaintainerConfig {
 	fn default() -> Self {
 		Self {
-			#[cfg(any(test, feature = "test-support"))]
-			tuning: MaintainerTuning::PRODUCTION,
 			alarms: Default::default(),
 			write_versions: TabletWriteVersions::lowest(),
 			idle_unload_after_ms: 600_000,
@@ -387,14 +375,7 @@ impl Default for MaintainerConfig {
 impl MaintainerConfig {
 	/// The maintainer's fixed bounds and intervals.
 	pub fn tuning(&self) -> &MaintainerTuning {
-		#[cfg(any(test, feature = "test-support"))]
-		{
-			&self.tuning
-		}
-		#[cfg(not(any(test, feature = "test-support")))]
-		{
-			&MaintainerTuning::PRODUCTION
-		}
+		&MaintainerTuning::PRODUCTION
 	}
 }
 

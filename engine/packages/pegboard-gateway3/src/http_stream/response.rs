@@ -512,5 +512,3 @@ pub(super) async fn send_http_response_window_updates(
 fn send_http_body_error(terminal_error: &ResponseBodyTerminal, message: impl Into<String>) {
 	terminal_error.fail(Box::new(std::io::Error::other(message.into())));
 }
-
-

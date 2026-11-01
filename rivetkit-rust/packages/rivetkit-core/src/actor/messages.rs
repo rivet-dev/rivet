@@ -469,9 +469,6 @@ pub enum ActorEvent {
 		conn_id: ConnId,
 		reply: Reply<()>,
 	},
-	
-	
-	
 	WorkflowHistoryRequested {
 		reply: Reply<Option<Vec<u8>>>,
 	},
@@ -508,9 +505,6 @@ impl ActorEvent {
 				ShutdownKind::Destroy => "run_destroy_cleanup",
 			},
 			Self::DisconnectConn { .. } => "disconnect_conn",
-			
-			
-			
 			Self::WorkflowHistoryRequested { .. } => "workflow_history_requested",
 			Self::WorkflowReplayRequested { .. } => "workflow_replay_requested",
 			Self::RunWake { .. } => "run_wake",
@@ -519,4 +513,3 @@ impl ActorEvent {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

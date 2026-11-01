@@ -259,5 +259,3 @@ pub(crate) fn validate(state: &LogShardState) -> anyhow::Result<()> {
 	);
 	Ok(())
 }
-
-

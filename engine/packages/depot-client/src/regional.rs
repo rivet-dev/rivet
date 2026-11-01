@@ -190,5 +190,3 @@ impl Client {
 		Ok(response)
 	}
 }
-
-

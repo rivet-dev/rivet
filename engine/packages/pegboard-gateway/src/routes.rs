@@ -206,6 +206,8 @@ pub async fn gateway(
 		Ok(ws) => {
 			let protocols = forwarded_protocols(&ws);
 			let open = websocket_open(actor_id, epoch, &path, &request_headers);
+			let clock = ctx.env().clock();
+			let keepalive_interval_ms = ctx.config().guard().websocket_keepalive_interval_ms();
 			// A pipelined open can reach the envoy before the actor's start does, and is then
 			// refused before admission. It is opened again once the actor runs, on a new
 			// stream, so the client never sees the refusal.
@@ -236,6 +238,8 @@ pub async fn gateway(
 						message_id,
 						open,
 						reopen,
+						clock,
+						keepalive_interval_ms,
 					)
 					.await
 					{
@@ -752,8 +756,6 @@ fn check_reserved_params(raw_query: Option<&str>) -> Result<()> {
 	Ok(())
 }
 
-
-
 /// The close code for an open the client should retry later.
 const TRY_AGAIN_LATER_CLOSE_CODE: u16 = 1013;
 
@@ -764,12 +766,9 @@ const WEBSOCKET_OPEN_RETRY_AFTER_MS: u64 = 1_000;
 enum WebSocketRejection {
 	/// The open may succeed later; the client retries after `retry_after_ms`.
 	Retry { retry_after_ms: u64 },
-	
 }
 
 impl WebSocketRejection {
-	
-
 	/// The close code and reason this rejection closes the client WebSocket with.
 	fn close_frame(&self) -> (u16, String) {
 		match self {
@@ -777,14 +776,12 @@ impl WebSocketRejection {
 				TRY_AGAIN_LATER_CLOSE_CODE,
 				websocket_retry_close_reason(*retry_after_ms),
 			),
-			
 		}
 	}
 
 	/// Accepts the upgrade only to close it with this rejection's code and reason.
 	fn close(self, ws: WebSocketUpgrade) -> Response {
 		let (code, reason) = self.close_frame();
-		
 		let protocols = ws
 			.requested_protocols()
 			.filter_map(|p| p.to_str().ok())
@@ -822,7 +819,3 @@ fn strip_token_protocol(protocols: &str) -> String {
 		.collect::<Vec<_>>()
 		.join(", ")
 }
-
-
-
-

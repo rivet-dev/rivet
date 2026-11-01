@@ -119,7 +119,7 @@ impl ServicesProcessManager {
 			.env("RIVET_ENDPOINT", &config.endpoint)
 			.env("RIVET__AUTH__ADMIN_TOKEN", "default")
 			.env("RIVET_NAMESPACE", &config.namespace)
-			.env("RIVET_POOL_NAME", &config.pool_name)
+			.env("RIVET_POOL", &config.pool_name)
 			.env("RIVETKIT_ENGINE_SPAWN", "never")
 			// Prevent the child RivetKit registry from recursively starting another
 			// Services process.
@@ -329,5 +329,3 @@ async fn wait_for_readiness(
 	}
 	.build())
 }
-
-

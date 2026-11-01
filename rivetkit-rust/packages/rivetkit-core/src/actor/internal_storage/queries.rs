@@ -86,8 +86,6 @@ pub(crate) const DELETE_USER_KV_RANGE_SQL: &str =
 pub(crate) const UPSERT_USER_KV_SQL: &str = "INSERT INTO _rivet_user_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
 pub(crate) const UPSERT_WORKFLOW_KV_SQL: &str = "INSERT INTO _rivet_wf_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
 
-
-
 pub(crate) const LOAD_INSPECTOR_TOKEN_SQL: &str =
 	"SELECT inspector_token FROM _rivet_runtime WHERE id = 1";
 pub(crate) const UPSERT_QUEUE_NEXT_ID_SQL: &str = "INSERT INTO _rivet_runtime (id, last_pushed_alarm, inspector_token, queue_next_id) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET queue_next_id = excluded.queue_next_id";

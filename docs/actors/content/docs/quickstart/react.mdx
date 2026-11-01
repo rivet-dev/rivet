@@ -22,10 +22,28 @@ npx skills add rivet-dev/skills
 
 </Step>
 
-<Step title="Install Dependencies">
+<Step title="Create a Project">
+
+Create an empty project and install RivetKit, React, and Vite:
 
 ```sh
-npm install rivetkit@next @rivetkit/react@next
+mkdir my-app
+cd my-app
+npm init -y
+npm pkg set type=module
+npm install rivetkit @rivetkit/react react react-dom
+npm install -D vite @vitejs/plugin-react tsx
+```
+
+The finished project has this layout:
+
+```
+my-app/
+  backend/index.ts
+  frontend/Counter.tsx
+  frontend/main.tsx
+  index.html
+  vite.config.ts
 ```
 
 </Step>
@@ -34,17 +52,34 @@ npm install rivetkit@next @rivetkit/react@next
 
 Create your actor registry on the backend and start the server:
 
-<CodeSnippet file="examples/docs/actors-quickstart-react/index.ts" title="backend/index.ts" />
+<CodeSnippet file="examples/docs/actors-quickstart-react/backend/index.ts" title="backend/index.ts" />
 
 </Step>
 
 <Step title="Create React Frontend">
 
-Set up your React application:
+Create a component that connects to the actor, then mount it:
 
-<CodeGroup>
-<CodeSnippet file="examples/docs/actors-quickstart-react/Counter.tsx" title="Counter.tsx" />
+<CodeGroup workspace>
+<CodeSnippet file="examples/docs/actors-quickstart-react/frontend/Counter.tsx" title="frontend/Counter.tsx" />
+<CodeSnippet file="examples/docs/actors-quickstart-react/frontend/main.tsx" title="frontend/main.tsx" />
 </CodeGroup>
+
+Create the HTML page that loads it:
+
+```html index.html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Rivet Counter</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/frontend/main.tsx"></script>
+  </body>
+</html>
+```
 
 For detailed information about the React client API, see the [React Client API Reference](/actors/docs/clients/react).
 
@@ -97,8 +132,6 @@ npx vite
 ```
 
 Open `http://localhost:5173` in your browser. Try opening multiple tabs to see realtime sync in action.
-
-Visit [http://localhost:6420](http://localhost:6420) in your browser (or point your AI agent at it) to open the Rivet developer tools and inspect your actors live.
 
 </Step>
 

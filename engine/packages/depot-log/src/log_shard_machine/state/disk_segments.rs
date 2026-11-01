@@ -401,5 +401,3 @@ pub(crate) fn segments_removed(
 		}
 	}
 }
-
-

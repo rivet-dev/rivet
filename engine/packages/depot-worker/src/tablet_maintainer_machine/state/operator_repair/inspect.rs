@@ -156,5 +156,3 @@ fn incarnation_view(
 		idle_ms: state.now_boot_ms.saturating_sub(volume.last_activity),
 	}
 }
-
-

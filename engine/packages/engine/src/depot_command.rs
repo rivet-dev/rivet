@@ -737,8 +737,6 @@ fn lease_view(
 	})
 }
 
-
-
 /// How long disk discovery waits before asking a recovering storage worker again.
 const DISK_DISCOVERY_RETRY_MS: u64 = 20;
 

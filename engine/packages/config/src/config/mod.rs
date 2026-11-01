@@ -178,8 +178,6 @@ impl Root {
 		self.pubsub.as_ref().unwrap_or(&DEFAULT)
 	}
 
-
-
 	pub fn validate_and_set_defaults(&mut self) -> Result<()> {
 		let auth = self
 			.auth
@@ -198,6 +196,7 @@ impl Root {
 				"storage.log_directory requires durable object_storage.primary; the default in_memory backend loses cluster metadata and cold data on restart even when log shards persist. Configure object_storage.primary.file_system.path for a single process, or use s3, azure, or gcs for shared storage."
 			);
 		}
+		self.guard().validate()?;
 		self.pegboard().validate()?;
 		self.epoxy().validate()?;
 		self.runtime.validate()?;

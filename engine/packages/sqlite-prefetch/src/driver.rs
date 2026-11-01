@@ -363,5 +363,3 @@ pub async fn plan_commit<S: Store>(
 	}
 	Ok(prefetcher.plan_purge(builder, new_size, txid, budget))
 }
-
-

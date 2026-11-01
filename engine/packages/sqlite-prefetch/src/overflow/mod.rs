@@ -740,5 +740,3 @@ impl Walk {
 		self.pending_next
 	}
 }
-
-

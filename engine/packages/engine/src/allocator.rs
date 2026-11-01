@@ -204,5 +204,3 @@ pub fn listen_for_heap_dumps(scope: &rivet_env::TaskScope) -> anyhow::Result<()>
 	tracing::info!("heap profiling enabled; send SIGUSR2 to write a profile");
 	Ok(())
 }
-
-

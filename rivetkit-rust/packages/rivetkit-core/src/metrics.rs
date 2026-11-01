@@ -105,7 +105,7 @@ fn ensure_rivetkit_info_recorded() {
 		.ok()
 		.and_then(|value| value.parse().ok())
 		.unwrap_or(1);
-	let pool_name = std::env::var("RIVET_POOL_NAME").unwrap_or_else(|_| "rivetkit-rust".to_owned());
+	let pool_name = std::env::var("RIVET_POOL").unwrap_or_else(|_| "default".to_owned());
 	record_rivetkit_info(
 		env!("CARGO_PKG_VERSION"),
 		envoy_version,

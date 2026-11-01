@@ -30,5 +30,3 @@ pub fn wrapping_le(a: u32, b: u32) -> bool {
 pub fn wrapping_max(a: u32, b: u32) -> u32 {
 	if wrapping_gt(b, a) { b } else { a }
 }
-
-

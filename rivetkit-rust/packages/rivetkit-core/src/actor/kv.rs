@@ -1,9 +1,4 @@
-
-
-
-
 use anyhow::Result;
-
 use rivet_envoy_client::handle::EnvoyHandle;
 
 use crate::types::ListOpts;
@@ -24,10 +19,7 @@ enum LegacyActorKvBackend {
 		handle: EnvoyHandle,
 		actor_id: String,
 	},
-	
 }
-
-
 
 impl LegacyActorKv {
 	pub(crate) fn new(handle: EnvoyHandle, actor_id: impl Into<String>) -> Self {
@@ -38,10 +30,6 @@ impl LegacyActorKv {
 			},
 		}
 	}
-
-	
-
-	
 
 	pub(crate) async fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
 		self.batch_put(&[(key, value)]).await
@@ -57,7 +45,6 @@ impl LegacyActorKv {
 					)
 					.await
 			}
-			
 		}
 	}
 
@@ -74,7 +61,6 @@ impl LegacyActorKv {
 					)
 					.await
 			}
-			
 		}
 	}
 
@@ -94,7 +80,6 @@ impl LegacyActorKv {
 					)
 					.await
 			}
-			
 		}
 	}
 
@@ -117,35 +102,6 @@ impl LegacyActorKv {
 					)
 					.await
 			}
-			
 		}
 	}
-
-	
-
-	
-
-	
-
-	
-
-	
-
-	
-
-	
-
-	
-
-	
-
-	
 }
-
-
-
-
-
-
-
-

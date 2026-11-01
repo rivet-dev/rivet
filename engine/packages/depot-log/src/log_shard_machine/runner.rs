@@ -784,5 +784,3 @@ async fn run_io(
 
 	Some(event)
 }
-
-

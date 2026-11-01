@@ -1233,5 +1233,3 @@ fn invalid_endpoint(endpoint: &str, reason: &str) -> anyhow::Error {
 	}
 	.build()
 }
-
-

@@ -29,7 +29,7 @@ Start, and Vite.
 <Step title="Install the World">
 
 ```sh
-npm install workflow @rivet-dev/workflow-world@next
+npm install workflow @rivet-dev/workflow-world
 ```
 
 </Step>
@@ -141,7 +141,13 @@ npm test
 
 Select the World and point it at your own HTTP server:
 
-<CodeSnippet file="examples/workflow-sdk/.env.example" title=".env" />
+```sh title=".env"
+WORKFLOW_TARGET_WORLD=@rivet-dev/workflow-world
+WORKFLOW_RUNTIME_URL=http://127.0.0.1:3000
+
+# The Rivet connection uses the standard RivetKit environment variables. Local
+# development needs none of them.
+```
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
@@ -198,9 +204,41 @@ SDK.
 
 ## Testing
 
-<CodeSnippet file="examples/workflow-sdk/vitest.integration.config.ts" title="vitest.integration.config.ts" />
+```ts title="vitest.integration.config.ts"
+import { workflow } from "@workflow/vitest";
+import { defineConfig } from "vitest/config";
 
-<CodeSnippet file="examples/workflow-sdk/workflows/order.integration.test.ts" title="workflows/order.integration.test.ts" />
+export default defineConfig({
+	plugins: [workflow()],
+	test: {
+		include: ["workflows/**/*.integration.test.ts"],
+		setupFiles: ["./vitest.setup.ts"],
+		testTimeout: 60_000,
+	},
+});
+```
+
+```ts title="workflows/order.integration.test.ts"
+import { waitForSleep } from "@workflow/vitest";
+import { expect, test } from "vitest";
+import { getRun, start } from "workflow/api";
+
+import { processOrder } from "./order.ts";
+
+test("runs the workflow end to end", async () => {
+	const run = await start(processOrder, ["42"]);
+	const sleepId = await waitForSleep(run);
+
+	await getRun(run.runId).wakeUp({ correlationIds: [sleepId] });
+
+	await expect(run.returnValue).resolves.toEqual({
+		id: "42",
+		reservationId: "reservation-42",
+		status: "charged",
+	});
+	expect(await run.status).toBe("completed");
+});
+```
 
 `waitForSleep` observes the durable sleep, `wakeUp` resumes that exact
 correlation, and the assertions wait for the final persisted result.

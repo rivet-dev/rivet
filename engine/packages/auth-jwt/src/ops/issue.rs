@@ -119,5 +119,3 @@ fn bounded_expiration(
 		.context("JWT expiration overflow")?;
 	Ok(requested_expires_ts.min(maximum_expires_ts))
 }
-
-

@@ -171,10 +171,6 @@ impl Operations {
 		self.operations.values()
 	}
 
-	
-
-	
-
 	pub(crate) fn is_empty(&self) -> bool {
 		self.operations.is_empty()
 	}
@@ -544,5 +540,3 @@ fn step(value: &mut usize, add: bool) {
 		value.saturating_sub(1)
 	};
 }
-
-

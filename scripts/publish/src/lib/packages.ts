@@ -44,9 +44,6 @@ export interface DiscoverPackagesOptions {
  */
 export const EXCLUDED = new Set<string>([
 	// Serverless is disabled for v3; retain the package sources for later.
-	"@rivetkit/cloudflare-workers",
-	"@rivetkit/supabase",
-	"@rivetkit/next-js",
 	"@rivetkit/shared-data",
 	"@rivetkit/engine-frontend",
 	"@rivetkit/sqlite-native",

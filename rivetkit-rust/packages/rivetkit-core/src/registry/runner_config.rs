@@ -1,8 +1,8 @@
-use std::net::IpAddr;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use reqwest::{Client, StatusCode, Url};
+use rivetkit_shared_types::endpoint::is_local_engine_endpoint;
 use serde_json::json;
 
 use crate::time::sleep;
@@ -183,22 +183,3 @@ fn engine_api_url(endpoint: &str, path: &[&str], namespace: &str) -> Result<Url>
 		.append_pair("namespace", namespace);
 	Ok(url)
 }
-
-fn is_local_engine_endpoint(endpoint: &str) -> bool {
-	let Ok(url) = Url::parse(endpoint) else {
-		return false;
-	};
-	let Some(host) = url.host_str() else {
-		return false;
-	};
-
-	if host == "localhost" || host.ends_with(".localhost") {
-		return true;
-	}
-
-	host.parse::<IpAddr>()
-		.map(|ip| ip.is_loopback() || ip.is_unspecified())
-		.unwrap_or(false)
-}
-
-

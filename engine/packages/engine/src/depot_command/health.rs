@@ -240,5 +240,3 @@ fn report(
 		"manifestCoherent": coherent, "partitionManifestVersion": before.tablet_manifest_version,
 		"afterPartitionManifestVersion": after.tablet_manifest_version, "partitions": tablets})
 }
-
-

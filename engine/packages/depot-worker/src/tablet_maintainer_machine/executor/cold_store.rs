@@ -228,63 +228,6 @@ impl ColdStore {
 		super::split::prepare(&self.db, factory, tablet, step, guard).await
 	}
 
-	/// Opens a store with a default filesystem layer on the production environment, for tests
-	/// that drive the store without a tablet manifest. Existing split clones must never be
-	/// initialized empty.
-	///
-	/// With the WAL disabled, a stopped owner can lose its unflushed memtable.
-	/// Trims follow the flush containing both filesystem versions and their record, so those lost
-	/// writes remain in replica logs and the next maintainer safely repeats them.
-	#[cfg(any(test, feature = "test-support"))]
-	pub async fn open(
-		factory: &dyn SlateDbFactory,
-		tablet_id: Uuid,
-		tablet_grant_epoch: NonZeroU64,
-		creation: DatabaseCreation,
-		frozen: bool,
-		config: &ColdStoreConfig,
-	) -> Result<Self> {
-		let (compaction_stalls, unflushed_full) =
-			crate::metrics::CompactionStalls::for_tablet(tablet_id)
-				.with_unflushed_limit(config.max_unflushed_bytes);
-		let compaction_stalls = std::sync::Arc::new(compaction_stalls);
-		let db = factory
-			.open_with_settings(
-				TabletVolumePrefix::new(tablet_id).pack(),
-				tablet_grant_epoch,
-				creation,
-				config.settings(frozen)?,
-				Some(compaction_stalls.clone()),
-			)
-			.await?;
-		let mut observer = crate::metrics::ColdStoreObserver::new(
-			tablet_id,
-			config.l0_max_ssts,
-			factory.shared_cache(),
-		);
-		observer.observe(&db);
-		let observer = std::sync::Arc::new(parking_lot::Mutex::new(observer));
-		let env = rivet_env::backends::production::ProductionEnv::new()?;
-		let filesystem = crate::filesystem::store::FilesystemStore::new(
-			db.clone(),
-			rivet_env::Env::clock(&env),
-			std::sync::Arc::new(|| true),
-			std::sync::Arc::new(parking_lot::Mutex::new(std::collections::BTreeMap::new())),
-			crate::filesystem::session::SessionConfig::default(),
-			1024,
-			rivet_env::Env::rng(&env, "depot.filesystem.sessions"),
-		)?
-		.with_observer(observer);
-		Ok(Self {
-			tablet_id,
-			filesystem: std::sync::Arc::new(filesystem),
-			compaction_stalls,
-			unflushed_full,
-			db,
-			tablet_grant_epoch: tablet_grant_epoch.get(),
-		})
-	}
-
 	/// Opens the filesystem store with retention filters and expiring read sessions.
 	/// Apply and lifecycle work share one database, grant, queue and task owner.
 	pub async fn open_filesystem(
@@ -491,8 +434,6 @@ impl ColdStore {
 			.await
 	}
 
-	
-
 	/// Joins every upstream task before ownership can be released or reassigned, after
 	/// uploading the memtable. No stop or move path uses it: a maintainer closes with
 	/// `close_without_upload`, since the upload records no cold position. Tests use it to
@@ -525,16 +466,6 @@ impl ColdStore {
 		Ok(())
 	}
 }
-
-
-
-
-
-
-
-
-
-
 
 /// The address of `key`'s own record row.
 fn incarnation_record_address(

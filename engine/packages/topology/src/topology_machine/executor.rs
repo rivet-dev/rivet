@@ -547,8 +547,6 @@ impl TopologyExecutor {
 	}
 }
 
-
-
 /// Records one confirmed renewal. Logs only the end of a late episode, so a healthy lease
 /// stays silent.
 fn record_renewal(latency_ms: u64, remaining_lease_ms: u64, recovered: bool) {

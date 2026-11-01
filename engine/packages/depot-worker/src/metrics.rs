@@ -466,8 +466,6 @@ impl ColdStoreObserver {
 	}
 }
 
-
-
 impl Drop for ColdStoreObserver {
 	fn drop(&mut self) {
 		let mut stores = STORES.lock();
@@ -939,8 +937,6 @@ impl slatedb_common::metrics::MetricsRecorder for CompactionStalls {
 }
 
 impl CompactionStalls {
-	
-
 	/// The cold-store owner serializes passes, so a stall belongs to at most one
 	/// active pass. Opening, reads and closing never create a pass observation.
 	/// Counts callbacks observed during this attempt; the owner must retain an
@@ -1948,10 +1944,6 @@ impl BusiestTabletCollector {
 		families
 	}
 }
-
-
-
-
 
 /// Counts one tablet maintainer recovery scan. Both labels are code-defined names.
 pub(crate) fn record_recovery_scan(scan: &'static str, trigger: &'static str) {

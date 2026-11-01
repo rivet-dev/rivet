@@ -35,25 +35,6 @@ pub struct KvHandle {
 	versions: Arc<dyn rivet_topology::versions::WriteVersions>,
 }
 
-/// The lowest version this binary writes of each family, for tests that run storage code
-/// without a topology: handles around a test-owned filesystem, and supervisors with a stub
-/// lease.
-#[cfg(any(test, feature = "test-support"))]
-pub struct LowestWriteVersions;
-
-#[cfg(any(test, feature = "test-support"))]
-impl rivet_topology::versions::WriteVersions for LowestWriteVersions {
-	fn write_version(&self, family: rivet_data::families::VersionFamily) -> Result<u16> {
-		rivet_topology::versions::lowest_write(
-			family
-				.info()
-				.map(rivet_data::families::FamilyInfo::versions)
-				.as_ref(),
-			family,
-		)
-	}
-}
-
 /// The commits one command has in flight, and whether its caller's deadline has passed. A
 /// commit dispatched before the deadline must run to its own outcome: dropping it abandons the
 /// write and fences the filesystem. Work the command has not dispatched by then is refused, so
@@ -147,45 +128,6 @@ impl KvHandle {
 		owner: &rivet_data::generated::shared_depot_alarms_v1::AlarmOwner,
 	) -> bool {
 		(self.may_serve)() && self.alarm_owner.as_ref() == Some(owner)
-	}
-	/// Constructs a command context around a test-owned filesystem and authority check.
-	#[cfg(feature = "test-support")]
-	pub fn for_test(
-		filesystem: Arc<Filesystem>,
-		ino: u64,
-		may_serve: Arc<dyn Fn() -> bool + Send + Sync>,
-		operation_id: [u8; 16],
-		volume_key: depot_types::VolumeKey,
-	) -> Self {
-		Self {
-			alarm_owner: None,
-			filesystem,
-			ino,
-			may_serve,
-			operation_id,
-			volume_key,
-			locked_ranges: Default::default(),
-			shared: Default::default(),
-			commits: Default::default(),
-			speculative: None,
-			versions: Arc::new(LowestWriteVersions),
-		}
-	}
-
-	/// A clone of this handle with its own command deadline, as another command of the same
-	/// opening would get.
-	#[cfg(feature = "test-support")]
-	pub fn for_another_command(&self) -> Self {
-		Self {
-			commits: Default::default(),
-			..self.clone()
-		}
-	}
-
-	/// Passes this command's deadline, as the host does when the caller's deadline expires.
-	#[cfg(feature = "test-support")]
-	pub fn expire_for_test(&self) {
-		self.commits.expire();
 	}
 
 	/// Whether this command's caller deadline has passed. Once it has, `begin`, `snapshot` and
@@ -658,7 +600,3 @@ pub(crate) struct LockEntry {
 	end: Bytes,
 	guard: DropGuard,
 }
-
-
-
-

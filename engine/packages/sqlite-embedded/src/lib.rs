@@ -49,5 +49,3 @@ pub mod worker;
 /// Process-wide SQLite page cache shared by every connection.
 #[cfg(feature = "transport")]
 pub mod pager_cache;
-
-

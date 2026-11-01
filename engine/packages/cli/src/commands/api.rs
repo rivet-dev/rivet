@@ -308,5 +308,3 @@ fn read_source(source: &str) -> Result<String> {
 	}
 	fs::read_to_string(source).with_context(|| format!("read {source}"))
 }
-
-

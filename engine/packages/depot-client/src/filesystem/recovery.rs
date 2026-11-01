@@ -26,8 +26,6 @@ pub(super) struct Receipt<'a> {
 	pub attempt: Attempt<'a>,
 }
 
-
-
 impl Filesystem {
 	pub(super) async fn pinned_result<T>(&self, result: Result<T>, deadline: u64) -> Result<T> {
 		if matches!(&result, Err(Error::TooOld)) && !self.fenced.load(Ordering::Acquire) {

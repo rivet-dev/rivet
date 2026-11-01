@@ -683,5 +683,3 @@ fn refuse_open(
 		fx,
 	);
 }
-
-

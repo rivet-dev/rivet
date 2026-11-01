@@ -656,4 +656,3 @@ impl ImportProgress {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

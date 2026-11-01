@@ -1118,7 +1118,6 @@ impl From<JsSqliteProfilingConfig> for SqliteProfilingConfigInput {
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
 
-
 fn duration_ms_or(value: Option<u32>, default_ms: u64) -> Duration {
 	Duration::from_millis(value.map(u64::from).unwrap_or(default_ms))
 }

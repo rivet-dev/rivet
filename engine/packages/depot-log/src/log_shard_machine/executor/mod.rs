@@ -1046,5 +1046,3 @@ fn retain_between(entries: &mut BTreeMap<u64, Location>, cold: u64, appended: u6
 		entries.split_off(&(appended + 1));
 	}
 }
-
-

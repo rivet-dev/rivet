@@ -1757,14 +1757,6 @@ async fn read_manifest(store: &dyn ObjectStore, etag: Option<&str>) -> Condition
 	}
 }
 
-
-
-
-
-
-
-
-
 impl TabletSupervisor {
 	/// Watches routing and alarm initialization together. The returned owned future
 	/// must run beside the supervisor so split source holds and serving gates stay current.

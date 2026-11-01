@@ -229,12 +229,8 @@ fn eligible(state: &MaintainerState, key: &VolumeLogKey) -> bool {
 			})
 }
 
-
-
 /// Counts one key visited by the copy loop. Test builds only.
-fn count_copy_visit() {
-	
-}
+fn count_copy_visit() {}
 
 /// One page per volume per round bounds memory and prevents one busy volume starving the others.
 pub(crate) fn drive(state: &mut MaintainerState, fx: &mut Effects) {
@@ -958,7 +954,3 @@ fn observe(
 		cold::observe(state, &key, worker, replica);
 	}
 }
-
-
-
-

@@ -106,5 +106,3 @@ impl ObjectStore for CleanupStore {
 		Err(denied("database cleanup cannot copy objects"))
 	}
 }
-
-

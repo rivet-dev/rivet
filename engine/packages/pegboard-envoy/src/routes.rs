@@ -227,5 +227,3 @@ fn ended_by_shutdown_or_reconnect(error: &anyhow::Error) -> bool {
 		|| error.is::<crate::envoy_record::Superseded>()
 		|| error.is::<crate::envoy_record::PoolAdmissionLost>()
 }
-
-

@@ -131,5 +131,3 @@ pub enum ColumnValue {
 	Text(String),
 	Blob(Vec<u8>),
 }
-
-

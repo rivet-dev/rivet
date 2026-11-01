@@ -161,5 +161,3 @@ pub(crate) fn timed_out(state: &mut MaintainerState, op_id: OpId, fx: &mut Effec
 	fx.execute(MaintainerEffect::CancelReplicaRequest { op_id });
 	completed(state, operation_id, Err("timed out".into()), fx);
 }
-
-

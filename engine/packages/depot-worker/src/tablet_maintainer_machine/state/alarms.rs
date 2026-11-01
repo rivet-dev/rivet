@@ -729,5 +729,3 @@ pub(crate) fn ready_response(
 		_ => super::fence(state, fx),
 	}
 }
-
-

@@ -14,5 +14,3 @@ pub use metrics::{ENVOY_INDEX_UPSERTS, STARTUP_PHASE_DURATION, STORAGE_OPERATION
 pub const DEFAULT_NAMESPACE: &str = "default";
 pub const DEFAULT_POOL: &str = "default";
 pub const ENVOY_HEARTBEAT_TIMEOUT_MS: i64 = 15_000;
-
-

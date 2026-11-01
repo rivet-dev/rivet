@@ -1,10 +1,10 @@
-use rivet_auth::*;
 use anyhow::{Result, anyhow};
 use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
 };
+use rivet_auth::*;
 use serde::{Deserialize, Serialize};
 use utoipa::IntoParams;
 use utoipa::ToSchema;

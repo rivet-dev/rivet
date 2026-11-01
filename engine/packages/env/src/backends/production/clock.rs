@@ -178,5 +178,3 @@ pub(super) fn thread_cpu_time_ns() -> Result<u64, ClockError> {
 		.and_then(|s| s.checked_add(u64::try_from(ts.tv_nsec).ok()?))
 		.ok_or(ClockError::Overflow)
 }
-
-

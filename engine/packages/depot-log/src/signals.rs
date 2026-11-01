@@ -138,5 +138,3 @@ impl SegmentPinAge {
 		self.samples.push_back((synced_log_seq, now_boot_ms));
 	}
 }
-
-

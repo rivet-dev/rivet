@@ -211,5 +211,3 @@ fn severity_color(severity: &str) -> &'static str {
 		_ => "37",
 	}
 }
-
-

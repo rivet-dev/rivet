@@ -2479,7 +2479,3 @@ fn drop_expired_command(command: &p::CommandWrapper, stage: &'static str) {
 		"dropping an actor command whose sender's deadline passed; the actor state machine retries it if it is still wanted"
 	);
 }
-
-
-
-

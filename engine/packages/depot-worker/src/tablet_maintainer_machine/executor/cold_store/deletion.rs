@@ -171,5 +171,3 @@ impl ColdStore {
 		Ok(DeleteSweepResult::Complete)
 	}
 }
-
-

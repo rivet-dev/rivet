@@ -1267,11 +1267,3 @@ fn replica_response(
 		}
 	}
 }
-
-
-
-
-
-
-
-

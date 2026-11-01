@@ -283,8 +283,6 @@ impl StoreLocks {
 		}
 	}
 
-	
-
 	/// Takes the tablet lock, then every requested stripe in ascending order, and
 	/// records how long `operation` waited at each scope.
 	pub(crate) async fn lock(
@@ -413,5 +411,3 @@ impl Drop for AccessGuard<'_> {
 		}
 	}
 }
-
-

@@ -3,7 +3,6 @@ use rivet_envoy_client::async_counter::AsyncCounter;
 use rivet_envoy_client::handle::EnvoyHandle;
 use std::future::Future;
 use std::sync::Arc;
-
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[cfg(not(feature = "wasm-runtime"))]
 use tokio::runtime::Handle;
@@ -23,9 +22,7 @@ use crate::actor::work_registry::LocalShutdownTask;
 use crate::actor::work_registry::{ActorWorkKind, CountGuard, RegionGuard, WorkRegistry};
 #[cfg(feature = "wasm-runtime")]
 use crate::runtime::RuntimeSpawner;
-
 use crate::time::{Instant, sleep};
-
 #[cfg(feature = "wasm-runtime")]
 use futures::channel::oneshot as futures_oneshot;
 #[cfg(feature = "wasm-runtime")]
@@ -48,8 +45,6 @@ pub(crate) struct SleepState {
 	// sent to the envoy. Its presence is what makes the intent a sleep rather
 	// than a destroy.
 	pub(super) stop_error: Mutex<Option<String>>,
-	
-	
 	pub(super) lifecycle_started: AtomicBool,
 	pub(super) run_handler_active_count: AtomicUsize,
 	// Forced-sync: the compatibility sleep timer is aborted from sync paths.
@@ -79,8 +74,6 @@ impl SleepState {
 			generation: Mutex::new(None),
 			http_request_counter: Mutex::new(None),
 			stop_error: Mutex::new(None),
-			
-			
 			lifecycle_started: AtomicBool::new(false),
 			run_handler_active_count: AtomicUsize::new(0),
 			sleep_timer: Mutex::new(None),
@@ -124,8 +117,6 @@ impl std::fmt::Debug for SleepState {
 }
 
 impl ActorContext {
-	
-
 	pub(crate) fn configure_sleep_state(&self, config: ActorConfig) {
 		*self.0.sleep.config.lock() = config;
 	}
@@ -149,7 +140,6 @@ impl ActorContext {
 	}
 
 	pub(crate) fn request_sleep_from_envoy(&self) {
-		
 		let envoy_handle = self.0.sleep.envoy_handle.lock().clone();
 		let generation = *self.0.sleep.generation.lock();
 		if let Some(envoy_handle) = envoy_handle {
@@ -158,7 +148,6 @@ impl ActorContext {
 	}
 
 	pub(crate) fn request_stop_from_envoy(&self) {
-		
 		let envoy_handle = self.0.sleep.envoy_handle.lock().clone();
 		let generation = *self.0.sleep.generation.lock();
 		let error = self.0.sleep.stop_error.lock().take();
@@ -225,8 +214,6 @@ impl ActorContext {
 	pub fn run_handler_active(&self) -> bool {
 		self.0.sleep.run_handler_active_count.load(Ordering::SeqCst) > 0
 	}
-
-	
 
 	pub(crate) async fn can_arm_sleep_timer(&self) -> CanSleep {
 		let config = self.sleep_state_config();
@@ -363,10 +350,6 @@ impl ActorContext {
 			.wait_zero(deadline)
 			.await
 	}
-
-	
-
-	
 
 	pub async fn wait_for_tracked_shutdown_work(&self) -> bool {
 		let shutdown_deadline = self.shutdown_deadline_token();
@@ -868,4 +851,3 @@ impl ActorContext {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

@@ -537,5 +537,3 @@ impl TransactionReader for ReplicaTransactionReader<'_> {
 		})
 	}
 }
-
-

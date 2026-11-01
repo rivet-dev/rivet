@@ -964,5 +964,3 @@ pub(crate) fn reload(
 	super::super::member_repair::absent(state, key, &WorkerId::from_bytes(body.worker), fx);
 	Ok(Run::Done(None))
 }
-
-

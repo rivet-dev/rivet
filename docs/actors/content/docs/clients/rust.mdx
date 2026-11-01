@@ -36,7 +36,7 @@ use rivetkit::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-	let client = Client::new(ClientConfig::new("http://localhost:6420").namespace("default"));
+	let client = Client::new(ClientConfig::new("http://localhost:6420"));
 
 	let counter = client.get_or_create_typed_default::<Counter>("counter", ["my-counter"])?;
 	let count = counter.send(Increment { amount: 1 }).await?;
@@ -60,7 +60,7 @@ use rivetkit::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-	let client = Client::new(ClientConfig::new("http://localhost:6420").namespace("default"));
+	let client = Client::new(ClientConfig::new("http://localhost:6420"));
 	let counter = client.get_or_create_typed_default::<Counter>("counter", ["my-counter"])?;
 
 	// Stateless: each call is independent
@@ -93,7 +93,7 @@ use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-	let client = Client::new(ClientConfig::new("http://localhost:6420").namespace("default"));
+	let client = Client::new(ClientConfig::new("http://localhost:6420"));
 
 	// Get or create an actor
 	let room = client.get_or_create_typed_default::<Counter>("counter", ["room-42"])?;
@@ -139,7 +139,7 @@ use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-	let client = Client::new(ClientConfig::new("http://localhost:6420").namespace("default"));
+	let client = Client::new(ClientConfig::new("http://localhost:6420"));
 
 	let chat = client.get_or_create_typed::<Counter>(
 		"counter",
@@ -170,7 +170,7 @@ use rivetkit::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-	let client = Client::new(ClientConfig::new("http://localhost:6420").namespace("default"));
+	let client = Client::new(ClientConfig::new("http://localhost:6420"));
 	let connection = client
 		.get_or_create_typed_default::<Counter>("counter", ["general"])?
 		.connect();
@@ -199,7 +199,7 @@ use rivetkit::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-	let client = Client::new(ClientConfig::new("http://localhost:6420").namespace("default"));
+	let client = Client::new(ClientConfig::new("http://localhost:6420"));
 	let connection = client
 		.get_or_create_typed_default::<Counter>("counter", ["general"])?
 		.connect();
@@ -243,7 +243,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-	let client = Client::new(ClientConfig::new("http://localhost:6420").namespace("default"));
+	let client = Client::new(ClientConfig::new("http://localhost:6420"));
 	let handle = client.get_or_create_typed_default::<Counter>("counter", ["general"])?;
 
 	// Raw HTTP request
@@ -298,7 +298,7 @@ use rivetkit::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-	let client = Client::new(ClientConfig::new("http://localhost:6420").namespace("default"));
+	let client = Client::new(ClientConfig::new("http://localhost:6420"));
 	let counter = client.get_or_create_typed_default::<Counter>("counter", ["my-counter"])?;
 
 	match counter.send(Increment { amount: 1 }).await {
@@ -326,7 +326,7 @@ use rivetkit::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-	let client = Client::new(ClientConfig::new("http://localhost:6420").namespace("default"));
+	let client = Client::new(ClientConfig::new("http://localhost:6420"));
 
 	// Compound key: [org, room]
 	let room = client.get_or_create_typed_default::<Counter>("counter", ["org-acme", "general"])?;
@@ -341,23 +341,25 @@ Keys accept arrays of `&str` or `String` (`["org-acme", "general"]`). Don't buil
 
 ### Configuration
 
-`ClientConfig::new(endpoint)` is a builder. The endpoint is always required; there is no default. Common options:
+`ClientConfig::new(endpoint)` is a builder. The endpoint is always required; there is no default. It accepts the same URL auth syntax as `RIVET_ENDPOINT`, so `https://my-namespace:my-token@api.rivet.dev` sets the namespace and token in one value. Common options:
 
 ```rust @nocheck
 use rivetkit::client::ClientConfig;
 
-let config = ClientConfig::new("http://localhost:6420")
-	.namespace("default")
+let config = ClientConfig::new("https://api.rivet.dev")
+	.namespace("my-namespace")
 	.token("<scoped-token>")
 	.pool_name("my-pool")
 	.header("x-custom", "value");
 ```
 
-- `namespace` - target namespace (defaults to the control plane's configured namespace).
-- `token` - authentication token for the control plane.
-- `pool_name` - node pool to target.
+- `namespace` - target namespace. Falls back to `RIVET_NAMESPACE`, then `default`.
+- `token` - authentication token for the control plane. Falls back to `RIVET_TOKEN`. A local control plane (`localhost` or a loopback address) uses the `default` token automatically, which is why the quickstart passes only an endpoint.
+- `pool_name` - node pool new actors are created in. Falls back to `RIVET_POOL`, then `default`, which matches the pool a `Registry` joins when `RIVET_POOL` is unset.
 - `header` / `headers` - extra HTTP headers sent with each request.
 - `max_input_size` - cap on encoded action input size.
+
+If the endpoint is not a valid URL, or a namespace or token is given both in the endpoint URL and as a separate option, every call on the client returns that error.
 
 See [Endpoints](/docs/endpoints) for details.
 

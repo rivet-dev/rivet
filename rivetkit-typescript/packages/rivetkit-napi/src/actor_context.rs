@@ -1160,7 +1160,6 @@ fn js_http_request_to_core_request(request: JsHttpRequest) -> napi::Result<CoreR
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
 
-
 /// One open call out to another actor.
 ///
 /// The call spans a request made by the host runtime, so it is opened and closed

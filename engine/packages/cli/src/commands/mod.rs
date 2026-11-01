@@ -2,7 +2,6 @@ pub mod account;
 pub mod api;
 pub mod cluster;
 pub mod deploy;
-pub mod dev;
 pub mod engine;
 pub mod link;
 pub mod logs;

@@ -297,5 +297,3 @@ impl ColdSnapshot for NoColdSnapshot {
 		Box::pin(async { Err(Error::Unavailable) })
 	}
 }
-
-

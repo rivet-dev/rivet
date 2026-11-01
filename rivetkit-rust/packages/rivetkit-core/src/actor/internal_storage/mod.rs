@@ -150,8 +150,6 @@ pub(crate) async fn load_actor_startup(db: &SqliteDb) -> Result<ActorStartupRead
 	})
 }
 
-
-
 pub(crate) async fn persist_actor_snapshot(db: &SqliteDb, actor: &PersistedActor) -> Result<()> {
 	let statements = vec![
 		SqliteBatchStatement {
@@ -295,8 +293,6 @@ pub(crate) fn build_actor_core_and_connection_statements(
 
 	Ok(statements)
 }
-
-
 
 /// Persists imported connection snapshots in bounded transactions. A legacy
 /// connection is at most one actor-KV value, but a migration page can contain
@@ -1063,8 +1059,6 @@ fn push_delete_connection_statements(statements: &mut Vec<SqliteBatchStatement>,
 	});
 }
 
-
-
 pub(crate) async fn persist_last_pushed_alarm(db: &SqliteDb, alarm_ts: Option<i64>) -> Result<()> {
 	db.execute(
 		UPSERT_LAST_PUSHED_ALARM_SQL,
@@ -1078,8 +1072,6 @@ pub(crate) async fn persist_last_pushed_alarm(db: &SqliteDb, alarm_ts: Option<i6
 	.context("persist internal last pushed alarm")?;
 	Ok(())
 }
-
-
 
 pub(crate) async fn persist_run_wake_at(db: &SqliteDb, wake_at: Option<i64>) -> Result<()> {
 	let payload = encode_latest_with_embedded_version::<persist_versioned::RunWakeAt>(
@@ -1444,4 +1436,3 @@ fn decode_cbor_blob<T: serde::de::DeserializeOwned>(
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

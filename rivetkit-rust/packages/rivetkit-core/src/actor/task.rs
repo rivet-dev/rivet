@@ -71,11 +71,6 @@ pub use crate::actor::task_types::LifecycleState;
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
 
-
-
-
-
-
 pub enum LifecycleCommand {
 	Start {
 		reply: oneshot::Sender<Result<()>>,
@@ -623,8 +618,6 @@ impl ActorTask {
 			}
 		}
 	}
-
-	
 
 	async fn begin_stop(
 		&mut self,
@@ -1906,8 +1899,6 @@ impl ActorTask {
 	}
 
 	fn deliver_shutdown_reply(&mut self, reason: ShutdownKind, result: &Result<()>) {
-		
-
 		let Some(pending) = self.shutdown_reply.take() else {
 			return;
 		};
@@ -2062,7 +2053,6 @@ impl ActorTask {
 			step = "teardown_sleep_state",
 			"actor shutdown cleanup step completed"
 		);
-		
 		ctx.wait_for_pending_state_writes().await;
 		tracing::debug!(
 			actor_id = %actor_id,

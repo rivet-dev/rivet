@@ -229,5 +229,3 @@ impl RowRange {
 		})
 	}
 }
-
-

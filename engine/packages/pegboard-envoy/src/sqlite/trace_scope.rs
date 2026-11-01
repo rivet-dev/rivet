@@ -58,5 +58,3 @@ impl<F> Drop for Scoped<F> {
 		});
 	}
 }
-
-

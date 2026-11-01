@@ -409,5 +409,3 @@ fn extract_host(url: &str) -> String {
 		.unwrap_or("localhost")
 		.to_string()
 }
-
-

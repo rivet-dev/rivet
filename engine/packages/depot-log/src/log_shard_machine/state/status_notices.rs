@@ -638,5 +638,3 @@ fn finish(
 fn observe_pending(state: &LogShardState) {
 	crate::metrics::observe_status_notices_pending(state.status_notices.pending());
 }
-
-

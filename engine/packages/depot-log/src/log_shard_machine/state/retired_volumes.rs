@@ -463,5 +463,3 @@ pub(crate) fn checkpoint_frame(
 			retirement,
 		})
 }
-
-

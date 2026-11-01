@@ -150,7 +150,7 @@ async function scheduleCollection(
 ): Promise<void> {
 	await c.cron.every({
 		name: `collect-production:${buildingId}`,
-		intervalMs,
+		interval: intervalMs,
 		action: "collectProduction",
 		args: [{ buildingId }],
 		maxHistory: 0,

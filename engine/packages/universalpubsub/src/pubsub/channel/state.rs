@@ -43,14 +43,10 @@ impl<W> ChannelState<W> {
 		}
 	}
 
-	
-
 	/// Whether the channel's stream is open.
 	pub(crate) fn is_ready(&self) -> bool {
 		self.phase == Phase::Ready
 	}
-
-	
 
 	/// Registers a request and returns its id, or gives the waiter back with the refusal.
 	pub(crate) fn submit(&mut self, waiter: W) -> Result<u64, (Refusal, W)> {
@@ -90,5 +86,3 @@ impl<W> ChannelState<W> {
 		std::mem::take(&mut self.pending).into_values().collect()
 	}
 }
-
-

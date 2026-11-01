@@ -132,5 +132,3 @@ impl Client {
 		Consensus::new(self.replica.clone(), self.transport.clone())
 	}
 }
-
-

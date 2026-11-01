@@ -2360,8 +2360,6 @@ fn reject_after_grant(
 	}
 }
 
-
-
 /// Whether a create's frames, its initial entries included, fit one write, the shard's memory
 /// headroom, the filling batch and the disk budget. It applies the same limits as admission, so
 /// a create whose entries fail it is admitted without them instead of being rejected.

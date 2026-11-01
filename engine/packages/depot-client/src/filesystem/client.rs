@@ -36,8 +36,6 @@ enum MutationOutcome {
 	Committed(depot_volume::volume_client_machine::types::WriteOutcome),
 }
 
-
-
 pub(super) struct State {
 	/// The epoch of the volume client this filesystem opened on, which every entry it admits
 	/// carries. The journal never changes client under the filesystem.

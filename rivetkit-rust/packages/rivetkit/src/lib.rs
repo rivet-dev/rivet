@@ -13,7 +13,6 @@ pub mod sqlite;
 pub mod start;
 pub mod telemetry;
 pub mod test;
-
 pub mod typed_client;
 
 pub use crate::{

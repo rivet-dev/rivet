@@ -428,8 +428,6 @@ impl PageBuffer {
 		}
 	}
 
-	
-
 	pub(crate) fn insert(&self, page: u32, bytes: PageBytes) {
 		self.insert_at(page, bytes, cache_now());
 	}
@@ -564,8 +562,6 @@ fn expire_tail(
 fn cache_now() -> Instant {
 	Instant::now()
 }
-
-
 
 impl Drop for BufferInner {
 	fn drop(&mut self) {

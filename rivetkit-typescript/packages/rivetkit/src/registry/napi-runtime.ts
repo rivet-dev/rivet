@@ -1286,7 +1286,7 @@ export async function loadNapiRuntime(): Promise<{
 }> {
 	// LOAD-BEARING: the specifier is computed (`.join("/")`) on purpose. Do NOT
 	// "simplify" it to a literal `import("@rivetkit/rivetkit-napi")`. Edge
-	// adapters (e.g. @rivetkit/supabase) pre-bundle this module for Deno; a
+	// adapters pre-bundle this module for Deno; a
 	// literal dynamic import is statically resolvable, so Deno's eszip bundler
 	// would snapshot the native `.node` addon into the deploy and 413. The
 	// computed specifier keeps it opaque to static analysis so it is never

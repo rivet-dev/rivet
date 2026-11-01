@@ -469,5 +469,3 @@ pub(crate) fn drive_trims(state: &mut MaintainerState, effects: &mut Effects) {
 		dispatch_trims(state, worker, keys, effects);
 	}
 }
-
-

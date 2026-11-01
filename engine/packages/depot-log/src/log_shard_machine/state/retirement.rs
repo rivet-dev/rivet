@@ -187,5 +187,3 @@ fn retire_parent_grants(state: &mut LogShardState) -> bool {
 	}
 	true
 }
-
-

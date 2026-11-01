@@ -3,12 +3,7 @@
 //! on responses that carry none, such as its own errors. RivetKit clients send every request
 //! with credentials, which rejects wildcards, so every value echoes the request.
 
-use axum::{
-	body::Body,
-	extract::Request,
-	middleware::Next,
-	response::Response,
-};
+use axum::{body::Body, extract::Request, middleware::Next, response::Response};
 use hyper::{
 	Method, StatusCode,
 	header::{
@@ -64,7 +59,9 @@ pub(crate) async fn cors(request: Request, next: Next) -> Response {
 
 fn is_preflight(request: &Request) -> bool {
 	request.method() == Method::OPTIONS
-		&& request.headers().contains_key(ACCESS_CONTROL_REQUEST_METHOD)
+		&& request
+			.headers()
+			.contains_key(ACCESS_CONTROL_REQUEST_METHOD)
 }
 
 fn preflight_response(request: &Request) -> Response {

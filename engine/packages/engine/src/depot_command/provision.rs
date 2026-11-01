@@ -361,5 +361,3 @@ pub async fn provision(
 		json!({ "partitionManifestVersion": manifest.tablet_manifest_version, "placement": placement_json(&manifest) }),
 	)
 }
-
-

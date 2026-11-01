@@ -117,19 +117,6 @@ It's recommended to use queues for mutations and actions for read-only queries. 
 <CodeSnippet file="examples/docs/actors-sqlite/queues/client.ts" title="client.ts" />
 </CodeGroup>
 
-{/* TODO(code): restore when the control plane exposes an API to read an Actor's inspector token. Tracked in ACT-6493.
-
-## Debugging
-
-- `GET /inspector/summary` includes `isDatabaseEnabled` so you can confirm SQLite is configured.
-- `GET /inspector/database/schema` returns the tables and views discovered in the actor's SQLite database.
-- `GET /inspector/database/rows?table=...&limit=100&offset=0` returns paged rows for a specific table or view.
-- `POST /inspector/database/execute` lets you run ad-hoc SQL for debugging and data fixes with positional `args` or named `properties`.
-- Keep a small read-only action for quick query verification while debugging.
-- In non-dev mode, inspector endpoints require authorization.
-
-*/}
-
 ## Profiling
 
 See [SQLite Profiling](/actors/docs/sqlite-profiling) to understand query fingerprints, transaction names, metrics, and diagnostics.

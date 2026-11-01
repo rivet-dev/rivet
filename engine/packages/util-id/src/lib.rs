@@ -260,5 +260,3 @@ fn base36_mod256(a: u8, b: u8, c: u8, d: u8) -> u8 {
 	let sum: u32 = (a as u32) * 46_656 + (b as u32) * 1_296 + (c as u32) * 36 + (d as u32) * 1;
 	(sum % 256) as u8
 }
-
-

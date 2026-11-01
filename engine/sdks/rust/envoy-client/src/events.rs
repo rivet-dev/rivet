@@ -142,5 +142,3 @@ pub async fn resend_unacknowledged_events(ctx: &mut EnvoyContext) {
 
 	ws_send(&ctx.shared, protocol::ToRivet::ToRivetEvents(events)).await;
 }
-
-

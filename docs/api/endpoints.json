@@ -74,14 +74,6 @@
         "rvt-token": "Token to authenticate with. Prefer the `x-rivet-token` header or inline path token when possible.",
         "args": "Positional arguments passed to the action, in order.",
         "output": "Value returned by the action. `null` if the action returned `undefined`."
-      },
-      "authProfiles": {
-        "inspector": {
-          "curlHeaders": [
-            "Authorization: Bearer $INSPECTOR_TOKEN"
-          ],
-          "description": "Inspector endpoints do not accept namespace tokens. Send the actor's inspector token as a bearer token in the `Authorization` header. {/* TODO(code): document how to read an Actor's inspector token once an API returns it (ACT-6493). */}"
-        }
       }
     },
     "asyncapi": {
@@ -648,364 +640,6 @@
           "href": "/docs/api/websockets",
           "badge": "WS"
         }
-      ],
-      "children": [
-        {
-          "title": "Inspector",
-          "dir": "inspector",
-          "icon": "faMagnifyingGlass",
-          "notes": "These endpoints power the actor inspector.",
-          "endpoints": [
-            {
-              "spec": "rivetkit",
-              "method": "get",
-              "path": "/gateway/{actor}/inspector/summary",
-              "slug": "summary",
-              "title": "Get Summary",
-              "description": "Get an overview of an actor's state, connections, actions, queue, database, and workflow.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-summary.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                }
-              },
-              "responses": {
-                "200": "The actor inspector summary.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "get",
-              "path": "/gateway/{actor}/inspector/state",
-              "slug": "state-get",
-              "title": "Get State",
-              "description": "Read the actor's current state.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-state-get.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                },
-                "response": {
-                  "state": {
-                    "count": 1
-                  }
-                }
-              },
-              "responses": {
-                "200": "The current actor state.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "patch",
-              "path": "/gateway/{actor}/inspector/state",
-              "slug": "state-patch",
-              "title": "Patch State",
-              "description": "Replace the actor's current state.",
-              "notes": "This writes state directly and bypasses actor actions. Use it only for inspection and recovery.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-state-patch.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                },
-                "body": {
-                  "state": {
-                    "count": 2
-                  }
-                },
-                "response": {
-                  "ok": true
-                }
-              },
-              "responses": {
-                "200": "The state was saved.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "get",
-              "path": "/gateway/{actor}/inspector/connections",
-              "slug": "connections",
-              "title": "List Connections",
-              "description": "List the actor's active connections.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-connections.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                }
-              },
-              "responses": {
-                "200": "The active connections.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "get",
-              "path": "/gateway/{actor}/inspector/rpcs",
-              "slug": "rpcs",
-              "title": "List Actions",
-              "description": "List the actions exposed by the actor.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-rpcs.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                }
-              },
-              "responses": {
-                "200": "The actor's action definitions.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "post",
-              "path": "/gateway/{actor}/inspector/action/{name}",
-              "slug": "action",
-              "title": "Invoke Action",
-              "description": "Invoke an actor action through the inspector.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-action.ts",
-              "parameters": {
-                "name": "Name of the action to invoke."
-              },
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID",
-                  "name": "increment"
-                },
-                "body": {
-                  "args": [
-                    1
-                  ]
-                },
-                "response": {
-                  "output": 1
-                }
-              },
-              "responses": {
-                "200": "The action result.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "get",
-              "path": "/gateway/{actor}/inspector/queue",
-              "slug": "queue-get",
-              "title": "Get Queue",
-              "description": "List pending queue messages and queue capacity details.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-queue-get.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                },
-                "query": {
-                  "limit": 50
-                }
-              },
-              "responses": {
-                "200": "Queue size, capacity, truncation status, and pending message metadata.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "post",
-              "path": "/gateway/{actor}/inspector/queue",
-              "slug": "queue-post",
-              "title": "Enqueue Message",
-              "description": "Enqueue a message through the inspector.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-queue-post.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                },
-                "body": {
-                  "name": "increment",
-                  "body": {
-                    "amount": 1
-                  }
-                }
-              },
-              "responses": {
-                "200": "Metadata for the enqueued message.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "delete",
-              "path": "/gateway/{actor}/inspector/queue",
-              "slug": "queue-delete",
-              "title": "Clear Queue",
-              "description": "Remove all pending messages from the actor's queue.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-queue-delete.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                }
-              },
-              "responses": {
-                "200": "The queue was cleared.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "get",
-              "path": "/gateway/{actor}/inspector/traces",
-              "slug": "traces",
-              "title": "Get Traces",
-              "description": "Get actor trace spans in OTLP JSON format.",
-              "notes": "Trace collection is not implemented yet, so this route currently returns an empty result.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-traces.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                },
-                "query": {
-                  "startMs": 0,
-                  "limit": 100
-                }
-              },
-              "responses": {
-                "200": "Trace data and whether the requested range was clamped.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "get",
-              "path": "/gateway/{actor}/inspector/workflow-history",
-              "slug": "workflow-history",
-              "title": "Get Workflow History",
-              "description": "Read workflow history and whether workflows are enabled for the actor.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-workflow-history.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                }
-              },
-              "responses": {
-                "200": "Workflow history and availability.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "post",
-              "path": "/gateway/{actor}/inspector/workflow/replay",
-              "slug": "workflow-replay",
-              "title": "Replay Workflow",
-              "description": "Schedule a workflow replay from an optional history entry.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-workflow-replay.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                },
-                "body": {
-                  "entryId": "entry-123"
-                }
-              },
-              "responses": {
-                "200": "Workflow history after scheduling the replay.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "get",
-              "path": "/gateway/{actor}/inspector/database/schema",
-              "slug": "database-schema",
-              "title": "Get Database Schema",
-              "description": "List tables, views, and columns in the actor's SQLite database.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-database-schema.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                }
-              },
-              "responses": {
-                "200": "The actor database schema.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "get",
-              "path": "/gateway/{actor}/inspector/database/rows",
-              "slug": "database-rows",
-              "title": "Query Database Rows",
-              "description": "Read a page of rows from an actor database table or view.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-database-rows.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                },
-                "query": {
-                  "table": "users",
-                  "limit": 100,
-                  "offset": 0
-                }
-              },
-              "responses": {
-                "200": "The selected rows.",
-                "401": "The inspector token is missing or invalid."
-              }
-            },
-            {
-              "spec": "rivetkit",
-              "method": "post",
-              "path": "/gateway/{actor}/inspector/database/execute",
-              "slug": "database-execute",
-              "title": "Execute SQL",
-              "description": "Run a SQL statement against the actor's SQLite database.",
-              "notes": "SQL executes directly against actor storage. Use bind parameters for values.",
-              "auth": "inspector",
-              "typescript": "examples/docs/api/inspector-database-execute.ts",
-              "examples": {
-                "path": {
-                  "actor": "$ACTOR_ID"
-                },
-                "body": {
-                  "sql": "SELECT * FROM users WHERE id = ?",
-                  "args": [
-                    "user-123"
-                  ]
-                }
-              },
-              "responses": {
-                "200": "Rows returned by the statement.",
-                "401": "The inspector token is missing or invalid."
-              }
-            }
-          ],
-          "pages": [
-            {
-              "title": "Inspector Connect",
-              "href": "/docs/api/inspector-connect",
-              "badge": "WS"
-            }
-          ],
-          "notice": "The inspector API is subject to change without notice. Do not build production integrations on it."
-        }
       ]
     },
     {
@@ -1107,14 +741,118 @@
       ]
     },
     {
-      "title": "Workers",
-      "dir": "workers",
-      "endpoints": [],
+      "title": "Pools",
+      "dir": "pools",
+      "endpoints": [
+        {
+          "spec": "engine",
+          "method": "get",
+          "path": "/pools",
+          "slug": "list",
+          "title": "List Pools",
+          "description": "List the node pools configured in a namespace, ordered by name. Results are paginated.",
+          "typescript": "examples/docs/api/pools-list.ts",
+          "examples": {
+            "query": {
+              "namespace": "$RIVET_NAMESPACE"
+            }
+          },
+          "responses": {
+            "200": "A page of node pools."
+          }
+        },
+        {
+          "spec": "engine",
+          "method": "get",
+          "path": "/pools/{pool}",
+          "slug": "get",
+          "title": "Get Pool",
+          "description": "Get a node pool's configuration.",
+          "typescript": "examples/docs/api/pools-get.ts",
+          "examples": {
+            "path": {
+              "pool": "$RIVET_POOL"
+            },
+            "query": {
+              "namespace": "$RIVET_NAMESPACE"
+            }
+          },
+          "responses": {
+            "200": "The node pool."
+          }
+        },
+        {
+          "spec": "engine",
+          "method": "put",
+          "path": "/pools/{pool}",
+          "slug": "upsert",
+          "title": "Upsert Pool",
+          "description": "Create or replace a node pool's configuration.",
+          "notes": "Omitted fields take their defaults. Unknown fields are rejected.",
+          "typescript": "examples/docs/api/pools-upsert.ts",
+          "examples": {
+            "path": {
+              "pool": "$RIVET_POOL"
+            },
+            "query": {
+              "namespace": "$RIVET_NAMESPACE"
+            },
+            "body": {
+              "drain_on_version_upgrade": true
+            }
+          },
+          "responses": {
+            "200": "The stored node pool."
+          }
+        },
+        {
+          "spec": "engine",
+          "method": "delete",
+          "path": "/pools/{pool}",
+          "slug": "delete",
+          "title": "Delete Pool",
+          "description": "Delete a node pool.",
+          "notes": "Fails with `pool.nodes_connected` while any node of the pool is connected.",
+          "typescript": "examples/docs/api/pools-delete.ts",
+          "examples": {
+            "path": {
+              "pool": "$RIVET_POOL"
+            },
+            "query": {
+              "namespace": "$RIVET_NAMESPACE"
+            }
+          },
+          "responses": {
+            "200": "The node pool was deleted."
+          }
+        },
+        {
+          "spec": "engine",
+          "method": "get",
+          "path": "/pools/{pool}/nodes",
+          "slug": "list-nodes",
+          "title": "List Pool Nodes",
+          "description": "List the live nodes of a node pool in node key order. Results are paginated.",
+          "typescript": "examples/docs/api/pools-list-nodes.ts",
+          "examples": {
+            "path": {
+              "pool": "$RIVET_POOL"
+            },
+            "query": {
+              "namespace": "$RIVET_NAMESPACE"
+            }
+          },
+          "responses": {
+            "200": "A page of live nodes."
+          }
+        }
+      ],
       "pages": [
         {
           "title": "Worker Connection",
           "href": "/docs/api/worker-connect",
-          "badge": "WS"
+          "badge": "WS",
+          "after": "list-nodes"
         }
       ]
     },

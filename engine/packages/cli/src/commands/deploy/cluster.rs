@@ -343,5 +343,3 @@ async fn wait_for_rollout(
 	}
 	bail!("timed out waiting for runner pool {pool} to roll out build {build_id}")
 }
-
-

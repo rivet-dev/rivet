@@ -332,5 +332,3 @@ pub fn remove_link() -> Result<Option<PathBuf>> {
 fn link_path(dir: &Path) -> PathBuf {
 	dir.join(LINK_DIR).join(LINK_FILE)
 }
-
-

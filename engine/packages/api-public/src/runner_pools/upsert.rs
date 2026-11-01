@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use rivet_auth::*;
 use anyhow::Result;
 use axum::response::{IntoResponse, Response};
 use futures_util::{StreamExt, TryStreamExt};
@@ -10,6 +9,7 @@ use rivet_api_builder::{
 };
 use rivet_api_peer::envoy_pools::*;
 use rivet_api_util::request_remote_datacenter;
+use rivet_auth::*;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

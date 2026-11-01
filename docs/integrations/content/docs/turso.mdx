@@ -56,7 +56,16 @@ npm install rivetkit @libsql/client @tursodatabase/api
 
 Create `.env` with your organization slug and token:
 
-<CodeSnippet file="examples/turso/.env.example" title=".env" />
+```sh title=".env"
+# Your Turso organization slug from `turso org list`.
+TURSO_ORG=
+
+# Platform API token from `turso auth api-tokens mint rivet-todos`.
+TURSO_PLATFORM_TOKEN=
+
+# Group to create each actor's database in. Defaults to "default".
+# TURSO_GROUP=default
+```
 
 </Step>
 
@@ -117,12 +126,6 @@ The Platform API token can create and delete every database in its organization,
 ## Startup timeout
 
 `createVars` must finish within `createVarsTimeout`, which defaults to 5 seconds. Its first query opens the connection to Turso, so a node far from the database's region spends part of that budget on the round trip. Raise `options.createVarsTimeout` if starts time out. See [Options](/actors/docs/lifecycle#options).
-
-## Testing
-
-The test creates real Turso databases, so it reads the same environment variables and is skipped without them. It checks that each list gets its own database and that destroying a list deletes it:
-
-<CodeSnippet file="examples/turso/tests/turso.test.ts" title="tests/turso.test.ts" />
 
 See the [Turso Platform API](https://docs.turso.tech/api-reference/introduction) and [TypeScript reference](https://docs.turso.tech/sdk/ts/reference) for the full APIs.
 

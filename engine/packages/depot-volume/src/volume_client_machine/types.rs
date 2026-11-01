@@ -270,8 +270,6 @@ impl AboveCold {
 		self.bytes
 	}
 
-	
-
 	/// The position one past the last recorded entry, or `None` for an empty window.
 	pub(crate) fn end_seq(&self) -> Option<u64> {
 		if self.sizes.is_empty() {
@@ -509,5 +507,3 @@ pub struct RecoveryReport {
 	pub in_sync: Vec<rivet_topology::worker::WorkerId>,
 	pub incomplete: Vec<rivet_topology::worker::WorkerId>,
 }
-
-

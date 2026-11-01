@@ -331,5 +331,3 @@ fn refresh_deadline(ring: &SigningKeyRing, config: &Config, now: rivet_env::Cloc
 	};
 	Ok(now.boot_ms.saturating_add(delay))
 }
-
-

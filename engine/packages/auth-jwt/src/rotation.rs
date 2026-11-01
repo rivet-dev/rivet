@@ -242,5 +242,3 @@ fn admin_authorized(expected: &str, presented: &str) -> bool {
 			Sha256::digest(expected.as_bytes()).ct_eq(&Sha256::digest(presented.as_bytes())),
 		)
 }
-
-

@@ -19,5 +19,3 @@ pub fn conn_hibernation_delta(conn: ConnId, bytes: Vec<u8>) -> StateDelta {
 pub fn conn_hibernation_removed_delta(conn: ConnId) -> StateDelta {
 	StateDelta::ConnHibernationRemoved(conn)
 }
-
-

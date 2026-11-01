@@ -1,16 +1,11 @@
 ---
 title: "CLI"
-seoTitle: "CLI Deployment and Local Development"
-description: "Use the optional Rivet CLI to deploy Rivet Actors to Rivet Cloud and run local development for supported serverless platforms."
+seoTitle: "Rivet CLI"
+description: "Use the optional Rivet CLI to deploy Rivet Actors to Rivet Cloud and manage Rivet Cloud projects and clusters."
 skill: true
 ---
 
-The `rivet` CLI (`@rivetkit/cli`) is optional. You only need it for:
-
-| Use case | Command |
-| --- | --- |
-| Deploy to Rivet Cloud | `rivet deploy` |
-| Local dev for serverless platforms (Cloudflare, Supabase) | `rivet dev --provider <name>` |
+The `rivet` CLI (`@rivetkit/cli`) is optional. You only need it to deploy to Rivet Cloud with `rivet deploy` and to manage Rivet Cloud projects and clusters.
 
 Run it with your package runner:
 
@@ -22,7 +17,6 @@ npx @rivetkit/cli <command>
 | --- | --- |
 | `rivet login` | Sign in to Rivet Cloud in the browser. |
 | `rivet link` | Link the current directory to a project or cluster. |
-| `rivet dev` | Run a local engine and your handler's dev server. |
 | `rivet deploy` | Build and deploy the project to Rivet Cloud. |
 | `rivet logs` | Read or follow a project's compute logs. |
 | `rivet pool` | List or delete compute pools in a namespace. |
@@ -45,33 +39,6 @@ rivet link --org my-org --cluster my-cluster
 `rivet link` writes `.rivet/project.json` in the current directory, so later commands there default to that project or cluster. It prompts for anything not passed as a flag. `rivet unlink` removes the link.
 
 Every command that talks to Rivet Cloud resolves its token in this order: `--token`, `RIVET_CLOUD_TOKEN`, the `rivet login` session, then a token saved by an earlier `rivet deploy --token`. Use `--token` or `RIVET_CLOUD_TOKEN` in CI. The project comes from `--project` and `--org` (or `RIVET_PROJECT` and `RIVET_ORG`). Otherwise an API token names its own project, and a `rivet login` session uses the linked directory or prompts for one. `--cluster` (or `RIVET_CLUSTER`) selects a cluster instead, with `--org` naming the organization it belongs to. `--cloud-api` points at a different Cloud API endpoint.
-
-## `rivet dev`
-
-Starts a local engine, spawns your dev server, and registers the serverless runner pointing at it. The control plane keeps running across restarts; Ctrl-C stops only the dev server.
-
-```bash
-rivet dev [--provider <serverless|cloudflare|supabase|none>] [--port N] [--fn-name NAME] [--url URL] [-- <command>...]
-```
-
-`--provider` selects how the dev server is launched. Anything after `--` is appended to the preset command (or is the command to run when no provider is set).
-
-| `--provider` | Spawns | Port |
-| --- | --- | --- |
-| _(omitted)_ | your `-- <command>` (needs `--port`) | from `--port` |
-| `serverless` | your `-- <command>` (gets `PORT`) | auto |
-| `cloudflare` | `wrangler dev` | `8787` |
-| `supabase` | `supabase functions serve` | `54321` |
-| `none` | nothing (engine only) | — |
-
-For `cloudflare`, the CLI also passes the control plane endpoint as `--var RIVET_ENDPOINT:...`, so the Worker connects back with no `wrangler.toml` config.
-
-| Flag | Description |
-| --- | --- |
-| `--port` | Handler port. Required without a provider unless `--url` is set. |
-| `--fn-name` | Supabase function name (default `rivet`). |
-| `--url` | Explicit handler URL, overriding port and path. |
-| `--engine-binary` | Path to a `rivet-engine` binary. |
 
 ## `rivet deploy`
 
@@ -257,7 +224,7 @@ Lines can arrive up to a minute late, and `--follow` prints them when they do.
 
 ## `rivet engine`
 
-Runs the bundled `rivet-engine` binary directly, against the same local database and ports as `rivet dev`. Arguments are forwarded verbatim.
+Runs the bundled `rivet-engine` binary directly. Arguments are forwarded verbatim.
 
 ```bash
 rivet engine nuke      # wipe local engine state
@@ -298,10 +265,8 @@ By default the namespace must already exist. Pass `--create-namespace` to create
 
 ## Engine binary resolution
 
-`rivet dev` and `rivet engine` resolve the `rivet-engine` binary from, in order: `--engine-binary`, `RIVET_ENGINE_BINARY_PATH`, a binary bundled next to the CLI, a local `target/{debug,release}` build, then an auto-downloaded release. Set `RIVETKIT_ENGINE_AUTO_DOWNLOAD=0` to require a local binary.
+`rivet engine` resolves the `rivet-engine` binary from, in order: `--engine-binary`, `RIVET_ENGINE_BINARY_PATH`, a binary bundled next to the CLI, a local `target/{debug,release}` build, then an auto-downloaded release. Set `RIVETKIT_ENGINE_AUTO_DOWNLOAD=0` to require a local binary.
 
 ## Related
 
 - [Deploying to Rivet Cloud](/docs/deploy/self-host/control-plane)
-- [Cloudflare Workers Quickstart](/actors/docs/quickstart/cloudflare)
-- [Supabase Functions Quickstart](/actors/docs/quickstart/supabase)

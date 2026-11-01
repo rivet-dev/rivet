@@ -219,5 +219,3 @@ fn validate_request(body: &CreateRequest, max_duration: u64) -> anyhow::Result<(
 	}
 	Ok(())
 }
-
-

@@ -186,5 +186,3 @@ impl<T> Receiver<T> {
 		Some(queued.value)
 	}
 }
-
-

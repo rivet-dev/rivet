@@ -78,5 +78,3 @@ pub fn bcrypt(s: impl AsRef<str>) -> bool {
 
 	BCRYPT.is_match(s)
 }
-
-

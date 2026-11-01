@@ -327,10 +327,6 @@ impl Skipped {
 		*self = Self::default();
 	}
 
-	
-
-	
-
 	/// Takes the next skipped volume, round robin after the last one handed back, or the full
 	/// pass an overflow asked for once no volume is left.
 	fn hand_back(&mut self) -> Option<HandBack> {

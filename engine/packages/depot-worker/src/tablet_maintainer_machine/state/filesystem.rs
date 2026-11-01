@@ -280,12 +280,8 @@ impl Filesystem {
 	}
 }
 
-
-
 /// Counts one volume visited by flush selection or completion. Test builds only.
-fn count_flush_visit() {
-	
-}
+fn count_flush_visit() {}
 
 /// Whether two filesystem states are equal apart from which volumes are marked for the
 /// next `drive` and which are offered for registration.
@@ -2597,8 +2593,6 @@ pub(crate) fn forget(state: &mut MaintainerState, key: &VolumeLogKey, fx: &mut E
 	fx.cancel_timer(MaintainerTimer::FilesystemDue(key.clone()));
 	fx.cancel_timer(MaintainerTimer::FilesystemRetry(key.clone()));
 }
-
-
 
 /// Shared maintainer validation also checks the nested apply/flush invariants.
 pub(crate) fn validate(state: &MaintainerState) -> anyhow::Result<()> {

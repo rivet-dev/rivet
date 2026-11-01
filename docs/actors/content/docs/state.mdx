@@ -285,9 +285,3 @@ For the full query API, schema migrations, transactions, and the Drizzle ORM, se
 
 - [SQLite](/actors/docs/sqlite): raw SQL against the embedded per-actor database.
 - [SQLite + Drizzle](/actors/docs/sqlite-drizzle): typed schema and query APIs.
-
-## Debugging
-
-- `GET /inspector/state` returns the actor's current state and `isStateEnabled`.
-- `PATCH /inspector/state` lets you set state directly while debugging.
-- In non-dev mode, inspector endpoints require authorization.

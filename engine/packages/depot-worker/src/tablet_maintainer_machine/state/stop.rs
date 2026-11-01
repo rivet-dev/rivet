@@ -717,5 +717,3 @@ pub(crate) fn cancel(state: &mut MaintainerState, effects: &mut Effects) {
 pub(crate) fn pending(state: &MaintainerState) -> usize {
 	state.stop_checks.pending.len()
 }
-
-

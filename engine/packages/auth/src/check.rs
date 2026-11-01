@@ -249,5 +249,3 @@ impl RequestAuthState {
 		Ok(credential)
 	}
 }
-
-

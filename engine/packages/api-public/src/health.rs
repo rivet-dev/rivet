@@ -1,8 +1,8 @@
-use rivet_auth::*;
 use anyhow::{Result, bail};
 use axum::{Json, extract::Extension, response::IntoResponse};
 use futures_util::StreamExt;
 use rivet_api_builder::ApiError;
+use rivet_auth::*;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use utoipa::ToSchema;

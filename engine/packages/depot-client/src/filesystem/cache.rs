@@ -1779,5 +1779,3 @@ impl RowStore for View {
 			.ok_or(depot_fs_core::Error::ReadRequired(request))
 	}
 }
-
-

@@ -974,4 +974,3 @@ fn is_loopback_address(hostname: &str) -> bool {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

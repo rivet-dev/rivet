@@ -570,5 +570,3 @@ fn scan_bounds(range: &Range<Vec<u8>>) -> (Bound<&[u8]>, Bound<&[u8]>) {
 		Bound::Excluded(range.end.as_slice()),
 	)
 }
-
-

@@ -90,8 +90,6 @@ impl ConnectAdmission {
 	}
 }
 
-
-
 /// Per-connection admission for retained actor lanes. A handle holds its slot until the last
 /// reference disappears, including references held by commands that already found the handle.
 pub(crate) struct ActorHandleBudget {

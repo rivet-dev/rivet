@@ -161,7 +161,6 @@ pub struct VfsConfig {
 	/// The most pages one transaction may change. Values above Depot's own commit cap,
 	/// `sqlite_types::MAX_COMMIT_DIRTY_PAGES`, are clamped to it.
 	pub max_commit_dirty_pages: usize,
-	
 }
 
 impl Default for VfsConfig {
@@ -202,7 +201,6 @@ impl VfsConfig {
 			max_pages_per_stage: DEFAULT_MAX_PAGES_PER_STAGE,
 			idle_release_ms: flags.idle_release_ms,
 			max_commit_dirty_pages: sqlite_types::MAX_COMMIT_DIRTY_PAGES,
-			
 		}
 	}
 }
@@ -717,10 +715,6 @@ pub struct VfsContext {
 	/// ran the statement to return instead of SQLite's generic message.
 	storage_error: Mutex<Option<SqliteStorageError>>,
 	fatal_error: RwLock<Option<String>>,
-	
-	
-	
-	
 	commit_atomic_count: AtomicU64,
 	/// Diagnostic attempts, distinct even when a refused/timed-out commit did not advance commit_total.
 	trace_commit_attempts: AtomicU64,
@@ -997,8 +991,6 @@ impl VfsState {
 		}
 	}
 
-	
-
 	/// A page a corked commit holds, which no cache may stand in for.
 	fn corked_page(&self, pgno: u32) -> Option<&PageBytes> {
 		self.corked.as_ref().and_then(|corked| corked.get(&pgno))
@@ -1147,10 +1139,6 @@ impl VfsContext {
 			transaction_too_large: Mutex::new(None),
 			storage_error: Mutex::new(None),
 			fatal_error: RwLock::new(None),
-			
-			
-			
-			
 			commit_atomic_count: AtomicU64::new(0),
 			trace_commit_attempts: AtomicU64::new(0),
 			io_methods: Box::new(io_methods),
@@ -1428,8 +1416,6 @@ impl VfsContext {
 		dirty_pages
 	}
 
-	
-
 	pub(crate) fn take_last_error(&self) -> Option<String> {
 		self.last_error.lock().take()
 	}
@@ -1585,14 +1571,6 @@ impl VfsContext {
 	fn delete_aux_file(&self, path: &str) {
 		self.aux_files.write().remove(path);
 	}
-
-	
-
-	
-
-	
-
-	
 
 	fn is_dead(&self) -> bool {
 		self.state.read().dead
@@ -2555,8 +2533,6 @@ fn handle_finalize_fence_error(ctx: &VfsContext, err: &CommitBufferError) {
 	}
 }
 
-
-
 pub(crate) async fn fetch_initial_pages_for_registration(
 	transport: SqliteTransportHandle,
 	actor_id: &str,
@@ -2897,24 +2873,6 @@ pub(crate) fn sqlite_exec(db: *mut sqlite3, sql: &str) -> std::result::Result<()
 	Ok(())
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 fn page_span(offset: i64, length: usize, page_size: usize) -> std::result::Result<Vec<u32>, ()> {
 	if offset < 0 {
 		return Err(());
@@ -2944,7 +2902,6 @@ unsafe extern "C" fn io_close(p_file: *mut sqlite3_file) -> c_int {
 			Ok(())
 		} else {
 			let ctx = &*file.ctx;
-			
 			ctx.discard_refused_transaction();
 			let should_flush = {
 				let state = ctx.state.read();
@@ -3324,7 +3281,6 @@ unsafe extern "C" fn io_write(
 
 		let end_page = ((offset + amt) + page_size - 1) / page_size;
 		state.db_size_pages = state.db_size_pages.max(end_page as u32);
-		
 		ctx.clear_last_error();
 		SQLITE_OK
 	})
@@ -3527,7 +3483,6 @@ unsafe extern "C" fn io_device_characteristics(p_file: *mut sqlite3_file) -> c_i
 		if get_aux_state(file).is_some() {
 			0
 		} else {
-			
 			SQLITE_IOCAP_BATCH_ATOMIC
 		}
 	})
@@ -3558,12 +3513,9 @@ unsafe extern "C" fn vfs_open(
 		let is_main =
 			path == ctx.actor_id && !delete_on_close && (flags & SQLITE_OPEN_MAIN_DB) != 0;
 
-		
-
 		let base = sqlite3_file {
 			pMethods: ctx.io_methods.as_ref(),
 		};
-		
 		let aux = if is_main {
 			ptr::null_mut()
 		} else {
@@ -3612,7 +3564,6 @@ unsafe extern "C" fn vfs_delete(
 			ctx.set_last_error("main database deletion is unsupported".to_string());
 			return SQLITE_IOERR_DELETE;
 		} else {
-			
 			ctx.delete_aux_file(path);
 		}
 		SQLITE_OK
@@ -3768,10 +3719,6 @@ impl SqliteVfs {
 		self.ctx.sqlite_vfs_metrics()
 	}
 
-	
-
-	
-
 	pub(crate) fn register_with_transport_and_initial_pages(
 		name: &str,
 		transport: SqliteTransportHandle,
@@ -3860,8 +3807,6 @@ impl SqliteVfs {
 			ms => Some(std::time::Duration::from_millis(ms)),
 		}
 	}
-
-	
 
 	fn ctx(&self) -> &VfsContext {
 		&self.ctx

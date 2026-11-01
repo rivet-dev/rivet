@@ -868,8 +868,6 @@ impl ActorContext {
 		self.0.connection_config.read().clone()
 	}
 
-	
-
 	async fn disconnect_managed(&self, conn_id: &str, reason: Option<String>) -> Result<()> {
 		let Some(conn) = self.remove_existing_for_disconnect(conn_id) else {
 			tracing::debug!(
@@ -1044,4 +1042,3 @@ fn disconnect_message(conn_id: &str, reason: Option<&str>) -> String {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-

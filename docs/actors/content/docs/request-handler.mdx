@@ -24,8 +24,6 @@ The `onRequest` handler processes HTTP requests sent to your actor. It receives 
 </Tab>
 </Tabs>
 
-See also the [raw fetch handler example](https://github.com/rivet-dev/rivet/tree/main/examples/raw-fetch-handler).
-
 ## Streaming Responses & Server-Sent Events
 
 Return a `Response` with a `ReadableStream` body to stream data as it becomes available. For server-sent events (SSE), set `Content-Type` to `text/event-stream` and format each event as one or more fields followed by a blank line.

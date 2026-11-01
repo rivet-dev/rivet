@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use rivet_actor_runtime_socket_protocol as wire;
@@ -347,13 +346,10 @@ enum LeaseEntry {
 	Terminal(&'static str),
 }
 
-
-
 #[derive(Default)]
 struct ConnectionLeaseState {
 	entries: BTreeMap<String, LeaseEntry>,
 	closed: bool,
-	
 }
 
 type ConnectionLeases = Arc<Mutex<ConnectionLeaseState>>;
@@ -868,7 +864,6 @@ async fn active_transaction(
 				Some(LeaseEntry::Pending(current)) if Arc::ptr_eq(current, &notify)
 			)
 		};
-		
 		if still_pending {
 			notified.await;
 		}
@@ -1071,5 +1066,3 @@ async fn write_payload<W: AsyncWrite + Unpin>(writer: &mut W, payload: &[u8]) ->
 	writer.flush().await?;
 	Ok(())
 }
-
-

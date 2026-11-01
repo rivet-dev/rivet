@@ -350,5 +350,3 @@ pub(crate) fn ready(
 	}
 	still_gone
 }
-
-

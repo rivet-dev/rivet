@@ -107,5 +107,3 @@ impl RecordState {
 		self.connected = true;
 	}
 }
-
-

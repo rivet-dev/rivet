@@ -352,5 +352,3 @@ impl MultipartUpload for LockedUpload {
 		self.inner.abort_with_guard(Some(guard)).await
 	}
 }
-
-

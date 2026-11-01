@@ -331,5 +331,3 @@ impl Drop for Database {
 		self.prefetcher.close();
 	}
 }
-
-

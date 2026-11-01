@@ -2,14 +2,18 @@
 use anyhow::{Context, Result, bail, ensure};
 use futures_util::StreamExt;
 use rivet_env::capabilities::websocket::{CloseFrame, Message, WebSocket};
+use rivet_env::{Clock, ClockError};
 use rivet_envoy_protocol as p;
+use std::sync::Arc;
 use universalpubsub::{DuplexStream, PacketReceiver, PacketSender};
 use vbare::Versioned;
 
-/// Whichever peer has made progress; the loop owns both directions' ordering.
+/// Whichever peer has made progress, or the keepalive interval; the loop owns both directions'
+/// ordering.
 enum Input {
 	Actor(Result<Option<bytes::Bytes>>),
 	Client(Option<Result<Message, axum::Error>>),
+	Keepalive(Result<u64, ClockError>),
 }
 
 /// How the actor answered a WebSocket open.
@@ -130,12 +134,20 @@ where
 ///
 /// The client socket is not read until the actor accepts the open, so a refused open that
 /// `open_tunnel` sends again is invisible to the client.
+///
+/// A ping frame goes to the client every `keepalive_interval_ms`. Proxies in front of guard
+/// close WebSockets that carry no frame for a while (Cloudflare after roughly 100 seconds), and
+/// neither a RivetKit client nor an idle actor sends anything on its own. The ping is sent
+/// whether or not the connection was busy: a proxy's idle timer resets on any frame, and
+/// watching for the last frame would cost a clock read per forwarded message.
 pub async fn proxy<Reopen, ReopenFut>(
 	socket: &mut WebSocket,
 	stream: DuplexStream,
 	identity: p::MessageId,
 	open: p::ToEnvoyWebSocketOpen,
 	reopen: Reopen,
+	clock: Arc<dyn Clock>,
+	keepalive_interval_ms: u64,
 ) -> Result<()>
 where
 	Reopen: FnOnce() -> ReopenFut,
@@ -163,8 +175,13 @@ where
 	};
 	let mut pending = None;
 
+	// The first tick completes at once and is skipped; the socket was just opened. Missed ticks
+	// are skipped too, so a connection that was busy for a while sends one ping, not a burst.
+	let mut keepalive = rivet_env::interval(clock, keepalive_interval_ms);
+	keepalive.tick().await.context("keepalive clock failed")?;
+
 	loop {
-		let input = rivet_env::select_biased!("actor replies release WebSocket send credit before more client input",
+		let input = rivet_env::select_biased!("actor replies release WebSocket send credit before more client input, and a keepalive ping never preempts either",
 			packet = receiver.recv() => Input::Actor(packet),
 			message = async {
 				if pending.is_none() {
@@ -173,6 +190,7 @@ where
 					futures_util::future::pending().await
 				}
 			} => Input::Client(message),
+			tick = keepalive.tick() => Input::Keepalive(tick),
 		);
 
 		match input {
@@ -263,6 +281,18 @@ where
 					Some(Message::Ping(_) | Message::Pong(_)) => {}
 				}
 			}
+			// A keepalive interval passed. A ping that cannot be sent means the socket is
+			// gone, which ends the tunnel like any other failed send. The client's WebSocket
+			// library answers the pong on its own.
+			Input::Keepalive(tick) => {
+				tick.context("keepalive clock failed")?;
+				let sent = socket.send(Message::Ping(bytes::Bytes::new())).await;
+				let result = if sent.is_ok() { "ok" } else { "error" };
+				crate::metrics::WEBSOCKET_KEEPALIVE_PING_TOTAL
+					.with_label_values(&[result])
+					.inc();
+				sent.context("keepalive ping to the client failed")?;
+			}
 		}
 	}
 }
@@ -286,5 +316,3 @@ async fn send(
 		.context("WebSocket message index overflow")?;
 	Ok(())
 }
-
-

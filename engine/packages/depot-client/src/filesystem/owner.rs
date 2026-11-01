@@ -105,5 +105,3 @@ impl Drop for OpenedFilesystem {
 		self.lease.release();
 	}
 }
-
-

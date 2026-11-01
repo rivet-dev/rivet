@@ -769,5 +769,3 @@ fn merge_floors(pages: &[Pgno]) -> Vec<Lookup> {
 	}
 	lookups
 }
-
-

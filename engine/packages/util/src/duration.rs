@@ -57,5 +57,3 @@ pub fn format(v: i64, with_ms: bool) -> String {
 
 	format!("{}{}s", segments, seconds)
 }
-
-

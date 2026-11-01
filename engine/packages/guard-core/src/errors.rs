@@ -130,5 +130,3 @@ fn truncate_to_char_boundary(mut value: String, max_bytes: usize) -> String {
 	value.truncate(end);
 	value
 }
-
-

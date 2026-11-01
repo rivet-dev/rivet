@@ -120,5 +120,3 @@ fn connect_retry_after_ms(error: &anyhow::Error, default_retry_after_ms: u64) ->
 		None
 	}
 }
-
-

@@ -356,5 +356,3 @@ fn encode_cbor<T: Serialize>(value: &T, label: &str) -> Result<Vec<u8>> {
 fn decode_cbor<T: DeserializeOwned>(bytes: &[u8], label: &str) -> Result<T> {
 	ciborium::from_reader(Cursor::new(bytes)).with_context(|| format!("decode {label} from cbor"))
 }
-
-

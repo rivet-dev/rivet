@@ -564,5 +564,3 @@ pub(crate) fn check_peer_versions(endpoint: &rivet_topology::worker::Worker) -> 
 	}
 	Ok(())
 }
-
-

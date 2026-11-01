@@ -70,7 +70,6 @@ interface CliOpts {
 	noLatest?: boolean;
 	dryRun?: boolean;
 	yes?: boolean;
-	skipChecks?: boolean;
 }
 
 async function main() {
@@ -86,7 +85,6 @@ async function main() {
 		.option("--no-latest", "Do not mark as latest")
 		.option("--dry-run", "Report version edits and run checks without writing or publishing")
 		.option("-y, --yes", "Skip interactive confirmation")
-		.option("--skip-checks", "Skip the OSS snapshot build; OSS CI and publish.yaml still build it")
 		.parse();
 
 	const opts = program.opts<CliOpts>();
@@ -116,7 +114,7 @@ async function main() {
 	// before the bump is pushed to EE.
 	if (!opts.dryRun) {
 		await requireReleaseBase(repoRoot);
-		await $({ stdio: "inherit", cwd: repoRoot })`scripts/git/oss-sync.sh push --dry-run --skip-build`;
+		await $({ stdio: "inherit", cwd: repoRoot })`scripts/git/oss-sync.ts push --dry-run --skip-build`;
 	}
 
 	// 4. Print plan.
@@ -126,7 +124,7 @@ async function main() {
 	console.log("Release plan");
 	console.log(`  Version:  ${version}`);
 	console.log(`  Latest:   ${latest}`);
-	console.log("  Source:   EE main, published to OSS main by scripts/git/oss-sync.sh");
+	console.log("  Source:   EE main, published to OSS main by scripts/git/oss-sync.ts");
 	console.log(`  Previous: ${latestGit ?? "(none)"}`);
 	if (opts.dryRun) console.log("  Dry run:  no source writes / commit / push / workflow trigger");
 	console.log("");
@@ -182,8 +180,7 @@ async function main() {
 	// 8. Publish the bump to OSS main. The sync builds and checks the public tree, which is
 	// exactly what publish.yaml builds, then records the sync back on EE main.
 	log.info("syncing EE main to OSS main");
-	const syncArgs = opts.skipChecks ? ["all", "--skip-build"] : ["all"];
-	await $({ stdio: "inherit", cwd: repoRoot })`scripts/git/oss-sync.sh ${syncArgs}`;
+	await $({ stdio: "inherit", cwd: repoRoot })`scripts/git/oss-sync.ts all`;
 
 	// 9. Trigger the workflow on OSS main, which now ends with the synced bump.
 	log.info("triggering publish.yaml workflow");

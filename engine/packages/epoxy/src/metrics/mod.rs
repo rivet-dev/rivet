@@ -57,8 +57,6 @@ impl Drop for WorkAttempt {
 	}
 }
 
-
-
 lazy_static::lazy_static! {
 	pub static ref VERSION_PROBES: IntCounter = register_int_counter_with_registry!(
 		Opts::new(

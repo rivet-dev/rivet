@@ -28,8 +28,6 @@ use std::{
 };
 use tokio::sync::{mpsc, oneshot, watch};
 
-
-
 /// Implementations check current singleton and worker lease evidence with a fresh clock.
 pub trait CoordinatorAuthority: Send + Sync + 'static {
 	fn permits(&self) -> bool;

@@ -428,9 +428,3 @@ impl EphemeralStateMachine for TopologyStateMachine {
 		Ok(())
 	}
 }
-
-
-
-
-
-

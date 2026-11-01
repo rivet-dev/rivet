@@ -164,5 +164,3 @@ pub(crate) fn rebuild(
 	super::super::filesystem::rebuild_record(state, key.clone(), record, fx);
 	Ok(())
 }
-
-

@@ -1,3 +1,4 @@
+use anyhow::{Result, bail};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
@@ -22,10 +23,22 @@ pub struct Guard {
 	pub route_auth_check_timeout_ms: Option<u64>,
 	/// Timeout for pegboard actor route authorization checks in milliseconds.
 	pub route_pegboard_auth_check_timeout_ms: Option<u64>,
-
+	/// Interval in milliseconds at which Guard sends a ping frame on every client WebSocket.
+	/// Keeps idle connections alive through proxies that close quiet WebSockets, such as
+	/// Cloudflare's roughly 100 second idle timeout. Must be greater than 0. Defaults to
+	/// 30000 ms.
+	pub websocket_keepalive_interval_ms: Option<u64>,
 }
 
 impl Guard {
+	pub fn validate(&self) -> Result<()> {
+		if self.websocket_keepalive_interval_ms == Some(0) {
+			bail!("guard.websocket_keepalive_interval_ms must be greater than 0");
+		}
+
+		Ok(())
+	}
+
 	pub fn host(&self) -> IpAddr {
 		self.host.unwrap_or(crate::defaults::hosts::GUARD)
 	}
@@ -48,5 +61,9 @@ impl Guard {
 
 	pub fn route_pegboard_auth_check_timeout(&self) -> std::time::Duration {
 		std::time::Duration::from_millis(self.route_pegboard_auth_check_timeout_ms.unwrap_or(5_000))
+	}
+
+	pub fn websocket_keepalive_interval_ms(&self) -> u64 {
+		self.websocket_keepalive_interval_ms.unwrap_or(30_000)
 	}
 }

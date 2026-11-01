@@ -251,5 +251,3 @@ async fn write_bytes(
 		Err(error) => WriteResult::Unknown(error.to_string()),
 	}
 }
-
-

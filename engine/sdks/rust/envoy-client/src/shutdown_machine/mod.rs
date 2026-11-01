@@ -72,5 +72,3 @@ impl State {
 		(!events_pending).then_some(Completion::Acknowledged)
 	}
 }
-
-

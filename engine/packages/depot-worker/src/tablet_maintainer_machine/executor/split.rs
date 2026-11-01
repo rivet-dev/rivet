@@ -117,5 +117,3 @@ pub(crate) async fn prepare(
 		.await?;
 	Ok(manifest_id)
 }
-
-

@@ -15,5 +15,3 @@ pub mod ops;
 pub mod services;
 pub mod transport;
 pub mod types;
-
-

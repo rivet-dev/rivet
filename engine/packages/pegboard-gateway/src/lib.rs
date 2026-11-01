@@ -7,6 +7,7 @@ use rivet_engine_context::EngineContext;
 mod acquire;
 mod cors;
 mod http_tunnel;
+mod metrics;
 mod raw_rest_path;
 mod retry_budget;
 mod route;
@@ -125,5 +126,3 @@ pub(crate) fn log_failure(error: &anyhow::Error) {
 		tracing::warn!(?error, "gateway request failed with an internal error");
 	}
 }
-
-

@@ -20,8 +20,6 @@ const INSPECTOR_TOKEN_BYTES: usize = 32;
 
 static INSPECTOR_TEST_TOKEN_OVERRIDE: OnceLock<RwLock<Option<String>>> = OnceLock::new();
 
-
-
 pub fn set_test_inspector_token_override(token: Option<String>) {
 	*INSPECTOR_TEST_TOKEN_OVERRIDE
 		.get_or_init(|| RwLock::new(None))

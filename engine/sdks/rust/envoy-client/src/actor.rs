@@ -14,7 +14,6 @@ use crate::connection::ws_send;
 use crate::context::SharedContext;
 use crate::handle::EnvoyHandle;
 use crate::http::HttpRequest;
-
 use crate::stringify::stringify_to_rivet_tunnel_message_kind;
 use crate::utils::{
 	BufferMap, id_to_str, spawn_detached, wrapping_add_u16, wrapping_lte_u16, wrapping_sub_u16,
@@ -1326,7 +1325,3 @@ async fn send_actor_message(
 		);
 	}
 }
-
-
-
-
