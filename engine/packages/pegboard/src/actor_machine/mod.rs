@@ -18,6 +18,10 @@ const STOP_RESEND_MS: u64 = 5 * 1000;
 /// The most a resend is delayed past `STOP_RESEND_MS`, drawn per resend, so the actors of one
 /// envoy that were stopped together do not resend and read its record in lockstep.
 const STOP_RESEND_JITTER_MS: u64 = 2 * 1000;
+/// How long a due alarm that found no envoy to start its actor on waits before it tries again.
+/// Envoys reconnect about a second after the engine starts, so a short wait keeps the alarm
+/// close to its deadline.
+const ALARM_NO_ENVOY_RETRY_MS: u64 = 1000;
 
 pub struct ActorStateMachine;
 
@@ -493,9 +497,12 @@ impl DurableStateMachine for ActorStateMachine {
 				RuntimeEvent::Input(wire::ActorEvent::Create(event)) => {
 					try_start(state, effects, event.waiter, preparation, now_unix_ms);
 				}
-				RuntimeEvent::Timer(wire::ActorTimer::AlarmTimeout) => {
-					wake(state, effects, preparation, now_unix_ms);
-				}
+				// With no envoy to start on, as right after the engine starts and before its
+				// envoys reconnect, the alarm is armed again so the wake is not lost.
+				RuntimeEvent::Timer(wire::ActorTimer::AlarmTimeout) => match preparation {
+					Some(_) => wake(state, effects, preparation, now_unix_ms),
+					None => rearm_alarm(effects, entropy),
+				},
 				RuntimeEvent::Input(wire::ActorEvent::Reallocate(event)) => {
 					if event.epoch == state.epoch {
 						allocate_actor(state, effects, preparation, Dispatch::Durable, now_unix_ms);
@@ -1067,6 +1074,17 @@ fn set_pending_action(
 	if allow {
 		*pending_action = new_pending_action;
 	}
+}
+
+/// Arms the alarm again for a wake that found no envoy to start the actor on. The jitter keeps
+/// the actors whose alarms came due together, as when the engine starts, from retrying in
+/// lockstep.
+fn rearm_alarm(effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>, entropy: Entropy) {
+	let jitter_ms = entropy.rng().gen_range(0..STOP_RESEND_JITTER_MS);
+	effects.arm_timer_after(
+		wire::ActorTimer::AlarmTimeout,
+		ALARM_NO_ENVOY_RETRY_MS + jitter_ms,
+	);
 }
 
 /// Ends the current epoch: its timers are cancelled, the epoch moves on, and the pending action
