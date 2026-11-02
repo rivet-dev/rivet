@@ -59,6 +59,7 @@ export function ArenaMenu({
 		setStatus("idle");
 	}, [cleanup]);
 
+	// docs:start queue
 	const queueForMatch = async () => {
 		setStatus("queuing");
 		setError("");
@@ -111,6 +112,7 @@ export function ArenaMenu({
 			setStatus("error");
 		}
 	};
+	// docs:end queue
 
 	const addBot = () => {
 		const bot = new ArenaBot(client, mode);

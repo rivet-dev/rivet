@@ -1271,9 +1271,9 @@ const GlobalActorOptionsBaseSchema = z
 		/** Enables the experimental Actor Runtime Socket for this actor. */
 		enableActorRuntimeSocket: z.boolean().default(false),
 		/**
-		 * Can hibernate WebSockets for onWebSocket.
-		 *
-		 * WebSockets using actions/events are hibernatable by default.
+		 * Can hibernate WebSockets, both client connections for actions and
+		 * events and WebSockets for onWebSocket. A WebSocket that does not
+		 * hibernate closes when the actor sleeps, and the client reconnects.
 		 *
 		 * @experimental
 		 **/
@@ -2325,7 +2325,7 @@ export const DocActorOptionsSchema = z
 			.boolean()
 			.optional()
 			.describe(
-				"Whether WebSockets using onWebSocket can be hibernated. WebSockets using actions/events are hibernatable by default. Default: false",
+				"Whether WebSockets can be hibernated, both client connections for actions and events and WebSockets using onWebSocket. A WebSocket that does not hibernate closes when the actor sleeps. Default: false",
 			),
 	})
 	.describe("Actor options for timeouts and behavior configuration.");

@@ -1,0 +1,27 @@
+[package]
+name = "rivet-cluster-config"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+rivet-state-machine-util.workspace = true
+rivet-state-machine.workspace = true
+rivet-state-machine-ephemeral.workspace = true
+rivet-object-store-util.workspace = true
+parking_lot.workspace = true
+rivet-env.workspace = true
+anyhow.workspace = true
+object_store.workspace = true
+rivet-config.workspace = true
+rivet-data.workspace = true
+rivet-keys.workspace = true
+rivet-metrics-server.workspace = true
+rivet-engine-context.workspace = true
+rivet-runtime.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true

@@ -138,7 +138,3 @@ impl TuplePack for ProtocolVersionSubspaceKey {
 		t.pack(w, tuple_depth)
 	}
 }
-
-#[cfg(test)]
-#[path = "../tests/inline/keys.rs"]
-mod tests;

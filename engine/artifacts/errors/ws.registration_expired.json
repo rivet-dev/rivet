@@ -1,5 +1,0 @@
-{
-  "code": "registration_expired",
-  "group": "ws",
-  "message": "The envoy registration expired while its connection was still active. The websocket should reconnect."
-}

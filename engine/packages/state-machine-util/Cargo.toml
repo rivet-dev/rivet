@@ -1,0 +1,15 @@
+[package]
+name = "rivet-state-machine-util"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+rivet-state-machine.workspace = true
+rivet-state-machine-ephemeral.workspace = true
+rivet-env.workspace = true
+serde.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+

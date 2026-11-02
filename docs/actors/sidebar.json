@@ -24,11 +24,6 @@
 							"icon": "faReact"
 						},
 						{
-							"title": "Next.js",
-							"href": "/actors/docs/quickstart/next-js",
-							"icon": "faNextjs"
-						},
-						{
 							"title": "Rust",
 							"href": "/actors/docs/quickstart/rust",
 							"icon": "faRust",
@@ -39,16 +34,6 @@
 							"href": "/actors/docs/quickstart/effect",
 							"icon": "faLayerGroup",
 							"badge": "Beta"
-						},
-						{
-							"title": "Cloudflare Workers",
-							"href": "/actors/docs/quickstart/cloudflare",
-							"icon": "faCloudflare"
-						},
-						{
-							"title": "Supabase Functions",
-							"href": "/actors/docs/quickstart/supabase",
-							"icon": "faSupabase"
 						}
 					]
 				}
@@ -105,6 +90,14 @@
 					"collapsible": true,
 					"pages": [
 						{
+							"title": "Authentication",
+							"href": "/actors/docs/authentication"
+						},
+						{
+							"title": "Access Control",
+							"href": "/actors/docs/access-control"
+						},
+						{
 							"title": "Connections",
 							"href": "/actors/docs/connections"
 						},
@@ -129,10 +122,6 @@
 						{
 							"title": "Lifecycle",
 							"href": "/actors/docs/lifecycle"
-						},
-						{
-							"title": "Permissions",
-							"href": "/actors/docs/permissions"
 						},
 						{
 							"title": "Input Parameters",
@@ -173,10 +162,6 @@
 							"href": "/actors/docs/logging"
 						},
 						{
-							"title": "Performance Monitoring & Tuning",
-							"href": "/actors/docs/performance-monitoring"
-						},
-						{
 							"title": "Errors",
 							"href": "/actors/docs/errors"
 						},
@@ -199,10 +184,6 @@
 						{
 							"title": "Icons & Names",
 							"href": "/actors/docs/appearance"
-						},
-						{
-							"title": "Custom Inspector Tabs",
-							"href": "/actors/docs/inspector-tabs"
 						},
 						{
 							"title": "Actor Runtime Socket",
@@ -261,6 +242,10 @@
 			"title": "Reference",
 			"pages": [
 				{
+					"title": "Troubleshooting",
+					"href": "/actors/docs/troubleshooting"
+				},
+				{
 					"title": "Production Checklist",
 					"href": "/actors/docs/production-checklist"
 				},
@@ -281,7 +266,7 @@
 							"href": "/actors/docs/http-server"
 						},
 						{
-							"title": "Runtime Environment Variables",
+							"title": "Environment Variables",
 							"href": "/actors/docs/environment-variables"
 						},
 						{
@@ -293,51 +278,97 @@
 			]
 		}
 	],
-	"learn": [
+	"guides": [
 		{
-			"title": "General",
+			"title": "Agents",
 			"pages": [
 				{
-					"title": "Overview",
-					"href": "/actors/learn",
-					"icon": "faSquareInfo"
+					"title": "AI Agent",
+					"href": "/guides/ai-agent"
 				}
 			]
 		},
 		{
-			"title": "Guides",
+			"title": "Databases",
 			"pages": [
 				{
-					"title": "AI Agent",
-					"href": "/actors/learn/ai-agent"
+					"title": "Database per Tenant",
+					"href": "/guides/per-tenant-database"
+				}
+			]
+		},
+		{
+			"title": "Games",
+			"pages": [
+				{
+					"title": "Battle Royale",
+					"href": "/guides/battle-royale"
 				},
 				{
-					"title": "Authenticate Users End to End",
-					"href": "/actors/learn/authentication"
+					"title": "IO Game",
+					"href": "/guides/io-game"
 				},
 				{
-					"title": "Chat Room",
-					"href": "/actors/learn/chat-room"
+					"title": "Arena Game",
+					"href": "/guides/arena-game"
 				},
 				{
-					"title": "Collaborative Text Editor",
-					"href": "/actors/learn/collaborative-text-editor"
+					"title": "Turn-Based Game",
+					"href": "/guides/turn-based-game"
 				},
+				{
+					"title": "Open World Game",
+					"href": "/guides/open-world-game"
+				},
+				{
+					"title": "Party Game",
+					"href": "/guides/party-game"
+				},
+				{
+					"title": "Ranked Matchmaking",
+					"href": "/guides/ranked-game"
+				},
+				{
+					"title": "Idle Game",
+					"href": "/guides/idle-game"
+				},
+				{
+					"title": "2D Physics Game",
+					"href": "/guides/physics-2d-game"
+				},
+				{
+					"title": "3D Physics Game",
+					"href": "/guides/physics-3d-game"
+				}
+			]
+		},
+		{
+			"title": "Workflows",
+			"pages": [
 				{
 					"title": "Cron Jobs and Scheduled Tasks",
-					"href": "/actors/learn/cron-jobs"
-				},
+					"href": "/guides/cron-jobs"
+				}
+			]
+		},
+		{
+			"title": "Realtime",
+			"pages": [
 				{
-					"title": "Database per Tenant",
-					"href": "/actors/learn/per-tenant-database"
+					"title": "Chat Room",
+					"href": "/guides/chat-room"
 				},
 				{
 					"title": "Live Cursors and Presence",
-					"href": "/actors/learn/live-cursors"
+					"href": "/guides/live-cursors"
 				},
 				{
-					"title": "Multiplayer Game",
-					"href": "/actors/learn/multiplayer-game"
+					"title": "Collaborative Text Editor (CRDT)",
+					"href": "/guides/collaborative-text-editor"
+				},
+				{
+					"title": "Collaborative Text Editor (OT)",
+					"href": "/guides/collaborative-text-editor-ot"
 				}
 			]
 		}

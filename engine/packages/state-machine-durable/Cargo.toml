@@ -1,0 +1,27 @@
+[package]
+name = "rivet-state-machine-durable"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+
+[dependencies]
+anyhow.workspace = true
+bytes.workspace = true
+depot-worker.workspace = true
+foundationdb-tuple.workspace = true
+lazy_static.workspace = true
+rivet-data.workspace = true
+rivet-engine-context.workspace = true
+rivet-env.workspace = true
+rivet-keys.workspace = true
+rivet-metrics.workspace = true
+rivet-state-machine.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+vbare.workspace = true
+

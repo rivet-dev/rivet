@@ -43,7 +43,3 @@ impl<'de> TupleUnpack<'de> for SigningKeyRingKey {
 		Ok((input, Self))
 	}
 }
-
-#[cfg(test)]
-#[path = "../tests/unit/storage_keys.rs"]
-mod tests;

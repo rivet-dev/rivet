@@ -1,0 +1,46 @@
+#import "shared/uuid_v4.v1.bare"
+
+type HeartbeatState enum {
+	ACTIVE
+	DRAINING
+	RELEASED
+}
+
+# One version family this binary supports: it decodes versions minRead through maxRead and
+# encodes at most maxWrite. Family IDs are the stable IDs in rivet-data's families.list.
+type FamilyVersions struct {
+	family: u16
+	minRead: u16
+	maxRead: u16
+	maxWrite: u16
+}
+
+# The exclusive lock a storage process holds on its log directory for its whole lifetime: the
+# kernel boot it was taken under and the locked inode. A later process of the same worker that
+# takes the same lock and finds the same scope proves the process that wrote this has exited.
+type DirectoryLock struct {
+	kernelBootId: data[16]
+	device: u64
+	inode: u64
+}
+
+# Every worker, including stateless ones, reads every heartbeat it lists or resolves, and
+# version selection does not count stateless readers. So after release, a new version of this
+# schema ships in two deploys: the first binary reads the new version but still writes the old
+# one, and only the second binary writes the new one. Skipping the first deploy is unsupported.
+type Data struct {
+	instanceId: UuidV4
+	apiPeerAddress: str
+	buildVersion: str
+	buildGitSha: str
+	startedAtUnixMs: i64
+	writeSequence: u64
+	state: HeartbeatState
+	# Positive static placement weight. 1000 means one allocated storage CPU core.
+	storageCapacityMillicores: u32
+	# Fixed per incarnation. Readers ignore family IDs they do not know, and a family missing
+	# from this list means the binary predates the family and cannot read it.
+	versions: list<FamilyVersions>
+	# Set by storage processes whose filesystem reports a lock scope; stateless ones have none.
+	directoryLock: optional<DirectoryLock>
+}

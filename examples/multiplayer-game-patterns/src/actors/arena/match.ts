@@ -45,6 +45,7 @@ export const arenaMatch = actor({
 		snapshot: event<Snapshot>(),
 		shoot: event<ShootEvent>(),
 	},
+	// docs:start connect
 	createState: (
 		_c,
 		input: {
@@ -99,6 +100,7 @@ export const arenaMatch = actor({
 
 		broadcastSnapshot(c);
 	},
+	// docs:end connect
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
 		await client.arenaMatchmaker
@@ -112,6 +114,7 @@ export const arenaMatch = actor({
 		player.connId = null;
 		broadcastSnapshot(c);
 	},
+	// docs:start tick
 	run: async (c) => {
 		const tick = interval(TICK_MS);
 		while (!c.aborted) {
@@ -127,7 +130,9 @@ export const arenaMatch = actor({
 			broadcastSnapshot(c);
 		}
 	},
+	// docs:end tick
 	actions: {
+		// docs:start combat
 		updatePosition: (c, input: { x: number; y: number }) => {
 			const found = findPlayerByConnId(c.state, c.conn.id);
 			if (!found) {
@@ -235,10 +240,12 @@ export const arenaMatch = actor({
 				broadcastSnapshot(c);
 			}
 		},
+		// docs:end combat
 		getSnapshot: (c) => buildSnapshot(c),
 	},
 });
 
+// docs:start combat
 function checkWinCondition(c: ActorContextOf<typeof arenaMatch>) {
 	if (c.state.phase !== "live") return;
 
@@ -265,6 +272,7 @@ function checkWinCondition(c: ActorContextOf<typeof arenaMatch>) {
 		}
 	}
 }
+// docs:end combat
 
 function broadcastSnapshot(c: ActorContextOf<typeof arenaMatch>) {
 	c.broadcast("snapshot", buildSnapshot(c));

@@ -53,7 +53,7 @@ async fn api_ctx_middleware(
 pub async fn create_router<F>(
 	name: &'static str,
 	config: rivet_config::Config,
-	pools: rivet_pools::Pools,
+	pools: rivet_engine_context::EngineContext,
 	builder: F,
 ) -> Result<Router>
 where

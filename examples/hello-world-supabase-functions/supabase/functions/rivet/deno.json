@@ -1,6 +1,0 @@
-{
-	"imports": {
-		"rivetkit": "npm:@rivetkit/supabase",
-		"@rivetkit/supabase": "npm:@rivetkit/supabase"
-	}
-}

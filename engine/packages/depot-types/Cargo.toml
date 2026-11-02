@@ -1,0 +1,24 @@
+[package]
+name = "depot-types"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+bytes.workspace = true
+crc32c.workspace = true
+foundationdb-tuple.workspace = true
+object_store.workspace = true
+rivet-data.workspace = true
+rivet-keys.workspace = true
+rivet-topology.workspace = true
+serde.workspace = true
+sha2.workspace = true
+uuid.workspace = true
+lz4_flex.workspace = true
+vbare.workspace = true
+xxhash-rust.workspace = true
+

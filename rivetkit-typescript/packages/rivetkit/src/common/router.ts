@@ -182,7 +182,7 @@ export function handleMetadataRequest(
 		version: VERSION,
 		envoy: {
 			kind: envoyKind,
-			version: config.envoy.version,
+			version: config.node.version,
 		},
 		envoyProtocolVersion: envoyProtocol.VERSION,
 		actorNames: buildActorNames(config),

@@ -40,6 +40,13 @@ impl ActorStopHandle {
 		Self::new(tx)
 	}
 
+	/// Test-only constructor that exposes the completion signal. Not for production use.
+	#[doc(hidden)]
+	pub fn with_completion_receiver() -> (Self, oneshot::Receiver<anyhow::Result<()>>) {
+		let (tx, rx) = oneshot::channel();
+		(Self::new(tx), rx)
+	}
+
 	pub fn complete(self) -> bool {
 		self.finish(Ok(()))
 	}

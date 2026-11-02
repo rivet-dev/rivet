@@ -1,0 +1,13 @@
+[package]
+name = "rivet-object-store-util"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+rivet-state-machine-util.workspace = true
+rivet-state-machine-ephemeral.workspace = true
+serde.workspace = true
+

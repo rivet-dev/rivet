@@ -47,6 +47,7 @@ export class ArenaGame {
 		private matchInfo: ArenaMatchInfo,
 		private options: { bot?: boolean } = {},
 	) {
+		// docs:start connect
 		this.conn = client.arenaMatch
 			.get([matchInfo.matchId], {
 				params: { playerId: matchInfo.playerId },
@@ -94,6 +95,7 @@ export class ArenaGame {
 				createdAt: performance.now(),
 			});
 		});
+		// docs:end connect
 
 		if (options.bot) {
 			this.botInterval = window.setInterval(() => {
@@ -198,12 +200,14 @@ export class ArenaGame {
 			}
 
 			// Send position to server at capped rate.
+			// docs:start send
 			if (now - this.lastSendTime >= SEND_RATE_MS) {
 				this.lastSendTime = now;
 				this.conn
 					.updatePosition({ x: this.localX, y: this.localY })
 					.catch(() => {});
 			}
+			// docs:end send
 		}
 
 		// Clear.

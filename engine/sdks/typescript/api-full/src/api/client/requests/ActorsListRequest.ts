@@ -11,14 +11,11 @@ import * as Rivet from "../../index";
  *     }
  */
 export interface ActorsListRequest {
-    namespace: string;
+    namespace?: string;
     name?: string;
     key?: string;
-    /**
-     * Deprecated.
-     */
     actorIds?: string;
-    actorId?: Rivet.RivetId | Rivet.RivetId[];
+    actorId?: Rivet.RivetId;
     includeDestroyed?: boolean;
     limit?: number;
     cursor?: string;

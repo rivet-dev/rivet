@@ -1,0 +1,227 @@
+---
+title: "A Radically Simpler Architecture"
+description: "Why actors eliminate complexity instead of managing it, and how merging state and compute removes the biggest source of latency in modern applications."
+---
+
+The typical backend architecture follows a familiar pattern. A web server connects to a database. Traffic grows, so you add Redis for caching. You need async processing, so you add Kafka. You need coordination, so you add distributed locks.
+
+## Every Solution Creates A Problem
+
+As you add components to your architecture to solve problems as you scale, in turn you create new problems for yourself:
+
+- **Caching**: brings cache invalidation bugs, stale data, and thundering herd problems.
+- **Message queues**: bring message ordering issues, exactly-once delivery problems, and dead letter queue monitoring.
+- **Pub/sub systems**: bring subscription management complexity, message replay challenges, and coordination overhead.
+- **Distributed locks**: bring deadlocks, lock timeouts, and split-brain scenarios.
+- **Multiple services**: bring distributed transactions, eventual consistency, and network partition handling.
+
+Worse, these are bugs you can't unit test for. They're emergent behaviors that only appear under load when it matters most.
+
+Yet it's accepted as _the way things must be_. Nobody got fired for adding Kafka, Redis, and RabbitMQ to the stack. The fact that each one brings its own failure modes is assumed to be the growing pains of any successful business.
+
+<Diagram
+  id="simpler-architecture-old"
+  label="A traditional backend. A client sends a request to a stateless web server. The web server reads from a Redis cache, queries a Postgres database, and enqueues jobs on a Kafka queue, each over the network as a separate layer."
+  nodes={[
+    { id: "client", x: 20, y: 150, w: 150, title: "Client", subtitle: "browser or app" },
+    { id: "server", x: 300, y: 150, title: "Web server", subtitle: "stateless compute" },
+    { id: "redis", x: 600, y: 40, title: "Redis", subtitle: "cache" },
+    { id: "postgres", x: 600, y: 150, title: "Postgres", subtitle: "database" },
+    { id: "kafka", x: 600, y: 260, title: "Kafka", subtitle: "queue" },
+  ]}
+  edges={[
+    { from: "client", to: "server", label: "request" },
+    { from: "server", to: "redis", fromSide: "top", via: [[385, 70]], label: "read cache" },
+    { from: "server", to: "postgres", label: "query" },
+    { from: "server", to: "kafka", fromSide: "bottom", via: [[385, 290]], label: "enqueue" },
+  ]}
+/>
+
+---
+
+## How We Got Here
+
+Looking back at the very first thing you did when starting your application: setting up a web server and a database. The way you've designed your app is through an **age-old practice of "separating state and compute."**
+
+We've been doing it this way since the 1980s, when client-server architecture put databases on their own machines.
+
+This came from the fact that computers were slow and had limited resources. Running application code and database operations on the same machine meant they'd fight over CPU and memory, making both perform poorly. Separating them protected databases from compute overhead.
+
+This tradeoff made sense when CPU and memory were severely limited, but the pattern outlived its purpose. As traffic grew, we added caching layers, message queues, and distributed locks, each solving a problem from the last without questioning the original assumption of how we got here.
+
+## 40 Years Later
+
+Those constraints from forty years ago no longer apply to today's servers. Modern CPUs are orders of magnitude faster, and memory is abundant and cheap. **Application bottlenecks have shifted from local compute to network latency and locks.**
+
+Rivet keeps each Actor's state in its own durable volume. SQLite runs with your code, reads can use nearby caches, and durable writes go through the control plane's replicated storage. Data can move with the Actor when it wakes on another node.
+
+This reduces the need to coordinate application state across a shared database, cache, and queue. Network access still matters: a cache miss can fetch pages over the network, and a durable write waits for replication. See [Benchmarking](/docs/benchmarking) for measured warm reads, reads after sleep, and writes.
+
+## The Actor Model: Combining Compute and State
+
+Actors take the completely opposite approach to "separating compute and state:" they **merge state and compute together**.
+
+Each actor's **state is isolated to itself** and cannot be read by any other actors. Instead, you communicate with actors over the network via actions.
+
+They're like mini-servers: they can accept and respond to network requests and even send network requests themselves. They remain running as a long-lived process with in-memory state until they decide to go to sleep.
+
+Actor-owned state gives each Actor a clear ownership boundary. Network failures, retries, and concurrent application work still need to be handled. Durable storage and Actor routing are provided by the control plane.
+
+<Diagram
+  id="simpler-architecture-actors"
+  label="Two Rivet Actors, user and order. Each one holds its state and runs its compute in the same place. The user Actor calls an action on the order Actor over the network."
+  nodes={[
+    { id: "user-actor", kind: "group", x: 20, y: 30, w: 230, h: 136 },
+    { id: "user", x: 35, y: 45, w: 200, h: 56, product: "actors", title: "`user`", subtitle: "alice" },
+    { id: "user-state", kind: "slot", x: 35, y: 113, w: 95, h: 38, title: "State" },
+    { id: "user-compute", kind: "slot", x: 140, y: 113, w: 95, h: 38, title: "Compute" },
+    { id: "order-actor", kind: "group", x: 400, y: 30, w: 230, h: 136 },
+    { id: "order", x: 415, y: 45, w: 200, h: 56, product: "actors", title: "`order`", subtitle: "ord-1" },
+    { id: "order-state", kind: "slot", x: 415, y: 113, w: 95, h: 38, title: "State" },
+    { id: "order-compute", kind: "slot", x: 520, y: 113, w: 95, h: 38, title: "Compute" },
+  ]}
+  edges={[{ from: "user-actor", to: "order-actor", label: "action" }]}
+/>
+
+## The 4 Properties That Eliminate Complexity
+
+By combining compute and state, actors present a few key properties that eliminate entire categories of problems. These properties are the core of the design patterns that we'll discuss in further articles.
+
+### Isolated State
+
+Each actor **manages its own private state**. No other process can access an actor's state.
+
+This eliminates race conditions (can't happen when only one process touches the data), deadlocks (no locks means no deadlocks), cache invalidation (no shared cache to invalidate), and read-after-write inconsistencies (your writes are immediately visible to you).
+
+Debugging becomes straightforward: the actor's state is the single source of truth. There's no need to reconstruct state from multiple systems or reason about eventual consistency across caches, databases, and message queues.
+
+As your app grows, new features affect a limited number of actors which have a limited scope. Changes don't ripple through shared state across services or risk breaking unrelated parts of your system.
+
+<Diagram
+  id="simpler-architecture-isolated-state"
+  label="Two Rivet Actors with isolated state. The user Actor for alice is the only one that reads and writes its balance and email. The order Actor for ord-1 is the only one that reads and writes its items and status. Separate state means no conflicts."
+  nodes={[
+    { id: "user-actor", kind: "group", x: 20, y: 20, w: 510, h: 90 },
+    { id: "user", x: 35, y: 35, product: "actors", title: "`user`", subtitle: "alice" },
+    { id: "user-state", x: 345, y: 35, title: "State", subtitle: "balance, email" },
+    { id: "order-actor", kind: "group", x: 20, y: 140, w: 510, h: 90 },
+    { id: "order", x: 35, y: 155, product: "actors", title: "`order`", subtitle: "ord-1" },
+    { id: "order-state", x: 345, y: 155, title: "State", subtitle: "items, status" },
+  ]}
+  edges={[
+    { from: "user", to: "user-state", both: true, label: "read, write" },
+    { from: "order", to: "order-state", both: true, label: "read, write" },
+  ]}
+  notes={[
+    { x: 560, y: 66, text: "Only this actor can read or write it" },
+    { x: 560, y: 186, text: "Separate state means no conflicts" },
+  ]}
+/>
+
+### Message-Based Communication
+
+Actors **talk through actions and events**, not direct state access. This makes it easier to scale actors since they can scale horizontally across multiple machines and still communicate efficiently.
+
+Messages sent to actors are **automatically queued and processed sequentially**. This almost always eliminates the need for external message queues since backpressure, ordering, and delivery are handled by the actor runtime itself.
+
+Crucially, **actors frequently talk to each other** to build larger systems that scale well. We'll be talking a lot about patterns like this in this course.
+
+<Diagram
+  id="simpler-architecture-messages"
+  label="Message passing between Rivet Actors. A client calls an action on the user Actor. The user Actor calls getStatus on the order Actor, where the message waits in the order Actor's queue and runs one at a time. The order Actor replies paid, and sends an event back to the client."
+  nodes={[
+    { id: "client", x: 20, y: 60, w: 150, title: "Client", subtitle: "your app" },
+    { id: "user", x: 300, y: 60, product: "actors", title: "`user`", subtitle: "alice" },
+    { id: "order-actor", kind: "group", x: 600, y: 20, w: 200, h: 138 },
+    { id: "order", x: 615, y: 35, w: 170, h: 56, product: "actors", title: "`order`", subtitle: "ord-1" },
+    { id: "queue", kind: "slot", x: 615, y: 104, w: 170, h: 38, title: "queue, one at a time" },
+  ]}
+  edges={[
+    { from: "client", to: "user", label: "action", step: 1 },
+    { from: "user", to: "order-actor", fromOffset: -12, toOffset: -11, label: "`getStatus`", step: 2 },
+    { from: "order-actor", to: "user", fromOffset: 13, toOffset: 12, kind: "reply", label: "paid", step: 3 },
+    { from: "order-actor", to: "client", fromSide: "bottom", toSide: "bottom", via: [[700, 200], [95, 200]], kind: "reply", label: "event", step: 4 },
+  ]}
+/>
+
+### Location Transparency
+
+Actors can run on any machine in a cluster and still **send messages between actors regardless of the host machine**. Rivet automatically handles intelligent load balancing of actors and routing between actors.
+
+The same code will run whether you have 1 or 1,000 machines without complex network configuration, DNS, or pub/sub systems.
+
+<Diagram
+  id="simpler-architecture-location"
+  label="Location transparency. Your code calls updateProfile on the user Actors for alice and joe. Alice runs on machine 1 next to bob, and joe runs on machine 2 next to dave. Rivet routes each call to the right machine, so the code is the same either way."
+  nodes={[
+    { id: "m1", kind: "boundary", x: 320, y: 20, w: 210, h: 200, title: "Machine 1" },
+    { id: "m2", kind: "boundary", x: 600, y: 20, w: 210, h: 200, title: "Machine 2" },
+    { id: "code", x: 20, y: 60, w: 150, title: "Your code", subtitle: "RivetKit client" },
+    { id: "alice", x: 340, y: 60, product: "actors", title: "`user`", subtitle: "alice" },
+    { id: "bob", x: 340, y: 140, product: "actors", title: "`user`", subtitle: "bob" },
+    { id: "dave", x: 620, y: 60, product: "actors", title: "`user`", subtitle: "dave" },
+    { id: "joe", x: 620, y: 140, product: "actors", title: "`user`", subtitle: "joe" },
+  ]}
+  edges={[
+    { from: "code", to: "alice", label: "`updateProfile`" },
+    { from: "code", to: "joe", fromSide: "bottom", toSide: "bottom", via: [[95, 250], [705, 250]], label: "`updateProfile`" },
+  ]}
+/>
+
+### Horizontal Scaling
+
+Actors are designed to transparently interact with other actors regardless of what machine they run on. This makes actors easy to scale by **just adding more machines** for actors to run on when you need it.
+
+Load spreads naturally since actors are small, lightweight units. No complex sharding logic or coordination needed.
+
+<Diagram
+  id="simpler-architecture-scaling"
+  label="Horizontal scaling. Machine 1 runs the user Actors for dave and alice and the order Actor for ord-1. Adding machine 2 adds capacity, and the user Actor for joe and the order Actor for ord-2 run there. Actions still route between actors on different machines."
+  nodes={[
+    { id: "m1", kind: "boundary", x: 20, y: 20, w: 360, h: 200, title: "Machine 1" },
+    { id: "m2", kind: "boundary", x: 500, y: 20, w: 190, h: 200, title: "Machine 2, added" },
+    { id: "dave", x: 40, y: 60, w: 150, product: "actors", title: "`user`", subtitle: "dave" },
+    { id: "alice", x: 210, y: 60, w: 150, product: "actors", title: "`user`", subtitle: "alice" },
+    { id: "ord1", x: 40, y: 140, w: 150, product: "actors", title: "`order`", subtitle: "ord-1" },
+    { id: "joe", x: 520, y: 60, w: 150, product: "actors", title: "`user`", subtitle: "joe" },
+    { id: "ord2", x: 520, y: 140, w: 150, product: "actors", title: "`order`", subtitle: "ord-2" },
+  ]}
+  edges={[{ from: "alice", to: "joe", label: "action" }]}
+/>
+
+---
+
+## Putting It All Together: A Radically Simpler Architecture
+
+When you build your backend with actors, the four properties listed remove the need for:
+
+- **Redis/Memcached**: Caching is built-in (state already lives in-memory with compute).
+- **Kafka/RabbitMQ/SQS**: Message queueing, events, and async messaging are built-in to the actor runtime.
+- **NATS/Redis Streams**: Pub/sub is built-in to actors through message passing and events.
+- **Consul/etcd/ZooKeeper**: No distributed coordination needed, actors encapsulate their own state and the runtime handles discovery and routing automatically.
+- **Istio/Linkerd**: Actors handle routing and discovery automatically.
+- **Database sharding**: Actors distribute themselves automatically. No shard keys, no rebalancing logic, no cross-shard queries.
+
+## If Actors Are So Great, Why Aren't They Everywhere?
+
+If you've reached this point and are unfamiliar with the actor model, you're probably asking this exact question. It all sounds a little _too_ rosy.
+
+The truth is that actors _are_ used widely, just not visibly. Large enterprises with engineers who've spent years wrestling with traditional architectures have long since adopted them. The pattern has proven itself at massive scale:
+
+- WhatsApp (notoriously acquired for $19B running Erlang/OTP with only 35 engineers)
+- Discord
+- LinkedIn
+- X
+- Pinterest
+- PayPal
+
+So why hasn't the actor model spread to smaller teams and mainstream development?
+
+This mirrors TypeScript's trajectory. It started as a niche tool for large codebases, and most developers dismissed it as unnecessary overhead with poor tooling. But as more developers felt the pain of loose typing at scale, adoption grew. Today, TypeScript is a non-negotiable for many teams because of that collective suffering.
+
+Actors are on the same trajectory. The pain of distributed systems complexity is becoming impossible to ignore.
+
+Other ecosystems have had mature actor frameworks for years. Erlang has OTP, Java has Akka, C# has Microsoft Orleans. But TypeScript has been the missing piece until recently with:
+
+- **Rivet Actors**: Open-source actor infrastructure for TypeScript
+- **Cloudflare Durable Objects**: Leverages Cloudflare's existing network & JavaScript runtime

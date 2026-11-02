@@ -2,7 +2,10 @@ import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState } from "react";
 import type { Message, registry } from "../src/index.ts";
 
+// docs:start client
+// docs:start connect
 const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
+// docs:end connect
 
 export function App() {
 	const [roomId, setRoomId] = useState("general");
@@ -10,6 +13,7 @@ export function App() {
 	const [input, setInput] = useState("");
 	const [messages, setMessages] = useState<Message[]>([]);
 
+	// docs:start connect
 	const chatRoom = useActor({
 		name: "chatRoom",
 		key: [roomId],
@@ -20,17 +24,23 @@ export function App() {
 			chatRoom.connection.getHistory().then(setMessages);
 		}
 	}, [chatRoom.connection]);
+	// docs:end connect
 
+	// docs:start events
 	chatRoom.useEvent("newMessage", (message: Message) => {
 		setMessages((prev) => [...prev, message]);
 	});
+	// docs:end events
 
+	// docs:start send
 	const sendMessage = async () => {
 		if (chatRoom.connection && input.trim()) {
 			await chatRoom.connection.sendMessage(username, input);
 			setInput("");
 		}
 	};
+	// docs:end send
+	// docs:end client
 
 	const handleKeyPress = (e: React.KeyboardEvent) => {
 		if (e.key === "Enter") {

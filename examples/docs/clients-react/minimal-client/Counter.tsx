@@ -2,7 +2,7 @@ import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "./index";
 
 const { useActor } = createRivetKit<typeof registry>({
-  endpoint: "https://my-namespace:pk_...@api.rivet.dev",
+  endpoint: "https://my-namespace@rivet.example.com",
 });
 
 function Counter() {

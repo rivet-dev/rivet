@@ -1,3 +1,4 @@
+import { actorKeyToGatewayQuery } from "@/actor/keys";
 import {
 	type ClientConfig,
 	DEFAULT_MAX_QUERY_INPUT_SIZE,
@@ -289,8 +290,9 @@ export function buildActorQueryGatewayUrl(
 }
 
 function pushKeyQueryParams(params: URLSearchParams, key: string[]): void {
-	if (key.length > 0) {
-		params.append("rvt-key", key.join(","));
+	const rvtKey = actorKeyToGatewayQuery(key);
+	if (rvtKey !== undefined) {
+		params.append("rvt-key", rvtKey);
 	}
 }
 

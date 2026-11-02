@@ -38,6 +38,7 @@ export const partyMatch = actor({
 		phase: "waiting",
 		members: {},
 	}),
+	// docs:start connect
 	createConnState: async (
 		c,
 		params: { playerId?: string; joinToken?: string },
@@ -124,6 +125,8 @@ export const partyMatch = actor({
 		broadcastSnapshot(c);
 		await updatePartySize(c);
 	},
+	// docs:end connect
+	// docs:start host
 	onDisconnect: async (c, conn) => {
 		const playerId = conn.state.playerId;
 		const member = c.state.members[playerId];
@@ -139,6 +142,7 @@ export const partyMatch = actor({
 		broadcastSnapshot(c);
 		await updatePartySize(c);
 	},
+	// docs:end host
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
 		await client.partyMatchmaker
@@ -156,6 +160,7 @@ export const partyMatch = actor({
 			member.name = input.name.trim() || "Player";
 			broadcastSnapshot(c);
 		},
+		// docs:start host
 		toggleReady: (c) => {
 			const member = c.state.members[c.conn.state.playerId];
 			if (!member || member.connId !== c.conn.id) {
@@ -206,6 +211,7 @@ export const partyMatch = actor({
 			c.state.phase = "finished";
 			broadcastSnapshot(c);
 		},
+		// docs:end host
 		getSnapshot: (c) => buildSnapshot(c),
 	},
 });
@@ -257,6 +263,7 @@ async function updatePartySize(c: ActorContextOf<typeof partyMatch>) {
 	});
 }
 
+// docs:start host
 function promoteNextHost(state: State) {
 	for (const member of Object.values(state.members)) {
 		member.isHost = false;
@@ -267,3 +274,4 @@ function promoteNextHost(state: State) {
 		next.isReady = false;
 	}
 }
+// docs:end host

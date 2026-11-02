@@ -140,8 +140,6 @@ The actor is still fully functional when `onSleep` runs. You can access the data
 
 This hook may not always be called in situations like crashes or forced terminations. Don't rely on it for critical cleanup operations.
 
-Not supported on Cloudflare Workers.
-
 <CodeSnippet file="examples/docs/actors-lifecycle/on-sleep.ts" />
 
 ### `run`
@@ -191,7 +189,7 @@ The `onBeforeConnect` hook does NOT return connection state - it's used solely f
 
 <CodeSnippet file="examples/docs/actors-lifecycle/on-before-connect.ts" />
 
-Connections cannot interact with the actor until this method completes successfully. Throwing an error will abort the connection. This can be used for authentication, see [Permissions](/actors/docs/permissions) for details.
+Connections cannot interact with the actor until this method completes successfully. Throwing an error will abort the connection. This can be used for authentication - see [Permissions](/actors/docs/permissions) for details.
 
 ### `onConnect`
 
@@ -222,7 +220,7 @@ Called when a client disconnects from the actor. Can be async. Receives the conn
 
 ### `onRequest`
 
-The `onRequest` hook handles HTTP requests sent to your actor at `/actors/{actorName}/http/*` endpoints. Can be async. It receives the request context and a standard `Request` object, and should return a `Response` object.
+The `onRequest` hook handles HTTP requests sent to your actor at `/gateway/{actorId}/request/*`. Can be async. It receives the request context and a standard `Request` object, and should return a `Response` object.
 
 See [Request Handler](/actors/docs/request-handler) for more details.
 
@@ -265,17 +263,17 @@ Outbound requests (e.g. `fetch` calls) do not count as activity and will not kee
 
 #### Upgrades & Eviction
 
-The platform may force an actor to migrate to a new machine during version upgrades or when a serverless request is about to timeout. The same [shutdown sequence](#shutdown-sequence) runs, then the actor is rescheduled on a new machine and wakes up with its persisted state.
+The platform may move an actor to another node, for example when its node stops during a deploy. The same [shutdown sequence](#shutdown-sequence) runs, then the actor is rescheduled on another node and wakes up with its persisted state.
 
-Use `onSleep`, `waitUntil`, or `keepAwake` to control the length of the grace period before the actor moves to another machine.
+Use `onSleep`, `waitUntil`, or `keepAwake` to control the length of the grace period before the actor moves to another node.
 
 ### Manual Lifecycle Controls
 
-You can also trigger lifecycle transitions from the Rivet Cloud API. These endpoints are useful for operational workflows, debugging, and forcing an actor to move through the same sleep or reschedule path that the platform would normally trigger.
+You can also trigger lifecycle transitions from the control plane API. Set `$RIVET_API` to your control plane URL, such as `https://rivet.example.com`. These endpoints are useful for operational workflows, debugging, and forcing an actor to move through the same sleep or reschedule path that the platform would normally trigger.
 
 ```bash
 curl -X POST \
-  "https://cloud-api.rivet.dev/actors/$ACTOR_ID/sleep?namespace=$NAMESPACE" \
+  "$RIVET_API/actors/$ACTOR_ID/sleep?namespace=$NAMESPACE" \
   -H "Authorization: Bearer $RIVET_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}'
@@ -283,7 +281,7 @@ curl -X POST \
 
 ```bash
 curl -X POST \
-  "https://cloud-api.rivet.dev/actors/$ACTOR_ID/reschedule?namespace=$NAMESPACE" \
+  "$RIVET_API/actors/$ACTOR_ID/reschedule?namespace=$NAMESPACE" \
   -H "Authorization: Bearer $RIVET_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}'
@@ -335,7 +333,7 @@ The actor waits up to `sleepGracePeriod` for graceful sleep work during the [shu
 | `sleepTimeout` | 30 seconds | Time of inactivity before the actor begins sleeping. |
 | `sleepGracePeriod` | 15 seconds | Total graceful shutdown window for hooks, `waitUntil`, `keepAwake`, async raw WebSocket handlers, and disconnects. |
 
-Rivet enforces a hard limit of **30 minutes** for the entire stop process. These can be configured in the [options](#options).
+These can be configured in the [options](#options).
 
 ### WebSocket Hibernation
 
@@ -355,7 +353,7 @@ The entire window is bounded by `sleepGracePeriod` on both sleep and destroy. De
 
 #### Graceful shutdown window
 
-During steps 1 through 6, the actor is still fully functional. Database access, `broadcast`, `waitUntil`, `queue.send`, and `schedule.after` all work. State mutations are persisted at step 7. Actions invoked by pre-existing connections or lifecycle hooks continue to execute normally.
+During steps 1 and 2, the actor is still fully functional. Database access, `broadcast`, `waitUntil`, `queue.send`, and `schedule.after` all work. State mutations are persisted at step 3. Actions invoked by pre-existing connections or lifecycle hooks continue to execute normally.
 
 New connections and raw WebSocket upgrades are rejected as soon as the shutdown sequence begins. New requests that arrive during shutdown are held until the actor wakes up again. The caller does not need to retry.
 

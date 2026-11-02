@@ -16,6 +16,7 @@ export interface TextLabel {
 	timestamp: number;
 }
 
+// docs:start room
 export const cursorRoom = actor({
 	state: {
 		textLabels: [] as TextLabel[],
@@ -30,8 +31,10 @@ export const cursorRoom = actor({
 	connState: {
 		cursor: null as CursorPosition | null,
 	},
+	// docs:end room
 
 	actions: {
+		// docs:start cursor
 		// Update cursor position
 		updateCursor: (c, userId: string, x: number, y: number) => {
 			const cursor: CursorPosition = {
@@ -44,7 +47,9 @@ export const cursorRoom = actor({
 			c.broadcast("cursorMoved", cursor);
 			return cursor;
 		},
+		// docs:end cursor
 
+		// docs:start labels
 		// Update text on the canvas (creates or updates)
 		updateText: (
 			c,
@@ -84,7 +89,9 @@ export const cursorRoom = actor({
 			);
 			c.broadcast("textRemoved", id);
 		},
+		// docs:end labels
 
+		// docs:start presence
 		// Get all room state (cursors and text labels)
 		getRoomState: (c) => {
 			const cursors: Record<string, CursorPosition> = {};
@@ -98,18 +105,23 @@ export const cursorRoom = actor({
 				textLabels: c.state.textLabels,
 			};
 		},
+		// docs:end presence
 	},
 
+	// docs:start presence
 	onDisconnect: (c, conn) => {
 		if (conn.state.cursor) {
 			c.broadcast("cursorRemoved", conn.state.cursor);
 		}
 	},
+	// docs:end presence
 });
 
+// docs:start registry
 // Register actors and start the server: https://rivet.dev/docs/setup
 export const registry = setup({
 	use: { cursorRoom },
 });
 
 registry.start();
+// docs:end registry

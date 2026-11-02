@@ -1,0 +1,34 @@
+[package]
+name = "rivet-engine-context"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+rivet-auth-jwt.workspace = true
+async-trait.workspace = true
+futures-util.workspace = true
+tokio.workspace = true
+depot-worker.workspace = true
+rivet-env = { workspace = true, features = ["slatedb"] }
+anyhow.workspace = true
+depot-client.workspace = true
+epoxy.workspace = true
+rivet-singleton-coordinator.workspace = true
+rivet-state-machine-ephemeral.workspace = true
+bytes.workspace = true
+rivet-topology.workspace = true
+object_store = { workspace = true, features = ["aws", "fs"] }
+reqwest.workspace = true
+rivet-config.workspace = true
+rivet-data.workspace = true
+rivet-outbound-guard.workspace = true
+rustls.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+universalpubsub.workspace = true
+uuid.workspace = true
+

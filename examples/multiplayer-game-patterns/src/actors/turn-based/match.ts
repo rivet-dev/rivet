@@ -28,6 +28,7 @@ export const turnBasedMatch = actor({
 	events: {
 		gameUpdate: event<GameSnapshot>(),
 	},
+	// docs:start state
 	createState: (_c, input: { matchId: string }): State => {
 		const board: CellValue[][] = [];
 		for (let r = 0; r < BOARD_SIZE; r++) {
@@ -55,6 +56,8 @@ export const turnBasedMatch = actor({
 		c.state.emptySince = null;
 		broadcastSnapshot(c);
 	},
+	// docs:end state
+	// docs:start abandon
 	onDisconnect: (c, conn) => {
 		const found = findPlayerByConnId(c.state, conn.id);
 		if (!found) return;
@@ -98,6 +101,7 @@ export const turnBasedMatch = actor({
 			.getOrCreate(["main"])
 			.send("closeMatch", { matchId: c.state.matchId });
 	},
+	// docs:end abandon
 	actions: {
 		createPlayer: (
 			c,
@@ -110,6 +114,7 @@ export const turnBasedMatch = actor({
 				symbol: input.symbol,
 			};
 		},
+		// docs:start make-move
 		makeMove: (c, input: { row: number; col: number }) => {
 			if (c.state.result !== null) {
 				throw new UserError("game is over", { code: "game_over" });
@@ -148,6 +153,7 @@ export const turnBasedMatch = actor({
 
 			broadcastSnapshot(c);
 		},
+		// docs:end make-move
 		getSnapshot: (c) => buildSnapshot(c),
 	},
 });

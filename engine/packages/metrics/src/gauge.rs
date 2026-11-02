@@ -19,6 +19,17 @@ pub struct GaugeGuard<P: Atomic> {
 	amount: P::T,
 }
 
+impl<P: Atomic> std::fmt::Debug for GaugeGuard<P>
+where
+	P::T: std::fmt::Debug,
+{
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("GaugeGuard")
+			.field("amount", &self.amount)
+			.finish()
+	}
+}
+
 impl<P: Atomic> GaugeGuard<P> {
 	/// Releases the increment now instead of at the end of the scope.
 	pub fn release(self) {}

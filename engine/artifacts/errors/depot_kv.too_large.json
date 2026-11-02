@@ -1,0 +1,5 @@
+{
+  "code": "too_large",
+  "group": "depot_kv",
+  "message": "The transaction exceeds a configured limit."
+}

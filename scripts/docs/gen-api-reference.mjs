@@ -799,7 +799,7 @@ function stringExample(name, schema) {
 	if (name === "key") return "my-key";
 	if (name === "datacenter" || name === "region") return "us-east";
 	if (name === "runner_name_selector" || name === "pool" || name === "runner") return "default";
-	if (name === "token") return "sk_...";
+	if (name === "token") return "<token>";
 	if (name === "cursor") return "...";
 	return name ? `<${name}>` : "...";
 }

@@ -1,7 +1,7 @@
-use gas::prelude::*;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
+use super::Runner;
 use crate::pagination::Pagination;
 
 #[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
@@ -10,12 +10,8 @@ use crate::pagination::Pagination;
 pub struct ListQuery {
 	pub namespace: String,
 	pub name: Option<String>,
-	/// Deprecated.
 	#[serde(default)]
-	pub runner_ids: Option<String>,
-	#[serde(default)]
-	pub runner_id: Vec<Id>,
-	pub include_stopped: Option<bool>,
+	pub runner_key: Vec<String>,
 	pub limit: Option<usize>,
 	pub cursor: Option<String>,
 }
@@ -24,6 +20,6 @@ pub struct ListQuery {
 #[serde(deny_unknown_fields)]
 #[schema(as = RunnersListResponse)]
 pub struct ListResponse {
-	pub runners: Vec<rivet_types::runners::Runner>,
+	pub runners: Vec<Runner>,
 	pub pagination: Pagination,
 }

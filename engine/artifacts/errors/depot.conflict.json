@@ -1,0 +1,5 @@
+{
+  "code": "conflict",
+  "group": "depot",
+  "message": "The command conflicted with a concurrent change to the volume."
+}

@@ -1,0 +1,11 @@
+type Desired struct {
+    value: i64
+}
+type Actual struct {
+    value: i64
+}
+type Data struct {
+    revision: u64
+    desired: Desired
+    actual: Actual
+}

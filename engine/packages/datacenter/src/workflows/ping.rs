@@ -33,7 +33,7 @@ struct RecordPingInput {}
 
 #[activity(RecordPing)]
 async fn record_ping(ctx: &ActivityCtx, _input: &RecordPingInput) -> Result<()> {
-	let client = rivet_pools::reqwest::client().await?;
+	let client = rivet_engine_context::reqwest::client().await?;
 
 	let dcs = ctx
 		.config()

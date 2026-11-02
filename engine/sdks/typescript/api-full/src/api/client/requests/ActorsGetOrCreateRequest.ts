@@ -8,18 +8,15 @@ import * as Rivet from "../../index";
  * @example
  *     {
  *         namespace: "namespace",
- *         crashPolicy: "restart",
  *         key: "key",
  *         name: "name",
- *         runnerNameSelector: "runner_name_selector"
+ *         pool: "pool"
  *     }
  */
 export interface ActorsGetOrCreateRequest {
-    namespace: string;
-    crashPolicy: Rivet.CrashPolicy;
-    datacenter?: string;
+    namespace?: string;
     input?: string;
-    key: string;
+    key?: string;
     name: string;
-    runnerNameSelector: string;
+    pool?: string;
 }

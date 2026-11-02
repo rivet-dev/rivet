@@ -1,0 +1,5 @@
+{
+  "code": "invalid_message",
+  "group": "ups",
+  "message": "The message exceeds the limit or has an invalid subject."
+}

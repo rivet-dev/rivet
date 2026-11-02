@@ -16,8 +16,8 @@ lazy_static::lazy_static! {
 		&["router", "method", "path"],
 		*REGISTRY
 	).unwrap();
-	pub static ref API_REQUEST_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		"api_request_duration",
+	pub static ref API_REQUEST_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		"api_request_duration_seconds",
 		"Duration of API requests.",
 		&["router", "method", "path", "status", "error"],
 		BUCKETS.to_vec(),

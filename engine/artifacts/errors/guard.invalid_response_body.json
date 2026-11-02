@@ -1,5 +1,0 @@
-{
-  "code": "invalid_response_body",
-  "group": "guard",
-  "message": "Unable to parse response body."
-}

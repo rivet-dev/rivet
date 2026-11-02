@@ -12,3 +12,4 @@ description = "Shared public types for RivetKit crates"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+url.workspace = true

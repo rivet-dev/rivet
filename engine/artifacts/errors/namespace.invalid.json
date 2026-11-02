@@ -1,0 +1,5 @@
+{
+  "code": "invalid",
+  "group": "namespace",
+  "message": "Namespace list limit must be between 1 and 100."
+}

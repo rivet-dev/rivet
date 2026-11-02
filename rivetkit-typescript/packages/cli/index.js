@@ -14,9 +14,6 @@ function getPlatformPackageName() {
 			if (arch === "x64") return "@rivetkit/cli-darwin-x64";
 			if (arch === "arm64") return "@rivetkit/cli-darwin-arm64";
 			break;
-		case "win32":
-			if (arch === "x64") return "@rivetkit/cli-win32-x64";
-			break;
 	}
 	return null;
 }
@@ -38,6 +35,12 @@ function getCliPath() {
 
 	const platformPkg = getPlatformPackageName();
 	if (!platformPkg) {
+		if (process.platform === "win32" && process.arch === "x64") {
+			throw new Error(
+				"@rivetkit/cli: Windows x64 is not yet supported via npm platform packages.\n" +
+					"Set RIVET_CLI_BINARY to a local rivet.exe binary.",
+			);
+		}
 		throw new Error(
 			`@rivetkit/cli: unsupported platform ${process.platform}/${process.arch}`,
 		);
@@ -47,19 +50,6 @@ function getCliPath() {
 	try {
 		pkgJsonPath = require.resolve(`${platformPkg}/package.json`);
 	} catch {
-		if (process.platform === "win32" && process.arch === "x64") {
-			const version = require("./package.json").version;
-			if (
-				typeof version === "string" &&
-				version.startsWith("0.0.0-")
-			) {
-				throw new Error(
-					"@rivetkit/cli: Windows x64 binaries are only published for release versions.\n" +
-						`The current package version (${version}) is a preview build, so @rivetkit/cli-win32-x64 was intentionally not published.\n` +
-						"Use a release build or set RIVET_CLI_BINARY to a local rivet.exe binary.",
-				);
-			}
-		}
 		throw new Error(
 			`@rivetkit/cli: platform package ${platformPkg} is not installed.\n` +
 				"Optional dependencies may have been skipped. Try npm install --include=optional @rivetkit/cli.",

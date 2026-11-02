@@ -13,5 +13,12 @@
 		"jsx": "react-jsx"
 	},
 	"include": ["**/*.ts", "**/*.tsx"],
-	"exclude": ["node_modules"]
+	"exclude": [
+		"node_modules",
+		"actors-quickstart-next-js",
+		"general-http-server/elysia-handler.ts",
+		"general-http-server/hono-handler.ts",
+		"general-http-server/serve.ts",
+		"actors-actions/calling-backend.ts"
+	]
 }

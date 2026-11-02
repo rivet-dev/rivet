@@ -1,0 +1,5 @@
+{
+  "code": "overloaded",
+  "group": "depot_kv",
+  "message": "The engine commit queue is full."
+}

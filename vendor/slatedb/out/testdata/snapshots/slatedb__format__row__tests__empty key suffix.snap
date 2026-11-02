@@ -1,0 +1,20 @@
+---
+source: src/row_codec.rs
+expression: output
+snapshot_kind: text
+---
+(
+    "empty key suffix",
+    "\0\u{4}\0\0\0\0\0\0\0\0\0\u{1}\0\0\0\0\u{5}value",
+    SstRowEntry {
+        key_prefix_len: 4,
+        key_suffix: b"",
+        seq: 1,
+        expire_ts: None,
+        create_ts: None,
+        value: Value(
+            b"value",
+        ),
+    },
+    b"keyp",
+)

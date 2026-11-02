@@ -46,6 +46,7 @@ export class RankedGame {
 		private matchInfo: RankedMatchInfo,
 		private options: { bot?: boolean } = {},
 	) {
+		// docs:start connect
 		this.conn = client.rankedMatch
 			.get([matchInfo.matchId], {
 				params: { username: matchInfo.username },
@@ -89,6 +90,7 @@ export class RankedGame {
 				createdAt: performance.now(),
 			});
 		});
+		// docs:end connect
 
 		if (options.bot) {
 			this.botInterval = window.setInterval(() => {
@@ -189,12 +191,14 @@ export class RankedGame {
 					),
 				);
 			}
+			// docs:start send
 			if (now - this.lastSendTime >= SEND_RATE_MS) {
 				this.lastSendTime = now;
 				this.conn
 					.updatePosition({ x: this.localX, y: this.localY })
 					.catch(() => {});
 			}
+			// docs:end send
 		}
 
 		ctx.fillStyle = "#000000";

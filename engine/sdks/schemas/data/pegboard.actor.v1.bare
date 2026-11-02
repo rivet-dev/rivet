@@ -1,0 +1,578 @@
+type Uuid data
+type Id data
+type WorkerId data
+
+type ActorData struct {
+    actorId: Id
+    namespace: str
+    poolName: str
+    name: str
+    key: optional<str>
+    input: optional<data>
+    createUnixMs: i64
+}
+
+type ActorAllocation struct {
+    envoyKey: str
+    workerId: WorkerId
+    connectionId: Uuid
+}
+
+type ReserveEpoxyPhasePending void
+type ReserveEpoxyPhaseReserved void
+type ReserveEpoxyPhaseAlreadyReserved struct {
+    reservationId: Id
+}
+type ReserveEpoxyPhaseFailed void
+type ReserveEpoxyPhaseMaxAttemptsReached void
+
+type ReserveEpoxyPhase union {
+    ReserveEpoxyPhasePending |
+    ReserveEpoxyPhaseReserved |
+    ReserveEpoxyPhaseAlreadyReserved |
+    ReserveEpoxyPhaseFailed |
+    ReserveEpoxyPhaseMaxAttemptsReached
+}
+
+type ReserveEpoxyState struct {
+    phase: ReserveEpoxyPhase
+    attempt: u32
+    createUnixMs: i64
+}
+
+type ReserveEpoxyEffectData struct {
+    namespace: str
+    name: str
+    key: optional<str>
+    state: ReserveEpoxyState
+}
+
+type PendingNone void
+type PendingSleep void
+type PendingDestroy void
+type PendingReallocate void
+
+type PendingAction union {
+    PendingNone |
+    PendingSleep |
+    PendingReallocate |
+    PendingDestroy
+}
+
+type ActorCreateData struct {
+    actorId: Id
+    namespace: str
+    poolName: str
+    name: str
+    key: optional<str>
+    input: optional<data>
+}
+
+type Initializing struct {
+    reserveEpoxy: ReserveEpoxyEffectData
+    allocation: optional<ActorAllocation>
+}
+
+type Starting struct {
+    allocation: ActorAllocation
+}
+
+type Running struct {
+    allocation: ActorAllocation
+}
+
+type Sleeping void
+
+type Stopping struct {
+    allocation: ActorAllocation
+}
+
+type DestroyPhasePending void
+type DestroyPhaseSuccess void
+type DestroyPhaseFailed void
+
+type DestroyPhase union {
+    DestroyPhasePending |
+    DestroyPhaseSuccess |
+    DestroyPhaseFailed
+}
+
+type DestroyState struct {
+    phase: DestroyPhase
+    attempt: u32
+    createUnixMs: i64
+}
+
+type DestroyEffectData struct {
+    createUnixMs: i64
+    state: DestroyState
+}
+
+type Destroying struct {
+    destroy: DestroyEffectData
+    epoxyAlreadyReserved: optional<Id>
+}
+
+type Destroyed void
+
+type ActorPhase union {
+    Initializing |
+    Starting |
+    Running |
+    Stopping |
+    Sleeping |
+    Destroying |
+    Destroyed
+}
+
+type StartWaiter struct {
+    workerId: WorkerId
+    waitId: u64
+    expiresUnixMs: i64
+}
+
+type WriteIndexPhasePending void
+type WriteIndexPhaseSuccess void
+type WriteIndexPhaseFailed void
+
+type WriteIndexPhase union {
+    WriteIndexPhasePending |
+    WriteIndexPhaseSuccess |
+    WriteIndexPhaseFailed
+}
+
+type WriteIndexState struct {
+    phase: WriteIndexPhase
+    attempt: u32
+    createUnixMs: i64
+}
+
+type WriteIndexEffectData struct {
+    namespace: str
+    name: str
+    createUnixMs: i64
+    state: WriteIndexState
+}
+
+type ActorState struct {
+    phase: ActorPhase
+    epoch: u32
+    createUnixMs: i64
+    commandIndex: i64
+    indexBucketCount: u64
+    pendingAction: PendingAction
+    writeIndex: WriteIndexEffectData
+    startWaiters: list<StartWaiter>
+    startWaitersCapacity: u32
+}
+
+type ReserveEpoxyTimeout struct {
+    attempt: u32
+    createUnixMs: i64
+}
+
+type WriteIndexTimeout struct {
+    attempt: u32
+    createUnixMs: i64
+}
+
+type DestroyTimeout struct {
+    attempt: u32
+    createUnixMs: i64
+}
+
+type StartTimeout struct {
+    epoch: u32
+}
+
+type StopTimeout struct {
+    epoch: u32
+}
+
+type AlarmTimeout void
+
+type ActorTimer union {
+    ReserveEpoxyTimeout |
+    WriteIndexTimeout |
+    DestroyTimeout |
+    StartTimeout |
+    AlarmTimeout |
+    StopTimeout
+}
+
+type StartFailed struct {
+    epoch: u32
+}
+
+# The actor executor found the envoy of `epoch` disconnected past its lost threshold while its
+# stop went undelivered, so the envoy has stopped every actor it held.
+type EnvoyGone struct {
+    epoch: u32
+}
+
+type Sleep void
+
+type TryStart struct {
+    waiter: optional<StartWaiter>
+}
+
+type Create struct {
+    init: ActorCreateData
+    waiter: optional<StartWaiter>
+}
+
+type Reallocate struct {
+    epoch: u32
+    lost: bool
+    waiter: optional<StartWaiter>
+}
+
+type UpdateRoute struct {
+    epoch: u32
+    from: ActorAllocation
+    to: ActorAllocation
+}
+
+type Destroy void
+
+type ToEnvoyEventKindRunning void
+
+type ToEnvoyEventKindStopped struct {
+    ok: bool
+    message: optional<str>
+}
+
+type ToEnvoyEventKindSleepIntent void
+
+type ToEnvoyEventKindStopIntent void
+
+type ToEnvoyEventKindSetAlarm struct {
+    alarmUnixMs: optional<i64>
+}
+
+type ToEnvoyEventKind union {
+    ToEnvoyEventKindRunning |
+    ToEnvoyEventKindStopped |
+    ToEnvoyEventKindSleepIntent |
+    ToEnvoyEventKindStopIntent |
+    ToEnvoyEventKindSetAlarm
+}
+
+type ToEnvoyEvent struct {
+    epoch: u32
+    kind: ToEnvoyEventKind
+}
+
+type ActorEvent union {
+    ReserveEpoxyState |
+    WriteIndexState |
+    StartFailed |
+    Sleep |
+    TryStart |
+    Create |
+    Reallocate |
+    UpdateRoute |
+    Destroy |
+    DestroyState |
+    ToEnvoyEvent |
+    EnvoyGone
+}
+
+type TryStartWaiting void
+
+type TryStartStarting struct {
+    epoch: u32
+    allocation: ActorAllocation
+}
+
+type TryStartRunning struct {
+    epoch: u32
+    allocation: ActorAllocation
+}
+
+type TryStartDestroyed void
+
+type TryStartEpoxyAlreadyReserved struct {
+    reservationId: Id
+}
+
+type TryStartFull void
+
+type TryStartOutcome union {
+    TryStartWaiting |
+    TryStartStarting |
+    TryStartRunning |
+    TryStartDestroyed |
+    TryStartEpoxyAlreadyReserved |
+    TryStartFull
+}
+
+type ActorReadRequest void
+type ActorReadResponse struct {
+    data: optional<ActorData>
+    phase: optional<ActorPhase>
+    epoch: u32
+}
+
+type ActorEventResponse struct {
+    outcome: optional<TryStartOutcome>
+}
+
+type ActorCreateRequest struct {
+    init: ActorCreateData
+    waiter: optional<StartWaiter>
+}
+type ActorCreateResponse struct {
+    outcome: TryStartOutcome
+}
+
+type ActorStartNoticeStarting struct {
+    epoch: u32
+    allocation: ActorAllocation
+}
+
+type ActorStartNoticeRunning struct {
+    epoch: u32
+    allocation: ActorAllocation
+}
+
+type ActorStartNoticeEpoxyAlreadyReserved struct {
+    reservationId: Id
+}
+
+type ActorStartNoticeDestroyed void
+
+type ActorStartNoticeKind union {
+    ActorStartNoticeStarting |
+    ActorStartNoticeRunning |
+    ActorStartNoticeEpoxyAlreadyReserved |
+    ActorStartNoticeDestroyed
+}
+
+type ActorStartNotice struct {
+    actorId: Id
+    kind: ActorStartNoticeKind
+}
+
+type KvValue struct {
+    value: data
+    version: data
+    updatedUnixMs: i64
+}
+
+type IndexInsertActorRequest struct {
+    actorId: Id
+    createUnixMs: i64
+}
+type IndexInsertActorResponse void
+
+type IndexDeleteActorRequest struct {
+    actorId: Id
+    createUnixMs: i64
+}
+type IndexDeleteActorResponse void
+
+type IndexActorCursor struct {
+    createUnixMs: i64
+    actorId: Id
+}
+
+type IndexListActorsRequest struct {
+    after: optional<IndexActorCursor>
+    limit: u32
+    includeDestroyed: bool
+}
+type IndexDestroyedActor struct {
+    createUnixMs: i64
+    actorId: Id
+    destroyUnixMs: i64
+}
+type IndexListActorsResponse struct {
+    actors: list<IndexActorCursor>
+    hasMore: bool
+    destroyed: list<IndexDestroyedActor>
+}
+
+type DestroyedActorIndexEntry struct {
+    destroyUnixMs: i64
+}
+
+type IndexReadDestroyedActorRequest struct {
+    createUnixMs: i64
+    actorId: Id
+}
+type IndexReadDestroyedActorResponse struct {
+    destroyUnixMs: optional<i64>
+}
+
+type EnvoyData struct {
+    key: str
+    workerId: WorkerId
+    connectionId: Uuid
+    connectionEpoch: u64
+    names: list<str>
+    createUnixMs: i64
+    heartbeatUnixMs: i64
+    stopping: bool
+    connected: bool
+}
+
+type EnvoyUpsertRequest struct {
+    data: EnvoyData
+    expected: optional<EnvoyData>
+}
+type EnvoyUpsertResponse struct {
+    data: EnvoyData
+}
+
+type EnvoyReadRequest void
+type EnvoyReadResponse struct {
+    data: optional<EnvoyData>
+}
+
+type IndexInsertEnvoyRequest struct {
+    createUnixMs: i64
+    envoyKey: str
+}
+type IndexInsertEnvoyResponse void
+
+type IndexListEnvoysRequest struct {
+    cursor: optional<data>
+}
+type IndexListEnvoysResponse struct {
+    envoyKeys: list<str>
+    cursor: optional<data>
+}
+
+type ActiveEnvoyIndexEntry struct {
+    workerId: WorkerId
+    connectionId: Uuid
+}
+
+type ActiveEnvoyState struct {
+    envoyKey: str
+    connectionEpoch: u64
+    heartbeatUnixMs: i64
+    names: list<str>
+}
+
+type IndexUpsertActiveEnvoyRequest struct {
+    envoyKey: str
+    connectionEpoch: u64
+    workerId: WorkerId
+    connectionId: Uuid
+    heartbeatUnixMs: i64
+    names: list<str>
+}
+type IndexUpsertActiveEnvoyResponse struct {
+    superseded: bool
+}
+
+type IndexDeleteActiveEnvoyRequest struct {
+    envoyKey: str
+    connectionEpoch: u64
+}
+type IndexDeleteActiveEnvoyResponse void
+
+type IndexPutEnvoyPoolRequest struct {
+    poolName: str
+}
+type IndexPutEnvoyPoolResponse void
+
+type IndexListEnvoyPoolsRequest void
+type IndexListEnvoyPoolsResponse struct {
+    pools: list<str>
+}
+
+type IndexListActiveEnvoysRequest struct {
+    name: str
+    cursor: optional<data>
+}
+type IndexListActiveEnvoysResponse struct {
+    envoys: list<ActorAllocation>
+    cursor: optional<data>
+}
+
+type IndexListActiveEnvoyStatesRequest struct {
+    cursor: optional<data>
+}
+type IndexListActiveEnvoyStatesResponse struct {
+    envoys: list<ActiveEnvoyState>
+    cursor: optional<data>
+}
+
+type NamespaceRecord struct {
+    createUnixMs: i64
+    createOperationId: data
+}
+
+type NamespaceCreateRequest struct {
+    name: str
+    createUnixMs: i64
+}
+type NamespaceCreateResponse struct {
+    created: bool
+    record: NamespaceRecord
+}
+
+type NamespaceReadRequest struct {
+    name: str
+}
+type NamespaceReadResponse struct {
+    record: optional<NamespaceRecord>
+}
+
+type NamespaceEntry struct {
+    name: str
+    record: NamespaceRecord
+}
+
+type NamespaceListRequest struct {
+    after: optional<str>
+    limit: u32
+}
+type NamespaceListResponse struct {
+    namespaces: list<NamespaceEntry>
+    cursor: optional<str>
+}
+
+type EpoxyActorByKeyEntry struct {
+    reservationId: Id
+}
+
+# Pool settings are captured when a connection registers. Metadata is opaque JSON.
+type NodePoolConfig struct {
+    drainOnVersionUpgrade: bool
+    actorEvictionDelay: u32
+    actorEvictionPeriod: u32
+    actorEvictionRate: f64
+    metadata: optional<data>
+}
+type PoolConnection struct {
+    connectionId: Id
+    heartbeatUnixMs: i64
+}
+type PoolRead void
+type PoolPut NodePoolConfig
+type PoolDelete void
+type PoolConnect PoolConnection
+type PoolRenew PoolConnection
+type PoolDisconnect Uuid
+type PoolOperation union {
+    PoolRead | PoolPut | PoolDelete | PoolConnect | PoolDisconnect | PoolRenew
+}
+type PoolRequest struct {
+    poolName: str
+    operation: PoolOperation
+}
+type PoolStatus enum { Ok NotFound Connected }
+type PoolResponse struct {
+    status: PoolStatus
+    config: optional<NodePoolConfig>
+}
+type PoolLease struct { heartbeatUnixMs: i64 }
+
+# One bounded page of configured pools, ordered by immutable name.
+type PoolEntry struct { name: str config: NodePoolConfig }
+type PoolListRequest struct { after: optional<str> limit: u32 }
+type PoolListResponse struct { pools: list<PoolEntry> cursor: optional<str> }

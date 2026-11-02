@@ -1,5 +1,0 @@
-{
-  "code": "branch_not_reachable",
-  "group": "depot",
-  "message": "Restore point branch is not reachable from this database branch chain."
-}

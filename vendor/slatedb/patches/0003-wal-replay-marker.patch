@@ -1,0 +1,48 @@
+--- a/src/memtable_flusher/manifest_writer.rs
++++ b/src/memtable_flusher/manifest_writer.rs
+@@ -524,7 +524,11 @@
+                     };
+                     tree.l0.push_front(view);
+                 }
+-                core.replay_after_wal_id = uploaded.imm_memtable.recent_flushed_wal_id();
++                // A later immutable memtable may have frozen before an earlier
++                // SST publication proved additional WAL coverage. Never regress
++                // that proof: GC may already have retired the covered WALs.
++                core.replay_after_wal_id = core.replay_after_wal_id
++                    .max(uploaded.imm_memtable.recent_flushed_wal_id());
+ 
+                 let memtable_tick = uploaded.imm_memtable.table().last_tick();
+                 core.last_l0_clock_tick = cmp::max(core.last_l0_clock_tick, memtable_tick);
+@@ -591,6 +595,32 @@
+         &mut self,
+         checkpoint_options: &[&CheckpointOptions],
+     ) -> Result<Vec<CheckpointCreateResult>, SlateDBError> {
++        // Freezing a memtable intentionally captures a conservative WAL watermark
++        // before its asynchronous WAL flush finishes. Once all records through a
++        // later flushed WAL sequence are in these manifest-owned SSTs, that WAL is
++        // redundant too. Advance the marker with the SST publication, including
++        // when an already-empty memtable has nothing left to freeze. Otherwise a
++        // fully flushed checkpoint can still require data WAL replay and cannot
++        // be projected safely. Never infer this from WAL durability alone.
++        //
++        // Until this writer flushes a data WAL, `last_flushed_seq` is None while WALs
++        // replayed at open may still be only in memtables, so no coverage is proven.
++        // The same holds with the WAL disabled, which never reports a flushed seq.
++        let wal = self.db.wal_observer.status()?;
++        let next_wal_id = wal.last_flushed_wal_id
++            .checked_add(1)
++            .ok_or(SlateDBError::InvalidDBState)?;
++        {
++            let mut guard = self.db.state.write();
++            guard.modify(|modifier| {
++                let core = &mut modifier.state.manifest.value.core;
++                if wal.last_flushed_seq.is_some_and(|seq| seq <= core.last_l0_seq) {
++                    core.replay_after_wal_id =
++                        core.replay_after_wal_id.max(wal.last_flushed_wal_id);
++                    core.next_wal_sst_id = core.next_wal_sst_id.max(next_wal_id);
++                }
++            });
++        }
+         let mut dirty = self.clone_local_manifest_for_write();
+         let mut checkpoint_results = Vec::new();
+         for options in checkpoint_options {

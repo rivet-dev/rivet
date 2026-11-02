@@ -1,13 +1,21 @@
 use std::{collections::BTreeMap, time::Duration};
 
 use anyhow::{Context, Result, bail};
-use reqwest::{Method, StatusCode};
+use reqwest::{
+	Method, StatusCode,
+	header::{HeaderName, HeaderValue},
+};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 use tokio::time::sleep;
 use url::Url;
 
-use crate::util::encode;
+use crate::{
+	auth::{Auth, login_access_token},
+	util::encode,
+};
+
+pub mod v2;
 
 #[derive(Deserialize)]
 pub struct TokenInspectResponse {
@@ -122,10 +130,27 @@ pub struct PoolError {
 	pub message: String,
 }
 
+/// Names the organization an OAuth caller acts in on API v2.
+const ORGANIZATION_HEADER: &str = "x-rivet-organization";
+
 pub struct CloudClient {
 	http: reqwest::Client,
 	base: Url,
-	token: String,
+	token: tokio::sync::RwLock<String>,
+	/// Set when the token comes from a `rivet login` session, whose access token
+	/// expires after minutes. Requests then refresh it as it nears expiry.
+	login: Option<LoginRefresh>,
+	/// The organization a cluster request acts in, sent as
+	/// `x-rivet-organization`. A login token names only the user, so API v2
+	/// needs it when the user belongs to several organizations.
+	organization: Option<String>,
+}
+
+struct LoginRefresh {
+	cloud_api: String,
+	/// Serializes refreshes, because a refresh rotates the refresh token and a
+	/// second one with the old token would fail.
+	lock: tokio::sync::Mutex<()>,
 }
 
 impl CloudClient {
@@ -133,15 +158,95 @@ impl CloudClient {
 		Ok(Self {
 			http: reqwest::Client::new(),
 			base: Url::parse(base).context("invalid Cloud API endpoint")?,
-			token,
+			token: tokio::sync::RwLock::new(token),
+			login: None,
+			organization: None,
 		})
+	}
+
+	/// Keeps a `rivet login` session's access token fresh for the life of the
+	/// client. Tokens from `--token` or `RIVET_CLOUD_TOKEN` are used as they are.
+	pub fn with_login_refresh(mut self, auth: &Auth, cloud_api: &str) -> Self {
+		if auth.is_login() {
+			self.login = Some(LoginRefresh {
+				cloud_api: cloud_api.to_string(),
+				lock: tokio::sync::Mutex::new(()),
+			});
+		}
+		self
+	}
+
+	async fn token(&self, force_refresh: bool) -> Result<String> {
+		let Some(login) = &self.login else {
+			return Ok(self.token.read().await.clone());
+		};
+		let _guard = login.lock.lock().await;
+		let token = login_access_token(&login.cloud_api, force_refresh).await?;
+		*self.token.write().await = token.clone();
+		Ok(token)
+	}
+
+	/// Sends a request. A `rivet login` session's token is refreshed before it
+	/// expires, and a request answered `401` is retried once with a refreshed
+	/// token in case it expired in flight.
+	pub async fn send(
+		&self,
+		method: Method,
+		path: &str,
+		body: Option<Value>,
+	) -> Result<reqwest::Response> {
+		self.send_with_headers(method, path, body, &[]).await
+	}
+
+	/// `send`, adding `headers` to the request.
+	pub async fn send_with_headers(
+		&self,
+		method: Method,
+		path: &str,
+		body: Option<Value>,
+		headers: &[(HeaderName, HeaderValue)],
+	) -> Result<reqwest::Response> {
+		let response = self
+			.request_with_headers(method.clone(), path, body.clone(), headers)
+			.await?
+			.send()
+			.await
+			.context("Cloud API request failed")?;
+		if response.status() != StatusCode::UNAUTHORIZED || self.login.is_none() {
+			return Ok(response);
+		}
+		self.token(true).await?;
+		self.request_with_headers(method, path, body, headers)
+			.await?
+			.send()
+			.await
+			.context("Cloud API request failed")
+	}
+
+	async fn request_with_headers(
+		&self,
+		method: Method,
+		path: &str,
+		body: Option<Value>,
+		headers: &[(HeaderName, HeaderValue)],
+	) -> Result<reqwest::RequestBuilder> {
+		let mut request = self.build_request(method, path, body).await?;
+		for (name, value) in headers {
+			request = request.header(name.clone(), value.clone());
+		}
+		Ok(request)
+	}
+
+	pub fn with_organization(mut self, organization: Option<String>) -> Self {
+		self.organization = organization;
+		self
 	}
 
 	/// Builds an authenticated JSON request. A bodyless non-GET request gets an
 	/// explicit `Content-Length: 0`, since some Cloud API frontends (e.g.
 	/// Google's load balancer) reject a bodyless POST/PUT/DELETE with 411 Length
 	/// Required.
-	fn build_request(
+	pub async fn build_request(
 		&self,
 		method: Method,
 		path: &str,
@@ -149,11 +254,15 @@ impl CloudClient {
 	) -> Result<reqwest::RequestBuilder> {
 		let url = self.base.join(path.trim_start_matches('/'))?;
 		let needs_content_length = !matches!(method, Method::GET | Method::HEAD);
+		let token = self.token(false).await?;
 		let mut request = self
 			.http
 			.request(method, url)
-			.bearer_auth(&self.token)
+			.bearer_auth(token)
 			.header("Content-Type", "application/json");
+		if let Some(organization) = &self.organization {
+			request = request.header(ORGANIZATION_HEADER, organization);
+		}
 		match body {
 			Some(body) => request = request.json(&body),
 			None if needs_content_length => {
@@ -170,11 +279,7 @@ impl CloudClient {
 		path: &str,
 		body: Option<Value>,
 	) -> Result<Option<T>> {
-		let response = self
-			.build_request(method, path, body)?
-			.send()
-			.await
-			.context("Cloud API request failed")?;
+		let response = self.send(method, path, body).await?;
 		if response.status() == StatusCode::NOT_FOUND {
 			return Ok(None);
 		}
@@ -194,9 +299,10 @@ impl CloudClient {
 	/// Builds an authenticated GET request for the given path. Used for
 	/// streaming responses (e.g. SSE log tails) that the buffered `request`
 	/// helpers cannot consume.
-	pub fn get_builder(&self, path: &str) -> Result<reqwest::RequestBuilder> {
+	pub async fn get_builder(&self, path: &str) -> Result<reqwest::RequestBuilder> {
 		let url = self.base.join(path.trim_start_matches('/'))?;
-		Ok(self.http.request(Method::GET, url).bearer_auth(&self.token))
+		let token = self.token(false).await?;
+		Ok(self.http.request(Method::GET, url).bearer_auth(token))
 	}
 
 	pub async fn request_ok<T: DeserializeOwned>(
@@ -205,11 +311,7 @@ impl CloudClient {
 		path: &str,
 		body: Option<Value>,
 	) -> Result<Option<T>> {
-		let response = self
-			.build_request(method, path, body)?
-			.send()
-			.await
-			.context("Cloud API request failed")?;
+		let response = self.send(method, path, body).await?;
 		let status = response.status();
 		let text = response.text().await.unwrap_or_default();
 		if !status.is_success() {
@@ -462,11 +564,7 @@ pub async fn delete_pool(
 		encode(pool),
 		encode(org)
 	);
-	let response = cloud
-		.build_request(Method::DELETE, &path, None)?
-		.send()
-		.await
-		.context("Cloud API request failed")?;
+	let response = cloud.send(Method::DELETE, &path, None).await?;
 	let status = response.status();
 	if status == StatusCode::NOT_FOUND {
 		bail!("pool not found: {pool}");
@@ -500,6 +598,66 @@ pub async fn create_token(
 		.await?
 		.context("token create returned no body")?;
 	Ok(response.token)
+}
+
+pub struct ApiToken {
+	pub id: String,
+	pub token: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateApiTokenResponse {
+	id: String,
+	api_token: String,
+}
+
+/// Mints a project API token for `docker login`, since the registry does not
+/// accept login sessions. Expires on its own if revocation never happens.
+pub async fn create_registry_token(
+	cloud: &CloudClient,
+	project: &str,
+	org: &str,
+) -> Result<ApiToken> {
+	let path = format!(
+		"/projects/{}/tokens/api?org={}",
+		encode(project),
+		encode(org)
+	);
+	let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);
+	let response: CreateApiTokenResponse = cloud
+		.request_ok(
+			Method::POST,
+			&path,
+			Some(json!({
+				"name": "rivet deploy (temporary)",
+				"expiresAt": expires_at.to_rfc3339(),
+			})),
+		)
+		.await?
+		.context("API token create returned no body")?;
+	Ok(ApiToken {
+		id: response.id,
+		token: response.api_token,
+	})
+}
+
+pub async fn revoke_api_token(
+	cloud: &CloudClient,
+	project: &str,
+	org: &str,
+	id: &str,
+) -> Result<()> {
+	let path = format!(
+		"/projects/{}/tokens/api/{}/revoke?org={}",
+		encode(project),
+		encode(id),
+		encode(org)
+	);
+	cloud
+		.request_ok::<serde_json::Value>(Method::POST, &path, None)
+		.await?;
+	Ok(())
 }
 
 pub fn registry_endpoint(cloud_api: &str) -> Result<String> {

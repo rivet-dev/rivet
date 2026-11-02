@@ -87,7 +87,3 @@ impl CachedSnapshot {
 		})
 	}
 }
-
-#[cfg(test)]
-#[path = "../../tests/unit/signing.rs"]
-mod tests;

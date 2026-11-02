@@ -1,0 +1,143 @@
+---
+title: "Party Game"
+description: "Build a party game with private lobbies, where a host creates a room, friends join with a party code, and the host starts the game."
+---
+
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
+
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/party" />
+
+<Diagram
+  id="party-game"
+  label="The host's game client sends createParty to the partyMatchmaker Actor, and friends send joinParty with the party code. The matchmaker keeps parties and join tickets in its SQLite tables. For createParty, it creates a partyMatch Actor. It replies with a matchId and a joinToken. The client connects to the match with its joinToken, and the match checks the ticket by sending verifyJoin to the matchmaker. Members then call toggleReady, and the host calls startGame. The match broadcasts the partyUpdate event to every member after each change. The numbers show the order of the calls. There is one matchmaker and one partyMatch Actor per match."
+  stackLabel="One per match"
+  nodes={[
+    { id: "client", x: 20, y: 80, w: 150, title: "Game client", subtitle: "browser lobby" },
+    { id: "mm", x: 330, y: 80, w: 230, product: "actors", title: "`partyMatchmaker`", subtitle: "one, keyed `main`" },
+    { id: "db", x: 330, y: 210, w: 230, title: "Matchmaker SQLite", subtitle: "`parties`, `join_tickets`" },
+    { id: "match", x: 760, y: 80, w: 190, product: "actors", stack: true, title: "`partyMatch`", subtitle: "members and host" },
+  ]}
+  edges={[
+    { from: "client", to: "mm", fromOffset: -10, toOffset: -10, label: "`createParty`, `joinParty`", labelAt: [250, 72], step: 1 },
+    { from: "mm", to: "match", fromOffset: -10, toOffset: -10, label: "`create`", step: 2 },
+    { from: "mm", to: "client", kind: "reply", fromOffset: 12, toOffset: 12, label: "`matchId`, `joinToken`", labelAt: [247, 144], step: 3 },
+    { from: "client", to: "match", fromSide: "top", toSide: "top", via: [[95, 30], [855, 30]], label: "`connect` with `joinToken`", step: 4 },
+    { from: "match", to: "mm", fromOffset: 12, toOffset: 12, label: "`verifyJoin`", labelAt: [659, 144], step: 5 },
+    { from: "mm", to: "db", fromSide: "bottom", toSide: "top", label: "`c.db.execute`", labelAt: [455, 180], labelAnchor: "start" },
+    { from: "client", to: "match", fromSide: "bottom", toSide: "bottom", fromOffset: -20, toOffset: -10, via: [[75, 310], [845, 310]], label: "`toggleReady`, `startGame`", step: 6 },
+    { from: "match", to: "client", kind: "reply", fromSide: "bottom", toSide: "bottom", fromOffset: 14, toOffset: 20, via: [[869, 345], [115, 345]], label: "`partyUpdate` events", step: 7 },
+  ]}
+/>
+
+What we'll build:
+
+- A `partyMatchmaker` Actor that creates parties with six-character codes and lets friends join by code.
+- Join tickets: tokens the matchmaker issues and the party checks before it lets anyone in.
+- A `partyMatch` Actor per party that tracks members, the host, ready flags, and the phase.
+- Host-only actions to start and finish the game, with no tick loop.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add rivetkit
+```
+
+</Step>
+
+<Step title="Create the matchmaker">
+
+One `partyMatchmaker` Actor, keyed `["main"]`, creates parties and hands out join tickets. Parties and tickets live in its SQLite database:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/party/matchmaker.ts" title="matchmaker.ts" region="create-join" />
+
+- Every request is a queue message, and `run` handles one message at a time. Two friends joining the last open slot at once can't both get in. `createParty`, `joinParty`, `verifyJoin`, `updatePartySize`, and `closeParty` are all queues.
+- `createParty` creates the `partyMatch` Actor with the party code and the host's player id, saves a `parties` row, and returns a `joinToken` along with the code. Codes leave out I, O, 0, and 1 so they are easy to read aloud, and the `party_code` column is `UNIQUE`.
+- `joinParty` uppercases and trims the code, rejects an unknown code with `party_not_found` and a full party with `party_full` (`MAX_PARTY_SIZE` is 8), and issues a new ticket.
+- `joinParty` counts the player as soon as it issues the ticket, so the slot is held while they connect. The party corrects the count later with `updatePartySize`.
+
+</Step>
+
+<Step title="Create the match">
+
+Each party is its own `partyMatch` Actor, keyed by the match id. A player gets in only with a ticket the matchmaker accepts:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/party/match.ts" title="match.ts" region="connect" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/party/matchmaker.ts" title="matchmaker.ts" region="verify-join" />
+</CodeGroup>
+
+- `createConnState` runs before the connection is accepted. It sends `verifyJoin` with the match id from `c.key[0]`, the `playerId`, and the `joinToken`, and throws `invalid_join_ticket` if the matchmaker has no such ticket. A rejected player never gets a connection.
+- The verified name and host flag become connection state. Actions read the player from `c.conn.state.playerId`, never from their arguments, so a member can't act as someone else.
+- `onConnect` checks the size limit again and turns away a second connection for the same player with `duplicate_player`. If the party has no host, the new member becomes the host.
+- Tickets stay valid until `closeParty`, so a player who drops can reconnect with the same ticket.
+
+</Step>
+
+<Step title="Add host controls">
+
+Nothing in a party lobby changes on its own, so there is no tick loop. Every change comes from an action or a connection, and each one broadcasts `partyUpdate`:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/party/match.ts" title="match.ts" highlight="host" />
+
+- `startGame` and `finishGame` throw `not_host` for anyone but the host, and check the phase: `waiting` to `playing` to `finished`. A second click gets `already_started` or `not_playing`.
+- `toggleReady` flips the member's ready flag. The example lets the host start without everyone ready. Add a check in `startGame` if your game needs it.
+- When a member leaves, `onDisconnect` removes them. If it was the host, `promoteNextHost` makes the next member the host and clears their ready flag, so the party never gets stuck without one.
+- After each join and leave the match sends `updatePartySize`, so the matchmaker turns joiners away only when the party is really full.
+
+<Note>
+The `playing` phase is where your game goes. For a quiz or drawing game, add actions that only work while `phase === "playing"`. For a realtime mini-game, add a `run` loop that ticks only during `playing`, or create a separate match Actor such as an [arena match](/guides/arena-game) and send every member its id.
+</Note>
+
+</Step>
+
+<Step title="Register the Actors">
+
+Add both Actors to the registry and start it:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/index.ts" title="actors/index.ts" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/index.ts" title="index.ts" />
+</CodeGroup>
+
+The example registers every game type in one registry. A party game only needs `partyMatchmaker` and `partyMatch`. Each Actor file imports `type { registry }` so that `c.client<typeof registry>()` is typed when the matchmaker creates a party and the party checks tickets.
+
+</Step>
+
+<Step title="Connect players">
+
+The menu creates or joins a party, then the lobby connects to it with the ticket it got back:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/party/menu.tsx" title="menu.tsx" highlight="create-join" />
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/party/game.tsx" title="game.tsx" highlight="connect" />
+</CodeGroup>
+
+- `mm.send("createParty", {}, { wait: true })` and `mm.send("joinParty", { partyCode }, { wait: true })` wait for the queue's reply. A joiner doesn't get the code back, so the menu adds the code the player typed.
+- The lobby connects with `partyMatch.get(...)` and puts both `playerId` and `joinToken` in `params`, which is what `createConnState` checks.
+- It subscribes to `partyUpdate` and also calls `getSnapshot` once, so the member list shows up even if no change has happened since it connected.
+- The buttons call `toggleReady`, `startGame`, and `finishGame`. The UI only shows **Start Game** to the host, but the server's `not_host` check is what enforces it.
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/multiplayer-game-patterns
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173`, pick **Party**, and click **Create Party**. The lobby shows the party code and lists you as **Host**. Open a second tab, enter the code, and click **Join Party**, or click **Add Bot**. Click **Ready**, then **Start Game** as the host, and the phase changes to `PLAYING`. Close the host's tab and the other member becomes the host.
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+- [Arena Game](/guides/arena-game): run a realtime match with teams and a tick loop.
+- [Connections](/actors/docs/connections): `createConnState`, connection params, and per-connection state.
+- [Authentication](/guides/authentication): replace join tickets with signed user tokens.

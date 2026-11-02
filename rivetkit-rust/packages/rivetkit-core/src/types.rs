@@ -1,3 +1,4 @@
+use rivetkit_shared_types::actor_key;
 use serde::{Deserialize, Serialize};
 
 pub type ActorKey = Vec<ActorKeySegment>;
@@ -9,32 +10,17 @@ pub enum ActorKeySegment {
 	Number(f64),
 }
 
+/// The actor key in the slash form RivetKit shows users and the actor REST API returns. A
+/// number segment is written as its decimal string.
 pub fn format_actor_key(key: &ActorKey) -> String {
-	key.iter()
+	let parts: Vec<String> = key
+		.iter()
 		.map(|segment| match segment {
-			ActorKeySegment::String(value) => escape_actor_key_segment(value),
-			ActorKeySegment::Number(value) => escape_actor_key_segment(&value.to_string()),
+			ActorKeySegment::String(value) => value.clone(),
+			ActorKeySegment::Number(value) => value.to_string(),
 		})
-		.collect::<Vec<_>>()
-		.join("/")
-}
-
-fn escape_actor_key_segment(segment: &str) -> String {
-	if segment.is_empty() {
-		return "\\0".to_owned();
-	}
-
-	let mut escaped = String::with_capacity(segment.len());
-	for ch in segment.chars() {
-		match ch {
-			'\\' | '/' => {
-				escaped.push('\\');
-				escaped.push(ch);
-			}
-			_ => escaped.push(ch),
-		}
-	}
-	escaped
+		.collect();
+	actor_key::slash::serialize(&parts)
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

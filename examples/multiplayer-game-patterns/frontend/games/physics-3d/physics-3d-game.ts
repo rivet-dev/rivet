@@ -131,6 +131,7 @@ export class Physics3dGame {
 			this.scene.add(mesh);
 		}
 
+		// docs:start connect
 		// Connect to actor.
 		const handle = client.physics3dWorld.getOrCreate(["main"], {
 			params: { name: matchInfo.name },
@@ -225,6 +226,7 @@ export class Physics3dGame {
 				}
 			}
 		});
+		// docs:end connect
 
 		this.renderer.domElement.addEventListener("click", this.onClick);
 		window.addEventListener("keydown", this.onKeyDown);
@@ -292,6 +294,7 @@ export class Physics3dGame {
 		this.sendInput();
 	};
 
+	// docs:start input
 	private sendInput() {
 		let ix = 0;
 		let iz = 0;
@@ -317,10 +320,12 @@ export class Physics3dGame {
 			this.lastJump = false;
 		}
 	}
+	// docs:end input
 
 	private draw = () => {
 		if (this.stopped) return;
 
+		// docs:start smoothing
 		// Lerp dynamic scene bodies.
 		for (const [id, mesh] of Object.entries(this.dynamicMeshes)) {
 			const target = this.targets[id];
@@ -353,6 +358,7 @@ export class Physics3dGame {
 				label.position.y += PLAYER_RADIUS + 0.5;
 			}
 		}
+		// docs:end smoothing
 
 		// Camera follows the local player.
 		const myMesh = this.playerMeshes[this.myConnId];

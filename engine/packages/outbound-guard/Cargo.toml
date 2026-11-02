@@ -12,9 +12,7 @@ ipnet.workspace = true
 reqwest.workspace = true
 rivet-config.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 url.workspace = true
 
-[dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

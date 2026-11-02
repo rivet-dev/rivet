@@ -5,7 +5,7 @@ use axum::{
 };
 use rivet_api_builder::ApiError;
 use rivet_api_types::{datacenters::list::*, pagination::Pagination};
-use rivet_auth::{AccessNamespaceScope, OperationKind, ResourceKind, TargetScope};
+use rivet_auth::*;
 use rivet_types::datacenters::Datacenter;
 
 use crate::ctx::ApiCtx;

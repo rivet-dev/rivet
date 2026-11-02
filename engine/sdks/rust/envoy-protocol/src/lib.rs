@@ -1,4 +1,5 @@
 pub mod generated;
+pub mod preloaded_kv;
 pub mod util;
 pub mod versioned;
 

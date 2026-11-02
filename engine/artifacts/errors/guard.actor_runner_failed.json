@@ -1,5 +1,0 @@
-{
-  "code": "actor_runner_failed",
-  "group": "guard",
-  "message": "Actor's runner pool is experiencing errors."
-}

@@ -249,7 +249,3 @@ impl RequestAuthState {
 		Ok(credential)
 	}
 }
-
-#[cfg(test)]
-#[path = "../tests/unit/check.rs"]
-mod tests;

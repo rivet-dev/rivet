@@ -25,6 +25,7 @@ export class IoGame {
 		private matchInfo: IoStyleMatchInfo,
 		private options: { bot?: boolean } = {},
 	) {
+		// docs:start connect
 		this.conn = client.ioStyleMatch
 			.get([matchInfo.matchId], {
 				params: {
@@ -47,6 +48,7 @@ export class IoGame {
 				}
 			}
 		});
+		// docs:end connect
 
 		if (options.bot) {
 			this.botInterval = window.setInterval(() => {
@@ -82,6 +84,7 @@ export class IoGame {
 		this.sendInput();
 	};
 
+	// docs:start input
 	private sendInput() {
 		let ix = 0;
 		let iy = 0;
@@ -95,6 +98,7 @@ export class IoGame {
 			this.conn.setInput({ inputX: ix, inputY: iy }).catch(() => {});
 		}
 	}
+	// docs:end input
 
 	private draw = () => {
 		if (this.stopped) return;
@@ -124,8 +128,10 @@ export class IoGame {
 		for (const [id, target] of Object.entries(this.targets)) {
 			const d = this.display[id];
 			if (!d) continue;
+			// docs:start interpolate
 			d.x += (target.x - d.x) * LERP_FACTOR;
 			d.y += (target.y - d.y) * LERP_FACTOR;
+			// docs:end interpolate
 
 			const px = d.x * sx;
 			const py = d.y * sy;

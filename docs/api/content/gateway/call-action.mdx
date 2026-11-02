@@ -8,7 +8,7 @@ description: "Invoke an action defined on an actor and return its result. This i
 Arguments are passed as a JSON array in `args` and spread into the action's parameters. The action's return value comes back in `output`. Actions that return `undefined` respond with `{ "output": null }`.
 
 ```http
-POST https://api.rivet.dev/gateway/{actor}/action/{action}
+POST https://rivet.example.com/gateway/{actor}/action/{action}
 ```
 
 ## Examples
@@ -16,7 +16,7 @@ POST https://api.rivet.dev/gateway/{actor}/action/{action}
 <CodeGroup>
 
 ```bash cURL
-curl -X POST "https://api.rivet.dev/gateway/counter/action/increment?rvt-namespace=$RIVET_NAMESPACE&rvt-method=getOrCreate&rvt-key=my-counter&rvt-pool=default" \
+curl -X POST "https://rivet.example.com/gateway/counter/action/increment?rvt-namespace=$RIVET_NAMESPACE&rvt-method=getOrCreate&rvt-key=my-counter&rvt-pool=default" \
   -H "x-rivet-token: $RIVET_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -32,7 +32,7 @@ curl -X POST "https://api.rivet.dev/gateway/counter/action/increment?rvt-namespa
 
 ## Authentication
 
-Send a token in the `x-rivet-token` header, inline in the path as `{actor_id}@{token}`, or in the `rvt-token` query parameter. Use a public token (`pk_`) from browsers and a secret token (`sk_`) from trusted backends. See [Authentication](/docs/api/authentication).
+Send a token in the `x-rivet-token` header, inline in the path as `{actor_id}@{token}`, or in the `rvt-token` query parameter. Use a [scoped token](/docs/jwt) from browsers and your Rivet token from trusted backends. See [Authentication](/docs/api/authentication).
 
 ## Path Parameters
 

@@ -114,6 +114,3 @@ pub fn validate_inspector_tabs(entries: &[InspectorTabEntry]) -> Result<()> {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/inspector_tabs.rs"]
-mod tests;

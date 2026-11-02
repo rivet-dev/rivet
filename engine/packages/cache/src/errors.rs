@@ -7,7 +7,7 @@ pub enum Error {
 	Config(anyhow::Error),
 
 	#[error("pools: {0}")]
-	Pools(#[from] rivet_pools::Error),
+	EngineContext(#[from] rivet_engine_context::Error),
 
 	#[error("cache getter: {0}")]
 	Getter(anyhow::Error),

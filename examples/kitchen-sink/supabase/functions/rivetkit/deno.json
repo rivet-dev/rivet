@@ -1,6 +1,5 @@
 {
   "imports": {
-    "@rivet-dev/agent-os-core": "npm:@rivet-dev/agent-os-core@^0.1.1",
     "@rivetkit/bare-ts": "npm:@rivetkit/bare-ts@^0.6.2",
     "@rivetkit/bare-ts/": "npm:@rivetkit/bare-ts@^0.6.2/",
     "@rivetkit/engine-envoy-protocol": "../../../../../engine/sdks/typescript/envoy-protocol/dist/index.js",

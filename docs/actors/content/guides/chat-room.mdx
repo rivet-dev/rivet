@@ -1,0 +1,130 @@
+---
+title: "Chat Room"
+description: "Build a realtime chat room backend with Rivet Actors: one actor per room, SQLite-backed message history, and WebSocket broadcast to every connected client."
+templates: ["chat-room"]
+---
+
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
+
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/chat-room" />
+
+<Diagram
+  id="chat-room"
+  label="Client A connects to the chatRoom Actor keyed by the room name and calls getHistory to load the messages already in the room. It then calls sendMessage. The Actor inserts the message as a row in the messages table of its SQLite database, which getHistory reads in id order. The Actor then broadcasts the newMessage event to every connected client, so both Client A and Client B append the message. The numbers show the order of the calls. There is one chatRoom Actor per room."
+  stackLabel="One per room"
+  nodes={[
+    { id: "a", x: 20, y: 60, title: "Client A", subtitle: "sends a message" },
+    { id: "b", x: 20, y: 240, title: "Client B", subtitle: "same room key" },
+    { id: "room", x: 420, y: 150, w: 190, product: "actors", stack: true, title: "`chatRoom`", subtitle: "one chat room" },
+    { id: "messages", x: 760, y: 150, w: 190, title: "SQLite `messages`", subtitle: "read by `getHistory`" },
+  ]}
+  edges={[
+    { from: "a", to: "room", fromSide: "top", toSide: "top", via: [[105, 25], [515, 25]], label: "`getHistory` on connect", step: 1 },
+    { from: "a", to: "room", fromOffset: -10, toOffset: -10, via: [[340, 80], [340, 170]], label: "`sendMessage`", labelAt: [215, 72], labelAnchor: "start", step: 2 },
+    { from: "room", to: "messages", label: "`INSERT`", step: 3 },
+    { from: "room", to: "a", kind: "reply", fromOffset: 10, toOffset: 10, via: [[260, 190], [260, 100]], label: "`newMessage`", labelAt: [285, 210], labelAnchor: "start", step: 4 },
+    { from: "room", to: "b", kind: "reply", fromSide: "bottom", toSide: "right", via: [[515, 270]], label: "`newMessage`", step: 4 },
+  ]}
+/>
+
+A chat room needs three things: one place that orders every message in the room, history that survives restarts, and instant delivery to everyone who is connected. A single Rivet Actor per room gives you all three.
+
+What we'll build:
+
+- A `chatRoom` Actor per room, keyed by the room name, that every client in the room connects to.
+- Message history in the Actor's SQLite database, so it survives sleep and restarts.
+- A `newMessage` event that the Actor broadcasts to every connected client on each send.
+- A React client that loads the history once and then appends messages as they arrive.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add rivetkit @rivetkit/react
+```
+
+</Step>
+
+<Step title="Create the chat room Actor">
+
+Each room is its own `chatRoom` Actor. It stores the room's messages in its own [SQLite](/actors/docs/sqlite) database:
+
+<CodeSnippet file="examples/chat-room/src/index.ts" title="index.ts" highlight="history,registry" />
+
+- The client picks the room with the [key](/actors/docs/keys) `[roomId]`. Every client with the same room name reaches the same Actor, and different rooms never share history or connections. Rooms also spread across the cluster on their own, so a busy room does not slow down the others.
+- `db({ onMigrate })` creates the `messages` table. `onMigrate` runs every time the Actor starts, which is why the statement uses `CREATE TABLE IF NOT EXISTS`.
+- Every `sendMessage` for a room runs in the same Actor, the only writer to that room's database. The `AUTOINCREMENT` id therefore gives the room one order without any locks.
+- `getHistory` returns every message sorted by `id`, not by `timestamp`, so every client loads the history in that order.
+- `setup({ use: { chatRoom } })` registers the Actor, and `registry.start()` serves it on port 6420.
+
+<Note>
+SQLite fits history that is large, long-lived, or needs caps, pagination, or search. If you only keep a small recent window, such as the last 50 to 100 messages, you can push messages onto an array in [state](/actors/docs/state) instead and trim it to the cap on every send. That is simpler, but the whole history lives in memory and there is no query layer.
+</Note>
+
+<Warning>
+`getHistory` returns every row in one response with no limit, and the table grows forever. A long-lived room eventually hits the outgoing message size and storage [limits](/actors/docs/limits). In production, add a `LIMIT` with pagination, and prune or archive old rows.
+</Warning>
+
+</Step>
+
+<Step title="Broadcast new messages">
+
+`sendMessage` saves the message, then pushes it to everyone in the room:
+
+<CodeSnippet file="examples/chat-room/src/index.ts" title="index.ts" highlight="broadcast" />
+
+- `events` declares `newMessage` as a typed [event](/actors/docs/events) carrying a `Message`. The React client gets the same payload type through `typeof registry`.
+- The [action](/actors/docs/actions) sets `timestamp` with `Date.now()` on the server and lets SQLite assign the `id`. Never accept timestamps or ids from the client.
+- The insert uses `?` placeholders, so user text never ends up inside the SQL string. Keep every query parameterized.
+- The insert finishes before `c.broadcast("newMessage", message)`, so a message that other clients have seen is already saved. The broadcast reaches every connection in the room, including the sender, and the action also returns the message to the caller.
+- `c.broadcast` is for messages the whole room should see. For private payloads, such as a direct message inside a room, send to a single connection with `conn.send` instead.
+
+<Warning>
+The example has no authentication. Any client can join any room by knowing its name, and `sender` is a plain action argument, so anyone can post as anyone. In production, check a token in [`onBeforeConnect`](/actors/docs/permissions), keep the user's identity in [connection state](/actors/docs/connections#connection-state), check room membership before serving history, and read the sender from the connection instead of the arguments.
+</Warning>
+
+<Warning>
+`sendMessage` accepts empty text and text of any length, and any client can call it as often as it likes. Every call is saved and sent to every connection, so one spammer costs the whole room. In production, trim the text on the server, reject empty messages, cap the length, and rate limit each connection.
+</Warning>
+
+</Step>
+
+<Step title="Connect the React client">
+
+The React client connects with `useActor`, loads the history once, then appends every `newMessage`:
+
+<CodeSnippet file="examples/chat-room/frontend/App.tsx" title="App.tsx" region="client" highlight="connect,events,send" />
+
+- `createRivetKit<typeof registry>` returns hooks typed against the backend, so action arguments and event payloads are checked. See the [React client](/actors/docs/clients/react).
+- `useActor({ name: "chatRoom", key: [roomId] })` connects to the room's Actor and creates it if it does not exist yet. The room input defaults to `general`. Changing it connects to a different Actor with its own history.
+- Once `chatRoom.connection` is ready, the client calls `getHistory` once to render the backlog. After that, `useEvent("newMessage", ...)` appends each new message as it arrives.
+- The sender sees its own message through the same broadcast as everyone else, so there is only one code path for rendering messages. `sendMessage` only waits for the action and clears the input.
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/chat-room
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173` in two windows and give each a different username. Send a message from one window and it appears in both. Reload, and the history is still there. Change the room name to get an empty room of your own.
+
+</Step>
+
+</Steps>
+
+## Extend it
+
+- **Typing indicators and presence**: keep the username and a typing flag in [connection state](/actors/docs/connections#connection-state), never in SQLite, so they disappear with the connection. Broadcast a typing event only when a user starts or stops typing, broadcast join and leave from `onConnect` and `onDisconnect`, and clear a typing indicator on the client after a short timeout so a dropped connection never leaves it stuck.
+- **Per-user inbox**: for offline delivery, unread counts, or notifications, add a `userInbox` Actor keyed by user id. The room forwards each message to every member's inbox with [actor-to-actor calls](/actors/docs/communicating-between-actors), and the inbox keeps the unread state. A direct message can be a `chatRoom` keyed by the sorted pair of user ids.
+
+## Next steps
+
+- [SQLite](/actors/docs/sqlite): queries, transactions, and migrations in the Actor's database.
+- [Live Cursors and Presence](/guides/live-cursors): connection state and `onDisconnect` for showing who is in a room.
+- [Permissions](/actors/docs/permissions): check who connects and what they may call.

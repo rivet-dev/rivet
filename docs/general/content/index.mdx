@@ -1,81 +1,63 @@
 ---
 title: "Rivet"
-description: "Find the right starting point: quickstarts by Actor type, architecture, guides, deploying, and self-hosting."
-seoTitle: "Rivet Documentation: Actors, Workflows, agentOS, Dynamic Apps"
-seoDescription: "Run agents, workflows, sandboxes, and generated apps as durable Actors on one control plane. Pick an Actor type, then learn how to run and operate Rivet."
+description: "Run durable Actors, workflows, sandboxes, and generated apps on one control plane."
+seoTitle: "Rivet Documentation: Actors, Workflows, Deploy"
+seoDescription: "Run agents, workflows, sandboxes, and generated apps as durable Actors on one control plane. Start with the Actors quickstart or pick an Actor type."
 ---
 
-Rivet runs agents, workflows, sandboxes, and generated apps as **Rivet Actors**: long-lived processes with durable state. One control plane schedules them, routes requests to them, and persists their state. Your code runs in workers you operate, on your own infrastructure or on [Rivet Cloud](https://dashboard.rivet.dev).
-
-## Start Building
-
-Pick the Actor type closest to what you are building. Each has its own quickstart; everything on this tab applies to all of them.
+Rivet runs agents, workflows, sandboxes, and generated apps as **Actors**: long-lived processes with durable state, scheduled by one control plane and hosted in node processes you already run. Every Actor type on this site is built on the same primitive.
 
 <CardGroup>
-  <Card title="Actors" href="/actors/docs/quickstart/backend">
-    Durable state, actions, realtime events, queues, and scheduling.
+  <Card title="Actors" href="/actors/docs">
+    The primitive: durable state, queues, events, and scheduling.
   </Card>
-  {/* TEMPORARY: Agents is built but unlaunched (see HIDDEN.md in the website repo). Restore when it ships:
+  {/* TEMPORARY: Agents is built but unlaunched (see HIDDEN.md). Restore when it ships:
   <Card title="Agents" href="/agents/docs">
     A durable process per agent, with memory that survives restarts.
   </Card>
   */}
-  <Card title="Workflows" href="/workflows/docs/quickstart">
+  <Card title="Workflows" href="/workflows/docs">
     Multi-step operations that replay instead of starting over.
   </Card>
-  <Card title="agentOS" href="/agentos/docs/quickstart">
+  <Card title="Sandboxes" href="/agentos/docs">
     A filesystem, shell, and network for code you did not write.
   </Card>
-  <Card title="Dynamic Apps" href="/dynamic-apps/docs/quickstart">
+  <Card title="Dynamic Apps" href="/dynamic-apps/docs">
     A backend per user, deployed the moment it is generated.
   </Card>
-</CardGroup>
-
-## Learn How It Works
-
-<CardGroup>
-  <Card title="Architecture" href="/docs/architecture">
-    Namespaces, Actors, workers and pools, the gateway, and serverless vs. long-running workers.
-  </Card>
-  <Card title="Guides" href="/guides">
-    Worked examples: an AI agent, a chat room, a multiplayer game, a per-tenant database.
+  <Card title="Deploy" href="/docs/deploy">
+    Run the control plane and nodes on your own infrastructure, or on Rivet Cloud.
   </Card>
 </CardGroup>
 
-## Deploy
+## Why Actors
 
-<CardGroup>
-  <Card title="Rivet Cloud" href="/docs/deploy/cloud">
-    Managed control plane. Deploy workers with the CLI or connect your own.
-  </Card>
-  <Card title="Bring Your Own Cloud" href="/docs/deploy/byoc">
-    Rivet runs the control plane inside your cloud account.
-  </Card>
-  <Card title="Self-Host the Control Plane" href="/docs/deploy/self-host/control-plane">
-    Kubernetes, Docker Compose, or a VM, with your own database.
-  </Card>
-  <Card title="Deploy Workers" href="/docs/deploy/self-host/workers">
-    Per-platform guides: Vercel, Cloudflare, Kubernetes, Railway, Lambda, and more.
-  </Card>
-</CardGroup>
+**Share capacity across Actors.** Many Actors run inside each node process. Add nodes as your workload grows.
 
-## Connect and Operate
+**Wake on demand.** An idle Actor saves its state and unloads from memory. Its next request wakes it. See [Benchmarking](/docs/benchmarking) for measured create, wake, and SQLite latency with the cluster configuration and method used.
 
-| I want to | Read |
-| --- | --- |
-| Point my backend and clients at Rivet | [Connect](/docs/connect) |
-| Let a browser or mobile app reach an Actor without a secret | [Authentication](/docs/authentication), [JWTs](/docs/jwt) |
-| Separate production from staging, or one customer from another | [Namespaces](/docs/namespaces) |
-| Run workers and route Actors to the right hardware | [Workers & Pools](/docs/workers) |
-| Ship new code without downtime | [Versions & Upgrades](/docs/versions) |
-| Place Actors near users or data | [Regions & Multi-Region](/docs/regions) |
-| Trace a request across Actors | [OpenTelemetry](/docs/tracing) |
-| Understand why an Actor is pending or crashed | [Actor Statuses](/docs/statuses), [Troubleshooting](/docs/troubleshooting) |
-| Inspect Actors and workers over HTTP | [Management API](/docs/debugging) |
+**Keep state with each Actor.** Every Actor gets its own SQLite database and key-value storage. The control plane replicates writes and moves data to object storage.
 
-## Tools
+## What the control plane provides
 
-- [CLI](/docs/cli): deploy to Rivet Cloud and run local development for serverless platforms.
-- [Rivet MCP](/docs/mcp) and the [Rivet skill](/docs/skill): connect your AI coding assistant to Rivet.
+- **Fault tolerance by design.** A node going down reschedules its Actors elsewhere with their state intact. No replay harness or checkpointing of your own.
+- **Regions.** On Rivet Cloud, place Actors near the users and data they serve. See [Regions](/docs/regions).
+- **HTTP and WebSocket networking.** Address an Actor directly over HTTP or hold a live WebSocket to it. No queue or broker in between.
+- **End-to-end type safety.** Actor definitions generate their own client types, so a signature change breaks the build rather than production.
+- **React SDK.** First-party hooks that subscribe a component to an Actor's state and keep it live as the Actor updates.
+- **OpenTelemetry.** Traces, metrics, and structured logs emitted in OTel format, into the collector you already run.
+- **Cron and scheduling.** Wake an Actor on a schedule or at a timestamp it sets for itself, without a separate scheduler.
+- **Actor-to-Actor calls.** Actors address each other by key and call across the cluster as if the other one were local.
+- **Single Rust binary.** The control plane ships as one static binary. Run a few identical instances behind a load balancer with an object storage bucket: no database, no CRDs, no operator, no service mesh.
+- **Deployment choice.** Run your own control plane or use [Rivet Cloud](/docs/deploy/cloud).
+
+## Works with the tools you already use
+
+Typed SDKs for TypeScript, Node.js, Bun, and Rust on the backend, React hooks on the frontend, and an [Effect](/actors/docs/quickstart/effect) SDK. Start from the [quickstarts](/actors/docs/quickstart/backend), or connect your AI client with [Rivet MCP](/docs/mcp) and the [Rivet skill](/docs/skill).
+
+## Where to go next
+
+- [Guides](/guides): worked examples such as an AI agent, a chat room, a multiplayer game, and a per-tenant database.
 - [Integrations](/integrations/): frameworks and libraries that run on Rivet Actors.
+- [Deploy](/docs/deploy): run the control plane on Kubernetes, Docker or a VM, and your nodes anywhere a process can run.
 - [Registry](/registry): every Actor type, first-party and community.

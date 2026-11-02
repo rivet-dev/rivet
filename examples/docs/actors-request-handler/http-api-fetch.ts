@@ -4,7 +4,7 @@ const actorId = "your-actor-id";
 const token = "your-token";
 
 const response = await fetch(
-  `https://api.rivet.dev/gateway/${actorId}/request/increment`,
+  `https://rivet.example.com/gateway/${actorId}/request/increment`,
   {
     method: "POST",
     headers: {

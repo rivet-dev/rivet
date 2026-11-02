@@ -43,6 +43,7 @@ export const arenaMatchmaker = actor({
 		queueUpdate: event<{ counts: Record<string, number> }>(),
 	},
 	actions: {
+		// docs:start queue
 		queueForMatch: async (c, { mode }: { mode: Mode }) => {
 			const playerId = crypto.randomUUID();
 			await c.queue.send("queueForMatch", {
@@ -52,6 +53,7 @@ export const arenaMatchmaker = actor({
 			});
 			return { playerId };
 		},
+		// docs:end queue
 		getQueueSizes: async (c) => {
 			const rows = await c.db.execute<{ mode: string; cnt: number }>(
 				`SELECT mode, COUNT(*) as cnt FROM player_pool GROUP BY mode`,
@@ -85,6 +87,7 @@ export const arenaMatchmaker = actor({
 			};
 		},
 	},
+	// docs:start queue
 	onDisconnect: async (c, conn) => {
 		await c.queue.send("unqueueForMatch", { connId: conn.id });
 	},
@@ -111,6 +114,7 @@ export const arenaMatchmaker = actor({
 			}
 		}
 	},
+	// docs:end queue
 });
 
 async function broadcastQueueSizes(c: ActorContextOf<typeof arenaMatchmaker>) {
@@ -153,6 +157,7 @@ async function processQueueEntry(
 	}
 }
 
+// docs:start fill-match
 async function fillMatch(
 	c: ActorContextOf<typeof arenaMatchmaker>,
 	mode: Mode,
@@ -222,6 +227,7 @@ async function fillMatch(
 		} satisfies ArenaAssignment);
 	}
 }
+// docs:end fill-match
 
 async function migrateTables(dbHandle: RawAccess) {
 	await dbHandle.execute(`

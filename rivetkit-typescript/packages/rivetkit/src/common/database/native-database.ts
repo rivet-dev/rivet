@@ -108,6 +108,11 @@ export type StateAwareSqliteDatabase = SqliteDatabase & {
 	): Promise<SqliteTransactionDatabase>;
 };
 
+type NativeSqliteDatabase = StateAwareSqliteDatabase & {
+	/** Stop JS calls while leaving the runtime-owned backend open. */
+	detachForShutdown(): Promise<void>;
+};
+
 export interface JsNativeTransactionLike {
 	exec(sql: string): Promise<NativeExecResult>;
 	execute(
@@ -311,7 +316,7 @@ class NativeCloseGate {
 		};
 	}
 
-	async close(callback: () => Promise<void>): Promise<void> {
+	async close(callback?: () => Promise<void>): Promise<void> {
 		if (this.#closed) {
 			return;
 		}
@@ -319,15 +324,17 @@ class NativeCloseGate {
 		if (this.#active > 0) {
 			await new Promise<void>((resolve) => this.#waiters.push(resolve));
 		}
-		await callback();
+		await callback?.();
 	}
 }
 
 export function wrapJsNativeDatabase(
 	database: JsNativeDatabaseLike,
-): StateAwareSqliteDatabase {
+): NativeSqliteDatabase {
 	const gate = new NativeCloseGate();
-	let closePromise: Promise<void> | undefined;
+	// Detach and explicit close are mutually exclusive terminal operations.
+	// Whichever starts first defines whether the backend is physically closed.
+	let terminalPromise: Promise<void> | undefined;
 	let lastInsertRowId: number | null = null;
 
 	const executeNative = async (
@@ -485,8 +492,12 @@ export function wrapJsNativeDatabase(
 			return normalizeNativeMetrics(database.metrics?.());
 		},
 		async close(): Promise<void> {
-			closePromise ??= gate.close(() => database.close());
-			await closePromise;
+			terminalPromise ??= gate.close(() => database.close());
+			await terminalPromise;
+		},
+		async detachForShutdown(): Promise<void> {
+			terminalPromise ??= gate.close();
+			await terminalPromise;
 		},
 	};
 }

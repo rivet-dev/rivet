@@ -1,5 +1,0 @@
-{
-  "code": "query_invalid_cbor_input",
-  "group": "guard",
-  "message": "invalid query gateway input cbor"
-}

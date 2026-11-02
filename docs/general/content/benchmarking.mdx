@@ -1,0 +1,77 @@
+---
+title: "Benchmarking"
+description: "How we benchmark Rivet: the cluster setup, what each number measures, and how to reproduce it."
+skill: true
+---
+
+These measurements come from the October 25, 2026 Rivet Actors benchmark. Use the setup and method below to compare your own cluster. Results depend on the workload and hardware.
+
+## Setup
+
+| | |
+| --- | --- |
+| **Region** | Azure `eastus2`, three availability zones |
+| **Control plane** | 3 instances, one per zone, each `Standard_L8as_v5`: 8 vCPU, 64 GiB RAM, about 1.7 TB local NVMe (ext4, `noatime`) |
+| **Durability** | Every write is acknowledged by 2 of 3 instances, and at least one of those is in another zone |
+| **Node and client** | 1 node VM, `Standard_D16as_v7`: 16 vCPU, in the first zone. The load generator runs on the same VM. |
+| **Software** | Debian 13, Node.js 24, release builds |
+| **Object storage** | Azure Blob Storage in the same region, with locally redundant storage (LRS) |
+
+Requests use plain HTTP inside the region over reused connections, with one request in flight. Create and wake requests have 20 ms gaps. The warm-read condition has 1,000 warmups; inserts run without gaps. Each row reports all successful samples from its condition, with nearest-rank percentiles and no trimming. All conditions below completed without errors.
+
+## Results
+
+Milliseconds, p50 / p99.
+
+| Measurement | Samples | p50 | p99 | What it measures |
+| --- | ---: | ---: | ---: | --- |
+| **Create** | 1,500 | 6.92 | 8.11 | Client send to full first ping reply from a new keyed Rivet Actor. Includes scheduling, storage creation, and framework startup. |
+| **Wake** | 1,200 | 4.37 | 6.80 | Client send to full ping reply from a Rivet Actor asleep for at least 10 seconds. |
+| **Durable insert** | 1,200 | 0.69 | 0.80 | One 128-byte SQLite row inserted in autocommit mode. Timed around the query on the node, including the write to a majority of disks across zones. |
+| **Warm read** | 1,200 | 0.059 | 0.080 | A primary-key read of one 128-byte row from SQLite's memory cache, timed around the query. |
+| **Random read after sleep, 50 MB database** | 1,200 | 1.33 | 100.1 | First random point read after at least 13 seconds asleep. Timed around the query, with two network page fetches. |
+| **Random read after sleep, 1 GB database** | 1,024 | 41.8 | 168.4 | The same condition with three network page fetches. |
+
+The query interval includes the SQLite call, transport, and materializing the result on the node. It excludes the client's HTTP round trip. Full HTTP p50 is 0.59 ms for a warm read, 17.8 ms for the 50 MB read after sleep, and 61.6 ms for the 1 GB read after sleep, including wake time.
+
+The node reaches the control plane in its own zone for reads; durable writes require a cross-zone acknowledgement. Sleeping does not guarantee a cold object-storage read. This setup tests replicated writes across zones, but its LRS bucket does not test object-storage availability during a zone failure.
+
+## Reproducing it
+
+<Steps>
+
+<Step title="Deploy the control plane">
+
+Run three control plane instances in three zones of one region, each on local NVMe, with a bucket in the same region. Follow the [Kubernetes](/docs/deploy/self-host/control-plane/kubernetes/) or [VM](/docs/deploy/self-host/control-plane/vm/) guide.
+
+</Step>
+
+<Step title="Deploy one node">
+
+Run one node in the first zone, with a Rivet Actor that has a `ping` action and a SQLite table, and a load generator on the same machine. See [Deploy nodes](/docs/deploy/self-host/workers/).
+
+</Step>
+
+<Step title="Warm up">
+
+For the warm-read condition, seed one 128-byte row and run 1,000 reads before recording samples. Keep startup and warmup measurements separate from measured requests.
+
+</Step>
+
+<Step title="Measure each condition">
+
+Use the sample counts and pacing above, with a new key for each create. For wakes, explicitly sleep each Actor and wait at least 10 seconds. For random reads, seed 128-byte rows into databases of the stated sizes, sleep the Actors for at least 13 seconds, and verify each measured query fetches pages over the network. Record HTTP and query intervals separately.
+
+</Step>
+
+<Step title="Report every sample">
+
+Sort the successful samples and take nearest-rank percentiles. Report the sample count and every failure next to each result.
+
+</Step>
+
+</Steps>
+
+## Under load
+
+These latency results use one request at a time. Concurrent create workloads that overlapped mass teardown produced timeouts. Unpaced 10 MiB writes produced errors, and a seven-minute write run slowed substantially. Measure sustained throughput and error rates for your workload separately from these latency conditions.

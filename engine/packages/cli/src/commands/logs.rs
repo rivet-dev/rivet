@@ -5,29 +5,22 @@ use reqwest::Method;
 use reqwest_eventsource::{Event, EventSource};
 
 use crate::{
-	DEFAULT_CLOUD_API, DEFAULT_NAMESPACE,
-	cloud::{CloudClient, LogEntry, TokenInspectResponse, get_namespace},
-	credentials::resolve_token,
+	DEFAULT_NAMESPACE,
+	cloud::{CloudClient, LogEntry, get_namespace},
+	target::{CloudArgs, ProjectTarget},
 	util::{color_enabled, encode},
 };
 
 #[derive(Parser)]
 pub struct Opts {
-	/// Rivet Cloud API token.
-	#[arg(long)]
-	token: Option<String>,
+	#[command(flatten)]
+	cloud: CloudArgs,
 	/// Cloud namespace to read logs from.
 	#[arg(long, default_value = DEFAULT_NAMESPACE)]
 	namespace: String,
 	/// Cloud compute pool to read logs from.
 	#[arg(long, default_value = crate::POOL_NAME)]
 	pool: String,
-	/// Override project from /tokens/api/inspect.
-	#[arg(long)]
-	project: Option<String>,
-	/// Override organization from /tokens/api/inspect.
-	#[arg(long)]
-	org: Option<String>,
 	/// Follow the log output (live tail).
 	#[arg(long, short = 'f')]
 	follow: bool,
@@ -46,22 +39,11 @@ pub struct Opts {
 	/// Emit raw JSON lines instead of formatted output.
 	#[arg(long)]
 	json: bool,
-	/// Cloud API endpoint.
-	#[arg(long, default_value = DEFAULT_CLOUD_API)]
-	cloud_api: String,
 }
 
 impl Opts {
 	pub async fn execute(self) -> Result<()> {
-		let token = resolve_token(self.token.as_deref())?;
-		let cloud = CloudClient::new(&self.cloud_api, token)?;
-
-		let inspect: TokenInspectResponse = cloud
-			.request(Method::GET, "/tokens/api/inspect", None)
-			.await?
-			.context("token inspect returned no body")?;
-		let project = self.project.clone().unwrap_or(inspect.project);
-		let org = self.org.clone().unwrap_or(inspect.organization);
+		let (cloud, _, ProjectTarget { org, project }) = self.cloud.connect_project().await?;
 		let namespace = get_namespace(&cloud, &project, &org, &self.namespace).await?;
 
 		if self.follow {
@@ -133,7 +115,7 @@ impl Opts {
 			path.push_str(&format!("&contains={}", encode(contains)));
 		}
 
-		let builder = cloud.get_builder(&path)?;
+		let builder = cloud.get_builder(&path).await?;
 		let mut events = EventSource::new(builder).context("failed to open log stream")?;
 		let color = color_enabled();
 

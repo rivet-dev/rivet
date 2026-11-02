@@ -1,5 +1,0 @@
-{
-  "code": "not_leader",
-  "group": "kv",
-  "message": "Current node is not the leader."
-}

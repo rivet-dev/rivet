@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/rivetkit-napi",
-	"version": "2.3.20",
+	"version": "3.0.0",
 	"description": "Native N-API addon for RivetKit providing envoy client and SQLite access",
 	"license": "Apache-2.0",
 	"main": "index.js",
@@ -43,7 +43,9 @@
 		"build:embed": "node scripts/build.mjs"
 	},
 	"dependencies": {
-		"@napi-rs/cli": "^2.18.4",
 		"@rivetkit/engine-envoy-protocol": "workspace:*"
+	},
+	"devDependencies": {
+		"@napi-rs/cli": "^2.18.4"
 	}
 }

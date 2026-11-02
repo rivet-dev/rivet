@@ -11,12 +11,12 @@
 # Base image: docker/builder-base/windows-mingw.Dockerfile
 FROM ghcr.io/rivet-dev/rivet/builder-base-windows-mingw:0e33ceb98
 
+# aws-lc-sys needs NASM when cross-compiling the Windows engine.
+RUN apt-get update && apt-get install -y --no-install-recommends nasm && \
+    rm -rf /var/lib/apt/lists/*
+
 ARG BUILD_TARGET=engine
 ARG BUILD_MODE=release
-ARG BUILD_FRONTEND=false
-ARG VITE_APP_API_URL=__SAME__
-ARG VITE_FEATURE_FLAGS=
-ARG RUST_TOOLCHAIN=1.91.1
 
 # Windows-specific build flags:
 # - lld linker is ~5x faster than MinGW's default ld for big Rust binaries.
@@ -33,22 +33,17 @@ ENV RUSTC_WRAPPER=sccache \
 WORKDIR /build
 COPY . .
 
-RUN rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal && \
+# Install the channel pinned in rust-toolchain.toml, copied in above.
+RUN RUST_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)" && \
+    rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal && \
     rustup default "${RUST_TOOLCHAIN}" && \
     rustup target add x86_64-pc-windows-gnu
 
-RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
+RUN if [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \
         export SKIP_NAPI_BUILD=1 && \
         export SKIP_WASM_BUILD=1 && \
-        pnpm install --ignore-scripts && \
-        VITE_APP_API_URL="${VITE_APP_API_URL}" VITE_FEATURE_FLAGS="${VITE_FEATURE_FLAGS}" npx turbo build:engine -F @rivetkit/engine-frontend; \
-    elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
-        export NODE_OPTIONS="--max-old-space-size=8192" && \
-        export SKIP_NAPI_BUILD=1 && \
-        export SKIP_WASM_BUILD=1 && \
-        pnpm install --ignore-scripts && \
-        npx turbo build:inspector-ui -F @rivetkit/engine-frontend; \
+        pnpm install --frozen-lockfile --ignore-scripts; \
     fi
 
 RUN --mount=type=cache,id=cargo-registry-windows-x64,target=/usr/local/cargo/registry,sharing=locked \

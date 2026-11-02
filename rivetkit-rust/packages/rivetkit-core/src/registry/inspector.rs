@@ -642,8 +642,8 @@ pub(super) fn inspector_wire_connections(
 				}
 			};
 			inspector_protocol::ConnectionDetails {
-				id: conn.id().to_owned(),
-				details,
+				id: conn.id().to_owned().into(),
+				details: details.into(),
 			}
 		})
 		.collect()
@@ -661,13 +661,13 @@ pub(super) fn inspector_wire_tab_config(
 			InspectorTabEntry::Custom {
 				id, label, icon, ..
 			} => inspector_protocol::TabConfigEntry {
-				id: id.clone(),
-				label: Some(label.clone()),
-				icon: icon.clone(),
+				id: id.clone().into(),
+				label: Some(label.clone().into()),
+				icon: icon.clone().map(Into::into),
 				hidden: false,
 			},
 			InspectorTabEntry::HideBuiltin { id } => inspector_protocol::TabConfigEntry {
-				id: id.clone(),
+				id: id.clone().into(),
 				label: None,
 				icon: None,
 				hidden: true,

@@ -1,5 +1,0 @@
-{
-  "code": "unsupported",
-  "group": "actor_runtime_socket",
-  "message": "Actor Runtime Socket is only available on Unix native runtimes."
-}

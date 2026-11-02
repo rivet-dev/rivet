@@ -103,6 +103,7 @@ export const rankedMatch = actor({
 		player.connId = null;
 		broadcastSnapshot(c);
 	},
+	// docs:start tick
 	run: async (c) => {
 		const tick = interval(TICK_MS);
 		while (!c.aborted) {
@@ -118,7 +119,9 @@ export const rankedMatch = actor({
 			broadcastSnapshot(c);
 		}
 	},
+	// docs:end tick
 	actions: {
+		// docs:start validate
 		updatePosition: (c, input: { x: number; y: number }) => {
 			const found = findPlayerByConnId(c.state, c.conn.id);
 			if (!found) {
@@ -153,6 +156,7 @@ export const rankedMatch = actor({
 			player.y = Math.max(0, Math.min(WORLD_SIZE, newY));
 			player.lastPositionAt = now;
 		},
+		// docs:end validate
 		shoot: (c, input: { dirX: number; dirY: number }) => {
 			const found = findPlayerByConnId(c.state, c.conn.id);
 			if (!found) {
@@ -235,6 +239,7 @@ function checkWinCondition(c: ActorContextOf<typeof rankedMatch>) {
 	}
 }
 
+// docs:start elo
 async function reportMatchCompletedIfNeeded(
 	c: ActorContextOf<typeof rankedMatch>,
 	options?: { allowNoResult?: boolean },
@@ -292,6 +297,7 @@ function calculateElo(
 		Math.round(loserRating + K_FACTOR * (0 - expectedL)),
 	];
 }
+// docs:end elo
 
 function broadcastSnapshot(c: ActorContextOf<typeof rankedMatch>) {
 	c.broadcast("snapshot", buildSnapshot(c));

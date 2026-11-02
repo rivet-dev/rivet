@@ -1,0 +1,66 @@
+--- a/src/db_cache/foyer.rs
++++ b/src/db_cache/foyer.rs
+@@ -101,6 +101,8 @@
+ 
+ #[async_trait]
+ impl DbCache for FoyerCache {
++    fn estimated_memory_usage(&self) -> Option<u64> { Some(self.inner.usage() as u64) }
++
+     async fn get_block(&self, key: &CachedKey) -> Result<Option<CachedEntry>, crate::Error> {
+         Ok(self.inner.get(key).map(|entry| entry.value().clone()))
+     }
+--- a/src/db_cache/mod.rs
++++ b/src/db_cache/mod.rs
+@@ -184,6 +184,10 @@
+ /// ```
+ #[async_trait]
+ pub trait DbCache: Send + Sync {
++    /// Estimated resident cache weight, excluding allocator overhead. Shared-cache implementations
++    /// may report their full weight conservatively; None means this backend cannot measure it.
++    fn estimated_memory_usage(&self) -> Option<u64> { None }
++
+     async fn get_block(&self, key: &CachedKey) -> Result<Option<CachedEntry>, crate::Error>;
+     async fn get_index(&self, key: &CachedKey) -> Result<Option<CachedEntry>, crate::Error>;
+     async fn get_filter(&self, key: &CachedKey) -> Result<Option<CachedEntry>, crate::Error>;
+@@ -568,6 +572,12 @@
+ 
+ #[async_trait]
+ impl DbCache for SplitCache {
++    fn estimated_memory_usage(&self) -> Option<u64> {
++        let block = self.block_cache.as_ref().map_or(Some(0), |cache| cache.estimated_memory_usage())?;
++        let meta = self.meta_cache.as_ref().map_or(Some(0), |cache| cache.estimated_memory_usage())?;
++        Some(block.saturating_add(meta))
++    }
++
+     async fn get_block(&self, key: &CachedKey) -> Result<Option<CachedEntry>, crate::Error> {
+         if let Some(cache) = &self.block_cache {
+             cache.get_block(key).await
+@@ -839,6 +849,8 @@
+ 
+ #[async_trait]
+ impl DbCache for DbCacheWrapper {
++    fn estimated_memory_usage(&self) -> Option<u64> { self.cache.estimated_memory_usage() }
++
+     async fn get_block(&self, key: &CachedKey) -> Result<Option<CachedEntry>, crate::Error> {
+         let scoped_key = self.scoped_key(key);
+         let entry = match self.cache.get_block(&scoped_key).await {
+@@ -997,6 +1009,8 @@
+ 
+ #[async_trait]
+ impl DbCache for UnownedDbCache {
++    fn estimated_memory_usage(&self) -> Option<u64> { self.inner.estimated_memory_usage() }
++
+     async fn get_block(&self, key: &CachedKey) -> Result<Option<CachedEntry>, crate::Error> {
+         self.inner.get_block(key).await
+     }
+--- a/src/db_cache/moka.rs
++++ b/src/db_cache/moka.rs
+@@ -106,6 +106,8 @@
+ 
+ #[async_trait]
+ impl DbCache for MokaCache {
++    fn estimated_memory_usage(&self) -> Option<u64> { Some(self.inner.weighted_size()) }
++
+     async fn get_block(&self, key: &CachedKey) -> Result<Option<CachedEntry>, crate::Error> {
+         Ok(self.inner.get(key).await)
+     }

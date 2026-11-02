@@ -1,0 +1,26 @@
+[package]
+name = "rivet-singleton-coordinator"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+rivet-state-machine-util.workspace = true
+rivet-object-store-util.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+rivet-env.workspace = true
+rivet-state-machine.workspace = true
+rivet-state-machine-ephemeral.workspace = true
+rivet-topology.workspace = true
+serde.workspace = true
+parking_lot.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+object_store.workspace = true
+rivet-data.workspace = true
+rivet-keys.workspace = true
+

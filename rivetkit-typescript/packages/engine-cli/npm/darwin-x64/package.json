@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/engine-cli-darwin-x64",
-	"version": "2.3.20",
+	"version": "3.0.0",
 	"description": "Rivet Engine binary for macOS x64",
 	"license": "Apache-2.0",
 	"os": [
@@ -12,6 +12,9 @@
 	"files": [
 		"rivet-engine"
 	],
+	"bin": {
+		"rivet-engine": "rivet-engine"
+	},
 	"engines": {
 		"node": ">= 20.0.0"
 	}

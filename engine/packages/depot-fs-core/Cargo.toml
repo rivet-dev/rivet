@@ -1,0 +1,20 @@
+[package]
+name = "depot-fs-core"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+bytes.workspace = true
+depot-types.workspace = true
+foundationdb-tuple.workspace = true
+rivet-data.workspace = true
+rivet-keys.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+vbare.workspace = true
+

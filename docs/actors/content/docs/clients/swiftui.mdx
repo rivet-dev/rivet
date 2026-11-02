@@ -38,7 +38,7 @@ struct HelloWorldApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .rivetKit(endpoint: "https://my-namespace:pk_...@api.rivet.dev")
+                .rivetKit(endpoint: "https://my-namespace@rivet.example.com")
         }
     }
 }
@@ -289,7 +289,7 @@ struct MyApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .rivetKit(endpoint: "https://my-namespace:pk_...@api.rivet.dev")
+                .rivetKit(endpoint: "https://my-namespace@rivet.example.com")
         }
     }
 }
@@ -298,7 +298,7 @@ struct MyApp: App {
 @main
 struct MyApp: App {
     private let client = RivetKitClient(
-        config: try! ClientConfig(endpoint: "https://api.rivet.dev", token: "pk_...")
+        config: try! ClientConfig(endpoint: "https://rivet.example.com", token: "<scoped-token>")
     )
 
     var body: some Scene {
@@ -318,7 +318,7 @@ When using `.rivetKit(endpoint:)`, the client is created once and cached per end
 
 - `RIVET_NAMESPACE` - Namespace (can also be in endpoint URL)
 - `RIVET_TOKEN` - Authentication token (can also be in endpoint URL)
-- `RIVET_RUNNER` - Runner name (defaults to `"default"`)
+{/* TODO(code): document `RIVET_POOL` here once the Swift client reads it; today it reads only its older pool variable. */}
 
 The endpoint is always required. There is no default endpoint.
 
@@ -327,10 +327,10 @@ The endpoint is always required. There is no default endpoint.
 Endpoints support URL auth syntax:
 
 ```
-https://namespace:token@api.rivet.dev
+https://namespace:token@rivet.example.com
 ```
 
-You can also pass the endpoint without auth and provide `RIVET_NAMESPACE` and `RIVET_TOKEN` separately. For serverless deployments, set the endpoint to your app's `/api/rivet` URL. See [Connect](/docs/connect#url-auth-syntax) for details.
+You can also pass the endpoint without auth and provide `RIVET_NAMESPACE` and `RIVET_TOKEN` separately. See [Endpoints](/docs/endpoints#url-auth-syntax) for details.
 
 ## API Reference
 

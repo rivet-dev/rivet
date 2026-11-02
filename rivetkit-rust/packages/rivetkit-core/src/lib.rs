@@ -27,8 +27,6 @@ pub use telemetry::{
 	IncomingTraceContext, OutboundCallInvocation, WorkflowRunInvocation, WorkflowRunOutcome,
 	WorkflowStepOutcome, WorkflowStepSpan,
 };
-#[cfg(any(test, feature = "test-support"))]
-pub mod testing;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod tokio_runtime_metrics;
 pub(crate) mod time {
@@ -164,8 +162,8 @@ pub use error::ActorLifecycle;
 pub use inspector::{Inspector, InspectorSnapshot};
 pub use registry::{CoreRegistry, EngineSpawnMode, RuntimeMode, ServeConfig};
 pub use rivet_envoy_client::config::{
-	HTTP_BODY_MAX_CHUNK_SIZE, HTTP_BODY_STREAM_CHANNEL_CAPACITY, HttpRequestBodyStream,
-	ResponseChunk,
+	HTTP_BODY_MAX_CHUNK_SIZE, HTTP_BODY_STREAM_CHANNEL_CAPACITY, HttpRequestBodyQueue,
+	HttpRequestBodyStream, ResponseChunk,
 };
 pub use runtime::{RuntimeBoxFuture, RuntimeSpawner, boxed_runtime_future};
 pub use serverless::{CoreServerlessRuntime, ServerlessRequest, ServerlessResponse};

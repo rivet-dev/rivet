@@ -1,0 +1,142 @@
+---
+title: "Idle Game"
+description: "Build an idle game like Cookie Clicker, where each player's world Actor keeps producing resources while they are offline and a shared leaderboard ranks everyone."
+---
+
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
+
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/idle" />
+
+<Diagram
+  id="idle-game"
+  label="The player's browser calls initialize and build on the idleWorld Actor for that player. Each building registers a fixed-interval job with c.cron.every. The job calls collectProduction on the world when it is due, even if the player is offline and the Actor is asleep. The world sends updateScore to the idleLeaderboard Actor and broadcasts stateUpdate to the browser. The leaderboard broadcasts leaderboardUpdate to every connected player. The numbers show the order of the calls. There is one idleWorld Actor per player."
+  stackLabel="One per player"
+  nodes={[
+    { id: "client", x: 20, y: 60, w: 150, title: "Player", subtitle: "browser client" },
+    { id: "world", x: 340, y: 60, w: 210, product: "actors", stack: true, title: "`idleWorld`", subtitle: "resources and buildings" },
+    { id: "cron", x: 340, y: 220, w: 210, title: "`c.cron.every`", subtitle: "one job per building" },
+    { id: "lb", x: 700, y: 60, w: 190, product: "actors", title: "`idleLeaderboard`", subtitle: "scores in SQLite" },
+  ]}
+  edges={[
+    { from: "client", to: "world", fromOffset: -10, toOffset: -10, label: "`initialize`, `build`", step: 1 },
+    { from: "world", to: "cron", fromSide: "bottom", toSide: "top", fromOffset: -40, toOffset: -40, label: "schedule", labelAt: [395, 172], labelAnchor: "end", stepAt: [325, 168], step: 2 },
+    { from: "cron", to: "world", fromSide: "top", toSide: "bottom", fromOffset: 40, toOffset: 40, label: "`collectProduction`", labelAt: [497, 172], labelAnchor: "start", step: 3 },
+    { from: "world", to: "lb", label: "`updateScore`", step: 4 },
+    { from: "world", to: "client", kind: "reply", fromOffset: 12, toOffset: 12, label: "`stateUpdate`", labelAt: [255, 120], step: 5 },
+    { from: "lb", to: "client", kind: "reply", fromSide: "top", toSide: "top", via: [[795, 24], [95, 24]], label: "`leaderboardUpdate`", step: 6 },
+  ]}
+/>
+
+What we'll build:
+
+- An `idleWorld` Actor per player that holds their resources, buildings, and total production.
+- A fixed-interval job per building that pays out production, even while the player is offline.
+- Catch-up from wall-clock time, so a payout that runs late still pays for every interval that passed.
+- An `idleLeaderboard` Actor that ranks players by total production and pushes changes live.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add rivetkit
+```
+
+</Step>
+
+<Step title="Create the world">
+
+Each player gets an `idleWorld` Actor, keyed by their player id. Its state is the whole save game:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/idle/world.ts" title="world.ts" region="build" />
+
+- There is no matchmaker. The client calls `idleWorld.getOrCreate([playerId])`, so the first visit creates the world and every later visit reaches the same one.
+- `initialize` is safe to call on every visit. The `initialized` flag makes it a no-op after the first call, apart from sending the current state. The first call gives the player a free farm.
+- `build` looks the building up in `BUILDINGS` and checks the cost on the server, so a client cannot build something it cannot afford. Resources, production rates, and totals never come from the client.
+- Every change ends with `broadcastState`, which sends a `stateUpdate` with the full snapshot to every open tab.
+
+<Note>
+`build` throws a plain `Error`. Clients only get a generic internal error for those. To show "Not enough resources" in the UI, throw a [`UserError`](/actors/docs/errors) with a code instead.
+</Note>
+
+</Step>
+
+<Step title="Produce while offline">
+
+An idle game has no tick loop. Each building gets its own fixed-interval job that calls `collectProduction`:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/idle/world.ts" title="world.ts" highlight="collect,schedule" />
+
+- `c.cron.every` registers a job named `collect-production:<buildingId>` that runs at the building's `productionIntervalMs`. Schedules are stored with the Actor, so they keep firing after the player closes the tab. A [schedule](/actors/docs/schedule) wakes the Actor if it is asleep.
+- `collectProduction` does not assume it ran on time. It counts how many whole intervals passed since `lastCollectedAt` and pays for all of them, so a late run still pays the right amount.
+- It sets `lastCollectedAt` to now, which drops any partial interval. Advance it by `intervals * productionIntervalMs` instead if you want to keep the remainder.
+- `maxHistory: 0` turns off run history, so jobs that never end do not pile up records.
+
+<Note>
+The farm pays every 10 seconds, so the example wakes the world every 10 seconds per farm. For a real game, use coarse intervals such as 5 to 15 minutes and let the elapsed-time math pay for everything in between. You can also run the same catch-up in `initialize` so a returning player sees their earnings right away.
+</Note>
+
+</Step>
+
+<Step title="Add the leaderboard">
+
+One `idleLeaderboard` Actor, keyed `["main"]`, ranks every player. The world reports its total after each payout:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/idle/world.ts" title="world.ts" region="leaderboard" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/idle/leaderboard.ts" title="leaderboard.ts" />
+</CodeGroup>
+
+- `updateLeaderboard` sends an `updateScore` message to the leaderboard's queue and does not wait for it. A slow leaderboard never delays a payout.
+- The leaderboard's `run` loop handles one message at a time. Many worlds can report at the same moment, and each upsert into the `scores` table still runs in order.
+- The score is `totalProduced`, which only the world computes. The `scores_rank_idx` index keeps `ORDER BY total_produced DESC` fast as the table grows.
+- After each upsert, the leaderboard broadcasts the top 10 as `leaderboardUpdate` to everyone connected.
+
+</Step>
+
+<Step title="Register the Actors">
+
+Add both Actors to the registry and start it:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/index.ts" title="actors/index.ts" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/index.ts" title="index.ts" />
+</CodeGroup>
+
+The example registers every game type in one registry. An idle game only needs `idleWorld` and `idleLeaderboard`. Each Actor file imports `type { registry }` so that `c.client<typeof registry>()` is typed when the world calls the leaderboard.
+
+</Step>
+
+<Step title="Connect the player">
+
+The game screen connects to the player's world and to the leaderboard:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/idle/game.tsx" title="game.tsx" region="connect" />
+
+- The client listens for `stateUpdate` before it calls `initialize`, so it does not miss the first snapshot. It then calls `getState` once to be sure it has one.
+- It reads the first leaderboard through the world's `getLeaderboard` action, then connects to `idleLeaderboard` directly for `leaderboardUpdate` events.
+- The countdown to the next payout runs in the browser from `lastCollectedAt` and `productionIntervalMs`. The server never sends timer ticks.
+- The menu creates a new random player id each time you click **Start Playing**, so each session starts a new world. To bring a player back to the same world, store the id, for example in `localStorage`, or key the world by the user id from your sign-in.
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/multiplayer-game-patterns
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173`, pick **Idle**, and click **Start Playing**. You start with 10 resources and a farm that pays 5 every 10 seconds. Build a mine once you have 50. Your name shows up on the leaderboard right away and climbs with each payout. Open a second tab and start another player to see both on the leaderboard.
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+- [Schedule & Cron](/actors/docs/schedule): one-shot, cron, and fixed-interval jobs that survive sleep.
+- [Ranked Matchmaking](/guides/ranked-game): a per-player rating Actor and a leaderboard fed by matches.
+- [State](/actors/docs/state): how `c.state` is saved and restored.

@@ -50,6 +50,23 @@ impl std::fmt::Display for RemoteSqliteIndeterminateResultError {
 
 impl std::error::Error for RemoteSqliteIndeterminateResultError {}
 
+/// Error returned when a SQLite page request's deadline passed before its response arrived.
+/// `sent` says whether the request reached the WebSocket: a sent write may still have
+/// committed, so its outcome is unknown, while a read or an unsent write changed nothing.
+#[derive(Debug)]
+pub struct SqliteRequestTimeoutError {
+	pub operation: &'static str,
+	pub sent: bool,
+}
+
+impl std::fmt::Display for SqliteRequestTimeoutError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "sqlite {} request timed out", self.operation)
+	}
+}
+
+impl std::error::Error for SqliteRequestTimeoutError {}
+
 /// Error returned before a transaction-bound remote SQLite request is sent
 /// when its owning WebSocket session is no longer current.
 #[derive(Debug)]
@@ -135,11 +152,24 @@ pub struct BackoffOptions {
 	pub jitter: bool,
 }
 
+/// Longest unhinted reconnect step, in milliseconds. Each delay is drawn uniformly from zero to
+/// its step (1, 2, then 4 s), spreading a disconnected fleet's attempts instead of sending waves.
+/// `reconnect_delay` also caps each wait against the engine's advertised lost threshold.
+pub const MAX_RECONNECT_DELAY_MS: u64 = 4_000;
+
+/// Longest retry hint a close reason may impose, in milliseconds. A runner waits between one and
+/// two hints unless the engine's advertised lost threshold requires an earlier retry.
+pub const MAX_RETRY_HINT_MS: u64 = 5_000;
+
+/// Shortest retry hint honored, in milliseconds, so a zero hint cannot make a shed runner
+/// reconnect at once.
+pub const MIN_RETRY_HINT_MS: u64 = 100;
+
 impl Default for BackoffOptions {
 	fn default() -> Self {
 		Self {
 			initial_delay: 1000,
-			max_delay: 30000,
+			max_delay: MAX_RECONNECT_DELAY_MS,
 			multiplier: 2.0,
 			jitter: true,
 		}
@@ -150,9 +180,9 @@ pub fn calculate_backoff(attempt: u32, options: &BackoffOptions) -> Duration {
 	let delay = (options.initial_delay as f64 * options.multiplier.powi(attempt as i32))
 		.min(options.max_delay as f64);
 
+	// Full jitter: a uniform draw from zero to the step.
 	let delay = if options.jitter {
-		let jitter = rand::thread_rng().gen_range(0.0..0.25);
-		delay * (1.0 + jitter)
+		rand::thread_rng().gen_range(0.0..=delay)
 	} else {
 		delay
 	};
@@ -160,16 +190,45 @@ pub fn calculate_backoff(attempt: u32, options: &BackoffOptions) -> Duration {
 	Duration::from_millis(delay as u64)
 }
 
+/// The wait before reconnect attempt `attempt`. A close that carried a retry hint (`retry_after_ms`), as guard
+/// sends when it sheds a connect at admission, spreads retries between one and two hints.
+/// Otherwise the jittered backoff applies. Half the advertised lost threshold caps either wait
+/// to leave time for the handshake, even when that requires retrying before a server hint.
+pub fn reconnect_delay(
+	attempt: u32,
+	retry_after_ms: Option<u64>,
+	lost_threshold_ms: u64,
+) -> Duration {
+	let delay = match retry_after_ms.map(|hint| hint.clamp(MIN_RETRY_HINT_MS, MAX_RETRY_HINT_MS)) {
+		Some(hint) => {
+			let spread = rand::thread_rng().gen_range(0..=hint);
+			Duration::from_millis(hint + spread)
+		}
+		None => calculate_backoff(attempt, &BackoffOptions::default()),
+	};
+	delay.min(Duration::from_millis(
+		lost_threshold_ms.saturating_sub(1) / 2,
+	))
+}
+
 pub struct ParsedCloseReason {
 	pub group: String,
 	pub error: String,
 	pub ray_id: Option<String>,
+	/// The retry hint a shedding server attached, in milliseconds.
+	pub retry_after_ms: Option<u64>,
 }
 
+/// Parses a close reason of the form `<group>.<code>`, optionally followed by
+/// `;retry_after_ms=<ms>` and then `#<ray id>`.
 pub fn parse_ws_close_reason(reason: &str) -> Option<ParsedCloseReason> {
 	let (main_part, ray_id) = match reason.split_once('#') {
 		Some((main, ray)) => (main, Some(ray.to_string())),
 		None => (reason, None),
+	};
+	let (main_part, retry_after_ms) = match main_part.split_once(';') {
+		Some((main, params)) => (main, retry_after_param(params)),
+		None => (main_part, None),
 	};
 
 	let (group, error) = main_part.split_once('.')?;
@@ -183,6 +242,20 @@ pub fn parse_ws_close_reason(reason: &str) -> Option<ParsedCloseReason> {
 		group: group.to_string(),
 		error: error.to_string(),
 		ray_id,
+		retry_after_ms,
+	})
+}
+
+/// Reads `retry_after_ms` from a close reason's `;`-separated `key=value` parameters, ignoring
+/// any it does not know.
+fn retry_after_param(params: &str) -> Option<u64> {
+	params.split(';').find_map(|param| {
+		let (key, value) = param.split_once('=')?;
+		if key.trim() == "retry_after_ms" {
+			value.trim().parse().ok()
+		} else {
+			None
+		}
 	})
 }
 

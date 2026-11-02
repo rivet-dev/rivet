@@ -13,16 +13,19 @@ path = "src/main.rs"
 [dependencies]
 anstyle.workspace = true
 anyhow.workspace = true
-clap.workspace = true
+base64.workspace = true
+chrono.workspace = true
+clap = { workspace = true, features = ["env"] }
 dirs.workspace = true
 futures-util.workspace = true
-reqwest.workspace = true
+md5.workspace = true
+reqwest = { workspace = true, features = ["stream"] }
 reqwest-eventsource.workspace = true
 rivetkit-engine-process.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "signal", "process", "fs", "io-std", "net"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true

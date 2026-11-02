@@ -99,7 +99,3 @@ impl Drop for HttpResponseQueuePermit {
 		self.budget.messages.fetch_sub(1, Ordering::AcqRel);
 	}
 }
-
-#[cfg(test)]
-#[path = "../../tests/support/http_response_queue.rs"]
-mod tests;

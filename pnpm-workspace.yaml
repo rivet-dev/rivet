@@ -1,33 +1,20 @@
 catalog:
   drizzle-orm: "0.45.2"
-
-catalogs:
-  platform:
-    rivetkit: "2.3.16"
-    "@rivetkit/rivetkit-napi": "2.3.16"
+  drizzle-zod: "0.8.3"
 
 packages:
   - engine
-  - self-host/compose/template
   - engine/sdks/typescript/api-full
   - engine/sdks/typescript/envoy-protocol
-  - engine/sdks/typescript/test-envoy
-  - engine/sdks/typescript/test-envoy-native
-  - engine/sdks/typescript/test-runner
-  - engine/tests/*
   - examples/*
-  - frontend
-  - frontend/packages/components/
-  - frontend/packages/icons/
-  - frontend/packages/shared-data/
   - integrations/*
   - integrations/*/examples/*
   - rivetkit-typescript/packages/*
   - rivetkit-swift/examples/*/server
   - scripts/publish
-  - scripts/tests
-  - scripts/vercel-examples
   - shared/typescript/*
+  - '!examples/sandbox'
+  - '!examples/multiplayer-game'
 ignoredBuiltDependencies:
   - '@parcel/watcher'
   - '@sentry/cli'
@@ -37,7 +24,7 @@ ignoredBuiltDependencies:
 onlyBuiltDependencies:
   - '@biomejs/biome'
   - opencode-ai
-  - '@rivet-gg/icons'
+  - bcrypt
   - better-sqlite3
   - cbor-extract
   - esbuild

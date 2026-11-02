@@ -1,0 +1,607 @@
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1085,6 +1085,18 @@
+         .await
+     }
+ 
++    /// Atomically delete the object only if its ETag matches `etag`.
++    ///
++    /// A changed object returns [`Error::Precondition`]. Missing objects may return
++    /// success or [`Error::NotFound`]. Implementations must fail closed if unsupported;
++    /// checking an ETag with GET followed by an unconditional DELETE is not safe.
++    async fn delete_if_match(&self, _location: &Path, _etag: &str) -> Result<()> {
++        Err(Error::NotImplemented {
++            operation: "delete_if_match".into(),
++            implementer: self.to_string(),
++        })
++    }
++
+     /// Delete all the objects at the specified locations
+     ///
+     /// When supported, this method will use bulk operations that delete more
+@@ -1351,6 +1363,10 @@
+                 self.as_ref().get_ranges(location, ranges).await
+             }
+ 
++            async fn delete_if_match(&self, location: &Path, etag: &str) -> Result<()> {
++                self.as_ref().delete_if_match(location, etag).await
++            }
++
+             fn delete_stream(
+                 &self,
+                 locations: BoxStream<'static, Result<Path>>,
+--- a/src/aws/mod.rs
++++ b/src/aws/mod.rs
+@@ -333,6 +333,10 @@
+         self.client.get_opts(location, options).await
+     }
+ 
++    async fn delete_if_match(&self, location: &Path, etag: &str) -> Result<()> {
++        self.client.delete_if_match(location, etag).await
++    }
++
+     fn delete_stream(
+         &self,
+         locations: BoxStream<'static, Result<Path>>,
+--- a/src/aws/client.rs
++++ b/src/aws/client.rs
+@@ -647,6 +647,14 @@
+         Ok(())
+     }
+ 
++    pub(crate) async fn delete_if_match(&self, path: &Path, etag: &str) -> Result<()> {
++        self.request(Method::DELETE, path)
++            .header(&http::header::IF_MATCH, etag)
++            .send()
++            .await?;
++        Ok(())
++    }
++
+     /// Make an S3 Copy request <https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html>
+     pub(crate) fn copy_request<'a>(&'a self, from: &Path, to: &'a Path) -> Request<'a> {
+         let source = format!("{}/{}", self.config.bucket, encode_path(from));
+--- a/src/memory.rs
++++ b/src/memory.rs
+@@ -297,6 +297,21 @@
+             .collect()
+     }
+ 
++    async fn delete_if_match(&self, location: &Path, etag: &str) -> Result<()> {
++        let mut storage = self.storage.write();
++        let Some(entry) = storage.map.get(location) else {
++            return Ok(());
++        };
++        if format!("\"{}\"", entry.e_tag) != etag {
++            return Err(crate::Error::Precondition {
++                path: location.to_string(),
++                source: "ETag changed before conditional delete".into(),
++            });
++        }
++        storage.map.remove(location);
++        Ok(())
++    }
++
+     fn delete_stream(
+         &self,
+         locations: BoxStream<'static, Result<Path>>,
+--- a/src/prefix.rs
++++ b/src/prefix.rs
+@@ -136,6 +136,10 @@
+         self.inner.get_ranges(&full_path, ranges).await
+     }
+ 
++    async fn delete_if_match(&self, location: &Path, etag: &str) -> Result<()> {
++        self.inner.delete_if_match(&self.full_path(location), etag).await
++    }
++
+     fn delete_stream(
+         &self,
+         locations: BoxStream<'static, Result<Path>>,
+--- a/src/limit.rs
++++ b/src/limit.rs
+@@ -105,6 +105,11 @@
+         self.inner.get_ranges(location, ranges).await
+     }
+ 
++    async fn delete_if_match(&self, location: &Path, etag: &str) -> Result<()> {
++        let _permit = self.semaphore.acquire().await.unwrap();
++        self.inner.delete_if_match(location, etag).await
++    }
++
+     fn delete_stream(
+         &self,
+         locations: BoxStream<'static, Result<Path>>,
+--- a/src/chunked.rs
++++ b/src/chunked.rs
+@@ -139,6 +139,10 @@
+         self.inner.get_ranges(location, ranges).await
+     }
+ 
++    async fn delete_if_match(&self, location: &Path, etag: &str) -> Result<()> {
++        self.inner.delete_if_match(location, etag).await
++    }
++
+     fn delete_stream(
+         &self,
+         locations: BoxStream<'static, Result<Path>>,
+--- a/src/throttle.rs
++++ b/src/throttle.rs
+@@ -196,6 +196,11 @@
+         self.inner.get_ranges(location, ranges).await
+     }
+ 
++    async fn delete_if_match(&self, location: &Path, etag: &str) -> Result<()> {
++        sleep(self.config().wait_delete_per_call).await;
++        self.inner.delete_if_match(location, etag).await
++    }
++
+     fn delete_stream(
+         &self,
+         locations: BoxStream<'static, Result<Path>>,
+--- a/src/gcp/mod.rs
++++ b/src/gcp/mod.rs
+@@ -82,6 +82,7 @@
+ #[derive(Debug, Clone)]
+ pub struct GoogleCloudStorage {
+     client: Arc<GoogleCloudStorageClient>,
++    generation_etags: bool,
+ }
+ 
+ impl std::fmt::Display for GoogleCloudStorage {
+@@ -95,6 +96,28 @@
+ }
+ 
+ impl GoogleCloudStorage {
++    /// Expose generations through ETag fields for clients retaining a single CAS token.
++    /// Conditional reads are checked against the returned generation; list results without
++    /// generations have no ETag. Native version fields and multipart part IDs are unchanged.
++    pub fn with_generation_etags(mut self) -> Self {
++        self.generation_etags = true;
++        self
++    }
++
++    fn metadata(&self, mut meta: ObjectMeta) -> ObjectMeta {
++        if self.generation_etags {
++            meta.e_tag = meta.version.clone();
++        }
++        meta
++    }
++
++    fn put_result(&self, mut result: PutResult) -> PutResult {
++        if self.generation_etags {
++            result.e_tag = result.version.clone();
++        }
++        result
++    }
++
+     /// Returns the [`GcpCredentialProvider`] used by [`GoogleCloudStorage`]
+     pub fn credentials(&self) -> &GcpCredentialProvider {
+         &self.client.config().credentials
+@@ -108,6 +131,7 @@
+ 
+ #[derive(Debug)]
+ struct GCSMultipartUpload {
++    store: GoogleCloudStorage,
+     state: Arc<UploadState>,
+     part_idx: usize,
+ }
+@@ -149,10 +173,11 @@
+     async fn complete(&mut self) -> Result<PutResult> {
+         let parts = self.state.parts.finish(self.part_idx)?;
+ 
+-        self.state
++        let result = self.state
+             .client
+             .multipart_complete(&self.state.path, &self.state.multipart_id, parts)
+-            .await
++            .await?;
++        Ok(self.store.put_result(result))
+     }
+ 
+     async fn abort(&mut self) -> Result<()> {
+@@ -169,9 +194,15 @@
+         &self,
+         location: &Path,
+         payload: PutPayload,
+-        opts: PutOptions,
++        mut opts: PutOptions,
+     ) -> Result<PutResult> {
+-        self.client.put(location, payload, opts).await
++        if self.generation_etags {
++            if let crate::PutMode::Update(version) = &mut opts.mode {
++                version.version = version.version.take().or_else(|| version.e_tag.take());
++            }
++        }
++        let result = self.client.put(location, payload, opts).await?;
++        Ok(self.put_result(result))
+     }
+ 
+     async fn put_multipart_opts(
+@@ -183,6 +214,7 @@
+         let upload_id = self.client.multipart_initiate(location, opts).await?;
+ 
+         Ok(Box::new(GCSMultipartUpload {
++            store: self.clone(),
+             part_idx: 0,
+             state: Arc::new(UploadState {
+                 client: Arc::clone(&self.client),
+@@ -195,7 +227,28 @@
+     }
+ 
+     async fn get_opts(&self, location: &Path, options: GetOptions) -> Result<GetResult> {
+-        self.client.get_opts(location, options).await
++        if !self.generation_etags {
++            return self.client.get_opts(location, options).await;
++        }
++        // Check the metadata from this very response, not a separate HEAD (which races).
++        let mut request = options.clone();
++        request.if_match = None;
++        request.if_none_match = None;
++        request.if_modified_since = None;
++        request.if_unmodified_since = None;
++        let mut result = self.client.get_opts(location, request).await?;
++        result.meta = self.metadata(result.meta);
++        options.check_preconditions(&result.meta)?;
++        Ok(result)
++    }
++
++    async fn delete_if_match(&self, location: &Path, etag: &str) -> Result<()> {
++        if !self.generation_etags {
++            return Err(crate::Error::NotSupported {
++                source: "conditional delete requires generation ETags".into(),
++            });
++        }
++        self.client.delete_if_generation_match(location, etag).await
+     }
+ 
+     fn delete_stream(
+@@ -217,7 +270,8 @@
+     }
+ 
+     fn list(&self, prefix: Option<&Path>) -> BoxStream<'static, Result<ObjectMeta>> {
+-        self.client.list(prefix)
++        let store = self.clone();
++        self.client.list(prefix).map(move |meta| meta.map(|meta| store.metadata(meta))).boxed()
+     }
+ 
+     fn list_with_offset(
+@@ -225,11 +279,14 @@
+         prefix: Option<&Path>,
+         offset: &Path,
+     ) -> BoxStream<'static, Result<ObjectMeta>> {
+-        self.client.list_with_offset(prefix, offset)
++        let store = self.clone();
++        self.client.list_with_offset(prefix, offset).map(move |meta| meta.map(|meta| store.metadata(meta))).boxed()
+     }
+ 
+     async fn list_with_delimiter(&self, prefix: Option<&Path>) -> Result<ListResult> {
+-        self.client.list_with_delimiter(prefix).await
++        let mut result = self.client.list_with_delimiter(prefix).await?;
++        result.objects = result.objects.into_iter().map(|meta| self.metadata(meta)).collect();
++        Ok(result)
+     }
+ 
+     async fn copy_opts(&self, from: &Path, to: &Path, options: CopyOptions) -> Result<()> {
+@@ -326,7 +383,8 @@
+         id: &MultipartId,
+         parts: Vec<PartId>,
+     ) -> Result<PutResult> {
+-        self.client.multipart_complete(path, id, parts).await
++        let result = self.client.multipart_complete(path, id, parts).await?;
++        Ok(self.put_result(result))
+     }
+ 
+     async fn abort_multipart(&self, path: &Path, id: &MultipartId) -> Result<()> {
+@@ -404,7 +462,9 @@
+         prefix: Option<&str>,
+         opts: PaginatedListOptions,
+     ) -> Result<PaginatedListResult> {
+-        self.client.list_request(prefix, opts).await
++        let mut result = self.client.list_request(prefix, opts).await?;
++        result.result.objects = result.result.objects.into_iter().map(|meta| self.metadata(meta)).collect();
++        Ok(result)
+     }
+ }
+ 
+--- a/src/gcp/builder.rs
++++ b/src/gcp/builder.rs
+@@ -683,6 +683,7 @@
+ 
+         let http_client = http.connect(&config.client_options)?;
+         Ok(GoogleCloudStorage {
++            generation_etags: false,
+             client: Arc::new(GoogleCloudStorageClient::new(config, http_client)?),
+         })
+     }
+--- a/src/gcp/client.rs
++++ b/src/gcp/client.rs
+@@ -571,6 +571,19 @@
+         Ok(())
+     }
+ 
++    /// Delete only the given generation <https://cloud.google.com/storage/docs/xml-api/delete-object>
++    pub(crate) async fn delete_if_generation_match(
++        &self,
++        path: &Path,
++        generation: &str,
++    ) -> Result<()> {
++        self.request(Method::DELETE, path)
++            .header(&VERSION_MATCH, generation)
++            .send()
++            .await?;
++        Ok(())
++    }
++
+     /// Perform a copy request <https://cloud.google.com/storage/docs/xml-api/put-object-copy>
+     pub(crate) async fn copy_request(&self, from: &Path, to: &Path, mode: CopyMode) -> Result<()> {
+         let credential = self.get_credential().await?;
+
+--- a/src/local.rs
++++ b/src/local.rs
+@@ -176,6 +176,9 @@
+         _ => Ok(()),
+     }
+ }
++
++/// Opaque ownership retained through a local blocking filesystem operation.
++pub type LocalOperationGuard = Arc<dyn std::fmt::Debug + Send + Sync>;
+ 
+ /// Local filesystem storage providing an [`ObjectStore`] interface to files on
+ /// local disk. Can optionally be created with a directory prefix
+@@ -244,6 +247,7 @@
+     automatic_cleanup: bool,
+     // if true, fsync written files and their parent directories after writes
+     fsync: bool,
++    operation_guard: Option<LocalOperationGuard>,
+ }
+ 
+ #[derive(Debug)]
+@@ -272,6 +276,7 @@
+             }),
+             automatic_cleanup: false,
+             fsync: false,
++            operation_guard: None,
+         }
+     }
+ 
+@@ -291,7 +296,33 @@
+             }),
+             automatic_cleanup: false,
+             fsync: false,
++            operation_guard: None,
+         })
++    }
++
++    /// Retain external ownership until blocking mutations finish, even if their caller cancels.
++    pub fn with_operation_guard(mut self, guard: LocalOperationGuard) -> Self {
++        self.operation_guard = Some(guard);
++        self
++    }
++
++    /// Create a concrete upload whose publication can retain a separate operation guard.
++    pub fn create_multipart(
++        &self,
++        location: &Path,
++        opts: PutMultipartOptions,
++    ) -> Result<LocalUpload> {
++        if !opts.attributes.is_empty() {
++            return Err(crate::Error::NotImplemented {
++                operation: "`put_multipart_opts` with `opts.attributes` specified".into(),
++                implementer: self.to_string(),
++            });
++        }
++        let dest = self.path_to_filesystem(location)?;
++        let (file, src) = new_staged_upload(&dest, self.fsync)?;
++        let mut upload = LocalUpload::new(src, dest, file, self.fsync);
++        upload.lifetime_guard = self.operation_guard.clone();
++        Ok(upload)
+     }
+ 
+     /// Return an absolute filesystem path of the given file location
+@@ -412,7 +443,9 @@
+ 
+         let path = self.path_to_filesystem(location)?;
+         let fsync = self.fsync;
++        let operation_guard = self.operation_guard.clone();
+         maybe_spawn_blocking(move || {
++            let _operation_guard = operation_guard;
+             let (mut file, staging_path) = new_staged_upload(&path, fsync)?;
+             let mut e_tag = None;
+ 
+@@ -459,16 +492,7 @@
+         location: &Path,
+         opts: PutMultipartOptions,
+     ) -> Result<Box<dyn MultipartUpload>> {
+-        if !opts.attributes.is_empty() {
+-            return Err(crate::Error::NotImplemented {
+-                operation: "`put_multipart_opts` with `opts.attributes` specified".into(),
+-                implementer: self.to_string(),
+-            });
+-        }
+-
+-        let dest = self.path_to_filesystem(location)?;
+-        let (file, src) = new_staged_upload(&dest, self.fsync)?;
+-        Ok(Box::new(LocalUpload::new(src, dest, file, self.fsync)))
++        Ok(Box::new(self.create_multipart(location, opts)?))
+     }
+ 
+     async fn get_opts(&self, location: &Path, options: GetOptions) -> Result<GetResult> {
+@@ -545,10 +569,13 @@
+     ) -> BoxStream<'static, Result<Path>> {
+         let config = Arc::clone(&self.config);
+         let automatic_cleanup = self.automatic_cleanup;
++        let operation_guard = self.operation_guard.clone();
+         locations
+             .map(move |location| {
+                 let config = Arc::clone(&config);
++                let operation_guard = operation_guard.clone();
+                 maybe_spawn_blocking(move || {
++                    let _operation_guard = operation_guard;
+                     let location = location?;
+                     // `with_fsync` does not apply to standalone deletes; only create-mode rename
+                     // fsyncs its internal source removal as part of the durable copy-and-delete.
+@@ -633,6 +660,7 @@
+         let from = self.path_to_filesystem(from)?;
+         let to = self.path_to_filesystem(to)?;
+         let fsync = self.fsync;
++        let operation_guard = self.operation_guard.clone();
+ 
+         match mode {
+             CopyMode::Overwrite => {
+@@ -644,6 +672,7 @@
+                 //
+                 // This is necessary because hard_link returns an error if the destination already exists
+                 maybe_spawn_blocking(move || {
++                    let _operation_guard = operation_guard;
+                     loop {
+                         let staged = staged_upload_path(&to, &id.to_string());
+                         // Stage via a temporary hard link; the source is already durable so the
+@@ -677,6 +706,7 @@
+             }
+             CopyMode::Create => {
+                 maybe_spawn_blocking(move || {
++                    let _operation_guard = operation_guard;
+                     loop {
+                         // The source is an existing object that is already durable, so no file
+                         // sync is needed; `hard_link` bundles in the fsync of `to`'s parent dir.
+@@ -720,7 +750,9 @@
+                 let from = self.path_to_filesystem(from)?;
+                 let to = self.path_to_filesystem(to)?;
+                 let fsync = self.fsync;
++                let operation_guard = self.operation_guard.clone();
+                 maybe_spawn_blocking(move || {
++                    let _operation_guard = operation_guard;
+                     loop {
+                         // Unlike multipart `complete`, there is no freshly written file to
+                         // `sync_all` here: `from` is an existing, already-durable object and a
+@@ -759,7 +791,9 @@
+                 let automatic_cleanup = self.automatic_cleanup;
+                 let fsync = self.fsync;
+                 let from = from.clone();
++                let operation_guard = self.operation_guard.clone();
+                 maybe_spawn_blocking(move || {
++                    let _operation_guard = operation_guard;
+                     Self::delete_location(config, automatic_cleanup, &from, fsync)
+                 })
+                 .await?;
+@@ -1085,8 +1119,9 @@
+     staging_path.into()
+ }
+ 
++/// A local multipart upload with ownership retained by its blocking operations.
+ #[derive(Debug)]
+-struct LocalUpload {
++pub struct LocalUpload {
+     /// The upload state
+     state: Arc<UploadState>,
+     /// The location of the temporary file
+@@ -1095,6 +1130,7 @@
+     offset: u64,
+     /// Whether to fsync the file and its parent directory on completion
+     fsync: bool,
++    lifetime_guard: Option<LocalOperationGuard>,
+ }
+ 
+ #[derive(Debug)]
+@@ -1113,18 +1149,25 @@
+             src: Some(src),
+             offset: 0,
+             fsync,
+-        }
+-    }
+-}
+-
+-#[async_trait]
+-impl MultipartUpload for LocalUpload {
+-    fn put_part(&mut self, data: PutPayload) -> UploadPart {
++            lifetime_guard: None,
++        }
++    }
++}
++
++impl LocalUpload {
++    /// Write one part while retaining ownership through the actual file write.
++    pub fn put_part_with_guard(
++        &mut self,
++        data: PutPayload,
++        guard: Option<LocalOperationGuard>,
++    ) -> UploadPart {
+         let offset = self.offset;
+         self.offset += data.content_length() as u64;
+ 
+         let s = Arc::clone(&self.state);
++        let lifetime_guard = self.lifetime_guard.clone();
+         maybe_spawn_blocking(move || {
++            let _ownership = (lifetime_guard, guard);
+             let mut guard = s.file.lock();
+             let file = guard.as_mut().ok_or(Error::Aborted)?;
+             file.seek(SeekFrom::Start(offset)).map_err(|source| {
+@@ -1141,11 +1184,17 @@
+         .boxed()
+     }
+ 
+-    async fn complete(&mut self) -> Result<PutResult> {
++    /// Publish while retaining ownership through the final rename and fsync.
++    pub async fn complete_with_guard(
++        &mut self,
++        guard: Option<LocalOperationGuard>,
++    ) -> Result<PutResult> {
+         let src = self.src.take().ok_or(Error::Aborted)?;
+         let s = Arc::clone(&self.state);
+         let fsync = self.fsync;
++        let lifetime_guard = self.lifetime_guard.clone();
+         maybe_spawn_blocking(move || {
++            let _ownership = (lifetime_guard, guard);
+             // Ensure no inflight writes
+             let mut guard = s.file.lock();
+             let file = guard.take().ok_or(Error::Aborted)?;
+@@ -1169,9 +1218,15 @@
+         .await
+     }
+ 
+-    async fn abort(&mut self) -> Result<()> {
++    /// Remove the staging file while retaining ownership through the actual unlink.
++    pub async fn abort_with_guard(
++        &mut self,
++        guard: Option<LocalOperationGuard>,
++    ) -> Result<()> {
+         let src = self.src.take().ok_or(Error::Aborted)?;
++        let lifetime_guard = self.lifetime_guard.clone();
+         maybe_spawn_blocking(move || {
++            let _ownership = (lifetime_guard, guard);
+             std::fs::remove_file(&src)
+                 .map_err(|source| Error::UnableToDeleteFile { source, path: src })?;
+             Ok(())
+@@ -1180,12 +1235,31 @@
+     }
+ }
+ 
++#[async_trait]
++impl MultipartUpload for LocalUpload {
++    fn put_part(&mut self, data: PutPayload) -> UploadPart {
++        self.put_part_with_guard(data, None)
++    }
++    async fn complete(&mut self) -> Result<PutResult> {
++        self.complete_with_guard(None).await
++    }
++    async fn abort(&mut self) -> Result<()> {
++        self.abort_with_guard(None).await
++    }
++}
++
+ impl Drop for LocalUpload {
+     fn drop(&mut self) {
+         if let Some(src) = self.src.take() {
+             // Try to clean up intermediate file ignoring any error
+             match tokio::runtime::Handle::try_current() {
+-                Ok(r) => drop(r.spawn_blocking(move || std::fs::remove_file(src))),
++                Ok(r) => {
++                    let guard = self.lifetime_guard.clone();
++                    drop(r.spawn_blocking(move || {
++                        let _guard = guard;
++                        std::fs::remove_file(src)
++                    }));
++                }
+                 Err(_) => drop(std::fs::remove_file(src)),
+             };
+         }

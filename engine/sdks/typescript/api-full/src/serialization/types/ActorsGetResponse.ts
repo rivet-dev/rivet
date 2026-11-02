@@ -1,0 +1,14 @@
+import * as serializers from "../index";
+import * as Rivet from "../../api/index";
+import * as core from "../../core";
+import { Actor } from "./Actor";
+
+export const ActorsGetResponse: core.serialization.ObjectSchema<serializers.ActorsGetResponse.Raw, Rivet.ActorsGetResponse> = core.serialization.object({
+    actor: Actor,
+});
+
+export declare namespace ActorsGetResponse {
+    export interface Raw {
+        actor: Actor.Raw;
+    }
+}

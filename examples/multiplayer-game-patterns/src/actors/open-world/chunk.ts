@@ -36,6 +36,7 @@ interface State {
 // Each connection carries a stable player ID while explicit enter/leave actions control chunk membership.
 export const openWorldChunk = actor({
 	options: { name: "Open World - Chunk", icon: "map" },
+	// docs:start chunk
 	events: {
 		snapshot: event<Snapshot>(),
 	},
@@ -73,6 +74,8 @@ export const openWorldChunk = actor({
 		}
 		broadcastSnapshot(c);
 	},
+	// docs:end chunk
+	// docs:start tick
 	run: async (c) => {
 		if (Array.isArray(c.state.blocks)) {
 			const migratedBlocks: Record<string, string> = {};
@@ -101,7 +104,9 @@ export const openWorldChunk = actor({
 			broadcastSnapshot(c);
 		}
 	},
+	// docs:end tick
 	actions: {
+		// docs:start membership
 		enterChunk: (
 			c,
 			input: { name: string; spawnX?: number; spawnY?: number },
@@ -180,6 +185,8 @@ export const openWorldChunk = actor({
 			player.inputY = Math.max(-1, Math.min(1, input.inputY));
 			player.sprint = !!input.sprint;
 		},
+		// docs:end membership
+		// docs:start blocks
 		placeBlock: (c, input: { gridX: number; gridY: number }) => {
 			const player = getControlledPlayer(c, c.conn.id);
 			if (!player) return;
@@ -209,6 +216,7 @@ export const openWorldChunk = actor({
 				broadcastSnapshot(c);
 			}
 		},
+		// docs:end blocks
 		getSnapshot: (c) => buildSnapshot(c, null),
 	},
 });
@@ -253,6 +261,7 @@ function buildSnapshot(c: { state: State }, playerId: string | null): Snapshot {
 	};
 }
 
+// docs:start snapshot
 function broadcastSnapshot(c: {
 	state: State;
 	conns: Map<
@@ -275,6 +284,7 @@ function broadcastSnapshot(c: {
 		}
 	}
 }
+// docs:end snapshot
 
 function clampToChunk(raw: number | undefined): number | null {
 	if (raw === undefined) return null;

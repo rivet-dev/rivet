@@ -9,31 +9,29 @@ Rivet gives you automatic instrumentation of actor actions, HTTP handlers, actor
 This helps you investigate anything that looks slow, walk through complex actor-to-actor flows, and get end-to-end context into the life of your actor.
 
 <div style="overflow-x:auto">
-<svg viewBox="0 0 900 272" role="img" aria-label="RivetKit's automatic spans and your application spans, from @opentelemetry/api or @effect/opentelemetry, flow into one OTLP collector configured by OTEL_EXPORTER_OTLP_TRACES_ENDPOINT." style="display:block;width:100%;min-width:640px;max-width:900px;margin:2.5rem auto 0;font-family:system-ui,sans-serif" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <marker id="otel-arch-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#2E4034"/></marker>
-  </defs>
-  <rect x="20" y="20" width="300" height="250" rx="10" fill="#faf8f3" stroke="#2E4034" stroke-width="1.4" stroke-dasharray="7 6"/>
-  <text x="40" y="44" font-size="11" font-family="ui-monospace,monospace" font-weight="600" letter-spacing="0.14em" fill="#2E4034">YOUR ACTOR PROCESS</text>
-  <g font-size="15" fill="#1b1916" text-anchor="middle">
-    <rect x="40" y="60" width="260" height="72" rx="8" fill="#fddcbb" stroke="#f0923b" stroke-width="2"/>
-    <text x="170" y="92" font-weight="500">RivetKit</text>
-    <text x="170" y="114" font-size="12" fill="#56524a">automatic actor spans</text>
-
-    <rect x="40" y="168" width="260" height="72" rx="8" fill="#c7e4fb" stroke="#3d9df3" stroke-width="2"/>
-    <text x="170" y="200" font-weight="500">Your code</text>
-    <text x="170" y="222" font-size="12" fill="#56524a">your application spans</text>
-
-    <g fill="none" stroke="#2E4034" stroke-width="1.6" stroke-linecap="round">
-      <path d="M300 96 H330 Q360 96 360 126 V152"/>
-      <path d="M300 204 H330 Q360 204 360 174 V172"/>
-      <path d="M360 156 H630" marker-end="url(#otel-arch-head)"/>
-    </g>
-        <text x="494" y="142" font-size="12.5" font-family="ui-monospace,monospace" fill="#1b1916">OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</text>
-
-    <rect x="644" y="108" width="216" height="96" rx="8" fill="#ffffff" stroke="#1b1916" stroke-width="1.4"/>
-    <text x="752" y="150" font-weight="500">OTLP collector</text>
-    <text x="752" y="174" font-size="12" fill="#56524a">Jaeger, Tempo, Honeycomb</text>
+<svg viewBox="0 0 660 200" role="img" aria-label="RivetKit's automatic spans and your application spans, from @opentelemetry/api or @effect/opentelemetry, flow into one OTLP collector configured by OTEL_EXPORTER_OTLP_TRACES_ENDPOINT." style="width:100%;max-width:660px;height:auto;display:block;margin:2.5rem auto;font-family:system-ui,sans-serif">
+  <defs><marker id="otel-arch-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="rgb(var(--site-pine, 46 64 52))"/></marker></defs>
+  <rect x="20" y="20" width="250" height="168" rx="10" fill="rgb(var(--site-paper-mid, 250 248 243))" stroke="rgb(var(--site-pine, 46 64 52))" stroke-width="1.4" stroke-dasharray="7 6"/>
+  <text x="40" y="44" font-size="11" font-family="ui-monospace,monospace" font-weight="600" letter-spacing="0.14em" fill="rgb(var(--site-pine, 46 64 52))">YOUR NODE</text>
+  <g stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4">
+    <rect x="40" y="58" width="210" height="50" rx="7" fill="rgb(var(--site-pine, 46 64 52) / 0.12)"/>
+    <rect x="40" y="122" width="210" height="50" rx="7" fill="rgb(var(--site-surface, 255 255 255))"/>
+    <rect x="420" y="80" width="200" height="56" rx="7" fill="rgb(var(--site-surface, 255 255 255))"/>
+  </g>
+  <g text-anchor="middle" fill="rgb(var(--site-ink, 27 25 22))">
+    <text x="145" y="80" font-size="13" font-weight="600">RivetKit</text>
+    <text x="145" y="97" font-size="11" fill="rgb(var(--site-ink-soft, 86 82 74))">automatic actor spans</text>
+    <text x="145" y="144" font-size="13" font-weight="600">Your code</text>
+    <text x="145" y="161" font-size="11" fill="rgb(var(--site-ink-soft, 86 82 74))">application spans</text>
+    <text x="520" y="104" font-size="13" font-weight="600">OTLP collector</text>
+    <text x="520" y="121" font-size="11" fill="rgb(var(--site-ink-soft, 86 82 74))">Jaeger, Tempo, Honeycomb</text>
+    <text x="355" y="100" font-size="11" fill="rgb(var(--site-ink-soft, 86 82 74))">OTLP</text>
+    <text x="520" y="160" font-size="10" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink-soft, 86 82 74))">OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</text>
+  </g>
+  <g stroke="rgb(var(--site-pine, 46 64 52))" stroke-width="1.4" fill="none">
+    <path d="M251 83 H300 V108"/>
+    <path d="M251 147 H300 V108"/>
+    <path d="M300 108 H419" marker-end="url(#otel-arch-arrow)"/>
   </g>
 </svg>
 </div>
@@ -111,48 +109,41 @@ Use a fixed span name, such as `generate_response`. Avoid building the name from
 
 A ray ID follows a request across actor calls and scheduled work. Rivet supplies one automatically, or you can provide your own.
 
-Each blue box shows an actor running an action. RivetKit records each execution as a **span**, with its duration and outcome.
+Each action box shows an actor running an action. RivetKit records each execution as a **span**, with its duration and outcome.
 
 <div style="overflow-x:auto">
-<svg viewBox="0 0 1040 370" role="img" aria-label="A caller sends a request to Rivet, which assigns a ray ID or keeps the one the caller sent. Rivet forwards it to the slackThread actor, which calls summarizer through c.client() and schedules postDigest for later. Every span and log line along the way carries the same ray ID." style="display:block;width:100%;min-width:0;max-width:1040px;margin:2.5rem auto;font-family:system-ui,sans-serif" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <marker id="otel-ray-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#2E4034"/></marker>
-  </defs>
-  <rect x="420" y="50" width="600" height="272" rx="10" fill="#faf8f3" stroke="#2E4034" stroke-width="1.4" stroke-dasharray="7 6"/>
-  <text x="440" y="74" font-size="14" font-family="ui-monospace,monospace" font-weight="600" letter-spacing="0.14em" fill="#2E4034">ONE RAY ID</text>
-  <g font-size="15" fill="#1b1916" text-anchor="middle" transform="translate(40 20)">
-    <rect x="20" y="70" width="120" height="64" rx="8" fill="#ffffff" stroke="#1b1916" stroke-width="1.4"/>
-    <text x="80" y="107" font-weight="500">Caller</text>
-
-    <path d="M140 102 H388" fill="none" stroke="#2E4034" stroke-width="1.6" stroke-linecap="round" marker-end="url(#otel-ray-head)"/>
-    <text x="265" y="94" font-size="15" font-family="ui-monospace,monospace">x-rivet-ray-id</text>
-    <text x="265" y="124" font-size="14" fill="#56524a">optional</text>
-
-    <rect x="400" y="70" width="120" height="64" rx="8" fill="#fddcbb" stroke="#f0923b" stroke-width="2"/>
-    <text x="460" y="107" font-weight="500">Rivet</text>
-
-    <path d="M520 102 H564" fill="none" stroke="#2E4034" stroke-width="1.6" stroke-linecap="round" marker-end="url(#otel-ray-head)"/>
-
-    <rect x="572" y="70" width="190" height="64" rx="8" fill="#c7e4fb" stroke="#3d9df3" stroke-width="2"/>
-    <text x="667" y="98" font-size="16" font-weight="500">Action: appMention</text>
-    <text x="667" y="118" font-size="14" font-family="ui-monospace,monospace" fill="#56524a">Actor: slackThread</text>
-
-    <path d="M762 102 H784" fill="none" stroke="#2E4034" stroke-width="1.6" stroke-linecap="round" marker-end="url(#otel-ray-head)"/>
-    <text x="771" y="60" font-size="15" font-family="ui-monospace,monospace">c.client()</text>
-
-    <rect x="792" y="70" width="170" height="64" rx="8" fill="#c7e4fb" stroke="#3d9df3" stroke-width="2"/>
-    <text x="877" y="98" font-size="16" font-weight="500">Action: summarize</text>
-    <text x="877" y="118" font-size="14" font-family="ui-monospace,monospace" fill="#56524a">Actor: summarizer</text>
-
-    <path d="M667 134 V206" fill="none" stroke="#2E4034" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="7 6" marker-end="url(#otel-ray-head)"/>
-    <text x="684" y="176" text-anchor="start" font-size="15" font-family="ui-monospace,monospace">c.schedule.after(60s)</text>
-
-    <rect x="572" y="218" width="190" height="64" rx="8" fill="#c7e4fb" stroke="#3d9df3" stroke-width="2"/>
-    <text x="667" y="246" font-size="16" font-weight="500">Action: postDigest</text>
-    <text x="667" y="266" font-size="14" font-family="ui-monospace,monospace" fill="#56524a">Actor: slackThread</text>
-
-    <text x="20" y="262" font-size="17" fill="#56524a" text-anchor="start">Same ray ID across this work</text>
-    <text x="20" y="288" font-size="17" font-family="ui-monospace,monospace" text-anchor="start">ray ID: my-rivet-ray-id</text>
+<svg viewBox="0 0 760 290" role="img" aria-label="A caller sends a request to Rivet, which assigns a ray ID or keeps the one the caller sent. Rivet forwards it to the slackThread actor, which calls summarizer through c.client() and schedules postDigest for later. Every span and log line along the way carries the same ray ID." style="width:100%;max-width:760px;height:auto;display:block;margin:2.5rem auto;font-family:system-ui,sans-serif">
+  <defs><marker id="otel-ray-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="rgb(var(--site-pine, 46 64 52))"/></marker></defs>
+  <rect x="250" y="20" width="490" height="256" rx="10" fill="rgb(var(--site-paper-mid, 250 248 243))" stroke="rgb(var(--site-pine, 46 64 52))" stroke-width="1.4" stroke-dasharray="7 6"/>
+  <text x="270" y="44" font-size="11" font-family="ui-monospace,monospace" font-weight="600" letter-spacing="0.14em" fill="rgb(var(--site-pine, 46 64 52))">ONE RAY ID</text>
+  <g stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.4">
+    <rect x="20" y="60" width="110" height="48" rx="7" fill="rgb(var(--site-surface, 255 255 255))"/>
+    <rect x="270" y="60" width="100" height="48" rx="7" fill="rgb(var(--site-pine, 46 64 52) / 0.12)"/>
+    <rect x="400" y="52" width="150" height="64" rx="7" fill="rgb(var(--site-surface, 255 255 255))"/>
+    <rect x="590" y="52" width="130" height="64" rx="7" fill="rgb(var(--site-surface, 255 255 255))"/>
+    <rect x="400" y="190" width="150" height="64" rx="7" fill="rgb(var(--site-surface, 255 255 255))"/>
+  </g>
+  <g text-anchor="middle" fill="rgb(var(--site-ink, 27 25 22))">
+    <text x="75" y="89" font-size="13" font-weight="600">Caller</text>
+    <text x="320" y="89" font-size="13" font-weight="600">Rivet</text>
+    <text x="475" y="80" font-size="13" font-weight="600">appMention</text>
+    <text x="475" y="98" font-size="11" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink-soft, 86 82 74))">slackThread</text>
+    <text x="655" y="80" font-size="13" font-weight="600">summarize</text>
+    <text x="655" y="98" font-size="11" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink-soft, 86 82 74))">summarizer</text>
+    <text x="475" y="218" font-size="13" font-weight="600">postDigest</text>
+    <text x="475" y="236" font-size="11" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink-soft, 86 82 74))">slackThread</text>
+    <text x="190" y="76" font-size="11" font-family="ui-monospace,monospace">x-rivet-ray-id</text>
+    <text x="190" y="100" font-size="11" fill="rgb(var(--site-ink-soft, 86 82 74))">optional</text>
+    <text x="570" y="42" font-size="11" font-family="ui-monospace,monospace">c.client()</text>
+  </g>
+  <text x="488" y="158" font-size="11" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink, 27 25 22))">c.schedule.after(60s)</text>
+  <text x="20" y="214" font-size="11" fill="rgb(var(--site-ink-soft, 86 82 74))">Same ray ID across this work</text>
+  <text x="20" y="232" font-size="11" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink, 27 25 22))">ray ID: my-rivet-ray-id</text>
+  <g stroke="rgb(var(--site-pine, 46 64 52))" stroke-width="1.4" fill="none">
+    <path d="M131 84 H269" marker-end="url(#otel-ray-arrow)"/>
+    <path d="M371 84 H399" marker-end="url(#otel-ray-arrow)"/>
+    <path d="M551 84 H589" marker-end="url(#otel-ray-arrow)"/>
+    <path d="M475 117 V189" stroke-dasharray="6 5" marker-end="url(#otel-ray-arrow)"/>
   </g>
 </svg>
 </div>

@@ -1,0 +1,122 @@
+#import "shared/depot.fs.v1.bare"
+
+# Typed row addresses; names and opaque keys remain bytes at this boundary.
+type FsFormatKey void
+type FsInodeKey struct { ino: u64 }
+type FsDentryKey struct { ino: u64 name: data }
+type FsLinkKey struct { ino: u64 parent: u64 name: data }
+type FsXattrKey struct { ino: u64 name: data }
+type FsKvKey struct { ino: u64 key: data }
+type FsOrphanKey struct { ino: u64 }
+type FsChunkKey struct { ino: u64 index: u64 }
+type FsRowKey union { FsInodeKey | FsDentryKey | FsLinkKey | FsXattrKey | FsKvKey | FsOrphanKey | FsChunkKey | FsFormatKey }
+type FsRowValue union { FsInode | FsDentry | FsBytes | FsPresent | FsFormat }
+type FsReadRow struct { key: FsRowKey value: FsRowValue changeSeq: optional<u64> }
+
+type FsAllRows void
+type FsAllMetadataRows void
+type FsAllChunkRows void
+type FsMetadataRows struct { ino: u64 }
+type FsChunkRows struct { ino: u64 first: u64 }
+type FsDirectoryRows struct { ino: u64 }
+type FsXattrRows struct { ino: u64 }
+type FsKvRows struct { ino: u64 start: data end: optional<data> }
+type FsOrphanRows void
+type FsRowRange union { FsAllRows | FsAllMetadataRows | FsAllChunkRows | FsMetadataRows | FsChunkRows | FsDirectoryRows | FsXattrRows | FsKvRows | FsOrphanRows }
+
+# One local layer only; missing inherits, while an explicit hole stops traversal.
+type FsResolvedChunk struct { bytes: optional<data> }
+type FsInheritedChunk struct { maxBytes: u32 }
+type FsChunkLookup union { FsResolvedChunk | FsInheritedChunk }
+type FsBaseChunksRequest struct { link: FsBaseLink ino: u64 indices: list<u64> }
+type FsBaseChunksResponse struct { chunks: list<FsChunkLookup> }
+
+# Metadata cursors are canonical source formal keys at sequence zero, not strings.
+type FsForkMetadataRequest struct { link: FsBaseLink after: optional<data> limit: u32 }
+type FsForkMetadataPage struct { rows: list<FsReadRow> complete: bool }
+type FsBaseKeysRequest struct { link: FsBaseLink after: optional<FsChunkPosition> limit: u32 }
+type FsBaseKeysPage struct { positions: list<FsChunkPosition> complete: bool completeImage: bool }
+
+# Chunks `first` through `first + count - 1` of one file.
+type FsChunkRange struct { first: u64 count: u32 }
+# Rows a session open reads before it replies, so an opening that already knows what it will
+# touch pays one round trip instead of one per row: the root inode, the format row and the
+# first page of orphan rows, then `path` resolved from the root (each step's dentry and the
+# child's inode) and the final inode's `xattrs`. Resolution stops at the first missing step.
+# The reply holds only rows that exist; the opening treats every other row it asked for as
+# absent at the session's position. Metadata rows only: the open runs ordered against the
+# volume's store work, so it must stay small, and a file's chunks are read afterwards.
+#
+# `kv` names KV inodes whose rows the opening reads first: each is a path from the root,
+# resolved like `path` with each step's dentry and inode returned, and a key range `start`
+# (inclusive) to `end` (exclusive, or unbounded when absent). The open returns the first page
+# of that inode's rows in the range, at most 256 rows, so the opening's first reads of them
+# are served from the open reply. A prefetch that could return more rows than one read may
+# is refused as too large before anything is read.
+type FsKvPrefetch struct { path: list<data> start: data end: optional<data> }
+type FsOpenPrefetch struct { path: list<data> xattrs: list<data> kv: list<FsKvPrefetch> }
+type FsReadOpen struct { position: optional<VolumeLogPosition> prefetch: optional<FsOpenPrefetch> }
+# A read through a session an open registered, at the session's pinned position.
+type FsSessionRead struct { session: UuidV4 }
+# A read by the claim holder, which registers no session. The volume's only writer holds every
+# entry above `floor` in memory, so any applied position from `floor` through `through` gives it
+# the same rows for what it asks; the maintainer reads at the newest one it has applied, waiting
+# within the read's deadline until it has applied `floor`. The request's client epoch fences it.
+type FsClaimRead struct { floor: VolumeLogPosition through: u64 }
+type FsReadAt union { FsSessionRead | FsClaimRead }
+type FsReadGet struct { at: FsReadAt key: FsRowKey }
+type FsReadScan struct { at: FsReadAt range: FsRowRange after: optional<FsRowKey> limit: u32 }
+# Every range is read in one request and answered in one reply, bounded by the maintainer's
+# row and byte limits for one read.
+type FsReadChunks struct { at: FsReadAt ino: u64 ranges: list<FsChunkRange> }
+type FsReadClose struct { session: UuidV4 }
+# A one-shot point read of `keys` in the KV file `file` under the volume root. The maintainer
+# opens a snapshot, reads, and releases it within the request. With no position it reads the
+# latest applied snapshot; a position pins an exact incarnation's snapshot, so later point reads
+# of one command see the same snapshot as its first.
+type FsReadKeys struct { position: optional<VolumeLogPosition> file: data keys: list<data> }
+# An operator's one-shot read of the stored versions of one row of this volume's own layer, newest
+# first, at or below the snapshot's position: their raw bytes and how each decodes. Positioned and
+# released like `FsReadKeys`. A fork's inherited rows are not in this layer. Chunk rows answer
+# `TOO_LARGE`; `versions` is capped by the maintainer's row limit.
+type FsReadRaw struct { position: optional<VolumeLogPosition> key: FsRowKey versions: u32 }
+type FsReadOperation union { FsReadOpen | FsReadGet | FsReadScan | FsReadChunks | FsReadClose | FsBaseChunksRequest | FsForkMetadataRequest | FsBaseKeysRequest | FsReadKeys | FsReadRaw }
+type FsReadTarget union { VolumeKey | VolumeLogKey }
+type FsReadRequest struct {
+    # Logical volume targets are only valid for a session open or point read of the latest
+    # applied snapshot.
+    target: FsReadTarget
+    # Exclusive volume clients reject evidence of a later writer. Stateless readers omit this.
+    clientEpoch: optional<u64>
+    operation: FsReadOperation
+}
+# A session an open registered. Relative lifetime avoids comparing monotonic clocks belonging
+# to different workers.
+type FsOpenedSession struct { id: UuidV4 lifetimeMs: u64 }
+type FsReadOpened struct {
+    volumeLogKey: VolumeLogKey
+    # Absent for an open by a claim holder, which reads with `FsClaimRead` afterwards, so the
+    # open's snapshot is released when it replies.
+    session: optional<FsOpenedSession>
+    applied: VolumeLogPosition
+    asOf: u64
+    # The rows the open's prefetch found, present exactly when the maintainer served the
+    # prefetch, so an opening never takes rows for absent that were never looked for. Inode
+    # rows carry their change sequence.
+    rows: optional<list<FsReadRow>>
+}
+# `session` names the session a session read used; a claim read has none.
+type FsReadRows struct { session: optional<UuidV4> applied: VolumeLogPosition asOf: u64 rows: list<FsReadRow> }
+type FsReadClosed void
+# One value per requested key, absent where the key or the file is absent.
+type FsReadValues struct { volumeLogKey: VolumeLogKey applied: VolumeLogPosition asOf: u64 values: list<optional<data>> }
+# NOT_SERVING: the maintainer that received the read is not serving its tablet, for example
+# while it drains or after it fenced itself. It says nothing about the reader's client epoch;
+# the reader retries after a pause, once the tablet's next maintainer serves.
+type FsReadError enum { TOO_OLD LAGGING FENCED TOO_LARGE OVERLOADED NOT_FOUND CORRUPT UNAVAILABLE BASE_UNAVAILABLE NOT_SERVING }
+# One stored version of a row. `raw` is the stored value bytes; `decoded` is the value when it
+# decodes, absent for a delete marker or a value that fails, which `decodeError` then describes.
+type FsRawVersion struct { seq: u64 raw: data deleted: bool decoded: optional<FsRowValue> decodeError: optional<str> }
+type FsReadRawVersions struct { volumeLogKey: VolumeLogKey applied: VolumeLogPosition asOf: u64 versions: list<FsRawVersion> }
+type FsReadResponse union { FsReadOpened | FsReadRows | FsReadClosed | FsReadError | FsBaseChunksResponse | FsForkMetadataPage | FsBaseKeysPage | FsReadValues | FsReadRawVersions }
+

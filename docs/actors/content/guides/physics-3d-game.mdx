@@ -1,0 +1,150 @@
+---
+title: "3D Physics Game"
+description: "Build a 3D multiplayer physics game where a Rivet Actor runs Rapier on the server and players render the world with three.js."
+---
+
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
+
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/physics-3d" />
+
+<Diagram
+  id="physics-3d-game"
+  label="Each player's browser connects to the same physics3dWorld Actor and calls setInput and spawnBox. The Actor's run loop applies the inputs to a Rapier 3D world it keeps in memory and steps it four times per tick, ten ticks per second. After each tick it broadcasts a snapshot event with every body's position and rotation to all connected players, who render it with three.js. The numbers show the order of the calls. There is one physics3dWorld Actor per world key."
+  stackLabel="One per world"
+  nodes={[
+    { id: "a", x: 20, y: 40, w: 170, title: "Player", subtitle: "three.js client" },
+    { id: "b", x: 20, y: 175, w: 170, title: "Other player", subtitle: "same world key" },
+    { id: "world", x: 400, y: 40, w: 190, product: "actors", stack: true, title: "`physics3dWorld`", subtitle: "10 ticks per second" },
+    { id: "rapier", x: 740, y: 40, title: "Rapier 3D world", subtitle: "bodies in `c.vars`" },
+  ]}
+  edges={[
+    { from: "a", to: "world", fromOffset: -10, toOffset: -10, label: "`setInput`, `spawnBox`", step: 1 },
+    { from: "world", to: "rapier", fromOffset: -10, toOffset: -10, label: "`step` x4", step: 2 },
+    { from: "world", to: "a", kind: "reply", fromOffset: 14, toOffset: 14, label: "`snapshot`", labelAt: [295, 98], step: 3 },
+    { from: "b", to: "world", toSide: "bottom", fromOffset: -12, toOffset: -40, via: [[455, 193]], label: "`setInput`, `spawnBox`", labelAt: [300, 185], step: 1 },
+    { from: "world", to: "b", kind: "reply", fromSide: "bottom", toSide: "right", toOffset: 14, via: [[495, 219]], label: "`snapshot`", labelAt: [300, 237], step: 3 },
+  ]}
+/>
+
+What we'll build:
+
+- A `physics3dWorld` Actor that owns a Rapier 3D world with players, walls, and cubes.
+- A 10 tick per second loop that applies player input and steps the physics.
+- Cube positions saved in Actor state, so the world survives a restart.
+- A three.js client that sends input and smooths the snapshots it receives.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add rivetkit @dimforge/rapier3d-compat three
+```
+
+</Step>
+
+<Step title="Create the world Actor">
+
+The `physics3dWorld` Actor holds the Rapier world and gives each connection a body. The scene layout lives in a config file that the server and the client both import:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/physics-3d/world.ts" title="world.ts" region="world" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/physics-3d/config.ts" title="config.ts" />
+</CodeGroup>
+
+- The Rapier `World` is a WebAssembly object that can't be saved, so it lives in `c.vars` from `createVars`. `c.state` only holds `tick` and `boxes`, plain tuples of each cube's id, position, and half extents.
+- `onBeforeConnect` rejects a connection with no `name`, or one longer than 20 characters, by throwing a `UserError` that the client receives.
+- `onConnect` creates a ball body at a random point around the center and stores its handle under `conn.id`. `lockRotations()` keeps the ball from rolling, so input moves it instead of spinning it. If a client connects before `run` has built the world, `onConnect` returns without creating a body.
+- `onDisconnect` only marks the player. The tick loop removes the body after `DISCONNECT_GRACE_MS` (5 seconds), and snapshots stop including it right away. A reconnecting client gets a new `conn.id` and a new body.
+- The scene is a 20 by 20 floor with four walls. y points up, so gravity is -9.81.
+
+</Step>
+
+<Step title="Run the physics loop">
+
+The simulation runs in `run`, which starts when the Actor wakes:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/physics-3d/world.ts" title="world.ts" region="tick" />
+
+- `run` awaits `RAPIER.init()` to load the WebAssembly module, then adds the fixed bodies from `SCENE_STATIC` and the cubes from `c.state.boxes`. On the first start, the cubes come from `SCENE_DYNAMIC`.
+- Every `TICK_MS` (100 ms) the loop applies each player's input as an impulse on the x and z axes, then calls `world.step()` `SUB_STEPS` (4) times with a 25 ms timestep. Smaller steps keep stacked cubes stable without sending more snapshots.
+- Velocity on x and z is multiplied by 0.85 each tick so players stop quickly. Vertical velocity is left alone so gravity still works.
+- After stepping, it writes every cube position to `c.state.boxes` and calls `c.broadcast("snapshot", ...)` once for all players. Each body in the snapshot carries a quaternion for its rotation. Only position and size are saved, so rotation and velocity reset when the Actor restarts.
+
+<Note>
+Rapier is worth it when you need stacking, joints, many collisions, or shapes like capsules, convex hulls, and triangle meshes. For simple movement, a few lines of kinematic code are cheaper. `cannon-es` and `ammo.js` are 3D alternatives. Use one engine per simulation and run it only on the server. three.js only renders, so keep it out of the Actor. The `-compat` build embeds the WebAssembly, so it loads in Node without bundler setup.
+</Note>
+
+</Step>
+
+<Step title="Handle player input">
+
+Players send intent. The Actor applies it on the next tick:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/physics-3d/world.ts" title="world.ts" region="input" />
+
+- `setInput` stores the x and z direction clamped to -1 to 1 and sets a jump flag. Clients never send positions, so they can't teleport or move faster than the physics allows.
+- The tick loop only applies a jump when vertical speed is under 0.5, a cheap check that the player is on something.
+- `spawnBox` drops a cube of random size and rotation from 5 units above the clicked point. It goes into `dynamicHandles`, so the next tick saves it with the rest.
+
+<Warning>
+`spawnBox` has no rate limit, body cap, or bounds check, so any client can fill the world. Limit how often each connection can call it and cap the number of bodies before you ship.
+</Warning>
+
+</Step>
+
+<Step title="Register the Actors">
+
+Add the world Actor to the registry and start it:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/index.ts" title="actors/index.ts" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/index.ts" title="index.ts" />
+</CodeGroup>
+
+- `physics3dWorld` is the only Actor this game needs. There is no matchmaker, because every player joins the same world.
+- The example registers every game type in one registry. In your own project, `setup({ use: { physics3dWorld } })` is enough.
+- `registry.start()` serves the Actors. The example's browser client connects to `http://localhost:6420`.
+
+</Step>
+
+<Step title="Connect players">
+
+The browser connects to the world, sends input when it changes, and renders each snapshot with three.js:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/physics-3d/physics-3d-game.ts" title="physics-3d-game.ts" highlight="connect,input,smoothing" />
+
+- Every player calls `getOrCreate(["main"])`, so everyone shares one world. Use a key per room to run many worlds, each with its own loop.
+- The `snapshot` handler stores target positions and creates a mesh the first time it sees a body, such as a cube someone just spawned. It removes meshes for bodies and players that are gone.
+- Each frame, the `requestAnimationFrame` loop moves meshes 30% (`CORRECTION_ALPHA`) toward their targets and uses `slerp` to turn them toward the target quaternion. The camera follows your own ball.
+- `sendInput` calls `setInput` only when the direction changes or jump is pressed. A click casts a ray onto the ground plane and sends the hit point to `spawnBox`.
+- The snapshot doesn't say which player is you, so the client finds itself by name. Two players with the same name confuse it. Send each player its id with `conn.send` to fix this.
+
+<Note>
+This is server-authoritative netcode with interpolation. The client does no prediction, so your own movement shows up one round trip plus up to one tick later. To make it feel faster, step the same physics for your own body on the client and correct it toward each snapshot. Every player also receives every body. That's fine for one room. For a large world, filter what each connection receives or split it into chunks as in the [Open World Game](/guides/open-world-game) guide.
+</Note>
+
+</Step>
+
+<Step title="Try it">
+
+Run the example:
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/multiplayer-game-patterns
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173`, choose **Physics 3D**, and click **Join World**. Move with WASD, jump with Space, and click the floor to drop cubes. Open a second tab to push the other player around. The top right shows the measured tick rate and latency.
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+- [2D Physics Game](/guides/physics-2d-game): the same pattern with Rapier 2D and a canvas.
+- [Open World Game](/guides/open-world-game): split a large world across many Actors.
+- [State](/actors/docs/state): when to use `state` and when to use `vars`.

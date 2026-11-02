@@ -1,0 +1,508 @@
+--- a/src/compaction_filter_iterator.rs
++++ b/src/compaction_filter_iterator.rs
+@@ -8,12 +8,24 @@
+ pub(crate) struct CompactionFilterIterator<T: RowEntryIterator> {
+     inner: T,
+     filter: Box<dyn CompactionFilter>,
++    full_input: bool,
++    pending: Option<RowEntry>,
+ }
+ 
+ impl<T: RowEntryIterator> CompactionFilterIterator<T> {
+     /// Creates a new CompactionFilterIterator.
+     pub(crate) fn new(inner: T, filter: Box<dyn CompactionFilter>) -> Self {
+-        Self { inner, filter }
++        Self {
++            inner,
++            filter,
++            full_input: false,
++            pending: None,
++        }
++    }
++
++    pub(crate) fn with_full_input(mut self, full_input: bool) -> Self {
++        self.full_input = full_input;
++        self
+     }
+ 
+     async fn apply_filter(&mut self, entry: RowEntry) -> Result<Option<RowEntry>, SlateDBError> {
+@@ -49,7 +61,10 @@
+ 
+     async fn next(&mut self) -> Result<Option<RowEntry>, SlateDBError> {
+         loop {
+-            match self.inner.next().await? {
++            match match self.pending.take() {
++                Some(entry) => Some(entry),
++                None => self.inner.next().await?,
++            } {
+                 Some(entry) => {
+                     if let Some(filtered) = self.apply_filter(entry).await? {
+                         return Ok(Some(filtered));
+@@ -66,7 +81,23 @@
+     }
+ 
+     async fn seek(&mut self, next_key: &[u8]) -> Result<(), SlateDBError> {
+-        self.inner.seek(next_key).await
++        if !self.full_input {
++            return self.inner.seek(next_key).await;
++        }
++        // The filter must observe skipped rows even though they already have
++        // durable output. Reconstruct its group state before resuming writes.
++        loop {
++            let entry = match self.pending.take() {
++                Some(entry) => Some(entry),
++                None => self.inner.next().await?,
++            };
++            let Some(entry) = entry else { return Ok(()) };
++            if entry.key.as_ref() >= next_key {
++                self.pending = Some(entry);
++                return Ok(());
++            }
++            self.filter.filter(&entry).await?;
++        }
+     }
+ }
+ 
+@@ -390,8 +421,8 @@
+ 
+     #[tokio::test]
+     async fn test_on_compaction_end_called_on_completion() {
+-        use std::sync::atomic::{AtomicBool, Ordering};
+         use std::sync::Arc;
++        use std::sync::atomic::{AtomicBool, Ordering};
+ 
+         struct TrackingFilter {
+             end_called: Arc<AtomicBool>,
+@@ -536,3 +567,7 @@
+         ));
+     }
+ }
++
++#[cfg(test)]
++#[path = "../tests/unit/compaction_filter_resume.rs"]
++mod compaction_filter_resume;
+--- a/src/compaction_filter.rs
++++ b/src/compaction_filter.rs
+@@ -83,6 +83,10 @@
+     pub destination: u32,
+     /// Whether the destination sorted run is the last (oldest) run after compaction.
+     pub is_dest_last_run: bool,
++    /// Present only when this job covers every SST in its segment at the
++    /// manifest's durable sequence barrier. Later writes are outside this proof.
++    /// Logical version filters must not infer full history from bottom level alone.
++    pub complete_input_through: Option<u64>,
+     /// The clock tick representing the time the compaction occurs.
+     /// This is used to make decisions about retention of expiring records.
+     pub compaction_clock_tick: i64,
+@@ -196,13 +200,21 @@
+ /// It creates a new filter instance for each compaction job, providing isolated state per job.
+ #[async_trait]
+ pub trait CompactionFilterSupplier: Send + Sync {
++    /// Whether filter decisions depend on earlier, different keys in the input.
++    /// Such filters run in one subcompaction and replay the skipped input prefix
++    /// into a fresh filter when resuming, before emitting any new output. This
++    /// prevents a restart or subcompaction boundary from losing group history.
++    fn requires_full_input(&self) -> bool {
++        false
++    }
++
+     /// Creates a filter for a compaction job. Return Err to abort compaction.
+     ///
+     /// This method is called each time a compaction job starts or resumes. If a compaction
+     /// is interrupted (e.g., compactor restarts) and later resumed, this method will be
+-    /// called again with a new filter instance. The new filter will only observe entries
+-    /// that have not yet been written to output SSTs. Entries already compacted in
+-    /// previous attempts will be skipped.
++    /// called again with a new filter instance. By default, entries already written
++    /// to output SSTs are skipped. A filter requiring full input instead observes
++    /// the skipped prefix again to reconstruct its history before output resumes.
+     ///
+     /// This is async to allow I/O during initialization (loading config,
+     /// connecting to external services, etc.) before the filter processes entries.
+--- a/src/compaction_worker.rs
++++ b/src/compaction_worker.rs
+@@ -483,6 +483,10 @@
+             None => false,
+         };
+ 
++        let complete_input_through = db_state.tree_for_segment(compaction.spec().segment())
++            .filter(|tree| tree.l0.len() == l0_sst_views.len() && tree.compacted.len() == sorted_runs.len())
++            .map(|_| db_state.last_l0_seq);
++
+         Ok(StartCompactionJobArgs {
+             // Use compaction_id as job id so completion messages line up with
+             // the entry in `.compactions`. (One-job-per-Compaction in phase 2.)
+@@ -494,6 +498,7 @@
+             sorted_runs,
+             compaction_clock_tick: db_state.last_l0_clock_tick,
+             is_dest_last_run,
++            complete_input_through,
+             retention_min_seq: Some(db_state.recent_snapshot_min_seq),
+             // Resume from the persisted compaction context (RFC-0028): a
+             // reclaim preserves it, so feeding it back lets the executor continue
+@@ -1695,3 +1700,7 @@
+         assert_eq!(ctx.subcompactions()[0].output_ssts()[0].id, sst1.id);
+     }
+ }
++
++#[cfg(test)]
++#[path = "../tests/unit/compaction_input_coverage.rs"]
++mod compaction_input_coverage;
+--- a/src/compactor_executor.rs
++++ b/src/compactor_executor.rs
+@@ -1,8 +1,8 @@
+ use std::collections::BTreeMap;
+ use std::mem;
+ use std::ops::{Bound, RangeBounds};
+-use std::sync::atomic::{self, AtomicBool};
+ use std::sync::Arc;
++use std::sync::atomic::{self, AtomicBool};
+ 
+ use bytes::Bytes;
+ use futures::future::{join, join_all};
+@@ -24,23 +24,23 @@
+ use crate::manifest::store::{ManifestStore, StoredManifest};
+ use crate::merge_iterator::MergeIterator;
+ use crate::merge_operator::{
+-    instrument_merge_operator, MergeOperatorIterator, MergeOperatorRequiredIterator,
+-    MergeOperatorType,
++    MergeOperatorIterator, MergeOperatorRequiredIterator, MergeOperatorType,
++    instrument_merge_operator,
+ };
+ use crate::peeking_iterator::PeekingIterator;
+ use crate::retention_iterator::RetentionIterator;
+ use crate::seq_tracker::SequenceTracker;
+ use crate::sorted_run_iterator::SortedRunIterator;
+ use crate::sst_iter::{SstIterator, SstIteratorOptions};
+-use crate::subcompaction::{plan_subcompaction_ranges, Subcompaction};
++use crate::subcompaction::{Subcompaction, plan_subcompaction_ranges};
+ use crate::tablestore::TableStore;
+-use slatedb_common::clock::SystemClock;
+ use slatedb_common::DbRand;
++use slatedb_common::clock::SystemClock;
+ 
+ use crate::compactor::stats::{CompactionStats, WorkerStats};
+ use crate::utils::{
+-    build_concurrent, compute_max_parallel, estimate_bytes_before_key, last_written_key_and_seq,
+-    spawn_bg_task, IdGenerator,
++    IdGenerator, build_concurrent, compute_max_parallel, estimate_bytes_before_key,
++    last_written_key_and_seq, spawn_bg_task,
+ };
+ use log::{debug, error};
+ use tracing::instrument;
+@@ -74,6 +74,7 @@
+     pub(crate) compaction_clock_tick: i64,
+     /// Whether the destination sorted run is the last (newest) run after compaction.
+     pub(crate) is_dest_last_run: bool,
++    pub(crate) complete_input_through: Option<u64>,
+     /// Optional minimum sequence to retain; lower sequences may be dropped by retention. This
+     /// value is used only when planning the compaction. Once the compaction has started, if it is
+     /// then resumed, then the executor uses retention_min_seq from ctx
+@@ -112,6 +113,7 @@
+     sorted_runs: Vec<SortedRun>,
+     compaction_clock_tick: i64,
+     is_dest_last_run: bool,
++    complete_input_through: Option<u64>,
+     retention_min_seq: Option<u64>,
+     output_ssts: Vec<SsTableHandle>,
+ }
+@@ -425,11 +427,13 @@
+             let context = CompactionJobContext {
+                 destination: job_args.destination,
+                 is_dest_last_run: job_args.is_dest_last_run,
++                complete_input_through: job_args.complete_input_through,
+                 compaction_clock_tick: job_args.compaction_clock_tick,
+                 retention_min_seq,
+             };
+             let filter = supplier.create_compaction_filter(&context).await?;
+-            let filter_iter = CompactionFilterIterator::new(retention_iter, filter);
++            let filter_iter = CompactionFilterIterator::new(retention_iter, filter)
++                .with_full_input(supplier.requires_full_input());
+             let boxed: Box<dyn TrackedRowEntryIterator> = Box::new(filter_iter);
+             let resuming_iter = ResumingIterator::new(boxed, resume_cursor).await?;
+             return Ok(resuming_iter);
+@@ -451,8 +455,7 @@
+                 id,
+                 bytes_processed,
+                 ctx,
+-            })
+-        {
++            }) {
+             debug!(
+                 "failed to send compaction progress (likely DB shutdown) [error={:?}]",
+                 e
+@@ -495,6 +498,15 @@
+                 args.retention_min_seq,
+             ),
+         };
++        #[cfg(feature = "compaction_filters")]
++        if self
++            .compaction_filter_supplier
++            .as_ref()
++            .is_some_and(|s| s.requires_full_input())
++            && ctx.subcompactions().len() != 1
++        {
++            return Err(SlateDBError::InvalidCompaction);
++        }
+         assert!(!ctx.subcompactions().is_empty());
+         let subcompaction_args = ctx
+             .subcompactions()
+@@ -509,6 +521,7 @@
+                 sorted_runs: args.sorted_runs.clone(),
+                 compaction_clock_tick: args.compaction_clock_tick,
+                 is_dest_last_run: args.is_dest_last_run,
++                complete_input_through: args.complete_input_through,
+                 retention_min_seq: ctx.retention_min_seq(),
+                 output_ssts: s.output_ssts().clone(),
+             })
+@@ -577,12 +590,23 @@
+         &self,
+         args: &StartCompactionJobArgs,
+     ) -> Result<Vec<Subcompaction>, SlateDBError> {
++        let max_subcompactions = self.options.max_subcompactions;
++        #[cfg(feature = "compaction_filters")]
++        let max_subcompactions = if self
++            .compaction_filter_supplier
++            .as_ref()
++            .is_some_and(|s| s.requires_full_input())
++        {
++            1
++        } else {
++            max_subcompactions
++        };
+         let ranges = plan_subcompaction_ranges(
+             &self.table_store,
+             &args.l0_sst_views,
+             &args.sorted_runs,
+             &args.segment,
+-            self.options.max_subcompactions,
++            max_subcompactions,
+             self.options.max_fetch_tasks,
+         )
+         .await?;
+@@ -1018,6 +1042,7 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++    use crate::Db;
+     use crate::block_cache_policy::BlockCachePolicy;
+     use crate::bytes_range::BytesRange;
+     use crate::format::sst::SsTableFormat;
+@@ -1026,13 +1051,12 @@
+     use crate::sst_iter::SstView;
+     use crate::tablestore::TableStoreKind;
+     use crate::test_utils::StringConcatMergeOperator;
+-    use crate::test_utils::{build_row_entries, build_sorted_runs, write_ssts, GatedObjectStore};
++    use crate::test_utils::{GatedObjectStore, build_row_entries, build_sorted_runs, write_ssts};
+     use crate::types::{RowEntry, ValueDeletable};
+-    use crate::Db;
+     use bytes::Bytes;
++    use object_store::ObjectStore;
+     use object_store::memory::InMemory;
+     use object_store::path::Path;
+-    use object_store::ObjectStore;
+     use proptest::prelude::Just;
+     use proptest::strategy::Strategy;
+     use proptest::test_runner::Config;
+@@ -1566,6 +1590,7 @@
+             sorted_runs,
+             compaction_clock_tick: 0,
+             is_dest_last_run: false,
++                complete_input_through: None,
+             retention_min_seq,
+             output_ssts,
+         };
+@@ -1749,6 +1774,7 @@
+                         sorted_runs: sorted_runs.clone(),
+                         compaction_clock_tick: 0,
+                         is_dest_last_run: false,
++                complete_input_through: None,
+                         retention_min_seq,
+                         ctx: Some(CompactionContext::new(
+                             vec![Subcompaction::new(BytesRange::unbounded())],
+@@ -1801,6 +1827,7 @@
+                             sorted_runs: sorted_runs.clone(),
+                             compaction_clock_tick: 0,
+                             is_dest_last_run: false,
++                complete_input_through: None,
+                             retention_min_seq,
+                             ctx: Some(CompactionContext::new(
+                                 vec![Subcompaction::new(BytesRange::unbounded())
+@@ -1911,6 +1938,7 @@
+             sorted_runs,
+             compaction_clock_tick: 0,
+             is_dest_last_run: false,
++                complete_input_through: None,
+             retention_min_seq: Some(0),
+             ctx: Some(CompactionContext::new(subcompactions, Some(0))),
+         }
+@@ -2403,6 +2431,7 @@
+             sorted_runs: vec![],
+             compaction_clock_tick: 0,
+             is_dest_last_run: false,
++                complete_input_through: None,
+             retention_min_seq: Some(0),
+             ctx: None,
+         };
+@@ -2460,6 +2489,7 @@
+             sorted_runs,
+             compaction_clock_tick: 0,
+             is_dest_last_run: false,
++                complete_input_through: None,
+             retention_min_seq: Some(0),
+             ctx: None,
+         };
+@@ -2555,6 +2585,7 @@
+             sorted_runs: vec![],
+             compaction_clock_tick: 0,
+             is_dest_last_run: false,
++                complete_input_through: None,
+             retention_min_seq: Some(0),
+             ctx: Some(CompactionContext::new(
+                 vec![Subcompaction::new(BytesRange::unbounded())],
+@@ -2587,6 +2618,7 @@
+             sorted_runs: vec![],
+             compaction_clock_tick: 0,
+             is_dest_last_run: false,
++                complete_input_through: None,
+             retention_min_seq: Some(0),
+             ctx: Some(CompactionContext::new(
+                 vec![Subcompaction::new(BytesRange::unbounded())],
+@@ -2695,6 +2727,7 @@
+             sorted_runs: vec![],
+             compaction_clock_tick: 0,
+             is_dest_last_run: false,
++                complete_input_through: None,
+             retention_min_seq: Some(0),
+             ctx: Some(CompactionContext::new(
+                 vec![Subcompaction::new(BytesRange::unbounded())],
+@@ -2883,6 +2916,7 @@
+                 sorted_runs: vec![],
+                 compaction_clock_tick: 0,
+                 is_dest_last_run,
++                complete_input_through: None,
+                 retention_min_seq,
+                 ctx: Some(CompactionContext::new(
+                     vec![Subcompaction::new(BytesRange::unbounded())],
+--- a/src/compactor.rs
++++ b/src/compactor.rs
+@@ -4954,6 +4954,7 @@
+                     sorted_runs,
+                     compaction_clock_tick: db_state.last_l0_clock_tick,
+                     is_dest_last_run,
++                    complete_input_through: None,
+                     retention_min_seq: None,
+                     ctx: compaction.ctx().cloned(),
+                 };
+--- a/tests/unit/compaction_filter_resume.rs
++++ b/tests/unit/compaction_filter_resume.rs
+@@ -0,0 +1,62 @@
++use super::*;
++use crate::{CompactionFilterError, ValueDeletable};
++use bytes::Bytes;
++use std::collections::VecDeque;
++
++struct Input(VecDeque<RowEntry>);
++#[async_trait]
++impl RowEntryIterator for Input {
++    async fn init(&mut self) -> Result<(), SlateDBError> {
++        Ok(())
++    }
++    async fn next(&mut self) -> Result<Option<RowEntry>, SlateDBError> {
++        Ok(self.0.pop_front())
++    }
++    async fn seek(&mut self, key: &[u8]) -> Result<(), SlateDBError> {
++        while self.0.front().is_some_and(|row| row.key.as_ref() < key) {
++            self.0.pop_front();
++        }
++        Ok(())
++    }
++}
++struct KeepFirst {
++    previous: Option<u8>,
++}
++#[async_trait]
++impl CompactionFilter for KeepFirst {
++    async fn filter(
++        &mut self,
++        row: &RowEntry,
++    ) -> Result<CompactionFilterDecision, CompactionFilterError> {
++        let same = self.previous == Some(row.key[0]);
++        self.previous = Some(row.key[0]);
++        Ok(if same {
++            CompactionFilterDecision::Drop
++        } else {
++            CompactionFilterDecision::Keep
++        })
++    }
++    async fn on_compaction_end(&mut self) -> Result<(), CompactionFilterError> {
++        Ok(())
++    }
++}
++#[tokio::test]
++async fn compaction_filter_resume_reconstructs_history_before_the_cursor() {
++    let rows = [b"a0", b"a1", b"a2", b"b0"]
++        .into_iter()
++        .map(|key| RowEntry {
++            key: Bytes::copy_from_slice(key),
++            value: ValueDeletable::Value(Bytes::new()),
++            seq: 1,
++            create_ts: None,
++            expire_ts: None,
++        })
++        .collect();
++    let mut iterator =
++        CompactionFilterIterator::new(Input(rows), Box::new(KeepFirst { previous: None }))
++            .with_full_input(true);
++    iterator.init().await.unwrap();
++    iterator.seek(b"a1").await.unwrap();
++    assert_eq!(iterator.next().await.unwrap().unwrap().key.as_ref(), b"b0");
++    assert!(iterator.next().await.unwrap().is_none());
++}
+--- a/tests/unit/compaction_input_coverage.rs
++++ b/tests/unit/compaction_input_coverage.rs
+@@ -0,0 +1,44 @@
++use super::*;
++use crate::compactor_state::{CompactionSpec, SourceId};
++use crate::db_state::{SsTableHandle, SsTableId, SsTableInfo, SsTableView};
++use crate::format::sst::SST_FORMAT_VERSION_LATEST;
++
++fn sst(n: u64) -> SsTableView {
++    SsTableView::identity(SsTableHandle::new(
++        SsTableId::from(Ulid::from_parts(n, 0)),
++        SST_FORMAT_VERSION_LATEST,
++        SsTableInfo::default(),
++    ))
++}
++#[test]
++fn compaction_input_coverage_requires_every_l0_and_sorted_run() {
++    let mut manifest = ManifestCore::new();
++    manifest.last_l0_seq = 200;
++    let l0 = sst(10);
++    let sorted = SortedRun::new(0, [sst(1)]);
++    Arc::make_mut(&mut manifest.tree).l0.push_back(l0.clone());
++    Arc::make_mut(&mut manifest.tree).compacted.push(sorted);
++    let partial = Compaction::new(
++        Ulid::from_parts(11, 0),
++        CompactionSpec::new(vec![SourceId::SortedRun(0)], 0),
++    );
++    let args = CompactionWorkerHandler::build_job_args(&partial, &manifest, "test").unwrap();
++    assert!(args.is_dest_last_run);
++    assert_eq!(args.complete_input_through, None);
++    let full = Compaction::new(
++        Ulid::from_parts(12, 0),
++        CompactionSpec::new(vec![SourceId::SstView(l0.id), SourceId::SortedRun(0)], 0),
++    );
++    let args = CompactionWorkerHandler::build_job_args(&full, &manifest, "test").unwrap();
++    assert_eq!(args.complete_input_through, Some(200));
++    // A newer L0 appears after the job was planned; resuming that same job
++    // cannot use the newer manifest's cold barrier as complete input evidence.
++    Arc::make_mut(&mut manifest.tree).l0.push_front(sst(13));
++    manifest.last_l0_seq = 250;
++    assert_eq!(
++        CompactionWorkerHandler::build_job_args(&full, &manifest, "test")
++            .unwrap()
++            .complete_input_through,
++        None
++    );
++}

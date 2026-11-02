@@ -1,0 +1,5 @@
+{
+  "code": "unexpected_packet",
+  "group": "ups",
+  "message": "Expected exactly one packet followed by the end of the stream."
+}

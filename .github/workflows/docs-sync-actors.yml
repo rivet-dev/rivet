@@ -10,12 +10,20 @@ on:
       - "docs/actors/**"
       - "examples/docs/**"
       - "examples/workflow-sdk/**"
+      - "examples/chat-room/**"
+      - "examples/collaborative-document/**"
+      - "examples/collaborative-document-ot/**"
+      - "examples/cursors/**"
+      - "examples/multiplayer-game-patterns/**"
+      - "examples/per-tenant-database/**"
+      - "examples/scheduling/**"
       - "rivetkit-typescript/artifacts/**"
       - "rivetkit-typescript/packages/rivetkit/package.json"
   workflow_dispatch:
 
 jobs:
   sync:
+    if: github.repository == 'rivet-dev/rivet'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,5 +35,12 @@ jobs:
           extra-paths: >-
             examples/docs
             examples/workflow-sdk
+            examples/chat-room
+            examples/collaborative-document
+            examples/collaborative-document-ot
+            examples/cursors
+            examples/multiplayer-game-patterns
+            examples/per-tenant-database
+            examples/scheduling
             rivetkit-typescript/artifacts
             rivetkit-typescript/packages/rivetkit/package.json

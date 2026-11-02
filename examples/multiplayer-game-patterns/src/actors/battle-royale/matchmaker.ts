@@ -35,6 +35,7 @@ export const battleRoyaleMatchmaker = actor({
 		}>(),
 		closeMatch: queue<{ matchId: string }>(),
 	},
+	// docs:start queue
 	run: async (c) => {
 		for await (const message of c.queue.iter({ completable: true })) {
 			const now = Date.now();
@@ -73,8 +74,10 @@ export const battleRoyaleMatchmaker = actor({
 			}
 		}
 	},
+	// docs:end queue
 });
 
+// docs:start find-match
 async function processFindMatch(
 	c: ActorContextOf<typeof battleRoyaleMatchmaker>,
 	now: number,
@@ -116,6 +119,7 @@ async function processFindMatch(
 
 	return { matchId, playerId };
 }
+// docs:end find-match
 
 async function processPendingPlayerConnected(
 	c: ActorContextOf<typeof battleRoyaleMatchmaker>,

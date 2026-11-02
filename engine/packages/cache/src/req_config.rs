@@ -279,7 +279,7 @@ impl RequestConfig {
 								Err(err) => {
 									tracing::error!(?err, "failed to read batch keys from cache");
 
-									metrics::CACHE_REQUEST_ERRORS
+									metrics::CACHE_REQUEST_ERRORS_TOTAL
 										.with_label_values(&[&base_key2])
 										.inc();
 								}
@@ -345,7 +345,7 @@ impl RequestConfig {
 
 				let keys = ctx.unresolved_keys();
 
-				metrics::CACHE_REQUEST_ERRORS
+				metrics::CACHE_REQUEST_ERRORS_TOTAL
 					.with_label_values(&[&base_key])
 					.inc();
 				metrics::CACHE_VALUE_MISS_TOTAL

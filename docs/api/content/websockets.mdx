@@ -23,7 +23,7 @@ Pass the token as a `rivet_token.{token}` subprotocol, or use the inline `{actor
 
 ```javascript Browser
 const ws = new WebSocket(
-  `wss://api.rivet.dev/gateway/${actorId}/websocket/chat`,
+  `wss://rivet.example.com/gateway/${actorId}/websocket/chat`,
   ["rivet", `rivet_token.${token}`],
 );
 
@@ -32,7 +32,7 @@ ws.onopen = () => ws.send("hello");
 ```
 
 ```bash wscat
-wscat -c "wss://api.rivet.dev/gateway/$ACTOR_ID@$RIVET_TOKEN/websocket/chat"
+wscat -c "wss://rivet.example.com/gateway/$ACTOR_ID@$RIVET_TOKEN/websocket/chat"
 ```
 
 </CodeGroup>
@@ -40,7 +40,7 @@ wscat -c "wss://api.rivet.dev/gateway/$ACTOR_ID@$RIVET_TOKEN/websocket/chat"
 To connect by name instead of ID, add the selector query parameters:
 
 ```bash
-wscat -c "wss://api.rivet.dev/gateway/chat-room/websocket/chat?rvt-namespace=$RIVET_NAMESPACE&rvt-method=getOrCreate&rvt-key=room-1&rvt-pool=default&rvt-token=$RIVET_TOKEN"
+wscat -c "wss://rivet.example.com/gateway/chat-room/websocket/chat?rvt-namespace=$RIVET_NAMESPACE&rvt-method=getOrCreate&rvt-key=room-1&rvt-pool=default&rvt-token=$RIVET_TOKEN"
 ```
 
 See [Low-Level WebSocket Handler](/actors/docs/websocket-handler) for the actor side.

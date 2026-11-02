@@ -1,0 +1,20 @@
+---
+source: src/row_codec.rs
+expression: output
+snapshot_kind: text
+---
+(
+    "large value",
+    "\0\u{2}\0\u{3}big\0\0\0\0\0\0\0\u{1}\0\0\0\0dxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    SstRowEntry {
+        key_prefix_len: 2,
+        key_suffix: b"big",
+        seq: 1,
+        expire_ts: None,
+        create_ts: None,
+        value: Value(
+            b"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        ),
+    },
+    b"bibig",
+)

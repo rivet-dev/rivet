@@ -1,8 +1,6 @@
-use anyhow::*;
-use epoxy_protocol::protocol::{self};
-use gas::prelude::*;
-
-use crate::utils;
+use crate::{client::Client, ops::EpoxyOperation};
+use anyhow::Result;
+use epoxy_protocol::protocol;
 
 #[derive(Debug)]
 pub struct Input {}
@@ -12,15 +10,17 @@ pub struct Output {
 	pub config: protocol::ClusterConfig,
 }
 
-#[operation]
-pub async fn epoxy_read_cluster_config(ctx: &OperationCtx, input: &Input) -> Result<Output> {
-	let config = ctx
-		.udb()?
-		.txn("epoxy_read_cluster_config", |tx| async move {
-			utils::read_config(&tx, ctx.config().epoxy_replica_id()).await
-		})
-		.custom_instrument(tracing::debug_span!("read_cluster_config_tx"))
-		.await?;
+impl EpoxyOperation for Input {
+	type Output = Output;
 
-	Ok(Output { config })
+	async fn execute(&self, client: &Client) -> Result<Output> {
+		epoxy_read_cluster_config(client, self).await
+	}
+}
+
+#[tracing::instrument(skip_all)]
+pub async fn epoxy_read_cluster_config(client: &Client, _: &Input) -> Result<Output> {
+	Ok(Output {
+		config: client.cluster_config().await?,
+	})
 }

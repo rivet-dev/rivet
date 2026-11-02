@@ -207,7 +207,3 @@ fn invalid_input(message: impl Into<String>) -> anyhow::Error {
 	}
 	.build()
 }
-
-#[cfg(test)]
-#[path = "../../tests/unit/auth_tokens.rs"]
-mod tests;

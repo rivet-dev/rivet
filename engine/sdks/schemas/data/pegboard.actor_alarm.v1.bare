@@ -1,0 +1,4 @@
+#import "shared/depot.alarms.v1.bare"
+
+type ActorAlarmRequest struct { revision: AlarmRevision owner: AlarmOwner }
+type ActorSetAlarmRequest struct { generation: u32 checkpointIndex: i64 alarmAt: optional<i64> }

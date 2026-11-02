@@ -8,15 +8,6 @@ import type {
 	registry,
 } from "../src/index.ts";
 
-const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
-
-const COMPANY_PRESETS = [
-	"Aurora Analytics",
-	"Cedarline Logistics",
-	"Juniper Devices",
-	"Mariner Studio",
-];
-
 const STATUS_LABELS: Record<ProjectStatus, string> = {
 	planning: "Planning",
 	active: "Active",
@@ -34,81 +25,10 @@ const getInitials = (name: string) =>
 		.slice(0, 2)
 		.toUpperCase();
 
-export function App() {
-	const [companyName, setCompanyName] = useState<string | null>(null);
-	const [companyInput, setCompanyInput] = useState(COMPANY_PRESETS[0]);
-	const [preset, setPreset] = useState(COMPANY_PRESETS[0]);
-
-	const handlePresetChange = (value: string) => {
-		setPreset(value);
-		setCompanyInput(value);
-	};
-
-	const handleSignIn = () => {
-		const trimmed = companyInput.trim();
-		if (trimmed.length === 0) return;
-		setCompanyName(trimmed);
-	};
-
-	return (
-		<div className="dashboard">
-			<section className="hero">
-				<div className="hero-badge">Per-tenant database demo</div>
-				<h1>Isolate every company with a single Rivet Actor</h1>
-				<p>
-					Each company gets its own CompanyDatabase actor keyed by
-					name. The actor state is the database, so switching
-					companies swaps the entire dataset.
-				</p>
-			</section>
-
-			{companyName ? (
-				<CompanyDashboard
-					companyName={companyName}
-					onSwitch={setCompanyName}
-				/>
-			) : (
-				<section className="card signin-card">
-					<h2 className="signin-title">Sign in to a company</h2>
-					<p className="signin-description">
-						Pick a company or enter a new one. The company name
-						becomes the actor key.
-					</p>
-					<div className="switcher">
-						<label htmlFor="company-preset">Quick pick</label>
-						<select
-							id="company-preset"
-							value={preset}
-							onChange={(event) =>
-								handlePresetChange(event.target.value)
-							}
-						>
-							{COMPANY_PRESETS.map((company) => (
-								<option key={company} value={company}>
-									{company}
-								</option>
-							))}
-						</select>
-
-						<label htmlFor="company-input">Company name</label>
-						<input
-							id="company-input"
-							value={companyInput}
-							onChange={(event) =>
-								setCompanyInput(event.target.value)
-							}
-							placeholder="Enter company name"
-						/>
-
-						<button type="button" onClick={handleSignIn}>
-							Continue to dashboard
-						</button>
-					</div>
-				</section>
-			)}
-		</div>
-	);
-}
+// docs:start client
+// docs:start connect
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
+// docs:end connect
 
 type CompanyDashboardProps = {
 	companyName: string;
@@ -116,10 +36,13 @@ type CompanyDashboardProps = {
 };
 
 function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
+	// docs:start connect
+	// The company name is the Actor key, so each tenant reaches its own Actor and database
 	const company = useActor({
 		name: "companyDatabase",
 		key: [companyName],
 	});
+	// docs:end connect
 
 	const [employees, setEmployees] = useState<Employee[]>([]);
 	const [projects, setProjects] = useState<Project[]>([]);
@@ -141,6 +64,7 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 		setStats(latestStats);
 	};
 
+	// docs:start connect
 	useEffect(() => {
 		let canceled = false;
 		setEmployees([]);
@@ -167,7 +91,9 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 			canceled = true;
 		};
 	}, [company.connection]);
+	// docs:end connect
 
+	// docs:start events
 	company.useEvent("employeeAdded", (employee: Employee) => {
 		setEmployees((prev) => [...prev, employee]);
 		void refreshStats();
@@ -177,12 +103,14 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 		setProjects((prev) => [...prev, project]);
 		void refreshStats();
 	});
+	// docs:end events
 
 	const companyInitials = useMemo(
 		() => getInitials(companyName),
 		[companyName],
 	);
 
+	// docs:start add
 	const handleAddEmployee = async (event: FormEvent) => {
 		event.preventDefault();
 		if (!company.connection) return;
@@ -197,6 +125,8 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 		await company.connection.addProject(projectName, projectStatus);
 		setProjectName("");
 	};
+	// docs:end add
+	// docs:end client
 
 	const handleSwitchCompany = () => {
 		const trimmed = switchName.trim();
@@ -216,8 +146,8 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 					<div>
 						<h2 className="company-name">{companyName}</h2>
 						<p className="company-subtitle">
-							Each company name maps to a unique actor with
-							isolated state.
+							Each company name maps to its own actor and
+							SQLite database.
 						</p>
 					</div>
 				</div>
@@ -262,7 +192,7 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 						</div>
 					) : (
 						<div className="empty">
-							Loading stats from actor state.
+							Loading stats from the company database.
 						</div>
 					)}
 				</div>
@@ -400,5 +330,88 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 				</div>
 			</div>
 		</section>
+	);
+}
+
+const COMPANY_PRESETS = [
+	"Aurora Analytics",
+	"Cedarline Logistics",
+	"Juniper Devices",
+	"Mariner Studio",
+];
+
+export function App() {
+	const [companyName, setCompanyName] = useState<string | null>(null);
+	const [companyInput, setCompanyInput] = useState(COMPANY_PRESETS[0]);
+	const [preset, setPreset] = useState(COMPANY_PRESETS[0]);
+
+	const handlePresetChange = (value: string) => {
+		setPreset(value);
+		setCompanyInput(value);
+	};
+
+	const handleSignIn = () => {
+		const trimmed = companyInput.trim();
+		if (trimmed.length === 0) return;
+		setCompanyName(trimmed);
+	};
+
+	return (
+		<div className="dashboard">
+			<section className="hero">
+				<div className="hero-badge">Per-tenant database demo</div>
+				<h1>Isolate every company with a single Rivet Actor</h1>
+				<p>
+					Each company gets its own CompanyDatabase actor keyed by
+					name, with its own SQLite database. Switching companies
+					swaps the entire dataset.
+				</p>
+			</section>
+
+			{companyName ? (
+				<CompanyDashboard
+					companyName={companyName}
+					onSwitch={setCompanyName}
+				/>
+			) : (
+				<section className="card signin-card">
+					<h2 className="signin-title">Sign in to a company</h2>
+					<p className="signin-description">
+						Pick a company or enter a new one. The company name
+						becomes the actor key.
+					</p>
+					<div className="switcher">
+						<label htmlFor="company-preset">Quick pick</label>
+						<select
+							id="company-preset"
+							value={preset}
+							onChange={(event) =>
+								handlePresetChange(event.target.value)
+							}
+						>
+							{COMPANY_PRESETS.map((company) => (
+								<option key={company} value={company}>
+									{company}
+								</option>
+							))}
+						</select>
+
+						<label htmlFor="company-input">Company name</label>
+						<input
+							id="company-input"
+							value={companyInput}
+							onChange={(event) =>
+								setCompanyInput(event.target.value)
+							}
+							placeholder="Enter company name"
+						/>
+
+						<button type="button" onClick={handleSignIn}>
+							Continue to dashboard
+						</button>
+					</div>
+				</section>
+			)}
+		</div>
 	);
 }

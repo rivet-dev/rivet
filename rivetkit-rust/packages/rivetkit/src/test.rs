@@ -9,9 +9,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use rivetkit_client::{Client, ClientConfig, GetOrCreateOptions};
-use rivetkit_core::ServeConfig;
+use rivetkit_core::{EngineSpawnMode, ServeConfig};
 use serde_json::Value as JsonValue;
-use tokio::net::TcpStream;
 use tokio::sync::{Mutex, oneshot};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -22,7 +21,6 @@ use crate::{
 };
 
 const ENDPOINT: &str = "http://127.0.0.1:6420";
-const ENGINE_PORT: u16 = 6420;
 const TOKEN: &str = "default";
 const NAMESPACE: &str = "default";
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
@@ -47,6 +45,9 @@ pub async fn setup(registry: Registry) -> Result<TestHandle> {
 		token: Some(TOKEN.to_owned()),
 		namespace: NAMESPACE.to_owned(),
 		pool_name: pool_name.clone(),
+		// This helper promises to start or reuse a local Engine. Direct serving
+		// treats Auto plus a supplied endpoint as connect-only.
+		engine_spawn: EngineSpawnMode::Always,
 		..ServeConfig::default()
 	};
 
@@ -66,8 +67,11 @@ pub async fn setup(registry: Registry) -> Result<TestHandle> {
 					.await
 			}
 		});
-		wait_for_port().await;
-		ready_rx.await.context("wait for registry envoy startup")?;
+		if ready_rx.await.is_err() {
+			// Preserve the actual startup error instead of reporting a closed channel.
+			serve.await.context("join registry startup")??;
+			anyhow::bail!("registry stopped before envoy startup");
+		}
 		serve
 	};
 
@@ -190,16 +194,6 @@ fn is_transient(error: &anyhow::Error) -> bool {
 	message.contains("actor_ready_timeout")
 		|| message.contains("no_runner_config_configured")
 		|| message.contains("Service Unavailable")
-}
-
-async fn wait_for_port() {
-	let deadline = Instant::now() + Duration::from_secs(60);
-	while Instant::now() < deadline {
-		if TcpStream::connect(("127.0.0.1", ENGINE_PORT)).await.is_ok() {
-			return;
-		}
-		tokio::time::sleep(Duration::from_millis(100)).await;
-	}
 }
 
 fn unique_suffix() -> u128 {

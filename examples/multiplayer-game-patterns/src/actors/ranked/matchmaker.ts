@@ -114,6 +114,7 @@ export const rankedMatchmaker = actor({
 	run: async (c) => {
 		c.waitUntil(runQueueUpdateTicker(c));
 
+		// docs:start run-loop
 		while (!c.aborted) {
 			const message = await c.queue.next({
 				timeout: PAIRING_RETRY_TICK_MS,
@@ -124,8 +125,10 @@ export const rankedMatchmaker = actor({
 				await attemptPairing(c);
 				continue;
 			}
+			// docs:end run-loop
 
 			if (message.name === "queueForMatch") {
+				// docs:start queue
 				const { username, connId } = message.body;
 
 				const client = c.client<typeof registry>();
@@ -151,6 +154,7 @@ export const rankedMatchmaker = actor({
 
 				await sendQueueUpdates(c);
 				await attemptPairing(c);
+				// docs:end queue
 			} else if (message.name === "unqueueForMatch") {
 				await c.db.execute(
 					`DELETE FROM player_pool WHERE conn_id = ?`,
@@ -158,6 +162,7 @@ export const rankedMatchmaker = actor({
 				);
 				await sendQueueUpdates(c);
 			} else if (message.name === "matchCompleted") {
+				// docs:start completed
 				const body = message.body;
 				const client = c.client<typeof registry>();
 
@@ -203,11 +208,13 @@ export const rankedMatchmaker = actor({
 					`DELETE FROM assignments WHERE match_id = ?`,
 					body.matchId,
 				);
+				// docs:end completed
 			}
 		}
 	},
 });
 
+// docs:start pairing
 async function attemptPairing(c: ActorContextOf<typeof rankedMatchmaker>) {
 	const now = Date.now();
 	const pool = await c.db.execute<QueuePlayerRow>(
@@ -249,6 +256,7 @@ async function attemptPairing(c: ActorContextOf<typeof rankedMatchmaker>) {
 		}
 	}
 }
+// docs:end pairing
 
 async function createRankedMatch(
 	c: ActorContextOf<typeof rankedMatchmaker>,

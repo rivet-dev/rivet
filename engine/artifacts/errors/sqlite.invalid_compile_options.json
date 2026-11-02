@@ -1,0 +1,5 @@
+{
+  "code": "invalid_compile_options",
+  "group": "sqlite",
+  "message": "SQLite requires SQLITE_ENABLE_BATCH_ATOMIC_WRITE and SQLITE_DIRECT_OVERFLOW_READ=0. Rebuild with LIBSQLITE3_FLAGS=\"SQLITE_ENABLE_BATCH_ATOMIC_WRITE SQLITE_DIRECT_OVERFLOW_READ=0\"."
+}

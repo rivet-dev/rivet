@@ -1,9 +1,11 @@
+pub(crate) mod ups;
+
 use std::{fmt, str::FromStr};
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{SigningKey as DalekSigningKey, pkcs8::EncodePrivateKey};
 use jsonwebtoken::{DecodingKey, EncodingKey};
-use rand::{CryptoRng, RngCore, rngs::OsRng};
+use rand::{CryptoRng, RngCore};
 use zeroize::Zeroizing;
 
 use crate::TokenError;
@@ -72,18 +74,20 @@ pub struct SigningKey {
 }
 
 impl SigningKey {
-	pub fn generate() -> Self {
-		Self::generate_with(&mut OsRng)
+	/// Create credentials only at an explicit production boundary. Simulations inject seeds.
+	pub fn generate() -> anyhow::Result<Self> {
+		let mut seed = [0; PRIVATE_KEY_BYTES];
+		let mut kid = [0; KEY_ID_BYTES];
+		rivet_env::backends::production::secure_random(&mut seed)?;
+		rivet_env::backends::production::secure_random(&mut kid)?;
+		Ok(Self::from_seed(KeyId::from_bytes(kid), seed))
 	}
 
 	pub fn generate_with(rng: &mut (impl CryptoRng + RngCore)) -> Self {
 		let kid = KeyId::generate(rng);
-		let key = DalekSigningKey::generate(rng);
-		Self {
-			kid,
-			seed: Zeroizing::new(key.to_bytes()),
-			public_key: key.verifying_key().to_bytes(),
-		}
+		let mut seed = [0; PRIVATE_KEY_BYTES];
+		rng.fill_bytes(&mut seed);
+		Self::from_seed(kid, seed)
 	}
 
 	pub fn from_seed(kid: KeyId, seed: [u8; PRIVATE_KEY_BYTES]) -> Self {

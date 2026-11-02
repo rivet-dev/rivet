@@ -39,6 +39,7 @@ export function TurnBasedGame({
 		conn?.dispose();
 	}, []);
 
+	// docs:start connect
 	useEffect(() => {
 		const conn = client.turnBasedMatch
 			.get([matchInfo.matchId], {
@@ -73,6 +74,7 @@ export function TurnBasedGame({
 	const makeMove = (row: number, col: number) => {
 		connRef.current?.makeMove({ row, col }).catch(() => {});
 	};
+	// docs:end connect
 
 	const myPlayer = snapshot?.players[matchInfo.playerId];
 	const mySymbol = myPlayer?.symbol;

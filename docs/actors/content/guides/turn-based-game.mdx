@@ -1,0 +1,151 @@
+---
+title: "Turn-Based Game"
+description: "Build a turn-based game such as correspondence chess, where a match Actor validates every move and keeps the board between turns."
+---
+
+import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
+
+<ExampleLinkBar href="https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/turn-based" />
+
+<Diagram
+  id="turn-based-game"
+  label="Player A calls createGame on the turnBasedMatchmaker Actor and gets back an invite code. Player B calls joinByCode with that code. The matchmaker calls createPlayer on the turnBasedMatch Actor to seat each player as X or O. The players connect to the match and call makeMove on their turn. The match validates each move and broadcasts the gameUpdate event to both players. The numbers show the order of the calls. There is one matchmaker and one turnBasedMatch Actor per match."
+  stackLabel="One per match"
+  nodes={[
+    { id: "a", x: 20, y: 40, title: "Player A", subtitle: "creates a game" },
+    { id: "b", x: 20, y: 200, title: "Player B", subtitle: "joins by code" },
+    { id: "mm", x: 320, y: 120, w: 225, product: "actors", title: "`turnBasedMatchmaker`", subtitle: "invites and queue" },
+    { id: "match", x: 700, y: 120, product: "actors", stack: true, title: "`turnBasedMatch`", subtitle: "board and turn" },
+  ]}
+  edges={[
+    { from: "a", to: "mm", fromOffset: 10, toOffset: -12, via: [[255, 80], [255, 138]], label: "`createGame`", labelAt: [243, 116], labelAnchor: "end", step: 1 },
+    { from: "b", to: "mm", fromOffset: -10, toOffset: 12, via: [[255, 220], [255, 162]], label: "`joinByCode`", labelAt: [243, 190], labelAnchor: "end", step: 2 },
+    { from: "mm", to: "match", label: "`createPlayer`", step: 3 },
+    { from: "a", to: "match", fromOffset: -12, toSide: "top", via: [[785, 58]], label: "`makeMove`", step: 4 },
+    { from: "match", to: "b", kind: "reply", fromSide: "bottom", toOffset: 14, via: [[785, 244]], label: "`gameUpdate` to both players", step: 5 },
+  ]}
+/>
+
+What we'll build:
+
+- A `turnBasedMatchmaker` Actor that creates private games with invite codes and pairs players from a public queue.
+- A `turnBasedMatch` Actor per match that owns the board, whose turn it is, and the result.
+- Move validation on the server, so a client can only play its own symbol, on its own turn, in an empty cell.
+- A browser client that creates or joins a game and plays it in realtime.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add rivetkit
+```
+
+</Step>
+
+<Step title="Create the matchmaker">
+
+One `turnBasedMatchmaker` Actor, keyed `["main"]`, hands out matches. It supports two ways in: a private game shared by invite code, and a public queue that pairs the first two players who ask:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/turn-based/matchmaker.ts" title="matchmaker.ts" highlight="invite,queue" />
+
+- Every write goes through a queue that `run` reads one message at a time. Two players can press "Join" at the same moment, and the queue makes sure only one of them takes the empty seat.
+- `createGame` creates the `turnBasedMatch` Actor, seats the creator as `X` with `createPlayer`, and stores the invite code in the `matches` table. `joinByCode` looks the code up, rejects a full game with `game_full`, and seats the joiner as `O`.
+- The client sends `createGame` and `joinByCode` with `wait: true`, so the result passed to `message.complete(...)` is the response.
+- `attemptPairing` takes the two oldest rows from `player_pool`, creates a match, and broadcasts `assignmentReady`. The `assignments` row stores the queueing connection's id, so `getAssignment` only returns it to that connection. `onDisconnect` removes a player from the queue when they close the tab.
+
+</Step>
+
+<Step title="Create the match">
+
+Each match is its own `turnBasedMatch` Actor, keyed by the match id. Its state is the whole game:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/turn-based/match.ts" title="match.ts" region="state" />
+
+- `createState` builds an empty board. The matchmaker passes the match id as input when it creates the Actor.
+- `players` maps a player id to a seat: name, symbol, and the id of the connection that is playing it. `onConnect` reads `playerId` from the connection params and disconnects anyone who has not been seated with `invalid_player`.
+- There is no tick loop. The match only changes when a player moves, so it broadcasts `gameUpdate` from the action that changed it.
+
+<Warning>
+The player id is the only credential in this example. Anyone who knows it can connect as that player. In production, issue a signed token from the matchmaker and check it in `onConnect`, or use [authentication](/guides/authentication).
+</Warning>
+
+</Step>
+
+<Step title="Validate moves">
+
+`makeMove` is the only action that changes the board, so every rule of the game lives in it:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/turn-based/match.ts" title="match.ts" region="make-move" />
+
+- The player comes from `c.conn.id`, not from the action input. A client cannot move for its opponent by sending a different name or symbol.
+- Each rule throws a `UserError` with a code: `game_over`, `player_not_found`, `not_your_turn`, `invalid_cell`, and `cell_taken`. Clients get the code and message, so the UI can say why a move was refused.
+- The server decides the result. It checks for a winner or a full board after every move, then flips `currentTurn`. The client draws the board only from snapshots, so a move shows up as played once `gameUpdate` arrives.
+
+</Step>
+
+<Step title="Sleep between turns">
+
+Turns can be hours apart, so a match should not hold anything open while it waits. This is how the example handles players leaving:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/turn-based/match.ts" title="match.ts" region="abandon" />
+
+- `onDisconnect` clears the seat's connection and records `emptySince` when the last player leaves. `onConnect` clears it again when someone comes back.
+- The `run` loop checks once a second and calls `c.destroy()` once the match has been empty for `EMPTY_MATCH_DESTROY_DELAY_MS` (10 seconds). Tic-tac-toe is played in one sitting, so an empty match is an abandoned one.
+- `onDestroy` sends `closeMatch` to the matchmaker, which deletes the match's invite code and assignments.
+
+<Note>
+For correspondence chess or a word game, keep the match instead of destroying it. Remove the `run` loop and `onDestroy`. The board, the turn, and the seats all live in `c.state`, which is saved automatically, so the Actor [sleeps](/actors/docs/lifecycle#sleeping) once nobody is connected and wakes with the same board on the next `connect` or `makeMove`. For a turn deadline, such as forfeiting a player who has not moved in three days, call `c.schedule.after(...)` after each move. A [schedule](/actors/docs/schedule) wakes a sleeping Actor when it is due.
+</Note>
+
+</Step>
+
+<Step title="Register the Actors">
+
+Add both Actors to the registry and start it:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/index.ts" title="actors/index.ts" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/index.ts" title="index.ts" />
+</CodeGroup>
+
+The example registers every game type in one registry. A turn-based game only needs `turnBasedMatchmaker` and `turnBasedMatch`. Each Actor file imports `type { registry }` so that `c.client<typeof registry>()` is typed when one Actor calls another.
+
+</Step>
+
+<Step title="Connect players">
+
+The menu asks the matchmaker for a game, then the game screen connects to the match with the player id it got back:
+
+<CodeGroup>
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/turn-based/menu.tsx" title="menu.tsx" region="create-game" />
+<CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/turn-based/game.tsx" title="game.tsx" region="connect" />
+</CodeGroup>
+
+- `mm.send("createGame", ..., { wait: true })` puts a message on the matchmaker's queue and waits for the response. The matchmaker connection is disposed right after, because the player now talks only to the match.
+- The match connection passes `playerId` in `params`. That is what `onConnect` uses to find the seat.
+- The client subscribes to `gameUpdate` and also calls `getSnapshot` once, so it has the board even if it connected after the last broadcast.
+- Quick Play calls the `queueForMatch` action and then waits for `assignmentReady`, with a `getAssignment` check in case the event fired before the listener was attached.
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/multiplayer-game-patterns
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173` and pick **Turn-Based**. Click **Create Private** to get a six-character invite code. Open a second tab, enter the code under **Join by Code**, and play. Or click **Add Bot** to have a bot join. Each player's board shows **Your turn!** or **Opponent's turn...**, and the match refuses any move sent out of turn with `not_your_turn`.
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+- [Ranked Matchmaking](/guides/ranked-game): pair players by rating and keep a leaderboard.
+- [Schedule & Cron](/actors/docs/schedule): add turn deadlines that wake a sleeping match.
+- [Lifecycle](/actors/docs/lifecycle): how Actors sleep, wake, and get destroyed.

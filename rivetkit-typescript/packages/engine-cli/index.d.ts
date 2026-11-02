@@ -2,7 +2,7 @@
  * Returns the absolute path to the rivet-engine binary for the current host.
  *
  * Resolution order:
- *   1. `RIVET_ENGINE_BINARY` env var (absolute path override)
+ *   1. `RIVET_ENGINE_BINARY` or `RIVET_ENGINE_BINARY_PATH` env var (absolute path override)
  *   2. Local `rivet-engine` binary next to this package (dev builds)
  *   3. The platform-specific `@rivetkit/engine-cli-<platform>` npm package
  *

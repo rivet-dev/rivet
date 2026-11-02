@@ -1,0 +1,5 @@
+{
+  "code": "conflict",
+  "group": "depot_kv",
+  "message": "The transaction conflicts with a later write."
+}

@@ -1,0 +1,5 @@
+{
+  "code": "corrupt",
+  "group": "depot_kv",
+  "message": "Stored data failed its integrity checks."
+}

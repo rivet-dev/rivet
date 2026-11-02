@@ -25,6 +25,7 @@ use crate::actor::persist::{
 };
 use crate::actor::state::RequestSaveOpts;
 use crate::error::ActorRuntime;
+use crate::runtime::RuntimeSpawner;
 use crate::time::timeout;
 use crate::types::ConnId;
 
@@ -141,6 +142,46 @@ pub(crate) fn decode_persisted_connection(payload: &[u8]) -> Result<PersistedCon
 		"persisted connection",
 	)?;
 	Ok(connection)
+}
+
+/// Disconnects a connection when dropped, unless it was disconnected or
+/// disarmed first. A caller that goes away drops its future at any await, and
+/// a connection left registered keeps the actor awake forever.
+pub(crate) struct DisconnectOnDrop {
+	conn: Option<ConnHandle>,
+}
+
+impl DisconnectOnDrop {
+	pub(crate) fn new(conn: ConnHandle) -> Self {
+		Self { conn: Some(conn) }
+	}
+
+	pub(crate) async fn disconnect(mut self) -> Result<()> {
+		match self.conn.take() {
+			Some(conn) => conn.disconnect(None).await,
+			None => Ok(()),
+		}
+	}
+
+	pub(crate) fn disarm(mut self) {
+		self.conn = None;
+	}
+}
+
+impl Drop for DisconnectOnDrop {
+	fn drop(&mut self) {
+		if let Some(conn) = self.conn.take() {
+			RuntimeSpawner::spawn(async move {
+				if let Err(error) = conn.disconnect(None).await {
+					tracing::warn!(
+						conn_id = conn.id(),
+						?error,
+						"failed to disconnect a connection whose caller went away"
+					);
+				}
+			});
+		}
+	}
 }
 
 #[derive(Clone)]
@@ -318,28 +359,34 @@ impl ConnHandle {
 		let hibernation = self.0.hibernation.read().clone()?;
 
 		Some(PersistedConnection {
-			id: self.id().to_owned(),
-			parameters: self.params(),
-			state,
+			id: self.id().to_owned().into(),
+			parameters: self.params().into(),
+			state: state.into(),
 			subscriptions: self
 				.subscriptions()
 				.into_iter()
-				.map(|event_name| PersistedSubscription { event_name })
+				.map(|event_name| PersistedSubscription {
+					event_name: event_name.into(),
+				})
 				.collect(),
 			gateway_id: hibernation.gateway_id,
 			request_id: hibernation.request_id,
 			server_message_index: hibernation.server_message_index,
 			client_message_index: hibernation.client_message_index,
-			request_path: hibernation.request_path,
-			request_headers: hibernation.request_headers.into_iter().collect(),
+			request_path: hibernation.request_path.into(),
+			request_headers: hibernation
+				.request_headers
+				.into_iter()
+				.map(|(name, value)| (name.into(), value.into()))
+				.collect(),
 		})
 	}
 
 	pub(crate) fn from_persisted(persisted: PersistedConnection) -> Self {
 		let conn = Self::new(
-			persisted.id.clone(),
-			persisted.parameters,
-			persisted.state,
+			persisted.id.to_string(),
+			persisted.parameters.to_vec(),
+			persisted.state.to_vec(),
 			true,
 		);
 		conn.configure_hibernation(Some(HibernatableConnectionMetadata {
@@ -347,8 +394,12 @@ impl ConnHandle {
 			request_id: persisted.request_id,
 			server_message_index: persisted.server_message_index,
 			client_message_index: persisted.client_message_index,
-			request_path: persisted.request_path,
-			request_headers: persisted.request_headers.into_iter().collect(),
+			request_path: persisted.request_path.to_string(),
+			request_headers: persisted
+				.request_headers
+				.into_iter()
+				.map(|(name, value)| (name.to_string(), value.to_string()))
+				.collect(),
 		}));
 		for subscription in persisted.subscriptions {
 			conn.subscribe(subscription.event_name);
@@ -691,10 +742,14 @@ impl ActorContext {
 			.await?;
 		self.insert_existing(conn.clone());
 
+		// The caller can go away while onConnect runs.
+		let opening = DisconnectOnDrop::new(conn.clone());
 		if let Err(error) = self.emit_connection_open(&conn, request).await {
+			opening.disarm();
 			self.remove_existing(conn.id());
 			return Err(error);
 		}
+		opening.disarm();
 		self.0.metrics.inc_connections_total();
 		self.record_connections_updated();
 		self.reset_sleep_timer();
@@ -811,11 +866,6 @@ impl ActorContext {
 
 	fn connection_config(&self) -> ActorConfig {
 		self.0.connection_config.read().clone()
-	}
-
-	#[cfg(test)]
-	pub(crate) fn connection_config_for_tests(&self) -> ActorConfig {
-		self.connection_config()
 	}
 
 	async fn disconnect_managed(&self, conn_id: &str, reason: Option<String>) -> Result<()> {
@@ -992,6 +1042,3 @@ fn disconnect_message(conn_id: &str, reason: Option<&str>) -> String {
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/connection.rs"]
-mod tests;

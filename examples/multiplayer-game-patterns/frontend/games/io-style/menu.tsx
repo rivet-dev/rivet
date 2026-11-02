@@ -18,6 +18,7 @@ export function IoStyleMenu({
 	const [status, setStatus] = useState<"idle" | "matching" | "error">("idle");
 	const [error, setError] = useState("");
 
+	// docs:start find-lobby
 	const findMatch = async () => {
 		setStatus("matching");
 		try {
@@ -38,6 +39,7 @@ export function IoStyleMenu({
 			setStatus("error");
 		}
 	};
+	// docs:end find-lobby
 
 	return (
 		<div className="app">

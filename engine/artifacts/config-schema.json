@@ -2,32 +2,6 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Root",
   "type": "object",
-  "oneOf": [
-    {
-      "type": "object",
-      "required": [
-        "postgres"
-      ],
-      "properties": {
-        "postgres": {
-          "$ref": "#/definitions/Postgres"
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "file_system"
-      ],
-      "properties": {
-        "file_system": {
-          "$ref": "#/definitions/FileSystem"
-        }
-      },
-      "additionalProperties": false
-    }
-  ],
   "required": [
     "auth"
   ],
@@ -46,33 +20,11 @@
     "auth": {
       "$ref": "#/definitions/Auth"
     },
-    "cache": {
+    "epoxy": {
       "default": null,
       "anyOf": [
         {
-          "$ref": "#/definitions/Cache"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "clickhouse": {
-      "default": null,
-      "anyOf": [
-        {
-          "$ref": "#/definitions/ClickHouse"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "features": {
-      "default": null,
-      "anyOf": [
-        {
-          "$ref": "#/definitions/Features"
+          "$ref": "#/definitions/Epoxy"
         },
         {
           "type": "null"
@@ -103,12 +55,27 @@
     },
     "metrics": {
       "default": {
+        "hardware": {
+          "disk_probe": null,
+          "disk_probe_bytes": null
+        },
         "host": null,
         "port": null
       },
       "allOf": [
         {
           "$ref": "#/definitions/Metrics"
+        }
+      ]
+    },
+    "object_storage": {
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ObjectStorageConfig"
+        },
+        {
+          "type": "null"
         }
       ]
     },
@@ -134,11 +101,11 @@
         }
       ]
     },
-    "pyroscope": {
+    "pubsub": {
       "default": null,
       "anyOf": [
         {
-          "$ref": "#/definitions/Pyroscope"
+          "$ref": "#/definitions/PubSub"
         },
         {
           "type": "null"
@@ -147,16 +114,9 @@
     },
     "runtime": {
       "default": {
-        "allow_version_rollback": null,
         "force_shutdown_duration": null,
-        "gasoline_loop_history_iteration_retention_count": null,
-        "gasoline_prune_eligibility_duration": null,
-        "gasoline_prune_interval_duration": null,
         "guard_shutdown_duration": null,
-        "udb_throttle_bytes_per_second": null,
         "worker_cpu_max": null,
-        "worker_load_shedding_beta": null,
-        "worker_load_shedding_curve": null,
         "worker_max_concurrent_workflows": null,
         "worker_max_deduped_workflows_per_pull": null,
         "worker_max_wake_condition_clears_per_pull": null,
@@ -171,11 +131,11 @@
         }
       ]
     },
-    "sqlite": {
+    "storage": {
       "default": null,
       "anyOf": [
         {
-          "$ref": "#/definitions/Sqlite"
+          "$ref": "#/definitions/StorageConfig"
         },
         {
           "type": "null"
@@ -206,11 +166,98 @@
   },
   "additionalProperties": false,
   "definitions": {
-    "ApiPeer": {
-      "description": "Configuration for the private API service.",
+    "AlarmConfig": {
+      "description": "Optional overrides for the partition frontier and worker-owned callback pool.",
       "type": "object",
       "properties": {
+        "handler_timeout_ms": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "io_timeout_ms": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_callbacks": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_candidates": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_operations": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "page_size": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "retry_max_ms": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "retry_min_ms": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "ApiPeer": {
+      "description": "Configuration for the private API service. This port is plaintext and unauthenticated. It must only be reachable on a private network.",
+      "type": "object",
+      "properties": {
+        "advertise_address": {
+          "description": "Address reachable by other nodes. Defaults to a concrete bind address. Wildcard binds require an explicit advertisement. Explicit loopback is valid only when all participating workers share the same host.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "host": {
+          "description": "Bind IP. Defaults to the host of advertise_address, or loopback for single-node development. DNS advertisements require an explicit bind IP. Explicit wildcard binds expose every interface.",
           "type": [
             "string",
             "null"
@@ -224,6 +271,19 @@
           ],
           "format": "uint16",
           "minimum": 0.0
+        },
+        "volumes": {
+          "default": {
+            "directory_page_size": 256,
+            "max_path_bytes": 4096,
+            "max_requests": 128,
+            "request_timeout_ms": 10000
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/VolumesConfig"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -245,7 +305,6 @@
         "jwt": {
           "description": "Short-lived, namespace-scoped JWT authentication. Enabled by default.",
           "default": {
-            "accepted_issuers": [],
             "audience": null,
             "default_duration": null,
             "enabled": null,
@@ -268,54 +327,16 @@
       },
       "additionalProperties": false
     },
-    "Cache": {
-      "description": "Configuration for the cache layer.",
+    "AzureObjectStoreConfig": {
+      "description": "Azure Blob storage used by SlateDB, topology, and cluster configuration.",
       "type": "object",
       "required": [
-        "enabled"
+        "account",
+        "container"
       ],
       "properties": {
-        "driver": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/CacheDriver"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "enabled": {
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false
-    },
-    "CacheDriver": {
-      "type": "string",
-      "enum": [
-        "in_memory"
-      ]
-    },
-    "ClickHouse": {
-      "type": "object",
-      "required": [
-        "http_url",
-        "native_url",
-        "username"
-      ],
-      "properties": {
-        "http_url": {
-          "description": "URL to the HTTP access port for ClickHouse.",
-          "type": "string",
-          "format": "uri"
-        },
-        "native_url": {
-          "description": "URL to the native access port for ClickHouse.",
-          "type": "string",
-          "format": "uri"
-        },
-        "password": {
+        "access_key": {
+          "description": "Optional override; otherwise use the adapter's environment/managed identity credentials.",
           "default": null,
           "anyOf": [
             {
@@ -326,12 +347,192 @@
             }
           ]
         },
-        "secure": {
-          "default": false,
-          "type": "boolean"
-        },
-        "username": {
+        "account": {
           "type": "string"
+        },
+        "container": {
+          "type": "string"
+        },
+        "prefix": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CheckpointConfig": {
+      "description": "Global checkpoint defaults; individual volume records can override retention.",
+      "type": "object",
+      "properties": {
+        "max_named_checkpoints_per_volume": {
+          "default": 64,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "retention": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RetentionPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ColdStoreCompression": {
+      "description": "Block compression for cold-store SSTs.",
+      "type": "string",
+      "enum": [
+        "none",
+        "lz4"
+      ]
+    },
+    "ColdStoreConfig": {
+      "description": "SlateDB caches shared by every cold-store database of one engine process.\n\nThese are fixed RAM caps of the storage worker process, separate from the log shard's and filesystems' budgets. With the defaults they hold up to 2 GiB together: 512 MiB of data blocks, 512 MiB of SST metadata and 1 GiB of unflushed memtables. Size a host for them beside `filesystem.max_process_cache_bytes`, the log shard's `max_memory_bytes` and loaded replicas, and the KV volume budget `kv_commands.max_worker_open_volume_bytes`.",
+      "type": "object",
+      "properties": {
+        "block_cache_bytes": {
+          "description": "Data block cache bytes for the whole process, not per database. Defaults to 512 MiB.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "compacted_sst_bytes": {
+          "description": "Largest SST a compaction writes before it starts the next one. A read whose index is not cached loads and decodes the SST's whole index, about 2% of the SST's bytes, so smaller compacted SSTs keep that cost small once the indexes of a growing database outgrow `meta_cache_bytes`. Defaults to 16 MiB.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "disk_cache_bytes": {
+          "description": "Disk cache capacity in bytes; 0 disables the cache. When unset, a storage worker sizes it from the free space of its filesystem at startup, next to the log shard.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "disk_cache_directory": {
+          "description": "Directory for the local disk cache of cold-store object parts. Defaults to `cold-cache` inside `storage.log_directory`. Its contents are disposable.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "disk_cache_on_compaction": {
+          "description": "Writes each SST a compaction uploads into the disk cache as well. Compaction output of large databases is mostly cold, and caching it costs local disk writes on the disk the log shard shares, so write-heavy deployments turn it off. Defaults to true.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "disk_cache_on_flush": {
+          "description": "Writes each SST a partition flush uploads into the disk cache as well, so its first reads are local. Defaults to true.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "disk_cache_part_bytes": {
+          "description": "Bytes fetched per cache miss and stored per cache file, a multiple of 1 KiB. Defaults to 1 MiB.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "l0_max_ssts": {
+          "description": "L0 SSTs a partition database holds before SlateDB stalls memtable flushes until a compaction drains them. One compaction takes up to this many sources, so it drains a full L0 at once. Higher values absorb flush bursts at the cost of more SSTs per read. Defaults to 16.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_concurrent_compactions": {
+          "description": "Concurrent compactions per partition database. A worker maintaining more than 8 partitions runs one per database. Defaults to 2.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "meta_cache_bytes": {
+          "description": "Index, filter and statistics cache bytes for the whole process. Defaults to 512 MiB.\n\nEvery SST probe needs that SST's index and filter in this cache, and a miss loads and decodes the SST's whole index. Indexes are about 2% of SST bytes, so 512 MiB keeps the metadata of about 25 GiB of SSTs per process in memory. Past that, reads start evicting indexes other reads need, and each actor start pays for more index decodes. A smaller cache reaches that point at proportionally less data.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "unflushed_budget_bytes": {
+          "description": "Unflushed memtable bytes for the whole process, split evenly across the partitions this worker maintains (at most 512 MiB and at least 8 MiB per partition). Defaults to 1 GiB.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "CommandConcurrency": {
+      "description": "Maximum simultaneous handlers per pegboard command class on one storage worker. Each value is further capped by `storage.kv_commands.max_inflight_commands`.",
+      "type": "object",
+      "properties": {
+        "actor": {
+          "description": "Actor creation. Defaults to 256.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "actor_event": {
+          "description": "Actor state machine events, including node lifecycle reports. Defaults to 256.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "actor_read": {
+          "description": "Actor record reads by the gateway, the API and storage fencing. Defaults to 256.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "index": {
+          "description": "Index inserts, deletes and listings. Defaults to 256.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -407,143 +608,175 @@
         }
       ]
     },
-    "EnvoyLoadBalancer": {
-      "oneOf": [
-        {
-          "description": "Current default. Finds the highest protocol version, then seeks from a random ping timestamp.",
-          "type": "object",
-          "required": [
-            "random_ping_timestamp"
-          ],
-          "properties": {
-            "random_ping_timestamp": {
-              "type": "object",
-              "properties": {
-                "use_snapshot_read": {
-                  "default": true,
-                  "type": "boolean"
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "Finds the highest protocol version, then chooses the newest fresh ping timestamp. This is purely for testing behavior that pins allocations to a single Envoy.",
-          "type": "object",
-          "required": [
-            "newest_ping_timestamp"
-          ],
-          "properties": {
-            "newest_ping_timestamp": {
-              "type": "object",
-              "properties": {
-                "use_snapshot_read": {
-                  "default": true,
-                  "type": "boolean"
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "Reads the full highest-version Envoy load-balancer range and chooses a random eligible Envoy.",
-          "type": "object",
-          "required": [
-            "random_full_range"
-          ],
-          "properties": {
-            "random_full_range": {
-              "type": "object",
-              "properties": {
-                "use_snapshot_read": {
-                  "default": true,
-                  "type": "boolean"
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "Hash-ring-based envoy selection backed by `EnvoyHashIdxKey`.\n\n`samples` controls the algorithm: - `1`: uniform random pick — draws one random ring pivot and returns the first fresh envoy. **Short-circuits past the `SlotsKey` read**, so this variant is strictly cheaper than `samples >= 2`. Pick when actor cost per envoy is uniform or measurements don't justify load awareness. - `>= 2`: power-of-K choices. Draws K independent random pivots, reads `SlotsKey` for each, picks min slots with uniform random tiebreak. Recommended default.",
-          "type": "object",
-          "required": [
-            "hash"
-          ],
-          "properties": {
-            "hash": {
-              "type": "object",
-              "properties": {
-                "max_scan": {
-                  "description": "Maximum stale entries walked per `scan_for_fresh` call before aborting and returning `None`. Circuit breaker against pathological drain scenarios. Default 16. Range 1..=256.",
-                  "default": 16,
-                  "type": "integer",
-                  "format": "uint32",
-                  "minimum": 0.0
-                },
-                "samples": {
-                  "description": "Number of independent ring samples per allocation. `1` = uniform pick (no slot read), `>= 2` = power-of-K-choices.",
-                  "default": 2,
-                  "type": "integer",
-                  "format": "uint8",
-                  "minimum": 0.0
-                },
-                "slot_jitter": {
-                  "description": "Additive random integer added to each candidate's slot count before the min-slot comparison. Decorrelates concurrent allocators reading the same stale `SlotsKey` snapshot. Only relevant when `samples >= 2`. `0` disables. Range 0..=64. Default 4.\n\nSee `slot_jitter` block in `engine/packages/pegboard/src/workflows/actor2/alloc_serverful/hash.rs` for how the default was sized.",
-                  "default": 4,
-                  "type": "integer",
-                  "format": "uint8",
-                  "minimum": 0.0
-                },
-                "use_snapshot_read": {
-                  "default": true,
-                  "type": "boolean"
-                },
-                "virtual_nodes": {
-                  "default": 8,
-                  "type": "integer",
-                  "format": "uint8",
-                  "minimum": 0.0
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        }
-      ]
-    },
-    "Features": {
+    "Epoxy": {
+      "description": "Epoxy runs in a single datacenter with fixed membership, so it has no settings yet. The section stays so multi-region settings have a home.",
       "type": "object",
-      "properties": {
-        "guard_gateway_v3": {
-          "description": "Controls routing to the streaming Guard Gateway V3 implementation.",
-          "default": null,
-          "anyOf": [
-            {
-              "$ref": "#/definitions/GuardGatewayV3"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
       "additionalProperties": false
     },
-    "FileSystem": {
+    "FileSystemObjectStoreConfig": {
+      "description": "A local directory used by one engine process at a time. Conditional writes are atomic only among requests of that process.",
       "type": "object",
       "required": [
         "path"
       ],
       "properties": {
         "path": {
+          "description": "Created when it does not exist.",
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "FilesystemConfig": {
+      "type": "object",
+      "properties": {
+        "max_cache_bytes": {
+          "description": "Bytes one filesystem's row cache may retain, a fairness ceiling inside `max_process_cache_bytes`.",
+          "default": 8388608,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_conflict_window_bytes": {
+          "default": 4194304,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_memory_bytes": {
+          "default": 67108864,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_operation_bytes": {
+          "default": 8388608,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_pending_commits": {
+          "default": 128,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_process_cache_bytes": {
+          "description": "Bytes all filesystem row caches in one process may retain together.",
+          "default": 1073741824,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_snapshot_age_ms": {
+          "default": 30000,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_snapshots": {
+          "default": 128,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_transaction_age_ms": {
+          "default": 300000,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_transaction_bytes": {
+          "description": "Maximum application bytes in one filesystem transaction.",
+          "default": 134217728,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_unapplied_bytes": {
+          "description": "Most payload bytes one opening may have admitted ahead of the newest position its partition's maintainer reported applied. A new write past it is refused with a retry hint before it is built, so a writer faster than the apply, as under a slow cold store or compaction, waits at admission instead of growing an unbounded backlog.",
+          "default": 268435456,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_value_bytes": {
+          "default": 1048576,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "note_ttl_ms": {
+          "description": "How long a write's overlay notes (\"this page is at this sequence\") outlive the write before the filesystem drops them and keeps their rows only as cache. A later miss on one of those rows reads it from the maintainer once it has applied the write. About ten times the usual apply latency.",
+          "default": 1000,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "request_timeout_ms": {
+          "default": 30000,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "ForkConfig": {
+      "description": "Global bounds for source hold cleanup and background cross-region copies.",
+      "type": "object",
+      "properties": {
+        "check_grace_ms": {
+          "description": "Minimum age before an unfinished fork's destination is checked.",
+          "default": 60000,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "materialize_batch_chunks": {
+          "description": "Further bounded by the maintainer's row and byte budgets.",
+          "default": 1024,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_concurrent_materializations": {
+          "default": 2,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "GcsObjectStoreConfig": {
+      "description": "Google Cloud Storage; defaults to the adapter's application default credentials.",
+      "type": "object",
+      "required": [
+        "bucket"
+      ],
+      "properties": {
+        "bucket": {
+          "type": "string"
+        },
+        "prefix": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "service_account_key": {
+          "description": "Optional JSON service account credential override.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -551,48 +784,6 @@
     "Guard": {
       "type": "object",
       "properties": {
-        "actor_force_wake_pending_timeout_ms": {
-          "description": "Timeout sent with actor force-wake requests in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "actor_ready_timeout_ms": {
-          "description": "Timeout for waiting for an actor to become ready in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "admission_client_state_cache_capacity": {
-          "description": "Maximum number of IP-keyed admission state entries when an admission limit is enabled.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 1.0
-        },
-        "admission_client_state_cache_idle_timeout_ms": {
-          "description": "Idle timeout for IP-keyed admission state in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 1.0
-        },
-        "enable_websocket_health_route": {
-          "description": "Enables the internal websocket health route for debug and latency testing. This is intended for websocket ping/pong verification and should remain disabled in normal deployments.",
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
         "host": {
           "description": "Host for HTTP traffic",
           "type": [
@@ -600,44 +791,6 @@
             "null"
           ],
           "format": "ip"
-        },
-        "http_client_pool_idle_timeout_ms": {
-          "description": "Idle timeout for pooled upstream HTTP connections in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 1.0
-        },
-        "http_max_request_body_size": {
-          "description": "Max HTTP request body size in bytes (first line of defense).",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "https": {
-          "description": "Enable & configure HTTPS",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Https"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "max_in_flight": {
-          "description": "Maximum concurrent requests applied per client IP. Omit to disable the in-flight limit.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 1.0
         },
         "port": {
           "description": "Port for HTTP traffic",
@@ -648,55 +801,8 @@
           "format": "uint16",
           "minimum": 0.0
         },
-        "proxy_retry_initial_interval_ms": {
-          "description": "Initial exponential retry backoff in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 1.0
-        },
-        "proxy_retry_max_attempts": {
-          "description": "Maximum number of proxy attempts, including the initial attempt.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 1.0
-        },
-        "rate_limit": {
-          "description": "Fixed-window request limit applied per client IP. Omit to disable request rate limiting.",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/GuardRateLimit"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "route_api_public_timeout_ms": {
-          "description": "Timeout for resolving api-public routes in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
         "route_auth_check_timeout_ms": {
           "description": "Timeout for guard-owned route authorization checks in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "route_cache_ttl_ms": {
-          "description": "TTL for cached route lookups in milliseconds.",
           "type": [
             "integer",
             "null"
@@ -713,15 +819,6 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "route_dispatch_timeout_ms": {
-          "description": "Timeout for dispatching to each guard routing module in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
         "route_pegboard_auth_check_timeout_ms": {
           "description": "Timeout for pegboard actor route authorization checks in milliseconds.",
           "type": [
@@ -731,94 +828,63 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "route_pegboard_fetch_actor_timeout_ms": {
-          "description": "Timeout for fetching pegboard actor routing state in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "route_pegboard_resolve_query_timeout_ms": {
-          "description": "Timeout for resolving pegboard actor query routes in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "route_pegboard_subscribe_timeout_ms": {
-          "description": "Timeout for subscribing to pegboard actor routing events in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "route_pegboard_wake_signal_timeout_ms": {
-          "description": "Timeout for sending pegboard actor wake signals in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "route_timeout_ms": {
-          "description": "Backstop timeout for route resolution in milliseconds. Primary timeout signals live inside each guard routing phase.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
         "tcp_nodelay": {
-          "description": "Enables TCP_NODELAY on accepted Guard sockets.",
+          "description": "Enables TCP_NODELAY on accepted Guard sockets. Defaults to true.\n\nGuard carries actor nodes' WebSockets and client WebSocket and HTTP traffic, where most writes are small frames. With Nagle's algorithm on, a small frame waits for the peer to acknowledge the previous one, and a peer that delays its ACK holds it for about 40 ms. That delay landed on every actor's first response.",
           "type": [
             "boolean",
             "null"
           ]
         },
-        "trace_propagation": {
-          "description": "Enables W3C trace context propagation (extract from incoming requests, inject into upstream requests/websockets).",
+        "websocket_keepalive_interval_ms": {
+          "description": "Interval in milliseconds at which Guard sends a ping frame on every client WebSocket. Keeps idle connections alive through proxies that close quiet WebSockets, such as Cloudflare's roughly 100 second idle timeout. Must be greater than 0. Defaults to 30000 ms.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "HardwareMetrics": {
+      "description": "Configuration for host hardware metrics.",
+      "type": "object",
+      "properties": {
+        "disk_probe": {
+          "description": "Times sequential writes and fsyncs on each data directory once at startup, in the background. Defaults to true.",
           "type": [
             "boolean",
             "null"
           ]
         },
-        "upstream_request_timeout_ms": {
-          "description": "Timeout for receiving upstream HTTP response headers in milliseconds.",
+        "disk_probe_bytes": {
+          "description": "Bytes the probe writes sequentially to each data directory. The fsync phase writes a further 400 KiB. Defaults to 64 MiB; at most 1 GiB.",
           "type": [
             "integer",
             "null"
           ],
           "format": "uint64",
-          "minimum": 1.0
-        },
-        "websocket_connect_attempt_timeout_ms": {
-          "description": "Timeout for each upstream WebSocket connection attempt in milliseconds.",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "HeartbeatGcConfig": {
+      "description": "Optional overrides for topology's bounded heartbeat cleanup service, which runs under the storage owner's singleton election. Topology defines the resolved defaults.",
+      "type": "object",
+      "properties": {
+        "batch_interval_ms": {
+          "description": "Pause between the batches of one pass. Defaults to 10 seconds.",
           "type": [
             "integer",
             "null"
           ],
           "format": "uint64",
-          "minimum": 1.0
+          "minimum": 0.0
         },
-        "websocket_flush_timeout_ms": {
-          "description": "Timeout for flushing forwarded WebSocket messages in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 1.0
-        },
-        "websocket_max_frame_size": {
-          "description": "Max WebSocket frame size in bytes.",
+        "batch_size": {
+          "description": "LIST entries examined per batch, 1 to 1000. Defaults to 128.",
           "type": [
             "integer",
             "null"
@@ -826,8 +892,17 @@
           "format": "uint",
           "minimum": 0.0
         },
-        "websocket_max_message_size": {
-          "description": "Max WebSocket message size in bytes.",
+        "batch_timeout_ms": {
+          "description": "Time budget of one batch. Defaults to 2 seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "delete_concurrency": {
+          "description": "Conditional deletes in flight per batch, 1 to `batch_size`. Defaults to 4.",
           "type": [
             "integer",
             "null"
@@ -835,92 +910,23 @@
           "format": "uint",
           "minimum": 0.0
         },
-        "websocket_send_timeout_ms": {
-          "description": "Timeout for forwarding a WebSocket message in milliseconds.",
+        "pass_interval_ms": {
+          "description": "Time between the starts of consecutive passes over both heartbeat prefixes. Defaults to one hour.",
           "type": [
             "integer",
             "null"
           ],
           "format": "uint64",
-          "minimum": 1.0
+          "minimum": 0.0
         },
-        "websocket_setup_timeout_ms": {
-          "description": "Timeout for completing the client WebSocket upgrade in milliseconds.",
+        "retention_ms": {
+          "description": "Defaults to 24 hours; clean shutdown markers remain available during this window.",
           "type": [
             "integer",
             "null"
           ],
           "format": "uint64",
-          "minimum": 1.0
-        }
-      },
-      "additionalProperties": false
-    },
-    "GuardGatewayV3": {
-      "type": "object",
-      "properties": {
-        "mode": {
-          "default": "off",
-          "allOf": [
-            {
-              "$ref": "#/definitions/GuardGatewayV3Mode"
-            }
-          ]
-        },
-        "percentage": {
-          "default": 0,
-          "type": "integer",
-          "format": "uint8",
-          "maximum": 100.0,
           "minimum": 0.0
-        }
-      },
-      "additionalProperties": false
-    },
-    "GuardGatewayV3Mode": {
-      "type": "string",
-      "enum": [
-        "off",
-        "opportunistic",
-        "on"
-      ]
-    },
-    "GuardRateLimit": {
-      "type": "object",
-      "required": [
-        "period_ms",
-        "requests"
-      ],
-      "properties": {
-        "period_ms": {
-          "description": "Fixed-window duration in milliseconds.",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 1.0
-        },
-        "requests": {
-          "description": "Number of requests allowed during each fixed window.",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 1.0
-        }
-      },
-      "additionalProperties": false
-    },
-    "Https": {
-      "type": "object",
-      "required": [
-        "port",
-        "tls"
-      ],
-      "properties": {
-        "port": {
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 0.0
-        },
-        "tls": {
-          "$ref": "#/definitions/Tls"
         }
       },
       "additionalProperties": false
@@ -928,15 +934,6 @@
     "Jwt": {
       "type": "object",
       "properties": {
-        "accepted_issuers": {
-          "description": "Previous Rivet issuers temporarily authorized during a migration.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "uri"
-          }
-        },
         "audience": {
           "type": [
             "string",
@@ -1038,6 +1035,330 @@
       },
       "additionalProperties": false
     },
+    "KvCommandConfig": {
+      "description": "Optional limits for typed commands and maintainer-owned filesystems.",
+      "type": "object",
+      "properties": {
+        "evicted_idle_warn_ms": {
+          "description": "Warns on eviction below this idle time; defaults to 15 seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_command_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_eviction_closes": {
+          "description": "Idle KV command volumes one partition's host closes at once to make room past its cap or the worker's budget. Each open refused at a full cap starts one such close, so a burst admits at this many closes per close latency. A closing volume keeps its memory charge until its close finishes. Defaults to 32.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_inflight_command_bytes": {
+          "description": "Received bytes of the KV commands one partition's host has admitted and not finished. A command that would exceed it is refused at once as unavailable, which callers retry within their deadline. Must hold at least one command of `max_command_bytes`. Defaults to 64 MiB, so a worker maintaining four partitions holds at most 256 MiB of command payloads.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_inflight_commands": {
+          "description": "Maximum simultaneous handlers per registered command class.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_open_volumes": {
+          "description": "KV command volumes one partition's host holds open at once, closing ones included. Defaults to the worker-wide cap, so by default only the worker's memory budget limits a partition.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_worker_open_volume_bytes": {
+          "description": "Memory, in bytes, that the KV command volumes of this worker may hold together across every partition it maintains, closing ones included. Each open volume is charged 80 KiB, its measured fixed cost with allocator headroom: its host slot, volume client and filesystem owner, plus the log replicas and maintainer state its open loads. Caches and command payloads are bounded separately. One worker-wide budget bounds memory however many partitions the worker holds, and a create burst opens one volume per new key, so the default of 5 GiB holds 65,536 volumes (default 5 GiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_worker_open_volumes": {
+          "description": "A count backstop to `max_worker_open_volume_bytes`; unset by default, so the byte budget alone sets the worker's cap.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "request_capacity": {
+          "description": "KV commands one worker holds received and unanswered, and that one caller may have outstanding to one worker, isolated from volume lifecycle requests. A full window refuses a command at once as overloaded, and the caller retries it within its deadline. Each partition's host admits at most the sum of its commands' concurrency caps (4,608 with the default caps and the engine's commands), so the default of 32,768 lets those caps, not this window, refuse load first on a worker that maintains up to seven partitions. Defaults to 32,768.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "short_idle_close_ms": {
+          "description": "Idle close for volumes of short-lived commands, such as one Epoxy key per volume. Closing also begins the volume's unload. Defaults to 2 seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "volume_idle_close_ms": {
+          "description": "Defaults to 60 seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "LogShardConfig": {
+      "description": "The log shard owns resolved defaults and validates relationships between these limits.",
+      "type": "object",
+      "properties": {
+        "checkpoint_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "checkpoint_timeout_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "disk_read_concurrency": {
+          "description": "Disk reads executing at once beside the shard's write queue. Each holds one scan buffer of two maximum batches from `max_memory_bytes`. Defaults to 8.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "inbox_capacity": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "manifest_refresh_timeout_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_admission_wait_ms": {
+          "description": "Longest wait, in milliseconds, of a request other than an append in the shard's inbox. A request that waited longer is refused as overloaded before any work, with a retry hint, so a saturated shard sheds load instead of queueing past the volume client's quorum timeout. Defaults to 1000.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_append_admission_wait_ms": {
+          "description": "The same bound for appends, commit announcements, trims and forgets, which carry writes a volume client already admitted or free memory and disk, so opens and other new work are shed first. At least `max_admission_wait_ms` and just under the volume client's 2 s append timeout, past which the client has resent the append anyway. Defaults to 1800.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_batch_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_disk_bytes": {
+          "description": "Disk bytes the shard's log may hold. When unset, a storage worker sizes it from the free space of its filesystem at startup, shared with the cold-store disk cache.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_disk_reads": {
+          "description": "Most reads waiting on the shard's disk at once; a read that needs disk beyond it is rejected as overloaded and retried by the caller. Defaults to 256.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_loaded_volume_bytes": {
+          "description": "Memory, in bytes, that one log shard's loaded replicas may hold, charged at 1.5 KiB per replica, the measured heap of a quiet loaded replica with headroom. A load past it is refused as `too_many_loaded_volumes`, a typed refusal its open retries. The default of 1.5 GiB holds 1,048,576 replicas (default 1.5 GiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_loaded_volumes": {
+          "description": "A count backstop to `max_loaded_volume_bytes`; unset by default, so the byte budget alone sets the shard's replica cap.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_memory_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_memory_requests": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_retained_payload_bytes": {
+          "description": "Encoded bytes of synced log entry payloads the shard keeps in memory for reads; defaults to a sixteenth of `max_memory_bytes`. Older payloads are read from disk.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_retained_payload_bytes_per_volume": {
+          "description": "Synced payload bytes one volume replica keeps after each disk write; defaults to 32 KiB.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_write_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "overload_retry_after_ms": {
+          "description": "Retry hint, in milliseconds, on a request refused because the inbox or a request budget is full. Defaults to 100.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "preallocate_segments": {
+          "description": "Writes log segments into files zero-filled to `segment_bytes` ahead of use, so each commit overwrites allocated blocks and syncs only its data instead of journaling a file size change. On the load cluster's disks this halves the sync and commit latency. The unused allocation of the active segment and one spare segment count toward `max_disk_bytes`. Each write also records, in a header slot synced with it, how far earlier syncs reached, so a disk that returns synced pages as zeros is reported as corruption rather than read as free space. Needs `segment_bytes` above 8 KiB. Defaults to true.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "recovery_timeout_ms": {
+          "description": "How long log shard recovery may go without finishing another file before the shard fails (default 120 s). It does not bound the whole scan, which grows with the log.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "release_idle_payloads_after_ms": {
+          "description": "How long a volume replica appends nothing before its synced payloads leave memory; defaults to 5000.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "remove_segments_timeout_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "segment_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "write_to_cold_at_disk_percent": {
+          "description": "Early cold-write watermark, 1..99 percent of the disk cap; defaults to 75.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "write_to_disk_timeout_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
     "Logs": {
       "type": "object",
       "properties": {
@@ -1051,25 +1372,22 @@
       },
       "additionalProperties": false
     },
-    "Memory": {
-      "type": "object",
-      "properties": {
-        "channel": {
-          "default": "default",
-          "type": "string"
-        },
-        "disable_memory_optimization": {
-          "description": "When true, force every UPS publish to round-trip through the memory driver instead of taking the in-process fast path for subjects that have a local subscriber on the same engine pod. Opt-in diagnostic; default false.",
-          "default": false,
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false
-    },
     "Metrics": {
       "description": "Configuration for the metrics service.",
       "type": "object",
       "properties": {
+        "hardware": {
+          "description": "Host hardware metrics, including a short disk probe of each data directory at startup.",
+          "default": {
+            "disk_probe": null,
+            "disk_probe_bytes": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/HardwareMetrics"
+            }
+          ]
+        },
         "host": {
           "type": [
             "string",
@@ -1088,68 +1406,111 @@
       },
       "additionalProperties": false
     },
-    "Nats": {
+    "ObjectStorageConfig": {
       "type": "object",
-      "required": [
-        "addresses"
-      ],
       "properties": {
-        "addresses": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "client_capacity": {
-          "description": "Capacity of the async-nats client command queue.\n\nWhen this fills, client operations such as subscribe, publish, and drain wait until the connection task catches up.",
-          "default": 1048576,
-          "type": "integer",
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "disable_memory_optimization": {
-          "description": "When true, force every UPS publish to round-trip through NATS instead of taking the in-process fast path for subjects that have a local subscriber on the same engine pod. Opt-in diagnostic; default false.",
-          "default": false,
-          "type": "boolean"
-        },
-        "password": {
-          "default": null,
-          "anyOf": [
+        "primary": {
+          "default": "in_memory",
+          "allOf": [
             {
-              "$ref": "#/definitions/Secret<String>"
-            },
-            {
-              "type": "null"
+              "$ref": "#/definitions/ObjectStoreBackend"
             }
           ]
         },
-        "port": {
+        "read_first_attempt_ms": {
+          "description": "Milliseconds the first attempt of a small GET or HEAD may wait for response headers before the client cuts it off and retries it with its normal timeouts. A request on a stalled connection otherwise waits the full 30 s client timeout. Default 250, set from the load cluster's Azure account, where about 0.02% of small requests took longer; 0 disables it. Response bodies are never cut off.",
+          "default": null,
           "type": [
             "integer",
             "null"
           ],
-          "format": "uint16",
+          "format": "uint64",
           "minimum": 0.0
         },
-        "subscription_capacity": {
-          "description": "Capacity of each individual NATS subscriber message buffer.\n\nWhen this fills, async-nats drops the message and emits `SlowConsumer`. Rivet logs this as `nats slow consumer`.",
-          "default": 262144,
-          "type": "integer",
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "username": {
+        "write_first_attempt_bytes_per_second": {
+          "description": "The upload rate a conditional PUT's first attempt may fall to before it is cut off, which extends `write_first_attempt_ms` by the body's size. Default 8 MiB/s.",
           "default": null,
           "type": [
-            "string",
+            "integer",
             "null"
-          ]
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "write_first_attempt_ms": {
+          "description": "Milliseconds the first attempt of a small conditional PUT (a lease, heartbeat or manifest) may wait for response headers, before the upload time its body needs at `write_first_attempt_bytes_per_second`. Unset by default, which disables it. Healthy conditional PUT latency is calibrated only on Azure; a healthy GCS PUT can take over 250 ms. GCS also allows about one write per second to one object, so a retry shortly after a cut-off on the same lease or heartbeat object risks a 429, an unknown outcome and an extra readback. Set it only from measured conditional PUT latency of the backend.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
     },
+    "ObjectStoreBackend": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "in_memory"
+          ]
+        },
+        {
+          "description": "A local directory, for a single engine process that keeps its data across restarts.",
+          "type": "object",
+          "required": [
+            "file_system"
+          ],
+          "properties": {
+            "file_system": {
+              "$ref": "#/definitions/FileSystemObjectStoreConfig"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "s3"
+          ],
+          "properties": {
+            "s3": {
+              "$ref": "#/definitions/S3ObjectStoreConfig"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "azure"
+          ],
+          "properties": {
+            "azure": {
+              "$ref": "#/definitions/AzureObjectStoreConfig"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "gcs"
+          ],
+          "properties": {
+            "gcs": {
+              "$ref": "#/definitions/GcsObjectStoreConfig"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "Outbound": {
-      "description": "Policy for outbound HTTP requests to user-configured destinations, such as serverless runner URLs.\n\nThese requests originate from inside the trusted engine network, so without restrictions a caller who can configure a runner can reach internal-only services. The defaults deny every non-globally-routable destination except loopback.",
+      "description": "Policy for outbound HTTP requests to user-configured destinations, such as serverless node URLs.\n\nThese requests originate from inside the trusted engine network, so without restrictions a caller who can configure a node can reach internal-only services. The defaults deny every non-globally-routable destination except loopback.",
       "type": "object",
       "properties": {
         "allow_cidrs": {
@@ -1163,7 +1524,7 @@
           }
         },
         "allow_hosts": {
-          "description": "Hostnames that are always permitted, whatever they resolve to.\n\nMatched exactly and case-insensitively, with no wildcards. Use this for a first-party service whose address is not known ahead of time, such as a Kubernetes service name. Anything served at a listed host becomes reachable by every runner config, so list individual hosts rather than a shared entry point.",
+          "description": "Hostnames that are always permitted, whatever they resolve to.\n\nMatched exactly and case-insensitively, with no wildcards. Use this for a first-party service whose address is not known ahead of time, such as a Kubernetes service name. Anything served at a listed host becomes reachable by every node config, so list individual hosts rather than a shared entry point.",
           "type": [
             "array",
             "null"
@@ -1187,7 +1548,7 @@
           ]
         },
         "allow_private_networks": {
-          "description": "Allow destinations that resolve to private, link-local, shared (CGNAT), or otherwise non-globally-routable addresses.\n\nSelf-hosted deployments that point runners at addresses on their own network, such as a Docker Compose service name, need this enabled.",
+          "description": "Allow destinations that resolve to private, link-local, shared (CGNAT), or otherwise non-globally-routable addresses.\n\nSelf-hosted deployments that point nodes at addresses on their own network, such as a Docker Compose service name, need this enabled.",
           "type": [
             "boolean",
             "null"
@@ -1215,11 +1576,201 @@
       },
       "additionalProperties": false
     },
+    "PartitionBalancingConfig": {
+      "description": "Static partition placement policy; membership and lease timings remain topology-owned.",
+      "type": "object",
+      "properties": {
+        "destination_stability_ms": {
+          "description": "How long a new worker must be listed in discovery, and pass one disk probe, before the coordinator places partitions on it. Must exceed the topology worker lease plus one renewal and the takeover grace, about 35 s, so a worker that crashes soon after it first appears has left discovery before it qualifies. Startup refuses a shorter value.",
+          "default": 60000,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "enabled": {
+          "description": "Whether the partition coordinator places, splits and replaces partitions on its own. When disabled, the layout changes only through operator commands: a new cluster gets no first partition until an operator creates one, and a missing worker is never replaced.",
+          "default": true,
+          "type": "boolean"
+        },
+        "max_disk_probes": {
+          "description": "Maximum concurrent disk admission requests made by the partition coordinator.",
+          "default": 4,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "missing_worker_ms": {
+          "description": "How long an assigned worker must be missing from discovery before its replicas are replaced. Counted from when discovery drops it, which is itself one lease after its last renewal.",
+          "default": 120000,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "partitions_per_core": {
+          "default": 2,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "PeerTransport": {
+      "description": "Connections and flow-control windows per peer. Omitted values use the defaults.",
+      "type": "object",
+      "properties": {
+        "channel_large_request_bytes": {
+          "description": "Requests with a larger payload use a peer's large-request channels, so they never queue ahead of small requests on one stream (default 64 KiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "channel_max_write_bytes": {
+          "description": "Most bytes a peer channel writes at once from its queue (default 256 KiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "channel_queue_bytes": {
+          "description": "Bytes of requests a peer channel queues for writing; a request that would exceed it is refused, though an empty queue always takes one (default 64 MiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "channel_queue_frames": {
+          "description": "Frames a peer channel queues for writing; a full queue refuses the request (default 8192).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "channel_reply_queue_bytes": {
+          "description": "Bytes of replies one served peer channel queues for writing. A channel at its cap refuses new requests as overloaded until its caller reads or the queued replies expire (default 64 MiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "incoming_channel_capacity": {
+          "description": "Peer channels this worker may serve across all remote workers (default 4096).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "outgoing_channel_capacity": {
+          "description": "Peer channels this worker may open across all remote workers (default 4096).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "reply_queue_bytes": {
+          "description": "Bytes of replies queued across every served peer channel of this worker. At the cap every channel refuses new requests as overloaded (default 1 GiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "request_connection_window_bytes": {
+          "description": "HTTP/2 connection window of a request connection (default 16 MiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "request_connections": {
+          "description": "Connections per peer for unary requests, each carrying one peer channel (default 4).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "request_stream_window_bytes": {
+          "description": "HTTP/2 stream window this worker grants a peer channel's replies (default 4 MiB). A worker's server grants each incoming stream a fixed 4 MiB window.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "server_connection_capacity": {
+          "description": "TCP connections the internal HTTP listener may serve at once (default 8192).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "stream_connection_window_bytes": {
+          "description": "HTTP/2 connection window of a stream connection (default 32 MiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "stream_connections": {
+          "description": "Connections per peer for long-lived streams such as tunnels (default 2).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "stream_stream_window_bytes": {
+          "description": "HTTP/2 stream window of a long-lived stream (default 1 MiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
     "Pegboard": {
       "type": "object",
       "properties": {
-        "actor_allocation_candidate_sample_size": {
-          "description": "Amount of runners to query from the allocation queue and choose at random when allocating an actor.",
+        "actor_index_buckets_per_name": {
+          "description": "Hashed index bucket volumes for each namespace and actor name (default 8, 1..=256).\n\nThis is part of the index address format. Changing it on a running cluster strands existing rows in buckets that listing and destroy no longer target, so treat it as fixed per cluster.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "actor_index_list_concurrency": {
+          "description": "Maximum actor index bucket pages one listing reads at once (default 32).",
           "type": [
             "integer",
             "null"
@@ -1227,58 +1778,8 @@
           "format": "uint",
           "minimum": 0.0
         },
-        "actor_allocation_threshold": {
-          "description": "How long to wait for an ack response from the outbound request layer before setting actor as lost.\n\nUnit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "actor_create_rate_limit_drip_rate_ms": {
-          "description": "Time to regain one actor creation token per namespace.\n\nUnit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "actor_create_rate_limit_requests": {
-          "description": "Max burst of actor creations per namespace before throttling.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "actor_retry_duration_threshold": {
-          "description": "How long to wait after starting to attempt to reallocate before before setting actor to sleep.\n\nUnit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "actor_start_threshold": {
-          "description": "How long to wait after creating and not receiving a starting state before setting actor as lost.\n\nUnit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "actor_stop_threshold": {
-          "description": "How long to wait after stopping and not receiving a stop state before setting actor as lost.\n\nUnit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "base_retry_timeout": {
-          "description": "Time to delay an actor from rescheduling after a rescheduling failure.\n\nUnit is in milliseconds.",
+        "actor_index_reaper_max_concurrency": {
+          "description": "Lazy orphan deletes an actor listing runs at once (default 16).",
           "type": [
             "integer",
             "null"
@@ -1286,43 +1787,8 @@
           "format": "uint",
           "minimum": 0.0
         },
-        "default_metadata_poll_interval": {
-          "description": "Default metadata poll interval for serverless runners when not specified in runner config.\n\nUnit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "envoy_eligible_threshold": {
-          "description": "How long after last ping before considering a envoy ineligible for allocation.\n\nUnit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "envoy_event_demuxer_gc_interval": {
-          "description": "GC interval for actor event demuxer in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "envoy_event_demuxer_max_last_seen_threshold": {
-          "description": "Max time since last seen before actor is considered stale, in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "envoy_expire_scheduler_max_concurrent_expires": {
-          "description": "Maximum concurrent background expire operations spawned by the read-path envoy expire scheduler.",
+        "actor_index_reaper_max_pending": {
+          "description": "Rows an actor listing's lazy orphan deletes may queue at once (default 1024).",
           "type": [
             "integer",
             "null"
@@ -1330,178 +1796,103 @@
           "format": "uint",
           "minimum": 0.0
         },
-        "envoy_expire_scheduler_max_pending": {
-          "description": "Maximum pending envoys tracked by the read-path envoy expire scheduler.",
+        "actor_key_cache_capacity": {
+          "description": "Actor key reservations and key epochs cached in one process, each (default 100000). Reservations never change, so a cached one is kept until evicted.",
           "type": [
             "integer",
             "null"
           ],
-          "format": "uint",
+          "format": "uint64",
           "minimum": 0.0
         },
-        "envoy_load_balancer": {
-          "description": "Strategy for choosing an Envoy when allocating a serverful actor.",
-          "anyOf": [
+        "actor_start_notice_timeout_ms": {
+          "description": "Timeout of one start notice to a waiting gateway worker. Unit is in milliseconds (default 2000, 100..=30000).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "actor_start_waiters_capacity": {
+          "description": "Gateway workers one actor keeps waiting for its start (default 64, 1..=1024). A request that finds the list full waits on its fallback poll alone.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "command_concurrency": {
+          "description": "Per-class handler concurrency for the storage commands pegboard registers on storage workers.",
+          "default": {
+            "actor": null,
+            "actor_event": null,
+            "actor_read": null,
+            "index": null
+          },
+          "allOf": [
             {
-              "$ref": "#/definitions/EnvoyLoadBalancer"
-            },
-            {
-              "type": "null"
+              "$ref": "#/definitions/CommandConcurrency"
             }
           ]
         },
-        "envoy_lost_threshold": {
-          "description": "How long to wait before considering an envoy lost and evicting all of its actors.\n\nUnit is in milliseconds.",
+        "gateway_port": {
+          "description": "Port for the new partition-backed gateway and node Hyper listener (default 6422).",
           "type": [
             "integer",
             "null"
           ],
-          "format": "int64"
+          "format": "uint16",
+          "minimum": 0.0
         },
-        "envoy_max_response_payload_size": {
-          "description": "Max response payload size in bytes from actors.",
+        "gateway_retry_budget_max_tokens": {
+          "description": "Retries one gateway process can bank for a burst of refusals; the budget starts full (default 100, 0..=100000).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "gateway_retry_budget_percent": {
+          "description": "Retries of refused requests one gateway process allows, as a percentage of the requests it receives (default 10, 0..=100). A refused request past this budget fails with `guard.service_unavailable` and its retry hint, so the client owns the next attempt.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "gateway_start_poll_after_ms": {
+          "description": "Time after a gateway request starts waiting for an actor's start notice before its first fallback read. Unit is in milliseconds (default 2000, 100..=30000).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_start_poll_interval_ms": {
+          "description": "Time between later fallback reads while a gateway request waits for an actor's start. Unit is in milliseconds (default 2000, 100..=30000).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_start_waits_capacity": {
+          "description": "Actors one gateway process waits on at once for a start notice (default 65536, 1..=1048576). When full, a new request waits on its fallback poll alone.",
           "type": [
             "integer",
             "null"
           ],
           "format": "uint",
-          "minimum": 0.0
-        },
-        "envoy_ping_timeout": {
-          "description": "Max time since last pong before the envoy connection is terminated. Unit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "envoy_update_ping_interval": {
-          "description": "Ping interval for envoy updates in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "envoy_websocket_rate_limit_drip_rate_us": {
-          "description": "Time to regain one inbound WebSocket message token on a single envoy connection.\n\nUnit is in microseconds. The envoy connection multiplexes every actor on a runner, so the sustained ceiling is far higher than the per-client gateway limit and needs sub-millisecond granularity to express.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "envoy_websocket_rate_limit_requests": {
-          "description": "Max burst of inbound WebSocket messages on a single envoy connection before throttling.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_gc_interval_ms": {
-          "description": "GC interval for in-flight requests in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_http_max_request_body_size": {
-          "description": "Max HTTP request body size in bytes for requests to actors.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "gateway_http_response_body_channel_capacity": {
-          "description": "Number of body chunks buffered between a streaming response handler and its HTTP client.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "gateway_http_response_queue_max_messages": {
-          "description": "Maximum number of envoy response messages buffered per HTTP request.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "gateway_hws_max_pending_size": {
-          "description": "Max pending message buffer size for hibernating WebSockets in bytes.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_hws_message_ack_timeout_ms": {
-          "description": "Hibernating WebSocket message ack timeout in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_response_chunk_idle_timeout_ms": {
-          "description": "Timeout between streaming HTTP response chunks in milliseconds.\n\nDisabled when unset so long-lived streams such as SSE may remain idle.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_response_start_timeout_ms": {
-          "description": "Timeout for response to start in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_streaming_http_response_queue_max_bytes": {
-          "description": "Maximum streaming response bytes buffered per HTTP request.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "gateway_tunnel_ping_timeout_ms": {
-          "description": "Tunnel ping timeout in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "gateway_update_ping_interval_ms": {
-          "description": "Ping interval for gateway updates in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
           "minimum": 0.0
         },
         "gateway_websocket_open_timeout_ms": {
-          "description": "WebSocket open/handshake timeout in milliseconds.",
+          "description": "Time an actor WebSocket upgrade may wait for its actor, as while storage recovers after an engine restart. Past it the gateway accepts the upgrade and closes it with `guard.service_unavailable` and a retry hint, so a client without a connect timeout retries instead of waiting forever. Unit is in milliseconds (default 15000, 1000..=45000).",
           "type": [
             "integer",
             "null"
@@ -1509,43 +1900,35 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "gateway_websocket_rate_limit_drip_rate_ms": {
-          "description": "Time to regain one inbound WebSocket message token on a single connection.\n\nUnit is in milliseconds.",
+        "node_actor_handles_capacity": {
+          "description": "Retained actor handles per node connection (default 16384, 1..=65536).",
           "type": [
             "integer",
             "null"
           ],
-          "format": "uint64",
+          "format": "uint",
           "minimum": 0.0
         },
-        "gateway_websocket_rate_limit_requests": {
-          "description": "Max burst of inbound WebSocket messages on a single connection before throttling.",
+        "node_actor_inbound_capacity": {
+          "description": "Events, KV and SQLite requests queued from one actor on a node connection (default 128, 1..=65536).",
           "type": [
             "integer",
             "null"
           ],
-          "format": "uint64",
+          "format": "uint",
           "minimum": 0.0
         },
-        "hibernating_request_eligible_threshold": {
-          "description": "How long after last ping before considering a hibernating request disconnected.\n\nUnit is in milliseconds.",
+        "node_actor_lane_capacity": {
+          "description": "Commands and tunnel messages queued toward one actor on a node connection (default 128, 1..=65536).",
           "type": [
             "integer",
             "null"
           ],
-          "format": "int64"
-        },
-        "min_metadata_poll_interval": {
-          "description": "Minimum metadata poll interval for serverless runners.\n\nThe actual poll interval will be the maximum of this value and the runner config's `metadata_poll_interval` setting. This prevents excessive polling even if the runner config specifies a very short interval.\n\nUnit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
+          "format": "uint",
           "minimum": 0.0
         },
-        "pool_desired_max_override": {
-          "description": "Global pool desired max.",
+        "node_connect_admission_burst": {
+          "description": "node connects one process can admit in a burst; the budget starts full (default 400, 1..=1000000).",
           "type": [
             "integer",
             "null"
@@ -1553,85 +1936,8 @@
           "format": "uint32",
           "minimum": 0.0
         },
-        "preload_max_total_bytes": {
-          "description": "Maximum total size of all preloaded KV data sent with the actor start command. Setting to 0 disables all preloading.\n\nUnit is in bytes. Default: 1,048,576 (1 MiB).",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "reschedule_backoff_max_exponent": {
-          "description": "Maximum exponent for the reschedule backoff calculation.\n\nThis controls the maximum backoff duration when rescheduling actors.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "retry_reset_duration": {
-          "description": "How long an actor goes without retries before it's retry count is reset to 0, effectively resetting its backoff to 0.\n\nUnit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "runner_eligible_threshold": {
-          "description": "How long after last ping before considering a runner ineligible for allocation.\n\nUnit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "runner_event_demuxer_gc_interval_ms": {
-          "description": "GC interval for actor event demuxer in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "runner_event_demuxer_max_last_seen_ms": {
-          "description": "Max time since last seen before actor is considered stale, in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "runner_lost_threshold": {
-          "description": "How long to wait after last ping before forcibly removing a runner from the database and deleting its workflow, evicting all actors.\n\nNote that the runner may still be running and can reconnect.\n\nUnit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "runner_max_response_payload_body_size": {
-          "description": "Max response payload size in bytes from actors.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "runner_ping_timeout_ms": {
-          "description": "Max time since last pong before the runner connection is terminated. Unit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "runner_pool_consecutive_successes_to_clear_error": {
-          "description": "Number of consecutive successes required to clear an active runner pool error.\n\nThis prevents a single success from clearing an error during flapping conditions. Higher values provide more stability but slower recovery from transient errors.",
+        "node_connect_admissions_per_second": {
+          "description": "node connects one process admits per second once its burst is spent (default 200, 1..=100000). A connect past the budget is closed at once with `node.connect_overloaded` and a retry hint, before any work, so a fleet reconnecting after an outage cannot overwhelm guard.",
           "type": [
             "integer",
             "null"
@@ -1639,8 +1945,8 @@
           "format": "uint32",
           "minimum": 0.0
         },
-        "runner_update_ping_interval_ms": {
-          "description": "Ping interval for runner updates in milliseconds.",
+        "node_connect_retry_after_ms": {
+          "description": "Retry hint sent with a shed node connect. The node waits between one and two hints, so shed connects return spread out, and caps the hint at 5 s so a shed node still retries well inside the lost threshold. The same hint goes with a connect refused because storage could not register the node yet. Unit is in milliseconds (default 1000, 100..=5000).",
           "type": [
             "integer",
             "null"
@@ -1648,26 +1954,8 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "serverless_backoff_max_exponent": {
-          "description": "Maximum exponent for the serverless backoff calculation.\n\nThis controls the maximum backoff duration when serverlessly connecting to runners.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "serverless_base_retry_timeout": {
-          "description": "Time to delay a serverless runner from attempting a new outbound connection after a connection failure.\n\nUnit is in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "serverless_drain_grace_period": {
-          "description": "**Deprecated** Configure the drain period in the runner config.\n\nDrain grace period for serverless runners.\n\nThis time is subtracted from the configured request duration. Once `duration - grace` is reached, the runner is sent stop commands for all of its actors. After the grace period is over (i.e. the full duration is reached) the runner websocket is forcibly closed.\n\nUnit is in milliseconds.",
+        "node_directory_cache_ms": {
+          "description": "Maximum age of the process-local node directory that actor allocation reads instead of listing the node index on every allocation. Must be greater than 0.\n\nUnit is in milliseconds. Defaults to 1000.",
           "type": [
             "integer",
             "null"
@@ -1675,107 +1963,408 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "serverless_retry_reset_duration": {
-          "description": "How long a serverless runner goes without connection failures before it's retry count is reset to 0, effectively resetting its backoff to 0.\n\nUnit is in milliseconds.",
+        "node_directory_max_stale_ms": {
+          "description": "Maximum age of a node directory listing that allocation still uses while one background listing replaces it. Allocation waits for a listing only past this age. Must be at least `node_directory_cache_ms`.\n\nUnit is in milliseconds. Defaults to 5000.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "node_event_delivery_timeout_ms": {
+          "description": "Time a lifecycle event may spend retrying storage command deadlines before its node socket is closed for reconnection. Defaults to 120000 ms.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "node_index_reaper_max_concurrency": {
+          "description": "Stale node row deletes one reader runs at once (default 8).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "node_index_reaper_max_pending": {
+          "description": "Stale node row deletes one reader may queue at once (default 256).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "node_lost_checks_capacity": {
+          "description": "Lost checks one process holds for closed node connections that may not reconnect (default 4096, 1..=65536). When full, the check due soonest is dropped and its actors are found lost on their next request.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "node_lost_threshold": {
+          "description": "How long a disconnected node keeps its actors before stopping them, advertised to the node on connect. The engine waits as long after a connection closes before it judges the node's actors lost, so both sides agree. It must exceed the node client's longest reconnect backoff (30 s), or an engine restart stops every actor.\n\nUnit is in milliseconds (default 40000).",
           "type": [
             "integer",
             "null"
           ],
           "format": "int64"
+        },
+        "node_ping_timeout": {
+          "description": "Max time since last pong before the node connection is terminated. Unit is in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "node_record_cache_capacity": {
+          "description": "node records cached for routing fallbacks in one process (default 10000).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "node_record_cache_ms": {
+          "description": "Lifetime of a cached node record read on a routing fallback, in milliseconds (default 2000).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "node_socket_queue_capacity": {
+          "description": "Messages queued for one node socket writer (default 128, 1..=65536).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "node_start_wait_ms": {
+          "description": "Longest time a node connection holds a gateway request for an actor generation whose start command it has not forwarded yet, in milliseconds (default 1000). A gateway sends a request right behind the start, so this keeps the request from reaching the node first. When it runs out the request is forwarded anyway, and the node refuses it as not found.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "node_tunnel_queue_capacity": {
+          "description": "Messages queued toward one gateway tunnel stream on a node connection (default 128, 1..=65536).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "node_update_ping_interval": {
+          "description": "Ping interval for node updates in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "sqlite_remote_idle_ms": {
+          "description": "Idle time after which a remote SQL session is closed and reopened on next use.\n\nUnit is in milliseconds (default 30000).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "sqlite_remote_max_response_bytes": {
+          "description": "Largest response, in logical bytes, that one remote SQL request may return. A larger result fails the request instead of being sent.\n\nUnit is in bytes (default 25165824, 24 MiB; at most 64 MiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "sqlite_remote_worker_threads": {
+          "description": "Threads shared by every remote SQL session in this process (default 4).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "sqlite_server_prefetch": {
+          "description": "Sends SQLite pages the client is likely to read next along with the pages it asked for (default true). When off, the engine sends only requested pages but keeps maintaining its prefetch hints, so turning it back on needs no rebuild. Runtime configurable.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "sqlite_sessions": {
+          "description": "Maximum actor storage lanes retained by one node connection (default 4000). Explicit overrides must be positive; each lane retains its database volume until stop.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
     },
-    "Postgres": {
+    "ProcessClassCapacity": {
+      "description": "The process-wide caps of a class that travels on unreserved subjects.",
       "type": "object",
-      "required": [
-        "url"
-      ],
       "properties": {
-        "nats": {
-          "description": "NATS configuration for UniversalDB multi-node mode.\n\nWhen set, UniversalDB runs in multi-node mode and uses NATS for follower-to-leader commit transport instead of an in-process resolver. When absent, UniversalDB runs single-node. If unset but the UPS pubsub is configured for NATS, this is inherited from that config at startup (see `Root::validate_and_set_defaults`).",
-          "default": null,
+        "incoming_capacity": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "outgoing_capacity": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "PubSub": {
+      "description": "Exact-subject worker requests and streams.",
+      "type": "object",
+      "properties": {
+        "classes": {
+          "description": "Per-class request caps. Every class has a defined cap; omitted values use the defaults.",
           "anyOf": [
             {
-              "$ref": "#/definitions/Nats"
+              "$ref": "#/definitions/RequestClasses"
             },
             {
               "type": "null"
             }
           ]
         },
-        "ssl": {
-          "description": "SSL configuration options",
-          "default": null,
-          "anyOf": [
-            {
-              "$ref": "#/definitions/PostgresSsl"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        "max_message_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
         },
-        "url": {
-          "description": "URL to connect to Postgres with\n\nSupports standard PostgreSQL connection parameters including `sslmode`. Supported sslmode values: `disable`, `prefer` (default), `require`. To verify server certificates, use `sslmode=require` with `ssl.root_cert_path`.\n\nExample with sslmode: `postgresql://user:pass@host:5432/db?sslmode=require`\n\nSee: https://docs.rs/postgres/0.19.10/postgres/config/struct.Config.html#url",
+        "max_request_subjects": {
+          "description": "Maximum concurrently reserved request subjects with isolated capacity.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "peer_transport": {
+          "description": "Peer connection sets. Unary requests travel on peer channels over request connections, and long-lived streams use separate stream connections, so a stalled stream cannot hold up requests.",
+          "default": {
+            "channel_large_request_bytes": null,
+            "channel_max_write_bytes": null,
+            "channel_queue_bytes": null,
+            "channel_queue_frames": null,
+            "channel_reply_queue_bytes": null,
+            "incoming_channel_capacity": null,
+            "outgoing_channel_capacity": null,
+            "reply_queue_bytes": null,
+            "request_connection_window_bytes": null,
+            "request_connections": null,
+            "request_stream_window_bytes": null,
+            "server_connection_capacity": null,
+            "stream_connection_window_bytes": null,
+            "stream_connections": null,
+            "stream_stream_window_bytes": null
+          },
           "allOf": [
             {
-              "$ref": "#/definitions/Secret<String>"
+              "$ref": "#/definitions/PeerTransport"
+            }
+          ]
+        },
+        "request_header_capacity": {
+          "description": "Concurrent HTTP request header reads (default 2048). Held only until the header decodes, then the request moves to its class or subject budget.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "request_subscription_capacity": {
+          "description": "Pending requests per subject; a full queue rejects new requests immediately.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "request_timeout_ms": {
+          "description": "Default and maximum request budget, including resolution, transit, and queueing.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "stream_buffer_capacity": {
+          "description": "Buffered packets per stream direction; full buffers apply backpressure.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "RequestClasses": {
+      "description": "Per-class request caps. storage classes travel on reserved subjects whose window is their incoming cap, so they take only an outgoing cap across every target.",
+      "type": "object",
+      "properties": {
+        "actor_start_notice": {
+          "description": "Actor start notices to waiting gateway workers (default 4096 each way).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ProcessClassCapacity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gateway_http": {
+          "description": "Gateway HTTP tunnels (default 4096 each way).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ProcessClassCapacity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gateway_websocket": {
+          "description": "Gateway WebSocket tunnels, held for the socket's life (default 65536 each way).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ProcessClassCapacity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "node_command": {
+          "description": "Actor commands to node connections (default 4096 each way).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ProcessClassCapacity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage_coordinator": {
+          "description": "storage partition coordinator requests (default outgoing 1024).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SubjectClassCapacity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage_kv_command": {
+          "description": "storage KV commands (default outgoing 8192).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SubjectClassCapacity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage_log": {
+          "description": "storage log shard requests (default outgoing 8192).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SubjectClassCapacity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage_stop_readiness": {
+          "description": "storage stop-readiness checks (default outgoing 1024).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SubjectClassCapacity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage_volume": {
+          "description": "storage volume lifecycle and filesystem requests (default outgoing 4096).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SubjectClassCapacity"
+            },
+            {
+              "type": "null"
             }
           ]
         }
       },
       "additionalProperties": false
     },
-    "PostgresSsl": {
-      "type": "object",
-      "properties": {
-        "client_cert_path": {
-          "description": "Path to the client certificate file\n\nUsed for client certificate authentication Equivalent to PostgreSQL's `sslcert` parameter",
-          "default": null,
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "client_key_path": {
-          "description": "Path to the client private key file\n\nUsed for client certificate authentication Equivalent to PostgreSQL's `sslkey` parameter",
-          "default": null,
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "root_cert_path": {
-          "description": "Path to the root certificate file for verifying the server's certificate\n\nRequired when using custom certificate authorities (e.g., Supabase) Equivalent to PostgreSQL's `sslrootcert` parameter",
-          "default": null,
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "Pyroscope": {
+    "RetentionPolicy": {
       "type": "object",
       "required": [
-        "server_url"
+        "count",
+        "interval_ms"
       ],
       "properties": {
-        "sample_rate": {
-          "description": "Sampling frequency in Hz.",
-          "default": null,
-          "type": [
-            "integer",
-            "null"
-          ],
+        "count": {
+          "type": "integer",
           "format": "uint32",
           "minimum": 0.0
         },
-        "server_url": {
-          "description": "Base URL of the Pyroscope server profiles are pushed to. Presence of this block means profiling is available; the profiler itself is toggled at runtime via the `profile enable`/`profile disable` CLI and starts off.",
-          "type": "string"
+        "interval_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -1783,70 +2372,23 @@
     "Runtime": {
       "type": "object",
       "properties": {
-        "allow_version_rollback": {
-          "description": "Whether or not to allow running the engine when the previous version that was run is higher than the current version.",
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
         "force_shutdown_duration": {
-          "description": "Time (in seconds) after which the engine process will forcibly exit after receiving SIGTERM. Must be greater than or equal to both worker_shutdown_duration and guard_shutdown_duration. Defaults to 10 minutes.",
+          "description": "Time (in seconds) after which the engine process will forcibly exit after receiving SIGTERM. Must be greater than or equal to both worker_shutdown_duration and guard_shutdown_duration. Defaults to nine minutes and 50 seconds, allowing the storage stop wait, singleton handover and teardown reserve.",
           "type": [
             "integer",
             "null"
           ],
           "format": "uint32",
-          "minimum": 0.0
-        },
-        "gasoline_loop_history_iteration_retention_count": {
-          "description": "How many forgotten loop iterations to retain (per workflow name) in storage for debugging purposes. Defaults to 100. Set \"default\" key to apply to all workflows.",
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        "gasoline_prune_eligibility_duration": {
-          "description": "Time (in seconds) after completion before considering a workflow eligible for pruning. Defaults to 7 days. Set to 0 to never prune workflow data.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gasoline_prune_interval_duration": {
-          "description": "Time (in seconds) to periodically check for workflows to prune. Defaults to 12 hours.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
           "minimum": 0.0
         },
         "guard_shutdown_duration": {
-          "description": "Time (in seconds) to allow for guard to wait for pending requests after receiving SIGTERM. Defaults to 10 minutes.",
+          "description": "Time (in seconds) to allow for guard to wait for pending requests after receiving SIGTERM. Defaults to nine minutes.",
           "type": [
             "integer",
             "null"
           ],
           "format": "uint32",
           "minimum": 0.0
-        },
-        "udb_throttle_bytes_per_second": {
-          "description": "Cluster-wide budget, in bytes per second, per named UniversalDB throttle. Each entry sets the read and write axes independently, for example `udb_throttle_bytes_per_second.depot_compaction.read`. An axis with no entry is unthrottled.",
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/definitions/UdbThrottle"
-          }
         },
         "worker_cpu_max": {
           "description": "Adjusts worker curve around this value (in millecores, i.e. 1000 = 1 core). Is not a hard limit. When unset, uses /sys/fs/cgroup/cpu.max, and if that is unset uses total host cpu.",
@@ -1856,40 +2398,6 @@
           ],
           "format": "uint",
           "minimum": 0.0
-        },
-        "worker_load_shedding_beta": {
-          "description": "Exponential moving average beta term. Defaults to 0.95.",
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "float"
-        },
-        "worker_load_shedding_curve": {
-          "description": "Determine load shedding ratio based on linear mapping on cpu usage. We will gradually pull less workflows as the cpu usage increases. Units are in (permille overall cpu usage, permille) Default: |     .   . 100% | _____   . |     .\\  . % wfs |     . \\ . |     .  \\. 5% |     .   \\_____ |_____.___.______ 0    70% 90% avg cpu usage",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          },
-          "maxItems": 2,
-          "minItems": 2
         },
         "worker_max_concurrent_workflows": {
           "description": "Maximum concurrently running workflows of a given workflow name for the **entire cluster**.",
@@ -1921,7 +2429,7 @@
           "minimum": 0.0
         },
         "worker_max_wake_keys_per_workflow_name_per_pull": {
-          "description": "Maximum wake condition keys read per workflow name in a single pull. Defaults to 20000, or 5000 for the depot compaction workflows. Set the \"default\" key to apply to all workflow names.",
+          "description": "Maximum wake condition keys read per workflow name in a single pull. Defaults to 20000, or 5000 for the storage compaction workflows. Set the \"default\" key to apply to all workflow names.",
           "type": [
             "object",
             "null"
@@ -1962,15 +2470,106 @@
       },
       "additionalProperties": false
     },
+    "S3ObjectStoreConfig": {
+      "type": "object",
+      "required": [
+        "bucket"
+      ],
+      "properties": {
+        "access_key_id": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bucket": {
+          "type": "string"
+        },
+        "endpoint": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prefix": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "region": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "secret_access_key": {
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "Secret<String>": {
       "type": "string"
     },
-    "Sqlite": {
+    "StorageConfig": {
       "type": "object",
       "properties": {
-        "actor_read_bytes_per_second": {
-          "description": "Cluster-wide budget, in bytes per second, for FoundationDB reads issued by actor `get_pages`.\n\nUnset means unthrottled. Reads matter here because a large staged commit makes the pages it staged take the slow read path (their PIDX owner sits above head, so a reader walks history for them), which means read volume spikes exactly when write volume peaks.",
-          "default": null,
+        "alarms": {
+          "description": "Bounded, deadline-driven volume alarm delivery.",
+          "default": {
+            "handler_timeout_ms": null,
+            "io_timeout_ms": null,
+            "max_callbacks": null,
+            "max_candidates": null,
+            "max_operations": null,
+            "page_size": null,
+            "retry_max_ms": null,
+            "retry_min_ms": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/AlarmConfig"
+            }
+          ]
+        },
+        "auto_provision_partitions": {
+          "description": "Creates this many partitions over this storage worker when the cluster has none, so a single-process engine serves actors without an operator. A restart finishes a run that stopped partway; partitions it did not start are left alone. Clusters with several storage workers leave it unset and run `storage partition provision` instead.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "balancing": {
+          "default": {
+            "destination_stability_ms": 60000,
+            "enabled": true,
+            "max_disk_probes": 4,
+            "missing_worker_ms": 120000,
+            "partitions_per_core": 2
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/PartitionBalancingConfig"
+            }
+          ]
+        },
+        "bulk_read_bytes_per_sec": {
+          "description": "Bytes per second that bulk runs may read across every partition of this process, with a burst of a quarter second (at least 4 MiB). Bulk runs wait for their bytes; point reads never wait. Unset or 0 leaves bulk runs unpaced.",
           "type": [
             "integer",
             "null"
@@ -1978,204 +2577,579 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "actor_write_bytes_per_second": {
-          "description": "Cluster-wide budget, in bytes per second, for FoundationDB writes issued by actor commits, including each segment of a staged commit.\n\nUnset means unthrottled, which is the behaviour before this existed. A staged commit lets one actor push an unbounded byte volume through `commit`, so this is the bound for that; it is opt-in because a byte-rate cap on the actor write path stalls user-visible commits, and that is not a default worth taking until an operator asks for it.",
-          "default": null,
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "compaction_admission_percent": {
-          "description": "Percentage (0-100) of database branches admitted to run compaction, keyed by a stable hash of the branch id. A branch whose hash falls outside the admitted fraction skips starting any compaction job (hot, cold, reclaim) while still tracking its backlog. This is a gradual rollout / load-shedding knob: it bounds how many databases compact at once so enabling compaction over a large uncompacted herd cannot saturate FDB all at once. Re-evaluated on every manager refresh, so raising it lets a previously skipped branch compact on its next check without restarting anything. Defaults to 100 (every branch admitted).",
-          "default": null,
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        },
-        "compaction_hot_fold_direct_to_shard": {
-          "description": "Whether hot compaction folds shard images straight into the live `SHARD` tier instead of staging them and having the install copy them across byte for byte. Halves hot compaction's FDB write volume, because the image stops being written twice.\n\nRead per slice, so flipping it takes effect on the next slice without restarting anything. Nothing about the mode is persisted: the install discovers where an image landed by looking for it, so a drain that spans a flip installs correctly either way and a mixed job needs no special handling.\n\nNo persisted format changes, so there is no version floor to clear before turning this on and nothing on disk to downgrade after turning it off. Rolling back is flipping it off; new slices stage again from that point.\n\nA compaction job abandoned mid-drain leaves shard images behind. Normally its successor reproduces the same boundaries and overwrites them, so they do not accumulate. A forced drain takes the live head by design, so an abandoned forced drain can strand images that no later drain revisits; those are inert for reads but nothing reclaims them. Defaults to off.",
-          "default": null,
+        "bulk_read_cache_blocks": {
+          "description": "Whether SST blocks a bulk run fetches enter the shared block cache. Defaults to true; false keeps large scans from evicting other volumes' hot blocks.",
           "type": [
             "boolean",
             "null"
           ]
         },
-        "compaction_install_throttle_admit_soft_util": {
-          "description": "Utilization of the advancing lanes' budget below which every such charge is admitted. Defaults to 0.5.",
-          "default": null,
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        },
-        "compaction_install_throttle_budget_multiplier": {
-          "description": "Multiplier the lanes that advance the pipeline without duplicating apply to the compaction byte budget before the throttle's admission ramp is evaluated: hot install, cold publish, cold staging, and hot folds that write straight to the shard tier. Install folds staged shards into the manifest and releases the staging area, and cold publish is what lets the cold watermark advance so reclaim may delete. Defaults to 1.0, so the configured byte rate stays an honest cap on everything except reclaim.\n\nCold staging measures against this rather than the staging budget because its heavy output is object-storage bytes, so it leaves no FoundationDB duplicate to bound.",
-          "default": null,
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        },
-        "compaction_max_hot_drain_span_txids": {
-          "description": "The largest span of txids one hot compaction drain folds before its install advances `hot_watermark_txid`.\n\nThe watermark is what makes a delta reclaimable, and a drain advances it exactly once, at the end. So this is also the granularity of reclaim eligibility: a branch whose whole history fits in one span holds every delta resident until the entire fold lands, which sets the peak footprint at live shards plus the full delta history. Lowering it folds in smaller chunks so reclaim interleaves and the peak comes down, at the cost of re-folding a page once per chunk that touches it and of running proportionally more jobs. Each drain rounds its own span down to a multiple of the drain head grain; this cap is not itself rounded.\n\nDefaults to 512, which keeps a typical branch draining over several jobs rather than one, so reclaim gets more than a single eligibility window per branch.",
-          "default": null,
+        "bulk_read_fetch_tasks": {
+          "description": "Concurrent SST block fetches inside one bulk run's scan. Defaults to 1; 0 is treated as 1.",
           "type": [
             "integer",
             "null"
           ],
-          "format": "uint64",
+          "format": "uint",
           "minimum": 0.0
         },
-        "compaction_read_bytes_per_second": {
-          "description": "Cluster-wide budget, in bytes per second, for FoundationDB reads issued by the heavy depot compaction read transactions (hot stage and hot install). Bounds how fast compaction reads a backlog's DELTA history so a deep, overwrite-heavy chain cannot pin a handful of storage processes on reads. Defaults to 64 MiB/s: reads carry no FDB replication amplification so this can sit above the write budget, but the read-amplification pathology (a throttled stage re-reading the same slice) makes an explicit cap worthwhile. Shares the same conflict-free windowed-counter design as the write throttle.",
-          "default": null,
+        "bulk_read_min_chunks": {
+          "description": "Chunk runs of at least this many chunks (4 KiB each) are read with the bulk scan settings below, as a table scan's read-ahead windows are. Unset or 0 reads every run with the normal settings.",
           "type": [
             "integer",
             "null"
           ],
-          "format": "uint64",
+          "format": "uint",
           "minimum": 0.0
         },
-        "compaction_reclaim_throttle_admit_soft_util": {
-          "description": "Utilization of the reclaim lane's budget below which every reclaim charge is admitted. Higher than the other lanes so reclaim stays fully admitted across the whole band where they ramp down, instead of merely ramping down more slowly. Defaults to 0.9.",
-          "default": null,
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+        "checkpoints": {
+          "default": {
+            "max_named_checkpoints_per_volume": 64,
+            "retention": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/CheckpointConfig"
+            }
+          ]
         },
-        "compaction_reclaim_throttle_budget_multiplier": {
-          "description": "Multiplier the reclaim lane applies to the compaction byte budget before the throttle's admission ramp is evaluated. Above 1.0 on purpose: reclaim deletes rather than produces, so it must keep admitting through the region where every other lane has already backed off, and its own charges land on the same counter so the arrangement stays self-regulating. This is also the bound on how far peak compaction pressure can exceed the configured byte rate. Defaults to 1.5.",
-          "default": null,
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+        "cold_store": {
+          "default": {
+            "block_cache_bytes": null,
+            "compacted_sst_bytes": null,
+            "disk_cache_bytes": null,
+            "disk_cache_directory": null,
+            "disk_cache_on_compaction": null,
+            "disk_cache_on_flush": null,
+            "disk_cache_part_bytes": null,
+            "l0_max_ssts": null,
+            "max_concurrent_compactions": null,
+            "meta_cache_bytes": null,
+            "unflushed_budget_bytes": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/ColdStoreConfig"
+            }
+          ]
         },
-        "compaction_stage_throttle_admit_soft_util": {
-          "description": "Utilization of the staging lane's budget below which every staging charge is admitted. Between this mark and that budget the admit probability ramps linearly to zero. Defaults to 0.5. Applies on the same terms as `compaction_stage_throttle_budget_multiplier`.",
-          "default": null,
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        },
-        "compaction_stage_throttle_backoff_ms": {
-          "description": "How long, in milliseconds, a throttled staging slice backs off before its drain retries.\n\nDeliberately far longer than the other lanes. Admission is probabilistic, so a denied slice that retries within the same window keeps rolling dice against the estimate install and reclaim are trying to work under. Backing staging off across several windows removes that retry pressure rather than merely losing each roll. Defaults to 30 seconds.\n\nApplies only while `compaction_hot_fold_direct_to_shard` is off, for the same reason the staging multiplier does: a direct fold is not competing with install over a duplicate it created, so parking it that long would only stall the fold.",
-          "default": null,
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "compaction_stage_throttle_budget_multiplier": {
-          "description": "Multiplier hot staging applies to the compaction byte budget before the throttle's admission ramp is evaluated. Every compaction lane charges one shared counter, so a multiplier below 1 is how much of the total compaction byte rate staging is allowed to occupy before it stops admitting. The lanes that advance the pipeline (install, cold publish, cold staging) and the lane that deletes (reclaim) measure the same counter against larger budgets, so they keep admitting through the region where staging is already denied.\n\nThis bounds a duplicate. Staging writes a second copy of every page it folds and cannot release either copy until install consumes it, so a cluster where staging wins the shared budget grows its FoundationDB footprint without bound while install and reclaim starve. Defaults to 0.3. Lower it to drain a backlog harder, raise it toward 1.0 to let staging and install compete as peers.\n\nApplies only while `compaction_hot_fold_direct_to_shard` is off. A direct fold writes the authoritative image once, so there is no duplicate to bound and the slice measures against `compaction_install_throttle_budget_multiplier` instead.",
-          "default": null,
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        },
-        "compaction_write_bytes_per_second": {
-          "description": "Cluster-wide budget, in bytes per second, for FoundationDB writes issued by depot compaction (hot compaction and reclaim). Bounds how fast compaction drains a backlog so it cannot saturate FDB's write queue. Defaults to 16 MiB/s, a conservative fraction of the 500 MiB/s sustained disk throughput recommended for FDB in the self-hosting docs, leaving headroom for live traffic and FDB write amplification.",
-          "default": null,
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "manager_idle_poll_interval_ms": {
-          "description": "How long, in milliseconds, a depot database branch manager that received no work waits before checking again.\n\nReads never signal the manager, so without a poll a branch that stops being written parks on a deadline-less listen and never reclaims again: its cold-backed hot rows stay resident in FoundationDB forever, and the one-shot stale-PIDX repair never gets dispatched. One reclaim job drains a branch's whole backlog, so this only bounds how long a newly idle branch keeps duplicate hot copies. Defaults to 12 hours. Each wake is a bounded-budget FoundationDB snapshot, so lower it if reclaim latency on idle branches matters more than the cluster-wide refresh cost (at 1M branches, 12 hours is ~23 refreshes/sec).",
-          "default": null,
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "manager_reclaim_interval_ms": {
-          "description": "How long, in milliseconds, a depot database branch manager waits before its next reclaim/GC check after arming one.\n\nThis is the latency floor on freeing hot rows that compaction has already superseded: the footprint a branch carries stays at its peak for up to this long after the work that made it reclaimable finished. Every wake costs a bounded-budget FoundationDB snapshot per branch, so lower it only where reclaim latency matters more than that per-branch refresh cost. Defaults to 10 minutes.",
-          "default": null,
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "max_storage_bytes": {
-          "description": "Maximum bytes of FoundationDB storage a single SQLite database may occupy, counting its live shards, its unfolded delta history, and its page index. A commit whose projected usage exceeds this is refused with `depot.quota_exceeded` rather than partially applied.\n\nDefaults to 10 GiB. Burst mode raises the effective cap for a branch whose cold drain has fallen behind, so peak usage can exceed this by that multiplier before a commit is refused. Raising it lets existing databases keep growing immediately; lowering it does not delete anything, it only refuses further growth on databases already above the new value.",
-          "default": null,
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "pitr": {
-          "description": "Point-in-time recovery. Absent disables PITR entirely: hot compaction selects no interval coverage txids, writes no `PITR_INTERVAL` rows, and ignores any stored bucket or database policy override. Present enables it cluster-wide with the settings below.\n\nPITR is off by default because each retained coverage position pins a complete shard image per touched shard, so the retained shard versions scale with `retention_ms / interval_ms`. Turning it on is a deliberate trade of FoundationDB footprint for restorable positions.",
-          "default": null,
+        "cold_store_compression": {
+          "description": "Codec for SlateDB SST blocks in the cold store; defaults to `lz4`. Each SST records its own codec, so changing it keeps existing SSTs readable.",
           "anyOf": [
             {
-              "$ref": "#/definitions/SqlitePitr"
+              "$ref": "#/definitions/ColdStoreCompression"
             },
             {
               "type": "null"
             }
           ]
         },
-        "unstable_disable_commit_size_cap": {
+        "command_timeout_ms": {
+          "description": "Floor for every typed storage command deadline, in milliseconds. Each command keeps its own default (5 seconds generic, 30 seconds for actor storage); when set, the larger of the two bounds both the client's retry budget and the maintainer's handler timeout. Unset keeps the per-command defaults.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "coordinator_request_capacity": {
+          "description": "Exact coordinator subject capacity. Defaults to 256.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "durable_max_events_per_commit": {
+          "description": "Most events of one durable state machine applied in one commit. Events that arrive while a commit is in flight are grouped up to this bound. Defaults to 16.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "endpoint_cache_capacity": {
+          "description": "Maximum cached endpoint hints, including missing workers. Defaults to 4096.",
           "default": null,
           "type": [
-            "boolean",
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "filesystem": {
+          "default": {
+            "max_cache_bytes": 8388608,
+            "max_conflict_window_bytes": 4194304,
+            "max_memory_bytes": 67108864,
+            "max_operation_bytes": 8388608,
+            "max_pending_commits": 128,
+            "max_process_cache_bytes": 1073741824,
+            "max_snapshot_age_ms": 30000,
+            "max_snapshots": 128,
+            "max_transaction_age_ms": 300000,
+            "max_transaction_bytes": 134217728,
+            "max_unapplied_bytes": 268435456,
+            "max_value_bytes": 1048576,
+            "note_ttl_ms": 1000,
+            "request_timeout_ms": 30000
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/FilesystemConfig"
+            }
+          ]
+        },
+        "flush_piggyback_min_bytes": {
+          "description": "Unflushed applied bytes at which a volume joins a partition flush another volume requested. Defaults to 16 KiB.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "flush_stage_concurrency": {
+          "description": "Volume records whose old rows one partition filesystem flush reads at once while it stages. Staging excludes every other store operation of the partition. Defaults to 16.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "forks": {
+          "default": {
+            "check_grace_ms": 60000,
+            "materialize_batch_chunks": 1024,
+            "max_concurrent_materializations": 2
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/ForkConfig"
+            }
+          ]
+        },
+        "heartbeat_gc": {
+          "description": "Background heartbeat reclamation; separate from membership lease expiration.",
+          "default": {
+            "batch_interval_ms": null,
+            "batch_size": null,
+            "batch_timeout_ms": null,
+            "delete_concurrency": null,
+            "pass_interval_ms": null,
+            "retention_ms": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/HeartbeatGcConfig"
+            }
+          ]
+        },
+        "idle_unload_after_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "kv_commands": {
+          "default": {
+            "evicted_idle_warn_ms": null,
+            "max_command_bytes": null,
+            "max_eviction_closes": null,
+            "max_inflight_command_bytes": null,
+            "max_inflight_commands": null,
+            "max_open_volumes": null,
+            "max_worker_open_volume_bytes": null,
+            "max_worker_open_volumes": null,
+            "request_capacity": null,
+            "short_idle_close_ms": null,
+            "volume_idle_close_ms": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/KvCommandConfig"
+            }
+          ]
+        },
+        "learning_deadline_ms": {
+          "description": "How long a partition replica-set change may stay in Learning before the coordinator aborts it and the partition returns to its old members. Defaults to one hour and must be at least 45 minutes. It counts from the phase's start, not from the learner's progress, so it must outlast the membership holder wait (15 minutes) plus the copy of the largest log suffix a learner may have to catch up.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "log_client_inflight_per_worker": {
+          "description": "Log shard requests a client keeps in flight to one storage worker. Later requests queue and go out together as one batch when a slot frees. Defaults to 2.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "log_directory": {
+          "description": "Existing directory owned by one storage process. Required when storage services start.",
+          "type": [
+            "string",
             "null"
           ]
         },
-        "unstable_disable_compaction": {
-          "description": "UNSTABLE: disables SQLite hot compaction.",
-          "default": null,
+        "log_request_capacity": {
+          "description": "Exact replica subject capacity, shared by local clients and the shard. Defaults to 2048.",
           "type": [
-            "boolean",
+            "integer",
             "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "log_shard": {
+          "description": "Optional overrides for the shard's disk, memory and operation bounds.",
+          "default": {
+            "checkpoint_bytes": null,
+            "checkpoint_timeout_ms": null,
+            "disk_read_concurrency": null,
+            "inbox_capacity": null,
+            "manifest_refresh_timeout_ms": null,
+            "max_admission_wait_ms": null,
+            "max_append_admission_wait_ms": null,
+            "max_batch_bytes": null,
+            "max_disk_bytes": null,
+            "max_disk_reads": null,
+            "max_loaded_volume_bytes": null,
+            "max_loaded_volumes": null,
+            "max_memory_bytes": null,
+            "max_memory_requests": null,
+            "max_retained_payload_bytes": null,
+            "max_retained_payload_bytes_per_volume": null,
+            "max_write_bytes": null,
+            "overload_retry_after_ms": null,
+            "preallocate_segments": null,
+            "recovery_timeout_ms": null,
+            "release_idle_payloads_after_ms": null,
+            "remove_segments_timeout_ms": null,
+            "segment_bytes": null,
+            "write_to_cold_at_disk_percent": null,
+            "write_to_disk_timeout_ms": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/LogShardConfig"
+            }
           ]
+        },
+        "lookup_request_capacity": {
+          "description": "Concurrent topology endpoint lookups and heartbeat inspections admitted per process. Defaults to 128.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "maintainer_inbox_capacity": {
+          "description": "Queued events one partition maintainer accepts before it rejects new requests as overloaded. Every volume open, read, apply and status notice for the partition passes through it, so a burst of actor starts on one partition needs room for several events per start. Must be positive. Defaults to 4096.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "maintainer_max_loaded_volumes": {
+          "description": "Volumes one partition maintainer holds loaded at once, before opens of more are refused as overloaded. A loaded volume costs about 1.8 KiB of maintainer heap, so the default of 500,000 holds under 1 GiB per partition. Must be positive.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "maintainer_max_queued_opens": {
+          "description": "Volume opens queued in one partition maintainer's inbox, not yet taken by its processing task, at which a new open is refused as overloaded at once instead of joining the inbox. Other inbox events do not count. Opens queued past this would mostly expire before admission. Must be positive. Defaults to 1024.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "maintainer_max_requests": {
+          "description": "Client requests one partition maintainer tracks at once before it rejects more as overloaded. Must be positive. Defaults to 1024.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "manifest_refresh_ms": {
+          "description": "Fallback interval for re-reading the partition manifest. Routing misses and `NotMaintainer` replies refresh it at once. Defaults to 30 seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_background_cold_reads": {
+          "description": "Size of each background cold-read window per partition maintainer: held-image source reads for forks, replica log reads for applies, fork jobs and fork cleanup jobs are each bounded by it separately, so they never take client read slots. Defaults to 4.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_cold_reads": {
+          "description": "Client cold-store reads in flight per partition maintainer: session opens, lifecycle row lookups and session reads share this window. A cold wake's reads fan out through it, so a narrow window serializes them. Object storage throughput scales almost linearly to about 32 parallel GETs, and a read slot is not always a GET, so 64 keeps a cold wake's reads from waiting on slots; on the load cluster a fully cold wake took about 850 ms at 4, 430 ms at 64 and 390 ms at 512. Defaults to 64.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_cold_reads_per_volume": {
+          "description": "Client session reads of one volume a partition maintainer admits while reads of other volumes wait, so one large scan cannot hold every client cold-read slot. Slots no other volume waits for still go to that volume. Unset or 0 admits client reads in arrival order.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_read_sessions": {
+          "description": "Filesystem read sessions per partition maintainer. A session lives while its volume is being read and ends after `read_session_idle_ms` without a read, so this bounds how many volumes a partition serves reads for at once. Opens past it are refused as overloaded. A held session retains about 1.2 KiB of maintainer heap, so the default of 16,384 holds under 20 MiB per partition. Must be positive.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "membership_refresh_cooldown_ms": {
+          "description": "Minimum milliseconds between miss-triggered membership refresh attempts, including failures.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "memtable_flush_throttle_ms": {
+          "description": "Throttle for memtable flushes that nobody urgently waits on: a pass that comes due waits up to this long, so passes that come due close together share one upload and one L0 SST. Defaults to ten seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "read_cursor_session_idle_ms": {
+          "description": "How long a session opened at the latest position stays registered after its last read, in milliseconds. An HTTP directory cursor resumes such a session between pages, and no client reopens it at its position, so a paging client keeps its cursor for this long between pages. Must be positive. Defaults to 30,000, the session lifetime.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "read_session_idle_ms": {
+          "description": "How long a read session stays registered after its last read, in milliseconds. Each read extends it up to the session's lifetime, and a client reopens an ended session on its next read, so sessions track volumes being read rather than volumes open. Must be positive. Defaults to 2,000.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "simulated_fs_read_cost_us": {
+          "description": "Simulation only: processing time each filesystem read request costs a partition maintainer, in microseconds, spent on the simulated clock so a maintainer busy with reads queues them as a loaded one does. Unset in deployments, where real processing time passes on its own.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "stop_poll_ms": {
+          "description": "Stop-permit retry interval. Defaults to one second.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "stop_teardown_ms": {
+          "description": "Teardown budget after a stop permit or timeout. Defaults to one minute.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "stop_timeout_ms": {
+          "description": "Maximum coordinated stop wait from the first signal. Defaults to eight minutes.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "store_admission_scan_limit": {
+          "description": "Queued store items one admission pass looks at past work that cannot start yet. Work beyond it waits for the next pass. Must be positive. Defaults to 1024.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "store_max_flush_staging": {
+          "description": "Partition filesystem flushes one partition maintainer lets stage at once. Staging writes the flush's records into the store. Must be positive. Defaults to 1.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "store_max_flush_uploads": {
+          "description": "Partition filesystem flushes one partition maintainer keeps in flight at once, staging or uploading; a staging flush counts because it uploads next. Must be at least `store_max_flush_staging`. Defaults to 2.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "store_max_keyed_in_flight": {
+          "description": "Filesystem applies and loads one partition maintainer admits to its store at once. They run concurrently, one task each, and their replica reads stay bounded by the cold byte budget, so the cap sizes concurrency for a burst of volume creates rather than memory. Must be positive. Defaults to 256.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "store_volume_lock_stripes": {
+          "description": "Volume lock stripes of each partition filesystem store. Two volumes on one stripe serialize their store work. Must be positive. Defaults to 1024.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "store_volume_locks": {
+          "description": "Which store work takes volume stripes. `core` (the default) trusts the maintainer core to order applies, loads, session opens, lifecycle lookups and the flush retention publish, so they take only the partition lock; stripes then guard only checkpoint-session opens against hold releases, checkpoint deletions and sweeps. `stripes` keeps a stripe on every operation, as before.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StoreVolumeLocks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "volume_client": {
+          "default": {
+            "close_after_idle_ms": null,
+            "max_loaded_volumes": null,
+            "max_requests": null,
+            "max_volume_key_bytes": null,
+            "open_timeout_ms": null,
+            "payload_codec": null,
+            "sweep_interval_ms": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/VolumeClientConfig"
+            }
+          ]
+        },
+        "volume_request_capacity": {
+          "description": "Per-subject lifecycle request capacity, isolated from other UPS traffic. Defaults to 1024.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "volume_request_timeout_ms": {
+          "description": "Entire lifecycle RPC budget, including route refreshes. Defaults to five seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "write_to_cold_above_bytes": {
+          "description": "Committed suffix threshold, default 64 MiB and maximum 256 MiB.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "write_to_cold_after_ms": {
+          "description": "Cold-write age from the first unflushed entry, plus up to a tenth of it as jitter. Defaults to one minute. Storage workers require the age with its jitter to stay below `stop_timeout_ms`, so a stopping worker never waits on a slower tiering cadence than its own stop budget.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
     },
-    "SqlitePitr": {
+    "StoreVolumeLocks": {
+      "description": "Which partition store operations take volume lock stripes.",
+      "oneOf": [
+        {
+          "description": "Only work the maintainer core does not order takes a stripe.",
+          "type": "string",
+          "enum": [
+            "core"
+          ]
+        },
+        {
+          "description": "Every store operation takes its volumes' stripes.",
+          "type": "string",
+          "enum": [
+            "stripes"
+          ]
+        }
+      ]
+    },
+    "SubjectClassCapacity": {
+      "description": "The outgoing cap of a subject-scoped class, across every target.",
       "type": "object",
       "properties": {
-        "interval_ms": {
-          "description": "Spacing, in milliseconds, between the PITR coverage positions hot compaction retains for a database that has no bucket or database policy override. Each position holds a complete image of every shard it covers until it expires, so halving this roughly doubles the retained shard versions. Defaults to 5 minutes.",
-          "default": null,
+        "outgoing_capacity": {
           "type": [
             "integer",
             "null"
           ],
-          "format": "int64"
-        },
-        "retention_ms": {
-          "description": "How long, in milliseconds, PITR coverage is retained for a database that has no bucket or database policy override. History older than this window is reclaimable. Defaults to 7 days.",
-          "default": null,
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "format": "uint",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -2188,30 +3162,6 @@
       "properties": {
         "enabled": {
           "type": "boolean"
-        }
-      },
-      "additionalProperties": false
-    },
-    "Tls": {
-      "type": "object",
-      "required": [
-        "actor_cert_path",
-        "actor_key_path",
-        "api_cert_path",
-        "api_key_path"
-      ],
-      "properties": {
-        "actor_cert_path": {
-          "type": "string"
-        },
-        "actor_key_path": {
-          "type": "string"
-        },
-        "api_cert_path": {
-          "type": "string"
-        },
-        "api_key_path": {
-          "type": "string"
         }
       },
       "additionalProperties": false
@@ -2240,11 +3190,11 @@
       },
       "additionalProperties": false
     },
-    "UdbThrottle": {
-      "description": "Byte-rate budgets for one UniversalDB throttle. An axis left unset is unthrottled.",
+    "VolumeClientConfig": {
+      "description": "Optional process ownership overrides; the volume client defines the resolved defaults.",
       "type": "object",
       "properties": {
-        "read": {
+        "close_after_idle_ms": {
           "type": [
             "integer",
             "null"
@@ -2252,11 +3202,95 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "write": {
+        "max_loaded_volumes": {
+          "description": "Volumes one engine process holds open at once; defaults to 32768. A held volume costs about 14 KiB of client state and under 64 KiB with its filesystem owner, so the default stays under 2 GiB. Page caches are bounded separately by the process cache budget.",
           "type": [
             "integer",
             "null"
           ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_requests": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_volume_key_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "open_timeout_ms": {
+          "description": "Time an open waits for volume recovery before failing; defaults to 3000 ms.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "payload_codec": {
+          "description": "Codec for logged write payloads: `lz4` (the default) or `none`. Each log entry records its codec, so changing this affects only new writes.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/VolumePayloadCodec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sweep_interval_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "VolumePayloadCodec": {
+      "description": "Codec for a volume's logged write payloads.",
+      "type": "string",
+      "enum": [
+        "none",
+        "lz4"
+      ]
+    },
+    "VolumesConfig": {
+      "description": "Bounds for internal volume reads served on the API-peer listener.",
+      "type": "object",
+      "properties": {
+        "directory_page_size": {
+          "default": 256,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_path_bytes": {
+          "default": 4096,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_requests": {
+          "default": 128,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "request_timeout_ms": {
+          "default": 10000,
+          "type": "integer",
           "format": "uint64",
           "minimum": 0.0
         }

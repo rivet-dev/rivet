@@ -1,8 +1,8 @@
 {
 	"name": "@rivetkit/cli",
-	"version": "2.3.20",
+	"version": "3.0.0",
 	"description": "Rivet Cloud CLI",
-	"license": "LicenseRef-RivetEnterprise",
+	"license": "Apache-2.0",
 	"main": "index.js",
 	"types": "index.d.ts",
 	"bin": {

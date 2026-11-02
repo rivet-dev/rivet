@@ -4,6 +4,7 @@
 # This package turns into the python
 # pypi rivetkit-client package
 [package]
+license = "Apache-2.0"
 name = "python-rivetkit-client"
 version = "0.9.0-rc.1"
 edition = "2021"

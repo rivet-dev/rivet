@@ -7,7 +7,7 @@ use rivetkit_engine_process::EngineResolverConfig;
 
 use crate::DEFAULT_ENGINE_ENDPOINT;
 
-/// Builds the engine resolver config shared by `rivet dev` and `rivet engine`.
+/// Builds the engine resolver config used by `rivet engine`.
 ///
 /// Resolution order (handled by the engine-process crate): the explicit
 /// `--engine-binary` path, then `RIVET_ENGINE_BINARY_PATH`, then a binary

@@ -17,6 +17,18 @@ pub struct SharedActorEntry {
 	pub active_http_request_count: Arc<AsyncCounter>,
 }
 
+/// Latched transport termination outcome, published only after loop cleanup.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StopStatus {
+	/// The loop is still running or draining; no termination outcome is published.
+	#[default]
+	Running,
+	/// All accepted generations finished locally and their events were acknowledged.
+	Acknowledged,
+	/// A deadline, explicit immediate stop, eviction, or terminal error ended the loop.
+	Interrupted,
+}
+
 pub struct SharedContext {
 	pub config: EnvoyConfig,
 	pub envoy_key: String,
@@ -43,11 +55,18 @@ pub struct SharedContext {
 	/// `EnvoyHandle::is_ping_healthy` to surface a dead engine link to upstream health checks.
 	/// Zero means no ping has been received yet.
 	pub last_ping_ts: AtomicI64,
+	/// The envoy's last contact with the engine before a connection was installed, recorded
+	/// before that connection reads any frame and kept at the earliest such contact until the
+	/// envoy loop takes it while handling an init. Zero when nothing is pending.
+	pub contact_before_install_ms: AtomicI64,
+	/// Wall-clock milliseconds of the last ping or init received on any connection. Zero until
+	/// the first one.
+	pub last_contact_ms: AtomicI64,
 	// Latched signal fired by `envoy_loop` after its cleanup block completes.
-	// Waiters observing `true` are guaranteed that the loop has exited and
+	// Waiters observing a terminal outcome know that the loop has exited and
 	// every pending KV/SQLite request has been resolved (with `EnvoyShutdownError`
 	// if it didn't complete naturally).
-	pub stopped_tx: watch::Sender<bool>,
+	pub stopped_tx: watch::Sender<StopStatus>,
 }
 
 #[derive(Debug)]
@@ -61,6 +80,9 @@ pub struct HttpConnectionTx {
 	pub session: u64,
 	pub tx: mpsc::Sender<HttpWsTxMessage>,
 	pub byte_budget: Arc<Semaphore>,
+	/// Bounds the detached tasks that send terminal frames for this session
+	/// while the HTTP stream is saturated.
+	pub detached_send_budget: Arc<Semaphore>,
 }
 
 pub struct HttpWsTxMessage {

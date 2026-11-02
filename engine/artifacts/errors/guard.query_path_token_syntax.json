@@ -1,5 +1,0 @@
-{
-  "code": "query_path_token_syntax",
-  "group": "guard",
-  "message": "query gateway paths must not use @token syntax"
-}

@@ -13,13 +13,10 @@ gas.workspace = true
 indoc.workspace = true
 rivet-build-meta.workspace = true
 rivet-config.workspace = true
-rivet-pools.workspace = true
+rivet-engine-context.workspace = true
 rivet-runtime.workspace = true
 semver.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 universaldb.workspace = true
 
-[dev-dependencies]
-rivet-test-deps-docker.workspace = true
-uuid.workspace = true

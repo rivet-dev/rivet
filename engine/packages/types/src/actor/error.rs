@@ -53,10 +53,10 @@ pub enum ActorError {
 
 	/// Actor cannot allocate due to the concurrent actor limit.
 	ConcurrentActorLimitReached,
-	/// No envoys available matching the pool name
-	NoEnvoys,
-	/// Envoy was allocated but never started the actor (GC timeout)
-	EnvoyNoResponse { envoy_key: Option<String> },
-	/// Envoy connection was lost (no recent ping, network issue, or crash)
-	EnvoyConnectionLost { envoy_key: String },
+	/// No runners available matching the pool name
+	NoRunners,
+	/// Runner was allocated but never started the actor (GC timeout)
+	RunnerNoResponse { runner_key: Option<String> },
+	/// Runner connection was lost (no recent ping, network issue, or crash)
+	RunnerConnectionLost { runner_key: String },
 }

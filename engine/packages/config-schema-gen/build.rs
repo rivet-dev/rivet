@@ -1,3 +1,9 @@
+#![allow(
+	clippy::disallowed_methods,
+	clippy::disallowed_types,
+	reason = "build-time code generation reads and writes host files outside the runtime environment"
+)]
+
 use std::{fs, path::Path};
 
 fn main() {

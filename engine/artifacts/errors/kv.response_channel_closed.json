@@ -1,5 +1,0 @@
-{
-  "code": "response_channel_closed",
-  "group": "kv",
-  "message": "Failed to receive KV response, channel closed."
-}

@@ -13,7 +13,6 @@ epoxy-protocol.workspace = true
 epoxy.workspace = true
 futures-util.workspace = true
 gas.workspace = true
-include_dir.workspace = true
 indexmap.workspace = true
 namespace.workspace = true
 pegboard.workspace = true
@@ -28,7 +27,7 @@ rivet-config.workspace = true
 rivet-data.workspace = true
 rivet-envoy-protocol.workspace = true
 rivet-error.workspace = true
-rivet-pools.workspace = true
+rivet-engine-context.workspace = true
 rivet-types.workspace = true
 rivet-util.workspace = true
 serde_json.workspace = true
@@ -40,9 +39,3 @@ tracing.workspace = true
 urlencoding.workspace = true
 utoipa.workspace = true
 
-[build-dependencies]
-anyhow.workspace = true
-fs_extra.workspace = true
-
-[dev-dependencies]
-axum-test.workspace = true
