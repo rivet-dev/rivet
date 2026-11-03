@@ -885,7 +885,7 @@ export interface RuntimeBundle {
 
 export function servicesBinaryUnavailable(cause: unknown): Error {
 	return new Error(
-		"services.binary_unavailable: Install @rivet-dev/services yourself to run local Services, or set RIVET_SERVICES_BINARY to its executable path.",
+		"services.binary_unavailable: Install @rivet-dev/services to run local Services, set RIVET_SERVICES_BINARY to its executable path, or set RIVET_RUN_SERVICES=0 to disable Services.",
 		{ cause },
 	);
 }

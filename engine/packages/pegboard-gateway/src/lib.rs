@@ -66,6 +66,15 @@ pub fn router(ctx: &EngineContext, waits: &std::sync::Arc<start_waits::StartWait
 #[error("actor", "not_found", "The actor does not exist or was destroyed.")]
 pub(crate) struct ActorNotFound;
 
+/// This request exhausted its acquisition deadline before reaching the actor.
+#[derive(Debug, rivet_error::RivetError)]
+#[error(
+	"guard",
+	"request_timeout",
+	"Timed out waiting for the actor to become ready."
+)]
+pub(crate) struct RequestTimeout;
+
 /// The gateway's query parameters are malformed or ask for something it does not support.
 #[derive(Debug, rivet_error::RivetError, serde::Serialize)]
 #[error(

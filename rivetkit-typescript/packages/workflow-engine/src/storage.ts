@@ -408,26 +408,32 @@ async function runDeletes(
 	driver: EngineDriver,
 	deletions: PendingDeletions,
 ): Promise<boolean> {
-	const ops = [
+	const metadataOps = splitBatchDeletes(deletions.keys).map(
+		(chunk) => () => driver.batchDelete(chunk),
+	);
+	const historyOps = [
 		...deletions.prefixes.map(
 			(prefix) => () => driver.deletePrefix(prefix),
 		),
 		...deletions.ranges.map(
 			(range) => () => driver.deleteRange(range.start, range.end),
 		),
-		...splitBatchDeletes(deletions.keys).map(
-			(chunk) => () => driver.batchDelete(chunk),
-		),
 	];
-	if (ops.length === 0) {
-		return false;
+	// Keep history discoverable until its metadata is removed, including after a restart.
+	for (const ops of [metadataOps, historyOps]) {
+		for (let i = 0; i < ops.length; i += MAX_CONCURRENT_DELETES) {
+			const results = await Promise.allSettled(
+				ops
+					.slice(i, i + MAX_CONCURRENT_DELETES)
+					.map((op) => Promise.resolve().then(op)),
+			);
+			const failed = results.find(
+				(result) => result.status === "rejected",
+			);
+			if (failed?.status === "rejected") throw failed.reason;
+		}
 	}
-	for (let i = 0; i < ops.length; i += MAX_CONCURRENT_DELETES) {
-		await Promise.all(
-			ops.slice(i, i + MAX_CONCURRENT_DELETES).map((op) => op()),
-		);
-	}
-	return true;
+	return metadataOps.length > 0 || historyOps.length > 0;
 }
 
 /**
@@ -440,40 +446,21 @@ export async function deleteEntriesWithPrefix(
 	prefixLocation: Location,
 	onHistoryUpdated?: () => void,
 ): Promise<void> {
-	const deletions = collectDeletionsForPrefix(storage, prefixLocation);
-
-	// Apply deletions to driver
-	await runDeletes(driver, deletions);
-
-	if (deletions.keys.length > 0 && onHistoryUpdated) {
-		onHistoryUpdated();
-	}
-}
-
-/**
- * Remove entries matching a location prefix from memory and collect
- * the driver-level deletion operations. The returned PendingDeletions
- * can be applied immediately or batched with a flush.
- */
-export function collectDeletionsForPrefix(
-	storage: Storage,
-	prefixLocation: Location,
-): PendingDeletions {
-	const pending: PendingDeletions = {
+	const entries = [...storage.history.entries].filter(([, entry]) =>
+		isLocationPrefix(prefixLocation, entry.location),
+	);
+	await runDeletes(driver, {
 		prefixes: [buildHistoryPrefix(prefixLocation)],
-		keys: [],
+		keys: entries.map(([, entry]) => buildEntryMetadataKey(entry.id)),
 		ranges: [],
-	};
-
-	for (const [key, entry] of storage.history.entries) {
-		if (isLocationPrefix(prefixLocation, entry.location)) {
-			pending.keys.push(buildEntryMetadataKey(entry.id));
+	});
+	for (const [key, entry] of entries) {
+		if (storage.history.entries.get(key) === entry) {
 			storage.entryMetadata.delete(entry.id);
 			storage.history.entries.delete(key);
 		}
 	}
-
-	return pending;
+	if (entries.length > 0 && onHistoryUpdated) onHistoryUpdated();
 }
 
 /**

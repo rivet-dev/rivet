@@ -22,6 +22,23 @@ impl<T> Reply<T> {
 		self.deliver(result);
 	}
 
+	/// Runs cancellation-safe work and replies with its result. If the caller
+	/// abandons the reply, drops the work instead. This does not roll back I/O
+	/// or stop a JavaScript promise that has already started executing.
+	pub async fn send_or_cancel<F>(mut self, work: F)
+	where
+		F: std::future::Future<Output = Result<T>>,
+	{
+		let Some(tx) = self.tx.as_mut() else {
+			return;
+		};
+		tokio::select! {
+			biased;
+			_ = tx.closed() => {}
+			result = work => self.deliver(result),
+		}
+	}
+
 	fn deliver(&mut self, result: Result<T>) {
 		if let Some(on_reply) = self.on_reply.take() {
 			on_reply(&result);

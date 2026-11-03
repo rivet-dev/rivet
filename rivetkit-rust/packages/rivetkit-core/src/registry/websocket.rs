@@ -589,32 +589,35 @@ impl RegistryDispatcher {
 				Box::pin(async move {
 					let callback_ctx = ctx.clone();
 					ctx.with_websocket_callback(|| async move {
-						if is_hibernatable
+						let is_probe = is_hibernatable
 							&& maybe_respond_to_raw_hibernatable_ack_state_probe(
 								&ws,
 								&message,
 								&ack_test_state,
-							) {
-							return;
-						}
+							);
 
-						let payload = if message.binary {
-							WsMessage::Binary(message.data)
-						} else {
-							match String::from_utf8(message.data) {
-								Ok(text) => WsMessage::Text(text),
-								Err(error) => {
-									tracing::warn!(
-										?error,
-										"raw websocket message was not valid utf-8"
-									);
-									ws.close(Some(1007), Some("message.invalid_utf8".to_owned()))
+						if !is_probe {
+							let payload = if message.binary {
+								WsMessage::Binary(message.data)
+							} else {
+								match String::from_utf8(message.data) {
+									Ok(text) => WsMessage::Text(text),
+									Err(error) => {
+										tracing::warn!(
+											?error,
+											"raw websocket message was not valid utf-8"
+										);
+										ws.close(
+											Some(1007),
+											Some("message.invalid_utf8".to_owned()),
+										)
 										.await;
-									return;
+										return;
+									}
 								}
-							}
-						};
-						ws.dispatch_message_event(payload, Some(message.message_index));
+							};
+							ws.dispatch_message_event(payload, Some(message.message_index));
+						}
 						if is_hibernatable
 							&& let Err(error) = persist_and_ack_hibernatable_actor_message(
 								&callback_ctx,
@@ -635,7 +638,7 @@ impl RegistryDispatcher {
 							.await;
 							return;
 						}
-						if is_hibernatable {
+						if is_hibernatable && !is_probe {
 							ack_test_state.lock().record(message.message_index);
 						}
 					})

@@ -305,9 +305,6 @@ async fn send(
 		p::PROTOCOL_VERSION,
 	)?;
 	sender.send(bytes).await?;
-	identity.message_index = identity
-		.message_index
-		.checked_add(1)
-		.context("WebSocket message index overflow")?;
+	identity.message_index = identity.message_index.wrapping_add(1);
 	Ok(())
 }

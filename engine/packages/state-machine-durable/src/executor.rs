@@ -11,9 +11,11 @@ pub type EffectContext = rivet_state_machine::EffectContext<()>;
 
 pub trait Executor<M: DurableStateMachine>: Send + Sync + 'static {
 	/// Runs before each transition with the machine's current state and the event about to be
-	/// applied, and returns the preparation the transition receives. The machine is locked, so the
-	/// state cannot change underneath it, but no transaction is open, so it may do I/O such
-	/// as a read of another volume. An error fails the event without applying it; the
+	/// applied, and returns the preparation the transition receives. The machine is locked
+	/// against other handlers, but an earlier uncertain commit may still land. The runner then
+	/// discards the plan and calls `prepare` again against fresh state, so preparation must be
+	/// safe to repeat. No transaction is open; it may do I/O such as a read of another volume.
+	/// An error fails the event without applying it; the
 	/// caller's retry owner, or the timer that caused it, tries again. Bound any I/O with a
 	/// deadline: every event of the machine waits behind it.
 	fn prepare<'a>(

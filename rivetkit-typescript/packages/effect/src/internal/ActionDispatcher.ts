@@ -11,7 +11,6 @@ import {
 import * as Rivetkit from "rivetkit";
 import type * as Action from "../Action.ts";
 import type { ActionHandlersFrom, ActionRequest, Actor } from "../Actor.ts";
-import type * as Client from "../Client.ts";
 import * as ActionErrorEnvelope from "./ActionErrorEnvelope.ts";
 import { makeActorLogAnnotations } from "./logging.ts";
 import { readTraceMeta, rpcSystem } from "./tracing.ts";
@@ -54,9 +53,14 @@ export const make = <
 			action._tag,
 			async (
 				c: Rivetkit.ActionContextOf<ActorDefinition>,
-				payload: Action.Payload<typeof action>,
-				meta?: Client.ActionMeta, // TODO: Find better type
+				...args: unknown[]
 			) => {
+				// Scheduler metadata is appended after stored arguments. Only strip
+				// the trusted invocation object, never a caller-supplied lookalike.
+				if (c.scheduledFire && args.at(-1) === c.scheduledFire) {
+					args.pop();
+				}
+				const [payload, meta] = args;
 				// Always wrap in a server-side span so the handler has a
 				// live `currentSpan` even when the caller didn't ship trace
 				// context (e.g., a non-Effect-SDK client). When trace context

@@ -190,6 +190,11 @@ impl ByteBudget {
 	/// Reserves `len` bytes, waiting for room as queued frames leave. The caller bounds the
 	/// wait with its own deadline.
 	pub(super) async fn reserve(self: &std::sync::Arc<Self>, len: usize) -> ByteReservation {
+		// A runnable reservation is not a waiter. Counting it before its first fit
+		// check can make concurrent admission refuse work even in an empty budget.
+		if let Some(reserved) = self.try_reserve(len) {
+			return reserved;
+		}
 		loop {
 			let released = self.released.notified();
 			tokio::pin!(released);

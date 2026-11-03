@@ -1129,15 +1129,12 @@ pub(super) fn framework_anyhow_status(error: &anyhow::Error) -> StatusCode {
 }
 
 pub(super) fn framework_error_status(group: &str, code: &str) -> StatusCode {
+	if let Some(status) = crate::error::public_error_status_code(group, code) {
+		return StatusCode::from_u16(status).expect("core public error status must be valid");
+	}
+	// Preserve these HTTP-only statuses without promoting private message/metadata.
 	match (group, code) {
-		("auth", "forbidden") => StatusCode::FORBIDDEN,
-		("actor", "action_not_found") => StatusCode::NOT_FOUND,
-		("actor", "not_found") => StatusCode::NOT_FOUND,
-		("actor", "action_timed_out") => StatusCode::REQUEST_TIMEOUT,
-		("actor", "invalid_request") => StatusCode::BAD_REQUEST,
-		("actor", "method_not_allowed") => StatusCode::METHOD_NOT_ALLOWED,
-		("message", "incoming_too_long" | "outgoing_too_long") => StatusCode::BAD_REQUEST,
-		("queue", _) => StatusCode::BAD_REQUEST,
+		("actor", "invalid_request") | ("queue", _) => StatusCode::BAD_REQUEST,
 		_ => StatusCode::INTERNAL_SERVER_ERROR,
 	}
 }

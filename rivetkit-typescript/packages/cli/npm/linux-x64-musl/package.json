@@ -6,6 +6,10 @@
 	"os": [
 		"linux"
 	],
+	"libc": [
+		"glibc",
+		"musl"
+	],
 	"cpu": [
 		"x64"
 	],

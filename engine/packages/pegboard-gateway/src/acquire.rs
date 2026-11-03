@@ -161,10 +161,11 @@ pub(crate) async fn acquire(
 	let acquired = rivet_env::timeout_at(clock.as_ref(), deadline.boot_ms, acquire.run()).await;
 	let result = match acquired {
 		Ok(result) => result,
-		Err(error) => {
+		Err(rivet_env::TimeoutError::Elapsed) => {
 			tracing::warn!(%actor_id, last_phase = acquire.last_phase, "actor did not become ready before the gateway deadline");
-			Err(error.into())
+			Err(crate::RequestTimeout.build())
 		}
+		Err(error) => Err(error.into()),
 	};
 	acquire.wait.release().await;
 	result

@@ -872,6 +872,7 @@ async fn handle_sub_stream(
 				actor_id: actor_id.clone().to_string(),
 				actor_epoch,
 				stopped: tokio::sync::Notify::new(),
+				overloaded: tokio::sync::Notify::new(),
 			});
 			{
 				let scc::hash_map::Entry::Vacant(entry) =
@@ -883,16 +884,14 @@ async fn handle_sub_stream(
 				entry.insert_entry(gateway_handle.clone());
 			}
 
-			let actor_handle = Box::pin(actor_handle(&conn, &tasks, &actor_id)).await?;
-
-			// A gateway sends a request right behind its actor's start command, over another
-			// stream, so it can arrive first. It waits here until the start is on the lane ahead of
-			// it, bounded, so the Envoy finds the actor.
-			Box::pin(actor_handle.await_start(&conn, &actor_id, actor_epoch)).await;
-			Box::pin(actor_handle.recv_tunnel_msg(tunnel_msg)).await?;
-
 			let mut stream_finalized_by_reply = false;
-			let handler_res = async {
+			let handler = async {
+				let actor_handle = Box::pin(actor_handle(&conn, &tasks, &actor_id)).await?;
+
+				// A gateway's stream can overtake its actor's start. Wait until that start
+				// is on the lane ahead of it; overload cancellation also covers this setup.
+				Box::pin(actor_handle.await_start(&conn, &actor_id, actor_epoch)).await;
+				Box::pin(actor_handle.recv_tunnel_msg(tunnel_msg)).await?;
 				loop {
 					rivet_env::select!( ctx.env().rng("envoy.subs");
 						// The execution stopped. Its tunnels end with it; the gateway closes the
@@ -962,10 +961,16 @@ async fn handle_sub_stream(
 				}
 
 				anyhow::Ok(())
-			}
-			.await;
+			};
+			let handler_res = gateway_handle.run(handler).await;
 
-			Box::pin(conn.gateway_handles.remove_async(&message_key)).await;
+			Box::pin(
+				conn.gateway_handles
+					.remove_if_async(&message_key, |current| {
+						Arc::ptr_eq(current, &gateway_handle)
+					}),
+			)
+			.await;
 
 			// Handle ungraceful termination with best effort closure
 			if !stream_finalized_by_reply {
@@ -2265,8 +2270,9 @@ impl From<p::ToRivetTunnelMessage> for TunnelReply {
 	}
 }
 
-/// Hands a tunnel reply to the gateway stream it belongs to. Replies for a closed stream are
-/// dropped.
+/// Hands a reply to its gateway without waiting for the gateway to read. A full queue cancels
+/// only that stream, including a handler blocked on a peer send; pongs and other actors keep
+/// flowing on the application socket. Replies to removed streams are dropped.
 async fn forward_tunnel_reply(
 	conn: &Connection,
 	message_key: ([u8; 4], [u8; 4]),
@@ -2277,16 +2283,19 @@ async fn forward_tunnel_reply(
 		.get_async(&message_key)
 		.await
 		.map(|entry| entry.clone());
-	if let Some(route) = handle
-		&& route.tx.send(reply).await.is_err()
-	{
-		// The route's request handler ended while this reply waited for room on its queue, as
-		// when the client went away or the actor stopped mid-response, so nobody can deliver the
-		// reply. Dropping it, and the route if it is still listed, keeps one late reply from
-		// closing the connection under every other actor on it.
+	if let Some(route) = handle {
+		match route.tx.try_send(reply) {
+			Ok(()) => return Ok(()),
+			Err(mpsc::error::TrySendError::Full(_)) => {
+				route.overloaded.notify_one();
+			}
+			Err(mpsc::error::TrySendError::Closed(_)) => {}
+		}
+		// Remove this exact registration. A replacement installed under the same request key
+		// must not be removed by the old stream's late reply.
 		tracing::debug!(
 			?message_key,
-			"dropped a tunnel reply for a closed gateway route"
+			"dropped a tunnel reply for a closed or full gateway route"
 		);
 		conn.gateway_handles
 			.remove_if_async(&message_key, |current| Arc::ptr_eq(current, &route))
@@ -2368,6 +2377,19 @@ struct GatewayHandle {
 	actor_epoch: u32,
 	/// Notified once the execution behind this tunnel stopped.
 	stopped: tokio::sync::Notify,
+	/// Cancels this stream even while its gateway has stopped reading a pending send.
+	overloaded: tokio::sync::Notify,
+}
+
+impl GatewayHandle {
+	/// Cancel the whole stream on overload, including setup and a blocked peer send. Merely
+	/// checking between messages would leave a slow gateway's accepted work stuck forever.
+	async fn run(&self, transfer: impl std::future::Future<Output = Result<()>>) -> Result<()> {
+		rivet_env::select_biased!("a full gateway reply queue cancels only its stream",
+			_ = self.overloaded.notified() => Err(anyhow::anyhow!("gateway reply queue is full")),
+			result = transfer => result,
+		)
+	}
 }
 
 /// Ends every tunnel to `epoch` of the actor. The envoy runs no execution for them anymore.

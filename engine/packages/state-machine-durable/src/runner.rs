@@ -8,7 +8,7 @@ use crate::{
 use anyhow::{Result, bail, ensure};
 use bytes::Bytes;
 use depot_worker::command::KvHandle;
-use depot_worker::command::Transaction;
+use depot_worker::command::{CommitError, Transaction};
 use rivet_data::generated::depot_durable_state_machine_v1 as wire;
 use rivet_data::generated::shared_depot_alarms_v1::{AlarmRevision, AlarmSet};
 use rivet_engine_context::EngineContext;
@@ -27,6 +27,11 @@ pub struct Runner<M: DurableStateMachine>(PhantomData<M>);
 enum BackendEvent<M: DurableStateMachine> {
 	Event(M::Event),
 	Alarm(AlarmRevision),
+}
+
+enum Attempt<T> {
+	Committed(T),
+	Replan,
 }
 
 impl<M: DurableStateMachine> Runner<M> {
@@ -63,6 +68,34 @@ impl<M: DurableStateMachine> Runner<M> {
 		executor: Arc<dyn Executor<M>>,
 		event: BackendEvent<M>,
 	) -> Result<M::State> {
+		loop {
+			let method = match &method {
+				Method::Get => Method::Get,
+				Method::GetOrCreate { state } => Method::GetOrCreate {
+					state: state.clone(),
+				},
+			};
+			let event = match &event {
+				BackendEvent::Event(event) => BackendEvent::Event(event.clone()),
+				BackendEvent::Alarm(revision) => BackendEvent::Alarm(revision.clone()),
+			};
+			match Self::process_attempt(ctx, db.clone(), method, executor.clone(), event).await? {
+				// Only an unadmitted conflict is safe to replan. A timed-out commit may still
+				// land and must retain its unknown outcome. KvHandle keeps the command's
+				// original deadline and authority across these attempts.
+				Attempt::Replan => {}
+				Attempt::Committed(state) => return Ok(state),
+			}
+		}
+	}
+
+	async fn process_attempt(
+		ctx: &EngineContext,
+		db: KvHandle,
+		method: Method<M>,
+		executor: Arc<dyn Executor<M>>,
+		event: BackendEvent<M>,
+	) -> Result<Attempt<M::State>> {
 		#[allow(clippy::disallowed_methods, reason = "metrics use real time")]
 		let lock_started = std::time::Instant::now();
 		let guard = db.lock_partition(MachineStateKey::new().range()).await?;
@@ -71,10 +104,11 @@ impl<M: DurableStateMachine> Runner<M> {
 			.observe(lock_started.elapsed().as_secs_f64());
 		let mut metrics = RunnerMetrics::new(M::DEBUG_NAME);
 
-		// Plan pass: the machine, its legacy timers and, for an alarm, its due timers are read
-		// from a snapshot, then each transition runs in memory with the executor's `prepare`
-		// before it. The lock keeps the state from changing meanwhile; no transaction is open,
-		// so `prepare` can do I/O without holding one.
+		// Plan pass: the machine, legacy timers and due timers are read from a snapshot,
+		// then each transition runs in memory with the executor's `prepare` before it. The
+		// lock excludes other handlers, but an earlier commit whose outcome was unknown
+		// may still land. Validate this snapshot again in the write transaction. No pin is
+		// retained across `prepare`, so its I/O does not retain a filesystem snapshot.
 		let (mut machine, legacy_timers, due_timers) = {
 			let mut snapshot = db.snapshot().await?;
 			let machine = Machine::<M>::read(&mut snapshot, method).await?;
@@ -228,13 +262,16 @@ impl<M: DurableStateMachine> Runner<M> {
 				executor.execute(effect, effect_ctx);
 			}
 			drop(guard);
-			return Ok(machine.state);
+			return Ok(Attempt::Committed(machine.state));
 		}
 
 		// Write pass: the planned transitions become one transaction, in order. A fired timer's
 		// row goes before its transition's own timer writes, so a rearm of the same timer lands
 		// after the removal.
 		let mut tx = db.begin().await?;
+		if !machine.validate_plan(&mut tx)? {
+			return Ok(Attempt::Replan);
+		}
 		let mut timers = TimerWrites::new(armed_head);
 		// Legacy timers move first, at their own deadlines, so this batch's arms, cancels and
 		// fired removals find them in the id-keyed rows.
@@ -328,7 +365,11 @@ impl<M: DurableStateMachine> Runner<M> {
 
 		#[allow(clippy::disallowed_methods, reason = "metrics use real time")]
 		let commit_started = std::time::Instant::now();
-		db.commit(tx).await?;
+		match db.commit(tx).await {
+			Ok(_) => {}
+			Err(CommitError::Conflict) => return Ok(Attempt::Replan),
+			Err(error) => return Err(error.into()),
+		}
 		crate::metrics::COMMIT_SECONDS
 			.with_label_values(&[M::DEBUG_NAME])
 			.observe(commit_started.elapsed().as_secs_f64());
@@ -343,7 +384,7 @@ impl<M: DurableStateMachine> Runner<M> {
 		}
 		metrics.observe_phase(RunnerPhase::Dispatch, started.elapsed().as_secs_f64());
 
-		Ok(machine.state)
+		Ok(Attempt::Committed(machine.state))
 	}
 
 	/// Runs one transition in memory and returns its effects.
@@ -574,6 +615,8 @@ struct Machine<M: DurableStateMachine> {
 	state: M::State,
 	/// The state's bytes as read, or `None` for a machine `GetOrCreate` supplied.
 	stored_state: Option<Vec<u8>>,
+	/// The filesystem snapshot from which the state, metadata and due timers were planned.
+	read_version: u64,
 	data: wire::Data,
 	data_changed: bool,
 }
@@ -582,6 +625,7 @@ impl<M: DurableStateMachine> Machine<M> {
 	/// Reads the machine, or builds the one `GetOrCreate` supplies when none is stored. Nothing
 	/// is written: the state is saved by the transition's transaction either way.
 	async fn read(tx: &mut Transaction, method: Method<M>) -> Result<Self> {
+		let read_version = tx.read_version();
 		let state_key_packed = MachineStateKey::new().pack();
 		let data_key = MachineDataKey::new();
 		let data_key_packed = data_key.pack();
@@ -593,6 +637,7 @@ impl<M: DurableStateMachine> Machine<M> {
 			Some(Machine {
 				state: M::deserialize_state(&state)?,
 				stored_state: Some(state.to_vec()),
+				read_version,
 				data: data
 					.map(|v| data_key.deserialize(v.into()))
 					.transpose()?
@@ -612,6 +657,7 @@ impl<M: DurableStateMachine> Machine<M> {
 			(Method::GetOrCreate { state }, None) => Ok(Machine {
 				state,
 				stored_state: None,
+				read_version,
 				data: wire::Data {
 					started_ms: None,
 					alarm: None,
@@ -623,6 +669,19 @@ impl<M: DurableStateMachine> Machine<M> {
 
 	fn has_started(&self) -> bool {
 		self.data.started_ms.is_some()
+	}
+
+	/// Reject any commit between planning and opening this transaction, even a timer change
+	/// that leaves state and metadata byte-identical. Every runner commit writes the state
+	/// key, so its read conflict also catches a commit that lands after this transaction opens,
+	/// including while commit waits for an uncertain write. No snapshot pin crosses prepare.
+	fn validate_plan(&self, tx: &mut Transaction) -> Result<bool> {
+		if tx.read_version() != self.read_version {
+			return Ok(false);
+		}
+		let key = MachineStateKey::new().pack();
+		tx.add_read_conflict_range((Bound::Included(&key[..]), Bound::Included(&key[..])))?;
+		Ok(true)
 	}
 
 	fn save(&self, tx: &mut Transaction, state_bytes: &[u8]) -> Result<()> {

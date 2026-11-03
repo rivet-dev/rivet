@@ -303,10 +303,7 @@ async fn send(
 
 	sender.send(msg).await?;
 
-	identity.message_index = identity
-		.message_index
-		.checked_add(1)
-		.context("HTTP message index overflow")?;
+	identity.message_index = identity.message_index.wrapping_add(1);
 	Ok(())
 }
 

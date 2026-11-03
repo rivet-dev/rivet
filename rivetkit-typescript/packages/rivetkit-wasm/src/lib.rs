@@ -621,9 +621,24 @@ async fn run_actor_adapter(callbacks: WasmCallbacks, start: ActorStart) -> Resul
 		start_run_handler(&callbacks, &ctx)?;
 	}
 
-	while let Some(event) = events.recv().await {
-		dispatch_event(&callbacks, &ctx, event).await;
+	// Connection callbacks may call this actor again. Keep their futures owned by
+	// the adapter while continuing to receive the nested request's events.
+	let mut connection_tasks = tokio::task::JoinSet::new();
+	loop {
+		tokio::select! {
+			Some(result) = connection_tasks.join_next(), if !connection_tasks.is_empty() => {
+				if let Err(error) = result {
+					console_error(&format!("wasm connection callback task failed: {error:#}"));
+				}
+			}
+			event = events.recv() => {
+				let Some(event) = event else { break };
+				dispatch_event(&callbacks, &ctx, event, &mut connection_tasks).await;
+			}
+		}
 	}
+	connection_tasks.abort_all();
+	while connection_tasks.join_next().await.is_some() {}
 
 	Ok(())
 }
@@ -721,7 +736,12 @@ async fn run_preamble(
 	Ok(())
 }
 
-async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event: ActorEvent) {
+async fn dispatch_event(
+	callbacks: &WasmCallbacks,
+	ctx: &WasmActorContext,
+	event: ActorEvent,
+	connection_tasks: &mut tokio::task::JoinSet<()>,
+) {
 	match event {
 		ActorEvent::Action {
 			name,
@@ -974,24 +994,33 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 			request,
 			reply,
 		} => {
-			let result = run_connection_preflight(callbacks, ctx, conn, params, request).await;
-			if let Err(error) = &result {
-				console_error(&format!(
-					"wasm connection preflight callback failed: {error:#}"
-				));
-			}
-			reply.send(result);
+			let callbacks = callbacks.clone();
+			let ctx = ctx.clone();
+			connection_tasks.spawn_local(reply.send_or_cancel(async move {
+				let result =
+					run_connection_preflight(&callbacks, &ctx, conn, params, request).await;
+				if let Err(error) = &result {
+					console_error(&format!(
+						"wasm connection preflight callback failed: {error:#}"
+					));
+				}
+				result
+			}));
 		}
 		ActorEvent::ConnectionOpen {
 			conn,
 			request,
 			reply,
 		} => {
-			let result = run_connection_open(callbacks, ctx, conn, request).await;
-			if let Err(error) = &result {
-				console_error(&format!("wasm connection open callback failed: {error:#}"));
-			}
-			reply.send(result);
+			let callbacks = callbacks.clone();
+			let ctx = ctx.clone();
+			connection_tasks.spawn_local(reply.send_or_cancel(async move {
+				let result = run_connection_open(&callbacks, &ctx, conn, request).await;
+				if let Err(error) = &result {
+					console_error(&format!("wasm connection open callback failed: {error:#}"));
+				}
+				result
+			}));
 		}
 		ActorEvent::SubscribeRequest {
 			conn,

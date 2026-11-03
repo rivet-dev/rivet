@@ -92,14 +92,7 @@
 				{
 					"code": "invalid_request",
 					"message": "Invalid hibernatable websocket connection ID",
-					"statuses": [
-						{
-							"status": 400,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
+					"statuses": []
 				},
 				{
 					"code": "invalid_version",
@@ -689,6 +682,18 @@
 					"statuses": [
 						{
 							"status": 429,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
+					"code": "request_timeout",
+					"message": "Timed out waiting for the actor to become ready.",
+					"statuses": [
+						{
+							"status": 504,
 							"surfaces": [
 								"gateway"
 							]

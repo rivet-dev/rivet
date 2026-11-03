@@ -251,8 +251,8 @@ export const RegistryConfigSchema = z
 			.default(() => getRivetRunEngineVersion() ?? VERSION),
 		/**
 		 * Starts the first-party Services actor host when RivetKit manages
-		 * a local engine. Disabled by default. Set RIVET_RUN_SERVICES=1
-		 * or startServices: true to enable it.
+		 * a local engine. Enabled by default for a managed local Engine. Set
+		 * RIVET_RUN_SERVICES=0 or startServices: false to disable it.
 		 */
 		startServices: z.boolean().optional(),
 		/**
@@ -369,7 +369,9 @@ export const RegistryConfigSchema = z
 			? localEngineEndpoint
 			: (parsedEndpoint?.endpoint ??
 				(isDevEnv ? localEngineEndpoint : undefined));
-		const startServices = config.startServices ?? getRivetRunServices();
+		const engineSpawn = !parsedEndpoint && Boolean(endpoint);
+		const startServices =
+			config.startServices ?? getRivetRunServices() ?? engineSpawn;
 		const validateServerlessEndpoint = Boolean(
 			config.startEngine || parsedEndpoint,
 		);
@@ -419,7 +421,7 @@ export const RegistryConfigSchema = z
 			...config,
 			sqlite,
 			endpoint,
-			engineSpawn: !parsedEndpoint && Boolean(endpoint),
+			engineSpawn,
 			startServices,
 			namespace,
 			token,
@@ -656,7 +658,7 @@ export const DocRegistryConfigSchema = z
 			.boolean()
 			.optional()
 			.describe(
-				"Starts Services when RivetKit manages a local Engine. Disabled by default. Set RIVET_RUN_SERVICES=1 or startServices: true to enable.",
+				"Starts Services when RivetKit manages a local Engine. Enabled by default for a managed local Engine. Set RIVET_RUN_SERVICES=0 or startServices: false to disable.",
 			),
 		configurePool: DocConfigurePoolSchema.describe(
 			"Automatically configure serverless nodes in the engine.",

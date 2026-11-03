@@ -514,6 +514,8 @@ export type ActionContext<
 	TEvents,
 	TQueues
 > & {
+	/** Present only when a durable schedule or cron invokes this action. */
+	readonly scheduledFire?: ScheduledFireInfo;
 	conn: Conn<
 		TState,
 		TConnParams,
