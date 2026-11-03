@@ -30,7 +30,7 @@ use crate::telemetry::SqliteOperation;
 #[cfg(feature = "sqlite-local")]
 mod envoy_sqlite_transport;
 #[cfg(feature = "sqlite-local")]
-mod profiling;
+pub(crate) mod profiling;
 mod tx;
 
 pub use tx::{
