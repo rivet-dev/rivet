@@ -1,5 +1,0 @@
-{
-  "code": "storage_overloaded",
-  "group": "sqlite",
-  "message": "SQLite storage is overloaded."
-}
