@@ -94,10 +94,6 @@
 							"href": "/actors/docs/authentication"
 						},
 						{
-							"title": "Access Control",
-							"href": "/actors/docs/access-control"
-						},
-						{
 							"title": "Connections",
 							"href": "/actors/docs/connections"
 						},
@@ -160,6 +156,10 @@
 						{
 							"title": "Logging",
 							"href": "/actors/docs/logging"
+						},
+						{
+							"title": "Performance Monitoring",
+							"href": "/actors/docs/performance-monitoring"
 						},
 						{
 							"title": "Errors",
@@ -369,6 +369,19 @@
 				{
 					"title": "Collaborative Text Editor (OT)",
 					"href": "/guides/collaborative-text-editor-ot"
+				}
+			]
+		},
+		{
+			"title": "Concepts",
+			"pages": [
+				{
+					"title": "A Radically Simpler Architecture",
+					"href": "/guides/a-radically-simpler-architecture"
+				},
+				{
+					"title": "Authentication",
+					"href": "/guides/authentication"
 				}
 			]
 		}
