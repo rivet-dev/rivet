@@ -31,10 +31,10 @@
 		"vitest": "^3.1.1"
 	},
 	"dependencies": {
-		"@rivetkit/react": "^3.0.1-preview.1",
+		"@rivetkit/react": "^3.0.1-preview.2",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1",
-		"rivetkit": "^3.0.1-preview.1"
+		"rivetkit": "^3.0.1-preview.2"
 	},
 	"license": "MIT"
 }
