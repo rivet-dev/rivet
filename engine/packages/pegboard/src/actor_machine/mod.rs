@@ -21,6 +21,29 @@ const STOP_RESEND_JITTER_MS: u64 = 2 * 1000;
 
 pub struct ActorStateMachine;
 
+/// What the executor's `prepare` supplies to one transition: the envoy selected for a start
+/// the event causes, as `needs_allocation` names them, and the configuration the transition
+/// reads, since the core never reads the config itself.
+#[derive(Clone, Debug)]
+pub struct Preparation {
+	/// The envoy a start this event causes goes to. `None` when the event starts nothing or
+	/// the pool has no envoy, in which case the actor sleeps.
+	pub allocation: Option<wire::ActorAllocation>,
+	/// How long a start waits for the envoy's running report before the epoch is stopped;
+	/// `pegboard.actor_start_threshold`.
+	pub start_threshold_ms: u64,
+}
+
+impl Default for Preparation {
+	fn default() -> Self {
+		let defaults = rivet_config::config::pegboard::Pegboard::default();
+		Self {
+			allocation: None,
+			start_threshold_ms: defaults.actor_start_threshold(),
+		}
+	}
+}
+
 impl DurableStateMachine for ActorStateMachine {
 	type Slot = NoSlot;
 	type State = State;
@@ -28,7 +51,7 @@ impl DurableStateMachine for ActorStateMachine {
 	type Effect = Effect;
 	type Timer = wire::ActorTimer;
 	type Snapshot = Snapshot;
-	type Preparation = Option<wire::ActorAllocation>;
+	type Preparation = Preparation;
 	type WriteEffect = WriteEffect;
 
 	const DEBUG_NAME: &'static str = "actor";
@@ -46,10 +69,14 @@ impl DurableStateMachine for ActorStateMachine {
 		raw_event: rivet_state_machine::Event<
 			rivet_state_machine_durable::RuntimeEvent<Event, wire::ActorTimer>,
 		>,
-		preparation: Option<wire::ActorAllocation>,
+		preparation: Preparation,
 		effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
 	) {
 		let State(state) = state;
+		let Preparation {
+			allocation: prepared_allocation,
+			start_threshold_ms,
+		} = preparation;
 		let now_unix_ms = raw_event.now.unix_ms;
 		let entropy = raw_event.entropy.clone();
 		let event = match raw_event.body {
@@ -61,13 +88,33 @@ impl DurableStateMachine for ActorStateMachine {
 		match state.phase {
 			wire::ActorPhase::Initializing(ref mut init) => match event {
 				RuntimeEvent::Input(wire::ActorEvent::TryStart(event)) => {
-					try_start(state, effects, event.waiter, preparation, now_unix_ms);
+					try_start(
+						state,
+						effects,
+						event.waiter,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Input(wire::ActorEvent::Create(event)) => {
-					try_start(state, effects, event.waiter, preparation, now_unix_ms);
+					try_start(
+						state,
+						effects,
+						event.waiter,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Timer(wire::ActorTimer::AlarmTimeout) => {
-					wake(state, effects, preparation, now_unix_ms);
+					wake(
+						state,
+						effects,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Input(wire::ActorEvent::ReserveEpoxyState(effect_state)) => {
 					walk_reserve_epoxy(
@@ -76,7 +123,13 @@ impl DurableStateMachine for ActorStateMachine {
 						effects,
 						Some(effect_state),
 					);
-					try_complete_initialization(state, effects, Dispatch::Nondurable, now_unix_ms);
+					try_complete_initialization(
+						state,
+						effects,
+						Dispatch::Nondurable,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Timer(wire::ActorTimer::ReserveEpoxyTimeout(timeout)) => {
 					walk_reserve_epoxy(
@@ -89,7 +142,13 @@ impl DurableStateMachine for ActorStateMachine {
 							create_unix_ms: timeout.create_unix_ms,
 						}),
 					);
-					try_complete_initialization(state, effects, Dispatch::Nondurable, now_unix_ms);
+					try_complete_initialization(
+						state,
+						effects,
+						Dispatch::Nondurable,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Input(wire::ActorEvent::Sleep) => {
 					set_pending_action(
@@ -139,13 +198,33 @@ impl DurableStateMachine for ActorStateMachine {
 			// Start command sent to `allocation`, waiting for the envoy's running report.
 			wire::ActorPhase::Starting(ref mut phase) => match event {
 				RuntimeEvent::Input(wire::ActorEvent::TryStart(event)) => {
-					try_start(state, effects, event.waiter, preparation, now_unix_ms);
+					try_start(
+						state,
+						effects,
+						event.waiter,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Input(wire::ActorEvent::Create(event)) => {
-					try_start(state, effects, event.waiter, preparation, now_unix_ms);
+					try_start(
+						state,
+						effects,
+						event.waiter,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Timer(wire::ActorTimer::AlarmTimeout) => {
-					wake(state, effects, preparation, now_unix_ms);
+					wake(
+						state,
+						effects,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				// The start command did not reach the envoy, or the envoy never reported
 				// running. Either way the envoy may hold the epoch, so it is only stopped, like
@@ -206,7 +285,13 @@ impl DurableStateMachine for ActorStateMachine {
 								}
 							}
 							wire::ToEnvoyEventKind::ToEnvoyEventKindStopped(_) => {
-								handle_stopped(state, effects, preparation, now_unix_ms);
+								handle_stopped(
+									state,
+									effects,
+									prepared_allocation,
+									start_threshold_ms,
+									now_unix_ms,
+								);
 							}
 							wire::ToEnvoyEventKind::ToEnvoyEventKindSleepIntent => {
 								set_pending_action(
@@ -290,20 +375,46 @@ impl DurableStateMachine for ActorStateMachine {
 			},
 			wire::ActorPhase::Running(ref mut phase) => match event {
 				RuntimeEvent::Input(wire::ActorEvent::TryStart(event)) => {
-					try_start(state, effects, event.waiter, preparation, now_unix_ms);
+					try_start(
+						state,
+						effects,
+						event.waiter,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Input(wire::ActorEvent::Create(event)) => {
-					try_start(state, effects, event.waiter, preparation, now_unix_ms);
+					try_start(
+						state,
+						effects,
+						event.waiter,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Timer(wire::ActorTimer::AlarmTimeout) => {
-					wake(state, effects, preparation, now_unix_ms);
+					wake(
+						state,
+						effects,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Input(wire::ActorEvent::ToEnvoyEvent(event)) => {
 					if event.epoch == state.epoch {
 						match event.kind {
 							wire::ToEnvoyEventKind::ToEnvoyEventKindRunning => {}
 							wire::ToEnvoyEventKind::ToEnvoyEventKindStopped(_) => {
-								handle_stopped(state, effects, preparation, now_unix_ms);
+								handle_stopped(
+									state,
+									effects,
+									prepared_allocation,
+									start_threshold_ms,
+									now_unix_ms,
+								);
 							}
 							wire::ToEnvoyEventKind::ToEnvoyEventKindSleepIntent => {
 								let allocation = phase.allocation.clone();
@@ -382,13 +493,33 @@ impl DurableStateMachine for ActorStateMachine {
 			},
 			wire::ActorPhase::Stopping(ref mut phase) => match event {
 				RuntimeEvent::Input(wire::ActorEvent::TryStart(event)) => {
-					try_start(state, effects, event.waiter, preparation, now_unix_ms);
+					try_start(
+						state,
+						effects,
+						event.waiter,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Input(wire::ActorEvent::Create(event)) => {
-					try_start(state, effects, event.waiter, preparation, now_unix_ms);
+					try_start(
+						state,
+						effects,
+						event.waiter,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Timer(wire::ActorTimer::AlarmTimeout) => {
-					wake(state, effects, preparation, now_unix_ms);
+					wake(
+						state,
+						effects,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				// The stop is still unanswered. It may have been lost with a connection the
 				// envoy has since replaced while it keeps the epoch running, so silence proves
@@ -405,7 +536,13 @@ impl DurableStateMachine for ActorStateMachine {
 				// end without its stopped report. A late report of an earlier epoch is ignored.
 				RuntimeEvent::Input(wire::ActorEvent::EnvoyGone(gone)) => {
 					if gone.epoch == state.epoch {
-						handle_stopped(state, effects, preparation, now_unix_ms);
+						handle_stopped(
+							state,
+							effects,
+							prepared_allocation,
+							start_threshold_ms,
+							now_unix_ms,
+						);
 					}
 				}
 				RuntimeEvent::Input(wire::ActorEvent::ToEnvoyEvent(event)) => {
@@ -413,7 +550,13 @@ impl DurableStateMachine for ActorStateMachine {
 						match event.kind {
 							wire::ToEnvoyEventKind::ToEnvoyEventKindRunning => {}
 							wire::ToEnvoyEventKind::ToEnvoyEventKindStopped(_) => {
-								handle_stopped(state, effects, preparation, now_unix_ms);
+								handle_stopped(
+									state,
+									effects,
+									prepared_allocation,
+									start_threshold_ms,
+									now_unix_ms,
+								);
 							}
 							wire::ToEnvoyEventKind::ToEnvoyEventKindSleepIntent => {
 								set_pending_action(
@@ -488,17 +631,44 @@ impl DurableStateMachine for ActorStateMachine {
 			},
 			wire::ActorPhase::Sleeping => match event {
 				RuntimeEvent::Input(wire::ActorEvent::TryStart(event)) => {
-					try_start(state, effects, event.waiter, preparation, now_unix_ms);
+					try_start(
+						state,
+						effects,
+						event.waiter,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Input(wire::ActorEvent::Create(event)) => {
-					try_start(state, effects, event.waiter, preparation, now_unix_ms);
+					try_start(
+						state,
+						effects,
+						event.waiter,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Timer(wire::ActorTimer::AlarmTimeout) => {
-					wake(state, effects, preparation, now_unix_ms);
+					wake(
+						state,
+						effects,
+						prepared_allocation,
+						start_threshold_ms,
+						now_unix_ms,
+					);
 				}
 				RuntimeEvent::Input(wire::ActorEvent::Reallocate(event)) => {
 					if event.epoch == state.epoch {
-						allocate_actor(state, effects, preparation, Dispatch::Durable, now_unix_ms);
+						allocate_actor(
+							state,
+							effects,
+							prepared_allocation,
+							Dispatch::Durable,
+							start_threshold_ms,
+							now_unix_ms,
+						);
 						store_start_waiter(state, event.waiter, now_unix_ms);
 					}
 				}
@@ -572,8 +742,9 @@ impl DurableStateMachine for ActorStateMachine {
 						state,
 						create.init,
 						create.waiter,
-						preparation,
+						prepared_allocation,
 						effects,
+						start_threshold_ms,
 						now_unix_ms,
 					);
 				}
@@ -628,6 +799,7 @@ fn try_complete_initialization(
 	state: &mut wire::ActorState,
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
 	dispatch: Dispatch,
+	start_threshold_ms: u64,
 	now_unix_ms: i64,
 ) {
 	let wire::ActorPhase::Initializing(init) = &state.phase else {
@@ -636,7 +808,14 @@ fn try_complete_initialization(
 	match &init.reserve_epoxy.state.phase {
 		wire::ReserveEpoxyPhase::ReserveEpoxyPhaseReserved => {
 			let allocation = init.allocation.clone();
-			allocate_actor(state, effects, allocation, dispatch, now_unix_ms);
+			allocate_actor(
+				state,
+				effects,
+				allocation,
+				dispatch,
+				start_threshold_ms,
+				now_unix_ms,
+			);
 		}
 		wire::ReserveEpoxyPhase::ReserveEpoxyPhasePending => {}
 		wire::ReserveEpoxyPhase::ReserveEpoxyPhaseAlreadyReserved(already_reserved) => {
@@ -679,6 +858,7 @@ fn initialize(
 	waiter: Option<wire::StartWaiter>,
 	allocation: Option<wire::ActorAllocation>,
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
+	start_threshold_ms: u64,
 	now_unix_ms: i64,
 ) {
 	let create_unix_ms = now_unix_ms.max(state.create_unix_ms.saturating_add(1));
@@ -732,7 +912,13 @@ fn initialize(
 	);
 
 	state.phase = wire::ActorPhase::Initializing(init_phase);
-	try_complete_initialization(state, effects, Dispatch::Durable, now_unix_ms);
+	try_complete_initialization(
+		state,
+		effects,
+		Dispatch::Durable,
+		start_threshold_ms,
+		now_unix_ms,
+	);
 }
 
 /// The `walk_*` helpers advance one effect's attempt state. `new_state` is the executor's
@@ -952,11 +1138,19 @@ fn wake(
 	state: &mut wire::ActorState,
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
 	hint: Option<wire::ActorAllocation>,
+	start_threshold_ms: u64,
 	now_unix_ms: i64,
 ) {
 	match &state.phase {
 		wire::ActorPhase::Sleeping => {
-			allocate_actor(state, effects, hint, Dispatch::Durable, now_unix_ms);
+			allocate_actor(
+				state,
+				effects,
+				hint,
+				Dispatch::Durable,
+				start_threshold_ms,
+				now_unix_ms,
+			);
 		}
 		wire::ActorPhase::Stopping(_) => {
 			set_pending_action(
@@ -1076,6 +1270,7 @@ fn handle_stopped(
 	state: &mut wire::ActorState,
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
 	hint: Option<wire::ActorAllocation>,
+	start_threshold_ms: u64,
 	now_unix_ms: i64,
 ) {
 	effects.cancel_timer(wire::ActorTimer::StartTimeout(wire::StartTimeout {
@@ -1095,7 +1290,14 @@ fn handle_stopped(
 			set_pending_action(&mut state.pending_action, wire::PendingAction::PendingNone);
 		}
 		wire::PendingAction::PendingReallocate => {
-			allocate_actor(state, effects, hint, Dispatch::Durable, now_unix_ms);
+			allocate_actor(
+				state,
+				effects,
+				hint,
+				Dispatch::Durable,
+				start_threshold_ms,
+				now_unix_ms,
+			);
 		}
 		wire::PendingAction::PendingDestroy => destroy_actor(state, effects, None, now_unix_ms),
 	}
@@ -1118,6 +1320,7 @@ fn allocate_actor(
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
 	allocation: Option<wire::ActorAllocation>,
 	dispatch: Dispatch,
+	start_threshold_ms: u64,
 	now_unix_ms: i64,
 ) {
 	match &state.pending_action {
@@ -1135,19 +1338,27 @@ fn allocate_actor(
 	set_pending_action(&mut state.pending_action, wire::PendingAction::PendingNone);
 
 	match allocation {
-		Some(allocation) => start_actor(state, effects, allocation, dispatch, now_unix_ms),
+		Some(allocation) => start_actor(
+			state,
+			effects,
+			allocation,
+			dispatch,
+			start_threshold_ms,
+			now_unix_ms,
+		),
 		None => state.phase = wire::ActorPhase::Sleeping,
 	}
 }
 
 /// Sends the start command for the current epoch to `allocation` and waits for the envoy to
-/// report running. The start timer bounds that wait. The waiters are told where the actor is
+/// report running. The start timer bounds that wait to `start_threshold_ms`. The waiters are told where the actor is
 /// starting and kept for the running notice.
 fn start_actor(
 	state: &mut wire::ActorState,
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
 	allocation: wire::ActorAllocation,
 	dispatch: Dispatch,
+	start_threshold_ms: u64,
 	now_unix_ms: i64,
 ) {
 	state.command_index += 1;
@@ -1168,7 +1379,7 @@ fn start_actor(
 	}
 	effects.arm_timer_after(
 		wire::ActorTimer::StartTimeout(wire::StartTimeout { epoch: state.epoch }),
-		EFFECT_TIMEOUT_MS,
+		start_threshold_ms,
 	);
 
 	state
@@ -1268,10 +1479,11 @@ fn try_start(
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
 	waiter: Option<wire::StartWaiter>,
 	hint: Option<wire::ActorAllocation>,
+	start_threshold_ms: u64,
 	now_unix_ms: i64,
 ) {
 	store_start_waiter(state, waiter, now_unix_ms);
-	wake(state, effects, hint, now_unix_ms);
+	wake(state, effects, hint, start_threshold_ms, now_unix_ms);
 }
 
 /// Stores a start waiter for the actor's next start, if the event carried one. Nothing is

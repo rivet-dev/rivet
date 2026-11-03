@@ -106,7 +106,19 @@ pub struct Pegboard {
 	///
 	/// Unit is in milliseconds (default 40000).
 	#[serde(rename = "node_lost_threshold")]
-	pub envoy_lost_threshold: Option<i64>,
+	pub envoy_lost_threshold: Option<u64>,
+	/// How long the engine waits after sending an actor's start for the node to report it
+	/// running. Past it the start is given up: the node is told to stop that epoch, and the
+	/// actor starts again once the node reports it stopped or is proven gone.
+	///
+	/// Unit is in milliseconds (default 30000).
+	pub actor_start_threshold: Option<u64>,
+	/// How long a node may take to stop its actors once asked, advertised to the node on
+	/// connect. A node shutting down drains its actors within this budget, and RivetKit uses it
+	/// as the default shutdown grace period.
+	///
+	/// Unit is in milliseconds (default 1800000, 30 minutes).
+	pub actor_stop_threshold: Option<u64>,
 	/// Max time since last pong before the node connection is terminated. Unit is in milliseconds.
 	#[serde(rename = "node_ping_timeout")]
 	pub envoy_ping_timeout: Option<i64>,
@@ -165,6 +177,13 @@ pub struct Pegboard {
 
 impl Pegboard {
 	pub fn validate(&self) -> Result<()> {
+		if self.actor_start_threshold() == 0 {
+			bail!("pegboard.actor_start_threshold must be greater than 0");
+		}
+		if self.actor_stop_threshold() == 0 {
+			bail!("pegboard.actor_stop_threshold must be greater than 0");
+		}
+
 		if self.envoy_event_delivery_timeout_ms == Some(0) {
 			bail!("pegboard.node_event_delivery_timeout_ms must be greater than 0");
 		}
@@ -423,8 +442,16 @@ impl Pegboard {
 		self.envoy_directory_max_stale_ms.unwrap_or(5_000)
 	}
 
-	pub fn envoy_lost_threshold(&self) -> i64 {
+	pub fn envoy_lost_threshold(&self) -> u64 {
 		self.envoy_lost_threshold.unwrap_or(40_000)
+	}
+
+	pub fn actor_start_threshold(&self) -> u64 {
+		self.actor_start_threshold.unwrap_or(30_000)
+	}
+
+	pub fn actor_stop_threshold(&self) -> u64 {
+		self.actor_stop_threshold.unwrap_or(30 * 60 * 1000)
 	}
 
 	pub fn envoy_ping_timeout(&self) -> i64 {

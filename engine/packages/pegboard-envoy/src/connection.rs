@@ -500,7 +500,7 @@ async fn schedule_lost_check(ctx: &EngineContext, conn: &Connection) {
 	};
 	// The envoy keeps its actors for its lost threshold after the socket closes, so they are
 	// not judged lost sooner.
-	let delay_ms = u64::try_from(ctx.config().pegboard().envoy_lost_threshold()).unwrap_or(0);
+	let delay_ms = ctx.config().pegboard().envoy_lost_threshold();
 	conn.lost_checks
 		.schedule(
 			lost_check_key(conn),
@@ -774,7 +774,7 @@ async fn handle_sub_stream(
 				// actor's commands in arrival order on its lane, while other actors' commands go
 				// ahead.
 				let turn_deadline_boot_ms = deadline_boot_ms.unwrap_or_else(|| {
-					now_boot_ms + conn.ctx.config().pegboard().envoy_lost_threshold() as u64
+					now_boot_ms + conn.ctx.config().pegboard().envoy_lost_threshold()
 				});
 				let mut turns = turns.drain(..);
 				for command in commands {
@@ -1058,9 +1058,14 @@ async fn handle_ws_msg(
 			conn.to_envoy_tx
 				.send(p::ToEnvoy::ToEnvoyInit(p::ToEnvoyInit {
 					metadata: p::ProtocolMetadata {
-						envoy_lost_threshold: ctx.config().pegboard().envoy_lost_threshold(),
-						// TODO: Remove?
-						actor_stop_threshold: 30000,
+						envoy_lost_threshold: i64::try_from(
+							ctx.config().pegboard().envoy_lost_threshold(),
+						)
+						.context("pegboard.node_lost_threshold exceeds the protocol's range")?,
+						actor_stop_threshold: i64::try_from(
+							ctx.config().pegboard().actor_stop_threshold(),
+						)
+						.context("pegboard.actor_stop_threshold exceeds the protocol's range")?,
 						max_response_payload_size: 32 * 1024 * 1024,
 					},
 				}))

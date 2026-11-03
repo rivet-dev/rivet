@@ -587,8 +587,10 @@ async fn envoy_check(
 	}
 
 	let now = ctx.env().clock().observe()?.unix_ms;
-	let heartbeat_expired =
-		envoy.heartbeat_unix_ms + ctx.config().pegboard().envoy_lost_threshold() < now;
+	// A threshold past the timestamp range never expires.
+	let lost_threshold_ms =
+		i64::try_from(ctx.config().pegboard().envoy_lost_threshold()).unwrap_or(i64::MAX);
+	let heartbeat_expired = envoy.heartbeat_unix_ms.saturating_add(lost_threshold_ms) < now;
 	if !envoy.connected && heartbeat_expired {
 		return Ok(EnvoyCheck::Lost);
 	}

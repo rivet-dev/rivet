@@ -503,6 +503,48 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	}
 
 	/**
+	 * Mark all retained history under `location` as visited.
+	 *
+	 * Replay does not re-enter a settled scope, but its entries stay in history.
+	 * Without this, an enclosing validateComplete or getVersion treats them as
+	 * leftovers from changed workflow code.
+	 */
+	private markSettledHistoryVisited(location: Location): void {
+		for (const [key, entry] of this.storage.history.entries) {
+			if (isLocationPrefix(location, entry.location)) {
+				this.markVisited(key);
+			}
+		}
+	}
+
+	/**
+	 * Mark the retained history of a resumed loop's finished iterations as
+	 * visited, because the loop continues from `resumeIteration` without
+	 * replaying them.
+	 */
+	private markFinishedIterationsVisited(
+		loopLocation: Location,
+		resumeIteration: number,
+	): void {
+		const loopSegment = loopLocation[loopLocation.length - 1];
+		for (const [key, entry] of this.storage.history.entries) {
+			if (!isLocationPrefix(loopLocation, entry.location)) {
+				continue;
+			}
+
+			const iterationSegment = entry.location[loopLocation.length];
+			if (
+				iterationSegment &&
+				typeof iterationSegment !== "number" &&
+				iterationSegment.loop === loopSegment &&
+				iterationSegment.iteration < resumeIteration
+			) {
+				this.markVisited(key);
+			}
+		}
+	}
+
+	/**
 	 * Check if a name has already been used at the current location in this execution.
 	 * Throws HistoryDivergedError if duplicate detected.
 	 */
@@ -1185,6 +1227,13 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				existing.id,
 			);
 
+			if (
+				metadata.status === "completed" ||
+				loopData.output !== undefined
+			) {
+				this.markSettledHistoryVisited(location);
+			}
+
 			if (rollbackMode) {
 				if (loopData.output !== undefined) {
 					return loopData.output as T;
@@ -1207,6 +1256,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			entry = existing;
 			state = loopData.state as S;
 			iteration = loopData.iteration;
+			this.markFinishedIterationsVisited(location, iteration);
 			if (rollbackMode) {
 				rollbackOutput = loopData.output as T | undefined;
 				rollbackIterationRan = rollbackOutput !== undefined;
@@ -2097,24 +2147,27 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					);
 				}
 
+				const branchLocation = appendName(
+					this.storage,
+					location,
+					branchName,
+				);
+
 				// Already completed
 				if (branchStatus.status === "completed") {
+					this.markSettledHistoryVisited(branchLocation);
 					results[branchName] = branchStatus.output;
 					return;
 				}
 
 				// Already failed
 				if (branchStatus.status === "failed") {
+					this.markSettledHistoryVisited(branchLocation);
 					errors[branchName] = new Error(branchStatus.error);
 					return;
 				}
 
 				// Execute branch
-				const branchLocation = appendName(
-					this.storage,
-					location,
-					branchName,
-				);
 				const branchCtx = this.createBranch(branchLocation);
 
 				branchStatus.status = "running";
@@ -2257,6 +2310,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			// Check if we already have a winner
 			const raceKind = existing.kind;
 			if (raceKind.data.winner !== null) {
+				this.markSettledHistoryVisited(location);
 				const winnerStatus =
 					raceKind.data.branches[raceKind.data.winner];
 				return {
@@ -2333,6 +2387,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 		// If we found a replay winner, return immediately
 		if (hasWinner && winnerName !== null) {
+			this.markSettledHistoryVisited(location);
 			return { winner: winnerName, value: winnerValue as T };
 		}
 
@@ -2345,19 +2400,21 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				);
 			}
 
-			// Skip already completed/cancelled
-			if (
-				branchStatus.status !== "pending" &&
-				branchStatus.status !== "running"
-			) {
-				continue;
-			}
-
 			const branchLocation = appendName(
 				this.storage,
 				location,
 				branch.name,
 			);
+
+			// Skip already completed/cancelled
+			if (
+				branchStatus.status !== "pending" &&
+				branchStatus.status !== "running"
+			) {
+				this.markSettledHistoryVisited(branchLocation);
+				continue;
+			}
+
 			const branchCtx = this.createBranch(
 				branchLocation,
 				raceAbortController,
@@ -2367,7 +2424,15 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			branchStatus.error = undefined;
 			entry.dirty = true;
 
-			const branchPromise = branch.run(branchCtx).then(
+			// Validate inside the run promise so a divergence reaches the
+			// rejection handler below instead of being dropped by allSettled.
+			const runBranch = async () => {
+				const output = await branch.run(branchCtx);
+				branchCtx.validateComplete();
+				return output;
+			};
+
+			const branchPromise = runBranch().then(
 				async (output) => {
 					if (hasWinner) {
 						// This branch completed after a winner was determined
@@ -2390,8 +2455,6 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					hasWinner = true;
 					winnerName = branch.name;
 					winnerValue = output;
-
-					branchCtx.validateComplete();
 
 					branchStatus.status = "completed";
 					branchStatus.output = output;
@@ -2583,6 +2646,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 
 			// If it's not already marked as removed, we just skip it
+			this.markSettledHistoryVisited(location);
 			return;
 		}
 

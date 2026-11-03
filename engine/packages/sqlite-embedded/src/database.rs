@@ -455,6 +455,11 @@ impl NativeDatabaseHandle {
 		self.map_worker_result(self.worker.execute_batch(statements).await)
 	}
 
+	/// Stops accepting SQL and lets the pool finish closing its retained connection and VFS.
+	pub fn request_close(&self) {
+		self.worker.request_close();
+	}
+
 	pub async fn close(&self) -> Result<()> {
 		self.map_worker_close_result(self.worker.close().await)
 	}

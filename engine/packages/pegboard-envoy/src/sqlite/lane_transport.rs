@@ -16,6 +16,9 @@ use tokio::sync::Mutex;
 pub(super) struct LaneTransport {
 	env: Arc<dyn rivet_env::Env>,
 	pages: Arc<Mutex<Pages>>,
+	/// Retain the original filesystem context through cleanup without retaining its exclusive
+	/// lease. Dispatch still requires the live lane and matching generation below.
+	_filesystem: Arc<depot_client::filesystem::Filesystem>,
 	lane: Weak<super::Lane>,
 	/// The generation the session was opened for. Requests stamped with another generation are
 	/// rejected, so a session that outlived its generation cannot touch the database.
@@ -30,6 +33,7 @@ impl LaneTransport {
 	pub(super) fn new(
 		env: Arc<dyn rivet_env::Env>,
 		pages: Arc<Mutex<Pages>>,
+		filesystem: Arc<depot_client::filesystem::Filesystem>,
 		lane: Weak<super::Lane>,
 		generation: u32,
 		unknown_commit: Arc<AtomicBool>,
@@ -37,6 +41,7 @@ impl LaneTransport {
 		Self {
 			env,
 			pages,
+			_filesystem: filesystem,
 			lane,
 			generation,
 			next_request_id: AtomicU32::new(0),

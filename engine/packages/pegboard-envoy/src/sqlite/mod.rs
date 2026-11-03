@@ -65,18 +65,35 @@ pub(crate) type ServerPrefetch = Arc<dyn Fn() -> bool + Send + Sync>;
 struct Lane {
 	actor: Arc<Mutex<Actor>>,
 	active: AtomicBool,
-	filesystem: std::sync::Mutex<Option<Weak<depot_client::filesystem::Filesystem>>>,
+	volume: std::sync::Mutex<Option<VolumeRetirement>>,
 	server_prefetch: ServerPrefetch,
 	/// Whether the volume this lane opened, or is opening, may still dispatch. The volume
 	/// client checks it before every request, and retiring the lane clears it.
 	serving: std::sync::Mutex<Arc<AtomicBool>>,
 }
+
+/// Revokes the same lease record as its owner without keeping that owner alive for cleanup.
+struct VolumeRetirement {
+	filesystem: Weak<depot_client::filesystem::Filesystem>,
+	owner: Option<depot_client::filesystem::owner::FilesystemRetirement>,
+}
+
+impl VolumeRetirement {
+	fn retire(&self) {
+		if let Some(owner) = &self.owner {
+			owner.retire();
+		} else if let Some(filesystem) = self.filesystem.upgrade() {
+			filesystem.fence_with(depot_client::fences::FenceReason::OwnerRetired);
+		}
+	}
+}
+
 impl Lane {
 	fn new(server_prefetch: ServerPrefetch) -> Self {
 		Self {
 			actor: Arc::new(Mutex::new(Actor::default())),
 			active: AtomicBool::new(true),
-			filesystem: std::sync::Mutex::new(None),
+			volume: std::sync::Mutex::new(None),
 			server_prefetch,
 			serving: std::sync::Mutex::new(Arc::new(AtomicBool::new(true))),
 		}
@@ -86,13 +103,13 @@ impl Lane {
 		self.fence();
 	}
 
-	/// Fences the filesystem this lane opened, if any, so a request still holding it cannot
-	/// write through it.
+	/// Revoke dispatch and release the exact owner bound to this lane, even while a request
+	/// holds its actor or page lock. Cleanup may keep the fenced filesystem context alive.
 	fn fence(&self) {
-		let slot = self.filesystem.lock().unwrap();
+		let slot = self.volume.lock().unwrap();
 		self.serving.lock().unwrap().store(false, Ordering::Release);
-		if let Some(fs) = slot.as_ref().and_then(Weak::upgrade) {
-			fs.fence_with(depot_client::fences::FenceReason::OwnerRetired);
+		if let Some(volume) = slot.as_ref() {
+			volume.retire();
 		}
 	}
 
@@ -106,13 +123,19 @@ impl Lane {
 		ensure!(self.active.load(Ordering::Acquire), "SQLite session ended");
 		Ok(())
 	}
-	fn install(&self, fs: &Arc<depot_client::filesystem::Filesystem>) -> Result<()> {
-		let mut slot = self.filesystem.lock().unwrap();
+	fn install(&self, volume: &OpenVolume) -> Result<()> {
+		let mut slot = self.volume.lock().unwrap();
 		if !self.active.load(Ordering::Acquire) {
-			fs.fence_with(depot_client::fences::FenceReason::OwnerRetired);
+			volume.retire();
 			anyhow::bail!("SQLite session ended");
 		}
-		*slot = Some(Arc::downgrade(fs));
+		*slot = Some(VolumeRetirement {
+			filesystem: Arc::downgrade(&volume.fs),
+			owner: volume
+				._owner
+				.as_ref()
+				.map(|owner| owner.retirement_handle()),
+		});
 		Ok(())
 	}
 }
@@ -156,6 +179,18 @@ pub(crate) struct OpenVolume {
 	pub fs: Arc<depot_client::filesystem::Filesystem>,
 	/// Keeps the exclusive owner alive; tests open a bare filesystem with no owner.
 	pub _owner: Option<depot_client::filesystem::OpenedFilesystem>,
+}
+
+impl OpenVolume {
+	/// End serving permission independently of references held by page work or native cleanup.
+	fn retire(&self) {
+		if let Some(owner) = &self._owner {
+			owner.retire();
+		} else {
+			self.fs
+				.fence_with(depot_client::fences::FenceReason::OwnerRetired);
+		}
+	}
 }
 
 impl Pages {
@@ -234,9 +269,8 @@ impl Sessions {
 	}
 
 	/// Retires `id`'s session for a stop of generation `through`, as [`Sessions::remove`]
-	/// does, and closes its database volume now instead of when the lane's last holder drops
-	/// it, so its maintainer can unload and tier it. The actor's next start, on any engine,
-	/// opens the volume again.
+	/// does. The exclusive lease ends before stop completes; queued native cleanup retains
+	/// only fenced filesystem context, allowing the next local generation to open immediately.
 	pub async fn stop(&self, id: Id, through: u32) {
 		let lane = self.existing_lane(id).await;
 		let Some(lane) = lane else {
@@ -250,11 +284,10 @@ impl Sessions {
 		if !self.remove_lane(id, &lane).await {
 			return;
 		}
-		lane.active.store(false, Ordering::Release);
+		lane.retire();
 		actor.session = None;
 
-		// Dropping the exclusive owner fences the volume and begins its close. The lane's own
-		// fence follows; no request can run in between, because this holds the session lock.
+		// Retired native sessions keep their filesystem context, never this exclusive lease.
 		{
 			let mut pages = actor.pages.lock().await;
 			pages.stage = None;
@@ -265,7 +298,6 @@ impl Sessions {
 			pages.kv_ino = None;
 			pages.volume = None;
 		}
-		lane.fence();
 		drop(actor);
 		self.expiry.lock().cancel(&id);
 	}
@@ -305,8 +337,8 @@ impl Sessions {
 
 	/// Closes remote SQL sessions that stayed unused for the idle time, until the caller drops
 	/// this future. One sleep covers every lane: it waits for the earliest scheduled check.
-	/// Dropping a session closes its connection and VFS; the next SQL request
-	/// reopens it.
+	/// A close request stops SQL admission at once; the pool owns native cleanup. The next SQL
+	/// request reopens the session.
 	pub async fn run_expiry(&self, env: Arc<dyn rivet_env::Env>) -> Result<()> {
 		let clock = env.clock();
 		loop {
@@ -473,11 +505,12 @@ impl Sessions {
 
 			// The volume is open either way. Its SQLite file opens from it on the next request.
 			let fs = open.opened.filesystem().clone();
-			lane.install(&fs)?;
-			pages.volume = Some(OpenVolume {
+			let volume = OpenVolume {
 				fs,
 				_owner: Some(open.opened),
-			});
+			};
+			lane.install(&volume)?;
+			pages.volume = Some(volume);
 			pages.database = None;
 			match open.first {
 				Some(reply) => {
@@ -715,7 +748,7 @@ impl Sessions {
 		actor.create_unix_ms = create_unix_ms;
 		if pages.volume.is_none() {
 			let volume = open(lane.guard()).await?;
-			lane.install(&volume.fs)?;
+			lane.install(&volume)?;
 			pages.volume = Some(volume);
 		}
 		Ok((actor, pages))
@@ -756,6 +789,7 @@ impl Sessions {
 						let session = remote::open_session(
 							env.clone(),
 							actor.pages.clone(),
+							fs.clone(),
 							Arc::downgrade(lane),
 							format!("envoy-remote-sqlite-{}", env.rng("sqlite.vfs").uuid_v4()),
 							id.to_string(),

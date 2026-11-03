@@ -21,14 +21,21 @@ pub(super) struct Session {
 	unknown_commit: Arc<AtomicBool>,
 }
 
+impl Drop for Session {
+	fn drop(&mut self) {
+		self.database.request_close();
+	}
+}
+
 /// Opens the actor VFS over the lane's pages for `generation`.
 #[allow(
 	clippy::too_many_arguments,
-	reason = "a session needs its environment, pages, lane, identity, generation, pool and guard"
+	reason = "a session needs its environment, pages, filesystem context, lane, identity, generation, pool and guard"
 )]
 pub(super) async fn open_session(
 	env: Arc<dyn rivet_env::Env>,
 	pages: Arc<Mutex<Pages>>,
+	filesystem: Arc<depot_client::filesystem::Filesystem>,
 	lane: Weak<Lane>,
 	vfs_name: String,
 	actor_id: String,
@@ -40,6 +47,7 @@ pub(super) async fn open_session(
 	let transport = Arc::new(LaneTransport::new(
 		env,
 		pages,
+		filesystem,
 		lane,
 		generation,
 		unknown_commit.clone(),

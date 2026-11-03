@@ -45,7 +45,13 @@ pub(crate) struct Lease {
 }
 impl Lease {
 	fn release(&self) {
-		*self.phase.lock() = LeasePhase::Released;
+		{
+			let mut phase = self.phase.lock();
+			if matches!(*phase, LeasePhase::Released) {
+				return;
+			}
+			*phase = LeasePhase::Released;
+		}
 		let on_release = self.on_release.lock().clone();
 		if let Some(on_release) = on_release {
 			on_release();
@@ -66,6 +72,26 @@ pub struct OpenedFilesystem {
 	lease: Arc<Lease>,
 	completion: Arc<Completion>,
 }
+
+/// Revokes the exact owner's permission without retaining its exclusive lease. A missing
+/// lease has already been released by its owner's destructor; this never targets a successor.
+#[derive(Clone)]
+pub struct FilesystemRetirement {
+	filesystem: std::sync::Weak<Filesystem>,
+	lease: std::sync::Weak<Lease>,
+}
+
+impl FilesystemRetirement {
+	pub fn retire(&self) {
+		if let Some(filesystem) = self.filesystem.upgrade() {
+			filesystem.fence_with(crate::fences::FenceReason::OwnerReleased);
+		}
+		if let Some(lease) = self.lease.upgrade() {
+			lease.release();
+		}
+	}
+}
+
 impl OpenedFilesystem {
 	pub(crate) fn new(filesystem: Arc<Filesystem>, completion: Arc<Completion>) -> Self {
 		Self {
@@ -89,8 +115,30 @@ impl OpenedFilesystem {
 	pub fn filesystem(&self) -> &Arc<Filesystem> {
 		&self.filesystem
 	}
+
+	/// Allows a lane to revoke this lease without acquiring a request's actor or pages lock.
+	pub fn retirement_handle(&self) -> FilesystemRetirement {
+		FilesystemRetirement {
+			filesystem: Arc::downgrade(&self.filesystem),
+			lease: Arc::downgrade(&self.lease),
+		}
+	}
+
+	/// Revoke this owner's serving permission without waiting for callers holding filesystem
+	/// context to finish. Their cloned filesystem stays alive but is permanently fenced.
+	pub fn retire(&self) {
+		self.filesystem
+			.fence_with(crate::fences::FenceReason::OwnerReleased);
+		self.lease.release();
+	}
+
 	pub async fn shutdown(self) -> anyhow::Result<()> {
-		*self.lease.phase.lock() = LeasePhase::Closing;
+		{
+			let mut phase = self.lease.phase.lock();
+			if matches!(*phase, LeasePhase::Serving) {
+				*phase = LeasePhase::Closing;
+			}
+		}
 		let result = self.filesystem.close().await;
 		self.lease.release();
 		self.completion.wait().await;
@@ -100,8 +148,6 @@ impl OpenedFilesystem {
 }
 impl Drop for OpenedFilesystem {
 	fn drop(&mut self) {
-		self.filesystem
-			.fence_with(crate::fences::FenceReason::OwnerReleased);
-		self.lease.release();
+		self.retire();
 	}
 }

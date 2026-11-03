@@ -1814,6 +1814,15 @@
           "format": "uint64",
           "minimum": 0.0
         },
+        "actor_start_threshold": {
+          "description": "How long the engine waits after sending an actor's start for the node to report it running. Past it the start is given up: the node is told to stop that epoch, and the actor starts again once the node reports it stopped or is proven gone.\n\nUnit is in milliseconds (default 30000).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "actor_start_waiters_capacity": {
           "description": "Gateway workers one actor keeps waiting for its start (default 64, 1..=1024). A request that finds the list full waits on its fallback poll alone.",
           "type": [
@@ -1821,6 +1830,15 @@
             "null"
           ],
           "format": "uint32",
+          "minimum": 0.0
+        },
+        "actor_stop_threshold": {
+          "description": "How long a node may take to stop its actors once asked, advertised to the node on connect. A node shutting down drains its actors within this budget, and RivetKit uses it as the default shutdown grace period.\n\nUnit is in milliseconds (default 1800000, 30 minutes).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
           "minimum": 0.0
         },
         "command_concurrency": {
@@ -2014,7 +2032,8 @@
             "integer",
             "null"
           ],
-          "format": "int64"
+          "format": "uint64",
+          "minimum": 0.0
         },
         "node_ping_timeout": {
           "description": "Max time since last pong before the node connection is terminated. Unit is in milliseconds.",

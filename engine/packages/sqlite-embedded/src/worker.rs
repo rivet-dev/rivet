@@ -1380,6 +1380,14 @@ impl SqliteWorkerHandle {
 		result.await.map_err(|_| sqlite_worker_dead_error())?
 	}
 
+	/// Stops accepting commands and queues close without waiting for a free pool thread.
+	/// The queued slot retains the native connection and VFS until close completes.
+	pub fn request_close(&self) {
+		if self.inner().mark_closing() {
+			self.slot.request_close();
+		}
+	}
+
 	pub async fn close(&self) -> Result<()> {
 		self.close_with_timeout(Some(SQLITE_WORKER_CLOSE_TIMEOUT))
 			.await
@@ -1394,9 +1402,7 @@ impl SqliteWorkerHandle {
 		let start = Instant::now();
 		// Close is a control path, not SQL work, so it bypasses the bounded command queue.
 		// Queued commands fail; a command a thread is running finishes first.
-		if self.inner().mark_closing() {
-			self.slot.request_close();
-		}
+		self.request_close();
 
 		let wait_closed = async {
 			loop {

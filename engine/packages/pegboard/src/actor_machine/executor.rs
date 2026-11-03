@@ -1,4 +1,4 @@
-use crate::actor_machine::{ActorStateMachine, Effect, Event, State, WriteEffect};
+use crate::actor_machine::{ActorStateMachine, Effect, Event, Preparation, State, WriteEffect};
 use crate::commands::EnvoyRead;
 use crate::index;
 use crate::keys::{
@@ -75,10 +75,15 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 		&'a self,
 		state: &'a State,
 		event: &'a RuntimeEvent<Event, wire::ActorTimer>,
-	) -> Pin<Box<dyn Future<Output = Result<Option<wire::ActorAllocation>>> + Send + 'a>> {
+	) -> Pin<Box<dyn Future<Output = Result<Preparation>> + Send + 'a>> {
 		Box::pin(async move {
+			let start_threshold_ms = self.ctx.config().pegboard().actor_start_threshold();
+
 			if !crate::actor_machine::needs_allocation(&state.0, event) {
-				return Ok(None);
+				return Ok(Preparation {
+					allocation: None,
+					start_threshold_ms,
+				});
 			}
 
 			let (actor_id, namespace, pool_name, name) = match event {
@@ -94,13 +99,18 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 				}
 			};
 
-			rivet_env::timeout(
+			let allocation = rivet_env::timeout(
 				&*self.ctx.env().clock(),
 				SELECT_TIMEOUT,
 				select_allocation(&self.ctx, &actor_id, &namespace, &pool_name, &name),
 			)
 			.await
-			.context("envoy selection timed out")?
+			.context("envoy selection timed out")??;
+
+			Ok(Preparation {
+				allocation,
+				start_threshold_ms,
+			})
 		})
 	}
 
@@ -685,7 +695,7 @@ fn parse_route(
 pub(crate) fn envoy_gone(
 	envoy: Option<&wire::EnvoyData>,
 	read_unix_ms: i64,
-	lost_threshold_ms: i64,
+	lost_threshold_ms: u64,
 ) -> bool {
 	let Some(envoy) = envoy else {
 		return true;
@@ -693,9 +703,11 @@ pub(crate) fn envoy_gone(
 	if envoy.connected {
 		return false;
 	}
+	// A threshold past the timestamp range is never reached.
+	let lost_threshold_ms = i64::try_from(lost_threshold_ms).unwrap_or(i64::MAX);
 	let gone_after_unix_ms = envoy
 		.heartbeat_unix_ms
-		.saturating_add(lost_threshold_ms.max(0))
+		.saturating_add(lost_threshold_ms)
 		.saturating_add(ENVOY_GONE_MARGIN_MS);
 	read_unix_ms > gone_after_unix_ms
 }

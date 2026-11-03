@@ -155,8 +155,8 @@ When a Rivet Actor starts, RivetKit loads some of its own data in the same step 
 
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
-| Actor start threshold | N/A | 30 seconds | Maximum time for an actor to start before it is considered lost and rescheduled. |
-| Actor stop threshold | N/A | 30 minutes | Maximum time for an actor to stop before it is considered lost. |
+| Actor start threshold | N/A | 30 seconds | Maximum time for an actor to report running after its start is sent before the start is given up and retried. |
+| Actor stop threshold | N/A | 30 minutes | Time a node is given to stop its actors once asked. RivetKit uses it as the default shutdown grace period. |
 
 ## Increasing Limits
 
