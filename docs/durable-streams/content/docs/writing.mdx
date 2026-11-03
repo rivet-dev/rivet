@@ -1,0 +1,40 @@
+---
+title: "Writing"
+description: "Append to a stream, retry without duplicates, and close it when you are done."
+---
+
+Writers add messages to the end of a stream. Once a write is acknowledged it is stored, and every reader sees it in the same place.
+
+## Append messages
+
+In a JSON stream, each append is one message. Close the stream when the reply is complete, optionally with a last message in the same call.
+
+<CodeSnippet file="examples/docs/durable-streams/write.ts" title="write.ts" />
+
+## Retry without duplicates
+
+If a response is lost, a plain append cannot tell whether it landed, and a retry may write it twice. An idempotent producer numbers every write so the server drops repeats.
+
+<CodeSnippet file="examples/docs/durable-streams/producer.ts" title="producer.ts" />
+
+- **Producer ID**: a stable name for the writer. Reuse it after a restart.
+- **`autoClaim`**: a restarted writer takes over, and the old one is rejected, so a stalled process cannot write over its replacement.
+
+Rivet remembers each producer for seven days after its last write. A retry sent later than that may be written again.
+
+## Finish the reply
+
+Closing tells readers no more data is coming. Close a stream when the work it records is done, such as a finished agent reply.
+
+- Call `stream.close()`, or `producer.close()` when writing through a producer.
+- A closed stream stays readable, but new appends are rejected.
+- Closing is permanent.
+
+## Keep writes in your own order
+
+If your writes carry their own sequence, such as database commit numbers, pass it as `seq` on each append. The server rejects any write whose `seq` is not greater than the last one. Values compare as strings, so pad numbers to a fixed width, such as `00000042`.
+
+## Next steps
+
+- [Reading](/durable-streams/docs/reading): load what is already there.
+- [Realtime Streaming](/durable-streams/docs/realtime): show the reply as it arrives.

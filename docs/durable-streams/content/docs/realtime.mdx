@@ -1,0 +1,33 @@
+---
+title: "Realtime Streaming"
+description: "Show new messages the moment they are written, and reconnect without missing any."
+---
+
+A live read catches up from an offset, then keeps the connection open and delivers new messages as they are written. This is how the browser shows the agent's reply token by token.
+
+## Follow a stream live
+
+<CodeSnippet file="examples/docs/durable-streams/read-live.ts" title="read-live.ts" />
+
+The callback runs for each batch, first with the history after your offset, then with every new write.
+
+## Reconnect without gaps
+
+Connections drop: a laptop sleeps, a phone changes networks, a tab refreshes. Save `batch.offset` as you go and pass it back as `offset` when you reconnect. The read resumes right after the last message you saw.
+
+The client also reconnects on its own while the page stays open.
+
+## Transport methods
+
+- **Server-Sent Events** (`live: "sse"`): one open connection, and the server pushes each write as it lands. Lowest latency. Byte streams arrive base64-encoded, and the client decodes them.
+- **Long-polling** (`live: "long-poll"` or `live: true`): each request waits for new data, then the client sends the next one. Use it when a proxy buffers streaming responses.
+- Both deliver the same messages and offsets. See the [HTTP API](/durable-streams/docs/http-api#live-reads) to use them without the client.
+
+## Stop when the stream closes
+
+When the writer [closes the stream](/durable-streams/docs/writing#finish-the-reply), a live read stops once it reaches the end.
+
+## Next steps
+
+- [Forking](/durable-streams/docs/forking): retry from an earlier point.
+- [Writing](/durable-streams/docs/writing): close the stream when the reply is done.

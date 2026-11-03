@@ -47,7 +47,7 @@ Install the official client:
 npm install @durable-streams/client
 ```
 
-<CodeSnippet file="examples/docs/actors-integrations-durable-streams/client.ts" title="client.ts" />
+<CodeSnippet file="examples/docs/durable-streams/client.ts" title="client.ts" />
 
 </Tab>
 
@@ -89,28 +89,7 @@ curl 'http://127.0.0.1:8642/durable-streams/v1/stream/demo?offset=-1'
 
 <Tab title="Self-hosted">
 
-Run the Rivet control plane with the required feature flags enabled:
-
-```sh
-docker run -p 6420:6420 \
-  -e RIVET__FEATURES__GUARD_GATEWAY_V3__MODE=on \
-  -e RIVET__FEATURES__GUARD_GATEWAY_V3__PERCENTAGE=100 \
-  rivetdev/engine
-```
-
-See the [self-hosting guides](/docs/deploy/self-host/control-plane/) for other ways to run it.
-
-Run the Durable Streams worker. It runs your streams and connects to the control plane:
-
-```sh
-docker run -p 8642:8642 \
-  --add-host=host.docker.internal:host-gateway \
-  -e RIVET_ENDPOINT=http://host.docker.internal:6420 \
-  -e HOST=0.0.0.0 \
-  rivetdev/services
-```
-
-Your streams are at `http://<host>:8642/durable-streams/v1/stream/<path>`.
+Run the Rivet Services node next to your own control plane. See [Rivet Services](/docs/deploy/self-host/nodes/services/).
 
 </Tab>
 

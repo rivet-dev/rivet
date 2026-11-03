@@ -1,0 +1,44 @@
+---
+title: "Forking"
+description: "Start a new stream from another stream's history and take it in a different direction."
+---
+
+A fork is a new stream that starts with another stream's history, then goes its own way. Use it to retry an agent from partway through a conversation, or to try two answers side by side.
+
+<Diagram
+  id="durable-streams-forking"
+  label="A fork named chat/session-1-retry starts from the history of chat/session-1, then receives its own writes."
+  legend={false}
+  nodes={[
+    { id: "stream", x: 20, y: 30, w: 230, product: "durable-streams", title: "`chat/session-1`" },
+    { id: "fork", x: 470, y: 30, w: 250, product: "durable-streams", title: "`chat/session-1-retry`" },
+  ]}
+  edges={[{ from: "stream", to: "fork", label: "fork" }]}
+/>
+
+## Fork a stream
+
+Create the new stream with `Stream-Forked-From` set to the source stream's path:
+
+```sh
+curl -X PUT \
+  -H 'Stream-Forked-From: /durable-streams/v1/stream/chat/session-1' \
+  http://127.0.0.1:8642/durable-streams/v1/stream/chat/session-1-retry
+```
+
+The TypeScript client does not create forks yet. Once the fork exists, read and write it like any other stream.
+
+## Fork from an earlier point
+
+By default a fork copies the whole history. Add `Stream-Fork-Offset` with an offset from a previous read to branch from that point instead, for example right before the agent's last reply.
+
+## What a fork shares
+
+- The fork keeps the source's content type and history up to the fork point.
+- History is shared, not copied, so forking a long stream is cheap.
+- Writes to the fork never touch the source, and later writes to the source do not appear in the fork.
+
+## Next steps
+
+- [HTTP API](/durable-streams/docs/http-api): every request and header.
+- [Streams](/durable-streams/docs/streams): create, expire, and delete streams.

@@ -1,0 +1,86 @@
+---
+title: "HTTP API"
+description: "Every request, header, and status code for using Durable Streams over plain HTTP."
+---
+
+Every stream is a URL, and every operation is a plain HTTP request on it:
+
+```txt
+http://127.0.0.1:8642/durable-streams/v1/stream/<path>
+```
+
+Any HTTP client works, and existing Durable Streams clients work unchanged. The [Durable Streams protocol](https://github.com/durable-streams/durable-streams/blob/main/PROTOCOL.md) covers every edge case.
+
+## Requests
+
+| Method | Does | Notes |
+| --- | --- | --- |
+| `PUT` | Create a stream | Body is optional initial data. Repeating the same `PUT` is safe; a different configuration returns `409`. |
+| `POST` | Append | Body is the data, in the stream's content type. |
+| `GET` | Read | Starts at the `offset` query parameter. Add `live` to wait for new data. |
+| `HEAD` | Read metadata | Content type, end offset, expiry, and whether the stream is closed. |
+| `DELETE` | Delete the stream and its history | |
+
+```sh
+STREAM=http://127.0.0.1:8642/durable-streams/v1/stream/chat/session-1
+
+curl -X PUT -H 'content-type: application/json' $STREAM
+curl -X POST -H 'content-type: application/json' --data '{"token":"hello"}' $STREAM
+curl "$STREAM?offset=-1"
+curl -I $STREAM
+curl -X DELETE $STREAM
+```
+
+## Creating
+
+| Request header | Use |
+| --- | --- |
+| `content-type` | The stream's format, fixed for its lifetime. `application/json` stores separate messages; anything else stores bytes. |
+| `Stream-TTL` | Delete after this many seconds with no reads or writes. |
+| `Stream-Expires-At` | Delete at an RFC 3339 timestamp. Use one of `Stream-TTL` or `Stream-Expires-At`, not both. |
+| `Stream-Forked-From` | Create a [fork](/durable-streams/docs/forking) of the stream at this path. |
+| `Stream-Fork-Offset` | Fork from this offset instead of the end. |
+
+## Appending
+
+In a JSON stream, posting a JSON array stores each element as its own message, so one request can carry a batch.
+
+| Request header | Use |
+| --- | --- |
+| `Producer-Id` | Stable name of an idempotent writer. |
+| `Producer-Epoch` | The writer's session. Raise it when the writer restarts; requests with an older epoch return `403`. |
+| `Producer-Seq` | Starts at `0` and goes up by one per request in the epoch. A repeated sequence returns `204` and writes nothing. Send all three producer headers or none. |
+| `Stream-Seq` | Your own ordering value. A value not greater than the last one returns `409`. Compared as strings. |
+| `Stream-Closed: true` | Close the stream, with or without a final message in the body. |
+
+## Reading
+
+| Query parameter | Use |
+| --- | --- |
+| `offset` | Where to start: an offset from a previous read, `-1` for the beginning, or `now` for the end. |
+| `live` | `sse` or `long-poll` to wait for new data. Omit for a one-off read. |
+
+| Response header | Meaning |
+| --- | --- |
+| `Stream-Next-Offset` | Pass this as `offset` on the next read. |
+| `Stream-Up-To-Date: true` | You have everything written so far. |
+| `Stream-Closed: true` | Nothing more will ever arrive. |
+
+### Live reads
+
+- **`live=sse`**: Server-Sent Events. `data` events carry messages and `control` events carry `streamNextOffset`, `upToDate`, and closed status. The server ends connections periodically; reconnect from the last `streamNextOffset`. For byte streams, `data` is base64-encoded and the response carries `stream-sse-data-encoding: base64`.
+- **`live=long-poll`**: the request waits until data arrives, then responds like a normal read. Returns `204` on timeout; retry with the same offset.
+
+```sh
+curl -N "$STREAM?offset=-1&live=sse"
+```
+
+## Status codes
+
+| Code | Meaning |
+| --- | --- |
+| `200`, `201` | Success, such as a read or a new stream. |
+| `204` | Success with no body, such as an append or close. Also returned for a duplicate producer write and a long-poll timeout. |
+| `403` | Producer epoch is older than the current one. |
+| `404` | The stream does not exist. |
+| `409` | Stream exists with a different configuration, is closed, or `Stream-Seq` went backwards. |

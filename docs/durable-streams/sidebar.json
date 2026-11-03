@@ -1,0 +1,53 @@
+{
+	"docs": [
+		{
+			"title": "General",
+			"pages": [
+				{
+					"title": "Introduction",
+					"href": "/durable-streams/docs",
+					"icon": "faSquareInfo"
+				}
+			]
+		},
+		{
+			"title": "Concepts",
+			"pages": [
+				{
+					"title": "Streams",
+					"href": "/durable-streams/docs/streams",
+					"icon": "faWater"
+				},
+				{
+					"title": "Writing",
+					"href": "/durable-streams/docs/writing",
+					"icon": "faPenToSquare"
+				},
+				{
+					"title": "Reading",
+					"href": "/durable-streams/docs/reading",
+					"icon": "faBookOpenReader"
+				},
+				{
+					"title": "Realtime Streaming",
+					"href": "/durable-streams/docs/realtime",
+					"icon": "faBolt"
+				},
+				{
+					"title": "Forking",
+					"href": "/durable-streams/docs/forking",
+					"icon": "faCodeBranch"
+				}
+			]
+		},
+		{
+			"title": "Reference",
+			"pages": [
+				{
+					"title": "HTTP API",
+					"href": "/durable-streams/docs/http-api"
+				}
+			]
+		}
+	]
+}

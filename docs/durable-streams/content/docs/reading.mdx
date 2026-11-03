@@ -1,0 +1,30 @@
+---
+title: "Reading"
+description: "Load a stream's history from any offset and pick up where you left off."
+---
+
+Readers start at an offset and move forward. An offset is a position in the stream, and every read tells you the offset to continue from.
+
+## Load everything so far
+
+<CodeSnippet file="examples/docs/durable-streams/read-history.ts" title="read-history.ts" />
+
+`res.offset` is where the next read should start.
+
+## Pick up where you left off
+
+Save the latest offset, for example in `localStorage`, and pass it back as `offset` next time. You get every message after it: nothing missed, nothing repeated.
+
+- **`-1`** starts at the beginning.
+- **`now`** skips history and starts at the end.
+
+Offsets are opaque strings. Store them and send them back as-is.
+
+## Know when a stream is done
+
+A closed stream tells readers that nothing more will arrive, so they can stop waiting. Without closing, a reader cannot tell "nothing yet" from "nothing ever".
+
+## Next steps
+
+- [Realtime Streaming](/durable-streams/docs/realtime): show new messages as they arrive.
+- [Forking](/durable-streams/docs/forking): start a new stream from this one's history.

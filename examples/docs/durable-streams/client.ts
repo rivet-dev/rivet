@@ -6,3 +6,9 @@ const stream = await DurableStream.create({
 });
 
 await stream.append(JSON.stringify({ message: "hello" }));
+
+// Read from the beginning, then keep receiving new messages live
+const res = await stream.stream<{ message: string }>();
+res.subscribeJson(async (batch) => {
+	for (const item of batch.items) console.log(item.message);
+});

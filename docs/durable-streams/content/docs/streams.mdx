@@ -1,0 +1,54 @@
+---
+title: "Streams"
+description: "Create a stream, pick its format, and decide when it goes away."
+---
+
+A stream is an append-only log at its own URL. Writers add to the end, and every reader sees the same messages in the same order.
+
+These pages follow one example: an AI agent streams its reply into `chat/session-1`, and a browser shows it as it arrives.
+
+<Diagram
+  id="durable-streams-streams"
+  label="An agent appends its reply to the chat/session-1 stream, and a browser reads it."
+  legend={false}
+  nodes={[
+    { id: "agent", x: 20, y: 30, w: 150, title: "Agent", subtitle: "writes the reply" },
+    { id: "stream", x: 330, y: 30, w: 220, product: "durable-streams", title: "`chat/session-1`" },
+    { id: "browser", x: 710, y: 30, w: 150, title: "Browser", subtitle: "shows the reply" },
+  ]}
+  edges={[
+    { from: "agent", to: "stream", label: "write" },
+    { from: "stream", to: "browser", label: "read" },
+  ]}
+/>
+
+## Create a stream
+
+Pick any path. Slashes are fine, and there is nothing to register first.
+
+<CodeSnippet file="examples/docs/durable-streams/create.ts" title="create.ts" />
+
+Creating the same stream twice is safe. Creating it again with different settings returns `409 Conflict`.
+
+## Choose JSON or bytes
+
+The content type is set at creation and never changes.
+
+- **`application/json`**: each append is one message, and reads return a JSON array. Use it for chat, events, and agent output.
+- **Anything else**, such as `text/plain` or `application/octet-stream`: one continuous run of bytes. Frame messages yourself, for example one JSON object per line.
+
+## Clean up automatically
+
+Set one of these when you create the stream, or neither to keep it until you delete it:
+
+- **`ttlSeconds`**: delete after this many seconds with no reads or writes. An active stream never expires.
+- **`expiresAt`**: delete at a fixed time, such as `2027-01-01T00:00:00Z`.
+
+To delete a stream now, call `stream.delete()`.
+
+On Rivet, each stream is its own Rivet Actor, so streams scale independently and sleep when no one is using them.
+
+## Next steps
+
+- [Writing](/durable-streams/docs/writing): append the agent's reply and finish it.
+- [Reading](/durable-streams/docs/reading): load what is already there.
