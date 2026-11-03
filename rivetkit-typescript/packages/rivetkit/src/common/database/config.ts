@@ -52,13 +52,16 @@ export interface SqliteTransactionOptions {
  * to change without notice.
  */
 export interface SqliteProfilingOptions {
-	/** Exact SQL statements to give fingerprint labels. Profiling defaults to actor
-	 * aggregates without fingerprint labels. Profile logs remain enabled.
-	 * RIVETKIT_SQLITE_PROFILING overrides selection with a JSON object containing
-	 * queries and/or fingerprints arrays. An empty object clears fingerprint selection. */
-	queries?: string[];
-	/** Exact query fingerprints to label separately, as reported in profile logs. */
-	fingerprints?: string[];
+	/** Exact SQL filter. Union with filterQueryFingerprints; both empty means all queries. */
+	filterQueries?: string[];
+	/** Fingerprint filter, including transaction fingerprints. Filters metrics, not diagnostic logs. */
+	filterQueryFingerprints?: string[];
+	/** Metric defaults apply even when omitted. Disabled metrics allocate no series. */
+	metrics?: SqliteProfilingMetricsOptions;
+	/** Duration buckets in seconds. Default [0.01, 0.1, 1]. Positive, finite, strictly increasing.
+	 * All actors in a process enabling the duration histogram must use identical buckets. */
+	durationHistogramBucketsSeconds?: number[];
+	/** Maximum distinct statement fingerprints per process. Default: 512. */
 	maxTrackedStatementFingerprints?: number;
 	maxTrackedTransactionFingerprints?: number;
 	maxPrometheusSeries?: number;
@@ -69,6 +72,46 @@ export interface SqliteProfilingOptions {
 	baselineSampleRate?: number;
 	maxDiagnosticEventsPerMinute?: number;
 	diagnosticEventQueueCapacity?: number;
+}
+
+/** SQLite profiling metrics. Physical-request metrics and gauges have no query labels. */
+export interface SqliteProfilingMetricsOptions {
+	/** Execution count and cumulative seconds. Uses histogram count/sum when enabled, otherwise counters. Default: true. */
+	duration?: boolean;
+	/** Execution duration histogram. Only applies when duration is enabled. Default: true. */
+	durationHistogram?: boolean;
+	/** Outcome counters, including success and errors. Default: true. */
+	outcomes?: boolean;
+	/** Per-query timing phase histograms. Default: false. */
+	phaseDurationHistogram?: boolean;
+	/** Storage round trips per operation histogram. Default: false. */
+	getPagesRoundTripsHistogram?: boolean;
+	/** Statements per transaction histogram. Default: false. */
+	transactionStatementCountHistogram?: boolean;
+	/** Per-query pages returned from storage, including returned prefetch pages. Default: true. */
+	pagesFetched?: boolean;
+	/** Actor-level page counters by page kind (no query labels). Default: false. */
+	localPages?: boolean;
+	/** Actor-level byte counters by byte kind (no query labels). Default: false. */
+	localBytes?: boolean;
+	/** Actor-level physical storage request duration histogram. Default: false. */
+	getPagesDurationHistogram?: boolean;
+	/** Actor-level pages per storage request histograms, by page kind. Default: false. */
+	getPagesPagesHistogram?: boolean;
+	/** Actor-level storage response byte histogram. Default: false. */
+	getPagesResponseBytesHistogram?: boolean;
+	/** Actor-level missing response page counter. Default: false. */
+	getPagesMissingPages?: boolean;
+	/** Queued SQLite work, aggregated by actor name. Default: true. */
+	workerQueueDepth?: boolean;
+	/** Executing SQLite work, aggregated by actor name. Default: true. */
+	workerInflight?: boolean;
+	/** Transaction waiters, aggregated by actor name. Default: true. */
+	coordinatorQueueDepth?: boolean;
+	/** Counts observations exceeding fingerprint or series limits. Default: true. */
+	fingerprintOverflow?: boolean;
+	/** Counts diagnostic events dropped by rate limits or backpressure. Default: true. */
+	eventDropped?: boolean;
 }
 
 export interface SqliteNativeMetrics {

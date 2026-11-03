@@ -72,13 +72,61 @@ pub struct JsInspectorTabEntry {
 	pub hidden: Option<bool>,
 }
 
+#[napi(object)]
+#[derive(Clone, Default)]
+pub struct JsSqliteProfilingMetrics {
+	pub duration: Option<bool>,
+	pub duration_histogram: Option<bool>,
+	pub outcomes: Option<bool>,
+	pub phase_duration_histogram: Option<bool>,
+	pub get_pages_round_trips_histogram: Option<bool>,
+	pub transaction_statement_count_histogram: Option<bool>,
+	pub pages_fetched: Option<bool>,
+	pub local_pages: Option<bool>,
+	pub local_bytes: Option<bool>,
+	pub get_pages_duration_histogram: Option<bool>,
+	pub get_pages_pages_histogram: Option<bool>,
+	pub get_pages_response_bytes_histogram: Option<bool>,
+	pub get_pages_missing_pages: Option<bool>,
+	pub worker_queue_depth: Option<bool>,
+	pub worker_inflight: Option<bool>,
+	pub coordinator_queue_depth: Option<bool>,
+	pub fingerprint_overflow: Option<bool>,
+	pub event_dropped: Option<bool>,
+}
+impl From<JsSqliteProfilingMetrics> for rivetkit_core::SqliteProfilingMetricsInput {
+	fn from(value: JsSqliteProfilingMetrics) -> Self {
+		Self {
+			duration: value.duration,
+			duration_histogram: value.duration_histogram,
+			outcomes: value.outcomes,
+			phase_duration_histogram: value.phase_duration_histogram,
+			get_pages_round_trips_histogram: value.get_pages_round_trips_histogram,
+			transaction_statement_count_histogram: value.transaction_statement_count_histogram,
+			pages_fetched: value.pages_fetched,
+			local_pages: value.local_pages,
+			local_bytes: value.local_bytes,
+			get_pages_duration_histogram: value.get_pages_duration_histogram,
+			get_pages_pages_histogram: value.get_pages_pages_histogram,
+			get_pages_response_bytes_histogram: value.get_pages_response_bytes_histogram,
+			get_pages_missing_pages: value.get_pages_missing_pages,
+			worker_queue_depth: value.worker_queue_depth,
+			worker_inflight: value.worker_inflight,
+			coordinator_queue_depth: value.coordinator_queue_depth,
+			fingerprint_overflow: value.fingerprint_overflow,
+			event_dropped: value.event_dropped,
+		}
+	}
+}
 /// Experimental SQLite profiling configuration. This entire configuration
 /// surface is subject to change without notice.
 #[napi(object)]
 #[derive(Clone, Default)]
 pub struct JsSqliteProfilingConfig {
-	pub queries: Option<Vec<String>>,
-	pub fingerprints: Option<Vec<String>>,
+	pub metrics: Option<JsSqliteProfilingMetrics>,
+	pub duration_histogram_buckets_seconds: Option<Vec<f64>>,
+	pub filter_queries: Option<Vec<String>>,
+	pub filter_query_fingerprints: Option<Vec<String>>,
 	pub max_tracked_statement_fingerprints: Option<u32>,
 	pub max_tracked_transaction_fingerprints: Option<u32>,
 	pub max_prometheus_series: Option<u32>,
@@ -1100,8 +1148,10 @@ impl From<JsActorTracingConfig> for ActorTracingConfig {
 impl From<JsSqliteProfilingConfig> for SqliteProfilingConfigInput {
 	fn from(value: JsSqliteProfilingConfig) -> Self {
 		Self {
-			queries: value.queries,
-			fingerprints: value.fingerprints,
+			metrics: value.metrics.map(Into::into),
+			duration_histogram_buckets_seconds: value.duration_histogram_buckets_seconds,
+			filter_queries: value.filter_queries,
+			filter_query_fingerprints: value.filter_query_fingerprints,
 			max_tracked_statement_fingerprints: value.max_tracked_statement_fingerprints,
 			max_tracked_transaction_fingerprints: value.max_tracked_transaction_fingerprints,
 			max_prometheus_series: value.max_prometheus_series,

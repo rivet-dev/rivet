@@ -182,8 +182,10 @@ pub struct WasmActionDefinition {
 #[derive(Clone, Default, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WasmSqliteProfilingConfig {
-	pub queries: Option<Vec<String>>,
-	pub fingerprints: Option<Vec<String>>,
+	pub metrics: Option<rivetkit_core::SqliteProfilingMetricsInput>,
+	pub duration_histogram_buckets_seconds: Option<Vec<f64>>,
+	pub filter_queries: Option<Vec<String>>,
+	pub filter_query_fingerprints: Option<Vec<String>>,
 	pub max_tracked_statement_fingerprints: Option<u32>,
 	pub max_tracked_transaction_fingerprints: Option<u32>,
 	pub max_prometheus_series: Option<u32>,
@@ -277,8 +279,10 @@ impl From<WasmActorConfig> for ActorConfigInput {
 impl From<WasmSqliteProfilingConfig> for SqliteProfilingConfigInput {
 	fn from(value: WasmSqliteProfilingConfig) -> Self {
 		Self {
-			queries: value.queries,
-			fingerprints: value.fingerprints,
+			metrics: value.metrics,
+			duration_histogram_buckets_seconds: value.duration_histogram_buckets_seconds,
+			filter_queries: value.filter_queries,
+			filter_query_fingerprints: value.filter_query_fingerprints,
 			max_tracked_statement_fingerprints: value.max_tracked_statement_fingerprints,
 			max_tracked_transaction_fingerprints: value.max_tracked_transaction_fingerprints,
 			max_prometheus_series: value.max_prometheus_series,

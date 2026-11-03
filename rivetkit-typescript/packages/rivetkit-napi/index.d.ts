@@ -83,13 +83,35 @@ export interface JsInspectorTabEntry {
   /** Set to true for HideBuiltin entries. */
   hidden?: boolean
 }
+export interface JsSqliteProfilingMetrics {
+  duration?: boolean
+  durationHistogram?: boolean
+  outcomes?: boolean
+  phaseDurationHistogram?: boolean
+  getPagesRoundTripsHistogram?: boolean
+  transactionStatementCountHistogram?: boolean
+  pagesFetched?: boolean
+  localPages?: boolean
+  localBytes?: boolean
+  getPagesDurationHistogram?: boolean
+  getPagesPagesHistogram?: boolean
+  getPagesResponseBytesHistogram?: boolean
+  getPagesMissingPages?: boolean
+  workerQueueDepth?: boolean
+  workerInflight?: boolean
+  coordinatorQueueDepth?: boolean
+  fingerprintOverflow?: boolean
+  eventDropped?: boolean
+}
 /**
  * Experimental SQLite profiling configuration. This entire configuration
  * surface is subject to change without notice.
  */
 export interface JsSqliteProfilingConfig {
-  queries?: Array<string>
-  fingerprints?: Array<string>
+  metrics?: JsSqliteProfilingMetrics
+  durationHistogramBucketsSeconds?: Array<number>
+  filterQueries?: Array<string>
+  filterQueryFingerprints?: Array<string>
   maxTrackedStatementFingerprints?: number
   maxTrackedTransactionFingerprints?: number
   maxPrometheusSeries?: number

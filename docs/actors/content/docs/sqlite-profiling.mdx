@@ -44,7 +44,7 @@ For example, suppose a Prometheus result contains `fingerprint="select-a1b2c3d4e
 
 ## Query metrics
 
-Collect [Prometheus metrics from each node](/docs/deploy/self-host/workers/prometheus-metrics/) to use the queries below.
+Collect [Prometheus metrics from each node](/docs/deploy/self-host/workers/prometheus-metrics/) to use the queries below. Some examples use optional metric families; see [Configure profiling](#configure-profiling).
 
 ### Slowest statements and transactions
 
@@ -201,15 +201,66 @@ sum by (actor_name, type, byte_kind) (
 
 ## Configure profiling
 
-Profiling is enabled by default and most applications do not need to configure it. The entire profiling configuration surface is experimental and subject to change without notice. Set `profiling.slowOperationThresholdMs` or `profiling.baselineSampleRate` on the database provider when needed.
+By default, native SQLite records metrics for all statement and transaction fingerprints, up to the tracking limits. Each query gets a duration histogram with 10 ms, 100 ms, and 1 s boundaries, outcome counters, and a counter for pages returned from storage. Duration `_count` and `_sum` provide execution count and cumulative duration. Worker queue depth, worker activity, transaction queue depth, fingerprint overflow, and dropped diagnostic events are also enabled.
 
-Increase fingerprint limits only when `other` is hiding frequently repeated operations. Prometheus series remain allocated for the life of the process after admission.
+All other profiling metric families are disabled by default. This configuration surface is experimental.
+
+For counters only, disable the duration histogram on your database provider:
+
+```ts
+profiling: {
+  metrics: { durationHistogram: false },
+}
+```
+
+This emits `rivet_rivetkit_sqlite_operations_total` and `rivet_rivetkit_sqlite_duration_seconds_total` instead of the duration histogram. Outcome counters and `rivet_rivetkit_sqlite_pages_fetched_total` remain enabled. Disabled metric families allocate no series and receive no observations.
+
+To limit query metrics, set `filterQueries` (exact SQL) or `filterQueryFingerprints`. The filters are combined as a union; both empty or omitted means all queries. They do not suppress diagnostic logs or enabled actor-level storage metrics.
+
+```ts
+profiling: {
+  filterQueries: ["SELECT value FROM items WHERE id = ?"],
+  durationHistogramBucketsSeconds: [0.01, 0.1, 1],
+  metrics: { localPages: true },
+}
+```
+
+`RIVETKIT_SQLITE_PROFILING` overrides the filters with a JSON object containing `filterQueries` and/or `filterQueryFingerprints`. `{}` selects all queries. The former `queries` and `fingerprints` fields have been removed.
+
+Duration bucket boundaries must be positive, finite, strictly increasing, and nonempty. All actor configurations enabling the duration histogram in one process must use the same boundaries; conflicting configurations are rejected. Other optional histograms retain their fixed boundaries.
+
+The `metrics` switches are:
+
+| Option | Default | Scope |
+| --- | --- | --- |
+| `duration` | `true` | Per-query count and cumulative duration |
+| `durationHistogram` | `true` | Per-query duration buckets; requires `duration` |
+| `outcomes` | `true` | Per-query counts by outcome, including errors |
+| `pagesFetched` | `true` | Pages returned from storage per statement, including returned prefetch pages |
+| `phaseDurationHistogram` | `false` | Per-query timing phases |
+| `getPagesRoundTripsHistogram` | `false` | Storage round trips per operation |
+| `transactionStatementCountHistogram` | `false` | Statements per transaction |
+| `localPages` | `false` | Actor-level page counters by kind |
+| `localBytes` | `false` | Actor-level byte counters by kind |
+| `getPagesDurationHistogram` | `false` | Physical storage request duration |
+| `getPagesPagesHistogram` | `false` | Pages per physical storage request |
+| `getPagesResponseBytesHistogram` | `false` | Bytes per physical storage response |
+| `getPagesMissingPages` | `false` | Missing response pages |
+| `workerQueueDepth` | `true` | Actor-level queued SQLite work |
+| `workerInflight` | `true` | Actor-level executing SQLite work |
+| `coordinatorQueueDepth` | `true` | Actor-level transaction waiters |
+| `fingerprintOverflow` | `true` | Observations exceeding tracking limits |
+| `eventDropped` | `true` | Dropped diagnostic events |
+
+The default limits are 512 statement fingerprints, 8 transaction fingerprints, and 25,000 profiling series per process. Series budgeting accounts for enabled metric families and configured duration buckets. Prometheus series remain allocated for the lifetime of the process. Increase limits only for useful operations that repeat regularly.
+
+`slowOperationThresholdMs`, `baselineSampleRate`, and diagnostic event limits control logs, independently of metric selection. Sampling logs does not sample Prometheus observations.
 
 ## Troubleshooting
 
-### Most results are `other`
+### Queries are missing
 
-Fast statements initially appear under `other`, while overflow metrics show when a fingerprint limit was reached. Increase limits only for useful operations that repeat regularly.
+Check the query filters and `rivet_rivetkit_sqlite_fingerprint_overflow_total`. Once a fingerprint or series limit is reached, new per-query observations are dropped rather than creating unbounded series. Enable the optional metric families needed by the examples above.
 
 ### Too many fingerprints
 
@@ -229,4 +280,4 @@ Diagnostic events are sampled and bounded. Check `rivet_rivetkit_sqlite_event_dr
 
 ### No profiling metrics appear
 
-Confirm profiling was not disabled in the database provider. Profiling currently applies to native actor-local SQLite, not remote or wasm SQLite.
+Confirm the relevant metric family is enabled and the query matches your filters. Profiling currently applies to native actor-local SQLite, not remote or wasm SQLite.

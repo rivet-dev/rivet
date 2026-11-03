@@ -11,14 +11,10 @@ use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use parking_lot::Mutex;
+#[cfg(feature = "sqlite-local")]
+use rivet_metrics::prometheus::{Counter, Histogram, IntCounter, IntGauge};
 use rivet_metrics::prometheus::{
 	CounterVec, HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Opts, Registry,
-};
-#[cfg(feature = "sqlite-local")]
-use rivet_metrics::prometheus::{
-	Histogram, IntCounter, IntGauge,
-	core::{Collector, Desc},
-	proto::MetricFamily,
 };
 
 use crate::actor::task_types::{ShutdownKind, StateMutationReason, UserTaskKind};
@@ -209,6 +205,12 @@ struct ActorMetricState {
 	#[cfg(feature = "sqlite-local")]
 	sqlite_worker_queue_depth: i64,
 	#[cfg(feature = "sqlite-local")]
+	sqlite_profile_worker_queue_depth: i64,
+	#[cfg(feature = "sqlite-local")]
+	sqlite_profile_worker_inflight: i64,
+	#[cfg(feature = "sqlite-local")]
+	sqlite_profile_coordinator_queue_depth: i64,
+	#[cfg(feature = "sqlite-local")]
 	sqlite_workers_active: i64,
 	#[cfg(feature = "sqlite-local")]
 	sqlite_vfs_cached_bytes: i64,
@@ -299,7 +301,10 @@ static METRICS: LazyLock<ActorMetricCollectors> = LazyLock::new(ActorMetricColle
 
 #[cfg(feature = "sqlite-local")]
 struct SqliteProfileCollectors {
-	duration_seconds: HistogramVec,
+	duration_seconds: Mutex<Option<(Vec<f64>, HistogramVec)>>,
+	operation_total: IntCounterVec,
+	duration_seconds_total: CounterVec,
+	pages_fetched_total: IntCounterVec,
 	phase_duration_seconds: HistogramVec,
 	get_pages_round_trips: HistogramVec,
 	transaction_statement_count: HistogramVec,
@@ -362,17 +367,89 @@ const SQLITE_PROFILE_OUTCOMES: [&str; 7] = [
 ];
 
 #[cfg(feature = "sqlite-local")]
+trait OptionalHistogram {
+	fn observe(&self, value: f64);
+}
+#[cfg(feature = "sqlite-local")]
+impl OptionalHistogram for Option<Histogram> {
+	fn observe(&self, value: f64) {
+		if let Some(metric) = self {
+			metric.observe(value);
+		}
+	}
+}
+#[cfg(feature = "sqlite-local")]
+trait OptionalCounter {
+	fn inc(&self);
+	fn inc_by(&self, value: u64);
+}
+#[cfg(feature = "sqlite-local")]
+impl OptionalCounter for Option<IntCounter> {
+	fn inc(&self) {
+		self.inc_by(1);
+	}
+	fn inc_by(&self, value: u64) {
+		if let Some(metric) = self {
+			metric.inc_by(value);
+		}
+	}
+}
+#[cfg(feature = "sqlite-local")]
+fn set_optional_aggregated_gauge(current: &mut i64, next: i64, metric: &Option<IntGauge>) {
+	if let Some(metric) = metric {
+		metric.add(next - *current);
+		*current = next;
+	}
+}
+
+/// Registry-owned histogram configuration, validated before actors start.
+#[cfg(feature = "sqlite-local")]
+pub(crate) fn configure_sqlite_duration_histogram(buckets: &[f64]) -> anyhow::Result<()> {
+	let mut configured = SQLITE_PROFILE_METRICS.duration_seconds.lock();
+	if let Some((existing, _)) = configured.as_ref() {
+		anyhow::ensure!(
+			existing == buckets,
+			"SQLite duration histogram buckets must match across actors in a process"
+		);
+	} else {
+		let metric = HistogramVec::new(
+			HistogramOpts::new(
+				"rivetkit_sqlite_duration_seconds",
+				"complete SQLite operation wall duration in seconds",
+			)
+			.buckets(buckets.to_vec()),
+			&[
+				"actor_name",
+				"type",
+				"fingerprint",
+				"fingerprint_source",
+				"transaction_mode",
+				"storage_transport",
+				"outcome_class",
+			],
+		)?;
+		rivet_metrics::REGISTRY.register(Box::new(metric.clone()))?;
+		*configured = Some((buckets.to_vec(), metric));
+	}
+	Ok(())
+}
+
+#[cfg(feature = "sqlite-local")]
 struct SqliteFingerprintMetricHandles {
-	duration: [Histogram; 2],
-	transaction_wait: Histogram,
-	worker_wait: Histogram,
-	storage: Histogram,
-	local_work: Histogram,
+	count: Option<IntCounter>,
+	duration_total: Option<Counter>,
+	pages_fetched: Option<IntCounter>,
+	duration: [Option<Histogram>; 2],
+
+	transaction_wait: Option<Histogram>,
+	worker_wait: Option<Histogram>,
+	storage: Option<Histogram>,
+	local_work: Option<Histogram>,
 	application_time: Option<Histogram>,
 	commit: Option<Histogram>,
-	get_pages_round_trips: Histogram,
+	get_pages_round_trips: Option<Histogram>,
 	transaction_statement_count: Option<Histogram>,
-	outcomes: [IntCounter; SQLITE_PROFILE_OUTCOMES.len()],
+	outcomes: [Option<IntCounter>; SQLITE_PROFILE_OUTCOMES.len()],
 }
 
 #[cfg(feature = "sqlite-local")]
@@ -384,7 +461,9 @@ impl SqliteFingerprintMetricHandles {
 		fingerprint_source: &'static str,
 		transaction_mode: &'static str,
 		storage_transport: &'static str,
+		config: &crate::SqliteProfilingConfig,
 	) -> Self {
+		let metrics = &config.metrics;
 		let base = [
 			actor_name,
 			operation_type,
@@ -394,61 +473,100 @@ impl SqliteFingerprintMetricHandles {
 			storage_transport,
 		];
 		let phase = |name| {
-			SQLITE_PROFILE_METRICS
-				.phase_duration_seconds
-				.with_label_values(&[base[0], base[1], base[2], base[3], base[4], base[5], name])
+			metrics.phase_duration_histogram.then(|| {
+				SQLITE_PROFILE_METRICS
+					.phase_duration_seconds
+					.with_label_values(&[
+						base[0], base[1], base[2], base[3], base[4], base[5], name,
+					])
+			})
 		};
 		let is_transaction = operation_type == "transaction";
+		let duration_histogram = metrics.duration && metrics.duration_histogram;
+		let counter_duration = metrics.duration && !metrics.duration_histogram;
 		Self {
+			count: counter_duration.then(|| {
+				SQLITE_PROFILE_METRICS
+					.operation_total
+					.with_label_values(&base)
+			}),
+			duration_total: counter_duration.then(|| {
+				SQLITE_PROFILE_METRICS
+					.duration_seconds_total
+					.with_label_values(&base)
+			}),
+			pages_fetched: (metrics.pages_fetched && !is_transaction).then(|| {
+				SQLITE_PROFILE_METRICS
+					.pages_fetched_total
+					.with_label_values(&base)
+			}),
 			duration: std::array::from_fn(|index| {
-				SQLITE_PROFILE_METRICS.duration_seconds.with_label_values(&[
-					base[0],
-					base[1],
-					base[2],
-					base[3],
-					base[4],
-					base[5],
-					if index == 0 { "success" } else { "non_success" },
-				])
+				duration_histogram.then(|| {
+					SQLITE_PROFILE_METRICS
+						.duration_seconds
+						.lock()
+						.as_ref()
+						.expect("validated duration histogram")
+						.1
+						.with_label_values(&[
+							base[0],
+							base[1],
+							base[2],
+							base[3],
+							base[4],
+							base[5],
+							if index == 0 { "success" } else { "non_success" },
+						])
+				})
 			}),
 			transaction_wait: phase("transaction_wait"),
 			worker_wait: phase("worker_wait"),
 			storage: phase("storage"),
 			local_work: phase("local_work"),
-			application_time: is_transaction.then(|| phase("application_time")),
-			commit: is_transaction.then(|| phase("commit")),
-			get_pages_round_trips: SQLITE_PROFILE_METRICS
-				.get_pages_round_trips
-				.with_label_values(&base),
-			transaction_statement_count: is_transaction.then(|| {
+			application_time: is_transaction.then(|| phase("application_time")).flatten(),
+			commit: is_transaction.then(|| phase("commit")).flatten(),
+			get_pages_round_trips: metrics.get_pages_round_trips_histogram.then(|| {
 				SQLITE_PROFILE_METRICS
-					.transaction_statement_count
+					.get_pages_round_trips
 					.with_label_values(&base)
 			}),
+			transaction_statement_count: (is_transaction
+				&& metrics.transaction_statement_count_histogram)
+				.then(|| {
+					SQLITE_PROFILE_METRICS
+						.transaction_statement_count
+						.with_label_values(&base)
+				}),
 			outcomes: std::array::from_fn(|index| {
-				SQLITE_PROFILE_METRICS.outcome_total.with_label_values(&[
-					base[0],
-					base[1],
-					base[2],
-					base[3],
-					base[4],
-					base[5],
-					SQLITE_PROFILE_OUTCOMES[index],
-				])
+				metrics.outcomes.then(|| {
+					SQLITE_PROFILE_METRICS.outcome_total.with_label_values(&[
+						base[0],
+						base[1],
+						base[2],
+						base[3],
+						base[4],
+						base[5],
+						SQLITE_PROFILE_OUTCOMES[index],
+					])
+				})
 			}),
 		}
 	}
 
 	fn observe_duration(&self, outcome: &str, duration: f64) {
 		self.duration[usize::from(outcome != "success")].observe(duration);
+		self.count.inc();
+		if let Some(total) = &self.duration_total {
+			total.inc_by(duration);
+		}
 	}
 
 	fn observe_phase(&self, phase: &str, duration: f64) {
 		let handle = match phase {
-			"transaction_wait" => Some(&self.transaction_wait),
-			"worker_wait" => Some(&self.worker_wait),
-			"storage" => Some(&self.storage),
-			"local_work" => Some(&self.local_work),
+			"transaction_wait" => self.transaction_wait.as_ref(),
+			"worker_wait" => self.worker_wait.as_ref(),
+			"storage" => self.storage.as_ref(),
+			"local_work" => self.local_work.as_ref(),
 			"application_time" => self.application_time.as_ref(),
 			"commit" => self.commit.as_ref(),
 			_ => None,
@@ -475,21 +593,22 @@ impl SqliteFingerprintMetricHandles {
 
 #[cfg(feature = "sqlite-local")]
 struct SqliteRequestMetricHandles {
-	duration: [Histogram; 2],
-	pages: [Histogram; SQLITE_PROFILE_REQUEST_PAGE_KINDS.len()],
-	response_bytes: Histogram,
-	missing_pages: IntCounter,
+	duration: [Option<Histogram>; 2],
+	pages: [Option<Histogram>; SQLITE_PROFILE_REQUEST_PAGE_KINDS.len()],
+	response_bytes: Option<Histogram>,
+	missing_pages: Option<IntCounter>,
 }
 
 #[cfg(feature = "sqlite-local")]
 struct SqliteLowCardMetricHandles {
-	local_pages: [[IntCounter; SQLITE_PROFILE_PAGE_KINDS.len()]; 2],
-	local_bytes: [[IntCounter; SQLITE_PROFILE_BYTE_KINDS.len()]; 2],
+	overflow: [[Option<IntCounter>; 2]; 2],
+	local_pages: [[Option<IntCounter>; SQLITE_PROFILE_PAGE_KINDS.len()]; 2],
+	local_bytes: [[Option<IntCounter>; SQLITE_PROFILE_BYTE_KINDS.len()]; 2],
 	requests: [SqliteRequestMetricHandles; SQLITE_PROFILE_REQUEST_ORDINALS.len()],
-	event_dropped: [IntCounter; 2],
-	worker_queue_depth: IntGauge,
-	worker_inflight: IntGauge,
-	coordinator_queue_depth: IntGauge,
+	event_dropped: [Option<IntCounter>; 2],
+	worker_queue_depth: Option<IntGauge>,
+	worker_inflight: Option<IntGauge>,
+	coordinator_queue_depth: Option<IntGauge>,
 }
 
 #[cfg(feature = "sqlite-local")]
@@ -502,96 +621,133 @@ impl fmt::Debug for SqliteLowCardMetricHandles {
 
 #[cfg(feature = "sqlite-local")]
 impl SqliteLowCardMetricHandles {
-	fn new(actor_name: &str, storage_transport: &'static str) -> Self {
+	fn new(
+		actor_name: &str,
+		storage_transport: &'static str,
+		metrics: &crate::SqliteProfilingMetrics,
+	) -> Self {
 		let operation_types = ["statement", "transaction"];
 		Self {
+			overflow: std::array::from_fn(|operation| {
+				std::array::from_fn(|reason| {
+					metrics.fingerprint_overflow.then(|| {
+						SQLITE_PROFILE_METRICS
+							.fingerprint_overflow_total
+							.with_label_values(&[
+								actor_name,
+								operation_types[operation],
+								["logical_cap", "series_budget"][reason],
+							])
+					})
+				})
+			}),
+
 			local_pages: std::array::from_fn(|operation_index| {
 				std::array::from_fn(|kind_index| {
-					SQLITE_PROFILE_METRICS
-						.local_pages_total
-						.with_label_values(&[
-							actor_name,
-							operation_types[operation_index],
-							SQLITE_PROFILE_PAGE_KINDS[kind_index],
-							storage_transport,
-						])
+					metrics.local_pages.then(|| {
+						SQLITE_PROFILE_METRICS
+							.local_pages_total
+							.with_label_values(&[
+								actor_name,
+								operation_types[operation_index],
+								SQLITE_PROFILE_PAGE_KINDS[kind_index],
+								storage_transport,
+							])
+					})
 				})
 			}),
 			local_bytes: std::array::from_fn(|operation_index| {
 				std::array::from_fn(|kind_index| {
-					SQLITE_PROFILE_METRICS
-						.local_bytes_total
-						.with_label_values(&[
-							actor_name,
-							operation_types[operation_index],
-							SQLITE_PROFILE_BYTE_KINDS[kind_index],
-							storage_transport,
-						])
+					metrics.local_bytes.then(|| {
+						SQLITE_PROFILE_METRICS
+							.local_bytes_total
+							.with_label_values(&[
+								actor_name,
+								operation_types[operation_index],
+								SQLITE_PROFILE_BYTE_KINDS[kind_index],
+								storage_transport,
+							])
+					})
 				})
 			}),
 			requests: std::array::from_fn(|ordinal_index| {
 				let ordinal = SQLITE_PROFILE_REQUEST_ORDINALS[ordinal_index];
 				SqliteRequestMetricHandles {
 					duration: std::array::from_fn(|outcome_index| {
-						SQLITE_PROFILE_METRICS
-							.get_pages_duration_seconds
-							.with_label_values(&[
-								actor_name,
-								ordinal,
-								if outcome_index == 0 {
-									"success"
-								} else {
-									"non_success"
-								},
-								storage_transport,
-							])
+						metrics.get_pages_duration_histogram.then(|| {
+							SQLITE_PROFILE_METRICS
+								.get_pages_duration_seconds
+								.with_label_values(&[
+									actor_name,
+									ordinal,
+									if outcome_index == 0 {
+										"success"
+									} else {
+										"non_success"
+									},
+									storage_transport,
+								])
+						})
 					}),
 					pages: std::array::from_fn(|kind_index| {
-						SQLITE_PROFILE_METRICS.get_pages_pages.with_label_values(&[
-							actor_name,
-							ordinal,
-							SQLITE_PROFILE_REQUEST_PAGE_KINDS[kind_index],
-							storage_transport,
-						])
+						metrics.get_pages_pages_histogram.then(|| {
+							SQLITE_PROFILE_METRICS.get_pages_pages.with_label_values(&[
+								actor_name,
+								ordinal,
+								SQLITE_PROFILE_REQUEST_PAGE_KINDS[kind_index],
+								storage_transport,
+							])
+						})
 					}),
-					response_bytes: SQLITE_PROFILE_METRICS
-						.get_pages_response_bytes
-						.with_label_values(&[actor_name, ordinal, storage_transport]),
-					missing_pages: SQLITE_PROFILE_METRICS
-						.get_pages_missing_pages_total
-						.with_label_values(&[actor_name, ordinal, storage_transport]),
+					response_bytes: metrics.get_pages_response_bytes_histogram.then(|| {
+						SQLITE_PROFILE_METRICS
+							.get_pages_response_bytes
+							.with_label_values(&[actor_name, ordinal, storage_transport])
+					}),
+					missing_pages: metrics.get_pages_missing_pages.then(|| {
+						SQLITE_PROFILE_METRICS
+							.get_pages_missing_pages_total
+							.with_label_values(&[actor_name, ordinal, storage_transport])
+					}),
 				}
 			}),
 			event_dropped: std::array::from_fn(|index| {
-				SQLITE_PROFILE_METRICS
-					.event_dropped_total
-					.with_label_values(&[
-						actor_name,
-						if index == 0 {
-							"rate_limit"
-						} else {
-							"backpressure"
-						},
-					])
+				metrics.event_dropped.then(|| {
+					SQLITE_PROFILE_METRICS
+						.event_dropped_total
+						.with_label_values(&[
+							actor_name,
+							if index == 0 {
+								"rate_limit"
+							} else {
+								"backpressure"
+							},
+						])
+				})
 			}),
-			worker_queue_depth: SQLITE_PROFILE_METRICS
-				.worker_queue_depth
-				.with_label_values(&[actor_name]),
-			worker_inflight: SQLITE_PROFILE_METRICS
-				.worker_inflight
-				.with_label_values(&[actor_name]),
-			coordinator_queue_depth: SQLITE_PROFILE_METRICS
-				.coordinator_queue_depth
-				.with_label_values(&[actor_name]),
+			worker_queue_depth: metrics.worker_queue_depth.then(|| {
+				SQLITE_PROFILE_METRICS
+					.worker_queue_depth
+					.with_label_values(&[actor_name])
+			}),
+			worker_inflight: metrics.worker_inflight.then(|| {
+				SQLITE_PROFILE_METRICS
+					.worker_inflight
+					.with_label_values(&[actor_name])
+			}),
+			coordinator_queue_depth: metrics.coordinator_queue_depth.then(|| {
+				SQLITE_PROFILE_METRICS
+					.coordinator_queue_depth
+					.with_label_values(&[actor_name])
+			}),
 		}
 	}
 }
 
 #[cfg(feature = "sqlite-local")]
-struct AdmittedSqliteProfile<'a> {
+struct AdmittedSqliteProfile {
 	fingerprint: String,
 	fingerprint_handles: Arc<SqliteFingerprintMetricHandles>,
-	low_card_handles: &'a SqliteLowCardMetricHandles,
 }
 
 #[cfg(feature = "sqlite-local")]
@@ -797,57 +953,45 @@ fn try_acquire_sqlite_diagnostic_rate(max_events_per_minute: usize) -> bool {
 	}
 }
 
-/// The empty fingerprint identifies an actor aggregate internally. Omit its identity
-/// labels when exporting so default series have no query dimension.
-#[cfg(feature = "sqlite-local")]
-#[derive(Clone)]
-struct OptionalFingerprintCollector<C>(C);
-
-#[cfg(feature = "sqlite-local")]
-impl<C: Collector> Collector for OptionalFingerprintCollector<C> {
-	fn desc(&self) -> Vec<&Desc> {
-		self.0.desc()
-	}
-
-	fn collect(&self) -> Vec<MetricFamily> {
-		let mut families = self.0.collect();
-		for family in &mut families {
-			for metric in family.mut_metric() {
-				if metric
-					.get_label()
-					.iter()
-					.any(|label| label.name() == "fingerprint" && label.value().is_empty())
-				{
-					metric.label.retain(|label| {
-						!matches!(label.name(), "fingerprint" | "fingerprint_source")
-					});
-				}
-			}
-		}
-		families
-	}
-}
-
 #[cfg(feature = "sqlite-local")]
 impl SqliteProfileCollectors {
 	fn new() -> Self {
-		let duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_sqlite_duration_seconds",
-				"complete SQLite operation wall duration in seconds",
-			)
-			.buckets(sqlite_worker_duration_buckets()),
-			&[
-				"actor_name",
-				"type",
-				"fingerprint",
-				"fingerprint_source",
-				"transaction_mode",
-				"storage_transport",
-				"outcome_class",
-			],
+		let duration_seconds = Mutex::new(None);
+		let query_labels = &[
+			"actor_name",
+			"type",
+			"fingerprint",
+			"fingerprint_source",
+			"transaction_mode",
+			"storage_transport",
+		];
+		let operation_total = IntCounterVec::new(
+			Opts::new(
+				"rivetkit_sqlite_operations_total",
+				"SQLite operation count without duration buckets",
+			),
+			query_labels,
 		)
-		.expect("create sqlite profiling duration histogram");
+		.expect("operation counter");
+		let duration_seconds_total = CounterVec::new(
+			Opts::new(
+				"rivetkit_sqlite_duration_seconds_total",
+				"cumulative SQLite operation seconds without duration buckets",
+			),
+			query_labels,
+		)
+		.expect("duration counter");
+		let pages_fetched_total = IntCounterVec::new(
+			Opts::new(
+				"rivetkit_sqlite_pages_fetched_total",
+				"pages returned from storage per SQLite statement",
+			),
+			query_labels,
+		)
+		.expect("pages fetched counter");
+		register_metric(&rivet_metrics::REGISTRY, operation_total.clone());
+		register_metric(&rivet_metrics::REGISTRY, duration_seconds_total.clone());
+		register_metric(&rivet_metrics::REGISTRY, pages_fetched_total.clone());
 		let phase_duration_seconds = HistogramVec::new(
 			HistogramOpts::new(
 				"rivetkit_sqlite_phase_duration_seconds",
@@ -1019,26 +1163,13 @@ impl SqliteProfileCollectors {
 		)
 		.expect("create sqlite coordinator queue depth gauge");
 
+		register_metric(&rivet_metrics::REGISTRY, phase_duration_seconds.clone());
+		register_metric(&rivet_metrics::REGISTRY, get_pages_round_trips.clone());
 		register_metric(
 			&rivet_metrics::REGISTRY,
-			OptionalFingerprintCollector(duration_seconds.clone()),
+			transaction_statement_count.clone(),
 		);
-		register_metric(
-			&rivet_metrics::REGISTRY,
-			OptionalFingerprintCollector(phase_duration_seconds.clone()),
-		);
-		register_metric(
-			&rivet_metrics::REGISTRY,
-			OptionalFingerprintCollector(get_pages_round_trips.clone()),
-		);
-		register_metric(
-			&rivet_metrics::REGISTRY,
-			OptionalFingerprintCollector(transaction_statement_count.clone()),
-		);
-		register_metric(
-			&rivet_metrics::REGISTRY,
-			OptionalFingerprintCollector(outcome_total.clone()),
-		);
+		register_metric(&rivet_metrics::REGISTRY, outcome_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, local_pages_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, local_bytes_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, get_pages_duration_seconds.clone());
@@ -1056,6 +1187,9 @@ impl SqliteProfileCollectors {
 
 		Self {
 			duration_seconds,
+			operation_total,
+			duration_seconds_total,
+			pages_fetched_total,
 			phase_duration_seconds,
 			get_pages_round_trips,
 			transaction_statement_count,
@@ -1741,7 +1875,18 @@ impl ActorMetrics {
 		actor_name: impl Into<String>,
 		_sqlite_profiling: crate::SqliteProfilingConfig,
 	) -> Self {
-		let _sqlite_profiling = _sqlite_profiling.with_process_override();
+		let mut _sqlite_profiling = _sqlite_profiling.with_process_override();
+		#[cfg(feature = "sqlite-local")]
+		if _sqlite_profiling.metrics.duration && _sqlite_profiling.metrics.duration_histogram {
+			if let Err(error) = _sqlite_profiling.validate_buckets().and_then(|_| {
+				configure_sqlite_duration_histogram(
+					&_sqlite_profiling.duration_histogram_buckets_seconds,
+				)
+			}) {
+				tracing::error!(%error, "invalid SQLite histogram configuration; using counters only");
+				_sqlite_profiling.metrics.duration_histogram = false;
+			}
+		}
 		let labels = ActorMetricLabels {
 			actor_name: actor_name.into(),
 		};
@@ -2230,9 +2375,21 @@ impl ActorMetricInner {
 				&labels,
 			);
 			if let Some(Some(handles)) = self.sqlite_profile_low_card_handles.get() {
-				handles.worker_queue_depth.set(0);
-				handles.worker_inflight.set(0);
-				handles.coordinator_queue_depth.set(0);
+				set_optional_aggregated_gauge(
+					&mut state.sqlite_profile_worker_queue_depth,
+					0,
+					&handles.worker_queue_depth,
+				);
+				set_optional_aggregated_gauge(
+					&mut state.sqlite_profile_worker_inflight,
+					0,
+					&handles.worker_inflight,
+				);
+				set_optional_aggregated_gauge(
+					&mut state.sqlite_profile_coordinator_queue_depth,
+					0,
+					&handles.coordinator_queue_depth,
+				);
 			}
 		}
 	}
@@ -2252,7 +2409,37 @@ impl fmt::Debug for ActorMetrics {
 
 #[cfg(feature = "sqlite-local")]
 impl ActorMetrics {
-	const SQLITE_LOW_CARD_SERIES_COST: usize = 891;
+	fn sqlite_low_card_series_cost(&self) -> usize {
+		let m = &self.inner.sqlite_profiling.metrics;
+		22 * usize::from(m.local_pages)
+			+ 8 * usize::from(m.local_bytes)
+			+ 240 * usize::from(m.get_pages_duration_histogram)
+			+ 252 * usize::from(m.get_pages_pages_histogram)
+			+ 54 * usize::from(m.get_pages_response_bytes_histogram)
+			+ 6 * usize::from(m.get_pages_missing_pages)
+			+ 2 * usize::from(m.event_dropped)
+			+ 4 * usize::from(m.fingerprint_overflow)
+			+ usize::from(m.worker_queue_depth)
+			+ usize::from(m.worker_inflight)
+			+ usize::from(m.coordinator_queue_depth)
+	}
+	fn sqlite_query_series_cost(&self, transaction: bool) -> usize {
+		let c = &self.inner.sqlite_profiling;
+		let m = &c.metrics;
+		let duration = if !m.duration {
+			0
+		} else if m.duration_histogram {
+			2 * (c.duration_histogram_buckets_seconds.len() + 3)
+		} else {
+			2
+		};
+		duration
+			+ usize::from(m.outcomes) * 7
+			+ usize::from(m.pages_fetched && !transaction)
+			+ usize::from(m.phase_duration_histogram) * (if transaction { 6 } else { 4 }) * 20
+			+ usize::from(m.get_pages_round_trips_histogram) * 14
+			+ usize::from(m.transaction_statement_count_histogram && transaction) * 14
+	}
 
 	fn reserve_sqlite_series(&self, cost: usize) -> bool {
 		SQLITE_PROFILE_ADMISSION
@@ -2271,26 +2458,31 @@ impl ActorMetrics {
 		self.inner
 			.sqlite_profile_low_card_handles
 			.get_or_init(|| {
-				let tuple = format!("{}\0{storage_transport}", self.actor_labels()[0]);
+				let tuple = format!(
+					"{}\0{storage_transport}\0{:x}",
+					self.actor_labels()[0],
+					self.inner.sqlite_profiling.metrics.cache_key()
+				);
 				if let Some(handles) = SQLITE_PROFILE_ADMISSION
 					.low_card_tuples
 					.read_sync(&tuple, |_, handles| Arc::clone(handles))
 				{
 					return Some(handles);
 				}
-				if !self.reserve_sqlite_series(Self::SQLITE_LOW_CARD_SERIES_COST) {
+				if !self.reserve_sqlite_series(self.sqlite_low_card_series_cost()) {
 					self.warn_sqlite_profile_capacity("low_card_series_budget", "profile");
 					return None;
 				}
 				let handles = Arc::new(SqliteLowCardMetricHandles::new(
 					self.actor_labels()[0],
 					storage_transport,
+					&self.inner.sqlite_profiling.metrics,
 				));
 				match SQLITE_PROFILE_ADMISSION.low_card_tuples.entry_sync(tuple) {
 					scc::hash_map::Entry::Occupied(entry) => {
 						SQLITE_PROFILE_ADMISSION
 							.series
-							.fetch_sub(Self::SQLITE_LOW_CARD_SERIES_COST, Ordering::AcqRel);
+							.fetch_sub(self.sqlite_low_card_series_cost(), Ordering::AcqRel);
 						Some(Arc::clone(entry.get()))
 					}
 					scc::hash_map::Entry::Vacant(entry) => {
@@ -2320,10 +2512,14 @@ impl ActorMetrics {
 		operation_type: &'static str,
 		reason: &'static str,
 	) {
-		SQLITE_PROFILE_METRICS
-			.fingerprint_overflow_total
-			.with_label_values(&[self.actor_labels()[0], operation_type, reason])
+		if !self.inner.sqlite_profiling.metrics.fingerprint_overflow {
+			return;
+		}
+		if let Some(handles) = self.sqlite_low_card_handles("proxy") {
+			handles.overflow[usize::from(operation_type == "transaction")]
+				[usize::from(reason == "series_budget")]
 			.inc();
+		}
 		self.warn_sqlite_profile_capacity(reason, operation_type);
 	}
 
@@ -2398,14 +2594,14 @@ impl ActorMetrics {
 		transaction_mode: &'static str,
 		storage_transport: &'static str,
 	) -> Option<Arc<SqliteFingerprintMetricHandles>> {
-		let cost = if operation_type == "transaction" {
-			207
-		} else {
-			147
-		};
+		let cost = self.sqlite_query_series_cost(operation_type == "transaction");
+		if cost == 0 {
+			return None;
+		}
 		let tuple = format!(
-			"{}\0{operation_type}\0{fingerprint}\0{fingerprint_source}\0{transaction_mode}\0{storage_transport}",
-			self.actor_labels()[0]
+			"{}\0{operation_type}\0{fingerprint}\0{fingerprint_source}\0{transaction_mode}\0{storage_transport}\0{:x}",
+			self.actor_labels()[0],
+			self.inner.sqlite_profiling.metrics.cache_key()
 		);
 		if let Some(handles) = SQLITE_PROFILE_ADMISSION
 			.tuples
@@ -2423,6 +2619,7 @@ impl ActorMetrics {
 			fingerprint_source,
 			transaction_mode,
 			storage_transport,
+			&self.inner.sqlite_profiling,
 		));
 		match SQLITE_PROFILE_ADMISSION.tuples.entry_sync(tuple) {
 			scc::hash_map::Entry::Occupied(entry) => {
@@ -2445,7 +2642,11 @@ impl ActorMetrics {
 		fingerprint_source: &'static str,
 		transaction_mode: &'static str,
 		storage_transport: &'static str,
-	) -> Option<AdmittedSqliteProfile<'_>> {
+	) -> Option<AdmittedSqliteProfile> {
+		if self.sqlite_query_series_cost(operation_type == "transaction") == 0 {
+			return None;
+		}
+
 		let (fingerprint, fingerprint_source, newly_admitted) =
 			if self.inner.sqlite_profile_selection.contains(fingerprint) {
 				(
@@ -2454,14 +2655,8 @@ impl ActorMetrics {
 					self.select_sqlite_fingerprint(operation_type, fingerprint)?,
 				)
 			} else {
-				("", "", false)
+				return None;
 			};
-		let Some(low_card_handles) = self.sqlite_low_card_handles(storage_transport) else {
-			if newly_admitted {
-				self.rollback_sqlite_logical_admission(operation_type, fingerprint);
-			}
-			return None;
-		};
 		if let Some(fingerprint_handles) = self.admit_sqlite_fingerprint_tuple(
 			operation_type,
 			fingerprint,
@@ -2472,7 +2667,6 @@ impl ActorMetrics {
 			return Some(AdmittedSqliteProfile {
 				fingerprint: fingerprint.to_owned(),
 				fingerprint_handles,
-				low_card_handles,
 			});
 		}
 		if newly_admitted {
@@ -2493,7 +2687,9 @@ impl ActorMetrics {
 		total_ns: u64,
 		phases: &[(&'static str, u64)],
 		get_pages_round_trips: u64,
-	) -> Option<AdmittedSqliteProfile<'_>> {
+	) -> Option<AdmittedSqliteProfile> {
+		let _ = self.sqlite_low_card_handles(storage_transport);
+
 		let admitted = self.admitted_sqlite_fingerprint(
 			operation_type,
 			fingerprint,
@@ -2647,7 +2843,7 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 			.saturating_sub(profile.transaction_wait_ns)
 			.saturating_sub(profile.profile.worker_wait_ns)
 			.saturating_sub(profile.profile.storage_ns);
-		let Some(admitted) = self.observe_profile_common(
+		let admitted = self.observe_profile_common(
 			profile.operation_type,
 			&profile.fingerprint,
 			profile.fingerprint_source,
@@ -2662,17 +2858,23 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 				("local_work", local_work_ns),
 			],
 			profile.profile.get_pages_round_trips,
-		) else {
-			return false;
+		);
+		if let Some(admitted) = &admitted {
+			admitted
+				.fingerprint_handles
+				.pages_fetched
+				.inc_by(profile.profile.response_present_pages);
+		}
+		let Some(low_card_handles) = self.sqlite_low_card_handles(profile.storage_transport) else {
+			return admitted.is_some();
 		};
 		self.record_local_profile_totals(
 			profile.operation_type,
-			admitted.low_card_handles,
+			low_card_handles,
 			&profile.profile,
 		);
 		for request in profile.profile.get_pages_requests.iter().flatten() {
-			let handles =
-				&admitted.low_card_handles.requests[sqlite_request_ordinal_index(request.ordinal)];
+			let handles = &low_card_handles.requests[sqlite_request_ordinal_index(request.ordinal)];
 			handles.duration[usize::from(!request.success)]
 				.observe(ns_to_seconds(request.duration_ns));
 			for (index, pages) in [
@@ -2692,14 +2894,14 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 				handles.missing_pages.inc_by(request.response_missing);
 			}
 		}
-		!admitted.fingerprint.is_empty() && admitted.fingerprint == profile.fingerprint
+		admitted.is_some_and(|admitted| admitted.fingerprint == profile.fingerprint)
 	}
 
 	fn observe_transaction_profile(
 		&self,
 		profile: &sqlite_embedded::vfs::SqliteTransactionMetric,
 	) -> bool {
-		let Some(admitted) = self.observe_profile_common(
+		let admitted = self.observe_profile_common(
 			"transaction",
 			&profile.fingerprint,
 			profile.fingerprint_source,
@@ -2716,20 +2918,21 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 				("commit", profile.commit_ns),
 			],
 			profile.get_pages_round_trips,
-		) else {
-			return false;
+		);
+		if let Some(admitted) = &admitted {
+			admitted
+				.fingerprint_handles
+				.transaction_statement_count
+				.observe(profile.statement_count as f64);
+		}
+		let Some(low_card_handles) = self.sqlite_low_card_handles(profile.storage_transport) else {
+			return admitted.is_some();
 		};
-		admitted
-			.fingerprint_handles
-			.transaction_statement_count
-			.as_ref()
-			.expect("transaction handles include statement count")
-			.observe(profile.statement_count as f64);
 		let mut aggregate = sqlite_embedded::vfs::SqliteOperationProfile::default();
 		aggregate.dirty_pages = profile.dirty_pages;
 		aggregate.dirty_bytes = profile.dirty_bytes;
-		self.record_local_profile_totals("transaction", admitted.low_card_handles, &aggregate);
-		!admitted.fingerprint.is_empty() && admitted.fingerprint == profile.fingerprint
+		self.record_local_profile_totals("transaction", low_card_handles, &aggregate);
+		admitted.is_some_and(|admitted| admitted.fingerprint == profile.fingerprint)
 	}
 
 	fn emit_operation_diagnostic_event(
@@ -2909,7 +3112,11 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 			&labels,
 		);
 		if let Some(Some(handles)) = self.inner.sqlite_profile_low_card_handles.get() {
-			handles.worker_queue_depth.set(u64_to_i64(depth));
+			set_optional_aggregated_gauge(
+				&mut state.sqlite_profile_worker_queue_depth,
+				u64_to_i64(depth),
+				&handles.worker_queue_depth,
+			);
 		}
 	}
 
@@ -2926,7 +3133,11 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 
 	fn set_worker_inflight(&self, active: bool) {
 		if let Some(Some(handles)) = self.inner.sqlite_profile_low_card_handles.get() {
-			handles.worker_inflight.set(if active { 1 } else { 0 });
+			set_optional_aggregated_gauge(
+				&mut self.inner.state.lock().sqlite_profile_worker_inflight,
+				i64::from(active),
+				&handles.worker_inflight,
+			);
 		}
 	}
 
@@ -2950,7 +3161,15 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 
 	fn set_coordinator_queue_depth(&self, depth: u64) {
 		if let Some(Some(handles)) = self.inner.sqlite_profile_low_card_handles.get() {
-			handles.coordinator_queue_depth.set(u64_to_i64(depth));
+			set_optional_aggregated_gauge(
+				&mut self
+					.inner
+					.state
+					.lock()
+					.sqlite_profile_coordinator_queue_depth,
+				u64_to_i64(depth),
+				&handles.coordinator_queue_depth,
+			);
 		}
 	}
 

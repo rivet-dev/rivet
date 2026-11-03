@@ -16,48 +16,58 @@ pub(super) struct StatementFingerprint {
 /// Immutable allowlists compiled once per database or metric sink.
 #[derive(Debug)]
 pub(crate) struct QuerySelection {
-	queries: HashMap<String, StatementFingerprint>,
-	fingerprints: HashSet<String>,
+	filter_queries: HashMap<String, StatementFingerprint>,
+	filter_query_fingerprints: HashSet<String>,
 	matches_fingerprints: bool,
+	track_all: bool,
 	tracks_transactions: bool,
 }
 
 impl QuerySelection {
 	pub(crate) fn new(config: &SqliteProfilingConfig) -> Self {
-		let queries = config
-			.queries
+		let filter_queries = config
+			.filter_queries
 			.iter()
 			.filter_map(|sql| {
 				statement_fingerprint(sql).map(|fingerprint| (sql.clone(), fingerprint))
 			})
 			.collect::<HashMap<_, _>>();
-		let mut fingerprints = config.fingerprints.iter().cloned().collect::<HashSet<_>>();
-		fingerprints.extend(
-			queries
+		let mut filter_query_fingerprints = config
+			.filter_query_fingerprints
+			.iter()
+			.cloned()
+			.collect::<HashSet<_>>();
+		filter_query_fingerprints.extend(
+			filter_queries
 				.values()
 				.map(|fingerprint| fingerprint.display.clone()),
 		);
-		let matches_fingerprints = !config.fingerprints.is_empty();
-		let tracks_transactions = config.fingerprints.iter().any(|fingerprint| {
-			fingerprint.starts_with("txn-") || fingerprint.starts_with("shape-")
-		});
+		let track_all =
+			config.filter_queries.is_empty() && config.filter_query_fingerprints.is_empty();
+		let matches_fingerprints = !config.filter_query_fingerprints.is_empty();
+		let tracks_transactions = track_all
+			|| config.filter_query_fingerprints.iter().any(|fingerprint| {
+				fingerprint.starts_with("txn-") || fingerprint.starts_with("shape-")
+			});
 		Self {
-			queries,
-			fingerprints,
+			filter_queries,
+			filter_query_fingerprints,
 			matches_fingerprints,
+			track_all,
 			tracks_transactions,
 		}
 	}
 
 	pub(crate) fn contains(&self, fingerprint: &str) -> bool {
-		!fingerprint.is_empty() && self.fingerprints.contains(fingerprint)
+		!fingerprint.is_empty()
+			&& (self.track_all || self.filter_query_fingerprints.contains(fingerprint))
 	}
 
 	fn statement(&self, sql: &str) -> Option<StatementFingerprint> {
-		if let Some(fingerprint) = self.queries.get(sql) {
+		if let Some(fingerprint) = self.filter_queries.get(sql) {
 			return Some(fingerprint.clone());
 		}
-		if !self.matches_fingerprints {
+		if !self.track_all && !self.matches_fingerprints {
 			return None;
 		}
 		let fingerprint = statement_fingerprint(sql)?;
