@@ -1,18 +1,24 @@
 use std::collections::{BTreeSet, HashMap};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail, ensure};
 use axum::{
 	Json,
 	extract::{Path, Query, State},
-	http::HeaderMap,
+	http::{HeaderMap, Method},
+	response::{IntoResponse, Response},
 };
 use base64::Engine;
+use bytes::Bytes;
 use futures_util::StreamExt;
 use pegboard::{
 	commands::{ActorCreate, ActorEvent, ActorRead, is_volume_gone},
+	errors::ActorMigratingFromV2,
 	keys::partition::ActorVolume,
 	wire,
 };
+use pegboard_gateway::migrate_from_v2::{self, V3Actor, decision, proxy};
+use rand::RngCore;
+use rivet_config::config::MigrateFromV2;
 use rivet_engine_context::EngineContext;
 use rivet_guard_core::auth;
 use rivet_util::{Id, rng::RngStreamIdExt};
@@ -176,6 +182,7 @@ fn node_json(
 		"pool": pool,
 		"namespace": namespace,
 		"datacenter": DATACENTER_NAME,
+		"version": record.version,
 		"create_ts": record.create_unix_ms,
 		"last_ping_ts": state.heartbeat_unix_ms,
 		"connected": record.connected,
@@ -349,17 +356,146 @@ async fn namespace(ctx: &EngineContext, query: Option<&str>) -> Result<String> {
 pub async fn create_actor(
 	State(ctx): State<EngineContext>,
 	Query(query): Query<NamespaceQuery>,
-	Json(body): Json<CreateActorRequest>,
-) -> Result<Json<Value>, ApiError> {
-	Ok(create_actor_inner(&ctx, query, body, false).await?)
+	headers: HeaderMap,
+	raw: Bytes,
+) -> Result<Response, ApiError> {
+	Ok(create_or_proxy(&ctx, query, &headers, raw, false).await?)
 }
 
 pub async fn get_or_create_actor(
 	State(ctx): State<EngineContext>,
 	Query(query): Query<NamespaceQuery>,
-	Json(body): Json<CreateActorRequest>,
-) -> Result<Json<Value>, ApiError> {
-	Ok(create_actor_inner(&ctx, query, body, true).await?)
+	headers: HeaderMap,
+	raw: Bytes,
+) -> Result<Response, ApiError> {
+	Ok(create_or_proxy(&ctx, query, &headers, raw, true).await?)
+}
+
+/// Creates the actor here, or proxies the create to V2's public API while a V2 namespace
+/// migrates in and the configured share sends it there. Keyless creates draw against the share;
+/// keyed creates stay with V2 until it reaches 1.0, and then go to V2 only for a key V2 already
+/// holds. A key this cluster holds is always served here, and one being moved in is refused as
+/// the retryable `actor.migrating_from_v2`. A create that sends `x-rivet-actor-version: 3`
+/// decides as if the share were 1.0.
+async fn create_or_proxy(
+	ctx: &EngineContext,
+	query: NamespaceQuery,
+	headers: &HeaderMap,
+	raw: Bytes,
+	get_or_create: bool,
+) -> Result<Response> {
+	let body = match Json::<CreateActorRequest>::from_bytes(&raw) {
+		Ok(Json(body)) => body,
+		Err(rejection) => return Ok(rejection.into_response()),
+	};
+	let namespace = namespace(ctx, query.namespace.as_deref()).await?;
+	let dynamic = migrate_from_v2::snapshot(ctx);
+	let Some(config) = migrate_from_v2::applies(dynamic.as_deref(), &namespace) else {
+		return Ok(create_actor_inner(ctx, query, body, get_or_create)
+			.await?
+			.into_response());
+	};
+	let create_ratio = migrate_from_v2::create_ratio(config, headers)?;
+	let keyed = body.key.is_some();
+	let count_create = |target: &'static str| {
+		migrate_from_v2::metrics::CREATES
+			.with_label_values(&[
+				namespace.as_str(),
+				target,
+				if keyed { "true" } else { "false" },
+			])
+			.inc();
+	};
+
+	let route = match &body.key {
+		None => {
+			let draw = (ctx.env().rng("migrate_from_v2.create").next_u64() >> 11) as f64
+				/ (1u64 << 53) as f64;
+			decision::keyless_create(draw, create_ratio)
+		}
+		Some(key) => {
+			// The API speaks the slash key form; the keyed id hashes the canonical form, as
+			// `create_actor_inner` does.
+			let canonical = canonical_key(key)?;
+			pegboard::validation::actor_name(&body.name)?;
+			pegboard::validation::actor_key(Some(&canonical))?;
+			let actor_id = pegboard::actor_key::keyed_actor_id(
+				ctx.config().dc_label(),
+				&namespace,
+				&body.name,
+				&canonical,
+			);
+			let state = migrate_from_v2::read_v3_actor(ctx, actor_id).await?;
+			let route = match decision::keyed(state, true, create_ratio) {
+				decision::Route::AskV2 => {
+					let found = proxy::key_exists(ctx, config, &body.name, key).await?;
+					decision::keyed_after_lookup(found)
+				}
+				route => route,
+			};
+			// An existing actor here is read, not created.
+			if let (decision::Route::V3, V3Actor::Active) = (route, state) {
+				return Ok(create_actor_inner(ctx, query, body, get_or_create)
+					.await?
+					.into_response());
+			}
+			route
+		}
+	};
+
+	match route {
+		decision::Route::V3 => {
+			count_create("v3");
+			Ok(create_actor_inner(ctx, query, body, get_or_create)
+				.await?
+				.into_response())
+		}
+		decision::Route::V2 => {
+			count_create("v2");
+			let method = if get_or_create {
+				Method::PUT
+			} else {
+				Method::POST
+			};
+			let path = format!("/actors?{}", v2_namespace_query(config)?);
+			let response = proxy::api(ctx, config, method, &path, Some(raw)).await?;
+			Ok(response.into_response())
+		}
+		decision::Route::RetryLater => Err(ActorMigratingFromV2::error()),
+		decision::Route::NotFound | decision::Route::AskV2 => Err(ActorNotFound.build()),
+	}
+}
+
+/// The V2 public API query naming the migrated V2 namespace.
+fn v2_namespace_query(config: &MigrateFromV2) -> Result<String> {
+	Ok(serde_html_form::to_string([(
+		"namespace",
+		config.namespace.as_str(),
+	)])?)
+}
+
+/// Lists live actors in the migrated V2 namespace through V2's public API, filtered by
+/// `params`. They keep V2's actor shape.
+async fn v2_actors(
+	ctx: &EngineContext,
+	config: &MigrateFromV2,
+	params: &[(&str, &str)],
+) -> Result<Vec<Value>> {
+	let mut query = vec![("namespace", config.namespace.as_str())];
+	query.extend_from_slice(params);
+	let path = format!("/actors?{}", serde_html_form::to_string(&query)?);
+	let response = proxy::api(ctx, config, Method::GET, &path, None).await?;
+	ensure!(
+		response.status.is_success(),
+		"V2 actor listing failed with status {}",
+		response.status
+	);
+	let mut listed: Value =
+		serde_json::from_slice(&response.body).context("invalid V2 actor listing")?;
+	match listed.get_mut("actors").map(Value::take) {
+		Some(Value::Array(actors)) => Ok(actors),
+		Some(_) | None => bail!("V2 actor listing has no actors array"),
+	}
 }
 
 /// Creates the actor and waits for its data record.
@@ -416,6 +552,10 @@ async fn create_actor_inner(
 		let existing = read_actor(ctx, actor_id)
 			.await?
 			.filter(|actor| !actor.destroyed);
+		// A key being moved in from V2 is not this cluster's to create or return yet.
+		if existing.as_ref().is_some_and(|actor| actor.held) {
+			return Err(ActorMigratingFromV2::error());
+		}
 		if let Some(actor) = existing {
 			if !get_or_create {
 				return Err(DuplicateKey.build());
@@ -441,6 +581,9 @@ async fn create_actor_inner(
 				wire::TryStartOutcome::TryStartDestroyed => {
 					rivet_env::sleep(clock.as_ref(), CREATE_POLL_INTERVAL).await?;
 					continue;
+				}
+				wire::TryStartOutcome::TryStartMigratingFromV2 => {
+					return Err(ActorMigratingFromV2::error());
 				}
 				wire::TryStartOutcome::TryStartWaiting
 				| wire::TryStartOutcome::TryStartStarting(_)
@@ -518,20 +661,32 @@ pub async fn list_actors(
 		.map(|cursor| parse_cursor(cursor))
 		.transpose()?;
 
+	// Actors this cluster does not hold are looked up in V2 while a V2 namespace migrates in.
+	let dynamic = migrate_from_v2::snapshot(&ctx);
+	let migration = migrate_from_v2::applies(dynamic.as_deref(), &namespace);
+
 	let mut actors = Vec::new();
 	let mut next_cursor = None;
 	match selector {
 		ActorListing::Ids(ids) => {
+			let mut missing = Vec::new();
 			for id in ids.split(',') {
-				if let Some(actor) =
-					lookup_actor(&ctx, Id::parse(id)?, &namespace, include_destroyed).await?
-				{
-					actors.push(actor);
+				match lookup_actor(&ctx, Id::parse(id)?, &namespace, include_destroyed).await? {
+					Some(actor) => actors.push(actor),
+					None => missing.push(id),
 				}
+			}
+			if let Some(config) = migration
+				&& !missing.is_empty()
+			{
+				let missing = missing.join(",");
+				actors.extend(v2_actors(&ctx, config, &[("actor_ids", &missing)]).await?);
 			}
 		}
 		ActorListing::Key { name, key } => {
-			// A key owned by another datacenter has no actor listed here.
+			// A key owned by another datacenter has no actor listed here. V2 is asked with the
+			// key as the client wrote it.
+			let v2_key = key;
 			let key = canonical_key(key)?;
 			let actor_id = pegboard::actor_key::keyed_actor_id(
 				ctx.config().dc_label(),
@@ -542,6 +697,8 @@ pub async fn list_actors(
 			if let Some(actor) = lookup_actor(&ctx, actor_id, &namespace, include_destroyed).await?
 			{
 				actors.push(actor);
+			} else if let Some(config) = migration {
+				actors.extend(v2_actors(&ctx, config, &[("name", name), ("key", v2_key)]).await?);
 			}
 		}
 		ActorListing::Name(name) => {
@@ -779,10 +936,20 @@ pub async fn get_actor(
 	Query(query): Query<NamespaceQuery>,
 ) -> Result<Json<Value>, ApiError> {
 	let namespace = namespace(&ctx, query.namespace.as_deref()).await?;
-	let Some(actor) = read_actor(&ctx, Id::parse(&actor_id)?)
+	let actor_id = Id::parse(&actor_id)?;
+	let Some(actor) = read_actor(&ctx, actor_id)
 		.await?
 		.filter(|actor| !actor.destroyed && actor.data.namespace.as_str() == namespace)
 	else {
+		// While a V2 namespace migrates in, V2 may still hold it.
+		let dynamic = migrate_from_v2::snapshot(&ctx);
+		if let Some(config) = migrate_from_v2::applies(dynamic.as_deref(), &namespace) {
+			let id = actor_id.to_string();
+			let found = v2_actors(&ctx, config, &[("actor_ids", &id)]).await?;
+			if let Some(actor) = found.into_iter().next() {
+				return Ok(Json(json!({ "actor": actor })));
+			}
+		}
 		return Err(ActorNotFound.build().into());
 	};
 
@@ -793,34 +960,29 @@ pub async fn destroy_actor(
 	State(ctx): State<EngineContext>,
 	Path(actor_id): Path<String>,
 	Query(query): Query<NamespaceQuery>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Response, ApiError> {
 	let namespace = namespace(&ctx, query.namespace.as_deref()).await?;
-	send_actor_event(
+	let actor_id = Id::parse(&actor_id)?;
+	let v2_call = (Method::DELETE, format!("/actors/{actor_id}"));
+	Ok(send_actor_event(
 		&ctx,
 		&namespace,
-		Id::parse(&actor_id)?,
+		actor_id,
 		wire::ActorEvent::Destroy,
+		v2_call,
 	)
-	.await?;
-
-	Ok(Json(json!({})))
+	.await?)
 }
 
 pub async fn sleep_actor(
 	State(ctx): State<EngineContext>,
 	Path(actor_id): Path<String>,
 	Query(query): Query<NamespaceQuery>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Response, ApiError> {
 	let namespace = namespace(&ctx, query.namespace.as_deref()).await?;
-	send_actor_event(
-		&ctx,
-		&namespace,
-		Id::parse(&actor_id)?,
-		wire::ActorEvent::Sleep,
-	)
-	.await?;
-
-	Ok(Json(json!({})))
+	let actor_id = Id::parse(&actor_id)?;
+	let v2_call = (Method::POST, format!("/actors/{actor_id}/sleep"));
+	Ok(send_actor_event(&ctx, &namespace, actor_id, wire::ActorEvent::Sleep, v2_call).await?)
 }
 
 /// Moves the actor to a new allocation, as main's reschedule does: a running or stopping actor
@@ -868,7 +1030,7 @@ fn reschedule_event(phase: &wire::ActorPhase, epoch: u32) -> Option<wire::ActorE
 	match phase {
 		wire::ActorPhase::Running(_)
 		| wire::ActorPhase::Stopping(_)
-		| wire::ActorPhase::Sleeping => Some(wire::ActorEvent::Reallocate(wire::Reallocate {
+		| wire::ActorPhase::Sleeping(_) => Some(wire::ActorEvent::Reallocate(wire::Reallocate {
 			epoch,
 			lost: false,
 			waiter: None,
@@ -877,19 +1039,42 @@ fn reschedule_event(phase: &wire::ActorPhase, epoch: u32) -> Option<wire::ActorE
 		| wire::ActorPhase::Starting(_)
 		| wire::ActorPhase::Destroying(_)
 		| wire::ActorPhase::Destroyed => None,
+		// V2 serves a held actor, so there is nothing here to move.
+		wire::ActorPhase::MigratingFromV2(_) => None,
 	}
 }
 
 /// Sends `event` to an existing actor's state machine.
 ///
 /// The existence check gives a missing actor a clear error instead of the state machine's
-/// internal one.
+/// internal one. While a V2 namespace migrates in, an actor this cluster does not hold gets the
+/// same call, `v2_call`, on V2's public API, and one being moved in is refused as the retryable
+/// `actor.migrating_from_v2`, so a destroy during the move is not lost.
 async fn send_actor_event(
 	ctx: &EngineContext,
 	namespace: &str,
 	actor_id: Id,
 	event: wire::ActorEvent,
-) -> Result<()> {
+	v2_call: (Method, String),
+) -> Result<Response> {
+	let dynamic = migrate_from_v2::snapshot(ctx);
+	if let Some(config) = migrate_from_v2::applies(dynamic.as_deref(), namespace) {
+		match migrate_from_v2::read_v3_actor(ctx, actor_id).await? {
+			V3Actor::Active => {}
+			V3Actor::Held => return Err(ActorMigratingFromV2::error()),
+			V3Actor::None => {
+				let (method, path) = v2_call;
+				let path = format!("{path}?{}", v2_namespace_query(config)?);
+				let body = if method == Method::POST {
+					Some(Bytes::from_static(b"{}"))
+				} else {
+					None
+				};
+				let response = proxy::api(ctx, config, method, &path, body).await?;
+				return Ok(response.into_response());
+			}
+		}
+	}
 	if read_actor(ctx, actor_id)
 		.await?
 		.is_none_or(|actor| actor.data.namespace.as_str() != namespace)
@@ -901,7 +1086,7 @@ async fn send_actor_event(
 		.command::<ActorEvent>(&ActorVolume::new(actor_id).volume_key(), event)
 		.await?;
 
-	Ok(())
+	Ok(Json(json!({})).into_response())
 }
 
 /// Pool configuration is flat. Opaque metadata is stored without interpretation.
@@ -1084,6 +1269,8 @@ pub(super) struct ReadActor {
 	pub(super) data: wire::ActorData,
 	/// The actor is being or has been destroyed.
 	destroyed: bool,
+	/// The V2 migrator holds the actor while its data moves in.
+	held: bool,
 }
 
 /// What a read of an actor found.
@@ -1109,8 +1296,13 @@ async fn read(ctx: &EngineContext, actor_id: Id) -> Result<Read> {
 		res.phase,
 		Some(wire::ActorPhase::Destroying(_) | wire::ActorPhase::Destroyed)
 	);
+	let held = matches!(res.phase, Some(wire::ActorPhase::MigratingFromV2(_)));
 	Ok(match res.data {
-		Some(data) => Read::Actor(ReadActor { data, destroyed }),
+		Some(data) => Read::Actor(ReadActor {
+			data,
+			destroyed,
+			held,
+		}),
 		None => Read::NoData,
 	})
 }

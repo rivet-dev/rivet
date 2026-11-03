@@ -1,0 +1,5 @@
+{
+  "code": "migrating_from_v2",
+  "group": "actor",
+  "message": "The actor is moving to this cluster from V2. Retry after the hinted delay."
+}

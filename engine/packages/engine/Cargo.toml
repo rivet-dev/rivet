@@ -41,6 +41,7 @@ depot-types = { path = "../depot-types" }
 depot-volume = { path = "../depot-volume" }
 rivet-data.workspace = true
 rivet-singleton-coordinator.workspace = true
+rivet-util.workspace = true
 rivet-metrics.workspace = true
 rivet-metrics-server.workspace = true
 object_store.workspace = true
@@ -52,6 +53,7 @@ rivet-topology.workspace = true
 depot-worker.workspace = true
 futures-util.workspace = true
 hex.workspace = true
+pegboard-v2-migrator.workspace = true
 pegboard.workspace = true
 rivet-build-meta.workspace = true
 rivet-config.workspace = true

@@ -27,6 +27,9 @@ pub struct EnvoyQuery {
 	protocol_version: u16,
 	#[serde(rename = "envoy_key")]
 	key: String,
+	/// The deployment version the envoy runs. Allocation prefers the newest version live in the
+	/// pool, so a rollout moves new actors to the new deployment as its envoys connect.
+	version: u32,
 	namespace: Option<String>,
 	pool_name: Option<String>,
 }
@@ -190,6 +193,7 @@ pub async fn connect(
 				query.key,
 				scope,
 				query.protocol_version,
+				query.version,
 				service,
 				connection_id,
 			)

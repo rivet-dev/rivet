@@ -6,12 +6,14 @@
 //! volume per namespace and pool, ordered by creation time.
 //!
 //! The active envoy index keeps, per envoy and per actor name it serves, one entry keyed by the
-//! name and the envoy's latest heartbeat, also in one volume per namespace and pool. The entry's
-//! value is the envoy's route, so allocating an actor is one listing of its name with no record
-//! read. A listing scans only heartbeats inside [`crate::ENVOY_HEARTBEAT_TIMEOUT_MS`], so envoys
-//! that stopped heartbeating drop out without a sweep. A per-envoy state key in the same volume
-//! fences the entries by connection epoch and remembers where they sit, so an older connection
-//! of the envoy can neither overwrite nor delete a newer connection's route.
+//! name, the envoy's version in descending order and the envoy's latest heartbeat, also in one
+//! volume per namespace and pool. The entry's value is the envoy's route, so allocating an actor
+//! is one listing of its name with no record read. A listing serves only the newest version
+//! that has a live envoy, so a rollout moves new actors to the new deployment as soon as one of
+//! its envoys is up, and it scans only heartbeats inside [`crate::ENVOY_HEARTBEAT_TIMEOUT_MS`],
+//! so envoys that stopped heartbeating drop out without a sweep. A per-envoy state key in the
+//! same volume fences the entries by connection epoch and remembers where they sit, so an older
+//! connection of the envoy can neither overwrite nor delete a newer connection's route.
 //!
 //! The pool catalog keeps one entry per pool of a namespace, in one volume per namespace, so the
 //! configured pools can be enumerated even before any envoy connects.
@@ -20,23 +22,26 @@
 //! writes the same key, so inserts are idempotent and need no command receipt.
 use crate::commands::EnvoyRead;
 use crate::keys::{
-	kv::ActiveEnvoyIndexKey, kv::ActiveEnvoyIndexNamePrefix, kv::ActiveEnvoyStateKey,
-	kv::ActiveEnvoyStatePrefix, kv::ActorIndexKey, kv::ActorIndexPrefix,
+	kv::ActiveEnvoyIndexKey, kv::ActiveEnvoyIndexNamePrefix, kv::ActiveEnvoyIndexVersionPrefix,
+	kv::ActiveEnvoyStateKey, kv::ActiveEnvoyStatePrefix, kv::ActiveEnvoyVersionKey,
+	kv::ActiveEnvoyVersionPrefix, kv::ActorIndexKey, kv::ActorIndexPrefix,
 	kv::DestroyedActorIndexKey, kv::DestroyedActorIndexPrefix, kv::EnvoyIndexKey,
-	kv::EnvoyIndexPrefix, kv::EnvoyPoolKey, kv::EnvoyPoolPrefix, partition::ActiveEnvoyIndexVolume,
-	partition::ActorIndexVolume, partition::EnvoyIndexVolume, partition::EnvoyPoolIndexVolume,
-	partition::EnvoyVolume, partition::actor_index_bucket,
+	kv::EnvoyIndexPrefix, kv::EnvoyPoolKey, kv::EnvoyPoolPrefix, kv::at_write_version,
+	partition::ActiveEnvoyIndexVolume, partition::ActorIndexVolume, partition::EnvoyIndexVolume,
+	partition::EnvoyPoolIndexVolume, partition::EnvoyVolume, partition::actor_index_bucket,
 };
 use crate::wire;
 use anyhow::{Context, Result, ensure};
 use depot_protocol::command::{Command, CommandTag};
 use depot_worker::command::{CommandRegistry, KvHandle};
 use futures_util::StreamExt;
+use rivet_data::families::VersionFamily;
+use rivet_data::versioned::{ENVOY_VERSION_ACTOR_VERSION, ENVOY_VERSION_BEFORE_VERSIONS};
 use rivet_engine_context::EngineContext;
 use rivet_env::Clock;
 use rivet_keys::keys::{
 	KeyAddress,
-	codec::{FormalKey, SubspaceRange},
+	codec::{DescendingU64, FormalKey, SubspaceRange},
 	tags::depot_command::{
 		PEGBOARD_INDEX_DELETE_ACTIVE_ENVOY, PEGBOARD_INDEX_DELETE_ACTOR,
 		PEGBOARD_INDEX_INSERT_ACTOR, PEGBOARD_INDEX_INSERT_ENVOY,
@@ -280,7 +285,10 @@ async fn delete_actor_handler(
 		let entry = wire::DestroyedActorIndexEntry {
 			destroy_unix_ms: now_unix_ms,
 		};
-		txn.put(&destroyed_key.pack(), &destroyed_key.serialize(entry)?)?;
+		txn.put(
+			&destroyed_key.pack(),
+			&destroyed_key.serialize(at_write_version(&db, entry)?)?,
+		)?;
 	}
 	db.commit(txn).await?;
 
@@ -499,17 +507,32 @@ fn delete_active_envoy_entries(
 	for name in &stored.names {
 		let key = ActiveEnvoyIndexKey::new(
 			name.to_string(),
+			DescendingU64(u64::from(stored.version)),
 			stored.heartbeat_unix_ms,
 			envoy_key.to_owned(),
 		);
 		txn.delete(&key.pack())?;
 	}
+	let version_key = ActiveEnvoyVersionKey::new(
+		DescendingU64(u64::from(stored.version)),
+		stored.heartbeat_unix_ms,
+		envoy_key.to_owned(),
+	);
+	txn.delete(&version_key.pack())?;
 	Ok(())
 }
 
 /// Replaces the envoy's index entries and state with the request's, in one transaction, unless
 /// the stored state belongs to a newer connection (`superseded`) or to a newer heartbeat of the
 /// same connection, which is a reordered or retried write and changes nothing.
+///
+/// The entries are keyed at the version the state will read back. While some live storage
+/// worker reads only a `pegboard.actor` version without the envoy version, the state is
+/// written without it and reads back as [`ENVOY_VERSION_BEFORE_VERSIONS`], so the entries go
+/// under that version too; otherwise the next upsert or delete, which finds the entries through
+/// the stored state, would leave them behind as ghosts. Allocation then spreads across every
+/// version until the fleet is upgraded, when the next heartbeat moves the entries to the
+/// envoy's version.
 async fn upsert_active_envoy_handler(
 	db: KvHandle,
 	request: wire::IndexUpsertActiveEnvoyRequest,
@@ -517,16 +540,40 @@ async fn upsert_active_envoy_handler(
 	let volume = ActiveEnvoyIndexVolume::from_volume_key(db.volume_key())?;
 	let envoy_key = request.envoy_key.to_string();
 	let state_key = ActiveEnvoyStateKey::new(envoy_key.clone());
+	let version = if db.write_version(VersionFamily::PEGBOARD_ACTOR)? >= ENVOY_VERSION_ACTOR_VERSION
+	{
+		request.version
+	} else {
+		ENVOY_VERSION_BEFORE_VERSIONS
+	};
 
 	let mut txn = db.begin().await?;
+	// The pool's newest live version is read before this envoy's rows change, skipping the
+	// envoy's own row so a redeploy to a lower version does not see itself as superseded.
+	let newest_live_version = newest_live_pool_version(
+		&volume,
+		&mut txn,
+		&envoy_key,
+		oldest_eligible_heartbeat(request.heartbeat_unix_ms),
+	)
+	.await?
+	.map_or(version, |newest| {
+		u32::try_from(newest.0).unwrap_or(u32::MAX).max(version)
+	});
 	if let Some(stored) = read_active_envoy_state(&mut txn, &state_key).await? {
 		if stored.connection_epoch > request.connection_epoch {
-			return Ok(wire::IndexUpsertActiveEnvoyResponse { superseded: true });
+			return Ok(wire::IndexUpsertActiveEnvoyResponse {
+				superseded: true,
+				newest_live_version,
+			});
 		}
 		if stored.connection_epoch == request.connection_epoch
 			&& stored.heartbeat_unix_ms > request.heartbeat_unix_ms
 		{
-			return Ok(wire::IndexUpsertActiveEnvoyResponse { superseded: false });
+			return Ok(wire::IndexUpsertActiveEnvoyResponse {
+				superseded: false,
+				newest_live_version,
+			});
 		}
 		delete_active_envoy_entries(&mut txn, &envoy_key, &stored)?;
 	}
@@ -538,24 +585,41 @@ async fn upsert_active_envoy_handler(
 	for name in &request.names {
 		let key = ActiveEnvoyIndexKey::new(
 			name.to_string(),
+			DescendingU64(u64::from(version)),
 			request.heartbeat_unix_ms,
 			envoy_key.clone(),
 		);
-		txn.put(&key.pack(), &key.serialize(entry.clone())?)?;
+		txn.put(
+			&key.pack(),
+			&key.serialize(at_write_version(&db, entry.clone())?)?,
+		)?;
 	}
+	let version_key = ActiveEnvoyVersionKey::new(
+		DescendingU64(u64::from(version)),
+		request.heartbeat_unix_ms,
+		envoy_key.clone(),
+	);
+	txn.put(&version_key.pack(), &[])?;
 	let state = wire::ActiveEnvoyState {
 		envoy_key: request.envoy_key,
 		connection_epoch: request.connection_epoch,
+		version,
 		heartbeat_unix_ms: request.heartbeat_unix_ms,
 		names: request.names,
 	};
-	txn.put(&state_key.pack(), &state_key.serialize(state)?)?;
+	txn.put(
+		&state_key.pack(),
+		&state_key.serialize(at_write_version(&db, state)?)?,
+	)?;
 	db.commit(txn).await?;
 	crate::metrics::ENVOY_INDEX_UPSERTS
 		.with_label_values(&[&volume.namespace, "heartbeat"])
 		.inc();
 
-	Ok(wire::IndexUpsertActiveEnvoyResponse { superseded: false })
+	Ok(wire::IndexUpsertActiveEnvoyResponse {
+		superseded: false,
+		newest_live_version,
+	})
 }
 
 /// Removes the envoy's index entries and state, unless a newer connection owns them. No state
@@ -590,48 +654,171 @@ fn oldest_eligible_heartbeat(now_unix_ms: i64) -> i64 {
 	now_unix_ms.saturating_sub(crate::ENVOY_HEARTBEAT_TIMEOUT_MS) + 1
 }
 
-/// Lists one page of the active envoys serving `request.name`, in ascending heartbeat order, as
-/// the allocations an actor of that name could be given. The scan starts at the oldest
-/// heartbeat still inside [`crate::ENVOY_HEARTBEAT_TIMEOUT_MS`] now, or after the cursor when
-/// the cursor is newer, so expired entries are never returned.
+/// The first key of `version`'s eligibility window under `name`: the oldest heartbeat still
+/// inside [`crate::ENVOY_HEARTBEAT_TIMEOUT_MS`], with the empty envoy key that sorts before every
+/// other key at that heartbeat.
+fn active_envoy_window_start(name: &str, version: DescendingU64, oldest_eligible: i64) -> Vec<u8> {
+	ActiveEnvoyIndexKey::new(name.to_owned(), version, oldest_eligible, String::new())
+		.pack()
+		.to_vec()
+}
+
+fn bound_slice(bound: &Bound<Vec<u8>>) -> Bound<&[u8]> {
+	match bound {
+		Bound::Included(key) => Bound::Included(key.as_slice()),
+		Bound::Excluded(key) => Bound::Excluded(key.as_slice()),
+		Bound::Unbounded => Bound::Unbounded,
+	}
+}
+
+/// The highest envoy version under `name` with an entry whose heartbeat is at or after
+/// `oldest_eligible`, or `None` when no live envoy serves the name.
+///
+/// Entries sort by descending version and then ascending heartbeat, so the first entry at or
+/// after a position is the oldest heartbeat of the highest version remaining. When it is live,
+/// its version is the answer. When it is stale, the seek moves to that version's eligibility
+/// window, whose first entry is either a live envoy of the same version or the first entry of
+/// the next version. Each version whose envoys all stopped heartbeating costs one extra seek.
+async fn newest_live_active_envoy_version(
+	volume: &ActiveEnvoyIndexVolume,
+	snapshot: &mut depot_worker::command::Transaction,
+	name: &str,
+	oldest_eligible: i64,
+) -> Result<Option<DescendingU64>> {
+	let range = ActiveEnvoyIndexNamePrefix::new(name.to_owned()).range();
+	let mut lower = Bound::Included(range.start.clone());
+	loop {
+		let entries = snapshot
+			.scan(
+				(bound_slice(&lower), Bound::Excluded(range.end.as_slice())),
+				Some(1),
+				false,
+			)
+			.await?;
+		let Some((raw_key, _)) = entries.into_iter().next() else {
+			return Ok(None);
+		};
+		let key =
+			ActiveEnvoyIndexKey::unpack(&raw_key).context("invalid active envoy index key")?;
+		if key.heartbeat_unix_ms >= oldest_eligible {
+			return Ok(Some(key.version));
+		}
+		crate::metrics::ENVOY_INDEX_STALE_ROWS
+			.with_label_values(&[&volume.namespace, "heartbeat_expired", "skipped"])
+			.inc();
+		lower = Bound::Included(active_envoy_window_start(
+			name,
+			key.version,
+			oldest_eligible,
+		));
+	}
+}
+
+/// The highest version among the pool's envoys other than `own_envoy_key` with a version row
+/// whose heartbeat is at or after `oldest_eligible`, or `None` when no other envoy is live.
+///
+/// The version rows sort like the name entries, descending version then ascending heartbeat,
+/// so the seek works the same way: a live first entry answers, a stale one moves the seek to
+/// its version's eligibility window. The envoy's own row is stepped over so a redeploy to a
+/// lower version does not see its previous row as a newer deployment.
+async fn newest_live_pool_version(
+	volume: &ActiveEnvoyIndexVolume,
+	snapshot: &mut depot_worker::command::Transaction,
+	own_envoy_key: &str,
+	oldest_eligible: i64,
+) -> Result<Option<DescendingU64>> {
+	let range = ActiveEnvoyVersionPrefix::new().range();
+	let mut lower = Bound::Included(range.start.clone());
+	loop {
+		let entries = snapshot
+			.scan(
+				(bound_slice(&lower), Bound::Excluded(range.end.as_slice())),
+				Some(1),
+				false,
+			)
+			.await?;
+		let Some((raw_key, _)) = entries.into_iter().next() else {
+			return Ok(None);
+		};
+		let key =
+			ActiveEnvoyVersionKey::unpack(&raw_key).context("invalid active envoy version key")?;
+		if key.envoy_key == own_envoy_key {
+			lower = Bound::Excluded(raw_key);
+			continue;
+		}
+		if key.heartbeat_unix_ms >= oldest_eligible {
+			return Ok(Some(key.version));
+		}
+		crate::metrics::ENVOY_INDEX_STALE_ROWS
+			.with_label_values(&[&volume.namespace, "heartbeat_expired", "skipped"])
+			.inc();
+		lower = Bound::Included(
+			ActiveEnvoyVersionKey::new(key.version, oldest_eligible, String::new())
+				.pack()
+				.to_vec(),
+		);
+	}
+}
+
+/// Lists one page of the active envoys serving `request.name` at the newest live version, in
+/// ascending heartbeat order, as the allocations an actor of that name could be given. The
+/// newest live version is the highest version with an entry whose heartbeat is inside
+/// [`crate::ENVOY_HEARTBEAT_TIMEOUT_MS`] now, so a rollout stops giving new actors to the
+/// previous deployment as soon as one envoy of the new one is live, and a deployment whose
+/// envoys all died does not starve allocation. A cursor stays in the version its first page
+/// chose and starts after the cursor or at the version's eligibility window, whichever is
+/// later, so a listing never mixes versions and never returns expired entries.
 async fn list_active_envoys_handler(
 	clock: Arc<dyn Clock>,
 	db: KvHandle,
 	request: wire::IndexListActiveEnvoysRequest,
 ) -> Result<wire::IndexListActiveEnvoysResponse> {
-	ActiveEnvoyIndexVolume::from_volume_key(db.volume_key())?;
+	let volume = ActiveEnvoyIndexVolume::from_volume_key(db.volume_key())?;
 	let now_unix_ms = clock.observe()?.unix_ms;
 	let name = request.name.to_string();
-	let range = ActiveEnvoyIndexNamePrefix::new(name.clone()).range();
+	let oldest_eligible = oldest_eligible_heartbeat(now_unix_ms);
+	let mut snapshot = db.snapshot().await?;
 
-	// An envoy is eligible while its heartbeat age is below the timeout. The empty envoy key sorts
-	// before every other key at the same heartbeat.
-	let window_start =
-		ActiveEnvoyIndexKey::new(name, oldest_eligible_heartbeat(now_unix_ms), String::new())
-			.pack()
-			.to_vec();
-
-	let lower = match request.cursor.as_deref() {
+	let (version, lower) = match request.cursor.as_deref() {
 		Some(cursor) => {
+			let range = ActiveEnvoyIndexNamePrefix::new(name.clone()).range();
 			ensure!(
 				range.start.as_slice() <= cursor && cursor < range.end.as_slice(),
 				"cursor outside index range"
 			);
-			// The cursor must encode an entire entry, not just a heartbeat prefix.
-			ActiveEnvoyIndexKey::unpack(cursor).context("invalid index cursor")?;
-			if cursor < window_start.as_slice() {
-				Bound::Included(window_start.as_slice())
+			// The cursor must encode an entire entry, not just a version or heartbeat prefix.
+			let cursor_key = ActiveEnvoyIndexKey::unpack(cursor).context("invalid index cursor")?;
+			let window_start =
+				active_envoy_window_start(&name, cursor_key.version, oldest_eligible);
+			let lower = if cursor < window_start.as_slice() {
+				Bound::Included(window_start)
 			} else {
-				Bound::Excluded(cursor)
-			}
+				Bound::Excluded(cursor.to_vec())
+			};
+			(cursor_key.version, lower)
 		}
-		None => Bound::Included(window_start.as_slice()),
+		None => {
+			let Some(version) =
+				newest_live_active_envoy_version(&volume, &mut snapshot, &name, oldest_eligible)
+					.await?
+			else {
+				return Ok(wire::IndexListActiveEnvoysResponse {
+					envoys: Vec::new(),
+					cursor: None,
+				});
+			};
+			let window_start = active_envoy_window_start(&name, version, oldest_eligible);
+			(version, Bound::Included(window_start))
+		}
 	};
+	let version_range = ActiveEnvoyIndexVersionPrefix::new(name.clone(), version).range();
 
-	let mut snapshot = db.snapshot().await?;
 	let mut entries = snapshot
 		.scan(
-			(lower, Bound::Excluded(range.end.as_slice())),
+			(
+				bound_slice(&lower),
+				Bound::Excluded(version_range.end.as_slice()),
+			),
 			Some(PAGE_SIZE + 1),
 			false,
 		)

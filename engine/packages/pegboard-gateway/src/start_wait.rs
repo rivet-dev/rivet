@@ -33,6 +33,8 @@ pub(crate) enum Next {
 	},
 	/// Another datacenter holds the actor's key, so this gateway cannot serve the request.
 	KeyOwnedElsewhere { reservation_id: Id },
+	/// The V2 migrator holds the actor, so V2 serves it and this gateway cannot.
+	MigratingFromV2,
 }
 
 /// Why the request last looked at the actor again.
@@ -77,6 +79,7 @@ pub(crate) fn next_after_notice(notice: Notice) -> Next {
 		}
 		// The read finds the actor destroyed and creates it again or reports it missing.
 		Notice::Destroyed => Next::Read,
+		Notice::MigratingFromV2 => Next::MigratingFromV2,
 	}
 }
 
@@ -208,6 +211,7 @@ impl StartWait {
 					reservation_id: Id::from_slice(&reserved.reservation_id)?,
 				}
 			}
+			wire::TryStartOutcome::TryStartMigratingFromV2 => Notice::MigratingFromV2,
 		};
 		if let Some(waiter) = waiter {
 			self.waits

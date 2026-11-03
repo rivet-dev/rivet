@@ -1,6 +1,6 @@
 //! The gateway's HTTP edge: authentication, the request's routing parameters, header hygiene
 //! and the hand-off of an acquired actor stream to the HTTP or WebSocket tunnel.
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use axum::response::IntoResponse;
 use axum::{
 	body::Body,
@@ -10,6 +10,7 @@ use axum::{
 };
 use axum_extra::extract::{Query, QueryRejection};
 use hyper::{HeaderMap, header};
+use pegboard::errors::ActorMigratingFromV2;
 use rivet_engine_context::EngineContext;
 use rivet_env::capabilities::websocket::{CloseFrame, Message, WebSocketUpgrade};
 use rivet_envoy_protocol as protocol;
@@ -19,11 +20,12 @@ use rivetkit_shared_types::actor_key;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, hash_map::Entry};
 
-use crate::acquire::{CreateActor, RoutingDeadline, acquire};
+use crate::acquire::{CreateActor, HeldByMigrateFromV2, RoutingDeadline, acquire};
+use crate::migrate_from_v2::{self, V3Actor, decision, proxy};
 use crate::raw_rest_path::RawRestPath;
 use crate::retry_budget::RetryBudget;
 use crate::start_waits::StartWaits;
-use crate::{GatewayError, QueryInvalidParams};
+use crate::{ActorNotFound, GatewayError, QueryInvalidParams};
 use std::sync::Arc;
 
 /// Read chunk for each client WebSocket. Tungstenite allocates it per socket up front, and its
@@ -106,6 +108,12 @@ impl GatewayQuery {
 			.or(self.runner.as_deref())
 			.unwrap_or(pegboard::DEFAULT_POOL)
 	}
+
+	fn namespace(&self) -> &str {
+		self.namespace
+			.as_deref()
+			.unwrap_or(pegboard::DEFAULT_NAMESPACE)
+	}
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
@@ -125,6 +133,7 @@ pub async fn gateway(
 	axum::Extension(waits): axum::Extension<Arc<StartWaits>>,
 	axum::Extension(budget): axum::Extension<Arc<RetryBudget>>,
 	request: Option<axum::Extension<RequestContext>>,
+	OriginalUri(original_uri): OriginalUri,
 	Path(selector): Path<String>,
 	RawRestPath(path_rest): RawRestPath,
 	RawQuery(raw_query): RawQuery,
@@ -146,10 +155,17 @@ pub async fn gateway(
 		}
 	};
 
+	// While a V2 namespace migrates into this one, actors this cluster does not hold are
+	// served by V2.
+	let dynamic = migrate_from_v2::snapshot(&ctx);
+	let migration = migrate_from_v2::Active::for_namespace(dynamic.as_deref(), query.namespace());
+	let keyed = query.method.is_some();
+
 	let preparing = prepare(
 		&ctx,
 		&waits,
 		&budget,
+		migration.as_ref(),
 		&selector,
 		path_rest,
 		raw_query,
@@ -188,9 +204,42 @@ pub async fn gateway(
 		preparing.await
 	};
 	let prepared = match prepared {
-		Ok(prepared) => prepared,
-		Err(error) => return reject(ws, error, ray_id),
+		Ok(Routed::V3(prepared)) => prepared,
+		Ok(Routed::V2(v2)) => {
+			let Some(migration) = &migration else {
+				let error = anyhow!("routed to V2 without a migration from V2");
+				return reject(ws, error, ray_id);
+			};
+			let request = V2Request {
+				original_uri,
+				method,
+				headers,
+				keyed,
+			};
+			return match proxy_to_v2(&ctx, migration, v2, request, ws, body, ray_id).await {
+				Ok(response) => response,
+				Err(error) => {
+					// A V2 answer of not_found is counted by the route it resolves to; anything
+					// else is a request V2 did not serve.
+					if refused_route(&error).is_none() {
+						migration.count_request("v2_error");
+					}
+					GatewayError::from(error).into_response()
+				}
+			};
+		}
+		Err(error) => {
+			if let Some(migration) = &migration
+				&& let Some(route) = refused_route(&error)
+			{
+				migration.count_request(route);
+			}
+			return reject(ws, error, ray_id);
+		}
 	};
+	if let Some(migration) = &migration {
+		migration.count_request("v3");
+	}
 	let Prepared {
 		actor_id,
 		epoch,
@@ -293,24 +342,23 @@ struct Prepared {
 }
 
 /// Authenticates the request, resolves its actor, opens a stream to it and builds what the tunnel
-/// forwards. Nothing has reached the actor when this fails.
+/// forwards, or names the V2 actor that serves it during a migration from V2. Nothing has reached
+/// the actor when this fails.
 #[allow(clippy::too_many_arguments)]
 async fn prepare(
 	ctx: &EngineContext,
 	waits: &Arc<StartWaits>,
 	budget: &RetryBudget,
+	migration: Option<&migrate_from_v2::Active<'_>>,
 	selector: &str,
 	path_rest: String,
 	raw_query: Option<String>,
 	query: GatewayQuery,
 	headers: &HeaderMap,
 	websocket: bool,
-) -> Result<Prepared> {
+) -> Result<Routed> {
 	let deadline = RoutingDeadline::new(ctx)?;
-	let namespace = query
-		.namespace
-		.clone()
-		.unwrap_or_else(|| pegboard::DEFAULT_NAMESPACE.to_owned());
+	let namespace = query.namespace().to_owned();
 	let pool_name = query.pool_name().to_owned();
 	pegboard::validation::pool_name(&pool_name)?;
 	if let Some(policy) = query.crash_policy.as_deref()
@@ -360,6 +408,12 @@ async fn prepare(
 	)?;
 	let class = tunnel_class(websocket);
 
+	if let Some(migration) = migration
+		&& let Some(v2) = route_keyed(ctx, migration, &target, headers).await?
+	{
+		return Ok(Routed::V2(v2));
+	}
+
 	// The gateway owns retries of a refused request. Nothing reaches the actor before the
 	// stream opens, so a refused attempt runs again from the start, within one request deadline.
 	budget.deposit();
@@ -383,6 +437,21 @@ async fn prepare(
 		if rivet_error::RivetError::extract(&error).group() == "auth" {
 			return Err(error);
 		}
+
+		// An actor this cluster does not serve by id is V2's while a migration from V2 runs.
+		// A held actor is V2's until its cutover, so it goes there as well.
+		let not_here = error
+			.downcast_ref::<rivet_error::RivetError>()
+			.is_some_and(|error| error.group() == "actor" && error.code() == "not_found");
+		let held = error.downcast_ref::<HeldByMigrateFromV2>().is_some();
+		if migration.is_some() && target.keyed.is_none() && (not_here || held) {
+			return Ok(Routed::V2(V2Target {
+				v3_id: target.actor_id,
+			}));
+		}
+		if held {
+			return Err(ActorMigratingFromV2::error());
+		}
 		retries.retry(ctx.env().as_ref(), error).await?;
 	};
 
@@ -393,7 +462,7 @@ async fn prepare(
 		None => path_rest,
 	};
 
-	Ok(Prepared {
+	Ok(Routed::V3(Prepared {
 		actor_id: target.actor_id,
 		epoch,
 		stream,
@@ -402,7 +471,7 @@ async fn prepare(
 		path,
 		request_headers: forwarded_headers(ctx, headers),
 		credential,
-	})
+	}))
 }
 
 /// Routes header and subprotocol actor selectors through the gateway's common edge.
@@ -439,6 +508,7 @@ pub async fn direct(
 		axum::Extension(waits),
 		axum::Extension(budget),
 		request,
+		OriginalUri(uri.clone()),
 		Path(actor_id.to_string()),
 		RawRestPath(uri.path().to_owned()),
 		RawQuery(uri.query().map(ToOwned::to_owned)),
@@ -595,6 +665,202 @@ fn reject(
 				tracing::debug!(?error, "failed to send gateway rejection close");
 			}
 		})
+}
+
+/// Where a request's route led.
+enum Routed {
+	/// The actor runs here, with its stream open.
+	V3(Prepared),
+	/// V2 serves the actor.
+	V2(V2Target),
+}
+
+/// An actor a request reaches in V2.
+struct V2Target {
+	/// The id this cluster would hold it under, read again when V2 does not have it.
+	v3_id: Id,
+}
+
+/// The parts of a request proxied to V2 unchanged.
+struct V2Request {
+	original_uri: hyper::Uri,
+	method: Method,
+	headers: HeaderMap,
+	keyed: bool,
+}
+
+/// Decides a keyed request before this cluster acquires its actor, while a migration from V2
+/// runs. Returns the V2 actor that serves it, or `None` to acquire it here.
+///
+/// A keyed actor moved in from V2 lives under the key's derived id, so that id is read first. A
+/// missing key goes to V2, except a getOrCreate once keyed creates moved here, which goes to V2
+/// only when V2 already has the key. A request by id needs no decision here: the acquire's own
+/// read finds whether this cluster holds the actor.
+async fn route_keyed(
+	ctx: &EngineContext,
+	migration: &migrate_from_v2::Active<'_>,
+	target: &Target,
+	headers: &HeaderMap,
+) -> Result<Option<V2Target>> {
+	let Some(keyed) = &target.keyed else {
+		return Ok(None);
+	};
+	let get_or_create = match keyed.method {
+		GatewayMethod::Get => false,
+		GatewayMethod::GetOrCreate => true,
+	};
+
+	let create_ratio = migrate_from_v2::create_ratio(migration.config, headers)?;
+	let state = migrate_from_v2::read_v3_actor(ctx, target.actor_id).await?;
+	let route = match decision::keyed(state, get_or_create, create_ratio) {
+		decision::Route::AskV2 => {
+			// The target holds the canonical key; V2's actor API reads the slash form.
+			let found = proxy::key_exists(
+				ctx,
+				migration.config,
+				&keyed.name,
+				&actor_key::to_slash(&keyed.key),
+			)
+			.await?;
+			decision::keyed_after_lookup(found)
+		}
+		route => route,
+	};
+	match route {
+		decision::Route::V3 => {
+			if get_or_create && state == V3Actor::None {
+				migration.count_create("v3", true);
+			}
+			Ok(None)
+		}
+		decision::Route::V2 => {
+			if get_or_create {
+				migration.count_create("v2", true);
+			}
+			Ok(Some(V2Target {
+				v3_id: target.actor_id,
+			}))
+		}
+		decision::Route::RetryLater => Err(ActorMigratingFromV2::error()),
+		decision::Route::NotFound => Err(ActorNotFound.build()),
+		decision::Route::AskV2 => bail!("keyed routing asked V2 twice"),
+	}
+}
+
+/// The route label of a request that failed before reaching an actor, when it is a migration
+/// outcome.
+fn refused_route(error: &anyhow::Error) -> Option<&'static str> {
+	let structured = error.downcast_ref::<rivet_error::RivetError>()?;
+	match (structured.group(), structured.code()) {
+		("actor", "migrating_from_v2") => Some("retry_later"),
+		("actor", "not_found") => Some("not_found"),
+		_ => None,
+	}
+}
+
+/// Proxies a request to V2's gateway, path, query, headers and body unchanged except for the
+/// namespace. When V2 does not hold the actor, this cluster's state is read again: an actor
+/// still held, or one activated meanwhile, is refused as the retryable
+/// `actor.migrating_from_v2`; anything else is `actor.not_found`.
+async fn proxy_to_v2(
+	ctx: &EngineContext,
+	migration: &migrate_from_v2::Active<'_>,
+	v2: V2Target,
+	request: V2Request,
+	ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
+	body: Body,
+	ray_id: Option<Id>,
+) -> Result<Response> {
+	let uri = proxy::gateway_uri(migration.config, &request.original_uri, request.keyed)?;
+	let namespace = migration.namespace.clone();
+
+	let ws = match ws {
+		Ok(ws) => ws,
+		Err(_) => {
+			let outcome =
+				proxy::http(ctx, &namespace, uri, request.method, &request.headers, body).await?;
+			let response = match outcome {
+				proxy::HttpOutcome::Response(response) => response,
+				proxy::HttpOutcome::NotFound => {
+					let state = migrate_from_v2::read_v3_actor(ctx, v2.v3_id).await?;
+					return Err(after_v2_not_found(migration, state));
+				}
+			};
+			migration.count_request("v2_fallback");
+			return Ok(response);
+		}
+	};
+
+	let upstream = match proxy::websocket_connect(ctx, &namespace, uri, &request.headers).await {
+		Ok(upstream) => upstream,
+		Err(error) => {
+			tracing::warn!(
+				?error,
+				"V2 gateway refused the WebSocket; check migrate_from_v2.endpoint"
+			);
+			migration.count_request("v2_error");
+			return Ok(reject(Ok(ws), error, ray_id));
+		}
+	};
+	migration.count_request("v2_fallback");
+	let ws = match proxy::accepted_protocol(&upstream) {
+		Some(protocol) => ws.protocols([protocol]),
+		None => ws,
+	};
+	let ctx = ctx.clone();
+	let decide_namespace = namespace.clone();
+	Ok(ws
+		.read_buffer_size(ACTOR_WEBSOCKET_READ_BUFFER_BYTES)
+		.on_upgrade(move |socket| async move {
+			let decide = move || async move {
+				let state = match migrate_from_v2::read_v3_actor(&ctx, v2.v3_id).await {
+					Ok(state) => state,
+					Err(error) => {
+						tracing::debug!(?error, "re-read after a V2 not_found failed");
+						return None;
+					}
+				};
+				let route = decision::after_v2_not_found(state);
+				let error = match route {
+					decision::Route::RetryLater => ActorMigratingFromV2::error(),
+					decision::Route::NotFound
+					| decision::Route::V3
+					| decision::Route::V2
+					| decision::Route::AskV2 => ActorNotFound.build(),
+				};
+				if let Some(label) = refused_route(&error) {
+					migrate_from_v2::metrics::REQUESTS
+						.with_label_values(&[&decide_namespace, label])
+						.inc();
+				}
+				let (code, reason) = errors::close_frame(&error, ray_id);
+				Some(CloseFrame {
+					code,
+					reason: reason.into(),
+				})
+			};
+			if let Err(error) = proxy::pump(socket, upstream, decide).await {
+				tracing::debug!(?error, "V2 WebSocket proxy stopped");
+			}
+		}))
+}
+
+/// The error for a request V2 does not hold, from this cluster's fresh state, counted by its
+/// route.
+fn after_v2_not_found(migration: &migrate_from_v2::Active<'_>, state: V3Actor) -> anyhow::Error {
+	match decision::after_v2_not_found(state) {
+		decision::Route::RetryLater => {
+			migration.count_request("retry_later");
+			ActorMigratingFromV2::error()
+		}
+		decision::Route::NotFound
+		| decision::Route::V3
+		| decision::Route::V2
+		| decision::Route::AskV2 => {
+			migration.count_request("not_found");
+			ActorNotFound.build()
+		}
+	}
 }
 
 /// The actor a request goes to, and what a getOrCreate creates there.

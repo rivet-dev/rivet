@@ -65,7 +65,12 @@ function classifyActorError(
 		return undefined;
 	}
 
-	if (error.group === "actor" && error.code === "restarting") {
+	// `actor.migrating_from_v2` is a refusal while the actor moves in from a V2 cluster; it
+	// carries a `retry_after_ms` hint.
+	if (
+		error.group === "actor" &&
+		(error.code === "restarting" || error.code === "migrating_from_v2")
+	) {
 		return buildLifecycleBoundaryInfo(
 			"request_retry",
 			"actor_error",

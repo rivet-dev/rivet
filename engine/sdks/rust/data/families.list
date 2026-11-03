@@ -37,3 +37,4 @@
 40 sqlite.db_overflow
 41 sqlite.db_recent
 42 auth.jwt_rotation
+43 pegboard.v2_migrator

@@ -27,10 +27,10 @@ impl Drop for Session {
 	}
 }
 
-/// Opens the actor VFS over the lane's pages for `generation`.
+/// Opens the actor VFS over the lane's pages for `epoch`.
 #[allow(
 	clippy::too_many_arguments,
-	reason = "a session needs its environment, pages, filesystem context, lane, identity, generation, pool and guard"
+	reason = "a session needs its environment, pages, filesystem context, lane, identity, epoch, pool and guard"
 )]
 pub(super) async fn open_session(
 	env: Arc<dyn rivet_env::Env>,
@@ -39,7 +39,7 @@ pub(super) async fn open_session(
 	lane: Weak<Lane>,
 	vfs_name: String,
 	actor_id: String,
-	generation: u32,
+	epoch: u32,
 	pool: &SqlitePool,
 	guard: ConnectionGuard,
 ) -> Result<Session> {
@@ -49,7 +49,7 @@ pub(super) async fn open_session(
 		pages,
 		filesystem,
 		lane,
-		generation,
+		epoch,
 		unknown_commit.clone(),
 	));
 	// The actor VFS is a storage adapter: its SQLite worker threads drive the in-process
@@ -64,7 +64,7 @@ pub(super) async fn open_session(
 		vfs_name,
 		transport,
 		actor_id,
-		u64::from(generation),
+		u64::from(epoch),
 		runtime,
 		None,
 		Some(guard),

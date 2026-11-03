@@ -6,7 +6,7 @@ use rivet_envoy_protocol as p;
 use rivet_util_id::Id;
 use std::{future::Future, time::Duration};
 
-/// Maps one envoy event to the actor event it drives. The envoy protocol's generation is the
+/// Maps one envoy event to the actor event it drives. The envoy protocol's epoch is the
 /// actor's epoch.
 pub(crate) fn actor_event(event: &p::EventWrapper) -> wire::ActorEvent {
 	let kind = match &event.inner {

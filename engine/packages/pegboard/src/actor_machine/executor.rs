@@ -1,14 +1,18 @@
-use crate::actor_machine::{ActorStateMachine, Effect, Event, Preparation, State, WriteEffect};
-use crate::commands::EnvoyRead;
-use crate::index;
-use crate::keys::{
-	self,
-	ups::{ActorStartNoticeSubject, EnvoySubject},
+use crate::actor_machine::{
+	ActorStateMachine, ENVOY_GONE_MARGIN_MS, Effect, Event, Preparation, State, WriteEffect,
 };
+use crate::commands::EnvoyRead;
+use crate::envoy_check::{
+	EnvoyCheck, Route, envoy_check, no_responders, repair_route, report_reallocate,
+	retryable_ups_error, unreachable_worker,
+};
+use crate::index;
+use crate::keys::{self, ups::ActorStartNoticeSubject};
 use crate::wire;
 use anyhow::{Context, Result, ensure};
 use bytes::Bytes;
 use depot_worker::command::{KvHandle, Transaction};
+use rivet_data::families::VersionFamily;
 use rivet_engine_context::EngineContext;
 use rivet_envoy_protocol as p;
 use rivet_keys::keys::{KeyAddress, codec::FormalKey};
@@ -18,7 +22,6 @@ use rivet_util::Id;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
-use uuid::Uuid;
 use vbare::Versioned;
 use xxhash_rust::xxh3::Xxh3;
 
@@ -32,9 +35,6 @@ const EFFECT_BACKOFF_MAX_MS: u64 = 30_000;
 /// behind it, so it is short; the caller retries.
 const SELECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// How far past its lost threshold a disconnected envoy must be before it is judged gone. It
-/// covers the delay between the engine's close and the envoy noticing it, and clock skew
-/// between the worker that stamped the disconnect and the one judging it.
-const ENVOY_GONE_MARGIN_MS: i64 = 5_000;
 
 #[derive(Clone)]
 pub struct Executor {
@@ -66,6 +66,48 @@ impl Executor {
 			.context("actor has no data")?;
 		data_key.deserialize(data.into())
 	}
+
+	async fn check_envoy(&self, epoch: u32, allocation: &wire::ActorAllocation) -> Result<()> {
+		let route = Route::of_allocation(allocation)?;
+		let route_refused = match self
+			.ctx
+			.ups()?
+			.has_subscriber(&route.worker, route.subject())
+			.await
+		{
+			Ok(true) => return Ok(()),
+			Ok(false) => true,
+			Err(error) => {
+				tracing::debug!(
+					?error,
+					"could not ask the route's worker for the envoy connection; judging the envoy by its record"
+				);
+				false
+			}
+		};
+
+		// A disconnected envoy inside its lost threshold may still come back with its actors,
+		// so the record cannot decide yet; the check's timer runs it again once it can.
+		let data = self.read_data().await?;
+		match envoy_check(&self.ctx, &data, allocation, route_refused).await? {
+			EnvoyCheck::Serving => Ok(()),
+			EnvoyCheck::Newer(newer) => {
+				repair_route(&self.ctx, self.actor_id, epoch, allocation, newer);
+				Ok(())
+			}
+			EnvoyCheck::Lost => self.report_check(epoch, true).await,
+			EnvoyCheck::Draining => self.report_check(epoch, false).await,
+		}
+	}
+
+	async fn report_check(&self, epoch: u32, lost: bool) -> Result<()> {
+		tracing::info!(
+			epoch,
+			lost,
+			"envoy check found the running epoch's envoy gone or draining; reporting it for reallocation"
+		);
+		report_reallocate(&self.ctx, self.actor_id, epoch, lost).await
+	}
 }
 
 impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
@@ -77,12 +119,19 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 		event: &'a RuntimeEvent<Event, wire::ActorTimer>,
 	) -> Pin<Box<dyn Future<Output = Result<Preparation>> + Send + 'a>> {
 		Box::pin(async move {
-			let start_threshold_ms = self.ctx.config().pegboard().actor_start_threshold();
+			let pegboard_config = self.ctx.config().pegboard();
+			let start_threshold_ms = pegboard_config.actor_start_threshold();
+			let start_waiters_capacity = pegboard_config.actor_start_waiters_capacity();
+			let envoy_lost_threshold_ms = pegboard_config.envoy_lost_threshold();
+			let write_version = self.db.write_version(VersionFamily::PEGBOARD_ACTOR)?;
 
 			if !crate::actor_machine::needs_allocation(&state.0, event) {
 				return Ok(Preparation {
 					allocation: None,
 					start_threshold_ms,
+					start_waiters_capacity,
+					envoy_lost_threshold_ms,
+					write_version,
 				});
 			}
 
@@ -110,6 +159,9 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 			Ok(Preparation {
 				allocation,
 				start_threshold_ms,
+				start_waiters_capacity,
+				envoy_lost_threshold_ms,
+				write_version,
 			})
 		})
 	}
@@ -125,6 +177,7 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 			match effect {
 				WriteEffect::WriteData { data } => {
 					let data_key = keys::kv::ActorDataKey::new();
+					let data = keys::kv::at_write_version(&self.db, data)?;
 					tx.put(&data_key.pack(), &data_key.serialize(data)?)?;
 					Ok(())
 				}
@@ -309,9 +362,8 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 						// The allocation's route is the common case and costs no read. Only a
 						// transport failure there is worth the envoy record: the envoy may have
 						// reconnected on a newer connection, possibly to another worker.
-						let (worker_id, connection_id) = route_of(&allocation)?;
-						let first =
-							send_commands(&self2.ctx, &worker_id, connection_id, &payload).await;
+						let route = Route::of_allocation(&allocation)?;
+						let first = send_commands(&self2.ctx, &route, &payload).await;
 						let Err(error) = first else {
 							return anyhow::Ok(());
 						};
@@ -360,10 +412,8 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 						if let Some(envoy) = &envoy
 							&& envoy.connected && envoy.connection_id != allocation.connection_id
 						{
-							let (worker_id, connection_id) = route_of_envoy(envoy)?;
 							let second =
-								send_commands(&self2.ctx, &worker_id, connection_id, &payload)
-									.await;
+								send_commands(&self2.ctx, &Route::of_envoy(envoy)?, &payload).await;
 							let Err(second) = second else {
 								return anyhow::Ok(());
 							};
@@ -451,7 +501,7 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 					};
 					let sent = async {
 						let data = self2.read_data().await?;
-						let (worker_id, connection_id) = route_of(&allocation)?;
+						let route = Route::of_allocation(&allocation)?;
 
 						let payload =
 							Bytes::from(p::versioned::ToEnvoy::serialize_with_embedded_version(
@@ -475,7 +525,7 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 								p::PROTOCOL_VERSION,
 							)?);
 
-						send_commands(&self2.ctx, &worker_id, connection_id, &payload).await
+						send_commands(&self2.ctx, &route, &payload).await
 					}
 					.await;
 
@@ -501,6 +551,18 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 						tracing::error!(
 							?err,
 							"could not report a failed start; the start timer covers it"
+						);
+					}
+				}));
+			}
+			Effect::CheckEnvoy { epoch, allocation } => {
+				let self2 = self.clone();
+				ctx.spawn(Box::pin(async move {
+					if let Err(error) = self2.check_envoy(epoch, &allocation).await {
+						tracing::warn!(
+							?error,
+							epoch,
+							"envoy check failed; the next alarm or request judges the envoy again"
 						);
 					}
 				}));
@@ -638,44 +700,18 @@ async fn send_start_notice(
 }
 
 /// Sends one command packet to an envoy connection and checks its acknowledgement.
-async fn send_commands(
-	ctx: &EngineContext,
-	worker_id: &universalpubsub::WorkerId,
-	connection_id: Uuid,
-	payload: &Bytes,
-) -> Result<()> {
+async fn send_commands(ctx: &EngineContext, route: &Route, payload: &Bytes) -> Result<()> {
 	let ack = ctx
 		.ups()?
 		.request(
 			universalpubsub::RequestClass::EnvoyCommand,
-			worker_id,
-			EnvoySubject::new(connection_id),
+			&route.worker,
+			route.subject(),
 			payload,
 		)
 		.await?;
 	ensure!(ack.as_ref() == COMMANDS_ACK, "unexpected envoy ack");
 	Ok(())
-}
-
-/// The UPS route an allocation records for its envoy.
-fn route_of(allocation: &wire::ActorAllocation) -> Result<(universalpubsub::WorkerId, Uuid)> {
-	parse_route(&allocation.worker_id, &allocation.connection_id)
-}
-
-/// The UPS route an envoy record names for its current connection.
-fn route_of_envoy(envoy: &wire::EnvoyData) -> Result<(universalpubsub::WorkerId, Uuid)> {
-	parse_route(&envoy.worker_id, &envoy.connection_id)
-}
-
-fn parse_route(
-	worker_id: &[u8],
-	connection_id: &[u8],
-) -> Result<(universalpubsub::WorkerId, Uuid)> {
-	let worker_id = universalpubsub::WorkerId::from_bytes(
-		worker_id.try_into().context("invalid envoy worker id")?,
-	);
-	let connection_id = Uuid::from_slice(connection_id).context("invalid envoy connection id")?;
-	Ok((worker_id, connection_id))
 }
 
 /// Whether the envoy record, read at `read_unix_ms`, proves the envoy holds no epoch any more.
@@ -708,15 +744,8 @@ pub(crate) fn envoy_gone(
 	let gone_after_unix_ms = envoy
 		.heartbeat_unix_ms
 		.saturating_add(lost_threshold_ms)
-		.saturating_add(ENVOY_GONE_MARGIN_MS);
+		.saturating_add(i64::try_from(ENVOY_GONE_MARGIN_MS).unwrap_or(i64::MAX));
 	read_unix_ms > gone_after_unix_ms
-}
-
-/// Whether the peer has no registration for this connection. A live connection
-/// draining accepted work retains its registration and returns consumer_closed.
-pub fn no_responders(error: &anyhow::Error) -> bool {
-	let structured = rivet_error::RivetError::extract(error);
-	structured.group() == "ups" && structured.code() == "no_responders"
 }
 
 /// Whether the connection a connected record names has ended, given `error`, its refusal of
@@ -727,7 +756,7 @@ pub fn no_responders(error: &anyhow::Error) -> bool {
 /// An ended lease counts only because a worker whose lease ended no longer serves envoy
 /// connections: a released worker closed them first, and an expired one is assumed dead.
 /// pegboard-envoy does not yet close its connections when its lease fences, so an expired
-/// worker that is still alive breaks this assumption, as it does the gateway's lost check.
+/// worker that is still alive breaks this assumption, as it does the envoy check.
 async fn connection_ended(
 	ctx: &EngineContext,
 	envoy: &wire::EnvoyData,
@@ -739,23 +768,12 @@ async fn connection_ended(
 	if !unreachable_worker(error) {
 		return Ok(false);
 	}
-	let (worker_id, _) = route_of_envoy(envoy)?;
-	let ended = match ctx.topology().worker_lease(&worker_id).await {
+	let route = Route::of_envoy(envoy)?;
+	let ended = match ctx.topology().worker_lease(&route.worker).await {
 		rivet_topology::WorkerLease::Expired | rivet_topology::WorkerLease::Released => true,
 		rivet_topology::WorkerLease::Live | rivet_topology::WorkerLease::Unknown => false,
 	};
 	Ok(ended)
-}
-
-/// Whether a UPS request failed without the worker answering: its route is unknown, the
-/// transport failed, or the request timed out.
-fn unreachable_worker(error: &anyhow::Error) -> bool {
-	let structured = rivet_error::RivetError::extract(error);
-	structured.group() == "ups"
-		&& matches!(
-			structured.code(),
-			"unknown_worker" | "transport" | "timeout"
-		)
 }
 
 /// Records the envoy as disconnected now, for a record still marked connected whose
@@ -803,21 +821,6 @@ async fn mark_disconnected(
 			"could not mark the envoy disconnected; the next stop resend retries"
 		),
 	}
-}
-
-/// Whether a failed UPS request to an envoy connection may succeed on another route: a stale
-/// route, a missing worker or a transport failure, as opposed to a refused or malformed request.
-pub fn retryable_ups_error(error: &anyhow::Error) -> bool {
-	let structured = rivet_error::RivetError::extract(error);
-	structured.group() == "ups"
-		&& matches!(
-			structured.code(),
-			"no_responders"
-				| "unknown_worker"
-				| "wrong_worker"
-				| "timeout" | "consumer_closed"
-				| "transport"
-		)
 }
 
 /// Picks an envoy for the actor by rendezvous hashing over every live envoy that serves its name

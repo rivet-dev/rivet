@@ -1,7 +1,8 @@
 use crate::{
 	DurableStateMachine, Effects, Executor, RuntimeEvent,
 	keys::kv::{
-		MachineDataKey, MachineStateKey, MachineTimerByIdKey, MachineTimerKey, MachineTimerPrefix,
+		LegacyMachineTimerByIdKey, LegacyMachineTimerKey, LegacyMachineTimerPrefix, MachineDataKey,
+		MachineStateKey, MachineTimerByIdKey, MachineTimerKey, MachineTimerPrefix,
 	},
 };
 use anyhow::{Result, bail, ensure};
@@ -70,13 +71,14 @@ impl<M: DurableStateMachine> Runner<M> {
 			.observe(lock_started.elapsed().as_secs_f64());
 		let mut metrics = RunnerMetrics::new(M::DEBUG_NAME);
 
-		// Plan pass: the machine and, for an alarm, its due timers are read from a snapshot,
-		// then each transition runs in memory with the executor's `prepare` before it. The
-		// lock keeps the state from changing meanwhile; no transaction is open, so `prepare`
-		// can do I/O without holding one.
-		let (mut machine, due_timers) = {
+		// Plan pass: the machine, its legacy timers and, for an alarm, its due timers are read
+		// from a snapshot, then each transition runs in memory with the executor's `prepare`
+		// before it. The lock keeps the state from changing meanwhile; no transaction is open,
+		// so `prepare` can do I/O without holding one.
+		let (mut machine, legacy_timers, due_timers) = {
 			let mut snapshot = db.snapshot().await?;
 			let machine = Machine::<M>::read(&mut snapshot, method).await?;
+			let legacy_timers = read_legacy_timers::<M>(&mut snapshot).await?;
 			let due_timers = match &event {
 				BackendEvent::Event(_) => Vec::new(),
 				BackendEvent::Alarm(_) => {
@@ -87,17 +89,30 @@ impl<M: DurableStateMachine> Runner<M> {
 						.scan(scan_bounds(&range), Some(max_events), false)
 						.await?;
 					let mut due = Vec::new();
-					for (key, _) in entries {
+					for (key, payload) in entries {
 						let key = MachineTimerKey::unpack(&key)?;
 						if key.deadline_unix_ms.0 > now.unix_ms {
 							break;
 						}
-						due.push(key);
+						due.push(DueTimer {
+							key,
+							payload: Bytes::from(payload),
+						});
 					}
+
+					// Due legacy timers fire with the rest, in deadline order. They move to the
+					// id-keyed rows in this batch's commit before any transition's writes.
+					let due_legacy = legacy_timers
+						.iter()
+						.filter(|legacy| legacy.due.key.deadline_unix_ms.0 <= now.unix_ms)
+						.map(|legacy| legacy.due.clone());
+					due.extend(due_legacy);
+					due.sort_by_key(|timer| timer.key.deadline_unix_ms.0);
+					due.truncate(max_events);
 					due
 				}
 			};
-			(machine, due_timers)
+			(machine, legacy_timers, due_timers)
 		};
 		let armed_head = machine
 			.data
@@ -152,30 +167,30 @@ impl<M: DurableStateMachine> Runner<M> {
 				// the deadline it now has, or none. A due timer whose row that transition
 				// replaced or removed is skipped, as it would be if the row were read back.
 				let mut overlay: HashMap<Bytes, Option<i64>> = HashMap::new();
-				for key in due_timers {
-					match overlay.get(&key.timer) {
+				for due in due_timers {
+					match overlay.get(&due.key.timer_id) {
 						Some(Some(deadline_unix_ms))
-							if *deadline_unix_ms == key.deadline_unix_ms.0 => {}
+							if *deadline_unix_ms == due.key.deadline_unix_ms.0 => {}
 						Some(_) => continue,
 						None => {}
 					}
 
-					let timer = M::deserialize_timer(&key.timer)?;
+					let timer = M::deserialize_timer(&due.payload)?;
 					let body = RuntimeEvent::Timer(timer);
 					let preparation = executor.prepare(&machine.state, &body).await?;
 					let mut effects =
 						Self::apply(ctx, &mut machine, &mut metrics, body, preparation, now).await;
-					let transition = Transition::new(Some(key), &mut effects);
+					let transition = Transition::new(Some(due.key), &mut effects);
 					for effect in &transition.effects {
 						match effect {
 							RuntimeEffect::ArmTimer { timer, at_boot_ms } => {
-								let timer = Bytes::from(M::serialize_timer(timer)?);
+								let timer_id = Bytes::from(M::timer_id(timer));
 								let deadline = deadline_unix_ms(transition.clocks, *at_boot_ms);
-								overlay.insert(timer, Some(deadline));
+								overlay.insert(timer_id, Some(deadline));
 							}
 							RuntimeEffect::CancelTimer(timer) => {
-								let timer = Bytes::from(M::serialize_timer(timer)?);
-								overlay.insert(timer, None);
+								let timer_id = Bytes::from(M::timer_id(timer));
+								overlay.insert(timer_id, None);
 							}
 							RuntimeEffect::Execute(_) | RuntimeEffect::Exit => {}
 						}
@@ -193,9 +208,11 @@ impl<M: DurableStateMachine> Runner<M> {
 		// at the quorum-committed position. The two views that serve entries before their
 		// quorum, a speculative creating capture and a volume opened empty, hold no stored
 		// state, so `stored_state` is `None` there and the batch commits. An alarm always
-		// commits its acknowledgement.
-		let state_bytes = M::serialize_state(&machine.state)?;
+		// commits its acknowledgement, and legacy timers always commit their move.
+		let version = db.write_version(M::FAMILY)?;
+		let state_bytes = M::serialize_state(&machine.state, version)?;
 		let unchanged = alarm_revision.is_none()
+			&& legacy_timers.is_empty()
 			&& !machine.data_changed
 			&& machine.stored_state.as_deref() == Some(state_bytes.as_slice())
 			&& plan.iter().all(Transition::is_read_only);
@@ -219,6 +236,11 @@ impl<M: DurableStateMachine> Runner<M> {
 		// after the removal.
 		let mut tx = db.begin().await?;
 		let mut timers = TimerWrites::new(armed_head);
+		// Legacy timers move first, at their own deadlines, so this batch's arms, cancels and
+		// fired removals find them in the id-keyed rows.
+		for legacy in &legacy_timers {
+			timers.move_legacy(&mut tx, legacy).await?;
+		}
 		let mut executions = Vec::new();
 		let mut nondurable = Vec::new();
 		for transition in plan {
@@ -234,14 +256,20 @@ impl<M: DurableStateMachine> Runner<M> {
 				match effect {
 					RuntimeEffect::Execute(effect) => executions.push(effect),
 					RuntimeEffect::ArmTimer { timer, at_boot_ms } => {
-						let timer = Bytes::from(M::serialize_timer(&timer)?);
+						let timer_id = Bytes::from(M::timer_id(&timer));
+						let payload = Bytes::from(M::serialize_timer(&timer, version)?);
 						timers
-							.arm(&mut tx, timer, deadline_unix_ms(clocks, at_boot_ms))
+							.arm(
+								&mut tx,
+								timer_id,
+								payload,
+								deadline_unix_ms(clocks, at_boot_ms),
+							)
 							.await?;
 					}
 					RuntimeEffect::CancelTimer(timer) => {
-						let timer = Bytes::from(M::serialize_timer(&timer)?);
-						timers.cancel(&mut tx, timer).await?;
+						let timer_id = Bytes::from(M::timer_id(&timer));
+						timers.cancel(&mut tx, timer_id).await?;
 					}
 					RuntimeEffect::Exit => bail!("durable state machines cannot exit"),
 				}
@@ -402,22 +430,17 @@ impl TimerWrites {
 		}
 	}
 
+	/// Arms the timer `timer_id` at `deadline_unix_ms` with `payload`, replacing the armed timer
+	/// with the same id.
 	async fn arm(
 		&mut self,
 		tx: &mut Transaction,
-		timer: Bytes,
+		timer_id: Bytes,
+		payload: Bytes,
 		deadline_unix_ms: i64,
 	) -> Result<()> {
-		self.cancel(tx, timer.clone()).await?;
-
-		let key = MachineTimerKey::new(OrderedI64(deadline_unix_ms), timer.clone());
-		tx.put(&key.pack(), &key.serialize(())?)?;
-
-		let by_id = MachineTimerByIdKey::new(timer);
-		tx.put(
-			&by_id.pack(),
-			&by_id.serialize(wire::TimerEntry { deadline_unix_ms })?,
-		)?;
+		self.cancel(tx, timer_id.clone()).await?;
+		self.put(tx, timer_id, payload, deadline_unix_ms)?;
 
 		self.new_armed_head = Some(
 			self.new_armed_head
@@ -427,24 +450,60 @@ impl TimerWrites {
 		Ok(())
 	}
 
-	async fn cancel(&mut self, tx: &mut Transaction, timer: Bytes) -> Result<()> {
-		let by_id = MachineTimerByIdKey::new(timer.clone());
+	/// Moves a legacy timer to the id-keyed rows at its own deadline. The deadline is already
+	/// counted in the durable head, so the head does not move. An armed timer with the same id
+	/// is replaced, so the move is idempotent.
+	async fn move_legacy(&mut self, tx: &mut Transaction, legacy: &LegacyTimer) -> Result<()> {
+		tx.delete(&legacy.key.pack())?;
+		tx.delete(&LegacyMachineTimerByIdKey::new(legacy.key.timer.clone()).pack())?;
 
-		let Some(entry) = tx.get(&by_id.pack()).await? else {
+		let timer_id = legacy.due.key.timer_id.clone();
+		self.cancel(tx, timer_id.clone()).await?;
+		self.put(
+			tx,
+			timer_id,
+			legacy.due.payload.clone(),
+			legacy.due.key.deadline_unix_ms.0,
+		)
+	}
+
+	fn put(
+		&mut self,
+		tx: &mut Transaction,
+		timer_id: Bytes,
+		payload: Bytes,
+		deadline_unix_ms: i64,
+	) -> Result<()> {
+		let key = MachineTimerKey::new(OrderedI64(deadline_unix_ms), timer_id.clone());
+		tx.put(&key.pack(), &key.serialize(payload)?)?;
+
+		let entry = MachineTimerByIdKey::new(timer_id);
+		tx.put(
+			&entry.pack(),
+			&entry.serialize(wire::TimerEntry { deadline_unix_ms })?,
+		)?;
+
+		Ok(())
+	}
+
+	async fn cancel(&mut self, tx: &mut Transaction, timer_id: Bytes) -> Result<()> {
+		let entry_key = MachineTimerByIdKey::new(timer_id.clone());
+
+		let Some(entry) = tx.get(&entry_key.pack()).await? else {
 			return Ok(());
 		};
 
-		let entry = by_id.deserialize(entry.into())?;
+		let entry = entry_key.deserialize(entry.into())?;
 
 		self.remove(
 			tx,
-			&MachineTimerKey::new(OrderedI64(entry.deadline_unix_ms), timer),
+			&MachineTimerKey::new(OrderedI64(entry.deadline_unix_ms), timer_id),
 		)
 	}
 
 	fn remove(&mut self, tx: &mut Transaction, key: &MachineTimerKey) -> Result<()> {
 		tx.delete(&key.pack())?;
-		tx.delete(&MachineTimerByIdKey::new(key.timer.clone()).pack())?;
+		tx.delete(&MachineTimerByIdKey::new(key.timer_id.clone()).pack())?;
 
 		let deadline_unix_ms = key.deadline_unix_ms.0;
 		if self
@@ -472,6 +531,43 @@ impl TimerWrites {
 			(durable, new) => durable.or(new),
 		})
 	}
+}
+
+/// A timer due to fire: its row and the payload stored in it.
+#[derive(Clone)]
+struct DueTimer {
+	key: MachineTimerKey,
+	payload: Bytes,
+}
+
+/// A timer stored before timers had stable ids: its legacy row, and the id-keyed row it moves
+/// to. Its legacy row named it by its serialized bytes, which become its payload.
+struct LegacyTimer {
+	key: LegacyMachineTimerKey,
+	due: DueTimer,
+}
+
+/// Reads every legacy timer of the machine. A machine holds a few timers at most, and the
+/// first commit after the read moves them all, so later reads find none.
+async fn read_legacy_timers<M: DurableStateMachine>(
+	tx: &mut Transaction,
+) -> Result<Vec<LegacyTimer>> {
+	let range = LegacyMachineTimerPrefix::new().range();
+	let entries = tx.scan(scan_bounds(&range), None, false).await?;
+
+	let mut legacy_timers = Vec::with_capacity(entries.len());
+	for (key, _) in entries {
+		let key = LegacyMachineTimerKey::unpack(&key)?;
+		let timer = M::deserialize_timer(&key.timer)?;
+		let timer_id = Bytes::from(M::timer_id(&timer));
+		let due = DueTimer {
+			key: MachineTimerKey::new(OrderedI64(key.deadline_unix_ms.0), timer_id),
+			payload: key.timer.clone(),
+		};
+		legacy_timers.push(LegacyTimer { key, due });
+	}
+
+	Ok(legacy_timers)
 }
 
 struct Machine<M: DurableStateMachine> {

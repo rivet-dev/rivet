@@ -35,6 +35,7 @@ scc.workspace = true
 moka.workspace = true
 rivet-topology.workspace = true
 sha2.workspace = true
+strum.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 universalpubsub.workspace = true

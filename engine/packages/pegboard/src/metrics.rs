@@ -80,6 +80,13 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
+	pub static ref ENVOY_VERSION_EVICTIONS: IntCounterVec = register_int_counter_vec_with_registry!(
+		"pegboard_envoy_version_evictions_total",
+		"Actors asked to move off an envoy superseded by a newer version in a pool that drains on version upgrade, by namespace and pool.",
+		&["namespace_id", "pool_name"],
+		*REGISTRY
+	).unwrap();
+
 	/// Committed envoy index mutations, counted once per command rather than per actor name.
 	pub static ref ENVOY_INDEX_UPSERTS: IntCounterVec = register_int_counter_vec_with_registry!(
 		"pegboard_envoy_index_upserts_total",

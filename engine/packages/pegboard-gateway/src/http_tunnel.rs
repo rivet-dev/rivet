@@ -316,13 +316,7 @@ fn admission_rejection(start: &protocol::ToRivetResponseStart) -> Result<Option<
 	if start.status != 503
 		|| !start.headers.iter().any(|(name, value)| {
 			name.eq_ignore_ascii_case("x-rivet-error")
-				&& matches!(
-					value.as_str(),
-					"envoy.actor_not_found"
-						| "envoy.actor_generation_mismatch"
-						| "runner.actor_not_found"
-						| "runner.actor_generation_mismatch"
-				)
+				&& pegboard::envoy_check::refuses_admission(value.as_str())
 		}) {
 		return Ok(None);
 	}

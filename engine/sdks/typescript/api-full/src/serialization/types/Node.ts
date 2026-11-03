@@ -7,6 +7,7 @@ export const Node: core.serialization.ObjectSchema<serializers.Node.Raw, Rivet.N
     pool: core.serialization.string(),
     namespace: core.serialization.string(),
     datacenter: core.serialization.string(),
+    version: core.serialization.number(),
     createTs: core.serialization.property("create_ts", core.serialization.number()),
     lastPingTs: core.serialization.property("last_ping_ts", core.serialization.number()),
     connected: core.serialization.boolean(),
@@ -19,6 +20,7 @@ export declare namespace Node {
         pool: string;
         namespace: string;
         datacenter: string;
+        version: number;
         create_ts: number;
         last_ping_ts: number;
         connected: boolean;

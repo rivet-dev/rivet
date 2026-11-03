@@ -72,7 +72,12 @@ impl EnvoyHandle {
 	/// True once the envoy loop has finished its cleanup block. Latched: stays
 	/// true forever after the loop exits.
 	pub fn is_stopped(&self) -> bool {
-		*self.shared.stopped_tx.borrow() != crate::context::StopStatus::Running
+		self.stop_status() != crate::context::StopStatus::Running
+	}
+
+	/// How the envoy loop ended, or `Running` while it has not. Latched like `is_stopped`.
+	pub fn stop_status(&self) -> crate::context::StopStatus {
+		*self.shared.stopped_tx.borrow()
 	}
 
 	/// Resolves when the envoy loop has finished its cleanup block.

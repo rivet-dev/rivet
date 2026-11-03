@@ -8,13 +8,15 @@
 //! judges the envoy an actor was allocated to, since the state machine has no start or stop
 //! timeout: a dead or draining envoy is reported with a `Reallocate`.
 use crate::ActorNotFound;
-use crate::route::Route;
 use crate::start_wait::{Next, StartWait, Wake};
 use crate::start_waits::StartWaits;
 use anyhow::Result;
 use base64::Engine;
-use pegboard::commands::{ActorRead, EnvoyRead, is_volume_gone};
-use pegboard::keys::partition::{ActorVolume, EnvoyVolume};
+use pegboard::commands::{ActorRead, is_volume_gone};
+use pegboard::envoy_check::{
+	EnvoyCheck, Route, envoy_check, no_responders, repair_route, retryable_ups_error,
+};
+use pegboard::keys::partition::ActorVolume;
 use pegboard::wire;
 use rivet_engine_context::EngineContext;
 use rivet_util::Id;
@@ -115,6 +117,19 @@ impl std::fmt::Display for ActorKeyOwnedElsewhere {
 
 impl std::error::Error for ActorKeyOwnedElsewhere {}
 
+/// The V2 migrator holds the actor, so nothing here starts or waits for it. V2 may still serve
+/// it, so routing decides where the request goes.
+#[derive(Debug)]
+pub(crate) struct HeldByMigrateFromV2;
+
+impl std::fmt::Display for HeldByMigrateFromV2 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("the actor is held by a migration from V2")
+	}
+}
+
+impl std::error::Error for HeldByMigrateFromV2 {}
+
 /// Waits until the actor runs and opens a stream to it on `class`. With `create`, the actor is
 /// created first and created again if it is found destroyed. With `pipeline`, the request may
 /// follow the start command to its envoy before the actor runs; a request the envoy already
@@ -158,7 +173,7 @@ pub(crate) async fn acquire(
 /// Whether a failed stream open to an envoy connection may succeed through the envoy fallback:
 /// a stale route, a missing worker or a transport failure, as opposed to a request error.
 pub(crate) fn retryable_open_error(error: &anyhow::Error) -> bool {
-	pegboard::actor_machine::executor::retryable_ups_error(error)
+	retryable_ups_error(error)
 }
 
 /// What a read of the actor found.
@@ -242,6 +257,7 @@ impl Acquire<'_> {
 					}
 					.into());
 				}
+				Next::MigratingFromV2 => return Err(HeldByMigrateFromV2.into()),
 				Next::Wait => {
 					next = self.wait.wait(ctx).await?;
 					continue;
@@ -283,7 +299,7 @@ impl Acquire<'_> {
 			self.last_phase = phase_name(&phase);
 
 			match phase {
-				wire::ActorPhase::Initializing(_) | wire::ActorPhase::Sleeping => {
+				wire::ActorPhase::Initializing(_) | wire::ActorPhase::Sleeping(_) => {
 					next = self.not_running().await?;
 				}
 				// The state machine's start and stop timers end these phases eventually, but a
@@ -309,7 +325,7 @@ impl Acquire<'_> {
 
 					// The failed open is the liveness check: read the envoy's record once.
 					tracing::debug!(%error, "actor channel open failed; reading the envoy record");
-					match envoy_check(ctx, &actor, &allocation, Some(&error)).await? {
+					match envoy_check(ctx, &actor, &allocation, no_responders(&error)).await? {
 						EnvoyCheck::Newer(newer) => match self.open(&newer).await {
 							Ok(stream) => {
 								// The allocation's route is stale for the rest of the epoch
@@ -317,9 +333,7 @@ impl Acquire<'_> {
 								repair_route(ctx, self.actor_id, epoch, &allocation, newer);
 								return Ok((epoch, stream));
 							}
-							Err(error)
-								if pegboard::actor_machine::executor::no_responders(&error) =>
-							{
+							Err(error) if no_responders(&error) => {
 								// This newer route ended too. The stop executor reads the record
 								// again and waits for the old epoch to stop before replacing it.
 								next = self.reallocate(epoch, true).await?;
@@ -350,6 +364,9 @@ impl Acquire<'_> {
 				wire::ActorPhase::Destroying(_) | wire::ActorPhase::Destroyed => {
 					next = self.create_or_not_found().await?;
 				}
+				// The V2 migrator holds the actor, and V2 may still serve it, so nothing here
+				// starts or waits for it.
+				wire::ActorPhase::MigratingFromV2(_) => return Err(HeldByMigrateFromV2.into()),
 			}
 		}
 	}
@@ -501,7 +518,7 @@ impl Acquire<'_> {
 		if self.wait.last_wake() != Some(Wake::Poll) {
 			return Ok(None);
 		}
-		match envoy_check(self.ctx, actor, allocation, None).await? {
+		match envoy_check(self.ctx, actor, allocation, false).await? {
 			EnvoyCheck::Serving | EnvoyCheck::Newer(_) => Ok(None),
 			EnvoyCheck::Lost => Ok(Some(self.reallocate(epoch, true).await?)),
 			EnvoyCheck::Draining => Ok(Some(self.reallocate(epoch, false).await?)),
@@ -540,107 +557,9 @@ fn phase_name(phase: &wire::ActorPhase) -> &'static str {
 		wire::ActorPhase::Starting(_) => "starting",
 		wire::ActorPhase::Running(_) => "running",
 		wire::ActorPhase::Stopping(_) => "stopping",
-		wire::ActorPhase::Sleeping => "sleeping",
+		wire::ActorPhase::Sleeping(_) => "sleeping",
 		wire::ActorPhase::Destroying(_) => "destroying",
 		wire::ActorPhase::Destroyed => "destroyed",
+		wire::ActorPhase::MigratingFromV2(_) => "migrating_from_v2",
 	}
-}
-
-/// What one fresh read of an envoy's record, and its worker's lease, says about the envoy an
-/// actor was allocated to.
-enum EnvoyCheck {
-	/// The envoy serves on the allocation's connection, or is disconnected for now; wait.
-	Serving,
-	/// The same envoy process reconnected and kept its actors; open its newer connection.
-	Newer(Route),
-	/// The envoy or its connection is gone. Reallocation stops the old epoch before replacing it.
-	Lost,
-	/// The envoy is draining.
-	Draining,
-}
-
-/// Reads the envoy's record once and judges it against `allocation`. Nothing is cached: each
-/// check is one durable read, so callers run it only after a failed open or on a fallback poll.
-async fn envoy_check(
-	ctx: &EngineContext,
-	actor: &wire::ActorData,
-	allocation: &wire::ActorAllocation,
-	failed_open: Option<&anyhow::Error>,
-) -> Result<EnvoyCheck> {
-	let route = Route::of_allocation(allocation)?;
-	let volume = EnvoyVolume::new(
-		actor.namespace.to_string(),
-		actor.pool_name.to_string(),
-		allocation.envoy_key.to_string(),
-	)
-	.volume_key();
-	let envoy = match ctx.depot().command::<EnvoyRead>(&volume, ()).await {
-		Ok(response) => response.data,
-		Err(error) if is_volume_gone(&error) => None,
-		Err(error) => return Err(error),
-	};
-	let Some(envoy) = envoy else {
-		return Ok(EnvoyCheck::Lost);
-	};
-	if envoy.stopping {
-		return Ok(EnvoyCheck::Draining);
-	}
-
-	let now = ctx.env().clock().observe()?.unix_ms;
-	// A threshold past the timestamp range never expires.
-	let lost_threshold_ms =
-		i64::try_from(ctx.config().pegboard().envoy_lost_threshold()).unwrap_or(i64::MAX);
-	let heartbeat_expired = envoy.heartbeat_unix_ms.saturating_add(lost_threshold_ms) < now;
-	if !envoy.connected && heartbeat_expired {
-		return Ok(EnvoyCheck::Lost);
-	}
-
-	let current = Route::of_envoy(&envoy)?;
-	// A restarted engine keeps its worker ID, so its live lease cannot prove that an
-	// old connection ended. A no-responders reply can. Prefer a newer connection
-	// when the record has one; otherwise enter the existing stop protocol, which records
-	// the disconnect and waits out the node's lost threshold before ending the epoch.
-	if envoy.connected
-		&& current == route
-		&& failed_open.is_some_and(pegboard::actor_machine::executor::no_responders)
-	{
-		return Ok(EnvoyCheck::Lost);
-	}
-	let lease_ended = match ctx.topology().worker_lease(&route.worker).await {
-		rivet_topology::WorkerLease::Expired | rivet_topology::WorkerLease::Released => true,
-		rivet_topology::WorkerLease::Live | rivet_topology::WorkerLease::Unknown => false,
-	};
-	// An ended worker lease only closes the envoy's connection, and the dead worker may have
-	// left the record marked connected. The envoy keeps its actors until its own lost threshold,
-	// which it learned from this config, so it may still reconnect with them.
-	if lease_ended && heartbeat_expired && current.connection_id == route.connection_id {
-		return Ok(EnvoyCheck::Lost);
-	}
-	if envoy.connected && current.connection_id != route.connection_id {
-		return Ok(EnvoyCheck::Newer(current));
-	}
-	Ok(EnvoyCheck::Serving)
-}
-
-/// Records the envoy's newer route on the actor's allocation, so later requests of the epoch
-/// open it first. Best effort and off the request's path: the state machine applies it only if
-/// the allocation still equals `from`, and a failure costs the next request one more fallback.
-fn repair_route(
-	ctx: &EngineContext,
-	actor_id: Id,
-	epoch: u32,
-	from: &wire::ActorAllocation,
-	newer: Route,
-) {
-	let event = wire::ActorEvent::UpdateRoute(wire::UpdateRoute {
-		epoch,
-		from: from.clone(),
-		to: newer.into_allocation(from),
-	});
-	let ctx2 = ctx.clone();
-	let _detached = ctx.env().spawn(Box::pin(async move {
-		if let Err(error) = crate::start_wait::send_event(&ctx2, actor_id, event).await {
-			tracing::debug!(%actor_id, ?error, "actor route repair failed; the next request falls back again");
-		}
-	}));
 }

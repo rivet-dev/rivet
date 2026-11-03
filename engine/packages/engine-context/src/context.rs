@@ -12,6 +12,8 @@ pub struct EngineAdapters {
 	pub fs: rivet_env::fs::Fs,
 	pub object_stores: ObjectStores,
 	pub http: Arc<dyn rivet_env::capabilities::http::HttpClient>,
+	/// HTTP and WebSocket clients for servers outside the cluster.
+	pub external_http: Arc<dyn rivet_env::capabilities::http::ExternalHttpClient>,
 	pub http_server: Arc<dyn rivet_env::capabilities::http::HttpServer>,
 	pub depot_databases: Arc<dyn rivet_env::capabilities::slatedb::SlateDbFactory>,
 }
@@ -24,6 +26,7 @@ pub(crate) struct EngineContextInner {
 	pub(crate) depot_databases: Arc<dyn rivet_env::capabilities::slatedb::SlateDbFactory>,
 	pub(crate) shutdown: rivet_env::capabilities::shutdown::Shutdown,
 	pub(crate) http: Arc<dyn rivet_env::capabilities::http::HttpClient>,
+	pub(crate) external_http: Arc<dyn rivet_env::capabilities::http::ExternalHttpClient>,
 	pub(crate) http_server: Arc<dyn rivet_env::capabilities::http::HttpServer>,
 	pub(crate) config: Config,
 	pub(crate) node_id: NodeId,
@@ -79,6 +82,7 @@ impl EngineContext {
 			fs,
 			object_stores,
 			http,
+			external_http,
 			http_server,
 			depot_databases,
 		} = adapters;
@@ -134,6 +138,7 @@ impl EngineContext {
 				fs,
 				depot_databases,
 				http,
+				external_http,
 				http_server,
 				env,
 				shutdown,
@@ -237,6 +242,12 @@ impl EngineContext {
 
 	pub fn fs(&self) -> rivet_env::fs::Fs {
 		self.0.fs.clone()
+	}
+
+	/// Clients for servers outside the cluster, such as the V2 deployment a migration from V2
+	/// proxies to.
+	pub fn external_http(&self) -> Arc<dyn rivet_env::capabilities::http::ExternalHttpClient> {
+		self.0.external_http.clone()
 	}
 
 	pub fn http_server(&self) -> Arc<dyn rivet_env::capabilities::http::HttpServer> {

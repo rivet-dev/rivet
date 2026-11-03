@@ -83,11 +83,17 @@ impl ReadTransport for crate::volume_requests::VolumeRequests {
 	}
 }
 
+/// Classifies a read's answer. A read UPS refused at admission, whether this process's lane to
+/// the maintainer was full or the maintainer's transport refused it, never reached the
+/// maintainer, so it is a refused cold read the edge may send again after the hint, like a read
+/// whose route named no maintainer.
 fn read_response(response: anyhow::Result<ClientResponse>) -> Result<FsReadResponse> {
 	match response.map_err(|error| {
+		if depot_volume::ups::client::is_ups_overloaded(&error) {
+			return Error::ColdReadRefused;
+		}
 		let kind = error.downcast_ref::<rivet_error::RivetError>();
 		match kind.map(|kind| (kind.group(), kind.code())) {
-			Some(("ups", "overloaded")) => Error::Overloaded,
 			Some(("depot", "routing_unavailable"))
 			| Some((
 				"ups",
@@ -110,11 +116,13 @@ fn read_response(response: anyhow::Result<ClientResponse>) -> Result<FsReadRespo
 		ClientResponse::VolumeRejectResponse(
 			VolumeRejectResponse::VolumeNotFound | VolumeRejectResponse::VolumeDeleted,
 		) => Err(depot_fs_core::Error::NotFound.into()),
+		// The maintainer shed the read before serving it. A read changes nothing, so the edge
+		// may send it again after the hint like any other refused cold read.
 		ClientResponse::VolumeRejectResponse(VolumeRejectResponse::Overloaded(_)) => {
 			crate::metrics::FS_OVERLOADED
 				.with_label_values(&["remote_rejected"])
 				.inc();
-			Err(Error::Overloaded)
+			Err(Error::ColdReadRefused)
 		}
 		ClientResponse::VolumeRejectResponse(VolumeRejectResponse::VolumeExists) => {
 			Err(Error::Unavailable)
@@ -704,7 +712,7 @@ fn checked(response: FsReadResponse) -> Result<FsReadResponse> {
 				crate::metrics::FS_OVERLOADED
 					.with_label_values(&["maintainer_read"])
 					.inc();
-				Error::Overloaded
+				Error::ColdReadRefused
 			}
 			FsReadError::NotFound => depot_fs_core::Error::NotFound.into(),
 			FsReadError::Corrupt => corrupt!(),

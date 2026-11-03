@@ -87,7 +87,7 @@ fn depot_service(role: WorkerRole) -> Service {
 
 fn storage_service(
 	directory: Arc<depot_worker::bootstrap::StorageDirectory>,
-	epoxy: Option<Arc<crate::epoxy_services::EpoxyServices>>,
+	singletons: Option<Arc<dyn rivet_singleton_coordinator::runtime::SingletonServices>>,
 	handover: watch::Sender<Option<rivet_singleton_coordinator::runtime::Handover>>,
 	coordinator: watch::Sender<Option<depot_worker::services::storage::CoordinatorActive>>,
 ) -> Service {
@@ -96,7 +96,7 @@ fn storage_service(
 		ServiceClass::Storage,
 		move |config, ctx| {
 			let directory = directory.clone();
-			let epoxy = epoxy.clone();
+			let singletons = singletons.clone();
 			let handover = handover.clone();
 			let coordinator = coordinator.clone();
 			async move {
@@ -109,6 +109,7 @@ fn storage_service(
 				crate::depot_command::kv::register(&mut commands)?;
 				pegboard::commands::register(&mut commands, &ctx)?;
 				pegboard::index::register(&mut commands, &ctx)?;
+				pegboard_v2_migrator::commands::register(&mut commands)?;
 
 				let deps = depot_worker::services::storage::StorageDependencies {
 					fork_peer: Some(Arc::new(crate::depot_peer::BaseReader(ctx.clone()))),
@@ -120,9 +121,7 @@ fn storage_service(
 					object_store: ctx.object_stores().primary.clone(),
 					lease_object_store: ctx.object_stores().lease.clone(),
 					databases: ctx.depot_databases(),
-					singleton_services: epoxy.map(|host| {
-						host as Arc<dyn rivet_singleton_coordinator::runtime::SingletonServices>
-					}),
+					singleton_services: singletons,
 					filesystem_cache: Some(ctx.filesystem_cache()),
 					log_shard_snapshot: None,
 					singleton_handover: Some(handover),
@@ -179,7 +178,7 @@ pub async fn start(
 	context: rivet_engine_context::EngineContext,
 	services: Vec<Service>,
 	storage: Option<Arc<depot_worker::bootstrap::StorageDirectory>>,
-	epoxy: Option<Arc<crate::epoxy_services::EpoxyServices>>,
+	singletons: Option<Arc<dyn rivet_singleton_coordinator::runtime::SingletonServices>>,
 	host_metrics: bool,
 ) -> Result<()> {
 	let role = depot_role(&services)?;
@@ -203,7 +202,7 @@ pub async fn start(
 		services.push(match role {
 			WorkerRole::Storage => storage_service(
 				storage.context("storage service requires an owned log directory")?,
-				epoxy,
+				singletons,
 				handover,
 				coordinator,
 			),

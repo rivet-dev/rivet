@@ -1,17 +1,21 @@
 //! Routed commands execute under a shared partition mutex and acknowledge durability.
 use crate::actor_machine::{ActorStateMachine, Event, State, executor::Executor};
+use crate::errors::MigrateFromV2Unsupported;
 use crate::keys;
+use crate::keys::kv::at_write_version;
 use crate::wire;
 use anyhow::{Context, Result, bail, ensure};
 use depot_protocol::command::{Command, CommandTag};
 use depot_worker::command::KvHandle;
+use rivet_data::families::VersionFamily;
 use rivet_engine_context::EngineContext;
 use rivet_keys::keys::{
 	KeyAddress,
 	codec::FormalKey,
 	tags::depot_command::{
-		PEGBOARD_ACTOR_ALARM, PEGBOARD_ACTOR_CREATE, PEGBOARD_ACTOR_EVENT, PEGBOARD_ACTOR_READ,
-		PEGBOARD_ENVOY_READ, PEGBOARD_ENVOY_UPSERT,
+		PEGBOARD_ACTOR_ALARM, PEGBOARD_ACTOR_CREATE, PEGBOARD_ACTOR_EVENT,
+		PEGBOARD_ACTOR_MIGRATE_FROM_V2_BEGIN, PEGBOARD_ACTOR_READ, PEGBOARD_ENVOY_READ,
+		PEGBOARD_ENVOY_UPSERT,
 	},
 };
 use rivet_state_machine_durable::DurableStateMachine;
@@ -49,6 +53,22 @@ impl Command for ActorEvent {
 	type Request = rivet_data::versioned::ActorEvent;
 	type Response = rivet_data::versioned::ActorEventResponse;
 }
+
+/// Begins a V2 migration of the actor, creating its state volume if it has none, and answers
+/// the phase and incarnation the begin left. Only the V2 migrator sends it; its later events go
+/// through `ActorEvent`. A repeated begin finds the actor already held under its own id.
+pub struct ActorMigrateFromV2Begin;
+
+impl Command for ActorMigrateFromV2Begin {
+	const TAG: CommandTag = CommandTag(PEGBOARD_ACTOR_MIGRATE_FROM_V2_BEGIN);
+
+	const CREATE_IF_MISSING: bool = true;
+	type Request = rivet_data::versioned::MigrateFromV2Begin;
+	type Response = rivet_data::versioned::ActorMigrateFromV2BeginResponse;
+}
+
+/// The first `pegboard.actor` version that can hold an actor for the V2 migrator.
+const MIGRATE_FROM_V2_ACTOR_VERSION: u16 = 2;
 
 pub fn is_volume_gone(error: &anyhow::Error) -> bool {
 	let structured = rivet_error::RivetError::extract(error);
@@ -110,6 +130,12 @@ pub fn register(
 	)?;
 
 	let ctx2 = ctx.clone();
+	registry.register_with_concurrency::<ActorMigrateFromV2Begin>(
+		concurrency.actor_event(),
+		move |db, request| actor_migrate_from_v2_begin_handler(ctx2.clone(), db, request),
+	)?;
+
+	let ctx2 = ctx.clone();
 	registry.register_with_concurrency::<ActorAlarm>(
 		concurrency.actor_event(),
 		move |db, request| actor_alarm_handler(ctx2.clone(), db, request),
@@ -130,36 +156,12 @@ async fn actor_create_handler(
 	request: wire::ActorCreateRequest,
 ) -> Result<wire::ActorCreateResponse> {
 	let volume = keys::partition::ActorVolume::from_volume_key(db.volume_key())?;
-	let pegboard_config = ctx.config().pegboard();
-
-	// The default state is a destroyed actor that has never run, so a brand-new actor and a
-	// recreated one take the same path. The `Create` commits with it, so nothing observes it.
-	let placeholder_write_index = wire::WriteIndexEffectData {
-		namespace: request.init.namespace.clone(),
-		name: request.init.name.clone(),
-		create_unix_ms: 0,
-		state: wire::WriteIndexState {
-			phase: wire::WriteIndexPhase::WriteIndexPhasePending,
-			attempt: 0,
-			create_unix_ms: 0,
-		},
-	};
 
 	let State(state) = rivet_state_machine_durable::Runner::process_event(
 		&ctx,
 		db.clone(),
 		Method::GetOrCreate {
-			state: State(wire::ActorState {
-				phase: wire::ActorPhase::Destroyed,
-				epoch: 0,
-				create_unix_ms: 0,
-				command_index: 0,
-				index_bucket_count: pegboard_config.actor_index_buckets_per_name(),
-				pending_action: wire::PendingAction::PendingNone,
-				write_index: placeholder_write_index,
-				start_waiters: Vec::new(),
-				start_waiters_capacity: pegboard_config.actor_start_waiters_capacity(),
-			}),
+			state: default_state(&ctx, &request.init),
 		},
 		Arc::new(Executor::new(&ctx, db, volume.actor_id)),
 		Event(wire::ActorEvent::Create(wire::Create {
@@ -172,6 +174,79 @@ async fn actor_create_handler(
 	Ok(wire::ActorCreateResponse {
 		outcome: try_start_outcome(&state, request.waiter.as_ref()),
 	})
+}
+
+/// The state of an actor volume that holds none yet: a destroyed actor that has never run, so a
+/// brand-new actor and a recreated one take the same path. The event that creates it commits
+/// with it, so nothing observes it.
+fn default_state(ctx: &EngineContext, init: &wire::ActorCreateData) -> State {
+	let pegboard_config = ctx.config().pegboard();
+	let placeholder_write_index = wire::WriteIndexEffectData {
+		namespace: init.namespace.clone(),
+		name: init.name.clone(),
+		create_unix_ms: 0,
+		state: wire::WriteIndexState {
+			phase: wire::WriteIndexPhase::WriteIndexPhasePending,
+			attempt: 0,
+			create_unix_ms: 0,
+		},
+	};
+
+	State(wire::ActorState {
+		phase: wire::ActorPhase::Destroyed,
+		epoch: 0,
+		create_unix_ms: 0,
+		storage_origin: wire::StorageOrigin::Created,
+		command_index: 0,
+		index_bucket_count: pegboard_config.actor_index_buckets_per_name(),
+		pending_action: wire::PendingAction::PendingNone,
+		write_index: placeholder_write_index,
+		start_waiters: Vec::new(),
+	})
+}
+
+/// Holds the actor for the V2 migrator, creating its state volume if it has none. The begin is
+/// refused before anything is written while the cluster cannot store a held actor.
+async fn actor_migrate_from_v2_begin_handler(
+	ctx: EngineContext,
+	db: KvHandle,
+	request: wire::MigrateFromV2Begin,
+) -> Result<wire::ActorMigrateFromV2BeginResponse> {
+	let volume = keys::partition::ActorVolume::from_volume_key(db.volume_key())?;
+	ensure_migrate_from_v2_supported(&db)?;
+
+	let State(state) = rivet_state_machine_durable::Runner::process_event(
+		&ctx,
+		db.clone(),
+		Method::GetOrCreate {
+			state: default_state(&ctx, &request.init),
+		},
+		Arc::new(Executor::new(&ctx, db, volume.actor_id)),
+		Event(wire::ActorEvent::MigrateFromV2(
+			wire::MigrateFromV2::MigrateFromV2Begin(request),
+		)),
+	)
+	.await?;
+
+	Ok(wire::ActorMigrateFromV2BeginResponse {
+		phase: state.phase,
+		create_unix_ms: state.create_unix_ms,
+	})
+}
+
+/// Refuses a V2 migration event while some live storage worker reads only actor state that
+/// cannot represent a held actor. The migrator retries its event on its own deadline.
+fn ensure_migrate_from_v2_supported(db: &KvHandle) -> Result<()> {
+	let write_version = db.write_version(VersionFamily::PEGBOARD_ACTOR)?;
+	if write_version < MIGRATE_FROM_V2_ACTOR_VERSION {
+		return Err(MigrateFromV2Unsupported {
+			write_version,
+			required_version: MIGRATE_FROM_V2_ACTOR_VERSION,
+		}
+		.build());
+	}
+
+	Ok(())
 }
 
 fn try_start_outcome(
@@ -203,9 +278,10 @@ fn try_start_outcome(
 			None => wire::TryStartOutcome::TryStartDestroyed,
 		},
 		wire::ActorPhase::Destroyed => wire::TryStartOutcome::TryStartDestroyed,
+		wire::ActorPhase::MigratingFromV2(_) => wire::TryStartOutcome::TryStartMigratingFromV2,
 		wire::ActorPhase::Initializing(_)
 		| wire::ActorPhase::Stopping(_)
-		| wire::ActorPhase::Sleeping => {
+		| wire::ActorPhase::Sleeping(_) => {
 			if waiter.is_some_and(|waiter| !crate::actor_machine::has_start_waiter(state, waiter)) {
 				return wire::TryStartOutcome::TryStartFull;
 			}
@@ -252,6 +328,9 @@ async fn actor_event_handler(
 	event: wire::ActorEvent,
 ) -> Result<wire::ActorEventResponse> {
 	let volume = keys::partition::ActorVolume::from_volume_key(db.volume_key())?;
+	if let wire::ActorEvent::MigrateFromV2(_) = &event {
+		ensure_migrate_from_v2_supported(&db)?;
+	}
 
 	let waiter = match &event {
 		wire::ActorEvent::TryStart(try_start) => Some(try_start.waiter.clone()),
@@ -265,7 +344,8 @@ async fn actor_event_handler(
 		| wire::ActorEvent::Destroy
 		| wire::ActorEvent::DestroyState(_)
 		| wire::ActorEvent::ToEnvoyEvent(_)
-		| wire::ActorEvent::EnvoyGone(_) => None,
+		| wire::ActorEvent::EnvoyGone(_)
+		| wire::ActorEvent::MigrateFromV2(_) => None,
 	};
 
 	let State(state) = rivet_state_machine_durable::Runner::process_event(
@@ -366,7 +446,10 @@ async fn envoy_upsert_handler(
 		return Ok(wire::EnvoyUpsertResponse { data: stored });
 	}
 
-	txn.put(&packed, &key.serialize(request.data.clone())?)?;
+	txn.put(
+		&packed,
+		&key.serialize(at_write_version(&db, request.data.clone())?)?,
+	)?;
 	db.commit(txn).await?;
 
 	Ok(wire::EnvoyUpsertResponse { data: request.data })

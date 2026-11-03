@@ -1,0 +1,238 @@
+# V2 to V3 actor migration protocol.
+#
+# Every request and response body of the V2 public API's `/migration/v1/` routes is one of these
+# types. The `/v1` path pins the version, so request and response bodies carry no version header.
+# V3's migrator holds a copy of this file. `ParkedRecord` is persisted in V2 and is the one type
+# stored with a vbare version header.
+
+# MARK: Candidates
+
+type Candidate struct {
+	actorId: data
+	workflowId: data
+	name: str
+	key: optional<str>
+	poolName: str
+	createTs: i64
+	# 1 is the old actor workflow, 2 is actor2.
+	version: u8
+	# 0 when the actor has never been allocated.
+	generation: u32
+	sleepTs: optional<i64>
+	# An envoy key or a connectable marker is present.
+	allocated: bool
+	destroyTs: optional<i64>
+	# The workflow's wake deadline: an alarm or a retry.
+	wakeDeadlineTs: optional<i64>
+	hibernating: bool
+	# The actor's SQLite still lives in the KV-backed v1 format, or its v1 import is unfinished.
+	sqliteV1: bool
+	# The actor was already migrated and parked.
+	parked: bool
+	# Pages in the published SQLite v2 head, 0 when the actor has none.
+	dbSizePages: u32
+	# FoundationDB's sampled estimate of the actor's KV bytes. Small actors may read as 0.
+	kvBytesEstimate: u64
+	# Exclusive cursor that resumes the listing right after this candidate, so a caller that admits
+	# only part of a page continues from the last candidate it handled. Empty for a read by id.
+	cursor: data
+}
+
+type CandidatesResponse struct {
+	candidates: list<Candidate>
+	# Exclusive cursor for the next page. None means the listing reached the end.
+	next: optional<data>
+}
+
+# MARK: Export
+
+type SqliteHead struct {
+	headTxid: u64
+	dbSizePages: u32
+	pageSize: u32
+}
+
+type ExportHeader struct {
+	generation: u32
+	sleepTs: i64
+	wakeDeadlineTs: optional<i64>
+	name: str
+	key: optional<str>
+	poolName: str
+	createTs: i64
+	kvBytesEstimate: u64
+	sqlite: optional<SqliteHead>
+}
+
+type KvEntry struct {
+	key: data
+	value: data
+	version: data
+	updateTs: i64
+}
+
+type KvBatch struct {
+	entries: list<KvEntry>
+}
+
+type PageBatch struct {
+	firstPgno: u32
+	pages: list<data>
+}
+
+# Emitted after each internal transaction. `cursor` is an encoded `ExportCursor` the client passes
+# back as `resume` to continue a broken stream.
+type ExportFence struct {
+	cursor: data
+}
+
+type ExportEnd struct {
+	kvEntries: u64
+	kvBytes: u64
+	pages: u32
+	# Chained xxh3-128 over every KvBatch and PageBatch frame, in stream order.
+	digest: data
+}
+
+type AbortReason enum {
+	FENCE_MOVED
+	DESTROYED
+	INELIGIBLE
+}
+
+type ExportAbort struct {
+	reason: AbortReason
+}
+
+type Frame union {
+	ExportHeader |
+	KvBatch |
+	PageBatch |
+	ExportFence |
+	ExportEnd |
+	ExportAbort
+}
+
+# Opaque to the client. The server checks the fence it carries before resuming.
+type ExportCursor struct {
+	generation: u32
+	sleepTs: i64
+	headTxid: optional<u64>
+	# The last KV key already sent. None means no KV entry was sent yet.
+	afterKvKey: optional<data>
+	kvDone: bool
+	# The next SQLite page to send.
+	nextPgno: u32
+	digest: data
+	kvEntries: u64
+	kvBytes: u64
+	pages: u32
+}
+
+# MARK: Cutover
+
+type CutoverRequest struct {
+	generation: u32
+	cutoverTs: i64
+}
+
+type IneligibleReason enum {
+	NOT_SLEEPING
+	ALLOCATED
+	HIBERNATING
+	ACTOR_V1
+	SQLITE_V1
+}
+
+type Cut void
+
+type AlreadyCut void
+
+type Woke void
+
+type Destroyed void
+
+type Ineligible struct {
+	reason: IneligibleReason
+}
+
+type CutoverResponse union {
+	Cut |
+	AlreadyCut |
+	Woke |
+	Destroyed |
+	Ineligible
+}
+
+# MARK: Confirm
+
+type ConfirmRequest struct {
+	generation: u32
+	sleepTs: i64
+	wakeDeadlineTs: optional<i64>
+	cutoverTs: i64
+	horizonMs: i64
+	v3ActorId: data
+}
+
+type WokeReason enum {
+	NOT_CUT
+	GENERATION_MOVED
+	SLEEP_MOVED
+	ALLOCATED
+	HIBERNATING
+	WORKER_RUNNING
+	PENDING_SIGNAL
+	DEADLINE_MOVED
+	DEADLINE_SOON
+	SILENCED
+}
+
+type Confirmed void
+
+type AlreadyConfirmed void
+
+type ConfirmWoke struct {
+	reason: WokeReason
+}
+
+type ConfirmResponse union {
+	Confirmed |
+	AlreadyConfirmed |
+	ConfirmWoke |
+	Destroyed
+}
+
+# MARK: Restore
+
+# `cutoverTs` must match the parked record when set. Unset restores whatever is parked, for
+# recovery, which knows the actor but not its cutover.
+type RestoreRequest struct {
+	cutoverTs: optional<i64>
+	# When set, restore refuses unless the parked record names this V3 actor.
+	v3ActorId: optional<data>
+}
+
+type Restored void
+
+type NotParked void
+
+type RestoreResponse union {
+	Restored |
+	NotParked
+}
+
+# MARK: Parked record
+
+# Stored at `[MIGRATION, PARKED, actor_id]` with a vbare version header. Holds the wake index rows
+# that park removed so restore can write them back.
+type ParkedRecord struct {
+	generation: u32
+	cutoverTs: i64
+	parkedAt: i64
+	v3ActorId: data
+	workflowId: data
+	workflowName: str
+	wakeDeadlineTs: optional<i64>
+	wakeSignals: list<str>
+}

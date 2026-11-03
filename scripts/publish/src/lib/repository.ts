@@ -5,9 +5,6 @@ import { $ } from "execa";
 /** The public repository that publish.yaml runs in and that release tags live on. */
 export const OSS_REPOSITORY = "rivet-dev/rivet";
 
-/** The private repository that is the source of truth for every release. */
-export const EE_REPOSITORY = "rivet-dev/engine-ee";
-
 /** Whether `remote` is a plain GitHub URL for `repository`, in any common Git URL form. */
 export function isGitHubRemote(remote: string, repository: string): boolean {
 	const value = remote.trim();
@@ -46,18 +43,18 @@ export async function originRemoteUrl(repoRoot: string): Promise<string> {
 	} catch {
 		// Report the same clear error for missing Git, jj, and origin remotes.
 	}
-	throw new Error(`release requires an origin remote for github.com/${EE_REPOSITORY}`);
+	throw new Error(`release requires an origin remote for github.com/${OSS_REPOSITORY}`);
 }
 
 /**
- * Releases are cut from EE, which publishes to OSS through the snapshot sync. Running the
- * release from an OSS checkout would commit to OSS directly and fork it from EE.
+ * Releases are cut only from OSS after the reviewed EE changes have been synced.
+ * Refuse EE and forks before changing source files or publishing anything.
  */
-export async function requireEeReleaseRepository(repoRoot: string): Promise<void> {
+export async function requireOssReleaseRepository(repoRoot: string): Promise<void> {
 	const origin = await originRemoteUrl(repoRoot);
-	if (!isGitHubRemote(origin, EE_REPOSITORY)) {
+	if (!isGitHubRemote(origin, OSS_REPOSITORY)) {
 		throw new Error(
-			`release is only allowed from a github.com/${EE_REPOSITORY} jj workspace; origin is ${origin}`,
+			`release is only allowed from a github.com/${OSS_REPOSITORY} jj workspace; origin is ${origin}`,
 		);
 	}
 }

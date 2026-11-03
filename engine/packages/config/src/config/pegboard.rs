@@ -47,11 +47,6 @@ pub struct Pegboard {
 	/// When it runs out the request is forwarded anyway, and the node refuses it as not found.
 	#[serde(rename = "node_start_wait_ms")]
 	pub envoy_start_wait_ms: Option<u64>,
-	/// Lost checks one process holds for closed node connections that may not reconnect
-	/// (default 4096, 1..=65536). When full, the check due soonest is dropped and its actors are
-	/// found lost on their next request.
-	#[serde(rename = "node_lost_checks_capacity")]
-	pub envoy_lost_checks_capacity: Option<usize>,
 	/// Gateway workers one actor keeps waiting for its start (default 64, 1..=1024). A request
 	/// that finds the list full waits on its fallback poll alone.
 	pub actor_start_waiters_capacity: Option<u32>,
@@ -242,10 +237,6 @@ impl Pegboard {
 				"node_actor_inbound_capacity",
 				self.envoy_actor_inbound_capacity(),
 			),
-			(
-				"node_lost_checks_capacity",
-				self.envoy_lost_checks_capacity(),
-			),
 		] {
 			if !(1..=65_536).contains(&capacity) {
 				bail!("pegboard.{key} must be in 1..=65536");
@@ -402,10 +393,6 @@ impl Pegboard {
 
 	pub fn envoy_connect_retry_after_ms(&self) -> u64 {
 		self.envoy_connect_retry_after_ms.unwrap_or(1_000)
-	}
-
-	pub fn envoy_lost_checks_capacity(&self) -> usize {
-		self.envoy_lost_checks_capacity.unwrap_or(4096)
 	}
 
 	pub fn sqlite_sessions(&self) -> usize {

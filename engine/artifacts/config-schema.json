@@ -68,6 +68,17 @@
         }
       ]
     },
+    "migrate_from_v2": {
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/MigrateFromV2"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "object_storage": {
       "default": null,
       "anyOf": [
@@ -1406,6 +1417,125 @@
       },
       "additionalProperties": false
     },
+    "MigrateFromV2": {
+      "description": "Settings for moving one V2 namespace's actors into this cluster.\n\nThe section is read through `config.dynamic()`, and a dynamic config update replaces it as a whole. `migrate_seed` is the exception: it is fixed at startup, because a new seed reshuffles which actors fall under `migrate_ratio`, so raising the ratio would no longer only add actors.",
+      "type": "object",
+      "required": [
+        "endpoint",
+        "namespace"
+      ],
+      "properties": {
+        "api_urls": {
+          "description": "V2's public API per datacenter label, which the migrator lists and moves actors through.",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "confirm_delay_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "create_ratio": {
+          "description": "Share of new creates that land in this cluster. Keyless creates draw against it; keyed creates move here only at 1.0.",
+          "default": 0.0,
+          "type": "number",
+          "format": "double"
+        },
+        "endpoint": {
+          "description": "V2's public gateway, where requests for actors this cluster does not hold are proxied.",
+          "type": "string"
+        },
+        "max_actors_per_sec": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_copy_bytes": {
+          "description": "Largest actor the migrator copies, by V2's reported SQLite size plus its KV estimate. Larger actors are skipped as `too_large` on every pass, so they never hold a slot; raise it once the rest of the namespace has moved to migrate them. Defaults to 10 GiB.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_in_flight": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "migrate_ratio": {
+          "description": "Share of existing V2 actors the migrator moves, picked by a stable hash of the actor id.",
+          "default": 0.0,
+          "type": "number",
+          "format": "double"
+        },
+        "migrate_seed": {
+          "description": "Seed of the hash behind `migrate_ratio`.",
+          "default": 0,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "min_sleep_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "namespace": {
+          "description": "The V2 namespace being migrated.",
+          "type": "string"
+        },
+        "pass_interval_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "target_namespace": {
+          "description": "The namespace here that the actors land in. Defaults to the V2 namespace's name.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "token": {
+          "description": "The namespace-wide V2 token for V2's migration API and the public API calls routing makes. Never logged.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "wake_horizon_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
     "ObjectStorageConfig": {
       "type": "object",
       "properties": {
@@ -2010,15 +2140,6 @@
         },
         "node_index_reaper_max_pending": {
           "description": "Stale node row deletes one reader may queue at once (default 256).",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "node_lost_checks_capacity": {
-          "description": "Lost checks one process holds for closed node connections that may not reconnect (default 4096, 1..=65536). When full, the check due soonest is dropped and its actors are found lost on their next request.",
           "type": [
             "integer",
             "null"

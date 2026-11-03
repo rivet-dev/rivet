@@ -102,6 +102,11 @@
 					]
 				},
 				{
+					"code": "invalid_version",
+					"message": "The requested actor version cannot be created here.",
+					"statuses": []
+				},
+				{
 					"code": "js_callback_unavailable",
 					"message": "JavaScript callback unavailable",
 					"statuses": []
@@ -142,6 +147,16 @@
 							]
 						}
 					]
+				},
+				{
+					"code": "migrate_from_v2_unsupported",
+					"message": "The cluster cannot hold actors for a V2 migration yet.",
+					"statuses": []
+				},
+				{
+					"code": "migrating_from_v2",
+					"message": "The actor is moving to this cluster from V2. Retry after the hinted delay.",
+					"statuses": []
 				},
 				{
 					"code": "missing_input",

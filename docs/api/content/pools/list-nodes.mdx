@@ -53,6 +53,7 @@ A page of live nodes.
 | `nodes[].pool` | `string` | Name of the node pool. |
 | `nodes[].namespace` | `string` | Name of the namespace. |
 | `nodes[].datacenter` | `string` | Datacenter name. |
+| `nodes[].version` | `integer` | Version the node announced when it connected. New actors are placed only on nodes at the newest version with a connected node in the pool. |
 | `nodes[].create_ts` | `integer` | When the node connected, in Unix milliseconds. |
 | `nodes[].last_ping_ts` | `integer` | When the node last sent a heartbeat, in Unix milliseconds. |
 | `nodes[].connected` | `boolean` | Whether the node is connected. |
@@ -68,6 +69,7 @@ A page of live nodes.
       "pool": "default",
       "namespace": "my-namespace",
       "datacenter": "default",
+      "version": 3,
       "create_ts": 1700000000000,
       "last_ping_ts": 1700000000000,
       "connected": false,

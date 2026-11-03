@@ -8,6 +8,7 @@ use pegboard::wire;
 use rivet_envoy_protocol as p;
 use rivet_error::*;
 use rivet_keys::keys::{KeyAddress, SubspaceRange};
+use rivet_topology::versions::{VersionFamily, WriteVersions};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Bound;
@@ -105,9 +106,11 @@ fn admit_get(keys: &[p::KvKey]) -> Result<()> {
 }
 
 /// Runs one KV request on the actor's `kv` inode. Requests of one actor run in order on its
-/// lane, and the lane's exclusive filesystem owner fences a stale engine.
+/// lane, and the lane's exclusive filesystem owner fences a stale engine. Values are written at
+/// the `pegboard.actor` version `versions` selects.
 pub(crate) async fn execute(
 	env: &dyn rivet_env::Env,
+	versions: &dyn WriteVersions,
 	fs: &Arc<Filesystem>,
 	ino: u64,
 	data: p::KvRequestData,
@@ -177,6 +180,7 @@ pub(crate) async fn execute(
 			let mut tx = fs.begin(ino).await?;
 
 			let now = env.clock().observe()?.unix_ms;
+			let version = versions.write_version(VersionFamily::PEGBOARD_ACTOR)?;
 			let entries: BTreeMap<_, _> = put.keys.into_iter().zip(put.values).collect();
 			for (key, value) in entries {
 				let packed = ActorKvKey::new(Bytes::from(key)).pack();
@@ -193,8 +197,7 @@ pub(crate) async fn execute(
 				tx.put(
 					&packed,
 					&rivet_data::versioned::KvValue::serialize_with_embedded_version(
-						&value,
-						rivet_data::generated::PEGBOARD_ACTOR_VERSION,
+						&value, version,
 					)?,
 				)?;
 			}

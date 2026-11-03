@@ -25,15 +25,10 @@ pub(crate) enum OpenReply {
 /// Whether the actor's host refused the open before the actor admitted it, so the same open
 /// may succeed against the actor once it runs.
 pub(crate) fn refused_before_admission(close: &p::ToRivetWebSocketClose) -> bool {
-	close.reason.as_deref().is_some_and(|reason| {
-		matches!(
-			reason,
-			"envoy.actor_not_found"
-				| "envoy.actor_generation_mismatch"
-				| "runner.actor_not_found"
-				| "runner.actor_generation_mismatch"
-		)
-	})
+	close
+		.reason
+		.as_deref()
+		.is_some_and(pegboard::envoy_check::refuses_admission)
 }
 
 /// Sends the open and waits for the actor's answer. The actor sends nothing else before it.

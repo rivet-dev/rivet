@@ -3308,6 +3308,7 @@
           "pool",
           "namespace",
           "datacenter",
+          "version",
           "create_ts",
           "last_ping_ts",
           "connected",
@@ -3331,6 +3332,12 @@
             "type": "string",
             "description": "Datacenter name.",
             "example": "default"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Version the node announced when it connected. New actors are placed only on nodes at the newest version with a connected node in the pool.",
+            "example": 3
           },
           "create_ts": {
             "type": "integer",

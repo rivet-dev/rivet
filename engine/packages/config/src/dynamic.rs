@@ -78,6 +78,14 @@ pub struct DynamicConfigUpdate {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub depot_balancing_enabled: Option<Option<bool>>,
+	/// Replaces the whole `migrate_from_v2` section. `migrate_seed` must stay what was loaded at
+	/// startup.
+	#[serde(
+		default,
+		deserialize_with = "double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub migrate_from_v2: Option<Option<crate::config::MigrateFromV2>>,
 }
 
 /// Deserializes a present `null` as `Some(None)` rather than `None`, so clearing a property stays

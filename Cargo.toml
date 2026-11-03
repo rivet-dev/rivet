@@ -58,6 +58,7 @@ members = [
   "engine/packages/pegboard",
   "engine/packages/pegboard-envoy",
   "engine/packages/pegboard-gateway",
+  "engine/packages/pegboard-v2-migrator",
   "engine/packages/engine-context",
 #   "engine/packages/postgres-util",
   "engine/packages/runtime",
@@ -77,6 +78,7 @@ members = [
   "engine/sdks/rust/envoy-client",
   "engine/sdks/rust/envoy-protocol",
   "engine/sdks/rust/epoxy-protocol",
+  "engine/sdks/rust/migrate-from-v2-protocol",
 #   "engine/sdks/rust/ups-protocol",
   "rivetkit-rust/packages/actor-persist",
   "rivetkit-rust/packages/client",
@@ -103,6 +105,7 @@ members = [
   [workspace.dependencies]
   anstyle = "1"
   anyhow = "1.0.82"
+  arc-swap = "1.7.1"
   backtrace = "0.3.75"
   async-trait = "0.1"
   axum-test = "17"
@@ -516,14 +519,17 @@ members = [
     [workspace.dependencies.pegboard]
     path = "engine/packages/pegboard"
 
+    [workspace.dependencies.pegboard-v2-migrator]
+    path = "engine/packages/pegboard-v2-migrator"
+
+    [workspace.dependencies.migrate-from-v2-protocol]
+    path = "engine/sdks/rust/migrate-from-v2-protocol"
+
     [workspace.dependencies.pegboard-envoy]
     path = "engine/packages/pegboard-envoy"
 
     [workspace.dependencies.pegboard-gateway]
     path = "engine/packages/pegboard-gateway"
-
-    [workspace.dependencies.pegboard-gateway3]
-    path = "engine/packages/pegboard-gateway3"
 
     [workspace.dependencies.rivet-engine-context]
     path = "engine/packages/engine-context"

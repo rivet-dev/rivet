@@ -81,6 +81,7 @@ pub mod ups {
 		(16, START_NOTICE, "start-notice"),
 		(17, DATABASE_PREFETCH, "database-prefetch"),
 		(18, JWT_ROTATION, "jwt-rotation"),
+		(19, V2_MIGRATOR, "v2-migrator"),
 	}
 }
 
@@ -147,14 +148,21 @@ pub mod partition {
 		(32, ACTOR_STATE, "actor-state"),
 		(33, MAINTAINER_LOG, "maintainer-log"),
 		(34, ACTIVE_ENVOY_INDEX, "active-envoy-index"),
-		(35, MACHINE_TIMER, "machine-timer"),
-		(36, MACHINE_TIMER_BY_ID, "machine-timer-by-id"),
+		(35, MACHINE_TIMER_LEGACY, "machine-timer-legacy"),
+		(36, MACHINE_TIMER_BY_ID_LEGACY, "machine-timer-by-id-legacy"),
 		(37, ENVOY_STATE, "envoy-state"),
 		(38, DESTROYED_ACTOR, "destroyed-actor"),
 		(39, NAMESPACE_CATALOG, "namespace-catalog"),
 		(40, NAMESPACE, "namespace"),
 		(41, POOL_CONNECTION, "pool-connection"),
 		(42, POOL_HEARTBEAT, "pool-heartbeat"),
+		(43, MACHINE_TIMER, "machine-timer"),
+		(44, MACHINE_TIMER_BY_ID, "machine-timer-by-id"),
+		(45, V2_MIGRATOR, "v2-migrator"),
+		(46, V2_MIGRATOR_PASS, "v2-migrator-pass"),
+		(47, V2_MIGRATOR_IN_FLIGHT, "v2-migrator-in-flight"),
+		(48, V2_MIGRATOR_FENCE, "v2-migrator-fence"),
+		(49, ENVOY_VERSION, "envoy-version"),
 	}
 }
 
@@ -191,5 +199,9 @@ pub mod depot_command {
 		(34, PEGBOARD_NAMESPACE_LIST, "pegboard.namespace.list"),
 		(35, PEGBOARD_POOL, "pegboard.pool"),
 		(36, PEGBOARD_POOL_LIST, "pegboard.pool-list"),
+		(37, PEGBOARD_ACTOR_MIGRATE_FROM_V2_BEGIN, "pegboard.actor.migrate-from-v2-begin"),
+		(38, PEGBOARD_V2_MIGRATOR_STATE_WRITE, "pegboard.v2-migrator.state-write"),
+		(39, PEGBOARD_V2_MIGRATOR_STATE_LOAD, "pegboard.v2-migrator.state-load"),
+		(40, PEGBOARD_V2_MIGRATOR_STATE_READ, "pegboard.v2-migrator.state-read"),
 	}
 }

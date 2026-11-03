@@ -1,4 +1,5 @@
 use crate::Effects;
+use rivet_data::families::VersionFamily;
 use rivet_env::Clocks;
 pub use rivet_state_machine::RuntimeEffect;
 use rivet_state_machine::{
@@ -46,6 +47,10 @@ pub trait DurableStateMachine: Sized + Send + Sync + 'static {
 
 	const DEBUG_NAME: &'static str;
 
+	/// The version family the state and timers are encoded in. The runner encodes both at the
+	/// family's write version, the highest every live storage worker reads.
+	const FAMILY: VersionFamily;
+
 	fn start(
 		state: &mut Self::State,
 		now: Clocks,
@@ -71,11 +76,19 @@ pub trait DurableStateMachine: Sized + Send + Sync + 'static {
 		state.clone()
 	}
 
-	fn serialize_state(state: &Self::State) -> anyhow::Result<Vec<u8>>;
+	/// Encodes the state at `version` of [`Self::FAMILY`].
+	fn serialize_state(state: &Self::State, version: u16) -> anyhow::Result<Vec<u8>>;
 
 	fn deserialize_state(bytes: &[u8]) -> anyhow::Result<Self::State>;
 
-	fn serialize_timer(timer: &Self::Timer) -> anyhow::Result<Vec<u8>>;
+	/// The timer's stable identity. Arming a timer replaces the armed timer with the same id and
+	/// cancelling one removes it, whatever encoding its payload was stored in. The id names
+	/// every field that distinguishes two timers to the machine, and never changes for a timer
+	/// that may be stored.
+	fn timer_id(timer: &Self::Timer) -> Vec<u8>;
+
+	/// Encodes the timer at `version` of [`Self::FAMILY`].
+	fn serialize_timer(timer: &Self::Timer, version: u16) -> anyhow::Result<Vec<u8>>;
 
 	fn deserialize_timer(bytes: &[u8]) -> anyhow::Result<Self::Timer>;
 }

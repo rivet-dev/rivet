@@ -10,10 +10,10 @@ use pegboard::epoch::{wrapping_ge, wrapping_gt, wrapping_le, wrapping_lt, wrappi
 use pegboard::keys::partition::ActorDatabaseVolume;
 use rivet_envoy_protocol as p;
 use rivet_state_machine::IndexedDeadlineQueue;
+use rivet_topology::versions::WriteVersions;
 use rivet_util_id::Id;
 pub(crate) use routing::{
-	actor_id, expected_generation, not_running_failure, overloaded_failure, request,
-	stopped_failure,
+	actor_id, expected_epoch, not_running_failure, overloaded_failure, request, stopped_failure,
 };
 use std::sync::{
 	Arc, Weak,
@@ -141,33 +141,33 @@ impl Lane {
 }
 #[derive(Default)]
 struct Actor {
-	/// The lane's generation, meaningful once `bound`. Epochs wrap, so it is compared with
+	/// The lane's epoch, meaningful once `bound`. Epochs wrap, so it is compared with
 	/// the ring helpers, never the integer operators.
-	generation: u32,
-	/// Whether a generation has been bound to this lane. A fresh lane accepts any generation.
+	epoch: u32,
+	/// Whether a epoch has been bound to this lane. A fresh lane accepts any epoch.
 	bound: bool,
-	/// The incarnation `generation` belongs to, the actor's `create_unix_ms`. It names the
+	/// The incarnation `epoch` belongs to, the actor's `create_unix_ms`. It names the
 	/// database volume.
 	create_unix_ms: i64,
-	/// The newest generation whose database volume was found fenced, so another owner took
-	/// it. That generation and older ones never reopen it here; only a newer generation does.
+	/// The newest epoch whose database volume was found fenced, so another owner took
+	/// it. That epoch and older ones never reopen it here; only a newer epoch does.
 	fenced_through: Option<u32>,
-	/// A generation whose start showed its storage was never written. Its first SQLite
+	/// A epoch whose start showed its storage was never written. Its first SQLite
 	/// commit opens the database volume with that commit as the volume's creating writes,
 	/// instead of opening the volume and then committing.
-	fresh_generation: Option<u32>,
+	fresh_epoch: Option<u32>,
 	session: Option<remote::Session>,
 	/// The page protocol state, shared with the remote session's in-process transport. Both
 	/// paths reach it only while holding this lane.
 	pages: Arc<Mutex<Pages>>,
 }
 
-/// One actor's open database volume, for the current generation: its SQLite file and staged
+/// One actor's open database volume, for the current epoch: its SQLite file and staged
 /// commit, and its KV inode. The SQLite file and the KV inode are created on first use, so a
 /// KV-only actor creates no `/sqlite/`.
 #[derive(Default)]
 pub(super) struct Pages {
-	generation: u32,
+	epoch: u32,
 	volume: Option<OpenVolume>,
 	database: Option<database::Database>,
 	stage: Option<Stage>,
@@ -268,9 +268,9 @@ impl Sessions {
 		})
 	}
 
-	/// Retires `id`'s session for a stop of generation `through`, as [`Sessions::remove`]
+	/// Retires `id`'s session for a stop of epoch `through`, as [`Sessions::remove`]
 	/// does. The exclusive lease ends before stop completes; queued native cleanup retains
-	/// only fenced filesystem context, allowing the next local generation to open immediately.
+	/// only fenced filesystem context, allowing the next local epoch to open immediately.
 	pub async fn stop(&self, id: Id, through: u32) {
 		let lane = self.existing_lane(id).await;
 		let Some(lane) = lane else {
@@ -278,7 +278,7 @@ impl Sessions {
 			return;
 		};
 		let mut actor = lane.actor.clone().lock_owned().await;
-		if actor.bound && wrapping_gt(actor.generation, through) {
+		if actor.bound && wrapping_gt(actor.epoch, through) {
 			return;
 		}
 		if !self.remove_lane(id, &lane).await {
@@ -303,7 +303,7 @@ impl Sessions {
 	}
 
 	/// Retires `id`'s session at once, without waiting for a request that holds it. Only for
-	/// a stop whose drain timed out: no newer generation can hold the session yet, and the
+	/// a stop whose drain timed out: no newer epoch can hold the session yet, and the
 	/// stuck request fails at its next session check.
 	pub async fn retire_now(&self, id: Id) {
 		if let Some((_, lane)) = self.actors.remove_async(&id).await {
@@ -313,10 +313,10 @@ impl Sessions {
 		self.expiry.lock().cancel(&id);
 	}
 
-	/// Retires `id`'s session when it belongs to `through` or an older generation. A session a
-	/// newer generation already took is left alone, so retiring a stopped generation never ends
+	/// Retires `id`'s session when it belongs to `through` or an older epoch. A session a
+	/// newer epoch already took is left alone, so retiring a stopped epoch never ends
 	/// its successor's session. The check and the retire run under the session lock, which
-	/// every request takes before it binds its generation.
+	/// every request takes before it binds its epoch.
 	pub async fn remove(&self, id: Id, through: u32) {
 		let lane = self.existing_lane(id).await;
 		let Some(lane) = lane else {
@@ -324,7 +324,7 @@ impl Sessions {
 			return;
 		};
 		let actor = lane.actor.clone().lock_owned().await;
-		if actor.bound && wrapping_gt(actor.generation, through) {
+		if actor.bound && wrapping_gt(actor.epoch, through) {
 			return;
 		}
 		if !self.remove_lane(id, &lane).await {
@@ -393,23 +393,23 @@ impl Sessions {
 		}
 		Ok(())
 	}
-	/// Runs one SQLite request as `generation` of the incarnation `create_unix_ms`, whose
+	/// Runs one SQLite request as `epoch` of the incarnation `create_unix_ms`, whose
 	/// database volume it opens.
 	pub async fn execute(
 		&self,
 		client: depot_client::Client,
 		id: Id,
-		generation: u32,
+		epoch: u32,
 		create_unix_ms: i64,
 		message: p::ToRivet,
 	) -> Result<p::ToEnvoy> {
 		let span = tracing::trace_span!(target: "sqlite_prefetch::trace", "execute",
-            actor_id = %id, generation, create_unix_ms);
+            actor_id = %id, epoch, create_unix_ms);
 		trace_scope::scope(span, async {
 			// The lane is resolved once and carried through both steps of the request.
 			let lane = self.lane(id).await?;
 			if let Some(reply) = self
-				.first_commit(&lane, &client, id, generation, create_unix_ms, &message)
+				.first_commit(&lane, &client, id, epoch, create_unix_ms, &message)
 				.await?
 			{
 				return Ok(reply);
@@ -419,7 +419,7 @@ impl Sessions {
 				&lane,
 				env,
 				id,
-				generation,
+				epoch,
 				create_unix_ms,
 				message,
 				open_volume(client, id, create_unix_ms),
@@ -429,18 +429,18 @@ impl Sessions {
 		.await
 	}
 
-	/// Records that `generation` starts on storage that was never written, so its first SQLite
+	/// Records that `epoch` starts on storage that was never written, so its first SQLite
 	/// commit creates the database volume with that commit, in one depot round.
-	pub async fn expect_fresh(&self, id: Id, generation: u32) -> Result<()> {
+	pub async fn expect_fresh(&self, id: Id, epoch: u32) -> Result<()> {
 		let lane = self.lane(id).await?;
 		let mut actor = lane.actor.lock().await;
-		if !actor.bound || wrapping_ge(generation, actor.generation) {
-			actor.fresh_generation = Some(generation);
+		if !actor.bound || wrapping_ge(epoch, actor.epoch) {
+			actor.fresh_epoch = Some(epoch);
 		}
 		Ok(())
 	}
 
-	/// Runs the first SQLite commit of a fresh generation as the creating writes of its
+	/// Runs the first SQLite commit of a fresh epoch as the creating writes of its
 	/// database volume. Returns `None` when the request is not such a commit, or when the
 	/// open did not create the volume with it; the volume is then open, and the request runs
 	/// as usual. A reply is returned only once the commit is durable.
@@ -449,33 +449,32 @@ impl Sessions {
 		lane: &Arc<Lane>,
 		client: &depot_client::Client,
 		id: Id,
-		generation: u32,
+		epoch: u32,
 		create_unix_ms: i64,
 		message: &p::ToRivet,
 	) -> Result<Option<p::ToEnvoy>> {
 		let span = tracing::trace_span!(target: "sqlite_prefetch::trace", "first_commit",
-            actor_id = %id, generation, create_unix_ms);
+            actor_id = %id, epoch, create_unix_ms);
 		trace_scope::scope(span, async {
 			let p::ToRivet::ToRivetSqliteCommitRequest(_) = message else {
 				return Ok(None);
 			};
 			let mut actor = lane.actor.clone().lock_owned().await;
 			lane.check()?;
-			if actor.fresh_generation != Some(generation) || actor.fenced_through.is_some() {
+			if actor.fresh_epoch != Some(epoch) || actor.fenced_through.is_some() {
 				return Ok(None);
 			}
-			actor.fresh_generation = None;
+			actor.fresh_epoch = None;
 			let mut pages = actor.pages.clone().lock_owned().await;
-			if pages.volume.is_some() || (actor.bound && wrapping_lt(generation, actor.generation))
-			{
+			if pages.volume.is_some() || (actor.bound && wrapping_lt(epoch, actor.epoch)) {
 				return Ok(None);
 			}
-			if !actor.bound || actor.generation != generation {
+			if !actor.bound || actor.epoch != epoch {
 				actor.session = None;
 				pages.stage = None;
-				actor.generation = generation;
+				actor.epoch = epoch;
 				actor.bound = true;
-				pages.generation = generation;
+				pages.epoch = epoch;
 			}
 			actor.create_unix_ms = create_unix_ms;
 
@@ -534,12 +533,12 @@ impl Sessions {
 		&self,
 		client: depot_client::Client,
 		id: Id,
-		generation: u32,
+		epoch: u32,
 		create_unix_ms: i64,
 	) -> Result<impl std::future::Future<Output = ()> + Send + use<>> {
 		self.prefetch_on(
 			id,
-			generation,
+			epoch,
 			create_unix_ms,
 			open_volume(client, id, create_unix_ms),
 		)
@@ -550,7 +549,7 @@ impl Sessions {
 	async fn prefetch_on<F, O>(
 		&self,
 		id: Id,
-		generation: u32,
+		epoch: u32,
 		create_unix_ms: i64,
 		open: O,
 	) -> Result<impl std::future::Future<Output = ()> + use<F, O>>
@@ -565,7 +564,7 @@ impl Sessions {
 				reason = "slow-open logging uses real time"
 			)]
 			let started = std::time::Instant::now();
-			let result = Self::prepare(&lane, generation, create_unix_ms, open)
+			let result = Self::prepare(&lane, epoch, create_unix_ms, open)
 				.await
 				.map(|_| ());
 			let elapsed = started.elapsed();
@@ -573,14 +572,14 @@ impl Sessions {
 			if elapsed >= std::time::Duration::from_secs(5) {
 				tracing::warn!(
 					%id,
-					generation,
+					epoch,
 					elapsed_ms = elapsed.as_millis() as u64,
 					ok = result.is_ok(),
 					"slow actor database volume prefetch; the start's first storage request waits for it"
 				);
 			}
 			if let Err(error) = result {
-				tracing::debug!(%id, generation, ?error, "actor database volume prefetch failed; the first storage request opens it");
+				tracing::debug!(%id, epoch, ?error, "actor database volume prefetch failed; the first storage request opens it");
 			}
 		})
 	}
@@ -590,15 +589,17 @@ impl Sessions {
 		&self,
 		client: depot_client::Client,
 		id: Id,
-		generation: u32,
+		epoch: u32,
 		create_unix_ms: i64,
 		data: p::KvRequestData,
 	) -> Result<p::KvResponseData> {
 		let env = client.env().clone();
+		let versions: Arc<dyn WriteVersions> = client.topology().clone();
 		self.kv_on(
 			env,
+			versions,
 			id,
-			generation,
+			epoch,
 			create_unix_ms,
 			data,
 			open_volume(client, id, create_unix_ms),
@@ -609,17 +610,18 @@ impl Sessions {
 	async fn kv_on<F: std::future::Future<Output = Result<OpenVolume>>>(
 		&self,
 		env: Arc<dyn rivet_env::Env>,
+		versions: Arc<dyn WriteVersions>,
 		id: Id,
-		generation: u32,
+		epoch: u32,
 		create_unix_ms: i64,
 		data: p::KvRequestData,
 		open: impl FnOnce(Arc<dyn Fn() -> bool + Send + Sync>) -> F,
 	) -> Result<p::KvResponseData> {
 		let lane = self.lane(id).await?;
-		let (_actor, mut pages) = Self::prepare(&lane, generation, create_unix_ms, open).await?;
+		let (_actor, mut pages) = Self::prepare(&lane, epoch, create_unix_ms, open).await?;
 		let ino = pages.kv_ino().await?;
 		let fs = pages.fs()?.clone();
-		let result = crate::kv::execute(env.as_ref(), &fs, ino, data).await;
+		let result = crate::kv::execute(env.as_ref(), versions.as_ref(), &fs, ino, data).await;
 		lane.check()?;
 		result
 	}
@@ -683,11 +685,11 @@ impl Sessions {
 		removed
 	}
 
-	/// Takes the lane for `generation` of the incarnation `create_unix_ms` and makes sure its
+	/// Takes the lane for `epoch` of the incarnation `create_unix_ms` and makes sure its
 	/// database volume is open.
 	async fn prepare<F: std::future::Future<Output = Result<OpenVolume>>>(
 		lane: &Arc<Lane>,
-		generation: u32,
+		epoch: u32,
 		create_unix_ms: i64,
 		open: impl FnOnce(Arc<dyn Fn() -> bool + Send + Sync>) -> F,
 	) -> Result<(
@@ -697,24 +699,24 @@ impl Sessions {
 		let mut actor = lane.actor.clone().lock_owned().await;
 		lane.check()?;
 		let mut pages = actor.pages.clone().lock_owned().await;
-		// A lane's generation only moves forward. A late start or request of an older
-		// generation would otherwise drop the live generation's staged commit and write with a
-		// head the live generation has moved past, failing its next commit's head fence.
+		// A lane's epoch only moves forward. A late start or request of an older
+		// epoch would otherwise drop the live epoch's staged commit and write with a
+		// head the live epoch has moved past, failing its next commit's head fence.
 		ensure!(
-			!actor.bound || wrapping_ge(generation, actor.generation),
-			"storage request for an older actor generation"
+			!actor.bound || wrapping_ge(epoch, actor.epoch),
+			"storage request for an older actor epoch"
 		);
-		// A fenced volume means another owner opened it, such as the actor's next generation
+		// A fenced volume means another owner opened it, such as the actor's next epoch
 		// started elsewhere after this one was judged lost. The fence is terminal for the
-		// generation that held it: reopening would fence the new owner in turn.
+		// epoch that held it: reopening would fence the new owner in turn.
 		if pages
 			.volume
 			.as_ref()
 			.is_some_and(|volume| volume.fs.is_fenced())
 		{
-			let fenced = actor.fenced_through.map_or(actor.generation, |fenced| {
-				wrapping_max(fenced, actor.generation)
-			});
+			let fenced = actor
+				.fenced_through
+				.map_or(actor.epoch, |fenced| wrapping_max(fenced, actor.epoch));
 			actor.fenced_through = Some(fenced);
 			actor.session = None;
 			pages.stage = None;
@@ -726,24 +728,24 @@ impl Sessions {
 			pages.volume = None;
 		}
 		if let Some(fenced) = actor.fenced_through {
-			if wrapping_le(generation, fenced) {
+			if wrapping_le(epoch, fenced) {
 				return Err(anyhow::Error::new(page_protocol::HeadFenceMismatch)).with_context(
 					|| {
 						format!(
-							"actor database volume was fenced for generation {fenced}; only a newer generation reopens it"
+							"actor database volume was fenced for epoch {fenced}; only a newer epoch reopens it"
 						)
 					},
 				);
 			}
 		}
-		if !actor.bound || actor.generation != generation {
-			// A new generation drops open SQL transactions and staged commits, retaining the
+		if !actor.bound || actor.epoch != epoch {
+			// A new epoch drops open SQL transactions and staged commits, retaining the
 			// exclusive filesystem owner instead of claiming it on every request.
 			actor.session = None;
 			pages.stage = None;
-			actor.generation = generation;
+			actor.epoch = epoch;
 			actor.bound = true;
-			pages.generation = generation;
+			pages.epoch = epoch;
 		}
 		actor.create_unix_ms = create_unix_ms;
 		if pages.volume.is_none() {
@@ -758,23 +760,22 @@ impl Sessions {
 	/// with the volume open injected so tests can supply their own I/O.
 	#[allow(
 		clippy::too_many_arguments,
-		reason = "a request needs its lane, identity, generation, incarnation and open"
+		reason = "a request needs its lane, identity, epoch, incarnation and open"
 	)]
 	async fn execute_in<F: std::future::Future<Output = Result<OpenVolume>>>(
 		&self,
 		lane: &Arc<Lane>,
 		env: Arc<dyn rivet_env::Env>,
 		id: Id,
-		generation: u32,
+		epoch: u32,
 		create_unix_ms: i64,
 		message: p::ToRivet,
 		open: impl FnOnce(Arc<dyn Fn() -> bool + Send + Sync>) -> F,
 	) -> Result<p::ToEnvoy> {
 		let span = tracing::trace_span!(target: "sqlite_prefetch::trace", "execute_in",
-            actor_id = %id, generation, create_unix_ms);
+            actor_id = %id, epoch, create_unix_ms);
 		trace_scope::scope(span, async {
-			let (mut actor, mut pages) =
-				Self::prepare(lane, generation, create_unix_ms, open).await?;
+			let (mut actor, mut pages) = Self::prepare(lane, epoch, create_unix_ms, open).await?;
 			if pages.database.is_none() {
 				pages.database().await?;
 			}
@@ -793,7 +794,7 @@ impl Sessions {
 							Arc::downgrade(lane),
 							format!("envoy-remote-sqlite-{}", env.rng("sqlite.vfs").uuid_v4()),
 							id.to_string(),
-							generation,
+							epoch,
 							&self.remote.pool,
 							sqlite_embedded::guard::ConnectionGuard {
 								max_result_bytes: self.remote.max_response_bytes as u64,

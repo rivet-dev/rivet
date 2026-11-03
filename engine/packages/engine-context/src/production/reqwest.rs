@@ -45,6 +45,16 @@ pub fn peer_client_with(
 	))
 }
 
+/// Servers outside the cluster, such as the V2 deployment a migration from V2 proxies to. Their
+/// URLs come from operator config, and Env owns the request deadline.
+pub fn external_client() -> Result<Arc<dyn rivet_env::capabilities::http::ExternalHttpClient>> {
+	Ok(Arc::new(
+		rivet_env::backends::production::external_http::ExternalReqwestClient::new(
+			CLIENT_USER_AGENT,
+		)?,
+	))
+}
+
 /// Build policy from this instance's configuration, without a process-global cache.
 pub async fn outbound_policy(config: &rivet_config::Config) -> Result<Arc<Policy>> {
 	Ok(Arc::new(Policy::from_config(config)?))

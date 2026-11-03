@@ -125,6 +125,7 @@ pub fn secure_random(bytes: &mut [u8]) -> Result<(), ::rand::Error> {
 	::rand::rngs::OsRng.try_fill_bytes(bytes)
 }
 
+pub mod external_http;
 pub mod fs;
 pub mod host;
 pub mod http;

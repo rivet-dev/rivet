@@ -27,8 +27,8 @@ pub(crate) fn actor_id(message: &p::ToRivet) -> Result<&str> {
 	})
 }
 
-/// The generation a SQLite request expects to own the actor, when it names one.
-pub(crate) fn expected_generation(message: &p::ToRivet) -> Option<u64> {
+/// The epoch a SQLite request expects to own the actor, when it names one.
+pub(crate) fn expected_epoch(message: &p::ToRivet) -> Option<u64> {
 	match message {
 		p::ToRivet::ToRivetSqliteGetPagesRequest(req) => req.data.expected_generation,
 		p::ToRivet::ToRivetSqliteCommitRequest(req) => req.data.expected_generation,
@@ -48,14 +48,14 @@ pub(crate) fn expected_generation(message: &p::ToRivet) -> Option<u64> {
 	}
 }
 
-/// The generation a request may run as: the one this connection owns, and only when the
-/// request expects that same generation.
-fn admitted_generation(owned: Option<u32>, message: &p::ToRivet) -> Option<u32> {
-	let expected = expected_generation(message);
-	owned.filter(|generation| expected.is_none_or(|expected| expected == u64::from(*generation)))
+/// The epoch a request may run as: the one this connection owns, and only when the
+/// request expects that same epoch.
+fn admitted_epoch(owned: Option<u32>, message: &p::ToRivet) -> Option<u32> {
+	let expected = expected_epoch(message);
+	owned.filter(|epoch| expected.is_none_or(|expected| expected == u64::from(*epoch)))
 }
 
-/// Runs one SQLite request for the generation this connection owns. Every failure becomes a
+/// Runs one SQLite request for the epoch this connection owns. Every failure becomes a
 /// request-scoped error reply so one actor never closes the shared socket.
 pub(crate) async fn request(
 	ctx: &EngineContext,
@@ -72,10 +72,10 @@ pub(crate) async fn request(
 		}
 	};
 	let create_unix_ms = owned.map(|(_, create_unix_ms)| create_unix_ms);
-	let owned = owned.map(|(generation, _)| generation);
-	let Some(generation) = admitted_generation(owned, &message) else {
-		// No generation owns the actor here, so its session is retired. A request of a stale
-		// generation only retires sessions older than the one this connection owns.
+	let owned = owned.map(|(epoch, _)| epoch);
+	let Some(epoch) = admitted_epoch(owned, &message) else {
+		// No epoch owns the actor here, so its session is retired. A request of a stale
+		// epoch only retires sessions older than the one this connection owns.
 		let through = match owned {
 			Some(owned) => owned.saturating_sub(1),
 			None => u32::MAX,
@@ -89,14 +89,14 @@ pub(crate) async fn request(
 		);
 	};
 
-	let create_unix_ms = create_unix_ms.context("owned generation without an incarnation")?;
+	let create_unix_ms = create_unix_ms.context("owned epoch without an incarnation")?;
 	// The request moves into its session; an error reply needs only its kind and ID.
 	let reply_to = ReplyTo::of(&message)?;
 	let span = tracing::trace_span!(target: "sqlite_prefetch::trace", "sqlite_request",
         wire_request_id = reply_to.request_id, wire_kind = ?reply_to.kind);
 	let result = super::trace_scope::scope(
 		span,
-		sessions.execute(ctx.depot(), id, generation, create_unix_ms, message),
+		sessions.execute(ctx.depot(), id, epoch, create_unix_ms, message),
 	)
 	.await;
 
@@ -147,14 +147,14 @@ fn refused_before_dispatch(error: &anyhow::Error) -> Option<u64> {
 }
 
 /// Builds the request-scoped error reply for a SQLite request.
-/// The reply to a request of `generation` after that generation stopped on this connection. It
+/// The reply to a request of `epoch` after that epoch stopped on this connection. It
 /// is a head fence mismatch, so the runtime treats it as lost ownership.
-pub(crate) fn stopped_failure(request: &p::ToRivet, generation: u64) -> Result<p::ToEnvoy> {
+pub(crate) fn stopped_failure(request: &p::ToRivet, epoch: u64) -> Result<p::ToEnvoy> {
 	failure(
 		request,
 		sqlite_types::HEAD_FENCE_MISMATCH_GROUP,
 		sqlite_types::HEAD_FENCE_MISMATCH_CODE,
-		format!("actor stopped: generation {generation} stopped on this envoy"),
+		format!("actor stopped: epoch {epoch} stopped on this envoy"),
 	)
 }
 

@@ -91,7 +91,7 @@ impl Registry {
 		self,
 		config: ServeConfig,
 		shutdown: CancellationToken,
-		on_handle: impl FnOnce(CoreEnvoyHandle) + Send + 'static,
+		on_handle: impl Fn(CoreEnvoyHandle) + Send + 'static,
 	) -> Result<()> {
 		self.inner
 			.serve_with_config_and_handle_observer(config, shutdown, on_handle)

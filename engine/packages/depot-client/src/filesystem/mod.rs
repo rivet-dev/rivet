@@ -63,8 +63,9 @@ pub enum Error {
 	#[error("cold store is unavailable")]
 	Unavailable,
 	/// The tablet maintainer did not serve a cold read: the route names no maintainer, the
-	/// maintainer refused the read, or the request failed in transport. Reads are idempotent,
-	/// so a caller may send the read again after a pause, for example once a re-grant lands.
+	/// maintainer refused the read, UPS refused to admit the request, or the request failed in
+	/// transport. Reads are idempotent, so a caller may send the read again after a pause, for
+	/// example once a re-grant lands or a full request lane drains.
 	#[error("cold read was refused while the tablet maintainer is unavailable")]
 	ColdReadRefused,
 	#[error("inherited filesystem data is unavailable")]

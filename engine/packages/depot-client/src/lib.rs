@@ -280,8 +280,14 @@ impl Client {
 					depot_types::client::not_maintainer(),
 				)));
 			}
+			// The maintainer shed the read, so the caller may send the delete again after the
+			// hint.
 			Ok(FsReadResponse::FsReadError(FsReadError::Overloaded))
-			| Err(filesystem::Error::Overloaded) => return Err(volumes::Error::Overloaded),
+			| Err(filesystem::Error::Overloaded) => {
+				return Err(volumes::Error::Lifecycle(RpcError::LifecycleRejected(
+					depot_types::client::overloaded(),
+				)));
+			}
 			// The current incarnation has no stored record, so no read can resolve it; the
 			// refusal names it, and deleting it is exactly the repair the name needs.
 			Err(filesystem::Error::RecordMissing { incarnation }) => {

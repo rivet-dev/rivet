@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { actor } from "rivetkit";
 import { db } from "rivetkit/db";
 
@@ -48,6 +49,33 @@ interface ReadRandomResult {
 	maxId: number;
 }
 
+interface DigestInput {
+	// Hash only rows with an id above this one.
+	afterId?: number;
+	// Hash only rows with an id up to this one, so rows appended later are left out.
+	maxId?: number;
+	// Rows hashed per call. Bounds one call's time and memory on any database size.
+	limit?: number;
+	// The chain value after the row `afterId`, as returned by the previous call. Hex; empty or
+	// absent for the start of the table.
+	chain?: string;
+}
+
+interface DigestResult {
+	rows: number;
+	// The id of the last hashed row, where the next call continues. `afterId` when no row was hashed.
+	lastId: number;
+	// The chain after the last hashed row.
+	chain: string;
+}
+
+interface StoredDigest {
+	// The chain over every row grow() inserted, kept in the same transaction as each batch.
+	chain: string;
+	rows: number;
+	lastId: number;
+}
+
 interface StorageStats {
 	pageCount: number;
 	pageSize: number;
@@ -63,6 +91,36 @@ interface GrowResult extends StorageStats {
 	elapsedMs: number;
 }
 
+const DEFAULT_DIGEST_LIMIT = 2048;
+const CHAIN_START = "0".repeat(64);
+
+// The content chain over rows in id order: each row's hash is folded into
+// the previous chain value. grow() keeps it current as it inserts, so the
+// expected content of a database is one small row instead of a full read.
+function chainRow(
+	chain: string,
+	row: { id: number; batch: number; created_at: number; payload: Uint8Array },
+): string {
+	const rowHash = createHash("sha256")
+		.update(`${row.id}:${row.batch}:${row.created_at}:`)
+		.update(row.payload)
+		.digest();
+	return createHash("sha256")
+		.update(Buffer.from(chain, "hex"))
+		.update(rowHash)
+		.digest("hex");
+}
+
+async function storedDigest(database: {
+	execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+}): Promise<StoredDigest> {
+	const rows = (await database.execute(
+		"SELECT chain, rows, last_id FROM grow_digest WHERE id = 1",
+	)) as Array<{ chain: string; rows: number; last_id: number }>;
+	const row = rows[0];
+	if (!row) return { chain: CHAIN_START, rows: 0, lastId: 0 };
+	return { chain: row.chain, rows: row.rows, lastId: row.last_id };
+}
 const DEFAULT_TARGET_MB = 64;
 // 64 rows x 8 KiB payload dirties ~130 SQLite pages per commit, comfortably
 // under the depot MAX_COMMIT_DIRTY_PAGES (320) cap and giving one uncompacted
@@ -111,7 +169,7 @@ export const growDb = actor({
 	options: {
 		// Generous per-action timeout. grow() self-limits with budgetMs and
 		// returns done=false before this fires.
-		actionTimeout: 300_000,
+		actionTimeout: 1_800_000,
 	},
 	db: db({
 		onMigrate: async (database) => {
@@ -121,6 +179,14 @@ export const growDb = actor({
 					batch INTEGER NOT NULL,
 					payload BLOB NOT NULL,
 					created_at INTEGER NOT NULL
+				)
+			`);
+			await database.execute(`
+				CREATE TABLE IF NOT EXISTS grow_digest (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					chain TEXT NOT NULL,
+					rows INTEGER NOT NULL,
+					last_id INTEGER NOT NULL
 				)
 			`);
 		},
@@ -135,7 +201,7 @@ export const growDb = actor({
 			const targetBytes = targetMb * MEBIBYTE;
 
 			const placeholders = new Array(batchRows)
-				.fill("(?, randomblob(?), ?)")
+				.fill("(?, ?, ?, ?)")
 				.join(", ");
 
 			let batchesThisCall = 0;
@@ -154,19 +220,43 @@ export const growDb = actor({
 					};
 				}
 
-				const now = Date.now();
-				const args: unknown[] = [];
-				for (let i = 0; i < batchRows; i += 1) {
-					args.push(batchesThisCall, rowBytes, now);
-				}
-
 				// One commit per batch so each iteration produces exactly one
-				// uncompacted delta in FDB.
+				// uncompacted delta in FDB. The content chain advances in the
+				// same transaction, so it always covers exactly the stored rows.
 				await c.db.execute("BEGIN");
 				try {
+					const digest = await storedDigest(c.db);
+					const maxRow = await queryOne<{ max_id: number | null }>(
+						c.db,
+						"SELECT max(id) AS max_id FROM grow_rows",
+					);
+					if ((maxRow.max_id ?? 0) !== digest.lastId) {
+						throw new Error(
+							`grow_digest covers rows up to ${digest.lastId} but the table holds rows up to ${maxRow.max_id}`,
+						);
+					}
+					const now = Date.now();
+					const args: unknown[] = [];
+					let chain = digest.chain;
+					for (let i = 0; i < batchRows; i += 1) {
+						const row = {
+							id: digest.lastId + 1 + i,
+							batch: batchesThisCall,
+							created_at: now,
+							payload: randomBytes(rowBytes),
+						};
+						chain = chainRow(chain, row);
+						args.push(row.id, row.batch, row.payload, row.created_at);
+					}
 					await c.db.execute(
-						`INSERT INTO grow_rows (batch, payload, created_at) VALUES ${placeholders}`,
+						`INSERT INTO grow_rows (id, batch, payload, created_at) VALUES ${placeholders}`,
 						...args,
+					);
+					await c.db.execute(
+						"INSERT INTO grow_digest (id, chain, rows, last_id) VALUES (1, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET chain = excluded.chain, rows = excluded.rows, last_id = excluded.last_id",
+						chain,
+						digest.rows + batchRows,
+						digest.lastId + batchRows,
 					);
 					await c.db.execute("COMMIT");
 				} catch (err) {
@@ -243,6 +333,33 @@ export const growDb = actor({
 			}
 			return { count, hits, bytes, maxId };
 		},
+		// Content verification for the migration load test. The caller chains
+		// the hashes of consecutive ranges, so a database of any size is hashed
+		// in calls that each stay well under the action and gateway timeouts.
+		digest: async (c, input: DigestInput = {}): Promise<DigestResult> => {
+			const afterId = input.afterId ?? 0;
+			const maxId = input.maxId ?? Number.MAX_SAFE_INTEGER;
+			const limit = finiteInt(input.limit, DEFAULT_DIGEST_LIMIT);
+			const rows = (await c.db.execute(
+				"SELECT id, batch, created_at, payload FROM grow_rows WHERE id > ? AND id <= ? ORDER BY id LIMIT ?",
+				afterId,
+				maxId,
+				limit,
+			)) as Array<{
+				id: number;
+				batch: number;
+				created_at: number;
+				payload: Uint8Array | ArrayBuffer;
+			}>;
+			let chain = input.chain || CHAIN_START;
+			for (const row of rows) {
+				chain = chainRow(chain, { ...row, payload: new Uint8Array(row.payload) });
+			}
+			return { rows: rows.length, lastId: rows.at(-1)?.id ?? afterId, chain };
+		},
+		// The chain grow() kept: the expected content of the database, read in
+		// one query.
+		storedDigest: async (c): Promise<StoredDigest> => storedDigest(c.db),
 		// Full-database verification for the compaction rig. This reads every
 		// page through the depot VFS, so it exercises PIDX resolution across
 		// folded shards and any remaining unfolded deltas. Deliberately not

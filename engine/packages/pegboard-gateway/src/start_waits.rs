@@ -40,6 +40,8 @@ pub enum Notice {
 	EpoxyAlreadyReserved { reservation_id: Id },
 	/// The actor is being destroyed and took its waiters. A getOrCreate creates it again.
 	Destroyed,
+	/// The V2 migrator recalled the actor and took its waiters, so V2 serves it again.
+	MigratingFromV2,
 }
 
 impl Notice {
@@ -59,6 +61,7 @@ impl Notice {
 				}
 			}
 			wire::ActorStartNoticeKind::ActorStartNoticeDestroyed => Notice::Destroyed,
+			wire::ActorStartNoticeKind::ActorStartNoticeMigratingFromV2 => Notice::MigratingFromV2,
 		})
 	}
 }

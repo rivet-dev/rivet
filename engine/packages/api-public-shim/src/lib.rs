@@ -128,16 +128,33 @@ impl IntoResponse for ApiError {
 			("auth", "verification_unavailable" | "issuance_unavailable") => {
 				StatusCode::SERVICE_UNAVAILABLE
 			}
+			("actor", "migrating_from_v2") => StatusCode::SERVICE_UNAVAILABLE,
 			_ => StatusCode::BAD_REQUEST,
 		};
-		let body = serde_json::json!({
+		let mut body = serde_json::json!({
 			"group": structured.group(),
 			"code": structured.code(),
 			"message": structured.message(),
 		});
+		let metadata = structured.metadata();
+		if let Some(metadata) = &metadata {
+			body["metadata"] = metadata.clone();
+		}
 		let mut response = (status, Json(body)).into_response();
-		if let Ok(reason) = format!("{}.{}", structured.group(), structured.code()).parse() {
-			response.headers_mut().insert("x-rivet-error", reason);
+		let error_code = format!("{}.{}", structured.group(), structured.code());
+		if let Ok(value) = hyper::header::HeaderValue::from_str(&error_code) {
+			response.headers_mut().insert("x-rivet-error", value);
+		}
+		// A retryable refusal tells the client when to come back.
+		let retry_after_ms = metadata
+			.as_ref()
+			.and_then(|metadata| metadata.get("retry_after_ms")?.as_u64());
+		if let Some(retry_after_ms) = retry_after_ms {
+			let retry_after_secs = retry_after_ms.div_ceil(1_000).max(1);
+			response.headers_mut().insert(
+				hyper::header::RETRY_AFTER,
+				hyper::header::HeaderValue::from(retry_after_secs),
+			);
 		}
 		response
 	}

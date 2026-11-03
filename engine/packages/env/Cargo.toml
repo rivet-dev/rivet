@@ -41,5 +41,6 @@ axum = { workspace = true, features = ["ws"] }
 hyper-util.workspace = true
 libc.workspace = true
 reqwest = { workspace = true, features = ["stream", "http2"] }
+tokio-tungstenite.workspace = true
 tokio = { workspace = true, features = ["full"] }
 

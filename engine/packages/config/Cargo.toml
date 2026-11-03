@@ -7,6 +7,7 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
+arc-swap.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
 config.workspace = true

@@ -3,7 +3,7 @@ use crate::{
 	keys::{
 		kv::{
 			EnvoyPoolKey, EnvoyPoolPrefix, NamespaceKey, NamespacePrefix, PoolConnectionKey,
-			PoolConnectionPrefix, PoolHeartbeatKey, PoolHeartbeatPrefix,
+			PoolConnectionPrefix, PoolHeartbeatKey, PoolHeartbeatPrefix, at_write_version,
 		},
 		partition::{EnvoyPoolIndexVolume, NamespaceCatalogVolume},
 	},
@@ -84,13 +84,11 @@ async fn bootstrap(clock: &dyn Clock, db: &KvHandle) -> Result<()> {
 	let key = NamespaceKey::new(crate::DEFAULT_NAMESPACE.to_owned());
 	let mut txn = db.begin().await?;
 	if txn.get(&key.pack()).await?.is_none() {
-		txn.put(
-			&key.pack(),
-			&key.serialize(wire::NamespaceRecord {
-				create_unix_ms: clock.observe()?.unix_ms,
-				create_operation_id: vec![0; 16].into(),
-			})?,
-		)?;
+		let record = wire::NamespaceRecord {
+			create_unix_ms: clock.observe()?.unix_ms,
+			create_operation_id: vec![0; 16].into(),
+		};
+		txn.put(&key.pack(), &key.serialize(at_write_version(db, record)?)?)?;
 		db.commit(txn).await?;
 	}
 	Ok(())
@@ -118,7 +116,10 @@ async fn create_handler(
 		create_unix_ms: request.create_unix_ms,
 		create_operation_id: db.operation_id().to_vec().into(),
 	};
-	txn.put(&key.pack(), &key.serialize(record.clone())?)?;
+	txn.put(
+		&key.pack(),
+		&key.serialize(at_write_version(&db, record.clone())?)?,
+	)?;
 	db.commit(txn).await?;
 	Ok(wire::NamespaceCreateResponse {
 		created: true,
@@ -215,7 +216,10 @@ async fn pool_handler(
 		.saturating_sub(crate::ENVOY_HEARTBEAT_TIMEOUT_MS);
 	match request.operation {
 		wire::PoolOperation::PoolPut(value) => {
-			txn.put(&key.pack(), &key.serialize(value.clone())?)?;
+			txn.put(
+				&key.pack(),
+				&key.serialize(at_write_version(&db, value.clone())?)?,
+			)?;
 			config = Some(value);
 			status = wire::PoolStatus::Ok;
 		}
@@ -287,7 +291,10 @@ async fn pool_handler(
 				}
 				txn.put(
 					&lease_key.pack(),
-					&lease_key.serialize(wire::PoolLease { heartbeat_unix_ms })?,
+					&lease_key.serialize(at_write_version(
+						&db,
+						wire::PoolLease { heartbeat_unix_ms },
+					)?)?,
 				)?;
 				txn.put(
 					&PoolHeartbeatKey::new(name, heartbeat_unix_ms, id).pack(),

@@ -18,7 +18,6 @@ use rivet_env::{
 };
 use rivet_envoy_protocol as p;
 use rivetkit_shared_types::actor_key;
-use std::collections::HashSet;
 use std::sync::{
 	Arc,
 	atomic::{AtomicI64, AtomicU64, Ordering},
@@ -43,6 +42,8 @@ struct Connection {
 	/// first. Allocation picks envoys from that index, so it is kept inside the heartbeat
 	/// window while the envoy answers pings and removed when it stops or disconnects.
 	last_heartbeat_unix_ms: AtomicI64,
+	/// Whether a newer version superseded this envoy, and the eviction of its actors.
+	version_drain: crate::version_drain::State,
 	to_envoy_tx: crate::queue::Sender<ToEnvoyFrame>,
 	/// A failed event lane ends the connection so its unacknowledged checkpoints replay.
 	/// Separate from the socket queue: backpressure must not prevent this close.
@@ -61,11 +62,6 @@ struct Connection {
 	gateway_handles: scc::HashMap<([u8; 4], [u8; 4]), Arc<GatewayHandle>>,
 	actor_handles: scc::HashMap<String, Arc<ActorHandle>>,
 	actor_handle_budget: crate::admission::ActorHandleBudget,
-	/// This process's lost checks for closed connections.
-	lost_checks: Arc<crate::lost_checks::LostChecks>,
-	/// Generations a closed connection of this envoy hosted, taken over when this connection
-	/// cancelled that connection's lost check. They join this connection's own check at close.
-	inherited: Mutex<Vec<crate::lost_checks::HostedActor>>,
 	connection_id: Uuid,
 	version: u16,
 }
@@ -76,6 +72,7 @@ pub async fn run(
 	envoy_key: String,
 	scope: crate::routes::EnvoyScope,
 	version: u16,
+	envoy_version: u32,
 	service: crate::Service,
 	connection_id: Option<Uuid>,
 ) -> Result<()> {
@@ -112,6 +109,7 @@ pub async fn run(
 		envoy_key.clone(),
 		ctx.ups()?.worker_id().as_bytes().to_vec(),
 		connection_id.as_bytes().to_vec(),
+		envoy_version,
 		now,
 	));
 
@@ -148,6 +146,7 @@ pub async fn run(
 		record,
 		pool_config: Default::default(),
 		last_heartbeat_unix_ms: AtomicI64::new(0),
+		version_drain: Default::default(),
 		to_envoy_tx,
 		event_failure,
 		queue_pressure,
@@ -157,8 +156,6 @@ pub async fn run(
 		gateway_handles: scc::HashMap::new(),
 		actor_handles: scc::HashMap::new(),
 		actor_handle_budget,
-		lost_checks: service.lost_checks.clone(),
-		inherited: Mutex::new(Vec::new()),
 		connection_id,
 		version,
 	});
@@ -384,7 +381,14 @@ pub async fn run(
 			let last_pong_unix_ms = conn2.last_pong_unix_ms.load(Ordering::Acquire);
 			if last_pong_unix_ms > conn2.last_heartbeat_unix_ms.load(Ordering::Acquire) {
 				match write_heartbeat(&ctx2, &conn2, last_pong_unix_ms).await {
-					Ok(()) => {}
+					Ok(()) => {
+						if let Err(error) = evict_actors_from_superseded_envoy(&ctx2, &conn2).await {
+							tracing::debug!(
+								?error,
+								"eviction from a superseded envoy failed; the next heartbeat retries it"
+							);
+						}
+					}
 					Err(error) if error.is::<crate::envoy_record::Superseded>() => {
 						tracing::info!(
 							"closing envoy connection whose active index entries belong to a newer connection"
@@ -452,75 +456,9 @@ pub async fn run(
 		.is_some_and(|error| error.is::<crate::envoy_record::Superseded>());
 	if !superseded {
 		disconnect(ctx, &conn).await;
-		schedule_lost_check(ctx, &conn).await;
 	}
 
 	res
-}
-
-/// Schedules the lost check for the generations this connection hosted, so a quiet actor on an
-/// envoy that never reconnects is not left running. A superseded connection needs none: a newer
-/// connection of the envoy hosts its actors.
-async fn schedule_lost_check(ctx: &EngineContext, conn: &Connection) {
-	if !conn.record.lock().await.connected {
-		return;
-	}
-
-	let mut actors = std::mem::take(&mut *conn.inherited.lock().await);
-	let mut hosted = Vec::new();
-	conn.actor_handles
-		.iter_async(|actor_id, handle| {
-			if let Some(generation) = handle.generation() {
-				hosted.push(crate::lost_checks::HostedActor {
-					actor_id: actor_id.clone(),
-					generation,
-				});
-			}
-			true
-		})
-		.await;
-	// A generation this connection hosts replaces the one it inherited for the same actor.
-	let hosted_ids: HashSet<&str> = hosted.iter().map(|actor| actor.actor_id.as_str()).collect();
-	actors.retain(|inherited| !hosted_ids.contains(inherited.actor_id.as_str()));
-	drop(hosted_ids);
-	actors.extend(hosted);
-	if actors.is_empty() {
-		return;
-	}
-
-	let now_boot_ms = match ctx.env().clock().observe() {
-		Ok(clocks) => clocks.boot_ms,
-		Err(error) => {
-			tracing::warn!(
-				?error,
-				"could not schedule the envoy lost check; its actors are found lost on their next request"
-			);
-			return;
-		}
-	};
-	// The envoy keeps its actors for its lost threshold after the socket closes, so they are
-	// not judged lost sooner.
-	let delay_ms = ctx.config().pegboard().envoy_lost_threshold();
-	conn.lost_checks
-		.schedule(
-			lost_check_key(conn),
-			crate::lost_checks::Check {
-				connection_id: conn.connection_id.as_bytes().to_vec(),
-				actors,
-			},
-			now_boot_ms,
-			delay_ms,
-		)
-		.await;
-}
-
-/// The key of this connection's envoy in the lost-check queue.
-fn lost_check_key(conn: &Connection) -> crate::lost_checks::EnvoyKey {
-	(
-		conn.scope.namespace.clone(),
-		conn.scope.pool_name.clone(),
-		conn.envoy_key.clone(),
-	)
 }
 
 /// The volume of the envoy's record.
@@ -565,7 +503,7 @@ async fn write_heartbeat(
 	conn: &Connection,
 	heartbeat_unix_ms: i64,
 ) -> Result<()> {
-	let (connection_epoch, names) = {
+	let (connection_epoch, version, names) = {
 		let record = conn.record.lock().await;
 		if !record.connected {
 			return Ok(());
@@ -576,7 +514,11 @@ async fn write_heartbeat(
 				.fetch_max(heartbeat_unix_ms, Ordering::AcqRel);
 			return Ok(());
 		}
-		(record.entry.connection_epoch, record.entry.names.clone())
+		(
+			record.entry.connection_epoch,
+			record.entry.version,
+			record.entry.names.clone(),
+		)
 	};
 	let response = ctx
 		.depot()
@@ -591,6 +533,7 @@ async fn write_heartbeat(
 				connection_epoch,
 				worker_id: ctx.ups()?.worker_id().as_bytes().to_vec().into(),
 				connection_id: conn.connection_id.as_bytes().to_vec().into(),
+				version,
 				heartbeat_unix_ms,
 				names,
 			},
@@ -601,7 +544,53 @@ async fn write_heartbeat(
 	}
 	conn.last_heartbeat_unix_ms
 		.fetch_max(heartbeat_unix_ms, Ordering::AcqRel);
+	if let Some(config) = conn.pool_config.get() {
+		conn.version_drain
+			.observe(
+				&conn.scope,
+				&conn.envoy_key,
+				version,
+				response.newest_live_version,
+				config.drain_on_version_upgrade,
+				ctx.env().clock().observe()?.boot_ms,
+			)
+			.await;
+	}
 	Ok(())
+}
+
+/// Asks the actors due in this heartbeat's eviction batch to move off this envoy, when a newer
+/// envoy version superseded it in a pool that drains on version upgrade. The pool configuration
+/// is the one captured at connect. Each move request is fenced by the actor's epoch.
+async fn evict_actors_from_superseded_envoy(ctx: &EngineContext, conn: &Connection) -> Result<()> {
+	let Some(config) = conn.pool_config.get() else {
+		return Ok(());
+	};
+	if !config.drain_on_version_upgrade || !conn.version_drain.is_draining().await {
+		return Ok(());
+	}
+	let mut bound = Vec::new();
+	conn.actor_handles
+		.iter_async(|actor_id, handle| {
+			if let Some(epoch) = handle.epoch.get() {
+				bound.push(crate::version_drain::BoundActor {
+					actor_id: actor_id.clone(),
+					epoch,
+				});
+			}
+			true
+		})
+		.await;
+	conn.version_drain
+		.evict_due(
+			ctx,
+			&conn.scope,
+			&conn.envoy_key,
+			crate::version_drain::Pacing::of_pool(config),
+			bound,
+			ctx.env().clock().observe()?.boot_ms,
+		)
+		.await
 }
 
 /// Writes the disconnect and leaves the active index, retrying with a short backoff within a
@@ -760,7 +749,7 @@ async fn handle_sub_stream(
 			Box::pin(async move {
 				// The sender's attempt deadline travels with the UPS request. A command that
 				// arrives after it is one the sender already gave up on and retries on its own,
-				// so forwarding it could only start a generation the engine no longer tracks.
+				// so forwarding it could only start a epoch the engine no longer tracks.
 				let deadline_boot_ms = stream_tx.deadline_boot_ms();
 				let now_boot_ms = conn.ctx.env().clock().observe()?.boot_ms;
 				if command_expired(deadline_boot_ms, now_boot_ms) {
@@ -789,15 +778,15 @@ async fn handle_sub_stream(
 						return anyhow::Ok(());
 					}
 					let handle = actor_handle(&conn, &tasks, &command.checkpoint.actor_id).await?;
-					let started_generation = match &command.inner {
+					let started_epoch = match &command.inner {
 						p::Command::CommandStartActor(_) => Some(command.checkpoint.generation),
 						p::Command::CommandStopActor(_) => None,
 					};
 					if let p::Command::CommandStartActor(start) = &command.inner {
 						handle
-							.bind_generation(command.checkpoint.generation, start.config.create_ts);
+							.bind_epoch(command.checkpoint.generation, start.config.create_ts);
 						let id = rivet_util_id::Id::parse(&command.checkpoint.actor_id);
-						// A start whose storage was never written, as only a first generation's
+						// A start whose storage was never written, as only a first epoch's
 						// preload shows, creates its database volume with its first SQLite
 						// commit instead of opening it ahead of time.
 						if start.preloaded_kv.is_some()
@@ -817,13 +806,13 @@ async fn handle_sub_stream(
 						} else if let Ok(id) = id {
 							// The database volume opens while the command reaches the Envoy and
 							// the runtime starts, instead of at the actor's first storage request.
-							let generation = command.checkpoint.generation;
+							let epoch = command.checkpoint.generation;
 							let create_unix_ms = start.config.create_ts;
 							// Reserve before spawning and forwarding the start, so a stop can
 							// retire its lane even when the open has not been polled yet.
 							match conn
 								.sqlite
-								.prefetch(conn.ctx.depot(), id, generation, create_unix_ms)
+								.prefetch(conn.ctx.depot(), id, epoch, create_unix_ms)
 								.await
 							{
 								Ok(prefetch) => {
@@ -838,8 +827,8 @@ async fn handle_sub_stream(
 					// The command is on its actor's lane, so the actor's next command may follow.
 					drop(turn);
 					// Requests held for this start may follow it now: it is ahead of them on the lane.
-					if let Some(generation) = started_generation {
-						handle.start_queued(generation);
+					if let Some(epoch) = started_epoch {
+						handle.start_queued(epoch);
 					}
 				}
 
@@ -863,19 +852,16 @@ async fn handle_sub_stream(
 			);
 
 			// Figure out recipient actor
-			let (is_websocket, actor_id, actor_generation) = match &tunnel_msg.message_kind {
+			let (is_websocket, actor_id, actor_epoch) = match &tunnel_msg.message_kind {
 				p::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(start) => (
 					false,
 					start.actor_id.clone(),
-					start
-						.actor_generation
-						.context("expected generation to be set")?,
+					start.actor_generation.context("expected epoch to be set")?,
 				),
 				p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(open) => (
 					true,
 					open.actor_id.clone(),
-					open.actor_generation
-						.context("expected generation to be set")?,
+					open.actor_generation.context("expected epoch to be set")?,
 				),
 				_ => bail!("unexpected first tunnel message, unable to determine recipient"),
 			};
@@ -884,7 +870,7 @@ async fn handle_sub_stream(
 			let gateway_handle = Arc::new(GatewayHandle {
 				tx: to_recipient_tx,
 				actor_id: actor_id.clone().to_string(),
-				actor_generation,
+				actor_epoch,
 				stopped: tokio::sync::Notify::new(),
 			});
 			{
@@ -902,7 +888,7 @@ async fn handle_sub_stream(
 			// A gateway sends a request right behind its actor's start command, over another
 			// stream, so it can arrive first. It waits here until the start is on the lane ahead of
 			// it, bounded, so the Envoy finds the actor.
-			Box::pin(actor_handle.await_start(&conn, &actor_id, actor_generation)).await;
+			Box::pin(actor_handle.await_start(&conn, &actor_id, actor_epoch)).await;
 			Box::pin(actor_handle.recv_tunnel_msg(tunnel_msg)).await?;
 
 			let mut stream_finalized_by_reply = false;
@@ -993,7 +979,7 @@ async fn handle_sub_stream(
 				} else {
 					p::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort(p::ToEnvoyRequestAbort {
 						actor_id: Some(actor_id),
-						actor_generation: Some(actor_generation),
+						actor_generation: Some(actor_epoch),
 						reason: p::HttpStreamAbortReason {
 							kind: p::HttpStreamAbortReasonKind::Cancelled,
 							detail: Some("gateway disconnected".into()),
@@ -1245,11 +1231,6 @@ async fn connect(ctx: &EngineContext, conn: &Arc<Connection>, names: Vec<String>
 	}
 	write_heartbeat(ctx, conn, heartbeat_unix_ms).await?;
 
-	// The envoy is back before its closed connection's lost check ran, so its actors survived.
-	if let Some(check) = conn.lost_checks.cancel(&lost_check_key(conn)).await {
-		conn.inherited.lock().await.extend(check.actors);
-	}
-
 	let previous = conn.record.lock().await.previous.take();
 	if let Some(previous) = previous.filter(|previous| previous.connected) {
 		// Best effort: without it the old connection closes at its ping timeout.
@@ -1432,11 +1413,11 @@ async fn inbound_actor_handle(
 		.actor_handles
 		.read_async(actor_id, |_, handle| handle.clone())
 		.await;
-	let unbound = BoundGeneration::default();
+	let unbound = BoundEpoch::default();
 	let bound = existing
 		.as_ref()
-		.map_or(&unbound, |handle| handle.generation.as_ref());
-	let Some(owned) = owned_generation(conn, actor_id, bound).await? else {
+		.map_or(&unbound, |handle| handle.epoch.as_ref());
+	let Some(owned) = owned_epoch(conn, actor_id, bound).await? else {
 		return Ok(None);
 	};
 	match existing {
@@ -1478,8 +1459,8 @@ async fn actor_handle_with_incarnation(
 		.await
 		.or_insert_with(|| {
 			let handle = ActorHandle::new(conn, tasks, actor_id.to_owned(), permit);
-			if let Some((generation, incarnation)) = owned {
-				handle.bind_generation(generation, incarnation);
+			if let Some((epoch, incarnation)) = owned {
+				handle.bind_epoch(epoch, incarnation);
 			}
 			Arc::new(handle)
 		})
@@ -1500,11 +1481,11 @@ struct ActorHandle {
 	/// Arrival order of the actor's command streams. Each stream is handled in its own task, so
 	/// a command waits for its turn before it enters `tx`.
 	command_turns: Turns,
-	generation: Arc<BoundGeneration>,
-	/// The newest generation whose start command this connection has queued on the actor's
+	epoch: Arc<BoundEpoch>,
+	/// The newest epoch whose start command this connection has queued on the actor's
 	/// lane. Requests held by `await_start` watch it.
 	start_queued: tokio::sync::watch::Sender<Option<u32>>,
-	/// The newest generation the actor's record showed already started, as one more than it or
+	/// The newest epoch the actor's record showed already started, as one more than it or
 	/// 0, so a connection that never forwarded the start reads the record once per actor.
 	started_elsewhere: AtomicU64,
 }
@@ -1540,9 +1521,9 @@ impl ActorHandle {
 			}
 		});
 
-		let generation = Arc::new(BoundGeneration::default());
+		let epoch = Arc::new(BoundEpoch::default());
 		let conn2 = conn.clone();
-		let generation2 = generation.clone();
+		let epoch2 = epoch.clone();
 		let storage_actor_id = actor_id.clone();
 		// The event lane keeps a sender to the storage lane for its stop barrier, so the
 		// storage lane ends only after the event lane.
@@ -1551,7 +1532,7 @@ impl ActorHandle {
 			if let Err(err) = ActorHandle::run_inbound(
 				&conn2,
 				&actor_id,
-				&generation2,
+				&epoch2,
 				inbound_rx,
 				Some(&barrier_tx),
 			)
@@ -1565,11 +1546,10 @@ impl ActorHandle {
 		});
 
 		let conn2 = conn.clone();
-		let generation2 = generation.clone();
+		let epoch2 = epoch.clone();
 		tasks.spawn(async move {
 			if let Err(err) =
-				ActorHandle::run_inbound(&conn2, &storage_actor_id, &generation2, storage_rx, None)
-					.await
+				ActorHandle::run_inbound(&conn2, &storage_actor_id, &epoch2, storage_rx, None).await
 			{
 				tracing::error!(actor_id = %storage_actor_id, ?err, "actor storage lane failed");
 			}
@@ -1581,24 +1561,24 @@ impl ActorHandle {
 			inbound_tx,
 			storage_tx,
 			command_turns: Turns::new(),
-			generation,
+			epoch,
 			start_queued: tokio::sync::watch::Sender::new(None),
 			started_elsewhere: AtomicU64::new(0),
 		}
 	}
 
-	/// Records that `generation`'s start command is queued on the lane.
-	fn start_queued(&self, generation: u32) {
+	/// Records that `epoch`'s start command is queued on the lane.
+	fn start_queued(&self, epoch: u32) {
 		self.start_queued.send_if_modified(|current| {
-			if current.is_some_and(|current| wrapping_ge(current, generation)) {
+			if current.is_some_and(|current| wrapping_ge(current, epoch)) {
 				return false;
 			}
-			*current = Some(generation);
+			*current = Some(epoch);
 			true
 		});
 	}
 
-	/// Holds a gateway request for `generation` until its start command is queued ahead of it,
+	/// Holds a gateway request for `epoch` until its start command is queued ahead of it,
 	/// for at most `pegboard.envoy_start_wait_ms`. A start this connection did not forward, such
 	/// as one delivered before a reconnect, is found in the actor's record instead. The request
 	/// is forwarded however the wait ends; an Envoy without the actor refuses it as not found.
@@ -1606,15 +1586,13 @@ impl ActorHandle {
 	/// Ordered UPS lanes do not make this hold unnecessary. They order requests from one sender
 	/// to one destination, but the start comes from the pegboard executor as a request and the
 	/// gateway request comes from a gateway as a stream, so nothing orders one behind the other.
-	async fn await_start(&self, conn: &Connection, actor_id: &str, generation: u32) {
+	async fn await_start(&self, conn: &Connection, actor_id: &str, epoch: u32) {
 		let is_queued =
-			|queued: &Option<u32>| queued.is_some_and(|queued| wrapping_ge(queued, generation));
+			|queued: &Option<u32>| queued.is_some_and(|queued| wrapping_ge(queued, epoch));
 		if is_queued(&self.start_queued.borrow())
-			|| decode_generation(self.started_elsewhere.load(Ordering::Acquire))
-				.is_some_and(|started| wrapping_ge(started, generation))
-			|| self
-				.generation()
-				.is_some_and(|bound| wrapping_gt(bound, generation))
+			|| decode_epoch(self.started_elsewhere.load(Ordering::Acquire))
+				.is_some_and(|started| wrapping_ge(started, epoch))
+			|| self.epoch().is_some_and(|bound| wrapping_gt(bound, epoch))
 		{
 			return;
 		}
@@ -1641,11 +1619,11 @@ impl ActorHandle {
 		let started = rivet_env::timeout_at(
 			clock.as_ref(),
 			deadline,
-			started_elsewhere(conn, actor_id, generation),
+			started_elsewhere(conn, actor_id, epoch),
 		)
 		.await;
 		if let Ok(Ok(true)) = started {
-			advance_generation(&self.started_elsewhere, generation);
+			advance_epoch(&self.started_elsewhere, epoch);
 			return;
 		}
 
@@ -1655,7 +1633,7 @@ impl ActorHandle {
 		if !forwarded {
 			tracing::debug!(
 				%actor_id,
-				generation,
+				epoch,
 				"actor start was not forwarded on this connection in time; forwarding the request anyway"
 			);
 		}
@@ -1673,8 +1651,8 @@ impl ActorHandle {
 					// stop is ignored or deduplicated by the Envoy. So a start that waited in this
 					// lane past its sender's deadline is dropped, and a stop is always forwarded.
 					//
-					// TODO: also send `CommandStopActor` for any generation that is no longer
-					// current when its storage request or event is refused, so a ghost generation
+					// TODO: also send `CommandStopActor` for any epoch that is no longer
+					// current when its storage request or event is refused, so a ghost epoch
 					// that slipped through (for example after a runtime restart lost its floor)
 					// stops on its first write or event instead of running user code.
 					if starts {
@@ -1709,7 +1687,7 @@ impl ActorHandle {
 	async fn run_inbound(
 		conn: &Arc<Connection>,
 		actor_id: &str,
-		generation: &BoundGeneration,
+		epoch: &BoundEpoch,
 		mut rx: crate::queue::Receiver<QueuedInbound>,
 		storage: Option<&crate::queue::Sender<QueuedInbound>>,
 	) -> Result<()> {
@@ -1718,10 +1696,7 @@ impl ActorHandle {
 		// request inline. Inline, the SQLite path made every held actor's lane future about
 		// 90 KiB.
 		while let Some(QueuedInbound { msg }) = rx.recv().await {
-			Box::pin(Self::handle_inbound(
-				conn, actor_id, generation, msg, storage,
-			))
-			.await?;
+			Box::pin(Self::handle_inbound(conn, actor_id, epoch, msg, storage)).await?;
 		}
 
 		Ok(())
@@ -1730,25 +1705,25 @@ impl ActorHandle {
 	async fn handle_inbound(
 		conn: &Arc<Connection>,
 		actor_id: &str,
-		generation: &BoundGeneration,
+		epoch: &BoundEpoch,
 		msg: InboundMsg,
 		storage: Option<&crate::queue::Sender<QueuedInbound>>,
 	) -> Result<()> {
 		match msg {
-			InboundMsg::Drained(barrier) => reach_stop_barrier(generation, *barrier),
+			InboundMsg::Drained(barrier) => reach_stop_barrier(epoch, *barrier),
 			InboundMsg::Kv(request) => {
-				let reply = kv_request(conn, actor_id, generation, *request).await;
+				let reply = kv_request(conn, actor_id, epoch, *request).await;
 				conn.to_envoy_tx.send(reply).await?;
 			}
 			InboundMsg::Sqlite(request) => {
-				if let Some(expected) = crate::sqlite::expected_generation(&request)
-					&& generation.is_stopped(expected)
+				if let Some(expected) = crate::sqlite::expected_epoch(&request)
+					&& epoch.is_stopped(expected)
 				{
 					let reply = crate::sqlite::stopped_failure(&request, expected)?;
 					conn.to_envoy_tx.send(reply).await?;
 					return Ok(());
 				}
-				let owned = owned_generation(conn, actor_id, generation).await;
+				let owned = owned_epoch(conn, actor_id, epoch).await;
 				let span = tracing::trace_span!(target: "sqlite_prefetch::trace", "sqlite_connection",
                     envoy_key = %conn.envoy_key, connection_id = %conn.connection_id);
 				let reply = crate::sqlite::trace_request(
@@ -1762,7 +1737,7 @@ impl ActorHandle {
 				let checkpoint = event.checkpoint.clone();
 				let stopped = crate::lifecycle::is_stopped(&event);
 				// A stop is delivered only after every storage request queued before it ran, as
-				// when both shared one lane: the stopped generation's writes finish before the
+				// when both shared one lane: the stopped epoch's writes finish before the
 				// actor may start elsewhere, and none of them can reopen the volume afterward.
 				if stopped && let Some(storage) = storage {
 					let budget = std::time::Duration::from_millis(
@@ -1779,23 +1754,23 @@ impl ActorHandle {
 					)
 					.await;
 					// A storage request that outlives the budget must not hold the stop back
-					// forever. The stopped generation is tombstoned so its queued requests fail
+					// forever. The stopped epoch is tombstoned so its queued requests fail
 					// closed, and its session is retired without waiting for the stuck request.
 					if !drained {
 						tracing::warn!(
 							%actor_id,
-							generation = checkpoint.generation,
-							"actor storage lane did not drain before the stop's delivery budget; a storage request is stuck, failing the stopped generation's remaining requests"
+							epoch = checkpoint.generation,
+							"actor storage lane did not drain before the stop's delivery budget; a storage request is stuck, failing the stopped epoch's remaining requests"
 						);
-						generation.stop(checkpoint.generation);
+						epoch.stop(checkpoint.generation);
 						if let Ok(id) = rivet_util_id::Id::parse(actor_id) {
 							conn.sqlite.retire_now(id).await;
 						}
 					}
 				}
-				// The stopped generation's session is retired before the stop is delivered, so
-				// no later generation can have taken it yet, and only a session of this
-				// generation or older is retired. Its database volume closes.
+				// The stopped epoch's session is retired before the stop is delivered, so
+				// no later epoch can have taken it yet, and only a session of this
+				// epoch or older is retired. Its database volume closes.
 				if stopped && let Ok(id) = rivet_util_id::Id::parse(actor_id) {
 					conn.sqlite.stop(id, checkpoint.generation).await;
 				}
@@ -1812,7 +1787,7 @@ impl ActorHandle {
 					}))
 					.await?;
 
-				// A stopped generation needs no lanes or SQLite session on this
+				// A stopped epoch needs no lanes or SQLite session on this
 				// connection. Dropping the handle closes its lanes once their queued
 				// work drains.
 				if stopped {
@@ -1820,8 +1795,8 @@ impl ActorHandle {
 					conn.actor_handles
 						.remove_if_async(actor_id, |handle| {
 							handle
-								.generation()
-								.is_none_or(|generation| generation == checkpoint.generation)
+								.epoch()
+								.is_none_or(|epoch| epoch == checkpoint.generation)
 						})
 						.await;
 				}
@@ -1831,12 +1806,12 @@ impl ActorHandle {
 		Ok(())
 	}
 
-	fn bind_generation(&self, generation: u32, create_unix_ms: i64) {
-		self.generation.bind(generation, create_unix_ms);
+	fn bind_epoch(&self, epoch: u32, create_unix_ms: i64) {
+		self.epoch.bind(epoch, create_unix_ms);
 	}
 
-	fn generation(&self) -> Option<u32> {
-		self.generation.get()
+	fn epoch(&self) -> Option<u32> {
+		self.epoch.get()
 	}
 
 	async fn recv_command(
@@ -1913,34 +1888,36 @@ impl ActorHandle {
 	}
 }
 
-/// The generation this connection started for one actor, and the incarnation it belongs to.
-/// Storage requests carry the generation so the actor volume can reject requests from an
+/// The epoch this connection started for one actor, and the incarnation it belongs to.
+/// Storage requests carry the epoch so the actor volume can reject requests from an
 /// execution that no longer owns the actor; the incarnation names the database volume.
 ///
-/// A stopped generation leaves a tombstone: it and every older generation own nothing on this
+/// A stopped epoch leaves a tombstone: it and every older epoch own nothing on this
 /// connection afterward, whatever was bound or the actor's record says, so their late storage
 /// requests fail closed.
+///
+/// The envoy protocol calls the actor epoch a generation, so every `checkpoint.generation` and
+/// `expected_generation` read off a message is the epoch tracked here.
 #[derive(Default)]
-struct BoundGeneration {
-	/// One more than the bound generation, or 0.
+struct BoundEpoch {
+	/// One more than the bound epoch, or 0.
 	bound: AtomicU64,
-	/// The bound generation's incarnation, the actor's `create_unix_ms`, or 0 before a bind.
+	/// The bound epoch's incarnation, the actor's `create_unix_ms`, or 0 before a bind.
 	create_unix_ms: AtomicI64,
-	/// One more than the highest stopped generation, or 0.
+	/// One more than the highest stopped epoch, or 0.
 	stopped: AtomicU64,
 }
 
-impl BoundGeneration {
-	fn bind(&self, generation: u32, create_unix_ms: i64) {
+impl BoundEpoch {
+	fn bind(&self, epoch: u32, create_unix_ms: i64) {
 		self.create_unix_ms.store(create_unix_ms, Ordering::Release);
-		self.bound
-			.store(u64::from(generation) + 1, Ordering::Release);
+		self.bound.store(u64::from(epoch) + 1, Ordering::Release);
 	}
 
-	/// The bound generation with its incarnation, unless it stopped.
+	/// The bound epoch with its incarnation, unless it stopped.
 	fn get_incarnation(&self) -> Option<(u32, i64)> {
-		let generation = self.get()?;
-		Some((generation, self.create_unix_ms.load(Ordering::Acquire)))
+		let epoch = self.get()?;
+		Some((epoch, self.create_unix_ms.load(Ordering::Acquire)))
 	}
 
 	fn get(&self) -> Option<u32> {
@@ -1948,43 +1925,43 @@ impl BoundGeneration {
 			0 => None,
 			bound => u32::try_from(bound - 1)
 				.ok()
-				.filter(|generation| !self.is_stopped(*generation)),
+				.filter(|epoch| !self.is_stopped(*epoch)),
 		}
 	}
 
-	/// Records that `generation` and every older one stopped on this connection.
-	fn stop(&self, generation: u32) {
-		advance_generation(&self.stopped, generation);
+	/// Records that `epoch` and every older one stopped on this connection.
+	fn stop(&self, epoch: u32) {
+		advance_epoch(&self.stopped, epoch);
 	}
 
-	/// Whether `generation` stopped here. A generation the protocol encodes outside the epoch
+	/// Whether `epoch` stopped here. An epoch the protocol encodes outside the epoch
 	/// range never stopped; admission rejects it separately.
-	fn is_stopped(&self, generation: impl Into<u64>) -> bool {
-		let Ok(generation) = u32::try_from(generation.into()) else {
+	fn is_stopped(&self, epoch: impl Into<u64>) -> bool {
+		let Ok(epoch) = u32::try_from(epoch.into()) else {
 			return false;
 		};
-		decode_generation(self.stopped.load(Ordering::Acquire))
-			.is_some_and(|stopped| wrapping_le(generation, stopped))
+		decode_epoch(self.stopped.load(Ordering::Acquire))
+			.is_some_and(|stopped| wrapping_le(epoch, stopped))
 	}
 }
 
-/// The generation an atomic holds as one more than it, or `None` for 0.
-fn decode_generation(encoded: u64) -> Option<u32> {
+/// The epoch an atomic holds as one more than it, or `None` for 0.
+fn decode_epoch(encoded: u64) -> Option<u32> {
 	match encoded {
 		0 => None,
 		encoded => u32::try_from(encoded - 1).ok(),
 	}
 }
 
-/// Advances an atomic that holds a generation as one more than it to `generation`, unless it
+/// Advances an atomic that holds a epoch as one more than it to `epoch`, unless it
 /// already holds a later one on the epoch ring.
-fn advance_generation(slot: &AtomicU64, generation: u32) {
+fn advance_epoch(slot: &AtomicU64, epoch: u32) {
 	let _ = slot.try_update(
 		Ordering::AcqRel,
 		Ordering::Acquire,
-		|current| match decode_generation(current) {
-			Some(current) if wrapping_ge(current, generation) => None,
-			Some(_) | None => Some(u64::from(generation) + 1),
+		|current| match decode_epoch(current) {
+			Some(current) if wrapping_ge(current, epoch) => None,
+			Some(_) | None => Some(u64::from(epoch) + 1),
 		},
 	);
 }
@@ -2005,38 +1982,39 @@ fn storage_lane_full_message() -> String {
 /// start delivered on another connection.
 const START_READ_GRACE: std::time::Duration = std::time::Duration::from_millis(20);
 
-/// Whether the actor's record shows `generation` already started, or a newer generation, so
+/// Whether the actor's record shows `epoch` already started, or a newer epoch, so
 /// its start was delivered on another connection and no start is coming on this one.
-async fn started_elsewhere(conn: &Connection, actor_id: &str, generation: u32) -> Result<bool> {
+async fn started_elsewhere(conn: &Connection, actor_id: &str, epoch: u32) -> Result<bool> {
 	let id = rivet_util_id::Id::parse(actor_id)?;
 	let read = conn
 		.ctx
 		.depot()
 		.command::<pegboard::commands::ActorRead>(&ActorVolume::new(id).volume_key(), ())
 		.await?;
-	if wrapping_gt(read.epoch, generation) {
+	if wrapping_gt(read.epoch, epoch) {
 		return Ok(true);
 	}
-	let started = read.epoch == generation
+	let started = read.epoch == epoch
 		&& match read.phase {
 			Some(wire::ActorPhase::Running(_)) | Some(wire::ActorPhase::Stopping(_)) => true,
 			Some(wire::ActorPhase::Starting(_))
 			| Some(wire::ActorPhase::Initializing(_))
-			| Some(wire::ActorPhase::Sleeping)
+			| Some(wire::ActorPhase::Sleeping(_))
 			| Some(wire::ActorPhase::Destroying(_))
 			| Some(wire::ActorPhase::Destroyed)
+			| Some(wire::ActorPhase::MigratingFromV2(_))
 			| None => false,
 		};
 	Ok(started)
 }
 
-/// Resolves the generation that owns the actor on this envoy, with the incarnation whose
+/// Resolves the epoch that owns the actor on this envoy, with the incarnation whose
 /// database volume it uses. A connection that did not deliver the start, such as one opened
 /// after a reconnect, learns both from the actor's record.
-async fn owned_generation(
+async fn owned_epoch(
 	conn: &Connection,
 	actor_id: &str,
-	bound: &BoundGeneration,
+	bound: &BoundEpoch,
 ) -> Result<Option<(u32, i64)>> {
 	if let Some(owned) = bound.get_incarnation() {
 		return Ok(Some(owned));
@@ -2054,7 +2032,7 @@ async fn owned_generation(
 		Err(error) if pegboard::commands::is_volume_gone(&error) => return Ok(None),
 		Err(error) => return Err(error),
 	};
-	Ok(record_owned_generation(
+	Ok(record_owned_epoch(
 		&conn.scope,
 		&conn.envoy_key,
 		read,
@@ -2062,11 +2040,11 @@ async fn owned_generation(
 	))
 }
 
-fn record_owned_generation(
+fn record_owned_epoch(
 	scope: &crate::routes::EnvoyScope,
 	envoy_key: &str,
 	read: wire::ActorReadResponse,
-	bound: &BoundGeneration,
+	bound: &BoundEpoch,
 ) -> Option<(u32, i64)> {
 	let (Some(data), Some(phase)) = (read.data, read.phase) else {
 		return None;
@@ -2076,9 +2054,10 @@ fn record_owned_generation(
 		| wire::ActorPhase::Running(wire::Running { allocation })
 		| wire::ActorPhase::Stopping(wire::Stopping { allocation, .. }) => allocation,
 		wire::ActorPhase::Initializing(_)
-		| wire::ActorPhase::Sleeping
+		| wire::ActorPhase::Sleeping(_)
 		| wire::ActorPhase::Destroying(_)
-		| wire::ActorPhase::Destroyed => return None,
+		| wire::ActorPhase::Destroyed
+		| wire::ActorPhase::MigratingFromV2(_) => return None,
 	};
 	// The allocation names the envoy, not the connection: after a reconnect the recorded
 	// connection is stale until a gateway repairs it, but the actor still runs here.
@@ -2103,13 +2082,12 @@ fn record_owned_generation(
 async fn kv_request(
 	conn: &Connection,
 	actor_id: &str,
-	bound: &BoundGeneration,
+	bound: &BoundEpoch,
 	request: p::ToRivetKvRequest,
 ) -> p::ToEnvoy {
 	let request_id = request.request_id;
 	let result = async {
-		let Some((generation, create_unix_ms)) = owned_generation(conn, actor_id, bound).await?
-		else {
+		let Some((epoch, create_unix_ms)) = owned_epoch(conn, actor_id, bound).await? else {
 			return Ok(crate::kv::error_response(
 				request_id,
 				"actor is not running on this envoy".into(),
@@ -2118,13 +2096,7 @@ async fn kv_request(
 		let id = rivet_util_id::Id::parse(actor_id)?;
 		let data = conn
 			.sqlite
-			.kv(
-				conn.ctx.depot(),
-				id,
-				generation,
-				create_unix_ms,
-				request.data,
-			)
+			.kv(conn.ctx.depot(), id, epoch, create_unix_ms, request.data)
 			.await?;
 		anyhow::Ok(p::ToEnvoy::ToEnvoyKvResponse(p::ToEnvoyKvResponse {
 			request_id,
@@ -2342,21 +2314,21 @@ enum InboundMsg {
 	/// One SQLite page or execution request; see [`crate::sqlite::actor_id`].
 	Sqlite(Box<p::ToRivet>),
 	/// A stop's barrier on the storage lane. When the lane reaches it, every request queued
-	/// before it ran; the lane then refuses the stopped generation's later requests and answers.
+	/// before it ran; the lane then refuses the stopped epoch's later requests and answers.
 	Drained(Box<StopBarrier>),
 }
 
 /// A stop's barrier on the storage lane.
 struct StopBarrier {
-	/// The generation that stopped; it and older ones are refused once the lane reaches this.
-	generation: u32,
+	/// The epoch that stopped; it and older ones are refused once the lane reaches this.
+	epoch: u32,
 	done: tokio::sync::oneshot::Sender<()>,
 }
 
 /// Runs when the storage lane reaches a stop's barrier: every request queued before it ran, so
-/// the stopped generation is closed to later requests before the stop is delivered.
-fn reach_stop_barrier(bound: &BoundGeneration, barrier: StopBarrier) {
-	bound.stop(barrier.generation);
+/// the stopped epoch is closed to later requests before the stop is delivered.
+fn reach_stop_barrier(bound: &BoundEpoch, barrier: StopBarrier) {
+	bound.stop(barrier.epoch);
 	let _ = barrier.done.send(());
 }
 
@@ -2365,19 +2337,19 @@ async fn drain_storage_lane_within(
 	clock: &dyn rivet_env::Clock,
 	budget: std::time::Duration,
 	storage: &crate::queue::Sender<QueuedInbound>,
-	generation: u32,
+	epoch: u32,
 ) -> bool {
-	rivet_env::timeout(clock, budget, drain_storage_lane(storage, generation))
+	rivet_env::timeout(clock, budget, drain_storage_lane(storage, epoch))
 		.await
 		.is_ok()
 }
 
 /// Waits until the storage lane has run every request queued on it so far. A closed lane has
 /// nothing left to run.
-async fn drain_storage_lane(storage: &crate::queue::Sender<QueuedInbound>, generation: u32) {
+async fn drain_storage_lane(storage: &crate::queue::Sender<QueuedInbound>, epoch: u32) {
 	let (done_tx, done_rx) = tokio::sync::oneshot::channel();
 	let barrier = StopBarrier {
-		generation,
+		epoch,
 		done: done_tx,
 	};
 	if storage
@@ -2393,16 +2365,16 @@ async fn drain_storage_lane(storage: &crate::queue::Sender<QueuedInbound>, gener
 struct GatewayHandle {
 	tx: crate::queue::Sender<TunnelReply>,
 	actor_id: String,
-	actor_generation: u32,
+	actor_epoch: u32,
 	/// Notified once the execution behind this tunnel stopped.
 	stopped: tokio::sync::Notify,
 }
 
-/// Ends every tunnel to `generation` of the actor. The envoy runs no execution for them anymore.
-async fn stop_tunnels(conn: &Connection, actor_id: &str, generation: u32) {
+/// Ends every tunnel to `epoch` of the actor. The envoy runs no execution for them anymore.
+async fn stop_tunnels(conn: &Connection, actor_id: &str, epoch: u32) {
 	conn.gateway_handles
 		.iter_async(|_, handle| {
-			if handle.actor_id == actor_id && handle.actor_generation == generation {
+			if handle.actor_id == actor_id && handle.actor_epoch == epoch {
 				handle.stopped.notify_one();
 			}
 			true
@@ -2478,7 +2450,7 @@ fn drop_expired_command(command: &p::CommandWrapper, stage: &'static str) {
 	};
 	tracing::debug!(
 		actor_id = %command.checkpoint.actor_id,
-		generation = command.checkpoint.generation,
+		epoch = command.checkpoint.generation,
 		stage,
 		kind,
 		"dropping an actor command whose sender's deadline passed; the actor state machine retries it if it is still wanted"

@@ -27,6 +27,10 @@ pub enum StopStatus {
 	Acknowledged,
 	/// A deadline, explicit immediate stop, eviction, or terminal error ended the loop.
 	Interrupted,
+	/// The engine was out of reach past its lost threshold while actors were hosted. They were
+	/// stopped and the envoy ended, so its owner starts a fresh one that registers under a new
+	/// key; the engine expires this key like a dead envoy and reschedules the actors.
+	Lost,
 }
 
 pub struct SharedContext {

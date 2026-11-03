@@ -10,6 +10,7 @@ pub mod epoxy;
 pub mod guard;
 pub mod logs;
 pub mod metrics;
+pub mod migrate_from_v2;
 pub mod object_storage;
 pub mod outbound;
 pub mod pegboard;
@@ -25,6 +26,7 @@ pub use epoxy::*;
 pub use guard::*;
 pub use logs::*;
 pub use metrics::*;
+pub use migrate_from_v2::MigrateFromV2;
 pub use object_storage::*;
 pub use outbound::*;
 pub use pegboard::*;
@@ -98,6 +100,9 @@ pub struct Root {
 
 	#[serde(default)]
 	pub outbound: Option<Outbound>,
+
+	#[serde(default)]
+	pub migrate_from_v2: Option<MigrateFromV2>,
 }
 
 impl Default for Root {
@@ -117,6 +122,7 @@ impl Default for Root {
 			runtime: Default::default(),
 			metrics: Default::default(),
 			outbound: None,
+			migrate_from_v2: None,
 		}
 	}
 }
@@ -146,6 +152,11 @@ impl Root {
 	pub fn api_peer(&self) -> &ApiPeer {
 		static DEFAULT: LazyLock<ApiPeer> = LazyLock::new(ApiPeer::default);
 		self.api_peer.as_ref().unwrap_or(&DEFAULT)
+	}
+
+	/// The V2 migration settings. Read them through `config.dynamic()` for the current values.
+	pub fn migrate_from_v2(&self) -> Option<&MigrateFromV2> {
+		self.migrate_from_v2.as_ref()
 	}
 
 	pub fn outbound(&self) -> &Outbound {
@@ -201,6 +212,9 @@ impl Root {
 		self.epoxy().validate()?;
 		self.runtime.validate()?;
 		self.metrics.hardware.validate()?;
+		if let Some(migrate_from_v2) = &self.migrate_from_v2 {
+			migrate_from_v2.validate()?;
+		}
 		// Validate that all datacenters have valid_hosts configured when there's more than one datacenter
 		let topology = self.topology();
 		if topology.datacenters.len() > 1 {

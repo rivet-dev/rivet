@@ -83,9 +83,19 @@ pub enum ResolvedEngine {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EngineRuntimeStamp {
 	pub pid: u32,
+	/// Linux process identity, independent of PID reuse and VM restarts.
+	/// Older records and other platforms retain conservative PID-only checks.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub process_identity: Option<ProcessIdentity>,
 	pub endpoint: String,
 	pub bind_host: String,
 	pub public_url: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProcessIdentity {
+	pub boot_id: String,
+	pub start_time_ticks: u64,
 }
 
 impl EngineRuntimeStamp {
@@ -174,7 +184,7 @@ impl EngineProcessManager {
 			if let Some(stamp) = read_engine_stamp().filter(|stamp| stamp.endpoint == *endpoint) {
 				// Shutdown closes the listener before releasing the storage locks.
 				// A watcher may restart its app while that Engine is still draining.
-				wait_for_engine_exit(stamp.pid, Duration::from_secs(20)).await?;
+				wait_for_engine_exit(&stamp, Duration::from_secs(20)).await?;
 				// Another app may have completed startup while we waited.
 				health = probe_existing_engine(endpoint).await?;
 			}
@@ -326,6 +336,7 @@ impl EngineProcessManager {
 		// costs that later process its reuse diagnostics.
 		let stamp = EngineRuntimeStamp {
 			pid,
+			process_identity: read_process_identity(pid),
 			endpoint: endpoint.clone(),
 			bind_host: resolve_bind_host(config)?,
 			public_url: config.public_url.clone(),
@@ -344,13 +355,14 @@ impl EngineProcessManager {
 }
 
 /// Waits without signalling a previous Engine that may still own storage locks.
-async fn wait_for_engine_exit(pid: u32, timeout: Duration) -> Result<()> {
+async fn wait_for_engine_exit(stamp: &EngineRuntimeStamp, timeout: Duration) -> Result<()> {
+	let pid = stamp.pid;
 	tracing::info!(
 		pid,
 		"waiting for the previous local engine to finish stopping"
 	);
 	tokio::time::timeout(timeout, async {
-		while pid_is_alive(pid) {
+		while stamp_process_is_alive(stamp) {
 			tokio::time::sleep(Duration::from_millis(100)).await;
 		}
 	})
@@ -499,11 +511,50 @@ fn read_engine_stamp() -> Option<EngineRuntimeStamp> {
 fn read_engine_stamp_from(path: &Path) -> Option<EngineRuntimeStamp> {
 	let contents = std::fs::read(path).ok()?;
 	let stamp: EngineRuntimeStamp = serde_json::from_slice(&contents).ok()?;
-	if !pid_is_alive(stamp.pid) {
+	if !stamp_process_is_alive(&stamp) {
 		let _ = std::fs::remove_file(path);
 		return None;
 	}
 	Some(stamp)
+}
+
+/// Missing identity (legacy records, unavailable procfs, or other platforms)
+/// must not bypass the protection against a real Engine still draining.
+fn stamp_process_is_alive(stamp: &EngineRuntimeStamp) -> bool {
+	if !pid_is_alive(stamp.pid) {
+		return false;
+	}
+	match (&stamp.process_identity, read_process_identity(stamp.pid)) {
+		(Some(recorded), Some(current)) => recorded == &current,
+		_ => true,
+	}
+}
+
+#[cfg(target_os = "linux")]
+fn read_process_identity(pid: u32) -> Option<ProcessIdentity> {
+	let boot_id = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").ok()?;
+	let boot_id = boot_id.trim();
+	if boot_id.is_empty() {
+		return None;
+	}
+	let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+	Some(ProcessIdentity {
+		boot_id: boot_id.to_owned(),
+		start_time_ticks: process_start_time_ticks(&stat)?,
+	})
+}
+
+#[cfg(target_os = "linux")]
+fn process_start_time_ticks(stat: &str) -> Option<u64> {
+	// Field 2 (comm) may contain spaces and parentheses. Start time is field
+	// 22, or offset 19 after the final closing parenthesis of comm.
+	let (_, fields) = stat.rsplit_once(')')?;
+	fields.split_whitespace().nth(19)?.parse().ok()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn read_process_identity(_pid: u32) -> Option<ProcessIdentity> {
+	None
 }
 
 #[cfg(unix)]
