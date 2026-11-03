@@ -360,7 +360,11 @@ export class ActorConnRaw {
 		}
 		if (this.#disposed) throw new errors.ActorConnDisposed();
 		if (this.#connectionOpenError) throw this.#connectionOpenError;
-		logger().debug({ msg: "action", name: opts.name, args: opts.args });
+		logger().debug({
+			msg: "action",
+			name: opts.name,
+			argCount: Array.isArray(opts.args) ? opts.args.length : undefined,
+		});
 
 		// If we have an active connection, use the websockactionId
 		const actionId = this.#actionIdCounter;
