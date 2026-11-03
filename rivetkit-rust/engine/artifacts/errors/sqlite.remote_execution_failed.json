@@ -1,0 +1,5 @@
+{
+  "code": "remote_execution_failed",
+  "group": "sqlite",
+  "message": "Remote SQLite execution failed."
+}

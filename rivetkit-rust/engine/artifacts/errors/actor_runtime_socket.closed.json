@@ -1,0 +1,5 @@
+{
+  "code": "closed",
+  "group": "actor_runtime_socket",
+  "message": "Actor Runtime Socket is closed for this actor generation."
+}

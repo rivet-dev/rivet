@@ -1,0 +1,5 @@
+{
+  "code": "invalid_message_key",
+  "group": "queue",
+  "message": "Queue message key is invalid"
+}

@@ -1,0 +1,5 @@
+{
+  "code": "invalid_persisted_data",
+  "group": "protocol",
+  "message": "Invalid persisted actor data."
+}

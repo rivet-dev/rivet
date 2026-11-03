@@ -1,0 +1,5 @@
+{
+  "code": "database_unavailable",
+  "group": "actor_runtime_socket",
+  "message": "Actor Runtime Socket requires an enabled LocalNative SQLite database."
+}

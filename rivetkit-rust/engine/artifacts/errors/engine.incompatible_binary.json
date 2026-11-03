@@ -1,0 +1,5 @@
+{
+  "code": "incompatible_binary",
+  "group": "engine",
+  "message": "The Engine binary is incompatible with this RivetKit."
+}

@@ -1,0 +1,5 @@
+{
+  "code": "not_enabled",
+  "group": "actor_runtime_socket",
+  "message": "Experimental Actor Runtime Socket is not enabled for this actor."
+}

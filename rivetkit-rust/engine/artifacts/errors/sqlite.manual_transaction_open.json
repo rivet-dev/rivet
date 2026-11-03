@@ -1,0 +1,5 @@
+{
+  "code": "manual_transaction_open",
+  "group": "sqlite",
+  "message": "SQLite manual transaction stayed open."
+}
