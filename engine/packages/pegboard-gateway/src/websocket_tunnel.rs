@@ -168,26 +168,22 @@ where
 			return Ok(());
 		}
 	};
-	let mut pending = None;
-
 	// The first tick completes at once and is skipped; the socket was just opened. Missed ticks
 	// are skipped too, so a connection that was busy for a while sends one ping, not a burst.
 	let mut keepalive = rivet_env::interval(clock, keepalive_interval_ms);
 	keepalive.tick().await.context("keepalive clock failed")?;
 
-	// Client frames to deliver first after a wake, and the last frame
-	// sent to the actor that it has not acknowledged yet.
-	let mut replay: std::collections::VecDeque<Message> = std::collections::VecDeque::new();
-	let mut unacked: Option<Message> = None;
+	let mut credit = ClientCredit::default();
 
 	loop {
-		let input = if let Some(message) = replay.pop_front() {
+		// Replayed frames use the same one-message credit as live client input.
+		let input = if let Some(message) = credit.next_replay() {
 			Input::Client(Some(Ok(message)))
 		} else {
 			rivet_env::select_biased!("actor replies release WebSocket send credit before more client input, and a keepalive ping never preempts either",
 			packet = receiver.recv() => Input::Actor(packet),
 			message = async {
-				if pending.is_none() {
+				if credit.is_free() {
 					socket.next().await
 				} else {
 					futures_util::future::pending().await
@@ -215,11 +211,9 @@ where
 					}
 					p::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(ack) => {
 						ensure!(
-							pending == Some(ack.index),
+							credit.acknowledge(ack.index),
 							"unexpected WebSocket acknowledgement"
 						);
-						pending = None;
-						unacked = None;
 					}
 					p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close)
 						if can_hibernate
@@ -233,15 +227,15 @@ where
 						if let Err(error) = sender.finish().await {
 							tracing::debug!(%error, "stopped WebSocket tunnel peer already closed");
 						}
-						if let Some(message) = unacked.take() {
-							replay.push_back(message);
-						}
-						pending = None;
 						tracing::debug!(
 							"actor stopped; client WebSocket hibernating at the gateway"
 						);
-						let first = hibernate_wait(socket, &mut keepalive).await?;
-						replay.push_back(first);
+						// A frame the actor never acknowledged must be replayed, so wake
+						// at once instead of waiting for another client frame.
+						if !credit.requeue_unacked() {
+							let first = hibernate_wait(socket, &mut keepalive).await?;
+							credit.replay.push_back(first);
+						}
 						let (new_stream, mut new_identity, new_open) = reopen().await?;
 						new_identity.gateway_id = identity.gateway_id;
 						new_identity.request_id = identity.request_id;
@@ -289,8 +283,7 @@ where
 				match message.transpose()? {
 					Some(Message::Text(text)) => {
 						if can_hibernate {
-							pending = Some(identity.message_index);
-							unacked = Some(Message::Text(text.clone()));
+							credit.sent(identity.message_index, Message::Text(text.clone()));
 						}
 						send(
 							&mut sender,
@@ -306,8 +299,7 @@ where
 					}
 					Some(Message::Binary(data)) => {
 						if can_hibernate {
-							pending = Some(identity.message_index);
-							unacked = Some(Message::Binary(data.clone()));
+							credit.sent(identity.message_index, Message::Binary(data.clone()));
 						}
 						send(
 							&mut sender,
@@ -351,6 +343,58 @@ where
 				sent.context("keepalive ping to the client failed")?;
 			}
 		}
+	}
+}
+
+/// One-message send credit for client frames to a hibernatable actor, and the frames to
+/// deliver first after a wake. A frame holds the credit from send until the actor acknowledges
+/// it; replayed frames are paced exactly like live client input.
+#[derive(Default)]
+struct ClientCredit {
+	/// Message index awaiting acknowledgement.
+	pending: Option<u16>,
+	/// The frame behind `pending`, kept to replay it if the actor sleeps first.
+	unacked: Option<Message>,
+	/// Frames to deliver, in order, before reading the client again.
+	replay: std::collections::VecDeque<Message>,
+}
+
+impl ClientCredit {
+	fn is_free(&self) -> bool {
+		self.pending.is_none()
+	}
+
+	/// The next replayed frame, only while no frame awaits acknowledgement.
+	fn next_replay(&mut self) -> Option<Message> {
+		if self.pending.is_some() {
+			return None;
+		}
+		self.replay.pop_front()
+	}
+
+	fn sent(&mut self, index: u16, message: Message) {
+		self.pending = Some(index);
+		self.unacked = Some(message);
+	}
+
+	/// Returns whether `index` was the awaited acknowledgement.
+	fn acknowledge(&mut self, index: u16) -> bool {
+		if self.pending != Some(index) {
+			return false;
+		}
+		self.pending = None;
+		self.unacked = None;
+		true
+	}
+
+	/// The actor stopped: the unacknowledged frame goes first in the replay. Returns whether
+	/// frames are queued, in which case the actor must be woken without waiting for the client.
+	fn requeue_unacked(&mut self) -> bool {
+		self.pending = None;
+		if let Some(message) = self.unacked.take() {
+			self.replay.push_front(message);
+		}
+		!self.replay.is_empty()
 	}
 }
 
@@ -520,5 +564,46 @@ mod tests {
 		assert!(matches!(ping, ClientMessage::Ping(_)));
 		assert!(rx.try_recv().is_err(), "keepalive must not return");
 		server.abort();
+	}
+
+	fn text(value: &str) -> Message {
+		Message::Text(value.into())
+	}
+
+	#[test]
+	fn unacked_frame_wakes_without_a_new_client_frame() {
+		let mut credit = ClientCredit::default();
+		credit.sent(4, text("request"));
+		// The actor stops before acknowledging: the frame needs replay, so no wait.
+		assert!(credit.requeue_unacked());
+		assert!(matches!(credit.next_replay(), Some(Message::Text(t)) if t.as_str() == "request"));
+		// With nothing unacknowledged, the gateway must wait for a client frame.
+		let mut idle = ClientCredit::default();
+		assert!(!idle.requeue_unacked());
+	}
+
+	#[test]
+	fn replay_is_delivered_in_order_one_frame_at_a_time() {
+		let mut credit = ClientCredit::default();
+		credit.sent(4, text("first"));
+		assert!(credit.requeue_unacked());
+		credit.replay.push_back(text("second"));
+
+		let first = credit.next_replay().unwrap();
+		assert!(matches!(&first, Message::Text(t) if t.as_str() == "first"));
+		credit.sent(10, first);
+		// The second frame waits for the first acknowledgement and cannot overwrite it.
+		assert!(credit.next_replay().is_none());
+		assert!(!credit.is_free());
+		assert!(!credit.acknowledge(11));
+		assert!(credit.acknowledge(10));
+
+		let second = credit.next_replay().unwrap();
+		assert!(matches!(&second, Message::Text(t) if t.as_str() == "second"));
+		credit.sent(11, second);
+		assert!(credit.next_replay().is_none());
+		assert!(credit.acknowledge(11));
+		assert!(credit.is_free());
+		assert!(credit.next_replay().is_none());
 	}
 }
