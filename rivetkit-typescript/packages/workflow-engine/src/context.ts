@@ -2351,6 +2351,18 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		// Track all branch promises to wait for cleanup
 		const branchPromises: Promise<void>[] = [];
 
+		// Track active running in-process branches to know when all branches have yielded
+		let activeRunningBranches = branches.length;
+		const yieldWaiters: Array<() => void> = [];
+		const notifyActiveBranchesChanged = () => {
+			if (activeRunningBranches === 0) {
+				const waiters = yieldWaiters.splice(0, yieldWaiters.length);
+				for (const resolve of waiters) {
+					resolve();
+				}
+			}
+		};
+
 		// Track winner info
 		let winnerName: string | null = null;
 		let winnerValue: T | undefined;
@@ -2434,6 +2446,9 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 			const branchPromise = runBranch().then(
 				async (output) => {
+					activeRunningBranches--;
+					notifyActiveBranchesChanged();
+
 					if (hasWinner) {
 						// This branch completed after a winner was determined
 						// Still record the completion for observability
@@ -2465,7 +2480,10 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					// Cancel other branches
 					raceAbortController.abort();
 				},
-				(error) => {
+				async (error) => {
+					activeRunningBranches--;
+					notifyActiveBranchesChanged();
+
 					if (hasWinner) {
 						if (
 							error instanceof CancelledError ||
@@ -2494,6 +2512,142 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 						branchStatus.status = "running";
 						branchStatus.error = undefined;
 						entry.dirty = true;
+
+						const deadline =
+							error instanceof SleepError
+								? error.deadline
+								: error instanceof StepFailedError
+									? error.retryAt
+									: undefined;
+
+						if (
+							deadline !== undefined &&
+							!hasWinner &&
+							!propagatedError &&
+							!raceAbortController.signal.aborted &&
+							activeRunningBranches > 0
+						) {
+							const delay = Math.max(0, deadline - Date.now());
+							await new Promise<void>((resolve) => {
+								let timer:
+									| ReturnType<typeof setTimeout>
+									| undefined;
+								let onAbort: (() => void) | undefined;
+								const cleanup = () => {
+									if (timer !== undefined) {
+										clearTimeout(timer);
+										timer = undefined;
+									}
+									if (onAbort) {
+										raceAbortController.signal.removeEventListener(
+											"abort",
+											onAbort,
+										);
+										onAbort = undefined;
+									}
+									const idx = yieldWaiters.indexOf(onYield);
+									if (idx !== -1) {
+										yieldWaiters.splice(idx, 1);
+									}
+								};
+								const onYield = () => {
+									cleanup();
+									resolve();
+								};
+								onAbort = () => {
+									cleanup();
+									resolve();
+								};
+								timer = setTimeout(() => {
+									cleanup();
+									resolve();
+								}, delay);
+
+								if (raceAbortController.signal.aborted) {
+									cleanup();
+									resolve();
+									return;
+								}
+								raceAbortController.signal.addEventListener(
+									"abort",
+									onAbort,
+									{
+										once: true,
+									},
+								);
+								yieldWaiters.push(onYield);
+							});
+
+							while (
+								!hasWinner &&
+								!propagatedError &&
+								!raceAbortController.signal.aborted &&
+								Date.now() < deadline &&
+								activeRunningBranches > 0
+							) {
+								await new Promise((r) =>
+									setTimeout(
+										r,
+										Math.max(1, deadline - Date.now()),
+									),
+								);
+							}
+
+							if (
+								!hasWinner &&
+								!propagatedError &&
+								!raceAbortController.signal.aborted &&
+								Date.now() >= deadline
+							) {
+								try {
+									const retryBranchCtx = this.createBranch(
+										branchLocation,
+										raceAbortController,
+									);
+									const output =
+										await branch.run(retryBranchCtx);
+									retryBranchCtx.validateComplete();
+
+									if (
+										!hasWinner &&
+										!propagatedError &&
+										!raceAbortController.signal.aborted
+									) {
+										hasWinner = true;
+										winnerName = branch.name;
+										winnerValue = output;
+
+										branchStatus.status = "completed";
+										branchStatus.output = output;
+										branchStatus.error = undefined;
+										raceData.winner = branch.name;
+										entry.dirty = true;
+
+										// Cancel other branches
+										raceAbortController.abort();
+										return;
+									}
+								} catch (retryError) {
+									if (
+										!(
+											retryError instanceof SleepError ||
+											retryError instanceof
+												MessageWaitError ||
+											retryError instanceof
+												StepFailedError
+										)
+									) {
+										branchStatus.status = "failed";
+										branchStatus.output = undefined;
+										branchStatus.error = String(retryError);
+										errors[branch.name] =
+											retryError as Error;
+										entry.dirty = true;
+									}
+								}
+							}
+						}
+
 						return;
 					}
 
