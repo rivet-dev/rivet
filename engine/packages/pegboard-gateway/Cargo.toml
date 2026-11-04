@@ -40,3 +40,7 @@ universalpubsub.workspace = true
 uuid.workspace = true
 vbare.workspace = true
 
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+tokio-tungstenite.workspace = true

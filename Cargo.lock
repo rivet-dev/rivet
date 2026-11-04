@@ -3409,6 +3409,7 @@ dependencies = [
  "serde_html_form",
  "serde_json",
  "tokio",
+ "tokio-tungstenite 0.26.2",
  "tracing",
  "universalpubsub",
  "uuid",

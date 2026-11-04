@@ -145,7 +145,7 @@ pub async fn proxy<Reopen, ReopenFut>(
 	keepalive_interval_ms: u64,
 ) -> Result<()>
 where
-	Reopen: FnOnce() -> ReopenFut,
+	Reopen: Fn() -> ReopenFut,
 	ReopenFut:
 		std::future::Future<Output = Result<(DuplexStream, p::MessageId, p::ToEnvoyWebSocketOpen)>>,
 {
@@ -154,7 +154,7 @@ where
 		mut receiver,
 		mut identity,
 		reply,
-	} = open_tunnel(stream, identity, open, reopen).await?;
+	} = open_tunnel(stream, identity, open, &reopen).await?;
 	let can_hibernate = match reply {
 		OpenReply::Accepted { can_hibernate } => can_hibernate,
 		OpenReply::Closed(close) => {
@@ -175,8 +175,16 @@ where
 	let mut keepalive = rivet_env::interval(clock, keepalive_interval_ms);
 	keepalive.tick().await.context("keepalive clock failed")?;
 
+	// Client frames to deliver first after a wake, and the last frame
+	// sent to the actor that it has not acknowledged yet.
+	let mut replay: std::collections::VecDeque<Message> = std::collections::VecDeque::new();
+	let mut unacked: Option<Message> = None;
+
 	loop {
-		let input = rivet_env::select_biased!("actor replies release WebSocket send credit before more client input, and a keepalive ping never preempts either",
+		let input = if let Some(message) = replay.pop_front() {
+			Input::Client(Some(Ok(message)))
+		} else {
+			rivet_env::select_biased!("actor replies release WebSocket send credit before more client input, and a keepalive ping never preempts either",
 			packet = receiver.recv() => Input::Actor(packet),
 			message = async {
 				if pending.is_none() {
@@ -186,7 +194,8 @@ where
 				}
 			} => Input::Client(message),
 			tick = keepalive.tick() => Input::Keepalive(tick),
-		);
+			)
+		};
 
 		match input {
 			// Runtime acknowledgements release one message of client-side credit.
@@ -210,6 +219,57 @@ where
 							"unexpected WebSocket acknowledgement"
 						);
 						pending = None;
+						unacked = None;
+					}
+					p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close)
+						if can_hibernate
+							&& close.code == Some(1012)
+							&& close.reason.as_deref() == Some("actor.stopped") =>
+					{
+						// The actor went to sleep. Keep the client
+						// socket, answer pings ourselves and wake the actor on the next client
+						// frame, re-opening the tunnel with the same gateway/request ids so
+						// the actor restores the hibernated connection.
+						if let Err(error) = sender.finish().await {
+							tracing::debug!(%error, "stopped WebSocket tunnel peer already closed");
+						}
+						if let Some(message) = unacked.take() {
+							replay.push_back(message);
+						}
+						pending = None;
+						tracing::debug!(
+							"actor stopped; client WebSocket hibernating at the gateway"
+						);
+						let first = hibernate_wait(socket, &mut keepalive).await?;
+						replay.push_back(first);
+						let (new_stream, mut new_identity, new_open) = reopen().await?;
+						new_identity.gateway_id = identity.gateway_id;
+						new_identity.request_id = identity.request_id;
+						let (mut new_sender, mut new_receiver) = new_stream.split();
+						let reply = open_actor(
+							&mut new_sender,
+							&mut new_receiver,
+							&mut new_identity,
+							new_open,
+						)
+						.await?;
+						match reply {
+							OpenReply::Accepted { .. } => {}
+							OpenReply::Closed(close) => {
+								socket
+									.send(Message::Close(close.code.map(|code| CloseFrame {
+										code,
+										reason: close.reason.unwrap_or_default().to_string().into(),
+									})))
+									.await?;
+								new_sender.finish().await?;
+								return Ok(());
+							}
+						}
+						sender = new_sender;
+						receiver = new_receiver;
+						identity = new_identity;
+						tracing::debug!("client WebSocket woke the actor and was re-attached");
 					}
 					p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
 						socket
@@ -230,6 +290,7 @@ where
 					Some(Message::Text(text)) => {
 						if can_hibernate {
 							pending = Some(identity.message_index);
+							unacked = Some(Message::Text(text.clone()));
 						}
 						send(
 							&mut sender,
@@ -246,6 +307,7 @@ where
 					Some(Message::Binary(data)) => {
 						if can_hibernate {
 							pending = Some(identity.message_index);
+							unacked = Some(Message::Binary(data.clone()));
 						}
 						send(
 							&mut sender,
@@ -292,6 +354,30 @@ where
 	}
 }
 
+/// Waits, with the actor asleep, for the next client frame that must
+/// reach the actor. Pings are answered by the WebSocket layer and the gateway keeps pinging the
+/// client, so neither wakes the actor. A client close or disconnect is returned as a close frame
+/// so the actor still learns that the connection ended.
+async fn hibernate_wait(
+	socket: &mut WebSocket,
+	keepalive: &mut rivet_env::tokio::time::Interval,
+) -> Result<Message> {
+	loop {
+		rivet_env::select_biased!("a client frame wakes the actor; keepalive pings only touch the client",
+			message = socket.next() => match message {
+				Some(Ok(message @ (Message::Text(_) | Message::Binary(_) | Message::Close(_)))) => return Ok(message),
+				// A dropped connection still tells the actor that the client is gone.
+				None | Some(Err(_)) => return Ok(Message::Close(None)),
+				Some(Ok(Message::Ping(_) | Message::Pong(_))) => {}
+			},
+			tick = keepalive.tick() => {
+				tick.context("keepalive clock failed")?;
+				socket.send(Message::Ping(bytes::Bytes::new())).await.context("keepalive ping to the client failed")?;
+			},
+		);
+	}
+}
+
 async fn send(
 	sender: &mut PacketSender,
 	identity: &mut p::MessageId,
@@ -307,4 +393,132 @@ async fn send(
 	sender.send(bytes).await?;
 	identity.message_index = identity.message_index.wrapping_add(1);
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use axum::{Router, extract::ws::WebSocketUpgrade, routing::get};
+	use futures_util::SinkExt;
+	use rivet_env::TokioClock;
+	use tokio::net::TcpListener;
+	use tokio::sync::oneshot;
+	use tokio_tungstenite::tungstenite::Message as ClientMessage;
+
+	type Client = tokio_tungstenite::WebSocketStream<
+		tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+	>;
+
+	/// Connects a client to a server socket that runs `hibernate_wait` once and reports the
+	/// result. Returns the connected client and the receiver for the server-side result.
+	async fn connect(
+		keepalive_ms: u64,
+	) -> (
+		Client,
+		oneshot::Receiver<Result<Message>>,
+		tokio::task::JoinHandle<()>,
+	) {
+		let (tx, rx) = oneshot::channel();
+		let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
+		let app = Router::new().route(
+			"/",
+			get(move |upgrade: WebSocketUpgrade| {
+				let tx = tx.clone();
+				async move {
+					upgrade.on_upgrade(move |mut socket| async move {
+						let clock = Arc::new(TokioClock::new().unwrap());
+						let mut keepalive = rivet_env::interval(clock, keepalive_ms);
+						keepalive.tick().await.unwrap();
+						let result = hibernate_wait(&mut socket, &mut keepalive).await;
+						if let Some(tx) = tx.lock().unwrap().take() {
+							let _ = tx.send(result);
+						}
+					})
+				}
+			}),
+		);
+		let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		let server = tokio::spawn(async move {
+			axum::serve(listener, app).await.unwrap();
+		});
+		let (client, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/"))
+			.await
+			.unwrap();
+		(client, rx, server)
+	}
+
+	async fn result(rx: oneshot::Receiver<Result<Message>>) -> Message {
+		tokio::time::timeout(std::time::Duration::from_secs(5), rx)
+			.await
+			.expect("hibernate_wait did not return")
+			.unwrap()
+			.unwrap()
+	}
+
+	#[tokio::test]
+	async fn ping_and_pong_do_not_wake_the_actor() {
+		let (mut client, mut rx, server) = connect(60_000).await;
+		client
+			.send(ClientMessage::Ping(vec![1].into()))
+			.await
+			.unwrap();
+		client
+			.send(ClientMessage::Pong(vec![2].into()))
+			.await
+			.unwrap();
+		// The ping is answered by the server socket, and hibernate_wait keeps waiting.
+		let pong = tokio::time::timeout(std::time::Duration::from_secs(5), client.next())
+			.await
+			.unwrap()
+			.unwrap()
+			.unwrap();
+		assert!(matches!(pong, ClientMessage::Pong(_)));
+		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+		assert!(rx.try_recv().is_err(), "ping/pong must not return");
+
+		client.send(ClientMessage::Text("hi".into())).await.unwrap();
+		assert!(matches!(result(rx).await, Message::Text(text) if text.as_str() == "hi"));
+		server.abort();
+	}
+
+	#[tokio::test]
+	async fn data_frames_are_returned() {
+		let (mut client, rx, server) = connect(60_000).await;
+		client
+			.send(ClientMessage::Binary(vec![7, 8, 9].into()))
+			.await
+			.unwrap();
+		assert!(matches!(result(rx).await, Message::Binary(data) if data.as_ref() == [7, 8, 9]));
+		server.abort();
+	}
+
+	#[tokio::test]
+	async fn client_close_is_returned() {
+		let (mut client, rx, server) = connect(60_000).await;
+		client.close(None).await.unwrap();
+		assert!(matches!(result(rx).await, Message::Close(_)));
+		server.abort();
+	}
+
+	#[tokio::test]
+	async fn client_eof_becomes_close() {
+		let (client, rx, server) = connect(60_000).await;
+		drop(client);
+		assert!(matches!(result(rx).await, Message::Close(_)));
+		server.abort();
+	}
+
+	#[tokio::test]
+	async fn keepalive_pings_the_client() {
+		let (mut client, mut rx, server) = connect(50).await;
+		let ping = tokio::time::timeout(std::time::Duration::from_secs(5), client.next())
+			.await
+			.unwrap()
+			.unwrap()
+			.unwrap();
+		assert!(matches!(ping, ClientMessage::Ping(_)));
+		assert!(rx.try_recv().is_err(), "keepalive must not return");
+		server.abort();
+	}
 }
