@@ -261,7 +261,7 @@ jobs:
             -t "$tag" \
             --load \
             .
-          CONTAINER_ID=$(docker create "$tag")
+          CONTAINER_ID=$(docker create --label rivet.ci.extraction=true "$tag")
           mkdir -p artifacts
           docker cp "$CONTAINER_ID:/artifacts/${{ matrix.artifact }}" artifacts/
           docker rm "$CONTAINER_ID"
