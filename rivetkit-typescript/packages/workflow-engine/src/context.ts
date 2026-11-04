@@ -2444,6 +2444,66 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				return output;
 			};
 
+			const handleBranchError = (error: unknown) => {
+				if (hasWinner) {
+					if (
+						error instanceof CancelledError ||
+						error instanceof EvictedError
+					) {
+						branchStatus.status = "cancelled";
+					} else {
+						lateErrors.push({
+							name: branch.name,
+							error: String(error),
+						});
+					}
+					entry.dirty = true;
+					return;
+				}
+
+				if (
+					error instanceof SleepError ||
+					error instanceof MessageWaitError ||
+					error instanceof StepFailedError
+				) {
+					schedulerYieldState = mergeSchedulerYield(
+						schedulerYieldState,
+						error,
+					);
+					branchStatus.status = "running";
+					branchStatus.error = undefined;
+					entry.dirty = true;
+					return;
+				}
+
+				if (
+					error instanceof EvictedError ||
+					error instanceof HistoryDivergedError ||
+					error instanceof EntryInProgressError ||
+					error instanceof RollbackCheckpointError ||
+					error instanceof RollbackStopError
+				) {
+					propagatedError = selectControlFlowError(
+						propagatedError,
+						error,
+					);
+					branchStatus.status = "running";
+					branchStatus.error = undefined;
+					entry.dirty = true;
+					return;
+				}
+
+				if (error instanceof CancelledError) {
+					branchStatus.status = "cancelled";
+				} else {
+					branchStatus.status = "failed";
+					branchStatus.output = undefined;
+					branchStatus.error = String(error);
+					errors[branch.name] = error as Error;
+				}
+				entry.dirty = true;
+			};
+
 			const branchPromise = runBranch().then(
 				async (output) => {
 					activeRunningBranches--;
@@ -2485,18 +2545,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					notifyActiveBranchesChanged();
 
 					if (hasWinner) {
-						if (
-							error instanceof CancelledError ||
-							error instanceof EvictedError
-						) {
-							branchStatus.status = "cancelled";
-						} else {
-							lateErrors.push({
-								name: branch.name,
-								error: String(error),
-							});
-						}
-						entry.dirty = true;
+						handleBranchError(error);
 						return;
 					}
 
@@ -2570,22 +2619,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 										return;
 									}
 								} catch (retryError) {
-									if (
-										!(
-											retryError instanceof SleepError ||
-											retryError instanceof
-												MessageWaitError ||
-											retryError instanceof
-												StepFailedError
-										)
-									) {
-										branchStatus.status = "failed";
-										branchStatus.output = undefined;
-										branchStatus.error = String(retryError);
-										errors[branch.name] =
-											retryError as Error;
-										entry.dirty = true;
-									}
+									handleBranchError(retryError);
 								}
 							}
 						}
@@ -2593,32 +2627,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 						return;
 					}
 
-					if (
-						error instanceof EvictedError ||
-						error instanceof HistoryDivergedError ||
-						error instanceof EntryInProgressError ||
-						error instanceof RollbackCheckpointError ||
-						error instanceof RollbackStopError
-					) {
-						propagatedError = selectControlFlowError(
-							propagatedError,
-							error,
-						);
-						branchStatus.status = "running";
-						branchStatus.error = undefined;
-						entry.dirty = true;
-						return;
-					}
-
-					if (error instanceof CancelledError) {
-						branchStatus.status = "cancelled";
-					} else {
-						branchStatus.status = "failed";
-						branchStatus.output = undefined;
-						branchStatus.error = String(error);
-						errors[branch.name] = error as Error;
-					}
-					entry.dirty = true;
+					handleBranchError(error);
 				},
 			);
 

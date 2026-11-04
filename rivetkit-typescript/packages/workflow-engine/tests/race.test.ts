@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+	HistoryDivergedError,
 	InMemoryDriver,
 	RaceError,
 	runWorkflow,
@@ -532,6 +533,42 @@ for (const mode of modes) {
 				expect(firstResult.output?.winner).toBe("sleep-short");
 				expect(firstResult.output?.value).toBe("short");
 			}
+		});
+
+		it("should propagate HistoryDivergedError when retrying branch instead of swallowing it", async () => {
+			let executed = false;
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.race("race-diverge", [
+					{
+						name: "work",
+						run: async (ctx) => {
+							return await ctx.step("slow-step", async () => {
+								await new Promise((r) => setTimeout(r, 600));
+								return "work-done";
+							});
+						},
+					},
+					{
+						name: "timeout",
+						run: async (ctx) => {
+							if (!executed) {
+								executed = true;
+								await ctx.sleep("wait", 150);
+							} else {
+								// On retry, run step with same name "wait" to trigger HistoryDivergedError (type mismatch: expected step, found sleep)
+								await ctx.step("wait", async () => "diverged");
+							}
+							return "timeout-done";
+						},
+					},
+				]);
+			};
+
+			await expect(
+				runWorkflow("wf-diverge", workflow, undefined, driver, {
+					mode,
+				}).result,
+			).rejects.toThrow(HistoryDivergedError);
 		});
 	});
 }
