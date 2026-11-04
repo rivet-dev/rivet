@@ -25,10 +25,12 @@ RUN RUST_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
     rustup default "${RUST_TOOLCHAIN}" && \
     rustup target add aarch64-unknown-linux-gnu
 
-RUN if [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
+RUN --mount=type=cache,id=rivet-${CACHE_SCOPE}-${BUILD_TARGET}-${BUILD_MODE}-pnpm-linux-arm64-gnu,target=/root/.local/share/pnpm/store,sharing=locked \
+    if [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
         export NODE_OPTIONS="--max-old-space-size=4096" && \
         export SKIP_NAPI_BUILD=1 && \
         export SKIP_WASM_BUILD=1 && \
+        pnpm config set store-dir /root/.local/share/pnpm/store && \
         pnpm install --frozen-lockfile --ignore-scripts; \
     fi
 

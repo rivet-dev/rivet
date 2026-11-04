@@ -32,10 +32,12 @@ RUN RUST_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
     rustup target add x86_64-unknown-linux-gnu
 
 # Build the Inspector UI for the native binding.
-RUN if [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
+RUN --mount=type=cache,id=rivet-${CACHE_SCOPE}-${BUILD_TARGET}-${BUILD_MODE}-pnpm-linux-x64-gnu,target=/root/.local/share/pnpm/store,sharing=locked \
+    if [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
         export NODE_OPTIONS="--max-old-space-size=4096" && \
         export SKIP_NAPI_BUILD=1 && \
         export SKIP_WASM_BUILD=1 && \
+        pnpm config set store-dir /root/.local/share/pnpm/store && \
         pnpm install --frozen-lockfile --ignore-scripts; \
     fi
 

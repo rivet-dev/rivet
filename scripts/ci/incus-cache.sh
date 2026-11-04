@@ -34,6 +34,7 @@ export DOCKER_CONFIG="$docker_config"
 docker buildx inspect incus >/dev/null 2>&1 ||\
   docker buildx create --name incus --driver remote "$CI_BUILDKIT_ENDPOINT"
 {
+  echo "npm_config_store_dir=$cache/pnpm-store"
   echo "DOCKER_CONFIG=$DOCKER_CONFIG"
   echo 'BUILDX_BUILDER=incus'
   echo "CI_CACHE_SCOPE=$CI_SLOT"
