@@ -8,6 +8,9 @@ FROM ghcr.io/rivet-dev/rivet/engine-base-builder:a36b881 AS builder
 ARG TARGETARCH
 
 ARG CARGO_BUILD_MODE=debug
+ARG CACHE_SCOPE=local
+ARG CARGO_BUILD_JOBS=4
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
 ARG STRIP_BINARY=false
 ARG OVERRIDE_GIT_SHA
 
@@ -24,10 +27,10 @@ RUN RUST_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
 # included in the output because of cache mount)
 RUN \
     --mount=type=secret,id=netrc,target=/root/.netrc,mode=0600 \
-    --mount=type=cache,target=/usr/local/cargo/git,id=univseral-cargo-git \
-    --mount=type=cache,target=/usr/local/cargo/registry,id=univseral-cargo-registry \
-    --mount=type=cache,target=/app/target,id=univseral-target \
-    --mount=type=cache,target=/root/.cache,id=universal-user-cache \
+    --mount=type=cache,target=/usr/local/cargo/git,id=rivet-engine-${CACHE_SCOPE}-${TARGETARCH}-${CARGO_BUILD_MODE}-univseral-cargo-git,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/registry,id=rivet-engine-${CACHE_SCOPE}-${TARGETARCH}-${CARGO_BUILD_MODE}-univseral-cargo-registry,sharing=locked \
+    --mount=type=cache,target=/app/target,id=rivet-engine-${CACHE_SCOPE}-${TARGETARCH}-${CARGO_BUILD_MODE}-univseral-target,sharing=locked \
+    --mount=type=cache,target=/root/.cache,id=rivet-engine-${CACHE_SCOPE}-${TARGETARCH}-${CARGO_BUILD_MODE}-universal-user-cache,sharing=locked \
     if [ "$CARGO_BUILD_MODE" = "release" ]; then \
         RUSTFLAGS="--cfg tokio_unstable" cargo build -p rivet-engine --bin rivet-engine --release; \
     else \

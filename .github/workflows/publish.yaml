@@ -205,7 +205,7 @@ jobs:
             artifact: rivet-aarch64-apple-darwin
             upload_prefix: cli
             platform: darwin-arm64
-    runs-on: depot-ubuntu-24.04-8
+    runs-on: ${{ github.repository == 'rivet-dev/rivet' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && fromJSON('["self-hosted","incus-heavy"]') || 'depot-ubuntu-24.04-8' }}
     permissions:
       contents: read
       id-token: write # required for depot OIDC trust
@@ -225,8 +225,11 @@ jobs:
         if: steps.gate.outputs.skip != 'true'
         with:
           lfs: ${{ needs.context.outputs.trigger == 'release' }}
+      - name: Attach persistent Incus caches
+        if: steps.gate.outputs.skip != 'true' && startsWith(runner.name, 'ci-0')
+        run: bash scripts/ci/incus-cache.sh docker
       - uses: depot/setup-action@v1
-        if: steps.gate.outputs.skip != 'true'
+        if: steps.gate.outputs.skip != 'true' && !startsWith(runner.name, 'ci-0')
       - name: Log in to ghcr.io
         if: steps.gate.outputs.skip != 'true'
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -239,21 +242,26 @@ jobs:
           else
             echo "build_mode=debug" >> $GITHUB_OUTPUT
           fi
-      - name: Build via depot
+      - name: Build native artifacts
         if: steps.gate.outputs.skip != 'true'
         env:
-          DEPOT_TOKEN: ${{ secrets.DEPOT_TOKEN }}
+          DEPOT_TOKEN: ${{ !startsWith(runner.name, 'ci-0') && secrets.DEPOT_TOKEN || '' }}
         run: |
-          depot build \
-            --project ${{ env.DEPOT_PROJECT_ID }} \
-            --secret id=DEPOT_TOKEN,env=DEPOT_TOKEN \
+          tag="builder-${{ matrix.build_target }}-${{ matrix.platform }}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          CONTAINER_ID=""
+          trap 'test -z "$CONTAINER_ID" || docker rm -f "$CONTAINER_ID" >/dev/null 2>&1; docker image rm "$tag" >/dev/null 2>&1 || true' EXIT
+          build=(depot build --project "$DEPOT_PROJECT_ID" --secret id=DEPOT_TOKEN,env=DEPOT_TOKEN)
+          if [ -n "${CI_BUILDKIT_ENDPOINT:-}" ]; then build=(docker buildx build --builder incus); fi
+          "${build[@]}" \
+            --build-arg "CACHE_SCOPE=${CI_SLOT:-hosted}" \
+            --build-arg "CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-4}" \
             --build-arg BUILD_TARGET=${{ matrix.build_target }} \
             --build-arg BUILD_MODE=${{ steps.mode.outputs.build_mode }} \
             -f ${{ matrix.docker }} \
-            -t builder-${{ matrix.build_target }}-${{ matrix.platform }} \
+            -t "$tag" \
             --load \
             .
-          CONTAINER_ID=$(docker create builder-${{ matrix.build_target }}-${{ matrix.platform }})
+          CONTAINER_ID=$(docker create "$tag")
           mkdir -p artifacts
           docker cp "$CONTAINER_ID:/artifacts/${{ matrix.artifact }}" artifacts/
           docker rm "$CONTAINER_ID"
@@ -272,13 +280,16 @@ jobs:
     needs: [context]
     if: needs.context.outputs.build_wasm == 'true'
     name: "Build rivetkit-wasm"
-    runs-on: depot-ubuntu-24.04-8
+    runs-on: ${{ github.repository == 'rivet-dev/rivet' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && fromJSON('["self-hosted","incus-heavy"]') || 'depot-ubuntu-24.04-8' }}
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: ${{ needs.context.outputs.trigger == 'release' }}
+      - name: Attach persistent Incus caches
+        if: startsWith(runner.name, 'ci-0')
+        run: bash scripts/ci/incus-cache.sh raw
       - run: corepack enable
       - uses: actions/setup-node@v4
         with:
@@ -286,9 +297,11 @@ jobs:
           cache: pnpm
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          cache: ${{ !startsWith(runner.name, 'ci-0') }}
           target: wasm32-unknown-unknown
           rustflags: ""
       - uses: Swatinem/rust-cache@v2
+        if: ${{ !startsWith(runner.name, 'ci-0') }}
         with:
           shared-key: "rivetkit-wasm-publish"
           cache-on-failure: true
@@ -321,11 +334,14 @@ jobs:
           - platform: linux/x86_64
             runner: depot-ubuntu-24.04-8
             arch_suffix: -amd64
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ github.repository == 'rivet-dev/rivet' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && matrix.arch_suffix == '-amd64' && fromJSON('["self-hosted","incus-heavy"]') || matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: ${{ needs.context.outputs.trigger == 'release' }}
+      - name: Attach persistent Incus caches
+        if: startsWith(runner.name, 'ci-0')
+        run: bash scripts/ci/incus-cache.sh docker
       - name: Compute build mode
         id: mode
         run: |
@@ -340,8 +356,9 @@ jobs:
           docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build & Push (rivetdev/engine:full)
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
+          builder: ${{ env.BUILDX_BUILDER || '' }}
           context: .
           push: true
           tags: rivetdev/engine:full-${{ needs.context.outputs.sha }}${{ matrix.arch_suffix }}
@@ -349,10 +366,13 @@ jobs:
           target: engine-full
           platforms: ${{ matrix.platform }}
           build-args: |
+            CACHE_SCOPE=${{ env.CI_SLOT || 'hosted' }}
+            CARGO_BUILD_JOBS=${{ env.CARGO_BUILD_JOBS || '4' }}
             CARGO_BUILD_MODE=${{ steps.mode.outputs.cargo_build_mode }}
       - name: Build & Push (rivetdev/engine:slim)
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
+          builder: ${{ env.BUILDX_BUILDER || '' }}
           context: .
           push: true
           tags: rivetdev/engine:slim-${{ needs.context.outputs.sha }}${{ matrix.arch_suffix }}
@@ -360,6 +380,8 @@ jobs:
           target: engine-slim
           platforms: ${{ matrix.platform }}
           build-args: |
+            CACHE_SCOPE=${{ env.CI_SLOT || 'hosted' }}
+            CARGO_BUILD_JOBS=${{ env.CARGO_BUILD_JOBS || '4' }}
             CARGO_BUILD_MODE=${{ steps.mode.outputs.cargo_build_mode }}
 
   # ---------------------------------------------------------------------------
