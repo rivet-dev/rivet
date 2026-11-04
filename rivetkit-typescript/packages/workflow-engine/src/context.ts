@@ -2528,76 +2528,18 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 							activeRunningBranches > 0
 						) {
 							const delay = Math.max(0, deadline - Date.now());
-							await new Promise<void>((resolve) => {
-								let timer:
-									| ReturnType<typeof setTimeout>
-									| undefined;
-								let onAbort: (() => void) | undefined;
-								const cleanup = () => {
-									if (timer !== undefined) {
-										clearTimeout(timer);
-										timer = undefined;
-									}
-									if (onAbort) {
-										raceAbortController.signal.removeEventListener(
-											"abort",
-											onAbort,
-										);
-										onAbort = undefined;
-									}
-									const idx = yieldWaiters.indexOf(onYield);
-									if (idx !== -1) {
-										yieldWaiters.splice(idx, 1);
-									}
-								};
-								const onYield = () => {
-									cleanup();
-									resolve();
-								};
-								onAbort = () => {
-									cleanup();
-									resolve();
-								};
-								timer = setTimeout(() => {
-									cleanup();
-									resolve();
-								}, delay);
-
-								if (raceAbortController.signal.aborted) {
-									cleanup();
-									resolve();
-									return;
-								}
-								raceAbortController.signal.addEventListener(
-									"abort",
-									onAbort,
-									{
-										once: true,
-									},
+							const waitReason =
+								await this.waitForDeadlineOrYield(
+									delay,
+									raceAbortController,
+									yieldWaiters,
 								);
-								yieldWaiters.push(onYield);
-							});
-
-							while (
-								!hasWinner &&
-								!propagatedError &&
-								!raceAbortController.signal.aborted &&
-								Date.now() < deadline &&
-								activeRunningBranches > 0
-							) {
-								await new Promise((r) =>
-									setTimeout(
-										r,
-										Math.max(1, deadline - Date.now()),
-									),
-								);
-							}
 
 							if (
+								waitReason === "deadline" &&
 								!hasWinner &&
 								!propagatedError &&
-								!raceAbortController.signal.aborted &&
-								Date.now() >= deadline
+								!raceAbortController.signal.aborted
 							) {
 								try {
 									const retryBranchCtx = this.createBranch(
@@ -2756,6 +2698,60 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				name,
 			},
 		);
+	}
+
+	private waitForDeadlineOrYield(
+		delay: number,
+		abortController: AbortController,
+		yieldWaiters: Array<() => void>,
+	): Promise<"deadline" | "yield" | "abort"> {
+		return new Promise<"deadline" | "yield" | "abort">((resolve) => {
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			let onAbort: (() => void) | undefined;
+
+			const cleanup = () => {
+				if (timer !== undefined) {
+					clearTimeout(timer);
+					timer = undefined;
+				}
+				if (onAbort) {
+					abortController.signal.removeEventListener(
+						"abort",
+						onAbort,
+					);
+					onAbort = undefined;
+				}
+				const idx = yieldWaiters.indexOf(onYield);
+				if (idx !== -1) {
+					yieldWaiters.splice(idx, 1);
+				}
+			};
+
+			const onYield = () => {
+				cleanup();
+				resolve("yield");
+			};
+
+			onAbort = () => {
+				cleanup();
+				resolve("abort");
+			};
+
+			if (abortController.signal.aborted) {
+				resolve("abort");
+				return;
+			}
+
+			abortController.signal.addEventListener("abort", onAbort, {
+				once: true,
+			});
+			yieldWaiters.push(onYield);
+
+			timer = setTimeout(() => {
+				cleanup();
+				resolve("deadline");
+			}, delay);
+		});
 	}
 
 	// === Removed ===
