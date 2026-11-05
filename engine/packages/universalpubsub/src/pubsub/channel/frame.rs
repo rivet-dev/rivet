@@ -226,6 +226,14 @@ impl ByteBudget {
 				.map(|gauge| rivet_metrics::GaugeGuardExt::add_guard(gauge, len as i64)),
 		}
 	}
+
+	pub(super) fn used(&self) -> usize {
+		self.used.load(std::sync::atomic::Ordering::Acquire)
+	}
+
+	pub(super) fn capacity(&self) -> usize {
+		self.capacity
+	}
 }
 
 /// Bytes held in a channel's write queue until the frame leaves it.

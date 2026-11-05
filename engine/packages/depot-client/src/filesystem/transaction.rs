@@ -800,10 +800,10 @@ impl Transaction {
 			self.pin.seq.checked_add(1).ok_or_else(|| corrupt!())?,
 			&entry,
 		)?;
-		let mut view = pinned.fork();
-		view.seq = self.pin.seq + 1;
-		view.layers
-			.push(Layer::new(view.seq, batch, &self.fs.budget)?);
+		// The last overlay wins even at the pin's sequence. Making it visible must not
+		// raise the remote read bound to the next transaction's committed sequence.
+		let pending = Layer::new(self.pin.seq, batch, &self.fs.budget)?;
+		let mut base = pinned.fork();
 		drop(pin);
 		let row_range = RowRange::Kv {
 			ino: self.ino,
@@ -825,16 +825,39 @@ impl Transaction {
 			if remaining == 0 {
 				break;
 			}
-			let page = self
-				.fs
-				.evaluate(&mut view, deadline, |v| {
-					v.scan(&row_range, cursor.as_ref(), remaining, None)
-				})
-				.await;
+			// Rebase the committed view at the pin, then rebuild the speculative overlay.
+			// Rebasing the overlay itself could admit the next committed sequence or drop
+			// our staged writes. Each page retains the same pin, cursor and deadline.
+			let mut retried_cold = None;
+			let page = loop {
+				let mut view = base.fork();
+				view.layers.push(pending.clone());
+				let page = self
+					.fs
+					.evaluate(&mut view, deadline, |v| {
+						v.scan(&row_range, cursor.as_ref(), remaining, None)
+					})
+					.await;
+				if !matches!(page, Err(Error::TooOld)) {
+					break page;
+				}
+				let before = base.cold.snapshot.position().volume_seq;
+				if !self
+					.fs
+					.rebase_view(&mut base, self.pin.seq, deadline)
+					.await?
+				{
+					break Err(Error::TooOld);
+				}
+				let after = base.cold.snapshot.position().volume_seq;
+				if after <= before && retried_cold.is_some_and(|cold| cold >= after) {
+					break Err(Error::TooOld);
+				}
+				retried_cold = Some(after);
+			};
 			let page = self.fs.pinned_result(page, deadline).await?;
 			let end = page.len() < remaining;
 			cursor = page.last().map(|(key, _)| key.clone());
-			view.forget_fetched();
 			for (key, value) in page {
 				if reverse && limit.is_some_and(|limit| retained.len() == limit) {
 					let (_, _, old_bytes, _charge) =

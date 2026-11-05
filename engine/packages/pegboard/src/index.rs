@@ -21,6 +21,11 @@
 //! Creation-ordered index entries are keys with empty values. Inserting the same entry twice
 //! writes the same key, so inserts are idempotent and need no command receipt.
 use crate::commands::EnvoyRead;
+use crate::keys::kv::{
+	ActiveEnvoyIndexPrefix, ActiveEnvoyNameVersionKey, ActiveEnvoyNameVersionPrefix,
+	ActiveEnvoyPoolVersionKey, ActiveEnvoyPoolVersionPrefix, ActiveEnvoyVersionNumberPrefix,
+	LegacyActiveEnvoyIndexKey,
+};
 use crate::keys::{
 	kv::ActiveEnvoyIndexKey, kv::ActiveEnvoyIndexNamePrefix, kv::ActiveEnvoyIndexVersionPrefix,
 	kv::ActiveEnvoyStateKey, kv::ActiveEnvoyStatePrefix, kv::ActiveEnvoyVersionKey,
@@ -41,7 +46,7 @@ use rivet_engine_context::EngineContext;
 use rivet_env::Clock;
 use rivet_keys::keys::{
 	KeyAddress,
-	codec::{DescendingU64, FormalKey, SubspaceRange},
+	codec::{AtVersion, DescendingU64, FormalKey, SubspaceRange},
 	tags::depot_command::{
 		PEGBOARD_INDEX_DELETE_ACTIVE_ENVOY, PEGBOARD_INDEX_DELETE_ACTOR,
 		PEGBOARD_INDEX_INSERT_ACTOR, PEGBOARD_INDEX_INSERT_ENVOY,
@@ -52,7 +57,7 @@ use rivet_keys::keys::{
 };
 use rivet_util::Id;
 use std::cmp::Ordering;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::ops::{Bound, Range};
 use std::sync::Arc;
 
@@ -487,6 +492,505 @@ async fn list_envoy_pools_handler(
 	Ok(wire::IndexListEnvoyPoolsResponse { pools })
 }
 
+/// Reconciliation progress belongs to the exclusive volume opening. A request may time out
+/// between pages; another command resumes the last completed page. A new opening starts over
+/// because a previous binary may have maintained either historical layout during a handoff.
+#[derive(Default)]
+struct ActiveEnvoyIndexOpening {
+	reconciliation: tokio::sync::Mutex<ActiveEnvoyReconciliation>,
+}
+
+/// Optional immutable node-state cache for one reconciliation phase. Source state cannot
+/// change while the opening gate is held. Reservations share the filesystem process budget;
+/// skipped reservations only cost another point read, never correctness or forward progress.
+#[derive(Default)]
+struct ActiveEnvoyStateCache {
+	entries: BTreeMap<String, CachedActiveEnvoyState>,
+	bytes: usize,
+}
+struct CachedActiveEnvoyState {
+	value: Option<Arc<wire::ActiveEnvoyState>>,
+	_reservation: depot_client::filesystem::CacheReservation,
+}
+impl ActiveEnvoyStateCache {
+	async fn get(
+		&mut self,
+		db: &KvHandle,
+		envoy_key: &str,
+	) -> Result<Option<Arc<wire::ActiveEnvoyState>>> {
+		if let Some(entry) = self.entries.get(envoy_key) {
+			return Ok(entry.value.clone());
+		}
+		// A view retaining a page of large node states can exceed its operation budget.
+		// Give each full-state point read its own view, independent of the route page.
+		let key = ActiveEnvoyStateKey::new(envoy_key.to_owned());
+		let mut snapshot = db.snapshot().await?;
+		let raw = snapshot.get(&key.pack()).await?;
+		let encoded_bytes = raw.as_ref().map_or(0, Vec::len);
+		let value = raw
+			.map(|raw| key.deserialize(raw.into()).map(Arc::new))
+			.transpose()?;
+		let bytes = encoded_bytes
+			.saturating_add(value.as_ref().map_or(0, |state| {
+				state
+					.names
+					.capacity()
+					.saturating_mul(std::mem::size_of::<vbare::Str>())
+			}))
+			.saturating_add(envoy_key.len())
+			.saturating_add(256);
+		// This is a temporary adapter cache; the shared process reservation is the
+		// aggregate bound across openings, and this cap bounds one opening's share.
+		if self.bytes.saturating_add(bytes) <= 16 * 1024 * 1024
+			&& let Some(reservation) = db.reserve_cache(bytes)
+		{
+			self.bytes += bytes;
+			self.entries.insert(
+				envoy_key.to_owned(),
+				CachedActiveEnvoyState {
+					value: value.clone(),
+					_reservation: reservation,
+				},
+			);
+		}
+		Ok(value)
+	}
+}
+
+/// A contradictory pair remains durable until every other route of its node is gone.
+/// A new opening can therefore rediscover the same ambiguity after partial cleanup.
+#[derive(Clone)]
+struct ActiveEnvoyAmbiguity {
+	canonical: Vec<u8>,
+	legacy: Vec<u8>,
+}
+impl ActiveEnvoyAmbiguity {
+	fn is_witness(&self, key: &[u8]) -> bool {
+		key == self.canonical || key == self.legacy
+	}
+}
+type ActiveEnvoyAmbiguities = BTreeMap<String, ActiveEnvoyAmbiguity>;
+
+enum ActiveEnvoyReconciliation {
+	/// Validate current pointers, import legacy rows, and retain ambiguous witness pairs.
+	RepairingRoutes {
+		after: Option<Vec<u8>>,
+		ambiguous: ActiveEnvoyAmbiguities,
+		states: ActiveEnvoyStateCache,
+	},
+	/// Remove other names of ambiguous nodes, including names preceding their witnesses.
+	CleaningAmbiguousRoutes {
+		after: Option<Vec<u8>>,
+		witnesses: ActiveEnvoyAmbiguities,
+	},
+	/// Every other route is gone; each contradictory pair can now be removed atomically.
+	RemovingAmbiguityWitnesses {
+		remaining: ActiveEnvoyAmbiguities,
+	},
+	/// Rebuild missing version summaries from bounded pages of authoritative state.
+	AddingVersions {
+		after: Option<Vec<u8>>,
+	},
+	/// Remove summaries that no longer name a node's current heartbeat and version.
+	PruningVersions {
+		after: Option<Vec<u8>>,
+		states: ActiveEnvoyStateCache,
+	},
+	/// Populate stable candidate catalogs from validated, bounded source pages. Older
+	/// binaries ignore these catalogs, so rebuild them at every exclusive opening.
+	AddingNameVersions {
+		after: Option<Vec<u8>>,
+	},
+	AddingPoolVersions {
+		after: Option<Vec<u8>>,
+	},
+	/// Only canonical allocation rows remain; ordinary handlers may serve and mutate them.
+	Ready,
+}
+impl Default for ActiveEnvoyReconciliation {
+	fn default() -> Self {
+		Self::RepairingRoutes {
+			after: None,
+			ambiguous: ActiveEnvoyAmbiguities::new(),
+			states: ActiveEnvoyStateCache::default(),
+		}
+	}
+}
+
+type IndexRepairs = BTreeMap<Vec<u8>, Option<Vec<u8>>>;
+async fn apply_index_repairs(db: &KvHandle, repairs: IndexRepairs) -> Result<()> {
+	if repairs.is_empty() {
+		return Ok(());
+	}
+	let mut txn = db.begin().await?;
+	for (key, value) in repairs {
+		match value {
+			Some(value) => txn.put(&key, &value)?,
+			None => txn.delete(&key)?,
+		}
+	}
+	db.commit(txn).await?;
+	Ok(())
+}
+fn shrink_index_page(error: &anyhow::Error, rows: &mut usize) -> bool {
+	if *rows > 1
+		&& matches!(
+			error.downcast_ref::<depot_client::filesystem::Error>(),
+			Some(depot_client::filesystem::Error::TooLarge)
+		) {
+		*rows = (*rows / 2).max(1);
+		true
+	} else {
+		false
+	}
+}
+fn unpack_active_envoy_row(raw: &[u8]) -> Result<(ActiveEnvoyIndexKey, bool)> {
+	match ActiveEnvoyIndexKey::unpack(raw) {
+		Ok(key) => Ok((key, false)),
+		Err(_) => {
+			let key =
+				LegacyActiveEnvoyIndexKey::unpack(raw).context("invalid active envoy index key")?;
+			Ok((
+				ActiveEnvoyIndexKey::new(
+					key.name,
+					DescendingU64(u64::from(ENVOY_VERSION_BEFORE_VERSIONS)),
+					key.heartbeat_unix_ms,
+					key.envoy_key,
+				),
+				true,
+			))
+		}
+	}
+}
+
+async fn reconcile_active_envoy_page(
+	db: &KvHandle,
+	snapshot: &mut depot_worker::command::Transaction,
+	rows: &[(Vec<u8>, Vec<u8>)],
+	progress: &mut ActiveEnvoyReconciliation,
+	write_version: u16,
+) -> Result<(IndexRepairs, ActiveEnvoyAmbiguities)> {
+	let mut repairs = IndexRepairs::new();
+	let mut newly_ambiguous = ActiveEnvoyAmbiguities::new();
+	match progress {
+		ActiveEnvoyReconciliation::RepairingRoutes {
+			ambiguous, states, ..
+		} => {
+			// Canonical rows sort before legacy rows for each name. One absence probe
+			// per name/page avoids a separate missing legacy point read for every node.
+			let mut legacy_presence: Option<(String, bool)> = None;
+			for (raw, value) in rows {
+				let (key, legacy) = unpack_active_envoy_row(raw)?;
+				if let Some(witness) = ambiguous
+					.get(&key.envoy_key)
+					.or_else(|| newly_ambiguous.get(&key.envoy_key))
+				{
+					if !witness.is_witness(raw) {
+						repairs.insert(raw.clone(), None);
+					}
+					continue;
+				}
+				let stored = states.get(db, &key.envoy_key).await?;
+				let Some(stored) = stored.filter(|state| {
+					state.heartbeat_unix_ms == key.heartbeat_unix_ms
+						&& (legacy || u64::from(state.version) == key.version.0)
+						&& state.names.iter().any(|name| &**name == key.name.as_str())
+				}) else {
+					repairs.insert(raw.clone(), None);
+					continue;
+				};
+				let canonical = ActiveEnvoyIndexKey::new(
+					key.name.clone(),
+					DescendingU64(u64::from(stored.version)),
+					key.heartbeat_unix_ms,
+					key.envoy_key.clone(),
+				);
+				let old = LegacyActiveEnvoyIndexKey::new(
+					key.name.clone(),
+					key.heartbeat_unix_ms,
+					key.envoy_key.clone(),
+				);
+				let entry = canonical.deserialize(value.clone().into())?;
+				let other = if legacy {
+					snapshot.get(&canonical.pack()).await?
+				} else {
+					if legacy_presence
+						.as_ref()
+						.is_none_or(|(name, _)| name != &key.name)
+					{
+						let lower = LegacyActiveEnvoyIndexKey::new(
+							key.name.clone(),
+							i64::MIN,
+							String::new(),
+						)
+						.pack();
+						let range = ActiveEnvoyIndexNamePrefix::new(key.name.clone()).range();
+						let exists = !snapshot
+							.scan(
+								(
+									Bound::Included(lower.as_ref()),
+									Bound::Excluded(range.end.as_slice()),
+								),
+								Some(1),
+								false,
+							)
+							.await?
+							.is_empty();
+						legacy_presence = Some((key.name.clone(), exists));
+					}
+					if legacy_presence.as_ref().is_some_and(|(_, exists)| *exists) {
+						snapshot.get(&old.pack()).await?
+					} else {
+						None
+					}
+				};
+				if let Some(other) = &other {
+					let other = canonical.deserialize(other.clone().into())?;
+					if entry.worker_id != other.worker_id
+						|| entry.connection_id != other.connection_id
+					{
+						newly_ambiguous.insert(
+							key.envoy_key,
+							ActiveEnvoyAmbiguity {
+								canonical: canonical.pack().to_vec(),
+								legacy: old.pack().to_vec(),
+							},
+						);
+						continue;
+					}
+				}
+				// The supported predecessor (v3-20) uses canonical keys even with v1
+				// value encoding. Legacy compatibility is import-only, not dual writing.
+				if legacy {
+					if other.is_none() {
+						repairs.insert(
+							canonical.pack().to_vec(),
+							Some(
+								canonical
+									.serialize(AtVersion::new(entry, write_version))?
+									.to_vec(),
+							),
+						);
+					}
+					repairs.insert(old.pack().to_vec(), None);
+				} else if other.is_some() {
+					repairs.insert(old.pack().to_vec(), None);
+				}
+			}
+		}
+		ActiveEnvoyReconciliation::CleaningAmbiguousRoutes { witnesses, .. } => {
+			for (raw, _) in rows {
+				let (key, _) = unpack_active_envoy_row(raw)?;
+				if let Some(witness) = witnesses.get(&key.envoy_key)
+					&& !witness.is_witness(raw)
+				{
+					repairs.insert(raw.clone(), None);
+				}
+			}
+		}
+		ActiveEnvoyReconciliation::AddingVersions { .. } => {
+			for (raw, value) in rows {
+				let key = ActiveEnvoyStateKey::unpack(raw)?;
+				let state = key.deserialize(value.clone().into())?;
+				let version = ActiveEnvoyVersionKey::new(
+					DescendingU64(u64::from(state.version)),
+					state.heartbeat_unix_ms,
+					key.envoy_key,
+				)
+				.pack();
+				if snapshot.get(&version).await?.is_none() {
+					repairs.insert(version.to_vec(), Some(Vec::new()));
+				}
+			}
+		}
+		ActiveEnvoyReconciliation::PruningVersions { states, .. } => {
+			for (raw, _) in rows {
+				let key = ActiveEnvoyVersionKey::unpack(raw)?;
+				let state = states.get(db, &key.envoy_key).await?;
+				if state.is_none_or(|state| {
+					state.heartbeat_unix_ms != key.heartbeat_unix_ms
+						|| u64::from(state.version) != key.version.0
+				}) {
+					repairs.insert(raw.clone(), None);
+				}
+			}
+		}
+		ActiveEnvoyReconciliation::AddingNameVersions { .. }
+		| ActiveEnvoyReconciliation::AddingPoolVersions { .. } => {
+			for (raw, _) in rows {
+				let catalog = if matches!(
+					progress,
+					ActiveEnvoyReconciliation::AddingNameVersions { .. }
+				) {
+					let key = ActiveEnvoyIndexKey::unpack(raw)?;
+					ActiveEnvoyNameVersionKey::new(key.name, key.version)
+						.pack()
+						.to_vec()
+				} else {
+					let key = ActiveEnvoyVersionKey::unpack(raw)?;
+					ActiveEnvoyPoolVersionKey::new(key.version).pack().to_vec()
+				};
+				if !repairs.contains_key(&catalog) && snapshot.get(&catalog).await?.is_none() {
+					repairs.insert(catalog, Some(Vec::new()));
+				}
+			}
+		}
+		ActiveEnvoyReconciliation::Ready
+		| ActiveEnvoyReconciliation::RemovingAmbiguityWitnesses { .. } => {
+			unreachable!("phase handled before source reads")
+		}
+	}
+	Ok((repairs, newly_ambiguous))
+}
+
+/// Reconcile once per exclusive opening. Read views and repair batches are byte-bounded;
+/// TooLarge shrinks the page without advancing its checkpoint. A timed-out command resumes
+/// completed pages, while an abandoned commit fences and reopens through normal recovery.
+/// Empty speculative volumes require no creating transaction here.
+async fn prepare_active_envoy_index(db: &KvHandle, write_version: u16) -> Result<()> {
+	let write_version = rivet_data::pegboard_actor::record_write_version(write_version);
+	let opening = db.opening_state::<ActiveEnvoyIndexOpening>().await?;
+	let mut progress = opening.reconciliation.lock().await;
+	let mut page_rows = PAGE_SIZE;
+	loop {
+		if let ActiveEnvoyReconciliation::RemovingAmbiguityWitnesses { remaining } = &mut *progress
+		{
+			if remaining.is_empty() {
+				*progress = ActiveEnvoyReconciliation::AddingVersions { after: None };
+				continue;
+			}
+			let keys: Vec<_> = remaining.keys().take(page_rows).cloned().collect();
+			let mut repairs = IndexRepairs::new();
+			for key in &keys {
+				let witness = &remaining[key];
+				repairs.insert(witness.canonical.clone(), None);
+				repairs.insert(witness.legacy.clone(), None);
+			}
+			if let Err(error) = apply_index_repairs(db, repairs).await {
+				if shrink_index_page(&error, &mut page_rows) {
+					continue;
+				}
+				return Err(error);
+			}
+			for key in keys {
+				remaining.remove(&key);
+			}
+			continue;
+		}
+		let (range, after) = match &*progress {
+			ActiveEnvoyReconciliation::RepairingRoutes { after, .. }
+			| ActiveEnvoyReconciliation::CleaningAmbiguousRoutes { after, .. }
+			| ActiveEnvoyReconciliation::AddingNameVersions { after } => {
+				(ActiveEnvoyIndexPrefix::new().range(), after)
+			}
+			ActiveEnvoyReconciliation::AddingVersions { after } => {
+				(ActiveEnvoyStatePrefix::new().range(), after)
+			}
+			ActiveEnvoyReconciliation::PruningVersions { after, .. }
+			| ActiveEnvoyReconciliation::AddingPoolVersions { after } => {
+				(ActiveEnvoyVersionPrefix::new().range(), after)
+			}
+			ActiveEnvoyReconciliation::Ready => return Ok(()),
+			ActiveEnvoyReconciliation::RemovingAmbiguityWitnesses { .. } => {
+				unreachable!("witness phase handled above")
+			}
+		};
+		let lower = after
+			.as_ref()
+			.map_or(Bound::Included(range.start.as_slice()), |key| {
+				Bound::Excluded(key.as_slice())
+			});
+		let mut snapshot = db.snapshot().await?;
+		let page = snapshot
+			.scan(
+				(lower, Bound::Excluded(range.end.as_slice())),
+				Some(page_rows),
+				false,
+			)
+			.await
+			.map_err(anyhow::Error::from);
+		let rows = match page {
+			Ok(rows) => rows,
+			Err(error) => {
+				if shrink_index_page(&error, &mut page_rows) {
+					continue;
+				}
+				return Err(error);
+			}
+		};
+		if rows.is_empty() {
+			*progress = match &mut *progress {
+				ActiveEnvoyReconciliation::RepairingRoutes { ambiguous, .. } => {
+					if ambiguous.is_empty() {
+						ActiveEnvoyReconciliation::AddingVersions { after: None }
+					} else {
+						ActiveEnvoyReconciliation::CleaningAmbiguousRoutes {
+							after: None,
+							witnesses: std::mem::take(ambiguous),
+						}
+					}
+				}
+				ActiveEnvoyReconciliation::CleaningAmbiguousRoutes { witnesses, .. } => {
+					ActiveEnvoyReconciliation::RemovingAmbiguityWitnesses {
+						remaining: std::mem::take(witnesses),
+					}
+				}
+				ActiveEnvoyReconciliation::AddingVersions { .. } => {
+					ActiveEnvoyReconciliation::PruningVersions {
+						after: None,
+						states: ActiveEnvoyStateCache::default(),
+					}
+				}
+				ActiveEnvoyReconciliation::PruningVersions { .. } => {
+					ActiveEnvoyReconciliation::AddingNameVersions { after: None }
+				}
+				ActiveEnvoyReconciliation::AddingNameVersions { .. } => {
+					ActiveEnvoyReconciliation::AddingPoolVersions { after: None }
+				}
+				ActiveEnvoyReconciliation::AddingPoolVersions { .. } => {
+					ActiveEnvoyReconciliation::Ready
+				}
+				_ => unreachable!("non-source phase handled above"),
+			};
+			continue;
+		}
+		let page =
+			reconcile_active_envoy_page(db, &mut snapshot, &rows, &mut progress, write_version)
+				.await;
+		let (repairs, newly_ambiguous) = match page {
+			Ok(page) => page,
+			Err(error) => {
+				if shrink_index_page(&error, &mut page_rows) {
+					continue;
+				}
+				return Err(error);
+			}
+		};
+		if let Err(error) = apply_index_repairs(db, repairs).await {
+			if shrink_index_page(&error, &mut page_rows) {
+				continue;
+			}
+			return Err(error);
+		}
+		// Publish source checkpoints and ambiguity facts only after successful effects.
+		let last = rows.last().unwrap().0.clone();
+		match &mut *progress {
+			ActiveEnvoyReconciliation::RepairingRoutes {
+				after, ambiguous, ..
+			} => {
+				ambiguous.extend(newly_ambiguous);
+				*after = Some(last);
+			}
+			ActiveEnvoyReconciliation::AddingVersions { after }
+			| ActiveEnvoyReconciliation::AddingNameVersions { after }
+			| ActiveEnvoyReconciliation::AddingPoolVersions { after }
+			| ActiveEnvoyReconciliation::PruningVersions { after, .. }
+			| ActiveEnvoyReconciliation::CleaningAmbiguousRoutes { after, .. } => *after = Some(last),
+			_ => unreachable!("non-source phase handled above"),
+		}
+	}
+}
+
 /// The stored state of an envoy in the active index, if it has one.
 async fn read_active_envoy_state(
 	txn: &mut depot_worker::command::Transaction,
@@ -522,6 +1026,49 @@ fn delete_active_envoy_entries(
 	Ok(())
 }
 
+/// Publish monotonic hints before any route can become visible. Separate bounded batches
+/// preserve the existing registration transaction budget, including very wide registrations.
+/// A cancelled or superseded request may leave extra hints; live-window validation makes
+/// those harmless. Blind concurrent puts of the same empty value cannot lose information.
+async fn ensure_active_envoy_versions(
+	db: &KvHandle,
+	names: &[vbare::Str],
+	version: DescendingU64,
+) -> Result<()> {
+	let pool = ActiveEnvoyPoolVersionKey::new(version).pack();
+	let mut offset = 0usize;
+	let mut page_rows = PAGE_SIZE;
+	loop {
+		let end = offset.saturating_add(page_rows).min(names.len());
+		let result: Result<()> = async {
+			let mut snapshot = db.snapshot().await?;
+			let mut repairs = IndexRepairs::new();
+			if offset == 0 && snapshot.get(&pool).await?.is_none() {
+				repairs.insert(pool.to_vec(), Some(Vec::new()));
+			}
+			for name in &names[offset..end] {
+				let key = ActiveEnvoyNameVersionKey::new(name.to_string(), version).pack();
+				if snapshot.get(&key).await?.is_none() {
+					repairs.insert(key.to_vec(), Some(Vec::new()));
+				}
+			}
+			drop(snapshot);
+			apply_index_repairs(db, repairs).await
+		}
+		.await;
+		if let Err(error) = result {
+			if shrink_index_page(&error, &mut page_rows) {
+				continue;
+			}
+			return Err(error);
+		}
+		if end == names.len() {
+			return Ok(());
+		}
+		offset = end;
+	}
+}
+
 /// Replaces the envoy's index entries and state with the request's, in one transaction, unless
 /// the stored state belongs to a newer connection (`superseded`) or to a newer heartbeat of the
 /// same connection, which is a reordered or retried write and changes nothing.
@@ -540,18 +1087,21 @@ async fn upsert_active_envoy_handler(
 	let volume = ActiveEnvoyIndexVolume::from_volume_key(db.volume_key())?;
 	let envoy_key = request.envoy_key.to_string();
 	let state_key = ActiveEnvoyStateKey::new(envoy_key.clone());
-	let version = if db.write_version(VersionFamily::PEGBOARD_ACTOR)? >= ENVOY_VERSION_ACTOR_VERSION
-	{
+	let write_version = rivet_data::pegboard_actor::record_write_version(
+		db.write_version(VersionFamily::PEGBOARD_ACTOR)?,
+	);
+	prepare_active_envoy_index(&db, write_version).await?;
+	let version = if write_version >= ENVOY_VERSION_ACTOR_VERSION {
 		request.version
 	} else {
 		ENVOY_VERSION_BEFORE_VERSIONS
 	};
 
+	ensure_active_envoy_versions(&db, &request.names, DescendingU64(u64::from(version))).await?;
 	let mut txn = db.begin().await?;
 	// The pool's newest live version is read before this envoy's rows change, skipping the
 	// envoy's own row so a redeploy to a lower version does not see itself as superseded.
 	let newest_live_version = newest_live_pool_version(
-		&volume,
 		&mut txn,
 		&envoy_key,
 		oldest_eligible_heartbeat(request.heartbeat_unix_ms),
@@ -589,10 +1139,8 @@ async fn upsert_active_envoy_handler(
 			request.heartbeat_unix_ms,
 			envoy_key.clone(),
 		);
-		txn.put(
-			&key.pack(),
-			&key.serialize(at_write_version(&db, entry.clone())?)?,
-		)?;
+		let encoded = key.serialize(AtVersion::new(entry.clone(), write_version))?;
+		txn.put(&key.pack(), &encoded)?;
 	}
 	let version_key = ActiveEnvoyVersionKey::new(
 		DescendingU64(u64::from(version)),
@@ -609,7 +1157,7 @@ async fn upsert_active_envoy_handler(
 	};
 	txn.put(
 		&state_key.pack(),
-		&state_key.serialize(at_write_version(&db, state)?)?,
+		&state_key.serialize(AtVersion::new(state, write_version))?,
 	)?;
 	db.commit(txn).await?;
 	crate::metrics::ENVOY_INDEX_UPSERTS
@@ -631,6 +1179,8 @@ async fn delete_active_envoy_handler(
 	let volume = ActiveEnvoyIndexVolume::from_volume_key(db.volume_key())?;
 	let envoy_key = request.envoy_key.to_string();
 	let state_key = ActiveEnvoyStateKey::new(envoy_key.clone());
+	// Reconcile before applying the delete so orphaned historical routes cannot survive it.
+	prepare_active_envoy_index(&db, db.write_version(VersionFamily::PEGBOARD_ACTOR)?).await?;
 
 	let mut txn = db.begin().await?;
 	let Some(stored) = read_active_envoy_state(&mut txn, &state_key).await? else {
@@ -671,21 +1221,14 @@ fn bound_slice(bound: &Bound<Vec<u8>>) -> Bound<&[u8]> {
 	}
 }
 
-/// The highest envoy version under `name` with an entry whose heartbeat is at or after
-/// `oldest_eligible`, or `None` when no live envoy serves the name.
-///
-/// Entries sort by descending version and then ascending heartbeat, so the first entry at or
-/// after a position is the oldest heartbeat of the highest version remaining. When it is live,
-/// its version is the answer. When it is stale, the seek moves to that version's eligibility
-/// window, whose first entry is either a live envoy of the same version or the first entry of
-/// the next version. Each version whose envoys all stopped heartbeating costs one extra seek.
+/// The highest candidate with a live route. Catalog keys contain no heartbeat and are never
+/// retired, so discovering a version cannot walk the physical history of moved route keys.
 async fn newest_live_active_envoy_version(
-	volume: &ActiveEnvoyIndexVolume,
 	snapshot: &mut depot_worker::command::Transaction,
 	name: &str,
 	oldest_eligible: i64,
 ) -> Result<Option<DescendingU64>> {
-	let range = ActiveEnvoyIndexNamePrefix::new(name.to_owned()).range();
+	let range = ActiveEnvoyNameVersionPrefix::new(name.to_owned()).range();
 	let mut lower = Bound::Included(range.start.clone());
 	loop {
 		let entries = snapshot
@@ -695,39 +1238,39 @@ async fn newest_live_active_envoy_version(
 				false,
 			)
 			.await?;
-		let Some((raw_key, _)) = entries.into_iter().next() else {
+		let Some((raw, _)) = entries.into_iter().next() else {
 			return Ok(None);
 		};
-		let key =
-			ActiveEnvoyIndexKey::unpack(&raw_key).context("invalid active envoy index key")?;
-		if key.heartbeat_unix_ms >= oldest_eligible {
-			return Ok(Some(key.version));
+		let candidate = ActiveEnvoyNameVersionKey::unpack(&raw)?;
+		let window = ActiveEnvoyIndexVersionPrefix::new(name.to_owned(), candidate.version).range();
+		let start = active_envoy_window_start(name, candidate.version, oldest_eligible);
+		if !snapshot
+			.scan(
+				(
+					Bound::Included(start.as_slice()),
+					Bound::Excluded(window.end.as_slice()),
+				),
+				Some(1),
+				false,
+			)
+			.await?
+			.is_empty()
+		{
+			return Ok(Some(candidate.version));
 		}
-		crate::metrics::ENVOY_INDEX_STALE_ROWS
-			.with_label_values(&[&volume.namespace, "heartbeat_expired", "skipped"])
-			.inc();
-		lower = Bound::Included(active_envoy_window_start(
-			name,
-			key.version,
-			oldest_eligible,
-		));
+		lower = Bound::Excluded(raw);
 	}
 }
 
-/// The highest version among the pool's envoys other than `own_envoy_key` with a version row
-/// whose heartbeat is at or after `oldest_eligible`, or `None` when no other envoy is live.
-///
-/// The version rows sort like the name entries, descending version then ascending heartbeat,
-/// so the seek works the same way: a live first entry answers, a stale one moves the seek to
-/// its version's eligibility window. The envoy's own row is stepped over so a redeploy to a
-/// lower version does not see its previous row as a newer deployment.
+/// Pool-wide version discovery also uses stable candidates and seeks directly into each live
+/// window. At most one current row belongs to `own_envoy_key`, so two rows suffice to find a
+/// different node. Never treat a candidate alone as evidence of a live deployment.
 async fn newest_live_pool_version(
-	volume: &ActiveEnvoyIndexVolume,
 	snapshot: &mut depot_worker::command::Transaction,
 	own_envoy_key: &str,
 	oldest_eligible: i64,
 ) -> Result<Option<DescendingU64>> {
-	let range = ActiveEnvoyVersionPrefix::new().range();
+	let range = ActiveEnvoyPoolVersionPrefix::new().range();
 	let mut lower = Bound::Included(range.start.clone());
 	loop {
 		let entries = snapshot
@@ -737,26 +1280,29 @@ async fn newest_live_pool_version(
 				false,
 			)
 			.await?;
-		let Some((raw_key, _)) = entries.into_iter().next() else {
+		let Some((raw, _)) = entries.into_iter().next() else {
 			return Ok(None);
 		};
-		let key =
-			ActiveEnvoyVersionKey::unpack(&raw_key).context("invalid active envoy version key")?;
-		if key.envoy_key == own_envoy_key {
-			lower = Bound::Excluded(raw_key);
-			continue;
+		let candidate = ActiveEnvoyPoolVersionKey::unpack(&raw)?;
+		let window = ActiveEnvoyVersionNumberPrefix::new(candidate.version).range();
+		let start =
+			ActiveEnvoyVersionKey::new(candidate.version, oldest_eligible, String::new()).pack();
+		let entries = snapshot
+			.scan(
+				(
+					Bound::Included(start.as_ref()),
+					Bound::Excluded(window.end.as_slice()),
+				),
+				Some(2),
+				false,
+			)
+			.await?;
+		for (key, _) in entries {
+			if ActiveEnvoyVersionKey::unpack(&key)?.envoy_key != own_envoy_key {
+				return Ok(Some(candidate.version));
+			}
 		}
-		if key.heartbeat_unix_ms >= oldest_eligible {
-			return Ok(Some(key.version));
-		}
-		crate::metrics::ENVOY_INDEX_STALE_ROWS
-			.with_label_values(&[&volume.namespace, "heartbeat_expired", "skipped"])
-			.inc();
-		lower = Bound::Included(
-			ActiveEnvoyVersionKey::new(key.version, oldest_eligible, String::new())
-				.pack()
-				.to_vec(),
-		);
+		lower = Bound::Excluded(raw);
 	}
 }
 
@@ -773,7 +1319,12 @@ async fn list_active_envoys_handler(
 	db: KvHandle,
 	request: wire::IndexListActiveEnvoysRequest,
 ) -> Result<wire::IndexListActiveEnvoysResponse> {
-	let volume = ActiveEnvoyIndexVolume::from_volume_key(db.volume_key())?;
+	ActiveEnvoyIndexVolume::from_volume_key(db.volume_key())?;
+	let write_version = rivet_data::pegboard_actor::record_write_version(
+		db.write_version(VersionFamily::PEGBOARD_ACTOR)?,
+	);
+	prepare_active_envoy_index(&db, write_version).await?;
+	// Reconciliation may perform cold I/O; eligibility starts after it completes.
 	let now_unix_ms = clock.observe()?.unix_ms;
 	let name = request.name.to_string();
 	let oldest_eligible = oldest_eligible_heartbeat(now_unix_ms);
@@ -787,20 +1338,30 @@ async fn list_active_envoys_handler(
 				"cursor outside index range"
 			);
 			// The cursor must encode an entire entry, not just a version or heartbeat prefix.
-			let cursor_key = ActiveEnvoyIndexKey::unpack(cursor).context("invalid index cursor")?;
+			let cursor_key = ActiveEnvoyIndexKey::unpack(cursor)
+				.or_else(|_| {
+					let legacy = LegacyActiveEnvoyIndexKey::unpack(cursor)?;
+					Ok::<_, anyhow::Error>(ActiveEnvoyIndexKey::new(
+						legacy.name,
+						DescendingU64(u64::from(ENVOY_VERSION_BEFORE_VERSIONS)),
+						legacy.heartbeat_unix_ms,
+						legacy.envoy_key,
+					))
+				})
+				.context("invalid index cursor")?;
+			let canonical_cursor = cursor_key.pack();
 			let window_start =
 				active_envoy_window_start(&name, cursor_key.version, oldest_eligible);
-			let lower = if cursor < window_start.as_slice() {
+			let lower = if canonical_cursor.as_ref() < window_start.as_slice() {
 				Bound::Included(window_start)
 			} else {
-				Bound::Excluded(cursor.to_vec())
+				Bound::Excluded(canonical_cursor.to_vec())
 			};
 			(cursor_key.version, lower)
 		}
 		None => {
 			let Some(version) =
-				newest_live_active_envoy_version(&volume, &mut snapshot, &name, oldest_eligible)
-					.await?
+				newest_live_active_envoy_version(&mut snapshot, &name, oldest_eligible).await?
 			else {
 				return Ok(wire::IndexListActiveEnvoysResponse {
 					envoys: Vec::new(),
@@ -811,14 +1372,10 @@ async fn list_active_envoys_handler(
 			(version, Bound::Included(window_start))
 		}
 	};
-	let version_range = ActiveEnvoyIndexVersionPrefix::new(name.clone(), version).range();
-
+	let range = ActiveEnvoyIndexVersionPrefix::new(name.clone(), version).range();
 	let mut entries = snapshot
 		.scan(
-			(
-				bound_slice(&lower),
-				Bound::Excluded(version_range.end.as_slice()),
-			),
+			(bound_slice(&lower), Bound::Excluded(range.end.as_slice())),
 			Some(PAGE_SIZE + 1),
 			false,
 		)
@@ -826,6 +1383,9 @@ async fn list_active_envoys_handler(
 	let has_more = entries.len() > PAGE_SIZE;
 	entries.truncate(PAGE_SIZE);
 
+	// The deployed versioned reader always parses canonical cursors, including when
+	// discovery falls back to encoding v1. Accept older incoming cursors above, but
+	// never choose an emitted wire format from a temporary encoding decision.
 	let cursor = if has_more {
 		entries.last().map(|(key, _)| key.clone())
 	} else {

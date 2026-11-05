@@ -66,9 +66,11 @@ mod inspector;
 mod inspector_ws;
 #[cfg(feature = "native-runtime")]
 mod runner_config;
+mod serving_envoy;
 mod websocket;
 
 use inspector::build_actor_inspector;
+pub use serving_envoy::{ActiveActorCountChanges, ServingEnvoy};
 
 const ENVOY_START_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -100,6 +102,10 @@ impl CoreEnvoyHandle {
 		}
 	}
 
+	pub fn is_stopped(&self) -> bool {
+		self.handle.is_stopped()
+	}
+
 	/// Resolves after the Engine sends the envoy initialization message.
 	pub async fn started(&self) -> anyhow::Result<()> {
 		self.handle.started().await
@@ -108,6 +114,10 @@ impl CoreEnvoyHandle {
 	/// Resolves once the envoy has no active actors (or has stopped).
 	pub async fn wait_actors_drained(&self) {
 		self.handle.wait_actors_drained().await
+	}
+
+	pub async fn wait_active_actor_count_change(&self, last: Option<usize>) -> Option<usize> {
+		self.handle.wait_active_actor_count_change(last).await
 	}
 
 	/// Engine-reported drain threshold in milliseconds. `None` until the
@@ -1398,10 +1408,11 @@ impl RegistryDispatcher {
 }
 
 impl RegistryDispatcher {
-	fn can_hibernate(&self, actor_id: &str, request: &HttpRequest) -> bool {
+	async fn can_hibernate(&self, actor_id: &str, request: &HttpRequest) -> bool {
 		let Some(instance) = self
 			.actor_instances
-			.read_sync(actor_id, |_, state| state.active_instance())
+			.read_async(actor_id, |_, state| state.active_instance())
+			.await
 			.flatten()
 		else {
 			return false;

@@ -139,6 +139,7 @@ fn emit_write(
 		state: write.state.clone(),
 		versions: worker_registration.versions.to_vec(),
 		directory_lock: worker_registration.directory_lock.clone(),
+		zone: worker_registration.zone.clone().map(Into::into),
 	};
 
 	let op = state.sequence.next(Slot::Heartbeat);
@@ -156,10 +157,12 @@ fn emit_write(
 	let call = IoCall::arm(op, timeout_ms, Timer::Io, out);
 	state.calls.insert(op.slot, call);
 
+	let heartbeat_version = state.heartbeat_version;
 	out.execute(Effect::WriteLocalHeartbeatRequest {
 		op,
 		worker_registration,
 		heartbeat,
+		heartbeat_version,
 		expected_etag,
 	});
 }
@@ -755,6 +758,9 @@ fn handle_list_storage_workers_response(
 	super::watch::listing_observed(state, &entries, issued_boot_ms, now_boot_ms, out);
 	state.discovery.entries = Some(entries);
 	state.recompute_read_floor();
+	if !partial {
+		state.select_heartbeat_version();
+	}
 
 	// A storage worker that other live storage workers could outpace must stop serving
 	// before it reads or replicates data at a version it cannot decode.
@@ -762,6 +768,11 @@ fn handle_list_storage_workers_response(
 		if let Some(incompatibility) = incompatible_version(state, now_boot_ms) {
 			out.execute(Effect::RecordIncompatibleVersion { incompatibility });
 			fence(state, FenceReason::IncompatibleVersion, out);
+			return;
+		}
+		if let Some(labelled) = labelled_peer_of_unlabelled_worker(state, now_boot_ms) {
+			out.execute(Effect::RecordMissingZone { labelled });
+			fence(state, FenceReason::MissingZone, out);
 			return;
 		}
 	}
@@ -826,6 +837,47 @@ fn incompatible_version(
 		.map(|entry| entry.heartbeat.versions.as_slice())
 		.collect();
 	crate::versions::incompatibility(&worker_registration.versions, &others)
+}
+
+/// Another live storage worker with a zone, when this storage worker started without one. Only
+/// the first complete listing after the claim counts, so this costs no extra request and never
+/// fences a worker that was already running when its peers gained labels.
+fn labelled_peer_of_unlabelled_worker(
+	state: &mut State,
+	now_boot_ms: u64,
+) -> Option<crate::worker::WorkerId> {
+	let LeaseState::Live {
+		worker_registration,
+		..
+	} = &state.lease
+	else {
+		return None;
+	};
+	if state.zone_checked {
+		return None;
+	}
+
+	let unlabelled = worker_registration.role == crate::worker::WorkerRole::Storage
+		&& worker_registration.zone.is_none();
+	let own_id = worker_registration.identity.worker_id.clone();
+	let store_now = state
+		.discovery
+		.store_clock
+		.as_ref()
+		.map(|clock| clock.lower_bound(now_boot_ms));
+	let ttl_ms = state.config.lease.ttl_ms as i128;
+	let labelled = state
+		.reader_entries()
+		.filter(|entry| unlabelled && entry.worker_id != own_id)
+		.filter(|entry| {
+			store_now
+				.is_some_and(|now| (now as i128 - entry.modified_unix_ms as i128).max(0) < ttl_ms)
+		})
+		.find(|entry| entry.heartbeat.zone.is_some())
+		.map(|entry| entry.worker_id.clone());
+
+	state.zone_checked = true;
+	labelled
 }
 
 fn wait_registration(

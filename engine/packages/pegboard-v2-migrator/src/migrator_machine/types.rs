@@ -12,7 +12,7 @@ pub struct OpId(pub u64);
 pub enum Timer {
 	/// Retries the state load after a failure.
 	Load,
-	/// Retries a state write after a failure.
+	/// Ends the backoff after a failed or refused state write, which dispatch then sends again.
 	Persist,
 	/// Retries a listing after a failure, or admits the next page once pacing allows.
 	Listing,
@@ -46,6 +46,8 @@ pub struct Settings {
 	pub confirm_delay_ms: u64,
 	/// Candidates whose reported size exceeds this are skipped as `TooLarge`.
 	pub max_copy_bytes: u64,
+	/// Copy bytes admitted per second; see `State::copy_budget_unix_ms`.
+	pub max_copy_bytes_per_sec: u64,
 	/// V2 datacenters to list, ascending.
 	pub datacenter_labels: Vec<u16>,
 	/// The namespace the actors land in and this datacenter's label, which keyed ids derive
@@ -67,6 +69,7 @@ impl Settings {
 			wake_horizon_ms: 0,
 			confirm_delay_ms: 20_000,
 			max_copy_bytes: u64::MAX,
+			max_copy_bytes_per_sec: u64::MAX,
 			datacenter_labels: Vec::new(),
 			target_namespace: String::new(),
 			v3_datacenter_label: 0,
@@ -238,6 +241,12 @@ pub enum V3Result {
 pub enum WriteResult {
 	Written,
 	Fenced,
+	/// The storage host refused the write at admission, so nothing ran. It asks the writer to
+	/// wait `retry_after_ms` before sending it again.
+	Refused {
+		retry_after_ms: u64,
+		error: String,
+	},
 	Failed(String),
 }
 

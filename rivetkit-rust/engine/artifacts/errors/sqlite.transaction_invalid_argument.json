@@ -1,0 +1,5 @@
+{
+  "code": "transaction_invalid_argument",
+  "group": "sqlite",
+  "message": "Invalid SQLite transaction argument."
+}

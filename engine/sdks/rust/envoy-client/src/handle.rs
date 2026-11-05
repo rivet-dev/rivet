@@ -310,6 +310,30 @@ impl EnvoyHandle {
 		rx.await.is_ok()
 	}
 
+	/// Resolve with the active actor count once it differs from `last`, or `None` once the
+	/// envoy has stopped.
+	pub async fn wait_active_actor_count_change(&self, last: Option<usize>) -> Option<usize> {
+		loop {
+			let notified = self.shared.actors_notify.notified();
+			tokio::pin!(notified);
+			notified.as_mut().enable();
+
+			if self.is_stopped() {
+				return None;
+			}
+
+			let count = self.active_actor_count();
+			if last != Some(count) {
+				return Some(count);
+			}
+
+			tokio::select! {
+				_ = notified => {}
+				_ = self.wait_stopped() => return None,
+			}
+		}
+	}
+
 	pub fn http_request_counter(
 		&self,
 		actor_id: &str,

@@ -630,6 +630,8 @@ async fn envoy_loop(
 					}
 					ToEnvoyMessage::ActorFinished { actor_id, generation } => {
 						ctx.unfinished_actors.remove(&(actor_id, generation));
+						// A failed start leaves the entry in place, but its closed handle changes the count.
+						ctx.shared.actors_notify.notify_waiters();
 					}
 					ToEnvoyMessage::KvRequest { actor_id, data, response_tx } => {
 						handle_kv_request(&mut ctx, actor_id, data, response_tx).await;
@@ -974,6 +976,7 @@ fn stop_all_actors_lost(ctx: &mut EnvoyContext) -> usize {
 			.lock()
 			.expect("shared actor registry poisoned")
 			.clear();
+		ctx.shared.actors_notify.notify_waiters();
 	}
 	hosted
 }

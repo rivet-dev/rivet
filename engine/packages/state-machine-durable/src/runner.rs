@@ -157,15 +157,15 @@ impl<M: DurableStateMachine> Runner<M> {
 
 		if !machine.has_started() {
 			let now = ctx.env().clock().observe()?;
+			let entropy = rivet_state_machine::Entropy(
+				ctx.env().rng("durable.state-machine.entropy").fork_seed(),
+			);
+			tracing::debug!(target: "rivet_state_machine", sm = M::DEBUG_NAME,
+				?now, ?entropy, "durable state machine startup");
 			let mut effects = Effects::new(now);
 			#[allow(clippy::disallowed_methods, reason = "metrics use real time")]
 			let started = std::time::Instant::now();
-			M::start(
-				&mut machine.state,
-				now,
-				rivet_state_machine::Entropy([0; 32]),
-				&mut effects,
-			);
+			M::start(&mut machine.state, now, entropy, &mut effects);
 			metrics.observe_transition("start", started.elapsed().as_secs_f64());
 
 			machine.debug_validate(ctx).await;
@@ -196,7 +196,6 @@ impl<M: DurableStateMachine> Runner<M> {
 					"durable alarm delivery is for a revision that is no longer armed"
 				);
 
-				let now = ctx.env().clock().observe()?;
 				// Timers an earlier transition of this batch armed or cancelled, by identity:
 				// the deadline it now has, or none. A due timer whose row that transition
 				// replaced or removed is skipped, as it would be if the row were read back.
@@ -212,6 +211,7 @@ impl<M: DurableStateMachine> Runner<M> {
 					let timer = M::deserialize_timer(&due.payload)?;
 					let body = RuntimeEvent::Timer(timer);
 					let preparation = executor.prepare(&machine.state, &body).await?;
+					let now = ctx.env().clock().observe()?;
 					let mut effects =
 						Self::apply(ctx, &mut machine, &mut metrics, body, preparation, now).await;
 					let transition = Transition::new(Some(due.key), &mut effects);
@@ -400,8 +400,12 @@ impl<M: DurableStateMachine> Runner<M> {
 		let event = Event {
 			now,
 			body,
-			entropy: rivet_state_machine::Entropy([0; 32]),
+			entropy: rivet_state_machine::Entropy(
+				ctx.env().rng("durable.state-machine.entropy").fork_seed(),
+			),
 		};
+		tracing::debug!(target: "rivet_state_machine", sm = M::DEBUG_NAME,
+			event = event_name, ?now, entropy = ?event.entropy, "durable state machine delivery");
 
 		let mut effects = Effects::new(now);
 		#[allow(clippy::disallowed_methods, reason = "metrics use real time")]
@@ -653,7 +657,7 @@ impl<M: DurableStateMachine> Machine<M> {
 
 		match (method, machine) {
 			(_, Some(machine)) => Ok(machine),
-			(Method::Get, None) => bail!("machine not found"),
+			(Method::Get, None) => Err(crate::errors::MachineNotFound.build()),
 			(Method::GetOrCreate { state }, None) => Ok(Machine {
 				state,
 				stored_state: None,

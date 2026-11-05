@@ -15,7 +15,10 @@ use crate::{
 use anyhow::Result;
 use object_store::{ObjectStore, PutMode, UpdateVersion};
 use rivet_env::TaskScope;
-use rivet_keys::keys::{KeyAddress, codec::FormalKey};
+use rivet_keys::keys::{
+	KeyAddress,
+	codec::{AtVersion, FormalKey},
+};
 use rivet_metrics::{GaugeGuardExt, IntGaugeGuard};
 use rivet_state_machine_ephemeral::{EffectContext, Executor};
 use rivet_state_machine_util::IoCall;
@@ -139,6 +142,13 @@ impl Executor<TopologyStateMachine> for TopologyExecutor {
 					selected = incompatibility.selected,
 					own_range = ?incompatibility.own_range,
 					"other storage workers write a version this binary cannot read; fencing. Roll forward to a binary that reads it, since versions only move forward"
+				);
+				return;
+			}
+			Effect::RecordMissingZone { labelled } => {
+				tracing::error!(
+					?labelled,
+					"storage.zone is unset, but another storage worker advertises one; fencing. Set storage.zone on this process"
 				);
 				return;
 			}
@@ -315,6 +325,7 @@ impl Executor<TopologyStateMachine> for TopologyExecutor {
 				op,
 				worker_registration,
 				heartbeat,
+				heartbeat_version,
 				expected_etag,
 			} => {
 				let Some(call) = self.pending_call(op) else {
@@ -340,7 +351,8 @@ impl Executor<TopologyStateMachine> for TopologyExecutor {
 							});
 
 							let result = async {
-								let bytes = key.serialize(heartbeat)?;
+								let bytes =
+									key.serialize(AtVersion::new(heartbeat, heartbeat_version))?;
 								Ok::<_, anyhow::Error>(
 									store
 										.put_opts(&key.pack(), bytes.into(), mode.into())
@@ -602,7 +614,8 @@ fn record_fence(report: &FenceReport) {
 		| FenceReason::ForeignHeartbeat
 		| FenceReason::RegistrationFailed
 		| FenceReason::DependentFailed
-		| FenceReason::IncompatibleVersion => tracing::error!(
+		| FenceReason::IncompatibleVersion
+		| FenceReason::MissingZone => tracing::error!(
 			?worker_id,
 			reason,
 			last_confirmed_issued_boot_ms = ?report.last_confirmed_issued_boot_ms,

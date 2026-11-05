@@ -180,7 +180,9 @@ pub(crate) async fn execute(
 			let mut tx = fs.begin(ino).await?;
 
 			let now = env.clock().observe()?.unix_ms;
-			let version = versions.write_version(VersionFamily::PEGBOARD_ACTOR)?;
+			let version = rivet_data::pegboard_actor::record_write_version(
+				versions.write_version(VersionFamily::PEGBOARD_ACTOR)?,
+			);
 			let entries: BTreeMap<_, _> = put.keys.into_iter().zip(put.values).collect();
 			for (key, value) in entries {
 				let packed = ActorKvKey::new(Bytes::from(key)).pack();

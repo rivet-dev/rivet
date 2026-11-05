@@ -157,6 +157,8 @@ pub async fn start(
 					.map_or(0, |unix_ms| unix_ms / 1000),
 			);
 		metrics::IN_FLIGHT_CAPACITY.set(i64::from(current.max_in_flight));
+		metrics::COPY_BUDGET_BYTES_PER_SECOND
+			.set(i64::try_from(current.max_copy_bytes_per_sec).unwrap_or(i64::MAX));
 		metrics::MIGRATE_RATIO
 			.with_label_values(&[current.target_namespace.as_str()])
 			.set(f64::from(current.migrate_ratio_ppm) / 1_000_000.0);

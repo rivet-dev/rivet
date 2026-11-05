@@ -1073,6 +1073,17 @@
 			]
 		},
 		{
+			"name": "state_machine",
+			"description": null,
+			"errors": [
+				{
+					"code": "machine_not_found",
+					"message": "The state machine does not exist.",
+					"statuses": []
+				}
+			]
+		},
+		{
 			"name": "topology",
 			"description": null,
 			"errors": [

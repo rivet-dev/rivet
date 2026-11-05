@@ -186,7 +186,13 @@ impl FilesystemStore {
 		// writes its rows while it is quarantined, so the session opens from the planned
 		// record under the volume's stripe.
 		let session = self
-			.open_ordered_session(key, &record, cold.clone(), Some(cold.volume_seq))
+			.open_ordered_session(
+				key,
+				&record,
+				cold.clone(),
+				Some(cold.volume_seq),
+				super::session::SessionUse::OneRequest,
+			)
 			.await?;
 		let result = async {
 			let format = session.version(&RowKey::Format).await?;

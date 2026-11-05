@@ -43,128 +43,126 @@ macro_rules! impl_versioned_v1 {
 	};
 }
 
-/// Declares the envelope `enum $name { V1($v1), V2($v2) }` and implements [`vbare::Versioned`]
-/// for it. `$upgrade` and `$downgrade` are the field-by-field converters between the two
-/// versions; a downgrade fails for a value version 1 cannot represent.
-macro_rules! impl_versioned_v1_v2 {
-	($name:ident, $v1:ty, $v2:ty, $upgrade:path, $downgrade:path) => {
+/// Three adjacent versions with explicit converters in upgrade and reverse downgrade order.
+macro_rules! impl_versioned_v1_v2_v3 {
+	($name:ident, $v1:ty, $v2:ty, $v3:ty, $up12:path, $down21:path, $up23:path, $down32:path) => {
 		pub enum $name {
 			V1($v1),
 			V2($v2),
+			V3($v3),
 		}
-
-		impl $name {
-			fn upgrade_v1(self) -> ::anyhow::Result<Self> {
-				match self {
-					Self::V1(value) => Ok(Self::V2($upgrade(value)?)),
-					Self::V2(_) => {
-						::anyhow::bail!(concat!("expected a version 1 ", stringify!($name)))
-					}
-				}
-			}
-
-			fn downgrade_v2(self) -> ::anyhow::Result<Self> {
-				match self {
-					Self::V2(value) => Ok(Self::V1($downgrade(value)?)),
-					Self::V1(_) => {
-						::anyhow::bail!(concat!("expected a version 2 ", stringify!($name)))
-					}
-				}
-			}
-		}
-
 		impl ::vbare::Versioned for $name {
-			type Latest = $v2;
-
-			const LATEST: u16 = 2;
-
-			const UPGRADES: &'static [::vbare::Converter<Self>] = &[Self::upgrade_v1];
-
-			const DOWNGRADES: &'static [::vbare::Converter<Self>] = &[Self::downgrade_v2];
-
-			fn wrap_latest(latest: Self::Latest) -> Self {
-				Self::V2(latest)
+			type Latest = $v3;
+			const LATEST: u16 = 3;
+			const UPGRADES: &'static [::vbare::Converter<Self>] = &[
+				|value| match value {
+					Self::V1(v) => Ok(Self::V2($up12(v)?)),
+					_ => ::anyhow::bail!("expected version 1"),
+				},
+				|value| match value {
+					Self::V2(v) => Ok(Self::V3($up23(v)?)),
+					_ => ::anyhow::bail!("expected version 2"),
+				},
+			];
+			const DOWNGRADES: &'static [::vbare::Converter<Self>] = &[
+				|value| match value {
+					Self::V3(v) => Ok(Self::V2($down32(v)?)),
+					_ => ::anyhow::bail!("expected version 3"),
+				},
+				|value| match value {
+					Self::V2(v) => Ok(Self::V1($down21(v)?)),
+					_ => ::anyhow::bail!("expected version 2"),
+				},
+			];
+			fn wrap_latest(value: Self::Latest) -> Self {
+				Self::V3(value)
 			}
-
 			fn unwrap_latest(self) -> ::anyhow::Result<Self::Latest> {
 				match self {
-					Self::V2(latest) => Ok(latest),
-					Self::V1(_) => {
-						::anyhow::bail!(concat!("expected the latest ", stringify!($name)))
-					}
+					Self::V3(value) => Ok(value),
+					_ => ::anyhow::bail!("expected latest version"),
 				}
 			}
-
 			fn decode_version(
 				version: u16,
 				body: ::vbare::Bytes,
 			) -> ::std::result::Result<Self, ::vbare::DecodeError> {
-				if version != 1 {
-					return Err($crate::versioned::unsupported_version(version, 2));
+				match version {
+					1 => Ok(Self::V1(<$v1 as ::vbare::Body>::from_body(body)?)),
+					2 => Ok(Self::V2(<$v2 as ::vbare::Body>::from_body(body)?)),
+					_ => Err($crate::versioned::unsupported_version(version, 3)),
 				}
-				Ok(Self::V1(<$v1 as ::vbare::Body>::from_body(body)?))
 			}
-
 			fn encode_version<S: ::vbare::Sink>(
 				&self,
 				version: u16,
 				out: &mut S,
 			) -> ::std::result::Result<(), ::vbare::EncodeError> {
 				match (self, version) {
-					(Self::V1(value), 1) => {
-						::vbare::Body::put_body(value, out);
-						Ok(())
-					}
-					(Self::V2(value), 2) => {
-						::vbare::Body::put_body(value, out);
-						Ok(())
-					}
-					_ => Err(::vbare::EncodeError::UnsupportedVersion(version)),
+					(Self::V1(v), 1) => ::vbare::Body::put_body(v, out),
+					(Self::V2(v), 2) => ::vbare::Body::put_body(v, out),
+					(Self::V3(v), 3) => ::vbare::Body::put_body(v, out),
+					_ => return Err(::vbare::EncodeError::UnsupportedVersion(version)),
 				}
+				Ok(())
 			}
 		}
 	};
 }
 
-/// Declares the envelope `enum $name { V2($latest) }` for a type that version 2 introduced, and
-/// implements [`vbare::Versioned`] for it. Version 1 neither decodes nor encodes it.
-macro_rules! impl_versioned_v2_only {
-	($name:ident, $latest:ty) => {
+/// Two adjacent versions for a type that version 2 introduced. Version 1 neither decodes nor
+/// encodes it, so its upgrade slot refuses.
+macro_rules! impl_versioned_v2_v3 {
+	($name:ident, $v2:ty, $v3:ty, $up23:path, $down32:path) => {
 		pub enum $name {
-			V2($latest),
+			V2($v2),
+			V3($v3),
 		}
-
 		impl ::vbare::Versioned for $name {
-			type Latest = $latest;
-
-			const LATEST: u16 = 2;
-
-			fn wrap_latest(latest: Self::Latest) -> Self {
-				Self::V2(latest)
+			type Latest = $v3;
+			const LATEST: u16 = 3;
+			const UPGRADES: &'static [::vbare::Converter<Self>] = &[
+				|_| ::anyhow::bail!("version 1 has no {}", stringify!($name)),
+				|value| match value {
+					Self::V2(v) => Ok(Self::V3($up23(v)?)),
+					_ => ::anyhow::bail!("expected version 2"),
+				},
+			];
+			const DOWNGRADES: &'static [::vbare::Converter<Self>] = &[
+				|value| match value {
+					Self::V3(v) => Ok(Self::V2($down32(v)?)),
+					_ => ::anyhow::bail!("expected version 3"),
+				},
+				|_| ::anyhow::bail!("version 1 has no {}", stringify!($name)),
+			];
+			fn wrap_latest(value: Self::Latest) -> Self {
+				Self::V3(value)
 			}
-
 			fn unwrap_latest(self) -> ::anyhow::Result<Self::Latest> {
-				let Self::V2(latest) = self;
-				Ok(latest)
+				match self {
+					Self::V3(value) => Ok(value),
+					_ => ::anyhow::bail!("expected latest version"),
+				}
 			}
-
 			fn decode_version(
 				version: u16,
-				_body: ::vbare::Bytes,
+				body: ::vbare::Bytes,
 			) -> ::std::result::Result<Self, ::vbare::DecodeError> {
-				Err($crate::versioned::unsupported_version(version, 2))
+				match version {
+					2 => Ok(Self::V2(<$v2 as ::vbare::Body>::from_body(body)?)),
+					_ => Err($crate::versioned::unsupported_version(version, 3)),
+				}
 			}
-
 			fn encode_version<S: ::vbare::Sink>(
 				&self,
 				version: u16,
 				out: &mut S,
 			) -> ::std::result::Result<(), ::vbare::EncodeError> {
-				if version != 2 {
-					return Err(::vbare::EncodeError::UnsupportedVersion(version));
+				match (self, version) {
+					(Self::V2(v), 2) => ::vbare::Body::put_body(v, out),
+					(Self::V3(v), 3) => ::vbare::Body::put_body(v, out),
+					_ => return Err(::vbare::EncodeError::UnsupportedVersion(version)),
 				}
-				let Self::V2(latest) = self;
-				::vbare::Body::put_body(latest, out);
 				Ok(())
 			}
 		}

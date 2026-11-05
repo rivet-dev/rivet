@@ -13,7 +13,8 @@ use rivet_state_machine::IndexedDeadlineQueue;
 use rivet_topology::versions::WriteVersions;
 use rivet_util_id::Id;
 pub(crate) use routing::{
-	actor_id, expected_epoch, not_running_failure, overloaded_failure, request, stopped_failure,
+	actor_id, expected_epoch, inbound_overloaded_failure, not_running_failure, overloaded_failure,
+	request, stopped_failure,
 };
 use std::sync::{
 	Arc, Weak,

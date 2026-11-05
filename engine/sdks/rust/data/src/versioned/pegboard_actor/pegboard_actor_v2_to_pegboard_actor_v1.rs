@@ -366,6 +366,9 @@ pub fn convert_actor_timer_pegboard_actor_v2_to_pegboard_actor_v1(
 		pegboard_actor_v2::ActorTimer::EnvoyCheckTimeout(_) => {
 			bail!("version 1 has no envoy check timeout")
 		}
+		pegboard_actor_v2::ActorTimer::StopThresholdTimeout(_) => {
+			bail!("version 1 has no stop threshold timeout")
+		}
 	})
 }
 

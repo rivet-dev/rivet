@@ -1,7 +1,7 @@
 //! Executes typed read-session operations against the grant-owned filesystem store.
 
 use super::{
-	session::{Error, Result},
+	session::{Error, Result, SessionUse},
 	store::FilesystemStore,
 };
 use depot_fs_core::store::{Row, RowKey, RowRange};
@@ -27,7 +27,13 @@ impl FilesystemStore {
 			return Err(Error::NotFound);
 		}
 		let session = self
-			.open_session(key, &record, applied.clone(), Some(applied.volume_seq))
+			.open_session_for(
+				key,
+				&record,
+				applied.clone(),
+				Some(applied.volume_seq),
+				SessionUse::OneRequest,
+			)
 			.await?;
 		let _close = SessionClose {
 			store: self,
@@ -68,17 +74,23 @@ impl FilesystemStore {
 		ordered: bool,
 		applied: VolumeLogPosition,
 		as_of: u64,
+		usage: SessionUse,
 	) -> Result<std::sync::Arc<super::session::ReadSession>> {
 		if ordered {
-			self.open_ordered_session(key, record, applied, Some(as_of))
+			self.open_ordered_session(key, record, applied, Some(as_of), usage)
 				.await
 		} else {
-			self.open_session(key, record, applied, Some(as_of)).await
+			self.open_session_for(key, record, applied, Some(as_of), usage)
+				.await
 		}
 	}
 
 	/// Opens a session at `position`, or at the latest position the reader may use when it is
 	/// `None`, and returns it with the position it serves.
+	#[allow(
+		clippy::too_many_arguments,
+		reason = "The captured snapshot bounds and request lifetime are validated together"
+	)]
 	async fn open_pinned(
 		&self,
 		key: &depot_types::VolumeLogKey,
@@ -87,6 +99,7 @@ impl FilesystemStore {
 		applied: Option<VolumeLogPosition>,
 		settled: Option<VolumeLogPosition>,
 		record: Option<depot_fs_core::FsVolumeRecord>,
+		usage: SessionUse,
 	) -> Result<(
 		std::sync::Arc<super::session::ReadSession>,
 		VolumeLogPosition,
@@ -113,7 +126,7 @@ impl FilesystemStore {
 			return Err(Error::Fenced);
 		}
 		let session = self
-			.register_read(key, &record, ordered, applied, position.volume_seq)
+			.register_read(key, &record, ordered, applied, position.volume_seq, usage)
 			.await?;
 		Ok((session, position))
 	}
@@ -258,6 +271,7 @@ impl FilesystemStore {
 					applied,
 					settled.clone(),
 					record,
+					SessionUse::OneRequest,
 				)
 				.await?
 				.0;
@@ -291,6 +305,7 @@ impl FilesystemStore {
 					applied,
 					settled,
 					record,
+					SessionUse::OneRequest,
 				)
 				.await?
 				.0;
@@ -335,6 +350,11 @@ impl FilesystemStore {
 					applied,
 					settled,
 					record,
+					if request.client_epoch.is_some() {
+						SessionUse::OneRequest
+					} else {
+						SessionUse::Reusable
+					},
 				)
 				.await?;
 			let now = self.clock.observe().map_err(|_| Error::Fenced)?.boot_ms;

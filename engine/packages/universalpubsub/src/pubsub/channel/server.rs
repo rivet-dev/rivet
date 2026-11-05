@@ -242,17 +242,22 @@ impl PubSub {
 		let channels = &self.inner.channels;
 		let channel_full = replies.bytes.is_full();
 		let process_full = channels.reply_bytes.is_full();
-		// The flag changes only when the budget crosses its cap, so the shared line is written
-		// once per episode rather than once per request.
-		let full_flag = &channels.reply_bytes_full;
-		if full_flag.load(std::sync::atomic::Ordering::Acquire) != process_full {
-			let was_full = full_flag.swap(process_full, std::sync::atomic::Ordering::AcqRel);
-			if process_full && !was_full {
-				tracing::warn!(
-					capacity = self.inner.options.channel.total_reply_queue_bytes,
-					"served peer channel replies reached their byte cap; callers are reading replies slower than this worker produces them"
-				);
-			}
+		// The shared line is written once per near-capacity episode and at most once a minute,
+		// rather than once per request.
+		let process_bytes = &channels.reply_bytes;
+		let used = process_bytes.used() as u64;
+		let capacity = process_bytes.capacity() as u64;
+		let now_boot_ms = || self.env().clock().boot_ms().ok();
+		if let Some(episode) = channels
+			.reply_bytes_warning
+			.observe(used, capacity, now_boot_ms)
+		{
+			tracing::warn!(
+				usage = used,
+				capacity,
+				suppressed_episodes = episode.suppressed_episodes,
+				"served peer channel replies are near their byte cap; callers are reading replies slower than this worker produces them, so new requests will be refused as overloaded"
+			);
 		}
 		let (reason, capacity) = match (channel_full, process_full) {
 			(false, false) => return Ok(()),

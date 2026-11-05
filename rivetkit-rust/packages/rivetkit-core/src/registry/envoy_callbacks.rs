@@ -151,15 +151,14 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		})
 	}
 
-	fn can_hibernate(
-		&self,
-		actor_id: &str,
-		_gateway_id: &protocol::GatewayId,
-		_request_id: &protocol::RequestId,
-		request: &HttpRequest,
-	) -> EnvoyBoxFuture<anyhow::Result<bool>> {
-		let can_hibernate = self.dispatcher.can_hibernate(actor_id, request);
-		Box::pin(async move { Ok(can_hibernate) })
+	fn can_hibernate<'a>(
+		&'a self,
+		actor_id: &'a str,
+		_gateway_id: &'a protocol::GatewayId,
+		_request_id: &'a protocol::RequestId,
+		request: &'a HttpRequest,
+	) -> rivet_envoy_client::callbacks::BorrowedBoxFuture<'a, anyhow::Result<bool>> {
+		Box::pin(async move { Ok(self.dispatcher.can_hibernate(actor_id, request).await) })
 	}
 }
 

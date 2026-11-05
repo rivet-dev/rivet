@@ -39,6 +39,7 @@ fn config(state: &State) -> cw::Config {
 
 fn effects<W: PreparedHeartbeat>(
 	registration: &WorkerRegistration,
+	heartbeat_version: u16,
 	input: rivet_state_machine_util::Effects<cw::Effect<W, OperationId>, cw::Timer<OperationId>>,
 	out: &mut Effects,
 ) {
@@ -52,6 +53,7 @@ fn effects<W: PreparedHeartbeat>(
 			Effect::WriteLocalHeartbeatRequest {
 				op,
 				worker_registration: registration.clone(),
+				heartbeat_version,
 				expected_etag: request.expected_etag().map(str::to_owned),
 				heartbeat: Heartbeat {
 					storage_capacity_millicores: registration.storage_capacity_millicores,
@@ -64,6 +66,7 @@ fn effects<W: PreparedHeartbeat>(
 					state: write.state.clone(),
 					versions: registration.versions.to_vec(),
 					directory_lock: registration.directory_lock.clone(),
+					zone: registration.zone.clone().map(Into::into),
 				},
 			}
 		}
@@ -73,6 +76,7 @@ fn effects<W: PreparedHeartbeat>(
 pub(super) fn claim(state: &mut State, request: ClaimAttempt, now_boot_ms: u64, out: &mut Effects) {
 	let settings = config(state);
 	let op = state.publication_sequence.next(Slot::Publication);
+	let heartbeat_version = state.heartbeat_version;
 	let LeaseState::Registering {
 		worker_registration,
 		phase,
@@ -84,7 +88,7 @@ pub(super) fn claim(state: &mut State, request: ClaimAttempt, now_boot_ms: u64, 
 	let mut child = rivet_state_machine_util::Effects::new(out.clocks());
 	let progress = cw::ConditionalWrite::start(request, settings, now_boot_ms, op, &mut child);
 	*phase = RegistrationPhase::Publishing(progress);
-	effects(worker_registration, child, out);
+	effects(worker_registration, heartbeat_version, child, out);
 }
 
 pub(super) fn release(
@@ -96,9 +100,10 @@ pub(super) fn release(
 	out: &mut Effects,
 ) {
 	let op = state.publication_sequence.next(Slot::Publication);
+	let heartbeat_version = state.heartbeat_version;
 	let mut child = rivet_state_machine_util::Effects::new(out.clocks());
 	let progress = cw::ConditionalWrite::start(request, config(state), now_boot_ms, op, &mut child);
-	effects(&worker_registration, child, out);
+	effects(&worker_registration, heartbeat_version, child, out);
 	state.lease = LeaseState::Releasing {
 		worker_registration,
 		deadline_boot_ms,
@@ -186,6 +191,7 @@ fn advance(
 	now_boot_ms: u64,
 	out: &mut Effects,
 ) {
+	let heartbeat_version = state.heartbeat_version;
 	match &mut state.lease {
 		LeaseState::Registering {
 			worker_registration,
@@ -199,7 +205,7 @@ fn advance(
 				|| state.publication_sequence.next(Slot::Publication),
 				&mut child,
 			);
-			effects(worker_registration, child, out);
+			effects(worker_registration, heartbeat_version, child, out);
 			match update {
 				Some(cw::Outcome::Confirmed(cw::Confirmation::Write { etag })) => {
 					lease::confirm(state, 1, etag, now_boot_ms, out)
@@ -232,7 +238,7 @@ fn advance(
 				|| state.publication_sequence.next(Slot::Publication),
 				&mut child,
 			);
-			effects(worker_registration, child, out);
+			effects(worker_registration, heartbeat_version, child, out);
 			match update {
 				Some(cw::Outcome::Confirmed(_)) => lease::stop(state, out),
 				Some(cw::Outcome::Reconcile(Read::Missing)) => {
@@ -280,6 +286,7 @@ pub(super) fn timer(state: &mut State, timer: Timer, now_boot_ms: u64, out: &mut
 }
 
 pub(super) fn cancel(state: &mut State, out: &mut Effects) {
+	let heartbeat_version = state.heartbeat_version;
 	match &mut state.lease {
 		LeaseState::Registering {
 			worker_registration,
@@ -288,7 +295,7 @@ pub(super) fn cancel(state: &mut State, out: &mut Effects) {
 		} => {
 			let mut child = rivet_state_machine_util::Effects::new(out.clocks());
 			progress.suspend(&mut child);
-			effects(worker_registration, child, out);
+			effects(worker_registration, heartbeat_version, child, out);
 		}
 		LeaseState::Releasing {
 			worker_registration,
@@ -297,7 +304,7 @@ pub(super) fn cancel(state: &mut State, out: &mut Effects) {
 		} => {
 			let mut child = rivet_state_machine_util::Effects::new(out.clocks());
 			progress.suspend(&mut child);
-			effects(worker_registration, child, out);
+			effects(worker_registration, heartbeat_version, child, out);
 		}
 		LeaseState::Registering {
 			phase: RegistrationPhase::ReadingHeartbeat { .. } | RegistrationPhase::Waiting { .. },

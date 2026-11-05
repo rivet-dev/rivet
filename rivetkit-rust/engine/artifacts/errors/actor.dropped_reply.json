@@ -1,0 +1,5 @@
+{
+  "code": "dropped_reply",
+  "group": "actor",
+  "message": "Actor reply channel was dropped without a response."
+}

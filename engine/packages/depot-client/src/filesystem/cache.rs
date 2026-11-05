@@ -1362,13 +1362,6 @@ impl View {
 			self.max_bytes,
 		)
 	}
-	pub(crate) fn forget_fetched(&mut self) {
-		self.gets.clear();
-		self.inodes.clear();
-		self.scans.clear();
-		self.charges.clear();
-		self.bytes = 0;
-	}
 
 	fn charge(&mut self, bytes: usize) -> Result<()> {
 		let next = self

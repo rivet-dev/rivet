@@ -63,6 +63,8 @@ pub enum FenceReason {
 	DependentFailed,
 	/// Other live storage workers could write a family at a version this binary cannot read.
 	IncompatibleVersion,
+	/// This storage worker started without `storage.zone` while another live one has a zone.
+	MissingZone,
 }
 
 impl FenceReason {
@@ -75,6 +77,7 @@ impl FenceReason {
 			Self::RegistrationFailed => "registration_failed",
 			Self::DependentFailed => "dependent_failed",
 			Self::IncompatibleVersion => "incompatible_version",
+			Self::MissingZone => "missing_zone",
 		}
 	}
 }
@@ -143,6 +146,9 @@ pub struct WorkerRegistration {
 	/// Active or Draining heartbeat naming it may claim that heartbeat without the takeover
 	/// wait: holding the lock proves the previous holder exited.
 	pub directory_lock: Option<crate::heartbeat::DirectoryLock>,
+	/// The failure domain from `storage.zone`. Heartbeats carry it from schema version 2, so one
+	/// written at version 1 omits it.
+	pub zone: Option<String>,
 }
 
 /// Cached endpoint hint. Hints never establish ownership.

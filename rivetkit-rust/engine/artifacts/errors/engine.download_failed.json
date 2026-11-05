@@ -1,0 +1,5 @@
+{
+  "code": "download_failed",
+  "group": "engine",
+  "message": "Engine binary download failed."
+}

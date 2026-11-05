@@ -91,8 +91,8 @@ pub(crate) struct Connections {
 	pub(super) server_tasks: rivet_env::TaskScope,
 	/// Reply bytes queued across every channel this process serves.
 	pub(super) reply_bytes: Arc<frame::ByteBudget>,
-	/// Set while `reply_bytes` is full, so its warning logs once per episode.
-	pub(super) reply_bytes_full: AtomicBool,
+	/// Logs when `reply_bytes` nears its cap, once per episode and at most once a minute.
+	pub(super) reply_bytes_warning: rivet_metrics::NearCapacityWarning,
 }
 
 impl Connections {
@@ -128,7 +128,7 @@ impl Connections {
 				options.total_reply_queue_bytes,
 				Some(&*crate::metrics::CHANNEL_REPLY_QUEUE_BYTES),
 			),
-			reply_bytes_full: AtomicBool::new(false),
+			reply_bytes_warning: rivet_metrics::NearCapacityWarning::new(),
 		}
 	}
 

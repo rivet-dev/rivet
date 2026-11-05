@@ -181,6 +181,21 @@ pub(crate) fn overloaded_failure(request: &p::ToRivet, retry_after_ms: u64) -> R
 	)
 }
 
+/// Refused before entering the shared inbound dispatcher or touching storage.
+pub(crate) fn inbound_overloaded_failure(
+	request: &p::ToRivet,
+	retry_after_ms: u64,
+) -> Result<p::ToEnvoy> {
+	failure(
+		request,
+		"depot",
+		"overloaded",
+		format!(
+			"node inbound queue is full (reason=node_inbound, retry_after_ms={retry_after_ms})"
+		),
+	)
+}
+
 /// How long the runtime waits before sending a write the volume client refused without a hint,
 /// such as a missing route or an entry the shards cannot accept.
 const REFUSED_WRITE_RETRY_AFTER_MS: u64 = 100;

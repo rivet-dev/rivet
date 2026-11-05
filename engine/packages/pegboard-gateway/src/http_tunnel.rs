@@ -3,7 +3,6 @@ use anyhow::{Context, Result, anyhow, bail, ensure};
 use axum::{body::Body, response::Response};
 use bytes::Bytes;
 use futures_util::StreamExt;
-use rivet_engine_context::EngineContext;
 use rivet_envoy_protocol as protocol;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, watch};
@@ -13,19 +12,19 @@ use vbare::Versioned;
 /// The request and response bodies advance independently under protocol byte credit.
 /// Keeping the task scope in the response body ties cancellation to the HTTP client.
 pub async fn proxy(
-	ctx: &EngineContext,
+	env: &Arc<dyn rivet_env::Env>,
 	stream: DuplexStream,
 	body: Body,
 	message_id: protocol::MessageId,
 	start: protocol::ToEnvoyRequestStart,
 ) -> Result<Response> {
-	let scope = Arc::new(ctx.env().task_scope());
+	let scope = Arc::new(env.task_scope());
 
 	let (headers_tx, headers_rx) = oneshot::channel();
 	let (body_tx, body_rx) = mpsc::channel(8);
 	let (consumed_tx, consumed_rx) = watch::channel(0u64);
 
-	let clock = ctx.env().clock();
+	let clock = env.clock();
 	scope.spawn(async move {
 		let mut headers = Some(headers_tx);
 		let result = forward(
@@ -54,9 +53,18 @@ pub async fn proxy(
 		}
 	});
 
-	let start = headers_rx
+	let head = headers_rx
 		.await
 		.context("HTTP tunnel stopped before response headers")??;
+	let start = match head {
+		ResponseHead::Start(start) => start,
+		ResponseHead::ActorStopped => {
+			// The actor's epoch stopped before it answered. Drop the upload/response owner
+			// and let the caller re-resolve its actor, as for an admission refusal.
+			drop(scope);
+			return actor_stopped_while_waiting();
+		}
+	};
 	if let Some(response) = admission_rejection(&start)? {
 		// The actor did not admit the request. Drop the upload/response owner and
 		// let the caller re-resolve its actor and replay its own retained body.
@@ -113,13 +121,46 @@ pub async fn proxy(
 	Ok(response.body(Body::from_stream(body))?)
 }
 
+/// What the actor answered before any response body.
+enum ResponseHead {
+	Start(protocol::ToRivetResponseStart),
+	/// The actor's epoch stopped before it sent response headers.
+	ActorStopped,
+}
+
+/// An actor aborted its HTTP response. Its kind and detail say why.
+#[derive(Debug)]
+struct ResponseAborted {
+	kind: protocol::HttpStreamAbortReasonKind,
+	detail: Option<vbare::Str>,
+}
+
+impl std::fmt::Display for ResponseAborted {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"actor response aborted: kind {:?}, detail {:?}",
+			self.kind, self.detail
+		)
+	}
+}
+
+impl std::error::Error for ResponseAborted {}
+
+/// Whether an abort is pegboard-envoy reporting that the actor's epoch stopped.
+fn actor_stopped(reason: &protocol::HttpStreamAbortReason) -> bool {
+	let detail_matches =
+		reason.detail.as_deref() == Some(pegboard::envoy_check::ACTOR_STOPPED_DETAIL);
+	matches!(reason.kind, protocol::HttpStreamAbortReasonKind::Cancelled) && detail_matches
+}
+
 async fn forward(
 	clock: &dyn rivet_env::Clock,
 	stream: DuplexStream,
 	body: Body,
 	mut identity: protocol::MessageId,
 	start: protocol::ToEnvoyRequestStart,
-	headers: &mut Option<oneshot::Sender<Result<protocol::ToRivetResponseStart>>>,
+	headers: &mut Option<oneshot::Sender<Result<ResponseHead>>>,
 	output: &mpsc::Sender<Result<Bytes>>,
 	mut response_consumed: watch::Receiver<u64>,
 ) -> Result<()> {
@@ -203,7 +244,7 @@ async fn forward(
 					protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(mut start) => {
 						let bytes = start.body.take();
 						let finished = !start.stream;
-						headers.take().context("duplicate HTTP response headers")?.send(Ok(start)).map_err(|_| anyhow!("HTTP caller disconnected"))?;
+						headers.take().context("duplicate HTTP response headers")?.send(Ok(ResponseHead::Start(start))).map_err(|_| anyhow!("HTTP caller disconnected"))?;
 
 						if let Some(bytes) = bytes {
 							output.send(Ok(Bytes::from(bytes))).await?;
@@ -225,8 +266,17 @@ async fn forward(
 							return Ok(());
 						}
 					}
-					protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(_) => {
-						bail!("actor response aborted")
+					protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(abort) => {
+						if actor_stopped(&abort.reason) && let Some(headers) = headers.take() {
+							tracing::debug!("actor stopped before its HTTP response headers; refusing the request");
+							headers.send(Ok(ResponseHead::ActorStopped)).map_err(|_| anyhow!("HTTP caller disconnected"))?;
+							return Ok(());
+						}
+						return Err(ResponseAborted {
+							kind: abort.reason.kind,
+							detail: abort.reason.detail,
+						}
+						.into());
 					}
 					_ => bail!("unexpected HTTP tunnel message"),
 				}
@@ -317,17 +367,21 @@ fn admission_rejection(start: &protocol::ToRivetResponseStart) -> Result<Option<
 		}) {
 		return Ok(None);
 	}
-	Ok(Some(
-		http::Response::builder()
-			.status(http::StatusCode::SERVICE_UNAVAILABLE)
-			.header(http::header::CONTENT_TYPE, "application/json")
-			.header("x-rivet-error", "guard.actor_stopped_while_waiting")
-			.body(Body::from(serde_json::to_vec(&serde_json::json!({
-				"group": "guard",
-				"code": "actor_stopped_while_waiting",
-				"message": "Actor stopped before accepting the request."
-			}))?))?,
-	))
+	Ok(Some(actor_stopped_while_waiting()?))
+}
+
+/// The retryable refusal for a request the actor never answered: the client re-resolves the
+/// actor and replays the request.
+fn actor_stopped_while_waiting() -> Result<Response> {
+	Ok(http::Response::builder()
+		.status(http::StatusCode::SERVICE_UNAVAILABLE)
+		.header(http::header::CONTENT_TYPE, "application/json")
+		.header("x-rivet-error", "guard.actor_stopped_while_waiting")
+		.body(Body::from(serde_json::to_vec(&serde_json::json!({
+			"group": "guard",
+			"code": "actor_stopped_while_waiting",
+			"message": "Actor stopped before accepting the request."
+		}))?))?)
 }
 
 /// How long a complete response waits to finish its upload half before the final bytes go to

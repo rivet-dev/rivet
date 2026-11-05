@@ -2,6 +2,9 @@ use anyhow::{Result, bail};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+/// Longest `storage.zone`, which every worker's heartbeat carries.
+const MAX_ZONE_BYTES: usize = 128;
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(rename = "StorageConfig")]
@@ -57,6 +60,11 @@ pub struct DepotConfig {
 	pub coordinator_request_capacity: Option<usize>,
 	/// Existing directory owned by one storage process. Required when storage services start.
 	pub log_directory: Option<std::path::PathBuf>,
+	/// The failure domain this storage worker runs in, such as a cloud availability zone. An
+	/// opaque label compared only for equality, advertised in the worker's heartbeat. A storage
+	/// worker without one stops shortly after starting if another live storage worker has one, so
+	/// set it on every storage worker.
+	pub zone: Option<String>,
 	/// Creates this many partitions over this storage worker when the cluster has none, so a
 	/// single-process engine serves actors without an operator. A restart finishes a run that
 	/// stopped partway; partitions it did not start are left alone. Clusters with several storage
@@ -281,6 +289,11 @@ impl DepotConfig {
 
 	pub fn validate(&self) -> Result<()> {
 		self.balancing.validate()?;
+		if let Some(zone) = &self.zone
+			&& (zone.is_empty() || zone.len() > MAX_ZONE_BYTES)
+		{
+			bail!("storage.zone must be between 1 and {MAX_ZONE_BYTES} bytes");
+		}
 		if self.auto_provision_tablets == Some(0) {
 			bail!("storage.auto_provision_partitions must be positive when set");
 		}
@@ -587,7 +600,9 @@ pub struct LogShardConfig {
 	pub preallocate_segments: Option<bool>,
 	pub checkpoint_bytes: Option<u64>,
 	/// Encoded bytes of synced log entry payloads the shard keeps in memory for reads;
-	/// defaults to a sixteenth of `max_memory_bytes`. Older payloads are read from disk.
+	/// defaults to a sixteenth of `max_memory_bytes`. Older payloads are read from disk. It is
+	/// a soft limit: the reported usage also counts payloads not yet synced, which only
+	/// `max_memory_bytes` bounds, so usage can exceed it under write load.
 	pub max_retained_payload_bytes: Option<u64>,
 	/// Synced payload bytes one volume replica keeps after each disk write; defaults to
 	/// 32 KiB.

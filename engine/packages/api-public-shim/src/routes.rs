@@ -914,8 +914,22 @@ fn format_cursor(cursor: &wire::IndexActorCursor) -> Result<String> {
 	Ok(format!("{}.{}", cursor.create_unix_ms, actor_id))
 }
 
-/// Parses a public cursor. Only the exact encoding [`format_cursor`] produces is accepted.
+/// Parses a public cursor: the exact encoding [`format_cursor`] produces, or a V2 cursor.
+///
+/// V2 clients page by creation time alone and build the next cursor themselves: a bare
+/// `{create_ms}` lists the actors created strictly before that millisecond. Listings run in
+/// descending `(create_unix_ms, actor_id)` order and resume strictly after the cursor, so the
+/// smallest actor ID at that millisecond is the same bound.
 fn parse_cursor(value: &str) -> Result<wire::IndexActorCursor> {
+	if let Ok(create_unix_ms) = value.parse::<i64>()
+		&& create_unix_ms.to_string() == value
+	{
+		return Ok(wire::IndexActorCursor {
+			create_unix_ms,
+			actor_id: Id::V1([0; 18]).as_bytes().into(),
+		});
+	}
+
 	let parsed = value.split_once('.').and_then(|(ms, actor_id)| {
 		let create_unix_ms = ms.parse::<i64>().ok()?;
 		let actor_id = Id::parse(actor_id).ok()?;

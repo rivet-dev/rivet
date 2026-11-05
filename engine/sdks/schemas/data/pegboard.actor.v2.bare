@@ -218,6 +218,14 @@ type EnvoyCheckTimeout struct {
     epoch: u32
 }
 
+# Ends the stopping `epoch` as lost when its stop is still unanswered past the stop threshold
+# and its margin. Armed once, when the epoch begins stopping at `stopUnixMs`; resends of the
+# stop do not move it.
+type StopThresholdTimeout struct {
+    epoch: u32
+    stopUnixMs: i64
+}
+
 type ActorTimer union {
     ReserveEpoxyTimeout |
     WriteIndexTimeout |
@@ -225,7 +233,8 @@ type ActorTimer union {
     StartTimeout |
     AlarmTimeout |
     StopTimeout |
-    EnvoyCheckTimeout
+    EnvoyCheckTimeout |
+    StopThresholdTimeout
 }
 
 type StartFailed struct {

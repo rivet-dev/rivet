@@ -3,14 +3,16 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use napi::bindgen_prelude::{Buffer, Env, Promise};
-use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
+use napi::threadsafe_function::{
+	ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
+};
 use napi::{JsFunction, JsObject};
 use napi_derive::napi;
 use parking_lot::Mutex as ParkingMutex;
 use rivetkit_core::{
 	CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime, EngineSpawnMode,
 	HTTP_BODY_STREAM_CHANNEL_CAPACITY, ServeConfig, ServerlessRequest,
-	registry::CoreEnvoyHandle,
+	registry::{CoreEnvoyHandle, ServingEnvoy},
 	serverless::ServerlessStreamError,
 	serverless_http::{
 		self, ApplicationFetch, ApplicationRequest, ApplicationResponse, ApplicationResponseBody,
@@ -130,6 +132,7 @@ pub struct CoreRegistry {
 	state: Arc<TokioMutex<RegistryState>>,
 	serving_envoy: Arc<ParkingMutex<Option<CoreEnvoyHandle>>>,
 	serving_envoy_ready: Arc<Notify>,
+	active_actor_envoy: ServingEnvoy,
 	route_metadata: Arc<ParkingMutex<Option<JsRegistryRouteResponse>>>,
 	route_package_version: Arc<ParkingMutex<Option<String>>>,
 	shutdown_token: CoreCancellationToken,
@@ -153,6 +156,7 @@ impl CoreRegistry {
 			))),
 			serving_envoy: Arc::new(ParkingMutex::new(None)),
 			serving_envoy_ready: Arc::new(Notify::new()),
+			active_actor_envoy: ServingEnvoy::default(),
 			route_metadata: Arc::new(ParkingMutex::new(None)),
 			route_package_version: Arc::new(ParkingMutex::new(None)),
 			shutdown_token: CoreCancellationToken::new(),
@@ -208,24 +212,27 @@ impl CoreRegistry {
 
 		let serve_config = serve_config_from_js(config, false, true);
 		*self.route_package_version.lock() = Some(serve_config.serverless_package_version.clone());
-		*self.route_metadata.lock() = Some(metadata_response(
-			registry.normal_metadata_payload(&serve_config),
-		)?);
+		let metadata = metadata_response(registry.normal_metadata_payload(&serve_config))
+			.inspect_err(|_| self.active_actor_envoy.close())?;
+		*self.route_metadata.lock() = Some(metadata);
 
 		*self.serving_envoy.lock() = None;
 		let serving_envoy = self.serving_envoy.clone();
 		let serving_envoy_ready = self.serving_envoy_ready.clone();
+		let active_actor_envoy = self.active_actor_envoy.clone();
 		let result = registry
 			.serve_with_config_and_handle_observer(
 				serve_config,
 				self.shutdown_token.clone(),
 				move |handle| {
+					active_actor_envoy.attach(handle.clone());
 					*serving_envoy.lock() = Some(handle);
 					serving_envoy_ready.notify_waiters();
 				},
 			)
 			.await;
 		*self.serving_envoy.lock() = None;
+		self.active_actor_envoy.close();
 		{
 			let mut guard = self.state.lock().await;
 			if matches!(*guard, RegistryState::Serving) {
@@ -288,7 +295,12 @@ impl CoreRegistry {
 
 		let (runtime, was_building) = {
 			let mut guard = self.state.lock().await;
-			match std::mem::replace(&mut *guard, RegistryState::ShuttingDown) {
+			let previous = std::mem::replace(&mut *guard, RegistryState::ShuttingDown);
+			// A serving registry keeps reporting while it drains; `serve()` closes it on return.
+			if !matches!(previous, RegistryState::Serving) {
+				self.active_actor_envoy.close();
+			}
+			match previous {
 				RegistryState::Registering(_) | RegistryState::Serving => (None, false),
 				RegistryState::Serverless(runtime) => (Some(runtime), false),
 				RegistryState::BuildingServerless => {
@@ -348,6 +360,45 @@ impl CoreRegistry {
 			Some(envoy) => Ok(envoy.actor_stop_threshold_ms().await),
 			None => Ok(None),
 		}
+	}
+
+	/// Number of actors hosted by the serverful envoy, or zero while it is not serving.
+	#[napi(js_name = "activeActorCount")]
+	pub fn active_actor_count(&self) -> u32 {
+		saturating_u32(self.active_actor_envoy.active_actor_count())
+	}
+
+	/// Calls `callback` with the active actor count and every change until `cancelToken`
+	/// is cancelled or the registry stops serving.
+	#[napi(
+		js_name = "onActiveActorCountChange",
+		ts_args_type = "callback: (count: number) => void, cancelToken: CancellationToken"
+	)]
+	pub fn on_active_actor_count_change(
+		&self,
+		env: Env,
+		callback: JsFunction,
+		cancel_token: &CancellationToken,
+	) -> napi::Result<()> {
+		let mut tsfn: ActiveActorCountTsfn = callback
+			.create_threadsafe_function(0, |ctx: ThreadSafeCallContext<u32>| {
+				Ok(vec![ctx.env.create_uint32(ctx.value)?])
+			})?;
+		tsfn.unref(&env)?;
+
+		let mut changes = self.active_actor_envoy.active_actor_count_changes();
+		let cancel_token = cancel_token.inner().clone();
+		napi::bindgen_prelude::spawn(async move {
+			tokio::select! {
+				_ = cancel_token.cancelled() => {}
+				_ = async {
+					while let Some(count) = changes.next().await {
+						deliver_active_actor_count(&tsfn, count);
+					}
+				} => {}
+			}
+		});
+		Ok(())
 	}
 
 	#[napi]
@@ -632,6 +683,7 @@ impl CoreRegistry {
 					}
 				}
 			};
+			self.active_actor_envoy.close();
 			return self.build_serverless_runtime(registry, config).await;
 		}
 	}
@@ -702,6 +754,26 @@ impl CoreRegistry {
 struct ApplicationFetchPayload {
 	request: ApplicationRequest,
 	response_stream: HttpResponseBodyStream,
+}
+
+type ActiveActorCountTsfn = ThreadsafeFunction<u32, ErrorStrategy::Fatal>;
+
+fn deliver_active_actor_count(tsfn: &ActiveActorCountTsfn, count: usize) {
+	let status = tsfn.call(
+		saturating_u32(count),
+		ThreadsafeFunctionCallMode::NonBlocking,
+	);
+	if status != napi::Status::Ok {
+		tracing::warn!(
+			?status,
+			count,
+			"failed to deliver active actor count callback"
+		);
+	}
+}
+
+fn saturating_u32(value: usize) -> u32 {
+	u32::try_from(value).unwrap_or(u32::MAX)
 }
 
 type ApplicationFetchTsfn =

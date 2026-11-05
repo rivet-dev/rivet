@@ -1,0 +1,5 @@
+{
+  "code": "completion_waiter_conflict",
+  "group": "queue",
+  "message": "Queue completion waiter conflict"
+}

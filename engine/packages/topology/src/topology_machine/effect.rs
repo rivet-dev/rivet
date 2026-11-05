@@ -49,6 +49,8 @@ pub enum Effect {
 		op: OperationId,
 		worker_registration: WorkerRegistration,
 		heartbeat: Heartbeat,
+		/// The schema version to encode `heartbeat` at, selected by the state machine.
+		heartbeat_version: u16,
 		/// `None` creates the object; `Some` CASes on the confirmed or observed etag.
 		expected_etag: Option<String>,
 	},
@@ -174,4 +176,13 @@ pub enum Effect {
 	RecordIncompatibleVersion {
 		incompatibility: crate::versions::Incompatibility,
 	},
+	/// **When**
+	///
+	/// This worker's first complete listing after its claim shows another live storage worker
+	/// with a zone while this one has none. Emitted just before the fence.
+	///
+	/// **Executor**
+	///
+	/// Logs the labelled worker and how to fix this worker's configuration. Returns no event.
+	RecordMissingZone { labelled: crate::worker::WorkerId },
 }

@@ -362,7 +362,9 @@ pub struct LogShardConfig {
 	pub max_forget_batch_volumes: u32,
 	/// Encoded bytes of retained entries whose payloads the shard may keep in memory after
 	/// they sync. Above it, the least recently appended replicas release their synced
-	/// payloads first. Unsynced payloads are already bounded by `max_memory_bytes`.
+	/// payloads first. Unsynced payloads are already bounded by `max_memory_bytes` and are
+	/// never released, yet `Resource::RetainedPayloadBytes` counts them, so its usage can
+	/// exceed this soft limit by up to the unsynced bytes.
 	pub max_retained_payload_bytes: u64,
 	/// Encoded bytes of synced payloads one replica keeps after each disk write; older
 	/// payloads are released first.

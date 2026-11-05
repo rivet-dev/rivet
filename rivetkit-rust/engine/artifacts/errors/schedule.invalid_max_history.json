@@ -1,0 +1,5 @@
+{
+  "code": "invalid_max_history",
+  "group": "schedule",
+  "message": "Schedule history limit is invalid."
+}

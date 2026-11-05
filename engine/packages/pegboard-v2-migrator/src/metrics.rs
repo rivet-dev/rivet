@@ -74,6 +74,19 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
+	pub static ref COPY_ADMITTED_BYTES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"migrate_from_v2_copy_admitted_bytes_total",
+		"Copy bytes charged against the copy byte budget, by V2's reported size, when an actor is admitted. Its rate is the budget in use.",
+		&["namespace"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref COPY_BUDGET_BYTES_PER_SECOND: IntGauge = register_int_gauge_with_registry!(
+		"migrate_from_v2_copy_budget_bytes_per_second",
+		"Configured migrate_from_v2.max_copy_bytes_per_sec.",
+		*REGISTRY
+	).unwrap();
+
 	pub static ref IN_FLIGHT_CAPACITY: IntGauge = register_int_gauge_with_registry!(
 		"migrate_from_v2_in_flight_capacity",
 		"Configured migrate_from_v2.max_in_flight.",

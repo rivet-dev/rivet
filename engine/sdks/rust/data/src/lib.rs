@@ -1,6 +1,7 @@
 mod depot_keys;
 pub mod families;
 pub mod generated;
+pub mod pegboard_actor;
 pub mod versioned;
 
 pub use generated::{

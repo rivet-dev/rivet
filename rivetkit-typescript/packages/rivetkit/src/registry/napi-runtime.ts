@@ -354,6 +354,21 @@ export class NapiCoreRuntime implements CoreRuntime {
 		);
 	}
 
+	registryActiveActorCount(registry: RegistryHandle): number {
+		return asNativeRegistry(registry).activeActorCount();
+	}
+
+	onRegistryActiveActorCountChange(
+		registry: RegistryHandle,
+		callback: (count: number) => void,
+		cancelToken: CancellationTokenHandle,
+	): void {
+		asNativeRegistry(registry).onActiveActorCountChange(
+			callback,
+			asNativeCancellationToken(cancelToken),
+		);
+	}
+
 	async registryHealth(
 		registry: RegistryHandle,
 	): Promise<RuntimeRegistryRouteResponse> {

@@ -20,6 +20,12 @@
 //! candidate handled, using the per-candidate cursor V2 returns, so the next page starts with the
 //! first one that did not fit. The cursor and the new entries are stored in the same write.
 //!
+//! **Copy budget.** Besides `max_in_flight` and `max_actors_per_sec`, admissions are paced by
+//! bytes: each admitted actor is charged its V2 size at `max_copy_bytes_per_sec`, and a selected
+//! candidate waits, like one without a free slot, while the charged bytes run more than
+//! [`COPY_BURST_MS`] ahead. Copies are one opaque effect each, so the budget is spent at admission
+//! rather than metered while a copy streams.
+//!
 //! **Requests.** An operator can ask for one actor by id, whatever `migrate_ratio` says. The core
 //! reads the actor from V2, admits it under every selection rule but the share, and replies once
 //! its entry is stored. One request is answered at a time. Requested actors do not wait for
@@ -59,6 +65,10 @@ const PAGE_LIMIT: u32 = 200;
 /// Timeout of an operator request's candidate read. The operator's UPS request waits at most 30
 /// s, so the read fails in time for the reply to reach it.
 const CANDIDATE_TIMEOUT_MS: u64 = 20_000;
+/// How far ahead of now the charged copy bytes may run while another actor is still admitted:
+/// one second of `max_copy_bytes_per_sec`. Small actors are admitted in bursts up to it; an actor
+/// larger than it is admitted alone once the earlier charges are nearly paid.
+pub const COPY_BURST_MS: i64 = 1_000;
 /// Operator-requested actors in flight at once, beyond `max_in_flight`. A script that migrates one
 /// actor at a time and waits for each uses one.
 pub const MAX_REQUESTED_IN_FLIGHT: usize = 4;
@@ -104,6 +114,7 @@ impl rivet_state_machine::Effect for Effect {
 			Effect::MigrateActorResponse { .. } => "migrate_actor_response",
 			Effect::RecordResult { .. } => "record_result",
 			Effect::RecordEffectFailure { .. } => "record_effect_failure",
+			Effect::RecordCopyAdmitted { .. } => "record_copy_admitted",
 			Effect::ReportPassEnd { .. } => "report_pass_end",
 		}
 	}
@@ -119,10 +130,11 @@ impl State {
 			pass_dirty: false,
 			listing: Listing::Idle,
 			entries: Default::default(),
-			persist: None,
+			persist: Persist::Idle,
 			persist_failures: 0,
 			next_op: 0,
 			next_admit_unix_ms: 0,
+			copy_budget_unix_ms: 0,
 			requested: None,
 			requested_entries: Default::default(),
 		}
@@ -191,7 +203,11 @@ impl EphemeralStateMachine for MigratorStateMachine {
 			RuntimeEvent::Input(Event::WriteStateResponse { op, result }) => {
 				on_written(state, op, result, now, out);
 			}
-			RuntimeEvent::Timer(Timer::Persist) => {}
+			RuntimeEvent::Timer(Timer::Persist) => {
+				if let Persist::Backoff = state.persist {
+					state.persist = Persist::Idle;
+				}
+			}
 			RuntimeEvent::Input(Event::ListCandidatesResponse {
 				op,
 				datacenter_label,
@@ -323,7 +339,7 @@ impl EphemeralStateMachine for MigratorStateMachine {
 			.filter(|entry| matches!(entry.step, Step::Persisting(_)))
 			.count();
 		ensure!(
-			persisting == 0 || state.persist.is_some(),
+			persisting == 0 || matches!(state.persist, Persist::Writing(_)),
 			"entries are persisting without a write in flight"
 		);
 		Ok(())
@@ -460,8 +476,12 @@ fn boot_at(now: Clocks, unix_ms: i64) -> u64 {
 }
 
 fn on_written(state: &mut State, op: OpId, result: WriteResult, now: Clocks, out: &mut Effects) {
-	let Some(persist) = state.persist.take_if(|persist| persist.op == op) else {
-		return;
+	let persist = match std::mem::replace(&mut state.persist, Persist::Idle) {
+		Persist::Writing(persist) if persist.op == op => persist,
+		other => {
+			state.persist = other;
+			return;
+		}
 	};
 	out.cancel_timer(Timer::Io(op));
 
@@ -504,20 +524,49 @@ fn on_written(state: &mut State, op: OpId, result: WriteResult, now: Clocks, out
 			);
 			state.phase = Phase::Stopped;
 		}
-		WriteResult::Failed(error) => {
-			tracing::warn!(%error, "writing the migration state failed; retrying");
+		WriteResult::Refused {
+			retry_after_ms,
+			error,
+		} => {
 			state.persist_failures += 1;
-			for v2_actor_id in persist.puts.iter().chain(persist.deletes.iter()) {
-				if let Some(entry) = state.entries.get_mut(v2_actor_id)
-					&& entry.step == Step::Persisting(op)
-				{
-					entry.step = Step::Dirty;
-				}
-			}
-			state.pass_dirty = true;
-			out.arm_timer_after(Timer::Persist, backoff_ms(state.persist_failures));
+			// Depot counts its refusals, so each one is not worth a warning; the backoff below
+			// keeps the resend rate low while the storage host sheds load.
+			tracing::debug!(
+				%error,
+				retry_after_ms,
+				failures = state.persist_failures,
+				"the storage host refused the migration state write; retrying after a backoff"
+			);
+			let backoff_ms =
+				backoff_ms(state.persist_failures).max(retry_after_ms.min(RETRY_MAX_MS));
+			back_off_persist(state, &persist, backoff_ms, out);
+		}
+		WriteResult::Failed(error) => {
+			state.persist_failures += 1;
+			tracing::warn!(
+				%error,
+				failures = state.persist_failures,
+				"writing the migration state failed; retrying after a backoff"
+			);
+			let backoff_ms = backoff_ms(state.persist_failures);
+			back_off_persist(state, &persist, backoff_ms, out);
 		}
 	}
+}
+
+/// Returns a failed write's entries to `Dirty` and holds every write until the `Persist` timer
+/// fires after `backoff_ms`.
+fn back_off_persist(state: &mut State, persist: &PersistOp, backoff_ms: u64, out: &mut Effects) {
+	for v2_actor_id in persist.puts.iter().chain(persist.deletes.iter()) {
+		if let Some(entry) = state.entries.get_mut(v2_actor_id)
+			&& entry.step == Step::Persisting(persist.op)
+		{
+			entry.step = Step::Dirty;
+		}
+	}
+	state.pass_dirty = true;
+	state.persist = Persist::Backoff;
+	out.arm_timer_after(Timer::Persist, backoff_ms);
 }
 
 fn backoff_ms(failures: u32) -> u64 {
@@ -691,8 +740,10 @@ fn on_page(
 			Ok(()) if state.entries.contains_key(&candidate.actor_id) => Err(Reason::InFlight),
 			selection => selection,
 		};
-		// A selected candidate with no free slot is left for the next page, which starts at it.
-		if selection.is_ok() && admitted >= u64::from(free) {
+		// A selected candidate with no free slot or no copy budget is left for the next page,
+		// which starts at it.
+		let budget_spent = state.copy_budget_unix_ms > now.unix_ms.saturating_add(COPY_BURST_MS);
+		if selection.is_ok() && (admitted >= u64::from(free) || budget_spent) {
 			filled = true;
 			break;
 		}
@@ -741,6 +792,9 @@ fn on_page(
 		pass.next_migration_seq += 1;
 		let entry = new_entry(&candidate, datacenter_label, seq, &state.settings, now);
 		state.entries.insert(candidate.actor_id, entry);
+		let bytes = copy_bytes(&candidate);
+		charge_copy(&mut state.copy_budget_unix_ms, &state.settings, bytes, now);
+		out.execute(Effect::RecordCopyAdmitted { bytes });
 		admitted += 1;
 	}
 
@@ -772,6 +826,16 @@ fn on_page(
 		.max(state.next_admit_unix_ms)
 		.saturating_add(i64::try_from(page_budget_ms).unwrap_or(i64::MAX));
 	state.listing = Listing::Idle;
+}
+
+/// Charges an admitted actor's copy `bytes` against the budget at `max_copy_bytes_per_sec`.
+fn charge_copy(copy_budget_unix_ms: &mut i64, settings: &Settings, bytes: u64, now: Clocks) {
+	let rate = u128::from(settings.max_copy_bytes_per_sec.max(1));
+	let cost_ms = (u128::from(bytes) * 1_000).div_ceil(rate);
+	let cost_ms = i64::try_from(cost_ms).unwrap_or(i64::MAX);
+	*copy_budget_unix_ms = (*copy_budget_unix_ms)
+		.max(now.unix_ms)
+		.saturating_add(cost_ms);
 }
 
 /// Slots the automatic listing may fill: `max_in_flight` less every entry, operator-requested ones
@@ -983,6 +1047,11 @@ fn on_candidate(
 	);
 	state.entries.insert(candidate.actor_id, entry);
 	state.requested_entries.insert(candidate.actor_id);
+	// The operator asked for this actor, so the budget does not hold it back, but its copy still
+	// counts against what the listing may admit next.
+	let bytes = copy_bytes(&candidate);
+	charge_copy(&mut state.copy_budget_unix_ms, &state.settings, bytes, now);
+	out.execute(Effect::RecordCopyAdmitted { bytes });
 	state.requested = Some(Requested {
 		request: requested.request,
 		v2_actor_id: requested.v2_actor_id,
@@ -1282,10 +1351,8 @@ fn on_io_timeout(state: &mut State, op: OpId, now: Clocks, out: &mut Effects) {
 		on_loaded(state, op, LoadResult::Failed("timed out".into()), now, out);
 		return;
 	}
-	if state
-		.persist
-		.as_ref()
-		.is_some_and(|persist| persist.op == op)
+	if let Persist::Writing(persist) = &state.persist
+		&& persist.op == op
 	{
 		on_written(state, op, WriteResult::Failed("timed out".into()), now, out);
 		return;
@@ -1357,8 +1424,10 @@ fn dispatch(state: &mut State, now: Clocks, out: &mut Effects) {
 	list(state, now, out);
 }
 
+/// Writes changed entries and a changed pass entry while `persist` is `Idle`. A write in flight
+/// or a failed write's backoff holds the changes until it ends.
 fn persist(state: &mut State, out: &mut Effects) {
-	if state.persist.is_some() {
+	if state.persist != Persist::Idle {
 		return;
 	}
 	let mut puts = Vec::new();
@@ -1393,7 +1462,7 @@ fn persist(state: &mut State, out: &mut Effects) {
 		None
 	};
 	state.pass_dirty = false;
-	state.persist = Some(PersistOp {
+	state.persist = Persist::Writing(PersistOp {
 		op,
 		puts,
 		deletes: deletes.clone(),
@@ -1539,9 +1608,13 @@ fn list(state: &mut State, now: Clocks, out: &mut Effects) {
 	if free_slots(state) == 0 {
 		return;
 	}
-	if now.unix_ms < state.next_admit_unix_ms {
+	// Wait for both the actor pacing and the copy budget, so a listed page can admit something.
+	let admit_at = state
+		.next_admit_unix_ms
+		.max(state.copy_budget_unix_ms.saturating_sub(COPY_BURST_MS));
+	if now.unix_ms < admit_at {
 		state.listing = Listing::Backoff;
-		out.arm_timer_at(Timer::Listing, boot_at(now, state.next_admit_unix_ms));
+		out.arm_timer_at(Timer::Listing, boot_at(now, admit_at));
 		return;
 	}
 

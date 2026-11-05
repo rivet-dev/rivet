@@ -41,13 +41,21 @@ pub struct KvHandle {
 /// nothing it starts lands after the caller was told the command timed out.
 #[derive(Debug)]
 pub(crate) struct CommandCommits {
+	deadline_boot_ms: u64,
 	in_flight: tokio::sync::watch::Sender<usize>,
 	expired: std::sync::atomic::AtomicBool,
 }
 
 impl Default for CommandCommits {
 	fn default() -> Self {
+		Self::new(u64::MAX)
+	}
+}
+
+impl CommandCommits {
+	fn new(deadline_boot_ms: u64) -> Self {
 		Self {
+			deadline_boot_ms,
 			in_flight: tokio::sync::watch::Sender::new(0),
 			expired: std::sync::atomic::AtomicBool::new(false),
 		}
@@ -117,6 +125,12 @@ impl rivet_topology::versions::WriteVersions for KvHandle {
 }
 
 impl KvHandle {
+	/// This command's admission deadline in the worker's monotonic clock domain.
+	/// Nested reads may use an earlier deadline to leave time for their owning command to commit.
+	pub fn deadline_boot_ms(&self) -> u64 {
+		self.commits.deadline_boot_ms
+	}
+
 	/// The version to encode a value of `family` stored in this volume at: the highest every
 	/// live storage worker reads. A command takes every versioned value's version from here.
 	pub fn write_version(&self, family: rivet_data::families::VersionFamily) -> Result<u16> {
@@ -135,6 +149,14 @@ impl KvHandle {
 	/// group holder, must hand that work to a live command instead of taking it.
 	pub fn expired(&self) -> bool {
 		self.commits.expired()
+	}
+
+	/// Reserves optional derived data against the filesystem process cache budget.
+	pub fn reserve_cache(
+		&self,
+		bytes: usize,
+	) -> Option<depot_client::filesystem::CacheReservation> {
+		self.writer().0.reserve_cache(bytes)
 	}
 
 	/// This opening's shared value of type `T`, created on first use. Commands of the same

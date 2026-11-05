@@ -177,6 +177,11 @@ pub async fn report_reallocate(
 	Ok(())
 }
 
+/// The HTTP abort detail and WebSocket close reason pegboard-envoy sends on a gateway tunnel
+/// whose actor epoch stopped. The gateway answers an HTTP abort carrying it before response
+/// headers with the same retryable refusal as an envoy admission refusal.
+pub const ACTOR_STOPPED_DETAIL: &str = "actor.stopped";
+
 /// Whether an envoy refused a request or WebSocket open with `code` before the actor admitted
 /// it: it does not host the actor, or not the generation the request named.
 pub fn refuses_admission(code: &str) -> bool {
