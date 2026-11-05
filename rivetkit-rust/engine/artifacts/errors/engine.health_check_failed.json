@@ -1,0 +1,5 @@
+{
+  "code": "health_check_failed",
+  "group": "engine",
+  "message": "Engine health check failed."
+}

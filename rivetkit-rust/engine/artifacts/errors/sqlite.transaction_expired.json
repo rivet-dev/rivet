@@ -1,0 +1,5 @@
+{
+  "code": "transaction_expired",
+  "group": "sqlite",
+  "message": "SQLite transaction expired."
+}

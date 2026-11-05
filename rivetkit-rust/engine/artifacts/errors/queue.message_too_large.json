@@ -1,0 +1,5 @@
+{
+  "code": "message_too_large",
+  "group": "queue",
+  "message": "Queue message is too large"
+}

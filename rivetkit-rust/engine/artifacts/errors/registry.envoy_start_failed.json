@@ -1,0 +1,5 @@
+{
+  "code": "envoy_start_failed",
+  "group": "registry",
+  "message": "Envoy failed to connect to the engine."
+}

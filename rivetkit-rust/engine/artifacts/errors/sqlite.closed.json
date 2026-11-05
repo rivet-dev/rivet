@@ -1,0 +1,5 @@
+{
+  "code": "closed",
+  "group": "sqlite",
+  "message": "SQLite database is closed."
+}
