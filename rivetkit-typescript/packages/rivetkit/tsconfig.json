@@ -19,6 +19,7 @@
 	"include": [
 		"src/**/*",
 		"runtime/index.ts",
+		"tests/conn-state.types.ts",
 		"tests/token-issuance.types.ts"
 	],
 	"exclude": [
