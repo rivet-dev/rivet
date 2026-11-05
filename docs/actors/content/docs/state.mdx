@@ -140,7 +140,7 @@ Each actor's state is fully isolated. Other actors and clients can't touch it di
 
 ## Durable State
 
-`c.state` lives in memory and is persisted automatically, so reads and writes have no added latency while the data still survives sleeps, restarts, upgrades, and crashes. Use it for small, simple values like counters, flags, and small maps.
+`c.state` lives in memory and is persisted automatically, so reads and writes have no added latency. Persisted state is loaded again after sleeps, restarts, and upgrades. An abrupt process crash can lose changes that have not reached storage yet. Use it for small, simple values like counters, flags, and small maps.
 
 `createState` runs once when the actor is first created. On later starts, state is loaded from storage instead of recreated. See [Lifecycle](/actors/docs/lifecycle).
 
@@ -148,12 +148,14 @@ Each actor's state is fully isolated. Other actors and clients can't touch it di
 
 Mutating `c.state` schedules a save automatically. Rapid mutations are batched into a single write on a throttle (`stateSaveInterval`, default 1 second). Reads never trigger a save, saves aren't tied to action or handler boundaries, and state is also flushed when the actor sleeps or shuts down.
 
+The save interval is a durability window, not a transaction boundary: a successful action can return before its state change is persisted. If the process crashes before the next completed save, changes since the last completed save can be lost. A separately committed `c.db` write can therefore be ahead of `c.state` after recovery. To commit state changes and embedded SQLite writes together, use [`includeState` in a SQLite transaction](/actors/docs/sqlite#transactions).
+
 To force a save mid-action, call `c.saveState()`:
 
-- `c.saveState({ immediate: true })` writes immediately and resolves once the write completes.
+- `c.saveState({ immediate: true })` writes immediately and resolves once the write completes, reducing the window in which the current state change can be lost.
 - `c.saveState()` schedules a throttled save and returns right away, without waiting for the write.
 
-Force an immediate save before a risky side effect so a crash can't lose progress:
+An immediate save persists state before a later side effect; it does not make that side effect atomic with the save. For a database update, use the SQLite transaction option linked above.
 
 <CodeSnippet file="examples/docs/actors-state/save-state.ts" />
 
