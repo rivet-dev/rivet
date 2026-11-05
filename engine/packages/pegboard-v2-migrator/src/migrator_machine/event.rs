@@ -27,13 +27,16 @@ pub enum Event {
 	///
 	/// **State**
 	///
-	/// `Written` makes the carried entries `Ready` (or `Waiting` for a future confirm), removes the
-	/// finished entries it deleted, and clears `persist`. `Fenced` moves to `Stopped`. `Failed` marks
-	/// the entries `Dirty` again.
+	/// A response for an op other than the write in flight is stale and changes nothing. `Written`
+	/// makes the carried entries `Ready` (or `Waiting` for a future confirm), removes the finished
+	/// entries it deleted, and moves `persist` to `Idle`. `Fenced` moves to `Stopped`. `Refused` and
+	/// `Failed` mark the entries `Dirty` again and move `persist` to `Backoff`, which holds every
+	/// write until the `Persist` timer fires.
 	///
 	/// **Effects**
 	///
-	/// `RecordResult` for each deleted entry; dispatch; `Failed` arms `Persist`.
+	/// `RecordResult` for each deleted entry; dispatch. `Refused` and `Failed` arm `Persist` after the
+	/// local backoff, or after the refusal's `retry_after_ms` when that is longer.
 	WriteStateResponse { op: OpId, result: WriteResult },
 	/// **When**
 	///
@@ -41,12 +44,16 @@ pub enum Event {
 	///
 	/// **State**
 	///
-	/// A page admits every selected candidate as a `Copying` entry and advances the cursor; both
-	/// are written together by the next state write. A failure moves the listing to `Backoff`.
+	/// A page admits selected candidates as `Copying` entries while slots and the copy byte budget
+	/// last, charging each one's size to `copy_budget_unix_ms`, and advances the cursor to the last
+	/// candidate handled; both are written together by the next state write. A failure moves the
+	/// listing to `Backoff`.
 	///
 	/// **Effects**
 	///
-	/// `RecordResult` for skipped candidates; dispatch; a failure arms `Listing`.
+	/// `RecordResult` for skipped candidates; `RecordCopyAdmitted` for admitted ones; dispatch,
+	/// which arms `Listing` while pacing or the copy budget holds the next page; a failure arms
+	/// `Listing`.
 	ListCandidatesResponse {
 		op: OpId,
 		datacenter_label: u16,
@@ -184,7 +191,8 @@ pub enum Event {
 	/// **Effects**
 	///
 	/// `MigrateActorResponse` with `Ineligible`, `NotFound` or `Failed` when nothing was admitted;
-	/// dispatch, which writes the new entry and replies once it is stored.
+	/// `RecordCopyAdmitted` when the actor was admitted, which charges the copy budget but is never
+	/// held back by it; dispatch, which writes the new entry and replies once it is stored.
 	ReadCandidateResponse { op: OpId, result: CandidateResult },
 	/// **When**
 	///

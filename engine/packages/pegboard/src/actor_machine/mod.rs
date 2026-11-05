@@ -11,11 +11,15 @@ pub mod executor;
 
 const EFFECT_TIMEOUT_MS: u64 = 15 * 1000;
 const EFFECT_MAX_ATTEMPTS: u32 = 10;
-/// How long a stop command goes unanswered before it is sent again. A stop never times out
-/// into the next epoch: it is resent until the envoy reports the epoch stopped or the
-/// executor proves the envoy gone, which it can do about one lost threshold after the
-/// envoy's connection closed. The interval bounds how late after that point the proof comes.
+/// How long a stop command goes unanswered before it is sent again. It is resent until the
+/// envoy reports the epoch stopped, the executor proves the envoy gone, or the stop deadline
+/// passes. The interval bounds how late after the envoy's lost threshold the proof comes.
 const STOP_RESEND_MS: u64 = 5 * 1000;
+/// How far past the stop threshold an unanswered stop ends its epoch as lost. The margin covers
+/// the stop's delivery and the node's own grace, which RivetKit counts from when it receives
+/// the stop, so a healthy node that drains for the full threshold never overlaps the next
+/// epoch.
+const STOP_LOST_MARGIN_MS: u64 = 5 * 1000;
 /// The most a resend is delayed past `STOP_RESEND_MS`, drawn per resend, so the actors of one
 /// envoy that were stopped together do not resend and read its record in lockstep.
 const STOP_RESEND_JITTER_MS: u64 = 2 * 1000;
@@ -38,6 +42,10 @@ pub struct ActorStateMachine;
 pub(crate) const ENVOY_GONE_MARGIN_MS: u64 = 5_000;
 /// The `pegboard.actor` version whose timers carry an alarm's envoy check re-drive.
 const ENVOY_CHECK_TIMER_VERSION: u16 = 2;
+/// Replacement selection is retried independently after confirmed old-generation completion.
+const ALLOCATION_RETRY_VERSION: u16 = 3;
+/// The `pegboard.actor` version whose timers carry the stop deadline.
+const STOP_THRESHOLD_TIMER_VERSION: u16 = 3;
 
 /// What the executor's `prepare` supplies to one transition: the envoy selected for a start
 /// the event causes, as `needs_allocation` names them, and the configuration the transition
@@ -50,6 +58,9 @@ pub struct Preparation {
 	/// How long a start waits for the envoy's running report before the epoch is stopped;
 	/// `pegboard.actor_start_threshold`.
 	pub start_threshold_ms: u64,
+	/// How long a stop goes unanswered, past the stop's margin, before the epoch ends as lost;
+	/// `pegboard.actor_stop_threshold`.
+	pub stop_threshold_ms: u64,
 	/// Most start waiters the actor keeps for its next start; a waiter past it is left out and
 	/// reported as such. `pegboard.actor_start_waiters_capacity`.
 	pub start_waiters_capacity: u32,
@@ -67,6 +78,7 @@ impl Default for Preparation {
 		Self {
 			allocation: None,
 			start_threshold_ms: defaults.actor_start_threshold(),
+			stop_threshold_ms: defaults.actor_stop_threshold(),
 			start_waiters_capacity: defaults.actor_start_waiters_capacity(),
 			envoy_lost_threshold_ms: defaults.envoy_lost_threshold(),
 			write_version: rivet_data::generated::PEGBOARD_ACTOR_VERSION,
@@ -108,11 +120,17 @@ impl DurableStateMachine for ActorStateMachine {
 		let Preparation {
 			allocation: prepared_allocation,
 			start_threshold_ms,
+			stop_threshold_ms,
 			start_waiters_capacity,
 			envoy_lost_threshold_ms,
 			write_version,
 		} = preparation;
 		let now_unix_ms = raw_event.now.unix_ms;
+		let stop_deadline = StopDeadline {
+			wait_ms: stop_threshold_ms.max(envoy_lost_threshold_ms),
+			write_version,
+			now_unix_ms,
+		};
 		let entropy = raw_event.entropy.clone();
 		let event = match raw_event.body {
 			RuntimeEvent::Input(Event(input)) => RuntimeEvent::Input(input),
@@ -280,21 +298,22 @@ impl DurableStateMachine for ActorStateMachine {
 				}
 				// The start command did not reach the envoy, or the envoy never reported
 				// running. Either way the envoy may hold the epoch, so it is only stopped, like
-				// a lost report: the epoch ends on the stopped report or once the envoy is
-				// proven gone, so the next start never runs beside this one.
+				// a lost report: the epoch ends on the stopped report, once the envoy is
+				// proven gone, or at the stop deadline, so the next start never runs beside
+				// this one.
 				RuntimeEvent::Input(wire::ActorEvent::StartFailed(res)) => {
 					if res.epoch == state.epoch {
 						let allocation = phase.allocation.clone();
 						effects.cancel_timer(wire::ActorTimer::StartTimeout(wire::StartTimeout {
 							epoch: state.epoch,
 						}));
-						stop_actor(state, effects, allocation);
+						stop_actor(state, effects, allocation, stop_deadline);
 					}
 				}
 				RuntimeEvent::Timer(wire::ActorTimer::StartTimeout(timeout)) => {
 					if timeout.epoch == state.epoch {
 						let allocation = phase.allocation.clone();
-						stop_actor(state, effects, allocation);
+						stop_actor(state, effects, allocation, stop_deadline);
 					}
 				}
 				RuntimeEvent::Input(wire::ActorEvent::ToEnvoyEvent(event)) => {
@@ -332,7 +351,7 @@ impl DurableStateMachine for ActorStateMachine {
 									wire::PendingAction::PendingSleep
 									| wire::PendingAction::PendingReallocate
 									| wire::PendingAction::PendingDestroy => {
-										stop_actor(state, effects, allocation);
+										stop_actor(state, effects, allocation, stop_deadline);
 									}
 								}
 							}
@@ -343,6 +362,8 @@ impl DurableStateMachine for ActorStateMachine {
 									prepared_allocation,
 									start_threshold_ms,
 									now_unix_ms,
+									write_version,
+									entropy,
 								);
 							}
 							wire::ToEnvoyEventKind::ToEnvoyEventKindSleepIntent => {
@@ -382,15 +403,15 @@ impl DurableStateMachine for ActorStateMachine {
 						);
 
 						// A lost report may be wrong while the envoy still hosts the epoch, so
-						// the epoch is only stopped. It ends on the envoy's stopped report or
-						// once the envoy is proven gone, so the next start never runs beside
-						// this one.
+						// the epoch is only stopped. It ends on the envoy's stopped report, once
+						// the envoy is proven gone, or at the stop deadline, so the next start
+						// never runs beside this one.
 						if event.lost {
 							let allocation = phase.allocation.clone();
 							effects.cancel_timer(wire::ActorTimer::StartTimeout(
 								wire::StartTimeout { epoch: state.epoch },
 							));
-							stop_actor(state, effects, allocation);
+							stop_actor(state, effects, allocation, stop_deadline);
 						}
 						store_start_waiter(
 							state,
@@ -488,11 +509,13 @@ impl DurableStateMachine for ActorStateMachine {
 									prepared_allocation,
 									start_threshold_ms,
 									now_unix_ms,
+									write_version,
+									entropy,
 								);
 							}
 							wire::ToEnvoyEventKind::ToEnvoyEventKindSleepIntent => {
 								let allocation = phase.allocation.clone();
-								stop_actor(state, effects, allocation);
+								stop_actor(state, effects, allocation, stop_deadline);
 							}
 							wire::ToEnvoyEventKind::ToEnvoyEventKindStopIntent => {
 								set_pending_action(
@@ -501,7 +524,7 @@ impl DurableStateMachine for ActorStateMachine {
 								);
 
 								let allocation = phase.allocation.clone();
-								stop_actor(state, effects, allocation);
+								stop_actor(state, effects, allocation, stop_deadline);
 							}
 							wire::ToEnvoyEventKind::ToEnvoyEventKindSetAlarm(alarm) => {
 								set_alarm(effects, alarm.alarm_unix_ms, now_unix_ms);
@@ -522,9 +545,10 @@ impl DurableStateMachine for ActorStateMachine {
 						);
 
 						// The epoch is stopped whether its envoy is lost or draining, and ends
-						// on the stopped report or once the envoy is proven gone.
+						// on the stopped report, once the envoy is proven gone, or at the stop
+						// deadline.
 						let allocation = phase.allocation.clone();
-						stop_actor(state, effects, allocation);
+						stop_actor(state, effects, allocation, stop_deadline);
 						store_start_waiter(
 							state,
 							event.waiter,
@@ -535,7 +559,7 @@ impl DurableStateMachine for ActorStateMachine {
 				}
 				RuntimeEvent::Input(wire::ActorEvent::Sleep) => {
 					let allocation = phase.allocation.clone();
-					stop_actor(state, effects, allocation);
+					stop_actor(state, effects, allocation, stop_deadline);
 				}
 				RuntimeEvent::Input(wire::ActorEvent::WriteIndexState(effect_state)) => {
 					walk_write_index(
@@ -566,7 +590,7 @@ impl DurableStateMachine for ActorStateMachine {
 					);
 
 					let allocation = phase.allocation.clone();
-					stop_actor(state, effects, allocation);
+					stop_actor(state, effects, allocation, stop_deadline);
 				}
 				_ => {}
 			},
@@ -603,13 +627,37 @@ impl DurableStateMachine for ActorStateMachine {
 					);
 				}
 				// The stop is still unanswered. It may have been lost with a connection the
-				// envoy has since replaced while it keeps the epoch running, so silence proves
-				// nothing: the same stop is sent again and the timer re-armed.
+				// envoy has since replaced while it keeps the epoch running, so short silence
+				// proves nothing: the same stop is sent again and the timer re-armed.
 				RuntimeEvent::Timer(wire::ActorTimer::StopTimeout(timeout)) => {
 					if timeout.epoch == state.epoch {
 						let allocation = phase.allocation.clone();
 						let jitter_ms = entropy.rng().gen_range(0..STOP_RESEND_JITTER_MS);
 						resend_stop(state, effects, allocation, jitter_ms);
+					}
+				}
+				// The stop went unanswered past the stop threshold and its margin. A node that
+				// received any of the stops has stopped the epoch within its grace, and one that
+				// never answers, such as one that never received the epoch, would otherwise hold
+				// the actor in `Stopping` forever. The epoch ends as lost, as for a gone envoy. A
+				// deadline of an earlier epoch is ignored.
+				RuntimeEvent::Timer(wire::ActorTimer::StopThresholdTimeout(timeout)) => {
+					if timeout.epoch == state.epoch {
+						tracing::warn!(
+							epoch = timeout.epoch,
+							waited_ms = now_unix_ms.saturating_sub(timeout.stop_unix_ms),
+							stop_threshold_ms,
+							"actor stop went unanswered past the stop threshold, ending the epoch as lost; the node may not hold the epoch or may be unresponsive"
+						);
+						handle_stopped(
+							state,
+							effects,
+							prepared_allocation,
+							start_threshold_ms,
+							now_unix_ms,
+							write_version,
+							entropy,
+						);
 					}
 				}
 				// The executor found the envoy disconnected for longer than its lost
@@ -623,6 +671,8 @@ impl DurableStateMachine for ActorStateMachine {
 							prepared_allocation,
 							start_threshold_ms,
 							now_unix_ms,
+							write_version,
+							entropy,
 						);
 					}
 				}
@@ -637,6 +687,8 @@ impl DurableStateMachine for ActorStateMachine {
 									prepared_allocation,
 									start_threshold_ms,
 									now_unix_ms,
+									write_version,
+									entropy,
 								);
 							}
 							wire::ToEnvoyEventKind::ToEnvoyEventKindSleepIntent => {
@@ -663,8 +715,8 @@ impl DurableStateMachine for ActorStateMachine {
 					}
 				}
 				// A lost report, even a repeated one, does not end the epoch: it may be wrong
-				// while the envoy still hosts it. The stopped report or the envoy's proven
-				// absence ends it.
+				// while the envoy still hosts it. The stopped report, the envoy's proven
+				// absence or the stop deadline ends it.
 				RuntimeEvent::Input(wire::ActorEvent::Reallocate(event)) => {
 					if event.epoch == state.epoch {
 						set_pending_action(
@@ -768,7 +820,30 @@ impl DurableStateMachine for ActorStateMachine {
 						);
 					}
 				}
-				RuntimeEvent::Input(wire::ActorEvent::Sleep) => {}
+				RuntimeEvent::Timer(wire::ActorTimer::AllocationRetry(retry)) => {
+					if retry.epoch == state.epoch
+						&& state.pending_action == wire::PendingAction::PendingReallocate
+					{
+						if prepared_allocation.is_some() {
+							allocate_actor(
+								state,
+								effects,
+								prepared_allocation,
+								Dispatch::Durable,
+								start_threshold_ms,
+								now_unix_ms,
+							);
+						} else {
+							arm_allocation_retry(state, effects, retry.attempt, entropy);
+						}
+					}
+				}
+				RuntimeEvent::Input(wire::ActorEvent::Sleep) => {
+					if state.pending_action == wire::PendingAction::PendingReallocate {
+						state.pending_action = wire::PendingAction::PendingNone;
+						cancel_allocation_retry(state, effects);
+					}
+				}
 				RuntimeEvent::Input(wire::ActorEvent::WriteIndexState(effect_state)) => {
 					walk_write_index(
 						&mut state.write_index,
@@ -988,7 +1063,10 @@ impl DurableStateMachine for ActorStateMachine {
 	}
 
 	fn serialize_state(state: &Self::State, version: u16) -> Result<Vec<u8>> {
-		rivet_data::versioned::ActorState::serialize_with_embedded_version(&state.0, version)
+		rivet_data::versioned::ActorState::serialize_with_embedded_version(
+			&state.0,
+			rivet_data::pegboard_actor::record_write_version(version),
+		)
 	}
 
 	fn deserialize_state(bytes: &[u8]) -> Result<Self::State> {
@@ -1440,6 +1518,14 @@ pub fn needs_allocation(
 	state: &wire::ActorState,
 	event: &RuntimeEvent<Event, wire::ActorTimer>,
 ) -> bool {
+	needs_allocation_at_version(state, event, rivet_data::generated::PEGBOARD_ACTOR_VERSION)
+}
+
+pub(crate) fn needs_allocation_at_version(
+	state: &wire::ActorState,
+	event: &RuntimeEvent<Event, wire::ActorTimer>,
+	write_version: u16,
+) -> bool {
 	let reallocation_pending = state.pending_action == wire::PendingAction::PendingReallocate;
 	let sleeping = matches!(state.phase, wire::ActorPhase::Sleeping(_));
 	match event {
@@ -1464,7 +1550,8 @@ pub fn needs_allocation(
 				matches!(
 					event.kind,
 					wire::ToEnvoyEventKind::ToEnvoyEventKindStopped(_)
-				) && reallocation_pending
+				) && write_version < ALLOCATION_RETRY_VERSION
+					&& reallocation_pending
 					&& matches!(
 						state.phase,
 						wire::ActorPhase::Starting(_)
@@ -1473,7 +1560,9 @@ pub fn needs_allocation(
 					)
 			}
 			wire::ActorEvent::EnvoyGone(event) if event.epoch == state.epoch => {
-				reallocation_pending && matches!(state.phase, wire::ActorPhase::Stopping(_))
+				write_version < ALLOCATION_RETRY_VERSION
+					&& reallocation_pending
+					&& matches!(state.phase, wire::ActorPhase::Stopping(_))
 			}
 			wire::ActorEvent::Reallocate(_)
 			| wire::ActorEvent::ToEnvoyEvent(_)
@@ -1489,7 +1578,16 @@ pub fn needs_allocation(
 		},
 		RuntimeEvent::Timer(timer) => match timer {
 			wire::ActorTimer::AlarmTimeout => sleeping,
-			wire::ActorTimer::StartTimeout(_)
+			wire::ActorTimer::AllocationRetry(retry) => {
+				sleeping && reallocation_pending && retry.epoch == state.epoch
+			}
+			wire::ActorTimer::StopThresholdTimeout(timeout) if timeout.epoch == state.epoch => {
+				write_version < ALLOCATION_RETRY_VERSION
+					&& reallocation_pending
+					&& matches!(state.phase, wire::ActorPhase::Stopping(_))
+			}
+			wire::ActorTimer::StopThresholdTimeout(_)
+			| wire::ActorTimer::StartTimeout(_)
 			| wire::ActorTimer::StopTimeout(_)
 			| wire::ActorTimer::EnvoyCheckTimeout(_)
 			| wire::ActorTimer::ReserveEpoxyTimeout(_)
@@ -1539,6 +1637,38 @@ fn rearm_alarm(
 	effects.arm_timer_after(wire::ActorTimer::AlarmTimeout, wait_ms + jitter_ms);
 }
 
+/// Retry only replacement allocation: this identity never replaces the actor's user alarm.
+fn arm_allocation_retry(
+	state: &wire::ActorState,
+	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
+	attempt: u32,
+	entropy: Entropy,
+) {
+	let wait = 1u64
+		.checked_shl(attempt)
+		.unwrap_or(u64::MAX)
+		.saturating_mul(ALARM_NO_ENVOY_RETRY_BASE_MS)
+		.min(ALARM_NO_ENVOY_RETRY_MAX_MS);
+	let jitter = entropy.rng().gen_range(0..ALARM_NO_ENVOY_RETRY_JITTER_MS);
+	effects.arm_timer_after(
+		wire::ActorTimer::AllocationRetry(wire::AllocationRetry {
+			epoch: state.epoch,
+			attempt: attempt.saturating_add(1),
+		}),
+		wait.saturating_add(jitter),
+	);
+}
+
+fn cancel_allocation_retry(
+	state: &wire::ActorState,
+	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
+) {
+	effects.cancel_timer(wire::ActorTimer::AllocationRetry(wire::AllocationRetry {
+		epoch: state.epoch,
+		attempt: 0,
+	}));
+}
+
 /// Puts the actor to sleep. An actor already asleep keeps its alarm's retry count, so a request
 /// that found no envoy either does not restart the backoff.
 fn enter_sleeping(state: &mut wire::ActorState) {
@@ -1556,6 +1686,8 @@ fn handle_stopped(
 	hint: Option<wire::ActorAllocation>,
 	start_threshold_ms: u64,
 	now_unix_ms: i64,
+	write_version: u16,
+	entropy: Entropy,
 ) {
 	effects.cancel_timer(wire::ActorTimer::StartTimeout(wire::StartTimeout {
 		epoch: state.epoch,
@@ -1566,6 +1698,7 @@ fn handle_stopped(
 	effects.cancel_timer(wire::ActorTimer::EnvoyCheckTimeout(
 		wire::EnvoyCheckTimeout { epoch: state.epoch },
 	));
+	cancel_stop_deadline(effects, state.epoch);
 
 	// The command index runs on across epochs: envoys deduplicate per epoch, and a stop for an
 	// epoch that already ended still needs an index above that epoch's start command.
@@ -1575,6 +1708,10 @@ fn handle_stopped(
 		wire::PendingAction::PendingNone | wire::PendingAction::PendingSleep => {
 			enter_sleeping(state);
 			set_pending_action(&mut state.pending_action, wire::PendingAction::PendingNone);
+		}
+		wire::PendingAction::PendingReallocate if write_version >= ALLOCATION_RETRY_VERSION => {
+			enter_sleeping(state);
+			arm_allocation_retry(state, effects, 0, entropy);
 		}
 		wire::PendingAction::PendingReallocate => {
 			allocate_actor(
@@ -1622,6 +1759,13 @@ fn allocate_actor(
 			return;
 		}
 	}
+	if allocation.is_none()
+		&& state.pending_action == wire::PendingAction::PendingReallocate
+		&& matches!(state.phase, wire::ActorPhase::Sleeping(_))
+	{
+		enter_sleeping(state);
+		return;
+	}
 	set_pending_action(&mut state.pending_action, wire::PendingAction::PendingNone);
 
 	match allocation {
@@ -1648,6 +1792,7 @@ fn start_actor(
 	start_threshold_ms: u64,
 	now_unix_ms: i64,
 ) {
+	cancel_allocation_retry(state, effects);
 	state.command_index += 1;
 
 	let start = Effect::Start {
@@ -1722,12 +1867,30 @@ fn send_stop_command(
 	});
 }
 
-/// Moves the actor to `Stopping`: the stop command goes to its allocation and the stop timer
-/// resends it until the envoy reports stopped or is proven gone.
+/// What a transition that begins a stop needs to arm the stop deadline: how long the stop may
+/// go unanswered, the version the actor's volume writes, and the event's clock.
+#[derive(Clone, Copy, Debug)]
+struct StopDeadline {
+	/// The longer of the stop threshold and the envoy lost threshold. An envoy cut off from the
+	/// engine keeps running its actors until its lost threshold passes, so ending the epoch any
+	/// sooner could start the next epoch while the old one still runs.
+	wait_ms: u64,
+	write_version: u16,
+	now_unix_ms: i64,
+}
+
+/// Moves the actor to `Stopping`: the stop command goes to its allocation, the stop timer
+/// resends it until the envoy reports stopped or is proven gone, and the stop deadline ends
+/// the epoch as lost once the longer of the stop and envoy lost thresholds, plus its margin,
+/// passes unanswered. Every path into
+/// `Stopping` comes through here, so the deadline is armed once per epoch and counted from its
+/// first stop. It is armed only where the actor's volume can store it: until every live storage
+/// worker reads the version that carries it, the stop waits as before.
 fn stop_actor(
 	state: &mut wire::ActorState,
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
 	allocation: wire::ActorAllocation,
+	deadline: StopDeadline,
 ) {
 	send_stop_command(
 		state,
@@ -1740,8 +1903,28 @@ fn stop_actor(
 		wire::ActorTimer::StopTimeout(wire::StopTimeout { epoch: state.epoch }),
 		STOP_RESEND_MS,
 	);
+	if deadline.write_version >= STOP_THRESHOLD_TIMER_VERSION {
+		effects.arm_timer_after(
+			wire::ActorTimer::StopThresholdTimeout(wire::StopThresholdTimeout {
+				epoch: state.epoch,
+				stop_unix_ms: deadline.now_unix_ms,
+			}),
+			deadline.wait_ms.saturating_add(STOP_LOST_MARGIN_MS),
+		);
+	}
 
 	state.phase = wire::ActorPhase::Stopping(wire::Stopping { allocation });
+}
+
+/// Cancels `epoch`'s stop deadline. The runner names an actor timer by its variant alone, so
+/// the cancel does not need the time the stop began.
+fn cancel_stop_deadline(effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>, epoch: u32) {
+	effects.cancel_timer(wire::ActorTimer::StopThresholdTimeout(
+		wire::StopThresholdTimeout {
+			epoch,
+			stop_unix_ms: 0,
+		},
+	));
 }
 
 /// Sends the current epoch's stop again under its own command index and re-arms the stop
@@ -1854,6 +2037,7 @@ fn destroy_actor(
 			kind: wire::ActorStartNoticeKind::ActorStartNoticeDestroyed,
 		});
 	}
+	cancel_allocation_retry(state, effects);
 	// The alarm belongs to this incarnation and must never wake the next one.
 	effects.cancel_timer(wire::ActorTimer::AlarmTimeout);
 
@@ -2134,6 +2318,8 @@ enum TimerId {
 	AlarmTimeout = 5,
 	StopTimeout = 6,
 	EnvoyCheckTimeout = 7,
+	StopThresholdTimeout = 8,
+	AllocationRetry = 9,
 }
 
 impl TimerId {
@@ -2146,6 +2332,8 @@ impl TimerId {
 			wire::ActorTimer::AlarmTimeout => Self::AlarmTimeout,
 			wire::ActorTimer::StopTimeout(_) => Self::StopTimeout,
 			wire::ActorTimer::EnvoyCheckTimeout(_) => Self::EnvoyCheckTimeout,
+			wire::ActorTimer::StopThresholdTimeout(_) => Self::StopThresholdTimeout,
+			wire::ActorTimer::AllocationRetry(_) => Self::AllocationRetry,
 		}
 	}
 }

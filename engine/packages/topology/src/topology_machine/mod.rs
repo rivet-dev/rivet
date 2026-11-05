@@ -96,6 +96,7 @@ impl rivet_state_machine::Effect for Effect {
 			Effect::RecordLookupRejected => "record_lookup_rejected",
 			Effect::RecordEndpointTimeout { .. } => "record_endpoint_timeout",
 			Effect::RecordIncompatibleVersion { .. } => "record_incompatible_version",
+			Effect::RecordMissingZone { .. } => "record_missing_zone",
 			Effect::RecordFence { .. } => "record_fence",
 			Effect::RecordRenewal { .. } => "record_renewal",
 			Effect::RecordRenewalLate { .. } => "record_renewal_late",

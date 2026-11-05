@@ -163,6 +163,8 @@ pub mod partition {
 		(47, V2_MIGRATOR_IN_FLIGHT, "v2-migrator-in-flight"),
 		(48, V2_MIGRATOR_FENCE, "v2-migrator-fence"),
 		(49, ENVOY_VERSION, "envoy-version"),
+		(50, ENVOY_NAME_VERSION, "envoy-name-version"),
+		(51, ENVOY_POOL_VERSION, "envoy-pool-version"),
 	}
 }
 

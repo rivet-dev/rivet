@@ -19,11 +19,13 @@ pub enum Effect {
 	LoadStateRequest { op: OpId, tenure: u64 },
 	/// **When**
 	///
-	/// Dispatch finds changed entries or a changed pass entry and no write in flight.
+	/// Dispatch finds changed entries or a changed pass entry while `persist` is `Idle`: no write is
+	/// in flight and no failed write's backoff runs.
 	///
 	/// **Executor**
 	///
-	/// Sends `MigrateFromV2StateWrite` fenced by the tenure, then returns `WriteStateResponse`.
+	/// Sends `MigrateFromV2StateWrite` fenced by the tenure, then returns `WriteStateResponse`. A
+	/// refusal that carries a Depot retry hint is returned as `Refused` with the hint.
 	WriteStateRequest {
 		op: OpId,
 		tenure: u64,
@@ -33,7 +35,7 @@ pub enum Effect {
 	},
 	/// **When**
 	///
-	/// Dispatch finds a free slot, a pending cursor and no pacing wait.
+	/// Dispatch finds a free slot, a pending cursor, no pacing wait and copy budget left.
 	///
 	/// **Executor**
 	///
@@ -171,6 +173,14 @@ pub enum Effect {
 	///
 	/// Increments `migrate_from_v2_effect_failures_total` for the phase. No response.
 	RecordEffectFailure { phase: String },
+	/// **When**
+	///
+	/// A listed or operator-requested actor was admitted and charged against the copy byte budget.
+	///
+	/// **Executor**
+	///
+	/// Adds `bytes` to `migrate_from_v2_copy_admitted_bytes_total`. No response.
+	RecordCopyAdmitted { bytes: u64 },
 	/// **When**
 	///
 	/// A pass ended.

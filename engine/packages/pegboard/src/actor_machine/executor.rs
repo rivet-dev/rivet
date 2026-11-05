@@ -110,6 +110,47 @@ impl Executor {
 	}
 }
 
+fn retryable_allocation_error(error: &anyhow::Error) -> bool {
+	error
+		.chain()
+		.filter_map(|cause| cause.downcast_ref::<rivet_error::RivetError>())
+		.any(|error| {
+			error.group() == "depot"
+				&& matches!(
+					error.code(),
+					"overloaded" | "unavailable" | "request_deadline_exceeded" | "read_interrupted"
+				)
+		})
+}
+
+/// All timers in one alarm batch share this absolute cutoff, leaving a second for the
+/// owning actor command to persist its retry even when nested reads use their whole budget.
+fn allocation_deadline(
+	now_boot_ms: u64,
+	command_deadline_boot_ms: u64,
+	durable_retry: bool,
+) -> u64 {
+	let limit = now_boot_ms.saturating_add(SELECT_TIMEOUT.as_millis() as u64);
+	if durable_retry {
+		limit.min(command_deadline_boot_ms.saturating_sub(1_000))
+	} else {
+		limit
+	}
+}
+
+fn allocation_result(
+	selection: std::result::Result<Result<Option<wire::ActorAllocation>>, rivet_env::TimeoutError>,
+	durable_retry: bool,
+) -> Result<Option<wire::ActorAllocation>> {
+	match selection {
+		Ok(Ok(allocation)) => Ok(allocation),
+		Err(rivet_env::TimeoutError::Elapsed) if durable_retry => Ok(None),
+		Ok(Err(error)) if durable_retry && retryable_allocation_error(&error) => Ok(None),
+		Err(error) => Err(error).context("envoy selection failed"),
+		Ok(Err(error)) => Err(error),
+	}
+}
+
 impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 	/// Selects the envoy for a start `event` causes, as `needs_allocation` names them, reading
 	/// the pool from the create's own data or the actor's data record.
@@ -121,44 +162,54 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 		Box::pin(async move {
 			let pegboard_config = self.ctx.config().pegboard();
 			let start_threshold_ms = pegboard_config.actor_start_threshold();
+			let stop_threshold_ms = pegboard_config.actor_stop_threshold();
 			let start_waiters_capacity = pegboard_config.actor_start_waiters_capacity();
 			let envoy_lost_threshold_ms = pegboard_config.envoy_lost_threshold();
 			let write_version = self.db.write_version(VersionFamily::PEGBOARD_ACTOR)?;
 
-			if !crate::actor_machine::needs_allocation(&state.0, event) {
+			if !crate::actor_machine::needs_allocation_at_version(&state.0, event, write_version) {
 				return Ok(Preparation {
 					allocation: None,
 					start_threshold_ms,
+					stop_threshold_ms,
 					start_waiters_capacity,
 					envoy_lost_threshold_ms,
 					write_version,
 				});
 			}
 
-			let (actor_id, namespace, pool_name, name) = match event {
-				RuntimeEvent::Input(Event(wire::ActorEvent::Create(create))) => (
-					create.init.actor_id.clone(),
-					create.init.namespace.clone(),
-					create.init.pool_name.clone(),
-					create.init.name.clone(),
-				),
-				_ => {
-					let data = self.read_data().await?;
-					(data.actor_id, data.namespace, data.pool_name, data.name)
-				}
-			};
+			let durable_retry = matches!(
+				event,
+				RuntimeEvent::Timer(
+					wire::ActorTimer::AllocationRetry(_) | wire::ActorTimer::AlarmTimeout
+				)
+			);
+			let clock = self.ctx.env().clock();
+			let now = clock.observe()?.boot_ms;
+			let deadline = allocation_deadline(now, self.db.deadline_boot_ms(), durable_retry);
+			let selection = rivet_env::timeout_at(&*clock, deadline, async {
+				let (actor_id, namespace, pool_name, name) = match event {
+					RuntimeEvent::Input(Event(wire::ActorEvent::Create(create))) => (
+						create.init.actor_id.clone(),
+						create.init.namespace.clone(),
+						create.init.pool_name.clone(),
+						create.init.name.clone(),
+					),
+					_ => {
+						let data = self.read_data().await?;
+						(data.actor_id, data.namespace, data.pool_name, data.name)
+					}
+				};
 
-			let allocation = rivet_env::timeout(
-				&*self.ctx.env().clock(),
-				SELECT_TIMEOUT,
-				select_allocation(&self.ctx, &actor_id, &namespace, &pool_name, &name),
-			)
-			.await
-			.context("envoy selection timed out")??;
+				select_allocation(&self.ctx, &actor_id, &namespace, &pool_name, &name).await
+			})
+			.await;
+			let allocation = allocation_result(selection, durable_retry)?;
 
 			Ok(Preparation {
 				allocation,
 				start_threshold_ms,
+				stop_threshold_ms,
 				start_waiters_capacity,
 				envoy_lost_threshold_ms,
 				write_version,
@@ -250,8 +301,21 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 					}
 					.await;
 
-					if let Err(err) = res {
-						tracing::error!(?err, "send actor event failed");
+					match res {
+						Ok(()) => {}
+						// The reservation starts before the commit that creates the machine. When
+						// that commit failed, its outcome has no machine to update; a retried
+						// create of the same key adopts the reservation.
+						Err(err) if rivet_state_machine_durable::is_machine_not_found(&err) => {
+							tracing::debug!(
+								?err,
+								actor_id = %self2.actor_id,
+								"reservation outcome for an actor whose create never committed"
+							);
+						}
+						Err(err) => {
+							tracing::error!(?err, "send actor event failed");
+						}
 					}
 				}));
 			}
@@ -683,7 +747,9 @@ async fn send_start_notice(
 	);
 	let payload = rivet_data::versioned::ActorStartNotice::serialize_with_embedded_version(
 		&notice,
-		rivet_data::generated::PEGBOARD_ACTOR_VERSION,
+		rivet_data::pegboard_actor::record_write_version(
+			rivet_data::generated::PEGBOARD_ACTOR_VERSION,
+		),
 	)?;
 
 	ctx.ups()?

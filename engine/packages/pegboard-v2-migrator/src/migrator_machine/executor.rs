@@ -90,6 +90,12 @@ impl Executor<MigratorStateMachine> for MigratorExecutor {
 					.inc();
 				return;
 			}
+			Effect::RecordCopyAdmitted { bytes } => {
+				metrics::COPY_ADMITTED_BYTES_TOTAL
+					.with_label_values(&[self.namespace().as_str()])
+					.inc_by(bytes);
+				return;
+			}
 			Effect::ReportPassEnd { pass } => {
 				metrics::report_pass_end(&self.namespace(), &pass);
 				return;
@@ -154,7 +160,13 @@ async fn run(ctx: &EngineContext, v2: Option<&V2Client>, effect: Effect) -> Opti
 			op,
 			result: write(ctx, tenure, pass, puts, deletes)
 				.await
-				.unwrap_or_else(|error| WriteResult::Failed(format!("{error:#}"))),
+				.unwrap_or_else(|error| match depot_client::retry_after_ms(&error) {
+					Some(retry_after_ms) => WriteResult::Refused {
+						retry_after_ms,
+						error: format!("{error:#}"),
+					},
+					None => WriteResult::Failed(format!("{error:#}")),
+				}),
 		},
 		Effect::ListCandidatesRequest {
 			op,
@@ -314,6 +326,7 @@ async fn run(ctx: &EngineContext, v2: Option<&V2Client>, effect: Effect) -> Opti
 		},
 		Effect::RecordResult { .. }
 		| Effect::RecordEffectFailure { .. }
+		| Effect::RecordCopyAdmitted { .. }
 		| Effect::ReportPassEnd { .. }
 		| Effect::MigrateActorResponse { .. } => return None,
 	})

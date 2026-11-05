@@ -1,0 +1,28 @@
+#import "shared/uuid_v4.v1.bare"
+#import "topology.worker_heartbeat.v1.bare"
+
+# Writers select the version from the read floor of the live storage workers, so a new version
+# of this schema ships in one rolling deploy.
+# TODO: This assumes every worker is a storage worker. Stateless workers also read heartbeats, but
+# discovery never lists them, so the read floor does not count them. A stateless worker on an older
+# binary cannot decode a heartbeat written at a version only the storage workers read.
+type Heartbeat struct {
+	instanceId: UuidV4
+	apiPeerAddress: str
+	buildVersion: str
+	buildGitSha: str
+	startedAtUnixMs: i64
+	writeSequence: u64
+	state: HeartbeatState
+	# Positive static placement weight. 1000 means one allocated storage CPU core.
+	storageCapacityMillicores: u32
+	# Fixed per incarnation. Readers ignore family IDs they do not know, and a family missing
+	# from this list means the binary predates the family and cannot read it.
+	versions: list<FamilyVersions>
+	# Set by storage processes whose filesystem reports a lock scope; stateless ones have none.
+	directoryLock: optional<DirectoryLock>
+	# The failure domain this worker runs in. An opaque label compared only for equality. Absent when
+	# the operator did not configure one. A process's first heartbeats can be written at version 1,
+	# which has no zone, so a reader can see the zone appear during one incarnation.
+	zone: optional<str>
+}

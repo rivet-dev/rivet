@@ -1,0 +1,5 @@
+{
+  "code": "machine_not_found",
+  "group": "state_machine",
+  "message": "The state machine does not exist."
+}

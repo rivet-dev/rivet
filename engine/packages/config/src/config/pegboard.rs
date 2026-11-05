@@ -23,7 +23,9 @@ pub struct Pegboard {
 	/// (default true). When off, the engine sends only requested pages but keeps maintaining its
 	/// prefetch hints, so turning it back on needs no rebuild. Runtime configurable.
 	pub sqlite_server_prefetch: Option<bool>,
-	/// Messages queued for one node socket writer (default 128, 1..=65536).
+	/// Messages queued in each of one node connection's separate inbound, data and control
+	/// lanes (default 128 per lane, 1..=65536). Inbound storage and lifecycle wire bytes each
+	/// have a separate 32 MiB cap, including executing work.
 	#[serde(rename = "node_socket_queue_capacity")]
 	pub envoy_socket_queue_capacity: Option<usize>,
 	/// Messages queued toward one gateway tunnel stream on a node connection (default 128,
@@ -104,15 +106,19 @@ pub struct Pegboard {
 	pub envoy_lost_threshold: Option<u64>,
 	/// How long the engine waits after sending an actor's start for the node to report it
 	/// running. Past it the start is given up: the node is told to stop that epoch, and the
-	/// actor starts again once the node reports it stopped or is proven gone.
+	/// actor starts again once the node reports it stopped, is proven gone, or the stop
+	/// threshold passes.
 	///
-	/// Unit is in milliseconds (default 30000).
+	/// Unit is in milliseconds (default 30000, 30 seconds).
 	pub actor_start_threshold: Option<u64>,
-	/// How long a node may take to stop its actors once asked, advertised to the node on
-	/// connect. A node shutting down drains its actors within this budget, and RivetKit uses it
-	/// as the default shutdown grace period.
+	/// Maximum time for an actor to stop before it is considered lost. The engine resends an
+	/// unanswered stop, and once this threshold plus a 5 second margin has passed since the
+	/// first stop it ends the actor's run as lost and moves on, as if the node were gone. It is
+	/// also advertised to the node on connect as the time it is given to stop: a node shutting
+	/// down drains its actors within this budget, and RivetKit uses it as the default shutdown
+	/// grace period.
 	///
-	/// Unit is in milliseconds (default 1800000, 30 minutes).
+	/// Unit is in milliseconds (default 30000, 30 seconds).
 	pub actor_stop_threshold: Option<u64>,
 	/// Max time since last pong before the node connection is terminated. Unit is in milliseconds.
 	#[serde(rename = "node_ping_timeout")]
@@ -438,7 +444,7 @@ impl Pegboard {
 	}
 
 	pub fn actor_stop_threshold(&self) -> u64 {
-		self.actor_stop_threshold.unwrap_or(30 * 60 * 1000)
+		self.actor_stop_threshold.unwrap_or(30_000)
 	}
 
 	pub fn envoy_ping_timeout(&self) -> i64 {

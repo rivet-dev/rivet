@@ -18,6 +18,8 @@ const PRESSURE_WARN_INTERVAL_MS: u64 = 30_000;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum QueueKind {
 	Socket,
+	SocketControl,
+	SocketInbound,
 	Tunnel,
 	ActorLane,
 	ActorInbound,
@@ -29,6 +31,8 @@ impl QueueKind {
 	pub(crate) fn label(self) -> &'static str {
 		match self {
 			QueueKind::Socket => "socket",
+			QueueKind::SocketControl => "socket_control",
+			QueueKind::SocketInbound => "socket_inbound",
 			QueueKind::Tunnel => "tunnel",
 			QueueKind::ActorLane => "actor_lane",
 			QueueKind::ActorInbound => "actor_inbound",
@@ -39,7 +43,9 @@ impl QueueKind {
 	/// The config key that sets this queue's capacity, for operator-facing warnings.
 	fn config_key(self) -> &'static str {
 		match self {
-			QueueKind::Socket => "pegboard.envoy_socket_queue_capacity",
+			QueueKind::Socket | QueueKind::SocketControl | QueueKind::SocketInbound => {
+				"pegboard.envoy_socket_queue_capacity"
+			}
 			QueueKind::Tunnel => "pegboard.envoy_tunnel_queue_capacity",
 			QueueKind::ActorLane => "pegboard.envoy_actor_lane_capacity",
 			QueueKind::ActorInbound | QueueKind::ActorStorage => {
@@ -66,7 +72,7 @@ impl QueuePressure {
 
 	/// Logs a warning when the queue is near its capacity and this connection has not warned
 	/// within the window.
-	fn observe(&self, kind: QueueKind, in_use: usize, capacity: usize) {
+	pub(crate) fn observe(&self, kind: QueueKind, in_use: usize, capacity: usize) {
 		if !near_capacity(in_use, capacity) {
 			return;
 		}

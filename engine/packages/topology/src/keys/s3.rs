@@ -15,5 +15,5 @@ rivet_keys::s3_key! {
 
 rivet_keys::s3_key! {
 	pub WorkerHeartbeatKey(pub role: WorkerRole, pub worker_id: WorkerId) => [RIVET, DEPOT, CLUSTER, NODE, {role}, {worker_id}];
-	value: vbare(rivet_data::versioned::TopologyWorkerHeartbeatData, rivet_data::TOPOLOGY_WORKER_HEARTBEAT_VERSION);
+	value: vbare_selected(rivet_data::versioned::TopologyWorkerHeartbeatData);
 }

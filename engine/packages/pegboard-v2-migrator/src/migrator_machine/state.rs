@@ -20,13 +20,18 @@ pub struct State {
 	/// In-flight entries keyed by V2 actor id: at most `max_in_flight`, plus the operator-requested
 	/// ones in `requested_entries`.
 	pub entries: BTreeMap<Id, Entry>,
-	/// The one state write in flight. Entries it carries are `Step::Persisting`.
-	pub persist: Option<PersistOp>,
+	pub persist: Persist,
 	/// Writes that failed in a row, for the retry backoff.
 	pub persist_failures: u32,
 	pub next_op: u64,
 	/// No page is admitted before this time, which paces admissions at `max_actors_per_sec`.
 	pub next_admit_unix_ms: i64,
+	/// When the copy bytes admitted so far are paid off at `max_copy_bytes_per_sec`. Each admission
+	/// moves it forward by the actor's size at that rate, starting from now when it lies in the
+	/// past. A listed candidate is admitted only while it is at most `COPY_BURST_MS` ahead of now.
+	/// Memory only: a new tenure starts with no debt, and the `Copying` entries it loads are
+	/// discarded rather than copied.
+	pub copy_budget_unix_ms: i64,
 	/// The one operator request to migrate an actor by id that is being answered. It lives only in
 	/// memory: the request ends with this tenure, and the operator sends it again.
 	pub requested: Option<Requested>,
@@ -77,6 +82,20 @@ pub enum Listing {
 	Backoff,
 	/// Every cursor is done; the `Pass` timer starts the next pass.
 	PassDone,
+}
+
+/// The state writes of this tenure. At most one write is in flight, and none while a failed
+/// write's backoff runs.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Persist {
+	/// No write in flight. Dispatch writes changed entries and a changed pass entry.
+	Idle,
+	/// The one state write in flight. Entries it carries are `Step::Persisting`.
+	Writing(PersistOp),
+	/// The last write failed or was refused. Nothing is written until the `Persist` timer ends
+	/// the backoff, so a storage host that sheds load is not sent the write again on every event.
+	/// Entries changed meanwhile stay `Dirty` and ride the next write.
+	Backoff,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

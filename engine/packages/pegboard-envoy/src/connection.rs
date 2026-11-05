@@ -3,6 +3,7 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use pegboard::{
 	commands::EnvoyRead,
+	envoy_check::ACTOR_STOPPED_DETAIL,
 	epoch::{wrapping_ge, wrapping_gt, wrapping_le},
 	index::{IndexDeleteActiveEnvoy, IndexInsertEnvoy, IndexUpsertActiveEnvoy},
 	keys::{
@@ -20,13 +21,15 @@ use rivet_envoy_protocol as p;
 use rivetkit_shared_types::actor_key;
 use std::sync::{
 	Arc,
-	atomic::{AtomicI64, AtomicU64, Ordering},
+	atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering},
 };
 use tokio::sync::{Mutex, mpsc};
 use universalpubsub::{RequestClass, Turn, Turns};
 
 use uuid::Uuid;
 use vbare::Versioned;
+
+mod inbound;
 
 struct Connection {
 	ctx: EngineContext,
@@ -45,6 +48,11 @@ struct Connection {
 	/// Whether a newer version superseded this envoy, and the eviction of its actors.
 	version_drain: crate::version_drain::State,
 	to_envoy_tx: crate::queue::Sender<ToEnvoyFrame>,
+	/// Small control replies have their own bounded lane so data backpressure cannot block
+	/// the socket reader before its next pong. The writer fairly drains both lanes.
+	control_tx: crate::queue::Sender<ToEnvoyFrame>,
+	/// Latched protocol rejection: reader and ordered dispatcher ignore later frames.
+	rejected: AtomicBool,
 	/// A failed event lane ends the connection so its unacknowledged checkpoints replay.
 	/// Separate from the socket queue: backpressure must not prevent this close.
 	event_failure: mpsc::Sender<anyhow::Error>,
@@ -64,6 +72,54 @@ struct Connection {
 	actor_handle_budget: crate::admission::ActorHandleBudget,
 	connection_id: Uuid,
 	version: u16,
+}
+
+impl Connection {
+	/// Admission is not delivery. Lifecycle callers use this only after their durable
+	/// delivery or proof that ownership ended; writer pressure retains the ACK.
+	async fn ack_events(&self, checkpoints: Vec<p::ActorCheckpoint>) -> Result<()> {
+		self.control_tx
+			.send(p::ToEnvoy::ToEnvoyAckEvents(p::ToEnvoyAckEvents {
+				last_event_checkpoints: checkpoints,
+			}))
+			.await?;
+		Ok(())
+	}
+
+	fn send_control(&self, frame: impl Into<ToEnvoyFrame>) -> Result<()> {
+		self.control_tx
+			.try_send(frame.into())
+			.map_err(|error| match error {
+				mpsc::error::TrySendError::Full(_) => anyhow::anyhow!(
+					"envoy control reply queue full; reconnect to replay unacknowledged work"
+				),
+				mpsc::error::TrySendError::Closed(_) => {
+					anyhow::anyhow!("envoy control reply writer closed")
+				}
+			})
+	}
+
+	/// Only for failures known to precede execution. If even the refusal cannot be
+	/// queued, let that caller time out rather than aborting unrelated accepted work.
+	/// Successes, lifecycle acknowledgements and protocol rejections remain strict.
+	fn send_storage_refusal(&self, reply: p::ToEnvoy) -> Result<()> {
+		match self.control_tx.try_send(reply.into()) {
+			Ok(()) => Ok(()),
+			Err(mpsc::error::TrySendError::Full(_)) => {
+				if let Ok(now) = self.ctx.env().clock().observe()
+					&& self.queue_pressure.claim_warning(now.boot_ms)
+				{
+					tracing::warn!(
+						"envoy storage refusal queue full; unadmitted request will time out"
+					);
+				}
+				Ok(())
+			}
+			Err(mpsc::error::TrySendError::Closed(_)) => {
+				bail!("envoy control reply writer closed")
+			}
+		}
+	}
 }
 
 pub async fn run(
@@ -119,6 +175,16 @@ pub async fn run(
 		ctx.config().pegboard().envoy_socket_queue_capacity(),
 		queue_pressure.clone(),
 	);
+	let (control_tx, mut control_rx) = crate::queue::channel(
+		crate::queue::QueueKind::SocketControl,
+		ctx.config().pegboard().envoy_socket_queue_capacity(),
+		queue_pressure.clone(),
+	);
+	let (inbound_tx, mut inbound_rx) = inbound::channel(
+		ctx.config().pegboard().envoy_socket_queue_capacity(),
+		queue_pressure.clone(),
+	);
+	let inbound_bytes = Arc::new(tokio::sync::Semaphore::new(SOCKET_INBOUND_BYTES));
 	let (mut socket_tx, mut socket_rx) = socket.split();
 	let (event_failure, mut event_failures) = mpsc::channel(1);
 	let (ping, mut ping_rx) = tokio::sync::watch::channel(0);
@@ -148,6 +214,8 @@ pub async fn run(
 		last_heartbeat_unix_ms: AtomicI64::new(0),
 		version_drain: Default::default(),
 		to_envoy_tx,
+		control_tx,
+		rejected: AtomicBool::new(false),
 		event_failure,
 		queue_pressure,
 		last_pong_unix_ms: AtomicI64::new(now),
@@ -263,81 +331,29 @@ pub async fn run(
 	});
 
 	let socket_writer_task = tasks.spawn_result(async move {
-		write_socket(&mut socket_tx, &mut to_envoy_rx, &mut ping_rx, version).await
+		write_socket(
+			&mut socket_tx,
+			&mut to_envoy_rx,
+			&mut control_rx,
+			&mut ping_rx,
+			version,
+		)
+		.await
 	});
 
 	let conn2 = conn.clone();
 	let ctx2 = ctx.clone();
-	let tasks2 = tasks.clone();
 	let socket_reader_task = tasks.spawn_result(async move {
-		// Set once a message is rejected. The socket writer then closes the connection, and
-		// messages that arrive before it does are ignored.
-		let mut rejected = false;
-		while let Some(message) = socket_rx.next().await {
-			match message? {
-				Message::Binary(_) if rejected => {}
-				Message::Binary(payload) => {
-					// The envoy speaks the connection's version without a header. At the latest
-					// version the message is viewed in place, and tunnel replies are forwarded
-					// to their gateway without being decoded.
-					let decoded = if conn2.version == p::PROTOCOL_VERSION {
-						match p::versioned::ToRivet::open_body(payload, conn2.version) {
-							Ok(view) => {
-								if let p::ToRivetRef::ToRivetTunnelMessage(message) = view.get() {
-									let message_id = message.message_id();
-									let message_key =
-										(*message_id.gateway_id(), *message_id.request_id());
-									forward_tunnel_reply(
-										&conn2,
-										message_key,
-										TunnelReply::Encoded(view),
-									)
-									.await?;
-									continue;
-								}
-								Ok(view.to_owned())
-							}
-							Err(error) => Err(error),
-						}
-					} else {
-						p::versioned::ToRivet::decode_body(payload, conn2.version)
-					};
-
-					let msg = match decoded {
-						Ok(msg) => msg,
-						Err(error) => {
-							let rejection = crate::rejection::Rejection::decode(error);
-							tracing::debug!(
-								code = rejection.frame.code,
-								reason = %rejection.frame.reason,
-								"rejecting undecodable envoy message"
-							);
-							conn2
-								.to_envoy_tx
-								.send(ToEnvoyFrame::Reject(rejection))
-								.await
-								.ok()
-								.context("envoy socket writer closed before rejecting a message")?;
-							rejected = true;
-							continue;
-						}
-					};
-					if let Some(rejection) = handle_ws_msg(&ctx2, &conn2, &tasks2, msg).await? {
-						log_connect_rejection(&rejection);
-						conn2
-							.to_envoy_tx
-							.try_send(ToEnvoyFrame::Reject(rejection))
-							.ok()
-							.context("envoy socket writer closed before rejecting a connect")?;
-						rejected = true;
-					}
-				}
-				Message::Close(_) => break,
-				_ => {}
-			}
-		}
-
-		anyhow::Ok(())
+		read_socket(&ctx2, &conn2, &mut socket_rx, &inbound_tx, &inbound_bytes).await
+	});
+	let conn2 = conn.clone();
+	let ctx2 = ctx.clone();
+	let tasks2 = tasks.clone();
+	let inbound_dispatch_task = tasks.spawn_result(async move {
+		dispatch_inbound(&conn2, &mut inbound_rx, |message| {
+			handle_ws_msg(&ctx2, &conn2, &tasks2, message)
+		})
+		.await
 	});
 
 	// A newer connection of this envoy asks this one to close, so commands sent to this connection
@@ -372,12 +388,7 @@ pub async fn run(
 	let ping_task = tasks.spawn_result(async move {
 		let clock = ctx2.env().clock();
 		let period_ms = ctx2.config().pegboard().envoy_update_ping_interval();
-		let mut interval = rivet_env::interval(clock.clone(), period_ms);
-		loop {
-			interval.tick().await?;
-			let ts = clock.observe()?.unix_ms;
-			conn2.ping.send_replace(ts);
-
+		run_ping_loop(clock, period_ms, &conn2.ping, || async {
 			let last_pong_unix_ms = conn2.last_pong_unix_ms.load(Ordering::Acquire);
 			if last_pong_unix_ms > conn2.last_heartbeat_unix_ms.load(Ordering::Acquire) {
 				match write_heartbeat(&ctx2, &conn2, last_pong_unix_ms).await {
@@ -409,9 +420,8 @@ pub async fn run(
 					}
 				}
 			}
-		}
-		#[allow(unreachable_code)]
-		anyhow::Ok(())
+			Ok(())
+		}).await
 	});
 
 	// Remote SQL sessions expire on one deadline queue, owned and joined with the connection.
@@ -436,6 +446,7 @@ pub async fn run(
 	let background = async {
 		rivet_env::select!( ctx.env().rng("envoy.background");
 			res = incoming_sub_task => res?.context("task cancelled")?,
+			res = inbound_dispatch_task => res?.context("task cancelled")?,
 			res = control => res,
 			res = periodic => res,
 		)
@@ -901,14 +912,14 @@ async fn handle_sub_stream(
 							let message_kind = if is_websocket {
 								p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(p::ToRivetWebSocketClose {
 									code: Some(1012),
-									reason: Some("actor.stopped".into()),
+									reason: Some(ACTOR_STOPPED_DETAIL.into()),
 									hibernate: false,
 								})
 							} else {
 								p::ToRivetTunnelMessageKind::ToRivetResponseAbort(p::ToRivetResponseAbort {
 									reason: p::HttpStreamAbortReason {
 										kind: p::HttpStreamAbortReasonKind::Cancelled,
-										detail: Some("actor.stopped".into()),
+										detail: Some(ACTOR_STOPPED_DETAIL.into()),
 									},
 								})
 							};
@@ -1009,6 +1020,178 @@ async fn handle_sub_stream(
 	Ok(())
 }
 
+// The public WebSocket already limits one frame to 32 MiB. Bound the *whole*
+// queued/in-progress backlog of each class to that size, not 128 maximum-size frames.
+// Lifecycle memory is reserved separately so one executing storage frame cannot starve it.
+const SOCKET_INBOUND_BYTES: usize = 32 * 1024 * 1024;
+
+struct SocketInbound {
+	message: p::ToRivet,
+	_bytes: tokio::sync::OwnedSemaphorePermit,
+}
+
+fn queue_inbound(
+	tx: &inbound::Sender,
+	bytes: &Arc<tokio::sync::Semaphore>,
+	message: p::ToRivet,
+	wire_bytes: usize,
+) -> Result<Vec<p::ToRivet>> {
+	tx.ensure_open()?;
+	let count = u32::try_from(wire_bytes).context("envoy inbound frame exceeds byte budget")?;
+	let storage = inbound::is_storage(&message);
+	let budget = if storage { bytes } else { tx.control_bytes() };
+	let permit = match budget.clone().try_acquire_many_owned(count) {
+		Ok(permit) => permit,
+		Err(tokio::sync::TryAcquireError::NoPermits) if storage => return Ok(vec![message]),
+		Err(tokio::sync::TryAcquireError::NoPermits) => {
+			bail!("envoy lifecycle byte budget exhausted; reconnect to replay unacknowledged work")
+		}
+		Err(tokio::sync::TryAcquireError::Closed) => bail!("envoy inbound byte budget closed"),
+	};
+	tx.try_send(SocketInbound {
+		message,
+		_bytes: permit,
+	})
+}
+
+/// Only storage requests removed before ownership lookup or execution may be refused.
+/// Lifecycle admission retains its reports or returns an explicit terminal resource error.
+fn refuse_inbound(conn: &Connection, message: p::ToRivet) -> Result<()> {
+	let reply = match message {
+		p::ToRivet::ToRivetKvRequest(request) => crate::kv::error_response(
+			request.request_id,
+			format!(
+				"depot.overloaded: node inbound queue is full (reason=node_inbound, retry_after_ms={STORAGE_LANE_RETRY_AFTER_MS})"
+			),
+		),
+		p::ToRivet::ToRivetSqliteGetPagesRequest(_)
+		| p::ToRivet::ToRivetSqliteCommitRequest(_)
+		| p::ToRivet::ToRivetSqliteCommitStageBeginRequest(_)
+		| p::ToRivet::ToRivetSqliteCommitStageSegmentRequest(_)
+		| p::ToRivet::ToRivetSqliteCommitFinalizeRequest(_)
+		| p::ToRivet::ToRivetSqliteExecRequest(_)
+		| p::ToRivet::ToRivetSqliteExecuteRequest(_)
+		| p::ToRivet::ToRivetSqliteExecuteBatchRequest(_) => {
+			crate::sqlite::inbound_overloaded_failure(&message, STORAGE_LANE_RETRY_AFTER_MS)?
+		}
+		_ => bail!("envoy inbound queue full; reconnect to replay unacknowledged work"),
+	};
+	conn.send_storage_refusal(reply)
+}
+
+/// Reads heartbeat traffic without waiting for actor ownership lookup, registration,
+/// durable event delivery or response queue capacity. All other ordered work uses one
+/// bounded dispatcher; storage admission failures are refused without disconnecting
+/// accepted execution. Pending storage may be refused to retain lifecycle reports.
+/// Only exhaustion of lifecycle resources itself requires reconnect/replay.
+async fn read_socket<S, E>(
+	ctx: &EngineContext,
+	conn: &Arc<Connection>,
+	socket_rx: &mut S,
+	inbound_tx: &inbound::Sender,
+	inbound_bytes: &Arc<tokio::sync::Semaphore>,
+) -> Result<()>
+where
+	S: futures_util::Stream<Item = std::result::Result<Message, E>> + Unpin,
+	E: std::error::Error + Send + Sync + 'static,
+{
+	while let Some(message) = socket_rx.next().await {
+		match message? {
+			Message::Binary(_) if conn.rejected.load(Ordering::Acquire) => {}
+			Message::Binary(payload) => {
+				let wire_bytes = payload.len();
+				// The envoy speaks the connection's version without a header. At the latest
+				// version the message is viewed in place, and tunnel replies are forwarded
+				// to their gateway without being decoded.
+				let decoded = if conn.version == p::PROTOCOL_VERSION {
+					match p::versioned::ToRivet::open_body(payload, conn.version) {
+						Ok(view) => {
+							if let p::ToRivetRef::ToRivetTunnelMessage(message) = view.get() {
+								let message_id = message.message_id();
+								let message_key =
+									(*message_id.gateway_id(), *message_id.request_id());
+								forward_tunnel_reply(conn, message_key, TunnelReply::Encoded(view))
+									.await?;
+								continue;
+							}
+							Ok(view.to_owned())
+						}
+						Err(error) => Err(error),
+					}
+				} else {
+					p::versioned::ToRivet::decode_body(payload, conn.version)
+				};
+
+				let msg = match decoded {
+					Ok(msg) => msg,
+					Err(error) => {
+						let rejection = crate::rejection::Rejection::decode(error);
+						tracing::debug!(
+							code = rejection.frame.code,
+							reason = %rejection.frame.reason,
+							"rejecting undecodable envoy message"
+						);
+						// A known protocol failure must not wait for a pending ownership
+						// lookup. Earlier unacknowledged work remains replayable.
+						conn.rejected.store(true, Ordering::Release);
+						conn.send_control(ToEnvoyFrame::Reject(rejection))?;
+						continue;
+					}
+				};
+				match msg {
+					p::ToRivet::ToRivetPong(_) => record_pong(ctx, conn)?,
+					// Command ACKs currently have no effects or ordering requirements.
+					p::ToRivet::ToRivetAckCommands(_) => {}
+					msg => {
+						for refused in queue_inbound(inbound_tx, inbound_bytes, msg, wire_bytes)? {
+							refuse_inbound(conn, refused)?;
+						}
+						// Buffered frames can all be ready without another I/O poll. Give the
+						// dispatcher a turn; this never waits on its storage work.
+						rivet_env::tokio::task::yield_now().await;
+					}
+				}
+			}
+			Message::Close(_) => break,
+			_ => {}
+		}
+	}
+
+	Ok(())
+}
+
+/// A single FIFO preserves admission order even when a start concurrently binds a handle.
+/// An unknown actor is validated before it can allocate retained actor lanes.
+async fn dispatch_inbound<F, Fut>(
+	conn: &Connection,
+	rx: &mut inbound::Receiver,
+	mut handle: F,
+) -> Result<()>
+where
+	F: FnMut(p::ToRivet) -> Fut,
+	Fut: std::future::Future<Output = Result<Option<crate::rejection::Rejection>>>,
+{
+	while let Some(SocketInbound { message, _bytes }) = rx.recv().await {
+		if conn.rejected.load(Ordering::Acquire) {
+			continue;
+		}
+		let rejection = handle(message).await?;
+		if let Some(rejection) = rejection {
+			log_connect_rejection(&rejection);
+			conn.rejected.store(true, Ordering::Release);
+			conn.send_control(ToEnvoyFrame::Reject(rejection))?;
+		}
+	}
+	Ok(())
+}
+
+fn record_pong(ctx: &EngineContext, conn: &Connection) -> Result<()> {
+	let now = ctx.env().clock().observe()?;
+	conn.last_pong_unix_ms.store(now.unix_ms, Ordering::Release);
+	conn.last_pong_boot_ms.store(now.boot_ms, Ordering::Release);
+	Ok(())
+}
+
 /// Handles one envoy message. Returns the rejection to close the connection with when the
 /// envoy's connect could not be registered.
 async fn handle_ws_msg(
@@ -1046,7 +1229,7 @@ async fn handle_ws_msg(
 				}
 			}
 
-			conn.to_envoy_tx
+			conn.control_tx
 				.send(p::ToEnvoy::ToEnvoyInit(p::ToEnvoyInit {
 					metadata: p::ProtocolMetadata {
 						envoy_lost_threshold: i64::try_from(
@@ -1062,11 +1245,7 @@ async fn handle_ws_msg(
 				}))
 				.await?;
 		}
-		p::ToRivet::ToRivetPong(_) => {
-			let now = ctx.env().clock().observe()?;
-			conn.last_pong_unix_ms.store(now.unix_ms, Ordering::Release);
-			conn.last_pong_boot_ms.store(now.boot_ms, Ordering::Release);
-		}
+		p::ToRivet::ToRivetPong(_) => record_pong(ctx, conn)?,
 		p::ToRivet::ToRivetStopping => {
 			// The record is written first so a heartbeat racing this cannot re-enter the index.
 			write_record(ctx, conn, false, |entry| {
@@ -1077,35 +1256,31 @@ async fn handle_ws_msg(
 		}
 		p::ToRivet::ToRivetAckCommands(_) => {}
 		p::ToRivet::ToRivetEvents(events) => {
-			// Never wait behind an actor's durable delivery on the socket reader. Refusing
-			// admission ends this connection: the SDK replays unacknowledged events on
-			// reconnect, and no later checkpoint may acknowledge past the refused event.
+			// This ordered dispatcher is separate from the socket reader. Wait for bounded
+			// actor-lane capacity instead of disconnecting on a legitimate replay batch.
+			// Delivery still owns the ACK, so admission cannot acknowledge past a failure.
+			let mut orphan_checkpoints = Vec::new();
 			for event in events {
 				let Some(handle) =
 					inbound_actor_handle(conn, tasks, &event.checkpoint.actor_id).await?
 				else {
 					// A replay from an epoch whose ownership already ended has no side effects.
 					// Acknowledge it without retaining lanes for an actor no longer hosted here.
-					conn.to_envoy_tx
-						.try_send(
-							p::ToEnvoy::ToEnvoyAckEvents(p::ToEnvoyAckEvents {
-								last_event_checkpoints: vec![event.checkpoint],
-							})
-							.into(),
-						)
-						.ok()
-						.context("envoy socket queue unavailable")?;
+					orphan_checkpoints.push(event.checkpoint);
 					continue;
 				};
 				if let Err(error) = handle.recv_event(event).await {
 					return Ok(Some(crate::rejection::Rejection {
 						frame: CloseFrame {
 							code: crate::routes::TRY_AGAIN_LATER,
-							reason: "envoy.event_lane_full;retry_after_ms=100".into(),
+							reason: "envoy.event_lane_closed;retry_after_ms=100".into(),
 						},
 						error,
 					}));
 				}
+			}
+			if !orphan_checkpoints.is_empty() {
+				conn.ack_events(orphan_checkpoints).await?;
 			}
 		}
 		p::ToRivet::ToRivetTunnelMessage(message) => {
@@ -1114,25 +1289,17 @@ async fn handle_ws_msg(
 		}
 		p::ToRivet::ToRivetKvRequest(request) => {
 			let Some(handle) = inbound_actor_handle(conn, tasks, &request.actor_id).await? else {
-				conn.to_envoy_tx
-					.try_send(
-						crate::kv::error_response(
-							request.request_id,
-							"actor is not running on this envoy".into(),
-						)
-						.into(),
-					)
-					.ok()
-					.context("envoy socket queue unavailable")?;
+				conn.send_storage_refusal(crate::kv::error_response(
+					request.request_id,
+					"actor is not running on this envoy".into(),
+				))?;
 				return Ok(None);
 			};
 			if let Some(refused) = handle.try_recv_kv(request)? {
-				conn.to_envoy_tx
-					.send(crate::kv::error_response(
-						refused.request_id,
-						storage_lane_full_message(),
-					))
-					.await?;
+				conn.send_storage_refusal(crate::kv::error_response(
+					refused.request_id,
+					storage_lane_full_message(),
+				))?;
 			}
 		}
 		p::ToRivet::ToRivetSqliteGetPagesRequest(_)
@@ -1145,19 +1312,14 @@ async fn handle_ws_msg(
 		| p::ToRivet::ToRivetSqliteExecuteBatchRequest(_) => {
 			let actor_id = crate::sqlite::actor_id(&msg)?.to_owned();
 			let Some(handle) = inbound_actor_handle(conn, tasks, &actor_id).await? else {
-				conn.to_envoy_tx
-					.try_send(crate::sqlite::not_running_failure(&msg)?.into())
-					.ok()
-					.context("envoy socket queue unavailable")?;
+				conn.send_storage_refusal(crate::sqlite::not_running_failure(&msg)?)?;
 				return Ok(None);
 			};
 			if let Some(refused) = handle.try_recv_sqlite(msg)? {
-				conn.to_envoy_tx
-					.send(crate::sqlite::overloaded_failure(
-						&refused,
-						STORAGE_LANE_RETRY_AFTER_MS,
-					)?)
-					.await?;
+				conn.send_storage_refusal(crate::sqlite::overloaded_failure(
+					&refused,
+					STORAGE_LANE_RETRY_AFTER_MS,
+				)?)?;
 			}
 		}
 	}
@@ -1309,6 +1471,46 @@ async fn write_record(
 	bail!("envoy record changed during write retry")
 }
 
+/// Publishes local pings independently of the serialized durable index refresh.
+/// An old active index entry makes a node ineligible for new allocations; it does not
+/// revoke actors on a connected node. Epoch teardown still requires a stopped report or
+/// proof of disconnection (`pegboard::actor_machine::executor::envoy_gone`).
+async fn run_ping_loop<F, Fut>(
+	clock: Arc<dyn rivet_env::Clock>,
+	period_ms: u64,
+	ping: &tokio::sync::watch::Sender<i64>,
+	mut refresh: F,
+) -> Result<()>
+where
+	F: FnMut() -> Fut,
+	Fut: std::future::Future<Output = Result<()>>,
+{
+	let publish = async {
+		let mut interval = rivet_env::interval(clock.clone(), period_ms);
+		loop {
+			interval.tick().await?;
+			ping.send_replace(clock.observe()?.unix_ms);
+		}
+		#[allow(unreachable_code)]
+		anyhow::Ok(())
+	};
+	let persist = async {
+		let mut interval = rivet_env::interval(clock.clone(), period_ms);
+		loop {
+			interval.tick().await?;
+			refresh().await?;
+		}
+		#[allow(unreachable_code)]
+		anyhow::Ok(())
+	};
+	// At most one refresh runs. A terminal refresh error still ends the connection;
+	// cancelling its owner drops both futures together, without detached refreshes.
+	rivet_env::select_biased!("terminal admission or supersession failure ends local liveness",
+		result = persist => result,
+		result = publish => result,
+	)
+}
+
 /// Whether the connection went longer than `ping_timeout_ms` without a pong.
 pub(crate) fn ping_timed_out(
 	last_pong_boot_ms: u64,
@@ -1346,12 +1548,13 @@ async fn pong_watchdog(
 	}
 }
 
-/// Writes queued frames to the envoy's socket until the queue closes or a close frame is
-/// written. A pending ping goes ahead of queued frames, so traffic that keeps the queue full
-/// never starves the ping an envoy must answer to stay connected.
+/// Fairly drains the bounded data and control lanes until both close or a close frame
+/// is written. Pings go first; control replies wait behind at most one data frame, and
+/// sustained control traffic cannot starve data responses.
 async fn write_socket<S>(
 	socket_tx: &mut S,
 	to_envoy_rx: &mut crate::queue::Receiver<ToEnvoyFrame>,
+	control_rx: &mut crate::queue::Receiver<ToEnvoyFrame>,
 	ping_rx: &mut tokio::sync::watch::Receiver<i64>,
 	version: u16,
 ) -> Result<()>
@@ -1359,6 +1562,16 @@ where
 	S: futures_util::Sink<Message> + Unpin,
 	S::Error: std::error::Error + Send + Sync + 'static,
 {
+	let data = futures_util::stream::unfold(to_envoy_rx, |rx| async {
+		rx.recv().await.map(|frame| (frame, rx))
+	});
+	let control = futures_util::stream::unfold(control_rx, |rx| async {
+		rx.recv().await.map(|frame| (frame, rx))
+	});
+	futures_util::pin_mut!(data, control);
+	// `select` alternates the first polled stream: neither control nor data can starve
+	// the other, and closing either lane still drains the remaining one.
+	let mut frames = futures_util::stream::select(data, control);
 	loop {
 		let next = rivet_env::select_biased!("a pending ping goes ahead of queued frames",
 			changed = ping_rx.changed() => match changed {
@@ -1366,7 +1579,7 @@ where
 				// The connection owns the sender, so it outlives this writer.
 				Err(_) => WriterNext::Frame(None),
 			},
-			frame = to_envoy_rx.recv() => WriterNext::Frame(frame),
+			frame = frames.next() => WriterNext::Frame(frame),
 		);
 		let frame = match next {
 			WriterNext::Ping(ts) => {
@@ -1386,8 +1599,8 @@ where
 				break;
 			}
 			ToEnvoyFrame::Reject(rejection) => {
-				// Frames queued before the rejection are written before the close. Replies
-				// whose handlers are still running are dropped with the connection.
+				// A rejection may overtake queued data. Unanswered requests and events
+				// remain unacknowledged when the connection closes.
 				if let Err(error) = socket_tx.send(Message::Close(Some(rejection.frame))).await {
 					tracing::debug!(?error, "failed to send envoy message rejection");
 				}
@@ -1786,11 +1999,7 @@ impl ActorHandle {
 					"actor lifecycle event delivery exhausted"
 				);
 
-				conn.to_envoy_tx
-					.send(p::ToEnvoy::ToEnvoyAckEvents(p::ToEnvoyAckEvents {
-						last_event_checkpoints: vec![checkpoint.clone()],
-					}))
-					.await?;
+				conn.ack_events(vec![checkpoint.clone()]).await?;
 
 				// A stopped epoch needs no lanes or SQLite session on this
 				// connection. Dropping the handle closes its lanes once their queued
@@ -1849,8 +2058,9 @@ impl ActorHandle {
 
 	async fn recv_event(&self, event: p::EventWrapper) -> Result<()> {
 		self.inbound_tx
-			.try_send(QueuedInbound::new(InboundMsg::Event(Box::new(event))))
-			.map_err(|_| anyhow::anyhow!("actor event lane unavailable; reconnect to replay"))
+			.send(QueuedInbound::new(InboundMsg::Event(Box::new(event))))
+			.await
+			.map_err(|_| anyhow::anyhow!("actor event lane closed; reconnect to replay"))
 	}
 
 	/// Queues a KV request on the storage lane without waiting. A full lane hands the request

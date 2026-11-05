@@ -24,10 +24,8 @@ type DirectoryLock struct {
 	inode: u64
 }
 
-# Every worker, including stateless ones, reads every heartbeat it lists or resolves, and
-# version selection does not count stateless readers. So after release, a new version of this
-# schema ships in two deploys: the first binary reads the new version but still writes the old
-# one, and only the second binary writes the new one. Skipping the first deploy is unsupported.
+# Writers select the version from the read floor of the live storage workers. See the latest version
+# of this schema for what that assumes.
 type Data struct {
 	instanceId: UuidV4
 	apiPeerAddress: str

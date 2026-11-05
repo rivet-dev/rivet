@@ -583,6 +583,13 @@ export declare class CoreRegistry {
    */
   shutdown(): Promise<void>
   actorStopThresholdMs(): Promise<number | null>
+  /** Number of actors hosted by the serverful envoy, or zero while it is not serving. */
+  activeActorCount(): number
+  /**
+   * Calls `callback` with the active actor count and every change until `cancelToken`
+   * is cancelled or the registry stops serving.
+   */
+  onActiveActorCountChange(callback: (count: number) => void, cancelToken: CancellationToken): void
   health(): Promise<JsRegistryRouteResponse>
   metadata(): JsRegistryRouteResponse
   metrics(): JsRegistryRouteResponse

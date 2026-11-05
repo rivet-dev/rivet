@@ -208,6 +208,15 @@ pub struct State {
 	/// Sole in-flight records for ordinary heartbeat and discovery I/O.
 	pub(super) calls: BTreeMap<Slot, IoCall<OperationId>>,
 
+	/// Whether this worker's first complete listing after its claim has been checked for zones.
+	/// Running workers are not checked again, so labels can roll out one restart at a time.
+	pub(super) zone_checked: bool,
+
+	/// The version this worker writes its heartbeat at. Starts at the oldest version it writes and
+	/// follows each complete listing's read floor, so an unknown storage view keeps the last
+	/// selection instead of dropping back to the oldest version.
+	pub(super) heartbeat_version: u16,
+
 	/// Publication helpers own pending work; this sequence survives claim and release replacement.
 	pub(super) publication_sequence: OpSequence<Slot>,
 }
@@ -260,6 +269,16 @@ impl State {
 			"storage capacity must be positive"
 		);
 
+		let heartbeat_family = crate::versions::VersionFamily::TOPOLOGY_WORKER_HEARTBEAT;
+		let own_heartbeat_range = match &worker_registration {
+			Some(registration) => {
+				rivet_data::families::advertised(&registration.versions, heartbeat_family).cloned()
+			}
+			None => heartbeat_family.info().map(|info| info.versions()),
+		};
+		let heartbeat_version =
+			crate::versions::lowest_write(own_heartbeat_range.as_ref(), heartbeat_family)?;
+
 		let lease = match worker_registration {
 			Some(worker_registration) => LeaseState::Registering {
 				worker_registration,
@@ -281,6 +300,8 @@ impl State {
 			watches: Default::default(),
 			sequence: OpSequence::default(),
 			calls: BTreeMap::new(),
+			heartbeat_version,
+			zone_checked: false,
 			publication_sequence: OpSequence::default(),
 		})
 	}
@@ -363,6 +384,29 @@ impl State {
 		self.discovery.entries.iter().flatten().filter(|entry| {
 			entry.role == WorkerRole::Storage && entry.heartbeat.state != HeartbeatState::Released
 		})
+	}
+
+	/// Selects the version to write this worker's heartbeat at from a complete listing's read
+	/// floor. A refusal keeps the current version.
+	///
+	/// TODO: This assumes every worker is a storage worker. Stateless workers also read
+	/// heartbeats, but discovery never lists them, so the read floor does not count them, and a
+	/// stateless worker on an older binary cannot decode a heartbeat written at this version.
+	pub(super) fn select_heartbeat_version(&mut self) {
+		let Some(registration) = self.lease.worker_registration() else {
+			return;
+		};
+		let family = crate::versions::VersionFamily::TOPOLOGY_WORKER_HEARTBEAT;
+		let own = rivet_data::families::advertised(&registration.versions, family);
+
+		match crate::versions::select(own, &self.discovery.read_floor, family) {
+			Ok(version) => self.heartbeat_version = version,
+			Err(error) => tracing::error!(
+				?error,
+				heartbeat_version = self.heartbeat_version,
+				"no heartbeat version is readable by every storage worker and writable here; keeping the current one, so check for storage workers on incompatible binaries"
+			),
+		}
 	}
 
 	/// Recomputes `discovery.read_floor` from the retained entries.

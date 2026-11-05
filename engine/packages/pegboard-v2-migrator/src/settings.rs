@@ -27,6 +27,7 @@ pub fn settings_from_config(
 		wake_horizon_ms: migration.wake_horizon_ms(),
 		confirm_delay_ms: migration.confirm_delay_ms(),
 		max_copy_bytes: migration.max_copy_bytes(),
+		max_copy_bytes_per_sec: migration.max_copy_bytes_per_sec(),
 		datacenter_labels,
 		target_namespace: migration.target_namespace().to_owned(),
 		v3_datacenter_label,

@@ -254,6 +254,7 @@ pub async fn start(
 		build_git_sha: config.build_meta().git_sha.clone(),
 		started_at_unix_ms: context.topology().started_at_unix_ms(),
 		directory_lock: directory_lock.clone(),
+		zone: config.depot().zone.clone(),
 	});
 	let peer = services
 		.iter()

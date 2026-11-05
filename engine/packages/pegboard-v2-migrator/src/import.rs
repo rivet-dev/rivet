@@ -329,7 +329,9 @@ async fn write_kv(state: &mut Import, batch: proto::KvBatch) -> Result<()> {
 				version: entry.version.clone(),
 				updated_unix_ms: entry.update_ts,
 			},
-			rivet_data::generated::PEGBOARD_ACTOR_VERSION,
+			rivet_data::pegboard_actor::record_write_version(
+				rivet_data::generated::PEGBOARD_ACTOR_VERSION,
+			),
 		)?;
 
 		if tx_bytes > 0 && tx_bytes + key.len() + value.len() > max_bytes {

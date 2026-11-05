@@ -1474,7 +1474,7 @@ impl VolumeHost {
 		}
 		// The caller's deadline tracker. A speculative run of this command that its admission
 		// starts shares it, so nothing it has not dispatched starts after the caller timed out.
-		let commits = Arc::new(super::CommandCommits::default());
+		let commits = Arc::new(super::CommandCommits::new(deadline));
 		let admission = match self.admit(&request, request_bytes, &commits) {
 			Ok(admission) => admission,
 			Err(error) => {
@@ -1658,23 +1658,10 @@ impl VolumeHost {
 			.run_with_writer(kv, request.body.to_vec())
 			.await;
 		handler_timer.observe_duration();
-		// The filesystem already retried refreshing its cold snapshot until the deadline, so a
-		// `TooOld` that reaches the handler means this opening cannot catch up in place, for
-		// example after its read session expired past retention. Fence it so the next command
-		// reopens the volume from the log instead of every command failing the same way.
-		if let Err(error) = &result
-			&& matches!(
-				error.downcast_ref::<FilesystemError>(),
-				Some(FilesystemError::TooOld)
-			) {
-			tracing::warn!(
-				command = command_label,
-				"command volume filesystem cannot refresh its cold view; reopening"
-			);
-			opened
-				.filesystem
-				.fence_with(depot_client::fences::FenceReason::CommandColdTooOld);
-		}
+		// TooOld can mean only this command's pinned snapshot expired or lost retention.
+		// The filesystem owns authority/corruption fencing; a fresh command can recover on
+		// the same opening. Fencing here turns a request-scoped refusal into a pool outage.
+
 		self.command_response(command_label, result)
 	}
 

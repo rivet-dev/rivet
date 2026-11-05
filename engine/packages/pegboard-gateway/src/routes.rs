@@ -321,7 +321,7 @@ pub async fn gateway(
 				stream: true,
 				response_stream: true,
 			};
-			match crate::http_tunnel::proxy(&ctx, stream, body, message_id, start).await {
+			match crate::http_tunnel::proxy(ctx.env(), stream, body, message_id, start).await {
 				Ok(response) => response,
 				Err(error) => GatewayError::from(error).into_response(),
 			}
@@ -395,7 +395,27 @@ async fn prepare(
 			},
 		)?;
 	}
-	pegboard::catalog::ensure_namespace(ctx, &namespace).await?;
+	// Catalog admission can refuse concurrent cold-cache lookups before actor acquisition.
+	// Spend the same request retry budget and original deadline on both routing stages.
+	budget.deposit();
+	let mut retries = budget.retries(deadline.boot_ms);
+	loop {
+		let lookup = rivet_env::timeout_at(
+			ctx.env().clock().as_ref(),
+			deadline.boot_ms,
+			pegboard::catalog::ensure_namespace(ctx, &namespace),
+		)
+		.await;
+		let result = match lookup {
+			Ok(result) => result,
+			Err(rivet_env::TimeoutError::Elapsed) => Err(crate::RequestTimeout.build()),
+			Err(error) => Err(error.into()),
+		};
+		let Err(error) = result else {
+			break;
+		};
+		retries.retry(ctx.env().as_ref(), error).await?;
+	}
 
 	check_reserved_params(raw_query.as_deref())?;
 	let message_id = new_message_id(ctx)?;
@@ -416,8 +436,6 @@ async fn prepare(
 
 	// The gateway owns retries of a refused request. Nothing reaches the actor before the
 	// stream opens, so a refused attempt runs again from the start, within one request deadline.
-	budget.deposit();
-	let mut retries = budget.retries(deadline.boot_ms);
 	let (epoch, stream) = loop {
 		let attempt = acquire(
 			ctx,

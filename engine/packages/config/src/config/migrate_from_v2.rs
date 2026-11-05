@@ -57,6 +57,12 @@ pub struct MigrateFromV2 {
 	/// Larger actors are skipped as `too_large` on every pass, so they never hold a slot; raise
 	/// it once the rest of the namespace has moved to migrate them. Defaults to 10 GiB.
 	pub max_copy_bytes: Option<u64>,
+	/// Bytes per second the migrator may admit for copying, by the same size `max_copy_bytes`
+	/// reads. Each admitted actor is charged its whole size when it is admitted; a new candidate
+	/// waits while the bytes already admitted are more than one second of this rate ahead. It bounds
+	/// the copy load on the storage nodes, which the actor count alone does not when actors are
+	/// large. The migrator is a singleton, so the budget is per datacenter. Defaults to 32 MiB/s.
+	pub max_copy_bytes_per_sec: Option<u64>,
 }
 
 impl std::fmt::Debug for MigrateFromV2 {
@@ -77,6 +83,7 @@ impl std::fmt::Debug for MigrateFromV2 {
 			.field("wake_horizon_ms", &self.wake_horizon_ms)
 			.field("confirm_delay_ms", &self.confirm_delay_ms)
 			.field("max_copy_bytes", &self.max_copy_bytes)
+			.field("max_copy_bytes_per_sec", &self.max_copy_bytes_per_sec)
 			.finish()
 	}
 }
@@ -114,6 +121,10 @@ impl MigrateFromV2 {
 
 	pub fn max_copy_bytes(&self) -> u64 {
 		self.max_copy_bytes.unwrap_or(10 * 1024 * 1024 * 1024)
+	}
+
+	pub fn max_copy_bytes_per_sec(&self) -> u64 {
+		self.max_copy_bytes_per_sec.unwrap_or(32 * 1024 * 1024)
 	}
 
 	pub fn validate(&self) -> Result<()> {
@@ -164,6 +175,10 @@ impl MigrateFromV2 {
 		ensure!(
 			self.max_copy_bytes() > 0,
 			"migrate_from_v2.max_copy_bytes must be positive"
+		);
+		ensure!(
+			self.max_copy_bytes_per_sec() > 0,
+			"migrate_from_v2.max_copy_bytes_per_sec must be positive"
 		);
 		ensure!(
 			self.wake_horizon_ms() >= MIN_WAKE_HORIZON_MS,

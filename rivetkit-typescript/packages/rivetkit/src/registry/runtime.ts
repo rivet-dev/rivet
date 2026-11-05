@@ -500,6 +500,12 @@ export interface CoreRuntime {
 	registryActorStopThresholdMs?(
 		registry: RegistryHandle,
 	): Promise<number | undefined>;
+	registryActiveActorCount?(registry: RegistryHandle): number;
+	onRegistryActiveActorCountChange?(
+		registry: RegistryHandle,
+		callback: (count: number) => void,
+		cancelToken: CancellationTokenHandle,
+	): void;
 	handleServerlessRequest(
 		registry: RegistryHandle,
 		req: RuntimeServerlessRequest,

@@ -6,7 +6,7 @@ use axum::{
 	routing::{delete, get, post, put},
 };
 use hyper::{
-	StatusCode,
+	Method, StatusCode,
 	header::{HeaderName, RETRY_AFTER},
 };
 use rivet_engine_context::EngineContext;
@@ -50,6 +50,7 @@ pub fn router(ctx: &EngineContext) -> Router {
 		.route("/auth/tokens", post(tokens::create))
 		.route("/auth/tokens/inspect", get(tokens::inspect))
 		.merge(protected)
+		.layer(middleware::from_fn(classify_read_refusal))
 		// Outermost, so preflights are answered before authentication. RivetKit clients send
 		// every request with credentials, which rejects wildcards, so the request's own values
 		// are mirrored and the readable headers are listed.
@@ -67,6 +68,23 @@ pub fn router(ctx: &EngineContext) -> Router {
 				.max_age(std::time::Duration::from_secs(86_400)),
 		)
 		.with_state(ctx.clone())
+}
+
+/// A storage refusal is retryable at a read-only HTTP boundary. A mutation can already
+/// have committed before a subsequent read is refused, so keep its existing status.
+async fn classify_read_refusal(request: Request, next: Next) -> Response {
+	let read_only = matches!(*request.method(), Method::GET | Method::HEAD);
+	let mut response = next.run(request).await;
+	if read_only
+		&& response.status() == StatusCode::BAD_REQUEST
+		&& response
+			.headers()
+			.get(X_RIVET_ERROR)
+			.is_some_and(|value| value == "depot.overloaded")
+	{
+		*response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
+	}
+	response
 }
 
 /// Authenticate and enforce route grants before running its handler.

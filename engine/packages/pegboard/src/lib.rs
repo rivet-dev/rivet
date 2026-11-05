@@ -7,7 +7,7 @@ pub mod envoy_check;
 pub mod epoch;
 pub mod errors;
 pub mod index;
-pub use rivet_data::generated::pegboard_actor_v2 as wire;
+pub use rivet_data::pegboard_actor as wire;
 pub mod keys;
 mod metrics;
 pub mod validation;

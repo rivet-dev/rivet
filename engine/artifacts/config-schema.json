@@ -1275,7 +1275,7 @@
           "minimum": 0.0
         },
         "max_retained_payload_bytes": {
-          "description": "Encoded bytes of synced log entry payloads the shard keeps in memory for reads; defaults to a sixteenth of `max_memory_bytes`. Older payloads are read from disk.",
+          "description": "Encoded bytes of synced log entry payloads the shard keeps in memory for reads; defaults to a sixteenth of `max_memory_bytes`. Older payloads are read from disk. It is a soft limit: the reported usage also counts payloads not yet synced, which only `max_memory_bytes` bounds, so usage can exceed it under write load.",
           "type": [
             "integer",
             "null"
@@ -1461,6 +1461,15 @@
         },
         "max_copy_bytes": {
           "description": "Largest actor the migrator copies, by V2's reported SQLite size plus its KV estimate. Larger actors are skipped as `too_large` on every pass, so they never hold a slot; raise it once the rest of the namespace has moved to migrate them. Defaults to 10 GiB.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_copy_bytes_per_sec": {
+          "description": "Bytes per second the migrator may admit for copying, by the same size `max_copy_bytes` reads. Each admitted actor is charged its whole size when it is admitted; a new candidate waits while the bytes already admitted are more than one second of this rate ahead. It bounds the copy load on the storage nodes, which the actor count alone does not when actors are large. The migrator is a singleton, so the budget is per datacenter. Defaults to 32 MiB/s.",
           "type": [
             "integer",
             "null"
@@ -1945,7 +1954,7 @@
           "minimum": 0.0
         },
         "actor_start_threshold": {
-          "description": "How long the engine waits after sending an actor's start for the node to report it running. Past it the start is given up: the node is told to stop that epoch, and the actor starts again once the node reports it stopped or is proven gone.\n\nUnit is in milliseconds (default 30000).",
+          "description": "How long the engine waits after sending an actor's start for the node to report it running. Past it the start is given up: the node is told to stop that epoch, and the actor starts again once the node reports it stopped, is proven gone, or the stop threshold passes.\n\nUnit is in milliseconds (default 30000, 30 seconds).",
           "type": [
             "integer",
             "null"
@@ -1963,7 +1972,7 @@
           "minimum": 0.0
         },
         "actor_stop_threshold": {
-          "description": "How long a node may take to stop its actors once asked, advertised to the node on connect. A node shutting down drains its actors within this budget, and RivetKit uses it as the default shutdown grace period.\n\nUnit is in milliseconds (default 1800000, 30 minutes).",
+          "description": "Maximum time for an actor to stop before it is considered lost. The engine resends an unanswered stop, and once this threshold plus a 5 second margin has passed since the first stop it ends the actor's run as lost and moves on, as if the node were gone. It is also advertised to the node on connect as the time it is given to stop: a node shutting down drains its actors within this budget, and RivetKit uses it as the default shutdown grace period.\n\nUnit is in milliseconds (default 30000, 30 seconds).",
           "type": [
             "integer",
             "null"
@@ -2183,7 +2192,7 @@
           "minimum": 0.0
         },
         "node_socket_queue_capacity": {
-          "description": "Messages queued for one node socket writer (default 128, 1..=65536).",
+          "description": "Messages queued in each of one node connection's separate inbound, data and control lanes (default 128 per lane, 1..=65536). Inbound storage and lifecycle wire bytes each have a separate 32 MiB cap, including executing work.",
           "type": [
             "integer",
             "null"
@@ -3256,6 +3265,13 @@
           ],
           "format": "uint64",
           "minimum": 0.0
+        },
+        "zone": {
+          "description": "The failure domain this storage worker runs in, such as a cloud availability zone. An opaque label compared only for equality, advertised in the worker's heartbeat. A storage worker without one stops shortly after starting if another live storage worker has one, so set it on every storage worker.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false

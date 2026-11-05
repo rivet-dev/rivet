@@ -723,6 +723,13 @@ pub(super) enum BelowCold {
 	Refused,
 }
 
+/// Whether a registered snapshot waits between requests or is closed by its current request.
+#[derive(Clone, Copy)]
+pub(super) enum SessionUse {
+	Reusable,
+	OneRequest,
+}
+
 impl FilesystemStore {
 	/// The core fixes applied before this effect. Even if apply progresses while
 	/// the SlateDB snapshot opens, the logical bound hides those later versions.
@@ -734,6 +741,18 @@ impl FilesystemStore {
 		record: &FsVolumeRecord,
 		applied: VolumeLogPosition,
 		as_of: Option<u64>,
+	) -> Result<Arc<ReadSession>> {
+		self.open_session_for(key, record, applied, as_of, SessionUse::Reusable)
+			.await
+	}
+
+	pub(super) async fn open_session_for(
+		&self,
+		key: &VolumeLogKey,
+		record: &FsVolumeRecord,
+		applied: VolumeLogPosition,
+		as_of: Option<u64>,
+		usage: SessionUse,
 	) -> Result<Arc<ReadSession>> {
 		// Hold registration and snapshot capture cannot race physical sweeping: the core runs
 		// no sweep or other writer of the volume beside an open, so in `core` mode the open
@@ -768,6 +787,7 @@ impl FilesystemStore {
 			as_of,
 			base_chain,
 			BelowCold::Checkpoints,
+			usage,
 		)
 		.await
 	}
@@ -775,12 +795,13 @@ impl FilesystemStore {
 	/// Opens a session from the maintainer's own record without reading the stored one.
 	/// The caller guarantees `record` is current: the core orders the open after every
 	/// store write of the volume, so the stored record cannot differ from it.
-	pub(crate) async fn open_ordered_session(
+	pub(super) async fn open_ordered_session(
 		&self,
 		key: &VolumeLogKey,
 		record: &FsVolumeRecord,
 		applied: VolumeLogPosition,
 		as_of: Option<u64>,
+		usage: SessionUse,
 	) -> Result<Arc<ReadSession>> {
 		// Hold registration and snapshot capture cannot race physical sweeping.
 		let _ordered = self
@@ -796,6 +817,7 @@ impl FilesystemStore {
 			as_of,
 			record.base_chain.clone(),
 			BelowCold::Checkpoints,
+			usage,
 		)
 		.await
 	}
@@ -826,12 +848,17 @@ impl FilesystemStore {
 			Some(as_of),
 			record.base_chain.clone(),
 			BelowCold::Refused,
+			SessionUse::OneRequest,
 		)
 		.await
 	}
 
 	/// Validates the session's bounds against `record` and registers it. The caller holds
 	/// the volume's stripe, except for a claim read, which `below_cold` refuses below cold.
+	#[allow(
+		clippy::too_many_arguments,
+		reason = "The captured snapshot bounds, retention policy and request lifetime are validated together"
+	)]
 	async fn register_checked(
 		&self,
 		key: &VolumeLogKey,
@@ -840,6 +867,7 @@ impl FilesystemStore {
 		as_of: Option<u64>,
 		base_chain: Vec<FsBaseLink>,
 		below_cold: BelowCold,
+		usage: SessionUse,
 	) -> Result<Arc<ReadSession>> {
 		self.admit()?;
 		if record.volume_incarnation != key.0.volume_incarnation
@@ -856,7 +884,7 @@ impl FilesystemStore {
 		if applied.volume_seq < record.cold.volume_seq {
 			return Err(Error::Corrupt);
 		}
-		self.register_session(record, applied, as_of, base_chain, below_cold)
+		self.register_session(record, applied, as_of, base_chain, below_cold, usage)
 			.await
 	}
 
@@ -931,6 +959,7 @@ impl FilesystemStore {
 			link.position.volume_seq,
 			record.base_chain.clone(),
 			BelowCold::Checkpoints,
+			SessionUse::Reusable,
 		)
 		.await
 	}
@@ -944,6 +973,7 @@ impl FilesystemStore {
 		as_of: u64,
 		base_chain: Vec<FsBaseLink>,
 		below_cold: BelowCold,
+		usage: SessionUse,
 	) -> Result<Arc<ReadSession>> {
 		let scope = keys::Scope::new(
 			&record.volume_key(),
@@ -983,6 +1013,18 @@ impl FilesystemStore {
 		};
 		let db = self.db.snapshot().await?;
 		self.admit()?;
+		// A one-request session has no idle phase: asynchronous storage work is part of
+		// that request. Its fixed lifetime and grant still bound admission and the reply.
+		let idle_deadline = match usage {
+			SessionUse::OneRequest => expires,
+			SessionUse::Reusable => self
+				.clock
+				.observe()
+				.map_err(|_| Error::Fenced)?
+				.boot_ms
+				.saturating_add(self.config.read_session_idle_ms)
+				.min(expires),
+		};
 		let session = Arc::new(ReadSession {
 			id,
 			scope,
@@ -992,10 +1034,7 @@ impl FilesystemStore {
 			base_chain,
 			base_reader: self.base_reader.clone(),
 			expires_boot_ms: expires,
-			idle_deadline_boot_ms: AtomicU64::new(
-				now.saturating_add(self.config.read_session_idle_ms)
-					.min(expires),
-			),
+			idle_deadline_boot_ms: AtomicU64::new(idle_deadline),
 			latest: std::sync::atomic::AtomicBool::new(false),
 			snapshot: Mutex::new(Some(Snapshot {
 				db,

@@ -12,7 +12,7 @@ pub use rivet_data::generated::topology_worker_heartbeat_v1::HeartbeatState;
 
 /// Versioned persisted payload used by heartbeat reads and conditional writes.
 /// Incarnation and write sequence identify confirmations; diagnostics never establish expiration.
-pub type Heartbeat = rivet_data::generated::topology_worker_heartbeat_v1::Data;
+pub type Heartbeat = rivet_data::generated::topology_worker_heartbeat_v2::Heartbeat;
 
 /// The scope of the exclusive lock a storage process holds on its log directory, which a later
 /// process of the same worker compares to prove that process exited. See `WorkerRegistration`.
