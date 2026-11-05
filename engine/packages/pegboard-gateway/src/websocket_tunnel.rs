@@ -1,6 +1,6 @@
 //! Bounded WebSocket forwarding tied to one admitted actor generation and UPS stream.
 use anyhow::{Context, Result, bail, ensure};
-use futures_util::StreamExt;
+use futures_util::{Sink, SinkExt, StreamExt};
 use rivet_env::capabilities::websocket::{CloseFrame, Message, WebSocket};
 use rivet_env::{Clock, ClockError};
 use rivet_envoy_protocol as p;
@@ -281,15 +281,24 @@ where
 			// library answers the pong on its own.
 			Input::Keepalive(tick) => {
 				tick.context("keepalive clock failed")?;
-				let sent = socket.send(Message::Ping(bytes::Bytes::new())).await;
-				let result = if sent.is_ok() { "ok" } else { "error" };
-				crate::metrics::WEBSOCKET_KEEPALIVE_PING_TOTAL
-					.with_label_values(&[result])
-					.inc();
-				sent.context("keepalive ping to the client failed")?;
+				send_keepalive_ping(socket).await?;
 			}
 		}
 	}
+}
+
+/// Sends one keepalive ping to the client and counts it. A failed send means the client socket
+/// is gone, so the caller ends its forwarding loop on the returned error.
+pub(crate) async fn send_keepalive_ping<S>(client: &mut S) -> Result<()>
+where
+	S: Sink<Message, Error = axum::Error> + Unpin,
+{
+	let sent = client.send(Message::Ping(bytes::Bytes::new())).await;
+	let result = if sent.is_ok() { "ok" } else { "error" };
+	crate::metrics::WEBSOCKET_KEEPALIVE_PING_TOTAL
+		.with_label_values(&[result])
+		.inc();
+	sent.context("keepalive ping to the client failed")
 }
 
 async fn send(

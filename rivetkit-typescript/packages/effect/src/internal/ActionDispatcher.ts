@@ -6,11 +6,17 @@ import {
 	Option,
 	Record,
 	Schema,
+	type Scope,
 	Tracer,
 } from "effect";
 import * as Rivetkit from "rivetkit";
 import type * as Action from "../Action.ts";
-import type { ActionHandlersFrom, ActionRequest, Actor } from "../Actor.ts";
+import type {
+	ActionConnection,
+	ActionHandlersFrom,
+	ActionRequest,
+	Actor,
+} from "../Actor.ts";
 import * as ActionErrorEnvelope from "./ActionErrorEnvelope.ts";
 import { makeActorLogAnnotations } from "./logging.ts";
 import { readTraceMeta, rpcSystem } from "./tracing.ts";
@@ -22,6 +28,7 @@ export type Instance<ActionHandlers> = {
 		effect: Effect.Effect<A, E, any>,
 		options?: Effect.RunOptions,
 	) => Fiber.Fiber<A, E>;
+	readonly connectionScope: (connectionId: string) => Scope.Scope;
 };
 
 export const make = <
@@ -112,6 +119,7 @@ export const make = <
 						_tag: action._tag,
 						action,
 						payload: decodedPayload,
+						connection: makeActionConnection(c, instance),
 					} as ActionRequest<typeof action>;
 
 					const resultExit = yield* Effect.exit(
@@ -186,6 +194,25 @@ export const make = <
 			},
 		];
 	});
+
+const makeActionConnection = (
+	c: { readonly conn?: { readonly id: string } },
+	instance: Pick<Instance<unknown>, "connectionScope">,
+): Option.Option<ActionConnection> => {
+	// Scheduled actions run without a connection, although the RivetKit
+	// context type declares `conn` as always present.
+	if (!c.conn) return Option.none();
+
+	const { id } = c.conn;
+	return Option.some({
+		id,
+		// Most handlers never read this, and the first read checks the
+		// connection list, which costs O(connections).
+		get scope() {
+			return instance.connectionScope(id);
+		},
+	});
+};
 
 const makeActorAbortedError = () =>
 	new Rivetkit.RivetError("actor", "aborted", "Actor aborted", {

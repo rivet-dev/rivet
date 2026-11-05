@@ -415,6 +415,18 @@ impl Client {
 			{
 				"read_interrupted"
 			}
+			// A command that never creates its volume answers a missing volume with this error,
+			// and callers such as pegboard's index listings read it as an empty result. It is an
+			// answer, not a failure, so failure alerts on `error` do not count it.
+			Err(error)
+				if error
+					.downcast_ref::<rivet_error::RivetError>()
+					.is_some_and(|error| {
+						error.group() == "depot" && error.code() == "volume_not_found"
+					}) =>
+			{
+				"not_found"
+			}
 			Err(error) if retry_after_ms(error).is_some() => "overloaded",
 			Err(_) => "error",
 		};

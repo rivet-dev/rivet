@@ -210,6 +210,7 @@ The Effect SDK wraps the most common actor features with typed, schema-validated
 | Logging | `RivetLogger` | Typed |
 | Sleep request | `Actor.Sleep` | Typed |
 | Actor address (`actorId` / `name` / `key`) | `Actor.CurrentAddress` | Typed |
+| Caller connection (`id` / `scope`) | `connection` on the action request | Typed |
 | Registry serve / test / web handler | `Registry` | Typed |
 | [Events & broadcast](/actors/docs/events) | Not yet wrapped | `rawRivetkitContext.broadcast(...)` |
 | [Schedule](/actors/docs/schedule) | Not yet wrapped | `rawRivetkitContext.schedule.*` |
@@ -218,6 +219,32 @@ The Effect SDK wraps the most common actor features with typed, schema-validated
 | Queues, connections, vars, alarms | Not yet wrapped | `rawRivetkitContext.*` |
 | Lifecycle hooks (`onSleep` / `onDestroy`) | Not yet wrapped | `rawRivetkitContext.*` |
 | Raw HTTP / WebSocket handlers | Not yet wrapped | `rawRivetkitContext.*` |
+
+### Connection-Bound Resources
+
+Action handlers receive `connection`, an `Option` with the caller's connection `id` and `scope`. It is `None` for scheduled actions. The scope closes when the connection disconnects or the actor sleeps, so resources bound to it do not leak:
+
+```ts
+WatchChanges: ({ connection }) =>
+	Option.match(connection, {
+		onNone: () => Effect.die("WatchChanges needs a connection"),
+		onSome: ({ id, scope }) =>
+			Effect.acquireRelease(
+				Effect.sync(() => {
+					watches.add(id);
+				}),
+				() =>
+					Effect.sync(() => {
+						watches.delete(id);
+					}),
+			).pipe(Scope.provide(scope)),
+	}),
+```
+
+- Calls from `Actor.client` and other stateless calls use a connection that closes as soon as the action returns. To keep a resource open, call the action through a raw RivetKit client's `.connect()`.
+- Clients must register their resources again after a reconnect, because a reconnect creates a new connection with a new `id`.
+- The `id` is an address, not an identity. Do not use it for authorization.
+- Keep finalizers short. The disconnect hook that closes the scope times out after 5 seconds.
 
 ### Raw Escape Hatch
 

@@ -128,7 +128,7 @@ impl PubSub {
 			return Err(errors::DispatchRejected.build());
 		}
 		self.validate(subject, payload)?;
-		let mut operation = crate::metrics::Operation::new("request");
+		let mut operation = crate::metrics::Operation::new("request", class);
 		let timeout = timeout.min(self.inner.options.request_timeout);
 		let result = if worker == self.worker_id() {
 			self.local_request(class, subject, payload, timeout, may_dispatch, ticket)
@@ -156,7 +156,7 @@ impl PubSub {
 				_ => "other_error",
 			};
 			crate::metrics::OPERATIONS
-				.with_label_values(&["request_outcome", outcome])
+				.with_label_values(&["request_outcome", class.as_str(), outcome])
 				.inc();
 		}
 		result

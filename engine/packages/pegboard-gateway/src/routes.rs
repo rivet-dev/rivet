@@ -770,6 +770,8 @@ async fn proxy_to_v2(
 		Some(protocol) => ws.protocols([protocol]),
 		None => ws,
 	};
+	let clock = ctx.env().clock();
+	let keepalive_interval_ms = ctx.config().guard().websocket_keepalive_interval_ms();
 	let ctx = ctx.clone();
 	let decide_namespace = namespace.clone();
 	Ok(ws
@@ -801,7 +803,9 @@ async fn proxy_to_v2(
 					reason: reason.into(),
 				})
 			};
-			if let Err(error) = proxy::pump(socket, upstream, decide).await {
+			if let Err(error) =
+				proxy::pump(socket, upstream, decide, clock, keepalive_interval_ms).await
+			{
 				tracing::debug!(?error, "V2 WebSocket proxy stopped");
 			}
 		}))

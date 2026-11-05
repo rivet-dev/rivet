@@ -11,7 +11,8 @@ use rivet_env::capabilities::{
 	http::{ClientWebSocket, Request},
 	websocket::{CloseFrame, Message, WebSocket},
 };
-use std::time::Duration;
+use rivet_env::{Clock, ClockError};
+use std::{sync::Arc, time::Duration};
 
 /// How long a proxied request waits for V2's response headers. V2's gateway may wake the
 /// actor first, so this outlasts its own wake wait.
@@ -205,14 +206,19 @@ pub fn accepted_protocol(socket: &ClientWebSocket) -> Option<String> {
 		.map(ToOwned::to_owned)
 }
 
-/// Whichever socket made progress.
+/// Whichever socket made progress, or the keepalive interval.
 enum Input {
 	Client(Option<Result<Message, axum::Error>>),
 	Upstream(Option<Result<Message>>),
+	Keepalive(Result<u64, ClockError>),
 }
 
 /// Forwards frames both ways until either side closes. Each hop answers its own pings, so
 /// ping and pong frames are not forwarded.
+///
+/// This gateway pings the client every `keepalive_interval_ms` itself, as the actor tunnel
+/// does, because a proxy in front of it closes WebSockets that carry no frame for a while.
+/// V2's own pings only keep the hop between this gateway and V2 alive.
 ///
 /// When V2 closes because it does not hold the actor, `on_not_found` decides the client's
 /// close; `None` forwards V2's close as it is.
@@ -220,6 +226,8 @@ pub async fn pump<F, Fut>(
 	client: WebSocket,
 	upstream: ClientWebSocket,
 	on_not_found: F,
+	clock: Arc<dyn Clock>,
+	keepalive_interval_ms: u64,
 ) -> Result<()>
 where
 	F: FnOnce() -> Fut,
@@ -233,10 +241,16 @@ where
 	} = upstream;
 	let mut on_not_found = Some(on_not_found);
 
+	// The first tick completes at once and is skipped; the socket was just opened. Missed ticks
+	// are skipped too, so a connection that was busy for a while sends one ping, not a burst.
+	let mut keepalive = rivet_env::interval(clock, keepalive_interval_ms);
+	keepalive.tick().await.context("keepalive clock failed")?;
+
 	loop {
-		let input = rivet_env::select_biased!("V2 frames reach the client before more client input",
+		let input = rivet_env::select_biased!("V2 frames reach the client before more client input, and a keepalive ping never preempts either",
 			message = stream.next() => Input::Upstream(message),
 			message = client_stream.next() => Input::Client(message),
+			tick = keepalive.tick() => Input::Keepalive(tick),
 		);
 		match input {
 			Input::Upstream(Some(Ok(Message::Close(frame)))) => {
@@ -284,6 +298,16 @@ where
 			Input::Client(None) => {
 				let _ = sink.close().await;
 				return Ok(());
+			}
+			// A ping that cannot be sent means the client is gone, so V2 is closed too.
+			Input::Keepalive(tick) => {
+				tick.context("keepalive clock failed")?;
+				if let Err(error) =
+					crate::websocket_tunnel::send_keepalive_ping(&mut client_sink).await
+				{
+					let _ = sink.close().await;
+					return Err(error);
+				}
 			}
 		}
 	}

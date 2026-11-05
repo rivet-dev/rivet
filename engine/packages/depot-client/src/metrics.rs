@@ -38,7 +38,7 @@ lazy_static::lazy_static! {
 	).unwrap();
 
 	pub(crate) static ref COMMAND_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		HistogramOpts::new("depot_client_command_duration_seconds", "Typed command latency from submission to final reply, by result: ok, overloaded, read_interrupted, deadline or error.")
+		HistogramOpts::new("depot_client_command_duration_seconds", "Typed command latency from submission to final reply, by result: ok, not_found, overloaded, read_interrupted, deadline or error.")
 			.buckets(rivet_metrics::BUCKETS.to_vec()),
 		&["command", "result"],
 		*rivet_metrics::REGISTRY

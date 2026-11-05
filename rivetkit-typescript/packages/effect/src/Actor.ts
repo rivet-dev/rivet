@@ -3,6 +3,7 @@ import {
 	Effect,
 	identity,
 	Layer,
+	type Option,
 	Predicate,
 	type Record,
 	type Schema,
@@ -106,6 +107,27 @@ export class Sleep extends Context.Service<Sleep, Effect.Effect<void>>()(
 	"@rivetkit/effect/Actor/Sleep",
 ) {}
 
+/**
+ * The connection that made an action call. The server sets these values, so a
+ * client cannot forge them.
+ *
+ * The id is an address, not an identity. Clients can read their own id, so do
+ * not use it for authorization.
+ *
+ * Takes only `id` from RivetKit's `Conn`, because clients supply `params`.
+ */
+export type ActionConnection = Readonly<Pick<Rivetkit.AnyConn, "id">> & {
+	/**
+	 * Closes when the connection disconnects or the actor sleeps or is
+	 * destroyed. Bind per-connection resources to it. If the connection has
+	 * already closed, finalizers added to this scope run immediately.
+	 *
+	 * Stateless calls, including calls from `Actor.client`, use a connection
+	 * that closes as soon as the action returns.
+	 */
+	readonly scope: Scope.Scope;
+};
+
 export type ActionRequest<A extends Action.Any> =
 	A extends Action.Action<
 		infer Tag,
@@ -117,6 +139,8 @@ export type ActionRequest<A extends Action.Any> =
 				readonly _tag: Tag;
 				readonly action: A;
 				readonly payload: Payload["Type"];
+				/** `None` when the action was started by the actor's schedule. */
+				readonly connection: Option.Option<ActionConnection>;
 			}
 		: never;
 
@@ -569,6 +593,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		...(instanceManager.onStateChange
 			? { onStateChange: instanceManager.onStateChange }
 			: {}),
+		onDisconnect: instanceManager.onDisconnect,
 		onSleep: instanceManager.onTeardown,
 		onDestroy: instanceManager.onTeardown,
 	});
