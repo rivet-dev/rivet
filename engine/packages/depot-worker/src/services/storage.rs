@@ -32,6 +32,8 @@ use tokio::sync::{oneshot, watch};
 use universalpubsub::{PubSub, SubjectCapacities};
 
 pub struct StorageDependencies {
+	/// Rollout readiness, published only after current maintainers observe recovered replicas.
+	pub readiness: Option<super::readiness::Readiness>,
 	pub fork_peer: Option<Arc<dyn crate::tablet_maintainer_machine::runner::ForkPeer>>,
 	pub base_reader: Option<Arc<dyn crate::filesystem::base::BaseChunkReader>>,
 	pub commands: Arc<crate::command::CommandRegistry>,
@@ -287,6 +289,7 @@ async fn run(
 			.with_balancing(Some(balancing_settings(
 				&settings.balancing,
 				&deps.topology.config().lease,
+				settings.zone.is_some(),
 			)?))
 			.with_balancing_enabled(balancing_enabled_updates)
 			.with_learning_deadline_ms(settings.learning_deadline_ms())
@@ -488,6 +491,21 @@ async fn run(
 	);
 	let mut services: FuturesUnordered<BoxFuture<'static, (&'static str, Result<()>)>> =
 		FuturesUnordered::new();
+	if let Some(readiness) = deps.readiness {
+		let ready = super::readiness::run(
+			readiness,
+			deps.pubsub.clone(),
+			deps.topology.clone(),
+			deps.object_store.clone(),
+			shard.snapshot.clone(),
+			view.clone(),
+			volume_capacities,
+			// This is the same full-volume barrier as a stop check, not a short RPC.
+			Duration::from_millis(settings.stop_timeout_ms()),
+			stopping.clone(),
+		);
+		services.push(async move { ("storage readiness", ready.await) }.boxed());
+	}
 	// The log request loop is one serial task for the whole shard: decode, submit and reply.
 	let log = rivet_metrics::monitor_task(
 		"log_shard_service",
@@ -618,6 +636,7 @@ impl SingletonServices for StorageSingletons {
 fn balancing_settings(
 	config: &rivet_config::config::TabletBalancingConfig,
 	lease: &rivet_topology::config::LeaseTiming,
+	zone_configured: bool,
 ) -> Result<crate::tablet_coordinator_machine::state::balancing::Settings> {
 	let listed_after_death_ms = lease
 		.ttl_ms
@@ -629,6 +648,7 @@ fn balancing_settings(
 	);
 	Ok(
 		crate::tablet_coordinator_machine::state::balancing::Settings {
+			require_zone_labels: zone_configured,
 			tablets_per_core: config.tablets_per_core,
 			destination_stability_ms: config.destination_stability_ms,
 			missing_worker_ms: config.missing_worker_ms,

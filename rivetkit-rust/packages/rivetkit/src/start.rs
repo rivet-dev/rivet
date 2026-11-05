@@ -212,6 +212,10 @@ pub async fn run_actor<A: Actor>(start: Start<A>) -> Result<()> {
 			Some(state) => state,
 			// Absent input falls back to the input type's default, matching
 			// rivetkit-typescript where createState receives undefined input.
+			#[allow(
+				deprecated,
+				reason = "the runtime keeps serving actor state until it is removed"
+			)]
 			None => A::create_state(&ctx, input.decode_or_default()?).await?,
 		};
 		ctx.set_initial_state(state);
@@ -469,8 +473,16 @@ async fn handle_actor_event<A: Actor>(
 					.clone()
 					.on_before_connect(ctx.clone(), &params)
 					.await?;
+				#[allow(
+					deprecated,
+					reason = "the runtime keeps serving connection state until it is removed"
+				)]
 				let conn_state = actor.clone().create_conn_state(ctx.clone(), params).await?;
 				let conn = ConnCtx::from(conn);
+				#[allow(
+					deprecated,
+					reason = "the runtime keeps serving connection state until it is removed"
+				)]
 				conn.set_state(&conn_state)?;
 				actor.on_connect(ctx, conn).await
 			}
@@ -497,6 +509,10 @@ async fn handle_actor_event<A: Actor>(
 		ActorEvent::SerializeState { reply, .. } => {
 			let result = async {
 				if ctx.state_dirty() {
+					#[allow(
+						deprecated,
+						reason = "the runtime keeps serving actor state until it is removed"
+					)]
 					actor.on_state_change(ctx.clone()).await?;
 				}
 				let delta = ctx.encode_state_delta()?;

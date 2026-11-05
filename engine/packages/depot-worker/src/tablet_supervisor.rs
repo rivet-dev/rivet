@@ -2021,6 +2021,45 @@ impl TabletSupervisor {
 	}
 
 	/// Opening instances reply from their pure core; obsolete grants never supply evidence.
+	pub fn replica_readiness(
+		&self,
+		request: rivet_data::generated::depot_replica_readiness_v1::ReplicaReadiness,
+	) -> Result<
+		(
+			VolumeReplyAuthority,
+			oneshot::Receiver<
+				rivet_data::generated::depot_storage_worker_protocol_v1::StopReadinessResponse,
+			>,
+		),
+		rivet_data::generated::depot_storage_worker_protocol_v1::StopReadinessResponse,
+	> {
+		use rivet_data::generated::depot_storage_worker_protocol_v1::StopReadinessResponse as Response;
+		let Some(running) = self.running.get(&request.tablet_id) else {
+			self.routing_miss();
+			return Err(Response::NotServing);
+		};
+		if running.tablet.tablet_grant_epoch != request.tablet_grant_epoch
+			|| running.tablet.replica_set.tablet_replica_set_version
+				!= request.tablet_replica_set_version
+		{
+			self.routing_miss();
+			return Err(Response::NotServing);
+		}
+		let authority = VolumeReplyAuthority {
+			snapshot: running.maintainer.snapshot.clone(),
+			grant: TabletGrant {
+				tablet_id: request.tablet_id,
+				tablet_grant_epoch: request.tablet_grant_epoch,
+			},
+			authority: running.authority.clone(),
+		};
+		if !authority.may_reply() {
+			return Err(Response::NotServing);
+		}
+		Ok((authority, running.maintainer.replica_readiness(request)?))
+	}
+
+	/// Opening instances reply from their pure core; obsolete grants never supply evidence.
 	pub fn stop_readiness(
 		&self,
 		request: rivet_data::generated::depot_storage_worker_protocol_v1::StopReadiness,

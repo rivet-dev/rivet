@@ -143,7 +143,7 @@ impl Provisioning {
 			ctx: ctx.clone(),
 			requests: depot_command::coordinator_requests(ctx)?,
 			disks: depot_command::storage_disks(ctx, vec![worker]).await?,
-			planned: provision::plan(tablets, 1)?,
+			planned: provision::plan(tablets, &[ctx.config().depot().zone.as_deref()])?,
 			intent,
 		}))
 	}

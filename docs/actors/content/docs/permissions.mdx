@@ -5,7 +5,7 @@ description: "Identify callers when they connect to a Rivet Actor, then authoriz
 skill: true
 ---
 
-Permissions are enforced inside your actor, on a caller that has already reached it. This is the only layer that can see `c.state`, `c.key`, and action arguments, so every domain rule lives here.
+Permissions are enforced inside your actor, on a caller that has already reached it. This is the only layer that can see the actor's own data, `c.key`, and action arguments, so every domain rule lives here.
 
 The layer above it decides which actor a client may reach at all. See [Authentication](/docs/authentication) for that, and [JWTs](/docs/jwt) to scope a client to a single actor before it ever gets here.
 
@@ -39,7 +39,7 @@ ActorError: Admins only
 
 ## Identifying the Caller
 
-Two hooks run before a connection is usable. Both can be async, and throwing from either rejects the connection.
+`onBeforeConnect` runs before a connection is usable. It can be async, and throwing from it rejects the connection.
 
 ### `onBeforeConnect`
 
@@ -47,22 +47,15 @@ Use it for pass or fail validation when you do not need the result later.
 
 <CodeSnippet file="examples/docs/actors-permissions/on-before-connect.ts" />
 
-### `createConnState`
-
-Use it when actions need to know who is calling. The returned object becomes `c.conn.state`. See [Connections](/actors/docs/connections) for the full lifecycle.
-
-<CodeSnippet file="examples/docs/actors-permissions/create-conn-state.ts" />
-
 ### Available Data
 
-Both hooks can read:
+`onBeforeConnect` can read:
 
 | Property | Description |
 | --- | --- |
 | `params` | Data the client passed when connecting. See [connection params](/actors/docs/connections#extracting-data-from-connection-params). |
 | `c.request` | The underlying HTTP request. |
 | `c.request.headers` | Request headers. Not available for `.connect()`. |
-| `c.state` | Actor state, for authorization decisions. See [state](/actors/docs/state). |
 | `c.key` | The actor's key. See [keys](/actors/docs/keys). |
 
 Prefer `params` over `c.request.headers`. It works for both HTTP and WebSocket connections, while headers do not.
@@ -90,7 +83,7 @@ Rejections surface through the normal error system. See [errors](/actors/docs/er
 
 Authorization is explicit per surface. Nothing is checked implicitly.
 
-- `onBeforeConnect` and `createConnState` reject unauthenticated connections.
+- `onBeforeConnect` rejects unauthenticated connections.
 - Action handlers enforce per-action rules.
 - `queues.<name>.canPublish` allows or denies an inbound queue publish.
 - `events.<name>.canSubscribe` allows or denies an event subscription.
@@ -137,7 +130,7 @@ Track attempts in `c.vars` and reject callers that exceed a limit.
 
 <CodeSnippet file="examples/docs/actors-permissions/rate-limiting.ts" />
 
-These counters are [ephemeral](/actors/docs/state#ephemeral-variables). Use `state` instead of `vars` to persist them.
+These counters are [ephemeral](/actors/docs/state#ephemeral-state). Use `state` instead of `vars` to persist them.
 
 ### Caching Validated Tokens
 

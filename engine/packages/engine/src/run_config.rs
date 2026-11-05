@@ -112,6 +112,7 @@ fn storage_service(
 				pegboard_v2_migrator::commands::register(&mut commands)?;
 
 				let deps = depot_worker::services::storage::StorageDependencies {
+					readiness: Some(ctx.storage_readiness().clone()),
 					fork_peer: Some(Arc::new(crate::depot_peer::BaseReader(ctx.clone()))),
 					base_reader: Some(Arc::new(crate::depot_peer::BaseReader(ctx.clone()))),
 					commands: Arc::new(commands),

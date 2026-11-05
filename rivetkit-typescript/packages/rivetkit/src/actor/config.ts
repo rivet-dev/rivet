@@ -376,6 +376,7 @@ export interface Conn<
 > {
 	id: string;
 	params: TConnParams;
+	/** @deprecated Connection state is deprecated and will be removed in a future version. Track live connections in `c.vars` from `onConnect` and `onDisconnect`, and store durable per-connection data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state */
 	state: TConnState;
 	isHibernatable: boolean;
 	send(name: string, ...args: any[]): void;
@@ -398,6 +399,7 @@ export interface ActorContext<
 	[ACTOR_CONTEXT_INTERNAL_SYMBOL]?: unknown;
 	/** Returns the raw unwrapped state without the write-through proxy. */
 	[RAW_STATE_SYMBOL](): TState;
+	/** @deprecated Actor state is deprecated and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
 	state: TState;
 	vars: TVars;
 	/**
@@ -437,6 +439,7 @@ export interface ActorContext<
 	/** @deprecated No-op. Always returns `false`. Use `keepAwake(promise)` or `waitUntil(promise)` instead. Will be removed in 2.2.0. */
 	readonly preventSleep: boolean;
 	broadcast(name: string, ...args: any[]): void;
+	/** @deprecated Actor state is deprecated and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
 	saveState(opts?: { immediate?: boolean; maxWait?: number }): Promise<void>;
 	keepAwake<T>(promise: Promise<T>): Promise<T>;
 	waitUntil(promise: Promise<unknown>): void;
@@ -1295,6 +1298,7 @@ export type GlobalActorOptionsInput = z.input<typeof GlobalActorOptionsSchema>;
 const InstanceActorOptionsBaseSchema = z
 	.object({
 		createVarsTimeout: z.number().positive().default(5000),
+		/** @deprecated Connection state is deprecated and will be removed in a future version. Track live connections in `c.vars` from `onConnect` and `onDisconnect`, and store durable per-connection data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state */
 		createConnStateTimeout: z.number().positive().default(5000),
 		onBeforeConnectTimeout: z.number().positive().default(5000),
 		onConnectTimeout: z.number().positive().default(5000),
@@ -1307,6 +1311,7 @@ const InstanceActorOptionsBaseSchema = z
 		onDestroyTimeout: z.number().positive().optional(),
 		/** @deprecated `waitUntilTimeout` is folded into `sleepGracePeriod`, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0. */
 		waitUntilTimeout: z.number().positive().optional(),
+		/** @deprecated Actor state is deprecated and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
 		stateSaveInterval: z.number().positive().default(1_000),
 		actionTimeout: z.number().positive().default(60_000),
 		connectionLivenessTimeout: z.number().positive().default(2500),
@@ -1430,8 +1435,12 @@ type CreateState<
 	TEvents extends EventSchemaConfig,
 	TQueues extends QueueSchemaConfig,
 > =
-	| { state: TState }
 	| {
+			/** @deprecated Actor state is deprecated and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
+			state: TState;
+	  }
+	| {
+			/** @deprecated Actor state is deprecated and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
 			createState: (
 				c: CreateContext<TState, TInput, TDatabase, TEvents, TQueues>,
 				input: TInput,
@@ -1455,8 +1464,12 @@ type CreateConnState<
 	TEvents extends EventSchemaConfig,
 	TQueues extends QueueSchemaConfig,
 > =
-	| { connState: TConnState }
 	| {
+			/** @deprecated Connection state is deprecated and will be removed in a future version. Track live connections in `c.vars` from `onConnect` and `onDisconnect`, and store durable per-connection data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state */
+			connState: TConnState;
+	  }
+	| {
+			/** @deprecated Connection state is deprecated and will be removed in a future version. Track live connections in `c.vars` from `onConnect` and `onDisconnect`, and store durable per-connection data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state */
 			createConnState: (
 				c: CreateConnStateContext<
 					TState,
@@ -1732,6 +1745,7 @@ interface BaseActorConfig<
 	 * another onStateChange call, preventing infinite recursion.
 	 *
 	 * @param newState The updated state
+	 * @deprecated Actor state is deprecated and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state
 	 */
 	onStateChange?: (
 		c: StateChangeContext<

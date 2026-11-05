@@ -42,6 +42,7 @@ async fn serve(ctx: EngineContext, envoys: pegboard_envoy::Service) -> Result<()
 	let proxy_state = ProxyState::new(&ctx);
 	let start_waits = pegboard_gateway::start_waits(&ctx);
 	let router = Router::new()
+		.merge(readiness_router(ctx.clone()))
 		.route(
 			"/health",
 			get(|| async {
@@ -110,6 +111,24 @@ async fn serve(ctx: EngineContext, envoys: pegboard_envoy::Service) -> Result<()
 	tracing::info!("guard shutdown complete");
 
 	Ok(())
+}
+
+/// Keep liveness independent of replica catch-up: recovery must not cause kubelet restarts.
+fn readiness_router(ctx: EngineContext) -> Router {
+	Router::new().route(
+		"/ready",
+		get(move || {
+			let ctx = ctx.clone();
+			async move {
+				let (status, state) = if ctx.is_ready() {
+					(hyper::StatusCode::OK, "ok")
+				} else {
+					(hyper::StatusCode::SERVICE_UNAVAILABLE, "not_ready")
+				};
+				(status, Json(serde_json::json!({"status": state})))
+			}
+		}),
+	)
 }
 
 // Helper function to process regular connections

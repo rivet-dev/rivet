@@ -253,6 +253,10 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 				request_id,
 				request,
 			}) => state::stop::admit(state, request_id, request, effects),
+			RuntimeEvent::Input(MaintainerEvent::ReplicaReadinessRequest {
+				request_id,
+				request,
+			}) => state::startup::admit(state, request_id, request, effects),
 			RuntimeEvent::Input(MaintainerEvent::HandoffReadinessRequest {
 				request_id,
 				request,

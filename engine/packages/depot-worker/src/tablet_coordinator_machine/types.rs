@@ -100,6 +100,8 @@ pub enum Timer {
 /// A bounded-lifetime Active storage discovery observation, captured by the executor.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StopTopology {
+	/// Known labels only; an absent entry is an unknown failure domain.
+	pub zones: std::collections::BTreeMap<[u8; 16], String>,
 	pub workers: std::collections::BTreeMap<[u8; 16], [u8; 16]>,
 	pub capacities: std::collections::BTreeMap<[u8; 16], u32>,
 	/// Each worker's advertised per-family version ranges, fixed for its process.

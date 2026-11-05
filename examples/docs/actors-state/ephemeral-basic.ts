@@ -1,16 +1,14 @@
 import { actor } from "rivetkit";
 
 const counter = actor({
-  state: { count: 0 },
-
   // Constant ephemeral value, reset each time the actor starts
-  vars: { lastAccessedAt: 0 },
+  vars: { count: 0, lastAccessedAt: 0 },
 
   actions: {
     increment: (c) => {
-      // Read and write the ephemeral var
+      // Read and write the ephemeral vars
       c.vars.lastAccessedAt = Date.now();
-      return ++c.state.count;
+      return ++c.vars.count;
     },
 
     getLastAccessed: (c) => c.vars.lastAccessedAt

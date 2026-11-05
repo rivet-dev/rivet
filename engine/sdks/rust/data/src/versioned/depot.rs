@@ -1,6 +1,16 @@
 //! Version envelopes for Depot records and messages. Log batches use the folder
 //! format version instead and are framed by the log shard codec.
 
+/// A replica catch-up barrier, separate from process stop intent.
+pub enum DepotReplicaReadinessData {
+	V1(crate::generated::depot_replica_readiness_v1::ReplicaReadiness),
+}
+
+impl_versioned_v1!(
+	DepotReplicaReadinessData,
+	crate::generated::depot_replica_readiness_v1::ReplicaReadiness
+);
+
 /// Versioned checkpoint of replica states and tablet grant epochs, without entries.
 /// Recovery replays batches above its boundary, bounding restart work. Covered state,
 /// forget and grant frames no longer pin old segments. Independent of the cold store.

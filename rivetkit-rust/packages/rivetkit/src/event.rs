@@ -719,6 +719,10 @@ impl<A: Actor> ConnOpen<A> {
 	}
 
 	pub fn accept(mut self, state: A::ConnState) {
+		#[allow(
+			deprecated,
+			reason = "the runtime keeps serving actor state until it is removed"
+		)]
 		let result = self.conn.set_state(&state);
 		if let Some(reply) = self.reply.take() {
 			reply.send(result);

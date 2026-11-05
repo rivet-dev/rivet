@@ -65,6 +65,9 @@ pub trait Actor: Send + Sync + Sized + 'static {
 		HttpCallbackAdmission::Untracked
 	}
 
+	#[deprecated(
+		note = "actor state is deprecated and will be removed in a future version. Store durable data in SQLite and ephemeral data in actor struct fields. See https://rivet.dev/actors/docs/deprecated/state"
+	)]
 	async fn create_state(_ctx: &Ctx<Self>, _input: Self::Input) -> Result<Self::State> {
 		bail!(
 			"{}",
@@ -97,10 +100,16 @@ pub trait Actor: Send + Sync + Sized + 'static {
 		Ok(())
 	}
 
+	#[deprecated(
+		note = "actor state is deprecated and will be removed in a future version. Store durable data in SQLite and ephemeral data in actor struct fields. See https://rivet.dev/actors/docs/deprecated/state"
+	)]
 	async fn on_state_change(self: Arc<Self>, _ctx: Ctx<Self>) -> Result<()> {
 		Ok(())
 	}
 
+	#[deprecated(
+		note = "connection state is deprecated and will be removed in a future version. Track live connections in actor struct fields and store durable data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state"
+	)]
 	async fn create_conn_state(
 		self: Arc<Self>,
 		_ctx: Ctx<Self>,

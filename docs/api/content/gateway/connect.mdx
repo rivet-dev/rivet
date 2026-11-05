@@ -14,7 +14,7 @@ Connection options travel as WebSocket subprotocols in the `Sec-WebSocket-Protoc
 | `rivet` | Required. Lets servers that insist on a matching protocol accept the upgrade. |
 | `rivet_encoding.json` | Message encoding. `json` is the default and is documented here. The RivetKit client uses `cbor` or `bare`; the payloads are the same, only the framing differs. |
 | `rivet_token.{token}` | Token to authenticate with. See [WebSocket Requests](/docs/api/authentication#websocket-requests). |
-| `rivet_conn_params.{params}` | Optional connection parameters passed to the actor's `createConnState` and `onBeforeConnect` hooks, as URL-encoded JSON. |
+| `rivet_conn_params.{params}` | Optional connection parameters passed to the actor's `onBeforeConnect` hook and available as `conn.params`, as URL-encoded JSON. |
 | `rivet_skip_ready_wait` | Complete the upgrade as soon as the actor is resolved instead of waiting for it to be ready. |
 
 Every message in both directions is a JSON object of the form `{ "body": { "tag": "<Message>", "val": { ... } } }`. The server sends `Init` first; nothing else arrives before it. There is no ping or heartbeat message. Rely on WebSocket ping frames or your own timeout to detect a dead connection.
@@ -60,7 +60,7 @@ After the upgrade completes, the server sends `Init` before any other message. S
 
 Send an `ActionRequest` with a client-chosen `id`. The server answers with an `ActionResponse` carrying the same `id`, or with an [`Error`](#errors) whose `actionId` matches. Requests may be pipelined; responses are not guaranteed to arrive in order, so match on `id` rather than position.
 
-This is the connection equivalent of [Call Action](/docs/api/gateway/call-action) over HTTP. Actions called on a connection can also read connection state set in `createConnState`.
+This is the connection equivalent of [Call Action](/docs/api/gateway/call-action) over HTTP.
 
 <CodeGroup>
 

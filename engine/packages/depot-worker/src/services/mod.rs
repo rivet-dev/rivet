@@ -12,6 +12,8 @@ pub mod heartbeat_gc;
 
 pub mod storage;
 
+pub mod readiness;
+
 mod stop_readiness;
 
 pub mod stopping;

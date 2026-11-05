@@ -26,8 +26,7 @@
 						{
 							"title": "Rust",
 							"href": "/actors/docs/quickstart/rust",
-							"icon": "faRust",
-							"badge": "Beta"
+							"icon": "faRust"
 						},
 						{
 							"title": "Effect.ts",
@@ -272,6 +271,16 @@
 						{
 							"title": "WASM vs Native SDK",
 							"href": "/actors/docs/wasm-vs-native-sdk"
+						}
+					]
+				},
+				{
+					"title": "Deprecated",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "State",
+							"href": "/actors/docs/deprecated/state"
 						}
 					]
 				}

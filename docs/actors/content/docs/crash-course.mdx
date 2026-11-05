@@ -68,7 +68,7 @@ Don't build keys with string interpolation like `"org:${userId}"` when `userId` 
 
 ### Input
 
-Pass initialization data when creating actors. Input is only available in `createState` and `onCreate`, so store it in state if you need it later.
+Pass initialization data when creating actors. Input is only available in `onCreate`, so store it in SQLite if you need it later.
 
 <CodeSnippet file="examples/docs/actors-crash-course/input.ts" />
 
@@ -110,7 +110,7 @@ Events enable real-time communication from actors to connected clients.
 
 ### Connections
 
-Access the current connection via `c.conn` or all connected clients via `c.conns`. Use `c.conn.id` or `c.conn.state` to securely identify who is calling an action. `c.conn` is only available for actions invoked through a connected client; stateless actor-handle calls run without a connection, so guard against that. Connection state is initialized via `connState` or `createConnState`, which receives parameters passed by the client on connect.
+Access the current connection via `c.conn` or all connected clients via `c.conns`. Use `c.conn.id` to securely identify who is calling an action. `c.conn` is only available for actions invoked through a connected client; stateless actor-handle calls run without a connection, so guard against that. Connection state is initialized via `connState` or `createConnState`, which receives parameters passed by the client on connect.
 
 <Tabs>
 <Tab title="Static Connection Initial State">
@@ -273,8 +273,8 @@ Use this pattern for long-lived, durable workflows that initialize resources, pr
 
 ### Authentication, Security, & CORS
 
-- Validate credentials in `onBeforeConnect` or `createConnState` and throw an error to reject unauthorized connections.
-- Use `c.conn.state` to securely identify users in actions rather than trusting action parameters.
+- Validate credentials in `onBeforeConnect` and throw an error to reject unauthorized connections.
+- Identify users in actions by `c.conn.id` and the identity verified when they connected, rather than trusting action parameters.
 - For cross-origin access, validate the request origin in `onBeforeConnect`.
 
 [Authentication Documentation](/actors/docs/permissions) · [CORS Documentation](/actors/docs/cors)

@@ -27,8 +27,8 @@ actor, not before shipping it.
 
 ### State
 
-- **Verify `c.state` does not grow unbounded.** Avoid using arrays or objects that grow over time in state. Use [SQLite](/actors/docs/sqlite) for unbounded or append-heavy data instead.
-- **Use input parameters and `createState` for actor initialization.** See [Input Parameters](/actors/docs/input).
+- **Verify `c.vars` does not grow unbounded.** Load only what you need into memory. Use [SQLite](/actors/docs/sqlite) for unbounded or append-heavy data instead.
+- **Use input parameters and `onCreate` for actor initialization.** See [Input Parameters](/actors/docs/input).
 
 ### Events
 
@@ -52,7 +52,7 @@ actor, not before shipping it.
 
 ### Authentication
 
-- **Validate connections in `createConnState` or `onBeforeConnect`.** Do not trust client input without validation. See [Permissions](/actors/docs/permissions).
+- **Validate connections in `onBeforeConnect`.** Do not trust client input without validation. See [Permissions](/actors/docs/permissions).
 
 ### CORS
 
@@ -65,7 +65,7 @@ actor, not before shipping it.
 
 ### Access Control
 
-Access control is only needed if you want granular permissions for different clients. For most use cases, basic authentication in `onBeforeConnect` or `createConnState` is sufficient.
+Access control is only needed if you want granular permissions for different clients. For most use cases, basic authentication in `onBeforeConnect` is sufficient.
 
 - **Use deny-by-default rules.** Reject unknown roles in `onBeforeConnect`, action handlers, `canPublish`, and `canSubscribe`. See [Permissions](/actors/docs/permissions).
 - **Authorize actions explicitly.** Check the caller's role in each action handler and throw `forbidden` for unauthorized access.

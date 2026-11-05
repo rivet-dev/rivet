@@ -868,6 +868,7 @@ pub(crate) fn event_scope(
 		RuntimeEvent::Input(Input::OpenVolumeRequest(_)) => UnloadScope::None,
 		RuntimeEvent::Input(Input::AssignmentUpdated { .. }) => UnloadScope::All,
 		RuntimeEvent::Input(Input::StopReadinessRequest { .. })
+		| RuntimeEvent::Input(Input::ReplicaReadinessRequest { .. })
 		| RuntimeEvent::Input(Input::ManifestObserved { .. })
 		| RuntimeEvent::Input(Input::HandoffReadinessRequest { .. })
 		| RuntimeEvent::Input(Input::MaterializeResponse { .. })

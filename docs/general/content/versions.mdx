@@ -37,23 +37,6 @@ For actors using [raw SQLite](/actors/docs/sqlite), use `migrations` to apply nu
 
 <CodeSnippet file="examples/docs/actors-versions/sqlite-migrate.ts" />
 
-### In-memory state (`c.state`)
-
-If you use `c.state` for persistence, you are responsible for handling schema changes yourself. If you add, remove, or rename fields between versions, your code must handle the old shape gracefully.
-
-**Manual defaults in `onWake`**
-
-Apply defaults for missing fields:
-
-<CodeSnippet file="examples/docs/actors-versions/onwake-defaults.ts" />
-
-**Zod schema coercion**
-
-Use [Zod](https://zod.dev/) to parse persisted state on wake. Zod's `.default()` fills in missing fields automatically, so old actor state is coerced to the current schema:
-
-<CodeSnippet file="examples/docs/actors-versions/zod-coercion.ts" />
-
-For anything beyond simple defaults, consider moving to [SQLite](/actors/docs/sqlite) where you get proper migration tooling.
 
 ## Stopping a node
 

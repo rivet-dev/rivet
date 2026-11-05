@@ -34,6 +34,7 @@ pub(crate) struct EngineContextInner {
 	background_started: AtomicBool,
 	known_namespaces: std::sync::RwLock<std::collections::HashSet<String>>,
 	ingress: crate::ingress::IngressDrain,
+	storage_readiness: depot_worker::services::readiness::Readiness,
 	pub(crate) ups: Option<UpsPool>,
 	pub(crate) object_stores: ObjectStores,
 	pub(crate) depot: DepotPool,
@@ -148,6 +149,7 @@ impl EngineContext {
 				background_started: AtomicBool::new(false),
 				known_namespaces: Default::default(),
 				ingress: Default::default(),
+				storage_readiness: Default::default(),
 				ups: Some(ups),
 				object_stores,
 				depot,
@@ -224,6 +226,40 @@ impl EngineContext {
 	/// Own accepted ingress until its HTTP bodies and runner connections finish.
 	pub fn ingress(&self) -> &crate::ingress::IngressDrain {
 		&self.0.ingress
+	}
+
+	/// Storage owns publication; HTTP readiness also checks the current topology lease.
+	pub fn storage_readiness(&self) -> &depot_worker::services::readiness::Readiness {
+		&self.0.storage_readiness
+	}
+
+	/// Readiness follows this process's selected role and is revoked from the first
+	/// shutdown request, even while storage remains available for a graceful drain.
+	pub fn is_ready(&self) -> bool {
+		if self.shutdown().is_requested() {
+			return false;
+		}
+		let topology = self.topology();
+		let std::result::Result::Ok(snapshot) = topology.snapshot() else {
+			return false;
+		};
+		let std::result::Result::Ok(now) = self.env().clock().observe() else {
+			return false;
+		};
+		if !snapshot.may_admit(now.boot_ms) {
+			return false;
+		}
+		match snapshot
+			.worker_registration
+			.as_ref()
+			.map(|registration| registration.role)
+		{
+			Some(rivet_topology::worker::WorkerRole::Storage) => {
+				self.storage_readiness().is_ready()
+			}
+			Some(rivet_topology::worker::WorkerRole::Stateless) => true,
+			None => false,
+		}
 	}
 
 	pub fn shutdown(&self) -> rivet_env::capabilities::shutdown::Shutdown {

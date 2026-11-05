@@ -33,7 +33,7 @@ These limits affect actions that use `.connect()` and [low-level WebSockets](/ac
 | Max incoming message size | 64 KiB | 32 MiB | Maximum size of incoming WebSocket messages. Soft limit configurable via `maxIncomingMessageSize`. |
 | Max outgoing message size | 1 MiB | 32 MiB | Maximum size of outgoing WebSocket messages. Soft limit configurable via `maxOutgoingMessageSize`. |
 | Max WebSocket frame size | N/A | 32 MiB | Maximum size of a single WebSocket frame accepted by Rivet's transport edge. This is not configurable by browser clients and is not negotiated during the WebSocket handshake. |
-| WebSocket open timeout | N/A | 15 seconds | Time allowed for WebSocket connection to be established, including `onBeforeConnect` and `createConnState` hooks. Connection is closed if exceeded. |
+| WebSocket open timeout | N/A | 15 seconds | Time allowed for WebSocket connection to be established, including the `onBeforeConnect` hook. Connection is closed if exceeded. |
 | Message ack timeout | N/A | 30 seconds | Time allowed for message acknowledgment before connection is closed. Only relevant in the case of a network issue and does not affect your application. |
 
 WebSocket connections close when the actor sleeps. Clients reconnect, which wakes the actor.
@@ -142,12 +142,10 @@ When a Rivet Actor starts, RivetKit loads some of its own data in the same step 
 | Raw HTTP stream idle timeout | N/A | None by default | Rivet does not close a stream for producing no chunks. Other proxies may, so send SSE heartbeats. |
 | On before connect timeout | 5 seconds | N/A | Timeout for the `onBeforeConnect` hook. Configurable via `onBeforeConnectTimeout`. |
 | Create vars timeout | 5 seconds | N/A | Timeout for `createVars` hook. Configurable via `createVarsTimeout`. |
-| Create conn state timeout | 5 seconds | N/A | Timeout for `createConnState` hook. Configurable via `createConnStateTimeout`. |
 | On connect timeout | 5 seconds | N/A | Timeout for `onConnect` hook. Configurable via `onConnectTimeout`. |
 | On migrate timeout | 30 seconds | N/A | Timeout for `onMigrate` hook. Configurable via `onMigrateTimeout`. |
 | Sleep grace period | 15 seconds | N/A | Total graceful shutdown budget for both sleep and destroy. Covers `onSleep`/`onDestroy`, run handler shutdown, `waitUntil`, `keepAwake`, async raw WebSocket handlers, and connection cleanup. Configurable via `sleepGracePeriod`. |
 | Sleep timeout | 30 seconds | N/A | Time of inactivity before actor hibernates. Configurable via `sleepTimeout`. |
-| State save interval | 1 second | N/A | Interval between automatic state saves. Configurable via `stateSaveInterval`. |
 | Connection liveness timeout | 2.5 seconds | N/A | Time a stateful connection can miss liveness checks before RivetKit treats it as unhealthy. Configurable via `connectionLivenessTimeout`. |
 | Connection liveness interval | 5 seconds | N/A | Interval between stateful connection liveness checks. Configurable via `connectionLivenessInterval`. |
 

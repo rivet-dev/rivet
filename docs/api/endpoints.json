@@ -67,7 +67,7 @@
         "rvt-key": "Actor key. Separate multi-part keys with commas.",
         "rvt-pool": "Pool to create the actor on when `rvt-method=getOrCreate`. RivetKit registers the `default` pool unless configured otherwise.",
         "rvt-runner": "Deprecated alias for `rvt-pool`.",
-        "rvt-input": "Base64url-encoded CBOR input passed to `createState` and `onCreate` when `rvt-method=getOrCreate` creates the actor.",
+        "rvt-input": "Base64url-encoded CBOR input passed to `onCreate` when `rvt-method=getOrCreate` creates the actor.",
         "rvt-region": "Preferred region when `rvt-method=getOrCreate` creates the actor.",
         "rvt-crash-policy": "Crash policy when `rvt-method=getOrCreate` creates the actor. RivetKit defaults to `sleep`.",
         "rvt-skip-ready-wait": "Return as soon as the actor is resolved instead of waiting for it to be ready.",
@@ -201,7 +201,7 @@
             "runner_name_selector": "Pool that runs the actor. RivetKit registers the `default` pool unless configured otherwise.",
             "crash_policy": "What happens when the actor crashes. RivetKit defaults to `sleep`.",
             "datacenter": "Datacenter to create the actor in. Defaults to the datacenter serving the request.",
-            "input": "Base64url-encoded CBOR input passed to the actor's `createState` and `onCreate` hooks."
+            "input": "Base64url-encoded CBOR input passed to the actor's `onCreate` hook."
           },
           "examples": {
             "query": {
@@ -230,7 +230,7 @@
             "runner_name_selector": "Pool that runs the actor. RivetKit registers the `default` pool unless configured otherwise.",
             "crash_policy": "What happens when the actor crashes. RivetKit defaults to `sleep`.",
             "datacenter": "Datacenter to create the actor in if it does not exist. Defaults to the datacenter serving the request.",
-            "input": "Base64url-encoded CBOR input passed to the actor's `createState` and `onCreate` hooks when the actor is created."
+            "input": "Base64url-encoded CBOR input passed to the actor's `onCreate` hook when the actor is created."
           },
           "examples": {
             "query": {
@@ -466,7 +466,7 @@
           "title": "Connect",
           "description": "Open a persistent WebSocket connection to an actor. One connection carries action calls, event subscriptions, and errors as JSON messages, which is what handle.connect() does in the RivetKit client.",
           "url": "wss://rivet.example.com/gateway/{actor}/connect",
-          "notes": "`{actor}` accepts the same forms as every gateway endpoint: an actor ID, `{actor_id}@{token}`, or an actor name with `rvt-*` query parameters. See [Actor Routing](/docs/api/actor-routing).\n\nConnection options travel as WebSocket subprotocols in the `Sec-WebSocket-Protocol` header because browsers cannot set arbitrary headers on an upgrade. Always include `rivet`, then add any of the prefixed entries below.\n\n| Subprotocol | Purpose |\n| --- | --- |\n| `rivet` | Required. Lets servers that insist on a matching protocol accept the upgrade. |\n| `rivet_encoding.json` | Message encoding. `json` is the default and is documented here. The RivetKit client uses `cbor` or `bare`; the payloads are the same, only the framing differs. |\n| `rivet_token.{token}` | Token to authenticate with. See [WebSocket Requests](/docs/api/authentication#websocket-requests). |\n| `rivet_conn_params.{params}` | Optional connection parameters passed to the actor's `createConnState` and `onBeforeConnect` hooks, as URL-encoded JSON. |\n| `rivet_skip_ready_wait` | Complete the upgrade as soon as the actor is resolved instead of waiting for it to be ready. |\n\nEvery message in both directions is a JSON object of the form `{ \"body\": { \"tag\": \"<Message>\", \"val\": { ... } } }`. The server sends `Init` first; nothing else arrives before it. There is no ping or heartbeat message. Rely on WebSocket ping frames or your own timeout to detect a dead connection.",
+          "notes": "`{actor}` accepts the same forms as every gateway endpoint: an actor ID, `{actor_id}@{token}`, or an actor name with `rvt-*` query parameters. See [Actor Routing](/docs/api/actor-routing).\n\nConnection options travel as WebSocket subprotocols in the `Sec-WebSocket-Protocol` header because browsers cannot set arbitrary headers on an upgrade. Always include `rivet`, then add any of the prefixed entries below.\n\n| Subprotocol | Purpose |\n| --- | --- |\n| `rivet` | Required. Lets servers that insist on a matching protocol accept the upgrade. |\n| `rivet_encoding.json` | Message encoding. `json` is the default and is documented here. The RivetKit client uses `cbor` or `bare`; the payloads are the same, only the framing differs. |\n| `rivet_token.{token}` | Token to authenticate with. See [WebSocket Requests](/docs/api/authentication#websocket-requests). |\n| `rivet_conn_params.{params}` | Optional connection parameters passed to the actor's `onBeforeConnect` hook and available as `conn.params`, as URL-encoded JSON. |\n| `rivet_skip_ready_wait` | Complete the upgrade as soon as the actor is resolved instead of waiting for it to be ready. |\n\nEvery message in both directions is a JSON object of the form `{ \"body\": { \"tag\": \"<Message>\", \"val\": { ... } } }`. The server sends `Init` first; nothing else arrives before it. There is no ping or heartbeat message. Rely on WebSocket ping frames or your own timeout to detect a dead connection.",
           "sections": [
             {
               "title": "Handshake",
@@ -487,7 +487,7 @@
             },
             {
               "title": "Actions",
-              "notes": "Send an `ActionRequest` with a client-chosen `id`. The server answers with an `ActionResponse` carrying the same `id`, or with an [`Error`](#errors) whose `actionId` matches. Requests may be pipelined; responses are not guaranteed to arrive in order, so match on `id` rather than position.\n\nThis is the connection equivalent of [Call Action](/docs/api/gateway/call-action) over HTTP. Actions called on a connection can also read connection state set in `createConnState`.",
+              "notes": "Send an `ActionRequest` with a client-chosen `id`. The server answers with an `ActionResponse` carrying the same `id`, or with an [`Error`](#errors) whose `actionId` matches. Requests may be pipelined; responses are not guaranteed to arrive in order, so match on `id` rather than position.\n\nThis is the connection equivalent of [Call Action](/docs/api/gateway/call-action) over HTTP.",
               "messages": [
                 "ActionRequest",
                 "ActionResponse"

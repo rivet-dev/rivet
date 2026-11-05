@@ -38,3 +38,4 @@
 41 sqlite.db_recent
 42 auth.jwt_rotation
 43 pegboard.v2_migrator
+44 depot.replica_readiness

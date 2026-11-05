@@ -215,6 +215,9 @@ impl<A: Actor> Ctx<A> {
 		ctx
 	}
 
+	#[deprecated(
+		note = "actor state is deprecated and will be removed in a future version. Store durable data in SQLite and ephemeral data in actor struct fields. See https://rivet.dev/actors/docs/deprecated/state"
+	)]
 	pub fn state(&self) -> StateRef<'_, A::State> {
 		StateRef {
 			guard: RwLockReadGuard::map(self.state.value.read(), |state| {
@@ -223,6 +226,9 @@ impl<A: Actor> Ctx<A> {
 		}
 	}
 
+	#[deprecated(
+		note = "actor state is deprecated and will be removed in a future version. Store durable data in SQLite and ephemeral data in actor struct fields. See https://rivet.dev/actors/docs/deprecated/state"
+	)]
 	pub fn state_mut(&self) -> StateMut<'_, A::State> {
 		self.state.dirty.store(true, Ordering::Release);
 		StateMut {
@@ -233,6 +239,9 @@ impl<A: Actor> Ctx<A> {
 		}
 	}
 
+	#[deprecated(
+		note = "actor state is deprecated and will be removed in a future version. Store durable data in SQLite and ephemeral data in actor struct fields. See https://rivet.dev/actors/docs/deprecated/state"
+	)]
 	pub fn set_state(&self, state: A::State) {
 		*self.state.value.write() = Some(state);
 		self.state.dirty.store(true, Ordering::Release);
@@ -254,7 +263,12 @@ impl<A: Actor> Ctx<A> {
 
 	pub fn encode_state_delta(&self) -> Result<StateDelta> {
 		let mut encoded = Vec::new();
-		ciborium::into_writer(&*self.state(), &mut encoded)
+		#[allow(
+			deprecated,
+			reason = "the runtime keeps serving actor state until it is removed"
+		)]
+		let state = self.state();
+		ciborium::into_writer(&*state, &mut encoded)
 			.context("encode actor state snapshot as cbor")?;
 		Ok(StateDelta::ActorState(encoded))
 	}
@@ -692,10 +706,16 @@ impl<A: Actor> ConnCtx<A> {
 		decode_cbor(&self.inner.params(), "connection params")
 	}
 
+	#[deprecated(
+		note = "connection state is deprecated and will be removed in a future version. Track live connections in actor struct fields and store durable data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state"
+	)]
 	pub fn state(&self) -> Result<A::ConnState> {
 		decode_cbor(&self.inner.state(), "connection state")
 	}
 
+	#[deprecated(
+		note = "connection state is deprecated and will be removed in a future version. Track live connections in actor struct fields and store durable data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state"
+	)]
 	pub fn set_state(&self, state: &A::ConnState) -> Result<()> {
 		self.inner
 			.set_state(encode_cbor(state, "connection state")?);

@@ -23,10 +23,8 @@ Each lifecycle hook and handler has a corresponding `*ContextOf` type, exported 
 
 | Hook / Handler | Context Type |
 |---|---|
-| `createState` | `CreateContextOf` |
 | `onCreate` | `CreateContextOf` |
 | `createVars` | `CreateVarsContextOf` |
-| `createConnState` | `CreateConnStateContextOf` |
 | `onBeforeConnect` | `BeforeConnectContextOf` |
 | `onConnect` | `ConnectContextOf` |
 | `onDisconnect` | `DisconnectContextOf` |
@@ -34,7 +32,6 @@ Each lifecycle hook and handler has a corresponding `*ContextOf` type, exported 
 | `onMigrate` | `MigrateContextOf` |
 | `onWake` | `WakeContextOf` |
 | `onSleep` | `SleepContextOf` |
-| `onStateChange` | `StateChangeContextOf` |
 | `onBeforeActionResponse` | `BeforeActionResponseContextOf` |
 | `actions.*` | `ActionContextOf` |
 | `run` | `RunContextOf` |

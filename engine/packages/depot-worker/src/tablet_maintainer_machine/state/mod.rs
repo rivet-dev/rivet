@@ -32,6 +32,7 @@ pub(crate) mod replica_creation;
 pub(crate) mod retired;
 pub(crate) mod signals;
 pub mod split;
+pub(crate) mod startup;
 pub(crate) mod stop;
 pub(crate) mod store;
 pub(crate) mod unload;

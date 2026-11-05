@@ -358,7 +358,19 @@ impl EphemeralStateMachine for TopologyStateMachine {
 			heartbeat_state: state.lease.heartbeat_state(),
 			storage_workers: state
 				.current_storage_entries()
-				.map(crate::heartbeat::Observation::worker)
+				.map(|entry| {
+					let mut worker = entry.worker();
+					// Our own configured label is known even when the heartbeat write
+					// floor is v1. Never project it onto another worker or incarnation.
+					if let Some(registration) = state.lease.worker_registration().filter(|r| {
+						r.role == worker.role
+							&& r.identity.worker_id == worker.id
+							&& r.identity.instance_id == worker.instance_id
+					}) {
+						worker.zone = registration.zone.clone().or(worker.zone);
+					}
+					worker
+				})
 				.collect(),
 			valid_until_boot_ms: state.discovery.valid_until_boot_ms,
 			store_clock: state.discovery.store_clock.clone(),

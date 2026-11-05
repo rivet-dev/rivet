@@ -82,6 +82,7 @@ pub mod ups {
 		(17, DATABASE_PREFETCH, "database-prefetch"),
 		(18, JWT_ROTATION, "jwt-rotation"),
 		(19, V2_MIGRATOR, "v2-migrator"),
+		(20, REPLICA_READINESS, "replica-readiness"),
 	}
 }
 

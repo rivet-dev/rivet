@@ -3402,6 +3402,22 @@ impl Maintainer {
 }
 
 impl Maintainer {
+	/// Fresh rounds bound the admission history; retries never add work or quiesce creates.
+	pub fn replica_readiness(
+		&self,
+		request: rivet_data::generated::depot_replica_readiness_v1::ReplicaReadiness,
+	) -> Result<
+		oneshot::Receiver<
+			rivet_data::generated::depot_storage_worker_protocol_v1::StopReadinessResponse,
+		>,
+		rivet_data::generated::depot_storage_worker_protocol_v1::StopReadinessResponse,
+	> {
+		self.submit_readiness(|request_id| MaintainerEvent::ReplicaReadinessRequest {
+			request_id,
+			request,
+		})
+	}
+
 	/// A check waits for a fresh bounded poll round; transport cancellation does not restart it.
 	pub fn stop_readiness(
 		&self,

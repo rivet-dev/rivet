@@ -194,7 +194,7 @@ Enable hibernation by setting `canHibernateWebSocket: true`. You can also pass a
 
 <CodeSnippet file="examples/docs/actors-websocket-handler/hibernation.ts" />
 
-Since `open` only fires once when the client first connects, use `c.conn.state` to store per-connection data that persists across sleep cycles. See [connections](/actors/docs/connections) for more details.
+Since `open` only fires once when the client first connects, store per-connection data in [SQLite](/actors/docs/sqlite), keyed by connection ID, so it persists across sleep cycles. See [connections](/actors/docs/connections) for more details.
 
 ### Accessing the Request
 

@@ -49,7 +49,7 @@ Content type: `application/json`.
 | --- | --- | --- | --- |
 | `name` | `string` | Yes | Name of the actor as registered in your RivetKit registry. |
 | `key` | `string \| null` | No | Key identifying this actor within its name. Multi-part keys are joined with `/`, see [Actor Keys](/docs/api/actor-keys). Omit for a keyless actor. |
-| `input` | `string \| null` | No | Base64url-encoded CBOR input passed to the actor's `createState` and `onCreate` hooks. |
+| `input` | `string \| null` | No | Base64url-encoded CBOR input passed to the actor's `onCreate` hook. |
 | `pool` | `string \| null` | No | Name of the node pool to run the actor in. Defaults to `default`. |
 
 ## Responses

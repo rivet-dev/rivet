@@ -24,6 +24,7 @@ enum RequestKind {
 	Volume,
 	Kv,
 	Stop,
+	Replica,
 }
 
 /// A volume request's message, the authority that admitted it, its response if the maintainer
@@ -198,6 +199,15 @@ async fn serve(
 	let mut readiness_requests = pubsub.subscribe_request(&readiness_subject)?;
 	let mut readiness_replies = FuturesUnordered::new();
 	let mut accepting_readiness = true;
+	let replica_subject =
+		depot_types::keys::pubsub::ReplicaReadinessSubject::new(pubsub.worker_id().clone());
+	let _replica_reservation = pubsub.reserve_request_subject(
+		&replica_subject,
+		universalpubsub::RequestClass::DepotStopReadiness,
+		capacities,
+	)?;
+	let mut replica_requests = pubsub.subscribe_request(&replica_subject)?;
+	let mut accepting_replicas = true;
 	let mut accepting = true;
 	let mut accepting_commands = true;
 	// Request and reply wakes cannot change what reconcile acts on: the manifest, leases,
@@ -209,6 +219,7 @@ async fn serve(
 			|| (!accepting
 				&& !accepting_commands
 				&& !accepting_readiness
+				&& !accepting_replicas
 				&& readiness_replies.is_empty()
 				&& replies.is_empty()
 				&& command_replies.is_empty())
@@ -276,12 +287,13 @@ async fn serve(
 					message = rivet_env::tokio::when(accepting, requests.next()) => (RequestKind::Volume, message),
 					message = rivet_env::tokio::when(accepting_commands, commands.next()) => (RequestKind::Kv, message),
 					message = rivet_env::tokio::when(accepting_readiness, readiness_requests.next()) => (RequestKind::Stop, message),
+					message = rivet_env::tokio::when(accepting_replicas, replica_requests.next()) => (RequestKind::Replica, message),
 				)
 			} => {
 				crate::metrics::record_tablet_loop_wake("request");
 				let (kind, message) = incoming;
 				let Some(message) = message? else {
-					match kind { RequestKind::Kv => accepting_commands = false, RequestKind::Volume => accepting = false, RequestKind::Stop => accepting_readiness = false }
+					match kind { RequestKind::Kv => accepting_commands = false, RequestKind::Volume => accepting = false, RequestKind::Stop => accepting_readiness = false, RequestKind::Replica => accepting_replicas = false }
 					continue;
 				};
 				if !topology.may_admit()? || message.is_request_expired()? {
@@ -292,6 +304,13 @@ async fn serve(
 					match super::stop_readiness::submit(topology, supervisor, message) {
 						Ok(reply) => readiness_replies.push(reply),
 						Err(error) => tracing::warn!(%error, "invalid stop readiness request"),
+					}
+					continue;
+				}
+				if matches!(kind, RequestKind::Replica) {
+					match super::stop_readiness::submit_replica(supervisor, message) {
+						Ok(reply) => readiness_replies.push(reply),
+						Err(_) => { /* Malformed probes supply no readiness evidence. */ }
 					}
 					continue;
 				}

@@ -9,6 +9,7 @@
 	},
 	"dependencies": {
 		"@durable-streams/client": "^0.2.6",
+		"cbor-x": "^1.6.0",
 		"rivetkit": "workspace:*",
 		"@rivetkit/react": "workspace:*",
 		"@rivetkit/engine-api-full": "workspace:*",

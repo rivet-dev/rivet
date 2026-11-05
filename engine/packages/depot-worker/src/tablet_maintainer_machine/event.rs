@@ -8,6 +8,22 @@ use serde::{Deserialize, Serialize};
 pub enum MaintainerEvent {
 	/// **When**
 	///
+	/// A live worker asks whether its replicas have caught up before reporting Ready.
+	///
+	/// **State**
+	///
+	/// Reserves a bounded fresh status barrier under the exact grant and disk assignment.
+	/// Does not quiesce creates or release client claims.
+	///
+	/// **Effects**
+	///
+	/// Polls replicas and replies through StopReadinessResponse; may drive cold recovery.
+	ReplicaReadinessRequest {
+		request_id: RequestId,
+		request: rivet_data::generated::depot_replica_readiness_v1::ReplicaReadiness,
+	},
+	/// **When**
+	///
 	/// The ordered store completes replay and its optional alarm projection.
 	///
 	/// **State**
@@ -972,6 +988,7 @@ pub enum MaintainerEvent {
 impl rivet_state_machine::EventBody for MaintainerEvent {
 	fn name(&self) -> &'static str {
 		match self {
+			Self::ReplicaReadinessRequest { .. } => "replica_readiness_request",
 			Self::FilesystemAlarmApplyResponse { .. } => "filesystem_apply_response",
 			Self::AlarmResponse { .. } => "alarm_response",
 			MaintainerEvent::StopReadinessRequest { .. } => "stop_readiness_request",

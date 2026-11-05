@@ -141,6 +141,7 @@ pub async fn lookup_worker(
 					return Ok(None);
 				}
 				let worker = Worker {
+					zone: entry.heartbeat.zone.as_deref().map(str::to_owned),
 					storage_capacity_millicores: entry.heartbeat.storage_capacity_millicores,
 					id: id.clone(),
 					role,

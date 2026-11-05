@@ -59,6 +59,7 @@ pub struct Observation {
 impl Observation {
 	pub(crate) fn worker(&self) -> crate::worker::Worker {
 		crate::worker::Worker {
+			zone: self.heartbeat.zone.as_deref().map(str::to_owned),
 			storage_capacity_millicores: self.heartbeat.storage_capacity_millicores,
 			id: self.worker_id.clone(),
 			instance_id: crate::worker::WorkerInstanceId::from_bytes(self.heartbeat.instance_id),

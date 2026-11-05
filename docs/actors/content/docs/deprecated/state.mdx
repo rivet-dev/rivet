@@ -1,0 +1,88 @@
+---
+title: "State"
+description: "Migrate actors off the deprecated c.state and c.conn.state APIs to SQLite and c.vars."
+---
+
+<Warning>
+`c.state` and `c.conn.state` are deprecated and will be removed in a future version. They still work today, so you can migrate at your own pace.
+</Warning>
+
+## What is deprecated
+
+Earlier versions of Rivet Actors stored durable data in two places that Rivet saved for you:
+
+- **Actor state** (`c.state`): a single serializable value defined with `state` or `createState`. Rivet wrote it to storage on a throttle and loaded it again on every start.
+- **Connection state** (`c.conn.state`): a value per connection defined with `connState` or `createConnState`.
+
+The related options `onStateChange`, `c.saveState()`, `stateSaveInterval` and `createConnStateTimeout` are deprecated with them. In Rust, `Ctx::state`, `Ctx::state_mut`, `Ctx::set_state`, `ConnCtx::state`, `ConnCtx::set_state`, `Actor::create_state`, `Actor::create_conn_state` and `Actor::on_state_change` are deprecated.
+
+<CodeSnippet file="examples/docs/actors-deprecated-state/before.ts" />
+
+Use these instead:
+
+- **Durable data** goes in [SQLite](/actors/docs/sqlite) (`c.db`).
+- **In-memory data** goes in [`c.vars`](/actors/docs/state#ephemeral-state). Load it from SQLite in `createVars` to serve reads from memory.
+- **Connection data** is tracked from `onConnect` and `onDisconnect`. See [Connection state](#connection-state).
+
+## Migrate actor state to SQLite
+
+Move existing data with a SQLite migration. It reads the old state once, writes it into your own tables, and from then on the actor only uses SQLite.
+
+1. Remove `state` or `createState` from the actor definition.
+2. Add a `db` with an `onMigrate` that creates your tables and copies the old state into them.
+3. Load the data into `c.vars` in `createVars` and write changes back to SQLite in your actions.
+
+<CodeGroup workspace>
+
+<CodeSnippet file="examples/docs/actors-deprecated-state/migrate.ts" title="actor.ts" />
+
+<CodeSnippet file="examples/docs/actors-deprecated-state/decode-legacy-state.ts" title="decode-legacy-state.ts" />
+
+</CodeGroup>
+
+`onMigrate` runs on every start inside a transaction, so make the copy idempotent. The example skips it once the new row exists. The decoder needs the `cbor-x` package:
+
+```sh
+npm install cbor-x
+```
+
+### Where the old state lives
+
+Actor state is stored in the actor's SQLite database in a table managed by Rivet. This table and its data will never be dropped, even after `c.state` is removed, so you can migrate out of it at any point:
+
+```sql
+CREATE TABLE _rivet_actor_state (
+    id    INTEGER PRIMARY KEY CHECK (id = 1),
+    state BLOB NOT NULL
+) STRICT
+```
+
+- There is at most one row, with `id = 1`. An actor that never had state may have no row or an empty blob.
+- `state` is the value of `c.state` encoded as [CBOR](https://cbor.io). `BigInt`, `Uint8Array`, `ArrayBuffer`, `Set` and `undefined` are stored as two-element arrays such as `["$BigInt", "42"]`. `decodeLegacyState` above turns them back into their original types.
+- Only read from `_rivet_*` tables. Do not write to or drop them; Rivet manages them.
+
+## Keep state in memory
+
+Most actors that used `c.state` want reads with no added latency. Keep that by loading from SQLite into `c.vars` once per start and writing through on each change:
+
+<CodeSnippet file="examples/docs/actors-state/sqlite-load-into-memory.ts" />
+
+`createVars` runs on every start, including after sleep, so the in-memory copy is always rebuilt from SQLite. Unlike `c.state`, a write is durable as soon as `c.db.execute` resolves. See [In-Memory State](/actors/docs/state) for more patterns.
+
+## Connection state
+
+Replace `connState` and `createConnState` with lifecycle hooks that key data by `conn.id`. Validate params in `onBeforeConnect` as before.
+
+### Regular connections
+
+A regular connection ends when the actor sleeps, so its data only needs to live in memory. Add it to `c.vars` in `onConnect` and remove it in `onDisconnect`:
+
+<CodeSnippet file="examples/docs/actors-deprecated-state/conn-vars.ts" />
+
+### Hibernatable WebSockets
+
+A [hibernatable WebSocket](/actors/docs/websocket-handler#websocket-hibernation) stays open while the actor sleeps, and `c.vars` is rebuilt when it wakes. Store data for these connections in SQLite so it survives, and delete it in `onDisconnect`:
+
+<CodeSnippet file="examples/docs/actors-deprecated-state/conn-sqlite.ts" />
+
+Hibernatable connection state is stored in the Rivet-managed `_rivet_conn_state` table, with `conn_id TEXT` as the key and the CBOR-encoded `state BLOB`. Migrate it in `onMigrate` with the same decoder if a connection must keep its data across the upgrade.

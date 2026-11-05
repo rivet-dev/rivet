@@ -28,11 +28,10 @@ Loading ──Start──▶ Ready ──spawn driver──▶ Started
 **On Create** (runs once per actor)
 
 1. `onMigrate`
-2. `createState`
-3. `onCreate`
-4. `createVars`
-5. `onWake`
-6. `run` (background, does not block)
+2. `onCreate`
+3. `createVars`
+4. `onWake`
+5. `run` (background, does not block)
 
 **On Destroy**
 
@@ -53,8 +52,7 @@ Loading ──Start──▶ Ready ──spawn driver──▶ Started
 **On Connect** (per client)
 
 1. `onBeforeConnect`
-2. `createConnState`
-3. `onConnect`
+2. `onConnect`
 
 **On Disconnect** (per client)
 
@@ -86,25 +84,19 @@ The `state` constant defines the initial state of the actor. See [state document
 
 ### `onMigrate`
 
-The `onMigrate` hook runs on every actor start, before `createState`, `onCreate`, `createVars`, and `onWake`. Can be async. It runs early so that database migrations are applied before any other lifecycle hook accesses the database. The second parameter is `true` when the actor is being created for the first time.
+The `onMigrate` hook runs on every actor start, before `onCreate`, `createVars`, and `onWake`. Can be async. It runs early so that database migrations are applied before any other lifecycle hook accesses the database. The second parameter is `true` when the actor is being created for the first time.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/on-migrate.ts" />
 
-### `createState`
-
-The `createState` function dynamically initializes state based on input. Called only once when the actor is first created. Can be async. See [state documentation](/actors/docs/state) for more information.
-
-<CodeSnippet file="examples/docs/actors-lifecycle/create-state.ts" />
-
 ### `vars`
 
-The `vars` constant defines ephemeral variables for the actor. These variables are not persisted and are useful for storing runtime-only data. The value for `vars` must be clonable via `structuredClone`. See [ephemeral variables documentation](/actors/docs/state#ephemeral-variables) for more information.
+The `vars` constant defines ephemeral variables for the actor. These variables are not persisted and are useful for storing runtime-only data. The value for `vars` must be clonable via `structuredClone`. See [ephemeral variables documentation](/actors/docs/state#ephemeral-state) for more information.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/vars.ts" />
 
 ### `createVars`
 
-The `createVars` function dynamically initializes ephemeral variables. Can be async. Use this when you need to initialize values at runtime. See [ephemeral variables documentation](/actors/docs/state#ephemeral-variables) for more information.
+The `createVars` function dynamically initializes ephemeral variables. Can be async. Use this when you need to initialize values at runtime. See [ephemeral variables documentation](/actors/docs/state#ephemeral-state) for more information.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/create-vars.ts" />
 
@@ -166,20 +158,6 @@ The handler exposes `c.aborted` for loop checks and `c.abortSignal` for cancelin
 Finite `run` handlers leave the actor alive after they finish. If you want a one shot task to clean itself up when it is done, call `c.destroy()` before returning.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/run-one-shot.ts" />
-
-### `onStateChange`
-
-Called whenever the actor's state changes. Cannot be async. This is often used to broadcast state updates.
-
-Do not mutate `c.state` inside `onStateChange`; re-entrant state mutation is rejected.
-
-<CodeSnippet file="examples/docs/actors-lifecycle/on-state-change.ts" />
-
-### `createConnState` and `connState`
-
-There are two ways to define the initial state for connections:
-1. `connState`: Define a constant object that will be used as the initial state for all connections
-2. `createConnState`: A function that dynamically creates initial connection state based on connection parameters. Can be async.
 
 ### `onBeforeConnect`
 
@@ -370,10 +348,8 @@ The `options` object allows you to configure various timeouts and behaviors for 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `createVarsTimeout` | 5000ms | Timeout for `createVars` function |
-| `createConnStateTimeout` | 5000ms | Timeout for `createConnState` function |
 | `onConnectTimeout` | 5000ms | Timeout for `onConnect` hook |
 | `sleepGracePeriod` | 15000ms | Total graceful shutdown window for both sleep and destroy |
-| `stateSaveInterval` | 1000ms | Interval for persisting state |
 | `actionTimeout` | 60000ms | Timeout for action execution |
 | `connectionLivenessTimeout` | 2500ms | Timeout for connection liveness check |
 | `connectionLivenessInterval` | 5000ms | Interval for connection liveness check |

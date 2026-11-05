@@ -21,3 +21,7 @@ rivet_keys::ups_subject! {
 rivet_keys::ups_subject! {
  pub StopReadinessSubject(worker_id: WorkerId) => [DEPOT, STOP_READINESS, {worker_id}];
 }
+
+rivet_keys::ups_subject! {
+	pub ReplicaReadinessSubject(worker_id: WorkerId) => [DEPOT, REPLICA_READINESS, {worker_id}];
+}

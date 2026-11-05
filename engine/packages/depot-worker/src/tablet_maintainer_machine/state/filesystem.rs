@@ -2513,6 +2513,46 @@ pub(crate) fn known_committed(state: &MaintainerState, key: &VolumeLogKey) -> u6
 	members.max(applied)
 }
 
+/// The proven floor at startup admission. Epochs prevent an abandoned old-writer tail
+/// with a larger sequence from standing in for a newer committed history.
+pub(super) fn committed_prefix(state: &MaintainerState, key: &VolumeLogKey) -> VolumeLogPosition {
+	let mut prefix = VolumeLogPosition {
+		volume_seq: known_committed(state, key),
+		client_epoch: 0,
+	};
+	let mut include = |position: &VolumeLogPosition| {
+		prefix.volume_seq = prefix.volume_seq.max(position.volume_seq);
+		prefix.client_epoch = prefix.client_epoch.max(position.client_epoch);
+	};
+	if let Some(volume) = state.loaded_volumes.get(key) {
+		for replica in volume.members.values() {
+			include(&replica.cold);
+		}
+		if let Some(row) = &volume.stored_row {
+			include(&row.cold);
+		}
+	}
+	if let Some(volume) = state.filesystem.volumes.get(key) {
+		include(&volume.applied);
+	}
+	if let Some(position) = state.filesystem.committed_floors.get(key) {
+		include(position);
+	}
+	if let Some((position, _)) = claim_quorum_commit(state, key) {
+		include(&position);
+	}
+	if let Some(position) = super::drain::through(state, key) {
+		include(position);
+	}
+	if let Some(position) = super::maintainer_log::replay::committed_through(state, key) {
+		include(position);
+	}
+	if let Some(position) = super::filesystem_reads::waiting_claim_floor(state, key) {
+		include(position);
+	}
+	prefix
+}
+
 /// The committed seq a non-holder's `Latest` fork or checkpoint waits for apply to reach: the
 /// highest commit the members prove, and at least what is applied. A tail an abandoned
 /// claim covered before its own entry reached a quorum is not proven here, so such a fork
