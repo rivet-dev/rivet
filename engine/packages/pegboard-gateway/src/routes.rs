@@ -260,22 +260,31 @@ pub async fn gateway(
 			// A pipelined open can reach the envoy before the actor's start does, and is then
 			// refused before admission. It is opened again once the actor runs, on a new
 			// stream, so the client never sees the refusal.
-			let reopen = move || async move {
-				let deadline = RoutingDeadline::new(&ctx)?;
-				let (epoch, stream) = acquire(
-					&ctx,
-					&waits,
-					actor_id,
-					None,
-					class,
-					false,
-					&credential,
-					deadline,
-				)
-				.await?;
-				let message_id = new_message_id(&ctx)?;
-				let open = websocket_open(actor_id, epoch, &path, &request_headers);
-				anyhow::Ok((stream, message_id, open))
+			// `Fn`, not `FnOnce`: it is also called to wake the actor
+			// when a hibernating client socket sends its next frame.
+			let reopen = move || {
+				let ctx = ctx.clone();
+				let waits = waits.clone();
+				let credential = credential.clone();
+				let path = path.clone();
+				let request_headers = request_headers.clone();
+				async move {
+					let deadline = RoutingDeadline::new(&ctx)?;
+					let (epoch, stream) = acquire(
+						&ctx,
+						&waits,
+						actor_id,
+						None,
+						class,
+						false,
+						&credential,
+						deadline,
+					)
+					.await?;
+					let message_id = new_message_id(&ctx)?;
+					let open = websocket_open(actor_id, epoch, &path, &request_headers);
+					anyhow::Ok((stream, message_id, open))
+				}
 			};
 
 			ws.protocols(protocols)
