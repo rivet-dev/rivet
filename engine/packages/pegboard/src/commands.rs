@@ -69,6 +69,8 @@ impl Command for ActorMigrateFromV2Begin {
 
 /// The first `pegboard.actor` version that can hold an actor for the V2 migrator.
 const MIGRATE_FROM_V2_ACTOR_VERSION: u16 = 2;
+/// The first `pegboard.actor` version that can store an actor delegated to V2.
+const DELEGATE_TO_V2_ACTOR_VERSION: u16 = 3;
 
 pub fn is_volume_gone(error: &anyhow::Error) -> bool {
 	let structured = rivet_error::RivetError::extract(error);
@@ -156,6 +158,16 @@ async fn actor_create_handler(
 	request: wire::ActorCreateRequest,
 ) -> Result<wire::ActorCreateResponse> {
 	let volume = keys::partition::ActorVolume::from_volume_key(db.volume_key())?;
+	// A keyed create in a namespace migrating in from V2 may delegate its key to V2, which
+	// only the version that stores a delegated actor can write.
+	if request.init.key.is_some() {
+		let dynamic = ctx.config().dynamic_ref();
+		if crate::migrate_from_v2::applies(dynamic.migrate_from_v2(), &request.init.namespace)
+			.is_some()
+		{
+			ensure_actor_version(&db, DELEGATE_TO_V2_ACTOR_VERSION)?;
+		}
+	}
 
 	let State(state) = rivet_state_machine_durable::Runner::process_event(
 		&ctx,
@@ -167,6 +179,7 @@ async fn actor_create_handler(
 		Event(wire::ActorEvent::Create(wire::Create {
 			init: request.init,
 			waiter: request.waiter.clone(),
+			force_actor_v3: request.force_actor_v3,
 		})),
 	)
 	.await?;
@@ -213,7 +226,7 @@ async fn actor_migrate_from_v2_begin_handler(
 	request: wire::MigrateFromV2Begin,
 ) -> Result<wire::ActorMigrateFromV2BeginResponse> {
 	let volume = keys::partition::ActorVolume::from_volume_key(db.volume_key())?;
-	ensure_migrate_from_v2_supported(&db)?;
+	ensure_actor_version(&db, MIGRATE_FROM_V2_ACTOR_VERSION)?;
 
 	let State(state) = rivet_state_machine_durable::Runner::process_event(
 		&ctx,
@@ -235,13 +248,14 @@ async fn actor_migrate_from_v2_begin_handler(
 }
 
 /// Refuses a V2 migration event while some live storage worker reads only actor state that
-/// cannot represent a held actor. The migrator retries its event on its own deadline.
-fn ensure_migrate_from_v2_supported(db: &KvHandle) -> Result<()> {
+/// cannot represent what the event may write: a held actor for the migrator, or a delegated one
+/// for a create in a migrating namespace. The caller retries on its own deadline.
+fn ensure_actor_version(db: &KvHandle, required_version: u16) -> Result<()> {
 	let write_version = db.write_version(VersionFamily::PEGBOARD_ACTOR)?;
-	if write_version < MIGRATE_FROM_V2_ACTOR_VERSION {
+	if write_version < required_version {
 		return Err(MigrateFromV2Unsupported {
 			write_version,
-			required_version: MIGRATE_FROM_V2_ACTOR_VERSION,
+			required_version,
 		}
 		.build());
 	}
@@ -269,16 +283,20 @@ fn try_start_outcome(
 				allocation: running.allocation.clone(),
 			})
 		}
-		wire::ActorPhase::Destroying(destroying) => match &destroying.epoxy_already_reserved {
-			Some(reservation_id) => wire::TryStartOutcome::TryStartEpoxyAlreadyReserved(
-				wire::TryStartEpoxyAlreadyReserved {
-					reservation_id: reservation_id.clone(),
-				},
-			),
+		wire::ActorPhase::Destroying(destroying) => match &destroying.key_owner {
+			Some(wire::KeyOwner::KeyOwnerDatacenter(owner)) => {
+				wire::TryStartOutcome::TryStartEpoxyAlreadyReserved(
+					wire::TryStartEpoxyAlreadyReserved {
+						reservation_id: owner.reservation_id.clone(),
+					},
+				)
+			}
+			Some(wire::KeyOwner::KeyOwnerV2) => wire::TryStartOutcome::TryStartDelegatedToV2,
 			None => wire::TryStartOutcome::TryStartDestroyed,
 		},
 		wire::ActorPhase::Destroyed => wire::TryStartOutcome::TryStartDestroyed,
 		wire::ActorPhase::MigratingFromV2(_) => wire::TryStartOutcome::TryStartMigratingFromV2,
+		wire::ActorPhase::DelegatedToV2 => wire::TryStartOutcome::TryStartDelegatedToV2,
 		wire::ActorPhase::Initializing(_)
 		| wire::ActorPhase::Stopping(_)
 		| wire::ActorPhase::Sleeping(_) => {
@@ -301,22 +319,23 @@ async fn actor_read_handler(
 	let state_key = rivet_state_machine_durable::keys::kv::MachineStateKey::new();
 
 	let mut snapshot = db.snapshot().await?;
-	let Some(data) = snapshot.get(&data_key.pack()).await? else {
+	let data = match snapshot.get(&data_key.pack()).await? {
+		Some(data) => Some(data_key.deserialize(data.into())?),
+		None => None,
+	};
+	// An actor delegated to V2 has state but no data record.
+	let Some(state) = snapshot.get(&state_key.pack()).await? else {
+		ensure!(data.is_none(), "should have machine state if data exists");
 		return Ok(wire::ActorReadResponse {
 			data: None,
 			phase: None,
 			epoch: 0,
 		});
 	};
-	let data = data_key.deserialize(data.into())?;
-	let state = snapshot
-		.get(&state_key.pack())
-		.await?
-		.context("should have machine state if data exists")?;
 	let state = ActorStateMachine::deserialize_state(&state)?.0;
 
 	Ok(wire::ActorReadResponse {
-		data: Some(data),
+		data,
 		phase: Some(state.phase),
 		epoch: state.epoch,
 	})
@@ -329,7 +348,7 @@ async fn actor_event_handler(
 ) -> Result<wire::ActorEventResponse> {
 	let volume = keys::partition::ActorVolume::from_volume_key(db.volume_key())?;
 	if let wire::ActorEvent::MigrateFromV2(_) = &event {
-		ensure_migrate_from_v2_supported(&db)?;
+		ensure_actor_version(&db, MIGRATE_FROM_V2_ACTOR_VERSION)?;
 	}
 
 	let waiter = match &event {

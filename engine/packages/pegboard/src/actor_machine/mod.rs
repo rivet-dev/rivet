@@ -34,8 +34,6 @@ const ALARM_NO_ENVOY_RETRY_MAX_MS: u64 = 30 * 1000;
 /// alarms came due together do not retry in lockstep.
 const ALARM_NO_ENVOY_RETRY_JITTER_MS: u64 = 2 * 1000;
 
-pub struct ActorStateMachine;
-
 /// How far past its lost threshold a disconnected envoy must be before it is judged gone. It
 /// covers the delay between the engine's close and the envoy noticing it, and clock skew
 /// between the worker that stamped the disconnect and the one judging it.
@@ -47,44 +45,7 @@ const ALLOCATION_RETRY_VERSION: u16 = 3;
 /// The `pegboard.actor` version whose timers carry the stop deadline.
 const STOP_THRESHOLD_TIMER_VERSION: u16 = 3;
 
-/// What the executor's `prepare` supplies to one transition: the envoy selected for a start
-/// the event causes, as `needs_allocation` names them, and the configuration the transition
-/// reads, since the core never reads the config itself.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Preparation {
-	/// The envoy a start this event causes goes to. `None` when the event starts nothing or
-	/// the pool has no envoy, in which case the actor sleeps.
-	pub allocation: Option<wire::ActorAllocation>,
-	/// How long a start waits for the envoy's running report before the epoch is stopped;
-	/// `pegboard.actor_start_threshold`.
-	pub start_threshold_ms: u64,
-	/// How long a stop goes unanswered, past the stop's margin, before the epoch ends as lost;
-	/// `pegboard.actor_stop_threshold`.
-	pub stop_threshold_ms: u64,
-	/// Most start waiters the actor keeps for its next start; a waiter past it is left out and
-	/// reported as such. `pegboard.actor_start_waiters_capacity`.
-	pub start_waiters_capacity: u32,
-	/// How long an envoy may go without the engine before it stops every actor it holds, and
-	/// so how long the engine waits before judging its record; `pegboard.envoy_lost_threshold`.
-	pub envoy_lost_threshold_ms: u64,
-	/// The `pegboard.actor` version the actor's volume writes: the highest every live storage
-	/// worker reads. A timer that version cannot carry is not armed.
-	pub write_version: u16,
-}
-
-impl Default for Preparation {
-	fn default() -> Self {
-		let defaults = rivet_config::config::pegboard::Pegboard::default();
-		Self {
-			allocation: None,
-			start_threshold_ms: defaults.actor_start_threshold(),
-			stop_threshold_ms: defaults.actor_stop_threshold(),
-			start_waiters_capacity: defaults.actor_start_waiters_capacity(),
-			envoy_lost_threshold_ms: defaults.envoy_lost_threshold(),
-			write_version: rivet_data::generated::PEGBOARD_ACTOR_VERSION,
-		}
-	}
-}
+pub struct ActorStateMachine;
 
 impl DurableStateMachine for ActorStateMachine {
 	type Slot = NoSlot;
@@ -124,6 +85,7 @@ impl DurableStateMachine for ActorStateMachine {
 			start_waiters_capacity,
 			envoy_lost_threshold_ms,
 			write_version,
+			create_placement,
 		} = preparation;
 		let now_unix_ms = raw_event.now.unix_ms;
 		let stop_deadline = StopDeadline {
@@ -175,6 +137,7 @@ impl DurableStateMachine for ActorStateMachine {
 					walk_reserve_epoxy(
 						&mut init.reserve_epoxy,
 						state.create_unix_ms,
+						KeyCheck::EpoxyAndV2,
 						effects,
 						Some(effect_state),
 					);
@@ -194,6 +157,7 @@ impl DurableStateMachine for ActorStateMachine {
 					walk_reserve_epoxy(
 						&mut init.reserve_epoxy,
 						state.create_unix_ms,
+						KeyCheck::EpoxyAndV2,
 						effects,
 						Some(wire::ReserveEpoxyState {
 							phase: wire::ReserveEpoxyPhase::ReserveEpoxyPhasePending,
@@ -892,7 +856,14 @@ impl DurableStateMachine for ActorStateMachine {
 					);
 
 					if let wire::DestroyPhase::DestroyPhaseSuccess = phase.destroy.state.phase {
-						state.phase = wire::ActorPhase::Destroyed;
+						// A key V2 holds stays V2's, so its next create goes there without
+						// asking V2 again.
+						state.phase = match phase.key_owner {
+							Some(wire::KeyOwner::KeyOwnerV2) => wire::ActorPhase::DelegatedToV2,
+							Some(wire::KeyOwner::KeyOwnerDatacenter(_)) | None => {
+								wire::ActorPhase::Destroyed
+							}
+						};
 						state.pending_action = wire::PendingAction::PendingNone;
 					}
 				}
@@ -913,6 +884,15 @@ impl DurableStateMachine for ActorStateMachine {
 			// The resting state of a destroyed actor, and the default state of a new one: a
 			// create starts the next incarnation, and nothing else moves it.
 			wire::ActorPhase::Destroyed => match event {
+				// A create whose key belongs in V2 settles that here, so every later create of
+				// the key follows it whatever the share says by then. Nothing starts, and the
+				// command reports the delegation to the caller.
+				RuntimeEvent::Input(wire::ActorEvent::Create(create))
+					if create.init.key.is_some()
+						&& create_placement == CreatePlacement::MigrationV2 =>
+				{
+					state.phase = wire::ActorPhase::DelegatedToV2;
+				}
 				RuntimeEvent::Input(wire::ActorEvent::Create(create)) => {
 					initialize(
 						state,
@@ -951,6 +931,7 @@ impl DurableStateMachine for ActorStateMachine {
 						walk_reserve_epoxy(
 							reserve_epoxy,
 							state.create_unix_ms,
+							KeyCheck::Epoxy,
 							effects,
 							Some(effect_state),
 						);
@@ -961,6 +942,7 @@ impl DurableStateMachine for ActorStateMachine {
 						walk_reserve_epoxy(
 							reserve_epoxy,
 							state.create_unix_ms,
+							KeyCheck::Epoxy,
 							effects,
 							Some(wire::ReserveEpoxyState {
 								phase: wire::ReserveEpoxyPhase::ReserveEpoxyPhasePending,
@@ -1024,7 +1006,8 @@ impl DurableStateMachine for ActorStateMachine {
 							wire::ReserveEpoxyPhase::ReserveEpoxyPhasePending
 							| wire::ReserveEpoxyPhase::ReserveEpoxyPhaseAlreadyReserved(_)
 							| wire::ReserveEpoxyPhase::ReserveEpoxyPhaseFailed
-							| wire::ReserveEpoxyPhase::ReserveEpoxyPhaseMaxAttemptsReached => false,
+							| wire::ReserveEpoxyPhase::ReserveEpoxyPhaseMaxAttemptsReached
+							| wire::ReserveEpoxyPhase::ReserveEpoxyPhaseInV2 => false,
 						},
 					};
 					if activate.migration_id == held.migration_id && key_reserved {
@@ -1049,6 +1032,36 @@ impl DurableStateMachine for ActorStateMachine {
 				RuntimeEvent::Input(wire::ActorEvent::MigrateFromV2(
 					wire::MigrateFromV2::MigrateFromV2Recall(_),
 				)) => {}
+				_ => {}
+			},
+			// V2 serves the key, so nothing here starts it. It has no epoch outstanding and no
+			// alarm, so no envoy, start, stop or alarm event can belong to it.
+			wire::ActorPhase::DelegatedToV2 => match event {
+				// Once the namespace no longer migrates in from V2, the key is this cluster's
+				// again, and a create starts it here as it would a destroyed actor.
+				RuntimeEvent::Input(wire::ActorEvent::Create(create))
+					if create_placement == CreatePlacement::Standard =>
+				{
+					initialize(
+						state,
+						create.init,
+						create.waiter,
+						prepared_allocation,
+						effects,
+						start_threshold_ms,
+						now_unix_ms,
+					);
+				}
+				// No waiter is stored; the command reports the delegation, and the request goes
+				// to V2.
+				RuntimeEvent::Input(wire::ActorEvent::TryStart(_))
+				| RuntimeEvent::Input(wire::ActorEvent::Create(_)) => {}
+				// The migrator moves the key's V2 actor in, under the same id.
+				RuntimeEvent::Input(wire::ActorEvent::MigrateFromV2(
+					wire::MigrateFromV2::MigrateFromV2Begin(begin),
+				)) => {
+					begin_migration_from_v2(state, begin, effects);
+				}
 				_ => {}
 			},
 		}
@@ -1084,6 +1097,64 @@ impl DurableStateMachine for ActorStateMachine {
 	fn deserialize_timer(bytes: &[u8]) -> Result<Self::Timer> {
 		rivet_data::versioned::ActorTimer::deserialize_with_embedded_version(bytes)
 	}
+}
+
+/// What the executor's `prepare` supplies to one transition: the envoy selected for a start
+/// the event causes, as `needs_allocation` names them, and the configuration the transition
+/// reads, since the core never reads the config itself.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Preparation {
+	/// The envoy a start this event causes goes to. `None` when the event starts nothing or
+	/// the pool has no envoy, in which case the actor sleeps.
+	pub allocation: Option<wire::ActorAllocation>,
+	/// How long a start waits for the envoy's running report before the epoch is stopped;
+	/// `pegboard.actor_start_threshold`.
+	pub start_threshold_ms: u64,
+	/// How long a stop goes unanswered, past the stop's margin, before the epoch ends as lost;
+	/// `pegboard.actor_stop_threshold`.
+	pub stop_threshold_ms: u64,
+	/// Most start waiters the actor keeps for its next start; a waiter past it is left out and
+	/// reported as such. `pegboard.actor_start_waiters_capacity`.
+	pub start_waiters_capacity: u32,
+	/// How long an envoy may go without the engine before it stops every actor it holds, and
+	/// so how long the engine waits before judging its record; `pegboard.envoy_lost_threshold`.
+	pub envoy_lost_threshold_ms: u64,
+	/// The `pegboard.actor` version the actor's volume writes: the highest every live storage
+	/// worker reads. A timer that version cannot carry is not armed.
+	pub write_version: u16,
+	/// Where a keyed create belongs, read from the migration config for a `Create` event, and
+	/// `Standard` for any other event.
+	pub create_placement: CreatePlacement,
+}
+
+impl Default for Preparation {
+	fn default() -> Self {
+		let defaults = rivet_config::config::pegboard::Pegboard::default();
+		Self {
+			allocation: None,
+			start_threshold_ms: defaults.actor_start_threshold(),
+			stop_threshold_ms: defaults.actor_stop_threshold(),
+			start_waiters_capacity: defaults.actor_start_waiters_capacity(),
+			envoy_lost_threshold_ms: defaults.envoy_lost_threshold(),
+			write_version: rivet_data::generated::PEGBOARD_ACTOR_VERSION,
+			create_placement: CreatePlacement::Standard,
+		}
+	}
+}
+
+/// Where a keyed create belongs while its namespace may be migrating in from V2.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CreatePlacement {
+	/// The namespace is not migrating in from V2, so the key is this cluster's. A key delegated
+	/// to V2 during an earlier migration is created here again.
+	Standard,
+	/// The namespace migrates in from V2, and the create forces actor v3 or its key's share is
+	/// below `create_ratio`. The reservation still asks V2 whether it holds the key, and a key
+	/// already delegated to V2 stays there.
+	MigrationV3,
+	/// The namespace migrates in from V2, and the key's share is at or past `create_ratio`, so
+	/// a destroyed actor is delegated to V2 instead of created.
+	MigrationV2,
 }
 
 /// Leaves `Initializing` once the reservation settled: on to the start when it is reserved, to
@@ -1133,7 +1204,33 @@ fn try_complete_initialization(
 					),
 				});
 			}
-			destroy_actor(state, effects, Some(reservation_id), now_unix_ms);
+			destroy_actor(
+				state,
+				effects,
+				Some(wire::KeyOwner::KeyOwnerDatacenter(
+					wire::KeyOwnerDatacenter { reservation_id },
+				)),
+				now_unix_ms,
+			);
+		}
+		wire::ReserveEpoxyPhase::ReserveEpoxyPhaseInV2 => {
+			// V2 holds the key. The waiters' requests go there now; no start will ever notify
+			// them. The record ends delegated to V2, so the key's later creates go there too.
+			state
+				.start_waiters
+				.retain(|waiter| waiter.expires_unix_ms > now_unix_ms);
+			if !state.start_waiters.is_empty() {
+				effects.execute(Effect::NotifyStartWaiters {
+					waiters: std::mem::take(&mut state.start_waiters),
+					kind: wire::ActorStartNoticeKind::ActorStartNoticeDelegatedToV2,
+				});
+			}
+			destroy_actor(
+				state,
+				effects,
+				Some(wire::KeyOwner::KeyOwnerV2),
+				now_unix_ms,
+			);
 		}
 		wire::ReserveEpoxyPhase::ReserveEpoxyPhaseFailed
 		| wire::ReserveEpoxyPhase::ReserveEpoxyPhaseMaxAttemptsReached => {
@@ -1201,7 +1298,13 @@ fn initialize(
 			create_unix_ms,
 		},
 	});
-	walk_reserve_epoxy(&mut init_phase.reserve_epoxy, create_unix_ms, effects, None);
+	walk_reserve_epoxy(
+		&mut init_phase.reserve_epoxy,
+		create_unix_ms,
+		KeyCheck::EpoxyAndV2,
+		effects,
+		None,
+	);
 	walk_write_index(
 		&mut state.write_index,
 		state.index_bucket_count,
@@ -1231,6 +1334,7 @@ fn initialize(
 fn walk_reserve_epoxy(
 	effect_data: &mut wire::ReserveEpoxyEffectData,
 	create_unix_ms: i64,
+	key_check: KeyCheck,
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
 	new_state: Option<wire::ReserveEpoxyState>,
 ) {
@@ -1249,7 +1353,8 @@ fn walk_reserve_epoxy(
 
 		match &new_state.phase {
 			wire::ReserveEpoxyPhase::ReserveEpoxyPhaseReserved
-			| wire::ReserveEpoxyPhase::ReserveEpoxyPhaseAlreadyReserved(_) => {
+			| wire::ReserveEpoxyPhase::ReserveEpoxyPhaseAlreadyReserved(_)
+			| wire::ReserveEpoxyPhase::ReserveEpoxyPhaseInV2 => {
 				effect_data.state.phase = new_state.phase;
 				effects.cancel_timer(wire::ActorTimer::ReserveEpoxyTimeout(
 					wire::ReserveEpoxyTimeout {
@@ -1294,6 +1399,7 @@ fn walk_reserve_epoxy(
 		key: key.to_string(),
 		attempt: effect_data.state.attempt,
 		create_unix_ms,
+		key_check,
 	});
 
 	let backoff = executor::effect_backoff(effect_data.state.attempt);
@@ -1507,7 +1613,8 @@ fn wake(
 		wire::ActorPhase::Running(_)
 		| wire::ActorPhase::Destroying(_)
 		| wire::ActorPhase::Destroyed
-		| wire::ActorPhase::MigratingFromV2(_) => {}
+		| wire::ActorPhase::MigratingFromV2(_)
+		| wire::ActorPhase::DelegatedToV2 => {}
 	}
 }
 
@@ -1532,7 +1639,11 @@ pub(crate) fn needs_allocation_at_version(
 		RuntimeEvent::Input(Event(input)) => match input {
 			wire::ActorEvent::TryStart(_) => sleeping,
 			wire::ActorEvent::Create(_) => {
-				sleeping || matches!(state.phase, wire::ActorPhase::Destroyed)
+				sleeping
+					|| matches!(
+						state.phase,
+						wire::ActorPhase::Destroyed | wire::ActorPhase::DelegatedToV2
+					)
 			}
 			wire::ActorEvent::Reallocate(event) if event.epoch == state.epoch => {
 				match state.phase {
@@ -1543,7 +1654,8 @@ pub(crate) fn needs_allocation_at_version(
 					| wire::ActorPhase::Stopping(_)
 					| wire::ActorPhase::Destroying(_)
 					| wire::ActorPhase::Destroyed
-					| wire::ActorPhase::MigratingFromV2(_) => false,
+					| wire::ActorPhase::MigratingFromV2(_)
+					| wire::ActorPhase::DelegatedToV2 => false,
 				}
 			}
 			wire::ActorEvent::ToEnvoyEvent(event) if event.epoch == state.epoch => {
@@ -1983,7 +2095,8 @@ fn store_start_waiter(
 		wire::ActorPhase::Running(_)
 		| wire::ActorPhase::Destroying(_)
 		| wire::ActorPhase::Destroyed
-		| wire::ActorPhase::MigratingFromV2(_) => return,
+		| wire::ActorPhase::MigratingFromV2(_)
+		| wire::ActorPhase::DelegatedToV2 => return,
 		wire::ActorPhase::Initializing(_)
 		| wire::ActorPhase::Starting(_)
 		| wire::ActorPhase::Stopping(_)
@@ -2025,7 +2138,7 @@ pub fn has_start_waiter(state: &wire::ActorState, waiter: &wire::StartWaiter) ->
 fn destroy_actor(
 	state: &mut wire::ActorState,
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
-	epoxy_already_reserved: Option<wire::Id>,
+	key_owner: Option<wire::KeyOwner>,
 	now_unix_ms: i64,
 ) {
 	state
@@ -2058,7 +2171,7 @@ fn destroy_actor(
 	);
 	state.phase = wire::ActorPhase::Destroying(wire::Destroying {
 		destroy: destroy_effect_data,
-		epoxy_already_reserved,
+		key_owner,
 	});
 }
 
@@ -2114,7 +2227,13 @@ fn begin_migration_from_v2(
 			create_unix_ms,
 		},
 	});
-	walk_reserve_epoxy(&mut reserve_epoxy, create_unix_ms, effects, None);
+	walk_reserve_epoxy(
+		&mut reserve_epoxy,
+		create_unix_ms,
+		KeyCheck::Epoxy,
+		effects,
+		None,
+	);
 
 	state.phase = wire::ActorPhase::MigratingFromV2(wire::MigratingFromV2 {
 		migration_id: begin.migration_id,
@@ -2193,6 +2312,18 @@ fn recall_to_v2(
 	});
 }
 
+/// Where a reservation looks for an owner of the key besides this datacenter.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KeyCheck {
+	/// Only Epoxy. The V2 migrator's hold reserves the key of an actor V2 holds by definition,
+	/// so asking V2 would always find it.
+	Epoxy,
+	/// Epoxy, and V2 while the actor's namespace migrates in from V2, so a create of a key V2
+	/// already holds ends delegated to V2. The executor reads the migration config when it
+	/// runs, so a migration configured or removed between attempts applies at once.
+	EpoxyAndV2,
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Effect {
 	ReserveEpoxy {
@@ -2201,6 +2332,7 @@ pub enum Effect {
 		key: String,
 		attempt: u32,
 		create_unix_ms: i64,
+		key_check: KeyCheck,
 	},
 	WriteIndex {
 		namespace: String,

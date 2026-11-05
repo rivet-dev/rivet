@@ -42,6 +42,8 @@ pub enum Notice {
 	Destroyed,
 	/// The V2 migrator recalled the actor and took its waiters, so V2 serves it again.
 	MigratingFromV2,
+	/// The actor's key belongs to V2 and the actor took its waiters, so V2 serves it.
+	DelegatedToV2,
 }
 
 impl Notice {
@@ -62,6 +64,7 @@ impl Notice {
 			}
 			wire::ActorStartNoticeKind::ActorStartNoticeDestroyed => Notice::Destroyed,
 			wire::ActorStartNoticeKind::ActorStartNoticeMigratingFromV2 => Notice::MigratingFromV2,
+			wire::ActorStartNoticeKind::ActorStartNoticeDelegatedToV2 => Notice::DelegatedToV2,
 		})
 	}
 }

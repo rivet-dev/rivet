@@ -10,6 +10,7 @@ pub mod index;
 pub use rivet_data::pegboard_actor as wire;
 pub mod keys;
 mod metrics;
+pub mod migrate_from_v2;
 pub mod validation;
 pub use metrics::{
 	ENVOY_INDEX_UPSERTS, ENVOY_VERSION_EVICTIONS, STARTUP_PHASE_DURATION,

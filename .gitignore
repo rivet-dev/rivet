@@ -93,3 +93,6 @@ __pycache__/
 # Temporary source trees used while regenerating the committed object-store dependency.
 /vendor/object_store/.object_store-*/
 
+
+# Error artifacts written by builds of the rivetkit-rust workspace. The engine workspace owns engine/artifacts.
+rivetkit-rust/engine/artifacts/

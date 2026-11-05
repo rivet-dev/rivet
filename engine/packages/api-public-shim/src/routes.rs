@@ -372,11 +372,10 @@ pub async fn get_or_create_actor(
 }
 
 /// Creates the actor here, or proxies the create to V2's public API while a V2 namespace
-/// migrates in and the configured share sends it there. Keyless creates draw against the share;
-/// keyed creates stay with V2 until it reaches 1.0, and then go to V2 only for a key V2 already
-/// holds. A key this cluster holds is always served here, and one being moved in is refused as
-/// the retryable `actor.migrating_from_v2`. A create that sends `x-rivet-actor-version: 3`
-/// decides as if the share were 1.0.
+/// migrates in. A keyless create draws against the share. A keyed create is sent here, and its
+/// state machine settles whether the key belongs here or to V2; one it places with V2 goes there.
+/// A key being moved in is refused as the retryable `actor.migrating_from_v2`. A create that
+/// sends `x-rivet-actor-version: 3` is placed here unless its key already belongs to V2.
 async fn create_or_proxy(
 	ctx: &EngineContext,
 	query: NamespaceQuery,
@@ -390,80 +389,49 @@ async fn create_or_proxy(
 	};
 	let namespace = namespace(ctx, query.namespace.as_deref()).await?;
 	let dynamic = migrate_from_v2::snapshot(ctx);
-	let Some(config) = migrate_from_v2::applies(dynamic.as_deref(), &namespace) else {
-		return Ok(create_actor_inner(ctx, query, body, get_or_create)
-			.await?
-			.into_response());
-	};
-	let create_ratio = migrate_from_v2::create_ratio(config, headers)?;
-	let keyed = body.key.is_some();
-	let count_create = |target: &'static str| {
-		migrate_from_v2::metrics::CREATES
-			.with_label_values(&[
-				namespace.as_str(),
-				target,
-				if keyed { "true" } else { "false" },
-			])
-			.inc();
+	let migration = migrate_from_v2::applies(dynamic.as_deref(), &namespace);
+	let force_actor_v3 = match migration {
+		Some(_) => migrate_from_v2::forces_actor_v3(headers)?,
+		None => false,
 	};
 
-	let route = match &body.key {
-		None => {
-			let draw = (ctx.env().rng("migrate_from_v2.create").next_u64() >> 11) as f64
-				/ (1u64 << 53) as f64;
-			decision::keyless_create(draw, create_ratio)
+	if let Some(config) = migration
+		&& body.key.is_none()
+	{
+		let draw =
+			(ctx.env().rng("migrate_from_v2.create").next_u64() >> 11) as f64 / (1u64 << 53) as f64;
+		let create_ratio = migrate_from_v2::create_ratio(config, headers)?;
+		if decision::keyless_create(draw, create_ratio) == decision::Route::V2 {
+			return proxy_create(ctx, config, get_or_create, raw).await;
 		}
-		Some(key) => {
-			// The API speaks the slash key form; the keyed id hashes the canonical form, as
-			// `create_actor_inner` does.
-			let canonical = canonical_key(key)?;
-			pegboard::validation::actor_name(&body.name)?;
-			pegboard::validation::actor_key(Some(&canonical))?;
-			let actor_id = pegboard::actor_key::keyed_actor_id(
-				ctx.config().dc_label(),
-				&namespace,
-				&body.name,
-				&canonical,
-			);
-			let state = migrate_from_v2::read_v3_actor(ctx, actor_id).await?;
-			let route = match decision::keyed(state, true, create_ratio) {
-				decision::Route::AskV2 => {
-					let found = proxy::key_exists(ctx, config, &body.name, key).await?;
-					decision::keyed_after_lookup(found)
-				}
-				route => route,
-			};
-			// An existing actor here is read, not created.
-			if let (decision::Route::V3, V3Actor::Active) = (route, state) {
-				return Ok(create_actor_inner(ctx, query, body, get_or_create)
-					.await?
-					.into_response());
-			}
-			route
-		}
-	};
-
-	match route {
-		decision::Route::V3 => {
-			count_create("v3");
-			Ok(create_actor_inner(ctx, query, body, get_or_create)
-				.await?
-				.into_response())
-		}
-		decision::Route::V2 => {
-			count_create("v2");
-			let method = if get_or_create {
-				Method::PUT
-			} else {
-				Method::POST
-			};
-			let path = format!("/actors?{}", v2_namespace_query(config)?);
-			let response = proxy::api(ctx, config, method, &path, Some(raw)).await?;
-			Ok(response.into_response())
-		}
-		decision::Route::RetryLater => Err(ActorMigratingFromV2::error()),
-		decision::Route::NotFound | decision::Route::AskV2 => Err(ActorNotFound.build()),
 	}
+
+	match create_actor_inner(ctx, query, body, get_or_create, force_actor_v3).await? {
+		Created::Actor(json) => Ok(json.into_response()),
+		Created::DelegatedToV2 => match migration {
+			Some(config) => proxy_create(ctx, config, get_or_create, raw).await,
+			// A key is only delegated to V2 while its namespace migrates in, so a create that
+			// raced the migration's end is refused and its retry creates the actor here.
+			None => Err(ActorMigratingFromV2::error()),
+		},
+	}
+}
+
+/// Sends the create to V2's public API in the migrated V2 namespace.
+async fn proxy_create(
+	ctx: &EngineContext,
+	config: &MigrateFromV2,
+	get_or_create: bool,
+	raw: Bytes,
+) -> Result<Response> {
+	let method = if get_or_create {
+		Method::PUT
+	} else {
+		Method::POST
+	};
+	let path = format!("/actors?{}", v2_namespace_query(config)?);
+	let response = pegboard::migrate_from_v2::api(ctx, config, method, &path, Some(raw)).await?;
+	Ok(proxy::api_response(response))
 }
 
 /// The V2 public API query naming the migrated V2 namespace.
@@ -484,7 +452,7 @@ async fn v2_actors(
 	let mut query = vec![("namespace", config.namespace.as_str())];
 	query.extend_from_slice(params);
 	let path = format!("/actors?{}", serde_html_form::to_string(&query)?);
-	let response = proxy::api(ctx, config, Method::GET, &path, None).await?;
+	let response = pegboard::migrate_from_v2::api(ctx, config, Method::GET, &path, None).await?;
 	ensure!(
 		response.status.is_success(),
 		"V2 actor listing failed with status {}",
@@ -498,7 +466,15 @@ async fn v2_actors(
 	}
 }
 
-/// Creates the actor and waits for its data record.
+/// What a create here came to.
+enum Created {
+	Actor(Json<Value>),
+	/// The key belongs to V2 while its namespace migrates in, so V2 serves the create.
+	DelegatedToV2,
+}
+
+/// Creates the actor and waits for its data record. `force_actor_v3` asks for the actor here while
+/// its namespace migrates in from V2.
 ///
 /// A keyed actor's id is derived from its key, so a getOrCreate of an existing actor reads it
 /// and a create of a missing one converges with any concurrent create. The create is a
@@ -509,7 +485,8 @@ async fn create_actor_inner(
 	query: NamespaceQuery,
 	mut body: CreateActorRequest,
 	get_or_create: bool,
-) -> Result<Json<Value>> {
+	force_actor_v3: bool,
+) -> Result<Created> {
 	let namespace = namespace(&ctx, query.namespace.as_deref()).await?;
 	// The API speaks the slash key form; the key is hashed and stored in its canonical form.
 	body.key = body.key.as_deref().map(canonical_key).transpose()?;
@@ -534,13 +511,22 @@ async fn create_actor_inner(
 		let Some(key) = body.key.clone() else {
 			// A keyless actor has a drawn id and nothing to reserve.
 			let actor_id = ctx.env().rng("actor.id").id_v1(ctx.config().dc_label());
-			create(ctx, actor_id, &namespace, &pool_name, &body, input.clone()).await?;
+			create(
+				ctx,
+				actor_id,
+				&namespace,
+				&pool_name,
+				&body,
+				input.clone(),
+				false,
+			)
+			.await?;
 			let data = wait_for_data(ctx, actor_id)
 				.await?
 				.context("keyless actor was destroyed during creation")?;
-			return Ok(Json(
+			return Ok(Created::Actor(Json(
 				json!({ "actor": actor_json(&data, None)?, "created": true }),
-			));
+			)));
 		};
 
 		let actor_id = pegboard::actor_key::keyed_actor_id(
@@ -560,16 +546,24 @@ async fn create_actor_inner(
 			if !get_or_create {
 				return Err(DuplicateKey.build());
 			}
-			return Ok(Json(
+			return Ok(Created::Actor(Json(
 				json!({ "actor": actor_json(&actor.data, None)?, "created": false }),
-			));
+			)));
 		}
 
 		// A create of a destroyed actor starts it fresh. One still being destroyed answers
 		// `Destroyed`, so the create is sent again shortly.
 		loop {
-			let outcome =
-				create(ctx, actor_id, &namespace, &pool_name, &body, input.clone()).await?;
+			let outcome = create(
+				ctx,
+				actor_id,
+				&namespace,
+				&pool_name,
+				&body,
+				input.clone(),
+				force_actor_v3,
+			)
+			.await?;
 			match outcome {
 				wire::TryStartOutcome::TryStartEpoxyAlreadyReserved(reserved) => {
 					let reservation_id = Id::from_slice(&reserved.reservation_id)?;
@@ -585,18 +579,21 @@ async fn create_actor_inner(
 				wire::TryStartOutcome::TryStartMigratingFromV2 => {
 					return Err(ActorMigratingFromV2::error());
 				}
+				wire::TryStartOutcome::TryStartDelegatedToV2 => return Ok(Created::DelegatedToV2),
 				wire::TryStartOutcome::TryStartWaiting
 				| wire::TryStartOutcome::TryStartStarting(_)
 				| wire::TryStartOutcome::TryStartRunning(_)
 				| wire::TryStartOutcome::TryStartFull => {}
 			}
+			// A create whose key turns out to belong to V2 is destroyed here, so the next create
+			// reports the delegation.
 			let Some(data) = wait_for_data(ctx, actor_id).await? else {
 				rivet_env::sleep(clock.as_ref(), CREATE_POLL_INTERVAL).await?;
 				continue;
 			};
-			return Ok(Json(
+			return Ok(Created::Actor(Json(
 				json!({ "actor": actor_json(&data, None)?, "created": true }),
-			));
+			)));
 		}
 	})
 	.await
@@ -612,6 +609,7 @@ async fn create(
 	pool_name: &str,
 	body: &CreateActorRequest,
 	input: Option<Vec<u8>>,
+	force_actor_v3: bool,
 ) -> Result<wire::TryStartOutcome> {
 	let created = ctx
 		.depot()
@@ -627,6 +625,7 @@ async fn create(
 					input: input.map(Into::into),
 				},
 				waiter: None,
+				force_actor_v3,
 			},
 		)
 		.await?;
@@ -1053,8 +1052,8 @@ fn reschedule_event(phase: &wire::ActorPhase, epoch: u32) -> Option<wire::ActorE
 		| wire::ActorPhase::Starting(_)
 		| wire::ActorPhase::Destroying(_)
 		| wire::ActorPhase::Destroyed => None,
-		// V2 serves a held actor, so there is nothing here to move.
-		wire::ActorPhase::MigratingFromV2(_) => None,
+		// V2 serves a held or delegated actor, so there is nothing here to move.
+		wire::ActorPhase::MigratingFromV2(_) | wire::ActorPhase::DelegatedToV2 => None,
 	}
 }
 
@@ -1076,7 +1075,7 @@ async fn send_actor_event(
 		match migrate_from_v2::read_v3_actor(ctx, actor_id).await? {
 			V3Actor::Active => {}
 			V3Actor::Held => return Err(ActorMigratingFromV2::error()),
-			V3Actor::None => {
+			V3Actor::Delegated | V3Actor::None => {
 				let (method, path) = v2_call;
 				let path = format!("{path}?{}", v2_namespace_query(config)?);
 				let body = if method == Method::POST {
@@ -1084,8 +1083,9 @@ async fn send_actor_event(
 				} else {
 					None
 				};
-				let response = proxy::api(ctx, config, method, &path, body).await?;
-				return Ok(response.into_response());
+				let response =
+					pegboard::migrate_from_v2::api(ctx, config, method, &path, body).await?;
+				return Ok(proxy::api_response(response));
 			}
 		}
 	}
@@ -1306,6 +1306,10 @@ async fn read(ctx: &EngineContext, actor_id: Id) -> Result<Read> {
 		Err(error) if is_volume_gone(&error) => return Ok(Read::Gone),
 		Err(error) => return Err(error),
 	};
+	// A key delegated to V2 has no actor here.
+	if let Some(wire::ActorPhase::DelegatedToV2) = res.phase {
+		return Ok(Read::Gone);
+	}
 	let destroyed = matches!(
 		res.phase,
 		Some(wire::ActorPhase::Destroying(_) | wire::ActorPhase::Destroyed)

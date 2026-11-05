@@ -2218,6 +2218,7 @@ async fn started_elsewhere(conn: &Connection, actor_id: &str, epoch: u32) -> Res
 			| Some(wire::ActorPhase::Destroying(_))
 			| Some(wire::ActorPhase::Destroyed)
 			| Some(wire::ActorPhase::MigratingFromV2(_))
+			| Some(wire::ActorPhase::DelegatedToV2)
 			| None => false,
 		};
 	Ok(started)
@@ -2272,7 +2273,8 @@ fn record_owned_epoch(
 		| wire::ActorPhase::Sleeping(_)
 		| wire::ActorPhase::Destroying(_)
 		| wire::ActorPhase::Destroyed
-		| wire::ActorPhase::MigratingFromV2(_) => return None,
+		| wire::ActorPhase::MigratingFromV2(_)
+		| wire::ActorPhase::DelegatedToV2 => return None,
 	};
 	// The allocation names the envoy, not the connection: after a reconnect the recorded
 	// connection is stale until a gateway repairs it, but the actor still runs here.

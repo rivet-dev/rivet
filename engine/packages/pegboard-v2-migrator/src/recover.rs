@@ -99,7 +99,13 @@ pub async fn recover(
 			}
 			true
 		}
-		Some(pb::ActorPhase::Destroying(_) | pb::ActorPhase::Destroyed) | None => false,
+		// A key delegated to V2 has no actor here to hold.
+		Some(
+			pb::ActorPhase::Destroying(_)
+			| pb::ActorPhase::Destroyed
+			| pb::ActorPhase::DelegatedToV2,
+		)
+		| None => false,
 		Some(
 			pb::ActorPhase::Initializing(_)
 			| pb::ActorPhase::Starting(_)

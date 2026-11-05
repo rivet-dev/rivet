@@ -35,6 +35,8 @@ pub(crate) enum Next {
 	KeyOwnedElsewhere { reservation_id: Id },
 	/// The V2 migrator holds the actor, so V2 serves it and this gateway cannot.
 	MigratingFromV2,
+	/// The actor's key belongs to V2, so V2 serves it.
+	DelegatedToV2,
 }
 
 /// Why the request last looked at the actor again.
@@ -80,6 +82,7 @@ pub(crate) fn next_after_notice(notice: Notice) -> Next {
 		// The read finds the actor destroyed and creates it again or reports it missing.
 		Notice::Destroyed => Next::Read,
 		Notice::MigratingFromV2 => Next::MigratingFromV2,
+		Notice::DelegatedToV2 => Next::DelegatedToV2,
 	}
 }
 
@@ -212,6 +215,7 @@ impl StartWait {
 				}
 			}
 			wire::TryStartOutcome::TryStartMigratingFromV2 => Notice::MigratingFromV2,
+			wire::TryStartOutcome::TryStartDelegatedToV2 => Notice::DelegatedToV2,
 		};
 		if let Some(waiter) = waiter {
 			self.waits

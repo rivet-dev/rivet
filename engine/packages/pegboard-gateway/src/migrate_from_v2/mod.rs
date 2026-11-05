@@ -1,6 +1,7 @@
 //! Routing for a cluster that is taking over one V2 namespace. This cluster serves the actors it
-//! holds and proxies the rest to V2; new creates move here by the configured share. With no
-//! `migrate_from_v2` config, or a request in another namespace, routing is unchanged.
+//! holds and proxies the rest to V2. New keyless creates move here by the configured share; a
+//! keyed create's state machine places its key itself. With no `migrate_from_v2` config, or a
+//! request in another namespace, routing is unchanged.
 
 pub mod decision;
 pub mod metrics;
@@ -39,19 +40,11 @@ impl<'a> Active<'a> {
 			.with_label_values(&[&self.namespace, route])
 			.inc();
 	}
-
-	/// Counts one create as executed, by `target` (`v2` or `v3`).
-	pub fn count_create(&self, target: &'static str, keyed: bool) {
-		let keyed = if keyed { "true" } else { "false" };
-		metrics::CREATES
-			.with_label_values(&[&self.namespace, target, keyed])
-			.inc();
-	}
 }
 
 /// Request header with which a create asks to land in this cluster while a V2 namespace migrates
 /// in. `3` creates the actor here whatever `create_ratio` says: a keyless create lands here, and
-/// a keyed getOrCreate lands here unless V2 already holds the key. Without a migration the
+/// a keyed getOrCreate lands here unless its key already belongs to V2. Without a migration the
 /// header changes nothing, since every create lands here anyway.
 pub const X_RIVET_ACTOR_VERSION: &str = "x-rivet-actor-version";
 
@@ -63,13 +56,24 @@ pub const WS_PROTOCOL_ACTOR_VERSION: &str = "rivet_actor_version.";
 /// [`X_RIVET_ACTOR_VERSION`] or [`WS_PROTOCOL_ACTOR_VERSION`], and the configured `create_ratio`
 /// otherwise. The header wins when a request carries both.
 pub fn create_ratio(config: &MigrateFromV2, headers: &HeaderMap) -> Result<f64> {
+	if forces_actor_v3(headers)? {
+		Ok(1.0)
+	} else {
+		Ok(config.create_ratio)
+	}
+}
+
+/// Whether the request asks to be created here with [`X_RIVET_ACTOR_VERSION`] or
+/// [`WS_PROTOCOL_ACTOR_VERSION`]. The header wins when a request carries both, and any version
+/// other than `3` is refused.
+pub fn forces_actor_v3(headers: &HeaderMap) -> Result<bool> {
 	let version = match headers.get(X_RIVET_ACTOR_VERSION) {
 		Some(value) => Some(String::from_utf8_lossy(value.as_bytes())),
 		None => requested_protocol_version(headers).map(Cow::Borrowed),
 	};
 	match version.as_deref() {
-		None => Ok(config.create_ratio),
-		Some("3") => Ok(1.0),
+		None => Ok(false),
+		Some("3") => Ok(true),
 		Some(version) => Err(ActorInvalidVersion {
 			version: version.to_owned(),
 		}
@@ -128,6 +132,7 @@ pub async fn read_v3_actor(ctx: &EngineContext, actor_id: Id) -> Result<V3Actor>
 pub fn classify(has_data: bool, phase: Option<&wire::ActorPhase>) -> V3Actor {
 	match phase {
 		Some(wire::ActorPhase::MigratingFromV2(_)) => V3Actor::Held,
+		Some(wire::ActorPhase::DelegatedToV2) => V3Actor::Delegated,
 		Some(wire::ActorPhase::Destroying(_) | wire::ActorPhase::Destroyed) | None => V3Actor::None,
 		Some(
 			wire::ActorPhase::Initializing(_)

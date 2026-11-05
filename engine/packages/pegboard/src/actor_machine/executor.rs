@@ -1,5 +1,6 @@
 use crate::actor_machine::{
-	ActorStateMachine, ENVOY_GONE_MARGIN_MS, Effect, Event, Preparation, State, WriteEffect,
+	ActorStateMachine, CreatePlacement, ENVOY_GONE_MARGIN_MS, Effect, Event, KeyCheck, Preparation,
+	State, WriteEffect,
 };
 use crate::commands::EnvoyRead;
 use crate::envoy_check::{
@@ -8,6 +9,7 @@ use crate::envoy_check::{
 };
 use crate::index;
 use crate::keys::{self, ups::ActorStartNoticeSubject};
+use crate::migrate_from_v2;
 use crate::wire;
 use anyhow::{Context, Result, ensure};
 use bytes::Bytes;
@@ -19,6 +21,7 @@ use rivet_keys::keys::{KeyAddress, codec::FormalKey};
 use rivet_state_machine::EffectContext;
 use rivet_state_machine_durable::RuntimeEvent;
 use rivet_util::Id;
+use rivetkit_shared_types::actor_key;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
@@ -108,6 +111,87 @@ impl Executor {
 		);
 		report_reallocate(&self.ctx, self.actor_id, epoch, lost).await
 	}
+
+	/// Where `event` places a keyed create under the current migration config, as
+	/// `Preparation::create_placement` describes.
+	fn create_placement(&self, event: &RuntimeEvent<Event, wire::ActorTimer>) -> CreatePlacement {
+		let RuntimeEvent::Input(Event(wire::ActorEvent::Create(create))) = event else {
+			return CreatePlacement::Standard;
+		};
+		let dynamic = self.ctx.config().dynamic_ref();
+		let Some(config) =
+			migrate_from_v2::applies(dynamic.migrate_from_v2(), &create.init.namespace)
+		else {
+			return CreatePlacement::Standard;
+		};
+		let Some(key) = &create.init.key else {
+			return CreatePlacement::MigrationV3;
+		};
+		if create.force_actor_v3 {
+			return CreatePlacement::MigrationV3;
+		}
+		let share = migrate_from_v2::key_share(&create.init.namespace, &create.init.name, key);
+		if share < config.create_ratio {
+			CreatePlacement::MigrationV3
+		} else {
+			CreatePlacement::MigrationV2
+		}
+	}
+}
+
+/// Settles who owns a key: Epoxy reserves it for this datacenter or names the datacenter that
+/// already holds it, and for `KeyCheck::EpoxyAndV2` while the namespace migrates in from V2, V2
+/// is asked at the same time and wins when it holds the key. A key V2 holds is delegated to V2,
+/// so its Epoxy reservation here stays with the delegated record.
+async fn reserve_key(
+	ctx: &EngineContext,
+	namespace: String,
+	name: String,
+	key: String,
+	key_check: KeyCheck,
+) -> Result<wire::ReserveEpoxyPhase> {
+	let migration = match key_check {
+		KeyCheck::Epoxy => None,
+		KeyCheck::EpoxyAndV2 => {
+			let dynamic = ctx.config().dynamic();
+			migrate_from_v2::applies(dynamic.migrate_from_v2(), &namespace).cloned()
+		}
+	};
+	let Some(migration) = migration else {
+		return reserve_epoxy(ctx, namespace, name, key).await;
+	};
+
+	// V2's actor API reads the slash form of the key.
+	let slash_key = actor_key::to_slash(&key);
+	let (in_v2, reserved) = futures_util::future::join(
+		migrate_from_v2::key_exists(ctx, &migration, &name, &slash_key),
+		reserve_epoxy(ctx, namespace, name.clone(), key),
+	)
+	.await;
+	if in_v2.context("ask V2 whether it holds the key")? {
+		return Ok(wire::ReserveEpoxyPhase::ReserveEpoxyPhaseInV2);
+	}
+	reserved
+}
+
+async fn reserve_epoxy(
+	ctx: &EngineContext,
+	namespace: String,
+	name: String,
+	key: String,
+) -> Result<wire::ReserveEpoxyPhase> {
+	match crate::actor_key::reserve(ctx, namespace, name, key).await? {
+		crate::actor_key::ReserveResult::Reserved { .. } => {
+			Ok(wire::ReserveEpoxyPhase::ReserveEpoxyPhaseReserved)
+		}
+		crate::actor_key::ReserveResult::AlreadyReserved { reservation_id } => {
+			Ok(wire::ReserveEpoxyPhase::ReserveEpoxyPhaseAlreadyReserved(
+				wire::ReserveEpoxyPhaseAlreadyReserved {
+					reservation_id: reservation_id.as_bytes().into(),
+				},
+			))
+		}
+	}
 }
 
 fn retryable_allocation_error(error: &anyhow::Error) -> bool {
@@ -166,8 +250,27 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 			let start_waiters_capacity = pegboard_config.actor_start_waiters_capacity();
 			let envoy_lost_threshold_ms = pegboard_config.envoy_lost_threshold();
 			let write_version = self.db.write_version(VersionFamily::PEGBOARD_ACTOR)?;
+			let create_placement = self.create_placement(event);
 
-			if !crate::actor_machine::needs_allocation_at_version(&state.0, event, write_version) {
+			// A create that leaves or puts the key with V2 starts nothing, so it selects no
+			// envoy.
+			let starts_nothing = match state.0.phase {
+				wire::ActorPhase::Destroyed => create_placement == CreatePlacement::MigrationV2,
+				wire::ActorPhase::DelegatedToV2 => create_placement != CreatePlacement::Standard,
+				wire::ActorPhase::Initializing(_)
+				| wire::ActorPhase::Starting(_)
+				| wire::ActorPhase::Running(_)
+				| wire::ActorPhase::Stopping(_)
+				| wire::ActorPhase::Sleeping(_)
+				| wire::ActorPhase::Destroying(_)
+				| wire::ActorPhase::MigratingFromV2(_) => false,
+			};
+			if starts_nothing
+				|| !crate::actor_machine::needs_allocation_at_version(
+					&state.0,
+					event,
+					write_version,
+				) {
 				return Ok(Preparation {
 					allocation: None,
 					start_threshold_ms,
@@ -175,6 +278,7 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 					start_waiters_capacity,
 					envoy_lost_threshold_ms,
 					write_version,
+					create_placement,
 				});
 			}
 
@@ -213,6 +317,7 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 				start_waiters_capacity,
 				envoy_lost_threshold_ms,
 				write_version,
+				create_placement,
 			})
 		})
 	}
@@ -244,6 +349,7 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 				key,
 				attempt,
 				create_unix_ms,
+				key_check,
 			} => {
 				let self2 = self.clone();
 				ctx.spawn(Box::pin(async move {
@@ -258,20 +364,7 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 							)
 							.await?;
 
-						match crate::actor_key::reserve(&self2.ctx, namespace, name, key).await? {
-							crate::actor_key::ReserveResult::Reserved { .. } => {
-								anyhow::Ok(wire::ReserveEpoxyPhase::ReserveEpoxyPhaseReserved)
-							}
-							crate::actor_key::ReserveResult::AlreadyReserved { reservation_id } => {
-								anyhow::Ok(
-									wire::ReserveEpoxyPhase::ReserveEpoxyPhaseAlreadyReserved(
-										wire::ReserveEpoxyPhaseAlreadyReserved {
-											reservation_id: reservation_id.as_bytes().into(),
-										},
-									),
-								)
-							}
-						}
+						reserve_key(&self2.ctx, namespace, name, key, key_check).await
 					}
 					.await;
 

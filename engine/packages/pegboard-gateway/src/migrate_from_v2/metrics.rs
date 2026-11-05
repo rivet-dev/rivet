@@ -1,5 +1,5 @@
-//! Gateway metrics of a migration from V2. Labels are bounded: the namespace name, the route,
-//! the target cluster and whether the actor is keyed.
+//! Gateway metrics of a migration from V2. Labels are bounded: the namespace name and the
+//! route.
 use rivet_metrics::{BUCKETS, REGISTRY, prometheus::*};
 
 lazy_static::lazy_static! {
@@ -7,13 +7,6 @@ lazy_static::lazy_static! {
 		"gateway_migrate_from_v2_requests_total",
 		"Gateway actor requests while a V2 namespace migrates in, by where they were served: v3 (including actors moved in from V2), v2_fallback, v2_error (routed to V2 but V2 was unreachable or refused), retry_later (retryable refusals sent to the client) or not_found.",
 		&["namespace", "route"],
-		*REGISTRY
-	).unwrap();
-
-	pub static ref CREATES: IntCounterVec = register_int_counter_vec_with_registry!(
-		"gateway_migrate_from_v2_creates_total",
-		"Actor creates as executed while a V2 namespace migrates in, by target cluster (v2 or v3) and whether the actor is keyed.",
-		&["namespace", "target", "keyed"],
 		*REGISTRY
 	).unwrap();
 

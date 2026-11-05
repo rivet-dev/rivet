@@ -1,5 +1,0 @@
-{
-  "code": "storage_timeout",
-  "group": "sqlite",
-  "message": "SQLite storage timed out."
-}

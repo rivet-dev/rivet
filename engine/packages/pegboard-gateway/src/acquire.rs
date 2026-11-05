@@ -63,6 +63,9 @@ pub(crate) struct CreateActor {
 	pub(crate) key: String,
 	/// The request's `rvt-input`, URL-safe base64 without padding.
 	pub(crate) input: Option<String>,
+	/// The request forces actor v3 while its namespace migrates in from V2, whatever
+	/// `create_ratio` says.
+	pub(crate) force_actor_v3: bool,
 }
 
 impl CreateActor {
@@ -129,6 +132,18 @@ impl std::fmt::Display for HeldByMigrateFromV2 {
 }
 
 impl std::error::Error for HeldByMigrateFromV2 {}
+
+/// The actor's key belongs to V2 while its namespace migrates in, so V2 serves the request.
+#[derive(Debug)]
+pub(crate) struct DelegatedToV2;
+
+impl std::fmt::Display for DelegatedToV2 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("the actor's key belongs to V2")
+	}
+}
+
+impl std::error::Error for DelegatedToV2 {}
 
 /// Waits until the actor runs and opens a stream to it on `class`. With `create`, the actor is
 /// created first and created again if it is found destroyed. With `pipeline`, the request may
@@ -259,6 +274,7 @@ impl Acquire<'_> {
 					.into());
 				}
 				Next::MigratingFromV2 => return Err(HeldByMigrateFromV2.into()),
+				Next::DelegatedToV2 => return Err(DelegatedToV2.into()),
 				Next::Wait => {
 					next = self.wait.wait(ctx).await?;
 					continue;
@@ -362,7 +378,11 @@ impl Acquire<'_> {
 						}
 					}
 				}
-				wire::ActorPhase::Destroying(_) | wire::ActorPhase::Destroyed => {
+				// A create of a key delegated to V2 reports the delegation while its namespace
+				// migrates in from V2, and creates the actor here once it no longer does.
+				wire::ActorPhase::Destroying(_)
+				| wire::ActorPhase::Destroyed
+				| wire::ActorPhase::DelegatedToV2 => {
 					next = self.create_or_not_found().await?;
 				}
 				// The V2 migrator holds the actor, and V2 may still serve it, so nothing here
@@ -479,6 +499,7 @@ impl Acquire<'_> {
 						input: input.map(Into::into),
 					},
 					waiter: waiter.clone(),
+					force_actor_v3: create.force_actor_v3,
 				},
 			)
 			.await?;
@@ -562,5 +583,6 @@ fn phase_name(phase: &wire::ActorPhase) -> &'static str {
 		wire::ActorPhase::Destroying(_) => "destroying",
 		wire::ActorPhase::Destroyed => "destroyed",
 		wire::ActorPhase::MigratingFromV2(_) => "migrating_from_v2",
+		wire::ActorPhase::DelegatedToV2 => "delegated_to_v2",
 	}
 }

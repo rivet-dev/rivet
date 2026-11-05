@@ -1,6 +1,6 @@
 //! The gateway's HTTP edge: authentication, the request's routing parameters, header hygiene
 //! and the hand-off of an acquired actor stream to the HTTP or WebSocket tunnel.
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow};
 use axum::response::IntoResponse;
 use axum::{
 	body::Body,
@@ -20,7 +20,7 @@ use rivetkit_shared_types::actor_key;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, hash_map::Entry};
 
-use crate::acquire::{CreateActor, HeldByMigrateFromV2, RoutingDeadline, acquire};
+use crate::acquire::{CreateActor, DelegatedToV2, HeldByMigrateFromV2, RoutingDeadline, acquire};
 use crate::migrate_from_v2::{self, V3Actor, decision, proxy};
 use crate::raw_rest_path::RawRestPath;
 use crate::retry_budget::RetryBudget;
@@ -428,11 +428,11 @@ async fn prepare(
 	)?;
 	let class = tunnel_class(websocket);
 
-	if let Some(migration) = migration
-		&& let Some(v2) = route_keyed(ctx, migration, &target, headers).await?
-	{
-		return Ok(Routed::V2(v2));
-	}
+	let force_actor_v3 = match migration {
+		Some(_) => migrate_from_v2::forces_actor_v3(headers)?,
+		None => false,
+	};
+	let get_or_create = target.create(force_actor_v3);
 
 	// The gateway owns retries of a refused request. Nothing reaches the actor before the
 	// stream opens, so a refused attempt runs again from the start, within one request deadline.
@@ -441,7 +441,7 @@ async fn prepare(
 			ctx,
 			waits,
 			target.actor_id,
-			target.create(),
+			get_or_create.clone(),
 			class,
 			true,
 			&credential,
@@ -456,13 +456,16 @@ async fn prepare(
 			return Err(error);
 		}
 
-		// An actor this cluster does not serve by id is V2's while a migration from V2 runs.
-		// A held actor is V2's until its cutover, so it goes there as well.
+		// While a migration from V2 runs, V2 serves what this cluster does not: an actor it has
+		// no record of, a key whose create placed it with V2, and a held actor until its
+		// cutover. A held key's getOrCreate is refused instead, since after the cutover V2's
+		// getOrCreate would create the key again instead of answering that it is gone.
 		let not_here = error
 			.downcast_ref::<rivet_error::RivetError>()
 			.is_some_and(|error| error.group() == "actor" && error.code() == "not_found");
+		let delegated = error.downcast_ref::<DelegatedToV2>().is_some();
 		let held = error.downcast_ref::<HeldByMigrateFromV2>().is_some();
-		if migration.is_some() && target.keyed.is_none() && (not_here || held) {
+		if migration.is_some() && (not_here || delegated || (held && get_or_create.is_none())) {
 			return Ok(Routed::V2(V2Target {
 				v3_id: target.actor_id,
 			}));
@@ -707,64 +710,6 @@ struct V2Request {
 	keyed: bool,
 }
 
-/// Decides a keyed request before this cluster acquires its actor, while a migration from V2
-/// runs. Returns the V2 actor that serves it, or `None` to acquire it here.
-///
-/// A keyed actor moved in from V2 lives under the key's derived id, so that id is read first. A
-/// missing key goes to V2, except a getOrCreate once keyed creates moved here, which goes to V2
-/// only when V2 already has the key. A request by id needs no decision here: the acquire's own
-/// read finds whether this cluster holds the actor.
-async fn route_keyed(
-	ctx: &EngineContext,
-	migration: &migrate_from_v2::Active<'_>,
-	target: &Target,
-	headers: &HeaderMap,
-) -> Result<Option<V2Target>> {
-	let Some(keyed) = &target.keyed else {
-		return Ok(None);
-	};
-	let get_or_create = match keyed.method {
-		GatewayMethod::Get => false,
-		GatewayMethod::GetOrCreate => true,
-	};
-
-	let create_ratio = migrate_from_v2::create_ratio(migration.config, headers)?;
-	let state = migrate_from_v2::read_v3_actor(ctx, target.actor_id).await?;
-	let route = match decision::keyed(state, get_or_create, create_ratio) {
-		decision::Route::AskV2 => {
-			// The target holds the canonical key; V2's actor API reads the slash form.
-			let found = proxy::key_exists(
-				ctx,
-				migration.config,
-				&keyed.name,
-				&actor_key::to_slash(&keyed.key),
-			)
-			.await?;
-			decision::keyed_after_lookup(found)
-		}
-		route => route,
-	};
-	match route {
-		decision::Route::V3 => {
-			if get_or_create && state == V3Actor::None {
-				migration.count_create("v3", true);
-			}
-			Ok(None)
-		}
-		decision::Route::V2 => {
-			if get_or_create {
-				migration.count_create("v2", true);
-			}
-			Ok(Some(V2Target {
-				v3_id: target.actor_id,
-			}))
-		}
-		decision::Route::RetryLater => Err(ActorMigratingFromV2::error()),
-		decision::Route::NotFound => Err(ActorNotFound.build()),
-		decision::Route::AskV2 => bail!("keyed routing asked V2 twice"),
-	}
-}
-
 /// The route label of a request that failed before reaching an actor, when it is a migration
 /// outcome.
 fn refused_route(error: &anyhow::Error) -> Option<&'static str> {
@@ -841,10 +786,9 @@ async fn proxy_to_v2(
 				let route = decision::after_v2_not_found(state);
 				let error = match route {
 					decision::Route::RetryLater => ActorMigratingFromV2::error(),
-					decision::Route::NotFound
-					| decision::Route::V3
-					| decision::Route::V2
-					| decision::Route::AskV2 => ActorNotFound.build(),
+					decision::Route::NotFound | decision::Route::V3 | decision::Route::V2 => {
+						ActorNotFound.build()
+					}
 				};
 				if let Some(label) = refused_route(&error) {
 					migrate_from_v2::metrics::REQUESTS
@@ -871,10 +815,7 @@ fn after_v2_not_found(migration: &migrate_from_v2::Active<'_>, state: V3Actor) -
 			migration.count_request("retry_later");
 			ActorMigratingFromV2::error()
 		}
-		decision::Route::NotFound
-		| decision::Route::V3
-		| decision::Route::V2
-		| decision::Route::AskV2 => {
+		decision::Route::NotFound | decision::Route::V3 | decision::Route::V2 => {
 			migration.count_request("not_found");
 			ActorNotFound.build()
 		}
@@ -940,7 +881,9 @@ impl Target {
 	}
 
 	/// What a getOrCreate creates. A get creates nothing and fails when the actor is missing.
-	fn create(&self) -> Option<CreateActor> {
+	/// What a getOrCreate creates. `force_actor_v3` asks for the actor here while its namespace
+	/// migrates in from V2.
+	fn create(&self, force_actor_v3: bool) -> Option<CreateActor> {
 		let keyed = self.keyed.as_ref()?;
 		match keyed.method {
 			GatewayMethod::Get => None,
@@ -950,6 +893,7 @@ impl Target {
 				name: keyed.name.clone(),
 				key: keyed.key.clone(),
 				input: keyed.input.clone(),
+				force_actor_v3,
 			}),
 		}
 	}

@@ -40,9 +40,9 @@ pub struct ActorInvalidVersion {
 	pub version: String,
 }
 
-/// A V2 migration event arrived while some live storage worker still reads only actor state
-/// older than `required_version`, so the held actor could not be stored. The migrator retries
-/// the event on its own deadline.
+/// A V2 migration event, or a keyed create in a namespace migrating in from V2, arrived while
+/// some live storage worker still reads only actor state older than `required_version`, so the
+/// held or delegated actor could not be stored. The caller retries on its own deadline.
 #[derive(Debug, Serialize, Deserialize, RivetError)]
 #[error(
 	"actor",

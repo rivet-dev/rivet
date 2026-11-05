@@ -50,9 +50,11 @@ pub async fn begin(
 		pb::ActorPhase::MigratingFromV2(held) if held.migration_id == migration_id => Begun::Held {
 			create_unix_ms: response.create_unix_ms,
 		},
+		// A begin takes a delegated key over, so it never answers `DelegatedToV2`.
 		pb::ActorPhase::MigratingFromV2(_)
 		| pb::ActorPhase::Destroying(_)
-		| pb::ActorPhase::Destroyed => Begun::Elsewhere,
+		| pb::ActorPhase::Destroyed
+		| pb::ActorPhase::DelegatedToV2 => Begun::Elsewhere,
 		pb::ActorPhase::Initializing(_)
 		| pb::ActorPhase::Starting(_)
 		| pb::ActorPhase::Running(_)
@@ -134,7 +136,9 @@ pub async fn reservation(
 		// A failed attempt is retried by the actor state machine.
 		pb::ReserveEpoxyPhase::ReserveEpoxyPhasePending
 		| pb::ReserveEpoxyPhase::ReserveEpoxyPhaseFailed => Reservation::Pending,
-		pb::ReserveEpoxyPhase::ReserveEpoxyPhaseAlreadyReserved(_) => Reservation::OwnedElsewhere,
+		// A hold's reservation never asks V2, so it never finds the key there.
+		pb::ReserveEpoxyPhase::ReserveEpoxyPhaseAlreadyReserved(_)
+		| pb::ReserveEpoxyPhase::ReserveEpoxyPhaseInV2 => Reservation::OwnedElsewhere,
 		pb::ReserveEpoxyPhase::ReserveEpoxyPhaseMaxAttemptsReached => Reservation::Exhausted,
 	})
 }

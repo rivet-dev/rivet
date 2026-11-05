@@ -1,5 +1,0 @@
-{
-  "code": "unauthorized",
-  "group": "inspector",
-  "message": "Inspector request requires a valid bearer token"
-}

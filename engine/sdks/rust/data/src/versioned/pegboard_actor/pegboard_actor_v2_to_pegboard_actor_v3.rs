@@ -188,7 +188,11 @@ pub fn convert_destroying_pegboard_actor_v2_to_pegboard_actor_v3(
 ) -> Result<pegboard_actor_v3::Destroying> {
 	Ok(pegboard_actor_v3::Destroying {
 		destroy: convert_destroy_effect_data_pegboard_actor_v2_to_pegboard_actor_v3(x.destroy)?,
-		epoxy_already_reserved: x.epoxy_already_reserved,
+		key_owner: x.epoxy_already_reserved.map(|reservation_id| {
+			pegboard_actor_v3::KeyOwner::KeyOwnerDatacenter(pegboard_actor_v3::KeyOwnerDatacenter {
+				reservation_id,
+			})
+		}),
 	})
 }
 
@@ -449,6 +453,7 @@ pub fn convert_create_pegboard_actor_v2_to_pegboard_actor_v3(
 			.waiter
 			.map(|v| convert_start_waiter_pegboard_actor_v2_to_pegboard_actor_v3(v))
 			.transpose()?,
+		force_actor_v3: false,
 	})
 }
 
@@ -750,6 +755,7 @@ pub fn convert_actor_create_request_pegboard_actor_v2_to_pegboard_actor_v3(
 			.waiter
 			.map(|v| convert_start_waiter_pegboard_actor_v2_to_pegboard_actor_v3(v))
 			.transpose()?,
+		force_actor_v3: false,
 	})
 }
 

@@ -47,6 +47,9 @@ pub fn convert_reserve_epoxy_phase_pegboard_actor_v3_to_pegboard_actor_v2(
 		pegboard_actor_v3::ReserveEpoxyPhase::ReserveEpoxyPhaseAlreadyReserved(v) => pegboard_actor_v2::ReserveEpoxyPhase::ReserveEpoxyPhaseAlreadyReserved(convert_reserve_epoxy_phase_already_reserved_pegboard_actor_v3_to_pegboard_actor_v2(v)?),
 		pegboard_actor_v3::ReserveEpoxyPhase::ReserveEpoxyPhaseFailed => pegboard_actor_v2::ReserveEpoxyPhase::ReserveEpoxyPhaseFailed,
 		pegboard_actor_v3::ReserveEpoxyPhase::ReserveEpoxyPhaseMaxAttemptsReached => pegboard_actor_v2::ReserveEpoxyPhase::ReserveEpoxyPhaseMaxAttemptsReached,
+		pegboard_actor_v3::ReserveEpoxyPhase::ReserveEpoxyPhaseInV2 => {
+			bail!("a key found in V2 has no pegboard.actor v2 form")
+		}
 	})
 }
 
@@ -189,7 +192,15 @@ pub fn convert_destroying_pegboard_actor_v3_to_pegboard_actor_v2(
 ) -> Result<pegboard_actor_v2::Destroying> {
 	Ok(pegboard_actor_v2::Destroying {
 		destroy: convert_destroy_effect_data_pegboard_actor_v3_to_pegboard_actor_v2(x.destroy)?,
-		epoxy_already_reserved: x.epoxy_already_reserved,
+		epoxy_already_reserved: match x.key_owner {
+			None => None,
+			Some(pegboard_actor_v3::KeyOwner::KeyOwnerDatacenter(owner)) => {
+				Some(owner.reservation_id)
+			}
+			Some(pegboard_actor_v3::KeyOwner::KeyOwnerV2) => {
+				bail!("a key owned by V2 has no pegboard.actor v2 form")
+			}
+		},
 	})
 }
 
@@ -235,6 +246,9 @@ pub fn convert_actor_phase_pegboard_actor_v3_to_pegboard_actor_v2(
 			pegboard_actor_v2::ActorPhase::MigratingFromV2(
 				convert_migrating_from_v2_pegboard_actor_v3_to_pegboard_actor_v2(v)?,
 			)
+		}
+		pegboard_actor_v3::ActorPhase::DelegatedToV2 => {
+			bail!("an actor delegated to V2 has no pegboard.actor v2 form")
 		}
 	})
 }
@@ -438,6 +452,9 @@ pub fn convert_try_start_pegboard_actor_v3_to_pegboard_actor_v2(
 pub fn convert_create_pegboard_actor_v3_to_pegboard_actor_v2(
 	x: pegboard_actor_v3::Create,
 ) -> Result<pegboard_actor_v2::Create> {
+	if x.force_actor_v3 {
+		bail!("a create that forces actor v3 has no pegboard.actor v2 form");
+	}
 	Ok(pegboard_actor_v2::Create {
 		init: convert_actor_create_data_pegboard_actor_v3_to_pegboard_actor_v2(x.init)?,
 		waiter: x
@@ -697,6 +714,9 @@ pub fn convert_try_start_outcome_pegboard_actor_v3_to_pegboard_actor_v2(
 		pegboard_actor_v3::TryStartOutcome::TryStartMigratingFromV2 => {
 			pegboard_actor_v2::TryStartOutcome::TryStartMigratingFromV2
 		}
+		pegboard_actor_v3::TryStartOutcome::TryStartDelegatedToV2 => {
+			bail!("an outcome naming a key that belongs to V2 has no pegboard.actor v2 form")
+		}
 	})
 }
 
@@ -739,6 +759,9 @@ pub fn convert_actor_migrate_from_v2_begin_response_pegboard_actor_v3_to_pegboar
 pub fn convert_actor_create_request_pegboard_actor_v3_to_pegboard_actor_v2(
 	x: pegboard_actor_v3::ActorCreateRequest,
 ) -> Result<pegboard_actor_v2::ActorCreateRequest> {
+	if x.force_actor_v3 {
+		bail!("a create that forces actor v3 has no pegboard.actor v2 form");
+	}
 	Ok(pegboard_actor_v2::ActorCreateRequest {
 		init: convert_actor_create_data_pegboard_actor_v3_to_pegboard_actor_v2(x.init)?,
 		waiter: x
@@ -791,6 +814,9 @@ pub fn convert_actor_start_notice_kind_pegboard_actor_v3_to_pegboard_actor_v2(
 		pegboard_actor_v3::ActorStartNoticeKind::ActorStartNoticeEpoxyAlreadyReserved(v) => pegboard_actor_v2::ActorStartNoticeKind::ActorStartNoticeEpoxyAlreadyReserved(convert_actor_start_notice_epoxy_already_reserved_pegboard_actor_v3_to_pegboard_actor_v2(v)?),
 		pegboard_actor_v3::ActorStartNoticeKind::ActorStartNoticeDestroyed => pegboard_actor_v2::ActorStartNoticeKind::ActorStartNoticeDestroyed,
 		pegboard_actor_v3::ActorStartNoticeKind::ActorStartNoticeMigratingFromV2 => pegboard_actor_v2::ActorStartNoticeKind::ActorStartNoticeMigratingFromV2,
+		pegboard_actor_v3::ActorStartNoticeKind::ActorStartNoticeDelegatedToV2 => {
+			bail!("a notice that the key belongs to V2 has no pegboard.actor v2 form")
+		}
 	})
 }
 

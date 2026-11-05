@@ -1,9 +1,8 @@
 //! Forwarding to the V2 deployment a migration takes over: gateway requests and WebSockets
-//! proxied unchanged, and the few V2 public API calls routing needs.
+//! proxied unchanged. The V2 public API client lives in `pegboard::migrate_from_v2`.
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result};
 use axum::body::Body;
-use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use hyper::{HeaderMap, Method, StatusCode, Uri, header};
 use rivet_config::config::MigrateFromV2;
@@ -17,12 +16,6 @@ use std::time::Duration;
 /// How long a proxied request waits for V2's response headers. V2's gateway may wake the
 /// actor first, so this outlasts its own wake wait.
 pub const V2_RESPONSE_TIMEOUT: Duration = Duration::from_secs(60);
-
-/// How long a V2 public API call may take.
-const V2_API_TIMEOUT: Duration = Duration::from_secs(15);
-
-/// Largest V2 public API response routing reads.
-const V2_API_RESPONSE_LIMIT_BYTES: usize = 1024 * 1024;
 
 /// V2's error header, `<group>.<code>`.
 const X_RIVET_ERROR: &str = "x-rivet-error";
@@ -296,118 +289,18 @@ where
 	}
 }
 
-/// A V2 public API response, read in full.
-pub struct ApiResponse {
-	pub status: StatusCode,
-	pub headers: HeaderMap,
-	pub body: Bytes,
-}
-
-impl ApiResponse {
-	/// The response as the client should see it.
-	pub fn into_response(self) -> axum::response::Response {
-		let mut response = axum::response::Response::new(Body::from(self.body));
-		*response.status_mut() = self.status;
-		let headers = response.headers_mut();
-		for name in [
-			header::CONTENT_TYPE,
-			header::HeaderName::from_static(X_RIVET_ERROR),
-		] {
-			if let Some(value) = self.headers.get(&name) {
-				headers.insert(name, value.clone());
-			}
+/// A V2 public API response as the client should see it.
+pub fn api_response(response: pegboard::migrate_from_v2::ApiResponse) -> axum::response::Response {
+	let mut out = axum::response::Response::new(Body::from(response.body));
+	*out.status_mut() = response.status;
+	let headers = out.headers_mut();
+	for name in [
+		header::CONTENT_TYPE,
+		header::HeaderName::from_static(X_RIVET_ERROR),
+	] {
+		if let Some(value) = response.headers.get(&name) {
+			headers.insert(name, value.clone());
 		}
-		response
 	}
-}
-
-/// The V2 public API of the lowest datacenter label. Any V2 datacenter resolves keys and
-/// creates globally, so one stable choice is enough.
-pub fn api_url(config: &MigrateFromV2) -> Result<&str> {
-	config
-		.api_urls
-		.iter()
-		.filter_map(|(label, url)| Some((label.parse::<u16>().ok()?, url)))
-		.min_by_key(|(label, _)| *label)
-		.map(|(_, url)| url.trim_end_matches('/'))
-		.context("migrate_from_v2.api_urls names no V2 public API")
-}
-
-/// Calls V2's public API with the migration's token. `path_and_query` starts with `/`.
-pub async fn api(
-	ctx: &EngineContext,
-	config: &MigrateFromV2,
-	method: Method,
-	path_and_query: &str,
-	body: Option<Bytes>,
-) -> Result<ApiResponse> {
-	let uri: Uri = format!("{}{path_and_query}", api_url(config)?)
-		.parse()
-		.context("invalid V2 public API URI")?;
-	let has_body = body.is_some();
-	let body = futures_util::stream::iter(body.map(Ok)).boxed();
-	let mut builder = Request::builder().method(method).uri(uri);
-	if has_body {
-		builder = builder.header(header::CONTENT_TYPE, "application/json");
-	}
-	if let Some(token) = &config.token {
-		builder = builder.header(header::AUTHORIZATION, format!("Bearer {token}"));
-	}
-	let request = builder.body(body)?;
-
-	let clock = ctx.env().clock();
-	let deadline = rivet_env::deadline_after(clock.as_ref(), V2_API_TIMEOUT)?;
-	let read = async {
-		let response = ctx.external_http().execute(request).await?;
-		let (parts, mut body) = response.into_parts();
-		let mut bytes = Vec::new();
-		while let Some(chunk) = body.next().await {
-			let chunk = chunk?;
-			ensure!(
-				bytes.len().saturating_add(chunk.len()) <= V2_API_RESPONSE_LIMIT_BYTES,
-				"V2 public API response is larger than {V2_API_RESPONSE_LIMIT_BYTES} bytes"
-			);
-			bytes.extend_from_slice(&chunk);
-		}
-		anyhow::Ok(ApiResponse {
-			status: parts.status,
-			headers: parts.headers,
-			body: Bytes::from(bytes),
-		})
-	};
-	rivet_env::timeout_at(clock.as_ref(), deadline, read)
-		.await
-		.context("V2 public API did not answer before the deadline")?
-}
-
-/// Whether V2 holds a live actor for `name` and `key`, in the slash form V2's actor API reads.
-pub async fn key_exists(
-	ctx: &EngineContext,
-	config: &MigrateFromV2,
-	name: &str,
-	key: &str,
-) -> Result<bool> {
-	let query = serde_html_form::to_string([
-		("namespace", config.namespace.as_str()),
-		("name", name),
-		("key", key),
-	])?;
-	let response = api(ctx, config, Method::GET, &format!("/actors?{query}"), None).await?;
-	ensure!(
-		response.status.is_success(),
-		"V2 actor lookup by key failed with status {}",
-		response.status
-	);
-	let listed: ListedActors =
-		serde_json::from_slice(&response.body).context("invalid V2 actor listing")?;
-	Ok(listed.actors.iter().any(|actor| {
-		actor
-			.get("destroy_ts")
-			.is_none_or(serde_json::Value::is_null)
-	}))
-}
-
-#[derive(serde::Deserialize)]
-struct ListedActors {
-	actors: Vec<serde_json::Value>,
+	out
 }
