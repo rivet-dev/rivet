@@ -4,7 +4,7 @@ const myActor = actor({
   options: {
     maxQueueSize: 1000,
     actionTimeout: 60_000,
-    stateSaveInterval: 1_000,
+    sleepTimeout: 30_000,
   },
   // ...
 });
