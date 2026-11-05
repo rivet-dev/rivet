@@ -117,6 +117,7 @@ export type ActionRequest<A extends Action.Any> =
 				readonly _tag: Tag;
 				readonly action: A;
 				readonly payload: Payload["Type"];
+				readonly connectionId: string;
 			}
 		: never;
 

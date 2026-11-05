@@ -112,6 +112,7 @@ export const make = <
 						_tag: action._tag,
 						action,
 						payload: decodedPayload,
+						connectionId: c.conn.id,
 					} as ActionRequest<typeof action>;
 
 					const resultExit = yield* Effect.exit(
