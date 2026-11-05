@@ -7,10 +7,9 @@
   </a>
   <br/>
   <br/>
-  <h3>Fast, high-density, scalable orchestration for agentic workloads.</h3>
+  <h3>Fast, high-density, scalable orchestration with Rivet Actors.<br/>Built on S3 at SSD speeds.</h3>
   <p>
-    Instead of a heavyweight sandbox per agent, each agent gets a lightweight Rivet Actor backed by S3.<br/>
-    4.99 ms p99 cold starts and 72 KB per Actor. Open source and self-hostable.
+    4.99 ms p99 cold starts, 72 KB RAM per Actor, scales to billions
   </p>
   <p>
     <a href="https://www.rivet.dev/docs">Quickstart</a> •
@@ -20,39 +19,6 @@
     <a href="https://x.com/rivet_dev">X</a>
   </p>
 </div>
-
-## Getting Started
-
-<table>
-<tr>
-<td width="50%" valign="top">
-
-### Use with Your Coding Agent
-
-Give your coding agent the Rivet skills to create examples or integrate into existing projects:
-
-```bash
-npx skills add rivet-dev/skills
-```
-
-Works with Claude Code, Cursor, Windsurf, and other AI coding tools.
-
-</td>
-<td width="50%" valign="top">
-
-### Start From Scratch
-
-- [Node.js & Bun](https://www.rivet.dev/actors/docs/quickstart/backend)
-- [React](https://www.rivet.dev/actors/docs/quickstart/react)
-- [Next.js](https://www.rivet.dev/actors/docs/quickstart/next-js)
-- [Rust](https://www.rivet.dev/actors/docs/quickstart/rust)
-- [Effect](https://www.rivet.dev/actors/docs/quickstart/effect)
-
-[View documentation →](https://www.rivet.dev/docs)
-
-</td>
-</tr>
-</table>
 
 ## What is Rivet?
 
@@ -111,7 +77,17 @@ agent.on("token", delta => process.stdout.write(delta));
 await agent.chat("how many r's in strawberry?");
 ```
 
-## Actor types
+## Getting Started
+
+### Use with your coding agent
+
+Paste this prompt into Claude Code, Cursor, Codex, or any coding agent:
+
+```text
+Run npx skills add rivet-dev/skills, then ask me what to build and run it locally.
+```
+
+### Start from scratch
 
 Every product Rivet ships is an Actor, scheduled by the same control plane.
 
@@ -130,11 +106,12 @@ Every product Rivet ships is an Actor, scheduled by the same control plane.
 
 ## How Actors compare to sandboxes
 
-| | Rivet Actor | Sandbox |
-|---|:---:|:---:|
-| **Cold start (p99)** | **4.99 ms** | 1.70 s |
-| **Memory per instance** | **72.4 KB** | 512 MiB |
-| **Storage** | **SQLite backed by S3**, about 10.4× cheaper than replicated SSDs | Disk per sandbox |
+| Metric | Rivet Actor | Sandbox |
+| --- | --- | --- |
+| Cold start (p99) | **4.99 ms** | 1.70 s |
+| Memory per instance | **72.4 KB** | 512 MiB |
+| Storage | **SQLite on S3** | Disk per sandbox |
+| Storage cost | **10.4× cheaper** | Replicated SSDs |
 
 <details>
 <summary>Benchmark details & methodology</summary>
@@ -157,42 +134,11 @@ Every product Rivet ships is an Actor, scheduled by the same control plane.
 
 ## Deployment Options
 
-<table>
-<tr>
-<td width="33%" valign="top">
-
-### Local & Self-Host
-
-Run Rivet locally while you build. In production, run the control plane on Docker, Kubernetes, or a VM on AWS, GCP, Azure, or Hetzner. S3 is the only dependency.
-
-```bash
-npm install rivetkit
-```
-
-[Open the quickstart →](https://www.rivet.dev/actors/docs/quickstart/backend)
-[Read self-hosting docs →](https://www.rivet.dev/docs/deploy/self-host/control-plane/)
-
-</td>
-<td width="33%" valign="top">
-
-### Rivet Cloud
-
-Fully managed, dedicated clusters on AWS or GCP in any region. Run your nodes on Rivet Cloud or bring your own.
-
-[Get started with Rivet Cloud →](https://dashboard.rivet.dev)
-
-</td>
-<td width="33%" valign="top">
-
-### BYOC
-
-Run the control plane inside your own VPC on AWS, GCP, or Azure, fully managed by Rivet. Your data never leaves your cloud.
-
-[Read the BYOC docs →](https://www.rivet.dev/docs/deploy/byoc/)
-
-</td>
-</tr>
-</table>
+| Option | Description | Get started |
+| --- | --- | --- |
+| **Local & self-host** | Run Rivet locally while you build. In production, run the control plane on Docker, Kubernetes, or a VM. S3 is the only dependency. | [Self-hosting docs](https://www.rivet.dev/docs/deploy/self-host/control-plane/) |
+| **Rivet Cloud** | Fully managed, dedicated clusters on AWS or GCP in any region. Run your nodes on Rivet Cloud or bring your own. | [Dashboard](https://dashboard.rivet.dev) |
+| **BYOC** | The control plane runs inside your own VPC on AWS, GCP, or Azure, fully managed by Rivet. Your data never leaves your cloud. | [BYOC docs](https://www.rivet.dev/docs/deploy/byoc/) |
 
 Every option runs the same control plane, from local dev to production. [Talk to an engineer →](https://www.rivet.dev/talk-to-an-engineer)
 
