@@ -25,10 +25,6 @@ type LocalAlarmTask = JoinHandle<()>;
 #[cfg(feature = "wasm-runtime")]
 type LocalAlarmTask = futures::future::AbortHandle;
 
-#[cfg(feature = "sqlite-local")]
-use crate::actor::actor_runtime_socket::{
-	ActorRuntimeSocketEndpoint, ActorRuntimeSocketEndpointInfo,
-};
 use crate::actor::connection::{
 	ConnHandle, ConnHandles, HibernatableConnectionMetadata, PendingHibernationChanges,
 	hibernatable_id_from_slice,
@@ -99,8 +95,6 @@ pub(crate) struct ActorContextInner {
 	/// phase. Startup consumes it once.
 	// Forced-sync: set once before the actor task starts and taken by its startup.
 	start_received_at: parking_lot::Mutex<Option<crate::time::Instant>>,
-	#[cfg(feature = "sqlite-local")]
-	actor_runtime_socket: ActorRuntimeSocketEndpoint,
 	// Forced-sync: actor state snapshots are exposed through synchronous
 	// accessors and are never held across `.await`.
 	pub(super) current_state: RwLock<Vec<u8>>,
@@ -422,9 +416,6 @@ impl ActorContext {
 		#[cfg(feature = "sqlite-local")]
 		sql.set_vfs_metrics(Arc::new(metrics.clone()));
 		let diagnostics = ActorDiagnostics::new(actor_id.clone());
-		#[cfg(feature = "sqlite-local")]
-		let actor_runtime_socket =
-			ActorRuntimeSocketEndpoint::new(config.enable_actor_runtime_socket, sql.clone());
 		let state_save_interval = config.state_save_interval;
 		let tracing_config = Arc::clone(&config.tracing);
 		let max_schedules = config.max_schedules;
@@ -438,8 +429,6 @@ impl ActorContext {
 			sql,
 			new_actor_storage: AtomicBool::new(false),
 			start_received_at: parking_lot::Mutex::new(None),
-			#[cfg(feature = "sqlite-local")]
-			actor_runtime_socket,
 			current_state: RwLock::new(Vec::new()),
 			persisted: RwLock::new(PersistedActor::default()),
 			last_pushed_alarm: RwLock::new(None),
@@ -536,35 +525,35 @@ impl ActorContext {
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub async fn kv_batch_get(&self, keys: &[&[u8]]) -> Result<Vec<Option<Vec<u8>>>> {
 		self.0.user_kv.batch_get(keys).await
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub async fn kv_batch_put(&self, entries: &[(&[u8], &[u8])]) -> Result<()> {
 		self.0.user_kv.batch_put(entries).await
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub async fn kv_batch_delete(&self, keys: &[&[u8]]) -> Result<()> {
 		self.0.user_kv.batch_delete(keys).await
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub async fn kv_delete_range(&self, start: &[u8], end: &[u8]) -> Result<()> {
 		self.0.user_kv.delete_range(start, end).await
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub async fn kv_list_prefix(
 		&self,
@@ -575,7 +564,7 @@ impl ActorContext {
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub async fn kv_list_range(
 		&self,
@@ -587,7 +576,7 @@ impl ActorContext {
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub fn kv(&self) -> &ActorKv {
 		&self.0.user_kv
@@ -624,16 +613,6 @@ impl ActorContext {
 	/// at most once, so a restart within this context probes storage again.
 	pub(crate) fn take_new_actor_storage(&self) -> bool {
 		self.0.new_actor_storage.swap(false, Ordering::AcqRel)
-	}
-
-	#[cfg(feature = "sqlite-local")]
-	pub async fn provision_actor_runtime_socket(&self) -> Result<ActorRuntimeSocketEndpointInfo> {
-		self.0.actor_runtime_socket.provision().await
-	}
-
-	#[cfg(feature = "sqlite-local")]
-	pub(crate) async fn shutdown_actor_runtime_socket(&self) {
-		self.0.actor_runtime_socket.shutdown().await;
 	}
 
 	pub async fn db_exec(&self, sql: &str) -> Result<Vec<u8>> {
@@ -871,10 +850,14 @@ impl ActorContext {
 	/// Deprecated no-op. Use `keep_awake` to hold the actor awake for the
 	/// duration of a future, or `wait_until` to keep work alive across the
 	/// sleep grace period. Retained only for NAPI bridge compatibility.
-	#[deprecated(note = "no-op: use `keep_awake` or `wait_until` instead")]
+	#[deprecated(
+		note = "`set_prevent_sleep` was deprecated in 3.0 and will be removed in a future version. It is a no-op. Use `keep_awake` or `wait_until`. See https://rivet.dev/actors/docs/deprecated/prevent-sleep"
+	)]
 	pub fn set_prevent_sleep(&self, _enabled: bool) {}
 
-	#[deprecated(note = "no-op: always returns false")]
+	#[deprecated(
+		note = "`prevent_sleep` was deprecated in 3.0 and will be removed in a future version. It is a no-op that always returns false. Use `keep_awake` or `wait_until`. See https://rivet.dev/actors/docs/deprecated/prevent-sleep"
+	)]
 	pub fn prevent_sleep(&self) -> bool {
 		false
 	}

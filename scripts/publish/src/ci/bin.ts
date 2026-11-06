@@ -47,7 +47,6 @@ const RUST_CRATES = [
 	"rivet-error",
 	"rivet-metrics",
 	"rivet-util-serde",
-	"rivet-actor-runtime-socket-protocol",
 	// rivet-envoy-protocol must precede sqlite-embedded, which pins it as an
 	// exact dependency. Publishing sqlite-embedded first makes cargo fail to
 	// resolve rivet-envoy-protocol because it is not yet on crates.io.

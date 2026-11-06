@@ -17,6 +17,17 @@ mod routes;
 mod tokens;
 
 pub fn router(ctx: &EngineContext) -> Router {
+	router_with_retry_budget(
+		ctx,
+		std::sync::Arc::new(pegboard_gateway::RetryBudget::from_config(ctx)),
+	)
+}
+
+/// Guard shares one retry budget between actor routing and public API requests.
+pub fn router_with_retry_budget(
+	ctx: &EngineContext,
+	budget: std::sync::Arc<pegboard_gateway::RetryBudget>,
+) -> Router {
 	// Clients can read metadata before authenticating. Other routes enforce scoped grants.
 	let protected = Router::new()
 		.route("/datacenters", get(routes::list_datacenters))
@@ -51,6 +62,7 @@ pub fn router(ctx: &EngineContext) -> Router {
 		.route("/auth/tokens/inspect", get(tokens::inspect))
 		.merge(protected)
 		.layer(middleware::from_fn(classify_read_refusal))
+		.layer(axum::Extension(budget))
 		// Outermost, so preflights are answered before authentication. RivetKit clients send
 		// every request with credentials, which rejects wildcards, so the request's own values
 		// are mirrored and the readable headers are listed.
@@ -147,6 +159,8 @@ impl IntoResponse for ApiError {
 				StatusCode::SERVICE_UNAVAILABLE
 			}
 			("actor", "migrating_from_v2") => StatusCode::SERVICE_UNAVAILABLE,
+			// Existing SDKs retry all 5xx responses; this create may already have taken effect.
+			("actor", "create_pending") => StatusCode::CONFLICT,
 			_ => StatusCode::BAD_REQUEST,
 		};
 		let mut body = serde_json::json!({

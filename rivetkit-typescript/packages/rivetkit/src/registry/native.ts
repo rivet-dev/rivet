@@ -2858,12 +2858,6 @@ export class ActorContextHandleAdapter {
 		return this.#kv;
 	}
 
-	async actorRuntimeSocket(): Promise<{ path: string }> {
-		return await callNative(() =>
-			this.#runtime.actorRuntimeSocketProvision(this.#ctx),
-		);
-	}
-
 	get db() {
 		if (!this.#databaseProvider) {
 			throw databaseNotConfiguredError();
@@ -3529,17 +3523,17 @@ export class ActorContextHandleAdapter {
 	// need to keep an actor awake should use `keepAwake(promise)` or
 	// `waitUntil(promise)` so the native counter machinery in rivetkit-core
 	// owns the lifecycle.
-	/** @deprecated Use `keepAwake(promise)` or `waitUntil(promise)` instead. */
+	/** @deprecated `setPreventSleep` was deprecated in 3.0 and will be removed in a future version. It is a no-op. Use `c.keepAwake(promise)` or `c.waitUntil(promise)`. See https://rivet.dev/actors/docs/deprecated/prevent-sleep */
 	setPreventSleep(_preventSleep: boolean): void {
 		logger().warn({
-			msg: "setPreventSleep is deprecated and is a no-op; use keepAwake(promise) or waitUntil(promise) instead",
+			msg: "setPreventSleep was deprecated in 3.0 and will be removed in a future version. It is a no-op; use keepAwake(promise) or waitUntil(promise) instead. See https://rivet.dev/actors/docs/deprecated/prevent-sleep",
 		});
 	}
 
-	/** @deprecated Use `keepAwake(promise)` or `waitUntil(promise)` instead. */
+	/** @deprecated `preventSleep` was deprecated in 3.0 and will be removed in a future version. It is a no-op that always returns `false`. Use `c.keepAwake(promise)` or `c.waitUntil(promise)`. See https://rivet.dev/actors/docs/deprecated/prevent-sleep */
 	get preventSleep(): boolean {
 		logger().warn({
-			msg: "preventSleep is deprecated and always returns false; use keepAwake(promise) or waitUntil(promise) instead",
+			msg: "preventSleep was deprecated in 3.0 and will be removed in a future version. It always returns false; use keepAwake(promise) or waitUntil(promise) instead. See https://rivet.dev/actors/docs/deprecated/prevent-sleep",
 		});
 		return false;
 	}
@@ -4009,7 +4003,6 @@ function buildActorConfig(
 			definition.config.actions,
 			definition.config.tracing,
 		),
-		enableActorRuntimeSocket: options.enableActorRuntimeSocket === true,
 		hasState:
 			config.state !== undefined ||
 			typeof config.createState === "function",

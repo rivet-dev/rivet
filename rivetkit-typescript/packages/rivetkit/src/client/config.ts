@@ -42,7 +42,7 @@ export const ClientConfigSchemaBase = z.object({
 				hasWarnedMissingEndpoint = true;
 				console.warn(
 					`[rivetkit] No endpoint provided to client. Defaulting to ${DEFAULT_ENDPOINT}. ` +
-						`Starting in 2.2.0, an explicit endpoint will be required. ` +
+						`Starting in 3.2.0, an explicit endpoint will be required. ` +
 						`Pass an endpoint to createClient() or createRivetKit(), ` +
 						`or set the RIVET_ENDPOINT environment variable.`,
 				);

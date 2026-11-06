@@ -11,8 +11,8 @@ pub mod fences;
 mod volume_observer;
 pub use command::{
 	CommandOptions, Conflict, Corrupt, Fenced, Overloaded, ROUTE_UNRESOLVED_REASON,
-	ReadInterrupted, Unavailable, overload_reason_label, retry_after_ms, route_unresolved,
-	unavailable_reason_label,
+	ReadInterrupted, RequestDeadlineExceeded, Unavailable, overload_reason_label, retry_after_ms,
+	route_unresolved, unavailable_reason_label,
 };
 pub mod filesystem;
 pub mod forks;
@@ -67,6 +67,8 @@ pub struct Client {
 	topology: Arc<Topology>,
 	dispatch_guard: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
 	command_timeout_floor: Option<std::time::Duration>,
+	/// Absolute request deadline inherited by typed commands and their route continuations.
+	command_deadline_boot_ms: Option<u64>,
 }
 
 impl Client {
@@ -78,6 +80,7 @@ impl Client {
 			topology,
 			dispatch_guard: None,
 			command_timeout_floor: None,
+			command_deadline_boot_ms: None,
 		}
 	}
 
@@ -94,6 +97,18 @@ impl Client {
 		match self.command_timeout_floor {
 			Some(floor) => default.max(floor),
 			None => default,
+		}
+	}
+
+	/// Caps typed commands at the caller's original boot deadline. Clones retain the cap,
+	/// and nesting can only shorten it. This handle adds no retry policy.
+	pub fn with_command_deadline(&self, deadline_boot_ms: u64) -> Self {
+		Self {
+			command_deadline_boot_ms: Some(
+				self.command_deadline_boot_ms
+					.map_or(deadline_boot_ms, |previous| previous.min(deadline_boot_ms)),
+			),
+			..self.clone()
 		}
 	}
 

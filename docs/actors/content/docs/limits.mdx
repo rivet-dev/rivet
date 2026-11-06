@@ -84,14 +84,6 @@ Large commits are sent in internal chunks, but each transaction is published ato
 
 If a transaction fails with `sqlite.transaction_too_large`, split the work into smaller transactions, for example by inserting, updating, or deleting rows in batches. `VACUUM` rewrites the whole database in one transaction, so it runs only while the database's in-use pages fit under this limit; it is refused up front on larger databases. Building an index on a large table can also exceed the limit.
 
-### Actor Runtime Socket
-
-The Beta [Actor Runtime Socket](/actors/docs/actor-runtime-socket) announces its frame limit during the handshake.
-
-| Name | Soft Limit | Hard Limit | Description |
-|------|------------|------------|-------------|
-| Frame payload size | 32 MiB | N/A | Default maximum request or response payload. Self-hosted native runtimes can configure `RIVET_ACTOR_RUNTIME_SOCKET_MAX_FRAME_BYTES`; oversized responses return `ResponseTooLarge`, and an oversized frame from the client closes the connection with `FrameTooLarge`. |
-
 ### Names and Keys
 
 | Name | Soft Limit | Hard Limit | Description |

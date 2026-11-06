@@ -2,9 +2,9 @@ use std::collections::{BTreeSet, HashMap};
 
 use anyhow::{Context, Result, bail, ensure};
 use axum::{
-	Json,
+	Extension, Json,
 	extract::{Path, Query, State},
-	http::{HeaderMap, Method},
+	http::{HeaderMap, Method, StatusCode},
 	response::{IntoResponse, Response},
 };
 use base64::Engine;
@@ -25,7 +25,7 @@ use rivet_util::{Id, rng::RngStreamIdExt};
 use rivetkit_shared_types::actor_key;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use crate::ApiError;
 
@@ -49,6 +49,118 @@ const NODE_READ_CONCURRENCY: usize = 16;
 
 /// How often a create reads the actor while waiting for its data record.
 const CREATE_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Retry only a refused storage step at the HTTP edge, within the request's shared budget.
+/// The caller retains the actor id and create body; a successful mutation is never replayed
+/// to recover a subsequent read.
+async fn create_step<T, F, Fut>(
+	ctx: &EngineContext,
+	retries: &mut pegboard_gateway::Retries<'_>,
+	operation: &'static str,
+	mut step: F,
+) -> Result<T>
+where
+	F: FnMut() -> Fut,
+	Fut: std::future::Future<Output = Result<T>>,
+{
+	loop {
+		match step().await {
+			Ok(value) => return Ok(value),
+			Err(error) => {
+				retries.retry(ctx.env().as_ref(), error).await?;
+				tracing::debug!(operation, "retrying refused actor API storage step");
+			}
+		}
+	}
+}
+
+/// Whether this HTTP request may already have submitted its actor's create.
+#[derive(Clone, Copy, Debug)]
+enum CreateProgress {
+	/// No actor create has been sent; a refusal is safe to return with its retry hint.
+	NotSubmitted,
+	/// A create may have been sent. An uncertain outcome may already have created this actor.
+	Submitted(Id),
+	/// A create was acknowledged. Reading its result must not invite another logical create.
+	Acknowledged(Id),
+}
+
+#[derive(Debug, rivet_error::RivetError, serde::Serialize)]
+#[error(
+	"actor",
+	"create_pending",
+	"Actor creation may still be in progress; do not retry creation automatically.",
+	"Actor creation may still be in progress; inspect actor {actor_id} instead of retrying creation."
+)]
+struct ActorCreatePending {
+	actor_id: String,
+}
+
+/// A known or uncertain create cannot be turned into a fresh user-request retry by a
+/// subsequent storage failure. Preserve its id without claiming that it already has data.
+fn create_error(progress: CreateProgress, error: anyhow::Error) -> anyhow::Error {
+	let uncertain = error
+		.downcast_ref::<rivet_error::RivetError>()
+		.map_or(true, |error| {
+			error.group() == "depot"
+				&& matches!(
+					error.code(),
+					"unavailable" | "request_deadline_exceeded" | "scope_revoked"
+				)
+		});
+	let actor_id = match progress {
+		CreateProgress::Acknowledged(actor_id)
+			if uncertain || depot_client::retry_after_ms(&error).is_some() =>
+		{
+			Some(actor_id)
+		}
+		CreateProgress::Submitted(actor_id) if uncertain => Some(actor_id),
+		_ => None,
+	};
+	match actor_id {
+		Some(actor_id) => ActorCreatePending {
+			actor_id: actor_id.to_string(),
+		}
+		.build(),
+		None => error,
+	}
+}
+
+/// Preserve local submission progress when a request deadline cancels a storage step.
+fn create_result<T>(
+	progress: CreateProgress,
+	result: Result<Result<T>, rivet_env::TimeoutError>,
+) -> Result<T> {
+	match result {
+		Ok(result) => result,
+		Err(rivet_env::TimeoutError::Elapsed) => Err(depot_client::RequestDeadlineExceeded.build()),
+		Err(rivet_env::TimeoutError::Clock(error)) => Err(error.into()),
+	}
+	.map_err(|error| create_error(progress, error))
+}
+
+/// Only refusals left before an actor create may be returned as retryable overloads.
+fn create_response(result: Result<Response>) -> Response {
+	match result {
+		Ok(response) => response,
+		Err(error) => {
+			let refused = depot_client::retry_after_ms(&error).is_some();
+			let deadline_elapsed =
+				error
+					.downcast_ref::<rivet_error::RivetError>()
+					.is_some_and(|error| {
+						error.group() == "depot" && error.code() == "request_deadline_exceeded"
+					});
+			let mut response = ApiError::from(error).into_response();
+			if refused {
+				*response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
+			} else if deadline_elapsed {
+				*response.status_mut() = StatusCode::GATEWAY_TIMEOUT;
+			}
+			response
+		}
+	}
+}
 
 /// Serves without authentication so clients can discover the engine before they authenticate.
 /// The actor names read every active envoy's record, so only a caller with the admin token gets
@@ -355,20 +467,26 @@ async fn namespace(ctx: &EngineContext, query: Option<&str>) -> Result<String> {
 
 pub async fn create_actor(
 	State(ctx): State<EngineContext>,
+	Extension(budget): Extension<Arc<pegboard_gateway::RetryBudget>>,
 	Query(query): Query<NamespaceQuery>,
 	headers: HeaderMap,
 	raw: Bytes,
 ) -> Result<Response, ApiError> {
-	Ok(create_or_proxy(&ctx, query, &headers, raw, false).await?)
+	Ok(create_response(
+		create_or_proxy(&ctx, &budget, query, &headers, raw, false).await,
+	))
 }
 
 pub async fn get_or_create_actor(
 	State(ctx): State<EngineContext>,
+	Extension(budget): Extension<Arc<pegboard_gateway::RetryBudget>>,
 	Query(query): Query<NamespaceQuery>,
 	headers: HeaderMap,
 	raw: Bytes,
 ) -> Result<Response, ApiError> {
-	Ok(create_or_proxy(&ctx, query, &headers, raw, true).await?)
+	Ok(create_response(
+		create_or_proxy(&ctx, &budget, query, &headers, raw, true).await,
+	))
 }
 
 /// Creates the actor here, or proxies the create to V2's public API while a V2 namespace
@@ -378,6 +496,7 @@ pub async fn get_or_create_actor(
 /// sends `x-rivet-actor-version: 3` is placed here unless its key already belongs to V2.
 async fn create_or_proxy(
 	ctx: &EngineContext,
+	budget: &pegboard_gateway::RetryBudget,
 	query: NamespaceQuery,
 	headers: &HeaderMap,
 	raw: Bytes,
@@ -387,7 +506,24 @@ async fn create_or_proxy(
 		Ok(Json(body)) => body,
 		Err(rejection) => return Ok(rejection.into_response()),
 	};
-	let namespace = namespace(ctx, query.namespace.as_deref()).await?;
+	let clock = ctx.env().clock();
+	let deadline = rivet_env::deadline_after(clock.as_ref(), CREATE_TIMEOUT)?;
+	budget.deposit();
+	let mut retries = budget.retries(deadline);
+	let namespace = {
+		let ctx = &ctx.with_depot_command_deadline(deadline);
+		create_result(
+			CreateProgress::NotSubmitted,
+			rivet_env::timeout_at(
+				clock.as_ref(),
+				deadline,
+				create_step(ctx, &mut retries, "namespace", || {
+					namespace(ctx, query.namespace.as_deref())
+				}),
+			)
+			.await,
+		)?
+	};
 	let dynamic = migrate_from_v2::snapshot(ctx);
 	let migration = migrate_from_v2::applies(dynamic.as_deref(), &namespace);
 	let force_actor_v3 = match migration {
@@ -406,7 +542,26 @@ async fn create_or_proxy(
 		}
 	}
 
-	match create_actor_inner(ctx, query, body, get_or_create, force_actor_v3).await? {
+	let mut progress = CreateProgress::NotSubmitted;
+	// The deadline covers the local storage work. Forwarding retains its existing timeout.
+	let result = {
+		let ctx = &ctx.with_depot_command_deadline(deadline);
+		rivet_env::timeout_at(
+			clock.as_ref(),
+			deadline,
+			create_actor_inner(
+				ctx,
+				query,
+				body,
+				get_or_create,
+				force_actor_v3,
+				&mut retries,
+				&mut progress,
+			),
+		)
+		.await
+	};
+	match create_result(progress, result)? {
 		Created::Actor(json) => Ok(json.into_response()),
 		Created::DelegatedToV2 => match migration {
 			Some(config) => proxy_create(ctx, config, get_or_create, raw).await,
@@ -486,8 +641,13 @@ async fn create_actor_inner(
 	mut body: CreateActorRequest,
 	get_or_create: bool,
 	force_actor_v3: bool,
+	retries: &mut pegboard_gateway::Retries<'_>,
+	progress: &mut CreateProgress,
 ) -> Result<Created> {
-	let namespace = namespace(&ctx, query.namespace.as_deref()).await?;
+	let namespace = create_step(ctx, retries, "namespace", || {
+		namespace(ctx, query.namespace.as_deref())
+	})
+	.await?;
 	// The API speaks the slash key form; the key is hashed and stored in its canonical form.
 	body.key = body.key.as_deref().map(canonical_key).transpose()?;
 	let pool_name = body
@@ -505,12 +665,12 @@ async fn create_actor_inner(
 		.context("invalid base64 actor input")?;
 
 	let clock = ctx.env().clock();
-	let deadline = rivet_env::deadline_after(clock.as_ref(), CREATE_TIMEOUT)?;
 
-	rivet_env::timeout_at(clock.as_ref(), deadline, async {
-		let Some(key) = body.key.clone() else {
-			// A keyless actor has a drawn id and nothing to reserve.
-			let actor_id = ctx.env().rng("actor.id").id_v1(ctx.config().dc_label());
+	let Some(key) = body.key.clone() else {
+		// A keyless actor has a drawn id and nothing to reserve.
+		let actor_id = ctx.env().rng("actor.id").id_v1(ctx.config().dc_label());
+		*progress = CreateProgress::Submitted(actor_id);
+		create_step(ctx, retries, "actor_create", || {
 			create(
 				ctx,
 				actor_id,
@@ -520,41 +680,41 @@ async fn create_actor_inner(
 				input.clone(),
 				false,
 			)
-			.await?;
-			let data = wait_for_data(ctx, actor_id)
-				.await?
-				.context("keyless actor was destroyed during creation")?;
-			return Ok(Created::Actor(Json(
-				json!({ "actor": actor_json(&data, None)?, "created": true }),
-			)));
-		};
-
-		let actor_id = pegboard::actor_key::keyed_actor_id(
-			ctx.config().dc_label(),
-			&namespace,
-			&body.name,
-			&key,
-		);
-		let existing = read_actor(ctx, actor_id)
+		})
+		.await?;
+		*progress = CreateProgress::Acknowledged(actor_id);
+		let data = wait_for_data(ctx, actor_id, retries)
 			.await?
-			.filter(|actor| !actor.destroyed);
-		// A key being moved in from V2 is not this cluster's to create or return yet.
-		if existing.as_ref().is_some_and(|actor| actor.held) {
-			return Err(ActorMigratingFromV2::error());
-		}
-		if let Some(actor) = existing {
-			if !get_or_create {
-				return Err(DuplicateKey.build());
-			}
-			return Ok(Created::Actor(Json(
-				json!({ "actor": actor_json(&actor.data, None)?, "created": false }),
-			)));
-		}
+			.context("keyless actor was destroyed during creation")?;
+		return Ok(Created::Actor(Json(
+			json!({ "actor": actor_json(&data, None)?, "created": true }),
+		)));
+	};
 
-		// A create of a destroyed actor starts it fresh. One still being destroyed answers
-		// `Destroyed`, so the create is sent again shortly.
-		loop {
-			let outcome = create(
+	let actor_id =
+		pegboard::actor_key::keyed_actor_id(ctx.config().dc_label(), &namespace, &body.name, &key);
+	let existing = create_step(ctx, retries, "actor_lookup", || read_actor(ctx, actor_id))
+		.await?
+		.filter(|actor| !actor.destroyed);
+	// A key being moved in from V2 is not this cluster's to create or return yet.
+	if existing.as_ref().is_some_and(|actor| actor.held) {
+		return Err(ActorMigratingFromV2::error());
+	}
+	if let Some(actor) = existing {
+		if !get_or_create {
+			return Err(DuplicateKey.build());
+		}
+		return Ok(Created::Actor(Json(
+			json!({ "actor": actor_json(&actor.data, None)?, "created": false }),
+		)));
+	}
+
+	// A create of a destroyed actor starts it fresh. One still being destroyed answers
+	// `Destroyed`, so the create is sent again shortly.
+	loop {
+		*progress = CreateProgress::Submitted(actor_id);
+		let outcome = create_step(ctx, retries, "actor_create", || {
+			create(
 				ctx,
 				actor_id,
 				&namespace,
@@ -563,41 +723,42 @@ async fn create_actor_inner(
 				input.clone(),
 				force_actor_v3,
 			)
-			.await?;
-			match outcome {
-				wire::TryStartOutcome::TryStartEpoxyAlreadyReserved(reserved) => {
-					let reservation_id = Id::from_slice(&reserved.reservation_id)?;
-					return Err(ActorKeyOwnedElsewhere {
-						datacenter_label: reservation_id.label(),
-					}
-					.build());
+		})
+		.await?;
+		match outcome {
+			wire::TryStartOutcome::TryStartEpoxyAlreadyReserved(reserved) => {
+				let reservation_id = Id::from_slice(&reserved.reservation_id)?;
+				return Err(ActorKeyOwnedElsewhere {
+					datacenter_label: reservation_id.label(),
 				}
-				wire::TryStartOutcome::TryStartDestroyed => {
-					rivet_env::sleep(clock.as_ref(), CREATE_POLL_INTERVAL).await?;
-					continue;
-				}
-				wire::TryStartOutcome::TryStartMigratingFromV2 => {
-					return Err(ActorMigratingFromV2::error());
-				}
-				wire::TryStartOutcome::TryStartDelegatedToV2 => return Ok(Created::DelegatedToV2),
-				wire::TryStartOutcome::TryStartWaiting
-				| wire::TryStartOutcome::TryStartStarting(_)
-				| wire::TryStartOutcome::TryStartRunning(_)
-				| wire::TryStartOutcome::TryStartFull => {}
+				.build());
 			}
-			// A create whose key turns out to belong to V2 is destroyed here, so the next create
-			// reports the delegation.
-			let Some(data) = wait_for_data(ctx, actor_id).await? else {
+			wire::TryStartOutcome::TryStartDestroyed => {
+				*progress = CreateProgress::NotSubmitted;
 				rivet_env::sleep(clock.as_ref(), CREATE_POLL_INTERVAL).await?;
 				continue;
-			};
-			return Ok(Created::Actor(Json(
-				json!({ "actor": actor_json(&data, None)?, "created": true }),
-			)));
+			}
+			wire::TryStartOutcome::TryStartMigratingFromV2 => {
+				return Err(ActorMigratingFromV2::error());
+			}
+			wire::TryStartOutcome::TryStartDelegatedToV2 => return Ok(Created::DelegatedToV2),
+			wire::TryStartOutcome::TryStartWaiting
+			| wire::TryStartOutcome::TryStartStarting(_)
+			| wire::TryStartOutcome::TryStartRunning(_)
+			| wire::TryStartOutcome::TryStartFull => {}
 		}
-	})
-	.await
-	.context("timed out waiting for actor creation")?
+		*progress = CreateProgress::Acknowledged(actor_id);
+		// A create whose key turns out to belong to V2 is destroyed here, so the next create
+		// reports the delegation.
+		let Some(data) = wait_for_data(ctx, actor_id, retries).await? else {
+			*progress = CreateProgress::NotSubmitted;
+			rivet_env::sleep(clock.as_ref(), CREATE_POLL_INTERVAL).await?;
+			continue;
+		};
+		return Ok(Created::Actor(Json(
+			json!({ "actor": actor_json(&data, None)?, "created": true }),
+		)));
+	}
 }
 
 /// Sends the create of `actor_id`. A create of an actor that exists keeps the existing actor's
@@ -633,10 +794,14 @@ async fn create(
 }
 
 /// Polls the actor until its data record is written. Returns `None` if it was destroyed first.
-async fn wait_for_data(ctx: &EngineContext, actor_id: Id) -> Result<Option<wire::ActorData>> {
+async fn wait_for_data(
+	ctx: &EngineContext,
+	actor_id: Id,
+	retries: &mut pegboard_gateway::Retries<'_>,
+) -> Result<Option<wire::ActorData>> {
 	let clock = ctx.env().clock();
 	loop {
-		match read(ctx, actor_id).await? {
+		match create_step(ctx, retries, "read_created_actor", || read(ctx, actor_id)).await? {
 			Read::Actor(actor) if actor.destroyed => return Ok(None),
 			Read::Actor(actor) => return Ok(Some(actor.data)),
 			Read::Gone => return Ok(None),

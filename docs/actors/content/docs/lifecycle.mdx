@@ -136,6 +136,10 @@ This hook may not always be called in situations like crashes or forced terminat
 
 ### `run`
 
+<Warning>
+Passing a plain function to `run` was deprecated in 3.0 and will be removed in a future version. Use `run: workflow(...)` for workflows, or start a background task from `onWake`. See [Deprecated run](/actors/docs/deprecated/run).
+</Warning>
+
 The `run` hook is called after the actor starts and runs in the background without blocking actor startup. This is ideal for long-running background tasks like:
 
 - Reading from message queues in a loop

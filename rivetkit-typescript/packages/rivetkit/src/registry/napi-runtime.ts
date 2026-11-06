@@ -1009,10 +1009,6 @@ export class NapiCoreRuntime implements CoreRuntime {
 		await nativeCtx.sql().close();
 	}
 
-	async actorRuntimeSocketProvision(ctx: ActorContextHandle) {
-		return await asNativeActorContext(ctx).provisionActorRuntimeSocket();
-	}
-
 	async actorQueueSend(
 		ctx: ActorContextHandle,
 		name: string,

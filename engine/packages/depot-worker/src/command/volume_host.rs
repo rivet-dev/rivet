@@ -3,7 +3,10 @@ use super::{
 	CommandRegistry, KvHandle, LockEntry, ReadHandle, ReadSource, RegisteredHandler,
 	session::{WriterlessRead, WriterlessReadError},
 };
-use crate::kv_refusals::{authority_moved, overloaded, overloaded_after, unavailable};
+use crate::kv_refusals::{
+	authority_moved, overloaded, overloaded_after, unavailable, volume_transition,
+	volume_transition_after,
+};
 use crate::tablet_maintainer_machine::{MaintainerSnapshot, state::MaintainerPhase};
 use anyhow::{Result, ensure};
 use bytes::Bytes;
@@ -430,16 +433,14 @@ fn readiness_failure(
 		// The ordinary branch carries no initial application writes, and the
 		// handler cannot run until readiness succeeds. Recovery can fail as the
 		// assignment changes without making this command's outcome uncertain.
-		WriteError::RecoveryFailed if !initial_writes => {
-			overloaded(OverloadReason::VolumeTransition)
-		}
+		WriteError::RecoveryFailed if !initial_writes => volume_transition("open_recovery_failed"),
 		WriteError::QuorumUnavailable { token: None } if !initial_writes => {
 			// A replica may unload during opening. No application payload was
 			// supplied and no handler ran, so this attempt is safe to refuse.
 			tracing::debug!(
 				"ordinary command open lost loaded replica quorum; refusing before execution"
 			);
-			overloaded(OverloadReason::VolumeTransition)
+			volume_transition("open_quorum_unavailable")
 		}
 		WriteError::VolumeNotFound
 		| WriteError::LifecycleRejected(VolumeRejectResponse::VolumeNotFound) => {
@@ -458,7 +459,7 @@ fn readiness_failure(
 		| WriteError::Overloaded {
 			retry_after_ms,
 			token: None,
-		} => overloaded_after(OverloadReason::VolumeTransition, retry_after_ms),
+		} => volume_transition_after("open_refused", retry_after_ms),
 		error => {
 			tracing::warn!(
 				?error,
@@ -1249,7 +1250,12 @@ impl VolumeHost {
 			return Err(authority_moved());
 		}
 		if cache.closing.contains(&request.volume_key) {
-			return Err(overloaded(OverloadReason::VolumeTransition));
+			tracing::debug!(
+				command = command_label(CommandTag(request.tag as usize)),
+				volume_key = ?request.volume_key,
+				"KV command arrived while its volume was closing"
+			);
+			return Err(volume_transition("closing"));
 		}
 		let tag = CommandTag(request.tag as usize);
 		let Some(command) = self.factory.registry.commands.get(&tag) else {
@@ -1305,9 +1311,9 @@ impl VolumeHost {
 						None,
 					);
 				}
-				return Err(overloaded(OverloadReason::VolumeTransition));
+				return Err(volume_transition("discarding_open"));
 			}
-			SlotAdmission::Backoff => return Err(overloaded(OverloadReason::VolumeTransition)),
+			SlotAdmission::Backoff => return Err(volume_transition("reopen_backoff")),
 			SlotAdmission::Reopen | SlotAdmission::Create => {
 				let idle_close_ms = self.factory.config.volume_idle_close_ms;
 				if let Some(ready) = cache.restart_slot(
@@ -1402,7 +1408,7 @@ impl VolumeHost {
 				u64::try_from(idle_close.as_millis()).unwrap_or(u64::MAX)
 			});
 		let Some(slot) = cache.volumes.get_mut(&request.volume_key) else {
-			return Err(overloaded(OverloadReason::VolumeTransition));
+			return Err(volume_transition("slot_missing"));
 		};
 		slot.inflight += 1;
 		slot.idle_close_ms = slot.idle_close_ms.min(idle_close_ms);
@@ -1602,7 +1608,7 @@ impl VolumeHost {
 			.start_timer();
 		let mut ready = admission.ready.clone();
 		if ready.wait_for(|ready| *ready).await.is_err() {
-			return overloaded(OverloadReason::VolumeTransition);
+			return volume_transition("open_cancelled");
 		}
 		open_wait.observe_duration();
 		let opened = match admission
@@ -1616,7 +1622,7 @@ impl VolumeHost {
 			// This command joined an open that could not create the volume. Retrying admits it
 			// again, and admission starts a creating open in the same slot.
 			Err(KvCommandResponse::VolumeNotFound) if request.create_if_missing => {
-				return overloaded(OverloadReason::VolumeTransition);
+				return volume_transition("create_after_missing_open");
 			}
 			Err(error) => return error.clone(),
 		};
@@ -1752,7 +1758,7 @@ impl VolumeHost {
 			let clock = host.env.clock();
 			let timeout = Duration::from_millis(host.factory.config.filesystem.request_timeout_ms);
 			let result = rivet_env::select_biased!("deletion cancels opening before another poll",
-				_ = cancel.cancelled() => Err(overloaded(OverloadReason::VolumeTransition)),
+				_ = cancel.cancelled() => Err(volume_transition("open_cancelled")),
 				result = rivet_env::timeout(clock.as_ref(), timeout, host.open(key, may_serve, command, create_if_absent, speculation)) => result.unwrap_or_else(|_| Err(unavailable(UnavailableReason::TimedOut))),
 			);
 			crate::metrics::KV_VOLUME_OPENS
@@ -2322,9 +2328,9 @@ fn filesystem_refusal(error: &FilesystemError) -> KvCommandResponse {
 		// A refused cold read did no work and reads are idempotent. Like the transitions above,
 		// a handler that already committed an earlier transaction relies on the handler
 		// idempotency contract when the edge sends the command again.
-		FilesystemError::Lagging | FilesystemError::TooOld | FilesystemError::ColdReadRefused => {
-			overloaded(OverloadReason::VolumeTransition)
-		}
+		FilesystemError::Lagging => volume_transition("cold_read_lagging"),
+		FilesystemError::TooOld => volume_transition("cold_read_too_old"),
+		FilesystemError::ColdReadRefused => volume_transition("cold_read_refused"),
 		// The write was refused before it was built because the volume's writes are ahead of
 		// its tablet's apply, so the edge may send the command again after the hint.
 		FilesystemError::ApplyBacklog { retry_after_ms } => {

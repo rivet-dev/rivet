@@ -72,7 +72,6 @@ members = [
 #   "engine/packages/util-id",
 #   "engine/packages/util-serde",
 #   "engine/packages/version-management",
-  "engine/sdks/rust/actor-runtime-socket-protocol",
 #   "engine/sdks/rust/data",
   "engine/sdks/rust/depot-protocol",
   "engine/sdks/rust/envoy-client",
@@ -90,6 +89,7 @@ members = [
   "rivetkit-rust/packages/shared-types",
   "rivetkit-typescript/packages/rivetkit-napi",
   "rivetkit-typescript/packages/rivetkit-wasm",
+#   "examples/ai-agent-rust",
 #   "examples/chat-room-rust",
 #   "examples/hello-world-rust",
 ]
@@ -575,10 +575,6 @@ members = [
 
     [workspace.dependencies.rivet-version-management]
     path = "engine/packages/version-management"
-
-    [workspace.dependencies.rivet-actor-runtime-socket-protocol]
-    path = "engine/sdks/rust/actor-runtime-socket-protocol"
-    version = "=3.0.5"
 
     [workspace.dependencies.rivet-data]
     path = "engine/sdks/rust/data"

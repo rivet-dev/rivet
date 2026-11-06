@@ -112,10 +112,6 @@
           "description": "Icon for the actor in the Inspector UI. Can be an emoji (e.g., '🚀') or FontAwesome icon name (e.g., 'rocket').",
           "type": "string"
         },
-        "enableActorRuntimeSocket": {
-          "description": "Enables the experimental Actor Runtime Socket for this actor. Default: false",
-          "type": "boolean"
-        },
         "createVarsTimeout": {
           "description": "Timeout in ms for createVars handler. Default: 5000",
           "type": "number"
@@ -141,11 +137,11 @@
           "type": "number"
         },
         "onDestroyTimeout": {
-          "description": "Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0.",
+          "description": "Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 3.2.0.",
           "type": "number"
         },
         "waitUntilTimeout": {
-          "description": "Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0.",
+          "description": "Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 3.2.0.",
           "type": "number"
         },
         "stateSaveInterval": {

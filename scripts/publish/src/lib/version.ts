@@ -114,7 +114,6 @@ const PUBLISHED_RUST_WORKSPACE_DEPS = new Set([
 	"rivet-error",
 	"rivet-metrics",
 	"rivet-util-serde",
-	"rivet-actor-runtime-socket-protocol",
 	"sqlite_types",
 	"sqlite-embedded",
 	"rivet-envoy-protocol",

@@ -149,6 +149,7 @@ async fn reserve_key(
 	name: String,
 	key: String,
 	key_check: KeyCheck,
+	write_version: u16,
 ) -> Result<wire::ReserveEpoxyPhase> {
 	let migration = match key_check {
 		KeyCheck::Epoxy => None,
@@ -158,14 +159,14 @@ async fn reserve_key(
 		}
 	};
 	let Some(migration) = migration else {
-		return reserve_epoxy(ctx, namespace, name, key).await;
+		return reserve_epoxy(ctx, namespace, name, key, write_version).await;
 	};
 
 	// V2's actor API reads the slash form of the key.
 	let slash_key = actor_key::to_slash(&key);
 	let (in_v2, reserved) = futures_util::future::join(
 		migrate_from_v2::key_exists(ctx, &migration, &name, &slash_key),
-		reserve_epoxy(ctx, namespace, name.clone(), key),
+		reserve_epoxy(ctx, namespace, name.clone(), key, write_version),
 	)
 	.await;
 	if in_v2.context("ask V2 whether it holds the key")? {
@@ -179,8 +180,9 @@ async fn reserve_epoxy(
 	namespace: String,
 	name: String,
 	key: String,
+	write_version: u16,
 ) -> Result<wire::ReserveEpoxyPhase> {
-	match crate::actor_key::reserve(ctx, namespace, name, key).await? {
+	match crate::actor_key::reserve(ctx, namespace, name, key, write_version).await? {
 		crate::actor_key::ReserveResult::Reserved { .. } => {
 			Ok(wire::ReserveEpoxyPhase::ReserveEpoxyPhaseReserved)
 		}
@@ -364,7 +366,10 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 							)
 							.await?;
 
-						reserve_key(&self2.ctx, namespace, name, key, key_check).await
+						let write_version =
+							self2.db.write_version(VersionFamily::PEGBOARD_ACTOR)?;
+						reserve_key(&self2.ctx, namespace, name, key, key_check, write_version)
+							.await
 					}
 					.await;
 
@@ -624,6 +629,17 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 			Effect::NotifyStartWaiters { waiters, kind } => {
 				let self2 = self.clone();
 				ctx.spawn(Box::pin(async move {
+					let write_version = match self2.db.write_version(VersionFamily::PEGBOARD_ACTOR)
+					{
+						Ok(write_version) => write_version,
+						Err(err) => {
+							tracing::warn!(
+								?err,
+								"no pegboard.actor write version; start waiters fall back to their own wait"
+							);
+							return;
+						}
+					};
 					let sends = waiters.into_iter().map(|waiter| {
 						let ctx = self2.ctx.clone();
 						let notice = wire::ActorStartNotice {
@@ -632,9 +648,14 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 						};
 
 						async move {
-							if let Err(err) =
-								send_start_notice(&ctx, notice, &waiter.worker_id, waiter.wait_id)
-									.await
+							if let Err(err) = send_start_notice(
+								&ctx,
+								notice,
+								write_version,
+								&waiter.worker_id,
+								waiter.wait_id,
+							)
+							.await
 							{
 								tracing::debug!(?err, "actor start notice send failed");
 							}
@@ -826,10 +847,12 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 	}
 }
 
-/// Sends one notice to the gateway wait `(worker_id, wait_id)` on the wait's own subject.
+/// Sends one notice to the gateway wait `(worker_id, wait_id)` on the wait's own subject,
+/// encoded at `write_version`, the negotiated `pegboard.actor` version.
 async fn send_start_notice(
 	ctx: &EngineContext,
 	notice: wire::ActorStartNotice,
+	write_version: u16,
 	worker_id: &[u8],
 	wait_id: u64,
 ) -> Result<()> {
@@ -840,9 +863,7 @@ async fn send_start_notice(
 	);
 	let payload = rivet_data::versioned::ActorStartNotice::serialize_with_embedded_version(
 		&notice,
-		rivet_data::pegboard_actor::record_write_version(
-			rivet_data::generated::PEGBOARD_ACTOR_VERSION,
-		),
+		rivet_data::pegboard_actor::record_write_version(write_version),
 	)?;
 
 	ctx.ups()?

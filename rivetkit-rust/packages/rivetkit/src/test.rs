@@ -16,7 +16,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-	Action, Actor, Handles, IntoActorKey, TypedActorConnection, TypedActorHandle,
+	Action, Actor, Handler, IntoActorKey, TypedActorConnection, TypedActorHandle,
 	registry::Registry, typed_client::encode_action_args,
 };
 
@@ -171,7 +171,7 @@ impl<A: Actor> TestActor<A> {
 
 	pub async fn send<M>(&self, action: M) -> Result<M::Output>
 	where
-		A: Handles<M>,
+		A: Handler<M>,
 		M: Action,
 	{
 		let args = encode_action_args(&action)?;

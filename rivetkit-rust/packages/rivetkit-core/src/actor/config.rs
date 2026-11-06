@@ -394,8 +394,6 @@ pub struct ActorConfig {
 	pub remote_sqlite: bool,
 	pub sqlite_profiling: SqliteProfilingConfig,
 	pub tracing: Arc<ActorTracingConfig>,
-	/// Enables the experimental Actor Runtime Socket.
-	pub enable_actor_runtime_socket: bool,
 	/// Whether the user declared actor state (`state: ...` or `createState`).
 	/// Gates the inspector state tab and state-subscription messages.
 	pub has_state: bool,
@@ -434,7 +432,6 @@ pub struct ActorConfigInput {
 	pub remote_sqlite: Option<bool>,
 	pub sqlite_profiling: Option<SqliteProfilingConfigInput>,
 	pub tracing: Option<ActorTracingConfig>,
-	pub enable_actor_runtime_socket: Option<bool>,
 	pub has_state: Option<bool>,
 	pub can_hibernate_websocket: Option<bool>,
 	pub state_save_interval_ms: Option<u32>,
@@ -470,7 +467,6 @@ impl ActorConfig {
 				.map(SqliteProfilingConfig::from_input)
 				.unwrap_or_default(),
 			tracing: Arc::new(config.tracing.unwrap_or_default()),
-			enable_actor_runtime_socket: config.enable_actor_runtime_socket.unwrap_or(false),
 			has_state: config.has_state.unwrap_or(false),
 			..Self::default()
 		};
@@ -596,7 +592,6 @@ impl Default for ActorConfig {
 			remote_sqlite: false,
 			sqlite_profiling: SqliteProfilingConfig::default(),
 			tracing: Arc::default(),
-			enable_actor_runtime_socket: false,
 			has_state: false,
 			can_hibernate_websocket: CanHibernateWebSocket::default(),
 			state_save_interval: DEFAULT_STATE_SAVE_INTERVAL,

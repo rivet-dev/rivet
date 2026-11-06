@@ -7,6 +7,8 @@ description: "Return the actor with the given name and key, creating it if it do
 
 The response includes `created`, which is `true` when this call created the actor. Gateway endpoints can perform the same lookup inline with the `rvt-*` selector parameters, so you only need this endpoint when you want the `actor_id` up front.
 
+An `actor.create_pending` response (HTTP 409) includes `metadata.actor_id` when creation may have taken effect but the result could not be confirmed. Inspect that actor rather than automatically resubmitting creation.
+
 ```http
 PUT https://rivet.example.com/actors
 ```

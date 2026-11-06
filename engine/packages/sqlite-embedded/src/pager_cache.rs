@@ -70,7 +70,8 @@ static INSTALLED: OnceLock<bool> = OnceLock::new();
 ///
 /// It must run before anything else in the process uses SQLite, because SQLite accepts a page
 /// cache only before it initializes and `sqlite3_config` itself is not thread safe. Production
-/// calls it from the first `SqlitePool::new`, which runs at startup before any database opens.
+/// calls it before the startup probe opens its database, or from the first `SqlitePool::new`
+/// when no probe runs. Pool construction also attaches metrics to an already installed cache.
 /// If SQLite is already initialized (another library opened a database first), the install fails
 /// and connections keep SQLite's per-connection cache. Returns whether the process-wide cache is
 /// active. Later calls only attach `metrics` if none are attached yet.

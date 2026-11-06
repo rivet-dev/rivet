@@ -2475,6 +2475,15 @@ fn verify_batch_atomic_writes_at_process_startup_blocking(
 	runtime: Handle,
 	config: VfsConfig,
 ) -> std::result::Result<(), String> {
+	// This probe opens SQLite before the runtime constructs its shared worker pool.
+	// Configure the process cache first: SQLite rejects PCACHE2 configuration after
+	// initialization, leaving every actor with its own cache instead of one budget.
+	crate::pager_cache::install(
+		sqlite_optimization_flags()
+			.pager_process_cache_kib
+			.saturating_mul(1024),
+		None,
+	);
 	let probe_id = NEXT_TEMP_AUX_ID.fetch_add(1, Ordering::Relaxed);
 	let file_name = format!("batch-atomic-startup-probe-{probe_id}.db");
 	let vfs = SqliteVfs::register_with_transport_and_initial_pages(

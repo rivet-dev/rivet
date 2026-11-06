@@ -448,8 +448,8 @@ impl SqlitePool {
 			metrics.set_pool_threads(max_threads as u64);
 		}
 		let page_budget = process_page_budget(metrics.clone());
-		// Every connection opens on a pool, so the first pool installs the pager cache before
-		// SQLite initializes.
+		// The startup probe may have installed the cache already. This also covers paths that
+		// construct a pool first and attaches the pool's metrics to the shared cache.
 		crate::pager_cache::install(
 			sqlite_optimization_flags()
 				.pager_process_cache_kib

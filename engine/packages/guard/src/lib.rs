@@ -41,6 +41,7 @@ async fn serve(ctx: EngineContext, envoys: pegboard_envoy::Service) -> Result<()
 	// Shared state between all requests
 	let proxy_state = ProxyState::new(&ctx);
 	let start_waits = pegboard_gateway::start_waits(&ctx);
+	let retry_budget = Arc::new(pegboard_gateway::RetryBudget::from_config(&ctx));
 	let router = Router::new()
 		.merge(readiness_router(ctx.clone()))
 		.route(
@@ -56,9 +57,16 @@ async fn serve(ctx: EngineContext, envoys: pegboard_envoy::Service) -> Result<()
 				}))
 			}),
 		)
-		.merge(pegboard_gateway::router(&ctx, &start_waits))
+		.merge(pegboard_gateway::router_with_retry_budget(
+			&ctx,
+			&start_waits,
+			retry_budget.clone(),
+		))
 		.merge(pegboard_envoy::router(&ctx, &envoys))
-		.merge(rivet_api_public_shim::router(&ctx));
+		.merge(rivet_api_public_shim::router_with_retry_budget(
+			&ctx,
+			retry_budget,
+		));
 
 	// Set up HTTP server
 	let http_addr: std::net::SocketAddr =

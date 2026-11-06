@@ -116,6 +116,7 @@ export type ConnInitContextOf<AD extends AnyActorDefinition> =
 		? BeforeConnectContext<S, V, I, DB, E, Q>
 		: never;
 
+/** @deprecated Connection state was deprecated in 3.0 and will be removed in a future version. Track live connections in `c.vars` from `onConnect` and `onDisconnect`, and store durable per-connection data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state */
 export type CreateConnStateContextOf<AD extends AnyActorDefinition> =
 	AD extends BaseActorDefinition<
 		infer S,
@@ -251,6 +252,7 @@ export type SleepContextOf<AD extends AnyActorDefinition> =
 		? SleepContext<S, CP, CS, V, I, DB, E, Q>
 		: never;
 
+/** @deprecated Actor state was deprecated in 3.0 and will be removed in a future version. See https://rivet.dev/actors/docs/deprecated/state */
 export type StateChangeContextOf<AD extends AnyActorDefinition> =
 	AD extends BaseActorDefinition<
 		infer S,

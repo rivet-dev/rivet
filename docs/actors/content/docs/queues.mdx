@@ -4,6 +4,10 @@ description: "Process durable messages in order with Rivet Actor queues and run 
 skill: true
 ---
 
+<Warning>
+Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite instead. See [Deprecated queues](/actors/docs/deprecated/queues) to migrate.
+</Warning>
+
 ## What are queues?
 
 - **Realtime**: messages are delivered to a live actor as soon as possible.

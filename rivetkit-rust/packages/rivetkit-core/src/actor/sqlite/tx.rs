@@ -72,10 +72,6 @@ impl SqliteTransaction {
 	pub async fn rollback(&self) -> Result<()> {
 		self.db.finish_transaction(&self.key, false).await
 	}
-
-	pub async fn expire(&self) -> Result<()> {
-		self.db.expire_transaction(&self.key).await
-	}
 }
 
 pub(super) struct TransactionCoordinator {
@@ -389,15 +385,6 @@ impl SqliteDb {
 			timeout,
 		)
 		.await
-	}
-
-	pub async fn begin_transaction_with_key(
-		&self,
-		key: impl Into<String>,
-		timeout: Option<Duration>,
-	) -> Result<SqliteTransaction> {
-		self.begin_transaction_with_key_and_name(key, None, timeout)
-			.await
 	}
 
 	async fn begin_transaction_with_key_and_name(

@@ -1,0 +1,16 @@
+[package]
+name = "example-ai-agent-rust"
+version = "0.1.0"
+edition.workspace = true
+license = "MIT"
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+async-openai = { version = "0.43", features = ["chat-completion"] }
+async-trait.workspace = true
+futures.workspace = true
+rivetkit = { path = "../../rivetkit-rust/packages/rivetkit" }
+serde.workspace = true
+tokio.workspace = true
+

@@ -1,0 +1,5 @@
+{
+  "code": "create_pending",
+  "group": "actor",
+  "message": "Actor creation may still be in progress; do not retry creation automatically."
+}

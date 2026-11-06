@@ -1,22 +1,15 @@
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::{future::Future, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
 use rivetkit::prelude::*;
-use rivetkit::{Action, BindParam, ColumnValue, Event, Handles, action};
+use rivetkit::{Action, BindParam, ColumnValue, Event, Handler, action};
 use serde::{Deserialize, Serialize};
 
 pub const ACTOR_NAME: &str = "chatRoom";
 
-type BoxFuture<T> = Pin<Box<dyn Future<Output = Result<T>> + Send>>;
-
 pub struct ChatRoom {
 	started_at_ms: i64,
-}
-
-#[derive(Default, Serialize, Deserialize)]
-pub struct ChatRoomState {
-	pub sent_count: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,20 +66,11 @@ impl Event for NewMessage {
 
 #[async_trait]
 impl Actor for ChatRoom {
-	type State = ChatRoomState;
 	type Input = ();
 	type Actions = (SendMessage, GetHistory, GetStats);
 	type Events = (NewMessage,);
-	type Queue = ();
 	type ConnParams = ();
-	type ConnState = ();
 	type Action = action::Raw;
-
-	const HAS_DATABASE: bool = true;
-
-	async fn create_state(_ctx: &Ctx<Self>, _input: Self::Input) -> Result<Self::State> {
-		Ok(ChatRoomState::default())
-	}
 
 	async fn create(ctx: &Ctx<Self>) -> Result<Self> {
 		ctx.sql()
@@ -106,38 +90,32 @@ impl Actor for ChatRoom {
 	}
 }
 
-impl Handles<SendMessage> for ChatRoom {
-	type Future = BoxFuture<Message>;
-
-	fn handle(self: Arc<Self>, ctx: Ctx<Self>, action: SendMessage) -> Self::Future {
-		Box::pin(async move {
-			let message = send_message(&ctx, action.sender, action.text).await?;
-			ctx.state_mut().sent_count += 1;
-			ctx.emit(NewMessage {
-				message: message.clone(),
-			})?;
-			Ok(message)
-		})
+impl Handler<SendMessage> for ChatRoom {
+	async fn handle(self: Arc<Self>, ctx: Ctx<Self>, action: SendMessage) -> Result<Message> {
+		let message = send_message(&ctx, action.sender, action.text).await?;
+		ctx.emit(NewMessage {
+			message: message.clone(),
+		})?;
+		Ok(message)
 	}
 }
 
-impl Handles<GetHistory> for ChatRoom {
-	type Future = BoxFuture<Vec<Message>>;
-
-	fn handle(self: Arc<Self>, ctx: Ctx<Self>, _action: GetHistory) -> Self::Future {
-		Box::pin(async move { get_history(&ctx).await })
+impl Handler<GetHistory> for ChatRoom {
+	async fn handle(self: Arc<Self>, ctx: Ctx<Self>, _action: GetHistory) -> Result<Vec<Message>> {
+		get_history(&ctx).await
 	}
 }
 
-impl Handles<GetStats> for ChatRoom {
-	type Future = BoxFuture<RoomStats>;
-
-	fn handle(self: Arc<Self>, ctx: Ctx<Self>, _action: GetStats) -> Self::Future {
-		Box::pin(async move {
-			Ok(RoomStats {
-				sent_count: ctx.state().sent_count,
-				started_at_ms: self.started_at_ms,
-			})
+impl Handler<GetStats> for ChatRoom {
+	async fn handle(self: Arc<Self>, ctx: Ctx<Self>, _action: GetStats) -> Result<RoomStats> {
+		let result = ctx
+			.sql()
+			.query("SELECT COUNT(*) FROM messages", None)
+			.await?;
+		let sent_count = column_int(result.rows.first().and_then(|row| row.first()))?;
+		Ok(RoomStats {
+			sent_count: u64::try_from(sent_count)?,
+			started_at_ms: self.started_at_ms,
 		})
 	}
 }

@@ -10,7 +10,7 @@ use rivetkit_client::{
 };
 use serde_json::Value as JsonValue;
 
-use crate::action::{Action, Handles, encode_positional};
+use crate::action::{Action, Handler, encode_positional};
 use crate::actor::Actor;
 use crate::event::Event;
 
@@ -141,7 +141,7 @@ impl<A: Actor> TypedActorHandle<A> {
 
 	pub async fn send<M>(&self, action: M) -> Result<M::Output>
 	where
-		A: Handles<M>,
+		A: Handler<M>,
 		M: Action,
 	{
 		self.call(action).await
@@ -193,7 +193,7 @@ impl<A: Actor> TypedActorConnection<A> {
 
 	pub async fn send<M>(&self, action: M) -> Result<M::Output>
 	where
-		A: Handles<M>,
+		A: Handler<M>,
 		M: Action,
 	{
 		self.call(action).await

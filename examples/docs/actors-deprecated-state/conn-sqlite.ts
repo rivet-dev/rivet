@@ -29,6 +29,19 @@ const room = actor({
     await c.db.execute("DELETE FROM presence WHERE conn_id = ?", conn.id);
   },
 
+  // A connection that closed while the actor slept may never reach
+  // `onDisconnect`, so drop rows for connections that are no longer open
+  onWake: async (c) => {
+    const rows = (await c.db.execute("SELECT conn_id FROM presence")) as {
+      conn_id: string;
+    }[];
+    for (const row of rows) {
+      if (!c.conns.has(row.conn_id)) {
+        await c.db.execute("DELETE FROM presence WHERE conn_id = ?", row.conn_id);
+      }
+    }
+  },
+
   actions: {
     whoAmI: async (c) => {
       const rows = (await c.db.execute(

@@ -92,21 +92,25 @@ export type ActorDefinitionActions<AD extends AnyActorDefinition> =
 		: ActorActionMap<ActionsOf<AD>>;
 
 type ActorQueueSend<TQueues extends QueueSchemaConfig> = {
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	<K extends keyof TQueues & string>(
 		name: K,
 		body: InferSchemaMap<TQueues>[K],
 		options: QueueSendWaitOptions,
 	): Promise<QueueSendResult<InferQueueCompleteMap<TQueues>[K]>>;
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	<K extends keyof TQueues & string>(
 		name: K,
 		body: InferSchemaMap<TQueues>[K],
 		options?: QueueSendNoWaitOptions,
 	): Promise<void>;
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	(
 		name: keyof TQueues extends never ? string : never,
 		body: unknown,
 		options: QueueSendWaitOptions,
 	): Promise<QueueSendResult>;
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	(
 		name: keyof TQueues extends never ? string : never,
 		body: unknown,

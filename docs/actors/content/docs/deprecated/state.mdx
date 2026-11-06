@@ -4,7 +4,7 @@ description: "Migrate actors off the deprecated c.state and c.conn.state APIs to
 ---
 
 <Warning>
-`c.state` and `c.conn.state` are deprecated and will be removed in a future version. They still work today, so you can migrate at your own pace.
+`c.state` and `c.conn.state` were deprecated in 3.0 and will be removed in a future version. They still work today, so you can migrate at your own pace.
 </Warning>
 
 ## What is deprecated
@@ -14,7 +14,9 @@ Earlier versions of Rivet Actors stored durable data in two places that Rivet sa
 - **Actor state** (`c.state`): a single serializable value defined with `state` or `createState`. Rivet wrote it to storage on a throttle and loaded it again on every start.
 - **Connection state** (`c.conn.state`): a value per connection defined with `connState` or `createConnState`.
 
-The related options `onStateChange`, `c.saveState()`, `stateSaveInterval` and `createConnStateTimeout` are deprecated with them. In Rust, `Ctx::state`, `Ctx::state_mut`, `Ctx::set_state`, `ConnCtx::state`, `ConnCtx::set_state`, `Actor::create_state`, `Actor::create_conn_state` and `Actor::on_state_change` are deprecated.
+The related options `onStateChange`, `c.saveState()`, `stateSaveInterval` and `createConnStateTimeout` are deprecated with them.
+
+The Rust SDK no longer has actor state or connection state APIs. Store durable data with `ctx.sql()` and in-memory data in fields on your actor struct.
 
 <CodeSnippet file="examples/docs/actors-deprecated-state/before.ts" />
 
@@ -58,7 +60,7 @@ CREATE TABLE _rivet_actor_state (
 ```
 
 - There is at most one row, with `id = 1`. An actor that never had state may have no row or an empty blob.
-- `state` is the value of `c.state` encoded as [CBOR](https://cbor.io). `BigInt`, `Uint8Array`, `ArrayBuffer`, `Set` and `undefined` are stored as two-element arrays such as `["$BigInt", "42"]`. `decodeLegacyState` above turns them back into their original types.
+- `state` is the value of `c.state` encoded as [CBOR](https://cbor.io). `BigInt`, `Uint8Array`, `ArrayBuffer`, `Set` and `undefined` are stored as two-element arrays such as `["$BigInt", "42"]`. `decodeLegacyState` above turns them back into their original types. This tag encoding applies to TypeScript actors.
 - Only read from `_rivet_*` tables. Do not write to or drop them; Rivet manages them.
 
 ## Keep state in memory
@@ -81,7 +83,7 @@ A regular connection ends when the actor sleeps, so its data only needs to live 
 
 ### Hibernatable WebSockets
 
-A [hibernatable WebSocket](/actors/docs/websocket-handler#websocket-hibernation) stays open while the actor sleeps, and `c.vars` is rebuilt when it wakes. Store data for these connections in SQLite so it survives, and delete it in `onDisconnect`:
+A [hibernatable WebSocket](/actors/docs/websocket-handler#websocket-hibernation) stays open while the actor sleeps, and `c.vars` is rebuilt when it wakes. Store data for these connections in SQLite so it survives, and delete it in `onDisconnect`. A connection that closes while the actor is asleep may not trigger `onDisconnect`, so also delete rows whose `conn_id` is no longer in `c.conns` when the actor wakes:
 
 <CodeSnippet file="examples/docs/actors-deprecated-state/conn-sqlite.ts" />
 

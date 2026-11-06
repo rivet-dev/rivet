@@ -39,6 +39,7 @@
 		"@effect/vitest": "^4.0.0",
 		"@types/node": "^22.18.1",
 		"@vitest/coverage-v8": "^5.0.3",
+		"effect": "4.0.0",
 		"publint": "^0.3.21",
 		"rivetkit": "workspace:*",
 		"typescript": "^5.9.2",

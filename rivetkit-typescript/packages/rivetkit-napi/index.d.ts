@@ -53,9 +53,6 @@ export interface JsInspectorSnapshot {
   queueSize: number
   connectedClients: number
 }
-export interface JsActorRuntimeSocketEndpointInfo {
-  path: string
-}
 export interface JsQueueSendResult {
   status: string
   response?: Buffer
@@ -136,7 +133,6 @@ export interface JsActorConfig {
   remoteSqlite?: boolean
   sqliteProfiling?: JsSqliteProfilingConfig
   tracing?: JsActorTracingConfig
-  enableActorRuntimeSocket?: boolean
   hasState?: boolean
   canHibernateWebsocket?: boolean
   stateSaveIntervalMs?: number
@@ -372,7 +368,6 @@ export declare class ActorContext {
   startWorkflowSpan(): Promise<WorkflowSpan>
   /** Returns nothing outside a workflow run or when tracing is off. */
   startWorkflowStepSpan(stepName: string, attempt: number): WorkflowStepSpan | null
-  provisionActorRuntimeSocket(): Promise<JsActorRuntimeSocketEndpointInfo>
   schedule(): Schedule
   queue(): Queue
   setAlarm(timestampMs?: number | undefined | null): void

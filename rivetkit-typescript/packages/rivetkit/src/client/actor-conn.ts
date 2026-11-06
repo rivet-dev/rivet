@@ -304,11 +304,13 @@ export class ActorConnRaw {
 		);
 	}
 
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	send(
 		name: string,
 		body: unknown,
 		options: QueueSendWaitOptions,
 	): Promise<QueueSendResult>;
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	send(
 		name: string,
 		body: unknown,

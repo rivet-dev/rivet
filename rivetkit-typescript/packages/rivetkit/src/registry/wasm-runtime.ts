@@ -970,20 +970,6 @@ export class WasmCoreRuntime implements CoreRuntime {
 		await callWasm(() => database.close());
 	}
 
-	async actorRuntimeSocketProvision(
-		_ctx: ActorContextHandle,
-	): Promise<never> {
-		throw new RivetError(
-			"actor_runtime_socket",
-			"unsupported",
-			"Actor Runtime Socket is only available on Unix native runtimes.",
-			{
-				public: true,
-				metadata: { runtime: "wasm" },
-			},
-		);
-	}
-
 	async actorQueueSend(
 		ctx: ActorContextHandle,
 		name: string,

@@ -1976,8 +1976,6 @@ impl ActorTask {
 		self.ctx.teardown_sleep_state().await;
 		self.ctx.wait_for_pending_state_writes().await;
 		self.ctx.abandon_pending_alarm_writes();
-		#[cfg(feature = "sqlite-local")]
-		self.ctx.shutdown_actor_runtime_socket().await;
 		if let Err(error) = self.ctx.sql().close_and_wait().await {
 			tracing::error!(
 				actor_id = %self.ctx.actor_id(),
@@ -2090,8 +2088,6 @@ impl ActorTask {
 			step = "wait_for_pending_alarm_writes",
 			"actor shutdown cleanup step completed"
 		);
-		#[cfg(feature = "sqlite-local")]
-		ctx.shutdown_actor_runtime_socket().await;
 		ctx.sql()
 			.cleanup_for_shutdown(reason == ShutdownKind::Sleep)
 			.await

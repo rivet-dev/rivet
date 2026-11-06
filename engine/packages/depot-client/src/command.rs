@@ -24,7 +24,7 @@ use vbare::Versioned;
 	"request_deadline_exceeded",
 	"The command deadline elapsed; its outcome may be unknown."
 )]
-pub(crate) struct RequestDeadlineExceeded;
+pub struct RequestDeadlineExceeded;
 
 /// The storage host did not admit the command. Nothing ran, so the caller may send it again after
 /// `retry_after_ms`.
@@ -169,6 +169,12 @@ impl Client {
 		ensure!(!timeout.is_zero(), "command timeout must be positive");
 		let clock = self.env().clock();
 		let deadline = rivet_env::deadline_after(clock.as_ref(), timeout)?;
+		let deadline = self
+			.command_deadline_boot_ms
+			.map_or(deadline, |caller| caller.min(deadline));
+		if self.command_deadline_boot_ms.is_some() && clock.observe()?.boot_ms >= deadline {
+			return Err(RequestDeadlineExceeded.build());
+		}
 		// A command body carries its own type's version, not the command envelope's.
 		let body = C::Request::seal_to_bytes(&request, C::Request::LATEST)?;
 		let request = KvCommandRequest {

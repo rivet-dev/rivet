@@ -30,6 +30,18 @@
 					]
 				},
 				{
+					"code": "create_pending",
+					"message": "Actor creation may still be in progress; do not retry creation automatically.",
+					"statuses": [
+						{
+							"status": 409,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
 					"code": "destroying",
 					"message": "Actor is destroying.",
 					"statuses": []

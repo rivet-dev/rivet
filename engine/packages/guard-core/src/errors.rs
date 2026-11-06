@@ -67,6 +67,8 @@ pub fn status(group: &str, code: &str) -> StatusCode {
 		("actor", "creation_rate_limit") => StatusCode::TOO_MANY_REQUESTS,
 		("actor", "not_found") => StatusCode::NOT_FOUND,
 		("actor", "migrating_from_v2") => StatusCode::SERVICE_UNAVAILABLE,
+		// Existing SDKs retry all 5xx responses; this create may already have taken effect.
+		("actor", "create_pending") => StatusCode::CONFLICT,
 		("core", "internal_error") => StatusCode::INTERNAL_SERVER_ERROR,
 		_ => StatusCode::BAD_REQUEST,
 	}

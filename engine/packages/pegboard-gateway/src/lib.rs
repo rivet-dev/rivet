@@ -41,6 +41,19 @@ pub fn start_waits(ctx: &EngineContext) -> std::sync::Arc<start_waits::StartWait
 }
 
 pub fn router(ctx: &EngineContext, waits: &std::sync::Arc<start_waits::StartWaits>) -> Router {
+	router_with_retry_budget(
+		ctx,
+		waits,
+		std::sync::Arc::new(RetryBudget::from_config(ctx)),
+	)
+}
+
+/// Constructed by guard with the budget also used by its public API routes.
+pub fn router_with_retry_budget(
+	ctx: &EngineContext,
+	waits: &std::sync::Arc<start_waits::StartWaits>,
+	budget: std::sync::Arc<RetryBudget>,
+) -> Router {
 	Router::new()
 		// Nesting to allow us to extract the raw user path
 		.nest(
@@ -54,9 +67,7 @@ pub fn router(ctx: &EngineContext, waits: &std::sync::Arc<start_waits::StartWait
 		.fallback(axum::routing::any(routes::direct))
 		.layer(axum::Extension(waits.clone()))
 		// Retries of refused requests across this process share one budget.
-		.layer(axum::Extension(std::sync::Arc::new(
-			retry_budget::RetryBudget::from_config(ctx),
-		)))
+		.layer(axum::Extension(budget))
 		// Outermost, so preflights are answered before any lookup, wake or auth.
 		.layer(axum::middleware::from_fn(cors::cors))
 		.with_state(ctx.clone())

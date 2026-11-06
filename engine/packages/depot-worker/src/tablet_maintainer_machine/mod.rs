@@ -16,7 +16,7 @@ use self::{
 	types::*,
 };
 use crate::tablet_maintainer_machine::types::MAX_COLD_BYTES;
-use rivet_data::generated::depot_kv_command_v1::{KvCommandResponse, OverloadReason};
+use rivet_data::generated::depot_kv_command_v1::KvCommandResponse;
 use rivet_data::generated::depot_storage_worker_protocol_v1::{
 	RejectResponse, StorageWorkerResponse,
 };
@@ -414,7 +414,7 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 			}) => {
 				if state::deletion::holds_key(state, &request.volume_key) {
 					let response = if state::deletion::lookup_pending(state, &request.volume_key) {
-						crate::kv_refusals::overloaded(OverloadReason::VolumeTransition)
+						crate::kv_refusals::volume_transition("delete_lookup")
 					} else {
 						KvCommandResponse::VolumeDeleted
 					};

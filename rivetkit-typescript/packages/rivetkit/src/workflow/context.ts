@@ -361,6 +361,7 @@ export class WorkflowStepContext<
 		return this.#runCtx.abortSignal;
 	}
 
+	/** @deprecated Actor state was deprecated in 3.0 and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
 	get state(): TState extends never ? never : TState {
 		this.#ensureActive("state");
 		return this.#runCtx.state as TState extends never ? never : TState;
@@ -399,6 +400,7 @@ export class WorkflowStepContext<
 		);
 	}
 
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	get queue() {
 		const self = this;
 		function send<K extends keyof TQueues & string>(
@@ -510,6 +512,7 @@ export class WorkflowContext<
 		return this.#runCtx.log;
 	}
 
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	get queue() {
 		const self = this;
 		function next<

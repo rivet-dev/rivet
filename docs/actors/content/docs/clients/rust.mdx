@@ -126,7 +126,7 @@ async fn main() -> Result<()> {
 
 ## Connection Parameters
 
-Pass connection parameters through the handle options. They are delivered to the actor's `create_conn_state` callback:
+Pass connection parameters through the handle options. The actor receives them in `on_before_connect` and can read them later with `ConnCtx::params`:
 
 ```rust @nocheck
 use counter::Counter;

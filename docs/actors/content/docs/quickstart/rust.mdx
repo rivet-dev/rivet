@@ -1,6 +1,6 @@
 ---
 title: "Rust Quickstart"
-description: "Build and run a Rivet Actor in Rust, define state and actions, then connect a client to the actor during local development."
+description: "Build and run a Rivet Actor in Rust, store data in SQLite and define actions, then connect a client to the actor during local development."
 skill: true
 ---
 
@@ -27,23 +27,17 @@ cargo add tokio --features full
 
 <Step title="Define Your Actor">
 
-Put the actor in `src/lib.rs` so both your server and your client can share the same types. An actor is a type that implements `Actor`, plus one `Handles<M>` implementation for each action. Persisted state lives in `type State`; ephemeral runtime state is just fields on your actor struct.
+Put the actor in `src/lib.rs` so both your server and your client can share the same types. An actor is a type that implements `Actor`, plus one `Handler<M>` implementation for each action. Durable data lives in the actor's SQLite database (`ctx.sql()`); in-memory data is just fields on your actor struct.
 
 ```rust src/lib.rs
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use rivetkit::prelude::*;
+use rivetkit::{BindParam, ColumnValue};
 use serde::{Deserialize, Serialize};
 
-type BoxFuture<T> = Pin<Box<dyn Future<Output = Result<T>> + Send>>;
-
 pub struct Counter;
-
-#[derive(Default, Serialize, Deserialize)]
-pub struct CounterState {
-	pub count: i64,
-}
 
 #[derive(Serialize, Deserialize)]
 pub struct Increment {
@@ -67,37 +61,41 @@ impl Event for NewCount {
 
 #[async_trait]
 impl Actor for Counter {
-	type State = CounterState;
 	type Input = ();
 	type Actions = (Increment,);
 	type Events = (NewCount,);
-	type Queue = ();
 	type ConnParams = ();
-	type ConnState = ();
 	type Action = action::Raw;
 
-	async fn create_state(_ctx: &Ctx<Self>, _input: Self::Input) -> Result<Self::State> {
-		Ok(CounterState::default())
-	}
-
-	async fn create(_ctx: &Ctx<Self>) -> Result<Self> {
+	async fn create(ctx: &Ctx<Self>) -> Result<Self> {
+		ctx.sql()
+			.exec(
+				"CREATE TABLE IF NOT EXISTS counter (
+					id INTEGER PRIMARY KEY,
+					count INTEGER NOT NULL
+				);
+				INSERT OR IGNORE INTO counter (id, count) VALUES (0, 0);",
+			)
+			.await?;
 		Ok(Self)
 	}
 }
 
-impl Handles<Increment> for Counter {
-	type Future = BoxFuture<i64>;
-
-	fn handle(self: Arc<Self>, ctx: Ctx<Self>, action: Increment) -> Self::Future {
-		Box::pin(async move {
-			let count = {
-				let mut state = ctx.state_mut();
-				state.count += action.amount;
-				state.count
-			};
-			ctx.emit(NewCount { count })?;
-			Ok(count)
-		})
+impl Handler<Increment> for Counter {
+	async fn handle(self: Arc<Self>, ctx: Ctx<Self>, action: Increment) -> Result<i64> {
+		let result = ctx
+			.sql()
+			.execute(
+				"UPDATE counter SET count = count + ? WHERE id = 0 RETURNING count",
+				Some(vec![BindParam::Integer(action.amount)]),
+			)
+			.await?;
+		let count = match result.rows.first().and_then(|row| row.first()) {
+			Some(ColumnValue::Integer(count)) => *count,
+			other => return Err(anyhow!("expected integer count, got {other:?}")),
+		};
+		ctx.emit(NewCount { count })?;
+		Ok(count)
 	}
 }
 
@@ -271,8 +269,8 @@ See the [React documentation](/actors/docs/clients/react) for more information.
 	<Card title="Actions" href="/actors/docs/actions">
 		Define the RPC surface clients call on your actor.
 	</Card>
-	<Card title="State" href="/actors/docs/state">
-		Persist and load actor state across sleeps and restarts.
+	<Card title="SQLite" href="/actors/docs/sqlite">
+		Store durable data across sleeps and restarts.
 	</Card>
 	<Card title="Events" href="/actors/docs/events">
 		Broadcast realtime updates to connected clients.

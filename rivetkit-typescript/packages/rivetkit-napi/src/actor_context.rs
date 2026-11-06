@@ -182,11 +182,6 @@ pub struct JsInspectorSnapshot {
 	pub connected_clients: u32,
 }
 
-#[napi(object)]
-pub struct JsActorRuntimeSocketEndpointInfo {
-	pub path: String,
-}
-
 #[derive(Clone)]
 struct DisconnectPredicatePayload {
 	conn: CoreConnHandle,
@@ -382,18 +377,6 @@ impl ActorContext {
 				shared: self.shared.clone(),
 				step: Some(step),
 			})
-	}
-
-	#[napi]
-	pub async fn provision_actor_runtime_socket(
-		&self,
-	) -> napi::Result<JsActorRuntimeSocketEndpointInfo> {
-		let info = self
-			.inner
-			.provision_actor_runtime_socket()
-			.await
-			.map_err(napi_anyhow_error)?;
-		Ok(JsActorRuntimeSocketEndpointInfo { path: info.path })
 	}
 
 	#[napi]

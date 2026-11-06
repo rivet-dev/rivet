@@ -193,7 +193,7 @@
           "slug": "create",
           "title": "Create Actor",
           "description": "Create a new actor. Fails if an actor with the same name and key already exists.",
-          "notes": "Prefer [Get or Create Actor](/docs/api/actors/get-or-create) for idempotent access by key. Use this endpoint when you need a fresh actor every time, for example with a random key.",
+          "notes": "Prefer [Get or Create Actor](/docs/api/actors/get-or-create) for idempotent access by key. Use this endpoint when you need a fresh actor every time, for example with a random key.\n\nAn `actor.create_pending` response (HTTP 409) means creation may have taken effect but the result could not be confirmed. Inspect the actor identified by `metadata.actor_id` rather than automatically resubmitting the create. A not-found read can race an in-flight create; retrying a keyless create can create a second actor.",
           "typescript": "examples/docs/api/actors-create.ts",
           "parameters": {
             "name": "Name of the actor as registered in your RivetKit registry.",
@@ -222,7 +222,7 @@
           "slug": "get-or-create",
           "title": "Get or Create Actor",
           "description": "Return the actor with the given name and key, creating it if it does not exist. This is the HTTP equivalent of client.actor.getOrCreate(key).",
-          "notes": "The response includes `created`, which is `true` when this call created the actor. Gateway endpoints can perform the same lookup inline with the `rvt-*` selector parameters, so you only need this endpoint when you want the `actor_id` up front.",
+          "notes": "The response includes `created`, which is `true` when this call created the actor. Gateway endpoints can perform the same lookup inline with the `rvt-*` selector parameters, so you only need this endpoint when you want the `actor_id` up front.\n\nAn `actor.create_pending` response (HTTP 409) includes `metadata.actor_id` when creation may have taken effect but the result could not be confirmed. Inspect that actor rather than automatically resubmitting creation.",
           "typescript": "examples/docs/api/actors-get-or-create.ts",
           "parameters": {
             "name": "Name of the actor as registered in your RivetKit registry.",

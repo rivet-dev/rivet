@@ -45,6 +45,8 @@ struct Connection {
 	/// first. Allocation picks envoys from that index, so it is kept inside the heartbeat
 	/// window while the envoy answers pings and removed when it stops or disconnects.
 	last_heartbeat_unix_ms: AtomicI64,
+	/// Last pong timestamp whose pool admission renewal was durably acknowledged.
+	pool_heartbeat_unix_ms: AtomicI64,
 	/// Whether a newer version superseded this envoy, and the eviction of its actors.
 	version_drain: crate::version_drain::State,
 	to_envoy_tx: crate::queue::Sender<ToEnvoyFrame>,
@@ -212,6 +214,7 @@ pub async fn run(
 		record,
 		pool_config: Default::default(),
 		last_heartbeat_unix_ms: AtomicI64::new(0),
+		pool_heartbeat_unix_ms: AtomicI64::new(0),
 		version_drain: Default::default(),
 		to_envoy_tx,
 		control_tx,
@@ -388,40 +391,37 @@ pub async fn run(
 	let ping_task = tasks.spawn_result(async move {
 		let clock = ctx2.env().clock();
 		let period_ms = ctx2.config().pegboard().envoy_update_ping_interval();
-		run_ping_loop(clock, period_ms, &conn2.ping, || async {
-			let last_pong_unix_ms = conn2.last_pong_unix_ms.load(Ordering::Acquire);
-			if last_pong_unix_ms > conn2.last_heartbeat_unix_ms.load(Ordering::Acquire) {
-				match write_heartbeat(&ctx2, &conn2, last_pong_unix_ms).await {
+		run_ping_loop(
+			clock, period_ms, &conn2.ping,
+			|| async {
+				match renew_pool_admission(&ctx2, &conn2).await {
+					Ok(()) => Ok(()),
+					Err(error) if error.is::<crate::envoy_record::PoolAdmissionLost>() => {
+						tracing::info!("closing node connection whose pool admission expired; the runtime reconnects for fresh admission");
+						Err(error)
+					}
+					Err(error) => {
+						tracing::debug!(?error, "pool admission renewal failed; the next pong retries it");
+						Ok(())
+					}
+				}
+			},
+			|| async {
+				match write_heartbeat(&ctx2, &conn2).await {
 					Ok(()) => {
 						if let Err(error) = evict_actors_from_superseded_envoy(&ctx2, &conn2).await {
-							tracing::debug!(
-								?error,
-								"eviction from a superseded envoy failed; the next heartbeat retries it"
-							);
+							tracing::debug!(?error, "eviction from a superseded envoy failed; the next heartbeat retries it");
 						}
 					}
 					Err(error) if error.is::<crate::envoy_record::Superseded>() => {
-						tracing::info!(
-							"closing envoy connection whose active index entries belong to a newer connection"
-						);
+						tracing::info!("closing envoy connection whose active index entries belong to a newer connection");
 						return Err(error);
 					}
-					Err(error) if error.is::<crate::envoy_record::PoolAdmissionLost>() => {
-						tracing::info!(
-							"closing node connection whose pool admission expired; the runtime reconnects for fresh admission"
-						);
-						return Err(error);
-					}
-					Err(error) => {
-						tracing::debug!(
-							?error,
-							"envoy heartbeat write failed; the next pong retries it"
-						);
-					}
+					Err(error) => tracing::debug!(?error, "envoy heartbeat write failed; the next pong retries it"),
 				}
-			}
-			Ok(())
-		}).await
+				Ok(())
+			},
+		).await
 	});
 
 	// Remote SQL sessions expire on one deadline queue, owned and joined with the connection.
@@ -509,17 +509,22 @@ async fn leave_active_index(ctx: &EngineContext, conn: &Connection) -> Result<()
 /// with this connection's route. A connection that is stopping or not yet connected writes
 /// nothing: it must not come back into allocation. An index owned by a newer connection of the
 /// envoy means this one is superseded and must close.
-async fn write_heartbeat(
-	ctx: &EngineContext,
-	conn: &Connection,
-	heartbeat_unix_ms: i64,
-) -> Result<()> {
-	let (connection_epoch, version, names) = {
+async fn write_heartbeat(ctx: &EngineContext, conn: &Connection) -> Result<()> {
+	let (connection_epoch, version, names, heartbeat_unix_ms) = {
 		let record = conn.record.lock().await;
 		if !record.connected {
 			return Ok(());
 		}
-		register_pool_connection(ctx, conn, heartbeat_unix_ms, true).await?;
+		// Advertise only a confirmed pool lease, never a newer unconfirmed pong.
+		let Some(heartbeat_unix_ms) = live_pool_heartbeat(
+			conn.pool_heartbeat_unix_ms.load(Ordering::Acquire),
+			ctx.env().clock().observe()?.unix_ms,
+		) else {
+			return Ok(());
+		};
+		if heartbeat_unix_ms <= conn.last_heartbeat_unix_ms.load(Ordering::Acquire) {
+			return Ok(());
+		}
 		if record.entry.stopping {
 			conn.last_heartbeat_unix_ms
 				.fetch_max(heartbeat_unix_ms, Ordering::AcqRel);
@@ -529,6 +534,7 @@ async fn write_heartbeat(
 			record.entry.connection_epoch,
 			record.entry.version,
 			record.entry.names.clone(),
+			heartbeat_unix_ms,
 		)
 	};
 	let response = ctx
@@ -552,6 +558,16 @@ async fn write_heartbeat(
 		.await?;
 	if response.superseded {
 		return Err(crate::envoy_record::Superseded.into());
+	}
+	// A late index write carries the confirmed timestamp and therefore expires with
+	// that admission. Do not act on its response without current confirmed admission.
+	if live_pool_heartbeat(
+		conn.pool_heartbeat_unix_ms.load(Ordering::Acquire),
+		ctx.env().clock().observe()?.unix_ms,
+	)
+	.is_none()
+	{
+		return Ok(());
 	}
 	conn.last_heartbeat_unix_ms
 		.fetch_max(heartbeat_unix_ms, Ordering::AcqRel);
@@ -578,6 +594,14 @@ async fn evict_actors_from_superseded_envoy(ctx: &EngineContext, conn: &Connecti
 		return Ok(());
 	};
 	if !config.drain_on_version_upgrade || !conn.version_drain.is_draining().await {
+		return Ok(());
+	}
+	if live_pool_heartbeat(
+		conn.pool_heartbeat_unix_ms.load(Ordering::Acquire),
+		ctx.env().clock().observe()?.unix_ms,
+	)
+	.is_none()
+	{
 		return Ok(());
 	}
 	let mut bound = Vec::new();
@@ -1368,8 +1392,10 @@ async fn register_pool_connection(
 /// the connection it replaced, if any, to close. Configuration stays fixed until disconnect.
 async fn connect(ctx: &EngineContext, conn: &Arc<Connection>, names: Vec<String>) -> Result<()> {
 	pegboard::catalog::ensure_namespace(ctx, &conn.scope.namespace).await?;
-	let config =
-		register_pool_connection(ctx, conn, ctx.env().clock().observe()?.unix_ms, false).await?;
+	let admitted_unix_ms = ctx.env().clock().observe()?.unix_ms;
+	let config = register_pool_connection(ctx, conn, admitted_unix_ms, false).await?;
+	conn.pool_heartbeat_unix_ms
+		.fetch_max(admitted_unix_ms, Ordering::AcqRel);
 	let _ = conn.pool_config.set(config);
 
 	let is_new = conn.record.lock().await.is_new();
@@ -1380,10 +1406,7 @@ async fn connect(ctx: &EngineContext, conn: &Arc<Connection>, names: Vec<String>
 
 	// The listing index is keyed by creation time, which the record keeps across connections,
 	// so an envoy enters it once. A retry of a lost reply writes the same key.
-	let (create_unix_ms, heartbeat_unix_ms) = {
-		let record = conn.record.lock().await;
-		(record.entry.create_unix_ms, record.entry.heartbeat_unix_ms)
-	};
+	let create_unix_ms = conn.record.lock().await.entry.create_unix_ms;
 	if is_new {
 		ctx.depot()
 			.command::<IndexInsertEnvoy>(
@@ -1396,7 +1419,7 @@ async fn connect(ctx: &EngineContext, conn: &Arc<Connection>, names: Vec<String>
 			)
 			.await?;
 	}
-	write_heartbeat(ctx, conn, heartbeat_unix_ms).await?;
+	write_heartbeat(ctx, conn).await?;
 
 	let previous = conn.record.lock().await.previous.take();
 	if let Some(previous) = previous.filter(|previous| previous.connected) {
@@ -1471,17 +1494,44 @@ async fn write_record(
 	bail!("envoy record changed during write retry")
 }
 
-/// Publishes local pings independently of the serialized durable index refresh.
+/// The catalog lease is the authority for advertising this node, not a recent pong alone.
+fn live_pool_heartbeat(confirmed_unix_ms: i64, now_unix_ms: i64) -> Option<i64> {
+	(confirmed_unix_ms > 0
+		&& now_unix_ms < confirmed_unix_ms.saturating_add(pegboard::ENVOY_HEARTBEAT_TIMEOUT_MS))
+	.then_some(confirmed_unix_ms)
+}
+
+/// One renewal at a time, serialized with connection record changes. Index work does
+/// not hold this lock while awaiting its store, so a slow index cannot expire admission.
+async fn renew_pool_admission(ctx: &EngineContext, conn: &Connection) -> Result<()> {
+	let record = conn.record.lock().await;
+	if !record.connected {
+		return Ok(());
+	}
+	let heartbeat_unix_ms = conn.last_pong_unix_ms.load(Ordering::Acquire);
+	if heartbeat_unix_ms <= conn.pool_heartbeat_unix_ms.load(Ordering::Acquire) {
+		return Ok(());
+	}
+	register_pool_connection(ctx, conn, heartbeat_unix_ms, true).await?;
+	conn.pool_heartbeat_unix_ms
+		.fetch_max(heartbeat_unix_ms, Ordering::AcqRel);
+	Ok(())
+}
+
+/// Publishes pings and renews admission independently of the serialized index refresh.
 /// An old active index entry makes a node ineligible for new allocations; it does not
 /// revoke actors on a connected node. Epoch teardown still requires a stopped report or
 /// proof of disconnection (`pegboard::actor_machine::executor::envoy_gone`).
-async fn run_ping_loop<F, Fut>(
+async fn run_ping_loop<R, Renew, F, Fut>(
 	clock: Arc<dyn rivet_env::Clock>,
 	period_ms: u64,
 	ping: &tokio::sync::watch::Sender<i64>,
+	mut renew: R,
 	mut refresh: F,
 ) -> Result<()>
 where
+	R: FnMut() -> Renew,
+	Renew: std::future::Future<Output = Result<()>>,
 	F: FnMut() -> Fut,
 	Fut: std::future::Future<Output = Result<()>>,
 {
@@ -1490,6 +1540,15 @@ where
 		loop {
 			interval.tick().await?;
 			ping.send_replace(clock.observe()?.unix_ms);
+		}
+		#[allow(unreachable_code)]
+		anyhow::Ok(())
+	};
+	let admission = async {
+		let mut interval = rivet_env::interval(clock.clone(), period_ms);
+		loop {
+			interval.tick().await?;
+			renew().await?;
 		}
 		#[allow(unreachable_code)]
 		anyhow::Ok(())
@@ -1503,9 +1562,10 @@ where
 		#[allow(unreachable_code)]
 		anyhow::Ok(())
 	};
-	// At most one refresh runs. A terminal refresh error still ends the connection;
-	// cancelling its owner drops both futures together, without detached refreshes.
+	// At most one renewal and one index refresh run. Terminal errors end the
+	// connection; its owner drops all three futures, without detached work.
 	rivet_env::select_biased!("terminal admission or supersession failure ends local liveness",
+		result = admission => result,
 		result = persist => result,
 		result = publish => result,
 	)

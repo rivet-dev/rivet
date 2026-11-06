@@ -4,12 +4,11 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use rivetkit_core::error::ActorRuntime;
 use rivetkit_core::{ActorHttpResponse, Request, Response, WebSocket};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 
 use crate::action::ActionSet;
 use crate::context::{ConnCtx, Ctx};
 use crate::event::EventSet;
-use crate::queue::QueueSet;
 
 /// Classifies an HTTP callback for independent bounded dispatcher pools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,16 +32,11 @@ pub enum HttpCallbackAdmission {
 
 #[async_trait]
 pub trait Actor: Send + Sync + Sized + 'static {
-	type State: Serialize + DeserializeOwned + Send + Sync + 'static;
 	type Input: DeserializeOwned + Default + Send + 'static;
 	type Actions: ActionSet<Self>;
 	type Events: EventSet;
-	type Queue: QueueSet<Self>;
 	type ConnParams: DeserializeOwned + Default + Send + Sync + 'static;
-	type ConnState: Serialize + DeserializeOwned + Default + Send + Sync + Clone + 'static;
 	type Action: DeserializeOwned + Send + 'static;
-
-	const HAS_DATABASE: bool = false;
 
 	/// Opts this actor into concurrent typed HTTP callbacks.
 	const CONCURRENT_HTTP_CALLBACKS: bool = false;
@@ -65,19 +59,6 @@ pub trait Actor: Send + Sync + Sized + 'static {
 		HttpCallbackAdmission::Untracked
 	}
 
-	#[deprecated(
-		note = "actor state is deprecated and will be removed in a future version. Store durable data in SQLite and ephemeral data in actor struct fields. See https://rivet.dev/actors/docs/deprecated/state"
-	)]
-	async fn create_state(_ctx: &Ctx<Self>, _input: Self::Input) -> Result<Self::State> {
-		bail!(
-			"{}",
-			ActorRuntime::NotConfigured {
-				component: "actor create_state hook".to_owned(),
-			}
-			.build()
-		)
-	}
-
 	async fn create(_ctx: &Ctx<Self>) -> Result<Self> {
 		bail!(
 			"{}",
@@ -98,24 +79,6 @@ pub trait Actor: Send + Sync + Sized + 'static {
 
 	async fn on_start(self: Arc<Self>, _ctx: Ctx<Self>) -> Result<()> {
 		Ok(())
-	}
-
-	#[deprecated(
-		note = "actor state is deprecated and will be removed in a future version. Store durable data in SQLite and ephemeral data in actor struct fields. See https://rivet.dev/actors/docs/deprecated/state"
-	)]
-	async fn on_state_change(self: Arc<Self>, _ctx: Ctx<Self>) -> Result<()> {
-		Ok(())
-	}
-
-	#[deprecated(
-		note = "connection state is deprecated and will be removed in a future version. Track live connections in actor struct fields and store durable data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state"
-	)]
-	async fn create_conn_state(
-		self: Arc<Self>,
-		_ctx: Ctx<Self>,
-		_params: Self::ConnParams,
-	) -> Result<Self::ConnState> {
-		Ok(Self::ConnState::default())
 	}
 
 	async fn on_before_connect(

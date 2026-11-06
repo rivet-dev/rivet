@@ -9,7 +9,10 @@ use epoxy::ops::{
 	},
 };
 use rivet_engine_context::EngineContext;
-use rivet_keys::keys::{KeyAddress, codec::FormalKey};
+use rivet_keys::keys::{
+	KeyAddress,
+	codec::{AtVersion, FormalKey},
+};
 use rivet_util::Id;
 
 // Every `key` in this module is the canonical actor key that `rivetkit_shared_types::actor_key`
@@ -46,11 +49,14 @@ pub(crate) enum ReserveResult {
 	AlreadyReserved { reservation_id: Id },
 }
 
+/// Reserves the key for this datacenter, writing the reservation at `write_version`, the
+/// negotiated `pegboard.actor` version, so every live storage worker can read it.
 pub(crate) async fn reserve(
 	ctx: &EngineContext,
 	namespace: String,
 	name: String,
 	key: String,
+	write_version: u16,
 ) -> Result<ReserveResult> {
 	let digest = key_digest(b"rivet.actor.key.reservation.v1", &namespace, &name, &key);
 	let mut bytes = [0; 16];
@@ -84,9 +90,12 @@ pub(crate) async fn reserve(
 
 	let epoxy_key = ActorKeyKey::new(namespace, name, key);
 	let value = epoxy_key
-		.serialize(wire::EpoxyActorByKeyEntry {
-			reservation_id: reservation_id.as_bytes().into(),
-		})?
+		.serialize(AtVersion::new(
+			wire::EpoxyActorByKeyEntry {
+				reservation_id: reservation_id.as_bytes().into(),
+			},
+			rivet_data::pegboard_actor::record_write_version(write_version),
+		))?
 		.to_vec();
 
 	let proposal_res = ctx

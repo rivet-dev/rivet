@@ -51,6 +51,8 @@ pub(crate) struct EngineContextInner {
 pub struct EngineContext(
 	Arc<EngineContextInner>,
 	Option<Arc<crate::singleton_scope::SingletonScope>>,
+	/// A request's absolute typed-command deadline, inherited by nested lookup helpers.
+	Option<u64>,
 );
 
 impl EngineContext {
@@ -156,6 +158,7 @@ impl EngineContext {
 				epoxy: std::sync::OnceLock::new(),
 				filesystem_cache,
 			}),
+			None,
 			None,
 		);
 
@@ -309,7 +312,7 @@ impl EngineContext {
 		ensure!(authority.permits(), "singleton authority already ended");
 		let scope =
 			crate::singleton_scope::SingletonScope::new(authority, self.depot(), self.http())?;
-		Ok(Self(self.0.clone(), Some(Arc::new(scope))))
+		Ok(Self(self.0.clone(), Some(Arc::new(scope)), self.2))
 	}
 	pub fn singleton_authority(
 		&self,
@@ -339,7 +342,7 @@ impl EngineContext {
 	pub fn epoxy(&self) -> Result<epoxy::client::Client> {
 		// Before startup installs volume access, the Depot client is incomplete; do not cache
 		// a client built from it.
-		if self.1.is_some() || self.0.depot.volumes.get().is_none() {
+		if self.1.is_some() || self.2.is_some() || self.0.depot.volumes.get().is_none() {
 			return epoxy::client::Client::with_depot(self.config(), self.depot(), self.http());
 		}
 		if let Some(client) = self.0.epoxy.get() {
@@ -351,7 +354,7 @@ impl EngineContext {
 	}
 
 	pub fn depot(&self) -> DepotClient {
-		self.1.as_ref().map_or_else(
+		let client = self.1.as_ref().map_or_else(
 			|| {
 				if let Some(volumes) = self.0.depot.volumes.get() {
 					// The service is constructed from this context's UPS identity.
@@ -365,6 +368,23 @@ impl EngineContext {
 				}
 			},
 			|scope| scope.depot.clone(),
+		);
+		match self.2 {
+			Some(deadline) => client.with_command_deadline(deadline),
+			None => client,
+		}
+	}
+
+	/// Caps every typed Depot command in a request, including commands from nested helpers.
+	/// Clones share the original absolute deadline; nested scopes cannot extend it.
+	pub fn with_depot_command_deadline(&self, deadline_boot_ms: u64) -> Self {
+		Self(
+			self.0.clone(),
+			self.1.clone(),
+			Some(
+				self.2
+					.map_or(deadline_boot_ms, |previous| previous.min(deadline_boot_ms)),
+			),
 		)
 	}
 

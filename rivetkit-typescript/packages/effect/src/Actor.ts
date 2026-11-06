@@ -49,6 +49,7 @@ export type Options<
 	State extends StateOptions.Any,
 	Database extends RivetkitDb.AnyDatabaseProvider = undefined,
 > = Readonly<RivetkitActorOptions> & {
+	/** @deprecated Actor state was deprecated in 3.0 and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
 	readonly state?: State;
 	readonly db?: Database;
 };
@@ -64,6 +65,7 @@ type StatefulOptions<
 	State extends StateOptions.Any,
 	Database extends RivetkitDb.AnyDatabaseProvider = undefined,
 > = Readonly<RivetkitActorOptions> & {
+	/** @deprecated Actor state was deprecated in 3.0 and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
 	readonly state: State;
 	readonly db?: Database;
 };
@@ -197,6 +199,7 @@ type WakeOptionsFor<
 } & ([StateDefinition] extends [never]
 	? unknown
 	: {
+			/** @deprecated Actor state was deprecated in 3.0 and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
 			readonly state: State.State<
 				StateOptions.Decoded<StateDefinition>,
 				Schema.SchemaError,

@@ -1,30 +1,13 @@
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use rivetkit::prelude::*;
-use rivetkit::{Action, Event, Handles, action};
+use rivetkit::{Action, BindParam, ColumnValue, Event, Handler, action};
 use serde::{Deserialize, Serialize};
 
 pub const ACTOR_NAME: &str = "counter";
 
-type BoxFuture<T> = Pin<Box<dyn Future<Output = Result<T>> + Send>>;
-
 pub struct Counter;
-
-#[derive(Default, Serialize, Deserialize)]
-pub struct CounterState {
-	pub count: i64,
-}
-
-#[derive(Default, Serialize, Deserialize)]
-pub struct CounterConnParams {
-	pub label: String,
-}
-
-#[derive(Clone, Default, Serialize, Deserialize)]
-pub struct CounterConnState {
-	pub label: String,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Increment {
@@ -47,15 +30,6 @@ impl Action for GetCount {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct GetConnLabel;
-
-impl Action for GetConnLabel {
-	type Output = String;
-
-	const NAME: &'static str = "getConnLabel";
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct NewCount {
 	pub count: i64,
 }
@@ -66,70 +40,54 @@ impl Event for NewCount {
 
 #[async_trait]
 impl Actor for Counter {
-	type State = CounterState;
 	type Input = ();
-	type Actions = (Increment, GetCount, GetConnLabel);
+	type Actions = (Increment, GetCount);
 	type Events = (NewCount,);
-	type Queue = ();
-	type ConnParams = CounterConnParams;
-	type ConnState = CounterConnState;
+	type ConnParams = ();
 	type Action = action::Raw;
 
-	async fn create_state(_ctx: &Ctx<Self>, _input: Self::Input) -> Result<Self::State> {
-		Ok(CounterState::default())
-	}
-
-	async fn create(_ctx: &Ctx<Self>) -> Result<Self> {
+	async fn create(ctx: &Ctx<Self>) -> Result<Self> {
+		ctx.sql()
+			.exec(
+				"CREATE TABLE IF NOT EXISTS counter (
+					id INTEGER PRIMARY KEY,
+					count INTEGER NOT NULL
+				);
+				INSERT OR IGNORE INTO counter (id, count) VALUES (0, 0);",
+			)
+			.await?;
 		Ok(Self)
 	}
+}
 
-	async fn create_conn_state(
-		self: Arc<Self>,
-		_ctx: Ctx<Self>,
-		params: Self::ConnParams,
-	) -> Result<Self::ConnState> {
-		Ok(CounterConnState {
-			label: params.label,
-		})
+impl Handler<Increment> for Counter {
+	async fn handle(self: Arc<Self>, ctx: Ctx<Self>, action: Increment) -> Result<i64> {
+		let result = ctx
+			.sql()
+			.execute(
+				"UPDATE counter SET count = count + ? WHERE id = 0 RETURNING count",
+				Some(vec![BindParam::Integer(action.amount)]),
+			)
+			.await?;
+		let count = match result.rows.first().and_then(|row| row.first()) {
+			Some(ColumnValue::Integer(count)) => *count,
+			other => return Err(anyhow!("expected integer count, got {other:?}")),
+		};
+		ctx.emit(NewCount { count })?;
+		Ok(count)
 	}
 }
 
-impl Handles<Increment> for Counter {
-	type Future = BoxFuture<i64>;
-
-	fn handle(self: Arc<Self>, ctx: Ctx<Self>, action: Increment) -> Self::Future {
-		Box::pin(async move {
-			let count = {
-				let mut state = ctx.state_mut();
-				state.count += action.amount;
-				state.count
-			};
-			ctx.emit(NewCount { count })?;
-			Ok(count)
-		})
-	}
-}
-
-impl Handles<GetCount> for Counter {
-	type Future = BoxFuture<i64>;
-
-	fn handle(self: Arc<Self>, ctx: Ctx<Self>, _action: GetCount) -> Self::Future {
-		Box::pin(async move { Ok(ctx.state().count) })
-	}
-}
-
-impl Handles<GetConnLabel> for Counter {
-	type Future = BoxFuture<String>;
-
-	fn handle(self: Arc<Self>, ctx: Ctx<Self>, _action: GetConnLabel) -> Self::Future {
-		Box::pin(async move {
-			Ok(ctx
-				.conn()
-				.map(|conn| conn.state())
-				.transpose()?
-				.map(|state| state.label)
-				.unwrap_or_default())
-		})
+impl Handler<GetCount> for Counter {
+	async fn handle(self: Arc<Self>, ctx: Ctx<Self>, _action: GetCount) -> Result<i64> {
+		let result = ctx
+			.sql()
+			.query("SELECT count FROM counter WHERE id = 0", None)
+			.await?;
+		match result.rows.first().and_then(|row| row.first()) {
+			Some(ColumnValue::Integer(count)) => Ok(*count),
+			other => Err(anyhow!("expected integer count, got {other:?}")),
+		}
 	}
 }
 

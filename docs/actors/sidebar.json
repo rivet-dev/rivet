@@ -185,11 +185,6 @@
 							"href": "/actors/docs/appearance"
 						},
 						{
-							"title": "Actor Runtime Socket",
-							"href": "/actors/docs/actor-runtime-socket",
-							"badge": "Beta"
-						},
-						{
 							"title": "Limits",
 							"href": "/actors/docs/limits"
 						}
@@ -281,6 +276,22 @@
 						{
 							"title": "State",
 							"href": "/actors/docs/deprecated/state"
+						},
+						{
+							"title": "Queues",
+							"href": "/actors/docs/deprecated/queues"
+						},
+						{
+							"title": "KV",
+							"href": "/actors/docs/deprecated/kv"
+						},
+						{
+							"title": "preventSleep",
+							"href": "/actors/docs/deprecated/prevent-sleep"
+						},
+						{
+							"title": "run",
+							"href": "/actors/docs/deprecated/run"
 						}
 					]
 				}

@@ -7,6 +7,8 @@ description: "Create a new actor. Fails if an actor with the same name and key a
 
 Prefer [Get or Create Actor](/docs/api/actors/get-or-create) for idempotent access by key. Use this endpoint when you need a fresh actor every time, for example with a random key.
 
+An `actor.create_pending` response (HTTP 409) means creation may have taken effect but the result could not be confirmed. Inspect the actor identified by `metadata.actor_id` rather than automatically resubmitting the create. A not-found read can race an in-flight create; retrying a keyless create can create a second actor.
+
 ```http
 POST https://rivet.example.com/actors
 ```

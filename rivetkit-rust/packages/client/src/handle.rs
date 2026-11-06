@@ -125,10 +125,16 @@ impl ActorHandleStateless {
 		codec::decode_http_action_response(self.encoding_kind, &output)
 	}
 
+	#[deprecated(
+		note = "queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite. See https://rivet.dev/actors/docs/deprecated/queues"
+	)]
 	pub async fn send(&self, name: &str, body: impl Serialize, _opts: SendOpts) -> Result<()> {
 		self.send_queue(name, &body, false, None).await.map(|_| ())
 	}
 
+	#[deprecated(
+		note = "queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite. See https://rivet.dev/actors/docs/deprecated/queues"
+	)]
 	pub async fn send_and_wait(
 		&self,
 		name: &str,
