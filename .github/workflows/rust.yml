@@ -49,11 +49,15 @@ jobs:
 
   check:
     name: Check
-    runs-on: depot-ubuntu-24.04-8
+    runs-on: ${{ github.repository == 'rivet-dev/rivet' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && fromJSON('["self-hosted","incus-heavy"]') || 'depot-ubuntu-24.04-8' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Attach persistent Incus caches
+        if: startsWith(runner.name, 'ci-0')
+        run: bash scripts/ci/incus-cache.sh raw
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          cache: ${{ !startsWith(runner.name, 'ci-0') }}
           target: wasm32-unknown-unknown
           cache-shared-key: rust-ci
           cache-on-failure: true
