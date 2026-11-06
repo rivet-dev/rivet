@@ -197,11 +197,16 @@ fn build_object_store(
 				}
 				builder = builder.with_retry(retry);
 			}
-			let store = builder.build()?;
+			let store: Arc<dyn ObjectStore> = Arc::new(builder.build()?);
+			let store = if s3.unquoted_if_match.unwrap_or(false) {
+				super::unquoted_if_match::UnquotedIfMatchStore::wrap(store)
+			} else {
+				store
+			};
 			if let Some(prefix) = s3.prefix.as_deref().filter(|prefix| !prefix.is_empty()) {
 				Ok(Arc::new(PrefixStore::new(store, prefix)))
 			} else {
-				Ok(Arc::new(store))
+				Ok(store)
 			}
 		}
 	}
