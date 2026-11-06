@@ -84,7 +84,9 @@ function classifyActorError(
 
 	if (
 		(error.group === "ups" && error.code === "consumer_closed") ||
-		(error.group === "depot" && error.code === "request_deadline_exceeded")
+		(error.group === "depot" &&
+			(error.code === "request_deadline_exceeded" ||
+				error.code === "unavailable"))
 	) {
 		// The connection can recover, but an interrupted action may already have run.
 		return buildLifecycleBoundaryInfo(
