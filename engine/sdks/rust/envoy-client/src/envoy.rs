@@ -43,10 +43,8 @@ use crate::tunnel::{
 };
 use crate::utils::{BufferMap, EnvoyShutdownError, SleepFuture, boxed_sleep, spawn_detached};
 
-/// Process-wide envoy slot. Holds the handle inside a mutex so a stopped
-/// handle (e.g. from a shutdown-during-build race in serverless mode) can be
-/// replaced on the next `start_envoy_sync` call. Registration rejections stay
-/// cached until process restart.
+/// Process-wide envoy slot. Non-terminal handles are released after shutdown
+/// cleanup; registration rejections stay cached until process restart.
 #[cfg(not(target_arch = "wasm32"))]
 static GLOBAL_ENVOY: OnceLock<Mutex<Option<EnvoyHandle>>> = OnceLock::new();
 
@@ -473,6 +471,22 @@ pub fn start_envoy_sync(config: EnvoyConfig) -> EnvoyHandle {
 	}
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn clear_global_envoy(shared: &Arc<SharedContext>) {
+	let Some(slot) = GLOBAL_ENVOY.get() else {
+		return;
+	};
+
+	let mut guard = slot.lock();
+	let is_current = match guard.as_ref() {
+		Some(handle) => handle.terminal_error().is_none() && Arc::ptr_eq(&handle.shared, shared),
+		None => false,
+	};
+	if is_current {
+		*guard = None;
+	}
+}
+
 fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 	crate::metrics::METRICS
 		.actor_queued_requests_capacity
@@ -784,6 +798,8 @@ async fn envoy_loop(
 	tracing::info!("envoy stopped");
 
 	ctx.shared.config.callbacks.on_shutdown();
+	#[cfg(not(target_arch = "wasm32"))]
+	clear_global_envoy(&ctx.shared);
 
 	// Latched signal: waiters on `EnvoyHandle::wait_stopped` observe this and
 	// any future callers of `wait_stopped` resolve immediately because watch
@@ -1031,3 +1047,7 @@ async fn handle_shutdown(ctx: &mut EnvoyContext) {
 		}
 	}
 }
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[path = "tests/global_envoy_lifecycle.rs"]
+mod global_envoy_lifecycle_tests;
