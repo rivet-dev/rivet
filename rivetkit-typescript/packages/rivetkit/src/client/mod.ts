@@ -53,6 +53,7 @@ export type {
 	ExtractActorsFromRegistry,
 	ExtractRegistryFromClient,
 	GetOptions,
+	GetOrCreateOptions,
 	GetWithIdOptions,
 	QueryOptions,
 	Region,

@@ -11,6 +11,7 @@ import {
 	Struct,
 } from "effect";
 import * as Rivetkit from "rivetkit";
+import type * as RivetkitClient from "rivetkit/client";
 import type * as RivetkitDb from "rivetkit/db";
 import type * as Action from "./Action.ts";
 import * as Client from "./Client.ts";
@@ -240,7 +241,11 @@ export type Handle<Actions extends Action.Any> = {
  * dispatch typed action calls against the returned `Handle`.
  */
 export type Accessor<Actions extends Action.Any> = {
-	readonly getOrCreate: (key: AccessorKeyParam) => Handle<Actions>;
+	/** Gets an actor by key, forwarding connection and creation options to RivetKit. */
+	readonly getOrCreate: (
+		key: AccessorKeyParam,
+		options?: RivetkitClient.GetOrCreateOptions,
+	) => Handle<Actions>;
 };
 
 type UnknownToNever<T> = unknown extends T ? never : T;
