@@ -469,11 +469,23 @@ pub struct CommandConcurrency {
 	pub actor: Option<usize>,
 	/// Index inserts, deletes and listings. Defaults to 256.
 	pub index: Option<usize>,
+	/// Namespace and pool catalog commands (namespace create, read and list; pool upsert and
+	/// list). Their handlers serialize on one lock per process, so this bounds how many callers
+	/// may wait on that lock rather than how many run. Defaults to 256.
+	pub catalog: Option<usize>,
 }
 
 impl CommandConcurrency {
 	pub fn validate(&self) -> Result<()> {
-		if [self.actor_event, self.actor_read, self.actor, self.index].contains(&Some(0)) {
+		if [
+			self.actor_event,
+			self.actor_read,
+			self.actor,
+			self.index,
+			self.catalog,
+		]
+		.contains(&Some(0))
+		{
 			bail!("pegboard.command_concurrency values must be greater than 0");
 		}
 		Ok(())
@@ -493,5 +505,33 @@ impl CommandConcurrency {
 
 	pub fn index(&self) -> usize {
 		self.index.unwrap_or(256)
+	}
+
+	pub fn catalog(&self) -> usize {
+		self.catalog.unwrap_or(256)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	/// Catalog handlers serialize on one lock, so a bound of 1 refused every concurrent caller
+	/// (`command_capacity`) without adding safety. Concurrent runner startups must be admitted.
+	#[test]
+	fn catalog_command_concurrency_admits_concurrent_callers() {
+		let concurrency = CommandConcurrency::default();
+		assert!(concurrency.catalog() > 1);
+		assert_eq!(concurrency.catalog(), concurrency.index());
+	}
+
+	#[test]
+	fn catalog_command_concurrency_is_configurable_and_validated() {
+		let parsed: CommandConcurrency = serde_json::from_str(r#"{"catalog": 8}"#).unwrap();
+		assert_eq!(parsed.catalog(), 8);
+		assert!(parsed.validate().is_ok());
+
+		let zero: CommandConcurrency = serde_json::from_str(r#"{"catalog": 0}"#).unwrap();
+		assert!(zero.validate().is_err());
 	}
 }
