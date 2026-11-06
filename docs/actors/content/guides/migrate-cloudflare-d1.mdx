@@ -1,0 +1,189 @@
+---
+title: "Migrate from Cloudflare D1"
+description: "Move a Cloudflare D1 database to Rivet Actors: split it into one SQLite database per actor, port your queries and migrations, and copy your data over."
+---
+
+A D1 database is one SQLite database that every Worker shares through a binding. In Rivet, each actor has its own embedded [SQLite database](/actors/docs/sqlite). Moving from D1 usually means splitting one shared database into many small ones, one per actor [key](/actors/docs/keys): a database per tenant, user, room, or document. Queries run inside the actor that owns the data. A query across every row of the old database needs a different design, covered in [Query across actors](#query-across-actors).
+
+## How concepts map
+
+| Cloudflare D1 | Rivet | Notes |
+|---|---|---|
+| Database (`wrangler d1 create`) | An actor with `db()`, one database per key | Created the first time a key is used. |
+| `env.DB` binding | [`c.db`](/actors/docs/sqlite) inside the actor | No binding config. |
+| `prepare().bind().all()`, `first()`, `run()`, `raw()` | [`c.db.execute(sql, ...args)`](/actors/docs/sqlite#queries) | Returns an array of row objects. |
+| `DB.batch([...])` | [`c.db.transaction(...)`](/actors/docs/sqlite#transactions) | Atomic, and can read results between statements. |
+| `DB.exec(sql)` | `c.db.execute(sql)` with several statements and no parameters | |
+| `wrangler d1 migrations` | `onMigrate` in `db()` | Each actor migrates itself when it starts. |
+| `drizzle-orm/d1` | [`rivetkit/db/drizzle`](/actors/docs/sqlite-drizzle) | Same schema, same drizzle-kit migrations. |
+| Worker routes that query D1 | [Actions](/actors/docs/actions), or [`onRequest`](/actors/docs/request-handler) | Call the actor that owns the data. |
+| `wrangler d1 execute`, D1 REST API | Admin actions you define | No SQL shell for actor databases. |
+| Location hints and jurisdictions | [Regions](/docs/regions) | An actor and its data stay in one region. |
+| Separate databases per environment | [Namespaces](/docs/namespaces) | |
+| Read replicas, Sessions API, Time Travel | No equivalent | See [Differences to plan for](#differences-to-plan-for). |
+
+## Split the database by actor
+
+Pick the key that most queries already filter on, often a `tenant_id` or `user_id` column. That value becomes the actor key, and the column disappears from the tables because each database only holds one tenant's rows.
+
+```ts Cloudflare @nocheck
+export default {
+  async fetch(request: Request, env: Env) {
+    const tenantId = new URL(request.url).searchParams.get("tenant");
+
+    // Every query filters the shared database by tenant
+    const { results } = await env.DB.prepare(
+      "SELECT id, email, name FROM users WHERE tenant_id = ? ORDER BY id",
+    )
+      .bind(tenantId)
+      .all();
+
+    return Response.json(results);
+  },
+};
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-d1/define.ts" title="Rivet" />
+
+Callers reach a tenant's database through its actor:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-d1/client.ts" title="client.ts" />
+
+Data that every tenant shares, such as a product catalog or feature flags, goes in its own actor with a fixed key like `["main"]`. Writes to one actor's database happen one at a time, so splitting by key also spreads write load across actors instead of funneling it through one database.
+
+## Run queries
+
+`c.db.execute` replaces the prepared statement chain. Pass parameters after the SQL in `?` order, or pass one object for named parameters like `:name`. It always returns the rows as objects, so read the first row yourself and use `RETURNING` where D1 gave you `meta.last_row_id` or `meta.changes`.
+
+Parameters must be numbers, strings, bigints, `null`, or `Uint8Array`. D1 converted other values for you, so convert booleans to `1` or `0`, `undefined` to `null`, and `ArrayBuffer` to `Uint8Array` before passing them.
+
+```ts Cloudflare @nocheck
+const { results } = await env.DB.prepare(
+  "SELECT id, email, name FROM users WHERE name LIKE ? ORDER BY id",
+)
+  .bind(`%${query}%`)
+  .all();
+
+const user = await env.DB.prepare("SELECT id, email, name FROM users WHERE id = ?")
+  .bind(id)
+  .first();
+
+const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM users").first("n");
+
+const { meta } = await env.DB.prepare("INSERT INTO users (email, name) VALUES (?, ?)")
+  .bind(email, name)
+  .run();
+const newId = meta.last_row_id;
+
+const result = await env.DB.prepare("UPDATE users SET name = ? WHERE id = ?")
+  .bind(name, id)
+  .run();
+const changed = result.meta.changes;
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-d1/tenant.ts" region="queries" title="Rivet" />
+
+There is no `raw()`. If you need arrays instead of objects, map the rows with `Object.values`. `DB.exec()` becomes a `c.db.execute` call with several statements and no parameters.
+
+## Replace batches with transactions
+
+`DB.batch()` runs a list of statements as one transaction. `c.db.transaction` does the same with a callback, so you can use the result of one statement in the next. It commits when the callback returns and rolls back if it throws. Always use the `tx` passed to the callback, not `c.db`, inside the transaction.
+
+```ts Cloudflare @nocheck
+await env.DB.batch([
+  env.DB.prepare("INSERT INTO orders (user_id, total) VALUES (?, ?)").bind(userId, total),
+  env.DB.prepare("UPDATE users SET order_count = order_count + 1 WHERE id = ?").bind(userId),
+]);
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-d1/tenant.ts" region="batch" title="Rivet" />
+
+## Port migrations
+
+D1 applies numbered SQL files with `wrangler d1 migrations apply`. An actor database has no separate apply step: `onMigrate` runs every time an actor starts, before anything else touches the database, and it is atomic. After a deploy, each actor brings its own database up to date the next time it starts.
+
+```sh Cloudflare
+npx wrangler d1 migrations create my-database add_order_count
+npx wrangler d1 migrations apply my-database --remote
+```
+
+To keep D1's numbered-file workflow, the `migrations` helper applies a list of versions in order and records the applied version in each database. Every actor database starts empty, so don't replay your old D1 migration files. Make version 1 your current D1 schema without the key column, such as `tenant_id`, and add each later change as a new version:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-d1/migrations.ts" title="Rivet" />
+
+<Note>
+`migrations` is exported from `rivetkit/unstable/migrations`, so its API may change. For a schema that only adds tables, `CREATE TABLE IF NOT EXISTS` statements in `onMigrate` are enough, as in the other examples on this page.
+</Note>
+
+Because older actors migrate whenever they next start, write each migration so it is safe to apply to any actor's database, including one that has been asleep for months.
+
+## Keep using Drizzle
+
+If you used Drizzle with D1, keep your schema and your drizzle-kit migrations. Swap `drizzle(env.DB)` for `db` from `rivetkit/db/drizzle` on the actor, and query through `c.db`.
+
+```ts Cloudflare @nocheck
+import { drizzle } from "drizzle-orm/d1";
+import { users } from "./schema";
+
+export default {
+  async fetch(request: Request, env: Env) {
+    const db = drizzle(env.DB, { schema: { users } });
+    const user = await db.query.users.findFirst({
+      where: (users, { eq }) => eq(users.id, 1),
+    });
+    return Response.json(user);
+  },
+};
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-d1/drizzle.ts" title="Rivet" />
+
+See [SQLite + Drizzle](/actors/docs/sqlite-drizzle) for the project layout and the `migrations.js` file that loads drizzle-kit's output.
+
+## Copy your data
+
+Copy rows out of D1 and into each actor through an import action. Group the exported rows by the column you chose as the key, then send each group to its actor in batches:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-d1/tenant.ts" region="import" title="tenant.ts" />
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-d1/import-from-d1.ts" title="import-from-d1.ts" />
+
+- **Keep the original IDs** so references between tables, and IDs stored outside the database, still match.
+- **Make the import safe to re-run.** `INSERT OR IGNORE` skips rows that already arrived, so you can restart a failed import.
+- **Split batches by size.** An action's arguments must fit in `maxIncomingMessageSize`, 64 KiB by default, so the script sizes each batch in bytes rather than rows. See [Limits](/actors/docs/limits).
+- **For large tables**, `wrangler d1 export my-database --remote --output dump.sql` writes a SQL dump you can load into a local SQLite file and read from there instead of `--json` output.
+- **Protect the import action.** Remove it after the move, or restrict who can call it with [authentication](/actors/docs/authentication).
+
+Move one tenant at a time. Pause that tenant's writes, import its rows, check that the data matches, then send its reads and writes to its actor and move on to the next tenant. Compare a checksum of each table, such as a hash of every row ordered by ID, rather than row counts: counts still match when an update was lost.
+
+## Query across actors
+
+D1 can answer `SELECT ... GROUP BY tenant_id` over every tenant in one query. Actor databases can't be joined or attached to each other, so plan cross-tenant reads explicitly:
+
+- **Keep an index in its own actor.** A directory actor records each tenant when its actor is created, so you can list them later.
+- **Fan out** to the actors you need, a few at a time, and combine the results in your code. Use `get` rather than `getOrCreate` so a report never recreates a deleted tenant.
+- **Send analytics elsewhere.** For reporting across all data, stream events to a data warehouse instead of querying live actors.
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-d1/directory.ts" region="directory" title="actors.ts" />
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-d1/report.ts" title="report.ts" />
+
+## Differences to plan for
+
+- **No shared database.** There are no joins or transactions across actors. Each transaction covers one actor's database.
+- **No read replicas or Sessions API.** An actor serves both reads and writes for its data from one region. Place it near its users with [regions](/docs/regions) instead of routing reads to replicas, and drop `withSession()` and bookmark handling.
+- **No Time Travel, backups, or `wrangler d1 export` for actor databases.** If you need exports or backups, build them as admin actions that read your tables.
+- **No SQL console or REST API.** Replace `wrangler d1 execute` and D1's HTTP API with actions or an [`onRequest`](/actors/docs/request-handler) handler that runs the queries you need.
+- **No result metadata.** `execute` returns rows only, without D1's `meta` (`duration`, `rows_read`, `changes`, `last_row_id`). Use `RETURNING` in the same statement instead.
+- **Journal and durability settings are fixed.** Rivet manages SQLite's journaling, so statements that change `journal_mode` or `journal_size_limit`, or lower `synchronous` below `NORMAL`, fail. Standard SQLite features, including JSON functions and FTS5, work as usual.
+- **Different limits.** D1's 10 GB cap per database doesn't apply, and there is no fixed storage limit per actor, but a single transaction has a size limit. See [Limits](/actors/docs/limits).
+- **Foreign keys aren't enforced.** D1 enforces them; actor databases don't, so `ON DELETE CASCADE` and other foreign key actions never run. Delete child rows yourself in the same transaction as the parent, or use triggers:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-d1/tenant.ts" region="delete-user" title="Rivet" />
+
+## Next steps
+
+- [SQLite](/actors/docs/sqlite) for queries, parameters, and transactions
+- [SQLite + Drizzle](/actors/docs/sqlite-drizzle) for typed schemas and generated migrations
+- [Communicating Between Actors](/actors/docs/communicating-between-actors) for the directory and fan-out patterns
+- [Testing](/actors/docs/testing) to cover your actors with Vitest
