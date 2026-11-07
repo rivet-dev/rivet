@@ -71,6 +71,7 @@ import type {
 	WorkflowQueueNextBatchOptions,
 	WorkflowQueueNextOptions,
 } from "./types.js";
+import { type LongTimeoutHandle, setLongTimeout } from "./utils.js";
 
 /**
  * Default values for step configuration.
@@ -1145,13 +1146,16 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		timeoutMs: number,
 		stepName: string,
 	): Promise<T> {
-		if (timeoutMs <= 0) {
+		// Infinity (or NaN) means no timeout, like 0.
+		if (timeoutMs <= 0 || !Number.isFinite(timeoutMs)) {
 			return promise;
 		}
 
-		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		// setLongTimeout, because setTimeout fires after 1ms for delays over
+		// 2^31-1 ms (~24.8 days).
+		let timeoutHandle: LongTimeoutHandle | undefined;
 		const timeoutPromise = new Promise<never>((_, reject) => {
-			timeoutId = setTimeout(() => {
+			timeoutHandle = setLongTimeout(() => {
 				reject(new StepTimeoutError(stepName, timeoutMs));
 			}, timeoutMs);
 		});
@@ -1159,9 +1163,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		try {
 			return await Promise.race([promise, timeoutPromise]);
 		} finally {
-			if (timeoutId !== undefined) {
-				clearTimeout(timeoutId);
-			}
+			timeoutHandle?.abort();
 		}
 	}
 
