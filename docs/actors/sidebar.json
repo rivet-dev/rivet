@@ -65,6 +65,11 @@
 					"title": "SQLite",
 					"href": "/actors/docs/sqlite",
 					"icon": "faSqlite"
+				},
+				{
+					"title": "Secure Code Execution",
+					"href": "/actors/docs/secure-code-execution",
+					"icon": "faSquareTerminal"
 				}
 			]
 		},

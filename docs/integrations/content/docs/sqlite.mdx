@@ -1,0 +1,18 @@
+---
+title: "SQLite"
+description: "Every Rivet Actor has its own embedded SQLite database."
+skill: false
+---
+
+SQLite is built into Rivet Actors: every Actor owns a database that lives and moves with it, so there is nothing to provision or connect. Declare `db` on the Actor, create your tables in `onMigrate`, and run SQL from any action with `c.db.execute(...)`.
+
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-sqlite/basic/index.ts" title="index.ts" />
+<CodeSnippet file="examples/docs/actors-sqlite/basic/client.ts" title="client.ts" />
+</CodeGroup>
+
+Each Actor's database is isolated from every other Actor's, and its rows persist across sleep, crashes, and upgrades like the rest of the Actor's state. Keep one Actor per thing you would otherwise give its own table, such as a user, a document, or an agent conversation, so each database stays small and close to the code that uses it.
+
+Use [Drizzle](/actors/docs/sqlite-drizzle) when you want a typed query builder over the same database. For a hosted SQLite-compatible database you reach over the network, see [Turso](/integrations/turso).
+
+The [SQLite feature page](/actors/docs/sqlite) covers queries, transactions, migrations, and limits.

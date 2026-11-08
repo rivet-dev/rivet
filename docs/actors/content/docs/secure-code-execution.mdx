@@ -1,0 +1,83 @@
+---
+title: "Secure Code Execution"
+description: "Run untrusted, AI-generated code inside a lightweight VM that lives in a Rivet Actor."
+skill: true
+---
+
+Agents write code, and that code should not run in your process. An Actor can boot a lightweight VM with its own filesystem, shell, and JavaScript and Python runtimes, and run the code there. The VM boots in milliseconds inside the Actor's process, so there is no separate sandbox service to deploy. The VM is powered by [agentOS](/agentos/docs).
+
+There are two ways to use it:
+
+- **A VM per Actor.** The VM lives as long as the Actor, so an agent session keeps its files and processes between runs.
+- **A temporary VM.** Boot a VM for one evaluation and release it when the call ends.
+
+## Quickstart
+
+<Steps>
+<Step title="Install">
+
+```sh
+npm install @rivet-dev/agentos-core
+```
+
+</Step>
+
+<Step title="Create a VM per Actor">
+
+Boot the VM in `createVars` and dispose it when the Actor sleeps.
+
+<CodeSnippet file="examples/docs/actors-secure-code-execution/actor.ts" title="actor.ts" />
+
+</Step>
+
+<Step title="Run code from a client">
+
+<CodeSnippet file="examples/docs/actors-secure-code-execution/client.ts" title="client.ts" />
+
+</Step>
+</Steps>
+
+## Evaluate code in a temporary VM
+
+When the code has no state to keep, boot a VM for the one call and dispose it in `finally`.
+
+<CodeSnippet file="examples/docs/actors-secure-code-execution/evaluate.ts" title="evaluate.ts" />
+
+## What the VM can do
+
+The actions below belong to the same Actor as the quickstart and use its `c.vars.vm`.
+
+### Shell
+
+Run a command in the VM and read its output. See [Bash](/agentos/docs/bash) and [Processes](/agentos/docs/processes) for background processes and interactive shells.
+
+<CodeSnippet file="examples/docs/actors-secure-code-execution/capabilities.ts" region="shell" title="actor.ts" />
+
+### Files
+
+The VM has a POSIX filesystem. Files the agent writes stay in that Actor's VM. See [Filesystem](/agentos/docs/filesystem) for directories, batch writes, and mounts.
+
+<CodeSnippet file="examples/docs/actors-secure-code-execution/capabilities.ts" region="files" title="actor.ts" />
+
+### JavaScript and Python
+
+`evaluate()` returns the value of an expression, as in the quickstart. `execute()` runs a program and captures its output. Both are available for [JavaScript](/agentos/docs/javascript) and [Python](/agentos/docs/python).
+
+<CodeSnippet file="examples/docs/actors-secure-code-execution/capabilities.ts" region="python" title="actor.ts" />
+
+### More
+
+- [Networking](/agentos/docs/networking): run servers inside the VM and reach them from the Actor.
+- [Software](/agentos/docs/software): install packages and tools into the VM.
+- [Schedules](/agentos/docs/cron): run commands in the VM on a cron schedule.
+- [Permissions](/agentos/docs/permissions) and [resource limits](/agentos/docs/resource-limits): control network access and cap CPU, memory, processes, and filesystem size.
+
+## Persistence
+
+The VM's filesystem is in memory and is released with the VM. Keep anything that must outlive a wake cycle in the Actor's [state](/actors/docs/state) or [SQLite](/actors/docs/sqlite), or store the VM's filesystem durably with [agentOS persistence](/agentos/docs/persistence).
+
+## Next steps
+
+- [agentOS documentation](/agentos/docs): the full VM API.
+- [Give an agent a sandbox](/guides/sandbox-adapter): drive an E2B, Daytona, Freestyle, or Docker sandbox from an Actor when the code needs a full container.
+- [Lifecycle](/actors/docs/lifecycle): when `createVars`, `onSleep`, and `onDestroy` run.

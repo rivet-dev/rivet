@@ -1,0 +1,66 @@
+---
+title: "E2B"
+description: "Give each Rivet Actor its own E2B sandbox."
+skill: false
+---
+
+[E2B](https://e2b.dev) runs cloud sandboxes from templates you define, and starts one in a few hundred milliseconds. Through `@rivet-dev/sandbox-adapter`, each Actor creates an E2B sandbox, runs commands and uses files in it, pauses it while the Actor sleeps, and deletes it when the Actor is destroyed.
+
+<Diagram
+  id="e2b"
+  label="A client calls actions on the build Actor whose key is the build id. Each build Actor creates its own E2B sandbox through the sandbox adapter, then runs commands and reads and writes files in it. There is one build Actor, and one E2B sandbox, per build."
+  stackLabel="One per build"
+  nodes={[
+    { id: "client", x: 20, y: 20, w: 110, title: "Client" },
+    { id: "build", x: 190, y: 20, w: 170, product: "actors", stack: true, title: "`build`", subtitle: "stores the sandbox id" },
+    { id: "e2b", x: 500, y: 20, w: 150, stack: true, title: "E2B", subtitle: "sandbox" },
+  ]}
+  edges={[
+    { from: "client", to: "build", label: "actions" },
+    { from: "build", to: "e2b", label: "`exec`, files", both: true },
+  ]}
+/>
+
+## Quickstart
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm install rivetkit @rivet-dev/sandbox-adapter e2b
+```
+
+</Step>
+
+<Step title="Configure E2B">
+
+Create an API key in the [E2B dashboard](https://e2b.dev/dashboard) and put it in `.env`. It stays on the node and never enters the sandbox.
+
+```sh title=".env"
+E2B_API_KEY=
+```
+
+</Step>
+
+<Step title="Define the Actor">
+
+Each `build` Actor owns one E2B sandbox. The first `run`, `saveFile`, or `readFile` creates it; later calls connect to the same sandbox.
+
+<CodeSnippet file="examples/docs/integrations-e2b/actor.ts" title="actor.ts" />
+
+</Step>
+
+</Steps>
+
+## Options
+
+| Option | Description |
+| --- | --- |
+| `template` | Template name or id. Defaults to `base`. |
+| `create` | Options for E2B's `Sandbox.create`. The API key defaults to `E2B_API_KEY`. |
+| `cwd` | Working directory inside the sandbox. Defaults to `/home/user`. |
+
+E2B ends a sandbox when its timeout runs out, so the provider creates sandboxes that pause on timeout and resume on the next call. `suspend` pauses the sandbox while the Actor sleeps, and `destroy` deletes it. After a timeout, `exec` returns empty `stdout` and `stderr`; `onData` has already received the output.
+
+The `Sandbox` API, lifecycle, and the other providers are in the [sandbox adapter guide](/guides/sandbox-adapter).
