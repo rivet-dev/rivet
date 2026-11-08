@@ -874,14 +874,15 @@ mod tests {
 	fn test_envoy_gone_evaluates_only_when_disconnected() {
 		let mut envoy = wire::EnvoyData {
 			key: "test_envoy".into(),
-			namespace: "default".into(),
-			pool_name: "default".into(),
 			worker_id: vec![1; 32].into(),
 			connection_id: vec![2; 16].into(),
+			connection_epoch: 1,
 			version: 1,
+			names: Vec::new(),
+			create_unix_ms: 1000,
+			heartbeat_unix_ms: 1000,
 			stopping: false,
 			connected: true,
-			heartbeat_unix_ms: 1000,
 		};
 
 		// When still marked connected, envoy is never considered gone, even if past threshold
