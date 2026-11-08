@@ -8,7 +8,7 @@ use anyhow::{Result, ensure};
 use bytes::Bytes;
 use depot_client::filesystem::{Error, Filesystem};
 pub use depot_client::filesystem::{Error as CommitError, Transaction};
-use depot_protocol::command::{Command, CommandTag, Request, Response};
+use depot_protocol::command::{Command, CommandTag, Request, Response, body_version};
 use futures_util::future::BoxFuture;
 use parking_lot::Mutex;
 use std::sync::Weak;
@@ -323,6 +323,8 @@ impl KvHandle {
 pub struct ReadHandle {
 	source: ReadSource,
 	volume_key: depot_types::VolumeKey,
+	/// Selects the version the command's response is encoded at; the worker's topology.
+	versions: Arc<dyn rivet_topology::versions::WriteVersions>,
 }
 
 #[derive(Clone)]
@@ -335,9 +337,11 @@ impl ReadHandle {
 	/// Wraps a writer-backed command context, for tests and the host's writer path.
 	pub fn from_writer(kv: KvHandle) -> Self {
 		let volume_key = kv.volume_key.clone();
+		let versions = kv.versions.clone();
 		Self {
 			source: ReadSource::Writer(kv),
 			volume_key,
+			versions,
 		}
 	}
 
@@ -551,8 +555,10 @@ impl CommandRegistry {
 					let handler = handler.clone();
 					Box::pin(async move {
 						let request = C::Request::deserialize_with_embedded_version(&body)?;
+						let response_version =
+							body_version::<C::Response>(|family| kv.write_version(family))?;
 						let response = handler.execute(kv, request).await?;
-						C::Response::serialize_with_embedded_version(&response, C::Response::LATEST)
+						C::Response::serialize_with_embedded_version(&response, response_version)
 					})
 				})),
 			},
@@ -589,8 +595,11 @@ impl CommandRegistry {
 					let handler = handler.clone();
 					Box::pin(async move {
 						let request = C::Request::deserialize_with_embedded_version(&body)?;
+						let response_version = body_version::<C::Response>(|family| {
+							read.versions.write_version(family)
+						})?;
 						let response = handler.execute(read, request).await?;
-						C::Response::serialize_with_embedded_version(&response, C::Response::LATEST)
+						C::Response::serialize_with_embedded_version(&response, response_version)
 					})
 				})),
 			},

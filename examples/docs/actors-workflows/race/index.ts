@@ -1,8 +1,21 @@
 import { actor, queue, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 export const auctionActor = actor({
-  state: { result: null as "sold" | "expired" | null },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS auction_result (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          result TEXT
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO auction_result (id, result) VALUES (1, NULL)",
+      );
+    },
+  }),
   queues: {
     bids: queue<{ amount: number }>(),
   },
@@ -28,11 +41,19 @@ export const auctionActor = actor({
 
     await ctx.step("finalize", async (step) => {
       await finalizeAuction("item-123", winner);
-      step.state.result = winner === "bid" ? "sold" : "expired";
+      await step.db.execute(
+        "UPDATE auction_result SET result = ? WHERE id = 1",
+        winner === "bid" ? "sold" : "expired",
+      );
     });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{ result: "sold" | "expired" | null }>(
+        "SELECT result FROM auction_result WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 

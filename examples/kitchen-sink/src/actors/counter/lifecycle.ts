@@ -1,39 +1,69 @@
 import { actor } from "rivetkit";
+import { db, type RawAccess } from "rivetkit/db";
 
 type ConnParams = { trackLifecycle?: boolean } | undefined;
 
 export const counterWithLifecycle = actor({
-	state: {
-		count: 0,
-		events: [] as string[],
-	},
-	createConnState: (_c, _params: ConnParams) => ({
-		joinTime: Date.now(),
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS counter (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					count INTEGER NOT NULL
+				);
+			`);
+			await db.execute(
+				"INSERT OR IGNORE INTO counter (id, count) VALUES (1, 0)",
+			);
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS lifecycle_events (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					name TEXT NOT NULL
+				);
+			`);
+		},
 	}),
-	onWake: (c) => {
-		c.state.events.push("onWake");
+	onWake: async (c) => {
+		await recordEvent(c.db, "onWake");
 	},
 	onSleep: async (c) => {
-		c.state.events.push("onSleep:start");
+		await recordEvent(c.db, "onSleep:start");
 		await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-		c.state.events.push("onSleep:end");
+		await recordEvent(c.db, "onSleep:end");
 	},
-	onBeforeConnect: (c, params: ConnParams) => {
-		if (params?.trackLifecycle) c.state.events.push("onBeforeConnect");
+	onBeforeConnect: async (c, params) => {
+		if ((params as ConnParams)?.trackLifecycle) {
+			await recordEvent(c.db, "onBeforeConnect");
+		}
 	},
-	onConnect: (c, conn) => {
-		if (conn.params?.trackLifecycle) c.state.events.push("onConnect");
+	onConnect: async (c, conn) => {
+		if ((conn.params as ConnParams)?.trackLifecycle) {
+			await recordEvent(c.db, "onConnect");
+		}
 	},
-	onDisconnect: (c, conn) => {
-		if (conn.params?.trackLifecycle) c.state.events.push("onDisconnect");
+	onDisconnect: async (c, conn) => {
+		if ((conn.params as ConnParams)?.trackLifecycle) {
+			await recordEvent(c.db, "onDisconnect");
+		}
 	},
 	actions: {
-		getEvents: (c) => {
-			return c.state.events;
+		getEvents: async (c) => {
+			const rows = await c.db.execute<{ name: string }>(
+				"SELECT name FROM lifecycle_events ORDER BY id",
+			);
+			return rows.map((row) => row.name);
 		},
-		increment: (c, x: number) => {
-			c.state.count += x;
-			return c.state.count;
+		increment: async (c, x: number) => {
+			const rows = await c.db.execute<{ count: number }>(
+				"UPDATE counter SET count = count + ? WHERE id = 1 RETURNING count",
+				x,
+			);
+			return rows[0].count;
 		},
 	},
 });
+
+/** Appends a lifecycle hook name so it survives sleep and shows up in `getEvents`. */
+async function recordEvent(database: RawAccess, name: string): Promise<void> {
+	await database.execute("INSERT INTO lifecycle_events (name) VALUES (?)", name);
+}

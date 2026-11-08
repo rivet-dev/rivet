@@ -16,7 +16,7 @@ Soft limits are configured in two places. Registry-level WebSocket message-size 
 
 <CodeSnippet file="examples/docs/actors-limits/registry-message-size.ts" />
 
-Per-actor limits such as queue sizes and lifecycle timeouts are passed to `actor(...)` via `options`:
+Per-actor limits such as action and lifecycle timeouts are passed to `actor(...)` via `options`:
 
 <CodeSnippet file="examples/docs/actors-limits/actor-options.ts" />
 
@@ -28,8 +28,8 @@ These limits affect actions that use `.connect()` and [low-level WebSockets](/ac
 
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
-| Max incoming message size | 64 KiB | 16 MiB | Maximum size of a message from the client. The soft limit applies to `.connect()` messages and to HTTP action and queue request bodies, not to low-level WebSockets. Soft limit configurable via `maxIncomingMessageSize`. |
-| Max outgoing message size | 1 MiB | 16 MiB | Maximum size of a message to the client. The soft limit applies to `.connect()` messages and to HTTP action and queue responses, not to low-level WebSockets. Soft limit configurable via `maxOutgoingMessageSize`. |
+| Max incoming message size | 64 KiB | 16 MiB | Maximum size of a message from the client. The soft limit applies to `.connect()` messages and to HTTP action request bodies, not to low-level WebSockets. Soft limit configurable via `maxIncomingMessageSize`. |
+| Max outgoing message size | 1 MiB | 16 MiB | Maximum size of a message to the client. The soft limit applies to `.connect()` messages and to HTTP action responses, not to low-level WebSockets. Soft limit configurable via `maxOutgoingMessageSize`. |
 | Max WebSocket frame size | N/A | 16 MiB | Maximum size of a single WebSocket frame accepted by Rivet's transport edge. This is not configurable by browser clients and is not negotiated during the WebSocket handshake. |
 | WebSocket open timeout | N/A | 15 seconds | Time allowed for Rivet to route the connection and start the actor. The `onBeforeConnect` hook runs after this and has its own timeout. |
 | Keepalive ping interval | N/A | 30 seconds | Rivet pings each client WebSocket at this interval so proxies do not close idle connections. A missed pong does not close the connection. |
@@ -46,29 +46,11 @@ These limits affect actions that do not use `.connect()` and [low-level HTTP req
 | Max queued requests per actor | N/A | 1,024 | Maximum requests waiting for one actor, mostly while it starts. Further requests fail with `envoy.actor_overloaded`. |
 | Max buffered response body size | N/A | 16 MiB | Maximum size of a response whose body is sent in one piece, including headers. Streaming responses have no size limit and are flow controlled instead of buffered in full. |
 
-Request bodies for [low-level HTTP requests](/actors/docs/request-handler) are streamed to the actor and have no fixed size limit. HTTP action and queue request bodies are limited by `maxIncomingMessageSize`.
-
-### Queue
-
-| Name | Soft Limit | Hard Limit | Description |
-|------|------------|------------|-------------|
-| Max queue size | 1,000 messages | N/A | Maximum number of messages in the queue before new messages are rejected. Configurable via `maxQueueSize`. |
-| Max queue message size | 64 KiB | N/A | Maximum size of each individual queue message. Configurable via `maxQueueMessageSize`. Actual payload is slightly lower after queue serialization overhead. Messages sent over HTTP are also limited by `maxIncomingMessageSize`. |
+Request bodies for [low-level HTTP requests](/actors/docs/request-handler) are streamed to the actor and have no fixed size limit. HTTP action request bodies are limited by `maxIncomingMessageSize`.
 
 ### Actor Storage
 
-Each Rivet Actor has one durable volume that holds its [SQLite database](/actors/docs/sqlite). [KV](/actors/docs/kv) data is stored in a table in that database. There is no fixed limit on the total storage of an actor.
-
-### Actor KV Storage
-
-These limits apply to the [KV API](/actors/docs/kv).
-
-| Name | Soft Limit | Hard Limit | Description |
-|------|------------|------------|-------------|
-| Max key size | N/A | 2 KiB | Maximum size of a single key written. |
-| Max value size | N/A | 128 KiB | Maximum size of a single value. |
-
-Batch operations have no fixed limit on the number of keys. A batch put of more than 128 entries or 512 KiB is written in several transactions, so it is not atomic.
+Each Rivet Actor has one durable volume that holds its [SQLite database](/actors/docs/sqlite). There is no fixed limit on the total storage of an actor.
 
 ### Actor SQLite Storage
 
@@ -103,7 +85,7 @@ If a transaction fails with `sqlite.transaction_too_large`, split the work into 
 | Create vars timeout | 5 seconds | N/A | Timeout for `createVars` hook. Configurable via `createVarsTimeout`. |
 | On connect timeout | 5 seconds | N/A | Timeout for `onConnect` hook. Configurable via `onConnectTimeout`. |
 | On migrate timeout | 30 seconds | N/A | Timeout for `onMigrate` hook. Configurable via `onMigrateTimeout`. |
-| Sleep grace period | 15 seconds | N/A | Total graceful shutdown budget for both sleep and destroy. Covers `onSleep`/`onDestroy`, run handler shutdown, `waitUntil`, `keepAwake`, async raw WebSocket handlers, and connection cleanup. Configurable via `sleepGracePeriod`. |
+| Sleep grace period | 15 seconds | N/A | Total graceful shutdown budget for both sleep and destroy. Covers `onSleep`/`onDestroy`, `run` workflow shutdown, `waitUntil`, `keepAwake`, async raw WebSocket handlers, and connection cleanup. Configurable via `sleepGracePeriod`. |
 | Sleep timeout | 30 seconds | N/A | Time of inactivity before actor hibernates. Configurable via `sleepTimeout`. |
 
 ### Actor Lifecycle

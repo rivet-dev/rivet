@@ -2,9 +2,9 @@ import { actor, setup } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
 
 const user = actor({
-  state: { username: "" },
+  vars: { username: "" },
   actions: {
-    updateUsername: (c, username: string) => { c.state.username = username; }
+    updateUsername: (c, username: string) => { c.vars.username = username; }
   }
 });
 

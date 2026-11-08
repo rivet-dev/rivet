@@ -12,8 +12,8 @@ import { db } from "rivetkit/db";
 //
 // The write counter lives in ephemeral `vars`, so a `kv` write is exactly one KV
 // put and a `sqlite` write is exactly one SQLite commit. The `sqlite-state` kind
-// also persists `state.writes` after the upsert, which costs a second commit, to
-// measure the app pattern of saving actor state after every write.
+// also persists a durable write counter in SQLite after the upsert, which costs a
+// second commit, to measure the app pattern of saving a counter after every write.
 
 type WriteKind = "kv" | "sqlite" | "sqlite-state";
 
@@ -61,8 +61,6 @@ interface LowWriteContext {
 		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
 	};
 	vars: { writes: number };
-	state: { writes: number };
-	saveState: (options: { immediate: boolean }) => Promise<void>;
 }
 
 async function performWrite(
@@ -89,8 +87,9 @@ async function performWrite(
 	}
 	c.vars.writes++;
 	if (kind === "sqlite-state") {
-		c.state.writes++;
-		await c.saveState({ immediate: true });
+		await c.db.execute(
+			"UPDATE write_counter SET writes = writes + 1 WHERE id = 1",
+		);
 	}
 }
 
@@ -142,10 +141,6 @@ export const lowWriteActor = actor({
 		canHibernateWebSocket: false,
 		sleepGracePeriod: 5_000,
 	},
-	// Persisted only by the `sqlite-state` kind.
-	state: {
-		writes: 0,
-	},
 	createVars: () => ({ writes: 0 }),
 	db: db({
 		onMigrate: async (database) => {
@@ -157,6 +152,16 @@ export const lowWriteActor = actor({
 					updated_at INTEGER NOT NULL
 				)
 			`);
+			// Durable write counter, updated only by the `sqlite-state` kind.
+			await database.execute(`
+				CREATE TABLE IF NOT EXISTS write_counter (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					writes INTEGER NOT NULL
+				)
+			`);
+			await database.execute(
+				"INSERT OR IGNORE INTO write_counter (id, writes) VALUES (1, 0)",
+			);
 		},
 	}),
 	// First-response probe for the load test. `GET .../probe` runs one SQLite read and

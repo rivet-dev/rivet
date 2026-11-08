@@ -1,14 +1,16 @@
 import { actor, event } from "rivetkit";
 
-interface ConnState {
+interface PlayerConn {
   playerId: string;
   role: string;
 }
 
 const gameRoom = actor({
-  state: {
-    players: {} as Record<string, {health: number, position: {x: number, y: number}}>
-  },
+  createVars: () => ({
+    players: {} as Record<string, {health: number, position: {x: number, y: number}}>,
+    // Player info for each live connection, keyed by connection ID
+    playerConns: new Map<string, PlayerConn>()
+  }),
 
   events: {
     privateMessage: event<{
@@ -18,17 +20,27 @@ const gameRoom = actor({
     }>()
   },
 
-  createConnState: (c, params: { playerId: string, role?: string }): ConnState => ({
-    playerId: params.playerId,
-    role: params.role || "player"
-  }),
+  onBeforeConnect: (c, params: { playerId: string, role?: string }) => {
+    if (!params.playerId) throw new Error("Missing playerId");
+  },
+
+  onConnect: (c, conn) => {
+    c.vars.playerConns.set(conn.id, {
+      playerId: conn.params.playerId,
+      role: conn.params.role || "player"
+    });
+  },
+
+  onDisconnect: (c, conn) => {
+    c.vars.playerConns.delete(conn.id);
+  },
 
   actions: {
     sendPrivateMessage: (c, targetPlayerId: string, message: string) => {
       // Find the target player's connection
       let targetConn = null;
       for (const conn of c.conns.values()) {
-        if (conn.state.playerId === targetPlayerId) {
+        if (c.vars.playerConns.get(conn.id)?.playerId === targetPlayerId) {
           targetConn = conn;
           break;
         }
@@ -36,7 +48,7 @@ const gameRoom = actor({
 
       if (targetConn) {
         targetConn.send('privateMessage', {
-          from: c.conn?.state.playerId,
+          from: c.vars.playerConns.get(c.conn.id)?.playerId,
           message,
           timestamp: Date.now()
         });

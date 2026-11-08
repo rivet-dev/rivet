@@ -2,11 +2,11 @@
 This matchmaker uses a private party flow with join tickets.
 1. createParty creates a party actor and issues a host join ticket.
 2. joinParty validates capacity and issues a join ticket for the party.
-3. partyMatch verifies join tickets during createConnState before adding members.
+3. partyMatch verifies join tickets in onBeforeConnect before adding members.
 4. partyMatch pushes connected member count updates through updatePartySize.
 5. closeParty removes the party row and all join tickets.
 */
-import { actor, queue, UserError } from "rivetkit";
+import { actor, UserError } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
 import type { registry } from "../index.ts";
@@ -21,166 +21,153 @@ export const partyMatchmaker = actor({
 	db: db({
 		onMigrate: migrateTables,
 	}),
-	queues: {
-		createParty: queue<
-			{ hostName?: string },
-			{
-				matchId: string;
-				playerId: string;
-				partyCode: string;
-				joinToken: string;
-				playerName: string;
+	actions: {
+		// docs:start create-join
+		createParty: async (c, { hostName }: { hostName?: string }) => {
+			const now = Date.now();
+			const matchId = crypto.randomUUID();
+			const partyCode = generatePartyCode();
+			const playerId = crypto.randomUUID();
+			const joinToken = crypto.randomUUID();
+			const playerName = hostName || generatePlayerName();
+
+			const client = c.client<typeof registry>();
+			await client.partyMatch.create([matchId], {
+				input: { partyCode },
+			});
+
+			// Save the party and the host's ticket together, so a party never
+			// exists without a ticket for its host.
+			await c.db.transaction(
+				async (tx) => {
+					await tx.execute(
+						`INSERT INTO parties (match_id, party_code, host_player_id, player_count, created_at) VALUES (?, ?, ?, ?, ?)`,
+						matchId,
+						partyCode,
+						playerId,
+						1,
+						now,
+					);
+					await tx.execute(
+						`INSERT INTO join_tickets (join_token, match_id, player_id, player_name, created_at) VALUES (?, ?, ?, ?, ?)`,
+						joinToken,
+						matchId,
+						playerId,
+						playerName,
+						now,
+					);
+				},
+				{ name: "create-party" },
+			);
+
+			return { matchId, playerId, partyCode, joinToken, playerName };
+		},
+		joinParty: async (
+			c,
+			input: { partyCode: string; playerName?: string },
+		) => {
+			const code = input.partyCode.toUpperCase().trim();
+			const now = Date.now();
+			const playerId = crypto.randomUUID();
+			const joinToken = crypto.randomUUID();
+			const playerName = input.playerName || generatePlayerName();
+
+			// Actions run concurrently, so check the size and take the slot in
+			// one transaction. Two friends joining the last open slot at once
+			// can't both get in.
+			const matchId = await c.db.transaction(
+				async (tx) => {
+					const [party] = await tx.execute<{
+						match_id: string;
+						player_count: number;
+					}>(
+						`SELECT match_id, player_count FROM parties WHERE party_code = ?`,
+						code,
+					);
+					if (!party) {
+						throw new UserError("Party not found", {
+							code: "party_not_found",
+						});
+					}
+					if (party.player_count >= MAX_PARTY_SIZE) {
+						throw new UserError("Party is full", {
+							code: "party_full",
+						});
+					}
+
+					await tx.execute(
+						`UPDATE parties SET player_count = player_count + 1 WHERE match_id = ?`,
+						party.match_id,
+					);
+					await tx.execute(
+						`INSERT INTO join_tickets (join_token, match_id, player_id, player_name, created_at) VALUES (?, ?, ?, ?, ?)`,
+						joinToken,
+						party.match_id,
+						playerId,
+						playerName,
+						now,
+					);
+					return party.match_id;
+				},
+				{ name: "join-party" },
+			);
+
+			return { matchId, playerId, joinToken, playerName };
+		},
+		// docs:end create-join
+		// docs:start verify-join
+		verifyJoin: async (
+			c,
+			input: { matchId: string; playerId: string; joinToken: string },
+		) => {
+			const [row] = await c.db.execute<{
+				player_name: string;
+				host_player_id: string;
+			}>(
+				`SELECT jt.player_name, p.host_player_id
+				 FROM join_tickets jt
+				 INNER JOIN parties p ON p.match_id = jt.match_id
+				 WHERE jt.join_token = ? AND jt.match_id = ? AND jt.player_id = ?
+				 LIMIT 1`,
+				input.joinToken,
+				input.matchId,
+				input.playerId,
+			);
+			if (!row) {
+				return { allowed: false, isHost: false };
 			}
-		>(),
-		joinParty: queue<
-			{ partyCode: string; playerName?: string },
-			{
-				matchId: string;
-				playerId: string;
-				joinToken: string;
-				playerName: string;
-			}
-		>(),
-		verifyJoin: queue<
-			{ matchId: string; playerId: string; joinToken: string },
-			{ allowed: boolean; playerName?: string; isHost: boolean }
-		>(),
-		updatePartySize: queue<{ matchId: string; playerCount: number }>(),
-		closeParty: queue<{ matchId: string }>(),
-	},
-	run: async (c) => {
-		for await (const message of c.queue.iter({ completable: true })) {
-			// docs:start create-join
-			if (message.name === "createParty") {
-				const now = Date.now();
-				const matchId = crypto.randomUUID();
-				const partyCode = generatePartyCode();
-				const playerId = crypto.randomUUID();
-				const joinToken = crypto.randomUUID();
-				const playerName =
-					message.body.hostName || generatePlayerName();
-
-				const client = c.client<typeof registry>();
-				await client.partyMatch.create([matchId], {
-					input: { matchId, partyCode, hostPlayerId: playerId },
-				});
-
-				await c.db.execute(
-					`INSERT INTO parties (match_id, party_code, host_player_id, player_count, created_at) VALUES (?, ?, ?, ?, ?)`,
-					matchId,
-					partyCode,
-					playerId,
-					1,
-					now,
-				);
-				await c.db.execute(
-					`INSERT INTO join_tickets (join_token, match_id, player_id, player_name, created_at) VALUES (?, ?, ?, ?, ?)`,
-					joinToken,
-					matchId,
-					playerId,
-					playerName,
-					now,
-				);
-
-				await message.complete({
-					matchId,
-					playerId,
-					partyCode,
-					joinToken,
-					playerName,
-				});
-			} else if (message.name === "joinParty") {
-				const code = message.body.partyCode.toUpperCase().trim();
-				const rows = await c.db.execute<{
-					match_id: string;
-					player_count: number;
-				}>(
-					`SELECT match_id, player_count FROM parties WHERE party_code = ?`,
-					code,
-				);
-				const row = rows[0];
-				if (!row) {
-					throw new UserError("Party not found", {
-						code: "party_not_found",
-					});
-				}
-				if (row.player_count >= MAX_PARTY_SIZE) {
-					throw new UserError("Party is full", {
-						code: "party_full",
-					});
-				}
-
-				const now = Date.now();
-				const playerId = crypto.randomUUID();
-				const joinToken = crypto.randomUUID();
-				const playerName =
-					message.body.playerName || generatePlayerName();
-
-				await c.db.execute(
-					`UPDATE parties SET player_count = player_count + 1 WHERE match_id = ?`,
-					row.match_id,
-				);
-				await c.db.execute(
-					`INSERT INTO join_tickets (join_token, match_id, player_id, player_name, created_at) VALUES (?, ?, ?, ?, ?)`,
-					joinToken,
-					row.match_id,
-					playerId,
-					playerName,
-					now,
-				);
-
-				await message.complete({
-					matchId: row.match_id,
-					playerId,
-					joinToken,
-					playerName,
-				});
-				// docs:end create-join
-			} else if (message.name === "verifyJoin") {
-				// docs:start verify-join
-				const rows = await c.db.execute<{
-					player_name: string;
-					host_player_id: string;
-				}>(
-					`SELECT jt.player_name, p.host_player_id
-					 FROM join_tickets jt
-					 INNER JOIN parties p ON p.match_id = jt.match_id
-					 WHERE jt.join_token = ? AND jt.match_id = ? AND jt.player_id = ?
-					 LIMIT 1`,
-					message.body.joinToken,
-					message.body.matchId,
-					message.body.playerId,
-				);
-				const row = rows[0];
-				if (!row) {
-					await message.complete({ allowed: false, isHost: false });
-					continue;
-				}
-				await message.complete({
-					allowed: true,
-					playerName: row.player_name,
-					isHost: row.host_player_id === message.body.playerId,
-				});
-				// docs:end verify-join
-			} else if (message.name === "updatePartySize") {
-				await c.db.execute(
-					`UPDATE parties SET player_count = ? WHERE match_id = ?`,
-					message.body.playerCount,
-					message.body.matchId,
-				);
-				await message.complete();
-			} else if (message.name === "closeParty") {
-				await c.db.execute(
-					`DELETE FROM join_tickets WHERE match_id = ?`,
-					message.body.matchId,
-				);
-				await c.db.execute(
-					`DELETE FROM parties WHERE match_id = ?`,
-					message.body.matchId,
-				);
-				await message.complete();
-			}
-		}
+			return {
+				allowed: true,
+				playerName: row.player_name,
+				isHost: row.host_player_id === input.playerId,
+			};
+		},
+		// docs:end verify-join
+		updatePartySize: async (
+			c,
+			{ matchId, playerCount }: { matchId: string; playerCount: number },
+		) => {
+			await c.db.execute(
+				`UPDATE parties SET player_count = ? WHERE match_id = ?`,
+				playerCount,
+				matchId,
+			);
+		},
+		closeParty: async (c, { matchId }: { matchId: string }) => {
+			await c.db.transaction(
+				async (tx) => {
+					await tx.execute(
+						`DELETE FROM join_tickets WHERE match_id = ?`,
+						matchId,
+					);
+					await tx.execute(
+						`DELETE FROM parties WHERE match_id = ?`,
+						matchId,
+					);
+				},
+				{ name: "close-party" },
+			);
+		},
 	},
 });
 

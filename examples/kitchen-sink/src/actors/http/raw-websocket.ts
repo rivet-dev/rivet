@@ -1,30 +1,31 @@
 import { actor } from "rivetkit";
 
 export const rawWebSocketActor = actor({
-	state: {
+	// Open WebSockets do not survive sleep, so these counters live in memory.
+	createVars: () => ({
 		connectionCount: 0,
 		messageCount: 0,
-	},
+	}),
 	onWebSocket(ctx, websocket) {
-		ctx.state.connectionCount = ctx.state.connectionCount + 1;
+		ctx.vars.connectionCount = ctx.vars.connectionCount + 1;
 		console.log(
-			`[ACTOR] New connection, count: ${ctx.state.connectionCount}`,
+			`[ACTOR] New connection, count: ${ctx.vars.connectionCount}`,
 		);
 
 		// Send welcome message
 		websocket.send(
 			JSON.stringify({
 				type: "welcome",
-				connectionCount: ctx.state.connectionCount,
+				connectionCount: ctx.vars.connectionCount,
 			}),
 		);
 		console.log("[ACTOR] Sent welcome message");
 
 		// Echo messages back
 		websocket.addEventListener("message", (event: any) => {
-			ctx.state.messageCount = ctx.state.messageCount + 1;
+			ctx.vars.messageCount = ctx.vars.messageCount + 1;
 			console.log(
-				`[ACTOR] Message received, total count: ${ctx.state.messageCount}, data:`,
+				`[ACTOR] Message received, total count: ${ctx.vars.messageCount}, data:`,
 				event.data,
 			);
 
@@ -41,13 +42,13 @@ export const rawWebSocketActor = actor({
 						);
 					} else if (parsed.type === "getStats") {
 						console.log(
-							`[ACTOR] Sending stats - connections: ${ctx.state.connectionCount}, messages: ${ctx.state.messageCount}`,
+							`[ACTOR] Sending stats - connections: ${ctx.vars.connectionCount}, messages: ${ctx.vars.messageCount}`,
 						);
 						websocket.send(
 							JSON.stringify({
 								type: "stats",
-								connectionCount: ctx.state.connectionCount,
-								messageCount: ctx.state.messageCount,
+								connectionCount: ctx.vars.connectionCount,
+								messageCount: ctx.vars.messageCount,
 							}),
 						);
 					} else if (parsed.type === "getRequestInfo") {
@@ -78,17 +79,17 @@ export const rawWebSocketActor = actor({
 
 		// Handle close
 		websocket.addEventListener("close", () => {
-			ctx.state.connectionCount = ctx.state.connectionCount - 1;
+			ctx.vars.connectionCount = ctx.vars.connectionCount - 1;
 			console.log(
-				`[ACTOR] Connection closed, count: ${ctx.state.connectionCount}`,
+				`[ACTOR] Connection closed, count: ${ctx.vars.connectionCount}`,
 			);
 		});
 	},
 	actions: {
 		getStats(ctx: any) {
 			return {
-				connectionCount: ctx.state.connectionCount,
-				messageCount: ctx.state.messageCount,
+				connectionCount: ctx.vars.connectionCount,
+				messageCount: ctx.vars.messageCount,
 			};
 		},
 	},

@@ -166,6 +166,10 @@ pub mod partition {
 		(49, ENVOY_VERSION, "envoy-version"),
 		(50, ENVOY_NAME_VERSION, "envoy-name-version"),
 		(51, ENVOY_POOL_VERSION, "envoy-pool-version"),
+		(52, ACL_TOKEN, "acl-token"),
+		(53, ACL_RULE, "acl-rule"),
+		(54, ACL_POLICY, "acl-policy"),
+		(55, ACL_ROLE, "acl-role"),
 	}
 }
 

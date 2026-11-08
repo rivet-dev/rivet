@@ -1,9 +1,9 @@
 import { actor } from "rivetkit";
 
 const counter = actor({
-	state: { count: 0 },
+	vars: { count: 0 },
 	actions: {
-		increment: (c, amount: number) => (c.state.count += amount),
-		getCount: (c) => c.state.count,
+		increment: (c, amount: number) => (c.vars.count += amount),
+		getCount: (c) => c.vars.count,
 	},
 });

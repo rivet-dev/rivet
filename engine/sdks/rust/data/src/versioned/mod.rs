@@ -2,10 +2,26 @@ use vbare::{DecodeError, DecodeErrorKind};
 
 use crate::generated::*;
 
+/// Implements [`VersionedFamily`](crate::families::VersionedFamily) for an envelope of
+/// `$family`, a [`VersionFamily`](crate::families::VersionFamily) constant. An envelope's
+/// family is stated where it is defined because a message cannot name it: a `void` message has
+/// no type of its own, and a shared schema's message can appear in envelopes of several
+/// families.
+macro_rules! impl_versioned_family {
+	($name:ident, $family:ident) => {
+		impl $crate::families::VersionedFamily for $name {
+			const FAMILY: Option<$crate::families::VersionFamily> =
+				Some($crate::families::VersionFamily::$family);
+		}
+	};
+}
+
 /// Implements [`vbare::Versioned`] for a single-version envelope `enum $name { V1($latest) }`.
 /// The latest value is a generated message.
 macro_rules! impl_versioned_v1 {
-	($name:ident, $latest:ty) => {
+	($name:ident, $family:ident, $latest:ty) => {
+		impl_versioned_family!($name, $family);
+
 		impl ::vbare::Versioned for $name {
 			type Latest = $latest;
 
@@ -45,7 +61,19 @@ macro_rules! impl_versioned_v1 {
 
 /// Three adjacent versions with explicit converters in upgrade and reverse downgrade order.
 macro_rules! impl_versioned_v1_v2_v3 {
-	($name:ident, $v1:ty, $v2:ty, $v3:ty, $up12:path, $down21:path, $up23:path, $down32:path) => {
+	(
+		$name:ident,
+		$family:ident,
+		$v1:ty,
+		$v2:ty,
+		$v3:ty,
+		$up12:path,
+		$down21:path,
+		$up23:path,
+		$down32:path
+	) => {
+		impl_versioned_family!($name, $family);
+
 		pub enum $name {
 			V1($v1),
 			V2($v2),
@@ -113,7 +141,9 @@ macro_rules! impl_versioned_v1_v2_v3 {
 /// Two adjacent versions for a type that version 2 introduced. Version 1 neither decodes nor
 /// encodes it, so its upgrade slot refuses.
 macro_rules! impl_versioned_v2_v3 {
-	($name:ident, $v2:ty, $v3:ty, $up23:path, $down32:path) => {
+	($name:ident, $family:ident, $v2:ty, $v3:ty, $up23:path, $down32:path) => {
+		impl_versioned_family!($name, $family);
+
 		pub enum $name {
 			V2($v2),
 			V3($v3),
@@ -232,6 +262,7 @@ pub enum AuthJwtEmergencyRotateRequestData {
 }
 impl_versioned_v1!(
 	AuthJwtEmergencyRotateRequestData,
+	AUTH_JWT_ROTATION,
 	auth_jwt_rotation_v1::OperatorRequest
 );
 pub enum AuthJwtEmergencyRotateResponseData {
@@ -239,5 +270,6 @@ pub enum AuthJwtEmergencyRotateResponseData {
 }
 impl_versioned_v1!(
 	AuthJwtEmergencyRotateResponseData,
+	AUTH_JWT_ROTATION,
 	auth_jwt_rotation_v1::EmergencyRotateResponse
 );

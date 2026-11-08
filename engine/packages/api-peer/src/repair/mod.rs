@@ -3,7 +3,7 @@
 //!
 //! These routes are served on the API-peer listener like the rest of this crate, but unlike
 //! the other routes each one requires the configured admin token through the shared edge
-//! check (`rivet_guard_core::auth::check_edge`), before its handler runs. A request without it
+//! check (`rivet_guard_core::auth::admit_admin_or_insecure`), before its handler runs. A request without it
 //! is refused `auth.invalid_token` and reaches no worker.
 //!
 //! Reads are side-effect free: maintainer inspections, unfenced shard status and log reads,
@@ -98,7 +98,9 @@ async fn require_admin_token(
 	request: Request,
 	next: Next,
 ) -> Response {
-	if let Err(error) = auth::check_edge(ctx.config(), auth::transport_token(request.headers())) {
+	if let Err(error) =
+		auth::admit_admin_or_insecure(ctx.config(), auth::transport_token(request.headers()))
+	{
 		return auth::http_rejection(&error)
 			.map(axum::body::Body::from)
 			.into_response();

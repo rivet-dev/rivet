@@ -2,7 +2,6 @@ import { actor, queue, setup } from "rivetkit";
 import { joinSignals } from "rivetkit/utils";
 
 const worker = actor({
-  state: {},
   createVars: () => ({
     cancelController: new AbortController(),
   }),

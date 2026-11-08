@@ -1,9 +1,10 @@
 use std::fmt;
 
+/// Discriminants are persisted in protocol version keys, so a retired number (1 and 2) is never
+/// reused.
 #[derive(Hash, Debug, Clone, Copy, PartialEq, Eq, strum::FromRepr)]
 pub enum RuntimeProtocolKind {
 	Envoy = 0,
-	Ups = 1,
 	Epoxy = 3,
 }
 
@@ -11,7 +12,6 @@ impl fmt::Display for RuntimeProtocolKind {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			RuntimeProtocolKind::Envoy => f.write_str("envoy"),
-			RuntimeProtocolKind::Ups => f.write_str("ups"),
 			RuntimeProtocolKind::Epoxy => f.write_str("epoxy"),
 		}
 	}
@@ -54,7 +54,6 @@ impl RuntimeProtocol {
 #[derive(PartialEq, Eq)]
 pub struct RuntimeProtocols {
 	pub envoy: RuntimeProtocol,
-	pub ups: RuntimeProtocol,
 	pub epoxy: RuntimeProtocol,
 }
 
@@ -67,7 +66,6 @@ impl Default for RuntimeProtocols {
 	fn default() -> Self {
 		RuntimeProtocols {
 			envoy: RuntimeProtocol::new(RuntimeProtocolKind::Envoy, 0),
-			ups: RuntimeProtocol::new(RuntimeProtocolKind::Ups, 0),
 			epoxy: RuntimeProtocol::new(RuntimeProtocolKind::Epoxy, 0),
 		}
 	}
@@ -75,20 +73,20 @@ impl Default for RuntimeProtocols {
 
 impl RuntimeProtocols {
 	/// Returns every protocol in a fixed order.
-	pub fn iter(&self) -> std::array::IntoIter<&RuntimeProtocol, 3> {
-		[&self.envoy, &self.ups, &self.epoxy].into_iter()
+	pub fn iter(&self) -> std::array::IntoIter<&RuntimeProtocol, 2> {
+		[&self.envoy, &self.epoxy].into_iter()
 	}
 
 	/// Returns every protocol in a fixed order, allowing each to be modified in place.
-	pub fn iter_mut(&mut self) -> std::array::IntoIter<&mut RuntimeProtocol, 3> {
-		[&mut self.envoy, &mut self.ups, &mut self.epoxy].into_iter()
+	pub fn iter_mut(&mut self) -> std::array::IntoIter<&mut RuntimeProtocol, 2> {
+		[&mut self.envoy, &mut self.epoxy].into_iter()
 	}
 }
 
 impl<'a> IntoIterator for &'a RuntimeProtocols {
 	type Item = &'a RuntimeProtocol;
 
-	type IntoIter = std::array::IntoIter<&'a RuntimeProtocol, 3>;
+	type IntoIter = std::array::IntoIter<&'a RuntimeProtocol, 2>;
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.iter()
@@ -98,7 +96,7 @@ impl<'a> IntoIterator for &'a RuntimeProtocols {
 impl<'a> IntoIterator for &'a mut RuntimeProtocols {
 	type Item = &'a mut RuntimeProtocol;
 
-	type IntoIter = std::array::IntoIter<&'a mut RuntimeProtocol, 3>;
+	type IntoIter = std::array::IntoIter<&'a mut RuntimeProtocol, 2>;
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.iter_mut()

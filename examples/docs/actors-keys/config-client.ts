@@ -2,8 +2,7 @@ import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
 const userSession = actor({
-  state: { userId: "", loginTime: 0, preferences: {} },
-  actions: { getUserId: (c) => c.state.userId }
+  actions: { getUserId: (c) => c.key[0] }
 });
 
 const registry = setup({ use: { userSession } });

@@ -11,7 +11,6 @@ epoxy-protocol.workspace = true
 rivet-config.workspace = true
 rivet-data.workspace = true
 rivet-envoy-protocol.workspace = true
-rivet-ups-protocol.workspace = true
 
 [build-dependencies]
 anyhow.workspace = true

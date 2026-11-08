@@ -2,9 +2,9 @@ import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
 const user = actor({
-  state: { name: "" },
+  vars: { name: "" },
   actions: {
-    getName: (c) => c.state.name,
+    getName: (c) => c.vars.name,
   },
 });
 

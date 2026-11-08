@@ -1,4 +1,5 @@
 import { actor, UserError } from "rivetkit";
+import { db } from "rivetkit/db";
 
 interface ConnParams {
 	authToken: string;
@@ -13,13 +14,14 @@ async function validateToken(
 	return token.length > 0 && roomKey.length > 0;
 }
 
-interface Message {
-	text: string;
-	timestamp: number;
-}
-
 const chatRoom = actor({
-	state: { messages: [] as Message[] },
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(
+				"CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL, timestamp INTEGER NOT NULL)",
+			);
+		},
+	}),
 
 	onBeforeConnect: async (c, params: ConnParams) => {
 		const roomName = c.key;
@@ -30,8 +32,12 @@ const chatRoom = actor({
 	},
 
 	actions: {
-		sendMessage: (c, text: string) => {
-			c.state.messages.push({ text, timestamp: Date.now() });
+		sendMessage: async (c, text: string) => {
+			await c.db.execute(
+				"INSERT INTO messages (text, timestamp) VALUES (?, ?)",
+				text,
+				Date.now(),
+			);
 		},
 	},
 });

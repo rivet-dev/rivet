@@ -1,11 +1,22 @@
 import { actor } from "rivetkit";
+import { db } from "rivetkit/db";
 
 export const pingPongCounter = actor({
-	state: {
-		pingCount: 0,
-	},
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS ping_counter (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					ping_count INTEGER NOT NULL
+				);
+			`);
+			await db.execute(
+				"INSERT OR IGNORE INTO ping_counter (id, ping_count) VALUES (1, 0)",
+			);
+		},
+	}),
 	onWebSocket(ctx, websocket) {
-		websocket.addEventListener("message", (event: any) => {
+		websocket.addEventListener("message", async (event: any) => {
 			const data = event.data;
 			if (typeof data !== "string") return;
 
@@ -17,11 +28,13 @@ export const pingPongCounter = actor({
 			}
 
 			if (parsed?.type === "ping") {
-				ctx.state.pingCount = ctx.state.pingCount + 1;
+				const [counter] = await ctx.db.execute<{ ping_count: number }>(
+					"UPDATE ping_counter SET ping_count = ping_count + 1 WHERE id = 1 RETURNING ping_count",
+				);
 				websocket.send(
 					JSON.stringify({
 						type: "pong",
-						pingCount: ctx.state.pingCount,
+						pingCount: counter.ping_count,
 						timestamp: Date.now(),
 					}),
 				);
@@ -29,12 +42,17 @@ export const pingPongCounter = actor({
 		});
 	},
 	actions: {
-		getPingCount(c) {
-			return c.state.pingCount;
+		async getPingCount(c) {
+			const [counter] = await c.db.execute<{ ping_count: number }>(
+				"SELECT ping_count FROM ping_counter WHERE id = 1",
+			);
+			return counter.ping_count;
 		},
-		resetPingCount(c) {
-			c.state.pingCount = 0;
-			return c.state.pingCount;
+		async resetPingCount(c) {
+			const [counter] = await c.db.execute<{ ping_count: number }>(
+				"UPDATE ping_counter SET ping_count = 0 WHERE id = 1 RETURNING ping_count",
+			);
+			return counter.ping_count;
 		},
 	},
 });

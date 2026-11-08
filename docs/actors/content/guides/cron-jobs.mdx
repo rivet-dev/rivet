@@ -10,13 +10,13 @@ import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
 <Diagram
   id="cron-jobs"
-  label="Your app's first call creates the reminderActor, and its onCreate hook calls cron.set to install the daily-report cron job with the expression 0 9 * * *. The job is a durable schedule stored with the Actor, so it survives sleep, restarts, upgrades, deploys, and crashes. Every day at 9:00 the job calls the sendDailyReport action on the same Actor. sendDailyReport saves the report as lastReport in the Actor's state and broadcasts the dailyReport event to connected clients. The numbers show the order of the calls. There is one reminderActor per key, such as one per user."
+  label="Your app's first call creates the reminderActor, and its onCreate hook calls cron.set to install the daily-report cron job with the expression 0 9 * * *. The job is a durable schedule stored with the Actor, so it survives sleep, restarts, upgrades, deploys, and crashes. Every day at 9:00 the job calls the sendDailyReport action on the same Actor. sendDailyReport saves the report as lastReport in the Actor's SQLite database and broadcasts the dailyReport event to connected clients. The numbers show the order of the calls. There is one reminderActor per key, such as one per user."
   stackLabel="One per key"
   nodes={[
     { id: "app", x: 20, y: 80, w: 150, title: "Your app", subtitle: "any client" },
     { id: "actor", x: 300, y: 80, w: 240, product: "actors", stack: true, title: "`reminderActor`", subtitle: "`onCreate`, `sendDailyReport`" },
     { id: "schedule", x: 700, y: 80, title: "Cron `daily-report`", subtitle: "`0 9 * * *`" },
-    { id: "state", x: 700, y: 190, title: "`c.state`", subtitle: "`lastReport`" },
+    { id: "state", x: 700, y: 190, title: "`c.db`", subtitle: "`daily_report`" },
   ]}
   edges={[
     { from: "app", to: "actor", label: "first call", step: 1 },
@@ -33,7 +33,7 @@ This guide adds a daily report to a reminders app. A `reminderActor` stores remi
 
 What we'll build:
 
-- A `reminderActor` per key that stores reminders and the last daily report in its state.
+- A `reminderActor` per key that stores reminders and the last daily report in its SQLite database.
 - A `daily-report` cron job, installed when the Actor is created, that runs every day at 9:00 Los Angeles time.
 - A `sendDailyReport` action that the job calls to build the report, save it, and broadcast it to connected clients.
 - One-shot reminders scheduled with `c.schedule.after` and `c.schedule.at`, and cancelled with `c.schedule.cancel`.
@@ -50,12 +50,12 @@ npm add rivetkit @rivetkit/react
 
 <Step title="Create the reminder Actor">
 
-The Actor's state holds the reminders and the bookkeeping the daily report needs:
+The Actor's [SQLite](/actors/docs/sqlite) database holds the reminders and the bookkeeping the daily report needs:
 
 <CodeSnippet file="examples/scheduling/src/index.ts" title="index.ts" highlight="state,registry" />
 
-- `reminders` and `completedCount` belong to the one-shot reminders you add in the last step. `lastReportAt` and `lastReport` belong to the daily report. All of it is [state](/actors/docs/state), saved automatically.
-- `lastReportAt` starts at `0`, so the first report covers everything that happened before it.
+- `onMigrate` creates the tables before any other lifecycle hook runs. The `reminders` table belongs to the one-shot reminders you add in the last step. The `daily_report` row holds `last_report_at` and `last_report` for the daily report. Every write is saved before the action returns, so it survives sleep and restarts.
+- `last_report_at` starts at `0`, so the first report covers everything that happened before it.
 - `events` declares `reminderTriggered` and `dailyReport`, the two typed [events](/actors/docs/events) the Actor broadcasts.
 - Every schedule belongs to one Actor, so the [key](/actors/docs/keys) decides the scope of the job. The example uses a single key, `["main"]`, which gives one global job. Use one key per user or per resource for reminders, trials, billing periods, and other per-entity jobs.
 
@@ -86,9 +86,9 @@ The cron job calls `sendDailyReport`, an ordinary action:
 <CodeSnippet file="examples/scheduling/src/index.ts" title="index.ts" highlight="report" />
 
 - When a schedule calls an action, it appends a `ScheduledFireInfo` object after the action's own arguments. It carries `kind`, `id`, `name`, `scheduledAt`, and `firedAt`.
-- The report covers the window from `lastReportAt` to `fire.scheduledAt`. Using the planned time instead of `Date.now()` keeps every window exactly one day long, even when a run starts a little late.
+- The report covers the window from `last_report_at` to `fire.scheduledAt`. Using the planned time instead of `Date.now()` keeps every window exactly one day long, even when a run starts a little late.
 - If the window was already reported, the action returns the saved report and changes nothing. Running it twice for the same occurrence is harmless, so a manual retry is safe.
-- It saves the report to `c.state.lastReport` and broadcasts `dailyReport`, so connected clients see it right away.
+- It saves the report to the `daily_report` row and broadcasts `dailyReport`, so connected clients see it right away.
 - A run that is still going when the next one is due makes the next one skip. Failed runs are not retried; the job continues at its next normal time. See [Execution behavior](/actors/docs/schedule#execution-behavior).
 
 <Warning>

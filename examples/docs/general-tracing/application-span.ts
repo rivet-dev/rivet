@@ -5,7 +5,6 @@ import { db } from "rivetkit/db";
 const tracer = trace.getTracer("counter");
 
 export const counter = actor({
-	state: {},
 	db: db(),
 	actions: {
 		query: async (c) =>

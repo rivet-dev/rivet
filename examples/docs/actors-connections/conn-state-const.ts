@@ -1,17 +1,21 @@
 import { actor } from "rivetkit";
 
-const chatRoom = actor({
-  state: { messages: [] },
+interface ConnInfo {
+  role: string;
+  joinedAt: number;
+}
 
-  // Define default connection state as a constant
-  connState: {
-    role: "guest",
-    joinedAt: 0
+const chatRoom = actor({
+  // Per-connection data, keyed by connection ID
+  createVars: () => ({ connections: new Map<string, ConnInfo>() }),
+
+  onConnect: (c, conn) => {
+    // Record the join timestamp when a client connects
+    c.vars.connections.set(conn.id, { role: "guest", joinedAt: Date.now() });
   },
 
-  onConnect: (c) => {
-    // Update join timestamp when a client connects
-    c.conn.state.joinedAt = Date.now();
+  onDisconnect: (c, conn) => {
+    c.vars.connections.delete(conn.id);
   },
 
   actions: {

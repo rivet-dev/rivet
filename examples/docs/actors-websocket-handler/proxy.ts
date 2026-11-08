@@ -5,10 +5,8 @@ import { createClient } from "rivetkit/client";
 import { actor, setup } from "rivetkit";
 
 const chatActor = actor({
-    state: { messages: [] as string[] },
     onWebSocket: (c, websocket) => {
         websocket.addEventListener("message", (event) => {
-            c.state.messages.push(event.data as string);
             websocket.send(event.data as string);
         });
     },

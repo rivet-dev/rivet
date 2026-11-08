@@ -15,23 +15,21 @@ const db = {
 };
 
 const userSession = actor({
-  state: { requestCount: 0 },
-
   // createVars runs on every wake (after restarts, crashes, or sleep), so
   // external data stays fresh.
-  createVars: async (c): Promise<{ user: User }> => {
+  createVars: async (c): Promise<{ user: User; requestCount: number }> => {
     // Load from database on every wake
     const user = await db.users.findById(c.key.join("-"));
-    return { user };
+    return { user, requestCount: 0 };
   },
 
   actions: {
     getProfile: (c) => {
-      c.state.requestCount++;
+      c.vars.requestCount++;
       return c.vars.user;
     },
     updateEmail: async (c, email: string) => {
-      c.state.requestCount++;
+      c.vars.requestCount++;
       await db.users.update(c.key.join("-"), { email });
       // Refresh cached data
       c.vars.user = await db.users.findById(c.key.join("-"));

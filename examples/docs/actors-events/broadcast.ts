@@ -8,10 +8,6 @@ type Message = {
 };
 
 const chatRoom = actor({
-  state: {
-    messages: [] as Message[]
-  },
-
   events: {
     messageReceived: event<Message>()
   },
@@ -24,8 +20,6 @@ const chatRoom = actor({
         text,
         timestamp: Date.now()
       };
-
-      c.state.messages.push(message);
 
       // Broadcast to all connected clients
       c.broadcast('messageReceived', message);

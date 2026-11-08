@@ -45,3 +45,14 @@ The upsert makes the copy safe to repeat, so a crash partway through retries it 
 For binary keys or values, pass `keyType: "binary"` and `type: "binary"` to `c.kv.list` and store them in `BLOB` columns.
 
 Entries written with `c.kv.batchPut` are not returned by `c.kv.list`. Read them back with `c.kv.batchGet` using the same keys.
+
+## Limits
+
+KV data is stored in a table in the actor's SQLite database, and these limits apply until you migrate:
+
+| Name | Limit | Description |
+| --- | --- | --- |
+| Max key size | 2 KiB | Maximum size of a single key written. |
+| Max value size | 128 KiB | Maximum size of a single value. |
+
+Batch operations have no fixed limit on the number of keys. A batch put of more than 128 entries or 512 KiB is written in several transactions, so it is not atomic.

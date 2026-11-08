@@ -3,7 +3,6 @@ import { ActorError, createClient } from "rivetkit/client";
 
 // Define actor with protected action
 const myActor = actor({
-	state: {},
 	actions: {
 		protectedAction: (c) => ({ success: true }),
 	},

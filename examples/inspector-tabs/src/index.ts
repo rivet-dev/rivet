@@ -1,4 +1,5 @@
 import { actor, event, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 
 // ============================================================================
 // Counter actor with author-declared inspector tabs.
@@ -13,35 +14,84 @@ import { actor, event, setup } from "rivetkit";
 export type Tick = { value: number; at: number };
 
 export const counter = actor({
-	// Persistent actor state. The "Counter" inspector tab reads this via
-	// `GET /inspector/state` and updates it via the `increment` / `reset`
-	// actions below.
-	state: {
-		value: 0,
-		history: [] as Tick[],
-	},
+	// The counter is saved in the actor's SQLite database. The "Counter"
+	// inspector tab reads it via the `getCounter` action and updates it via
+	// the `increment` / `reset` actions below.
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS counter (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					value INTEGER NOT NULL
+				)
+			`);
+			await db.execute(
+				"INSERT OR IGNORE INTO counter (id, value) VALUES (1, 0)",
+			);
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS history (
+					seq INTEGER PRIMARY KEY AUTOINCREMENT,
+					value INTEGER NOT NULL,
+					at INTEGER NOT NULL
+				)
+			`);
+		},
+	}),
 
 	events: {
 		valueChanged: event<number>(),
 	},
 
 	actions: {
+		// Invoked from the custom tabs via `POST /inspector/action/getCounter`.
+		getCounter: async (c) => {
+			const [{ value }] = await c.db.execute<{ value: number }>(
+				"SELECT value FROM counter WHERE id = 1",
+			);
+			const history = await c.db.execute<Tick>(
+				"SELECT value, at FROM history ORDER BY seq",
+			);
+			return { value, history };
+		},
+
 		// Invoked from the custom tab via
 		// `POST /inspector/action/increment` with body `{ args: [amount] }`.
-		increment: (c, amount: number) => {
-			c.state.value += amount;
-			c.state.history.push({ value: c.state.value, at: Date.now() });
-			if (c.state.history.length > 50) {
-				c.state.history.shift();
-			}
-			c.broadcast("valueChanged", c.state.value);
-			return c.state.value;
+		increment: async (c, amount: number) => {
+			// Add to the stored value in SQL so concurrent increments never
+			// overwrite each other, and record the tick in the same transaction.
+			const value = await c.db.transaction(
+				async (tx) => {
+					const [counter] = await tx.execute<{ value: number }>(
+						"UPDATE counter SET value = value + ? WHERE id = 1 RETURNING value",
+						amount,
+					);
+					await tx.execute(
+						"INSERT INTO history (value, at) VALUES (?, ?)",
+						counter.value,
+						Date.now(),
+					);
+					await tx.execute(
+						"DELETE FROM history WHERE seq NOT IN (SELECT seq FROM history ORDER BY seq DESC LIMIT 50)",
+					);
+					return counter.value;
+				},
+				{ name: "increment-counter" },
+			);
+			c.broadcast("valueChanged", value);
+			return value;
 		},
 
 		// Invoked from the custom tab via `POST /inspector/action/reset`.
-		reset: (c) => {
-			c.state.value = 0;
-			c.state.history = [];
+		reset: async (c) => {
+			await c.db.transaction(
+				async (tx) => {
+					await tx.execute(
+						"UPDATE counter SET value = 0 WHERE id = 1",
+					);
+					await tx.execute("DELETE FROM history");
+				},
+				{ name: "reset-counter" },
+			);
 			c.broadcast("valueChanged", 0);
 			return 0;
 		},

@@ -31,7 +31,7 @@ export class EmptyMessageError extends Schema.TaggedError<EmptyMessageError>()(
 // control how values are encoded on the wire and decoded inside handlers.
 
 // Sends a user message to the agent and returns the assistant's reply. The
-// whole conversation history is persisted in actor state, so the model sees
+// whole conversation history is stored in the actor's SQLite database, so the model sees
 // every prior turn even across actor restarts.
 export const SendMessage = Action.make("SendMessage", {
 	payload: { content: Schema.String },

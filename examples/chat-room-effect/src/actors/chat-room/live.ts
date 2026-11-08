@@ -1,5 +1,5 @@
 import { Actor } from "@rivetkit/effect";
-import { Context, DateTime, Effect, Layer, Schema, Stream } from "effect";
+import { Context, DateTime, Effect, Layer } from "effect";
 import { db } from "rivetkit/db";
 import { Moderator } from "../moderator/api.ts";
 import { ChatRoom, MemberNotInRoomError } from "./api.ts";
@@ -41,7 +41,7 @@ export const RoomPolicyLive = Layer.succeed(
 // and returns the action handlers.
 export const ChatRoomLive = ChatRoom.toLayer(
 	// Wake scope (runs on each wake)
-	Effect.fnUntraced(function* ({ rawRivetkitContext, state }) {
+	Effect.fnUntraced(function* ({ rawRivetkitContext }) {
 		// Actor-provided services, custom services, and actor clients are all
 		// yielded from the Effect context for this wake. They are scoped to
 		// this actor instance, not to individual action calls.
@@ -54,14 +54,40 @@ export const ChatRoomLive = ChatRoom.toLayer(
 			key: address.key.join("/"),
 		});
 
+		// Runs a query against the actor's SQLite database as an Effect.
+		const query = <TRow extends Record<string, unknown>>(
+			sql: string,
+			...args: unknown[]
+		) =>
+			Effect.tryPromise(() =>
+				rawRivetkitContext.db.execute<TRow>(sql, ...args),
+			).pipe(Effect.orDie);
+
+		const getRoomName = query<{ name: string }>(
+			"SELECT name FROM room WHERE id = 1",
+		).pipe(Effect.map((rows) => rows[0]?.name ?? ""));
+
+		const getMembers = query<{ name: string }>(
+			"SELECT name FROM members ORDER BY id",
+		);
+
+		// Logs every committed membership change, right after the write.
+		const logMembersChanged = Effect.fnUntraced(function* () {
+			const roomName = yield* getRoomName;
+			const members = yield* getMembers;
+			yield* Effect.log("room members changed", {
+				actorId: address.actorId,
+				roomName,
+				memberCount: members.length,
+			});
+			return members.length;
+		});
+
 		// Finalizers run on sleep
 		yield* Effect.addFinalizer(
 			Effect.fnUntraced(function* () {
-				// Access the actor's persisted `state` with a `SubscriptionRef`-like API
-				const roomName = yield* state.get.pipe(
-					Effect.orDie,
-					Effect.map((s) => s.name),
-				);
+				// Read the persisted room name from the actor's SQLite database
+				const roomName = yield* getRoomName;
 				yield* Effect.log("room sleeping", {
 					actorId: address.actorId,
 					key: address.key.join("/"),
@@ -70,25 +96,10 @@ export const ChatRoomLive = ChatRoom.toLayer(
 			}),
 		);
 
-		// `state.changes` streams every committed state change for this actor wake.
-		yield* state.changes.pipe(
-			Stream.runForEach((current) =>
-				Effect.log("room state changed", {
-					actorId: address.actorId,
-					roomName: current.name,
-					memberCount: current.members.length,
-				}),
-			),
-			Effect.forkScoped,
-		);
-
-		// Combine persisted actor state with a custom service-owned domain guard.
+		// Combine persisted room members with a custom service-owned domain guard.
 		const ensureMember = (name: string) =>
-			state.get.pipe(
-				Effect.orDie,
-				Effect.flatMap((current) =>
-					roomPolicy.requireMember(current.members, name),
-				),
+			getMembers.pipe(
+				Effect.flatMap((members) => roomPolicy.requireMember(members, name)),
 			);
 
 		// --- Message processing (not yet implemented) ---
@@ -117,30 +128,25 @@ export const ChatRoomLive = ChatRoom.toLayer(
 		// --- Action handlers (request-response) ---
 		return ChatRoom.of({
 			Initialize: ({ payload }) =>
-				// This replaces `createState(input)`. Callers should initialize
-				// a room before actions that depend on a persisted room name.
-				state
-					.update((current) => {
-						if (current.initialized) return current;
-						return {
-							...current,
-							name: payload.name,
-							initialized: true,
-						};
-					})
-					.pipe(Effect.orDie),
+				// This replaces passing an `input` when creating an actor. Callers
+				// should initialize a room before actions that depend on a
+				// persisted room name. Only the first call sets the name.
+				query(
+					"UPDATE room SET name = ?, initialized = 1 WHERE id = 1 AND initialized = 0",
+					payload.name,
+				).pipe(Effect.asVoid),
 			Join: Effect.fnUntraced(function* ({ payload }) {
 				const joinedAt = yield* DateTime.now;
 				const member = {
 					name: payload.name,
 					joinedAt,
 				};
-				const next = yield* state
-					.updateAndGet((current) => ({
-						...current,
-						members: [...current.members, member],
-					}))
-					.pipe(Effect.orDie);
+				yield* query(
+					"INSERT INTO members (name, joined_at) VALUES (?, ?)",
+					member.name,
+					DateTime.toEpochMillis(member.joinedAt),
+				);
+				const memberCount = yield* logMembersChanged();
 
 				rawRivetkitContext.broadcast("memberJoined", {
 					member: {
@@ -156,19 +162,13 @@ export const ChatRoomLive = ChatRoom.toLayer(
 					text: `Welcome to the room, ${payload.name}!`,
 				});
 
-				return { memberCount: next.members.length };
+				return { memberCount };
 			}),
 			Leave: Effect.fnUntraced(function* ({ payload }) {
 				yield* ensureMember(payload.name);
 
-				yield* state
-					.update((current) => ({
-						...current,
-						members: current.members.filter(
-							(member) => member.name !== payload.name,
-						),
-					}))
-					.pipe(Effect.orDie);
+				yield* query("DELETE FROM members WHERE name = ?", payload.name);
+				yield* logMembersChanged();
 
 				rawRivetkitContext.broadcast("memberLeft", {
 					name: payload.name,
@@ -231,25 +231,31 @@ export const ChatRoomLive = ChatRoom.toLayer(
 		});
 	}),
 	{
-		state: {
-			schema: Schema.Struct({
-				name: Schema.String,
-				members: Schema.Array(
-					Schema.Struct({
-						name: Schema.String,
-						joinedAt: Schema.DateTimeUtc,
-					}),
-				),
-				initialized: Schema.Boolean,
-			}),
-			initialValue: () => ({
-				name: "",
-				members: [{ name: "Admin", joinedAt: DateTime.nowUnsafe() }],
-				initialized: false,
-			}),
-		},
 		db: db({
 			onMigrate: async (client) => {
+				await client.execute(`
+					CREATE TABLE IF NOT EXISTS room (
+						id INTEGER PRIMARY KEY CHECK (id = 1),
+						name TEXT NOT NULL,
+						initialized INTEGER NOT NULL
+					)
+				`);
+				await client.execute(`
+					CREATE TABLE IF NOT EXISTS members (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						name TEXT NOT NULL,
+						joined_at INTEGER NOT NULL
+					)
+				`);
+				// Seed a new room with the Admin member. The room row only
+				// exists after the first start, so this runs once.
+				await client.execute(
+					"INSERT INTO members (name, joined_at) SELECT 'Admin', ? WHERE NOT EXISTS (SELECT 1 FROM room)",
+					Date.now(),
+				);
+				await client.execute(
+					"INSERT OR IGNORE INTO room (id, name, initialized) VALUES (1, '', 0)",
+				);
 				await client.execute(`
 					CREATE TABLE IF NOT EXISTS messages (
 						id INTEGER PRIMARY KEY AUTOINCREMENT,

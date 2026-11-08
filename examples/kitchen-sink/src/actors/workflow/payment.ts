@@ -4,6 +4,12 @@
 
 import { actor, event } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
+import {
+	loadRecord,
+	recordDb,
+	saveRecord,
+	updateRecord,
+} from "./record-store.ts";
 
 export type TransactionStep = {
 	name: string;
@@ -36,18 +42,21 @@ export type TransactionInput = {
 };
 
 export const payment = actor({
-	createState: (c, input?: TransactionInput): Transaction => ({
-		id: c.key[0] as string,
-		amount: input?.amount ?? 100,
-		shouldFail: input?.shouldFail ?? false,
-		status: "pending",
-		steps: [
-			{ name: "reserve-inventory", status: "pending" },
-			{ name: "charge-card", status: "pending" },
-			{ name: "complete-order", status: "pending" },
-		],
-		startedAt: Date.now(),
-	}),
+	db: recordDb(),
+	onCreate: async (c, input?: TransactionInput) => {
+		await saveRecord<Transaction>(c.db, {
+			id: c.key[0] as string,
+			amount: input?.amount ?? 100,
+			shouldFail: input?.shouldFail ?? false,
+			status: "pending",
+			steps: [
+				{ name: "reserve-inventory", status: "pending" },
+				{ name: "charge-card", status: "pending" },
+				{ name: "complete-order", status: "pending" },
+			],
+			startedAt: Date.now(),
+		});
+	},
 	events: {
 		transactionStarted: event<Transaction>(),
 		transactionUpdated: event<Transaction>(),
@@ -55,19 +64,21 @@ export const payment = actor({
 	},
 
 	actions: {
-		getTransaction: (c): Transaction => c.state,
+		getTransaction: (c): Promise<Transaction> =>
+			loadRecord<Transaction>(c.db),
 	},
 
 	run: workflow(async (ctx) => {
 		await ctx.loop("payment-loop", async (loopCtx) => {
 			await loopCtx.step("init-payment", async (c) => {
+				const transaction = await loadRecord<Transaction>(c.db);
 				c.log.info({
 					msg: "starting payment processing",
-					txId: c.state.id,
-					amount: c.state.amount,
-					shouldFail: c.state.shouldFail,
+					txId: transaction.id,
+					amount: transaction.amount,
+					shouldFail: transaction.shouldFail,
 				});
-				c.broadcast("transactionStarted", c.state);
+				c.broadcast("transactionStarted", transaction);
 			});
 
 			await loopCtx.rollbackCheckpoint("payment-checkpoint");
@@ -76,40 +87,50 @@ export const payment = actor({
 			await loopCtx.step({
 				name: "reserve-inventory",
 				run: async (c) => {
-					c.state.status = "reserving";
-					const step = c.state.steps.find(
-						(s) => s.name === "reserve-inventory",
+					const updated = await updateRecord<Transaction>(
+						c.db,
+						(transaction) => {
+							transaction.status = "reserving";
+							const step = transaction.steps.find(
+								(s) => s.name === "reserve-inventory",
+							);
+							if (step) {
+								step.status = "completed";
+								step.completedAt = Date.now();
+							}
+						},
 					);
-					if (step) {
-						step.status = "completed";
-						step.completedAt = Date.now();
-					}
-					c.broadcast("transactionUpdated", c.state);
+					c.broadcast("transactionUpdated", updated);
 
 					await new Promise((r) =>
 						setTimeout(r, 500 + Math.random() * 500),
 					);
 					c.log.info({
 						msg: "inventory reserved",
-						txId: c.state.id,
+						txId: updated.id,
 					});
 					return { reserved: true };
 				},
 				rollback: async (c) => {
 					// Set rolling_back status on first rollback
-					c.state.status = "rolling_back";
-					const step = c.state.steps.find(
-						(s) => s.name === "reserve-inventory",
+					const updated = await updateRecord<Transaction>(
+						c.db,
+						(transaction) => {
+							transaction.status = "rolling_back";
+							const step = transaction.steps.find(
+								(s) => s.name === "reserve-inventory",
+							);
+							if (step) {
+								step.status = "rolled_back";
+								step.rolledBackAt = Date.now();
+							}
+						},
 					);
-					if (step) {
-						step.status = "rolled_back";
-						step.rolledBackAt = Date.now();
-					}
 					c.log.info({
 						msg: "inventory released",
-						txId: c.state.id,
+						txId: updated.id,
 					});
-					c.broadcast("transactionUpdated", c.state);
+					c.broadcast("transactionUpdated", updated);
 					// Small delay so UI can show the rollback
 					await new Promise((r) => setTimeout(r, 400));
 				},
@@ -119,38 +140,48 @@ export const payment = actor({
 			await loopCtx.step({
 				name: "charge-card",
 				run: async (c) => {
-					c.state.status = "charging";
-					const step = c.state.steps.find(
-						(s) => s.name === "charge-card",
+					const updated = await updateRecord<Transaction>(
+						c.db,
+						(transaction) => {
+							transaction.status = "charging";
+							const step = transaction.steps.find(
+								(s) => s.name === "charge-card",
+							);
+							if (step) {
+								step.status = "completed";
+								step.completedAt = Date.now();
+							}
+						},
 					);
-					if (step) {
-						step.status = "completed";
-						step.completedAt = Date.now();
-					}
-					c.broadcast("transactionUpdated", c.state);
+					c.broadcast("transactionUpdated", updated);
 
 					await new Promise((r) =>
 						setTimeout(r, 500 + Math.random() * 500),
 					);
 
-					if (c.state.shouldFail) {
+					if (updated.shouldFail) {
 						throw new Error("Payment declined (simulated)");
 					}
 
-					c.log.info({ msg: "card charged", txId: c.state.id });
-					return { chargeId: `ch_${c.state.id}` };
+					c.log.info({ msg: "card charged", txId: updated.id });
+					return { chargeId: `ch_${updated.id}` };
 				},
 				rollback: async (c) => {
-					c.state.status = "rolling_back";
-					const step = c.state.steps.find(
-						(s) => s.name === "charge-card",
+					const updated = await updateRecord<Transaction>(
+						c.db,
+						(transaction) => {
+							transaction.status = "rolling_back";
+							const step = transaction.steps.find(
+								(s) => s.name === "charge-card",
+							);
+							if (step) {
+								step.status = "rolled_back";
+								step.rolledBackAt = Date.now();
+							}
+						},
 					);
-					if (step) {
-						step.status = "rolled_back";
-						step.rolledBackAt = Date.now();
-					}
-					c.log.info({ msg: "charge refunded", txId: c.state.id });
-					c.broadcast("transactionUpdated", c.state);
+					c.log.info({ msg: "charge refunded", txId: updated.id });
+					c.broadcast("transactionUpdated", updated);
 					// Small delay so UI can show the rollback
 					await new Promise((r) => setTimeout(r, 400));
 				},
@@ -158,21 +189,31 @@ export const payment = actor({
 
 			// Step 3: Complete order
 			await loopCtx.step("complete-order", async (c) => {
-				c.state.status = "completing";
-				const step = c.state.steps.find(
-					(s) => s.name === "complete-order",
+				const completing = await updateRecord<Transaction>(
+					c.db,
+					(transaction) => {
+						transaction.status = "completing";
+						const step = transaction.steps.find(
+							(s) => s.name === "complete-order",
+						);
+						if (step) step.status = "completed";
+					},
 				);
-				if (step) step.status = "completed";
-				c.broadcast("transactionUpdated", c.state);
+				c.broadcast("transactionUpdated", completing);
 
 				await new Promise((r) =>
 					setTimeout(r, 300 + Math.random() * 300),
 				);
 
-				c.state.status = "completed";
-				c.state.completedAt = Date.now();
-				c.log.info({ msg: "order completed", txId: c.state.id });
-				c.broadcast("transactionCompleted", c.state);
+				const completed = await updateRecord<Transaction>(
+					c.db,
+					(transaction) => {
+						transaction.status = "completed";
+						transaction.completedAt = Date.now();
+					},
+				);
+				c.log.info({ msg: "order completed", txId: completed.id });
+				c.broadcast("transactionCompleted", completed);
 			});
 
 			return Loop.break(undefined);

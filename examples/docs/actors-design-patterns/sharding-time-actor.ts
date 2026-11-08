@@ -1,17 +1,30 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 
-interface Event {
+type Event = {
   type: string;
   url: string;
-}
+};
 
 const hourlyAnalytics = actor({
-  state: { events: [] as Event[] },
-  actions: {
-    trackEvent: (c, event: Event) => {
-      c.state.events.push(event);
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          type TEXT NOT NULL,
+          url TEXT NOT NULL
+        );
+      `);
     },
-    getEvents: (c) => c.state.events,
+  }),
+  actions: {
+    trackEvent: async (c, event: Event) => {
+      await c.db.execute("INSERT INTO events (type, url) VALUES (?, ?)", event.type, event.url);
+    },
+    getEvents: async (c) => {
+      return (await c.db.execute("SELECT type, url FROM events ORDER BY id")) as Event[];
+    },
   },
 });
 

@@ -25,4 +25,5 @@ sha2.workspace = true
 subtle.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 

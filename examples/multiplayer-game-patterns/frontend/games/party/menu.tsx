@@ -27,16 +27,10 @@ export function PartyMenu({
 		setStatus("loading");
 		setError("");
 		try {
-			const mm = client.partyMatchmaker.getOrCreate(["main"]).connect();
-			const result = await mm.send(
-				"createParty",
-				{},
-				{ wait: true, timeout: 10_000 },
-			);
-			mm.dispose();
-			const response = result.response;
-			if (!response?.matchId) throw new Error("Failed to create party");
-			onReady(response);
+			// A one-off action needs no connection to the matchmaker.
+			const mm = client.partyMatchmaker.getOrCreate(["main"]);
+			const party = await mm.createParty({});
+			onReady(party);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 			setStatus("error");
@@ -48,16 +42,9 @@ export function PartyMenu({
 		setStatus("loading");
 		setError("");
 		try {
-			const mm = client.partyMatchmaker.getOrCreate(["main"]).connect();
-			const result = await mm.send(
-				"joinParty",
-				{ partyCode: joinCode.trim() },
-				{ wait: true, timeout: 10_000 },
-			);
-			mm.dispose();
-			const response = result.response;
-			if (!response?.matchId) throw new Error("Failed to join party");
-			onReady({ ...response, partyCode: joinCode.trim().toUpperCase() });
+			const mm = client.partyMatchmaker.getOrCreate(["main"]);
+			const ticket = await mm.joinParty({ partyCode: joinCode.trim() });
+			onReady({ ...ticket, partyCode: joinCode.trim().toUpperCase() });
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 			setStatus("error");

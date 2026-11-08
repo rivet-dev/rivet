@@ -30,7 +30,7 @@ Use [FontAwesome](https://fontawesome.com/search) icon names without the "fa" pr
 
 ## Default Behavior
 
-If no `icon` is specified, actors display the default actor icon. If no `name` is specified, the actor's registry key (e.g., `chatRoom`, `gameServer`) is displayed instead.
+If no `icon` is specified, actors display the default actor icon, or the workflow icon for [workflow actors](#workflow-actors). If no `name` is specified, the actor's registry key (e.g., `chatRoom`, `gameServer`) is displayed instead.
 
 ## Examples
 
@@ -38,22 +38,10 @@ Here are some common patterns:
 
 <CodeSnippet file="examples/docs/actors-appearance/examples-patterns.ts" />
 
-## Advanced: Run Handler Metadata
+## Workflow Actors
 
-For library developers creating reusable run handlers, you can bundle icon and name metadata directly with the `run` property. This allows libraries to provide sensible defaults without requiring users to configure them manually.
+Actors that set `run` to a [workflow](/workflows/docs) display the workflow icon (`diagram-project`) by default. `options.icon` takes precedence over it:
 
-Instead of returning a function from your run handler factory, return an object with `name`, `icon`, and `run`:
+<CodeSnippet file="examples/docs/actors-appearance/workflow-override.ts" />
 
-<CodeSnippet file="examples/docs/actors-appearance/run-handler-metadata.ts" />
-
-Users can then use this directly:
-
-<CodeSnippet file="examples/docs/actors-appearance/run-handler-usage.ts" />
-
-This run-handler metadata is applied through the registry metadata. The native runtime reads the actor's `options.name` and `options.icon` directly, so set those explicitly if you need the name or icon to appear everywhere.
-
-Actor-level `options.name` and `options.icon` always take precedence, allowing users to override library defaults:
-
-<CodeSnippet file="examples/docs/actors-appearance/run-handler-override.ts" />
-
-The built-in `workflow()` helper uses this pattern to automatically display the workflow icon for workflow-based actors.
+The workflow icon is applied through the registry metadata. The native runtime reads `options.name` and `options.icon` directly, so set those explicitly if you need the name or icon to appear everywhere.

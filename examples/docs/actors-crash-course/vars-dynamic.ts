@@ -1,14 +1,14 @@
 import { actor } from "rivetkit";
 
 const counter = actor({
-  state: { count: 0 },
   createVars: () => ({
+    count: 0,
     emitter: new EventTarget(),
   }),
   actions: {
     increment: (c) => {
       c.vars.emitter.dispatchEvent(new Event("change"));
-      return c.state.count += 1;
+      return c.vars.count += 1;
     },
   },
 });

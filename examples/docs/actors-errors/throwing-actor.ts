@@ -1,7 +1,7 @@
 import { actor, UserError } from "rivetkit";
 
 const user = actor({
-  state: { username: "" },
+  vars: { username: "" },
   actions: {
     updateUsername: (c, username: string) => {
       // Validate username
@@ -10,7 +10,7 @@ const user = actor({
       }
 
       // Update username
-      c.state.username = username;
+      c.vars.username = username;
     }
   }
 });

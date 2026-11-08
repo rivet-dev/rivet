@@ -8,6 +8,7 @@ export const MODE_CONFIG: Record<Mode, { capacity: number; teams: number }> = {
 };
 
 export const TICK_MS = 50; // 20 tps
+export const SNAPSHOT_INTERVAL_MS = 1_000; // Saving this often bounds how much progress a crash can lose.
 export const WORLD_SIZE = 600;
 export const MAX_SPEED = 200; // pixels per second
 export const SHOOT_RANGE = 300;

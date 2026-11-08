@@ -2,6 +2,7 @@
 # Format: `<id> <schema identifier>`. An ID is permanent: never reuse or renumber one, even
 # after its schema is deleted, because heartbeats and persisted version marks carry it.
 # The build fails when a schema has no ID or an ID names no schema.
+# 1 acl.audit_entry (retired: schema deleted)
 6 auth.grants
 7 auth.jwt_key_ring
 8 depot.client_protocol

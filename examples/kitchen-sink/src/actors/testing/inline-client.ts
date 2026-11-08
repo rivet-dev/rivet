@@ -1,4 +1,5 @@
 import { actor } from "rivetkit";
+import { db } from "rivetkit/db";
 import type { registry } from "../../index.ts";
 
 // The dynamic-sandbox WebSocket connect path is failing intermittently and
@@ -33,7 +34,16 @@ async function waitForConnectionOpen(connection: {
 }
 
 export const inlineClientActor = actor({
-	state: { messages: [] as string[] },
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS messages (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					text TEXT NOT NULL
+				);
+			`);
+		},
+	}),
 	actions: {
 		// Action that uses client to call another actor (stateless)
 		callCounterIncrement: async (c, amount: number) => {
@@ -41,7 +51,8 @@ export const inlineClientActor = actor({
 			const result = await client.counter
 				.getOrCreate(["inline-test"])
 				.increment(amount);
-			c.state.messages.push(
+			await c.db.execute(
+				"INSERT INTO messages (text) VALUES (?)",
 				`Called counter.increment(${amount}), result: ${result}`,
 			);
 			return result;
@@ -53,7 +64,10 @@ export const inlineClientActor = actor({
 			const count = await client.counter
 				.getOrCreate(["inline-test"])
 				.getCount();
-			c.state.messages.push(`Got counter state: ${count}`);
+			await c.db.execute(
+				"INSERT INTO messages (text) VALUES (?)",
+				`Got counter state: ${count}`,
+			);
 			return count;
 		},
 
@@ -69,7 +83,8 @@ export const inlineClientActor = actor({
 				const result2 = await handle.increment(amount * 2);
 				events.push(result2);
 
-				c.state.messages.push(
+				await c.db.execute(
+					"INSERT INTO messages (text) VALUES (?)",
 					`Connected to counter, incremented by ${amount} and ${amount * 2}, results: ${result1}, ${result2}, events: ${JSON.stringify(events)}`,
 				);
 
@@ -92,21 +107,25 @@ export const inlineClientActor = actor({
 
 			await connection.dispose();
 
-			c.state.messages.push(
+			await c.db.execute(
+				"INSERT INTO messages (text) VALUES (?)",
 				`Connected to counter, incremented by ${amount} and ${amount * 2}, results: ${result1}, ${result2}, events: ${JSON.stringify(events)}`,
 			);
 
 			return { result1, result2, events };
 		},
 
-		// Get all messages from this actor's state
-		getMessages: (c) => {
-			return c.state.messages;
+		// Get all messages recorded by this actor
+		getMessages: async (c) => {
+			const rows = await c.db.execute<{ text: string }>(
+				"SELECT text FROM messages ORDER BY id",
+			);
+			return rows.map((row) => row.text);
 		},
 
 		// Clear messages
-		clearMessages: (c) => {
-			c.state.messages = [];
+		clearMessages: async (c) => {
+			await c.db.execute("DELETE FROM messages");
 		},
 	},
 });

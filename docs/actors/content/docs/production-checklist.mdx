@@ -39,11 +39,6 @@ actor, not before shipping it.
 - **Review action timeout configuration.** The default `actionTimeout` is 60 seconds. Increase it if you have long-running actions like API calls or file processing. See [Actor Configuration](/actors/docs/actor-configuration).
 - **Review message size limits.** The default `maxIncomingMessageSize` is 64 KiB and `maxOutgoingMessageSize` is 1 MiB. Increase if your actors send or receive large JSON payloads. See [Registry Configuration](/actors/docs/registry-configuration).
 
-### Queues
-
-- **Review queue limits.** The default `maxQueueSize` is 1,000 messages and `maxQueueMessageSize` is 64 KiB. Increase if you expect burst traffic or large queue payloads. See [Actor Configuration](/actors/docs/actor-configuration).
-- **Ensure queue handlers are idempotent.** If processing fails before `message.complete()`, the message will be retried. See [Queues](/actors/docs/queues).
-
 ### Workflows
 
 - **Verify workflows do not generate infinite steps.** Use `ctx.loop` to avoid creating unbounded step histories. See [Workflows](/workflows/docs).
@@ -67,9 +62,9 @@ actor, not before shipping it.
 
 Access control is only needed if you want granular permissions for different clients. For most use cases, basic authentication in `onBeforeConnect` is sufficient.
 
-- **Use deny-by-default rules.** Reject unknown roles in `onBeforeConnect`, action handlers, `canPublish`, and `canSubscribe`. See [Permissions](/actors/docs/permissions).
+- **Use deny-by-default rules.** Reject unknown roles in `onBeforeConnect`, action handlers, and `canSubscribe`. See [Permissions](/actors/docs/permissions).
 - **Authorize actions explicitly.** Check the caller's role in each action handler and throw `forbidden` for unauthorized access.
-- **Gate event subscriptions and queue publishes.** Use `canSubscribe` and `canPublish` hooks to restrict which clients can subscribe to events or publish to queues.
+- **Gate event subscriptions.** Use `canSubscribe` hooks to restrict which clients can subscribe to events.
 
 ## Clients
 

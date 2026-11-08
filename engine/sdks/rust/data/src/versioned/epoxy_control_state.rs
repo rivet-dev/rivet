@@ -6,6 +6,7 @@ pub enum EpoxyCoordinatorStateData {
 
 impl_versioned_v1!(
 	EpoxyCoordinatorStateData,
+	EPOXY_CONTROL_STATE,
 	epoxy_control_state_v1::CoordinatorData
 );
 
@@ -13,4 +14,8 @@ pub enum EpoxyReplicaStateData {
 	V1(epoxy_control_state_v1::ReplicaData),
 }
 
-impl_versioned_v1!(EpoxyReplicaStateData, epoxy_control_state_v1::ReplicaData);
+impl_versioned_v1!(
+	EpoxyReplicaStateData,
+	EPOXY_CONTROL_STATE,
+	epoxy_control_state_v1::ReplicaData
+);

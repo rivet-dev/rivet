@@ -1,17 +1,12 @@
 import { actor } from "rivetkit";
 
-interface Message {
-  text: string;
-  author: string;
-}
-
 interface ConnParams {
   authToken?: string;
   userId?: string;
   role?: string;
 }
 
-interface ConnState {
+interface ConnInfo {
   userId: string;
   role: string;
   joinTime: number;
@@ -22,16 +17,8 @@ function validateToken(token: string): boolean {
 }
 
 const chatRoom = actor({
-  state: { messages: [] as Message[] },
-
-  // Dynamically create connection state
-  createConnState: (c, params: ConnParams): ConnState => {
-    return {
-      userId: params.userId || "anonymous",
-      role: params.role || "guest",
-      joinTime: Date.now()
-    };
-  },
+  // Per-connection data, keyed by connection ID
+  createVars: () => ({ connections: new Map<string, ConnInfo>() }),
 
   // Validate connections before accepting them
   onBeforeConnect: (c, params: ConnParams) => {
@@ -41,8 +28,20 @@ const chatRoom = actor({
       throw new Error("Invalid authentication");
     }
 
-    // Authentication is valid, connection will proceed
-    // The actual connection state will come from createConnState
+    // Authentication is valid, so the connection will proceed to onConnect
+  },
+
+  // Record per-connection data once the connection is accepted
+  onConnect: (c, conn) => {
+    c.vars.connections.set(conn.id, {
+      userId: conn.params.userId || "anonymous",
+      role: conn.params.role || "guest",
+      joinTime: Date.now()
+    });
+  },
+
+  onDisconnect: (c, conn) => {
+    c.vars.connections.delete(conn.id);
   },
 
   actions: {}

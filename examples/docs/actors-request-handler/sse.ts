@@ -3,7 +3,6 @@ import { actor } from "rivetkit";
 const encoder = new TextEncoder();
 
 export const notificationsActor = actor({
-	state: {},
 	onRequest: () => {
 		const stream = new ReadableStream<Uint8Array>({
 			async start(controller) {

@@ -9,7 +9,7 @@ import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
 <Diagram
   id="physics-3d-game"
-  label="Each player's browser connects to the same physics3dWorld Actor and calls setInput and spawnBox. The Actor's run loop applies the inputs to a Rapier 3D world it keeps in memory and steps it four times per tick, ten ticks per second. After each tick it broadcasts a snapshot event with every body's position and rotation to all connected players, who render it with three.js. The numbers show the order of the calls. There is one physics3dWorld Actor per world key."
+  label="Each player's browser connects to the same physics3dWorld Actor and calls setInput and spawnBox. The Actor's tick loop applies the inputs to a Rapier 3D world it keeps in memory and steps it four times per tick, ten ticks per second. After each tick it broadcasts a snapshot event with every body's position and rotation to all connected players, who render it with three.js. The numbers show the order of the calls. There is one physics3dWorld Actor per world key."
   stackLabel="One per world"
   nodes={[
     { id: "a", x: 20, y: 40, w: 170, title: "Player", subtitle: "three.js client" },
@@ -30,7 +30,7 @@ What we'll build:
 
 - A `physics3dWorld` Actor that owns a Rapier 3D world with players, walls, and cubes.
 - A 10 tick per second loop that applies player input and steps the physics.
-- Cube positions saved in Actor state, so the world survives a restart.
+- Cube positions saved in SQLite, so the world survives a restart.
 - A three.js client that sends input and smooths the snapshots it receives.
 
 <Steps>
@@ -52,9 +52,9 @@ The `physics3dWorld` Actor holds the Rapier world and gives each connection a bo
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/physics-3d/config.ts" title="config.ts" />
 </CodeGroup>
 
-- The Rapier `World` is a WebAssembly object that can't be saved, so it lives in `c.vars` from `createVars`. `c.state` only holds `tick` and `boxes`, plain tuples of each cube's id, position, and half extents.
+- The Rapier `World` is a WebAssembly object that can't be saved, so it lives in `c.vars`, along with the `tick` counter and the player bodies. `createVars` starts it as `null`, and `onWake` builds it in the next step. SQLite keeps a copy of the world: the `boxes` table, one row per cube with its id, position, and half extents, and a one-row `world` table with the tick.
 - `onBeforeConnect` rejects a connection with no `name`, or one longer than 20 characters, by throwing a `UserError` that the client receives.
-- `onConnect` creates a ball body at a random point around the center and stores its handle under `conn.id`. `lockRotations()` keeps the ball from rolling, so input moves it instead of spinning it. If a client connects before `run` has built the world, `onConnect` returns without creating a body.
+- `onConnect` creates a ball body at a random point around the center and stores its handle under `conn.id`. `lockRotations()` keeps the ball from rolling, so input moves it instead of spinning it.
 - `onDisconnect` only marks the player. The tick loop removes the body after `DISCONNECT_GRACE_MS` (5 seconds), and snapshots stop including it right away. A reconnecting client gets a new `conn.id` and a new body.
 - The scene is a 20 by 20 floor with four walls. y points up, so gravity is -9.81.
 
@@ -62,14 +62,34 @@ The `physics3dWorld` Actor holds the Rapier world and gives each connection a bo
 
 <Step title="Run the physics loop">
 
-The simulation runs in `run`, which starts when the Actor wakes:
+`onWake` runs on every start. It loads the world and starts the simulation as a background task, and `onSleep` and `onDestroy` wait for that task to save and exit:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/physics-3d/world.ts" title="world.ts" region="wake" />
+
+- The Actor accepts connections and actions only after `onWake` resolves, so `onConnect` and `spawnBox` always find the loaded world through `getWorld`.
+- `onDestroy` waits for the loop too, because the Actor closes its database right after `onDestroy` returns.
+
+`loadWorld` builds the Rapier world and restores it from SQLite:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/physics-3d/world.ts" title="world.ts" region="load" />
+
+- It awaits `RAPIER.init()` to load the WebAssembly module, then adds the fixed bodies from `SCENE_STATIC` and restores the tick and the cubes from SQLite. On the first start the tables are empty, so the cubes come from `SCENE_DYNAMIC`.
+
+`runWorld` steps the world until the Actor shuts down:
 
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/physics-3d/world.ts" title="world.ts" region="tick" />
 
-- `run` awaits `RAPIER.init()` to load the WebAssembly module, then adds the fixed bodies from `SCENE_STATIC` and the cubes from `c.state.boxes`. On the first start, the cubes come from `SCENE_DYNAMIC`.
 - Every `TICK_MS` (100 ms) the loop applies each player's input as an impulse on the x and z axes, then calls `world.step()` `SUB_STEPS` (4) times with a 25 ms timestep. Smaller steps keep stacked cubes stable without sending more snapshots.
 - Velocity on x and z is multiplied by 0.85 each tick so players stop quickly. Vertical velocity is left alone so gravity still works.
-- After stepping, it writes every cube position to `c.state.boxes` and calls `c.broadcast("snapshot", ...)` once for all players. Each body in the snapshot carries a quaternion for its rotation. Only position and size are saved, so rotation and velocity reset when the Actor restarts.
+- After stepping, it calls `c.broadcast("snapshot", ...)` once for all players. Each body in the snapshot carries a quaternion for its rotation. The simulation itself stays in memory, so ticks don't write to the database.
+- Every `SNAPSHOT_INTERVAL_MS` (1 second) the loop calls `saveWorld`, so a crash loses at most about a second of movement. When the Actor sleeps or stops, `c.aborted` ends the loop and `runWorld` saves once more. Only position and size are saved, so rotation and velocity reset when the Actor restarts.
+- An empty world [sleeps](/actors/docs/lifecycle#sleeping) after the idle timeout. The next player's connection wakes it, `onWake` restores the last save, and that player gets a body like everyone else.
+
+`saveWorld` writes the copy in SQLite:
+
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/physics-3d/world.ts" title="world.ts" region="save" />
+
+- It replaces the `world` row and every row in `boxes` inside one `c.db.transaction`. A crash in the middle of a save keeps the previous save instead of leaving part of the world.
 
 <Note>
 Rapier is worth it when you need stacking, joints, many collisions, or shapes like capsules, convex hulls, and triangle meshes. For simple movement, a few lines of kinematic code are cheaper. `cannon-es` and `ammo.js` are 3D alternatives. Use one engine per simulation and run it only on the server. three.js only renders, so keep it out of the Actor. The `-compat` build embeds the WebAssembly, so it loads in Node without bundler setup.
@@ -85,7 +105,7 @@ Players send intent. The Actor applies it on the next tick:
 
 - `setInput` stores the x and z direction clamped to -1 to 1 and sets a jump flag. Clients never send positions, so they can't teleport or move faster than the physics allows.
 - The tick loop only applies a jump when vertical speed is under 0.5, a cheap check that the player is on something.
-- `spawnBox` drops a cube of random size and rotation from 5 units above the clicked point. It goes into `dynamicHandles`, so the next tick saves it with the rest.
+- `spawnBox` drops a cube of random size and rotation from 5 units above the clicked point. It goes into `dynamicHandles`, so the next save includes it.
 
 <Warning>
 `spawnBox` has no rate limit, body cap, or bounds check, so any client can fill the world. Limit how often each connection can call it and cap the number of bodies before you ship.
@@ -147,4 +167,4 @@ Open `http://localhost:5173`, choose **Physics 3D**, and click **Join World**. M
 
 - [2D Physics Game](/guides/physics-2d-game): the same pattern with Rapier 2D and a canvas.
 - [Open World Game](/guides/open-world-game): split a large world across many Actors.
-- [State](/actors/docs/state): when to use `state` and when to use `vars`.
+- [State](/actors/docs/state): when to keep data in SQLite and when to use `vars`.

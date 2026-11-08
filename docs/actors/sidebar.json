@@ -42,7 +42,7 @@
 			"title": "Features",
 			"pages": [
 				{
-					"title": "In-Memory State",
+					"title": "State",
 					"href": "/actors/docs/state",
 					"icon": "faFloppyDisk"
 				},
@@ -55,11 +55,6 @@
 					"title": "Realtime",
 					"href": "/actors/docs/events",
 					"icon": "faTowerBroadcast"
-				},
-				{
-					"title": "Queues",
-					"href": "/actors/docs/queues",
-					"icon": "faMailbox"
 				},
 				{
 					"title": "Schedule & Cron",
@@ -147,10 +142,6 @@
 						{
 							"title": "SQLite Profiling",
 							"href": "/actors/docs/sqlite-profiling"
-						},
-						{
-							"title": "Low-Level KV Storage",
-							"href": "/actors/docs/kv"
 						},
 						{
 							"title": "Logging",

@@ -9,7 +9,7 @@ import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
 <Diagram
   id="party-game"
-  label="The host's game client sends createParty to the partyMatchmaker Actor, and friends send joinParty with the party code. The matchmaker keeps parties and join tickets in its SQLite tables. For createParty, it creates a partyMatch Actor. It replies with a matchId and a joinToken. The client connects to the match with its joinToken, and the match checks the ticket by sending verifyJoin to the matchmaker. Members then call toggleReady, and the host calls startGame. The match broadcasts the partyUpdate event to every member after each change. The numbers show the order of the calls. There is one matchmaker and one partyMatch Actor per match."
+  label="The host's game client calls createParty on the partyMatchmaker Actor, and friends call joinParty with the party code. The matchmaker keeps parties and join tickets in its SQLite tables. For createParty, it creates a partyMatch Actor. It replies with a matchId and a joinToken. The client connects to the match with its joinToken, and the match checks the ticket by calling verifyJoin on the matchmaker. Members then call toggleReady, and the host calls startGame. The match broadcasts the partyUpdate event to every member after each change. The numbers show the order of the calls. There is one matchmaker and one partyMatch Actor per match."
   stackLabel="One per match"
   nodes={[
     { id: "client", x: 20, y: 80, w: 150, title: "Game client", subtitle: "browser lobby" },
@@ -52,9 +52,10 @@ One `partyMatchmaker` Actor, keyed `["main"]`, creates parties and hands out joi
 
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/party/matchmaker.ts" title="matchmaker.ts" region="create-join" />
 
-- Every request is a queue message, and `run` handles one message at a time. Two friends joining the last open slot at once can't both get in. `createParty`, `joinParty`, `verifyJoin`, `updatePartySize`, and `closeParty` are all queues.
-- `createParty` creates the `partyMatch` Actor with the party code and the host's player id, saves a `parties` row, and returns a `joinToken` along with the code. Codes leave out I, O, 0, and 1 so they are easy to read aloud, and the `party_code` column is `UNIQUE`.
+- Every request is an [action](/actors/docs/actions): `createParty`, `joinParty`, `verifyJoin`, `updatePartySize`, and `closeParty`.
+- `createParty` creates the `partyMatch` Actor with the party code as input, saves a `parties` row and the host's ticket in one transaction, and returns a `joinToken` along with the code. Codes leave out I, O, 0, and 1 so they are easy to read aloud, and the `party_code` column is `UNIQUE`.
 - `joinParty` uppercases and trims the code, rejects an unknown code with `party_not_found` and a full party with `party_full` (`MAX_PARTY_SIZE` is 8), and issues a new ticket.
+- Actions run at the same time, so `joinParty` checks the size, counts the player, and saves the ticket in one [`c.db.transaction`](/actors/docs/sqlite#transactions). Two friends joining the last open slot at once can't both get in.
 - `joinParty` counts the player as soon as it issues the ticket, so the slot is held while they connect. The party corrects the count later with `updatePartySize`.
 
 </Step>
@@ -68,9 +69,11 @@ Each party is its own `partyMatch` Actor, keyed by the match id. A player gets i
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/party/matchmaker.ts" title="matchmaker.ts" region="verify-join" />
 </CodeGroup>
 
-- `createConnState` runs before the connection is accepted. It sends `verifyJoin` with the match id from `c.key[0]`, the `playerId`, and the `joinToken`, and throws `invalid_join_ticket` if the matchmaker has no such ticket. A rejected player never gets a connection.
-- The verified name and host flag become connection state. Actions read the player from `c.conn.state.playerId`, never from their arguments, so a member can't act as someone else.
+- `onBeforeConnect` runs before the connection is accepted. It calls `verifyJoin` on the matchmaker with the match id from `c.key[0]`, the `playerId`, and the `joinToken`, and throws `invalid_join_ticket` if the matchmaker has no such ticket. A rejected player never gets a connection.
+- An accepted ticket's name and host flag go into `c.vars.verifiedTickets`, keyed by player id, because `onBeforeConnect` runs before the connection has an id. `onConnect` reads them back with the `playerId` from the connection params and stores the verified player in `c.vars.players`, keyed by `conn.id`. `onDisconnect` deletes that entry.
+- Actions find the caller with `c.vars.players.get(c.conn.id)`, never from their arguments, so a member can't act as someone else.
 - `onConnect` checks the size limit again and turns away a second connection for the same player with `duplicate_player`. If the party has no host, the new member becomes the host.
+- `onCreate` saves the party code from the input and the `waiting` phase to a one-row `party` table, so both survive sleep. Members and ready flags only live in `c.vars`, because they belong to live connections.
 - Tickets stay valid until `closeParty`, so a player who drops can reconnect with the same ticket.
 
 </Step>
@@ -81,13 +84,13 @@ Nothing in a party lobby changes on its own, so there is no tick loop. Every cha
 
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/party/match.ts" title="match.ts" highlight="host" />
 
-- `startGame` and `finishGame` throw `not_host` for anyone but the host, and check the phase: `waiting` to `playing` to `finished`. A second click gets `already_started` or `not_playing`.
+- `startGame` and `finishGame` throw `not_host` for anyone but the host, and move the phase from `waiting` to `playing` to `finished`. Each is one `UPDATE` that only matches the expected phase, so a second click changes nothing and gets `already_started` or `not_playing`.
 - `toggleReady` flips the member's ready flag. The example lets the host start without everyone ready. Add a check in `startGame` if your game needs it.
 - When a member leaves, `onDisconnect` removes them. If it was the host, `promoteNextHost` makes the next member the host and clears their ready flag, so the party never gets stuck without one.
-- After each join and leave the match sends `updatePartySize`, so the matchmaker turns joiners away only when the party is really full.
+- After each join and leave the match calls `updatePartySize`, so the matchmaker turns joiners away only when the party is really full.
 
 <Note>
-The `playing` phase is where your game goes. For a quiz or drawing game, add actions that only work while `phase === "playing"`. For a realtime mini-game, add a `run` loop that ticks only during `playing`, or create a separate match Actor such as an [arena match](/guides/arena-game) and send every member its id.
+The `playing` phase is where your game goes. For a quiz or drawing game, add actions that only work while the phase is `playing`. For a realtime mini-game, start a tick loop from [`onWake`](/actors/docs/lifecycle) that only steps during `playing`, or create a separate match Actor such as an [arena match](/guides/arena-game) and send every member its id.
 </Note>
 
 </Step>
@@ -114,8 +117,8 @@ The menu creates or joins a party, then the lobby connects to it with the ticket
 <CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/party/game.tsx" title="game.tsx" highlight="connect" />
 </CodeGroup>
 
-- `mm.send("createParty", {}, { wait: true })` and `mm.send("joinParty", { partyCode }, { wait: true })` wait for the queue's reply. A joiner doesn't get the code back, so the menu adds the code the player typed.
-- The lobby connects with `partyMatch.get(...)` and puts both `playerId` and `joinToken` in `params`, which is what `createConnState` checks.
+- `mm.createParty({})` and `mm.joinParty({ partyCode })` are action calls that return the ticket. A joiner doesn't get the code back, so the menu adds the code the player typed.
+- The lobby connects with `partyMatch.get(...)` and puts both `playerId` and `joinToken` in `params`, which is what `onBeforeConnect` checks.
 - It subscribes to `partyUpdate` and also calls `getSnapshot` once, so the member list shows up even if no change has happened since it connected.
 - The buttons call `toggleReady`, `startGame`, and `finishGame`. The UI only shows **Start Game** to the host, but the server's `not_host` check is what enforces it.
 
@@ -139,5 +142,5 @@ Open `http://localhost:5173`, pick **Party**, and click **Create Party**. The lo
 ## Next steps
 
 - [Arena Game](/guides/arena-game): run a realtime match with teams and a tick loop.
-- [Connections](/actors/docs/connections): `createConnState`, connection params, and per-connection state.
+- [Connections](/actors/docs/connections): `onBeforeConnect`, connection params, and per-connection data.
 - [Authentication](/guides/authentication): replace join tickets with signed user tokens.

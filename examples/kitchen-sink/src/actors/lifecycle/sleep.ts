@@ -1,24 +1,69 @@
 import { actor, event, type UniversalWebSocket } from "rivetkit";
+import { db, type RawAccess } from "rivetkit/db";
 import { promiseWithResolvers } from "rivetkit/utils";
 
 export const SLEEP_TIMEOUT = 1000;
 
+type LifecycleCountsRow = {
+	start_count: number;
+	sleep_count: number;
+	request_count: number;
+};
+
+/** Creates a one-row table of lifecycle counts that survives sleep. */
+function lifecycleCountsDb() {
+	return db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS lifecycle_counts (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					start_count INTEGER NOT NULL DEFAULT 0,
+					sleep_count INTEGER NOT NULL DEFAULT 0,
+					request_count INTEGER NOT NULL DEFAULT 0
+				);
+			`);
+			await db.execute(
+				"INSERT OR IGNORE INTO lifecycle_counts (id) VALUES (1)",
+			);
+		},
+	});
+}
+
+/** Reads the lifecycle counts. */
+async function loadCounts(database: RawAccess): Promise<LifecycleCountsRow> {
+	const [counts] = await database.execute<LifecycleCountsRow>(
+		"SELECT start_count, sleep_count, request_count FROM lifecycle_counts WHERE id = 1",
+	);
+	return counts;
+}
+
+/** Counts one start of the actor, including the first one. */
+async function recordStart(database: RawAccess): Promise<void> {
+	await database.execute(
+		"UPDATE lifecycle_counts SET start_count = start_count + 1 WHERE id = 1",
+	);
+}
+
+/** Counts one sleep of the actor. */
+async function recordSleep(database: RawAccess): Promise<void> {
+	await database.execute(
+		"UPDATE lifecycle_counts SET sleep_count = sleep_count + 1 WHERE id = 1",
+	);
+}
+
 export const sleep = actor({
-	state: { startCount: 0, sleepCount: 0 },
-	onWake: (c) => {
-		c.state.startCount += 1;
-	},
-	onSleep: (c) => {
-		c.state.sleepCount += 1;
-	},
+	db: lifecycleCountsDb(),
+	onWake: (c) => recordStart(c.db),
+	onSleep: (c) => recordSleep(c.db),
 	actions: {
 		triggerSleep: (c) => {
 			c.sleep();
 		},
-		getCounts: (c) => {
+		getCounts: async (c) => {
+			const counts = await loadCounts(c.db);
 			return {
-				startCount: c.state.startCount,
-				sleepCount: c.state.sleepCount,
+				startCount: counts.start_count,
+				sleepCount: counts.sleep_count,
 			};
 		},
 		setAlarm: async (c, duration: number) => {
@@ -34,30 +79,28 @@ export const sleep = actor({
 });
 
 export const sleepWithLongRpc = actor({
-	state: { startCount: 0, sleepCount: 0 },
+	db: lifecycleCountsDb(),
 	createVars: () =>
-		({}) as { longRunningResolve: PromiseWithResolvers<void> },
+		({}) as { longRunningResolve?: PromiseWithResolvers<void> },
 	events: {
 		waiting: event<[]>(),
 	},
-	onWake: (c) => {
-		c.state.startCount += 1;
-	},
-	onSleep: (c) => {
-		c.state.sleepCount += 1;
-	},
+	onWake: (c) => recordStart(c.db),
+	onSleep: (c) => recordSleep(c.db),
 	actions: {
-		getCounts: (c) => {
+		getCounts: async (c) => {
+			const counts = await loadCounts(c.db);
 			return {
-				startCount: c.state.startCount,
-				sleepCount: c.state.sleepCount,
+				startCount: counts.start_count,
+				sleepCount: counts.sleep_count,
 			};
 		},
 		longRunningRpc: async (c) => {
 			c.log.info("starting long running rpc");
-			c.vars.longRunningResolve = promiseWithResolvers(() => {});
+			const longRunningResolve = promiseWithResolvers<void>(() => {});
+			c.vars.longRunningResolve = longRunningResolve;
 			c.broadcast("waiting");
-			await c.vars.longRunningResolve.promise;
+			await longRunningResolve.promise;
 			c.log.info("finished long running rpc");
 		},
 		finishLongRunningRpc: (c) => c.vars.longRunningResolve?.resolve(),
@@ -68,15 +111,13 @@ export const sleepWithLongRpc = actor({
 });
 
 export const sleepWithRawHttp = actor({
-	state: { startCount: 0, sleepCount: 0, requestCount: 0 },
-	onWake: (c) => {
-		c.state.startCount += 1;
-	},
-	onSleep: (c) => {
-		c.state.sleepCount += 1;
-	},
+	db: lifecycleCountsDb(),
+	onWake: (c) => recordStart(c.db),
+	onSleep: (c) => recordSleep(c.db),
 	onRequest: async (c, request) => {
-		c.state.requestCount += 1;
+		await c.db.execute(
+			"UPDATE lifecycle_counts SET request_count = request_count + 1 WHERE id = 1",
+		);
 		const url = new URL(request.url);
 
 		if (url.pathname === "/long-request") {
@@ -95,11 +136,12 @@ export const sleepWithRawHttp = actor({
 		return new Response("Not Found", { status: 404 });
 	},
 	actions: {
-		getCounts: (c) => {
+		getCounts: async (c) => {
+			const counts = await loadCounts(c.db);
 			return {
-				startCount: c.state.startCount,
-				sleepCount: c.state.sleepCount,
-				requestCount: c.state.requestCount,
+				startCount: counts.start_count,
+				sleepCount: counts.sleep_count,
+				requestCount: counts.request_count,
 			};
 		},
 	},
@@ -109,26 +151,36 @@ export const sleepWithRawHttp = actor({
 });
 
 export const sleepWithRawWebSocket = actor({
-	state: { startCount: 0, sleepCount: 0, connectionCount: 0 },
-	onWake: (c) => {
-		c.state.startCount += 1;
-	},
-	onSleep: (c) => {
-		c.state.sleepCount += 1;
-	},
+	db: lifecycleCountsDb(),
+	// Open WebSockets do not survive sleep, so their count lives only in memory.
+	createVars: () => ({ connectionCount: 0 }),
+	onWake: (c) => recordStart(c.db),
+	onSleep: (c) => recordSleep(c.db),
 	onWebSocket: (c, websocket: UniversalWebSocket) => {
-		c.state.connectionCount += 1;
+		c.vars.connectionCount += 1;
 		c.log.info({
 			msg: "websocket connected",
-			connectionCount: c.state.connectionCount,
+			connectionCount: c.vars.connectionCount,
 		});
 
 		websocket.send(
 			JSON.stringify({
 				type: "connected",
-				connectionCount: c.state.connectionCount,
+				connectionCount: c.vars.connectionCount,
 			}),
 		);
+
+		const sendCounts = async () => {
+			const counts = await loadCounts(c.db);
+			websocket.send(
+				JSON.stringify({
+					type: "counts",
+					startCount: counts.start_count,
+					sleepCount: counts.sleep_count,
+					connectionCount: c.vars.connectionCount,
+				}),
+			);
+		};
 
 		websocket.addEventListener("message", (event: any) => {
 			const data = event.data;
@@ -136,14 +188,12 @@ export const sleepWithRawWebSocket = actor({
 				try {
 					const parsed = JSON.parse(data);
 					if (parsed.type === "getCounts") {
-						websocket.send(
-							JSON.stringify({
-								type: "counts",
-								startCount: c.state.startCount,
-								sleepCount: c.state.sleepCount,
-								connectionCount: c.state.connectionCount,
-							}),
-						);
+						sendCounts().catch((error) => {
+							c.log.warn({
+								msg: "failed to read counts for websocket",
+								error,
+							});
+						});
 					} else if (parsed.type === "keepAlive") {
 						// Just acknowledge to keep connection alive
 						websocket.send(JSON.stringify({ type: "ack" }));
@@ -156,19 +206,20 @@ export const sleepWithRawWebSocket = actor({
 		});
 
 		websocket.addEventListener("close", () => {
-			c.state.connectionCount -= 1;
+			c.vars.connectionCount -= 1;
 			c.log.info({
 				msg: "websocket disconnected",
-				connectionCount: c.state.connectionCount,
+				connectionCount: c.vars.connectionCount,
 			});
 		});
 	},
 	actions: {
-		getCounts: (c) => {
+		getCounts: async (c) => {
+			const counts = await loadCounts(c.db);
 			return {
-				startCount: c.state.startCount,
-				sleepCount: c.state.sleepCount,
-				connectionCount: c.state.connectionCount,
+				startCount: counts.start_count,
+				sleepCount: counts.sleep_count,
+				connectionCount: c.vars.connectionCount,
 			};
 		},
 	},
@@ -178,18 +229,15 @@ export const sleepWithRawWebSocket = actor({
 });
 
 export const sleepWithNoSleepOption = actor({
-	state: { startCount: 0, sleepCount: 0 },
-	onWake: (c) => {
-		c.state.startCount += 1;
-	},
-	onSleep: (c) => {
-		c.state.sleepCount += 1;
-	},
+	db: lifecycleCountsDb(),
+	onWake: (c) => recordStart(c.db),
+	onSleep: (c) => recordSleep(c.db),
 	actions: {
-		getCounts: (c) => {
+		getCounts: async (c) => {
+			const counts = await loadCounts(c.db);
 			return {
-				startCount: c.state.startCount,
-				sleepCount: c.state.sleepCount,
+				startCount: counts.start_count,
+				sleepCount: counts.sleep_count,
 			};
 		},
 	},

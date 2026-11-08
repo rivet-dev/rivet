@@ -4,7 +4,6 @@ import { actor } from "rivetkit";
  * Actor for testing large payloads without connections
  */
 export const largePayloadActor = actor({
-	state: {},
 	actions: {
 		/**
 		 * Accepts a large request payload and returns its size
@@ -43,16 +42,17 @@ export const largePayloadActor = actor({
  * Actor for testing large payloads with connections
  */
 export const largePayloadConnActor = actor({
-	state: {},
-	connState: {
-		lastRequestSize: 0,
+	// The last request size is tracked per connection, keyed by connection ID.
+	createVars: () => ({ lastRequestSizes: new Map<string, number>() }),
+	onDisconnect: (c, conn) => {
+		c.vars.lastRequestSizes.delete(conn.id);
 	},
 	actions: {
 		/**
 		 * Accepts a large request payload and returns its size
 		 */
 		processLargeRequest: (c, data: { items: string[] }) => {
-			c.conn.state.lastRequestSize = data.items.length;
+			c.vars.lastRequestSizes.set(c.conn.id, data.items.length);
 			return {
 				itemCount: data.items.length,
 				firstItem: data.items[0],
@@ -84,7 +84,7 @@ export const largePayloadConnActor = actor({
 		 * Get the last request size
 		 */
 		getLastRequestSize: (c) => {
-			return c.conn.state.lastRequestSize;
+			return c.vars.lastRequestSizes.get(c.conn.id) ?? 0;
 		},
 	},
 });

@@ -1,4 +1,5 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 type TaskMessage = {
@@ -14,10 +15,20 @@ export const workerActor = actor({
 });
 
 export const coordinatorActor = actor({
-  state: {
-    lastTaskId: null as string | null,
-    lastResult: 0,
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS coordinator_stats (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          last_task_id TEXT,
+          last_result INTEGER NOT NULL
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO coordinator_stats (id, last_task_id, last_result) VALUES (1, NULL, 0)",
+      );
+    },
+  }),
   run: workflow(async (ctx) => {
     await ctx.loop("orchestrator-loop", async (loopCtx) => {
         const [message] = await loopCtx.queue.nextBatch("wait-task", {
@@ -32,14 +43,22 @@ export const coordinatorActor = actor({
         );
 
         await loopCtx.step("record-result", async (step) => {
-          step.state.lastTaskId = task.taskId;
-          step.state.lastResult = result as number;
+          await step.db.execute(
+            "UPDATE coordinator_stats SET last_task_id = ?, last_result = ? WHERE id = 1",
+            task.taskId,
+            result as number,
+          );
         });
 
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{ lastTaskId: string | null; lastResult: number }>(
+        "SELECT last_task_id AS lastTaskId, last_result AS lastResult FROM coordinator_stats WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 

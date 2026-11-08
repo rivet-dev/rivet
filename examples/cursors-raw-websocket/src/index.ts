@@ -4,6 +4,7 @@ import {
 	setup,
 	type UniversalWebSocket,
 } from "rivetkit";
+import { db, type RawAccess } from "rivetkit/db";
 
 export interface CursorPosition {
 	userId: string;
@@ -12,14 +13,14 @@ export interface CursorPosition {
 	timestamp: number;
 }
 
-export interface TextLabel {
+export type TextLabel = {
 	id: string;
 	userId: string;
 	text: string;
 	x: number;
 	y: number;
 	timestamp: number;
-}
+};
 
 interface Vars {
 	websockets: Map<
@@ -28,10 +29,29 @@ interface Vars {
 	>;
 }
 
+/** Reads every text label saved in the room, oldest first. */
+async function loadTextLabels(db: RawAccess): Promise<TextLabel[]> {
+	return (await db.execute(
+		"SELECT id, user_id AS userId, text, x, y, timestamp FROM text_labels ORDER BY timestamp",
+	)) as TextLabel[];
+}
+
 export const cursorRoom = actor({
-	state: {
-		textLabels: [] as TextLabel[],
-	},
+	// Text labels belong to the room, so they are saved in SQLite.
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS text_labels (
+					id TEXT PRIMARY KEY,
+					user_id TEXT NOT NULL,
+					text TEXT NOT NULL,
+					x REAL NOT NULL,
+					y REAL NOT NULL,
+					timestamp INTEGER NOT NULL
+				)
+			`);
+		},
+	}),
 
 	createVars: (): Vars => {
 		return {
@@ -46,7 +66,7 @@ export const cursorRoom = actor({
 		},
 
 		// Get all room state (cursors and text labels)
-		getRoomState: (c) => {
+		getRoomState: async (c) => {
 			const cursors: Record<string, CursorPosition> = {};
 			for (const [sessionId, { cursor }] of c.vars.websockets.entries()) {
 				if (cursor) {
@@ -55,7 +75,7 @@ export const cursorRoom = actor({
 			}
 			return {
 				cursors,
-				textLabels: c.state.textLabels,
+				textLabels: await loadTextLabels(c.db),
 			};
 		},
 	},
@@ -82,7 +102,8 @@ export const cursorRoom = actor({
 		// Store the websocket
 		c.vars.websockets.set(sessionId, { socket: websocket, cursor: null });
 
-		// Send initial state to the new connection
+		// Send the current cursors and text labels to the new connection
+		const textLabels = await loadTextLabels(c.db);
 		const cursors: Record<string, CursorPosition> = {};
 		for (const [id, { cursor }] of c.vars.websockets.entries()) {
 			if (cursor) {
@@ -94,13 +115,13 @@ export const cursorRoom = actor({
 				type: "init",
 				data: {
 					cursors,
-					textLabels: c.state.textLabels,
+					textLabels,
 				},
 			}),
 		);
 
 		// Handle incoming messages
-		websocket.addEventListener("message", (event: RivetMessageEvent) => {
+		websocket.addEventListener("message", async (event: RivetMessageEvent) => {
 			try {
 				const message = JSON.parse(event.data as string);
 
@@ -143,15 +164,16 @@ export const cursorRoom = actor({
 							timestamp: Date.now(),
 						};
 
-						// Find and update existing text label or add new one
-						const existingIndex = c.state.textLabels.findIndex(
-							(label) => label.id === id,
+						// Insert a new text label or replace the existing one with the same ID
+						await c.db.execute(
+							"INSERT OR REPLACE INTO text_labels (id, user_id, text, x, y, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+							textLabel.id,
+							textLabel.userId,
+							textLabel.text,
+							textLabel.x,
+							textLabel.y,
+							textLabel.timestamp,
 						);
-						if (existingIndex >= 0) {
-							c.state.textLabels[existingIndex] = textLabel;
-						} else {
-							c.state.textLabels.push(textLabel);
-						}
 
 						// Broadcast to all connections
 						for (const { socket } of c.vars.websockets.values()) {
@@ -167,9 +189,7 @@ export const cursorRoom = actor({
 
 					case "removeText": {
 						const { id } = message.data;
-						c.state.textLabels = c.state.textLabels.filter(
-							(label) => label.id !== id,
-						);
+						await c.db.execute("DELETE FROM text_labels WHERE id = ?", id);
 
 						// Broadcast to all connections
 						for (const { socket } of c.vars.websockets.values()) {

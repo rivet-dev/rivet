@@ -22,20 +22,12 @@ export function BattleRoyaleMenu({
 	const findMatch = async () => {
 		setStatus("matching");
 		try {
-			const mm = client.battleRoyaleMatchmaker
+			// A plain action call needs no connection, because the player only
+			// talks to the match from here on.
+			const match = await client.battleRoyaleMatchmaker
 				.getOrCreate(["main"])
-				.connect();
-			const result = await mm.send(
-				"findMatch",
-				{},
-				{ wait: true, timeout: 10_000 },
-			);
-			mm.dispose();
-			const response = result.response;
-			if (!response?.matchId || !response?.playerId) {
-				throw new Error("Matchmaker did not return a valid match");
-			}
-			onReady(response);
+				.findMatch();
+			onReady(match);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 			setStatus("error");

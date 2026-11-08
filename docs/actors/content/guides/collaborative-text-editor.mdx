@@ -10,20 +10,20 @@ import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
 <Diagram
   id="collaborative-text-editor"
-  label="Editor A calls createDocument on the documentList Actor for its workspace, which creates a document Actor for the new document. Each editor connects to the document Actor and sends every local Yjs change with applyUpdate. The document Actor merges the change into its own Y.Doc, saves a full snapshot to the yjs:doc key in its KV storage with kv.put, and broadcasts the change as sync and awareness events to every editor. The numbers show the order of the calls. There is one documentList Actor per workspace and one document Actor per document."
+  label="Editor A calls createDocument on the documentList Actor for its workspace, which creates a document Actor for the new document. Each editor connects to the document Actor and sends every local Yjs change with applyUpdate. The document Actor merges the change into its own Y.Doc, saves a full snapshot to its SQLite database, and broadcasts the change as sync and awareness events to every editor. The numbers show the order of the calls. There is one documentList Actor per workspace and one document Actor per document."
   stackLabel="One per document"
   nodes={[
     { id: "a", x: 20, y: 40, title: "Editor A", subtitle: "types an edit" },
     { id: "b", x: 20, y: 220, title: "Editor B", subtitle: "sees the edit" },
     { id: "list", x: 330, y: 40, w: 200, product: "actors", title: "`documentList`", subtitle: "workspace index" },
     { id: "doc", x: 640, y: 140, product: "actors", stack: true, title: "`document`", subtitle: "live `Y.Doc`" },
-    { id: "kv", x: 640, y: 300, title: "Actor KV", subtitle: "`yjs:doc` snapshot" },
+    { id: "db", x: 640, y: 300, title: "Document SQLite", subtitle: "`snapshot` column" },
   ]}
   edges={[
     { from: "a", to: "list", label: "`createDocument`", step: 1 },
     { from: "list", to: "doc", toSide: "top", via: [[725, 70]], label: "`create`", step: 2 },
     { from: "a", to: "doc", fromSide: "bottom", toOffset: -10, via: [[105, 160]], label: "`applyUpdate`", step: 3 },
-    { from: "doc", to: "kv", label: "`kv.put`", labelAt: [737, 255], labelAnchor: "start", step: 4 },
+    { from: "doc", to: "db", label: "save snapshot", labelAt: [737, 255], labelAnchor: "start", step: 4 },
     { from: "doc", to: "b", kind: "reply", fromOffset: 15, via: [[560, 185], [560, 250]], label: "`sync` and `awareness` events", step: 5 },
   ]}
 />
@@ -32,7 +32,7 @@ What we'll build:
 
 - A `document` Actor per document that keeps the merged Yjs document and relays every edit to the other editors.
 - Live cursors and names over the Yjs Awareness protocol, cleaned up when someone closes the tab.
-- A snapshot of the document in the Actor's KV storage, so it survives restarts.
+- A snapshot of the document in the Actor's SQLite database, so it survives restarts.
 - A `documentList` Actor per workspace that creates documents and lists them.
 - A React editor that syncs a local `Y.Doc` with the Actor.
 
@@ -56,9 +56,9 @@ Each document is its own `document` Actor, keyed by `[workspaceId, documentId]`:
 
 <CodeSnippet file="examples/collaborative-document/src/index.ts" title="index.ts" region="document" />
 
-- `createState` holds only metadata: `title`, `createdAt`, and `updatedAt`. It reads the title from the creation [input](/actors/docs/input) that `documentList` passes in.
-- The live `Y.Doc` and its `Awareness` live in [vars](/actors/docs/state#ephemeral-state), because they are class instances that cannot be saved as JSON state. `createVars` rebuilds them every time the Actor starts by loading the binary `yjs:doc` key from [KV storage](/actors/docs/kv).
-- `connState` gives every connection its own list of awareness client ids, which is used to clean up presence on disconnect.
+- The Actor's [SQLite](/actors/docs/sqlite) database holds one `document` row with the `title`, `created_at`, `updated_at`, and a `snapshot` of the Yjs document. `onCreate` runs once and saves the title from the creation [input](/actors/docs/input) that `documentList` passes in.
+- The live `Y.Doc` and its `Awareness` live in [vars](/actors/docs/state#ephemeral-state), because they are live class instances that are never saved. `createVars` rebuilds them every time the Actor starts by loading the `snapshot` column.
+- `clientIdsByConn` in vars maps each connection's ID to its list of awareness client ids, which is used to clean up presence on disconnect.
 - The multi-part [key](/actors/docs/keys) scopes the document to its workspace, so two workspaces can never reach each other's documents by id.
 
 </Step>
@@ -86,12 +86,12 @@ Names, colors, and cursor positions travel over the Yjs Awareness protocol, thro
 
 <CodeSnippet file="examples/collaborative-document/src/index.ts" title="index.ts" region="presence" highlight="disconnect,awareness" />
 
-- `applyUpdate(update, "awareness", clientId)` applies the change to the server's `Awareness`, remembers `clientId` in that connection's `connState`, and broadcasts the `awareness` event. Presence is never saved.
+- `applyUpdate(update, "awareness", clientId)` applies the change to the server's `Awareness`, remembers `clientId` under that connection's ID in `clientIdsByConn`, and broadcasts the `awareness` event. Presence is never saved.
 - `getAwareness` returns everyone's current presence, so a client that joins late sees the other cursors right away.
-- `onDisconnect` removes every awareness client the connection asserted and broadcasts the removal, so the cursor disappears even if the tab closed without saying goodbye. See [Connections](/actors/docs/connections).
+- `onDisconnect` removes every awareness client the connection asserted, drops the connection's entry from `clientIdsByConn`, and broadcasts the removal, so the cursor disappears even if the tab closed without saying goodbye. See [Connections](/actors/docs/connections).
 
 <Warning>
-The `clientId` comes from the client and is trusted as is, so one connection could remove another user's cursor by claiming its id. In production, check it against state the server owns for that connection.
+The `clientId` comes from the client and is trusted as is, so one connection could remove another user's cursor by claiming its id. In production, check it against data the server owns for that connection.
 </Warning>
 
 </Step>
@@ -102,16 +102,16 @@ Every `"sync"` update also saves the whole document:
 
 <CodeSnippet file="examples/collaborative-document/src/index.ts" title="index.ts" region="sync" highlight="persist" />
 
-- `Y.encodeStateAsUpdate` encodes the merged document as one compact update, and `c.kv.put` overwrites the single `yjs:doc` key with it. There is no update log, so there is nothing to replay on start and no separate compaction job. Encoding the merged state is the compaction.
+- `Y.encodeStateAsUpdate` encodes the merged document as one compact update, and a single `UPDATE` stores it in the `snapshot` column along with `updated_at`. There is no update log, so there is nothing to replay on start and no separate compaction job. Encoding the merged state is the compaction.
 - The write finishes before the broadcast, so an edit that other clients have seen is already saved. If the Actor crashes or moves, `createVars` loads the last snapshot.
 - Every keystroke rewrites the whole document. That is simple and fine for small and medium documents.
 
 <Warning>
-A single KV value is limited to 128 KiB (see [Limits](/actors/docs/limits)). Once the encoded document grows past that, `kv.put` throws, so `applyUpdate` fails before the broadcast and edits are neither saved nor relayed.
+`getContent` returns the whole document in one action response, and responses are limited to 1 MiB by default (see [Limits](/actors/docs/limits)). The `number[]` encoding is larger than the raw bytes, so once a document approaches that size, new editors can no longer catch up.
 </Warning>
 
 <Note>
-For large documents or high edit rates, append each incremental update to an update log under its own key and write a merged snapshot only every N updates, then delete the log entries it covers. Start then loads the snapshot and replays the log. Only switch once the full-snapshot write is the measured bottleneck or the document nears the value limit.
+For large documents or high edit rates, append each incremental update to an `updates` table and write a merged snapshot only every N updates, then delete the rows it covers. Start then loads the snapshot and replays the remaining updates. Only switch once the full-snapshot write is the measured bottleneck.
 </Note>
 
 </Step>
@@ -123,6 +123,7 @@ A `documentList` Actor per workspace creates documents and lists them. The regis
 <CodeSnippet file="examples/collaborative-document/src/index.ts" title="index.ts" region="list" />
 
 - This is the coordinator pattern from [Design Patterns](/actors/docs/design-patterns): `documentList` owns discovery, and each `document` Actor owns one document's realtime state.
+- `documentList` stores each document's summary in its own SQLite table.
 - `createDocument` creates the `document` Actor explicitly with `c.client<typeof registry>()` and passes `{ title, createdAt }` as input. See [Communicating Between Actors](/actors/docs/communicating-between-actors).
 - `deleteDocument` only removes the entry from the list. The `document` Actor and its snapshot stay behind. To delete a document for real, also [destroy](/actors/docs/destroy) the Actor.
 

@@ -443,7 +443,7 @@ export function App() {
 					<p className="eyebrow">Collaborative Document</p>
 					<h1>Shared documents with Yjs and Rivet Actors</h1>
 					<p>
-						Document actors keep CRDT state in KV storage, while the
+						Document actors keep CRDT state in SQLite, while the
 						coordinator indexes documents per workspace.
 					</p>
 				</div>

@@ -30,6 +30,14 @@ pub struct FamilyInfo {
 	pub max_write: u16,
 }
 
+/// The family a versioned envelope's payloads belong to. A payload that crosses between
+/// binaries during a rolling deploy is encoded at its family's negotiated version, the highest
+/// every live storage worker reads, never at the compiled latest.
+pub trait VersionedFamily: vbare::Versioned {
+	/// `None` only for an envelope whose protocol pins its single version out of band.
+	const FAMILY: Option<VersionFamily>;
+}
+
 include!(concat!(env!("OUT_DIR"), "/families.rs"));
 
 impl VersionFamily {

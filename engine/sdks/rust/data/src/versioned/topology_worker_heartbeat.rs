@@ -5,6 +5,8 @@ pub enum TopologyWorkerHeartbeatData {
 	V2(topology_worker_heartbeat_v2::Heartbeat),
 }
 
+impl_versioned_family!(TopologyWorkerHeartbeatData, TOPOLOGY_WORKER_HEARTBEAT);
+
 impl ::vbare::Versioned for TopologyWorkerHeartbeatData {
 	type Latest = topology_worker_heartbeat_v2::Heartbeat;
 

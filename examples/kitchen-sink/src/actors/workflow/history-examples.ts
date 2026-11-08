@@ -1,5 +1,11 @@
 import { actor, queue } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
+import {
+	loadRecord,
+	recordDb,
+	saveRecord,
+	updateRecord,
+} from "./record-store.ts";
 
 function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -15,42 +21,54 @@ export type WorkflowHistorySimpleState = {
 };
 
 export const workflowHistorySimple = actor({
-	createState: (c): WorkflowHistorySimpleState => ({
-		id: c.key[0] as string,
-		status: "pending",
-	}),
+	db: recordDb(),
+	onCreate: async (c) => {
+		await saveRecord<WorkflowHistorySimpleState>(c.db, {
+			id: c.key[0] as string,
+			status: "pending",
+		});
+	},
 	actions: {
-		getState: (c): WorkflowHistorySimpleState => c.state,
+		getState: (c): Promise<WorkflowHistorySimpleState> =>
+			loadRecord<WorkflowHistorySimpleState>(c.db),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.step("start", async (c) => {
-			c.state.status = "running";
-			c.state.lastStep = "start";
-			c.state.startedAt = Date.now();
+			await updateRecord<WorkflowHistorySimpleState>(c.db, (record) => {
+				record.status = "running";
+				record.lastStep = "start";
+				record.startedAt = Date.now();
+			});
 			return { initialized: true };
 		});
 
 		await delay(700);
 
 		await ctx.step("process", async (c) => {
-			c.state.lastStep = "process";
+			await updateRecord<WorkflowHistorySimpleState>(c.db, (record) => {
+				record.lastStep = "process";
+			});
 			return { processed: true, items: 5 };
 		});
 
 		await delay(2200);
 
 		await ctx.step("validate", async (c) => {
-			c.state.lastStep = "validate";
+			await updateRecord<WorkflowHistorySimpleState>(c.db, (record) => {
+				record.lastStep = "validate";
+			});
 			return { valid: true };
 		});
 
 		await delay(600);
 
 		await ctx.step("complete", async (c) => {
-			c.state.lastStep = "complete";
-			c.state.status = "completed";
-			c.state.completedAt = Date.now();
-			c.state.output = { success: true, processedItems: 3 };
+			await updateRecord<WorkflowHistorySimpleState>(c.db, (record) => {
+				record.lastStep = "complete";
+				record.status = "completed";
+				record.completedAt = Date.now();
+				record.output = { success: true, processedItems: 3 };
+			});
 			return { success: true };
 		});
 	}),
@@ -67,18 +85,24 @@ export type WorkflowHistoryLoopState = {
 };
 
 export const workflowHistoryLoop = actor({
-	createState: (c): WorkflowHistoryLoopState => ({
-		id: c.key[0] as string,
-		status: "running",
-		processed: 0,
-		batches: [],
-	}),
+	db: recordDb(),
+	onCreate: async (c) => {
+		await saveRecord<WorkflowHistoryLoopState>(c.db, {
+			id: c.key[0] as string,
+			status: "running",
+			processed: 0,
+			batches: [],
+		});
+	},
 	actions: {
-		getState: (c): WorkflowHistoryLoopState => c.state,
+		getState: (c): Promise<WorkflowHistoryLoopState> =>
+			loadRecord<WorkflowHistoryLoopState>(c.db),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.step("init", async (c) => {
-			c.state.status = "running";
+			await updateRecord<WorkflowHistoryLoopState>(c.db, (record) => {
+				record.status = "running";
+			});
 			return { batchSize: LOOP_ITEMS.length };
 		});
 
@@ -92,8 +116,16 @@ export const workflowHistoryLoop = actor({
 				const item = LOOP_ITEMS[loopState.index];
 
 				await loopCtx.step(`process-${loopState.index}`, async (c) => {
-					c.state.processed += 1;
-					c.state.batches.push({ index: loopState.index, item });
+					await updateRecord<WorkflowHistoryLoopState>(
+						c.db,
+						(record) => {
+							record.processed += 1;
+							record.batches.push({
+								index: loopState.index,
+								item,
+							});
+						},
+					);
 					return { item, status: "done" };
 				});
 
@@ -106,8 +138,10 @@ export const workflowHistoryLoop = actor({
 		});
 
 		await ctx.step("finalize", async (c) => {
-			c.state.status = "completed";
-			c.state.completedAt = Date.now();
+			await updateRecord<WorkflowHistoryLoopState>(c.db, (record) => {
+				record.status = "completed";
+				record.completedAt = Date.now();
+			});
 			return { allProcessed: true };
 		});
 	}),
@@ -124,16 +158,22 @@ export type WorkflowHistoryJoinState = {
 };
 
 export const workflowHistoryJoin = actor({
-	createState: (c): WorkflowHistoryJoinState => ({
-		id: c.key[0] as string,
-		status: "pending",
-	}),
+	db: recordDb(),
+	onCreate: async (c) => {
+		await saveRecord<WorkflowHistoryJoinState>(c.db, {
+			id: c.key[0] as string,
+			status: "pending",
+		});
+	},
 	actions: {
-		getState: (c): WorkflowHistoryJoinState => c.state,
+		getState: (c): Promise<WorkflowHistoryJoinState> =>
+			loadRecord<WorkflowHistoryJoinState>(c.db),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.step("start", async (c) => {
-			c.state.status = "running";
+			await updateRecord<WorkflowHistoryJoinState>(c.db, (record) => {
+				record.status = "running";
+			});
 			return { ready: true };
 		});
 
@@ -168,12 +208,14 @@ export const workflowHistoryJoin = actor({
 		});
 
 		await ctx.step("merge-results", async (c) => {
-			c.state.status = "completed";
-			c.state.result = {
-				api: results["fetch-api"].data,
-				rows: results["query-db"].rows,
-				cacheHit: results["check-cache"].hit,
-			};
+			await updateRecord<WorkflowHistoryJoinState>(c.db, (record) => {
+				record.status = "completed";
+				record.result = {
+					api: results["fetch-api"].data,
+					rows: results["query-db"].rows,
+					cacheHit: results["check-cache"].hit,
+				};
+			});
 			return { merged: true };
 		});
 	}),
@@ -187,16 +229,22 @@ export type WorkflowHistoryRaceState = {
 };
 
 export const workflowHistoryRace = actor({
-	createState: (c): WorkflowHistoryRaceState => ({
-		id: c.key[0] as string,
-		status: "running",
-	}),
+	db: recordDb(),
+	onCreate: async (c) => {
+		await saveRecord<WorkflowHistoryRaceState>(c.db, {
+			id: c.key[0] as string,
+			status: "running",
+		});
+	},
 	actions: {
-		getState: (c): WorkflowHistoryRaceState => c.state,
+		getState: (c): Promise<WorkflowHistoryRaceState> =>
+			loadRecord<WorkflowHistoryRaceState>(c.db),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.step("begin", async (c) => {
-			c.state.status = "running";
+			await updateRecord<WorkflowHistoryRaceState>(c.db, (record) => {
+				record.status = "running";
+			});
 			return { started: true };
 		});
 
@@ -221,9 +269,11 @@ export const workflowHistoryRace = actor({
 		]);
 
 		await ctx.step("use-result", async (c) => {
-			c.state.status = "completed";
-			c.state.winner = winner;
-			c.state.result = value.provider;
+			await updateRecord<WorkflowHistoryRaceState>(c.db, (record) => {
+				record.status = "completed";
+				record.winner = winner;
+				record.result = value.provider;
+			});
 			return { used: value.provider };
 		});
 	}),
@@ -280,11 +330,14 @@ const FULL_WORKFLOW_ITEMS = [
 ];
 
 export const workflowHistoryFull = actor({
-	createState: (c): WorkflowHistoryFullState => ({
-		id: c.key[0] as string,
-		status: "pending",
-		seededMessages: false,
-	}),
+	db: recordDb(),
+	onCreate: async (c) => {
+		await saveRecord<WorkflowHistoryFullState>(c.db, {
+			id: c.key[0] as string,
+			status: "pending",
+			seededMessages: false,
+		});
+	},
 	queues: {
 		[QUEUE_ORDER_CREATED]: queue<OrderCreatedMessage>(),
 		[QUEUE_ORDER_UPDATED]: queue<OrderUpdatedMessage>(),
@@ -294,35 +347,48 @@ export const workflowHistoryFull = actor({
 		[QUEUE_ORDER_OPTIONAL]: queue<OrderOptionalMessage>(),
 	},
 	actions: {
-		getState: (c): WorkflowHistoryFullState => c.state,
+		getState: (c): Promise<WorkflowHistoryFullState> =>
+			loadRecord<WorkflowHistoryFullState>(c.db),
 		seedMessages: async (c) => {
-			if (c.state.seededMessages) return;
+			const record = await loadRecord<WorkflowHistoryFullState>(c.db);
+			if (record.seededMessages) return;
 			for (const seed of FULL_WORKFLOW_MESSAGE_SEEDS) {
 				await c.queue.send(seed.name, seed.payload);
 			}
-			c.state.seededMessages = true;
+			await updateRecord<WorkflowHistoryFullState>(c.db, (record) => {
+				record.seededMessages = true;
+			});
 		},
 	},
 	run: workflow(async (ctx) => {
 		await ctx.step("bootstrap", async (c) => {
-			c.state.status = "running";
-			c.state.lastStep = "bootstrap";
-			c.state.startedAt = Date.now();
+			const updated = await updateRecord<WorkflowHistoryFullState>(
+				c.db,
+				(record) => {
+					record.status = "running";
+					record.lastStep = "bootstrap";
+					record.startedAt = Date.now();
+				},
+			);
 			return {
-				requestId: `req-${c.state.id}`,
+				requestId: `req-${updated.id}`,
 				startedAt: Date.now(),
 			};
 		});
 
 		await ctx.step("validate-input", async (c) => {
-			c.state.lastStep = "validate-input";
+			await updateRecord<WorkflowHistoryFullState>(c.db, (record) => {
+				record.lastStep = "validate-input";
+			});
 			return true;
 		});
 
 		await ctx.rollbackCheckpoint("checkpoint-after-validation");
 
 		await ctx.step("load-user-profile", async (c) => {
-			c.state.lastStep = "load-user-profile";
+			await updateRecord<WorkflowHistoryFullState>(c.db, (record) => {
+				record.lastStep = "load-user-profile";
+			});
 			return {
 				id: "user-123",
 				tier: "standard",
@@ -331,12 +397,16 @@ export const workflowHistoryFull = actor({
 		});
 
 		await ctx.step("compute-discount", async (c) => {
-			c.state.lastStep = "compute-discount";
+			await updateRecord<WorkflowHistoryFullState>(c.db, (record) => {
+				record.lastStep = "compute-discount";
+			});
 			return { percent: 5, reason: "tier-discount" };
 		});
 
 		await ctx.step("ephemeral-cache-check", async (c) => {
-			c.state.lastStep = "ephemeral-cache-check";
+			await updateRecord<WorkflowHistoryFullState>(c.db, (record) => {
+				record.lastStep = "ephemeral-cache-check";
+			});
 			return { cacheHit: false, tier: "standard" };
 		});
 
@@ -488,9 +558,11 @@ export const workflowHistoryFull = actor({
 		await ctx.removed("legacy-step-placeholder", "step");
 
 		await ctx.step("finalize", async (c) => {
-			c.state.lastStep = "finalize";
-			c.state.status = "completed";
-			c.state.completedAt = Date.now();
+			await updateRecord<WorkflowHistoryFullState>(c.db, (record) => {
+				record.lastStep = "finalize";
+				record.status = "completed";
+				record.completedAt = Date.now();
+			});
 			return true;
 		});
 	}),
@@ -510,35 +582,56 @@ export type WorkflowHistoryInProgressInput = {
 };
 
 export const workflowHistoryInProgress = actor({
-	createState: (
-		c,
-		input?: WorkflowHistoryInProgressInput,
-	): WorkflowHistoryInProgressState => ({
-		id: c.key[0] as string,
-		status: "running",
-		processingDurationMs: input?.processingDurationMs ?? 30000,
-		progress: 0,
-	}),
+	db: recordDb(),
+	onCreate: async (c, input?: WorkflowHistoryInProgressInput) => {
+		await saveRecord<WorkflowHistoryInProgressState>(c.db, {
+			id: c.key[0] as string,
+			status: "running",
+			processingDurationMs: input?.processingDurationMs ?? 30000,
+			progress: 0,
+		});
+	},
 	actions: {
-		getState: (c): WorkflowHistoryInProgressState => c.state,
+		getState: (c): Promise<WorkflowHistoryInProgressState> =>
+			loadRecord<WorkflowHistoryInProgressState>(c.db),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.step("init", async (c) => {
-			c.state.startedAt = Date.now();
-			c.state.progress = 10;
+			await updateRecord<WorkflowHistoryInProgressState>(
+				c.db,
+				(record) => {
+					record.startedAt = Date.now();
+					record.progress = 10;
+				},
+			);
 			return { initialized: true };
 		});
 
 		await ctx.step("fetch-data", async (c) => {
-			c.state.progress = 25;
+			await updateRecord<WorkflowHistoryInProgressState>(
+				c.db,
+				(record) => {
+					record.progress = 25;
+				},
+			);
 			return { fetched: true, records: 100 };
 		});
 
 		await ctx.step("process", async (c) => {
-			c.state.progress = 42;
-			await delay(c.state.processingDurationMs);
-			c.state.status = "completed";
-			c.state.completedAt = Date.now();
+			const updated = await updateRecord<WorkflowHistoryInProgressState>(
+				c.db,
+				(record) => {
+					record.progress = 42;
+				},
+			);
+			await delay(updated.processingDurationMs);
+			await updateRecord<WorkflowHistoryInProgressState>(
+				c.db,
+				(record) => {
+					record.status = "completed";
+					record.completedAt = Date.now();
+				},
+			);
 			return { processed: true };
 		});
 	}),
@@ -555,21 +648,29 @@ export type WorkflowHistoryRetryingState = {
 const RETRY_MAX_RETRIES = 20;
 
 export const workflowHistoryRetrying = actor({
-	createState: (c): WorkflowHistoryRetryingState => ({
-		id: c.key[0] as string,
-		status: "running",
-		attempts: 0,
-		succeedAfter: 999,
-	}),
+	db: recordDb(),
+	onCreate: async (c) => {
+		await saveRecord<WorkflowHistoryRetryingState>(c.db, {
+			id: c.key[0] as string,
+			status: "running",
+			attempts: 0,
+			succeedAfter: 999,
+		});
+	},
 	actions: {
-		getState: (c): WorkflowHistoryRetryingState => c.state,
-		allowSuccess: (c, afterAttempt?: number) => {
-			c.state.succeedAfter = afterAttempt ?? c.state.attempts + 1;
+		getState: (c): Promise<WorkflowHistoryRetryingState> =>
+			loadRecord<WorkflowHistoryRetryingState>(c.db),
+		allowSuccess: async (c, afterAttempt?: number) => {
+			await updateRecord<WorkflowHistoryRetryingState>(c.db, (record) => {
+				record.succeedAfter = afterAttempt ?? record.attempts + 1;
+			});
 		},
 	},
 	run: workflow(async (ctx) => {
 		await ctx.step("start", async (c) => {
-			c.state.status = "running";
+			await updateRecord<WorkflowHistoryRetryingState>(c.db, (record) => {
+				record.status = "running";
+			});
 			return { ready: true };
 		});
 
@@ -579,14 +680,23 @@ export const workflowHistoryRetrying = actor({
 			retryBackoffBase: 250,
 			retryBackoffMax: 1500,
 			run: async (c) => {
-				c.state.attempts += 1;
-				if (c.state.attempts < c.state.succeedAfter) {
-					const error = new Error("Connection timeout after 5000ms");
-					c.state.lastError = error.message;
-					throw error;
+				const updated =
+					await updateRecord<WorkflowHistoryRetryingState>(
+						c.db,
+						(record) => {
+							record.attempts += 1;
+							if (record.attempts < record.succeedAfter) {
+								record.lastError =
+									"Connection timeout after 5000ms";
+							} else {
+								record.status = "completed";
+								record.lastError = undefined;
+							}
+						},
+					);
+				if (updated.lastError) {
+					throw new Error(updated.lastError);
 				}
-				c.state.status = "completed";
-				c.state.lastError = undefined;
 				return { success: true };
 			},
 		});
@@ -603,17 +713,23 @@ export type WorkflowHistoryFailedState = {
 const FAILED_MAX_RETRIES = 3;
 
 export const workflowHistoryFailed = actor({
-	createState: (c): WorkflowHistoryFailedState => ({
-		id: c.key[0] as string,
-		status: "running",
-		attempts: 0,
-	}),
+	db: recordDb(),
+	onCreate: async (c) => {
+		await saveRecord<WorkflowHistoryFailedState>(c.db, {
+			id: c.key[0] as string,
+			status: "running",
+			attempts: 0,
+		});
+	},
 	actions: {
-		getState: (c): WorkflowHistoryFailedState => c.state,
+		getState: (c): Promise<WorkflowHistoryFailedState> =>
+			loadRecord<WorkflowHistoryFailedState>(c.db),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.step("init", async (c) => {
-			c.state.status = "running";
+			await updateRecord<WorkflowHistoryFailedState>(c.db, (record) => {
+				record.status = "running";
+			});
 			return { initialized: true };
 		});
 
@@ -627,11 +743,16 @@ export const workflowHistoryFailed = actor({
 			retryBackoffBase: 200,
 			retryBackoffMax: 800,
 			run: async (c) => {
-				c.state.attempts += 1;
 				const error = new Error(
 					"Database connection failed: ECONNREFUSED",
 				);
-				c.state.lastError = error.message;
+				await updateRecord<WorkflowHistoryFailedState>(
+					c.db,
+					(record) => {
+						record.attempts += 1;
+						record.lastError = error.message;
+					},
+				);
 				throw error;
 			},
 		});

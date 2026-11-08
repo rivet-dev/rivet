@@ -2,36 +2,36 @@ import { actor, UserError } from "rivetkit";
 
 // Actor with synchronous actions
 export const syncActionActor = actor({
-	state: { value: 0 },
+	createVars: () => ({ value: 0 }),
 	actions: {
 		// Simple synchronous action that returns a value directly
 		increment: (c, amount = 1) => {
-			c.state.value += amount;
-			return c.state.value;
+			c.vars.value += amount;
+			return c.vars.value;
 		},
 		// Synchronous action that returns an object
 		getInfo: (c) => {
 			return {
-				currentValue: c.state.value,
+				currentValue: c.vars.value,
 				timestamp: Date.now(),
 			};
 		},
 		// Synchronous action with no return value (void)
 		reset: (c) => {
-			c.state.value = 0;
+			c.vars.value = 0;
 		},
 	},
 });
 
 // Actor with asynchronous actions
 export const asyncActionActor = actor({
-	state: { value: 0, data: null as any },
+	createVars: () => ({ value: 0, data: null as any }),
 	actions: {
 		// Async action with a delay
 		delayedIncrement: async (c, amount = 1) => {
 			await Promise.resolve();
-			c.state.value += amount;
-			return c.state.value;
+			c.vars.value += amount;
+			return c.vars.value;
 		},
 		// Async action that simulates an API call
 		fetchData: async (c, id: string) => {
@@ -39,7 +39,7 @@ export const asyncActionActor = actor({
 
 			// Simulate response data
 			const data = { id, timestamp: Date.now() };
-			c.state.data = data;
+			c.vars.data = data;
 			return data;
 		},
 		// Async action with error handling
@@ -57,7 +57,7 @@ export const asyncActionActor = actor({
 
 // Actor with promise actions
 export const promiseActor = actor({
-	state: { results: [] as string[] },
+	createVars: () => ({ results: [] as string[] }),
 	actions: {
 		// Action that returns a resolved promise
 		resolvedPromise: (_c) => {
@@ -66,7 +66,7 @@ export const promiseActor = actor({
 		// Action that returns a promise that resolves after a delay
 		delayedPromise: (c): Promise<string> => {
 			return new Promise<string>((resolve) => {
-				c.state.results.push("delayed");
+				c.vars.results.push("delayed");
 				resolve("delayed value");
 			});
 		},
@@ -76,7 +76,7 @@ export const promiseActor = actor({
 		},
 		// Action to check the collected results
 		getResults: (c) => {
-			return c.state.results;
+			return c.vars.results;
 		},
 	},
 });

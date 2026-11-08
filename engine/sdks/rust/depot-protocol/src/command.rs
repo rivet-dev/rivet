@@ -1,4 +1,5 @@
 //! Stable command identities and generated request and response payloads.
+use rivet_data::families::{VersionFamily, VersionedFamily};
 use rivet_keys::keys::tags;
 use std::time::Duration;
 use vbare::Versioned;
@@ -33,8 +34,23 @@ pub trait Command: Send + Sync + 'static {
 	/// the handler decides from the contents it reads, never from the presence of a key.
 	const SPECULATIVE_CREATE: bool = false;
 	const TIMEOUT: Duration = Duration::from_secs(5);
-	type Request: Versioned<Latest: Send>;
-	type Response: Versioned<Latest: Send>;
+	/// The client and the host can run different binaries during a rolling deploy, so each
+	/// body is encoded at its envelope family's negotiated version, never the compiled latest.
+	type Request: VersionedFamily<Latest: Send>;
+	type Response: VersionedFamily<Latest: Send>;
+}
+
+/// The version to encode a command body of envelope `V` at. A body with a family takes the
+/// family's negotiated version from `write_version`, capped at the newest version `V`
+/// encodes, since a family can be newer than one of its envelopes. A body without a family
+/// uses its envelope's only version.
+pub fn body_version<V: VersionedFamily>(
+	write_version: impl FnOnce(VersionFamily) -> anyhow::Result<u16>,
+) -> anyhow::Result<u16> {
+	match V::FAMILY {
+		Some(family) => Ok(write_version(family)?.min(V::LATEST)),
+		None => Ok(V::LATEST),
+	}
 }
 
 pub type Request<C> = <<C as Command>::Request as Versioned>::Latest;

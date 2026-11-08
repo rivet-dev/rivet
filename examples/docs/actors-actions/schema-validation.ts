@@ -7,7 +7,7 @@ const IncrementSchema = z.object({
 });
 
 const counter = actor({
-  state: { count: 0 },
+  vars: { count: 0 },
   actions: {
     increment: (c, params: unknown) => {
       // Validate parameters
@@ -18,8 +18,8 @@ const counter = actor({
           metadata: { errors: result.error.issues }
         });
       }
-      c.state.count += result.data.count;
-      return c.state.count;
+      c.vars.count += result.data.count;
+      return c.vars.count;
     }
   }
 });

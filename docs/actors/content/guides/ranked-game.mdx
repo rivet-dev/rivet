@@ -9,7 +9,7 @@ import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
 <Diagram
   id="ranked-game"
-  label="The player calls queueForMatch on the rankedMatchmaker Actor. The matchmaker reads the player's rating with getRating from that player's rankedPlayer Actor, pairs two players whose rating windows overlap, creates a rankedMatch Actor, and sends assignmentReady back. The player calls updatePosition and shoot on the match, which broadcasts snapshot events. When someone reaches the score limit, the match sends matchCompleted with the new ratings to the matchmaker, which calls applyMatchResult on both rankedPlayer Actors and updatePlayer on the rankedLeaderboard Actor. The numbers show the order of the calls. There is one rankedPlayer Actor per username and one rankedMatch Actor per match."
+  label="The player calls queueForMatch on the rankedMatchmaker Actor. The matchmaker reads the player's rating with getRating from that player's rankedPlayer Actor, pairs two players whose rating windows overlap, creates a rankedMatch Actor, and sends assignmentReady back. The player calls updatePosition and shoot on the match, which broadcasts snapshot events. When someone reaches the score limit, the match calls matchCompleted with the new ratings on the matchmaker, which calls applyMatchResult on both rankedPlayer Actors and updatePlayer on the rankedLeaderboard Actor. The numbers show the order of the calls. There is one rankedPlayer Actor per username and one rankedMatch Actor per match."
   stackLabel="One per match or username"
   nodes={[
     { id: "client", x: 20, y: 40, w: 130, h: 240, title: "Player", subtitle: "browser client" },
@@ -32,7 +32,7 @@ import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
 What we'll build:
 
-- A `rankedPlayer` Actor per username that stores the player's rating, wins, and losses.
+- A `rankedPlayer` Actor per username that stores the player's rating, wins, and losses in SQLite.
 - A `rankedMatchmaker` Actor that pairs players by rating and widens each player's search window the longer they wait.
 - A `rankedMatch` Actor per duel that runs a 20 tick per second loop, checks movement, and resolves shots.
 - Elo rating updates and a `rankedLeaderboard` Actor that keeps the top 20 players.
@@ -51,14 +51,16 @@ npm add rivetkit
 
 One `rankedMatchmaker` Actor, keyed `["main"]`, owns the queue. It stores waiting players in a `player_pool` table in its SQLite database and pairs them by rating:
 
-<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/ranked/matchmaker.ts" title="matchmaker.ts" highlight="run-loop,queue,pairing" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/ranked/matchmaker.ts" title="matchmaker.ts" highlight="queue,retry,pairing" />
 
 - The client only sends a username. The matchmaker reads the rating itself with `getRating` on that player's `rankedPlayer` Actor, so a client cannot queue with a made-up rating.
 - Each player's window starts at 50 rating points and grows by 25 per second of waiting, up to 500. Two players match only if their difference fits inside both windows. The player who has waited longest is paired first, with the closest opponent that fits.
-- `run` waits for the next queue message with a 2 second timeout. When nothing arrives, it runs `attemptPairing` anyway, because the windows keep growing while nobody new joins.
-- Writes go through the queue, so `queueForMatch`, `unqueueForMatch`, and `matchCompleted` never interleave. `onDisconnect` removes a player who closes the tab.
+- `queueForMatch` adds the player to `player_pool` and calls `attemptPairing` right away. The windows keep growing while nobody new joins, so `onWake` also starts `runPairingRetryTicker`, which calls `attemptPairing` every 2 seconds.
+- Actions and the retry loop run at the same time, so `attemptPairing` picks a pair and removes both players from `player_pool` in one `c.db.transaction`. Two pairings at once can't claim the same player.
+- `createRankedMatch` creates the `rankedMatch` Actor after the transaction commits, because a transaction must not wait on another Actor. If creating it fails, `returnToPool` puts the players who are still connected back in their old places.
+- `onDisconnect` removes a player who closes the tab.
 
-A second loop, started with `c.waitUntil(...)`, sends every connection its own `queueUpdate` once a second. A queued player gets their wait time and current rating range. It uses `conn.send(...)` instead of `c.broadcast(...)` because each player gets different numbers.
+`onWake` starts a second loop, `runQueueUpdateTicker`, that sends every connection its own `queueUpdate` once a second. A queued player gets their wait time and current rating range. It uses `conn.send(...)` instead of `c.broadcast(...)` because each player gets different numbers. The two loops run separately, so a slow match creation never holds up the queue updates. Both wait with `c.abortSignal`, so they exit as soon as the Actor starts to sleep, and `onSleep` waits for them. Waiting players stay connected, which keeps the matchmaker awake.
 
 </Step>
 
@@ -66,10 +68,12 @@ A second loop, started with `c.waitUntil(...)`, sends every connection its own `
 
 When two players pair, the matchmaker creates a `rankedMatch` Actor with both usernames and ratings as input, then broadcasts `assignmentReady`. The match is a short realtime duel, first to 5 hits:
 
-<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/ranked/match.ts" title="match.ts" highlight="tick,validate" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/ranked/match.ts" title="match.ts" highlight="tick,validate,save" />
 
+- `onCreate` saves both usernames, ratings, and random spawn points to the match's SQLite database once. `createVars` loads them into `c.vars` on every start, with the phase, tick, positions, scores, and `resultReported` from the last save. Both players start without a connection, because none survives a restart.
 - The match starts in `waiting` and switches to `live` in `onConnect` once both players are connected. A connection whose `username` param is not one of the two assigned players is dropped with `invalid_player`.
-- `run` ticks every 50 ms (`TICK_MS`). Each tick checks the win condition and broadcasts a `snapshot`.
+- `onWake` starts `runMatch` as a background task on every start, and `onSleep` waits for it to save and exit. It ticks every 50 ms (`TICK_MS`). Each tick checks the win condition and broadcasts a `snapshot`. Connected players keep the match awake. Once both leave, it sleeps, and the next connection resumes it from the last save.
+- Ticks and actions only change memory. Every `SNAPSHOT_INTERVAL_MS` (1 second) in every phase, and once more when the Actor stops, `saveMatch` writes the match and both players in one `c.db.transaction`, so a crash loses at most about a second of play.
 - The client owns its own movement and sends positions, so movement feels instant. `updatePosition` never trusts them: it caps the distance by `MAX_SPEED` times the time since the last update and clamps to the world bounds. A teleport turns into a normal step.
 - Combat is decided on the server. `shoot` takes only a direction and checks range and angle against the server's positions, so a client cannot claim a hit.
 
@@ -86,7 +90,10 @@ When someone reaches the score limit, the match computes both new ratings and re
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/ranked/match.ts" title="match.ts" region="elo" />
 
 - `calculateElo` uses a K-factor of 32 with the ratings the players had when they were paired.
-- `resultReported` makes sure the result is sent once, even though both the tick loop and `onDestroy` check it. If the match is destroyed without a winner, it sends an empty `matchCompleted` so the matchmaker still deletes the match's rows.
+- `matchCompleted` is an action on the matchmaker, so the call returns once both players and the leaderboard have the result.
+- `resultReported` keeps the match from sending the result again once it went through, even though both the tick loop and `onDestroy` check it. `onDestroy` waits for the loop to exit first, so a report still in flight is not sent twice, and the tick loop saves right after reporting instead of waiting for the next periodic save.
+- Reporting is safe to repeat, so a report that fails, even partway through, arms a `retryReport` schedule after `REPORT_RETRY_MS` instead of stopping the loop. A schedule wakes the match even after both players have left and it went to sleep. Each `rankedPlayer` records the match id in the same transaction as the result and ignores a match it has already applied.
+- If the match is destroyed without a winner, it calls `matchCompleted` with empty usernames so the matchmaker still deletes the match's rows.
 
 The matchmaker then writes the result to each player and to the leaderboard:
 
@@ -96,8 +103,9 @@ The matchmaker then writes the result to each player and to the leaderboard:
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/ranked/leaderboard.ts" title="leaderboard.ts" />
 </CodeGroup>
 
-- `rankedPlayer` keeps the rating in `c.state`, keyed by username, so it outlives every match. `applyMatchResult` sets the new rating, counts the win or loss, and broadcasts `stateUpdate` to anyone watching that profile.
-- `rankedLeaderboard` is one Actor keyed `["main"]`. The `updatePlayer` action only enqueues. The `run` loop upserts one row at a time into the `leaderboard` table, then broadcasts the top 20 as `leaderboardUpdate`.
+- `rankedPlayer` keeps the rating, wins, and losses in a one-row `profile` table in its SQLite database, keyed by username, so it outlives every match. `applyMatchResult` records the match id in `applied_matches` and, only if it is new, sets the new rating and adds the win or loss in one `apply-match-result` transaction. Two different results at once are both counted, and the same result sent twice counts once. It then broadcasts `stateUpdate` to anyone watching that profile.
+- `rankedLeaderboard` is one Actor keyed `["main"]`. `updatePlayer` upserts the player's row into the `leaderboard` table in one statement, then broadcasts the top 20 as `leaderboardUpdate`.
+- Two matches for the same player can finish at once and report out of order. Every result adds one win or loss, so the upsert only replaces a row with a profile that has at least as many games played. An older profile never overwrites a newer one.
 - The leaderboard copies rating, wins, and losses from `getProfile`. The `rankedPlayer` Actor stays the source of truth.
 
 <Warning>
@@ -128,7 +136,7 @@ The menu queues through the matchmaker and waits for an assignment. The game the
 <CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/ranked/ranked-game.ts" title="ranked-game.ts" highlight="connect,send" />
 </CodeGroup>
 
-- `queueForMatch` returns the connection id. `waitForAssignment` ignores any `assignmentReady` for another connection, so two tabs with the same username do not both take the match. It also calls `getAssignment` once, in case the event fired before the listener was attached.
+- `queueForMatch` returns the connection id. `waitForAssignment` ignores any `assignmentReady` for another connection, so two tabs with the same username do not both take the match. It also calls `getAssignment` once, in case the event fired before the listener was attached. That happens whenever `queueForMatch` itself completes the pair.
 - The game connects with `params: { username }`, which is how `onConnect` finds the player.
 - The local player moves every frame and sends `updatePosition` every 50 ms. When a `snapshot` puts the player more than 40 pixels away, the client snaps to the server's position. Other players are drawn with interpolation toward their last snapshot position.
 - The game is drawn on a canvas with `requestAnimationFrame`. React state is only used for menus.
@@ -154,4 +162,4 @@ Open `http://localhost:5173` and pick **Ranked**. Click **Queue for Match**, the
 
 - [Turn-Based Game](/guides/turn-based-game): invite codes and a match that waits between moves.
 - [Idle Game](/guides/idle-game): a per-player Actor with a shared leaderboard.
-- [Queues](/actors/docs/queues): how queue messages keep the matchmaker's writes in order.
+- [Transactions](/actors/docs/sqlite#transactions): how the matchmaker claims a pair when requests overlap.

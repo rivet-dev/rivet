@@ -1,36 +1,32 @@
 import { actor, event } from "rivetkit";
 
 export const counterConn = actor({
-	state: {
-		connectionCount: 0,
-	},
 	events: {
 		newCount: event<number>(),
 	},
-	connState: { count: 0 },
-	onConnect: (c, _conn) => {
-		c.state.connectionCount += 1;
+	// Each live connection keeps its own count, keyed by connection ID.
+	createVars: () => ({ counts: new Map<string, number>() }),
+	onConnect: (c, conn) => {
+		c.vars.counts.set(conn.id, 0);
 	},
-	onDisconnect: (c, _conn) => {
-		// Note: We can't determine if disconnect was graceful from here
-		// For testing purposes, we'll decrement on all disconnects
-		// In real scenarios, you'd use connection tracking with timeouts
-		c.state.connectionCount -= 1;
+	onDisconnect: (c, conn) => {
+		c.vars.counts.delete(conn.id);
 	},
 	actions: {
 		increment: (c, x: number) => {
-			c.conn.state.count += x;
-			c.broadcast("newCount", c.conn.state.count);
+			const count = (c.vars.counts.get(c.conn.id) ?? 0) + x;
+			c.vars.counts.set(c.conn.id, count);
+			c.broadcast("newCount", count);
 		},
 		setCount: (c, x: number) => {
-			c.conn.state.count = x;
+			c.vars.counts.set(c.conn.id, x);
 			c.broadcast("newCount", x);
 		},
 		getCount: (c) => {
-			return c.conn.state.count;
+			return c.vars.counts.get(c.conn.id) ?? 0;
 		},
 		getConnectionCount: (c) => {
-			return c.state.connectionCount;
+			return c.vars.counts.size;
 		},
 	},
 });

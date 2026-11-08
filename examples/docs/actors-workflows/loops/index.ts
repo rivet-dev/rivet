@@ -1,12 +1,23 @@
 import { actor, queue, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 export const workflowCounter = actor({
-  state: {
-    value: 0,
-    processed: 0,
-    lastOperationId: null as string | null,
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS counter (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          value INTEGER NOT NULL,
+          processed INTEGER NOT NULL,
+          last_operation_id TEXT
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO counter (id, value, processed, last_operation_id) VALUES (1, 0, 0, NULL)",
+      );
+    },
+  }),
   queues: {
     counter: queue<{ delta: number }>(),
   },
@@ -21,7 +32,16 @@ export const workflowCounter = actor({
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{
+        value: number;
+        processed: number;
+        lastOperationId: string | null;
+      }>(
+        "SELECT value, processed, last_operation_id AS lastOperationId FROM counter WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 
@@ -43,9 +63,11 @@ async function applyCounterCommand(
     nextValue: number;
     operationId: string;
   };
-  ctx.state.value = result.nextValue;
-  ctx.state.lastOperationId = result.operationId;
-  ctx.state.processed += 1;
+  await ctx.db.execute(
+    "UPDATE counter SET value = ?, last_operation_id = ?, processed = processed + 1 WHERE id = 1",
+    result.nextValue,
+    result.operationId,
+  );
 }
 
 export const registry = setup({ use: { workflowCounter } });

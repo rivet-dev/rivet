@@ -19,7 +19,7 @@ Open the [Rivet dashboard](https://dashboard.rivet.dev), navigate to your counte
 - **No bundler.** Each tab is a single static `index.html` with inline `<script>`. rivetkit serves the bytes as-is — but the `source` field accepts any directory, so Vite/webpack/React/Vue build outputs work the same way.
 - **Hide built-in tabs.** `{ id: "queue", hidden: true }` removes the queue tab from the strip when the actor doesn't use that subsystem.
 - **Custom icons.** `icon: "tag"` on a tab descriptor maps to a dashboard glyph; unknown ids fall back to a neutral icon.
-- **Read state, invoke actions.** Tabs hit `/inspector/state`, `/inspector/action/<name>`, `/inspector/rpcs`, and the rest of the inspector HTTP API with `Authorization: Bearer ${authToken}` — the same token the built-in inspector tabs use.
+- **Read inspector data, invoke actions.** Tabs hit `/inspector/action/<name>`, `/inspector/rpcs`, and the rest of the inspector HTTP API with `Authorization: Bearer ${authToken}`. This is the same token the built-in inspector tabs use.
 - **Dashboard-native styling.** Both tabs link `../../tab.css`, a stylesheet the engine serves that mirrors the dashboard's design tokens under `--rivet-*` CSS variables. Tabs look at home in the inspector without any custom CSS.
 - **Live light/dark theme.** The dashboard signals its active theme in the `v1Init` postMessage; tabs apply the `dark` class to `<html>` and flip in lockstep when the user toggles theme in the dashboard's user dropdown.
 - **TypeScript types.** Tabs built with TypeScript can `import type { V1Init, InspectorStateResponse, ... } from "rivetkit/inspector-tab"` for compile-time safety on the handshake and HTTP shapes.
@@ -27,8 +27,8 @@ Open the [Rivet dashboard](https://dashboard.rivet.dev), navigate to your counte
 ## Implementation
 
 - **Actor + tab declarations** ([`src/index.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/inspector-tabs/src/index.ts)): a counter actor whose `inspector.tabs[]` array declares both custom tabs plus the queue-hide modifier. Inline JSDoc walks through every property (`id`, `label`, `source`, `icon`, `hidden`) and notes that `source` can point at any built-asset directory.
-- **Counter tab** ([`inspector-tabs/counter/index.html`](https://github.com/rivet-dev/rivet/tree/main/examples/inspector-tabs/inspector-tabs/counter/index.html)): live count, +1 / +5 / +10 / reset buttons, recent-changes history. Demonstrates invoking actor actions from a tab and polling state on a 1 s tick. Heavy inline comments walk through the postMessage contract and auth flow — this file is the deeper tutorial.
-- **Info tab** ([`inspector-tabs/info/index.html`](https://github.com/rivet-dev/rivet/tree/main/examples/inspector-tabs/inspector-tabs/info/index.html)): actor id, registered actions, raw state JSON. Demonstrates calling multiple inspector endpoints in parallel with `Promise.all`. Leaner comments; pairs with Counter for the basics.
+- **Counter tab** ([`inspector-tabs/counter/index.html`](https://github.com/rivet-dev/rivet/tree/main/examples/inspector-tabs/inspector-tabs/counter/index.html)): live count, +1 / +5 / +10 / reset buttons, recent-changes history. Demonstrates invoking actor actions from a tab and polling the `getCounter` action on a 1 s tick. Heavy inline comments walk through the postMessage contract and auth flow. This file is the deeper tutorial.
+- **Info tab** ([`inspector-tabs/info/index.html`](https://github.com/rivet-dev/rivet/tree/main/examples/inspector-tabs/inspector-tabs/info/index.html)): actor id, registered actions, live counter JSON. Demonstrates calling multiple inspector endpoints in parallel with `Promise.all`. Leaner comments; pairs with Counter for the basics.
 
 ### The handshake contract
 
@@ -40,7 +40,7 @@ Every custom tab is a normal web page. The contract between the tab and the dash
 4. **Send `{ type: "ready", v: 1 }` to `window.parent`** once the tab mounts. If the dashboard doesn't see `ready` within 8 s it shows "Inspector UI didn't load."
 5. **Fetch inspector endpoints with `Authorization: Bearer ${authToken}`** — and post `{ type: "token-refresh-needed", v: 1 }` on a 401. Don't silently retry; wait for the next `init` instead.
 
-Inspector data routes live two directories up from the bundle: the tab loads at `/inspector/custom-tabs/<id>/`, so `../../state` resolves to `/inspector/state` on the same actor. The shared stylesheet is at `../../tab.css`. Absolute paths like `/inspector/state` would resolve to the engine root and 404 — always use the relative form.
+Inspector data routes live two directories up from the bundle: the tab loads at `/inspector/custom-tabs/<id>/`, so `../../rpcs` resolves to `/inspector/rpcs` on the same actor. The shared stylesheet is at `../../tab.css`. Absolute paths like `/inspector/rpcs` would resolve to the engine root and 404, so always use the relative form.
 
 ### TypeScript
 

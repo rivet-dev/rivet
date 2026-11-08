@@ -1,4 +1,5 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 function openResource(): string {
@@ -11,10 +12,20 @@ export const setupRunTeardownActor = actor({
   vars: {
     resource: null as string | null,
   },
-  state: {
-    initialized: false,
-    ticks: 0,
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS worker_status (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          initialized INTEGER NOT NULL,
+          ticks INTEGER NOT NULL
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO worker_status (id, initialized, ticks) VALUES (1, 0, 0)",
+      );
+    },
+  }),
   onWake: (c) => {
     c.vars.resource = openResource();
   },
@@ -26,18 +37,23 @@ export const setupRunTeardownActor = actor({
   run: workflow(async (ctx) => {
     await ctx.step("setup", async (step) => {
       if (!step.vars.resource) step.vars.resource = openResource();
-      step.state.initialized = true;
+      await step.db.execute("UPDATE worker_status SET initialized = 1 WHERE id = 1");
     });
 
     await ctx.loop("main-loop", async (loopCtx) => {
         await loopCtx.sleep("tick", 1_000);
         await loopCtx.step("tick-step", async (step) => {
-          step.state.ticks += 1;
+          await step.db.execute("UPDATE worker_status SET ticks = ticks + 1 WHERE id = 1");
         });
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{ initialized: number; ticks: number }>(
+        "SELECT initialized, ticks FROM worker_status WHERE id = 1",
+      );
+      return { initialized: rows[0].initialized === 1, ticks: rows[0].ticks };
+    },
   },
 });
 

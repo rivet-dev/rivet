@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { actor, event, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import {
 	Awareness,
 	applyAwarenessUpdate,
@@ -19,7 +20,6 @@ export type SyncEvent = { update: number[] };
 export type AwarenessEvent = { update: number[] };
 
 type DocumentInput = { title: string; createdAt: number };
-type DocumentState = { title: string; createdAt: number; updatedAt: number };
 
 type UpdateKind = "sync" | "awareness";
 
@@ -28,45 +28,63 @@ const toBytes = (update: number[]) => Uint8Array.from(update);
 
 // docs:start document
 export const document = actor({
-	// Track client awareness IDs per connection.
-	connState: {
-		clientIds: [] as number[],
-	},
 	events: {
 		sync: event<SyncEvent>(),
 		awareness: event<AwarenessEvent>(),
 	},
 
-	// Persistent metadata that survives restarts: https://rivet.dev/docs/actors/state
-	createState: (_c, input: DocumentInput): DocumentState => ({
-		title: input.title,
-		createdAt: input.createdAt,
-		updatedAt: input.createdAt,
+	// Metadata and the Yjs snapshot survive restarts: https://rivet.dev/docs/actors/sqlite
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS document (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					title TEXT NOT NULL,
+					snapshot BLOB,
+					created_at INTEGER NOT NULL,
+					updated_at INTEGER NOT NULL
+				)
+			`);
+		},
 	}),
 
-	// Load Yjs state from durable KV storage.
+	// Save the metadata from the creation input once, when the Actor is created.
+	onCreate: async (c, input: DocumentInput) => {
+		await c.db.execute(
+			"INSERT INTO document (id, title, created_at, updated_at) VALUES (1, ?, ?, ?)",
+			input.title,
+			input.createdAt,
+			input.createdAt,
+		);
+	},
+
+	// Rebuild the live Yjs document from the last saved snapshot.
 	createVars: async (c) => {
 		const doc = new Y.Doc();
-		const stored = await c.kv.get("yjs:doc", { type: "binary" });
-		if (stored) {
-			Y.applyUpdate(doc, stored);
+		const [row] = await c.db.execute<{ snapshot: Uint8Array | null }>(
+			"SELECT snapshot FROM document WHERE id = 1",
+		);
+		if (row?.snapshot) {
+			Y.applyUpdate(doc, row.snapshot);
 		}
 		const awareness = new Awareness(doc);
-		return { doc, awareness };
+		// Track client awareness IDs per connection, keyed by connection ID.
+		const clientIdsByConn = new Map<string, number[]>();
+		return { doc, awareness, clientIdsByConn };
 	},
 	// docs:end document
 
 	// docs:start presence
 	// docs:start disconnect
 	onDisconnect: (c, conn) => {
-		const clientIds = conn.state.clientIds;
+		const clientIds = c.vars.clientIdsByConn.get(conn.id) ?? [];
+		c.vars.clientIdsByConn.delete(conn.id);
 		if (clientIds.length === 0) {
 			return;
 		}
 		removeAwarenessStates(c.vars.awareness, clientIds, "disconnect");
 		const update = encodeAwarenessUpdate(c.vars.awareness, clientIds);
 		c.broadcast("awareness", { update: toNumbers(update) });
-		conn.state.clientIds = [];
 	},
 	// docs:end disconnect
 
@@ -88,8 +106,11 @@ export const document = actor({
 				Y.applyUpdate(c.vars.doc, bytes, "client");
 				// docs:start persist
 				const snapshot = Y.encodeStateAsUpdate(c.vars.doc);
-				await c.kv.put("yjs:doc", snapshot);
-				c.state.updatedAt = Date.now();
+				await c.db.execute(
+					"UPDATE document SET snapshot = ?, updated_at = ? WHERE id = 1",
+					snapshot,
+					Date.now(),
+				);
 				// docs:end persist
 				c.broadcast("sync", { update });
 				return;
@@ -100,10 +121,11 @@ export const document = actor({
 			const bytes = toBytes(update);
 			applyAwarenessUpdate(c.vars.awareness, bytes, "client");
 			if (typeof clientId === "number" && c.conn) {
-				const knownIds = c.conn.state.clientIds;
+				const knownIds = c.vars.clientIdsByConn.get(c.conn.id) ?? [];
 				if (!knownIds.includes(clientId)) {
 					knownIds.push(clientId);
 				}
+				c.vars.clientIdsByConn.set(c.conn.id, knownIds);
 			}
 			c.broadcast("awareness", { update });
 		},
@@ -120,10 +142,19 @@ export const document = actor({
 
 // docs:start list
 export const documentList = actor({
-	// One coordinator per workspace that indexes document actors.
-	state: {
-		documents: [] as DocumentSummary[],
-	},
+	// One coordinator per workspace that indexes document actors in SQLite.
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS documents (
+					id TEXT PRIMARY KEY,
+					title TEXT NOT NULL,
+					created_at INTEGER NOT NULL,
+					updated_at INTEGER NOT NULL
+				)
+			`);
+		},
+	}),
 
 	actions: {
 		createDocument: async (c, title: string) => {
@@ -147,14 +178,22 @@ export const documentList = actor({
 				createdAt,
 				updatedAt: createdAt,
 			};
-			c.state.documents.push(summary);
+			await c.db.execute(
+				"INSERT INTO documents (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
+				summary.id,
+				summary.title,
+				summary.createdAt,
+				summary.updatedAt,
+			);
 			return summary;
 		},
-		listDocuments: (c) => c.state.documents,
-		deleteDocument: (c, documentId: string) => {
-			c.state.documents = c.state.documents.filter(
-				(document) => document.id !== documentId,
-			);
+		listDocuments: async (c): Promise<DocumentSummary[]> => {
+			return (await c.db.execute(
+				"SELECT id, title, created_at AS createdAt, updated_at AS updatedAt FROM documents ORDER BY created_at",
+			)) as DocumentSummary[];
+		},
+		deleteDocument: async (c, documentId: string) => {
+			await c.db.execute("DELETE FROM documents WHERE id = ?", documentId);
 			return true;
 		},
 	},
