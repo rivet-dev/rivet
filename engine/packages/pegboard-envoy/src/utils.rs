@@ -79,6 +79,14 @@ impl UrlData {
 			.ok_or_else(|| WsError::InvalidRequest("missing `version` query parameter").build())?
 			.parse::<u32>()
 			.context(WsError::InvalidRequest("invalid `version` query parameter").build())?;
+		// The envoy indexes store versions with `encode_reverse_u32`, which only keeps
+		// higher versions first up to `i32::MAX`.
+		if version > i32::MAX as u32 {
+			return Err(WsError::InvalidRequest(
+				"`version` query parameter too large (> 2147483647)",
+			)
+			.build());
+		}
 
 		Ok(UrlData {
 			protocol_version,
@@ -89,3 +97,7 @@ impl UrlData {
 		})
 	}
 }
+
+#[cfg(test)]
+#[path = "../tests/support/utils.rs"]
+mod tests;
