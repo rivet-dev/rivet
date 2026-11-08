@@ -79,6 +79,14 @@ impl UrlData {
 			.ok_or_else(|| WsError::InvalidRequest("missing `version` query parameter").build())?
 			.parse::<u32>()
 			.context(WsError::InvalidRequest("invalid `version` query parameter").build())?;
+		// The envoy indexes store versions with `encode_reverse_u32`, which only keeps
+		// higher versions first up to `i32::MAX`.
+		if version > i32::MAX as u32 {
+			return Err(WsError::InvalidRequest(
+				"`version` query parameter too large (> 2147483647)",
+			)
+			.build());
+		}
 
 		Ok(UrlData {
 			protocol_version,
@@ -87,5 +95,28 @@ impl UrlData {
 			envoy_key,
 			version,
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn parse_version(version: u64) -> Result<UrlData> {
+		let url = url::Url::parse(&format!(
+			"ws://localhost/?protocol_version={MIN_PROTOCOL_VERSION}&namespace=default&pool_name=default&envoy_key=envoy&version={version}"
+		))
+		.unwrap();
+		UrlData::parse_url(url, MIN_PROTOCOL_VERSION)
+	}
+
+	#[test]
+	fn version_must_fit_reverse_index_encoding() {
+		assert_eq!(
+			parse_version(i32::MAX as u64).unwrap().version,
+			i32::MAX as u32
+		);
+		assert!(parse_version(i32::MAX as u64 + 1).is_err());
+		assert!(parse_version(u32::MAX as u64).is_err());
 	}
 }
