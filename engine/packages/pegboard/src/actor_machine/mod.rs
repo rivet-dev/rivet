@@ -264,9 +264,15 @@ impl DurableStateMachine for ActorStateMachine {
 				// running. Either way the envoy may hold the epoch, so it is only stopped, like
 				// a lost report: the epoch ends on the stopped report, once the envoy is
 				// proven gone, or at the stop deadline, so the next start never runs beside
-				// this one.
+				// this one. The wake that caused the start, such as an alarm whose timer already
+				// fired, is not dropped: the stopped epoch is reallocated, which retries until an
+				// envoy runs it. A start sent to a connection that died with the engine, before
+				// its envoy reconnected, fails here.
 				RuntimeEvent::Input(wire::ActorEvent::StartFailed(res)) => {
 					if res.epoch == state.epoch {
+						if state.pending_action == wire::PendingAction::PendingNone {
+							state.pending_action = wire::PendingAction::PendingReallocate;
+						}
 						let allocation = phase.allocation.clone();
 						effects.cancel_timer(wire::ActorTimer::StartTimeout(wire::StartTimeout {
 							epoch: state.epoch,
