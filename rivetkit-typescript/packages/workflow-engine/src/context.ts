@@ -2351,6 +2351,18 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		// Track all branch promises to wait for cleanup
 		const branchPromises: Promise<void>[] = [];
 
+		// Track active running in-process branches to know when all branches have yielded
+		let activeRunningBranches = branches.length;
+		const yieldWaiters: Array<() => void> = [];
+		const notifyActiveBranchesChanged = () => {
+			if (activeRunningBranches === 0) {
+				const waiters = yieldWaiters.splice(0, yieldWaiters.length);
+				for (const resolve of waiters) {
+					resolve();
+				}
+			}
+		};
+
 		// Track winner info
 		let winnerName: string | null = null;
 		let winnerValue: T | undefined;
@@ -2432,8 +2444,71 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				return output;
 			};
 
+			const handleBranchError = (error: unknown) => {
+				if (hasWinner) {
+					if (
+						error instanceof CancelledError ||
+						error instanceof EvictedError
+					) {
+						branchStatus.status = "cancelled";
+					} else {
+						lateErrors.push({
+							name: branch.name,
+							error: String(error),
+						});
+					}
+					entry.dirty = true;
+					return;
+				}
+
+				if (
+					error instanceof SleepError ||
+					error instanceof MessageWaitError ||
+					error instanceof StepFailedError
+				) {
+					schedulerYieldState = mergeSchedulerYield(
+						schedulerYieldState,
+						error,
+					);
+					branchStatus.status = "running";
+					branchStatus.error = undefined;
+					entry.dirty = true;
+					return;
+				}
+
+				if (
+					error instanceof EvictedError ||
+					error instanceof HistoryDivergedError ||
+					error instanceof EntryInProgressError ||
+					error instanceof RollbackCheckpointError ||
+					error instanceof RollbackStopError
+				) {
+					propagatedError = selectControlFlowError(
+						propagatedError,
+						error,
+					);
+					branchStatus.status = "running";
+					branchStatus.error = undefined;
+					entry.dirty = true;
+					return;
+				}
+
+				if (error instanceof CancelledError) {
+					branchStatus.status = "cancelled";
+				} else {
+					branchStatus.status = "failed";
+					branchStatus.output = undefined;
+					branchStatus.error = String(error);
+					errors[branch.name] = error as Error;
+				}
+				entry.dirty = true;
+			};
+
 			const branchPromise = runBranch().then(
 				async (output) => {
+					activeRunningBranches--;
+					notifyActiveBranchesChanged();
+
 					if (hasWinner) {
 						// This branch completed after a winner was determined
 						// Still record the completion for observability
@@ -2465,20 +2540,12 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					// Cancel other branches
 					raceAbortController.abort();
 				},
-				(error) => {
+				async (error) => {
+					activeRunningBranches--;
+					notifyActiveBranchesChanged();
+
 					if (hasWinner) {
-						if (
-							error instanceof CancelledError ||
-							error instanceof EvictedError
-						) {
-							branchStatus.status = "cancelled";
-						} else {
-							lateErrors.push({
-								name: branch.name,
-								error: String(error),
-							});
-						}
-						entry.dirty = true;
+						handleBranchError(error);
 						return;
 					}
 
@@ -2494,35 +2561,73 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 						branchStatus.status = "running";
 						branchStatus.error = undefined;
 						entry.dirty = true;
+
+						const deadline =
+							error instanceof SleepError
+								? error.deadline
+								: error instanceof StepFailedError
+									? error.retryAt
+									: undefined;
+
+						if (
+							deadline !== undefined &&
+							!hasWinner &&
+							!propagatedError &&
+							!raceAbortController.signal.aborted &&
+							activeRunningBranches > 0
+						) {
+							const delay = Math.max(0, deadline - Date.now());
+							const waitReason =
+								await this.waitForDeadlineOrYield(
+									delay,
+									raceAbortController,
+									yieldWaiters,
+								);
+
+							if (
+								waitReason === "deadline" &&
+								!hasWinner &&
+								!propagatedError &&
+								!raceAbortController.signal.aborted
+							) {
+								try {
+									const retryBranchCtx = this.createBranch(
+										branchLocation,
+										raceAbortController,
+									);
+									const output =
+										await branch.run(retryBranchCtx);
+									retryBranchCtx.validateComplete();
+
+									if (
+										!hasWinner &&
+										!propagatedError &&
+										!raceAbortController.signal.aborted
+									) {
+										hasWinner = true;
+										winnerName = branch.name;
+										winnerValue = output;
+
+										branchStatus.status = "completed";
+										branchStatus.output = output;
+										branchStatus.error = undefined;
+										raceData.winner = branch.name;
+										entry.dirty = true;
+
+										// Cancel other branches
+										raceAbortController.abort();
+										return;
+									}
+								} catch (retryError) {
+									handleBranchError(retryError);
+								}
+							}
+						}
+
 						return;
 					}
 
-					if (
-						error instanceof EvictedError ||
-						error instanceof HistoryDivergedError ||
-						error instanceof EntryInProgressError ||
-						error instanceof RollbackCheckpointError ||
-						error instanceof RollbackStopError
-					) {
-						propagatedError = selectControlFlowError(
-							propagatedError,
-							error,
-						);
-						branchStatus.status = "running";
-						branchStatus.error = undefined;
-						entry.dirty = true;
-						return;
-					}
-
-					if (error instanceof CancelledError) {
-						branchStatus.status = "cancelled";
-					} else {
-						branchStatus.status = "failed";
-						branchStatus.output = undefined;
-						branchStatus.error = String(error);
-						errors[branch.name] = error as Error;
-					}
-					entry.dirty = true;
+					handleBranchError(error);
 				},
 			);
 
@@ -2602,6 +2707,60 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				name,
 			},
 		);
+	}
+
+	private waitForDeadlineOrYield(
+		delay: number,
+		abortController: AbortController,
+		yieldWaiters: Array<() => void>,
+	): Promise<"deadline" | "yield" | "abort"> {
+		return new Promise<"deadline" | "yield" | "abort">((resolve) => {
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			let onAbort: (() => void) | undefined;
+
+			const cleanup = () => {
+				if (timer !== undefined) {
+					clearTimeout(timer);
+					timer = undefined;
+				}
+				if (onAbort) {
+					abortController.signal.removeEventListener(
+						"abort",
+						onAbort,
+					);
+					onAbort = undefined;
+				}
+				const idx = yieldWaiters.indexOf(onYield);
+				if (idx !== -1) {
+					yieldWaiters.splice(idx, 1);
+				}
+			};
+
+			const onYield = () => {
+				cleanup();
+				resolve("yield");
+			};
+
+			onAbort = () => {
+				cleanup();
+				resolve("abort");
+			};
+
+			if (abortController.signal.aborted) {
+				resolve("abort");
+				return;
+			}
+
+			abortController.signal.addEventListener("abort", onAbort, {
+				once: true,
+			});
+			yieldWaiters.push(onYield);
+
+			timer = setTimeout(() => {
+				cleanup();
+				resolve("deadline");
+			}, delay);
+		});
 	}
 
 	// === Removed ===
