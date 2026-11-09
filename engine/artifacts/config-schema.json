@@ -536,6 +536,15 @@
           "format": "uint",
           "minimum": 0.0
         },
+        "catalog": {
+          "description": "Namespace and pool catalog commands (namespace create, read and list; pool upsert and list). Their handlers serialize on one lock per process, so this bounds how many callers may wait on that lock rather than how many run. Defaults to 256.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
         "index": {
           "description": "Index inserts, deletes and listings. Defaults to 256.",
           "type": [
@@ -1986,6 +1995,7 @@
             "actor": null,
             "actor_event": null,
             "actor_read": null,
+            "catalog": null,
             "index": null
           },
           "allOf": [

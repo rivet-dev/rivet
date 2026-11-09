@@ -57,24 +57,26 @@ impl Command for PoolList {
 	type Response = rivet_data::versioned::PoolListResponse;
 }
 pub(crate) fn register(registry: &mut CommandRegistry, ctx: &EngineContext) -> Result<()> {
-	// Commands share the volume-opening lock so concurrent creates cannot claim one name.
+	// Commands share the volume-opening lock so concurrent creates cannot claim one name. The
+	// handlers serialize on it, so the admission bound only limits how many callers wait.
+	let concurrency = ctx.config().pegboard().command_concurrency.catalog();
 	let clock = ctx.env().clock();
-	registry.register_with_concurrency::<NamespaceCreate>(1, move |db, request| {
+	registry.register_with_concurrency::<NamespaceCreate>(concurrency, move |db, request| {
 		create_handler(clock.clone(), db, request)
 	})?;
 	let clock = ctx.env().clock();
-	registry.register_with_concurrency::<NamespaceRead>(1, move |db, request| {
+	registry.register_with_concurrency::<NamespaceRead>(concurrency, move |db, request| {
 		read_handler(clock.clone(), db, request)
 	})?;
 	let clock = ctx.env().clock();
-	registry.register_with_concurrency::<NamespaceList>(1, move |db, request| {
+	registry.register_with_concurrency::<NamespaceList>(concurrency, move |db, request| {
 		list_handler(clock.clone(), db, request)
 	})?;
 	let clock = ctx.env().clock();
-	registry.register_with_concurrency::<Pool>(1, move |db, request| {
+	registry.register_with_concurrency::<Pool>(concurrency, move |db, request| {
 		pool_handler(clock.clone(), db, request)
 	})?;
-	registry.register_with_concurrency::<PoolList>(1, pool_list_handler)?;
+	registry.register_with_concurrency::<PoolList>(concurrency, pool_list_handler)?;
 	Ok(())
 }
 
