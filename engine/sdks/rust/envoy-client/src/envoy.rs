@@ -37,11 +37,12 @@ use crate::sqlite::{
 	handle_sqlite_get_pages_response, handle_sqlite_request, process_unsent_remote_sqlite_requests,
 	process_unsent_sqlite_requests,
 };
+use crate::time::Instant;
 use crate::tunnel::{
 	CompletedHttpRequests, HttpRequestCancellationKey, handle_tunnel_message, make_ws_key,
 	resend_buffered_tunnel_messages, send_hibernatable_ws_message_ack,
 };
-use crate::utils::{BufferMap, EnvoyShutdownError, SleepFuture, boxed_sleep, spawn_detached};
+use crate::utils::{BufferMap, EnvoyShutdownError, spawn_detached};
 
 /// Process-wide envoy slot. Holds the handle inside a mutex so a stopped
 /// handle (e.g. from a shutdown-during-build race in serverless mode) can be
@@ -138,6 +139,25 @@ pub enum ToEnvoyMessage {
 	ConnClose {
 		evict: bool,
 		session: u64,
+		/// The established native session's original contact deadline, if known.
+		contact_deadline: Option<Instant>,
+	},
+	/// **When**
+	///
+	/// The native transport has closed a session whose Engine contact deadline elapsed.
+	///
+	/// **State**
+	///
+	/// Retires that session and any hosted generations. Clears the disconnected lost timer
+	/// because the negotiated loss budget has already elapsed.
+	///
+	/// **Effects**
+	///
+	/// Classifies in-flight storage requests, stops actors, and either ends this envoy as
+	/// lost or tells an idle or draining envoy's transport it can reconnect under the same key.
+	ContactExpired {
+		session: u64,
+		resume: oneshot::Sender<()>,
 	},
 	/// **When**
 	///
@@ -497,6 +517,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		connection_session: std::sync::atomic::AtomicU64::new(0),
 		next_connection_session: std::sync::atomic::AtomicU64::new(0),
 		connection_session_tx,
+		expired_connection_session: std::sync::atomic::AtomicU64::new(0),
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(0),
@@ -550,7 +571,7 @@ async fn envoy_loop(
 	start_tx: tokio::sync::watch::Sender<Option<String>>,
 	connection_task: Option<tokio::task::JoinHandle<()>>,
 ) {
-	let mut lost_timeout: Option<SleepFuture> = None;
+	let mut lost_deadline: Option<Instant> = None;
 	let mut acknowledged_shutdown = false;
 	let mut lost = false;
 
@@ -575,6 +596,15 @@ async fn envoy_loop(
 			break;
 		}
 		let iter_start = now;
+		if lost_deadline.is_some_and(|deadline| now >= deadline) {
+			lost_deadline = None;
+			let hosted = stop_all_actors_lost(&mut ctx);
+			observe_envoy_loop_iteration("lost_timeout", iter_start);
+			if hosted > 0 && !ctx.shutdown.is_draining() {
+				lost = true;
+				break;
+			}
+		}
 		#[allow(unused_assignments)]
 		let mut branch: &'static str = "unknown";
 		tokio::select! {
@@ -589,8 +619,12 @@ async fn envoy_loop(
 
 				match msg {
 					ToEnvoyMessage::ConnMessage { message, session } => {
-						match handle_conn_message(&mut ctx, &start_tx, lost_timeout, message, session).await {
-							AfterMessage::Continue(timer) => lost_timeout = timer,
+						let expired = ctx.shared.expired_connection_session.load(Ordering::Acquire);
+						if expired != 0 && session <= expired {
+							continue;
+						}
+						match handle_conn_message(&mut ctx, &start_tx, lost_deadline, message, session).await {
+							AfterMessage::Continue(deadline) => lost_deadline = deadline,
 							AfterMessage::Lost => {
 								lost = true;
 								observe_envoy_loop_iteration(branch, iter_start);
@@ -598,19 +632,23 @@ async fn envoy_loop(
 							}
 						}
 					}
-					ToEnvoyMessage::ConnClose { evict, session } => {
-						remove_http_routes_for_session(&mut ctx, session);
-						for generations in ctx.actors.values() {
-							for actor in generations.values() {
-								let _ = actor.handle.send(ToActor::ConnectionClosed { session });
-							}
-						}
-						handle_sqlite_connection_closed(&mut ctx, session);
-						lost_timeout = handle_conn_close(&ctx, lost_timeout);
+					ToEnvoyMessage::ConnClose { evict, session, contact_deadline } => {
+						close_session(&mut ctx, session);
+						lost_deadline = Some(lost_deadline_after_close(&ctx, lost_deadline, contact_deadline));
 						if evict {
 							observe_envoy_loop_iteration(branch, iter_start);
 							break;
 						}
+					}
+					ToEnvoyMessage::ContactExpired { session, resume } => {
+						close_session(&mut ctx, session);
+						lost_deadline = None;
+						if stop_all_actors_lost(&mut ctx) > 0 && !ctx.shutdown.is_draining() {
+							lost = true;
+							observe_envoy_loop_iteration(branch, iter_start);
+							break;
+						}
+						let _ = resume.send(());
 					}
 					ToEnvoyMessage::RegistrationRejected { session, ray_id } => {
 						remove_http_routes_for_session(&mut ctx, session);
@@ -723,20 +761,7 @@ async fn envoy_loop(
 				branch = "request_deadline";
 				crate::deadlines::expire_due(&mut ctx);
 			}
-			_ = async {
-				match lost_timeout.as_mut() {
-					Some(timeout) => timeout.as_mut().await,
-					None => std::future::pending::<()>().await,
-				}
-			} => {
-				branch = "lost_timeout";
-				lost_timeout = None;
-				if stop_all_actors_lost(&mut ctx) > 0 && !ctx.shutdown.is_draining() {
-					lost = true;
-					observe_envoy_loop_iteration(branch, iter_start);
-					break;
-				}
-			}
+			_ = sleep_until_deadline(lost_deadline) => { continue; }
 		}
 		observe_envoy_loop_iteration(branch, iter_start);
 	}
@@ -803,7 +828,7 @@ async fn envoy_loop(
 /// What the loop does after a connection message: carry on with the lost timer as it now
 /// stands, or end because the lost threshold stopped hosted actors.
 enum AfterMessage {
-	Continue(Option<SleepFuture>),
+	Continue(Option<Instant>),
 	Lost,
 }
 
@@ -844,7 +869,7 @@ pub fn send_to_envoy_tx(
 async fn handle_conn_message(
 	ctx: &mut EnvoyContext,
 	start_tx: &tokio::sync::watch::Sender<Option<String>>,
-	mut lost_timeout: Option<SleepFuture>,
+	mut lost_deadline: Option<Instant>,
 	message: protocol::ToEnvoy,
 	session: u64,
 ) -> AfterMessage {
@@ -871,7 +896,12 @@ async fn handle_conn_message(
 			} else {
 				crate::time::now_millis().saturating_sub(contact_ms)
 			};
-			if silence_ms > init.metadata.envoy_lost_threshold {
+			#[allow(
+				clippy::disallowed_methods,
+				reason = "The standalone SDK owns its connection and actor-loss deadlines."
+			)]
+			let budget_elapsed = lost_deadline.is_some_and(|deadline| Instant::now() >= deadline);
+			if budget_elapsed || silence_ms > init.metadata.envoy_lost_threshold {
 				tracing::warn!(
 					silence_ms,
 					lost_threshold_ms = init.metadata.envoy_lost_threshold,
@@ -882,7 +912,7 @@ async fn handle_conn_message(
 				}
 			}
 
-			lost_timeout = None;
+			lost_deadline = None;
 			if ctx.shutdown.is_draining() {
 				ws_send(&ctx.shared, protocol::ToRivet::ToRivetStopping).await;
 			}
@@ -935,7 +965,7 @@ async fn handle_conn_message(
 		}
 	}
 
-	AfterMessage::Continue(lost_timeout)
+	AfterMessage::Continue(lost_deadline)
 }
 
 /// Stops every actor after registration is rejected or the engine's lost threshold expires,
@@ -981,9 +1011,23 @@ fn stop_all_actors_lost(ctx: &mut EnvoyContext) -> usize {
 	hosted
 }
 
-fn handle_conn_close(ctx: &EnvoyContext, lost_timeout: Option<SleepFuture>) -> Option<SleepFuture> {
-	if lost_timeout.is_some() {
-		return lost_timeout;
+fn close_session(ctx: &mut EnvoyContext, session: u64) {
+	remove_http_routes_for_session(ctx, session);
+	for generations in ctx.actors.values() {
+		for actor in generations.values() {
+			let _ = actor.handle.send(ToActor::ConnectionClosed { session });
+		}
+	}
+	handle_sqlite_connection_closed(ctx, session);
+}
+
+fn lost_deadline_after_close(
+	ctx: &EnvoyContext,
+	previous: Option<Instant>,
+	contact: Option<Instant>,
+) -> Instant {
+	if let Some(deadline) = previous.into_iter().chain(contact).min() {
+		return deadline;
 	}
 
 	// Read threshold from protocol metadata, fall back to 10 seconds
@@ -996,9 +1040,12 @@ fn handle_conn_close(ctx: &EnvoyContext, lost_timeout: Option<SleepFuture>) -> O
 
 	tracing::debug!(ms = lost_threshold, "starting envoy lost timeout");
 
-	Some(boxed_sleep(std::time::Duration::from_millis(
-		lost_threshold,
-	)))
+	#[allow(
+		clippy::disallowed_methods,
+		reason = "The standalone SDK owns its connection and actor-loss deadlines."
+	)]
+	let now = Instant::now();
+	now + std::time::Duration::from_millis(lost_threshold)
 }
 
 async fn handle_shutdown(ctx: &mut EnvoyContext) {

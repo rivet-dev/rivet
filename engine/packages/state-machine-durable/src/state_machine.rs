@@ -90,5 +90,15 @@ pub trait DurableStateMachine: Sized + Send + Sync + 'static {
 	/// Encodes the timer at `version` of [`Self::FAMILY`].
 	fn serialize_timer(timer: &Self::Timer, version: u16) -> anyhow::Result<Vec<u8>>;
 
+	/// Encodes a timer rearmed by a delivery of the same timer id. The fired payload
+	/// can establish a version the volume's readers already had to support.
+	fn serialize_rearmed_timer(
+		timer: &Self::Timer,
+		version: u16,
+		_fired_payload: &[u8],
+	) -> anyhow::Result<Vec<u8>> {
+		Self::serialize_timer(timer, version)
+	}
+
 	fn deserialize_timer(bytes: &[u8]) -> anyhow::Result<Self::Timer>;
 }

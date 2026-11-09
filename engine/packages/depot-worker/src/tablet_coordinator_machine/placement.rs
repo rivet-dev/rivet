@@ -14,6 +14,8 @@ use std::{
 
 pub type Id = [u8; 16];
 
+pub(crate) const TARGET_REPLICA_COUNT: usize = 3;
+
 /// Known physical failure domains, ordered ahead of the number of labelled members.
 /// Unknown labels never count as distinct zones, even when their worker IDs differ.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -45,7 +47,7 @@ pub fn choose_members<'a, T: Copy + Eq>(
 	let mut used = BTreeSet::new();
 	for pass in 0..3 {
 		for (id, zone) in &candidates {
-			if members.len() == 3 {
+			if members.len() == TARGET_REPLICA_COUNT {
 				return members;
 			}
 			if members.contains(id) {
@@ -572,7 +574,7 @@ impl Search {
 		{
 			return;
 		}
-		if (tablet.replica_set.members.len() < self.destinations.len().min(3)
+		if (tablet.replica_set.members.len() < self.destinations.len().min(TARGET_REPLICA_COUNT)
 			|| (tablet.replica_set.members.len() == 1
 				&& !self
 					.input
@@ -757,10 +759,11 @@ impl Search {
 		if self.complete {
 			return None;
 		}
-		// Bootstrap on the destinations that qualify now, even when there are fewer than three.
-		// Local development runs a single storage worker, so waiting for a full replica set
-		// would leave it with no tablets at all.
-		if manifest.tablets.is_empty() && !self.destinations.is_empty() && self.input.discretionary
+		// The first grants must tolerate one disk loss. Single-worker quickstarts
+		// explicitly provision their partitions through a separate startup service.
+		if manifest.tablets.is_empty()
+			&& self.destinations.len() >= TARGET_REPLICA_COUNT
+			&& self.input.discretionary
 		{
 			self.complete = true;
 			return Some(Action::Bootstrap {

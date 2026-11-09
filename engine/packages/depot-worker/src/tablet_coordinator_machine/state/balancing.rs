@@ -182,7 +182,11 @@ impl Balancing {
 			})
 			.collect();
 		let blocked = self.last_rejection.clone().or_else(|| {
-			if search.input.destinations.is_empty() {
+			if search.input.destinations.is_empty()
+				|| (self.enabled
+					&& manifest.tablets.is_empty()
+					&& search.input.destinations.len() < placement::TARGET_REPLICA_COUNT)
+			{
 				Some(BlockReason::WaitingForWorkers)
 			} else if !unavailable.is_empty() {
 				Some(

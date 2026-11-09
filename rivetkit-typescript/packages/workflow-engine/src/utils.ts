@@ -9,6 +9,10 @@ const TIMEOUT_MAX = 2147483647;
 
 export type LongTimeoutHandle = { abort: () => void };
 
+/**
+ * Like setTimeout, but waits out delays over 2^31-1 ms (about 24.8 days).
+ * setTimeout fires such delays after 1 ms, so this chains shorter timers.
+ */
 export function setLongTimeout(
 	listener: () => void,
 	after: number,

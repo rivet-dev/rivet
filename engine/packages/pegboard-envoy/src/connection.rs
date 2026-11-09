@@ -1381,8 +1381,8 @@ async fn register_pool_connection(
 			.await?;
 	match (reply.status, reply.config) {
 		(wire::PoolStatus::Ok, Some(config)) => Ok(config),
-		// Renewal cannot revive an expired or removed admission. Retrying on the
-		// same live socket would keep pongs flowing but never restore scheduling.
+		// A missing pool or admission record requires a new registration. A stale
+		// heartbeat fails the attempt above and the next pong can retry.
 		_ if renew => Err(crate::envoy_record::PoolAdmissionLost.into()),
 		_ => Err(pegboard::validation::PoolNotFound.build()),
 	}

@@ -214,7 +214,7 @@ impl<M: DurableStateMachine> Runner<M> {
 					let now = ctx.env().clock().observe()?;
 					let mut effects =
 						Self::apply(ctx, &mut machine, &mut metrics, body, preparation, now).await;
-					let transition = Transition::new(Some(due.key), &mut effects);
+					let transition = Transition::new(Some(due), &mut effects);
 					for effect in &transition.effects {
 						match effect {
 							RuntimeEffect::ArmTimer { timer, at_boot_ms } => {
@@ -281,8 +281,8 @@ impl<M: DurableStateMachine> Runner<M> {
 		let mut executions = Vec::new();
 		let mut nondurable = Vec::new();
 		for transition in plan {
-			if let Some(key) = &transition.fired {
-				timers.remove(&mut tx, key)?;
+			if let Some(fired) = &transition.fired {
+				timers.remove(&mut tx, &fired.key)?;
 			}
 			for write in transition.writes {
 				executor.write(write, &mut tx).await?;
@@ -294,12 +294,17 @@ impl<M: DurableStateMachine> Runner<M> {
 					RuntimeEffect::Execute(effect) => executions.push(effect),
 					RuntimeEffect::ArmTimer { timer, at_boot_ms } => {
 						let timer_id = Bytes::from(M::timer_id(&timer));
-						let payload = Bytes::from(M::serialize_timer(&timer, version)?);
+						let payload = match &transition.fired {
+							Some(fired) if fired.key.timer_id == timer_id => {
+								M::serialize_rearmed_timer(&timer, version, &fired.payload)?
+							}
+							_ => M::serialize_timer(&timer, version)?,
+						};
 						timers
 							.arm(
 								&mut tx,
 								timer_id,
-								payload,
+								Bytes::from(payload),
 								deadline_unix_ms(clocks, at_boot_ms),
 							)
 							.await?;
@@ -421,7 +426,7 @@ impl<M: DurableStateMachine> Runner<M> {
 /// One planned transition: the timer it fired for, if any, and the effects it emitted, with
 /// the clock snapshot its timer deadlines are relative to.
 struct Transition<M: DurableStateMachine> {
-	fired: Option<MachineTimerKey>,
+	fired: Option<DueTimer>,
 	clocks: Clocks,
 	effects: Vec<RuntimeEffect<M::Effect, M::Timer>>,
 	nondurable: Vec<M::Effect>,
@@ -436,7 +441,7 @@ impl<M: DurableStateMachine> Transition<M> {
 	}
 
 	fn new(
-		fired: Option<MachineTimerKey>,
+		fired: Option<DueTimer>,
 		effects: &mut Effects<M::Effect, M::Timer, M::WriteEffect>,
 	) -> Self {
 		Self {

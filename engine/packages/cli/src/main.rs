@@ -3,11 +3,13 @@ use clap::{Parser, Subcommand};
 
 mod auth;
 mod cloud;
+mod cluster_env;
 mod commands;
 mod credentials;
 mod engine_runner;
 mod target;
 mod templates;
+mod terminal;
 mod util;
 
 pub(crate) const DEFAULT_CLOUD_API: &str = "https://cloud-api.rivet.dev";

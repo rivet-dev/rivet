@@ -410,7 +410,7 @@ export interface StepConfig<T> {
 	retryBackoffBase?: number;
 	/** Maximum delay in ms for exponential backoff (default: 30000). */
 	retryBackoffMax?: number;
-	/** Timeout in ms for step execution (default: 30000). Set to 0 to disable. */
+	/** Timeout in ms for step execution (default: 30000). Set to 0 or Infinity to disable. */
 	timeout?: number;
 	/** If true, step timeouts retry like any other error instead of failing immediately as critical. Default: false. */
 	retryOnTimeout?: boolean;

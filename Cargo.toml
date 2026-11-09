@@ -147,6 +147,7 @@ members = [
   rand = "0.8"
   regex = "1.4"
   replace_with = "0.1.8"
+  rpassword = "7.3"
   rustls-pemfile = "2.2.0"
   scc = "3.6.12"
   semver = "1.0.27"

@@ -184,6 +184,11 @@ impl Pegboard {
 		if self.actor_stop_threshold() == 0 {
 			bail!("pegboard.actor_stop_threshold must be greater than 0");
 		}
+		if !(1..self.envoy_lost_threshold()).contains(&self.envoy_update_ping_interval()) {
+			bail!(
+				"pegboard.node_update_ping_interval must be positive and less than pegboard.node_lost_threshold"
+			);
+		}
 
 		if self.envoy_event_delivery_timeout_ms == Some(0) {
 			bail!("pegboard.node_event_delivery_timeout_ms must be greater than 0");
@@ -452,7 +457,8 @@ impl Pegboard {
 	}
 
 	pub fn envoy_update_ping_interval(&self) -> u64 {
-		self.envoy_update_ping_interval.unwrap_or(3_000)
+		self.envoy_update_ping_interval
+			.unwrap_or_else(|| (self.envoy_lost_threshold() / 2).clamp(1, 3_000))
 	}
 }
 

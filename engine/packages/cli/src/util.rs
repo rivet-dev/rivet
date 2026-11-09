@@ -31,7 +31,9 @@ pub fn parse_env_vars(vars: &[String]) -> Result<BTreeMap<String, String>> {
 		if key.is_empty() {
 			bail!("--env key cannot be empty");
 		}
-		map.insert(key.to_string(), value.to_string());
+		if map.insert(key.to_string(), value.to_string()).is_some() {
+			bail!("--env {key} is given more than once; pass each variable once");
+		}
 	}
 	Ok(map)
 }

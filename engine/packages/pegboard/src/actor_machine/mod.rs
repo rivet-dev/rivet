@@ -1,5 +1,5 @@
 use crate::wire;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rivet_data::families::VersionFamily;
 use rivet_env::Clocks;
 use rivet_state_machine::{Entropy, NoSlot};
@@ -1092,6 +1092,23 @@ impl DurableStateMachine for ActorStateMachine {
 
 	fn serialize_timer(timer: &Self::Timer, version: u16) -> Result<Vec<u8>> {
 		rivet_data::versioned::ActorTimer::serialize_with_embedded_version(timer, version)
+	}
+
+	fn serialize_rearmed_timer(
+		timer: &Self::Timer,
+		version: u16,
+		fired_payload: &[u8],
+	) -> Result<Vec<u8>> {
+		let version = if matches!(timer, wire::ActorTimer::AllocationRetry(_)) {
+			// Discovery may fall back to v2 while a committed v3 retry is firing.
+			let header = fired_payload
+				.first_chunk::<2>()
+				.context("missing actor timer version")?;
+			version.max(u16::from_le_bytes(*header))
+		} else {
+			version
+		};
+		Self::serialize_timer(timer, version)
 	}
 
 	fn deserialize_timer(bytes: &[u8]) -> Result<Self::Timer> {

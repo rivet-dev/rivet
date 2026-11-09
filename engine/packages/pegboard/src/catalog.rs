@@ -272,13 +272,15 @@ async fn pool_handler(
 				.await?
 				.map(|raw| lease_key.deserialize(raw.into()))
 				.transpose()?;
-			// A renewal cannot grant a new admission after deletion, disconnect or expiry.
-			let valid = connection.heartbeat_unix_ms > oldest
-				&& (!renew
-					|| previous
-						.as_ref()
-						.is_some_and(|lease| lease.heartbeat_unix_ms > oldest));
-			if config.is_some() && valid {
+			// Deletion and disconnect remove the admission under the same lock. A fresh
+			// heartbeat can regain admission after expiry only while that record still exists.
+			let can_admit = config.is_some() && (!renew || previous.is_some());
+			let fresh = connection.heartbeat_unix_ms > oldest;
+			if renew && can_admit && !fresh {
+				// The heartbeat deadline passed. The next pong can retry on this connection.
+				return Err(depot_client::RequestDeadlineExceeded.build());
+			}
+			if can_admit && fresh {
 				let heartbeat_unix_ms = previous
 					.as_ref()
 					.map_or(connection.heartbeat_unix_ms, |lease| {

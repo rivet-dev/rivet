@@ -53,6 +53,8 @@ pub struct SharedContext {
 	pub connection_session: AtomicU64,
 	pub next_connection_session: AtomicU64,
 	pub connection_session_tx: watch::Sender<u64>,
+	/// Highest session whose contact deadline expired, fencing queued messages from that session.
+	pub expired_connection_session: AtomicU64,
 	pub protocol_metadata: Arc<Mutex<Option<protocol::ProtocolMetadata>>>,
 	pub shutting_down: AtomicBool,
 	/// Epoch ms timestamp of the most recent ping packet received from the engine. Used by

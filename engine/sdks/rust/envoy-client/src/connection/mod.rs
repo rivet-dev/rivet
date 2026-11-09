@@ -46,6 +46,7 @@ fn report_connection_close(
 	shared: &SharedContext,
 	session: u64,
 	reason: Option<crate::utils::ParsedCloseReason>,
+	contact_deadline: Option<crate::time::Instant>,
 ) -> bool {
 	if let Some(reason) = &reason {
 		if reason.group == "pool" && reason.error == "not_found" {
@@ -60,7 +61,14 @@ fn report_connection_close(
 		}
 	}
 	let evict = reason.is_some_and(|reason| reason.group == "ws" && reason.error == "eviction");
-	let _ = crate::envoy::send_to_envoy_tx(shared, ToEnvoyMessage::ConnClose { evict, session });
+	let _ = crate::envoy::send_to_envoy_tx(
+		shared,
+		ToEnvoyMessage::ConnClose {
+			evict,
+			session,
+			contact_deadline,
+		},
+	);
 	evict
 }
 

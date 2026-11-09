@@ -359,7 +359,8 @@ const { winner, value } = await ctx.race("timeout", [
 
 - All branches execute concurrently
 - Returns when FIRST branch completes
-- Other branches are cancelled via AbortMessage
+- A yielded branch runs again at its deadline while other branches still have in-process work, and the race arms the deadline as a durable alarm. Once every branch has yielded, the race yields to the scheduler
+- Other branches are cancelled via AbortSignal. The race stops awaiting a cancelled step and discards its late result, and it still waits for other losing code to settle
 - Winner tracked in history for replay
 
 ## Loop State Management

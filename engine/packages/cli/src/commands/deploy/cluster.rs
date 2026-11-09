@@ -1,4 +1,5 @@
 use std::{
+	collections::{BTreeMap, BTreeSet},
 	fs::File,
 	io::Read,
 	path::{Path, PathBuf},
@@ -12,8 +13,9 @@ use tokio::time::{Instant, sleep};
 use crate::{
 	cloud::{
 		CloudClient,
-		v2::{self, BuildFailure, BuildStatus, PoolUpsert, State},
+		v2::{self, BuildFailure, BuildStatus, EnvValue, PoolUpsert, State},
 	},
+	cluster_env::{EnvChange, check_secrets_exist, edit_env, unpinned_list},
 	util::{default_image_tag, docker_build, run_command},
 };
 
@@ -40,12 +42,35 @@ pub struct ClusterDeploy {
 	pub build_context: PathBuf,
 	pub image: Option<String>,
 	pub tag: Option<String>,
+	/// Variables to set on the pool, by name: strings, and secrets by name.
+	pub env: BTreeMap<String, EnvValue>,
+}
+
+/// The pool's variables after a deploy that sets `env`, which overwrites the
+/// same names and keeps the rest. `None` when the deploy changes none, so the
+/// upsert leaves the pool's variables, and any rollback pins, as they are.
+pub fn deployed_env(
+	current: &BTreeMap<String, EnvValue>,
+	env: &BTreeMap<String, EnvValue>,
+) -> Option<EnvChange> {
+	edit_env(current, env, &BTreeSet::new())
 }
 
 pub async fn deploy(cloud: &CloudClient, opts: ClusterDeploy) -> Result<()> {
 	let cluster = opts.cluster.as_str();
 	let pool = opts.pool.as_str();
-	let region = resolve_region(cloud, cluster, opts.region).await?;
+	let region = v2::resolve_region(cloud, cluster, opts.region).await?;
+
+	// Check the variables before the build, so a missing secret does not
+	// surface only after a long build and upload.
+	let names_secret = opts.env.values().any(|value| match value {
+		EnvValue::Secret(_) => true,
+		EnvValue::String(_) => false,
+	});
+	if names_secret {
+		let secrets = v2::list_secrets(cloud, cluster).await?;
+		check_secrets_exist(cluster, &opts.env, &secrets)?;
+	}
 
 	let build_id = match opts.build {
 		Some(build_id) => build_id,
@@ -70,14 +95,36 @@ pub async fn deploy(cloud: &CloudClient, opts: ClusterDeploy) -> Result<()> {
 	// with --build that is still being prepared.
 	wait_for_build(cloud, cluster, &build_id).await?;
 
-	// The upsert replaces the allowlist, so an existing pool's is sent back.
-	let cidr_allowlist = v2::find_runner_pool(cloud, cluster, &region, pool)
-		.await?
-		.map(|pool| pool.cidr_allowlist)
-		.unwrap_or_default();
+	// The upsert replaces the allowlist, so an existing pool's is sent back,
+	// and the variables this deploy sets are merged into the pool's own.
+	let existing = v2::find_runner_pool(cloud, cluster, &region, pool).await?;
+	let (cidr_allowlist, current_env) = match existing {
+		Some(pool) => (pool.cidr_allowlist, pool.env),
+		None => (Vec::new(), BTreeMap::new()),
+	};
+	let env = deployed_env(&current_env, &opts.env);
 
 	tracing::info!(%cluster, %region, %pool, %build_id, "rolling out build");
-	upsert_runner_pool(cloud, cluster, &region, pool, &build_id, &cidr_allowlist).await?;
+	upsert_runner_pool(
+		cloud,
+		cluster,
+		&region,
+		pool,
+		&build_id,
+		&cidr_allowlist,
+		env.as_ref().map(|change| &change.env),
+	)
+	.await?;
+	if let Some(change) = &env
+		&& !change.unpinned.is_empty()
+	{
+		let unpinned = unpinned_list(&change.unpinned);
+		tracing::info!(
+			%pool,
+			%unpinned,
+			"unpinned variables a rollback had pinned; they now take the secret's latest version"
+		);
+	}
 	wait_for_rollout(cloud, cluster, &region, pool, &build_id).await?;
 	if let Some(url) = v2::find_runner_pool(cloud, cluster, &region, pool)
 		.await?
@@ -111,29 +158,6 @@ async fn create_build_when_ready(
 		sleep(UPLOAD_READY_INTERVAL).await;
 	}
 	bail!("cluster {cluster} did not become ready for uploads; check its status in the dashboard")
-}
-
-async fn resolve_region(
-	cloud: &CloudClient,
-	cluster: &str,
-	region: Option<String>,
-) -> Result<String> {
-	if let Some(region) = region {
-		return Ok(region);
-	}
-	let mut regions = v2::list_regions(cloud, cluster).await?;
-	match regions.len() {
-		0 => bail!("cluster {cluster} has no regions; add one before deploying"),
-		1 => Ok(regions.swap_remove(0).region),
-		_ => bail!(
-			"cluster {cluster} has several regions; pass --region with one of: {}",
-			regions
-				.iter()
-				.map(|region| region.region.as_str())
-				.collect::<Vec<_>>()
-				.join(", ")
-		),
-	}
 }
 
 async fn upload_image(
@@ -201,9 +225,12 @@ async fn upsert_runner_pool(
 	pool: &str,
 	build_id: &str,
 	cidr_allowlist: &[String],
+	env: Option<&BTreeMap<String, EnvValue>>,
 ) -> Result<()> {
 	let message =
-		match v2::put_runner_pool(cloud, cluster, region, pool, build_id, cidr_allowlist).await? {
+		match v2::put_runner_pool(cloud, cluster, region, pool, build_id, cidr_allowlist, env)
+			.await?
+		{
 			PoolUpsert::Applied => return Ok(()),
 			PoolUpsert::Conflict(message) => message,
 		};
@@ -216,7 +243,7 @@ async fn upsert_runner_pool(
 		}
 	}
 	wait_for_build(cloud, cluster, build_id).await?;
-	match v2::put_runner_pool(cloud, cluster, region, pool, build_id, cidr_allowlist).await? {
+	match v2::put_runner_pool(cloud, cluster, region, pool, build_id, cidr_allowlist, env).await? {
 		PoolUpsert::Applied => Ok(()),
 		PoolUpsert::Conflict(message) => {
 			bail!("runner pool {pool} refused build {build_id}: {message}")
