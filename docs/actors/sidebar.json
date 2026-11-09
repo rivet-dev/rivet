@@ -400,6 +400,31 @@
 					"href": "/guides/authentication"
 				}
 			]
+		},
+		{
+			"title": "Migrations",
+			"pages": [
+				{
+					"title": "From Cloudflare Durable Objects",
+					"href": "/guides/migrate-cloudflare-durable-objects"
+				},
+				{
+					"title": "From Cloudflare Agents",
+					"href": "/guides/migrate-cloudflare-agents"
+				},
+				{
+					"title": "From Cloudflare D1",
+					"href": "/guides/migrate-cloudflare-d1"
+				},
+				{
+					"title": "From Cloudflare Queues",
+					"href": "/guides/migrate-cloudflare-queues"
+				},
+				{
+					"title": "From PartyKit",
+					"href": "/guides/migrate-partykit"
+				}
+			]
 		}
 	]
 }

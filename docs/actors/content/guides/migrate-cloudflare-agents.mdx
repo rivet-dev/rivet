@@ -1,0 +1,311 @@
+---
+title: "Migrate from Cloudflare Agents"
+description: "Move a Cloudflare Agents SDK app to Rivet Actors: agent classes, synced state, SQL, callable methods, WebSockets, scheduling, queued tasks, and AI chat."
+---
+
+The Cloudflare Agents SDK builds each agent on a Durable Object. In Rivet, each agent instance becomes a Rivet Actor: one `actor()` definition, addressed by a [key](/actors/docs/keys), with its own [SQLite](/actors/docs/sqlite) database, [actions](/actors/docs/actions), [events](/actors/docs/events), and [schedules](/actors/docs/schedule).
+
+The biggest change is state. Cloudflare syncs `this.state` to every client and lets clients write to it. In Rivet, durable data lives in SQLite, clients change it by calling actions, and the actor pushes changes to clients as events.
+
+## How concepts map
+
+| Cloudflare Agents | Rivet | Notes |
+| --- | --- | --- |
+| `class MyAgent extends Agent` | [`actor({ ... })`](/actors/docs/lifecycle) | Registered with `setup({ use })` |
+| Agent name and instance name | Actor name and [key](/actors/docs/keys) | `client.chatAgent.getOrCreate(["room-123"])` |
+| `onStart()` | [`onWake`](/actors/docs/lifecycle) | Runs on every start. `onCreate` runs once and receives input |
+| `initialState`, `this.state`, `setState()` | [SQLite](/actors/docs/sqlite) and [`c.vars`](/actors/docs/state) | Broadcast an event after each change |
+| `validateStateChange()`, `onStateChanged()` | Code in the action that writes | |
+| `this.sql` | `c.db.execute()` | Placeholders instead of template literals |
+| `@callable()` methods | [Actions](/actors/docs/actions) | |
+| `onConnect()`, `onClose()` | [`onConnect`, `onDisconnect`](/actors/docs/connections) | Validate in `onBeforeConnect` |
+| `connection.setState()` | `c.vars` keyed by `conn.id` | Or SQLite, for data that must outlive the actor's memory |
+| `onMessage()`, `this.broadcast()` | Actions and [events](/actors/docs/events) | Or raw frames with [`onWebSocket`](/actors/docs/websocket-handler) |
+| `onRequest()`, server-sent events | [`onRequest`](/actors/docs/request-handler) | Streaming responses work |
+| `routeAgentRequest()`, `getAgentByName()` | `getOrCreate(key)` and `handle.fetch()` | Your server picks the key |
+| `this.schedule(seconds)`, `this.schedule(date)` | `c.schedule.after(ms)`, `c.schedule.at(ms)` | Milliseconds, not seconds |
+| `this.schedule(cron)`, `scheduleEvery()` | `c.cron.set()`, `c.cron.every()` | Named recurring jobs |
+| `this.queue()` | A SQLite table drained in the background | |
+| `AgentWorkflow`, `waitForApproval()` | [Rivet Workflows](/workflows/docs), or actions and a schedule | |
+| `useAgent`, `AgentClient` | [`useActor`](/actors/docs/clients/react), [`createClient`](/actors/docs/clients/javascript) | |
+| `AIChatAgent`, `useAgentChat` | An AI SDK call in an action, streamed as events | No built-in chat class |
+| `this.destroy()` | `c.destroy()` | |
+
+## Define an actor
+
+An agent class becomes an `actor()` definition. Lifecycle methods become hooks, and every `@callable()` method becomes an action. `onStart` maps to `onWake`, which runs on every start. Use `onCreate` for setup that runs once; it receives the input the actor was created with.
+
+```ts Cloudflare @nocheck
+import { Agent, callable } from "agents";
+
+export class SupportAgent extends Agent<Env> {
+  async onStart() {
+    console.log("agent started", this.name);
+  }
+
+  @callable()
+  greet(name: string) {
+    return `Hello, ${name}!`;
+  }
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/define.ts" title="Rivet" />
+
+Every Durable Object binding in `wrangler.toml` becomes an entry in the registry. A client creates this actor with `client.supportAgent.getOrCreate(["support-123"], { createWithInput: { ownerId: "user-1" } })`.
+
+## Replace synced state with SQLite and events
+
+Cloudflare persists `this.state`, sends it to every connected client, and accepts writes from clients through `setState`. Rivet splits this into three parts:
+
+- **Durable data** goes in SQLite. Load it into `c.vars` in `createVars` to serve reads from memory.
+- **Writes** go through actions, so validation that lived in `validateStateChange` moves into the action.
+- **Sync** is an event the actor broadcasts after each change. Clients call an action once for the current value, then follow the event.
+
+```ts Cloudflare @nocheck
+import { Agent } from "agents";
+
+type GameState = { score: number; players: string[] };
+
+export class GameAgent extends Agent<Env, GameState> {
+  initialState: GameState = { score: 0, players: [] };
+
+  validateStateChange(next: GameState) {
+    if (next.score < 0) throw new Error("score must be non-negative");
+  }
+}
+
+// Client: agent.setState({ ...agent.state, score: 100 });
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/state-sync.ts" title="Rivet" />
+
+Actions run concurrently and interleave at each `await`. `addScore` changes `c.vars` before it awaits, and writes the delta with `value = value + ?` instead of a value the client read earlier, so concurrent calls don't lose updates. A write is durable once `c.db.execute` resolves.
+
+## Run SQL
+
+`this.sql` and `c.db` both use the actor's own SQLite database. Replace template literal interpolation with `?` placeholders, and create tables in `onMigrate`, which runs on every start before any other hook.
+
+```ts Cloudflare @nocheck
+export class DirectoryAgent extends Agent<Env> {
+  async onStart() {
+    this.sql`CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT)`;
+  }
+
+  @callable()
+  getUser(id: string) {
+    const [user] = this.sql`SELECT id, name FROM users WHERE id = ${id}`;
+    return user ?? null;
+  }
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/sql.ts" title="Rivet" />
+
+`c.db.execute` is async and returns an array of rows. Use `c.db.transaction` for writes that must succeed or fail together.
+
+## Handle connections and WebSockets
+
+Rivet clients connect over a WebSocket, call actions, and receive events. Messages that clients sent through `onMessage` become actions, and `this.broadcast` becomes `c.broadcast` or a loop over `c.conns`. Data from `connection.setState()` moves to `c.vars`, keyed by `conn.id`.
+
+```ts Cloudflare @nocheck
+import { Agent, type Connection, type ConnectionContext } from "agents";
+
+export class ChatAgent extends Agent<Env> {
+  onConnect(connection: Connection, ctx: ConnectionContext) {
+    const token = new URL(ctx.request.url).searchParams.get("token");
+    if (!token) return connection.close(4001, "invalid token");
+    connection.setState({ userId: userIdFromToken(token) });
+  }
+
+  onMessage(connection: Connection, message: string) {
+    this.broadcast(message, [connection.id]);
+  }
+
+  onClose(connection: Connection) {
+    console.log("disconnected", connection.id);
+  }
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/connections.ts" title="Rivet" />
+
+Clients pass `{ token }` as connection params. Throwing in `onBeforeConnect` rejects the connection before it opens.
+
+Actions called on a handle without `.connect()` also run `onBeforeConnect`, `onConnect`, and `onDisconnect`, with a temporary connection. Its `conn.params` is `null` unless the handle was created with `params`, so check for it before reading fields. Announce presence from an explicit action, such as `join`, rather than from `onConnect`.
+
+To keep your own wire protocol, handle raw frames with `onWebSocket` instead:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/raw-websocket.ts" title="Rivet" />
+
+## Serve HTTP and server-sent events
+
+`onRequest` takes a standard `Request` and returns a `Response`, as in Cloudflare. Streaming bodies work, so server-sent event endpoints move over unchanged. The actor stays awake until the stream closes.
+
+```ts Cloudflare @nocheck
+export class ReportAgent extends Agent<Env> {
+  async onRequest(request: Request) {
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/status")) return Response.json({ status: "ok" });
+    return new Response("Not found", { status: 404 });
+  }
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/http.ts" title="Rivet" />
+
+Call it from a client with `handle.fetch("/status")`. See [Request Handler](/actors/docs/request-handler) for the other ways to reach it.
+
+## Route requests and webhooks
+
+`routeAgentRequest` derives the instance from the URL path, and `getAgentByName` looks one up by name. In Rivet, your server picks the key and forwards the request with `handle.fetch()`:
+
+```ts Cloudflare @nocheck
+import { getAgentByName } from "agents";
+
+export default {
+  async fetch(request: Request, env: Env) {
+    const repo = new URL(request.url).pathname.split("/")[2];
+    const agent = await getAgentByName(env.RepoAgent, repo);
+    return agent.fetch(request);
+  },
+};
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/routing.ts" region="router" title="Rivet" />
+
+The actor verifies the signature and stores each delivery once, because webhook providers retry:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/routing.ts" region="actor" title="Rivet" />
+
+## Schedule tasks
+
+Every Agents SDK schedule has a counterpart. Delays and timestamps use milliseconds, not seconds. Cron expressions and fixed intervals are named jobs, and reusing a name updates the job. The scheduled callback is an ordinary action that receives the arguments you passed.
+
+```ts Cloudflare @nocheck
+await this.schedule(60, "sendReminder", { message: "Check email" });
+await this.schedule(new Date("2026-12-01T09:00:00Z"), "sendReminder", { message: "Monthly report due" });
+await this.schedule("0 8 * * *", "dailyDigest", {});
+await this.scheduleEvery(30, "poll", {});
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/schedule.ts" title="Rivet" />
+
+Schedules survive sleep, restarts, and crashes. Failed runs are not retried automatically, and the minimum fixed interval is 5 seconds. See [Schedule](/actors/docs/schedule).
+
+## Run queued tasks
+
+`this.queue()` stores a task, runs it in the background in order, and retries it with backoff when it fails. In Rivet, insert the task into a SQLite table and drain the table in the background:
+
+1. An action inserts a row. The task is durable once the insert resolves.
+2. A drain loop processes due rows in order and deletes each one after it succeeds.
+3. A failed task gets a later `run_at` with exponential backoff. After 3 attempts it moves to `failed_tasks`.
+4. `c.keepAwake` keeps the actor awake until the drain finishes, and a schedule wakes the actor when the next retry is due.
+5. `onWake` restarts the drain, so tasks left over from a sleep or crash still run.
+
+```ts Cloudflare @nocheck
+export class MailAgent extends Agent<Env> {
+  @callable()
+  async signUp(email: string) {
+    await this.queue("processEmail", { email, subject: "Welcome!" });
+  }
+
+  async processEmail(task: { email: string; subject: string }) {
+    await sendEmail(task.email, task.subject);
+  }
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/queue-tasks.ts" title="Rivet" />
+
+The attempt is counted before the task runs, so a task that crashes the actor still uses up its attempts. A task can run more than once, so make the work idempotent. `drainDue` rejects calls that don't come from a schedule, because clients can call any action. For batching, pausing, and replaying failed tasks, see [Migrate from Cloudflare Queues](/guides/migrate-cloudflare-queues).
+
+## Move workflows and approvals
+
+Move `AgentWorkflow` classes to [Rivet Workflows](/workflows/docs), which runs durable, replayable steps on Rivet Actors.
+
+An approval that only needs to wait for a person does not need a workflow. Store the pending request in SQLite, broadcast it to reviewers, and schedule an expiry in place of `waitForApproval`'s timeout:
+
+```ts Cloudflare @nocheck
+export class ExpenseWorkflow extends AgentWorkflow<ExpenseAgent, Expense> {
+  async run(event: AgentWorkflowEvent<Expense>, step: AgentWorkflowStep) {
+    await this.reportProgress({ step: "approval", status: "pending" });
+    const approval = await this.waitForApproval(step, { timeout: "7 days" });
+    await step.do("process", async () => processExpense(event.payload, approval));
+  }
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/approval.ts" title="Rivet" />
+
+The `status = 'pending'` condition resolves each expense once, even if a reviewer and the expiry both arrive. `expire` checks `c.scheduledFire`, so only the schedule can call it.
+
+## Connect from clients
+
+`createClient` replaces `AgentClient`, and `useActor` from `@rivetkit/react` replaces `useAgent`. Load the current state once with an action, then subscribe to the event the actor broadcasts instead of `onStateUpdate`. Instead of `agent.call()` or `agent.stub`, call actions directly.
+
+```tsx Cloudflare @nocheck
+import { useAgent } from "agents/react";
+
+const agent = useAgent<GameState>({
+  agent: "game-agent",
+  name: "game-123",
+  onStateUpdate: (state) => setScore(state.score),
+});
+
+await agent.call("addPlayer", ["ada"]);
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/client.ts" title="Rivet" />
+
+In React:
+
+```tsx Rivet @nocheck
+import { useEffect, useState } from "react";
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./state-sync";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+function Game() {
+  const [score, setScore] = useState(0);
+  const game = useActor({ name: "game", key: ["game-123"] });
+
+  // Load the current state once connected, then follow changes
+  useEffect(() => {
+    game.connection?.getState().then((state) => setScore(state.score));
+  }, [game.connection]);
+  game.useEvent("stateChanged", (state) => setScore(state.score));
+
+  return (
+    <button onClick={() => game.connection?.addScore(10)}>
+      Score: {score}
+    </button>
+  );
+}
+```
+
+## Call AI models
+
+`AIChatAgent` and `useAgentChat` have no Rivet equivalent. Call a model from an action with the [AI SDK](https://ai-sdk.dev) or any provider's SDK, store the conversation in SQLite, and stream tokens to clients as events:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-agents/ai-chat.ts" title="Rivet" />
+
+Each `token` and `reply` event carries a `replyId`, so clients can tell apart replies that stream at the same time. Actions time out after 60 seconds by default. Raise `actionTimeout` in `options` for long generations. For a complete agent backend, see the [AI Agent](/guides/ai-agent) guide. To run existing coding agents as durable actors, see [Rivet Agents](/agents/docs).
+
+## What has no direct equivalent
+
+- **Automatic state sync.** Clients can't write actor data directly. Expose actions for each change and broadcast events for fanout.
+- **Chat helpers.** `AIChatAgent`, `useAgentChat`, and resumable chat streams have no built-in counterpart. Build them from actions, SQLite, and events as shown above.
+- **Workers AI, Browser Rendering, and Email Routing.** These are Cloudflare services. Call a model provider, a hosted browser, or an email API from your actions, and forward inbound email to an actor over HTTP.
+- **MCP servers (`McpAgent`).** Use the [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) and serve it from `onRequest`.
+- **Bindings on `this.env`.** Read secrets and configuration from environment variables in your process.
+- **Hibernation by default.** Cloudflare keeps sockets open while an agent hibernates. In Rivet, an open connection currently keeps the actor awake. When the actor does sleep, its WebSockets close and clients reconnect, unless you set `canHibernateWebSocket: true` (experimental), which keeps both client connections and `onWebSocket` sockets open across sleep. `c.vars` is lost on sleep either way, so keep data that must survive in SQLite and rebuild memory in `createVars`.
+- **Concurrency.** Actions run concurrently and interleave at `await` points. For read-modify-write, use a single SQL statement such as `UPDATE ... RETURNING`, a transaction, or a synchronous change to `c.vars`.
+
+## Next steps
+
+- [Actions](/actors/docs/actions) and [Events](/actors/docs/events)
+- [SQLite](/actors/docs/sqlite)
+- [Lifecycle](/actors/docs/lifecycle)
+- [Migrate from Cloudflare Durable Objects](/guides/migrate-cloudflare-durable-objects)

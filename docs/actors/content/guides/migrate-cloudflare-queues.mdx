@@ -1,0 +1,231 @@
+---
+title: "Migrate from Cloudflare Queues"
+description: "Move Cloudflare Queues producers and consumers to Rivet Actors, with durable jobs in SQLite, batching, retries, delays, and dead letters."
+---
+
+Cloudflare Queues is a managed broker that sits between Workers. In Rivet, a queue is an actor. Producers call an action that inserts a job into the actor's [SQLite](/actors/docs/sqlite) database, and the actor drains that table in the background. A job is durable as soon as the insert returns, and it still runs if the actor sleeps or crashes before processing it.
+
+Because you write the consumer loop, batching, retries, delays and dead letters are a few lines of SQL that you can tune per queue.
+
+## How concepts map
+
+| Cloudflare | Rivet | Notes |
+| --- | --- | --- |
+| Queue | An actor with a `jobs` table, addressed by its [key](/actors/docs/keys) | One actor per queue, or one per shard |
+| Producer binding, `send()` | An `enqueue` [action](/actors/docs/actions) | Callable from clients, other actors, or HTTP |
+| `sendBatch()` | Inserts in one [transaction](/actors/docs/sqlite) | All or nothing |
+| `queue()` consumer handler | A drain loop started by actions and `onWake` | See [Lifecycle](/actors/docs/lifecycle) |
+| `max_batch_size` | `LIMIT` on the drain query | |
+| `max_batch_timeout` | Not needed | The drain starts as soon as a job is inserted |
+| `message.ack()` | Delete the row after the work succeeds | |
+| `message.retry()`, `max_retries`, `retry_delay` | Count attempts and push `run_at` back | A [schedule](/actors/docs/schedule) wakes the actor when it is due |
+| `delaySeconds` | A `run_at` column | |
+| Dead letter queue | A `dead_letters` table | |
+| `max_concurrency` | Shard jobs across several actor keys | |
+| Pull consumers, REST publishing | `pull` and `ack` actions, or [`onRequest`](/actors/docs/request-handler) | |
+| Pause, resume, purge | Actions you define | |
+
+## Define the queue
+
+The queue actor owns two tables: `jobs` for pending work and `dead_letters` for jobs that ran out of retries. A `settings` row stores whether delivery is paused, so the flag survives restarts. The tuning values that Cloudflare reads from `wrangler.toml` become constants in your code.
+
+<CodeGroup>
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/queue.ts" region="config" title="Settings" />
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/queue.ts" region="schema" title="Schema" />
+</CodeGroup>
+
+## Produce messages
+
+A Worker sends to a queue through a binding. In Rivet, the producer gets a handle to the queue actor by its key and calls the `enqueue` action. `enqueueBatch` inserts every job in one transaction, so a batch is stored completely or not at all.
+
+```ts Cloudflare @nocheck
+export default {
+  async fetch(req: Request, env: Env): Promise<Response> {
+    await env.EMAIL_QUEUE.send({ to: "ada@example.com", subject: "Welcome" });
+    await env.EMAIL_QUEUE.sendBatch([
+      { body: { to: "ada@example.com", subject: "Receipt" } },
+      { body: { to: "grace@example.com", subject: "Receipt" } },
+    ]);
+    return new Response("Queued");
+  },
+};
+```
+
+<CodeGroup>
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/queue.ts" region="produce" title="queue.ts" />
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/client.ts" region="send" title="client.ts" />
+</CodeGroup>
+
+Batches are sent the same way:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/client.ts" region="batch" title="Rivet" />
+
+Bodies are stored as JSON text. To queue binary data, add a `BLOB` column instead.
+
+## Consume messages in batches
+
+Cloudflare calls your `queue()` handler with a batch of messages. In Rivet, the actor reads the next batch of due jobs with a `LIMIT` query and processes them in order by `id`. `startDrain` runs at most one drain at a time: if jobs arrive while a drain is running, the `pending` flag makes the drain check again, or start a new one, before it stops. `c.keepAwake` stops the actor from sleeping until the drain finishes, and the drain stops starting new jobs once `c.aborted` is set during shutdown.
+
+```ts Cloudflare @nocheck
+// wrangler.toml: max_batch_size = 10
+export default {
+  async queue(batch: MessageBatch<Email>, env: Env): Promise<void> {
+    for (const message of batch.messages) {
+      await sendEmail(message.body);
+      message.ack();
+    }
+  },
+};
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/queue.ts" region="consumer" title="Rivet" />
+
+Start the drain from `onWake` too. A job inserted just before a crash or sleep is then picked up the next time the actor starts:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/queue.ts" region="resume-on-wake" title="Rivet" />
+
+There is no equivalent of `max_batch_timeout`. A Cloudflare consumer waits to fill a batch, but a Rivet drain starts as soon as the first job is inserted.
+
+## Acknowledge and retry
+
+Acknowledging a message becomes deleting its row, and only after the work succeeds. The actor counts each attempt before it runs the work, so a job that crashes the actor still uses up its retries. When the work throws, the actor sets `run_at` in the future, so the job is skipped until its backoff has passed. After `MAX_RETRIES` retries, the job moves to `dead_letters`.
+
+```ts Cloudflare @nocheck
+// wrangler.toml: max_retries = 3, dead_letter_queue = "emails-dlq"
+export default {
+  async queue(batch: MessageBatch<Email>, env: Env): Promise<void> {
+    for (const message of batch.messages) {
+      try {
+        await sendEmail(message.body);
+        message.ack();
+      } catch {
+        message.retry({ delaySeconds: 5 });
+      }
+    }
+  },
+};
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/queue.ts" region="retry" title="Rivet" />
+
+Delivery is at least once, as with Cloudflare Queues. If the actor crashes after the work succeeds but before the row is deleted, the job runs again on the next start, so make the work idempotent.
+
+## Delay messages
+
+Cloudflare's `delaySeconds` becomes a `run_at` timestamp on the row. The drain only reads jobs that are due.
+
+```ts Cloudflare @nocheck
+await env.EMAIL_QUEUE.send(
+  { to: "ada@example.com", subject: "Reminder" },
+  { delaySeconds: 60 },
+);
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/client.ts" region="delay" title="Rivet" />
+
+When a drain finishes with jobs still waiting, it schedules the `drain` action for the earliest `run_at`, unless a drain is already scheduled by then. Schedules survive sleep, so the actor can sleep in the meantime, and Rivet wakes it when the [schedule](/actors/docs/schedule) is due:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/queue.ts" region="wake" title="Rivet" />
+
+## Dead letter queues
+
+Cloudflare routes a message to a separate dead letter queue after its last retry, and you consume that queue to inspect or replay failures. In Rivet, failed jobs are rows in the `dead_letters` table of the same actor. Expose actions to list them and to move one back into the queue. A redriven job keeps its ID and gets a fresh retry budget:
+
+```ts Cloudflare @nocheck
+// wrangler.toml
+// [[queues.consumers]]
+// queue = "emails"
+// max_retries = 3
+// dead_letter_queue = "emails-dlq"
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/queue.ts" region="dead-letters" title="Rivet" />
+
+## Scale consumers
+
+Cloudflare runs more consumer invocations as the backlog grows, up to `max_concurrency`. A Rivet queue actor drains one job at a time, so a single actor's throughput is bounded by how fast it processes each job. To process more in parallel, split the queue across several actors by key. Each shard drains independently. Hashing a stable ID such as the user ID sends related jobs to the same shard, so they run one after another instead of in parallel.
+
+```ts Cloudflare @nocheck
+// wrangler.toml
+// [[queues.consumers]]
+// queue = "emails"
+// max_concurrency = 8
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/client.ts" region="shard" title="Rivet" />
+
+If ordering doesn't matter, you can also process a batch with `Promise.all` inside the drain loop.
+
+## Pull consumers and HTTP publishing
+
+Cloudflare pull consumers lease messages over HTTP and acknowledge them by lease ID. The same pattern is a `pull` action that leases rows for a visibility timeout and an `ack` action that deletes them by lease ID. Each pull issues a new lease ID, so an ack after the lease expired still works until another consumer pulls the message again. A message that is pulled `MAX_DELIVERIES` times without an ack moves to a dead letter table.
+
+```ts Cloudflare @nocheck
+const response = await fetch(
+  `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/queues/${QUEUE_ID}/messages/pull`,
+  {
+    method: "POST",
+    headers: { authorization: `Bearer ${API_TOKEN}`, "content-type": "application/json" },
+    body: JSON.stringify({ batch_size: 10, visibility_timeout_ms: 30000 }),
+  },
+);
+const { result } = await response.json();
+// ...process result.messages, then POST their lease_ids to /messages/ack
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/pull-queue.ts" region="actions" title="Rivet" />
+
+Producers and consumers written in other languages can use the same queue over plain HTTP with [`onRequest`](/actors/docs/request-handler):
+
+<CodeGroup>
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/pull-queue.ts" region="http" title="pull-queue.ts" />
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/client.ts" region="pull" title="client.ts" />
+</CodeGroup>
+
+## Produce from another actor
+
+A Durable Object that published to a queue through `env` calls the queue actor's action instead. Use [`c.client()`](/actors/docs/communicating-between-actors) to get a handle from inside an actor:
+
+```ts Cloudflare @nocheck
+export class Signups extends DurableObject<Env> {
+  async register(email: string) {
+    await this.env.EMAIL_QUEUE.send({ to: email, subject: "Welcome" });
+  }
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/index.ts" region="producer-actor" title="Rivet" />
+
+## Pause, resume, and purge
+
+Wrangler's queue commands become actions you define on the queue actor. Pausing stops the drain after the current job and skips the scheduled wake. Resuming starts it again. Producers can keep enqueueing while delivery is paused.
+
+```sh Cloudflare
+npx wrangler queues pause-delivery emails
+npx wrangler queues resume-delivery emails
+npx wrangler queues purge emails
+```
+
+<CodeGroup>
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/queue.ts" region="admin" title="queue.ts" />
+<CodeSnippet file="examples/docs/migrate-cloudflare-queues/client.ts" region="admin" title="client.ts" />
+</CodeGroup>
+
+## Differences to plan for
+
+- **A queue is one actor.** Throughput is bounded by one actor working through its jobs. Shard by key when one actor isn't enough.
+- **Ordering.** Jobs run in insert order within one actor, but a job waiting for a retry or a delay doesn't block the jobs behind it. Cloudflare doesn't guarantee ordering either.
+- **At-least-once delivery.** A job can run more than once after a crash. Make the work idempotent, for example by keying side effects on the job ID.
+- **Retention.** Cloudflare deletes unconsumed messages after the retention period. Rows stay in SQLite until you delete them, so add a cleanup for old dead letters if you keep many.
+- **Message size.** Instead of Cloudflare's 128 KB message limit, a body is limited by the incoming message size of the action call that enqueues it: 64 KiB by default, configurable up to 16 MiB. Bodies sent through `onRequest` are streamed and have no fixed limit. See [Limits](/actors/docs/limits).
+- **Content types.** JSON and text map to a `TEXT` column and bytes to a `BLOB` column. There is no equivalent of the `v8` content type.
+- **Metrics and dashboard.** There is no built-in queue dashboard. Expose backlog and dead letter counts through actions like `backlog`, and export them to your own metrics.
+- **Cloudflare integrations.** R2 event notifications and other Cloudflare services that publish to a queue have no Rivet equivalent. Call the `enqueue` action from your own webhook or event handler instead.
+- **Fan-out to many readers.** A queue hands each job to one consumer. For a durable stream that many readers replay at their own pace, use [Durable Streams](/durable-streams/docs).
+
+## Next steps
+
+- [SQLite](/actors/docs/sqlite): tables, migrations, and transactions in an actor.
+- [Schedule](/actors/docs/schedule): delayed actions and cron jobs.
+- [Lifecycle](/actors/docs/lifecycle): `onWake`, sleeping, and `keepAwake`.
+- [Communicating between actors](/actors/docs/communicating-between-actors): calling the queue from other actors.
