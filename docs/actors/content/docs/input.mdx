@@ -47,7 +47,7 @@ Define input types to ensure type safety:
 
 <CodeSnippet file="examples/docs/actors-input/type-safety.ts" />
 
-### Store Input in State
+### Store Input in SQLite
 
 Input is only available in the `onCreate` lifecycle hook. If you need to access input data later (in actions, timers, or other hooks), store it in [SQLite](/actors/docs/sqlite) during creation. This is the recommended pattern because input shapes can evolve over time, and persisting input ensures you always have access to the values the actor was created with:
 

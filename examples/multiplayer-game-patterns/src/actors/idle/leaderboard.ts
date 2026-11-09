@@ -1,4 +1,4 @@
-import { type ActorContextOf, actor, event, queue } from "rivetkit";
+import { type ActorContextOf, actor, event } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
 export interface LeaderboardEntry {
@@ -12,40 +12,37 @@ export const idleLeaderboard = actor({
 	db: db({
 		onMigrate: migrateTables,
 	}),
-	queues: {
-		updateScore: queue<{
-			playerId: string;
-			playerName: string;
-			totalProduced: number;
-		}>(),
-	},
 	events: {
 		leaderboardUpdate: event<LeaderboardEntry[]>(),
 	},
 	actions: {
-		getTopScores: async (c, input: { limit?: number }) => {
-			return await getTop(c, input.limit ?? 10);
-		},
-	},
-	run: async (c) => {
-		for await (const message of c.queue.iter()) {
-			if (message.name !== "updateScore") continue;
-
+		updateScore: async (
+			c,
+			input: {
+				playerId: string;
+				playerName: string;
+				totalProduced: number;
+			},
+		) => {
+			// Worlds do not wait for this call, so two reports from one world
+			// can arrive out of order. The total only grows, so an older report
+			// never replaces a newer one.
 			await c.db.execute(
 				`INSERT INTO scores (player_id, player_name, total_produced, updated_at) VALUES (?, ?, ?, ?)
-					 ON CONFLICT(player_id) DO UPDATE SET player_name = ?, total_produced = ?, updated_at = ?`,
-				message.body.playerId,
-				message.body.playerName,
-				message.body.totalProduced,
-				Date.now(),
-				message.body.playerName,
-				message.body.totalProduced,
+					 ON CONFLICT(player_id) DO UPDATE SET player_name = excluded.player_name, total_produced = excluded.total_produced, updated_at = excluded.updated_at
+					 WHERE excluded.total_produced >= scores.total_produced`,
+				input.playerId,
+				input.playerName,
+				input.totalProduced,
 				Date.now(),
 			);
 
 			const top = await getTop(c, 10);
 			c.broadcast("leaderboardUpdate", top);
-		}
+		},
+		getTopScores: async (c, input: { limit?: number }) => {
+			return await getTop(c, input.limit ?? 10);
+		},
 	},
 });
 

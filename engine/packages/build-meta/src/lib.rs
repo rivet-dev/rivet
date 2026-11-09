@@ -60,10 +60,6 @@ pub fn compiled_runtime_protocols() -> rivet_config::RuntimeProtocols {
 			rivet_config::RuntimeProtocolKind::Envoy,
 			rivet_envoy_protocol::PROTOCOL_VERSION,
 		),
-		ups: rivet_config::RuntimeProtocol::new(
-			rivet_config::RuntimeProtocolKind::Ups,
-			rivet_ups_protocol::PROTOCOL_VERSION,
-		),
 		epoxy: rivet_config::RuntimeProtocol::new(
 			rivet_config::RuntimeProtocolKind::Epoxy,
 			epoxy_protocol::PROTOCOL_VERSION,

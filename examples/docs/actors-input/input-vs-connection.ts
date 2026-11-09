@@ -1,14 +1,37 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { createClient } from "rivetkit/client";
 
 interface RoomInput { roomName: string; isPrivate: boolean; }
+interface ConnParams { userId: string; displayName: string; }
 
 const chatRoom = actor({
-  createState: (c, input: RoomInput) => ({ name: input.roomName, isPrivate: input.isPrivate }),
-  createConnState: (c, params: { userId: string; displayName: string }) => ({
-    userId: params.userId,
-    displayName: params.displayName,
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(
+        "CREATE TABLE IF NOT EXISTS room (id INTEGER PRIMARY KEY CHECK (id = 1), name TEXT NOT NULL, is_private INTEGER NOT NULL)",
+      );
+    },
   }),
+  // Input configures the whole actor once, when it is created
+  onCreate: async (c, input: RoomInput) => {
+    await c.db.execute(
+      "INSERT INTO room (id, name, is_private) VALUES (1, ?, ?)",
+      input.roomName,
+      input.isPrivate ? 1 : 0,
+    );
+  },
+  // Connection parameters describe each client that connects
+  createVars: () => ({ users: new Map<string, ConnParams>() }),
+  onBeforeConnect: (c, params: ConnParams) => {
+    if (!params.userId) throw new Error("Missing userId");
+  },
+  onConnect: (c, conn) => {
+    c.vars.users.set(conn.id, conn.params);
+  },
+  onDisconnect: (c, conn) => {
+    c.vars.users.delete(conn.id);
+  },
   actions: {}
 });
 

@@ -1,10 +1,21 @@
 import { Hono } from "hono";
 import { type ActorContextOf, actor } from "rivetkit";
+import { db } from "rivetkit/db";
 
 export const rawFetchCounter = actor({
-	state: {
-		count: 0,
-	},
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS counter (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					count INTEGER NOT NULL
+				);
+			`);
+			await db.execute(
+				"INSERT OR IGNORE INTO counter (id, count) VALUES (1, 0)",
+			);
+		},
+	}),
 	createVars: () => {
 		// Setup router
 		return { router: createCounterRouter() };
@@ -22,20 +33,25 @@ function createCounterRouter(): Hono<any> {
 		Bindings: { actor: ActorContextOf<typeof rawFetchCounter> };
 	}>();
 
-	app.get("/count", (c) => {
+	app.get("/count", async (c) => {
 		const { actor } = c.env;
 
+		const rows = await actor.db.execute<{ count: number }>(
+			"SELECT count FROM counter WHERE id = 1",
+		);
 		return c.json({
-			count: actor.state.count,
+			count: rows[0].count,
 		});
 	});
 
-	app.post("/increment", (c) => {
+	app.post("/increment", async (c) => {
 		const { actor } = c.env;
 
-		actor.state.count++;
+		const rows = await actor.db.execute<{ count: number }>(
+			"UPDATE counter SET count = count + 1 WHERE id = 1 RETURNING count",
+		);
 		return c.json({
-			count: actor.state.count,
+			count: rows[0].count,
 		});
 	});
 

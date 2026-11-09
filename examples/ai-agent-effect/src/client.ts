@@ -26,7 +26,7 @@ const program = Effect.gen(function* () {
 			),
 		);
 
-	// The whole conversation is persisted in actor state.
+	// The whole conversation is stored in the actor's SQLite database.
 	const history = yield* agent.GetHistory();
 	yield* Effect.log(`history has ${history.length} turns`);
 });

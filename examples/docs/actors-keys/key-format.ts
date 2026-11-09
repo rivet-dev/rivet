@@ -2,12 +2,11 @@ import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
 const counter = actor({
-  state: { count: 0 },
-  actions: { increment: (c) => c.state.count++ }
+  vars: { count: 0 },
+  actions: { increment: (c) => c.vars.count++ }
 });
 
 const chatRoom = actor({
-  state: { messages: [] as string[] },
   actions: {}
 });
 

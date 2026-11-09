@@ -2,7 +2,7 @@ import { actor } from "rivetkit";
 
 interface PollerVars {
   lastPrice: number;
-  // The background loop started in `onWake`, so `onSleep` can wait for it
+  // `onWake` stores its loop here so `onSleep` can wait for it.
   task: Promise<void> | null;
 }
 
@@ -43,13 +43,21 @@ const poller = actor({
   },
 });
 
+// Resolve after `ms`, or as soon as the actor starts shutting down
 function delay(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener("abort", () => {
-      clearTimeout(timer);
+    if (signal.aborted) {
       resolve();
-    });
+      return;
+    }
+
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal.addEventListener("abort", finish, { once: true });
   });
 }
 

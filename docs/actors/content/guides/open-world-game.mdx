@@ -31,7 +31,7 @@ What we'll build:
 
 - An `openWorldChunk` Actor per chunk, keyed by world id and chunk coordinates.
 - A 10 tick per second loop in each chunk that moves its players and sends snapshots.
-- Blocks that players place and remove, saved in the chunk's state.
+- Blocks that players place and remove, saved in the chunk's SQLite database.
 - A browser client that watches every chunk in view and moves the player to the next chunk at an edge.
 
 <Steps>
@@ -53,8 +53,9 @@ Each chunk of the world is its own `openWorldChunk` Actor. A connection can watc
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/open-world/config.ts" title="config.ts" />
 </CodeGroup>
 
-- The key is `[worldId, chunkX, chunkY]`. `createState` reads the coordinates from `c.key`, so a chunk knows where it is without any input. There is no matchmaker: whoever knows a position can compute its chunk key.
+- The key is `[worldId, chunkX, chunkY]`. `createVars` reads the coordinates from `c.key`, so a chunk knows where it is without any input. It also loads the chunk's saved blocks, players, and tick from SQLite into `c.vars`. Connections only live in memory, so restored players start without one. There is no matchmaker: whoever knows a position can compute its chunk key.
 - A connection is not a player. `onConnect` records the `playerId` from the connection params with `inChunk: false`, so a client can watch a chunk without standing in it. `enterChunk` adds the player at a spawn point clamped to the chunk, and `leaveChunk` removes it. `addPlayer` and `removePlayer` do the same thing.
+- After a restart, the first connection whose `playerId` matches a restored player takes that player back, so a reconnecting client keeps control where it was.
 - `setInput` only accepts input from the connection that controls the player in this chunk, and clamps each axis to -1 to 1. The client sends a direction, never a position.
 - Positions are local to the chunk, from 0 to `CHUNK_SIZE` (1200). The world position is `chunkX * CHUNK_SIZE + x`.
 
@@ -66,12 +67,14 @@ The client chooses its `playerId` and its spawn point, so it can claim another p
 
 <Step title="Run the tick loop">
 
-Each chunk simulates only its own players, in a loop in `run`:
+Each chunk simulates only its own players, in a background task that `onWake` launches on every start:
 
-<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/open-world/chunk.ts" title="chunk.ts" highlight="tick,snapshot" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/open-world/chunk.ts" title="chunk.ts" highlight="tick,snapshot,save" />
 
-- `run` starts when the Actor wakes and waits on `interval(TICK_MS)` until `c.aborted` is set. Every 100 ms it moves each player by `SPEED`, or 2.5 times that while sprinting, and clamps them to the chunk edges.
-- Load grows with the number of chunks in use, not the size of the world. A chunk nobody has visited has no Actor.
+- `runChunk` ticks on `interval(TICK_MS)` until `c.aborted` is set. Every 100 ms it moves each player by `SPEED`, or 2.5 times that while sprinting, and clamps them to the chunk edges.
+- `onSleep` and `onDestroy` wait for the loop to save and exit. `onDestroy` needs the wait because the Actor closes its database right after `onDestroy` returns.
+- Load grows with the number of chunks in use, not the size of the world. A chunk nobody has visited has no Actor, and a chunk nobody is connected to [sleeps](/actors/docs/lifecycle#sleeping) after the idle timeout and resumes from its last save on the next connection.
+- Ticks only change memory. Every `SNAPSHOT_INTERVAL_MS` (1 second), and once more when the Actor stops, `saveChunk` writes the tick and every player's name, color, and position in one `c.db.transaction`, so a crash loses at most about a second of movement. The loop removes a restored player whose client hasn't reconnected within `RECONNECT_GRACE_MS` (5 seconds).
 - `broadcastSnapshot` loops over `c.conns` and calls `conn.send` instead of `c.broadcast`, because each snapshot sets `selfPlayerId` only for the connection that controls that player.
 - Every snapshot holds the whole chunk: all players and all blocks. That is fine for a small chunk. For busy chunks, send a full snapshot when a client connects and only the changes after that.
 
@@ -87,12 +90,12 @@ Players build on a 24 by 24 grid in each chunk:
 
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/open-world/chunk.ts" title="chunk.ts" region="blocks" />
 
-- Blocks live in `c.state.blocks`, which maps `"gridX,gridY"` to the color of the player who placed the block. Actor state is saved, so a chunk keeps its blocks when it sleeps and wakes. Players are not kept: `onDisconnect` removes them.
+- Blocks are saved in the `blocks` table, one row per grid cell with the color of the player who placed it. `c.vars.blocks` keeps the same data in memory as a map from `"gridX,gridY"` to color, so snapshots never read the database. Each change updates the map and writes the row, so a chunk keeps its blocks when it sleeps and wakes. Players are not written per action: the tick loop saves them, and `onDisconnect` removes them.
 - `placeBlock` only works for a player standing in this chunk and rejects cells outside the grid. `removeBlock` only checks that the caller is connected, so a client watching from the next chunk can remove blocks. Check it the same way as `placeBlock` if you don't want that.
 - Both actions send a snapshot only when a block actually changed.
 
 <Note>
-JSON state works for a small grid per chunk. For bigger worlds, with many blocks, inventories, or anything you need to query, store it in the chunk's [SQLite](/actors/docs/sqlite) database and index it by position.
+Loading every block into memory works for a small grid per chunk. For bigger worlds, with many blocks or inventories, query the [SQLite](/actors/docs/sqlite) table by position instead of loading all of it on wake.
 </Note>
 
 </Step>
@@ -152,5 +155,5 @@ Open `http://localhost:5173`, choose **Open World**, and click **Enter World**. 
 ## Next steps
 
 - [2D Physics Game](/guides/physics-2d-game): run a physics engine in a world Actor's tick loop.
-- [Lifecycle](/actors/docs/lifecycle): how `run` loops start and stop.
+- [Lifecycle](/actors/docs/lifecycle): when `onWake` and `onSleep` run.
 - [SQLite](/actors/docs/sqlite): store large chunk data with queries and indexes.

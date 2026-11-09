@@ -1,4 +1,5 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 type WorkMessage = { id: string; value: number };
@@ -27,11 +28,21 @@ async function runWithLimit<T>(
 }
 
 export const boundedDrainActor = actor({
-  state: {
-    processed: 0,
-    lastWindowSize: 0,
-    lastWindowTotal: 0,
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS drain_stats (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          processed INTEGER NOT NULL,
+          last_window_size INTEGER NOT NULL,
+          last_window_total INTEGER NOT NULL
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO drain_stats (id, processed, last_window_size, last_window_total) VALUES (1, 0, 0, 0)",
+      );
+    },
+  }),
   run: workflow(async (ctx) => {
     await ctx.loop("bounded-drain-loop", async (loopCtx) => {
         const window: WorkMessage[] = [];
@@ -53,7 +64,16 @@ export const boundedDrainActor = actor({
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{
+        processed: number;
+        lastWindowSize: number;
+        lastWindowTotal: number;
+      }>(
+        "SELECT processed, last_window_size AS lastWindowSize, last_window_total AS lastWindowTotal FROM drain_stats WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 
@@ -67,9 +87,12 @@ async function processWindow(
     windowTotal += result;
   });
 
-  ctx.state.processed += window.length;
-  ctx.state.lastWindowSize = window.length;
-  ctx.state.lastWindowTotal = windowTotal;
+  await ctx.db.execute(
+    "UPDATE drain_stats SET processed = processed + ?, last_window_size = ?, last_window_total = ? WHERE id = 1",
+    window.length,
+    window.length,
+    windowTotal,
+  );
 }
 
 export const registry = setup({ use: { boundedDrainActor } });

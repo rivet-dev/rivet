@@ -2,15 +2,15 @@ import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
 const userActor = actor({
-  state: { email: "", lastActive: 0 },
+  vars: { email: "", lastActive: 0 },
   actions: {
     updateEmail: (c, email: string) => {
-      c.state.email = email;
-      c.state.lastActive = Date.now();
+      c.vars.email = email;
+      c.vars.lastActive = Date.now();
     },
     getUser: (c) => ({
-      email: c.state.email,
-      lastActive: c.state.lastActive,
+      email: c.vars.email,
+      lastActive: c.vars.lastActive,
     }),
   },
 });
@@ -22,7 +22,7 @@ const user = await client.userActor.create(["user-123"], {
   input: { email: "alice@example.com" },
 });
 
-// Updates state and triggers onStateChange
+// Updates the actor's data and syncs it to the external database
 await user.updateEmail("alice2@example.com");
 
 const userData = await user.getUser();

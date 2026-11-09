@@ -14,4 +14,5 @@ pub mod metrics;
 pub mod ops;
 pub mod services;
 pub mod transport;
+pub mod typed;
 pub mod types;

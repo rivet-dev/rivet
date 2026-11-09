@@ -43,7 +43,7 @@ Pending connections are not visible in `c.conns` while `onBeforeConnect` is runn
 
 The `onBeforeConnect` hook is called whenever a new client connects to the actor. Can be async. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
 
-The `onBeforeConnect` hook does NOT return connection state - it's used solely for validation.
+The `onBeforeConnect` hook is used solely for validation. To keep per-connection data, store it in `c.vars` from `onConnect`.
 
 Connections are not visible in `c.conns` while `onBeforeConnect` is running.
 

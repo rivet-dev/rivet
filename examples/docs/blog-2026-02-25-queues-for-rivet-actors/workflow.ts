@@ -2,23 +2,23 @@ import { actor, queue, setup } from "rivetkit";
 import { workflow } from "rivetkit/workflow";
 
 const worker = actor({
-  state: { processed: 0 },
   queues: {
     orders: queue<{ orderId: string }>(),
   },
   // Workflow replays safely on crash or restart
   run: workflow(async (ctx) => {
-    for await (const message of ctx.queue.iter()) {
-      await ctx.step("charge", async (ctx) =>
+    await ctx.loop("order-loop", async (loopCtx) => {
+      const message = await loopCtx.queue.next("wait-order");
+      await loopCtx.step("charge", async () =>
         charge(message.body.orderId),
       );
-      await ctx.step("fulfill", async (ctx) =>
+      await loopCtx.step("fulfill", async () =>
         fulfill(message.body.orderId),
       );
-      await ctx.step("notify", async (ctx) =>
+      await loopCtx.step("notify", async () =>
         notify(message.body.orderId),
       );
-    }
+    });
   }),
 });
 

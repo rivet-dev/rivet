@@ -14,26 +14,19 @@ export class PartyBot {
 
 	private async start() {
 		try {
-			const mm = this.client.partyMatchmaker
+			const ticket = await this.client.partyMatchmaker
 				.getOrCreate(["main"])
-				.connect();
-			const result = await mm.send(
-				"joinParty",
-				{
+				.joinParty({
 					partyCode: this.partyCode,
 					playerName: `Bot-${Math.random().toString(36).slice(2, 6)}`,
-				},
-				{ wait: true, timeout: 10_000 },
-			);
-			mm.dispose();
-			const response = result.response;
-			if (!response || this.destroyed) return;
+				});
+			if (this.destroyed) return;
 
 			this.conn = this.client.partyMatch
-				.get([response.matchId], {
+				.get([ticket.matchId], {
 					params: {
-						playerId: response.playerId,
-						joinToken: response.joinToken,
+						playerId: ticket.playerId,
+						joinToken: ticket.joinToken,
 					},
 				})
 				.connect();

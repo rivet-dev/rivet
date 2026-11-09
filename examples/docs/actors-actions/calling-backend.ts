@@ -4,11 +4,11 @@ import { Hono } from "hono";
 
 // Define actor
 const counter = actor({
-  state: { count: 0 },
+  vars: { count: 0 },
   actions: {
     increment: (c, amount: number) => {
-      c.state.count += amount;
-      return c.state.count;
+      c.vars.count += amount;
+      return c.vars.count;
     }
   }
 });

@@ -7,28 +7,26 @@ interface WorkflowResult {
 }
 
 const dataProcessor = actor({
-  state: {},
   actions: {
     initialize: (c, workflowId: string) => ({ workflowId, data: "initialized" })
   }
 });
 
 const validator = actor({
-  state: {},
   actions: {
     validate: (c, data: { workflowId: string; data: string }) => ({ valid: true, data })
   }
 });
 
 const finalizer = actor({
-  state: {},
   actions: {
     finalize: (c, validationResult: { valid: boolean }) => ({ finalized: validationResult.valid })
   }
 });
 
 const workflowActor = actor({
-  state: { workflows: [] as WorkflowResult[] },
+  // Completed workflows are kept in memory for this example
+  createVars: () => ({ workflows: [] as WorkflowResult[] }),
 
   actions: {
     executeWorkflow: async (c, workflowId: string) => {
@@ -46,7 +44,7 @@ const workflowActor = actor({
       const finalizerHandle = client.finalizer.getOrCreate(["main"]);
       const result = await finalizerHandle.finalize(validationResult);
 
-      c.state.workflows.push({ workflowId, result, completedAt: Date.now() });
+      c.vars.workflows.push({ workflowId, result, completedAt: Date.now() });
       return result;
     }
   }

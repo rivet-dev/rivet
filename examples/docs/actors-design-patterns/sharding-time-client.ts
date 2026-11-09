@@ -7,10 +7,10 @@ interface Event {
 }
 
 const hourlyAnalytics = actor({
-  state: { events: [] as Event[] },
+  vars: { events: [] as Event[] },
   actions: {
     trackEvent: (c, event: Event) => {
-      c.state.events.push(event);
+      c.vars.events.push(event);
     },
   },
 });

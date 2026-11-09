@@ -4,7 +4,7 @@ description: "Export traces from Rivet Actors, add application spans, and follow
 skill: true
 ---
 
-Rivet gives you automatic instrumentation of actor actions, HTTP handlers, actor-to-actor calls, SQLite operations, queues, and scheduled actions.
+Rivet gives you automatic instrumentation of actor actions, HTTP handlers, actor-to-actor calls, SQLite operations, and scheduled actions.
 
 This helps you investigate anything that looks slow, walk through complex actor-to-actor flows, and get end-to-end context into the life of your actor.
 
@@ -57,7 +57,6 @@ Each span shows how long an operation took and whether it failed. RivetKit recor
 - Actions and HTTP handlers, with the operations they perform shown underneath
 - Calls through `c.client()`, including time spent routing, waking the other actor, and retrying
 - SQLite operations, without recording SQL text, bindings, or results
-- Queue sends and receipts, with a link from each receipt to its sender
 - Scheduled actions, in a new trace linked to the work that scheduled them
 - Workflow runs and steps. Each run is a new trace linked to the run before it
 
@@ -172,10 +171,10 @@ RivetKit sends spans in the background. Actor requests continue if the collector
 
 ## Known limitations
 
-- WebSocket handlers, lifecycle hooks, connection callbacks, KV operations, and actor state operations do not have dedicated spans
+- WebSocket handlers, lifecycle hooks, and connection callbacks do not have dedicated spans
 - Actions called over `.connect()` start a new trace instead of joining the caller's trace
 - Effect spans are not traced. Use `@effect/opentelemetry`
 - RivetKit does not add `rivet.ray.id` to your application spans
-- Workflow spans carry a `rivet.ray.id` only after the workflow receives a queue message
+- Workflow spans do not carry a `rivet.ray.id`
 - The Wasm runtime is not traced
 - A hard process exit can lose spans still waiting in the export queue

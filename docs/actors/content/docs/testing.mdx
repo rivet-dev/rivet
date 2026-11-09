@@ -22,9 +22,9 @@ Rivet includes a test helper called `setupTest` that starts your registry in tes
 
 <CodeSnippet file="examples/docs/actors-testing/basic-setup.ts" />
 
-## Testing Actor State
+## Testing Persisted Data
 
-State persists within each test, allowing you to verify that your actor correctly maintains state between operations.
+Data an actor writes to [SQLite](/actors/docs/sqlite) persists within each test, allowing you to verify that your actor correctly maintains data between operations.
 
 <CodeSnippet file="examples/docs/actors-testing/testing-state.ts" />
 

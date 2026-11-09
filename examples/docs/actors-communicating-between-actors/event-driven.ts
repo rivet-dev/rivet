@@ -17,7 +17,6 @@ interface AuditLog {
 }
 
 const userActor = actor({
-  state: {},
   actions: {
     createUser: (c, name: string) => {
       const user = { id: crypto.randomUUID(), name };
@@ -28,7 +27,6 @@ const userActor = actor({
 });
 
 const orderActor = actor({
-  state: {},
   actions: {
     completeOrder: (c, amount: number) => {
       const order = { id: crypto.randomUUID(), amount };
@@ -39,7 +37,8 @@ const orderActor = actor({
 });
 
 const auditLogActor = actor({
-  state: { logs: [] as AuditLog[] },
+  // Audit logs are kept in memory for this example
+  createVars: () => ({ logs: [] as AuditLog[] }),
 
   actions: {
     startAuditing: async (c) => {
@@ -51,7 +50,7 @@ const auditLogActor = actor({
 
       // Listen for user events
       userActorConn.on("userCreated", (user: User) => {
-        c.state.logs.push({
+        c.vars.logs.push({
           event: "userCreated",
           data: user,
           timestamp: Date.now()
@@ -60,7 +59,7 @@ const auditLogActor = actor({
 
       // Listen for order events
       orderActorConn.on("orderCompleted", (order: Order) => {
-        c.state.logs.push({
+        c.vars.logs.push({
           event: "orderCompleted",
           data: order,
           timestamp: Date.now()

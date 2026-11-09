@@ -5,5 +5,6 @@ pub enum DepotSplitSnapshotData {
 }
 impl_versioned_v1!(
 	DepotSplitSnapshotData,
+	DEPOT_SPLIT_SNAPSHOT,
 	crate::generated::depot_split_snapshot_v1::SplitSnapshot
 );

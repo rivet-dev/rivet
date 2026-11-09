@@ -84,11 +84,6 @@
 					"badge": "POST"
 				},
 				{
-					"title": "Send Queue Message",
-					"href": "/docs/api/gateway/queue",
-					"badge": "POST"
-				},
-				{
 					"title": "Connect",
 					"href": "/docs/api/gateway/connect",
 					"badge": "WS"

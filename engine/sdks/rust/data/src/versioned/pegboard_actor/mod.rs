@@ -23,6 +23,7 @@ pub const ENVOY_VERSION_ACTOR_VERSION: u16 = 2;
 
 impl_versioned_v1_v2_v3!(
 	ActorData,
+	PEGBOARD_ACTOR,
 	v1::ActorData,
 	v2::ActorData,
 	v3::ActorData,
@@ -34,6 +35,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	ActorState,
+	PEGBOARD_ACTOR,
 	v1::ActorState,
 	v2::ActorState,
 	v3::ActorState,
@@ -45,6 +47,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	ActorTimer,
+	PEGBOARD_ACTOR,
 	v1::ActorTimer,
 	v2::ActorTimer,
 	v3::ActorTimer,
@@ -56,6 +59,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	ActorCreateRequest,
+	PEGBOARD_ACTOR,
 	v1::ActorCreateRequest,
 	v2::ActorCreateRequest,
 	v3::ActorCreateRequest,
@@ -67,6 +71,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	ActorCreateResponse,
+	PEGBOARD_ACTOR,
 	v1::ActorCreateResponse,
 	v2::ActorCreateResponse,
 	v3::ActorCreateResponse,
@@ -78,6 +83,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	ActorReadRequest,
+	PEGBOARD_ACTOR,
 	v1::ActorReadRequest,
 	v2::ActorReadRequest,
 	v3::ActorReadRequest,
@@ -89,6 +95,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	ActorReadResponse,
+	PEGBOARD_ACTOR,
 	v1::ActorReadResponse,
 	v2::ActorReadResponse,
 	v3::ActorReadResponse,
@@ -100,6 +107,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	ActorStartNotice,
+	PEGBOARD_ACTOR,
 	v1::ActorStartNotice,
 	v2::ActorStartNotice,
 	v3::ActorStartNotice,
@@ -111,6 +119,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	ActorEvent,
+	PEGBOARD_ACTOR,
 	v1::ActorEvent,
 	v2::ActorEvent,
 	v3::ActorEvent,
@@ -122,6 +131,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	ActorEventResponse,
+	PEGBOARD_ACTOR,
 	v1::ActorEventResponse,
 	v2::ActorEventResponse,
 	v3::ActorEventResponse,
@@ -133,6 +143,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexInsertActorRequest,
+	PEGBOARD_ACTOR,
 	v1::IndexInsertActorRequest,
 	v2::IndexInsertActorRequest,
 	v3::IndexInsertActorRequest,
@@ -144,6 +155,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexInsertActorResponse,
+	PEGBOARD_ACTOR,
 	v1::IndexInsertActorResponse,
 	v2::IndexInsertActorResponse,
 	v3::IndexInsertActorResponse,
@@ -155,6 +167,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexDeleteActorRequest,
+	PEGBOARD_ACTOR,
 	v1::IndexDeleteActorRequest,
 	v2::IndexDeleteActorRequest,
 	v3::IndexDeleteActorRequest,
@@ -166,6 +179,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexDeleteActorResponse,
+	PEGBOARD_ACTOR,
 	v1::IndexDeleteActorResponse,
 	v2::IndexDeleteActorResponse,
 	v3::IndexDeleteActorResponse,
@@ -177,6 +191,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexListActorsRequest,
+	PEGBOARD_ACTOR,
 	v1::IndexListActorsRequest,
 	v2::IndexListActorsRequest,
 	v3::IndexListActorsRequest,
@@ -188,6 +203,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexListActorsResponse,
+	PEGBOARD_ACTOR,
 	v1::IndexListActorsResponse,
 	v2::IndexListActorsResponse,
 	v3::IndexListActorsResponse,
@@ -199,6 +215,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	DestroyedActorIndexEntry,
+	PEGBOARD_ACTOR,
 	v1::DestroyedActorIndexEntry,
 	v2::DestroyedActorIndexEntry,
 	v3::DestroyedActorIndexEntry,
@@ -210,6 +227,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexReadDestroyedActorRequest,
+	PEGBOARD_ACTOR,
 	v1::IndexReadDestroyedActorRequest,
 	v2::IndexReadDestroyedActorRequest,
 	v3::IndexReadDestroyedActorRequest,
@@ -221,6 +239,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexReadDestroyedActorResponse,
+	PEGBOARD_ACTOR,
 	v1::IndexReadDestroyedActorResponse,
 	v2::IndexReadDestroyedActorResponse,
 	v3::IndexReadDestroyedActorResponse,
@@ -232,6 +251,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexListEnvoysRequest,
+	PEGBOARD_ACTOR,
 	v1::IndexListEnvoysRequest,
 	v2::IndexListEnvoysRequest,
 	v3::IndexListEnvoysRequest,
@@ -243,6 +263,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexListEnvoysResponse,
+	PEGBOARD_ACTOR,
 	v1::IndexListEnvoysResponse,
 	v2::IndexListEnvoysResponse,
 	v3::IndexListEnvoysResponse,
@@ -254,6 +275,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	EpoxyActorByKeyEntry,
+	PEGBOARD_ACTOR,
 	v1::EpoxyActorByKeyEntry,
 	v2::EpoxyActorByKeyEntry,
 	v3::EpoxyActorByKeyEntry,
@@ -265,6 +287,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	KvValue,
+	PEGBOARD_ACTOR,
 	v1::KvValue,
 	v2::KvValue,
 	v3::KvValue,
@@ -276,6 +299,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	EnvoyData,
+	PEGBOARD_ACTOR,
 	v1::EnvoyData,
 	v2::EnvoyData,
 	v3::EnvoyData,
@@ -287,6 +311,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	EnvoyUpsertRequest,
+	PEGBOARD_ACTOR,
 	v1::EnvoyUpsertRequest,
 	v2::EnvoyUpsertRequest,
 	v3::EnvoyUpsertRequest,
@@ -298,6 +323,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	EnvoyUpsertResponse,
+	PEGBOARD_ACTOR,
 	v1::EnvoyUpsertResponse,
 	v2::EnvoyUpsertResponse,
 	v3::EnvoyUpsertResponse,
@@ -309,6 +335,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	EnvoyReadRequest,
+	PEGBOARD_ACTOR,
 	v1::EnvoyReadRequest,
 	v2::EnvoyReadRequest,
 	v3::EnvoyReadRequest,
@@ -320,6 +347,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	EnvoyReadResponse,
+	PEGBOARD_ACTOR,
 	v1::EnvoyReadResponse,
 	v2::EnvoyReadResponse,
 	v3::EnvoyReadResponse,
@@ -331,6 +359,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexInsertEnvoyRequest,
+	PEGBOARD_ACTOR,
 	v1::IndexInsertEnvoyRequest,
 	v2::IndexInsertEnvoyRequest,
 	v3::IndexInsertEnvoyRequest,
@@ -342,6 +371,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexInsertEnvoyResponse,
+	PEGBOARD_ACTOR,
 	v1::IndexInsertEnvoyResponse,
 	v2::IndexInsertEnvoyResponse,
 	v3::IndexInsertEnvoyResponse,
@@ -353,6 +383,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexUpsertActiveEnvoyRequest,
+	PEGBOARD_ACTOR,
 	v1::IndexUpsertActiveEnvoyRequest,
 	v2::IndexUpsertActiveEnvoyRequest,
 	v3::IndexUpsertActiveEnvoyRequest,
@@ -364,6 +395,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexUpsertActiveEnvoyResponse,
+	PEGBOARD_ACTOR,
 	v1::IndexUpsertActiveEnvoyResponse,
 	v2::IndexUpsertActiveEnvoyResponse,
 	v3::IndexUpsertActiveEnvoyResponse,
@@ -375,6 +407,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexDeleteActiveEnvoyRequest,
+	PEGBOARD_ACTOR,
 	v1::IndexDeleteActiveEnvoyRequest,
 	v2::IndexDeleteActiveEnvoyRequest,
 	v3::IndexDeleteActiveEnvoyRequest,
@@ -386,6 +419,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexDeleteActiveEnvoyResponse,
+	PEGBOARD_ACTOR,
 	v1::IndexDeleteActiveEnvoyResponse,
 	v2::IndexDeleteActiveEnvoyResponse,
 	v3::IndexDeleteActiveEnvoyResponse,
@@ -397,6 +431,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexPutEnvoyPoolRequest,
+	PEGBOARD_ACTOR,
 	v1::IndexPutEnvoyPoolRequest,
 	v2::IndexPutEnvoyPoolRequest,
 	v3::IndexPutEnvoyPoolRequest,
@@ -408,6 +443,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexPutEnvoyPoolResponse,
+	PEGBOARD_ACTOR,
 	v1::IndexPutEnvoyPoolResponse,
 	v2::IndexPutEnvoyPoolResponse,
 	v3::IndexPutEnvoyPoolResponse,
@@ -419,6 +455,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexListEnvoyPoolsRequest,
+	PEGBOARD_ACTOR,
 	v1::IndexListEnvoyPoolsRequest,
 	v2::IndexListEnvoyPoolsRequest,
 	v3::IndexListEnvoyPoolsRequest,
@@ -430,6 +467,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexListEnvoyPoolsResponse,
+	PEGBOARD_ACTOR,
 	v1::IndexListEnvoyPoolsResponse,
 	v2::IndexListEnvoyPoolsResponse,
 	v3::IndexListEnvoyPoolsResponse,
@@ -441,6 +479,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexListActiveEnvoysRequest,
+	PEGBOARD_ACTOR,
 	v1::IndexListActiveEnvoysRequest,
 	v2::IndexListActiveEnvoysRequest,
 	v3::IndexListActiveEnvoysRequest,
@@ -452,6 +491,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexListActiveEnvoysResponse,
+	PEGBOARD_ACTOR,
 	v1::IndexListActiveEnvoysResponse,
 	v2::IndexListActiveEnvoysResponse,
 	v3::IndexListActiveEnvoysResponse,
@@ -463,6 +503,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexListActiveEnvoyStatesRequest,
+	PEGBOARD_ACTOR,
 	v1::IndexListActiveEnvoyStatesRequest,
 	v2::IndexListActiveEnvoyStatesRequest,
 	v3::IndexListActiveEnvoyStatesRequest,
@@ -474,6 +515,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	IndexListActiveEnvoyStatesResponse,
+	PEGBOARD_ACTOR,
 	v1::IndexListActiveEnvoyStatesResponse,
 	v2::IndexListActiveEnvoyStatesResponse,
 	v3::IndexListActiveEnvoyStatesResponse,
@@ -485,6 +527,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	ActiveEnvoyIndexEntry,
+	PEGBOARD_ACTOR,
 	v1::ActiveEnvoyIndexEntry,
 	v2::ActiveEnvoyIndexEntry,
 	v3::ActiveEnvoyIndexEntry,
@@ -496,6 +539,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	ActiveEnvoyState,
+	PEGBOARD_ACTOR,
 	v1::ActiveEnvoyState,
 	v2::ActiveEnvoyState,
 	v3::ActiveEnvoyState,
@@ -507,6 +551,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	NamespaceRecord,
+	PEGBOARD_ACTOR,
 	v1::NamespaceRecord,
 	v2::NamespaceRecord,
 	v3::NamespaceRecord,
@@ -518,6 +563,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	NamespaceCreateRequest,
+	PEGBOARD_ACTOR,
 	v1::NamespaceCreateRequest,
 	v2::NamespaceCreateRequest,
 	v3::NamespaceCreateRequest,
@@ -529,6 +575,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	NamespaceCreateResponse,
+	PEGBOARD_ACTOR,
 	v1::NamespaceCreateResponse,
 	v2::NamespaceCreateResponse,
 	v3::NamespaceCreateResponse,
@@ -540,6 +587,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	NamespaceReadRequest,
+	PEGBOARD_ACTOR,
 	v1::NamespaceReadRequest,
 	v2::NamespaceReadRequest,
 	v3::NamespaceReadRequest,
@@ -551,6 +599,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	NamespaceReadResponse,
+	PEGBOARD_ACTOR,
 	v1::NamespaceReadResponse,
 	v2::NamespaceReadResponse,
 	v3::NamespaceReadResponse,
@@ -562,6 +611,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	NamespaceListRequest,
+	PEGBOARD_ACTOR,
 	v1::NamespaceListRequest,
 	v2::NamespaceListRequest,
 	v3::NamespaceListRequest,
@@ -573,6 +623,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	NamespaceListResponse,
+	PEGBOARD_ACTOR,
 	v1::NamespaceListResponse,
 	v2::NamespaceListResponse,
 	v3::NamespaceListResponse,
@@ -584,6 +635,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	NodePoolConfig,
+	PEGBOARD_ACTOR,
 	v1::NodePoolConfig,
 	v2::NodePoolConfig,
 	v3::NodePoolConfig,
@@ -595,6 +647,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	PoolRequest,
+	PEGBOARD_ACTOR,
 	v1::PoolRequest,
 	v2::PoolRequest,
 	v3::PoolRequest,
@@ -606,6 +659,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	PoolResponse,
+	PEGBOARD_ACTOR,
 	v1::PoolResponse,
 	v2::PoolResponse,
 	v3::PoolResponse,
@@ -617,6 +671,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	PoolLease,
+	PEGBOARD_ACTOR,
 	v1::PoolLease,
 	v2::PoolLease,
 	v3::PoolLease,
@@ -628,6 +683,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	PoolListRequest,
+	PEGBOARD_ACTOR,
 	v1::PoolListRequest,
 	v2::PoolListRequest,
 	v3::PoolListRequest,
@@ -639,6 +695,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v1_v2_v3!(
 	PoolListResponse,
+	PEGBOARD_ACTOR,
 	v1::PoolListResponse,
 	v2::PoolListResponse,
 	v3::PoolListResponse,
@@ -650,6 +707,7 @@ impl_versioned_v1_v2_v3!(
 
 impl_versioned_v2_v3!(
 	MigrateFromV2Begin,
+	PEGBOARD_ACTOR,
 	v2::MigrateFromV2Begin,
 	v3::MigrateFromV2Begin,
 	up23::convert_migrate_from_v2_begin_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -658,6 +716,7 @@ impl_versioned_v2_v3!(
 
 impl_versioned_v2_v3!(
 	ActorMigrateFromV2BeginResponse,
+	PEGBOARD_ACTOR,
 	v2::ActorMigrateFromV2BeginResponse,
 	v3::ActorMigrateFromV2BeginResponse,
 	up23::convert_actor_migrate_from_v2_begin_response_pegboard_actor_v2_to_pegboard_actor_v3,

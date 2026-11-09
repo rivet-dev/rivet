@@ -158,6 +158,8 @@ interface AgentConcurrent2Vars {
 	wakeStartedAt: number | null;
 	wakeIteration: number;
 	iterationSchemaReady?: boolean;
+	/** Lifetime counters loaded from `agent2_counters` and written back by `saveAgentConcurrent2Counters`. */
+	counters: AgentConcurrent2Counters;
 }
 
 interface RawRivetDB {
@@ -169,7 +171,7 @@ interface RawRivetDB {
 
 type SQLPrimitive = string | number | boolean | null;
 
-interface AgentConcurrent2State {
+interface AgentConcurrent2Counters {
 	runCount: number;
 	wakeCount: number;
 	queryStats: AgentConcurrent2QueryStats;
@@ -354,23 +356,25 @@ export const loadTestAgent2 = actor({
 		canHibernateWebSocket: false,
 		sleepGracePeriod: 5_000,
 	},
-	state: {
-		runCount: 0,
-		wakeCount: 0,
-		queryStats: createAgentConcurrent2QueryStats(),
-	} as AgentConcurrent2State,
 	db: db({
 		onMigrate: async (database) => {
 			await createAgentConcurrent2Schema(database);
 			await seedAgentConcurrent2Data(database);
+			await createAgentConcurrent2CountersTable(database);
 		},
 	}),
-	vars: {
+	createVars: async (c): Promise<AgentConcurrent2Vars> => ({
 		sql: null,
 		wakeStats: null,
 		wakeStartedAt: null,
 		wakeIteration: 0,
-	} as AgentConcurrent2Vars,
+		counters: await loadAgentConcurrent2Counters(c.db),
+	}),
+	// Lifetime counters are written back when the actor sleeps and at each
+	// `stateSaves` tick pass, so ordinary requests do not pay an extra commit.
+	onSleep: async (c) => {
+		await saveAgentConcurrent2Counters(c);
+	},
 	onWebSocket: (c, websocket: UniversalWebSocket) => {
 		send(websocket, {
 			type: "connected",
@@ -394,17 +398,17 @@ export const loadTestAgent2 = actor({
 			options?: AgentConcurrent2RunOptions,
 		) => {
 			const runtime = ensureAgentConcurrent2Runtime(c);
-			c.state.runCount++;
+			c.vars.counters.runCount++;
 			runtime.vars.wakeIteration++;
 			const cycleStats = createAgentConcurrent2QueryStats();
 			const stats = createAgentConcurrent2StatsSet(
 				cycleStats,
 				runtime.wakeStats,
-				c.state.queryStats,
+				c.vars.counters.queryStats,
 			);
 			const result = await runAgentConcurrent2Workload(
 				runtime.sql,
-				clientId ?? `agent2-action-${c.state.runCount}`,
+				clientId ?? `agent2-action-${c.vars.counters.runCount}`,
 				0,
 				parseGrowthOptions((options ?? {}) as Record<string, unknown>),
 				stats,
@@ -414,7 +418,7 @@ export const loadTestAgent2 = actor({
 				stats: snapshotAgentConcurrent2Stats(c, cycleStats),
 			};
 		},
-		getRunCount: (c) => c.state.runCount,
+		getRunCount: (c) => c.vars.counters.runCount,
 		sleep: (c) => {
 			c.sleep();
 			return true;
@@ -426,9 +430,7 @@ async function handleAgentConcurrent2Message(
 	c: {
 		db: RawRivetDB;
 		vars: AgentConcurrent2Vars;
-		state: AgentConcurrent2State;
 		sleep: () => void;
-		saveState: (opts: { immediate?: boolean }) => Promise<void>;
 	},
 	websocket: UniversalWebSocket,
 	data: unknown,
@@ -455,13 +457,13 @@ async function handleAgentConcurrent2Message(
 		}
 
 		const runtime = ensureAgentConcurrent2Runtime(c);
-		c.state.runCount++;
+		c.vars.counters.runCount++;
 		runtime.vars.wakeIteration++;
 		cycleStats = createAgentConcurrent2QueryStats();
 		const stats = createAgentConcurrent2StatsSet(
 			cycleStats,
 			runtime.wakeStats,
-			c.state.queryStats,
+			c.vars.counters.queryStats,
 		);
 
 		if (request.type === "agent2_iterate") {
@@ -474,8 +476,8 @@ async function handleAgentConcurrent2Message(
 				request,
 				stats,
 				async () => {
-					c.state.runCount++;
-					await c.saveState({ immediate: true });
+					c.vars.counters.runCount++;
+					await saveAgentConcurrent2Counters(c);
 				},
 			);
 			send(websocket, {
@@ -748,22 +750,71 @@ function createAgentConcurrent2Db(db: RawRivetDB): AgentConcurrent2Db {
 function ensureAgentConcurrent2Runtime(c: {
 	db: RawRivetDB;
 	vars: AgentConcurrent2Vars;
-	state: AgentConcurrent2State;
 }): AgentConcurrent2Runtime {
 	c.vars.sql ??= createAgentConcurrent2Db(c.db);
-	c.state.queryStats ??= createAgentConcurrent2QueryStats();
-	c.state.wakeCount ??= 0;
 	if (!c.vars.wakeStats) {
 		c.vars.wakeStats = createAgentConcurrent2QueryStats();
 		c.vars.wakeStartedAt = Date.now();
 		c.vars.wakeIteration = 0;
-		c.state.wakeCount++;
+		c.vars.counters.wakeCount++;
 	}
 	return {
 		sql: c.vars.sql,
 		wakeStats: c.vars.wakeStats,
 		vars: c.vars,
 	};
+}
+
+async function createAgentConcurrent2CountersTable(
+	database: RawRivetDB,
+): Promise<void> {
+	await database.execute(`CREATE TABLE IF NOT EXISTS agent2_counters (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		run_count INTEGER NOT NULL,
+		wake_count INTEGER NOT NULL,
+		query_stats TEXT NOT NULL
+	)`);
+	await database.execute(
+		"INSERT OR IGNORE INTO agent2_counters (id, run_count, wake_count, query_stats) VALUES (1, 0, 0, ?)",
+		JSON.stringify(createAgentConcurrent2QueryStats()),
+	);
+}
+
+async function loadAgentConcurrent2Counters(
+	database: RawRivetDB,
+): Promise<AgentConcurrent2Counters> {
+	const rows = await database.execute(
+		"SELECT run_count, wake_count, query_stats FROM agent2_counters WHERE id = 1",
+	);
+	const row = rows[0];
+	if (!row) {
+		throw new Error("agent2_counters row is missing");
+	}
+	return {
+		runCount: Number(row.run_count),
+		wakeCount: Number(row.wake_count),
+		queryStats: JSON.parse(
+			String(row.query_stats),
+		) as AgentConcurrent2QueryStats,
+	};
+}
+
+/**
+ * Writes the lifetime counters back to SQLite in one commit. The write goes
+ * through the serialized database so it never lands inside another request's
+ * open transaction.
+ */
+async function saveAgentConcurrent2Counters(
+	c: { db: RawRivetDB; vars: AgentConcurrent2Vars },
+): Promise<void> {
+	const sql = (c.vars.sql ??= createAgentConcurrent2Db(c.db));
+	const counters = c.vars.counters;
+	await sql(
+		"UPDATE agent2_counters SET run_count = ?, wake_count = ?, query_stats = ? WHERE id = 1",
+		counters.runCount,
+		counters.wakeCount,
+		JSON.stringify(counters.queryStats),
+	);
 }
 
 function createAgentConcurrent2QueryStats(): AgentConcurrent2QueryStats {
@@ -792,18 +843,18 @@ function createAgentConcurrent2StatsSet(
 }
 
 function snapshotAgentConcurrent2Stats(
-	c: { vars: AgentConcurrent2Vars; state: AgentConcurrent2State },
+	c: { vars: AgentConcurrent2Vars },
 	cycle: AgentConcurrent2QueryStats,
 ): AgentConcurrent2StatsSnapshot {
 	return {
-		wakeIndex: c.state.wakeCount,
-		actorIteration: c.state.runCount,
+		wakeIndex: c.vars.counters.wakeCount,
+		actorIteration: c.vars.counters.runCount,
 		wakeIteration: c.vars.wakeIteration,
 		cycle: cloneAgentConcurrent2QueryStats(cycle),
 		wake: cloneAgentConcurrent2QueryStats(
 			c.vars.wakeStats ?? createAgentConcurrent2QueryStats(),
 		),
-		actor: cloneAgentConcurrent2QueryStats(c.state.queryStats),
+		actor: cloneAgentConcurrent2QueryStats(c.vars.counters.queryStats),
 	};
 }
 
@@ -2712,7 +2763,7 @@ interface AgentIterationOptions {
 	planReads: number;
 	/** Rows read when the actor rebuilds the transcript for the next request. */
 	transcriptLimit: number;
-	/** Immediate actor state saves per iteration, one at the end of each tick pass. */
+	/** Counter commits per iteration, one at the end of each tick pass. */
 	stateSaves: number;
 	mode: "serial" | "merged";
 }
@@ -2728,7 +2779,7 @@ interface AgentIterationResult {
 	reads: number[];
 	/** Reads that ran directly after a commit. */
 	readsAfterCommit: number[];
-	/** Immediate actor state saves, as `flushDirtyState` runs after each tick. */
+	/** Durations of the counter commits that end each tick pass. */
 	stateSaves: number[];
 	planMs: number;
 	transcriptMs: number;
@@ -2783,7 +2834,7 @@ async function runAgentIteration(
 	sql: AgentConcurrent2Db,
 	options: AgentIterationOptions,
 	stats: AgentConcurrent2QueryStatsSet,
-	saveState: () => Promise<void>,
+	persistCounters: () => Promise<void>,
 ): Promise<AgentIterationResult> {
 	const startedAt = performance.now();
 	const nextText = createTextGenerator(
@@ -2795,12 +2846,12 @@ async function runAgentIteration(
 	const readsAfterCommit: number[] = [];
 	const stateSaves: number[] = [];
 	let stateSavesLeft = options.stateSaves;
-	/** Ends a tick pass: the actor flushes its dirty state with an immediate save. */
+	/** Ends a tick pass: the actor commits its counters to SQLite. */
 	const endTick = async () => {
 		if (stateSavesLeft <= 0) return;
 		stateSavesLeft--;
 		const t0 = performance.now();
-		await saveState();
+		await persistCounters();
 		stateSaves.push(performance.now() - t0);
 	};
 	const nowIso = () => new Date().toISOString();

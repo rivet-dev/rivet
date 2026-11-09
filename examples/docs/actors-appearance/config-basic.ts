@@ -5,7 +5,6 @@ const chatRoom = actor({
     name: "Chat Room",    // Human-friendly display name
     icon: "comments",     // FontAwesome icon name
   },
-  state: { messages: [] },
   actions: {
     // ...
   }

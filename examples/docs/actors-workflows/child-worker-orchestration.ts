@@ -1,4 +1,5 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 type BatchMessage = { payload: number };
@@ -10,9 +11,19 @@ export const childWorkerActor = actor({
 });
 
 export const orchestratorActor = actor({
-  state: {
-    lastTotal: 0,
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS orchestrator_stats (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          last_total INTEGER NOT NULL
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO orchestrator_stats (id, last_total) VALUES (1, 0)",
+      );
+    },
+  }),
   run: workflow(async (ctx) => {
     await ctx.step("start-children", async (step) => startChildren(step));
 
@@ -46,13 +57,21 @@ export const orchestratorActor = actor({
         });
 
         await loopCtx.step("reconcile", async (step) => {
-          step.state.lastTotal = results.a + results.b + results.c;
+          await step.db.execute(
+            "UPDATE orchestrator_stats SET last_total = ? WHERE id = 1",
+            results.a + results.b + results.c,
+          );
         });
 
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{ lastTotal: number }>(
+        "SELECT last_total AS lastTotal FROM orchestrator_stats WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 

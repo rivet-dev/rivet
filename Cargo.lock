@@ -1136,6 +1136,7 @@ dependencies = [
 name = "depot-protocol"
 version = "3.0.6"
 dependencies = [
+ "anyhow",
  "rivet-data",
  "rivet-keys",
  "vbare",
@@ -1443,6 +1444,7 @@ name = "epoxy-protocol"
 version = "3.0.6"
 dependencies = [
  "anyhow",
+ "rivet-data",
  "serde",
  "serde_bytes",
  "vbare",
@@ -4254,7 +4256,6 @@ dependencies = [
  "rivet-config",
  "rivet-data",
  "rivet-envoy-protocol",
- "rivet-ups-protocol",
  "vergen",
  "vergen-gitcl",
 ]
@@ -4602,6 +4603,7 @@ dependencies = [
  "subtle",
  "tokio",
  "tokio-util",
+ "tracing",
 ]
 
 [[package]]
@@ -4843,18 +4845,6 @@ dependencies = [
  "lazy_static",
  "rivet-metrics",
  "tracing",
-]
-
-[[package]]
-name = "rivet-ups-protocol"
-version = "3.0.6"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "serde",
- "serde_bytes",
- "vbare",
- "vbare-compiler",
 ]
 
 [[package]]

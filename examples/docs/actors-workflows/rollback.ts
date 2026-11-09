@@ -1,8 +1,21 @@
 import { actor, queue, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 export const checkoutActor = actor({
-  state: { status: "pending" as string },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS checkout_status (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          status TEXT NOT NULL
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO checkout_status (id, status) VALUES (1, 'pending')",
+      );
+    },
+  }),
   queues: {
     orders: queue<{ orderId: string }>(),
   },
@@ -29,13 +42,20 @@ export const checkoutActor = actor({
         });
 
         await loopCtx.step("confirm", async (step) => {
-          step.state.status = "confirmed";
+          await step.db.execute(
+            "UPDATE checkout_status SET status = 'confirmed' WHERE id = 1",
+          );
         });
 
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{ status: string }>(
+        "SELECT status FROM checkout_status WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 

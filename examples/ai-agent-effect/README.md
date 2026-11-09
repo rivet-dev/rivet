@@ -1,6 +1,6 @@
 # AI Agent (Effect)
 
-A stateful AI agent actor built with the [Effect](https://effect.website) SDK for Rivet Actors and [Effect AI](https://effect.website/docs/ai/introduction/). The agent persists its conversation history in actor state, so it remembers every turn across calls and restarts.
+A stateful AI agent actor built with the [Effect](https://effect.website) SDK for Rivet Actors and [Effect AI](https://effect.website/docs/ai/introduction/). The agent stores its conversation history in the actor's SQLite database, so it remembers every turn across calls and restarts.
 
 ## Prerequisites
 
@@ -29,7 +29,7 @@ npm run client
 
 ## Features
 
-- **Persistent conversation memory**: Every user and assistant turn is stored in persisted actor state (a `Schema.Array` of role/content messages), so the model sees the full history on each call, even after the actor sleeps or restarts
+- **Persistent conversation memory**: Every user and assistant turn is stored as a row in the actor's SQLite database, so the model sees the full history on each call, even after the actor sleeps or restarts
 - **Effect AI integration**: The agent calls `LanguageModel.generateText` from `effect/ai` with the running history as the prompt
 - **Swappable model via Layer**: The actor requires the `LanguageModel` service but never constructs it. The concrete model is provided as an Effect `Layer` where the actor is composed: a real OpenAI model in `dev`, a mock model in tests
 - **Effect-native actor**: Defined with `Actor.make` and implemented with `toLayer`, returning action handlers from an Effect wake scope
@@ -40,7 +40,7 @@ npm run client
 The actor is split into a public contract and a server-only implementation:
 
 - **Contract** ([`src/actors/agent/api.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect/src/actors/agent/api.ts)): Declares the `Agent` actor, the `Message` type, the `SendMessage` / `GetHistory` actions, and the `EmptyMessageError`
-- **Implementation** ([`src/actors/agent/live.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect/src/actors/agent/live.ts)): Implements the wake scope, the conversation-history state schema, and the action handlers that call the LLM
+- **Implementation** ([`src/actors/agent/live.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect/src/actors/agent/live.ts)): Implements the wake scope, the SQLite schema for the conversation history, and the action handlers that call the LLM
 - **Model wiring** ([`src/model.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect/src/model.ts)): Composes a `Layer<LanguageModel>` from `OpenAiLanguageModel`, `OpenAiClient`, and `FetchHttpClient`
 - **Server** ([`src/main.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect/src/main.ts)): Provides the model Layer to the actor layer and serves it with `Registry.serve`
 - **Client** ([`src/client.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect/src/client.ts)): An Effect client using the typed `Agent.client` accessor
@@ -48,7 +48,7 @@ The actor is split into a public contract and a server-only implementation:
 
 ## Resources
 
-Read more about [actions](/docs/actors/actions), [state](/docs/actors/state), and [the Effect quickstart](/docs/actors/quickstart/effect).
+Read more about [actions](/docs/actors/actions), [SQLite](/docs/actors/sqlite), and [the Effect quickstart](/docs/actors/quickstart/effect).
 
 ## License
 

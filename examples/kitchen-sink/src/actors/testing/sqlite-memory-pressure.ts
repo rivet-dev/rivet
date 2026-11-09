@@ -109,9 +109,6 @@ export const sqliteMemoryPressure = actor({
 	options: {
 		actionTimeout: 300_000,
 	},
-	state: {
-		sleepCount: 0,
-	},
 	db: db({
 		onMigrate: async (database) => {
 			await database.execute(`
@@ -143,15 +140,27 @@ export const sqliteMemoryPressure = actor({
 					created_at INTEGER NOT NULL
 				)
 			`);
+			await database.execute(`
+				CREATE TABLE IF NOT EXISTS sleep_counter (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					sleep_count INTEGER NOT NULL
+				)
+			`);
+			await database.execute(
+				"INSERT OR IGNORE INTO sleep_counter (id, sleep_count) VALUES (1, 0)",
+			);
 		},
 	}),
-	onSleep: (c) => {
-		c.state.sleepCount += 1;
+	onSleep: async (c) => {
+		const rows = await c.db.execute<{ sleep_count: number }>(
+			"UPDATE sleep_counter SET sleep_count = sleep_count + 1 WHERE id = 1 RETURNING sleep_count",
+		);
+		const sleepCount = rows[0]?.sleep_count ?? 0;
 		console.log(
 			JSON.stringify({
 				kind: "sqlite_memory_pressure_on_sleep",
 				actorId: c.actorId,
-				sleepCount: c.state.sleepCount,
+				sleepCount,
 				timestamp: new Date().toISOString(),
 			}),
 		);

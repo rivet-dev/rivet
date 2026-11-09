@@ -49,21 +49,20 @@ One `turnBasedMatchmaker` Actor, keyed `["main"]`, hands out matches. It support
 
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/turn-based/matchmaker.ts" title="matchmaker.ts" highlight="invite,queue" />
 
-- Every write goes through a queue that `run` reads one message at a time. Two players can press "Join" at the same moment, and the queue makes sure only one of them takes the empty seat.
-- `createGame` creates the `turnBasedMatch` Actor, seats the creator as `X` with `createPlayer`, and stores the invite code in the `matches` table. `joinByCode` looks the code up, rejects a full game with `game_full`, and seats the joiner as `O`.
-- The client sends `createGame` and `joinByCode` with `wait: true`, so the result passed to `message.complete(...)` is the response.
-- `attemptPairing` takes the two oldest rows from `player_pool`, creates a match, and broadcasts `assignmentReady`. The `assignments` row stores the queueing connection's id, so `getAssignment` only returns it to that connection. `onDisconnect` removes a player from the queue when they close the tab.
+- Every request is an [action](/actors/docs/actions) that returns its result to the caller. `createGame` creates the `turnBasedMatch` Actor, seats the creator as `X` with `createPlayer`, and stores the invite code in the `matches` table. `joinByCode` looks the code up, rejects a full game with `game_full`, and seats the joiner as `O`.
+- Actions run at the same time, so `joinByCode` checks for an open seat and takes it in one [`c.db.transaction`](/actors/docs/sqlite#transactions). Two players can press "Join" at the same moment, and only one of them gets the seat. The joiner is seated after the transaction commits, because a transaction must not wait on another Actor. If seating fails, the seat opens again.
+- `queueForMatch` adds the player to `player_pool` and calls `attemptPairing`, which takes the two oldest players in one transaction, creates a match, and broadcasts `assignmentReady`. If creating the match fails, `returnToPool` puts both players back. The `assignments` row stores the queueing connection's id, so `getAssignment` only returns it to that connection. `onDisconnect` removes a player from the queue when they close the tab.
 
 </Step>
 
 <Step title="Create the match">
 
-Each match is its own `turnBasedMatch` Actor, keyed by the match id. Its state is the whole game:
+Each match is its own `turnBasedMatch` Actor, keyed by the match id. Its SQLite database holds the whole game:
 
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/turn-based/match.ts" title="match.ts" region="state" />
 
-- `createState` builds an empty board. The matchmaker passes the match id as input when it creates the Actor.
-- `players` maps a player id to a seat: name, symbol, and the id of the connection that is playing it. `onConnect` reads `playerId` from the connection params and disconnects anyone who has not been seated with `invalid_player`.
+- `onMigrate` creates a `game` row with an empty board and a `players` table for the seats. `createPlayer` saves each seat. The match id comes from `c.key`, so the matchmaker passes no input.
+- `c.vars.connIds` maps a seated player id to the connection playing it. It only lives in memory, because connections do not outlive the Actor. `onConnect` reads `playerId` from the connection params and disconnects anyone who has not been seated with `invalid_player`.
 - There is no tick loop. The match only changes when a player moves, so it broadcasts `gameUpdate` from the action that changed it.
 
 <Warning>
@@ -80,7 +79,8 @@ The player id is the only credential in this example. Anyone who knows it can co
 
 - The player comes from `c.conn.id`, not from the action input. A client cannot move for its opponent by sending a different name or symbol.
 - Each rule throws a `UserError` with a code: `game_over`, `player_not_found`, `not_your_turn`, `invalid_cell`, and `cell_taken`. Clients get the code and message, so the UI can say why a move was refused.
-- The server decides the result. It checks for a winner or a full board after every move, then flips `currentTurn`. The client draws the board only from snapshots, so a move shows up as played once `gameUpdate` arrives.
+- The checks and the save run in one `c.db.transaction` that reads the `game` row first. Two moves sent at once cannot both pass the turn check.
+- The server decides the result. It checks for a winner or a full board after every move, flips the turn, and saves the board, turn, and result to the `game` row. The client draws the board only from snapshots, so a move shows up as played once `gameUpdate` arrives.
 
 </Step>
 
@@ -88,14 +88,15 @@ The player id is the only credential in this example. Anyone who knows it can co
 
 Turns can be hours apart, so a match should not hold anything open while it waits. This is how the example handles players leaving:
 
-<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/turn-based/match.ts" title="match.ts" region="abandon" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/turn-based/match.ts" title="match.ts" highlight="abandon" />
 
-- `onDisconnect` clears the seat's connection and records `emptySince` when the last player leaves. `onConnect` clears it again when someone comes back.
-- The `run` loop checks once a second and calls `c.destroy()` once the match has been empty for `EMPTY_MATCH_DESTROY_DELAY_MS` (10 seconds). Tic-tac-toe is played in one sitting, so an empty match is an abandoned one.
-- `onDestroy` sends `closeMatch` to the matchmaker, which deletes the match's invite code and assignments.
+- `onDisconnect` clears the seat's connection. When the last player leaves, and the match is not shutting down, it records `emptySince` and calls `c.schedule.after(EMPTY_MATCH_DESTROY_DELAY_MS, "destroyIfEmpty", emptySince)`. `onConnect` clears `emptySince` again when someone comes back.
+- The [schedule](/actors/docs/schedule) is saved with the Actor, so it still runs `destroyIfEmpty` on time after a restart or a [sleep](/actors/docs/lifecycle#sleeping), and it wakes the Actor to do it. A shutdown disconnects everyone too, but those players reconnect afterward, so it does not start the countdown.
+- `destroyIfEmpty` refuses to run unless a schedule called it (`c.scheduledFire`), so a client cannot destroy someone else's match. It checks again before it calls `c.destroy()`. It keeps the match if a player is connected, and ignores an older schedule if a player came back and left again, so the match is destroyed `EMPTY_MATCH_DESTROY_DELAY_MS` (10 seconds) after the last player leaves. Tic-tac-toe is played in one sitting, so an empty match is an abandoned one.
+- `onDestroy` calls `closeMatch` on the matchmaker, which deletes the match's invite code and assignments.
 
 <Note>
-For correspondence chess or a word game, keep the match instead of destroying it. Remove the `run` loop and `onDestroy`. The board, the turn, and the seats all live in `c.state`, which is saved automatically, so the Actor [sleeps](/actors/docs/lifecycle#sleeping) once nobody is connected and wakes with the same board on the next `connect` or `makeMove`. For a turn deadline, such as forfeiting a player who has not moved in three days, call `c.schedule.after(...)` after each move. A [schedule](/actors/docs/schedule) wakes a sleeping Actor when it is due.
+For correspondence chess or a word game, keep the match instead of destroying it. Remove `destroyIfEmpty`, the schedule in `onDisconnect`, and `onDestroy`. The board, the turn, and the seats are already saved in SQLite after every change, so the Actor [sleeps](/actors/docs/lifecycle#sleeping) once nobody is connected and wakes with the same board on the next `connect` or `makeMove`. For a turn deadline, such as forfeiting a player who has not moved in three days, call `c.schedule.after(...)` after each move. A [schedule](/actors/docs/schedule) wakes a sleeping Actor when it is due.
 </Note>
 
 </Step>
@@ -122,7 +123,7 @@ The menu asks the matchmaker for a game, then the game screen connects to the ma
 <CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/turn-based/game.tsx" title="game.tsx" region="connect" />
 </CodeGroup>
 
-- `mm.send("createGame", ..., { wait: true })` puts a message on the matchmaker's queue and waits for the response. The matchmaker connection is disposed right after, because the player now talks only to the match.
+- `mm.createGame(...)` and `mm.joinByCode(...)` are action calls that return the match id and player id, plus the invite code for a new game. They go through a plain actor handle without opening a connection, because the player talks only to the match afterward.
 - The match connection passes `playerId` in `params`. That is what `onConnect` uses to find the seat.
 - The client subscribes to `gameUpdate` and also calls `getSnapshot` once, so it has the board even if it connected after the last broadcast.
 - Quick Play calls the `queueForMatch` action and then waits for `assignmentReady`, with a `getAssignment` check in case the event fired before the listener was attached.

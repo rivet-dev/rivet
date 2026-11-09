@@ -8,7 +8,7 @@
 //! committed.
 use crate::{Client, metrics};
 use anyhow::{Result, ensure};
-use depot_protocol::command::{Command, Request, Response};
+use depot_protocol::command::{Command, Request, Response, body_version};
 use rivet_data::{
 	DEPOT_KV_COMMAND_VERSION,
 	generated::depot_kv_command_v1::{
@@ -175,8 +175,11 @@ impl Client {
 		if self.command_deadline_boot_ms.is_some() && clock.observe()?.boot_ms >= deadline {
 			return Err(RequestDeadlineExceeded.build());
 		}
-		// A command body carries its own type's version, not the command envelope's.
-		let body = C::Request::seal_to_bytes(&request, C::Request::LATEST)?;
+		// A command body carries its own type's version, not the command envelope's. The host
+		// may run another binary, so the body uses its family's negotiated version.
+		let body_version =
+			body_version::<C::Request>(|family| self.topology.write_version(family))?;
+		let body = C::Request::seal_to_bytes(&request, body_version)?;
 		let request = KvCommandRequest {
 			volume_key: volume_key.clone(),
 			operation_id: *self

@@ -1,4 +1,5 @@
 import { actor, event, queue, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 type Progress = {
@@ -8,14 +9,22 @@ type Progress = {
 };
 
 export const progressActor = actor({
-  state: {
-    progress: {
-      stage: "idle",
-      completed: 0,
-      total: 0,
-    } as Progress,
-    sum: 0,
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS job_progress (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          stage TEXT NOT NULL,
+          completed INTEGER NOT NULL,
+          total INTEGER NOT NULL,
+          sum INTEGER NOT NULL
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO job_progress (id, stage, completed, total, sum) VALUES (1, 'idle', 0, 0, 0)",
+      );
+    },
+  }),
   events: {
     progressUpdated: event<Progress>(),
   },
@@ -37,30 +46,34 @@ export const progressActor = actor({
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<Progress & { sum: number }>(
+        "SELECT stage, completed, total, sum FROM job_progress WHERE id = 1",
+      );
+      const { sum, ...progress } = rows[0];
+      return { progress, sum };
+    },
   },
 });
 
-function markProgressRunning(ctx: WorkflowStepContextOf<typeof progressActor>): void {
-  ctx.state.progress = {
-    stage: "running",
-    completed: ctx.state.progress.completed,
-    total: ctx.state.progress.total + 1,
-  };
-  ctx.broadcast("progressUpdated", ctx.state.progress);
+async function markProgressRunning(
+  ctx: WorkflowStepContextOf<typeof progressActor>,
+): Promise<void> {
+  const rows = await ctx.db.execute<Progress>(
+    "UPDATE job_progress SET stage = 'running', total = total + 1 WHERE id = 1 RETURNING stage, completed, total",
+  );
+  ctx.broadcast("progressUpdated", rows[0]);
 }
 
-function applyProgressJob(
+async function applyProgressJob(
   ctx: WorkflowStepContextOf<typeof progressActor>,
   value: number,
-): void {
-  ctx.state.sum += value;
-  ctx.state.progress = {
-    stage: "completed",
-    completed: ctx.state.progress.completed + 1,
-    total: ctx.state.progress.total,
-  };
-  ctx.broadcast("progressUpdated", ctx.state.progress);
+): Promise<void> {
+  const rows = await ctx.db.execute<Progress>(
+    "UPDATE job_progress SET sum = sum + ?, stage = 'completed', completed = completed + 1 WHERE id = 1 RETURNING stage, completed, total",
+    value,
+  );
+  ctx.broadcast("progressUpdated", rows[0]);
 }
 
 export const registry = setup({ use: { progressActor } });

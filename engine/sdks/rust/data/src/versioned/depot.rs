@@ -8,6 +8,7 @@ pub enum DepotReplicaReadinessData {
 
 impl_versioned_v1!(
 	DepotReplicaReadinessData,
+	DEPOT_REPLICA_READINESS,
 	crate::generated::depot_replica_readiness_v1::ReplicaReadiness
 );
 
@@ -20,6 +21,7 @@ pub enum DepotLogShardCheckpointData {
 
 impl_versioned_v1!(
 	DepotLogShardCheckpointData,
+	DEPOT_LOG_SHARD,
 	crate::generated::depot_log_shard_v1::LogShardCheckpoint
 );
 
@@ -31,6 +33,7 @@ pub enum DepotLogShardCheckpointEnvelopeData {
 
 impl_versioned_v1!(
 	DepotLogShardCheckpointEnvelopeData,
+	DEPOT_LOG_SHARD,
 	crate::generated::depot_log_shard_v1::LogShardCheckpointEnvelope
 );
 
@@ -41,6 +44,7 @@ pub enum DepotStorageWorkerRequestData {
 
 impl_versioned_v1!(
 	DepotStorageWorkerRequestData,
+	DEPOT_STORAGE_WORKER_PROTOCOL,
 	crate::generated::depot_storage_worker_protocol_v1::StorageWorkerRequest
 );
 
@@ -51,6 +55,7 @@ pub enum DepotStorageWorkerResponseData {
 
 impl_versioned_v1!(
 	DepotStorageWorkerResponseData,
+	DEPOT_STORAGE_WORKER_PROTOCOL,
 	crate::generated::depot_storage_worker_protocol_v1::StorageWorkerResponse
 );
 
@@ -61,6 +66,7 @@ pub enum DepotClientRequestData {
 
 impl_versioned_v1!(
 	DepotClientRequestData,
+	DEPOT_CLIENT_PROTOCOL,
 	crate::generated::depot_client_protocol_v1::ClientRequest
 );
 
@@ -71,6 +77,7 @@ pub enum DepotClientResponseData {
 
 impl_versioned_v1!(
 	DepotClientResponseData,
+	DEPOT_CLIENT_PROTOCOL,
 	crate::generated::depot_client_protocol_v1::ClientResponse
 );
 
@@ -81,6 +88,7 @@ pub enum DepotTabletCoordinatorResponseData {
 
 impl_versioned_v1!(
 	DepotTabletCoordinatorResponseData,
+	DEPOT_TABLET_COORDINATOR_PROTOCOL,
 	crate::generated::depot_tablet_coordinator_protocol_v1::TabletCoordinatorResponse
 );
 
@@ -91,6 +99,7 @@ pub enum DepotKvCommandRequestData {
 
 impl_versioned_v1!(
 	DepotKvCommandRequestData,
+	DEPOT_KV_COMMAND,
 	crate::generated::depot_kv_command_v1::KvCommandRequest
 );
 
@@ -101,6 +110,7 @@ pub enum DepotKvCommandResponseData {
 
 impl_versioned_v1!(
 	DepotKvCommandResponseData,
+	DEPOT_KV_COMMAND,
 	crate::generated::depot_kv_command_v1::KvCommandResponse
 );
 
@@ -109,7 +119,11 @@ pub enum DepotKvGetData {
 	V1(crate::generated::depot_kv_command_v1::KvGet),
 }
 
-impl_versioned_v1!(DepotKvGetData, crate::generated::depot_kv_command_v1::KvGet);
+impl_versioned_v1!(
+	DepotKvGetData,
+	DEPOT_KV_COMMAND,
+	crate::generated::depot_kv_command_v1::KvGet
+);
 
 /// Versioned `KvGetResponse` with strict payload decoding.
 pub enum DepotKvGetResponseData {
@@ -118,6 +132,7 @@ pub enum DepotKvGetResponseData {
 
 impl_versioned_v1!(
 	DepotKvGetResponseData,
+	DEPOT_KV_COMMAND,
 	crate::generated::depot_kv_command_v1::KvGetResponse
 );
 
@@ -128,6 +143,7 @@ pub enum DepotKvApplyData {
 
 impl_versioned_v1!(
 	DepotKvApplyData,
+	DEPOT_KV_COMMAND,
 	crate::generated::depot_kv_command_v1::KvApply
 );
 
@@ -138,6 +154,7 @@ pub enum DepotKvApplyResponseData {
 
 impl_versioned_v1!(
 	DepotKvApplyResponseData,
+	DEPOT_KV_COMMAND,
 	crate::generated::depot_kv_command_v1::KvApplyResponse
 );
 
@@ -148,6 +165,7 @@ pub enum DepotOperatorCompareAndSetRequestData {
 
 impl_versioned_v1!(
 	DepotOperatorCompareAndSetRequestData,
+	DEPOT_OPERATOR_COMMAND,
 	crate::generated::depot_operator_command_v1::CompareAndSetRequest
 );
 
@@ -158,6 +176,7 @@ pub enum DepotOperatorCompareAndSetResponseData {
 
 impl_versioned_v1!(
 	DepotOperatorCompareAndSetResponseData,
+	DEPOT_OPERATOR_COMMAND,
 	crate::generated::depot_operator_command_v1::CompareAndSetResponse
 );
 
@@ -168,6 +187,7 @@ pub enum DepotOperatorMutationTagData {
 
 impl_versioned_v1!(
 	DepotOperatorMutationTagData,
+	DEPOT_OPERATOR_COMMAND,
 	crate::generated::depot_operator_command_v1::MutationTag
 );
 
@@ -178,6 +198,7 @@ pub enum DepotStopReadinessData {
 
 impl_versioned_v1!(
 	DepotStopReadinessData,
+	DEPOT_STORAGE_WORKER_PROTOCOL,
 	crate::generated::depot_storage_worker_protocol_v1::StopReadiness
 );
 
@@ -189,6 +210,7 @@ pub enum DepotHandoffReadinessResponseData {
 
 impl_versioned_v1!(
 	DepotHandoffReadinessResponseData,
+	DEPOT_STORAGE_WORKER_PROTOCOL,
 	crate::generated::depot_storage_worker_protocol_v1::HandoffReadinessResponse
 );
 
@@ -218,6 +240,7 @@ pub enum DepotStopReadinessResponseData {
 
 impl_versioned_v1!(
 	DepotStopReadinessResponseData,
+	DEPOT_STORAGE_WORKER_PROTOCOL,
 	crate::generated::depot_storage_worker_protocol_v1::StopReadinessResponse
 );
 
@@ -228,6 +251,7 @@ pub enum DepotMaintainerEntryData {
 
 impl_versioned_v1!(
 	DepotMaintainerEntryData,
+	DEPOT_MAINTAINER_LOG,
 	crate::generated::depot_maintainer_log_v1::MaintainerEntry
 );
 
@@ -238,6 +262,7 @@ pub enum DepotMaintainerLogRecordData {
 
 impl_versioned_v1!(
 	DepotMaintainerLogRecordData,
+	DEPOT_MAINTAINER_LOG,
 	crate::generated::depot_maintainer_log_v1::MaintainerLogRecord
 );
 
@@ -248,6 +273,7 @@ pub enum DepotRepairAuditData {
 
 impl_versioned_v1!(
 	DepotRepairAuditData,
+	DEPOT_MAINTAINER_LOG,
 	crate::generated::depot_maintainer_log_v1::RepairAuditOp
 );
 
@@ -258,5 +284,6 @@ pub enum DepotVolumeCreationData {
 
 impl_versioned_v1!(
 	DepotVolumeCreationData,
+	DEPOT_MAINTAINER_LOG,
 	crate::generated::depot_maintainer_log_v1::VolumeCreation
 );

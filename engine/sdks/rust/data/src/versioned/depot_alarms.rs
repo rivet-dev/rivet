@@ -5,6 +5,7 @@ pub enum DepotVolumeAlarmData {
 }
 impl_versioned_v1!(
 	DepotVolumeAlarmData,
+	DEPOT_ALARM,
 	crate::generated::depot_alarm_v1::AlarmValue
 );
 
@@ -13,6 +14,7 @@ pub enum DepotAlarmCurrentData {
 }
 impl_versioned_v1!(
 	DepotAlarmCurrentData,
+	DEPOT_ALARM,
 	crate::generated::depot_alarm_v1::AlarmCurrent
 );
 
@@ -21,6 +23,7 @@ pub enum DepotAlarmTimeData {
 }
 impl_versioned_v1!(
 	DepotAlarmTimeData,
+	DEPOT_ALARM,
 	crate::generated::depot_alarm_v1::AlarmTimeRecord
 );
 
@@ -29,6 +32,7 @@ pub enum ActorAlarmRequestData {
 }
 impl_versioned_v1!(
 	ActorAlarmRequestData,
+	PEGBOARD_ACTOR_ALARM,
 	crate::generated::pegboard_actor_alarm_v1::ActorAlarmRequest
 );
 
@@ -37,6 +41,7 @@ pub enum ActorSetAlarmRequestData {
 }
 impl_versioned_v1!(
 	ActorSetAlarmRequestData,
+	PEGBOARD_ACTOR_ALARM,
 	crate::generated::pegboard_actor_alarm_v1::ActorSetAlarmRequest
 );
 
@@ -45,6 +50,7 @@ pub enum DepotAlarmIndexProgressData {
 }
 impl_versioned_v1!(
 	DepotAlarmIndexProgressData,
+	DEPOT_TABLET_MANIFEST,
 	crate::generated::depot_tablet_manifest_v1::AlarmIndexProgress
 );
 
@@ -54,6 +60,7 @@ pub enum ActorAlarmMachineStateData {
 }
 impl_versioned_v1!(
 	ActorAlarmMachineStateData,
+	PEGBOARD_ACTOR_STATE,
 	crate::generated::pegboard_actor_state_v1::ActorMachineState
 );
 
@@ -70,6 +77,7 @@ pub enum DepotAlarmTabletManifestData {
 }
 impl_versioned_v1!(
 	DepotAlarmTabletManifestData,
+	DEPOT_TABLET_MANIFEST,
 	crate::generated::depot_tablet_manifest_v1::AlarmTabletManifest
 );
 
@@ -79,5 +87,6 @@ pub enum DepotAlarmCoordinatorRequestData {
 }
 impl_versioned_v1!(
 	DepotAlarmCoordinatorRequestData,
+	DEPOT_TABLET_COORDINATOR_PROTOCOL,
 	crate::generated::depot_tablet_coordinator_protocol_v1::AlarmCoordinatorRequest
 );

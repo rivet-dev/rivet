@@ -1,35 +1,53 @@
 import { actor } from "rivetkit";
+import { db, type RawAccess } from "rivetkit/db";
 
 export const onStateChangeActor = actor({
-	state: {
-		value: 0,
-	},
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS value (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					value INTEGER NOT NULL
+				);
+			`);
+			await db.execute(
+				"INSERT OR IGNORE INTO value (id, value) VALUES (1, 0)",
+			);
+		},
+	}),
+	// The change count only describes the current run, so it lives in memory.
 	vars: {
 		changeCount: 0,
 	},
 	actions: {
-		// Action that modifies state - should trigger onStateChange
-		setValue: (c, newValue: number) => {
-			c.state.value = newValue;
-			return c.state.value;
+		// Action that modifies the value and records the change inline
+		setValue: async (c, newValue: number) => {
+			const [row] = await c.db.execute<{ value: number }>(
+				"UPDATE value SET value = ? WHERE id = 1 RETURNING value",
+				newValue,
+			);
+			c.vars.changeCount++;
+			return row.value;
 		},
-		// Action that modifies state multiple times - should trigger onStateChange for each change
-		incrementMultiple: (c, times: number) => {
-			for (let i = 0; i < times; i++) {
-				c.state.value++;
-			}
-			return c.state.value;
+		// Action that adds to the value in one write and records one change
+		incrementMultiple: async (c, times: number) => {
+			const [row] = await c.db.execute<{ value: number }>(
+				"UPDATE value SET value = value + ? WHERE id = 1 RETURNING value",
+				times,
+			);
+			c.vars.changeCount++;
+			return row.value;
 		},
-		// Action that doesn't modify state - should NOT trigger onStateChange
-		getValue: (c) => {
-			return c.state.value;
+		// Action that doesn't modify the value, so no change is recorded
+		getValue: async (c) => {
+			return await loadValue(c.db);
 		},
-		// Action that reads and returns without modifying - should NOT trigger onStateChange
-		getDoubled: (c) => {
-			const doubled = c.state.value * 2;
+		// Action that reads and returns without modifying, so no change is recorded
+		getDoubled: async (c) => {
+			const doubled = (await loadValue(c.db)) * 2;
 			return doubled;
 		},
-		// Get the count of how many times onStateChange was called
+		// Get the count of how many changes were recorded
 		getChangeCount: (c) => {
 			return c.vars.changeCount;
 		},
@@ -38,8 +56,11 @@ export const onStateChangeActor = actor({
 			c.vars.changeCount = 0;
 		},
 	},
-	// Track onStateChange calls
-	onStateChange: (c) => {
-		c.vars.changeCount++;
-	},
 });
+
+async function loadValue(database: RawAccess): Promise<number> {
+	const [row] = await database.execute<{ value: number }>(
+		"SELECT value FROM value WHERE id = 1",
+	);
+	return row.value;
+}

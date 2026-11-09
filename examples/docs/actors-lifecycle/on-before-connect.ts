@@ -10,17 +10,15 @@ type ConnParams = {
   authToken?: string;
 };
 
-const chatRoom = actor({
-  state: { messages: [] },
+interface ConnInfo {
+  userId: string;
+  role: string;
+  joinTime: number;
+}
 
-  // Method 2: Dynamically create connection state
-  createConnState: (_c, params: ConnParams) => {
-    return {
-      userId: params.userId || "anonymous",
-      role: params.role || "guest",
-      joinTime: Date.now()
-    };
-  },
+const chatRoom = actor({
+  // Per-connection data lives in memory, keyed by connection ID
+  createVars: () => ({ connections: new Map<string, ConnInfo>() }),
 
   // Validate connections before accepting them
   onBeforeConnect: (_c, params: ConnParams) => {
@@ -30,8 +28,21 @@ const chatRoom = actor({
       throw new Error("Invalid authentication");
     }
 
-    // Authentication is valid, connection will proceed
-    // The actual connection state will come from connState or createConnState
+    // Authentication is valid, so the connection will proceed to onConnect
+  },
+
+  // Record per-connection data once the connection is accepted
+  onConnect: (c, conn) => {
+    const params = conn.params;
+    c.vars.connections.set(conn.id, {
+      userId: params.userId || "anonymous",
+      role: params.role || "guest",
+      joinTime: Date.now()
+    });
+  },
+
+  onDisconnect: (c, conn) => {
+    c.vars.connections.delete(conn.id);
   },
 
   actions: { /* ... */ }

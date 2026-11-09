@@ -13,28 +13,26 @@ interface Report {
 }
 
 const userMetrics = actor({
-  state: {},
   actions: {
     getStats: (c): Stats => ({ count: 100, total: 500 })
   }
 });
 
 const orderMetrics = actor({
-  state: {},
   actions: {
     getStats: (c): Stats => ({ count: 50, total: 10000 })
   }
 });
 
 const systemMetrics = actor({
-  state: {},
   actions: {
     getStats: (c): Stats => ({ count: 5, total: 99 })
   }
 });
 
 const analyticsActor = actor({
-  state: { reports: [] as Report[] },
+  // Generated reports are kept in memory for this example
+  createVars: () => ({ reports: [] as Report[] }),
 
   actions: {
     generateReport: async (c, reportType: string) => {
@@ -58,7 +56,7 @@ const analyticsActor = actor({
         generatedAt: Date.now()
       };
 
-      c.state.reports.push(report);
+      c.vars.reports.push(report);
       return report;
     }
   }

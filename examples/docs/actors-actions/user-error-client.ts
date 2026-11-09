@@ -3,7 +3,7 @@ import { ActorError, createClient } from "rivetkit/client";
 
 // Define the user actor
 const user = actor({
-  state: { username: "" },
+  vars: { username: "" },
   actions: {
     updateUsername: (c, username: string) => {
       if (username.length > 32) {
@@ -12,7 +12,7 @@ const user = actor({
           metadata: { maxLength: 32 }
         });
       }
-      c.state.username = username;
+      c.vars.username = username;
     }
   }
 });

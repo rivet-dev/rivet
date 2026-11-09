@@ -1,14 +1,14 @@
 import { actor } from "rivetkit";
 
 const directory = actor({
-	state: { names: [] as string[] },
+	vars: { names: [] as string[] },
 	actions: {
 		// Actions can now be nested
 		users: {
 			add: (c, name: string) => {
-				c.state.names.push(name);
+				c.vars.names.push(name);
 			},
-			list: (c) => c.state.names,
+			list: (c) => c.vars.names,
 		},
 	},
 });

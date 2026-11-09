@@ -1,13 +1,7 @@
 import { actor, setup } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
 
-interface Transaction {
-  amount: number;
-  status: string;
-}
-
 const payment = actor({
-  state: { transactions: [] as Transaction[] },
   actions: { processPayment: async (c, amount: number) => {} }
 });
 

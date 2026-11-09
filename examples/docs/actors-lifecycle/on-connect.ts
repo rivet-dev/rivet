@@ -1,19 +1,19 @@
 import { actor } from "rivetkit";
 
 const chatRoom = actor({
-  state: {
+  createVars: () => ({
     users: {} as Record<string, { online: boolean; lastSeen: number }>,
-    messages: [] as string[],
-  },
-
-  createConnState: (_c, params: { userId?: string }) => ({
-    userId: params.userId ?? "anonymous",
+    userIds: new Map<string, string>(),
   }),
 
   onConnect: (c, conn) => {
-    // Add user to the room's user list using connection state
-    const userId = conn.state.userId;
-    c.state.users[userId] = {
+    // Remember which user owns this connection
+    const params = conn.params as { userId?: string } | undefined;
+    const userId = params?.userId ?? "anonymous";
+    c.vars.userIds.set(conn.id, userId);
+
+    // Add user to the room's user list
+    c.vars.users[userId] = {
       online: true,
       lastSeen: Date.now()
     };

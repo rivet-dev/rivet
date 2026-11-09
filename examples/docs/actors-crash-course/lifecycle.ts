@@ -1,59 +1,60 @@
-import { actor, event, queue } from "rivetkit";
-
-interface RoomState {
-	users: Record<string, boolean>;
-	name?: string;
-}
+import { actor, event } from "rivetkit";
+import { db } from "rivetkit/db";
 
 interface RoomInput {
 	roomName: string;
 }
 
-interface ConnState {
+interface ConnInfo {
 	userId: string;
 	joinedAt: number;
 }
 
 const chatRoom = actor({
 	events: {
-		stateChanged: event<RoomState>(),
-	},
-	queues: {
-		work: queue<{ task: string }>(),
+		usersChanged: event<string[]>(),
 	},
 
-	// State & vars initialization
-	createState: (c, input: RoomInput): RoomState => ({
-		users: {},
-		name: input.roomName,
+	// Database & vars initialization
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(
+				"CREATE TABLE IF NOT EXISTS room (id INTEGER PRIMARY KEY CHECK (id = 1), name TEXT NOT NULL)",
+			);
+		},
 	}),
-	createVars: () => ({ startTime: Date.now() }),
+	createVars: () => ({
+		startTime: Date.now(),
+		users: new Map<string, ConnInfo>(),
+	}),
 
 	// Actor lifecycle
-	onCreate: (c) => console.log("created", c.key),
+	onCreate: async (c, input: RoomInput) => {
+		await c.db.execute("INSERT INTO room (id, name) VALUES (1, ?)", input.roomName);
+		console.log("created", c.key);
+	},
 	onDestroy: (c) => console.log("destroyed"),
 	onWake: (c) => console.log("actor started"),
 	onSleep: (c) => console.log("actor sleeping"),
-	run: async (c) => {
-		for await (const message of c.queue.iter()) {
-			console.log("processing", message.body.task);
-		}
-	},
-	onStateChange: (c, newState) => c.broadcast("stateChanged", newState),
 
 	// Connection lifecycle
-	createConnState: (c, params): ConnState => ({
-		userId: (params as { userId: string }).userId,
-		joinedAt: Date.now(),
-	}),
 	onBeforeConnect: (c, params) => {
 		/* validate auth */
 	},
-	onConnect: (c, conn) => console.log("connected:", (conn.state as ConnState).userId),
-	onDisconnect: (c, conn) => console.log("disconnected:", (conn.state as ConnState).userId),
+	onConnect: (c, conn) => {
+		const { userId } = conn.params as { userId: string };
+		c.vars.users.set(conn.id, { userId, joinedAt: Date.now() });
+		console.log("connected:", userId);
+		c.broadcast("usersChanged", [...c.vars.users.values()].map((u) => u.userId));
+	},
+	onDisconnect: (c, conn) => {
+		console.log("disconnected:", c.vars.users.get(conn.id)?.userId);
+		c.vars.users.delete(conn.id);
+		c.broadcast("usersChanged", [...c.vars.users.values()].map((u) => u.userId));
+	},
 
 	// Networking
-	onRequest: (c, req) => new Response(JSON.stringify(c.state)),
+	onRequest: (c, req) => new Response(JSON.stringify([...c.vars.users.values()])),
 	onWebSocket: (c, socket) => socket.addEventListener("message", console.log),
 
 	// Response transformation

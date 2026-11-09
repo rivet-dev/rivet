@@ -1,4 +1,5 @@
 import { actor, event, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 
 export type Message = {
 	id: string;
@@ -8,10 +9,21 @@ export type Message = {
 };
 
 export const chatRoom = actor({
-	// Persistent state that survives restarts: https://rivet.dev/docs/actors/state
-	state: {
-		messages: [] as Message[],
-	},
+	// Durable data lives in the actor's embedded SQLite database: https://rivet.dev/docs/actors/sqlite
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS messages (
+					seq INTEGER PRIMARY KEY AUTOINCREMENT,
+					id TEXT NOT NULL,
+					sender TEXT NOT NULL,
+					text TEXT NOT NULL,
+					timestamp INTEGER NOT NULL
+				)
+			`);
+		},
+	}),
+
 	events: {
 		newMessage: event<Message>(),
 		messagesCleared: event<[]>(),
@@ -19,26 +31,35 @@ export const chatRoom = actor({
 
 	actions: {
 		// Callable functions from clients: https://rivet.dev/docs/actors/actions
-		sendMessage: (c, sender: string, text: string) => {
+		sendMessage: async (c, sender: string, text: string) => {
 			const message: Message = {
 				id: crypto.randomUUID(),
 				sender,
 				text,
 				timestamp: Date.now(),
 			};
-			// State changes are automatically persisted
-			c.state.messages.push(message);
+			// The message survives restarts once the insert completes
+			await c.db.execute(
+				"INSERT INTO messages (id, sender, text, timestamp) VALUES (?, ?, ?, ?)",
+				message.id,
+				message.sender,
+				message.text,
+				message.timestamp,
+			);
 			// Send events to all connected clients: https://rivet.dev/docs/actors/events
 			c.broadcast("newMessage", message);
 			return message;
 		},
 
-		// Returns all messages for initial state loading
-		getMessages: (c) => c.state.messages,
+		// Returns all messages for initial loading
+		getMessages: (c) =>
+			c.db.execute<Message>(
+				"SELECT id, sender, text, timestamp FROM messages ORDER BY seq",
+			),
 
 		// Clears all messages and notifies clients
-		clearMessages: (c) => {
-			c.state.messages = [];
+		clearMessages: async (c) => {
+			await c.db.execute("DELETE FROM messages");
 			c.broadcast("messagesCleared");
 			return { success: true };
 		},

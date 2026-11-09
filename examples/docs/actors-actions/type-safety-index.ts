@@ -2,11 +2,11 @@ import { actor, setup } from "rivetkit";
 
 // Create simple counter
 const counter = actor({
-  state: { count: 0 },
+  vars: { count: 0 },
   actions: {
     increment: (c, count: number) => {
-      c.state.count += count;
-      return c.state.count;
+      c.vars.count += count;
+      return c.vars.count;
     }
   }
 });

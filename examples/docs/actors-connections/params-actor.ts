@@ -4,7 +4,7 @@ interface ConnParams {
   authToken: string;
 }
 
-interface ConnState {
+interface ConnInfo {
   userId: string;
   role: string;
 }
@@ -19,19 +19,26 @@ function getUserIdFromToken(token: string): string {
 }
 
 const gameRoom = actor({
-  state: {},
+  // Per-connection data, keyed by connection ID
+  createVars: () => ({ players: new Map<string, ConnInfo>() }),
 
-  // Handle connection setup
-  createConnState: (c, params: ConnParams): ConnState => {
-    // Validate authentication token
-    const authToken = params.authToken;
-
-    if (!authToken || !validateToken(authToken)) {
+  // Validate the authentication token before accepting the connection
+  onBeforeConnect: (c, params: ConnParams) => {
+    if (!params.authToken || !validateToken(params.authToken)) {
       throw new Error("Invalid auth token");
     }
+  },
 
-    // Create connection state
-    return { userId: getUserIdFromToken(authToken), role: "player" };
+  // Record who this connection belongs to
+  onConnect: (c, conn) => {
+    c.vars.players.set(conn.id, {
+      userId: getUserIdFromToken(conn.params.authToken),
+      role: "player"
+    });
+  },
+
+  onDisconnect: (c, conn) => {
+    c.vars.players.delete(conn.id);
   },
 
   actions: {}

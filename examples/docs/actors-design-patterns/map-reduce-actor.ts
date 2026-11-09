@@ -1,4 +1,5 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 
 interface Task {
   id: string;
@@ -12,7 +13,13 @@ interface Result {
 
 // Coordinator fans out tasks, then fans in results
 const coordinator = actor({
-  state: { results: [] as Result[] },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(
+        "CREATE TABLE IF NOT EXISTS results (task_id TEXT PRIMARY KEY, output TEXT NOT NULL)",
+      );
+    },
+  }),
   actions: {
     // Fan-out: distribute work in parallel
     startJob: async (c, tasks: Task[]) => {
@@ -22,15 +29,24 @@ const coordinator = actor({
       );
     },
     // Fan-in: collect results
-    reportResult: (c, result: Result) => {
-      c.state.results.push(result);
+    reportResult: async (c, result: Result) => {
+      await c.db.execute(
+        "INSERT OR REPLACE INTO results (task_id, output) VALUES (?, ?)",
+        result.taskId,
+        result.output,
+      );
     },
-    getResults: (c) => c.state.results,
+    getResults: async (c) => {
+      const rows = (await c.db.execute("SELECT task_id, output FROM results")) as {
+        task_id: string;
+        output: string;
+      }[];
+      return rows.map((row): Result => ({ taskId: row.task_id, output: row.output }));
+    },
   },
 });
 
 const worker = actor({
-  state: {},
   actions: {
     process: async (c, task: Task) => {
       const result = { taskId: task.id, output: `Processed ${task.data}` };

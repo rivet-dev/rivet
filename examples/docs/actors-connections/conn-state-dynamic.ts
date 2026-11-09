@@ -1,6 +1,6 @@
 import { actor } from "rivetkit";
 
-interface ConnState {
+interface ConnInfo {
   userId: string;
   role: string;
   joinedAt: number;
@@ -16,22 +16,31 @@ function generateUserId(): string {
 }
 
 const chatRoom = actor({
-  state: { messages: [] as Message[] },
+  createVars: () => ({
+    messages: [] as Message[],
+    // Per-connection data, keyed by connection ID
+    connections: new Map<string, ConnInfo>()
+  }),
 
-  // Create connection state dynamically
-  createConnState: (c): ConnState => {
-    // Return the connection state
-    return {
+  // Build each connection's data when it connects
+  onConnect: (c, conn) => {
+    c.vars.connections.set(conn.id, {
       userId: generateUserId(),
       role: "guest",
       joinedAt: Date.now()
-    };
+    });
+  },
+
+  onDisconnect: (c, conn) => {
+    c.vars.connections.delete(conn.id);
   },
 
   actions: {
     sendMessage: (c, message: string) => {
-      const username = c.conn.state.userId;
-      c.state.messages.push({ username, message });
+      const connInfo = c.vars.connections.get(c.conn.id);
+      if (!connInfo) throw new Error("Unknown connection");
+      const username = connInfo.userId;
+      c.vars.messages.push({ username, message });
       c.broadcast("newMessage", { username, message });
     }
   }

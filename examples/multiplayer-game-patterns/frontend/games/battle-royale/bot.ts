@@ -11,26 +11,12 @@ export class BattleRoyaleBot {
 
 	private async start() {
 		try {
-			const mm = this.client.battleRoyaleMatchmaker
+			const match = await this.client.battleRoyaleMatchmaker
 				.getOrCreate(["main"])
-				.connect();
-			const result = await mm.send(
-				"findMatch",
-				{},
-				{ wait: true, timeout: 10_000 },
-			);
-			mm.dispose();
-			const response = (
-				result as {
-					response?: {
-						matchId: string;
-						playerId: string;
-					};
-				}
-			)?.response;
-			if (!response || this.destroyed) return;
+				.findMatch();
+			if (this.destroyed) return;
 
-			this.game = new BattleRoyaleGame(null, this.client, response, {
+			this.game = new BattleRoyaleGame(null, this.client, match, {
 				bot: true,
 			});
 		} catch {

@@ -4,13 +4,11 @@ import { createClient } from "rivetkit/client";
 type Message = { text: string };
 
 const chatRoom = actor({
-  state: { messages: [] as string[] },
   events: {
     messageReceived: event<Message>()
   },
   actions: {
     sendMessage: (c, text: string) => {
-      c.state.messages.push(text);
       c.broadcast('messageReceived', { text });
     }
   }

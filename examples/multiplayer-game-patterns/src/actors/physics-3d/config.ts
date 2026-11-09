@@ -1,4 +1,5 @@
 export const TICK_MS = 100; // 10 TPS
+export const SNAPSHOT_INTERVAL_MS = 1_000; // Saving this often bounds how much progress a crash can lose.
 export const SUB_STEPS = 4; // Physics sub-steps per tick for stable stacking.
 export const MOVE_FORCE = 0.5;
 export const JUMP_IMPULSE = 2;

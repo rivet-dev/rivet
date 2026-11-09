@@ -1,22 +1,32 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText, tool } from "ai";
 import { actor, event } from "rivetkit";
+import { db, type RawAccess } from "rivetkit/db";
 import { z } from "zod";
 import { getWeather } from "./my-tools.ts";
 import type { Message } from "./types.ts";
 
 export const aiAgent = actor({
-	// Persistent state that survives restarts: https://rivet.dev/docs/actors/state
-	state: {
-		messages: [] as Message[],
-	},
+	// Messages are stored in SQLite so they survive restarts: https://rivet.dev/docs/actors/sqlite
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS messages (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					role TEXT NOT NULL,
+					content TEXT NOT NULL,
+					timestamp INTEGER NOT NULL
+				);
+			`);
+		},
+	}),
 	events: {
 		messageReceived: event<Message>(),
 	},
 
 	actions: {
 		// Callable functions from clients: https://rivet.dev/docs/actors/actions
-		getMessages: (c) => c.state.messages,
+		getMessages: (c) => loadMessages(c.db),
 
 		sendMessage: async (c, userMessage: string) => {
 			const userMsg: Message = {
@@ -24,13 +34,13 @@ export const aiAgent = actor({
 				content: userMessage,
 				timestamp: Date.now(),
 			};
-			// State changes are automatically persisted
-			c.state.messages.push(userMsg);
+			await saveMessage(c.db, userMsg);
+			const messages = await loadMessages(c.db);
 
 			const { text } = await generateText({
 				model: openai("gpt-4o-mini"),
 				prompt: userMessage,
-				messages: c.state.messages,
+				messages,
 				tools: {
 					weather: tool({
 						description: "Get the weather in a location",
@@ -53,7 +63,7 @@ export const aiAgent = actor({
 				content: text,
 				timestamp: Date.now(),
 			};
-			c.state.messages.push(assistantMsg);
+			await saveMessage(c.db, assistantMsg);
 
 			// Send events to all connected clients: https://rivet.dev/docs/actors/events
 			c.broadcast("messageReceived", assistantMsg);
@@ -62,3 +72,18 @@ export const aiAgent = actor({
 		},
 	},
 });
+
+async function loadMessages(database: RawAccess): Promise<Message[]> {
+	return await database.execute<Message>(
+		"SELECT role, content, timestamp FROM messages ORDER BY id",
+	);
+}
+
+async function saveMessage(database: RawAccess, message: Message): Promise<void> {
+	await database.execute(
+		"INSERT INTO messages (role, content, timestamp) VALUES (?, ?, ?)",
+		message.role,
+		message.content,
+		message.timestamp,
+	);
+}

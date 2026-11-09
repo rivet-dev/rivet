@@ -174,7 +174,8 @@ pub async fn metadata(
 		"version": env!("CARGO_PKG_VERSION"),
 		"envoyProtocolVersion": rivet_envoy_protocol::PROTOCOL_VERSION,
 	});
-	let authenticated = auth::check_edge(ctx.config(), auth::transport_token(&headers)).is_ok();
+	let authenticated =
+		auth::admit_admin_or_insecure(ctx.config(), auth::transport_token(&headers)).is_ok();
 	if authenticated {
 		body["actorNames"] = actor_names(&ctx, pegboard::DEFAULT_NAMESPACE).await?;
 	}

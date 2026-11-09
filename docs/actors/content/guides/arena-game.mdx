@@ -9,7 +9,7 @@ import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
 <Diagram
   id="arena-game"
-  label="The game client calls queueForMatch on the arenaMatchmaker Actor with a mode, and the matchmaker adds the player to its player_pool table. Once enough players are queued for that mode, the matchmaker creates an arenaMatch Actor with the roster and teams, saves the assignments, and sends the assignmentReady event to the client. The client connects to the match with its playerId, then sends updatePosition and shoot. The match broadcasts snapshot and shoot events back. When the match is destroyed, it sends matchCompleted to the matchmaker. The numbers show the order of the calls. There is one matchmaker and one arenaMatch Actor per match."
+  label="The game client calls queueForMatch on the arenaMatchmaker Actor with a mode, and the matchmaker adds the player to its player_pool table. Once enough players are queued for that mode, the matchmaker creates an arenaMatch Actor with the roster and teams, saves the assignments, and sends the assignmentReady event to the client. The client connects to the match with its playerId, then sends updatePosition and shoot. The match broadcasts snapshot and shoot events back. When the match is destroyed, it calls matchCompleted on the matchmaker. The numbers show the order of the calls. There is one matchmaker and one arenaMatch Actor per match."
   stackLabel="One per match"
   nodes={[
     { id: "client", x: 20, y: 80, w: 150, title: "Game client", subtitle: "browser canvas" },
@@ -52,10 +52,10 @@ One `arenaMatchmaker` Actor, keyed `["main"]`, holds a waiting pool per mode and
 
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/arena/matchmaker.ts" title="matchmaker.ts" highlight="queue,fill-match" />
 
-- `queueForMatch` is an action. It creates the `playerId`, records `c.conn.id`, and puts a message on the internal `queueForMatch` queue. It returns right away. The match arrives later as an event, because nobody knows how long the wait will be.
-- `run` handles one queue message at a time, so two players joining at once can't both fill the last slot. Each entry goes into `player_pool`, the new counts go out as `queueUpdate`, and `fillMatch` runs once the mode reaches its `MODE_CONFIG` capacity.
-- `fillMatch` takes the players who have waited longest and assigns teams by position (`idx % teams`, or `-1` for free-for-all). It creates the `arenaMatch` Actor with the roster as input, saves each row in `assignments`, and broadcasts `assignmentReady`.
-- `onDisconnect` sends `unqueueForMatch`, so a player who closes the tab leaves the pool.
+- `queueForMatch` is an action. It creates the `playerId`, adds the player to `player_pool` with `c.conn.id`, sends the new counts as `queueUpdate`, and calls `fillMatch`. The match arrives as an event, because nobody knows how long the wait will be.
+- Actions run at the same time, so `fillMatch` checks the count and removes the players who have waited longest in one `c.db.transaction`. Two players joining at once can't both fill the last slot.
+- `fillMatch` assigns teams by position (`idx % teams`, or `-1` for free-for-all). After the transaction commits, it creates the `arenaMatch` Actor with the roster as input, saves the match and its `assignments`, and broadcasts `assignmentReady`. If creating the match fails, `returnToPool` puts the players back in their old places.
+- `onDisconnect` deletes the player's row, so a player who closes the tab leaves the pool.
 
 <Warning>
 `assignmentReady` is broadcast to every client connected to the matchmaker, and the `playerId` in it is enough to connect as that player. In production, send each assignment only to its owner with `conn.send(...)` (the row already stores `conn_id`), and check a signed token in the match.
@@ -69,7 +69,7 @@ Each match is its own `arenaMatch` Actor, keyed by the match id. It starts with 
 
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/arena/match.ts" title="match.ts" region="connect" />
 
-- `createState` seeds every assigned player from the input with their team, color, and a random spawn point. The roster is fixed, so `onConnect` doesn't need to ask the matchmaker. An id that isn't on the roster is disconnected with `invalid_player`.
+- `onCreate` runs once and saves the match settings and the roster from the input, with a random spawn point for each player, into the match's SQLite database. `createVars` loads them on every start, with the phase, tick, positions, and scores from the last save, into `c.vars`. Every player starts without a connection, because none survives a restart. The roster is fixed, so `onConnect` doesn't need to ask the matchmaker. An id that isn't on the roster is disconnected with `invalid_player`.
 - The match stays in `waiting` until every assigned player has a connection, then switches to `live`. Nobody starts a 4v4 with three players.
 - A disconnect only clears the player's connection id. Their seat and score stay, so they can reconnect into the same match.
 
@@ -79,12 +79,14 @@ Each match is its own `arenaMatch` Actor, keyed by the match id. It starts with 
 
 The match runs a 20 tick per second loop, and checks every move and shot that arrives between ticks:
 
-<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/arena/match.ts" title="match.ts" highlight="tick,combat" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/arena/match.ts" title="match.ts" highlight="tick,combat,save" />
 
+- `onWake` starts `runMatch` as a background task on every start, and `onSleep` waits for it to save and exit. Connected players keep the match awake. Once everyone leaves, it sleeps, and the next connection resumes it from the last save.
 - `interval(TICK_MS)` ticks every 50 ms, twice as often as the battle royale, because arena fights are short and close. Ticks are skipped until the match is `live`. Each live tick checks the win condition and broadcasts one `snapshot`.
+- Ticks and actions only change memory. Every `SNAPSHOT_INTERVAL_MS` (1 second) in every phase, and once more when the Actor stops, `saveMatch` writes the phase, tick, winner, positions, and scores in one `c.db.transaction`. A crash loses at most about a second of play, and a finished match stays finished.
 - The client owns movement. `updatePosition` limits each move to `MAX_SPEED` times the time since the last update and keeps the player inside the world, so a client that teleports only moves as far as it could have run.
 - The server owns combat. `shoot` skips teammates, finds the closest enemy within `SHOOT_RANGE` and `SHOOT_ANGLE` of the aim, gives the shooter a point, respawns the victim at a random spot, and broadcasts `shoot`.
-- `checkWinCondition` ends a free-for-all when one player reaches `SCORE_LIMIT`, and a team match when a team's combined score does. When the match Actor is destroyed, `onDestroy` sends `matchCompleted` so the matchmaker deletes its row.
+- `checkWinCondition` ends a free-for-all when one player reaches `SCORE_LIMIT`, and a team match when a team's combined score does. When the match Actor is destroyed, `onDestroy` calls `matchCompleted` so the matchmaker deletes its row.
 
 <Note>
 For a Rocket League style match, the ball is shared by both teams, so simulate it on the server with `@dimforge/rapier3d` and let each client predict only its own car. Also limit how often each connection may call `updatePosition` and `shoot`. The example client sends positions at most 20 times per second.
@@ -140,5 +142,5 @@ Open `http://localhost:5173`, pick **Arena**, choose **FFA**, and click **Queue*
 ## Next steps
 
 - [Ranked Game](/guides/ranked-game): pair players by rating instead of first come, first served.
-- [Queues](/actors/docs/queues): how the matchmaker handles one request at a time.
+- [Transactions](/actors/docs/sqlite#transactions): how the matchmaker claims players when requests overlap.
 - [Events](/actors/docs/events): broadcast to everyone or send to one connection.

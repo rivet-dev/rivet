@@ -1,22 +1,14 @@
 import { type ActorContextOf, actor, event } from "rivetkit";
+import { db } from "rivetkit/db";
 import type { registry } from "../index.ts";
 import { BUILDINGS, type BuildingType, STARTING_RESOURCES } from "./config.ts";
 
-interface BuildingEntry {
-	id: string;
-	typeId: string;
-	builtAt: number;
-	lastCollectedAt: number;
-}
-
-interface State {
-	playerId: string;
-	playerName: string;
-	resources: number;
-	buildings: BuildingEntry[];
-	totalProduced: number;
-	initialized: boolean;
-}
+// The world columns that the leaderboard ranks.
+type ScoreRow = {
+	player_id: string;
+	player_name: string;
+	total_produced: number;
+};
 
 interface IdleSnapshot {
 	playerId: string;
@@ -39,41 +31,71 @@ export const idleWorld = actor({
 	events: {
 		stateUpdate: event<IdleSnapshot>(),
 	},
-	state: {
-		playerId: "",
-		playerName: "",
-		resources: STARTING_RESOURCES,
-		buildings: [] as BuildingEntry[],
-		totalProduced: 0,
-		initialized: false as boolean,
-	} satisfies State,
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS world (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					player_id TEXT NOT NULL,
+					player_name TEXT NOT NULL,
+					resources INTEGER NOT NULL,
+					total_produced INTEGER NOT NULL,
+					initialized INTEGER NOT NULL
+				)
+			`);
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS buildings (
+					id TEXT PRIMARY KEY,
+					type_id TEXT NOT NULL,
+					built_at INTEGER NOT NULL,
+					last_collected_at INTEGER NOT NULL
+				)
+			`);
+			await db.execute(
+				"INSERT OR IGNORE INTO world (id, player_id, player_name, resources, total_produced, initialized) VALUES (1, '', '', ?, 0, 0)",
+				STARTING_RESOURCES,
+			);
+		},
+	}),
 	actions: {
 		// docs:start build
 		initialize: async (c, input: { playerName: string; playerId?: string }) => {
-			if (c.state.initialized) {
-				broadcastState(c);
+			const keyPlayerId = Array.isArray(c.key) ? c.key[0] : c.key;
+			const playerId = input.playerId || keyPlayerId || "";
+			const farmType = BUILDINGS.find((b) => b.id === "farm")!;
+			const farmId = crypto.randomUUID();
+			const now = Date.now();
+
+			// Set the initialized flag and add the free farm in one transaction,
+			// so only the first call creates a farm.
+			const world = await c.db.transaction(
+				async (tx) => {
+					const [claimed] = await tx.execute<ScoreRow>(
+						"UPDATE world SET player_id = ?, player_name = ?, initialized = 1 WHERE id = 1 AND initialized = 0 RETURNING player_id, player_name, total_produced",
+						playerId,
+						input.playerName,
+					);
+					if (!claimed) return null;
+
+					await tx.execute(
+						"INSERT INTO buildings (id, type_id, built_at, last_collected_at) VALUES (?, ?, ?, ?)",
+						farmId,
+						farmType.id,
+						now,
+						now,
+					);
+					return claimed;
+				},
+				{ name: "initialize-world" },
+			);
+			if (!world) {
+				await broadcastState(c);
 				return;
 			}
-			c.state.playerName = input.playerName;
-			const keyPlayerId = Array.isArray(c.key) ? c.key[0] : c.key;
-			if (input.playerId) {
-				c.state.playerId = input.playerId;
-			} else if (typeof keyPlayerId === "string" && keyPlayerId) {
-				c.state.playerId = keyPlayerId;
-			}
-			c.state.initialized = true;
 
-			const farmType = BUILDINGS.find((b) => b.id === "farm")!;
-			const building: BuildingEntry = {
-				id: crypto.randomUUID(),
-				typeId: farmType.id,
-				builtAt: Date.now(),
-				lastCollectedAt: Date.now(),
-			};
-			c.state.buildings.push(building);
-			await scheduleCollection(c, building.id, farmType.productionIntervalMs);
-			updateLeaderboard(c);
-			broadcastState(c);
+			await scheduleCollection(c, farmId, farmType.productionIntervalMs);
+			updateLeaderboard(c, world);
+			await broadcastState(c);
 		},
 		build: async (c, input: { buildingTypeId: string }) => {
 			const buildingType = BUILDINGS.find(
@@ -82,57 +104,92 @@ export const idleWorld = actor({
 			if (!buildingType) {
 				throw new Error("Unknown building type");
 			}
-			if (c.state.resources < buildingType.cost) {
-				throw new Error("Not enough resources");
-			}
 
-			c.state.resources -= buildingType.cost;
-			const building: BuildingEntry = {
-				id: crypto.randomUUID(),
-				typeId: buildingType.id,
-				builtAt: Date.now(),
-				lastCollectedAt: Date.now(),
-			};
-			c.state.buildings.push(building);
+			const buildingId = crypto.randomUUID();
+			const now = Date.now();
+
+			// Spend the cost and add the building in one transaction. The UPDATE
+			// only matches when the player can afford the building, so two builds
+			// at once cannot spend the same resources.
+			await c.db.transaction(
+				async (tx) => {
+					const [paid] = await tx.execute(
+						"UPDATE world SET resources = resources - ? WHERE id = 1 AND resources >= ? RETURNING resources",
+						buildingType.cost,
+						buildingType.cost,
+					);
+					if (!paid) {
+						throw new Error("Not enough resources");
+					}
+
+					await tx.execute(
+						"INSERT INTO buildings (id, type_id, built_at, last_collected_at) VALUES (?, ?, ?, ?)",
+						buildingId,
+						buildingType.id,
+						now,
+						now,
+					);
+				},
+				{ name: "add-building" },
+			);
+
 			await scheduleCollection(
 				c,
-				building.id,
+				buildingId,
 				buildingType.productionIntervalMs,
 			);
-			broadcastState(c);
+			await broadcastState(c);
 		},
 		// docs:end build
 		// docs:start collect
-		collectProduction: (c, input: { buildingId: string }) => {
-			const building = c.state.buildings.find(
-				(b: BuildingEntry) => b.id === input.buildingId,
+		collectProduction: async (c, input: { buildingId: string }) => {
+			// Read the building and pay out in one transaction, so two runs at
+			// once cannot both pay for the same intervals.
+			const world = await c.db.transaction(
+				async (tx) => {
+					const [building] = await tx.execute<{
+						type_id: string;
+						last_collected_at: number;
+					}>(
+						"SELECT type_id, last_collected_at FROM buildings WHERE id = ?",
+						input.buildingId,
+					);
+					if (!building) return null;
+
+					const buildingType = BUILDINGS.find(
+						(b: BuildingType) => b.id === building.type_id,
+					);
+					if (!buildingType) return null;
+
+					const now = Date.now();
+					const elapsed = now - building.last_collected_at;
+					const intervals = Math.floor(
+						elapsed / buildingType.productionIntervalMs,
+					);
+					if (intervals <= 0) return null;
+
+					const produced = intervals * buildingType.productionRate;
+					await tx.execute(
+						"UPDATE buildings SET last_collected_at = ? WHERE id = ?",
+						now,
+						input.buildingId,
+					);
+					const [updated] = await tx.execute<ScoreRow>(
+						"UPDATE world SET resources = resources + ?, total_produced = total_produced + ? WHERE id = 1 RETURNING player_id, player_name, total_produced",
+						produced,
+						produced,
+					);
+					return updated;
+				},
+				{ name: "collect-production" },
 			);
-			if (!building) return;
+			if (!world) return;
 
-			const buildingType = BUILDINGS.find(
-				(b: BuildingType) => b.id === building.typeId,
-			);
-			if (!buildingType) return;
-
-			const now = Date.now();
-			const elapsed = now - building.lastCollectedAt;
-			const intervals = Math.floor(
-				elapsed / buildingType.productionIntervalMs,
-			);
-			if (intervals <= 0) {
-				return;
-			}
-
-			const produced = intervals * buildingType.productionRate;
-			c.state.resources += produced;
-			c.state.totalProduced += produced;
-			building.lastCollectedAt = now;
-
-			updateLeaderboard(c);
-			broadcastState(c);
+			updateLeaderboard(c, world);
+			await broadcastState(c);
 		},
 		// docs:end collect
-		getState: (c): IdleSnapshot => buildSnapshot(c),
+		getState: (c): Promise<IdleSnapshot> => buildSnapshot(c),
 		getLeaderboard: async (c) => {
 			const client = c.client<typeof registry>();
 			return await client.idleLeaderboard
@@ -159,42 +216,67 @@ async function scheduleCollection(
 // docs:end schedule
 
 // docs:start leaderboard
-function updateLeaderboard(c: ActorContextOf<typeof idleWorld>) {
+function updateLeaderboard(
+	c: ActorContextOf<typeof idleWorld>,
+	world: ScoreRow,
+) {
+	// Do not wait for the leaderboard, so a slow leaderboard never delays a
+	// payout. A failed report is fixed by the next payout's total.
 	const client = c.client<typeof registry>();
 	client.idleLeaderboard
 		.getOrCreate(["main"])
-		.send("updateScore", {
-			playerId: c.state.playerId,
-			playerName: c.state.playerName,
-			totalProduced: c.state.totalProduced,
+		.updateScore({
+			playerId: world.player_id,
+			playerName: world.player_name,
+			totalProduced: world.total_produced,
 		})
-		.catch(() => {});
+		.catch((error) => {
+			c.log.warn({ msg: "leaderboard update failed", error });
+		});
 }
 // docs:end leaderboard
 
-function buildSnapshot(c: ActorContextOf<typeof idleWorld>): IdleSnapshot {
+async function buildSnapshot(
+	c: ActorContextOf<typeof idleWorld>,
+): Promise<IdleSnapshot> {
+	const [world] = await c.db.execute<{
+		player_id: string;
+		player_name: string;
+		resources: number;
+		total_produced: number;
+	}>(
+		"SELECT player_id, player_name, resources, total_produced FROM world WHERE id = 1",
+	);
+	const buildings = await c.db.execute<{
+		id: string;
+		type_id: string;
+		built_at: number;
+		last_collected_at: number;
+	}>(
+		"SELECT id, type_id, built_at, last_collected_at FROM buildings ORDER BY built_at",
+	);
 	return {
-		playerId: c.state.playerId,
-		playerName: c.state.playerName,
-		resources: c.state.resources,
-		totalProduced: c.state.totalProduced,
-		buildings: c.state.buildings.map((b: BuildingEntry) => {
+		playerId: world!.player_id,
+		playerName: world!.player_name,
+		resources: world!.resources,
+		totalProduced: world!.total_produced,
+		buildings: buildings.map((b) => {
 			const bType = BUILDINGS.find(
-				(bt: BuildingType) => bt.id === b.typeId,
+				(bt: BuildingType) => bt.id === b.type_id,
 			) as BuildingType;
 			return {
 				id: b.id,
-				typeId: b.typeId,
+				typeId: b.type_id,
 				name: bType.name,
 				productionRate: bType.productionRate,
 				productionIntervalMs: bType.productionIntervalMs,
-				builtAt: b.builtAt,
-				lastCollectedAt: b.lastCollectedAt,
+				builtAt: b.built_at,
+				lastCollectedAt: b.last_collected_at,
 			};
 		}),
 	};
 }
 
-function broadcastState(c: ActorContextOf<typeof idleWorld>) {
-	c.broadcast("stateUpdate", buildSnapshot(c));
+async function broadcastState(c: ActorContextOf<typeof idleWorld>) {
+	c.broadcast("stateUpdate", await buildSnapshot(c));
 }

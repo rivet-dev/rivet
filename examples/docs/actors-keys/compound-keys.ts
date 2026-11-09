@@ -1,9 +1,9 @@
 import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
-const chatRoom = actor({ state: { messages: [] as string[] }, actions: {} });
-const gameRoom = actor({ state: { players: [] as string[] }, actions: {} });
-const workspace = actor({ state: { data: {} }, actions: {} });
+const chatRoom = actor({ actions: {} });
+const gameRoom = actor({ actions: {} });
+const workspace = actor({ actions: {} });
 
 const registry = setup({ use: { chatRoom, gameRoom, workspace } });
 const client = createClient<typeof registry>("http://localhost:6420");

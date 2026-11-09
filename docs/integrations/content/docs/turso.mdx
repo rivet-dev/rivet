@@ -99,8 +99,8 @@ npx tsx scripts/client.ts
 
 | Hook | What it does |
 | --- | --- |
-| `createState` | Runs once, when the actor is created. Creates the actor's database and a token scoped to it, and saves both in [state](/actors/docs/state). A database left over from a failed creation attempt is reused. |
-| `createVars` | Runs on every start. Opens a client to the database on `c.vars` and creates the table if it does not exist. When the actor sleeps, `c.vars` is dropped, and the next wake opens a new client. |
+| `onCreate` | Runs once, when the actor is created. Creates the actor's database and a token scoped to it, and saves both in the actor's embedded [SQLite](/actors/docs/sqlite) database. A database left over from a failed creation attempt is reused. |
+| `createVars` | Runs on every start. Reads the saved database details, opens a client to the database on `c.vars` and creates the table if it does not exist. When the actor sleeps, `c.vars` is dropped, and the next wake opens a new client. |
 | `onDestroy` | Deletes the database. |
 
 The client lives on `c.vars` because it is a live object. [Ephemeral variables](/actors/docs/state#ephemeral-state) are never persisted, so each start gets a fresh client.
@@ -121,7 +121,7 @@ This relies on the HTTP transport. A `wss://` URL keeps a WebSocket open, and an
 
 ## Credentials
 
-The Platform API token can create and delete every database in its organization, so it stays in the server's environment. Each actor keeps only the token for its own database in its state.
+The Platform API token can create and delete every database in its organization, so it stays in the server's environment. Each actor keeps only the token for its own database in its embedded SQLite database.
 
 ## Startup timeout
 

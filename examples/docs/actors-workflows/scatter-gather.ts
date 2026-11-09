@@ -1,4 +1,5 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 type ScatterMessage = { input: number };
@@ -10,9 +11,19 @@ export const shardActor = actor({
 });
 
 export const scatterGatherActor = actor({
-  state: {
-    lastSum: 0,
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS gather_stats (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          last_sum INTEGER NOT NULL
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO gather_stats (id, last_sum) VALUES (1, 0)",
+      );
+    },
+  }),
   run: workflow(async (ctx) => {
     await ctx.loop("scatter-gather-loop", async (loopCtx) => {
         const [message] = await loopCtx.queue.nextBatch("wait-scatter", {
@@ -44,13 +55,21 @@ export const scatterGatherActor = actor({
         });
 
         await loopCtx.step("aggregate", async (step) => {
-          step.state.lastSum = gathered.shardA + gathered.shardB + gathered.shardC;
+          await step.db.execute(
+            "UPDATE gather_stats SET last_sum = ? WHERE id = 1",
+            gathered.shardA + gathered.shardB + gathered.shardC,
+          );
         });
 
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{ lastSum: number }>(
+        "SELECT last_sum AS lastSum FROM gather_stats WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 

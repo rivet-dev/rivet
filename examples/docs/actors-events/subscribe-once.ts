@@ -2,13 +2,13 @@ import { actor, event, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
 const gameRoom = actor({
-  state: { started: false },
+  vars: { started: false },
   events: {
     gameStarted: event<[]>()
   },
   actions: {
     startGame: (c) => {
-      c.state.started = true;
+      c.vars.started = true;
       c.broadcast('gameStarted');
     }
   }

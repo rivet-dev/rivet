@@ -42,7 +42,7 @@
 			"title": "Features",
 			"pages": [
 				{
-					"title": "In-Memory State",
+					"title": "State",
 					"href": "/actors/docs/state",
 					"icon": "faFloppyDisk"
 				},
@@ -57,11 +57,6 @@
 					"icon": "faTowerBroadcast"
 				},
 				{
-					"title": "Queues",
-					"href": "/actors/docs/queues",
-					"icon": "faMailbox"
-				},
-				{
 					"title": "Schedule & Cron",
 					"href": "/actors/docs/schedule",
 					"icon": "faClock"
@@ -70,6 +65,11 @@
 					"title": "SQLite",
 					"href": "/actors/docs/sqlite",
 					"icon": "faSqlite"
+				},
+				{
+					"title": "Secure Code Execution",
+					"href": "/actors/docs/secure-code-execution",
+					"icon": "faSquareTerminal"
 				}
 			]
 		},
@@ -147,10 +147,6 @@
 						{
 							"title": "SQLite Profiling",
 							"href": "/actors/docs/sqlite-profiling"
-						},
-						{
-							"title": "Low-Level KV Storage",
-							"href": "/actors/docs/kv"
 						},
 						{
 							"title": "Logging",

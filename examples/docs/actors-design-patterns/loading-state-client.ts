@@ -8,8 +8,7 @@ interface User {
 }
 
 const userSession = actor({
-  state: { requestCount: 0 },
-  createVars: () => ({ user: null as User | null }),
+  createVars: () => ({ user: null as User | null, requestCount: 0 }),
   actions: {
     getProfile: (c) => c.vars.user,
     updateEmail: async (c, email: string) => {},

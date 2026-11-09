@@ -1,13 +1,24 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 type ControlSignal = { kind: "pause" | "resume" | "stop" };
 
 export const controlLoopActor = actor({
-  state: {
-    mode: "running" as "running" | "paused" | "stopped",
-    handledSignals: 0,
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS control_status (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          mode TEXT NOT NULL,
+          handled_signals INTEGER NOT NULL
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO control_status (id, mode, handled_signals) VALUES (1, 'running', 0)",
+      );
+    },
+  }),
   run: workflow(async (ctx) => {
     await ctx.loop("control-loop", async (loopCtx) => {
         const [message] = await loopCtx.queue.nextBatch("wait-signal", {
@@ -24,18 +35,31 @@ export const controlLoopActor = actor({
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{
+        mode: "running" | "paused" | "stopped";
+        handledSignals: number;
+      }>(
+        "SELECT mode, handled_signals AS handledSignals FROM control_status WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 
-function applyControlSignal(
+async function applyControlSignal(
   ctx: WorkflowStepContextOf<typeof controlLoopActor>,
   kind: ControlSignal["kind"],
-): void {
-  ctx.state.handledSignals += 1;
-  if (kind === "pause") ctx.state.mode = "paused";
-  if (kind === "resume") ctx.state.mode = "running";
-  if (kind === "stop") ctx.state.mode = "stopped";
+): Promise<void> {
+  const modes = {
+    pause: "paused",
+    resume: "running",
+    stop: "stopped",
+  } as const;
+  await ctx.db.execute(
+    "UPDATE control_status SET mode = ?, handled_signals = handled_signals + 1 WHERE id = 1",
+    modes[kind],
+  );
 }
 
 export const registry = setup({ use: { controlLoopActor } });

@@ -390,54 +390,6 @@
         },
         {
           "spec": "rivetkit",
-          "method": "post",
-          "path": "/gateway/{actor}/queue/{name}",
-          "slug": "queue",
-          "title": "Send Queue Message",
-          "description": "Enqueue a durable message for an actor. Optionally wait for the actor to complete it and return a response.",
-          "notes": "By default, the request returns after the message is enqueued. Set `wait` to `true` to wait for `message.complete(...)`; `timeout` sets that wait in milliseconds, and a timeout returns `status: \"timedOut\"` without canceling the queued work.",
-          "typescript": "examples/docs/api/gateway-queue.ts",
-          "parameters": {
-            "name": "Name of the queue message as defined in the actor's `queues` map."
-          },
-          "examples": {
-            "path": {
-              "actor": "counter",
-              "name": "increment"
-            },
-            "selector": {
-              "rvt-namespace": "$RIVET_NAMESPACE",
-              "rvt-method": "getOrCreate",
-              "rvt-key": "my-counter",
-              "rvt-pool": "default"
-            },
-            "body": {
-              "body": {
-                "amount": 1
-              },
-              "wait": true,
-              "timeout": 5000
-            },
-            "response": {
-              "status": "completed",
-              "response": {
-                "count": 1
-              }
-            }
-          },
-          "responses": {
-            "200": "The message was enqueued, with its completion status when waiting."
-          },
-          "related": [
-            {
-              "title": "Queues",
-              "href": "/actors/docs/queues"
-            }
-          ],
-          "after": "call-action"
-        },
-        {
-          "spec": "rivetkit",
           "method": "get",
           "path": "/gateway/{actor}/metadata",
           "slug": "metadata",

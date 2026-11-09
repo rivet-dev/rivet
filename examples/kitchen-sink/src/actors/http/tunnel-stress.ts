@@ -3,30 +3,45 @@ import {
 	type RivetMessageEvent,
 	type UniversalWebSocket,
 } from "rivetkit";
+import { db } from "rivetkit/db";
 
 export const tunnelStress = actor({
 	options: {
 		canHibernateWebSocket: false,
 		sleepGracePeriod: 5_000,
 	},
-	state: {
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS message_counter (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					count INTEGER NOT NULL
+				);
+			`);
+			await db.execute(
+				"INSERT OR IGNORE INTO message_counter (id, count) VALUES (1, 0)",
+			);
+		},
+	}),
+	// Connection and heartbeat counts only describe open WebSockets, so they
+	// live in memory. The message count is stored in SQLite.
+	createVars: () => ({
 		connectionCount: 0,
-		messageCount: 0,
 		heartbeatCount: 0,
-	},
+	}),
 	onWebSocket(c, websocket: UniversalWebSocket) {
-		c.state.connectionCount += 1;
+		c.vars.connectionCount += 1;
 		const connectionId = crypto.randomUUID();
 
 		const sendHeartbeat = () => {
 			if (websocket.readyState !== 1) return;
 
-			c.state.heartbeatCount += 1;
+			c.vars.heartbeatCount += 1;
 			websocket.send(
 				JSON.stringify({
 					type: "heartbeat",
 					connectionId,
-					heartbeatCount: c.state.heartbeatCount,
+					heartbeatCount: c.vars.heartbeatCount,
 					timestamp: Date.now(),
 				}),
 			);
@@ -38,7 +53,7 @@ export const tunnelStress = actor({
 		websocket.addEventListener(
 			"message",
 			async (event: RivetMessageEvent) => {
-				// Fast-path ping: echo back without touching KV so the client can measure raw RTT
+				// Fast-path ping: echo back without touching storage so the client can measure raw RTT
 				// without the per-message storage write. Used by the counter-latency client's first
 				// two probes after WS open.
 				if (typeof event.data === "string") {
@@ -68,13 +83,14 @@ export const tunnelStress = actor({
 					}
 				}
 
-				c.state.messageCount += 1;
-				await c.kv.put("counter", String(c.state.messageCount));
+				const [counter] = await c.db.execute<{ count: number }>(
+					"UPDATE message_counter SET count = count + 1 WHERE id = 1 RETURNING count",
+				);
 				websocket.send(
 					JSON.stringify({
 						type: "reply",
 						connectionId,
-						messageCount: c.state.messageCount,
+						messageCount: counter.count,
 						timestamp: Date.now(),
 						received: event.data,
 					}),
@@ -84,15 +100,18 @@ export const tunnelStress = actor({
 
 		websocket.addEventListener("close", () => {
 			clearInterval(heartbeat);
-			c.state.connectionCount -= 1;
+			c.vars.connectionCount -= 1;
 		});
 	},
 	actions: {
-		getStats(c) {
+		async getStats(c) {
+			const [counter] = await c.db.execute<{ count: number }>(
+				"SELECT count FROM message_counter WHERE id = 1",
+			);
 			return {
-				connectionCount: c.state.connectionCount,
-				messageCount: c.state.messageCount,
-				heartbeatCount: c.state.heartbeatCount,
+				connectionCount: c.vars.connectionCount,
+				messageCount: counter.count,
+				heartbeatCount: c.vars.heartbeatCount,
 			};
 		},
 	},

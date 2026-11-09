@@ -116,8 +116,8 @@ socket.send(JSON.stringify({ type: "ping" }));`,
 	console.log(event.id);
 });`,
 	lifecycle: `export const counterWithLifecycle = actor({
-	onConnect: (c) => c.state.events.push("onConnect"),
-	actions: { getEvents: (c) => c.state.events },
+	onConnect: (c) => recordEvent(c.db, "onConnect"),
+	actions: { getEvents: (c) => c.db.execute("SELECT name FROM lifecycle_events") },
 });`,
 	destroy: `await client.destroyActor.getOrCreate(["demo"]).destroy();`,
 	testing: `const { client } = await setupTest(ctx, registry);
@@ -163,7 +163,7 @@ export const myActor = actor({
 	parallelismTest: `import { db } from "rivetkit/db";
 
 export const parallelismTest = actor({
-	state: { stateCount: 0 },
+	createVars: () => ({ stateCount: 0 }),
 	db: db({
 		onMigrate: async (db) => {
 			await db.execute(\`CREATE TABLE IF NOT EXISTS counter (...)\`);
@@ -171,8 +171,8 @@ export const parallelismTest = actor({
 	}),
 	actions: {
 		incrementState: (c) => {
-			c.state.stateCount += 1;
-			c.broadcast("stateCountChanged", { count: c.state.stateCount });
+			c.vars.stateCount += 1;
+			c.broadcast("stateCountChanged", { count: c.vars.stateCount });
 		},
 		incrementSqlite: async (c) => {
 			await c.db.execute("UPDATE counter SET count = count + 1");
@@ -548,9 +548,9 @@ export const PAGE_GROUPS: PageGroup[] = [
 			},
 			{
 				id: "on-state-change",
-				title: "On State Change",
+				title: "Reacting to Changes",
 				description:
-					"Track how often state changes fire with onStateChange hooks.",
+					"React to data changes inline in the actions that make them.",
 				docs: [
 					{
 						label: "Events",
@@ -683,7 +683,7 @@ export const PAGE_GROUPS: PageGroup[] = [
 				id: "connections-presence",
 				title: "Connections and Presence",
 				description:
-					"Track connection state and shared counters across clients.",
+					"Track per-connection data and shared counters across clients.",
 				docs: [
 					{
 						label: "Connections",

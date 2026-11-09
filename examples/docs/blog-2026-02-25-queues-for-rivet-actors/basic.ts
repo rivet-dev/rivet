@@ -1,7 +1,15 @@
 import { actor, queue, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 
 const counter = actor({
-  state: { value: 0 },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(
+        "CREATE TABLE IF NOT EXISTS counter (id INTEGER PRIMARY KEY CHECK (id = 1), value INTEGER NOT NULL)",
+      );
+      await db.execute("INSERT OR IGNORE INTO counter (id, value) VALUES (1, 0)");
+    },
+  }),
   // Define typed queues
   queues: {
     increment: queue<{ amount: number }>(),
@@ -9,11 +17,19 @@ const counter = actor({
   // Process messages in the run handler
   run: async (c) => {
     for await (const message of c.queue.iter()) {
-      c.state.value += message.body.amount;
+      await c.db.execute(
+        "UPDATE counter SET value = value + ? WHERE id = 1",
+        message.body.amount,
+      );
     }
   },
   actions: {
-    getValue: (c) => c.state.value,
+    getValue: async (c) => {
+      const rows = (await c.db.execute(
+        "SELECT value FROM counter WHERE id = 1",
+      )) as { value: number }[];
+      return rows[0].value;
+    },
   },
 });
 

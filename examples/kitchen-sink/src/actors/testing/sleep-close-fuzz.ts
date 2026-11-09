@@ -5,25 +5,25 @@ import {
 } from "rivetkit";
 
 // Minimal non-hibernatable WebSocket actor for fuzz-testing the
-// force-sleep → gateway close path. Keeps state intentionally tiny so the
+// force-sleep → gateway close path. Keeps in-memory vars intentionally tiny so the
 // only thing being exercised is the close lifecycle, not user code.
 export const sleepCloseFuzz = actor({
 	options: {
 		canHibernateWebSocket: false,
 	},
-	state: {
+	createVars: () => ({
 		connectionCount: 0,
 		messageCount: 0,
-	},
+	}),
 	onWebSocket(c, websocket: UniversalWebSocket) {
-		c.state.connectionCount += 1;
+		c.vars.connectionCount += 1;
 		const connectionId = crypto.randomUUID();
 
 		websocket.send(
 			JSON.stringify({
 				type: "welcome",
 				connectionId,
-				connectionCount: c.state.connectionCount,
+				connectionCount: c.vars.connectionCount,
 			}),
 		);
 
@@ -39,7 +39,7 @@ export const sleepCloseFuzz = actor({
 		}, 500);
 
 		websocket.addEventListener("message", (event: RivetMessageEvent) => {
-			c.state.messageCount += 1;
+			c.vars.messageCount += 1;
 			websocket.send(
 				JSON.stringify({
 					type: "echo",
@@ -51,14 +51,14 @@ export const sleepCloseFuzz = actor({
 
 		websocket.addEventListener("close", () => {
 			clearInterval(interval);
-			c.state.connectionCount -= 1;
+			c.vars.connectionCount -= 1;
 		});
 	},
 	actions: {
 		getStats(c) {
 			return {
-				connectionCount: c.state.connectionCount,
-				messageCount: c.state.messageCount,
+				connectionCount: c.vars.connectionCount,
+				messageCount: c.vars.messageCount,
 			};
 		},
 	},

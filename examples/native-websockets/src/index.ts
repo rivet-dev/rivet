@@ -5,26 +5,25 @@ import {
 	type UniversalWebSocket,
 } from "rivetkit";
 
+interface Cursor {
+	userId: string;
+	x: number;
+	y: number;
+	timestamp: number;
+}
+
 interface Vars {
 	websockets: Map<string, UniversalWebSocket>;
+	cursors: Record<string, Cursor>;
 }
 
 export const cursorRoom = actor({
-	state: {
-		cursors: {} as Record<
-			string,
-			{
-				userId: string;
-				x: number;
-				y: number;
-				timestamp: number;
-			}
-		>,
-	},
-
+	// Websockets and cursor positions only matter while users are connected,
+	// so both live in vars, which are never persisted.
 	createVars: (): Vars => {
 		return {
 			websockets: new Map(),
+			cursors: {},
 		};
 	},
 
@@ -58,12 +57,12 @@ export const cursorRoom = actor({
 		// Store websocket in vars (non-persistent)
 		c.vars.websockets.set(userId, websocket);
 
-		// Send initial state to the new connection
+		// Send the current cursors to the new connection
 		websocket.send(
 			JSON.stringify({
 				type: "init",
 				data: {
-					cursors: c.state.cursors,
+					cursors: c.vars.cursors,
 				},
 			}),
 		);
@@ -77,8 +76,8 @@ export const cursorRoom = actor({
 					case "updateCursor": {
 						const { x, y } = message.data;
 
-						// Update cursor position in state (persistent)
-						c.state.cursors[userId] = {
+						// Update the cursor position in memory
+						c.vars.cursors[userId] = {
 							userId,
 							x,
 							y,
@@ -90,7 +89,7 @@ export const cursorRoom = actor({
 							ws.send(
 								JSON.stringify({
 									type: "cursorUpdate",
-									data: c.state.cursors[userId],
+									data: c.vars.cursors[userId],
 								}),
 							);
 						}
@@ -103,7 +102,7 @@ export const cursorRoom = actor({
 							JSON.stringify({
 								type: "cursorsState",
 								data: {
-									cursors: c.state.cursors,
+									cursors: c.vars.cursors,
 								},
 							}),
 						);

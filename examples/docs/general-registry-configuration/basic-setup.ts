@@ -1,7 +1,7 @@
 import { setup, actor } from "rivetkit";
 
-const myActor = actor({ state: {}, actions: {} });
+const myActor = actor({ actions: {} });
 
 const registry = setup({
-  use: { myActor },
+	use: { myActor },
 });

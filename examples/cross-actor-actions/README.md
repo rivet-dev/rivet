@@ -16,7 +16,7 @@ npm run dev
 
 - **Inter-actor communication**: Actors call actions on other actors using the server-side client
 - **Transactional workflows**: Implement checkout process with inventory reservations
-- **Distributed state management**: Each actor manages its own state while coordinating with others
+- **Distributed data**: Each actor stores its own data in its own SQLite database while coordinating with others
 - **Type-safe cross-actor calls**: Full TypeScript type safety across actor boundaries
 
 ## Implementation

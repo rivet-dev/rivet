@@ -1,14 +1,20 @@
 import { actor, queue, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 export const dashboardActor = actor({
-  state: {
-    summary: null as null | {
-      users: number;
-      orders: number;
-      revenue: number;
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS dashboard_summary (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          users INTEGER NOT NULL,
+          orders INTEGER NOT NULL,
+          revenue INTEGER NOT NULL
+        );
+      `);
     },
-  },
+  }),
   queues: {
     refresh: queue<Record<string, never>>(),
   },
@@ -35,13 +41,25 @@ export const dashboardActor = actor({
         });
 
         await loopCtx.step("save-summary", async (step) => {
-          step.state.summary = summary;
+          await step.db.execute(
+            "INSERT OR REPLACE INTO dashboard_summary (id, users, orders, revenue) VALUES (1, ?, ?, ?)",
+            summary.users,
+            summary.orders,
+            summary.revenue,
+          );
         });
 
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{
+        users: number;
+        orders: number;
+        revenue: number;
+      }>("SELECT users, orders, revenue FROM dashboard_summary WHERE id = 1");
+      return { summary: rows[0] ?? null };
+    },
   },
 });
 

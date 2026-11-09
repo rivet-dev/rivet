@@ -162,10 +162,16 @@ const TOOL_CALL_RESULT_BYTES = 10_975;
 const EXECUTOR_TOOL_SCHEMA_BYTES = 2_235;
 
 export const slowReconnectActor = actor({
-	state: { runCount: 0 },
 	db: db({
 		onMigrate: async (database) => {
 			await createSlowReconnectSchema(database);
+			await database.execute(`CREATE TABLE IF NOT EXISTS run_counter (
+				id INTEGER PRIMARY KEY CHECK (id = 1),
+				run_count INTEGER NOT NULL
+			)`);
+			await database.execute(
+				"INSERT OR IGNORE INTO run_counter (id, run_count) VALUES (1, 0)",
+			);
 		},
 	}),
 	vars: { sql: null } as SlowReconnectVars,
@@ -191,14 +197,19 @@ export const slowReconnectActor = actor({
 		},
 		reproReconnect: async (c, clientId?: string) => {
 			c.vars.sql ??= createSlowReconnectDb(c.db);
-			c.state.runCount++;
+			const runCount = await incrementRunCount(c.db);
 			return await runReconnectRepro(
 				c.vars.sql,
-				clientId ?? `action-${c.state.runCount}`,
+				clientId ?? `action-${runCount}`,
 				0,
 			);
 		},
-		getRunCount: (c) => c.state.runCount,
+		getRunCount: async (c) => {
+			const rows = await c.db.execute<{ run_count: number }>(
+				"SELECT run_count FROM run_counter WHERE id = 1",
+			);
+			return rows[0]?.run_count ?? 0;
+		},
 		sleep: (c) => {
 			c.sleep();
 			return true;
@@ -206,8 +217,16 @@ export const slowReconnectActor = actor({
 	},
 });
 
+/** Increments the durable run counter and returns the new count. */
+async function incrementRunCount(database: RawRivetDB): Promise<number> {
+	const rows = await database.execute(
+		"UPDATE run_counter SET run_count = run_count + 1 WHERE id = 1 RETURNING run_count",
+	);
+	return Number(rows[0]?.run_count ?? 0);
+}
+
 async function handleSlowReconnectWebSocketMessage(
-	c: { db: RawRivetDB; vars: SlowReconnectVars; state: { runCount: number } },
+	c: { db: RawRivetDB; vars: SlowReconnectVars },
 	sock: WebSocket,
 	data: unknown,
 ): Promise<void> {
@@ -223,7 +242,7 @@ async function handleSlowReconnectWebSocketMessage(
 		const request = parseSlowReconnectRequest(data);
 		trigger = request.type;
 		c.vars.sql ??= createSlowReconnectDb(c.db);
-		c.state.runCount++;
+		const runCount = await incrementRunCount(c.db);
 
 		if (request.type === "client_resume") {
 			const startedAt = performance.now();
@@ -243,7 +262,7 @@ async function handleSlowReconnectWebSocketMessage(
 		const clientId =
 			request.type === "executor_connect"
 				? request.clientId
-				: (request.clientId ?? `slow-reconnect-${c.state.runCount}`);
+				: (request.clientId ?? `slow-reconnect-${runCount}`);
 		const staggerHandleMs =
 			request.type === "repro_reconnect"
 				? (request.staggerHandleMs ?? 0)

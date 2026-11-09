@@ -1,40 +1,70 @@
 import { actor } from "rivetkit";
+import { db } from "rivetkit/db";
 import type { registry } from "../../index.ts";
 
 export const destroyObserver = actor({
-	state: { destroyedActors: [] as string[] },
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS destroyed_actors (
+					actor_key TEXT PRIMARY KEY
+				);
+			`);
+		},
+	}),
 	actions: {
-		notifyDestroyed: (c, actorKey: string) => {
-			c.state.destroyedActors.push(actorKey);
+		notifyDestroyed: async (c, actorKey: string) => {
+			await c.db.execute(
+				"INSERT OR IGNORE INTO destroyed_actors (actor_key) VALUES (?)",
+				actorKey,
+			);
 		},
-		wasDestroyed: (c, actorKey: string) => {
-			return c.state.destroyedActors.includes(actorKey);
+		wasDestroyed: async (c, actorKey: string) => {
+			const rows = await c.db.execute(
+				"SELECT 1 FROM destroyed_actors WHERE actor_key = ?",
+				actorKey,
+			);
+			return rows.length > 0;
 		},
-		reset: (c) => {
-			c.state.destroyedActors = [];
+		reset: async (c) => {
+			await c.db.execute("DELETE FROM destroyed_actors");
 		},
 	},
 });
 
 export const destroyActor = actor({
-	state: { value: 0, key: "" },
-	onWake: (c) => {
-		// Store the actor key so we can reference it in onDestroy
-		c.state.key = c.key.join("/");
-	},
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS destroy_value (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					value INTEGER NOT NULL
+				);
+			`);
+			await db.execute(
+				"INSERT OR IGNORE INTO destroy_value (id, value) VALUES (1, 0)",
+			);
+		},
+	}),
 	onDestroy: async (c) => {
+		// Report the actor key so the observer can confirm onDestroy ran.
 		const client = c.client<typeof registry>();
 		const observer = client.destroyObserver.getOrCreate(["observer"]);
-		await observer.notifyDestroyed(c.state.key);
+		await observer.notifyDestroyed(c.key.join("/"));
 	},
 	actions: {
 		setValue: async (c, newValue: number) => {
-			c.state.value = newValue;
-			await c.saveState({ immediate: true });
-			return c.state.value;
+			await c.db.execute(
+				"UPDATE destroy_value SET value = ? WHERE id = 1",
+				newValue,
+			);
+			return newValue;
 		},
-		getValue: (c) => {
-			return c.state.value;
+		getValue: async (c) => {
+			const rows = await c.db.execute<{ value: number }>(
+				"SELECT value FROM destroy_value WHERE id = 1",
+			);
+			return rows[0].value;
 		},
 		destroy: (c) => {
 			c.destroy();

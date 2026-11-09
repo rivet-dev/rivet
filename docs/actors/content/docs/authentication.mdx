@@ -28,14 +28,13 @@ Control plane grants decide which Actors a client can reach. The connection hook
 
 ## Authentication Connections
 
-Authentication is configured through `onBeforeConnect`, which validates credentials and rejects the connection by throwing.
+Authentication is configured through `onBeforeConnect`, which validates credentials and rejects the connection by throwing. To use the caller's identity in actions, store it in `c.vars` keyed by `conn.id` from `onConnect`, then look it up with `c.conn.id`.
 
 ## Access Control
 
 After a connection is authenticated, use [Access Control](/actors/docs/access-control) to enforce authorization:
 
 - Check permissions in action handlers.
-- Use `queues.<name>.canPublish` to gate inbound queue publishes.
 - Use `events.<name>.canSubscribe` to gate event subscriptions.
 
 ### `onBeforeConnect`
@@ -50,7 +49,7 @@ Authentication hooks have access to several properties:
 
 | Property | Description |
 |----------|-------------|
-| `params` | Custom data passed by the client when connecting (see [connection params](/actors/docs/connections#extracting-data-from-connection-params)) |
+| `params` | Custom data passed by the client when connecting (see [connection params](/actors/docs/connections#parameters)) |
 | `c.request` | The underlying HTTP request object |
 | `c.request.headers` | Request headers for tokens, API keys (does not work for `.connect()`) |
 | `c.key` | The actor's key (see [keys](/actors/docs/keys)) |
@@ -92,9 +91,9 @@ Validate credentials against an external authentication service:
 
 <CodeSnippet file="examples/docs/actors-permissions/external-auth-provider.ts" />
 
-### Using `c.state` In Authorization
+### Using Actor Data In Authorization
 
-Access actor state via `c.state` and the actor's key via `c.key` to make authorization decisions:
+Read the actor's own data from SQLite, loaded into `c.vars` on start, and the actor's key via `c.key` to make authorization decisions:
 
 <CodeSnippet file="examples/docs/actors-permissions/using-state.ts" />
 
@@ -114,6 +113,6 @@ The limits in this example are [ephemeral](/actors/docs/state#ephemeral-state). 
 
 ### Caching Tokens
 
-Cache validated tokens in `c.vars` to avoid redundant validation on repeated connections. See [ephemeral variables](/actors/docs/state#ephemeral-state) for more details.
+Cache validated tokens in `c.vars` to avoid redundant validation on repeated connections and between `onBeforeConnect` and `onConnect`. See [ephemeral variables](/actors/docs/state#ephemeral-state) for more details.
 
 <CodeSnippet file="examples/docs/actors-permissions/caching-tokens.ts" />

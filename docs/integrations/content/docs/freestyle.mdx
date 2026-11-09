@@ -1,0 +1,66 @@
+---
+title: "Freestyle"
+description: "Give each Rivet Actor its own Freestyle VM."
+skill: false
+---
+
+[Freestyle](https://freestyle.sh) runs Firecracker VMs from snapshots and pauses them when idle. Through `@rivet-dev/sandbox-adapter`, each Actor creates a Freestyle VM, runs commands and uses files in it, pauses it while the Actor sleeps, and deletes it when the Actor is destroyed.
+
+<Diagram
+  id="freestyle"
+  label="A client calls actions on the build Actor whose key is the build id. Each build Actor creates its own Freestyle VM through the sandbox adapter, then runs commands and reads and writes files in it. There is one build Actor, and one Freestyle VM, per build."
+  stackLabel="One per build"
+  nodes={[
+    { id: "client", x: 20, y: 20, w: 110, title: "Client" },
+    { id: "build", x: 190, y: 20, w: 170, product: "actors", stack: true, title: "`build`", subtitle: "stores the sandbox id" },
+    { id: "freestyle", x: 500, y: 20, w: 150, stack: true, title: "Freestyle", subtitle: "VM" },
+  ]}
+  edges={[
+    { from: "client", to: "build", label: "actions" },
+    { from: "build", to: "freestyle", label: "`exec`, files", both: true },
+  ]}
+/>
+
+## Quickstart
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm install rivetkit @rivet-dev/sandbox-adapter freestyle
+```
+
+</Step>
+
+<Step title="Configure Freestyle">
+
+Create an API key in the [Freestyle dashboard](https://admin.freestyle.sh) and put it in `.env`. It stays on the node and never enters the VM.
+
+```sh title=".env"
+FREESTYLE_API_KEY=
+```
+
+</Step>
+
+<Step title="Define the Actor">
+
+Each `build` Actor owns one Freestyle VM. A VM has no network access until a `firewall` rule allows it, so `create` is required. The first `run`, `saveFile`, or `readFile` creates the VM; later calls connect to the same one.
+
+<CodeSnippet file="examples/docs/integrations-freestyle/actor.ts" title="actor.ts" />
+
+</Step>
+
+</Steps>
+
+## Options
+
+| Option | Description |
+| --- | --- |
+| `create` | Options for Freestyle's `vms.create`, or a function that receives the Actor context and returns them. Required, because `firewall` is required. |
+| `client` | A Freestyle client. Defaults to `new Freestyle()`, which reads `FREESTYLE_API_KEY`. |
+| `cwd` | Working directory inside the VM. Created when the Actor connects. Defaults to `/workspace`. |
+
+Commands run as `root` through Python 3, so the snapshot must include it. Every `freestyle/ubuntu*` snapshot does. `suspend` pauses the VM while the Actor sleeps, and `destroy` deletes it.
+
+The `Sandbox` API, lifecycle, and the other providers are in the [sandbox adapter guide](/guides/sandbox-adapter).

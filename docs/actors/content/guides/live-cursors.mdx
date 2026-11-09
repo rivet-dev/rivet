@@ -10,13 +10,13 @@ import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
 <Diagram
   id="live-cursors"
-  label="Browser A connects to the cursorRoom Actor for its room and calls getRoomState to load the cursors and text labels already there. On every mouse move it calls updateCursor, which stores the cursor in that connection's connState. The room broadcasts the cursorMoved event to every connection, so Browser B draws the new position. When Browser A closes its tab, onDisconnect broadcasts cursorRemoved and Browser B removes that cursor. Text labels are saved in the Actor's persistent state. The numbers show the order of the calls. There is one cursorRoom Actor per room."
+  label="Browser A connects to the cursorRoom Actor for its room and calls getRoomState to load the cursors and text labels already there. On every mouse move it calls updateCursor, which stores the cursor in memory under that connection's ID. The room broadcasts the cursorMoved event to every connection, so Browser B draws the new position. When Browser A closes its tab, onDisconnect broadcasts cursorRemoved and Browser B removes that cursor. Text labels are saved in the Actor's SQLite database. The numbers show the order of the calls. There is one cursorRoom Actor per room."
   stackLabel="One per room"
   nodes={[
     { id: "a", x: 20, y: 60, title: "Browser A", subtitle: "moves the mouse" },
     { id: "b", x: 20, y: 240, title: "Browser B", subtitle: "draws cursors" },
-    { id: "room", x: 600, y: 150, w: 190, product: "actors", stack: true, title: "`cursorRoom`", subtitle: "cursors in `connState`" },
-    { id: "state", x: 920, y: 150, w: 150, title: "`c.state`", subtitle: "`textLabels`, saved" },
+    { id: "room", x: 600, y: 150, w: 190, product: "actors", stack: true, title: "`cursorRoom`", subtitle: "cursors in `c.vars`" },
+    { id: "state", x: 920, y: 150, w: 150, title: "`c.db`", subtitle: "`text_labels`, saved" },
   ]}
   edges={[
     { from: "a", to: "room", fromSide: "top", toSide: "top", via: [[105, 25], [670, 25]], toOffset: -25, label: "`getRoomState` on join", step: 1 },
@@ -31,7 +31,7 @@ What we'll build:
 
 - A `cursorRoom` Actor per room, keyed by the room name, that every browser in the room connects to.
 - Cursor presence stored per connection, so a cursor disappears the moment its tab closes.
-- Text labels on the canvas that are saved in the Actor's state and survive restarts.
+- Text labels on the canvas that are saved in the Actor's SQLite database and survive restarts.
 - A React client that sends its cursor on every mouse move and draws everyone else's.
 
 <Steps>
@@ -50,8 +50,8 @@ Each room is its own `cursorRoom` Actor. It keeps two kinds of data: the text la
 
 <CodeSnippet file="examples/cursors/src/index.ts" title="index.ts" highlight="room,registry" />
 
-- `state.textLabels` is persistent [state](/actors/docs/state). It is saved automatically and is still there after everyone leaves and the Actor sleeps or restarts.
-- `connState.cursor` is [connection state](/actors/docs/connections#connection-state). Each connection gets its own copy, and it is thrown away when the connection closes. Presence only means something while the user is connected, so keeping it here means stale cursors can never pile up in storage.
+- The `text_labels` table lives in the Actor's [SQLite](/actors/docs/sqlite) database. Every write is saved before the action returns, so labels are still there after everyone leaves and the Actor sleeps or restarts.
+- `cursors` is a map in [vars](/actors/docs/state#ephemeral-state), keyed by [connection](/actors/docs/connections) ID. Each connection gets its own entry, and `onDisconnect` deletes it when the connection closes. Vars are never saved, and presence only means something while the user is connected, so stale cursors can never pile up in storage.
 - `events` declares the four typed [events](/actors/docs/events) the room broadcasts. The React client gets the same payload types through `typeof registry`.
 - The client picks the room with the [key](/actors/docs/keys) `[roomId]`. Two tabs with the same room name reach the same Actor, and different rooms never share cursors or labels.
 
@@ -63,14 +63,14 @@ Each room is its own `cursorRoom` Actor. It keeps two kinds of data: the text la
 
 <CodeSnippet file="examples/cursors/src/index.ts" title="index.ts" highlight="cursor" />
 
-- It writes the cursor to `c.conn.state`, the calling connection's own state, then broadcasts `cursorMoved` to every connection in the room, including the sender.
+- It stores the cursor in `c.vars.cursors` under `c.conn.id`, the calling connection's ID, then broadcasts `cursorMoved` to every connection in the room, including the sender.
 - The position is in a fixed 1920x1080 canvas space, not screen pixels. Each client scales the canvas to its window, so cursors line up across screen sizes.
 
 <Warning>
 The example sends an update on every raw `mousemove` and the Actor accepts all of them. A fast mouse on a high refresh rate display can send hundreds of updates per second per user. In production, throttle on both sides:
 
 - **Client**: send the latest position every 33 to 50ms (20 to 30Hz) and drop the moves in between. Always send the final position so cursors settle where the mouse stopped, and interpolate between received positions when drawing.
-- **Actor**: keep the time of the last accepted update in `connState` and drop updates that arrive faster than your cap. A client throttle is only a courtesy, so the Actor is where the limit is enforced.
+- **Actor**: keep the time of the last accepted update per connection in `c.vars` and drop updates that arrive faster than your cap. A client throttle is only a courtesy, so the Actor is where the limit is enforced.
 </Warning>
 
 <Warning>
@@ -86,8 +86,8 @@ Presence has three moments: join, move, and leave. Move is `updateCursor`. Join 
 <CodeSnippet file="examples/cursors/src/index.ts" title="index.ts" highlight="presence" />
 
 - **Join**: there is no join broadcast. A new client calls `getRoomState` once after it connects to load the cursors and labels already in the room. Other users first see the newcomer on their first `cursorMoved`.
-- `getRoomState` builds the cursor map from `c.conns.values()`, the live connections, instead of reading a stored list. The answer always matches who is connected.
-- **Leave**: `onDisconnect` runs when a connection closes and broadcasts `cursorRemoved` with that connection's last cursor. Clients delete it from their map, so the cursor disappears as soon as the tab closes. See [Lifecycle](/actors/docs/lifecycle) for when `onDisconnect` runs.
+- `getRoomState` builds the cursor map from `c.vars.cursors`, which only holds live connections, instead of reading a stored list. The answer always matches who is connected. It reads the labels from SQLite.
+- **Leave**: `onDisconnect` runs when a connection closes and removes that connection's cursor from `c.vars.cursors` and broadcasts `cursorRemoved` with it. Clients delete it from their map, so the cursor disappears as soon as the tab closes. See [Lifecycle](/actors/docs/lifecycle) for when `onDisconnect` runs.
 
 </Step>
 
@@ -97,11 +97,11 @@ Clicking the canvas places a text label that everyone sees and that stays after 
 
 <CodeSnippet file="examples/cursors/src/index.ts" title="index.ts" highlight="labels" />
 
-- `updateText` inserts or replaces a label by `id` in `c.state.textLabels` and broadcasts `textUpdated`. The client calls it on every keystroke, so others watch the text being typed.
-- `removeText` filters the label out and broadcasts `textRemoved` with its id. The client calls it when the user presses Escape or finishes with an empty label.
+- `updateText` inserts or replaces a label by `id` in the `text_labels` table and broadcasts `textUpdated`. The client calls it on every keystroke, so others watch the text being typed.
+- `removeText` deletes the label's row and broadcasts `textRemoved` with its id. The client calls it when the user presses Escape or finishes with an empty label.
 
 <Warning>
-Any client can edit or remove any label, because `updateText` trusts the `id` and `userId` it is given and `removeText` trusts the `id`. In production, check that the caller owns the label, cap the text length, and cap the number of labels so the persistent state cannot grow without bound.
+Any client can edit or remove any label, because `updateText` trusts the `id` and `userId` it is given and `removeText` trusts the `id`. In production, check that the caller owns the label, cap the text length, and cap the number of labels so the table cannot grow without bound.
 </Warning>
 
 </Step>
@@ -136,6 +136,6 @@ Open `http://localhost:5173` in two windows side by side. Move the mouse in one 
 
 ## Next steps
 
-- [Connections](/actors/docs/connections): connection params, `createConnState`, and `onBeforeConnect` for checking who connects.
+- [Connections](/actors/docs/connections): connection params, `onConnect` and `onDisconnect`, and `onBeforeConnect` for checking who connects.
 - [Chat Room](/guides/chat-room): the same one Actor per room pattern with saved message history.
 - [WebSocket Handler](/actors/docs/websocket-handler): send your own message format over a raw WebSocket instead of actions and events.

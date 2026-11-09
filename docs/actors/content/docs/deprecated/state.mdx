@@ -1,5 +1,5 @@
 ---
-title: "State"
+title: "Deprecated State"
 description: "Migrate actors off the deprecated c.state and c.conn.state APIs to SQLite and c.vars."
 ---
 
@@ -23,7 +23,7 @@ The Rust SDK no longer has actor state or connection state APIs. Store durable d
 Use these instead:
 
 - **Durable data** goes in [SQLite](/actors/docs/sqlite) (`c.db`).
-- **In-memory data** goes in [`c.vars`](/actors/docs/state#ephemeral-state). Load it from SQLite in `createVars` to serve reads from memory.
+- **In-memory data** goes in [`c.vars`](/actors/docs/state#ephemeral-state). It is rebuilt on every start and lost when the actor sleeps or crashes.
 - **Connection data** is tracked from `onConnect` and `onDisconnect`. See [Connection state](#connection-state).
 
 ## Migrate actor state to SQLite
@@ -32,7 +32,7 @@ Move existing data with a SQLite migration. It reads the old state once, writes 
 
 1. Remove `state` or `createState` from the actor definition.
 2. Add a `db` with an `onMigrate` that creates your tables and copies the old state into them.
-3. Load the data into `c.vars` in `createVars` and write changes back to SQLite in your actions.
+3. Read and write the new tables from your actions. See [Update data in SQL](#update-data-in-sql).
 
 <CodeGroup workspace>
 
@@ -63,13 +63,27 @@ CREATE TABLE _rivet_actor_state (
 - `state` is the value of `c.state` encoded as [CBOR](https://cbor.io). `BigInt`, `Uint8Array`, `ArrayBuffer`, `Set` and `undefined` are stored as two-element arrays such as `["$BigInt", "42"]`. `decodeLegacyState` above turns them back into their original types. This tag encoding applies to TypeScript actors.
 - Only read from `_rivet_*` tables. Do not write to or drop them; Rivet manages them.
 
-## Keep state in memory
+## Update data in SQL
 
-Most actors that used `c.state` want reads with no added latency. Keep that by loading from SQLite into `c.vars` once per start and writing through on each change:
+`c.state` changes ran synchronously, so two actions never interleaved in the middle of one. Every SQLite query is awaited and actions run concurrently, so an action can pause between reading a value and writing it back while another action changes it. Copying data into `c.vars`, changing the copy and writing it back has the same problem and loses updates.
 
-<CodeSnippet file="examples/docs/actors-state/sqlite-load-into-memory.ts" />
+Make each change one statement that computes the new value in SQL and returns it with `RETURNING`. Put the check in the `WHERE` clause so the check and the change cannot be split, and run statements that must commit together in `c.db.transaction`:
 
-`createVars` runs on every start, including after sleep, so the in-memory copy is always rebuilt from SQLite. Unlike `c.state`, a write is durable as soon as `c.db.execute` resolves. See [In-Memory State](/actors/docs/state) for more patterns.
+<CodeSnippet file="examples/docs/actors-deprecated-state/update-in-sql.ts" />
+
+Queries run in the actor's own process, so reading from SQLite in each action is fast. Unlike `c.state`, a write is durable as soon as `c.db.execute` resolves.
+
+## Realtime loops
+
+An actor that changes data on every tick, such as a game loop or a physics world, keeps the live simulation in `c.vars` and saves a snapshot to SQLite on an interval. `c.state` did this for you: it was saved about once per second by default (`stateSaveInterval`), so a crash lost up to a second of progress.
+
+1. Load the last snapshot in `createVars`.
+2. Save a snapshot from the loop once the interval has passed, and once more when the loop exits.
+3. Write each snapshot in one `c.db.transaction` so a crash never leaves half of one.
+
+<CodeSnippet file="examples/docs/actors-state/sqlite-snapshot.ts" />
+
+The interval bounds how much progress a crash can lose. Data tied to a live connection, such as a player's current input, stays out of the snapshot. The loop starts from `onWake`; see [run](/actors/docs/deprecated/run) for that pattern.
 
 ## Connection state
 

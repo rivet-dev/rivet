@@ -1,14 +1,25 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 export const invoiceActor = actor({
-  state: {
-    invoiceId: null as string | null,
-    subtotal: 0,
-    tax: 0,
-    total: 0,
-    status: "idle" as "idle" | "complete",
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS invoice (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          invoice_id TEXT,
+          subtotal INTEGER NOT NULL,
+          tax INTEGER NOT NULL,
+          total INTEGER NOT NULL,
+          status TEXT NOT NULL
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO invoice (id, invoice_id, subtotal, tax, total, status) VALUES (1, NULL, 0, 0, 0, 'idle')",
+      );
+    },
+  }),
   run: workflow(async (ctx) => {
     const subtotal = await ctx.step("load-subtotal", async (ctx) =>
       loadSubtotal(),
@@ -23,7 +34,18 @@ export const invoiceActor = actor({
     );
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{
+        invoiceId: string | null;
+        subtotal: number;
+        tax: number;
+        total: number;
+        status: "idle" | "complete";
+      }>(
+        "SELECT invoice_id AS invoiceId, subtotal, tax, total, status FROM invoice WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 
@@ -68,11 +90,13 @@ async function saveInvoice(
     throw new Error(`save invoice failed: ${response.status}`);
   }
   const invoice = (await response.json()) as { id: string };
-  ctx.state.invoiceId = invoice.id;
-  ctx.state.subtotal = subtotal;
-  ctx.state.tax = tax;
-  ctx.state.total = total;
-  ctx.state.status = "complete";
+  await ctx.db.execute(
+    "UPDATE invoice SET invoice_id = ?, subtotal = ?, tax = ?, total = ?, status = 'complete' WHERE id = 1",
+    invoice.id,
+    subtotal,
+    tax,
+    total,
+  );
 }
 
 export const registry = setup({ use: { invoiceActor } });

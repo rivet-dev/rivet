@@ -32,7 +32,7 @@ import { actor, setup } from "rivetkit";
 import * as wasmBindings from "@rivetkit/rivetkit-wasm";
 import wasmModule from "@rivetkit/rivetkit-wasm/rivetkit_wasm_bg.wasm";
 
-const counter = actor({ state: { count: 0 }, actions: {} });
+const counter = actor({ actions: {} });
 
 const registry = setup({
   runtime: "wasm",

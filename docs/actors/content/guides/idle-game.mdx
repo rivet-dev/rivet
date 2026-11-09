@@ -9,7 +9,7 @@ import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
 <Diagram
   id="idle-game"
-  label="The player's browser calls initialize and build on the idleWorld Actor for that player. Each building registers a fixed-interval job with c.cron.every. The job calls collectProduction on the world when it is due, even if the player is offline and the Actor is asleep. The world sends updateScore to the idleLeaderboard Actor and broadcasts stateUpdate to the browser. The leaderboard broadcasts leaderboardUpdate to every connected player. The numbers show the order of the calls. There is one idleWorld Actor per player."
+  label="The player's browser calls initialize and build on the idleWorld Actor for that player. Each building registers a fixed-interval job with c.cron.every. The job calls collectProduction on the world when it is due, even if the player is offline and the Actor is asleep. The world calls updateScore on the idleLeaderboard Actor and broadcasts stateUpdate to the browser. The leaderboard broadcasts leaderboardUpdate to every connected player. The numbers show the order of the calls. There is one idleWorld Actor per player."
   stackLabel="One per player"
   nodes={[
     { id: "client", x: 20, y: 60, w: 150, title: "Player", subtitle: "browser client" },
@@ -46,13 +46,15 @@ npm add rivetkit
 
 <Step title="Create the world">
 
-Each player gets an `idleWorld` Actor, keyed by their player id. Its state is the whole save game:
+Each player gets an `idleWorld` Actor, keyed by their player id. Its SQLite database is the whole save game:
 
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/idle/world.ts" title="world.ts" region="build" />
 
 - There is no matchmaker. The client calls `idleWorld.getOrCreate([playerId])`, so the first visit creates the world and every later visit reaches the same one.
-- `initialize` is safe to call on every visit. The `initialized` flag makes it a no-op after the first call, apart from sending the current state. The first call gives the player a free farm.
+- The save game is a one-row `world` table for resources and totals plus a `buildings` table, so progress survives sleep and restarts. Actions read and change those rows directly instead of keeping a copy in memory.
+- `initialize` is safe to call on every visit. The `initialized` flag makes it a no-op after the first call, apart from sending the current snapshot. The first call gives the player a free farm.
 - `build` looks the building up in `BUILDINGS` and checks the cost on the server, so a client cannot build something it cannot afford. Resources, production rates, and totals never come from the client.
+- Actions can run at the same time. Each change runs in one `c.db.transaction` and updates columns relative to their saved value, such as `resources = resources - ?` with `WHERE resources >= ?`, so two builds at once cannot spend the same resources.
 - Every change ends with `broadcastState`, which sends a `stateUpdate` with the full snapshot to every open tab.
 
 <Note>
@@ -68,8 +70,8 @@ An idle game has no tick loop. Each building gets its own fixed-interval job tha
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/idle/world.ts" title="world.ts" highlight="collect,schedule" />
 
 - `c.cron.every` registers a job named `collect-production:<buildingId>` that runs at the building's `productionIntervalMs`. Schedules are stored with the Actor, so they keep firing after the player closes the tab. A [schedule](/actors/docs/schedule) wakes the Actor if it is asleep.
-- `collectProduction` does not assume it ran on time. It counts how many whole intervals passed since `lastCollectedAt` and pays for all of them, so a late run still pays the right amount.
-- It sets `lastCollectedAt` to now, which drops any partial interval. Advance it by `intervals * productionIntervalMs` instead if you want to keep the remainder.
+- `collectProduction` does not assume it ran on time. It counts how many whole intervals passed since `last_collected_at` and pays for all of them, so a late run still pays the right amount.
+- It sets `last_collected_at` to now in the same transaction as the payout, which drops any partial interval and keeps two overlapping runs from paying twice. Advance it by `intervals * productionIntervalMs` instead if you want to keep the remainder.
 - `maxHistory: 0` turns off run history, so jobs that never end do not pile up records.
 
 <Note>
@@ -87,8 +89,9 @@ One `idleLeaderboard` Actor, keyed `["main"]`, ranks every player. The world rep
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/idle/leaderboard.ts" title="leaderboard.ts" />
 </CodeGroup>
 
-- `updateLeaderboard` sends an `updateScore` message to the leaderboard's queue and does not wait for it. A slow leaderboard never delays a payout.
-- The leaderboard's `run` loop handles one message at a time. Many worlds can report at the same moment, and each upsert into the `scores` table still runs in order.
+- `updateLeaderboard` calls the leaderboard's `updateScore` action and does not wait for it, so a slow leaderboard never delays a payout. A failed call is logged, and the next payout reports the new total.
+- Many worlds can report at the same moment, and actions run at the same time. Each report is a single upsert into the `scores` table, so two reports can't overwrite each other halfway.
+- Because the world does not wait, two reports from one world can arrive out of order. The total only grows, so the upsert only replaces a row when the new `total_produced` is at least the saved one.
 - The score is `totalProduced`, which only the world computes. The `scores_rank_idx` index keeps `ORDER BY total_produced DESC` fast as the table grows.
 - After each upsert, the leaderboard broadcasts the top 10 as `leaderboardUpdate` to everyone connected.
 
@@ -139,4 +142,4 @@ Open `http://localhost:5173`, pick **Idle**, and click **Start Playing**. You st
 
 - [Schedule & Cron](/actors/docs/schedule): one-shot, cron, and fixed-interval jobs that survive sleep.
 - [Ranked Matchmaking](/guides/ranked-game): a per-player rating Actor and a leaderboard fed by matches.
-- [State](/actors/docs/state): how `c.state` is saved and restored.
+- [SQLite](/actors/docs/sqlite): store durable data in each Actor's own database.

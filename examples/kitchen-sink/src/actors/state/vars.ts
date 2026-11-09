@@ -2,8 +2,6 @@ import { actor } from "rivetkit";
 
 // Actor with static vars
 export const staticVarActor = actor({
-	state: { value: 0 },
-	connState: { hello: "world" },
 	vars: { counter: 42, name: "test-actor" },
 	actions: {
 		getVars: (c) => {
@@ -17,8 +15,6 @@ export const staticVarActor = actor({
 
 // Actor with nested vars
 export const nestedVarActor = actor({
-	state: { value: 0 },
-	connState: { hello: "world" },
 	vars: {
 		counter: 42,
 		nested: {
@@ -43,8 +39,6 @@ export const nestedVarActor = actor({
 
 // Actor with dynamic vars
 export const dynamicVarActor = actor({
-	state: { value: 0 },
-	connState: { hello: "world" },
 	createVars: () => {
 		return {
 			random: Math.random(),
@@ -60,8 +54,6 @@ export const dynamicVarActor = actor({
 
 // Actor with unique vars per instance
 export const uniqueVarActor = actor({
-	state: { value: 0 },
-	connState: { hello: "world" },
 	createVars: () => {
 		return {
 			id: Math.floor(Math.random() * 1000000),
@@ -76,8 +68,6 @@ export const uniqueVarActor = actor({
 
 // Actor that uses driver context
 export const driverCtxActor = actor({
-	state: { value: 0 },
-	connState: { hello: "world" },
 	createVars: (_c, driverCtx: any) => {
 		return {
 			hasDriverCtx: Boolean(driverCtx?.isTest),

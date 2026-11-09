@@ -20,7 +20,7 @@ Structure:
      3a. CONFIG     — trusted shell origin (REQUIRED)
      3b. STATE      — token + actor id (populated by `v1Init`)
      3c. FETCH      — small JSON helper with auth + 401 handling
-     3d. RENDER     — pull state + rpcs in parallel, render each panel
+     3d. RENDER     : pull the counter + rpcs in parallel, render each panel
      3e. HANDSHAKE  — `v1Init` receiver + `ready` signal (REQUIRED)
 -->
 <html lang="en">
@@ -109,10 +109,10 @@ Structure:
 
 		<section class="rivet-card">
 			<div class="rivet-section-header">
-				Live state (polled every 2 s)
+				Live counter (polled every 2 s)
 			</div>
 			<div class="rivet-section-body">
-				<pre id="state">…</pre>
+				<pre id="counter">…</pre>
 			</div>
 		</section>
 
@@ -169,16 +169,20 @@ Structure:
 			// Same pattern as `../counter/index.html`. Two things to notice:
 			//
 			//   • Relative path. The iframe is at
-			//     `/inspector/custom-tabs/info/`, so `../../state` resolves
-			//     to `/inspector/state` on the same actor.
+			//     `/inspector/custom-tabs/info/`, so `../../rpcs` resolves
+			//     to `/inspector/rpcs` on the same actor.
 			//
 			//   • 401 → token-refresh-needed. The tab must NOT silently
 			//     retry; instead it notifies the dashboard, which refreshes
 			//     and re-issues `v1Init` with a fresh token.
 
-			async function fetchJson(rel) {
+			async function fetchJson(rel, init = {}) {
 				const r = await fetch(rel, {
-					headers: { Authorization: `Bearer ${authToken}` },
+					...init,
+					headers: {
+						...init.headers,
+						Authorization: `Bearer ${authToken}`,
+					},
 				});
 				if (r.status === 401) {
 					window.parent.postMessage(
@@ -199,13 +203,19 @@ Structure:
 
 			async function refreshOnce() {
 				try {
-					const [stateRes, rpcsRes] = await Promise.all([
-						fetchJson("../../state"),
+					// The counter lives in the actor's SQLite database, so it
+					// is read through the `getCounter` action.
+					const [counterRes, rpcsRes] = await Promise.all([
+						fetchJson("../../action/getCounter", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: JSON.stringify({ args: [] }),
+						}),
 						fetchJson("../../rpcs"),
 					]);
-					if (stateRes) {
-						document.getElementById("state").textContent =
-							JSON.stringify(stateRes.state ?? {}, null, 2);
+					if (counterRes) {
+						document.getElementById("counter").textContent =
+							JSON.stringify(counterRes.output ?? {}, null, 2);
 					}
 					if (rpcsRes) {
 						const ul = document.getElementById("rpcs");

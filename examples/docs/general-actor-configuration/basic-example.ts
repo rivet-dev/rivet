@@ -1,12 +1,12 @@
 import { actor, setup } from "rivetkit";
 
 const myActor = actor({
-  state: { count: 0 },
+  vars: { count: 0 },
 
   actions: {
     increment: (c) => {
-      c.state.count++;
-      return c.state.count;
+      c.vars.count++;
+      return c.vars.count;
     },
   },
   options: {

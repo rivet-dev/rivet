@@ -1,50 +1,69 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
+
+type Message = {
+	id: string;
+	text: string;
+	timestamp: number;
+};
 
 export const chatRoom = actor({
-	state: {
-		messages: [] as Array<{
-			id: string;
-			text: string;
-			timestamp: number;
-		}>,
-	},
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS messages (
+					seq INTEGER PRIMARY KEY AUTOINCREMENT,
+					id TEXT NOT NULL,
+					text TEXT NOT NULL,
+					timestamp INTEGER NOT NULL
+				)
+			`);
+		},
+	}),
 	createVars: () => {
 		return {
 			sockets: new Set<any>(),
 		};
 	},
-	onWebSocket(ctx, socket) {
+	async onWebSocket(ctx, socket) {
 		// Add socket to the set
 		ctx.vars.sockets.add(socket);
 
 		// Send recent messages to new connection
+		const messages = (await ctx.db.execute(
+			"SELECT id, text, timestamp FROM messages ORDER BY seq",
+		)) as Message[];
 		socket.send(
 			JSON.stringify({
 				type: "init",
-				messages: ctx.state.messages,
+				messages,
 			}),
 		);
 
 		// Handle incoming messages
-		socket.addEventListener("message", (event: any) => {
+		socket.addEventListener("message", async (event: any) => {
 			try {
 				const data = JSON.parse(event.data);
 
 				if (data.type === "message" && data.text) {
-					const message = {
+					const message: Message = {
 						id: crypto.randomUUID(),
 						text: data.text,
 						timestamp: Date.now(),
 					};
 
-					// Add to state
-					ctx.state.messages.push(message);
-					ctx.saveState({});
+					// Persist the message to SQLite
+					await ctx.db.execute(
+						"INSERT INTO messages (id, text, timestamp) VALUES (?, ?, ?)",
+						message.id,
+						message.text,
+						message.timestamp,
+					);
 
 					// Keep only last 50 messages
-					if (ctx.state.messages.length > 50) {
-						ctx.state.messages.shift();
-					}
+					await ctx.db.execute(
+						"DELETE FROM messages WHERE seq NOT IN (SELECT seq FROM messages ORDER BY seq DESC LIMIT 50)",
+					);
 
 					// Broadcast to all connected clients
 					const broadcast = JSON.stringify({

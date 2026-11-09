@@ -1,18 +1,18 @@
 import { actor } from "rivetkit";
 
 const sessionActor = actor({
-  state: {
+  vars: {
     activeTurns: 0,
   },
 
   actions: {
     runTurn: async (c, input: string) => {
-      c.state.activeTurns += 1;
+      c.vars.activeTurns += 1;
       try {
         const result = await c.keepAwake(processTurn(input));
         return result;
       } finally {
-        c.state.activeTurns -= 1;
+        c.vars.activeTurns -= 1;
       }
     },
   }

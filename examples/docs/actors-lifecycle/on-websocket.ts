@@ -1,15 +1,15 @@
 import { actor } from "rivetkit";
 
 const realtimeActor = actor({
-  state: { connectionCount: 0 },
+  vars: { connectionCount: 0 },
 
   onWebSocket: (c, websocket) => {
-    c.state.connectionCount++;
+    c.vars.connectionCount++;
 
     // Send welcome message
     websocket.send(JSON.stringify({
       type: "welcome",
-      connectionCount: c.state.connectionCount
+      connectionCount: c.vars.connectionCount
     }));
 
     // Handle incoming messages
@@ -26,7 +26,7 @@ const realtimeActor = actor({
 
     // Handle connection close
     websocket.addEventListener("close", () => {
-      c.state.connectionCount--;
+      c.vars.connectionCount--;
     });
   },
 

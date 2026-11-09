@@ -1,17 +1,29 @@
 import { expect, test } from "vitest";
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { setupTest } from "rivetkit/test";
 
 const scheduler = actor({
-  state: { completedTasks: [] as string[] },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(
+        "CREATE TABLE IF NOT EXISTS completed_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)",
+      );
+    },
+  }),
   actions: {
     scheduleTask: async (c, taskName: string) => {
       await c.schedule.after(50, "completeTask", taskName);
     },
-    completeTask: (c, taskName: string) => {
-      c.state.completedTasks.push(taskName);
+    completeTask: async (c, taskName: string) => {
+      await c.db.execute("INSERT INTO completed_tasks (name) VALUES (?)", taskName);
     },
-    getCompletedTasks: (c) => c.state.completedTasks,
+    getCompletedTasks: async (c) => {
+      const rows = (await c.db.execute(
+        "SELECT name FROM completed_tasks ORDER BY id",
+      )) as { name: string }[];
+      return rows.map((row) => row.name);
+    },
   },
 });
 

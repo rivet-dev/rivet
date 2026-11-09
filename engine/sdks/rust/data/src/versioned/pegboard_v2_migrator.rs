@@ -4,19 +4,31 @@ pub enum MigrateFromV2InFlight {
 	V1(wire::MigrateFromV2InFlight),
 }
 
-impl_versioned_v1!(MigrateFromV2InFlight, wire::MigrateFromV2InFlight);
+impl_versioned_v1!(
+	MigrateFromV2InFlight,
+	PEGBOARD_V2_MIGRATOR,
+	wire::MigrateFromV2InFlight
+);
 
 pub enum MigrateFromV2Pass {
 	V1(wire::MigrateFromV2Pass),
 }
 
-impl_versioned_v1!(MigrateFromV2Pass, wire::MigrateFromV2Pass);
+impl_versioned_v1!(
+	MigrateFromV2Pass,
+	PEGBOARD_V2_MIGRATOR,
+	wire::MigrateFromV2Pass
+);
 
 pub enum MigrateFromV2Fence {
 	V1(wire::MigrateFromV2Fence),
 }
 
-impl_versioned_v1!(MigrateFromV2Fence, wire::MigrateFromV2Fence);
+impl_versioned_v1!(
+	MigrateFromV2Fence,
+	PEGBOARD_V2_MIGRATOR,
+	wire::MigrateFromV2Fence
+);
 
 pub enum MigrateFromV2StateWriteRequest {
 	V1(wire::MigrateFromV2StateWriteRequest),
@@ -24,6 +36,7 @@ pub enum MigrateFromV2StateWriteRequest {
 
 impl_versioned_v1!(
 	MigrateFromV2StateWriteRequest,
+	PEGBOARD_V2_MIGRATOR,
 	wire::MigrateFromV2StateWriteRequest
 );
 
@@ -33,6 +46,7 @@ pub enum MigrateFromV2StateWriteResponse {
 
 impl_versioned_v1!(
 	MigrateFromV2StateWriteResponse,
+	PEGBOARD_V2_MIGRATOR,
 	wire::MigrateFromV2StateWriteResponse
 );
 
@@ -42,6 +56,7 @@ pub enum MigrateFromV2StateLoadRequest {
 
 impl_versioned_v1!(
 	MigrateFromV2StateLoadRequest,
+	PEGBOARD_V2_MIGRATOR,
 	wire::MigrateFromV2StateLoadRequest
 );
 
@@ -51,6 +66,7 @@ pub enum MigrateFromV2StateLoadResponse {
 
 impl_versioned_v1!(
 	MigrateFromV2StateLoadResponse,
+	PEGBOARD_V2_MIGRATOR,
 	wire::MigrateFromV2StateLoadResponse
 );
 
@@ -60,6 +76,7 @@ pub enum MigrateFromV2StateReadRequest {
 
 impl_versioned_v1!(
 	MigrateFromV2StateReadRequest,
+	PEGBOARD_V2_MIGRATOR,
 	wire::MigrateFromV2StateReadRequest
 );
 
@@ -67,10 +84,18 @@ pub enum MigrateFromV2ActorRequest {
 	V1(wire::MigrateFromV2ActorRequest),
 }
 
-impl_versioned_v1!(MigrateFromV2ActorRequest, wire::MigrateFromV2ActorRequest);
+impl_versioned_v1!(
+	MigrateFromV2ActorRequest,
+	PEGBOARD_V2_MIGRATOR,
+	wire::MigrateFromV2ActorRequest
+);
 
 pub enum MigrateFromV2ActorResponse {
 	V1(wire::MigrateFromV2ActorResponse),
 }
 
-impl_versioned_v1!(MigrateFromV2ActorResponse, wire::MigrateFromV2ActorResponse);
+impl_versioned_v1!(
+	MigrateFromV2ActorResponse,
+	PEGBOARD_V2_MIGRATOR,
+	wire::MigrateFromV2ActorResponse
+);

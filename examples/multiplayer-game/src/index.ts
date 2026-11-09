@@ -1,4 +1,5 @@
 import { actor, event, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import type { GameState, JoinResult, Player, RoomStats } from "./types.ts";
 
 const MAX_PLAYERS = 10;
@@ -47,58 +48,82 @@ const buildGameState = (
 	updatedAt: Date.now(),
 });
 
-type GameRoomState = {
+type GameRoomVars = {
 	roomId: string;
 	maxPlayers: number;
 	players: Record<string, Player>;
+	// Maps each connection ID to the player it controls.
+	playerIds: Map<string, string>;
 };
 
+const ROOM_STATS_SELECT =
+	"SELECT room_id AS roomId, player_count AS playerCount, created_at AS createdAt, last_updated_at AS lastUpdatedAt, max_players AS maxPlayers FROM rooms ORDER BY created_at";
+
 const matchmaker = actor({
-	// Coordinator actor that tracks active game rooms. https://rivet.dev/docs/actors/design-patterns
-	state: {
-		rooms: [] as RoomStats[],
-	},
+	// Coordinator actor that tracks active game rooms in SQLite. https://rivet.dev/docs/actors/design-patterns
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS rooms (
+					room_id TEXT PRIMARY KEY,
+					player_count INTEGER NOT NULL,
+					created_at INTEGER NOT NULL,
+					last_updated_at INTEGER NOT NULL,
+					max_players INTEGER NOT NULL
+				)
+			`);
+		},
+	}),
 	actions: {
 		findGame: async (c) => {
-			const openRoom = c.state.rooms.find(
-				(room) => room.playerCount < room.maxPlayers,
-			);
-			if (openRoom) {
-				return openRoom.roomId;
+			const openRooms = (await c.db.execute(
+				"SELECT room_id AS roomId FROM rooms WHERE player_count < max_players ORDER BY created_at LIMIT 1",
+			)) as { roomId: string }[];
+			if (openRooms[0]) {
+				return openRooms[0].roomId;
 			}
 
-			const roomId = `room-${c.state.rooms.length + 1}`;
+			const [{ roomCount }] = (await c.db.execute(
+				"SELECT COUNT(*) AS roomCount FROM rooms",
+			)) as { roomCount: number }[];
+			const roomId = `room-${roomCount + 1}`;
 			const client = c.client<typeof registry>();
 			await client.gameRoom.create([roomId], {
 				input: { roomId, maxPlayers: MAX_PLAYERS },
 			});
 
-			c.state.rooms.push({
+			const now = Date.now();
+			await c.db.execute(
+				"INSERT OR IGNORE INTO rooms (room_id, player_count, created_at, last_updated_at, max_players) VALUES (?, 0, ?, ?, ?)",
 				roomId,
-				playerCount: 0,
-				createdAt: Date.now(),
-				lastUpdatedAt: Date.now(),
-				maxPlayers: MAX_PLAYERS,
-			});
+				now,
+				now,
+				MAX_PLAYERS,
+			);
 
 			return roomId;
 		},
-		listRooms: (c) => c.state.rooms.map((room) => room.roomId),
-		getRoomStats: (c) => c.state.rooms,
-		updateRoomStats: (c, roomId: string, playerCount: number) => {
-			const room = c.state.rooms.find((entry) => entry.roomId === roomId);
-			if (room) {
-				room.playerCount = playerCount;
-				room.lastUpdatedAt = Date.now();
-			} else {
-				c.state.rooms.push({
-					roomId,
-					playerCount,
-					createdAt: Date.now(),
-					lastUpdatedAt: Date.now(),
-					maxPlayers: MAX_PLAYERS,
-				});
-			}
+		listRooms: async (c) => {
+			const rooms = (await c.db.execute(ROOM_STATS_SELECT)) as RoomStats[];
+			return rooms.map((room) => room.roomId);
+		},
+		getRoomStats: async (c) => {
+			return (await c.db.execute(ROOM_STATS_SELECT)) as RoomStats[];
+		},
+		updateRoomStats: async (c, roomId: string, playerCount: number) => {
+			const now = Date.now();
+			await c.db.execute(
+				`INSERT INTO rooms (room_id, player_count, created_at, last_updated_at, max_players)
+				VALUES (?, ?, ?, ?, ?)
+				ON CONFLICT (room_id) DO UPDATE SET
+					player_count = excluded.player_count,
+					last_updated_at = excluded.last_updated_at`,
+				roomId,
+				playerCount,
+				now,
+				now,
+				MAX_PLAYERS,
+			);
 
 			return { roomId, playerCount };
 		},
@@ -106,17 +131,38 @@ const matchmaker = actor({
 });
 
 const gameRoom = actor({
-	// Data actor that owns room state and broadcasts changes. https://rivet.dev/docs/actors/state
-	createState: (
-		_c,
-		input: { roomId: string; maxPlayers: number },
-	): GameRoomState => ({
-		roomId: input.roomId,
-		maxPlayers: input.maxPlayers,
-		players: {},
+	// Data actor that owns a room and broadcasts changes. The room settings are
+	// saved in SQLite: https://rivet.dev/docs/actors/sqlite
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS room (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					room_id TEXT NOT NULL,
+					max_players INTEGER NOT NULL
+				)
+			`);
+		},
 	}),
-	connState: {
-		playerId: null as string | null,
+	onCreate: async (c, input: { roomId: string; maxPlayers: number }) => {
+		await c.db.execute(
+			"INSERT INTO room (id, room_id, max_players) VALUES (1, ?, ?)",
+			input.roomId,
+			input.maxPlayers,
+		);
+	},
+	// Players only exist while they are connected, so they live in memory:
+	// https://rivet.dev/docs/actors/state
+	createVars: async (c): Promise<GameRoomVars> => {
+		const [room] = (await c.db.execute(
+			"SELECT room_id, max_players FROM room WHERE id = 1",
+		)) as { room_id: string; max_players: number }[];
+		return {
+			roomId: room.room_id,
+			maxPlayers: room.max_players,
+			players: {},
+			playerIds: new Map(),
+		};
 	},
 	events: {
 		playerLeft: event<{ playerId: string }>(),
@@ -136,52 +182,51 @@ const gameRoom = actor({
 		}>(),
 	},
 	onDisconnect: (c, conn) => {
-		const playerId = conn.state.playerId;
+		const playerId = c.vars.playerIds.get(conn.id);
+		c.vars.playerIds.delete(conn.id);
 		if (!playerId) return;
 
-		if (c.state.players[playerId]) {
-			delete c.state.players[playerId];
+		if (c.vars.players[playerId]) {
+			delete c.vars.players[playerId];
 			c.broadcast("playerLeft", { playerId });
 			c.broadcast(
 				"gameState",
 				buildGameState(
-					c.state.roomId,
-					c.state.maxPlayers,
-					c.state.players,
+					c.vars.roomId,
+					c.vars.maxPlayers,
+					c.vars.players,
 				),
 			);
 			void reportRoomCount(c);
 		}
-
-		conn.state.playerId = null;
 	},
 	actions: {
 		join: async (c, name: string): Promise<JoinResult | null> => {
-			const existingId = c.conn.state.playerId;
-			if (existingId && c.state.players[existingId]) {
+			const existingId = c.vars.playerIds.get(c.conn.id);
+			if (existingId && c.vars.players[existingId]) {
 				return {
 					playerId: existingId,
-					player: c.state.players[existingId],
+					player: c.vars.players[existingId],
 				};
 			}
 
-			if (Object.keys(c.state.players).length >= c.state.maxPlayers) {
+			if (Object.keys(c.vars.players).length >= c.vars.maxPlayers) {
 				return null;
 			}
 
 			const playerId = c.conn.id;
 			const player = createPlayer(playerId, name);
 
-			c.conn.state.playerId = playerId;
-			c.state.players[playerId] = player;
+			c.vars.playerIds.set(c.conn.id, playerId);
+			c.vars.players[playerId] = player;
 
 			c.broadcast("playerJoined", { playerId, player });
 			c.broadcast(
 				"gameState",
 				buildGameState(
-					c.state.roomId,
-					c.state.maxPlayers,
-					c.state.players,
+					c.vars.roomId,
+					c.vars.maxPlayers,
+					c.vars.players,
 				),
 			);
 			await reportRoomCount(c);
@@ -189,10 +234,10 @@ const gameRoom = actor({
 			return { playerId, player };
 		},
 		move: async (c, dx: number, dy: number) => {
-			const playerId = c.conn.state.playerId;
+			const playerId = c.vars.playerIds.get(c.conn.id);
 			if (!playerId) return null;
 
-			const player = c.state.players[playerId];
+			const player = c.vars.players[playerId];
 			if (!player) return null;
 
 			const magnitude = Math.hypot(dx, dy);
@@ -214,12 +259,12 @@ const gameRoom = actor({
 				player.lastUpdate = Date.now();
 			}
 
-			const eaten = resolveCollisions(c.state.players, c.conns);
+			const eaten = resolveCollisions(c.vars.players, c.vars.playerIds);
 			for (const entry of eaten) {
 				c.broadcast("playerEaten", entry);
 			}
 
-			if (c.state.players[playerId]) {
+			if (c.vars.players[playerId]) {
 				c.broadcast("playerMoved", {
 					playerId,
 					x: player.x,
@@ -236,9 +281,9 @@ const gameRoom = actor({
 			c.broadcast(
 				"gameState",
 				buildGameState(
-					c.state.roomId,
-					c.state.maxPlayers,
-					c.state.players,
+					c.vars.roomId,
+					c.vars.maxPlayers,
+					c.vars.players,
 				),
 			);
 
@@ -250,7 +295,7 @@ const gameRoom = actor({
 			};
 		},
 		getState: (c) =>
-			buildGameState(c.state.roomId, c.state.maxPlayers, c.state.players),
+			buildGameState(c.vars.roomId, c.vars.maxPlayers, c.vars.players),
 	},
 });
 
@@ -259,7 +304,7 @@ const clamp = (value: number, min: number, max: number) =>
 
 const resolveCollisions = (
 	players: Record<string, Player>,
-	connections: Map<string, { state: { playerId: string | null } }>,
+	connPlayerIds: Map<string, string>,
 ) => {
 	const playerIds = Object.keys(players);
 	const ordered = playerIds.sort((a, b) => players[b].mass - players[a].mass);
@@ -299,9 +344,9 @@ const resolveCollisions = (
 	if (removed.size > 0) {
 		for (const targetId of removed) {
 			delete players[targetId];
-			for (const conn of connections.values()) {
-				if (conn.state.playerId === targetId) {
-					conn.state.playerId = null;
+			for (const [connId, playerId] of connPlayerIds) {
+				if (playerId === targetId) {
+					connPlayerIds.delete(connId);
 				}
 			}
 		}
@@ -311,13 +356,13 @@ const resolveCollisions = (
 };
 
 const reportRoomCount = async (c: {
-	state: GameRoomState;
+	vars: GameRoomVars;
 	client: <_T>() => any;
 }) => {
 	const client = c.client<typeof registry>();
 	await client.matchmaker
 		.getOrCreate(["main"])
-		.updateRoomStats(c.state.roomId, Object.keys(c.state.players).length);
+		.updateRoomStats(c.vars.roomId, Object.keys(c.vars.players).length);
 };
 
 export const registry = setup({

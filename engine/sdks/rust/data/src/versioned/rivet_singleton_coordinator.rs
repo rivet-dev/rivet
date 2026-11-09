@@ -6,5 +6,6 @@ pub enum RivetSingletonCoordinatorData {
 
 impl_versioned_v1!(
 	RivetSingletonCoordinatorData,
+	RIVET_SINGLETON_COORDINATOR,
 	rivet_singleton_coordinator_v1::Data
 );

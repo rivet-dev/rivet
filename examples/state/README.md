@@ -1,6 +1,6 @@
 # State Management
 
-Demonstrates persistent state management in Rivet Actors with automatic state saving and restoration.
+Demonstrates durable data in Rivet Actors: messages are stored in the actor's embedded SQLite database and read back with SQL.
 
 ## Getting Started
 
@@ -14,20 +14,19 @@ npm run dev
 
 ## Features
 
-- **Persistent state**: Actor state automatically saved and restored across restarts
-- **Typed state management**: Full TypeScript type safety for state objects
-- **State initialization**: Define initial state with `createState` or `state` property
-- **Automatic serialization**: State changes automatically persisted without manual saves
+- **Durable data in SQLite**: Each actor writes its messages to its own embedded SQLite database, so they survive restarts and sleep
+- **Direct reads**: `getMessages` queries SQLite on demand, so there is no in-memory copy to keep in sync
+- **Schema migrations**: `onMigrate` creates the table before any other lifecycle hook runs
 
 ## Implementation
 
-This example demonstrates state management in Rivet Actors with a simple counter:
+This example demonstrates durable data in Rivet Actors with a simple chat room:
 
-- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/state/src/backend/registry.ts)): Defines the `counter` actor with a count state that persists across actor restarts
+- **Actor Definition** ([`src/index.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/state/src/index.ts)): Defines the `chatRoom` actor, which stores and reads messages in SQLite
 
 ## Resources
 
-Read more about [state management](/docs/actors/state), [actions](/docs/actors/actions), and [lifecycle hooks](/docs/actors/lifecycle).
+Read more about [state](https://rivet.dev/actors/docs/state), [SQLite](https://rivet.dev/actors/docs/sqlite), [actions](https://rivet.dev/actors/docs/actions), and [lifecycle hooks](https://rivet.dev/actors/docs/lifecycle).
 
 ## License
 

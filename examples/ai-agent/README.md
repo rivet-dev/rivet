@@ -1,6 +1,6 @@
 # AI Agent
 
-Example project demonstrating queue-driven Rivet Actor AI agents with streaming Vercel AI SDK responses.
+Example project demonstrating Rivet Actor AI agents that answer each message in order and stream Vercel AI SDK responses.
 
 ## Getting Started
 
@@ -15,9 +15,10 @@ npm run dev
 ## Features
 
 - Actor-per-agent pattern with a coordinating manager Rivet Actor
-- Queue-based intake using `for await` over `c.queue.iter(...)` inside the run loop
+- Durable message intake: a `sendMessage` action saves each message to SQLite before it returns
+- Ordered replies from a background drain started by the action and by `onWake`, one model call at a time
 - Streaming AI responses sent to the UI as they arrive
-- Persistent history stored in Rivet Actor state
+- Persistent history stored in the Rivet Actor's SQLite database
 - Live status updates via events and polling
 
 ## Prerequisites
@@ -26,15 +27,14 @@ npm run dev
 
 ## Implementation
 
-The AgentManager creates and tracks agent actors, while each AI agent Rivet Actor consumes queue messages in `run` and streams responses with the Vercel AI SDK.
+The AgentManager creates and tracks agent actors. Each AI agent Rivet Actor saves incoming messages as pending, answers them oldest first with the Vercel AI SDK, and saves each reply together with the message it answers. Pending messages are answered after a restart, so a message sent before a crash is not lost.
 
-- **Actor definitions and queues** ([`src/actors.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent/src/actors.ts))
+- **Actor definitions and server entry point** ([`src/index.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent/src/index.ts))
 - **Frontend orchestration** ([`frontend/App.tsx`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent/frontend/App.tsx))
-- **Server entry point** ([`src/server.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent/src/server.ts))
 
 ## Resources
 
-Read more about [queues](https://rivet.dev/docs/actors/queues), [run handlers](https://rivet.dev/docs/actors/run), [state](https://rivet.dev/docs/actors/state), and [events](https://rivet.dev/docs/actors/events).
+Read more about [actions](https://rivet.dev/docs/actors/actions), [lifecycle hooks](https://rivet.dev/docs/actors/lifecycle), [SQLite](https://rivet.dev/docs/actors/sqlite), and [events](https://rivet.dev/docs/actors/events).
 
 ## License
 

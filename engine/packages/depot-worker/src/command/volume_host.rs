@@ -1554,6 +1554,7 @@ impl VolumeHost {
 				deadline,
 			))),
 			volume_key: request.volume_key,
+			versions: self.factory.pubsub.topology().clone(),
 		};
 		let handler_timer = crate::metrics::KV_COMMAND_PHASE_DURATION
 			.with_label_values(&[command_label, "handler"])

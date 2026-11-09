@@ -1,7 +1,6 @@
 import { actor } from "rivetkit";
 
 const myActor = actor({
-  state: {},
   actions: {
     logExamples: (c) => {
       // Just a message

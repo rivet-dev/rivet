@@ -1,16 +1,15 @@
 import { actor, setup } from "rivetkit";
 
 const inventory = actor({
-	state: { stock: 100 },
+	vars: { stock: 100 },
 	actions: {
 		reserve: (c, amount: number) => {
-			c.state.stock -= amount;
+			c.vars.stock -= amount;
 		},
 	},
 });
 
 const order = actor({
-	state: {},
 	actions: {
 		process: async (c) => {
 			const client = c.client<typeof registry>();

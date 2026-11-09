@@ -287,10 +287,8 @@ impl Acquire<'_> {
 					} => (actor, epoch, phase),
 					Read::Initializing => {
 						self.last_phase = "initializing";
-						next = if matches!(
-							self.credential,
-							rivet_guard_core::auth::Credential::Jwt(_)
-						) && self.authorization_namespace.is_none()
+						next = if self.credential.is_namespace_scoped()
+							&& self.authorization_namespace.is_none()
 						{
 							self.wait.wait(ctx).await?
 						} else {
@@ -408,24 +406,23 @@ impl Acquire<'_> {
 		Ok(stream)
 	}
 
-	/// Notices carry no namespace, so a JWT can route only after a read or keyed creation
-	/// established its scope. Fresh expiry checks also cover opens resumed from a notice.
+	/// Notices carry no namespace, so a namespace-scoped credential can route only after a read
+	/// or keyed creation established its scope. Fresh expiry checks also cover opens resumed
+	/// from a notice.
 	fn authorize_route(&self) -> Result<()> {
-		match self.credential {
-			rivet_guard_core::auth::Credential::Admin => Ok(()),
-			rivet_guard_core::auth::Credential::Jwt(_) => {
-				let namespace = self
-					.authorization_namespace
-					.as_deref()
-					.ok_or_else(|| rivet_guard_core::auth::InsufficientPermissions.build())?;
-				authorize_read(
-					self.credential,
-					self.ctx.env().clock().observe()?.unix_ms,
-					namespace,
-					self.actor_id,
-				)
-			}
+		if !self.credential.is_namespace_scoped() {
+			return Ok(());
 		}
+		let namespace = self
+			.authorization_namespace
+			.as_deref()
+			.ok_or_else(|| rivet_guard_core::auth::InsufficientPermissions.build())?;
+		authorize_read(
+			self.credential,
+			self.ctx.env().clock().observe()?.unix_ms,
+			namespace,
+			self.actor_id,
+		)
 	}
 
 	/// Opens a stream to the allocation a start notice or `TryStart` answer named, with no

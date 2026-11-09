@@ -1,4 +1,5 @@
-//! Admin-issued namespace JWTs. Claims are stateless; the coordinator owns the signing ring.
+//! Namespace JWTs issued by a persistent credential such as the admin token. Claims are stateless; the coordinator
+//! owns the signing ring.
 use crate::ApiError;
 use axum::{
 	Json,
@@ -46,11 +47,9 @@ pub async fn create(
 			.build()
 			.into());
 	}
-	// Issuance requires the actual admin credential, including in insecure deployments.
-	let token = auth::transport_token(&headers).ok_or_else(|| auth::InvalidToken.build())?;
-	if !auth::is_admin_bearer(ctx.config(), &format!("Bearer {token}")) {
-		return Err(auth::InvalidToken.build().into());
-	}
+	// Issuance requires a presented persistent credential, including in insecure deployments.
+	let credential = auth::authenticate(&ctx, auth::transport_token(&headers)).await?;
+	credential.require_management()?;
 	pegboard::catalog::ensure_namespace(&ctx, &body.namespace).await?;
 	validate_request(&body, jwt.max_duration().as_secs())?;
 	let grants = ValidatedGrantSet::new(
@@ -71,15 +70,12 @@ pub async fn create(
 		}
 		.build()
 	})?;
+	let duration = body
+		.duration
+		.unwrap_or_else(|| jwt.default_duration().as_secs());
 	let (token, issued_ts, expires_ts) = ctx
 		.jwt()
-		.issue(
-			body.namespace,
-			grants,
-			body.subject,
-			body.duration
-				.unwrap_or_else(|| jwt.default_duration().as_secs()),
-		)
+		.issue(body.namespace, grants, body.subject, duration)
 		.await
 		.map_err(|error| {
 			tracing::warn!(?error, "JWT signing ring is unavailable");
@@ -123,13 +119,14 @@ fn no_store(mut response: Response) -> Response {
 
 /// Authorize routes against their namespace and operation. Direct actor IDs resolve the actual
 /// persisted namespace before authorization; a query parameter never changes an actor's scope.
+/// Credential management is reserved for presented persistent credentials.
 pub async fn authorize(
 	ctx: &EngineContext,
 	credential: &Credential,
 	method: &str,
 	uri: &axum::http::Uri,
 ) -> anyhow::Result<()> {
-	if matches!(credential, Credential::Admin) {
+	if !credential.is_namespace_scoped() {
 		return Ok(());
 	}
 	let path = uri.path();

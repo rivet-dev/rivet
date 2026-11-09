@@ -23,13 +23,13 @@ npm run dev
 
 ## Implementation
 
-This stream processor uses a Top-K algorithm to efficiently maintain the top 3 values using insertion sort. Updates are instantly sent to all connected clients via event broadcasting. The actor maintains persistent state tracking values and statistics, and multiple users can add values simultaneously.
+This stream processor maintains the top 3 values in its SQLite database: each new value is inserted and everything below the top 3 is deleted in the same transaction. Updates are instantly sent to all connected clients via event broadcasting, and multiple users can add values simultaneously without overwriting each other.
 
-- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/stream/src/backend/registry.ts)): Implements the `streamProcessor` actor with insertion-based Top-K maintenance with O(k) complexity for efficiently maintaining the highest values
+- **Actor Definition** ([`src/index.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/stream/src/index.ts)): Implements the `streamProcessor` actor, which keeps the value count and the top values in SQLite
 
 ## Resources
 
-Read more about [state management](/docs/actors/state), [actions](/docs/actors/actions), and [events](/docs/actors/events).
+Read more about [state management](/docs/actors/state), [SQLite](/docs/actors/sqlite), [actions](/docs/actors/actions), and [events](/docs/actors/events).
 
 ## License
 

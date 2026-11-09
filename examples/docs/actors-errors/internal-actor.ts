@@ -1,7 +1,6 @@
 import { actor } from "rivetkit";
 
 const payment = actor({
-  state: { transactions: [] },
   actions: {
     processPayment: async (c, amount: number) => {
       // This will throw a regular Error (not UserError)

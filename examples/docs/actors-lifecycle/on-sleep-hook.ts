@@ -1,11 +1,13 @@
 import { actor } from "rivetkit";
 
 const myActor = actor({
-  state: { count: 0 },
-  vars: { intervalId: null as ReturnType<typeof setInterval> | null },
+  vars: {
+    count: 0,
+    intervalId: null as ReturnType<typeof setInterval> | null,
+  },
 
   onWake: (c) => {
-    c.vars.intervalId = setInterval(() => { c.state.count++; }, 10_000);
+    c.vars.intervalId = setInterval(() => { c.vars.count++; }, 10_000);
   },
 
   onSleep: (c) => {

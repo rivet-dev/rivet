@@ -2,7 +2,6 @@ import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
 const globalActor = actor({
-  state: { config: {} },
   actions: {}
 });
 

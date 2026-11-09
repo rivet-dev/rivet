@@ -1,7 +1,7 @@
 ---
 title: "Permissions"
 seoTitle: "Authorize Callers Inside Rivet Actors"
-description: "Identify callers when they connect to a Rivet Actor, then authorize every action, queue publish, and event subscription with deny-by-default rules."
+description: "Identify callers when they connect to a Rivet Actor, then authorize every action and event subscription with deny-by-default rules."
 skill: true
 ---
 
@@ -15,7 +15,7 @@ The layer above it decides which actor a client may reach at all. See [Authentic
 
 <Step title="Identify the caller and gate an action">
 
-Use `createConnState` to turn a credential into connection state, then check that state in the actions that need it. Throwing from `createConnState` rejects the connection.
+Verify the credential in `onBeforeConnect`, where throwing rejects the connection. Once the connection is accepted, `onConnect` stores the caller's identity in `c.vars`, keyed by `conn.id`, and actions look it up with `c.conn.id`. The document body itself lives in [SQLite](/actors/docs/sqlite).
 
 <CodeGroup workspace>
 <CodeSnippet file="examples/docs/actors-permissions/quickstart/index.ts" title="index.ts" />
@@ -43,7 +43,7 @@ ActorError: Admins only
 
 ### `onBeforeConnect`
 
-Use it for pass or fail validation when you do not need the result later.
+Use it for pass or fail validation. When actions need the caller's identity later, resolve it again in `onConnect` and store it in `c.vars` keyed by `conn.id`, as in the [Quickstart](#quickstart).
 
 <CodeSnippet file="examples/docs/actors-permissions/on-before-connect.ts" />
 
@@ -53,7 +53,7 @@ Use it for pass or fail validation when you do not need the result later.
 
 | Property | Description |
 | --- | --- |
-| `params` | Data the client passed when connecting. See [connection params](/actors/docs/connections#extracting-data-from-connection-params). |
+| `params` | Data the client passed when connecting. See [connection params](/actors/docs/connections#parameters). |
 | `c.request` | The underlying HTTP request. |
 | `c.request.headers` | Request headers. Not available for `.connect()`. |
 | `c.key` | The actor's key. See [keys](/actors/docs/keys). |
@@ -85,7 +85,6 @@ Authorization is explicit per surface. Nothing is checked implicitly.
 
 - `onBeforeConnect` rejects unauthenticated connections.
 - Action handlers enforce per-action rules.
-- `queues.<name>.canPublish` allows or denies an inbound queue publish.
 - `events.<name>.canSubscribe` allows or denies an event subscription.
 
 <CodeSnippet file="examples/docs/actors-permissions/chat-room.ts" />
@@ -94,13 +93,13 @@ Authorization is explicit per surface. Nothing is checked implicitly.
 
 1. Keep connection hooks strict and reject invalid credentials.
 2. In each action, allow the expected roles explicitly and throw `forbidden` otherwise.
-3. In `canPublish` and `canSubscribe`, return `true` only for allowed roles and end with `return false`.
+3. In `canSubscribe`, return `true` only for allowed roles and end with `return false`.
 
 ### Return Value Contract
 
-`canPublish` and `canSubscribe` must return a boolean. `true` allows, `false` denies with `forbidden`. Returning `undefined`, `null`, or any non-boolean throws an internal error.
+`canSubscribe` must return a boolean. `true` allows, `false` denies with `forbidden`. Returning `undefined`, `null`, or any non-boolean throws an internal error.
 
-`canPublish` applies only to queue names declared in `queues`, and messages for undeclared queues are ignored while the publish still reports as completed. `canSubscribe` applies only to event names declared in `events`, and broadcasting an undeclared event still reaches its subscribers.
+`canSubscribe` applies only to event names declared in `events`, and broadcasting an undeclared event still reaches its subscribers.
 
 ## Patterns
 
@@ -114,9 +113,9 @@ Tokens from Clerk, Auth0, Supabase, or your own issuer are opaque to Rivet. Veri
 
 <CodeSnippet file="examples/docs/actors-permissions/external-auth-provider.ts" />
 
-### Authorizing Against Actor State
+### Authorizing Against Actor Data
 
-`c.state` and `c.key` are both available, so an actor can decide access from its own data.
+`c.vars`, `c.db`, and `c.key` are all available in `onBeforeConnect`, so an actor can decide access from its own data. This profile stores its owner in SQLite and loads it into `c.vars` on start.
 
 <CodeSnippet file="examples/docs/actors-permissions/using-state.ts" />
 
@@ -130,11 +129,11 @@ Track attempts in `c.vars` and reject callers that exceed a limit.
 
 <CodeSnippet file="examples/docs/actors-permissions/rate-limiting.ts" />
 
-These counters are [ephemeral](/actors/docs/state#ephemeral-state). Use `state` instead of `vars` to persist them.
+These counters are [ephemeral](/actors/docs/state#ephemeral-state). Store them in [SQLite](/actors/docs/sqlite) to persist them.
 
 ### Caching Validated Tokens
 
-Avoid revalidating the same token on every reconnect.
+Avoid revalidating the same token on every reconnect, and between `onBeforeConnect` and `onConnect`.
 
 <CodeSnippet file="examples/docs/actors-permissions/caching-tokens.ts" />
 

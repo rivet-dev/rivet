@@ -7,7 +7,6 @@ interface Item {
 }
 
 const processor = actor({
-  state: {},
   actions: {
     process: (c, item: Item) => ({ processed: true, item })
   }

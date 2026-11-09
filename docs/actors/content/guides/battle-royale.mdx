@@ -9,7 +9,7 @@ import ExampleLinkBar from "@/components/docs/ExampleLinkBar.astro";
 
 <Diagram
   id="battle-royale"
-  label="The game client sends findMatch to the battleRoyaleMatchmaker Actor, which keeps lobbies and seat reservations in its SQLite tables. If no lobby is open, the matchmaker creates a battleRoyaleMatch Actor. It replies with a matchId and playerId. The client connects to the match with its playerId, and the match claims the seat by sending pendingPlayerConnected to the matchmaker. The client then sends updatePosition and shoot, and the match broadcasts snapshot and shoot events back. The numbers show the order of the calls. There is one matchmaker and one battleRoyaleMatch Actor per match."
+  label="The game client calls findMatch on the battleRoyaleMatchmaker Actor, which keeps lobbies and seat reservations in its SQLite tables. If no lobby is open, the matchmaker creates a battleRoyaleMatch Actor. It returns a matchId and playerId. The client connects to the match with its playerId, and the match claims the seat by calling pendingPlayerConnected on the matchmaker. The client then calls updatePosition and shoot, and the match broadcasts snapshot and shoot events back. The numbers show the order of the calls. There is one matchmaker and one battleRoyaleMatch Actor per match."
   stackLabel="One per match"
   nodes={[
     { id: "client", x: 20, y: 80, w: 150, title: "Game client", subtitle: "browser canvas" },
@@ -50,12 +50,14 @@ npm add rivetkit
 
 One `battleRoyaleMatchmaker` Actor, keyed `["main"]`, decides which lobby each player joins. It keeps lobbies and seat reservations in its SQLite database:
 
-<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/battle-royale/matchmaker.ts" title="matchmaker.ts" highlight="queue,find-match" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/battle-royale/matchmaker.ts" title="matchmaker.ts" highlight="actions,find-match" />
 
-- Every request is a queue message, and `run` handles one message at a time. Two players asking at the same moment can't both take the last seat. `findMatch`, `pendingPlayerConnected`, `updateMatch`, and `closeMatch` are all queues.
-- `processFindMatch` picks the open lobby with the most players, and the oldest one on a tie. If there is none, it inserts a row and creates the `battleRoyaleMatch` Actor with the match id as its input.
-- It returns a new `playerId` and saves it in `pending_players` for 15 seconds. `player_count` counts pending players as well as connected ones, so a lobby that is still filling is never handed out past `LOBBY_CAPACITY` (16).
-- A reservation that is never claimed expires at the start of the next message, in `expirePendingPlayers`, which frees the seat.
+- `findMatch`, `pendingPlayerConnected`, `updateMatch`, and `closeMatch` are actions. Actions run at the same time, so each one reads and changes the tables inside one `c.db.transaction`.
+- `reserveSeat` picks the open lobby with the most players, and the oldest one on a tie, and reserves a seat in the same transaction. Two players asking at the same moment can't both take the last seat.
+- If there is none, `openLobby` creates a `battleRoyaleMatch` Actor keyed by a new match id, inserts its row, and `findMatch` tries again. The Actor is created outside the transaction, because a transaction must not wait on another Actor. Requests that find no open lobby at the same time wait for the same new lobby in `c.vars.openingLobby` instead of opening one each.
+- `findMatch` returns a new `playerId` and saves it in `pending_players` for 15 seconds. `player_count` counts pending players as well as connected ones, so a lobby that is still filling is never handed out past `LOBBY_CAPACITY` (16).
+- `pendingPlayerConnected` claims a reservation by deleting it with `DELETE ... RETURNING`, so each `playerId` is accepted only once. The same transaction counts the seat as connected, so it never looks free before the match reports its new count.
+- A reservation that is never claimed expires at the start of the next `findMatch`, in `expirePendingPlayers`, which frees the seat.
 
 </Step>
 
@@ -66,9 +68,10 @@ Each match is its own `battleRoyaleMatch` Actor, keyed by the match id. A player
 <CodeSnippet file="examples/multiplayer-game-patterns/src/actors/battle-royale/match.ts" title="match.ts" highlight="connect" />
 
 - `onConnect` reads `playerId` from the connection params. A new player has to be claimed from the matchmaker with `pendingPlayerConnected` first. An unknown or expired id is disconnected with `player_not_pending`.
-- `claimPendingPlayer` waits for the matchmaker's answer for at most 3 seconds and treats a timeout as a rejection, so a busy matchmaker can't hang a join.
+- `claimPendingPlayer` calls the matchmaker's `pendingPlayerConnected` action and returns its answer. If the matchmaker can't be reached, the call throws and the connection fails instead of turning a valid player away.
 - A player who reconnects keeps their seat, with the new connection id. During the lobby, a player who stays away for 5 seconds is removed.
-- After every join and leave, `updateMatchmaker` sends `updateMatch` with the player count and whether the match has started. The matchmaker stops sending players to a match once `is_started` is set.
+- A claim uses up the reservation, so `onConnect` saves the new player to SQLite right away. After a crash, `createVars` restores every claimed player without a connection, so a player who reconnects gets their seat back instead of `player_not_pending`.
+- After every join and leave, `updateMatchmaker` calls `updateMatch` with the player count and whether the match has started. The matchmaker stops sending players to a match once `is_started` is set.
 
 <Warning>
 The `playerId` is the only credential in this example. Anyone who knows it can connect as that player. In production, have the matchmaker issue a signed token and check it in the match, or use [authentication](/guides/authentication).
@@ -78,11 +81,13 @@ The `playerId` is the only credential in this example. Anyone who knows it can c
 
 <Step title="Shrink the zone and resolve hits">
 
-The match runs a fixed loop in `run`. Movement and shots arrive as actions between ticks:
+The match runs a fixed loop that `onWake` starts. Movement and shots arrive as actions between ticks:
 
-<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/battle-royale/match.ts" title="match.ts" highlight="tick,combat" />
+<CodeSnippet file="examples/multiplayer-game-patterns/src/actors/battle-royale/match.ts" title="match.ts" highlight="tick,combat,save" />
 
+- `onWake` starts `runMatch` as a background task on every start, and `onSleep` waits for it to save and exit. Connected players keep the match awake. Once everyone leaves, it sleeps, and the next connection resumes it from the last save. The 5 second lobby grace is shorter than the 30 second idle timeout, so the loop always removes the last players before an empty lobby sleeps.
 - `interval(TICK_MS)` ticks every 100 ms until `c.aborted`. Ten ticks per second is enough for a zone that moves slowly and for lobby checks. Each tick ends with one `snapshot` broadcast of the whole match.
+- Ticks and actions only change memory. Every `SNAPSHOT_INTERVAL_MS` (1 second), and once more when the Actor stops, `saveMatch` writes the phase, tick, zone, countdown, and every claimed player in one `c.db.transaction`, so a crash loses at most about a second of play.
 - In the lobby, the countdown starts once 16 players are connected and lasts 3 seconds. `startGame` then places everyone inside the zone at full health. Once the match is live, the zone shrinks after 50 ticks, and a player outside it loses 1 HP per tick.
 - The client owns movement. `updatePosition` takes the client's position, but limits the distance to `MAX_SPEED` times the time since the last update and keeps it inside the world. A client that tries to teleport only moves as far as it could have walked.
 - The server owns combat. `shoot` finds the closest living player within `SHOOT_RANGE` and `SHOOT_ANGLE` of the aim, applies the damage, records the placement, and broadcasts `shoot` so every client can draw the shot.
@@ -115,7 +120,7 @@ The menu asks the matchmaker for a match, then the game connects to it with the 
 <CodeSnippet file="examples/multiplayer-game-patterns/frontend/games/battle-royale/battle-royale-game.ts" title="battle-royale-game.ts" highlight="connect,send" />
 </CodeGroup>
 
-- `mm.send("findMatch", {}, { wait: true })` waits for the queue's reply. The menu disposes the matchmaker connection right after, because the player now talks only to the match.
+- `findMatch` is an action, so the menu awaits its return value. It calls it on a handle without opening a connection, because the player only talks to the match after that.
 - The game uses `battleRoyaleMatch.get(...)`, not `getOrCreate`, because only the matchmaker creates matches. `playerId` goes in `params`, which is where `onConnect` reads it.
 - The client moves its own player every frame and sends `updatePosition` at most every 50 ms. If a `snapshot` puts it more than 40 pixels from where it thinks it is, it snaps to the server's position. Other players are smoothed toward their latest position.
 - Game state lives in a class that draws to a canvas with `requestAnimationFrame`. React only renders the menu and buttons.
@@ -140,5 +145,5 @@ Open `http://localhost:5173`, pick **Battle Royale**, and click **Find Match**. 
 ## Next steps
 
 - [IO Game](/guides/io-game): open lobbies that players join and leave at any time.
-- [Queues](/actors/docs/queues): how the matchmaker handles one request at a time.
+- [Transactions](/actors/docs/sqlite#transactions): how the matchmaker reserves seats when requests overlap.
 - [Connections](/actors/docs/connections): connection params, `onConnect`, and per-connection state.

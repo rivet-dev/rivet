@@ -1,7 +1,7 @@
 import { actor, ActionContextOf } from "rivetkit";
 
 const counter = actor({
-  state: { count: 0 },
+  vars: { count: 0 },
 
   actions: {
     increment: (c) => {
@@ -12,5 +12,5 @@ const counter = actor({
 
 // Simple helper function with typed context
 function incrementCount(c: ActionContextOf<typeof counter>) {
-  c.state.count += 1;
+  c.vars.count += 1;
 }

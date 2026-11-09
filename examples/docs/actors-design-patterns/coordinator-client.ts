@@ -2,22 +2,22 @@ import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
 const chatRoom = actor({
-  state: { messages: [] as { sender: string; text: string }[] },
+  vars: { messages: [] as { sender: string; text: string }[] },
   actions: {
     sendMessage: (c, sender: string, text: string) => {
       const message = { sender, text };
-      c.state.messages.push(message);
+      c.vars.messages.push(message);
       return message;
     },
-    getHistory: (c) => c.state.messages,
+    getHistory: (c) => c.vars.messages,
   },
 });
 
 const chatRoomList = actor({
-  state: { chatRoomIds: [] as string[] },
+  vars: { chatRoomIds: [] as string[] },
   actions: {
     createChatRoom: async (c, name: string) => "room-id",
-    listChatRooms: (c) => c.state.chatRoomIds,
+    listChatRooms: (c) => c.vars.chatRoomIds,
   },
 });
 

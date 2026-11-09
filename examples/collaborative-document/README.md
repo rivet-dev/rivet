@@ -17,11 +17,11 @@ npm run dev
 - **Coordinator pattern**: One documentList actor per workspace indexes document actors
 - **CRDT synchronization**: Document actors broadcast Yjs updates to every collaborator
 - **Presence and cursors**: Awareness updates flow through actor events for live cursors
-- **Durable persistence**: Yjs snapshots are stored in actor KV for crash recovery
+- **Durable persistence**: Yjs snapshots are stored in the actor's SQLite database for crash recovery
 
 ## Implementation
 
-The coordinator creates document actors and tracks IDs, while each document actor stores Yjs state in KV storage and broadcasts updates.
+The coordinator creates document actors and tracks IDs, while each document actor stores Yjs state in SQLite and broadcasts updates.
 
 - **Coordinator and document actors**: [`src/actors.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/collaborative-document/src/actors.ts)
 - **React editor and presence UI**: [`frontend/App.tsx`](https://github.com/rivet-dev/rivet/tree/main/examples/collaborative-document/frontend/App.tsx)
@@ -29,7 +29,7 @@ The coordinator creates document actors and tracks IDs, while each document acto
 
 ## Resources
 
-Read more about [coordinator actors](/docs/actors/design-patterns), [events](/docs/actors/events), [actions](/docs/actors/actions), and [KV storage](/docs/actors/kv).
+Read more about [coordinator actors](/docs/actors/design-patterns), [events](/docs/actors/events), [actions](/docs/actors/actions), and [SQLite](/docs/actors/sqlite).
 
 ## License
 

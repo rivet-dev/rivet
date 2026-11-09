@@ -18,8 +18,8 @@ File layout:
      3a. CONFIG         — read trusted shell origin from the URL
      3b. STATE          — variables the tab owns
      3c. HELPERS        — DOM helpers (errors, busy state)
-     3d. INSPECTOR HTTP — fetchState / invokeAction wrappers
-     3e. RENDERING      — translate actor state into DOM
+     3d. INSPECTOR HTTP: fetchCounter / invokeAction wrappers
+     3e. RENDERING      : translate the counter into DOM
      3f. HANDSHAKE      — postMessage receiver + `ready` signal (REQUIRED)
      3g. WIRING         — connect buttons to actions (UI-specific)
 
@@ -196,15 +196,15 @@ dashboard. Everything else is demo-specific.
 			}
 
 			// =================================================================
-			// 3d. INSPECTOR HTTP — fetch state and invoke actions
+			// 3d. INSPECTOR HTTP: read the counter and invoke actions
 			// =================================================================
 			//
 			// REQUIRED PATTERN.
 			//
 			// The iframe runs at `/inspector/custom-tabs/counter/` on the
 			// actor's gateway URL, so inspector data routes live two
-			// directories up. We use relative paths (`../../state`,
-			// `../../action/<name>`) so we don't need to know the engine
+			// directories up. We use relative paths (`../../action/<name>`)
+			// so we don't need to know the engine
 			// origin or the actor id — the browser resolves them for us.
 			//
 			// Two auth rules from the contract:
@@ -217,10 +217,17 @@ dashboard. Everything else is demo-specific.
 			//      Do NOT silently retry — the token is stale until init
 			//      fires again.
 
-			async function fetchState() {
+			// The counter lives in the actor's SQLite database, so the tab
+			// reads it through the `getCounter` action.
+			async function fetchCounter() {
 				try {
-					const r = await fetch("../../state", {
-						headers: { Authorization: `Bearer ${authToken}` },
+					const r = await fetch("../../action/getCounter", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							Authorization: `Bearer ${authToken}`,
+						},
+						body: JSON.stringify({ args: [] }),
 					});
 					if (r.status === 401) {
 						window.parent.postMessage(
@@ -231,11 +238,11 @@ dashboard. Everything else is demo-specific.
 					}
 					if (!r.ok) {
 						throw new Error(
-							`Inspector state request failed: ${r.status}`,
+							`Inspector getCounter request failed: ${r.status}`,
 						);
 					}
-					const { state } = await r.json();
-					render(state ?? {});
+					const { output } = await r.json();
+					render(output ?? {});
 					clearError();
 				} catch (err) {
 					showError(err?.stack ?? String(err));
@@ -269,9 +276,9 @@ dashboard. Everything else is demo-specific.
 						);
 					}
 					clearError();
-					// Refetch state immediately so the UI feels snappy
+					// Refetch the counter immediately so the UI feels snappy
 					// instead of waiting for the next 1 s poll tick.
-					await fetchState();
+					await fetchCounter();
 				} catch (err) {
 					showError(err?.stack ?? String(err));
 				} finally {
@@ -280,15 +287,15 @@ dashboard. Everything else is demo-specific.
 			}
 
 			// =================================================================
-			// 3e. RENDERING — translate state into DOM
+			// 3e. RENDERING: translate the counter into DOM
 			// =================================================================
 
-			function render(state) {
+			function render(counter) {
 				document.getElementById("value").textContent = String(
-					state.value ?? 0,
+					counter.value ?? 0,
 				);
-				const hist = Array.isArray(state.history)
-					? [...state.history].reverse()
+				const hist = Array.isArray(counter.history)
+					? [...counter.history].reverse()
 					: [];
 				const container = document.getElementById("history");
 				if (!hist.length) {
@@ -355,11 +362,11 @@ dashboard. Everything else is demo-specific.
 						(msg.theme ?? "dark") === "dark",
 					);
 					if (pollTimer) clearInterval(pollTimer);
-					fetchState();
+					fetchCounter();
 					// Poll every second. For higher-frequency UIs prefer a
 					// WebSocket-based pattern; the inspector HTTP routes
 					// are designed for occasional reads.
-					pollTimer = setInterval(fetchState, 1000);
+					pollTimer = setInterval(fetchCounter, 1000);
 				}
 			});
 
