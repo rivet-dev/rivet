@@ -135,8 +135,12 @@ pub async fn start(
 	// Operator requests reach this tenure only while it runs. A failed subscription leaves the
 	// migration running without them.
 	let mut serving = true;
-	let transport = requests::serve(ctx.ups()?, authority, runner.inbox.clone(), replies.clone());
-	tokio::pin!(transport);
+	let mut transport = Box::pin(requests::serve(
+		ctx.ups()?,
+		authority,
+		runner.inbox.clone(),
+		replies.clone(),
+	));
 	let mut snapshot = runner.snapshot.clone();
 	let mut current = settings;
 	let mut shutdown = ctx.shutdown();
@@ -210,6 +214,9 @@ pub async fn start(
 		}
 	}
 
+	// Release the request transport's strong inbox sender before joining the runner.
+	// Dropping only a Pin<&mut _> would leave the underlying future alive here.
+	drop(transport);
 	let _ = runner.inbox.send(Event::StopRequest).await;
 	replies.close();
 	executor.cancel();
