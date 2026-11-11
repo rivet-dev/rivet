@@ -2414,3 +2414,41 @@ pub(crate) fn effect_backoff(attempt: u32) -> u64 {
 		.saturating_mul(multiplier)
 		.min(EFFECT_BACKOFF_MAX_MS)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_envoy_gone_evaluates_only_when_disconnected() {
+		let mut envoy = wire::EnvoyData {
+			key: "test_envoy".into(),
+			worker_id: vec![1; 32].into(),
+			connection_id: vec![2; 16].into(),
+			connection_epoch: 1,
+			version: 1,
+			names: Vec::new(),
+			create_unix_ms: 1000,
+			heartbeat_unix_ms: 1000,
+			stopping: false,
+			connected: true,
+		};
+
+		// When still marked connected, envoy is never considered gone, even if past threshold
+		assert!(!envoy_gone(Some(&envoy), 100_000, 40_000));
+
+		// When marked disconnected, envoy is not gone before threshold + margin
+		envoy.connected = false;
+		assert!(!envoy_gone(Some(&envoy), 1000 + 40_000, 40_000));
+
+		// When marked disconnected and past threshold + margin, envoy is gone
+		assert!(envoy_gone(
+			Some(&envoy),
+			1000 + 40_000 + (ENVOY_GONE_MARGIN_MS as i64) + 1,
+			40_000
+		));
+
+		// When envoy record is None, it is always considered gone
+		assert!(envoy_gone(None, 1000, 40_000));
+	}
+}
