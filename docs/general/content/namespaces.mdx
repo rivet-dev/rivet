@@ -61,6 +61,19 @@ curl "$RIVET_API/namespaces?limit=100" \
 
 The response contains `namespaces` and `pagination.cursor`. Pass the cursor as `cursor` on the next request. Filter a single namespace with `?name=staging`.
 
+## Fork a namespace
+
+Pass `fork_from` to create a namespace that starts with a copy of another namespace's Actors, with the same Actor IDs, keys, and databases. The copy shares the parent's data instead of copying it. Node pools are not copied, so configure them in the new namespace before its Actors can run:
+
+```bash
+curl -X POST "$RIVET_API/namespaces?wait=settled" \
+  -H "Authorization: Bearer $RIVET_ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"staging-copy","fork_from":"production"}'
+```
+
+See [Namespace Forks](/actors/docs/forking#namespace-forks) for what a fork includes and how Actors can tell they are in a copy.
+
 ## Choose a namespace
 
 An endpoint can include the slug, as above, or you can set `RIVET_NAMESPACE=staging` separately. Management API requests use `?namespace=staging`.

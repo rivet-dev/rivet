@@ -67,6 +67,11 @@
 					"icon": "faSqlite"
 				},
 				{
+					"title": "Forking",
+					"href": "/actors/docs/forking",
+					"icon": "faCodeBranch"
+				},
+				{
 					"title": "Secure Code Execution",
 					"href": "/actors/docs/secure-code-execution",
 					"icon": "faSquareTerminal"
@@ -301,6 +306,22 @@
 				{
 					"title": "AI Agent",
 					"href": "/guides/ai-agent"
+				},
+				{
+					"title": "Side Questions (/btw)",
+					"href": "/guides/side-questions"
+				},
+				{
+					"title": "Branch Conversations (/fork)",
+					"href": "/guides/branch-conversations"
+				},
+				{
+					"title": "Forking Subagents",
+					"href": "/guides/forking-subagents"
+				},
+				{
+					"title": "Agent Swarms",
+					"href": "/guides/agent-swarms"
 				}
 			]
 		},

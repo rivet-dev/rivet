@@ -1,0 +1,154 @@
+---
+title: "Side Questions with /btw"
+description: "Ask a quick question about an agent's work by forking the agent, asking the fork, and discarding it, without interrupting the agent or adding to its conversation."
+---
+
+<Diagram
+  id="side-questions"
+  label="The chat client gives the user's agent a long task with prompt. While the agent works, the client forks it, which copies the agent's conversation into a /btw fork without calling the agent. The client asks the fork one question, the fork answers, and the client discards the fork. The numbers show the order of the calls. The agent's own conversation never changes."
+  nodes={[
+    { id: "client", x: 20, y: 120, w: 150, title: "Chat client", subtitle: "`/btw` command" },
+    { id: "agent", x: 400, y: 30, w: 225, product: "agents", title: "`agent`", subtitle: "keeps working" },
+    { id: "btw", x: 400, y: 210, w: 225, product: "agents", highlight: true, title: "`/btw` fork", subtitle: "one answer, then discarded" },
+  ]}
+  edges={[
+    { from: "client", to: "agent", fromSide: "top", toSide: "left", via: [[95, 60]], label: "`prompt` a long task", labelAt: [215, 52], step: 1 },
+    { from: "agent", to: "btw", fromSide: "bottom", toSide: "top", label: "`fork` copies the conversation", labelAt: [522, 150], labelAnchor: "start", step: 2 },
+    { from: "client", to: "btw", fromSide: "right", toSide: "left", via: [[285, 150], [285, 240]], label: "one question", labelAt: [300, 232], labelAnchor: "start", step: 3 },
+    { from: "btw", to: "client", kind: "reply", fromSide: "bottom", toSide: "bottom", via: [[512, 310], [95, 310]], label: "answer", step: 4 },
+  ]}
+/>
+
+A side question, often a `/btw` command in a chat app, asks an agent about its work without derailing it: "btw, which step looks riskiest?" The answer needs the agent's full context, but the agent may be in the middle of a long task, and the question and answer should not end up in its conversation.
+
+A [fork](/actors/docs/forking) does both. The client forks the agent, asks the fork one question, shows the answer, and discards the fork. Forking never calls the agent, so it keeps working, and nothing the fork writes reaches the agent's conversation. To keep working in a copy of the conversation instead, see [Branch Conversations with /fork](/guides/branch-conversations).
+
+What we'll build:
+
+- A [Pi](/agents/docs) agent with a `discard` action that destroys a fork.
+- A `btw` function that forks the agent, asks the fork, and discards it.
+- An `onFork` hook that cleans up a `/btw` fork the client forgot to discard.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add @rivet-dev/pi @earendil-works/pi-durable @earendil-works/pi-ai @earendil-works/chord rivetkit zod
+```
+
+</Step>
+
+<Step title="Create the agent">
+
+```ts server.ts
+import { createRegistry } from "@earendil-works/pi-durable";
+import { pi } from "@rivet-dev/pi";
+import { setup } from "rivetkit";
+import { z } from "zod";
+
+const QuickQuestion = z.object({ kind: z.literal("btw") });
+
+export const agent = pi({
+	model: "anthropic/claude-opus-5-5",
+	registry: createRegistry(),
+
+	// Runs once, at the first start of a fork. If the client never discards a
+	// /btw fork, it destroys itself after ten minutes.
+	onFork: async (c, fork) => {
+		if (QuickQuestion.safeParse(fork.input).success) {
+			await c.schedule.after(10 * 60_000, "discard");
+		}
+	},
+
+	actions: {
+		discard: (c) => {
+			c.destroy();
+		},
+	},
+});
+
+export const registry = setup({ use: { agent } });
+
+registry.start();
+```
+
+- The agent is an ordinary Pi agent. Pi saves each model call and tool call to the agent's SQLite database, so a fork starts with the whole conversation.
+- `onFork` runs once, at the first start of a fork. A fork made with `{ kind: "btw" }` schedules its own `discard` in case the client never discards it.
+
+</Step>
+
+<Step title="Ask a side question">
+
+```ts btw.ts
+import { ROOT_CONVERSATION_ID } from "@earendil-works/pi-durable";
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>();
+
+/** Answers a question about an agent's work without touching its conversation. */
+export async function btw(agentId: string, question: string): Promise<string> {
+	// The fork starts with the agent's conversation up to its last saved step.
+	// Forking never calls the agent, so a turn it is working on keeps going.
+	const side = await client.agent.fork(agentId, { input: { kind: "btw" } });
+	try {
+		// The fork also copied that turn and would continue it. Stop it in the
+		// fork only, so the side question is answered right away.
+		await side.conversation.abort(ROOT_CONVERSATION_ID);
+
+		const result = await side.prompt(
+			`btw, ${question} Answer in a few sentences from what you know so far.`,
+			{ requestId: crypto.randomUUID() },
+		);
+		return result.status === "done"
+			? (result.text ?? "")
+			: `No answer: ${result.reason}`;
+	} finally {
+		// Nothing the fork wrote reaches the agent. Destroy it.
+		await side.discard();
+	}
+}
+
+const agent = client.agent.getOrCreate(["user-123"]);
+const agentId = await agent.resolve();
+
+// The main agent works on a long task. The side question does not wait for it.
+const work = agent.prompt(
+	"Plan the migration of our billing service to the new API.",
+	{
+		requestId: crypto.randomUUID(),
+	},
+);
+console.log(await btw(agentId, "which step looks riskiest?"));
+await work;
+```
+
+- `client.agent.fork` returns once the copy is ready. The fork is already running.
+- The fork copied the turn the agent is working on and would continue it, repeating the agent's model calls. `conversation.abort` stops that turn in the fork only, so the question runs at once. The agent's own turn keeps going.
+- `discard` destroys the fork. Nothing it wrote reaches the agent.
+
+</Step>
+
+<Step title="Try it">
+
+Set your model key and start the agent:
+
+```sh
+export ANTHROPIC_API_KEY=sk-ant-...
+npx tsx server.ts
+```
+
+In another terminal, run `npx tsx btw.ts`. The side answer prints while the agent is still planning, and the agent's conversation has no trace of it.
+
+</Step>
+
+</Steps>
+
+## Gotchas
+
+- **The fork starts from saved steps.** Pi saves each step as it goes, so the fork has the conversation up to the agent's last saved step. Text the agent is writing at that moment is not in it.
+- **Discard every fork.** A fork is a full agent. It sleeps when idle but keeps its storage until it is destroyed. The `discard` that `onFork` schedules cleans up after a client that crashed first.
+- **Use keyless forks.** Nobody needs to find a side question again, so it gets no key and can never collide with another fork.
+- **Fork only agents without a sandbox.** This agent keeps its files in its own database, so the fork gets its own copy. A fork of an agent with a [sandbox](/guides/agent-sandboxes) copies the record of that sandbox, so it would run its tools in the source's sandbox.
+- **Side questions are cheap.** The fork stores only the question and the answer. It reads the rest of the conversation from the agent's data.
