@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/cli-darwin-arm64",
-	"version": "3.1.1-rc.1",
+	"version": "3.1.1",
 	"description": "Rivet CLI for macOS arm64 (Apple Silicon)",
 	"license": "Apache-2.0",
 	"os": [
