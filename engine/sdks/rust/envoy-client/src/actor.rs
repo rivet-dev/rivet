@@ -1293,6 +1293,34 @@ async fn handle_hws_restore(
 			.any(|req| req.gateway_id == meta.gateway_id && req.request_id == meta.request_id);
 
 		if !is_connected {
+			if hibernating_requests.is_empty() {
+				// The start command does not track hibernating requests: the gateway keeps the
+				// client socket open while the actor sleeps. Keep the persisted connection and
+				// wait for the gateway to re-open the tunnel with the same gateway and request
+				// ids (the restore path in `handle_ws_open`) instead of closing it as stale.
+				ctx.websocket_requests.insert(
+					&[&meta.gateway_id, &meta.request_id],
+					WebSocketRequestState {
+						envoy_message_index: 0,
+					},
+				);
+				let (parked_tx, _parked_rx) = mpsc::unbounded_channel();
+				ctx.ws_entries.insert(
+					&[&meta.gateway_id, &meta.request_id],
+					WsEntry {
+						is_hibernatable: true,
+						rivet_message_index: meta.rivet_message_index,
+						ws_handler: None,
+						outgoing_tx: parked_tx,
+					},
+				);
+				tracing::debug!(
+					request_id = id_to_str(&meta.request_id),
+					"parked hibernated websocket until the gateway re-opens it"
+				);
+				continue;
+			}
+
 			tracing::debug!(
 				request_id = id_to_str(&meta.request_id),
 				"removing stale persisted websocket"
