@@ -1480,13 +1480,15 @@ fn refused_page_request_hint_ms(message: &p::ToRivet, error: &anyhow::Error) -> 
 /// reports it as outcome unknown. A refusal without a hint, such as an entry that is too large,
 /// would be refused the same way and returns at once.
 ///
-/// A write the selected entry version cannot carry was refused at admission too, so it
-/// qualifies the same way.
+/// A write the selected entry version cannot carry, and a write refused because the volume's
+/// admitted writes are too far ahead of its tablet's apply, were refused at admission too, so
+/// they qualify the same way.
 fn refused_write_hint_ms(error: &anyhow::Error) -> Option<u64> {
 	match error.downcast_ref::<depot_client::filesystem::Error>() {
-		Some(depot_client::filesystem::Error::VersionUnavailable { retry_after_ms }) => {
-			Some(*retry_after_ms)
-		}
+		Some(
+			depot_client::filesystem::Error::VersionUnavailable { retry_after_ms }
+			| depot_client::filesystem::Error::ApplyBacklog { retry_after_ms },
+		) => Some(*retry_after_ms),
 		Some(depot_client::filesystem::Error::Log(error))
 			if error.disposition() == ErrorDisposition::NotExecuted =>
 		{

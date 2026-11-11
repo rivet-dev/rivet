@@ -94,7 +94,7 @@ pub fn router_with_retry_budget(
 		.route("/auth/tokens", post(tokens::create))
 		.route("/auth/tokens/inspect", get(tokens::inspect))
 		.merge(protected)
-		.layer(middleware::from_fn(classify_read_refusal))
+		.layer(middleware::from_fn(classify_retry_safe_refusal))
 		.layer(axum::Extension(budget))
 		// Outermost, so preflights are answered before authentication. RivetKit clients send
 		// every request with credentials, which rejects wildcards, so the request's own values
@@ -118,22 +118,39 @@ pub fn router_with_retry_budget(
 }
 
 /// Refusals that happen before any work and answer 503 at a read-only HTTP boundary. Every
-/// other method keeps the 400 they answer with, which released clients already handle.
+/// other method keeps the 400 they answer with, which released clients already handle, except
+/// actor deletion as described on [`classify_retry_safe_refusal`].
 const READ_RETRYABLE_REFUSALS: [&str; 2] = ["depot.overloaded", "actor.fork_unavailable"];
 
-/// A storage or admission refusal is retryable at a read-only HTTP boundary. A mutation can
-/// already have committed before a subsequent read is refused, so keep its existing status.
-async fn classify_read_refusal(request: Request, next: Next) -> Response {
+/// A refusal is retryable where sending the request again cannot repeat a committed write:
+/// reads, and actor deletion refused as overloaded, whose only write is its final depot command
+/// and is therefore never reached when that command or an earlier read is refused. Other
+/// mutations can already have committed before a subsequent read is refused, so they keep
+/// their existing status.
+async fn classify_retry_safe_refusal(request: Request, next: Next) -> Response {
 	let read_only = matches!(*request.method(), Method::GET | Method::HEAD);
+	let actor_delete = *request.method() == Method::DELETE && is_actor_path(request.uri().path());
 	let mut response = next.run(request).await;
-	let retryable_refusal = response
+	let refusal = response
 		.headers()
 		.get(X_RIVET_ERROR)
-		.is_some_and(|value| READ_RETRYABLE_REFUSALS.iter().any(|code| value == *code));
-	if read_only && response.status() == StatusCode::BAD_REQUEST && retryable_refusal {
+		.and_then(|value| value.to_str().ok());
+	let retryable_refusal = match refusal {
+		Some(code) if read_only => READ_RETRYABLE_REFUSALS.contains(&code),
+		Some(code) if actor_delete => code == "depot.overloaded",
+		_ => false,
+	};
+	if retryable_refusal && response.status() == StatusCode::BAD_REQUEST {
 		*response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
 	}
 	response
+}
+
+fn is_actor_path(path: &str) -> bool {
+	matches!(
+		path.trim_start_matches('/').split('/').collect::<Vec<_>>().as_slice(),
+		["actors", actor_id] if !actor_id.is_empty()
+	)
 }
 
 /// Authenticate and enforce route grants before running its handler.
@@ -235,7 +252,7 @@ impl IntoResponse for ApiError {
 			// The fork's deadline passed while its copy goes on.
 			("actor", "fork_pending") => StatusCode::GATEWAY_TIMEOUT,
 			// Storage, messaging and admission refusals keep the 400 that released clients
-			// read; `classify_read_refusal` answers 503 for the ones a read may retry.
+			// read; `classify_retry_safe_refusal` answers 503 for the ones a read may retry.
 			_ => StatusCode::BAD_REQUEST,
 		};
 		let mut body = serde_json::json!({
