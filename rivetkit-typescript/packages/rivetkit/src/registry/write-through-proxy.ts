@@ -24,7 +24,8 @@ export function createWriteThroughProxy<T>(
 
 	return onChange(
 		value as T & Record<string, any>,
-		() => {
+		(path: string) => {
+			unwrapPath(value, path);
 			commit(value);
 		},
 		{
@@ -32,11 +33,57 @@ export function createWriteThroughProxy<T>(
 			// mutation. We always return true so on-change applies the change
 			// if beforeChange did not throw.
 			onValidate(_path: string, newValue: unknown) {
+				unwrapWriteThroughProxy(newValue);
 				beforeChange?.(newValue);
 				return true;
 			},
 		},
 	) as T;
+}
+
+/**
+ * Unwraps any `@rivetkit/on-change` proxies located at the given dot-separated
+ * path on the root object in place.
+ */
+function unwrapPath(root: unknown, pathStr: string): void {
+	if (!root || typeof root !== "object") {
+		return;
+	}
+	if (!pathStr) {
+		unwrapWriteThroughProxy(root);
+		return;
+	}
+	const parts = pathStr.split(".");
+	let current: any = root;
+	for (let i = 0; i < parts.length - 1; i++) {
+		const key = parts[i];
+		if (!current || typeof current !== "object") {
+			return;
+		}
+		if (current instanceof Map) {
+			current = current.get(key);
+		} else {
+			current = current[key];
+		}
+	}
+	const lastKey = parts[parts.length - 1];
+	if (current && typeof current === "object" && lastKey !== undefined) {
+		if (current instanceof Map) {
+			const existing = current.get(lastKey);
+			const unwrapped = unwrapWriteThroughProxy(existing);
+			if (unwrapped !== existing) {
+				current.set(lastKey, unwrapped);
+			}
+		} else if (!(current instanceof Set)) {
+			const existing = current[lastKey];
+			const unwrapped = unwrapWriteThroughProxy(existing);
+			if (unwrapped !== existing) {
+				current[lastKey] = unwrapped;
+			}
+		} else {
+			unwrapWriteThroughProxy(current);
+		}
+	}
 }
 
 /**
