@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/effect",
-	"version": "3.0.7",
+	"version": "3.1.0-rc.1",
 	"description": "Effect SDK for Rivet Actors",
 	"license": "Apache-2.0",
 	"type": "module",
