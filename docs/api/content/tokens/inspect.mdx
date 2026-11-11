@@ -39,7 +39,7 @@ The token's claims. The response carries `Cache-Control: no-store`.
 | `grants` | `object[]` | Permissions the token carries. |
 | `grants[].resource` | `"namespace" \| "actor" \| "node" \| "pool" \| "datacenter" \| "actor_gateway" \| "actor_kv"` | Resource type the grant applies to. |
 | `grants[].target` | `"any" \| object` | `"any"` for every resource of this type, or `{ "id": "..." }` for one resource. |
-| `grants[].operations` | `("read" \| "update" \| "list" \| "create" \| "delete")[]` | Operations the token may perform on the target. |
+| `grants[].operations` | `("read" \| "update" \| "list" \| "create" \| "delete" \| "fork")[]` | Operations the token may perform on the target. |
 | `issued_ts` | `integer` | When the token was issued, in Unix milliseconds. |
 | `expires_ts` | `integer` | When the token expires, in Unix milliseconds. |
 

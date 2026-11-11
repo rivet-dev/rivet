@@ -16,7 +16,8 @@ pub use codec::{
 };
 pub use error::TokenError;
 pub use grants::{
-	MAX_GRANTS, MAX_OPERATIONS_PER_GRANT, ValidatedGrantSet, decode_grants, encode_grants,
+	FORK_GRANTS_VERSION, MAX_GRANTS, MAX_OPERATIONS_PER_GRANT, ValidatedGrantSet, decode_grants,
+	encode_grants,
 };
 pub use key_ring::{
 	ABSOLUTE_KEY_LIMIT, ActiveIssuer, ActiveKey, Algorithm, EmergencyReceipt, ISSUER_HISTORY_LIMIT,

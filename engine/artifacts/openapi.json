@@ -93,7 +93,7 @@
             }
           },
           "400": {
-            "description": "`validation.invalid_input`: the subject exceeds 256 UTF-8 bytes, the duration is outside the allowed range, or the grant set is invalid (empty, more than 32 grants, a grant without operations or with more than 5, or a `token` or `jwt` resource). `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "description": "`validation.invalid_input`: the subject exceeds 256 UTF-8 bytes, the duration is outside the allowed range, or the grant set is invalid (empty, more than 32 grants, a grant without operations or with more than 6, or a `token` or `jwt` resource). `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
             "content": {
               "application/json": {
                 "schema": {
@@ -188,7 +188,7 @@
             }
           },
           "503": {
-            "description": "`auth.issuance_unavailable`: the signing service is temporarily unavailable. Retry the request.",
+            "description": "`auth.issuance_unavailable`: the signing service is temporarily unavailable. Retry the request. `auth.operation_unavailable`: a grant includes `fork` while an engine upgrade is rolling out and some engine workers cannot read it yet. Nothing was issued; retry after the `Retry-After` delay.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2620,7 +2620,7 @@
             }
           },
           "403": {
-            "description": "`auth.insufficient_permissions`: the token's grants do not allow creating actors and reading the source actor, or for a namespace token the source actor does not exist. A fork copies the source's data, so it needs read access to the source as well as create access.",
+            "description": "`auth.insufficient_permissions`: the token's grants do not allow forking the source actor and creating actors, or for a namespace token the source actor does not exist. A namespace token needs `fork` on the source actor (its ID or `any`) and `create` on every actor (`any`), since the new actor's ID is not known before the fork. No other operation, including `read`, allows a fork.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3281,7 +3281,8 @@
           "update",
           "list",
           "create",
-          "delete"
+          "delete",
+          "fork"
         ]
       },
       "AuthResourceKind": {
@@ -3406,7 +3407,7 @@
               "$ref": "#/components/schemas/AuthOperationKind"
             },
             "minItems": 1,
-            "maxItems": 5,
+            "maxItems": 6,
             "description": "Operations the grant allows on the target."
           }
         },
@@ -3951,7 +3952,7 @@
               "string",
               "null"
             ],
-            "description": "Fork input as standard base64 (with padding), passed to the new actor's `onFork` hook."
+            "description": "Fork input as standard base64 (with padding), passed to the new actor's `onFork` hook. It comes from the caller, so `onFork` must validate it like any client input."
           }
         }
       },

@@ -11,6 +11,7 @@ use rivet_auth_jwt::{Id, ValidatedGrantSet};
 use rivet_auth_policy::{OwnedGrant, Scope};
 use rivet_engine_context::EngineContext;
 use rivet_guard_core::auth::{self, Credential, OperationKind, ResourceKind};
+use rivet_topology::versions::{VersionFamily, WriteVersions};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -73,6 +74,7 @@ pub async fn create(
 	let duration = body
 		.duration
 		.unwrap_or_else(|| jwt.default_duration().as_secs());
+	admit_grants(ctx.topology().as_ref(), &grants)?;
 	let (token, issued_ts, expires_ts) = ctx
 		.jwt()
 		.issue(body.namespace, grants, body.subject, duration)
@@ -85,6 +87,33 @@ pub async fn create(
 		Json(json!({ "token": token, "issued_ts": issued_ts, "expires_ts": expires_ts }))
 			.into_response(),
 	))
+}
+
+/// Refuses a grant set that grants fork, with `auth.operation_unavailable` before the token is
+/// signed, while a listed engine worker cannot decode the `auth.grants` version that carries it.
+/// A set without fork is encoded at version 1, which every engine with JWTs decodes, so it never
+/// waits.
+///
+/// Only this region's storage workers are listed, and stateless workers are never listed. A
+/// token that grants fork is therefore accepted everywhere only once every region has upgraded
+/// and, within a region, stateless workers roll before storage workers.
+fn admit_grants(fleet: &dyn WriteVersions, grants: &ValidatedGrantSet) -> anyhow::Result<()> {
+	if !grants.grants_fork() {
+		return Ok(());
+	}
+	let fleet_reads = fleet.write_version(VersionFamily::AUTH_GRANTS);
+	if matches!(fleet_reads, Ok(version) if version >= rivet_auth_jwt::FORK_GRANTS_VERSION) {
+		return Ok(());
+	}
+	tracing::debug!(
+		?fleet_reads,
+		"refused a JWT that grants fork while an engine worker may not read it"
+	);
+	Err(rivet_auth_policy::errors::Auth::OperationUnavailable {
+		operation: OperationKind::Fork.to_string(),
+		retry_after_ms: rivet_auth_policy::errors::OPERATION_UNAVAILABLE_RETRY_AFTER_MS,
+	}
+	.build())
 }
 
 pub async fn inspect(
@@ -165,8 +194,8 @@ pub async fn authorize(
 }
 
 /// Checks every grant the route `method` `path` needs on `target`: its own operation, and for a
-/// fork also read access to the source, since the fork copies the source's data into an actor
-/// the caller controls, which create access alone never allowed.
+/// fork also create access for the new actor. The new actor's id is not known before the fork,
+/// so only a create grant for every actor in the namespace allows it.
 pub(crate) fn authorize_access(
 	credential: &Credential,
 	now_unix_ms: i64,
@@ -181,9 +210,9 @@ pub(crate) fn authorize_access(
 		credential.authorize(
 			now_unix_ms,
 			namespace,
-			resource,
-			target,
-			OperationKind::Read,
+			ResourceKind::Actor,
+			None,
+			OperationKind::Create,
 		)?;
 	}
 	Ok(())
@@ -228,9 +257,9 @@ pub(crate) fn route_access(
 				_ => return Err(auth::InsufficientPermissions.build()),
 			},
 		),
-		// A fork makes a new actor from the source the path names, so it needs create access,
-		// checked against the source; `authorize_access` also requires read access to it.
-		(method, p) if is_fork(method, p) => (ResourceKind::Actor, OperationKind::Create),
+		// A fork copies the source the path names into a new actor, so it needs fork access to
+		// the source; `authorize_access` also requires create access for the new actor.
+		(method, p) if is_fork(method, p) => (ResourceKind::Actor, OperationKind::Fork),
 		(_, p) if p.starts_with("/actors/") => (
 			ResourceKind::Actor,
 			match method {

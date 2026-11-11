@@ -367,6 +367,11 @@
 					]
 				},
 				{
+					"code": "operation_unavailable",
+					"message": "The operation cannot be granted until every engine worker supports it. Retry after the engine upgrade finishes.",
+					"statuses": []
+				},
+				{
 					"code": "token_expired",
 					"message": "Authentication token has expired.",
 					"statuses": [

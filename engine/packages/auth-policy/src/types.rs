@@ -90,6 +90,9 @@ pub enum OperationKind {
 	List,
 	Create,
 	Delete,
+	/// Copies an actor's data into a new actor the caller names. No other operation implies it,
+	/// because the copy hands the caller everything the source holds.
+	Fork,
 }
 
 impl fmt::Display for OperationKind {
@@ -100,6 +103,7 @@ impl fmt::Display for OperationKind {
 			OperationKind::Update => "update",
 			OperationKind::Delete => "delete",
 			OperationKind::List => "list",
+			OperationKind::Fork => "fork",
 		})
 	}
 }

@@ -121,6 +121,65 @@ macro_rules! impl_versioned_v2 {
 	};
 }
 
+/// Implements [`vbare::Versioned`] for a two-version envelope `enum $name { V1($v1), V2($v2) }`
+/// whose versions convert through the scaffolded converters `$up` and `$down`. `$down` refuses
+/// a value version 1 cannot carry.
+macro_rules! impl_versioned_v1_v2 {
+	($name:ident, $family:ident, $v1:ty, $v2:ty, $up:path, $down:path) => {
+		impl_versioned_family!($name, $family);
+
+		impl ::vbare::Versioned for $name {
+			type Latest = $v2;
+
+			const LATEST: u16 = 2;
+
+			const UPGRADES: &'static [::vbare::Converter<Self>] = &[|value| match value {
+				Self::V1(value) => Ok(Self::V2($up(value)?)),
+				Self::V2(_) => ::anyhow::bail!("expected a version 1 value"),
+			}];
+
+			const DOWNGRADES: &'static [::vbare::Converter<Self>] = &[|value| match value {
+				Self::V2(value) => Ok(Self::V1($down(value)?)),
+				Self::V1(_) => ::anyhow::bail!("expected a version 2 value"),
+			}];
+
+			fn wrap_latest(latest: Self::Latest) -> Self {
+				Self::V2(latest)
+			}
+
+			fn unwrap_latest(self) -> ::anyhow::Result<Self::Latest> {
+				match self {
+					Self::V2(latest) => Ok(latest),
+					Self::V1(_) => ::anyhow::bail!("expected the latest version"),
+				}
+			}
+
+			fn decode_version(
+				version: u16,
+				body: ::vbare::Bytes,
+			) -> ::std::result::Result<Self, ::vbare::DecodeError> {
+				match version {
+					1 => Ok(Self::V1(<$v1 as ::vbare::Body>::from_body(body)?)),
+					_ => Err($crate::versioned::unsupported_version(version, 2)),
+				}
+			}
+
+			fn encode_version<S: ::vbare::Sink>(
+				&self,
+				version: u16,
+				out: &mut S,
+			) -> ::std::result::Result<(), ::vbare::EncodeError> {
+				match (self, version) {
+					(Self::V1(value), 1) => ::vbare::Body::put_body(value, out),
+					(Self::V2(value), 2) => ::vbare::Body::put_body(value, out),
+					_ => return Err(::vbare::EncodeError::UnsupportedVersion(version)),
+				}
+				Ok(())
+			}
+		}
+	};
+}
+
 /// Implements [`vbare::Versioned`] for a single-version envelope `enum $name { V2($v2) }` of a
 /// family whose latest version is 2: a type the family's version 1 never had, so version 1 is
 /// refused outright.

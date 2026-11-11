@@ -224,6 +224,9 @@ impl IntoResponse for ApiError {
 			| ("namespace", "protected") => StatusCode::FORBIDDEN,
 			("auth", "verification_unavailable" | "issuance_unavailable")
 			| ("actor", "migrating_from_v2") => StatusCode::SERVICE_UNAVAILABLE,
+			// A grant of an operation an older engine worker cannot read yet, refused before
+			// anything was written or signed. No release answered it.
+			("auth", "operation_unavailable") => StatusCode::SERVICE_UNAVAILABLE,
 			// Refused at admission, before any work, for every method. No release answered it,
 			// and released clients retry a 5xx but treat this refusal as a 400 as fatal.
 			("namespace", "creating") => StatusCode::SERVICE_UNAVAILABLE,

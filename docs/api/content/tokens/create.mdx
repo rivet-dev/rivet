@@ -57,7 +57,7 @@ Content type: `application/json`.
 | `grants` | `object[]` | Yes | Permissions the token carries. |
 | `grants[].resource` | `"namespace" \| "actor" \| "node" \| "pool" \| "datacenter" \| "actor_gateway" \| "actor_kv"` | Yes | Resource type the grant applies to. |
 | `grants[].target` | `"any" \| object` | Yes | `"any"` for every resource of this type, or `{ "id": "..." }` for one resource. |
-| `grants[].operations` | `("read" \| "update" \| "list" \| "create" \| "delete")[]` | Yes | Operations the token may perform on the target. |
+| `grants[].operations` | `("read" \| "update" \| "list" \| "create" \| "delete" \| "fork")[]` | Yes | Operations the token may perform on the target. |
 
 ## Responses
 
@@ -81,7 +81,7 @@ The issued token. The response carries `Cache-Control: no-store`.
 
 ### 400
 
-`validation.invalid_input`: the subject exceeds 256 UTF-8 bytes, the duration is outside the allowed range, or the grant set is invalid (empty, more than 32 grants, a grant without operations or with more than 5, or a `token` or `jwt` resource). `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.
+`validation.invalid_input`: the subject exceeds 256 UTF-8 bytes, the duration is outside the allowed range, or the grant set is invalid (empty, more than 32 grants, a grant without operations or with more than 6, or a `token` or `jwt` resource). `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -188,7 +188,7 @@ Content type: `text/plain`.
 
 ### 503
 
-`auth.issuance_unavailable`: the signing service is temporarily unavailable. Retry the request.
+`auth.issuance_unavailable`: the signing service is temporarily unavailable. Retry the request. `auth.operation_unavailable`: a grant includes `fork` while an engine upgrade is rolling out and some engine workers cannot read it yet. Nothing was issued; retry after the `Retry-After` delay.
 
 | Field | Type | Description |
 | --- | --- | --- |

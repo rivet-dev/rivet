@@ -118,7 +118,10 @@ export interface ActorForkLink {
 
 /** The fork an `onFork` hook runs for: the newest entry of `c.forkChain` and the fork input. */
 export interface ActorFork extends ActorForkLink {
-	/** The `input` passed to `client.<actor>.fork`, or `undefined`. */
+	/**
+	 * The `input` passed to `client.<actor>.fork`, or `undefined`. It comes from the caller that
+	 * forked the actor, so validate it like any client input.
+	 */
 	input: unknown;
 }
 

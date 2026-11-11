@@ -2,15 +2,21 @@ use std::cmp::Ordering;
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use rivet_auth_policy::{OperationKind, OwnedGrant, ResourceKind, Scope};
-use rivet_data::{AUTH_GRANTS_VERSION, generated::auth_grants_v1, versioned::AuthGrantsData};
+use rivet_data::{generated::auth_grants_v2, versioned::AuthGrantsData};
 
 use crate::{Id, TokenError};
 use vbare::Versioned;
 
 pub const MAX_GRANTS: usize = 32;
-pub const MAX_OPERATIONS_PER_GRANT: usize = 5;
+pub const MAX_OPERATIONS_PER_GRANT: usize = 6;
 pub const MAX_GRANTS_BYTES: usize = 2_048;
 const MAX_ENCODED_GRANTS_BYTES: usize = 2_731;
+
+/// The first `auth.grants` version, which every engine with JWTs decodes.
+const FIRST_GRANTS_VERSION: u16 = 1;
+
+/// The first `auth.grants` version that carries the fork operation.
+pub const FORK_GRANTS_VERSION: u16 = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ValidatedGrantSet<N = String> {
@@ -52,30 +58,45 @@ impl<N: Clone + Ord> ValidatedGrantSet<N> {
 		&self.grants
 	}
 
+	/// Whether any grant allows fork, which only [`FORK_GRANTS_VERSION`] and later carry.
+	pub fn grants_fork(&self) -> bool {
+		self.grants
+			.iter()
+			.any(|grant| grant.operations.contains(&OperationKind::Fork))
+	}
+
 	pub fn into_grants(self) -> Vec<OwnedGrant<N, Id>> {
 		self.grants
 	}
 }
 
+/// Encodes `grants` at the lowest `auth.grants` version that carries every operation in them, so
+/// a token without fork stays readable by engines from before the fork operation. That version
+/// is part of the canonical encoding [`decode_grants`] checks.
 pub fn encode_grants<N: Clone + Ord>(grants: &ValidatedGrantSet<N>) -> Result<String, TokenError> {
-	let data = auth_grants_v1::Data {
+	let data = auth_grants_v2::Data {
 		grants: grants
 			.grants
 			.iter()
 			.cloned()
-			.map(|grant| auth_grants_v1::Grant {
+			.map(|grant| auth_grants_v2::Grant {
 				resource: encode_resource(grant.resource),
 				target: match grant.target {
-					Scope::Any => auth_grants_v1::TargetScope::Any,
-					Scope::Id(id) => auth_grants_v1::TargetScope::Id(id.as_bytes().to_vec().into()),
+					Scope::Any => auth_grants_v2::TargetScope::Any,
+					Scope::Id(id) => auth_grants_v2::TargetScope::Id(id.as_bytes().to_vec().into()),
 				},
 				operations: grant.operations.into_iter().map(encode_operation).collect(),
 			})
 			.collect(),
 	};
 
-	let encoded = AuthGrantsData::seal_to_bytes(&data, AUTH_GRANTS_VERSION)
-		.map_err(|_| TokenError::InvalidGrants)?;
+	let version = if grants.grants_fork() {
+		FORK_GRANTS_VERSION
+	} else {
+		FIRST_GRANTS_VERSION
+	};
+	let encoded =
+		AuthGrantsData::seal_to_bytes(&data, version).map_err(|_| TokenError::InvalidGrants)?;
 	if encoded.len() > MAX_GRANTS_BYTES {
 		return Err(TokenError::InvalidGrants);
 	}
@@ -153,8 +174,8 @@ pub fn decode_grants<N: Clone + Ord>(
 			namespace: Scope::Id(namespace_id.clone()),
 			resource: decode_resource(grant.resource)?,
 			target: match grant.target {
-				auth_grants_v1::TargetScope::Any => Scope::Any,
-				auth_grants_v1::TargetScope::Id(id) => {
+				auth_grants_v2::TargetScope::Any => Scope::Any,
+				auth_grants_v2::TargetScope::Id(id) => {
 					Scope::Id(Id::from_slice(&id).map_err(|_| TokenError::InvalidGrants)?)
 				}
 			},
@@ -162,61 +183,63 @@ pub fn decode_grants<N: Clone + Ord>(
 		});
 	}
 
+	// Every grant set has one canonical encoding, its version included.
 	let validated = ValidatedGrantSet::new(namespace_id, grants)?;
-	let version = u16::from_le_bytes([decoded[0], decoded[1]]);
-	if version == AUTH_GRANTS_VERSION && encode_grants(&validated).as_deref() != Ok(encoded) {
+	if encode_grants(&validated).as_deref() != Ok(encoded) {
 		return Err(TokenError::InvalidGrants);
 	}
 
 	Ok(validated.into_grants())
 }
 
-fn encode_resource(resource: ResourceKind) -> auth_grants_v1::ResourceKind {
+fn encode_resource(resource: ResourceKind) -> auth_grants_v2::ResourceKind {
 	match resource {
-		ResourceKind::Namespace => auth_grants_v1::ResourceKind::Namespace,
-		ResourceKind::Actor => auth_grants_v1::ResourceKind::Actor,
-		ResourceKind::Runner => auth_grants_v1::ResourceKind::Runner,
-		ResourceKind::RunnerPool => auth_grants_v1::ResourceKind::RunnerPool,
-		ResourceKind::Token => auth_grants_v1::ResourceKind::Token,
-		ResourceKind::Datacenter => auth_grants_v1::ResourceKind::Datacenter,
-		ResourceKind::ActorGateway => auth_grants_v1::ResourceKind::ActorGateway,
-		ResourceKind::ActorKv => auth_grants_v1::ResourceKind::ActorKv,
+		ResourceKind::Namespace => auth_grants_v2::ResourceKind::Namespace,
+		ResourceKind::Actor => auth_grants_v2::ResourceKind::Actor,
+		ResourceKind::Runner => auth_grants_v2::ResourceKind::Runner,
+		ResourceKind::RunnerPool => auth_grants_v2::ResourceKind::RunnerPool,
+		ResourceKind::Token => auth_grants_v2::ResourceKind::Token,
+		ResourceKind::Datacenter => auth_grants_v2::ResourceKind::Datacenter,
+		ResourceKind::ActorGateway => auth_grants_v2::ResourceKind::ActorGateway,
+		ResourceKind::ActorKv => auth_grants_v2::ResourceKind::ActorKv,
 		ResourceKind::Jwt => {
 			unreachable!("control-plane grants are rejected during validation")
 		}
 	}
 }
 
-fn decode_resource(resource: auth_grants_v1::ResourceKind) -> Result<ResourceKind, TokenError> {
+fn decode_resource(resource: auth_grants_v2::ResourceKind) -> Result<ResourceKind, TokenError> {
 	Ok(match resource {
-		auth_grants_v1::ResourceKind::Namespace => ResourceKind::Namespace,
-		auth_grants_v1::ResourceKind::Actor => ResourceKind::Actor,
-		auth_grants_v1::ResourceKind::Runner => ResourceKind::Runner,
-		auth_grants_v1::ResourceKind::RunnerPool => ResourceKind::RunnerPool,
-		auth_grants_v1::ResourceKind::Token => ResourceKind::Token,
-		auth_grants_v1::ResourceKind::Reserved => return Err(TokenError::InvalidGrants),
-		auth_grants_v1::ResourceKind::Datacenter => ResourceKind::Datacenter,
-		auth_grants_v1::ResourceKind::ActorGateway => ResourceKind::ActorGateway,
-		auth_grants_v1::ResourceKind::ActorKv => ResourceKind::ActorKv,
+		auth_grants_v2::ResourceKind::Namespace => ResourceKind::Namespace,
+		auth_grants_v2::ResourceKind::Actor => ResourceKind::Actor,
+		auth_grants_v2::ResourceKind::Runner => ResourceKind::Runner,
+		auth_grants_v2::ResourceKind::RunnerPool => ResourceKind::RunnerPool,
+		auth_grants_v2::ResourceKind::Token => ResourceKind::Token,
+		auth_grants_v2::ResourceKind::Reserved => return Err(TokenError::InvalidGrants),
+		auth_grants_v2::ResourceKind::Datacenter => ResourceKind::Datacenter,
+		auth_grants_v2::ResourceKind::ActorGateway => ResourceKind::ActorGateway,
+		auth_grants_v2::ResourceKind::ActorKv => ResourceKind::ActorKv,
 	})
 }
 
-fn encode_operation(operation: OperationKind) -> auth_grants_v1::OperationKind {
+fn encode_operation(operation: OperationKind) -> auth_grants_v2::OperationKind {
 	match operation {
-		OperationKind::Read => auth_grants_v1::OperationKind::Read,
-		OperationKind::Update => auth_grants_v1::OperationKind::Update,
-		OperationKind::List => auth_grants_v1::OperationKind::List,
-		OperationKind::Create => auth_grants_v1::OperationKind::Create,
-		OperationKind::Delete => auth_grants_v1::OperationKind::Delete,
+		OperationKind::Read => auth_grants_v2::OperationKind::Read,
+		OperationKind::Update => auth_grants_v2::OperationKind::Update,
+		OperationKind::List => auth_grants_v2::OperationKind::List,
+		OperationKind::Create => auth_grants_v2::OperationKind::Create,
+		OperationKind::Delete => auth_grants_v2::OperationKind::Delete,
+		OperationKind::Fork => auth_grants_v2::OperationKind::Fork,
 	}
 }
 
-fn decode_operation(operation: auth_grants_v1::OperationKind) -> OperationKind {
+fn decode_operation(operation: auth_grants_v2::OperationKind) -> OperationKind {
 	match operation {
-		auth_grants_v1::OperationKind::Read => OperationKind::Read,
-		auth_grants_v1::OperationKind::Update => OperationKind::Update,
-		auth_grants_v1::OperationKind::List => OperationKind::List,
-		auth_grants_v1::OperationKind::Create => OperationKind::Create,
-		auth_grants_v1::OperationKind::Delete => OperationKind::Delete,
+		auth_grants_v2::OperationKind::Read => OperationKind::Read,
+		auth_grants_v2::OperationKind::Update => OperationKind::Update,
+		auth_grants_v2::OperationKind::List => OperationKind::List,
+		auth_grants_v2::OperationKind::Create => OperationKind::Create,
+		auth_grants_v2::OperationKind::Delete => OperationKind::Delete,
+		auth_grants_v2::OperationKind::Fork => OperationKind::Fork,
 	}
 }
