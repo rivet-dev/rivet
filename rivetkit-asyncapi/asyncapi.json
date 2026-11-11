@@ -2,7 +2,7 @@
   "asyncapi": "3.0.0",
   "info": {
     "title": "RivetKit WebSocket Protocol",
-    "version": "3.1.0",
+    "version": "3.1.1-rc.1",
     "description": "WebSocket protocol for bidirectional communication between RivetKit clients and actors"
   },
   "channels": {
