@@ -4,6 +4,7 @@ use futures_util::{Sink, SinkExt, StreamExt};
 use rivet_env::capabilities::websocket::{CloseFrame, Message, WebSocket};
 use rivet_env::{Clock, ClockError};
 use rivet_envoy_protocol as p;
+use std::future::Future;
 use std::sync::Arc;
 use universalpubsub::{DuplexStream, PacketReceiver, PacketSender};
 use vbare::Versioned;
@@ -15,6 +16,52 @@ enum Input {
 	Client(Option<Result<Message, axum::Error>>),
 	Keepalive(Result<u64, ClockError>),
 }
+
+/// One stream to the actor's host as the tunnel uses it: a UPS `DuplexStream`, or an in-memory
+/// actor in tests.
+pub trait TunnelStream: Send {
+	type Sender: TunnelSender;
+	type Receiver: TunnelReceiver;
+
+	fn split(self) -> (Self::Sender, Self::Receiver);
+}
+
+pub trait TunnelSender: Send {
+	fn send(&mut self, packet: bytes::Bytes) -> impl Future<Output = Result<()>> + Send;
+	fn finish(self) -> impl Future<Output = Result<()>> + Send;
+}
+
+pub trait TunnelReceiver: Send {
+	fn recv(&mut self) -> impl Future<Output = Result<Option<bytes::Bytes>>> + Send;
+}
+
+impl TunnelStream for DuplexStream {
+	type Sender = PacketSender;
+	type Receiver = PacketReceiver;
+
+	fn split(self) -> (PacketSender, PacketReceiver) {
+		DuplexStream::split(self)
+	}
+}
+
+impl TunnelSender for PacketSender {
+	fn send(&mut self, packet: bytes::Bytes) -> impl Future<Output = Result<()>> + Send {
+		PacketSender::send(self, packet)
+	}
+
+	fn finish(self) -> impl Future<Output = Result<()>> + Send {
+		PacketSender::finish(self)
+	}
+}
+
+impl TunnelReceiver for PacketReceiver {
+	fn recv(&mut self) -> impl Future<Output = Result<Option<bytes::Bytes>>> + Send {
+		PacketReceiver::recv(self)
+	}
+}
+
+/// What `reopen` resolves to: a new stream to the actor, its tunnel identity and its open.
+type Reopened<S> = (S, p::MessageId, p::ToEnvoyWebSocketOpen);
 
 /// How the actor answered a WebSocket open.
 pub(crate) enum OpenReply {
@@ -33,8 +80,8 @@ pub(crate) fn refused_before_admission(close: &p::ToRivetWebSocketClose) -> bool
 
 /// Sends the open and waits for the actor's answer. The actor sends nothing else before it.
 async fn open_actor(
-	sender: &mut PacketSender,
-	receiver: &mut PacketReceiver,
+	sender: &mut impl TunnelSender,
+	receiver: &mut impl TunnelReceiver,
 	identity: &mut p::MessageId,
 	open: p::ToEnvoyWebSocketOpen,
 ) -> Result<OpenReply> {
@@ -76,9 +123,9 @@ fn decode_reply(
 }
 
 /// The actor side of a WebSocket once the actor answered its open.
-pub(crate) struct Tunnel {
-	pub(crate) sender: PacketSender,
-	pub(crate) receiver: PacketReceiver,
+pub(crate) struct Tunnel<S: TunnelStream> {
+	pub(crate) sender: S::Sender,
+	pub(crate) receiver: S::Receiver,
 	pub(crate) identity: p::MessageId,
 	pub(crate) reply: OpenReply,
 }
@@ -88,16 +135,16 @@ pub(crate) struct Tunnel {
 /// `reopen` acquires after the actor runs; a second refusal is the answer. Ordered UPS lanes do
 /// not prevent the first refusal, because the start reaches the Envoy from the pegboard executor
 /// while the open travels on this gateway's stream.
-pub(crate) async fn open_tunnel<Reopen, ReopenFut>(
-	stream: DuplexStream,
+pub(crate) async fn open_tunnel<S, Reopen, ReopenFut>(
+	stream: S,
 	mut identity: p::MessageId,
 	open: p::ToEnvoyWebSocketOpen,
 	reopen: Reopen,
-) -> Result<Tunnel>
+) -> Result<Tunnel<S>>
 where
+	S: TunnelStream,
 	Reopen: FnOnce() -> ReopenFut,
-	ReopenFut:
-		std::future::Future<Output = Result<(DuplexStream, p::MessageId, p::ToEnvoyWebSocketOpen)>>,
+	ReopenFut: Future<Output = Result<Reopened<S>>>,
 {
 	let (mut sender, mut receiver) = stream.split();
 	let mut reply = open_actor(&mut sender, &mut receiver, &mut identity, open).await?;
@@ -135,9 +182,9 @@ where
 /// neither a RivetKit client nor an idle actor sends anything on its own. The ping is sent
 /// whether or not the connection was busy: a proxy's idle timer resets on any frame, and
 /// watching for the last frame would cost a clock read per forwarded message.
-pub async fn proxy<Reopen, ReopenFut>(
+pub async fn proxy<S, Reopen, ReopenFut>(
 	socket: &mut WebSocket,
-	stream: DuplexStream,
+	stream: S,
 	identity: p::MessageId,
 	open: p::ToEnvoyWebSocketOpen,
 	reopen: Reopen,
@@ -145,9 +192,9 @@ pub async fn proxy<Reopen, ReopenFut>(
 	keepalive_interval_ms: u64,
 ) -> Result<()>
 where
+	S: TunnelStream,
 	Reopen: Fn() -> ReopenFut,
-	ReopenFut:
-		std::future::Future<Output = Result<(DuplexStream, p::MessageId, p::ToEnvoyWebSocketOpen)>>,
+	ReopenFut: Future<Output = Result<Reopened<S>>>,
 {
 	let Tunnel {
 		mut sender,
@@ -155,7 +202,7 @@ where
 		mut identity,
 		reply,
 	} = open_tunnel(stream, identity, open, &reopen).await?;
-	let can_hibernate = match reply {
+	let mut can_hibernate = match reply {
 		OpenReply::Accepted { can_hibernate } => can_hibernate,
 		OpenReply::Closed(close) => {
 			socket
@@ -216,14 +263,12 @@ where
 						);
 					}
 					p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close)
-						if can_hibernate
-							&& close.code == Some(1012)
-							&& close.reason.as_deref() == Some("actor.stopped") =>
+						if can_hibernate && actor_stopped(&close) =>
 					{
-						// The actor went to sleep. Keep the client
-						// socket, answer pings ourselves and wake the actor on the next client
-						// frame, re-opening the tunnel with the same gateway/request ids so
-						// the actor restores the hibernated connection.
+						// The actor went to sleep. Keep the client socket, answer pings
+						// ourselves and wake the actor on the next client frame, re-opening the
+						// tunnel with the same gateway/request ids so the actor restores the
+						// hibernated connection.
 						if let Err(error) = sender.finish().await {
 							tracing::debug!(%error, "stopped WebSocket tunnel peer already closed");
 						}
@@ -236,19 +281,21 @@ where
 							let first = hibernate_wait(socket, &mut keepalive).await?;
 							credit.replay.push_back(first);
 						}
-						let (new_stream, mut new_identity, new_open) = reopen().await?;
-						new_identity.gateway_id = identity.gateway_id;
-						new_identity.request_id = identity.request_id;
-						let (mut new_sender, mut new_receiver) = new_stream.split();
-						let reply = open_actor(
-							&mut new_sender,
-							&mut new_receiver,
-							&mut new_identity,
-							new_open,
-						)
+
+						// The wake opens the tunnel like the first open: `reopen` retries refused
+						// acquisitions within the retry budget, and `open_tunnel` opens once more
+						// when the woken actor's host refuses the open before admission. Every
+						// attempt carries the hibernated connection's ids.
+						let hibernated = identity.clone();
+						let (stream, woken, open) = reopen_hibernated(&reopen, &hibernated).await?;
+						let tunnel = open_tunnel(stream, woken, open, || {
+							reopen_hibernated(&reopen, &hibernated)
+						})
 						.await?;
-						match reply {
-							OpenReply::Accepted { .. } => {}
+						match tunnel.reply {
+							OpenReply::Accepted {
+								can_hibernate: still_hibernatable,
+							} => can_hibernate = still_hibernatable,
 							OpenReply::Closed(close) => {
 								socket
 									.send(Message::Close(close.code.map(|code| CloseFrame {
@@ -256,13 +303,13 @@ where
 										reason: close.reason.unwrap_or_default().to_string().into(),
 									})))
 									.await?;
-								new_sender.finish().await?;
+								tunnel.sender.finish().await?;
 								return Ok(());
 							}
 						}
-						sender = new_sender;
-						receiver = new_receiver;
-						identity = new_identity;
+						sender = tunnel.sender;
+						receiver = tunnel.receiver;
+						identity = tunnel.identity;
 						tracing::debug!("client WebSocket woke the actor and was re-attached");
 					}
 					p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
@@ -431,8 +478,29 @@ async fn hibernate_wait(
 	}
 }
 
+/// Whether the actor's close says it stopped to sleep rather than closed the connection.
+fn actor_stopped(close: &p::ToRivetWebSocketClose) -> bool {
+	close.code == Some(1012) && close.reason.as_deref() == Some("actor.stopped")
+}
+
+/// Opens a new stream to the woken actor under the hibernated connection's gateway and request
+/// ids, which the actor's restore path looks the persisted connection up by.
+async fn reopen_hibernated<S, Reopen, ReopenFut>(
+	reopen: &Reopen,
+	hibernated: &p::MessageId,
+) -> Result<Reopened<S>>
+where
+	Reopen: Fn() -> ReopenFut,
+	ReopenFut: Future<Output = Result<Reopened<S>>>,
+{
+	let (stream, mut identity, open) = reopen().await?;
+	identity.gateway_id = hibernated.gateway_id;
+	identity.request_id = hibernated.request_id;
+	Ok((stream, identity, open))
+}
+
 async fn send(
-	sender: &mut PacketSender,
+	sender: &mut impl TunnelSender,
 	identity: &mut p::MessageId,
 	kind: p::ToEnvoyTunnelMessageKind,
 ) -> Result<()> {
@@ -443,12 +511,17 @@ async fn send(
 		}),
 		p::PROTOCOL_VERSION,
 	)?;
-	sender.send(bytes).await?;
+	sender.send(bytes.into()).await?;
 	identity.message_index = identity.message_index.wrapping_add(1);
 	Ok(())
 }
 
 #[cfg(test)]
+#[allow(
+	clippy::disallowed_methods,
+	clippy::disallowed_types,
+	reason = "the tests drive a real client socket against a local axum server"
+)]
 mod tests {
 	use super::*;
 	use axum::{Router, extract::ws::WebSocketUpgrade, routing::get};
@@ -614,5 +687,270 @@ mod tests {
 		assert!(credit.acknowledge(11));
 		assert!(credit.is_free());
 		assert!(credit.next_replay().is_none());
+	}
+	/// One end of an in-memory stream between the gateway and a scripted actor.
+	struct FakeStream {
+		to_actor: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
+		from_actor: tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,
+	}
+
+	struct FakeSender(tokio::sync::mpsc::UnboundedSender<bytes::Bytes>);
+
+	struct FakeReceiver(tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>);
+
+	impl TunnelStream for FakeStream {
+		type Sender = FakeSender;
+		type Receiver = FakeReceiver;
+
+		fn split(self) -> (FakeSender, FakeReceiver) {
+			(FakeSender(self.to_actor), FakeReceiver(self.from_actor))
+		}
+	}
+
+	impl TunnelSender for FakeSender {
+		fn send(&mut self, packet: bytes::Bytes) -> impl Future<Output = Result<()>> + Send {
+			let sent = self
+				.0
+				.send(packet)
+				.map_err(|_| anyhow::anyhow!("fake actor stream closed"));
+			async move { sent }
+		}
+
+		async fn finish(self) -> Result<()> {
+			Ok(())
+		}
+	}
+
+	impl TunnelReceiver for FakeReceiver {
+		async fn recv(&mut self) -> Result<Option<bytes::Bytes>> {
+			Ok(self.0.recv().await)
+		}
+	}
+
+	/// The actor's end of a `FakeStream`.
+	struct FakeActor {
+		from_gateway: tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,
+		to_gateway: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
+	}
+
+	impl FakeActor {
+		async fn recv(&mut self) -> p::ToEnvoyTunnelMessage {
+			let bytes =
+				tokio::time::timeout(std::time::Duration::from_secs(5), self.from_gateway.recv())
+					.await
+					.expect("gateway sent nothing")
+					.expect("gateway stream ended");
+			let p::ToEnvoy::ToEnvoyTunnelMessage(message) =
+				p::versioned::ToEnvoy::decode(bytes).unwrap()
+			else {
+				panic!("not a tunnel message");
+			};
+			message
+		}
+
+		fn send(&self, id: &p::MessageId, kind: p::ToRivetTunnelMessageKind) {
+			let bytes = p::versioned::ToRivet::serialize_with_embedded_version(
+				&p::ToRivet::ToRivetTunnelMessage(p::ToRivetTunnelMessage {
+					message_id: id.clone(),
+					message_kind: kind,
+				}),
+				p::PROTOCOL_VERSION,
+			)
+			.unwrap();
+			self.to_gateway.send(bytes.into()).unwrap();
+		}
+
+		/// Reads the gateway's open and returns its identity.
+		async fn recv_open(&mut self) -> p::MessageId {
+			let message = self.recv().await;
+			assert!(matches!(
+				message.message_kind,
+				p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(_)
+			));
+			message.message_id
+		}
+	}
+
+	fn fake_stream() -> (FakeStream, FakeActor) {
+		let (to_actor, from_gateway) = tokio::sync::mpsc::unbounded_channel();
+		let (to_gateway, from_actor) = tokio::sync::mpsc::unbounded_channel();
+		(
+			FakeStream {
+				to_actor,
+				from_actor,
+			},
+			FakeActor {
+				from_gateway,
+				to_gateway,
+			},
+		)
+	}
+
+	fn message_id(gateway_id: u8, request_id: u8) -> p::MessageId {
+		p::MessageId {
+			gateway_id: [gateway_id; 4],
+			request_id: [request_id; 4],
+			message_index: 0,
+		}
+	}
+
+	fn websocket_open() -> p::ToEnvoyWebSocketOpen {
+		p::ToEnvoyWebSocketOpen {
+			actor_id: "actor".to_owned().into(),
+			actor_generation: Some(1),
+			path: "/".to_owned().into(),
+			headers: Default::default(),
+		}
+	}
+
+	fn ws_close(code: u16, reason: &str) -> p::ToRivetTunnelMessageKind {
+		p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(p::ToRivetWebSocketClose {
+			code: Some(code),
+			reason: Some(reason.to_owned().into()),
+			hibernate: false,
+		})
+	}
+
+	fn ws_accept() -> p::ToRivetTunnelMessageKind {
+		p::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(p::ToRivetWebSocketOpen {
+			can_hibernate: true,
+		})
+	}
+
+	/// The woken actor's host refuses the first open before admission, as when the open overtakes
+	/// the actor's start. The gateway opens once more on a new stream, under the hibernated ids,
+	/// and the client is never closed.
+	#[tokio::test]
+	async fn wake_opens_again_when_the_woken_actor_refuses_before_admission() {
+		let (first, mut asleep) = fake_stream();
+		let (refused, mut refusing) = fake_stream();
+		let (accepted, mut woken) = fake_stream();
+		let streams = Arc::new(std::sync::Mutex::new(std::collections::VecDeque::from([
+			refused, accepted,
+		])));
+		let reopens = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+		let (done_tx, done_rx) = oneshot::channel();
+		let done_tx = Arc::new(std::sync::Mutex::new(Some(done_tx)));
+		let first = Arc::new(std::sync::Mutex::new(Some(first)));
+		let app = Router::new().route(
+			"/",
+			get({
+				let streams = streams.clone();
+				let reopens = reopens.clone();
+				move |upgrade: WebSocketUpgrade| async move {
+					upgrade.on_upgrade(move |mut socket| async move {
+						let stream = first.lock().unwrap().take().unwrap();
+						// Each reopen acquires a new stream with fresh ids; the wake must put
+						// the hibernated ids back.
+						let reopen = move || {
+							let stream = streams.lock().unwrap().pop_front();
+							reopens.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+							async move {
+								let stream = stream.context("no stream left to reopen")?;
+								anyhow::Ok((stream, message_id(9, 9), websocket_open()))
+							}
+						};
+						let clock = Arc::new(TokioClock::new().unwrap());
+						let result = proxy(
+							&mut socket,
+							stream,
+							message_id(1, 2),
+							websocket_open(),
+							reopen,
+							clock,
+							60_000,
+						)
+						.await;
+						if let Some(tx) = done_tx.lock().unwrap().take() {
+							let _ = tx.send(result);
+						}
+					})
+				}
+			}),
+		);
+		let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		let server = tokio::spawn(async move {
+			axum::serve(listener, app).await.unwrap();
+		});
+		let (mut client, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/"))
+			.await
+			.unwrap();
+
+		// The actor accepts the connection as hibernatable, then goes to sleep.
+		let id = asleep.recv_open().await;
+		asleep.send(&id, ws_accept());
+		asleep.send(&id, ws_close(1012, "actor.stopped"));
+
+		// The client's next frame wakes the actor.
+		client
+			.send(ClientMessage::Text("wake".into()))
+			.await
+			.unwrap();
+
+		// The woken actor's host refuses the first open before admission.
+		let refused_id = refusing.recv_open().await;
+		assert_eq!(refused_id.gateway_id, [1; 4]);
+		assert_eq!(refused_id.request_id, [2; 4]);
+		refusing.send(&refused_id, ws_close(1011, "envoy.actor_not_found"));
+
+		// The second open, on a new stream and under the same ids, is accepted and receives
+		// the frame that woke the actor.
+		let woken_id = woken.recv_open().await;
+		assert_eq!(woken_id.gateway_id, [1; 4]);
+		assert_eq!(woken_id.request_id, [2; 4]);
+		woken.send(&woken_id, ws_accept());
+		let message = woken.recv().await;
+		let p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(data) = message.message_kind
+		else {
+			panic!("expected the client's frame after the wake");
+		};
+		assert_eq!(data.data.as_ref(), b"wake");
+		woken.send(
+			&message.message_id,
+			p::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(
+				p::ToRivetWebSocketMessageAck {
+					index: message.message_id.message_index,
+				},
+			),
+		);
+		woken.send(
+			&message.message_id,
+			p::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(p::ToRivetWebSocketMessage {
+				data: b"awake".to_vec().into(),
+				binary: false,
+			}),
+		);
+
+		// The client was never closed: its next frame is the woken actor's reply.
+		let reply = loop {
+			let frame = tokio::time::timeout(std::time::Duration::from_secs(5), client.next())
+				.await
+				.expect("no reply from the woken actor")
+				.unwrap()
+				.unwrap();
+			if !matches!(frame, ClientMessage::Ping(_) | ClientMessage::Pong(_)) {
+				break frame;
+			}
+		};
+		assert!(
+			matches!(&reply, ClientMessage::Text(text) if text.as_str() == "awake"),
+			"unexpected frame {reply:?}"
+		);
+		assert_eq!(reopens.load(std::sync::atomic::Ordering::SeqCst), 2);
+
+		// A client close still ends the tunnel cleanly.
+		client.close(None).await.unwrap();
+		assert!(matches!(
+			woken.recv().await.message_kind,
+			p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(_)
+		));
+		tokio::time::timeout(std::time::Duration::from_secs(5), done_rx)
+			.await
+			.unwrap()
+			.unwrap()
+			.unwrap();
+		server.abort();
 	}
 }

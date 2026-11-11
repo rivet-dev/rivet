@@ -259,28 +259,47 @@ pub async fn gateway(
 			let keepalive_interval_ms = ctx.config().guard().websocket_keepalive_interval_ms();
 			// A pipelined open can reach the envoy before the actor's start does, and is then
 			// refused before admission. It is opened again once the actor runs, on a new
-			// stream, so the client never sees the refusal.
-			// `Fn`, not `FnOnce`: it is also called to wake the actor
-			// when a hibernating client socket sends its next frame.
+			// stream, so the client never sees the refusal. A refused reopen is retried like
+			// the first open, within the same budget and a fresh request deadline; one that is
+			// not retried closes the socket with the same retryable close as a refused open.
+			// Each reopen credits the budget like a received request before it may draw on it,
+			// so reopens under sustained refusals pay for their own retries instead of draining
+			// the budget first opens share.
+			//
+			// `Fn`, not `FnOnce`: a hibernatable WebSocket whose actor went to sleep calls it
+			// again to wake the actor on the client's next frame.
 			let reopen = move || {
 				let ctx = ctx.clone();
 				let waits = waits.clone();
+				let budget = budget.clone();
 				let credential = credential.clone();
 				let path = path.clone();
 				let request_headers = request_headers.clone();
 				async move {
 					let deadline = RoutingDeadline::new(&ctx)?;
-					let (epoch, stream) = acquire(
-						&ctx,
-						&waits,
-						actor_id,
-						None,
-						class,
-						false,
-						&credential,
-						deadline,
-					)
-					.await?;
+					budget.deposit();
+					let mut retries = budget.retries(deadline.boot_ms);
+					let (epoch, stream) = loop {
+						let attempt = acquire(
+							&ctx,
+							&waits,
+							actor_id,
+							None,
+							class,
+							false,
+							&credential,
+							deadline,
+						)
+						.await;
+						let error = match attempt {
+							Ok(acquired) => break acquired,
+							Err(error) => error,
+						};
+						if rivet_error::RivetError::extract(&error).group() == "auth" {
+							return Err(error);
+						}
+						retries.retry(ctx.env().as_ref(), error).await?;
+					};
 					let message_id = new_message_id(&ctx)?;
 					let open = websocket_open(actor_id, epoch, &path, &request_headers);
 					anyhow::Ok((stream, message_id, open))
