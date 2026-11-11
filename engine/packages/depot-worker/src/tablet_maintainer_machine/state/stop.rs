@@ -13,7 +13,7 @@ use rivet_data::generated::{
 		NotReady, ReadinessPurpose, StaleTabletGrantEpoch, StaleTabletReplicaSet, StopReadiness,
 		StopReadinessResponse as Response,
 	},
-	shared_depot_fs_v1::FsVolumeStatus,
+	shared_depot_fs_v2::FsVolumeStatus,
 	shared_depot_types_v1::{TabletPhase, VolumeBlocker, VolumeLogReplicaStatus},
 };
 use rivet_topology::worker::WorkerId;
@@ -162,6 +162,7 @@ pub(crate) fn manifest_observed(
 		.is_some_and(|owner| owner.manifest_version.is_some_and(|fence| version > fence))
 	{
 		state.stop_checks.owner = None;
+		super::lazy_fork_waiters::handoff_ended(state);
 	}
 }
 

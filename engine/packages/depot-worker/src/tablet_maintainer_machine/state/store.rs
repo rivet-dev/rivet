@@ -65,6 +65,12 @@ pub(crate) enum StoreWork {
 	SweepPending {
 		scope: depot_fs_core::keys::slatedb::Scope,
 	},
+	/// The fork pin pass of a registered grouped base volume, queued by
+	/// `groups::settle_pin_waits` when the cache learns that a child its pins wait on is
+	/// archived.
+	ForkPinPass {
+		key: depot_types::VolumeLogKey,
+	},
 	Checkpoint {
 		request_id: crate::tablet_maintainer_machine::types::RequestId,
 	},
@@ -209,6 +215,7 @@ impl StoreQueue {
 			| StoreWork::Fork { .. }
 			| StoreWork::PendingWork
 			| StoreWork::SweepPending { .. }
+			| StoreWork::ForkPinPass { .. }
 			| StoreWork::ReadDeleteRow { .. }
 			| StoreWork::WriteToCold { .. } => self.work.contains(work),
 		}
@@ -423,7 +430,8 @@ impl StoreQueueIndex {
 			| StoreWork::ForkCleanup { .. }
 			| StoreWork::Fork { .. }
 			| StoreWork::PendingWork
-			| StoreWork::SweepPending { .. } => count(&mut counts.other, add),
+			| StoreWork::SweepPending { .. }
+			| StoreWork::ForkPinPass { .. } => count(&mut counts.other, add),
 			StoreWork::ForkReference { request_id } => {
 				count(&mut counts.other, add);
 				count_key(&mut self.fork_references, request_id, add);
@@ -515,6 +523,7 @@ pub(crate) fn operation_access(operation: &Operation) -> StoreAccess {
 	match operation {
 		Operation::PendingWork { .. }
 		| Operation::SweepPending { .. }
+		| Operation::ForkPinPass { .. }
 		| Operation::Checkpoint { .. }
 		| Operation::ForkReference { .. }
 		| Operation::ForkStore { .. }
@@ -551,7 +560,7 @@ pub(crate) fn operation_access(operation: &Operation) -> StoreAccess {
 		Operation::FilesystemQuery { order, .. } => match order {
 			QueryOrder::Ordered => StoreAccess::OrderedRead,
 			QueryOrder::Session | QueryOrder::Claim => StoreAccess::SessionRead,
-			QueryOrder::HeldImage => StoreAccess::None,
+			QueryOrder::HeldImage | QueryOrder::BaseRead => StoreAccess::None,
 		},
 		Operation::Alarm(
 			super::alarms::Attempt::Running(request)
@@ -561,6 +570,7 @@ pub(crate) fn operation_access(operation: &Operation) -> StoreAccess {
 		Operation::MaterializePeer { .. }
 		| Operation::ForkCleanupPeer { .. }
 		| Operation::ForkPeer { .. }
+		| Operation::GroupRead { .. }
 		| Operation::FilesystemRead { .. }
 		| Operation::PromotionList { .. }
 		| Operation::CatchUp { .. }
@@ -674,8 +684,17 @@ pub(crate) fn snapshot(state: &MaintainerState) -> crate::tablet_maintainer_mach
 		read_capacity: state.config.max_cold_reads,
 		per_volume_read_capacity: state.config.max_cold_reads_per_volume,
 		held_image_reads_in_flight: state.operations.index().counts.held_image_query,
+		base_reads_in_flight: state.operations.index().counts.base_read,
+		base_read_capacity: state.config.max_base_reads,
 		replica_log_reads_in_flight: state.operations.index().counts.filesystem_read,
-		fork_jobs: state.forks.jobs.len() as u32,
+		fork_jobs: super::forks::non_lazy_job_count(state) as u32,
+		lazy_fork_jobs: super::forks::lazy_job_count(state) as u32,
+		parked_lazy_fork_jobs: super::forks::parked_job_count(state) as u32,
+		parked_lazy_fork_job_capacity: state.config.max_parked_lazy_fork_jobs,
+		lazy_fork_job_capacity: state.config.max_lazy_fork_jobs,
+		archive_fences_in_flight: state.operations.index().counts.archive_fence,
+		archive_fences_queued: state.groups.archive_fences.len() as u32,
+		archive_fence_capacity: state.config.max_archive_fences,
 		fork_cleanup_jobs: state.fork_cleanup.job_count() as u32,
 		background_read_capacity: state.config.max_background_cold_reads,
 		keyed_capacity: state.config.max_keyed_in_flight,
@@ -689,6 +708,17 @@ pub(crate) fn snapshot(state: &MaintainerState) -> crate::tablet_maintainer_mach
 		initial_bytes_capacity: state.config.tuning().max_pending_initial_bytes,
 		loaded_volumes: state.loaded_volumes.len() as u32,
 		loaded_volume_capacity: state.config.max_loaded_volumes,
+		lazy_fork_waiting_opens: state.awaiting_lazy_fork.len() as u32,
+		group_wanted_forks: state.groups.wanted_forks as u32,
+		group_wanted_forks_capacity: state.config.max_group_wanted_forks,
+		absent_lazy_forks: state.lazy_forks_absent.len() as u32,
+		absent_lazy_forks_capacity: state.config.max_absent_lazy_forks,
+		group_pin_wait_children: state.groups.pin_wait_children as u32,
+		group_pin_wait_children_capacity: state.config.max_group_pin_wait_children,
+		group_reads_in_flight: state.groups.reads_in_flight as u32,
+		group_reads_in_flight_capacity: state.config.max_group_reads_in_flight,
+		group_reads_queued_first: state.groups.read_queue.first_len() as u32,
+		group_reads_queued_background: state.groups.read_queue.background_len() as u32,
 		initial_writes_withheld: state.initial_writes_withheld,
 	}
 }
@@ -768,6 +798,7 @@ fn barrier_reason(work: &StoreWork) -> AdmissionBlock {
 		| StoreWork::ForkReference { .. }
 		| StoreWork::PendingWork
 		| StoreWork::SweepPending { .. }
+		| StoreWork::ForkPinPass { .. }
 		| StoreWork::Checkpoint { .. }
 		| StoreWork::FilesystemQuery { .. }
 		| StoreWork::FilesystemLoad { .. }
@@ -1284,7 +1315,12 @@ fn drive_queue(state: &mut MaintainerState, effects: &mut Effects, resume: bool)
 					},
 					effects,
 				);
-				effects.execute(MaintainerEffect::SweepPendingRequest { op_id, scope });
+				let archived_children = super::groups::take_deleted_archived(state, &scope);
+				effects.execute(MaintainerEffect::SweepPendingRequest {
+					op_id,
+					scope,
+					archived_children,
+				});
 			}
 
 			StoreWork::ForkReference { request_id } => {
@@ -1304,7 +1340,34 @@ fn drive_queue(state: &mut MaintainerState, effects: &mut Effects, resume: bool)
 					},
 					effects,
 				);
-				effects.execute(MaintainerEffect::FilesystemLoadRequest { op_id, key });
+				// Stop recovery only reads, so only a registration runs the pin pass, and only a
+				// base volume's: a claim log shares its base's pin rows, whose pass is the
+				// base's to run under the base's footprint.
+				let claim_log = depot_types::is_claim_log(&key.0.volume_key).is_some();
+				let archived_children = match purpose {
+					super::filesystem::LoadPurpose::Register if !claim_log => {
+						super::groups::pass_started(state, op_id, &key);
+						super::groups::archived_children(state, &key)
+					}
+					super::filesystem::LoadPurpose::Register
+					| super::filesystem::LoadPurpose::StopProof => Vec::new(),
+				};
+				effects.execute(MaintainerEffect::FilesystemLoadRequest {
+					op_id,
+					key,
+					purpose,
+					archived_children,
+				});
+			}
+			StoreWork::ForkPinPass { key } => {
+				// A pass is queued only while the tablet serves, and a tablet that stops serving
+				// never serves again in this grant: it drains, stops or is fenced. The pass is
+				// dropped and the pins keep waiting, which keeps more than needed, until the
+				// volume's load on the next owner runs it.
+				if state.phase != MaintainerPhase::Serving {
+					continue;
+				}
+				super::groups::dispatch_pin_pass(state, key, effects);
 			}
 			StoreWork::FilesystemApply { key } => {
 				super::filesystem::dispatch_apply(state, key, effects)
@@ -1324,7 +1387,9 @@ fn drive_queue(state: &mut MaintainerState, effects: &mut Effects, resume: bool)
 				effects.execute(MaintainerEffect::ReadRowRequest {
 					op_id,
 					volume_key: key.0.volume_key,
-					incarnation: Some(key.0.volume_incarnation),
+					read: crate::tablet_maintainer_machine::types::RowRead::Deleting(
+						key.0.volume_incarnation,
+					),
 				});
 			}
 
@@ -1349,7 +1414,9 @@ fn drive_queue(state: &mut MaintainerState, effects: &mut Effects, resume: bool)
 				effects.execute(MaintainerEffect::ReadRowRequest {
 					op_id,
 					volume_key: key.0.volume_key,
-					incarnation: Some(key.0.volume_incarnation),
+					read: crate::tablet_maintainer_machine::types::RowRead::Incarnation(
+						key.0.volume_incarnation,
+					),
 				});
 			}
 			StoreWork::ReadRow { volume_key } => {
@@ -1365,7 +1432,7 @@ fn drive_queue(state: &mut MaintainerState, effects: &mut Effects, resume: bool)
 				effects.execute(MaintainerEffect::ReadRowRequest {
 					op_id,
 					volume_key,
-					incarnation: None,
+					read: crate::tablet_maintainer_machine::types::RowRead::Pointer,
 				});
 			}
 			StoreWork::WriteToCold {

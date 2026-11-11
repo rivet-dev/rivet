@@ -32,6 +32,8 @@ pub struct FileUpdate {
 }
 
 struct Postimages<'a, S> {
+	/// The claim log the entry belongs to; see [`depot_fs_core::apply::plan`].
+	claim_log: u16,
 	base: &'a S,
 	rows: BTreeMap<RowKey, Option<Row>>,
 	ranges: Vec<RowRange>,
@@ -94,6 +96,7 @@ impl<S: RowStore> RowStore for Postimages<'_, S> {
 impl<S: RowStore> Postimages<'_, S> {
 	fn append(&mut self, seq: u64, op: FsOp, ops: &mut Vec<FsOp>) -> depot_fs_core::Result<()> {
 		let plan = apply::plan(
+			self.claim_log,
 			seq,
 			&FsEntry {
 				txn: None,
@@ -188,7 +191,8 @@ impl Filesystem {
 		extra: Vec<FsOp>,
 	) -> Result<u64> {
 		let _scratch = self.reserve_edits(edits, xattrs, &extra)?;
-		self.mutate(|base, seq, now| build(base, seq, now, ino, edits, xattrs, &extra))
+		let claim_log = self.claim_log;
+		self.mutate(|base, seq, now| build(base, claim_log, seq, now, ino, edits, xattrs, &extra))
 			.await
 	}
 	pub(super) fn reserve_edits(
@@ -286,6 +290,7 @@ fn extra_op_bytes(op: &FsOp) -> usize {
 /// file's operations in the entry, each applied over the postimages before it.
 pub(super) fn build<S: RowStore>(
 	base: &S,
+	claim_log: u16,
 	seq: u64,
 	now: i64,
 	ino: u64,
@@ -294,6 +299,7 @@ pub(super) fn build<S: RowStore>(
 	extra: &[FsOp],
 ) -> depot_fs_core::Result<Vec<FsOp>> {
 	let mut view = Postimages {
+		claim_log,
 		base,
 		rows: BTreeMap::new(),
 		ranges: Vec::new(),

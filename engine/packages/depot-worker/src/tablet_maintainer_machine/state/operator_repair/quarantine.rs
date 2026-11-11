@@ -17,11 +17,11 @@ use crate::repair_types::RepairPrepared;
 use crate::tablet_maintainer_machine::{Effects, state::MaintainerState};
 use depot_types::VolumeLogKey;
 use rivet_data::generated::{
-	depot_client_protocol_v1::{
+	depot_client_protocol_v2::{
 		RepairPlan, RepairRebuildPlan, RepairRebuildRecord, RepairRefusalCode, RepairRefused,
 		RepairResult,
 	},
-	shared_depot_fs_v1::{FsVolumeRecord, FsVolumeStatus},
+	shared_depot_fs_v2::{FsVolumeRecord, FsVolumeStatus},
 };
 
 /// The record a rebuild of `key` would write, while `key` is quarantined, not being deleted,

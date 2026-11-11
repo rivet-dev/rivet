@@ -117,9 +117,10 @@ fn no_store(mut response: Response) -> Response {
 	response
 }
 
-/// Authorize routes against their namespace and operation. Direct actor IDs resolve the actual
-/// persisted namespace before authorization; a query parameter never changes an actor's scope.
-/// Credential management is reserved for presented persistent credentials.
+/// Authorize routes against the namespace the request named and the route's operation. A
+/// direct actor ID must exist in that namespace, read through its group, and is then authorized
+/// in it. Records name no namespace, so the group the ID was read through is what proves which
+/// namespace it is in. Credential management is reserved for presented persistent credentials.
 pub async fn authorize(
 	ctx: &EngineContext,
 	credential: &Credential,
@@ -134,11 +135,81 @@ pub async fn authorize(
 		url::form_urlencoded::parse(uri.query().unwrap_or("").as_bytes())
 			.into_owned()
 			.collect();
-	let mut namespace = query
+	let namespace = query
 		.get("namespace")
 		.cloned()
 		.unwrap_or_else(|| pegboard::DEFAULT_NAMESPACE.into());
-	let (resource, operation) = match (method, path) {
+	// A route outside the map is refused before any read.
+	route_access(method, path)?;
+	// The id names the resource's copy in the request's namespace, whose group holds its
+	// volumes; the same id in another namespace is another resource.
+	let target = if path.starts_with("/actors/") && path != "/actors/names" {
+		let id = Id::parse(path["/actors/".len()..].split('/').next().unwrap_or(""))?;
+		let standing = pegboard::catalog::namespace_standing(ctx, &namespace).await?;
+		let (_group, read) = super::routes::resolve_actor(ctx, &standing, id).await?;
+		let found = read
+			.and_then(|read| read.data)
+			.is_some_and(|data| super::routes::belongs(&data, &standing));
+		Some(existing_target(found, id)?)
+	} else {
+		None
+	};
+	authorize_access(
+		credential,
+		ctx.env().clock().observe()?.unix_ms,
+		&namespace,
+		method,
+		path,
+		target,
+	)
+}
+
+/// Checks every grant the route `method` `path` needs on `target`: its own operation, and for a
+/// fork also read access to the source, since the fork copies the source's data into an actor
+/// the caller controls, which create access alone never allowed.
+pub(crate) fn authorize_access(
+	credential: &Credential,
+	now_unix_ms: i64,
+	namespace: &str,
+	method: &str,
+	path: &str,
+	target: Option<Id>,
+) -> anyhow::Result<()> {
+	let (resource, operation) = route_access(method, path)?;
+	credential.authorize(now_unix_ms, namespace, resource, target, operation)?;
+	if is_fork(method, path) {
+		credential.authorize(
+			now_unix_ms,
+			namespace,
+			resource,
+			target,
+			OperationKind::Read,
+		)?;
+	}
+	Ok(())
+}
+
+fn is_fork(method: &str, path: &str) -> bool {
+	method == "POST" && path.starts_with("/actors/") && path.ends_with("/fork")
+}
+
+/// The target of a direct actor route, refused like a missing grant when the request namespace
+/// holds no such actor. A foreign record in the shared unprefixed key space counts as missing, so
+/// a token cannot probe for IDs.
+fn existing_target(found: bool, id: Id) -> anyhow::Result<Id> {
+	if !found {
+		return Err(auth::InsufficientPermissions.build());
+	}
+	Ok(id)
+}
+
+/// The resource and operation a route needs a grant for. Routes outside this map stay
+/// administrative.
+pub(crate) fn route_access(
+	method: &str,
+	path: &str,
+) -> anyhow::Result<(ResourceKind, OperationKind)> {
+	Ok(match (method, path) {
 		("GET", "/actors") => (ResourceKind::Actor, OperationKind::List),
 		("POST" | "PUT", "/actors") => (ResourceKind::Actor, OperationKind::Create),
 		("GET", "/actors/names") => (ResourceKind::Actor, OperationKind::List),
@@ -157,6 +228,9 @@ pub async fn authorize(
 				_ => return Err(auth::InsufficientPermissions.build()),
 			},
 		),
+		// A fork makes a new actor from the source the path names, so it needs create access,
+		// checked against the source; `authorize_access` also requires read access to it.
+		(method, p) if is_fork(method, p) => (ResourceKind::Actor, OperationKind::Create),
 		(_, p) if p.starts_with("/actors/") => (
 			ResourceKind::Actor,
 			match method {
@@ -168,24 +242,7 @@ pub async fn authorize(
 		),
 		// Namespace catalog management and issuance remain administrative.
 		_ => return Err(auth::InsufficientPermissions.build()),
-	};
-	let target = if path.starts_with("/actors/") && path != "/actors/names" {
-		let id = Id::parse(path["/actors/".len()..].split('/').next().unwrap_or(""))?;
-		let actor = super::routes::read_actor(ctx, id)
-			.await?
-			.ok_or_else(|| auth::InsufficientPermissions.build())?;
-		namespace = actor.data.namespace.to_string();
-		Some(id)
-	} else {
-		None
-	};
-	credential.authorize(
-		ctx.env().clock().observe()?.unix_ms,
-		&namespace,
-		resource,
-		target,
-		operation,
-	)
+	})
 }
 
 #[derive(Debug, rivet_error::RivetError, Serialize, Deserialize)]

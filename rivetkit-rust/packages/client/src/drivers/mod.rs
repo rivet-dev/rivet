@@ -16,15 +16,35 @@ use tracing::debug;
 pub mod sse;
 pub mod ws;
 
+pub(crate) fn close_stop_reason(reason: &str) -> DriverStopReason {
+	match reason.split('#').next() {
+		Some("actor.destroyed") => DriverStopReason::ActorDestroyed {
+			reason: reason.to_owned(),
+		},
+		Some("actor.not_found") => DriverStopReason::ActorNotFound {
+			reason: reason.to_owned(),
+		},
+		Some("auth.invalid_token" | "auth.token_expired" | "auth.insufficient_permissions") => {
+			DriverStopReason::AuthRefused {
+				reason: reason.to_owned(),
+			}
+		}
+		_ => DriverStopReason::ServerDisconnect,
+	}
+}
+
 pub type MessageToClient = Arc<to_client::ToClient>;
 pub type MessageToServer = Arc<to_server::ToServer>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DriverStopReason {
 	UserAborted,
 	ServerDisconnect,
 	ServerError,
 	TaskError,
+	ActorDestroyed { reason: String },
+	ActorNotFound { reason: String },
+	AuthRefused { reason: String },
 }
 
 #[derive(Debug)]

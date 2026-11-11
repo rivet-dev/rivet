@@ -21,7 +21,10 @@ impl RegistryDispatcher {
 		sender: WebSocketSender,
 	) -> Result<WebSocketHandler> {
 		tracing::info!(actor_id, path, "handle_websocket: routing");
-		let instance = self.active_actor(actor_id).await?;
+		let instance = self
+			.active_actor(actor_id)
+			.await
+			.map_err(refuse_open_during_destroy)?;
 		// A socket opens only once the startup state is durable, so its first message never
 		// reports state a failed startup commit would lose.
 		instance.ctx.wait_startup_commit().await?;
@@ -929,5 +932,14 @@ pub(super) fn actor_connect_error_websocket_handler(
 				sender.close(Some(1011), Some(close_reason));
 			})
 		})),
+	}
+}
+
+fn refuse_open_during_destroy(error: anyhow::Error) -> anyhow::Error {
+	let rivet_error = RivetError::extract(&error);
+	if rivet_error.group() == "actor" && rivet_error.code() == "destroying" {
+		ActorLifecycleError::Destroyed.build()
+	} else {
+		error
 	}
 }

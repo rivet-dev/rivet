@@ -26,7 +26,7 @@ use rivet_data::generated::{
 	depot_storage_worker_protocol_v1::{
 		self as wire, StorageWorkerRequest as Request, StorageWorkerResponse as Response,
 	},
-	shared_depot_fs_v1::FsVolumeStatus,
+	shared_depot_fs_v2::FsVolumeStatus,
 	shared_depot_types_v1::VolumeLogReplicaStatus as Status,
 };
 use rivet_topology::worker::WorkerId;

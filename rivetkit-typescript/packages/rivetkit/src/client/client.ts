@@ -12,6 +12,10 @@ import {
 	CONNECT_SYMBOL,
 } from "./actor-conn";
 import { type ActorHandle, ActorHandleRaw } from "./actor-handle";
+import {
+	isRetryableForkRefusal,
+	retryOnLifecycleBoundary,
+} from "./lifecycle-errors";
 import { logger } from "./log";
 import { resolveGatewayTarget } from "./resolve-gateway-target";
 import { type RetryBudgetOptions, RetryBudget } from "./retry-budget";
@@ -90,6 +94,21 @@ export interface ActorAccessor<AD extends AnyActorDefinition> {
 		key?: string | string[],
 		opts?: CreateOptions,
 	): Promise<ActorHandle<AD>>;
+
+	/**
+	 * Forks the actor `actorId` into a new actor of this name, and returns a
+	 * stateless handle to the new actor with its ID resolved.
+	 *
+	 * The new actor starts at once on a copy of the source's database as of
+	 * its last committed write, runs `onFork` once with `opts.input`, and
+	 * keeps running independently of the source. A fork is not idempotent:
+	 * a `key` already held answers `actor.duplicate_key`.
+	 *
+	 * @param {string} actorId - The ID of the source actor.
+	 * @param {ForkOptions} [opts] - The new actor's key and the fork input.
+	 * @returns {Promise<ActorHandle<AD>>} - A promise that resolves to a handle to the new actor.
+	 */
+	fork(actorId: string, opts?: ForkOptions): Promise<ActorHandle<AD>>;
 }
 
 /**
@@ -153,6 +172,16 @@ export interface CreateOptions extends QueryOptions {
 	 * Overrides the client's configured `poolName` for this call.
 	 */
 	poolName?: string;
+}
+
+/**
+ * Options for forking an actor.
+ */
+export interface ForkOptions extends QueryOptions {
+	/** The new actor's key. Omit for a keyless actor. */
+	key?: string | string[];
+	/** The fork input, passed to the new actor's `onFork` hook. */
+	input?: unknown;
 }
 
 /**
@@ -419,6 +448,60 @@ export class ClientRaw {
 		return proxy;
 	}
 
+	/**
+	 * Forks the actor `actorId` into a new actor and returns a handle to it.
+	 *
+	 * @template AD The actor class that this handle is for.
+	 * @param {string} name - The name of the actor; the source has the same name.
+	 * @param {string} actorId - The ID of the source actor.
+	 * @param {ForkOptions} [opts] - The new actor's key and the fork input.
+	 * @returns {Promise<ActorHandle<AD>>} - A promise that resolves to a handle to the new actor.
+	 */
+	async fork<AD extends AnyActorDefinition>(
+		name: string,
+		actorId: string,
+		opts?: ForkOptions,
+	): Promise<ActorHandle<AD>> {
+		const key = typeof opts?.key === "string" ? [opts.key] : opts?.key;
+
+		logger().debug({
+			msg: "fork actor",
+			name,
+			sourceActorId: actorId,
+			key,
+		});
+
+		// The client is the retry owner: a fork refused before it did anything is sent again
+		// after the service's hint, within the client's retry budget.
+		const forked = await retryOnLifecycleBoundary(
+			() =>
+				this.#driver.forkActor({
+					actorId,
+					key,
+					input: opts?.input,
+				}),
+			{
+				signal: opts?.signal,
+				budget: this.#retryBudget,
+				isRetryable: isRetryableForkRefusal,
+			},
+		);
+
+		const getForIdQuery = {
+			getForId: {
+				name,
+				actorId: forked.actorId,
+			},
+		} satisfies ActorQuery;
+		const handle = this.#createHandle(
+			opts?.params,
+			opts?.getParams,
+			getForIdQuery,
+			opts?.signal,
+		);
+		return createActorProxy(handle) as ActorHandle<AD>;
+	}
+
 	#createHandle(
 		params: unknown,
 		getParams: (() => Promise<unknown>) | undefined,
@@ -558,6 +641,16 @@ export function createClientWithDriver<A extends Registry<any>>(
 						return await target.create<
 							ExtractActorsFromRegistry<A>[typeof prop]
 						>(prop, key, opts);
+					},
+					fork: async (
+						actorId: string,
+						opts: ForkOptions = {},
+					): Promise<
+						ActorHandle<ExtractActorsFromRegistry<A>[typeof prop]>
+					> => {
+						return await target.fork<
+							ExtractActorsFromRegistry<A>[typeof prop]
+						>(prop, actorId, opts);
 					},
 				} as ActorAccessor<ExtractActorsFromRegistry<A>[typeof prop]>;
 			}

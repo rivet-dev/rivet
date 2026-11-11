@@ -11,8 +11,8 @@ use crate::{
 };
 
 use super::{
-	DriverConnectArgs, DriverConnection, DriverHandle, DriverStopReason, MessageToClient,
-	MessageToServer,
+	close_stop_reason, DriverConnectArgs, DriverConnection, DriverHandle, DriverStopReason,
+	MessageToClient, MessageToServer,
 };
 
 pub(crate) async fn connect(args: DriverConnectArgs) -> Result<DriverConnection> {
@@ -100,9 +100,11 @@ async fn start(
 								return DriverStopReason::UserAborted;
 							}
 						},
-						Message::Close(_) => {
-							debug!("Close message");
-							return DriverStopReason::ServerDisconnect;
+						Message::Close(frame) => {
+							debug!(?frame, "Close message");
+							return frame.as_ref().map_or(DriverStopReason::ServerDisconnect, |frame| {
+								close_stop_reason(frame.reason.as_str())
+							});
 						},
 						_ => {
 							debug!("Invalid message type received");

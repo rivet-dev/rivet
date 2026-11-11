@@ -4,7 +4,7 @@
 
 use super::{MaintainerPhase, MaintainerState};
 use crate::tablet_maintainer_machine::{Effects, effect::MaintainerEffect, types::RequestId};
-use rivet_data::generated::depot_client_protocol_v1::{
+use rivet_data::generated::depot_client_protocol_v2::{
 	ClientResponse, OperatorTabletReport, VolumeRejectResponse,
 };
 

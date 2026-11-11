@@ -1,0 +1,5 @@
+{
+  "code": "response_version_unavailable",
+  "group": "depot",
+  "message": "The command's answer cannot be expressed at the version its caller reads; it may have been applied."
+}

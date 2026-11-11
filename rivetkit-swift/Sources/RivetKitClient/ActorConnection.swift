@@ -55,6 +55,7 @@ public actor ActorConnection {
     private var actionIdCounter: UInt64 = 0
     private var actorId: String?
     private var connectionId: String?
+    private var stopError: ActorError?
 
     init(manager: RemoteManager, registry: ConnectionRegistry, queryState: ActorHandleState, params: AnyEncodable?) {
         self.manager = manager
@@ -74,6 +75,7 @@ public actor ActorConnection {
         case .idle, .disconnected:
             break
         }
+        stopError = nil
         logger.debug("initiating connection")
         setStatus(.connecting)
         connectTask?.cancel()
@@ -91,6 +93,9 @@ public actor ActorConnection {
         if status == .disposed {
             logger.debug("action \(name, privacy: .public) called after dispose")
             throw ActorConnDisposed()
+        }
+        if let stopError {
+            throw stopError
         }
         let actionId = actionIdCounter
         actionIdCounter += 1
@@ -437,6 +442,16 @@ public actor ActorConnection {
                 return
             } catch {
                 logger.warning("failed to connect attempt=\(attempt) error=\(String(describing: error), privacy: .public)")
+                if let actorError = error as? ActorError {
+                    if isAuthRefused(group: actorError.group, code: actorError.code) {
+                        stopPermanently(with: actorError)
+                        return
+                    }
+                    if await stopsForMissingActor(actorError, wasConnected: false) {
+                        stopPermanently(with: actorError)
+                        return
+                    }
+                }
                 if status != .disposed {
                     setStatus(.disconnected)
                 }
@@ -748,6 +763,35 @@ public actor ActorConnection {
         logger.debug("websocket closed error=\(String(describing: error), privacy: .public)")
         let wasConnected = status == .connected
         setStatus(.disconnected)
+
+        if let websocket,
+           let reasonData = websocket.closeReason,
+           let reason = String(data: reasonData, encoding: .utf8),
+           let parsed = WebSocketCloseReasonParser.parse(reason)
+        {
+            let actorError = ActorError(group: parsed.group, code: parsed.code, message: "Connection closed: \(reason)", metadata: nil)
+            // A destroyed actor is gone. Reconnecting through `getOrCreate` would create it again, so
+            // the connection stops whether it was open or still opening.
+            if isActorDestroyed(group: parsed.group, code: parsed.code) {
+                stopPermanently(with: actorError)
+                return
+            }
+            // The client cannot refresh its token, so a refused connection would be refused again on
+            // every retry.
+            if isAuthRefused(group: parsed.group, code: parsed.code) {
+                stopPermanently(with: actorError)
+                return
+            }
+            if await stopsForMissingActor(actorError, wasConnected: wasConnected) {
+                stopPermanently(with: actorError)
+                return
+            }
+            if status == .disposed {
+                rejectAllPending(error: ActorConnDisposed())
+                return
+            }
+        }
+
         var errorToThrow: Error = error
         if wasConnected, let websocket, let reasonData = websocket.closeReason, let reason = String(data: reasonData, encoding: .utf8) {
             if let parsed = WebSocketCloseReasonParser.parse(reason) {
@@ -778,6 +822,36 @@ public actor ActorConnection {
         }
         logger.debug("triggering reconnect")
         connect()
+    }
+
+    private func stopsForMissingActor(_ actorError: ActorError, wasConnected: Bool) async -> Bool {
+        guard isActorNotFound(group: actorError.group, code: actorError.code) else {
+            return false
+        }
+        let query = await queryState.query
+        if status == .disposed {
+            return false
+        }
+        switch query {
+        case .getForId:
+            return true
+        case .getForKey:
+            return !wasConnected
+        case .getOrCreateForKey, .create:
+            return false
+        }
+    }
+
+    private func stopPermanently(with actorError: ActorError) {
+        if status == .disposed {
+            return
+        }
+        stopError = actorError
+        setStatus(.idle)
+        rejectAllPending(error: actorError)
+        for (_, handler) in errorHandlers {
+            handler(actorError)
+        }
     }
 
     private func sendMessage(_ message: ToServerMessage, ephemeral: Bool) {

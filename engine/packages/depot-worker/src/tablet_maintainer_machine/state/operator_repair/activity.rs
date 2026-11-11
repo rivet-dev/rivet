@@ -12,7 +12,7 @@ use crate::tablet_maintainer_machine::{
 	types::OpId,
 };
 use depot_types::{VolumeKey, VolumeLogKey};
-use rivet_data::generated::depot_client_protocol_v1::{
+use rivet_data::generated::depot_client_protocol_v2::{
 	RepairActivity, RepairDiagnosticRow, RepairDiagnosticValue, RepairDiagnosticsPage,
 	RepairDiagnosticsRequest,
 };
@@ -139,8 +139,11 @@ fn summaries(state: &MaintainerState, key: &VolumeLogKey) -> Vec<(u64, RepairAct
 		add(0, "open", "WAITING_DELETE", None);
 	}
 	if let Some(unload) = state.unloading.get(key) {
-		use crate::tablet_maintainer_machine::state::{operations, unload::RowCheck};
-		let phase = if unload.awaiting_notices {
+		use crate::tablet_maintainer_machine::state::{
+			operations,
+			unload::{RowCheck, awaiting_close_notices},
+		};
+		let phase = if awaiting_close_notices(state, unload) {
 			"WAITING_NOTICES"
 		} else if unload.recovery_backoff {
 			"RECOVERY_BACKOFF"
@@ -169,6 +172,7 @@ fn summaries(state: &MaintainerState, key: &VolumeLogKey) -> Vec<(u64, RepairAct
 			DeleteStep::ReadingRow { .. } => "READING_ROW",
 			DeleteStep::WaitingForReplay { .. } => "WAITING_REPLAY",
 			DeleteStep::WaitingForCover { .. } => "WAITING_COVER",
+			DeleteStep::Pinning { .. } => "PINNING",
 			DeleteStep::Active(progress) => match progress.cold {
 				ColdProgress::WaitingForReplica => "WAITING_REPLICA",
 				ColdProgress::WaitingForRow => "WAITING_ROW",
@@ -182,7 +186,7 @@ fn summaries(state: &MaintainerState, key: &VolumeLogKey) -> Vec<(u64, RepairAct
 		};
 		add(2, "delete", phase, None);
 	}
-	if let Some(job) = state.forks.jobs.get(name) {
+	if let Some(job) = state.forks.job(name) {
 		add(3, "fork", job.activity_phase(), Some(job.spec.operation_id));
 	}
 	if let Some(claim) = state.repairs.claims.by_name.get(name) {
@@ -262,6 +266,7 @@ fn describe(
 			false,
 		),
 		Operation::ForkPeer { volume_key } => ("fork_peer", "IN_FLIGHT", volume_key == name, false),
+		Operation::GroupRead { .. } => ("group_read", "IN_FLIGHT", false, false),
 		Operation::ForkReference { volumes, .. } => (
 			"fork_reference",
 			"IN_FLIGHT",
@@ -277,6 +282,12 @@ fn describe(
 			volume.is_none(),
 		),
 		Operation::SweepPending { scope } => ("sweep_pending", "IN_FLIGHT", scoped(scope), false),
+		Operation::ForkPinPass { key } => (
+			"fork_pin_pass",
+			"IN_FLIGHT",
+			&key.0.volume_key == name,
+			false,
+		),
 		Operation::Checkpoint { volume_key, .. } => {
 			("checkpoint", "IN_FLIGHT", volume_key == name, false)
 		}

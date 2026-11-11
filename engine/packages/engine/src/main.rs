@@ -7,7 +7,6 @@ use rivet_env::Env;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-// use once_cell::sync::Lazy;
 
 #[cfg(target_os = "linux")]
 mod allocator;
@@ -222,8 +221,8 @@ async fn main_inner(
 			);
 			let singletons: Arc<dyn rivet_singleton_coordinator::runtime::SingletonServices> =
 				Arc::new(singleton_services::CompositeSingletons::new(vec![
-					epoxy.clone(),
-					migrator,
+					("epoxy", epoxy.clone()),
+					("v2 migrator", migrator),
 				]));
 			if let Some(peer) = services
 				.iter_mut()

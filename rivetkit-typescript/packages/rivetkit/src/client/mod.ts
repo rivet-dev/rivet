@@ -52,6 +52,7 @@ export type {
 	CreateOptions,
 	ExtractActorsFromRegistry,
 	ExtractRegistryFromClient,
+	ForkOptions,
 	GetOptions,
 	GetWithIdOptions,
 	QueryOptions,

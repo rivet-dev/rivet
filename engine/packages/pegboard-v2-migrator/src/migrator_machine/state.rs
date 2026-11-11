@@ -114,6 +114,14 @@ pub struct Entry {
 	pub step: Step,
 	/// Failed attempts of the current phase's effect, for the backoff.
 	pub failures: u32,
+	/// Activation answers that found no actor at the entry's placement, counted within the
+	/// current phase of this tenure: any answer in between (a failure, `IndexPending`) does not
+	/// reset it, a phase change does, and it is not persisted, so a takeover starts again at
+	/// zero. At `HOLD_VANISHED_MAX_ATTEMPTS` the entry finishes as needing recovery.
+	pub vanished: u32,
+	/// Set when a copy moved the legacy-placed entry into the group, until a write stores the
+	/// move; that write then tells the namespace its backfill may read again.
+	pub placement_moved: bool,
 	/// Set when the entry finished: the next write deletes it and then its result is recorded.
 	pub finished: Option<(Outcome, Reason)>,
 }

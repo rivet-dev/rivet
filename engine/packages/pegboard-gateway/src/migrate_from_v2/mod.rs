@@ -114,11 +114,16 @@ pub fn applies<'a>(dynamic: Option<&'a Root>, namespace: &str) -> Option<&'a Mig
 	Some(config)
 }
 
-/// Reads what this cluster holds for `actor_id` without waiting for it.
-pub async fn read_v3_actor(ctx: &EngineContext, actor_id: Id) -> Result<V3Actor> {
+/// Reads what this cluster holds for `actor_id`, whose volumes are keyed in `group`, without
+/// waiting for it.
+pub async fn read_v3_actor(
+	ctx: &EngineContext,
+	group: Option<rivet_keys::keys::codec::GroupId>,
+	actor_id: Id,
+) -> Result<V3Actor> {
 	let read = ctx
 		.depot()
-		.command::<pegboard::commands::ActorRead>(&ActorVolume::new(actor_id).volume_key(), ())
+		.command::<pegboard::commands::ActorRead>(&ActorVolume::in_namespace(group, actor_id), ())
 		.await;
 	let read = match read {
 		Ok(read) => read,

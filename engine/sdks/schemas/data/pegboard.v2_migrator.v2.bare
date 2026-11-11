@@ -1,0 +1,210 @@
+# Durable state of the V2 migrator singleton, in the `[MIGRATE_FROM_V2]` volume, and its commands.
+#
+# Version 2 records where each in-flight actor lives: the target namespace's volume group when the
+# entry was admitted, or none for the legacy unprefixed placement every version 1 entry has; and
+# the namespace it was admitted for, which version 1 did not record.
+
+type Id data
+
+# The hash of a namespace's own group key, as `pegboard.namespace` names it.
+type GroupId data[16]
+
+# The facts of one V2 actor the migrator selected, copied from V2's `Candidate`.
+type MigrateFromV2Candidate struct {
+    v2ActorId: Id
+    datacenterLabel: u16
+    name: str
+    key: optional<str>
+    poolName: str
+    createTs: i64
+    generation: u32
+    sleepTs: i64
+    wakeDeadlineTs: optional<i64>
+}
+
+# The export is being imported into V3. The V3 actor is held as `MigratingFromV2` before the copy
+# writes anything.
+type MigrateFromV2Copying void
+
+# The export is imported, and the held V3 actor is reserving its key. V2 is cut over only once the
+# key is reserved, because after V2 confirms nothing may discard the actor.
+type MigrateFromV2Reserving void
+
+# `cutoverTs` was chosen and persisted before the first cutover call, so a retry or a new tenure
+# reissues the same call.
+type MigrateFromV2CuttingOver struct {
+    cutoverTs: i64
+}
+
+# V2 answered `cut`; confirm is due at `confirmAt` (unix ms).
+type MigrateFromV2Confirming struct {
+    cutoverTs: i64
+    confirmAt: i64
+}
+
+# V2 confirmed and parked the actor. Activation in V3 is reissued until it succeeds.
+type MigrateFromV2Activating struct {
+    cutoverTs: i64
+}
+
+type MigrateFromV2DiscardReason enum {
+    FENCE_MOVED
+    DESTROYED
+    INELIGIBLE
+    WOKE
+    WOKE_AFTER_CUT
+    COPY_FAILED
+    FAILOVER
+    DUPLICATE_KEY
+    KEY_RESERVATION_FAILED
+}
+
+# The migration is abandoned before V2 confirmed it. The held V3 actor is destroyed, which deletes
+# its imported database.
+type MigrateFromV2Discarding struct {
+    reason: MigrateFromV2DiscardReason
+}
+
+type MigrateFromV2Phase union {
+    MigrateFromV2Copying |
+    MigrateFromV2Reserving |
+    MigrateFromV2CuttingOver |
+    MigrateFromV2Confirming |
+    MigrateFromV2Activating |
+    MigrateFromV2Discarding
+}
+
+# One actor in flight, keyed by its V2 actor id. At most `max_in_flight` exist.
+#
+# `group` is the placement every call on the V3 actor and its database addresses: the target
+# namespace's volume group as the migrator saw it when it admitted the entry, or absent for the
+# legacy unprefixed placement of a namespace that had no group yet. `v3ActorId` was derived for the
+# same placement. Both stay fixed for the entry's life, whatever the namespace's standing becomes.
+#
+# `namespace` is the target namespace the entry was admitted for. Absent on an entry written by
+# version 1, which did not record it, so a reader treats such an entry as belonging to any
+# namespace.
+type MigrateFromV2InFlight struct {
+    migrationId: u64
+    v3ActorId: Id
+    candidate: MigrateFromV2Candidate
+    startedAt: i64
+    phase: MigrateFromV2Phase
+    group: optional<GroupId>
+    namespace: optional<str>
+}
+
+type MigrateFromV2Cursor struct {
+    datacenterLabel: u16
+    # The last candidates page's `next`. None with `done` unset is the start of the listing.
+    after: optional<data>
+    done: bool
+}
+
+type MigrateFromV2Counts struct {
+    listed: u64
+    selected: u64
+    confirmed: u64
+    discarded: u64
+    skipped: u64
+    duplicateKey: u64
+    alreadyMigrated: u64
+    notSelected: u64
+    tooLarge: u64
+    needsRecovery: u64
+}
+
+# The current pass. Rewritten when a page is admitted or the pass ends.
+type MigrateFromV2Pass struct {
+    pass: u64
+    startedAt: i64
+    cursors: list<MigrateFromV2Cursor>
+    counts: MigrateFromV2Counts
+    # Set when every cursor is done. The next pass starts `pass_interval_ms` later.
+    endedAt: optional<i64>
+    # Counts migration ids handed out, so every attempt gets a distinct id.
+    nextMigrationSeq: u64
+}
+
+# Fences every write by the singleton tenure that made it.
+type MigrateFromV2Fence struct {
+    coordinatorGeneration: u64
+}
+
+type MigrateFromV2StateWriteRequest struct {
+    coordinatorGeneration: u64
+    pass: optional<MigrateFromV2Pass>
+    puts: list<MigrateFromV2InFlight>
+    deletes: list<Id>
+}
+
+type MigrateFromV2StateWritten void
+
+# A newer tenure wrote first; this writer lost the singleton and must stop.
+type MigrateFromV2StateFenced struct {
+    coordinatorGeneration: u64
+}
+
+type MigrateFromV2StateWriteResponse union {
+    MigrateFromV2StateWritten |
+    MigrateFromV2StateFenced
+}
+
+# Claims the state for a new tenure and returns it, in one command.
+type MigrateFromV2StateLoadRequest struct {
+    coordinatorGeneration: u64
+}
+
+type MigrateFromV2StateLoaded struct {
+    pass: optional<MigrateFromV2Pass>
+    inFlight: list<MigrateFromV2InFlight>
+}
+
+type MigrateFromV2StateLoadResponse union {
+    MigrateFromV2StateLoaded |
+    MigrateFromV2StateFenced
+}
+
+# Reads the state without claiming it, for operators.
+type MigrateFromV2StateReadRequest void
+
+# Asks the migrator to move one V2 actor now, whatever `migrate_ratio` says. `rivet-engine
+# migrate-from-v2 migrate` sends it over UPS to the worker holding the singleton tenure.
+type MigrateFromV2ActorRequest struct {
+    v2ActorId: Id
+}
+
+# The actor is in flight and its entry is stored, whether this request admitted it or it already
+# was. The migration finishes like any other; `status` shows its phase.
+type MigrateFromV2ActorAdmitted struct {
+    v3ActorId: Id
+    migrationId: u64
+}
+
+# The actor fails a selection rule other than the share. `reason` is the rule's skip reason, such
+# as `recently_awake`.
+type MigrateFromV2ActorIneligible struct {
+    reason: str
+}
+
+# V2 holds no such actor in the migrated namespace.
+type MigrateFromV2ActorNotFound void
+
+# The migrator cannot take the actor now: it is loading, every slot is taken, another request is
+# being answered, or the actor's datacenter is not configured. Nothing was admitted.
+type MigrateFromV2ActorUnavailable struct {
+    reason: str
+}
+
+# Reading the actor from V2 failed. Nothing was admitted.
+type MigrateFromV2ActorFailed struct {
+    message: str
+}
+
+type MigrateFromV2ActorResponse union {
+    MigrateFromV2ActorAdmitted |
+    MigrateFromV2ActorIneligible |
+    MigrateFromV2ActorNotFound |
+    MigrateFromV2ActorUnavailable |
+    MigrateFromV2ActorFailed
+}

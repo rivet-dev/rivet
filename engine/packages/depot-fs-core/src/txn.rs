@@ -43,16 +43,22 @@ pub enum Resolution {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Resolver {
+	/// The claim log whose entries this resolver follows; it numbers the inodes they create.
+	claim_log: u16,
 	position: VolumeLogPosition,
 	open: BTreeMap<Vec<u8>, OpenTxn>,
 }
 
 impl Resolver {
-	pub fn new(position: VolumeLogPosition) -> Self {
+	pub fn new(claim_log: u16, position: VolumeLogPosition) -> Self {
 		Self {
+			claim_log,
 			position,
 			open: BTreeMap::new(),
 		}
+	}
+	pub fn claim_log(&self) -> u16 {
+		self.claim_log
 	}
 	pub fn position(&self) -> &VolumeLogPosition {
 		&self.position
@@ -148,7 +154,10 @@ impl Resolver {
 		bytes: u64,
 	) -> Result<Resolution> {
 		validate(&entry)?;
-		let inodes = footprint(at.volume_seq, &entry.ops);
+		let inodes = footprint(
+			created(self.claim_log, at.volume_seq, &entry.ops)?,
+			&entry.ops,
+		);
 		let id = entry.txn.as_ref().map(id);
 		if matches!(
 			entry.txn,
@@ -270,9 +279,23 @@ pub fn validate(entry: &FsEntry) -> Result<()> {
 	Ok(())
 }
 
+/// The number the inode an entry at `seq` of `claim_log` creates takes, when `ops` create one.
+/// An entry that creates nothing may sit past the claim log's last inode number, so the
+/// number is only computed, and only refused, for one that does.
+pub fn created(claim_log: u16, seq: u64, ops: &[FsOp]) -> Result<u64> {
+	let numbered = ops
+		.iter()
+		.any(|op| creates(op) && !matches!(op, FsOp::FsRoot(_)));
+	match numbered {
+		true => crate::inode::pack(claim_log, seq),
+		false => Ok(seq),
+	}
+}
+
 /// Every inode referenced by an operation participates in isolation, including
-/// parents, replaced rename targets, raw KV operations and the allocated inode.
-pub fn footprint(seq: u64, ops: &[FsOp]) -> BTreeSet<u64> {
+/// parents, replaced rename targets, raw KV operations and the allocated inode, whose
+/// number is `created` (see [`created`]).
+pub fn footprint(created: u64, ops: &[FsOp]) -> BTreeSet<u64> {
 	let mut result = BTreeSet::new();
 	for op in ops {
 		match op {
@@ -280,16 +303,16 @@ pub fn footprint(seq: u64, ops: &[FsOp]) -> BTreeSet<u64> {
 				result.insert(ROOT_INO);
 			}
 			FsOp::FsCreate(v) => {
-				result.extend([v.parent.ino, seq]);
+				result.extend([v.parent.ino, created]);
 			}
 			FsOp::FsMkdir(v) => {
-				result.extend([v.parent.ino, seq]);
+				result.extend([v.parent.ino, created]);
 			}
 			FsOp::FsSymlink(v) => {
-				result.extend([v.parent.ino, seq]);
+				result.extend([v.parent.ino, created]);
 			}
 			FsOp::FsMknod(v) => {
-				result.extend([v.parent.ino, seq]);
+				result.extend([v.parent.ino, created]);
 			}
 			FsOp::FsLink(v) => {
 				result.extend([v.parent.ino, v.target.ino]);

@@ -1,0 +1,5 @@
+{
+  "code": "lineage_too_deep",
+  "group": "group",
+  "message": "The group's lineage has reached the depth cap."
+}

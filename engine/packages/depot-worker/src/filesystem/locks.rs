@@ -149,7 +149,7 @@ pub(crate) fn scope_stripe(scope: &depot_fs_core::keys::slatedb::Scope) -> u64 {
 impl LockRequest {
 	/// The tablet lock shared and both of a fork's volume stripes written. Fork steps
 	/// read and write rows of the destination and holds of the parent.
-	pub(crate) fn fork(spec: &rivet_data::generated::shared_depot_fs_v1::FsForkSpec) -> Self {
+	pub(crate) fn fork(spec: &rivet_data::generated::shared_depot_fs_v2::FsForkSpec) -> Self {
 		Self::shared()
 			.write(stripe(&spec.parent_volume_key))
 			.write(stripe(&spec.destination_volume_key))

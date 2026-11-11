@@ -37,7 +37,7 @@ Every response includes an `x-rivet-ray-id` header that uniquely identifies the 
 | `404` | The resource does not exist. |
 | `429` | Rate limited. Back off and retry. |
 | `500` | An unexpected error. The body has `group: "core"`, `code: "internal_error"`. Details are only exposed in development. |
-| `503` | Token verification or issuance is temporarily unavailable. Retry with backoff. |
+| `503` | Temporarily unavailable: token verification or issuance, or a request the gateway could not serve yet after retrying it, such as one for an overloaded storage host or for an actor that an engine upgrade is moving to its new place. The gateway answers those with `guard.service_unavailable`, a `metadata.reason` such as `actor_moving` or `depot_overloaded`, and a `Retry-After` header. Retry with backoff, no sooner than the hint. |
 
 [Error Codes](/docs/api/error-codes) lists every group and code with its status and cause. Errors thrown by your own actor code come back as `user.{code}`; see [Errors](/actors/docs/errors) for throwing and catching them inside actors.
 

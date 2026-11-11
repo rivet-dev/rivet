@@ -13,11 +13,11 @@ use depot_fs_core::{
 	keys::slatedb::Scope,
 };
 use rivet_data::generated::{
-	depot_client_protocol_v1::{ClientRequest, ClientResponse},
-	shared_depot_fs_read_v1::*,
+	depot_client_protocol_v2::{ClientRequest, ClientResponse},
+	shared_depot_fs_read_v2::*,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) struct Materializations {
@@ -33,6 +33,10 @@ pub(crate) struct Materializations {
 	/// its volume that finds no pending row removes it. A row gone before a multi-page or
 	/// full scan leaves its entry, without a timer, until the maintainer fences or stops.
 	retries: BTreeMap<Scope, u32>,
+	/// Queued jobs whose store step waits for the pass that raises the tablet's `depot.fs_rows`
+	/// mark: a completed materialization writes its volume's record, which the store encodes at
+	/// the old mark until that pass completes. `release_held` queues them again then.
+	held: BTreeSet<Scope>,
 }
 
 /// The longest wait before a failed source read is tried again.
@@ -195,6 +199,20 @@ pub(crate) fn fence(state: &mut MaintainerState, fx: &mut Effects) {
 	}
 }
 
+/// The pass raising the rows mark completed: every step held for it is queued again.
+pub(crate) fn release_held(state: &mut MaintainerState) {
+	for scope in std::mem::take(&mut state.materializations.held) {
+		if matches!(
+			state.materializations.jobs.get(&scope),
+			Some(Phase::Queued(_))
+		) {
+			state
+				.store_queue
+				.push_back(StoreWork::Materialize { scope });
+		}
+	}
+}
+
 /// Hands one skipped volume back to discovery if `scope`'s job ended.
 fn settle(state: &mut MaintainerState, scope: &Scope, fx: &mut Effects) {
 	if state.materializations.jobs.contains_key(scope) {
@@ -220,6 +238,13 @@ pub(crate) fn dispatch(state: &mut MaintainerState, scope: Scope, fx: &mut Effec
 		return;
 	};
 	let action = action.clone();
+	// A grouped record written at the old rows mark would fail the store write and fence the
+	// maintainer, so the step waits for the prompt pass that makes the raised mark durable.
+	if super::maintainer_log::rows_mark_pending(state) {
+		state.materializations.held.insert(scope);
+		super::maintainer_log::request_mark_pass(state, fx);
+		return;
+	}
 	state
 		.materializations
 		.jobs

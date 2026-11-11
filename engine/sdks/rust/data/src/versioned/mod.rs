@@ -59,56 +59,41 @@ macro_rules! impl_versioned_v1 {
 	};
 }
 
-/// Three adjacent versions with explicit converters in upgrade and reverse downgrade order.
-macro_rules! impl_versioned_v1_v2_v3 {
-	(
-		$name:ident,
-		$family:ident,
-		$v1:ty,
-		$v2:ty,
-		$v3:ty,
-		$up12:path,
-		$down21:path,
-		$up23:path,
-		$down32:path
-	) => {
+/// Implements [`vbare::Versioned`] for a two-version envelope `enum $name { V1, V2 }` whose
+/// latest is `$v2`. Version 1 upgrades through `From` and version 2 downgrades through
+/// [`Downgrade`], which refuses a value version 1 cannot carry.
+macro_rules! impl_versioned_v2 {
+	($name:ident, $family:ident, $v1:ty, $v2:ty) => {
 		impl_versioned_family!($name, $family);
 
-		pub enum $name {
-			V1($v1),
-			V2($v2),
-			V3($v3),
+		impl $name {
+			fn upgrade_v1(self) -> ::anyhow::Result<Self> {
+				match self {
+					Self::V1(value) => Ok(Self::V2(value.into())),
+					Self::V2(_) => ::anyhow::bail!("expected a version 1 value"),
+				}
+			}
+			fn downgrade_v2(self) -> ::anyhow::Result<Self> {
+				match self {
+					Self::V2(value) => {
+						Ok(Self::V1($crate::versioned::Downgrade::downgrade(value)?))
+					}
+					Self::V1(_) => ::anyhow::bail!("expected a version 2 value"),
+				}
+			}
 		}
 		impl ::vbare::Versioned for $name {
-			type Latest = $v3;
-			const LATEST: u16 = 3;
-			const UPGRADES: &'static [::vbare::Converter<Self>] = &[
-				|value| match value {
-					Self::V1(v) => Ok(Self::V2($up12(v)?)),
-					_ => ::anyhow::bail!("expected version 1"),
-				},
-				|value| match value {
-					Self::V2(v) => Ok(Self::V3($up23(v)?)),
-					_ => ::anyhow::bail!("expected version 2"),
-				},
-			];
-			const DOWNGRADES: &'static [::vbare::Converter<Self>] = &[
-				|value| match value {
-					Self::V3(v) => Ok(Self::V2($down32(v)?)),
-					_ => ::anyhow::bail!("expected version 3"),
-				},
-				|value| match value {
-					Self::V2(v) => Ok(Self::V1($down21(v)?)),
-					_ => ::anyhow::bail!("expected version 2"),
-				},
-			];
-			fn wrap_latest(value: Self::Latest) -> Self {
-				Self::V3(value)
+			type Latest = $v2;
+			const LATEST: u16 = 2;
+			const UPGRADES: &'static [::vbare::Converter<Self>] = &[Self::upgrade_v1];
+			const DOWNGRADES: &'static [::vbare::Converter<Self>] = &[Self::downgrade_v2];
+			fn wrap_latest(latest: Self::Latest) -> Self {
+				Self::V2(latest)
 			}
 			fn unwrap_latest(self) -> ::anyhow::Result<Self::Latest> {
 				match self {
-					Self::V3(value) => Ok(value),
-					_ => ::anyhow::bail!("expected latest version"),
+					Self::V2(latest) => Ok(latest),
+					Self::V1(_) => ::anyhow::bail!("expected the latest version"),
 				}
 			}
 			fn decode_version(
@@ -117,8 +102,7 @@ macro_rules! impl_versioned_v1_v2_v3 {
 			) -> ::std::result::Result<Self, ::vbare::DecodeError> {
 				match version {
 					1 => Ok(Self::V1(<$v1 as ::vbare::Body>::from_body(body)?)),
-					2 => Ok(Self::V2(<$v2 as ::vbare::Body>::from_body(body)?)),
-					_ => Err($crate::versioned::unsupported_version(version, 3)),
+					_ => Err($crate::versioned::unsupported_version(version, 2)),
 				}
 			}
 			fn encode_version<S: ::vbare::Sink>(
@@ -127,9 +111,8 @@ macro_rules! impl_versioned_v1_v2_v3 {
 				out: &mut S,
 			) -> ::std::result::Result<(), ::vbare::EncodeError> {
 				match (self, version) {
-					(Self::V1(v), 1) => ::vbare::Body::put_body(v, out),
-					(Self::V2(v), 2) => ::vbare::Body::put_body(v, out),
-					(Self::V3(v), 3) => ::vbare::Body::put_body(v, out),
+					(Self::V1(value), 1) => ::vbare::Body::put_body(value, out),
+					(Self::V2(value), 2) => ::vbare::Body::put_body(value, out),
 					_ => return Err(::vbare::EncodeError::UnsupportedVersion(version)),
 				}
 				Ok(())
@@ -138,61 +121,57 @@ macro_rules! impl_versioned_v1_v2_v3 {
 	};
 }
 
-/// Two adjacent versions for a type that version 2 introduced. Version 1 neither decodes nor
-/// encodes it, so its upgrade slot refuses.
-macro_rules! impl_versioned_v2_v3 {
-	($name:ident, $family:ident, $v2:ty, $v3:ty, $up23:path, $down32:path) => {
+/// Implements [`vbare::Versioned`] for a single-version envelope `enum $name { V2($v2) }` of a
+/// family whose latest version is 2: a type the family's version 1 never had, so version 1 is
+/// refused outright.
+macro_rules! impl_versioned_v2_only {
+	($name:ident, $family:ident, $v2:ty) => {
 		impl_versioned_family!($name, $family);
 
-		pub enum $name {
-			V2($v2),
-			V3($v3),
+		impl $name {
+			/// The converter slot for version 1, which this type never had: `UPGRADES[i]` converts
+			/// version `i + 1` and `DOWNGRADES[i]` converts to version `LATEST - i - 1`, so the
+			/// slot must exist and must refuse.
+			fn no_version_1(self) -> ::anyhow::Result<Self> {
+				::anyhow::bail!("this type has no version 1")
+			}
 		}
+
 		impl ::vbare::Versioned for $name {
-			type Latest = $v3;
-			const LATEST: u16 = 3;
-			const UPGRADES: &'static [::vbare::Converter<Self>] = &[
-				|_| ::anyhow::bail!("version 1 has no {}", stringify!($name)),
-				|value| match value {
-					Self::V2(v) => Ok(Self::V3($up23(v)?)),
-					_ => ::anyhow::bail!("expected version 2"),
-				},
-			];
-			const DOWNGRADES: &'static [::vbare::Converter<Self>] = &[
-				|value| match value {
-					Self::V3(v) => Ok(Self::V2($down32(v)?)),
-					_ => ::anyhow::bail!("expected version 3"),
-				},
-				|_| ::anyhow::bail!("version 1 has no {}", stringify!($name)),
-			];
-			fn wrap_latest(value: Self::Latest) -> Self {
-				Self::V3(value)
+			type Latest = $v2;
+
+			const LATEST: u16 = 2;
+
+			const UPGRADES: &'static [::vbare::Converter<Self>] = &[Self::no_version_1];
+
+			const DOWNGRADES: &'static [::vbare::Converter<Self>] = &[Self::no_version_1];
+
+			fn wrap_latest(latest: Self::Latest) -> Self {
+				Self::V2(latest)
 			}
+
 			fn unwrap_latest(self) -> ::anyhow::Result<Self::Latest> {
-				match self {
-					Self::V3(value) => Ok(value),
-					_ => ::anyhow::bail!("expected latest version"),
-				}
+				let Self::V2(latest) = self;
+				Ok(latest)
 			}
+
 			fn decode_version(
 				version: u16,
-				body: ::vbare::Bytes,
+				_body: ::vbare::Bytes,
 			) -> ::std::result::Result<Self, ::vbare::DecodeError> {
-				match version {
-					2 => Ok(Self::V2(<$v2 as ::vbare::Body>::from_body(body)?)),
-					_ => Err($crate::versioned::unsupported_version(version, 3)),
-				}
+				Err($crate::versioned::unsupported_version(version, 2))
 			}
+
 			fn encode_version<S: ::vbare::Sink>(
 				&self,
 				version: u16,
 				out: &mut S,
 			) -> ::std::result::Result<(), ::vbare::EncodeError> {
-				match (self, version) {
-					(Self::V2(v), 2) => ::vbare::Body::put_body(v, out),
-					(Self::V3(v), 3) => ::vbare::Body::put_body(v, out),
-					_ => return Err(::vbare::EncodeError::UnsupportedVersion(version)),
+				if version != 2 {
+					return Err(::vbare::EncodeError::UnsupportedVersion(version));
 				}
+				let Self::V2(latest) = self;
+				::vbare::Body::put_body(latest, out);
 				Ok(())
 			}
 		}
@@ -218,6 +197,7 @@ mod auth_jwt_key_ring;
 mod depot;
 mod depot_alarms;
 mod depot_durable_state_machine;
+mod depot_group;
 mod depot_split_snapshot;
 mod epoxy_control_state;
 mod epoxy_key_state;
@@ -231,6 +211,7 @@ pub use auth_jwt_key_ring::*;
 pub use depot::*;
 pub use depot_alarms::*;
 pub use depot_durable_state_machine::*;
+pub use depot_group::*;
 pub use depot_split_snapshot::*;
 pub use epoxy_control_state::*;
 pub use epoxy_key_state::*;
@@ -250,12 +231,19 @@ pub use ups_channel::*;
 
 mod pegboard_actor;
 pub use pegboard_actor::*;
+mod pegboard_namespace;
+pub use pegboard_namespace::*;
 
 mod pegboard_v2_migrator;
 pub use pegboard_v2_migrator::*;
 
 mod depot_fs;
 pub use depot_fs::*;
+
+mod depot_fs_v2;
+pub use depot_fs_v2::Downgrade;
+
+mod depot_v2;
 
 pub enum AuthJwtEmergencyRotateRequestData {
 	V1(auth_jwt_rotation_v1::OperatorRequest),
@@ -273,3 +261,31 @@ impl_versioned_v1!(
 	AUTH_JWT_ROTATION,
 	auth_jwt_rotation_v1::EmergencyRotateResponse
 );
+
+/// A downgrade refused because the older version has no way to express the value, as opposed
+/// to a converter or encoding failure. A caller that tries versions in order to find the lowest
+/// one that expresses a value, such as the durable runner's timer and state encodings,
+/// skips only this refusal and fails on any other error. Families encoded by the durable runner
+/// (state and timers) raise it; other families' refusals are plain errors.
+#[derive(Debug)]
+pub struct Inexpressible {
+	/// The older version that cannot express the value.
+	pub version: u16,
+	/// What the older version lacks, for the error message.
+	pub what: &'static str,
+}
+
+impl std::fmt::Display for Inexpressible {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "version {} has no {}", self.version, self.what)
+	}
+}
+
+impl std::error::Error for Inexpressible {}
+
+impl Inexpressible {
+	/// The refusal of `version`, which has no `what`, as a converter's error.
+	pub(crate) fn lacks(version: u16, what: &'static str) -> anyhow::Error {
+		Inexpressible { version, what }.into()
+	}
+}

@@ -351,7 +351,7 @@ pub struct VolumeClientState {
 	/// A completed create supplies the initial open evidence. Consumed exactly once by start;
 	/// subsequent recovery always performs a fresh open pinned to this volume incarnation.
 	pub(crate) initial_open:
-		Option<rivet_data::generated::depot_client_protocol_v1::VolumeOpenResponse>,
+		Option<rivet_data::generated::depot_client_protocol_v2::VolumeOpenResponse>,
 	/// Whether `initial_open` was kept from an earlier create rather than just answered, so
 	/// its member states may be stale and every member is claimed again; see
 	/// [`super::lifecycle::opened`].
@@ -392,12 +392,12 @@ pub struct VolumeClientState {
 	pub(crate) claim_attempt: u32,
 	pub(crate) observed_epoch: u64,
 	pub(crate) last_client_seq: u64,
-	pub(crate) cold_receipts: Vec<rivet_data::generated::shared_depot_fs_v1::FsWriteReceipt>,
+	pub(crate) cold_receipts: Vec<rivet_data::generated::shared_depot_fs_v2::FsWriteReceipt>,
 	/// What the accepted open row's maintainer had applied above its cold: the epochs and
 	/// receipts of those entries, so recovery replays only from the applied position. Set by
 	/// every accepted open row.
 	pub(crate) applied_history:
-		Option<rivet_data::generated::depot_client_protocol_v1::VolumeAppliedHistory>,
+		Option<rivet_data::generated::depot_client_protocol_v2::VolumeAppliedHistory>,
 	pub(crate) dedupe: super::types::DedupeWindow,
 	pub(crate) barriers: BTreeMap<RequestId, Barrier>,
 	/// This opening's claim entry, retained when recovery selected its history, before the
@@ -413,6 +413,10 @@ pub struct VolumeClientState {
 	/// The volume row names a fork base, so rows below the log may come from another volume.
 	/// Set from every accepted open row.
 	pub(crate) has_base_chain: bool,
+	/// The volume was made from its parent group's copy at a fork, as the row says; set from
+	/// every accepted open row. An opener resets inherited state the first time it acts on
+	/// such a volume's incarnation.
+	pub(crate) lazy_fork: Option<rivet_data::generated::shared_depot_fs_v2::FsLazyForkOrigin>,
 	/// The current open adopted a claim the maintainer granted in its open response, so the
 	/// maintainer already knows this client's claim. Set by every accepted open row.
 	pub(crate) granted_claim: bool,
@@ -433,7 +437,7 @@ pub struct VolumeClientState {
 	/// The position a creating open committed the initial writes through, once accepted.
 	pub(crate) created: Option<VolumeLogPosition>,
 	/// Keys the creating open asks the maintainer to read back; see `VolumeCreateOptions.read`.
-	pub(crate) read_keys: Option<rivet_data::generated::depot_client_protocol_v1::VolumeReadKeys>,
+	pub(crate) read_keys: Option<rivet_data::generated::depot_client_protocol_v2::VolumeReadKeys>,
 	/// The values the open read back, when the maintainer could answer them.
 	pub(crate) read_back: Option<std::sync::Arc<Vec<Option<vbare::Bytes>>>>,
 }
@@ -611,6 +615,7 @@ impl VolumeClientState {
 			claim_settled: false,
 			claim_quorum: BTreeSet::new(),
 			has_base_chain: false,
+			lazy_fork: None,
 			granted_claim: false,
 			close_acknowledged: false,
 			opened_empty: false,
@@ -728,7 +733,7 @@ impl VolumeClientState {
 	/// Names keys the creating open asks the maintainer to read back when the volume exists.
 	pub fn set_read_keys(
 		&mut self,
-		read: Option<rivet_data::generated::depot_client_protocol_v1::VolumeReadKeys>,
+		read: Option<rivet_data::generated::depot_client_protocol_v2::VolumeReadKeys>,
 	) {
 		self.read_keys = read;
 	}
@@ -748,7 +753,7 @@ impl VolumeClientState {
 	fn from_response(
 		config: VolumeClientConfig,
 		client_incarnation: [u8; 16],
-		opened: rivet_data::generated::depot_client_protocol_v1::VolumeOpenResponse,
+		opened: rivet_data::generated::depot_client_protocol_v2::VolumeOpenResponse,
 		replica_set: TabletReplicaSet,
 	) -> anyhow::Result<Self> {
 		let key = VolumeLogKey(rivet_data::generated::shared_depot_types_v1::VolumeLogKey {
@@ -767,7 +772,7 @@ impl VolumeClientState {
 	pub fn from_kept_open_response(
 		config: VolumeClientConfig,
 		client_incarnation: [u8; 16],
-		opened: rivet_data::generated::depot_client_protocol_v1::VolumeOpenResponse,
+		opened: rivet_data::generated::depot_client_protocol_v2::VolumeOpenResponse,
 		replica_set: TabletReplicaSet,
 	) -> anyhow::Result<Self> {
 		let mut state = Self::from_response(config, client_incarnation, opened, replica_set)?;

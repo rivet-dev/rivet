@@ -46,6 +46,18 @@ export function isSchedulingError(group: string, code: string): boolean {
 	);
 }
 
+/**
+ * Checks if a connection closed because its actor was destroyed. The actor is gone, so
+ * reconnecting through `getOrCreate` would create it again.
+ */
+export function isActorDestroyed(group: string, code: string): boolean {
+	return group === "actor" && code === "destroyed";
+}
+
+export function isActorNotFound(group: string, code: string): boolean {
+	return group === "actor" && code === "not_found";
+}
+
 export function actorSchedulingError(
 	group: string,
 	code: string,

@@ -1,0 +1,120 @@
+#import "shared/depot.types.v1.bare"
+
+# The rows of a volume group's own volume, `[GROUP_VOLUME, group]`, and of an event shard,
+# `[EVENT, s]`. Both are ordinary unprefixed KV volumes, written only by the group commands and
+# read by storage workers through the normal read path.
+
+# A group id: the partition key hash of the group's own key, so it is never drawn at random and
+# always traces back to its owner.
+type GroupId data[16]
+
+# An archived group is closed to every read and write, for good.
+type GroupStatus enum { LIVE ARCHIVED }
+
+# The group a child was forked from and the parent's fork number that made it.
+type GroupBase struct { parent: GroupId forkNumber: u64 }
+
+# KV key [GROUP_RECORD]. `depth` is 0 for a root and stays below the lineage depth cap, so a
+# lineage walk is bounded. `latestFork` is the last fork number drawn from this group; it never
+# lowers and a number is never reused.
+type GroupRecord struct {
+	status: GroupStatus
+	base: optional<GroupBase>
+	root: GroupId
+	depth: u8
+	latestFork: u64
+	# The group's own key bytes, `[NAMESPACE, name]` for a namespace's group, whose hash is the
+	# group id: the only way a maintainer-side reader learns the namespace behind a group id.
+	key: data
+	# How many fork children of this group are not archived: raised when a fork number is drawn
+	# and lowered when the child's archive marks its fork child row, both under the group's
+	# write lock, so an archive checks this instead of scanning every fork child row.
+	liveChildren: u64
+}
+
+# KV key [FORK_CHILD, forkNumber]: one row per fork of this group, written when the fork number
+# is drawn. `archived` is set once the child group is archived, so a parent's pin path learns
+# which children its pins still wait on from the parent's own volume.
+type ForkChild struct {
+	child: GroupId
+	operationId: UuidV4
+	unixMs: i64
+	archived: bool
+}
+
+# KV key [EVENT_SEQ] of an event shard: the row number the next event takes, and the lowest
+# row number still served. Rows below `oldest` were trimmed and a reader skips them.
+type EventCounter struct { next: u64 oldest: u64 }
+
+type EventGroupForked struct { parent: GroupId child: GroupId forkNumber: u64 }
+type EventGroupArchived struct { group: GroupId }
+
+# KV key [EVENT_ROW, n] of an event shard. Every kind is idempotent and order-independent, so
+# an event may be posted to any shard; a reader skips a kind it does not know.
+type Event union { EventGroupForked | EventGroupArchived }
+
+# The read commands storage workers run on these volumes. Both are served by maintainer point
+# reads of the latest applied snapshot, so a reader never opens the volume's writer.
+
+# Reads a group volume's record and the fork child rows of `forkNumbers`, at most 256 of them.
+type GroupReadRequest struct { forkNumbers: list<u64> }
+type ForkChildRow struct { forkNumber: u64 child: ForkChild }
+# `record` is absent for a volume that was never written, which a reader treats as a root
+# group with no forks; `children` holds only the rows that exist. `commitLag` is how many
+# volume seqs the snapshot the answer was read from lagged the highest commit the group
+# volume's maintainer knew of when it answered. An answer with no lag holds every fork draw
+# and archive committed before the read reached the maintainer, and only such an answer may
+# be cached; one with a lag may miss them. A volume that was never written, and a read served
+# by the volume's writer, answer with no lag.
+type GroupReadResponse struct { record: optional<GroupRecord> children: list<ForkChildRow> commitLag: u64 }
+
+# Reads an event shard. With `first`, the rows from that number on, at most `limit` and
+# stopping at the first absent row; without it, nothing but the shard's tail, which is where a
+# starting reader begins. `next` is the first row number the reply did not return. `oldest` is
+# the lowest row number the shard still holds; a `first` below it reads no rows and `next`
+# jumps to `oldest`, so the reader knows it missed the trimmed rows.
+type EventsReadRequest struct { first: optional<u64> limit: u32 }
+type EventRow struct { sequence: u64 event: Event }
+type EventsReadResponse struct { rows: list<EventRow> next: u64 oldest: u64 }
+
+# KV key [FORK_OPERATION, operationId] on a group volume: the fork number an operation drew,
+# so a retried draw reuses it.
+type ForkOperation struct { forkNumber: u64 }
+
+# The write commands of the namespace API, each a few writes on one volume through the
+# command host. A fork is three of them in order: the parent draws the fork number, an event
+# is posted, the child's record is written; a retry with the same operation id completes the
+# same fork. An archive is one on the group, an event, and one on the parent.
+
+# Creates a root group's record if the volume holds none. An existing root is reported as
+# not created; an existing child is `group.exists`.
+# `key` is the group's own key bytes; see `GroupRecord.key`.
+type GroupCreateRequest struct { key: data }
+type GroupCreateResponse struct { created: bool record: GroupRecord }
+
+# Draws the next fork number of this group for `child`, or returns the one `operationId`
+# already drew. Refused `group.not_found`, `group.archived` and `group.lineage_too_deep`
+# when the group's depth has reached `maxLineageDepth`.
+type GroupForkDrawRequest struct { child: GroupId operationId: UuidV4 unixMs: i64 maxLineageDepth: u8 }
+type GroupForkDrawResponse struct { forkNumber: u64 root: GroupId depth: u8 }
+
+# Writes the child's record below `parent` at `forkNumber`. A record with the same base is
+# reported as not created; one with another base is `group.exists`.
+type GroupChildCreateRequest struct { parent: GroupId forkNumber: u64 root: GroupId depth: u8 key: data }
+type GroupChildCreateResponse struct { created: bool record: GroupRecord }
+
+# Archives the group once every fork child row is archived, else `group.has_children`. An
+# archived group is reported as not archived by this call. There is no unarchive.
+type GroupArchiveRequest void
+type GroupArchiveResponse struct { archived: bool record: GroupRecord }
+
+# Marks the fork child row `forkNumber` of this group archived, after the child was. A row
+# that is missing or names another child is left alone.
+type GroupChildArchivedRequest struct { forkNumber: u64 child: GroupId }
+type GroupChildArchivedResponse void
+
+# Appends `event` to this shard at the counter's next number and trims the row
+# `retainedRows` below it in the same commit, so a shard holds at most `retainedRows` rows.
+# A retry posts it again, which every kind tolerates.
+type EventPostRequest struct { event: Event retainedRows: u64 }
+type EventPostResponse struct { sequence: u64 }

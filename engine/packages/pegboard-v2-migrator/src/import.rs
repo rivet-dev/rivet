@@ -17,7 +17,8 @@ use pegboard_envoy::keys::kv::ActorKvKey;
 use rivet_engine_context::EngineContext;
 use rivet_env::Clock;
 use rivet_envoy_protocol as ep;
-use rivet_keys::keys::KeyAddress;
+use rivet_keys::keys::{KeyAddress, codec::GroupId};
+use rivet_topology::versions::{VersionFamily, WriteVersions};
 use rivet_util::Id;
 use sqlite_embedded_filesystem::page_protocol::database::{self, Database};
 use vbare::Versioned;
@@ -58,20 +59,25 @@ pub struct Copied {
 }
 
 /// Copies the export of `v2_actor_id` into the database volume of the held incarnation
-/// `create_unix_ms` of `v3_actor_id`.
+/// `create_unix_ms` of `v3_actor_id`, at `group`, the placement the hold was begun at.
 ///
 /// The volume is deleted first, so a copy restarted after a failover or a takeover of the hold
 /// never mixes with an earlier one.
+#[allow(
+	clippy::too_many_arguments,
+	reason = "one argument per part of the copy's identity and V2 fence"
+)]
 pub async fn copy(
 	ctx: &EngineContext,
 	v2: &V2Client,
+	group: Option<GroupId>,
 	v2_actor_id: Id,
 	v3_actor_id: Id,
 	create_unix_ms: i64,
 	generation: u32,
 	sleep_ts: i64,
 ) -> Result<CopyOutcome> {
-	let key = ActorDatabaseVolume::new(v3_actor_id, create_unix_ms).volume_key();
+	let key = ActorDatabaseVolume::in_namespace(group, v3_actor_id, create_unix_ms);
 	let clock = ctx.env().clock();
 	let depot = ctx.depot();
 	resend_refused(clock.as_ref(), || depot.delete_current(key.clone()))
@@ -87,6 +93,7 @@ pub async fn copy(
 		v2,
 		&fs,
 		ctx.env().clock(),
+		ctx.topology(),
 		v2_actor_id,
 		generation,
 		sleep_ts,
@@ -101,6 +108,8 @@ pub async fn copy(
 struct Import {
 	fs: Arc<Filesystem>,
 	clock: Arc<dyn Clock>,
+	/// Chooses the `pegboard.actor` version for imported KV values, as for every other KV writer.
+	versions: Arc<dyn WriteVersions>,
 	kv_ino: Option<u64>,
 	database: Option<Database>,
 	db_size_pages: u32,
@@ -116,6 +125,7 @@ async fn import(
 	v2: &V2Client,
 	fs: &Arc<Filesystem>,
 	clock: Arc<dyn Clock>,
+	versions: Arc<dyn WriteVersions>,
 	v2_actor_id: Id,
 	generation: u32,
 	sleep_ts: i64,
@@ -123,6 +133,7 @@ async fn import(
 	let mut state = Import {
 		fs: fs.clone(),
 		clock,
+		versions,
 		kv_ino: None,
 		database: None,
 		db_size_pages: 0,
@@ -319,6 +330,7 @@ async fn write_kv(state: &mut Import, batch: proto::KvBatch) -> Result<()> {
 	let ino = kv_ino(state).await?;
 	let max_bytes = state.fs.max_transaction_bytes();
 
+	let version = kv_write_version(state.versions.as_ref())?;
 	let mut puts = Vec::new();
 	let mut tx_bytes = 0;
 	for entry in batch.entries {
@@ -329,9 +341,7 @@ async fn write_kv(state: &mut Import, batch: proto::KvBatch) -> Result<()> {
 				version: entry.version.clone(),
 				updated_unix_ms: entry.update_ts,
 			},
-			rivet_data::pegboard_actor::record_write_version(
-				rivet_data::generated::PEGBOARD_ACTOR_VERSION,
-			),
+			version,
 		)?;
 
 		if tx_bytes > 0 && tx_bytes + key.len() + value.len() > max_bytes {
@@ -349,6 +359,16 @@ async fn write_kv(state: &mut Import, batch: proto::KvBatch) -> Result<()> {
 		commit_kv(state, ino, &puts).await?;
 	}
 	Ok(())
+}
+
+/// The `pegboard.actor` version to write imported KV values at: the negotiated one every live
+/// storage worker reads, never the compiled latest, because readers on older binaries share the
+/// volume during a rolling deploy. Version 4 is written under the version 3 header by the
+/// envelope's seal; see `rivet_data::versioned::legacy_v3`.
+fn kv_write_version(versions: &dyn WriteVersions) -> Result<u16> {
+	Ok(rivet_data::pegboard_actor::record_write_version(
+		versions.write_version(VersionFamily::PEGBOARD_ACTOR)?,
+	))
 }
 
 /// Commits one transaction of KV puts, sending it again while the storage host refuses it.

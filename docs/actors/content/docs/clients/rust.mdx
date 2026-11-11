@@ -215,7 +215,7 @@ async fn main() -> Result<()> {
 }
 ```
 
-`ConnectionStatus` is one of `Idle`, `Connecting`, `Connected`, or `Disconnected`. Connections reconnect automatically with backoff until you call `disconnect`.
+`ConnectionStatus` is one of `Idle`, `Connecting`, `Connected`, or `Disconnected`. Connections reconnect automatically with backoff until you call `disconnect`, or until the actor is destroyed.
 
 ## Low-Level HTTP & WebSocket
 

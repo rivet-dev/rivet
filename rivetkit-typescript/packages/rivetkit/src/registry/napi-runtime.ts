@@ -692,8 +692,16 @@ export class NapiCoreRuntime implements CoreRuntime {
 		return asNativeActorContext(ctx).key();
 	}
 
+	actorForkChain(ctx: ActorContextHandle) {
+		return asNativeActorContext(ctx).forkChain();
+	}
+
 	actorRegion(ctx: ActorContextHandle): string {
 		return asNativeActorContext(ctx).region();
+	}
+
+	actorNamespace(ctx: ActorContextHandle): string {
+		return asNativeActorContext(ctx).namespace();
 	}
 
 	actorSleep(ctx: ActorContextHandle): void {

@@ -15,21 +15,6 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			|_config, ctx| Box::pin(rivet_guard::start(ctx)),
 			true,
 		),
-		// TODO: Restore these services as their legacy dependencies are replaced.
-		/*
-		Service::new(
-			"guard",
-			ServiceClass::Stateless,
-			|config, context| Box::pin(rivet_guard::start(config, context)),
-			true,
-		),
-		Service::new(
-			"bootstrap",
-			ServiceClass::Once,
-			|config, context| Box::pin(rivet_bootstrap::start(config, context)),
-			false,
-		),
-		*/
 		Service::new(
 			"api_peer",
 			ServiceClass::Always,
@@ -43,20 +28,14 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			|config, context| rivet_cluster_config::services::start(config, context),
 			false,
 		),
-		/*
+		// Legacy: moves the catalog's legacy namespace rows into their namespace volumes once
+		// the fleet reads them. Removed in 3.1 with the backfill.
 		Service::new(
-			"version_management",
-			ServiceClass::Always,
-			|config, context| Box::pin(rivet_version_management::start(config, context)),
+			"pegboard_legacy_namespace_rows",
+			ServiceClass::Storage,
+			|_config, context| pegboard::services::legacy_namespace_rows::legacy_start(context),
 			false,
 		),
-		Service::new(
-			"cache_purge",
-			ServiceClass::Always,
-			|config, context| Box::pin(rivet_cache_purge::start(config, context)),
-			false,
-		),
-		*/
 	];
 
 	Ok(RunConfigData { services })
@@ -114,6 +93,7 @@ fn storage_service(
 				let deps = depot_worker::services::storage::StorageDependencies {
 					readiness: Some(ctx.storage_readiness().clone()),
 					fork_peer: Some(Arc::new(crate::depot_peer::BaseReader(ctx.clone()))),
+					group_commands: Some(Arc::new(crate::depot_peer::BaseReader(ctx.clone()))),
 					base_reader: Some(Arc::new(crate::depot_peer::BaseReader(ctx.clone()))),
 					commands: Arc::new(commands),
 					directory,
@@ -128,8 +108,11 @@ fn storage_service(
 					singleton_handover: Some(handover),
 					coordinator_active: Some(coordinator),
 				};
-				// Due actor timers come back to their volumes as `ActorAlarm` commands.
-				let alarms = Arc::new(pegboard::commands::ActorAlarmDriver(ctx.clone()));
+				// Due actor and namespace timers come back to their volumes as alarm commands.
+				let alarms = Arc::new(AlarmDriver {
+					actors: pegboard::commands::ActorAlarmDriver(ctx.clone()),
+					ctx: ctx.clone(),
+				});
 				depot_worker::services::storage::start_with_driver(
 					ctx.shutdown(),
 					config,
@@ -141,6 +124,26 @@ fn storage_service(
 		},
 		true,
 	)
+}
+
+/// Routes a due depot alarm to the state machine that owns its volume: a namespace's volume goes to
+/// the namespace state machine, and every other volume goes to the actor alarm driver.
+struct AlarmDriver {
+	actors: pegboard::commands::ActorAlarmDriver,
+	ctx: rivet_engine_context::EngineContext,
+}
+
+impl depot_worker::alarms::DepotDriver for AlarmDriver {
+	fn on_alarm(
+		&self,
+		key: depot_types::VolumeKey,
+		alarm: depot_worker::alarms::AlarmContext,
+	) -> futures_util::future::BoxFuture<'_, Result<()>> {
+		if pegboard::catalog::is_namespace_volume(&key) {
+			return Box::pin(pegboard::catalog::deliver_alarm(&self.ctx, key, alarm));
+		}
+		self.actors.on_alarm(key, alarm)
+	}
 }
 
 pub(crate) fn depot_role(services: &[Service]) -> Result<Option<WorkerRole>> {

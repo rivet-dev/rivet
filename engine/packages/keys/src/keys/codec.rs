@@ -546,13 +546,67 @@ pub fn pack_placement(placement: &Placement, out: &mut Vec<u8>) {
 	placement.pack_into(out);
 }
 
-/// Reads the placement a placed key starts with, or `None` for any other key. Every volume's
-/// route goes through this, so it reads the tuple bytes directly: the `PLACED` tag, then a
-/// byte-string component of exactly 16 bytes, with zero bytes escaped as `00 ff`.
+/// A volume group's id: the partition key hash of the group's own key, `[NAMESPACE, name]` for a
+/// namespace's group, so it is never drawn at random and can be traced back to its owner.
+pub type GroupId = [u8; 16];
+
+/// Packs the prefix of a grouped key: the `GROUPED` tag and the group id. A grouped key carries
+/// its group in front of everything else, including a placement, so the bytes after the prefix
+/// are exactly the key the same volume would have in the group's root namespace. That is what
+/// lets a fork of a group find the parent's volume by rewriting the prefix and nothing else.
+///
+/// A key with no group prefix predates groups and belongs to no group; it is read only through
+/// a key family's `Legacy*` type.
+pub fn pack_group(group: &GroupId, out: &mut Vec<u8>) {
+	BinaryComponent::pack_into(&(crate::keys::tags::partition::GROUPED as u64), out);
+	group.pack_into(out);
+}
+
+/// What a partition key starts with: its group, if it has one, and its placement, if it has one.
+/// Routing reads both from the bytes with no lookup.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct KeyPrefixes {
+	pub group: Option<GroupId>,
+	pub placement: Option<Placement>,
+}
+
+/// Reads the group and placement prefixes of a partition key. A group prefix always comes first.
+pub fn prefixes(packed: &[u8]) -> KeyPrefixes {
+	let (group, rest) = match embedded_group(packed) {
+		Some((group, rest)) => (Some(group), rest),
+		None => (None, packed),
+	};
+	KeyPrefixes {
+		group,
+		placement: placement_prefix(rest),
+	}
+}
+
+/// Reads the group a grouped key starts with and returns the bytes after it, or `None` for a key
+/// with no group prefix.
+pub fn embedded_group(packed: &[u8]) -> Option<(GroupId, &[u8])> {
+	let rest = packed.strip_prefix(GROUPED_TAG.as_slice())?;
+	hash_component(rest)
+}
+
+/// Reads the placement a placed key starts with, past its group prefix if it has one, or `None`
+/// for any other key. Every volume's route goes through this, so it reads the tuple bytes
+/// directly: the `PLACED` tag, then a byte-string component of exactly 16 bytes, with zero bytes
+/// escaped as `00 ff`.
 pub fn embedded_placement(packed: &[u8]) -> Option<Placement> {
+	prefixes(packed).placement
+}
+
+fn placement_prefix(packed: &[u8]) -> Option<Placement> {
 	let rest = packed.strip_prefix(PLACED_TAG.as_slice())?;
+	hash_component(rest).map(|(placement, _)| placement)
+}
+
+/// Reads one 16-byte byte-string component from the front of `rest` and returns it with the
+/// bytes after it.
+fn hash_component(rest: &[u8]) -> Option<([u8; 16], &[u8])> {
 	let mut bytes = rest.strip_prefix(&[BYTES_CODE])?.iter();
-	let mut placement = [0u8; 16];
+	let mut hash = [0u8; 16];
 	let mut len = 0;
 	loop {
 		let byte = *bytes.next()?;
@@ -564,14 +618,21 @@ pub fn embedded_placement(packed: &[u8]) -> Option<Placement> {
 			0x00 => break,
 			byte => byte,
 		};
-		*placement.get_mut(len)? = value;
+		*hash.get_mut(len)? = value;
 		len += 1;
 	}
 	match len {
-		16 => Some(placement),
+		16 => Some((hash, bytes.as_slice())),
 		_ => None,
 	}
 }
+
+/// The packed tag that starts every grouped partition key, packed once like `PLACED_TAG`.
+static GROUPED_TAG: LazyLock<Vec<u8>> = LazyLock::new(|| {
+	let mut tag = Vec::with_capacity(2);
+	BinaryComponent::pack_into(&(crate::keys::tags::partition::GROUPED as u64), &mut tag);
+	tag
+});
 
 /// The packed tag that starts every placed partition key. Routing checks it on every log
 /// request, so it is packed once.
@@ -598,10 +659,55 @@ pub fn pack_bytes(pack: impl FnOnce(&mut Vec<u8>)) -> bytes::Bytes {
 /// The tuple type code of a byte string.
 const BYTES_CODE: u8 = 0x01;
 
+/// The tuple type code of the integer zero; a positive integer of `n` bytes has the code
+/// `INT_ZERO_CODE + n` followed by its big-endian digits.
+const INT_ZERO_CODE: u8 = 0x14;
+
+/// Reads one non-negative integer component from the front of `rest`, as a key tag is
+/// encoded, and returns it with the bytes after it.
+fn tag_component(rest: &[u8]) -> Option<(u64, &[u8])> {
+	let (&code, rest) = rest.split_first()?;
+	let len = usize::from(code.checked_sub(INT_ZERO_CODE)?);
+	if len > 8 {
+		return None;
+	}
+	let (digits, rest) = rest.split_at_checked(len)?;
+	let value = digits
+		.iter()
+		.fold(0u64, |value, digit| (value << 8) | u64::from(*digit));
+	Some((value, rest))
+}
+
+/// The tag of the key family a partition key belongs to: the first tag after its group and
+/// placement prefixes, if it has them. A key family is what a key's first own component names,
+/// such as `ACTOR` or `ACTOR_INDEX`; routing by family never needs the rest of the key.
+pub fn family_tag(packed: &[u8]) -> Option<u64> {
+	let rest = match embedded_group(packed) {
+		Some((_, rest)) => rest,
+		None => packed,
+	};
+	let (tag, rest) = tag_component(rest)?;
+	if tag != crate::keys::tags::partition::PLACED as u64 {
+		return Some(tag);
+	}
+	let (_, rest) = hash_component(rest)?;
+	tag_component(rest).map(|(tag, _)| tag)
+}
+
 /// Skips the placement prefix of a placed key while unpacking it. The caller's canonical check
 /// confirms the placement matches the one its components derive.
 pub fn skip_placement(input: &mut &[u8], depth: TupleDepth) -> tuple::PackResult<()> {
 	expect_tag(input, depth, crate::keys::tags::partition::PLACED)?;
 	Placement::unpack_from(input, depth)?;
 	Ok(())
+}
+
+/// Takes the group prefix of a grouped key while unpacking it, or nothing for a key without one.
+/// The caller's canonical check confirms the group repacks to the same bytes.
+pub fn take_group(input: &mut &[u8], depth: TupleDepth) -> tuple::PackResult<Option<GroupId>> {
+	if !input.starts_with(GROUPED_TAG.as_slice()) {
+		return Ok(None);
+	}
+	expect_tag(input, depth, crate::keys::tags::partition::GROUPED)?;
+	Ok(Some(GroupId::unpack_from(input, depth)?))
 }

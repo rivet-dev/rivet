@@ -1,7 +1,7 @@
 //! Creation evidence kept in a volume's replica states.
 //!
 //! A create writes the new incarnation's immutable record parts, its base chain, retention
-//! policy and ordering epoch, into the state of every replica it creates. The
+//! policy, ordering epoch and group fork fields, into the state of every replica it creates. The
 //! create already waits for that quorum, so the evidence costs no extra write, and a later
 //! maintainer that finds the volume before its first record reached cold can still open it
 //! with its base chain and policy. Every load that creates a replica of an existing volume,
@@ -19,7 +19,7 @@
 use super::{LoadedVolume, MaintainerState};
 use depot_types::VolumeLogKey;
 use rivet_data::generated::{
-	depot_maintainer_log_v1::VolumeCreation, shared_depot_fs_v1::FsVolumeRecord,
+	depot_maintainer_log_v2::VolumeCreation, shared_depot_fs_v2::FsVolumeRecord,
 };
 use vbare::Versioned;
 
@@ -30,6 +30,9 @@ pub(crate) fn encode(row: &FsVolumeRecord, version: u16) -> Option<vbare::Bytes>
 		incarnation_epoch: row.incarnation_epoch,
 		base_chain: row.base_chain.clone(),
 		retention: row.retention.clone(),
+		created_at_fork: row.created_at_fork,
+		lazy_fork: row.lazy_fork.clone(),
+		metadata_local: row.metadata_local,
 	};
 	match rivet_data::versioned::DepotVolumeCreationData::serialize_with_embedded_version(
 		&creation, version,

@@ -17,6 +17,7 @@ use pegboard::envoy_check::{
 	EnvoyCheck, Route, envoy_check, no_responders, repair_route, retryable_ups_error,
 };
 use pegboard::keys::partition::ActorVolume;
+use pegboard::legacy_volumes::ResolvedRead;
 use pegboard::wire;
 use rivet_engine_context::EngineContext;
 use rivet_util::Id;
@@ -57,7 +58,14 @@ impl RoutingDeadline {
 /// own input in place; a create of a destroyed actor starts it fresh.
 #[derive(Clone)]
 pub(crate) struct CreateActor {
-	pub(crate) namespace: String,
+	/// The actor the create makes and the group its volumes are keyed in: always the
+	/// namespace's own, from [`pegboard::actor_key::keyed_create_actor`], whatever actor the
+	/// request first resolved to. Computed from `standing` again once the create is sent.
+	pub(crate) actor: pegboard::actor_key::KeyedActor,
+	/// The request's namespace as the create acts on it: its name, which tokens are checked
+	/// against, its group, and for a namespace without a group the legacy namespace the actor
+	/// records (`NamespaceStanding::legacy_create_namespace`).
+	pub(crate) standing: Arc<pegboard::NamespaceStanding>,
 	pub(crate) pool_name: String,
 	pub(crate) name: String,
 	pub(crate) key: String,
@@ -78,7 +86,7 @@ impl CreateActor {
 	) -> Result<()> {
 		credential.authorize(
 			now_unix_ms,
-			&self.namespace,
+			&self.standing.name,
 			rivet_guard_core::auth::ResourceKind::ActorGateway,
 			Some(actor_id),
 			rivet_guard_core::auth::OperationKind::Create,
@@ -86,7 +94,9 @@ impl CreateActor {
 	}
 }
 
-/// Checks whether a request may reach an existing actor through its gateway.
+/// Checks whether a request may reach an existing actor through its gateway. `namespace` is
+/// the one the request named: the record names none, and the group it was read through proves
+/// which namespace it is read in.
 fn authorize_read(
 	credential: &rivet_guard_core::auth::Credential,
 	now_unix_ms: i64,
@@ -145,45 +155,135 @@ impl std::fmt::Display for DelegatedToV2 {
 
 impl std::error::Error for DelegatedToV2 {}
 
+/// Where an acquisition starts, carried from one attempt of a request to the next so a retried
+/// attempt resumes from where the last one left off rather than from the request's resolve.
+pub(crate) struct AcquireTarget {
+	/// The actor the attempt routes to: the resolved one, or the create's own once a create
+	/// moved the acquisition to it.
+	pub(crate) actor_id: Id,
+	/// The group the actor's volumes are in: its namespace's, or `None` for an actor at the
+	/// legacy unprefixed keys.
+	pub(crate) group: Option<rivet_keys::keys::codec::GroupId>,
+	/// What the request's resolve learned about the actor's state volume, taken by the first
+	/// read so it is not read twice.
+	pub(crate) resolved: Option<ResolvedRead>,
+	pub(crate) create: Option<CreateActor>,
+	/// Whether an attempt already sent the create, so a later attempt reads the actor first and
+	/// creates again only once it finds the actor gone.
+	pub(crate) create_sent: bool,
+}
+
+impl AcquireTarget {
+	pub(crate) fn new(
+		actor_id: Id,
+		group: Option<rivet_keys::keys::codec::GroupId>,
+		resolved: ResolvedRead,
+		create: Option<CreateActor>,
+	) -> Self {
+		Self {
+			actor_id,
+			group,
+			resolved: Some(resolved),
+			create,
+			create_sent: false,
+		}
+	}
+
+	/// Whether the acquisition starts with its create instead of a read: only when it may
+	/// create, no earlier attempt sent the create, the actor resolved is the one the create
+	/// makes, and the resolve did not already find that actor's record, which the first read
+	/// reuses instead. A request resolved to an actor not yet moved reads it first and creates
+	/// only once it is gone.
+	fn creates_first(&self) -> bool {
+		let Some(create) = &self.create else {
+			return false;
+		};
+		if self.create_sent {
+			return false;
+		}
+		let resolved_is_created =
+			create.actor.actor_id == self.actor_id && create.actor.group == self.group;
+		let found = matches!(self.resolved, Some(ResolvedRead::Found(_)));
+		resolved_is_created && !found
+	}
+
+	/// Records that `create` is about to be sent and moves the target to its actor. Returns
+	/// whether the actor or group changed. What the resolve read is dropped either way: a create
+	/// invalidates any earlier read, so the next read reads the actor again.
+	fn follow_create(&mut self, create: CreateActor) -> bool {
+		self.create_sent = true;
+		self.resolved = None;
+		let moved = create.actor.actor_id != self.actor_id || create.actor.group != self.group;
+		if moved {
+			self.actor_id = create.actor.actor_id;
+			self.group = create.actor.group;
+		}
+		self.create = Some(create);
+		moved
+	}
+}
+
 /// Waits until the actor runs and opens a stream to it on `class`. With `create`, the actor is
 /// created first and created again if it is found destroyed. With `pipeline`, the request may
 /// follow the start command to its envoy before the actor runs; a request the envoy already
 /// refused there waits for the actor to run instead. Returns the actor's epoch and the stream.
+/// `namespace` is the request's validated namespace, which a token is checked against. `target`
+/// is where the acquisition starts; it is updated in place whether the acquisition succeeds or
+/// fails, so the request's next attempt starts from it. A create always makes the create's own
+/// actor in the namespace's group, and the acquisition follows it there, so the answer names
+/// the actor and group the stream reached.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn acquire(
 	ctx: &EngineContext,
 	waits: &Arc<StartWaits>,
-	actor_id: Id,
-	create: Option<CreateActor>,
+	target: &mut AcquireTarget,
+	namespace: &str,
 	class: universalpubsub::RequestClass,
 	pipeline: bool,
 	credential: &rivet_guard_core::auth::Credential,
 	deadline: RoutingDeadline,
-) -> Result<(u32, universalpubsub::DuplexStream)> {
+) -> Result<Acquired> {
 	let clock = ctx.env().clock();
 
 	let mut acquire = Acquire {
 		ctx,
+		waits: waits.clone(),
 		class,
 		deadline_unix_ms: deadline.unix_ms,
-		actor_id,
-		create,
+		wait: StartWait::new(waits.clone(), target.actor_id, target.group),
+		target,
+		namespace,
 		pipeline,
 		credential,
 		authorization_namespace: None,
-		wait: StartWait::new(waits.clone(), actor_id),
 		last_phase: "unread",
 	};
 	let acquired = rivet_env::timeout_at(clock.as_ref(), deadline.boot_ms, acquire.run()).await;
 	let result = match acquired {
-		Ok(result) => result,
+		Ok(Ok((epoch, stream))) => Ok(Acquired {
+			epoch,
+			stream,
+			actor_id: acquire.target.actor_id,
+			group: acquire.target.group,
+		}),
+		Ok(Err(error)) => Err(error),
 		Err(rivet_env::TimeoutError::Elapsed) => {
-			tracing::warn!(%actor_id, last_phase = acquire.last_phase, "actor did not become ready before the gateway deadline");
+			tracing::warn!(actor_id = %acquire.target.actor_id, last_phase = acquire.last_phase, "actor did not become ready before the gateway deadline");
 			Err(crate::RequestTimeout.build())
 		}
 		Err(error) => Err(error.into()),
 	};
 	acquire.wait.release().await;
 	result
+}
+
+/// A stream to a running actor: its epoch, and the actor and group it reached, which differ from
+/// the requested ones only after a create made the namespace's own actor.
+pub(crate) struct Acquired {
+	pub(crate) epoch: u32,
+	pub(crate) stream: universalpubsub::DuplexStream,
+	pub(crate) actor_id: Id,
+	pub(crate) group: Option<rivet_keys::keys::codec::GroupId>,
 }
 
 /// Whether a failed stream open to an envoy connection may succeed through the envoy fallback:
@@ -209,13 +309,17 @@ enum Read {
 /// One request's acquisition, kept outside the deadline so its wait is released however it ends.
 struct Acquire<'a> {
 	ctx: &'a EngineContext,
+	waits: Arc<StartWaits>,
 	class: universalpubsub::RequestClass,
 	deadline_unix_ms: i64,
-	actor_id: Id,
-	create: Option<CreateActor>,
+	/// Where this attempt routes, shared with the request's later attempts.
+	target: &'a mut AcquireTarget,
+	/// The namespace the request named, the only scope a token is checked against.
+	namespace: &'a str,
 	pipeline: bool,
 	credential: &'a rivet_guard_core::auth::Credential,
-	/// Actual namespace from an actor read, or the namespace of this keyed creation.
+	/// The request's namespace once an actor read or this keyed creation authorized it; `None`
+	/// until then, so a JWT does not route on a notice alone.
 	authorization_namespace: Option<String>,
 	wait: StartWait,
 	last_phase: &'static str,
@@ -226,7 +330,7 @@ impl Acquire<'_> {
 		let ctx = self.ctx;
 		let clock = ctx.env().clock();
 		let mut stream_retry_delay = STREAM_RETRY_INITIAL_DELAY;
-		let mut next = match self.create.is_some() {
+		let mut next = match self.target.creates_first() {
 			true => self.create().await?,
 			false => Next::Read,
 		};
@@ -298,18 +402,29 @@ impl Acquire<'_> {
 					}
 					Read::Gone => {
 						self.last_phase = "gone";
+						let before = self.target.actor_id;
 						next = self.create_or_not_found().await?;
+						if self.target.actor_id != before {
+							last_actor = None;
+						}
 						continue;
 					}
 				},
 			};
+			// Without a group the unprefixed key space is shared, so a record of another
+			// namespace is refused as missing before anything authorizes or wakes it.
+			if !pegboard::catalog::actor_in_namespace(self.target.group, self.namespace, &actor) {
+				return Err(ActorNotFound.build());
+			}
+			// The read found the actor through the request namespace's group, so the request's
+			// namespace is the scope.
 			authorize_read(
 				self.credential,
 				self.ctx.env().clock().observe()?.unix_ms,
-				&actor.namespace,
-				self.actor_id,
+				self.namespace,
+				self.target.actor_id,
 			)?;
-			self.authorization_namespace = Some(actor.namespace.to_string());
+			self.authorization_namespace = Some(self.namespace.to_owned());
 			last_actor = Some(actor.clone());
 			self.last_phase = phase_name(&phase);
 
@@ -340,12 +455,27 @@ impl Acquire<'_> {
 
 					// The failed open is the liveness check: read the envoy's record once.
 					tracing::debug!(%error, "actor channel open failed; reading the envoy record");
-					match envoy_check(ctx, &actor, &allocation, no_responders(&error)).await? {
+					match envoy_check(
+						ctx,
+						self.namespace,
+						&actor,
+						&allocation,
+						no_responders(&error),
+					)
+					.await?
+					{
 						EnvoyCheck::Newer(newer) => match self.open(&newer).await {
 							Ok(stream) => {
 								// The allocation's route is stale for the rest of the epoch
 								// unless someone records what this request learned.
-								repair_route(ctx, self.actor_id, epoch, &allocation, newer);
+								repair_route(
+									ctx,
+									self.target.group,
+									self.target.actor_id,
+									epoch,
+									&allocation,
+									newer,
+								);
 								return Ok((epoch, stream));
 							}
 							Err(error) if no_responders(&error) => {
@@ -381,7 +511,11 @@ impl Acquire<'_> {
 				wire::ActorPhase::Destroying(_)
 				| wire::ActorPhase::Destroyed
 				| wire::ActorPhase::DelegatedToV2 => {
+					let before = self.target.actor_id;
 					next = self.create_or_not_found().await?;
+					if self.target.actor_id != before {
+						last_actor = None;
+					}
 				}
 				// The V2 migrator holds the actor, and V2 may still serve it, so nothing here
 				// starts or waits for it.
@@ -421,7 +555,7 @@ impl Acquire<'_> {
 			self.credential,
 			self.ctx.env().clock().observe()?.unix_ms,
 			namespace,
-			self.actor_id,
+			self.target.actor_id,
 		)
 	}
 
@@ -443,16 +577,26 @@ impl Acquire<'_> {
 		}
 	}
 
-	async fn read(&self) -> Result<Read> {
-		let response = self
-			.ctx
-			.depot()
-			.command::<ActorRead>(&ActorVolume::new(self.actor_id).volume_key(), ())
-			.await;
-		let response = match response {
-			Ok(response) => response,
-			Err(error) if is_volume_gone(&error) => return Ok(Read::Gone),
-			Err(error) => return Err(error),
+	async fn read(&mut self) -> Result<Read> {
+		let resolved = self.target.resolved.take().unwrap_or(ResolvedRead::Unread);
+		let response = match resolved {
+			ResolvedRead::Found(response) => response,
+			ResolvedRead::Gone => return Ok(Read::Gone),
+			ResolvedRead::Unread => {
+				let response = self
+					.ctx
+					.depot()
+					.command::<ActorRead>(
+						&ActorVolume::in_namespace(self.target.group, self.target.actor_id),
+						(),
+					)
+					.await;
+				match response {
+					Ok(response) => response,
+					Err(error) if is_volume_gone(&error) => return Ok(Read::Gone),
+					Err(error) => return Err(error),
+				}
+			}
 		};
 		Ok(match (response.data, response.phase) {
 			(Some(actor), Some(phase)) => Read::Actor {
@@ -464,17 +608,37 @@ impl Acquire<'_> {
 		})
 	}
 
-	/// Creates the actor with this request's waiter and returns what the answer settled.
+	/// Creates the actor with this request's waiter and returns what the answer settled. The
+	/// create makes its own actor in the namespace's group; when the request had resolved to
+	/// another, such as a not yet moved actor at the legacy unprefixed keys, the acquisition
+	/// moves to the created actor first, with a start wait for it in place of the old one.
+	/// Legacy: a create whose standing has no group reads the namespace again first and creates
+	/// at the new id in the group when the namespace has moved into one; see
+	/// [`pegboard::actor_key::keyed_create_standing`]. Removed in 3.1 with the backfill.
 	async fn create(&mut self) -> Result<Next> {
-		let Some(create) = &self.create else {
+		let Some(mut create) = self.target.create.clone() else {
 			return Err(ActorNotFound.build());
 		};
+		let standing =
+			pegboard::actor_key::keyed_create_standing(self.ctx, &create.standing).await?;
+		create.actor = pegboard::actor_key::keyed_create_actor(
+			self.ctx.config().dc_label(),
+			&standing,
+			&create.name,
+			&create.key,
+		);
+		create.standing = standing;
 		create.authorize(
 			self.credential,
 			self.ctx.env().clock().observe()?.unix_ms,
-			self.actor_id,
+			create.actor.actor_id,
 		)?;
-		self.authorization_namespace = Some(create.namespace.clone());
+		self.authorization_namespace = Some(create.standing.name.clone());
+		let legacy_namespace = create.standing.legacy_create_namespace();
+		if self.target.follow_create(create.clone()) {
+			let wait = StartWait::new(self.waits.clone(), self.target.actor_id, self.target.group);
+			std::mem::replace(&mut self.wait, wait).release().await;
+		}
 		let input = create
 			.input
 			.as_deref()
@@ -485,21 +649,24 @@ impl Acquire<'_> {
 			.ctx
 			.depot()
 			.command::<pegboard::commands::ActorCreate>(
-				&ActorVolume::new(self.actor_id).volume_key(),
+				&ActorVolume::in_namespace(self.target.group, self.target.actor_id),
 				wire::ActorCreateRequest {
 					init: wire::ActorCreateData {
-						actor_id: self.actor_id.as_bytes().into(),
-						namespace: create.namespace.clone().into(),
+						actor_id: self.target.actor_id.as_bytes().into(),
 						pool_name: create.pool_name.clone().into(),
 						name: create.name.clone().into(),
 						key: Some(create.key.clone().into()),
 						input: input.map(Into::into),
+						legacy_namespace: legacy_namespace.map(Into::into),
+						fork_from: None,
+						legacy_move: None,
 					},
 					waiter: waiter.clone(),
 					force_actor_v3: create.force_actor_v3,
 				},
 			)
-			.await?;
+			.await
+			.map_err(pegboard::commands::legacy_v3_create_refusal)?;
 		let settled = self
 			.wait
 			.on_outcome(waiter.as_ref(), created.outcome)
@@ -510,7 +677,7 @@ impl Acquire<'_> {
 	/// A destroyed actor is created again by a request that may create, and is not found by
 	/// one that may not.
 	async fn create_or_not_found(&mut self) -> Result<Next> {
-		if self.create.is_none() {
+		if self.target.create.is_none() {
 			return Err(ActorNotFound.build());
 		}
 		self.create().await
@@ -537,7 +704,7 @@ impl Acquire<'_> {
 		if self.wait.last_wake() != Some(Wake::Poll) {
 			return Ok(None);
 		}
-		match envoy_check(self.ctx, actor, allocation, false).await? {
+		match envoy_check(self.ctx, self.namespace, actor, allocation, false).await? {
 			EnvoyCheck::Serving | EnvoyCheck::Newer(_) => Ok(None),
 			EnvoyCheck::Lost => Ok(Some(self.reallocate(epoch, true).await?)),
 			EnvoyCheck::Draining => Ok(Some(self.reallocate(epoch, false).await?)),
@@ -550,7 +717,8 @@ impl Acquire<'_> {
 		let waiter = self.wait.waiter(self.ctx, self.deadline_unix_ms).await?;
 		let response = crate::start_wait::send_event(
 			self.ctx,
-			self.actor_id,
+			self.target.group,
+			self.target.actor_id,
 			wire::ActorEvent::Reallocate(wire::Reallocate {
 				epoch,
 				lost,

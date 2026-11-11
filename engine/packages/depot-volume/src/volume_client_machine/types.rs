@@ -109,7 +109,7 @@ pub enum WriteError {
 	VolumeNotFound,
 	RoutingUnavailable,
 	ColdStoreUnavailable,
-	LifecycleRejected(rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse),
+	LifecycleRejected(rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse),
 	RecoveryFailed,
 	QuorumUnavailable {
 		token: Option<WriteToken>,
@@ -176,8 +176,13 @@ impl PermanentRefusal {
 }
 
 /// Why a refused open did not reach the volume.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum OpenRefusal {
+	/// The volume has no record and waits for its lazy fork from `parent`, an ancestor volume
+	/// whose members hold a tail nothing proved committed under a holder that may be alive and
+	/// quiet. Opening again only helps once that tail is proven, which the caller may ask the
+	/// ancestor's holder to do.
+	TailUnproven { parent: depot_types::VolumeKey },
 	/// The answering worker does not hold the tablet's maintainer grant, as while the grant
 	/// moves to a new maintainer.
 	NotMaintainer,
@@ -457,7 +462,7 @@ impl WriteError {
 
 	/// Distinguishes safe resubmission from outcomes that require the original retry identity.
 	pub fn disposition(&self) -> ErrorDisposition {
-		use rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse;
+		use rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse;
 
 		match self {
 			Self::DeadlineExceeded { token: None } => ErrorDisposition::NotExecuted,
@@ -476,11 +481,13 @@ impl WriteError {
 				VolumeRejectResponse::VolumeNotFound
 				| VolumeRejectResponse::VolumeExists
 				| VolumeRejectResponse::VolumeDeleted
-				| VolumeRejectResponse::VolumeRecordMissing(_) => ErrorDisposition::Permanent,
+				| VolumeRejectResponse::VolumeRecordMissing(_)
+				| VolumeRejectResponse::VolumeGroupArchived => ErrorDisposition::Permanent,
 				VolumeRejectResponse::NotMaintainer(_)
 				| VolumeRejectResponse::TabletSplitting
 				| VolumeRejectResponse::Overloaded(_)
-				| VolumeRejectResponse::VolumeUnderRepair(_) => ErrorDisposition::NotExecuted,
+				| VolumeRejectResponse::VolumeUnderRepair(_)
+				| VolumeRejectResponse::VolumeTailUnproven(_) => ErrorDisposition::NotExecuted,
 			},
 			Self::ColdStoreUnavailable
 			| Self::QuorumUnavailable { .. }

@@ -50,6 +50,10 @@ pub(crate) struct SpeculativeRun {
 	pub commits: Arc<super::CommandCommits>,
 	pub writes: Vec<VolumeLogEntryBody>,
 	pub journal: Arc<CaptureJournal>,
+	/// The empty in-memory volume the command ran on. When the open finds the volume already
+	/// exists, as the first command of a lazily forked volume always does, the host releases
+	/// it before dropping the command, whose commit is then abandoned on purpose.
+	pub filesystem: Arc<Filesystem>,
 	pub handler: futures_util::future::BoxFuture<'static, anyhow::Result<Vec<u8>>>,
 }
 

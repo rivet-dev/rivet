@@ -43,6 +43,18 @@ export const ActorsCreateResponseSchema = z.object({
 });
 export type ActorsCreateResponse = z.infer<typeof ActorsCreateResponseSchema>;
 
+// MARK: POST /actors/{actor_id}/fork
+export const ActorsForkRequestSchema = z.object({
+	key: z.string().nullable().optional(),
+	input: z.string().nullable().optional(),
+});
+export type ActorsForkRequest = z.infer<typeof ActorsForkRequestSchema>;
+
+export const ActorsForkResponseSchema = z.object({
+	actor: ActorSchema,
+});
+export type ActorsForkResponse = z.infer<typeof ActorsForkResponseSchema>;
+
 // MARK: PUT /actors
 export const ActorsGetOrCreateRequestSchema = z.object({
 	datacenter: z.string().optional(),

@@ -92,6 +92,8 @@ pub(crate) struct ActorStartupRead {
 	pub import_state: Option<String>,
 	pub snapshot: Option<InternalActorSnapshot>,
 	pub inspector_token: Option<String>,
+	/// The encoded fork state in `_rivet_meta`, absent for an actor that was never forked.
+	pub fork_state: Option<Vec<u8>>,
 }
 
 /// Reads an existing actor's startup data in one statement.
@@ -102,6 +104,7 @@ pub(crate) async fn load_actor_startup(db: &SqliteDb) -> Result<ActorStartupRead
 			Some(vec![
 				BindParam::Text(KV_IMPORT_STATE_META_KEY.to_owned()),
 				BindParam::Text(RUN_WAKE_AT_META_KEY.to_owned()),
+				BindParam::Text(crate::actor::fork::FORK_STATE_META_KEY.to_owned()),
 			]),
 		)
 		.await
@@ -116,6 +119,7 @@ pub(crate) async fn load_actor_startup(db: &SqliteDb) -> Result<ActorStartupRead
 		None => None,
 	};
 	let inspector_token = read_optional_text(row, 5, "inspector_token")?;
+	let fork_state = read_optional_blob(row, 7, "fork state")?;
 	let snapshot = match row.get(1) {
 		Some(ColumnValue::Null) | None => None,
 		Some(_) => {
@@ -147,11 +151,30 @@ pub(crate) async fn load_actor_startup(db: &SqliteDb) -> Result<ActorStartupRead
 		import_state,
 		snapshot,
 		inspector_token,
+		fork_state,
 	})
 }
 
-pub(crate) async fn persist_actor_snapshot(db: &SqliteDb, actor: &PersistedActor) -> Result<()> {
-	let statements = vec![
+/// The statement that stores the actor's fork state in `_rivet_meta`. A start that ran a fork
+/// hook writes it in the same batch as the hook's state, so the hook's edits and the fork's
+/// record commit together.
+pub(crate) fn fork_state_statement(encoded: Vec<u8>) -> SqliteBatchStatement {
+	SqliteBatchStatement {
+		sql: UPSERT_META_TEXT_SQL.to_owned(),
+		params: Some(vec![
+			BindParam::Text(crate::actor::fork::FORK_STATE_META_KEY.to_owned()),
+			BindParam::Blob(encoded),
+		]),
+	}
+}
+
+/// Persists the actor snapshot and `extra` statements as one batch, which is one commit.
+pub(crate) async fn persist_actor_snapshot_with(
+	db: &SqliteDb,
+	actor: &PersistedActor,
+	extra: Vec<SqliteBatchStatement>,
+) -> Result<()> {
+	let mut statements = vec![
 		SqliteBatchStatement {
 			sql: UPSERT_ACTOR_SQL.to_owned(),
 			params: Some(vec![
@@ -164,6 +187,7 @@ pub(crate) async fn persist_actor_snapshot(db: &SqliteDb, actor: &PersistedActor
 			params: Some(vec![BindParam::Blob(actor.state.clone().to_vec())]),
 		},
 	];
+	statements.extend(extra);
 
 	db.execute_batch(statements)
 		.await
@@ -172,7 +196,7 @@ pub(crate) async fn persist_actor_snapshot(db: &SqliteDb, actor: &PersistedActor
 }
 
 /// Imports the schedule vector from the legacy versioned actor snapshot exactly
-/// once. Runtime state flushes must use [`persist_actor_snapshot`] so SQLite
+/// once. Runtime state flushes must use [`persist_actor_snapshot_with`] so SQLite
 /// schedule rows remain authoritative and are never rewritten from the legacy
 /// field.
 pub(crate) async fn import_legacy_actor_snapshot(
@@ -221,14 +245,18 @@ pub(crate) async fn import_legacy_actor_snapshot(
 	Ok(())
 }
 
-pub(crate) async fn persist_actor_core_and_connections(
+/// Persists the actor state and connection deltas and `extra` statements as one batch, which
+/// is one commit.
+pub(crate) async fn persist_actor_core_and_connections_with(
 	db: &SqliteDb,
 	actor: Option<&PersistedActor>,
 	connections: &[PersistedConnection],
 	removed_connections: &[String],
+	extra: Vec<SqliteBatchStatement>,
 ) -> Result<()> {
-	let statements =
+	let mut statements =
 		build_actor_core_and_connection_statements(actor, connections, removed_connections)?;
+	statements.extend(extra);
 
 	if statements.is_empty() {
 		return Ok(());

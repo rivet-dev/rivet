@@ -31,6 +31,37 @@ lazy_static::lazy_static! {
 }
 
 lazy_static::lazy_static! {
+	pub(crate) static ref GROUP_EVENTS: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_group_events_total", "Events the storage worker's poll read from the event shards, by kind."), &["kind"], *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_EVENTS_DROPPED: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_group_events_dropped_total", "Event pages a maintainer did not take, by reason: inbox_full when its inbox had no room; the group record it reads on load makes up for them."), &["reason"], *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_PIN_WAIT_CHILDREN_SKIPPED: IntCounter = register_int_counter_with_registry!("depot_group_pin_wait_children_skipped_total", "Child groups a deleted volume's held sweep could not wait on because depot.groups.max_pin_wait_children was full; the sweep runs again once a wait frees room, or at the tablet's next pending scan when more deleted volumes wait for room than the cap allows.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_EVENTS_SKIPPED: IntCounter = register_int_counter_with_registry!("depot_group_events_skipped_total", "Event rows an events read skipped because this binary does not decode their kind.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_EVENTS_TRIMMED: IntCounter = register_int_counter_with_registry!("depot_group_events_trimmed_total", "Event rows posts trimmed because the shard held more than `depot.events.retained_rows` rows.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_EVENTS_POLL_ERRORS: IntCounter = register_int_counter_with_registry!("depot_group_events_poll_errors_total", "Event shard reads that failed; the next poll retries from the same cursor.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_EVENT_LISTENERS: IntGauge = register_int_gauge_with_registry!("depot_group_event_listeners", "Maintainers of this process subscribed to the events feed.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_LAZY_FORKS: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_group_lazy_forks_total", "Lazy forks of grouped volumes by outcome: started when an open began one, published_inline or published_through when one published its record with the metadata copied in or read through the chain, absent when the lineage walk found the volume did not exist at the fork, parked when its ancestor answered that its tail is unproven and no open waited, so it stopped asking until the next open, redriven when such an open made a parked one ask again, parked_evicted when one was dropped at depot.groups.max_parked_lazy_fork_jobs, parked_archived when one was dropped because its namespace's group was archived, or resumed when an open found a lazy fork the store holds with no job, as a dropped parked one, and resumed it at its stored spec (also counted as started)."), &["result"], *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_RECORD_CACHE: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_group_record_cache_total", "Group record reads of this process's tablet maintainers by how the process-wide group record cache answered: hit when it served the record, miss when it did not hold the group, children when the read asked for fork child rows, which it does not hold, and unsynced while an event shard is not positioned or its last read failed. Every result but hit read the group volume."), &["result"], *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_RECORD_CACHE_INVALIDATIONS: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_group_record_cache_invalidations_total", "Entries the process-wide group record cache dropped, by reason: event when an event named a group cached without a record, gap when the events poll lost or first positioned a cursor, evicted at depot.groups.max_cached_records, and floor_evicted when the oldest remembered event floor left at the same bound."), &["reason"], *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_RECORD_CACHE_ENTRIES: IntGauge = register_int_gauge_with_registry!("depot_group_record_cache_entries", "Group records held by this process's group record cache.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_RECORD_CACHE_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_group_record_cache_capacity", "Configured group record cache bound (depot.groups.max_cached_records) of this process.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_RECORD_CACHE_FLOORS: IntGauge = register_int_gauge_with_registry!("depot_group_record_cache_event_floors", "Groups whose events this process's group record cache remembers without holding their record, so a read that lags those events cannot fill the cache with the record from before them. Bounded by depot.groups.max_cached_records.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_RECORD_READ_LAG_ENTRIES: Histogram = register_histogram_with_registry!("depot_group_record_read_lag_entries", "For each group record read that reached a group volume, how many volume seqs its snapshot lagged the highest commit the volume's maintainer knew of. Only reads with no lag fill this process's group record cache.", rivet_metrics::PAGE_COUNT_BUCKETS.to_vec(), *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_EVENTS_FULL_PAGES: IntCounter = register_int_counter_with_registry!("depot_group_events_full_pages_total", "Event shard reads that returned a full page, after which this process's group record cache serves nothing until the shard returns a short page.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_READS: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_group_reads_total", "Group record reads maintainers ran, by result."), &["result"], *rivet_metrics::REGISTRY).unwrap();
+}
+
+lazy_static::lazy_static! {
+	pub(crate) static ref GROUP_FORK_PINS: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_group_fork_pins_total", "Fork pins on the tablet store by result: logged when the maintainer logged a pin op, written when an apply wrote the pin row, replayed when a replay found the row already there, empty when the pin waited on no one and wrote no row, idle when the maintainer logged the pin the store planned for an idle parent at an acquire, and dropped for each pin a pin pass deleted because every child it waited on was archived."), &["result"], *rivet_metrics::REGISTRY).unwrap();
+}
+
+lazy_static::lazy_static! {
+	pub(crate) static ref FORK_PIN_LOOKUP_FALLBACKS: IntCounter = register_int_counter_with_registry!("depot_fork_pin_lookup_fallbacks_total", "Lookups of the fork pin covering a fork that the newest-first read could not answer and that read every pin of the volume: a fork in a range whose pin was dropped, or pin rows out of fork order.", *rivet_metrics::REGISTRY).unwrap();
+}
+
+lazy_static::lazy_static! {
+	pub(crate) static ref GROUP_ARCHIVE_CLOSES: IntCounter = register_int_counter_with_registry!(Opts::new("depot_group_archive_closes_total", "Registered volumes a tablet maintainer closed because their group was archived: their command host slots dropped, their read sessions revoked and their writers fenced by a recovery claim."), *rivet_metrics::REGISTRY).unwrap();
+}
+
+lazy_static::lazy_static! {
 	pub(crate) static ref RETENTION_CHECKS: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_maintainer_retention_checks_total", "Due retention checks of registered volumes by result: logged when the check logged a retention checkpoint op, parked when the volume was unchanged since its newest retention checkpoint so the check logged nothing and the next apply arms it again, or deferred when store work of the volume or the maintainer log made it retry."), &["result"], *rivet_metrics::REGISTRY).unwrap();
 }
 
@@ -55,7 +86,7 @@ lazy_static::lazy_static! {
  pub(crate) static ref COORDINATOR_WRITE_COMMANDS: Histogram = register_histogram_with_registry!("depot_coordinator_write_commands", "Queued coordinator commands applied by one manifest write.", rivet_metrics::PAGE_COUNT_BUCKETS.to_vec(), *rivet_metrics::REGISTRY).unwrap();
  pub(crate) static ref COORDINATOR_STOP_PERMITS: IntCounter = register_int_counter_with_registry!("depot_coordinator_stop_permits_total", "Durably granted worker stop permits.", *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref KV_COMMAND_PHASE_DURATION: HistogramVec = register_histogram_vec_with_registry!(HistogramOpts::new("depot_kv_command_phase_duration_seconds", "Storage-side KV command time waiting for its volume to open and running its handler.").buckets(rivet_metrics::BUCKETS.to_vec()), &["command", "phase"], *rivet_metrics::REGISTRY).unwrap();
-	pub(crate) static ref TABLET_FS_READ_REJECTED: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_tablet_filesystem_read_rejected_total", "Client filesystem reads a tablet maintainer refused as overloaded, by cause."), &["reason"], *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_FS_READ_REJECTED: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_tablet_filesystem_read_rejected_total", "Client filesystem reads a tablet maintainer refused as overloaded, by cause: read_capacity (a fork job's held-image window was full), base_read_capacity (the window of fork children's inherited layer reads was full), deadline, request_capacity or memtable_full."), &["reason"], *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref TABLET_FS_READ_EXPIRED: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_tablet_filesystem_read_expired_total", "Client filesystem reads a tablet maintainer answered unavailable at their deadline, by where they waited and by operation."), &["stage", "operation"], *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref FS_STORE_LOCK_WAIT: HistogramVec = register_histogram_vec_with_registry!(HistogramOpts::new("depot_filesystem_store_lock_wait_seconds", "Time a filesystem store operation waited for a store lock, by lock mode, operation and scope (the tablet lock or volume stripes).").buckets(rivet_metrics::MICRO_BUCKETS.to_vec()), &["mode", "operation", "scope"], *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref TABLET_FLUSH_DEFERRED: IntCounter = register_int_counter_with_registry!("depot_tablet_flush_deferred_volumes_total", "Requested volumes a tablet filesystem flush skipped because their own work was in flight or queued ahead, and owes to the next flush.", *rivet_metrics::REGISTRY).unwrap();
@@ -1061,6 +1092,7 @@ impl StoreGauges {
 			);
 		}
 		warn_near_read_caps(&previous, &next);
+		warn_near_group_caps(&previous, &next);
 		if at_cap(&next) && !at_cap(&previous) {
 			tracing::warn!(
 				keyed_in_flight = next.keyed_in_flight,
@@ -1115,23 +1147,108 @@ fn warn_near_read_caps(
 	}
 	let background = |snapshot: &crate::tablet_maintainer_machine::StoreSnapshot| {
 		[
-			("held_image_read", snapshot.held_image_reads_in_flight),
-			("replica_log_read", snapshot.replica_log_reads_in_flight),
-			("fork_job", snapshot.fork_jobs),
-			("fork_cleanup_job", snapshot.fork_cleanup_jobs),
+			(
+				BackgroundWindow::HeldImageRead,
+				snapshot.held_image_reads_in_flight,
+			),
+			(
+				BackgroundWindow::ReplicaLogRead,
+				snapshot.replica_log_reads_in_flight,
+			),
+			(BackgroundWindow::ForkJob, snapshot.fork_jobs),
+			(BackgroundWindow::ForkCleanupJob, snapshot.fork_cleanup_jobs),
 		]
 	};
 	for ((window, before), (_, after)) in background(previous).into_iter().zip(background(next)) {
 		if near(after, next.background_read_capacity)
 			&& !near(before, previous.background_read_capacity)
 		{
-			tracing::warn!(
-				window,
-				in_flight = after,
-				capacity = next.background_read_capacity,
-				"tablet background cold-read window near its cap; forks are refused and applies and cleanups wait, raise depot.max_background_cold_reads if they back up"
-			);
+			warn_near_background_cap(window, after, next.background_read_capacity);
 		}
+	}
+	if near(next.lazy_fork_jobs, next.lazy_fork_job_capacity)
+		&& !near(previous.lazy_fork_jobs, previous.lazy_fork_job_capacity)
+	{
+		tracing::warn!(
+			in_flight = next.lazy_fork_jobs,
+			capacity = next.lazy_fork_job_capacity,
+			"tablet lazy fork job window near its cap; first opens of fork children's volumes are refused as overloaded until a job ends, raise depot.groups.max_lazy_fork_jobs if those opens are refused"
+		);
+	}
+	if near(
+		next.parked_lazy_fork_jobs,
+		next.parked_lazy_fork_job_capacity,
+	) && !near(
+		previous.parked_lazy_fork_jobs,
+		previous.parked_lazy_fork_job_capacity,
+	) {
+		tracing::warn!(
+			parked = next.parked_lazy_fork_jobs,
+			capacity = next.parked_lazy_fork_job_capacity,
+			"tablet parked lazy fork jobs near their cap; past it the oldest is dropped and its volume's next open resumes it with one more store round, raise depot.groups.max_parked_lazy_fork_jobs or find the quiet parents whose tails stay unproven"
+		);
+	}
+	if near(next.archive_fences_in_flight, next.archive_fence_capacity)
+		&& !near(
+			previous.archive_fences_in_flight,
+			previous.archive_fence_capacity,
+		) {
+		tracing::warn!(
+			in_flight = next.archive_fences_in_flight,
+			queued = next.archive_fences_queued,
+			capacity = next.archive_fence_capacity,
+			"tablet archive fence window near its cap; writers of archived namespaces' loaded volumes stay unfenced until a fence ends, raise depot.groups.max_archive_fences if archives are slow to close their volumes"
+		);
+	}
+	if near(next.base_reads_in_flight, next.base_read_capacity)
+		&& !near(previous.base_reads_in_flight, previous.base_read_capacity)
+	{
+		tracing::warn!(
+			in_flight = next.base_reads_in_flight,
+			capacity = next.base_read_capacity,
+			"tablet inherited layer read window near its cap; fork children's reads of pages and rows they inherit from this tablet are refused as retryable overload, raise depot.storage.max_base_reads if fork children's reads are refused"
+		);
+	}
+}
+
+/// One background cold-read window of a tablet, each with its own cap of
+/// `depot.max_background_cold_reads` and its own consequence when full.
+#[derive(Clone, Copy)]
+enum BackgroundWindow {
+	HeldImageRead,
+	ReplicaLogRead,
+	ForkJob,
+	ForkCleanupJob,
+}
+
+/// Warns that `window` reached the near-cap band, naming what waits or is refused while it is
+/// full: the held-image read and fork job windows refuse new work, the others make it wait.
+fn warn_near_background_cap(window: BackgroundWindow, in_flight: u32, capacity: u32) {
+	match window {
+		BackgroundWindow::HeldImageRead => tracing::warn!(
+			window = "held_image_read",
+			in_flight,
+			capacity,
+			"tablet held-image read window near its cap; reads of held source images, a fork child's inherited pages among them, are refused as overloaded, raise depot.max_background_cold_reads if inherited reads fail"
+		),
+		BackgroundWindow::ReplicaLogRead => tracing::warn!(
+			window = "replica_log_read",
+			in_flight,
+			capacity,
+			"tablet replica log read window near its cap; applies reading entries from log replicas wait, raise depot.max_background_cold_reads if the apply backlog grows"
+		),
+		BackgroundWindow::ForkJob => tracing::warn!(
+			window = "fork_job",
+			in_flight,
+			capacity,
+			"tablet fork job window near its cap; new forks other than lazy forks are refused as overloaded until a job ends, raise depot.max_background_cold_reads if forks are refused"
+		),
+		BackgroundWindow::ForkCleanupJob => tracing::warn!(
+			window = "fork_cleanup_job",
+			in_flight,
+			capacity,
+			"tablet fork cleanup window near its cap; fork cleanups wait, raise depot.max_background_cold_reads if released forks keep their storage"
+		),
 	}
 }
 
@@ -1172,9 +1289,83 @@ impl AdmissionStallClock {
 lazy_static::lazy_static! {
 	pub(crate) static ref TABLET_INITIAL_BYTES: IntGauge = register_int_gauge_with_registry!("depot_tablet_initial_write_bytes", "Payload bytes of initial writes that unacknowledged volume creations hold for their retries, across this process's maintainers.", *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref TABLET_LOADED_VOLUMES: IntGauge = register_int_gauge_with_registry!("depot_tablet_loaded_volumes", "Volumes loaded across this process's tablet maintainers.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_LAZY_FORK_WAITING_OPENS: IntGauge = register_int_gauge_with_registry!("depot_tablet_lazy_fork_waiting_opens", "Opens of grouped volumes waiting for their lazy fork job or a group read, across this process's tablet maintainers.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_LAZY_FORK_WAITERS_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_tablet_lazy_fork_waiters_per_volume_capacity", "Configured opens of one grouped volume a tablet maintainer holds while its lazy fork or a group read is in progress (depot.groups.max_open_waiters_per_volume).", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_GROUP_WANTED_FORKS: IntGauge = register_int_gauge_with_registry!("depot_tablet_group_wanted_forks", "Fork numbers the group caches of this process's tablet maintainers want read for pins and acquires.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_GROUP_WANTED_FORKS_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_tablet_group_wanted_forks_capacity", "Configured wanted fork bound (depot.groups.max_wanted_forks), summed across this process's tablet maintainers.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_ARCHIVE_FENCES: IntGaugeVec = register_int_gauge_vec_with_registry!(Opts::new("depot_tablet_archive_fences", "Fences of archived groups' loaded volumes across this process's tablet maintainers, by state: in_flight (a recovery claims the volume) or queued (waiting for a slot of depot.groups.max_archive_fences or for the volume's other work)."), &["state"], *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_ARCHIVE_FENCES_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_tablet_archive_fences_capacity", "Configured archive fences at once (depot.groups.max_archive_fences), summed across this process's tablet maintainers.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_ACQUIRE_PIN_WAITS: IntCounter = register_int_counter_with_registry!("depot_group_acquire_pin_waits_total", "Group fork acquires a parent's tablet maintainer parked until the parent stood pinned through the fork, instead of answering them busy; each is dispatched again when the pin applies, the parent registers, a group read completes or retry_ms passes.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_ABSENT_LAZY_FORKS: IntGauge = register_int_gauge_with_registry!("depot_tablet_absent_lazy_forks", "Volumes the tablet maintainers of this process remember a lazy fork found absent at the fork, so their next open creates them without walking the lineage again.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_ABSENT_LAZY_FORKS_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_tablet_absent_lazy_forks_capacity", "Configured absent lazy fork bound (depot.groups.max_absent_lazy_forks), which applies per tablet maintainer, summed across this process's tablet maintainers.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_PARKED_LAZY_FORK_JOBS: IntGauge = register_int_gauge_with_registry!("depot_tablet_parked_lazy_fork_jobs", "Lazy fork jobs the tablet maintainers of this process keep parked behind a parent whose tail is unproven, until the next open of their volume. A parked job does no I/O and takes no lazy fork job slot.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_PARKED_LAZY_FORK_JOBS_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_tablet_parked_lazy_fork_jobs_capacity", "Configured parked lazy fork job bound (depot.groups.max_parked_lazy_fork_jobs), which applies per tablet maintainer, summed across this process's tablet maintainers.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref GROUP_LAZY_FORKS_ABSENT_FORGOTTEN: IntCounter = register_int_counter_with_registry!("depot_group_lazy_forks_absent_forgotten_total", "Absent lazy fork marks a tablet maintainer forgot at depot.groups.max_absent_lazy_forks; each sends that volume's next open through a lazy fork job again, or refuses it as overloaded when no job is free.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_GROUP_PIN_WAIT_CHILDREN: IntGauge = register_int_gauge_with_registry!("depot_tablet_group_pin_wait_children", "Child groups whose status the group caches of this process's tablet maintainers are learning for the fork pins loaded volumes left waiting.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_GROUP_PIN_WAIT_CHILDREN_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_tablet_group_pin_wait_children_capacity", "Configured pin wait child bound (depot.groups.max_pin_wait_children), summed across this process's tablet maintainers.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_GROUP_READS_IN_FLIGHT: IntGauge = register_int_gauge_with_registry!("depot_tablet_group_reads_in_flight", "Group volume reads in flight from the group caches of this process's tablet maintainers.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_GROUP_READS_QUEUED: IntGaugeVec = register_int_gauge_vec_with_registry!(Opts::new("depot_tablet_group_reads_queued", "Group volume reads waiting for a slot of depot.groups.max_reads_in_flight, by lane, across this process's tablet maintainers. The first lane holds reads that hold applies, opens, fork stamps and acquires; the background lane holds reads that only learn a waited child's status or answer due alarms."), &["lane"], *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_GROUP_READS_IN_FLIGHT_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_tablet_group_reads_in_flight_capacity", "Configured group read bound (depot.groups.max_reads_in_flight), summed across this process's tablet maintainers.", *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref TABLET_LOADED_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_tablet_loaded_volume_capacity", "Configured loaded volume bound, summed across this process's tablet maintainers.", *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref TABLET_INITIAL_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_tablet_initial_write_capacity_bytes", "Configured bound on initial write bytes held by unacknowledged creations, summed across this process's maintainers.", *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref TABLET_INITIAL_WITHHELD: IntCounter = register_int_counter_with_registry!("depot_tablet_initial_writes_withheld_total", "Creating opens sent without their initial writes, because the writes exceeded a budget or the creation had granted another open. The opener writes them after its claim entry.", *rivet_metrics::REGISTRY).unwrap();
+}
+
+/// Warns when a group cache bound comes within a tenth of its cap, once per crossing.
+fn warn_near_group_caps(
+	previous: &crate::tablet_maintainer_machine::StoreSnapshot,
+	next: &crate::tablet_maintainer_machine::StoreSnapshot,
+) {
+	let near =
+		|used: u32, capacity: u32| capacity > 0 && u64::from(used) * 10 >= u64::from(capacity) * 9;
+	if near(next.group_wanted_forks, next.group_wanted_forks_capacity)
+		&& !near(
+			previous.group_wanted_forks,
+			previous.group_wanted_forks_capacity,
+		) {
+		tracing::warn!(
+			wanted_forks = next.group_wanted_forks,
+			capacity = next.group_wanted_forks_capacity,
+			"the group cache wants nearly depot.groups.max_wanted_forks fork rows read; pins and acquires past it wait for reads to drain, raise the cap if grouped applies stall"
+		);
+	}
+	if near(
+		next.group_pin_wait_children,
+		next.group_pin_wait_children_capacity,
+	) && !near(
+		previous.group_pin_wait_children,
+		previous.group_pin_wait_children_capacity,
+	) {
+		tracing::warn!(
+			pin_wait_children = next.group_pin_wait_children,
+			capacity = next.group_pin_wait_children_capacity,
+			"the group cache is learning nearly depot.groups.max_pin_wait_children child statuses for fork pins; loads past it leave their pins to the next pin or load, raise the cap if parents keep versions too long"
+		);
+	}
+	if near(next.absent_lazy_forks, next.absent_lazy_forks_capacity)
+		&& !near(
+			previous.absent_lazy_forks,
+			previous.absent_lazy_forks_capacity,
+		) {
+		tracing::warn!(
+			absent_lazy_forks = next.absent_lazy_forks,
+			capacity = next.absent_lazy_forks_capacity,
+			"the maintainer remembers nearly depot.groups.max_absent_lazy_forks volumes a lazy fork found absent; past it the oldest are forgotten and their next open runs a lazy fork job again or is refused as overloaded, raise the cap if opens of missing volumes repeat"
+		);
+	}
+	if near(
+		next.group_reads_in_flight,
+		next.group_reads_in_flight_capacity,
+	) && !near(
+		previous.group_reads_in_flight,
+		previous.group_reads_in_flight_capacity,
+	) {
+		tracing::warn!(
+			reads_in_flight = next.group_reads_in_flight,
+			capacity = next.group_reads_in_flight_capacity,
+			"the group cache has nearly depot.groups.max_reads_in_flight group volume reads in flight; further reads wait for these, raise the cap if pins and loads stall behind them"
+		);
+	}
 }
 
 fn apply_store_delta(
@@ -1220,8 +1411,10 @@ fn apply_store_delta(
 			("ordered_read", snapshot.ordered_reads_in_flight),
 			("session_read", snapshot.session_reads_in_flight),
 			("held_image_read", snapshot.held_image_reads_in_flight),
+			("base_read", snapshot.base_reads_in_flight),
 			("replica_log_read", snapshot.replica_log_reads_in_flight),
 			("fork_job", snapshot.fork_jobs),
+			("lazy_fork_job", snapshot.lazy_fork_jobs),
 			("fork_cleanup_job", snapshot.fork_cleanup_jobs),
 		]
 	};
@@ -1238,6 +1431,8 @@ fn apply_store_delta(
 			("admission_scan", snapshot.admission_scan_limit),
 			("cold_reads_per_volume", snapshot.per_volume_read_capacity),
 			("background_read", snapshot.background_read_capacity),
+			("base_read", snapshot.base_read_capacity),
+			("lazy_fork_job", snapshot.lazy_fork_job_capacity),
 		]
 	};
 	for ((kind, before), (_, after)) in capacities(previous).into_iter().zip(capacities(next)) {
@@ -1256,6 +1451,72 @@ fn apply_store_delta(
 		next.initial_bytes_held,
 	));
 	TABLET_LOADED_VOLUMES.add(delta(previous.loaded_volumes, next.loaded_volumes));
+	TABLET_ARCHIVE_FENCES
+		.with_label_values(&["in_flight"])
+		.add(delta(
+			previous.archive_fences_in_flight,
+			next.archive_fences_in_flight,
+		));
+	TABLET_ARCHIVE_FENCES
+		.with_label_values(&["queued"])
+		.add(delta(
+			previous.archive_fences_queued,
+			next.archive_fences_queued,
+		));
+	TABLET_ARCHIVE_FENCES_CAPACITY.add(delta(
+		previous.archive_fence_capacity,
+		next.archive_fence_capacity,
+	));
+	TABLET_GROUP_WANTED_FORKS.add(delta(previous.group_wanted_forks, next.group_wanted_forks));
+	TABLET_GROUP_WANTED_FORKS_CAPACITY.add(delta(
+		previous.group_wanted_forks_capacity,
+		next.group_wanted_forks_capacity,
+	));
+	TABLET_ABSENT_LAZY_FORKS.add(delta(previous.absent_lazy_forks, next.absent_lazy_forks));
+	TABLET_PARKED_LAZY_FORK_JOBS.add(delta(
+		previous.parked_lazy_fork_jobs,
+		next.parked_lazy_fork_jobs,
+	));
+	TABLET_PARKED_LAZY_FORK_JOBS_CAPACITY.add(delta(
+		previous.parked_lazy_fork_job_capacity,
+		next.parked_lazy_fork_job_capacity,
+	));
+	TABLET_ABSENT_LAZY_FORKS_CAPACITY.add(delta(
+		previous.absent_lazy_forks_capacity,
+		next.absent_lazy_forks_capacity,
+	));
+	TABLET_GROUP_PIN_WAIT_CHILDREN.add(delta(
+		previous.group_pin_wait_children,
+		next.group_pin_wait_children,
+	));
+	TABLET_GROUP_PIN_WAIT_CHILDREN_CAPACITY.add(delta(
+		previous.group_pin_wait_children_capacity,
+		next.group_pin_wait_children_capacity,
+	));
+	TABLET_GROUP_READS_IN_FLIGHT.add(delta(
+		previous.group_reads_in_flight,
+		next.group_reads_in_flight,
+	));
+	TABLET_GROUP_READS_IN_FLIGHT_CAPACITY.add(delta(
+		previous.group_reads_in_flight_capacity,
+		next.group_reads_in_flight_capacity,
+	));
+	TABLET_GROUP_READS_QUEUED
+		.with_label_values(&["first"])
+		.add(delta(
+			previous.group_reads_queued_first,
+			next.group_reads_queued_first,
+		));
+	TABLET_GROUP_READS_QUEUED
+		.with_label_values(&["background"])
+		.add(delta(
+			previous.group_reads_queued_background,
+			next.group_reads_queued_background,
+		));
+	TABLET_LAZY_FORK_WAITING_OPENS.add(delta(
+		previous.lazy_fork_waiting_opens,
+		next.lazy_fork_waiting_opens,
+	));
 	TABLET_LOADED_CAPACITY.add(delta(
 		previous.loaded_volume_capacity,
 		next.loaded_volume_capacity,
@@ -2133,7 +2394,7 @@ lazy_static::lazy_static! {
 	pub(crate) static ref TABLET_STORE_CAPACITY: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		Opts::new(
 			"depot_tablet_store_capacity",
-			"Configured tablet store limits summed across active maintainers: flush_staging and flush_uploading slots, admission_scan items, and background_read, the size of each background cold-read window (held_image_read, replica_log_read, fork_job and fork_cleanup_job in depot_tablet_store_in_flight).",
+			"Configured tablet store limits summed across active maintainers: flush_staging and flush_uploading slots, admission_scan items, background_read, the size of each background cold-read window (held_image_read, replica_log_read, fork_job and fork_cleanup_job in depot_tablet_store_in_flight), base_read, the window of fork children's inherited layer reads, and lazy_fork_job, the window of lazy fork jobs (base_read and lazy_fork_job in depot_tablet_store_in_flight).",
 		),
 		&["kind"],
 		*rivet_metrics::REGISTRY
@@ -2150,8 +2411,8 @@ lazy_static::lazy_static! {
 
 lazy_static::lazy_static! {
 	pub(crate) static ref TABLET_UNLOAD_FORGETS: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_tablet_unload_forgets_total", "Answers to an unload's conditional forget of one member, by result: forgotten, not_loaded, mismatch (the member holds entries past the row), claim_changed (the member stayed at the row but holds a claim newer than the one the forget expected), deleted, refused (the member answered without forgetting; it waits for a retry, or the unload is cancelled when a newer writer holds the volume) failed (no answer, so the forget may still apply; it waits for a retry) or late (a forget sent before its unload was cancelled removed the member, which is then reloaded)."), &["result"], *rivet_metrics::REGISTRY).unwrap();
-	pub(crate) static ref TABLET_VOLUME_OPEN_EXPIRED: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_tablet_volume_open_expired_total", "Volume opens the maintainer refused as overloaded at its answer deadline (half the caller's remaining time, or the caller's deadline once a creating open's loads are out), by the step they were waiting in: awaiting_deletion, waiting_for_repair, reading_row or loading."), &["step"], *rivet_metrics::REGISTRY).unwrap();
-	pub(crate) static ref TABLET_VOLUME_OPEN_REJECTED: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_tablet_volume_open_rejected_total", "Volume opens a tablet maintainer rejected as overloaded at admission, by reason: inbox_queue (refused at submit because depot.maintainer_max_queued_opens opens were already queued in the inbox), deadline, invalid_retention, key_too_large, request_capacity, row_read_capacity, fork_hold, key_opening (another open of the key is in flight), key_row_read or memtable_full (its row lookup queued behind store work that the full memtable budget holds)."), &["reason"], *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_VOLUME_OPEN_EXPIRED: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_tablet_volume_open_expired_total", "Volume opens the maintainer refused as overloaded at its answer deadline (half the caller's remaining time, or the caller's deadline once a creating open's loads are out), by the step they were waiting in: awaiting_deletion, awaiting_lazy_fork, waiting_for_repair, reading_row or loading."), &["step"], *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref TABLET_VOLUME_OPEN_REJECTED: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_tablet_volume_open_rejected_total", "Volume opens a tablet maintainer rejected as overloaded at admission, by reason: inbox_queue (refused at submit because depot.maintainer_max_queued_opens opens were already queued in the inbox), deadline, invalid_retention, key_too_large, request_capacity, row_read_capacity, fork_hold, key_opening (another open of the key is in flight), key_row_read, memtable_full (its row lookup queued behind store work that the full memtable budget holds), group_fork (a grouped volume's lazy fork job could not start, for want of a free job or of the tablet's row version) or lazy_fork_waiters_full (depot.groups.max_open_waiters_per_volume opens of the grouped volume already wait for its lazy fork or a group read)."), &["reason"], *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref TABLET_VOLUME_OPEN_INBOX_DEPTH: Histogram = register_histogram_with_registry!(
 		"depot_tablet_volume_open_inbox_depth",
 		"Volume opens already queued in the tablet maintainer's inbox, not yet taken by its runner, when another open was submitted. Other inbox events are not counted.",
@@ -2177,6 +2438,8 @@ lazy_static::lazy_static! {
 
 lazy_static::lazy_static! {
 	pub(crate) static ref DELETE_DRAIN_DURATION: Histogram = register_histogram_with_registry!("depot_delete_drain_seconds", "Time a delete or restore spent claiming an incarnation and writing its final log tail to cold before stopping its apply work.", rivet_metrics::BUCKETS.to_vec(), *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref DELETE_FORK_PINS: IntCounter = register_int_counter_with_registry!("depot_delete_fork_pins_total", "Deletes of a grouped volume that finished waiting for its fork pin and went on to claim and drain it, because its group was forked after the volume's last pin.", *rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref DELETE_PIN_TAIL_PROOFS: IntCounter = register_int_counter_with_registry!("depot_delete_pin_tail_proofs_total", "Recoveries a delete waiting for its volume's fork pin started to prove a log tail nothing proved committed, so the pin could be logged.", *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref DELETE_DRAINS_APPLIED: IntCounter = register_int_counter_with_registry!("depot_delete_drains_applied_total", "Delete and restore drains that found unapplied entries above cold and wrote them before cleanup.", *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref RETIRED_LOGS_AWAITING_IMPORT: IntGauge = register_int_gauge_with_registry!("depot_retired_logs_awaiting_import", "Retired split parents in the manifest whose maintainer log waits for a child's import before it can be forgotten.", *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref RETIRED_LOG_REPLICAS_FORGOTTEN: IntCounter = register_int_counter_with_registry!("depot_retired_log_replicas_forgotten_total", "Replicas of a retired split parent's maintainer log forgotten by the parent's cleanup owner once every child imported the log.", *rivet_metrics::REGISTRY).unwrap();
@@ -2185,6 +2448,28 @@ lazy_static::lazy_static! {
 lazy_static::lazy_static! {
 	pub(crate) static ref TABLET_FS_VOLUME_RECORD_MISSING: IntCounter = register_int_counter_with_registry!("depot_tablet_volume_record_missing_total", "Loaded volume incarnations whose stored record the cold store does not hold although a replica reports a cold position above zero. Each stays loaded and unregistered for the maintainer lifetime and its name refuses requests until the incarnation is deleted; a successor maintainer counts it again.", *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref TABLET_FORK_REPLAY_RECORD_MISSING: IntCounter = register_int_counter_with_registry!("depot_tablet_fork_replay_record_missing_total", "Acknowledged fork replay attempts paused because their image source record is missing. An operator must repair the source before replay can continue.", *rivet_metrics::REGISTRY).unwrap();
+}
+
+lazy_static::lazy_static! {
+	pub(crate) static ref MAINTAINER_GRANT_RETURNS: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"depot_maintainer_grant_returns_total",
+			"Tablet maintainer lifetimes that ended gracefully to hand their grant back, by reason: rows_inexpressible when a held row stayed inexpressible at every depot.fs_rows version the grant reaches, versions_raised when the fleet's read floor rose above the versions the grant selected.",
+		),
+		&["reason"],
+		*rivet_metrics::REGISTRY
+	).unwrap();
+}
+
+lazy_static::lazy_static! {
+	pub(crate) static ref FILESYSTEM_APPLIES_HELD: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"depot_filesystem_applies_held_total",
+			"Filesystem applies a tablet maintainer held instead of fencing because the store cannot encode a row of theirs yet, by reason: rows_mark_pending waits for the pass that makes the raised depot.fs_rows mark durable, rows_inexpressible waits for the grant to be handed back and selected again.",
+		),
+		&["reason"],
+		*rivet_metrics::REGISTRY
+	).unwrap();
 }
 
 lazy_static::lazy_static! {
@@ -2238,8 +2523,11 @@ lazy_static::lazy_static! {
  pub(crate) static ref ALARM_OPERATION_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_alarm_operation_capacity", "Configured keyed alarm operation capacity across local tablets.", *rivet_metrics::REGISTRY).unwrap();
  pub(crate) static ref ALARM_PARKED: IntGauge = register_int_gauge_with_registry!("depot_alarm_parked", "Bounded alarm requests waiting for retry or store admission, without execution slots.", *rivet_metrics::REGISTRY).unwrap();
  pub(crate) static ref ALARM_PARKED_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_alarm_parked_capacity", "Configured parked request capacity across local tablets (depot.alarms.max_candidates per tablet).", *rivet_metrics::REGISTRY).unwrap();
+ pub(crate) static ref ALARM_GROUP_WAITS: IntGauge = register_int_gauge_with_registry!("depot_alarm_group_waits", "Due alarms across local tablets waiting for their volume group's record read before delivery.", *rivet_metrics::REGISTRY).unwrap();
+ pub(crate) static ref ALARM_GROUP_WAIT_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_alarm_group_wait_capacity", "Configured group wait capacity across local tablets (depot.alarms.max_candidates per tablet).", *rivet_metrics::REGISTRY).unwrap();
  pub(crate) static ref ALARM_CALLBACKS: IntGauge = register_int_gauge_with_registry!("depot_alarm_callbacks", "Alarm callbacks currently running across local workers.", *rivet_metrics::REGISTRY).unwrap();
  pub(crate) static ref ALARM_CALLBACK_CAPACITY: IntGauge = register_int_gauge_with_registry!("depot_alarm_callback_capacity", "Configured callback capacity across local workers.", *rivet_metrics::REGISTRY).unwrap();
+ pub(crate) static ref ALARM_HINTS_DROPPED: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_alarm_hints_dropped_total", "Due alarm hints dropped at a cap and left to a later discovery pass, by reason: group_full (a group's record read already holds its share of waits), group_waits_full (depot.alarms.max_candidates waits held across groups) or parked_full (the parked request budget is full)."), &["reason"], *rivet_metrics::REGISTRY).unwrap();
  pub(crate) static ref ALARM_DISCOVERY_ROWS: IntCounter = register_int_counter_with_registry!("depot_alarm_discovery_rows_total", "Ordered alarm index rows returned by frontier refills.", *rivet_metrics::REGISTRY).unwrap();
 }
 
@@ -2247,7 +2535,7 @@ lazy_static::lazy_static! {
 #[derive(Default)]
 pub(crate) struct AlarmGauges {
 	last: crate::tablet_maintainer_machine::AlarmSnapshot,
-	held: Option<[rivet_metrics::IntGaugeGuard; 6]>,
+	held: Option<[rivet_metrics::IntGaugeGuard; 8]>,
 }
 impl AlarmGauges {
 	pub(crate) fn observe(&mut self, next: crate::tablet_maintainer_machine::AlarmSnapshot) {
@@ -2289,6 +2577,17 @@ impl AlarmGauges {
 				);
 			}
 		}
+		// A group wait past the cap drops its hint and leaves the alarm to a later discovery
+		// pass, so delivery is late rather than queued.
+		if near(next.group_waits, next.group_wait_capacity)
+			&& !near(self.last.group_waits, self.last.group_wait_capacity)
+		{
+			tracing::warn!(
+				used = next.group_waits,
+				capacity = next.group_wait_capacity,
+				"due alarms waiting on group record reads are near depot.alarms.max_candidates; alarms past it are found again by a later pass, likely group record reads are slow or failing"
+			);
+		}
 		self.held.take();
 		self.held = Some([
 			ALARM_CANDIDATES.add_guard(i64::from(next.candidates)),
@@ -2297,6 +2596,8 @@ impl AlarmGauges {
 			ALARM_OPERATION_CAPACITY.add_guard(i64::from(next.operation_capacity)),
 			ALARM_PARKED.add_guard(i64::from(next.parked)),
 			ALARM_PARKED_CAPACITY.add_guard(i64::from(next.parked_capacity)),
+			ALARM_GROUP_WAITS.add_guard(i64::from(next.group_waits)),
+			ALARM_GROUP_WAIT_CAPACITY.add_guard(i64::from(next.group_wait_capacity)),
 		]);
 		self.last = next;
 	}
@@ -2315,6 +2616,10 @@ lazy_static::lazy_static! {
 }
 
 lazy_static::lazy_static! {
+	pub(crate) static ref TABLET_STARTS_AWAITING_LISTING: IntCounter = register_int_counter_with_registry!(
+		Opts::new("depot_tablet_starts_awaiting_listing_total", "Tablet starts deferred because this process's first storage listing had not completed, so no version selection rested on a listing yet."),
+		*rivet_metrics::REGISTRY
+	).unwrap();
 	pub(crate) static ref LEASE_DEGRADED_REFUSALS: IntCounterVec = register_int_counter_vec_with_registry!(
 		Opts::new("depot_lease_degraded_refusals_total", "New ownership this worker refused because its topology lease renewal was late, by kind: volume_open, disk_probe, tablet_start or fresh_grant. The worker kept serving what it held."),
 		&["kind"], *rivet_metrics::REGISTRY

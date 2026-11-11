@@ -1,0 +1,5 @@
+{
+  "code": "fork_unavailable",
+  "group": "actor",
+  "message": "Actor forks are unavailable until the engine upgrade finishes; retry."
+}

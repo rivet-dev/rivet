@@ -3,9 +3,8 @@
 use crate::Client;
 use anyhow::{Context, Result, ensure};
 use rivet_data::{
-	DEPOT_CLIENT_PROTOCOL_VERSION,
-	generated::depot_client_protocol_v1::{ClientRequest, ClientResponse},
-	versioned::{DepotClientRequestData, DepotClientResponseData},
+	generated::depot_client_protocol_v2::{ClientRequest, ClientResponse},
+	versioned::DepotClientResponseData,
 };
 use rivet_env::{
 	Clock,
@@ -17,6 +16,11 @@ use vbare::Versioned;
 pub const PEER_PATH: &str = "/v1/depot/filesystem";
 pub const REGION_HEADER: &str = "x-rivet-depot-region";
 pub const TIMEOUT_HEADER: &str = "x-rivet-depot-timeout-ms";
+/// The `depot.client_protocol` version of every request to another region's API peer: the
+/// version every release reads. Raise it only once the API peer advertises its read version, so
+/// a region can negotiate with a peer region that still runs an older release.
+const REGIONAL_VERSION: u16 = 1;
+
 pub const MAX_MESSAGE_BYTES: usize = depot_fs_core::wire::DEFAULT_MAX_READ_BYTES + 64 * 1024;
 
 #[derive(Debug, thiserror::Error)]
@@ -48,12 +52,15 @@ impl Regions {
 		self.topology.dc_for_label(region).is_some()
 	}
 
-	/// One attempt preserves the exact body. The operation owner decides whether an
-	/// uncertain command can be retried; HTTP redirects and retries are not requested here.
+	/// One attempt preserves the exact body, sealed at `version`. The operation owner decides
+	/// whether an uncertain command can be retried; HTTP redirects and retries are not
+	/// requested here.
 	async fn request(
 		&self,
 		region: u16,
 		request: ClientRequest,
+		version: u16,
+		retry_after_ms: u64,
 		deadline: u64,
 	) -> Result<ClientResponse> {
 		validate_request(region, &request)?;
@@ -63,10 +70,7 @@ impl Regions {
 			.ok_or(RegionUnavailable(region))?;
 		let remaining = deadline.saturating_sub(self.clock.observe()?.boot_ms);
 		ensure!(remaining > 0, "regional request deadline expired");
-		let bytes = DepotClientRequestData::serialize_with_embedded_version(
-			&request,
-			DEPOT_CLIENT_PROTOCOL_VERSION,
-		)?;
+		let bytes = crate::client_protocol::seal_request(&request, version, retry_after_ms)?;
 		ensure!(
 			bytes.len() <= MAX_MESSAGE_BYTES,
 			"regional request too large"
@@ -153,6 +157,19 @@ impl Client {
 		Ok(())
 	}
 
+	/// The version a request to another region's API peer is sealed at, and the hint of a
+	/// request that version cannot carry. Topology lists only this region's workers and the
+	/// API peer advertises no read version, so the remote region may still run the previous
+	/// release while a deploy rolls region by region: every regional request is sealed at
+	/// [`REGIONAL_VERSION`], which every release reads, and a body only a newer version
+	/// carries, such as a group fork's, is refused as `version_pending` with the hint.
+	fn regional_version(&self) -> (u16, u64) {
+		(
+			REGIONAL_VERSION,
+			self.topology.config().lease.refresh_hint_interval_ms,
+		)
+	}
+
 	/// A peer request is delivered locally once. It never bounces between regions.
 	pub async fn filesystem_peer_request(
 		&self,
@@ -184,7 +201,10 @@ impl Client {
 			self.filesystem_peer_request(region, request, deadline_boot_ms)
 				.await?
 		} else {
-			regions.request(region, request, deadline_boot_ms).await?
+			let (version, retry_after_ms) = self.regional_version();
+			regions
+				.request(region, request, version, retry_after_ms, deadline_boot_ms)
+				.await?
 		};
 		self.regional_admission()?;
 		Ok(response)

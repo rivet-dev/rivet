@@ -6,7 +6,7 @@ use depot_fs_core::{
 	keys::slatedb as keys,
 	work::{PendingSweepProgress, PendingVolume, PendingWorkPage},
 };
-use rivet_data::generated::shared_depot_fs_v1::FsVolumeStatus;
+use rivet_data::generated::shared_depot_fs_v2::FsVolumeStatus;
 use rivet_keys::keys::{
 	KeyAddress, PrefixAddress,
 	codec::{AtVersion, FormalKey},
@@ -123,7 +123,16 @@ impl FilesystemStore {
 
 	/// Both data and cursor writes are idempotent. The marker is deleted only
 	/// after the final data page is durable; interruption repeats the old page.
-	pub async fn sweep_pending(&self, scope: &keys::Scope) -> Result<PendingSweepProgress> {
+	///
+	/// `archived` are child groups the maintainer learned archived among those the scope's
+	/// fork pins wait on (see `SweepHold::ForkPins`): they are dropped from the pins first, in
+	/// the same memtable as the sweep's deletes, and a pin left waiting on no one is deleted,
+	/// so the sweep goes on once the last one is.
+	pub async fn sweep_pending(
+		&self,
+		scope: &keys::Scope,
+		archived: &std::collections::BTreeSet<[u8; 16]>,
+	) -> Result<PendingSweepProgress> {
 		let _ordered = self
 			.lock(
 				super::locks::LockRequest::scope(scope),
@@ -131,6 +140,9 @@ impl FilesystemStore {
 			)
 			.await;
 		self.admit()?;
+		if !archived.is_empty() {
+			self.fork_pin_pass(scope, archived).await?;
+		}
 		let key = keys::PendingSweepKey::new(scope.hash, scope.name.clone(), scope.incarnation);
 		let Some(value) = self.db.get(key.pack()).await? else {
 			self.admit()?;

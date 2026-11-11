@@ -4,6 +4,7 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use pegboard::{keys::partition::V2MigratorVolume, migrate_from_v2::MigrateFromV2StateRead};
 use rivet_engine_context::EngineContext;
 use rivet_singleton_coordinator::{
 	singleton_coordinator_machine::{executor::LeaseStore, types::LeaseRead},
@@ -13,8 +14,6 @@ use rivet_util::Id;
 use serde_json::{Value, json};
 
 use crate::{
-	commands::MigrateFromV2StateRead,
-	keys::partition::V2MigratorVolume,
 	migrator_machine::{snapshot::phase_name, types::wire},
 	v2_client::V2Client,
 };

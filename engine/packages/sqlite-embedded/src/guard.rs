@@ -3,10 +3,20 @@
 //! An engine that executes an Envoy's SQL on its own threads bounds the work of each command,
 //! the database's size, the largest value and each statement's result size, and refuses statements that would change the
 //! VFS's journal, page or locking assumptions or open another database file.
+//!
+//! Every connection, guarded or not, also gets a progress handler through [`CommandProgress`],
+//! which lets an owner interrupt the command running on it. The handler is installed when the
+//! connection opens rather than when an interrupt is wanted, for two reasons. SQLite computes a
+//! statement's progress limit once when its step begins, so one long `sqlite3_step`, such as an
+//! aggregate over a join that emits no rows, never calls a handler installed during it. And
+//! calling `sqlite3_progress_handler` from the interrupting thread would block on the
+//! connection's mutex until that step ends. The handler costs one atomic load per
+//! `PROGRESS_INTERVAL` virtual machine instructions; point reads and small writes run fewer
+//! instructions than that and never call it.
 use std::{
 	ffi::CStr,
 	os::raw::{c_char, c_int, c_void},
-	sync::atomic::{AtomicU64, Ordering},
+	sync::atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
 use anyhow::{Result, ensure};
@@ -58,24 +68,108 @@ impl Default for ConnectionGuard {
 	}
 }
 
-/// A guard installed on one open connection. It must outlive the connection, because SQLite
-/// keeps a pointer to it for the progress callback.
+/// The progress handler's state for one connection: the guard's work budget, if a guard is
+/// installed, and whether its owner interrupted the running command. SQLite keeps a pointer to
+/// it for the progress callback, so it must outlive every statement the connection runs: the
+/// owner drops it only once the connection is closed or its handler is removed with
+/// [`Self::uninstall`].
+pub(crate) struct CommandProgress {
+	guard: Option<InstalledGuard>,
+	/// Set once by [`Self::interrupt`] and never cleared, so every progress callback after it
+	/// stops the command. Only an owner about to close the database sets it: a close, or a
+	/// failed start just before it drops its held commits and closes. Every SQL command after it
+	/// fails once it reaches a progress callback; commands that run no SQL, such as a discard of
+	/// held commits, and short statements are unaffected.
+	interrupted: AtomicBool,
+}
+
+impl CommandProgress {
+	pub(crate) fn new(guard: Option<ConnectionGuard>) -> Box<Self> {
+		Box::new(Self {
+			guard: guard.map(InstalledGuard::new),
+			interrupted: AtomicBool::new(false),
+		})
+	}
+
+	/// Installs the guard, if any, and the progress handler.
+	pub(crate) fn install(&self, db: *mut sqlite3) -> Result<()> {
+		if let Some(guard) = &self.guard {
+			guard.install(db)?;
+		}
+		// SAFETY: `self` is boxed, and its owner keeps it alive until the connection is closed
+		// or the handler is removed with `uninstall`, as the type requires.
+		unsafe {
+			sqlite3_progress_handler(
+				db,
+				PROGRESS_INTERVAL,
+				Some(progress),
+				self as *const Self as *mut c_void,
+			);
+		}
+		Ok(())
+	}
+
+	/// Removes the progress handler from `db`, for a connection that outlives this state, such
+	/// as one handed to another thread to close.
+	///
+	/// # Safety
+	///
+	/// `db` must be a live connection that the caller owns, and no thread may run a statement
+	/// on it, or otherwise use it, during the call.
+	pub(crate) unsafe fn uninstall(db: *mut sqlite3) {
+		// SAFETY: the caller guarantees `db` is live and idle, as this function requires.
+		unsafe {
+			sqlite3_progress_handler(db, 0, None, std::ptr::null_mut());
+		}
+	}
+
+	pub(crate) fn guard(&self) -> Option<&InstalledGuard> {
+		self.guard.as_ref()
+	}
+
+	/// Makes the running command fail with `SQLITE_INTERRUPT` at its next progress callback,
+	/// within `PROGRESS_INTERVAL` virtual machine instructions of its next step. A command
+	/// blocked in a VFS request stops once that request returns. Unlike
+	/// `sqlite3_interrupt`, which SQLite clears when a statement starts with none active, this
+	/// also stops a statement the command starts later, such as the next one in a batch.
+	pub(crate) fn interrupt(&self) {
+		self.interrupted.store(true, Ordering::Release);
+	}
+
+	/// Whether [`Self::interrupt`] ran.
+	pub(crate) fn interrupted(&self) -> bool {
+		self.interrupted.load(Ordering::Acquire)
+	}
+
+	/// Whether SQLite should stop the running command now.
+	fn stops_command(&self) -> bool {
+		if self.interrupted() {
+			return true;
+		}
+		self.guard
+			.as_ref()
+			.is_some_and(|guard| guard.exhausted_budget())
+	}
+}
+
+/// A guard installed on one open connection, owned by its [`CommandProgress`].
 pub(crate) struct InstalledGuard {
 	config: ConnectionGuard,
 	progress_callbacks: AtomicU64,
 }
 
 impl InstalledGuard {
-	pub(crate) fn new(config: ConnectionGuard) -> Box<Self> {
-		Box::new(Self {
+	fn new(config: ConnectionGuard) -> Self {
+		Self {
 			config,
 			progress_callbacks: AtomicU64::new(0),
-		})
+		}
 	}
 
-	/// Sets the size cap, then installs the length limit, the progress handler and the
-	/// authorizer. The size cap is set first because the authorizer then refuses to change it.
-	pub(crate) fn install(&self, db: *mut sqlite3) -> Result<()> {
+	/// Sets the size cap, then installs the length limit and the authorizer. The size cap is
+	/// set first because the authorizer then refuses to change it. The work budget is checked by
+	/// the [`CommandProgress`] progress handler.
+	fn install(&self, db: *mut sqlite3) -> Result<()> {
 		crate::vfs::sqlite_exec(
 			db,
 			&format!("PRAGMA max_page_count = {};", self.config.max_page_count),
@@ -83,12 +177,6 @@ impl InstalledGuard {
 		.map_err(anyhow::Error::msg)?;
 		unsafe {
 			sqlite3_limit(db, SQLITE_LIMIT_LENGTH, self.config.max_length_bytes);
-			sqlite3_progress_handler(
-				db,
-				PROGRESS_INTERVAL,
-				Some(progress),
-				self as *const Self as *mut c_void,
-			);
 		}
 		let rc = unsafe { sqlite3_set_authorizer(db, Some(authorize), std::ptr::null_mut()) };
 		ensure!(
@@ -107,12 +195,17 @@ impl InstalledGuard {
 	pub(crate) fn reset(&self) {
 		self.progress_callbacks.store(0, Ordering::Relaxed);
 	}
+
+	/// Counts one progress callback and reports whether the command used up its budget.
+	fn exhausted_budget(&self) -> bool {
+		let callbacks = self.progress_callbacks.fetch_add(1, Ordering::Relaxed) + 1;
+		callbacks > self.config.max_progress_callbacks
+	}
 }
 
 extern "C" fn progress(context: *mut c_void) -> c_int {
-	let guard = unsafe { &*(context as *const InstalledGuard) };
-	let callbacks = guard.progress_callbacks.fetch_add(1, Ordering::Relaxed) + 1;
-	c_int::from(callbacks > guard.config.max_progress_callbacks)
+	let progress = unsafe { &*(context as *const CommandProgress) };
+	c_int::from(progress.stops_command())
 }
 
 extern "C" fn authorize(

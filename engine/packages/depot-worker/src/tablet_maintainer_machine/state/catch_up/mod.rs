@@ -14,7 +14,7 @@ use rivet_data::generated::{
 		self as wire, RejectResponse, StorageWorkerRequest as Request,
 		StorageWorkerResponse as Response,
 	},
-	shared_depot_fs_v1::{FsVolumeRecord, FsVolumeStatus},
+	shared_depot_fs_v2::{FsVolumeRecord, FsVolumeStatus},
 	shared_depot_types_v1::{TabletPhase, VolumeLogPosition, VolumeLogReplicaStatus as Status},
 };
 use rivet_topology::worker::WorkerId;

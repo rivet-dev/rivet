@@ -1,9 +1,11 @@
 //! Converts the `migrate_from_v2` config section into the settings the state machine decides on.
 use crate::migrator_machine::types::Settings;
 
+/// `target_group` is the volume group of the target namespace's standing, if it has one.
 pub fn settings_from_config(
 	root: &rivet_config::config::Root,
 	v3_datacenter_label: u16,
+	target_group: Option<[u8; 16]>,
 ) -> Settings {
 	let Some(migration) = root.migrate_from_v2() else {
 		return Settings::disabled();
@@ -31,5 +33,6 @@ pub fn settings_from_config(
 		datacenter_labels,
 		target_namespace: migration.target_namespace().to_owned(),
 		v3_datacenter_label,
+		target_group,
 	}
 }

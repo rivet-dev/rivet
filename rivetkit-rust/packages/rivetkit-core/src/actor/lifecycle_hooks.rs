@@ -3,6 +3,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::actor::connection::ConnHandle;
 use crate::actor::context::ActorContext;
+use crate::actor::fork::ActorForkStart;
 use crate::actor::messages::ActorEvent;
 
 pub struct Reply<T> {
@@ -128,6 +129,9 @@ pub struct ActorStart {
 	pub is_new: bool,
 	pub snapshot: Option<Vec<u8>>,
 	pub hibernated: Vec<(ConnHandle, Vec<u8>)>,
+	/// The individual actor fork whose hook runs in this start, at the first start of a forked
+	/// actor. The runtime runs the hook once its state is loaded and before `onWake`.
+	pub fork: Option<ActorForkStart>,
 	pub events: ActorEvents,
 	pub startup_ready: Option<oneshot::Sender<Result<()>>>,
 }

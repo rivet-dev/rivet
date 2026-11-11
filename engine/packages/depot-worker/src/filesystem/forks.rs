@@ -30,14 +30,24 @@ impl FilesystemStore {
 	/// volume. Deleted-volume sweeps delete the record outside this lock, ordered by the
 	/// core alone.
 	///
-	/// Without `incarnation` the row is the name's pointer, the newest stored incarnation,
-	/// which an open of an unloaded name reads; a pointer naming another volume key leaves
-	/// `key` without a row. With it the row is that incarnation's own.
+	/// For [`RowRead::Pointer`] the row is the name's pointer, the newest stored incarnation,
+	/// which an open of an unloaded name reads; a pointer naming another volume key leaves `key`
+	/// without a row. Otherwise the row is that incarnation's own, and for
+	/// [`RowRead::Deleting`] the lookup also returns the incarnation's pin mark, read under the
+	/// same lock as the row, since a pin pass moves a pin from its rows into the record.
+	///
+	/// [`RowRead::Pointer`]: crate::tablet_maintainer_machine::types::RowRead::Pointer
+	/// [`RowRead::Deleting`]: crate::tablet_maintainer_machine::types::RowRead::Deleting
 	pub async fn lifecycle_lookup(
 		&self,
 		key: &depot_types::VolumeKey,
-		incarnation: Option<[u8; 16]>,
+		read: crate::tablet_maintainer_machine::types::RowRead,
 	) -> Result<depot_fs_core::forks::LifecycleLookup> {
+		use crate::tablet_maintainer_machine::types::RowRead;
+		let incarnation = match read {
+			RowRead::Pointer => None,
+			RowRead::Incarnation(incarnation) | RowRead::Deleting(incarnation) => Some(incarnation),
+		};
 		let _running = self.enter_volumes([(
 			super::locks::StoreVolume::from(key),
 			super::locks::VolumeAccess::Lookup,
@@ -70,11 +80,25 @@ impl FilesystemStore {
 				}
 			},
 		};
+		// The last fork the incarnation's pin rows, stored pin mark or creation stamp cover, as
+		// a pin pass reads them.
+		let pinned_through = match read {
+			RowRead::Deleting(incarnation) => {
+				let scope = keys::Scope::new(key, Uuid::from_bytes(incarnation));
+				let created_at_fork = row.as_ref().and_then(|row| row.created_at_fork);
+				let stored_mark = row.as_ref().and_then(|row| row.fork_pinned_through);
+				self.fork_pinned_through(&scope, created_at_fork)
+					.await?
+					.max(stored_mark)
+			}
+			RowRead::Pointer | RowRead::Incarnation(_) => None,
+		};
 		self.admit()?;
 		Ok(depot_fs_core::forks::LifecycleLookup {
 			row,
 			pending,
 			superseded,
+			pinned_through,
 		})
 	}
 	/// Reads what an operator inspection of `key` shows from the store: the pointer row, the
@@ -448,7 +472,11 @@ impl FilesystemStore {
 					link.volume_key == target.volume_key
 						&& link.incarnation == target.incarnation
 						&& link.region.unwrap_or(spec.destination_region) == spec.parent_region
-						&& target.position.volume_seq <= link.position.volume_seq
+						&& target
+							.position
+							.root_position()
+							.zip(link.position.root_position())
+							.is_some_and(|(target, link)| target.volume_seq <= link.volume_seq)
 				});
 			if !reachable {
 				return Ok(Err(FsForkError::CheckpointNotReachable));
@@ -534,21 +562,42 @@ impl FilesystemStore {
 		let mut previous = after;
 		let mut batch = WriteBatch::new();
 		let mut bytes = 0usize;
+		// Rows are encoded as an apply's are: a row the store cannot encode yet refuses the whole
+		// page with a typed refusal the maintainer holds the job on, before anything is staged.
+		let (version, reachable) = self.row_versions();
 		for (key, mut row) in rows {
 			if matches!(key, RowKey::Chunk(..)) {
 				return Ok(Err(FsForkError::Invalid));
 			}
-			let cursor = keys::encode_row(&source, &key, 0, None, self.row_version())?
-				.0
-				.to_vec();
+			// The cursor is the source row's address, which no row version changes, so it is
+			// encoded at the newest version, which expresses every key. Encoding it at the grant's
+			// version would refuse a row version 1 lacks, such as a range whiteout, with an
+			// untyped error before the hold check below could classify it.
+			let cursor = keys::encode_row(
+				&source,
+				&key,
+				rivet_data::ROOT_CLAIM_LOG,
+				0,
+				None,
+				rivet_data::DEPOT_FS_ROWS_VERSION,
+			)?
+			.0
+			.to_vec();
 			if previous.as_ref().is_some_and(|old| old >= &cursor) {
 				return Ok(Err(FsForkError::Invalid));
 			}
 			if let Row::Inode(inode) = &mut row {
 				*inode = depot_fs_core::forks::copy_inode(inode.clone());
 			}
-			let (address, value) =
-				keys::encode_row(&target, &key, 0, Some(row), self.row_version())?;
+			let (address, value) = super::store::encode_held_row(
+				&target,
+				&key,
+				rivet_data::ROOT_CLAIM_LOG,
+				0,
+				Some(row),
+				version,
+				reachable,
+			)?;
 			bytes = bytes
 				.saturating_add(address.len())
 				.saturating_add(value.len());
@@ -559,7 +608,10 @@ impl FilesystemStore {
 			previous = Some(cursor);
 		}
 		pending.preparation = if complete {
-			FsForkPreparation::FsForkReady(FsForkReady { image: copy.image })
+			FsForkPreparation::FsForkReady(FsForkReady {
+				image: copy.image,
+				metadata_local: true,
+			})
 		} else {
 			FsForkPreparation::FsForkCopying(FsForkCopying {
 				image: copy.image,
@@ -587,13 +639,82 @@ impl FilesystemStore {
 		claimed: Option<[u8; 16]>,
 		flush: bool,
 		incarnation_epoch: u64,
+		created_at_fork: Option<u64>,
 	) -> Outcome<FsVolumeRecord> {
-		self.publish_fork_over(spec, claimed, flush, None, incarnation_epoch)
-			.await
+		self.publish_fork_over(
+			spec,
+			claimed,
+			flush,
+			None,
+			incarnation_epoch,
+			created_at_fork,
+		)
+		.await
 	}
 
 	/// Publishes like `publish_fork`. A restore of an incarnation whose first record has not
 	/// reached the store yet replaces `replaced`, the record the maintainer registered for it.
+	/// Moves a pending lazy fork that is still acquiring to `next`, the spec of the next
+	/// ancestor, which the walk asks instead. The destination keeps its reservation.
+	async fn retarget_fork(&self, spec: &FsForkSpec, next: FsForkSpec) -> Outcome<Preparation> {
+		let _ordered = self
+			.lock(super::locks::LockRequest::fork(spec), LockOperation::Other)
+			.await;
+		self.admit()?;
+		if next.destination_volume_key != spec.destination_volume_key
+			|| next.destination_region != spec.destination_region
+			|| !matches!(next.selector, FsForkSelector::FsForkGroup(_))
+		{
+			return Ok(Err(FsForkError::Invalid));
+		}
+		let Some(mut pending) = self.pending_fork(&spec.destination_volume_key).await? else {
+			return Ok(Err(FsForkError::ForkDeleted));
+		};
+		if pending.spec == next {
+			return Ok(Ok(Preparation::Pending(Box::new(pending))));
+		}
+		if pending.spec != *spec {
+			return Ok(Err(FsForkError::OperationConflict));
+		}
+		if !matches!(pending.preparation, FsForkPreparation::FsForkAcquirePending) {
+			return Ok(Err(FsForkError::Busy));
+		}
+		pending.spec = next;
+		self.write_fork_preparation(&pending).await?;
+		Ok(Ok(Preparation::Pending(Box::new(pending))))
+	}
+
+	/// Marks a remembered lazy fork ready without copying: its metadata stays on the parent
+	/// and is read through the chain.
+	async fn skip_fork_copy(&self, spec: &FsForkSpec) -> Outcome<Preparation> {
+		let _ordered = self
+			.lock(super::locks::LockRequest::fork(spec), LockOperation::Other)
+			.await;
+		self.admit()?;
+		let Some(mut pending) = self.pending_fork(&spec.destination_volume_key).await? else {
+			return Ok(Err(FsForkError::ForkDeleted));
+		};
+		if pending.spec != *spec {
+			return Ok(Err(FsForkError::OperationConflict));
+		}
+		let image = match &pending.preparation {
+			FsForkPreparation::FsForkCopying(FsForkCopying {
+				image,
+				cursor: None,
+			}) => image.clone(),
+			FsForkPreparation::FsForkReady(_) => {
+				return Ok(Ok(Preparation::Pending(Box::new(pending))));
+			}
+			_ => return Ok(Err(FsForkError::Busy)),
+		};
+		pending.preparation = FsForkPreparation::FsForkReady(FsForkReady {
+			image,
+			metadata_local: false,
+		});
+		self.write_fork_preparation(&pending).await?;
+		Ok(Ok(Preparation::Pending(Box::new(pending))))
+	}
+
 	async fn publish_fork_over(
 		&self,
 		spec: &FsForkSpec,
@@ -601,6 +722,7 @@ impl FilesystemStore {
 		flush: bool,
 		replaced: Option<FsVolumeRecord>,
 		incarnation_epoch: u64,
+		created_at_fork: Option<u64>,
 	) -> Outcome<FsVolumeRecord> {
 		let _ordered = self
 			.lock(super::locks::LockRequest::fork(spec), LockOperation::Other)
@@ -632,6 +754,18 @@ impl FilesystemStore {
 		let name = spec.destination_volume_key.name.clone();
 		let mut base_chain = vec![ready.image.link.clone()];
 		base_chain.extend(ready.image.parent_base.clone());
+		let lazy_fork = match &spec.selector {
+			FsForkSelector::FsForkGroup(group) => {
+				depot_types::keys::partition::forkable_group(&spec.parent_volume_key.partition_key)
+					.map(|parent| FsLazyForkOrigin {
+						parent,
+						fork_number: group.fork_number,
+					})
+			}
+			FsForkSelector::FsForkLatest
+			| FsForkSelector::FsForkNamed(_)
+			| FsForkSelector::FsForkAtTime(_) => None,
+		};
 		let record = FsVolumeRecord {
 			incarnation_epoch,
 			recent_writes: Vec::new(),
@@ -642,6 +776,13 @@ impl FilesystemStore {
 			cold: depot_fs_core::forks::initial_position(&ready.image.link.position)?,
 			base_chain,
 			retention: old.as_ref().and_then(|r| r.retention.clone()),
+			// A lazy fork stands pinned through the fork it was created at, since no fork at
+			// or below that number can resolve to it.
+			fork_pinned_through: lazy_fork.as_ref().and(created_at_fork),
+			created_at_fork,
+			deleted_at_fork: None,
+			lazy_fork,
+			metadata_local: ready.metadata_local,
 		};
 		let receipt = FsForkReceipt {
 			spec: spec.clone(),
@@ -711,24 +852,32 @@ impl FilesystemStore {
 				self.row_version(),
 			))?,
 		);
-		let alarm_key = depot_types::VolumeLogKey::from(
-			rivet_data::generated::shared_depot_types_v1::VolumeLogKey {
-				volume_key: spec.destination_volume_key.clone(),
-				volume_incarnation: spec.operation_id,
-			},
-		);
-		let summary = self.alarm_at(&alarm_key, record.cold.clone()).await?;
-		let mut projection = super::store::PlannedWrites::default();
-		self.put_alarm_projection(
-			&alarm_key,
-			None,
-			&rivet_data::generated::depot_alarm_v1::AlarmCurrent {
-				summary,
-				retry: None,
-			},
-			&mut projection,
-		)?;
-		projection.apply(&mut batch);
+		// A lazy fork indexes no alarm, whether a read or a command made it. Its inherited alarm
+		// starts when the child's first command commits and its durable runner arms it again.
+		// This is intentional: it keeps a fork O(1), a fork cannot wake every inherited alarm at
+		// once and overload the child's pools, and reading an actor does not start it. Two later
+		// options are not built: the parent fires its children's alarms, or a colocated import
+		// places volumes by root group and copies alarm entries on `GROUP_FORKED`.
+		if record.lazy_fork.is_none() {
+			let alarm_key = depot_types::VolumeLogKey::from(
+				rivet_data::generated::shared_depot_types_v1::VolumeLogKey {
+					volume_key: spec.destination_volume_key.clone(),
+					volume_incarnation: spec.operation_id,
+				},
+			);
+			let summary = self.alarm_at(&alarm_key, record.cold.clone()).await?;
+			let mut projection = super::store::PlannedWrites::default();
+			self.put_alarm_projection(
+				&alarm_key,
+				None,
+				&rivet_data::generated::depot_alarm_v1::AlarmCurrent {
+					summary,
+					retry: None,
+				},
+				&mut projection,
+			)?;
+			projection.apply(&mut batch);
+		}
 		super::store::put_record(&mut batch, pointer.as_ref(), &record, self.row_version())?;
 		batch.delete(keys::PendingForkKey::new(hash, name.clone().map(Into::into)).pack());
 		if spec.parent_region != spec.destination_region {
@@ -778,6 +927,7 @@ impl FilesystemStore {
 		spec: &FsForkSpec,
 		image: FsForkImage,
 		incarnation_epoch: u64,
+		created_at_fork: Option<u64>,
 	) -> Result<bool> {
 		let _ordered = self
 			.lock(super::locks::LockRequest::fork(spec), LockOperation::Other)
@@ -811,7 +961,7 @@ impl FilesystemStore {
 				}
 				drop(_ordered);
 				return Ok(self
-					.publish_fork(spec, None, false, incarnation_epoch)
+					.publish_fork(spec, None, false, incarnation_epoch, created_at_fork)
 					.await?
 					.is_ok());
 			}
@@ -918,6 +1068,16 @@ impl FilesystemStore {
 		replaced: Option<FsVolumeRecord>,
 	) -> Result<depot_fs_core::forks::StoreResult> {
 		use depot_fs_core::forks::{StoreAction, StoreResult};
+		// A group fork's rows exist only from `depot.fs_rows` version 2. A fresh grant writes
+		// below it until its first pass makes the raised mark durable, so the job is refused
+		// for a retry before it writes anything. Once it wrote a row at version 2 the mark is
+		// durable, so every later step and grant can encode it.
+		if matches!(action, StoreAction::Inspect | StoreAction::Prepare)
+			&& matches!(spec.selector, FsForkSelector::FsForkGroup(_))
+			&& self.row_version() < super::fork_pins::FORK_PIN_ROW_VERSION
+		{
+			return Ok(StoreResult::Rejected(FsForkError::Busy));
+		}
 		let outcome = match action {
 			StoreAction::Inspect => {
 				let _ordered = self
@@ -973,6 +1133,11 @@ impl FilesystemStore {
 					.await?
 			}
 			StoreAction::Copy { after, page } => {
+				// A page the store may refuse to encode yet goes back to the job to hold; only
+				// a store below the newest row version can refuse one.
+				let retained = (self.row_version() < rivet_data::DEPOT_FS_ROWS_VERSION)
+					.then(|| (after.clone(), page.clone()));
+				let complete = page.complete;
 				let Ok(rows) = page
 					.rows
 					.into_iter()
@@ -981,17 +1146,29 @@ impl FilesystemStore {
 				else {
 					return Ok(StoreResult::Rejected(FsForkError::Invalid));
 				};
-				self.copy_fork_metadata(&spec, after, rows, page.complete)
-					.await?
+				match self.copy_fork_metadata(&spec, after, rows, complete).await {
+					Ok(outcome) => outcome,
+					Err(error) => return held_copy(error, retained),
+				}
 			}
 			StoreAction::Publish {
 				claimed,
 				logged,
 				incarnation_epoch,
+				created_at_fork,
 			} => self
-				.publish_fork_over(&spec, claimed, !logged, replaced, incarnation_epoch)
+				.publish_fork_over(
+					&spec,
+					claimed,
+					!logged,
+					replaced,
+					incarnation_epoch,
+					created_at_fork,
+				)
 				.await?
 				.map(Preparation::Complete),
+			StoreAction::Retarget(next) => self.retarget_fork(&spec, next).await?,
+			StoreAction::SkipCopy => self.skip_fork_copy(&spec).await?,
 			StoreAction::Fail(error) => self.fail_fork(&spec, error).await?,
 		};
 		self.admit()?;
@@ -999,5 +1176,44 @@ impl FilesystemStore {
 			Ok(progress) => StoreResult::Progress(progress),
 			Err(error) => StoreResult::Rejected(error),
 		})
+	}
+}
+
+/// The answer to a copy step whose page the store refused with `error`. A typed rows refusal
+/// hands the step back as [`StoreResult::RowsMarkPending`] or
+/// [`StoreResult::RowsInexpressible`], so the maintainer holds the job instead of fencing; any
+/// other error fails the step. `retained` is the step's cursor and page, kept whenever the
+/// store's row version could refuse one.
+fn held_copy(
+	error: anyhow::Error,
+	retained: Option<(
+		Option<Vec<u8>>,
+		rivet_data::generated::shared_depot_fs_read_v2::FsForkMetadataPage,
+	)>,
+) -> Result<depot_fs_core::forks::StoreResult> {
+	use crate::tablet_maintainer_machine::types::FilesystemApplyError;
+	use depot_fs_core::forks::{StoreAction, StoreResult};
+
+	let Some((after, page)) = retained else {
+		return Err(error);
+	};
+	let action = StoreAction::Copy { after, page };
+	match error.downcast_ref::<FilesystemApplyError>() {
+		Some(FilesystemApplyError::RowsMarkPending { row, version }) => {
+			Ok(StoreResult::RowsMarkPending {
+				action,
+				row: row.clone(),
+				version: *version,
+			})
+		}
+		Some(FilesystemApplyError::RowsInexpressible { row, reachable }) => {
+			Ok(StoreResult::RowsInexpressible {
+				action,
+				row: row.clone(),
+				reachable: *reachable,
+			})
+		}
+		Some(FilesystemApplyError::ReplicaRead { .. } | FilesystemApplyError::Storage(_))
+		| None => Err(error),
 	}
 }

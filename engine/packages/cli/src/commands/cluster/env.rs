@@ -58,8 +58,8 @@ pub struct SetOpts {
 	#[arg(long = "env", value_name = "KEY=VALUE")]
 	env: Vec<String>,
 	/// A variable taking a cluster secret's latest version, as `KEY` for a
-	/// secret named like the variable, or `KEY=SECRET_NAME`. Repeatable. Roll
-	/// the secret out first with `rivet cluster secret rollout`.
+	/// secret named like the variable, or `KEY=SECRET_NAME`. Repeatable. Set
+	/// the secret first with `rivet cluster secret set`.
 	#[arg(long = "secret", value_name = "KEY[=SECRET_NAME]")]
 	secret: Vec<String>,
 }

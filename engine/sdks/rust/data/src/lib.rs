@@ -1,3 +1,4 @@
+mod depot_cuts;
 mod depot_keys;
 pub mod families;
 pub mod generated;
@@ -13,8 +14,12 @@ pub use generated::{
 	UPS_PACKET_VERSION, UPS_REQUEST_VERSION,
 };
 
-pub use generated::{DEPOT_KV_COMMAND_VERSION, DEPOT_OPERATOR_COMMAND_VERSION};
+pub use generated::{
+	DEPOT_GROUP_VERSION, DEPOT_KV_COMMAND_VERSION, DEPOT_OPERATOR_COMMAND_VERSION,
+};
 
 pub use generated::{DEPOT_FS_ENTRY_VERSION, DEPOT_FS_ROWS_VERSION, DEPOT_MAINTAINER_LOG_VERSION};
 
 pub use generated::{SQLITE_DB_OVERFLOW_VERSION, SQLITE_DB_RECENT_VERSION};
+
+pub use depot_cuts::ROOT_CLAIM_LOG;

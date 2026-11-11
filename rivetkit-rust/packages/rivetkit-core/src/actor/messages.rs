@@ -467,6 +467,9 @@ pub enum ActorEvent {
 	},
 	DisconnectConn {
 		conn_id: ConnId,
+		/// The close reason the connection's transport ends with, such as
+		/// [`ACTOR_DESTROYED_CLOSE_REASON`](crate::actor::connection::ACTOR_DESTROYED_CLOSE_REASON).
+		reason: Option<&'static str>,
 		reply: Reply<()>,
 	},
 	WorkflowHistoryRequested {

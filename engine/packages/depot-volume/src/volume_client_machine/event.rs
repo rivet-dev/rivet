@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RpcError {
 	/// The maintainer rejected this lifecycle command before returning a row.
-	LifecycleRejected(rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse),
+	LifecycleRejected(rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse),
 	/// No cached maintainer route was available; this attempt sent no command.
 	RoutingUnavailable,
 	Rejected(RejectResponse),
@@ -185,7 +185,7 @@ pub enum VolumeClientEvent {
 	VolumeOpenResponse {
 		op_id: OpId,
 		result:
-			Result<rivet_data::generated::depot_client_protocol_v1::VolumeOpenResponse, RpcError>,
+			Result<rivet_data::generated::depot_client_protocol_v2::VolumeOpenResponse, RpcError>,
 	},
 
 	/// **When**

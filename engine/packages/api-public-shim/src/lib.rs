@@ -16,9 +16,36 @@ use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 mod routes;
 mod tokens;
 
-pub fn router(ctx: &EngineContext) -> Router {
+/// The process's waits for namespace forks. Without UPS no wait can receive a notice, and every
+/// fork create reads the namespace at its deadline.
+fn namespace_start_waits(
+	ctx: &EngineContext,
+) -> std::sync::Arc<pegboard::namespace_waits::StartWaits> {
+	let ups = match ctx.ups() {
+		Ok(ups) => Some(ups),
+		Err(error) => {
+			tracing::warn!(
+				?error,
+				"namespace fork waits have no UPS; fork creates read the namespace at their deadline"
+			);
+			None
+		}
+	};
+	pegboard::namespace_waits::StartWaits::new(
+		ups,
+		ctx.config().pegboard().gateway_start_waits_capacity(),
+	)
+}
+
+/// `start_waits` are the gateway's actor start waits, which an actor fork shares so its wait ids
+/// never collide with a gateway request's.
+pub fn router(
+	ctx: &EngineContext,
+	start_waits: &std::sync::Arc<pegboard_gateway::start_waits::StartWaits>,
+) -> Router {
 	router_with_retry_budget(
 		ctx,
+		start_waits,
 		std::sync::Arc::new(pegboard_gateway::RetryBudget::from_config(ctx)),
 	)
 }
@@ -26,6 +53,7 @@ pub fn router(ctx: &EngineContext) -> Router {
 /// Guard shares one retry budget between actor routing and public API requests.
 pub fn router_with_retry_budget(
 	ctx: &EngineContext,
+	start_waits: &std::sync::Arc<pegboard_gateway::start_waits::StartWaits>,
 	budget: std::sync::Arc<pegboard_gateway::RetryBudget>,
 ) -> Router {
 	// Clients can read metadata before authenticating. Other routes enforce scoped grants.
@@ -35,6 +63,10 @@ pub fn router_with_retry_budget(
 		.route("/pools/{pool}/nodes", get(routes::list_pool_nodes))
 		.route("/namespaces", get(routes::list_namespaces))
 		.route("/namespaces", post(routes::create_namespace))
+		.route(
+			"/namespaces/{name}/archive",
+			post(routes::archive_namespace),
+		)
 		.route("/actors", get(routes::list_actors))
 		.route("/actors", post(routes::create_actor))
 		.route("/actors", put(routes::get_or_create_actor))
@@ -42,6 +74,7 @@ pub fn router_with_retry_budget(
 		.route("/actors/{actor_id}", get(routes::get_actor))
 		.route("/actors/{actor_id}", delete(routes::destroy_actor))
 		.route("/actors/{actor_id}/sleep", post(routes::sleep_actor))
+		.route("/actors/{actor_id}/fork", post(routes::fork_actor))
 		.route(
 			"/actors/{actor_id}/reschedule",
 			post(routes::reschedule_actor),
@@ -79,21 +112,25 @@ pub fn router_with_retry_budget(
 				])
 				.max_age(std::time::Duration::from_secs(86_400)),
 		)
+		.layer(axum::Extension(namespace_start_waits(ctx)))
+		.layer(axum::Extension(start_waits.clone()))
 		.with_state(ctx.clone())
 }
 
-/// A storage refusal is retryable at a read-only HTTP boundary. A mutation can already
-/// have committed before a subsequent read is refused, so keep its existing status.
+/// Refusals that happen before any work and answer 503 at a read-only HTTP boundary. Every
+/// other method keeps the 400 they answer with, which released clients already handle.
+const READ_RETRYABLE_REFUSALS: [&str; 2] = ["depot.overloaded", "actor.fork_unavailable"];
+
+/// A storage or admission refusal is retryable at a read-only HTTP boundary. A mutation can
+/// already have committed before a subsequent read is refused, so keep its existing status.
 async fn classify_read_refusal(request: Request, next: Next) -> Response {
 	let read_only = matches!(*request.method(), Method::GET | Method::HEAD);
 	let mut response = next.run(request).await;
-	if read_only
-		&& response.status() == StatusCode::BAD_REQUEST
-		&& response
-			.headers()
-			.get(X_RIVET_ERROR)
-			.is_some_and(|value| value == "depot.overloaded")
-	{
+	let retryable_refusal = response
+		.headers()
+		.get(X_RIVET_ERROR)
+		.is_some_and(|value| READ_RETRYABLE_REFUSALS.iter().any(|code| value == *code));
+	if read_only && response.status() == StatusCode::BAD_REQUEST && retryable_refusal {
 		*response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
 	}
 	response
@@ -133,9 +170,34 @@ impl<E: Into<anyhow::Error>> From<E> for ApiError {
 	}
 }
 
+/// `error` as `depot.overloaded` when it is an unstructured Depot refusal that ran nothing and
+/// carries a retry hint, so the caller's edge retries it after the hint instead of reading an
+/// internal error. Its `reason` names the answer, such as `apply_backlog` or `not_maintainer`,
+/// not only load. Any other error is returned as it is.
+///
+/// It applies to every route: Depot refuses some opens for now without a structured error, such
+/// as an open of a volume whose lazy fork is still running.
+fn unstructured_refusal(error: anyhow::Error) -> anyhow::Error {
+	let structured = error
+		.chain()
+		.any(|cause| cause.downcast_ref::<rivet_error::RivetError>().is_some());
+	if structured {
+		return error;
+	}
+	let Some(retry_after_ms) = depot_client::retry_after_ms(&error) else {
+		return error;
+	};
+	tracing::debug!(?error, retry_after_ms, "depot refused a request for now");
+	depot_client::Overloaded {
+		reason: depot_client::refusal_reason(&error).to_owned(),
+		retry_after_ms,
+	}
+	.build()
+}
+
 impl IntoResponse for ApiError {
 	fn into_response(self) -> Response {
-		let error = self.0;
+		let error = unstructured_refusal(self.0);
 		let structured = error
 			.chain()
 			.find_map(|cause| cause.downcast_ref::<rivet_error::RivetError>());
@@ -150,17 +212,27 @@ impl IntoResponse for ApiError {
 		};
 		let status = match (structured.group(), structured.code()) {
 			("actor" | "namespace" | "pool", "not_found") => StatusCode::NOT_FOUND,
-			("namespace", "name_not_unique")
+			(
+				"namespace",
+				"name_not_unique" | "pending" | "archived" | "failed" | "has_forks" | "has_nodes"
+				| "backfill_pending" | "backfill_skipped" | "migrating_from_v2",
+			)
 			| ("pool", "nodes_connected")
-			| ("actor", "duplicate_key") => StatusCode::CONFLICT,
+			| ("actor", "duplicate_key" | "fork_failed" | "fork_too_deep") => StatusCode::CONFLICT,
 			("auth", "invalid_token" | "token_expired") => StatusCode::UNAUTHORIZED,
-			("auth", "insufficient_permissions" | "issuance_disabled") => StatusCode::FORBIDDEN,
-			("auth", "verification_unavailable" | "issuance_unavailable") => {
-				StatusCode::SERVICE_UNAVAILABLE
-			}
-			("actor", "migrating_from_v2") => StatusCode::SERVICE_UNAVAILABLE,
+			("auth", "insufficient_permissions" | "issuance_disabled")
+			| ("namespace", "protected") => StatusCode::FORBIDDEN,
+			("auth", "verification_unavailable" | "issuance_unavailable")
+			| ("actor", "migrating_from_v2") => StatusCode::SERVICE_UNAVAILABLE,
+			// Refused at admission, before any work, for every method. No release answered it,
+			// and released clients retry a 5xx but treat this refusal as a 400 as fatal.
+			("namespace", "creating") => StatusCode::SERVICE_UNAVAILABLE,
 			// Existing SDKs retry all 5xx responses; this create may already have taken effect.
 			("actor", "create_pending") => StatusCode::CONFLICT,
+			// The fork's deadline passed while its copy goes on.
+			("actor", "fork_pending") => StatusCode::GATEWAY_TIMEOUT,
+			// Storage, messaging and admission refusals keep the 400 that released clients
+			// read; `classify_read_refusal` answers 503 for the ones a read may retry.
 			_ => StatusCode::BAD_REQUEST,
 		};
 		let mut body = serde_json::json!({
@@ -168,6 +240,8 @@ impl IntoResponse for ApiError {
 			"code": structured.code(),
 			"message": structured.message(),
 		});
+		// Metadata carries what a caller acts on, such as the actor a pending fork created, and
+		// a retryable refusal's hint.
 		let metadata = structured.metadata();
 		if let Some(metadata) = &metadata {
 			body["metadata"] = metadata.clone();
@@ -177,7 +251,8 @@ impl IntoResponse for ApiError {
 		if let Ok(value) = hyper::header::HeaderValue::from_str(&error_code) {
 			response.headers_mut().insert("x-rivet-error", value);
 		}
-		// A retryable refusal tells the client when to come back.
+		// A retryable refusal tells the client when to come back. Retry-After counts whole
+		// seconds, so the hint rounds up and never reads as now.
 		let retry_after_ms = metadata
 			.as_ref()
 			.and_then(|metadata| metadata.get("retry_after_ms")?.as_u64());

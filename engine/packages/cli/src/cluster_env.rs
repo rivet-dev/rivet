@@ -117,7 +117,7 @@ pub fn check_secrets_exist(
 		return Ok(());
 	}
 	bail!(
-		"cluster {cluster} has no secret named {}; roll it out first with `rivet cluster secret rollout <name>`",
+		"cluster {cluster} has no secret named {}; set it first with `rivet cluster secret set <name>`",
 		missing.join(", ")
 	)
 }
@@ -215,7 +215,7 @@ pub fn cluster_label(cluster: &str, org: Option<&str>) -> String {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct SecretUsage {
 	/// Pools with at least one reference that takes the latest version, which
-	/// roll when the secret is rolled out.
+	/// roll when the secret is set.
 	pub rolling: Vec<String>,
 	/// Pools whose every reference a rollback pinned, which do not roll.
 	pub pinned: Vec<String>,
@@ -261,8 +261,8 @@ pub fn secret_usage(name: &str, pools: &[RunnerPoolSummary]) -> SecretUsage {
 	usage
 }
 
-/// What `secret rollout` is about to do, shown before it asks to confirm.
-pub fn rollout_plan(
+/// What `secret set` is about to do, shown before it asks to confirm.
+pub fn set_plan(
 	cluster: &str,
 	org: Option<&str>,
 	name: &str,
@@ -270,7 +270,7 @@ pub fn rollout_plan(
 	usage: &SecretUsage,
 ) -> String {
 	let mut lines = vec![format!(
-		"rolling out secret {name} in {}",
+		"setting secret {name} in {}",
 		cluster_label(cluster, org)
 	)];
 	match latest_version {
@@ -295,8 +295,8 @@ pub fn rollout_plan(
 	lines.join("\n")
 }
 
-/// The result of a rollout, naming only the pools that actually roll.
-pub fn rollout_outcome(rollout: &SecretRollout, usage: &SecretUsage) -> String {
+/// The result of setting a secret, naming only the pools that actually roll.
+pub fn set_outcome(rollout: &SecretRollout, usage: &SecretUsage) -> String {
 	if !rollout.changed {
 		return format!(
 			"secret {} already holds this value at version {}; nothing rolled",
@@ -304,7 +304,7 @@ pub fn rollout_outcome(rollout: &SecretRollout, usage: &SecretUsage) -> String {
 		);
 	}
 	let mut message = format!(
-		"rolled out secret {} as version {}",
+		"set secret {} to version {}",
 		rollout.name, rollout.latest_version
 	);
 	if usage.is_unused() {

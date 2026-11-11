@@ -963,6 +963,15 @@ async fn handle_conn_message(
 		protocol::ToEnvoy::ToEnvoyPing(_) => {
 			// Should be handled by connection task
 		}
+		protocol::ToEnvoy::ToEnvoySqliteProveTail(request) => {
+			// The engine worker holding the actor's database answers this request itself, so it
+			// never reaches the WebSocket. One that does is from a faulty engine and is ignored.
+			tracing::warn!(
+				actor_id = %request.actor_id,
+				generation = request.generation,
+				"ignoring an engine-internal SQLite tail proof request sent to the envoy; the engine forwarded a message it should answer"
+			);
+		}
 	}
 
 	AfterMessage::Continue(lost_deadline)

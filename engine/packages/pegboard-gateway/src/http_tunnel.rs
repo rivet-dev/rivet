@@ -10,9 +10,11 @@ use universalpubsub::{DuplexStream, PacketSender};
 use vbare::Versioned;
 
 /// The request and response bodies advance independently under protocol byte credit.
-/// Keeping the task scope in the response body ties cancellation to the HTTP client.
+/// Keeping the task scope in the response body ties cancellation to the HTTP client. Every
+/// message of the tunnel is encoded at `version`, the one the envoy's host worker reads.
 pub async fn proxy(
 	env: &Arc<dyn rivet_env::Env>,
+	version: u16,
 	stream: DuplexStream,
 	body: Body,
 	message_id: protocol::MessageId,
@@ -29,6 +31,7 @@ pub async fn proxy(
 		let mut headers = Some(headers_tx);
 		let result = forward(
 			clock.as_ref(),
+			version,
 			stream,
 			body,
 			message_id,
@@ -156,6 +159,7 @@ fn actor_stopped(reason: &protocol::HttpStreamAbortReason) -> bool {
 
 async fn forward(
 	clock: &dyn rivet_env::Clock,
+	version: u16,
 	stream: DuplexStream,
 	body: Body,
 	mut identity: protocol::MessageId,
@@ -169,6 +173,7 @@ async fn forward(
 	send(
 		&mut sender,
 		&mut identity,
+		version,
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(start),
 	)
 	.await?;
@@ -289,6 +294,7 @@ async fn forward(
 				let result = send(
 					&mut sender,
 					&mut identity,
+					version,
 					protocol::ToEnvoyTunnelMessageKind::ToEnvoyResponseBodyWindowUpdate(
 						protocol::ToEnvoyResponseBodyWindowUpdate {
 							consumed_bytes,
@@ -306,6 +312,7 @@ async fn forward(
 				let result = send(
 					&mut sender,
 					&mut identity,
+					version,
 					protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(
 						protocol::ToEnvoyRequestChunk {
 							body: bytes, finish
@@ -338,9 +345,12 @@ fn peer_closed_input(result: Result<()>) -> Result<bool> {
 	Ok(true)
 }
 
+/// Sends one tunnel message to pegboard-envoy over UPS, encoded at `version`; see
+/// `pegboard::envoy_protocol`.
 async fn send(
 	sender: &mut PacketSender,
 	identity: &mut protocol::MessageId,
+	version: u16,
 	kind: protocol::ToEnvoyTunnelMessageKind,
 ) -> Result<()> {
 	let msg = protocol::versioned::ToEnvoy::serialize_with_embedded_version(
@@ -348,7 +358,7 @@ async fn send(
 			message_id: identity.clone(),
 			message_kind: kind,
 		}),
-		protocol::PROTOCOL_VERSION,
+		version,
 	)?;
 
 	sender.send(msg).await?;

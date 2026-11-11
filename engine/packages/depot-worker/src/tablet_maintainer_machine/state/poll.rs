@@ -186,6 +186,7 @@ pub(crate) fn volume_refreshed(state: &MaintainerState, barrier: &VolumeBarrier)
 /// its next reads if a later request is waiting, or drops the entry.
 fn settle_volume(state: &mut MaintainerState, key: &VolumeLogKey) {
 	super::catch_up::mark(state, key);
+	super::unload::mark(state, key);
 	let polls = &mut state.status_polls;
 	if polls
 		.volume_sending
@@ -269,7 +270,11 @@ fn drive_volume_barriers(
 				});
 				keys.push(key);
 			} else {
+				// The barrier finishes with nothing to read, so whoever waits on it, such as a
+				// parked unload, is marked as a finished read would mark it.
 				state.status_polls.volume_barriers.remove(&key);
+				super::catch_up::mark(state, &key);
+				super::unload::mark(state, &key);
 			}
 		}
 		if keys.is_empty() {
@@ -961,6 +966,8 @@ fn observed(
 				.as_ref()
 				.is_none_or(|previous| previous.status != VolumeLogReplicaStatus::InSync);
 		cold::observe(state, &key, worker, observed.clone());
+		// The observation may prove the tail a grouped log's pin floor waits for.
+		super::groups::members_observed(state, &key);
 		if now_in_sync {
 			report_missing_members(state, &key, effects);
 		}

@@ -2,7 +2,7 @@
 use rivet_util::Id;
 use serde::{Deserialize, Serialize};
 
-pub use rivet_data::generated::pegboard_v2_migrator_v1 as wire;
+pub use rivet_data::generated::pegboard_v2_migrator_v2 as wire;
 
 /// Correlates one effect with its response within one tenure. Never reused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -54,6 +54,12 @@ pub struct Settings {
 	/// from.
 	pub target_namespace: String,
 	pub v3_datacenter_label: u16,
+	/// The target namespace's volume group, or `None` while it has none. An admission places its
+	/// entry here and derives a keyed actor's id for that placement, as a fresh keyed create in
+	/// the namespace would: the group's id when grouped, the legacy namespace-hashed id at the
+	/// unprefixed placement otherwise. The entry keeps both for its life. A namespace gains its
+	/// group once and never loses it, so a group, once seen, is never replaced by `None`.
+	pub target_group: Option<[u8; 16]>,
 }
 
 impl Settings {
@@ -73,6 +79,7 @@ impl Settings {
 			datacenter_labels: Vec::new(),
 			target_namespace: String::new(),
 			v3_datacenter_label: 0,
+			target_group: None,
 		}
 	}
 }
@@ -123,6 +130,7 @@ pub enum Reason {
 	Failover,
 	ActivateRefused,
 	CutoverMismatch,
+	HoldVanished,
 }
 
 impl Reason {
@@ -150,6 +158,7 @@ impl Reason {
 			Reason::Failover => "failover",
 			Reason::ActivateRefused => "activate_refused",
 			Reason::CutoverMismatch => "cutover_mismatch",
+			Reason::HoldVanished => "hold_vanished",
 		}
 	}
 }
@@ -205,6 +214,11 @@ pub enum CopyResult {
 	},
 	/// The V3 state of the target id belongs to an actor outside this migration.
 	NativeActor,
+	/// The entry was placed at the legacy unprefixed placement, but the target namespace has the
+	/// volume group `group` now. Checked before the begin, so nothing was written.
+	PlacementMoved {
+		group: [u8; 16],
+	},
 	FenceMoved,
 	Destroyed,
 	Ineligible,
@@ -234,6 +248,21 @@ pub enum ConfirmResult {
 pub enum V3Result {
 	Applied,
 	Refused,
+	Failed(String),
+}
+
+/// How an activation's read-back left the V3 actor.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ActivateResult {
+	/// The actor is activated, and at the legacy placement its legacy index entry is written.
+	Applied,
+	/// The actor is activated at the legacy placement, and its legacy index entry is not written
+	/// yet. The actor state machine retries that write itself; the entry reads it again.
+	IndexPending,
+	/// Another migration holds the actor.
+	Refused,
+	/// The actor has no state at the entry's placement after the activation was sent.
+	Vanished(String),
 	Failed(String),
 }
 

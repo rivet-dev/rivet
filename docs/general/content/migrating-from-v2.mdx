@@ -16,6 +16,8 @@ This guide covers running the two control planes side by side, the settings that
 5. **New actors land in Rivet 3** in a share you choose (0-100%).
 6. **When every actor has moved,** you stop the Rivet 2 nodes, remove the migration settings, and retire the Rivet 2 control plane.
 
+Until you remove the migration settings, the target namespace cannot be forked (`namespace.migrating_from_v2`): a fork taken mid-migration would hold only the actors already moved.
+
 An actor is never moved while it runs. If one wakes in the middle of its copy, the attempt is discarded and the actor is tried again on a later pass, so a busy actor simply waits until it sleeps.
 
 ### Actor IDs and keys

@@ -139,6 +139,7 @@ pub use actor::context::{
 	ActorContext, ActorKv, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion,
 };
 pub use actor::factory::{ActorEntryFn, ActorFactory};
+pub use actor::fork::{ActorForkStart, ForkLink};
 pub use actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 pub use actor::messages::{
 	ActorEvent, ActorHttpResponse, QueueSendResult, QueueSendStatus, Request, Response,

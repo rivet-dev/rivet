@@ -1,0 +1,5 @@
+{
+  "code": "transaction_queue_full",
+  "group": "sqlite",
+  "message": "SQLite transaction queue is full."
+}

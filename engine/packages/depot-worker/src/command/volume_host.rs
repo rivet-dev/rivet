@@ -428,7 +428,7 @@ fn readiness_failure(
 	initial_writes: bool,
 ) -> KvCommandResponse {
 	use depot_volume::volume_client_machine::types::WriteError;
-	use rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse;
+	use rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse;
 	match error {
 		// The ordinary branch carries no initial application writes, and the
 		// handler cannot run until readiness succeeds. Recovery can fail as the
@@ -448,6 +448,17 @@ fn readiness_failure(
 		}
 		WriteError::LifecycleRejected(VolumeRejectResponse::VolumeDeleted) => {
 			KvCommandResponse::VolumeDeleted
+		}
+		// The volume's group is archived: the command's caller learns the group error the
+		// group commands answer, which the namespace API maps to its own.
+		WriteError::LifecycleRejected(VolumeRejectResponse::VolumeGroupArchived) => {
+			let error = super::groups::GroupArchived.build();
+			let structured = rivet_error::RivetError::extract(&error);
+			KvCommandResponse::ApplicationError(ApplicationError {
+				group: structured.group().to_owned().into(),
+				code: structured.code().to_owned().into(),
+				message: structured.message().to_owned().into(),
+			})
 		}
 		// The volume's stored record is lost; nothing serves it until it is deleted, so the
 		// edge must not retry the command into its deadline.
@@ -648,11 +659,14 @@ impl Cache {
 			return SlotAdmission::Discard;
 		}
 		match (slot.opened.get(), slot.retry_at) {
-			(Some(Err(_)), Some(retry_at)) if now < retry_at => SlotAdmission::Backoff,
-			(Some(Err(_)), Some(_)) => SlotAdmission::Reopen,
-			(Some(Err(KvCommandResponse::VolumeNotFound)), None) if create_if_missing => {
+			// A volume found missing is created by a command that may create it, whatever
+			// backoff earlier refusals of the slot left: a grouped volume's first opens are
+			// refused while its lineage walk runs, then answer not found.
+			(Some(Err(KvCommandResponse::VolumeNotFound)), _) if create_if_missing => {
 				SlotAdmission::Create
 			}
+			(Some(Err(_)), Some(retry_at)) if now < retry_at => SlotAdmission::Backoff,
+			(Some(Err(_)), Some(_)) => SlotAdmission::Reopen,
 			(Some(Err(_)), None) => SlotAdmission::Discard,
 			(Some(Ok(opened)), _) if opened.filesystem.is_fenced() => SlotAdmission::Discard,
 			(Some(Ok(_)), _) | (None, _) => SlotAdmission::Use,
@@ -741,6 +755,8 @@ pub struct VolumeHost {
 	active: Arc<AtomicBool>,
 	may_serve: Arc<dyn Fn() -> bool + Send + Sync>,
 	snapshot: watch::Receiver<MaintainerSnapshot>,
+	/// The hosting maintainer's tablet version marks, shared by every command handle.
+	marks: Arc<dyn super::VersionMarks>,
 	tasks: TaskScope,
 	/// Jitter for reopen backoff.
 	rng: rivet_env::RngStream,
@@ -798,6 +814,7 @@ impl VolumeHost {
 		mut factory: Factory,
 		snapshot: watch::Receiver<MaintainerSnapshot>,
 		authority: Arc<dyn Fn() -> bool + Send + Sync>,
+		request_mark: super::RequestVersionMark,
 	) -> Result<Arc<Self>> {
 		ensure!(
 			factory.config.max_open_volumes > 0
@@ -857,6 +874,10 @@ impl VolumeHost {
 						| MaintainerPhase::Stopped
 				)
 			}),
+			marks: Arc::new(super::MaintainerVersionMarks::new(
+				snapshot.clone(),
+				request_mark,
+			)),
 			snapshot,
 			_capacity_metrics: capacity_metrics,
 		});
@@ -942,10 +963,54 @@ impl VolumeHost {
 		}
 	}
 
-	/// Deleting a volume invalidates cached snapshots as well as in-flight transactions.
+	/// Deleting a volume invalidates cached snapshots as well as in-flight transactions. The
+	/// opened filesystem is fenced as deleted first, so the fence its handlers then meet names
+	/// the delete rather than a revoked dispatch, which is reserved for lost authority.
 	pub fn invalidate(&self, key: &depot_types::VolumeLogKey) {
+		self.deactivate(key, depot_client::fences::FenceReason::VolumeDeleted);
+	}
+
+	/// Drops the slots of volumes whose group was archived. Each opened filesystem is fenced
+	/// as released, so a handler in flight answers its caller `authority_moved`; the caller's
+	/// next command opens the volume again, and the maintainer refuses that open as archived.
+	pub fn close_archived(&self, keys: &[depot_types::VolumeLogKey]) {
+		for key in keys {
+			self.deactivate(key, depot_client::fences::FenceReason::OwnerReleased);
+		}
+	}
+
+	/// Fences the opened filesystem of `key`'s exact incarnation with `reason` and deactivates
+	/// its slot, which closes at the next sweep when idle or when its last command finishes.
+	fn deactivate(
+		&self,
+		key: &depot_types::VolumeLogKey,
+		reason: depot_client::fences::FenceReason,
+	) {
 		let now = self.env.clock().observe().map_or(0, |now| now.boot_ms);
 		let mut cache = self.lock_cache();
+		let deleted =
+			cache
+				.volumes
+				.get(&key.0.volume_key)
+				.and_then(|slot| match slot.opened.get() {
+					Some(Ok(opened)) => {
+						let current = opened
+							.volume
+							.handle()
+							.snapshot
+							.borrow()
+							.volume_log_key
+							.as_deref() == Some(key);
+						match current {
+							true => Some(opened.filesystem.clone()),
+							false => None,
+						}
+					}
+					Some(Err(_)) | None => None,
+				});
+		if let Some(filesystem) = deleted {
+			filesystem.fence_with(reason);
+		}
 		if let Some(slot) = cache.volumes.get(&key.0.volume_key)
 			&& slot.opened.get().is_none_or(|result| {
 				result.as_ref().map_or(true, |opened| {
@@ -1135,6 +1200,9 @@ impl VolumeHost {
 			.observe()
 			.map_err(|_| unavailable(UnavailableReason::Internal))?
 			.boot_ms;
+
+		// A worker standing in for an older release refuses what that release cannot decode.
+		// Its topology read happens before the cache lock.
 
 		// Reserve both budgets under one lock; closing volumes keep their capacity.
 		let mut worker_full = false;
@@ -1550,7 +1618,7 @@ impl VolumeHost {
 			source: ReadSource::Writerless(Arc::new(WriterlessRead::new(
 				Arc::new(self.factory.lifecycle.clone()),
 				request.volume_key.clone(),
-				b"kv",
+				super::KV_FILE,
 				deadline,
 			))),
 			volume_key: request.volume_key,
@@ -1584,7 +1652,10 @@ impl VolumeHost {
 				"unavailable",
 				overloaded(OverloadReason::FilesystemOverloaded),
 			),
-			None => ("served", self.command_response(command_label, result)),
+			None => (
+				"served",
+				self.command_response(command_label, result, false),
+			),
 		};
 		crate::metrics::KV_WRITERLESS_READS
 			.with_label_values(&[command_label, label])
@@ -1628,7 +1699,9 @@ impl VolumeHost {
 			Err(error) => return error.clone(),
 		};
 		// The command that ran speculatively before this open created the volume answers with
-		// that result; its writes are already committed.
+		// that result; its writes are already committed. A retry that collects it has a fresh
+		// tracker of its own, so the result counts as committed rather than as what that tracker
+		// saw.
 		let speculated = {
 			let mut speculated = opened.speculated.lock();
 			match speculated.as_ref() {
@@ -1641,7 +1714,7 @@ impl VolumeHost {
 		let speculated = speculated.filter(|speculated| !speculated.caller_timed_out);
 		if let Some(speculated) = speculated {
 			crate::metrics::KV_SPECULATIVE_CREATES.inc();
-			return self.command_response(command_label, speculated.result);
+			return self.command_response(command_label, speculated.result, true);
 		}
 		let command = &self.factory.registry.commands[&CommandTag(request.tag as usize)];
 		let kv = KvHandle {
@@ -1653,9 +1726,11 @@ impl VolumeHost {
 			volume_key: request.volume_key,
 			locked_ranges: opened.locked_ranges.clone(),
 			shared: opened.shared.clone(),
-			commits,
+			commits: commits.clone(),
 			speculative: None,
 			versions: self.factory.pubsub.topology().clone(),
+			lazy_fork: opened.volume.handle().snapshot.borrow().lazy_fork.clone(),
+			marks: self.marks.clone(),
 		};
 		let handler_timer = crate::metrics::KV_COMMAND_PHASE_DURATION
 			.with_label_values(&[command_label, "handler"])
@@ -1669,14 +1744,16 @@ impl VolumeHost {
 		// The filesystem owns authority/corruption fencing; a fresh command can recover on
 		// the same opening. Fencing here turns a request-scoped refusal into a pool outage.
 
-		self.command_response(command_label, result)
+		self.command_response(command_label, result, commits.dispatched())
 	}
 
-	/// Maps a handler result to its wire response.
+	/// Maps a handler result to its wire response. `committed` says whether the handler
+	/// dispatched a commit of its volume.
 	fn command_response(
 		&self,
 		command: &'static str,
 		result: Result<Vec<u8>>,
+		committed: bool,
 	) -> KvCommandResponse {
 		match result {
 			Ok(body) if body.len() > self.factory.config.max_command_bytes => {
@@ -1690,6 +1767,11 @@ impl VolumeHost {
 				) =>
 			{
 				KvCommandResponse::CommandTooLarge
+			}
+			// The command needed a version mark before its tablet's maintainer finished opening;
+			// nothing was requested or stored, and the maintainer serves here shortly.
+			Err(error) if error.downcast_ref::<super::TabletOpening>().is_some() => {
+				overloaded(OverloadReason::VolumeTransition)
 			}
 			Err(error)
 				if error
@@ -1716,24 +1798,7 @@ impl VolumeHost {
 					filesystem_refusal,
 				)
 			}
-			Err(error) => {
-				let extracted = rivet_error::RivetError::extract(&error);
-				// An unstructured handler error reaches the caller only as `core.internal_error`,
-				// so its cause is logged here, where it is still known.
-				if extracted.group() == "core" && extracted.code() == "internal_error" {
-					tracing::warn!(
-						command,
-						?error,
-						"depot command failed with an unstructured error; the caller sees core.internal_error"
-					);
-				}
-				let error = extracted;
-				KvCommandResponse::ApplicationError(ApplicationError {
-					group: error.group().to_string().into(),
-					code: error.code().to_string().into(),
-					message: error.message().to_string().into(),
-				})
-			}
+			Err(error) => handler_failure(command, error, committed),
 		}
 	}
 
@@ -1899,7 +1964,15 @@ impl VolumeHost {
 						opening_locked_ranges = run.locked_ranges.clone();
 						Some(run)
 					}
-					false => None,
+					// The speculation assumed an absent volume and lost. Its in-memory volume
+					// is released before the command is dropped, so it counts once as a lost
+					// speculation, logged as routine, and its abandoned commit counts no second
+					// fence: the first command of every lazily forked volume takes this path,
+					// and runs again on the opened volume.
+					false => {
+						run.filesystem.release_lost_speculation();
+						None
+					}
 				};
 				(volume, opened.map(|_| ()), created_run)
 			}
@@ -1949,7 +2022,7 @@ impl VolumeHost {
 				self.env.clock(),
 				self.factory.config.filesystem.clone(),
 				self.factory.config.process_cache.clone(),
-				b"kv",
+				super::KV_FILE,
 			)
 			.await
 			.map_err(|error| {
@@ -1984,7 +2057,11 @@ impl VolumeHost {
 					child: ino,
 					kind: Kind::Kv,
 				}),
-				None => filesystem.lookup(depot_fs_core::ROOT_INO, b"kv").await,
+				None => {
+					filesystem
+						.lookup(depot_fs_core::ROOT_INO, super::KV_FILE)
+						.await
+				}
 			};
 			let ino = match lookup {
 				Ok(entry) if entry.kind == Kind::Kv => entry.child,
@@ -1992,7 +2069,7 @@ impl VolumeHost {
 				Err(FilesystemError::Filesystem(depot_fs_core::Error::NotFound)) => filesystem
 					.create(
 						depot_fs_core::ROOT_INO,
-						b"kv",
+						super::KV_FILE,
 						depot_fs_core::rules::new_inode(Kind::Kv, 0o600, 0, 0, 0),
 					)
 					.await
@@ -2062,7 +2139,7 @@ impl VolumeHost {
 			self.env.clock(),
 			self.factory.config.filesystem.clone(),
 			None,
-			b"kv",
+			super::KV_FILE,
 		)
 		.await
 		.ok()?;
@@ -2071,7 +2148,7 @@ impl VolumeHost {
 		let writer = super::speculation::SpeculationGuard::new();
 		let kv = KvHandle {
 			alarm_owner: self.alarm_owner.get().cloned(),
-			filesystem,
+			filesystem: filesystem.clone(),
 			ino: staged?,
 			may_serve,
 			operation_id: speculation.operation_id,
@@ -2081,6 +2158,8 @@ impl VolumeHost {
 			commits: speculation.commits.clone(),
 			speculative: Some(writer.writer()),
 			versions: self.factory.pubsub.topology().clone(),
+			lazy_fork: None,
+			marks: self.marks.clone(),
 		};
 		let mut handler = command
 			.handler
@@ -2102,6 +2181,7 @@ impl VolumeHost {
 			commits: speculation.commits.clone(),
 			writes,
 			journal,
+			filesystem,
 			handler,
 		})
 	}
@@ -2334,7 +2414,8 @@ fn filesystem_refusal(error: &FilesystemError) -> KvCommandResponse {
 		FilesystemError::ColdReadRefused => volume_transition("cold_read_refused"),
 		// The write was refused before it was built because the volume's writes are ahead of
 		// its tablet's apply, so the edge may send the command again after the hint.
-		FilesystemError::ApplyBacklog { retry_after_ms } => {
+		FilesystemError::ApplyBacklog { retry_after_ms }
+		| FilesystemError::VersionUnavailable { retry_after_ms } => {
 			overloaded_after(OverloadReason::FilesystemOverloaded, *retry_after_ms)
 		}
 		FilesystemError::Fenced => KvCommandResponse::Fenced,
@@ -2414,4 +2495,49 @@ impl Config {
 			},
 		}
 	}
+}
+
+/// The response to a handler that failed with `error`, which none of the host's own refusal
+/// mappings matched. `committed` says whether the handler dispatched a commit of its volume.
+fn handler_failure(
+	command: &'static str,
+	error: anyhow::Error,
+	committed: bool,
+) -> KvCommandResponse {
+	if !committed && let Some(response) = nested_refusal(&error) {
+		return response;
+	}
+	let extracted = rivet_error::RivetError::extract(&error);
+	// An unstructured handler error reaches the caller only as `core.internal_error`,
+	// so its cause is logged here, where it is still known.
+	if extracted.group() == "core" && extracted.code() == "internal_error" {
+		tracing::warn!(
+			command,
+			?error,
+			"depot command failed with an unstructured error; the caller sees core.internal_error"
+		);
+	}
+	let error = extracted;
+	KvCommandResponse::ApplicationError(ApplicationError {
+		group: error.group().to_string().into(),
+		code: error.code().to_string().into(),
+		message: error.message().to_string().into(),
+	})
+}
+
+/// The refusal a handler met when a nested Depot command it sent was refused before running,
+/// answered with that command's reason and retry hint. Only taken for a handler that committed
+/// nothing: its transaction aborted with the error, so its own command ran nothing either, and
+/// the caller's edge may send it again after the hint as it would a refusal at admission. As an
+/// application error the refusal would lose its hint, and the edge would answer a final error.
+fn nested_refusal(error: &anyhow::Error) -> Option<KvCommandResponse> {
+	let structured = error.downcast_ref::<rivet_error::RivetError>()?;
+	if structured.group() != "depot" || structured.code() != "overloaded" {
+		return None;
+	}
+	let retry_after_ms = depot_client::retry_after_ms(error)?;
+	let metadata = structured.metadata()?;
+	let label = metadata.get("reason")?.as_str()?;
+	let reason = depot_client::overload_reason_of_label(label)?;
+	Some(overloaded_after(reason, retry_after_ms))
 }

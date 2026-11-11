@@ -1,7 +1,7 @@
 //! Checkpoint identities, bounded policy and durable mutation results.
 use crate::*;
 use anyhow::{Result, ensure};
-use rivet_data::generated::depot_client_protocol_v1::VolumeCheckpointResponse;
+use rivet_data::generated::depot_client_protocol_v2::VolumeCheckpointResponse;
 
 /// Values are bounded before they enter either the log or the store queue.
 pub const MAX_NAME_BYTES: usize = 255;
@@ -82,15 +82,15 @@ pub fn retention_due(
 /// An existing named point wins unchanged, while confirmation cannot create a
 /// replacement for an intent removed after it was applied.
 pub fn named_checkpoint(
-	inspection: rivet_data::generated::depot_client_protocol_v1::CheckpointInspection,
+	inspection: rivet_data::generated::depot_client_protocol_v2::CheckpointInspection,
 	position: &rivet_data::generated::shared_depot_types_v1::VolumeLogPosition,
-	request: &rivet_data::generated::depot_client_protocol_v1::CheckpointCreate,
+	request: &rivet_data::generated::depot_client_protocol_v2::CheckpointCreate,
 	now_unix_ms: i64,
 ) -> std::result::Result<
 	FsCheckpointInfo,
-	rivet_data::generated::depot_client_protocol_v1::CheckpointError,
+	rivet_data::generated::depot_client_protocol_v2::CheckpointError,
 > {
-	use rivet_data::generated::depot_client_protocol_v1::CheckpointError as E;
+	use rivet_data::generated::depot_client_protocol_v2::CheckpointError as E;
 	if !valid_name(&request.name) {
 		return Err(E::Invalid);
 	}
@@ -98,10 +98,14 @@ pub fn named_checkpoint(
 		if minimum.volume_incarnation != inspection.volume_incarnation {
 			return Err(E::IncarnationChanged);
 		}
-		if minimum.position.volume_seq > position.volume_seq {
+		// The volume has one claim log, so the minimum names claim log 0 alone.
+		let Some(minimum) = minimum.cut.root_position() else {
+			return Err(E::Invalid);
+		};
+		if minimum.volume_seq > position.volume_seq {
 			return Err(E::Lagging);
 		}
-		if minimum.position.client_epoch > position.client_epoch {
+		if minimum.client_epoch > position.client_epoch {
 			return Err(E::Invalid);
 		}
 	}
@@ -113,21 +117,22 @@ pub fn named_checkpoint(
 		None => Ok(FsCheckpointInfo {
 			name: request.name.clone(),
 			volume_incarnation: inspection.volume_incarnation,
-			position: position.clone(),
+			position: FsCut::single(position.clone()),
 			checkpoint: FsVolumeCheckpoint {
 				named: true,
 				retention: false,
 				created_at: now_unix_ms,
 				client_epoch: position.client_epoch,
+				cut: Some(FsCut::single(position.clone())),
 			},
 		}),
 	}
 }
 
 pub fn valid_operation(
-	operation: &rivet_data::generated::depot_client_protocol_v1::CheckpointOperation,
+	operation: &rivet_data::generated::depot_client_protocol_v2::CheckpointOperation,
 ) -> bool {
-	use rivet_data::generated::depot_client_protocol_v1::CheckpointOperation as Op;
+	use rivet_data::generated::depot_client_protocol_v2::CheckpointOperation as Op;
 	match operation {
 		Op::CheckpointCreate(op) => valid_name(&op.name),
 		Op::CheckpointInspect(op) => valid_name(&op.name),

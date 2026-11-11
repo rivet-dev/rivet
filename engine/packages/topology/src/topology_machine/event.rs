@@ -1,6 +1,6 @@
 use super::types::{EndpointResult, FenceReason, OperationId};
 use crate::{
-	heartbeat::{Observation, Read, Write},
+	heartbeat::{Observation, Read, UnobservedHeartbeat, Write},
 	worker::{Worker, WorkerId},
 };
 use serde::{Deserialize, Serialize};
@@ -102,11 +102,37 @@ pub enum Event {
 		op: OperationId,
 		result: Option<Vec<Observation>>,
 	},
-	/// The listing completed but at least one heartbeat GET was unreadable. Healthy observations
-	/// are applied without treating the listing as expiry evidence for retained observations.
+	/// **When**
+	///
+	/// The discovery executor answers `ListStorageWorkersRequest` with this when the listing
+	/// completed but at least one heartbeat it read gave no observation.
+	///
+	/// **State**
+	///
+	/// Healthy observations are applied. A worker whose heartbeat this listing read but could not
+	/// use, and whose `Last-Modified` the listing proves expired, cannot be serving: it leaves
+	/// the read floor and makes the listing no less complete. Of the rest, a worker in
+	/// `unobserved` keeps version selection at the lowest write version until a listing observes
+	/// it; one in `unconfirmed` keeps its previous observation, and the listing is not expiry
+	/// evidence for retained observations. When every such worker is proven expired the listing
+	/// counts as complete, like `ListStorageWorkersResponse`.
+	///
+	/// **Effects**
+	///
+	/// `RecordUnobservedWorkersExpired` for the proven-expired workers, then the same effects as
+	/// `ListStorageWorkersResponse`; a complete listing can also fence this worker for an
+	/// incompatible version.
 	ListStorageWorkersPartialResponse {
 		op: OperationId,
 		entries: Vec<Observation>,
+		/// The listed storage workers whose heartbeat gave no observation and that no earlier
+		/// listing observed.
+		#[serde(default)]
+		unobserved: Vec<UnobservedHeartbeat>,
+		/// The other heartbeats that gave no observation: listed storage workers whose earlier
+		/// observation is in `entries`, and this process's own stateless heartbeat.
+		#[serde(default)]
+		unconfirmed: Vec<UnobservedHeartbeat>,
 	},
 	/// Answers `LookupEndpointRequest`. Ignored unless `generation` matches the pending
 	/// lookup for `worker`. A found endpoint is cached until its heartbeat's lease would end;

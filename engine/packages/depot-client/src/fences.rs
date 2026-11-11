@@ -63,6 +63,11 @@ pub enum FenceReason {
 	CaptureCreated,
 	/// The owning slot, lease or filesystem handle was released.
 	OwnerReleased,
+	/// A command host ran a volume's first command speculatively on an empty in-memory volume,
+	/// and the open found the volume already existed, as it does for the first command of every
+	/// lazily forked volume. The command runs again on the opened volume; the empty one is
+	/// released, and the commit its dropped attempt abandons counts no second fence.
+	SpeculationLost,
 	/// The slot replaced this filesystem's volume client, or holds none for a reopen.
 	SlotReplaced,
 	/// The slot closed this filesystem's volume client.
@@ -110,6 +115,7 @@ impl FenceReason {
 			FenceReason::VolumeUnresolved => "volume_unresolved",
 			FenceReason::CaptureCreated => "capture_created",
 			FenceReason::OwnerReleased => "owner_released",
+			FenceReason::SpeculationLost => "speculation_lost",
 			FenceReason::ReplayFailed => "replay_failed",
 			FenceReason::SlotReplaced => "slot_replaced",
 			FenceReason::SlotClosed => "slot_closed",
@@ -123,12 +129,19 @@ impl FenceReason {
 	}
 
 	/// The owner ended this lifetime itself: it dropped or closed its handle, or retired, as
-	/// every actor stop and idle release does. These are logged at debug; they still count by
-	/// reason and still take the once-per-owner line, so nothing later repeats it.
+	/// every actor stop and idle release does, or the volume it held was deleted, which ends the
+	/// lifetime on purpose. These are logged at debug; they still count by reason and still take
+	/// the once-per-owner line, so nothing later repeats it. A revoked dispatch is not routine:
+	/// a delete fences as deleted before it revokes, so a revoke seen first means the owner lost
+	/// its authority, which stays a warning.
 	fn routine(self) -> bool {
 		matches!(
 			self,
-			FenceReason::OwnerReleased | FenceReason::SlotClosed | FenceReason::OwnerRetired
+			FenceReason::OwnerReleased
+				| FenceReason::SpeculationLost
+				| FenceReason::SlotClosed
+				| FenceReason::OwnerRetired
+				| FenceReason::VolumeDeleted
 		)
 	}
 

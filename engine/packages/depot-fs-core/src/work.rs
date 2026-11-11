@@ -39,7 +39,7 @@ impl PendingVolume {
 	}
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum PendingSweepProgress {
 	Held(SweepHold),
 	More,
@@ -48,7 +48,7 @@ pub enum PendingSweepProgress {
 
 /// What keeps a retired incarnation from being swept. The kind decides who drives the sweep
 /// again, because only one of them leaves a trace when it goes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum SweepHold {
 	/// A read session of the incarnation has not expired. Sessions expire inside the store
 	/// without an event, so the maintainer retries the sweep on a deadline.
@@ -58,4 +58,10 @@ pub enum SweepHold {
 	/// sweep row and touches its volume's pending rows, and that volume's scan queues the
 	/// sweep again, so nothing waits on it in memory.
 	Checkpoint,
+	/// Only fork pins keep the incarnation, for the child groups in `waiting`, which a deleted
+	/// incarnation's pins name and which nothing else ever drops: the incarnation has no next
+	/// pin or load. The maintainer's group cache waits for each to be archived and queues the
+	/// sweep again with them, which drops them from the pins first; see
+	/// `groups::deleted_pins_held`.
+	ForkPins { waiting: Vec<[u8; 16]> },
 }

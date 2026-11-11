@@ -33,7 +33,8 @@ use crate::keys::{
 	kv::DestroyedActorIndexKey, kv::DestroyedActorIndexPrefix, kv::EnvoyIndexKey,
 	kv::EnvoyIndexPrefix, kv::EnvoyPoolKey, kv::EnvoyPoolPrefix, kv::at_write_version,
 	partition::ActiveEnvoyIndexVolume, partition::ActorIndexVolume, partition::EnvoyIndexVolume,
-	partition::EnvoyPoolIndexVolume, partition::EnvoyVolume, partition::actor_index_bucket,
+	partition::EnvoyPoolIndexVolume, partition::EnvoyVolume, partition::LegacyActorIndexVolume,
+	partition::actor_index_bucket,
 };
 use crate::wire;
 use anyhow::{Context, Result, ensure};
@@ -240,9 +241,9 @@ pub fn register(registry: &mut CommandRegistry, ctx: &EngineContext) -> Result<(
 
 /// Fails unless `db` is the bucket volume of its namespace and name that holds `actor_id`'s entry.
 fn ensure_actor_bucket(db: &KvHandle, actor_id: Id, buckets: u64) -> Result<()> {
-	let volume = ActorIndexVolume::from_volume_key(db.volume_key())?;
+	let bucket = ActorIndexVolume::parse_bucket(db.volume_key())?;
 	ensure!(
-		volume.bucket == actor_index_bucket(actor_id, buckets),
+		bucket == actor_index_bucket(actor_id, buckets),
 		"wrong actor index bucket volume"
 	);
 	Ok(())
@@ -324,8 +325,8 @@ async fn list_actors_handler(
 	db: KvHandle,
 	request: wire::IndexListActorsRequest,
 ) -> Result<wire::IndexListActorsResponse> {
-	let volume = ActorIndexVolume::from_volume_key(db.volume_key())?;
-	ensure!(volume.bucket < buckets, "actor index bucket out of range");
+	let bucket = ActorIndexVolume::parse_bucket(db.volume_key())?;
+	ensure!(bucket < buckets, "actor index bucket out of range");
 	ensure!(
 		request.limit > 0,
 		"actor index listing limit must be positive"
@@ -1742,9 +1743,20 @@ pub struct ActorPage {
 ///
 /// Each bucket is read at a different moment, so an entry that lands behind the listing's position
 /// appears only in a fresh listing.
+///
+/// Legacy: until the namespace's backfill is done its unprefixed buckets are listed beside the
+/// grouped ones, with the group's bucket count, which is the configured count when the
+/// namespace moved into its group. Changing `pegboard.actor_index_buckets_per_name` across the
+/// upgrade is unsupported until the backfill is done, since the unprefixed entries were bucketed
+/// by the count of their own time; this is the same hazard as changing it before groups. The
+/// cursor is a position in the merged order (creation time, then actor id), not per source, so it
+/// stays valid when the backfill finishes mid-pagination and the unprefixed sources drop out. A
+/// page at that moment may repeat or skip an actor once: a moved entry reappears in a grouped
+/// bucket, and a keyed actor's moved entry carries its new id, which sorts elsewhere at the same
+/// creation time. Removed in 3.1 with the backfill.
 pub async fn list_actors(
 	ctx: &EngineContext,
-	namespace: &str,
+	namespace: &crate::NamespaceStanding,
 	name: &str,
 	after: Option<wire::IndexActorCursor>,
 	limit: usize,
@@ -1752,7 +1764,8 @@ pub async fn list_actors(
 ) -> Result<ActorPage> {
 	ensure!(limit > 0, "actor listing limit must be positive");
 	let limit = limit.min(PAGE_SIZE);
-	let buckets = ctx.config().pegboard().actor_index_buckets_per_name();
+	let buckets =
+		namespace.index_bucket_count(ctx.config().pegboard().actor_index_buckets_per_name());
 	let concurrency =
 		(buckets as usize).min(ctx.config().pegboard().actor_index_list_concurrency());
 	crate::metrics::ACTOR_INDEX_LIST_BUCKETS.observe(buckets as f64);
@@ -1760,11 +1773,17 @@ pub async fn list_actors(
 	#[allow(clippy::disallowed_methods, reason = "metrics use real time")]
 	let started = std::time::Instant::now();
 
-	let mut merge = ListMerge::new(buckets as usize, after, limit);
+	// Legacy: until the namespace's backfill is done, its unprefixed buckets are listed as more
+	// sources beside the grouped ones, numbered after them. Removed in 3.1 with the backfill.
+	let sources = match namespace.legacy_fallback().every() {
+		true => buckets.saturating_mul(2),
+		false => buckets,
+	};
+	let mut merge = ListMerge::new(sources as usize, after, limit);
 
 	// Read a small first page from every bucket.
 	let first_page = limit.min(MERGE_FIRST_PAGE);
-	let pages = futures_util::stream::iter(0..buckets)
+	let pages = futures_util::stream::iter(0..sources)
 		.map(|bucket| {
 			let request = merge.page_request(bucket as usize);
 			async move {
@@ -1772,6 +1791,7 @@ pub async fn list_actors(
 					ctx,
 					namespace,
 					name,
+					buckets,
 					bucket,
 					request,
 					first_page,
@@ -1804,6 +1824,7 @@ pub async fn list_actors(
 					ctx,
 					namespace,
 					name,
+					buckets,
 					bucket as u64,
 					request,
 					remaining,
@@ -1841,22 +1862,59 @@ fn collect_destroyed(
 }
 
 /// Reads when the incarnation of `actor_id` created at `create_unix_ms` was destroyed, or
-/// `None` when the index holds no destroyed entry for it.
+/// `None` when the index holds no destroyed entry for it. Until the namespace's backfill is done
+/// a miss also reads the legacy unprefixed bucket, where an actor from before groups has its
+/// entry; this is a legacy read removed in 3.1 with the backfill.
 pub async fn read_destroyed_actor(
 	ctx: &EngineContext,
-	namespace: &str,
+	namespace: &crate::NamespaceStanding,
 	name: &str,
 	actor_id: Id,
 	create_unix_ms: i64,
 ) -> Result<Option<i64>> {
-	let buckets = ctx.config().pegboard().actor_index_buckets_per_name();
-	let volume =
-		ActorIndexVolume::for_actor(namespace.to_owned(), name.to_owned(), actor_id, buckets)
-			.volume_key();
+	let buckets =
+		namespace.index_bucket_count(ctx.config().pegboard().actor_index_buckets_per_name());
+	let volume = ActorIndexVolume::for_actor_in_namespace(
+		namespace.group_id(),
+		namespace.name.clone(),
+		name.to_owned(),
+		actor_id,
+		buckets,
+	);
+	let found = read_destroyed_entry(ctx, &volume, actor_id, create_unix_ms).await?;
+	if found.is_some()
+		|| namespace
+			.legacy_fallback()
+			.namespace_for(actor_id)
+			.is_none()
+	{
+		return Ok(found);
+	}
+	let legacy = LegacyActorIndexVolume::new(
+		namespace.name.clone(),
+		name.to_owned(),
+		actor_index_bucket(actor_id, buckets),
+	)
+	.volume_key();
+	// The backfill deletes the unprefixed buckets at its end, after which they hold nothing.
+	match read_destroyed_entry(ctx, &legacy, actor_id, create_unix_ms).await {
+		Ok(found) => Ok(found),
+		Err(error) if crate::commands::is_volume_gone(&error) => Ok(None),
+		Err(error) => Err(error),
+	}
+}
+
+/// Reads one bucket's destroyed entry of an incarnation. A bucket never created holds none.
+async fn read_destroyed_entry(
+	ctx: &EngineContext,
+	volume: &rivet_keys::keys::VolumeKey,
+	actor_id: Id,
+	create_unix_ms: i64,
+) -> Result<Option<i64>> {
 	let result = ctx
 		.depot()
 		.command::<IndexReadDestroyedActor>(
-			&volume,
+			volume,
 			wire::IndexReadDestroyedActorRequest {
 				create_unix_ms,
 				actor_id: actor_id.as_bytes().into(),
@@ -1870,20 +1928,40 @@ pub async fn read_destroyed_actor(
 	}
 }
 
-/// Reads one bucket page. A bucket volume that was never created is empty.
+/// Reads one page of the listing source `source`. Sources below `buckets` are the namespace's
+/// buckets; the ones from `buckets` up are its legacy unprefixed buckets, listed only while its
+/// backfill is not done. A bucket volume that was never created is empty. While the backfill
+/// moves an actor, a listing shows it twice, at its old entry and its new one (a random-id actor
+/// twice under the same id), until the old actor's destroy deletes the old entry; listings do
+/// not dedupe across the two shapes.
+#[allow(clippy::too_many_arguments, reason = "one bucket read's inputs")]
 async fn list_bucket(
 	ctx: &EngineContext,
-	namespace: &str,
+	namespace: &crate::NamespaceStanding,
 	name: &str,
-	bucket: u64,
+	buckets: u64,
+	source: u64,
 	after: Option<wire::IndexActorCursor>,
 	limit: usize,
 	include_destroyed: bool,
 ) -> Result<wire::IndexListActorsResponse> {
+	let legacy = source >= buckets;
+	let volume = match source.checked_sub(buckets) {
+		None => ActorIndexVolume::in_namespace(
+			namespace.group_id(),
+			namespace.name.clone(),
+			name.to_owned(),
+			source,
+		),
+		Some(bucket) => {
+			LegacyActorIndexVolume::new(namespace.name.clone(), name.to_owned(), bucket)
+				.volume_key()
+		}
+	};
 	let result = ctx
 		.depot()
 		.command::<IndexListActors>(
-			&ActorIndexVolume::new(namespace.to_owned(), name.to_owned(), bucket).volume_key(),
+			&volume,
 			wire::IndexListActorsRequest {
 				after,
 				limit: limit as u32,
@@ -1892,9 +1970,14 @@ async fn list_bucket(
 		)
 		.await;
 
+	// Legacy: the backfill deletes a namespace's unprefixed buckets once it moved their actors,
+	// so a deleted one is empty too. Removed in 3.1 with the backfill.
+	let empty = |error: &anyhow::Error| {
+		is_volume_not_found(error) || (legacy && crate::commands::is_volume_gone(error))
+	};
 	match result {
 		Ok(page) => Ok(page),
-		Err(error) if is_volume_not_found(&error) => Ok(wire::IndexListActorsResponse {
+		Err(error) if empty(&error) => Ok(wire::IndexListActorsResponse {
 			actors: Vec::new(),
 			has_more: false,
 			destroyed: Vec::new(),

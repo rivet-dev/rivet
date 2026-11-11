@@ -151,9 +151,9 @@ impl Refusal {
 
 	/// The refusal a maintainer's reject response maps to.
 	pub(crate) fn rejected(
-		reason: rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse,
+		reason: rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse,
 	) -> Self {
-		use rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse as Reject;
+		use rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse as Reject;
 		let (status, code, retry_after_ms) = match &reason {
 			Reject::NotMaintainer(reject) => (
 				StatusCode::SERVICE_UNAVAILABLE,
@@ -175,10 +175,16 @@ impl Refusal {
 				"VOLUME_UNDER_REPAIR",
 				Some(reject.retry_after_ms),
 			),
+			Reject::VolumeTailUnproven(reject) => (
+				StatusCode::SERVICE_UNAVAILABLE,
+				"VOLUME_TAIL_UNPROVEN",
+				Some(reject.retry_after_ms),
+			),
 			Reject::VolumeNotFound => (StatusCode::NOT_FOUND, "VOLUME_NOT_FOUND", None),
 			Reject::VolumeExists => (StatusCode::CONFLICT, "VOLUME_EXISTS", None),
 			Reject::VolumeDeleted => (StatusCode::GONE, "VOLUME_DELETED", None),
 			Reject::VolumeRecordMissing(_) => (StatusCode::CONFLICT, "VOLUME_RECORD_MISSING", None),
+			Reject::VolumeGroupArchived => (StatusCode::GONE, "VOLUME_GROUP_ARCHIVED", None),
 		};
 		Self {
 			status,

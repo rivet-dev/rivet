@@ -6,3 +6,4 @@ export { type ActorsGetRequest } from "./ActorsGetRequest";
 export { type ActorsDeleteRequest } from "./ActorsDeleteRequest";
 export { type ActorsRescheduleRequest } from "./ActorsRescheduleRequest";
 export { type ActorsSleepRequest } from "./ActorsSleepRequest";
+export { type ActorsForkRequest } from "./ActorsForkRequest";

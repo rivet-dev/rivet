@@ -1,6 +1,7 @@
 import type { ClientConfig } from "@/client/config";
 import {
 	HEADER_RIVET_ACTOR,
+	HEADER_RIVET_NAMESPACE,
 	HEADER_RIVET_RAY_ID,
 	HEADER_RIVET_SKIP_READY_WAIT,
 	HEADER_RIVET_TARGET,
@@ -87,6 +88,11 @@ function buildGuardHeaders(
 	if (options.directActorId !== undefined) {
 		headers.set(HEADER_RIVET_TARGET, "actor");
 		headers.set(HEADER_RIVET_ACTOR, options.directActorId);
+		// An actor ID resolves within its namespace. Without one the gateway falls back
+		// to the token's namespace, or to `default` for the admin token.
+		if (runConfig.namespace) {
+			headers.set(HEADER_RIVET_NAMESPACE, runConfig.namespace);
+		}
 	}
 	if (shouldSkipReadyWait(options)) {
 		headers.set(HEADER_RIVET_SKIP_READY_WAIT, "1");

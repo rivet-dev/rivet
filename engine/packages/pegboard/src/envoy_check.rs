@@ -9,6 +9,7 @@ use crate::keys::partition::{ActorVolume, EnvoyVolume};
 use crate::wire;
 use anyhow::{Context, Result};
 use rivet_engine_context::EngineContext;
+use rivet_keys::keys::codec::GroupId;
 use rivet_util::Id;
 use uuid::Uuid;
 
@@ -70,17 +71,20 @@ pub enum EnvoyCheck {
 
 /// Reads the envoy's record once and judges it against `allocation`. Nothing is cached: each
 /// check is one durable read, so callers run it only after the allocation's route refused them
-/// or on a fallback poll. `route_refused` says the route's worker answered that it holds no
+/// or on a fallback poll. `namespace` is the namespace the actor is served in, whose envoys
+/// host it: for an actor inherited through a namespace fork it is not the origin namespace its
+/// data names. `route_refused` says the route's worker answered that it holds no
 /// subscriber for the connection, as a `no_responders` open failure does.
 pub async fn envoy_check(
 	ctx: &EngineContext,
+	namespace: &str,
 	actor: &wire::ActorData,
 	allocation: &wire::ActorAllocation,
 	route_refused: bool,
 ) -> Result<EnvoyCheck> {
 	let route = Route::of_allocation(allocation)?;
 	let volume = EnvoyVolume::new(
-		actor.namespace.to_string(),
+		namespace.to_string(),
 		actor.pool_name.to_string(),
 		allocation.envoy_key.to_string(),
 	)
@@ -131,10 +135,12 @@ pub async fn envoy_check(
 }
 
 /// Records the envoy's newer route on the actor's allocation, so later requests of the epoch
-/// open it first. Best effort and off the caller's path: the state machine applies it only if
+/// open it first. `group` is the group of the namespace the request was resolved in, which holds
+/// the actor's state volume (absent for a pre-group namespace). Best effort and off the caller's path: the state machine applies it only if
 /// the allocation still equals `from`, and a failure costs the next request one more fallback.
 pub fn repair_route(
 	ctx: &EngineContext,
+	group: Option<GroupId>,
 	actor_id: Id,
 	epoch: u32,
 	from: &wire::ActorAllocation,
@@ -149,7 +155,7 @@ pub fn repair_route(
 	let _detached = ctx.env().spawn(Box::pin(async move {
 		let sent = ctx2
 			.depot()
-			.command::<crate::commands::ActorEvent>(&ActorVolume::new(actor_id).volume_key(), event)
+			.command::<crate::commands::ActorEvent>(&ActorVolume::in_namespace(group, actor_id), event)
 			.await;
 		if let Err(error) = sent {
 			tracing::debug!(%actor_id, ?error, "actor route repair failed; the next request falls back again");
@@ -158,10 +164,12 @@ pub fn repair_route(
 }
 
 /// Reports `epoch` for reallocation: lost when its envoy no longer hosts it, otherwise draining.
+/// `group` is the group of the envoy's namespace, which holds the actor's state volume.
 /// The state machine stops a lost epoch and waits for the envoy's stopped report, or its proven
 /// absence, before starting the next, so a wrong report costs a restart, never a second writer.
 pub async fn report_reallocate(
 	ctx: &EngineContext,
+	group: Option<GroupId>,
 	actor_id: Id,
 	epoch: u32,
 	lost: bool,
@@ -172,7 +180,7 @@ pub async fn report_reallocate(
 		waiter: None,
 	});
 	ctx.depot()
-		.command::<crate::commands::ActorEvent>(&ActorVolume::new(actor_id).volume_key(), event)
+		.command::<crate::commands::ActorEvent>(&ActorVolume::in_namespace(group, actor_id), event)
 		.await?;
 	Ok(())
 }

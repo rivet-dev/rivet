@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use crate::{
 	cloud::{CloudClient, v2},
 	cluster_env::{
-		MAX_SECRET_BYTES, SecretUsage, delete_plan, rollout_outcome, rollout_plan, secret_usage,
+		MAX_SECRET_BYTES, SecretUsage, delete_plan, secret_usage, set_outcome, set_plan,
 		validate_secret_name,
 	},
 	target::{CloudArgs, ClusterTarget, Target},
@@ -23,10 +23,11 @@ pub struct Opts {
 enum Commands {
 	/// List the cluster's secrets. Values are never shown.
 	List(ListOpts),
-	/// Roll out a new value for a secret, creating it when it does not exist.
+	/// Set a secret's value, creating the secret when it does not exist.
 	/// Every runner pool whose env names the secret rolls onto the new value,
 	/// except a pool a rollback pinned to an older version.
-	Rollout(RolloutOpts),
+	#[command(alias = "rollout")]
+	Set(SetOpts),
 	/// Delete a secret. Refused while a runner pool's env names it.
 	Delete(DeleteOpts),
 }
@@ -40,12 +41,12 @@ pub struct ListOpts {
 	json: bool,
 }
 
-/// Rolls out a new value. The value never goes on the command line, where it
+/// Sets a secret's value. The value never goes on the command line, where it
 /// would land in shell history and the process list: in a terminal it is
 /// prompted for without echo, otherwise it is read from stdin, or from the
 /// environment variable `--from-env` names.
 #[derive(Parser)]
-pub struct RolloutOpts {
+pub struct SetOpts {
 	/// Name of the secret, such as `DATABASE_URL` or `db-password`.
 	name: String,
 	#[command(flatten)]
@@ -54,12 +55,12 @@ pub struct RolloutOpts {
 	/// instead of a prompt or stdin.
 	#[arg(long, value_name = "VAR")]
 	from_env: Option<String>,
-	/// Roll out an empty value. Without it an empty value is refused, so a
+	/// Set an empty value. Without it an empty value is refused, so a
 	/// script that forgot to pipe the value fails instead of blanking the
 	/// secret.
 	#[arg(long)]
 	allow_empty: bool,
-	/// Roll out without asking to confirm. Required when there is no terminal
+	/// Set the value without asking to confirm. Required when there is no terminal
 	/// to confirm on, such as in CI.
 	#[arg(long)]
 	yes: bool,
@@ -81,7 +82,7 @@ impl Opts {
 	pub async fn execute(self) -> Result<()> {
 		match self.command {
 			Commands::List(opts) => opts.execute().await,
-			Commands::Rollout(opts) => opts.execute().await,
+			Commands::Set(opts) => opts.execute().await,
 			Commands::Delete(opts) => opts.execute().await,
 		}
 	}
@@ -136,24 +137,24 @@ impl ListOpts {
 	}
 }
 
-impl RolloutOpts {
+impl SetOpts {
 	async fn execute(self) -> Result<()> {
 		validate_secret_name(&self.name)?;
 		let (cloud, cluster, org) = connect(&self.cloud).await?;
 		let (latest_version, usage) = inspect_secret(&cloud, &cluster, &self.name).await?;
 		eprintln!(
 			"{}",
-			rollout_plan(&cluster, org.as_deref(), &self.name, latest_version, &usage)
+			set_plan(&cluster, org.as_deref(), &self.name, latest_version, &usage)
 		);
-		if !self.yes && !terminal::confirm("roll out this secret?", "roll out the secret")? {
+		if !self.yes && !terminal::confirm("set this secret?", "set the secret")? {
 			eprintln!("aborted");
 			return Ok(());
 		}
 
 		let (value, source) = read_value(&self.name, self.from_env.as_deref()).await?;
 		let value = checked_value(value, source, self.allow_empty)?;
-		let rollout = v2::rollout_secret(&cloud, &cluster, &self.name, &value).await?;
-		println!("{}", rollout_outcome(&rollout, &usage));
+		let result = v2::rollout_secret(&cloud, &cluster, &self.name, &value).await?;
+		println!("{}", set_outcome(&result, &usage));
 		Ok(())
 	}
 }
@@ -242,13 +243,13 @@ pub(super) fn checked_value(
 	}
 	match source {
 		ValueSource::Prompt => {
-			bail!("no value was entered; pass --allow-empty to roll out an empty value")
+			bail!("no value was entered; pass --allow-empty to set an empty value")
 		}
 		ValueSource::Stdin => bail!(
-			"stdin was empty; pipe the value, such as `printf %s \"$VALUE\" | rivet cluster secret rollout <name>`, use --from-env, or pass --allow-empty"
+			"stdin was empty; pipe the value, such as `printf %s \"$VALUE\" | rivet cluster secret set <name>`, use --from-env, or pass --allow-empty"
 		),
 		ValueSource::Env => bail!(
-			"the environment variable is empty; set it or pass --allow-empty to roll out an empty value"
+			"the environment variable is empty; set it or pass --allow-empty to set an empty value"
 		),
 	}
 }

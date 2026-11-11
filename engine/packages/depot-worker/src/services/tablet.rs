@@ -7,11 +7,11 @@ use futures_util::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnord
 use rivet_data::{
 	DEPOT_CLIENT_PROTOCOL_VERSION,
 	generated::{
-		depot_client_protocol_v1::{ClientRequest, ClientResponse},
+		depot_client_protocol_v2::{ClientRequest, ClientResponse},
 		depot_kv_command_v1::UnavailableReason,
 		depot_tablet_manifest_v1::TabletManifest,
 	},
-	versioned::{DepotClientRequestData, DepotClientResponseData},
+	versioned::DepotClientRequestData,
 };
 use rivet_topology::Topology;
 use std::{sync::Arc, time::Duration};
@@ -95,6 +95,7 @@ pub async fn start_with_commands(
 		capacities,
 		Duration::from_secs(5),
 		Arc::new(move || lease.may_admit().unwrap_or(false)),
+		topology.clone(),
 	)?
 	.with_command_capacity(config.request_capacity)?
 	.with_shared_timers(timers.clone());
@@ -333,6 +334,9 @@ async fn serve(
 					continue;
 				}
 
+				let Some(message) = unless_previous_release_refuses(topology, message).await else {
+					continue;
+				};
 				// Malformed requests never enter a maintainer or reserve lifecycle state.
 				let request = match DepotClientRequestData::deserialize_with_embedded_version(&message.payload) {
 					Ok(request) => request,
@@ -381,17 +385,30 @@ async fn serve(
 	}
 }
 
+/// Hands `message` back unless this worker stands in for an older release that cannot decode
+/// it, in which case it fails the request as that release does. Only `test-support` builds stand
+/// in for older releases. The check lives outside the request loop's `select_biased!` because a
+/// test gate inside that macro cannot be stripped from the public source.
+async fn unless_previous_release_refuses(
+	topology: &Topology,
+	message: RequestMessage,
+) -> Option<RequestMessage> {
+	let _ = topology;
+	Some(message)
+}
+
 /// Checks the original grant both before encoding and immediately before handing bytes to UPS.
 fn deliver(topology: &Topology, reply: Reply) -> Result<()> {
 	let (message, authority, response, filesystem_read) = reply;
 	let may_send =
 		|| -> Result<bool> { Ok(topology.may_admit()? && !message.is_request_expired()?) };
 	let authorized = || authority.as_ref().is_none_or(|guard| guard.may_reply());
+	// The answer goes back at the version the request was sealed at, which its sender reads.
+	let request_version = depot_client::client_protocol::embedded_version(&message.payload)
+		.unwrap_or(DEPOT_CLIENT_PROTOCOL_VERSION);
+	let retry_after_ms = topology.config().lease.refresh_hint_interval_ms;
 	let encode = |response: &ClientResponse| {
-		DepotClientResponseData::serialize_with_embedded_version(
-			response,
-			DEPOT_CLIENT_PROTOCOL_VERSION,
-		)
+		depot_client::client_protocol::seal_response(response, request_version, retry_after_ms)
 	};
 	if !may_send()? {
 		return Ok(());

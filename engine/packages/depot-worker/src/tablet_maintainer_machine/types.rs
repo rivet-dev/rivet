@@ -21,15 +21,69 @@ pub enum ApplyAuthority {
 	RetiredTail,
 }
 
-/// Only a failed replica reread is safe to retry under the same store grant.
-/// Partial rows remain hidden at their original commit sequence until replay finishes.
+/// Why a filesystem apply stopped before its last entry. A failed replica reread and a row the
+/// store cannot encode yet are safe to replay under the same store grant: partial rows remain
+/// hidden at their original commit sequence until replay finishes, and replaying from the
+/// unchanged resolver stages the same rows again. Any other failure fences the maintainer.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, thiserror::Error)]
 pub enum FilesystemApplyError {
 	#[error("transaction reread from {worker:?} failed: {message}")]
 	ReplicaRead { worker: WorkerId, message: String },
+	/// An entry writes a row the store's current `depot.fs_rows` version cannot express but
+	/// the version the grant selected can, such as a KV range whiteout of a volume read
+	/// through its base while the store still encodes at version 1. The store refused the entry
+	/// before staging any of its own rows. The pass that makes the raised rows mark durable lets the replay encode it.
+	#[error(
+		"{row} row needs depot.fs_rows above version {version}; waiting for the raised rows mark"
+	)]
+	RowsMarkPending { row: String, version: u16 },
+	/// An entry writes a row that no version this grant reaches can express: `reachable`, the
+	/// higher of the selected version and the durable mark, is below the version the row
+	/// needs, as during a deploy that mixes versions or after a grant selected from a stale
+	/// topology view. The store refused the entry before staging any of its own rows. Nothing
+	/// in this grant resolves it; the maintainer hands the grant back after
+	/// `MaintainerTuning::inexpressible_hold_ms`, and the next grant selects again.
+	#[error(
+		"{row} row needs depot.fs_rows above version {reachable}, the highest this grant reaches"
+	)]
+	RowsInexpressible { row: String, reachable: u16 },
 	#[error("{0}")]
 	Storage(String),
 }
+
+/// What a grouped volume's load learned from its fork pin rows beyond its pinned-through fork.
+/// Empty for a volume outside any group, for a claim log, whose base volume's load runs the
+/// pass on the same rows, and for a stop-proof load, which runs no pin pass.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LoadedForkPins {
+	/// The distinct child groups the pins the pass kept still wait on, bounded by the pins it
+	/// read times their waiters. The group cache learns each one's status, so a later pass can
+	/// drop the ones it finds archived although nothing on this tablet knew them when the
+	/// volume loaded.
+	pub waiting: Vec<[u8; 16]>,
+	/// The fork ranges, `first_fork..=last_fork`, of the kept pins that still wait on someone.
+	/// One per pin, so bounded like `waiting`. The group cache weighs reading the parent's fork
+	/// rows over these ranges against reading each waiting child's record.
+	pub waiting_forks: Vec<(u64, u64)>,
+	/// The pass deleted a pin through a fork that neither the stored record's
+	/// `fork_pinned_through` nor a remaining pin covers. The record is stored again, or a later
+	/// load would rebuild a lower value and the next pin would cover those forks again.
+	pub record_lags: bool,
+}
+
+/// The fork children of the parent's group the maintainer's cache knows, by fork number, with
+/// whether each child is archived: those from the lowest fork an idle parent of the group was
+/// found to need through the acquired one, or none before any was found. The store plans the
+/// pin of a parent volume its tablet does not hold loaded with them, and asks for the forks
+/// after the parent's last pin when they do not cover them, so the pin's waiting list is
+/// complete without reading forks an earlier pin already covers.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct GroupChildren {
+	pub children: std::collections::BTreeMap<u64, ([u8; 16], bool)>,
+}
+
+/// The most fork child rows one `GroupRead` returns; a reader that needs more pages.
+pub const GROUP_READ_MAX_CHILDREN: usize = 256;
 
 /// At most this many pending-work keys are visited per discovery page.
 pub const MAX_ORPHAN_SCAN_KEYS: u32 = 128;
@@ -87,6 +141,11 @@ pub const COLD_OPEN_TIMEOUT_MS: u64 = 60_000;
 
 /// Deadline for a checkpoint or projected clone; expiry fences and waits for storage cleanup.
 pub const SPLIT_STORAGE_TIMEOUT_MS: u64 = 60_000;
+
+/// The first `depot.fs_rows` version with a fork pin row. A store writing an older version
+/// cannot take a pin, so the maintainer refuses the group fork that needs one until every
+/// storage worker reads this version and a grant selects it.
+pub const FORK_PIN_ROW_VERSION: u16 = 2;
 
 /// The versions one grant writes its tablet's data at. The supervisor selects them from the
 /// topology's read floor when it starts the grant, so a rolling deploy never writes a version
@@ -221,6 +280,12 @@ pub struct MaintainerTuning {
 	/// that writer and makes its owner open it again, so one writer that cannot match never
 	/// holds the tablet's change open indefinitely.
 	pub membership_holder_wait_ms: u64,
+	/// How long an apply or fork copy may hold a row no `depot.fs_rows` version of this grant
+	/// can express before the maintainer hands the grant back. The grant's selected version is
+	/// fixed for its lifetime and may come from a stale topology view, as right after a worker
+	/// restart, so only a new grant can select again; a fleet that still mixes versions repeats
+	/// the hand-back at this interval.
+	pub inexpressible_hold_ms: u64,
 }
 
 impl MaintainerTuning {
@@ -252,6 +317,8 @@ impl MaintainerTuning {
 		holder_check_after_ms: 300_000,
 		// Several replica set hand-off rounds, so an idle writer adopts the change and matches first.
 		membership_holder_wait_ms: 900_000,
+		// Several topology listings, so a stale view at grant start has refreshed.
+		inexpressible_hold_ms: 30_000,
 	};
 }
 
@@ -276,6 +343,41 @@ pub struct MaintainerConfig {
 	pub materialize_batch_chunks: u32,
 	pub checkpoints: depot_fs_core::checkpoints::CheckpointConfig,
 	pub max_requests: u32,
+	/// Opens of one grouped volume held while its lazy fork or a group read its open needs is
+	/// in progress. An open arriving with this many already waiting is refused as overloaded.
+	/// Production sets it from `depot.groups.max_open_waiters_per_volume`.
+	pub max_lazy_fork_waiters_per_volume: u32,
+	/// Fork numbers the group cache may want read at once across the tablet's groups. A pin
+	/// or acquire that needs more asks for the rest once reads drain these. Production sets
+	/// it from `depot.groups.max_wanted_forks`.
+	pub max_group_wanted_forks: u32,
+	/// Child groups whose status the group cache may be learning at once for the fork pins
+	/// loaded volumes left waiting. A load past it leaves its other children waiting in the
+	/// store until the volume's next pin or load. Production sets it from
+	/// `depot.groups.max_pin_wait_children`.
+	pub max_group_pin_wait_children: u32,
+	/// Group volume reads the group cache has in flight at once across the tablet's groups.
+	/// An entry due for a read past it waits for a read to finish. Production sets it from
+	/// `depot.groups.max_reads_in_flight`.
+	pub max_group_reads_in_flight: u32,
+	/// Volumes this maintainer remembers a lazy fork found absent at the fork. Past it the
+	/// oldest mark is forgotten, and that volume's next open runs a lazy fork job again, or is
+	/// refused as overloaded when no job is free.
+	/// Production sets it from `depot.groups.max_absent_lazy_forks`.
+	pub max_absent_lazy_forks: u32,
+	/// Lazy fork jobs (group forks an open starts) running at once. Other fork jobs use the
+	/// `max_background_cold_reads` window, so neither kind takes the other's jobs. Production
+	/// sets it from `depot.groups.max_lazy_fork_jobs`.
+	pub max_lazy_fork_jobs: u32,
+	/// Lazy fork jobs parked behind an unproven parent tail, which hold only memory: no I/O,
+	/// no timer and no slot of `max_lazy_fork_jobs`. At the cap the oldest parked job is
+	/// dropped, and its destination's next open resumes its stored fork. Production sets it
+	/// from `depot.groups.max_parked_lazy_fork_jobs`.
+	pub max_parked_lazy_fork_jobs: u32,
+	/// Recoveries that fence the writers of an archived group's loaded volumes, running at
+	/// once. Apart from `max_repairs`, so an archive never takes crash repairs' slots.
+	/// Production sets it from `depot.groups.max_archive_fences`.
+	pub max_archive_fences: u32,
 	/// Queued events the maintainer's inbox holds before senders are rejected as overloaded.
 	pub inbox_capacity: u32,
 	/// Volume opens queued in the inbox, not yet taken by the runner, at which a new open is
@@ -322,6 +424,10 @@ pub struct MaintainerConfig {
 	/// reads, fork jobs and fork cleanup jobs are each bounded by it separately, so raising
 	/// the client window never widens them.
 	pub max_background_cold_reads: u32,
+	/// Reads of one inherited layer served at once for fork children (base chunk and base row
+	/// reads). They serve live clients, so they never take a background window; past this cap
+	/// they are refused as retryable overload.
+	pub max_base_reads: u32,
 	/// Simulation only: runner time each admitted filesystem read request costs, spent on the
 	/// simulated clock so a maintainer busy with reads queues them as a loaded one does. Zero
 	/// in deployments, where real processing time passes on its own.
@@ -351,6 +457,14 @@ impl Default for MaintainerConfig {
 			materialize_batch_chunks: 1024,
 			checkpoints: Default::default(),
 			max_requests: 1024,
+			max_lazy_fork_waiters_per_volume: 64,
+			max_group_wanted_forks: 16_384,
+			max_group_pin_wait_children: 16_384,
+			max_group_reads_in_flight: 64,
+			max_absent_lazy_forks: 65_536,
+			max_lazy_fork_jobs: 32,
+			max_parked_lazy_fork_jobs: 1024,
+			max_archive_fences: 16,
 			inbox_capacity: 4096,
 			max_queued_opens: 1024,
 			max_loaded_volumes: 500_000,
@@ -363,6 +477,7 @@ impl Default for MaintainerConfig {
 			max_cold_reads_per_volume: 0,
 			max_cold_reads: 64,
 			max_background_cold_reads: 4,
+			max_base_reads: 64,
 			simulated_fs_read_cost_us: 0,
 			max_keyed_in_flight: 256,
 			max_flush_staging: 1,
@@ -389,6 +504,19 @@ pub struct StatusNotice {
 	pub cold_write:
 		Option<rivet_data::generated::depot_storage_worker_protocol_v1::ColdWriteStatus>,
 	pub entries: Vec<rivet_data::generated::depot_log_shard_v1::VolumeLogEntry>,
+}
+
+/// What a `ReadRowRequest` reads from the store.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum RowRead {
+	/// The name's pointer, the newest stored incarnation, which an open of an unloaded name reads.
+	Pointer,
+	/// That incarnation's own row, which an unload of a known incarnation reads.
+	Incarnation([u8; 16]),
+	/// That incarnation's own row and its pin mark, the last fork its pin rows, stored pin mark
+	/// or creation stamp cover, which a delete of it reads: a delete recovered from tombstones
+	/// whose Deleted record never landed stamps the fork its pin reached.
+	Deleting([u8; 16]),
 }
 
 /// A caller's identity is retained independently of executor operation attempts.
@@ -421,11 +549,16 @@ pub struct OpenVolume {
 	pub initial: Vec<rivet_data::generated::depot_log_shard_v1::PayloadWrite>,
 	/// Keys to read back when the open finds the volume existing with no log tail. See
 	/// `VolumeCreateOptions.read`.
-	pub read: Option<rivet_data::generated::depot_client_protocol_v1::VolumeReadKeys>,
+	pub read: Option<rivet_data::generated::depot_client_protocol_v2::VolumeReadKeys>,
+	/// When the volume has no record and its group has a base, make it from the parent
+	/// group's copy at the fork before anything else; see `VolumeOpenRequest.lazyFork`.
+	pub lazy_fork: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum MaintainerTimer {
+	/// A failed group record read is queued again for a read slot.
+	GroupReadRetry(rivet_keys::keys::codec::GroupId),
 	/// **When**
 	///
 	/// The earliest cached alarm or retry deadline becomes due while serving.
@@ -487,15 +620,19 @@ pub enum MaintainerTimer {
 
 	/// **When**
 	///
-	/// An uncertain source attempt reaches its retry delay.
+	/// An uncertain source attempt reaches its retry delay, a failure op waits for the log
+	/// to serve, or a group fork's Inspect or Prepare the store refused as busy waits to be
+	/// sent again.
 	///
 	/// **State**
 	///
-	/// Restores the exact prepared image/cursor as ready.
+	/// Restores the exact prepared image/cursor as ready, submits the failure op again, or
+	/// queues the refused store step again.
 	///
 	/// **Effects**
 	///
-	/// The normal drive pass dispatches one new attempt.
+	/// The normal drive pass dispatches one new attempt; a queued store step goes to the
+	/// store, or is held again until the rows mark lands.
 	ForkRetry(depot_types::VolumeKey),
 
 	/// **When**
@@ -583,15 +720,19 @@ pub enum MaintainerTimer {
 
 	/// **When**
 	///
-	/// The caller's original checkpoint administration deadline expires.
+	/// The caller's original checkpoint administration deadline expires, or half of what was
+	/// left of it when a `Latest` checkpoint entered `Proving`.
 	///
 	/// **State**
 	///
-	/// Removes the waiting caller; an already sent mutation remains owned.
+	/// Removes the waiting caller; an already sent mutation remains owned. A checkpoint that
+	/// left `Proving` before its deadline keeps waiting.
 	///
 	/// **Effects**
 	///
-	/// Replies with an unavailable outcome without cancelling durable work.
+	/// Replies `TailUnproven` to a checkpoint still proving, and an unavailable outcome to any
+	/// other, without cancelling durable work. A checkpoint that left `Proving` has the timer
+	/// armed again at its full deadline.
 	CheckpointRequest(RequestId),
 	/// **When**
 	///
@@ -691,7 +832,8 @@ pub enum MaintainerTimer {
 	CatchUp,
 	/// Releases only caller bookkeeping; deletion continues after its uncertain reply.
 	DeleteRequest(depot_types::VolumeLogKey),
-	/// Makes failed member work eligible for another bounded attempt.
+	/// Makes failed member work eligible for another bounded attempt, and re-drives a delete
+	/// waiting to log its volume's fork pin.
 	DeleteRetry(depot_types::VolumeLogKey),
 	/// Resumes the same checkpoint, child clone or coordinator report after backoff.
 	SplitRetry,
@@ -891,6 +1033,23 @@ pub enum MaintainerTimer {
 	MemtableBudgetShed,
 	/// **When**
 	///
+	/// `MaintainerTuning::inexpressible_hold_ms` after an apply or fork copy first held a row
+	/// no `depot.fs_rows` version of this grant can express, while one still holds. One timer
+	/// serves the whole tablet: it is armed when the first such hold appears and cancelled
+	/// when the last one is released or dropped.
+	///
+	/// **State**
+	///
+	/// While serving with such a hold, ends the lifetime gracefully as a drain does
+	/// (`Draining`, then `Stopped` once the cold store closes); the supervisor then takes a
+	/// fresh grant, which selects versions again. Otherwise changes nothing.
+	///
+	/// **Effects**
+	///
+	/// Cancels the lifetime's timers and work and emits `CloseCold`, as a drain does.
+	InexpressibleHoldDeadline,
+	/// **When**
+	///
 	/// A maintainer log request to this member failed or was refused, and its retry delay
 	/// passed.
 	///
@@ -913,7 +1072,7 @@ pub struct RecoveryRequest {
 	/// retain their version/disk binding; matching still checks each replica incarnation.
 	pub required_members: std::collections::BTreeSet<WorkerId>,
 	pub volume_log_key: depot_types::VolumeLogKey,
-	pub row: rivet_data::generated::shared_depot_fs_v1::FsVolumeRecord,
+	pub row: rivet_data::generated::shared_depot_fs_v2::FsVolumeRecord,
 	pub replica_set: rivet_data::generated::shared_depot_types_v1::TabletReplicaSet,
 	pub timeout_ms: u64,
 	/// The claim epoch this maintainer issued for the recovery client, which never chooses
@@ -937,6 +1096,12 @@ pub enum ReplayOutcome {
 	/// The store holds the fork's preparation again; the op is done once the fork has copied
 	/// its metadata again and published.
 	ResumeFork(depot_fs_core::FsForkSpec),
+	/// A fork pin of `key` through `last_fork` is in the store, so the volume's entries may
+	/// apply past the pin's cut.
+	ForkPinned {
+		key: depot_types::VolumeLogKey,
+		last_fork: u64,
+	},
 }
 
 /// The outcome of one deletion sweep step.
@@ -954,11 +1119,11 @@ pub enum DeleteSweepResult {
 /// flight; every repair call checks its own fence again.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RepairRecords {
-	pub pointer: Option<rivet_data::generated::shared_depot_fs_v1::FsVolumeRecord>,
-	pub pending_fork: Option<rivet_data::generated::shared_depot_fs_v1::FsPendingFork>,
+	pub pointer: Option<rivet_data::generated::shared_depot_fs_v2::FsVolumeRecord>,
+	pub pending_fork: Option<rivet_data::generated::shared_depot_fs_v2::FsPendingFork>,
 	pub incarnations: Vec<(
 		[u8; 16],
-		Option<rivet_data::generated::shared_depot_fs_v1::FsVolumeRecord>,
+		Option<rivet_data::generated::shared_depot_fs_v2::FsVolumeRecord>,
 	)>,
 }
 
@@ -968,7 +1133,7 @@ pub struct RepairRecords {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RepairClaimOpen {
 	pub volume_log_key: depot_types::VolumeLogKey,
-	pub row: rivet_data::generated::shared_depot_fs_v1::FsVolumeRecord,
+	pub row: rivet_data::generated::shared_depot_fs_v2::FsVolumeRecord,
 	pub replica_set: rivet_data::generated::shared_depot_types_v1::TabletReplicaSet,
 	pub claim_epoch: u64,
 	pub timeout_ms: u64,

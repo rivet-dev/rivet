@@ -61,6 +61,7 @@ use crate::websocket::WebSocket;
 mod actor_connect;
 mod dispatch;
 mod envoy_callbacks;
+pub(crate) use envoy_callbacks::actor_key_from_protocol;
 mod http;
 mod inspector;
 mod inspector_ws;
@@ -1451,6 +1452,7 @@ impl RegistryDispatcher {
 			actor_name.to_owned(),
 			key,
 			self.region.clone(),
+			handle.namespace().to_owned(),
 			Some(generation),
 			handle.get_envoy_key().to_owned(),
 			factory.config().clone(),

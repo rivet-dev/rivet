@@ -106,6 +106,22 @@ export interface ActorKv {
 	[key: string]: any;
 }
 
+/** One individual actor fork behind an actor, as `c.forkChain` lists it. */
+export interface ActorForkLink {
+	/** The source actor's ID. */
+	actorId: string;
+	/** The source actor's key. */
+	key: string[];
+	/** When the fork was made, in milliseconds since the epoch. */
+	forkedAt: number;
+}
+
+/** The fork an `onFork` hook runs for: the newest entry of `c.forkChain` and the fork input. */
+export interface ActorFork extends ActorForkLink {
+	/** The `input` passed to `client.<actor>.fork`, or `undefined`. */
+	input: unknown;
+}
+
 export interface ActorSchedule {
 	after(
 		duration: number,
@@ -412,7 +428,18 @@ export interface ActorContext<
 	readonly actorId: string;
 	readonly name: string;
 	readonly key: string[];
+	/**
+	 * The individual actor forks behind this actor, oldest first; empty when it was never
+	 * forked. Namespace forks are not listed.
+	 */
+	readonly forkChain: ActorForkLink[];
 	readonly region: string;
+	/**
+	 * The name of the namespace the actor runs in. After a namespace fork it differs from the
+	 * source actor's namespace while the actor id stays the same, so an actor that owns an
+	 * external resource can store this to detect that it was copied.
+	 */
+	readonly namespace: string;
 	readonly conns: Map<
 		string,
 		Conn<
@@ -1358,6 +1385,7 @@ export const ActorConfigSchema = z
 		onDestroy: zFunction().optional(),
 		onMigrate: zFunction().optional(),
 		onWake: zFunction().optional(),
+		onFork: zFunction().optional(),
 		onSleep: zFunction().optional(),
 		run: zRunHandler,
 		onStateChange: zFunction().optional(),
@@ -1634,6 +1662,49 @@ interface BaseActorConfig<
 			TQueues
 		>,
 		isNew: boolean,
+	) => void | Promise<void>;
+
+	/**
+	 * Called once at the first start of an actor made by forking another actor
+	 * (`client.<actor>.fork`), after its state loads and before `onWake` and any
+	 * overdue schedule events run. `createState` and `onCreate` do not run for a fork.
+	 *
+	 * Use this hook to cancel schedules the fork inherited, drop resources copied
+	 * from the source, or record the fork input. `c.forkChain` already ends with
+	 * this fork. A throw fails the start, and the hook runs again on the next start.
+	 * Forks of a whole namespace do not call it.
+	 *
+	 * State edits made in this hook are saved in one commit with the record that the
+	 * fork ran, so a start that finds the fork recorded also finds the hook's final
+	 * state. On native SQLite the hook's `c.db` writes and any save it starts itself
+	 * join that commit too, and a failed start drops them. Two limits apply:
+	 *
+	 * - On remote SQLite (wasm runtimes), `c.db` writes, and state the hook writes
+	 *   itself in a transaction (for example `c.db.transaction` with
+	 *   `experimental.includeState`), are committed at once, without the fork record.
+	 *   A `c.saveState` call is not such a write: the startup save carries its
+	 *   state. Only state the hook leaves to the startup save is atomic with it. A
+	 *   crash or a failed start before the record lands runs the hook again on top
+	 *   of those writes, so the hook must be idempotent there.
+	 * - On native SQLite the hook's writes must fit one commit (32,768 pages, 128 MiB
+	 *   at the default page size). A transaction that would take them past it fails as
+	 *   too large instead of committing part of them early; a hook that lets the error
+	 *   throw fails the start, and nothing it wrote lands. Move a backfill that large
+	 *   into later actions.
+	 *   `onCreate` differs: its writes held so far are committed early instead.
+	 */
+	onFork?: (
+		c: WakeContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
+		fork: ActorFork,
 	) => void | Promise<void>;
 
 	/**
@@ -2009,6 +2080,7 @@ export type ActorConfig<
 	| "onDestroy"
 	| "onMigrate"
 	| "onWake"
+	| "onFork"
 	| "onSleep"
 	| "run"
 	| "onStateChange"
@@ -2108,6 +2180,7 @@ export type ActorConfigInput<
 	| "onDestroy"
 	| "onMigrate"
 	| "onWake"
+	| "onFork"
 	| "onSleep"
 	| "run"
 	| "onStateChange"
@@ -2407,6 +2480,12 @@ export const DocActorConfigSchema = z
 			.optional()
 			.describe(
 				"Called when the actor wakes up and is ready to receive connections and actions.",
+			),
+		onFork: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called once at the first start of an actor made by forking another actor, before onWake. Receives the source actor, the fork time and the fork input.",
 			),
 		onSleep: z
 			.unknown()

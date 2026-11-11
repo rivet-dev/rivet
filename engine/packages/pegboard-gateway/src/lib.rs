@@ -9,6 +9,7 @@ mod cors;
 mod http_tunnel;
 mod metrics;
 pub mod migrate_from_v2;
+mod namespace_fallback;
 mod raw_rest_path;
 mod retry_budget;
 mod routes;
@@ -16,7 +17,7 @@ mod start_wait;
 pub mod start_waits;
 mod websocket_tunnel;
 
-pub use retry_budget::{Retries, RetryBudget};
+pub use retry_budget::{Refusal, Retries, RetryBudget, legacy_actor_moving_error};
 
 /// The process's start waits, shared by every gateway request. Building them starts nothing:
 /// each wait subscribes for its notices when a request creates it, and the waiting requests
@@ -68,6 +69,11 @@ pub fn router_with_retry_budget(
 		.layer(axum::Extension(waits.clone()))
 		// Retries of refused requests across this process share one budget.
 		.layer(axum::Extension(budget))
+		// Requests that resolve in `default` without naming a namespace share one warning
+		// interval across this process.
+		.layer(axum::Extension(std::sync::Arc::new(
+			namespace_fallback::NamespaceFallbacks::default(),
+		)))
 		// Outermost, so preflights are answered before any lookup, wake or auth.
 		.layer(axum::middleware::from_fn(cors::cors))
 		.with_state(ctx.clone())

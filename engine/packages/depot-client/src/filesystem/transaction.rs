@@ -18,6 +18,10 @@ use vbare::Versioned;
 
 /// Longest KV key a read or write accepts.
 const MAX_KV_KEY_BYTES: usize = 2048;
+/// The longest key a KV range delete may name as a bound: twice a put's key limit, which a
+/// caller's tuple encoding of a key at that limit reaches when every byte is escaped, plus room for
+/// the encoding's framing and the caller's own key prefix.
+const MAX_KV_RANGE_BOUND_BYTES: usize = 2 * MAX_KV_KEY_BYTES + 64;
 
 /// Half-open byte range. Appending a zero byte converts an inclusive key bound
 /// to the smallest exclusive bound, including keys containing arbitrary bytes.
@@ -554,12 +558,7 @@ impl Filesystem {
 			}
 			let old_len = entry.ops.len();
 			entry.ops.extend(p.tx.ops.iter().cloned());
-			let bytes = rivet_data::versioned::DepotFsEntryData::serialize_with_embedded_version(
-				&entry,
-				entry_version,
-			)
-			.map_err(|_| corrupt!())?
-			.len();
+			let bytes = super::transport::seal_entry(&entry, entry_version)?.len();
 			if bytes > status.max_payload_bytes || bytes > self.config.max_operation_bytes {
 				entry.ops.truncate(old_len);
 				if accepted.is_empty() {
@@ -797,6 +796,7 @@ impl Transaction {
 			ops: self.ops.clone(),
 		};
 		let batch = apply::plan(
+			self.fs.claim_log,
 			self.pin.seq.checked_add(1).ok_or_else(|| corrupt!())?,
 			&entry,
 		)?;
@@ -933,6 +933,15 @@ impl Transaction {
 		if !range.valid() {
 			return Err(depot_fs_core::Error::Invalid.into());
 		}
+		// A range delete on a volume with a base leaves a whiteout row of its two keys, which
+		// every later read of the file may consult, so its keys are bounded. A bound need not be
+		// a key a put can store, and a caller's encoding of a key at a put's limit may be longer
+		// than that limit, so a bound may be about twice as long.
+		for bound in std::iter::once(&range.start).chain(range.end.as_ref()) {
+			if bound.len() > MAX_KV_RANGE_BOUND_BYTES {
+				return Err(depot_fs_core::Error::Invalid.into());
+			}
+		}
 		self.charge(96 + range.start.len() + range.end.as_ref().map_or(0, Vec::len))?;
 		self.ops.push(FsOp::FsKvDeleteRange(FsKvDeleteRange {
 			ino: self.ino,
@@ -965,7 +974,13 @@ impl Filesystem {
 		match value {
 			Some(Row::Bytes(value)) => Ok(Some(Vec::from(value))),
 			None => Ok(None),
-			Some(Row::Format(_) | Row::Inode(_) | Row::Dentry(_) | Row::Unit) => Err(corrupt!()),
+			Some(
+				Row::Format(_)
+				| Row::Inode(_)
+				| Row::Dentry(_)
+				| Row::Unit
+				| Row::KvRangeWhiteout(_),
+			) => Err(corrupt!()),
 		}
 	}
 

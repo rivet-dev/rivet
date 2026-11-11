@@ -1,6 +1,6 @@
 use super::types::*;
 use super::{effect::*, state::*};
-use crate::topology_machine::snapshot::{endpoint_hint, same_endpoint};
+use crate::topology_machine::snapshot::{discovery_usable, endpoint_hint, same_endpoint};
 use crate::topology_machine::types::EndpointEntry;
 use crate::worker::{Worker, WorkerId};
 
@@ -11,16 +11,25 @@ pub(super) fn handle_resolve_endpoint_request(
 	now_boot_ms: u64,
 	out: &mut Effects,
 ) {
-	if let Some(value) = endpoint_hint(
-		state
-			.storage_entries(now_boot_ms)
-			.find(|entry| entry.worker_id == worker)
-			.map(crate::heartbeat::Observation::worker),
-		&state.lookups.entries,
-		&state.lookups.invalidated,
-		&worker,
-		now_boot_ms,
-	) {
+	let storage_worker = state
+		.storage_entries(now_boot_ms)
+		.find(|entry| entry.worker_id == worker)
+		.map(crate::heartbeat::Observation::worker);
+	// A usable storage hit is moved into the reply; otherwise the endpoint cache answers.
+	let hint = match storage_worker {
+		Some(discovered) if discovery_usable(&discovered, &state.lookups.invalidated) => {
+			Some(Some(discovered))
+		}
+		Some(_) | None => endpoint_hint(
+			None,
+			&state.lookups.entries,
+			&state.lookups.invalidated,
+			&worker,
+			now_boot_ms,
+		)
+		.map(|value| value.cloned()),
+	};
+	if let Some(value) = hint {
 		out.execute(Effect::ResolveEndpointResponse {
 			request_id,
 			result: Ok(value),

@@ -123,6 +123,9 @@ export class Namespaces {
         request: Rivet.NamespacesCreateRequest,
         requestOptions?: Namespaces.RequestOptions,
     ): Promise<Rivet.NamespacesCreateResponse> {
+        const _body = request;
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
+
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.baseUrl)) ??
@@ -138,14 +141,82 @@ export class Namespaces {
                 ...requestOptions?.headers,
             },
             contentType: "application/json",
+            queryParameters: _queryParams,
             requestType: "json",
-            body: serializers.NamespacesCreateRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
+            body: serializers.NamespacesCreateRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
             abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return serializers.NamespacesCreateResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /namespaces.");
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * Archives a namespace: refuses new work for it, stops what its nodes host, then closes its
+     * storage. Archiving is final. Answers at once with the namespace at status `archiving`, or
+     * `archived` when it already is.
+     *
+     * @param {string} name - The namespace to archive.
+     * @param {Namespaces.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.namespaces.archive("staging")
+     */
+    public async archive(
+        name: string,
+        requestOptions?: Namespaces.RequestOptions,
+    ): Promise<Rivet.NamespacesArchiveResponse> {
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                `namespaces/${encodeURIComponent(name)}/archive`,
+            ),
+            method: "POST",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            requestType: "json",
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.NamespacesArchiveResponse.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,

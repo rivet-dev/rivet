@@ -10,20 +10,19 @@ use std::ops::Bound;
 use anyhow::{Context, Result};
 use depot_protocol::command::{Command, CommandTag};
 use depot_worker::command::KvHandle;
-use rivet_data::generated::pegboard_v2_migrator_v1 as wire;
+use rivet_data::families::VersionFamily;
+use rivet_data::generated::pegboard_v2_migrator_v2 as wire;
 use rivet_keys::keys::{
 	KeyAddress, SubspaceRange,
-	codec::FormalKey,
-	tags::depot_command::{
-		PEGBOARD_V2_MIGRATOR_STATE_LOAD, PEGBOARD_V2_MIGRATOR_STATE_READ,
-		PEGBOARD_V2_MIGRATOR_STATE_WRITE,
-	},
+	codec::{AtVersion, FormalKey},
+	tags::depot_command::{PEGBOARD_V2_MIGRATOR_STATE_LOAD, PEGBOARD_V2_MIGRATOR_STATE_WRITE},
 };
 use rivet_util::Id;
 
-use crate::keys::{
-	kv::{V2MigratorFenceKey, V2MigratorInFlightKey, V2MigratorInFlightPrefix, V2MigratorPassKey},
-	partition::V2MigratorVolume,
+use pegboard::{keys::partition::V2MigratorVolume, migrate_from_v2::MigrateFromV2StateRead};
+
+use crate::keys::kv::{
+	V2MigratorFenceKey, V2MigratorInFlightKey, V2MigratorInFlightPrefix, V2MigratorPassKey,
 };
 
 /// Writes the pass entry and in-flight entries of one tenure. Repeating it writes the same values, so a
@@ -50,19 +49,8 @@ impl Command for MigrateFromV2StateLoad {
 	type Response = rivet_data::versioned::MigrateFromV2StateLoadResponse;
 }
 
-/// Reads the pass entry and every in-flight entry without claiming the state, for operators. It
-/// never raises the fence, so it cannot stop a running tenure.
-pub struct MigrateFromV2StateRead;
-
-impl Command for MigrateFromV2StateRead {
-	const TAG: CommandTag = CommandTag(PEGBOARD_V2_MIGRATOR_STATE_READ);
-	const READ_ONLY: bool = true;
-
-	type Request = rivet_data::versioned::MigrateFromV2StateReadRequest;
-	type Response = rivet_data::versioned::MigrateFromV2StateLoadResponse;
-}
-
-/// Operator reads are rare, so one runs at a time.
+/// Operator reads and the reads of namespaces whose backfill waits on the migrator are rare, so one
+/// runs at a time.
 const STATE_READ_CONCURRENCY: usize = 1;
 
 pub fn register(registry: &mut depot_worker::command::CommandRegistry) -> Result<()> {
@@ -91,6 +79,7 @@ async fn state_write(
 ) -> Result<wire::MigrateFromV2StateWriteResponse> {
 	V2MigratorVolume::from_volume_key(kv.volume_key())?;
 
+	let version = kv.write_version(VersionFamily::PEGBOARD_V2_MIGRATOR)?;
 	let mut txn = kv.begin().await?;
 	let fence = read_fence(&mut txn).await?;
 	if fence > request.coordinator_generation {
@@ -105,13 +94,16 @@ async fn state_write(
 
 	if let Some(pass) = request.pass {
 		let key = V2MigratorPassKey::new();
-		txn.put(&key.pack(), &key.serialize(pass)?)?;
+		txn.put(&key.pack(), &key.serialize(AtVersion::new(pass, version))?)?;
 	}
 	for entry in request.puts {
 		let v2_actor_id =
 			Id::from_slice(&entry.candidate.v2_actor_id).context("in-flight actor id")?;
 		let key = V2MigratorInFlightKey::new(v2_actor_id);
-		txn.put(&key.pack(), &key.serialize(entry)?)?;
+		// An entry placed in a volume group is inexpressible at version 1, and the write fails
+		// while a storage worker that reads only version 1 is live. The migrator retries it after
+		// a backoff; a namespace gains its group only once such workers are gone.
+		txn.put(&key.pack(), &key.serialize(AtVersion::new(entry, version))?)?;
 	}
 	for v2_actor_id in request.deletes {
 		let v2_actor_id = Id::from_slice(&v2_actor_id).context("deleted actor id")?;
@@ -169,12 +161,11 @@ async fn state_load(
 	// Raise the fence so every older tenure's later writes are refused.
 	if fence < request.coordinator_generation {
 		let key = V2MigratorFenceKey::new();
-		txn.put(
-			&key.pack(),
-			&key.serialize(wire::MigrateFromV2Fence {
-				coordinator_generation: request.coordinator_generation,
-			})?,
-		)?;
+		let version = kv.write_version(VersionFamily::PEGBOARD_V2_MIGRATOR)?;
+		let fence = wire::MigrateFromV2Fence {
+			coordinator_generation: request.coordinator_generation,
+		};
+		txn.put(&key.pack(), &key.serialize(AtVersion::new(fence, version))?)?;
 		kv.commit(txn).await?;
 	}
 

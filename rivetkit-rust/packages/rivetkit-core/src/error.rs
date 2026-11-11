@@ -172,6 +172,9 @@ pub enum ActorLifecycle {
 	#[error("destroying", "Actor is destroying.")]
 	Destroying,
 
+	#[error("destroyed", "Actor was destroyed.")]
+	Destroyed,
+
 	#[error("shutdown_timeout", "Actor shutdown timed out.")]
 	ShutdownTimeout,
 

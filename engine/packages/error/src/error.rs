@@ -5,7 +5,9 @@ use std::{fmt, sync::OnceLock};
 
 static EXPOSE_INTERNAL_ERRORS: OnceLock<bool> = OnceLock::new();
 
-fn expose_internal_errors() -> bool {
+/// Whether `RIVET_EXPOSE_ERRORS=1` asks for internal error details in client-facing replies.
+/// Read once per process.
+pub fn expose_internal_errors() -> bool {
 	*EXPOSE_INTERNAL_ERRORS
 		.get_or_init(|| matches!(std::env::var("RIVET_EXPOSE_ERRORS").as_deref(), Ok("1")))
 }

@@ -4,6 +4,7 @@ pub mod connection;
 pub mod context;
 pub(crate) mod diagnostics;
 pub mod factory;
+pub mod fork;
 pub(crate) mod internal_storage;
 pub(crate) mod keys;
 pub mod kv;
@@ -26,6 +27,7 @@ pub use config::{ActionDefinition, ActorConfig, ActorConfigOverrides, CanHiberna
 pub use connection::ConnHandle;
 pub use context::{ActorContext, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion};
 pub use factory::{ActorEntryFn, ActorFactory};
+pub use fork::{ActorForkStart, ForkLink};
 pub use lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 pub use messages::{
 	ActorEvent, QueueSendResult, QueueSendStatus, Request, Response, StateDelta, WorkflowKvWrite,

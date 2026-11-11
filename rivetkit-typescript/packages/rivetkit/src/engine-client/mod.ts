@@ -20,6 +20,7 @@ import type {
 	ActorOutput,
 	CreateInput,
 	EngineControlClient,
+	ForkInput,
 	GatewayRequestOptions,
 	GatewayTarget,
 	GetForIdInput,
@@ -43,6 +44,7 @@ import {
 import {
 	createActor,
 	destroyActor,
+	forkActor,
 	getActor,
 	getActorByKey,
 	getOrCreateActor,
@@ -346,6 +348,32 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		return apiActorToOutput(result.actor);
 	}
 
+	async forkActor({ actorId, key, input }: ForkInput): Promise<ActorOutput> {
+		await this.#metadataPromise;
+
+		logger().info({ msg: "forking actor via engine api", actorId, key });
+
+		const result = await this.#withCredential((config) =>
+			forkActor(config, actorId, {
+				key: key ? serializeActorKey(key) : undefined,
+				input:
+					input !== undefined
+						? uint8ArrayToBase64(
+								encodeCborCompat(input as JsonCompatValue),
+							)
+						: undefined,
+			}),
+		);
+
+		logger().info({
+			msg: "actor forked",
+			actorId: result.actor.actor_id,
+			sourceActorId: actorId,
+		});
+
+		return apiActorToOutput(result.actor);
+	}
+
 	async listActors({ name }: ListActorsInput): Promise<ActorOutput[]> {
 		await this.#metadataPromise;
 
@@ -574,6 +602,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		if ("directId" in target) {
 			return buildActorGatewayUrl(
 				endpoint,
+				config.namespace,
 				target.directId,
 				config.token,
 				path,
@@ -583,6 +612,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		if ("getForId" in target) {
 			return buildActorGatewayUrl(
 				endpoint,
+				config.namespace,
 				target.getForId.actorId,
 				config.token,
 				path,

@@ -83,6 +83,9 @@ pub trait EnvoyCallbacks: Send + Sync + 'static {
 
 	fn on_disconnect(&self, _handle: EnvoyHandle) {}
 
+	/// Starts an actor. `fork` names the individual actor fork the actor's database was copied
+	/// in when the start command carries one, which only the first start of a forked actor
+	/// does; a runtime without a fork hook ignores it.
 	fn on_actor_start(
 		&self,
 		handle: EnvoyHandle,
@@ -90,6 +93,7 @@ pub trait EnvoyCallbacks: Send + Sync + 'static {
 		generation: u32,
 		config: protocol::ActorConfig,
 		preloaded_kv: Option<protocol::PreloadedKv>,
+		fork: Option<protocol::ActorFork>,
 	) -> BoxFuture<anyhow::Result<()>>;
 
 	fn on_actor_stop(

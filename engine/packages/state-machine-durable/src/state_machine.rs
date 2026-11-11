@@ -48,7 +48,8 @@ pub trait DurableStateMachine: Sized + Send + Sync + 'static {
 	const DEBUG_NAME: &'static str;
 
 	/// The version family the state and timers are encoded in. The runner encodes both at the
-	/// family's write version, the highest every live storage worker reads.
+	/// family's write version, the highest every live storage worker reads, or above it behind
+	/// a tablet version mark when that version cannot express them; see `Runner`.
 	const FAMILY: VersionFamily;
 
 	fn start(
@@ -70,13 +71,23 @@ pub trait DurableStateMachine: Sized + Send + Sync + 'static {
 
 	fn snapshot(state: &Self::State) -> Self::Snapshot;
 
+	/// The incarnation the state was last reset for after a group fork, the stamp
+	/// `VolumeRecordView::pending_fork_reset` compares. While it differs from the incarnation
+	/// of a volume made by a group fork, the state is inherited, and the runner arms the Depot
+	/// alarm again in the commit that resets it. A machine whose volume is never made by a
+	/// group fork returns `None`.
+	fn fork_reset(state: &Self::State) -> Option<[u8; 16]>;
+
 	fn debug_validate(state: &Self::State) -> anyhow::Result<()>;
 
 	fn normalize(state: &Self::State, _now: Clocks, _ranks: &RankMap<Self::Slot>) -> Self::State {
 		state.clone()
 	}
 
-	/// Encodes the state at `version` of [`Self::FAMILY`].
+	/// Encodes the state at `version` of [`Self::FAMILY`]. A version that cannot express the
+	/// state must refuse with [`rivet_data::versioned::Inexpressible`], which is the only error
+	/// the runner skips while it looks for the lowest version at or above the selected one that
+	/// expresses it. Any other error fails the transition. See `state_encoding`.
 	fn serialize_state(state: &Self::State, version: u16) -> anyhow::Result<Vec<u8>>;
 
 	fn deserialize_state(bytes: &[u8]) -> anyhow::Result<Self::State>;
@@ -87,7 +98,11 @@ pub trait DurableStateMachine: Sized + Send + Sync + 'static {
 	/// that may be stored.
 	fn timer_id(timer: &Self::Timer) -> Vec<u8>;
 
-	/// Encodes the timer at `version` of [`Self::FAMILY`].
+	/// Encodes the timer at `version` of [`Self::FAMILY`]. A version that cannot express the
+	/// timer must refuse with [`rivet_data::versioned::Inexpressible`] (anywhere in the error's
+	/// chain), which is the only error the runner skips while it looks for the lowest version at
+	/// or above the selected one that expresses it. Any other error fails the transition. See
+	/// `timer_encoding`.
 	fn serialize_timer(timer: &Self::Timer, version: u16) -> anyhow::Result<Vec<u8>>;
 
 	/// Encodes a timer rearmed by a delivery of the same timer id. The fired payload

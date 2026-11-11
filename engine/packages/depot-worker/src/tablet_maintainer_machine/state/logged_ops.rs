@@ -9,7 +9,7 @@
 use super::{MaintainerState, Operation, maintainer_log::LogToken};
 use crate::tablet_maintainer_machine::{Effects, effect::MaintainerEffect, types::OpId};
 use depot_types::VolumeLogKey;
-use rivet_data::generated::depot_maintainer_log_v1::MaintainerOp;
+use rivet_data::generated::depot_maintainer_log_v2::MaintainerOp;
 
 /// The live store operation `op_id` has its op committed at `token`: apply it.
 pub(crate) fn committed(
@@ -32,15 +32,17 @@ pub(crate) fn committed(
 pub(crate) fn op_volume(op: &MaintainerOp) -> Option<depot_types::VolumeKey> {
 	match op {
 		MaintainerOp::CheckpointOp(op) => Some(op.request.volume_key.clone()),
-		MaintainerOp::RetentionCheckpointOp(op) => {
-			Some(op.target.volume_log_key.volume_key.clone())
-		}
+		MaintainerOp::RetentionCheckpointOp(op) => op
+			.targets
+			.first()
+			.map(|target| target.volume_log_key.volume_key.clone()),
 		MaintainerOp::ForkReferenceOp(op) => Some(op.request.spec().parent_volume_key.clone()),
 		MaintainerOp::ForkPublishOp(op) => Some(op.spec.destination_volume_key.clone()),
 		MaintainerOp::ForkFailOp(op) => Some(op.spec.destination_volume_key.clone()),
 		MaintainerOp::RepairAuditOp(op) => {
 			Some(op.row.request.envelope.volume_log_key.volume_key.clone())
 		}
+		MaintainerOp::ForkPinOp(op) => Some(op.volume_log_key.volume_key.clone()),
 	}
 }
 
@@ -68,11 +70,11 @@ pub(crate) fn replay(
 	// later is no longer registered for apply, and its first record may never have reached
 	// cold, so the acquire takes the record the parent's replicas describe, live as it was.
 	if record.is_none()
-		&& let rivet_data::generated::depot_maintainer_log_v1::MaintainerOp::ForkReferenceOp(op) =
+		&& let rivet_data::generated::depot_maintainer_log_v2::MaintainerOp::ForkReferenceOp(op) =
 			&op && matches!(
 		op.request,
-		rivet_data::generated::depot_client_protocol_v1::FsForkReferenceRequest::FsForkAcquire(_)
-	) && let Some(target) = &op.target
+		rivet_data::generated::depot_client_protocol_v2::FsForkReferenceRequest::FsForkAcquire(_)
+	) && let Some(target) = op.targets.first()
 	{
 		let target_key = VolumeLogKey(target.volume_log_key.clone());
 		record = state
@@ -80,17 +82,56 @@ pub(crate) fn replay(
 			.get(&target_key)
 			.and_then(|volume| volume.row(&target_key))
 			.map(|mut row| {
-				row.status = rivet_data::generated::shared_depot_fs_v1::FsVolumeStatus::Live;
+				row.status = rivet_data::generated::shared_depot_fs_v2::FsVolumeStatus::Live;
 				row
 			});
 	}
+	// A fork pin of a volume this maintainer holds loaded but not registered, whose record never
+	// reached cold, was written to the store's memtable only: a crash before the volume's first
+	// record pass lost the pin row with it, as for a grouped volume deleted before that pass.
+	// The store must not take the missing record for a swept volume, so the pin goes with the
+	// row the volume's replicas describe and the store rebuilds the pin row at its cut.
+	if record.is_none()
+		&& let MaintainerOp::ForkPinOp(pin) = &op
+	{
+		let pin_key = VolumeLogKey(pin.volume_log_key.clone());
+		record = state
+			.loaded_volumes
+			.get(&pin_key)
+			.filter(|volume| volume.stored_row.is_none())
+			.and_then(|volume| volume.row(&pin_key))
+			.filter(|row| row.cold.volume_seq == 0);
+	}
 	let loaded_parent_incarnations = match &op {
-		rivet_data::generated::depot_maintainer_log_v1::MaintainerOp::ForkReferenceOp(op) => {
+		MaintainerOp::ForkReferenceOp(op) => {
 			super::loaded_incarnations(state, &op.request.spec().parent_volume_key)
 		}
-		_ => Vec::new(),
+		MaintainerOp::CheckpointOp(_)
+		| MaintainerOp::RetentionCheckpointOp(_)
+		| MaintainerOp::ForkPublishOp(_)
+		| MaintainerOp::ForkFailOp(_)
+		| MaintainerOp::ForkPinOp(_)
+		| MaintainerOp::RepairAuditOp(_) => Vec::new(),
+	};
+	// A fork pin drops the children the cache knows archived, and has not seen a pass apply,
+	// from the volume's earlier pins.
+	let pin_key = match &op {
+		MaintainerOp::ForkPinOp(op) => Some(VolumeLogKey(op.volume_log_key.clone())),
+		MaintainerOp::CheckpointOp(_)
+		| MaintainerOp::RetentionCheckpointOp(_)
+		| MaintainerOp::ForkReferenceOp(_)
+		| MaintainerOp::ForkPublishOp(_)
+		| MaintainerOp::ForkFailOp(_)
+		| MaintainerOp::RepairAuditOp(_) => None,
+	};
+	let archived_children = match &pin_key {
+		Some(key) => super::groups::archived_children(state, key),
+		None => Vec::new(),
 	};
 	let op_id = state.begin(Operation::ReplayOp { token, volume_key }, fx);
+	if let Some(key) = &pin_key {
+		super::groups::pass_started(state, op_id, key);
+	}
 	fx.execute(MaintainerEffect::MaintainerOpRequest {
 		op_id,
 		op,
@@ -98,6 +139,7 @@ pub(crate) fn replay(
 		applied,
 		region: state.config.local_region,
 		loaded_parent_incarnations,
+		archived_children,
 	});
 }
 
@@ -116,6 +158,7 @@ pub(crate) fn replayed(
 	) {
 		return;
 	}
+	let pass = super::groups::take_pass(state, op_id);
 	let Some(Operation::ReplayOp { token, .. }) = state.finish(op_id, fx) else {
 		unreachable!("checked above")
 	};
@@ -139,6 +182,13 @@ pub(crate) fn replayed(
 			super::maintainer_log::replay::finished(state, token, fx)
 		}
 		Ok(ReplayOutcome::ResumeFork(spec)) => super::forks::resume(state, spec, token),
+		Ok(ReplayOutcome::ForkPinned { key, last_fork }) => {
+			super::filesystem::fork_pinned(state, &key, last_fork);
+			super::groups::pass_applied(state, pass);
+			super::maintainer_log::replay::finished(state, token, fx);
+			super::fork_references::pins_progressed(state, Some(&key.0.volume_key), fx);
+			super::deletion::pin_applied(state, &key.0.volume_key);
+		}
 		Err(error) => {
 			tracing::warn!(%error, "replaying a maintainer log op failed in the store; fencing");
 			super::fence(state, fx);

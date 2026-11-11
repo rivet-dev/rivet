@@ -7,10 +7,14 @@ license.workspace = true
 edition.workspace = true
 autotests = false
 
+[features]
+# Reservation reads by key that only tests and the system sim make.
+
 [dependencies]
 anyhow.workspace = true
 bytes.workspace = true
 depot-client.workspace = true
+depot-fs-core.workspace = true
 depot-protocol.workspace = true
 depot-types.workspace = true
 depot-worker.workspace = true

@@ -36,11 +36,13 @@ async fn open_actor(
 	sender: &mut PacketSender,
 	receiver: &mut PacketReceiver,
 	identity: &mut p::MessageId,
+	version: u16,
 	open: p::ToEnvoyWebSocketOpen,
 ) -> Result<OpenReply> {
 	send(
 		sender,
 		identity,
+		version,
 		p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(open),
 	)
 	.await?;
@@ -77,6 +79,8 @@ fn decode_reply(
 
 /// The actor side of a WebSocket once the actor answered its open.
 pub(crate) struct Tunnel {
+	/// The envoy protocol version of every message to the actor's host on this tunnel.
+	pub(crate) version: u16,
 	pub(crate) sender: PacketSender,
 	pub(crate) receiver: PacketReceiver,
 	pub(crate) identity: p::MessageId,
@@ -87,20 +91,25 @@ pub(crate) struct Tunnel {
 /// when a pipelined open arrives ahead of the actor's start, is sent once more on the stream
 /// `reopen` acquires after the actor runs; a second refusal is the answer. Ordered UPS lanes do
 /// not prevent the first refusal, because the start reaches the Envoy from the pegboard executor
-/// while the open travels on this gateway's stream.
-pub(crate) async fn open_tunnel<Reopen, ReopenFut>(
+/// while the open travels on this gateway's stream. Messages to the actor's host are encoded at
+/// the version `version_of` gives for the stream they travel on, fixed when it opens; see
+/// `pegboard::envoy_protocol`.
+pub(crate) async fn open_tunnel<VersionOf, Reopen, ReopenFut>(
 	stream: DuplexStream,
+	version_of: VersionOf,
 	mut identity: p::MessageId,
 	open: p::ToEnvoyWebSocketOpen,
 	reopen: Reopen,
 ) -> Result<Tunnel>
 where
+	VersionOf: Fn(&DuplexStream) -> u16,
 	Reopen: FnOnce() -> ReopenFut,
 	ReopenFut:
 		std::future::Future<Output = Result<(DuplexStream, p::MessageId, p::ToEnvoyWebSocketOpen)>>,
 {
+	let mut version = version_of(&stream);
 	let (mut sender, mut receiver) = stream.split();
-	let mut reply = open_actor(&mut sender, &mut receiver, &mut identity, open).await?;
+	let mut reply = open_actor(&mut sender, &mut receiver, &mut identity, version, open).await?;
 	if let OpenReply::Closed(close) = &reply
 		&& refused_before_admission(close)
 	{
@@ -112,11 +121,13 @@ where
 			tracing::debug!(%error, "refused WebSocket tunnel peer already closed");
 		}
 		let (stream, next_identity, open) = reopen().await?;
+		version = version_of(&stream);
 		(sender, receiver) = stream.split();
 		identity = next_identity;
-		reply = open_actor(&mut sender, &mut receiver, &mut identity, open).await?;
+		reply = open_actor(&mut sender, &mut receiver, &mut identity, version, open).await?;
 	}
 	Ok(Tunnel {
+		version,
 		sender,
 		receiver,
 		identity,
@@ -135,9 +146,10 @@ where
 /// neither a RivetKit client nor an idle actor sends anything on its own. The ping is sent
 /// whether or not the connection was busy: a proxy's idle timer resets on any frame, and
 /// watching for the last frame would cost a clock read per forwarded message.
-pub async fn proxy<Reopen, ReopenFut>(
+pub async fn proxy<VersionOf, Reopen, ReopenFut>(
 	socket: &mut WebSocket,
 	stream: DuplexStream,
+	version_of: VersionOf,
 	identity: p::MessageId,
 	open: p::ToEnvoyWebSocketOpen,
 	reopen: Reopen,
@@ -145,16 +157,18 @@ pub async fn proxy<Reopen, ReopenFut>(
 	keepalive_interval_ms: u64,
 ) -> Result<()>
 where
+	VersionOf: Fn(&DuplexStream) -> u16,
 	Reopen: FnOnce() -> ReopenFut,
 	ReopenFut:
 		std::future::Future<Output = Result<(DuplexStream, p::MessageId, p::ToEnvoyWebSocketOpen)>>,
 {
 	let Tunnel {
+		version,
 		mut sender,
 		mut receiver,
 		mut identity,
 		reply,
-	} = open_tunnel(stream, identity, open, reopen).await?;
+	} = open_tunnel(stream, version_of, identity, open, reopen).await?;
 	let can_hibernate = match reply {
 		OpenReply::Accepted { can_hibernate } => can_hibernate,
 		OpenReply::Closed(close) => {
@@ -234,6 +248,7 @@ where
 						send(
 							&mut sender,
 							&mut identity,
+							version,
 							p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(
 								p::ToEnvoyWebSocketMessage {
 									data: text.into(),
@@ -250,6 +265,7 @@ where
 						send(
 							&mut sender,
 							&mut identity,
+							version,
 							p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(
 								p::ToEnvoyWebSocketMessage { data, binary: true },
 							),
@@ -260,6 +276,7 @@ where
 						send(
 							&mut sender,
 							&mut identity,
+							version,
 							p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(
 								p::ToEnvoyWebSocketClose {
 									code: close.as_ref().map(|c| c.code),
@@ -304,6 +321,7 @@ where
 async fn send(
 	sender: &mut PacketSender,
 	identity: &mut p::MessageId,
+	version: u16,
 	kind: p::ToEnvoyTunnelMessageKind,
 ) -> Result<()> {
 	let bytes = p::versioned::ToEnvoy::serialize_with_embedded_version(
@@ -311,7 +329,7 @@ async fn send(
 			message_id: identity.clone(),
 			message_kind: kind,
 		}),
-		p::PROTOCOL_VERSION,
+		version,
 	)?;
 	sender.send(bytes).await?;
 	identity.message_index = identity.message_index.wrapping_add(1);
