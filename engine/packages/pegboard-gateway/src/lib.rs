@@ -8,15 +8,16 @@ mod acquire;
 mod cors;
 mod http_tunnel;
 mod metrics;
+pub mod migrate_from_v2;
+mod namespace_fallback;
 mod raw_rest_path;
 mod retry_budget;
-mod route;
 mod routes;
 mod start_wait;
 pub mod start_waits;
 mod websocket_tunnel;
 
-pub use retry_budget::{Retries, RetryBudget};
+pub use retry_budget::{Refusal, Retries, RetryBudget, legacy_actor_moving_error};
 
 /// The process's start waits, shared by every gateway request. Building them starts nothing:
 /// each wait subscribes for its notices when a request creates it, and the waiting requests
@@ -41,6 +42,19 @@ pub fn start_waits(ctx: &EngineContext) -> std::sync::Arc<start_waits::StartWait
 }
 
 pub fn router(ctx: &EngineContext, waits: &std::sync::Arc<start_waits::StartWaits>) -> Router {
+	router_with_retry_budget(
+		ctx,
+		waits,
+		std::sync::Arc::new(RetryBudget::from_config(ctx)),
+	)
+}
+
+/// Constructed by guard with the budget also used by its public API routes.
+pub fn router_with_retry_budget(
+	ctx: &EngineContext,
+	waits: &std::sync::Arc<start_waits::StartWaits>,
+	budget: std::sync::Arc<RetryBudget>,
+) -> Router {
 	Router::new()
 		// Nesting to allow us to extract the raw user path
 		.nest(
@@ -54,8 +68,11 @@ pub fn router(ctx: &EngineContext, waits: &std::sync::Arc<start_waits::StartWait
 		.fallback(axum::routing::any(routes::direct))
 		.layer(axum::Extension(waits.clone()))
 		// Retries of refused requests across this process share one budget.
+		.layer(axum::Extension(budget))
+		// Requests that resolve in `default` without naming a namespace share one warning
+		// interval across this process.
 		.layer(axum::Extension(std::sync::Arc::new(
-			retry_budget::RetryBudget::from_config(ctx),
+			namespace_fallback::NamespaceFallbacks::default(),
 		)))
 		// Outermost, so preflights are answered before any lookup, wake or auth.
 		.layer(axum::middleware::from_fn(cors::cors))
@@ -65,6 +82,15 @@ pub fn router(ctx: &EngineContext, waits: &std::sync::Arc<start_waits::StartWait
 #[derive(Debug, rivet_error::RivetError)]
 #[error("actor", "not_found", "The actor does not exist or was destroyed.")]
 pub(crate) struct ActorNotFound;
+
+/// This request exhausted its acquisition deadline before reaching the actor.
+#[derive(Debug, rivet_error::RivetError)]
+#[error(
+	"guard",
+	"request_timeout",
+	"Timed out waiting for the actor to become ready."
+)]
+pub(crate) struct RequestTimeout;
 
 /// The gateway's query parameters are malformed or ask for something it does not support.
 #[derive(Debug, rivet_error::RivetError, serde::Serialize)]

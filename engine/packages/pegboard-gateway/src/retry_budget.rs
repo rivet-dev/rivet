@@ -11,6 +11,11 @@
 //! or the budget runs out instead of stopping after a fixed number of attempts.
 //! Snapshot-only storage reads interrupted by transport can also retry here: routing has not
 //! sent the user request to the actor, and repeating the lookup has no mutating effects.
+//!
+//! Legacy: an actor the backfill is moving refuses its wake with `actor.moving`, which nothing
+//! reached the actor for either. Its retry resolves the actor again, which finds it at its new
+//! id once the move made it, so a move of about a second rarely reaches the client. Removed in
+//! 3.1 with the backfill.
 use anyhow::Result;
 use axum::{body::Body, response::Response};
 use hyper::header::{self, HeaderValue};
@@ -37,12 +42,16 @@ const MILLI: u64 = 1_000;
 /// A routing failure the edge may retry before the user request reaches the actor: either
 /// storage/UPS refused the work or a snapshot-only lookup lost its reply. An uncertain mutation,
 /// explicit storage failure, fence, or corruption is final for this routing attempt.
+///
+/// Public because `Retries::retry` returns the refusal it waited out, which callers outside the
+/// gateway, such as the system sim's edge retry scenario, receive. Its fields stay
+/// crate-private: only the gateway reads them.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Refusal {
+pub struct Refusal {
 	/// Bounded cause, used as a metric label.
-	pub reason: &'static str,
-	pub retry_after_ms: u64,
-	pub kind: RefusalKind,
+	pub(crate) reason: &'static str,
+	pub(crate) retry_after_ms: u64,
+	pub(crate) kind: RefusalKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,7 +64,17 @@ pub(crate) enum RefusalKind {
 	/// again from a fresh lookup after a jittered exponential backoff, bounded by the deadline
 	/// and the budget. The hint is only for the client once those run out.
 	RouteUnresolved,
+	/// Legacy: the backfill is moving the actor. A retry waits at least the hint, within the
+	/// per-request cap, and resolves the actor again. Removed in 3.1 with the backfill.
+	LegacyActorMoving,
 }
+
+/// Legacy: the retry hint of `actor.moving` when its metadata carries none. Removed in 3.1 with
+/// the backfill.
+const LEGACY_ACTOR_MOVING_RETRY_AFTER_MS: u64 = 1_000;
+
+/// The retry hint of `namespace.creating` when its metadata carries none.
+const NAMESPACE_CREATING_RETRY_AFTER_MS: u64 = 1_000;
 
 /// Classifies `error` as a retryable refusal.
 /// Only definite refusals and transport-interrupted snapshot reads qualify. An uncertain
@@ -82,6 +101,32 @@ pub(crate) fn refusal(error: &anyhow::Error) -> Option<Refusal> {
 		}
 		return Some(Refusal {
 			reason: "depot_overloaded",
+			retry_after_ms,
+			kind: RefusalKind::Overloaded,
+		});
+	}
+	// Legacy: removed in 3.1 with the backfill.
+	let extracted = rivet_error::RivetError::extract(error);
+	if extracted.group() == "actor" && extracted.code() == "moving" {
+		let retry_after_ms = extracted
+			.metadata()
+			.and_then(|metadata| metadata.get("retry_after_ms")?.as_u64())
+			.unwrap_or(LEGACY_ACTOR_MOVING_RETRY_AFTER_MS);
+		return Some(Refusal {
+			reason: "actor_moving",
+			retry_after_ms,
+			kind: RefusalKind::LegacyActorMoving,
+		});
+	}
+	// The namespace's group create has not settled, as while its legacy row moves into its
+	// volume: nothing ran, and the namespace settles on its own.
+	if extracted.group() == "namespace" && extracted.code() == "creating" {
+		let retry_after_ms = extracted
+			.metadata()
+			.and_then(|metadata| metadata.get("retry_after_ms")?.as_u64())
+			.unwrap_or(NAMESPACE_CREATING_RETRY_AFTER_MS);
+		return Some(Refusal {
+			reason: "namespace_creating",
 			retry_after_ms,
 			kind: RefusalKind::Overloaded,
 		});
@@ -125,6 +170,19 @@ pub(crate) fn refusal_error(refusal: Refusal) -> anyhow::Error {
 		retry_after_ms: refusal.retry_after_ms,
 	}
 	.build()
+}
+
+/// Legacy: the client-facing refusal of a request that names a keyed actor the backfill has not
+/// moved yet, answered where the request cannot wait for the move. It is the
+/// `guard.service_unavailable` with reason `actor_moving` and the hint the gateway answers once
+/// it stops retrying a moving actor, which a released client retries after the hint. The new
+/// behavior has no such move. Removed in 3.1 with the backfill.
+pub fn legacy_actor_moving_error() -> anyhow::Error {
+	refusal_error(Refusal {
+		reason: "actor_moving",
+		retry_after_ms: LEGACY_ACTOR_MOVING_RETRY_AFTER_MS,
+		kind: RefusalKind::LegacyActorMoving,
+	})
 }
 
 /// The client-facing HTTP reply for a refusal the gateway did not retry: the canonical error
@@ -233,7 +291,9 @@ impl RetryBudget {
 			Ok(false)
 		};
 		let floor_ms = match refusal.kind {
-			RefusalKind::Overloaded | RefusalKind::ReadInterrupted => {
+			RefusalKind::Overloaded
+			| RefusalKind::ReadInterrupted
+			| RefusalKind::LegacyActorMoving => {
 				if attempt >= MAX_RETRIES_PER_REQUEST {
 					return denied("attempts");
 				}
@@ -274,7 +334,10 @@ impl Retries<'_> {
 	/// Decides whether the attempt that failed with `error` runs again. Returns `Ok` after
 	/// waiting out the backoff when it may, and otherwise the error for the client: anything
 	/// that is not a refusal at once, and a refusal once the deadline or budget runs out.
-	pub async fn retry(&mut self, env: &dyn Env, error: anyhow::Error) -> Result<()> {
+	///
+	/// Answers the refusal it waited out, so the caller can resolve the actor again for one that
+	/// needs it and still answer that refusal if the resolve cannot finish.
+	pub async fn retry(&mut self, env: &dyn Env, error: anyhow::Error) -> Result<Refusal> {
 		let Some(refused) = refusal(&error) else {
 			return Err(error);
 		};
@@ -286,6 +349,6 @@ impl Retries<'_> {
 			return Err(error);
 		}
 		self.retries += 1;
-		Ok(())
+		Ok(refused)
 	}
 }

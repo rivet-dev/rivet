@@ -18,6 +18,10 @@ use vbare::Versioned;
 
 /// Longest KV key a read or write accepts.
 const MAX_KV_KEY_BYTES: usize = 2048;
+/// The longest key a KV range delete may name as a bound: twice a put's key limit, which a
+/// caller's tuple encoding of a key at that limit reaches when every byte is escaped, plus room for
+/// the encoding's framing and the caller's own key prefix.
+const MAX_KV_RANGE_BOUND_BYTES: usize = 2 * MAX_KV_KEY_BYTES + 64;
 
 /// Half-open byte range. Appending a zero byte converts an inclusive key bound
 /// to the smallest exclusive bound, including keys containing arbitrary bytes.
@@ -554,12 +558,7 @@ impl Filesystem {
 			}
 			let old_len = entry.ops.len();
 			entry.ops.extend(p.tx.ops.iter().cloned());
-			let bytes = rivet_data::versioned::DepotFsEntryData::serialize_with_embedded_version(
-				&entry,
-				entry_version,
-			)
-			.map_err(|_| corrupt!())?
-			.len();
+			let bytes = super::transport::seal_entry(&entry, entry_version)?.len();
 			if bytes > status.max_payload_bytes || bytes > self.config.max_operation_bytes {
 				entry.ops.truncate(old_len);
 				if accepted.is_empty() {
@@ -797,13 +796,14 @@ impl Transaction {
 			ops: self.ops.clone(),
 		};
 		let batch = apply::plan(
+			self.fs.claim_log,
 			self.pin.seq.checked_add(1).ok_or_else(|| corrupt!())?,
 			&entry,
 		)?;
-		let mut view = pinned.fork();
-		view.seq = self.pin.seq + 1;
-		view.layers
-			.push(Layer::new(view.seq, batch, &self.fs.budget)?);
+		// The last overlay wins even at the pin's sequence. Making it visible must not
+		// raise the remote read bound to the next transaction's committed sequence.
+		let pending = Layer::new(self.pin.seq, batch, &self.fs.budget)?;
+		let mut base = pinned.fork();
 		drop(pin);
 		let row_range = RowRange::Kv {
 			ino: self.ino,
@@ -825,16 +825,39 @@ impl Transaction {
 			if remaining == 0 {
 				break;
 			}
-			let page = self
-				.fs
-				.evaluate(&mut view, deadline, |v| {
-					v.scan(&row_range, cursor.as_ref(), remaining, None)
-				})
-				.await;
+			// Rebase the committed view at the pin, then rebuild the speculative overlay.
+			// Rebasing the overlay itself could admit the next committed sequence or drop
+			// our staged writes. Each page retains the same pin, cursor and deadline.
+			let mut retried_cold = None;
+			let page = loop {
+				let mut view = base.fork();
+				view.layers.push(pending.clone());
+				let page = self
+					.fs
+					.evaluate(&mut view, deadline, |v| {
+						v.scan(&row_range, cursor.as_ref(), remaining, None)
+					})
+					.await;
+				if !matches!(page, Err(Error::TooOld)) {
+					break page;
+				}
+				let before = base.cold.snapshot.position().volume_seq;
+				if !self
+					.fs
+					.rebase_view(&mut base, self.pin.seq, deadline)
+					.await?
+				{
+					break Err(Error::TooOld);
+				}
+				let after = base.cold.snapshot.position().volume_seq;
+				if after <= before && retried_cold.is_some_and(|cold| cold >= after) {
+					break Err(Error::TooOld);
+				}
+				retried_cold = Some(after);
+			};
 			let page = self.fs.pinned_result(page, deadline).await?;
 			let end = page.len() < remaining;
 			cursor = page.last().map(|(key, _)| key.clone());
-			view.forget_fetched();
 			for (key, value) in page {
 				if reverse && limit.is_some_and(|limit| retained.len() == limit) {
 					let (_, _, old_bytes, _charge) =
@@ -910,6 +933,15 @@ impl Transaction {
 		if !range.valid() {
 			return Err(depot_fs_core::Error::Invalid.into());
 		}
+		// A range delete on a volume with a base leaves a whiteout row of its two keys, which
+		// every later read of the file may consult, so its keys are bounded. A bound need not be
+		// a key a put can store, and a caller's encoding of a key at a put's limit may be longer
+		// than that limit, so a bound may be about twice as long.
+		for bound in std::iter::once(&range.start).chain(range.end.as_ref()) {
+			if bound.len() > MAX_KV_RANGE_BOUND_BYTES {
+				return Err(depot_fs_core::Error::Invalid.into());
+			}
+		}
 		self.charge(96 + range.start.len() + range.end.as_ref().map_or(0, Vec::len))?;
 		self.ops.push(FsOp::FsKvDeleteRange(FsKvDeleteRange {
 			ino: self.ino,
@@ -942,7 +974,13 @@ impl Filesystem {
 		match value {
 			Some(Row::Bytes(value)) => Ok(Some(Vec::from(value))),
 			None => Ok(None),
-			Some(Row::Format(_) | Row::Inode(_) | Row::Dentry(_) | Row::Unit) => Err(corrupt!()),
+			Some(
+				Row::Format(_)
+				| Row::Inode(_)
+				| Row::Dentry(_)
+				| Row::Unit
+				| Row::KvRangeWhiteout(_),
+			) => Err(corrupt!()),
 		}
 	}
 

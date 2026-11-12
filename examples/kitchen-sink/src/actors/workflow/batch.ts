@@ -4,6 +4,12 @@
 
 import { actor, event } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
+import {
+	loadRecord,
+	recordDb,
+	saveRecord,
+	updateRecord,
+} from "./record-store.ts";
 
 export type BatchInfo = {
 	id: number;
@@ -46,16 +52,19 @@ export type BatchJobInput = {
 };
 
 export const batch = actor({
-	createState: (c, input?: BatchJobInput): BatchJob => ({
-		id: c.key[0] as string,
-		totalItems: input?.totalItems ?? 50,
-		batchSize: input?.batchSize ?? 5,
-		status: "running",
-		processedTotal: 0,
-		currentBatch: 0,
-		batches: [],
-		startedAt: Date.now(),
-	}),
+	db: recordDb(),
+	onCreate: async (c, input?: BatchJobInput) => {
+		await saveRecord<BatchJob>(c.db, {
+			id: c.key[0] as string,
+			totalItems: input?.totalItems ?? 50,
+			batchSize: input?.batchSize ?? 5,
+			status: "running",
+			processedTotal: 0,
+			currentBatch: 0,
+			batches: [],
+			startedAt: Date.now(),
+		});
+	},
 	events: {
 		batchProcessed: event<BatchInfo>(),
 		stateChanged: event<BatchJob>(),
@@ -66,7 +75,7 @@ export const batch = actor({
 	},
 
 	actions: {
-		getJob: (c): BatchJob => c.state,
+		getJob: (c): Promise<BatchJob> => loadRecord<BatchJob>(c.db),
 	},
 
 	run: workflow(async (ctx) => {
@@ -75,9 +84,10 @@ export const batch = actor({
 			state: { cursor: 0 },
 			run: async (batchCtx, loopState: { cursor: number }) => {
 				const batch = await batchCtx.step("fetch-batch", async (c) => {
+					const job = await loadRecord<BatchJob>(c.db);
 					c.log.info({
 						msg: "processing batch",
-						jobId: c.state.id,
+						jobId: job.id,
 						cursor: loopState.cursor,
 					});
 					await new Promise((r) =>
@@ -85,8 +95,8 @@ export const batch = actor({
 					);
 					return fetchBatch(
 						loopState.cursor,
-						c.state.batchSize,
-						c.state.totalItems,
+						job.batchSize,
+						job.totalItems,
 					);
 				});
 
@@ -101,16 +111,20 @@ export const batch = actor({
 						processedAt: Date.now(),
 					};
 
-					c.state.currentBatch = loopState.cursor;
-					c.state.processedTotal += batch.items.length;
-					c.state.batches.push(batchInfo);
-
+					const updated = await updateRecord<BatchJob>(
+						c.db,
+						(job) => {
+							job.currentBatch = loopState.cursor;
+							job.processedTotal += batch.items.length;
+							job.batches.push(batchInfo);
+						},
+					);
 					c.broadcast("batchProcessed", batchInfo);
-					c.broadcast("stateChanged", c.state);
+					c.broadcast("stateChanged", updated);
 
 					c.log.info({
 						msg: "batch processed",
-						jobId: c.state.id,
+						jobId: updated.id,
 						cursor: loopState.cursor,
 						count: batch.items.length,
 					});
@@ -118,12 +132,17 @@ export const batch = actor({
 
 				if (!batch.hasMore) {
 					await batchCtx.step("mark-complete", async (c) => {
-						c.state.status = "completed";
-						c.state.completedAt = Date.now();
-						c.broadcast("stateChanged", c.state);
+						const updated = await updateRecord<BatchJob>(
+							c.db,
+							(job) => {
+								job.status = "completed";
+								job.completedAt = Date.now();
+							},
+						);
+						c.broadcast("stateChanged", updated);
 						c.broadcast("processingComplete", {
 							totalBatches: loopState.cursor + 1,
-							totalItems: c.state.processedTotal,
+							totalItems: updated.processedTotal,
 						});
 					});
 					return Loop.break(loopState.cursor + 1);

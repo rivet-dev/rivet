@@ -1,0 +1,18 @@
+# An individual actor fork in a forked actor's lineage.
+type ForkLink struct {
+	# The source actor.
+	actorId: str
+	# The source actor's key, in the form the engine sends it.
+	key: optional<str>
+	# When the fork was made, in milliseconds since the epoch.
+	forkedAt: i64
+}
+
+# What an actor knows of the individual actor forks behind it, stored in `_rivet_meta`.
+type ForkState struct {
+	# The fork whose hook last ran to completion on this database. A database copied by a fork
+	# holds its source's value, so the first start of the copy sees a different fork.
+	appliedForkId: optional<data>
+	# Every individual actor fork behind this actor, oldest first.
+	chain: list<ForkLink>
+}

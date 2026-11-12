@@ -15,7 +15,7 @@ npm run dev
 ## Features
 
 - **Type-safe actor actions**: Define and call actions with full TypeScript type safety
-- **Actor state management**: Initialize and persist actor state using `createState`
+- **Durable data in SQLite**: Save creation input in `onCreate`, then read and update it with SQL in each action
 - **Cross-actor communication**: Create and interact with actors from within other actors
 - **RPC-style patterns**: Call actor methods from client code with automatic type inference
 
@@ -23,11 +23,11 @@ npm run dev
 
 This example demonstrates the fundamentals of defining and calling actor actions:
 
-- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/actor-actions/src/backend/registry.ts)): Shows how to define actions with parameters, return values, and state management
+- **Actor Definition** ([`src/index.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/actor-actions/src/index.ts)): Shows how to define actions with parameters and return values, backed by each actor's SQLite database
 
 ## Resources
 
-Read more about [actions](/docs/actors/actions), [state](/docs/actors/state), and [actor setup](/docs/setup).
+Read more about [actions](/docs/actors/actions), [state](/docs/actors/state), [SQLite](/docs/actors/sqlite), and [actor setup](/docs/setup).
 
 ## License
 

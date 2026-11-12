@@ -64,6 +64,11 @@
 					"badge": "POST"
 				},
 				{
+					"title": "Fork Actor",
+					"href": "/docs/api/actors/fork",
+					"badge": "POST"
+				},
+				{
 					"title": "Reschedule Actor",
 					"href": "/docs/api/actors/reschedule",
 					"badge": "POST"
@@ -81,11 +86,6 @@
 				{
 					"title": "Call Action",
 					"href": "/docs/api/gateway/call-action",
-					"badge": "POST"
-				},
-				{
-					"title": "Send Queue Message",
-					"href": "/docs/api/gateway/queue",
 					"badge": "POST"
 				},
 				{
@@ -136,6 +136,11 @@
 				{
 					"title": "Create Namespace",
 					"href": "/docs/api/namespaces/create",
+					"badge": "POST"
+				},
+				{
+					"title": "Archive Namespace",
+					"href": "/docs/api/namespaces/archive",
 					"badge": "POST"
 				}
 			]

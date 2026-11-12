@@ -4,12 +4,11 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use rivetkit_core::error::ActorRuntime;
 use rivetkit_core::{ActorHttpResponse, Request, Response, WebSocket};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 
 use crate::action::ActionSet;
 use crate::context::{ConnCtx, Ctx};
 use crate::event::EventSet;
-use crate::queue::QueueSet;
 
 /// Classifies an HTTP callback for independent bounded dispatcher pools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,16 +32,11 @@ pub enum HttpCallbackAdmission {
 
 #[async_trait]
 pub trait Actor: Send + Sync + Sized + 'static {
-	type State: Serialize + DeserializeOwned + Send + Sync + 'static;
 	type Input: DeserializeOwned + Default + Send + 'static;
 	type Actions: ActionSet<Self>;
 	type Events: EventSet;
-	type Queue: QueueSet<Self>;
 	type ConnParams: DeserializeOwned + Default + Send + Sync + 'static;
-	type ConnState: Serialize + DeserializeOwned + Default + Send + Sync + Clone + 'static;
 	type Action: DeserializeOwned + Send + 'static;
-
-	const HAS_DATABASE: bool = false;
 
 	/// Opts this actor into concurrent typed HTTP callbacks.
 	const CONCURRENT_HTTP_CALLBACKS: bool = false;
@@ -65,16 +59,6 @@ pub trait Actor: Send + Sync + Sized + 'static {
 		HttpCallbackAdmission::Untracked
 	}
 
-	async fn create_state(_ctx: &Ctx<Self>, _input: Self::Input) -> Result<Self::State> {
-		bail!(
-			"{}",
-			ActorRuntime::NotConfigured {
-				component: "actor create_state hook".to_owned(),
-			}
-			.build()
-		)
-	}
-
 	async fn create(_ctx: &Ctx<Self>) -> Result<Self> {
 		bail!(
 			"{}",
@@ -93,20 +77,29 @@ pub trait Actor: Send + Sync + Sized + 'static {
 		Ok(())
 	}
 
-	async fn on_start(self: Arc<Self>, _ctx: Ctx<Self>) -> Result<()> {
-		Ok(())
-	}
-
-	async fn on_state_change(self: Arc<Self>, _ctx: Ctx<Self>) -> Result<()> {
-		Ok(())
-	}
-
-	async fn create_conn_state(
+	/// Runs once at the first start of an actor made by an individual actor fork, before
+	/// `on_start`, with the source, the fork time and the fork input. `ctx.fork_chain()`
+	/// already ends with this fork.
+	///
+	/// State edits made here commit with the record that the fork ran. On native SQLite the
+	/// hook's SQL writes and any save it starts itself join that commit, and a failed start
+	/// drops them. On remote SQLite (wasm runtimes) SQL writes, and state the hook writes itself
+	/// in a state transaction, commit at once, without the fork record; only state left to the
+	/// startup save, which also carries a save the hook only requests, is atomic with it, so the
+	/// hook must be idempotent there. On native SQLite the hook's writes must fit one commit: a
+	/// transaction that would take them past it fails as too large instead of committing part
+	/// of them early, so nothing the hook wrote lands without the fork record. `on_create`
+	/// differs: its writes held so far are committed early instead.
+	async fn on_fork(
 		self: Arc<Self>,
 		_ctx: Ctx<Self>,
-		_params: Self::ConnParams,
-	) -> Result<Self::ConnState> {
-		Ok(Self::ConnState::default())
+		_fork: rivetkit_core::ActorForkStart,
+	) -> Result<()> {
+		Ok(())
+	}
+
+	async fn on_start(self: Arc<Self>, _ctx: Ctx<Self>) -> Result<()> {
+		Ok(())
 	}
 
 	async fn on_before_connect(

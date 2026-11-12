@@ -1,0 +1,13 @@
+#import "shared/uuid_v4.v1.bare"
+
+# A non-stopping worker asks the current maintainer for a fresh status barrier over
+# its replicas. This never quiesces creates or releases a client's claim. The reply
+# is the existing versioned StopReadinessResponse on a separate UPS subject.
+type ReplicaReadiness struct {
+	tabletId: UuidV4
+	tabletGrantEpoch: u64
+	tabletReplicaSetVersion: u64
+	workerId: UuidV4
+	workerIncarnation: UuidV4
+	diskIncarnation: UuidV4
+}

@@ -72,13 +72,61 @@ pub struct JsInspectorTabEntry {
 	pub hidden: Option<bool>,
 }
 
+#[napi(object)]
+#[derive(Clone, Default)]
+pub struct JsSqliteProfilingMetrics {
+	pub duration: Option<bool>,
+	pub duration_histogram: Option<bool>,
+	pub outcomes: Option<bool>,
+	pub phase_duration_histogram: Option<bool>,
+	pub get_pages_round_trips_histogram: Option<bool>,
+	pub transaction_statement_count_histogram: Option<bool>,
+	pub pages_fetched: Option<bool>,
+	pub local_pages: Option<bool>,
+	pub local_bytes: Option<bool>,
+	pub get_pages_duration_histogram: Option<bool>,
+	pub get_pages_pages_histogram: Option<bool>,
+	pub get_pages_response_bytes_histogram: Option<bool>,
+	pub get_pages_missing_pages: Option<bool>,
+	pub worker_queue_depth: Option<bool>,
+	pub worker_inflight: Option<bool>,
+	pub coordinator_queue_depth: Option<bool>,
+	pub fingerprint_overflow: Option<bool>,
+	pub event_dropped: Option<bool>,
+}
+impl From<JsSqliteProfilingMetrics> for rivetkit_core::SqliteProfilingMetricsInput {
+	fn from(value: JsSqliteProfilingMetrics) -> Self {
+		Self {
+			duration: value.duration,
+			duration_histogram: value.duration_histogram,
+			outcomes: value.outcomes,
+			phase_duration_histogram: value.phase_duration_histogram,
+			get_pages_round_trips_histogram: value.get_pages_round_trips_histogram,
+			transaction_statement_count_histogram: value.transaction_statement_count_histogram,
+			pages_fetched: value.pages_fetched,
+			local_pages: value.local_pages,
+			local_bytes: value.local_bytes,
+			get_pages_duration_histogram: value.get_pages_duration_histogram,
+			get_pages_pages_histogram: value.get_pages_pages_histogram,
+			get_pages_response_bytes_histogram: value.get_pages_response_bytes_histogram,
+			get_pages_missing_pages: value.get_pages_missing_pages,
+			worker_queue_depth: value.worker_queue_depth,
+			worker_inflight: value.worker_inflight,
+			coordinator_queue_depth: value.coordinator_queue_depth,
+			fingerprint_overflow: value.fingerprint_overflow,
+			event_dropped: value.event_dropped,
+		}
+	}
+}
 /// Experimental SQLite profiling configuration. This entire configuration
 /// surface is subject to change without notice.
 #[napi(object)]
 #[derive(Clone, Default)]
 pub struct JsSqliteProfilingConfig {
-	pub queries: Option<Vec<String>>,
-	pub fingerprints: Option<Vec<String>>,
+	pub metrics: Option<JsSqliteProfilingMetrics>,
+	pub duration_histogram_buckets_seconds: Option<Vec<f64>>,
+	pub filter_queries: Option<Vec<String>>,
+	pub filter_query_fingerprints: Option<Vec<String>>,
 	pub max_tracked_statement_fingerprints: Option<u32>,
 	pub max_tracked_transaction_fingerprints: Option<u32>,
 	pub max_prometheus_series: Option<u32>,
@@ -109,7 +157,6 @@ pub struct JsActorConfig {
 	pub remote_sqlite: Option<bool>,
 	pub sqlite_profiling: Option<JsSqliteProfilingConfig>,
 	pub tracing: Option<JsActorTracingConfig>,
-	pub enable_actor_runtime_socket: Option<bool>,
 	pub has_state: Option<bool>,
 	pub can_hibernate_websocket: Option<bool>,
 	pub state_save_interval_ms: Option<u32>,
@@ -155,6 +202,12 @@ pub(crate) struct CreateConnStatePayload {
 	pub(crate) conn: CoreConnHandle,
 	pub(crate) params: Vec<u8>,
 	pub(crate) request: Option<Request>,
+}
+
+#[derive(Clone)]
+pub(crate) struct ForkPayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) fork: rivetkit_core::ActorForkStart,
 }
 
 #[derive(Clone)]
@@ -264,6 +317,7 @@ pub(crate) struct CallbackBindings {
 	pub(crate) create_vars: Option<CallbackTsfn<LifecyclePayload>>,
 	pub(crate) on_migrate: Option<CallbackTsfn<MigratePayload>>,
 	pub(crate) on_wake: Option<CallbackTsfn<LifecyclePayload>>,
+	pub(crate) on_fork: Option<CallbackTsfn<ForkPayload>>,
 	pub(crate) on_before_actor_start: Option<CallbackTsfn<LifecyclePayload>>,
 	pub(crate) on_sleep: Option<CallbackTsfn<LifecyclePayload>>,
 	pub(crate) on_destroy: Option<CallbackTsfn<LifecyclePayload>>,
@@ -429,6 +483,7 @@ impl CallbackBindings {
 			create_vars: optional_tsfn(&callbacks, "createVars", build_lifecycle_payload)?,
 			on_migrate: optional_tsfn(&callbacks, "onMigrate", build_migrate_payload)?,
 			on_wake: optional_tsfn(&callbacks, "onWake", build_lifecycle_payload)?,
+			on_fork: optional_tsfn(&callbacks, "onFork", build_fork_payload)?,
 			on_before_actor_start: optional_tsfn(
 				&callbacks,
 				"onBeforeActorStart",
@@ -661,6 +716,17 @@ impl TsfnPayloadSummary for CreateConnStatePayload {
 	}
 }
 
+impl TsfnPayloadSummary for ForkPayload {
+	fn payload_summary(&self) -> String {
+		format!(
+			"actor_id={} source_actor_id={} input_bytes={}",
+			self.ctx.actor_id(),
+			self.fork.link.actor_id,
+			self.fork.input.as_ref().map(Vec::len).unwrap_or(0)
+		)
+	}
+}
+
 impl TsfnPayloadSummary for MigratePayload {
 	fn payload_summary(&self) -> String {
 		format!("actor_id={} is_new={}", self.ctx.actor_id(), self.is_new)
@@ -778,6 +844,19 @@ fn build_lifecycle_payload(
 ) -> napi::Result<Vec<napi::JsUnknown>> {
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
+	Ok(vec![object.into_unknown()])
+}
+
+fn build_fork_payload(env: &Env, payload: ForkPayload) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut fork = env.create_object()?;
+	let link = crate::actor_context::js_fork_link(&payload.fork.link);
+	fork.set("actorId", link.actor_id)?;
+	fork.set("key", link.key)?;
+	fork.set("forkedAt", link.forked_at)?;
+	fork.set("input", payload.fork.input.map(Buffer::from))?;
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("fork", fork)?;
 	Ok(vec![object.into_unknown()])
 }
 
@@ -1024,7 +1103,6 @@ impl From<JsActorConfig> for ActorConfigInput {
 			remote_sqlite: value.remote_sqlite,
 			sqlite_profiling: value.sqlite_profiling.map(Into::into),
 			tracing: value.tracing.map(Into::into),
-			enable_actor_runtime_socket: value.enable_actor_runtime_socket,
 			has_state: value.has_state,
 			can_hibernate_websocket: value.can_hibernate_websocket,
 			state_save_interval_ms: value.state_save_interval_ms,
@@ -1100,8 +1178,10 @@ impl From<JsActorTracingConfig> for ActorTracingConfig {
 impl From<JsSqliteProfilingConfig> for SqliteProfilingConfigInput {
 	fn from(value: JsSqliteProfilingConfig) -> Self {
 		Self {
-			queries: value.queries,
-			fingerprints: value.fingerprints,
+			metrics: value.metrics.map(Into::into),
+			duration_histogram_buckets_seconds: value.duration_histogram_buckets_seconds,
+			filter_queries: value.filter_queries,
+			filter_query_fingerprints: value.filter_query_fingerprints,
 			max_tracked_statement_fingerprints: value.max_tracked_statement_fingerprints,
 			max_tracked_transaction_fingerprints: value.max_tracked_transaction_fingerprints,
 			max_prometheus_series: value.max_prometheus_series,

@@ -46,7 +46,7 @@ pub trait StatusNotifier: Send + Sync + 'static {
 	fn notify(
 		&self,
 		worker: WorkerId,
-		request: rivet_data::generated::depot_client_protocol_v1::ReplicaStatusNoticeRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::ReplicaStatusNoticeRequest,
 	) -> std::pin::Pin<Box<dyn std::future::Future<Output = super::types::NoticeOutcome> + Send>>;
 }
 
@@ -178,7 +178,7 @@ impl Shard {
 		let inbox = handle.inbox.downgrade();
 		let signal_clock = env.clock();
 		tasks.spawn(async move {
-			let mut near = std::collections::BTreeSet::new();
+			let mut warnings = std::collections::BTreeMap::new();
 			let mut pin_age = crate::signals::SegmentPinAge::default();
 			loop {
 				let (mut resources, retained_entries, retained_entry_bytes) = {
@@ -200,7 +200,7 @@ impl Shard {
 						capacity: inbox.max_capacity() as u64,
 					});
 				}
-				crate::metrics::observe(resources, &mut near);
+				crate::metrics::observe(resources, &mut warnings, || signal_clock.boot_ms().ok());
 				if snapshots.changed().await.is_err() {
 					break;
 				}

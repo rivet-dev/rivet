@@ -16,7 +16,7 @@ use self::{
 	types::*,
 };
 use crate::tablet_maintainer_machine::types::MAX_COLD_BYTES;
-use rivet_data::generated::depot_kv_command_v1::{KvCommandResponse, OverloadReason};
+use rivet_data::generated::depot_kv_command_v1::KvCommandResponse;
 use rivet_data::generated::depot_storage_worker_protocol_v1::{
 	RejectResponse, StorageWorkerResponse,
 };
@@ -48,6 +48,11 @@ pub struct MaintainerSnapshot {
 	pub store: StoreSnapshot,
 	pub alarms: AlarmSnapshot,
 	pub signals: SignalSnapshot,
+	/// The version marks of the tablet's maintainer log record that are durable in its
+	/// store: read at opening and raised when a pass carrying a raised record completes. A
+	/// command stores a value above the read floor only once these cover its version, so no
+	/// worker the coordinator may grant the tablet to finds a value it cannot read.
+	pub version_marks_durable: Vec<rivet_data::generated::shared_depot_types_v1::VersionMark>,
 }
 
 /// Values the runner reports as signal events and gauges, read from state in constant time.
@@ -76,6 +81,10 @@ pub struct AlarmSnapshot {
 	pub parked_capacity: u32,
 	pub candidate_capacity: u32,
 	pub operation_capacity: u32,
+	/// Due alarm keys waiting for their group record's read before they are read or called.
+	pub group_waits: u32,
+	/// The cap on `group_waits`: `depot.alarms.max_candidates`.
+	pub group_wait_capacity: u32,
 }
 
 impl rivet_state_machine::Snapshot for MaintainerSnapshot {}
@@ -105,12 +114,31 @@ pub struct StoreSnapshot {
 	pub read_capacity: u32,
 	/// Configured session reads of one volume while another volume's reads wait; zero is off.
 	pub per_volume_read_capacity: u32,
-	/// Fork source reads against held images in flight.
+	/// Fork jobs' source reads against held images in flight.
 	pub held_image_reads_in_flight: u32,
+	/// Fork children's reads of one inherited layer in flight.
+	pub base_reads_in_flight: u32,
+	/// Configured window of fork children's inherited layer reads (`max_base_reads`).
+	pub base_read_capacity: u32,
 	/// Replica log reads for applies in flight.
 	pub replica_log_reads_in_flight: u32,
-	/// Fork jobs admitted and not yet finished.
+	/// Fork jobs other than lazy forks admitted and not yet finished.
 	pub fork_jobs: u32,
+	/// Lazy fork jobs admitted and not yet finished, other than parked ones.
+	pub lazy_fork_jobs: u32,
+	/// Lazy fork jobs parked behind an unproven parent tail until an open re-drives them,
+	/// bounded by `parked_lazy_fork_job_capacity`.
+	pub parked_lazy_fork_jobs: u32,
+	/// Configured parked lazy fork jobs (`max_parked_lazy_fork_jobs`).
+	pub parked_lazy_fork_job_capacity: u32,
+	/// Configured lazy fork jobs at once (`max_lazy_fork_jobs`).
+	pub lazy_fork_job_capacity: u32,
+	/// Recoveries fencing the writers of archived groups' loaded volumes in flight.
+	pub archive_fences_in_flight: u32,
+	/// Loaded volumes of archived groups waiting for their fence.
+	pub archive_fences_queued: u32,
+	/// Configured archive fences at once (`max_archive_fences`).
+	pub archive_fence_capacity: u32,
 	/// Fork cleanup jobs admitted and not yet finished.
 	pub fork_cleanup_jobs: u32,
 	/// Configured size of each background window: held-image reads, replica log reads,
@@ -142,6 +170,35 @@ pub struct StoreSnapshot {
 	pub loaded_volumes: u32,
 	/// The configured bound on `loaded_volumes`.
 	pub loaded_volume_capacity: u32,
+	/// Opens of grouped volumes waiting for a lazy fork job or a group read.
+	pub lazy_fork_waiting_opens: u32,
+	/// Fork numbers the group cache wants read.
+	pub group_wanted_forks: u32,
+	/// The configured bound on `group_wanted_forks`.
+	pub group_wanted_forks_capacity: u32,
+	/// Volumes a lazy fork found absent whose mark the maintainer still holds.
+	pub absent_lazy_forks: u32,
+	/// The configured bound on `absent_lazy_forks`.
+	pub absent_lazy_forks_capacity: u32,
+	/// Child groups whose status the group cache is learning for waiting fork pins.
+	pub group_pin_wait_children: u32,
+	/// The configured bound on `group_pin_wait_children`.
+	pub group_pin_wait_children_capacity: u32,
+	/// Group volume reads the group cache has in flight.
+	pub group_reads_in_flight: u32,
+	/// The configured bound on `group_reads_in_flight`.
+	pub group_reads_in_flight_capacity: u32,
+	/// Group reads queued for a slot in the first lane: reads that hold applies, opens, fork
+	/// stamps or acquires. A queued place whose entry stopped being due counts until it is
+	/// popped. Unbounded by config: at most one place per cached entry.
+	pub group_reads_queued_first: u32,
+	/// Group reads queued for a slot in the background lane: entries with no loaded volume made
+	/// only to learn a waited child's status or to answer due alarms. Bounded by
+	/// `group_pin_wait_children_capacity` plus twice the alarm group wait capacity: an
+	/// alarm-only entry is created only for a waiting key and leaves when its read ends, unless
+	/// it is kept, within that capacity, for an overflow's discovery pass. A queued place whose
+	/// entry stopped being due counts until it is popped.
+	pub group_reads_queued_background: u32,
 }
 
 pub struct TabletMaintainerMachine;
@@ -165,6 +222,7 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 			MaintainerTimer::IdleUnload => "idle_unload",
 			MaintainerTimer::OpenRead(..) => "open_read",
 			MaintainerTimer::ForkRequest(..) => "fork_request",
+			MaintainerTimer::GroupReadRetry(..) => "group_read_retry",
 			MaintainerTimer::ForkRetry(..) => "fork_retry",
 			MaintainerTimer::MaterializeRetry(..) => "materialize_retry",
 			MaintainerTimer::PendingWorkTick => "pending_work_tick",
@@ -202,6 +260,7 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 			MaintainerTimer::MemberRepairRetry(..) => "member_repair_retry",
 			MaintainerTimer::MaintainerLogDue => "maintainer_log_due",
 			MaintainerTimer::MemtableBudgetShed => "memtable_budget_shed",
+			MaintainerTimer::InexpressibleHoldDeadline => "inexpressible_hold_deadline",
 			MaintainerTimer::MaintainerLogRetry(..) => "maintainer_log_retry",
 		}
 	}
@@ -253,6 +312,10 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 				request_id,
 				request,
 			}) => state::stop::admit(state, request_id, request, effects),
+			RuntimeEvent::Input(MaintainerEvent::ReplicaReadinessRequest {
+				request_id,
+				request,
+			}) => state::startup::admit(state, request_id, request, effects),
 			RuntimeEvent::Input(MaintainerEvent::HandoffReadinessRequest {
 				request_id,
 				request,
@@ -279,6 +342,9 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 			}
 			RuntimeEvent::Input(MaintainerEvent::SweepPendingResponse { op_id, result }) => {
 				state::pending_work::swept(state, op_id, result, effects)
+			}
+			RuntimeEvent::Input(MaintainerEvent::ForkPinPassResponse { op_id, result }) => {
+				state::groups::pin_pass_completed(state, op_id, result, effects)
 			}
 
 			RuntimeEvent::Timer(MaintainerTimer::RetentionDue) => {
@@ -312,6 +378,18 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 				} else {
 					state::forks::peer(state, op_id, result, effects);
 				}
+			}
+			RuntimeEvent::Input(MaintainerEvent::GroupReadResponse { op_id, result }) => {
+				state::groups::read_completed(state, op_id, result, effects)
+			}
+			RuntimeEvent::Input(MaintainerEvent::GroupEvents { events, gap }) => {
+				if gap {
+					state::groups::gap(state, effects);
+				}
+				state::groups::events(state, events, effects)
+			}
+			RuntimeEvent::Timer(MaintainerTimer::GroupReadRetry(group)) => {
+				state::groups::retry(state, group, effects)
 			}
 			RuntimeEvent::Timer(MaintainerTimer::ForkRequest(id)) => {
 				state::forks::expire(state, id, effects)
@@ -352,6 +430,9 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 			RuntimeEvent::Timer(MaintainerTimer::MemtableBudgetShed) => {
 				state::filesystem_reads::memtable_budget_shed(state, effects)
 			}
+			RuntimeEvent::Timer(MaintainerTimer::InexpressibleHoldDeadline) => {
+				state::filesystem::inexpressible_hold_deadline(state, effects)
+			}
 			RuntimeEvent::Timer(MaintainerTimer::MaintainerLogRetry(worker)) => {
 				state::maintainer_log::retry(state, worker)
 			}
@@ -375,9 +456,11 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 			RuntimeEvent::Input(MaintainerEvent::FilesystemLoadRequest { key }) => {
 				state::filesystem::load(state, key)
 			}
-			RuntimeEvent::Input(MaintainerEvent::FilesystemLoadResponse { op_id, result }) => {
-				state::filesystem::loaded(state, op_id, result, effects)
-			}
+			RuntimeEvent::Input(MaintainerEvent::FilesystemLoadResponse {
+				op_id,
+				result,
+				fork_pins,
+			}) => state::filesystem::loaded(state, op_id, result, fork_pins, effects),
 			RuntimeEvent::Input(MaintainerEvent::FilesystemCommittedRequest { key, through }) => {
 				state::filesystem::committed(state, key, through, effects)
 			}
@@ -410,7 +493,7 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 			}) => {
 				if state::deletion::holds_key(state, &request.volume_key) {
 					let response = if state::deletion::lookup_pending(state, &request.volume_key) {
-						crate::kv_refusals::overloaded(OverloadReason::VolumeTransition)
+						crate::kv_refusals::volume_transition("delete_lookup")
 					} else {
 						KvCommandResponse::VolumeDeleted
 					};
@@ -470,6 +553,7 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 			}
 			RuntimeEvent::Timer(MaintainerTimer::DeleteRetry(key)) => {
 				state::drain::retry(state, &key, effects);
+				state::deletion::pin_retry(state, &key, effects);
 				state::deletion::retry(state, key)
 			}
 			RuntimeEvent::Input(MaintainerEvent::PrepareSplitResponse { op_id, result }) => {
@@ -506,6 +590,9 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 			}
 			RuntimeEvent::Input(MaintainerEvent::ReportVersionMarksResponse { op_id, result }) => {
 				state::version_marks::reported(state, op_id, result, effects)
+			}
+			RuntimeEvent::Input(MaintainerEvent::VersionMarkWanted { mark }) => {
+				state::version_marks::wanted(state, mark, effects)
 			}
 			RuntimeEvent::Timer(MaintainerTimer::VersionMarksRetry) => {
 				state::version_marks::retry(state)
@@ -547,17 +634,7 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 			RuntimeEvent::Timer(MaintainerTimer::ReadRequest(request_id)) => {
 				state::filesystem_reads::expired(state, request_id, effects);
 			}
-			RuntimeEvent::Input(MaintainerEvent::Drain) => {
-				if !matches!(
-					state.phase,
-					state::MaintainerPhase::Fenced
-						| state::MaintainerPhase::Stopped
-						| state::MaintainerPhase::Draining
-				) {
-					state::revoke_lifetime(state, effects);
-					state.phase = state::MaintainerPhase::Draining;
-				}
-			}
+			RuntimeEvent::Input(MaintainerEvent::Drain) => state::stop_gracefully(state, effects),
 			RuntimeEvent::Input(MaintainerEvent::ColdClosed { result }) => {
 				if matches!(
 					state.phase,
@@ -717,6 +794,15 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 							effects,
 						);
 					}
+					Some(Operation::GroupRead { .. }) => {
+						effects.execute(MaintainerEffect::CancelGroupReadRequest { op_id });
+						state::groups::read_completed(
+							state,
+							op_id,
+							Err("group read timed out".into()),
+							effects,
+						);
+					}
 					Some(Operation::FilesystemQuery { .. }) => {
 						state::filesystem_reads::timed_out(state, op_id, effects);
 					}
@@ -729,6 +815,7 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 					Some(
 						Operation::PendingWork { .. }
 						| Operation::SweepPending { .. }
+						| Operation::ForkPinPass { .. }
 						| Operation::Checkpoint { .. }
 						| Operation::ForkReference { .. }
 						| Operation::ForkStore { .. }
@@ -832,11 +919,18 @@ impl EphemeralStateMachine for TabletMaintainerMachine {
 			store: state::store::snapshot(state),
 			alarms: state::alarms::snapshot(state),
 			signals: state::signals::snapshot(state),
+			version_marks_durable: state.maintainer_log.durable_marks.clone(),
 		}
 	}
 
 	fn debug_validate(state: &MaintainerState) -> anyhow::Result<()> {
 		state::alarms::validate(state)?;
+		state::groups::validate(state)?;
+		state.awaiting_lazy_fork.validate()?;
+		state::forks::validate_parked(state)?;
+		state
+			.lazy_forks_absent
+			.validate(state.config.max_absent_lazy_forks as usize)?;
 		#[cfg(debug_assertions)]
 		if let Some(error) = &state.drive_oracle_error {
 			anyhow::bail!("{error}");
@@ -966,14 +1060,19 @@ pub(crate) fn drives(
 		#[cfg(debug_assertions)]
 		DriveScope::Full => state::deletion::mark_all(state),
 	}
-	state::deletion::drive(state, entropy, effects);
+	state::deletion::drive(state, entropy.clone(), effects);
 	match scope {
 		DriveScope::Incremental => {}
 		#[cfg(debug_assertions)]
 		DriveScope::Full => state::unload::mark_all(state),
 	}
 	state::unload::drive(state, effects);
+	state::groups::drive_archive_fences(state, effects);
+	state::groups::resume_skipped_deleted_pins(state);
 	state::checkpoints::resume_after_unload(state, effects);
+	// Opens whose lazy fork or group read ended are admitted before the store drive, so
+	// their record lookups are queued in this pass.
+	state::lazy_fork_waiters::drive(state, effects);
 	state::cold::drive_trims(state, effects);
 	state::promotion::drive(state, effects);
 	state::poll::drive(state, effects);
@@ -1007,6 +1106,10 @@ pub(crate) fn drives(
 		DriveScope::Full => state::store::drive_admission(state, effects, true),
 	}
 	state::catch_up::drive(state, effects);
+	// A fork pin the filesystem drive or a group acquire logs for a grouped volume is
+	// appended in this pass, so the volume's apply and the acquire's retry wait only for the
+	// quorum and not for the next event.
+	state::maintainer_log::drive(state, &entropy, effects);
 	// Any drive may have rescheduled a volume's checks, so the timers follow their queue
 	// heads last.
 	state::poll::arm_head(state, effects);
@@ -1015,6 +1118,9 @@ pub(crate) fn drives(
 	state::holders::finish_event(state, effects);
 	state::fork_cleanup::arm_due(state, effects);
 	state::alarms::drive(state, effects);
+	// The filesystem drive may have registered a volume into an archived group after the first
+	// fence pass, so it is closed and fenced in this event rather than the next.
+	state::groups::drive_archive_fences(state, effects);
 }
 
 /// Runs the drives incrementally on `state` and as a full pass on a copy, and reports
@@ -1234,12 +1340,14 @@ fn replica_response(
 		}
 		Operation::PendingWork { .. }
 		| Operation::SweepPending { .. }
+		| Operation::ForkPinPass { .. }
 		| Operation::Checkpoint { .. }
 		| Operation::ForkReference { .. }
 		| Operation::ForkStore { .. }
 		| Operation::ForkCleanupStore { .. }
 		| Operation::MaterializeStore { .. }
 		| Operation::ForkPeer { .. }
+		| Operation::GroupRead { .. }
 		| Operation::ForkCleanupPeer { .. }
 		| Operation::MaterializePeer { .. }
 		| Operation::FilesystemQuery { .. }

@@ -2,7 +2,6 @@ import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
 const chatRoom = actor({
-	state: { messages: [] as string[] },
 	actions: {
 		getRoomInfo: (c) => ({ org: c.key[0], room: c.key[1] }),
 	},

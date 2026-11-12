@@ -5,10 +5,7 @@ use ciborium::Value;
 use rivetkit_core::actor::ShutdownKind;
 use rivetkit_core::actor::schedule::ScheduledFireInfo;
 use rivetkit_core::error::ActorRuntime;
-use rivetkit_core::{
-	ActorEvent, ActorHttpResponse, QueueSendResult, QueueSendStatus, Reply, Request, Response,
-	SerializeStateReason, StateDelta, WebSocket,
-};
+use rivetkit_core::{ActorEvent, ActorHttpResponse, Reply, Request, Response, WebSocket};
 use serde::{
 	Serialize,
 	de::{
@@ -17,7 +14,7 @@ use serde::{
 	},
 };
 
-use crate::{action, actor::Actor, context::ConnCtx, persist};
+use crate::{action, actor::Actor, context::ConnCtx};
 
 /// An event an actor can broadcast to connected clients. Payloads must be JSON-compatible,
 /// like [`crate::action::Action`] arguments.
@@ -79,12 +76,10 @@ impl_event_set!(
 pub enum RuntimeEvent<A: Actor> {
 	Action(ActionCall<A>),
 	Http(HttpCall),
-	QueueSend(QueueSend<A>),
 	WebSocketOpen(WsOpen<A>),
 	ConnOpen(ConnOpen<A>),
 	ConnClosed(ConnClosed<A>),
 	Subscribe(Subscribe<A>),
-	SerializeState(SerializeState<A>),
 	Sleep(Sleep<A>),
 	Destroy(Destroy<A>),
 }
@@ -112,24 +107,6 @@ impl<A: Actor> RuntimeEvent<A> {
 				reply,
 			} => Self::Http(HttpCall {
 				request: Some(request),
-				reply: Some(reply),
-			}),
-			ActorEvent::QueueSend {
-				name,
-				body,
-				conn,
-				request,
-				wait,
-				timeout_ms,
-				invocation_telemetry: _,
-				reply,
-			} => Self::QueueSend(QueueSend {
-				name,
-				body,
-				conn: ConnCtx::from(conn),
-				request,
-				wait,
-				timeout_ms,
 				reply: Some(reply),
 			}),
 			ActorEvent::WebSocketOpen {
@@ -169,11 +146,12 @@ impl<A: Actor> RuntimeEvent<A> {
 				event_name,
 				reply: Some(reply),
 			}),
-			ActorEvent::SerializeState { reason, reply } => Self::SerializeState(SerializeState {
-				reason,
-				reply: Some(reply),
-				_p: PhantomData,
-			}),
+			ActorEvent::QueueSend { .. } => {
+				unreachable!("QueueSend is rejected by Events")
+			}
+			ActorEvent::SerializeState { .. } => {
+				unreachable!("SerializeState is answered by Events")
+			}
 			ActorEvent::RunGracefulCleanup { reason, reply } => match reason {
 				ShutdownKind::Sleep => Self::Sleep(Sleep {
 					reply: Some(reply),
@@ -571,77 +549,6 @@ impl HttpCall {
 }
 
 #[derive(Debug)]
-#[must_use = "reply to the queue send or dropping it sends actor/dropped_reply"]
-#[allow(dead_code)]
-pub struct QueueSend<A: Actor> {
-	pub(crate) name: String,
-	pub(crate) body: Vec<u8>,
-	pub(crate) conn: ConnCtx<A>,
-	pub(crate) request: Request,
-	pub(crate) wait: bool,
-	pub(crate) timeout_ms: Option<u64>,
-	pub(crate) reply: Option<Reply<QueueSendResult>>,
-}
-
-impl<A: Actor> Drop for QueueSend<A> {
-	fn drop(&mut self) {
-		if self.reply.is_some() {
-			warn_dropped_event("QueueSend", self.name.as_str());
-		}
-	}
-}
-
-impl<A: Actor> QueueSend<A> {
-	pub fn name(&self) -> &str {
-		&self.name
-	}
-
-	pub fn body(&self) -> &[u8] {
-		&self.body
-	}
-
-	pub fn conn(&self) -> &ConnCtx<A> {
-		&self.conn
-	}
-
-	pub fn request(&self) -> &Request {
-		&self.request
-	}
-
-	pub fn should_wait(&self) -> bool {
-		self.wait
-	}
-
-	pub fn timeout_ms(&self) -> Option<u64> {
-		self.timeout_ms
-	}
-
-	pub fn complete(mut self, response: Option<Vec<u8>>) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Ok(QueueSendResult {
-				status: QueueSendStatus::Completed,
-				response,
-			}));
-		}
-	}
-
-	pub fn timed_out(mut self) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Ok(QueueSendResult {
-				status: QueueSendStatus::TimedOut,
-				response: None,
-			}));
-		}
-	}
-
-	pub fn err(mut self, err: anyhow::Error) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Err(err));
-		}
-	}
-}
-
-#[derive(Debug)]
 #[must_use = "reply to the websocket open or dropping it sends actor/dropped_reply"]
 #[allow(dead_code)]
 pub struct WsOpen<A: Actor> {
@@ -718,18 +625,10 @@ impl<A: Actor> ConnOpen<A> {
 		&self.conn
 	}
 
-	pub fn accept(mut self, state: A::ConnState) {
-		let result = self.conn.set_state(&state);
+	pub fn accept(mut self) {
 		if let Some(reply) = self.reply.take() {
-			reply.send(result);
+			reply.send(Ok(()));
 		}
-	}
-
-	pub fn accept_default(self)
-	where
-		A::ConnState: Default,
-	{
-		self.accept(A::ConnState::default());
 	}
 
 	pub fn reject(mut self, err: anyhow::Error) {
@@ -780,74 +679,6 @@ impl<A: Actor> Subscribe<A> {
 	pub fn deny(mut self, err: anyhow::Error) {
 		if let Some(reply) = self.reply.take() {
 			reply.send(Err(err));
-		}
-	}
-}
-
-#[derive(Debug)]
-#[must_use = "reply to the serialize-state request or dropping it sends actor/dropped_reply"]
-pub struct SerializeState<A: Actor> {
-	pub(crate) reason: SerializeStateReason,
-	pub(crate) reply: Option<Reply<Vec<StateDelta>>>,
-	pub(crate) _p: PhantomData<fn() -> A>,
-}
-
-impl<A: Actor> Drop for SerializeState<A> {
-	fn drop(&mut self) {
-		if self.reply.is_some() {
-			warn_dropped_event("SerializeState", format_args!("{:?}", self.reason));
-		}
-	}
-}
-
-impl<A: Actor> SerializeState<A> {
-	pub fn reason(&self) -> SerializeStateReason {
-		self.reason
-	}
-
-	pub fn save<S: Serialize>(self, state: &S) {
-		self.save_with_result(persist::state_deltas(state));
-	}
-
-	pub fn save_with(mut self, deltas: Vec<StateDelta>) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Ok(deltas));
-		}
-	}
-
-	pub fn save_state_and_conns<S: Serialize>(
-		self,
-		state: &S,
-		conn_hibernation: Vec<(rivetkit_core::ConnId, Vec<u8>)>,
-		conn_hibernation_removed: Vec<rivetkit_core::ConnId>,
-	) {
-		let mut deltas = match persist::state_deltas(state) {
-			Ok(deltas) => deltas,
-			Err(error) => {
-				self.save_with_result(Err(error));
-				return;
-			}
-		};
-		deltas.extend(
-			conn_hibernation
-				.into_iter()
-				.map(|(conn, bytes)| persist::conn_hibernation_delta(conn, bytes)),
-		);
-		deltas.extend(
-			conn_hibernation_removed
-				.into_iter()
-				.map(persist::conn_hibernation_removed_delta),
-		);
-		self.save_with(deltas);
-	}
-
-	pub fn skip(self) {
-		self.save_with(Vec::new());
-	}
-
-	fn save_with_result(mut self, result: AnyhowResult<Vec<StateDelta>>) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(result);
 		}
 	}
 }

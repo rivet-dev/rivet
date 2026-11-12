@@ -232,12 +232,64 @@ export interface PendingDeletions {
 	ranges: { start: Uint8Array; end: Uint8Array }[];
 }
 
+interface FlushQueue {
+	/** Settles when every save started or queued so far has finished. */
+	tail: Promise<void>;
+	/** The next save, while it has not started. Other callers can join it. */
+	waiting?: Promise<void>;
+}
+
+// Saves of one workflow run one at a time, so an older snapshot never lands
+// after a newer one.
+const flushQueues = new WeakMap<Storage, FlushQueue>();
+
+/**
+ * Save workflow history in order, preserving mutations made during each write.
+ *
+ * A save that has not started reads storage when it starts, so it also saves
+ * the changes of callers that join it. They share its result. Saves with
+ * deletions do not share, so pruning runs in order with the writes around it.
+ */
+export function flush(
+	storage: Storage,
+	driver: EngineDriver,
+	onHistoryUpdated?: () => void,
+	pendingDeletions?: PendingDeletions,
+): Promise<void> {
+	let queue = flushQueues.get(storage);
+	if (!queue) {
+		queue = { tail: Promise.resolve() };
+		flushQueues.set(storage, queue);
+	}
+	if (queue.waiting && !pendingDeletions) {
+		return queue.waiting;
+	}
+
+	const activeQueue = queue;
+	const next: Promise<void> = activeQueue.tail.then(() => {
+		if (activeQueue.waiting === next) {
+			activeQueue.waiting = undefined;
+		}
+		return flushSnapshot(
+			storage,
+			driver,
+			onHistoryUpdated,
+			pendingDeletions,
+		);
+	});
+	if (!pendingDeletions) {
+		activeQueue.waiting = next;
+	}
+	activeQueue.tail = next.catch(() => undefined);
+	return next;
+}
+
 /**
  * Flush all dirty data to the driver. Optionally includes pending
  * deletions so that history pruning happens alongside the
  * state write.
  */
-export async function flush(
+async function flushSnapshot(
 	storage: Storage,
 	driver: EngineDriver,
 	onHistoryUpdated?: () => void,
@@ -320,36 +372,51 @@ export async function flush(
 		});
 	}
 
-	if (writes.length > 0) {
-		if (driver.atomicBatch) {
-			await driver.batch(writes);
-		} else {
-			for (const chunk of splitBatchWrites(writes)) {
-				await driver.batch(chunk);
-			}
-		}
-	}
-
-	// Apply pending deletions after the batch write. These are collected
-	// by collectLoopPruning so pruning happens alongside the state write.
-	if (pendingDeletions) {
-		const didChange = await runDeletes(driver, pendingDeletions);
-		if (didChange) {
-			historyUpdated = true;
-		}
-	}
-
-	// Update flushed tracking after successful write
+	// Record what this write contains before awaiting it. A concurrent branch
+	// can change storage during the write, and those changes must stay dirty.
+	const savedNameCount = storage.nameRegistry.length;
+	const savedState = storage.state;
+	const savedOutput = storage.output;
+	const savedError = storage.error;
 	for (const entry of dirtyEntries) {
 		entry.dirty = false;
 	}
 	for (const metadata of dirtyMetadata) {
 		metadata.dirty = false;
 	}
-	storage.flushedNameCount = storage.nameRegistry.length;
-	storage.flushedState = storage.state;
-	storage.flushedOutput = storage.output;
-	storage.flushedError = storage.error;
+	try {
+		if (writes.length > 0) {
+			if (driver.atomicBatch) {
+				await driver.batch(writes);
+			} else {
+				for (const chunk of splitBatchWrites(writes)) {
+					await driver.batch(chunk);
+				}
+			}
+		}
+
+		// Apply pending deletions after the batch write. These are collected
+		// by collectLoopPruning so pruning happens alongside the state write.
+		if (pendingDeletions) {
+			const didChange = await runDeletes(driver, pendingDeletions);
+			if (didChange) {
+				historyUpdated = true;
+			}
+		}
+	} catch (error) {
+		for (const entry of dirtyEntries) {
+			entry.dirty = true;
+		}
+		for (const metadata of dirtyMetadata) {
+			metadata.dirty = true;
+		}
+		throw error;
+	}
+
+	storage.flushedNameCount = savedNameCount;
+	storage.flushedState = savedState;
+	storage.flushedOutput = savedOutput;
+	storage.flushedError = savedError;
 
 	if (historyUpdated && onHistoryUpdated) {
 		onHistoryUpdated();
@@ -408,26 +475,57 @@ async function runDeletes(
 	driver: EngineDriver,
 	deletions: PendingDeletions,
 ): Promise<boolean> {
-	const ops = [
+	const metadataOps = splitBatchDeletes(deletions.keys).map(
+		(chunk) => () => driver.batchDelete(chunk),
+	);
+	const historyOps = [
 		...deletions.prefixes.map(
 			(prefix) => () => driver.deletePrefix(prefix),
 		),
 		...deletions.ranges.map(
 			(range) => () => driver.deleteRange(range.start, range.end),
 		),
-		...splitBatchDeletes(deletions.keys).map(
-			(chunk) => () => driver.batchDelete(chunk),
-		),
 	];
-	if (ops.length === 0) {
-		return false;
+	// Keep history discoverable until its metadata is removed, including after a restart.
+	for (const ops of [metadataOps, historyOps]) {
+		for (let i = 0; i < ops.length; i += MAX_CONCURRENT_DELETES) {
+			const results = await Promise.allSettled(
+				ops
+					.slice(i, i + MAX_CONCURRENT_DELETES)
+					.map((op) => Promise.resolve().then(op)),
+			);
+			const failed = results.find(
+				(result) => result.status === "rejected",
+			);
+			if (failed?.status === "rejected") throw failed.reason;
+		}
 	}
-	for (let i = 0; i < ops.length; i += MAX_CONCURRENT_DELETES) {
-		await Promise.all(
-			ops.slice(i, i + MAX_CONCURRENT_DELETES).map((op) => op()),
-		);
+	return metadataOps.length > 0 || historyOps.length > 0;
+}
+
+/**
+ * Remove the entries under a location prefix from memory, and return the
+ * deletions that remove them from the driver. Pass the result to `flush`, so
+ * the deletions run only after the writes that must land first.
+ */
+export function takeEntriesWithPrefix(
+	storage: Storage,
+	prefixLocation: Location,
+): PendingDeletions {
+	const metadataKeys: Uint8Array[] = [];
+	for (const [key, entry] of [...storage.history.entries]) {
+		if (!isLocationPrefix(prefixLocation, entry.location)) {
+			continue;
+		}
+		metadataKeys.push(buildEntryMetadataKey(entry.id));
+		storage.entryMetadata.delete(entry.id);
+		storage.history.entries.delete(key);
 	}
-	return true;
+	return {
+		prefixes: [buildHistoryPrefix(prefixLocation)],
+		keys: metadataKeys,
+		ranges: [],
+	};
 }
 
 /**
@@ -440,40 +538,21 @@ export async function deleteEntriesWithPrefix(
 	prefixLocation: Location,
 	onHistoryUpdated?: () => void,
 ): Promise<void> {
-	const deletions = collectDeletionsForPrefix(storage, prefixLocation);
-
-	// Apply deletions to driver
-	await runDeletes(driver, deletions);
-
-	if (deletions.keys.length > 0 && onHistoryUpdated) {
-		onHistoryUpdated();
-	}
-}
-
-/**
- * Remove entries matching a location prefix from memory and collect
- * the driver-level deletion operations. The returned PendingDeletions
- * can be applied immediately or batched with a flush.
- */
-export function collectDeletionsForPrefix(
-	storage: Storage,
-	prefixLocation: Location,
-): PendingDeletions {
-	const pending: PendingDeletions = {
+	const entries = [...storage.history.entries].filter(([, entry]) =>
+		isLocationPrefix(prefixLocation, entry.location),
+	);
+	await runDeletes(driver, {
 		prefixes: [buildHistoryPrefix(prefixLocation)],
-		keys: [],
+		keys: entries.map(([, entry]) => buildEntryMetadataKey(entry.id)),
 		ranges: [],
-	};
-
-	for (const [key, entry] of storage.history.entries) {
-		if (isLocationPrefix(prefixLocation, entry.location)) {
-			pending.keys.push(buildEntryMetadataKey(entry.id));
+	});
+	for (const [key, entry] of entries) {
+		if (storage.history.entries.get(key) === entry) {
 			storage.entryMetadata.delete(entry.id);
 			storage.history.entries.delete(key);
 		}
 	}
-
-	return pending;
+	if (entries.length > 0 && onHistoryUpdated) onHistoryUpdated();
 }
 
 /**

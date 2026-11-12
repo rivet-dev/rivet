@@ -14,19 +14,18 @@ use depot_volume::{
 };
 use parking_lot::Mutex;
 use rivet_data::{
-	DEPOT_CLIENT_PROTOCOL_VERSION,
 	generated::{
-		depot_client_protocol_v1::{
+		depot_client_protocol_v2::{
 			ClientRequest, ClientResponse, VolumeCloseRequest, VolumeCreateOptions,
 			VolumeOpenRequest, VolumeRejectResponse,
 		},
 		depot_tablet_manifest_v1::{Tablet, TabletManifest},
 		shared_depot_types_v1::VolumeHolder,
 	},
-	versioned::{DepotClientRequestData, DepotClientResponseData},
+	versioned::DepotClientResponseData,
 };
 use rivet_env::Env;
-use rivet_topology::worker::WorkerId;
+use rivet_topology::{versions::PeerVersions, worker::WorkerId};
 use std::{sync::Arc, time::Duration};
 use tokio::sync::watch;
 use universalpubsub::{PubSub, SubjectCapacities};
@@ -56,6 +55,9 @@ pub struct VolumeRequests {
 	timeout: Duration,
 	pub(crate) max_command_bytes: Option<usize>,
 	may_dispatch: Arc<dyn Fn() -> bool + Send + Sync>,
+	/// Topology's view of the version each maintainer reads, so a request to a worker of an
+	/// older release is sealed at a version it decodes.
+	versions: Arc<dyn PeerVersions>,
 	/// The process-wide deadline queue every volume client started here keeps its alarms in,
 	/// when the owner runs one.
 	timers: Option<rivet_state_machine_ephemeral::SharedTimers>,
@@ -80,6 +82,7 @@ impl VolumeRequests {
 		capacities: SubjectCapacities,
 		timeout: Duration,
 		may_dispatch: Arc<dyn Fn() -> bool + Send + Sync>,
+		versions: Arc<dyn PeerVersions>,
 	) -> Result<Self> {
 		ensure!(
 			!timeout.is_zero(),
@@ -101,6 +104,7 @@ impl VolumeRequests {
 			timeout,
 			max_command_bytes: None,
 			may_dispatch,
+			versions,
 			timers: None,
 		})
 	}
@@ -169,7 +173,7 @@ impl VolumeRequests {
 		mut state: VolumeClientState,
 		on_terminal: Option<Box<dyn Fn() + Send + Sync>>,
 		initial: Vec<rivet_data::generated::depot_log_shard_v1::VolumeLogEntryBody>,
-		read: Option<rivet_data::generated::depot_client_protocol_v1::VolumeReadKeys>,
+		read: Option<rivet_data::generated::depot_client_protocol_v2::VolumeReadKeys>,
 		make_transport: impl FnOnce(
 			Arc<dyn Fn() -> bool + Send + Sync>,
 		) -> Result<Arc<dyn VolumeClientTransport>>,
@@ -363,10 +367,7 @@ impl VolumeRequests {
 			universalpubsub::RequestClass::DepotVolume,
 			self.capacities,
 		)?;
-		let payload = DepotClientRequestData::serialize_with_embedded_version(
-			&request,
-			DEPOT_CLIENT_PROTOCOL_VERSION,
-		)?;
+		let payload = self.seal(&request, &worker)?;
 		let remaining = deadline.saturating_sub(clock.observe()?.boot_ms);
 		if remaining == 0 {
 			return Err(universalpubsub::errors::Timeout.build());
@@ -403,8 +404,8 @@ impl VolumeRequests {
 				Ok(ClientResponse::VolumeRejectResponse(
 					VolumeRejectResponse::NotMaintainer(_) | VolumeRejectResponse::TabletSplitting
 				)) | Ok(ClientResponse::FsReadResponse(
-					rivet_data::generated::shared_depot_fs_read_v1::FsReadResponse::FsReadError(
-						rivet_data::generated::shared_depot_fs_read_v1::FsReadError::NotServing
+					rivet_data::generated::shared_depot_fs_read_v2::FsReadResponse::FsReadError(
+						rivet_data::generated::shared_depot_fs_read_v2::FsReadError::NotServing
 					)
 				))
 			) {
@@ -416,7 +417,7 @@ impl VolumeRequests {
 
 /// The bounded `operation` label of a filesystem read, or `None` for every other request.
 fn fs_read_label(request: &ClientRequest) -> Option<&'static str> {
-	use rivet_data::generated::shared_depot_fs_read_v1::FsReadOperation;
+	use rivet_data::generated::shared_depot_fs_read_v2::FsReadOperation;
 	let ClientRequest::FsReadRequest(read) = request else {
 		return None;
 	};
@@ -431,10 +432,17 @@ fn fs_read_label(request: &ClientRequest) -> Option<&'static str> {
 		FsReadOperation::FsBaseKeysRequest(_) => "base_keys",
 		FsReadOperation::FsReadKeys(_) => "point",
 		FsReadOperation::FsReadRaw(_) => "raw",
+		FsReadOperation::FsBaseRowsRequest(_) => "base_rows",
 	})
 }
 
 impl VolumeRequests {
+	/// Seals `request` at the version `worker` reads. See [`crate::client_protocol::seal_request`].
+	fn seal(&self, request: &ClientRequest, worker: &WorkerId) -> Result<bytes::Bytes> {
+		let version = crate::client_protocol::request_version(self.versions.as_ref(), worker);
+		crate::client_protocol::seal_request(request, version, self.versions.refresh_hint_ms())
+	}
+
 	/// This process as the holder of the volumes it opens: its topology worker and the
 	/// instance that identifies this process's lifetime.
 	pub fn holder(&self) -> VolumeHolder {
@@ -481,6 +489,9 @@ fn lifecycle_transport_error(error: &anyhow::Error) -> RpcError {
 			retry_after_ms: depot_volume::ups::client::TRANSPORT_OVERLOAD_RETRY_AFTER_MS,
 		};
 	}
+	if let Some(retry_after_ms) = crate::client_protocol::version_pending_retry_after_ms(error) {
+		return RpcError::Overloaded { retry_after_ms };
+	}
 	RpcError::Unavailable
 }
 
@@ -505,6 +516,11 @@ pub(crate) fn unsent_refusal(error: &anyhow::Error) -> Option<VolumeRejectRespon
 	if depot_volume::ups::client::is_ups_overloaded(error) {
 		return Some(depot_types::client::overloaded());
 	}
+	if let Some(retry_after_ms) = crate::client_protocol::version_pending_retry_after_ms(error) {
+		return Some(VolumeRejectResponse::Overloaded(
+			rivet_data::generated::depot_client_protocol_v2::Overloaded { retry_after_ms },
+		));
+	}
 	None
 }
 
@@ -515,10 +531,14 @@ impl VolumeLifecycleTransport for VolumeRequests {
 		client_incarnation: [u8; 16],
 		create_if_absent: bool,
 		initial: Vec<rivet_data::generated::depot_log_shard_v1::PayloadWrite>,
-		read: Option<rivet_data::generated::depot_client_protocol_v1::VolumeReadKeys>,
+		read: Option<rivet_data::generated::depot_client_protocol_v2::VolumeReadKeys>,
 		deadline_boot_ms: u64,
-	) -> TransportFuture<'_, rivet_data::generated::depot_client_protocol_v1::VolumeOpenResponse> {
+	) -> TransportFuture<'_, rivet_data::generated::depot_client_protocol_v2::VolumeOpenResponse> {
 		Box::pin(async move {
+			// A volume of a family that group forks touch is made from its parent group's copy
+			// when it has no record; Epoxy keys and system volumes never are.
+			let lazy_fork =
+				depot_types::keys::partition::forkable_group(&volume_key.partition_key).is_some();
 			// Command volumes take the default retention, matching a separate create.
 			let create_if_absent = if create_if_absent {
 				Some(VolumeCreateOptions {
@@ -536,6 +556,7 @@ impl VolumeLifecycleTransport for VolumeRequests {
 						volume_key,
 						client_incarnation,
 						holder: self.holder(),
+						lazy_fork,
 					}),
 					deadline_boot_ms,
 				)

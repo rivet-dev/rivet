@@ -40,6 +40,8 @@ const log = scoped("version");
 interface PackageJson {
 	name?: string;
 	version?: string;
+	exports?: unknown;
+	publishConfig?: { exports?: unknown };
 	repository?: {
 		type: "git";
 		url: string;
@@ -112,7 +114,6 @@ const PUBLISHED_RUST_WORKSPACE_DEPS = new Set([
 	"rivet-error",
 	"rivet-metrics",
 	"rivet-util-serde",
-	"rivet-actor-runtime-socket-protocol",
 	"sqlite_types",
 	"sqlite-embedded",
 	"rivet-envoy-protocol",
@@ -242,6 +243,10 @@ export async function bumpPackageJsons(
 		pkgJson.version = versionOf.get(pkg.name) ?? version;
 
 		if (!versionOnly) {
+			// npm does not apply pnpm-specific publishConfig export overrides.
+			if (pkgJson.publishConfig?.exports !== undefined) {
+				pkgJson.exports = pkgJson.publishConfig.exports;
+			}
 			pkgJson.repository = {
 				type: "git",
 				url: githubRepositoryUrl(requirePublishRepository(opts.repository)),

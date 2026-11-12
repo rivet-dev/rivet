@@ -8,6 +8,7 @@ mod peer_deadline;
 pub(super) mod request;
 pub(super) mod stream;
 pub(super) mod subject;
+mod subscriber;
 
 use std::{
 	collections::BTreeMap,

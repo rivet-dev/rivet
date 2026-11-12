@@ -2,7 +2,14 @@
 // Demonstrates: Parallel data fetching with join (wait-all)
 
 import { actor, event, queue } from "rivetkit";
+import type { RawAccess } from "rivetkit/db";
 import { Loop, workflow } from "rivetkit/workflow";
+import {
+	loadRecord,
+	recordDb,
+	saveRecord,
+	updateRecord,
+} from "./record-store.ts";
 
 export type UserStats = {
 	count: number;
@@ -75,15 +82,18 @@ async function fetchMetricsStats(): Promise<MetricsStats> {
 }
 
 export const dashboard = actor({
-	state: {
-		data: null as DashboardData | null,
-		loading: false,
-		branches: {
-			users: "pending" as BranchStatus,
-			orders: "pending" as BranchStatus,
-			metrics: "pending" as BranchStatus,
-		},
-		lastRefresh: null as number | null,
+	db: recordDb(),
+	onCreate: async (c) => {
+		await saveRecord<DashboardState>(c.db, {
+			data: null,
+			loading: false,
+			branches: {
+				users: "pending",
+				orders: "pending",
+				metrics: "pending",
+			},
+			lastRefresh: null,
+		});
 	},
 	queues: {
 		[QUEUE_REFRESH]: queue<RefreshMessage>(),
@@ -95,19 +105,15 @@ export const dashboard = actor({
 
 	actions: {
 		refresh: async (c) => {
-			if (!c.state.loading) {
-				c.state.loading = true;
-				c.state.branches = {
-					users: "pending",
-					orders: "pending",
-					metrics: "pending",
-				};
-				c.broadcast("stateChanged", c.state);
+			const dashboard = await startRefresh(c.db);
+			if (dashboard) {
+				c.broadcast("stateChanged", dashboard);
 				await c.queue.send(QUEUE_REFRESH, {});
 			}
 		},
 
-		getState: (c): DashboardState => c.state,
+		getState: (c): Promise<DashboardState> =>
+			loadRecord<DashboardState>(c.db),
 	},
 
 	run: workflow(async (ctx) => {
@@ -122,8 +128,13 @@ export const dashboard = actor({
 				users: {
 					run: async (branchCtx) => {
 						await branchCtx.step("mark-running", async (bc) => {
-							bc.state.branches.users = "running";
-							bc.broadcast("stateChanged", bc.state);
+							const updated = await updateRecord<DashboardState>(
+								bc.db,
+								(dashboard) => {
+									dashboard.branches.users = "running";
+								},
+							);
+							bc.broadcast("stateChanged", updated);
 						});
 
 						const data = await branchCtx.step(
@@ -134,8 +145,13 @@ export const dashboard = actor({
 						);
 
 						await branchCtx.step("mark-complete", async (bc) => {
-							bc.state.branches.users = "completed";
-							bc.broadcast("stateChanged", bc.state);
+							const updated = await updateRecord<DashboardState>(
+								bc.db,
+								(dashboard) => {
+									dashboard.branches.users = "completed";
+								},
+							);
+							bc.broadcast("stateChanged", updated);
 						});
 
 						return data;
@@ -144,8 +160,13 @@ export const dashboard = actor({
 				orders: {
 					run: async (branchCtx) => {
 						await branchCtx.step("mark-running", async (bc) => {
-							bc.state.branches.orders = "running";
-							bc.broadcast("stateChanged", bc.state);
+							const updated = await updateRecord<DashboardState>(
+								bc.db,
+								(dashboard) => {
+									dashboard.branches.orders = "running";
+								},
+							);
+							bc.broadcast("stateChanged", updated);
 						});
 
 						const data = await branchCtx.step(
@@ -156,8 +177,13 @@ export const dashboard = actor({
 						);
 
 						await branchCtx.step("mark-complete", async (bc) => {
-							bc.state.branches.orders = "completed";
-							bc.broadcast("stateChanged", bc.state);
+							const updated = await updateRecord<DashboardState>(
+								bc.db,
+								(dashboard) => {
+									dashboard.branches.orders = "completed";
+								},
+							);
+							bc.broadcast("stateChanged", updated);
 						});
 
 						return data;
@@ -166,8 +192,13 @@ export const dashboard = actor({
 				metrics: {
 					run: async (branchCtx) => {
 						await branchCtx.step("mark-running", async (bc) => {
-							bc.state.branches.metrics = "running";
-							bc.broadcast("stateChanged", bc.state);
+							const updated = await updateRecord<DashboardState>(
+								bc.db,
+								(dashboard) => {
+									dashboard.branches.metrics = "running";
+								},
+							);
+							bc.broadcast("stateChanged", updated);
 						});
 
 						const data = await branchCtx.step(
@@ -178,8 +209,13 @@ export const dashboard = actor({
 						);
 
 						await branchCtx.step("mark-complete", async (bc) => {
-							bc.state.branches.metrics = "completed";
-							bc.broadcast("stateChanged", bc.state);
+							const updated = await updateRecord<DashboardState>(
+								bc.db,
+								(dashboard) => {
+									dashboard.branches.metrics = "completed";
+								},
+							);
+							bc.broadcast("stateChanged", updated);
 						});
 
 						return data;
@@ -188,16 +224,22 @@ export const dashboard = actor({
 			});
 
 			await loopCtx.step("save-data", async (c) => {
-				c.state.data = {
+				const data: DashboardData = {
 					users: results.users,
 					orders: results.orders,
 					metrics: results.metrics,
 					fetchedAt: Date.now(),
 				};
-				c.state.loading = false;
-				c.state.lastRefresh = Date.now();
-				c.broadcast("stateChanged", c.state);
-				c.broadcast("refreshComplete", c.state.data);
+				const updated = await updateRecord<DashboardState>(
+					c.db,
+					(dashboard) => {
+						dashboard.data = data;
+						dashboard.loading = false;
+						dashboard.lastRefresh = Date.now();
+					},
+				);
+				c.broadcast("stateChanged", updated);
+				c.broadcast("refreshComplete", data);
 			});
 
 			ctx.log.info({ msg: "dashboard refresh complete" });
@@ -206,3 +248,27 @@ export const dashboard = actor({
 		});
 	}),
 });
+
+/**
+ * Marks the dashboard as loading and resets every branch. Returns `undefined`
+ * when a refresh is already in progress.
+ */
+async function startRefresh(
+	database: RawAccess,
+): Promise<DashboardState | undefined> {
+	return await database.transaction(
+		async (tx) => {
+			const dashboard = await loadRecord<DashboardState>(tx);
+			if (dashboard.loading) return undefined;
+			dashboard.loading = true;
+			dashboard.branches = {
+				users: "pending",
+				orders: "pending",
+				metrics: "pending",
+			};
+			await saveRecord(tx, dashboard);
+			return dashboard;
+		},
+		{ name: "start-refresh" },
+	);
+}

@@ -1,9 +1,9 @@
 use super::types::{
-	EndpointResult, EndpointTimeoutResult, FenceReport, OperationId, RenewalLateReport,
-	RequestError, Timer, WorkerRegistration,
+	EndpointResult, EndpointTimeoutResult, FenceReport, FloorAgeReport, OperationId,
+	RenewalLateReport, RequestError, Timer, WorkerRegistration,
 };
 use crate::{
-	heartbeat::{Heartbeat, Read},
+	heartbeat::{Heartbeat, Read, UnobservedHeartbeat},
 	worker::WorkerId,
 };
 use serde::{Deserialize, Serialize};
@@ -49,6 +49,8 @@ pub enum Effect {
 		op: OperationId,
 		worker_registration: WorkerRegistration,
 		heartbeat: Heartbeat,
+		/// The schema version to encode `heartbeat` at, selected by the state machine.
+		heartbeat_version: u16,
 		/// `None` creates the object; `Some` CASes on the confirmed or observed etag.
 		expected_etag: Option<String>,
 	},
@@ -174,4 +176,35 @@ pub enum Effect {
 	RecordIncompatibleVersion {
 		incompatibility: crate::versions::Incompatibility,
 	},
+	/// **When**
+	///
+	/// This worker's first complete listing after its claim shows another live storage worker
+	/// with a zone while this one has none. Emitted just before the fence.
+	///
+	/// **Executor**
+	///
+	/// Logs the labelled worker and how to fix this worker's configuration. Returns no event.
+	RecordMissingZone { labelled: crate::worker::WorkerId },
+	/// **When**
+	///
+	/// Every listing response, failed ones included, once some listing has observed every
+	/// storage worker it listed.
+	///
+	/// **Executor**
+	///
+	/// Sets the read floor age gauge. Warns when the age has just passed the ttl, since version
+	/// selection then rests on a view no listing has renewed for a lease's length, and logs at
+	/// info when a listing renews it. Returns no event.
+	RecordReadFloorAge { report: FloorAgeReport },
+	/// **When**
+	///
+	/// A partial listing response named storage workers whose heartbeat it read without being
+	/// able to use it (undecodable or without an ETag), and whose `Last-Modified` the listing
+	/// proves expired. Such a worker cannot be serving, so the read floor leaves it out, along
+	/// with any earlier observation of it, and it does not keep the listing partial.
+	///
+	/// **Executor**
+	///
+	/// Warns once per worker with its reason. Returns no event.
+	RecordUnobservedWorkersExpired { workers: Vec<UnobservedHeartbeat> },
 }

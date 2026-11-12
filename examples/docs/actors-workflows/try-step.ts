@@ -1,11 +1,22 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { workflow } from "rivetkit/workflow";
 
 export const paymentActor = actor({
-  state: {
-    status: "pending" as "pending" | "manual-review" | "paid",
-    reason: null as string | null,
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS payment_status (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          status TEXT NOT NULL,
+          reason TEXT
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO payment_status (id, status, reason) VALUES (1, 'pending', NULL)",
+      );
+    },
+  }),
   run: workflow(async (ctx) => {
     const charge = await ctx.tryStep({
       name: "charge-card",
@@ -15,17 +26,28 @@ export const paymentActor = actor({
 
     await ctx.step("store-charge-result", async (step) => {
       if (!charge.ok) {
-        step.state.status = "manual-review";
-        step.state.reason = charge.failure.error.message;
+        await step.db.execute(
+          "UPDATE payment_status SET status = 'manual-review', reason = ? WHERE id = 1",
+          charge.failure.error.message,
+        );
         return;
       }
 
-      step.state.status = "paid";
-      step.state.reason = null;
+      await step.db.execute(
+        "UPDATE payment_status SET status = 'paid', reason = NULL WHERE id = 1",
+      );
     });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{
+        status: "pending" | "manual-review" | "paid";
+        reason: string | null;
+      }>(
+        "SELECT status, reason FROM payment_status WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 

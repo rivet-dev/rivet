@@ -20,6 +20,14 @@ pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 #[cfg(target_arch = "wasm32")]
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T>>>;
 
+/// A callback future that can borrow its admission request while it waits.
+#[cfg(not(target_arch = "wasm32"))]
+pub type BorrowedBoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// A callback future that can borrow its admission request while it waits.
+#[cfg(target_arch = "wasm32")]
+pub type BorrowedBoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
+
 /// One-shot completion handle used to defer the final stopped event until teardown is done.
 #[derive(Clone)]
 pub struct ActorStopHandle {
@@ -75,6 +83,9 @@ pub trait EnvoyCallbacks: Send + Sync + 'static {
 
 	fn on_disconnect(&self, _handle: EnvoyHandle) {}
 
+	/// Starts an actor. `fork` names the individual actor fork the actor's database was copied
+	/// in when the start command carries one, which only the first start of a forked actor
+	/// does; a runtime without a fork hook ignores it.
 	fn on_actor_start(
 		&self,
 		handle: EnvoyHandle,
@@ -82,6 +93,7 @@ pub trait EnvoyCallbacks: Send + Sync + 'static {
 		generation: u32,
 		config: protocol::ActorConfig,
 		preloaded_kv: Option<protocol::PreloadedKv>,
+		fork: Option<protocol::ActorFork>,
 	) -> BoxFuture<anyhow::Result<()>>;
 
 	fn on_actor_stop(
@@ -136,11 +148,11 @@ pub trait EnvoyCallbacks: Send + Sync + 'static {
 		sender: WebSocketSender,
 	) -> BoxFuture<anyhow::Result<WebSocketHandler>>;
 
-	fn can_hibernate(
-		&self,
-		actor_id: &str,
-		gateway_id: &protocol::GatewayId,
-		request_id: &protocol::RequestId,
-		request: &HttpRequest,
-	) -> BoxFuture<anyhow::Result<bool>>;
+	fn can_hibernate<'a>(
+		&'a self,
+		actor_id: &'a str,
+		gateway_id: &'a protocol::GatewayId,
+		request_id: &'a protocol::RequestId,
+		request: &'a HttpRequest,
+	) -> BorrowedBoxFuture<'a, anyhow::Result<bool>>;
 }

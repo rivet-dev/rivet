@@ -43,12 +43,14 @@ impl std::error::Error for PoolAdmissionLost {}
 
 impl RecordState {
 	/// The state of a new connection that read `stored` before connecting. The record keeps the
-	/// envoy's creation time across connections and advances its connection epoch.
+	/// envoy's creation time across connections, advances its connection epoch and takes the
+	/// version this connection announced, so a redeployed envoy key moves to its new version.
 	pub(crate) fn new(
 		stored: Option<wire::EnvoyData>,
 		envoy_key: String,
 		worker_id: Vec<u8>,
 		connection_id: Vec<u8>,
+		version: u32,
 		now_unix_ms: i64,
 	) -> Self {
 		let entry = wire::EnvoyData {
@@ -58,6 +60,7 @@ impl RecordState {
 			connection_epoch: stored
 				.as_ref()
 				.map_or(1, |stored| stored.connection_epoch.saturating_add(1)),
+			version,
 			names: Vec::new(),
 			create_unix_ms: stored
 				.as_ref()

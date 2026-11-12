@@ -29,7 +29,7 @@ impl Registry {
 	}
 
 	#[deprecated(
-		note = "use register_actor/register_actor_with and implement Actor + Handles instead"
+		note = "use register_actor/register_actor_with and implement Actor + Handler instead"
 	)]
 	pub fn register<A, F, Fut>(&mut self, name: &str, entry: F) -> &mut Self
 	where
@@ -57,7 +57,7 @@ impl Registry {
 	}
 
 	#[deprecated(
-		note = "use register_actor/register_actor_with and implement Actor + Handles instead"
+		note = "use register_actor/register_actor_with and implement Actor + Handler instead"
 	)]
 	pub fn register_with<A, F, Fut>(
 		&mut self,
@@ -91,7 +91,7 @@ impl Registry {
 		self,
 		config: ServeConfig,
 		shutdown: CancellationToken,
-		on_handle: impl FnOnce(CoreEnvoyHandle) + Send + 'static,
+		on_handle: impl Fn(CoreEnvoyHandle) + Send + 'static,
 	) -> Result<()> {
 		self.inner
 			.serve_with_config_and_handle_observer(config, shutdown, on_handle)
@@ -253,7 +253,8 @@ where
 }
 
 fn actor_config<A: Actor>(mut config: ActorConfig) -> ActorConfig {
-	config.has_database |= A::HAS_DATABASE;
+	// Every Rust actor gets a database; `ctx.sql()` is the only durable storage API.
+	config.has_database = true;
 	// Internal storage (state, KV, queue) always uses SQLite, so without local
 	// SQLite compiled in every actor must route it through the engine.
 	if !cfg!(feature = "sqlite-local") {

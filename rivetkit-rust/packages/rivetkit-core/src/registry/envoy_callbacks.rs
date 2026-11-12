@@ -26,8 +26,10 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		generation: u32,
 		config: protocol::ActorConfig,
 		preloaded_kv: Option<protocol::PreloadedKv>,
+		fork: Option<protocol::ActorFork>,
 	) -> EnvoyBoxFuture<anyhow::Result<()>> {
 		let received_at = crate::time::Instant::now();
+		let fork = fork.map(crate::actor::fork::StartFork::from_protocol);
 		let new_actor_storage = shows_new_actor_storage(preloaded_kv.as_ref());
 		let dispatcher = self.dispatcher.clone();
 		let actor_name = config.name.clone();
@@ -52,6 +54,7 @@ impl EnvoyCallbacks for RegistryCallbacks {
 			)?;
 			ctx.set_new_actor_storage(new_actor_storage);
 			ctx.set_start_received_at(received_at);
+			ctx.set_start_fork(fork);
 
 			dispatcher
 				.start_actor(StartActorRequest {
@@ -151,15 +154,14 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		})
 	}
 
-	fn can_hibernate(
-		&self,
-		actor_id: &str,
-		_gateway_id: &protocol::GatewayId,
-		_request_id: &protocol::RequestId,
-		request: &HttpRequest,
-	) -> EnvoyBoxFuture<anyhow::Result<bool>> {
-		let can_hibernate = self.dispatcher.can_hibernate(actor_id, request);
-		Box::pin(async move { Ok(can_hibernate) })
+	fn can_hibernate<'a>(
+		&'a self,
+		actor_id: &'a str,
+		_gateway_id: &'a protocol::GatewayId,
+		_request_id: &'a protocol::RequestId,
+		request: &'a HttpRequest,
+	) -> rivet_envoy_client::callbacks::BorrowedBoxFuture<'a, anyhow::Result<bool>> {
+		Box::pin(async move { Ok(self.dispatcher.can_hibernate(actor_id, request).await) })
 	}
 }
 
@@ -284,7 +286,8 @@ impl ServeConfig {
 	}
 }
 
-fn actor_key_from_protocol(key: Option<String>) -> ActorKey {
+/// The actor key a start command carries, as the runtime's key segments.
+pub(crate) fn actor_key_from_protocol(key: Option<String>) -> ActorKey {
 	let Some(key) = key else {
 		return Vec::new();
 	};

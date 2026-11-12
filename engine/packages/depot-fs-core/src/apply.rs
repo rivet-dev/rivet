@@ -10,24 +10,35 @@ fn inode(batch: &mut Batch, update: &FsInodeUpdate) {
 	);
 }
 
-fn create(batch: &mut Batch, seq: u64, parent: &FsInodeUpdate, name: &[u8], child: &FsInode) {
+/// Writes the rows of an inode the entry at `seq` of `claim_log` creates. Its number packs
+/// the claim log with the sequence, so numbers stay unique across every log of the volume.
+fn create(
+	batch: &mut Batch,
+	claim_log: u16,
+	seq: u64,
+	parent: &FsInodeUpdate,
+	name: &[u8],
+	child: &FsInode,
+) -> Result<()> {
+	let ino = crate::inode::pack(claim_log, seq)?;
 	inode(batch, parent);
 	batch
 		.rows
-		.insert(RowKey::Inode(seq), Some(Row::Inode(child.clone())));
+		.insert(RowKey::Inode(ino), Some(Row::Inode(child.clone())));
 	batch.rows.insert(
 		RowKey::Dentry(parent.ino, name.to_vec()),
 		Some(Row::Dentry(FsDentry {
-			child: seq,
+			child: ino,
 			kind: child.kind.clone(),
 		})),
 	);
 	if child.kind != FsKind::Dir {
 		batch.rows.insert(
-			RowKey::Link(seq, parent.ino, name.to_vec()),
+			RowKey::Link(ino, parent.ino, name.to_vec()),
 			Some(Row::Unit),
 		);
 	}
+	Ok(())
 }
 
 fn orphan(batch: &mut Batch, target: &FsInodeUpdate) {
@@ -74,9 +85,10 @@ fn remove_range(batch: &mut Batch, store: &impl RowStore, range: RowRange, seq: 
 	Ok(())
 }
 
-/// Produces one atomic batch. Reapplying a sequence, including after partial storage
-/// work, reads the same previous-sequence snapshot and produces identical versions.
-pub fn apply(seq: u64, entry: &FsEntry, store: &impl RowStore) -> Result<Batch> {
+/// Produces one atomic batch for the entry at `seq` of `claim_log`. Reapplying a sequence,
+/// including after partial storage work, reads the same previous-sequence snapshot and
+/// produces identical versions.
+pub fn apply(claim_log: u16, seq: u64, entry: &FsEntry, store: &impl RowStore) -> Result<Batch> {
 	if seq == 0 {
 		return Err(Error::Invalid);
 	}
@@ -87,7 +99,9 @@ pub fn apply(seq: u64, entry: &FsEntry, store: &impl RowStore) -> Result<Batch> 
 	for op in &entry.ops {
 		match op {
 			FsOp::FsRoot(v) => {
-				if v.format.inline_max_bytes > CHUNK_BYTES as u64 {
+				if claim_log != crate::inode::ROOT_CLAIM_LOG
+					|| v.format.inline_max_bytes > CHUNK_BYTES as u64
+				{
 					return Err(Error::Corrupt);
 				}
 				batch
@@ -97,10 +111,10 @@ pub fn apply(seq: u64, entry: &FsEntry, store: &impl RowStore) -> Result<Batch> 
 					.rows
 					.insert(RowKey::Inode(ROOT_INO), Some(Row::Inode(v.inode.clone())));
 			}
-			FsOp::FsCreate(v) => create(&mut batch, seq, &v.parent, &v.name, &v.inode),
-			FsOp::FsMkdir(v) => create(&mut batch, seq, &v.parent, &v.name, &v.inode),
-			FsOp::FsSymlink(v) => create(&mut batch, seq, &v.parent, &v.name, &v.inode),
-			FsOp::FsMknod(v) => create(&mut batch, seq, &v.parent, &v.name, &v.inode),
+			FsOp::FsCreate(v) => create(&mut batch, claim_log, seq, &v.parent, &v.name, &v.inode)?,
+			FsOp::FsMkdir(v) => create(&mut batch, claim_log, seq, &v.parent, &v.name, &v.inode)?,
+			FsOp::FsSymlink(v) => create(&mut batch, claim_log, seq, &v.parent, &v.name, &v.inode)?,
+			FsOp::FsMknod(v) => create(&mut batch, claim_log, seq, &v.parent, &v.name, &v.inode)?,
 			FsOp::FsLink(v) => {
 				inode(&mut batch, &v.parent);
 				inode(&mut batch, &v.target);
@@ -238,7 +252,7 @@ pub struct ApplyPlan {
 	pub final_rows: Batch,
 }
 
-pub fn plan(seq: u64, entry: &FsEntry) -> Result<ApplyPlan> {
+pub fn plan(claim_log: u16, seq: u64, entry: &FsEntry) -> Result<ApplyPlan> {
 	struct Ranges(std::cell::RefCell<Vec<RowRange>>);
 	impl RowStore for Ranges {
 		fn get(&self, _: &RowKey, _: Option<u64>) -> Result<Option<Row>> {
@@ -259,7 +273,7 @@ pub fn plan(seq: u64, entry: &FsEntry) -> Result<ApplyPlan> {
 		}
 	}
 	let ranges = Ranges(std::cell::RefCell::new(Vec::new()));
-	let final_rows = apply(seq, entry, &ranges)?;
+	let final_rows = apply(claim_log, seq, entry, &ranges)?;
 	Ok(ApplyPlan {
 		ranges: ranges.0.into_inner(),
 		final_rows,

@@ -1,7 +1,9 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
+use anyhow::Context;
+use futures_util::{SinkExt, Stream, StreamExt};
 use rivet_envoy_protocol as protocol;
 use tokio::sync::{Semaphore, mpsc, oneshot};
 use tokio_tungstenite::tungstenite;
@@ -12,9 +14,18 @@ use crate::context::{HttpWsTxMessage, SharedContext, WsTxMessage};
 use crate::envoy::ToEnvoyMessage;
 use crate::handle::EnvoyHandle;
 use crate::metrics::METRICS;
-use crate::utils::{parse_ws_close_reason, reconnect_delay};
+use crate::time::Instant;
+use crate::utils::{ParsedCloseReason, parse_ws_close_reason, reconnect_delay};
 
 const STABLE_CONNECTION_MS: u64 = 60_000;
+const OPEN_TIMEOUT: Duration = Duration::from_secs(30);
+const INIT_TIMEOUT: Duration = Duration::from_secs(30);
+const CLOSE_GRACE: Duration = Duration::from_millis(100);
+
+enum SessionEnd {
+	Closed(Option<ParsedCloseReason>, Option<Instant>),
+	ContactExpired,
+}
 
 pub fn start_connection(shared: Arc<SharedContext>) -> Option<tokio::task::JoinHandle<()>> {
 	let span = tracing::debug_span!("envoy_connection", envoy_key = %shared.envoy_key);
@@ -65,27 +76,28 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 
 		let mut retry_after_ms = None;
 		match single_connection(&shared).await {
-			Ok((session, close_reason)) => {
+			Ok((session, SessionEnd::Closed(close_reason, contact_deadline))) => {
 				retry_after_ms = close_reason
 					.as_ref()
 					.and_then(|reason| reason.retry_after_ms);
-				if super::report_connection_close(&shared, session, close_reason) {
+				if super::report_connection_close(&shared, session, close_reason, contact_deadline)
+				{
+					return;
+				}
+			}
+			Ok((session, SessionEnd::ContactExpired)) => {
+				let (resume, wait) = oneshot::channel();
+				if crate::envoy::send_to_envoy_tx(
+					&shared,
+					ToEnvoyMessage::ContactExpired { session, resume },
+				)
+				.is_err() || wait.await.is_err()
+				{
 					return;
 				}
 			}
 			Err(error) => {
 				tracing::error!(?error, "connection failed");
-				let session = shared.connection_session.load(Ordering::Acquire);
-				if session != 0 {
-					super::remove_connection_for_session(&shared, session).await;
-				}
-				let _ = crate::envoy::send_to_envoy_tx(
-					&shared,
-					ToEnvoyMessage::ConnClose {
-						evict: false,
-						session,
-					},
-				);
 			}
 		}
 
@@ -106,9 +118,11 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 	}
 }
 
-async fn single_connection(
-	shared: &Arc<SharedContext>,
-) -> anyhow::Result<(u64, Option<crate::utils::ParsedCloseReason>)> {
+#[allow(
+	clippy::disallowed_methods,
+	reason = "The native SDK owns its Tokio transport deadline."
+)]
+async fn single_connection(shared: &Arc<SharedContext>) -> anyhow::Result<(u64, SessionEnd)> {
 	let url = super::ws_url(shared);
 	let protocols = {
 		let mut p = vec!["rivet".to_string()];
@@ -142,13 +156,19 @@ async fn single_connection(
 	// small frames sent immediately after another frame on this shared socket.
 	match &shared.config.connector {
 		Some(connector) => {
-			let stream = connector.connect(&url).await?;
-			let (ws_stream, response) = tokio_tungstenite::client_async_with_config(
-				request,
-				stream,
-				Some(websocket_config()),
-			)
-			.await?;
+			let (ws_stream, response) = tokio::time::timeout(OPEN_TIMEOUT, async {
+				let stream = connector.connect(&url).await?;
+				Ok::<_, anyhow::Error>(
+					tokio_tungstenite::client_async_with_config(
+						request,
+						stream,
+						Some(websocket_config()),
+					)
+					.await?,
+				)
+			})
+			.await
+			.context("node WebSocket dial or upgrade timed out")??;
 			serve_connection(
 				shared,
 				ws_stream,
@@ -162,12 +182,16 @@ async fn single_connection(
 			.await
 		}
 		None => {
-			let (ws_stream, response) = tokio_tungstenite::connect_async_with_config(
-				request,
-				Some(websocket_config()),
-				true,
+			let (ws_stream, response) = tokio::time::timeout(
+				OPEN_TIMEOUT,
+				tokio_tungstenite::connect_async_with_config(
+					request,
+					Some(websocket_config()),
+					true,
+				),
 			)
-			.await?;
+			.await
+			.context("node WebSocket dial or upgrade timed out")??;
 			serve_connection(
 				shared,
 				ws_stream,
@@ -184,11 +208,15 @@ async fn single_connection(
 }
 
 /// Runs one connected WebSocket session until it closes or fails.
+#[allow(
+	clippy::disallowed_methods,
+	reason = "The native SDK owns its Tokio transport deadline."
+)]
 async fn serve_connection<S>(
 	shared: &Arc<SharedContext>,
 	ws_stream: tokio_tungstenite::WebSocketStream<S>,
 	server_connection: Option<uuid::Uuid>,
-) -> anyhow::Result<(u64, Option<crate::utils::ParsedCloseReason>)>
+) -> anyhow::Result<(u64, SessionEnd)>
 where
 	S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
@@ -232,10 +260,9 @@ where
 	// Spawn write task
 	let shared2 = shared.clone();
 	let write_span = tracing::debug_span!("envoy_ws_write", envoy_key = %shared2.envoy_key);
-	let (write_failed_tx, mut write_failed_rx) = oneshot::channel();
-	let write_handle = tokio::spawn(
+	let mut writer = tokio::task::JoinSet::new();
+	writer.spawn(
 		async move {
-			let mut write_failed_tx = Some(write_failed_tx);
 			super::send_initial_metadata(&shared2).await;
 
 			loop {
@@ -258,9 +285,6 @@ where
 						let result = write.send(tungstenite::Message::Binary(data.into())).await;
 						if let Err(e) = result {
 							tracing::error!(?e, "failed to send ws message");
-							if let Some(write_failed_tx) = write_failed_tx.take() {
-								let _ = write_failed_tx.send(());
-							}
 							break;
 						}
 					}
@@ -283,9 +307,6 @@ where
 						let failed = result.is_err();
 						let _ = message.written.send(result);
 						if failed {
-							if let Some(write_failed_tx) = write_failed_tx.take() {
-								let _ = write_failed_tx.send(());
-							}
 							break;
 						}
 					}
@@ -298,16 +319,25 @@ where
 	let mut result = None;
 
 	let debug_latency_ms = shared.config.debug_latency_ms;
+	let mut deadline = Instant::now() + INIT_TIMEOUT;
+	let mut contact_threshold = None;
 
-	loop {
+	let timed_out = loop {
 		let msg = tokio::select! {
-			msg = read.next() => msg,
-			_ = &mut write_failed_rx => {
+			biased;
+			_ = tokio::time::sleep_until(deadline) => break true,
+			_ = writer.join_next() => {
 				disconnect_reason = "write_error";
-				break;
+				result = read_close_after_writer(&mut read, deadline).await
+					.and_then(|frame| parse_ws_close_reason(&frame.reason));
+				break Instant::now() >= deadline;
 			}
+			msg = read.next() => msg,
 		};
-		let Some(msg) = msg else { break };
+		if Instant::now() >= deadline {
+			break true;
+		}
+		let Some(msg) = msg else { break false };
 		match msg {
 			Ok(tungstenite::Message::Binary(data)) => {
 				crate::utils::inject_latency(debug_latency_ms).await;
@@ -320,13 +350,44 @@ where
 
 				let decode_start = std::time::Instant::now();
 				// Decoding shares the frame: tunnel bodies and SQLite pages are slices of it.
-				let decoded = crate::protocol::versioned::ToEnvoy::decode_body(
+				let decoded = match crate::protocol::versioned::ToEnvoy::decode_body(
 					data.into(),
 					protocol::PROTOCOL_VERSION,
-				)?;
+				) {
+					Ok(message) => message,
+					Err(error) => {
+						tracing::error!(?error, "invalid Engine WebSocket message");
+						break false;
+					}
+				};
 				METRICS
 					.ws_decode_duration
 					.observe(decode_start.elapsed().as_secs_f64());
+
+				let now = Instant::now();
+				if now >= deadline {
+					break true;
+				}
+				// Pre-Init pings get a pong but do not extend registration.
+				let renew_with = match &decoded {
+					protocol::ToEnvoy::ToEnvoyInit(init) => {
+						let Ok(ms) = u64::try_from(init.metadata.envoy_lost_threshold) else {
+							tracing::error!("negative node lost threshold");
+							break false;
+						};
+						Some(Duration::from_millis(ms))
+					}
+					protocol::ToEnvoy::ToEnvoyPing(_) => contact_threshold,
+					_ => None,
+				};
+				if let Some(threshold) = renew_with {
+					let Some(next_deadline) = now.checked_add(threshold) else {
+						tracing::error!("node lost threshold exceeds the clock range");
+						break false;
+					};
+					deadline = next_deadline;
+					contact_threshold = Some(threshold);
+				}
 
 				match decoded {
 					protocol::ToEnvoy::ToEnvoyPing(ping) => {
@@ -353,7 +414,7 @@ where
 					);
 					result = parse_ws_close_reason(&reason_str);
 				}
-				break;
+				break false;
 			}
 			Err(e) => {
 				disconnect_reason = "error";
@@ -364,11 +425,28 @@ where
 				} else {
 					tracing::error!(?e, "websocket error");
 				}
-				break;
+				break false;
 			}
 			_ => {}
 		}
-	}
+	};
+	let end = if timed_out && contact_threshold.is_some() {
+		shared
+			.expired_connection_session
+			.store(session, Ordering::Release);
+		writer.abort_all();
+		disconnect_reason = "contact_timeout";
+		tracing::warn!(
+			session,
+			"node contact expired while the WebSocket remained open"
+		);
+		SessionEnd::ContactExpired
+	} else {
+		if timed_out {
+			disconnect_reason = "init_timeout";
+		}
+		SessionEnd::Closed(result, contact_threshold.map(|_| deadline))
+	};
 
 	let session_duration = session_start.elapsed();
 	METRICS
@@ -386,14 +464,35 @@ where
 	);
 
 	// Clean up
+	writer.shutdown().await;
+	drop(read);
 	super::remove_connection_for_session(shared, session).await;
-	write_handle.abort();
 	shared
 		.config
 		.callbacks
 		.on_disconnect(EnvoyHandle::from_shared(shared.clone()));
 
-	Ok((session, result))
+	Ok((session, end))
+}
+
+// A structured close can be queued behind pings when the writer fails.
+#[allow(
+	clippy::disallowed_methods,
+	reason = "The native SDK owns its Tokio transport deadline."
+)]
+async fn read_close_after_writer(
+	read: &mut (impl Stream<Item = Result<tungstenite::Message, tungstenite::Error>> + Unpin),
+	deadline: Instant,
+) -> Option<tungstenite::protocol::CloseFrame> {
+	let until = deadline.min(Instant::now() + CLOSE_GRACE);
+	while Instant::now() < until {
+		match tokio::time::timeout_at(until, read.next()).await {
+			Ok(Some(Ok(tungstenite::Message::Close(frame)))) => return frame,
+			Ok(Some(Ok(_))) => tokio::task::yield_now().await,
+			_ => break,
+		}
+	}
+	None
 }
 
 enum EitherWrite {

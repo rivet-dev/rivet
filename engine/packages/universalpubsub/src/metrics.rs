@@ -4,6 +4,8 @@ use parking_lot::Mutex;
 use rivet_metrics::{GaugeGuardExt, IntGaugeGuard, prometheus::*};
 use uuid::Uuid;
 
+use crate::RequestClass;
+
 /// Shared accounting for bounded queues and byte budgets. Usage guards follow
 /// items through enqueue, dequeue, cancellation, and receiver destruction.
 pub(crate) struct Buffer {
@@ -204,14 +206,16 @@ impl Drop for BufferUsage {
 
 pub(crate) struct Operation {
 	operation: &'static str,
+	class: RequestClass,
 	outcome: &'static str,
 	_timer: rivet_metrics::prometheus::HistogramTimer,
 }
 
 impl Operation {
-	pub fn new(operation: &'static str) -> Self {
+	pub fn new(operation: &'static str, class: RequestClass) -> Self {
 		Self {
 			operation,
+			class,
 			outcome: "cancelled",
 			_timer: crate::metrics::DURATION
 				.with_label_values(&[operation])
@@ -227,7 +231,7 @@ impl Operation {
 impl Drop for Operation {
 	fn drop(&mut self) {
 		crate::metrics::OPERATIONS
-			.with_label_values(&[self.operation, self.outcome])
+			.with_label_values(&[self.operation, self.class.as_str(), self.outcome])
 			.inc();
 	}
 }
@@ -429,8 +433,8 @@ pub static ref REJECTED: IntCounterVec = register_int_counter_vec_with_registry!
 		*rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref OPERATIONS: IntCounterVec = register_int_counter_vec_with_registry!(
-		Opts::new("ups_operations_total", "UPS operation outcomes."),
-		&["operation", "result"],
+		Opts::new("ups_operations_total", "UPS operation outcomes by request class."),
+		&["operation", "class", "result"],
 		*rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref DURATION: HistogramVec = register_histogram_vec_with_registry!(

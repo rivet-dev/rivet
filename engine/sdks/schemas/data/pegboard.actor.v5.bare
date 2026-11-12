@@ -1,0 +1,759 @@
+# Version 4's layout under its own header, so binaries that read it never confuse it with the
+# version 3 header that 3.0.3 through 3.0.7 also write version 4's layout under.
+
+type Uuid data
+type Id data
+type WorkerId data
+
+type ActorData struct {
+    actorId: Id
+    namespace: str
+    poolName: str
+    name: str
+    key: optional<str>
+    input: optional<data>
+    createUnixMs: i64
+}
+
+type ActorAllocation struct {
+    envoyKey: str
+    workerId: WorkerId
+    connectionId: Uuid
+}
+
+type ReserveEpoxyPhasePending void
+type ReserveEpoxyPhaseReserved void
+type ReserveEpoxyPhaseAlreadyReserved struct {
+    reservationId: Id
+}
+type ReserveEpoxyPhaseFailed void
+type ReserveEpoxyPhaseMaxAttemptsReached void
+# V2 holds the key of the namespace migrating in, so the key is V2's and nothing was reserved.
+type ReserveEpoxyPhaseInV2 void
+
+type ReserveEpoxyPhase union {
+    ReserveEpoxyPhasePending |
+    ReserveEpoxyPhaseReserved |
+    ReserveEpoxyPhaseAlreadyReserved |
+    ReserveEpoxyPhaseFailed |
+    ReserveEpoxyPhaseMaxAttemptsReached |
+    ReserveEpoxyPhaseInV2
+}
+
+type ReserveEpoxyState struct {
+    phase: ReserveEpoxyPhase
+    attempt: u32
+    createUnixMs: i64
+}
+
+# Settles who owns the actor's key: this datacenter, once Epoxy reserves it here, another
+# datacenter that already reserved it, or V2, when a create's namespace migrates in from V2 and
+# V2 already holds the key.
+type ReserveEpoxyEffectData struct {
+    namespace: str
+    name: str
+    key: optional<str>
+    state: ReserveEpoxyState
+}
+
+type PendingNone void
+type PendingSleep void
+type PendingDestroy void
+type PendingReallocate void
+
+type PendingAction union {
+    PendingNone |
+    PendingSleep |
+    PendingReallocate |
+    PendingDestroy
+}
+
+type ActorCreateData struct {
+    actorId: Id
+    namespace: str
+    poolName: str
+    name: str
+    key: optional<str>
+    input: optional<data>
+}
+
+type Initializing struct {
+    reserveEpoxy: ReserveEpoxyEffectData
+    allocation: optional<ActorAllocation>
+}
+
+type Starting struct {
+    allocation: ActorAllocation
+}
+
+type Running struct {
+    allocation: ActorAllocation
+}
+
+type Sleeping struct {
+    wakeRetries: u32
+}
+
+type Stopping struct {
+    allocation: ActorAllocation
+}
+
+type DestroyPhasePending void
+type DestroyPhaseSuccess void
+type DestroyPhaseFailed void
+
+type DestroyPhase union {
+    DestroyPhasePending |
+    DestroyPhaseSuccess |
+    DestroyPhaseFailed
+}
+
+type DestroyState struct {
+    phase: DestroyPhase
+    attempt: u32
+    createUnixMs: i64
+}
+
+type DestroyEffectData struct {
+    createUnixMs: i64
+    state: DestroyState
+}
+
+# Another datacenter reserved the key first, under `reservationId`.
+type KeyOwnerDatacenter struct {
+    reservationId: Id
+}
+
+# V2 holds the key of the namespace migrating in.
+type KeyOwnerV2 void
+
+# Who owns the key of an incarnation destroyed because its reservation found another owner.
+type KeyOwner union {
+    KeyOwnerDatacenter |
+    KeyOwnerV2
+}
+
+# `keyOwner` is set when the incarnation is destroyed because its key belongs elsewhere: a create
+# meanwhile is told so, and a key that belongs to V2 ends delegated to V2 instead of destroyed.
+type Destroying struct {
+    destroy: DestroyEffectData
+    keyOwner: optional<KeyOwner>
+}
+
+type Destroyed void
+
+# Held by the V2 migrator under `migrationId` while the actor's data is imported from V2 and V2
+# gives the actor up. Its data record exists, but nothing starts it. A held actor that began here
+# reserves its key in `reserveEpoxy`, as `Initializing` does, and is activated only once the key
+# is reserved. A recalled actor has no `reserveEpoxy`: it reserved its key before it first slept.
+type MigratingFromV2 struct {
+    migrationId: u64
+    reserveEpoxy: optional<ReserveEpoxyEffectData>
+    # The actor's own alarm came due while it was held, so an activation that keeps the actor's
+    # alarm wakes it at once.
+    alarmDue: bool
+}
+
+# While its namespace migrates in from V2, the key belongs to V2: a create placed it there, by
+# `create_ratio` or because V2 already held it, and every later create follows that instead of
+# deciding again. It has no data record and nothing starts it. The V2 migrator's begin takes it
+# over when it moves the actor in.
+type DelegatedToV2 void
+
+type ActorPhase union {
+    Initializing |
+    Starting |
+    Running |
+    Stopping |
+    Sleeping |
+    Destroying |
+    Destroyed |
+    MigratingFromV2 |
+    DelegatedToV2
+}
+
+type StartWaiter struct {
+    workerId: WorkerId
+    waitId: u64
+    expiresUnixMs: i64
+}
+
+type WriteIndexPhasePending void
+type WriteIndexPhaseSuccess void
+type WriteIndexPhaseFailed void
+
+type WriteIndexPhase union {
+    WriteIndexPhasePending |
+    WriteIndexPhaseSuccess |
+    WriteIndexPhaseFailed
+}
+
+type WriteIndexState struct {
+    phase: WriteIndexPhase
+    attempt: u32
+    createUnixMs: i64
+}
+
+type WriteIndexEffectData struct {
+    namespace: str
+    name: str
+    createUnixMs: i64
+    state: WriteIndexState
+}
+
+# Where an incarnation's database came from. Only a created one is empty on its first start.
+type StorageOrigin enum {
+    CREATED
+    IMPORTED
+}
+
+type ActorState struct {
+    phase: ActorPhase
+    epoch: u32
+    createUnixMs: i64
+    storageOrigin: StorageOrigin
+    commandIndex: i64
+    indexBucketCount: u64
+    pendingAction: PendingAction
+    writeIndex: WriteIndexEffectData
+    startWaiters: list<StartWaiter>
+}
+
+type ReserveEpoxyTimeout struct {
+    attempt: u32
+    createUnixMs: i64
+}
+
+type WriteIndexTimeout struct {
+    attempt: u32
+    createUnixMs: i64
+}
+
+type DestroyTimeout struct {
+    attempt: u32
+    createUnixMs: i64
+}
+
+type StartTimeout struct {
+    epoch: u32
+}
+
+type StopTimeout struct {
+    epoch: u32
+}
+
+type AlarmTimeout void
+
+# Runs the envoy check again for the running `epoch` in case the process running the check an
+# alarm started died with it. Armed with that check, past the envoy's lost threshold.
+type EnvoyCheckTimeout struct {
+    epoch: u32
+}
+
+# Ends the stopping `epoch` as lost when its stop is still unanswered past the stop threshold
+# and its margin. Armed once, when the epoch begins stopping at `stopUnixMs`; resends of the
+# stop do not move it.
+type StopThresholdTimeout struct {
+    epoch: u32
+    stopUnixMs: i64
+}
+
+# Retries only the replacement allocation after the old epoch confirmed it stopped, so it
+# never replaces the actor's own alarm. `attempt` drives the backoff.
+type AllocationRetry struct {
+    epoch: u32
+    attempt: u32
+}
+
+type ActorTimer union {
+    ReserveEpoxyTimeout |
+    WriteIndexTimeout |
+    DestroyTimeout |
+    StartTimeout |
+    AlarmTimeout |
+    StopTimeout |
+    EnvoyCheckTimeout |
+    StopThresholdTimeout |
+    AllocationRetry
+}
+
+type StartFailed struct {
+    epoch: u32
+}
+
+# The actor executor found the envoy of `epoch` disconnected past its lost threshold while its
+# stop went undelivered, so the envoy has stopped every actor it held.
+type EnvoyGone struct {
+    epoch: u32
+}
+
+type Sleep void
+
+type TryStart struct {
+    waiter: optional<StartWaiter>
+}
+
+# `forceActorV3` asks for the actor in this cluster while its namespace migrates in from V2,
+# whatever `create_ratio` says, unless its key already belongs to V2.
+type Create struct {
+    init: ActorCreateData
+    waiter: optional<StartWaiter>
+    forceActorV3: bool
+}
+
+type Reallocate struct {
+    epoch: u32
+    lost: bool
+    waiter: optional<StartWaiter>
+}
+
+type UpdateRoute struct {
+    epoch: u32
+    from: ActorAllocation
+    to: ActorAllocation
+}
+
+type Destroy void
+
+type ToEnvoyEventKindRunning void
+
+type ToEnvoyEventKindStopped struct {
+    ok: bool
+    message: optional<str>
+}
+
+type ToEnvoyEventKindSleepIntent void
+
+type ToEnvoyEventKindStopIntent void
+
+type ToEnvoyEventKindSetAlarm struct {
+    alarmUnixMs: optional<i64>
+}
+
+type ToEnvoyEventKind union {
+    ToEnvoyEventKindRunning |
+    ToEnvoyEventKindStopped |
+    ToEnvoyEventKindSleepIntent |
+    ToEnvoyEventKindStopIntent |
+    ToEnvoyEventKindSetAlarm
+}
+
+type ToEnvoyEvent struct {
+    epoch: u32
+    kind: ToEnvoyEventKind
+}
+
+# A destroyed actor starts a new incarnation held as `MigratingFromV2`, with its data record
+# written in the same commit and its storage marked imported. `createUnixMs` is V2's creation
+# time, raised past the previous incarnation's if needed. A held actor with an older id is taken
+# over; any other phase is left unchanged.
+type MigrateFromV2Begin struct {
+    migrationId: u64
+    init: ActorCreateData
+    createUnixMs: i64
+}
+
+# V2 gave the actor up: a held actor with this id and its key reserved sleeps, with its index
+# entry written, or is destroyed if a destroy arrived while it was held. `alarmUnixMs` replaces
+# the actor's alarm; without it the actor keeps its own, and one that came due while it was held
+# fires at once.
+# Any other phase is left unchanged. A reservation that ran out of attempts or found another
+# owner never settles, so the migrator discards that hold and imports the actor again.
+type MigrateFromV2Activate struct {
+    migrationId: u64
+    alarmUnixMs: optional<i64>
+}
+
+# A held actor with this id is destroyed, which deletes its imported database. Any other phase
+# is left unchanged.
+type MigrateFromV2Discard struct {
+    migrationId: u64
+}
+
+# A sleeping actor is held again under this id, so it can be handed back to V2. Any other phase
+# is left unchanged.
+type MigrateFromV2Recall struct {
+    migrationId: u64
+}
+
+type MigrateFromV2 union {
+    MigrateFromV2Begin |
+    MigrateFromV2Activate |
+    MigrateFromV2Discard |
+    MigrateFromV2Recall
+}
+
+type ActorEvent union {
+    ReserveEpoxyState |
+    WriteIndexState |
+    StartFailed |
+    Sleep |
+    TryStart |
+    Create |
+    Reallocate |
+    UpdateRoute |
+    Destroy |
+    DestroyState |
+    ToEnvoyEvent |
+    EnvoyGone |
+    MigrateFromV2
+}
+
+type TryStartWaiting void
+
+type TryStartStarting struct {
+    epoch: u32
+    allocation: ActorAllocation
+}
+
+type TryStartRunning struct {
+    epoch: u32
+    allocation: ActorAllocation
+}
+
+type TryStartDestroyed void
+
+type TryStartEpoxyAlreadyReserved struct {
+    reservationId: Id
+}
+
+type TryStartFull void
+
+# The V2 migrator holds the actor, so V2 still serves it. No waiter is stored.
+type TryStartMigratingFromV2 void
+
+# The key is delegated to V2, so V2 serves it. No waiter is stored.
+type TryStartDelegatedToV2 void
+
+type TryStartOutcome union {
+    TryStartWaiting |
+    TryStartStarting |
+    TryStartRunning |
+    TryStartDestroyed |
+    TryStartEpoxyAlreadyReserved |
+    TryStartFull |
+    TryStartMigratingFromV2 |
+    TryStartDelegatedToV2
+}
+
+type ActorReadRequest void
+type ActorReadResponse struct {
+    data: optional<ActorData>
+    phase: optional<ActorPhase>
+    epoch: u32
+}
+
+type ActorEventResponse struct {
+    outcome: optional<TryStartOutcome>
+}
+
+type ActorMigrateFromV2BeginResponse struct {
+    phase: ActorPhase
+    createUnixMs: i64
+}
+
+type ActorCreateRequest struct {
+    init: ActorCreateData
+    waiter: optional<StartWaiter>
+    forceActorV3: bool
+}
+type ActorCreateResponse struct {
+    outcome: TryStartOutcome
+}
+
+type ActorStartNoticeStarting struct {
+    epoch: u32
+    allocation: ActorAllocation
+}
+
+type ActorStartNoticeRunning struct {
+    epoch: u32
+    allocation: ActorAllocation
+}
+
+type ActorStartNoticeEpoxyAlreadyReserved struct {
+    reservationId: Id
+}
+
+type ActorStartNoticeDestroyed void
+
+# The V2 migrator recalled the actor, so V2 serves it again and the waiter's request goes there.
+type ActorStartNoticeMigratingFromV2 void
+
+# The key belongs to V2, so the waiter's request goes there.
+type ActorStartNoticeDelegatedToV2 void
+
+type ActorStartNoticeKind union {
+    ActorStartNoticeStarting |
+    ActorStartNoticeRunning |
+    ActorStartNoticeEpoxyAlreadyReserved |
+    ActorStartNoticeDestroyed |
+    ActorStartNoticeMigratingFromV2 |
+    ActorStartNoticeDelegatedToV2
+}
+
+type ActorStartNotice struct {
+    actorId: Id
+    kind: ActorStartNoticeKind
+}
+
+type KvValue struct {
+    value: data
+    version: data
+    updatedUnixMs: i64
+}
+
+type IndexInsertActorRequest struct {
+    actorId: Id
+    createUnixMs: i64
+}
+type IndexInsertActorResponse void
+
+type IndexDeleteActorRequest struct {
+    actorId: Id
+    createUnixMs: i64
+}
+type IndexDeleteActorResponse void
+
+type IndexActorCursor struct {
+    createUnixMs: i64
+    actorId: Id
+}
+
+type IndexListActorsRequest struct {
+    after: optional<IndexActorCursor>
+    limit: u32
+    includeDestroyed: bool
+}
+type IndexDestroyedActor struct {
+    createUnixMs: i64
+    actorId: Id
+    destroyUnixMs: i64
+}
+type IndexListActorsResponse struct {
+    actors: list<IndexActorCursor>
+    hasMore: bool
+    destroyed: list<IndexDestroyedActor>
+}
+
+type DestroyedActorIndexEntry struct {
+    destroyUnixMs: i64
+}
+
+type IndexReadDestroyedActorRequest struct {
+    createUnixMs: i64
+    actorId: Id
+}
+type IndexReadDestroyedActorResponse struct {
+    destroyUnixMs: optional<i64>
+}
+
+type EnvoyData struct {
+    key: str
+    workerId: WorkerId
+    connectionId: Uuid
+    connectionEpoch: u64
+    version: u32
+    names: list<str>
+    createUnixMs: i64
+    heartbeatUnixMs: i64
+    stopping: bool
+    connected: bool
+}
+
+type EnvoyUpsertRequest struct {
+    data: EnvoyData
+    expected: optional<EnvoyData>
+}
+type EnvoyUpsertResponse struct {
+    data: EnvoyData
+}
+
+type EnvoyReadRequest void
+type EnvoyReadResponse struct {
+    data: optional<EnvoyData>
+}
+
+type IndexInsertEnvoyRequest struct {
+    createUnixMs: i64
+    envoyKey: str
+}
+type IndexInsertEnvoyResponse void
+
+type IndexListEnvoysRequest struct {
+    cursor: optional<data>
+}
+type IndexListEnvoysResponse struct {
+    envoyKeys: list<str>
+    cursor: optional<data>
+}
+
+type ActiveEnvoyIndexEntry struct {
+    workerId: WorkerId
+    connectionId: Uuid
+}
+
+type ActiveEnvoyState struct {
+    envoyKey: str
+    connectionEpoch: u64
+    version: u32
+    heartbeatUnixMs: i64
+    names: list<str>
+}
+
+type IndexUpsertActiveEnvoyRequest struct {
+    envoyKey: str
+    connectionEpoch: u64
+    workerId: WorkerId
+    connectionId: Uuid
+    version: u32
+    heartbeatUnixMs: i64
+    names: list<str>
+}
+type IndexUpsertActiveEnvoyResponse struct {
+    superseded: bool
+    # The highest version among the pool's envoys with a live heartbeat, including the
+    # upserted envoy. An envoy below it is superseded by a newer deployment.
+    newestLiveVersion: u32
+}
+
+type IndexDeleteActiveEnvoyRequest struct {
+    envoyKey: str
+    connectionEpoch: u64
+}
+type IndexDeleteActiveEnvoyResponse void
+
+type IndexPutEnvoyPoolRequest struct {
+    poolName: str
+}
+type IndexPutEnvoyPoolResponse void
+
+type IndexListEnvoyPoolsRequest void
+type IndexListEnvoyPoolsResponse struct {
+    pools: list<str>
+}
+
+type IndexListActiveEnvoysRequest struct {
+    name: str
+    cursor: optional<data>
+}
+type IndexListActiveEnvoysResponse struct {
+    envoys: list<ActorAllocation>
+    cursor: optional<data>
+}
+
+type IndexListActiveEnvoyStatesRequest struct {
+    cursor: optional<data>
+}
+type IndexListActiveEnvoyStatesResponse struct {
+    envoys: list<ActiveEnvoyState>
+    cursor: optional<data>
+}
+
+type NamespaceRecord struct {
+    createUnixMs: i64
+    createOperationId: data
+}
+
+type NamespaceCreateRequest struct {
+    name: str
+    createUnixMs: i64
+}
+type NamespaceCreateResponse struct {
+    created: bool
+    record: NamespaceRecord
+}
+
+type NamespaceReadRequest struct {
+    name: str
+}
+type NamespaceReadResponse struct {
+    record: optional<NamespaceRecord>
+}
+
+type NamespaceEntry struct {
+    name: str
+    record: NamespaceRecord
+}
+
+type NamespaceListRequest struct {
+    after: optional<str>
+    limit: u32
+}
+type NamespaceListResponse struct {
+    namespaces: list<NamespaceEntry>
+    cursor: optional<str>
+}
+
+type EpoxyActorByKeyEntry struct {
+    reservationId: Id
+}
+
+# Pool settings are captured when a connection registers. Metadata is opaque JSON.
+type NodePoolConfig struct {
+    drainOnVersionUpgrade: bool
+    actorEvictionDelay: u32
+    actorEvictionPeriod: u32
+    actorEvictionRate: f64
+    metadata: optional<data>
+}
+
+type PoolConnection struct {
+    connectionId: Id
+    heartbeatUnixMs: i64
+}
+
+type PoolRead void
+
+type PoolPut NodePoolConfig
+
+type PoolDelete void
+
+type PoolConnect PoolConnection
+
+type PoolRenew PoolConnection
+
+type PoolDisconnect Uuid
+
+type PoolOperation union {
+    PoolRead |
+    PoolPut |
+    PoolDelete |
+    PoolConnect |
+    PoolDisconnect |
+    PoolRenew
+}
+
+type PoolStatus enum {
+    OK
+    NOT_FOUND
+    CONNECTED
+}
+
+type PoolRequest struct {
+    poolName: str
+    operation: PoolOperation
+}
+type PoolResponse struct {
+    status: PoolStatus
+    config: optional<NodePoolConfig>
+}
+
+type PoolLease struct {
+    heartbeatUnixMs: i64
+    }
+
+# One bounded page of configured pools, ordered by immutable name.
+type PoolEntry struct {
+    name: str
+    config: NodePoolConfig
+}
+
+type PoolListRequest struct {
+    after: optional<str>
+    limit: u32
+}
+type PoolListResponse struct {
+    pools: list<PoolEntry>
+    cursor: optional<str>
+}

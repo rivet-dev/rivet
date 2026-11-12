@@ -1,19 +1,30 @@
 import { Hono } from "hono";
 import { actor, type RequestContext } from "rivetkit";
+import { db } from "rivetkit/db";
 
 export const rawHttpActor = actor({
-	state: {
-		requestCount: 0,
-	},
-	onRequest(
-		ctx: RequestContext<any, any, any, any, any, any>,
-		request: Request,
-	) {
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS request_stats (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					request_count INTEGER NOT NULL
+				);
+			`);
+			await db.execute(
+				"INSERT OR IGNORE INTO request_stats (id, request_count) VALUES (1, 0)",
+			);
+		},
+	}),
+	async onRequest(ctx, request: Request) {
 		const url = new URL(request.url);
 		const method = request.method;
 
 		// Track request count
-		ctx.state.requestCount++;
+		const rows = await ctx.db.execute<{ request_count: number }>(
+			"UPDATE request_stats SET request_count = request_count + 1 WHERE id = 1 RETURNING request_count",
+		);
+		const requestCount = rows[0].request_count;
 
 		// Handle different endpoints
 		if (url.pathname === "/api/hello") {
@@ -34,7 +45,7 @@ export const rawHttpActor = actor({
 		if (url.pathname === "/api/state") {
 			return new Response(
 				JSON.stringify({
-					requestCount: ctx.state.requestCount,
+					requestCount,
 				}),
 				{
 					headers: { "Content-Type": "application/json" },

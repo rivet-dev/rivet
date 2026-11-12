@@ -9,6 +9,8 @@ export interface Node {
     namespace: string;
     /** Datacenter name. */
     datacenter: string;
+    /** Version the node announced when it connected. New actors are placed only on nodes at the newest version with a connected node in the pool. */
+    version: number;
     /** When the node connected, in Unix milliseconds. */
     createTs: number;
     /** When the node last sent a heartbeat, in Unix milliseconds. */

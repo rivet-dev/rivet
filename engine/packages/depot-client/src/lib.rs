@@ -6,12 +6,15 @@
 #![warn(unreachable_pub)]
 
 pub mod checkpoints;
+pub mod client_protocol;
 mod command;
 pub mod fences;
 mod volume_observer;
 pub use command::{
 	CommandOptions, Conflict, Corrupt, Fenced, Overloaded, ROUTE_UNRESOLVED_REASON,
-	ReadInterrupted, Unavailable, overload_reason_label, retry_after_ms, route_unresolved,
+	ReadInterrupted, RequestDeadlineExceeded, Unavailable, overload_reason_label,
+	overload_reason_of_label, refusal_reason, refused_before_running,
+	reject_refused_before_running, retry_after_ms, route_unresolved, tail_unproven_parent,
 	unavailable_reason_label,
 };
 pub mod filesystem;
@@ -19,6 +22,7 @@ pub mod forks;
 mod keys;
 pub mod metrics;
 pub mod regional;
+pub mod rollback;
 pub mod volume_requests;
 pub mod volumes;
 
@@ -27,7 +31,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use depot_types::VolumeLogKey;
 use depot_volume::volume_client_machine::event::RpcError;
-use rivet_data::generated::shared_depot_fs_v1::FsVolumeRecord;
+use rivet_data::generated::shared_depot_fs_v2::FsVolumeRecord;
 use rivet_topology::topology::Topology;
 use universalpubsub::{PubSub, WorkerId};
 
@@ -67,6 +71,10 @@ pub struct Client {
 	topology: Arc<Topology>,
 	dispatch_guard: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
 	command_timeout_floor: Option<std::time::Duration>,
+	/// The bytes every filesystem rollback this client runs may hold at once.
+	rollback_budget: Arc<filesystem::RollbackBudget>,
+	/// Absolute request deadline inherited by typed commands and their route continuations.
+	command_deadline_boot_ms: Option<u64>,
 }
 
 impl Client {
@@ -78,7 +86,24 @@ impl Client {
 			topology,
 			dispatch_guard: None,
 			command_timeout_floor: None,
+			rollback_budget: filesystem::RollbackBudget::new(
+				filesystem::rollback::DEFAULT_MAX_ROLLBACK_BYTES,
+			),
+			command_deadline_boot_ms: None,
 		}
+	}
+
+	/// Caps the bytes every filesystem rollback this client and its clones run may hold at
+	/// once, `depot.filesystem.max_rollback_bytes`.
+	pub fn with_max_rollback_bytes(&self, capacity: usize) -> Self {
+		Self {
+			rollback_budget: filesystem::RollbackBudget::new(capacity),
+			..self.clone()
+		}
+	}
+
+	pub(crate) fn rollback_budget(&self) -> &Arc<filesystem::RollbackBudget> {
+		&self.rollback_budget
 	}
 
 	/// Raises every typed command deadline to at least `floor`. Commands whose own
@@ -94,6 +119,18 @@ impl Client {
 		match self.command_timeout_floor {
 			Some(floor) => default.max(floor),
 			None => default,
+		}
+	}
+
+	/// Caps typed commands at the caller's original boot deadline. Clones retain the cap,
+	/// and nesting can only shorten it. This handle adds no retry policy.
+	pub fn with_command_deadline(&self, deadline_boot_ms: u64) -> Self {
+		Self {
+			command_deadline_boot_ms: Some(
+				self.command_deadline_boot_ms
+					.map_or(deadline_boot_ms, |previous| previous.min(deadline_boot_ms)),
+			),
+			..self.clone()
 		}
 	}
 
@@ -157,10 +194,10 @@ impl Client {
 	/// retain the caller's original monotonic deadline, including route refreshes.
 	pub async fn read_filesystem(
 		&self,
-		request: rivet_data::generated::shared_depot_fs_read_v1::FsReadRequest,
+		request: rivet_data::generated::shared_depot_fs_read_v2::FsReadRequest,
 		deadline_boot_ms: u64,
-	) -> Result<rivet_data::generated::shared_depot_fs_read_v1::FsReadResponse> {
-		use rivet_data::generated::{depot_client_protocol_v1::*, shared_depot_fs_read_v1::*};
+	) -> Result<rivet_data::generated::shared_depot_fs_read_v2::FsReadResponse> {
+		use rivet_data::generated::{depot_client_protocol_v2::*, shared_depot_fs_read_v2::*};
 		let response = self
 			.volume_handle()?
 			.read_requests()
@@ -170,13 +207,15 @@ impl Client {
 			ClientResponse::FsReadResponse(response) => response,
 			ClientResponse::VolumeRejectResponse(reason) => {
 				FsReadResponse::FsReadError(match reason {
-					VolumeRejectResponse::VolumeNotFound | VolumeRejectResponse::VolumeDeleted => {
-						FsReadError::NotFound
-					}
+					// An archived group's volumes are closed for good, like a deleted one.
+					VolumeRejectResponse::VolumeNotFound
+					| VolumeRejectResponse::VolumeDeleted
+					| VolumeRejectResponse::VolumeGroupArchived => FsReadError::NotFound,
 					// A repair claim refuses only lifecycle requests; a read refused for one
 					// retries like shed load.
 					VolumeRejectResponse::Overloaded(_)
-					| VolumeRejectResponse::VolumeUnderRepair(_) => FsReadError::Overloaded,
+					| VolumeRejectResponse::VolumeUnderRepair(_)
+					| VolumeRejectResponse::VolumeTailUnproven(_) => FsReadError::Overloaded,
 					// The volume's stored record is lost, which no retry mends; the read error
 					// carries no incarnation, and `delete_current` reads through the volume
 					// handle, whose error does.
@@ -195,9 +234,9 @@ impl Client {
 	/// cached manifest so the next attempt finds the current maintainer.
 	pub async fn repair_request(
 		&self,
-		request: rivet_data::generated::depot_client_protocol_v1::ClientRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::ClientRequest,
 		deadline_boot_ms: u64,
-	) -> Result<rivet_data::generated::depot_client_protocol_v1::ClientResponse> {
+	) -> Result<rivet_data::generated::depot_client_protocol_v2::ClientResponse> {
 		self.volume_handle()?
 			.read_requests()
 			.request_at(request, deadline_boot_ms)
@@ -250,7 +289,7 @@ impl Client {
 		key: depot_types::VolumeKey,
 	) -> Result<bool, volumes::Error> {
 		use filesystem::remote::ReadTransport;
-		use rivet_data::generated::shared_depot_fs_read_v1::{
+		use rivet_data::generated::shared_depot_fs_read_v2::{
 			FsReadError, FsReadKeys, FsReadOperation, FsReadRequest, FsReadResponse, FsReadTarget,
 		};
 
@@ -262,7 +301,7 @@ impl Client {
 				target: FsReadTarget::VolumeKey(key.clone()),
 				client_epoch: None,
 				operation: FsReadOperation::FsReadKeys(FsReadKeys {
-					position: None,
+					cut: None,
 					file: Vec::new().into(),
 					keys: Vec::new(),
 				}),
@@ -280,8 +319,14 @@ impl Client {
 					depot_types::client::not_maintainer(),
 				)));
 			}
+			// The maintainer shed the read, so the caller may send the delete again after the
+			// hint.
 			Ok(FsReadResponse::FsReadError(FsReadError::Overloaded))
-			| Err(filesystem::Error::Overloaded) => return Err(volumes::Error::Overloaded),
+			| Err(filesystem::Error::Overloaded) => {
+				return Err(volumes::Error::Lifecycle(RpcError::LifecycleRejected(
+					depot_types::client::overloaded(),
+				)));
+			}
 			// The current incarnation has no stored record, so no read can resolve it; the
 			// refusal names it, and deleting it is exactly the repair the name needs.
 			Err(filesystem::Error::RecordMissing { incarnation }) => {
@@ -334,3 +379,5 @@ impl Client {
 		}
 	}
 }
+
+pub mod groups;

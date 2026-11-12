@@ -49,7 +49,19 @@ function AgentPanel({ info }: { info: AgentInfo }) {
 				next[existingIndex] = message;
 				return next;
 			}
-			return [...prev, message].sort((a, b) => a.createdAt - b.createdAt);
+
+			// A reply goes right after the message it answers, which is where
+			// `getHistory` lists it after a reload.
+			const answeredIndex = prev.findIndex(
+				(item) => item.id === message.replyTo,
+			);
+			if (answeredIndex === -1) {
+				return [...prev, message];
+			}
+
+			const next = [...prev];
+			next.splice(answeredIndex + 1, 0, message);
+			return next;
 		});
 	});
 
@@ -77,7 +89,7 @@ function AgentPanel({ info }: { info: AgentInfo }) {
 			return;
 		}
 
-		await agent.connection.send("message", {
+		await agent.connection.sendMessage({
 			text: trimmed,
 			sender: "Operator",
 		});
@@ -200,8 +212,8 @@ export function App() {
 					<p className="hero__eyebrow">AI Agent</p>
 					<h1>Spin up AI agents and message them in parallel.</h1>
 					<p className="hero__subtitle">
-						Each Rivet Actor keeps its own memory and streams
-						responses as queue messages arrive.
+						Each Rivet Actor keeps its own memory and streams a
+						reply to each message in the order they arrive.
 					</p>
 				</div>
 				<div className="hero__controls">

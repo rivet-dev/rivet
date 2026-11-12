@@ -1,14 +1,16 @@
 import { actor } from "rivetkit";
 
 const counter = actor({
-  state: { count: 0 },
-  vars: { intervalId: null as NodeJS.Timeout | null },
+  vars: {
+    count: 0,
+    intervalId: null as NodeJS.Timeout | null,
+  },
 
   onWake: (c) => {
     // Set up interval when actor wakes
     c.vars.intervalId = setInterval(() => {
-      c.state.count++;
-      console.log('Auto-increment:', c.state.count);
+      c.vars.count++;
+      console.log('Auto-increment:', c.vars.count);
     }, 10000);
   },
 
@@ -22,7 +24,7 @@ const counter = actor({
     }
 
     // Perform any other cleanup
-    console.log('Final count:', c.state.count);
+    console.log('Final count:', c.vars.count);
   },
 
   actions: { /* ... */ }

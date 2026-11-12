@@ -5,6 +5,9 @@ use rivet_data::generated::{
 	depot_storage_worker_protocol_v1::{RejectResponse, StorageWorkerResponse},
 };
 use rivet_metrics::prometheus::*;
+use std::collections::BTreeMap;
+
+use crate::log_shard_machine::snapshot::{Resource, ResourceUsage};
 
 lazy_static::lazy_static! {
 	static ref BARRIER_WAIT_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
@@ -272,10 +275,14 @@ pub(crate) fn observe_segment_pin_age(age_ms: u64) {
 	SEGMENT_PIN_AGE.set(age_ms as f64 / 1000.0);
 }
 
-/// A runner-owned observer publishes gauges and warns only on entry into the near-cap band.
+/// A runner-owned observer publishes gauges and warns once per near-capacity episode, at
+/// most once a minute per resource, for the resources that refuse or wait at their cap (see
+/// `Resource::warns_near_capacity`). `now_boot_ms` is read only when a resource enters the
+/// near band.
 pub(crate) fn observe(
-	resources: impl IntoIterator<Item = crate::log_shard_machine::snapshot::ResourceUsage>,
-	near: &mut std::collections::BTreeSet<crate::log_shard_machine::snapshot::Resource>,
+	resources: impl IntoIterator<Item = ResourceUsage>,
+	warnings: &mut BTreeMap<Resource, rivet_metrics::NearCapacityWarning>,
+	now_boot_ms: impl Fn() -> Option<u64>,
 ) {
 	for value in resources {
 		USAGE
@@ -284,17 +291,51 @@ pub(crate) fn observe(
 		CAPACITY
 			.with_label_values(&[value.resource.label()])
 			.set(value.capacity.min(i64::MAX as u64) as i64);
-		if value.used > 0 && value.used.saturating_mul(10) >= value.capacity.saturating_mul(9) {
-			if near.insert(value.resource) {
-				tracing::warn!(
-					resource = value.resource.label(),
-					usage = value.used,
-					capacity = value.capacity,
-					"log shard resource near capacity"
-				);
-			}
-		} else {
-			near.remove(&value.resource);
+		if !value.resource.warns_near_capacity() {
+			continue;
+		}
+
+		let warning = warnings.entry(value.resource).or_default();
+		if let Some(episode) = warning.observe(value.used, value.capacity, &now_boot_ms) {
+			tracing::warn!(
+				resource = value.resource.label(),
+				usage = value.used,
+				capacity = value.capacity,
+				suppressed_episodes = episode.suppressed_episodes,
+				hint = near_capacity_hint(value.resource),
+				"log shard resource near capacity"
+			);
+		}
+	}
+}
+
+/// The likely cause of a resource nearing its cap and what to adjust.
+fn near_capacity_hint(resource: Resource) -> &'static str {
+	match resource {
+		Resource::PendingRequests => {
+			"requests wait on disk writes or reads; check disk latency or raise depot.log_shard.max_memory_requests"
+		}
+		Resource::PendingBytes => {
+			"unsynced appends and reads wait on disk; check disk latency or raise depot.log_shard.max_memory_bytes"
+		}
+		Resource::DiskBytes => {
+			"log segments wait on cold writes; check cold-store uploads or raise depot.log_shard.max_disk_bytes"
+		}
+		Resource::Replicas => {
+			"many volumes are loaded on this shard; raise depot.log_shard.max_loaded_volume_bytes if loads are refused"
+		}
+		Resource::QuarantinedBytes => {
+			"quarantined segments are waiting for removal and count toward depot.log_shard.max_disk_bytes"
+		}
+		Resource::Inbox => "the shard is processing requests slower than they arrive",
+		Resource::RetainedPayloadBytes => {
+			"soft cache budget: usage also counts unsynced payloads, which only depot.log_shard.max_memory_bytes bounds, so it may exceed the cap under write load; older synced payloads are read from disk"
+		}
+		Resource::DiskReads => {
+			"reads are falling back to disk; check disk latency or raise depot.log_shard.max_disk_reads"
+		}
+		Resource::AdmissionWaitMs => {
+			"requests wait in the inbox before admission; the shard is saturated"
 		}
 	}
 }

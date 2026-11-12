@@ -49,6 +49,8 @@ pub struct VolumeClientSnapshot {
 	pub claim_entry_written_at_unix_ms: Option<i64>,
 	/// The volume row names a fork base, so its rows are not only in this volume's log.
 	pub has_base_chain: bool,
+	/// The volume was made from its parent group's copy at a fork; see `FsVolumeRecord.lazyFork`.
+	pub lazy_fork: Option<rivet_data::generated::shared_depot_fs_v2::FsLazyForkOrigin>,
 	/// The current open adopted a claim the maintainer granted, so the maintainer knows it.
 	pub granted_claim: bool,
 	/// The maintainer acknowledged this client's close, so its owner sends no second one.

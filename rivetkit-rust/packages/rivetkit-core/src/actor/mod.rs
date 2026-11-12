@@ -1,14 +1,10 @@
 pub mod action;
-#[cfg(all(feature = "sqlite-local", unix))]
-pub mod actor_runtime_socket;
-#[cfg(all(feature = "sqlite-local", not(unix)))]
-#[path = "actor_runtime_socket_unsupported.rs"]
-pub mod actor_runtime_socket;
 pub mod config;
 pub mod connection;
 pub mod context;
 pub(crate) mod diagnostics;
 pub mod factory;
+pub mod fork;
 pub(crate) mod internal_storage;
 pub(crate) mod keys;
 pub mod kv;
@@ -27,12 +23,11 @@ pub mod task_types;
 pub(crate) mod work_registry;
 
 pub use action::ActionDispatchError;
-#[cfg(feature = "sqlite-local")]
-pub use actor_runtime_socket::ActorRuntimeSocketEndpointInfo;
 pub use config::{ActionDefinition, ActorConfig, ActorConfigOverrides, CanHibernateWebSocket};
 pub use connection::ConnHandle;
 pub use context::{ActorContext, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion};
 pub use factory::{ActorEntryFn, ActorFactory};
+pub use fork::{ActorForkStart, ForkLink};
 pub use lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 pub use messages::{
 	ActorEvent, QueueSendResult, QueueSendStatus, Request, Response, StateDelta, WorkflowKvWrite,

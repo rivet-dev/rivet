@@ -2,12 +2,18 @@
 use crate::Client;
 use depot_fs_core::{FsForkError, FsForkNamed, FsForkSelector, FsForkSpec, FsVolumeRecord};
 use depot_types::VolumeKey;
-use rivet_data::generated::depot_client_protocol_v1::*;
+use rivet_data::generated::depot_client_protocol_v2::*;
+use vbare::Versioned;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	#[error("fork rejected: {0:?}")]
 	Rejected(FsForkError),
+	/// A maintainer refused the fork for good with a lifecycle answer: the parent or the
+	/// destination is missing or deleted, the destination already exists, its group is archived,
+	/// or a record is missing. Sending this body again cannot change the answer.
+	#[error("fork rejected by the volume lifecycle: {0:?}")]
+	LifecycleRejected(VolumeRejectResponse),
 	/// This exact body may already be durable. Pass it to resume_fork; do not
 	/// generate another operation id or recapture its Latest minimum.
 	#[error("fork outcome is unknown; resume the retained operation")]
@@ -31,7 +37,10 @@ pub enum Error {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Refusal {
 	/// The fork job could not run yet: another job holds the destination, the parent has not
-	/// applied the requested position, or a base or region is briefly unavailable.
+	/// applied the requested position, or a base or region is briefly unavailable. As
+	/// `TailUnproven`, the parent's members hold a tail nothing proved committed, which waits
+	/// for a recovery of the parent: a caller that knows the parent's writer is quiet can open
+	/// the parent, whose claim proves the tail, before it resends.
 	Fork(FsForkError),
 	/// The destination's maintainer did not admit the request, or the request found no route
 	/// to one and was not sent.
@@ -43,13 +52,24 @@ pub enum Refusal {
 const FORK_REFUSED_RETRY_AFTER_MS: u64 = 100;
 
 impl Error {
+	/// Whether the fork was refused because the parent's tail is unproven.
+	pub fn tail_unproven(&self) -> bool {
+		matches!(
+			self,
+			Self::Refused {
+				reason: Refusal::Fork(FsForkError::TailUnproven),
+				..
+			}
+		)
+	}
+
 	/// The hint after which the edge sends the retained body again, or `None` for an error
 	/// the edge must not retry.
 	pub fn retry_after_ms(&self) -> Option<u64> {
 		match self {
 			Self::Refused { retry_after_ms, .. } => Some(*retry_after_ms),
 			Self::Preparation(error) => crate::retry_after_ms(error),
-			Self::Rejected(_) | Self::Unknown { .. } => None,
+			Self::Rejected(_) | Self::LifecycleRejected(_) | Self::Unknown { .. } => None,
 		}
 	}
 }
@@ -242,15 +262,14 @@ where
 			error @ (FsForkError::Busy
 			| FsForkError::Lagging
 			| FsForkError::BaseUnavailable
-			| FsForkError::RegionUnavailable),
+			| FsForkError::RegionUnavailable
+			| FsForkError::TailUnproven),
 		))) => Err(refused(Refusal::Fork(error), FORK_REFUSED_RETRY_AFTER_MS)),
 		Ok(ClientResponse::FsForkResponse(FsForkResponse::FsForkError(error))) => {
 			Err(Error::Rejected(error))
 		}
-		// The parent or the destination has no stored record and nothing serves it until
-		// that incarnation is deleted; sending again cannot help.
-		Ok(ClientResponse::VolumeRejectResponse(VolumeRejectResponse::VolumeRecordMissing(_))) => {
-			Err(Error::Rejected(FsForkError::BaseUnavailable))
+		Ok(ClientResponse::VolumeRejectResponse(reject)) if permanent_reject(&reject) => {
+			Err(Error::LifecycleRejected(reject))
 		}
 		// A refusal can answer an expired caller of a job that keeps running, so it never
 		// establishes that durable work was rolled back; the retained body joins that job.
@@ -268,5 +287,71 @@ where
 			None => Err(unknown()),
 		},
 		Ok(_) => Err(unknown()),
+	}
+}
+
+/// Whether a lifecycle answer to a fork holds for good. A missing, deleted or existing volume,
+/// an archived group and a record no maintainer can rebuild do not change by waiting; a
+/// maintainer move, a split, load and an operator repair claim pass.
+fn permanent_reject(reject: &VolumeRejectResponse) -> bool {
+	match reject {
+		VolumeRejectResponse::VolumeNotFound
+		| VolumeRejectResponse::VolumeExists
+		| VolumeRejectResponse::VolumeDeleted
+		| VolumeRejectResponse::VolumeRecordMissing(_)
+		| VolumeRejectResponse::VolumeGroupArchived => true,
+		VolumeRejectResponse::NotMaintainer(_)
+		| VolumeRejectResponse::TabletSplitting
+		| VolumeRejectResponse::Overloaded(_)
+		| VolumeRejectResponse::VolumeUnderRepair(_)
+		| VolumeRejectResponse::VolumeTailUnproven(_) => false,
+	}
+}
+
+/// Encodes a prepared fork body for an application to persist before it sends the body, so it
+/// can resume the same fork after a restart with [`decode_spec`] and [`Client::resume_fork`].
+pub fn encode_spec(spec: &FsForkSpec) -> anyhow::Result<Vec<u8>> {
+	rivet_data::versioned::DepotFsForkSpecData::serialize_with_embedded_version(
+		spec,
+		rivet_data::versioned::DepotFsForkSpecData::LATEST,
+	)
+}
+
+/// Why a persisted fork body does not decode.
+#[derive(Debug, thiserror::Error)]
+pub enum DecodeSpecError {
+	/// The body names the schema version one past this binary's latest, as a newer binary
+	/// writes during a rolling upgrade. Assuming no rollback, it decodes once a binary that knows
+	/// the version handles it, and an application may keep the fork waiting until then; after a
+	/// rollback it waits until such a binary runs again.
+	#[error("fork body version {version} is newer than this binary's latest, {latest}")]
+	NewerVersion { version: u16, latest: u16 },
+	/// No binary decodes the body: it is truncated, corrupt or names no valid version, including
+	/// a version more than one past this binary's latest, which no rolling upgrade produces. An
+	/// application fails the fork rather than wait on it.
+	#[error("fork body does not decode")]
+	Corrupt(#[source] anyhow::Error),
+}
+
+/// Decodes a fork body [`encode_spec`] wrote.
+pub fn decode_spec(bytes: &[u8]) -> Result<FsForkSpec, DecodeSpecError> {
+	let latest = rivet_data::versioned::DepotFsForkSpecData::LATEST;
+	match rivet_data::versioned::DepotFsForkSpecData::deserialize_with_embedded_version(bytes) {
+		Ok(spec) => Ok(spec),
+		Err(error) => match embedded_version(bytes) {
+			Some(version) if version == latest + 1 => {
+				Err(DecodeSpecError::NewerVersion { version, latest })
+			}
+			Some(_) | None => Err(DecodeSpecError::Corrupt(error)),
+		},
+	}
+}
+
+/// The schema version in the two-byte little-endian header vbare puts before every versioned
+/// body, or `None` when the body is too short to hold one.
+fn embedded_version(bytes: &[u8]) -> Option<u16> {
+	match bytes {
+		[low, high, ..] => Some(u16::from_le_bytes([*low, *high])),
+		[] | [_] => None,
 	}
 }

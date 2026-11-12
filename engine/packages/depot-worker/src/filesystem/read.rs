@@ -1,12 +1,21 @@
 //! Executes typed read-session operations against the grant-owned filesystem store.
 
 use super::{
-	session::{Error, Result},
+	session::{Error, Result, SessionUse},
 	store::FilesystemStore,
 };
 use depot_fs_core::store::{Row, RowKey, RowRange};
 use futures_util::{StreamExt, TryStreamExt};
-use rivet_data::generated::{shared_depot_fs_read_v1::*, shared_depot_types_v1::VolumeLogPosition};
+use rivet_data::generated::{
+	shared_depot_fs_read_v2::*, shared_depot_fs_v2::FsCut, shared_depot_types_v1::VolumeLogPosition,
+};
+
+/// The position a read's cut pins. The volume has one claim log, so a cut names claim log 0
+/// alone; a cut over any other log is refused as corrupt.
+fn pinned_cut(cut: Option<FsCut>) -> Result<Option<VolumeLogPosition>> {
+	cut.map(|cut| cut.into_single().map_err(|_| Error::Corrupt))
+		.transpose()
+}
 use uuid::Uuid;
 
 impl FilesystemStore {
@@ -27,7 +36,13 @@ impl FilesystemStore {
 			return Err(Error::NotFound);
 		}
 		let session = self
-			.open_session(key, &record, applied.clone(), Some(applied.volume_seq))
+			.open_session_for(
+				key,
+				&record,
+				applied.clone(),
+				Some(applied.volume_seq),
+				SessionUse::OneRequest,
+			)
 			.await?;
 		let _close = SessionClose {
 			store: self,
@@ -68,17 +83,23 @@ impl FilesystemStore {
 		ordered: bool,
 		applied: VolumeLogPosition,
 		as_of: u64,
+		usage: SessionUse,
 	) -> Result<std::sync::Arc<super::session::ReadSession>> {
 		if ordered {
-			self.open_ordered_session(key, record, applied, Some(as_of))
+			self.open_ordered_session(key, record, applied, Some(as_of), usage)
 				.await
 		} else {
-			self.open_session(key, record, applied, Some(as_of)).await
+			self.open_session_for(key, record, applied, Some(as_of), usage)
+				.await
 		}
 	}
 
 	/// Opens a session at `position`, or at the latest position the reader may use when it is
 	/// `None`, and returns it with the position it serves.
+	#[allow(
+		clippy::too_many_arguments,
+		reason = "The captured snapshot bounds and request lifetime are validated together"
+	)]
 	async fn open_pinned(
 		&self,
 		key: &depot_types::VolumeLogKey,
@@ -87,6 +108,7 @@ impl FilesystemStore {
 		applied: Option<VolumeLogPosition>,
 		settled: Option<VolumeLogPosition>,
 		record: Option<depot_fs_core::FsVolumeRecord>,
+		usage: SessionUse,
 	) -> Result<(
 		std::sync::Arc<super::session::ReadSession>,
 		VolumeLogPosition,
@@ -113,7 +135,7 @@ impl FilesystemStore {
 			return Err(Error::Fenced);
 		}
 		let session = self
-			.register_read(key, &record, ordered, applied, position.volume_seq)
+			.register_read(key, &record, ordered, applied, position.volume_seq, usage)
 			.await?;
 		Ok((session, position))
 	}
@@ -207,6 +229,10 @@ impl FilesystemStore {
 					.base_chunk_keys(v)
 					.await
 					.map(FsReadResponse::FsBaseKeysPage),
+				FsReadOperation::FsBaseRowsRequest(v) => self
+					.read_base_rows(v)
+					.await
+					.map(FsReadResponse::FsBaseRowsPage),
 				_ => unreachable!("source operation classified above"),
 			};
 		}
@@ -214,16 +240,17 @@ impl FilesystemStore {
 			FsReadTarget::VolumeLogKey(key) => depot_types::VolumeLogKey(key.clone()),
 			FsReadTarget::VolumeKey(key) => {
 				let latest = match &request.operation {
-					FsReadOperation::FsReadOpen(FsReadOpen { position, .. })
-					| FsReadOperation::FsReadKeys(FsReadKeys { position, .. })
-					| FsReadOperation::FsReadRaw(FsReadRaw { position, .. }) => position.is_none(),
+					FsReadOperation::FsReadOpen(FsReadOpen { cut, .. })
+					| FsReadOperation::FsReadKeys(FsReadKeys { cut, .. })
+					| FsReadOperation::FsReadRaw(FsReadRaw { cut, .. }) => cut.is_none(),
 					FsReadOperation::FsReadGet(_)
 					| FsReadOperation::FsReadScan(_)
 					| FsReadOperation::FsReadChunks(_)
 					| FsReadOperation::FsReadClose(_)
 					| FsReadOperation::FsBaseChunksRequest(_)
 					| FsReadOperation::FsForkMetadataRequest(_)
-					| FsReadOperation::FsBaseKeysRequest(_) => false,
+					| FsReadOperation::FsBaseKeysRequest(_)
+					| FsReadOperation::FsBaseRowsRequest(_) => false,
 				};
 				if request.client_epoch.is_some() || !latest {
 					return Err(Error::Corrupt);
@@ -254,10 +281,11 @@ impl FilesystemStore {
 				.open_pinned(
 					&key,
 					request.client_epoch,
-					point.position,
+					pinned_cut(point.cut)?,
 					applied,
 					settled.clone(),
 					record,
+					SessionUse::OneRequest,
 				)
 				.await?
 				.0;
@@ -275,10 +303,13 @@ impl FilesystemStore {
 			if bytes > self.config.max_read_bytes {
 				return Err(Error::TooLarge);
 			}
+			// The store knows no commit beyond what it read; the maintainer raises
+			// `committed` to the commits it knows of when it answers.
 			return Ok(FsReadResponse::FsReadValues(FsReadValues {
 				volume_log_key: key.into(),
-				applied: session.applied.clone(),
+				applied: session.applied_cut(),
 				as_of: session.as_of,
+				committed: session.as_of,
 				values,
 			}));
 		}
@@ -287,10 +318,11 @@ impl FilesystemStore {
 				.open_pinned(
 					&key,
 					request.client_epoch,
-					raw.position,
+					pinned_cut(raw.cut)?,
 					applied,
 					settled,
 					record,
+					SessionUse::OneRequest,
 				)
 				.await?
 				.0;
@@ -304,11 +336,11 @@ impl FilesystemStore {
 			};
 			return Ok(FsReadResponse::FsReadRawVersions(FsReadRawVersions {
 				volume_log_key: key.into(),
-				applied: session.applied.clone(),
+				applied: session.applied_cut(),
 				as_of: session.as_of,
 				versions: versions
 					.into_iter()
-					.map(|(seq, raw, decoded)| {
+					.map(|(seq, claim_log, raw, decoded)| {
 						let (deleted, decoded, decode_error) = match decoded {
 							Ok(Some(value)) => (false, Some(value.into()), None),
 							Ok(None) => (true, None, None),
@@ -316,6 +348,7 @@ impl FilesystemStore {
 						};
 						FsRawVersion {
 							seq,
+							claim_log,
 							raw: raw.into(),
 							deleted,
 							decoded,
@@ -326,15 +359,21 @@ impl FilesystemStore {
 			}));
 		}
 		if let FsReadOperation::FsReadOpen(open) = request.operation {
-			let latest = open.position.is_none();
+			let latest = open.cut.is_none();
+			let usage = if request.client_epoch.is_some() {
+				SessionUse::OneRequest
+			} else {
+				SessionUse::Reusable
+			};
 			let (session, position) = self
 				.open_pinned(
 					&key,
 					request.client_epoch,
-					open.position,
+					pinned_cut(open.cut)?,
 					applied,
 					settled,
 					record,
+					usage,
 				)
 				.await?;
 			let now = self.clock.observe().map_err(|_| Error::Fenced)?.boot_ms;
@@ -356,13 +395,14 @@ impl FilesystemStore {
 			let rows = match &open.prefetch {
 				Some(prefetch) => {
 					let rows = self.prefetch_rows(&session, prefetch).await?;
-					record_served(&session, rows.iter().map(|(_, row, _)| row));
+					record_served(&session, rows.iter().map(|(_, _, row, _)| row));
 					Some(
 						rows.into_iter()
-							.map(|(key, value, change_seq)| FsReadRow {
+							.map(|(key, claim_log, value, change_seq)| FsReadRow {
 								change_seq,
 								key: key.into(),
 								value: value.into(),
+								claim_log,
 							})
 							.collect(),
 					)
@@ -380,10 +420,13 @@ impl FilesystemStore {
 				},
 				// A latest open reports the position it serves as the applied position, which
 				// is what the reader moves its snapshot to.
-				applied: if latest {
-					position.clone()
-				} else {
-					session.applied.clone()
+				applied: match &session.cut {
+					Some(cut) => cut.clone(),
+					None => FsCut::single(if latest {
+						position.clone()
+					} else {
+						session.applied.clone()
+					}),
 				},
 				as_of: session.as_of,
 				rows,
@@ -399,7 +442,8 @@ impl FilesystemStore {
 			| FsReadOperation::FsForkMetadataRequest(_)
 			| FsReadOperation::FsBaseKeysRequest(_)
 			| FsReadOperation::FsReadKeys(_)
-			| FsReadOperation::FsReadRaw(_) => unreachable!("handled before row reads"),
+			| FsReadOperation::FsReadRaw(_)
+			| FsReadOperation::FsBaseRowsRequest(_) => unreachable!("handled before row reads"),
 		};
 		// A session read uses the session its open registered; a claim read registers one for
 		// this request only and releases it when the read finishes or is cancelled.
@@ -426,16 +470,16 @@ impl FilesystemStore {
 			}
 		};
 		let mut change_seq = None;
-		let rows: Vec<(RowKey, Row)> = match request.operation {
+		let rows: Vec<(RowKey, u16, Row)> = match request.operation {
 			FsReadOperation::FsReadGet(v) => {
 				let key = RowKey::from(v.key);
 				if matches!(key, RowKey::Inode(_)) {
-					change_seq = session.version(&key).await?.map(|(seq, _)| seq);
+					change_seq = session.version(&key).await?.map(|(seq, _, _)| seq);
 				}
 				session
-					.get(&key)
+					.get_stamped(&key)
 					.await?
-					.map(|row| (key, row))
+					.map(|(claim_log, row)| (key, claim_log, row))
 					.into_iter()
 					.collect()
 			}
@@ -457,7 +501,9 @@ impl FilesystemStore {
 					&mut bytes,
 				)
 				.await?;
-				rows
+				rows.into_iter()
+					.map(|(key, claim_log, row)| (key, claim_log, row))
+					.collect()
 			}
 			FsReadOperation::FsReadClose(_)
 			| FsReadOperation::FsReadOpen(_)
@@ -465,19 +511,21 @@ impl FilesystemStore {
 			| FsReadOperation::FsForkMetadataRequest(_)
 			| FsReadOperation::FsBaseKeysRequest(_)
 			| FsReadOperation::FsReadKeys(_)
-			| FsReadOperation::FsReadRaw(_) => unreachable!("handled before row reads"),
+			| FsReadOperation::FsReadRaw(_)
+			| FsReadOperation::FsBaseRowsRequest(_) => unreachable!("handled before row reads"),
 		};
-		record_served(&session, rows.iter().map(|(_, row)| row));
+		record_served(&session, rows.iter().map(|(_, _, row)| row));
 		Ok(FsReadResponse::FsReadRows(FsReadRows {
 			session: reply_session,
-			applied: session.applied.clone(),
+			applied: session.applied_cut(),
 			as_of: session.as_of,
 			rows: rows
 				.into_iter()
-				.map(|(key, value)| FsReadRow {
+				.map(|(key, claim_log, value)| FsReadRow {
 					change_seq,
 					key: key.into(),
 					value: value.into(),
+					claim_log,
 				})
 				.collect(),
 		}))
@@ -495,7 +543,7 @@ impl FilesystemStore {
 		&self,
 		session: &super::session::ReadSession,
 		prefetch: &FsOpenPrefetch,
-	) -> Result<Vec<(RowKey, Row, Option<u64>)>> {
+	) -> Result<Vec<(RowKey, u16, Row, Option<u64>)>> {
 		let mut most_rows = prefetch
 			.path
 			.len()
@@ -516,21 +564,26 @@ impl FilesystemStore {
 		let metadata = async {
 			let (root, format, orphans) = futures_util::try_join!(
 				session.version(&RowKey::Inode(depot_fs_core::ROOT_INO)),
-				session.get(&RowKey::Format),
+				session.get_stamped(&RowKey::Format),
 				session.scan(&RowRange::Orphans, None, PREFETCH_ORPHAN_ROWS),
 			)?;
 			let mut rows = Vec::new();
-			if let Some((change_seq, Some(row))) = root {
+			if let Some((change_seq, claim_log, Some(row))) = root {
 				rows.push((
 					RowKey::Inode(depot_fs_core::ROOT_INO),
+					claim_log,
 					row,
 					Some(change_seq),
 				));
 			}
-			if let Some(row) = format {
-				rows.push((RowKey::Format, row, None));
+			if let Some((claim_log, row)) = format {
+				rows.push((RowKey::Format, claim_log, row, None));
 			}
-			rows.extend(orphans.into_iter().map(|(key, row)| (key, row, None)));
+			rows.extend(
+				orphans
+					.into_iter()
+					.map(|(key, claim_log, row)| (key, claim_log, row, None)),
+			);
 			Ok::<_, Error>(rows)
 		};
 		let path = async {
@@ -540,7 +593,12 @@ impl FilesystemStore {
 				for name in &prefetch.xattrs {
 					reads.push(async move {
 						let key = RowKey::Xattr(ino, name.to_vec());
-						Ok::<_, Error>(session.get(&key).await?.map(|row| (key, row, None)))
+						Ok::<_, Error>(
+							session
+								.get_stamped(&key)
+								.await?
+								.map(|(claim_log, row)| (key, claim_log, row, None)),
+						)
 					});
 				}
 				let xattrs = futures_util::stream::iter(reads)
@@ -564,7 +622,11 @@ impl FilesystemStore {
 					let values = session
 						.scan(&range, None, depot_fs_core::wire::PREFETCH_KV_ROWS)
 						.await?;
-					rows.extend(values.into_iter().map(|(key, row)| (key, row, None)));
+					rows.extend(
+						values
+							.into_iter()
+							.map(|(key, claim_log, row)| (key, claim_log, row, None)),
+					);
 				}
 				Ok::<_, Error>(rows)
 			});
@@ -589,23 +651,25 @@ const OPEN_READS_IN_FLIGHT: usize = 16;
 async fn resolve_prefetch_path(
 	session: &super::session::ReadSession,
 	path: &[vbare::Bytes],
-	rows: &mut Vec<(RowKey, Row, Option<u64>)>,
+	rows: &mut Vec<(RowKey, u16, Row, Option<u64>)>,
 ) -> Result<Option<u64>> {
 	let mut parent = depot_fs_core::ROOT_INO;
 	for name in path {
 		let key = RowKey::Dentry(parent, name.to_vec());
-		let Some(row) = session.get(&key).await? else {
+		let Some((claim_log, row)) = session.get_stamped(&key).await? else {
 			return Ok(None);
 		};
 		let Row::Dentry(dentry) = &row else {
 			return Err(Error::Corrupt);
 		};
 		let child = dentry.child;
-		rows.push((key, row, None));
-		let Some((change_seq, Some(inode))) = session.version(&RowKey::Inode(child)).await? else {
+		rows.push((key, claim_log, row, None));
+		let Some((change_seq, claim_log, Some(inode))) =
+			session.version(&RowKey::Inode(child)).await?
+		else {
 			return Ok(None);
 		};
-		rows.push((RowKey::Inode(child), inode, Some(change_seq)));
+		rows.push((RowKey::Inode(child), claim_log, inode, Some(change_seq)));
 		parent = child;
 	}
 	Ok(Some(parent))
@@ -627,7 +691,7 @@ async fn read_chunk_ranges(
 	config: &super::session::SessionConfig,
 	ino: u64,
 	ranges: &[FsChunkRange],
-	rows: &mut Vec<(RowKey, Row)>,
+	rows: &mut Vec<(RowKey, u16, Row)>,
 	bytes: &mut usize,
 ) -> Result<()> {
 	let mut chunks = 0usize;
@@ -657,8 +721,11 @@ async fn read_chunk_ranges(
 				if *bytes > config.max_read_bytes {
 					return Err(Error::TooLarge);
 				}
+				// Chunks resolve through the fork base layers, which carry no stamp; the
+				// volume's one claim log wrote every chunk of its own layer.
 				rows.push((
 					RowKey::Chunk(ino, first + offset as u64),
+					rivet_data::ROOT_CLAIM_LOG,
 					Row::Bytes(data.into()),
 				));
 			}
@@ -694,9 +761,15 @@ async fn read_kv_values(
 		Some(Row::Dentry(dentry)) if dentry.kind == depot_fs_core::FsKind::Kv => dentry.child,
 		Some(_) | None => return Ok(vec![None; keys.len()]),
 	};
+	// One batch, so a forked volume's inherited keys cost one parallel round of one request per
+	// base link rather than a serial walk per key.
+	let row_keys: Vec<RowKey> = keys
+		.iter()
+		.map(|wanted| RowKey::Kv(ino, wanted.to_vec()))
+		.collect();
 	let mut values = Vec::with_capacity(keys.len());
-	for wanted in keys {
-		let value = match session.get(&RowKey::Kv(ino, wanted.to_vec())).await? {
+	for row in session.get_many(&row_keys).await? {
+		let value = match row {
 			Some(Row::Bytes(bytes)) => Some(vbare::Bytes::from(bytes)),
 			Some(_) => return Err(Error::Corrupt),
 			None => None,
@@ -724,7 +797,7 @@ fn record_served<'a>(
 		.map(|row| match row {
 			Row::Bytes(bytes) => bytes.len() as u64,
 			Row::Inode(inode) => inode.inline.as_ref().map_or(0, |inline| inline.len()) as u64,
-			Row::Format(_) | Row::Dentry(_) | Row::Unit => 0,
+			Row::Format(_) | Row::Dentry(_) | Row::Unit | Row::KvRangeWhiteout(_) => 0,
 		})
 		.sum();
 	crate::metrics::READ_SESSION_ROWS

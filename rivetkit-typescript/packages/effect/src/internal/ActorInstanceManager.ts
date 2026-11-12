@@ -35,6 +35,47 @@ export type Instance<
 	) => Fiber.Fiber<A, E>;
 	readonly scope: Scope.Closeable;
 	readonly state?: ActorStateAdapter.ActorState<StateDefinition>;
+	readonly connectionScope: (connectionId: string) => Scope.Scope;
+	readonly closeConnectionScope: (
+		connectionId: string,
+	) => Effect.Effect<void>;
+};
+
+/**
+ * Tracks one scope per connection, created when a handler first reads it.
+ * Each scope is a child of the wake scope, so sleep and destroy also close it.
+ */
+const makeConnectionScopes = (
+	wakeScope: Scope.Scope,
+	isConnected: (connectionId: string) => boolean,
+) => {
+	const scopes = new Map<string, Scope.Closeable>();
+
+	return {
+		connectionScope: (connectionId: string): Scope.Scope => {
+			const existing = scopes.get(connectionId);
+			if (existing) return existing;
+
+			const scope = Scope.forkUnsafe(wakeScope);
+			// Core removes a connection before it reports the disconnect. So a
+			// connection that is still present will get a later close, and one
+			// that is gone gets a closed scope, which runs finalizers immediately.
+			if (isConnected(connectionId)) {
+				scopes.set(connectionId, scope);
+			} else {
+				Scope.closeUnsafe(scope, Exit.void);
+			}
+			return scope;
+		},
+		closeConnectionScope: (connectionId: string) =>
+			Effect.suspend(() => {
+				const scope = scopes.get(connectionId);
+				if (!scope) return Effect.void;
+
+				scopes.delete(connectionId);
+				return Scope.close(scope, Exit.void);
+			}),
+	};
 };
 
 export const make = Effect.fnUntraced(function* <
@@ -96,6 +137,9 @@ export const make = Effect.fnUntraced(function* <
 				runFork,
 				scope,
 				state,
+				...makeConnectionScopes(scope, (connectionId) =>
+					c.conns.has(connectionId),
+				),
 			};
 		}).pipe(
 			Effect.onError((cause) =>
@@ -121,6 +165,16 @@ export const make = Effect.fnUntraced(function* <
 					stateAdapter.publishChange(instance, newState);
 				}
 			: undefined,
+		onDisconnect: async (
+			c: { readonly actorId: string },
+			conn: { readonly id: string },
+		) => {
+			const instance = instances.get(c.actorId);
+			// The disconnect can arrive after teardown closed the wake scope.
+			if (!instance) return;
+
+			await runPromise(instance.closeConnectionScope(conn.id));
+		},
 		onTeardown: async (c: { readonly actorId: string }) => {
 			return runPromise(
 				Effect.gen(function* () {

@@ -1,6 +1,8 @@
 //! Requests on this gateway process waiting for actors to start.
 //!
-//! The process keeps at most one wait per actor. The first request for a not-running actor
+//! The process keeps at most one wait per actor, keyed by the actor's id within the group its
+//! volumes are in: a forked namespace's actors keep their parent's ids, and requests for the
+//! parent's actor and the fork's must never share a wait or its notices. The first request for a not-running actor
 //! creates it, subscribes to the wait's own notice subject and registers one start waiter in the
 //! actor state machine; later requests for the same actor join it and register nothing. The
 //! actor's host sends start notices to that subject as the actor moves along its start path, and
@@ -40,6 +42,13 @@ pub enum Notice {
 	EpoxyAlreadyReserved { reservation_id: Id },
 	/// The actor is being destroyed and took its waiters. A getOrCreate creates it again.
 	Destroyed,
+	/// The V2 migrator recalled the actor and took its waiters, so V2 serves it again.
+	MigratingFromV2,
+	/// The actor's key belongs to V2 and the actor took its waiters, so V2 serves it.
+	DelegatedToV2,
+	/// The forked actor's database fork finished. The actor kept its waiters, so its start
+	/// notices follow once it has a node; a fork create answers on this one.
+	Forked,
 }
 
 impl Notice {
@@ -59,6 +68,9 @@ impl Notice {
 				}
 			}
 			wire::ActorStartNoticeKind::ActorStartNoticeDestroyed => Notice::Destroyed,
+			wire::ActorStartNoticeKind::ActorStartNoticeMigratingFromV2 => Notice::MigratingFromV2,
+			wire::ActorStartNoticeKind::ActorStartNoticeDelegatedToV2 => Notice::DelegatedToV2,
+			wire::ActorStartNoticeKind::ActorStartNoticeForked => Notice::Forked,
 		})
 	}
 }
@@ -91,13 +103,21 @@ impl Completion {
 	}
 }
 
+/// The actor a wait is for: its id within the group its volumes are in, `None` for an actor at
+/// the legacy unprefixed keys. An id alone names a parent's actor and every fork's copy of it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct WaitKey {
+	pub group: Option<rivet_keys::keys::codec::GroupId>,
+	pub actor_id: Id,
+}
+
 /// The process's start waits, owned by the gateway router state.
 pub struct StartWaits {
 	env: Arc<dyn rivet_env::Env>,
 	/// Where waits subscribe for their notices. `None` leaves every wait to its fallback poll.
 	ups: Option<universalpubsub::PubSub>,
 	capacity: usize,
-	waits: scc::HashMap<Id, Wait>,
+	waits: scc::HashMap<WaitKey, Wait>,
 	len: AtomicUsize,
 	next_wait_id: AtomicU64,
 	/// Whether the near-capacity warning fired since usage was last below 90 %.
@@ -126,8 +146,8 @@ impl StartWaits {
 
 	/// Joins the actor's wait, creating it when none exists. Returns `None` when the process holds
 	/// its capacity of waits, so the caller waits on its fallback poll alone.
-	pub async fn join(self: &Arc<Self>, actor_id: Id) -> Option<WaitGuard> {
-		let entry = self.waits.entry_async(actor_id).await;
+	pub async fn join(self: &Arc<Self>, key: WaitKey) -> Option<WaitGuard> {
+		let entry = self.waits.entry_async(key).await;
 		let (wait_id, created, notices, subscription) = match entry {
 			scc::hash_map::Entry::Occupied(mut occupied) => {
 				let wait = occupied.get_mut();
@@ -147,7 +167,7 @@ impl StartWaits {
 				}
 				let wait_id = self.next_wait_id.fetch_add(1, Ordering::Relaxed);
 				let (sender, _receiver) = watch::channel(None);
-				let subscription = Arc::new(Mutex::new(self.subscribe(actor_id, wait_id)));
+				let subscription = Arc::new(Mutex::new(self.subscribe(key.actor_id, wait_id)));
 				vacant.insert_entry(Wait {
 					wait_id,
 					notices: sender.clone(),
@@ -163,7 +183,7 @@ impl StartWaits {
 		let updates = notices.subscribe();
 		Some(WaitGuard {
 			waits: self.clone(),
-			actor_id,
+			key,
 			wait_id,
 			created,
 			notices,
@@ -188,8 +208,8 @@ impl StartWaits {
 
 	/// Completes the actor's wait if it is the one `wait_id` names, for an answer that settled
 	/// the wait locally without a notice.
-	pub async fn complete(&self, actor_id: Id, wait_id: u64, notice: Notice) -> Completion {
-		let Some(wait) = self.waits.get_async(&actor_id).await else {
+	pub async fn complete(&self, key: WaitKey, wait_id: u64, notice: Notice) -> Completion {
+		let Some(wait) = self.waits.get_async(&key).await else {
 			return Completion::UnknownWait;
 		};
 		if wait.wait_id != wait_id {
@@ -215,8 +235,8 @@ impl StartWaits {
 	}
 
 	/// Leaves the wait; the last request to leave removes it, and with it its subscription.
-	async fn release(&self, actor_id: Id, wait_id: u64) {
-		let entry = self.waits.entry_async(actor_id).await;
+	async fn release(&self, key: WaitKey, wait_id: u64) {
+		let entry = self.waits.entry_async(key).await;
 		let scc::hash_map::Entry::Occupied(mut occupied) = entry else {
 			return;
 		};
@@ -257,7 +277,7 @@ impl StartWaits {
 /// done; dropping it without that releases it on a background task.
 pub struct WaitGuard {
 	waits: Arc<StartWaits>,
-	actor_id: Id,
+	key: WaitKey,
 	wait_id: u64,
 	created: bool,
 	notices: watch::Sender<Option<Notice>>,
@@ -313,11 +333,11 @@ impl WaitGuard {
 					Read::Request(Ok(Some(request))) => request,
 					Read::Request(Ok(None)) => break,
 					Read::Request(Err(error)) => {
-						tracing::debug!(actor_id = %self.actor_id, wait_id = self.wait_id, ?error, "start notice subscription ended; the wait polls instead");
+						tracing::debug!(actor_id = %self.key.actor_id, wait_id = self.wait_id, ?error, "start notice subscription ended; the wait polls instead");
 						break;
 					}
 				};
-				match decode(&request, self.actor_id) {
+				match decode(&request, self.key.actor_id) {
 					Ok(notice) => {
 						let _ = request.reply(&[]);
 						if self.waits.drops_notices() {
@@ -329,7 +349,7 @@ impl WaitGuard {
 					}
 					Err(error) => {
 						tracing::warn!(
-							actor_id = %self.actor_id,
+							actor_id = %self.key.actor_id,
 							wait_id = self.wait_id,
 							?error,
 							"rejecting an invalid actor start notice; the sender is out of date or misrouted"
@@ -368,7 +388,7 @@ impl WaitGuard {
 
 	pub async fn finish(mut self) {
 		self.released = true;
-		self.waits.release(self.actor_id, self.wait_id).await;
+		self.waits.release(self.key, self.wait_id).await;
 	}
 }
 
@@ -378,10 +398,10 @@ impl Drop for WaitGuard {
 			return;
 		}
 		let waits = self.waits.clone();
-		let actor_id = self.actor_id;
+		let key = self.key;
 		let wait_id = self.wait_id;
 		self.waits.env.spawn(Box::pin(async move {
-			waits.release(actor_id, wait_id).await;
+			waits.release(key, wait_id).await;
 		}));
 	}
 }

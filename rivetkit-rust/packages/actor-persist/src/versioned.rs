@@ -628,6 +628,18 @@ impl_v1_body!(
 	"workflow trace context"
 );
 
+/// The individual actor forks behind an actor and the fork whose hook last ran, stored in
+/// `_rivet_meta`, where an older runtime that knows nothing of forks leaves it alone.
+pub enum ForkState {
+	V1(crate::generated::fork_v1::ForkState),
+}
+
+impl_v1_body!(
+	ForkState,
+	crate::generated::fork_v1::ForkState,
+	"fork state"
+);
+
 /// The error for a version this envelope cannot decode.
 fn unsupported_version(detail: String) -> DecodeError {
 	DecodeError::with_detail(DecodeErrorKind::UnsupportedVersion, 0, detail)

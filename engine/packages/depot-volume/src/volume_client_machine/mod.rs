@@ -235,6 +235,7 @@ impl EphemeralStateMachine for VolumeClientMachine {
 				.claim_entry
 				.map(|claim_entry| claim_entry.written_at_unix_ms),
 			has_base_chain: state.has_base_chain,
+			lazy_fork: state.lazy_fork.clone(),
 			granted_claim: state.granted_claim,
 			close_acknowledged: state.close_acknowledged,
 			opened_empty: state.opened_empty,

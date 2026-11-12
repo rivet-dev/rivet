@@ -20,23 +20,24 @@ use std::{
 
 use anyhow::{Result, anyhow};
 use libsqlite3_sys::{
-	SQLITE_OPEN_CREATE, SQLITE_OPEN_READWRITE, sqlite3_compileoption_used, sqlite3_get_autocommit,
+	SQLITE_INTERRUPT, SQLITE_OPEN_CREATE, SQLITE_OPEN_READWRITE, sqlite3_compileoption_used,
+	sqlite3_get_autocommit,
 };
 use parking_lot::{Condvar, Mutex};
 use tokio::sync::{Notify, oneshot, watch};
 
 use crate::{
-	guard::{ConnectionGuard, InstalledGuard},
+	guard::{CommandProgress, ConnectionGuard},
 	optimization_flags::sqlite_optimization_flags,
 	page_buffer::PageBudget,
 	query::{
-		BindParam, ExecuteResult, QueryResult, exec_statements, exec_statements_profiled,
-		execute_single_statement, execute_single_statement_profiled,
+		BindParam, ExecuteResult, QueryResult, SqliteStatementError, exec_statements,
+		exec_statements_profiled, execute_single_statement, execute_single_statement_profiled,
 	},
 	vfs::{
-		NativeConnection, NativeVfsHandle, SqliteCommitIndeterminateError, SqliteOperationProfile,
-		SqliteRoundTripCounts, SqliteVfsMetrics, configure_connection_for_database,
-		open_connection, sqlite_exec,
+		CorkClose, NativeConnection, NativeVfsHandle, SqliteCommitIndeterminateError,
+		SqliteOperationProfile, SqliteRoundTripCounts, SqliteVfsMetrics,
+		configure_connection_for_database, open_connection, sqlite_exec,
 	},
 };
 
@@ -333,8 +334,9 @@ struct DatabaseSlot {
 	/// Whether this database's work is background work, such as an actor going to sleep. Read
 	/// each time the database is queued.
 	background: AtomicBool,
-	/// Installed on the connection when it opens; boxed so SQLite's pointer to it stays valid.
-	guard: Option<Box<InstalledGuard>>,
+	/// The progress handler's state, with the connection's guard if it has one. Installed on
+	/// the connection when it opens; boxed so SQLite's pointer to it stays valid.
+	progress: Box<CommandProgress>,
 	work: Mutex<SlotWork>,
 }
 
@@ -448,8 +450,8 @@ impl SqlitePool {
 			metrics.set_pool_threads(max_threads as u64);
 		}
 		let page_budget = process_page_budget(metrics.clone());
-		// Every connection opens on a pool, so the first pool installs the pager cache before
-		// SQLite initializes.
+		// The startup probe may have installed the cache already. This also covers paths that
+		// construct a pool first and attaches the pool's metrics to the shared cache.
 		crate::pager_cache::install(
 			sqlite_optimization_flags()
 				.pager_process_cache_kib
@@ -811,6 +813,9 @@ impl DatabaseSlot {
 	}
 
 	/// Queues one command, or fails at once when the database is closing or its queue is full.
+	/// A discard of the corked commits is a control path like the close and is never refused
+	/// for a full queue: refusing it would leave the corked commits for the close, whose
+	/// connection drop sends them to depot.
 	fn enqueue(self: &Arc<Self>, command: SqliteCommand) -> Result<()> {
 		match self.inner.state.load(Ordering::Acquire) {
 			STATE_RUNNING => {}
@@ -819,7 +824,8 @@ impl DatabaseSlot {
 			other => return Err(anyhow!("unknown sqlite worker state {other}")),
 		}
 		let mut work = self.work.lock();
-		if work.commands.len() >= SQLITE_WORKER_QUEUE_CAPACITY {
+		let control = matches!(command, SqliteCommand::DiscardCork { .. });
+		if !control && work.commands.len() >= SQLITE_WORKER_QUEUE_CAPACITY {
 			drop(work);
 			if let Some(metrics) = &self.inner.metrics {
 				metrics.record_worker_queue_overload();
@@ -987,9 +993,7 @@ impl DatabaseSlot {
 		match action {
 			Action::Open(ready) => match open_database_connection(&self.vfs, &self.file_name)
 				.and_then(|db| {
-					if let Some(guard) = &self.guard {
-						guard.install(db.as_ptr())?;
-					}
+					self.progress.install(db.as_ptr())?;
 					Ok(db)
 				}) {
 				Ok(db) => {
@@ -1012,11 +1016,20 @@ impl DatabaseSlot {
 				}
 			},
 			Action::Run(mut open, command) => {
-				if let Some(guard) = &self.guard {
+				// After a discard of the corked commits the connection only closes. A command
+				// that would run SQL or uncork, even one queued before the discard ran, would
+				// otherwise commit straight to depot, since the cork is gone.
+				if self.inner.discard_requested.load(Ordering::Acquire)
+					&& command.command.refused_after_discard()
+				{
+					fail_command(command.command);
+					return ConnectionSlot::Parked(open);
+				}
+				if let Some(guard) = self.progress.guard() {
 					guard.reset();
 				}
 				let _inflight = WorkerInflightGuard::new(metrics);
-				let max_result_bytes = self.guard.as_ref().map(|guard| guard.max_result_bytes());
+				let max_result_bytes = self.progress.guard().map(|guard| guard.max_result_bytes());
 				run_command(
 					&mut open.db,
 					&self.vfs,
@@ -1027,6 +1040,7 @@ impl DatabaseSlot {
 					&mut open.transaction,
 					&mut open.pending_uncork,
 					&self.inner.explicit_transaction,
+					&self.progress,
 				);
 				report_vfs_memory(&open.db, metrics);
 				ConnectionSlot::Parked(open)
@@ -1041,6 +1055,13 @@ impl DatabaseSlot {
 					fail_queued_commands(&mut work.commands);
 					work.close_requested_at
 				};
+				// A discard the close overtook, or one that failed, still drops the corked
+				// commits before the connection's drop would send them to depot.
+				if let Some(open) = &open
+					&& self.inner.discard_requested.load(Ordering::Acquire)
+				{
+					open.db.discard_corked_commits();
+				}
 				drop(open);
 				if let Some(metrics) = metrics {
 					metrics.set_vfs_cached_bytes(0);
@@ -1065,6 +1086,17 @@ impl Drop for DatabaseSlot {
 		if let ConnectionSlot::Parked(open) =
 			std::mem::replace(&mut work.connection, ConnectionSlot::Gone)
 		{
+			// The orphan's close drops the connection, which would send corked commits to
+			// depot.
+			if self.inner.discard_requested.load(Ordering::Acquire) {
+				open.db.discard_corked_commits();
+			}
+			// The orphaned connection outlives this slot's progress state.
+			// SAFETY: the slot is being dropped, so no pool thread holds it or runs a
+			// statement on this parked connection.
+			unsafe {
+				CommandProgress::uninstall(open.db.as_ptr());
+			}
 			self.shared.orphan(open.db);
 		}
 		self.shared.cancel_idle(self.id);
@@ -1103,6 +1135,25 @@ struct SqliteWorkerInner {
 	/// command's reply so a caller that sees the reply also sees the new state.
 	/// Reset to `false` when the database stops because the connection is gone.
 	explicit_transaction: watch::Sender<bool>,
+	/// The owner asked to drop the corked commits. Set before the discard is queued, so every
+	/// later SQL command, cork or uncork fails as closing instead of committing straight to
+	/// depot, and the close drops the corked commits even when the discard never ran.
+	discard_requested: AtomicBool,
+}
+
+impl SqliteCommand {
+	/// Whether the command fails as closing once a discard of the corked commits was
+	/// requested: every command that runs SQL or moves the cork.
+	fn refused_after_discard(&self) -> bool {
+		match self {
+			SqliteCommand::Execute { .. }
+			| SqliteCommand::Exec { .. }
+			| SqliteCommand::ExecuteBatch { .. }
+			| SqliteCommand::Cork { .. }
+			| SqliteCommand::Uncork { .. } => true,
+			SqliteCommand::DiscardCork { .. } => false,
+		}
+	}
 }
 
 enum SqliteCommand {
@@ -1123,9 +1174,14 @@ enum SqliteCommand {
 		reply: oneshot::Sender<Result<SqliteWorkerResult<Vec<ExecuteResult>>>>,
 	},
 	/// Holds later commits in memory; see `NativeDatabase::cork_commits`.
-	Cork { reply: oneshot::Sender<Result<()>> },
+	Cork {
+		close: CorkClose,
+		reply: oneshot::Sender<Result<()>>,
+	},
 	/// Sends the corked commits as one; see `NativeDatabase::uncork_commits`.
 	Uncork { reply: oneshot::Sender<Result<()>> },
+	/// Drops the corked commits; see `NativeDatabase::discard_corked_commits`.
+	DiscardCork { reply: oneshot::Sender<Result<()>> },
 }
 
 #[derive(Debug)]
@@ -1221,6 +1277,7 @@ impl SqliteWorkerHandle {
 			closed: Notify::new(),
 			ready: Mutex::new(Some(ready_rx)),
 			explicit_transaction: watch::Sender::new(false),
+			discard_requested: AtomicBool::new(false),
 		});
 		let shared = &pool.owner.shared;
 		let id = {
@@ -1243,7 +1300,7 @@ impl SqliteWorkerHandle {
 			last_used_ns: AtomicU64::new(0),
 			idle_queued: AtomicBool::new(false),
 			background: AtomicBool::new(false),
-			guard: guard.map(InstalledGuard::new),
+			progress: CommandProgress::new(guard),
 			work: Mutex::new(SlotWork {
 				commands: VecDeque::new(),
 				scheduled: false,
@@ -1365,10 +1422,11 @@ impl SqliteWorkerHandle {
 
 	/// Holds every later commit in memory until `uncork_commits`, which sends them to depot as
 	/// one commit. Commands queue in order, so the transactions after this call are the ones
-	/// held. None of them is durable until uncorking succeeds.
-	pub async fn cork_commits(&self) -> Result<()> {
+	/// held. None of them is durable until uncorking succeeds. `close` decides whether a close
+	/// before uncorking, on any path including a panicking command, sends or drops them.
+	pub async fn cork_commits(&self, close: CorkClose) -> Result<()> {
 		let (reply, result) = oneshot::channel();
-		self.slot.enqueue(SqliteCommand::Cork { reply })?;
+		self.slot.enqueue(SqliteCommand::Cork { close, reply })?;
 		result.await.map_err(|_| sqlite_worker_dead_error())?
 	}
 
@@ -1378,6 +1436,34 @@ impl SqliteWorkerHandle {
 		let (reply, result) = oneshot::channel();
 		self.slot.enqueue(SqliteCommand::Uncork { reply })?;
 		result.await.map_err(|_| sqlite_worker_dead_error())?
+	}
+
+	/// Stops accepting commands and queues close without waiting for a free pool thread.
+	/// The queued slot retains the native connection and VFS until close completes.
+	pub fn request_close(&self) {
+		if self.inner().mark_closing() {
+			self.slot.request_close();
+		}
+	}
+
+	/// Drops the transactions committed since `cork_commits` without sending them. The
+	/// database is unusable afterwards and must close: from this call on, every SQL command,
+	/// cork or uncork fails as closing, including ones queued before it, and the close drops
+	/// the corked commits even if the discard itself never runs. The discard is never refused
+	/// for a full queue.
+	pub async fn discard_corked_commits(&self) -> Result<()> {
+		self.inner()
+			.discard_requested
+			.store(true, Ordering::Release);
+		let (reply, result) = oneshot::channel();
+		self.slot.enqueue(SqliteCommand::DiscardCork { reply })?;
+		result.await.map_err(|_| sqlite_worker_dead_error())?
+	}
+
+	/// Whether the owner asked to discard the corked commits, after which the database only
+	/// closes.
+	pub(crate) fn discard_requested(&self) -> bool {
+		self.inner().discard_requested.load(Ordering::Acquire)
 	}
 
 	pub async fn close(&self) -> Result<()> {
@@ -1390,13 +1476,33 @@ impl SqliteWorkerHandle {
 		self.close_with_timeout(None).await
 	}
 
+	/// Interrupts the command a pool thread is running, without closing the database, for an
+	/// owner that must run another command before it closes, such as a failed start that drops
+	/// its held commits first. The interrupt is sticky: every later SQL command fails once it
+	/// reaches a progress callback, so the owner must close the database afterwards. Unlike a
+	/// close, it fails no queued command, so a queued command that runs no SQL still runs.
+	pub fn interrupt(&self) {
+		self.slot.progress.interrupt();
+	}
+
+	/// Like [`Self::close_and_wait`], and first interrupts the command a pool thread is
+	/// running, for an owner that has no use for its outcome, such as a start that failed. The
+	/// command then fails with `SQLITE_INTERRUPT` within a progress interval of its next step,
+	/// so the wait is bounded by one VFS request rather than by the whole statement. The close
+	/// is marked first, so no queued command starts after the interrupt.
+	pub async fn interrupt_and_close_and_wait(&self) -> Result<()> {
+		if self.inner().mark_closing() {
+			self.slot.request_close();
+		}
+		self.slot.progress.interrupt();
+		self.close_with_timeout(None).await
+	}
+
 	async fn close_with_timeout(&self, close_timeout: Option<Duration>) -> Result<()> {
 		let start = Instant::now();
 		// Close is a control path, not SQL work, so it bypasses the bounded command queue.
 		// Queued commands fail; a command a thread is running finishes first.
-		if self.inner().mark_closing() {
-			self.slot.request_close();
-		}
+		self.request_close();
 
 		let wait_closed = async {
 			loop {
@@ -1510,6 +1616,7 @@ fn run_command(
 	transaction: &mut Option<TransactionTracker>,
 	pending_uncork: &mut Option<oneshot::Sender<Result<()>>>,
 	explicit_transaction: &watch::Sender<bool>,
+	progress: &CommandProgress,
 ) {
 	// A storage failure belongs to the command whose statement saw it. One that a command
 	// left unreported, such as an uncork's, must not relabel a later command's own failure.
@@ -1524,6 +1631,7 @@ fn run_command(
 		transaction,
 		pending_uncork,
 		explicit_transaction,
+		progress,
 	);
 
 	// A deferred uncork runs as soon as the transaction it waited on ends.
@@ -1545,6 +1653,7 @@ fn run_command_inner(
 	transaction: &mut Option<TransactionTracker>,
 	pending_uncork: &mut Option<oneshot::Sender<Result<()>>>,
 	explicit_transaction: &watch::Sender<bool>,
+	progress: &CommandProgress,
 ) {
 	let start = Instant::now();
 	match command {
@@ -1618,7 +1727,7 @@ fn run_command_inner(
 			};
 			finalize_transaction_if_complete(db, metrics, file_name, transaction);
 			publish_explicit_transaction(db, explicit_transaction);
-			let _ = reply.send(worker_command_result(db, vfs, worker_result));
+			let _ = reply.send(worker_command_result(db, vfs, progress, worker_result));
 		}
 		SqliteCommand::Exec {
 			sql,
@@ -1662,7 +1771,7 @@ fn run_command_inner(
 			};
 			finalize_transaction_if_complete(db, metrics, file_name, transaction);
 			publish_explicit_transaction(db, explicit_transaction);
-			let _ = reply.send(worker_command_result(db, vfs, worker_result));
+			let _ = reply.send(worker_command_result(db, vfs, progress, worker_result));
 		}
 		SqliteCommand::ExecuteBatch { statements, reply } => {
 			if reply.is_closed() {
@@ -1711,10 +1820,18 @@ fn run_command_inner(
 				result,
 				profile: SqliteOperationProfile::default(),
 			};
-			let _ = reply.send(worker_command_result(db, vfs, worker_result));
+			let _ = reply.send(worker_command_result(db, vfs, progress, worker_result));
 		}
-		SqliteCommand::Cork { reply } => {
-			db.cork_commits();
+		SqliteCommand::Cork { close, reply } => {
+			db.cork_commits(close);
+			let _ = reply.send(Ok(()));
+		}
+		SqliteCommand::DiscardCork { reply } => {
+			db.discard_corked_commits();
+			// An uncork waiting for its transaction to end has nothing left to send.
+			if let Some(uncork) = pending_uncork.take() {
+				let _ = uncork.send(Err(sqlite_closing_error()));
+			}
 			let _ = reply.send(Ok(()));
 		}
 		SqliteCommand::Uncork { reply } => {
@@ -1734,11 +1851,25 @@ fn run_command_inner(
 fn worker_command_result<T>(
 	db: &NativeConnection,
 	vfs: &NativeVfsHandle,
+	progress: &CommandProgress,
 	result: SqliteWorkerResult<T>,
 ) -> Result<SqliteWorkerResult<T>> {
 	if let Some(operation) = vfs.take_indeterminate_result() {
 		return Err(SqliteCommitIndeterminateError(operation).into());
 	}
+
+	// A command its owner interrupted fails like the commands the close fails in the queue,
+	// instead of with SQLite's generic "interrupted".
+	let result = match result {
+		SqliteWorkerResult {
+			result: Err(error),
+			profile,
+		} if progress.interrupted() && is_sqlite_interrupt(&error) => SqliteWorkerResult {
+			result: Err(sqlite_closing_error()),
+			profile,
+		},
+		result => result,
+	};
 
 	// A statement that failed on a storage request that changed nothing, a refusal with a
 	// retry hint or a timeout, reports that cause instead of SQLite's generic "disk I/O error".
@@ -1975,10 +2106,19 @@ fn fail_command(command: SqliteCommand) {
 		SqliteCommand::ExecuteBatch { reply, .. } => {
 			let _ = reply.send(Err(sqlite_closing_error()));
 		}
-		SqliteCommand::Cork { reply } | SqliteCommand::Uncork { reply } => {
+		SqliteCommand::Cork { reply, .. }
+		| SqliteCommand::Uncork { reply }
+		| SqliteCommand::DiscardCork { reply } => {
 			let _ = reply.send(Err(sqlite_closing_error()));
 		}
 	}
+}
+
+/// Whether a statement failed because SQLite interrupted it.
+fn is_sqlite_interrupt(error: &anyhow::Error) -> bool {
+	error
+		.downcast_ref::<SqliteStatementError>()
+		.is_some_and(|error| error.code & 0xff == SQLITE_INTERRUPT)
 }
 
 fn sqlite_closing_error() -> anyhow::Error {

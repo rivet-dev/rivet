@@ -16,7 +16,7 @@ npm run dev
 
 - **Durable message delivery**: Prompts and responses flow through durable streams, ensuring reliable delivery even if components restart
 - **Streaming AI responses**: AI responses stream in real-time through durable streams to the frontend
-- **Actor-based processing**: AI agent runs as a Rivet Actor with persistent state tracking processed prompts
+- **Actor-based processing**: AI agent runs as a Rivet Actor that saves its stream offset in SQLite to track processed prompts
 
 ## Prerequisites
 

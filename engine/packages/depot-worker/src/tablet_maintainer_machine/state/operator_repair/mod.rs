@@ -18,7 +18,7 @@ use crate::tablet_maintainer_machine::{
 	event::RepairEvent,
 	types::{OpId, RequestId},
 };
-use rivet_data::generated::depot_client_protocol_v1::{ClientResponse, VolumeRejectResponse};
+use rivet_data::generated::depot_client_protocol_v2::{ClientResponse, VolumeRejectResponse};
 use serde::{Deserialize, Serialize};
 
 /// Work an operator repair request keeps in flight.
@@ -77,7 +77,7 @@ pub(crate) fn on_event(state: &mut MaintainerState, event: RepairEvent, fx: &mut
 			} else if !super::in_tablet(state, &request.volume_log_key.volume_key) {
 				refuse(request_id, depot_types::client::not_maintainer(), fx);
 			} else if request.kind
-				== rivet_data::generated::depot_client_protocol_v1::RepairDiagnosticsKind::Activity
+				== rivet_data::generated::depot_client_protocol_v2::RepairDiagnosticsKind::Activity
 			{
 				match activity::page(state, &request) {
 					Ok(page) => fx.execute(MaintainerEffect::Reply {
@@ -176,7 +176,7 @@ const MAX_AUDIT_ROWS: u32 = 100;
 fn audit_list(
 	state: &mut MaintainerState,
 	request_id: RequestId,
-	request: rivet_data::generated::depot_client_protocol_v1::RepairAuditListRequest,
+	request: rivet_data::generated::depot_client_protocol_v2::RepairAuditListRequest,
 	fx: &mut Effects,
 ) {
 	if let Err(reason) = admissible(state) {

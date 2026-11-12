@@ -5,7 +5,7 @@ use axum::{
 	extract::{Request, State},
 	http::{StatusCode, Version},
 	response::{IntoResponse, Response},
-	routing::post,
+	routing::{get, post},
 };
 use bytes::BytesMut;
 use futures_util::{StreamExt, stream};
@@ -107,6 +107,7 @@ impl PubSub {
 		Router::new()
 			.route(PATH, post(receive))
 			.route(super::channel::PATH, post(super::channel::server::receive))
+			.route(super::subscriber::PATH, get(super::subscriber::receive))
 			.with_state(self.clone())
 	}
 }
@@ -211,7 +212,7 @@ pub(super) fn connection_error_reason(error: &anyhow::Error) -> &'static str {
 	}
 }
 
-fn transport_error(error: anyhow::Error) -> anyhow::Error {
+pub(super) fn transport_error(error: anyhow::Error) -> anyhow::Error {
 	if error
 		.downcast_ref::<rivet_env::capabilities::http::ResponseTooLarge>()
 		.is_some()

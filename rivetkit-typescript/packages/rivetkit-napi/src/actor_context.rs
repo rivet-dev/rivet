@@ -85,6 +85,40 @@ pub struct JsActorKeySegment {
 	pub number_value: Option<f64>,
 }
 
+/// One individual actor fork behind an actor, as `c.forkChain` lists it.
+#[napi(object)]
+pub struct JsForkLink {
+	pub actor_id: String,
+	pub key: Vec<JsActorKeySegment>,
+	/// Milliseconds since the epoch.
+	pub forked_at: f64,
+}
+
+pub(crate) fn js_actor_key(key: &rivetkit_core::types::ActorKey) -> Vec<JsActorKeySegment> {
+	key.iter()
+		.map(|segment| match segment {
+			ActorKeySegment::String(value) => JsActorKeySegment {
+				kind: "string".to_owned(),
+				string_value: Some(value.clone()),
+				number_value: None,
+			},
+			ActorKeySegment::Number(value) => JsActorKeySegment {
+				kind: "number".to_owned(),
+				string_value: None,
+				number_value: Some(*value),
+			},
+		})
+		.collect()
+}
+
+pub(crate) fn js_fork_link(link: &rivetkit_core::ForkLink) -> JsForkLink {
+	JsForkLink {
+		actor_id: link.actor_id.clone(),
+		key: js_actor_key(&link.key),
+		forked_at: link.forked_at as f64,
+	}
+}
+
 /// Active actor invocation correlation exposed to the TypeScript runtime adapter.
 #[napi(object)]
 pub struct JsActorInvocationTraceContext {
@@ -180,11 +214,6 @@ pub struct JsInspectorSnapshot {
 	pub active_connections: u32,
 	pub queue_size: u32,
 	pub connected_clients: u32,
-}
-
-#[napi(object)]
-pub struct JsActorRuntimeSocketEndpointInfo {
-	pub path: String,
 }
 
 #[derive(Clone)]
@@ -385,18 +414,6 @@ impl ActorContext {
 	}
 
 	#[napi]
-	pub async fn provision_actor_runtime_socket(
-		&self,
-	) -> napi::Result<JsActorRuntimeSocketEndpointInfo> {
-		let info = self
-			.inner
-			.provision_actor_runtime_socket()
-			.await
-			.map_err(napi_anyhow_error)?;
-		Ok(JsActorRuntimeSocketEndpointInfo { path: info.path })
-	}
-
-	#[napi]
 	pub fn schedule(&self) -> Schedule {
 		Schedule::new(self.inner.clone())
 	}
@@ -564,27 +581,24 @@ impl ActorContext {
 
 	#[napi]
 	pub fn key(&self) -> Vec<JsActorKeySegment> {
-		self.inner
-			.key()
-			.iter()
-			.map(|segment| match segment {
-				ActorKeySegment::String(value) => JsActorKeySegment {
-					kind: "string".to_owned(),
-					string_value: Some(value.clone()),
-					number_value: None,
-				},
-				ActorKeySegment::Number(value) => JsActorKeySegment {
-					kind: "number".to_owned(),
-					string_value: None,
-					number_value: Some(*value),
-				},
-			})
-			.collect()
+		js_actor_key(self.inner.key())
+	}
+
+	/// The individual actor forks behind this actor, oldest first.
+	#[napi]
+	pub fn fork_chain(&self) -> Vec<JsForkLink> {
+		self.inner.fork_chain().iter().map(js_fork_link).collect()
 	}
 
 	#[napi]
 	pub fn region(&self) -> String {
 		self.inner.region().to_owned()
+	}
+
+	/// The name of the namespace the actor runs in.
+	#[napi]
+	pub fn namespace(&self) -> String {
+		self.inner.namespace().to_owned()
 	}
 
 	#[napi]

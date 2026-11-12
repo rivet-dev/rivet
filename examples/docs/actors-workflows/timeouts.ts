@@ -1,4 +1,5 @@
 import { actor, queue, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 async function chargeCard(orderId: string): Promise<string> {
@@ -6,9 +7,19 @@ async function chargeCard(orderId: string): Promise<string> {
 }
 
 export const timeoutActor = actor({
-  state: {
-    lastChargeId: null as string | null,
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS charge_stats (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          last_charge_id TEXT
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO charge_stats (id, last_charge_id) VALUES (1, NULL)",
+      );
+    },
+  }),
   queues: {
     charge: queue<{ orderId: string }>(),
   },
@@ -27,7 +38,10 @@ export const timeoutActor = actor({
         });
 
         await loopCtx.step("save-charge", async (step) => {
-          step.state.lastChargeId = chargeId;
+          await step.db.execute(
+            "UPDATE charge_stats SET last_charge_id = ? WHERE id = 1",
+            chargeId,
+          );
         });
 
       });

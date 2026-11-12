@@ -93,7 +93,7 @@
             }
           },
           "400": {
-            "description": "`validation.invalid_input`: the subject exceeds 256 UTF-8 bytes, the duration is outside the allowed range, or the grant set is invalid (empty, more than 32 grants, a grant without operations or with more than 5, or a `token` or `jwt` resource). `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "description": "`validation.invalid_input`: the subject exceeds 256 UTF-8 bytes, the duration is outside the allowed range, or the grant set is invalid (empty, more than 32 grants, a grant without operations or with more than 6, or a `token` or `jwt` resource). `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
             "content": {
               "application/json": {
                 "schema": {
@@ -188,7 +188,7 @@
             }
           },
           "503": {
-            "description": "`auth.issuance_unavailable`: the signing service is temporarily unavailable. Retry the request.",
+            "description": "`auth.issuance_unavailable`: the signing service is temporarily unavailable. Retry the request. `auth.operation_unavailable`: a grant includes `fork` while an engine upgrade is rolling out and some engine workers cannot read it yet. Nothing was issued; retry after the `Retry-After` delay.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1314,7 +1314,7 @@
         },
         "responses": {
           "200": {
-            "description": "The created namespace.",
+            "description": "The created namespace. A fork answers once it is `live`, or after 30 seconds with its record as it stands; poll `GET /namespaces?name=` until it is `live`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1369,7 +1369,7 @@
             }
           },
           "409": {
-            "description": "`namespace.name_not_unique`: a namespace with this name already exists.",
+            "description": "`namespace.name_not_unique`: a namespace with this name exists.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1685,7 +1685,7 @@
             }
           },
           "400": {
-            "description": "`actor.invalid_name`: `name` is empty or longer than 64 bytes. `actor.invalid_key`: `key` is longer than 1024 bytes. `actor.invalid_key_encoding`: `key` is not in canonical slash-separated form. `actor.key_owned_elsewhere`: another datacenter owns the key. `envoy.invalid_pool_name`: `pool` is not a valid pool name. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "description": "`actor.invalid_name`: `name` is empty or longer than 64 bytes. `actor.invalid_key`: `key` is longer than 1024 bytes. `actor.invalid_key_encoding`: `key` is not in canonical slash-separated form. `actor.key_owned_elsewhere`: another datacenter owns the key. `envoy.invalid_pool_name`: `pool` is not a valid pool name. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens. `actor.invalid_input`: `input` is not valid base64.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1780,7 +1780,7 @@
             }
           },
           "500": {
-            "description": "`core.internal_error`: an unexpected failure, including `input` that is not valid base64 and a create that did not finish within 30 seconds.",
+            "description": "`core.internal_error`: an unexpected failure, including a create that did not finish within 30 seconds.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1861,7 +1861,7 @@
             }
           },
           "400": {
-            "description": "`actor.invalid_name`: `name` is empty or longer than 64 bytes. `actor.invalid_key`: `key` is longer than 1024 bytes. `actor.invalid_key_encoding`: `key` is not in canonical slash-separated form. `actor.key_owned_elsewhere`: another datacenter owns the key. `envoy.invalid_pool_name`: `pool` is not a valid pool name. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens.",
+            "description": "`actor.invalid_name`: `name` is empty or longer than 64 bytes. `actor.invalid_key`: `key` is longer than 1024 bytes. `actor.invalid_key_encoding`: `key` is not in canonical slash-separated form. `actor.key_owned_elsewhere`: another datacenter owns the key. `envoy.invalid_pool_name`: `pool` is not a valid pool name. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens. `actor.invalid_input`: `input` is not valid base64.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1941,7 +1941,7 @@
             }
           },
           "500": {
-            "description": "`core.internal_error`: an unexpected failure, including `input` that is not valid base64 and a create that did not finish within 30 seconds.",
+            "description": "`core.internal_error`: an unexpected failure, including a create that did not finish within 30 seconds.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2538,6 +2538,211 @@
         ]
       }
     },
+    "/actors/{actor_id}/fork": {
+      "post": {
+        "tags": [
+          "actors::fork"
+        ],
+        "summary": "Forks an actor: creates a new actor in the same namespace, with the source's name and pool, whose database is a copy of the source's latest committed state, and starts it. Answers once the copy finished.",
+        "operationId": "actors_fork",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the source actor.",
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "description": "Name of the namespace to operate in. Defaults to `default`.",
+            "schema": {
+              "type": "string",
+              "default": "default",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorsForkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The new actor, after its database fork finished.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsForkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`actor.invalid_key`: `key` is longer than 1024 bytes. `actor.invalid_key_encoding`: `key` is not in canonical slash-separated form. `actor.key_owned_elsewhere`: another datacenter owns the key. `envoy.invalid_namespace_name`: the `namespace` value is not a DNS label of 1 to 63 lowercase letters, digits and hyphens. `actor.invalid_input`: `input` is not valid base64.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "invalid_name",
+                    "message": "Actor name must be 1 to 64 bytes."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`auth.insufficient_permissions`: the token's grants do not allow forking the source actor and creating actors, or for a namespace token the source actor does not exist. A namespace token needs `fork` on the source actor (its ID or `any`) and `create` on every actor (`any`), since the new actor's ID is not known before the fork. No other operation, including `read`, allows a fork.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "insufficient_permissions",
+                    "message": "Insufficient permissions to access this resource."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`actor.not_found`: the source actor does not exist, was destroyed, or belongs to another namespace. `namespace.not_found`: the namespace does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "not_found",
+                    "message": "The actor does not exist or was destroyed."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`actor.duplicate_key`: a live actor already holds `key`, including an earlier fork of the same source. Forks are not idempotent. `actor.fork_too_deep`: the source's database is already 16 forks deep. `actor.fork_failed`: the database copy failed, for example because the source was destroyed during the fork, and the new actor was destroyed; or the source never started, so it has no database to copy, and nothing was created. `namespace.pending`, `namespace.archived`: the namespace does not accept new actors.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "fork_too_deep",
+                    "message": "The actor is too many forks deep to fork again."
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The request is missing the `Content-Type: application/json` header. Returned as plain text.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The JSON body does not match the request schema, for example a missing required field, a wrong type or an unknown field where unknown fields are rejected. Returned as plain text.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`core.internal_error`: an unexpected failure, including a request whose 30 second deadline passed before the new actor was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "core",
+                    "code": "internal_error",
+                    "message": "An internal error occurred"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`auth.verification_unavailable`: token verification keys are temporarily unavailable. Retry the request. `actor.fork_unavailable`: an engine upgrade is rolling out and not every engine worker supports forks yet. Nothing was created; retry after the `Retry-After` delay. `guard.service_unavailable` (reason `actor_moving`): in a namespace upgraded from an earlier release, the keyed source has not yet been moved into its namespace's volume group, which gives it a new ID. Nothing was created; retry after the `Retry-After` delay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "verification_unavailable",
+                    "message": "The server could not verify the authentication token because verification keys are temporarily unavailable. Retry the request."
+                  }
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "`actor.fork_pending`: the request's 30 second deadline passed after the new actor was created, while its database copy goes on. `metadata.actor_id` names the new actor: read it with `GET /actors/{actor_id}` later. It starts once the copy finishes, or is destroyed if the copy fails. Do not send the fork again, since forks are not idempotent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "actor",
+                    "code": "fork_pending",
+                    "message": "The actor fork is still in progress; read actor 0yu3yi42e4nqf61brlp3pmqnc7xu00 later.",
+                    "metadata": {
+                      "actor_id": "0yu3yi42e4nqf61brlp3pmqnc7xu00"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "rivet_token_header": []
+          }
+        ]
+      }
+    },
     "/actors/{actor_id}/reschedule": {
       "post": {
         "tags": [
@@ -2679,6 +2884,100 @@
           }
         ]
       }
+    },
+    "/namespaces/{name}/archive": {
+      "post": {
+        "tags": [
+          "namespaces"
+        ],
+        "summary": "Archives a namespace: refuses new work for it, stops what its nodes host, then closes its storage. Archiving is final. Requires the admin token.",
+        "operationId": "namespaces_archive",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "The namespace to archive.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "maxLength": 63
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The namespace, at status `archiving`, or `archived` when it already is. The archive finishes on its own.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespacesArchiveResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth.invalid_token`: the request carries no token, or the token is not valid. `auth.token_expired`: the token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "auth",
+                    "code": "invalid_token",
+                    "message": "Authentication token is invalid."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`namespace.protected`: the `default` namespace cannot be archived.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "protected",
+                    "message": "The default namespace cannot be archived."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`namespace.not_found`: no namespace has this name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "not_found",
+                    "message": "The namespace does not exist."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`namespace.has_forks`: a fork of this namespace is not archived; archive it first. `namespace.has_nodes`: a node of this namespace is connected; stop its nodes before archiving it. `namespace.pending`: the namespace's fork has not finished. `namespace.failed`: the namespace's fork failed. `namespace.backfill_skipped`: the namespace still has actors from an earlier release that its backfill could not move; destroy them first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse",
+                  "example": {
+                    "group": "namespace",
+                    "code": "has_forks",
+                    "message": "A fork of this namespace is not archived; archive it first."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2697,7 +2996,8 @@
           "connectable_ts",
           "sleep_ts",
           "reschedule_ts",
-          "destroy_ts"
+          "destroy_ts",
+          "forked_from"
         ],
         "properties": {
           "actor_id": {
@@ -2771,6 +3071,17 @@
             ],
             "format": "int64",
             "description": "When the actor was destroyed, in Unix milliseconds. Only set in listings that include destroyed actors; otherwise `null`."
+          },
+          "forked_from": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RivetId"
+              }
+            ],
+            "description": "ID of the source actor this actor's database was forked from, or `null` for an actor that was not made by [Fork Actor](/docs/api/actors/fork)."
           }
         },
         "additionalProperties": false
@@ -2970,7 +3281,8 @@
           "update",
           "list",
           "create",
-          "delete"
+          "delete",
+          "fork"
         ]
       },
       "AuthResourceKind": {
@@ -3095,7 +3407,7 @@
               "$ref": "#/components/schemas/AuthOperationKind"
             },
             "minItems": 1,
-            "maxItems": 5,
+            "maxItems": 6,
             "description": "Operations the grant allows on the target."
           }
         },
@@ -3193,7 +3505,7 @@
             "description": "Human-readable error message."
           },
           "metadata": {
-            "description": "Extra details. Only present on some errors raised while authenticating or authorizing the request."
+            "description": "Extra details on some errors, for example the retry hint of a refusal or the new actor of a pending fork."
           }
         }
       },
@@ -3239,7 +3551,8 @@
         "type": "object",
         "required": [
           "name",
-          "create_ts"
+          "create_ts",
+          "status"
         ],
         "properties": {
           "name": {
@@ -3251,6 +3564,47 @@
             "type": "integer",
             "format": "int64",
             "description": "When the namespace was created, in Unix milliseconds."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "creating",
+              "forking",
+              "live",
+              "archiving",
+              "archived",
+              "failed"
+            ],
+            "description": "`creating` while a new namespace's volume group is created, `forking` while a fork's group writes run, `live` once the namespace serves, `archiving` while its nodes stop what they host, `archived` once its storage is closed, for good, and `failed` when a fork was refused after its record was written; the name is then retired."
+          },
+          "forked_from": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NamespaceForkedFrom"
+              }
+            ],
+            "nullable": true,
+            "description": "What the namespace was forked from; `null` for a namespace that is not a fork, and while a fork's number is not yet known."
+          },
+          "archived_ts": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "When the namespace was archived, in Unix milliseconds; `null` unless `archived`."
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamespaceSkippedActor"
+            },
+            "description": "Legacy: for a namespace upgraded from an earlier release, the actors the move into its volume group could not move, at most 1,000. Each stays reachable by its ID and key until destroyed; destroying it removes it from this list. Empty for every other namespace. Removed with the backfill in 3.1.",
+            "example": []
+          },
+          "skipped_count": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "description": "Legacy: how many actors the move could not move and are not destroyed yet, which can exceed the length of `skipped`. Forks and archives of the namespace are refused while it is above zero. Removed with the backfill in 3.1."
           }
         },
         "additionalProperties": false
@@ -3308,6 +3662,7 @@
           "pool",
           "namespace",
           "datacenter",
+          "version",
           "create_ts",
           "last_ping_ts",
           "connected",
@@ -3331,6 +3686,12 @@
             "type": "string",
             "description": "Datacenter name.",
             "example": "default"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Version the node announced when it connected. New actors are placed only on nodes at the newest version with a connected node in the pool.",
+            "example": 3
           },
           "create_ts": {
             "type": "integer",
@@ -3511,6 +3872,101 @@
         "type": "string",
         "description": "A Rivet ID: 30 lowercase base36 characters.",
         "example": "d97pbq1nyqxw1w5qdwz0iirbqiblh2"
+      },
+      "NamespaceForkedFrom": {
+        "type": "object",
+        "required": [
+          "namespace",
+          "fork_number",
+          "forked_ts"
+        ],
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "description": "The parent namespace."
+          },
+          "fork_number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The parent's fork number this namespace was made at."
+          },
+          "forked_ts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the fork finished, in Unix milliseconds."
+          }
+        },
+        "additionalProperties": false
+      },
+      "NamespaceSkippedActor": {
+        "type": "object",
+        "required": [
+          "actor_id",
+          "name",
+          "key"
+        ],
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "description": "ID of the actor."
+          },
+          "name": {
+            "type": "string",
+            "description": "Actor name."
+          },
+          "key": {
+            "type": "string",
+            "nullable": true,
+            "description": "Actor key in the slash form, or `null` for an actor without one."
+          }
+        },
+        "additionalProperties": false,
+        "description": "An actor the move into the namespace's volume group could not move."
+      },
+      "NamespacesArchiveResponse": {
+        "type": "object",
+        "required": [
+          "namespace"
+        ],
+        "properties": {
+          "namespace": {
+            "$ref": "#/components/schemas/Namespace"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ActorsForkRequest": {
+        "type": "object",
+        "description": "Unknown fields are ignored. The fork takes the source's name and pool.",
+        "properties": {
+          "key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1024,
+            "description": "Key of the new actor in canonical slash-separated form, at most 1024 bytes. Omit for an actor without a key."
+          },
+          "input": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Fork input as standard base64 (with padding), passed to the new actor's `onFork` hook. It comes from the caller, so `onFork` must validate it like any client input."
+          }
+        }
+      },
+      "ActorsForkResponse": {
+        "type": "object",
+        "required": [
+          "actor"
+        ],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          }
+        },
+        "additionalProperties": false
       }
     },
     "securitySchemes": {

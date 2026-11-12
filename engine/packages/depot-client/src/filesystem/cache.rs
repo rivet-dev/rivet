@@ -67,7 +67,7 @@ fn row_value_bytes(row: &Row) -> u64 {
 	match row {
 		Row::Bytes(bytes) => bytes.len() as u64,
 		Row::Inode(inode) => inode.inline.as_ref().map_or(0, |inline| inline.len()) as u64,
-		Row::Format(_) | Row::Dentry(_) | Row::Unit => 0,
+		Row::Format(_) | Row::Dentry(_) | Row::Unit | Row::KvRangeWhiteout(_) => 0,
 	}
 }
 
@@ -712,6 +712,8 @@ fn range_start(range: &RowRange) -> Option<RowKey> {
 		RowRange::Xattrs(ino) => Some(RowKey::Xattr(*ino, Vec::new())),
 		RowRange::Kv { ino, start, .. } => Some(RowKey::Kv(*ino, start.clone())),
 		RowRange::Orphans => Some(RowKey::Orphan(0)),
+		RowRange::KvRangeWhiteouts(ino) => Some(RowKey::KvRangeWhiteout(*ino, Vec::new())),
+		RowRange::KvRangeWhiteoutsAll => Some(RowKey::KvRangeWhiteout(0, Vec::new())),
 	}
 }
 
@@ -736,6 +738,8 @@ struct RowCacheState {
 /// newest released write of a key becomes that key's snapshot row, so the rows a filesystem
 /// just wrote stay cached after it releases their layers.
 pub(super) struct RowCache {
+	/// The claim log whose entries fill this cache, which numbers the inodes they create.
+	claim_log: u16,
 	state: Mutex<RowCacheState>,
 	/// Serializes log reads, so simultaneous misses on one entry read it once.
 	loading: tokio::sync::Mutex<()>,
@@ -746,12 +750,14 @@ pub(super) struct RowCache {
 
 impl RowCache {
 	pub(crate) fn new(
+		claim_log: u16,
 		snapshot: VolumeLogPosition,
 		budget: Arc<Budget>,
 		max_bytes: usize,
 		share: Arc<CacheShare>,
 	) -> Arc<Self> {
 		Arc::new(Self {
+			claim_log,
 			state: Mutex::new(RowCacheState {
 				lru: Lru::default(),
 				snapshot,
@@ -797,7 +803,13 @@ impl RowCache {
 			Some(Row::Inode(inode)) => Some(Some(super::Inode { inode, change_seq })),
 			None => Some(None),
 			// Any other row under an inode key is corrupt; reading cold reports it.
-			Some(Row::Format(_) | Row::Dentry(_) | Row::Bytes(_) | Row::Unit) => None,
+			Some(
+				Row::Format(_)
+				| Row::Dentry(_)
+				| Row::Bytes(_)
+				| Row::Unit
+				| Row::KvRangeWhiteout(_),
+			) => None,
 		}
 	}
 
@@ -993,7 +1005,7 @@ impl RowCache {
 		let transient = self.reserve_evicting(payload.payload.len().saturating_mul(2))?;
 		let raw = depot_types::payload_codec::decode(&payload).map_err(|_| corrupt!())?;
 		let decoded = <rivet_data::versioned::DepotFsEntryData as vbare::Versioned>::deserialize_with_embedded_version(&raw).map_err(|_| corrupt!())?;
-		let batch = depot_fs_core::apply::plan(source.seq, &decoded)?.final_rows;
+		let batch = depot_fs_core::apply::plan(self.claim_log, source.seq, &decoded)?.final_rows;
 		drop(decoded);
 		drop(raw);
 		drop(payload);
@@ -1133,7 +1145,8 @@ impl Cold {
 				| RowKey::Dentry(..)
 				| RowKey::Link(..)
 				| RowKey::Xattr(..)
-				| RowKey::Chunk(..) => {
+				| RowKey::Chunk(..)
+				| RowKey::KvRangeWhiteout(..) => {
 					found.insert(row.key.clone(), row);
 				}
 			}
@@ -1362,13 +1375,6 @@ impl View {
 			self.max_bytes,
 		)
 	}
-	pub(crate) fn forget_fetched(&mut self) {
-		self.gets.clear();
-		self.inodes.clear();
-		self.scans.clear();
-		self.charges.clear();
-		self.bytes = 0;
-	}
 
 	fn charge(&mut self, bytes: usize) -> Result<()> {
 		let next = self
@@ -1449,7 +1455,13 @@ impl View {
 				return match row {
 					Some(Row::Inode(inode)) => Some(Some(inode.clone())),
 					None => Some(None),
-					Some(Row::Format(_) | Row::Dentry(_) | Row::Bytes(_) | Row::Unit) => None,
+					Some(
+						Row::Format(_)
+						| Row::Dentry(_)
+						| Row::Bytes(_)
+						| Row::Unit
+						| Row::KvRangeWhiteout(_),
+					) => None,
 				};
 			}
 			if layer.ranges.iter().any(|r| r.contains(&key)) {

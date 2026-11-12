@@ -1,4 +1,5 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 
 interface Order {
   id: string;
@@ -13,24 +14,31 @@ interface ProcessedOrder extends Order {
 }
 
 const inventory = actor({
-  state: { stock: 100 },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(
+        "CREATE TABLE IF NOT EXISTS stock (id INTEGER PRIMARY KEY CHECK (id = 1), count INTEGER NOT NULL)",
+      );
+      await db.execute("INSERT OR IGNORE INTO stock (id, count) VALUES (1, 100)");
+    },
+  }),
   actions: {
-    reserveStock: (c, quantity: number) => {
-      c.state.stock -= quantity;
+    reserveStock: async (c, quantity: number) => {
+      await c.db.execute("UPDATE stock SET count = count - ? WHERE id = 1", quantity);
       return { reserved: quantity };
     }
   }
 });
 
 const payment = actor({
-  state: {},
   actions: {
     processPayment: (c, amount: number) => ({ transactionId: "tx-123" })
   }
 });
 
 const orderProcessor = actor({
-  state: { orders: [] as ProcessedOrder[] },
+  // Processed orders are kept in memory for this example
+  createVars: () => ({ orders: [] as ProcessedOrder[] }),
 
   actions: {
     processOrder: async (c, order: Order) => {
@@ -44,8 +52,8 @@ const orderProcessor = actor({
       const paymentHandle = client.payment.getOrCreate([order.customerId]);
       const result = await paymentHandle.processPayment(order.amount);
 
-      // Update order state
-      c.state.orders.push({ ...order, status: "completed", paymentResult: result });
+      // Record the processed order
+      c.vars.orders.push({ ...order, status: "completed", paymentResult: result });
 
       return { success: true, orderId: order.id };
     }

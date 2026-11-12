@@ -2,11 +2,11 @@ import { actor, setup } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
 
 const user = actor({
-  state: { username: "" },
+  vars: { username: "" },
   actions: {
     updateUsername: (c, username: string) => {
       if (username.length > 32) throw new Error("Username is too long");
-      c.state.username = username;
+      c.vars.username = username;
     }
   }
 });

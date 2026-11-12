@@ -34,6 +34,13 @@ export interface RuntimeActorKeySegment {
 	numberValue?: number;
 }
 
+/** One individual actor fork behind an actor, as the runtime reports it. */
+export interface RuntimeForkLink {
+	actorId: string;
+	key: RuntimeActorKeySegment[];
+	forkedAt: number;
+}
+
 /** Resolves correlation at operation time so retained clients cannot freeze stale context. */
 export type CurrentActorInvocation = () =>
 	| ActorInvocationTraceContext
@@ -248,10 +255,6 @@ export type RuntimeSqlBindParam =
 
 export type RuntimeSqlBindParams = RuntimeSqlBindParam[] | null;
 
-export interface RuntimeActorRuntimeSocketEndpointInfo {
-	path: string;
-}
-
 export interface RuntimeSqlQueryResult {
 	columns: string[];
 	rows: unknown[][];
@@ -332,7 +335,6 @@ export interface RuntimeActorConfig {
 	remoteSqlite?: boolean;
 	sqliteProfiling?: SqliteProfilingOptions;
 	tracing?: RuntimeActorTracingConfig;
-	enableActorRuntimeSocket?: boolean;
 	hasState?: boolean;
 	canHibernateWebsocket?: boolean;
 	stateSaveIntervalMs?: number;
@@ -500,6 +502,12 @@ export interface CoreRuntime {
 	registryActorStopThresholdMs?(
 		registry: RegistryHandle,
 	): Promise<number | undefined>;
+	registryActiveActorCount?(registry: RegistryHandle): number;
+	onRegistryActiveActorCountChange?(
+		registry: RegistryHandle,
+		callback: (count: number) => void,
+		cancelToken: CancellationTokenHandle,
+	): void;
 	handleServerlessRequest(
 		registry: RegistryHandle,
 		req: RuntimeServerlessRequest,
@@ -623,7 +631,11 @@ export interface CoreRuntime {
 	currentInvocationScope(): object | undefined;
 	actorName(ctx: ActorContextHandle): string;
 	actorKey(ctx: ActorContextHandle): RuntimeActorKeySegment[];
+	/** The individual actor forks behind the actor, oldest first. */
+	actorForkChain(ctx: ActorContextHandle): RuntimeForkLink[];
 	actorRegion(ctx: ActorContextHandle): string;
+	/** The name of the namespace the actor runs in. */
+	actorNamespace(ctx: ActorContextHandle): string;
 	actorSleep(ctx: ActorContextHandle): void;
 	actorDestroy(ctx: ActorContextHandle): void;
 	actorAbortSignal(ctx: ActorContextHandle): AbortSignal;
@@ -754,9 +766,6 @@ export interface CoreRuntime {
 	actorSqlMetrics(ctx: ActorContextHandle): SqliteNativeMetrics | null;
 	actorSqlTakeLastKvError(ctx: ActorContextHandle): string | null;
 	actorSqlClose(ctx: ActorContextHandle): Promise<void>;
-	actorRuntimeSocketProvision(
-		ctx: ActorContextHandle,
-	): Promise<RuntimeActorRuntimeSocketEndpointInfo>;
 
 	actorQueueSend(
 		ctx: ActorContextHandle,
@@ -885,7 +894,7 @@ export interface RuntimeBundle {
 
 export function servicesBinaryUnavailable(cause: unknown): Error {
 	return new Error(
-		"services.binary_unavailable: Install @rivet-dev/services yourself to run local Services, or set RIVET_SERVICES_BINARY to its executable path.",
+		"services.binary_unavailable: Install @rivet-dev/services to run local Services, set RIVET_SERVICES_BINARY to its executable path, or set RIVET_RUN_SERVICES=0 to disable Services.",
 		{ cause },
 	);
 }

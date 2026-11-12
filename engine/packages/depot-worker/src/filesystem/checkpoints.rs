@@ -6,11 +6,11 @@
 
 use super::store::{FilesystemStore, LockOperation, PlannedWrites};
 use crate::tablet_maintainer_machine::state::checkpoints::logged_minimum;
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use bytes::Bytes;
 use depot_fs_core::{keys::slatedb as keys, *};
 use rivet_data::generated::{
-	depot_client_protocol_v1::*, shared_depot_types_v1::VolumeLogPosition,
+	depot_client_protocol_v2::*, shared_depot_types_v1::VolumeLogPosition,
 };
 use rivet_keys::keys::{
 	KeyAddress, PrefixAddress,
@@ -39,16 +39,35 @@ pub(super) fn address(scope: &keys::Scope, seq: u64, name: Vec<u8>) -> keys::Vol
 	)
 }
 
-fn info(key: &keys::VolumeCheckpointKey, checkpoint: FsVolumeCheckpoint) -> FsCheckpointInfo {
+/// The checkpoint's cut: the one stored with it, or for a row written before cuts existed the
+/// one-log cut its key and epoch describe. The returned value carries the cut either way, so a
+/// checkpoint read back from a version 1 row equals the one that was written.
+fn info(key: &keys::VolumeCheckpointKey, mut checkpoint: FsVolumeCheckpoint) -> FsCheckpointInfo {
+	let position = checkpoint.cut.clone().unwrap_or_else(|| {
+		FsCut::single(VolumeLogPosition {
+			volume_seq: key.sequence(),
+			client_epoch: checkpoint.client_epoch,
+		})
+	});
+	checkpoint.cut = Some(position.clone());
 	FsCheckpointInfo {
 		name: key.checkpoint_name().to_vec().into(),
 		volume_incarnation: *key.incarnation().as_bytes(),
-		position: VolumeLogPosition {
-			volume_seq: key.sequence(),
-			client_epoch: checkpoint.client_epoch,
-		},
+		position,
 		checkpoint,
 	}
+}
+
+/// The sequence of a checkpoint's row key: its cut's claim log 0 position. The volume has one
+/// claim log, so a cut over any other log is corrupt.
+/// The sequence a checkpoint's row is keyed by: its cut's claim log 0 position, so rows of a
+/// volume with several claims still sort by time.
+fn key_seq(checkpoint: &FsCheckpointInfo) -> Result<u64> {
+	checkpoint
+		.position
+		.root_position()
+		.map(|position| position.volume_seq)
+		.context("a checkpoint's cut names claim log 0")
 }
 
 impl FilesystemStore {
@@ -160,6 +179,10 @@ impl FilesystemStore {
 						retention: false,
 						created_at: intent.created_at,
 						client_epoch: epoch,
+						cut: Some(FsCut::single(VolumeLogPosition {
+							volume_seq: seq,
+							client_epoch: epoch,
+						})),
 					},
 					self.row_version(),
 				))?,
@@ -167,7 +190,7 @@ impl FilesystemStore {
 			// Adding before the batch is conservative. A failed write fences this
 			// store; no compaction can lose a version needed by an admitted pin.
 			if let Some(retention) = self.catalog.lock().get_mut(scope) {
-				retention.checkpoints.insert(seq);
+				retention.pins.insert(super::filter::PinnedCut::single(seq));
 			}
 			written.insert(seq);
 		}
@@ -305,11 +328,7 @@ impl FilesystemStore {
 		retired: bool,
 		batch: &mut PlannedWrites,
 	) -> Result<()> {
-		let key = address(
-			scope,
-			checkpoint.position.volume_seq,
-			checkpoint.name.to_vec(),
-		);
+		let key = address(scope, key_seq(checkpoint)?, checkpoint.name.to_vec());
 		let mut value = checkpoint.checkpoint.clone();
 		value.named = named;
 		value.retention = retention;
@@ -326,7 +345,7 @@ impl FilesystemStore {
 		let held = named || retention || holds.next().await?.is_some();
 		let replayable = current.is_some_and(|record| {
 			let mut record = record.clone();
-			self.limit_cold(scope, &mut record);
+			self.limit_cold(&mut record);
 			record.volume_incarnation == *scope.incarnation.as_bytes()
 				&& record.status != FsVolumeStatus::Deleted
 				&& key.sequence() > record.cold.volume_seq
@@ -393,7 +412,7 @@ impl FilesystemStore {
 			let checkpoint = info(&address, address.deserialize(row.value)?);
 			if !checkpoint.checkpoint.named
 				&& !checkpoint.checkpoint.retention
-				&& checkpoint.position.volume_seq <= record.cold.volume_seq
+				&& key_seq(&checkpoint)? <= record.cold.volume_seq
 			{
 				self.update_hold(&scope, &checkpoint, false, false, Some(record), batch)
 					.await?;
@@ -417,7 +436,7 @@ impl FilesystemStore {
 			} else if checkpoint.checkpoint.retention {
 				let order = (
 					checkpoint.checkpoint.created_at,
-					checkpoint.position.volume_seq,
+					key_seq(&checkpoint)?,
 					checkpoint.name.clone(),
 				);
 				retained.insert(order, checkpoint);
@@ -452,6 +471,7 @@ impl FilesystemStore {
 				retention: true,
 				created_at: now,
 				client_epoch: record.cold.client_epoch,
+				cut: Some(FsCut::single(record.cold.clone())),
 			};
 			batch.put(
 				address.pack(),
@@ -502,7 +522,7 @@ impl FilesystemStore {
 			return Ok(());
 		};
 		let retired = target.incarnation != scope.incarnation;
-		if !checkpoint.checkpoint.named || (!retired && checkpoint.position.volume_seq >= seq) {
+		if !checkpoint.checkpoint.named || (!retired && key_seq(&checkpoint)? >= seq) {
 			return Ok(());
 		}
 		let current = self.record(volume_key).await?;
@@ -577,7 +597,8 @@ impl FilesystemStore {
 		loaded: Option<FsVolumeRecord>,
 		applied: Option<VolumeLogPosition>,
 	) -> Result<CheckpointResult> {
-		self.checkpoint_change(request, loaded, applied, None).await
+		self.checkpoint_change(request, loaded, applied, None, None)
+			.await
 	}
 
 	/// `checkpoint_request` for a change whose durable record is a maintainer log op made at
@@ -592,7 +613,22 @@ impl FilesystemStore {
 		applied: Option<VolumeLogPosition>,
 		created_at_unix_ms: i64,
 	) -> Result<CheckpointResult> {
-		self.checkpoint_change(request, loaded, applied, Some(created_at_unix_ms))
+		self.checkpoint_logged_at(request, loaded, applied, created_at_unix_ms, None)
+			.await
+	}
+
+	/// [`Self::checkpoint_logged`] of a volume with several claims, whose checkpoint is taken
+	/// at `claims`, a cut over every claim log of its table whose claim log 0 position is
+	/// `applied`.
+	pub async fn checkpoint_logged_at(
+		&self,
+		request: VolumeCheckpointRequest,
+		loaded: Option<FsVolumeRecord>,
+		applied: Option<VolumeLogPosition>,
+		created_at_unix_ms: i64,
+		claims: Option<FsCut>,
+	) -> Result<CheckpointResult> {
+		self.checkpoint_change(request, loaded, applied, Some(created_at_unix_ms), claims)
 			.await
 	}
 
@@ -602,7 +638,14 @@ impl FilesystemStore {
 		loaded: Option<FsVolumeRecord>,
 		applied: Option<VolumeLogPosition>,
 		logged: Option<i64>,
+		claims: Option<FsCut>,
 	) -> Result<CheckpointResult> {
+		ensure!(
+			claims
+				.as_ref()
+				.is_none_or(|cut| cut.root_position() == applied.as_ref()),
+			"a checkpoint cut does not start at the applied position"
+		);
 		let _ordered = self
 			.lock(
 				super::locks::LockRequest::volume(&request.volume_key),
@@ -709,15 +752,19 @@ impl FilesystemStore {
 		// The holder logged this change; it is done once the apply passed its position. The
 		// entry stays in the log until the pass that moves cold past it, so nothing flushes.
 		if let Some(minimum) = logged_minimum(&request.operation) {
-			let response = if minimum.volume_incarnation != record.volume_incarnation {
-				rejected(CheckpointError::IncarnationChanged)
-			} else if minimum.position.volume_seq > record.cold.volume_seq {
-				rejected(CheckpointError::Lagging)
-			} else {
-				CheckpointResult {
+			// The volume has one claim log, so the minimum names claim log 0 alone.
+			let response = match minimum.cut.root_position() {
+				_ if minimum.volume_incarnation != record.volume_incarnation => {
+					rejected(CheckpointError::IncarnationChanged)
+				}
+				None => rejected(CheckpointError::Invalid),
+				Some(position) if position.volume_seq > record.cold.volume_seq => {
+					rejected(CheckpointError::Lagging)
+				}
+				Some(_) => CheckpointResult {
 					response: VolumeCheckpointResponse::CheckpointUpdated,
 					record: None,
-				}
+				},
 			};
 			self.admit()?;
 			return Ok(response);
@@ -745,10 +792,20 @@ impl FilesystemStore {
 					Some(created_at) => created_at,
 					None => self.clock.observe()?.unix_ms,
 				};
-				let checkpoint = match named_checkpoint(inspection, &record.cold, &op, now) {
+				let mut checkpoint = match named_checkpoint(inspection, &record.cold, &op, now) {
 					Ok(info) => info,
 					Err(error) => return Ok(rejected(error)),
 				};
+				// A new checkpoint of a volume with several claims stands at the cut over
+				// every claim log; its row's key keeps claim log 0's position.
+				if let Some(cut) = &claims
+					&& !confirmation
+					&& checkpoint.checkpoint.cut.as_ref()
+						== Some(&FsCut::single(record.cold.clone()))
+				{
+					checkpoint.position = cut.clone();
+					checkpoint.checkpoint.cut = Some(cut.clone());
+				}
 				if confirmation {
 					// The log quorum already makes this intent durable. Its
 					// canonical name can be confirmed from completed apply
@@ -759,11 +816,7 @@ impl FilesystemStore {
 						record: None,
 					});
 				}
-				let key = address(
-					&scope,
-					checkpoint.position.volume_seq,
-					checkpoint.name.to_vec(),
-				);
+				let key = address(&scope, key_seq(&checkpoint)?, checkpoint.name.to_vec());
 				batch.put(
 					key.pack(),
 					key.serialize(AtVersion::new(
@@ -823,7 +876,7 @@ impl FilesystemStore {
 		}
 		// Flush the applied record with metadata changes: replay from an older
 		// cold floor must never recreate an already deleted checkpoint intent.
-		self.limit_cold(&scope, &mut record);
+		self.limit_cold(&mut record);
 		super::store::put_record(&mut batch, pointer.as_ref(), &record, self.row_version())?;
 		self.stage(batch).await?;
 		// No op logged this change: its tablet never started its maintainer log, which only
@@ -889,7 +942,7 @@ impl FilesystemStore {
 			if checkpoint.checkpoint.retention {
 				let order = (
 					checkpoint.checkpoint.created_at,
-					checkpoint.position.volume_seq,
+					key_seq(&checkpoint)?,
 					checkpoint.name.clone(),
 				);
 				retained.insert(order, checkpoint);
@@ -921,6 +974,7 @@ impl FilesystemStore {
 			retention: true,
 			created_at: created_at_unix_ms,
 			client_epoch: position.client_epoch,
+			cut: Some(FsCut::single(position.clone())),
 		};
 		planned.put(
 			address.pack(),
@@ -945,7 +999,9 @@ impl FilesystemStore {
 		}
 		// Pin the new checkpoint before the write, as a logged checkpoint does.
 		if let Some(retention) = self.catalog.lock().get_mut(&scope) {
-			retention.checkpoints.insert(position.volume_seq);
+			retention
+				.pins
+				.insert(super::filter::PinnedCut::single(position.volume_seq));
 		}
 		let mut batch = WriteBatch::new();
 		planned.apply(&mut batch);

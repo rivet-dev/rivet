@@ -1,0 +1,308 @@
+---
+title: "Migrating from Rivet 2"
+description: "Move a namespace's Rivet Actors from a Rivet 2 control plane to a Rivet 3 control plane without downtime, running both side by side until every actor has moved."
+---
+
+A Rivet 3 control plane can take over a namespace from a running Rivet 2 control plane while both serve traffic. Rivet 3 fronts every request: it serves the actors it already holds and forwards the rest to Rivet 2. In the background, a migrator copies each Rivet 2 actor's state into Rivet 3 while the actor is asleep, then hands the actor over. Your clients keep one endpoint the whole time, and actors move over gradually.
+
+This guide covers running the two control planes side by side, the settings that pace the move, moving individual actors by hand, and what to watch while it runs.
+
+## How a migration works
+
+1. **Rivet 3 runs beside Rivet 2.** It is configured with the address of the Rivet 2 control plane and the name of the namespace being moved. One namespace moves at a time.
+2. **Clients point at Rivet 3.** A request for an actor that Rivet 3 holds is served there. A request for any other actor is forwarded to Rivet 2, so nothing has to have moved yet for clients to switch.
+3. **Nodes run on both.** Your existing node deployment stays connected to Rivet 2 and keeps hosting the actors that live there. A second deployment of the same code connects to Rivet 3 and hosts the actors that have moved and the ones created there.
+4. **The migrator moves sleeping actors.** On each pass it lists the namespace's Rivet 2 actors, picks the ones that are asleep and eligible, copies their key-value and SQLite state into Rivet 3, and hands each one over: Rivet 2 parks its copy and Rivet 3 activates its own. The next request wakes the actor on a Rivet 3 node.
+5. **New actors land in Rivet 3** in a share you choose (0-100%).
+6. **When every actor has moved,** you stop the Rivet 2 nodes, remove the migration settings, and retire the Rivet 2 control plane.
+
+Until you remove the migration settings, the target namespace cannot be forked (`namespace.migrating_from_v2`): a fork taken mid-migration would hold only the actors already moved.
+
+An actor is never moved while it runs. If one wakes in the middle of its copy, the attempt is discarded and the actor is tried again on a later pass, so a busy actor simply waits until it sleeps.
+
+### Actor IDs and keys
+
+- **Actors without a key keep their ID.** A request by ID reaches the actor before and after it moves.
+- **Actors with a key get a new ID in Rivet 3.** Lookups by key (`get` and `getOrCreate`) find the actor wherever it lives, so code that addresses keyed actors by key needs no change. Once a keyed actor has moved, a request by its old Rivet 2 ID answers `actor.not_found`.
+
+If you store actor IDs of keyed actors, for example in your own database, resolve those actors by key instead before migrating, or refresh the stored ID by resolving the key again when a request by ID answers `actor.not_found`.
+
+## Before you start
+
+- **Upgrade Rivet 2 to the latest 2.x release.** The migrator talks to a migration API that only recent 2.x releases serve. Check that the Rivet 2 control plane answers under `/migration/v1/` before going further.
+- **Make sure Rivet 3 can reach Rivet 2.** Only Rivet 3 makes calls, to the Rivet 2 gateway and to the Rivet 2 API of every Rivet 2 datacenter. Rivet 2 does not need to reach Rivet 3. These addresses do not have to be public: if Rivet 2 sits behind a proxy or load balancer and Rivet 3 runs next to it, point Rivet 3 at an internal address it can reach directly.
+- **Plan for the storage load.** Every move reads the actor's state from Rivet 2. On a large namespace, start slowly and watch Rivet 2's storage and memory as the rate goes up. See [Pacing](#pacing).
+- **Check how your actors call each other.** See [Actor-to-actor calls](#actor-to-actor-calls).
+
+## Set up Rivet 3 beside Rivet 2
+
+<Steps>
+<Step title="Deploy the Rivet 3 control plane">
+
+Deploy Rivet 3 as a separate cluster with its own storage. It does not share anything with Rivet 2 apart from the network path between them.
+
+</Step>
+<Step title="Create the namespace and node pools">
+
+Create a namespace in Rivet 3 with the same name as the Rivet 2 namespace, and create each node pool that the namespace's actors use (`PUT /pools/{name}`). Actors keep their pool when they move, and Rivet 3 refuses nodes for a pool it does not know.
+
+</Step>
+<Step title="Configure the migration as a passthrough">
+
+Add a `migrate_from_v2` section to the Rivet 3 configuration with both ratios at 0. Rivet 3 now forwards the namespace's requests to Rivet 2, and the migrator lists the namespace without moving anything.
+
+```yaml
+migrate_from_v2:
+  # An address of the Rivet 2 gateway that Rivet 3 can reach, where requests for actors
+  # Rivet 3 does not hold are forwarded. It does not have to be public.
+  endpoint: http://rivet2.internal:6420
+  # An address of the Rivet 2 API for each Rivet 2 datacenter, keyed by datacenter label.
+  # These do not have to be public either.
+  api_urls:
+    "1": http://rivet2.internal:6420
+  # The Rivet 2 namespace to move.
+  namespace: my-namespace
+  create_ratio: 0.0
+  migrate_ratio: 0.0
+```
+
+To keep the Rivet 2 token hidden, pass it through the environment as `RIVET__MIGRATE_FROM_V2__TOKEN` instead of writing it into the file.
+
+</Step>
+<Step title="Check that the migrator sees the namespace">
+
+Run the migrator's status command from a Rivet 3 control plane instance:
+
+```bash
+rivet-engine migrate-from-v2 status
+```
+
+The current pass should list the namespace's actors as `not_selected`, because the ratio is 0. If the pass lists nothing, or errors, it points at a misconfiguration of the endpoint, the API addresses, or the token.
+
+</Step>
+<Step title="Point clients at Rivet 3">
+
+Switch your clients and backend to the Rivet 3 endpoint. Every request now goes through Rivet 3, which forwards everything to Rivet 2 until actors start moving. Note that you will still need actor nodes pointed at Rivet 2 until the end of the migration. See [Run nodes on both control planes](#run-nodes-on-both-control-planes).
+
+</Step>
+</Steps>
+
+## Run nodes on both control planes
+
+Keep your current node deployment connected to Rivet 2, and add a second deployment of the same code connected to Rivet 3. Size the Rivet 3 deployment for the actors you expect to move in the next stretch of the migration, then grow it as the share moves over. Both deployments run until the last actor has moved.
+
+Deploy new code to both deployments together for the duration of the migration, since an actor can run on either one depending on whether it has moved yet.
+
+### Actor-to-actor calls
+
+An actor's own client (`c.client()`) talks to the control plane its node is connected to. On a node connected to Rivet 2, that is Rivet 2, which does not know about actors that have already moved. A call by key to a moved actor can then fail, or create a second actor with the same key in Rivet 2.
+
+Make those calls through a client created with `createClient` and pointed at the Rivet 3 endpoint on both node deployments, for as long as the migration runs. Rivet 3 reaches every actor, wherever it lives, and decides where each new key is created, so a call that goes straight to Rivet 2 can create a key Rivet 3 has already placed. Do this before raising `create_ratio` above 0.
+
+## Changing settings without a restart
+
+Every migration setting except `migrate_seed` can be changed while the control plane runs, through its dynamic configuration. This is how you ramp the ratios, tune the pacing, and switch to the next namespace, all without restarting a single control plane instance.
+
+Write the complete `migrate_from_v2` section as a JSON file and apply it from any Rivet 3 control plane instance:
+
+```json
+{
+  "endpoint": "http://rivet2.internal:6420",
+  "api_urls": { "1": "http://rivet2.internal:6420" },
+  "namespace": "my-namespace",
+  "token": "<rivet-2-namespace-token>",
+  "create_ratio": 0.1,
+  "migrate_ratio": 0.1,
+  "min_sleep_ms": 600000
+}
+```
+
+```bash
+rivet-engine migrate-from-v2 set-config migrate.json
+```
+
+- **The file replaces the whole section.** Fields you leave out fall back to their defaults, not to the configuration file's values, so always write every field you rely on. That includes the Rivet 2 token: `RIVET__MIGRATE_FROM_V2__TOKEN` only fills in the configuration file, so a dynamic update has to carry the token itself. Keep the file private and delete it once applied.
+- **Every instance applies it within about a minute.** The gateway and the migrator both read the new values, so check `rivet-engine migrate-from-v2 status` and the [metrics](#what-to-watch) after about a minute before changing anything else.
+- **It persists and takes priority.** A dynamic update survives restarts and takes priority over the `migrate_from_v2` section of the configuration file until you remove it.
+- **`migrate_seed` is fixed at startup.** A new seed would reshuffle which actors `migrate_ratio` selects, so an update must keep the seed the control plane started with.
+
+To drop the dynamic update and return to the configuration file, run:
+
+```bash
+rivet-engine migrate-from-v2 clear-config
+```
+
+Once you have settled on values, record them in the configuration file as well, so that a later `clear-config` or a change to the file does not silently undo them.
+
+## Start moving actors
+
+Raise the ratios gradually with [dynamic updates](#changing-settings-without-a-restart), so you can watch each step before the next. A typical ramp is 0.1, then 0.5, then 1.0, with a pause at each step to check the [signals below](#what-to-watch).
+
+- `migrate_ratio` is the share of existing Rivet 2 actors the migrator moves. Actors are picked by a stable hash of their ID, so raising the ratio only ever adds actors.
+- `create_ratio` is the share of new actors created in Rivet 3. Actors without a key are drawn at random. Actors with a key are picked by a stable hash of the key, so raising the ratio only ever adds keys. A key that already exists in Rivet 2 stays there until the migrator moves it, whatever the ratio says.
+
+The first create of a key settles where it lives, and every later create of that key follows the same decision, even after you change the ratio. A key can therefore never end up in both control planes, provided every create reaches Rivet 3 first. Requests sent straight to Rivet 2 bypass that, which is why clients and [actor-to-actor calls](#actor-to-actor-calls) must go through Rivet 3.
+
+## Settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `endpoint` | required | Address of the Rivet 2 gateway that requests are forwarded to. Any address Rivet 3 can reach, such as an internal one that bypasses a proxy or load balancer in front of Rivet 2. |
+| `api_urls` | none | Address of the Rivet 2 API per datacenter label, used to list, export, and hand over actors. Like `endpoint`, it only has to be reachable from Rivet 3. |
+| `namespace` | required | The Rivet 2 namespace being moved. |
+| `target_namespace` | same as `namespace` | The Rivet 3 namespace the actors land in. |
+| `create_ratio` | `0.0` | Share of new actors created in Rivet 3, by a stable hash of the key for keyed actors. |
+| `migrate_ratio` | `0.0` | Share of existing actors the migrator moves. |
+| `migrate_seed` | `0` | Seed of the hash behind `migrate_ratio`. Read at startup only, because a new seed reshuffles which actors are selected. |
+| `min_sleep_ms` | 10 minutes | How long an actor must have been asleep before it can move. |
+| `wake_horizon_ms` | 5 minutes | An actor with an alarm due sooner than this stays where it is for now. |
+| `pass_interval_ms` | 5 minutes | Time between passes over the namespace. |
+| `max_in_flight` | `16` | Moves in progress at once. |
+| `max_actors_per_sec` | `50` | Moves started per second. |
+| `max_copy_bytes` | 10 GiB | Largest actor copied, by stored SQLite size plus key-value size. Larger actors are skipped as `too_large`. |
+| `max_copy_bytes_per_sec` | 32 MiB/s | State admitted for copying per second, which bounds the read load on Rivet 2's storage. |
+| `confirm_delay_ms` | 20 s | How long a handover waits before it is confirmed, so a wake already on its way to Rivet 2 lands first. |
+
+### Pacing
+
+The defaults are deliberately slow. `min_sleep_ms` decides how many actors are eligible at all: an actor that sleeps briefly between frequent wakes is only picked up once the floor is shorter than its sleep. `max_in_flight`, `max_actors_per_sec`, and `max_copy_bytes_per_sec` decide how fast eligible actors move.
+
+Tune all of these with [dynamic updates](#changing-settings-without-a-restart) while you watch. Raise the throughput settings while Rivet 2's storage, CPU, and memory stay comfortable, and lower them again if they climb. A shorter `pass_interval_ms` revisits actors that were skipped as awake sooner.
+
+## Move actors by hand
+
+The migrator command also moves, inspects, and returns individual actors. Use Rivet 2 actor IDs.
+
+```bash
+# Move one actor now, whatever migrate_ratio says. Every other eligibility rule still applies.
+rivet-engine migrate-from-v2 migrate <actor-id>
+
+# Return once the move is admitted instead of waiting for it to finish.
+rivet-engine migrate-from-v2 migrate <actor-id> --no-wait
+
+# Keep retrying until the actor is eligible, for example until an awake actor sleeps.
+rivet-engine migrate-from-v2 migrate <actor-id> --wait-eligible --timeout-secs 600
+
+# Show the current pass and every move in progress.
+rivet-engine migrate-from-v2 status
+```
+
+`migrate` prints a JSON result: `migrated` (with `"already": true` if it had moved before), `admitted`, `ineligible` with a `reason`, or `not_found`. Running it again for the same actor is safe.
+
+### Creating new actors in Rivet 3
+
+A request can ask for its new actor to be created in Rivet 3 regardless of `create_ratio`, by sending the `x-rivet-actor-version: 3` header. Browsers and other clients that cannot set headers on a WebSocket upgrade can send the `rivet_actor_version.3` WebSocket subprotocol instead.
+
+With the header, an actor without a key is created in Rivet 3, and a keyed `getOrCreate` creates it in Rivet 3 unless the key already belongs to Rivet 2, in which case it returns the Rivet 2 actor. A key belongs to Rivet 2 when Rivet 2 holds it, or when an earlier create without the header placed it there, so the header only decides where a key's first create lands. Any other version is refused with `actor.invalid_version`. Use it to try new features on Rivet 3 or to route a specific part of your app there early. Without a migration configured, the header has no effect.
+
+### Returning an actor to Rivet 2
+
+If a moved actor misbehaves on Rivet 3, hand it back:
+
+```bash
+rivet-engine migrate-from-v2 recover <rivet-2-actor-id> --v3-actor-id <rivet-3-actor-id>
+```
+
+Rivet 2 serves the actor again as it was when it moved, and **anything the actor wrote on Rivet 3 after moving is dropped**. Actors without a key keep their ID, so `--v3-actor-id` is only needed for keyed actors. Recovery depends on Rivet 2's parked copy, so it is only possible until Rivet 2 is retired. To stop moving more actors while you investigate, set `migrate_ratio` back to 0 with a [dynamic update](#changing-settings-without-a-restart). Actors that have already moved stay on Rivet 3.
+
+## Actors that do not move on their own
+
+The migrator skips an actor on a pass for a reason, and most reasons clear by themselves:
+
+| Reason | Meaning | What to do |
+|---|---|---|
+| `not_selected` | Outside the current `migrate_ratio`. | Raise the ratio. |
+| `recently_awake` | Running, or asleep for less than `min_sleep_ms`. | Nothing. It moves after it sleeps. |
+| `wake_soon` | Its alarm is due within `wake_horizon_ms`. | Nothing. It moves after the alarm runs and it sleeps again. |
+| `hibernating` | A client holds a hibernatable WebSocket open to it. | Nothing. It moves once the client disconnects. |
+| `too_large` | Its state is larger than `max_copy_bytes`. | Raise `max_copy_bytes` once the rest of the namespace has moved. |
+| `actor_v1`, `sqlite_v1` | It is stored in a format older than Rivet 2's current one, which the migrator cannot copy. | It stays on Rivet 2. Recreate it on Rivet 3 if you still need it. |
+| `key_untranslatable` | Its key cannot be written in Rivet 3's key encoding without risking a collision. | It stays on Rivet 2. Recreate it under a supported key. |
+| `duplicate_key` | Rivet 3 already has a separate actor with the same key. | Decide which copy to keep. The Rivet 2 actor is left alone. |
+
+### Always-awake actors
+
+Some actors never sleep long enough to move: singletons with a loop, actors on a short timer, or actors that something pings continuously. Near the end of the migration, these are usually all that is left.
+
+To move them, briefly stop them from waking on Rivet 2:
+
+1. With a [dynamic update](#changing-settings-without-a-restart), lower `min_sleep_ms` to a few seconds and `wake_horizon_ms` to its minimum, so an actor qualifies the moment it sleeps.
+2. Make sure your Rivet 3 nodes have the capacity to host everything that is left.
+3. Stop the Rivet 2 node deployment. Its actors sleep, and each one is moved within the next few passes. Requests that arrive for them in the meantime wait or are retried, as during a node restart.
+4. Use `migrate <actor-id> --wait-eligible` for the specific actors you need to move first.
+5. Once they have moved, put `min_sleep_ms` and `wake_horizon_ms` back.
+
+Expect these actors to be unavailable for a few minutes. Anything that would restart the Rivet 2 nodes during this window, such as a deploy or an autoscaler, resets the clock, so pause it first.
+
+## What to watch
+
+### Migrator status and metrics
+
+`rivet-engine migrate-from-v2 status` shows the current pass and every move in progress. The pass counts are cumulative for the pass:
+
+- `already_migrated`: actors that have moved. The migration is done when a completed pass has as many as `listed`.
+- `confirmed`: actors moved during this pass.
+- `skipped` and `not_selected`: actors not moved this pass. See the reasons above.
+- `discarded`: moves abandoned because the actor woke, was destroyed, or the copy failed. They are retried.
+- `needs_recovery`: actors that Rivet 2 handed over but Rivet 3 could not activate. **This must stay at 0.** Such an actor is unreachable until you resolve it, with `migrate` again or with `recover`.
+
+The same picture is available as Prometheus metrics from every control plane instance:
+
+| Metric | What it shows |
+|---|---|
+| `rivet_migrate_from_v2_actors` | Actors by state in the latest pass. |
+| `rivet_migrate_from_v2_actor_result_total` | Move outcomes by `result` and `reason`. |
+| `rivet_migrate_from_v2_in_flight`, `rivet_migrate_from_v2_in_flight_capacity` | Moves in progress, against `max_in_flight`. |
+| `rivet_migrate_from_v2_in_flight_oldest_started_at_seconds` | Start of the oldest move in progress. A value that stops advancing points at a stuck move. |
+| `rivet_migrate_from_v2_copy_bytes`, `rivet_migrate_from_v2_copy_duration_seconds` | Size and duration of each copy. |
+| `rivet_migrate_from_v2_pass_duration_seconds`, `rivet_migrate_from_v2_pass_completed_at_seconds` | Pass length and the time the last pass finished. |
+| `rivet_migrate_from_v2_effect_failures_total` | Failed calls to Rivet 2 or Rivet 3 during moves, by phase. |
+| `rivet_gateway_migrate_from_v2_requests_total` | Requests by `route`: served by Rivet 3 (`v3`), forwarded to Rivet 2 (`v2_fallback`), refused because Rivet 2 failed (`v2_error`), asked to retry (`retry_later`), or `not_found`. |
+
+As the migration progresses, `v3` grows and `v2_fallback` shrinks toward 0. A steady stream of `v2_error` means Rivet 3 cannot reliably reach Rivet 2.
+
+### Rivet 2's health
+
+Every move reads the actor's state from Rivet 2, so watch Rivet 2's storage, CPU, and memory and lower the pacing settings if they climb. Keep Rivet 2 healthy and its nodes running until the end: actors that have not moved still live there.
+
+## Things that look alarming but are not
+
+- **`actor.migrating_from_v2` errors.** While an actor is being handed over, requests for it are refused with this retryable error and a short retry hint. RivetKit clients retry it. Other clients should honor the retry hint.
+- **Discarded moves.** An actor that wakes during its copy is discarded and tried again later. A few percent of attempts being discarded is normal, more for actors that wake often.
+- **A large `skipped` count early on.** Busy actors are skipped until they sleep. The count shrinks over several passes.
+- **"Export stream broke; resuming from the last fence"** in the Rivet 3 logs. A copy whose connection to Rivet 2 dropped resumes where it stopped. Only an actor that fails the same way on every pass needs a closer look.
+- **The same actor ID listed twice** when you list actors including destroyed ones: one destroyed and one live, with nearly the same creation time. A move that was abandoned left the destroyed record, and the live one is the actor. Do not delete the destroyed record by ID, because a delete by ID reaches the live actor, which shares it.
+- **`not_found` requests on the Rivet 3 gateway.** Some are ordinary requests for actors that never existed. If they grow as actors move, something is calling keyed actors by their old Rivet 2 ID. See [Actor IDs and keys](#actor-ids-and-keys).
+- **Rivet 2 still listing moved actors.** Rivet 2 keeps a parked copy of every moved actor so it can be recovered. It does not run, and Rivet 3 does not forward requests to it.
+
+## Finishing the migration
+
+<Steps>
+<Step title="Confirm every actor has moved">
+
+Wait for a pass whose `already_migrated` count equals its `listed` count, with nothing in flight. Resolve any actor still skipped, using the table above.
+
+</Step>
+<Step title="Confirm nothing reaches Rivet 2">
+
+`rivet_gateway_migrate_from_v2_requests_total{route="v2_fallback"}` should stay flat. Requests still being forwarded mean an actor is still on Rivet 2.
+
+</Step>
+<Step title="Stop the Rivet 2 nodes">
+
+Scale the Rivet 2 node deployment to zero and keep the Rivet 3 deployment. Switch actor-to-actor clients back to the actor's own client if you changed them for the migration.
+
+</Step>
+<Step title="Remove the migration settings">
+
+Run `rivet-engine migrate-from-v2 clear-config` if you used [dynamic updates](#changing-settings-without-a-restart), then remove the `migrate_from_v2` section from the Rivet 3 configuration. Rivet 3 now serves the namespace on its own.
+
+</Step>
+<Step title="Retire Rivet 2">
+
+Keep the Rivet 2 control plane and its storage until you are confident in the migration, because returning an actor needs it. Back up its storage before you shut it down.
+
+</Step>
+</Steps>
+
+To move another namespace, point `namespace` at it, either in the configuration file or with a [dynamic update](#changing-settings-without-a-restart), and start again from [Set up Rivet 3 beside Rivet 2](#set-up-rivet-3-beside-rivet-2).

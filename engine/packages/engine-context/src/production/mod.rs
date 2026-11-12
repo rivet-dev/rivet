@@ -59,6 +59,7 @@ pub async fn storage_adapters(
 		fs,
 		object_stores,
 		http,
+		external_http: reqwest::external_client()?,
 		http_server: Arc::new(
 			rivet_env::backends::production::http::AxumServer::with_connection_capacity(
 				config

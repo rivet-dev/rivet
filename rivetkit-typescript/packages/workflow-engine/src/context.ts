@@ -32,12 +32,12 @@ import {
 } from "./location.js";
 import {
 	createEntry,
-	deleteEntriesWithPrefix,
 	flush,
 	getOrCreateMetadata,
 	loadMetadata,
 	type PendingDeletions,
 	setEntry,
+	takeEntriesWithPrefix,
 } from "./storage.js";
 import type {
 	BranchConfig,
@@ -71,6 +71,7 @@ import type {
 	WorkflowQueueNextBatchOptions,
 	WorkflowQueueNextOptions,
 } from "./types.js";
+import { type LongTimeoutHandle, setLongTimeout } from "./utils.js";
 
 /**
  * Default values for step configuration.
@@ -295,6 +296,40 @@ function buildSchedulerYieldError(
 	return new MessageWaitError(messageNames);
 }
 
+/** A race branch waiting on the scheduler, and how to run it again in-process. */
+interface YieldedRaceBranch {
+	error: SleepError | MessageWaitError | StepFailedError;
+	start: () => void;
+}
+
+/** A branch waiting only on messages has no deadline. */
+function yieldedDeadline(yielded: YieldedRaceBranch): number | undefined {
+	const { error } = yielded;
+	if (error instanceof SleepError) {
+		return error.deadline;
+	}
+	if (error instanceof StepFailedError) {
+		return error.retryAt;
+	}
+	return undefined;
+}
+
+function earliestYieldedDeadline(
+	yieldedBranches: Map<string, YieldedRaceBranch>,
+): number | undefined {
+	let earliest: number | undefined;
+	for (const yielded of yieldedBranches.values()) {
+		const deadline = yieldedDeadline(yielded);
+		if (
+			deadline !== undefined &&
+			(earliest === undefined || deadline < earliest)
+		) {
+			earliest = deadline;
+		}
+	}
+	return earliest;
+}
+
 function controlFlowErrorPriority(error: Error): number {
 	if (error instanceof EvictedError) {
 		return 0;
@@ -343,6 +378,8 @@ export interface RollbackAction<T = unknown> {
 export class WorkflowContextImpl implements WorkflowContextInterface {
 	private entryInProgress = false;
 	private abortController: AbortController;
+	/** The run's signal. Race branches have their own, which eviction skips. */
+	private evictionSignal: AbortSignal;
 	private currentLocation: Location;
 	private visitedKeys: Set<string>;
 	private runSpan?: WorkflowSpan;
@@ -374,6 +411,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	) {
 		this.currentLocation = location;
 		this.abortController = abortController ?? new AbortController();
+		this.evictionSignal = this.abortController.signal;
 		this.mode = mode;
 		this.rollbackActions = rollbackActions;
 		this.rollbackCheckpointSet = rollbackCheckpointSet;
@@ -413,6 +451,11 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		}
 	}
 
+	/** Whether an enclosing race picked a winner and cancelled this branch. */
+	private isRaceCancelled(): boolean {
+		return this.abortSignal.reason instanceof CancelledError;
+	}
+
 	private async flushStorage(): Promise<void> {
 		await flush(this.storage, this.driver, this.historyNotifier);
 	}
@@ -424,7 +467,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		location: Location,
 		abortController?: AbortController,
 	): WorkflowContextImpl {
-		return new WorkflowContextImpl(
+		const branch = new WorkflowContextImpl(
 			this.workflowId,
 			this.storage,
 			this.driver,
@@ -440,6 +483,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			this.visitedKeys,
 			this.runSpan,
 		);
+		branch.evictionSignal = this.evictionSignal;
+		return branch;
 	}
 
 	/**
@@ -500,6 +545,48 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	 */
 	private markVisited(key: string): void {
 		this.visitedKeys.add(key);
+	}
+
+	/**
+	 * Mark all retained history under `location` as visited.
+	 *
+	 * Replay does not re-enter a settled scope, but its entries stay in history.
+	 * Without this, an enclosing validateComplete or getVersion treats them as
+	 * leftovers from changed workflow code.
+	 */
+	private markSettledHistoryVisited(location: Location): void {
+		for (const [key, entry] of this.storage.history.entries) {
+			if (isLocationPrefix(location, entry.location)) {
+				this.markVisited(key);
+			}
+		}
+	}
+
+	/**
+	 * Mark the retained history of a resumed loop's finished iterations as
+	 * visited, because the loop continues from `resumeIteration` without
+	 * replaying them.
+	 */
+	private markFinishedIterationsVisited(
+		loopLocation: Location,
+		resumeIteration: number,
+	): void {
+		const loopSegment = loopLocation[loopLocation.length - 1];
+		for (const [key, entry] of this.storage.history.entries) {
+			if (!isLocationPrefix(loopLocation, entry.location)) {
+				continue;
+			}
+
+			const iterationSegment = entry.location[loopLocation.length];
+			if (
+				iterationSegment &&
+				typeof iterationSegment !== "number" &&
+				iterationSegment.loop === loopSegment &&
+				iterationSegment.iteration < resumeIteration
+			) {
+				this.markVisited(key);
+			}
+		}
 	}
 
 	/**
@@ -629,6 +716,34 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 			if (onAbort) {
 				this.abortSignal.removeEventListener("abort", onAbort);
+			}
+		}
+	}
+
+	/**
+	 * Wait until `deadline`, a running race branch settles, or the workflow is
+	 * evicted. The timer and abort listener are torn down on every outcome.
+	 */
+	private async waitForRaceWake(
+		deadline: number,
+		runningBranches: Set<Promise<void>>,
+	): Promise<void> {
+		let timer: ReturnType<typeof setLongTimeout> | undefined;
+		let onEvicted: (() => void) | undefined;
+		const wake = new Promise<void>((resolve) => {
+			timer = setLongTimeout(resolve, Math.max(0, deadline - Date.now()));
+			onEvicted = resolve;
+			this.evictionSignal.addEventListener("abort", onEvicted, {
+				once: true,
+			});
+		});
+
+		try {
+			await Promise.race([wake, ...runningBranches]);
+		} finally {
+			timer?.abort();
+			if (onEvicted) {
+				this.evictionSignal.removeEventListener("abort", onEvicted);
 			}
 		}
 	}
@@ -878,6 +993,11 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 		}
 
+		// A race can cancel this branch while the metadata above loads.
+		if (this.isRaceCancelled()) {
+			throw new EvictedError();
+		}
+
 		// Execute the step
 		const entry =
 			existing ?? createEntry(location, { type: "step", data: {} });
@@ -930,6 +1050,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			metadata.status = "completed";
 			metadata.error = undefined;
 			metadata.completedAt = Date.now();
+			metadata.dirty = true;
 
 			// Ephemeral steps don't trigger an immediate flush. This avoids the
 			// synchronous write overhead for transient operations. Note that the
@@ -953,10 +1074,20 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			});
 			return output;
 		} catch (error) {
+			// The race that cancelled this step deletes its entry, so a
+			// cancellation is not a failure to record or retry.
+			if (this.isRaceCancelled()) {
+				stepSpan?.finish("failed");
+				throw new EvictedError();
+			}
+
 			if (entry.kind.type === "step") {
 				entry.kind.data.error = String(error);
 			}
 			entry.dirty = true;
+			// A sibling branch can save this step's running metadata while the
+			// callback runs, so the failure status must be saved again.
+			metadata.dirty = true;
 
 			// Timeout errors are treated as critical by default. Steps opt
 			// into retrying on timeout with retryOnTimeout: true.
@@ -1103,23 +1234,33 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		timeoutMs: number,
 		stepName: string,
 	): Promise<T> {
-		if (timeoutMs <= 0) {
-			return promise;
-		}
-
-		let timeoutId: ReturnType<typeof setTimeout> | undefined;
-		const timeoutPromise = new Promise<never>((_, reject) => {
-			timeoutId = setTimeout(() => {
-				reject(new StepTimeoutError(stepName, timeoutMs));
-			}, timeoutMs);
+		let interrupt!: (error: Error) => void;
+		const interrupted = new Promise<never>((_, reject) => {
+			interrupt = reject;
 		});
 
-		try {
-			return await Promise.race([promise, timeoutPromise]);
-		} finally {
-			if (timeoutId !== undefined) {
-				clearTimeout(timeoutId);
+		// A timeout of 0 or a non-finite timeout such as Infinity disables the timeout.
+		let timeout: LongTimeoutHandle | undefined;
+		if (timeoutMs > 0 && Number.isFinite(timeoutMs)) {
+			timeout = setLongTimeout(() => {
+				interrupt(new StepTimeoutError(stepName, timeoutMs));
+			}, timeoutMs);
+		}
+
+		// A race that cancels this step stops awaiting it, as a timeout does.
+		// Eviction does not interrupt a step, so its result is still recorded.
+		const onAbort = () => {
+			if (this.isRaceCancelled()) {
+				interrupt(new EvictedError());
 			}
+		};
+		this.abortSignal.addEventListener("abort", onAbort, { once: true });
+
+		try {
+			return await Promise.race([promise, interrupted]);
+		} finally {
+			timeout?.abort();
+			this.abortSignal.removeEventListener("abort", onAbort);
 		}
 	}
 
@@ -1185,6 +1326,13 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				existing.id,
 			);
 
+			if (
+				metadata.status === "completed" ||
+				loopData.output !== undefined
+			) {
+				this.markSettledHistoryVisited(location);
+			}
+
 			if (rollbackMode) {
 				if (loopData.output !== undefined) {
 					return loopData.output as T;
@@ -1207,6 +1355,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			entry = existing;
 			state = loopData.state as S;
 			iteration = loopData.iteration;
+			this.markFinishedIterationsVisited(location, iteration);
 			if (rollbackMode) {
 				rollbackOutput = loopData.output as T | undefined;
 				rollbackIterationRan = rollbackOutput !== undefined;
@@ -2097,24 +2246,27 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					);
 				}
 
+				const branchLocation = appendName(
+					this.storage,
+					location,
+					branchName,
+				);
+
 				// Already completed
 				if (branchStatus.status === "completed") {
+					this.markSettledHistoryVisited(branchLocation);
 					results[branchName] = branchStatus.output;
 					return;
 				}
 
 				// Already failed
 				if (branchStatus.status === "failed") {
+					this.markSettledHistoryVisited(branchLocation);
 					errors[branchName] = new Error(branchStatus.error);
 					return;
 				}
 
 				// Execute branch
-				const branchLocation = appendName(
-					this.storage,
-					location,
-					branchName,
-				);
 				const branchCtx = this.createBranch(branchLocation);
 
 				branchStatus.status = "running";
@@ -2257,6 +2409,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			// Check if we already have a winner
 			const raceKind = existing.kind;
 			if (raceKind.data.winner !== null) {
+				this.markSettledHistoryVisited(location);
 				const winnerStatus =
 					raceKind.data.branches[raceKind.data.winner];
 				return {
@@ -2294,8 +2447,11 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		// Create abort controller for cancellation
 		const raceAbortController = new AbortController();
 
-		// Track all branch promises to wait for cleanup
-		const branchPromises: Promise<void>[] = [];
+		// Track branches with in-process work to wait for cleanup
+		const runningBranches = new Set<Promise<void>>();
+
+		// Track the wait of each branch that yielded, and how to run it again
+		const yieldedBranches = new Map<string, YieldedRaceBranch>();
 
 		// Track winner info
 		let winnerName: string | null = null;
@@ -2303,7 +2459,6 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		let hasWinner = false;
 		const errors: Record<string, Error> = {};
 		const lateErrors: Array<{ name: string; error: string }> = [];
-		let schedulerYieldState: SchedulerYieldState | undefined;
 		let propagatedError: Error | undefined;
 
 		// Check for replay winners first
@@ -2333,6 +2488,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 		// If we found a replay winner, return immediately
 		if (hasWinner && winnerName !== null) {
+			this.markSettledHistoryVisited(location);
 			return { winner: winnerName, value: winnerValue as T };
 		}
 
@@ -2345,129 +2501,214 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				);
 			}
 
-			// Skip already completed/cancelled
-			if (
-				branchStatus.status !== "pending" &&
-				branchStatus.status !== "running"
-			) {
-				continue;
-			}
-
 			const branchLocation = appendName(
 				this.storage,
 				location,
 				branch.name,
 			);
-			const branchCtx = this.createBranch(
-				branchLocation,
-				raceAbortController,
-			);
+
+			// Skip already completed/cancelled
+			if (
+				branchStatus.status !== "pending" &&
+				branchStatus.status !== "running"
+			) {
+				this.markSettledHistoryVisited(branchLocation);
+				continue;
+			}
 
 			branchStatus.status = "running";
 			branchStatus.error = undefined;
 			entry.dirty = true;
 
-			const branchPromise = branch.run(branchCtx).then(
-				async (output) => {
-					if (hasWinner) {
-						// This branch completed after a winner was determined
-						// Still record the completion for observability
-						branchStatus.status = "completed";
-						branchStatus.output = output;
-						branchStatus.error = undefined;
-						entry.dirty = true;
-						return;
-					}
+			// Validate inside the run promise so a divergence reaches the
+			// rejection handler below instead of being dropped.
+			const runBranch = async () => {
+				const branchCtx = this.createBranch(
+					branchLocation,
+					raceAbortController,
+				);
+				const output = await branch.run(branchCtx);
+				branchCtx.validateComplete();
+				return output;
+			};
 
-					if (propagatedError) {
-						branchStatus.status = "completed";
-						branchStatus.output = output;
-						branchStatus.error = undefined;
-						entry.dirty = true;
-						return;
-					}
+			const startBranch = () => {
+				const branchPromise = runBranch()
+					.then(
+						async (output) => {
+							if (hasWinner) {
+								// This branch completed after a winner was determined
+								// Still record the completion for observability
+								branchStatus.status = "completed";
+								branchStatus.output = output;
+								branchStatus.error = undefined;
+								entry.dirty = true;
+								return;
+							}
 
-					hasWinner = true;
-					winnerName = branch.name;
-					winnerValue = output;
+							if (propagatedError) {
+								branchStatus.status = "completed";
+								branchStatus.output = output;
+								branchStatus.error = undefined;
+								entry.dirty = true;
+								return;
+							}
 
-					branchCtx.validateComplete();
+							hasWinner = true;
+							winnerName = branch.name;
+							winnerValue = output;
 
-					branchStatus.status = "completed";
-					branchStatus.output = output;
-					branchStatus.error = undefined;
-					raceData.winner = branch.name;
-					entry.dirty = true;
+							branchStatus.status = "completed";
+							branchStatus.output = output;
+							branchStatus.error = undefined;
+							raceData.winner = branch.name;
+							entry.dirty = true;
 
-					// Cancel other branches
-					raceAbortController.abort();
-				},
-				(error) => {
-					if (hasWinner) {
-						if (
-							error instanceof CancelledError ||
-							error instanceof EvictedError
-						) {
-							branchStatus.status = "cancelled";
-						} else {
-							lateErrors.push({
-								name: branch.name,
-								error: String(error),
-							});
-						}
-						entry.dirty = true;
-						return;
-					}
+							// Cancel other branches
+							raceAbortController.abort(new CancelledError());
+						},
+						(error) => {
+							if (hasWinner) {
+								if (
+									error instanceof CancelledError ||
+									error instanceof EvictedError ||
+									error instanceof SleepError ||
+									error instanceof MessageWaitError
+								) {
+									branchStatus.status = "cancelled";
+								} else {
+									lateErrors.push({
+										name: branch.name,
+										error: String(error),
+									});
+								}
+								entry.dirty = true;
+								return;
+							}
 
-					if (
-						error instanceof SleepError ||
-						error instanceof MessageWaitError ||
-						error instanceof StepFailedError
-					) {
-						schedulerYieldState = mergeSchedulerYield(
-							schedulerYieldState,
-							error,
-						);
-						branchStatus.status = "running";
-						branchStatus.error = undefined;
-						entry.dirty = true;
-						return;
-					}
+							if (
+								error instanceof SleepError ||
+								error instanceof MessageWaitError ||
+								error instanceof StepFailedError
+							) {
+								yieldedBranches.set(branch.name, {
+									error,
+									start: startBranch,
+								});
+								branchStatus.status = "running";
+								branchStatus.error = undefined;
+								entry.dirty = true;
+								return;
+							}
 
-					if (
-						error instanceof EvictedError ||
-						error instanceof HistoryDivergedError ||
-						error instanceof EntryInProgressError ||
-						error instanceof RollbackCheckpointError ||
-						error instanceof RollbackStopError
-					) {
-						propagatedError = selectControlFlowError(
-							propagatedError,
-							error,
-						);
-						branchStatus.status = "running";
-						branchStatus.error = undefined;
-						entry.dirty = true;
-						return;
-					}
+							if (
+								error instanceof EvictedError ||
+								error instanceof HistoryDivergedError ||
+								error instanceof EntryInProgressError ||
+								error instanceof RollbackCheckpointError ||
+								error instanceof RollbackStopError
+							) {
+								propagatedError = selectControlFlowError(
+									propagatedError,
+									error,
+								);
+								branchStatus.status = "running";
+								branchStatus.error = undefined;
+								entry.dirty = true;
+								return;
+							}
 
-					if (error instanceof CancelledError) {
-						branchStatus.status = "cancelled";
-					} else {
-						branchStatus.status = "failed";
-						branchStatus.output = undefined;
-						branchStatus.error = String(error);
-						errors[branch.name] = error as Error;
-					}
-					entry.dirty = true;
-				},
-			);
+							if (error instanceof CancelledError) {
+								branchStatus.status = "cancelled";
+							} else {
+								branchStatus.status = "failed";
+								branchStatus.output = undefined;
+								branchStatus.error = String(error);
+								errors[branch.name] = error as Error;
+							}
+							entry.dirty = true;
+						},
+					)
+					.finally(() => {
+						runningBranches.delete(branchPromise);
+					});
+				runningBranches.add(branchPromise);
+			};
 
-			branchPromises.push(branchPromise);
+			startBranch();
 		}
 
-		// Wait for all branches to complete or be cancelled
-		await Promise.allSettled(branchPromises);
+		// A cancelled branch also cancels the races nested inside it.
+		const parentSignal = this.abortSignal;
+		const forwardCancellation = () => {
+			if (parentSignal.reason instanceof CancelledError) {
+				raceAbortController.abort(parentSignal.reason);
+			}
+		};
+		forwardCancellation();
+		parentSignal.addEventListener("abort", forwardCancellation, {
+			once: true,
+		});
+
+		// Wait for all branches to complete or be cancelled. Nothing else wakes
+		// a yielded branch while another still has in-process work, because the
+		// scheduler only takes over once every branch has settled.
+		let scheduledWakeAt: number | undefined;
+		try {
+			while (runningBranches.size > 0) {
+				const canWake =
+					!propagatedError &&
+					!raceAbortController.signal.aborted &&
+					!this.evictionSignal.aborted;
+
+				if (canWake) {
+					const now = Date.now();
+					for (const [branchName, yielded] of yieldedBranches) {
+						if ((yieldedDeadline(yielded) ?? Infinity) <= now) {
+							yieldedBranches.delete(branchName);
+							yielded.start();
+						}
+					}
+				}
+
+				const wakeAt = canWake
+					? earliestYieldedDeadline(yieldedBranches)
+					: undefined;
+				if (wakeAt === undefined) {
+					await Promise.race(runningBranches);
+					continue;
+				}
+
+				// Keep the deadline durable, because the scheduler only arms it
+				// if this run reaches a yield.
+				if (wakeAt !== scheduledWakeAt) {
+					scheduledWakeAt = wakeAt;
+					try {
+						await this.driver.setAlarm(this.workflowId, wakeAt);
+					} catch (error) {
+						propagatedError = selectControlFlowError(
+							propagatedError,
+							error as Error,
+						);
+					}
+
+					// A branch can settle during this write, so compute the wake again.
+					continue;
+				}
+
+				await this.waitForRaceWake(wakeAt, runningBranches);
+			}
+		} finally {
+			parentSignal.removeEventListener("abort", forwardCancellation);
+		}
+
+		// A cancelled race has no winner to report to its parent branch.
+		if (!hasWinner && raceAbortController.signal.aborted) {
+			propagatedError = selectControlFlowError(
+				propagatedError,
+				new EvictedError(),
+			);
+		}
 
 		if (propagatedError) {
 			await this.flushStorage();
@@ -2482,6 +2723,13 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			)
 		) {
 			await this.flushStorage();
+			let schedulerYieldState: SchedulerYieldState | undefined;
+			for (const { error } of yieldedBranches.values()) {
+				schedulerYieldState = mergeSchedulerYield(
+					schedulerYieldState,
+					error,
+				);
+			}
 			if (!schedulerYieldState) {
 				throw new Error(
 					`Race "${name}" has pending branches without a scheduler yield`,
@@ -2490,27 +2738,35 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			throw buildSchedulerYieldError(schedulerYieldState);
 		}
 
-		// Clean up entries from non-winning branches
+		// Clean up entries from non-winning branches. The flush saves the
+		// winner before it deletes them, so a crash in between leaves only
+		// stale loser entries, which replay skips because the race has a winner.
+		let loserDeletions: PendingDeletions | undefined;
 		if (hasWinner && winnerName !== null) {
+			loserDeletions = { prefixes: [], keys: [], ranges: [] };
 			for (const branch of branches) {
 				if (branch.name !== winnerName) {
+					if (yieldedBranches.has(branch.name)) {
+						raceData.branches[branch.name].status = "cancelled";
+						entry.dirty = true;
+					}
 					const branchLocation = appendName(
 						this.storage,
 						location,
 						branch.name,
 					);
-					await deleteEntriesWithPrefix(
+					const deletions = takeEntriesWithPrefix(
 						this.storage,
-						this.driver,
 						branchLocation,
-						this.historyNotifier,
 					);
+					loserDeletions.prefixes.push(...deletions.prefixes);
+					loserDeletions.keys.push(...deletions.keys);
 				}
 			}
 		}
 
 		// Flush final state
-		await this.flushStorage();
+		await this.flushStorageWithDeletions(loserDeletions);
 
 		// Log late errors if any (these occurred after a winner was determined)
 		if (lateErrors.length > 0) {
@@ -2583,6 +2839,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 
 			// If it's not already marked as removed, we just skip it
+			this.markSettledHistoryVisited(location);
 			return;
 		}
 

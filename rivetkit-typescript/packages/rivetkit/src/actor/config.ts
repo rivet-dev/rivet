@@ -65,10 +65,7 @@ type ActorKvListOptions<
 
 type ActorClientFor<T> = T extends Registry<any> ? Client<T> : T;
 
-/**
- * @deprecated Actor KV is deprecated. Use embedded SQLite (`c.db`)
- * or actor state instead.
- */
+/** @deprecated Actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/kv */
 export interface ActorKv {
 	get<T extends ActorKvValueType = "text">(
 		key: Uint8Array | string,
@@ -107,6 +104,25 @@ export interface ActorKv {
 		options?: ActorKvListOptions<T, K>,
 	): Promise<Array<[ActorKvKeyTypeMap[K], ActorKvValueTypeMap[T]]>>;
 	[key: string]: any;
+}
+
+/** One individual actor fork behind an actor, as `c.forkChain` lists it. */
+export interface ActorForkLink {
+	/** The source actor's ID. */
+	actorId: string;
+	/** The source actor's key. */
+	key: string[];
+	/** When the fork was made, in milliseconds since the epoch. */
+	forkedAt: number;
+}
+
+/** The fork an `onFork` hook runs for: the newest entry of `c.forkChain` and the fork input. */
+export interface ActorFork extends ActorForkLink {
+	/**
+	 * The `input` passed to `client.<actor>.fork`, or `undefined`. It comes from the caller that
+	 * forked the actor, so validate it like any client input.
+	 */
+	input: unknown;
 }
 
 export interface ActorSchedule {
@@ -312,6 +328,7 @@ export interface QueueIterOptions<
 	completable?: TCompletable;
 }
 
+/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 export interface ActorQueue<
 	TQueues extends QueueSchemaConfig = Record<never, never>,
 > {
@@ -376,6 +393,7 @@ export interface Conn<
 > {
 	id: string;
 	params: TConnParams;
+	/** @deprecated Connection state was deprecated in 3.0 and will be removed in a future version. Track live connections in `c.vars` from `onConnect` and `onDisconnect`, and store durable per-connection data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state */
 	state: TConnState;
 	isHibernatable: boolean;
 	send(name: string, ...args: any[]): void;
@@ -398,25 +416,33 @@ export interface ActorContext<
 	[ACTOR_CONTEXT_INTERNAL_SYMBOL]?: unknown;
 	/** Returns the raw unwrapped state without the write-through proxy. */
 	[RAW_STATE_SYMBOL](): TState;
+	/** @deprecated Actor state was deprecated in 3.0 and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
 	state: TState;
 	vars: TVars;
-	/**
-	 * @deprecated Actor KV is deprecated. Use embedded SQLite (`c.db`)
-	 * or actor state instead.
-	 */
+	/** @deprecated Actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/kv */
 	readonly kv: ActorKv;
 	readonly db: InferDatabaseClient<TDatabase>;
 	readonly schedule: ActorSchedule;
 	readonly cron: ActorCron;
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	readonly queue: ActorQueue<TQueues>;
 	/** @experimental */
 	readonly run: ActorRun;
 	readonly actorId: string;
 	readonly name: string;
 	readonly key: string[];
+	/**
+	 * The individual actor forks behind this actor, oldest first; empty when it was never
+	 * forked. Namespace forks are not listed.
+	 */
+	readonly forkChain: ActorForkLink[];
 	readonly region: string;
-	/** Provisions the experimental Actor Runtime Socket for this actor generation. */
-	actorRuntimeSocket(): Promise<{ path: string }>;
+	/**
+	 * The name of the namespace the actor runs in. After a namespace fork it differs from the
+	 * source actor's namespace while the actor id stays the same, so an actor that owns an
+	 * external resource can store this to detect that it was copied.
+	 */
+	readonly namespace: string;
 	readonly conns: Map<
 		string,
 		Conn<
@@ -434,13 +460,14 @@ export interface ActorContext<
 	readonly abortSignal: AbortSignal;
 	readonly aborted: boolean;
 	readonly request?: Request;
-	/** @deprecated No-op. Always returns `false`. Use `keepAwake(promise)` or `waitUntil(promise)` instead. Will be removed in 2.2.0. */
+	/** @deprecated `preventSleep` was deprecated in 3.0 and will be removed in a future version. It is a no-op that always returns `false`. Use `c.keepAwake(promise)` or `c.waitUntil(promise)`. See https://rivet.dev/actors/docs/deprecated/prevent-sleep */
 	readonly preventSleep: boolean;
 	broadcast(name: string, ...args: any[]): void;
+	/** @deprecated Actor state was deprecated in 3.0 and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
 	saveState(opts?: { immediate?: boolean; maxWait?: number }): Promise<void>;
 	keepAwake<T>(promise: Promise<T>): Promise<T>;
 	waitUntil(promise: Promise<unknown>): void;
-	/** @deprecated No-op. Use `keepAwake(promise)` to hold the actor awake for a specific promise. Will be removed in 2.2.0. */
+	/** @deprecated `setPreventSleep` was deprecated in 3.0 and will be removed in a future version. It is a no-op. Use `c.keepAwake(promise)` or `c.waitUntil(promise)`. See https://rivet.dev/actors/docs/deprecated/prevent-sleep */
 	setPreventSleep(preventSleep: boolean): void;
 	sleep(): void;
 	destroy(): void;
@@ -514,6 +541,8 @@ export type ActionContext<
 	TEvents,
 	TQueues
 > & {
+	/** Present only when a durable schedule or cron invokes this action. */
+	readonly scheduledFire?: ScheduledFireInfo;
 	conn: Conn<
 		TState,
 		TConnParams,
@@ -584,6 +613,7 @@ export type ConnectContext<
 	TQueues
 >;
 
+/** @deprecated Connection state was deprecated in 3.0 and will be removed in a future version. Track live connections in `c.vars` from `onConnect` and `onDisconnect`, and store durable per-connection data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state */
 export type CreateConnStateContext<
 	TState,
 	TVars,
@@ -727,6 +757,7 @@ export type SleepContext<
 	TQueues
 >;
 
+/** @deprecated Actor state was deprecated in 3.0 and will be removed in a future version. See https://rivet.dev/actors/docs/deprecated/state */
 export type StateChangeContext<
 	TState,
 	TConnParams,
@@ -1268,8 +1299,6 @@ const GlobalActorOptionsBaseSchema = z
 		name: z.string().optional(),
 		/** Icon for the actor in the Inspector UI. Can be an emoji or FontAwesome icon name. */
 		icon: z.string().optional(),
-		/** Enables the experimental Actor Runtime Socket for this actor. */
-		enableActorRuntimeSocket: z.boolean().default(false),
 		/**
 		 * Can hibernate WebSockets, both client connections for actions and
 		 * events and WebSockets for onWebSocket. A WebSocket that does not
@@ -1293,6 +1322,7 @@ export type GlobalActorOptionsInput = z.input<typeof GlobalActorOptionsSchema>;
 const InstanceActorOptionsBaseSchema = z
 	.object({
 		createVarsTimeout: z.number().positive().default(5000),
+		/** @deprecated Connection state was deprecated in 3.0 and will be removed in a future version. Track live connections in `c.vars` from `onConnect` and `onDisconnect`, and store durable per-connection data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state */
 		createConnStateTimeout: z.number().positive().default(5000),
 		onBeforeConnectTimeout: z.number().positive().default(5000),
 		onConnectTimeout: z.number().positive().default(5000),
@@ -1301,27 +1331,30 @@ const InstanceActorOptionsBaseSchema = z
 			.number()
 			.positive()
 			.default(DEFAULT_SLEEP_GRACE_PERIOD),
-		/** @deprecated `onDestroyTimeout` is folded into `sleepGracePeriod`, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0. */
+		/** @deprecated `onDestroyTimeout` is folded into `sleepGracePeriod`, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 3.2.0. */
 		onDestroyTimeout: z.number().positive().optional(),
-		/** @deprecated `waitUntilTimeout` is folded into `sleepGracePeriod`, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0. */
+		/** @deprecated `waitUntilTimeout` is folded into `sleepGracePeriod`, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 3.2.0. */
 		waitUntilTimeout: z.number().positive().optional(),
+		/** @deprecated Actor state was deprecated in 3.0 and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
 		stateSaveInterval: z.number().positive().default(1_000),
 		actionTimeout: z.number().positive().default(60_000),
 		connectionLivenessTimeout: z.number().positive().default(2500),
 		connectionLivenessInterval: z.number().positive().default(5000),
-		/** @deprecated Use `c.keepAwake(promise)` to scope keep-awake to a specific operation, or keep `noSleep` for actors that must stay awake indefinitely. Will be removed in 2.2.0. */
+		/** @deprecated Use `c.keepAwake(promise)` to scope keep-awake to a specific operation, or keep `noSleep` for actors that must stay awake indefinitely. Will be removed in 3.2.0. */
 		noSleep: z.boolean().default(false),
 		sleepTimeout: z.number().positive().default(30_000),
+		/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 		maxQueueSize: z.number().positive().default(1000),
 		/** Maximum pending one-shot and recurring schedules. */
 		maxSchedules: z.number().int().nonnegative().default(1000),
+		/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 		maxQueueMessageSize: z
 			.number()
 			.positive()
 			.default(64 * 1024),
-		/** @deprecated Internal storage moved to SQLite and no longer uses KV preloading, so this option is ignored. Will be removed in 2.2.0. */
+		/** @deprecated Internal storage moved to SQLite and no longer uses KV preloading, so this option is ignored. Will be removed in 3.2.0. */
 		preloadMaxWorkflowBytes: z.number().nonnegative().optional(),
-		/** @deprecated Internal storage moved to SQLite and no longer uses KV preloading, so this option is ignored. Will be removed in 2.2.0. */
+		/** @deprecated Internal storage moved to SQLite and no longer uses KV preloading, so this option is ignored. Will be removed in 3.2.0. */
 		preloadMaxConnectionsBytes: z.number().nonnegative().optional(),
 	})
 	.strict();
@@ -1355,6 +1388,7 @@ export const ActorConfigSchema = z
 		onDestroy: zFunction().optional(),
 		onMigrate: zFunction().optional(),
 		onWake: zFunction().optional(),
+		onFork: zFunction().optional(),
 		onSleep: zFunction().optional(),
 		run: zRunHandler,
 		onStateChange: zFunction().optional(),
@@ -1428,8 +1462,12 @@ type CreateState<
 	TEvents extends EventSchemaConfig,
 	TQueues extends QueueSchemaConfig,
 > =
-	| { state: TState }
 	| {
+			/** @deprecated Actor state was deprecated in 3.0 and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
+			state: TState;
+	  }
+	| {
+			/** @deprecated Actor state was deprecated in 3.0 and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state */
 			createState: (
 				c: CreateContext<TState, TInput, TDatabase, TEvents, TQueues>,
 				input: TInput,
@@ -1453,8 +1491,12 @@ type CreateConnState<
 	TEvents extends EventSchemaConfig,
 	TQueues extends QueueSchemaConfig,
 > =
-	| { connState: TConnState }
 	| {
+			/** @deprecated Connection state was deprecated in 3.0 and will be removed in a future version. Track live connections in `c.vars` from `onConnect` and `onDisconnect`, and store durable per-connection data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state */
+			connState: TConnState;
+	  }
+	| {
+			/** @deprecated Connection state was deprecated in 3.0 and will be removed in a future version. Track live connections in `c.vars` from `onConnect` and `onDisconnect`, and store durable per-connection data in SQLite. See https://rivet.dev/actors/docs/deprecated/state#connection-state */
 			createConnState: (
 				c: CreateConnStateContext<
 					TState,
@@ -1626,6 +1668,49 @@ interface BaseActorConfig<
 	) => void | Promise<void>;
 
 	/**
+	 * Called once at the first start of an actor made by forking another actor
+	 * (`client.<actor>.fork`), after its state loads and before `onWake` and any
+	 * overdue schedule events run. `createState` and `onCreate` do not run for a fork.
+	 *
+	 * Use this hook to cancel schedules the fork inherited, drop resources copied
+	 * from the source, or record the fork input. `c.forkChain` already ends with
+	 * this fork. A throw fails the start, and the hook runs again on the next start.
+	 * Forks of a whole namespace do not call it.
+	 *
+	 * State edits made in this hook are saved in one commit with the record that the
+	 * fork ran, so a start that finds the fork recorded also finds the hook's final
+	 * state. On native SQLite the hook's `c.db` writes and any save it starts itself
+	 * join that commit too, and a failed start drops them. Two limits apply:
+	 *
+	 * - On remote SQLite (wasm runtimes), `c.db` writes, and state the hook writes
+	 *   itself in a transaction (for example `c.db.transaction` with
+	 *   `experimental.includeState`), are committed at once, without the fork record.
+	 *   A `c.saveState` call is not such a write: the startup save carries its
+	 *   state. Only state the hook leaves to the startup save is atomic with it. A
+	 *   crash or a failed start before the record lands runs the hook again on top
+	 *   of those writes, so the hook must be idempotent there.
+	 * - On native SQLite the hook's writes must fit one commit (32,768 pages, 128 MiB
+	 *   at the default page size). A transaction that would take them past it fails as
+	 *   too large instead of committing part of them early; a hook that lets the error
+	 *   throw fails the start, and nothing it wrote lands. Move a backfill that large
+	 *   into later actions.
+	 *   `onCreate` differs: its writes held so far are committed early instead.
+	 */
+	onFork?: (
+		c: WakeContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
+		fork: ActorFork,
+	) => void | Promise<void>;
+
+	/**
 	 * Called when the actor is started and ready to receive connections and action.
 	 *
 	 * Use this hook to initialize resources needed for the actor's operation
@@ -1694,6 +1779,12 @@ interface BaseActorConfig<
 	 *
 	 * Can be either a function or a RunConfig object with optional name/icon metadata.
 	 *
+	 * Passing a plain function was deprecated in 3.0 and will be removed in a
+	 * future version; it logs a warning at startup. Start background work from
+	 * `onWake` with `c.keepAwake` and track it in `c.vars` instead.
+	 * `run: workflow(...)` is not deprecated. See
+	 * https://rivet.dev/actors/docs/deprecated/run
+	 *
 	 * @returns Void or a Promise.
 	 */
 	run?:
@@ -1730,6 +1821,7 @@ interface BaseActorConfig<
 	 * another onStateChange call, preventing infinite recursion.
 	 *
 	 * @param newState The updated state
+	 * @deprecated Actor state was deprecated in 3.0 and will be removed in a future version. Store durable data in SQLite (`c.db`) and in-memory data in `c.vars`. See https://rivet.dev/actors/docs/deprecated/state
 	 */
 	onStateChange?: (
 		c: StateChangeContext<
@@ -1936,6 +2028,8 @@ interface BaseActorConfig<
 
 	/**
 	 * Schema map for queue payloads sent by this actor.
+	 *
+	 * @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues
 	 */
 	queues?: TQueues;
 }
@@ -1989,6 +2083,7 @@ export type ActorConfig<
 	| "onDestroy"
 	| "onMigrate"
 	| "onWake"
+	| "onFork"
 	| "onSleep"
 	| "run"
 	| "onStateChange"
@@ -2088,6 +2183,7 @@ export type ActorConfigInput<
 	| "onDestroy"
 	| "onMigrate"
 	| "onWake"
+	| "onFork"
 	| "onSleep"
 	| "run"
 	| "onStateChange"
@@ -2219,12 +2315,6 @@ export const DocActorOptionsSchema = z
 			.describe(
 				"Icon for the actor in the Inspector UI. Can be an emoji (e.g., '🚀') or FontAwesome icon name (e.g., 'rocket').",
 			),
-		enableActorRuntimeSocket: z
-			.boolean()
-			.optional()
-			.describe(
-				"Enables the experimental Actor Runtime Socket for this actor. Default: false",
-			),
 		createVarsTimeout: z
 			.number()
 			.optional()
@@ -2259,13 +2349,13 @@ export const DocActorOptionsSchema = z
 			.number()
 			.optional()
 			.describe(
-				"Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0.",
+				"Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 3.2.0.",
 			),
 		waitUntilTimeout: z
 			.number()
 			.optional()
 			.describe(
-				"Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0.",
+				"Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 3.2.0.",
 			),
 		stateSaveInterval: z
 			.number()
@@ -2393,6 +2483,12 @@ export const DocActorConfigSchema = z
 			.optional()
 			.describe(
 				"Called when the actor wakes up and is ready to receive connections and actions.",
+			),
+		onFork: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called once at the first start of an actor made by forking another actor, before onWake. Receives the source actor, the fork time and the fork input.",
 			),
 		onSleep: z
 			.unknown()

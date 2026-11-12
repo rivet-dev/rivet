@@ -8,7 +8,7 @@ Actions are very lightweight. They can be called thousands of times per second s
 
 For advanced use cases that require direct access to HTTP requests or WebSocket connections, see [Low-Level HTTP Handler](/actors/docs/request-handler) and [Low-Level WebSocket Handler](/actors/docs/websocket-handler).
 
-By default, actions run in parallel. If you need advanced control over concurrency, use [queues](/actors/docs/queues).
+By default, actions run in parallel and interleave at every `await`. Keep each change atomic with a single SQL statement or a [transaction](/actors/docs/sqlite#transactions).
 
 ## Writing Actions
 
@@ -16,7 +16,7 @@ Actions are defined in the `actions` object when creating an actor:
 
 <CodeSnippet file="examples/docs/actors-actions/writing-actions.ts" />
 
-Each action receives a context object (commonly named `c`) as its first parameter, which provides access to state, connections, and other utilities. Additional parameters follow after that.
+Each action receives a context object (commonly named `c`) as its first parameter, which provides access to vars, the database, connections, and other utilities. Additional parameters follow after that.
 
 ### Nested Actions
 

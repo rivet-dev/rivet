@@ -2,6 +2,12 @@
 # Format: `<id> <schema identifier>`. An ID is permanent: never reuse or renumber one, even
 # after its schema is deleted, because heartbeats and persisted version marks carry it.
 # The build fails when a schema has no ID or an ID names no schema.
+# A protocol whose schema lives outside that directory is listed as
+# `<id> <identifier> <min read> <max read>`; this binary writes its max read. Keep the range equal
+# to the protocol crate's supported versions; a test in the crate that encodes it checks this.
+# Such a protocol must be a message protocol that nothing persists: the storage incompatibility
+# fence ignores it.
+# 1 acl.audit_entry (retired: schema deleted)
 6 auth.grants
 7 auth.jwt_key_ring
 8 depot.client_protocol
@@ -37,3 +43,11 @@
 40 sqlite.db_overflow
 41 sqlite.db_recent
 42 auth.jwt_rotation
+43 pegboard.v2_migrator
+44 depot.replica_readiness
+# 100 filesystem.filesystem (reserved for the filesystem API)
+# 101 filesystem.connection (reserved for the filesystem API)
+102 depot.group
+# 103 pegboard.namespace_jobs (retired: schema deleted)
+104 pegboard.namespace
+105 envoy.protocol 8 9

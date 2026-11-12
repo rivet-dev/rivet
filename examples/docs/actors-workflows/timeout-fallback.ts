@@ -1,4 +1,5 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 export const primaryServiceActor = actor({
@@ -17,10 +18,20 @@ export const fallbackServiceActor = actor({
 });
 
 export const timeoutFallbackActor = actor({
-  state: {
-    lastSource: "none" as "none" | "primary" | "fallback",
-    lastValue: "",
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS fallback_stats (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          last_source TEXT NOT NULL,
+          last_value TEXT NOT NULL
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO fallback_stats (id, last_source, last_value) VALUES (1, 'none', '')",
+      );
+    },
+  }),
   run: workflow(async (ctx) => {
     await ctx.loop("timeout-loop", async (loopCtx) => {
         await loopCtx.queue.nextBatch("wait-request", {
@@ -55,14 +66,25 @@ export const timeoutFallbackActor = actor({
         }
 
         await loopCtx.step("record-choice", async (step) => {
-          step.state.lastSource = source;
-          step.state.lastValue = value;
+          await step.db.execute(
+            "UPDATE fallback_stats SET last_source = ?, last_value = ? WHERE id = 1",
+            source,
+            value,
+          );
         });
 
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{
+        lastSource: "none" | "primary" | "fallback";
+        lastValue: string;
+      }>(
+        "SELECT last_source AS lastSource, last_value AS lastValue FROM fallback_stats WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 

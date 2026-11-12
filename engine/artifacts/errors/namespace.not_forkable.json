@@ -1,0 +1,5 @@
+{
+  "code": "not_forkable",
+  "group": "namespace",
+  "message": "The namespace cannot be forked until its volumes from before volume groups are moved into its group."
+}

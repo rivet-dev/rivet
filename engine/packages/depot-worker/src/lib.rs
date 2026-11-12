@@ -30,6 +30,7 @@ pub mod disk_budget;
 pub mod error;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod filesystem;
+pub mod group_events;
 mod kv_refusals;
 #[cfg(not(target_arch = "wasm32"))]
 mod metrics;

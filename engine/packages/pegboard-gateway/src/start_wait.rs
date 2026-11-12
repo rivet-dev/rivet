@@ -6,12 +6,17 @@
 //! actor runs. A notice can be lost, so the wait is paired with a fallback poll: a read at
 //! `pegboard.gateway_start_poll_after_ms` after the wait began, then every
 //! `pegboard.gateway_start_poll_interval_ms`. The request deadline bounds both.
-use crate::start_waits::{Notice, StartWaits, WaitGuard};
+use crate::start_waits::{Notice, StartWaits, WaitGuard, WaitKey};
 use anyhow::{Context, Result};
 use pegboard::{keys::partition::ActorVolume, wire};
 use rivet_engine_context::EngineContext;
 use rivet_util::Id;
 use std::sync::Arc;
+
+/// Legacy: how long a client waits before it retries a request to an actor the backfill is
+/// moving. A move of one actor takes about a database fork, so a retry a second later usually
+/// finds the actor at its new id. Removed in 3.1 with the backfill.
+const LEGACY_MOVING_RETRY_AFTER_MS: u64 = 1_000;
 
 /// What a waiting request does next.
 pub(crate) enum Next {
@@ -33,6 +38,10 @@ pub(crate) enum Next {
 	},
 	/// Another datacenter holds the actor's key, so this gateway cannot serve the request.
 	KeyOwnedElsewhere { reservation_id: Id },
+	/// The V2 migrator holds the actor, so V2 serves it and this gateway cannot.
+	MigratingFromV2,
+	/// The actor's key belongs to V2, so V2 serves it.
+	DelegatedToV2,
 }
 
 /// Why the request last looked at the actor again.
@@ -77,6 +86,10 @@ pub(crate) fn next_after_notice(notice: Notice) -> Next {
 		}
 		// The read finds the actor destroyed and creates it again or reports it missing.
 		Notice::Destroyed => Next::Read,
+		Notice::MigratingFromV2 => Next::MigratingFromV2,
+		Notice::DelegatedToV2 => Next::DelegatedToV2,
+		// The actor's fork finished and its start follows; the read finds where it stands.
+		Notice::Forked => Next::Read,
 	}
 }
 
@@ -84,6 +97,8 @@ pub(crate) fn next_after_notice(notice: Notice) -> Next {
 pub(crate) struct StartWait {
 	waits: Arc<StartWaits>,
 	actor_id: Id,
+	/// The group the actor's state volume is in.
+	group: Option<rivet_keys::keys::codec::GroupId>,
 	/// Whether the request has joined (or tried to join) the process's wait.
 	joined: bool,
 	guard: Option<WaitGuard>,
@@ -93,14 +108,27 @@ pub(crate) struct StartWait {
 }
 
 impl StartWait {
-	pub(crate) fn new(waits: Arc<StartWaits>, actor_id: Id) -> Self {
+	pub(crate) fn new(
+		waits: Arc<StartWaits>,
+		actor_id: Id,
+		group: Option<rivet_keys::keys::codec::GroupId>,
+	) -> Self {
 		Self {
 			waits,
 			actor_id,
+			group,
 			joined: false,
 			guard: None,
 			schedule: None,
 			last_wake: None,
+		}
+	}
+
+	/// The process wait this request joins: its actor in its group.
+	fn key(&self) -> WaitKey {
+		WaitKey {
+			group: self.group,
+			actor_id: self.actor_id,
 		}
 	}
 
@@ -122,7 +150,7 @@ impl StartWait {
 			pegboard.gateway_start_poll_after_ms(),
 			pegboard.gateway_start_poll_interval_ms(),
 		));
-		self.guard = self.waits.join(self.actor_id).await;
+		self.guard = self.waits.join(self.key()).await;
 		if self.guard.is_none() {
 			tracing::debug!(actor_id = %self.actor_id, "gateway start waits are full; waiting on the fallback poll alone");
 		}
@@ -160,7 +188,7 @@ impl StartWait {
 		let event = wire::ActorEvent::TryStart(wire::TryStart {
 			waiter: waiter.clone(),
 		});
-		let response = match send_event(ctx, self.actor_id, event).await {
+		let response = match send_event(ctx, self.group, self.actor_id, event).await {
 			Ok(response) => response,
 			Err(error) if pegboard::commands::is_volume_gone(&error) => {
 				return Ok(Some(Next::Read));
@@ -195,6 +223,15 @@ impl StartWait {
 			// A destroy in flight finishes within milliseconds, so the fallback poll's next
 			// read, rather than an immediate one, finds it gone and creates it again.
 			wire::TryStartOutcome::TryStartDestroyed => return Ok(Some(Next::Wait)),
+			// Legacy: the backfill is moving the actor, so nothing will start this copy. The
+			// client retries and resolves the actor again, which finds its new id once the move
+			// made it. Removed in 3.1 with the backfill.
+			wire::TryStartOutcome::TryStartLegacyMoving => {
+				return Err(pegboard::validation::LegacyActorMoving {
+					retry_after_ms: LEGACY_MOVING_RETRY_AFTER_MS,
+				}
+				.build());
+			}
 			wire::TryStartOutcome::TryStartStarting(starting) => Notice::Starting {
 				epoch: starting.epoch,
 				allocation: starting.allocation,
@@ -208,10 +245,12 @@ impl StartWait {
 					reservation_id: Id::from_slice(&reserved.reservation_id)?,
 				}
 			}
+			wire::TryStartOutcome::TryStartMigratingFromV2 => Notice::MigratingFromV2,
+			wire::TryStartOutcome::TryStartDelegatedToV2 => Notice::DelegatedToV2,
 		};
 		if let Some(waiter) = waiter {
 			self.waits
-				.complete(self.actor_id, waiter.wait_id, notice.clone())
+				.complete(self.key(), waiter.wait_id, notice.clone())
 				.await;
 		}
 		Ok(Some(next_after_notice(notice)))
@@ -264,10 +303,14 @@ impl StartWait {
 /// Sends one event to the actor's state machine through the `ActorEvent` command.
 pub(crate) async fn send_event(
 	ctx: &EngineContext,
+	group: Option<rivet_keys::keys::codec::GroupId>,
 	actor_id: Id,
 	event: wire::ActorEvent,
 ) -> Result<wire::ActorEventResponse> {
 	ctx.depot()
-		.command::<pegboard::commands::ActorEvent>(&ActorVolume::new(actor_id).volume_key(), event)
+		.command::<pegboard::commands::ActorEvent>(
+			&ActorVolume::in_namespace(group, actor_id),
+			event,
+		)
 		.await
 }

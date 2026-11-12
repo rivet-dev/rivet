@@ -84,6 +84,32 @@ impl Response {
 }
 pub(super) type Reply = (RequestMessage, Option<ReplyAuthority>, Response);
 
+pub(super) fn submit_replica(
+	supervisor: &TabletSupervisor,
+	message: RequestMessage,
+) -> Result<BoxFuture<'static, Reply>> {
+	let request =
+		rivet_data::versioned::DepotReplicaReadinessData::deserialize_with_embedded_version(
+			&message.payload,
+		)?;
+	anyhow::ensure!(
+		message.source_worker_id.as_bytes() == &request.worker_id,
+		"replica readiness must name its caller"
+	);
+	let submitted = supervisor.replica_readiness(request);
+	Ok(async move {
+		let (guard, response) = match submitted {
+			Ok((guard, response)) => (
+				Some(ReplyAuthority::Stop(guard)),
+				response.await.unwrap_or(StopReadinessResponse::NotServing),
+			),
+			Err(response) => (None, response),
+		};
+		(message, guard, Response::Stop(response))
+	}
+	.boxed())
+}
+
 pub(super) fn submit(
 	topology: &Topology,
 	supervisor: &TabletSupervisor,

@@ -1,6 +1,6 @@
 ---
 title: "Troubleshooting"
-description: "Diagnose common Rivet Actors setup, connection, deployment, and runtime problems with targeted checks and corrective steps."
+description: "Troubleshoot Rivet control plane connectivity, deployment configuration, and persistent logs with practical diagnostic checks."
 skill: true
 ---
 
@@ -11,6 +11,10 @@ Before diving into specific errors, try these general troubleshooting steps:
 - Check your server logs for `level=ERROR` or `level=WARN` messages.
 - Check if any of your backend processes have crashed or restarted unexpectedly.
 - If you need more diagnostics, set `RIVET_LOG_LEVEL=DEBUG` for verbose logging. See [Logging](/actors/docs/logging) for more options.
+
+## Logs report `storage.zone is unset`
+
+A control plane process stops shortly after starting if it has no zone while another process in the cluster has one. Set `RIVET__STORAGE__ZONE` on this process to the zone it runs in, such as `us-east-1a`.
 
 ## Persistent logs require durable object storage
 
@@ -59,11 +63,11 @@ An unexpected error occurred within Rivet. If this persists, please [contact sup
 
 ## Actors crashing immediately on startup
 
-If your actors are being created and then immediately destroyed or crashing, there is likely an error being thrown in your `createState` or `onCreate` lifecycle hooks. These hooks run during actor initialization before the actor is marked as ready.
+If your actors are being created and then immediately destroyed or crashing, there is likely an error being thrown in your `onCreate` lifecycle hook. This hook runs during actor initialization before the actor is marked as ready.
 
 Check your server logs for the error message and stack trace. Common causes include:
 
-- An exception thrown in `createState` (e.g. invalid input, failed validation, or a runtime error when computing initial state)
+- An exception thrown in `onCreate` (e.g. invalid input, failed validation, or a runtime error during setup)
 - An exception thrown in `onCreate` (e.g. a failing external API call, missing configuration, or invalid setup logic)
 
 Fix the error in the relevant lifecycle hook and redeploy.

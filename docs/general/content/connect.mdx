@@ -56,8 +56,6 @@ RIVET_ENDPOINT=https://my-namespace:<rivet-token>@rivet.example.com
 
 Clients reach your Actors through the control plane's gateway, never through your backend directly. Point them at the same endpoint with a public token instead of a secret one.
 
-<img src={imgEndpointEnvVars.src} alt="Diagram showing Client connecting to Rivet, which connects to Your Backend" />
-
 Pass the public endpoint directly when constructing a [JavaScript](/actors/docs/clients/javascript), [React](/actors/docs/clients/react), [Swift](/actors/docs/clients/swift), or [Rust](/actors/docs/clients/rust) client.
 
 ## URL Auth Syntax

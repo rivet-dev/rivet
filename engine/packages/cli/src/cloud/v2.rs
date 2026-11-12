@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 use anyhow::{Context, Result, bail};
 use reqwest::{Method, StatusCode, header::CONTENT_LENGTH};
@@ -139,12 +139,43 @@ impl Status {
 	}
 }
 
+/// One of a runner pool's variables: a string, or a cluster secret by name.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EnvValue {
+	String(String),
+	Secret(SecretRef),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecretRef {
+	pub name: String,
+	/// Set while a rollback pinned the version the pool runs, until `env` is
+	/// next sent. The Cloud API only accepts a pin resent exactly as read, and
+	/// the CLI drops every pin when it sends `env`, so the pool takes the
+	/// latest version.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub pinned_version: Option<u64>,
+}
+
 #[derive(Deserialize)]
 pub struct RunnerPool {
 	pub build_id: Option<String>,
 	pub cidr_allowlist: Vec<String>,
+	#[serde(default)]
+	pub env: BTreeMap<String, EnvValue>,
 	pub endpoints: Endpoints,
 	pub status: Status,
+}
+
+/// A runner pool as the cluster-wide list returns it, reduced to what the CLI
+/// reads from it.
+#[derive(Deserialize)]
+pub struct RunnerPoolSummary {
+	pub region: String,
+	pub pool: String,
+	#[serde(default)]
+	pub env: BTreeMap<String, EnvValue>,
 }
 
 #[derive(Deserialize)]
@@ -272,6 +303,65 @@ pub async fn get_build(cloud: &CloudClient, cluster: &str, build_id: &str) -> Re
 	request(cloud, Method::GET, &build_path(cluster, build_id), None).await
 }
 
+/// The cluster's region named by `region`, or its only one. A named region
+/// is checked against the cluster's, so a typo is not reported as a missing
+/// runner pool.
+pub async fn resolve_region(
+	cloud: &CloudClient,
+	cluster: &str,
+	region: Option<String>,
+) -> Result<String> {
+	let regions = list_regions(cloud, cluster)
+		.await?
+		.into_iter()
+		.map(|region| region.region)
+		.collect();
+	pick_region(cluster, region, regions)
+}
+
+/// Picks `requested` from the cluster's `regions`, or the only one.
+pub fn pick_region(
+	cluster: &str,
+	requested: Option<String>,
+	mut regions: Vec<String>,
+) -> Result<String> {
+	if regions.is_empty() {
+		bail!("cluster {cluster} has no regions; add one before deploying");
+	}
+	match requested {
+		Some(region) => {
+			if regions.contains(&region) {
+				Ok(region)
+			} else {
+				bail!(
+					"region {region} is not in cluster {cluster}; its regions are: {}",
+					regions.join(", ")
+				)
+			}
+		}
+		None => {
+			if regions.len() == 1 {
+				Ok(regions.swap_remove(0))
+			} else {
+				bail!(
+					"cluster {cluster} has several regions; pass --region with one of: {}",
+					regions.join(", ")
+				)
+			}
+		}
+	}
+}
+
+/// Every runner pool in the cluster, across its regions.
+pub async fn list_runner_pools(
+	cloud: &CloudClient,
+	cluster: &str,
+) -> Result<Vec<RunnerPoolSummary>> {
+	let path = format!("/v2/clusters/{}/runner-pools", encode(cluster));
+	let list: List<RunnerPoolSummary> = request(cloud, Method::GET, &path, None).await?;
+	Ok(list.items)
+}
+
 /// Returns `None` when the pool does not exist. The caller must have resolved
 /// the cluster and region already, since those are also reported as not found.
 pub async fn find_runner_pool(
@@ -288,6 +378,8 @@ pub async fn find_runner_pool(
 	decode(&path, status, &text).map(Some)
 }
 
+/// Rolls the pool out to `build_id`. `env`, when given, replaces the pool's
+/// variables; left out they are kept.
 pub async fn put_runner_pool(
 	cloud: &CloudClient,
 	cluster: &str,
@@ -295,18 +387,17 @@ pub async fn put_runner_pool(
 	pool: &str,
 	build_id: &str,
 	cidr_allowlist: &[String],
+	env: Option<&BTreeMap<String, EnvValue>>,
 ) -> Result<PoolUpsert> {
 	let path = runner_pool_path(cluster, region, pool);
-	let (status, text) = send(
-		cloud,
-		Method::PUT,
-		&path,
-		Some(json!({
-			"build_id": build_id,
-			"cidr_allowlist": cidr_allowlist,
-		})),
-	)
-	.await?;
+	let mut body = json!({
+		"build_id": build_id,
+		"cidr_allowlist": cidr_allowlist,
+	});
+	if let Some(env) = env {
+		body["env"] = serde_json::to_value(env).context("encode the pool's env")?;
+	}
+	let (status, text) = send(cloud, Method::PUT, &path, Some(body)).await?;
 	if status == StatusCode::CONFLICT {
 		let message = serde_json::from_str::<ApiError>(&text)
 			.map(|error| error.message)
@@ -375,4 +466,54 @@ pub async fn list_logs(
 		path.push_str(&params.join("&"));
 	}
 	request(cloud, Method::GET, &path, None).await
+}
+
+/// A cluster secret, without its value, which the Cloud API never returns.
+#[derive(Serialize, Deserialize)]
+pub struct Secret {
+	pub name: String,
+	pub latest_version: u64,
+	pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SecretRollout {
+	pub name: String,
+	pub latest_version: u64,
+	/// False when the value equals the latest version's, which rolls nothing.
+	pub changed: bool,
+}
+
+fn secrets_path(cluster: &str) -> String {
+	format!("/v2/clusters/{}/secrets", encode(cluster))
+}
+
+pub async fn list_secrets(cloud: &CloudClient, cluster: &str) -> Result<Vec<Secret>> {
+	let page: List<Secret> = request(cloud, Method::GET, &secrets_path(cluster), None).await?;
+	Ok(page.items)
+}
+
+/// Stores `value` as the secret's next version and rolls every pool naming it.
+pub async fn rollout_secret(
+	cloud: &CloudClient,
+	cluster: &str,
+	name: &str,
+	value: &str,
+) -> Result<SecretRollout> {
+	request(
+		cloud,
+		Method::POST,
+		&format!("{}/rollout", secrets_path(cluster)),
+		Some(json!({ "name": name, "value": value })),
+	)
+	.await
+}
+
+pub async fn delete_secret(cloud: &CloudClient, cluster: &str, name: &str) -> Result<()> {
+	let path = format!("{}/{}", secrets_path(cluster), encode(name));
+	let (status, text) = send(cloud, Method::DELETE, &path, None).await?;
+	if !status.is_success() {
+		decode::<Value>(&path, status, &text)?;
+	}
+	Ok(())
 }

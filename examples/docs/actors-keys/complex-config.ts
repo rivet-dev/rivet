@@ -1,4 +1,5 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { createClient } from "rivetkit/client";
 
 interface ChatRoomInput {
@@ -9,12 +10,20 @@ interface ChatRoomInput {
 }
 
 const chatRoom = actor({
-  createState: (c, input: ChatRoomInput) => ({
-    maxUsers: input.maxUsers,
-    isPrivate: input.isPrivate,
-    moderators: input.moderators,
-    settings: input.settings,
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(
+        "CREATE TABLE IF NOT EXISTS config (id INTEGER PRIMARY KEY CHECK (id = 1), value TEXT NOT NULL)",
+      );
+    },
   }),
+  // Store the input once when the actor is created
+  onCreate: async (c, input: ChatRoomInput) => {
+    await c.db.execute(
+      "INSERT INTO config (id, value) VALUES (1, ?)",
+      JSON.stringify(input),
+    );
+  },
   actions: {}
 });
 

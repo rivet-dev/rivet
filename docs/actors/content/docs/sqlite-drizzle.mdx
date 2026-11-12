@@ -205,30 +205,29 @@ await c.db.execute(
 );
 ```
 
-## Queues
+## Transactions
 
-Use queues for ordered mutations and keep actions read-only. Import `queue` alongside `actor` from `rivetkit`.
+Actions run concurrently and interleave at every `await`, so make each write a single statement or group related writes in `c.db.transaction`. Pass a static `name`, use only the callback's `tx` inside it, and make network calls after it commits. See [Transactions](/actors/docs/sqlite#transactions).
 
 ```ts @nocheck
-import { actor, queue } from "rivetkit";
+import { eq } from "drizzle-orm";
 
 // ...
 
-queues: {
-  addTodo: queue<{ title: string }>(),
-},
-run: async (c) => {
-  for await (const message of c.queue.iter()) {
-    if (message.name === "addTodo") {
-      await c.db.insert(todos).values({
-        title: message.body.title,
-        createdAt: Date.now(),
-      });
-    }
-  }
-},
 actions: {
-  getTodos: async (c) => await c.db.select().from(todos),
+  // The check and the update run together, so two renames cannot both claim a title
+  renameTodo: async (c, id: number, title: string) => {
+    return await c.db.transaction(
+      async (tx) => {
+        const taken = await tx.select().from(todos).where(eq(todos.title, title));
+        if (taken.length > 0) return false;
+
+        await tx.update(todos).set({ title }).where(eq(todos.id, id));
+        return true;
+      },
+      { name: "rename-todo" },
+    );
+  },
 },
 ```
 
@@ -237,8 +236,7 @@ actions: {
 - Prefer Drizzle query APIs for app code and use raw SQL for advanced SQLite features.
 - Keep one `drizzle.config.ts` per actor folder.
 - Re-run `db:generate` after schema changes and commit generated migration files.
-- Use queues for writes and actions for reads.
-- Keep related writes in one action or queue message to reduce interleaved query risk.
+- Keep related writes in one `c.db.transaction`, because concurrent actions can interleave between separate queries.
 
 ## Read more
 

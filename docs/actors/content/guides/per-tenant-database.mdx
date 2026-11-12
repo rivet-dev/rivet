@@ -123,7 +123,7 @@ The React dashboard connects to the Actor for the signed-in company, loads its d
 In the example, the visitor types a company name and that string becomes the Actor key, so anyone can read and write any tenant's data. In production, the tenant id must come from your auth, never from the client:
 
 - Derive the tenant id from a verified credential, such as a claim in a [JWT](/docs/jwt).
-- In [`onBeforeConnect`](/actors/docs/permissions) or `createConnState`, check that the credential's tenant matches `c.key[0]` and reject the connection if it does not. Keep the verified user in [connection state](/actors/docs/connections#connection-state) for per-action checks.
+- In [`onBeforeConnect`](/actors/docs/permissions), check that the credential's tenant matches `c.key[0]` and reject the connection if it does not. Keep the verified user in a `c.vars` map keyed by connection ID, filled in `onConnect`, for per-action checks. See [Connections](/actors/docs/connections).
 - Never build a key from one tenant's input to reach another tenant's Actor.
 </Warning>
 

@@ -1,0 +1,5 @@
+{
+  "code": "invalid_version",
+  "group": "actor",
+  "message": "The requested actor version cannot be created here."
+}

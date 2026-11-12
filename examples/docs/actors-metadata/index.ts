@@ -1,10 +1,6 @@
 import { actor, setup } from "rivetkit";
 
 const chatRoom = actor({
-	state: {
-		messages: [],
-	},
-
 	actions: {
 		// Get actor metadata
 		getMetadata: (c) => {

@@ -5,6 +5,7 @@ use std::sync::{
 	Arc,
 	atomic::{AtomicBool, Ordering},
 };
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 #[cfg(feature = "sqlite-local")]
@@ -60,7 +61,7 @@ use sqlite_embedded::{
 		NativeDatabaseHandle, open_database_from_transport_on_pool,
 		open_new_database_from_transport_on_pool,
 	},
-	vfs::{SqliteVfsMetrics, SqliteVfsMetricsSnapshot},
+	vfs::{CorkClose, SqliteVfsMetrics, SqliteVfsMetricsSnapshot},
 	worker::{
 		SQLITE_WORKER_QUEUE_CAPACITY, SqlitePool, SqliteWorkerCloseTimeoutError,
 		SqliteWorkerClosingError, SqliteWorkerDeadError, SqliteWorkerFatalError,
@@ -96,6 +97,19 @@ pub struct SqliteBatchStatement {
 pub enum SqliteBackend {
 	LocalNative,
 	RemoteEnvoy,
+}
+
+/// How [`SqliteDb::close_backend`] closes a `LocalNative` worker. A remote database has no
+/// worker, so it ignores this.
+#[derive(Clone, Copy, Debug)]
+enum NativeClose {
+	/// Waits up to the worker's close timeout. A running command finishes first.
+	Bounded,
+	/// Waits until the worker relinquished SQLite. A running command finishes first.
+	Strict,
+	/// Like `Strict`, but first interrupts the running command, for a teardown that has no use
+	/// for its outcome, such as a failed start's.
+	StrictInterrupting,
 }
 
 #[cfg(feature = "sqlite-local")]
@@ -868,12 +882,13 @@ impl SqliteDb {
 		let result = if self.backend == SqliteBackend::RemoteEnvoy {
 			self.remote_execute_batch_with_bootstrap(statements).await
 		} else {
-			async {
-				let transaction = self
-					.clone()
-					.with_invocation_telemetry(None)
-					.begin_transaction(None)
-					.await?;
+			// The batch runs as its own task because its transaction holds the
+			// coordinator gate. An actor task that stops polling this future to
+			// await another statement would otherwise wait on its own gate until
+			// the transaction expires.
+			let db = self.clone().with_invocation_telemetry(None);
+			let batch = async move {
+				let transaction = db.begin_transaction(None).await?;
 				let mut results = Vec::with_capacity(statements.len());
 				for statement in statements {
 					match transaction.execute(statement.sql, statement.params).await {
@@ -895,8 +910,8 @@ impl SqliteDb {
 					.await
 					.context("commit sqlite batch transaction")?;
 				Ok(results)
-			}
-			.await
+			};
+			run_detached_transaction_task(batch, "sqlite batch transaction task failed").await
 		};
 
 		match result {
@@ -917,24 +932,22 @@ impl SqliteDb {
 
 	/// Holds the open local database's later commits in memory until `uncork_commits`, which
 	/// sends them to depot as one commit. Returns whether it corked: the remote backend and a
-	/// closed database do not.
-	pub(crate) async fn cork_commits(&self) -> Result<bool> {
+	/// closed database do not. `close` decides what closing the database before uncorking does
+	/// with the held commits on every path, including a panic on its worker. Under
+	/// `CorkClose::Discard` a transaction that would take the cork past one commit fails as too
+	/// large instead of sending part of the cork.
+	#[cfg(feature = "sqlite-local")]
+	pub(crate) async fn cork_commits(&self, close: CorkClose) -> Result<bool> {
 		if self.backend != SqliteBackend::LocalNative {
 			return Ok(false);
 		}
 
-		#[cfg(feature = "sqlite-local")]
-		{
-			let Some(native_db) = self.db.lock().clone() else {
-				return Ok(false);
-			};
-			let result = native_db.cork_commits().await;
-			self.map_local_worker_result(result)?;
-			return Ok(true);
-		}
-
-		#[cfg(not(feature = "sqlite-local"))]
-		Ok(false)
+		let Some(native_db) = self.db.lock().clone() else {
+			return Ok(false);
+		};
+		let result = native_db.cork_commits(close).await;
+		self.map_local_worker_result(result)?;
+		Ok(true)
 	}
 
 	/// Moves this database's later work behind foreground work on the shared pool. Called when
@@ -969,12 +982,46 @@ impl SqliteDb {
 		Ok(())
 	}
 
+	/// Interrupts the statement a failed start's hooks left running on the local worker, without
+	/// closing the database, so the commands the teardown queues before its close, such as
+	/// [`Self::discard_corked_commits`], do not wait for that statement. Marking the close
+	/// instead would fail the queued discard, and closing the connection then sends the held
+	/// commits to depot. The interrupt is sticky, so the database must close afterwards. A
+	/// remote database has no local worker, so this does nothing there.
+	pub(crate) fn interrupt(&self) {
+		#[cfg(feature = "sqlite-local")]
+		if let Some(native_db) = self.db.lock().clone() {
+			native_db.interrupt();
+		}
+	}
+
+	/// Drops the commits held since `cork_commits` without sending them, for a start that failed
+	/// before they were meant to become durable. The database is unusable afterwards and must
+	/// close: every later SQL command fails as `sqlite.closed`, also one already queued behind
+	/// the discard, and the close drops the held commits even when the discard itself failed. It
+	/// is never refused for a full command queue. A database that never corked has nothing
+	/// held, so this does nothing there.
+	pub(crate) async fn discard_corked_commits(&self) -> Result<()> {
+		#[cfg(feature = "sqlite-local")]
+		{
+			if self.backend != SqliteBackend::LocalNative {
+				return Ok(());
+			}
+			let native_db = self.native_db_handle()?;
+			let result = native_db.discard_corked_commits().await;
+			return self.map_local_worker_result(result);
+		}
+
+		#[cfg(not(feature = "sqlite-local"))]
+		Ok(())
+	}
+
 	pub async fn close(&self) -> Result<()> {
 		let db = self.clone();
 		run_detached_transaction_task(
 			async move {
 				let _gate = db.shutdown_transaction_coordinator().await;
-				db.close_backend(false).await
+				db.close_backend(NativeClose::Bounded).await
 			},
 			"sqlite close task failed",
 		)
@@ -988,27 +1035,64 @@ impl SqliteDb {
 		// would make a task-level join failure ambiguous: the caller could no longer
 		// prove that the worker had relinquished SQLite before replacing the actor.
 		let _gate = self.shutdown_transaction_coordinator().await;
-		self.close_backend(true).await
+		self.close_backend(NativeClose::Strict).await
 	}
 
-	async fn close_backend(&self, _wait_for_worker: bool) -> Result<()> {
+	/// Closes SQLite like [`Self::close_and_wait`] for a teardown that cannot wait on user code,
+	/// such as a failed start whose hook left a statement running. Waiting for the coordinator
+	/// to drain stops after `limit`, since a running statement holds the coordinator until its
+	/// reply comes, which may be never: inside a transaction it holds the transaction's
+	/// statement lock, and outside one it holds the coordinator's gate.
+	///
+	/// The worker close stays strict: this still returns only once the native worker
+	/// relinquished SQLite, which a new generation needs as proof. For `LocalNative` a stuck
+	/// statement is a command running on the pool thread. The close interrupts it, which is safe
+	/// because the connection belongs to this generation and nothing wants the statement's
+	/// outcome. The command then stops at its next progress callback, or once the VFS request it
+	/// is blocked on returns. The VFS transport's request deadline (the envoy client's
+	/// `KV_EXPIRE_MS`, 30 s) bounds that one request, not the statement, so the strict close
+	/// waits for roughly one request deadline rather than the whole statement. A transport
+	/// without a deadline would hold this close for as long as its request. A remote database
+	/// has no local worker to wait for, so `limit` bounds its whole close.
+	pub(crate) async fn close_and_wait_within(&self, limit: Duration) -> Result<()> {
+		let gate = self.shutdown_transaction_coordinator_within(limit).await;
+		if let Err(timed_out) = &gate {
+			tracing::warn!(
+				actor_id = self.actor_id.as_deref().unwrap_or("unknown"),
+				limit_ms = limit.as_millis() as u64,
+				transaction_active = timed_out.transaction_active,
+				"a statement still holds the sqlite coordinator while sqlite closes; closing without waiting for it, and any transaction it holds never commits"
+			);
+		}
+		let result = self.close_backend(NativeClose::StrictInterrupting).await;
+		drop(gate);
+		result
+	}
+
+	async fn close_backend(&self, _close: NativeClose) -> Result<()> {
 		match self.backend {
 			SqliteBackend::LocalNative => {
 				#[cfg(feature = "sqlite-local")]
 				{
 					let native_db = self.db.lock().clone();
 					if let Some(native_db) = native_db {
-						let close_result = if _wait_for_worker {
-							native_db.close_and_wait().await
-						} else {
-							native_db.close().await
+						let close_result = match _close {
+							NativeClose::Bounded => native_db.close().await,
+							NativeClose::Strict => native_db.close_and_wait().await,
+							NativeClose::StrictInterrupting => {
+								native_db.interrupt_and_close_and_wait().await
+							}
 						};
 						let close_timed_out = close_result.as_ref().err().is_some_and(|error| {
 							error
 								.downcast_ref::<SqliteWorkerCloseTimeoutError>()
 								.is_some()
 						});
-						let release_handle = _wait_for_worker || !close_timed_out;
+						let strict = match _close {
+							NativeClose::Bounded => false,
+							NativeClose::Strict | NativeClose::StrictInterrupting => true,
+						};
+						let release_handle = strict || !close_timed_out;
 						let result = self.map_local_worker_result(close_result);
 						self.abort_worker_failure_monitor();
 						if let Some(metrics) = self.vfs_metrics.as_ref() {

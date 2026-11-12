@@ -8,6 +8,13 @@ export interface JsActorKeySegment {
   stringValue?: string
   numberValue?: number
 }
+/** One individual actor fork behind an actor, as `c.forkChain` lists it. */
+export interface JsForkLink {
+  actorId: string
+  key: Array<JsActorKeySegment>
+  /** Milliseconds since the epoch. */
+  forkedAt: number
+}
 /** Active actor invocation correlation exposed to the TypeScript runtime adapter. */
 export interface JsActorInvocationTraceContext {
   rayId?: string
@@ -53,9 +60,6 @@ export interface JsInspectorSnapshot {
   queueSize: number
   connectedClients: number
 }
-export interface JsActorRuntimeSocketEndpointInfo {
-  path: string
-}
 export interface JsQueueSendResult {
   status: string
   response?: Buffer
@@ -83,13 +87,35 @@ export interface JsInspectorTabEntry {
   /** Set to true for HideBuiltin entries. */
   hidden?: boolean
 }
+export interface JsSqliteProfilingMetrics {
+  duration?: boolean
+  durationHistogram?: boolean
+  outcomes?: boolean
+  phaseDurationHistogram?: boolean
+  getPagesRoundTripsHistogram?: boolean
+  transactionStatementCountHistogram?: boolean
+  pagesFetched?: boolean
+  localPages?: boolean
+  localBytes?: boolean
+  getPagesDurationHistogram?: boolean
+  getPagesPagesHistogram?: boolean
+  getPagesResponseBytesHistogram?: boolean
+  getPagesMissingPages?: boolean
+  workerQueueDepth?: boolean
+  workerInflight?: boolean
+  coordinatorQueueDepth?: boolean
+  fingerprintOverflow?: boolean
+  eventDropped?: boolean
+}
 /**
  * Experimental SQLite profiling configuration. This entire configuration
  * surface is subject to change without notice.
  */
 export interface JsSqliteProfilingConfig {
-  queries?: Array<string>
-  fingerprints?: Array<string>
+  metrics?: JsSqliteProfilingMetrics
+  durationHistogramBucketsSeconds?: Array<number>
+  filterQueries?: Array<string>
+  filterQueryFingerprints?: Array<string>
   maxTrackedStatementFingerprints?: number
   maxTrackedTransactionFingerprints?: number
   maxPrometheusSeries?: number
@@ -114,7 +140,6 @@ export interface JsActorConfig {
   remoteSqlite?: boolean
   sqliteProfiling?: JsSqliteProfilingConfig
   tracing?: JsActorTracingConfig
-  enableActorRuntimeSocket?: boolean
   hasState?: boolean
   canHibernateWebsocket?: boolean
   stateSaveIntervalMs?: number
@@ -350,7 +375,6 @@ export declare class ActorContext {
   startWorkflowSpan(): Promise<WorkflowSpan>
   /** Returns nothing outside a workflow run or when tracing is off. */
   startWorkflowStepSpan(stepName: string, attempt: number): WorkflowStepSpan | null
-  provisionActorRuntimeSocket(): Promise<JsActorRuntimeSocketEndpointInfo>
   schedule(): Schedule
   queue(): Queue
   setAlarm(timestampMs?: number | undefined | null): void
@@ -370,7 +394,11 @@ export declare class ActorContext {
   actorId(): string
   name(): string
   key(): Array<JsActorKeySegment>
+  /** The individual actor forks behind this actor, oldest first. */
+  forkChain(): Array<JsForkLink>
   region(): string
+  /** The name of the namespace the actor runs in. */
+  namespace(): string
   sleep(): void
   destroy(): void
   destroyRequested(): boolean
@@ -561,6 +589,13 @@ export declare class CoreRegistry {
    */
   shutdown(): Promise<void>
   actorStopThresholdMs(): Promise<number | null>
+  /** Number of actors hosted by the serverful envoy, or zero while it is not serving. */
+  activeActorCount(): number
+  /**
+   * Calls `callback` with the active actor count and every change until `cancelToken`
+   * is cancelled or the registry stops serving.
+   */
+  onActiveActorCountChange(callback: (count: number) => void, cancelToken: CancellationToken): void
   health(): Promise<JsRegistryRouteResponse>
   metadata(): JsRegistryRouteResponse
   metrics(): JsRegistryRouteResponse

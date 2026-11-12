@@ -548,31 +548,63 @@ type NodePoolConfig struct {
     actorEvictionRate: f64
     metadata: optional<data>
 }
+
 type PoolConnection struct {
     connectionId: Id
     heartbeatUnixMs: i64
 }
+
 type PoolRead void
+
 type PoolPut NodePoolConfig
+
 type PoolDelete void
+
 type PoolConnect PoolConnection
+
 type PoolRenew PoolConnection
+
 type PoolDisconnect Uuid
+
 type PoolOperation union {
-    PoolRead | PoolPut | PoolDelete | PoolConnect | PoolDisconnect | PoolRenew
+    PoolRead |
+    PoolPut |
+    PoolDelete |
+    PoolConnect |
+    PoolDisconnect |
+    PoolRenew
 }
+
+type PoolStatus enum {
+    OK
+    NOT_FOUND
+    CONNECTED
+}
+
 type PoolRequest struct {
     poolName: str
     operation: PoolOperation
 }
-type PoolStatus enum { Ok NotFound Connected }
 type PoolResponse struct {
     status: PoolStatus
     config: optional<NodePoolConfig>
 }
-type PoolLease struct { heartbeatUnixMs: i64 }
+
+type PoolLease struct {
+    heartbeatUnixMs: i64
+    }
 
 # One bounded page of configured pools, ordered by immutable name.
-type PoolEntry struct { name: str config: NodePoolConfig }
-type PoolListRequest struct { after: optional<str> limit: u32 }
-type PoolListResponse struct { pools: list<PoolEntry> cursor: optional<str> }
+type PoolEntry struct {
+    name: str
+    config: NodePoolConfig
+}
+
+type PoolListRequest struct {
+    after: optional<str>
+    limit: u32
+}
+type PoolListResponse struct {
+    pools: list<PoolEntry>
+    cursor: optional<str>
+}

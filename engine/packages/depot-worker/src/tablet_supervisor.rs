@@ -28,7 +28,7 @@ use futures_util::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnord
 use object_store::ObjectStore;
 use parking_lot::RwLock;
 use rivet_data::generated::{
-	depot_client_protocol_v1::{
+	depot_client_protocol_v2::{
 		ClientRequest, ClientResponse, OperatorCachesFailed, OperatorCachesOutcome,
 		OperatorDroppedCaches, OperatorResponse, OperatorTabletOutcome, OperatorTabletRejected,
 		VolumeRejectResponse,
@@ -88,12 +88,14 @@ impl<T: Send + Sync + 'static> LeaseChanges for watch::Receiver<T> {
 	}
 }
 
-/// The parts of a topology snapshot that decide what `WorkerLease` answers for this process.
-/// The registration identity is fixed for the process's lifetime, so it is not part of it.
+/// The parts of a topology snapshot that decide what `WorkerLease` answers for this process,
+/// and whether the first storage listing has landed, which tablet grants wait for. The
+/// registration identity is fixed for the process's lifetime, so it is not part of it.
 #[derive(Clone, PartialEq, Eq)]
 struct LeaseView {
 	status: LeaseStatus,
 	heartbeat_state: Option<HeartbeatState>,
+	floor_listed: bool,
 }
 
 impl LeaseView {
@@ -101,6 +103,7 @@ impl LeaseView {
 		Self {
 			status: snapshot.status.clone(),
 			heartbeat_state: snapshot.heartbeat_state,
+			floor_listed: snapshot.floor_listed(),
 		}
 	}
 }
@@ -108,8 +111,8 @@ impl LeaseView {
 /// Topology publishes one snapshot for every change of its state, including endpoint lookups,
 /// so this resolves only when the lease view itself differs from the last one seen. `seen`
 /// is the view at the last wake, not at the last read, which loses nothing because a lease
-/// view never returns to an earlier value: live deadlines only advance, and the fenced,
-/// releasing and stopped statuses are terminal.
+/// view never returns to an earlier value: live deadlines only advance, the fenced,
+/// releasing and stopped statuses are terminal, and the first listing lands once.
 struct TopologyLeaseChanges {
 	snapshots: watch::Receiver<TopologySnapshot>,
 	seen: LeaseView,
@@ -189,7 +192,11 @@ impl crate::tablet_maintainer_machine::runner::HolderWatches for Topology {
 /// The runtime capabilities shared by maintainers; policy and state remain inside each machine.
 pub struct SupervisorDependencies {
 	pub fork_peer: Option<Arc<dyn crate::tablet_maintainer_machine::runner::ForkPeer>>,
-	pub base_reader: Option<Arc<dyn crate::filesystem::base::BaseChunkReader>>,
+	/// Runs the group read commands for every maintainer; see `MaintainerDependencies`.
+	pub group_commands: Option<Arc<dyn crate::group_events::GroupCommands>>,
+	/// The process's events feed every maintainer subscribes to.
+	pub group_events: Option<Arc<crate::group_events::GroupEventsFeed>>,
+	pub base_reader: Option<Arc<dyn crate::filesystem::base::BaseLayerReader>>,
 	/// The local shard receives the same manifest as this worker’s maintainers.
 	pub log_shard: Arc<Shard>,
 	pub env: Arc<dyn Env>,
@@ -245,6 +252,8 @@ struct RunningTablet {
 	/// A reservation for `update_slot` is in `TabletSupervisor::inbox_slots`. No update is
 	/// offered meanwhile; the slot's arrival wakes the supervisor to offer it.
 	reserving_slot: bool,
+	/// The versions this grant selected when it started, which it writes for its lifetime.
+	write_versions: crate::tablet_maintainer_machine::types::TabletWriteVersions,
 	/// Boot time this instance started, for the move timing logs.
 	started_boot_ms: u64,
 	/// Whether the first request routed to this instance was logged.
@@ -360,7 +369,23 @@ pub struct TabletSupervisor {
 	/// Wakes `wait_for_work` when the worker's lease changes. Taken before the lease is first
 	/// read, so no change is missed.
 	lease_changes: LeaseSubscription,
+	/// The wait of tablet starts for the process's first storage listing, once one started
+	/// waiting; see `log_listing_wait`.
+	listing_wait: Option<ListingWait>,
 }
+
+/// When tablet starts began waiting for the process's first storage listing, and when the
+/// supervisor last warned about it.
+struct ListingWait {
+	started_boot_ms: u64,
+	warned_boot_ms: Option<u64>,
+}
+
+/// How long tablet starts wait for the process's first storage listing before the supervisor
+/// warns, and the spacing of later warnings. Grants usually arrive before the first listing,
+/// which takes about one object-store round trip, and a failed one is retried after the
+/// discovery hint interval, so a shorter wait is an ordinary boot.
+const LISTING_WAIT_WARN_INTERVAL_MS: u64 = 10_000;
 
 enum LeaseSubscription {
 	/// The lease has not been read yet.
@@ -605,7 +630,40 @@ impl TabletSupervisor {
 			terminals: FuturesUnordered::new(),
 			inbox_slots: FuturesUnordered::new(),
 			lease_changes: LeaseSubscription::Unsubscribed,
+			listing_wait: None,
 		}
+	}
+
+	/// Logs that a tablet start waits for the first storage listing: at debug while the wait
+	/// is young, then as a warning once it has lasted `LISTING_WAIT_WARN_INTERVAL_MS`, at most
+	/// once per that interval.
+	fn log_listing_wait(&mut self, tablet_id: [u8; 16]) {
+		let Ok(now_boot_ms) = self.deps.env.clock().boot_ms() else {
+			return;
+		};
+		let wait = self.listing_wait.get_or_insert(ListingWait {
+			started_boot_ms: now_boot_ms,
+			warned_boot_ms: None,
+		});
+		let waited_ms = now_boot_ms.saturating_sub(wait.started_boot_ms);
+		let due = waited_ms >= LISTING_WAIT_WARN_INTERVAL_MS
+			&& wait.warned_boot_ms.is_none_or(|warned| {
+				now_boot_ms >= warned.saturating_add(LISTING_WAIT_WARN_INTERVAL_MS)
+			});
+		if !due {
+			tracing::debug!(
+				tablet_id = %uuid::Uuid::from_bytes(tablet_id),
+				waited_ms,
+				"tablet start waits for this process's first storage listing"
+			);
+			return;
+		}
+		wait.warned_boot_ms = Some(now_boot_ms);
+		tracing::warn!(
+			tablet_id = %uuid::Uuid::from_bytes(tablet_id),
+			waited_ms,
+			"tablet start still waits for this process's first storage listing; check object-store latency and topology discovery errors"
+		);
 	}
 
 	/// Subscribes to lease changes once, before the first read of the lease, so a change
@@ -733,7 +791,7 @@ impl TabletSupervisor {
 			ClientRequest::RepairAuditListRequest(request) => {
 				running.maintainer.repair_audit_list(request)
 			}
-			// Notices and operator requests name no single volume and were rejected above.
+			// Notices and operator requests were rejected above.
 			ClientRequest::ReplicaStatusNoticeRequest(_)
 			| ClientRequest::OperatorTierRequest(_)
 			| ClientRequest::OperatorDropCachesRequest(_) => {
@@ -899,19 +957,49 @@ impl TabletSupervisor {
 		self.recovery_requested.retain(|grant, _| current(grant));
 		self.terminal_recovery.retain(current);
 
-		// Revoke all obsolete instances before any one tablet's cleanup begins.
+		// Revoke all obsolete instances before any one tablet's cleanup begins. A grant whose
+		// versions the fleet's read floor has since raised is handed back too, so its next grant
+		// writes rows and log ops at the raised versions, which group forks need. At most one
+		// per reconcile, so a worker that saw a roll finish does not hand all its grants back at
+		// once.
+		let selectable = match self.deps.versions.floor_listed() {
+			true => crate::tablet_maintainer_machine::types::TabletWriteVersions::select(
+				self.deps.versions.as_ref(),
+			)
+			.ok(),
+			false => None,
+		};
+		let mut version_returns = 1;
 		let mut revoked = vec![];
 		for (id, running) in &self.running {
 			let fenced = matches!(
 				running.maintainer.snapshot.borrow().phase,
 				MaintainerPhase::Fenced | MaintainerPhase::Stopped
 			);
-			let keep = !fenced
+			let mut keep = !fenced
 				&& self.deps.lease.permits(self.worker.clone())
 				&& manifest
 					.tablets
 					.iter()
 					.any(|tablet| same_lifetime(tablet, &running.tablet));
+			let raised = selectable.is_some_and(|selectable| {
+				selectable.fs_rows > running.write_versions.fs_rows
+					|| selectable.maintainer_log > running.write_versions.maintainer_log
+			});
+			if keep && raised && version_returns > 0 {
+				version_returns -= 1;
+				keep = false;
+				tracing::info!(
+					tablet_id = ?id,
+					grant_epoch = running.tablet.tablet_grant_epoch,
+					selected = ?running.write_versions,
+					?selectable,
+					"handing a tablet grant back because the fleet's read floor rose above the versions it selected"
+				);
+				crate::metrics::MAINTAINER_GRANT_RETURNS
+					.with_label_values(&["versions_raised"])
+					.inc();
+			}
 			if !keep {
 				running
 					.authority
@@ -1030,6 +1118,17 @@ impl TabletSupervisor {
 					.inc();
 				continue;
 			}
+			// A grant selects its versions once for its whole lifetime, so it waits for the
+			// process's first completed storage listing rather than selecting with no listing
+			// behind it. The listing wakes the supervisor as a lease change; after it, a start
+			// never waits, and a grant that selected lower versions than a later listing allows,
+			// because a worker was unobserved or an older one was still live, is handed back by
+			// the reconcile that sees the higher selection.
+			if !self.deps.versions.floor_listed() {
+				crate::metrics::TABLET_STARTS_AWAITING_LISTING.inc();
+				self.log_listing_wait(tablet.id);
+				continue;
+			}
 			// The grant writes at the versions every live storage worker reads now. A
 			// refusal means none is safe to write, so this grant does not start, and the
 			// next reconcile offers it again; the worker's other tablets keep serving.
@@ -1068,6 +1167,8 @@ impl TabletSupervisor {
 				},
 				MaintainerDependencies {
 					fork_peer: self.deps.fork_peer.clone(),
+					group_commands: self.deps.group_commands.clone(),
+					group_events: self.deps.group_events.clone(),
 					base_reader: self.deps.base_reader.clone(),
 					env: self.deps.env.clone(),
 					cold_store: self.deps.cold_store.clone(),
@@ -1148,6 +1249,7 @@ impl TabletSupervisor {
 					retired_pending: true,
 					update_slot: None,
 					reserving_slot: false,
+					write_versions,
 					started_boot_ms: started.boot_ms,
 					first_request_logged: std::sync::atomic::AtomicBool::new(false),
 				},
@@ -1798,7 +1900,7 @@ impl TabletSupervisor {
 	/// replicas to the tablet's new maintainer.
 	fn status_notices(
 		&self,
-		request: rivet_data::generated::depot_client_protocol_v1::ReplicaStatusNoticeRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::ReplicaStatusNoticeRequest,
 	) -> Result<(VolumeReplyAuthority, oneshot::Receiver<ClientResponse>), VolumeRejectResponse> {
 		let worker = WorkerId::from_bytes(request.worker_id);
 		let mut authority = None;
@@ -1859,7 +1961,7 @@ impl TabletSupervisor {
 		};
 		let (sender, receiver) = oneshot::channel();
 		let _ = sender.send(ClientResponse::ReplicaStatusNoticeResponse(
-			rivet_data::generated::depot_client_protocol_v1::ReplicaStatusNoticeResponse {
+			rivet_data::generated::depot_client_protocol_v2::ReplicaStatusNoticeResponse {
 				refused_tablets,
 				unknown_tablets,
 			},
@@ -2018,6 +2120,45 @@ impl TabletSupervisor {
 			},
 			response,
 		))
+	}
+
+	/// Opening instances reply from their pure core; obsolete grants never supply evidence.
+	pub fn replica_readiness(
+		&self,
+		request: rivet_data::generated::depot_replica_readiness_v1::ReplicaReadiness,
+	) -> Result<
+		(
+			VolumeReplyAuthority,
+			oneshot::Receiver<
+				rivet_data::generated::depot_storage_worker_protocol_v1::StopReadinessResponse,
+			>,
+		),
+		rivet_data::generated::depot_storage_worker_protocol_v1::StopReadinessResponse,
+	> {
+		use rivet_data::generated::depot_storage_worker_protocol_v1::StopReadinessResponse as Response;
+		let Some(running) = self.running.get(&request.tablet_id) else {
+			self.routing_miss();
+			return Err(Response::NotServing);
+		};
+		if running.tablet.tablet_grant_epoch != request.tablet_grant_epoch
+			|| running.tablet.replica_set.tablet_replica_set_version
+				!= request.tablet_replica_set_version
+		{
+			self.routing_miss();
+			return Err(Response::NotServing);
+		}
+		let authority = VolumeReplyAuthority {
+			snapshot: running.maintainer.snapshot.clone(),
+			grant: TabletGrant {
+				tablet_id: request.tablet_id,
+				tablet_grant_epoch: request.tablet_grant_epoch,
+			},
+			authority: running.authority.clone(),
+		};
+		if !authority.may_reply() {
+			return Err(Response::NotServing);
+		}
+		Ok((authority, running.maintainer.replica_readiness(request)?))
 	}
 
 	/// Opening instances reply from their pure core; obsolete grants never supply evidence.

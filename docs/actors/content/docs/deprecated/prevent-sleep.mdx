@@ -1,0 +1,28 @@
+---
+title: "Deprecated preventSleep"
+description: "Replace the deprecated preventSleep and setPreventSleep with keepAwake and waitUntil."
+---
+
+<Warning>
+`preventSleep` and `setPreventSleep` were deprecated in 3.0 and will be removed in a future version. They are no-ops: `setPreventSleep` does nothing and `preventSleep` always returns `false`.
+</Warning>
+
+## What is deprecated
+
+- `c.setPreventSleep(enabled)` and `c.preventSleep` in TypeScript.
+- `Ctx::set_prevent_sleep` and `Ctx::prevent_sleep` in Rust.
+
+<CodeSnippet file="examples/docs/actors-deprecated-prevent-sleep/before.ts" />
+
+Because these calls no longer do anything, an actor that relies on them can sleep in the middle of the work they were meant to protect.
+
+## Use `keepAwake` or `waitUntil`
+
+Scope the work that must finish to a promise instead of toggling a flag:
+
+- **`c.keepAwake(promise)`** blocks sleep until the promise settles and returns its result. Use it when the caller waits for the work.
+- **`c.waitUntil(promise)`** lets the current request return right away and finishes the promise before the actor sleeps. Use it for background work.
+
+<CodeSnippet file="examples/docs/actors-deprecated-prevent-sleep/keep-awake.ts" />
+
+In Rust, use `Ctx::keep_awake` and `Ctx::wait_until`. See [Lifecycle](/actors/docs/lifecycle) for how sleep works.

@@ -2,9 +2,10 @@ use super::{
 	TopologyStateMachine,
 	effect::*,
 	event::*,
+	state::FloorEvidence,
 	types::{
-		EndpointResult, EndpointTimeoutResult, FenceReason, FenceReport, OperationId,
-		RenewalLateReport, RequestError,
+		EndpointResult, EndpointTimeoutResult, FenceReason, FenceReport, FloorAgeChange,
+		FloorAgeReport, OperationId, RenewalLateReport, RequestError,
 	},
 };
 use crate::{
@@ -15,7 +16,10 @@ use crate::{
 use anyhow::Result;
 use object_store::{ObjectStore, PutMode, UpdateVersion};
 use rivet_env::TaskScope;
-use rivet_keys::keys::{KeyAddress, codec::FormalKey};
+use rivet_keys::keys::{
+	KeyAddress,
+	codec::{AtVersion, FormalKey},
+};
 use rivet_metrics::{GaugeGuardExt, IntGaugeGuard};
 use rivet_state_machine_ephemeral::{EffectContext, Executor};
 use rivet_state_machine_util::IoCall;
@@ -132,6 +136,21 @@ impl Executor<TopologyStateMachine> for TopologyExecutor {
 				record_renewal_late(&report);
 				return;
 			}
+			Effect::RecordReadFloorAge { report } => {
+				record_floor_age(&report);
+				return;
+			}
+			Effect::RecordUnobservedWorkersExpired { workers } => {
+				for worker in workers {
+					tracing::warn!(
+						worker_id = ?worker.worker_id,
+						reason = worker.reason.label(),
+						modified_unix_ms = ?worker.reason.modified_unix_ms(),
+						"left a listed storage worker out of the read floor: the listing could not use its heartbeat and its lease has expired. Heartbeat GC removes the record; check the store or the binary that wrote it"
+					);
+				}
+				return;
+			}
 			Effect::RecordIncompatibleVersion { incompatibility } => {
 				tracing::error!(
 					family = incompatibility.family,
@@ -139,6 +158,13 @@ impl Executor<TopologyStateMachine> for TopologyExecutor {
 					selected = incompatibility.selected,
 					own_range = ?incompatibility.own_range,
 					"other storage workers write a version this binary cannot read; fencing. Roll forward to a binary that reads it, since versions only move forward"
+				);
+				return;
+			}
+			Effect::RecordMissingZone { labelled } => {
+				tracing::error!(
+					?labelled,
+					"storage.zone is unset, but another storage worker advertises one; fencing. Set storage.zone on this process"
 				);
 				return;
 			}
@@ -315,6 +341,7 @@ impl Executor<TopologyStateMachine> for TopologyExecutor {
 				op,
 				worker_registration,
 				heartbeat,
+				heartbeat_version,
 				expected_etag,
 			} => {
 				let Some(call) = self.pending_call(op) else {
@@ -340,7 +367,8 @@ impl Executor<TopologyStateMachine> for TopologyExecutor {
 							});
 
 							let result = async {
-								let bytes = key.serialize(heartbeat)?;
+								let bytes =
+									key.serialize(AtVersion::new(heartbeat, heartbeat_version))?;
 								Ok::<_, anyhow::Error>(
 									store
 										.put_opts(&key.pack(), bytes.into(), mode.into())
@@ -402,7 +430,7 @@ impl Executor<TopologyStateMachine> for TopologyExecutor {
 							timer.observe_duration();
 							crate::metrics::REFRESHES
 								.with_label_values(&[match &result {
-									Ok(listing) if listing.partial => "partial",
+									Ok(listing) if listing.partial() => "partial",
 									Ok(_) => "success",
 									Err(_) => "error",
 								}])
@@ -412,10 +440,12 @@ impl Executor<TopologyStateMachine> for TopologyExecutor {
 								tracing::warn!(%error, "topology discovery failed");
 							}
 							match result {
-								Ok(listing) if listing.partial => {
+								Ok(listing) if listing.partial() => {
 									Event::ListStorageWorkersPartialResponse {
 										op,
 										entries: listing.entries,
+										unobserved: listing.unobserved,
+										unconfirmed: listing.unconfirmed,
 									}
 								}
 								Ok(listing) => Event::ListStorageWorkersResponse {
@@ -578,6 +608,35 @@ fn record_renewal_late(report: &RenewalLateReport) {
 	);
 }
 
+/// Publishes the read floor's age and logs the edges of a stale episode.
+fn record_floor_age(report: &FloorAgeReport) {
+	crate::metrics::READ_FLOOR_AGE.set(report.age_ms as f64 / 1000.0);
+
+	let selection = match report.floor {
+		FloorEvidence::Unlisted => "no listing has completed, so writes use the lowest version",
+		FloorEvidence::Unobserved => {
+			"a listed storage worker was never observed, so writes use the lowest version"
+		}
+		FloorEvidence::Observed => {
+			"writes use the read floor of the last listing, which may rest on kept observations"
+		}
+	};
+	match report.change {
+		FloorAgeChange::Unchanged => {}
+		FloorAgeChange::BecameStale => tracing::warn!(
+			age_ms = report.age_ms,
+			ttl_ms = report.ttl_ms,
+			fully_observed = report.fully_observed,
+			selection,
+			"no storage listing has read every storage worker for longer than the heartbeat ttl; check object-store latency, listing errors and unreadable heartbeats"
+		),
+		FloorAgeChange::Renewed => tracing::info!(
+			age_ms = report.age_ms,
+			"a storage listing read every storage worker again"
+		),
+	}
+}
+
 /// Logs this worker's own fence once and counts it. The coordinator and other dependents
 /// exit after topology fences, so this line names the cause their exit logs do not.
 fn record_fence(report: &FenceReport) {
@@ -602,7 +661,8 @@ fn record_fence(report: &FenceReport) {
 		| FenceReason::ForeignHeartbeat
 		| FenceReason::RegistrationFailed
 		| FenceReason::DependentFailed
-		| FenceReason::IncompatibleVersion => tracing::error!(
+		| FenceReason::IncompatibleVersion
+		| FenceReason::MissingZone => tracing::error!(
 			?worker_id,
 			reason,
 			last_confirmed_issued_boot_ms = ?report.last_confirmed_issued_boot_ms,

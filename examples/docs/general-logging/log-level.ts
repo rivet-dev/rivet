@@ -1,8 +1,8 @@
 import { actor, setup } from "rivetkit";
 
 const counter = actor({
-  state: { count: 0 },
-  actions: { increment: (c) => c.state.count++ }
+  vars: { count: 0 },
+  actions: { increment: (c) => c.vars.count++ }
 });
 
 const registry = setup({

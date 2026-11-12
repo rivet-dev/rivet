@@ -9,7 +9,7 @@ use axum::{
 	routing::post,
 };
 use depot_client::regional::{MAX_MESSAGE_BYTES, PEER_PATH, REGION_HEADER, TIMEOUT_HEADER};
-use rivet_data::versioned::{DepotClientRequestData, DepotClientResponseData};
+use rivet_data::versioned::DepotClientRequestData;
 use rivet_env::Clock;
 use std::sync::Arc;
 use std::time::Duration;
@@ -63,12 +63,17 @@ async fn dispatch(service: &PeerService, request: Request<Body>) -> Result<Vec<u
 	let response = rivet_env::timeout(clock.as_ref(), timeout, async {
 		let bytes = to_bytes(request.into_body(), MAX_MESSAGE_BYTES).await?;
 		let command = DepotClientRequestData::deserialize_with_embedded_version(&bytes)?;
+		// The answer goes back at the version the request was sealed at, which the
+		// requesting region reads.
+		let request_version = depot_client::client_protocol::embedded_version(&bytes)
+			.unwrap_or(rivet_data::DEPOT_CLIENT_PROTOCOL_VERSION);
 		let response = (service.client)()
 			.filesystem_peer_request(region, command, deadline)
 			.await?;
-		let bytes = DepotClientResponseData::serialize_with_embedded_version(
+		let bytes = depot_client::client_protocol::seal_response(
 			&response,
-			rivet_data::DEPOT_CLIENT_PROTOCOL_VERSION,
+			request_version,
+			depot_types::client::MAINTAINER_OVERLOAD_RETRY_AFTER_MS,
 		)?;
 		ensure!(
 			bytes.len() <= MAX_MESSAGE_BYTES,

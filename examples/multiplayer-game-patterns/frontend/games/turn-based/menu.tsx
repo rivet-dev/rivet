@@ -91,18 +91,10 @@ export function TurnBasedMenu({
 		setStatus("loading");
 		setError("");
 		try {
-			const mm = client.turnBasedMatchmaker
-				.getOrCreate(["main"])
-				.connect();
-			const result = await mm.send(
-				"createGame",
-				{ playerName: name.trim() },
-				{ wait: true, timeout: 10_000 },
-			);
-			mm.dispose();
-			const response = result.response;
-			if (!response?.matchId) throw new Error("Failed to create game");
-			onReady(response);
+			// A one-off action needs no connection to the matchmaker.
+			const mm = client.turnBasedMatchmaker.getOrCreate(["main"]);
+			const game = await mm.createGame({ playerName: name.trim() });
+			onReady(game);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 			setStatus("error");
@@ -114,18 +106,12 @@ export function TurnBasedMenu({
 		setStatus("loading");
 		setError("");
 		try {
-			const mm = client.turnBasedMatchmaker
-				.getOrCreate(["main"])
-				.connect();
-			const result = await mm.send(
-				"joinByCode",
-				{ inviteCode: joinCode.trim(), playerName: name.trim() },
-				{ wait: true, timeout: 10_000 },
-			);
-			mm.dispose();
-			const response = result.response;
-			if (!response?.matchId) throw new Error("Failed to join game");
-			onReady(response);
+			const mm = client.turnBasedMatchmaker.getOrCreate(["main"]);
+			const game = await mm.joinByCode({
+				inviteCode: joinCode.trim(),
+				playerName: name.trim(),
+			});
+			onReady(game);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 			setStatus("error");

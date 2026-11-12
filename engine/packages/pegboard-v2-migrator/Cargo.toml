@@ -1,0 +1,49 @@
+[package]
+name = "pegboard-v2-migrator"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+bytes.workspace = true
+depot-client.workspace = true
+depot-fs-core.workspace = true
+depot-protocol.workspace = true
+depot-worker.workspace = true
+foundationdb-tuple.workspace = true
+futures-util.workspace = true
+lazy_static.workspace = true
+migrate-from-v2-protocol.workspace = true
+parking_lot.workspace = true
+pegboard-envoy.workspace = true
+pegboard.workspace = true
+rivet-config.workspace = true
+rivet-data.workspace = true
+rivet-engine-context.workspace = true
+rivet-env.workspace = true
+rivet-envoy-protocol.workspace = true
+rivet-keys.workspace = true
+rivet-metrics.workspace = true
+rivet-singleton-coordinator.workspace = true
+rivet-state-machine-ephemeral.workspace = true
+rivet-state-machine.workspace = true
+rivet-topology.workspace = true
+rivet-util.workspace = true
+rivetkit-shared-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlite-embedded-filesystem = { path = "../sqlite-embedded-filesystem" }
+sqlite_types.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+universalpubsub.workspace = true
+urlencoding.workspace = true
+vbare.workspace = true
+xxhash-rust.workspace = true
+

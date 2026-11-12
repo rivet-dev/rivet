@@ -182,8 +182,10 @@ pub struct WasmActionDefinition {
 #[derive(Clone, Default, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WasmSqliteProfilingConfig {
-	pub queries: Option<Vec<String>>,
-	pub fingerprints: Option<Vec<String>>,
+	pub metrics: Option<rivetkit_core::SqliteProfilingMetricsInput>,
+	pub duration_histogram_buckets_seconds: Option<Vec<f64>>,
+	pub filter_queries: Option<Vec<String>>,
+	pub filter_query_fingerprints: Option<Vec<String>>,
 	pub max_tracked_statement_fingerprints: Option<u32>,
 	pub max_tracked_transaction_fingerprints: Option<u32>,
 	pub max_prometheus_series: Option<u32>,
@@ -204,7 +206,6 @@ pub struct WasmActorConfig {
 	pub has_database: Option<bool>,
 	pub remote_sqlite: Option<bool>,
 	pub sqlite_profiling: Option<WasmSqliteProfilingConfig>,
-	pub enable_actor_runtime_socket: Option<bool>,
 	pub has_state: Option<bool>,
 	pub can_hibernate_websocket: Option<bool>,
 	pub state_save_interval_ms: Option<u32>,
@@ -241,7 +242,6 @@ impl From<WasmActorConfig> for ActorConfigInput {
 			remote_sqlite: config.remote_sqlite,
 			sqlite_profiling: config.sqlite_profiling.map(Into::into),
 			tracing: None,
-			enable_actor_runtime_socket: config.enable_actor_runtime_socket,
 			has_state: config.has_state,
 			can_hibernate_websocket: config.can_hibernate_websocket,
 			state_save_interval_ms: config.state_save_interval_ms,
@@ -277,8 +277,10 @@ impl From<WasmActorConfig> for ActorConfigInput {
 impl From<WasmSqliteProfilingConfig> for SqliteProfilingConfigInput {
 	fn from(value: WasmSqliteProfilingConfig) -> Self {
 		Self {
-			queries: value.queries,
-			fingerprints: value.fingerprints,
+			metrics: value.metrics,
+			duration_histogram_buckets_seconds: value.duration_histogram_buckets_seconds,
+			filter_queries: value.filter_queries,
+			filter_query_fingerprints: value.filter_query_fingerprints,
 			max_tracked_statement_fingerprints: value.max_tracked_statement_fingerprints,
 			max_tracked_transaction_fingerprints: value.max_tracked_transaction_fingerprints,
 			max_prometheus_series: value.max_prometheus_series,
@@ -545,6 +547,7 @@ struct WasmCallbacks {
 	create_vars: Option<Function>,
 	on_migrate: Option<Function>,
 	on_wake: Option<Function>,
+	on_fork: Option<Function>,
 	on_before_actor_start: Option<Function>,
 	on_sleep: Option<Function>,
 	on_destroy: Option<Function>,
@@ -572,6 +575,7 @@ impl WasmCallbacks {
 			create_vars: function_property(&callbacks, "createVars"),
 			on_migrate: function_property(&callbacks, "onMigrate"),
 			on_wake: function_property(&callbacks, "onWake"),
+			on_fork: function_property(&callbacks, "onFork"),
 			on_before_actor_start: function_property(&callbacks, "onBeforeActorStart"),
 			on_sleep: function_property(&callbacks, "onSleep"),
 			on_destroy: function_property(&callbacks, "onDestroy"),
@@ -602,12 +606,13 @@ async fn run_actor_adapter(callbacks: WasmCallbacks, start: ActorStart) -> Resul
 		is_new,
 		snapshot,
 		hibernated: _,
+		fork,
 		mut events,
 		startup_ready,
 	} = start;
 
 	let ctx = WasmActorContext::from_core(core_ctx.clone(), callbacks.clone());
-	let preamble = run_preamble(&callbacks, &ctx, input, is_new, snapshot).await;
+	let preamble = run_preamble(&callbacks, &ctx, input, is_new, snapshot, fork).await;
 	if let Some(reply) = startup_ready {
 		let _ = reply.send(
 			preamble
@@ -621,9 +626,24 @@ async fn run_actor_adapter(callbacks: WasmCallbacks, start: ActorStart) -> Resul
 		start_run_handler(&callbacks, &ctx)?;
 	}
 
-	while let Some(event) = events.recv().await {
-		dispatch_event(&callbacks, &ctx, event).await;
+	// Connection callbacks may call this actor again. Keep their futures owned by
+	// the adapter while continuing to receive the nested request's events.
+	let mut connection_tasks = tokio::task::JoinSet::new();
+	loop {
+		tokio::select! {
+			Some(result) = connection_tasks.join_next(), if !connection_tasks.is_empty() => {
+				if let Err(error) = result {
+					console_error(&format!("wasm connection callback task failed: {error:#}"));
+				}
+			}
+			event = events.recv() => {
+				let Some(event) = event else { break };
+				dispatch_event(&callbacks, &ctx, event, &mut connection_tasks).await;
+			}
+		}
 	}
+	connection_tasks.abort_all();
+	while connection_tasks.join_next().await.is_some() {}
 
 	Ok(())
 }
@@ -659,6 +679,7 @@ async fn run_preamble(
 	input: Option<Vec<u8>>,
 	is_new: bool,
 	snapshot: Option<Vec<u8>>,
+	fork: Option<rivetkit_core::ActorForkStart>,
 ) -> Result<()> {
 	if let Some(callback) = &callbacks.on_migrate {
 		let payload = object();
@@ -706,6 +727,35 @@ async fn run_preamble(
 		call_callback(callback, &payload.into()).await?;
 	}
 
+	// A fork's first start runs its hook once its state is loaded and before `onWake`; core
+	// decides when a fork's hook is due.
+	if let (Some(fork), Some(callback)) = (fork, &callbacks.on_fork) {
+		let payload = object();
+		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
+		let fork_object = object();
+		set_anyhow(
+			&fork_object,
+			"actorId",
+			JsValue::from_str(&fork.link.actor_id),
+		)?;
+		set_anyhow(
+			&fork_object,
+			"key",
+			serde_wasm_bindgen::to_value(&wasm_actor_key(&fork.link.key))
+				.map_err(|error| anyhow!("serialize fork key: {error}"))?,
+		)?;
+		set_anyhow(
+			&fork_object,
+			"forkedAt",
+			JsValue::from_f64(fork.link.forked_at as f64),
+		)?;
+		if let Some(input) = fork.input.as_ref() {
+			set_anyhow(&fork_object, "input", bytes_to_js(input))?;
+		}
+		set_anyhow(&payload, "fork", fork_object.into())?;
+		call_callback(callback, &payload.into()).await?;
+	}
+
 	if let Some(callback) = &callbacks.on_wake {
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
@@ -721,7 +771,12 @@ async fn run_preamble(
 	Ok(())
 }
 
-async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event: ActorEvent) {
+async fn dispatch_event(
+	callbacks: &WasmCallbacks,
+	ctx: &WasmActorContext,
+	event: ActorEvent,
+	connection_tasks: &mut tokio::task::JoinSet<()>,
+) {
 	match event {
 		ActorEvent::Action {
 			name,
@@ -974,24 +1029,33 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 			request,
 			reply,
 		} => {
-			let result = run_connection_preflight(callbacks, ctx, conn, params, request).await;
-			if let Err(error) = &result {
-				console_error(&format!(
-					"wasm connection preflight callback failed: {error:#}"
-				));
-			}
-			reply.send(result);
+			let callbacks = callbacks.clone();
+			let ctx = ctx.clone();
+			connection_tasks.spawn_local(reply.send_or_cancel(async move {
+				let result =
+					run_connection_preflight(&callbacks, &ctx, conn, params, request).await;
+				if let Err(error) = &result {
+					console_error(&format!(
+						"wasm connection preflight callback failed: {error:#}"
+					));
+				}
+				result
+			}));
 		}
 		ActorEvent::ConnectionOpen {
 			conn,
 			request,
 			reply,
 		} => {
-			let result = run_connection_open(callbacks, ctx, conn, request).await;
-			if let Err(error) = &result {
-				console_error(&format!("wasm connection open callback failed: {error:#}"));
-			}
-			reply.send(result);
+			let callbacks = callbacks.clone();
+			let ctx = ctx.clone();
+			connection_tasks.spawn_local(reply.send_or_cancel(async move {
+				let result = run_connection_open(&callbacks, &ctx, conn, request).await;
+				if let Err(error) = &result {
+					console_error(&format!("wasm connection open callback failed: {error:#}"));
+				}
+				result
+			}));
 		}
 		ActorEvent::SubscribeRequest {
 			conn,
@@ -1025,15 +1089,24 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 				reply.send(result);
 			});
 		}
-		ActorEvent::DisconnectConn { conn_id, reply } => {
+		ActorEvent::DisconnectConn {
+			conn_id,
+			reason,
+			reply,
+		} => {
 			let result = async {
+				// The transport closes before the user callback runs, so a callback that fails or
+				// outlasts the grace period cannot keep the client from seeing the reason.
+				ctx.inner
+					.disconnect_conn_with_reason(conn_id, reason)
+					.await?;
 				if let Some(callback) = &callbacks.on_disconnect_final {
 					let payload = object();
 					set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 					set_anyhow(&payload, "conn", JsValue::NULL)?;
 					call_callback(callback, &payload.into()).await?;
 				}
-				ctx.inner.disconnect_conn(conn_id).await
+				Ok::<_, anyhow::Error>(())
 			}
 			.await;
 			if let Err(error) = result {
@@ -1320,29 +1393,34 @@ impl WasmActorContext {
 
 	#[wasm_bindgen]
 	pub fn key(&self) -> Result<JsValue, JsValue> {
-		let segments: Vec<WasmActorKeySegment> = self
+		serde_wasm_bindgen::to_value(&wasm_actor_key(self.inner.key())).map_err(Into::into)
+	}
+
+	/// The individual actor forks behind this actor, oldest first.
+	#[wasm_bindgen(js_name = forkChain)]
+	pub fn fork_chain(&self) -> Result<JsValue, JsValue> {
+		let links: Vec<WasmForkLink> = self
 			.inner
-			.key()
+			.fork_chain()
 			.iter()
-			.map(|segment| match segment {
-				rivetkit_core::ActorKeySegment::String(value) => WasmActorKeySegment {
-					kind: "string".to_owned(),
-					string_value: Some(value.clone()),
-					number_value: None,
-				},
-				rivetkit_core::ActorKeySegment::Number(value) => WasmActorKeySegment {
-					kind: "number".to_owned(),
-					string_value: None,
-					number_value: Some(*value),
-				},
+			.map(|link| WasmForkLink {
+				actor_id: link.actor_id.clone(),
+				key: wasm_actor_key(&link.key),
+				forked_at: link.forked_at as f64,
 			})
 			.collect();
-		serde_wasm_bindgen::to_value(&segments).map_err(Into::into)
+		serde_wasm_bindgen::to_value(&links).map_err(Into::into)
 	}
 
 	#[wasm_bindgen]
 	pub fn region(&self) -> String {
 		self.inner.region().to_owned()
+	}
+
+	/// The name of the namespace the actor runs in.
+	#[wasm_bindgen]
+	pub fn namespace(&self) -> String {
+		self.inner.namespace().to_owned()
 	}
 
 	#[wasm_bindgen(js_name = beginOnStateChange)]
@@ -2476,6 +2554,31 @@ struct WasmActorKeySegment {
 	kind: String,
 	string_value: Option<String>,
 	number_value: Option<f64>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WasmForkLink {
+	actor_id: String,
+	key: Vec<WasmActorKeySegment>,
+	forked_at: f64,
+}
+
+fn wasm_actor_key(key: &rivetkit_core::types::ActorKey) -> Vec<WasmActorKeySegment> {
+	key.iter()
+		.map(|segment| match segment {
+			rivetkit_core::ActorKeySegment::String(value) => WasmActorKeySegment {
+				kind: "string".to_owned(),
+				string_value: Some(value.clone()),
+				number_value: None,
+			},
+			rivetkit_core::ActorKeySegment::Number(value) => WasmActorKeySegment {
+				kind: "number".to_owned(),
+				string_value: None,
+				number_value: Some(*value),
+			},
+		})
+		.collect()
 }
 
 #[derive(serde::Deserialize)]

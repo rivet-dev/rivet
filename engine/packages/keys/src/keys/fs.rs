@@ -147,6 +147,43 @@ macro_rules! __read_fs_part {
 	};
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __key_struct {
+	($vis:vis $name:ident ($($field_vis:vis $field:ident: $ty:ty),* $(,)?) {$($extra:tt)*}) => {
+		#[derive(Clone, Debug, PartialEq, Eq)]
+		$vis struct $name {
+			$($field_vis $field: $ty,)*
+			$($extra)*
+		}
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __formal_value {
+	($name:ident, vbare($wrapper:path, $version:expr)) => {
+		impl $crate::keys::codec::FormalKey for $name {
+			type Codec = $crate::keys::codec::VbareValue<$wrapper, { $version }>;
+		}
+	};
+	($name:ident, vbare_selected($wrapper:path)) => {
+		impl $crate::keys::codec::FormalKey for $name {
+			type Codec = $crate::keys::codec::SelectedVbareValue<$wrapper>;
+		}
+	};
+	($name:ident, bytes) => {
+		impl $crate::keys::codec::FormalKey for $name {
+			type Codec = $crate::keys::codec::BytesValue;
+		}
+	};
+	($name:ident, unit) => {
+		impl $crate::keys::codec::FormalKey for $name {
+			type Codec = $crate::keys::codec::UnitValue;
+		}
+	};
+}
+
 /// Defines a relative filesystem address and its value codec. Components are
 /// string literals or `{field}` references implementing `TextComponent`.
 /// `pack` returns a `PathBuf` to join beneath the caller's configured root;

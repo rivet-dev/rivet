@@ -169,6 +169,10 @@ export async function sendHttpRequest<
 			}),
 		);
 	} catch (error) {
+		// Credential providers and custom transports can already supply a structured error.
+		if (ActorError.isRivetError(error)) {
+			throw error;
+		}
 		throw new HttpRequestError(`Request failed: ${error}`, {
 			cause: error,
 		});

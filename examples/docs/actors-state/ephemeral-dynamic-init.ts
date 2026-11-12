@@ -1,14 +1,15 @@
 import { actor } from "rivetkit";
 
 const chatRoom = actor({
-  state: { messages: [] as string[] },
-
   // Build a non-serializable emitter on each start
-  createVars: () => ({ emitter: createEventEmitter() }),
+  createVars: () => ({
+    messages: [] as string[],
+    emitter: createEventEmitter(),
+  }),
 
   actions: {
     broadcast: (c, text: string) => {
-      c.state.messages.push(text);
+      c.vars.messages.push(text);
       // Use the ephemeral emitter
       c.vars.emitter.emit("message", text);
     }

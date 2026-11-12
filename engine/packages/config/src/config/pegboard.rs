@@ -23,7 +23,9 @@ pub struct Pegboard {
 	/// (default true). When off, the engine sends only requested pages but keeps maintaining its
 	/// prefetch hints, so turning it back on needs no rebuild. Runtime configurable.
 	pub sqlite_server_prefetch: Option<bool>,
-	/// Messages queued for one node socket writer (default 128, 1..=65536).
+	/// Messages queued in each of one node connection's separate inbound, data and control
+	/// lanes (default 128 per lane, 1..=65536). Inbound storage and lifecycle wire bytes each
+	/// have a separate 32 MiB cap, including executing work.
 	#[serde(rename = "node_socket_queue_capacity")]
 	pub envoy_socket_queue_capacity: Option<usize>,
 	/// Messages queued toward one gateway tunnel stream on a node connection (default 128,
@@ -47,11 +49,11 @@ pub struct Pegboard {
 	/// When it runs out the request is forwarded anyway, and the node refuses it as not found.
 	#[serde(rename = "node_start_wait_ms")]
 	pub envoy_start_wait_ms: Option<u64>,
-	/// Lost checks one process holds for closed node connections that may not reconnect
-	/// (default 4096, 1..=65536). When full, the check due soonest is dropped and its actors are
-	/// found lost on their next request.
-	#[serde(rename = "node_lost_checks_capacity")]
-	pub envoy_lost_checks_capacity: Option<usize>,
+	/// Pool names one process tracks while it refuses node connects because the pool does not
+	/// exist (default 1024, 1..=65536). Refusals of one name that persist for a minute log one
+	/// warning; when full, a new name is not tracked until a tracked one stops being refused.
+	#[serde(rename = "node_missing_pools_capacity")]
+	pub envoy_missing_pools_capacity: Option<usize>,
 	/// Gateway workers one actor keeps waiting for its start (default 64, 1..=1024). A request
 	/// that finds the list full waits on its fallback poll alone.
 	pub actor_start_waiters_capacity: Option<u32>,
@@ -106,7 +108,23 @@ pub struct Pegboard {
 	///
 	/// Unit is in milliseconds (default 40000).
 	#[serde(rename = "node_lost_threshold")]
-	pub envoy_lost_threshold: Option<i64>,
+	pub envoy_lost_threshold: Option<u64>,
+	/// How long the engine waits after sending an actor's start for the node to report it
+	/// running. Past it the start is given up: the node is told to stop that epoch, and the
+	/// actor starts again once the node reports it stopped, is proven gone, or the stop
+	/// threshold passes.
+	///
+	/// Unit is in milliseconds (default 30000, 30 seconds).
+	pub actor_start_threshold: Option<u64>,
+	/// Maximum time for an actor to stop before it is considered lost. The engine resends an
+	/// unanswered stop, and once this threshold plus a 5 second margin has passed since the
+	/// first stop it ends the actor's run as lost and moves on, as if the node were gone. It is
+	/// also advertised to the node on connect as the time it is given to stop: a node shutting
+	/// down drains its actors within this budget, and RivetKit uses it as the default shutdown
+	/// grace period.
+	///
+	/// Unit is in milliseconds (default 30000, 30 seconds).
+	pub actor_stop_threshold: Option<u64>,
 	/// Max time since last pong before the node connection is terminated. Unit is in milliseconds.
 	#[serde(rename = "node_ping_timeout")]
 	pub envoy_ping_timeout: Option<i64>,
@@ -136,6 +154,24 @@ pub struct Pegboard {
 	/// existing rows in buckets that listing and destroy no longer target, so treat it as fixed
 	/// per cluster.
 	pub actor_index_buckets_per_name: Option<u64>,
+	/// How long an engine process trusts a namespace's cached status before it reads the
+	/// namespace's volume again, in milliseconds (default 10000). Existence is cached for good.
+	/// A request past it is answered from the cached status while one background read per
+	/// namespace replaces it.
+	pub namespace_status_ttl_ms: Option<u64>,
+	/// Background namespace status reads one engine process runs at once (default 64,
+	/// 1..=4096). A stale namespace that finds every slot taken is answered from its cached
+	/// status and read again by a later request.
+	pub namespace_status_refresh_max_concurrency: Option<usize>,
+	/// Creates that may wait at once for one namespace's fork to finish (default 64). A create
+	/// left out of a full list waits for its deadline and reads the namespace then.
+	pub namespace_start_waiters_capacity: Option<u32>,
+	/// How long a namespace fork waits for its group writes before sending them again, in
+	/// milliseconds (default 15000); later attempts back off up to `namespace_job_retry_max_ms`.
+	pub namespace_fork_retry_ms: Option<u64>,
+	/// The longest wait between two attempts of a namespace's fork, group archive or index
+	/// write, in milliseconds (default 30000).
+	pub namespace_job_retry_max_ms: Option<u64>,
 	/// Rows an actor listing's lazy orphan deletes may queue at once (default 1024).
 	pub actor_index_reaper_max_pending: Option<usize>,
 	/// Lazy orphan deletes an actor listing runs at once (default 16).
@@ -161,10 +197,26 @@ pub struct Pegboard {
 	/// Per-class handler concurrency for the storage commands pegboard registers on storage workers.
 	#[serde(default)]
 	pub command_concurrency: CommandConcurrency,
+	/// Legacy: the move of a namespace's actors from before volume groups into its group, which
+	/// runs once per namespace upgraded from 3.0. Removed in 3.1 with the backfill.
+	#[serde(default)]
+	pub backfill: LegacyBackfill,
 }
 
 impl Pegboard {
 	pub fn validate(&self) -> Result<()> {
+		if self.actor_start_threshold() == 0 {
+			bail!("pegboard.actor_start_threshold must be greater than 0");
+		}
+		if self.actor_stop_threshold() == 0 {
+			bail!("pegboard.actor_stop_threshold must be greater than 0");
+		}
+		if !(1..self.envoy_lost_threshold()).contains(&self.envoy_update_ping_interval()) {
+			bail!(
+				"pegboard.node_update_ping_interval must be positive and less than pegboard.node_lost_threshold"
+			);
+		}
+
 		if self.envoy_event_delivery_timeout_ms == Some(0) {
 			bail!("pegboard.node_event_delivery_timeout_ms must be greater than 0");
 		}
@@ -186,6 +238,18 @@ impl Pegboard {
 		}
 		if self.actor_key_cache_capacity == Some(0) {
 			bail!("pegboard.actor_key_cache_capacity must be greater than 0");
+		}
+		if self.namespace_status_ttl_ms == Some(0) {
+			bail!("pegboard.namespace_status_ttl_ms must be greater than 0");
+		}
+		if !(1..=4096).contains(&self.namespace_status_refresh_max_concurrency()) {
+			bail!("pegboard.namespace_status_refresh_max_concurrency must be in 1..=4096");
+		}
+		if !(1..=1024).contains(&self.namespace_start_waiters_capacity()) {
+			bail!("pegboard.namespace_start_waiters_capacity must be in 1..=1024");
+		}
+		if self.namespace_fork_retry_ms == Some(0) || self.namespace_job_retry_max_ms == Some(0) {
+			bail!("pegboard.namespace retry intervals must be greater than 0");
 		}
 		if self.actor_index_reaper_max_pending == Some(0)
 			|| self.actor_index_reaper_max_concurrency == Some(0)
@@ -224,8 +288,8 @@ impl Pegboard {
 				self.envoy_actor_inbound_capacity(),
 			),
 			(
-				"node_lost_checks_capacity",
-				self.envoy_lost_checks_capacity(),
+				"node_missing_pools_capacity",
+				self.envoy_missing_pools_capacity(),
 			),
 		] {
 			if !(1..=65_536).contains(&capacity) {
@@ -277,12 +341,33 @@ impl Pegboard {
 		}
 
 		self.command_concurrency.validate()?;
+		self.backfill.validate()?;
 
 		Ok(())
 	}
 
 	pub fn actor_index_buckets_per_name(&self) -> u64 {
 		self.actor_index_buckets_per_name.unwrap_or(8)
+	}
+
+	pub fn namespace_status_ttl_ms(&self) -> u64 {
+		self.namespace_status_ttl_ms.unwrap_or(10_000)
+	}
+
+	pub fn namespace_status_refresh_max_concurrency(&self) -> usize {
+		self.namespace_status_refresh_max_concurrency.unwrap_or(64)
+	}
+
+	pub fn namespace_start_waiters_capacity(&self) -> u32 {
+		self.namespace_start_waiters_capacity.unwrap_or(64)
+	}
+
+	pub fn namespace_fork_retry_ms(&self) -> u64 {
+		self.namespace_fork_retry_ms.unwrap_or(15_000)
+	}
+
+	pub fn namespace_job_retry_max_ms(&self) -> u64 {
+		self.namespace_job_retry_max_ms.unwrap_or(30_000)
 	}
 
 	pub fn envoy_record_cache_ms(&self) -> u64 {
@@ -385,8 +470,8 @@ impl Pegboard {
 		self.envoy_connect_retry_after_ms.unwrap_or(1_000)
 	}
 
-	pub fn envoy_lost_checks_capacity(&self) -> usize {
-		self.envoy_lost_checks_capacity.unwrap_or(4096)
+	pub fn envoy_missing_pools_capacity(&self) -> usize {
+		self.envoy_missing_pools_capacity.unwrap_or(1024)
 	}
 
 	pub fn sqlite_sessions(&self) -> usize {
@@ -423,8 +508,16 @@ impl Pegboard {
 		self.envoy_directory_max_stale_ms.unwrap_or(5_000)
 	}
 
-	pub fn envoy_lost_threshold(&self) -> i64 {
+	pub fn envoy_lost_threshold(&self) -> u64 {
 		self.envoy_lost_threshold.unwrap_or(40_000)
+	}
+
+	pub fn actor_start_threshold(&self) -> u64 {
+		self.actor_start_threshold.unwrap_or(30_000)
+	}
+
+	pub fn actor_stop_threshold(&self) -> u64 {
+		self.actor_stop_threshold.unwrap_or(30_000)
 	}
 
 	pub fn envoy_ping_timeout(&self) -> i64 {
@@ -432,7 +525,110 @@ impl Pegboard {
 	}
 
 	pub fn envoy_update_ping_interval(&self) -> u64 {
-		self.envoy_update_ping_interval.unwrap_or(3_000)
+		self.envoy_update_ping_interval
+			.unwrap_or_else(|| (self.envoy_lost_threshold() / 2).clamp(1, 3_000))
+	}
+}
+
+/// Legacy: the backfill that moves a namespace's actors from before volume groups into its group.
+/// Removed in 3.1 with the backfill.
+#[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LegacyBackfill {
+	/// How long after a namespace moves into its group its backfill waits before starting, and
+	/// between two checks of the fleet while older binaries run, in milliseconds (default 600000,
+	/// 10 minutes). The backfill starts only once every storage worker reads namespace volumes,
+	/// and stateless workers are never listed, so this wait is what lets a rolling upgrade of the
+	/// stateless workers finish first. A stateless worker from before groups that still runs
+	/// after it can serve a moved actor's old copy, whose writes are then lost. The legacy
+	/// namespace row pass waits the same delay between its two fleet checks before moving the
+	/// catalog's legacy namespace rows. The wait is a persisted timer, so a lowered delay applies
+	/// only after the timer armed under the previous delay fires.
+	pub start_delay_ms: Option<u64>,
+	/// Actors one backfill page moves, one after another (default 16, 1..=256).
+	pub page_size: Option<u32>,
+	/// How long one backfill page may run before it is sent again, in milliseconds (default
+	/// 120000). A page starts no new move after half of this, stops a move that runs past three
+	/// quarters of it, and is aborted at its end. A shorter value is raised so that half of it
+	/// covers an actor's stop deadline, the longer of `actor_stop_threshold` and
+	/// `node_lost_threshold` plus 5 seconds, with 15 seconds to spare.
+	pub page_timeout_ms: Option<u64>,
+	/// Sends of one backfill page that may fail at the same actor before the backfill gives up
+	/// on that actor, records it as skipped and moves on (default 10). A namespace with a
+	/// skipped actor still finishes its backfill, but 3.1 refuses to start until an operator
+	/// resolves it.
+	pub max_actor_attempts: Option<u32>,
+	/// Actor names one process remembers having recorded for the backfill after a legacy
+	/// fallback read, so each is written once (default 100000). Past it, reads record no new
+	/// names and count each name they skip in `pegboard_backfill_name_records_skipped_total`; the
+	/// backfill then finds those names only in the namespace's node records.
+	pub recorded_names_capacity: Option<usize>,
+	/// Name record writes one process runs at once in the background, off the request path
+	/// (default 64). A read that finds every slot taken records nothing, counts the skip, and
+	/// leaves the name for a later read to record.
+	pub name_record_writes_in_flight: Option<usize>,
+	/// Actors one namespace's running backfill may give up on (default 1000, 1..=1000). Every
+	/// page carries the list, and a finished backfill lists them all so each stays reachable.
+	/// At the cap, a page that reaches `max_actor_attempts` fails and is sent again after
+	/// `page_timeout_ms` instead of giving up on another actor, logging an error and counting
+	/// `pegboard_backfill_give_ups_refused_total`, so the backfill waits for an operator.
+	pub max_skipped: Option<usize>,
+}
+
+impl LegacyBackfill {
+	pub fn validate(&self) -> Result<()> {
+		if self.start_delay_ms == Some(0) {
+			bail!("pegboard.backfill.start_delay_ms must be greater than 0");
+		}
+		if !(1..=256).contains(&self.page_size()) {
+			bail!("pegboard.backfill.page_size must be in 1..=256");
+		}
+		if !(1_000..=3_600_000).contains(&self.page_timeout_ms()) {
+			bail!("pegboard.backfill.page_timeout_ms must be in 1000..=3600000");
+		}
+		if self.max_actor_attempts() == 0 {
+			bail!("pegboard.backfill.max_actor_attempts must be greater than 0");
+		}
+		if self.recorded_names_capacity() == 0 {
+			bail!("pegboard.backfill.recorded_names_capacity must be greater than 0");
+		}
+		if self.name_record_writes_in_flight() == 0 {
+			bail!("pegboard.backfill.name_record_writes_in_flight must be greater than 0");
+		}
+		if !(1..=1_000).contains(&self.max_skipped()) {
+			bail!(
+				"pegboard.backfill.max_skipped must be in 1..=1000, the most skipped actors a finished backfill lists"
+			);
+		}
+		Ok(())
+	}
+
+	pub fn start_delay_ms(&self) -> u64 {
+		self.start_delay_ms.unwrap_or(600_000)
+	}
+
+	pub fn page_size(&self) -> u32 {
+		self.page_size.unwrap_or(16)
+	}
+
+	pub fn page_timeout_ms(&self) -> u64 {
+		self.page_timeout_ms.unwrap_or(120_000)
+	}
+
+	pub fn max_actor_attempts(&self) -> u32 {
+		self.max_actor_attempts.unwrap_or(10)
+	}
+
+	pub fn recorded_names_capacity(&self) -> usize {
+		self.recorded_names_capacity.unwrap_or(100_000)
+	}
+
+	pub fn name_record_writes_in_flight(&self) -> usize {
+		self.name_record_writes_in_flight.unwrap_or(64)
+	}
+
+	pub fn max_skipped(&self) -> usize {
+		self.max_skipped.unwrap_or(1_000)
 	}
 }
 
@@ -447,7 +643,8 @@ pub struct CommandConcurrency {
 	pub actor_read: Option<usize>,
 	/// Actor creation. Defaults to 256.
 	pub actor: Option<usize>,
-	/// Index inserts, deletes and listings. Defaults to 256.
+	/// Index inserts, deletes and listings, including the namespace index's writes and
+	/// listings. Defaults to 256.
 	pub index: Option<usize>,
 }
 

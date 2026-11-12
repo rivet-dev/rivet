@@ -26,8 +26,7 @@
 						{
 							"title": "Rust",
 							"href": "/actors/docs/quickstart/rust",
-							"icon": "faRust",
-							"badge": "Beta"
+							"icon": "faRust"
 						},
 						{
 							"title": "Effect.ts",
@@ -43,7 +42,7 @@
 			"title": "Features",
 			"pages": [
 				{
-					"title": "In-Memory State",
+					"title": "State",
 					"href": "/actors/docs/state",
 					"icon": "faFloppyDisk"
 				},
@@ -58,11 +57,6 @@
 					"icon": "faTowerBroadcast"
 				},
 				{
-					"title": "Queues",
-					"href": "/actors/docs/queues",
-					"icon": "faMailbox"
-				},
-				{
 					"title": "Schedule & Cron",
 					"href": "/actors/docs/schedule",
 					"icon": "faClock"
@@ -71,6 +65,16 @@
 					"title": "SQLite",
 					"href": "/actors/docs/sqlite",
 					"icon": "faSqlite"
+				},
+				{
+					"title": "Forking",
+					"href": "/actors/docs/forking",
+					"icon": "faCodeBranch"
+				},
+				{
+					"title": "Secure Code Execution",
+					"href": "/actors/docs/secure-code-execution",
+					"icon": "faSquareTerminal"
 				}
 			]
 		},
@@ -92,10 +96,6 @@
 						{
 							"title": "Authentication",
 							"href": "/actors/docs/authentication"
-						},
-						{
-							"title": "Access Control",
-							"href": "/actors/docs/access-control"
 						},
 						{
 							"title": "Connections",
@@ -154,12 +154,12 @@
 							"href": "/actors/docs/sqlite-profiling"
 						},
 						{
-							"title": "Low-Level KV Storage",
-							"href": "/actors/docs/kv"
-						},
-						{
 							"title": "Logging",
 							"href": "/actors/docs/logging"
+						},
+						{
+							"title": "Performance Monitoring",
+							"href": "/actors/docs/performance-monitoring"
 						},
 						{
 							"title": "Errors",
@@ -184,11 +184,6 @@
 						{
 							"title": "Icons & Names",
 							"href": "/actors/docs/appearance"
-						},
-						{
-							"title": "Actor Runtime Socket",
-							"href": "/actors/docs/actor-runtime-socket",
-							"badge": "Beta"
 						},
 						{
 							"title": "Limits",
@@ -274,6 +269,32 @@
 							"href": "/actors/docs/wasm-vs-native-sdk"
 						}
 					]
+				},
+				{
+					"title": "Deprecated",
+					"collapsible": true,
+					"pages": [
+						{
+							"title": "State",
+							"href": "/actors/docs/deprecated/state"
+						},
+						{
+							"title": "Queues",
+							"href": "/actors/docs/deprecated/queues"
+						},
+						{
+							"title": "KV",
+							"href": "/actors/docs/deprecated/kv"
+						},
+						{
+							"title": "preventSleep",
+							"href": "/actors/docs/deprecated/prevent-sleep"
+						},
+						{
+							"title": "run",
+							"href": "/actors/docs/deprecated/run"
+						}
+					]
 				}
 			]
 		}
@@ -285,6 +306,22 @@
 				{
 					"title": "AI Agent",
 					"href": "/guides/ai-agent"
+				},
+				{
+					"title": "Side Questions (/btw)",
+					"href": "/guides/side-questions"
+				},
+				{
+					"title": "Branch Conversations (/fork)",
+					"href": "/guides/branch-conversations"
+				},
+				{
+					"title": "Forking Subagents",
+					"href": "/guides/forking-subagents"
+				},
+				{
+					"title": "Agent Swarms",
+					"href": "/guides/agent-swarms"
 				}
 			]
 		},
@@ -369,6 +406,19 @@
 				{
 					"title": "Collaborative Text Editor (OT)",
 					"href": "/guides/collaborative-text-editor-ot"
+				}
+			]
+		},
+		{
+			"title": "Concepts",
+			"pages": [
+				{
+					"title": "A Radically Simpler Architecture",
+					"href": "/guides/a-radically-simpler-architecture"
+				},
+				{
+					"title": "Authentication",
+					"href": "/guides/authentication"
 				}
 			]
 		}

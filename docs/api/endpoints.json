@@ -43,7 +43,8 @@
         "grants[].target": "`\"any\"` for every resource of this type, or `{ \"id\": \"...\" }` for one resource.",
         "grants[].operations": "Operations the token may perform on the target.",
         "value": "Base64-encoded value bytes.",
-        "update_ts": "When the key was last written, in Unix milliseconds."
+        "update_ts": "When the key was last written, in Unix milliseconds.",
+        "actor.forked_from": "ID of the actor this actor's database was forked from, or `null`."
       },
       "authProfiles": {
         "none": {
@@ -62,12 +63,12 @@
       },
       "parameters": {
         "actor": "Actor ID, actor ID with an inline token (`{actor_id}@{token}`), or actor name combined with the `rvt-*` query parameters.",
-        "rvt-namespace": "Namespace the actor lives in. Required when `{actor}` is an actor name.",
+        "rvt-namespace": "Namespace the actor lives in. Required when `{actor}` is an actor name. You can send it in the `x-rivet-namespace` header instead; a request that names two different namespaces is rejected with `guard.query_invalid_params`. Without either, an actor ID resolves in your token's namespace, or in `default` for your Rivet token.",
         "rvt-method": "How to resolve an actor name to an actor. `getOrCreate` requires `rvt-pool`.",
         "rvt-key": "Actor key. Separate multi-part keys with commas.",
         "rvt-pool": "Pool to create the actor on when `rvt-method=getOrCreate`. RivetKit registers the `default` pool unless configured otherwise.",
         "rvt-runner": "Deprecated alias for `rvt-pool`.",
-        "rvt-input": "Base64url-encoded CBOR input passed to `createState` and `onCreate` when `rvt-method=getOrCreate` creates the actor.",
+        "rvt-input": "Base64url-encoded CBOR input passed to `onCreate` when `rvt-method=getOrCreate` creates the actor.",
         "rvt-region": "Preferred region when `rvt-method=getOrCreate` creates the actor.",
         "rvt-crash-policy": "Crash policy when `rvt-method=getOrCreate` creates the actor. RivetKit defaults to `sleep`.",
         "rvt-skip-ready-wait": "Return as soon as the actor is resolved instead of waiting for it to be ready.",
@@ -193,7 +194,7 @@
           "slug": "create",
           "title": "Create Actor",
           "description": "Create a new actor. Fails if an actor with the same name and key already exists.",
-          "notes": "Prefer [Get or Create Actor](/docs/api/actors/get-or-create) for idempotent access by key. Use this endpoint when you need a fresh actor every time, for example with a random key.",
+          "notes": "Prefer [Get or Create Actor](/docs/api/actors/get-or-create) for idempotent access by key. Use this endpoint when you need a fresh actor every time, for example with a random key.\n\nAn `actor.create_pending` response (HTTP 409) means creation may have taken effect but the result could not be confirmed. Inspect the actor identified by `metadata.actor_id` rather than automatically resubmitting the create. A not-found read can race an in-flight create; retrying a keyless create can create a second actor.",
           "typescript": "examples/docs/api/actors-create.ts",
           "parameters": {
             "name": "Name of the actor as registered in your RivetKit registry.",
@@ -201,7 +202,7 @@
             "runner_name_selector": "Pool that runs the actor. RivetKit registers the `default` pool unless configured otherwise.",
             "crash_policy": "What happens when the actor crashes. RivetKit defaults to `sleep`.",
             "datacenter": "Datacenter to create the actor in. Defaults to the datacenter serving the request.",
-            "input": "Base64url-encoded CBOR input passed to the actor's `createState` and `onCreate` hooks."
+            "input": "Base64url-encoded CBOR input passed to the actor's `onCreate` hook."
           },
           "examples": {
             "query": {
@@ -222,7 +223,7 @@
           "slug": "get-or-create",
           "title": "Get or Create Actor",
           "description": "Return the actor with the given name and key, creating it if it does not exist. This is the HTTP equivalent of client.actor.getOrCreate(key).",
-          "notes": "The response includes `created`, which is `true` when this call created the actor. Gateway endpoints can perform the same lookup inline with the `rvt-*` selector parameters, so you only need this endpoint when you want the `actor_id` up front.",
+          "notes": "The response includes `created`, which is `true` when this call created the actor. Gateway endpoints can perform the same lookup inline with the `rvt-*` selector parameters, so you only need this endpoint when you want the `actor_id` up front.\n\nAn `actor.create_pending` response (HTTP 409) includes `metadata.actor_id` when creation may have taken effect but the result could not be confirmed. Inspect that actor rather than automatically resubmitting creation.",
           "typescript": "examples/docs/api/actors-get-or-create.ts",
           "parameters": {
             "name": "Name of the actor as registered in your RivetKit registry.",
@@ -230,7 +231,7 @@
             "runner_name_selector": "Pool that runs the actor. RivetKit registers the `default` pool unless configured otherwise.",
             "crash_policy": "What happens when the actor crashes. RivetKit defaults to `sleep`.",
             "datacenter": "Datacenter to create the actor in if it does not exist. Defaults to the datacenter serving the request.",
-            "input": "Base64url-encoded CBOR input passed to the actor's `createState` and `onCreate` hooks when the actor is created."
+            "input": "Base64url-encoded CBOR input passed to the actor's `onCreate` hook when the actor is created."
           },
           "examples": {
             "query": {
@@ -251,6 +252,7 @@
           "slug": "destroy",
           "title": "Destroy Actor",
           "description": "Destroy an actor. The actor's onDestroy hook runs, then its state is deleted permanently.",
+          "notes": "For an actor listed in its namespace's `skipped` field, the destroy also removes it from that list. It succeeds again for such an actor once it is destroyed or gone, so repeat it until `skipped_count` drops.",
           "typescript": "examples/docs/api/actors-destroy.ts",
           "examples": {
             "query": {
@@ -277,6 +279,36 @@
               "namespace": "$RIVET_NAMESPACE"
             },
             "body": {}
+          },
+          "related": [
+            {
+              "title": "Lifecycle",
+              "href": "/actors/docs/lifecycle"
+            }
+          ]
+        },
+        {
+          "spec": "engine",
+          "method": "post",
+          "path": "/actors/{actor_id}/fork",
+          "slug": "fork",
+          "title": "Fork Actor",
+          "description": "Create a new actor whose database is a copy of another actor's, and start it. The new actor has the source's name and pool, a new ID, and the key you give it.",
+          "notes": "The copy holds every write the source committed before the call, like a crash point: state the source still holds in memory is not included, so call `saveState({ immediate: true })` in an action first to include it. The new actor runs `onFork` once at its first start instead of `createState` and `onCreate`. Both actors keep the copied schedule, queue and workflows, so each runs them. A fork is not idempotent: a key already held answers `actor.duplicate_key`. A database can be forked at most 16 times deep. The call answers once the copy finished. If its 30 second deadline passes after the new actor was created, it answers `actor.fork_pending` (504) with the new actor's ID in `metadata.actor_id`; the copy goes on, so read that actor later instead of forking again. If the deadline passes before the create was confirmed, it answers 500 `core.internal_error` with no actor ID, and the create may still land: retrying a keyless fork can then make a second copy, while retrying a keyed fork answers `actor.duplicate_key`. A source that never started has no database to copy and answers `actor.fork_failed` without creating anything. A namespace token needs `fork` on the source actor, by its ID or `any`, and `create` on every actor (`any`), since the new actor's ID is not known before the fork. The copy hands the caller everything the source holds, so no other operation, including `read`, allows a fork. The fork input comes from the caller: validate it in `onFork` like any client input. While an engine upgrade is rolling out, forks are refused with `actor.fork_unavailable` (503 with `Retry-After`) until every engine worker supports them; retry after the hinted delay. In a namespace upgraded from an earlier release, a keyed source that the upgrade has not yet moved into its namespace's volume group is refused with `guard.service_unavailable` (503 with `Retry-After`, reason `actor_moving`), since the move gives it a new actor ID that the copy's `forked_from` must name; retry after the hinted delay, and the fork is admitted once the source has moved.",
+          "parameters": {
+            "key": "Key of the new actor. Multi-part keys are joined with `/`, see [Actor Keys](/docs/api/actor-keys). Omit for a keyless actor.",
+            "input": "Base64-encoded CBOR fork input, passed to the new actor's `onFork` hook. It comes from the caller, so `onFork` must validate it like any client input."
+          },
+          "examples": {
+            "query": {
+              "namespace": "$RIVET_NAMESPACE"
+            },
+            "body": {
+              "key": "my-counter-b"
+            }
+          },
+          "responses": {
+            "200": "The new actor, once its database copy finished. `actor.forked_from` names the source."
           },
           "related": [
             {
@@ -390,54 +422,6 @@
         },
         {
           "spec": "rivetkit",
-          "method": "post",
-          "path": "/gateway/{actor}/queue/{name}",
-          "slug": "queue",
-          "title": "Send Queue Message",
-          "description": "Enqueue a durable message for an actor. Optionally wait for the actor to complete it and return a response.",
-          "notes": "By default, the request returns after the message is enqueued. Set `wait` to `true` to wait for `message.complete(...)`; `timeout` sets that wait in milliseconds, and a timeout returns `status: \"timedOut\"` without canceling the queued work.",
-          "typescript": "examples/docs/api/gateway-queue.ts",
-          "parameters": {
-            "name": "Name of the queue message as defined in the actor's `queues` map."
-          },
-          "examples": {
-            "path": {
-              "actor": "counter",
-              "name": "increment"
-            },
-            "selector": {
-              "rvt-namespace": "$RIVET_NAMESPACE",
-              "rvt-method": "getOrCreate",
-              "rvt-key": "my-counter",
-              "rvt-pool": "default"
-            },
-            "body": {
-              "body": {
-                "amount": 1
-              },
-              "wait": true,
-              "timeout": 5000
-            },
-            "response": {
-              "status": "completed",
-              "response": {
-                "count": 1
-              }
-            }
-          },
-          "responses": {
-            "200": "The message was enqueued, with its completion status when waiting."
-          },
-          "related": [
-            {
-              "title": "Queues",
-              "href": "/actors/docs/queues"
-            }
-          ],
-          "after": "call-action"
-        },
-        {
-          "spec": "rivetkit",
           "method": "get",
           "path": "/gateway/{actor}/metadata",
           "slug": "metadata",
@@ -466,7 +450,7 @@
           "title": "Connect",
           "description": "Open a persistent WebSocket connection to an actor. One connection carries action calls, event subscriptions, and errors as JSON messages, which is what handle.connect() does in the RivetKit client.",
           "url": "wss://rivet.example.com/gateway/{actor}/connect",
-          "notes": "`{actor}` accepts the same forms as every gateway endpoint: an actor ID, `{actor_id}@{token}`, or an actor name with `rvt-*` query parameters. See [Actor Routing](/docs/api/actor-routing).\n\nConnection options travel as WebSocket subprotocols in the `Sec-WebSocket-Protocol` header because browsers cannot set arbitrary headers on an upgrade. Always include `rivet`, then add any of the prefixed entries below.\n\n| Subprotocol | Purpose |\n| --- | --- |\n| `rivet` | Required. Lets servers that insist on a matching protocol accept the upgrade. |\n| `rivet_encoding.json` | Message encoding. `json` is the default and is documented here. The RivetKit client uses `cbor` or `bare`; the payloads are the same, only the framing differs. |\n| `rivet_token.{token}` | Token to authenticate with. See [WebSocket Requests](/docs/api/authentication#websocket-requests). |\n| `rivet_conn_params.{params}` | Optional connection parameters passed to the actor's `createConnState` and `onBeforeConnect` hooks, as URL-encoded JSON. |\n| `rivet_skip_ready_wait` | Complete the upgrade as soon as the actor is resolved instead of waiting for it to be ready. |\n\nEvery message in both directions is a JSON object of the form `{ \"body\": { \"tag\": \"<Message>\", \"val\": { ... } } }`. The server sends `Init` first; nothing else arrives before it. There is no ping or heartbeat message. Rely on WebSocket ping frames or your own timeout to detect a dead connection.",
+          "notes": "`{actor}` accepts the same forms as every gateway endpoint: an actor ID, `{actor_id}@{token}`, or an actor name with `rvt-*` query parameters. See [Actor Routing](/docs/api/actor-routing).\n\nConnection options travel as WebSocket subprotocols in the `Sec-WebSocket-Protocol` header because browsers cannot set arbitrary headers on an upgrade. Always include `rivet`, then add any of the prefixed entries below.\n\n| Subprotocol | Purpose |\n| --- | --- |\n| `rivet` | Required. Lets servers that insist on a matching protocol accept the upgrade. |\n| `rivet_encoding.json` | Message encoding. `json` is the default and is documented here. The RivetKit client uses `cbor` or `bare`; the payloads are the same, only the framing differs. |\n| `rivet_token.{token}` | Token to authenticate with. See [WebSocket Requests](/docs/api/authentication#websocket-requests). |\n| `rivet_conn_params.{params}` | Optional connection parameters passed to the actor's `onBeforeConnect` hook and available as `conn.params`, as URL-encoded JSON. |\n| `rivet_skip_ready_wait` | Complete the upgrade as soon as the actor is resolved instead of waiting for it to be ready. |\n\nEvery message in both directions is a JSON object of the form `{ \"body\": { \"tag\": \"<Message>\", \"val\": { ... } } }`. The server sends `Init` first; nothing else arrives before it. There is no ping or heartbeat message. Rely on WebSocket ping frames or your own timeout to detect a dead connection.",
           "sections": [
             {
               "title": "Handshake",
@@ -487,7 +471,7 @@
             },
             {
               "title": "Actions",
-              "notes": "Send an `ActionRequest` with a client-chosen `id`. The server answers with an `ActionResponse` carrying the same `id`, or with an [`Error`](#errors) whose `actionId` matches. Requests may be pipelined; responses are not guaranteed to arrive in order, so match on `id` rather than position.\n\nThis is the connection equivalent of [Call Action](/docs/api/gateway/call-action) over HTTP. Actions called on a connection can also read connection state set in `createConnState`.",
+              "notes": "Send an `ActionRequest` with a client-chosen `id`. The server answers with an `ActionResponse` carrying the same `id`, or with an [`Error`](#errors) whose `actionId` matches. Requests may be pipelined; responses are not guaranteed to arrive in order, so match on `id` rather than position.\n\nThis is the connection equivalent of [Call Action](/docs/api/gateway/call-action) over HTTP.",
               "messages": [
                 "ActionRequest",
                 "ActionResponse"
@@ -705,7 +689,7 @@
           "slug": "list",
           "title": "List Namespaces",
           "description": "List namespaces, optionally filtered by name or ID. Results are paginated.",
-          "notes": "Use `namespace_id` for multiple IDs. `namespace_ids` is deprecated.",
+          "notes": "Use `namespace_id` for multiple IDs. `namespace_ids` is deprecated. For a namespace upgraded from an earlier release, `skipped` lists the actors the move into its volume group could not move, by ID, name and key, and `skipped_count` counts them; both are empty for every other namespace and are removed with the backfill in 3.1. `skipped` lists at most 1,000 actors, so `skipped_count` can be higher.",
           "typescript": "examples/docs/api/namespaces-list.ts",
           "parameters": {
             "name": "Only return namespaces with this name.",
@@ -722,11 +706,14 @@
           "path": "/namespaces",
           "slug": "create",
           "title": "Create Namespace",
-          "description": "Create a namespace with a unique name and a display name.",
+          "description": "Create a namespace with a unique name, or fork an existing namespace into a new one whose keyed actors and listings are the parent's as of the fork.",
+          "notes": "A new namespace is written with status `creating`, or `forking` for a fork, and the call answers once it is `live`, or after 30 seconds with the namespace as it stands; poll `GET /namespaces?name=` until it is `live`. A fork includes every write the parent acknowledged before the call. Pass `wait=settled` to wait a few more seconds after the fork is live, so later parent writes usually stay out of the fork; it does not guarantee it. Namespace names are never reused: an archived or failed name stays listed with its status. Forking is refused for a namespace upgraded from an earlier release until its existing actors have been moved into its volume group (`namespace.not_forkable`). An actor the move could not move after its retries is left in place and listed in the namespace's `skipped` field, by ID, name and key, with their number in `skipped_count` (see `GET /namespaces?name=`). It stays reachable by its ID and its key, so you can read and export its data, and forking stays refused (`namespace.backfill_skipped`, which gives the number of such actors) until each one is destroyed, through `DELETE /actors/{actor_id}` or by the actor itself. Destroying a listed actor is idempotent: repeat it if `skipped_count` did not drop, even once the actor is gone. Access to such actors is removed with the backfill in 3.1, so export and destroy them before upgrading. Forking is also refused for a namespace that is still being created (`namespace.creating`, 503 with `Retry-After`; retry after the hinted delay), forking, archiving or archived (`namespace.pending`, `namespace.archived`), one whose fork failed (`namespace.failed`), one at the lineage depth cap (`namespace.lineage_too_deep`), or one a migration from Rivet v2 is still moving actors into (`namespace.migrating_from_v2`, 409), until the migration ends. A new namespace appears in `GET /namespaces` once its listing entry is written, usually within the call; a lookup by name never waits for it.",
           "typescript": "examples/docs/api/namespaces-create.ts",
           "parameters": {
             "name": "Unique name used to identify the namespace.",
-            "display_name": "Human-readable name for the namespace."
+            "display_name": "Human-readable name for the namespace.",
+            "fork_from": "The namespace to fork. The new namespace starts with the parent's keyed actors and listings as of the fork.",
+            "wait": "`settled` waits a few more seconds after the fork is live, so later parent writes usually stay out of the fork. It does not guarantee it."
           },
           "examples": {
             "body": {
@@ -735,7 +722,22 @@
             }
           },
           "responses": {
-            "200": "The newly created namespace."
+            "200": "The newly created namespace, with its `status` and, for a fork, `forked_from`."
+          }
+        },
+        {
+          "spec": "engine",
+          "method": "post",
+          "path": "/namespaces/{name}/archive",
+          "slug": "archive",
+          "title": "Archive Namespace",
+          "description": "Archive a namespace: refuse new work for it, stop what its nodes host, then close its storage. Archiving is final and the name is never reused.",
+          "notes": "Answers at once with the namespace at status `archiving`, or `archived` when it already is; the archive finishes on its own and `GET /namespaces?name=` shows `archived` once it has. Every fork of the namespace must be archived first (`namespace.has_forks`), and every node of the namespace must be disconnected (`namespace.has_nodes`). The `default` namespace cannot be archived (`namespace.protected`), nor can a namespace whose fork has not finished (`namespace.pending`) or failed (`namespace.failed`), or one upgraded from an earlier release whose existing actors are still being moved into its volume group (`namespace.backfill_pending`) or that still has actors the move could not move (`namespace.backfill_skipped`; destroy them first, as described under creating a namespace).",
+          "parameters": {
+            "name": "The namespace to archive."
+          },
+          "responses": {
+            "200": "The namespace, with status `archiving` or `archived`."
           }
         }
       ]

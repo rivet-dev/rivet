@@ -27,6 +27,10 @@ pub enum StopStatus {
 	Acknowledged,
 	/// A deadline, explicit immediate stop, eviction, or terminal error ended the loop.
 	Interrupted,
+	/// The engine was out of reach past its lost threshold while actors were hosted. They were
+	/// stopped and the envoy ended, so its owner starts a fresh one that registers under a new
+	/// key; the engine expires this key like a dead envoy and reschedules the actors.
+	Lost,
 }
 
 pub struct SharedContext {
@@ -49,6 +53,8 @@ pub struct SharedContext {
 	pub connection_session: AtomicU64,
 	pub next_connection_session: AtomicU64,
 	pub connection_session_tx: watch::Sender<u64>,
+	/// Highest session whose contact deadline expired, fencing queued messages from that session.
+	pub expired_connection_session: AtomicU64,
 	pub protocol_metadata: Arc<Mutex<Option<protocol::ProtocolMetadata>>>,
 	pub shutting_down: AtomicBool,
 	/// Epoch ms timestamp of the most recent ping packet received from the engine. Used by

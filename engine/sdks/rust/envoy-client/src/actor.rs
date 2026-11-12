@@ -3,6 +3,8 @@ use std::{
 	sync::Arc,
 };
 
+use futures_util::{StreamExt, stream::FuturesUnordered};
+
 use crate::async_counter::AsyncCounter;
 use rivet_envoy_protocol as protocol;
 use tokio::sync::oneshot::error::TryRecvError;
@@ -166,6 +168,25 @@ struct ActorContext {
 	active_http_request_count: Arc<AsyncCounter>,
 }
 
+type WebSocketKey = (protocol::GatewayId, protocol::RequestId);
+
+struct PreparedWebSocket {
+	is_hibernatable: bool,
+	handler: WebSocketHandler,
+	outgoing_tx: mpsc::UnboundedSender<WsOutgoing>,
+	outgoing_rx: mpsc::UnboundedReceiver<WsOutgoing>,
+}
+
+type WebSocketOpenFuture =
+	crate::callbacks::BoxFuture<(protocol::MessageId, anyhow::Result<PreparedWebSocket>)>;
+
+#[derive(Default)]
+struct PendingWebSocketOpens {
+	futures: FuturesUnordered<WebSocketOpenFuture>,
+	// Retain a closed setup until it finishes so its connection can be cleaned up.
+	requests: HashMap<WebSocketKey, Option<protocol::ToEnvoyWebSocketClose>>,
+}
+
 struct PendingStop {
 	completion_rx: oneshot::Receiver<anyhow::Result<()>>,
 	stop_code: protocol::StopCode,
@@ -216,6 +237,7 @@ pub fn create_actor(
 	config: protocol::ActorConfig,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
+	fork: Option<protocol::ActorFork>,
 ) -> (mpsc::UnboundedSender<ToActor>, Arc<AsyncCounter>) {
 	// The start command is handled synchronously on receipt, so this is its receipt time.
 	let received = crate::time::Instant::now();
@@ -229,6 +251,7 @@ pub fn create_actor(
 		config,
 		hibernating_requests,
 		preloaded_kv,
+		fork,
 		tx.clone(),
 		rx,
 		active_http_request_count.clone(),
@@ -266,6 +289,7 @@ async fn actor_inner(
 	config: protocol::ActorConfig,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
+	fork: Option<protocol::ActorFork>,
 	tx: mpsc::UnboundedSender<ToActor>,
 	mut rx: mpsc::UnboundedReceiver<ToActor>,
 	active_http_request_count: Arc<AsyncCounter>,
@@ -291,6 +315,7 @@ async fn actor_inner(
 		active_http_request_count,
 	};
 	let mut http_request_tasks = JoinSet::new();
+	let mut websocket_opens = PendingWebSocketOpens::default();
 	let mut pending_stop: Option<PendingStop> = None;
 	let mut rx_closed = false;
 
@@ -304,6 +329,7 @@ async fn actor_inner(
 			generation,
 			config,
 			preloaded_kv,
+			fork,
 		)
 		.await;
 
@@ -353,6 +379,11 @@ async fn actor_inner(
 
 	loop {
 		tokio::select! {
+			Some((message_id, result)) = websocket_opens.futures.next(), if !websocket_opens.futures.is_empty() => {
+				let close = websocket_opens.requests.remove(&(message_id.gateway_id, message_id.request_id))
+					.expect("completed websocket setup must be pending");
+				finish_ws_open(&mut ctx, message_id, result, close).await;
+			}
 			maybe_task = async {
 				if http_request_tasks.is_empty() {
 					std::future::pending().await
@@ -405,6 +436,7 @@ async fn actor_inner(
 							continue;
 						}
 						ctx.command_idx = command_idx;
+						websocket_opens = PendingWebSocketOpens::default();
 						match begin_stop(&mut ctx, &handle, &mut http_request_tasks, reason).await {
 							StopProgress::Stopped => break,
 							StopProgress::Pending(stop) => pending_stop = Some(stop),
@@ -419,6 +451,7 @@ async fn actor_inner(
 						}
 
 						ctx.error = Some("actor lost due to timeout".to_string());
+						websocket_opens = PendingWebSocketOpens::default();
 
 						match begin_stop(
 							&mut ctx,
@@ -494,13 +527,21 @@ async fn actor_inner(
 						path,
 						headers,
 					} => {
-						handle_ws_open(&mut ctx, &handle, message_id, path, headers).await;
+						if pending_stop.is_some() {
+							reject_ws_open(&mut ctx, message_id, 1013, "Actor Stopping").await;
+						} else {
+							handle_ws_open(&mut ctx, &handle, &mut websocket_opens, message_id, path, headers).await;
+						}
 					}
 					ToActor::WsMsg { message_id, msg } => {
 						handle_ws_message(&mut ctx, message_id, msg).await;
 					}
 					ToActor::WsClose { message_id, close } => {
-						handle_ws_close(&mut ctx, message_id, close).await;
+						if let Some(pending_close) = websocket_opens.requests.get_mut(&(message_id.gateway_id, message_id.request_id)) {
+							pending_close.get_or_insert(close);
+						} else {
+							handle_ws_close(&mut ctx, message_id, close).await;
+						}
 					}
 					ToActor::HwsAck {
 						gateway_id,
@@ -727,10 +768,19 @@ fn spawn_ws_outgoing_task(
 async fn handle_ws_open(
 	ctx: &mut ActorContext,
 	handle: &EnvoyHandle,
+	pending: &mut PendingWebSocketOpens,
 	message_id: protocol::MessageId,
 	path: String,
 	headers: BTreeMap<String, String>,
 ) {
+	let key = (message_id.gateway_id, message_id.request_id);
+	if pending.requests.contains_key(&key) {
+		return;
+	}
+	if pending.futures.len() >= ctx.shared.config.max_queued_requests_per_actor {
+		reject_ws_open(ctx, message_id, 1013, "Actor Overloaded").await;
+		return;
+	}
 	let restored_ws = ctx
 		.ws_entries
 		.remove(&[&message_id.gateway_id, &message_id.request_id]);
@@ -748,6 +798,77 @@ async fn handle_ws_open(
 		);
 	}
 
+	let shared = ctx.shared.clone();
+	let handle = handle.clone();
+	let actor_id = ctx.actor_id.clone();
+	pending.requests.insert(key, None);
+	pending.futures.push(Box::pin(async move {
+		let result = prepare_ws_open(
+			shared,
+			handle,
+			actor_id,
+			message_id.clone(),
+			path,
+			headers,
+			is_restoring_hibernatable,
+		)
+		.await;
+		(message_id, result)
+	}));
+}
+
+async fn reject_ws_open(
+	ctx: &mut ActorContext,
+	message_id: protocol::MessageId,
+	code: u16,
+	reason: &str,
+) {
+	// New opens do not have request state yet. Existing restored requests retain their index.
+	if !ctx
+		.websocket_requests
+		.contains_key(&[&message_id.gateway_id, &message_id.request_id])
+	{
+		ctx.websocket_requests.insert(
+			&[&message_id.gateway_id, &message_id.request_id],
+			WebSocketRequestState {
+				envoy_message_index: 0,
+			},
+		);
+	}
+	send_actor_message(
+		ctx,
+		message_id.gateway_id,
+		message_id.request_id,
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
+			protocol::ToRivetWebSocketClose {
+				code: Some(code),
+				reason: Some(reason.to_owned().into()),
+				hibernate: false,
+			},
+		),
+	)
+	.await;
+	if let Some(ws) = ctx
+		.ws_entries
+		.remove(&[&message_id.gateway_id, &message_id.request_id])
+	{
+		if let Some(handler) = ws.ws_handler {
+			(handler.on_close)(code, reason.to_owned()).await;
+		}
+	}
+	ctx.websocket_requests
+		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+}
+
+async fn prepare_ws_open(
+	shared: Arc<SharedContext>,
+	handle: EnvoyHandle,
+	actor_id: String,
+	message_id: protocol::MessageId,
+	path: String,
+	headers: BTreeMap<String, String>,
+	is_restoring_hibernatable: bool,
+) -> anyhow::Result<PreparedWebSocket> {
 	let mut full_headers: HashMap<String, String> = headers.into_iter().collect();
 	full_headers.insert("Upgrade".to_string(), "websocket".to_string());
 	full_headers.insert("Connection".to_string(), "Upgrade".to_string());
@@ -763,41 +884,16 @@ async fn handle_ws_open(
 	let is_hibernatable = if is_restoring_hibernatable {
 		true
 	} else {
-		match ctx
-			.shared
+		shared
 			.config
 			.callbacks
 			.can_hibernate(
-				&ctx.actor_id,
+				&actor_id,
 				&message_id.gateway_id,
 				&message_id.request_id,
 				&request,
 			)
-			.await
-		{
-			Ok(is_hibernatable) => is_hibernatable,
-			Err(error) => {
-				tracing::error!(?error, "error checking websocket hibernation");
-
-				send_actor_message(
-					ctx,
-					message_id.gateway_id,
-					message_id.request_id,
-					protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
-						protocol::ToRivetWebSocketClose {
-							code: Some(1011),
-							reason: Some(("Server Error".to_string()).into()),
-							hibernate: false,
-						},
-					),
-				)
-				.await;
-
-				ctx.websocket_requests
-					.remove(&[&message_id.gateway_id, &message_id.request_id]);
-				return;
-			}
-		}
+			.await?
 	};
 
 	// Create outgoing channel BEFORE calling websocket() so the sender is available immediately
@@ -806,44 +902,57 @@ async fn handle_ws_open(
 		tx: outgoing_tx.clone(),
 	};
 
-	let ws_result = if is_restoring_hibernatable {
-		ctx.shared
-			.config
-			.callbacks
-			.websocket(
-				handle.clone(),
-				ctx.actor_id.clone(),
-				message_id.gateway_id,
-				message_id.request_id,
-				request,
-				path,
-				full_headers,
-				true,
-				true,
-				sender,
-			)
-			.await
-	} else {
-		ctx.shared
-			.config
-			.callbacks
-			.websocket(
-				handle.clone(),
-				ctx.actor_id.clone(),
-				message_id.gateway_id,
-				message_id.request_id,
-				request,
-				path,
-				full_headers,
-				is_hibernatable,
-				false,
-				sender,
-			)
-			.await
-	};
+	let handler = shared
+		.config
+		.callbacks
+		.websocket(
+			handle,
+			actor_id,
+			message_id.gateway_id,
+			message_id.request_id,
+			request,
+			path,
+			full_headers,
+			is_hibernatable,
+			is_restoring_hibernatable,
+			sender,
+		)
+		.await?;
+	Ok(PreparedWebSocket {
+		is_hibernatable,
+		handler,
+		outgoing_tx,
+		outgoing_rx,
+	})
+}
 
+async fn finish_ws_open(
+	ctx: &mut ActorContext,
+	message_id: protocol::MessageId,
+	ws_result: anyhow::Result<PreparedWebSocket>,
+	close: Option<protocol::ToEnvoyWebSocketClose>,
+) {
 	match ws_result {
-		Ok(ws_handler) => {
+		Ok(prepared) => {
+			let PreparedWebSocket {
+				is_hibernatable,
+				handler: ws_handler,
+				outgoing_tx,
+				outgoing_rx,
+			} = prepared;
+			if let Some(close) = close {
+				// No outgoing worker is started for a connection closed during setup.
+				drop(outgoing_rx);
+				drop(outgoing_tx);
+				(ws_handler.on_close)(
+					close.code.unwrap_or(1000),
+					close.reason.unwrap_or_default().to_string(),
+				)
+				.await;
+				ctx.websocket_requests
+					.remove(&[&message_id.gateway_id, &message_id.request_id]);
+				return;
+			}
 			ctx.ws_entries.insert(
 				&[&message_id.gateway_id, &message_id.request_id],
 				WsEntry {
@@ -895,19 +1004,9 @@ async fn handle_ws_open(
 		Err(error) => {
 			tracing::error!(?error, "error handling websocket open");
 
-			send_actor_message(
-				ctx,
-				message_id.gateway_id,
-				message_id.request_id,
-				protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
-					protocol::ToRivetWebSocketClose {
-						code: Some(1011),
-						reason: Some(("Server Error".to_string()).into()),
-						hibernate: false,
-					},
-				),
-			)
-			.await;
+			if close.is_none() {
+				reject_ws_open(ctx, message_id.clone(), 1011, "Server Error").await;
+			}
 
 			ctx.websocket_requests
 				.remove(&[&message_id.gateway_id, &message_id.request_id]);

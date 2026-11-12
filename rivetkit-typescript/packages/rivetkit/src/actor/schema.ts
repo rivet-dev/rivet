@@ -14,6 +14,7 @@ export interface EventTypeToken<T, TContext = any> {
 export interface QueueTypeToken<TMessage, TComplete = never, TContext = any> {
 	readonly _queueMessage?: TMessage;
 	readonly _queueComplete?: TComplete;
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	readonly canPublish?: SchemaHook<TContext>;
 	readonly message?: PrimitiveSchema;
 	readonly complete?: PrimitiveSchema;
@@ -28,6 +29,7 @@ interface EventOptions<TContext = any> {
 }
 
 interface QueueOptions<TContext = any> {
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	canPublish?: SchemaHook<TContext>;
 	message?: PrimitiveSchema;
 	complete?: PrimitiveSchema;
@@ -39,6 +41,7 @@ export function event<T, TContext = any>(
 	return (options ?? {}) as EventTypeToken<T, TContext>;
 }
 
+/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 export function queue<TMessage, TComplete = never, TContext = any>(
 	options?: QueueOptions<TContext>,
 ): QueueTypeToken<TMessage, TComplete, TContext> {
@@ -55,6 +58,7 @@ export interface EventSchemaDefinition<TContext = any> {
 export interface QueueSchemaDefinition<TContext = any> {
 	message: PrimitiveSchema;
 	complete?: PrimitiveSchema;
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	canPublish?: SchemaHook<TContext>;
 }
 

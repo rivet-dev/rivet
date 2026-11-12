@@ -22,18 +22,12 @@ export function IoStyleMenu({
 	const findMatch = async () => {
 		setStatus("matching");
 		try {
-			const mm = client.ioStyleMatchmaker.getOrCreate(["main"]).connect();
-			const result = await mm.send(
-				"findLobby",
-				{},
-				{ wait: true, timeout: 10_000 },
-			);
-			mm.dispose();
-			const response = result.response;
-			if (!response?.matchId || !response?.playerId) {
-				throw new Error("Matchmaker did not return a valid lobby");
-			}
-			onReady(response);
+			// A plain action call needs no connection, because the player only
+			// talks to the match from here on.
+			const lobby = await client.ioStyleMatchmaker
+				.getOrCreate(["main"])
+				.findLobby();
+			onReady(lobby);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 			setStatus("error");

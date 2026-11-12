@@ -7,7 +7,6 @@ use rivet_env::Env;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-// use once_cell::sync::Lazy;
 
 #[cfg(target_os = "linux")]
 mod allocator;
@@ -20,6 +19,7 @@ mod object_store_canary;
 mod peer;
 mod run_config;
 mod services;
+mod singleton_services;
 
 // static LONG_VERSION: Lazy<String> = Lazy::new(|| rivet_build_meta::pretty_print());
 
@@ -47,6 +47,9 @@ enum SubCommand {
 	/// Probe the configured object storage with heartbeat-sized requests and export their
 	/// latency and stall counts on the metrics port, without starting any engine service.
 	ObjectStoreCanary(object_store_canary::Args),
+	/// Operate the migration of a V2 namespace into this cluster.
+	#[command(subcommand)]
+	MigrateFromV2(depot_command::migrate_from_v2::Command),
 }
 
 #[derive(clap::Subcommand)]
@@ -162,6 +165,9 @@ async fn main_inner(
 				Some(SubCommand::Auth(AuthCommand::Jwt(command))) => {
 					Some(depot_command::OperatorCommand::Jwt(command))
 				}
+				Some(SubCommand::MigrateFromV2(command)) => {
+					Some(depot_command::OperatorCommand::MigrateFromV2(command))
+				}
 				Some(SubCommand::ObjectStoreCanary(_)) | None => None,
 			};
 			let command_result = if let Some(command) = command {
@@ -207,8 +213,17 @@ async fn main_inner(
 			)
 			.await?;
 
-			// Peer requests and membership reconciliation share the elected regional owner.
+			// Peer requests and membership reconciliation share the elected regional owner, and
+			// the migrator from V2 runs under the same election.
 			let epoxy = Arc::new(epoxy_services::EpoxyServices::new(ctx.clone()));
+			let migrator = Arc::new(
+				pegboard_v2_migrator::services::migrator::MigratorServices::new(ctx.clone()),
+			);
+			let singletons: Arc<dyn rivet_singleton_coordinator::runtime::SingletonServices> =
+				Arc::new(singleton_services::CompositeSingletons::new(vec![
+					("epoxy", epoxy.clone()),
+					("v2 migrator", migrator),
+				]));
 			if let Some(peer) = services
 				.iter_mut()
 				.find(|service| service.name == "api_peer")
@@ -231,7 +246,7 @@ async fn main_inner(
 				ctx,
 				services,
 				storage.clone(),
-				Some(epoxy),
+				Some(singletons),
 				!operator_command,
 			)
 			.await
@@ -271,7 +286,10 @@ fn select_command_services(
 	command: Option<&SubCommand>,
 	services: &mut Vec<rivet_service_manager::Service>,
 ) -> bool {
-	let operator = matches!(command, Some(SubCommand::Depot(_) | SubCommand::Auth(_)));
+	let operator = matches!(
+		command,
+		Some(SubCommand::Depot(_) | SubCommand::Auth(_) | SubCommand::MigrateFromV2(_))
+	);
 	if operator {
 		services.retain(|service| service.name == "api_peer");
 	}

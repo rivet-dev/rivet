@@ -2,32 +2,25 @@
 resolver = "2"
 exclude = ["vendor/object_store/out", "vendor/slatedb/out"]
 members = [
-#   "engine/packages/auth",
   "engine/packages/auth-jwt",
   "engine/packages/auth-policy",
 #   "engine/packages/api-builder",
   "engine/packages/api-peer",
 #   "engine/packages/api-public",
   "engine/packages/api-public-shim",
-#   "engine/packages/api-public-openapi-gen",
 #   "engine/packages/api-types",
-#   "engine/packages/api-util",
-#   "engine/packages/bootstrap",
 #   "engine/packages/build-meta",
-#   "engine/packages/cache",
-#   "engine/packages/cache-purge",
-#   "engine/packages/cache-result",
   "engine/packages/cli",
   "engine/packages/config",
   "engine/packages/cluster-config",
   "engine/packages/config-schema-gen",
-#   "engine/packages/datacenter",
   "engine/packages/depot-worker",
   "engine/packages/depot-log",
   "engine/packages/depot-volume",
   "engine/packages/depot-fs-core",
   "engine/packages/topology",
   "engine/packages/keys",
+  "engine/packages/keys-macros",
   "engine/packages/depot-client",
   "engine/packages/state-machine",
   "engine/packages/state-machine-util",
@@ -37,7 +30,6 @@ members = [
   "engine/packages/state-machine-durable",
   "engine/packages/durable-reconciler",
   "engine/packages/depot-types",
-#   "engine/packages/sqlite-remote",
   "engine/packages/sqlite-embedded",
   "engine/packages/sqlite-embedded-filesystem",
   "engine/packages/sqlite-prefetch",
@@ -49,35 +41,28 @@ members = [
 #   "engine/packages/error-macros",
     "engine/packages/guard",
     "engine/packages/guard-core",
-#   "engine/packages/guard-core-old",
-#   "engine/packages/logs",
 #   "engine/packages/metrics",
 #   "engine/packages/metrics-server",
-#   "engine/packages/namespace",
   "engine/packages/outbound-guard",
   "engine/packages/pegboard",
   "engine/packages/pegboard-envoy",
   "engine/packages/pegboard-gateway",
+  "engine/packages/pegboard-v2-migrator",
   "engine/packages/engine-context",
-#   "engine/packages/postgres-util",
   "engine/packages/runtime",
   "engine/packages/service-manager",
   "engine/packages/telemetry",
-#   "engine/packages/term",
 #   "engine/packages/tracing-utils",
-#   "engine/packages/types",
 #   "engine/packages/universalpubsub",
 #   "engine/packages/util",
 #   "engine/packages/util-id",
 #   "engine/packages/util-serde",
-#   "engine/packages/version-management",
-  "engine/sdks/rust/actor-runtime-socket-protocol",
 #   "engine/sdks/rust/data",
   "engine/sdks/rust/depot-protocol",
   "engine/sdks/rust/envoy-client",
   "engine/sdks/rust/envoy-protocol",
   "engine/sdks/rust/epoxy-protocol",
-#   "engine/sdks/rust/ups-protocol",
+  "engine/sdks/rust/migrate-from-v2-protocol",
   "rivetkit-rust/packages/actor-persist",
   "rivetkit-rust/packages/client",
   "rivetkit-rust/packages/client-protocol",
@@ -88,12 +73,13 @@ members = [
   "rivetkit-rust/packages/shared-types",
   "rivetkit-typescript/packages/rivetkit-napi",
   "rivetkit-typescript/packages/rivetkit-wasm",
+#   "examples/ai-agent-rust",
 #   "examples/chat-room-rust",
 #   "examples/hello-world-rust",
 ]
 
   [workspace.package]
-  version = "3.0.0"
+  version = "3.1.1"
   edition = "2024"
   authors = [ "Rivet Gaming, LLC <developer@rivet.dev>" ]
   license = "Apache-2.0"
@@ -103,6 +89,7 @@ members = [
   [workspace.dependencies]
   anstyle = "1"
   anyhow = "1.0.82"
+  arc-swap = "1.7.1"
   backtrace = "0.3.75"
   async-trait = "0.1"
   axum-test = "17"
@@ -129,7 +116,6 @@ members = [
   imbl = { version = "7.0.2", features = ["serde"] }
   include_dir = "0.7.4"
   indoc = "2.0.5"
-  itertools = "0.14.0"
   json5 = "0.4.1"
   jsonwebtoken = { version = "11", default-features = false, features = [ "aws_lc_rs" ] }
   lazy_static = "1.4"
@@ -144,17 +130,16 @@ members = [
   quote = "1.0"
   rand = "0.8"
   regex = "1.4"
-  replace_with = "0.1.8"
-  rustls-pemfile = "2.2.0"
+  rpassword = "7.3"
+  rstest = "0.26.1"
   scc = "3.6.12"
-  semver = "1.0.27"
   serde_bytes = "0.11.17"
   serde_html_form = "0.2.7"
   serde_yaml = "0.9.34"
   sha2 = "0.10"
   subtle = "2"
+  tar = "0.4.46"
   tempfile = "3.13.0"
-  testcontainers = "0.24"
   thiserror = "1.0.64"
   tokio-stream = "0.1.15"
   tokio-util = "0.7"
@@ -163,6 +148,7 @@ members = [
   tracing-opentelemetry = "0.29"
   vergen-gitcl = "1.0.0"
   zeroize = { version = "1.8", features = [ "derive" ] }
+  zstd = "0.13.3"
   reqwest-eventsource = "0.6.0"
 
     [workspace.dependencies.xxhash-rust]
@@ -193,17 +179,6 @@ members = [
   "reqwest",
   "rustls",
   "tracing"
-]
-
-    [workspace.dependencies.windows]
-    version = "0.58"
-    features = [
-  "Win32",
-  "Win32_Storage",
-  "Win32_Storage_FileSystem",
-  "Win32_System",
-  "Win32_System_Console",
-  "Win32_Security"
 ]
 
     [workspace.dependencies.hyper-util]
@@ -334,13 +309,6 @@ members = [
     version = "1.44.0"
     features = [ "rt", "sync", "time", "macros", "io-util", "tracing" ]
 
-    [workspace.dependencies.tokio-postgres]
-    version = "0.7"
-    features = [ "with-chrono-0_4" ]
-
-    [workspace.dependencies.webpki-roots]
-    version = "0.26"
-
     [workspace.dependencies.tracing-logfmt]
     version = "0.3"
     features = [ "ansi_logs" ]
@@ -374,9 +342,6 @@ members = [
     [workspace.dependencies.rivet-auth-policy]
     path = "engine/packages/auth-policy"
 
-    [workspace.dependencies.rivet-auth]
-    path = "engine/packages/auth"
-
     [workspace.dependencies.rivet-auth-jwt]
     path = "engine/packages/auth-jwt"
 
@@ -389,29 +354,11 @@ members = [
     [workspace.dependencies.rivet-api-public-shim]
     path = "engine/packages/api-public-shim"
 
-    [workspace.dependencies.rivet-api-public-openapi-gen]
-    path = "engine/packages/api-public-openapi-gen"
-
     [workspace.dependencies.rivet-api-types]
     path = "engine/packages/api-types"
 
-    [workspace.dependencies.rivet-api-util]
-    path = "engine/packages/api-util"
-
-    [workspace.dependencies.rivet-bootstrap]
-    path = "engine/packages/bootstrap"
-
     [workspace.dependencies.rivet-build-meta]
     path = "engine/packages/build-meta"
-
-    [workspace.dependencies.rivet-cache]
-    path = "engine/packages/cache"
-
-    [workspace.dependencies.rivet-cache-purge]
-    path = "engine/packages/cache-purge"
-
-    [workspace.dependencies.rivet-cache-result]
-    path = "engine/packages/cache-result"
 
     [workspace.dependencies.rivet-cli]
     path = "engine/packages/cli"
@@ -421,9 +368,6 @@ members = [
 
     [workspace.dependencies.rivet-config-schema-gen]
     path = "engine/packages/config-schema-gen"
-
-    [workspace.dependencies.datacenter]
-    path = "engine/packages/datacenter"
 
     [workspace.dependencies.rivet-singleton-coordinator]
     path = "engine/packages/singleton-coordinator"
@@ -446,18 +390,15 @@ members = [
     [workspace.dependencies.sqlite-embedded]
     default-features = false
     path = "engine/packages/sqlite-embedded"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.sqlite-prefetch]
     path = "engine/packages/sqlite-prefetch"
 
-    [workspace.dependencies.sqlite-remote]
-    path = "engine/packages/sqlite-remote"
-
     [workspace.dependencies.sqlite_types]
     package = "rivet-sqlite-types"
     path = "engine/packages/rivet-sqlite-types"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.depot-client]
     path = "engine/packages/depot-client"
@@ -485,11 +426,11 @@ members = [
 
     [workspace.dependencies.rivet-error]
     path = "engine/packages/error"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivet-error-macros]
     path = "engine/packages/error-macros"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivet-guard]
     path = "engine/packages/guard"
@@ -497,18 +438,12 @@ members = [
     [workspace.dependencies.rivet-guard-core]
     path = "engine/packages/guard-core"
 
-    [workspace.dependencies.rivet-logs]
-    path = "engine/packages/logs"
-
     [workspace.dependencies.rivet-metrics]
     path = "engine/packages/metrics"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivet-metrics-server]
     path = "engine/packages/metrics-server"
-
-    [workspace.dependencies.namespace]
-    path = "engine/packages/namespace"
 
     [workspace.dependencies.rivet-outbound-guard]
     path = "engine/packages/outbound-guard"
@@ -516,20 +451,20 @@ members = [
     [workspace.dependencies.pegboard]
     path = "engine/packages/pegboard"
 
+    [workspace.dependencies.pegboard-v2-migrator]
+    path = "engine/packages/pegboard-v2-migrator"
+
+    [workspace.dependencies.migrate-from-v2-protocol]
+    path = "engine/sdks/rust/migrate-from-v2-protocol"
+
     [workspace.dependencies.pegboard-envoy]
     path = "engine/packages/pegboard-envoy"
 
     [workspace.dependencies.pegboard-gateway]
     path = "engine/packages/pegboard-gateway"
 
-    [workspace.dependencies.pegboard-gateway3]
-    path = "engine/packages/pegboard-gateway3"
-
     [workspace.dependencies.rivet-engine-context]
     path = "engine/packages/engine-context"
-
-    [workspace.dependencies.rivet-postgres-util]
-    path = "engine/packages/postgres-util"
 
     [workspace.dependencies.rivet-runtime]
     path = "engine/packages/runtime"
@@ -540,23 +475,13 @@ members = [
     [workspace.dependencies.rivet-telemetry]
     path = "engine/packages/telemetry"
 
-    [workspace.dependencies.rivet-term]
-    path = "engine/packages/term"
-
     [workspace.dependencies.rivet-tracing-utils]
     path = "engine/packages/tracing-utils"
-
-    [workspace.dependencies.rivet-types]
-    path = "engine/packages/types"
 
     [workspace.dependencies.universalpubsub]
     path = "engine/packages/universalpubsub"
 
     [workspace.dependencies.rivet-util]
-    path = "engine/packages/util"
-
-    [workspace.dependencies.util]
-    package = "rivet-util"
     path = "engine/packages/util"
 
     [workspace.dependencies.rivet-util-id]
@@ -565,14 +490,7 @@ members = [
 
     [workspace.dependencies.rivet-util-serde]
     path = "engine/packages/util-serde"
-    version = "=3.0.0"
-
-    [workspace.dependencies.rivet-version-management]
-    path = "engine/packages/version-management"
-
-    [workspace.dependencies.rivet-actor-runtime-socket-protocol]
-    path = "engine/sdks/rust/actor-runtime-socket-protocol"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivet-data]
     path = "engine/sdks/rust/data"
@@ -592,55 +510,55 @@ members = [
     [workspace.dependencies.rivet-keys]
     path = "engine/packages/keys"
 
+    [workspace.dependencies.rivet-keys-macros]
+    path = "engine/packages/keys-macros"
+
     [workspace.dependencies.depot-protocol]
     path = "engine/sdks/rust/depot-protocol"
 
     [workspace.dependencies.rivet-envoy-client]
     path = "engine/sdks/rust/envoy-client"
     default-features = false
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivet-envoy-protocol]
     path = "engine/sdks/rust/envoy-protocol"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivetkit-client-protocol]
     path = "rivetkit-rust/packages/client-protocol"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivetkit-client]
     path = "rivetkit-rust/packages/client"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivetkit-actor-persist]
     path = "rivetkit-rust/packages/actor-persist"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivetkit-inspector-protocol]
     path = "rivetkit-rust/packages/inspector-protocol"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivetkit]
     path = "rivetkit-rust/packages/rivetkit"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivetkit-core]
     path = "rivetkit-rust/packages/rivetkit-core"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivetkit-shared-types]
     path = "rivetkit-rust/packages/shared-types"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.rivetkit-engine-process]
     path = "rivetkit-rust/packages/engine-process"
-    version = "=3.0.0"
+    version = "=3.1.1"
 
     [workspace.dependencies.epoxy-protocol]
     path = "engine/sdks/rust/epoxy-protocol"
-
-    [workspace.dependencies.rivet-ups-protocol]
-    path = "engine/sdks/rust/ups-protocol"
 
     [workspace.dependencies.rivet-alloc-count]
     path = "engine/packages/alloc-count"

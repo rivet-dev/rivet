@@ -3,7 +3,7 @@
 //!
 //! These routes are served on the API-peer listener like the rest of this crate, but unlike
 //! the other routes each one requires the configured admin token through the shared edge
-//! check (`rivet_guard_core::auth::check_edge`), before its handler runs. A request without it
+//! check (`rivet_guard_core::auth::admit_admin_or_insecure`), before its handler runs. A request without it
 //! is refused `auth.invalid_token` and reaches no worker.
 //!
 //! Reads are side-effect free: maintainer inspections, unfenced shard status and log reads,
@@ -98,7 +98,9 @@ async fn require_admin_token(
 	request: Request,
 	next: Next,
 ) -> Response {
-	if let Err(error) = auth::check_edge(ctx.config(), auth::transport_token(request.headers())) {
+	if let Err(error) =
+		auth::admit_admin_or_insecure(ctx.config(), auth::transport_token(request.headers()))
+	{
 		return auth::http_rejection(&error)
 			.map(axum::body::Body::from)
 			.into_response();
@@ -149,9 +151,9 @@ impl Refusal {
 
 	/// The refusal a maintainer's reject response maps to.
 	pub(crate) fn rejected(
-		reason: rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse,
+		reason: rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse,
 	) -> Self {
-		use rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse as Reject;
+		use rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse as Reject;
 		let (status, code, retry_after_ms) = match &reason {
 			Reject::NotMaintainer(reject) => (
 				StatusCode::SERVICE_UNAVAILABLE,
@@ -173,10 +175,16 @@ impl Refusal {
 				"VOLUME_UNDER_REPAIR",
 				Some(reject.retry_after_ms),
 			),
+			Reject::VolumeTailUnproven(reject) => (
+				StatusCode::SERVICE_UNAVAILABLE,
+				"VOLUME_TAIL_UNPROVEN",
+				Some(reject.retry_after_ms),
+			),
 			Reject::VolumeNotFound => (StatusCode::NOT_FOUND, "VOLUME_NOT_FOUND", None),
 			Reject::VolumeExists => (StatusCode::CONFLICT, "VOLUME_EXISTS", None),
 			Reject::VolumeDeleted => (StatusCode::GONE, "VOLUME_DELETED", None),
 			Reject::VolumeRecordMissing(_) => (StatusCode::CONFLICT, "VOLUME_RECORD_MISSING", None),
+			Reject::VolumeGroupArchived => (StatusCode::GONE, "VOLUME_GROUP_ARCHIVED", None),
 		};
 		Self {
 			status,

@@ -8,6 +8,8 @@ pub(crate) mod health;
 pub(crate) mod jwt;
 #[path = "depot_command/kv.rs"]
 pub(crate) mod kv;
+#[path = "depot_command/migrate_from_v2.rs"]
+pub(crate) mod migrate_from_v2;
 #[path = "depot_command/provision.rs"]
 pub(crate) mod provision;
 
@@ -20,7 +22,7 @@ use depot_worker::{
 	tablet_coordinator_machine::{store, types::ReadResult},
 };
 use rivet_data::generated::{
-	depot_client_protocol_v1::VolumeRejectResponse,
+	depot_client_protocol_v2::VolumeRejectResponse,
 	depot_storage_worker_protocol_v1::{
 		GetDiskIncarnationResponse, RejectResponse, StorageWorkerRequest, StorageWorkerResponse,
 	},
@@ -78,6 +80,7 @@ pub enum Command {
 pub enum OperatorCommand {
 	Storage(Command),
 	Jwt(jwt::Command),
+	MigrateFromV2(migrate_from_v2::Command),
 }
 
 #[derive(Debug, Subcommand)]
@@ -258,6 +261,9 @@ pub fn service(
 					let result = match command {
 						OperatorCommand::Storage(command) => execute(&ctx, command).await,
 						OperatorCommand::Jwt(command) => jwt::execute(&ctx, command).await,
+						OperatorCommand::MigrateFromV2(command) => {
+							migrate_from_v2::execute(&ctx, command).await
+						}
 					}
 					.inspect_err(|error| {
 						tracing::error!(?error, "operator command failed");
@@ -367,7 +373,7 @@ pub(crate) async fn execute(ctx: &EngineContext, command: Command) -> Result<Val
 /// explicit admission failures that prove the command was not executed, waiting each
 /// refusal's own hint when it carries one. Every other outcome is returned unchanged,
 /// including uncertain writes and their retry tokens.
-async fn routed<T, E: Into<anyhow::Error>, F: Future<Output = Result<T, E>>>(
+pub(crate) async fn routed<T, E: Into<anyhow::Error>, F: Future<Output = Result<T, E>>>(
 	ctx: &EngineContext,
 	request: impl FnMut() -> F,
 ) -> Result<T> {

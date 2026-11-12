@@ -10,6 +10,7 @@ import {
 	type ActorConfig,
 	type ActorConfigInput,
 	ActorConfigSchema,
+	getRunInspectorKind,
 } from "./config";
 import { loggerWithoutContext } from "./log";
 import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
@@ -34,10 +35,40 @@ function warnDeprecatedOptionKeys(options: unknown) {
 		if (opts[key] !== undefined && !warnedDeprecatedOptionKeys.has(key)) {
 			warnedDeprecatedOptionKeys.add(key);
 			loggerWithoutContext().warn({
-				msg: `actor option \`${key}\` is deprecated and is now ignored. ${detail} Will be removed in 2.2.0.`,
+				msg: `actor option \`${key}\` is deprecated and is now ignored. ${detail} Will be removed in 3.2.0.`,
 			});
 		}
 	}
+}
+
+let warnedDeprecatedRun = false;
+
+/**
+ * Warns once per process when `run` is a plain function. `run: workflow(...)`
+ * is the supported way to use `run` and does not warn.
+ */
+function warnDeprecatedRun(input: unknown) {
+	if (warnedDeprecatedRun || !input || typeof input !== "object") return;
+
+	const run = (input as { run?: unknown }).run;
+	if (run === undefined) return;
+
+	const runFunction =
+		typeof run === "object" && run !== null
+			? (run as { run?: unknown }).run
+			: run;
+	if (
+		typeof runFunction === "function" &&
+		getRunInspectorKind(runFunction as (...args: any[]) => any) ===
+			"workflow"
+	) {
+		return;
+	}
+
+	warnedDeprecatedRun = true;
+	loggerWithoutContext().warn({
+		msg: "actor option `run` with a plain function was deprecated in 3.0 and will be removed in a future version. Start background work from `onWake` with `c.keepAwake` and track it in `c.vars`. `run: workflow(...)` is not deprecated. See https://rivet.dev/actors/docs/deprecated/run",
+	});
 }
 
 export interface BaseActorDefinition<
@@ -200,6 +231,7 @@ export function actor<
 	warnDeprecatedOptionKeys(
 		(input as { options?: unknown } | undefined)?.options,
 	);
+	warnDeprecatedRun(input);
 	const config = ActorConfigSchema.parse(input) as ActorConfig<
 		TState,
 		TConnParams,

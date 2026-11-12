@@ -4,7 +4,7 @@ interface ConnParams {
 	authToken: string;
 }
 
-interface ConnState {
+interface Caller {
 	userId: string;
 	role: string;
 }
@@ -28,36 +28,57 @@ async function validateToken(
 	return null;
 }
 
+// Validate a token, reusing a recent result from the actor's cache.
+async function identify(
+	cache: TokenCache,
+	params: ConnParams,
+): Promise<Caller> {
+	const token = params.authToken;
+
+	// Check cache first
+	const cached = cache[token];
+	if (cached && cached.expiresAt > Date.now()) {
+		return { userId: cached.userId, role: cached.role };
+	}
+
+	// Validate token (expensive operation)
+	const payload = await validateToken(token);
+	if (!payload) {
+		throw new UserError("Invalid token", { code: "invalid_token" });
+	}
+
+	// Cache the result
+	cache[token] = {
+		userId: payload.sub,
+		role: payload.role,
+		expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
+	};
+
+	return { userId: payload.sub, role: payload.role };
+}
+
 const cachedAuthActor = actor({
-	state: {},
-	createVars: () => ({ tokenCache: {} as TokenCache }),
+	createVars: () => ({
+		tokenCache: {} as TokenCache,
+		// The caller for each live connection, keyed by connection ID
+		callers: new Map<string, Caller>(),
+	}),
 
-	createConnState: async (c, params: ConnParams): Promise<ConnState> => {
-		const token = params.authToken;
+	// Validates the token and fills the cache
+	onBeforeConnect: async (c, params: ConnParams) => {
+		await identify(c.vars.tokenCache, params);
+	},
 
-		// Check cache first
-		const cached = c.vars.tokenCache[token];
-		if (cached && cached.expiresAt > Date.now()) {
-			return { userId: cached.userId, role: cached.role };
-		}
+	// Reads the cached result instead of validating again
+	onConnect: async (c, conn) => {
+		c.vars.callers.set(conn.id, await identify(c.vars.tokenCache, conn.params));
+	},
 
-		// Validate token (expensive operation)
-		const payload = await validateToken(token);
-		if (!payload) {
-			throw new UserError("Invalid token", { code: "invalid_token" });
-		}
-
-		// Cache the result
-		c.vars.tokenCache[token] = {
-			userId: payload.sub,
-			role: payload.role,
-			expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
-		};
-
-		return { userId: payload.sub, role: payload.role };
+	onDisconnect: (c, conn) => {
+		c.vars.callers.delete(conn.id);
 	},
 
 	actions: {
-		getData: (c) => ({ userId: c.conn.state.userId }),
+		getData: (c) => ({ userId: c.vars.callers.get(c.conn.id)?.userId }),
 	},
 });

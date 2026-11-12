@@ -41,31 +41,95 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, instrument::WithSubscriber};
 
 use crate::actor::action::ActionDispatchError;
-use crate::actor::connection::ConnHandle;
+use crate::actor::connection::{ACTOR_DESTROYED_CLOSE_REASON, ConnHandle};
 use crate::actor::context::ActorContext;
 use crate::actor::factory::ActorFactory;
+use crate::actor::internal_storage;
 use crate::actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 use crate::actor::messages::{
 	ActorEvent, ActorHttpResponse, QueueSendResult, Request, SerializeStateReason, StateDelta,
 	WorkflowKvWrite,
 };
 use crate::actor::metrics::startup_phase::StartupPhase;
-use crate::actor::state::{PersistedActor, RequestSaveOpts};
+use crate::actor::state::{PersistedActor, RequestSaveOpts, StateTransactionClose};
 use crate::actor::task_types::ShutdownKind;
 use crate::actor::work_registry::ActorWorkKind;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::runtime::{RuntimeBoxFuture, RuntimeSpawner, boxed_runtime_future};
+use crate::sqlite::SqliteBatchStatement;
 use crate::telemetry::{ActorInvocation, IncomingInvocationContext};
-use crate::time::{Instant, sleep_until, timeout};
+use crate::time::{Instant, sleep, sleep_until, timeout};
 use crate::types::{SaveStateOpts, format_actor_key};
 use crate::websocket::WebSocket;
+#[cfg(feature = "sqlite-local")]
+use sqlite_embedded::vfs::CorkClose;
 
 pub type ActionDispatchResult = std::result::Result<Vec<u8>, ActionDispatchError>;
 pub type HttpDispatchResult = Result<ActorHttpResponse>;
 
 const SERIALIZE_STATE_SHUTDOWN_SANITY_CAP: Duration = Duration::from_secs(15);
+
+/// The share of the shutdown serialize cap a failed start waits for the rollback of a state
+/// transaction its hooks left open, after waiting the whole cap for its writes, and then for the
+/// SQLite coordinator to drain. A quarter keeps the failed start's teardown well inside twice
+/// the cap even when a hook's statement holds the transaction or the coordinator for good.
+const FAILED_START_ROLLBACK_CAP_DIVISOR: u32 = 4;
 const INSPECTOR_SERIALIZE_STATE_INTERVAL: Duration = Duration::from_millis(50);
 const INSPECTOR_OVERLAY_CHANNEL_CAPACITY: usize = 32;
+
+/// How long a fork's start may spend, counted from when the actor received the start (or from the
+/// start of `start_actor` when that is unknown), before it stops retrying a refused write of the
+/// fork hook's final state with the applied fork. The engine fails a start whose actor has not
+/// reported running `ENGINE_START_EFFECT_TIMEOUT` after it dispatched the start (the actor
+/// machine's effect timeout, `pegboard::actor_machine::EFFECT_TIMEOUT_MS`, which must change
+/// together with this budget) and stops that epoch. This budget stays below it, leaving room for
+/// the dispatch and the work after the save, so core fails the start itself, and the next start
+/// runs the hook again, before the engine stops an epoch core is still starting. The first write
+/// is not bounded by it, since nothing refused it; `ENGINE_START_EFFECT_TIMEOUT` bounds that one.
+const FORK_HOOK_SAVE_STARTUP_BUDGET: Duration = Duration::from_secs(10);
+
+/// The engine's start effect timeout, `pegboard::actor_machine::EFFECT_TIMEOUT_MS`
+/// (`engine/packages/pegboard/src/actor_machine/mod.rs`); the two must change together. The
+/// actor machine fails a start whose actor has not reported running this long after it
+/// dispatched the start, plus its retry backoff, and stops that epoch. Core counts this window
+/// from when it received the start, which is after the engine's dispatch, so core's window ends
+/// at or after the engine's. A Stop the engine sends then queues behind `start_actor`, so the
+/// engine's timeout ends core's work only where a fenced write fails it. Core bounds the first
+/// write of the fork hook's state by this window from when the start was received, so an adapter
+/// that never answers its `SerializeState` fails the start instead of hanging it with the Stop
+/// queued behind it.
+const ENGINE_START_EFFECT_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Most serializations of the fork hook's state one start makes. A refused write waits for the
+/// state writes in flight, so a pass is normally followed by one more that succeeds; the cap stops
+/// a hook that leaves a task running state transactions from making a full-state serialization
+/// back to back for the whole budget.
+const FORK_HOOK_SAVE_MAX_PASSES: u32 = 8;
+
+/// The pause before the fork hook's state is serialized again, doubled per pass up to
+/// `FORK_HOOK_SAVE_MAX_BACKOFF`, so an epoch that keeps moving is not serialized back to back.
+const FORK_HOOK_SAVE_INITIAL_BACKOFF: Duration = Duration::from_millis(10);
+const FORK_HOOK_SAVE_MAX_BACKOFF: Duration = Duration::from_millis(250);
+
+/// A fork's start could not write the fork hook's final state with the applied fork: a state write
+/// the hook started (a save it did not await, or a state transaction it left open) was still in
+/// flight when `FORK_HOOK_SAVE_STARTUP_BUDGET` or `FORK_HOOK_SAVE_MAX_PASSES` ran out. The start
+/// fails, which discards the held writes, so the next start runs the hook again instead of finding
+/// the fork applied without its edits.
+#[derive(Debug)]
+pub(crate) struct ForkHookStateUnsaved;
+
+impl std::fmt::Display for ForkHookStateUnsaved {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str(
+			"a state write the fork hook started was still in flight when the fork's start ran out \
+			 of time or retries to save the hook's state with the applied fork; the start fails and \
+			 the hook runs again",
+		)
+	}
+}
+
+impl std::error::Error for ForkHookStateUnsaved {}
 
 pub use crate::actor::task_types::LifecycleState;
 
@@ -241,6 +305,8 @@ struct PersistedStartup {
 	run_wake_at: Option<i64>,
 	/// The stored inspector token, so the start need not read it again.
 	inspector_token: Option<String>,
+	/// The individual actor forks behind the actor and the fork whose hook last ran.
+	fork: rivetkit_actor_persist::generated::fork_v1::ForkState,
 }
 
 struct PendingLifecycleReply {
@@ -274,6 +340,10 @@ pub struct ActorTask {
 
 	// === STARTUP ===
 	pub start_input: Option<Vec<u8>>,
+	/// Whether this start is a fork's first start whose writes, the fork hook's included, are
+	/// held in the cork and not yet handed to the startup commit. A start that fails while it
+	/// is set drops them.
+	fork_start_held: bool,
 
 	// === USER RUNTIME BRIDGE ===
 	/// Sends `ActorEvent`s from core subsystems and `ActorTask` to the
@@ -382,6 +452,7 @@ impl ActorTask {
 			factory,
 			ctx,
 			start_input,
+			fork_start_held: false,
 			actor_event_tx: Some(actor_event_tx),
 			actor_event_rx: Some(actor_event_rx),
 			run_handle: None,
@@ -706,6 +777,12 @@ impl ActorTask {
 	}
 
 	fn emit_grace_events(&mut self, reason: ShutdownKind) {
+		// A sleeping actor's clients reconnect to wake it. A destroyed actor's clients must not,
+		// because a `getOrCreate` reconnect would create the actor again.
+		let close_reason = match reason {
+			ShutdownKind::Sleep => None,
+			ShutdownKind::Destroy => Some(ACTOR_DESTROYED_CLOSE_REASON),
+		};
 		let conns: Vec<_> = self.ctx.conns().collect();
 		for conn in conns {
 			let hibernatable_sleep =
@@ -719,7 +796,11 @@ impl ActorTask {
 			let conn_id = conn.id().to_owned();
 			if let Err(error) = self.send_actor_event(
 				"grace_disconnect_conn",
-				ActorEvent::DisconnectConn { conn_id, reply },
+				ActorEvent::DisconnectConn {
+					conn_id,
+					reason: close_reason,
+					reply,
+				},
 			) {
 				tracing::error!(?error, "failed to enqueue disconnect cleanup event");
 			}
@@ -895,6 +976,15 @@ impl ActorTask {
 			"actor dispatch command received"
 		);
 		if let Some(error) = self.dispatch_lifecycle_error() {
+			// A connection refused during a destroy must not be retried, or a `getOrCreate`
+			// reconnect would create the actor again.
+			let error = if matches!(command, DispatchCommand::OpenWebSocket { .. })
+				&& self.destroy_in_progress()
+			{
+				ActorLifecycleError::Destroyed.build()
+			} else {
+				error
+			};
 			self.reply_dispatch_error(command, error);
 			self.log_dispatch_command_handled(command_kind, "rejected_lifecycle");
 			return;
@@ -1145,6 +1235,14 @@ impl ActorTask {
 		self.ctx.attach_actor_to_error(error)
 	}
 
+	fn destroy_in_progress(&self) -> bool {
+		self.ctx.destroy_requested()
+			|| matches!(
+				self.lifecycle,
+				LifecycleState::DestroyGrace | LifecycleState::Destroying
+			)
+	}
+
 	fn dispatch_lifecycle_error(&self) -> Option<anyhow::Error> {
 		// TODO: Share admission policy with RegistryDispatcher::active_actor.
 		if self.ctx.destroy_requested() {
@@ -1171,6 +1269,7 @@ impl ActorTask {
 
 	async fn start_actor(&mut self) -> Result<()> {
 		let mut startup_timer = self.ctx.metrics().begin_startup_timer();
+		let startup_started_at = Instant::now();
 		let actor_id = self.ctx.actor_id().to_owned();
 		if !self.ctx.started() {
 			self.ctx.configure_sleep(self.factory.config().clone());
@@ -1182,10 +1281,11 @@ impl ActorTask {
 
 		self.ctx.begin_startup_commits();
 		let schema_started_at = Instant::now();
+		let start_received_at = self.ctx.take_start_received_at();
+		// Time before `start_actor` counts against the engine's start timeout too.
+		let fork_hook_save_budget_started_at = start_received_at.unwrap_or(startup_started_at);
 		// Recorded once the start knows whether the actor is new.
-		let before_storage = self
-			.ctx
-			.take_start_received_at()
+		let before_storage = start_received_at
 			.map(|received_at| schema_started_at.saturating_duration_since(received_at));
 		let storage_result = crate::actor::migrate_kv_to_sqlite::ensure_startup_storage(&self.ctx)
 			.await
@@ -1231,6 +1331,18 @@ impl ActorTask {
 		};
 		let is_new = !persisted.actor.has_initialized;
 		let stored_inspector_token = persisted.inspector_token.clone();
+		// The first start of an individual actor fork runs the runtime's fork hook. The
+		// start command's input is the fork input; the copied record keeps the source's.
+		let pending_fork = crate::actor::fork::pending(
+			&persisted.fork,
+			self.ctx.take_start_fork(),
+			self.start_input.clone(),
+		);
+		let fork_chain = match &pending_fork {
+			Some((next, _)) => crate::actor::fork::chain_of(next),
+			None => crate::actor::fork::chain_of(&persisted.fork),
+		};
+		self.ctx.set_fork_chain(fork_chain);
 		startup_timer.set_is_new(is_new);
 		self.ctx.metrics().observe_startup_storage(
 			is_new,
@@ -1255,17 +1367,32 @@ impl ActorTask {
 		// A new actor's startup writes, from its staged bootstrap through the runtime's schema
 		// migrations to its initial state, stay in memory until PostReady makes them durable
 		// as one commit. A start that fails first commits what it wrote when the database
-		// closes, as separate commits would have.
-		let startup_corked = if is_new {
+		// closes, as separate commits would have. A fork's first start holds its writes the
+		// same way, so its hook's writes and the fork's record commit together; a fork start
+		// that fails first drops them instead, since without the applied fork the next start
+		// runs the hook again on top of them. The fork's cork drops them on every close,
+		// including a panic on the database's worker, not only through the explicit discard,
+		// and a fork transaction that would take the cork past one commit fails as too large
+		// instead of sending part of it. Only the local backend corks.
+		#[cfg(feature = "sqlite-local")]
+		let startup_corked = if is_new || pending_fork.is_some() {
+			let close = if pending_fork.is_some() {
+				CorkClose::Discard
+			} else {
+				CorkClose::Flush
+			};
 			self.ctx
 				.sql()
-				.cork_commits()
+				.cork_commits(close)
 				.await
 				.context("hold new actor startup commits")?
 		} else {
 			false
 		};
-		let inspector_mirror_token = storage.inspector_mirror_token.take();
+		#[cfg(not(feature = "sqlite-local"))]
+		let startup_corked = false;
+		self.fork_start_held = startup_corked && pending_fork.is_some();
+		let mut inspector_mirror_token = storage.inspector_mirror_token.take();
 
 		self.ctx.metrics().set_startup_phase(StartupPhase::CoreInit);
 		let core_init_started_at = Instant::now();
@@ -1286,10 +1413,30 @@ impl ActorTask {
 			let init_inspector_token_started_at = Instant::now();
 			// A stored token is authoritative, so the start does not wait on the check of its
 			// dashboard mirror; the mirror is checked and repaired in the background.
-			match (&stored_inspector_token, inspector_token_initialized) {
-				(_, true) => {}
-				(Some(token), false) => spawn_inspector_mirror_check(&self.ctx, token.clone()),
-				(None, false) => crate::inspector::auth::init_inspector_token(&self.ctx)
+			// A fork's copy holds its source's token; the fork gets its own, so the source's
+			// inspector credential does not open it.
+			match (
+				&stored_inspector_token,
+				inspector_token_initialized,
+				pending_fork.is_some(),
+			) {
+				// The fork's startup commit is held, so its new token's mirror is written only
+				// after that commit, as a bootstrap's is.
+				(_, _, true) => {
+					let rotated = crate::inspector::auth::rotate_inspector_token(&self.ctx)
+						.await
+						.context("rotate forked actor inspector token")?;
+					// Without a new token the copy keeps the source's stored token, and writing
+					// its mirror again after the commit only restates what the mirror holds.
+					if rotated.is_some() {
+						inspector_mirror_token = rotated;
+					}
+				}
+				(_, true, false) => {}
+				(Some(token), false, false) => {
+					spawn_inspector_mirror_check(&self.ctx, token.clone())
+				}
+				(None, false, false) => crate::inspector::auth::init_inspector_token(&self.ctx)
 					.await
 					.context("initialize inspector token")?,
 			}
@@ -1306,7 +1453,8 @@ impl ActorTask {
 					.await
 					.context("restore hibernatable connections")?;
 			}
-			Self::settle_hibernated_connections(self.ctx.clone())
+			// A fork's copied hibernated connections belong to its source's gateway requests.
+			Self::settle_hibernated_connections(self.ctx.clone(), pending_fork.is_some())
 				.await
 				.context("settle hibernated connections")?;
 			if bootstrapped {
@@ -1330,7 +1478,11 @@ impl ActorTask {
 			.metrics()
 			.set_startup_phase(StartupPhase::RuntimePreamble);
 		let runtime_preamble_started_at = Instant::now();
-		let runtime_preamble_result = self.spawn_run_handle(is_new).await;
+		let (fork_state, fork_start) = match pending_fork {
+			Some((next, start)) => (Some(next), Some(start)),
+			None => (None, None),
+		};
+		let runtime_preamble_result = self.spawn_run_handle(is_new, fork_start).await;
 		self.ctx.metrics().observe_startup_phase_result(
 			StartupPhase::RuntimePreamble,
 			Some(is_new),
@@ -1343,19 +1495,43 @@ impl ActorTask {
 			.set_startup_phase(StartupPhase::PostReady);
 		let post_ready_started_at = Instant::now();
 		let post_ready_result: Result<()> = async {
-			if is_new {
-				// Manual-startup runtimes usually mark initialization during their
-				// preamble. This is the fallback for runtimes that completed startup
-				// without doing so.
-				if !self.ctx.persisted_actor().has_initialized {
-					self.ctx.set_has_initialized(true);
-				}
+			// Manual-startup runtimes usually mark initialization during their preamble.
+			// This is the fallback for runtimes that completed startup without doing so.
+			if is_new && !self.ctx.persisted_actor().has_initialized {
+				self.ctx.set_has_initialized(true);
+			}
+			// A fork's hook edits state like a new actor's preamble does. The statement that
+			// records the applied fork is handed to the startup save, which runs it in the batch
+			// that writes the hook's state, so the hook's final state edits and the applied fork
+			// are one commit on every backend, held or not. No other state write can carry it.
+			// A runtime holds the hook's edits until it is asked to serialize them; on remote
+			// SQLite a state transaction the hook commits itself lands at once, without the
+			// record.
+			let mut unwritten_fork = Vec::new();
+			if let Some(fork_state) = &fork_state {
+				let encoded = crate::actor::fork::encode_state(fork_state)?;
+				unwritten_fork.push(internal_storage::fork_state_statement(encoded));
+				self.save_fork_hook_state(&mut unwritten_fork, fork_hook_save_budget_started_at)
+					.await
+					.context("save the fork hook's state")?;
+			}
+			if is_new || fork_state.is_some() {
 				self.ctx
-					.persist_state(SaveStateOpts { immediate: true })
+					.persist_state_carrying(SaveStateOpts { immediate: true }, &mut unwritten_fork)
 					.await
 					.context("persist actor startup state")?;
 			}
+			// A hook that left no state to write records the fork on its own.
+			if !unwritten_fork.is_empty() {
+				self.ctx
+					.sql()
+					.execute_batch(unwritten_fork)
+					.await
+					.context("record the applied actor fork")?;
+			}
 			if startup_corked {
+				// The startup commit owns the held writes from here, whatever its outcome.
+				self.fork_start_held = false;
 				self.spawn_startup_commit(inspector_mirror_token);
 			} else if let Some(token) = inspector_mirror_token {
 				spawn_inspector_mirror(&self.ctx, token);
@@ -1386,6 +1562,161 @@ impl ActorTask {
 			"perf internal: startupTotalMs"
 		);
 		Ok(())
+	}
+
+	/// Serializes the state edits a fork's hook requested a save for and writes them with the
+	/// statements in `fork_record`, which the write empties, so they join the held startup
+	/// commit. Nothing is written, and `fork_record` is left, when the hook requested no save.
+	///
+	/// A save the hook started and did not await, or a state transaction it left open, makes the
+	/// write refuse the serialized state. The hook's final state must still ride the fork record,
+	/// so this waits for those writes and serializes again, with a short backoff between passes.
+	/// The first pass is not bounded by the startup budget, since a slow start before it must not
+	/// fail a write that nothing refused; it is bounded by `ENGINE_START_EFFECT_TIMEOUT` from
+	/// `budget_started_at`, past which the engine has failed the start already. Each retry, its
+	/// wait for the in-flight writes and its backoff are bounded by `FORK_HOOK_SAVE_STARTUP_BUDGET`
+	/// from `budget_started_at`, below the engine's start timeout, and the passes by
+	/// `FORK_HOOK_SAVE_MAX_PASSES`. A write still refused then fails the start with
+	/// [`ForkHookStateUnsaved`], which discards the held writes, so the next start runs the hook
+	/// again instead of finding the fork applied without its edits.
+	async fn save_fork_hook_state(
+		&mut self,
+		fork_record: &mut Vec<SqliteBatchStatement>,
+		budget_started_at: Instant,
+	) -> Result<()> {
+		if !self.ctx.save_requested() {
+			return Ok(());
+		}
+
+		// The first pass waits for its reply like any other startup step, up to the engine's
+		// start window, past which the engine has failed the start.
+		let first_reply_cap = self.shutdown_serialize_cap();
+		let engine_deadline = budget_started_at + ENGINE_START_EFFECT_TIMEOUT;
+		let engine_remaining = engine_deadline.saturating_duration_since(Instant::now());
+		let first_pass = timeout(
+			engine_remaining,
+			self.save_fork_hook_state_pass(fork_record, first_reply_cap),
+		)
+		.await;
+		let first_pass = match first_pass {
+			Ok(first_pass) => first_pass,
+			Err(elapsed) => {
+				tracing::warn!(
+					actor_id = %self.ctx.actor_id(),
+					elapsed_ms = duration_ms_f64(budget_started_at.elapsed()),
+					timeout_ms = duration_ms_f64(ENGINE_START_EFFECT_TIMEOUT),
+					"fork hook state was not written within the engine's start effect timeout; failing the start so the hook runs again"
+				);
+				return Err(elapsed).context(
+					"the fork hook's state was not written within the engine's start effect timeout",
+				);
+			}
+		};
+		if first_pass? {
+			return Ok(());
+		}
+
+		// Retries wait for the refusing writes, so they spend the start's budget.
+		let deadline = budget_started_at + FORK_HOOK_SAVE_STARTUP_BUDGET;
+		let mut backoff = FORK_HOOK_SAVE_INITIAL_BACKOFF;
+		for pass in 2..=FORK_HOOK_SAVE_MAX_PASSES {
+			let refused_passes = pass - 1;
+			let remaining = deadline.saturating_duration_since(Instant::now());
+			tracing::debug!(
+				actor_id = %self.ctx.actor_id(),
+				refused_pass = refused_passes,
+				remaining_ms = duration_ms_f64(remaining),
+				"fork hook state refused by an in-flight state write, waiting to serialize again"
+			);
+			if remaining.is_zero() {
+				return Err(self.fork_hook_state_unsaved(budget_started_at, refused_passes));
+			}
+			if timeout(remaining, self.ctx.wait_for_pending_state_writes())
+				.await
+				.is_err()
+			{
+				return Err(self.fork_hook_state_unsaved(budget_started_at, refused_passes));
+			}
+
+			let remaining = deadline.saturating_duration_since(Instant::now());
+			if remaining.is_zero() {
+				return Err(self.fork_hook_state_unsaved(budget_started_at, refused_passes));
+			}
+			sleep(backoff.min(remaining)).await;
+			backoff = (backoff * 2).min(FORK_HOOK_SAVE_MAX_BACKOFF);
+
+			let remaining = deadline.saturating_duration_since(Instant::now());
+			match timeout(
+				remaining,
+				self.save_fork_hook_state_pass(fork_record, remaining),
+			)
+			.await
+			{
+				Ok(written) => {
+					if written? {
+						return Ok(());
+					}
+				}
+				Err(_elapsed) => {
+					return Err(self.fork_hook_state_unsaved(budget_started_at, refused_passes));
+				}
+			}
+		}
+		Err(self.fork_hook_state_unsaved(budget_started_at, FORK_HOOK_SAVE_MAX_PASSES))
+	}
+
+	/// Logs why the fork hook's state could not be written and returns [`ForkHookStateUnsaved`].
+	/// A hook that is slow every time and leaves a state write in flight fails each start here, so
+	/// the warning carries how long the start had run, which tells a spent startup budget apart
+	/// from a write refused on every pass.
+	fn fork_hook_state_unsaved(
+		&self,
+		budget_started_at: Instant,
+		refused_passes: u32,
+	) -> anyhow::Error {
+		tracing::warn!(
+			actor_id = %self.ctx.actor_id(),
+			refused_passes,
+			elapsed_ms = duration_ms_f64(budget_started_at.elapsed()),
+			budget_ms = duration_ms_f64(FORK_HOOK_SAVE_STARTUP_BUDGET),
+			"fork hook state still refused by a state write the hook left in flight; failing the start so the hook runs again"
+		);
+		ForkHookStateUnsaved.into()
+	}
+
+	/// Serializes the fork hook's state once and writes it with `fork_record` if no other state
+	/// write refuses it. Returns whether it was written. `reply_cap` bounds the wait for the
+	/// serialized state only once shutdown has started.
+	async fn save_fork_hook_state_pass(
+		&mut self,
+		fork_record: &mut Vec<SqliteBatchStatement>,
+		reply_cap: Duration,
+	) -> Result<bool> {
+		let save_request_revision = self.ctx.save_request_revision();
+		let state_transaction_epoch = self.ctx.state_transaction_epoch();
+		let (reply_tx, reply_rx) = oneshot::channel();
+		self.send_actor_event(
+			"fork_hook_serialize_state",
+			ActorEvent::SerializeState {
+				reason: SerializeStateReason::Save,
+				reply: Reply::from(reply_tx),
+			},
+		)?;
+		let deltas = await_save_serialization(
+			self.ctx.shutdown_deadline_token(),
+			reply_rx,
+			reply_cap,
+			"receive fork hook serialize-state reply",
+		)
+		.await?;
+		self.ctx
+			.save_state_carrying_at_transaction_epoch(
+				deltas,
+				save_request_revision,
+				state_transaction_epoch,
+				fork_record,
+			)
+			.await
 	}
 
 	/// Makes a new actor's held startup writes durable as one commit in the background, so its
@@ -1453,16 +1784,19 @@ impl ActorTask {
 				.await
 				.context("load persisted actor startup data from sqlite")?;
 		}
+		let fork = crate::actor::fork::state_from_row(read.fork_state)?;
 		if let Some(snapshot) = read.snapshot {
 			return Ok(PersistedStartup {
 				actor: snapshot.actor,
 				last_pushed_alarm: snapshot.last_pushed_alarm,
 				run_wake_at: snapshot.run_wake_at,
 				inspector_token: read.inspector_token,
+				fork,
 			});
 		}
 		let mut fresh = self.fresh_startup();
 		fresh.inspector_token = read.inspector_token;
+		fresh.fork = fork;
 		Ok(fresh)
 	}
 
@@ -1476,6 +1810,7 @@ impl ActorTask {
 			last_pushed_alarm: None,
 			run_wake_at: None,
 			inspector_token: None,
+			fork: crate::actor::fork::empty_state(),
 		}
 	}
 
@@ -1489,7 +1824,11 @@ impl ActorTask {
 		self.actor_event_rx = Some(actor_event_rx);
 	}
 
-	async fn spawn_run_handle(&mut self, is_new: bool) -> Result<()> {
+	async fn spawn_run_handle(
+		&mut self,
+		is_new: bool,
+		fork: Option<crate::actor::fork::ActorForkStart>,
+	) -> Result<()> {
 		if self.run_handle.is_some() {
 			return Ok(());
 		}
@@ -1518,6 +1857,7 @@ impl ActorTask {
 					(conn, bytes)
 				})
 				.collect(),
+			fork,
 			events: ActorEvents::new(self.ctx.actor_id().to_owned(), actor_events),
 			startup_ready: startup_ready_tx,
 		};
@@ -1545,10 +1885,22 @@ impl ActorTask {
 		Ok(())
 	}
 
-	async fn settle_hibernated_connections(ctx: ActorContext) -> Result<()> {
+	/// Removes the hibernated connections whose gateway request is gone. `drop_all` removes
+	/// every one, for a fork's first start, whose copied connections are its source's.
+	async fn settle_hibernated_connections(ctx: ActorContext, drop_all: bool) -> Result<()> {
 		let actor_id = ctx.actor_id().to_owned();
 		let mut dead_conn_ids = Vec::new();
 		for conn in ctx.conns().filter(|conn| conn.is_hibernatable()) {
+			if drop_all {
+				tracing::debug!(
+					actor_id = %actor_id,
+					conn_id = conn.id(),
+					outcome = "dead_forked_copy",
+					"hibernated connection settled"
+				);
+				dead_conn_ids.push(conn.id().to_owned());
+				continue;
+			}
 			let hibernation = conn.hibernation();
 			let Some(hibernation) = hibernation else {
 				tracing::debug!(
@@ -1974,11 +2326,37 @@ impl ActorTask {
 		// deadline so abortable waitUntil/registered work cannot hold teardown.
 		self.ctx.mark_shutdown_deadline_reached();
 		self.ctx.teardown_sleep_state().await;
-		self.ctx.wait_for_pending_state_writes().await;
+		self.wait_for_failed_startup_state_writes().await;
 		self.ctx.abandon_pending_alarm_writes();
-		#[cfg(feature = "sqlite-local")]
-		self.ctx.shutdown_actor_runtime_socket().await;
-		if let Err(error) = self.ctx.sql().close_and_wait().await {
+		// A statement the failed hooks left running would hold every SQLite command queued
+		// behind it, including the discard below and the coordinator's rollback, for as long
+		// as it runs. Nothing wants its outcome, so interrupt it first. The interrupt does not
+		// close the database, because a close would fail the queued discard and send the held
+		// writes to depot.
+		self.ctx.sql().interrupt();
+		// A fork start that failed before its startup commit drops the hook's held writes, so
+		// the next start runs the hook on the source's copy, not on top of them. The discard is
+		// never refused for a full queue, and from here on no SQL command commits, also one
+		// already queued; the close drops the held writes even if the discard failed.
+		if std::mem::take(&mut self.fork_start_held)
+			&& let Err(error) = self.ctx.sql().discard_corked_commits().await
+		{
+			tracing::error!(
+				actor_id = %self.ctx.actor_id(),
+				?error,
+				"could not drop a failed fork start's held writes",
+			);
+		}
+		// A statement the failed hooks left running holds the SQLite coordinator until its
+		// reply comes: one inside the state transaction holds the transaction's statement
+		// lock, and a detached one outside any transaction holds the coordinator's gate. The
+		// interrupt above ends a local statement within one VFS request, but a remote one may
+		// never reply. So every failed start stops waiting for the coordinator after the
+		// rollback's bound. The close still waits for the native worker to relinquish SQLite,
+		// which the next generation relies on; see `SqliteDb::close_and_wait_within`.
+		let limit = self.shutdown_serialize_cap() / FAILED_START_ROLLBACK_CAP_DIVISOR;
+		let closed = self.ctx.sql().close_and_wait_within(limit).await;
+		if let Err(error) = closed {
 			tracing::error!(
 				actor_id = %self.ctx.actor_id(),
 				?error,
@@ -1987,6 +2365,51 @@ impl ActorTask {
 		}
 		self.ctx.sql().request_allocator_trim();
 		self.transition_to(LifecycleState::Terminated);
+	}
+
+	/// Waits up to `shutdown_serialize_cap` for the state writes in flight when a start failed,
+	/// so the teardown after it does not race them. A state transaction the start's hooks left
+	/// open counts as one, and nothing ends it on its own, so past the cap the open transaction
+	/// is rolled back and its writes never commit. The rollback itself waits on a hook that is
+	/// mid-statement in the transaction, so it is bounded too, by a fraction of the cap; past it
+	/// the transaction is left to roll back when its commit runs. The teardown then continues and
+	/// the start fails with its original error instead of hanging with the engine's Stop queued
+	/// behind it. Logs once, as a warning only when a transaction was open.
+	async fn wait_for_failed_startup_state_writes(&mut self) {
+		let cap = self.shutdown_serialize_cap();
+		let started_at = Instant::now();
+		if timeout(cap, self.ctx.wait_for_pending_state_writes())
+			.await
+			.is_ok()
+		{
+			return;
+		}
+
+		let rollback_cap = cap / FAILED_START_ROLLBACK_CAP_DIVISOR;
+		let closed = self.ctx.close_state_transactions_within(rollback_cap).await;
+		let elapsed_ms = duration_ms_f64(started_at.elapsed());
+		let cap_ms = duration_ms_f64(cap);
+		match closed {
+			StateTransactionClose::NoneOpen => tracing::debug!(
+				actor_id = %self.ctx.actor_id(),
+				elapsed_ms,
+				cap_ms,
+				"state writes still in flight after a failed start and no state transaction is open; continuing the teardown"
+			),
+			StateTransactionClose::RolledBack => tracing::warn!(
+				actor_id = %self.ctx.actor_id(),
+				elapsed_ms,
+				cap_ms,
+				"a hook left a state transaction open after a failed start; rolled it back and continuing the teardown"
+			),
+			StateTransactionClose::RollbackTimedOut => tracing::warn!(
+				actor_id = %self.ctx.actor_id(),
+				elapsed_ms,
+				cap_ms,
+				rollback_cap_ms = duration_ms_f64(rollback_cap),
+				"a hook left a state transaction open after a failed start and is still inside it; continuing the teardown, and the transaction rolls back instead of committing"
+			),
+		}
 	}
 
 	async fn save_final_state(&mut self) -> Result<()> {
@@ -2090,8 +2513,6 @@ impl ActorTask {
 			step = "wait_for_pending_alarm_writes",
 			"actor shutdown cleanup step completed"
 		);
-		#[cfg(feature = "sqlite-local")]
-		ctx.shutdown_actor_runtime_socket().await;
 		ctx.sql()
 			.cleanup_for_shutdown(reason == ShutdownKind::Sleep)
 			.await

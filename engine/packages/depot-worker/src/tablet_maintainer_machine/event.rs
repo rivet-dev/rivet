@@ -8,6 +8,22 @@ use serde::{Deserialize, Serialize};
 pub enum MaintainerEvent {
 	/// **When**
 	///
+	/// A live worker asks whether its replicas have caught up before reporting Ready.
+	///
+	/// **State**
+	///
+	/// Reserves a bounded fresh status barrier under the exact grant and disk assignment.
+	/// Does not quiesce creates or release client claims.
+	///
+	/// **Effects**
+	///
+	/// Polls replicas and replies through StopReadinessResponse; may drive cold recovery.
+	ReplicaReadinessRequest {
+		request_id: RequestId,
+		request: rivet_data::generated::depot_replica_readiness_v1::ReplicaReadiness,
+	},
+	/// **When**
+	///
 	/// The ordered store completes replay and its optional alarm projection.
 	///
 	/// **State**
@@ -174,7 +190,7 @@ pub enum MaintainerEvent {
 	/// Persists source images or metadata pages, or schedules retry without abandoning a hold.
 	ForkPeerResponse {
 		op_id: OpId,
-		result: Result<rivet_data::generated::depot_client_protocol_v1::ClientResponse, String>,
+		result: Result<rivet_data::generated::depot_client_protocol_v2::ClientResponse, String>,
 	},
 
 	/// **When**
@@ -190,7 +206,7 @@ pub enum MaintainerEvent {
 	/// Refreshes source progress when needed, queues storage and arms the caller deadline.
 	ForkReferenceRequest {
 		request_id: RequestId,
-		request: rivet_data::generated::depot_client_protocol_v1::FsForkReferenceRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::FsForkReferenceRequest,
 		deadline_boot_ms: u64,
 	},
 	/// **When**
@@ -200,10 +216,13 @@ pub enum MaintainerEvent {
 	/// **State**
 	///
 	/// Consumes the source durability proof, even after caller expiry; stale operations are ignored.
+	/// A planned idle pin moves the acquire to `Pinning`; a planning lookup that needs no pin
+	/// moves it to `QueuedPinned`.
 	///
 	/// **Effects**
 	///
-	/// Replies and schedules safe trims, or fences after uncertain storage failure.
+	/// Replies and schedules safe trims, or fences after uncertain storage failure. A planned
+	/// idle pin is submitted to the maintainer log as a `ForkPinOp`.
 	ForkReferenceResponse {
 		op_id: OpId,
 		result: Result<depot_fs_core::forks::ReferenceResult, String>,
@@ -239,6 +258,23 @@ pub enum MaintainerEvent {
 		op_id: OpId,
 		result: Result<depot_fs_core::work::PendingSweepProgress, String>,
 	},
+	/// **When**
+	///
+	/// The store finishes a fork pin pass a group read started for a registered volume.
+	///
+	/// **State**
+	///
+	/// Releases the operation. A failure is reported and changes nothing else: the pins keep
+	/// waiting, which keeps more than needed and never less, and the volume's next pin or
+	/// load runs the pass again.
+	///
+	/// **Effects**
+	///
+	/// Allows more queued work.
+	ForkPinPassResponse {
+		op_id: OpId,
+		result: Result<(), String>,
+	},
 
 	/// **When**
 	///
@@ -253,7 +289,7 @@ pub enum MaintainerEvent {
 	/// Queues ordered store work and arms the original caller deadline.
 	CheckpointRequest {
 		request_id: RequestId,
-		request: rivet_data::generated::depot_client_protocol_v1::VolumeCheckpointRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::VolumeCheckpointRequest,
 		deadline_boot_ms: u64,
 	},
 	/// **When**
@@ -302,7 +338,7 @@ pub enum MaintainerEvent {
 	/// Schedules filesystem store work and the caller's original deadline.
 	FilesystemQueryRequest {
 		request_id: RequestId,
-		request: rivet_data::generated::shared_depot_fs_read_v1::FsReadRequest,
+		request: rivet_data::generated::shared_depot_fs_read_v2::FsReadRequest,
 		deadline_boot_ms: u64,
 	},
 	/// **When**
@@ -318,7 +354,7 @@ pub enum MaintainerEvent {
 	/// Replies once, or fences on a storage failure.
 	FilesystemQueryResponse {
 		op_id: OpId,
-		result: Result<rivet_data::generated::shared_depot_fs_read_v1::FsReadResponse, String>,
+		result: Result<rivet_data::generated::shared_depot_fs_read_v2::FsReadResponse, String>,
 	},
 
 	/// **When**
@@ -340,15 +376,25 @@ pub enum MaintainerEvent {
 	///
 	/// **State**
 	///
-	/// Matching records initialize applied at cold; invalid results fence.
+	/// Matching records initialize applied at cold; invalid results fence. The child
+	/// groups a registered grouped base volume's kept pins wait on join its group's entry,
+	/// within `max_group_pin_wait_children`. The children the cache does not know are learned
+	/// the cheaper way: the parent's entry wants the fork rows over the pins' ranges when the
+	/// children outnumber those rows' pages, and otherwise each child gets an entry of its own
+	/// to read. A record whose stored `fork_pinned_through` lags a deleted pin is queued to be
+	/// stored again.
 	///
 	/// **Effects**
 	///
-	/// Starts qualified committed reads.
+	/// Starts qualified committed reads, the group reads within `max_group_reads_in_flight`,
+	/// and, while the tablet serves, a fork pin pass when the cache already knows an archived
+	/// child the volume's pins wait on.
 	///
 	FilesystemLoadResponse {
 		op_id: OpId,
 		result: Result<Option<depot_fs_core::FsVolumeRecord>, String>,
+		/// What the registration's pin pass left, for a grouped volume; empty otherwise.
+		fork_pins: super::types::LoadedForkPins,
 	},
 	/// **When**
 	///
@@ -558,6 +604,41 @@ pub enum MaintainerEvent {
 			rivet_data::generated::depot_tablet_coordinator_protocol_v1::TabletCoordinatorResponse,
 			String,
 		>,
+	},
+
+	/// **When**
+	///
+	/// A command of a volume this grant hosts is about to store a value of `mark.family` at
+	/// `mark.version`, above the version the storage read floor selected, because the
+	/// selected version cannot express it. The command host sends it only when the
+	/// published `version_marks_durable` snapshot does not cover the mark, and then waits
+	/// for that snapshot before committing.
+	///
+	/// **State**
+	///
+	/// While serving, a mark the in-memory record does not cover, of a version this binary
+	/// writes, joins `maintainer_log.wanted_marks`. The next pass that writes the record
+	/// raises the record's marks to it, and `version_marks_durable` follows once that pass
+	/// completes. Ignored in any other phase or when the record already covers it; the
+	/// waiting command ends at its own deadline or when the phase leaves serving.
+	///
+	/// A mark already wanted but not yet in the record asks for the pass again, since the
+	/// pass that took it may have been unable to write the record.
+	///
+	/// **Effects**
+	///
+	/// Asks for a prompt log pass, arming `FilesystemFlushBatch` within the cold batch delay.
+	/// The raised mark then reaches the coordinator through `ReportVersionMarksRequest`.
+	///
+	/// That pass is a full tablet memtable flush: one L0 SST to cold, carrying every volume's
+	/// applied data with the record. It is a bounded exception to the rule that command work
+	/// never writes to cold, the same mechanism the `depot.fs_rows` mark pass uses. Marks are
+	/// monotonic and opening seeds the durable ones, so it happens once per tablet per family
+	/// per rolling deploy: about one PUT (plus its manifest write) per pegboard tablet when the
+	/// first actor batch on a newly rolled storage worker needs version 2, and never once the
+	/// read floor selects the version itself.
+	VersionMarkWanted {
+		mark: rivet_data::generated::shared_depot_types_v1::VersionMark,
 	},
 
 	/// **When**
@@ -882,7 +963,7 @@ pub enum MaintainerEvent {
 		op_id: OpId,
 		/// The tablet store's record of its maintainer log, when it has one.
 		result: Result<
-			Option<rivet_data::generated::depot_maintainer_log_v1::MaintainerLogRecord>,
+			Option<rivet_data::generated::depot_maintainer_log_v2::MaintainerLogRecord>,
 			String,
 		>,
 	},
@@ -936,6 +1017,60 @@ pub enum MaintainerEvent {
 
 	/// **When**
 	///
+	/// The executor finished a group record read.
+	///
+	/// **State**
+	///
+	/// Fills the group's cache entry, keeping an archive an event reported over a read that
+	/// predates it, passes its own status to its parent's entry as the child of the fork it
+	/// left by, releases the volumes that waited on it, and settles the pin waits of both
+	/// entries' volumes; a child read that found no record lets its wait go. An entry that only
+	/// a resolved wait named leaves. A failure arms a retry whose delay doubles with each
+	/// failure in a row up to a cap. Frees one slot of `max_group_reads_in_flight`, also when
+	/// the read's entry left while it was in flight, in which case the opens waiting for that
+	/// entry's read are admitted again and nothing else changes. An entry an event marked
+	/// `gap_pending` while the read was in flight stays unread and is queued for another read;
+	/// the volumes held for it and the opens waiting for it keep waiting for that read.
+	///
+	/// **Effects**
+	///
+	/// The next page of fork children when the read asked for more than one page holds, the
+	/// read again of an entry marked `gap_pending`, the queued reads the freed slot makes room
+	/// for, and a fork pin pass for each volume whose pin waits just learned an archived child.
+	GroupReadResponse {
+		op_id: OpId,
+		result: Result<rivet_data::generated::depot_group_v1::GroupReadResponse, String>,
+	},
+
+	/// **When**
+	///
+	/// The process's events poll read a page from an event shard.
+	///
+	/// **State**
+	///
+	/// Raises the latest fork of each cached parent a fork names and marks each cached child
+	/// an archive names, keeping the archive on the child's entry even before its record is
+	/// read. A child a pin wait names but the cache does not hold gets an entry marked
+	/// archived, so a fork row read in flight for that wait cannot answer it live. Events of
+	/// other groups the cache does not hold are ignored, since their record is read on load.
+	/// A gap, or a fork naming a cached child with no record, marks the entries it reads
+	/// again; one whose read is in flight is marked `gap_pending`, so that read's answer
+	/// leaves it unread and it is read again after it.
+	///
+	/// **Effects**
+	///
+	/// The read of an entry an archive created or an event marked for another read, within
+	/// `max_group_reads_in_flight`.
+	GroupEvents {
+		events: Vec<rivet_data::generated::depot_group_v1::Event>,
+		/// Events before these may have been missed: a page was dropped for this maintainer,
+		/// or the poll started its cursor after failing to read the shard. Every cached group
+		/// record is read again.
+		gap: bool,
+	},
+
+	/// **When**
+	///
 	/// The filesystem read task finished an open's read-back.
 	///
 	/// **State**
@@ -972,6 +1107,7 @@ pub enum MaintainerEvent {
 impl rivet_state_machine::EventBody for MaintainerEvent {
 	fn name(&self) -> &'static str {
 		match self {
+			Self::ReplicaReadinessRequest { .. } => "replica_readiness_request",
 			Self::FilesystemAlarmApplyResponse { .. } => "filesystem_apply_response",
 			Self::AlarmResponse { .. } => "alarm_response",
 			MaintainerEvent::StopReadinessRequest { .. } => "stop_readiness_request",
@@ -983,10 +1119,13 @@ impl rivet_state_machine::EventBody for MaintainerEvent {
 			MaintainerEvent::ForkRequest { .. } => "fork_request",
 			MaintainerEvent::ForkStoreResponse { .. } => "fork_store_response",
 			MaintainerEvent::ForkPeerResponse { .. } => "fork_peer_response",
+			MaintainerEvent::GroupReadResponse { .. } => "group_read_response",
+			MaintainerEvent::GroupEvents { .. } => "group_events",
 			MaintainerEvent::ForkReferenceRequest { .. } => "fork_reference_request",
 			MaintainerEvent::ForkReferenceResponse { .. } => "fork_reference_response",
 			MaintainerEvent::PendingWorkResponse { .. } => "pending_work_response",
 			MaintainerEvent::SweepPendingResponse { .. } => "sweep_pending_response",
+			MaintainerEvent::ForkPinPassResponse { .. } => "fork_pin_pass_response",
 			MaintainerEvent::CheckpointRequest { .. } => "checkpoint_request",
 			MaintainerEvent::CheckpointResponse { .. } => "checkpoint_response",
 			MaintainerEvent::FilesystemQueryRequest { .. } => "filesystem_query_request",
@@ -1007,6 +1146,7 @@ impl rivet_state_machine::EventBody for MaintainerEvent {
 				"report_parent_log_imported_response"
 			}
 			MaintainerEvent::ReportVersionMarksResponse { .. } => "report_version_marks_response",
+			MaintainerEvent::VersionMarkWanted { .. } => "version_mark_wanted",
 			MaintainerEvent::AssignmentUpdated { .. } => "assignment_updated",
 			MaintainerEvent::OperatorTierRequest { .. } => "operator_tier_request",
 			MaintainerEvent::OperatorUnloadRequest { .. } => "operator_unload_request",
@@ -1047,7 +1187,7 @@ pub enum RepairEvent {
 	/// Arms the read deadline and dispatches DiagnosticsRequest, or replies with refusal.
 	DiagnosticsRequest {
 		request_id: RequestId,
-		request: rivet_data::generated::depot_client_protocol_v1::RepairDiagnosticsRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::RepairDiagnosticsRequest,
 	},
 	/// **When**
 	/// The diagnostic read completes or fails.
@@ -1058,7 +1198,7 @@ pub enum RepairEvent {
 	DiagnosticsResponse {
 		op_id: OpId,
 		result:
-			Result<rivet_data::generated::depot_client_protocol_v1::RepairDiagnosticsPage, String>,
+			Result<rivet_data::generated::depot_client_protocol_v2::RepairDiagnosticsPage, String>,
 	},
 	/// **When**
 	///
@@ -1113,7 +1253,7 @@ pub enum RepairEvent {
 	/// Arms the operation timer and dispatches PrepareRequest, or replies.
 	Request {
 		request_id: RequestId,
-		request: rivet_data::generated::depot_client_protocol_v1::RepairRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::RepairRequest,
 	},
 
 	/// **When**
@@ -1148,7 +1288,7 @@ pub enum RepairEvent {
 	/// Arms the operation timer and dispatches AuditListRequest, or replies.
 	AuditListRequest {
 		request_id: RequestId,
-		request: rivet_data::generated::depot_client_protocol_v1::RepairAuditListRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::RepairAuditListRequest,
 	},
 
 	/// **When**
@@ -1164,7 +1304,7 @@ pub enum RepairEvent {
 	/// Cancels the operation timer and replies with the page, or with `Overloaded`.
 	AuditListResponse {
 		op_id: OpId,
-		result: Result<rivet_data::generated::depot_client_protocol_v1::RepairAuditPage, String>,
+		result: Result<rivet_data::generated::depot_client_protocol_v2::RepairAuditPage, String>,
 	},
 
 	/// **When**

@@ -1,7 +1,6 @@
 import { actor, setup } from "rivetkit";
 
 const myActor = actor({
-  state: {},
   actions: {}
 });
 

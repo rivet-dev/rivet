@@ -4,6 +4,12 @@
 
 import { actor, event } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
+import {
+	loadRecord,
+	recordDb,
+	saveRecord,
+	updateRecord,
+} from "./record-store.ts";
 
 export type RaceTask = {
 	id: string;
@@ -22,39 +28,43 @@ export type RaceTaskInput = {
 };
 
 export const race = actor({
-	createState: (c, input?: RaceTaskInput): RaceTask => ({
-		id: c.key[0] as string,
-		workDurationMs: input?.workDurationMs ?? 2000,
-		timeoutMs: input?.timeoutMs ?? 3000,
-		status: "running",
-		startedAt: Date.now(),
-	}),
+	db: recordDb(),
+	onCreate: async (c, input?: RaceTaskInput) => {
+		await saveRecord<RaceTask>(c.db, {
+			id: c.key[0] as string,
+			workDurationMs: input?.workDurationMs ?? 2000,
+			timeoutMs: input?.timeoutMs ?? 3000,
+			status: "running",
+			startedAt: Date.now(),
+		});
+	},
 	events: {
 		raceStarted: event<RaceTask>(),
 		raceCompleted: event<RaceTask>(),
 	},
 
 	actions: {
-		getTask: (c): RaceTask => c.state,
+		getTask: (c): Promise<RaceTask> => loadRecord<RaceTask>(c.db),
 	},
 
 	run: workflow(async (ctx) => {
 		await ctx.loop("race-loop", async (loopCtx) => {
-			// Get durations inside a step since state is only available in steps
+			// Read the durations inside a step since the database is only available in steps
 			const { workDurationMs, timeoutMs, taskId } = await loopCtx.step(
 				"start-race",
 				async (c) => {
+					const task = await loadRecord<RaceTask>(c.db);
 					c.log.info({
 						msg: "starting race",
-						taskId: c.state.id,
-						workDurationMs: c.state.workDurationMs,
-						timeoutMs: c.state.timeoutMs,
+						taskId: task.id,
+						workDurationMs: task.workDurationMs,
+						timeoutMs: task.timeoutMs,
 					});
-					c.broadcast("raceStarted", c.state);
+					c.broadcast("raceStarted", task);
 					return {
-						workDurationMs: c.state.workDurationMs,
-						timeoutMs: c.state.timeoutMs,
-						taskId: c.state.id,
+						workDurationMs: task.workDurationMs,
+						timeoutMs: task.timeoutMs,
+						taskId: task.id,
 					};
 				},
 			);
@@ -82,28 +92,28 @@ export const race = actor({
 			]);
 
 			await loopCtx.step("save-result", async (c) => {
-				c.state.completedAt = Date.now();
-				c.state.actualDurationMs =
-					c.state.completedAt - c.state.startedAt;
+				const updated = await updateRecord<RaceTask>(c.db, (task) => {
+					task.completedAt = Date.now();
+					task.actualDurationMs = task.completedAt - task.startedAt;
 
-				if (winner === "work") {
-					c.state.status = "work_won";
-					c.state.result = value as string;
-					c.log.info({
-						msg: "work completed before timeout",
-						taskId: c.state.id,
-						durationMs: c.state.actualDurationMs,
-					});
-				} else {
-					c.state.status = "timeout_won";
-					c.log.info({
-						msg: "timeout won the race",
-						taskId: c.state.id,
-						durationMs: c.state.actualDurationMs,
-					});
-				}
-
-				c.broadcast("raceCompleted", c.state);
+					if (winner === "work") {
+						task.status = "work_won";
+						task.result = value as string;
+						c.log.info({
+							msg: "work completed before timeout",
+							taskId: task.id,
+							durationMs: task.actualDurationMs,
+						});
+					} else {
+						task.status = "timeout_won";
+						c.log.info({
+							msg: "timeout won the race",
+							taskId: task.id,
+							durationMs: task.actualDurationMs,
+						});
+					}
+				});
+				c.broadcast("raceCompleted", updated);
 			});
 
 			return Loop.break(undefined);

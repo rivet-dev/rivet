@@ -23,12 +23,19 @@ Use the `.webSocket()` method on an actor handle to open a WebSocket connection 
 <CodeGroup workspace>
 ```typescript index.ts @hide @nocheck
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 
 export const chat = actor({
-    state: { messages: [] as string[] },
+    db: db({
+        onMigrate: async (db) => {
+            await db.execute(
+                "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL)",
+            );
+        },
+    }),
     onWebSocket: (c, websocket) => {
-        websocket.addEventListener("message", (event) => {
-            c.state.messages.push(event.data as string);
+        websocket.addEventListener("message", async (event) => {
+            await c.db.execute("INSERT INTO messages (text) VALUES (?)", event.data as string);
         });
     },
     actions: {}
@@ -69,12 +76,19 @@ Use `.getGatewayUrl()` to get the raw gateway URL for the actor. This is useful 
 <CodeGroup workspace>
 ```typescript index.ts @hide @nocheck
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 
 export const chat = actor({
-    state: { messages: [] as string[] },
+    db: db({
+        onMigrate: async (db) => {
+            await db.execute(
+                "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL)",
+            );
+        },
+    }),
     onWebSocket: (c, websocket) => {
-        websocket.addEventListener("message", (event) => {
-            c.state.messages.push(event.data as string);
+        websocket.addEventListener("message", async (event) => {
+            await c.db.execute("INSERT INTO messages (text) VALUES (?)", event.data as string);
         });
     },
     actions: {}
@@ -194,7 +208,7 @@ Enable hibernation by setting `canHibernateWebSocket: true`. You can also pass a
 
 <CodeSnippet file="examples/docs/actors-websocket-handler/hibernation.ts" />
 
-Since `open` only fires once when the client first connects, use `c.conn.state` to store per-connection data that persists across sleep cycles. See [connections](/actors/docs/connections) for more details.
+Since `open` only fires once when the client first connects, store per-connection data in [SQLite](/actors/docs/sqlite), keyed by connection ID, so it persists across sleep cycles. See [connections](/actors/docs/connections) for more details.
 
 ### Accessing the Request
 

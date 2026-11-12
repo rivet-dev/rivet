@@ -5,7 +5,7 @@ This matchmaker uses a queue and fill flow.
 3. The matchmaker stores assignments and broadcasts assignmentReady so each client can connect to the new match.
 4. onDisconnect unqueues pending players so stale queue entries do not stay in the pool.
 */
-import { type ActorContextOf, actor, event, queue } from "rivetkit";
+import { type ActorContextOf, actor, event } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
 import type { registry } from "../index.ts";
@@ -22,6 +22,7 @@ export interface ArenaAssignment {
 type QueuePlayerRow = {
 	player_id: string;
 	conn_id: string | null;
+	queued_at: number;
 };
 
 export const arenaMatchmaker = actor({
@@ -29,15 +30,6 @@ export const arenaMatchmaker = actor({
 	db: db({
 		onMigrate: migrateTables,
 	}),
-	queues: {
-		queueForMatch: queue<{
-			mode: Mode;
-			playerId: string;
-			connId: string;
-		}>(),
-		unqueueForMatch: queue<{ connId: string }>(),
-		matchCompleted: queue<{ matchId: string }>(),
-	},
 	events: {
 		assignmentReady: event<ArenaAssignment>(),
 		queueUpdate: event<{ counts: Record<string, number> }>(),
@@ -46,11 +38,15 @@ export const arenaMatchmaker = actor({
 		// docs:start queue
 		queueForMatch: async (c, { mode }: { mode: Mode }) => {
 			const playerId = crypto.randomUUID();
-			await c.queue.send("queueForMatch", {
-				mode,
+			await c.db.execute(
+				`INSERT INTO player_pool (player_id, mode, queued_at, conn_id) VALUES (?, ?, ?, ?)`,
 				playerId,
-				connId: c.conn.id,
-			});
+				mode,
+				Date.now(),
+				c.conn.id,
+			);
+			await broadcastQueueSizes(c);
+			await fillMatch(c, mode);
 			return { playerId };
 		},
 		// docs:end queue
@@ -86,33 +82,14 @@ export const arenaMatchmaker = actor({
 				connId: row.conn_id,
 			};
 		},
+		matchCompleted: async (c, { matchId }: { matchId: string }) => {
+			await c.db.execute(`DELETE FROM matches WHERE match_id = ?`, matchId);
+		},
 	},
 	// docs:start queue
 	onDisconnect: async (c, conn) => {
-		await c.queue.send("unqueueForMatch", { connId: conn.id });
-	},
-	run: async (c) => {
-		for await (const message of c.queue.iter()) {
-			if (message.name === "queueForMatch") {
-				await processQueueEntry(
-					c,
-					message.body.mode,
-					message.body.playerId,
-					message.body.connId,
-				);
-			} else if (message.name === "unqueueForMatch") {
-				await c.db.execute(
-					`DELETE FROM player_pool WHERE conn_id = ?`,
-					message.body.connId,
-				);
-				await broadcastQueueSizes(c);
-			} else if (message.name === "matchCompleted") {
-				await c.db.execute(
-					`DELETE FROM matches WHERE match_id = ?`,
-					message.body.matchId,
-				);
-			}
-		}
+		await c.db.execute(`DELETE FROM player_pool WHERE conn_id = ?`, conn.id);
+		await broadcastQueueSizes(c);
 	},
 	// docs:end queue
 });
@@ -128,96 +105,85 @@ async function broadcastQueueSizes(c: ActorContextOf<typeof arenaMatchmaker>) {
 	c.broadcast("queueUpdate", { counts });
 }
 
-async function processQueueEntry(
-	c: ActorContextOf<typeof arenaMatchmaker>,
-	mode: Mode,
-	playerId: string,
-	connId: string,
-): Promise<void> {
+// docs:start fill-match
+async function fillMatch(c: ActorContextOf<typeof arenaMatchmaker>, mode: Mode) {
 	const config = MODE_CONFIG[mode];
 
-	await c.db.execute(
-		`INSERT OR REPLACE INTO player_pool (player_id, mode, queued_at, conn_id) VALUES (?, ?, ?, ?)`,
-		playerId,
-		mode,
-		Date.now(),
-		connId,
+	// Actions run concurrently, so check the count and remove the players in
+	// one transaction. Two players joining at once can't both fill the last slot.
+	const queued = await c.db.transaction(
+		async (tx) => {
+			const rows = await tx.execute<QueuePlayerRow>(
+				`SELECT player_id, conn_id, queued_at FROM player_pool WHERE mode = ? ORDER BY queued_at ASC LIMIT ?`,
+				mode,
+				config.capacity,
+			);
+			if (rows.length < config.capacity) return [];
+			for (const row of rows) {
+				await tx.execute(
+					`DELETE FROM player_pool WHERE player_id = ?`,
+					row.player_id,
+				);
+			}
+			return rows;
+		},
+		{ name: "claim-players" },
 	);
-
-	await broadcastQueueSizes(c);
-
-	const countRows = await c.db.execute<{ cnt: number }>(
-		`SELECT COUNT(*) as cnt FROM player_pool WHERE mode = ?`,
-		mode,
-	);
-	const count = countRows[0]?.cnt ?? 0;
-
-	if (count >= config.capacity) {
-		await fillMatch(c, mode, config);
-	}
-}
-
-// docs:start fill-match
-async function fillMatch(
-	c: ActorContextOf<typeof arenaMatchmaker>,
-	mode: Mode,
-	config: { capacity: number; teams: number },
-) {
-	const queued = await c.db.execute<QueuePlayerRow>(
-		`SELECT player_id, conn_id FROM player_pool WHERE mode = ? ORDER BY queued_at ASC LIMIT ?`,
-		mode,
-		config.capacity,
-	);
-
-	const queuedPlayers = queued.map((r) => ({
-		playerId: r.player_id,
-		connId: r.conn_id,
-	}));
-	const playerIds = queuedPlayers.map((r) => r.playerId);
-
-	for (const pid of playerIds) {
-		await c.db.execute(`DELETE FROM player_pool WHERE player_id = ?`, pid);
-	}
+	if (queued.length === 0) return;
 
 	const matchId = crypto.randomUUID();
-	const assignedPlayers = queuedPlayers.map((queuedPlayer, idx) => ({
-		playerId: queuedPlayer.playerId,
-		connId: queuedPlayer.connId,
+	const assignedPlayers = queued.map((row, idx) => ({
+		playerId: row.player_id,
+		connId: row.conn_id,
 		teamId: config.teams > 0 ? idx % config.teams : -1,
 	}));
 
+	// Create the match outside the transaction, because a transaction must not
+	// wait on another actor.
 	const client = c.client<typeof registry>();
-	await client.arenaMatch.create([matchId], {
-		input: {
-			matchId,
-			mode,
-			capacity: config.capacity,
-			assignedPlayers: assignedPlayers.map((ap) => ({
-				playerId: ap.playerId,
-				teamId: ap.teamId,
-			})),
-		},
-	});
+	try {
+		await client.arenaMatch.create([matchId], {
+			input: {
+				matchId,
+				mode,
+				capacity: config.capacity,
+				assignedPlayers: assignedPlayers.map((ap) => ({
+					playerId: ap.playerId,
+					teamId: ap.teamId,
+				})),
+			},
+		});
+	} catch (error) {
+		await returnToPool(c, mode, queued);
+		throw error;
+	}
 
-	await c.db.execute(
-		`INSERT INTO matches (match_id, mode, capacity, created_at) VALUES (?, ?, ?, ?)`,
-		matchId,
-		mode,
-		config.capacity,
-		Date.now(),
+	await c.db.transaction(
+		async (tx) => {
+			await tx.execute(
+				`INSERT INTO matches (match_id, mode, capacity, created_at) VALUES (?, ?, ?, ?)`,
+				matchId,
+				mode,
+				config.capacity,
+				Date.now(),
+			);
+			for (const ap of assignedPlayers) {
+				await tx.execute(
+					`INSERT INTO assignments (player_id, match_id, team_id, mode, conn_id) VALUES (?, ?, ?, ?, ?)`,
+					ap.playerId,
+					matchId,
+					ap.teamId,
+					mode,
+					ap.connId,
+				);
+			}
+		},
+		{ name: "save-match" },
 	);
 
 	await broadcastQueueSizes(c);
 
 	for (const ap of assignedPlayers) {
-		await c.db.execute(
-			`INSERT INTO assignments (player_id, match_id, team_id, mode, conn_id) VALUES (?, ?, ?, ?, ?)`,
-			ap.playerId,
-			matchId,
-			ap.teamId,
-			mode,
-			ap.connId,
-		);
 		c.broadcast("assignmentReady", {
 			matchId,
 			playerId: ap.playerId,
@@ -228,6 +194,35 @@ async function fillMatch(
 	}
 }
 // docs:end fill-match
+
+/** Puts claimed players back at their original place in the pool. */
+async function returnToPool(
+	c: ActorContextOf<typeof arenaMatchmaker>,
+	mode: Mode,
+	players: QueuePlayerRow[],
+) {
+	// A player who left while the match was being created stays out of the
+	// pool, because their disconnect found no row to remove.
+	const stillConnected = players.filter(
+		(player) => player.conn_id !== null && c.conns.has(player.conn_id),
+	);
+
+	await c.db.transaction(
+		async (tx) => {
+			for (const player of stillConnected) {
+				await tx.execute(
+					`INSERT INTO player_pool (player_id, mode, queued_at, conn_id) VALUES (?, ?, ?, ?)`,
+					player.player_id,
+					mode,
+					player.queued_at,
+					player.conn_id,
+				);
+			}
+		},
+		{ name: "return-players" },
+	);
+	await broadcastQueueSizes(c);
+}
 
 async function migrateTables(dbHandle: RawAccess) {
 	await dbHandle.execute(`

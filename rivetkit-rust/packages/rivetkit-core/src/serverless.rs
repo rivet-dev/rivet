@@ -610,7 +610,13 @@ impl CoreServerlessRuntime {
 			if self.shutting_down.load(Ordering::Acquire) {
 				return Err(RuntimeShutDown.build());
 			}
-			match guard.as_ref() {
+			// An envoy the lost threshold ended is replaced like one that was never started:
+			// it registers under a new key, and the engine reschedules the actors it dropped.
+			// Any other end stays cached: a registration rejection is terminal for this
+			// runtime and its diagnostic must keep answering, as below.
+			match guard.as_ref().filter(|cached| {
+				cached.handle.stop_status() != rivet_envoy_client::context::StopStatus::Lost
+			}) {
 				Some(cached) => {
 					// The start request token authenticates the serverless callback. It is
 					// not part of envoy identity, and may differ from the token used for

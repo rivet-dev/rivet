@@ -1,21 +1,23 @@
 import { actor } from "rivetkit";
 
 const chatRoom = actor({
-  state: {
+  createVars: () => ({
     users: {} as Record<string, { online: boolean; lastSeen: number }>,
-    messages: [] as string[],
-  },
-
-  createConnState: (_c, params: { userId?: string }) => ({
-    userId: params.userId ?? "anonymous",
+    userIds: new Map<string, string>(),
   }),
+
+  onConnect: (c, conn) => {
+    const params = conn.params as { userId?: string } | undefined;
+    c.vars.userIds.set(conn.id, params?.userId ?? "anonymous");
+  },
 
   onDisconnect: (c, conn) => {
     // Update user status when they disconnect
-    const userId = conn.state.userId;
-    if (c.state.users[userId]) {
-      c.state.users[userId].online = false;
-      c.state.users[userId].lastSeen = Date.now();
+    const userId = c.vars.userIds.get(conn.id) ?? "anonymous";
+    c.vars.userIds.delete(conn.id);
+    if (c.vars.users[userId]) {
+      c.vars.users[userId].online = false;
+      c.vars.users[userId].lastSeen = Date.now();
     }
 
     // Broadcast that a user left

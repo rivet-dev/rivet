@@ -68,6 +68,17 @@
         }
       ]
     },
+    "migrate_from_v2": {
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/MigrateFromV2"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "object_storage": {
       "default": null,
       "anyOf": [
@@ -526,7 +537,7 @@
           "minimum": 0.0
         },
         "index": {
-          "description": "Index inserts, deletes and listings. Defaults to 256.",
+          "description": "Index inserts, deletes and listings, including the namespace index's writes and listings. Defaults to 256.",
           "type": [
             "integer",
             "null"
@@ -613,6 +624,41 @@
       "type": "object",
       "additionalProperties": false
     },
+    "EventsConfig": {
+      "description": "The event shards of a region and how often a storage worker polls them. Shards are unprefixed KV volumes; growing the count changes nothing for readers, since an event may be posted to any shard and nothing relies on their order.",
+      "type": "object",
+      "properties": {
+        "poll_interval_ms": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "retained_rows": {
+          "description": "Most rows one event shard keeps. Each post trims the row this many below it, so a storage worker whose cursor falls further behind than this misses rows and reads every cached group's record again. Must be positive.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "shards": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
     "FileSystemObjectStoreConfig": {
       "description": "A local directory used by one engine process at a time. Conditional writes are atomic only among requests of that process.",
       "type": "object",
@@ -664,6 +710,20 @@
         "max_process_cache_bytes": {
           "description": "Bytes all filesystem row caches in one process may retain together.",
           "default": 1073741824,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_rollback_bytes": {
+          "description": "Bytes of checkpoint and head metadata all filesystem rollbacks in one process may hold together while they plan. A rollback that would pass it is refused as overloaded before it writes anything, and may be sent again shortly.",
+          "default": 536870912,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "max_rollback_rows": {
+          "description": "Metadata rows one rollback reads from each of the checkpoint and the current state at most. A volume with more is refused as too large before anything is written.",
+          "default": 1048576,
           "type": "integer",
           "format": "uint",
           "minimum": 0.0
@@ -777,6 +837,112 @@
               "type": "null"
             }
           ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "GroupsConfig": {
+      "description": "Volume group limits. `max_lineage_depth` counts the root: 4 allows a root and three forks below it, and raising it later is a check, not a migration. `inline_metadata_bytes` is the most metadata an acquire reply carries for a lazily forked volume. `max_open_waiters_per_volume` is how many opens of one grouped volume a tablet maintainer holds while the volume's lazy fork or a group read it needs is in progress; an open arriving with that many already waiting is refused as overloaded. `max_wanted_forks` is how many fork numbers a tablet maintainer's group cache wants read at once, and `max_pin_wait_children` how many child groups it learns the status of at once for the fork pins its loaded volumes left waiting; work past either waits for the cache to drain. `max_reads_in_flight` is how many group volume reads a tablet maintainer's group cache has in flight at once; further reads start as these finish. `max_absent_lazy_forks` is how many volumes each tablet maintainer remembers a lazy fork found absent at the fork, so a process holds up to this many per tablet it maintains; past it the oldest is forgotten, and that volume's next open runs a lazy fork job again, which adds a lineage walk, a store round and a caller round trip, or is refused as overloaded when no job is free. `max_lazy_fork_jobs` is how many lazy fork jobs each tablet maintainer runs at once, apart from the `storage.max_background_cold_reads` window of other fork jobs, so a wake of many fork children and an actor fork never take each other's jobs; an open of a grouped volume with no record that finds every lazy fork job taken is refused as overloaded (default 32). `max_parked_lazy_fork_jobs` is how many lazy fork jobs each tablet maintainer keeps parked behind a parent whose tail is unproven, waiting for the next open of their volume; a parked job is a few hundred bytes of memory and does no I/O, and past the cap the oldest is dropped, so its volume's next open resumes its stored fork with one more store round (default 1024). `max_archive_fences` is how many recoveries each tablet maintainer runs at once to fence the writers of an archived group's loaded volumes, apart from the crash repair slots; further volumes wait for a slot (default 16). `max_cached_records` is how many group records a storage worker process keeps in the cache its tablet maintainers share, so a tablet with no loaded volume of a group answers a create's lineage walk and fork stamp, and a due alarm's archived check, without reading the group volume; the events poll keeps it current, and past the cap the least recently used group is dropped and read again on its next use (default 65,536).",
+      "type": "object",
+      "properties": {
+        "inline_metadata_bytes": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_absent_lazy_forks": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_archive_fences": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_cached_records": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_lazy_fork_jobs": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_lineage_depth": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "max_open_waiters_per_volume": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_parked_lazy_fork_jobs": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_pin_wait_children": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_reads_in_flight": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_wanted_forks": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -1140,6 +1306,76 @@
       },
       "additionalProperties": false
     },
+    "LegacyBackfill": {
+      "description": "Legacy: the backfill that moves a namespace's actors from before volume groups into its group. Removed in 3.1 with the backfill.",
+      "type": "object",
+      "properties": {
+        "max_actor_attempts": {
+          "description": "Sends of one backfill page that may fail at the same actor before the backfill gives up on that actor, records it as skipped and moves on (default 10). A namespace with a skipped actor still finishes its backfill, but 3.1 refuses to start until an operator resolves it.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_skipped": {
+          "description": "Actors one namespace's running backfill may give up on (default 1000, 1..=1000). Every page carries the list, and a finished backfill lists them all so each stays reachable. At the cap, a page that reaches `max_actor_attempts` fails and is sent again after `page_timeout_ms` instead of giving up on another actor, logging an error and counting `pegboard_backfill_give_ups_refused_total`, so the backfill waits for an operator.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "name_record_writes_in_flight": {
+          "description": "Name record writes one process runs at once in the background, off the request path (default 64). A read that finds every slot taken records nothing, counts the skip, and leaves the name for a later read to record.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "page_size": {
+          "description": "Actors one backfill page moves, one after another (default 16, 1..=256).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "page_timeout_ms": {
+          "description": "How long one backfill page may run before it is sent again, in milliseconds (default 120000). A page starts no new move after half of this, stops a move that runs past three quarters of it, and is aborted at its end. A shorter value is raised so that half of it covers an actor's stop deadline, the longer of `actor_stop_threshold` and `node_lost_threshold` plus 5 seconds, with 15 seconds to spare.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "recorded_names_capacity": {
+          "description": "Actor names one process remembers having recorded for the backfill after a legacy fallback read, so each is written once (default 100000). Past it, reads record no new names and count each name they skip in `pegboard_backfill_name_records_skipped_total`; the backfill then finds those names only in the namespace's node records.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "start_delay_ms": {
+          "description": "How long after a namespace moves into its group its backfill waits before starting, and between two checks of the fleet while older binaries run, in milliseconds (default 600000, 10 minutes). The backfill starts only once every storage worker reads namespace volumes, and stateless workers are never listed, so this wait is what lets a rolling upgrade of the stateless workers finish first. A stateless worker from before groups that still runs after it can serve a moved actor's old copy, whose writes are then lost. The legacy namespace row pass waits the same delay between its two fleet checks before moving the catalog's legacy namespace rows. The wait is a persisted timer, so a lowered delay applies only after the timer armed under the previous delay fires.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
     "LogShardConfig": {
       "description": "The log shard owns resolved defaults and validates relationships between these limits.",
       "type": "object",
@@ -1264,7 +1500,7 @@
           "minimum": 0.0
         },
         "max_retained_payload_bytes": {
-          "description": "Encoded bytes of synced log entry payloads the shard keeps in memory for reads; defaults to a sixteenth of `max_memory_bytes`. Older payloads are read from disk.",
+          "description": "Encoded bytes of synced log entry payloads the shard keeps in memory for reads; defaults to a sixteenth of `max_memory_bytes`. Older payloads are read from disk. It is a soft limit: the reported usage also counts payloads not yet synced, which only `max_memory_bytes` bounds, so usage can exceed it under write load.",
           "type": [
             "integer",
             "null"
@@ -1401,6 +1637,134 @@
             "null"
           ],
           "format": "uint16",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "MigrateFromV2": {
+      "description": "Settings for moving one V2 namespace's actors into this cluster.\n\nThe section is read through `config.dynamic()`, and a dynamic config update replaces it as a whole. `migrate_seed` is the exception: it is fixed at startup, because a new seed reshuffles which actors fall under `migrate_ratio`, so raising the ratio would no longer only add actors.",
+      "type": "object",
+      "required": [
+        "endpoint",
+        "namespace"
+      ],
+      "properties": {
+        "api_urls": {
+          "description": "V2's public API per datacenter label, which the migrator lists and moves actors through.",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "confirm_delay_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "create_ratio": {
+          "description": "Share of new creates that land in this cluster. Keyless creates draw against it; keyed creates move here only at 1.0.",
+          "default": 0.0,
+          "type": "number",
+          "format": "double"
+        },
+        "endpoint": {
+          "description": "V2's public gateway, where requests for actors this cluster does not hold are proxied.",
+          "type": "string"
+        },
+        "max_actors_per_sec": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_copy_bytes": {
+          "description": "Largest actor the migrator copies, by V2's reported SQLite size plus its KV estimate. Larger actors are skipped as `too_large` on every pass, so they never hold a slot; raise it once the rest of the namespace has moved to migrate them. Defaults to 10 GiB.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_copy_bytes_per_sec": {
+          "description": "Bytes per second the migrator may admit for copying, by the same size `max_copy_bytes` reads. Each admitted actor is charged its whole size when it is admitted; a new candidate waits while the bytes already admitted are more than one second of this rate ahead. It bounds the copy load on the storage nodes, which the actor count alone does not when actors are large. The migrator is a singleton, so the budget is per datacenter. Defaults to 32 MiB/s.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_in_flight": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "migrate_ratio": {
+          "description": "Share of existing V2 actors the migrator moves, picked by a stable hash of the actor id.",
+          "default": 0.0,
+          "type": "number",
+          "format": "double"
+        },
+        "migrate_seed": {
+          "description": "Seed of the hash behind `migrate_ratio`.",
+          "default": 0,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "min_sleep_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "namespace": {
+          "description": "The V2 namespace being migrated.",
+          "type": "string"
+        },
+        "pass_interval_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "target_namespace": {
+          "description": "The namespace here that the actors land in. Defaults to the V2 namespace's name.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "token": {
+          "description": "The namespace-wide V2 token for V2's migration API and the public API calls routing makes. Never logged.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "wake_horizon_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
           "minimum": 0.0
         }
       },
@@ -1814,6 +2178,15 @@
           "format": "uint64",
           "minimum": 0.0
         },
+        "actor_start_threshold": {
+          "description": "How long the engine waits after sending an actor's start for the node to report it running. Past it the start is given up: the node is told to stop that epoch, and the actor starts again once the node reports it stopped, is proven gone, or the stop threshold passes.\n\nUnit is in milliseconds (default 30000, 30 seconds).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "actor_start_waiters_capacity": {
           "description": "Gateway workers one actor keeps waiting for its start (default 64, 1..=1024). A request that finds the list full waits on its fallback poll alone.",
           "type": [
@@ -1822,6 +2195,32 @@
           ],
           "format": "uint32",
           "minimum": 0.0
+        },
+        "actor_stop_threshold": {
+          "description": "Maximum time for an actor to stop before it is considered lost. The engine resends an unanswered stop, and once this threshold plus a 5 second margin has passed since the first stop it ends the actor's run as lost and moves on, as if the node were gone. It is also advertised to the node on connect as the time it is given to stop: a node shutting down drains its actors within this budget, and RivetKit uses it as the default shutdown grace period.\n\nUnit is in milliseconds (default 30000, 30 seconds).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "backfill": {
+          "description": "Legacy: the move of a namespace's actors from before volume groups into its group, which runs once per namespace upgraded from 3.0. Removed in 3.1 with the backfill.",
+          "default": {
+            "max_actor_attempts": null,
+            "max_skipped": null,
+            "name_record_writes_in_flight": null,
+            "page_size": null,
+            "page_timeout_ms": null,
+            "recorded_names_capacity": null,
+            "start_delay_ms": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/LegacyBackfill"
+            }
+          ]
         },
         "command_concurrency": {
           "description": "Per-class handler concurrency for the storage commands pegboard registers on storage workers.",
@@ -1893,6 +2292,51 @@
         },
         "gateway_websocket_open_timeout_ms": {
           "description": "Time an actor WebSocket upgrade may wait for its actor, as while storage recovers after an engine restart. Past it the gateway accepts the upgrade and closes it with `guard.service_unavailable` and a retry hint, so a client without a connect timeout retries instead of waiting forever. Unit is in milliseconds (default 15000, 1000..=45000).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "namespace_fork_retry_ms": {
+          "description": "How long a namespace fork waits for its group writes before sending them again, in milliseconds (default 15000); later attempts back off up to `namespace_job_retry_max_ms`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "namespace_job_retry_max_ms": {
+          "description": "The longest wait between two attempts of a namespace's fork, group archive or index write, in milliseconds (default 30000).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "namespace_start_waiters_capacity": {
+          "description": "Creates that may wait at once for one namespace's fork to finish (default 64). A create left out of a full list waits for its deadline and reads the namespace then.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "namespace_status_refresh_max_concurrency": {
+          "description": "Background namespace status reads one engine process runs at once (default 64, 1..=4096). A stale namespace that finds every slot taken is answered from its cached status and read again by a later request.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "namespace_status_ttl_ms": {
+          "description": "How long an engine process trusts a namespace's cached status before it reads the namespace's volume again, in milliseconds (default 10000). Existence is cached for good. A request past it is answered from the cached status while one background read per namespace replaces it.",
           "type": [
             "integer",
             "null"
@@ -1999,22 +2443,23 @@
           "format": "uint",
           "minimum": 0.0
         },
-        "node_lost_checks_capacity": {
-          "description": "Lost checks one process holds for closed node connections that may not reconnect (default 4096, 1..=65536). When full, the check due soonest is dropped and its actors are found lost on their next request.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
         "node_lost_threshold": {
           "description": "How long a disconnected node keeps its actors before stopping them, advertised to the node on connect. The engine waits as long after a connection closes before it judges the node's actors lost, so both sides agree. It must exceed the node client's longest reconnect backoff (30 s), or an engine restart stops every actor.\n\nUnit is in milliseconds (default 40000).",
           "type": [
             "integer",
             "null"
           ],
-          "format": "int64"
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "node_missing_pools_capacity": {
+          "description": "Pool names one process tracks while it refuses node connects because the pool does not exist (default 1024, 1..=65536). Refusals of one name that persist for a minute log one warning; when full, a new name is not tracked until a tracked one stops being refused.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
         },
         "node_ping_timeout": {
           "description": "Max time since last pong before the node connection is terminated. Unit is in milliseconds.",
@@ -2043,7 +2488,7 @@
           "minimum": 0.0
         },
         "node_socket_queue_capacity": {
-          "description": "Messages queued for one node socket writer (default 128, 1..=65536).",
+          "description": "Messages queued in each of one node connection's separate inbound, data and control lanes (default 128 per lane, 1..=65536). Inbound storage and lifecycle wire bytes each have a separate 32 MiB cap, including executing work.",
           "type": [
             "integer",
             "null"
@@ -2681,6 +3126,19 @@
           "format": "uint",
           "minimum": 0.0
         },
+        "events": {
+          "description": "The depot-wide events every storage worker polls: group forks and archives.",
+          "default": {
+            "poll_interval_ms": null,
+            "retained_rows": null,
+            "shards": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/EventsConfig"
+            }
+          ]
+        },
         "filesystem": {
           "default": {
             "max_cache_bytes": 8388608,
@@ -2689,6 +3147,8 @@
             "max_operation_bytes": 8388608,
             "max_pending_commits": 128,
             "max_process_cache_bytes": 1073741824,
+            "max_rollback_bytes": 536870912,
+            "max_rollback_rows": 1048576,
             "max_snapshot_age_ms": 30000,
             "max_snapshots": 128,
             "max_transaction_age_ms": 300000,
@@ -2731,6 +3191,27 @@
           "allOf": [
             {
               "$ref": "#/definitions/ForkConfig"
+            }
+          ]
+        },
+        "groups": {
+          "description": "Volume groups: the lineage depth cap and the inline metadata threshold.",
+          "default": {
+            "inline_metadata_bytes": null,
+            "max_absent_lazy_forks": null,
+            "max_archive_fences": null,
+            "max_cached_records": null,
+            "max_lazy_fork_jobs": null,
+            "max_lineage_depth": null,
+            "max_open_waiters_per_volume": null,
+            "max_parked_lazy_fork_jobs": null,
+            "max_pin_wait_children": null,
+            "max_reads_in_flight": null,
+            "max_wanted_forks": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/GroupsConfig"
             }
           ]
         },
@@ -2903,6 +3384,15 @@
         },
         "max_background_cold_reads": {
           "description": "Size of each background cold-read window per partition maintainer: held-image source reads for forks, replica log reads for applies, fork jobs and fork cleanup jobs are each bounded by it separately, so they never take client read slots. Defaults to 4.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_base_reads": {
+          "description": "Reads of one inherited layer a partition maintainer serves at once for fork children: each page or metadata row a child has not rewritten is one of these on its ancestor's partition, made for a live client. Past the cap a read is refused as retryable `depot.overloaded` with a hint, which the child's caller sends again. Separate from `max_background_cold_reads`, so a mass wake of fork children never takes the parent's background windows. Defaults to 64; must be positive.",
           "type": [
             "integer",
             "null"
@@ -3116,6 +3606,13 @@
           ],
           "format": "uint64",
           "minimum": 0.0
+        },
+        "zone": {
+          "description": "The failure domain this storage worker runs in, such as a cloud availability zone. An opaque label compared only for equality, advertised in the worker's heartbeat. A storage worker without one stops shortly after starting if another live storage worker has one, so set it on every storage worker.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false

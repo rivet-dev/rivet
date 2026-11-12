@@ -1,17 +1,28 @@
 import { actor, queue, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { Loop, type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 type WorkMessage = { amount: number };
 type ControlMessage = { type: "stop"; reason: string };
 
 export const setupRunTeardownActor = actor({
-  state: {
-    phase: "idle" as "idle" | "running" | "stopped",
-    total: 0,
-    processed: 0,
-    stopReason: null as string | null,
-    workerSessionId: null as string | null,
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS worker_status (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          phase TEXT NOT NULL,
+          total INTEGER NOT NULL,
+          processed INTEGER NOT NULL,
+          stop_reason TEXT,
+          worker_session_id TEXT
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO worker_status (id, phase, total, processed, stop_reason, worker_session_id) VALUES (1, 'idle', 0, 0, NULL, NULL)",
+      );
+    },
+  }),
   queues: {
     work: queue<WorkMessage>(),
     control: queue<ControlMessage>(),
@@ -44,7 +55,18 @@ export const setupRunTeardownActor = actor({
     );
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{
+        phase: "idle" | "running" | "stopped";
+        total: number;
+        processed: number;
+        stopReason: string | null;
+        workerSessionId: string | null;
+      }>(
+        "SELECT phase, total, processed, stop_reason AS stopReason, worker_session_id AS workerSessionId FROM worker_status WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 
@@ -58,22 +80,33 @@ async function setupWorkerSession(
     throw new Error(`worker setup failed: ${response.status}`);
   }
   const session = (await response.json()) as { sessionId: string };
-  ctx.state.workerSessionId = session.sessionId;
-  ctx.state.phase = "running";
-  ctx.state.stopReason = null;
+  await ctx.db.execute(
+    "UPDATE worker_status SET worker_session_id = ?, phase = 'running', stop_reason = NULL WHERE id = 1",
+    session.sessionId,
+  );
+}
+
+async function getWorkerSessionId(
+  ctx: WorkflowStepContextOf<typeof setupRunTeardownActor>,
+): Promise<string | null> {
+  const rows = await ctx.db.execute<{ workerSessionId: string | null }>(
+    "SELECT worker_session_id AS workerSessionId FROM worker_status WHERE id = 1",
+  );
+  return rows[0].workerSessionId;
 }
 
 async function applyWorkerMessage(
   ctx: WorkflowStepContextOf<typeof setupRunTeardownActor>,
   work: WorkMessage,
 ): Promise<void> {
+  const sessionId = await getWorkerSessionId(ctx);
   const response = await fetch("https://api.example.com/workers/process", {
     method: "POST",
     headers: {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      sessionId: ctx.state.workerSessionId,
+      sessionId,
       amount: work.amount,
     }),
   });
@@ -81,25 +114,30 @@ async function applyWorkerMessage(
     throw new Error(`worker process failed: ${response.status}`);
   }
   const result = (await response.json()) as { appliedAmount: number };
-  ctx.state.total += result.appliedAmount;
-  ctx.state.processed += 1;
+  await ctx.db.execute(
+    "UPDATE worker_status SET total = total + ?, processed = processed + 1 WHERE id = 1",
+    result.appliedAmount,
+  );
 }
 
 async function teardownWorkerSession(
   ctx: WorkflowStepContextOf<typeof setupRunTeardownActor>,
   stopReason: string,
 ): Promise<void> {
-  if (ctx.state.workerSessionId) {
+  const sessionId = await getWorkerSessionId(ctx);
+  if (sessionId) {
     const response = await fetch(
-      `https://api.example.com/workers/session/${ctx.state.workerSessionId}`,
+      `https://api.example.com/workers/session/${sessionId}`,
       { method: "DELETE" },
     );
     if (!response.ok) {
       throw new Error(`worker teardown failed: ${response.status}`);
     }
   }
-  ctx.state.phase = "stopped";
-  ctx.state.stopReason = stopReason;
+  await ctx.db.execute(
+    "UPDATE worker_status SET phase = 'stopped', stop_reason = ? WHERE id = 1",
+    stopReason,
+  );
 }
 
 export const registry = setup({ use: { setupRunTeardownActor } });

@@ -104,7 +104,7 @@
       "type": "string"
     },
     "startServices": {
-      "description": "Starts Services when RivetKit manages a local Engine. Defaults to the local-Engine decision. Set RIVET_RUN_SERVICES=0 or 1 to override.",
+      "description": "Starts Services when RivetKit manages a local Engine. Enabled by default for a managed local Engine. Set RIVET_RUN_SERVICES=0 or startServices: false to disable.",
       "type": "boolean"
     },
     "configurePool": {

@@ -1,13 +1,14 @@
 use crate::{
 	DurableStateMachine, Effects, Executor, RuntimeEvent,
 	keys::kv::{
-		MachineDataKey, MachineStateKey, MachineTimerByIdKey, MachineTimerKey, MachineTimerPrefix,
+		LegacyMachineTimerByIdKey, LegacyMachineTimerKey, LegacyMachineTimerPrefix, MachineDataKey,
+		MachineStateKey, MachineTimerByIdKey, MachineTimerKey, MachineTimerPrefix,
 	},
 };
-use anyhow::{Result, bail, ensure};
+use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use depot_worker::command::KvHandle;
-use depot_worker::command::Transaction;
+use depot_worker::command::{CommitError, Transaction};
 use rivet_data::generated::depot_durable_state_machine_v1 as wire;
 use rivet_data::generated::shared_depot_alarms_v1::{AlarmRevision, AlarmSet};
 use rivet_engine_context::EngineContext;
@@ -26,6 +27,11 @@ pub struct Runner<M: DurableStateMachine>(PhantomData<M>);
 enum BackendEvent<M: DurableStateMachine> {
 	Event(M::Event),
 	Alarm(AlarmRevision),
+}
+
+enum Attempt<T> {
+	Committed(T),
+	Replan,
 }
 
 impl<M: DurableStateMachine> Runner<M> {
@@ -62,6 +68,34 @@ impl<M: DurableStateMachine> Runner<M> {
 		executor: Arc<dyn Executor<M>>,
 		event: BackendEvent<M>,
 	) -> Result<M::State> {
+		loop {
+			let method = match &method {
+				Method::Get => Method::Get,
+				Method::GetOrCreate { state } => Method::GetOrCreate {
+					state: state.clone(),
+				},
+			};
+			let event = match &event {
+				BackendEvent::Event(event) => BackendEvent::Event(event.clone()),
+				BackendEvent::Alarm(revision) => BackendEvent::Alarm(revision.clone()),
+			};
+			match Self::process_attempt(ctx, db.clone(), method, executor.clone(), event).await? {
+				// Only an unadmitted conflict is safe to replan. A timed-out commit may still
+				// land and must retain its unknown outcome. KvHandle keeps the command's
+				// original deadline and authority across these attempts.
+				Attempt::Replan => {}
+				Attempt::Committed(state) => return Ok(state),
+			}
+		}
+	}
+
+	async fn process_attempt(
+		ctx: &EngineContext,
+		db: KvHandle,
+		method: Method<M>,
+		executor: Arc<dyn Executor<M>>,
+		event: BackendEvent<M>,
+	) -> Result<Attempt<M::State>> {
 		#[allow(clippy::disallowed_methods, reason = "metrics use real time")]
 		let lock_started = std::time::Instant::now();
 		let guard = db.lock_partition(MachineStateKey::new().range()).await?;
@@ -70,13 +104,15 @@ impl<M: DurableStateMachine> Runner<M> {
 			.observe(lock_started.elapsed().as_secs_f64());
 		let mut metrics = RunnerMetrics::new(M::DEBUG_NAME);
 
-		// Plan pass: the machine and, for an alarm, its due timers are read from a snapshot,
+		// Plan pass: the machine, legacy timers and due timers are read from a snapshot,
 		// then each transition runs in memory with the executor's `prepare` before it. The
-		// lock keeps the state from changing meanwhile; no transaction is open, so `prepare`
-		// can do I/O without holding one.
-		let (mut machine, due_timers) = {
+		// lock excludes other handlers, but an earlier commit whose outcome was unknown
+		// may still land. Validate this snapshot again in the write transaction. No pin is
+		// retained across `prepare`, so its I/O does not retain a filesystem snapshot.
+		let (mut machine, legacy_timers, due_timers) = {
 			let mut snapshot = db.snapshot().await?;
 			let machine = Machine::<M>::read(&mut snapshot, method).await?;
+			let legacy_timers = read_legacy_timers::<M>(&mut snapshot).await?;
 			let due_timers = match &event {
 				BackendEvent::Event(_) => Vec::new(),
 				BackendEvent::Alarm(_) => {
@@ -87,36 +123,85 @@ impl<M: DurableStateMachine> Runner<M> {
 						.scan(scan_bounds(&range), Some(max_events), false)
 						.await?;
 					let mut due = Vec::new();
-					for (key, _) in entries {
+					for (key, payload) in entries {
 						let key = MachineTimerKey::unpack(&key)?;
 						if key.deadline_unix_ms.0 > now.unix_ms {
 							break;
 						}
-						due.push(key);
+						due.push(DueTimer {
+							key,
+							payload: Bytes::from(payload),
+						});
 					}
+
+					// Due legacy timers fire with the rest, in deadline order. They move to the
+					// id-keyed rows in this batch's commit before any transition's writes.
+					let due_legacy = legacy_timers
+						.iter()
+						.filter(|legacy| legacy.due.key.deadline_unix_ms.0 <= now.unix_ms)
+						.map(|legacy| legacy.due.clone());
+					due.extend(due_legacy);
+					due.sort_by_key(|timer| timer.key.deadline_unix_ms.0);
+					due.truncate(max_events);
 					due
 				}
 			};
-			(machine, due_timers)
+			(machine, legacy_timers, due_timers)
 		};
+		// A delivery for a revision the machine no longer has armed raced a transition that
+		// re-armed or cleared the alarm in the same commit as the Depot alarm row, so the current
+		// revision, if any, has its own delivery. The stale one is acknowledged as done without
+		// firing anything; refusing it would only log an internal error and retry it.
+		if let BackendEvent::Alarm(revision) = &event
+			&& !machine
+				.data
+				.alarm
+				.as_ref()
+				.is_some_and(|alarm| alarm.arm_id == revision.arm_id)
+		{
+			tracing::debug!(
+				machine = M::DEBUG_NAME,
+				"durable alarm delivery is for a revision that is no longer armed; acknowledged as stale"
+			);
+			crate::metrics::STALE_ALARM_DELIVERIES_TOTAL
+				.with_label_values(&[M::DEBUG_NAME])
+				.inc();
+			drop(guard);
+			return Ok(Attempt::Committed(machine.state));
+		}
+
 		let armed_head = machine
 			.data
 			.alarm
 			.as_ref()
 			.map(|alarm| alarm.deadline_unix_ms);
+		// A volume made by a group fork inherits its parent's machine data and Depot alarm row,
+		// but its lazy fork indexed no alarm, so nothing fires until this volume arms it again.
+		// That happens in the first commit of this incarnation: the one that resets the
+		// inherited state for it. Its deadline can equal the inherited one, so the comparison
+		// below alone would skip it.
+		let rearm_inherited_alarm = machine.stored_state.is_some()
+			&& db
+				.volume_record()
+				.pending_fork_reset(M::fork_reset(&machine.state))
+				.is_some();
+		// Selected once per batch: the version every live storage worker reads. The state,
+		// the writes and the timers are encoded at it, or above it behind a tablet version
+		// mark when it cannot express them; see the write pass.
+		let selected = db.write_version(M::FAMILY)?;
 		let mut plan: Vec<Transition<M>> = Vec::new();
 
 		if !machine.has_started() {
 			let now = ctx.env().clock().observe()?;
+			let entropy = rivet_state_machine::Entropy(
+				ctx.env().rng("durable.state-machine.entropy").fork_seed(),
+			);
+			tracing::debug!(target: "rivet_state_machine", sm = M::DEBUG_NAME,
+				?now, ?entropy, "durable state machine startup");
 			let mut effects = Effects::new(now);
 			#[allow(clippy::disallowed_methods, reason = "metrics use real time")]
 			let started = std::time::Instant::now();
-			M::start(
-				&mut machine.state,
-				now,
-				rivet_state_machine::Entropy([0; 32]),
-				&mut effects,
-			);
+			M::start(&mut machine.state, now, entropy, &mut effects);
 			metrics.observe_transition("start", started.elapsed().as_secs_f64());
 
 			machine.debug_validate(ctx).await;
@@ -137,45 +222,35 @@ impl<M: DurableStateMachine> Runner<M> {
 				None
 			}
 			BackendEvent::Alarm(revision) => {
-				let armed = machine
-					.data
-					.alarm
-					.as_ref()
-					.is_some_and(|alarm| alarm.arm_id == revision.arm_id);
-				ensure!(
-					armed,
-					"durable alarm delivery is for a revision that is no longer armed"
-				);
-
-				let now = ctx.env().clock().observe()?;
 				// Timers an earlier transition of this batch armed or cancelled, by identity:
 				// the deadline it now has, or none. A due timer whose row that transition
 				// replaced or removed is skipped, as it would be if the row were read back.
 				let mut overlay: HashMap<Bytes, Option<i64>> = HashMap::new();
-				for key in due_timers {
-					match overlay.get(&key.timer) {
+				for due in due_timers {
+					match overlay.get(&due.key.timer_id) {
 						Some(Some(deadline_unix_ms))
-							if *deadline_unix_ms == key.deadline_unix_ms.0 => {}
+							if *deadline_unix_ms == due.key.deadline_unix_ms.0 => {}
 						Some(_) => continue,
 						None => {}
 					}
 
-					let timer = M::deserialize_timer(&key.timer)?;
+					let timer = M::deserialize_timer(&due.payload)?;
 					let body = RuntimeEvent::Timer(timer);
 					let preparation = executor.prepare(&machine.state, &body).await?;
+					let now = ctx.env().clock().observe()?;
 					let mut effects =
 						Self::apply(ctx, &mut machine, &mut metrics, body, preparation, now).await;
-					let transition = Transition::new(Some(key), &mut effects);
+					let transition = Transition::new(Some(due), &mut effects);
 					for effect in &transition.effects {
 						match effect {
 							RuntimeEffect::ArmTimer { timer, at_boot_ms } => {
-								let timer = Bytes::from(M::serialize_timer(timer)?);
+								let timer_id = Bytes::from(M::timer_id(timer));
 								let deadline = deadline_unix_ms(transition.clocks, *at_boot_ms);
-								overlay.insert(timer, Some(deadline));
+								overlay.insert(timer_id, Some(deadline));
 							}
 							RuntimeEffect::CancelTimer(timer) => {
-								let timer = Bytes::from(M::serialize_timer(timer)?);
-								overlay.insert(timer, None);
+								let timer_id = Bytes::from(M::timer_id(timer));
+								overlay.insert(timer_id, None);
 							}
 							RuntimeEffect::Execute(_) | RuntimeEffect::Exit => {}
 						}
@@ -193,9 +268,15 @@ impl<M: DurableStateMachine> Runner<M> {
 		// at the quorum-committed position. The two views that serve entries before their
 		// quorum, a speculative creating capture and a volume opened empty, hold no stored
 		// state, so `stored_state` is `None` there and the batch commits. An alarm always
-		// commits its acknowledgement.
-		let state_bytes = M::serialize_state(&machine.state)?;
+		// commits its acknowledgement, and legacy timers always commit their move.
+		//
+		// The comparison is by bytes at this batch's version, so the first batch on a state
+		// stored at another version rewrites it once: one extra durable write on that actor's
+		// first wake after the upgrade.
+		let (state_bytes, state_version) = state_encoding::<M>(&machine.state, selected)?;
 		let unchanged = alarm_revision.is_none()
+			&& legacy_timers.is_empty()
+			&& !rearm_inherited_alarm
 			&& !machine.data_changed
 			&& machine.stored_state.as_deref() == Some(state_bytes.as_slice())
 			&& plan.iter().all(Transition::is_read_only);
@@ -211,22 +292,47 @@ impl<M: DurableStateMachine> Runner<M> {
 				executor.execute(effect, effect_ctx);
 			}
 			drop(guard);
-			return Ok(machine.state);
+			return Ok(Attempt::Committed(machine.state));
+		}
+
+		// A batch storing the state, a write or an armed timer above the selected version,
+		// because the selected version cannot express it, first makes the tablet's mark of
+		// the family durable at that version, so no worker that cannot read it is granted
+		// the tablet. Writes follow the state's version; a cancel writes nothing it encodes.
+		let mut stored_version = state_version;
+		for transition in &plan {
+			for effect in &transition.effects {
+				if let RuntimeEffect::ArmTimer { timer, .. } = effect {
+					let (_, timer_version) = timer_encoding::<M>(timer, selected)?;
+					stored_version = stored_version.max(timer_version);
+				}
+			}
+		}
+		if stored_version > selected {
+			db.ensure_version_mark(M::FAMILY, stored_version).await?;
 		}
 
 		// Write pass: the planned transitions become one transaction, in order. A fired timer's
 		// row goes before its transition's own timer writes, so a rearm of the same timer lands
 		// after the removal.
 		let mut tx = db.begin().await?;
+		if !machine.validate_plan(&mut tx)? {
+			return Ok(Attempt::Replan);
+		}
 		let mut timers = TimerWrites::new(armed_head);
+		// Legacy timers move first, at their own deadlines, so this batch's arms, cancels and
+		// fired removals find them in the id-keyed rows.
+		for legacy in &legacy_timers {
+			timers.move_legacy(&mut tx, legacy).await?;
+		}
 		let mut executions = Vec::new();
 		let mut nondurable = Vec::new();
 		for transition in plan {
-			if let Some(key) = &transition.fired {
-				timers.remove(&mut tx, key)?;
+			if let Some(fired) = &transition.fired {
+				timers.remove(&mut tx, &fired.key)?;
 			}
 			for write in transition.writes {
-				executor.write(write, &mut tx).await?;
+				executor.write(write, &mut tx, state_version).await?;
 			}
 			// Timer deadlines are relative to the transition's own clock snapshot.
 			let clocks = transition.clocks;
@@ -234,14 +340,29 @@ impl<M: DurableStateMachine> Runner<M> {
 				match effect {
 					RuntimeEffect::Execute(effect) => executions.push(effect),
 					RuntimeEffect::ArmTimer { timer, at_boot_ms } => {
-						let timer = Bytes::from(M::serialize_timer(&timer)?);
+						let timer_id = Bytes::from(M::timer_id(&timer));
+						// A rearm of the timer that just fired keeps at least the version its fired
+						// payload was stored at. That payload is already in this tablet, so the
+						// tablet's version mark covers its version.
+						let (payload, payload_version) = timer_encoding::<M>(&timer, selected)?;
+						let payload = match &transition.fired {
+							Some(fired) if fired.key.timer_id == timer_id => {
+								M::serialize_rearmed_timer(&timer, payload_version, &fired.payload)?
+							}
+							_ => payload,
+						};
 						timers
-							.arm(&mut tx, timer, deadline_unix_ms(clocks, at_boot_ms))
+							.arm(
+								&mut tx,
+								timer_id,
+								Bytes::from(payload),
+								deadline_unix_ms(clocks, at_boot_ms),
+							)
 							.await?;
 					}
 					RuntimeEffect::CancelTimer(timer) => {
-						let timer = Bytes::from(M::serialize_timer(&timer)?);
-						timers.cancel(&mut tx, timer).await?;
+						let timer_id = Bytes::from(M::timer_id(&timer));
+						timers.cancel(&mut tx, timer_id).await?;
 					}
 					RuntimeEffect::Exit => bail!("durable state machines cannot exit"),
 				}
@@ -273,7 +394,13 @@ impl<M: DurableStateMachine> Runner<M> {
 				machine.data.alarm = next;
 				machine.data_changed = true;
 			}
-			None if next_deadline != armed_deadline => {
+			// The first command of a lazily forked incarnation arms its inherited alarm here,
+			// never a read or the fork itself. This is intentional: it keeps a fork O(1), a
+			// fork cannot wake every inherited alarm at once and overload the child's pools,
+			// and reading an actor does not start it. Two later options are not built: the
+			// parent fires its children's alarms, or a colocated import places volumes by root
+			// group and copies alarm entries on `GROUP_FORKED`.
+			None if rearm_inherited_alarm || next_deadline != armed_deadline => {
 				let next = next_deadline.map(|deadline_unix_ms| wire::Alarm {
 					arm_id: *ctx.env().rng("durable.alarm.arm").uuid_v4().as_bytes(),
 					deadline_unix_ms,
@@ -300,7 +427,11 @@ impl<M: DurableStateMachine> Runner<M> {
 
 		#[allow(clippy::disallowed_methods, reason = "metrics use real time")]
 		let commit_started = std::time::Instant::now();
-		db.commit(tx).await?;
+		match db.commit(tx).await {
+			Ok(_) => {}
+			Err(CommitError::Conflict) => return Ok(Attempt::Replan),
+			Err(error) => return Err(error.into()),
+		}
 		crate::metrics::COMMIT_SECONDS
 			.with_label_values(&[M::DEBUG_NAME])
 			.observe(commit_started.elapsed().as_secs_f64());
@@ -315,7 +446,7 @@ impl<M: DurableStateMachine> Runner<M> {
 		}
 		metrics.observe_phase(RunnerPhase::Dispatch, started.elapsed().as_secs_f64());
 
-		Ok(machine.state)
+		Ok(Attempt::Committed(machine.state))
 	}
 
 	/// Runs one transition in memory and returns its effects.
@@ -331,8 +462,12 @@ impl<M: DurableStateMachine> Runner<M> {
 		let event = Event {
 			now,
 			body,
-			entropy: rivet_state_machine::Entropy([0; 32]),
+			entropy: rivet_state_machine::Entropy(
+				ctx.env().rng("durable.state-machine.entropy").fork_seed(),
+			),
 		};
+		tracing::debug!(target: "rivet_state_machine", sm = M::DEBUG_NAME,
+			event = event_name, ?now, entropy = ?event.entropy, "durable state machine delivery");
 
 		let mut effects = Effects::new(now);
 		#[allow(clippy::disallowed_methods, reason = "metrics use real time")]
@@ -348,7 +483,7 @@ impl<M: DurableStateMachine> Runner<M> {
 /// One planned transition: the timer it fired for, if any, and the effects it emitted, with
 /// the clock snapshot its timer deadlines are relative to.
 struct Transition<M: DurableStateMachine> {
-	fired: Option<MachineTimerKey>,
+	fired: Option<DueTimer>,
 	clocks: Clocks,
 	effects: Vec<RuntimeEffect<M::Effect, M::Timer>>,
 	nondurable: Vec<M::Effect>,
@@ -363,7 +498,7 @@ impl<M: DurableStateMachine> Transition<M> {
 	}
 
 	fn new(
-		fired: Option<MachineTimerKey>,
+		fired: Option<DueTimer>,
 		effects: &mut Effects<M::Effect, M::Timer, M::WriteEffect>,
 	) -> Self {
 		Self {
@@ -374,6 +509,80 @@ impl<M: DurableStateMachine> Transition<M> {
 			writes: effects.drain_writes(),
 		}
 	}
+}
+
+/// The timer payload's encoding at the lowest version of the machine's family it can be stored
+/// at: `selected`, or the lowest newer one that expresses it when `selected` cannot. The row
+/// that holds it is named by `timer_id`, which no version change moves. Only a version's
+/// [`Inexpressible`](rivet_data::versioned::Inexpressible) refusal moves on to the next
+/// version: any other encoding error fails the batch, since skipping it would hide a converter
+/// bug behind a version mark.
+fn timer_encoding<M: DurableStateMachine>(
+	timer: &M::Timer,
+	selected: u16,
+) -> Result<(Vec<u8>, u16)> {
+	let max_write = M::FAMILY
+		.info()
+		.map(|info| info.max_write)
+		.with_context(|| format!("this binary does not know family {}", M::FAMILY))?;
+	let mut refusal = None;
+	for version in selected..=max_write {
+		match M::serialize_timer(timer, version) {
+			Ok(bytes) => return Ok((bytes, version)),
+			Err(error) if error.is::<rivet_data::versioned::Inexpressible>() => {
+				refusal = Some(error)
+			}
+			Err(error) => {
+				return Err(error.context(format!(
+					"failed to encode a timer of family {} at version {version}",
+					M::FAMILY
+				)));
+			}
+		}
+	}
+	Err(refusal.unwrap_or_else(|| {
+		anyhow::anyhow!(
+			"no version of family {} from {selected} encodes the timer",
+			M::FAMILY
+		)
+	}))
+}
+
+/// The state's encoding at the lowest version of the machine's family it can be stored at:
+/// `selected`, the version the storage read floor allows, or the lowest newer one that
+/// expresses it when `selected` cannot, such as actor state under a floor of version 1. Only a
+/// version's [`Inexpressible`](rivet_data::versioned::Inexpressible) refusal moves on to the
+/// next version: any other encoding error fails the batch, since skipping it would hide a
+/// converter bug behind a version mark and the bounded cold flush the mark costs.
+fn state_encoding<M: DurableStateMachine>(
+	state: &M::State,
+	selected: u16,
+) -> Result<(Vec<u8>, u16)> {
+	let max_write = M::FAMILY
+		.info()
+		.map(|info| info.max_write)
+		.with_context(|| format!("this binary does not know family {}", M::FAMILY))?;
+	let mut refusal = None;
+	for version in selected..=max_write {
+		match M::serialize_state(state, version) {
+			Ok(bytes) => return Ok((bytes, version)),
+			Err(error) if error.is::<rivet_data::versioned::Inexpressible>() => {
+				refusal = Some(error)
+			}
+			Err(error) => {
+				return Err(error.context(format!(
+					"failed to encode the state of family {} at version {version}",
+					M::FAMILY
+				)));
+			}
+		}
+	}
+	Err(refusal.unwrap_or_else(|| {
+		anyhow::anyhow!(
+			"no version of family {} from {selected} encodes the state",
+			M::FAMILY
+		)
+	}))
 }
 
 /// Converts a boot clock deadline to unix time, keeping the delay from the transition's clock
@@ -402,22 +611,17 @@ impl TimerWrites {
 		}
 	}
 
+	/// Arms the timer `timer_id` at `deadline_unix_ms` with `payload`, replacing the armed timer
+	/// with the same id.
 	async fn arm(
 		&mut self,
 		tx: &mut Transaction,
-		timer: Bytes,
+		timer_id: Bytes,
+		payload: Bytes,
 		deadline_unix_ms: i64,
 	) -> Result<()> {
-		self.cancel(tx, timer.clone()).await?;
-
-		let key = MachineTimerKey::new(OrderedI64(deadline_unix_ms), timer.clone());
-		tx.put(&key.pack(), &key.serialize(())?)?;
-
-		let by_id = MachineTimerByIdKey::new(timer);
-		tx.put(
-			&by_id.pack(),
-			&by_id.serialize(wire::TimerEntry { deadline_unix_ms })?,
-		)?;
+		self.cancel(tx, timer_id.clone()).await?;
+		self.put(tx, timer_id, payload, deadline_unix_ms)?;
 
 		self.new_armed_head = Some(
 			self.new_armed_head
@@ -427,24 +631,60 @@ impl TimerWrites {
 		Ok(())
 	}
 
-	async fn cancel(&mut self, tx: &mut Transaction, timer: Bytes) -> Result<()> {
-		let by_id = MachineTimerByIdKey::new(timer.clone());
+	/// Moves a legacy timer to the id-keyed rows at its own deadline. The deadline is already
+	/// counted in the durable head, so the head does not move. An armed timer with the same id
+	/// is replaced, so the move is idempotent.
+	async fn move_legacy(&mut self, tx: &mut Transaction, legacy: &LegacyTimer) -> Result<()> {
+		tx.delete(&legacy.key.pack())?;
+		tx.delete(&LegacyMachineTimerByIdKey::new(legacy.key.timer.clone()).pack())?;
 
-		let Some(entry) = tx.get(&by_id.pack()).await? else {
+		let timer_id = legacy.due.key.timer_id.clone();
+		self.cancel(tx, timer_id.clone()).await?;
+		self.put(
+			tx,
+			timer_id,
+			legacy.due.payload.clone(),
+			legacy.due.key.deadline_unix_ms.0,
+		)
+	}
+
+	fn put(
+		&mut self,
+		tx: &mut Transaction,
+		timer_id: Bytes,
+		payload: Bytes,
+		deadline_unix_ms: i64,
+	) -> Result<()> {
+		let key = MachineTimerKey::new(OrderedI64(deadline_unix_ms), timer_id.clone());
+		tx.put(&key.pack(), &key.serialize(payload)?)?;
+
+		let entry = MachineTimerByIdKey::new(timer_id);
+		tx.put(
+			&entry.pack(),
+			&entry.serialize(wire::TimerEntry { deadline_unix_ms })?,
+		)?;
+
+		Ok(())
+	}
+
+	async fn cancel(&mut self, tx: &mut Transaction, timer_id: Bytes) -> Result<()> {
+		let entry_key = MachineTimerByIdKey::new(timer_id.clone());
+
+		let Some(entry) = tx.get(&entry_key.pack()).await? else {
 			return Ok(());
 		};
 
-		let entry = by_id.deserialize(entry.into())?;
+		let entry = entry_key.deserialize(entry.into())?;
 
 		self.remove(
 			tx,
-			&MachineTimerKey::new(OrderedI64(entry.deadline_unix_ms), timer),
+			&MachineTimerKey::new(OrderedI64(entry.deadline_unix_ms), timer_id),
 		)
 	}
 
 	fn remove(&mut self, tx: &mut Transaction, key: &MachineTimerKey) -> Result<()> {
 		tx.delete(&key.pack())?;
-		tx.delete(&MachineTimerByIdKey::new(key.timer.clone()).pack())?;
+		tx.delete(&MachineTimerByIdKey::new(key.timer_id.clone()).pack())?;
 
 		let deadline_unix_ms = key.deadline_unix_ms.0;
 		if self
@@ -474,10 +714,49 @@ impl TimerWrites {
 	}
 }
 
+/// A timer due to fire: its row and the payload stored in it.
+#[derive(Clone)]
+struct DueTimer {
+	key: MachineTimerKey,
+	payload: Bytes,
+}
+
+/// A timer stored before timers had stable ids: its legacy row, and the id-keyed row it moves
+/// to. Its legacy row named it by its serialized bytes, which become its payload.
+struct LegacyTimer {
+	key: LegacyMachineTimerKey,
+	due: DueTimer,
+}
+
+/// Reads every legacy timer of the machine. A machine holds a few timers at most, and the
+/// first commit after the read moves them all, so later reads find none.
+async fn read_legacy_timers<M: DurableStateMachine>(
+	tx: &mut Transaction,
+) -> Result<Vec<LegacyTimer>> {
+	let range = LegacyMachineTimerPrefix::new().range();
+	let entries = tx.scan(scan_bounds(&range), None, false).await?;
+
+	let mut legacy_timers = Vec::with_capacity(entries.len());
+	for (key, _) in entries {
+		let key = LegacyMachineTimerKey::unpack(&key)?;
+		let timer = M::deserialize_timer(&key.timer)?;
+		let timer_id = Bytes::from(M::timer_id(&timer));
+		let due = DueTimer {
+			key: MachineTimerKey::new(OrderedI64(key.deadline_unix_ms.0), timer_id),
+			payload: key.timer.clone(),
+		};
+		legacy_timers.push(LegacyTimer { key, due });
+	}
+
+	Ok(legacy_timers)
+}
+
 struct Machine<M: DurableStateMachine> {
 	state: M::State,
 	/// The state's bytes as read, or `None` for a machine `GetOrCreate` supplied.
 	stored_state: Option<Vec<u8>>,
+	/// The filesystem snapshot from which the state, metadata and due timers were planned.
+	read_version: u64,
 	data: wire::Data,
 	data_changed: bool,
 }
@@ -486,6 +765,7 @@ impl<M: DurableStateMachine> Machine<M> {
 	/// Reads the machine, or builds the one `GetOrCreate` supplies when none is stored. Nothing
 	/// is written: the state is saved by the transition's transaction either way.
 	async fn read(tx: &mut Transaction, method: Method<M>) -> Result<Self> {
+		let read_version = tx.read_version();
 		let state_key_packed = MachineStateKey::new().pack();
 		let data_key = MachineDataKey::new();
 		let data_key_packed = data_key.pack();
@@ -497,6 +777,7 @@ impl<M: DurableStateMachine> Machine<M> {
 			Some(Machine {
 				state: M::deserialize_state(&state)?,
 				stored_state: Some(state.to_vec()),
+				read_version,
 				data: data
 					.map(|v| data_key.deserialize(v.into()))
 					.transpose()?
@@ -512,10 +793,11 @@ impl<M: DurableStateMachine> Machine<M> {
 
 		match (method, machine) {
 			(_, Some(machine)) => Ok(machine),
-			(Method::Get, None) => bail!("machine not found"),
+			(Method::Get, None) => Err(crate::errors::MachineNotFound.build()),
 			(Method::GetOrCreate { state }, None) => Ok(Machine {
 				state,
 				stored_state: None,
+				read_version,
 				data: wire::Data {
 					started_ms: None,
 					alarm: None,
@@ -527,6 +809,19 @@ impl<M: DurableStateMachine> Machine<M> {
 
 	fn has_started(&self) -> bool {
 		self.data.started_ms.is_some()
+	}
+
+	/// Reject any commit between planning and opening this transaction, even a timer change
+	/// that leaves state and metadata byte-identical. Every runner commit writes the state
+	/// key, so its read conflict also catches a commit that lands after this transaction opens,
+	/// including while commit waits for an uncertain write. No snapshot pin crosses prepare.
+	fn validate_plan(&self, tx: &mut Transaction) -> Result<bool> {
+		if tx.read_version() != self.read_version {
+			return Ok(false);
+		}
+		let key = MachineStateKey::new().pack();
+		tx.add_read_conflict_range((Bound::Included(&key[..]), Bound::Included(&key[..])))?;
+		Ok(true)
 	}
 
 	fn save(&self, tx: &mut Transaction, state_bytes: &[u8]) -> Result<()> {

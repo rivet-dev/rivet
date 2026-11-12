@@ -50,6 +50,11 @@ impl StopTransport for StopRequests {
 				"storage discovery expired"
 			);
 			Ok(StopTopology {
+				zones: snapshot
+					.storage_workers
+					.iter()
+					.filter_map(|w| w.zone.clone().map(|zone| (*w.id.as_bytes(), zone)))
+					.collect(),
 				capacities: snapshot
 					.storage_workers
 					.iter()
@@ -82,6 +87,11 @@ impl StopTransport for StopRequests {
 					let snapshot = snapshots.borrow_and_update();
 					(
 						StopTopology {
+							zones: snapshot
+								.storage_workers
+								.iter()
+								.filter_map(|w| w.zone.clone().map(|zone| (*w.id.as_bytes(), zone)))
+								.collect(),
 							capacities: snapshot
 								.storage_workers
 								.iter()

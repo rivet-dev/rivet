@@ -49,12 +49,12 @@ Send a token in the `x-rivet-token` header, inline in the path as `{actor_id}@{t
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `rvt-namespace` | `string` | No | Namespace the actor lives in. Required when `{actor}` is an actor name. |
+| `rvt-namespace` | `string` | No | Namespace the actor lives in. Required when `{actor}` is an actor name. You can send it in the `x-rivet-namespace` header instead; a request that names two different namespaces is rejected with `guard.query_invalid_params`. Without either, an actor ID resolves in your token's namespace, or in `default` for your Rivet token. |
 | `rvt-method` | `string` | No | How to resolve an actor name to an actor. `getOrCreate` requires `rvt-pool`. One of `"get"`, `"getOrCreate"`. |
 | `rvt-key` | `string` | No | Actor key. Separate multi-part keys with commas. |
 | `rvt-pool` | `string` | No | Pool to create the actor on when `rvt-method=getOrCreate`. RivetKit registers the `default` pool unless configured otherwise. |
 | `rvt-runner` | `string` | No | Deprecated alias for `rvt-pool`. |
-| `rvt-input` | `string` | No | Base64url-encoded CBOR input passed to `createState` and `onCreate` when `rvt-method=getOrCreate` creates the actor. |
+| `rvt-input` | `string` | No | Base64url-encoded CBOR input passed to `onCreate` when `rvt-method=getOrCreate` creates the actor. |
 | `rvt-region` | `string` | No | Preferred region when `rvt-method=getOrCreate` creates the actor. |
 | `rvt-crash-policy` | `string` | No | Crash policy when `rvt-method=getOrCreate` creates the actor. RivetKit defaults to `sleep`. One of `"restart"`, `"sleep"`, `"destroy"`. |
 | `rvt-skip-ready-wait` | `boolean` | No | Return as soon as the actor is resolved instead of waiting for it to be ready. |

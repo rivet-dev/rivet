@@ -30,6 +30,23 @@
 					]
 				},
 				{
+					"code": "create_pending",
+					"message": "Actor creation may still be in progress; do not retry creation automatically.",
+					"statuses": [
+						{
+							"status": 409,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
+					"code": "destroyed",
+					"message": "Actor was destroyed.",
+					"statuses": []
+				},
+				{
 					"code": "destroying",
 					"message": "Actor is destroying.",
 					"statuses": []
@@ -45,6 +62,26 @@
 					"statuses": []
 				},
 				{
+					"code": "fork_failed",
+					"message": "The actor fork failed.",
+					"statuses": []
+				},
+				{
+					"code": "fork_pending",
+					"message": "The actor fork is still in progress; read the new actor later.",
+					"statuses": []
+				},
+				{
+					"code": "fork_too_deep",
+					"message": "The actor is too many forks deep to fork again.",
+					"statuses": []
+				},
+				{
+					"code": "fork_unavailable",
+					"message": "Actor forks are unavailable until the engine upgrade finishes; retry.",
+					"statuses": []
+				},
+				{
 					"code": "input_too_large",
 					"message": "Actor input too large.",
 					"statuses": []
@@ -57,6 +94,11 @@
 				{
 					"code": "invalid_include_destroyed",
 					"message": "The actor listing include_destroyed flag must be true or false.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_input",
+					"message": "The input is not valid base64.",
 					"statuses": []
 				},
 				{
@@ -92,14 +134,12 @@
 				{
 					"code": "invalid_request",
 					"message": "Invalid hibernatable websocket connection ID",
-					"statuses": [
-						{
-							"status": 400,
-							"surfaces": [
-								"gateway"
-							]
-						}
-					]
+					"statuses": []
+				},
+				{
+					"code": "invalid_version",
+					"message": "The requested actor version cannot be created here.",
+					"statuses": []
 				},
 				{
 					"code": "js_callback_unavailable",
@@ -132,6 +172,11 @@
 					"statuses": []
 				},
 				{
+					"code": "legacy_moved_away",
+					"message": "The actor event reached an abandoned copy of an actor being moved by an engine upgrade. Clients never receive this code: the engine delivers the event to the original actor.",
+					"statuses": []
+				},
+				{
 					"code": "method_not_allowed",
 					"message": "Method not allowed",
 					"statuses": [
@@ -144,8 +189,23 @@
 					]
 				},
 				{
+					"code": "migrate_from_v2_unsupported",
+					"message": "The cluster cannot hold actors for a V2 migration yet.",
+					"statuses": []
+				},
+				{
+					"code": "migrating_from_v2",
+					"message": "The actor is moving to this cluster from V2. Retry after the hinted delay.",
+					"statuses": []
+				},
+				{
 					"code": "missing_input",
 					"message": "Actor input is missing.",
+					"statuses": []
+				},
+				{
+					"code": "moving",
+					"message": "The actor is being moved by an engine upgrade. Clients never receive this code: the gateway retries the request, then answers guard.service_unavailable with reason actor_moving and a Retry-After hint.",
 					"statuses": []
 				},
 				{
@@ -307,6 +367,11 @@
 					]
 				},
 				{
+					"code": "operation_unavailable",
+					"message": "The operation cannot be granted until every engine worker supports it. Retry after the engine upgrade finishes.",
+					"statuses": []
+				},
+				{
 					"code": "token_expired",
 					"message": "Authentication token has expired.",
 					"statuses": [
@@ -451,6 +516,11 @@
 					"statuses": []
 				},
 				{
+					"code": "response_version_unavailable",
+					"message": "The command's answer cannot be expressed at the version its caller reads; it may have been applied.",
+					"statuses": []
+				},
+				{
 					"code": "routing_unavailable",
 					"message": "No tablet maintainer route is available.",
 					"statuses": []
@@ -568,6 +638,11 @@
 					"statuses": []
 				},
 				{
+					"code": "incompatible_binary",
+					"message": "The Engine binary is incompatible with this RivetKit.",
+					"statuses": []
+				},
+				{
 					"code": "incompatible_engine",
 					"message": "An incompatible engine is already running on the endpoint.",
 					"statuses": []
@@ -590,6 +665,11 @@
 				{
 					"code": "port_occupied",
 					"message": "Engine port is occupied by a different runtime.",
+					"statuses": []
+				},
+				{
+					"code": "spawn_endpoint_conflict",
+					"message": "Engine spawn conflicts with the configured endpoint",
 					"statuses": []
 				}
 			]
@@ -621,6 +701,37 @@
 				{
 					"code": "malformed_message",
 					"message": "The message could not be decoded.",
+					"statuses": []
+				}
+			]
+		},
+		{
+			"name": "group",
+			"description": null,
+			"errors": [
+				{
+					"code": "archived",
+					"message": "The group is archived and closed for good.",
+					"statuses": []
+				},
+				{
+					"code": "exists",
+					"message": "A different group already exists with this id.",
+					"statuses": []
+				},
+				{
+					"code": "has_children",
+					"message": "The group has a child that is not archived.",
+					"statuses": []
+				},
+				{
+					"code": "lineage_too_deep",
+					"message": "The group's lineage has reached the depth cap.",
+					"statuses": []
+				},
+				{
+					"code": "not_found",
+					"message": "The group does not exist.",
 					"statuses": []
 				}
 			]
@@ -681,6 +792,18 @@
 					]
 				},
 				{
+					"code": "request_timeout",
+					"message": "Timed out waiting for the actor to become ready.",
+					"statuses": [
+						{
+							"status": 504,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
 					"code": "service_unavailable",
 					"message": "Service unavailable.",
 					"statuses": [
@@ -713,7 +836,32 @@
 		{
 			"name": "kv",
 			"description": "Low-level KV storage inside an actor.",
-			"errors": []
+			"errors": [
+				{
+					"code": "key_too_large",
+					"message": "KV key is too large.",
+					"statuses": [
+						{
+							"status": 400,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
+					"code": "value_too_large",
+					"message": "KV value is too large.",
+					"statuses": [
+						{
+							"status": 400,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				}
+			]
 		},
 		{
 			"name": "message",
@@ -750,8 +898,60 @@
 			"description": "Namespace lookup and creation.",
 			"errors": [
 				{
+					"code": "archived",
+					"message": "The namespace is archived or being archived.",
+					"statuses": []
+				},
+				{
+					"code": "backfill_pending",
+					"message": "The namespace's volumes from before volume groups are still being moved into its group; retry later.",
+					"statuses": []
+				},
+				{
+					"code": "backfill_skipped",
+					"message": "The namespace still has actors from before volume groups that its backfill could not move; destroy them first.",
+					"statuses": []
+				},
+				{
+					"code": "creating",
+					"message": "The namespace is still being created; retry.",
+					"statuses": [
+						{
+							"status": 503,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
+					"code": "failed",
+					"message": "The namespace's fork was refused and its name is retired.",
+					"statuses": []
+				},
+				{
+					"code": "has_forks",
+					"message": "A fork of this namespace is not archived; archive it first.",
+					"statuses": []
+				},
+				{
+					"code": "has_nodes",
+					"message": "A node of this namespace is connected; stop its nodes before archiving it.",
+					"statuses": []
+				},
+				{
 					"code": "invalid",
 					"message": "Namespace list limit must be between 1 and 100.",
+					"statuses": []
+				},
+				{
+					"code": "lineage_too_deep",
+					"message": "The namespace is as many forks below its root as the lineage depth cap allows.",
+					"statuses": []
+				},
+				{
+					"code": "migrating_from_v2",
+					"message": "The namespace cannot be forked while a V2 migration moves actors into it.",
 					"statuses": []
 				},
 				{
@@ -760,8 +960,23 @@
 					"statuses": []
 				},
 				{
+					"code": "not_forkable",
+					"message": "The namespace cannot be forked until its volumes from before volume groups are moved into its group.",
+					"statuses": []
+				},
+				{
 					"code": "not_found",
 					"message": "The namespace does not exist.",
+					"statuses": []
+				},
+				{
+					"code": "pending",
+					"message": "The namespace's creation or fork has not finished; retry.",
+					"statuses": []
+				},
+				{
+					"code": "protected",
+					"message": "The default namespace cannot be archived.",
 					"statuses": []
 				}
 			]
@@ -916,6 +1131,18 @@
 					]
 				},
 				{
+					"code": "message_identity_mismatch",
+					"message": "Queue message identity does not match",
+					"statuses": [
+						{
+							"status": 400,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
 					"code": "message_too_large",
 					"message": "Queue message is too large",
 					"statuses": [
@@ -945,6 +1172,11 @@
 			"name": "registry",
 			"description": null,
 			"errors": [
+				{
+					"code": "envoy_start_failed",
+					"message": "Envoy failed to connect to the engine.",
+					"statuses": []
+				},
 				{
 					"code": "shut_down",
 					"message": "Registry is shut down.",
@@ -991,12 +1223,150 @@
 			]
 		},
 		{
+			"name": "schedule",
+			"description": null,
+			"errors": [
+				{
+					"code": "interrupted",
+					"message": "Scheduled action was interrupted.",
+					"statuses": [
+						{
+							"status": 400,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
+					"code": "invalid_cron_expression",
+					"message": "Cron expression is invalid.",
+					"statuses": [
+						{
+							"status": 400,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
+					"code": "invalid_interval",
+					"message": "Schedule interval is invalid.",
+					"statuses": [
+						{
+							"status": 400,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
+					"code": "invalid_max_history",
+					"message": "Schedule history limit is invalid.",
+					"statuses": [
+						{
+							"status": 400,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
+					"code": "invalid_name",
+					"message": "Schedule name is invalid.",
+					"statuses": [
+						{
+							"status": 400,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
+					"code": "invalid_schedule_row",
+					"message": "Stored schedule data is invalid.",
+					"statuses": [
+						{
+							"status": 400,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
+					"code": "invalid_timezone",
+					"message": "Schedule timezone is invalid.",
+					"statuses": [
+						{
+							"status": 400,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
+					"code": "max_schedules_exceeded",
+					"message": "Actor schedule limit reached.",
+					"statuses": [
+						{
+							"status": 400,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				}
+			]
+		},
+		{
 			"name": "serverless_runner_pool",
 			"description": null,
 			"errors": [
 				{
 					"code": "not_found",
 					"message": "No serverless pool for this runner exists.",
+					"statuses": []
+				}
+			]
+		},
+		{
+			"name": "services",
+			"description": null,
+			"errors": [
+				{
+					"code": "binary_not_found",
+					"message": "Services binary was not found.",
+					"statuses": []
+				},
+				{
+					"code": "binary_unavailable",
+					"message": "Services binary is unavailable.",
+					"statuses": []
+				},
+				{
+					"code": "metadata_failed",
+					"message": "Services compatibility could not be verified.",
+					"statuses": []
+				},
+				{
+					"code": "protocol_mismatch",
+					"message": "Services is newer than the local Engine protocol.",
+					"statuses": []
+				},
+				{
+					"code": "readiness_failed",
+					"message": "Services did not become ready.",
+					"statuses": []
+				},
+				{
+					"code": "start_failed",
+					"message": "Services failed to start.",
 					"statuses": []
 				}
 			]
@@ -1018,6 +1388,11 @@
 				{
 					"code": "invalid_compile_options",
 					"message": "SQLite requires SQLITE_ENABLE_BATCH_ATOMIC_WRITE and SQLITE_DIRECT_OVERFLOW_READ=0. Rebuild with LIBSQLITE3_FLAGS=\"SQLITE_ENABLE_BATCH_ATOMIC_WRITE SQLITE_DIRECT_OVERFLOW_READ=0\".",
+					"statuses": []
+				},
+				{
+					"code": "manual_transaction_open",
+					"message": "SQLite manual transaction stayed open.",
 					"statuses": []
 				},
 				{
@@ -1046,8 +1421,74 @@
 					"statuses": []
 				},
 				{
+					"code": "storage_overloaded",
+					"message": "SQLite storage is overloaded.",
+					"statuses": []
+				},
+				{
+					"code": "storage_timeout",
+					"message": "SQLite storage timed out.",
+					"statuses": []
+				},
+				{
+					"code": "transaction_closed",
+					"message": "SQLite transaction coordinator is closed.",
+					"statuses": []
+				},
+				{
+					"code": "transaction_connection_lost",
+					"message": "SQLite transaction connection was lost.",
+					"statuses": []
+				},
+				{
+					"code": "transaction_expired",
+					"message": "SQLite transaction expired.",
+					"statuses": []
+				},
+				{
+					"code": "transaction_invalid_argument",
+					"message": "Invalid SQLite transaction argument.",
+					"statuses": []
+				},
+				{
+					"code": "transaction_queue_full",
+					"message": "SQLite transaction queue is full.",
+					"statuses": []
+				},
+				{
+					"code": "transaction_terminal",
+					"message": "SQLite transaction handle is terminal.",
+					"statuses": []
+				},
+				{
+					"code": "transaction_too_large",
+					"message": "SQLite transaction is too large.",
+					"statuses": []
+				},
+				{
+					"code": "transaction_unknown",
+					"message": "Unknown SQLite transaction handle.",
+					"statuses": []
+				},
+				{
 					"code": "unavailable",
 					"message": "SQLite is unavailable.",
+					"statuses": []
+				},
+				{
+					"code": "writer_busy",
+					"message": "SQLite writer is busy.",
+					"statuses": []
+				}
+			]
+		},
+		{
+			"name": "state_machine",
+			"description": null,
+			"errors": [
+				{
+					"code": "machine_not_found",
+					"message": "The state machine does not exist.",
 					"statuses": []
 				}
 			]

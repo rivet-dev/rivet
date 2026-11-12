@@ -14,6 +14,10 @@ pub enum RowKey {
 	Kv(u64, Vec<u8>),
 	Orphan(u64),
 	Chunk(u64, u64),
+	/// The range whiteout of KV file `ino` starting at this key; see [`crate::FsKvRangeWhiteout`].
+	/// It sits under object zero like the orphan rows, so every whiteout of a volume sorts
+	/// before its inodes' rows.
+	KvRangeWhiteout(u64, Vec<u8>),
 }
 
 impl RowKey {
@@ -26,6 +30,7 @@ impl RowKey {
 			Self::Xattr(ino, name) => (0, *ino, 3, 0, name),
 			Self::Kv(ino, key) => (0, *ino, 4, 0, key),
 			Self::Orphan(ino) => (0, 0, 5, *ino, &[]),
+			Self::KvRangeWhiteout(ino, start) => (0, 0, 10, *ino, start),
 			Self::Chunk(ino, chunk) => (1, *ino, 0, *chunk, &[]),
 		}
 	}
@@ -50,6 +55,8 @@ pub enum Row {
 	Dentry(FsDentry),
 	Bytes(bytes::Bytes),
 	Unit,
+	/// The exclusive end of a range whiteout, unbounded when `None`.
+	KvRangeWhiteout(Option<Vec<u8>>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -71,6 +78,10 @@ pub enum RowRange {
 		end: Option<Vec<u8>>,
 	},
 	Orphans,
+	/// The range whiteouts of one KV file.
+	KvRangeWhiteouts(u64),
+	/// Every range whiteout of the volume.
+	KvRangeWhiteoutsAll,
 }
 
 /// A pure rule can suspend on a cache miss. Its owner loads this bounded request
@@ -111,6 +122,8 @@ impl RowRange {
 				ino == i && key >= start && end.as_ref().is_none_or(|end| key < end)
 			}
 			(Self::Orphans, RowKey::Orphan(_)) => true,
+			(Self::KvRangeWhiteouts(i), RowKey::KvRangeWhiteout(j, _)) => i == j,
+			(Self::KvRangeWhiteoutsAll, RowKey::KvRangeWhiteout(..)) => true,
 			_ => false,
 		}
 	}

@@ -1,10 +1,10 @@
 ---
 title: Lifecycle
-description: "Understand Rivet Actor creation, wake, sleep, connection, state-change, migration, and destruction hooks across an instance's lifecycle."
+description: "Understand Rivet Actor creation, wake, sleep, connection, migration, and destruction hooks across an instance's lifecycle."
 skill: true
 ---
 
-Actors follow a well-defined lifecycle with hooks at each stage. Understanding these hooks is essential for proper initialization, state management, and cleanup.
+Actors follow a well-defined lifecycle with hooks at each stage. Understanding these hooks is essential for proper initialization, data management, and cleanup.
 
 ## Lifecycle
 
@@ -28,33 +28,40 @@ Loading ──Start──▶ Ready ──spawn driver──▶ Started
 **On Create** (runs once per actor)
 
 1. `onMigrate`
-2. `createState`
-3. `onCreate`
-4. `createVars`
-5. `onWake`
-6. `run` (background, does not block)
+2. `onCreate`
+3. `createVars`
+4. `onWake`, which starts any [background tasks](#background-tasks)
+5. `run` workflow (background, does not block)
 
 **On Destroy**
 
-1. `onDestroy`
+1. `c.abortSignal` fires
+2. `onDestroy`
 
 **On Wake** (after sleep, restart, or crash)
 
 1. `onMigrate`
 2. `createVars`
-3. `onWake`
-4. `run` (background, does not block)
+3. `onWake`, which starts any [background tasks](#background-tasks)
+4. `run` workflow (background, does not block)
+
+**On Fork** (first start of a [fork](/actors/docs/forking))
+
+1. `onMigrate`
+2. `createVars`
+3. `onFork`
+4. `onWake`, which starts any [background tasks](#background-tasks)
+5. `run` workflow (background, does not block)
 
 **On Sleep** (after idle period)
 
-1. Wait for `run` to complete (with timeout)
-2. `onSleep`
+1. `c.abortSignal` fires, so the `run` workflow and background tasks can stop
+2. `onSleep`, while the `run` workflow finishes (with timeout)
 
 **On Connect** (per client)
 
 1. `onBeforeConnect`
-2. `createConnState`
-3. `onConnect`
+2. `onConnect`
 
 **On Disconnect** (per client)
 
@@ -63,11 +70,6 @@ Loading ──Start──▶ Ready ──spawn driver──▶ Started
 **On Inbound Action Invoke** (per action call)
 
 1. Action handler executes
-
-**On Inbound Queue Publish** (per `handle.send(...)`)
-
-1. `queues.<name>.canPublish` (if defined)
-2. Queue message is enqueued
 
 **On Event Subscription Request** (per subscribe request)
 
@@ -78,47 +80,39 @@ Loading ──Start──▶ Ready ──spawn driver──▶ Started
 
 Actor lifecycle hooks are defined as functions in the actor configuration.
 
-### `state`
-
-The `state` constant defines the initial state of the actor. See [state documentation](/actors/docs/state) for more information.
-
-<CodeSnippet file="examples/docs/actors-lifecycle/state.ts" />
-
 ### `onMigrate`
 
-The `onMigrate` hook runs on every actor start, before `createState`, `onCreate`, `createVars`, and `onWake`. Can be async. It runs early so that database migrations are applied before any other lifecycle hook accesses the database. The second parameter is `true` when the actor is being created for the first time.
+The `onMigrate` hook runs on every actor start, before `onCreate`, `createVars`, and `onWake`. Can be async. It runs early so that database migrations are applied before any other lifecycle hook accesses the database. The second parameter is `true` when the actor is being created for the first time.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/on-migrate.ts" />
 
-### `createState`
-
-The `createState` function dynamically initializes state based on input. Called only once when the actor is first created. Can be async. See [state documentation](/actors/docs/state) for more information.
-
-<CodeSnippet file="examples/docs/actors-lifecycle/create-state.ts" />
-
 ### `vars`
 
-The `vars` constant defines ephemeral variables for the actor. These variables are not persisted and are useful for storing runtime-only data. The value for `vars` must be clonable via `structuredClone`. See [ephemeral variables documentation](/actors/docs/state#ephemeral-variables) for more information.
+The `vars` constant defines ephemeral variables for the actor. These variables are not persisted and are useful for storing runtime-only data. The value for `vars` must be clonable via `structuredClone`. See [ephemeral variables documentation](/actors/docs/state#ephemeral-state) for more information.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/vars.ts" />
 
 ### `createVars`
 
-The `createVars` function dynamically initializes ephemeral variables. Can be async. Use this when you need to initialize values at runtime. See [ephemeral variables documentation](/actors/docs/state#ephemeral-variables) for more information.
+The `createVars` function dynamically initializes ephemeral variables. Can be async. Use this when you need to initialize values at runtime. See [ephemeral variables documentation](/actors/docs/state#ephemeral-state) for more information.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/create-vars.ts" />
 
 ### `onCreate`
 
-The `onCreate` hook is called when the actor is first created. Can be async. Use this hook for initialization logic that doesn't affect the initial state.
+The `onCreate` hook is called when the actor is first created and receives the actor's input. Can be async. It runs only once per actor, so use it for one-time setup such as seeding [SQLite](/actors/docs/sqlite) from input.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/on-create.ts" />
 
+### `onFork`
+
+The `onFork` hook runs once, at the first start of an actor made by [forking](/actors/docs/forking) another actor, in place of `onCreate`. Can be async. It receives the source actor's ID and key, the time of the fork, and the caller's fork input, and has 5 seconds to finish. Use it to cancel schedules the fork copied and to drop resources that belong to the source. See [onFork](/actors/docs/forking#onfork).
+
 ### `onDestroy`
 
-The `onDestroy` hook is called when the actor is being permanently destroyed. Can be async. Use this for final cleanup operations like closing external connections, releasing resources, or performing any last-minute state persistence.
+The `onDestroy` hook is called when the actor is being permanently destroyed. Can be async. Use this for final cleanup operations like closing external connections, releasing resources, or writing any final data to the database.
 
-The actor is still fully functional when `onDestroy` runs. You can access the database, broadcast events, call `waitUntil`, send queue messages, and use `schedule.after`. State mutations made during `onDestroy` are persisted before the actor is torn down.
+The actor is still fully functional when `onDestroy` runs. You can access the database, broadcast events, call `waitUntil`, and use `schedule.after`. Database writes made during `onDestroy` complete before the actor is torn down.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/on-destroy.ts" />
 
@@ -128,7 +122,7 @@ This hook is called any time the actor is started (e.g. after restarting, upgrad
 
 This is called after the actor has been initialized but before any connections are accepted.
 
-Use this hook to set up any resources or start any background tasks, such as `setInterval`.
+Use this hook to set up any resources or start any background tasks, such as `setInterval`. See [Background tasks](#background-tasks) for long-running loops.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/on-wake.ts" />
 
@@ -136,7 +130,7 @@ Use this hook to set up any resources or start any background tasks, such as `se
 
 This hook is called when the actor is going to sleep. Can be async. Use this to clean up resources, close connections, or perform any shutdown operations.
 
-The actor is still fully functional when `onSleep` runs. You can access the database, broadcast events, call `waitUntil`, send queue messages, and use `schedule.after`. State mutations made during `onSleep` are persisted before the actor finishes sleeping.
+The actor is still fully functional when `onSleep` runs. You can access the database, broadcast events, call `waitUntil`, and use `schedule.after`. Database writes made during `onSleep` complete before the actor finishes sleeping.
 
 This hook may not always be called in situations like crashes or forced terminations. Don't rely on it for critical cleanup operations.
 
@@ -144,48 +138,29 @@ This hook may not always be called in situations like crashes or forced terminat
 
 ### `run`
 
-The `run` hook is called after the actor starts and runs in the background without blocking actor startup. This is ideal for long-running background tasks like:
+Set `run` to a [workflow](/workflows/docs) to give the actor a durable entry point. The workflow starts after `onWake` and runs in the background without blocking startup. Each completed step is recorded, so after a sleep, crash, or upgrade the workflow resumes where it left off instead of starting over.
 
-- Reading from message queues in a loop
-- Tick loops for periodic work
-- Custom workflow logic
-- Background processing
-
-The handler exposes `c.aborted` for loop checks and `c.abortSignal` for canceling operations when the actor is stopping. You should always check or listen for shutdown to exit gracefully.
-
-**Important behavior:**
-- The actor may go to sleep at any time during the `run` handler. Wrap work that must keep the actor awake with `c.keepAwake(promise)` to block idle sleep until the promise settles.
-- If the `run` handler exits (returns), the actor follows its normal idle sleep timeout once it becomes idle
-- If the `run` handler throws an error, the actor logs the error and then follows its normal idle sleep timeout once it becomes idle
-- On shutdown, `c.abortSignal` fires so the `run` handler can exit within the graceful shutdown window.
-
-<CodeSnippet file="examples/docs/actors-lifecycle/run-tick-loop.ts" />
-
-<CodeSnippet file="examples/docs/actors-lifecycle/run-queue-consumer.ts" />
-
-Finite `run` handlers leave the actor alive after they finish. If you want a one shot task to clean itself up when it is done, call `c.destroy()` before returning.
+A workflow that returns leaves the actor alive, and the actor sleeps once it is idle. To clean up a one-shot job when it is done, destroy the actor from the last step:
 
 <CodeSnippet file="examples/docs/actors-lifecycle/run-one-shot.ts" />
 
-### `onStateChange`
+#### Background tasks
 
-Called whenever the actor's state changes. Cannot be async. This is often used to broadcast state updates.
+For long-running work that does not need to be durable, such as a tick loop, start a task from `onWake`:
 
-Do not mutate `c.state` inside `onStateChange`; re-entrant state mutation is rejected.
+1. `onWake` starts the task and stores its promise in `c.vars`. `onWake` runs on every start, so the task restarts after a sleep, crash, or upgrade.
+2. The task checks `c.aborted` and passes `c.abortSignal` to anything it waits on, so it exits when the actor starts shutting down.
+3. `onSleep` waits for the task to exit. `c.abortSignal` fires before `onSleep` runs, so the task is already stopping.
 
-<CodeSnippet file="examples/docs/actors-lifecycle/on-state-change.ts" />
+<CodeSnippet file="examples/docs/actors-lifecycle/run-tick-loop.ts" />
 
-### `createConnState` and `connState`
-
-There are two ways to define the initial state for connections:
-1. `connState`: Define a constant object that will be used as the initial state for all connections
-2. `createConnState`: A function that dynamically creates initial connection state based on connection parameters. Can be async.
+A background task does not keep the actor awake. Once the actor has no connections or requests, it sleeps after `sleepTimeout`, the task exits, and `onWake` starts it again on the next wake. Wrap work that must finish in [`c.keepAwake(promise)`](#keeping-the-actor-awake). Wrapping the whole loop keeps the actor awake until it is destroyed, so only do that for an actor that must never sleep.
 
 ### `onBeforeConnect`
 
 The `onBeforeConnect` hook is called whenever a new client connects to the actor. Can be async. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
 
-The `onBeforeConnect` hook does NOT return connection state - it's used solely for validation.
+The `onBeforeConnect` hook is used solely for validation. To keep per-connection data, store it in `c.vars` keyed by `conn.id` in `onConnect` and remove it in `onDisconnect`.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/on-before-connect.ts" />
 
@@ -193,24 +168,21 @@ Connections cannot interact with the actor until this method completes successfu
 
 ### `onConnect`
 
-Executed after the client has successfully connected. Can be async. Receives the connection object as a second parameter.
+Executed after the client has successfully connected. Can be async. Receives the connection object as a second parameter, whose `conn.params` holds the parameters the client passed.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/on-connect.ts" />
 
 Messages will not be processed for this actor until this hook succeeds. Errors thrown from this hook will cause the client to disconnect.
 
-### `canPublish` and `canSubscribe`
+### `canSubscribe`
 
-Use schema-level hooks to authorize queue publishes and event subscriptions. Both hooks can be async and must return booleans:
-
-- `queues.<name>.canPublish` runs before inbound queue publishes.
-- `events.<name>.canSubscribe` runs before inbound event subscription requests.
+Use the schema-level `events.<name>.canSubscribe` hook to authorize event subscriptions. It runs before each inbound subscription request, can be async, and must return a boolean.
 
 For actions, enforce authorization directly inside each action handler.
 
-<CodeSnippet file="examples/docs/actors-lifecycle/can-publish-subscribe.ts" />
+<CodeSnippet file="examples/docs/actors-lifecycle/can-subscribe.ts" />
 
-Use deny-by-default rules for each hook and return `false` unless explicitly allowed. See [Permissions](/actors/docs/permissions) for full guidance.
+Use deny-by-default rules and return `false` unless explicitly allowed. See [Permissions](/actors/docs/permissions) for full guidance.
 
 ### `onDisconnect`
 
@@ -252,10 +224,12 @@ An actor is considered idle and eligible to sleep when **all** of the following 
 
 - No active HTTP requests
 - No active connections (unless they are hibernatable WebSockets)
-- No active `run` handler (unless it is waiting on a queue)
+- No active `run` workflow
 - No outstanding `c.keepAwake(promise)` promises
 - No pending disconnect callbacks
 - No async `onWebSocket` event handlers (eg `open`, `message`, `close`) still running
+
+[Background tasks](#background-tasks) started from `onWake` do not count as activity, so the actor can sleep while they run. Wrap work that must finish in `c.keepAwake(promise)`.
 
 Once the actor becomes idle, the sleep timer starts. After `sleepTimeout` (default 30 seconds) of continuous inactivity, the actor begins the sleep process. Any activity resets the timer.
 
@@ -308,10 +282,6 @@ RivetKit gives you two primitives for holding the actor awake across background 
 
 <CodeSnippet file="examples/docs/actors-lifecycle/keep-awake.ts" />
 
-<Note>
-`setPreventSleep(enabled)` is deprecated and now a no-op. Wrap the work you want to keep alive with `c.keepAwake(promise)` instead.
-</Note>
-
 ### On Sleep Hook
 
 The [`onSleep`](#onsleep) hook runs during shutdown for cleanup like clearing intervals or closing connections. It is best-effort and will not run if the actor crashes.
@@ -353,7 +323,7 @@ The entire window is bounded by `sleepGracePeriod` on both sleep and destroy. De
 
 #### Graceful shutdown window
 
-During steps 1 and 2, the actor is still fully functional. Database access, `broadcast`, `waitUntil`, `queue.send`, and `schedule.after` all work. State mutations are persisted at step 3. Actions invoked by pre-existing connections or lifecycle hooks continue to execute normally.
+During steps 1 and 2, the actor is still fully functional. Database access, `broadcast`, `waitUntil`, and `schedule.after` all work. Actions invoked by pre-existing connections or lifecycle hooks continue to execute normally.
 
 New connections and raw WebSocket upgrades are rejected as soon as the shutdown sequence begins. New requests that arrive during shutdown are held until the actor wakes up again. The caller does not need to retry.
 
@@ -370,10 +340,8 @@ The `options` object allows you to configure various timeouts and behaviors for 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `createVarsTimeout` | 5000ms | Timeout for `createVars` function |
-| `createConnStateTimeout` | 5000ms | Timeout for `createConnState` function |
 | `onConnectTimeout` | 5000ms | Timeout for `onConnect` hook |
 | `sleepGracePeriod` | 15000ms | Total graceful shutdown window for both sleep and destroy |
-| `stateSaveInterval` | 1000ms | Interval for persisting state |
 | `actionTimeout` | 60000ms | Timeout for action execution |
 | `connectionLivenessTimeout` | 2500ms | Timeout for connection liveness check |
 | `connectionLivenessInterval` | 5000ms | Interval for connection liveness check |
@@ -386,7 +354,7 @@ The `options` object allows you to configure various timeouts and behaviors for 
 
 The `c.abortSignal` provides an `AbortSignal` that fires when the actor is stopping, and `c.aborted` is the shorthand boolean for loop checks. Use these to cancel ongoing operations when the actor sleeps or is destroyed.
 
-The abort signal fires at the very start of the [shutdown sequence](#shutdown-sequence), before `onSleep` or `onDestroy` runs. This means `c.aborted` is already `true` inside those lifecycle hooks. The signal fires early so that the `run` handler can exit promptly, but the actor remains fully functional throughout the graceful shutdown window.
+The abort signal fires at the very start of the [shutdown sequence](#shutdown-sequence), before `onSleep` or `onDestroy` runs. This means `c.aborted` is already `true` inside those lifecycle hooks. The signal fires early so that the `run` workflow and [background tasks](#background-tasks) can exit promptly, but the actor remains fully functional throughout the graceful shutdown window.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/abort-signal.ts" />
 

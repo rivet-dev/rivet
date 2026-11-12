@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+	collections::BTreeMap,
+	path::{Path, PathBuf},
+};
 
 use anyhow::{Result, bail};
 use clap::Parser;
@@ -11,6 +14,7 @@ use crate::{
 		CloudClient, create_or_update_pool, create_registry_token, dashboard_endpoint,
 		ensure_namespace, pool_exists, registry_endpoint, revoke_api_token, wait_for_pool,
 	},
+	cluster_env::parse_set_args,
 	credentials::store_cloud_token,
 	target::{CloudArgs, ClusterTarget, ProjectTarget, Target},
 	util::{
@@ -45,9 +49,16 @@ pub struct Opts {
 	/// Docker build context.
 	#[arg(long, default_value = ".")]
 	build_context: PathBuf,
-	/// Environment override, repeatable as KEY=VAL.
+	/// Environment override, repeatable as KEY=VAL. On a cluster, sets these
+	/// runner pool variables and keeps the pool's others.
 	#[arg(long = "env")]
 	env_vars: Vec<String>,
+	/// A runner pool variable taking a cluster secret's latest version,
+	/// repeatable as KEY (a secret named like the variable) or
+	/// KEY=SECRET_NAME, and kept with the pool's others. Clusters only; set
+	/// the secret first with `rivet cluster secret set`.
+	#[arg(long = "secret", value_name = "KEY[=SECRET_NAME]")]
+	secrets: Vec<String>,
 	/// Skip prompts.
 	#[arg(long)]
 	yes: bool,
@@ -127,9 +138,11 @@ impl Opts {
 					&[
 						("--region", self.region.is_some()),
 						("--build", self.build.is_some()),
+						("--secret", !self.secrets.is_empty()),
 					],
 				)?;
-				self.deploy_project(cloud, auth, project, resources, runner_config)
+				let env = parse_env_vars(&self.env_vars)?;
+				self.deploy_project(cloud, auth, project, env, resources, runner_config)
 					.await
 			}
 			Target::Cluster(ClusterTarget { cluster, .. }) => {
@@ -137,7 +150,6 @@ impl Opts {
 					"cluster",
 					&[
 						("--namespace", self.namespace.is_some()),
-						("--env", !self.env_vars.is_empty()),
 						("--cpu", self.cpu.is_some()),
 						("--memory", self.memory.is_some()),
 						("--min-scale", self.min_scale.is_some()),
@@ -158,6 +170,7 @@ impl Opts {
 						("--reuse-image", self.reuse_image),
 					],
 				)?;
+				let env = parse_set_args(&self.env_vars, &self.secrets)?;
 				cluster::deploy(
 					&cloud,
 					cluster::ClusterDeploy {
@@ -169,6 +182,7 @@ impl Opts {
 						build_context: self.build_context,
 						image: self.image,
 						tag: self.tag,
+						env,
 					},
 				)
 				.await
@@ -184,6 +198,7 @@ impl Opts {
 			org: organization,
 			project,
 		}: ProjectTarget,
+		env_map: BTreeMap<String, String>,
 		resources: Option<Value>,
 		runner_config: Option<Value>,
 	) -> Result<()> {
@@ -304,7 +319,6 @@ impl Opts {
 				"tag": tag,
 			});
 		}
-		let env_map = parse_env_vars(&self.env_vars)?;
 		if !env_map.is_empty() {
 			pool_body["environment"] = serde_json::to_value(env_map)?;
 		}

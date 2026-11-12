@@ -81,6 +81,11 @@ pub mod ups {
 		(16, START_NOTICE, "start-notice"),
 		(17, DATABASE_PREFETCH, "database-prefetch"),
 		(18, JWT_ROTATION, "jwt-rotation"),
+		(19, V2_MIGRATOR, "v2-migrator"),
+		(20, REPLICA_READINESS, "replica-readiness"),
+		// 40: reserved for the filesystem API.
+		// 41: reserved for volume limits.
+		(43, NAMESPACE, "namespace"),
 	}
 }
 
@@ -119,6 +124,11 @@ pub mod slatedb {
 		(35, FS_RECORD, "fs-record"),
 		(36, FS_SPLIT_SNAPSHOT, "fs-split-snapshot"),
 		(37, FS_REPAIR_AUDIT, "fs-repair-audit"),
+		// 60: reserved for volume usage rows.
+		// 61-62: reserved for claim rows and claim usage rows.
+		(63, FS_FORKPIN, "fs-forkpin"),
+		(64, FS_KV_RANGE_WHITEOUT, "fs-kv-range-whiteout"),
+		(65, FS_DELETED_INCARNATION, "fs-deleted-incarnation"),
 	}
 }
 
@@ -147,14 +157,46 @@ pub mod partition {
 		(32, ACTOR_STATE, "actor-state"),
 		(33, MAINTAINER_LOG, "maintainer-log"),
 		(34, ACTIVE_ENVOY_INDEX, "active-envoy-index"),
-		(35, MACHINE_TIMER, "machine-timer"),
-		(36, MACHINE_TIMER_BY_ID, "machine-timer-by-id"),
+		(35, MACHINE_TIMER_LEGACY, "machine-timer-legacy"),
+		(36, MACHINE_TIMER_BY_ID_LEGACY, "machine-timer-by-id-legacy"),
 		(37, ENVOY_STATE, "envoy-state"),
 		(38, DESTROYED_ACTOR, "destroyed-actor"),
 		(39, NAMESPACE_CATALOG, "namespace-catalog"),
 		(40, NAMESPACE, "namespace"),
 		(41, POOL_CONNECTION, "pool-connection"),
 		(42, POOL_HEARTBEAT, "pool-heartbeat"),
+		(43, MACHINE_TIMER, "machine-timer"),
+		(44, MACHINE_TIMER_BY_ID, "machine-timer-by-id"),
+		(45, V2_MIGRATOR, "v2-migrator"),
+		(46, V2_MIGRATOR_PASS, "v2-migrator-pass"),
+		(47, V2_MIGRATOR_IN_FLIGHT, "v2-migrator-in-flight"),
+		(48, V2_MIGRATOR_FENCE, "v2-migrator-fence"),
+		(49, ENVOY_VERSION, "envoy-version"),
+		(50, ENVOY_NAME_VERSION, "envoy-name-version"),
+		(51, ENVOY_POOL_VERSION, "envoy-pool-version"),
+		(52, ACL_TOKEN, "acl-token"),
+		(53, ACL_RULE, "acl-rule"),
+		(54, ACL_POLICY, "acl-policy"),
+		(55, ACL_ROLE, "acl-role"),
+		// 100-105: reserved for the filesystem API.
+		(106, CLAIM_LOG, "claim-log"),
+		// Retired: the namespace group key's tag before that key became `[NAMESPACE, name]`. It
+		// was never released; the value stays reserved so no other family reuses it.
+		(107, RETIRED_GROUP, "retired-group"),
+		(108, GROUPED, "grouped"),
+		(109, GROUP_RECORD, "group-record"),
+		(110, FORK_CHILD, "fork-child"),
+		(111, EVENT, "event"),
+		(112, EVENT_SEQ, "event-seq"),
+		(113, EVENT_ROW, "event-row"),
+		(114, GROUP_VOLUME, "group-volume"),
+		(115, FORK_OPERATION, "fork-operation"),
+		(116, NAMESPACE_VOLUME, "namespace-volume"),
+		(117, NAMESPACE_STATE, "namespace-state"),
+		(118, NAMESPACE_INDEX, "namespace-index"),
+		// Legacy: an actor name a legacy fallback read found, on a namespace volume. Removed in
+		// 3.1 with the backfill.
+		(119, LEGACY_BACKFILL_NAME, "legacy-backfill-name"),
 	}
 }
 
@@ -186,10 +228,38 @@ pub mod depot_command {
 		(28, PEGBOARD_INDEX_LIST_ACTIVE_ENVOYS, "pegboard.index.list-active-envoys"),
 		(30, PEGBOARD_INDEX_LIST_ACTIVE_ENVOY_STATES, "pegboard.index.list-active-envoy-states"),
 		(31, PEGBOARD_INDEX_READ_DESTROYED_ACTOR, "pegboard.index.read-destroyed-actor"),
-		(32, PEGBOARD_NAMESPACE_CREATE, "pegboard.namespace.create"),
-		(33, PEGBOARD_NAMESPACE_READ, "pegboard.namespace.read"),
-		(34, PEGBOARD_NAMESPACE_LIST, "pegboard.namespace.list"),
+		(32, LEGACY_PEGBOARD_NAMESPACE_CREATE, "pegboard.namespace.create"),
+		(33, LEGACY_PEGBOARD_NAMESPACE_READ, "pegboard.namespace.read"),
+		(34, LEGACY_PEGBOARD_NAMESPACE_LIST, "pegboard.namespace.list"),
 		(35, PEGBOARD_POOL, "pegboard.pool"),
 		(36, PEGBOARD_POOL_LIST, "pegboard.pool-list"),
+		(37, PEGBOARD_ACTOR_MIGRATE_FROM_V2_BEGIN, "pegboard.actor.migrate-from-v2-begin"),
+		(38, PEGBOARD_V2_MIGRATOR_STATE_WRITE, "pegboard.v2-migrator.state-write"),
+		(39, PEGBOARD_V2_MIGRATOR_STATE_LOAD, "pegboard.v2-migrator.state-load"),
+		(40, PEGBOARD_V2_MIGRATOR_STATE_READ, "pegboard.v2-migrator.state-read"),
+		// 100-106: reserved for the filesystem API.
+		(107, GROUP_READ, "depot.group.read"),
+		(108, EVENTS_READ, "depot.events.read"),
+		(109, GROUP_CREATE, "depot.group.create"),
+		(110, GROUP_FORK_DRAW, "depot.group.fork-draw"),
+		(111, GROUP_CHILD_CREATE, "depot.group.child-create"),
+		(112, GROUP_ARCHIVE, "depot.group.archive"),
+		(113, GROUP_CHILD_ARCHIVED, "depot.group.child-archived"),
+		(114, EVENT_POST, "depot.events.post"),
+		(115, PEGBOARD_NAMESPACE_ARCHIVE, "pegboard.namespace.archive"),
+		(116, PEGBOARD_NAMESPACE_STEP, "pegboard.namespace.step"),
+		(117, PEGBOARD_NAMESPACE_ALARM, "pegboard.namespace.alarm"),
+		(118, PEGBOARD_NAMESPACE_STATE_CREATE, "pegboard.namespace.state-create"),
+		(119, PEGBOARD_NAMESPACE_STATE_READ, "pegboard.namespace.state-read"),
+		(120, PEGBOARD_NAMESPACE_INDEX_PUT, "pegboard.namespace.index-put"),
+		(121, PEGBOARD_NAMESPACE_INDEX_LIST, "pegboard.namespace.index-list"),
+		(122, LEGACY_PEGBOARD_NAMESPACE_MOVE, "pegboard.namespace.legacy-move"),
+		(123, LEGACY_PEGBOARD_ACTOR_ALARM_READ, "pegboard.actor.legacy-alarm-read"),
+		// Legacy: records an actor name a legacy fallback read found, on a namespace volume.
+		// Removed in 3.1 with the backfill.
+		(124, LEGACY_PEGBOARD_BACKFILL_NAME_RECORD, "pegboard.namespace.legacy-backfill-name-record"),
+		// Legacy: pages the actor names recorded on a namespace volume for the backfill. Removed in
+		// 3.1 with the backfill.
+		(125, LEGACY_PEGBOARD_BACKFILL_NAME_LIST, "pegboard.namespace.legacy-backfill-name-list"),
 	}
 }

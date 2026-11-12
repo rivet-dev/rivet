@@ -238,12 +238,40 @@ pub fn unlink(
 	}))
 }
 
+/// Options of [`rename_with`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RenameFlags {
+	/// Fail with [`Error::Exists`] instead of replacing an existing target, as
+	/// `RENAME_NOREPLACE` does.
+	pub no_replace: bool,
+}
+
 pub fn rename(
 	store: &impl RowStore,
 	from: u64,
 	from_name: Vec<u8>,
 	to: u64,
 	to_name: Vec<u8>,
+	now: i64,
+) -> Result<Option<FsOp>> {
+	rename_with(
+		store,
+		from,
+		from_name,
+		to,
+		to_name,
+		RenameFlags::default(),
+		now,
+	)
+}
+
+pub fn rename_with(
+	store: &impl RowStore,
+	from: u64,
+	from_name: Vec<u8>,
+	to: u64,
+	to_name: Vec<u8>,
+	flags: RenameFlags,
 	now: i64,
 ) -> Result<Option<FsOp>> {
 	name(&from_name)?;
@@ -257,6 +285,9 @@ pub fn rename(
 		Err(Error::NotFound) => None,
 		Err(error) => return Err(error),
 	};
+	if flags.no_replace && replacement.is_some() {
+		return Err(Error::Exists);
+	}
 	if replacement == Some(source.child) {
 		return Ok(None);
 	}
@@ -611,14 +642,24 @@ pub fn resolve(
 	follow_final: bool,
 	as_of: Option<u64>,
 ) -> Result<u64> {
+	resolve_within(store, ROOT_INO, start, path, follow_final, as_of)
+}
+
+/// [`resolve`] confined to the subtree under the directory `root`: an absolute path or link
+/// starts at `root`, and `..` at `root` stays there, so resolution never walks above it. The
+/// caller checks that `start` lies inside the subtree.
+pub fn resolve_within(
+	store: &impl RowStore,
+	root: u64,
+	start: u64,
+	path: &[u8],
+	follow_final: bool,
+	as_of: Option<u64>,
+) -> Result<u64> {
 	if path.is_empty() || path.contains(&0) {
 		return Err(Error::Invalid);
 	}
-	let mut current = if path.starts_with(b"/") {
-		ROOT_INO
-	} else {
-		start
-	};
+	let mut current = if path.starts_with(b"/") { root } else { start };
 	let mut parts: VecDeque<Vec<u8>> = path
 		.split(|b| *b == b'/')
 		.filter(|v| !v.is_empty())
@@ -627,7 +668,18 @@ pub fn resolve(
 	let mut links = 0;
 	let mut require_directory = path.ends_with(b"/");
 	while let Some(part) = parts.pop_front() {
-		let found = lookup(store, current, &part, as_of)?;
+		let found = match current == root && part == b".." {
+			true => {
+				if inode(store, root, as_of)?.kind != FsKind::Dir {
+					return Err(Error::NotDirectory);
+				}
+				FsDentry {
+					child: root,
+					kind: FsKind::Dir,
+				}
+			}
+			false => lookup(store, current, &part, as_of)?,
+		};
 		if found.kind == FsKind::Symlink && (!parts.is_empty() || follow_final || require_directory)
 		{
 			links += 1;
@@ -642,7 +694,7 @@ pub fn resolve(
 				require_directory = true;
 			}
 			if target.starts_with(b"/") {
-				current = ROOT_INO;
+				current = root;
 			}
 			for part in target.split(|b| *b == b'/').filter(|v| !v.is_empty()).rev() {
 				parts.push_front(part.to_vec());

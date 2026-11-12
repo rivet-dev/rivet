@@ -2,22 +2,50 @@
 
 use rivet_topology::worker::WorkerId;
 
-rivet_keys::ups_subject! {
-	pub VolumeLogSubject(worker_id: WorkerId) => [DEPOT, VOLUME_LOG, {worker_id}];
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::UpsSubject)]
+#[ups(subject = [DEPOT, VOLUME_LOG, worker_id])]
+pub struct VolumeLogSubject {
+	worker_id: WorkerId,
+	#[subject]
+	subject: Vec<u8>,
 }
 
-rivet_keys::ups_subject! {
-	pub VolumeCommandSubject(worker_id: WorkerId) => [DEPOT, VOLUME_COMMAND, {worker_id}];
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::UpsSubject)]
+#[ups(subject = [DEPOT, VOLUME_COMMAND, worker_id])]
+pub struct VolumeCommandSubject {
+	worker_id: WorkerId,
+	#[subject]
+	subject: Vec<u8>,
 }
 
-rivet_keys::ups_subject! {
-	pub TabletCoordinatorSubject(worker_id: WorkerId) => [DEPOT, COORDINATOR, {worker_id}];
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::UpsSubject)]
+#[ups(subject = [DEPOT, COORDINATOR, worker_id])]
+pub struct TabletCoordinatorSubject {
+	worker_id: WorkerId,
+	#[subject]
+	subject: Vec<u8>,
 }
 
-rivet_keys::ups_subject! {
-	pub KvCommandSubject(worker_id: WorkerId) => [DEPOT, KV_COMMAND, {worker_id}];
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::UpsSubject)]
+#[ups(subject = [DEPOT, KV_COMMAND, worker_id])]
+pub struct KvCommandSubject {
+	worker_id: WorkerId,
+	#[subject]
+	subject: Vec<u8>,
 }
 
-rivet_keys::ups_subject! {
- pub StopReadinessSubject(worker_id: WorkerId) => [DEPOT, STOP_READINESS, {worker_id}];
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::UpsSubject)]
+#[ups(subject = [DEPOT, STOP_READINESS, worker_id])]
+pub struct StopReadinessSubject {
+	worker_id: WorkerId,
+	#[subject]
+	subject: Vec<u8>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::UpsSubject)]
+#[ups(subject = [DEPOT, REPLICA_READINESS, worker_id])]
+pub struct ReplicaReadinessSubject {
+	worker_id: WorkerId,
+	#[subject]
+	subject: Vec<u8>,
 }

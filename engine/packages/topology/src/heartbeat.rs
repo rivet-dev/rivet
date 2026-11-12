@@ -12,7 +12,7 @@ pub use rivet_data::generated::topology_worker_heartbeat_v1::HeartbeatState;
 
 /// Versioned persisted payload used by heartbeat reads and conditional writes.
 /// Incarnation and write sequence identify confirmations; diagnostics never establish expiration.
-pub type Heartbeat = rivet_data::generated::topology_worker_heartbeat_v1::Data;
+pub type Heartbeat = rivet_data::generated::topology_worker_heartbeat_v2::Heartbeat;
 
 /// The scope of the exclusive lock a storage process holds on its log directory, which a later
 /// process of the same worker compares to prove that process exited. See `WorkerRegistration`.
@@ -59,6 +59,7 @@ pub struct Observation {
 impl Observation {
 	pub(crate) fn worker(&self) -> crate::worker::Worker {
 		crate::worker::Worker {
+			zone: self.heartbeat.zone.as_deref().map(str::to_owned),
 			storage_capacity_millicores: self.heartbeat.storage_capacity_millicores,
 			id: self.worker_id.clone(),
 			instance_id: crate::worker::WorkerInstanceId::from_bytes(self.heartbeat.instance_id),
@@ -90,30 +91,103 @@ impl StoreClock {
 /// Exact-key read for local lease validation, discovery, and caller inspections. Missing and
 /// unreadable are distinct: an outage cannot be treated as an expired owner.
 pub async fn read_heartbeat(store: &dyn ObjectStore, role: WorkerRole, id: &WorkerId) -> Read {
+	match read_heartbeat_detail(store, role, id).await {
+		HeartbeatRead::Found(observation) => Read::Found(observation),
+		HeartbeatRead::Missing => Read::Missing,
+		HeartbeatRead::Unreachable | HeartbeatRead::Unusable(_) => Read::Unknown,
+	}
+}
+
+/// Result of `read_heartbeat_detail`: a [`Read`] that also tells apart why a heartbeat that
+/// exists is not an observation. Storage discovery needs that to judge a worker it never
+/// observed; lease validation reads every such case as [`Read::Unknown`].
+pub(crate) enum HeartbeatRead {
+	Found(Observation),
+	Missing,
+	/// The GET failed, so nothing is known about the heartbeat.
+	Unreachable,
+	/// The heartbeat exists but gives no observation: it has no ETag, or its body does not
+	/// decode. A version header above the newest version this binary reads is undecodable too:
+	/// the heartbeat schema ships a new version only after every reader decodes it, so no
+	/// supported writer writes one, and such a header means corruption or an unsupported deploy
+	/// skip, never a newer worker that reads what this binary writes.
+	Unusable(UnobservedReason),
+}
+
+/// Why a storage listing could not observe a listed worker it never observed before. The
+/// variants that read the heartbeat carry its `Last-Modified`, the lease record's renewal
+/// time, which shows once the worker can no longer be serving.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum UnobservedReason {
+	/// The heartbeat GET failed or timed out.
+	Unreadable,
+	/// The heartbeat body does not decode, including a version header above the newest version
+	/// this binary reads.
+	Undecodable { modified_unix_ms: i64 },
+	/// The store answered the heartbeat without an ETag.
+	NoEtag { modified_unix_ms: i64 },
+}
+
+impl UnobservedReason {
+	/// The bounded `reason` label of `topology_unobserved_workers_total`.
+	pub fn label(&self) -> &'static str {
+		match self {
+			Self::Unreadable => "read",
+			Self::Undecodable { .. } => "decode",
+			Self::NoEtag { .. } => "etag",
+		}
+	}
+
+	/// The heartbeat's `Last-Modified`, when the GET returned one.
+	pub fn modified_unix_ms(&self) -> Option<i64> {
+		match self {
+			Self::Unreadable => None,
+			Self::Undecodable { modified_unix_ms } | Self::NoEtag { modified_unix_ms } => {
+				Some(*modified_unix_ms)
+			}
+		}
+	}
+}
+
+/// A listed storage worker that no listing has observed, and why.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct UnobservedHeartbeat {
+	pub worker_id: WorkerId,
+	pub reason: UnobservedReason,
+}
+
+/// See [`HeartbeatRead`].
+pub(crate) async fn read_heartbeat_detail(
+	store: &dyn ObjectStore,
+	role: WorkerRole,
+	id: &WorkerId,
+) -> HeartbeatRead {
 	let key = WorkerHeartbeatKey::new(role, id.clone());
 
 	let result = match store.get(&key.pack()).await {
 		Ok(result) => result,
-		Err(object_store::Error::NotFound { .. }) => return Read::Missing,
-		Err(_) => return Read::Unknown,
-	};
-
-	let Some(etag) = result.meta.e_tag.clone() else {
-		return Read::Unknown;
+		Err(object_store::Error::NotFound { .. }) => return HeartbeatRead::Missing,
+		Err(_) => return HeartbeatRead::Unreachable,
 	};
 
 	let modified_unix_ms = result.meta.last_modified.timestamp_millis();
+	let etag = result.meta.e_tag.clone();
+	let bytes = match result.bytes().await {
+		Ok(bytes) => bytes,
+		Err(_) => return HeartbeatRead::Unreachable,
+	};
+	let Some(etag) = etag else {
+		return HeartbeatRead::Unusable(UnobservedReason::NoEtag { modified_unix_ms });
+	};
 
-	let value = async { Ok::<_, anyhow::Error>(key.deserialize(result.bytes().await?)?) }.await;
-
-	match value {
-		Ok(heartbeat) => Read::Found(Observation {
+	match key.deserialize(bytes) {
+		Ok(heartbeat) => HeartbeatRead::Found(Observation {
 			worker_id: id.clone(),
 			role,
 			heartbeat,
 			etag,
 			modified_unix_ms,
 		}),
-		Err(_) => Read::Unknown,
+		Err(_) => HeartbeatRead::Unusable(UnobservedReason::Undecodable { modified_unix_ms }),
 	}
 }

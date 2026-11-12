@@ -8,14 +8,70 @@ use rivet_data::generated::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-	cmp::Ordering,
+	cmp::{Ordering, Reverse},
 	collections::{BTreeMap, BTreeSet},
 };
 
 pub type Id = [u8; 16];
 
+pub(crate) const TARGET_REPLICA_COUNT: usize = 3;
+
+/// Known physical failure domains, ordered ahead of the number of labelled members.
+/// Unknown labels never count as distinct zones, even when their worker IDs differ.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct ZoneSpread {
+	pub distinct: usize,
+	pub known: usize,
+}
+
+pub(crate) fn zone_spread<'a>(zones: impl IntoIterator<Item = Option<&'a str>>) -> ZoneSpread {
+	let mut distinct = BTreeSet::new();
+	let mut known = 0;
+	for zone in zones.into_iter().flatten() {
+		distinct.insert(zone);
+		known += 1;
+	}
+	ZoneSpread {
+		distinct: distinct.len(),
+		known,
+	}
+}
+
+/// Takes up to three workers in caller preference order: unused known zones first,
+/// then other labelled workers, then unknown ones. Shared by bootstrap and provisioning.
+pub fn choose_members<'a, T: Copy + Eq>(
+	candidates: impl IntoIterator<Item = (T, Option<&'a str>)>,
+) -> Vec<T> {
+	let candidates: Vec<_> = candidates.into_iter().collect();
+	let mut members = Vec::new();
+	let mut used = BTreeSet::new();
+	for pass in 0..3 {
+		for (id, zone) in &candidates {
+			if members.len() == TARGET_REPLICA_COUNT {
+				return members;
+			}
+			if members.contains(id) {
+				continue;
+			}
+			let qualifies = match pass {
+				0 => zone.is_some_and(|zone| !used.contains(zone)),
+				1 => zone.is_some(),
+				_ => true,
+			};
+			if qualifies {
+				members.push(*id);
+				if let Some(zone) = zone {
+					used.insert(*zone);
+				}
+			}
+		}
+	}
+	members
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Worker {
+	pub zone: Option<String>,
 	pub capacity_millicores: u32,
 	pub disk_incarnation: Id,
 	/// The worker's advertised per-family version ranges, when discovery carried them.
@@ -25,6 +81,8 @@ pub struct Worker {
 /// Observations are supplied by the coordinator. They never authorize storage mutations.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Input {
+	/// Configured or previously observed zone policy, independent of eligible workers.
+	pub require_zone_labels: bool,
 	/// Exact-process, exact-disk probes; existing assignments need no destination delay.
 	pub available: BTreeMap<Id, Worker>,
 	/// Freshly verified assigned disks, or workers past the destination stability window.
@@ -37,7 +95,7 @@ pub struct Input {
 	pub tablets_per_core: u32,
 	/// Whether discretionary actions may be chosen: bootstrap, splits, rebalancing
 	/// replacements and grant moves. Repair never depends on it: replacing a dead or stopping
-	/// replica and growing a replica set below its target size run either way.
+	/// replica, growing a replica set below its target size and repairing zone spread run either way.
 	pub discretionary: bool,
 }
 
@@ -111,6 +169,8 @@ impl PartialOrd for Delta {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 struct Candidate {
 	priority: u8,
+	/// Improvement in distinct known zones, then in labelled members; larger wins.
+	zone_gain: (i8, i8),
 	replicas: Delta,
 	maintainers: Delta,
 	key: [Id; 4],
@@ -118,12 +178,20 @@ struct Candidate {
 }
 impl Candidate {
 	fn compare(&self, other: &Self) -> Ordering {
-		(self.priority, &self.replicas, &self.maintainers, self.key).cmp(&(
-			other.priority,
-			&other.replicas,
-			&other.maintainers,
-			other.key,
-		))
+		(
+			self.priority,
+			Reverse(self.zone_gain),
+			&self.replicas,
+			&self.maintainers,
+			self.key,
+		)
+			.cmp(&(
+				other.priority,
+				Reverse(other.zone_gain),
+				&other.replicas,
+				&other.maintainers,
+				other.key,
+			))
 	}
 }
 
@@ -138,7 +206,7 @@ pub struct Search {
 	widest_split_width: BigInt,
 	/// Tablets an operator paused: never the subject of a discretionary action, and not a
 	/// split target their smaller peers wait on. Their dead or stopping replicas are still
-	/// replaced and their replica sets still grown to the target size.
+	/// replaced, their replica sets grown and their zone spread repaired.
 	paused: BTreeSet<Id>,
 	loads: BTreeMap<Id, (BigInt, BigInt)>,
 	destinations: Vec<Id>,
@@ -310,6 +378,26 @@ impl Search {
 			.and_then(|worker| worker.versions.as_deref());
 		super::state::versions::readable_with(tablet, versions)
 	}
+	fn zone_gain(&self, members: &[Id], leaving: Option<Id>, joining: Id) -> (i8, i8) {
+		let zone = |id: &Id| {
+			self.input
+				.available
+				.get(id)
+				.and_then(|worker| worker.zone.as_deref())
+		};
+		let before = zone_spread(members.iter().map(zone));
+		let after = zone_spread(
+			members
+				.iter()
+				.filter(|id| Some(**id) != leaving)
+				.chain([&joining])
+				.map(zone),
+		);
+		(
+			after.distinct as i8 - before.distinct as i8,
+			after.known as i8 - before.known as i8,
+		)
+	}
 	fn delta(&self, leaving: Id, joining: Id, size: &BigInt, maintainer: bool) -> Delta {
 		if leaving == joining {
 			return Delta::zero();
@@ -377,7 +465,8 @@ impl Search {
 			&& let Some(midpoint) = tablet.hash_range.midpoint()
 		{
 			self.offer(Candidate {
-				priority: 1,
+				priority: 2,
+				zone_gain: (0, 0),
 				replicas: Delta {
 					numerator: -&size,
 					denominator: 1,
@@ -400,7 +489,8 @@ impl Search {
 			let delta = self.delta(owner, *worker, &size, true);
 			if delta < Delta::zero() {
 				self.offer(Candidate {
-					priority: 2,
+					priority: 3,
+					zone_gain: (0, 0),
 					replicas: Delta::zero(),
 					maintainers: delta,
 					key: [tablet.id, [0; 16], [0; 16], *worker],
@@ -459,6 +549,7 @@ impl Search {
 		}
 		self.offer(Candidate {
 			priority: 0,
+			zone_gain: (0, 0),
 			replicas: Delta::zero(),
 			maintainers: Delta::zero(),
 			key: [tablet.id, leaving, [0; 16], [0; 16]],
@@ -483,7 +574,7 @@ impl Search {
 		{
 			return;
 		}
-		if (tablet.replica_set.members.len() < self.destinations.len().min(3)
+		if (tablet.replica_set.members.len() < self.destinations.len().min(TARGET_REPLICA_COUNT)
 			|| (tablet.replica_set.members.len() == 1
 				&& !self
 					.input
@@ -506,6 +597,7 @@ impl Search {
 				.unwrap_or_default();
 			self.offer(Candidate {
 				priority: 0,
+				zone_gain: self.zone_gain(&tablet.replica_set.members, None, joining),
 				replicas: Delta::new(
 					&size * (load * 2 + &size),
 					self.capacity_millicores(&joining),
@@ -557,12 +649,40 @@ impl Search {
 			.stopping
 			.iter()
 			.any(|entry| entry.worker_id == leaving && entry.permitted_at.is_none());
-		if !required && !draining && replicas >= Delta::zero() {
+		// A missing label can be a v1 heartbeat hiding a real failure domain. With
+		// any zones configured, optional moves need every current and joining label;
+		// improving the number of known labels alone can destroy physical spread.
+		// Fully unlabelled clusters retain their existing development placement policy.
+		if !required
+			&& !draining
+			&& self.input.require_zone_labels
+			&& tablet
+				.replica_set
+				.members
+				.iter()
+				.chain([&joining])
+				.any(|id| {
+					self.input
+						.available
+						.get(id)
+						.is_none_or(|worker| worker.zone.is_none())
+				}) {
 			return;
 		}
-		// A rebalancing replacement is discretionary: a pause or the switch holds it. A
-		// required or draining one is repair and runs either way.
-		if !required && !draining && (self.paused.contains(&tablet.id) || !self.input.discretionary)
+		let zone_gain = self.zone_gain(&tablet.replica_set.members, Some(leaving), joining);
+		let zone_repair = zone_gain > (0, 0);
+		if !required
+			&& !draining
+			&& (zone_gain < (0, 0) || (!zone_repair && replicas >= Delta::zero()))
+		{
+			return;
+		}
+		// Zone spread, a missing replica and a drain are repairs, independent of the
+		// discretionary switch and tablet pauses. Ordinary load moves remain discretionary.
+		if !required
+			&& !draining
+			&& !zone_repair
+			&& (self.paused.contains(&tablet.id) || !self.input.discretionary)
 		{
 			return;
 		}
@@ -614,7 +734,14 @@ impl Search {
 			maintainer
 		};
 		self.offer(Candidate {
-			priority: if required || draining { 0 } else { 2 },
+			priority: if required || draining {
+				0
+			} else if zone_repair {
+				1
+			} else {
+				3
+			},
+			zone_gain,
 			replicas,
 			maintainers: self.delta(owner, maintainer, &size, true),
 			key: [tablet.id, leaving, joining, maintainer],
@@ -632,14 +759,20 @@ impl Search {
 		if self.complete {
 			return None;
 		}
-		// Bootstrap on the destinations that qualify now, even when there are fewer than three.
-		// Local development runs a single storage worker, so waiting for a full replica set
-		// would leave it with no tablets at all.
-		if manifest.tablets.is_empty() && !self.destinations.is_empty() && self.input.discretionary
+		// The first grants must tolerate one disk loss. Single-worker quickstarts
+		// explicitly provision their partitions through a separate startup service.
+		if manifest.tablets.is_empty()
+			&& self.destinations.len() >= TARGET_REPLICA_COUNT
+			&& self.input.discretionary
 		{
 			self.complete = true;
 			return Some(Action::Bootstrap {
-				members: self.destinations.iter().take(3).copied().collect(),
+				members: choose_members(self.destinations.iter().map(|id| {
+					(
+						*id,
+						self.input.available.get(id).and_then(|w| w.zone.as_deref()),
+					)
+				})),
 				tablets: self.desired_tablets.max(1),
 			});
 		}

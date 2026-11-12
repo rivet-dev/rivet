@@ -48,7 +48,8 @@ pub struct EnvoyConfig {
 
 	/// Most HTTP requests admitted to one actor that its task has not taken from its inbox yet.
 	/// Requests wait there while the actor starts. A request past the cap is refused with
-	/// `envoy.actor_overloaded` instead of growing the inbox.
+	/// `envoy.actor_overloaded` instead of growing the inbox. Also bounds concurrent
+	/// WebSocket initializations per actor; excess opens close with 1013.
 	pub max_queued_requests_per_actor: usize,
 
 	pub callbacks: Arc<dyn EnvoyCallbacks>,

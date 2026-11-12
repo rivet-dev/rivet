@@ -13,7 +13,7 @@ use rivet_data::generated::{
 		CreateTablet, ReplaceReplica, SplitTablet, TabletCoordinatorRequest,
 	},
 	depot_tablet_manifest_v1::{TabletManifest, TabletSplit},
-	shared_depot_types_v1::StorageWorkerDisk,
+	shared_depot_types_v1::{StorageWorkerDisk, TabletPhase},
 };
 use rivet_state_machine::Entropy;
 use serde::{Deserialize, Serialize};
@@ -43,12 +43,16 @@ impl BlockReason {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Status {
+	/// Tablets whose current or next persisted configuration lacks three known zones.
+	pub zone_degraded_tablets: u64,
+	/// Tablets with an unknown zone in either configuration, including absent workers.
+	pub unknown_zone_tablets: u64,
 	pub desired_tablets: u64,
 	pub projected_tablets: u64,
 	pub admitted_workers: u64,
 	pub pending_splits: u64,
 	pub pending_replacements: u64,
-	/// Tablets an operator paused, which the balancer leaves alone.
+	/// Tablets an operator paused. Safety repairs still run; discretionary placement does not.
 	pub paused_tablets: u64,
 	pub search_complete: bool,
 	pub replica_imbalance_ppm: u64,
@@ -61,6 +65,8 @@ pub struct Status {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Settings {
+	/// Local storage configuration establishes zone policy before discovery or disk probes.
+	pub require_zone_labels: bool,
 	pub tablets_per_core: u32,
 	pub destination_stability_ms: u64,
 	pub missing_worker_ms: u64,
@@ -69,6 +75,7 @@ pub struct Settings {
 impl Default for Settings {
 	fn default() -> Self {
 		Self {
+			require_zone_labels: false,
 			tablets_per_core: 2,
 			destination_stability_ms: 60_000,
 			missing_worker_ms: 120_000,
@@ -84,6 +91,7 @@ enum Probe {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 struct Observation {
+	zone: Option<String>,
 	instance: Id,
 	capacity: u32,
 	/// Advertised version ranges, fixed for the observed process.
@@ -94,10 +102,12 @@ struct Observation {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Balancing {
+	/// Once configured or observed, zone policy survives loss of every labelled worker.
+	require_zone_labels: bool,
 	/// Whether the balancer may choose discretionary actions: bootstrapping tablets,
 	/// splits, rebalancing replacements and grant moves. Off, it still observes workers and
-	/// repairs, replacing dead or stopping replicas and restoring a replica set below its
-	/// target size, since durability must not depend on the switch.
+	/// repairs, replacing dead or stopping replicas, restoring replica counts and repairing
+	/// zone spread, since durability must not depend on the switch.
 	enabled: bool,
 	last_rejection: Option<BlockReason>,
 	reported: Option<Status>,
@@ -110,6 +120,7 @@ pub struct Balancing {
 impl Balancing {
 	pub fn new(settings: Settings) -> Self {
 		Self {
+			require_zone_labels: settings.require_zone_labels,
 			enabled: true,
 			last_rejection: None,
 			reported: None,
@@ -154,10 +165,7 @@ impl Balancing {
 		let pending_replacements = manifest
 			.tablets
 			.iter()
-			.filter(|t| {
-				t.replica_set.phase
-					!= rivet_data::generated::shared_depot_types_v1::TabletPhase::Stable
-			})
+			.filter(|t| t.replica_set.phase != TabletPhase::Stable)
 			.count() as u64;
 		let paused_tablets = manifest.paused.len() as u64;
 		let search = self.search.as_ref()?;
@@ -174,7 +182,11 @@ impl Balancing {
 			})
 			.collect();
 		let blocked = self.last_rejection.clone().or_else(|| {
-			if search.input.destinations.is_empty() {
+			if search.input.destinations.is_empty()
+				|| (self.enabled
+					&& manifest.tablets.is_empty()
+					&& search.input.destinations.len() < placement::TARGET_REPLICA_COUNT)
+			{
 				Some(BlockReason::WaitingForWorkers)
 			} else if !unavailable.is_empty() {
 				Some(
@@ -197,7 +209,33 @@ impl Balancing {
 			}
 		});
 		let (replica_imbalance_ppm, maintainer_imbalance_ppm) = search.imbalance_ppm();
+		let mut zone_degraded_tablets = 0;
+		let mut unknown_zone_tablets = 0;
+		for tablet in &manifest.tablets {
+			let next = match &tablet.replica_set.phase {
+				TabletPhase::Stable => None,
+				TabletPhase::Learning(phase) => Some(&phase.next),
+				TabletPhase::Joint(phase) => Some(&phase.next),
+			};
+			let (degraded, unknown) = std::iter::once(&tablet.replica_set.members)
+				.chain(next)
+				.map(|members| {
+					let spread = placement::zone_spread(
+						members
+							.iter()
+							.map(|id| self.workers.get(id).and_then(|w| w.zone.as_deref())),
+					);
+					(spread.distinct != 3, spread.known != members.len())
+				})
+				.fold((false, false), |(degraded, unknown), (d, u)| {
+					(degraded || d, unknown || u)
+				});
+			zone_degraded_tablets += u64::from(degraded);
+			unknown_zone_tablets += u64::from(unknown);
+		}
 		Some(Status {
+			zone_degraded_tablets,
+			unknown_zone_tablets,
 			desired_tablets: search.desired_tablets,
 			projected_tablets: search.projected_tablets,
 			admitted_workers: search.input.destinations.len() as u64,
@@ -232,7 +270,7 @@ impl Balancing {
 			});
 		}
 	}
-	/// Drops every observation and cancels the probes and deadlines armed for them.
+	/// Drops worker observations and cancels their probes and deadlines, retaining zone policy.
 	fn clear(&mut self, effects: &mut Effects) {
 		for (worker, observation) in &self.workers {
 			if let Probe::Running { operation } = observation.probe {
@@ -255,6 +293,10 @@ impl Balancing {
 		if now >= topology.valid_until_boot_ms {
 			return;
 		}
+		// Policy depends on the whole discovery snapshot, never disk eligibility. A
+		// failed probe, disappearance or new process cannot turn a labelled cluster
+		// into an unlabelled development cluster for the rest of this coordinator's life.
+		self.require_zone_labels |= !topology.zones.is_empty();
 		self.workers.retain(|id, observation| {
 			let same = topology.workers.get(id) == Some(&observation.instance)
 				&& topology
@@ -280,13 +322,20 @@ impl Balancing {
 			if capacity == 0 {
 				continue;
 			}
-			self.workers.entry(*id).or_insert(Observation {
+			let worker = self.workers.entry(*id).or_insert(Observation {
+				zone: topology.zones.get(id).cloned(),
 				instance: *instance,
 				capacity,
 				versions: topology.versions.get(id).cloned(),
 				first_seen_boot_ms: now,
 				probe: Probe::Waiting { at_boot_ms: now },
 			});
+			// The label is fixed for this process. A v1 renewal can hide it again when
+			// an older reader lowers the write floor; absence cannot erase prior evidence.
+			// The retain pass above discards it on an incarnation change.
+			if let Some(zone) = topology.zones.get(id) {
+				worker.zone = Some(zone.clone());
+			}
 		}
 	}
 	pub(in crate::tablet_coordinator_machine) fn probe_response(
@@ -362,6 +411,7 @@ impl Balancing {
 					Some((
 						*id,
 						placement::Worker {
+							zone: w.zone.clone(),
 							capacity_millicores: w.capacity,
 							disk_incarnation: disk,
 							versions: w.versions.clone(),
@@ -406,6 +456,7 @@ impl Balancing {
 			)
 			.collect();
 		placement::Input {
+			require_zone_labels: self.require_zone_labels,
 			available,
 			destinations,
 			replaceable,

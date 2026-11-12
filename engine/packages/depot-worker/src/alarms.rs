@@ -154,17 +154,27 @@ pub enum Request {
 		summary: AlarmSummary,
 		record: AlarmRetryRecord,
 	},
+	/// Drops the key's index rows: its group is archived, so its alarm never fires again.
+	Forget {
+		key: VolumeLogKey,
+	},
 }
 impl Request {
 	pub(crate) fn key(&self) -> Option<&VolumeLogKey> {
 		match self {
 			Self::Page { .. } => None,
-			Self::Read { key } | Self::Call { key, .. } | Self::Retry { key, .. } => Some(key),
+			Self::Read { key }
+			| Self::Call { key, .. }
+			| Self::Retry { key, .. }
+			| Self::Forget { key } => Some(key),
 		}
 	}
 	/// Projection reads and updates share admission with filesystem replay and retirement.
 	pub(crate) fn uses_store(&self) -> bool {
-		matches!(self, Self::Read { .. } | Self::Retry { .. })
+		matches!(
+			self,
+			Self::Read { .. } | Self::Retry { .. } | Self::Forget { .. }
+		)
 	}
 }
 
@@ -205,6 +215,10 @@ pub(crate) async fn execute(
 		Request::Read { key } => Ok(Response::Read {
 			current: fs.current_alarm(&key).await?,
 		}),
+		Request::Forget { key } => {
+			fs.forget_alarm(&key).await?;
+			Ok(Response::Updated { current: None })
+		}
 		Request::Call { key, summary, .. } => {
 			let Ok(_permit) = driver.pool.permits.try_acquire() else {
 				if !driver.pool.warned.swap(true, Ordering::Relaxed) {

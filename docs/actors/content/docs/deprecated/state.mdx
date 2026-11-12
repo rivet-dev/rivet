@@ -1,0 +1,104 @@
+---
+title: "Deprecated State"
+description: "Migrate actors off the deprecated c.state and c.conn.state APIs to SQLite and c.vars."
+---
+
+<Warning>
+`c.state` and `c.conn.state` were deprecated in 3.0 and will be removed in a future version. They still work today, so you can migrate at your own pace.
+</Warning>
+
+## What is deprecated
+
+Earlier versions of Rivet Actors stored durable data in two places that Rivet saved for you:
+
+- **Actor state** (`c.state`): a single serializable value defined with `state` or `createState`. Rivet wrote it to storage on a throttle and loaded it again on every start.
+- **Connection state** (`c.conn.state`): a value per connection defined with `connState` or `createConnState`.
+
+The related options `onStateChange`, `c.saveState()`, `stateSaveInterval` and `createConnStateTimeout` are deprecated with them.
+
+The Rust SDK no longer has actor state or connection state APIs. Store durable data with `ctx.sql()` and in-memory data in fields on your actor struct.
+
+<CodeSnippet file="examples/docs/actors-deprecated-state/before.ts" />
+
+Use these instead:
+
+- **Durable data** goes in [SQLite](/actors/docs/sqlite) (`c.db`).
+- **In-memory data** goes in [`c.vars`](/actors/docs/state#ephemeral-state). It is rebuilt on every start and lost when the actor sleeps or crashes.
+- **Connection data** is tracked from `onConnect` and `onDisconnect`. See [Connection state](#connection-state).
+
+## Migrate actor state to SQLite
+
+Move existing data with a SQLite migration. It reads the old state once, writes it into your own tables, and from then on the actor only uses SQLite.
+
+1. Remove `state` or `createState` from the actor definition.
+2. Add a `db` with an `onMigrate` that creates your tables and copies the old state into them.
+3. Read and write the new tables from your actions. See [Update data in SQL](#update-data-in-sql).
+
+<CodeGroup workspace>
+
+<CodeSnippet file="examples/docs/actors-deprecated-state/migrate.ts" title="actor.ts" />
+
+<CodeSnippet file="examples/docs/actors-deprecated-state/decode-legacy-state.ts" title="decode-legacy-state.ts" />
+
+</CodeGroup>
+
+`onMigrate` runs on every start inside a transaction, so make the copy idempotent. The example skips it once the new row exists. The decoder needs the `cbor-x` package:
+
+```sh
+npm install cbor-x
+```
+
+### Where the old state lives
+
+Actor state is stored in the actor's SQLite database in a table managed by Rivet. This table and its data will never be dropped, even after `c.state` is removed, so you can migrate out of it at any point:
+
+```sql
+CREATE TABLE _rivet_actor_state (
+    id    INTEGER PRIMARY KEY CHECK (id = 1),
+    state BLOB NOT NULL
+) STRICT
+```
+
+- There is at most one row, with `id = 1`. An actor that never had state may have no row or an empty blob.
+- `state` is the value of `c.state` encoded as [CBOR](https://cbor.io). `BigInt`, `Uint8Array`, `ArrayBuffer`, `Set` and `undefined` are stored as two-element arrays such as `["$BigInt", "42"]`. `decodeLegacyState` above turns them back into their original types. This tag encoding applies to TypeScript actors.
+- Only read from `_rivet_*` tables. Do not write to or drop them; Rivet manages them.
+
+## Update data in SQL
+
+`c.state` changes ran synchronously, so two actions never interleaved in the middle of one. Every SQLite query is awaited and actions run concurrently, so an action can pause between reading a value and writing it back while another action changes it. Copying data into `c.vars`, changing the copy and writing it back has the same problem and loses updates.
+
+Make each change one statement that computes the new value in SQL and returns it with `RETURNING`. Put the check in the `WHERE` clause so the check and the change cannot be split, and run statements that must commit together in `c.db.transaction`:
+
+<CodeSnippet file="examples/docs/actors-deprecated-state/update-in-sql.ts" />
+
+Queries run in the actor's own process, so reading from SQLite in each action is fast. Unlike `c.state`, a write is durable as soon as `c.db.execute` resolves.
+
+## Realtime loops
+
+An actor that changes data on every tick, such as a game loop or a physics world, keeps the live simulation in `c.vars` and saves a snapshot to SQLite on an interval. `c.state` did this for you: it was saved about once per second by default (`stateSaveInterval`), so a crash lost up to a second of progress.
+
+1. Load the last snapshot in `createVars`.
+2. Save a snapshot from the loop once the interval has passed, and once more when the loop exits.
+3. Write each snapshot in one `c.db.transaction` so a crash never leaves half of one.
+
+<CodeSnippet file="examples/docs/actors-state/sqlite-snapshot.ts" />
+
+The interval bounds how much progress a crash can lose. Data tied to a live connection, such as a player's current input, stays out of the snapshot. The loop starts from `onWake`; see [run](/actors/docs/deprecated/run) for that pattern.
+
+## Connection state
+
+Replace `connState` and `createConnState` with lifecycle hooks that key data by `conn.id`. Validate params in `onBeforeConnect` as before.
+
+### Regular connections
+
+A regular connection ends when the actor sleeps, so its data only needs to live in memory. Add it to `c.vars` in `onConnect` and remove it in `onDisconnect`:
+
+<CodeSnippet file="examples/docs/actors-deprecated-state/conn-vars.ts" />
+
+### Hibernatable WebSockets
+
+A [hibernatable WebSocket](/actors/docs/websocket-handler#websocket-hibernation) stays open while the actor sleeps, and `c.vars` is rebuilt when it wakes. Store data for these connections in SQLite so it survives, and delete it in `onDisconnect`. A connection that closes while the actor is asleep may not trigger `onDisconnect`, so also delete rows whose `conn_id` is no longer in `c.conns` when the actor wakes:
+
+<CodeSnippet file="examples/docs/actors-deprecated-state/conn-sqlite.ts" />
+
+Hibernatable connection state is stored in the Rivet-managed `_rivet_conn_state` table, with `conn_id TEXT` as the key and the CBOR-encoded `state BLOB`. Migrate it in `onMigrate` with the same decoder if a connection must keep its data across the upgrade.

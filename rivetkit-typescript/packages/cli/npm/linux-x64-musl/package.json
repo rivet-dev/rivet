@@ -1,10 +1,14 @@
 {
 	"name": "@rivetkit/cli-linux-x64-musl",
-	"version": "3.0.0",
+	"version": "3.1.1",
 	"description": "Rivet CLI for Linux x64 musl (static)",
 	"license": "Apache-2.0",
 	"os": [
 		"linux"
+	],
+	"libc": [
+		"glibc",
+		"musl"
 	],
 	"cpu": [
 		"x64"

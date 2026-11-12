@@ -8,7 +8,7 @@
 //! error that is not a [`RivetError`] is reported as `core.internal_error`.
 
 use http::{HeaderValue, StatusCode, header};
-use rivet_error::RivetError;
+use rivet_error::{INTERNAL_ERROR, RivetError};
 use rivet_util::Id;
 
 /// HTTP header that names a failed request's error as `<group>.<code>`.
@@ -67,6 +67,11 @@ pub fn status(group: &str, code: &str) -> StatusCode {
 		("actor", "creation_rate_limit") => StatusCode::TOO_MANY_REQUESTS,
 		("actor", "not_found") => StatusCode::NOT_FOUND,
 		("actor", "migrating_from_v2") => StatusCode::SERVICE_UNAVAILABLE,
+		// Refused at admission while the namespace's group create settles; no release answered
+		// it, and released clients retry a 5xx but treat a 400 as final.
+		("namespace", "creating") => StatusCode::SERVICE_UNAVAILABLE,
+		// Existing SDKs retry all 5xx responses; this create may already have taken effect.
+		("actor", "create_pending") => StatusCode::CONFLICT,
 		("core", "internal_error") => StatusCode::INTERNAL_SERVER_ERROR,
 		_ => StatusCode::BAD_REQUEST,
 	}
@@ -74,13 +79,24 @@ pub fn status(group: &str, code: &str) -> StatusCode {
 
 /// The canonical HTTP reply for `error`.
 pub fn http_response(error: &anyhow::Error) -> http::Response<Vec<u8>> {
+	http_response_exposing(error, rivet_error::expose_internal_errors())
+}
+
+/// `http_response`, with `expose_internal` in place of `RIVET_EXPOSE_ERRORS`. The metadata of
+/// `core.internal_error` holds the whole debug chain of an unstructured error (keys, addresses,
+/// paths, SQL), so it reaches the client only when internal errors are exposed. A structured
+/// error's own metadata is always sent.
+fn http_response_exposing(error: &anyhow::Error, expose_internal: bool) -> http::Response<Vec<u8>> {
 	let error = RivetError::extract(error);
 	let mut body = serde_json::json!({
 		"group": error.group(),
 		"code": error.code(),
 		"message": error.message(),
 	});
-	if let Some(metadata) = error.metadata() {
+	let internal = error.group() == INTERNAL_ERROR.group && error.code() == INTERNAL_ERROR.code;
+	if let Some(metadata) = error.metadata()
+		&& (expose_internal || !internal)
+	{
 		body["metadata"] = metadata;
 	}
 

@@ -354,6 +354,21 @@ export class NapiCoreRuntime implements CoreRuntime {
 		);
 	}
 
+	registryActiveActorCount(registry: RegistryHandle): number {
+		return asNativeRegistry(registry).activeActorCount();
+	}
+
+	onRegistryActiveActorCountChange(
+		registry: RegistryHandle,
+		callback: (count: number) => void,
+		cancelToken: CancellationTokenHandle,
+	): void {
+		asNativeRegistry(registry).onActiveActorCountChange(
+			callback,
+			asNativeCancellationToken(cancelToken),
+		);
+	}
+
 	async registryHealth(
 		registry: RegistryHandle,
 	): Promise<RuntimeRegistryRouteResponse> {
@@ -677,8 +692,16 @@ export class NapiCoreRuntime implements CoreRuntime {
 		return asNativeActorContext(ctx).key();
 	}
 
+	actorForkChain(ctx: ActorContextHandle) {
+		return asNativeActorContext(ctx).forkChain();
+	}
+
 	actorRegion(ctx: ActorContextHandle): string {
 		return asNativeActorContext(ctx).region();
+	}
+
+	actorNamespace(ctx: ActorContextHandle): string {
+		return asNativeActorContext(ctx).namespace();
 	}
 
 	actorSleep(ctx: ActorContextHandle): void {
@@ -992,10 +1015,6 @@ export class NapiCoreRuntime implements CoreRuntime {
 			return;
 		}
 		await nativeCtx.sql().close();
-	}
-
-	async actorRuntimeSocketProvision(ctx: ActorContextHandle) {
-		return await asNativeActorContext(ctx).provisionActorRuntimeSocket();
 	}
 
 	async actorQueueSend(

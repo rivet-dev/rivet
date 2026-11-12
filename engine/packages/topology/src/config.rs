@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+/// The default spacing of storage discovery listings. A caller refused until the fleet's read
+/// floor changes waits this long, so a listing has refreshed the floor by its retry.
+pub const DEFAULT_REFRESH_INTERVAL_MS: u64 = 10_000;
+
 /// Millisecond budgets shared by all members. Store timestamps may be truncated
 /// to seconds; takeover waits beyond both the lease and the store uncertainty.
 ///
@@ -80,7 +84,7 @@ impl Default for LeaseTiming {
 			zombie_grace_ms: 2_000,
 			io_timeout_ms: 1_000,
 			heartbeat_attempt_ms: default_heartbeat_attempt_ms(),
-			refresh_interval_ms: 10_000,
+			refresh_interval_ms: DEFAULT_REFRESH_INTERVAL_MS,
 			refresh_hint_interval_ms: default_refresh_hint_interval_ms(),
 			boot_timeout_ms: 60_000,
 			store_timestamp_uncertainty_ms: 1_000,

@@ -1,0 +1,5 @@
+{
+  "code": "lineage_too_deep",
+  "group": "namespace",
+  "message": "The namespace is as many forks below its root as the lineage depth cap allows."
+}

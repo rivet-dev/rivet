@@ -13,12 +13,16 @@ pub mod log_shard;
 pub mod membership;
 pub mod payload_codec;
 
+mod claim_log;
+pub use claim_log::{ClaimLogName, ROOT_CLAIM_LOG, claim_log_key, claim_logs, is_claim_log};
+
 mod volume_log_key;
 pub use volume_log_key::{VolumeLogKey, listing_order, partition_key_hash};
 
 pub use rivet_data::generated::shared_depot_types_v1::{
 	PartitionKeyHash, PartitionKeyHashRange, VolumeKey,
 };
+pub use rivet_keys::keys::codec::GroupId;
 
 pub mod stop;
 pub mod storage_worker;

@@ -1,5 +1,8 @@
 use crate::{
-	heartbeat::{Observation, Read, read_heartbeat},
+	heartbeat::{
+		HeartbeatRead, Observation, Read, UnobservedHeartbeat, UnobservedReason, read_heartbeat,
+		read_heartbeat_detail,
+	},
 	keys::s3::{StorageHeartbeatPrefix, WorkerHeartbeatKey},
 	worker::{Worker, WorkerId, WorkerRole},
 };
@@ -15,9 +18,23 @@ const HEARTBEAT_READ_CONCURRENCY: usize = 8;
 /// A listing can advance healthy peers even when one listed heartbeat cannot be read.
 pub struct StorageListing {
 	pub entries: Vec<Observation>,
-	/// A previous observation was retained after an unreadable GET, so this listing cannot
-	/// establish that the observation expired.
-	pub partial: bool,
+	/// The listed storage workers whose heartbeat gave no observation and that no earlier
+	/// listing observed, so their advertised versions are unknown: they may run an older
+	/// binary.
+	pub unobserved: Vec<UnobservedHeartbeat>,
+	/// The other heartbeats this listing read without an observation: listed storage workers
+	/// whose earlier observation stays in `entries`, and this process's own stateless
+	/// heartbeat. While one may still be renewed, the listing cannot establish that a retained
+	/// observation expired.
+	pub unconfirmed: Vec<UnobservedHeartbeat>,
+}
+
+impl StorageListing {
+	/// Whether some heartbeat gave no observation, so the listing alone does not prove that
+	/// every retained observation is current.
+	pub fn partial(&self) -> bool {
+		!self.unobserved.is_empty() || !self.unconfirmed.is_empty()
+	}
 }
 
 /// Lists every storage worker heartbeat. Production discovery and simulators that drive
@@ -54,7 +71,7 @@ pub async fn list_storage(
 				crate::metrics::DISCOVERY_HEARTBEAT_READS
 					.with_label_values(&["reused"])
 					.inc();
-				return Ok((Some(entry.clone()), false));
+				return Ok((Some(entry.clone()), None));
 			}
 
 			crate::metrics::DISCOVERY_HEARTBEAT_READS
@@ -63,24 +80,42 @@ pub async fn list_storage(
 			let read = rivet_env::timeout(
 				clock,
 				Duration::from_millis(read_timeout_ms),
-				read_heartbeat(store, WorkerRole::Storage, &key.worker_id),
+				read_heartbeat_detail(store, WorkerRole::Storage, &key.worker_id),
 			)
 			.await
-			.unwrap_or(Read::Unknown);
-			match read {
-				Read::Found(entry) => Ok((Some(entry), false)),
-				Read::Missing => Ok((None, false)),
-				// A failed GET is not evidence that the listed worker disappeared. Keep its
-				// previous observation until a later read or expiry evidence supersedes it.
-				Read::Unknown => Ok((previous.cloned(), true)),
+			.unwrap_or(HeartbeatRead::Unreachable);
+			let reason = match read {
+				HeartbeatRead::Found(entry) => return Ok((Some(entry), None)),
+				HeartbeatRead::Missing => return Ok((None, None)),
+				HeartbeatRead::Unreachable => UnobservedReason::Unreadable,
+				HeartbeatRead::Unusable(reason) => reason,
+			};
+			// A heartbeat that gave no observation is not evidence that the listed worker
+			// disappeared. Keep its previous observation until a later read or expiry evidence
+			// supersedes it.
+			if previous.is_none() {
+				crate::metrics::UNOBSERVED_WORKERS
+					.with_label_values(&[reason.label()])
+					.inc();
 			}
+			let heartbeat = UnobservedHeartbeat {
+				worker_id: key.worker_id.clone(),
+				reason,
+			};
+			Ok((previous.cloned(), Some(heartbeat)))
 		})
 		.buffer_unordered(HEARTBEAT_READ_CONCURRENCY);
 	let mut entries = Vec::new();
-	let mut partial = false;
+	let mut unobserved = Vec::new();
+	let mut unconfirmed = Vec::new();
 	while let Some(entry) = reads.next().await {
-		let (entry, uncertain) = entry?;
-		partial |= uncertain;
+		let (entry, unread) = entry?;
+		if let Some(unread) = unread {
+			match entry {
+				Some(_) => unconfirmed.push(unread),
+				None => unobserved.push(unread),
+			}
+		}
 		if let Some(entry) = entry {
 			entries.push(entry);
 		}
@@ -105,7 +140,10 @@ pub async fn list_storage(
 			Read::Found(entry) => entries.push(entry),
 			Read::Missing => {}
 			Read::Unknown => {
-				partial = true;
+				unconfirmed.push(UnobservedHeartbeat {
+					worker_id: worker_registration.identity.worker_id.clone(),
+					reason: UnobservedReason::Unreadable,
+				});
 				if let Some(entry) = known.iter().find(|entry| {
 					entry.role == WorkerRole::Stateless
 						&& entry.worker_id == worker_registration.identity.worker_id
@@ -116,7 +154,11 @@ pub async fn list_storage(
 		}
 	}
 
-	Ok(StorageListing { entries, partial })
+	Ok(StorageListing {
+		entries,
+		unobserved,
+		unconfirmed,
+	})
 }
 
 /// Listings and reads may quote an ETag differently, so quotes are ignored.
@@ -141,6 +183,7 @@ pub async fn lookup_worker(
 					return Ok(None);
 				}
 				let worker = Worker {
+					zone: entry.heartbeat.zone.as_deref().map(str::to_owned),
 					storage_capacity_millicores: entry.heartbeat.storage_capacity_millicores,
 					id: id.clone(),
 					role,

@@ -116,6 +116,7 @@ pub(crate) async fn run_adapter_loop(
 		is_new,
 		snapshot,
 		hibernated,
+		fork,
 		mut events,
 		startup_ready,
 	} = start;
@@ -144,6 +145,7 @@ pub(crate) async fn run_adapter_loop(
 		is_new,
 		snapshot,
 		hibernated,
+		fork,
 	)
 	.await
 	{
@@ -236,6 +238,7 @@ async fn run_preamble(
 	is_new: bool,
 	snapshot: Option<Vec<u8>>,
 	hibernated: Vec<(rivetkit_core::ConnHandle, Vec<u8>)>,
+	fork: Option<rivetkit_core::ActorForkStart>,
 ) -> Result<RunHandlerSlot> {
 	let snapshot = normalize_startup_snapshot(bindings.create_state.is_some(), snapshot);
 
@@ -320,6 +323,22 @@ async fn run_preamble(
 					"createVars",
 					config.create_vars_timeout,
 					call_create_vars(callback, ctx),
+				),
+			)
+			.await?;
+	}
+
+	// A fork's first start runs its hook once its state is loaded, before `onWake` and before
+	// core drains overdue schedule events, so the hook can cancel inherited schedules and drop
+	// copied resources first. Core decides when a fork's hook is due.
+	if let (Some(fork), Some(callback)) = (fork, &bindings.on_fork) {
+		ctx.inner()
+			.time_runtime_callback(
+				"onFork",
+				with_timeout(
+					"onFork",
+					config.on_create_timeout,
+					call_on_fork(callback, ctx, fork),
 				),
 			)
 			.await?;
@@ -736,17 +755,25 @@ pub(crate) async fn dispatch_event(
 				reply.send(Ok(()));
 			});
 		}
-		ActorEvent::DisconnectConn { conn_id, reply } => {
+		ActorEvent::DisconnectConn {
+			conn_id,
+			reason,
+			reply,
+		} => {
 			let callback = bindings.on_disconnect_final.clone();
 			let ctx = ctx.clone();
 			tasks.spawn(async move {
 				let result: Result<()> = async {
 					let conn = { ctx.inner().conns().find(|conn| conn.id() == conn_id) };
 					if let Some(conn) = conn {
+						// The transport closes before the user callback runs, so a callback that fails
+						// or outlasts the grace period cannot keep the client from seeing the reason.
+						ctx.inner()
+							.disconnect_conn_with_reason(conn_id, reason)
+							.await?;
 						if let Some(callback) = callback {
-							call_on_disconnect_final(&callback, &ctx, conn.clone()).await?;
+							call_on_disconnect_final(&callback, &ctx, conn).await?;
 						}
-						ctx.inner().disconnect_conn(conn_id).await?;
 					}
 					Ok(())
 				}
@@ -1135,6 +1162,22 @@ async fn call_on_migrate(
 		MigratePayload {
 			ctx: ctx.inner().clone(),
 			is_new,
+		},
+	)
+	.await
+}
+
+async fn call_on_fork(
+	callback: &crate::actor_factory::CallbackTsfn<crate::actor_factory::ForkPayload>,
+	ctx: &ActorContext,
+	fork: rivetkit_core::ActorForkStart,
+) -> Result<()> {
+	call_void(
+		"onFork",
+		callback,
+		crate::actor_factory::ForkPayload {
+			ctx: ctx.inner().clone(),
+			fork,
 		},
 	)
 	.await

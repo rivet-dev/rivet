@@ -1,26 +1,26 @@
 import { actor, CreateContextOf, ActionContextOf } from "rivetkit";
 
 const gameRoom = actor({
-  createState: (c, input: { roomId: string }): { players: string[]; score: number } => {
+  onCreate: (c, input: { roomId: string }) => {
     initializeRoom(c, input.roomId);
-    return { players: [] as string[], score: 0 };
   },
+
+  createVars: () => ({ players: [] as string[] }),
 
   actions: {
     addPlayer: (c, playerId: string) => {
       validatePlayer(c, playerId);
-      c.state.players.push(playerId);
+      c.vars.players.push(playerId);
     }
   }
 });
 
-// Extract CreateContext type for createState hook
+// Extract CreateContext type for onCreate hook
 function initializeRoom(
   context: CreateContextOf<typeof gameRoom>,
   roomId: string
 ) {
   console.log(`Initializing room: ${roomId}`);
-  // context.state is not available here (being created)
   // context.vars is not available here (not created yet)
 }
 
@@ -30,7 +30,7 @@ function validatePlayer(
   playerId: string
 ) {
   // Full context available in actions
-  if (context.state.players.includes(playerId)) {
+  if (context.vars.players.includes(playerId)) {
     throw new Error("Player already in room");
   }
 }

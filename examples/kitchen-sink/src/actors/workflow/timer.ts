@@ -4,6 +4,12 @@
 
 import { actor, event } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
+import {
+	loadRecord,
+	recordDb,
+	saveRecord,
+	updateRecord,
+} from "./record-store.ts";
 
 export type Timer = {
 	id: string;
@@ -19,42 +25,48 @@ export type TimerInput = {
 };
 
 export const timer = actor({
-	createState: (c, input?: TimerInput): Timer => ({
-		id: c.key[0] as string,
-		name: input?.name ?? "Timer",
-		durationMs: input?.durationMs ?? 10000,
-		startedAt: Date.now(),
-	}),
+	db: recordDb(),
+	onCreate: async (c, input?: TimerInput) => {
+		await saveRecord<Timer>(c.db, {
+			id: c.key[0] as string,
+			name: input?.name ?? "Timer",
+			durationMs: input?.durationMs ?? 10000,
+			startedAt: Date.now(),
+		});
+	},
 	events: {
 		timerStarted: event<Timer>(),
 		timerCompleted: event<Timer>(),
 	},
 
 	actions: {
-		getTimer: (c): Timer => c.state,
+		getTimer: (c): Promise<Timer> => loadRecord<Timer>(c.db),
 	},
 
 	run: workflow(async (ctx) => {
 		await ctx.loop("timer-loop", async (loopCtx) => {
-			// Get duration inside a step since state is only available in steps
+			// Read the duration inside a step since the database is only available in steps
 			const durationMs = await loopCtx.step("start-timer", async (c) => {
+				const timer = await loadRecord<Timer>(c.db);
 				c.log.info({
 					msg: "starting timer",
-					timerId: c.state.id,
-					durationMs: c.state.durationMs,
+					timerId: timer.id,
+					durationMs: timer.durationMs,
 				});
-				c.broadcast("timerStarted", c.state);
-				return c.state.durationMs;
+				c.broadcast("timerStarted", timer);
+				return timer.durationMs;
 			});
 
 			await loopCtx.sleep("countdown", durationMs);
 
 			await loopCtx.step("complete-timer", async (c) => {
-				c.state.completedAt = Date.now();
-				c.broadcast("timerCompleted", c.state);
+				const updated = await updateRecord<Timer>(c.db, (timer) => {
+					timer.completedAt = Date.now();
+				});
+				c.broadcast("timerCompleted", updated);
 				c.log.info({
 					msg: "timer completed",
-					timerId: c.state.id,
+					timerId: updated.id,
 				});
 			});
 

@@ -1,4 +1,5 @@
 use crate::Effects;
+use rivet_data::families::VersionFamily;
 use rivet_env::Clocks;
 pub use rivet_state_machine::RuntimeEffect;
 use rivet_state_machine::{
@@ -46,6 +47,11 @@ pub trait DurableStateMachine: Sized + Send + Sync + 'static {
 
 	const DEBUG_NAME: &'static str;
 
+	/// The version family the state and timers are encoded in. The runner encodes both at the
+	/// family's write version, the highest every live storage worker reads, or above it behind
+	/// a tablet version mark when that version cannot express them; see `Runner`.
+	const FAMILY: VersionFamily;
+
 	fn start(
 		state: &mut Self::State,
 		now: Clocks,
@@ -65,17 +71,49 @@ pub trait DurableStateMachine: Sized + Send + Sync + 'static {
 
 	fn snapshot(state: &Self::State) -> Self::Snapshot;
 
+	/// The incarnation the state was last reset for after a group fork, the stamp
+	/// `VolumeRecordView::pending_fork_reset` compares. While it differs from the incarnation
+	/// of a volume made by a group fork, the state is inherited, and the runner arms the Depot
+	/// alarm again in the commit that resets it. A machine whose volume is never made by a
+	/// group fork returns `None`.
+	fn fork_reset(state: &Self::State) -> Option<[u8; 16]>;
+
 	fn debug_validate(state: &Self::State) -> anyhow::Result<()>;
 
 	fn normalize(state: &Self::State, _now: Clocks, _ranks: &RankMap<Self::Slot>) -> Self::State {
 		state.clone()
 	}
 
-	fn serialize_state(state: &Self::State) -> anyhow::Result<Vec<u8>>;
+	/// Encodes the state at `version` of [`Self::FAMILY`]. A version that cannot express the
+	/// state must refuse with [`rivet_data::versioned::Inexpressible`], which is the only error
+	/// the runner skips while it looks for the lowest version at or above the selected one that
+	/// expresses it. Any other error fails the transition. See `state_encoding`.
+	fn serialize_state(state: &Self::State, version: u16) -> anyhow::Result<Vec<u8>>;
 
 	fn deserialize_state(bytes: &[u8]) -> anyhow::Result<Self::State>;
 
-	fn serialize_timer(timer: &Self::Timer) -> anyhow::Result<Vec<u8>>;
+	/// The timer's stable identity. Arming a timer replaces the armed timer with the same id and
+	/// cancelling one removes it, whatever encoding its payload was stored in. The id names
+	/// every field that distinguishes two timers to the machine, and never changes for a timer
+	/// that may be stored.
+	fn timer_id(timer: &Self::Timer) -> Vec<u8>;
+
+	/// Encodes the timer at `version` of [`Self::FAMILY`]. A version that cannot express the
+	/// timer must refuse with [`rivet_data::versioned::Inexpressible`] (anywhere in the error's
+	/// chain), which is the only error the runner skips while it looks for the lowest version at
+	/// or above the selected one that expresses it. Any other error fails the transition. See
+	/// `timer_encoding`.
+	fn serialize_timer(timer: &Self::Timer, version: u16) -> anyhow::Result<Vec<u8>>;
+
+	/// Encodes a timer rearmed by a delivery of the same timer id. The fired payload
+	/// can establish a version the volume's readers already had to support.
+	fn serialize_rearmed_timer(
+		timer: &Self::Timer,
+		version: u16,
+		_fired_payload: &[u8],
+	) -> anyhow::Result<Vec<u8>> {
+		Self::serialize_timer(timer, version)
+	}
 
 	fn deserialize_timer(bytes: &[u8]) -> anyhow::Result<Self::Timer>;
 }

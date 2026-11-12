@@ -27,26 +27,19 @@ export class TurnBasedBot {
 
 	private async start(inviteCode: string) {
 		try {
-			const mm = this.client.turnBasedMatchmaker
+			const game = await this.client.turnBasedMatchmaker
 				.getOrCreate(["main"])
-				.connect();
-			const result = await mm.send(
-				"joinByCode",
-				{
+				.joinByCode({
 					inviteCode,
 					playerName: `Bot-${Math.random().toString(36).slice(2, 6)}`,
-				},
-				{ wait: true, timeout: 10_000 },
-			);
-			mm.dispose();
-			const response = result.response;
-			if (!response || this.destroyed) return;
+				});
+			if (this.destroyed) return;
 
-			this.playerId = response.playerId;
+			this.playerId = game.playerId;
 
 			this.conn = this.client.turnBasedMatch
-				.get([response.matchId], {
-					params: { playerId: response.playerId },
+				.get([game.matchId], {
+					params: { playerId: game.playerId },
 				})
 				.connect();
 

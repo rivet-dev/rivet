@@ -4,7 +4,7 @@ description: "How we benchmark Rivet: the cluster setup, what each number measur
 skill: true
 ---
 
-These measurements come from the October 25, 2026 Rivet Actors benchmark. Use the setup and method below to compare your own cluster. Results depend on the workload and hardware.
+These measurements come from our published benchmark, [Rivet Actors against Cloudflare Durable Objects](https://github.com/rivet-dev/bench-rivet-actors-vs-durable-objects), run on November 5, 2026 with Rivet 3.0.3. The repository has the raw samples, the full report, and the scripts to reproduce every number. Results depend on the workload and hardware.
 
 ## Setup
 
@@ -14,64 +14,64 @@ These measurements come from the October 25, 2026 Rivet Actors benchmark. Use th
 | **Control plane** | 3 instances, one per zone, each `Standard_L8as_v5`: 8 vCPU, 64 GiB RAM, about 1.7 TB local NVMe (ext4, `noatime`) |
 | **Durability** | Every write is acknowledged by 2 of 3 instances, and at least one of those is in another zone |
 | **Node and client** | 1 node VM, `Standard_D16as_v7`: 16 vCPU, in the first zone. The load generator runs on the same VM. |
-| **Software** | Debian 13, Node.js 24, release builds |
+| **Software** | Rivet 3.0.3 (`rivetdev/engine:3.0.3` and `rivetkit@3.0.3`), Node.js 24 |
 | **Object storage** | Azure Blob Storage in the same region, with locally redundant storage (LRS) |
-
-Requests use plain HTTP inside the region over reused connections, with one request in flight. Create and wake requests have 20 ms gaps. The warm-read condition has 1,000 warmups; inserts run without gaps. Each row reports all successful samples from its condition, with nearest-rank percentiles and no trimming. All conditions below completed without errors.
 
 ## Results
 
-Milliseconds, p50 / p99.
+Milliseconds, p50 / p99, nearest rank, no trimming. Every condition completed without errors.
 
 | Measurement | Samples | p50 | p99 | What it measures |
 | --- | ---: | ---: | ---: | --- |
-| **Create** | 1,500 | 6.92 | 8.11 | Client send to full first ping reply from a new keyed Rivet Actor. Includes scheduling, storage creation, and framework startup. |
-| **Wake** | 1,200 | 4.37 | 6.80 | Client send to full ping reply from a Rivet Actor asleep for at least 10 seconds. |
-| **Durable insert** | 1,200 | 0.69 | 0.80 | One 128-byte SQLite row inserted in autocommit mode. Timed around the query on the node, including the write to a majority of disks across zones. |
-| **Warm read** | 1,200 | 0.059 | 0.080 | A primary-key read of one 128-byte row from SQLite's memory cache, timed around the query. |
-| **Random read after sleep, 50 MB database** | 1,200 | 1.33 | 100.1 | First random point read after at least 13 seconds asleep. Timed around the query, with two network page fetches. |
-| **Random read after sleep, 1 GB database** | 1,024 | 41.8 | 168.4 | The same condition with three network page fetches. |
+| **Cold start** | 1,500 | 4.30 | 4.99 | Client send to full reply from a new Rivet Actor, through the gateway. Includes scheduling, storage creation, and framework startup. |
+| **Wake** | 1,200 | 6.26 | 8.15 | Client send to full reply from a Rivet Actor asleep for at least 10 seconds. |
+| **Warm request** | 2,000 | 0.45 | 0.79 | Round trip of a request to a running Rivet Actor. |
+| **Durable write (3 AZ)** | 1,200 | 0.69 | 1.07 | One SQLite row inserted, timed around the query in the Rivet Actor, including the write to a majority of disks across zones. |
+| **Warm point read** | 1,200 | 0.09 | 0.54 | A point read from SQLite's memory cache, timed around the query in the Rivet Actor. |
+| **Point read after sleep, 50 MB database** | 1,200 | 0.90 | 1.36 | The first random point read after at least 13 seconds asleep, timed around the query in the Rivet Actor. |
 
-The query interval includes the SQLite call, transport, and materializing the result on the node. It excludes the client's HTTP round trip. Full HTTP p50 is 0.59 ms for a warm read, 17.8 ms for the 50 MB read after sleep, and 61.6 ms for the 1 GB read after sleep, including wake time.
+Throughput, the Durable Objects results, and the remaining conditions are in the [repository](https://github.com/rivet-dev/bench-rivet-actors-vs-durable-objects).
 
-The node reaches the control plane in its own zone for reads; durable writes require a cross-zone acknowledgement. Sleeping does not guarantee a cold object-storage read. This setup tests replicated writes across zones, but its LRS bucket does not test object-storage availability during a zone failure.
+## Comparison baseline
+
+The Rivet landing page compares Rivet Actors with sandboxes, using [E2B](https://e2b.dev) as the baseline. We did not measure the E2B figures on the setup above. They come from E2B's documentation and a third-party benchmark.
+
+| | Rivet Actor | E2B sandbox | Difference |
+| --- | ---: | ---: | ---: |
+| **Cold start, p50** | 4.30 ms | 1.27 s | About 295× |
+| **Cold start, p99** | 4.99 ms | 1.70 s | About 341× |
+| **Memory** | 72.4 KB per running Rivet Actor | 512 MiB per sandbox | About 7,242× |
+
+### Memory
+
+- **Why E2B:** E2B has one of the smallest default memory allocations among sandbox providers, which keeps the comparison conservative.
+- **E2B figure:** 512 MiB per sandbox, the default documented in [E2B's billing documentation](https://docs.e2b.dev/billing) as of November 4, 2026. This is allocated memory, not measured memory consumption or a minimum.
+- **Node.js floor:** Each sandbox requires its own Node.js process, so a sandbox running Node.js cannot use less memory than one Node.js runtime, however small its allocation.
+- **Rivet figure:** 72.4 KB is the resident memory (RSS) added by one running Rivet Actor, measured in September 2026 with the Rust rivetkit SDK. Rivet Actors share their node's process instead of each starting their own.
+
+### Cold starts
+
+- **Why E2B:** E2B is a standard baseline, and using it for memory and cold starts keeps the comparison consistent.
+- **Startup time:** 1.27 seconds median and 1.70 seconds p99, from [ComputeSDK's October 30, 2026 sandbox benchmark](https://www.computesdk.com/benchmarks/sandboxes/burst-tti).
+- **Methodology:** 100 sandboxes launched concurrently, with 100% success. Timing starts at `compute.sandbox.create()` and ends after the first successful `runCommand()` inside the sandbox.
+
+Rivet's cold start measures Rivet Actor creation through the first response, with one request at a time. Comparing the medians gives approximately 295×, and comparing the p99s gives approximately 341×, but these are separate benchmarks with different concurrency and environments.
+
+## Storage cost
+
+SQLite on S3 costs about 10.4× less to store long term than replicated SSD storage. This is a calculation from AWS list prices in `us-east-1`, not a measured Rivet bill.
+
+| | S3 Standard | Three Amazon EBS gp3 copies |
+| --- | ---: | ---: |
+| **Per GB-month** | $0.023 | $0.24 ($0.08 per copy) |
+| **1 TB for a year** | $276 | $2,880 |
+
+- **Why gp3:** AWS recommends General Purpose SSD volumes for most workloads and describes gp3 as its [lowest-cost SSD volume type](https://docs.aws.amazon.com/ebs/latest/userguide/general-purpose.html).
+- **Why three copies:** S3 Standard [stores data across at least three Availability Zones](https://docs.aws.amazon.com/AmazonS3/latest/userguide/DataDurability.html) at no extra charge. An EBS volume is tied to one zone, so matching that placement takes one volume per zone.
+- **Prices:** [S3 Standard](https://aws.amazon.com/s3/pricing/) uses the first 50 TB tier. [gp3](https://aws.amazon.com/ebs/pricing/) uses storage only, with its included 3,000 IOPS and 125 MB/s.
+- **Reads and writes:** This comparison does not include the cost of reads and writes. We assume that cost is amortized because Rivet batches reads and writes to S3, so its share of the total cost is a small fraction. This is an assumption, not a measurement.
+- **What else this excludes:** Cross-zone replication transfer and extra provisioned gp3 performance. It also excludes the replicated local disks that hold recent writes before they move to object storage, so the figure applies to data at rest in S3.
 
 ## Reproducing it
 
-<Steps>
-
-<Step title="Deploy the control plane">
-
-Run three control plane instances in three zones of one region, each on local NVMe, with a bucket in the same region. Follow the [Kubernetes](/docs/deploy/self-host/control-plane/kubernetes/) or [VM](/docs/deploy/self-host/control-plane/vm/) guide.
-
-</Step>
-
-<Step title="Deploy one node">
-
-Run one node in the first zone, with a Rivet Actor that has a `ping` action and a SQLite table, and a load generator on the same machine. See [Deploy nodes](/docs/deploy/self-host/workers/).
-
-</Step>
-
-<Step title="Warm up">
-
-For the warm-read condition, seed one 128-byte row and run 1,000 reads before recording samples. Keep startup and warmup measurements separate from measured requests.
-
-</Step>
-
-<Step title="Measure each condition">
-
-Use the sample counts and pacing above, with a new key for each create. For wakes, explicitly sleep each Actor and wait at least 10 seconds. For random reads, seed 128-byte rows into databases of the stated sizes, sleep the Actors for at least 13 seconds, and verify each measured query fetches pages over the network. Record HTTP and query intervals separately.
-
-</Step>
-
-<Step title="Report every sample">
-
-Sort the successful samples and take nearest-rank percentiles. Report the sample count and every failure next to each result.
-
-</Step>
-
-</Steps>
-
-## Under load
-
-These latency results use one request at a time. Concurrent create workloads that overlapped mass teardown produced timeouts. Unpaced 10 MiB writes produced errors, and a seven-minute write run slowed substantially. Measure sustained throughput and error rates for your workload separately from these latency conditions.
+Follow the [Reproduce it](https://github.com/rivet-dev/bench-rivet-actors-vs-durable-objects#reproduce-it) steps in the repository. Its scripts provision the Azure VMs, deploy the control plane and node, run each condition, and regenerate the report from the raw samples.

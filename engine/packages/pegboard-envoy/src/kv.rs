@@ -8,6 +8,7 @@ use pegboard::wire;
 use rivet_envoy_protocol as p;
 use rivet_error::*;
 use rivet_keys::keys::{KeyAddress, SubspaceRange};
+use rivet_topology::versions::WriteVersions;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Bound;
@@ -104,10 +105,32 @@ fn admit_get(keys: &[p::KvKey]) -> Result<()> {
 	Ok(())
 }
 
+/// Refuses a range delete before anything is deleted when either bound is longer than the key
+/// limit, as a get or a put naming such a key is refused. The filesystem holds a bound's encoded
+/// form to a limit that leaves room for the encoding of a key at this limit.
+fn admit_range_bounds(start: &[u8], end: &[u8]) -> Result<()> {
+	if let Some(bound) = [start, end]
+		.into_iter()
+		.find(|bound| bound.len() > MAX_KEY_BYTES)
+	{
+		return Err(KvKeyTooLarge {
+			bytes: bound.len(),
+			max: MAX_KEY_BYTES,
+		}
+		.build());
+	}
+	Ok(())
+}
+
 /// Runs one KV request on the actor's `kv` inode. Requests of one actor run in order on its
-/// lane, and the lane's exclusive filesystem owner fences a stale engine.
+/// lane, and the lane's exclusive filesystem owner fences a stale engine. A put encodes its
+/// values at `versions`' write version of `pegboard.actor`, since the actor's next start may
+/// land on a process of the previous release while a deploy rolls; a put that version cannot
+/// carry is refused before anything is written, with `retry_after_ms` as its hint.
 pub(crate) async fn execute(
 	env: &dyn rivet_env::Env,
+	versions: &dyn WriteVersions,
+	retry_after_ms: u64,
 	fs: &Arc<Filesystem>,
 	ino: u64,
 	data: p::KvRequestData,
@@ -174,6 +197,9 @@ pub(crate) async fn execute(
 				"KV key too large"
 			);
 
+			let version = rivet_data::pegboard_actor::record_write_version(
+				versions.write_version(pegboard::sealed::FAMILY)?,
+			);
 			let mut tx = fs.begin(ino).await?;
 
 			let now = env.clock().observe()?.unix_ms;
@@ -190,13 +216,24 @@ pub(crate) async fn execute(
 						.into(),
 					updated_unix_ms: now,
 				};
-				tx.put(
-					&packed,
-					&rivet_data::versioned::KvValue::serialize_with_embedded_version(
-						&value,
-						rivet_data::generated::PEGBOARD_ACTOR_VERSION,
-					)?,
-				)?;
+				let sealed = match pegboard::sealed::seal::<rivet_data::versioned::KvValue>(
+					pegboard::sealed::SealedValue::Kv,
+					&value,
+					version,
+					retry_after_ms,
+				) {
+					Ok(sealed) => sealed,
+					Err(error)
+						if depot_client::client_protocol::version_pending_retry_after_ms(
+							&error,
+						)
+						.is_some() =>
+					{
+						return Ok(refusal(error));
+					}
+					Err(error) => return Err(error),
+				};
+				tx.put(&packed, &sealed)?;
 			}
 			tx.commit().await?;
 
@@ -213,16 +250,22 @@ pub(crate) async fn execute(
 			Ok(p::KvResponseData::KvDeleteResponse)
 		}
 		p::KvRequestData::KvDeleteRangeRequest(range) => {
+			// An empty or reversed range deletes nothing and succeeds whatever its bounds' sizes,
+			// as it always has. User keys sort as their packed forms do.
+			if range.start >= range.end {
+				return Ok(p::KvResponseData::KvDeleteResponse);
+			}
+			if let Err(error) = admit_range_bounds(&range.start, &range.end) {
+				return Ok(refusal(error));
+			}
 			let start = ActorKvKey::new(range.start).pack();
 			let end = ActorKvKey::new(range.end).pack();
-			if start < end {
-				let mut tx = fs.begin(ino).await?;
-				tx.delete_range((
-					Bound::Included(start.as_ref()),
-					Bound::Excluded(end.as_ref()),
-				))?;
-				tx.commit().await?;
-			}
+			let mut tx = fs.begin(ino).await?;
+			tx.delete_range((
+				Bound::Included(start.as_ref()),
+				Bound::Excluded(end.as_ref()),
+			))?;
+			tx.commit().await?;
 			Ok(p::KvResponseData::KvDeleteResponse)
 		}
 		p::KvRequestData::KvDropRequest => {

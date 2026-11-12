@@ -3,12 +3,10 @@ catalog:
   drizzle-zod: "0.8.3"
 
 packages:
-  - engine
   - engine/sdks/typescript/api-full
   - engine/sdks/typescript/envoy-protocol
   - examples/*
   - integrations/*
-  - integrations/*/examples/*
   - rivetkit-typescript/packages/*
   - rivetkit-swift/examples/*/server
   - scripts/publish

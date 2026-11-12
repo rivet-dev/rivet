@@ -2,7 +2,11 @@
 # "Control" distinguishes membership/learning from per-key consensus and KV data.
 # CoordinatorData and ReplicaData live at separate typed keys with independent CAS
 # revisions; sharing this schema does not make them one record or transaction.
-type ReplicaStatus enum { Joining Learning Active }
+type ReplicaStatus enum {
+	JOINING
+	LEARNING
+	ACTIVE
+}
 
 type Member struct {
 	replicaId: u64

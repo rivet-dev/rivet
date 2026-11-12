@@ -104,3 +104,15 @@ public struct ManagerApiError: Error, Sendable, Equatable, LocalizedError, Custo
 func isSchedulingError(group: String, code: String) -> Bool {
     return group == "guard" && (code == "actor_ready_timeout" || code == "actor_runner_failed")
 }
+
+func isActorDestroyed(group: String, code: String) -> Bool {
+    return group == "actor" && code == "destroyed"
+}
+
+func isActorNotFound(group: String, code: String) -> Bool {
+    return group == "actor" && code == "not_found"
+}
+
+func isAuthRefused(group: String, code: String) -> Bool {
+    return group == "auth" && (code == "invalid_token" || code == "token_expired" || code == "insufficient_permissions")
+}

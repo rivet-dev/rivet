@@ -138,11 +138,13 @@ export class ActorHandleRaw {
 		return this.#params;
 	}
 
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	send(
 		name: string,
 		body: unknown,
 		options: QueueSendWaitOptions,
 	): Promise<QueueSendResult>;
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	send(
 		name: string,
 		body: unknown,
@@ -200,8 +202,16 @@ export class ActorHandleRaw {
 						},
 					}).send(name, body, options as any);
 				} catch (err) {
-					const { group, code, message, metadata, rayId, actor } =
-						deconstructError(err, true);
+					const {
+						group,
+						code,
+						message,
+						metadata,
+						rayId,
+						actor,
+						public: isPublic,
+						statusCode,
+					} = deconstructError(err, true);
 
 					if (
 						this.#shouldRetryQueueDispatchOverload(
@@ -272,6 +282,8 @@ export class ActorHandleRaw {
 					}
 
 					throw new ActorError(group, code, message, {
+						public: isPublic,
+						statusCode,
 						metadata,
 						rayId,
 						actor,
@@ -434,8 +446,16 @@ export class ActorHandleRaw {
 				}
 				return output;
 			} catch (err) {
-				const { group, code, message, metadata, rayId, actor } =
-					deconstructError(err, true);
+				const {
+					group,
+					code,
+					message,
+					metadata,
+					rayId,
+					actor,
+					public: isPublic,
+					statusCode,
+				} = deconstructError(err, true);
 
 				if (
 					await this.#shouldRetrySchedulingError(
@@ -476,7 +496,13 @@ export class ActorHandleRaw {
 						"actor",
 						"not_found",
 						"The actor does not exist or was destroyed.",
-						{ metadata, rayId, actor },
+						{
+							public: true,
+							statusCode: 404,
+							metadata,
+							rayId,
+							actor,
+						},
 					);
 				}
 
@@ -498,6 +524,8 @@ export class ActorHandleRaw {
 				}
 
 				throw new ActorError(group, code, message, {
+					public: isPublic,
+					statusCode,
 					metadata,
 					rayId,
 					actor,
@@ -779,8 +807,16 @@ export class ActorHandleRaw {
 				}
 				return response;
 			} catch (err) {
-				const { group, code, message, metadata, rayId, actor } =
-					deconstructError(err, true);
+				const {
+					group,
+					code,
+					message,
+					metadata,
+					rayId,
+					actor,
+					public: isPublic,
+					statusCode,
+				} = deconstructError(err, true);
 
 				if (
 					await this.#shouldRetrySchedulingError(
@@ -828,6 +864,8 @@ export class ActorHandleRaw {
 				}
 
 				throw new ActorError(group, code, message, {
+					public: isPublic,
+					statusCode,
 					metadata,
 					rayId,
 					actor,

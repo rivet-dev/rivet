@@ -4,6 +4,7 @@
 
 - Reject persistent storage logs paired with an in-memory primary object store, which loses cluster metadata and cold data on restart.
 - Stop nodes rejected with `pool.not_found` and report their namespace and pool instead of reconnecting indefinitely. Transient connection failures still retry.
+- Add `connection` to `@rivetkit/effect` action requests. It holds the caller's connection `id` and a `scope` that closes when the connection ends, and it is `None` for scheduled actions.
 
 - **Authentication configuration is now required.** Deployments that previously omitted `auth`
   must configure an explicit production secret before upgrading:

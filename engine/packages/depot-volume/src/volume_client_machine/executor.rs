@@ -79,9 +79,9 @@ pub trait VolumeClientTransport: Send + Sync {
 		client_incarnation: [u8; 16],
 		create_if_absent: bool,
 		initial: Vec<rivet_data::generated::depot_log_shard_v1::PayloadWrite>,
-		read: Option<rivet_data::generated::depot_client_protocol_v1::VolumeReadKeys>,
+		read: Option<rivet_data::generated::depot_client_protocol_v2::VolumeReadKeys>,
 		deadline_boot_ms: u64,
-	) -> TransportFuture<'_, rivet_data::generated::depot_client_protocol_v1::VolumeOpenResponse>;
+	) -> TransportFuture<'_, rivet_data::generated::depot_client_protocol_v2::VolumeOpenResponse>;
 
 	/// Releases the client's volume through the maintainer after draining.
 	fn close(

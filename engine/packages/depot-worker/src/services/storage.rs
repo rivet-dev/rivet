@@ -32,8 +32,14 @@ use tokio::sync::{oneshot, watch};
 use universalpubsub::{PubSub, SubjectCapacities};
 
 pub struct StorageDependencies {
+	/// Rollout readiness, published only after current maintainers observe recovered replicas.
+	pub readiness: Option<super::readiness::Readiness>,
 	pub fork_peer: Option<Arc<dyn crate::tablet_maintainer_machine::runner::ForkPeer>>,
-	pub base_reader: Option<Arc<dyn crate::filesystem::base::BaseChunkReader>>,
+	/// Runs the group read commands for the events poll and the maintainers. `None` runs no
+	/// poll and leaves grouped volumes unable to apply, which only a test or simulation
+	/// without groups accepts.
+	pub group_commands: Option<Arc<dyn crate::group_events::GroupCommands>>,
+	pub base_reader: Option<Arc<dyn crate::filesystem::base::BaseLayerReader>>,
 	pub commands: Arc<crate::command::CommandRegistry>,
 	/// Dropped when storage services stop, but topology and UPS outlive them, so this is not
 	/// the lock's last holder: the process keeps the directory until it can no longer serve
@@ -266,6 +272,7 @@ async fn run(
 		pubsub: deps.pubsub.clone(),
 		capacities: volume_capacities,
 		timeout,
+		versions: deps.topology.clone(),
 	}));
 	// The balancer's switch follows the dynamic config; its settings are fixed at startup.
 	let (balancing_enabled, balancing_enabled_updates) =
@@ -287,6 +294,7 @@ async fn run(
 			.with_balancing(Some(balancing_settings(
 				&settings.balancing,
 				&deps.topology.config().lease,
+				settings.zone.is_some(),
 			)?))
 			.with_balancing_enabled(balancing_enabled_updates)
 			.with_learning_deadline_ms(settings.learning_deadline_ms())
@@ -356,10 +364,16 @@ async fn run(
 	crate::metrics::FS_BULK_BUDGET_BYTES_PER_SEC.set(bulk_budget.as_ref().map_or(0, |budget| {
 		i64::try_from(budget.bytes_per_sec()).unwrap_or(i64::MAX)
 	}));
+	settings.events.validate()?;
+	let group_events = Arc::new(crate::group_events::GroupEventsFeed::new(
+		usize::try_from(settings.groups.max_cached_records()).unwrap_or(usize::MAX),
+	));
 	let mut supervisor = TabletSupervisor::new(
 		deps.pubsub.worker_id().clone(),
 		SupervisorDependencies {
 			fork_peer: deps.fork_peer.clone(),
+			group_commands: deps.group_commands.clone(),
+			group_events: Some(group_events.clone()),
 			base_reader: deps.base_reader.clone(),
 			log_shard: shard.clone(),
 			env: env.clone(),
@@ -387,6 +401,8 @@ async fn run(
 					.store_volume_lock_stripes
 					.unwrap_or(ColdStoreConfig::default().volume_lock_stripes),
 				bulk_budget: bulk_budget.clone(),
+				inline_metadata_bytes: usize::try_from(settings.groups.inline_metadata_bytes())
+					.unwrap_or(usize::MAX),
 				bulk_run: crate::filesystem::session::BulkRunConfig {
 					min_chunks: settings.bulk_read_min_chunks.unwrap_or(0),
 					cache_blocks: settings.bulk_read_cache_blocks.unwrap_or(true),
@@ -446,6 +462,9 @@ async fn run(
 				max_background_cold_reads: settings
 					.max_background_cold_reads
 					.unwrap_or(MaintainerConfig::default().max_background_cold_reads),
+				max_base_reads: settings
+					.max_base_reads
+					.unwrap_or(MaintainerConfig::default().max_base_reads),
 				simulated_fs_read_cost_us: settings.simulated_fs_read_cost_us.unwrap_or(0),
 				max_keyed_in_flight: settings
 					.store_max_keyed_in_flight
@@ -465,6 +484,14 @@ async fn run(
 				max_requests: settings
 					.maintainer_max_requests
 					.unwrap_or(MaintainerConfig::default().max_requests),
+				max_lazy_fork_waiters_per_volume: settings.groups.max_open_waiters_per_volume(),
+				max_group_wanted_forks: settings.groups.max_wanted_forks(),
+				max_group_pin_wait_children: settings.groups.max_pin_wait_children(),
+				max_group_reads_in_flight: settings.groups.max_reads_in_flight(),
+				max_absent_lazy_forks: settings.groups.max_absent_lazy_forks(),
+				max_lazy_fork_jobs: settings.groups.max_lazy_fork_jobs(),
+				max_parked_lazy_fork_jobs: settings.groups.max_parked_lazy_fork_jobs(),
+				max_archive_fences: settings.groups.max_archive_fences(),
 				max_loaded_volumes: settings
 					.maintainer_max_loaded_volumes
 					.unwrap_or(MaintainerConfig::default().max_loaded_volumes),
@@ -488,6 +515,21 @@ async fn run(
 	);
 	let mut services: FuturesUnordered<BoxFuture<'static, (&'static str, Result<()>)>> =
 		FuturesUnordered::new();
+	if let Some(readiness) = deps.readiness {
+		let ready = super::readiness::run(
+			readiness,
+			deps.pubsub.clone(),
+			deps.topology.clone(),
+			deps.object_store.clone(),
+			shard.snapshot.clone(),
+			view.clone(),
+			volume_capacities,
+			// This is the same full-volume barrier as a stop check, not a short RPC.
+			Duration::from_millis(settings.stop_timeout_ms()),
+			stopping.clone(),
+		);
+		services.push(async move { ("storage readiness", ready.await) }.boxed());
+	}
 	// The log request loop is one serial task for the whole shard: decode, submit and reply.
 	let log = rivet_metrics::monitor_task(
 		"log_shard_service",
@@ -519,6 +561,20 @@ async fn run(
 		},
 	);
 	services.push(async move { ("volume requests", tablets.await) }.boxed());
+	if let Some(commands) = deps.group_commands.clone() {
+		let events = super::group_events::start(
+			env.clone(),
+			commands,
+			group_events.clone(),
+			crate::group_events::poll::PollConfig {
+				shards: settings.events.shards(),
+				poll_interval_ms: settings.events.poll_interval_ms(),
+				page: crate::command::groups::EVENTS_READ_MAX_ROWS,
+			},
+			stopping.clone(),
+		);
+		services.push(async move { ("events poll", events.await) }.boxed());
+	}
 	let commands = super::coordinator::start(
 		deps.pubsub.clone(),
 		deps.topology.clone(),
@@ -602,12 +658,23 @@ impl SingletonServices for StorageSingletons {
 			}
 		};
 		let (tablets, heartbeat_gc, application) = futures_util::join!(
-			self.tablets.reconcile_stopped(tenure),
-			self.heartbeat_gc.reconcile_stopped(tenure),
-			application,
+			traced_reconcile("tablets", self.tablets.reconcile_stopped(tenure)),
+			traced_reconcile("heartbeat gc", self.heartbeat_gc.reconcile_stopped(tenure)),
+			traced_reconcile("application", application),
 		);
 		tablets.and(heartbeat_gc).and(application)
 	}
+}
+
+/// Logs when one singleton host finishes reconciling, so a stuck host is visible before the
+/// coordinator's stop watchdog exits the process.
+async fn traced_reconcile(
+	host: &'static str,
+	reconcile: impl std::future::Future<Output = Result<()>>,
+) -> Result<()> {
+	let result = reconcile.await;
+	tracing::info!(host, ok = result.is_ok(), "singleton host reconciled");
+	result
 }
 
 /// The coordinator's automatic placement settings, or none when the operator disabled it.
@@ -618,6 +685,7 @@ impl SingletonServices for StorageSingletons {
 fn balancing_settings(
 	config: &rivet_config::config::TabletBalancingConfig,
 	lease: &rivet_topology::config::LeaseTiming,
+	zone_configured: bool,
 ) -> Result<crate::tablet_coordinator_machine::state::balancing::Settings> {
 	let listed_after_death_ms = lease
 		.ttl_ms
@@ -629,6 +697,7 @@ fn balancing_settings(
 	);
 	Ok(
 		crate::tablet_coordinator_machine::state::balancing::Settings {
+			require_zone_labels: zone_configured,
 			tablets_per_core: config.tablets_per_core,
 			destination_stability_ms: config.destination_stability_ms,
 			missing_worker_ms: config.missing_worker_ms,

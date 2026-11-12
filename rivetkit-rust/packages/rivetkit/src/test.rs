@@ -16,7 +16,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-	Action, Actor, Handles, IntoActorKey, TypedActorConnection, TypedActorHandle,
+	Action, Actor, Handler, IntoActorKey, TypedActorConnection, TypedActorHandle,
 	registry::Registry, typed_client::encode_action_args,
 };
 
@@ -59,10 +59,15 @@ pub async fn setup(registry: Registry) -> Result<TestHandle> {
 		let (ready_tx, ready_rx) = oneshot::channel();
 		let serve = tokio::spawn({
 			let shutdown = shutdown.clone();
+			// The observer runs again for every envoy the registry starts; only the first
+			// one marks readiness.
+			let ready_tx = parking_lot::Mutex::new(Some(ready_tx));
 			async move {
 				registry
 					.serve_with_config_and_handle_observer(config, shutdown, move |_| {
-						let _ = ready_tx.send(());
+						if let Some(ready_tx) = ready_tx.lock().take() {
+							let _ = ready_tx.send(());
+						}
 					})
 					.await
 			}
@@ -166,7 +171,7 @@ impl<A: Actor> TestActor<A> {
 
 	pub async fn send<M>(&self, action: M) -> Result<M::Output>
 	where
-		A: Handles<M>,
+		A: Handler<M>,
 		M: Action,
 	{
 		let args = encode_action_args(&action)?;

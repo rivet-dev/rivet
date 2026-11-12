@@ -2,18 +2,18 @@
 /**
  * Linear release cutter — called by humans, never by CI.
  *
- * Run from an EE jj workspace whose `@` is empty and directly on main@origin.
- * EE is the source of truth; OSS receives the bump through the snapshot sync.
+ * Run from an OSS jj workspace whose `@` is empty and directly on main@origin.
+ * Sync EE to OSS first; this command creates the version bump and release in OSS.
  *
  * Steps:
  *   1. Resolve target version (flags → semver bump → error)
  *   2. Auto-detect or confirm `latest` flag against the OSS release tags
- *   3. Require an empty working-copy revision on the latest EE main and a syncable OSS main
+ *   3. Require an empty working-copy revision on the latest OSS main
  *   4. Print release plan and confirm
  *   5. Update non-package.json source files (Cargo.toml, examples)
  *   6. Rewrite every publishable package.json (via discovery)
- *   7. Commit the bump to EE main and push it
- *   8. Sync EE main to OSS main (builds and checks the public tree)
+ *   7. Build the updated public tree locally
+ *   8. Commit the bump to OSS main and push it
  *   9. Trigger the OSS publish.yaml workflow
  *
  * Debugging: comment out any step. No `--only-steps`, no phases.
@@ -36,7 +36,7 @@ import {
 	shouldTagAsLatest,
 	updateSourceFiles,
 } from "../lib/version.js";
-import { OSS_REPOSITORY, requireEeReleaseRepository } from "../lib/repository.js";
+import { OSS_REPOSITORY, requireOssReleaseRepository } from "../lib/repository.js";
 
 const log = scoped("release");
 
@@ -89,7 +89,7 @@ async function main() {
 
 	const opts = program.opts<CliOpts>();
 	const repoRoot = findRepoRoot();
-	await requireEeReleaseRepository(repoRoot);
+	await requireOssReleaseRepository(repoRoot);
 
 	// 1. Resolve version.
 	const version = await resolveVersion({
@@ -109,12 +109,9 @@ async function main() {
 	else latest = opts.dryRun ? false : await shouldTagAsLatest(version);
 	latest = releaseLatest(version, latest);
 
-	// 3. Require an empty working-copy revision directly on the latest EE main, and check that
-	// the OSS sync can run (for example, that no OSS-only commit is waiting to be pulled)
-	// before the bump is pushed to EE.
+	// 3. Require an empty working-copy revision directly on the latest OSS main.
 	if (!opts.dryRun) {
 		await requireReleaseBase(repoRoot);
-		await $({ stdio: "inherit", cwd: repoRoot })`scripts/git/oss-sync.ts push --dry-run --skip-build`;
 	}
 
 	// 4. Print plan.
@@ -124,7 +121,7 @@ async function main() {
 	console.log("Release plan");
 	console.log(`  Version:  ${version}`);
 	console.log(`  Latest:   ${latest}`);
-	console.log("  Source:   EE main, published to OSS main by scripts/git/oss-sync.ts");
+	console.log("  Source:   OSS main (sync EE to OSS before releasing)");
 	console.log(`  Previous: ${latestGit ?? "(none)"}`);
 	if (opts.dryRun) console.log("  Dry run:  no source writes / commit / push / workflow trigger");
 	console.log("");
@@ -170,19 +167,25 @@ async function main() {
 		return;
 	}
 
-	// 7. Commit the bump to EE main. Cargo.lock follows the new workspace version.
-	log.info("committing version bump to EE main");
-	await $({ stdio: "inherit", cwd: repoRoot })`cargo update --workspace --offline`;
+	// 7. Check and build the versioned public tree before pushing any release changes.
+	// Native and wasm builds generate shared codecs, so build libraries serially first.
+	log.info("building release from OSS");
+	const build = $({ stdio: "inherit", cwd: repoRoot });
+	await build`cargo update --workspace --offline`;
+	await build`pnpm install --frozen-lockfile`;
+	await build`cargo check --workspace --exclude rivetkit-wasm`;
+	await build`pnpm exec turbo build --filter=rivetkit --concurrency=1`;
+	await build`pnpm exec turbo build --filter=./rivetkit-typescript/packages/* --concurrency=1`;
+	await build`pnpm build`;
+
+	// 8. Commit the bump to OSS main and push it. Pull these commits back into EE
+	// before the next EE-to-OSS snapshot sync.
+	log.info("committing version bump to OSS main");
 	await $({ stdio: "inherit", cwd: repoRoot })`jj commit -m ${`chore(release): update version to ${version}`}`;
 	await $({ stdio: "inherit", cwd: repoRoot })`jj bookmark set main -r @-`;
 	await $({ stdio: "inherit", cwd: repoRoot })`jj git push --remote origin --bookmark main`;
 
-	// 8. Publish the bump to OSS main. The sync builds and checks the public tree, which is
-	// exactly what publish.yaml builds, then records the sync back on EE main.
-	log.info("syncing EE main to OSS main");
-	await $({ stdio: "inherit", cwd: repoRoot })`scripts/git/oss-sync.ts all`;
-
-	// 9. Trigger the workflow on OSS main, which now ends with the synced bump.
+	// 9. Trigger the workflow on OSS main, which now ends with the version bump.
 	log.info("triggering publish.yaml workflow");
 	const latestFlag = latest ? "true" : "false";
 	await $({
@@ -196,7 +199,7 @@ async function main() {
 	);
 }
 
-/** Fails unless `@` is an empty revision directly on top of the freshly fetched EE main. */
+/** Fails unless `@` is an empty revision directly on top of the freshly fetched OSS main. */
 async function requireReleaseBase(repoRoot: string): Promise<void> {
 	await $({ cwd: repoRoot })`jj git fetch --remote origin --branch main`;
 	const { stdout } = await $({

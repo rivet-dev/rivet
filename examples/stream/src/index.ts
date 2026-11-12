@@ -1,4 +1,5 @@
 import { actor, event, setup } from "rivetkit";
+import { db, type RawAccess } from "rivetkit/db";
 
 export type StreamState = {
 	topValues: number[];
@@ -11,68 +12,77 @@ export type StreamUpdate = {
 };
 
 const streamProcessor = actor({
-	// Persistent state that survives restarts: https://rivet.dev/docs/actors/state
-	state: {
-		topValues: [] as number[],
-		totalValues: 0,
-	},
+	// Durable data that survives restarts: https://rivet.dev/docs/actors/sqlite
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS stats (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					total_values INTEGER NOT NULL
+				)
+			`);
+			await db.execute(
+				"INSERT OR IGNORE INTO stats (id, total_values) VALUES (1, 0)",
+			);
+			await db.execute(
+				"CREATE TABLE IF NOT EXISTS top_values (value REAL NOT NULL)",
+			);
+		},
+	}),
+
 	events: {
 		updated: event<StreamUpdate>(),
 	},
 
 	actions: {
 		// Callable functions from clients: https://rivet.dev/docs/actors/actions
-		getTopValues: (c) => c.state.topValues,
+		getTopValues: async (c) => (await readStats(c.db)).topValues,
 
-		getStats: (c) => ({
-			topValues: c.state.topValues,
-			totalCount: c.state.totalValues,
-			highestValue:
-				c.state.topValues.length > 0 ? c.state.topValues[0] : null,
-		}),
+		getStats: (c) => readStats(c.db),
 
-		addValue: (c, value: number) => {
-			// State changes are automatically persisted
-			c.state.totalValues++;
+		addValue: async (c, value: number) => {
+			// Update the count and the top values in one transaction so
+			// concurrent calls never overwrite each other.
+			const result = await c.db.transaction(
+				async (tx) => {
+					await tx.execute(
+						"UPDATE stats SET total_values = total_values + 1 WHERE id = 1",
+					);
+					await tx.execute(
+						"INSERT INTO top_values (value) VALUES (?)",
+						value,
+					);
 
-			// Insert new value if needed
-			const insertAt = c.state.topValues.findIndex((v) => value > v);
-			if (insertAt === -1 && c.state.topValues.length < 3) {
-				// Add to end if not better than existing values but we have space
-				c.state.topValues.push(value);
-			} else if (insertAt !== -1) {
-				// Insert at the correct position
-				c.state.topValues.splice(insertAt, 0, value);
-			}
+					// Keep only the top 3 values.
+					await tx.execute(
+						"DELETE FROM top_values WHERE rowid NOT IN (SELECT rowid FROM top_values ORDER BY value DESC LIMIT 3)",
+					);
 
-			// Keep only top 3
-			if (c.state.topValues.length > 3) {
-				c.state.topValues.length = 3;
-			}
-
-			// Sort descending to ensure correct order
-			c.state.topValues.sort((a, b) => b - a);
-
-			const result: StreamUpdate = {
-				topValues: c.state.topValues,
-				totalCount: c.state.totalValues,
-				highestValue:
-					c.state.topValues.length > 0 ? c.state.topValues[0] : null,
-			};
+					return await readStats(tx);
+				},
+				{ name: "add-value" },
+			);
 
 			// Send events to all connected clients: https://rivet.dev/docs/actors/events
 			c.broadcast("updated", result);
 
-			return c.state.topValues;
+			return result.topValues;
 		},
 
-		reset: (c) => {
-			c.state.topValues = [];
-			c.state.totalValues = 0;
+		reset: async (c) => {
+			await c.db.transaction(
+				async (tx) => {
+					await tx.execute(
+						"UPDATE stats SET total_values = 0 WHERE id = 1",
+					);
+					await tx.execute("DELETE FROM top_values");
+				},
+				{ name: "reset-stats" },
+			);
 
 			const result: StreamUpdate = {
-				topValues: c.state.topValues,
-				totalCount: c.state.totalValues,
+				topValues: [],
+				totalCount: 0,
 				highestValue: null,
 			};
 
@@ -82,6 +92,21 @@ const streamProcessor = actor({
 		},
 	},
 });
+
+async function readStats(db: RawAccess): Promise<StreamUpdate> {
+	const [{ totalCount }] = await db.execute<{ totalCount: number }>(
+		"SELECT total_values AS totalCount FROM stats WHERE id = 1",
+	);
+	const rows = await db.execute<{ value: number }>(
+		"SELECT value FROM top_values ORDER BY value DESC",
+	);
+	const topValues = rows.map((row) => row.value);
+	return {
+		topValues,
+		totalCount,
+		highestValue: topValues.length > 0 ? topValues[0] : null,
+	};
+}
 
 // Register actors and start the server: https://rivet.dev/docs/setup
 export const registry = setup({

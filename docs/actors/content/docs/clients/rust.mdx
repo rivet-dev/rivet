@@ -1,12 +1,8 @@
 ---
-title: "Rust (Beta)"
+title: "Rust"
 description: "Connect Rust applications to Rivet Actors with typed actor handles, actions, realtime events, and connection lifecycle APIs."
 skill: true
 ---
-
-<Note>
-Rust support is in beta. The supported public Rust API is `rivetkit` and `rivetkit::client`; lower-level crates are internal implementation details and do not carry a stability guarantee. See the full API reference on [docs.rs/rivetkit](https://docs.rs/rivetkit), or the runnable [`hello-world-rust`](https://github.com/rivet-dev/rivet/tree/main/examples/hello-world-rust) example.
-</Note>
 
 ## Getting Started
 
@@ -126,7 +122,7 @@ async fn main() -> Result<()> {
 
 ## Connection Parameters
 
-Pass connection parameters through the handle options. They are delivered to the actor's `create_conn_state` callback:
+Pass connection parameters through the handle options. The actor receives them in `on_before_connect` and can read them later with `ConnCtx::params`:
 
 ```rust @nocheck
 use counter::Counter;
@@ -219,7 +215,7 @@ async fn main() -> Result<()> {
 }
 ```
 
-`ConnectionStatus` is one of `Idle`, `Connecting`, `Connected`, or `Disconnected`. Connections reconnect automatically with backoff until you call `disconnect`.
+`ConnectionStatus` is one of `Idle`, `Connecting`, `Connected`, or `Disconnected`. Connections reconnect automatically with backoff until you call `disconnect`, or until the actor is destroyed.
 
 ## Low-Level HTTP & WebSocket
 

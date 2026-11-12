@@ -405,6 +405,9 @@ pub(super) fn ready_to_report(state: &MaintainerState) -> bool {
 		// closes retain their outstanding cleanup without blocking membership.
 		&& state.deleting.is_empty()
 		&& counts.recover_volume == 0
+		// An archive fence is a recovery that claims log replicas too; it is counted apart only
+		// for its own budget.
+		&& counts.archive_fence == 0
 		&& counts.forget_orphan == 0
 		&& state.membership_checks.evidence == Some(evidence(state))
 		&& matches!(state.membership_checks.scan, Scan::Complete)

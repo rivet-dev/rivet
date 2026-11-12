@@ -4,7 +4,7 @@ use crate::{
 	Error, Result,
 	store::{Row, RowKey, RowRange},
 };
-use rivet_data::generated::shared_depot_fs_read_v1 as wire;
+use rivet_data::generated::shared_depot_fs_read_v2 as wire;
 
 /// Shared default bounds for native and simulated snapshot readers.
 /// Read sessions one tablet holds at once. A held session retains about 1.2 KiB of maintainer
@@ -49,6 +49,12 @@ impl From<RowKey> for wire::FsRowKey {
 			}),
 			RowKey::Orphan(ino) => Self::FsOrphanKey(wire::FsOrphanKey { ino }),
 			RowKey::Chunk(ino, index) => Self::FsChunkKey(wire::FsChunkKey { ino, index }),
+			RowKey::KvRangeWhiteout(ino, start) => {
+				Self::FsKvRangeWhiteoutKey(wire::FsKvRangeWhiteoutKey {
+					ino,
+					start: start.into(),
+				})
+			}
 		}
 	}
 }
@@ -63,6 +69,9 @@ impl From<wire::FsRowKey> for RowKey {
 			wire::FsRowKey::FsKvKey(v) => Self::Kv(v.ino, v.key.to_vec()),
 			wire::FsRowKey::FsOrphanKey(v) => Self::Orphan(v.ino),
 			wire::FsRowKey::FsChunkKey(v) => Self::Chunk(v.ino, v.index),
+			wire::FsRowKey::FsKvRangeWhiteoutKey(v) => {
+				Self::KvRangeWhiteout(v.ino, v.start.to_vec())
+			}
 		}
 	}
 }
@@ -85,6 +94,10 @@ impl From<RowRange> for wire::FsRowRange {
 				end: end.map(Into::into),
 			}),
 			RowRange::Orphans => Self::FsOrphanRows,
+			RowRange::KvRangeWhiteouts(ino) => {
+				Self::FsKvRangeWhiteoutRows(wire::FsKvRangeWhiteoutRows { ino })
+			}
+			RowRange::KvRangeWhiteoutsAll => Self::FsKvRangeWhiteoutsAllRows,
 		}
 	}
 }
@@ -113,6 +126,8 @@ impl From<wire::FsRowRange> for RowRange {
 				end: v.end.map(Into::into),
 			},
 			wire::FsRowRange::FsOrphanRows => Self::Orphans,
+			wire::FsRowRange::FsKvRangeWhiteoutRows(v) => Self::KvRangeWhiteouts(v.ino),
+			wire::FsRowRange::FsKvRangeWhiteoutsAllRows => Self::KvRangeWhiteoutsAll,
 		}
 	}
 }
@@ -124,12 +139,38 @@ impl From<Row> for wire::FsRowValue {
 			Row::Dentry(v) => Self::FsDentry(v),
 			Row::Bytes(v) => Self::FsBytes(v),
 			Row::Unit => Self::FsPresent,
+			Row::KvRangeWhiteout(end) => Self::FsKvRangeWhiteout(crate::FsKvRangeWhiteout {
+				end: end.map(Into::into),
+			}),
 		}
 	}
 }
 pub fn decode_row(row: wire::FsReadRow) -> Result<(RowKey, Row)> {
 	let key = RowKey::from(row.key);
-	let value = match (&key, row.value) {
+	let value = decode_value(&key, row.value)?;
+	Ok((key, value))
+}
+
+/// One layer's row of a base read: the key with its row, or with `None` for a whiteout.
+pub fn decode_base_row(row: wire::FsBaseRow) -> Result<(RowKey, Option<Row>)> {
+	let key = RowKey::from(row.key);
+	let value = row
+		.value
+		.map(|value| decode_value(&key, value))
+		.transpose()?;
+	Ok((key, value))
+}
+
+pub fn encode_base_row(key: RowKey, value: Option<Row>) -> wire::FsBaseRow {
+	wire::FsBaseRow {
+		key: key.into(),
+		value: value.map(Into::into),
+	}
+}
+
+/// The row a wire value is under `key`, refusing a value of another kind.
+pub fn decode_value(key: &RowKey, value: wire::FsRowValue) -> Result<Row> {
+	let value = match (key, value) {
 		(RowKey::Format, wire::FsRowValue::FsFormat(v))
 			if v.inline_max_bytes <= crate::CHUNK_BYTES as u64 =>
 		{
@@ -141,9 +182,12 @@ pub fn decode_row(row: wire::FsReadRow) -> Result<(RowKey, Row)> {
 			Row::Bytes(v)
 		}
 		(RowKey::Link(..) | RowKey::Orphan(_), wire::FsRowValue::FsPresent) => Row::Unit,
+		(RowKey::KvRangeWhiteout(..), wire::FsRowValue::FsKvRangeWhiteout(v)) => {
+			Row::KvRangeWhiteout(v.end.map(|end| end.to_vec()))
+		}
 		_ => return Err(Error::Corrupt),
 	};
-	Ok((key, value))
+	Ok(value)
 }
 
 impl From<crate::forks::ChunkLookup> for wire::FsChunkLookup {
@@ -192,6 +236,7 @@ pub fn source_link(operation: &wire::FsReadOperation) -> Option<&crate::FsBaseLi
 		wire::FsReadOperation::FsBaseChunksRequest(v) => Some(&v.link),
 		wire::FsReadOperation::FsForkMetadataRequest(v) => Some(&v.link),
 		wire::FsReadOperation::FsBaseKeysRequest(v) => Some(&v.link),
+		wire::FsReadOperation::FsBaseRowsRequest(v) => Some(&v.link),
 		_ => None,
 	}
 }

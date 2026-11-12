@@ -4,14 +4,14 @@ import { actor, setup } from "rivetkit";
 
 // Define the actor
 const myActor = actor({
-  state: { value: "initial" },
+  vars: { value: "initial" },
   actions: {
     someAction: (c) => {
-      c.state.value = "updated";
-      return c.state.value;
+      c.vars.value = "updated";
+      return c.vars.value;
     },
-    getState: (c) => {
-      return c.state.value;
+    getValue: (c) => {
+      return c.vars.value;
     }
   }
 });
@@ -32,6 +32,6 @@ test("my actor test", async (testCtx) => {
   await myActorHandle.someAction();
 
   // Make assertions
-  const result = await myActorHandle.getState();
+  const result = await myActorHandle.getValue();
   expect(result).toEqual("updated");
 });

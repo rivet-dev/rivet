@@ -16,10 +16,13 @@ use tokio::sync::Mutex;
 pub(super) struct LaneTransport {
 	env: Arc<dyn rivet_env::Env>,
 	pages: Arc<Mutex<Pages>>,
+	/// Retain the original filesystem context through cleanup without retaining its exclusive
+	/// lease. Dispatch still requires the live lane and matching epoch below.
+	_filesystem: Arc<depot_client::filesystem::Filesystem>,
 	lane: Weak<super::Lane>,
-	/// The generation the session was opened for. Requests stamped with another generation are
-	/// rejected, so a session that outlived its generation cannot touch the database.
-	generation: u32,
+	/// The epoch the session was opened for. Requests stamped with another epoch are
+	/// rejected, so a session that outlived its epoch cannot touch the database.
+	epoch: u32,
 	next_request_id: AtomicU32,
 	/// An undecided page commit invalidates SQLite's rollback state, even while the
 	/// filesystem retains its writer claim and can resolve the write by reading it back.
@@ -30,29 +33,31 @@ impl LaneTransport {
 	pub(super) fn new(
 		env: Arc<dyn rivet_env::Env>,
 		pages: Arc<Mutex<Pages>>,
+		filesystem: Arc<depot_client::filesystem::Filesystem>,
 		lane: Weak<super::Lane>,
-		generation: u32,
+		epoch: u32,
 		unknown_commit: Arc<AtomicBool>,
 	) -> Self {
 		Self {
 			env,
 			pages,
+			_filesystem: filesystem,
 			lane,
-			generation,
+			epoch,
 			next_request_id: AtomicU32::new(0),
 			unknown_commit,
 		}
 	}
 
-	/// Checks the request's generation and the lane, then runs one page protocol message.
+	/// Checks the request's epoch and the lane, then runs one page protocol message.
 	async fn execute(
 		&self,
-		expected_generation: Option<u64>,
+		expected_epoch: Option<u64>,
 		message: p::ToRivet,
 	) -> Result<p::ToEnvoy> {
 		ensure!(
-			expected_generation == Some(u64::from(self.generation)),
-			"SQLite request for another generation"
+			expected_epoch == Some(u64::from(self.epoch)),
+			"SQLite request for another epoch"
 		);
 		let Some(lane) = self.lane.upgrade() else {
 			bail!("SQLite session ended");
@@ -63,7 +68,7 @@ impl LaneTransport {
 			super::IndeterminateResult
 		);
 		let mut pages = self.pages.lock().await;
-		ensure!(pages.generation == self.generation, "SQLite session ended");
+		ensure!(pages.epoch == self.epoch, "SQLite session ended");
 		let Pages {
 			database, stage, ..
 		} = &mut *pages;
@@ -98,13 +103,13 @@ impl sqlite_embedded::vfs::SqliteTransport for LaneTransport {
 		&self,
 		request: p::SqliteGetPagesRequest,
 	) -> Result<p::SqliteGetPagesResponse> {
-		let generation = request.expected_generation;
+		let epoch = request.expected_generation;
 		let message = p::ToRivet::ToRivetSqliteGetPagesRequest(p::ToRivetSqliteGetPagesRequest {
 			request_id: self.request_id(),
 			data: request,
 		});
 		let p::ToEnvoy::ToEnvoySqliteGetPagesResponse(response) =
-			self.execute(generation, message).await?
+			self.execute(epoch, message).await?
 		else {
 			bail!("unexpected SQLite page response");
 		};
@@ -112,13 +117,13 @@ impl sqlite_embedded::vfs::SqliteTransport for LaneTransport {
 	}
 
 	async fn commit(&self, request: p::SqliteCommitRequest) -> Result<p::SqliteCommitResponse> {
-		let generation = request.expected_generation;
+		let epoch = request.expected_generation;
 		let message = p::ToRivet::ToRivetSqliteCommitRequest(p::ToRivetSqliteCommitRequest {
 			request_id: self.request_id(),
 			data: request,
 		});
 		let p::ToEnvoy::ToEnvoySqliteCommitResponse(response) =
-			self.execute(generation, message).await?
+			self.execute(epoch, message).await?
 		else {
 			bail!("unexpected SQLite commit response");
 		};
@@ -129,7 +134,7 @@ impl sqlite_embedded::vfs::SqliteTransport for LaneTransport {
 		&self,
 		request: p::SqliteCommitStageBeginRequest,
 	) -> Result<p::SqliteCommitStageBeginResponse> {
-		let generation = request.expected_generation;
+		let epoch = request.expected_generation;
 		let message = p::ToRivet::ToRivetSqliteCommitStageBeginRequest(
 			p::ToRivetSqliteCommitStageBeginRequest {
 				request_id: self.request_id(),
@@ -137,7 +142,7 @@ impl sqlite_embedded::vfs::SqliteTransport for LaneTransport {
 			},
 		);
 		let p::ToEnvoy::ToEnvoySqliteCommitStageBeginResponse(response) =
-			self.execute(generation, message).await?
+			self.execute(epoch, message).await?
 		else {
 			bail!("unexpected SQLite stage response");
 		};
@@ -148,7 +153,7 @@ impl sqlite_embedded::vfs::SqliteTransport for LaneTransport {
 		&self,
 		request: p::SqliteCommitStageSegmentRequest,
 	) -> Result<p::SqliteCommitStageSegmentResponse> {
-		let generation = request.expected_generation;
+		let epoch = request.expected_generation;
 		let message = p::ToRivet::ToRivetSqliteCommitStageSegmentRequest(
 			p::ToRivetSqliteCommitStageSegmentRequest {
 				request_id: self.request_id(),
@@ -156,7 +161,7 @@ impl sqlite_embedded::vfs::SqliteTransport for LaneTransport {
 			},
 		);
 		let p::ToEnvoy::ToEnvoySqliteCommitStageSegmentResponse(response) =
-			self.execute(generation, message).await?
+			self.execute(epoch, message).await?
 		else {
 			bail!("unexpected SQLite stage response");
 		};
@@ -167,14 +172,14 @@ impl sqlite_embedded::vfs::SqliteTransport for LaneTransport {
 		&self,
 		request: p::SqliteCommitFinalizeRequest,
 	) -> Result<p::SqliteCommitFinalizeResponse> {
-		let generation = request.expected_generation;
+		let epoch = request.expected_generation;
 		let message =
 			p::ToRivet::ToRivetSqliteCommitFinalizeRequest(p::ToRivetSqliteCommitFinalizeRequest {
 				request_id: self.request_id(),
 				data: request,
 			});
 		let p::ToEnvoy::ToEnvoySqliteCommitFinalizeResponse(response) =
-			self.execute(generation, message).await?
+			self.execute(epoch, message).await?
 		else {
 			bail!("unexpected SQLite stage response");
 		};

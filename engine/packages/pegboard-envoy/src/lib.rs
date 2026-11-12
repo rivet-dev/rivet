@@ -8,28 +8,27 @@ use rivet_engine_context::EngineContext;
 mod admission;
 mod connection;
 mod envoy_record;
-mod keys;
+pub mod keys;
 mod kv;
 mod lifecycle;
-mod lost_checks;
+mod missing_pools;
 mod queue;
 mod rejection;
 mod routes;
-pub mod services;
 mod sqlite;
+mod version_drain;
 
-/// Process-wide state shared by every Envoy connection. Building it starts nothing; the owner
-/// starts [`services::lost_checks::start`] beside the router.
+/// Process-wide state shared by every Envoy connection. Building it starts nothing.
 #[derive(Clone)]
 pub struct Service {
 	pub(crate) connections: rivet_engine_context::ingress::IngressDrain,
 	pub(crate) stopping: tokio::sync::watch::Sender<bool>,
 	/// Remote SQL from every connection runs on one worker pool.
 	pub(crate) sqlite_pool: sqlite_embedded::worker::SqlitePool,
-	/// Lost checks for closed connections, run by the lost-check service.
-	pub(crate) lost_checks: std::sync::Arc<lost_checks::LostChecks>,
 	/// The connect budget every Envoy connect to this process is admitted against.
 	pub(crate) connect_admission: std::sync::Arc<admission::ConnectAdmission>,
+	/// Pool names this process refused node connects for, for the sustained refusal warning.
+	pub(crate) missing_pools: std::sync::Arc<missing_pools::MissingPools>,
 }
 
 /// Guard owns this signal; cancellation must also ask detached upgrades to drain.
@@ -61,8 +60,8 @@ pub fn service(ctx: &EngineContext) -> Service {
 			ctx.config().pegboard().sqlite_remote_worker_threads(),
 			None,
 		),
-		lost_checks: std::sync::Arc::new(lost_checks::LostChecks::new(
-			ctx.config().pegboard().envoy_lost_checks_capacity(),
+		missing_pools: std::sync::Arc::new(missing_pools::MissingPools::new(
+			ctx.config().pegboard().envoy_missing_pools_capacity(),
 		)),
 		connect_admission: std::sync::Arc::new(admission::ConnectAdmission::new(
 			admission::ConnectBudget {

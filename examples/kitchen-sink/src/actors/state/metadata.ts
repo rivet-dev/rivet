@@ -1,30 +1,34 @@
 import { actor } from "rivetkit";
 
+type MetadataVars = {
+	lastMetadata: any;
+	actorName: string;
+	storedTags: Record<string, string>;
+	storedRegion: string | null;
+};
+
 // Note: For testing only - metadata API will need to be mocked
 // in tests since this is implementation-specific
 export const metadataActor = actor({
-	state: {
-		lastMetadata: null as any,
-		actorName: "",
-		// Store tags and region in state for testing since they may not be
-		// available in the context in all environments
-		storedTags: {} as Record<string, string>,
-		storedRegion: null as string | null,
-	},
-	onWake: (c) => {
+	createVars: (c): MetadataVars => ({
+		lastMetadata: null,
 		// Store the actor name during initialization
-		c.state.actorName = c.name;
-	},
+		actorName: c.name,
+		// Store tags and region in vars for testing since they may not be
+		// available in the context in all environments
+		storedTags: {},
+		storedRegion: null,
+	}),
 	actions: {
 		// Set up test tags - this will be called by tests to simulate tags
 		setupTestTags: (c, tags: Record<string, string>) => {
-			c.state.storedTags = tags;
+			c.vars.storedTags = tags;
 			return tags;
 		},
 
 		// Set up test region - this will be called by tests to simulate region
 		setupTestRegion: (c, region: string) => {
-			c.state.storedRegion = region;
+			c.vars.storedRegion = region;
 			return region;
 		},
 
@@ -33,12 +37,12 @@ export const metadataActor = actor({
 			// Create metadata object from stored values
 			const metadata = {
 				name: c.name,
-				tags: c.state.storedTags,
-				region: c.state.storedRegion,
+				tags: c.vars.storedTags,
+				region: c.vars.storedRegion,
 			};
 
 			// Store for later inspection
-			c.state.lastMetadata = metadata;
+			c.vars.lastMetadata = metadata;
 			return metadata;
 		},
 
@@ -49,27 +53,27 @@ export const metadataActor = actor({
 
 		// Get a specific tag by key
 		getTag: (c, key: string) => {
-			return c.state.storedTags[key] || null;
+			return c.vars.storedTags[key] || null;
 		},
 
 		// Get all tags
 		getTags: (c) => {
-			return c.state.storedTags;
+			return c.vars.storedTags;
 		},
 
 		// Get the region
 		getRegion: (c) => {
-			return c.state.storedRegion;
+			return c.vars.storedRegion;
 		},
 
-		// Get the stored actor name (from onWake)
+		// Get the stored actor name (from createVars)
 		getStoredActorName: (c) => {
-			return c.state.actorName;
+			return c.vars.actorName;
 		},
 
 		// Get last retrieved metadata
 		getLastMetadata: (c) => {
-			return c.state.lastMetadata;
+			return c.vars.lastMetadata;
 		},
 	},
 });

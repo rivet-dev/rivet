@@ -6,6 +6,7 @@
 //! core's bounded windows and check current authority at dispatch and reply.
 
 use super::executor::cold_store::{ColdStore, ColdStoreConfig};
+use super::state::filesystem::LoadPurpose;
 use super::{
 	MaintainerSnapshot, TabletMaintainerMachine, effect::MaintainerEffect, event::MaintainerEvent,
 	state::MaintainerState, types::*,
@@ -18,12 +19,12 @@ use futures_util::{
 };
 use parking_lot::Mutex as SyncMutex;
 use rivet_data::generated::{
-	depot_client_protocol_v1::{ClientResponse, VolumeRejectResponse},
+	depot_client_protocol_v2::{ClientResponse, VolumeRejectResponse},
 	depot_kv_command_v1::{OverloadReason, UnavailableReason},
 	depot_storage_worker_protocol_v1::{StorageWorkerRequest, StorageWorkerResponse, TabletGrant},
 	depot_tablet_coordinator_protocol_v1::{SplitPrepared, TabletCoordinatorResponse},
 	depot_tablet_manifest_v1::Tablet,
-	shared_depot_fs_read_v1::{FsReadOperation, FsReadRequest},
+	shared_depot_fs_read_v2::{FsReadOperation, FsReadRequest},
 };
 use rivet_env::{
 	Env, TaskHandle, TaskScope,
@@ -142,7 +143,7 @@ pub trait ForkPeer: Send + Sync + 'static {
 	fn request(
 		&self,
 		region: u16,
-		request: rivet_data::generated::depot_client_protocol_v1::ClientRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::ClientRequest,
 		deadline_boot_ms: u64,
 	) -> ForkPeerFuture<'_>;
 }
@@ -150,7 +151,11 @@ pub trait ForkPeer: Send + Sync + 'static {
 /// Runtime-only adapters never enter the deterministic state.
 pub struct MaintainerDependencies {
 	pub fork_peer: Option<Arc<dyn ForkPeer>>,
-	pub base_reader: Option<Arc<dyn crate::filesystem::base::BaseChunkReader>>,
+	/// Runs the group read commands; `None` leaves grouped volumes unable to apply.
+	pub group_commands: Option<Arc<dyn crate::group_events::GroupCommands>>,
+	/// The process's events feed, which this maintainer's inbox subscribes to.
+	pub group_events: Option<Arc<crate::group_events::GroupEventsFeed>>,
+	pub base_reader: Option<Arc<dyn crate::filesystem::base::BaseLayerReader>>,
 	pub env: Arc<dyn Env>,
 	pub cold_store: Arc<dyn SlateDbFactory>,
 	pub replicas: Arc<dyn ReplicaTransport>,
@@ -252,7 +257,8 @@ impl BulkPacing {
 			| FsReadOperation::FsReadGet(_)
 			| FsReadOperation::FsReadScan(_)
 			| FsReadOperation::FsForkMetadataRequest(_)
-			| FsReadOperation::FsBaseKeysRequest(_) => 0,
+			| FsReadOperation::FsBaseKeysRequest(_)
+			| FsReadOperation::FsBaseRowsRequest(_) => 0,
 		};
 		chunks.saturating_mul(depot_fs_core::CHUNK_BYTES as u64)
 	}
@@ -260,6 +266,8 @@ impl BulkPacing {
 
 pub struct Maintainer {
 	alarm_tasks: Arc<SyncMutex<BTreeMap<OpId, AbortHandle>>>,
+	/// The events feed this maintainer's inbox is subscribed to, and its listener id.
+	group_events: Option<(Arc<crate::group_events::GroupEventsFeed>, u64)>,
 	kv_host: KvHost,
 	kv_responses: KvResponses,
 	inbox: Option<mpsc::Sender<MaintainerEvent>>,
@@ -767,7 +775,13 @@ impl Maintainer {
 			alarm_tasks: alarm_tasks.clone(),
 			alarm_scope: Arc::new(deps.env.task_scope()),
 			fork_peer: deps.fork_peer,
+			group_commands: deps.group_commands,
+			group_records: deps
+				.group_events
+				.as_ref()
+				.map(|feed| feed.records().clone()),
 			fork_tasks: SyncMutex::new(BTreeMap::new()),
+			group_read_tasks: SyncMutex::new(BTreeMap::new()),
 			kv_host: kv_host.clone(),
 			kv_responses: kv_responses.clone(),
 			notify_closed: SyncMutex::new(Some(notify_closed)),
@@ -792,6 +806,8 @@ impl Maintainer {
 		});
 		crate::metrics::TABLET_MAINTAINER_INBOX_CAPACITY.set(i64::from(config.inbox_capacity));
 		crate::metrics::TABLET_VOLUME_OPEN_QUEUE_CAPACITY.set(i64::from(config.max_queued_opens));
+		crate::metrics::TABLET_LAZY_FORK_WAITERS_CAPACITY
+			.set(i64::from(config.max_lazy_fork_waiters_per_volume));
 		let busy: Arc<dyn rivet_state_machine_ephemeral::BusyObserver> = runner_load;
 		let handle = Runner::<TabletMaintainerMachine>::spawn_with_observers(
 			deps.env.clone(),
@@ -824,8 +840,13 @@ impl Maintainer {
 			}
 			signals.close(signal_clock.boot_ms().unwrap_or(0));
 		});
+		let group_events = deps
+			.group_events
+			.as_ref()
+			.map(|feed| (feed.clone(), feed.subscribe(handle.inbox.clone())));
 		Ok(Self {
 			alarm_tasks,
+			group_events,
 			kv_host,
 			kv_responses,
 			inbox: Some(handle.inbox),
@@ -948,7 +969,7 @@ impl Maintainer {
 	/// Runs one mutating operator repair call; see `state::operator_repair::calls`.
 	pub fn repair(
 		&self,
-		request: rivet_data::generated::depot_client_protocol_v1::RepairRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::RepairRequest,
 	) -> Result<oneshot::Receiver<ClientResponse>, VolumeRejectResponse> {
 		self.submit(|request_id| {
 			MaintainerEvent::Repair(super::event::RepairEvent::Request {
@@ -961,7 +982,7 @@ impl Maintainer {
 	/// Lists bounded lifecycle diagnostics for one volume.
 	pub fn repair_diagnostics(
 		&self,
-		request: rivet_data::generated::depot_client_protocol_v1::RepairDiagnosticsRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::RepairDiagnosticsRequest,
 	) -> Result<oneshot::Receiver<ClientResponse>, VolumeRejectResponse> {
 		self.submit(|request_id| {
 			MaintainerEvent::Repair(super::event::RepairEvent::DiagnosticsRequest {
@@ -974,7 +995,7 @@ impl Maintainer {
 	/// Lists the repair audit rows of one name.
 	pub fn repair_audit_list(
 		&self,
-		request: rivet_data::generated::depot_client_protocol_v1::RepairAuditListRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::RepairAuditListRequest,
 	) -> Result<oneshot::Receiver<ClientResponse>, VolumeRejectResponse> {
 		self.submit(|request_id| {
 			MaintainerEvent::Repair(super::event::RepairEvent::AuditListRequest {
@@ -1023,6 +1044,7 @@ impl Maintainer {
 				},
 				initial: Vec::new(),
 				read: None,
+				lazy_fork: false,
 			})
 		})
 	}
@@ -1048,6 +1070,7 @@ impl Maintainer {
 				client_incarnation: Some(client_incarnation),
 				initial: Vec::new(),
 				read: None,
+				lazy_fork: false,
 			})
 		})
 	}
@@ -1056,10 +1079,11 @@ impl Maintainer {
 	pub fn open_volume(
 		&self,
 		worker: WorkerId,
-		request: rivet_data::generated::depot_client_protocol_v1::VolumeOpenRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::VolumeOpenRequest,
 		deadline_boot_ms: u64,
 	) -> Result<oneshot::Receiver<ClientResponse>, VolumeRejectResponse> {
 		let holder = Some(request.holder.clone());
+		let lazy_fork = open_lazy_fork(&request);
 		self.submit_open(|request_id| {
 			MaintainerEvent::OpenVolumeRequest(OpenVolume {
 				mode: if request.create_if_absent.is_some() {
@@ -1085,6 +1109,7 @@ impl Maintainer {
 				worker_id: worker,
 				request_id,
 				deadline_boot_ms,
+				lazy_fork,
 			})
 		})
 	}
@@ -1118,7 +1143,7 @@ impl Maintainer {
 
 	pub fn fork_reference(
 		&self,
-		request: rivet_data::generated::depot_client_protocol_v1::FsForkReferenceRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::FsForkReferenceRequest,
 		deadline_boot_ms: u64,
 	) -> Result<oneshot::Receiver<ClientResponse>, VolumeRejectResponse> {
 		self.submit(|request_id| MaintainerEvent::ForkReferenceRequest {
@@ -1129,7 +1154,7 @@ impl Maintainer {
 	}
 	pub fn checkpoint(
 		&self,
-		request: rivet_data::generated::depot_client_protocol_v1::VolumeCheckpointRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::VolumeCheckpointRequest,
 		deadline_boot_ms: u64,
 	) -> Result<oneshot::Receiver<ClientResponse>, VolumeRejectResponse> {
 		self.submit(|request_id| MaintainerEvent::CheckpointRequest {
@@ -1412,6 +1437,9 @@ impl Maintainer {
 	/// Cold-store close joins SlateDB's own tasks before the supervisor may release the grant.
 	pub async fn shutdown(mut self) -> Result<()> {
 		self.revoke_commands();
+		if let Some((feed, id)) = self.group_events.take() {
+			feed.unsubscribe(id);
+		}
 		if let Some(host) = self.kv_host.get() {
 			host.shutdown().await;
 		}
@@ -1452,6 +1480,9 @@ impl Maintainer {
 impl Drop for Maintainer {
 	fn drop(&mut self) {
 		self.revoke_commands();
+		if let Some((feed, id)) = self.group_events.take() {
+			feed.unsubscribe(id);
+		}
 		let Some(io_stopped) = self.io_stopped.take() else {
 			return;
 		};
@@ -1503,7 +1534,17 @@ struct MaintainerExecutor {
 	alarm_scope: Arc<TaskScope>,
 	filesystem: watch::Receiver<Option<Arc<crate::filesystem::store::FilesystemStore>>>,
 	fork_peer: Option<Arc<dyn ForkPeer>>,
+	group_commands: Option<Arc<dyn crate::group_events::GroupCommands>>,
+	/// The process's group record cache, which answers record reads of groups the process
+	/// has read before without a command; `None` without an events feed.
+	group_records: Option<Arc<crate::group_events::records::GroupRecordCache>>,
 	fork_tasks: SyncMutex<BTreeMap<OpId, TaskHandle>>,
+	/// The local tasks of the group reads in flight, so a read whose operation timed out stops
+	/// being waited on and this maintainer never waits on more than `max_group_reads_in_flight`
+	/// of them. Aborting a task does not stop a read the group volume's owner, possibly another
+	/// worker, already admitted; that read ends under its own deadline. Finished tasks are
+	/// pruned on each insert.
+	group_read_tasks: SyncMutex<BTreeMap<OpId, TaskHandle>>,
 	kv_host: KvHost,
 	kv_responses: KvResponses,
 	split_reporter: Arc<dyn SplitReporter>,
@@ -1548,6 +1589,14 @@ impl Executor<TabletMaintainerMachine> for MaintainerExecutor {
 			effect => (effect, None),
 		};
 		match effect {
+			MaintainerEffect::CloseArchivedVolumes { keys } => {
+				let _ = self
+					.reads
+					.send(ReadDispatch::RevokeSessions { keys: keys.clone() });
+				if let Some(host) = self.kv_host.get() {
+					host.close_archived(&keys);
+				}
+			}
 			MaintainerEffect::RefreshCommandReplicaSets => {
 				if !self.closing.load(Ordering::Acquire)
 					&& self.authority.may_serve(&self.grant)
@@ -1650,6 +1699,52 @@ impl Executor<TabletMaintainerMachine> for MaintainerExecutor {
 				};
 				if let Some(reply) = self.stop_responses.lock().remove(&request_id) {
 					let _ = reply.send(response);
+				}
+			}
+			MaintainerEffect::GroupReadRequest {
+				op_id,
+				group,
+				fork_numbers,
+			} => {
+				let Some(tasks) = self.tasks.upgrade() else {
+					return;
+				};
+				let commands = self.group_commands.clone();
+				let records = self.group_records.clone();
+				let authority = self.authority.clone();
+				let grant = self.grant.clone();
+				let inbox = inbox.clone();
+				let task = ctx.spawn_in(&tasks, async move {
+					if !authority.may_serve(&grant) {
+						let _ = inbox.send(MaintainerEvent::Fence).await;
+						return;
+					}
+					let result = match commands {
+						Some(commands) => {
+							crate::group_events::records::read_group(
+								commands.as_ref(),
+								records.as_deref(),
+								group,
+								fork_numbers,
+							)
+							.await
+						}
+						None => Err("group commands unavailable on this worker".into()),
+					};
+					let event = if authority.may_serve(&grant) {
+						MaintainerEvent::GroupReadResponse { op_id, result }
+					} else {
+						MaintainerEvent::Fence
+					};
+					let _ = inbox.send(event).await;
+				});
+				let mut pending = self.group_read_tasks.lock();
+				pending.retain(|_, task| !task.is_finished());
+				pending.insert(op_id, task);
+			}
+			MaintainerEffect::CancelGroupReadRequest { op_id } => {
+				if let Some(task) = self.group_read_tasks.lock().remove(&op_id) {
+					task.abort();
 				}
 			}
 			MaintainerEffect::ForkPeerRequest {
@@ -1992,6 +2087,9 @@ impl Executor<TabletMaintainerMachine> for MaintainerExecutor {
 				for (_, task) in std::mem::take(&mut *self.fork_tasks.lock()) {
 					task.abort();
 				}
+				for (_, task) in std::mem::take(&mut *self.group_read_tasks.lock()) {
+					task.abort();
+				}
 				for (_, task) in std::mem::take(&mut *self.report_tasks.lock()) {
 					task.abort();
 				}
@@ -2059,12 +2157,12 @@ impl Executor<TabletMaintainerMachine> for MaintainerExecutor {
 			MaintainerEffect::ReadRowRequest {
 				op_id,
 				volume_key,
-				incarnation,
+				read,
 			} => {
 				let _ = self.reads.send(ReadDispatch::Row {
 					op_id,
 					volume_key,
-					incarnation,
+					read,
 					inbox: inbox.clone(),
 				});
 			}
@@ -2203,6 +2301,7 @@ impl Executor<TabletMaintainerMachine> for MaintainerExecutor {
 			| MaintainerEffect::ForkCleanupRequest { .. }
 			| MaintainerEffect::MaterializeRequest { .. }
 			| MaintainerEffect::FilesystemLoadRequest { .. }
+			| MaintainerEffect::ForkPinPassRequest { .. }
 			| MaintainerEffect::FilesystemApplyRequest { .. }
 			| MaintainerEffect::FilesystemFlushRequest { .. }
 			| MaintainerEffect::SweepDeletedRequest { .. }
@@ -2230,10 +2329,10 @@ enum ReadDispatch {
 	/// when the grant has ended or the store has closed.
 	Query {
 		op_id: OpId,
-		request: rivet_data::generated::shared_depot_fs_read_v1::FsReadRequest,
+		request: rivet_data::generated::shared_depot_fs_read_v2::FsReadRequest,
 		applied: Option<rivet_data::generated::shared_depot_types_v1::VolumeLogPosition>,
 		settled: Option<rivet_data::generated::shared_depot_types_v1::VolumeLogPosition>,
-		record: Option<rivet_data::generated::shared_depot_fs_v1::FsVolumeRecord>,
+		record: Option<rivet_data::generated::shared_depot_fs_v2::FsVolumeRecord>,
 		inbox: mpsc::Sender<MaintainerEvent>,
 	},
 	/// Spawns one lifecycle row lookup against the currently open filesystem store, or
@@ -2241,7 +2340,7 @@ enum ReadDispatch {
 	Row {
 		op_id: OpId,
 		volume_key: depot_types::VolumeKey,
-		incarnation: Option<[u8; 16]>,
+		read: super::types::RowRead,
 		inbox: mpsc::Sender<MaintainerEvent>,
 	},
 	/// Spawns one open's read-back against the currently open filesystem store, or fences it
@@ -2249,9 +2348,9 @@ enum ReadDispatch {
 	Keys {
 		op_id: OpId,
 		key: depot_types::VolumeLogKey,
-		record: rivet_data::generated::shared_depot_fs_v1::FsVolumeRecord,
+		record: rivet_data::generated::shared_depot_fs_v2::FsVolumeRecord,
 		applied: rivet_data::generated::shared_depot_types_v1::VolumeLogPosition,
-		read: rivet_data::generated::depot_client_protocol_v1::VolumeReadKeys,
+		read: rivet_data::generated::depot_client_protocol_v2::VolumeReadKeys,
 		inbox: mpsc::Sender<MaintainerEvent>,
 	},
 	/// Spawns one operator repair read against the currently open filesystem store, or
@@ -2262,6 +2361,11 @@ enum ReadDispatch {
 	},
 	/// Aborts and joins one query task. A late completion is ignored by operation identity.
 	Cancel { op_id: OpId },
+	/// Revokes every read session of `keys` in the currently open filesystem store, for the
+	/// volumes of an archived group.
+	RevokeSessions {
+		keys: Vec<depot_types::VolumeLogKey>,
+	},
 	/// Aborts and joins every query task, then acknowledges. The IO loop sends this before
 	/// closing the store, and every later query is fenced.
 	Close { closed: oneshot::Sender<()> },
@@ -2327,7 +2431,7 @@ async fn run_filesystem_reads(
 			ReadDispatch::Row {
 				op_id,
 				volume_key,
-				incarnation,
+				read,
 				inbox,
 			} => {
 				if store_closed || !authority.may_serve(&grant) || closing.load(Ordering::Acquire) {
@@ -2345,7 +2449,7 @@ async fn run_filesystem_reads(
 					let result = match store {
 						Some(store) => with_purpose(
 							ObjectStorePurpose::Lookup,
-							store.lifecycle_lookup(&volume_key, incarnation),
+							store.lifecycle_lookup(&volume_key, read),
 						)
 						.await
 						.map_err(|error| error.to_string()),
@@ -2425,6 +2529,11 @@ async fn run_filesystem_reads(
 				});
 				reads.retain(|_, task| !task.is_finished());
 				reads.insert(op_id, task);
+			}
+			ReadDispatch::RevokeSessions { keys } => {
+				if let Some(store) = filesystem.borrow().clone() {
+					store.revoke_sessions_of(&keys);
+				}
 			}
 			ReadDispatch::Cancel { op_id } => {
 				if let Some(task) = reads.remove(&op_id) {
@@ -2516,7 +2625,7 @@ async fn repair_read(
 					.repair_audits(&volume_key, after, limit as usize)
 					.await
 					.map(|(audits, after)| {
-						rivet_data::generated::depot_client_protocol_v1::RepairAuditPage {
+						rivet_data::generated::depot_client_protocol_v2::RepairAuditPage {
 							audits,
 							after,
 						}
@@ -2598,7 +2707,7 @@ struct StoreIo {
 	config: Arc<ColdStoreConfig>,
 	guard: Arc<dyn rivet_env::MutationGuard>,
 	env: Arc<dyn Env>,
-	base_reader: Option<Arc<dyn crate::filesystem::base::BaseChunkReader>>,
+	base_reader: Option<Arc<dyn crate::filesystem::base::BaseLayerReader>>,
 	replicas: Arc<dyn ReplicaTransport>,
 }
 
@@ -2716,6 +2825,7 @@ async fn store_io(
 			applied,
 			logged,
 			loaded_parent_incarnations,
+			group_children,
 		} => {
 			let result = async {
 				storage
@@ -2730,6 +2840,7 @@ async fn store_io(
 						applied,
 						logged,
 						&loaded_parent_incarnations,
+						group_children.as_ref(),
 					)
 					.await
 			}
@@ -2757,13 +2868,17 @@ async fn store_io(
 			.map_err(|e| e.to_string());
 			Some(MaintainerEvent::PendingWorkResponse { op_id, result })
 		}
-		MaintainerEffect::SweepPendingRequest { op_id, scope } => {
+		MaintainerEffect::SweepPendingRequest {
+			op_id,
+			scope,
+			archived_children,
+		} => {
 			let result = async {
 				storage
 					.as_ref()
 					.context("cold store not open")?
 					.filesystem()
-					.sweep_pending(&scope)
+					.sweep_pending(&scope, &archived_children.into_iter().collect())
 					.await
 			}
 			.await
@@ -2778,13 +2893,21 @@ async fn store_io(
 			applied,
 			region,
 			loaded_parent_incarnations,
+			archived_children,
 		} => {
 			let result = async {
 				storage
 					.as_ref()
 					.context("cold store not open")?
 					.filesystem()
-					.apply_maintainer_op(op, record, applied, region, &loaded_parent_incarnations)
+					.apply_maintainer_op(
+						op,
+						record,
+						applied,
+						region,
+						&loaded_parent_incarnations,
+						&archived_children.into_iter().collect(),
+					)
 					.await
 			}
 			.await
@@ -2797,6 +2920,7 @@ async fn store_io(
 			record,
 			applied,
 			logged,
+			claims,
 		} => {
 			let result = async {
 				let fs = storage
@@ -2805,7 +2929,7 @@ async fn store_io(
 					.filesystem();
 				match logged {
 					Some(created_at) => {
-						fs.checkpoint_logged(request, record, applied, created_at)
+						fs.checkpoint_logged_at(request, record, applied, created_at, claims)
 							.await
 					}
 					None => fs.checkpoint_request(request, record, applied).await,
@@ -2816,20 +2940,99 @@ async fn store_io(
 			Some(MaintainerEvent::CheckpointResponse { op_id, result })
 		}
 
-		MaintainerEffect::FilesystemLoadRequest { op_id, key } => {
+		MaintainerEffect::FilesystemLoadRequest {
+			op_id,
+			key,
+			purpose,
+			archived_children,
+		} => {
 			let result = async {
+				let filesystem = storage
+					.as_ref()
+					.context("cold store not open")?
+					.filesystem();
+				let mut record = filesystem
+					.incarnation_row(&key.0.volume_key, key.0.volume_incarnation)
+					.await?;
+				// A grouped volume's pinned-through fork is never trusted from memory: it is
+				// the larger of the fork the incarnation was created at and the last fork of
+				// its pin rows. For a registration the same read is the load's pin pass, which
+				// drops the children the cache knows archived from those rows; stop recovery
+				// only reads.
+				let mut fork_pins = LoadedForkPins::default();
+				if let Some(record) = record.as_mut()
+					&& depot_types::keys::partition::forkable_group(&key.0.volume_key.partition_key)
+						.is_some()
+				{
+					let (scope, _) = depot_fs_core::keys::slatedb::Scope::of_log(
+						&key.0.volume_key,
+						uuid::Uuid::from_bytes(key.0.volume_incarnation),
+					);
+					// The stored value covers forks whose pin waited on no one and wrote no
+					// row; the pin rows cover the rest. A claim log's scope is its base's, so
+					// only the base's registration runs the pass on those rows and reports
+					// them; a claim log reads them like a stop proof. A claim log's load
+					// therefore never sets `record_lags`: it deletes no pin row, and no pin
+					// decision reads its own `fork_pinned_through`, since its applies wait on
+					// the base's pin (`groups::pin_need`) and pins are logged on the base. A
+					// value it stores that a base pass leaves above the remaining rows is
+					// harmless, and the base's own registration stores the base record again
+					// when its pass leaves that one lagging.
+					let claim_log = depot_types::is_claim_log(&key.0.volume_key).is_some();
+					let from_rows = match purpose {
+						LoadPurpose::Register if !claim_log => {
+							let (from_rows, loaded) = filesystem
+								.load_fork_pins(
+									&scope,
+									record.created_at_fork,
+									record.fork_pinned_through,
+									&archived_children.into_iter().collect(),
+								)
+								.await?;
+							fork_pins = loaded;
+							from_rows
+						}
+						LoadPurpose::Register | LoadPurpose::StopProof => {
+							filesystem
+								.fork_pinned_through(&scope, record.created_at_fork)
+								.await?
+						}
+					};
+					record.fork_pinned_through = record.fork_pinned_through.max(from_rows);
+				}
+				anyhow::Ok((record, fork_pins))
+			}
+			.await;
+			let (result, fork_pins) = match result {
+				Ok((record, fork_pins)) => (Ok(record), fork_pins),
+				Err(error) => (Err(error.to_string()), Default::default()),
+			};
+			Some(MaintainerEvent::FilesystemLoadResponse {
+				op_id,
+				result,
+				fork_pins,
+			})
+		}
+		MaintainerEffect::ForkPinPassRequest {
+			op_id,
+			key,
+			archived_children,
+		} => {
+			let result = async {
+				let (scope, _) = depot_fs_core::keys::slatedb::Scope::of_log(
+					&key.0.volume_key,
+					uuid::Uuid::from_bytes(key.0.volume_incarnation),
+				);
 				storage
 					.as_ref()
 					.context("cold store not open")?
 					.filesystem()
-					.incarnation_row(&key.0.volume_key, key.0.volume_incarnation)
+					.fork_pin_pass(&scope, &archived_children.into_iter().collect())
 					.await
 			}
-			.await;
-			Some(MaintainerEvent::FilesystemLoadResponse {
-				op_id,
-				result: result.map_err(|e| e.to_string()),
-			})
+			.await
+			.map_err(|e| e.to_string());
+			Some(MaintainerEvent::ForkPinPassResponse { op_id, result })
 		}
 		MaintainerEffect::FilesystemApplyRequest {
 			read_timeout_ms,
@@ -3119,8 +3322,11 @@ async fn store_io(
 		| MaintainerEffect::Reply { .. }
 		| MaintainerEffect::CancelReplicaRequest { .. }
 		| MaintainerEffect::ForkPeerRequest { .. }
+		| MaintainerEffect::GroupReadRequest { .. }
 		| MaintainerEffect::CancelForkPeerRequest { .. }
+		| MaintainerEffect::CancelGroupReadRequest { .. }
 		| MaintainerEffect::RefreshCommandReplicaSets
+		| MaintainerEffect::CloseArchivedVolumes { .. }
 		| MaintainerEffect::CloseComplete => None,
 	}
 }
@@ -3146,6 +3352,7 @@ fn store_operation_purpose(effect: &MaintainerEffect) -> ObjectStorePurpose {
 		| MaintainerEffect::PrepareSplitRequest { .. }
 		| MaintainerEffect::SweepDeletedRequest { .. }
 		| MaintainerEffect::SweepPendingRequest { .. }
+		| MaintainerEffect::ForkPinPassRequest { .. }
 		| MaintainerEffect::WriteToColdRequest { .. }
 		| MaintainerEffect::StopReadinessResponse { .. }
 		| MaintainerEffect::FilesystemQueryRequest { .. }
@@ -3178,8 +3385,11 @@ fn store_operation_purpose(effect: &MaintainerEffect) -> ObjectStorePurpose {
 		| MaintainerEffect::Reply { .. }
 		| MaintainerEffect::CancelReplicaRequest { .. }
 		| MaintainerEffect::ForkPeerRequest { .. }
+		| MaintainerEffect::GroupReadRequest { .. }
 		| MaintainerEffect::CancelForkPeerRequest { .. }
+		| MaintainerEffect::CancelGroupReadRequest { .. }
 		| MaintainerEffect::RefreshCommandReplicaSets
+		| MaintainerEffect::CloseArchivedVolumes { .. }
 		| MaintainerEffect::CloseComplete => ObjectStorePurpose::Maintenance,
 	}
 }
@@ -3204,6 +3414,7 @@ fn store_operation_label(effect: &MaintainerEffect) -> Option<&'static str> {
 		MaintainerEffect::PrepareSplitRequest { .. } => "prepare_split",
 		MaintainerEffect::SweepDeletedRequest { .. } => "sweep_deleted",
 		MaintainerEffect::SweepPendingRequest { .. } => "sweep_pending",
+		MaintainerEffect::ForkPinPassRequest { .. } => "fork_pin_pass",
 		MaintainerEffect::WriteToColdRequest { .. } => "write_to_cold",
 		MaintainerEffect::StopReadinessResponse { .. }
 		| MaintainerEffect::FilesystemQueryRequest { .. }
@@ -3237,8 +3448,11 @@ fn store_operation_label(effect: &MaintainerEffect) -> Option<&'static str> {
 		| MaintainerEffect::Reply { .. }
 		| MaintainerEffect::CancelReplicaRequest { .. }
 		| MaintainerEffect::ForkPeerRequest { .. }
+		| MaintainerEffect::GroupReadRequest { .. }
 		| MaintainerEffect::CancelForkPeerRequest { .. }
+		| MaintainerEffect::CancelGroupReadRequest { .. }
 		| MaintainerEffect::RefreshCommandReplicaSets
+		| MaintainerEffect::CloseArchivedVolumes { .. }
 		| MaintainerEffect::CloseComplete => return None,
 	})
 }
@@ -3280,6 +3494,8 @@ fn open_reply_label(response: &ClientResponse) -> &'static str {
 			VolumeRejectResponse::Overloaded(_) => "overloaded",
 			VolumeRejectResponse::VolumeRecordMissing(_) => "record_missing",
 			VolumeRejectResponse::VolumeUnderRepair(_) => "under_repair",
+			VolumeRejectResponse::VolumeGroupArchived => "group_archived",
+			VolumeRejectResponse::VolumeTailUnproven(_) => "tail_unproven",
 		},
 		ClientResponse::VolumeOpenResponse(_) | ClientResponse::VolumeCreateResponse(_) => "ok",
 		ClientResponse::FsReadResponse(_)
@@ -3322,10 +3538,31 @@ impl Maintainer {
 			tablet_id: grant.tablet_id,
 			tablet_grant_epoch: grant.tablet_grant_epoch,
 		};
+		// Weak, since the command host lives as long as this maintainer: a strong sender would
+		// keep the inbox open, and the runner, which stops once every sender is gone, alive.
+		let inbox = self.inbox.as_ref().map(mpsc::Sender::downgrade);
+		// A full inbox sheds the command at admission with a retryable refusal; a gone or
+		// closed one means the maintainer stopped, so the command follows the tablet's route.
+		let request_mark = move |mark| {
+			let Some(inbox) = inbox.as_ref().and_then(mpsc::WeakSender::upgrade) else {
+				return Err(depot_client::filesystem::Error::Fenced);
+			};
+			match inbox.try_send(MaintainerEvent::VersionMarkWanted { mark }) {
+				Ok(()) => Ok(()),
+				Err(mpsc::error::TrySendError::Full(_)) => {
+					crate::metrics::record_maintainer_inbox_full("version_mark");
+					Err(depot_client::filesystem::Error::Overloaded)
+				}
+				Err(mpsc::error::TrySendError::Closed(_)) => {
+					Err(depot_client::filesystem::Error::Fenced)
+				}
+			}
+		};
 		let host = crate::command::volume_host::VolumeHost::new(
 			factory,
 			self.snapshot.clone(),
 			Arc::new(move || authority.may_serve(&grant)),
+			Arc::new(request_mark),
 		)?;
 		host.set_alarm_owner(alarm_owner);
 		anyhow::ensure!(self.kv_host.set(host).is_ok(), "KV host already installed");
@@ -3402,6 +3639,22 @@ impl Maintainer {
 }
 
 impl Maintainer {
+	/// Fresh rounds bound the admission history; retries never add work or quiesce creates.
+	pub fn replica_readiness(
+		&self,
+		request: rivet_data::generated::depot_replica_readiness_v1::ReplicaReadiness,
+	) -> Result<
+		oneshot::Receiver<
+			rivet_data::generated::depot_storage_worker_protocol_v1::StopReadinessResponse,
+		>,
+		rivet_data::generated::depot_storage_worker_protocol_v1::StopReadinessResponse,
+	> {
+		self.submit_readiness(|request_id| MaintainerEvent::ReplicaReadinessRequest {
+			request_id,
+			request,
+		})
+	}
+
 	/// A check waits for a fresh bounded poll round; transport cancellation does not restart it.
 	pub fn stop_readiness(
 		&self,
@@ -3472,4 +3725,16 @@ impl Maintainer {
 		}
 		Ok(receive)
 	}
+}
+
+/// Whether an open makes a missing record from its parent group's copy. The flag follows from
+/// the key alone, as the client derives it, so the maintainer derives it too: a request sealed at
+/// a `depot.client_protocol` version without the field, as a sender whose view of this worker
+/// is stale after it restarted on a newer binary seals it, arrives without it, and a fresh
+/// record made there would shadow the group fork's copy for good.
+pub(crate) fn open_lazy_fork(
+	request: &rivet_data::generated::depot_client_protocol_v2::VolumeOpenRequest,
+) -> bool {
+	request.lazy_fork
+		|| depot_types::keys::partition::forkable_group(&request.volume_key.partition_key).is_some()
 }

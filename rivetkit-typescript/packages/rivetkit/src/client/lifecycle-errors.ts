@@ -65,7 +65,12 @@ function classifyActorError(
 		return undefined;
 	}
 
-	if (error.group === "actor" && error.code === "restarting") {
+	// `actor.migrating_from_v2` is a refusal while the actor moves in from a V2 cluster; it
+	// carries a `retry_after_ms` hint.
+	if (
+		error.group === "actor" &&
+		(error.code === "restarting" || error.code === "migrating_from_v2")
+	) {
 		return buildLifecycleBoundaryInfo(
 			"request_retry",
 			"actor_error",
@@ -286,9 +291,34 @@ async function waitWithSignal(ms: number, signal?: AbortSignal) {
 }
 
 /**
+ * Whether a fork was refused before it did anything, so sending it again cannot make a second
+ * copy: `actor.fork_unavailable` while an engine upgrade rolls out, and
+ * `guard.service_unavailable` with the reason `actor_moving` while a keyed source waits for its
+ * namespace's backfill. Every other fork error, including the timeouts after which a copy may
+ * exist, goes to the caller.
+ */
+export function isRetryableForkRefusal(error: unknown): boolean {
+	if (!(error instanceof ActorError)) {
+		return false;
+	}
+	if (error.group === "actor" && error.code === "fork_unavailable") {
+		return true;
+	}
+	if (error.group === "guard" && error.code === "service_unavailable") {
+		const metadata = error.metadata as
+			| { reason?: unknown }
+			| null
+			| undefined;
+		return metadata?.reason === "actor_moving";
+	}
+	return false;
+}
+
+/**
  * Runs `run`, retrying retryable lifecycle and refusal errors with jittered exponential backoff
  * that honors the service's `retry_after_ms` hint. With a `budget`, the call credits it once and
  * every retry spends a token; a spent budget returns the error instead of retrying.
+ * `isRetryable` replaces the lifecycle classification for calls that retry other errors.
  */
 export async function retryOnLifecycleBoundary<T>(
 	run: () => Promise<T>,
@@ -298,11 +328,13 @@ export async function retryOnLifecycleBoundary<T>(
 		maxDelayMs?: number;
 		signal?: AbortSignal;
 		budget?: RetryBudget;
+		isRetryable?: (error: unknown) => boolean;
 	},
 ): Promise<T> {
 	const maxAttempts = opts?.maxAttempts ?? 5;
 	const initialDelayMs = opts?.initialDelayMs ?? 25;
 	const maxDelayMs = opts?.maxDelayMs ?? 200;
+	const isRetryable = opts?.isRetryable ?? isRetryableLifecycleRequestError;
 	opts?.budget?.deposit();
 
 	let lastError: unknown;
@@ -312,7 +344,7 @@ export async function retryOnLifecycleBoundary<T>(
 		try {
 			return await run();
 		} catch (error) {
-			if (!isRetryableLifecycleRequestError(error)) {
+			if (!isRetryable(error)) {
 				throw error;
 			}
 

@@ -3,16 +3,21 @@
 
 use super::{session::Result as SessionResult, store::FilesystemStore};
 use crate::repair_types::{PrepareReads, RepairPrepared, RepairProbe};
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use bytes::Bytes;
 use depot_fs_core::{FsVolumeRecord, ROOT_INO, keys::slatedb as keys, store::RowKey};
 use rivet_data::generated::{
-	depot_client_protocol_v1::RepairAuditRow, depot_maintainer_log_v1::RepairAuditOp,
+	depot_client_protocol_v2::RepairAuditRow, depot_maintainer_log_v2::RepairAuditOp,
 };
-use rivet_keys::keys::{KeyAddress, PrefixAddress, codec::FormalKey};
+use rivet_data::{families::VersionFamily, versioned::DepotRepairAuditData};
+use rivet_keys::keys::{
+	KeyAddress, PrefixAddress,
+	codec::{AtVersion, FormalKey},
+};
 use slatedb::WriteBatch;
 use std::ops::Bound;
 use uuid::Uuid;
+use vbare::Versioned;
 
 fn audit_key(volume_key: &depot_types::VolumeKey, operation_id: [u8; 16]) -> keys::RepairAuditKey {
 	keys::RepairAuditKey::new(
@@ -22,14 +27,33 @@ fn audit_key(volume_key: &depot_types::VolumeKey, operation_id: [u8; 16]) -> key
 	)
 }
 
+/// The lowest `depot.maintainer_log` version that carries `op`. The row lives in tablet data,
+/// which a worker of an older release may be granted after this one, and the tablet's mark of
+/// the family only rises to the version its grant selects. The op itself was logged at that
+/// version or below, so the lowest version carrying it never passes the mark.
+fn audit_version(op: &RepairAuditOp) -> Result<u16> {
+	let info = VersionFamily::DEPOT_MAINTAINER_LOG
+		.info()
+		.context("this binary does not know depot.maintainer_log")?;
+	for version in info.min_read..DepotRepairAuditData::LATEST {
+		match DepotRepairAuditData::seal_to_vec(op, version) {
+			Ok(_) => return Ok(version),
+			Err(vbare::EncodeError::Conversion(_)) => {}
+			Err(error) => return Err(error.into()),
+		}
+	}
+	Ok(DepotRepairAuditData::LATEST)
+}
+
 impl FilesystemStore {
 	/// Writes one repair call's audit row to the memtable: the op is durable in the maintainer
 	/// log, and an ordinary pass makes the row cold. A later op of the same call replaces it.
 	pub(super) async fn write_repair_audit(&self, op: RepairAuditOp) -> Result<()> {
 		let envelope = &op.row.request.envelope;
 		let key = audit_key(&envelope.volume_log_key.volume_key, envelope.operation_id);
+		let version = audit_version(&op)?;
 		let mut batch = WriteBatch::new();
-		batch.put(key.pack(), key.serialize(op)?);
+		batch.put(key.pack(), key.serialize(AtVersion::new(op, version))?);
 		self.stage(batch).await?;
 		self.admit()
 	}
@@ -153,7 +177,7 @@ impl FilesystemStore {
 		key: &depot_types::VolumeLogKey,
 		record: FsVolumeRecord,
 		applied: rivet_data::generated::shared_depot_types_v1::VolumeLogPosition,
-		keys: &[rivet_data::generated::shared_depot_fs_read_v1::FsRowKey],
+		keys: &[rivet_data::generated::shared_depot_fs_read_v2::FsRowKey],
 	) -> SessionResult<Vec<Option<Bytes>>> {
 		let session = self
 			.open_session(key, &record, applied.clone(), Some(applied.volume_seq))
@@ -165,8 +189,8 @@ impl FilesystemStore {
 				let newest = session.raw_versions(&row, 1).await?.into_iter().next();
 				values.push(match newest {
 					// A delete marker leaves the row absent.
-					Some((_, _, Ok(None))) | None => None,
-					Some((_, raw, Ok(Some(_)) | Err(_))) => Some(raw),
+					Some((_, _, _, Ok(None))) | None => None,
+					Some((_, _, raw, Ok(Some(_)) | Err(_))) => Some(raw),
 				});
 			}
 			Ok(values)
@@ -186,15 +210,21 @@ impl FilesystemStore {
 		// writes its rows while it is quarantined, so the session opens from the planned
 		// record under the volume's stripe.
 		let session = self
-			.open_ordered_session(key, &record, cold.clone(), Some(cold.volume_seq))
+			.open_ordered_session(
+				key,
+				&record,
+				cold.clone(),
+				Some(cold.volume_seq),
+				super::session::SessionUse::OneRequest,
+			)
 			.await?;
 		let result = async {
 			let format = session.version(&RowKey::Format).await?;
 			let root = session.version(&RowKey::Inode(ROOT_INO)).await?;
 			Ok(RepairProbe {
 				record: record.clone(),
-				format_row_present: matches!(format, Some((_, Some(_)))),
-				root_inode_present: matches!(root, Some((_, Some(_)))),
+				format_row_present: matches!(format, Some((_, _, Some(_)))),
+				root_inode_present: matches!(root, Some((_, _, Some(_)))),
 			})
 		}
 		.await;

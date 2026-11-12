@@ -61,14 +61,17 @@ use crate::websocket::WebSocket;
 mod actor_connect;
 mod dispatch;
 mod envoy_callbacks;
+pub(crate) use envoy_callbacks::actor_key_from_protocol;
 mod http;
 mod inspector;
 mod inspector_ws;
 #[cfg(feature = "native-runtime")]
 mod runner_config;
+mod serving_envoy;
 mod websocket;
 
 use inspector::build_actor_inspector;
+pub use serving_envoy::{ActiveActorCountChanges, ServingEnvoy};
 
 const ENVOY_START_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -100,6 +103,10 @@ impl CoreEnvoyHandle {
 		}
 	}
 
+	pub fn is_stopped(&self) -> bool {
+		self.handle.is_stopped()
+	}
+
 	/// Resolves after the Engine sends the envoy initialization message.
 	pub async fn started(&self) -> anyhow::Result<()> {
 		self.handle.started().await
@@ -108,6 +115,10 @@ impl CoreEnvoyHandle {
 	/// Resolves once the envoy has no active actors (or has stopped).
 	pub async fn wait_actors_drained(&self) {
 		self.handle.wait_actors_drained().await
+	}
+
+	pub async fn wait_active_actor_count_change(&self, last: Option<usize>) -> Option<usize> {
+		self.handle.wait_active_actor_count_change(last).await
 	}
 
 	/// Engine-reported drain threshold in milliseconds. `None` until the
@@ -613,7 +624,7 @@ impl CoreRegistry {
 		self,
 		config: ServeConfig,
 		shutdown: CancellationToken,
-		on_handle: impl FnOnce(CoreEnvoyHandle) + Send + 'static,
+		on_handle: impl Fn(CoreEnvoyHandle) + Send + 'static,
 	) -> Result<()> {
 		#[cfg(feature = "sqlite-local")]
 		sqlite_embedded::vfs::verify_batch_atomic_writes_at_process_startup().await?;
@@ -660,33 +671,43 @@ impl CoreRegistry {
 			dispatcher: dispatcher.clone(),
 		});
 
-		let prepopulate_actor_names = dispatcher
-			.build_actor_metadata_map()
-			.into_iter()
-			.map(|(name, metadata)| (name, rivet_envoy_client::config::ActorName { metadata }))
-			.collect();
-		let handle = start_envoy_sync(rivet_envoy_client::config::EnvoyConfig {
-			version: config.version,
-			endpoint: config.endpoint,
-			token: config.token,
-			namespace: config.namespace,
-			pool_name: config.pool_name,
-			prepopulate_actor_names,
-			metadata: Some(json!({
-				"rivetkit": { "version": config.serverless_package_version },
-			})),
-			// Each registry owns its dispatcher, endpoint, and shutdown lifetime.
-			not_global: true,
-			debug_latency_ms: None,
-			max_queued_requests_per_actor:
-				rivet_envoy_client::config::DEFAULT_MAX_QUEUED_REQUESTS_PER_ACTOR,
-			stopped_generation_floor_ttl:
-				rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_TTL,
-			stopped_generation_floor_capacity:
-				rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_CAPACITY,
-			callbacks,
-			connector: None,
-		});
+		// Every envoy of this registry is built the same way; a fresh one replaces an envoy
+		// the lost threshold ended, see below.
+		let start_envoy = {
+			let dispatcher = dispatcher.clone();
+			move || {
+				let prepopulate_actor_names = dispatcher
+					.build_actor_metadata_map()
+					.into_iter()
+					.map(|(name, metadata)| {
+						(name, rivet_envoy_client::config::ActorName { metadata })
+					})
+					.collect();
+				start_envoy_sync(rivet_envoy_client::config::EnvoyConfig {
+					version: config.version,
+					endpoint: config.endpoint.clone(),
+					token: config.token.clone(),
+					namespace: config.namespace.clone(),
+					pool_name: config.pool_name.clone(),
+					prepopulate_actor_names,
+					metadata: Some(json!({
+						"rivetkit": { "version": config.serverless_package_version },
+					})),
+					// Each registry owns its dispatcher, endpoint, and shutdown lifetime.
+					not_global: true,
+					debug_latency_ms: None,
+					max_queued_requests_per_actor:
+						rivet_envoy_client::config::DEFAULT_MAX_QUEUED_REQUESTS_PER_ACTOR,
+					stopped_generation_floor_ttl:
+						rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_TTL,
+					stopped_generation_floor_capacity:
+						rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_CAPACITY,
+					callbacks: callbacks.clone(),
+					connector: None,
+				})
+			}
+		};
+		let mut handle = start_envoy();
 		let envoy_ready: Result<bool> = tokio::select! {
 			biased;
 			_ = shutdown.cancelled() => Ok(false),
@@ -709,15 +730,33 @@ impl CoreRegistry {
 		// host's default SIGINT handling when rivetkit-core is embedded in
 		// Node via NAPI and leaves the host process unable to exit. Callers
 		// trip the `shutdown` token instead.
-		tokio::select! {
-			_ = shutdown.cancelled() => {},
-			_ = async {
-				handle.wait_stopped().await;
-				if handle.terminal_error().is_none() {
-					// Keep existing host-controlled shutdown behavior for ordinary eviction.
-					shutdown.cancelled().await;
+		loop {
+			tokio::select! {
+				_ = shutdown.cancelled() => break,
+				_ = handle.wait_stopped() => {},
+			}
+			match handle.stop_status() {
+				// The envoy lost the engine past its lost threshold with actors running and
+				// stopped them. Only a fresh envoy, under a new key, lets the engine tell
+				// those actors apart from ones this process still runs; it registers like a
+				// restarted process and gets new work, while the engine reschedules the old.
+				rivet_envoy_client::context::StopStatus::Lost => {
+					tracing::warn!(
+						"the envoy lost the engine past its lost threshold and stopped its actors; starting a fresh envoy under a new key"
+					);
+					handle = start_envoy();
+					on_handle(CoreEnvoyHandle::new(handle.clone()));
 				}
-			} => {},
+				rivet_envoy_client::context::StopStatus::Running
+				| rivet_envoy_client::context::StopStatus::Acknowledged
+				| rivet_envoy_client::context::StopStatus::Interrupted => {
+					if handle.terminal_error().is_none() {
+						// Keep existing host-controlled shutdown behavior for ordinary eviction.
+						shutdown.cancelled().await;
+					}
+					break;
+				}
+			}
 		}
 
 		let shutdown_envoy = async {
@@ -1370,10 +1409,11 @@ impl RegistryDispatcher {
 }
 
 impl RegistryDispatcher {
-	fn can_hibernate(&self, actor_id: &str, request: &HttpRequest) -> bool {
+	async fn can_hibernate(&self, actor_id: &str, request: &HttpRequest) -> bool {
 		let Some(instance) = self
 			.actor_instances
-			.read_sync(actor_id, |_, state| state.active_instance())
+			.read_async(actor_id, |_, state| state.active_instance())
+			.await
 			.flatten()
 		else {
 			return false;
@@ -1412,6 +1452,7 @@ impl RegistryDispatcher {
 			actor_name.to_owned(),
 			key,
 			self.region.clone(),
+			handle.namespace().to_owned(),
 			Some(generation),
 			handle.get_envoy_key().to_owned(),
 			factory.config().clone(),

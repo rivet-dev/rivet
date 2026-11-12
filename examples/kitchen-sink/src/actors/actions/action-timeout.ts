@@ -2,7 +2,6 @@ import { actor } from "rivetkit";
 
 // Short timeout actor
 export const shortTimeoutActor = actor({
-	state: { value: 0 },
 	options: {
 		actionTimeout: 50, // 50ms timeout
 	},
@@ -20,7 +19,6 @@ export const shortTimeoutActor = actor({
 
 // Long timeout actor
 export const longTimeoutActor = actor({
-	state: { value: 0 },
 	options: {
 		actionTimeout: 200, // 200ms timeout
 	},
@@ -35,7 +33,6 @@ export const longTimeoutActor = actor({
 
 // Default timeout actor
 export const defaultTimeoutActor = actor({
-	state: { value: 0 },
 	actions: {
 		normalAction: async (_c) => {
 			await new Promise((resolve) => setTimeout(resolve, 50));
@@ -46,7 +43,6 @@ export const defaultTimeoutActor = actor({
 
 // Sync actor (timeout shouldn't apply)
 export const syncTimeoutActor = actor({
-	state: { value: 0 },
 	options: {
 		actionTimeout: 50, // 50ms timeout
 	},

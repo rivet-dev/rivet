@@ -16,7 +16,6 @@ async function validateToken(token: string): Promise<{ userId: string }> {
 }
 
 const rateLimitedActor = actor({
-	state: {},
 	createVars: () => ({ rateLimits: {} as Record<string, RateLimitEntry> }),
 
 	onBeforeConnect: async (c, params: ConnParams) => {

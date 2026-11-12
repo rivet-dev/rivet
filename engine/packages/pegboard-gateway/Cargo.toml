@@ -7,6 +7,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+rivet-keys.workspace = true
 rivet-topology.workspace = true
 anyhow.workspace = true
 depot-client.workspace = true
@@ -18,7 +19,9 @@ futures-util.workspace = true
 http.workspace = true
 hyper.workspace = true
 lazy_static.workspace = true
+moka.workspace = true
 pegboard.workspace = true
+rivet-config.workspace = true
 rivet-data.workspace = true
 rivet-engine-context.workspace = true
 rivet-env.workspace = true

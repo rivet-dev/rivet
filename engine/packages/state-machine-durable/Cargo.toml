@@ -14,6 +14,7 @@ depot-worker.workspace = true
 foundationdb-tuple.workspace = true
 lazy_static.workspace = true
 rivet-data.workspace = true
+rivet-error.workspace = true
 rivet-engine-context.workspace = true
 rivet-env.workspace = true
 rivet-keys.workspace = true

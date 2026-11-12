@@ -5,14 +5,12 @@ type Message = { id: string; userId: string; text: string };
 
 // Define the actor
 const chatRoom = actor({
-  state: { messages: [] as Message[] },
   events: {
     messageReceived: event<Message>()
   },
   actions: {
     sendMessage: (c, userId: string, text: string) => {
       const message = { id: crypto.randomUUID(), userId, text };
-      c.state.messages.push(message);
       c.broadcast('messageReceived', message);
       return message;
     }

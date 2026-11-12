@@ -1,0 +1,5 @@
+{
+  "code": "migrating_from_v2",
+  "group": "namespace",
+  "message": "The namespace cannot be forked while a V2 migration moves actors into it."
+}

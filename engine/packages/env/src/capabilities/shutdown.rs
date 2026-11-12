@@ -75,6 +75,12 @@ impl Shutdown {
 		}
 	}
 
+	/// A current readiness check must stop admitting traffic from the first request,
+	/// including when the request's clock observation failed.
+	pub fn is_requested(&self) -> bool {
+		matches!(*self.state.borrow(), State::Requested { .. })
+	}
+
 	pub fn deadline(&self, duration: Duration) -> Result<u64, ClockError> {
 		let state = self.state.borrow();
 		let State::Requested {

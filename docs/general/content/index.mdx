@@ -5,59 +5,8 @@ seoTitle: "Rivet Documentation: Actors, Workflows, Deploy"
 seoDescription: "Run agents, workflows, sandboxes, and generated apps as durable Actors on one control plane. Start with the Actors quickstart or pick an Actor type."
 ---
 
-Rivet runs agents, workflows, sandboxes, and generated apps as **Actors**: long-lived processes with durable state, scheduled by one control plane and hosted in node processes you already run. Every Actor type on this site is built on the same primitive.
+<Onboarding />
 
-<CardGroup>
-  <Card title="Actors" href="/actors/docs">
-    The primitive: durable state, queues, events, and scheduling.
-  </Card>
-  {/* TEMPORARY: Agents is built but unlaunched (see HIDDEN.md). Restore when it ships:
-  <Card title="Agents" href="/agents/docs">
-    A durable process per agent, with memory that survives restarts.
-  </Card>
-  */}
-  <Card title="Workflows" href="/workflows/docs">
-    Multi-step operations that replay instead of starting over.
-  </Card>
-  <Card title="Sandboxes" href="/agentos/docs">
-    A filesystem, shell, and network for code you did not write.
-  </Card>
-  <Card title="Dynamic Apps" href="/dynamic-apps/docs">
-    A backend per user, deployed the moment it is generated.
-  </Card>
-  <Card title="Deploy" href="/docs/deploy">
-    Run the control plane and nodes on your own infrastructure, or on Rivet Cloud.
-  </Card>
-</CardGroup>
+## Guides
 
-## Why Actors
-
-**Share capacity across Actors.** Many Actors run inside each node process. Add nodes as your workload grows.
-
-**Wake on demand.** An idle Actor saves its state and unloads from memory. Its next request wakes it. See [Benchmarking](/docs/benchmarking) for measured create, wake, and SQLite latency with the cluster configuration and method used.
-
-**Keep state with each Actor.** Every Actor gets its own SQLite database and key-value storage. The control plane replicates writes and moves data to object storage.
-
-## What the control plane provides
-
-- **Fault tolerance by design.** A node going down reschedules its Actors elsewhere with their state intact. No replay harness or checkpointing of your own.
-- **Regions.** On Rivet Cloud, place Actors near the users and data they serve. See [Regions](/docs/regions).
-- **HTTP and WebSocket networking.** Address an Actor directly over HTTP or hold a live WebSocket to it. No queue or broker in between.
-- **End-to-end type safety.** Actor definitions generate their own client types, so a signature change breaks the build rather than production.
-- **React SDK.** First-party hooks that subscribe a component to an Actor's state and keep it live as the Actor updates.
-- **OpenTelemetry.** Traces, metrics, and structured logs emitted in OTel format, into the collector you already run.
-- **Cron and scheduling.** Wake an Actor on a schedule or at a timestamp it sets for itself, without a separate scheduler.
-- **Actor-to-Actor calls.** Actors address each other by key and call across the cluster as if the other one were local.
-- **Single Rust binary.** The control plane ships as one static binary. Run a few identical instances behind a load balancer with an object storage bucket: no database, no CRDs, no operator, no service mesh.
-- **Deployment choice.** Run your own control plane or use [Rivet Cloud](/docs/deploy/cloud).
-
-## Works with the tools you already use
-
-Typed SDKs for TypeScript, Node.js, Bun, and Rust on the backend, React hooks on the frontend, and an [Effect](/actors/docs/quickstart/effect) SDK. Start from the [quickstarts](/actors/docs/quickstart/backend), or connect your AI client with [Rivet MCP](/docs/mcp) and the [Rivet skill](/docs/skill).
-
-## Where to go next
-
-- [Guides](/guides): worked examples such as an AI agent, a chat room, a multiplayer game, and a per-tenant database.
-- [Integrations](/integrations/): frameworks and libraries that run on Rivet Actors.
-- [Deploy](/docs/deploy): run the control plane on Kubernetes, Docker or a VM, and your nodes anywhere a process can run.
-- [Registry](/registry): every Actor type, first-party and community.
+<GuideCards />

@@ -190,6 +190,11 @@ impl ByteBudget {
 	/// Reserves `len` bytes, waiting for room as queued frames leave. The caller bounds the
 	/// wait with its own deadline.
 	pub(super) async fn reserve(self: &std::sync::Arc<Self>, len: usize) -> ByteReservation {
+		// A runnable reservation is not a waiter. Counting it before its first fit
+		// check can make concurrent admission refuse work even in an empty budget.
+		if let Some(reserved) = self.try_reserve(len) {
+			return reserved;
+		}
 		loop {
 			let released = self.released.notified();
 			tokio::pin!(released);
@@ -205,7 +210,8 @@ impl ByteBudget {
 	}
 
 	/// Whether new work must be refused at admission: the budget is used up, or a reservation
-	/// is already waiting for room it did not find.
+	/// is already waiting for room it did not find. A reservation that fits at once never
+	/// registers as a waiter, so concurrent reservations under the cap never read as full.
 	pub(super) fn is_full(&self) -> bool {
 		use std::sync::atomic::Ordering;
 		self.waiters.load(Ordering::Acquire) > 0
@@ -220,6 +226,14 @@ impl ByteBudget {
 				.metric
 				.map(|gauge| rivet_metrics::GaugeGuardExt::add_guard(gauge, len as i64)),
 		}
+	}
+
+	pub(super) fn used(&self) -> usize {
+		self.used.load(std::sync::atomic::Ordering::Acquire)
+	}
+
+	pub(super) fn capacity(&self) -> usize {
+		self.capacity
 	}
 }
 

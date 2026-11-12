@@ -397,13 +397,20 @@ enum HandBack {
 
 /// Skipped work whose kind has a free job, for discovery to scan before it goes idle. A
 /// handed-back volume's scan may start no job (its row is gone, or another scan started it),
-/// so a free job could otherwise wait for a job end that never comes.
+/// so a free job could otherwise wait for a job end that never comes. Each fork window hands
+/// back only its own skipped forks: a fork handed back while only the other window has room
+/// would be skipped again at once and handed back again without end.
 fn idle_hand_back(state: &mut MaintainerState) -> Option<HandBack> {
 	if state.phase != MaintainerPhase::Serving {
 		return None;
 	}
-	if super::forks::has_free_job(state)
+	if super::forks::has_free_non_lazy_job(state)
 		&& let Some(hand_back) = state.forks.skipped.hand_back()
+	{
+		return Some(hand_back);
+	}
+	if super::forks::has_free_lazy_job(state)
+		&& let Some(hand_back) = state.forks.skipped_lazy.hand_back()
 	{
 		return Some(hand_back);
 	}
@@ -449,6 +456,15 @@ pub(crate) fn swept(
 			if state.held_sweeps.is_empty() {
 				cancel_retry(state, fx);
 			}
+		}
+		Ok(PendingSweepProgress::Held(SweepHold::ForkPins { waiting })) => {
+			// Only a deleted incarnation's fork pins keep it, which nothing else drops: the
+			// group cache waits for their children's archives and queues the sweep again.
+			state.held_sweeps.remove(&scope);
+			if state.held_sweeps.is_empty() {
+				cancel_retry(state, fx);
+			}
+			super::groups::deleted_pins_held(state, scope, waiting, fx);
 		}
 		Ok(PendingSweepProgress::Held(SweepHold::ReadSession)) => {
 			// Read sessions expire inside the store without an event, so a retry deadline

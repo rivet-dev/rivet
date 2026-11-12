@@ -56,14 +56,169 @@ pub struct ActionDefinition {
 	pub name: String,
 }
 
+/// Selection of SQLite profiling metric families. Disabled families allocate no series.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct SqliteProfilingMetrics {
+	pub duration: bool,
+	pub duration_histogram: bool,
+	pub outcomes: bool,
+	pub phase_duration_histogram: bool,
+	pub get_pages_round_trips_histogram: bool,
+	pub transaction_statement_count_histogram: bool,
+	pub pages_fetched: bool,
+	pub local_pages: bool,
+	pub local_bytes: bool,
+	pub get_pages_duration_histogram: bool,
+	pub get_pages_pages_histogram: bool,
+	pub get_pages_response_bytes_histogram: bool,
+	pub get_pages_missing_pages: bool,
+	pub worker_queue_depth: bool,
+	pub worker_inflight: bool,
+	pub coordinator_queue_depth: bool,
+	pub fingerprint_overflow: bool,
+	pub event_dropped: bool,
+}
+impl Default for SqliteProfilingMetrics {
+	fn default() -> Self {
+		Self {
+			duration: true,
+			duration_histogram: true,
+			outcomes: true,
+			phase_duration_histogram: false,
+			get_pages_round_trips_histogram: false,
+			transaction_statement_count_histogram: false,
+			pages_fetched: true,
+			local_pages: false,
+			local_bytes: false,
+			get_pages_duration_histogram: false,
+			get_pages_pages_histogram: false,
+			get_pages_response_bytes_histogram: false,
+			get_pages_missing_pages: false,
+			worker_queue_depth: true,
+			worker_inflight: true,
+			coordinator_queue_depth: true,
+			fingerprint_overflow: true,
+			event_dropped: true,
+		}
+	}
+}
+impl SqliteProfilingMetrics {
+	/// Compact cache discriminator for sinks with different metric selections.
+	pub(crate) fn cache_key(&self) -> u32 {
+		(u32::from(self.duration) << 0)
+			| (u32::from(self.duration_histogram) << 1)
+			| (u32::from(self.outcomes) << 2)
+			| (u32::from(self.phase_duration_histogram) << 3)
+			| (u32::from(self.get_pages_round_trips_histogram) << 4)
+			| (u32::from(self.transaction_statement_count_histogram) << 5)
+			| (u32::from(self.pages_fetched) << 6)
+			| (u32::from(self.local_pages) << 7)
+			| (u32::from(self.local_bytes) << 8)
+			| (u32::from(self.get_pages_duration_histogram) << 9)
+			| (u32::from(self.get_pages_pages_histogram) << 10)
+			| (u32::from(self.get_pages_response_bytes_histogram) << 11)
+			| (u32::from(self.get_pages_missing_pages) << 12)
+			| (u32::from(self.worker_queue_depth) << 13)
+			| (u32::from(self.worker_inflight) << 14)
+			| (u32::from(self.coordinator_queue_depth) << 15)
+			| (u32::from(self.fingerprint_overflow) << 16)
+			| (u32::from(self.event_dropped) << 17)
+	}
+}
+/// Sparse metric overrides at native and wasm boundaries.
+#[derive(Clone, Debug, Default, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct SqliteProfilingMetricsInput {
+	pub duration: Option<bool>,
+	pub duration_histogram: Option<bool>,
+	pub outcomes: Option<bool>,
+	pub phase_duration_histogram: Option<bool>,
+	pub get_pages_round_trips_histogram: Option<bool>,
+	pub transaction_statement_count_histogram: Option<bool>,
+	pub pages_fetched: Option<bool>,
+	pub local_pages: Option<bool>,
+	pub local_bytes: Option<bool>,
+	pub get_pages_duration_histogram: Option<bool>,
+	pub get_pages_pages_histogram: Option<bool>,
+	pub get_pages_response_bytes_histogram: Option<bool>,
+	pub get_pages_missing_pages: Option<bool>,
+	pub worker_queue_depth: Option<bool>,
+	pub worker_inflight: Option<bool>,
+	pub coordinator_queue_depth: Option<bool>,
+	pub fingerprint_overflow: Option<bool>,
+	pub event_dropped: Option<bool>,
+}
+impl From<SqliteProfilingMetricsInput> for SqliteProfilingMetrics {
+	fn from(input: SqliteProfilingMetricsInput) -> Self {
+		let mut metrics = Self::default();
+		if let Some(value) = input.duration {
+			metrics.duration = value;
+		}
+		if let Some(value) = input.duration_histogram {
+			metrics.duration_histogram = value;
+		}
+		if let Some(value) = input.outcomes {
+			metrics.outcomes = value;
+		}
+		if let Some(value) = input.phase_duration_histogram {
+			metrics.phase_duration_histogram = value;
+		}
+		if let Some(value) = input.get_pages_round_trips_histogram {
+			metrics.get_pages_round_trips_histogram = value;
+		}
+		if let Some(value) = input.transaction_statement_count_histogram {
+			metrics.transaction_statement_count_histogram = value;
+		}
+		if let Some(value) = input.pages_fetched {
+			metrics.pages_fetched = value;
+		}
+		if let Some(value) = input.local_pages {
+			metrics.local_pages = value;
+		}
+		if let Some(value) = input.local_bytes {
+			metrics.local_bytes = value;
+		}
+		if let Some(value) = input.get_pages_duration_histogram {
+			metrics.get_pages_duration_histogram = value;
+		}
+		if let Some(value) = input.get_pages_pages_histogram {
+			metrics.get_pages_pages_histogram = value;
+		}
+		if let Some(value) = input.get_pages_response_bytes_histogram {
+			metrics.get_pages_response_bytes_histogram = value;
+		}
+		if let Some(value) = input.get_pages_missing_pages {
+			metrics.get_pages_missing_pages = value;
+		}
+		if let Some(value) = input.worker_queue_depth {
+			metrics.worker_queue_depth = value;
+		}
+		if let Some(value) = input.worker_inflight {
+			metrics.worker_inflight = value;
+		}
+		if let Some(value) = input.coordinator_queue_depth {
+			metrics.coordinator_queue_depth = value;
+		}
+		if let Some(value) = input.fingerprint_overflow {
+			metrics.fingerprint_overflow = value;
+		}
+		if let Some(value) = input.event_dropped {
+			metrics.event_dropped = value;
+		}
+		metrics
+	}
+}
 /// Experimental SQLite profiling configuration.
 ///
 /// This entire configuration surface, including every field, is subject to
 /// change without notice.
 #[derive(Clone, Debug)]
 pub struct SqliteProfilingConfig {
-	pub queries: Vec<String>,
-	pub fingerprints: Vec<String>,
+	pub filter_queries: Vec<String>,
+	pub metrics: SqliteProfilingMetrics,
+	pub duration_histogram_buckets_seconds: Vec<f64>,
+	pub filter_query_fingerprints: Vec<String>,
 	pub max_tracked_statement_fingerprints: usize,
 	pub max_tracked_transaction_fingerprints: usize,
 	pub max_prometheus_series: usize,
@@ -79,9 +234,11 @@ pub struct SqliteProfilingConfig {
 impl Default for SqliteProfilingConfig {
 	fn default() -> Self {
 		Self {
-			queries: Vec::new(),
-			fingerprints: Vec::new(),
-			max_tracked_statement_fingerprints: 128,
+			filter_queries: Vec::new(),
+			metrics: SqliteProfilingMetrics::default(),
+			duration_histogram_buckets_seconds: vec![0.01, 0.1, 1.0],
+			filter_query_fingerprints: Vec::new(),
+			max_tracked_statement_fingerprints: 512,
 			max_tracked_transaction_fingerprints: 8,
 			max_prometheus_series: 25_000,
 			max_statements_per_transaction_trace: 32,
@@ -102,8 +259,10 @@ impl Default for SqliteProfilingConfig {
 /// change without notice.
 #[derive(Clone, Debug, Default)]
 pub struct SqliteProfilingConfigInput {
-	pub queries: Option<Vec<String>>,
-	pub fingerprints: Option<Vec<String>>,
+	pub filter_queries: Option<Vec<String>>,
+	pub metrics: Option<SqliteProfilingMetricsInput>,
+	pub duration_histogram_buckets_seconds: Option<Vec<f64>>,
+	pub filter_query_fingerprints: Option<Vec<String>>,
 	pub max_tracked_statement_fingerprints: Option<u32>,
 	pub max_tracked_transaction_fingerprints: Option<u32>,
 	pub max_prometheus_series: Option<u32>,
@@ -118,14 +277,25 @@ pub struct SqliteProfilingConfigInput {
 
 /// The process override replaces only query selection, retaining diagnostic limits.
 #[derive(Default, serde::Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 struct SqliteProfilingQueries {
-	queries: Vec<String>,
-	fingerprints: Vec<String>,
+	filter_queries: Vec<String>,
+	filter_query_fingerprints: Vec<String>,
 }
 
 impl SqliteProfilingConfig {
-	/// Process selection overrides actor settings. An empty object clears fingerprint selection.
+	pub(crate) fn validate_buckets(&self) -> anyhow::Result<()> {
+		let buckets = &self.duration_histogram_buckets_seconds;
+		anyhow::ensure!(
+			!buckets.is_empty()
+				&& buckets.iter().all(|v| v.is_finite() && *v > 0.0)
+				&& buckets.windows(2).all(|pair| pair[0] < pair[1]),
+			"SQLite profiling durationHistogramBucketsSeconds must be nonempty, positive, finite, and strictly increasing"
+		);
+		Ok(())
+	}
+
+	/// Process selection overrides actor settings. An empty object selects all queries.
 	pub(crate) fn with_process_override(self) -> Self {
 		self.with_query_override(std::env::var("RIVETKIT_SQLITE_PROFILING").ok().as_deref())
 	}
@@ -135,12 +305,12 @@ impl SqliteProfilingConfig {
 			let selection = match serde_json::from_str::<SqliteProfilingQueries>(value) {
 				Ok(selection) => selection,
 				Err(error) => {
-					tracing::warn!(%error, "invalid RIVETKIT_SQLITE_PROFILING; expected a JSON object with queries or fingerprints arrays; using profiling without fingerprint labels");
+					tracing::warn!(%error, "invalid RIVETKIT_SQLITE_PROFILING; expected a JSON object with filterQueries or filterQueryFingerprints arrays; using profiling without query filters");
 					SqliteProfilingQueries::default()
 				}
 			};
-			self.queries = selection.queries;
-			self.fingerprints = selection.fingerprints;
+			self.filter_queries = selection.filter_queries;
+			self.filter_query_fingerprints = selection.filter_query_fingerprints;
 		}
 		self
 	}
@@ -154,8 +324,12 @@ impl SqliteProfilingConfig {
 				}
 			};
 		}
-		config.queries = input.queries.unwrap_or_default();
-		config.fingerprints = input.fingerprints.unwrap_or_default();
+		config.filter_queries = input.filter_queries.unwrap_or_default();
+		config.metrics = input.metrics.map(Into::into).unwrap_or_default();
+		if let Some(buckets) = input.duration_histogram_buckets_seconds {
+			config.duration_histogram_buckets_seconds = buckets;
+		}
+		config.filter_query_fingerprints = input.filter_query_fingerprints.unwrap_or_default();
 		set_usize!(max_tracked_statement_fingerprints);
 		set_usize!(max_tracked_transaction_fingerprints);
 		set_usize!(max_prometheus_series);
@@ -220,8 +394,6 @@ pub struct ActorConfig {
 	pub remote_sqlite: bool,
 	pub sqlite_profiling: SqliteProfilingConfig,
 	pub tracing: Arc<ActorTracingConfig>,
-	/// Enables the experimental Actor Runtime Socket.
-	pub enable_actor_runtime_socket: bool,
 	/// Whether the user declared actor state (`state: ...` or `createState`).
 	/// Gates the inspector state tab and state-subscription messages.
 	pub has_state: bool,
@@ -260,7 +432,6 @@ pub struct ActorConfigInput {
 	pub remote_sqlite: Option<bool>,
 	pub sqlite_profiling: Option<SqliteProfilingConfigInput>,
 	pub tracing: Option<ActorTracingConfig>,
-	pub enable_actor_runtime_socket: Option<bool>,
 	pub has_state: Option<bool>,
 	pub can_hibernate_websocket: Option<bool>,
 	pub state_save_interval_ms: Option<u32>,
@@ -296,7 +467,6 @@ impl ActorConfig {
 				.map(SqliteProfilingConfig::from_input)
 				.unwrap_or_default(),
 			tracing: Arc::new(config.tracing.unwrap_or_default()),
-			enable_actor_runtime_socket: config.enable_actor_runtime_socket.unwrap_or(false),
 			has_state: config.has_state.unwrap_or(false),
 			..Self::default()
 		};
@@ -381,6 +551,15 @@ impl ActorConfig {
 	/// config so the actor never starts with garbage state.
 	pub fn validate(&self) -> anyhow::Result<()> {
 		crate::inspector::validate_inspector_tabs(&self.inspector_tabs)?;
+		self.sqlite_profiling.validate_buckets()?;
+		#[cfg(feature = "sqlite-local")]
+		if self.sqlite_profiling.metrics.duration
+			&& self.sqlite_profiling.metrics.duration_histogram
+		{
+			super::metrics::configure_sqlite_duration_histogram(
+				&self.sqlite_profiling.duration_histogram_buckets_seconds,
+			)?;
+		}
 		self.tracing.validate(&self.actions)?;
 		anyhow::ensure!(
 			self.sqlite_profiling.baseline_sample_rate.is_finite()
@@ -413,7 +592,6 @@ impl Default for ActorConfig {
 			remote_sqlite: false,
 			sqlite_profiling: SqliteProfilingConfig::default(),
 			tracing: Arc::default(),
-			enable_actor_runtime_socket: false,
 			has_state: false,
 			can_hibernate_websocket: CanHibernateWebSocket::default(),
 			state_save_interval: DEFAULT_STATE_SAVE_INTERVAL,

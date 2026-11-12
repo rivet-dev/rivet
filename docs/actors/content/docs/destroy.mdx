@@ -60,4 +60,8 @@ Once destroyed, the `onDestroy` hook will be called. This can be used to clean u
 
 ## Accessing Actor After Destroy
 
-Once an actor is destroyed, any subsequent requests to it will fail with an `actor.not_found` error (`{ group: "actor", code: "not_found" }`). The actor's state is permanently deleted.
+Once an actor is destroyed, its data, including its SQLite database, is permanently deleted.
+
+- Requests through `get` or `getForId` fail with an `actor.not_found` error (`{ group: "actor", code: "not_found" }`).
+- Requests through `getOrCreate` create a new, empty actor under the same key.
+- Open connections close with an `actor.destroyed` error (`{ group: "actor", code: "destroyed" }`).

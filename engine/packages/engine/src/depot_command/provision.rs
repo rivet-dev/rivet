@@ -1,7 +1,7 @@
 //! Static tablet placement for a fresh cluster in one operator process.
 //!
 //! The hash space is split into equal tablets. Tablet `i` has up to three members in a rotating window
-//! starting at `workers[i % n]`, and its first member
+//! starting at `workers[i % n]`, preferring distinct known zones. Its first member
 //! maintains it, so tablets, replicas and grants spread evenly over any number of storage workers.
 //! Creates and grants are sent concurrently so the coordinator can batch them into few manifest
 //! writes, and the result is checked against this plan before the command reports success.
@@ -28,8 +28,9 @@ pub struct PlannedTablet {
 	pub members: Vec<usize>,
 }
 
-/// Equal hash ranges with rotating up-to-three-member windows over `workers` storage workers.
-pub fn plan(tablets: usize, workers: usize) -> Result<Vec<PlannedTablet>> {
+/// Equal hash ranges with rotating, zone-aware replica selection over storage workers.
+pub fn plan(tablets: usize, zones: &[Option<&str>]) -> Result<Vec<PlannedTablet>> {
+	let workers = zones.len();
 	ensure!(tablets > 0, "provision needs at least one partition");
 	ensure!(
 		workers > 0,
@@ -49,9 +50,12 @@ pub fn plan(tablets: usize, workers: usize) -> Result<Vec<PlannedTablet>> {
 			PlannedTablet {
 				start,
 				end,
-				members: (0..workers.min(3))
-					.map(|offset| (index + offset) % workers)
-					.collect(),
+				members: depot_worker::tablet_coordinator_machine::placement::choose_members(
+					(0..workers).map(|offset| {
+						let worker = (index + offset) % workers;
+						(worker, zones[worker])
+					}),
+				),
 			}
 		})
 		.collect())
@@ -332,7 +336,26 @@ pub async fn provision(
 	tablets: usize,
 	concurrency: usize,
 ) -> Result<Value> {
-	let planned = plan(tablets, disks.len())?;
+	let workers = ctx.topology().storage_workers().await?;
+	let zones_by_worker: BTreeMap<_, _> = workers
+		.iter()
+		.map(|worker| (*worker.id.as_bytes(), worker.zone.as_deref()))
+		.collect();
+	let zones = disks
+		.iter()
+		.map(|disk| {
+			zones_by_worker
+				.get(&disk.worker_id)
+				.copied()
+				.with_context(|| {
+					format!(
+						"storage worker {} is absent from active discovery",
+						Uuid::from_bytes(disk.worker_id)
+					)
+				})
+		})
+		.collect::<Result<Vec<_>>>()?;
+	let planned = plan(tablets, &zones)?;
 
 	// A previous provision against this prefix would make the grants land on other tablets.
 	let existing = super::read_manifest(ctx).await?;

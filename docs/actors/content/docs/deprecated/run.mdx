@@ -1,0 +1,29 @@
+---
+title: "Deprecated run"
+description: "Replace a plain run handler with a background task started in onWake."
+---
+
+<Warning>
+Passing a plain function to `run` was deprecated in 3.0 and will be removed in a future version. It still works today and logs a warning at startup. `run: workflow(...)` is not deprecated.
+</Warning>
+
+## What is deprecated
+
+A plain `run` function starts a long-running loop alongside the actor. Only that form is deprecated. Workflows keep using `run: workflow(...)`.
+
+<CodeSnippet file="examples/docs/actors-deprecated-run/before.ts" />
+
+## Start a background task in `onWake`
+
+Start the same loop yourself from `onWake`, which runs on every start, and keep a handle to it in `c.vars`:
+
+1. `onWake` starts the loop and stores its promise in `c.vars`.
+2. The loop checks `c.aborted` and passes `c.abortSignal` to anything it waits on, so it exits when the actor starts shutting down.
+3. `c.keepAwake` wraps only the work that must finish. Between iterations the actor can still sleep, and `onWake` restarts the loop when it wakes.
+4. `onSleep` waits for the loop to exit. `c.abortSignal` fires before `onSleep` runs, so the loop is already stopping.
+
+<CodeSnippet file="examples/docs/actors-deprecated-run/background-task.ts" />
+
+Wrapping the whole loop in `c.keepAwake` keeps the actor awake until it is destroyed. Only do that for an actor that must never sleep.
+
+For work that must survive a crash or resume where it left off, store progress in [SQLite](/actors/docs/sqlite) or use a workflow. See [Build a durable job queue](/actors/docs/deprecated/queues#build-a-durable-job-queue) for a complete example.

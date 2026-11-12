@@ -430,6 +430,41 @@ export class InvalidRequest extends Schema.TaggedError<InvalidRequest>(
 	}
 }
 
+export class GuardRequestTimeout extends Schema.TaggedError<GuardRequestTimeout>(
+	`${ReasonTypeId}/GuardRequestTimeout`,
+)("GuardRequestTimeout", {
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
+}) {
+	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message() {
+		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
+	get rayId() {
+		return this.cause.rayId;
+	}
+	get isRetryable(): boolean {
+		return false;
+	}
+}
+
 export class GuardActorReadyTimeout extends Schema.TaggedError<GuardActorReadyTimeout>(
 	`${ReasonTypeId}/GuardActorReadyTimeout`,
 )("GuardActorReadyTimeout", {
@@ -924,6 +959,7 @@ export type RivetErrorReason =
 	| OutgoingMessageTooLong
 	| InvalidEncoding
 	| InvalidRequest
+	| GuardRequestTimeout
 	| GuardActorReadyTimeout
 	| GuardActorWakeRetriesExceeded
 	| GuardActorRunnerFailed
@@ -952,6 +988,7 @@ export const RivetErrorReason: Schema.Union<
 		typeof OutgoingMessageTooLong,
 		typeof InvalidEncoding,
 		typeof InvalidRequest,
+		typeof GuardRequestTimeout,
 		typeof GuardActorReadyTimeout,
 		typeof GuardActorWakeRetriesExceeded,
 		typeof GuardActorRunnerFailed,
@@ -979,6 +1016,7 @@ export const RivetErrorReason: Schema.Union<
 	OutgoingMessageTooLong,
 	InvalidEncoding,
 	InvalidRequest,
+	GuardRequestTimeout,
 	GuardActorReadyTimeout,
 	GuardActorWakeRetriesExceeded,
 	GuardActorRunnerFailed,
@@ -1108,6 +1146,8 @@ const reasonByCode: { [key: string]: MakeRivetErrorReason | undefined } = {
 		new OutgoingMessageTooLong({ cause: error }),
 	"encoding.invalid": (error) => new InvalidEncoding({ cause: error }),
 	"request.invalid": (error) => new InvalidRequest({ cause: error }),
+	"guard.request_timeout": (error) =>
+		new GuardRequestTimeout({ cause: error }),
 	"guard.actor_ready_timeout": (error) =>
 		new GuardActorReadyTimeout({ cause: error }),
 	"guard.actor_wake_retries_exceeded": (error) =>

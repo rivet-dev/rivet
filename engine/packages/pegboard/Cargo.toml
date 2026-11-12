@@ -7,18 +7,24 @@ license.workspace = true
 edition.workspace = true
 autotests = false
 
+[features]
+# Reservation reads by key that only tests and the system sim make.
+
 [dependencies]
 anyhow.workspace = true
 bytes.workspace = true
 depot-client.workspace = true
+depot-fs-core.workspace = true
 depot-protocol.workspace = true
 depot-types.workspace = true
 depot-worker.workspace = true
 epoxy.workspace = true
 foundationdb-tuple.workspace = true
 futures-util.workspace = true
+http.workspace = true
 lazy_static.workspace = true
 parking_lot.workspace = true
+rivet-config.workspace = true
 rivet-data.workspace = true
 rivet-engine-context.workspace = true
 rivet-env.workspace = true
@@ -29,11 +35,15 @@ rivet-metrics.workspace = true
 rivet-state-machine-durable.workspace = true
 rivet-state-machine.workspace = true
 rivet-util.workspace = true
+rivetkit-shared-types.workspace = true
 serde.workspace = true
+serde_html_form.workspace = true
+serde_json.workspace = true
 scc.workspace = true
 moka.workspace = true
 rivet-topology.workspace = true
 sha2.workspace = true
+strum.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 universalpubsub.workspace = true

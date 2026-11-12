@@ -111,6 +111,23 @@ pub(crate) struct Carried {
 	/// Order of keeping, so a full budget drops the oldest set first.
 	inserted: u64,
 }
+/// Why a registered volume's apply waits instead of running; see [`Filesystem::applies_held`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub(crate) enum ApplyHold {
+	/// The store refused the volume's next entry, or would refuse its fork pin, because a row
+	/// of it needs the raised `depot.fs_rows` mark, which the version this grant selected
+	/// expresses. Entered only while that mark is pending, with a prompt pass requested; the
+	/// completion of the pass that makes the mark durable releases it, and the apply, or the
+	/// pin before it, runs again from the unchanged resolver.
+	RowsMark,
+	/// The store refused the volume's next entry because a row of it needs a version above
+	/// every one this grant reaches, as in a deploy that mixes versions or a grant that
+	/// selected from a stale topology view. Nothing in this lifetime releases it: it arms the
+	/// tablet's [`MaintainerTimer::InexpressibleHoldDeadline`], whose firing hands the grant
+	/// back, and the next grant selects again and applies the entry if it can.
+	RowsInexpressible,
+}
+
 /// Progress of a volume whose opens are refused while its apply catches up.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) struct OpenWait {
@@ -211,6 +228,15 @@ pub struct Filesystem {
 	/// before the other candidates, so an open waits for its own volume's apply, not for the
 	/// whole tablet's.
 	pub(crate) waiting_opens: BTreeMap<VolumeLogKey, OpenWait>,
+	/// Registered volumes whose apply waits for the store to be able to encode a row of their
+	/// next entry, and why. Only that volume waits; other volumes keep applying. A held
+	/// volume takes no read, page or apply and is not a candidate until released. Bounded by
+	/// the registered volumes, and left with the volume or the lifetime.
+	pub(crate) applies_held: BTreeMap<VolumeLogKey, ApplyHold>,
+	/// Whether [`MaintainerTimer::InexpressibleHoldDeadline`] is armed: exactly while an
+	/// apply or fork copy holds a row no version of this grant can express; see
+	/// [`sync_inexpressible_deadline`].
+	pub(crate) inexpressible_deadline_armed: bool,
 }
 
 impl Filesystem {
@@ -306,6 +332,8 @@ pub(crate) fn same_ignoring_marks(a: &Filesystem, b: &Filesystem) -> bool {
 		&& a.memtable_bytes == b.memtable_bytes
 		&& a.committed_floors == b.committed_floors
 		&& a.waiting_opens == b.waiting_opens
+		&& a.applies_held == b.applies_held
+		&& a.inexpressible_deadline_armed == b.inexpressible_deadline_armed
 }
 
 /// Asks the next `drive` to register a loaded volume if it has become eligible.
@@ -617,8 +645,8 @@ pub(crate) fn mark_record_missing(
 				super::filesystem_reads::reply(
 					state,
 					request_id,
-					rivet_data::generated::shared_depot_fs_read_v1::FsReadResponse::FsReadError(
-						rivet_data::generated::shared_depot_fs_read_v1::FsReadError::NotFound,
+					rivet_data::generated::shared_depot_fs_read_v2::FsReadResponse::FsReadError(
+						rivet_data::generated::shared_depot_fs_read_v2::FsReadError::NotFound,
 					),
 					fx,
 				);
@@ -693,6 +721,7 @@ pub(crate) fn loaded(
 	state: &mut MaintainerState,
 	id: OpId,
 	result: Result<Option<FsVolumeRecord>, String>,
+	fork_pins: crate::tablet_maintainer_machine::types::LoadedForkPins,
 	fx: &mut Effects,
 ) {
 	if !matches!(
@@ -701,10 +730,14 @@ pub(crate) fn loaded(
 	) {
 		return;
 	}
+	let pass = super::groups::take_pass(state, id);
 	let Some(Operation::FilesystemLoad { key, purpose }) = state.finish(id, fx) else {
 		unreachable!()
 	};
-	if retiring(state, &key) || !state.loaded_volumes.contains_key(&key) {
+	if !state.loaded_volumes.contains_key(&key) {
+		return;
+	}
+	if retiring(state, &key) {
 		return;
 	}
 	// A lookup queued before the incarnation was quarantined answers late; the quarantine
@@ -802,6 +835,22 @@ pub(crate) fn loaded(
 	let queue =
 		!persisted && !state.pending_rows.contains(&key) && !state.deleting.contains_key(&key);
 	register(state, key.clone(), record, persisted);
+	if state.filesystem.volumes.contains_key(&key) {
+		// A stored record whose `fork_pinned_through` lags a pin this load deleted is stored
+		// again by the next ordinary pass, so a later load does not rebuild a lower value.
+		if fork_pins.record_lags && persisted && !state.deleting.contains_key(&key) {
+			if let Some(volume) = state.filesystem.volumes.get_mut(&key) {
+				volume.record_persisted = false;
+			}
+			unrecorded(state, key.clone(), fx);
+		}
+		// The load's pin pass dropped the archived children it carried.
+		super::groups::pass_applied(state, pass);
+		super::groups::pins_loaded(state, &key, fork_pins, fx);
+		super::groups::drive(state, fx);
+		super::fork_references::pins_progressed(state, Some(&key.0.volume_key), fx);
+		super::deletion::pin_applied(state, &key.0.volume_key);
+	}
 	if queue && state.filesystem.volumes.contains_key(&key) {
 		unrecorded(state, key, fx);
 	}
@@ -838,7 +887,10 @@ fn register(
 		Volume {
 			applied: record.cold.clone(),
 			settled: record.cold.clone(),
-			resolver: depot_fs_core::txn::Resolver::new(record.cold.clone()),
+			resolver: depot_fs_core::txn::Resolver::new(
+				super::claims::base_of(&key).1,
+				record.cold.clone(),
+			),
 			epochs: Default::default(),
 			record: record.into(),
 			record_persisted: persisted,
@@ -854,6 +906,8 @@ fn register(
 			entry_bytes: 0,
 		},
 	);
+	// Every registration counts once towards its group's entry, whichever path registered it.
+	super::groups::volume_registered(state, &key);
 	wake_lagging_opens(state, &key, cold_seq);
 	schedule_retention(state, &key);
 	mark_candidate(state, &key);
@@ -894,7 +948,8 @@ pub(crate) fn stored(
 		let cold_seq = record.cold.volume_seq;
 		volume.applied = record.cold.clone();
 		volume.settled = record.cold.clone();
-		volume.resolver = depot_fs_core::txn::Resolver::new(record.cold.clone());
+		volume.resolver =
+			depot_fs_core::txn::Resolver::new(super::claims::base_of(key).1, record.cold.clone());
 		volume.epochs = Default::default();
 		volume.due_boot_ms = None;
 		fx.cancel_timer(MaintainerTimer::FilesystemDue(key.clone()));
@@ -1135,6 +1190,7 @@ pub(crate) fn drive(state: &mut MaintainerState, fx: &mut Effects) {
 		.copied()
 		.chain(round_robin.filter(|key| !priority.contains(key)));
 	let mut selected = Vec::new();
+	let mut grouped = Vec::new();
 	// Candidates found unreadable leave the set. Whatever later makes them readable
 	// marks them again: a member observation, an apply, or a retry timer.
 	let mut evaluated = Vec::new();
@@ -1151,6 +1207,7 @@ pub(crate) fn drive(state: &mut MaintainerState, fx: &mut Effects) {
 			.is_some_and(|limit| volume.applied.volume_seq >= limit);
 		if volume.retry_wait
 			|| held || busy.contains(key)
+			|| state.filesystem.applies_held.contains_key(key)
 			|| state.operations.index().filesystem_reads.contains_key(key)
 			|| state
 				.operations
@@ -1187,12 +1244,31 @@ pub(crate) fn drive(state: &mut MaintainerState, fx: &mut Effects) {
 		else {
 			continue;
 		};
+		// A grouped volume with entries to apply pins the state before its first write after
+		// a fork of its group, so its entries are read only once the pin is logged or no pin
+		// is needed. A volume with nothing to apply never pins, however often its group forks.
+		// Entries below the volume's pin floor apply before the pin and are read now.
+		match super::groups::pin_need(state, key) {
+			super::groups::PinNeed::None | super::groups::PinNeed::Apply => {}
+			need => {
+				grouped.push((key.clone(), need));
+				continue;
+			}
+		}
 		cold_bytes += read_budget;
 		selected.push((key.clone(), worker, proof, volume.applied.clone()));
 	}
 
 	for key in evaluated {
 		state.filesystem.candidates.remove(&key);
+	}
+	for (key, need) in grouped {
+		match need {
+			super::groups::PinNeed::None | super::groups::PinNeed::Apply => {}
+			super::groups::PinNeed::Read => super::groups::hold_for_read(state, &key, fx),
+			super::groups::PinNeed::Pin => super::groups::pin(state, &key, fx),
+			super::groups::PinNeed::Unsupported => super::groups::unsupported(state, &key),
+		}
 	}
 	for (key, worker, proof, previous) in selected {
 		if !state.filesystem.waiting_opens.contains_key(&key) {
@@ -1255,8 +1331,9 @@ pub(crate) fn read(
 		fence(state, fx);
 		return;
 	}
-	// Apply stops at the position of the volume's next recovered maintainer log op.
-	let limit = super::maintainer_log::replay::apply_limit(state, &key).unwrap_or(u64::MAX);
+	// Apply stops at the position of the volume's next recovered maintainer log op, and at
+	// its pin floor while a fork pin waits for it.
+	let limit = apply_through_limit(state, &key);
 	page.entries
 		.retain(|e| e.volume_seq <= committed && e.volume_seq <= limit);
 	super::cold::observe(state, &key, worker, page.state);
@@ -1270,6 +1347,14 @@ pub(crate) fn read(
 		.map(depot_types::log_shard::entry_bytes)
 		.sum::<u64>();
 	accept_page(state, key, previous, page.entries, bytes, fx);
+}
+
+/// The highest seq a page of `key`'s entries may apply through: the position of its next
+/// recovered maintainer log op, and its pin floor while a fork pin waits for it to reach it.
+fn apply_through_limit(state: &MaintainerState, key: &VolumeLogKey) -> u64 {
+	let replay = super::maintainer_log::replay::apply_limit(state, key).unwrap_or(u64::MAX);
+	let pin_floor = super::groups::pin_apply_limit(state, key).unwrap_or(u64::MAX);
+	replay.min(pin_floor)
 }
 
 /// Queues committed `entries` that continue `previous` for apply. Fences, and returns false,
@@ -1379,8 +1464,19 @@ pub(crate) fn pushed(
 	let previous = volume.applied.clone();
 	let held = super::maintainer_log::replay::apply_limit(state, key)
 		.is_some_and(|limit| previous.volume_seq >= limit);
+	// A grouped volume logs its fork pin before its first write after a fork of its group,
+	// as on the read path: the entries wait while the pin path reads the group or logs the
+	// pin. Below its pin floor the volume applies first, up to the floor.
+	let pin_blocked = match super::groups::pin_need(state, key) {
+		super::groups::PinNeed::None | super::groups::PinNeed::Apply => false,
+		super::groups::PinNeed::Read
+		| super::groups::PinNeed::Pin
+		| super::groups::PinNeed::Unsupported => true,
+	};
 	let blocked = volume.retry_wait
 		|| held
+		|| pin_blocked
+		|| state.filesystem.applies_held.contains_key(key)
 		|| volume.unavailable_sources.contains(worker)
 		|| retiring(state, key)
 		|| apply_in_progress(state, key);
@@ -1428,6 +1524,12 @@ pub(crate) fn pushed(
 		if keep(state, entries) && apply_in_progress(state, key) {
 			state.filesystem.carried_ready.insert(key.clone());
 		}
+		// The next drive runs the volume's pin path. Whatever then lets the apply go on, the
+		// pin op's replay or the group's read, marks the volume again and offers the kept
+		// entries.
+		if pin_blocked {
+			state.filesystem.candidates.insert(key.clone());
+		}
 		return false;
 	}
 
@@ -1446,10 +1548,11 @@ pub(crate) fn pushed(
 		return false;
 	}
 
-	// Apply stops at the proven commit and at the position of the volume's next recovered
-	// maintainer log op; what lies above waits for the next observation of the volume.
+	// Apply stops at the proven commit, at the position of the volume's next recovered
+	// maintainer log op and at its pin floor while a fork pin waits for it; what lies above
+	// waits for the next observation of the volume.
 	let committed = committed_on(state, key, replica);
-	let limit = super::maintainer_log::replay::apply_limit(state, key).unwrap_or(u64::MAX);
+	let limit = apply_through_limit(state, key);
 	let ready_through = committed.min(limit);
 	let ready_count = entries.partition_point(|entry| entry.volume_seq <= ready_through);
 	let rest = entries.split_off(ready_count);
@@ -1479,6 +1582,169 @@ pub(crate) fn pushed(
 	crate::metrics::record_notice_apply();
 	accept_page(state, key.clone(), previous, ready, ready_bytes, fx)
 }
+/// Holds `key`'s apply until the pass that raises the `depot.fs_rows` mark completes, for a
+/// `row` this grant selected a version for that the store does not write yet, such as a fork
+/// pin; see [`ApplyHold::RowsMark`].
+pub(crate) fn hold_for_rows_mark(
+	state: &mut MaintainerState,
+	key: &VolumeLogKey,
+	row: &str,
+	fx: &mut Effects,
+) {
+	// A read, page or apply in flight offers the volume again when it ends, and a hold may
+	// not overlap it; the pass is asked for meanwhile.
+	if apply_in_progress(state, key) {
+		super::maintainer_log::request_mark_pass(state, fx);
+		return;
+	}
+	let version = state.maintainer_log.record.as_ref().map_or(1, |record| {
+		super::maintainer_log::rows_mark(&record.version_marks)
+	});
+	hold_apply(state, key.clone(), ApplyHold::RowsMark, row, version, fx);
+}
+
+/// Holds `key`'s apply after the store refused a row of its next entry at `version`, the
+/// store's current row version for [`ApplyHold::RowsMark`] and the grant's selected one for
+/// [`ApplyHold::RowsInexpressible`]. A rows mark hold asks for the prompt pass that makes the
+/// raised mark durable. A refusal that arrives after that pass completed, because the apply
+/// ran beside it, retries after the usual interval instead: the store encodes at the raised
+/// mark by then.
+fn hold_apply(
+	state: &mut MaintainerState,
+	key: VolumeLogKey,
+	hold: ApplyHold,
+	row: &str,
+	version: u16,
+	fx: &mut Effects,
+) {
+	if !state.filesystem.volumes.contains_key(&key) {
+		return;
+	}
+	match hold {
+		ApplyHold::RowsMark => {
+			if !super::maintainer_log::rows_mark_pending(state) {
+				retry(state, key, fx);
+				return;
+			}
+			crate::metrics::FILESYSTEM_APPLIES_HELD
+				.with_label_values(&["rows_mark_pending"])
+				.inc();
+			tracing::debug!(
+				?key,
+				row,
+				version,
+				"filesystem apply waits for the pass that raises the rows mark"
+			);
+			state.filesystem.applies_held.insert(key, hold);
+			super::maintainer_log::request_mark_pass(state, fx);
+		}
+		ApplyHold::RowsInexpressible => {
+			crate::metrics::FILESYSTEM_APPLIES_HELD
+				.with_label_values(&["rows_inexpressible"])
+				.inc();
+			// A volume enters this hold once per lifetime, so this warns once per volume.
+			tracing::warn!(
+				?key,
+				row,
+				reachable = version,
+				"filesystem apply holds a row no depot.fs_rows version of this grant can express; a storage worker may still run an older release or the grant selected from a stale topology view, so the maintainer hands the grant back unless the hold ends first"
+			);
+			state.filesystem.applies_held.insert(key, hold);
+			sync_inexpressible_deadline(state, fx);
+		}
+	}
+}
+
+/// Whether an apply or a fork copy holds a row no `depot.fs_rows` version of this grant can
+/// express.
+fn holds_inexpressible(state: &MaintainerState) -> bool {
+	state
+		.filesystem
+		.applies_held
+		.values()
+		.any(|hold| *hold == ApplyHold::RowsInexpressible)
+		|| super::forks::holds_inexpressible(state)
+}
+
+/// Arms the tablet's [`MaintainerTimer::InexpressibleHoldDeadline`] when the first
+/// inexpressible hold appears and cancels it when the last one goes, keeping the deadline of
+/// the first while any remains. Call after every change to those holds.
+pub(crate) fn sync_inexpressible_deadline(state: &mut MaintainerState, fx: &mut Effects) {
+	match (
+		holds_inexpressible(state),
+		state.filesystem.inexpressible_deadline_armed,
+	) {
+		(true, false) => {
+			fx.arm_timer_after(
+				MaintainerTimer::InexpressibleHoldDeadline,
+				state.config.tuning().inexpressible_hold_ms,
+			);
+			state.filesystem.inexpressible_deadline_armed = true;
+		}
+		(false, true) => {
+			fx.cancel_timer(MaintainerTimer::InexpressibleHoldDeadline);
+			state.filesystem.inexpressible_deadline_armed = false;
+		}
+		(true, true) | (false, false) => {}
+	}
+}
+
+/// An inexpressible hold outlived [`MaintainerTuning::inexpressible_hold_ms`]: this grant's
+/// selected version, fixed for its lifetime, never expresses the held row, so the maintainer
+/// hands the grant back gracefully and the supervisor's next grant selects versions again from
+/// a fresh topology view. In a fleet that still mixes versions this repeats at the deadline's
+/// rate, the bounded cost of a client and a storage worker disagreeing during a roll.
+///
+/// [`MaintainerTuning::inexpressible_hold_ms`]: crate::tablet_maintainer_machine::types::MaintainerTuning::inexpressible_hold_ms
+pub(crate) fn inexpressible_hold_deadline(state: &mut MaintainerState, fx: &mut Effects) {
+	state.filesystem.inexpressible_deadline_armed = false;
+	if state.phase != MaintainerPhase::Serving || !holds_inexpressible(state) {
+		return;
+	}
+	let held_applies: Vec<&VolumeLogKey> = state
+		.filesystem
+		.applies_held
+		.iter()
+		.filter(|(_, hold)| **hold == ApplyHold::RowsInexpressible)
+		.map(|(key, _)| key)
+		.collect();
+	let marks = state
+		.maintainer_log
+		.record
+		.as_ref()
+		.map_or(&[][..], |record| record.version_marks.as_slice());
+	tracing::warn!(
+		tablet_id = ?state.tablet.id,
+		grant_epoch = state.tablet.tablet_grant_epoch,
+		volume_key = ?held_applies.first(),
+		held_applies = held_applies.len(),
+		held_fork_copies = super::forks::inexpressible_count(state),
+		selected = state.config.write_versions.fs_rows,
+		marked = super::maintainer_log::rows_mark(marks),
+		"a held row stayed inexpressible at every depot.fs_rows version this grant reaches; handing the grant back so the next one selects versions from a fresh topology view"
+	);
+	crate::metrics::MAINTAINER_GRANT_RETURNS
+		.with_label_values(&["rows_inexpressible"])
+		.inc();
+	super::stop_gracefully(state, fx);
+}
+
+/// The pass that raised the rows mark completed, so the store encodes at it: every apply held
+/// for it is offered to the next `drive` again.
+pub(crate) fn release_held_applies(state: &mut MaintainerState) {
+	let released: Vec<VolumeLogKey> = state
+		.filesystem
+		.applies_held
+		.iter()
+		.filter(|(_, hold)| **hold == ApplyHold::RowsMark)
+		.map(|(key, _)| key.clone())
+		.collect();
+	for key in released {
+		state.filesystem.applies_held.remove(&key);
+		mark_candidate(state, &key);
+	}
+}
+
 fn retry(state: &mut MaintainerState, key: VolumeLogKey, fx: &mut Effects) {
 	if let Some(v) = state.filesystem.volumes.get_mut(&key) {
 		v.retry_wait = true;
@@ -1595,7 +1861,7 @@ pub(crate) fn dispatch_apply(state: &mut MaintainerState, key: VolumeLogKey, fx:
 				.iter()
 				.filter_map(|entry| match &entry.body {
 					VolumeLogEntryBody::PayloadWrite(write) => {
-						Some(rivet_data::generated::shared_depot_fs_v1::FsWriteReceipt {
+						Some(rivet_data::generated::shared_depot_fs_v2::FsWriteReceipt {
 							client_seq: write.client_seq,
 							request_id: write.request_id,
 							payload_digest: write.payload_digest,
@@ -1678,6 +1944,23 @@ pub(crate) fn applied(
 		retry(state, key, fx);
 		return;
 	}
+	// The store staged nothing of the refused entry, so the apply runs again from the
+	// unchanged resolver once the store can encode the row.
+	if let Err(FilesystemApplyError::RowsMarkPending { row, version }) = &result {
+		hold_apply(state, key, ApplyHold::RowsMark, row, *version, fx);
+		return;
+	}
+	if let Err(FilesystemApplyError::RowsInexpressible { row, reachable }) = &result {
+		hold_apply(
+			state,
+			key,
+			ApplyHold::RowsInexpressible,
+			row,
+			*reachable,
+			fx,
+		);
+		return;
+	}
 	if result.as_ref() != Ok(&through) {
 		match &result {
 			Err(error) => tracing::warn!(%error, "filesystem apply failed in the store; fencing"),
@@ -1721,6 +2004,7 @@ pub(crate) fn applied(
 	{
 		state.filesystem.committed_floors.remove(&key);
 	}
+	super::groups::applied_through(state, &key, applied_seq);
 	if !far_behind(state, &key) {
 		state.filesystem.waiting_opens.remove(&key);
 	}
@@ -1844,7 +2128,7 @@ pub(crate) fn applied_history(
 	state: &MaintainerState,
 	key: &VolumeLogKey,
 	cold: &VolumeLogPosition,
-) -> Option<rivet_data::generated::depot_client_protocol_v1::VolumeAppliedHistory> {
+) -> Option<rivet_data::generated::depot_client_protocol_v2::VolumeAppliedHistory> {
 	let volume = state.filesystem.volumes.get(key)?;
 	let first = cold.volume_seq.checked_add(1)?;
 	if volume.applied.volume_seq < first || cold.volume_seq < volume.record.cold.volume_seq {
@@ -1869,7 +2153,7 @@ pub(crate) fn applied_history(
 		return None;
 	}
 	Some(
-		rivet_data::generated::depot_client_protocol_v1::VolumeAppliedHistory {
+		rivet_data::generated::depot_client_protocol_v2::VolumeAppliedHistory {
 			applied: volume.applied.clone(),
 			epochs,
 			recent_writes: volume
@@ -1888,7 +2172,7 @@ pub(crate) fn applied_history(
 /// with the stored row stays shared.
 fn merge_receipts(
 	record: &mut super::record::SharedRecord,
-	receipts: Vec<rivet_data::generated::shared_depot_fs_v1::FsWriteReceipt>,
+	receipts: Vec<rivet_data::generated::shared_depot_fs_v2::FsWriteReceipt>,
 ) {
 	let settled = receipts.is_empty()
 		&& record.recent_writes.len() <= 64
@@ -2384,7 +2668,10 @@ pub(crate) fn flushed(
 /// Whether a delete or restore has stopped apply work for `key`. A drain still applying the
 /// incarnation's final tail keeps it running until the store holds that tail.
 pub(crate) fn retiring(state: &MaintainerState, key: &VolumeLogKey) -> bool {
-	(state.deleting.contains_key(key) || super::forks::quiescing(&state.forks, &key.0.volume_key))
+	// A delete waiting for its volume's fork pin leaves the incarnation registering and
+	// applying like a live one until the pin is logged.
+	let deleting = state.deleting.contains_key(key) && !super::deletion::pinning(state, key);
+	(deleting || super::forks::quiescing(&state.forks, &key.0.volume_key))
 		&& !super::drain::applying(state, key)
 }
 
@@ -2513,12 +2800,144 @@ pub(crate) fn known_committed(state: &MaintainerState, key: &VolumeLogKey) -> u6
 	members.max(applied)
 }
 
+/// The proven floor at startup admission. Epochs prevent an abandoned old-writer tail
+/// with a larger sequence from standing in for a newer committed history.
+pub(super) fn committed_prefix(state: &MaintainerState, key: &VolumeLogKey) -> VolumeLogPosition {
+	let mut prefix = VolumeLogPosition {
+		volume_seq: known_committed(state, key),
+		client_epoch: 0,
+	};
+	let mut include = |position: &VolumeLogPosition| {
+		prefix.volume_seq = prefix.volume_seq.max(position.volume_seq);
+		prefix.client_epoch = prefix.client_epoch.max(position.client_epoch);
+	};
+	if let Some(volume) = state.loaded_volumes.get(key) {
+		for replica in volume.members.values() {
+			include(&replica.cold);
+		}
+		if let Some(row) = &volume.stored_row {
+			include(&row.cold);
+		}
+	}
+	if let Some(volume) = state.filesystem.volumes.get(key) {
+		include(&volume.applied);
+	}
+	if let Some(position) = state.filesystem.committed_floors.get(key) {
+		include(position);
+	}
+	if let Some((position, _)) = claim_quorum_commit(state, key) {
+		include(&position);
+	}
+	if let Some(position) = super::drain::through(state, key) {
+		include(position);
+	}
+	if let Some(position) = super::maintainer_log::replay::committed_through(state, key) {
+		include(position);
+	}
+	if let Some(position) = super::filesystem_reads::waiting_claim_floor(state, key) {
+		include(position);
+	}
+	prefix
+}
+
 /// The committed seq a non-holder's `Latest` fork or checkpoint waits for apply to reach: the
-/// highest commit the members prove, and at least what is applied. A tail an abandoned
-/// claim covered before its own entry reached a quorum is not proven here, so such a fork
-/// can still miss that tail until the volume is reopened or its idle unload recovers it.
+/// highest commit the members prove, and at least what is applied. A tail a newer claim
+/// covered before its own entry reached a quorum is not proven here; a fork acquire or a
+/// checkpoint whose members hold more (see `latest_barrier`) waits until they prove it.
 pub(crate) fn latest_committed(state: &MaintainerState, key: &VolumeLogKey, applied: u64) -> u64 {
 	known_committed(state, key).max(applied)
+}
+
+/// The highest tail an in-sync member of `key` holds, committed or not. Zero when nothing is
+/// loaded.
+pub(crate) fn member_tail(state: &MaintainerState, key: &VolumeLogKey) -> u64 {
+	state.loaded_volumes.get(key).map_or(0, |volume| {
+		volume
+			.members
+			.values()
+			.filter(|replica| replica.status == VolumeLogReplicaStatus::InSync)
+			.map(|replica| replica.appended.volume_seq)
+			.max()
+			.unwrap_or(0)
+	})
+}
+
+/// The epoch of the newest claim `key`'s members recorded, or zero when none did.
+pub(crate) fn newest_claim_epoch(state: &MaintainerState, key: &VolumeLogKey) -> u64 {
+	state.loaded_volumes.get(key).map_or(0, |volume| {
+		volume
+			.members
+			.values()
+			.filter_map(|replica| replica.claimed_client.as_ref())
+			.map(|client| client.client_epoch)
+			.max()
+			.unwrap_or(0)
+	})
+}
+
+/// What a nonholder's `Latest` barrier over `key` found once every member was read again. A
+/// fork acquire and a checkpoint with no minimum capture the volume through it, so neither
+/// copies an image without a commit the holder acknowledged before the call.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LatestBarrier {
+	/// Every in-sync member's tail is proven committed: the capture applies through `through`.
+	Proven { through: u64 },
+	/// An in-sync member holds a tail up to `frontier` above what the members prove, under
+	/// claims no newer than `claim_epoch`. It may hold acknowledged commits, so the capture
+	/// waits for `tail_proven_through`.
+	Unproven { frontier: u64, claim_epoch: u64 },
+}
+
+/// The `Latest` barrier over `key`, whose maintainer applied through `applied`.
+pub(crate) fn latest_barrier(
+	state: &MaintainerState,
+	key: &VolumeLogKey,
+	applied: u64,
+) -> LatestBarrier {
+	let through = latest_committed(state, key, applied);
+	let frontier = member_tail(state, key);
+	if frontier > through {
+		LatestBarrier::Unproven {
+			frontier,
+			claim_epoch: newest_claim_epoch(state, key),
+		}
+	} else {
+		LatestBarrier::Proven { through }
+	}
+}
+
+/// The position an unproven barrier of `key` may now apply through, once the members prove
+/// committed through `frontier` or prove a claim newer than `claim_epoch`; `None` while
+/// neither holds. A recovery commits its claim entry above every committed entry, so the
+/// position it proves covers every commit acknowledged before the barrier even when it dropped
+/// an uncommitted part of the frontier.
+pub(crate) fn tail_proven_through(
+	state: &MaintainerState,
+	key: &VolumeLogKey,
+	frontier: u64,
+	claim_epoch: u64,
+) -> Option<u64> {
+	let applied = state
+		.filesystem
+		.volumes
+		.get(key)
+		.map_or(0, |volume| volume.applied.volume_seq);
+	let committed = latest_committed(state, key, applied);
+	let newer_claim_proven = claim_quorum_commit(state, key)
+		.is_some_and(|(_, client)| client.client_epoch > claim_epoch);
+	if committed >= frontier || newer_claim_proven {
+		Some(committed)
+	} else {
+		None
+	}
+}
+
+/// Whether an in-sync member of `key` holds entries above what the members prove committed.
+/// They may hold commits a claimant acknowledged: a live writer's quorum proves them as its
+/// appends land, and a claim that settled with no entry of its own hides its predecessor's
+/// tail until a recovery of the volume commits a claim entry above it.
+pub(crate) fn tail_unproven(state: &MaintainerState, key: &VolumeLogKey) -> bool {
+	member_tail(state, key) > known_committed(state, key)
 }
 
 /// Deletion cancels unsent data work; the single active store operation finishes in order.
@@ -2571,9 +2990,14 @@ pub(crate) fn forget(state: &mut MaintainerState, key: &VolumeLogKey, fx: &mut E
 	drop_carried(state, key);
 	state.filesystem.clear_flush_request(key);
 	state.filesystem.set_unflushed_bytes(key, 0);
-	state.filesystem.volumes.remove(key);
+	if state.filesystem.volumes.remove(key).is_some() {
+		super::groups::volume_forgotten(state, key, fx);
+	}
 	state.filesystem.committed_floors.remove(key);
 	state.filesystem.waiting_opens.remove(key);
+	if state.filesystem.applies_held.remove(key).is_some() {
+		sync_inexpressible_deadline(state, fx);
+	}
 	if let Some(id) = state.volume_keys.find(key) {
 		state.filesystem.retention.cancel(&id);
 	}
@@ -2597,6 +3021,27 @@ pub(crate) fn forget(state: &mut MaintainerState, key: &VolumeLogKey, fx: &mut E
 /// Shared maintainer validation also checks the nested apply/flush invariants.
 pub(crate) fn validate(state: &MaintainerState) -> anyhow::Result<()> {
 	state.filesystem.retention.debug_validate()?;
+	anyhow::ensure!(
+		state.filesystem.inexpressible_deadline_armed == holds_inexpressible(state),
+		"the inexpressible hold deadline is armed without a hold, or a hold has none"
+	);
+	for (key, hold) in &state.filesystem.applies_held {
+		anyhow::ensure!(
+			state.filesystem.volumes.contains_key(key) && state.loaded_volumes.contains_key(key),
+			"a held apply outlived its loaded volume"
+		);
+		anyhow::ensure!(
+			!apply_in_progress(state, key),
+			"a held volume has a read, page or apply in flight"
+		);
+		match hold {
+			ApplyHold::RowsMark => anyhow::ensure!(
+				super::maintainer_log::rows_mark_pending(state),
+				"an apply is held for a rows mark that is not pending"
+			),
+			ApplyHold::RowsInexpressible => {}
+		}
+	}
 	for key in &state.filesystem.record_missing {
 		anyhow::ensure!(
 			state.loaded_volumes.contains_key(key),
@@ -2883,17 +3328,29 @@ pub(crate) fn retention_due(state: &mut MaintainerState, fx: &mut Effects) {
 		let after = volume.applied.clone();
 		crate::metrics::record_retention_check("logged");
 		let op =
-			rivet_data::generated::depot_maintainer_log_v1::MaintainerOp::RetentionCheckpointOp(
-				rivet_data::generated::depot_maintainer_log_v1::RetentionCheckpointOp {
-					target: rivet_data::generated::depot_maintainer_log_v1::MaintainerOpTarget {
-						volume_log_key: key.0.clone(),
-						after,
-					},
+			rivet_data::generated::depot_maintainer_log_v2::MaintainerOp::RetentionCheckpointOp(
+				rivet_data::generated::depot_maintainer_log_v2::RetentionCheckpointOp {
+					targets: vec![
+						rivet_data::generated::depot_maintainer_log_v2::MaintainerOpTarget {
+							volume_log_key: key.0.clone(),
+							after,
+						},
+					],
 					created_at_unix_ms: fx.clocks().unix_ms,
 				},
 			);
 		super::maintainer_log::replay::submit_live(state, op, key.clone());
 		schedule_retention(state, &key);
+	}
+}
+
+/// A fork pin op of `key` applied: the volume stands pinned through `last_fork`, so its
+/// entries apply without another pin until its group is forked again. The record's own field
+/// follows so a flush persists it, though a load rebuilds it from the pin rows regardless.
+pub(crate) fn fork_pinned(state: &mut MaintainerState, key: &VolumeLogKey, last_fork: u64) {
+	if let Some(volume) = state.filesystem.volumes.get_mut(key) {
+		let record = volume.record.make_mut();
+		record.fork_pinned_through = Some(record.fork_pinned_through.unwrap_or(0).max(last_fork));
 	}
 }
 
@@ -2991,7 +3448,8 @@ pub fn wake_lagging_opens(state: &mut MaintainerState, key: &VolumeLogKey, appli
 			super::filesystem_reads::QueryOrder::Claim => state.session_reads.push_back(id),
 			super::filesystem_reads::QueryOrder::Ordered
 			| super::filesystem_reads::QueryOrder::Session
-			| super::filesystem_reads::QueryOrder::HeldImage => state
+			| super::filesystem_reads::QueryOrder::HeldImage
+			| super::filesystem_reads::QueryOrder::BaseRead => state
 				.store_queue
 				.push_back(super::store::StoreWork::FilesystemQuery { request_id: id }),
 		}

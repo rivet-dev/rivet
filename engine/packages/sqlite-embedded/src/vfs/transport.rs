@@ -762,7 +762,7 @@ struct VfsState {
 	/// Pages of transactions SQLite committed while commits are corked, not yet sent to depot.
 	/// `Some` while corked: each commit adds its pages here instead of committing, and uncorking
 	/// sends them all as one commit. Reads see these pages before any cache.
-	corked: Option<BTreeMap<u32, PageBytes>>,
+	corked: Option<Cork>,
 	dead: bool,
 	/// Database size after the last transaction moved into the cork, which a commit of the cork
 	/// alone carries.
@@ -780,11 +780,51 @@ struct VfsState {
 	closing: bool,
 }
 
+/// What closing the connection does with the commits a cork still holds. Chosen when the cork
+/// starts, so every way the connection can be dropped, including a panic unwinding through the
+/// worker that owns it, follows the same policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CorkClose {
+	/// The close sends the corked commits to depot as one commit, as separate commits would
+	/// have been sent. For writes that are correct on their own, such as a new actor's startup.
+	Flush,
+	/// The close drops the corked commits, so none of them becomes durable unless uncorking
+	/// sends it. For writes that must not land without the step that uncorks them, such as a
+	/// fork start's hook, which the next start reruns on the source's copy. The cork is never
+	/// sent early: a transaction that would take it past one commit (`commit_page_cap`) fails
+	/// as too large, so every write under this policy must fit one cork.
+	Discard,
+}
+
+/// Commits SQLite completed while corked and the policy for them at close.
+#[derive(Debug, Clone)]
+struct Cork {
+	pages: BTreeMap<u32, PageBytes>,
+	close: CorkClose,
+}
+
+/// What crossed the commit page cap, for the warning that names who must write less.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CapCrossedBy {
+	/// One transaction on its own, including one that does not fit an emptied cork.
+	Transaction,
+	/// The transactions a `CorkClose::Discard` cork holds, together with the next one.
+	DiscardCork,
+}
+
+/// Where `cork_dirty_pages` put a finished transaction's pages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CorkOutcome {
+	/// No cork is held, so the transaction commits to depot as usual.
 	NotCorked,
+	/// The pages moved into the cork.
 	Corked,
+	/// A `CorkClose::Flush` cork has no room for the transaction. The caller commits the cork
+	/// on its own first, then corks the transaction.
 	Overflow,
+	/// A `CorkClose::Discard` cork has no room for the transaction. Sending the cork early would
+	/// make part of it durable, so the caller fails the transaction as too large.
+	TooLarge,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -878,6 +918,19 @@ impl VfsState {
 		} else {
 			self.committed_db_size_pages
 		}
+	}
+
+	/// Drops the cork and any open transaction, restoring the size depot holds. Returns false
+	/// when nothing was corked.
+	fn drop_cork(&mut self) -> bool {
+		if self.corked.take().is_none() {
+			return false;
+		}
+		self.write_buffer.dirty.clear();
+		self.write_buffer.in_atomic_write = false;
+		self.db_size_pages = self.committed_db_size_pages;
+		self.refused_write_pending = false;
+		true
 	}
 
 	/// Drops the write buffer of a transaction SQLite has not committed and restores the size
@@ -993,29 +1046,32 @@ impl VfsState {
 
 	/// A page a corked commit holds, which no cache may stand in for.
 	fn corked_page(&self, pgno: u32) -> Option<&PageBytes> {
-		self.corked.as_ref().and_then(|corked| corked.get(&pgno))
+		self.corked.as_ref().and_then(|cork| cork.pages.get(&pgno))
 	}
 
 	/// While corked, moves the finished transaction's pages into the cork instead of
 	/// committing them.
 	///
 	/// The cork is sent as one commit, so it holds at most `max_pages` pages. When the
-	/// transaction would take it past that, nothing moves and the result is `Overflow`: the
-	/// caller commits the cork on its own first, then corks the transaction.
+	/// transaction would take it past that, nothing moves and the result depends on the cork's
+	/// close policy: `Overflow` for `CorkClose::Flush`, `TooLarge` for `CorkClose::Discard`.
 	fn cork_dirty_pages(&mut self, max_pages: usize) -> CorkOutcome {
-		let Some(corked) = self.corked.as_mut() else {
+		let Some(cork) = self.corked.as_mut() else {
 			return CorkOutcome::NotCorked;
 		};
 		let added_pages = self
 			.write_buffer
 			.dirty
 			.keys()
-			.filter(|pgno| !corked.contains_key(pgno))
+			.filter(|pgno| !cork.pages.contains_key(pgno))
 			.count();
-		if corked.len() + added_pages > max_pages {
-			return CorkOutcome::Overflow;
+		if cork.pages.len() + added_pages > max_pages {
+			return match cork.close {
+				CorkClose::Flush => CorkOutcome::Overflow,
+				CorkClose::Discard => CorkOutcome::TooLarge,
+			};
 		}
-		corked.append(&mut self.write_buffer.dirty);
+		cork.pages.append(&mut self.write_buffer.dirty);
 		self.corked_db_size_pages = self.db_size_pages;
 		CorkOutcome::Corked
 	}
@@ -1272,21 +1328,38 @@ impl VfsContext {
 	/// `SQLITE_FULL` like a full disk: it fails the statement and rolls back, restoring the
 	/// pages from its journal, so nothing over the cap is ever held or sent.
 	fn refuse_oversize_transaction(&self) -> c_int {
-		let error = self.transaction_too_large_error();
-		tracing::warn!(
-			actor_id = %self.actor_id,
-			max_pages = error.max_pages,
-			"sqlite transaction exceeds the commit page cap; the application must split it into smaller transactions"
-		);
-		self.set_last_error(error.to_string());
-		*self.transaction_too_large.lock() = Some(error);
+		self.record_transaction_too_large(CapCrossedBy::Transaction);
 		SQLITE_FULL
 	}
 
-	/// A commit refused for crossing the cap. The write cap keeps every transaction under it,
-	/// so this is only a backstop.
-	fn transaction_too_large_commit_error(&self) -> CommitBufferError {
-		CommitBufferError::Other(self.transaction_too_large_error().to_string())
+	/// Records that the current transaction crossed the commit page cap, so the worker reports
+	/// the statement as `sqlite.transaction_too_large` instead of SQLite's generic error, and
+	/// returns the error's message. The caller must not hold the state lock: the error reads
+	/// the page size, which takes it again.
+	fn record_transaction_too_large(&self, crossed_by: CapCrossedBy) -> String {
+		let error = self.transaction_too_large_error();
+		match crossed_by {
+			CapCrossedBy::Transaction => tracing::warn!(
+				actor_id = %self.actor_id,
+				max_pages = error.max_pages,
+				"sqlite transaction exceeds the commit page cap; the application must split it into smaller transactions"
+			),
+			CapCrossedBy::DiscardCork => tracing::warn!(
+				actor_id = %self.actor_id,
+				max_pages = error.max_pages,
+				"sqlite transactions held by a discard cork, such as a fork hook's, together exceed the commit page cap; the hook must write fewer pages in total before the cork closes"
+			),
+		}
+		let message = error.to_string();
+		self.set_last_error(message.clone());
+		*self.transaction_too_large.lock() = Some(error);
+		message
+	}
+
+	/// A commit refused for crossing the cap, recorded so the worker reports it as too large.
+	/// The caller must not hold the state lock.
+	fn transaction_too_large_commit_error(&self, crossed_by: CapCrossedBy) -> CommitBufferError {
+		CommitBufferError::Other(self.record_transaction_too_large(crossed_by))
 	}
 
 	/// Commits the transactions held in the cork as one commit and leaves the cork empty, for
@@ -1296,7 +1369,7 @@ impl VfsContext {
 	fn commit_cork_alone(&self) -> std::result::Result<(), CommitBufferError> {
 		let request = {
 			let state = self.state.read();
-			let Some(corked) = state.corked.as_ref() else {
+			let Some(corked) = state.corked.as_ref().map(|cork| &cork.pages) else {
 				return Ok(());
 			};
 			BufferedCommitRequest {
@@ -1344,8 +1417,8 @@ impl VfsContext {
 		for dirty_page in &request.dirty_pages {
 			state.note_committed_page(&self.config, dirty_page.pgno, &dirty_page.bytes);
 		}
-		if let Some(corked) = state.corked.as_mut() {
-			corked.clear();
+		if let Some(cork) = state.corked.as_mut() {
+			cork.pages.clear();
 		}
 		Ok(())
 	}
@@ -2014,6 +2087,11 @@ impl VfsContext {
 					state.refused_write_pending = false;
 					return Ok(CommitWait::Completed(None));
 				}
+				CorkOutcome::TooLarge => {
+					// The error reads the page size, which takes the state lock again.
+					drop(state);
+					return Err(self.transaction_too_large_commit_error(CapCrossedBy::DiscardCork));
+				}
 				CorkOutcome::Overflow => {
 					drop(state);
 					self.commit_cork_alone()?;
@@ -2023,7 +2101,11 @@ impl VfsContext {
 							state.refused_write_pending = false;
 							Ok(CommitWait::Completed(None))
 						}
-						CorkOutcome::Overflow => Err(self.transaction_too_large_commit_error()),
+						CorkOutcome::Overflow | CorkOutcome::TooLarge => {
+							// The error reads the page size, which takes the state lock again.
+							drop(state);
+							Err(self.transaction_too_large_commit_error(CapCrossedBy::Transaction))
+						}
 					};
 				}
 			}
@@ -2160,6 +2242,11 @@ impl VfsContext {
 					state.refused_write_pending = false;
 					return Ok(CommitWait::Completed(()));
 				}
+				CorkOutcome::TooLarge => {
+					// The error reads the page size, which takes the state lock again.
+					drop(state);
+					return Err(self.transaction_too_large_commit_error(CapCrossedBy::DiscardCork));
+				}
 				CorkOutcome::Overflow => {
 					drop(state);
 					self.commit_cork_alone()?;
@@ -2170,7 +2257,11 @@ impl VfsContext {
 							state.refused_write_pending = false;
 							Ok(CommitWait::Completed(()))
 						}
-						CorkOutcome::Overflow => Err(self.transaction_too_large_commit_error()),
+						CorkOutcome::Overflow | CorkOutcome::TooLarge => {
+							// The error reads the page size, which takes the state lock again.
+							drop(state);
+							Err(self.transaction_too_large_commit_error(CapCrossedBy::Transaction))
+						}
 					};
 				}
 			}
@@ -2283,8 +2374,8 @@ impl VfsContext {
 			.retain(|pgno, _| *pgno <= truncated_pages);
 		let between_transactions =
 			!state.write_buffer.in_atomic_write && state.write_buffer.dirty.is_empty();
-		if let Some(corked) = state.corked.as_mut() {
-			corked.retain(|pgno, _| *pgno <= truncated_pages);
+		if let Some(cork) = state.corked.as_mut() {
+			cork.pages.retain(|pgno, _| *pgno <= truncated_pages);
 		}
 		// A shrink between transactions belongs to the last corked one.
 		if state.corked.is_some() && between_transactions {
@@ -2300,16 +2391,31 @@ impl VfsContext {
 
 	/// Corks commits: until `uncork`, each transaction SQLite commits stays in memory instead
 	/// of going to depot. SQLite and its readers see the transactions as committed; none is
-	/// durable until uncorking commits them all at once.
-	fn cork(&self) {
+	/// durable until uncorking commits them all at once. `close` decides what a close before
+	/// uncorking does with them. A cork already in place keeps its pages and its policy.
+	fn cork(&self, close: CorkClose) {
 		let mut state = self.state.write();
 		if state.corked.is_none() {
-			state.corked = Some(BTreeMap::new());
+			state.corked = Some(Cork {
+				pages: BTreeMap::new(),
+				close,
+			});
 			// A cork inside a transaction starts from the committed size, not the size the
 			// open transaction's spilled pages reached, so a close that discards the
 			// transaction does not publish its growth.
 			state.corked_db_size_pages = state.committed_db_size_pages;
 		}
+	}
+
+	/// Drops every transaction committed while corked, and any open transaction, so none of
+	/// them reaches depot, then marks the connection fatal: SQLite still sees them as committed,
+	/// so the connection must only close after this. Depot keeps the state from before the cork.
+	fn discard_cork(&self) {
+		if !self.state.write().drop_cork() {
+			return;
+		}
+		tracing::debug!(actor_id = %self.actor_id, "discarded the corked sqlite commits");
+		self.mark_fatal("sqlite corked commits were discarded; the database must close".to_owned());
 	}
 
 	/// Sends every transaction committed while corked to depot as one commit, then commits
@@ -2327,7 +2433,11 @@ impl VfsContext {
 					"cannot uncork sqlite commits inside a transaction".to_string(),
 				));
 			}
-			state.write_buffer.dirty = state.corked.take().unwrap_or_default();
+			state.write_buffer.dirty = state
+				.corked
+				.take()
+				.map(|cork| cork.pages)
+				.unwrap_or_default();
 		}
 		self.flush_dirty_pages().map(|_| ())
 	}
@@ -2475,6 +2585,15 @@ fn verify_batch_atomic_writes_at_process_startup_blocking(
 	runtime: Handle,
 	config: VfsConfig,
 ) -> std::result::Result<(), String> {
+	// This probe opens SQLite before the runtime constructs its shared worker pool.
+	// Configure the process cache first: SQLite rejects PCACHE2 configuration after
+	// initialization, leaving every actor with its own cache instead of one budget.
+	crate::pager_cache::install(
+		sqlite_optimization_flags()
+			.pager_process_cache_kib
+			.saturating_mul(1024),
+		None,
+	);
 	let probe_id = NEXT_TEMP_AUX_ID.fetch_add(1, Ordering::Relaxed);
 	let file_name = format!("batch-atomic-startup-probe-{probe_id}.db");
 	let vfs = SqliteVfs::register_with_transport_and_initial_pages(
@@ -3877,9 +3996,10 @@ impl NativeDatabase {
 	/// next read fetches again.
 	/// Holds every later commit in memory until `uncork_commits`, which sends them to depot as
 	/// one commit. The transactions are committed for this connection meanwhile, but none is
-	/// durable, so nothing may report them done until uncorking succeeds.
-	pub fn cork_commits(&self) {
-		self._vfs.ctx().cork();
+	/// durable, so nothing may report them done until uncorking succeeds. `close` decides
+	/// whether a close before uncorking sends or drops them.
+	pub fn cork_commits(&self, close: CorkClose) {
+		self._vfs.ctx().cork(close);
 	}
 
 	/// Sends the transactions committed since `cork_commits` to depot as one commit. Must run
@@ -3898,6 +4018,13 @@ impl NativeDatabase {
 			.ctx()
 			.uncork()
 			.map_err(|error| anyhow::anyhow!("uncork sqlite commits: {error:?}"))
+	}
+
+	/// Drops the transactions committed since `cork_commits` without sending them, for a start
+	/// that failed before its held writes were meant to become durable. The connection is
+	/// unusable afterwards and must close.
+	pub fn discard_corked_commits(&self) {
+		self._vfs.ctx().discard_cork();
 	}
 
 	pub fn release_idle_memory(&self) -> bool {
@@ -3929,12 +4056,28 @@ impl Drop for NativeDatabase {
 			if write_transaction_open(self.db) {
 				ctx.discard_open_transaction();
 			}
-			// Corked pages join the write buffer, so the flush below carries them.
+			// Corked pages follow the policy chosen when the cork started. Flushed pages join the
+			// write buffer, so the flush below carries them. Discarded ones are dropped with any
+			// open transaction, so the flush below has nothing to send; this runs on every drop,
+			// also when a panic unwinds through the worker that owns the connection.
 			{
 				let mut state = ctx.state.write();
-				if let Some(mut corked) = state.corked.take() {
-					corked.append(&mut state.write_buffer.dirty);
-					state.write_buffer.dirty = corked;
+				let close = state.corked.as_ref().map(|cork| cork.close);
+				match close {
+					Some(CorkClose::Flush) => {
+						if let Some(mut cork) = state.corked.take() {
+							cork.pages.append(&mut state.write_buffer.dirty);
+							state.write_buffer.dirty = cork.pages;
+						}
+					}
+					Some(CorkClose::Discard) => {
+						state.drop_cork();
+						tracing::debug!(
+							actor_id = %ctx.actor_id,
+							"dropped the corked sqlite commits at close"
+						);
+					}
+					None => {}
 				}
 			}
 			let should_flush = {

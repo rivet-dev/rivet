@@ -11,6 +11,15 @@ use vbare::DecodeError;
 /// WebSocket close code for a message whose payload is invalid.
 const INVALID_PAYLOAD: u16 = 1007;
 
+/// WebSocket close code for "service restart", used when the connection must be reopened to
+/// serve with a fresh scope.
+const SERVICE_RESTART: u16 = 1012;
+
+/// Legacy: the close reason for a connection whose namespace moved into its volume group after
+/// connect. A plain `<group>.<code>` reason like `envoy.engine_shutting_down`, since the envoy
+/// only reconnects on it. Removed in 3.1 with the backfill.
+const LEGACY_NAMESPACE_MOVED_REASON: &str = "envoy.namespace_moved";
+
 #[derive(RivetError, Debug, Serialize, Deserialize)]
 #[error(
 	"envoy",
@@ -71,6 +80,20 @@ impl Rejection {
 				reason: reason.into(),
 			},
 			error,
+		}
+	}
+
+	/// Legacy: closes a connection opened before its namespace moved into its volume group,
+	/// with `1012` and the reason `envoy.namespace_moved`. The envoy reconnects, the new
+	/// connection carries the grouped scope, and the envoy replays its unacknowledged events
+	/// there. Removed in 3.1 with the backfill.
+	pub(crate) fn legacy_namespace_moved() -> Self {
+		Rejection {
+			frame: CloseFrame {
+				code: SERVICE_RESTART,
+				reason: LEGACY_NAMESPACE_MOVED_REASON.into(),
+			},
+			error: crate::lifecycle::LegacyNamespaceMoved.into(),
 		}
 	}
 

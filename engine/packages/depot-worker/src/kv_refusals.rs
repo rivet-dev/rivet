@@ -26,6 +26,24 @@ pub(crate) fn overloaded_after(reason: OverloadReason, retry_after_ms: u64) -> K
 	})
 }
 
+/// Distinguishes the temporary storage condition without changing the public wire reason.
+pub(crate) fn volume_transition(cause: &'static str) -> KvCommandResponse {
+	volume_transition_after(cause, OVERLOADED_RETRY_AFTER_MS)
+}
+
+/// Keeps a lower layer's retry hint while recording the transition's actual source.
+pub(crate) fn volume_transition_after(
+	cause: &'static str,
+	retry_after_ms: u64,
+) -> KvCommandResponse {
+	tracing::debug!(
+		cause,
+		retry_after_ms,
+		"KV command refused during a volume transition"
+	);
+	overloaded_after(OverloadReason::VolumeTransition, retry_after_ms)
+}
+
 /// An admitted command that could not finish; its outcome may be unknown.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn unavailable(reason: UnavailableReason) -> KvCommandResponse {

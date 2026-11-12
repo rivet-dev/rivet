@@ -123,7 +123,7 @@ Actors can integrate with external resources like databases or external APIs.
 
 ### Loading State
 
-Load external data during actor initialization using `createVars`. This keeps your actor's persisted state clean while caching expensive lookups.
+Load external data during actor initialization using `createVars`. The external database stays the source of truth, and the actor caches expensive lookups in memory without persisting them.
 
 Use this when:
 
@@ -146,35 +146,6 @@ Use this when:
 </Tab>
 </Tabs>
 
-### Syncing State Changes
-
-Use `onStateChange` to automatically sync actor state changes to external resources. This hook runs after state changes are flushed, which is coalesced to once per event loop tick rather than once per individual field mutation.
-
-Use this when:
-
-- You need to mirror actor state in an external database
-- Triggering external side effects when state changes
-- Keeping external systems in sync with actor state
-
-**Example: Syncing to Database**
-
-<Tabs>
-<Tab title="Actor">
-
-<CodeSnippet file="examples/docs/actors-design-patterns/syncing-state-actor.ts" />
-
-</Tab>
-<Tab title="Client">
-
-<CodeSnippet file="examples/docs/actors-design-patterns/syncing-state-client.ts" />
-
-</Tab>
-</Tabs>
-
-`onStateChange` is called once per flush with the final coalesced state, ensuring external resources stay in sync. In the `updateEmail` example above, the two synchronous assignments produce a single `onStateChange` call.
-
-Do not mutate `c.state` inside `onStateChange`; re-entrant state mutation is rejected.
-
 ## Anti-Patterns
 
 ### "God" Actor
@@ -184,10 +155,12 @@ Avoid creating a single actor that handles everything. This defeats the purpose 
 **Problem:**
 ```ts
 import { actor } from "rivetkit";
+import { db } from "rivetkit/db";
 
 // Bad: one actor doing everything
 const app = actor({
-  state: { users: {}, orders: {}, inventory: {}, analytics: {} },
+  // Users, orders, inventory, and analytics tables all in one database
+  db: db({ onMigrate: async (db) => { /* ... */ } }),
   actions: {
     createUser: (c, user) => { /* ... */ },
     processOrder: (c, order) => { /* ... */ },

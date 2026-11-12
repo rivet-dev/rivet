@@ -7,12 +7,12 @@ use crate::tablet_maintainer_machine::types::CLOSE_NOTICE_WAIT_MS;
 use crate::tablet_maintainer_machine::{Effects, effect::MaintainerEffect, types::*};
 use depot_types::{VolumeLogKey, partition_key_hash};
 use rivet_data::generated::{
-	depot_client_protocol_v1::{ClientResponse, VolumeRejectResponse},
+	depot_client_protocol_v2::{ClientResponse, VolumeRejectResponse},
 	depot_log_shard_v1::VolumeLogReplicaState,
 	depot_storage_worker_protocol_v1::{
 		self as wire, RejectResponse, StorageWorkerRequest, StorageWorkerResponse,
 	},
-	shared_depot_fs_v1::{FsVolumeRecord, FsVolumeStatus},
+	shared_depot_fs_v2::{FsVolumeRecord, FsVolumeStatus},
 	shared_depot_types_v1::{VolumeLogPosition, VolumeLogReplicaStatus},
 };
 use rivet_state_machine::IndexedDeadlineQueue;
@@ -41,11 +41,26 @@ pub(crate) struct Unloading {
 	pub recovery_backoff: bool,
 	/// When this unload began, for the unload duration metric only.
 	pub began_boot_ms: u64,
-	/// A requested close waits out its `CloseNotices` timer before deciding what it may
-	/// forget. The writer announces nothing at close, and the shards notice the maintainer of
-	/// its last appends within their notice delay; those notices mark the unload. Only a
-	/// suffix still unproven when the timer fires asks the members for a status probe.
-	pub awaiting_notices: bool,
+	/// How far a requested close has learned its writer's last appends; see `CloseNotices`.
+	pub notices: CloseNotices,
+}
+
+/// How far a requested close has learned its writer's last appends. The writer announces
+/// nothing at close, and the shards notice the maintainer of those appends within their notice
+/// delay, but a notice can be lost. Until the members have been observed after the close, their
+/// tails may be below the writer's last commit, so a point read reports the commit unknown.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub(crate) enum CloseNotices {
+	/// Nothing is awaited: the unload did not come from a requested close.
+	None,
+	/// The `CloseNotices` timer is armed for one notice window. The unload forgets nothing,
+	/// and the shards' notices that arrive meanwhile mark it.
+	Awaiting,
+	/// The notice window passed, and `barrier` reads the volume from every member in case a
+	/// notice was lost; each read has its operation timer. The unload waits until the barrier
+	/// finishes, and point reads report the commit unknown until it finished with a quorum of
+	/// members observed.
+	Observing { barrier: super::poll::VolumeBarrier },
 }
 
 /// Positive quorum evidence that every acknowledged entry of this closed incarnation
@@ -151,7 +166,7 @@ pub(crate) fn admit(
 				// may still be on their way. The unload waits one notice window for them
 				// before it decides what it may forget; see `notices_due`.
 				if let Some(unloading) = state.unloading.get_mut(&key) {
-					unloading.awaiting_notices = true;
+					unloading.notices = CloseNotices::Awaiting;
 					fx.arm_timer_after(MaintainerTimer::CloseNotices(key), CLOSE_NOTICE_WAIT_MS);
 				}
 			}
@@ -170,29 +185,68 @@ pub(crate) fn admit(
 	});
 }
 
-/// The `CloseNotices` timer of a requested close fired: the shards have had their notice
-/// window to report the writer's last appends. When a member still shows a tail above what
-/// the members prove committed, a notice was lost or delayed, so one status probe observes
-/// every member before the unload decides; its replies mark the volume. Otherwise the unload
-/// proceeds on the notices alone and sends nothing.
-pub(crate) fn notices_due(state: &mut MaintainerState, key: VolumeLogKey, fx: &mut Effects) {
-	let Some(unloading) = state.unloading.get_mut(&key) else {
-		return;
+/// Whether a requested close of `key` may still have appends of its writer that no member has
+/// reported, so the members' tails may be below the writer's last commit. That holds while the
+/// close named a claim newer than any observed and waits for a status probe, while its unload
+/// waits out the `CloseNotices` window, and after the window until the unload's barrier has
+/// observed a quorum of members. A member whose last read failed counts as unobserved; a later
+/// notice or poll of it observes it.
+pub(crate) fn close_notices_pending(state: &MaintainerState, key: &VolumeLogKey) -> bool {
+	if state.pending_closes.contains_key(key) {
+		return true;
+	}
+	let Some(unloading) = state.unloading.get(key) else {
+		return false;
 	};
-	if !unloading.awaiting_notices {
+	match &unloading.notices {
+		CloseNotices::None => false,
+		CloseNotices::Awaiting => true,
+		CloseNotices::Observing { barrier } => {
+			if !super::poll::volume_refreshed(state, barrier) {
+				return true;
+			}
+			let Some(volume) = state.loaded_volumes.get(key) else {
+				return false;
+			};
+			let unavailable = state
+				.filesystem
+				.volumes
+				.get(key)
+				.map(|volume| &volume.unavailable_sources);
+			!super::membership::quorum(&state.tablet.replica_set, |worker| {
+				volume.members.contains_key(worker)
+					&& !unavailable.is_some_and(|unavailable| unavailable.contains(worker))
+			})
+		}
+	}
+}
+
+/// Whether a requested close still waits to learn its writer's last appends before its unload
+/// decides what it may forget: the notice window is open, or the barrier after it is unfinished.
+pub(crate) fn awaiting_close_notices(state: &MaintainerState, unloading: &Unloading) -> bool {
+	match &unloading.notices {
+		CloseNotices::None => false,
+		CloseNotices::Awaiting => true,
+		CloseNotices::Observing { barrier } => !super::poll::volume_refreshed(state, barrier),
+	}
+}
+
+/// The `CloseNotices` timer of a requested close fired: the shards have had their notice
+/// window to report the writer's last appends. A notice may have been lost, and a lost one
+/// leaves the members' tails below the writer's last commit with nothing to show it, so one
+/// volume barrier observes every member before the unload decides and before a point read may
+/// report a known commit. The barrier's completion marks the volume.
+pub(crate) fn notices_due(state: &mut MaintainerState, key: VolumeLogKey, fx: &mut Effects) {
+	if !state
+		.unloading
+		.get(&key)
+		.is_some_and(|unloading| unloading.notices == CloseNotices::Awaiting)
+	{
 		return;
 	}
-	unloading.awaiting_notices = false;
-
-	let proven = super::filesystem::known_committed(state, &key);
-	let unproven_suffix = state.loaded_volumes.get(&key).is_some_and(|volume| {
-		volume
-			.members
-			.values()
-			.any(|member| member.appended.volume_seq > proven)
-	});
-	if unproven_suffix {
-		super::poll::request(state, key.clone(), fx);
+	let barrier = super::poll::refresh_volume(state, key.clone(), fx);
+	if let Some(unloading) = state.unloading.get_mut(&key) {
+		unloading.notices = CloseNotices::Observing { barrier };
 	}
 	mark(state, &key);
 }
@@ -297,7 +351,7 @@ pub(crate) fn begin(state: &mut MaintainerState, key: VolumeLogKey, reason: Unlo
 			waiting: BTreeSet::new(),
 			recovery_backoff: false,
 			began_boot_ms: state.now_boot_ms,
-			awaiting_notices: false,
+			notices: CloseNotices::None,
 		},
 	);
 	state.unload_drive.dirty.insert(key.clone());
@@ -748,11 +802,14 @@ pub(crate) fn mark(state: &mut MaintainerState, key: &VolumeLogKey) {
 	}
 }
 
-/// Marks the unloading volumes `scope` covers.
+/// Marks the unloading volumes `scope` covers, and offers again the lazy fork waiters parked
+/// for work on its keys.
 pub(crate) fn mark_scope(state: &mut MaintainerState, scope: UnloadScope) {
 	match scope {
 		UnloadScope::None => {}
 		UnloadScope::Keys(volume_keys) => {
+			// Work on these keys may have ended, so opens parked behind it are offered again.
+			super::lazy_fork_waiters::keys_marked(state, &volume_keys);
 			for volume_key in volume_keys {
 				super::deletion::mark_volume_key(state, &volume_key);
 				let keys = state
@@ -764,6 +821,7 @@ pub(crate) fn mark_scope(state: &mut MaintainerState, scope: UnloadScope) {
 			}
 		}
 		UnloadScope::All => {
+			super::lazy_fork_waiters::all_marked(state);
 			mark_all(state);
 			super::deletion::mark_all(state);
 		}
@@ -807,6 +865,8 @@ pub(crate) fn operation_finished(state: &mut MaintainerState, operation: &Operat
 		| Operation::ForkCleanupPeer { .. }
 		| Operation::ForkStore { .. }
 		| Operation::ForkPeer { .. }
+		| Operation::GroupRead { .. }
+		| Operation::ForkPinPass { .. }
 		| Operation::ForkReference { .. }
 		| Operation::Checkpoint { .. }
 		| Operation::FilesystemQuery { .. }
@@ -868,6 +928,7 @@ pub(crate) fn event_scope(
 		RuntimeEvent::Input(Input::OpenVolumeRequest(_)) => UnloadScope::None,
 		RuntimeEvent::Input(Input::AssignmentUpdated { .. }) => UnloadScope::All,
 		RuntimeEvent::Input(Input::StopReadinessRequest { .. })
+		| RuntimeEvent::Input(Input::ReplicaReadinessRequest { .. })
 		| RuntimeEvent::Input(Input::ManifestObserved { .. })
 		| RuntimeEvent::Input(Input::HandoffReadinessRequest { .. })
 		| RuntimeEvent::Input(Input::MaterializeResponse { .. })
@@ -875,10 +936,13 @@ pub(crate) fn event_scope(
 		| RuntimeEvent::Input(Input::ForkRequest { .. })
 		| RuntimeEvent::Input(Input::ForkStoreResponse { .. })
 		| RuntimeEvent::Input(Input::ForkPeerResponse { .. })
+		| RuntimeEvent::Input(Input::GroupReadResponse { .. })
+		| RuntimeEvent::Input(Input::GroupEvents { .. })
 		| RuntimeEvent::Input(Input::ForkReferenceRequest { .. })
 		| RuntimeEvent::Input(Input::ForkReferenceResponse { .. })
 		| RuntimeEvent::Input(Input::PendingWorkResponse { .. })
 		| RuntimeEvent::Input(Input::SweepPendingResponse { .. })
+		| RuntimeEvent::Input(Input::ForkPinPassResponse { .. })
 		| RuntimeEvent::Input(Input::CheckpointRequest { .. })
 		| RuntimeEvent::Input(Input::CheckpointResponse { .. })
 		| RuntimeEvent::Input(Input::FilesystemQueryRequest { .. })
@@ -896,6 +960,7 @@ pub(crate) fn event_scope(
 		| RuntimeEvent::Input(Input::ReportParentLogImportedResponse { .. })
 		| RuntimeEvent::Timer(MaintainerTimer::ParentLogReportRetry)
 		| RuntimeEvent::Input(Input::ReportVersionMarksResponse { .. })
+		| RuntimeEvent::Input(Input::VersionMarkWanted { .. })
 		| RuntimeEvent::Input(Input::OperatorTierRequest { .. })
 		| RuntimeEvent::Input(Input::OperatorUnloadRequest { .. })
 		| RuntimeEvent::Input(Input::SweepDeletedResponse { .. })
@@ -948,6 +1013,7 @@ pub(crate) fn event_scope(
 		| RuntimeEvent::Timer(MaintainerTimer::ColdBatch)
 		| RuntimeEvent::Timer(MaintainerTimer::Poll)
 		| RuntimeEvent::Timer(MaintainerTimer::ForkRequest(_))
+		| RuntimeEvent::Timer(MaintainerTimer::GroupReadRetry(_))
 		| RuntimeEvent::Timer(MaintainerTimer::CheckpointRequest(_))
 		| RuntimeEvent::Timer(MaintainerTimer::ForkReferenceRequest(_))
 		| RuntimeEvent::Timer(MaintainerTimer::OpenRequest(_))
@@ -961,6 +1027,7 @@ pub(crate) fn event_scope(
 		| RuntimeEvent::Timer(MaintainerTimer::PromotionRetry(_))
 		| RuntimeEvent::Timer(MaintainerTimer::MaintainerLogDue)
 		| RuntimeEvent::Timer(MaintainerTimer::MemtableBudgetShed)
+		| RuntimeEvent::Timer(MaintainerTimer::InexpressibleHoldDeadline)
 		| RuntimeEvent::Timer(MaintainerTimer::MaintainerLogRetry(_)) => UnloadScope::None,
 	}
 }
@@ -1024,9 +1091,11 @@ fn operation_scope(operation: &Operation) -> UnloadScope {
 		| Operation::ForkCleanupPeer { .. }
 		| Operation::ForkStore { .. }
 		| Operation::ForkPeer { .. }
+		| Operation::GroupRead { .. }
 		| Operation::ForkReference { .. }
 		| Operation::PendingWork { .. }
 		| Operation::SweepPending { .. }
+		| Operation::ForkPinPass { .. }
 		| Operation::Checkpoint { .. }
 		| Operation::ReportCatchUp { .. }
 		| Operation::ReportSplit
@@ -1142,10 +1211,11 @@ pub(crate) fn drive(state: &mut MaintainerState, fx: &mut Effects) {
 			continue;
 		}
 		// A closing client announces nothing, so the members' notices of its last appends,
-		// or the backstop probe after them, decide what the unload may forget. Both mark
+		// or the backstop barrier after them, decide what the unload may forget. Both mark
 		// this volume.
 		if matches!(state.unloading[&key].reason, UnloadReason::Requested)
-			&& (state.unloading[&key].awaiting_notices || super::poll::probing(state, &key))
+			&& (awaiting_close_notices(state, &state.unloading[&key])
+				|| super::poll::probing(state, &key))
 		{
 			continue;
 		}

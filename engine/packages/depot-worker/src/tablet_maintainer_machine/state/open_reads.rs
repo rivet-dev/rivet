@@ -19,7 +19,7 @@ use crate::tablet_maintainer_machine::{
 };
 use depot_types::VolumeLogKey;
 use rivet_data::generated::{
-	depot_client_protocol_v1::{self as client, ClientResponse},
+	depot_client_protocol_v2::{self as client, ClientResponse},
 	shared_depot_types_v1::{VolumeLogPosition, VolumeLogReplicaStatus},
 };
 use serde::{Deserialize, Serialize};

@@ -1,4 +1,5 @@
 import { actor, queue, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 type Reminder = {
@@ -7,9 +8,16 @@ type Reminder = {
 };
 
 export const reminderActor = actor({
-  state: {
-    fired: [] as string[],
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS fired_reminders (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          text TEXT NOT NULL
+        );
+      `);
+    },
+  }),
   queues: {
     reminders: queue<Reminder>(),
   },
@@ -21,13 +29,21 @@ export const reminderActor = actor({
         await loopCtx.sleepUntil("wait-until-reminder", runAt);
 
         await loopCtx.step("record-reminder", async (step) => {
-          step.state.fired.push(message.body.text);
+          await step.db.execute(
+            "INSERT INTO fired_reminders (text) VALUES (?)",
+            message.body.text,
+          );
         });
 
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{ text: string }>(
+        "SELECT text FROM fired_reminders ORDER BY id",
+      );
+      return { fired: rows.map((row) => row.text) };
+    },
   },
 });
 

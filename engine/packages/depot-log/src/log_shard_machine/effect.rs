@@ -171,7 +171,7 @@ pub enum LogShardEffect {
 	NotifyMaintainerRequest {
 		worker: rivet_topology::worker::WorkerId,
 		notice_id: u64,
-		request: rivet_data::generated::depot_client_protocol_v1::ReplicaStatusNoticeRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::ReplicaStatusNoticeRequest,
 	},
 }
 

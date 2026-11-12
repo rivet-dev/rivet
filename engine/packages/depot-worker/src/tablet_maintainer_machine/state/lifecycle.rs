@@ -8,9 +8,9 @@ use crate::tablet_maintainer_machine::types::CREATION_RETRY_MS;
 use crate::tablet_maintainer_machine::{Effects, effect::MaintainerEffect, types::*};
 use depot_types::{VolumeLogKey, partition_key_hash};
 use rivet_data::generated::{
-	depot_client_protocol_v1::{self as client, ClientResponse, VolumeRejectResponse},
+	depot_client_protocol_v2::{self as client, ClientResponse, VolumeRejectResponse},
 	depot_storage_worker_protocol_v1::{self as wire, StorageWorkerRequest, StorageWorkerResponse},
-	shared_depot_fs_v1::{FsVolumeRecord, FsVolumeStatus},
+	shared_depot_fs_v2::{FsVolumeRecord, FsVolumeStatus},
 	shared_depot_types_v1::{ClientIdentity, VolumeLogPosition, VolumeLogReplicaStatus},
 };
 use rivet_state_machine::Entropy;
@@ -102,15 +102,168 @@ pub(crate) fn creation_expired(
 
 /// Rejects an open as overloaded and counts why, so a load run shows which admission
 /// limit or key conflict turned callers away.
-fn reject_overloaded(request_id: RequestId, reason: &'static str, effects: &mut Effects) {
+pub(crate) fn reject_overloaded(
+	request_id: RequestId,
+	reason: &'static str,
+	effects: &mut Effects,
+) {
 	crate::metrics::TABLET_VOLUME_OPEN_REJECTED
 		.with_label_values(&[reason])
 		.inc();
 	reject(request_id, depot_types::client::overloaded(), effects);
 }
 
+/// Admits a new open. An open of a grouped volume whose lazy fork or group read is in progress
+/// waits behind it with the key's other opens; see `lazy_fork_waiters`.
+pub(crate) fn admit(state: &mut MaintainerState, caller: OpenVolume, effects: &mut Effects) {
+	if super::lazy_fork_waiters::joins(state, &caller.volume_key) {
+		if let Some(reason) = refused_before_waiting(state, &caller, effects) {
+			reject_overloaded(caller.request_id, reason, effects);
+			return;
+		}
+		// A job parked behind an unproven parent tail asks the parent again for this open.
+		if !super::forks::redrive_parked(state, &caller.volume_key) {
+			reject_overloaded(caller.request_id, "group_fork", effects);
+			return;
+		}
+		super::lazy_fork_waiters::join(state, caller, effects);
+		return;
+	}
+	admit_open(state, caller, effects);
+}
+
+/// The overloaded refusal an open of a key with waiting opens gets before it may wait: an
+/// expired or invalid open, or a full request budget. Every other admission check runs when
+/// the open is admitted again.
+fn refused_before_waiting(
+	state: &MaintainerState,
+	caller: &OpenVolume,
+	effects: &Effects,
+) -> Option<&'static str> {
+	if caller.deadline_boot_ms <= effects.clocks().boot_ms {
+		Some("deadline")
+	} else if !depot_fs_core::checkpoints::valid_policy(caller.retention.as_ref())
+		|| (caller.mode == OpenMode::Existing && caller.retention.is_some())
+	{
+		Some("invalid_retention")
+	} else if state.request_count() >= state.config.max_requests as usize {
+		Some("request_capacity")
+	} else {
+		None
+	}
+}
+
+/// The transient reason admission would refuse `caller` now, if any: an owner handoff that
+/// bars a create, work in flight on its key, a full request or row-read budget, recovered
+/// maintainer log ops of the key not yet replayed, or an apply far behind its commits. Each
+/// clears on a later event. A waiting open admitted again checks this first and keeps waiting
+/// while it holds, so it is never refused after it waited. Composed of the same checks
+/// `admit_open` runs, so the two cannot drift. It does not cover the rarer transient refusals
+/// tied to a deletion of the key or to an incomplete member listing. `slot` says whether the
+/// request budget already counts `caller`.
+pub(crate) fn not_now(
+	state: &mut MaintainerState,
+	caller: &OpenVolume,
+	slot: BudgetSlot,
+) -> Option<&'static str> {
+	if handoff_blocks(state, caller) {
+		Some("owner_handoff")
+	} else if let Some(reason) = key_busy(state, &caller.volume_key, slot) {
+		Some(reason)
+	} else if apply_behind(state, caller) {
+		Some("apply_behind")
+	} else {
+		None
+	}
+}
+
+/// Whether an owner handoff bars `caller` from creating: only the handoff's admitted
+/// initializers may create until it ends.
+fn handoff_blocks(state: &MaintainerState, caller: &OpenVolume) -> bool {
+	caller.mode == OpenMode::Create && !super::stop::may_initialize(state, caller.request_id)
+}
+
+/// Whether the open an admission check is for already holds a slot of the shared request
+/// budget that `MaintainerState::request_count` counts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BudgetSlot {
+	/// The open holds no slot yet, so it needs a free one: a new open, or a waiting open
+	/// already taken off its queue.
+	Needed,
+	/// The open still waits in `awaiting_lazy_fork`, which counts it. Admitting it moves its
+	/// slot from the queue into the admitted work instead of taking another, so the check
+	/// leaves it out. Without that, waiting opens that fill the budget would refuse one
+	/// another until their deadlines.
+	Held,
+}
+
+/// The overloaded reason admission refuses an open of `key` for work in flight or a full
+/// budget: recovered maintainer log ops of the key not yet in the store, a full request or
+/// row-read budget, or a fork, open or row read of the key in flight.
+fn key_busy(
+	state: &MaintainerState,
+	key: &depot_types::VolumeKey,
+	slot: BudgetSlot,
+) -> Option<&'static str> {
+	if super::maintainer_log::replay::pending_for(state, key) {
+		Some("log_replay")
+	} else if let Some(reason) = capacity_full(state, slot) {
+		Some(reason)
+	} else if super::forks::holds_key(state, key) {
+		Some("fork_hold")
+	} else if state.pending.contains_key(key) {
+		Some("key_opening")
+	} else if state.operations.index().read_rows.contains_key(key) {
+		Some("key_row_read")
+	} else {
+		None
+	}
+}
+
+/// The overloaded reason admission refuses any open for while the tablet-wide request or row
+/// read budget is full, or `None` while both have room.
+pub(crate) fn capacity_full(state: &MaintainerState, slot: BudgetSlot) -> Option<&'static str> {
+	let other_requests = match slot {
+		BudgetSlot::Needed => state.request_count(),
+		BudgetSlot::Held => state.request_count().saturating_sub(1),
+	};
+	let counts = state.operations.index().counts;
+	let row_reads = counts.read_row as usize + counts.load as usize;
+	let row_read_cap = (state.config.max_requests as usize)
+		.saturating_mul(state.members().len())
+		.saturating_sub(state.members().len());
+	if other_requests >= state.config.max_requests as usize {
+		Some("request_capacity")
+	} else if row_reads > row_read_cap {
+		Some("row_read_capacity")
+	} else {
+		None
+	}
+}
+
+/// Takes the pending open of `key` out of `pending`. Every removal goes through here, so a
+/// lazy fork waiter parked behind the open is offered again once it leaves.
+fn take_pending(state: &mut MaintainerState, key: &depot_types::VolumeKey) -> Option<PendingOpen> {
+	let pending = state.pending.remove(key);
+	if pending.is_some() {
+		super::lazy_fork_waiters::key_freed(state, key);
+	}
+	pending
+}
+
+/// Whether the volume's apply is far behind its commits and catching up, so an open that is
+/// not a create waits for it instead of replaying the whole gap within its own deadline.
+fn apply_behind(state: &mut MaintainerState, caller: &OpenVolume) -> bool {
+	caller.mode != OpenMode::Create
+		&& super::filesystem::open_waits_for_apply(state, &caller.volume_key)
+}
+
 /// Rejects busy keys rather than run conflicting lifecycle operations concurrently.
-pub(crate) fn admit(state: &mut MaintainerState, mut caller: OpenVolume, effects: &mut Effects) {
+pub(crate) fn admit_open(
+	state: &mut MaintainerState,
+	mut caller: OpenVolume,
+	effects: &mut Effects,
+) {
 	// The transport names the requesting worker. A holder naming another worker is not
 	// trusted, so the claim this open grants records no holder.
 	if caller
@@ -137,8 +290,11 @@ pub(crate) fn admit(state: &mut MaintainerState, mut caller: OpenVolume, effects
 		reject_overloaded(caller.request_id, reason, effects);
 		return;
 	}
-	// A maintainer log's reserved address is never a client volume.
-	if super::maintainer_log::is_log_volume(&caller.volume_key) {
+	// A maintainer log's reserved address is never a client volume, and neither is a claim
+	// log's: a claim is opened through its base volume.
+	if super::maintainer_log::is_log_volume(&caller.volume_key)
+		|| depot_types::is_claim_log(&caller.volume_key).is_some()
+	{
 		reject(
 			caller.request_id,
 			VolumeRejectResponse::VolumeExists,
@@ -168,39 +324,28 @@ pub(crate) fn admit(state: &mut MaintainerState, mut caller: OpenVolume, effects
 		);
 		return;
 	}
-	if caller.mode == OpenMode::Create && !super::stop::may_initialize(state, caller.request_id) {
+	if handoff_blocks(state, &caller) {
 		reject_overloaded(caller.request_id, "owner_handoff", effects);
+		return;
+	}
+	// An archived group is closed for good: every open of its volumes is refused once the
+	// cache knows the status, which the next events poll or group read tells it.
+	if super::groups::archived(state, &caller.volume_key, effects) == Some(true) {
+		crate::metrics::TABLET_VOLUME_OPEN_REJECTED
+			.with_label_values(&["group_archived"])
+			.inc();
+		reject(
+			caller.request_id,
+			VolumeRejectResponse::VolumeGroupArchived,
+			effects,
+		);
 		return;
 	}
 	let busy = if caller.volume_key.byte_len() > state.config.tuning().max_volume_key_bytes as usize
 	{
 		Some("key_too_large")
-	} else if super::maintainer_log::replay::pending_for(state, &caller.volume_key) {
-		// Recovered maintainer log ops of this volume are not in the store yet.
-		Some("log_replay")
-	} else if state.request_count() >= state.config.max_requests as usize {
-		Some("request_capacity")
-	} else if {
-		let counts = state.operations.index().counts;
-		(counts.read_row as usize + counts.load as usize)
-			> (state.config.max_requests as usize)
-				.saturating_mul(state.members().len())
-				.saturating_sub(state.members().len())
-	} {
-		Some("row_read_capacity")
-	} else if super::forks::holds_key(state, &caller.volume_key) {
-		Some("fork_hold")
-	} else if state.pending.contains_key(&caller.volume_key) {
-		Some("key_opening")
-	} else if state
-		.operations
-		.index()
-		.read_rows
-		.contains_key(&caller.volume_key)
-	{
-		Some("key_row_read")
 	} else {
-		None
+		key_busy(state, &caller.volume_key, BudgetSlot::Needed)
 	};
 	if let Some(reason) = busy {
 		reject_overloaded(caller.request_id, reason, effects);
@@ -255,9 +400,7 @@ pub(crate) fn admit(state: &mut MaintainerState, mut caller: OpenVolume, effects
 
 	// The volume's apply is far behind its commits and catching up; the opener retries once
 	// it has, instead of replaying the whole gap within its own deadline.
-	if caller.mode != OpenMode::Create
-		&& super::filesystem::open_waits_for_apply(state, &caller.volume_key)
-	{
+	if apply_behind(state, &caller) {
 		reject_overloaded(caller.request_id, "apply_behind", effects);
 		return;
 	}
@@ -479,7 +622,7 @@ fn lookup_waits_behind_store_write(state: &MaintainerState, key: &depot_types::V
 /// admission cancelled any unload of the key, so the key is marked for the unload drive as
 /// after an expired open.
 fn shed_row_read(state: &mut MaintainerState, key: &depot_types::VolumeKey, fx: &mut Effects) {
-	let Some(pending) = state.pending.remove(key) else {
+	let Some(pending) = take_pending(state, key) else {
 		return;
 	};
 	state
@@ -505,10 +648,10 @@ pub(crate) fn resume_after_repair(
 		.get(key)
 		.is_some_and(|pending| matches!(pending.step, OpenStep::WaitingForRepair))
 	{
-		let pending = state.pending.remove(key).expect("waiting caller");
+		let pending = take_pending(state, key).expect("waiting caller");
 		effects.cancel_timer(MaintainerTimer::RepairWait(pending.caller.request_id));
 		// Re-evaluate deletion, incarnation, and cold after the recovery completion.
-		admit(state, pending.caller, effects);
+		admit_open(state, pending.caller, effects);
 	}
 }
 
@@ -602,7 +745,7 @@ pub(crate) fn resume_after_deletion(state: &mut MaintainerState, effects: &mut E
 			.awaiting_deletion
 			.remove(&key)
 			.expect("released waiter");
-		admit(state, caller, effects);
+		admit_open(state, caller, effects);
 	}
 }
 
@@ -617,8 +760,29 @@ pub(crate) fn row(
 	if !state.pending.contains_key(&key) {
 		return;
 	}
+	let stored_lazy_fork = result
+		.as_ref()
+		.ok()
+		.and_then(|lookup| lookup.pending.as_ref())
+		.map(|pending| pending.spec.clone());
 	let Some(result) = super::fork_admission::lookup(state, &key, result) else {
-		let pending = state.pending.remove(&key).expect("current caller");
+		let pending = take_pending(state, &key).expect("current caller");
+		// A lazy fork the store holds with no job, as one dropped while parked, resumes at
+		// its stored spec, which may name an ancestor past the nearest; the open waits for
+		// it as for a job it started. Restarting from the nearest ancestor would conflict
+		// with the stored spec. Any other stored fork is left to discovery.
+		if pending.caller.lazy_fork
+			&& let Some(spec) = stored_lazy_fork
+			&& super::forks::resume_lazy(state, spec, pending.caller.deadline_boot_ms, effects)
+		{
+			super::lazy_fork_waiters::park(
+				state,
+				pending.caller,
+				super::lazy_fork_waiters::Wait::Job,
+				effects,
+			);
+			return;
+		}
 		reject(
 			pending.caller.request_id,
 			depot_types::client::overloaded(),
@@ -664,7 +828,7 @@ pub(crate) fn row(
 		.collect::<Vec<_>>();
 	let fallback = (observed.len() == 1).then(|| observed[0].clone());
 	if matches!(result, Ok(None)) && observed.len() > 1 {
-		let pending = state.pending.remove(&key).expect("current caller");
+		let pending = take_pending(state, &key).expect("current caller");
 		reject(
 			pending.caller.request_id,
 			depot_types::client::overloaded(),
@@ -687,7 +851,7 @@ pub(crate) fn row(
 				volume_incarnation: row.volume_incarnation,
 			});
 		if super::filesystem::is_record_missing(state, &fallback_key) {
-			let pending = state.pending.remove(&key).expect("current caller");
+			let pending = take_pending(state, &key).expect("current caller");
 			reject(
 				pending.caller.request_id,
 				depot_types::client::record_missing(row.volume_incarnation),
@@ -697,7 +861,7 @@ pub(crate) fn row(
 		}
 		if super::filesystem::record_lost(state, &fallback_key) {
 			super::filesystem::offer(state, &fallback_key);
-			let pending = state.pending.remove(&key).expect("current caller");
+			let pending = take_pending(state, &key).expect("current caller");
 			reject_overloaded(pending.caller.request_id, "record_lookup", effects);
 			return;
 		}
@@ -708,28 +872,118 @@ pub(crate) fn row(
 		Ok(None) if fallback.is_some() => fallback.expect("observed volume"),
 		Ok(Some(row)) => row,
 		Ok(None) => {
+			// A volume of a group with a base is made from the parent group's copy at the
+			// fork before anything else, whatever the open's mode: the open starts the fork
+			// job, or finds it running, and waits for it with the key's other opens; once the
+			// job has published the record they are admitted again and open it, and once the
+			// job has found the volume absent at the fork they create it, or are refused as
+			// absent.
+			//
+			// This holds for an open that only reads, too, and is intentional: a read in a
+			// child publishes the volume's record and pins the parent. Consistent reads need
+			// it, since the child must see the parent as of the fork and never a parent write
+			// made after it, and only the published record with the parent's pin fixes that
+			// state.
+			let lazy_fork = pending.caller.lazy_fork;
+			if lazy_fork {
+				match super::groups::lazy_fork(state, &key) {
+					super::groups::LazyFork::None => {}
+					super::groups::LazyFork::Pending(group) => {
+						// The walk created the entry of a group it has not read; the read
+						// starts now and the open waits for it.
+						super::groups::drive(state, effects);
+						let pending = take_pending(state, &key).expect("current caller");
+						super::lazy_fork_waiters::park(
+							state,
+							pending.caller,
+							super::lazy_fork_waiters::Wait::GroupRead(group),
+							effects,
+						);
+						return;
+					}
+					super::groups::LazyFork::Spec(spec) => {
+						let pending = take_pending(state, &key).expect("current caller");
+						if !state.lazy_forks_absent.contains(&key) {
+							// The open waits for the job, which publishes the volume's record
+							// or finds it absent, and is then admitted again: one round trip
+							// for the caller. A job that cannot start now, for want of a free
+							// job or of a grant that writes the group fork's rows, is refused
+							// for a retry.
+							if super::forks::start_lazy(
+								state,
+								spec,
+								pending.caller.deadline_boot_ms,
+								effects,
+							) {
+								super::lazy_fork_waiters::park(
+									state,
+									pending.caller,
+									super::lazy_fork_waiters::Wait::Job,
+									effects,
+								);
+							} else {
+								reject_overloaded(pending.caller.request_id, "group_fork", effects);
+							}
+							return;
+						}
+						// The walk found the volume absent at the fork: the open goes on as
+						// today, creating it if asked. The mark stays until a create uses it,
+						// so existing-only opens keep the negative answer.
+						state.pending.insert(key.clone(), pending);
+					}
+				}
+			}
+			let pending = state.pending.get(&key).expect("current caller");
 			if pending.caller.mode == OpenMode::Existing {
-				let pending = state.pending.remove(&key).expect("current caller");
+				let pending = take_pending(state, &key).expect("current caller");
 				reject(
 					pending.caller.request_id,
 					VolumeRejectResponse::VolumeNotFound,
 					effects,
 				);
 				return;
-			};
+			}
 			// A create-if-absent may read an existing row after quiescence, but
 			// cannot draw a new incarnation after the old owner promised Ready.
 			if !super::stop::may_initialize(state, pending.caller.request_id) {
-				let pending = state.pending.remove(&key).expect("current caller");
+				let pending = take_pending(state, &key).expect("current caller");
 				reject_overloaded(pending.caller.request_id, "owner_handoff", effects);
 				return;
 			}
+			let retention = pending.caller.retention.clone();
+			// A grouped volume records the fork it was created at, which needs its group read;
+			// the open waits for the read.
+			let created_at_fork = match super::groups::fork_stamp(state, &key, effects) {
+				Ok(created_at_fork) => created_at_fork,
+				Err(group) => {
+					let pending = take_pending(state, &key).expect("current caller");
+					super::lazy_fork_waiters::park(
+						state,
+						pending.caller,
+						super::lazy_fork_waiters::Wait::GroupRead(group),
+						effects,
+					);
+					return;
+				}
+			};
+			// The record and creation evidence carry that stamp, which a grant that selected
+			// versions below a group fork's records only as fork 0. Such a grant refuses a create
+			// stamped past fork 0 for a retry rather than create a volume whose stamp it would
+			// lose.
+			let created_at_fork = super::groups::recorded_stamp(state, &key, created_at_fork);
+			if created_at_fork.is_some() && !super::groups::records_group_forks(state, &key) {
+				let pending = take_pending(state, &key).expect("current caller");
+				reject_overloaded(pending.caller.request_id, "group_fork", effects);
+				return;
+			}
+			// The volume is created now, so a negative answer from a lazy walk is used up.
+			state.lazy_forks_absent.remove(&key);
 			// The ordering epoch is drawn with the creation's first claim; see `load`.
 			FsVolumeRecord {
 				incarnation_epoch: 0,
 				recent_writes: Vec::new(),
 				base_chain: Vec::new(),
-				retention: pending.caller.retention.clone(),
+				retention,
 				partition_key: key.partition_key.clone(),
 				name: key.name.clone(),
 				volume_incarnation: *entropy.rng().uuid_v4().as_bytes(),
@@ -738,6 +992,11 @@ pub(crate) fn row(
 					client_epoch: 0,
 					volume_seq: 0,
 				},
+				fork_pinned_through: None,
+				created_at_fork,
+				deleted_at_fork: None,
+				lazy_fork: None,
+				metadata_local: false,
 			}
 		}
 		Err(_) => {
@@ -747,7 +1006,7 @@ pub(crate) fn row(
 	};
 	if row.status == FsVolumeStatus::Deleted {
 		super::deletion::observe_row(state, key.clone(), row);
-		let pending = state.pending.remove(&key).expect("current caller");
+		let pending = take_pending(state, &key).expect("current caller");
 		if creates(&pending.caller) {
 			await_deletion(state, pending.caller, effects);
 			return;
@@ -934,7 +1193,7 @@ fn load(
 	if !state.loaded_volumes.contains_key(&key)
 		&& state.reserves_at_least(state.config.max_loaded_volumes as usize)
 	{
-		let pending = state.pending.remove(&volume_key).expect("current caller");
+		let pending = take_pending(state, &volume_key).expect("current caller");
 		reject(
 			pending.caller.request_id,
 			depot_types::client::overloaded(),
@@ -1028,7 +1287,7 @@ fn load(
 				if inserted {
 					state.remove_loaded_volume(&key);
 				}
-				let pending = state.pending.remove(&volume_key).expect("current caller");
+				let pending = take_pending(state, &volume_key).expect("current caller");
 				reject_overloaded(pending.caller.request_id, "claim_epoch", effects);
 				return;
 			};
@@ -1045,7 +1304,7 @@ fn load(
 		};
 		let Some(incarnation_epoch) = incarnation_epoch else {
 			state.remove_loaded_volume(&key);
-			let pending = state.pending.remove(&volume_key).expect("current caller");
+			let pending = take_pending(state, &volume_key).expect("current caller");
 			reject_overloaded(pending.caller.request_id, "claim_epoch", effects);
 			return;
 		};
@@ -2034,6 +2293,24 @@ pub(crate) fn complete_load(
 	super::member_repair::open_completed(state, &key, effects);
 }
 
+/// Refuses the opens of `key` waiting for its lazy fork job as `VolumeTailUnproven` naming
+/// `parent_volume_key`, the ancestor whose acquire answer was `TailUnproven`, so each opener
+/// can have that tail proven now rather than at its deadline.
+pub(crate) fn refuse_job_waiters_tail_unproven(
+	state: &mut MaintainerState,
+	key: &depot_types::VolumeKey,
+	parent_volume_key: depot_types::VolumeKey,
+	effects: &mut Effects,
+) {
+	for caller in super::lazy_fork_waiters::take_job_waiters(state, key) {
+		let refusal = VolumeRejectResponse::VolumeTailUnproven(client::VolumeTailUnproven {
+			parent_volume_key: parent_volume_key.clone(),
+			retry_after_ms: state.config.tuning().retry_ms,
+		});
+		reject(caller.request_id, refusal, effects);
+	}
+}
+
 /// Retires one expired caller without rolling back loads already dispatched to disk.
 pub(crate) fn expired(state: &mut MaintainerState, id: RequestId, fx: &mut Effects) {
 	let Some(key) = state.open_deadlines.keys.remove(&id) else {
@@ -2050,12 +2327,28 @@ pub(crate) fn expired(state: &mut MaintainerState, id: RequestId, fx: &mut Effec
 		reject(id, depot_types::client::overloaded(), fx);
 		return;
 	}
+	if super::lazy_fork_waiters::expired(state, &key, id) {
+		count_expired("awaiting_lazy_fork");
+		// A job whose ancestor's tail is unproven names that ancestor, so the opener can have
+		// the tail proven; any other wait is shed load.
+		let refusal = match super::forks::lazy_tail_unproven(state, &key) {
+			Some(parent_volume_key) => {
+				VolumeRejectResponse::VolumeTailUnproven(client::VolumeTailUnproven {
+					parent_volume_key,
+					retry_after_ms: state.config.tuning().retry_ms,
+				})
+			}
+			None => depot_types::client::overloaded(),
+		};
+		reject(id, refusal, fx);
+		return;
+	}
 	if state
 		.pending
 		.get(&key)
 		.is_some_and(|pending| pending.caller.request_id == id)
 	{
-		if let Some(pending) = state.pending.remove(&key) {
+		if let Some(pending) = take_pending(state, &key) {
 			count_expired(match pending.step {
 				OpenStep::WaitingForRepair => "waiting_for_repair",
 				OpenStep::ReadingRow => "reading_row",
@@ -2104,9 +2397,48 @@ impl OpenDeadlines {}
 /// deletion is armed again at half of what then remains, which stays before the caller's
 /// deadline. Once a creating open's loads are out, `load` moves the deadline to the caller's
 /// own, since the loads may still create the volume and a refusal would then be false.
-fn arm_deadline(state: &mut MaintainerState, caller: &OpenVolume, effects: &mut Effects) -> u64 {
+pub(crate) fn arm_deadline(
+	state: &mut MaintainerState,
+	caller: &OpenVolume,
+	effects: &mut Effects,
+) -> u64 {
 	let now_boot_ms = effects.clocks().boot_ms;
 	let budget_ms = (caller.deadline_boot_ms.saturating_sub(now_boot_ms) / 2).max(1);
+	arm_open_timer(state, caller, budget_ms, effects)
+}
+
+/// How long before the caller's own deadline an open waiting for its volume's lazy fork is
+/// answered, so the refusal reaches the caller while it still listens: a reply hop, with room.
+pub(crate) const LAZY_FORK_REPLY_MARGIN_MS: u64 = 250;
+
+/// Arms the answer deadline of an open that waits for its own volume's lazy fork job or the
+/// group read that job needs, and returns how long the open may be held.
+///
+/// That wait is a dependency on work for this very volume, not load, so the open is held for
+/// as long as its caller listens: until [`LAZY_FORK_REPLY_MARGIN_MS`] before the caller's
+/// deadline, or half of its remaining time when that is shorter. Answering at half, as
+/// [`arm_deadline`] does for other held opens, refused a first read whose job needed a little
+/// more than half of a short open timeout, although the job then published the record.
+pub(crate) fn arm_lazy_fork_deadline(
+	state: &mut MaintainerState,
+	caller: &OpenVolume,
+	effects: &mut Effects,
+) -> u64 {
+	let now_boot_ms = effects.clocks().boot_ms;
+	let remaining_ms = caller.deadline_boot_ms.saturating_sub(now_boot_ms);
+	let margin_ms = LAZY_FORK_REPLY_MARGIN_MS.min(remaining_ms / 2);
+	let budget_ms = remaining_ms.saturating_sub(margin_ms).max(1);
+	arm_open_timer(state, caller, budget_ms, effects)
+}
+
+/// Arms `caller`'s answer timer `budget_ms` from now and records its key for the expiry.
+fn arm_open_timer(
+	state: &mut MaintainerState,
+	caller: &OpenVolume,
+	budget_ms: u64,
+	effects: &mut Effects,
+) -> u64 {
+	let now_boot_ms = effects.clocks().boot_ms;
 	effects.arm_timer_at(
 		MaintainerTimer::OpenRequest(caller.request_id),
 		now_boot_ms.saturating_add(budget_ms),
@@ -2118,13 +2450,18 @@ fn arm_deadline(state: &mut MaintainerState, caller: &OpenVolume, effects: &mut 
 
 	// Answered callers leave their entries behind. Dropping them once they outnumber the live
 	// callers keeps the index proportional to the parked opens at amortized constant cost.
-	let live = state.pending.len() + state.awaiting_deletion.len();
+	let live = state.pending.len() + state.awaiting_deletion.len() + state.awaiting_lazy_fork.len();
 	if state.open_deadlines.keys.len() > 2 * live + 64 {
-		let (pending, deletion) = (&state.pending, &state.awaiting_deletion);
+		let (pending, deletion, lazy) = (
+			&state.pending,
+			&state.awaiting_deletion,
+			&state.awaiting_lazy_fork,
+		);
 		state.open_deadlines.keys.retain(|id, key| {
 			*id == caller.request_id
 				|| pending.get(key).is_some_and(|p| p.caller.request_id == *id)
 				|| deletion.get(key).is_some_and(|c| c.request_id == *id)
+				|| lazy.holds(key, *id)
 		});
 	}
 	budget_ms

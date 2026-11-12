@@ -1,0 +1,72 @@
+---
+title: "Docker"
+description: "Give each Rivet Actor its own Docker container for local development."
+skill: false
+---
+
+[Docker](https://docs.docker.com) runs containers on the node itself, so it needs no account and no network round trip. Through `@rivet-dev/sandbox-adapter`, each Actor creates a container, runs commands and uses files in it, stops it while the Actor sleeps, and removes it when the Actor is destroyed. Use it for local development, and switch the import to a cloud provider for production.
+
+<Diagram
+  id="docker"
+  label="A client calls actions on the build Actor whose key is the build id. Each build Actor creates its own Docker container through the sandbox adapter, then runs commands and reads and writes files in it. There is one build Actor, and one Docker container, per build."
+  stackLabel="One per build"
+  nodes={[
+    { id: "client", x: 20, y: 20, w: 110, title: "Client" },
+    { id: "build", x: 190, y: 20, w: 170, product: "actors", stack: true, title: "`build`", subtitle: "stores the sandbox id" },
+    { id: "docker", x: 500, y: 20, w: 150, stack: true, title: "Docker", subtitle: "container" },
+  ]}
+  edges={[
+    { from: "client", to: "build", label: "actions" },
+    { from: "build", to: "docker", label: "`exec`, files", both: true },
+  ]}
+/>
+
+## Quickstart
+
+<Steps>
+
+<Step title="Install">
+
+The provider runs the `docker` CLI on the node and uses the current Docker context, so [Docker](https://docs.docker.com/get-started/get-docker/) must be installed and running. No extra package is needed.
+
+```sh
+npm install rivetkit @rivet-dev/sandbox-adapter
+```
+
+</Step>
+
+<Step title="Define the Actor">
+
+Each `build` Actor owns one container. The first `run`, `saveFile`, or `readFile` creates it; later calls connect to the same container. This example joins the `none` network, so commands have no network access.
+
+<CodeSnippet file="examples/docs/integrations-docker/actor.ts" title="actor.ts" />
+
+</Step>
+
+</Steps>
+
+## Options
+
+| Option | Description |
+| --- | --- |
+| `image` | Image to run. Defaults to `ubuntu:24.04`. |
+| `cwd` | Working directory inside the container. Created when the Actor connects. Defaults to `/workspace`. |
+| `env` | Environment variables of the container. The node's environment is never passed in. |
+| `network` | Docker network to join. Set `"none"` for no network access. Defaults to `bridge`. The `host` network is rejected. |
+| `ports` | Container ports to publish on a random `127.0.0.1` port. Read the address with `dockerPortAddress(sandboxId, port)`. |
+| `keepImageEntrypoint` | Runs the image's own entrypoint, for images that start a server. By default the container runs an idle process. |
+| `docker` | Path of the Docker CLI. Defaults to `docker`. |
+
+Each sandbox is one container with the label `dev.rivet.sandbox-adapter.sandbox-id`. The container has no host mounts, no host environment, no privileged mode, and no host network. `suspend` stops the container while the Actor sleeps, and `destroy` removes it.
+
+## Image requirements
+
+The provider has no agent inside the container. It runs every operation through `/bin/sh` and a few command-line tools from the image: `tail`, `mkdir`, `cat`, `rm`, and `touch`, plus a writable `/tmp`. `ubuntu:24.04`, `debian:bookworm-slim`, `alpine:3.22`, and `busybox:1.37` have all of them. Check your own image with:
+
+```sh
+docker run --rm --entrypoint /bin/sh my-image -c 'for t in tail cat mkdir rm touch; do command -v "$t" >/dev/null || echo "missing: $t"; done; [ -w /tmp ] || echo "not writable: /tmp"'
+```
+
+A non-root `USER` needs a `cwd` it owns, such as `/home/app`, because Docker creates the default `/workspace` as `root`. Commands can only use what the image has, such as `git` or `node`.
+
+The `Sandbox` API, lifecycle, and the other providers are in the [sandbox adapter guide](/guides/sandbox-adapter).

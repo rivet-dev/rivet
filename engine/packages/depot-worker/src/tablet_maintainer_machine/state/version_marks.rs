@@ -34,10 +34,12 @@ pub(crate) struct VersionReport {
 
 /// Raises `marks` to the versions this grant writes into tablet data, `versions`: the record
 /// itself at `depot.maintainer_log`, and SlateDB row values at `depot.fs_rows` once this mark
-/// is durable. Returns whether any rose.
+/// is durable; and to `wanted`, the marks commands asked for before storing values above
+/// the read floor. Returns whether any rose.
 pub(crate) fn raise_written(
 	marks: &mut Vec<VersionMark>,
 	versions: &crate::tablet_maintainer_machine::types::TabletWriteVersions,
+	wanted: &[VersionMark],
 ) -> bool {
 	let mut raised = raise_mark(marks, VersionFamily::DEPOT_FS_ROWS, versions.fs_rows);
 	raised |= raise_mark(
@@ -45,7 +47,40 @@ pub(crate) fn raise_written(
 		VersionFamily::DEPOT_MAINTAINER_LOG,
 		versions.maintainer_log,
 	);
+	raised |= merge_marks(marks, wanted);
 	raised
+}
+
+/// A command asked for `mark` before storing a value at it; see
+/// `MaintainerEvent::VersionMarkWanted`. Depot reads no command value, so the family is
+/// opaque here: the mark only keeps the coordinator from granting the tablet to a worker
+/// that cannot read it, and a worker that opens the record anyway refuses it.
+pub(crate) fn wanted(state: &mut MaintainerState, mark: VersionMark, effects: &mut Effects) {
+	if state.phase != MaintainerPhase::Serving {
+		return;
+	}
+	let family = VersionFamily(mark.family);
+	let writes = family
+		.info()
+		.is_some_and(|info| info.min_read <= mark.version && mark.version <= info.max_write);
+	if !writes {
+		tracing::warn!(
+			tablet_id = %uuid::Uuid::from_bytes(state.tablet.id),
+			family = mark.family,
+			version = mark.version,
+			"a command asked for a version mark this binary does not write; ignoring it"
+		);
+		return;
+	}
+	if mark_of(current(state), family).is_some_and(|recorded| recorded >= mark.version) {
+		return;
+	}
+	// A mark already wanted but not in the record means no pass has written it yet: the pass
+	// asked for may still be due, or it was dispatched when the record could not be written,
+	// such as while the log was not serving, which clears the request but keeps the mark.
+	// Asking again is idempotent: it arms no second flush while one is scheduled.
+	raise_mark(&mut state.maintainer_log.wanted_marks, family, mark.version);
+	super::maintainer_log::request_marks_pass(state, effects);
 }
 
 /// The marks the tablet's data holds as this maintainer knows them, including ones a

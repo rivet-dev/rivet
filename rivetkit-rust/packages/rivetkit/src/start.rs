@@ -11,7 +11,7 @@ use futures::FutureExt;
 use rivet_error::RivetError;
 use rivetkit_core::actor::ShutdownKind;
 use rivetkit_core::error::{ActorLifecycle, ActorRuntime, action_not_found};
-use rivetkit_core::{ActorEvent, ActorEvents, ActorStart, QueueSendResult, QueueSendStatus, Reply};
+use rivetkit_core::{ActorEvent, ActorEvents, ActorStart, Reply};
 use serde::de::DeserializeOwned;
 use tokio::{sync::OwnedSemaphorePermit, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -21,7 +21,6 @@ use crate::{
 	actor::{Actor, HttpCallbackAdmission, HttpCallbackClass},
 	context::{ConnCtx, Ctx},
 	event::RuntimeEvent,
-	queue::QueueSet,
 };
 
 #[derive(Debug)]
@@ -29,8 +28,11 @@ pub struct Start<A: Actor> {
 	pub ctx: Ctx<A>,
 	pub input: Input<A>,
 	pub is_new: bool,
-	pub snapshot: Snapshot,
 	pub hibernated: Vec<Hibernated<A>>,
+	/// The individual actor fork at the first start of a forked actor: the source, the fork
+	/// time and the fork input. Handle it before serving events; it is not offered again once
+	/// this start succeeds.
+	pub fork: Option<rivetkit_core::ActorForkStart>,
 	pub events: Events<A>,
 	#[doc(hidden)]
 	pub startup_ready: Option<tokio::sync::oneshot::Sender<Result<()>>>,
@@ -83,39 +85,6 @@ impl<A: Actor> Input<A> {
 }
 
 #[derive(Debug)]
-pub struct Snapshot {
-	is_new: bool,
-	bytes: Option<Vec<u8>>,
-}
-
-impl Snapshot {
-	pub fn is_new(&self) -> bool {
-		self.is_new
-	}
-
-	pub fn decode<S>(&self) -> Result<Option<S>>
-	where
-		S: DeserializeOwned,
-	{
-		let Some(bytes) = self.bytes.as_deref().filter(|bytes| !bytes.is_empty()) else {
-			return Ok(None);
-		};
-		decode_cbor(bytes, "actor snapshot").map(Some)
-	}
-
-	pub fn decode_or_default<S>(&self) -> Result<S>
-	where
-		S: DeserializeOwned + Default,
-	{
-		Ok(self.decode()?.unwrap_or_default())
-	}
-
-	pub fn raw(&self) -> Option<&[u8]> {
-		self.bytes.as_deref()
-	}
-}
-
-#[derive(Debug)]
 pub struct Hibernated<A: Actor> {
 	pub conn: ConnCtx<A>,
 }
@@ -156,12 +125,24 @@ impl<A: Actor> Events<A> {
 				reply.send(Ok(()));
 				None
 			}
-			ActorEvent::DisconnectConn { conn_id, reply } => {
-				reply.send(self.ctx.disconnect_conn(&conn_id).await);
+			ActorEvent::DisconnectConn {
+				conn_id,
+				reason,
+				reply,
+			} => {
+				reply.send(self.ctx.disconnect_conn_with_reason(&conn_id, reason).await);
 				None
 			}
 			ActorEvent::RunWake { reply, .. } => {
 				reply.send(Ok(()));
+				None
+			}
+			ActorEvent::QueueSend { name, reply, .. } => {
+				reply.send(Err(queue_handler_not_found(name)));
+				None
+			}
+			ActorEvent::SerializeState { reply, .. } => {
+				reply.send(Ok(Vec::new()));
 				None
 			}
 			event => Some(event),
@@ -174,15 +155,27 @@ impl<A: Actor> Events<A> {
 				reply.send(Ok(()));
 				None
 			}
-			ActorEvent::DisconnectConn { conn_id, reply } => {
+			ActorEvent::DisconnectConn {
+				conn_id,
+				reason,
+				reply,
+			} => {
 				let ctx = self.ctx.clone();
 				tokio::spawn(async move {
-					reply.send(ctx.disconnect_conn(&conn_id).await);
+					reply.send(ctx.disconnect_conn_with_reason(&conn_id, reason).await);
 				});
 				None
 			}
 			ActorEvent::RunWake { reply, .. } => {
 				reply.send(Ok(()));
+				None
+			}
+			ActorEvent::QueueSend { name, reply, .. } => {
+				reply.send(Err(queue_handler_not_found(name)));
+				None
+			}
+			ActorEvent::SerializeState { reply, .. } => {
+				reply.send(Ok(Vec::new()));
 				None
 			}
 			event => Some(event),
@@ -193,32 +186,26 @@ impl<A: Actor> Events<A> {
 pub async fn run_actor<A: Actor>(start: Start<A>) -> Result<()> {
 	let Start {
 		ctx,
-		input,
+		input: _,
 		is_new,
-		snapshot,
 		hibernated: _,
+		fork,
 		mut events,
 		startup_ready,
 	} = start;
 
-	// Run the whole startup phase (input decode, state creation, create,
-	// on_create, on_start) as one fallible unit so a failure is forwarded to
-	// the runtime handshake as the real cause instead of being dropped. Without
-	// this, an input decode error would drop `startup_ready`, surfacing only a
-	// generic closed-channel error rather than the actual failure. The failure
-	// itself is logged by rivetkit-core when it drains the run handle.
+	// Run the whole startup phase (create, on_create, on_start) as one
+	// fallible unit so a failure is forwarded to the runtime handshake as the
+	// real cause instead of dropping `startup_ready`, which would surface only
+	// a generic closed-channel error. The failure itself is logged by
+	// rivetkit-core when it drains the run handle.
 	let startup = async {
-		let state = match snapshot.decode()? {
-			Some(state) => state,
-			// Absent input falls back to the input type's default, matching
-			// rivetkit-typescript where createState receives undefined input.
-			None => A::create_state(&ctx, input.decode_or_default()?).await?,
-		};
-		ctx.set_initial_state(state);
-
 		let actor = Arc::new(A::create(&ctx).await?);
 		if is_new {
 			actor.clone().on_create(ctx.clone()).await?;
+		}
+		if let Some(fork) = fork {
+			actor.clone().on_fork(ctx.clone(), fork).await?;
 		}
 		actor.clone().on_start(ctx.clone()).await?;
 		Ok::<_, anyhow::Error>(actor)
@@ -416,34 +403,8 @@ async fn handle_actor_event<A: Actor>(
 				reply.send(actor.on_fetch_response(ctx, request).await);
 			}
 		}
-		ActorEvent::QueueSend {
-			name,
-			body,
-			conn,
-			request,
-			reply,
-			..
-		} => {
-			let handler_ctx = ctx
-				.with_request(Some(request))
-				.with_conn(Some(ConnCtx::from(conn)));
-			match <A::Queue as QueueSet<A>>::dispatch(
-				actor,
-				handler_ctx.clone(),
-				name.as_str(),
-				body.as_slice(),
-			) {
-				Some(future) => {
-					spawn_queue_reply(handler_ctx, reply, future);
-				}
-				None => {
-					reply.send(Err(ActorRuntime::NotFound {
-						resource: "queue handler".to_owned(),
-						id: name,
-					}
-					.build()));
-				}
-			}
+		ActorEvent::QueueSend { name, reply, .. } => {
+			reply.send(Err(queue_handler_not_found(name)));
 		}
 		ActorEvent::WebSocketOpen {
 			ws, request, reply, ..
@@ -469,10 +430,7 @@ async fn handle_actor_event<A: Actor>(
 					.clone()
 					.on_before_connect(ctx.clone(), &params)
 					.await?;
-				let conn_state = actor.clone().create_conn_state(ctx.clone(), params).await?;
-				let conn = ConnCtx::from(conn);
-				conn.set_state(&conn_state)?;
-				actor.on_connect(ctx, conn).await
+				actor.on_connect(ctx, ConnCtx::from(conn)).await
 			}
 			.await;
 			reply.send(result);
@@ -495,16 +453,9 @@ async fn handle_actor_event<A: Actor>(
 			);
 		}
 		ActorEvent::SerializeState { reply, .. } => {
-			let result = async {
-				if ctx.state_dirty() {
-					actor.on_state_change(ctx.clone()).await?;
-				}
-				let delta = ctx.encode_state_delta()?;
-				ctx.clear_state_dirty();
-				Ok(vec![delta])
-			}
-			.await;
-			reply.send(result);
+			// Rust actors keep no framework-managed state, so there is nothing
+			// to persist.
+			reply.send(Ok(Vec::new()));
 		}
 		ActorEvent::RunGracefulCleanup { reason, reply } => {
 			let result = match reason {
@@ -512,10 +463,14 @@ async fn handle_actor_event<A: Actor>(
 				ShutdownKind::Destroy => actor.on_destroy(ctx).await,
 			};
 			reply.send(result);
-			// Keep the loop alive so the finalize-phase `SerializeState` can capture state the hook wrote; core ends it by closing the channel.
+			// Keep the loop alive until core closes the channel after the finalize phase.
 		}
-		ActorEvent::DisconnectConn { conn_id, reply } => {
-			reply.send(ctx.disconnect_conn(&conn_id).await);
+		ActorEvent::DisconnectConn {
+			conn_id,
+			reason,
+			reply,
+		} => {
+			reply.send(ctx.disconnect_conn_with_reason(&conn_id, reason).await);
 		}
 		ActorEvent::WorkflowHistoryRequested { reply } => {
 			reply.send(Err(not_configured("workflow history")));
@@ -563,22 +518,14 @@ fn spawn_action_reply<A: Actor>(
 	});
 }
 
-fn spawn_queue_reply<A: Actor>(
-	ctx: Ctx<A>,
-	reply: Reply<QueueSendResult>,
-	future: crate::queue::BoxQueueFuture,
-) {
-	tokio::spawn(async move {
-		let abort = ctx.abort_signal();
-		let result = tokio::select! {
-			_ = abort.cancelled() => Err(ActorLifecycle::Stopping.build()),
-			result = future => result.map(|response| QueueSendResult {
-				status: QueueSendStatus::Completed,
-				response,
-			}),
-		};
-		reply.send(result);
-	});
+/// Rust actors have no queue handlers, so every queue send is rejected the way
+/// an undeclared queue name is.
+fn queue_handler_not_found(name: String) -> anyhow::Error {
+	ActorRuntime::NotFound {
+		resource: "queue handler".to_owned(),
+		id: name,
+	}
+	.build()
 }
 
 fn not_configured(component: impl Into<String>) -> anyhow::Error {
@@ -594,19 +541,17 @@ pub fn wrap_start<A: Actor>(core_start: ActorStart) -> Result<Start<A>> {
 		ctx,
 		input,
 		is_new,
-		snapshot,
+		snapshot: _,
 		hibernated,
+		fork,
 		events,
 		startup_ready,
 	} = core_start;
 
 	let hibernated = hibernated
 		.into_iter()
-		.map(|(conn, bytes)| Hibernated {
-			conn: ConnCtx::from({
-				conn.set_state(bytes);
-				conn
-			}),
+		.map(|(conn, _bytes)| Hibernated {
+			conn: ConnCtx::from(conn),
 		})
 		.collect();
 
@@ -619,11 +564,8 @@ pub fn wrap_start<A: Actor>(core_start: ActorStart) -> Result<Start<A>> {
 			_p: PhantomData,
 		},
 		is_new,
-		snapshot: Snapshot {
-			is_new,
-			bytes: snapshot,
-		},
 		hibernated,
+		fork,
 		events: Events {
 			ctx,
 			rx: events,

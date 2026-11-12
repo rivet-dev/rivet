@@ -5,16 +5,8 @@ interface ConnParams {
   authToken: string;
 }
 
-interface ConnState {
-  userId: string;
-  role: string;
-}
-
 const gameRoom = actor({
-  state: {},
-  createConnState: (c, params: ConnParams): ConnState => {
-    return { userId: "user-123", role: "player" };
-  },
+  onBeforeConnect: (c, params: ConnParams) => {},
   actions: {}
 });
 

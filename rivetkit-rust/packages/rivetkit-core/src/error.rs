@@ -28,10 +28,6 @@ pub fn public_error_status_code(group: &str, code: &str) -> Option<u16> {
 		("actor", "method_not_allowed") => Some(405),
 		("actor", "action_timed_out") => Some(408),
 		("actor", "aborted") => Some(400),
-		(
-			"actor_runtime_socket",
-			"unsupported" | "not_enabled" | "closed" | "database_unavailable",
-		) => Some(400),
 		("message", "incoming_too_long" | "outgoing_too_long") => Some(400),
 		("schedule", _) => Some(400),
 		(
@@ -175,6 +171,9 @@ pub enum ActorLifecycle {
 
 	#[error("destroying", "Actor is destroying.")]
 	Destroying,
+
+	#[error("destroyed", "Actor was destroyed.")]
+	Destroyed,
 
 	#[error("shutdown_timeout", "Actor shutdown timed out.")]
 	ShutdownTimeout,

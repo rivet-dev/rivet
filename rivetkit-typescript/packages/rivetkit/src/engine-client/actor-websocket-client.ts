@@ -8,6 +8,7 @@ import {
 	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
+	WS_PROTOCOL_NAMESPACE,
 	WS_PROTOCOL_STANDARD as WS_PROTOCOL_RIVETKIT,
 	WS_PROTOCOL_SKIP_READY_WAIT,
 	WS_PROTOCOL_TARGET,
@@ -194,15 +195,34 @@ class BufferedRemoteWebSocket implements UniversalWebSocket {
 	}
 }
 
+/**
+ * Builds the gateway URL of an actor addressed by ID. The actor's namespace rides as
+ * `rvt-namespace`: an actor ID is resolved within its namespace, so without it the gateway
+ * falls back to the token's namespace, or to `default` for the admin token.
+ */
 export function buildActorGatewayUrl(
 	endpoint: string,
+	namespace: string,
 	actorId: string,
 	token: string | undefined,
 	path = "",
 ): string {
+	if (namespace.length === 0) {
+		throw new Error("actor gateway namespace must not be empty");
+	}
 	const tokenSegment =
 		token !== undefined ? `@${encodeURIComponent(token)}` : "";
-	const gatewayPath = `/gateway/${encodeURIComponent(actorId)}${tokenSegment}${path}`;
+	const params = new URLSearchParams();
+	params.append("rvt-namespace", namespace);
+	let separator: string;
+	if (path.endsWith("?") || path.endsWith("&")) {
+		separator = "";
+	} else if (path.includes("?")) {
+		separator = "&";
+	} else {
+		separator = "?";
+	}
+	const gatewayPath = `/gateway/${encodeURIComponent(actorId)}${tokenSegment}${path}${separator}${params.toString()}`;
 	return combineUrlPath(endpoint, gatewayPath);
 }
 
@@ -395,6 +415,10 @@ export function buildWebSocketProtocols(
 	if (target) {
 		protocols.push(`${WS_PROTOCOL_TARGET}${target.target}`);
 		protocols.push(`${WS_PROTOCOL_ACTOR}${target.actorId}`);
+		// An actor ID resolves within its namespace; see `buildActorGatewayUrl`.
+		if (runConfig.namespace) {
+			protocols.push(`${WS_PROTOCOL_NAMESPACE}${runConfig.namespace}`);
+		}
 		if (runConfig.token) {
 			protocols.push(`${WS_PROTOCOL_TOKEN}${runConfig.token}`);
 		}

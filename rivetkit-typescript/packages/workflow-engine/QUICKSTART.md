@@ -346,6 +346,9 @@ if (winner === "work") {
 ```
 
 - Other branches are cancelled via `AbortSignal` when a winner is determined
+- A sleep deadline wakes its branch while other branches still run, so the race above returns at the deadline
+- Code that runs in a cancelled step is not stopped, like a step that times out. It keeps running in the background and its side effects still occur, but its result is discarded. Pass the branch's `ctx.abortSignal` to APIs that can stop early
+- A race waits for code outside a step in a losing branch to settle, so it must honor `ctx.abortSignal`
 - If all branches fail, throws `RaceError` with all errors
 
 ### Eviction and Cancellation

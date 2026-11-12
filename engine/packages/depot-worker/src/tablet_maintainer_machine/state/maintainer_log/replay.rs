@@ -23,7 +23,7 @@ use super::{LogToken, MaintainerState};
 use crate::tablet_maintainer_machine::Effects;
 use depot_types::VolumeLogKey;
 use rivet_data::generated::{
-	depot_maintainer_log_v1::{ForkPublishOp, MaintainerOp, MaintainerOpTarget},
+	depot_maintainer_log_v2::{ForkPinOp, ForkPublishOp, MaintainerOp, MaintainerOpTarget},
 	shared_depot_types_v1::VolumeLogPosition,
 };
 use serde::{Deserialize, Serialize};
@@ -55,23 +55,100 @@ pub(crate) struct Replay {
 	pub(crate) recovered: u64,
 }
 
-/// The volume and position an op follows.
+/// The volume and position an op follows. An op targets its volume's claim logs; a volume
+/// with one claim has one target, and an op of a retired incarnation none.
 pub(crate) fn target(op: &MaintainerOp) -> Option<(VolumeLogKey, VolumeLogPosition)> {
-	op_target(op).map(
-		|MaintainerOpTarget {
-		     volume_log_key,
-		     after,
-		 }| { (VolumeLogKey(volume_log_key.clone()), after.clone()) },
-	)
+	match listed_targets(op) {
+		Ok(targets) => targets.first().map(|target| {
+			(
+				VolumeLogKey(target.volume_log_key.clone()),
+				target.after.clone(),
+			)
+		}),
+		Err(pin) => {
+			let log = pin.cut.logs.first()?;
+			let key = fork_pin_target(pin, log.claim_log)?;
+			Some((key, log.position.clone()))
+		}
+	}
 }
 
-fn op_target(op: &MaintainerOp) -> Option<&MaintainerOpTarget> {
+/// The targets an op lists, or the fork pin itself, whose targets are its cut's claim logs at
+/// their positions, claim log 0 first, which is the order the pin path builds the cut in.
+fn listed_targets(op: &MaintainerOp) -> Result<&[MaintainerOpTarget], &ForkPinOp> {
 	match op {
-		MaintainerOp::CheckpointOp(op) => op.target.as_ref(),
-		MaintainerOp::RetentionCheckpointOp(op) => Some(&op.target),
-		MaintainerOp::ForkReferenceOp(op) => op.target.as_ref(),
-		MaintainerOp::ForkPublishOp(op) => op.target.as_ref(),
+		MaintainerOp::CheckpointOp(op) => Ok(&op.targets),
+		MaintainerOp::RetentionCheckpointOp(op) => Ok(&op.targets),
+		MaintainerOp::ForkReferenceOp(op) => Ok(&op.targets),
+		MaintainerOp::ForkPublishOp(op) => Ok(&op.targets),
+		MaintainerOp::ForkPinOp(pin) => Err(pin),
+		MaintainerOp::ForkFailOp(_) | MaintainerOp::RepairAuditOp(_) => Ok(&[]),
+	}
+}
+
+/// The position `op` names the claim log `key` at, if it targets it. `key_base` is
+/// `claims::base_of(key)`, which the caller computes once for a scan over many ops, so a fork
+/// pin is matched against its cut without forming a key per op.
+fn target_position<'op>(
+	op: &'op MaintainerOp,
+	key: &VolumeLogKey,
+	key_base: &(VolumeLogKey, u16),
+) -> Option<&'op VolumeLogPosition> {
+	let pin = match listed_targets(op) {
+		Ok(targets) => {
+			return targets
+				.iter()
+				.find(|target| target.volume_log_key == key.0)
+				.map(|target| &target.after);
+		}
+		Err(pin) => pin,
+	};
+	let (base, claim_log) = key_base;
+	if pin.volume_log_key != base.0 {
+		return None;
+	}
+	pin.cut
+		.logs
+		.iter()
+		.find(|log| log.claim_log == *claim_log)
+		.map(|log| &log.position)
+}
+
+/// The position an op names its first target at, borrowed from the op.
+fn first_position(op: &MaintainerOp) -> Option<&VolumeLogPosition> {
+	match op {
+		MaintainerOp::CheckpointOp(op) => op.targets.first().map(|target| &target.after),
+		MaintainerOp::RetentionCheckpointOp(op) => op.targets.first().map(|target| &target.after),
+		MaintainerOp::ForkReferenceOp(op) => op.targets.first().map(|target| &target.after),
+		MaintainerOp::ForkPublishOp(op) => op.targets.first().map(|target| &target.after),
+		MaintainerOp::ForkPinOp(op) => op.cut.logs.first().map(|log| &log.position),
 		MaintainerOp::ForkFailOp(_) | MaintainerOp::RepairAuditOp(_) => None,
+	}
+}
+
+/// The key of claim log `claim_log` of a fork pin's volume. Only a claim log other than 0 of
+/// an unnamed volume has no key, and the pin path never puts one in a cut, since it builds the
+/// cut from registered claim logs; such a log is named by no target. Recovery reports it once,
+/// in [`warn_keyless_pin_logs`], since this runs in per-op scans on every drive.
+fn fork_pin_target(pin: &ForkPinOp, claim_log: u16) -> Option<VolumeLogKey> {
+	let base = VolumeLogKey(pin.volume_log_key.clone());
+	super::super::claims::log_key(&base, claim_log)
+}
+
+/// Reports, once as a recovered op is taken, every claim log of a fork pin's cut that has no
+/// key and that no target therefore names.
+fn warn_keyless_pin_logs(op: &MaintainerOp) {
+	let MaintainerOp::ForkPinOp(pin) = op else {
+		return;
+	};
+	for log in &pin.cut.logs {
+		if fork_pin_target(pin, log.claim_log).is_none() {
+			tracing::warn!(
+				volume_log_key = ?pin.volume_log_key,
+				claim_log = log.claim_log,
+				"a recovered fork pin's cut names a claim log with no key; the pin path only cuts registered claim logs, so the op was logged by a faulty maintainer"
+			);
+		}
 	}
 }
 
@@ -87,7 +164,8 @@ pub(crate) fn trim_target(op: &MaintainerOp) -> Option<(VolumeLogKey, VolumeLogP
 		| MaintainerOp::RetentionCheckpointOp(_)
 		| MaintainerOp::ForkReferenceOp(_)
 		| MaintainerOp::ForkFailOp(_)
-		| MaintainerOp::RepairAuditOp(_) => target(op),
+		| MaintainerOp::RepairAuditOp(_)
+		| MaintainerOp::ForkPinOp(_) => target(op),
 	}
 }
 
@@ -95,11 +173,15 @@ pub(crate) fn trim_target(op: &MaintainerOp) -> Option<(VolumeLogKey, VolumeLogP
 fn volume_key(op: &MaintainerOp) -> Option<&depot_types::VolumeKey> {
 	match op {
 		MaintainerOp::CheckpointOp(op) => Some(&op.request.volume_key),
-		MaintainerOp::RetentionCheckpointOp(op) => Some(&op.target.volume_log_key.volume_key),
+		MaintainerOp::RetentionCheckpointOp(op) => op
+			.targets
+			.first()
+			.map(|target| &target.volume_log_key.volume_key),
 		MaintainerOp::ForkReferenceOp(op) => Some(&op.request.spec().parent_volume_key),
 		MaintainerOp::ForkPublishOp(op) => Some(&op.spec.destination_volume_key),
 		MaintainerOp::ForkFailOp(op) => Some(&op.spec.destination_volume_key),
 		MaintainerOp::RepairAuditOp(op) => Some(&op.row.request.envelope.volume_log_key.volume_key),
+		MaintainerOp::ForkPinOp(op) => Some(&op.volume_log_key.volume_key),
 	}
 }
 
@@ -114,6 +196,7 @@ pub(crate) fn recovered(
 	if frozen {
 		return;
 	}
+	warn_keyless_pin_logs(&op);
 	state.maintainer_log.replay.recovered += 1;
 	state.maintainer_log.replay.queue.push_back(Pending {
 		token,
@@ -129,6 +212,7 @@ pub(crate) fn recovered_from_parent(state: &mut MaintainerState, op: MaintainerO
 	if volume_key(&op).is_none_or(|key| !super::super::in_tablet(state, key)) {
 		return;
 	}
+	warn_keyless_pin_logs(&op);
 	let target = trim_target(&op);
 	let token = super::submit(state, op.clone(), target, super::Waiter::Replay);
 	state.maintainer_log.replay.recovered += 1;
@@ -140,8 +224,13 @@ pub(crate) fn recovered_from_parent(state: &mut MaintainerState, op: MaintainerO
 }
 
 /// Logs a live op that follows `key`'s apply position and applies it through the replay
-/// queue once it commits: its volume's apply waits at the op's position until then.
-pub(crate) fn submit_live(state: &mut MaintainerState, op: MaintainerOp, key: VolumeLogKey) {
+/// queue once it commits: its volume's apply waits at the op's position until then. Returns
+/// the op's token, which [`pending_token`] reports until the op is applied.
+pub(crate) fn submit_live(
+	state: &mut MaintainerState,
+	op: MaintainerOp,
+	key: VolumeLogKey,
+) -> LogToken {
 	let target = trim_target(&op);
 	let token = super::submit(state, op.clone(), target, super::Waiter::Replay);
 	state
@@ -155,6 +244,35 @@ pub(crate) fn submit_live(state: &mut MaintainerState, op: MaintainerOp, key: Vo
 			op,
 			recovered: false,
 		});
+	token
+}
+
+/// Whether the op logged at `token` still waits in the replay queue or is being applied.
+pub(crate) fn pending_token(state: &MaintainerState, token: LogToken) -> bool {
+	let replay = &state.maintainer_log.replay;
+	replay.applying.contains_key(&token)
+		|| replay.queue.iter().any(|pending| pending.token == token)
+		|| replay
+			.by_volume
+			.values()
+			.any(|ops| ops.iter().any(|pending| pending.token == token))
+}
+
+/// Whether any op of an incarnation of `name` waits in the replay queue or is being applied,
+/// live or recovered.
+pub(crate) fn name_has_ops(state: &MaintainerState, name: &depot_types::VolumeKey) -> bool {
+	earliest_pending_token(state, name).is_some()
+}
+
+/// Whether `op` is the fork pin of a volume this maintainer holds neither loaded nor
+/// registered, such as an idle parent's pin, which is logged at the volume's stored cut. With
+/// no apply above that cut and no stored cold known here, nothing in memory says whether a
+/// pass covered it, so the op applies in log order and the store skips it when the volume's
+/// stored cold moved past its cut.
+fn unheld_pin(state: &MaintainerState, op: &MaintainerOp, key: &VolumeLogKey) -> bool {
+	matches!(op, MaintainerOp::ForkPinOp(_))
+		&& !state.loaded_volumes.contains_key(key)
+		&& !state.filesystem.volumes.contains_key(key)
 }
 
 /// Logs a live op that follows no volume's apply and applies it through the replay queue, in
@@ -211,16 +329,29 @@ pub(crate) fn pending_for(state: &MaintainerState, key: &depot_types::VolumeKey)
 	})
 }
 
-/// The apply limit of a registered volume: the position of its next op to replay.
+/// The apply limit of a registered volume: the position of its next op to replay, or the
+/// lowest position at which an op queued under another log of its volume names it. An op's
+/// cut is taken from positions every one of its logs had applied, and each log holds there
+/// until the op is in the store; otherwise a log could apply and go cold past its position
+/// before the op pins the cut, and compaction would drop the versions the cut returns.
 pub(crate) fn apply_limit(state: &MaintainerState, key: &VolumeLogKey) -> Option<u64> {
-	state
-		.maintainer_log
-		.replay
+	let replay = &state.maintainer_log.replay;
+	let own = replay
 		.by_volume
 		.get(key)
 		.and_then(|ops| ops.front())
 		.and_then(|pending| target(&pending.op))
-		.map(|(_, after)| after.volume_seq)
+		.map(|(_, after)| after.volume_seq);
+	let key_base = super::super::claims::base_of(key);
+	let named = super::super::claims::volume_logs(key)
+		.into_iter()
+		.filter(|log| log != key)
+		.filter_map(|log| replay.by_volume.get(&log))
+		.flat_map(|ops| ops.iter())
+		.filter_map(|pending| target_position(&pending.op, key, &key_base))
+		.map(|after| after.volume_seq)
+		.min();
+	own.into_iter().chain(named).min()
 }
 
 /// The position the volume's next op to replay follows, as commit evidence. The maintainer
@@ -236,7 +367,7 @@ pub(crate) fn committed_through<'a>(
 	key: &VolumeLogKey,
 ) -> Option<&'a VolumeLogPosition> {
 	let pending = state.maintainer_log.replay.by_volume.get(key)?.front()?;
-	op_target(&pending.op).map(|target| &target.after)
+	first_position(&pending.op)
 }
 
 /// The volume's cold position as the store durably holds it: its registered record once a
@@ -302,6 +433,7 @@ pub(crate) fn drive(state: &mut MaintainerState, fx: &mut Effects) {
 			// the store decides whether the publication is there.
 			Some((key, after))
 				if !matches!(pending.op, MaintainerOp::ForkPublishOp(_))
+					&& !unheld_pin(state, &pending.op, &key)
 					&& after.volume_seq < durable_cold(state, &key) =>
 			{
 				// The pass that moved the volume's cold past the op covered it.
@@ -421,7 +553,7 @@ pub(crate) fn dispatch_ready(state: &mut MaintainerState, key: &VolumeLogKey, fx
 				&& !earlier_op_of_name_pending(state, &key.0.volume_key, &pending.token)
 		}
 	};
-	if !ready || busy(state, &pending.op) {
+	if !ready || !other_targets_reached(state, &pending.op) || busy(state, &pending.op) {
 		return;
 	}
 	let ops = state
@@ -442,6 +574,29 @@ pub(crate) fn dispatch_ready(state: &mut MaintainerState, key: &VolumeLogKey, fx
 		.applying
 		.insert(pending.token, (Some(key.clone()), pending.recovered));
 	super::super::logged_ops::replay(state, pending.token, pending.op, Some(key.clone()), fx);
+}
+
+/// Whether every target of `op` after its first, the other claim logs of a volume with several
+/// claims, has applied through the position the op names it at. The op waits under its first
+/// target, claim log 0, whose apply it holds; the live maintainer took every other position
+/// from what that log had applied, so only a replay after a move ever waits here. A log this
+/// maintainer does not hold has nothing above its stored cold to apply, so it never holds the
+/// op back.
+fn other_targets_reached(state: &MaintainerState, op: &MaintainerOp) -> bool {
+	let reached =
+		|key: &VolumeLogKey, after: &VolumeLogPosition| match state.filesystem.volumes.get(key) {
+			Some(volume) => volume.applied.volume_seq >= after.volume_seq,
+			None => !state.loaded_volumes.contains_key(key),
+		};
+	match listed_targets(op) {
+		Ok(targets) => targets
+			.iter()
+			.skip(1)
+			.all(|target| reached(&VolumeLogKey(target.volume_log_key.clone()), &target.after)),
+		Err(pin) => pin.cut.logs.iter().skip(1).all(|log| {
+			fork_pin_target(pin, log.claim_log).is_none_or(|key| reached(&key, &log.position))
+		}),
+	}
 }
 
 /// Whether `op` is a fork publication that a failure op of the same spec, still queued behind
@@ -554,7 +709,8 @@ fn publish_op_pending(
 		| MaintainerOp::RetentionCheckpointOp(_)
 		| MaintainerOp::ForkReferenceOp(_)
 		| MaintainerOp::ForkFailOp(_)
-		| MaintainerOp::RepairAuditOp(_) => false,
+		| MaintainerOp::RepairAuditOp(_)
+		| MaintainerOp::ForkPinOp(_) => false,
 	};
 	let replay = &state.maintainer_log.replay;
 	replay.queue.iter().any(|pending| publishes(&pending.op))

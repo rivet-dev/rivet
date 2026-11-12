@@ -1,0 +1,5 @@
+{
+  "code": "spawn_endpoint_conflict",
+  "group": "engine",
+  "message": "Engine spawn conflicts with the configured endpoint"
+}

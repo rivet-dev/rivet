@@ -33,4 +33,5 @@ rivet-data.workspace = true
 scc.workspace = true
 rivet-error.workspace = true
 uuid.workspace = true
+vbare.workspace = true
 

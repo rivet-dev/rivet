@@ -1,0 +1,5 @@
+{
+  "code": "transaction_too_large",
+  "group": "sqlite",
+  "message": "SQLite transaction is too large."
+}

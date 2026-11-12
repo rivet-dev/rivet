@@ -29,6 +29,8 @@ use crate::runtime::RuntimeSpawner;
 use crate::time::timeout;
 use crate::types::ConnId;
 
+pub const ACTOR_DESTROYED_CLOSE_REASON: &str = "actor.destroyed";
+
 pub(crate) type EventSendCallback = Arc<dyn Fn(OutgoingEvent) -> Result<()> + Send + Sync>;
 pub(crate) type DisconnectCallback =
 	Arc<dyn Fn(Option<String>) -> BoxFuture<'static, Result<()>> + Send + Sync>;
@@ -436,11 +438,11 @@ impl ConnHandle {
 		self.disconnect_handler()
 	}
 
-	pub(crate) async fn disconnect_transport_only(&self) -> Result<()> {
+	pub(crate) async fn disconnect_transport_only(&self, reason: Option<&str>) -> Result<()> {
 		let Some(handler) = self.transport_disconnect_handler() else {
 			return Ok(());
 		};
-		handler(None).await
+		handler(reason.map(str::to_owned)).await
 	}
 
 	fn transport_disconnect_handler(&self) -> Option<DisconnectCallback> {
@@ -947,7 +949,11 @@ impl ActorContext {
 		self.0.connections.read().get(conn_id).cloned()
 	}
 
-	pub(crate) async fn disconnect_transport_only<F>(&self, mut predicate: F) -> Result<()>
+	pub(crate) async fn disconnect_transport_only<F>(
+		&self,
+		mut predicate: F,
+		reason: Option<&str>,
+	) -> Result<()>
 	where
 		F: FnMut(&ConnHandle) -> bool,
 	{
@@ -959,7 +965,7 @@ impl ActorContext {
 		let mut failures = Vec::new();
 
 		for conn in &connections {
-			match conn.disconnect_transport_only().await {
+			match conn.disconnect_transport_only(reason).await {
 				Ok(()) => {
 					tracing::debug!(
 						actor_id = %self.actor_id(),

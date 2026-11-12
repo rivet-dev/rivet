@@ -136,6 +136,9 @@ impl WorkerIdentity {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Worker {
+	/// Failure domain from the heartbeat, or this exact local process's registration.
+	/// Unknown labels never establish independent zones.
+	pub zone: Option<String>,
 	/// Positive static storage placement weight; 1000 represents one allocated CPU core.
 	pub storage_capacity_millicores: u32,
 	pub id: WorkerId,

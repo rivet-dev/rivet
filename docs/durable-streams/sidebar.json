@@ -1,0 +1,17 @@
+{
+	"docs": [
+		{
+			"title": "General",
+			"pages": [
+				{
+					"title": "Durable Streams",
+					"href": "/durable-streams/docs",
+					"icon": {
+						"src": "/images/vendors/durable-streams.svg",
+						"monochrome": false
+					}
+				}
+			]
+		}
+	]
+}

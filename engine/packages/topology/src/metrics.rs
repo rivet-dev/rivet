@@ -22,8 +22,17 @@ lazy_static::lazy_static! {
 		*rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref WRITE_VERSION_FALLBACKS: IntCounterVec = register_int_counter_vec_with_registry!(
-		Opts::new("topology_write_version_fallbacks_total", "Write versions chosen while the storage view was expired or never listed, so the writer used its lowest write version, by family."),
+		Opts::new("topology_write_version_fallbacks_total", "Write versions chosen before any storage listing observed every listed storage worker, or while the last listing named one it never observed, so the writer used its lowest write version, by family."),
 		&["family"], *rivet_metrics::REGISTRY
+	).unwrap();
+	pub static ref UNOBSERVED_WORKERS: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("topology_unobserved_workers_total", "Listed storage workers that a listing could not observe and that no earlier listing observed, so version selection falls back to the lowest write version, by reason: read (the heartbeat GET failed), decode (its body does not decode at a version this binary reads) or etag (the store answered without an ETag). Counted once per listing."),
+		&["reason"], *rivet_metrics::REGISTRY
+	).unwrap();
+	pub static ref READ_FLOOR_AGE: Gauge = register_gauge_with_registry!(
+		"topology_read_floor_age_seconds",
+		"Age of the read floor version selection uses: time since the last storage listing that observed every listed storage worker was issued, sampled at each listing response. Above the heartbeat ttl the view is stuck.",
+		*rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref HEARTBEAT_RENEWAL_ATTEMPTS: IntCounterVec = register_int_counter_vec_with_registry!(
 		Opts::new("topology_heartbeat_renewal_attempts_total", "Slow heartbeat renewal writes, by result: superseded (a fresh attempt started beside it) or late_confirmed (a superseded write confirmed the lease)."),

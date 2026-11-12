@@ -41,7 +41,9 @@ async fn serve(ctx: EngineContext, envoys: pegboard_envoy::Service) -> Result<()
 	// Shared state between all requests
 	let proxy_state = ProxyState::new(&ctx);
 	let start_waits = pegboard_gateway::start_waits(&ctx);
+	let retry_budget = Arc::new(pegboard_gateway::RetryBudget::from_config(&ctx));
 	let router = Router::new()
+		.merge(readiness_router(ctx.clone()))
 		.route(
 			"/health",
 			get(|| async {
@@ -55,18 +57,18 @@ async fn serve(ctx: EngineContext, envoys: pegboard_envoy::Service) -> Result<()
 				}))
 			}),
 		)
-		.merge(pegboard_gateway::router(&ctx, &start_waits))
+		.merge(pegboard_gateway::router_with_retry_budget(
+			&ctx,
+			&start_waits,
+			retry_budget.clone(),
+		))
 		.merge(pegboard_envoy::router(&ctx, &envoys))
-		.merge(rivet_api_public_shim::router(&ctx));
+		.merge(rivet_api_public_shim::router_with_retry_budget(
+			&ctx,
+			&start_waits,
+			retry_budget,
+		));
 
-	// Background services of the routers, cancelled and joined at shutdown.
-	let services = ctx.env().task_scope();
-	let lost_checks = pegboard_envoy::services::lost_checks::start(ctx.clone(), envoys.clone());
-	services.spawn(async move {
-		if let Err(error) = lost_checks.await {
-			tracing::error!(?error, "envoy lost check service stopped");
-		}
-	});
 	// Set up HTTP server
 	let http_addr: std::net::SocketAddr =
 		(ctx.config().guard().host(), ctx.config().guard().port()).into();
@@ -114,11 +116,28 @@ async fn serve(ctx: EngineContext, envoys: pegboard_envoy::Service) -> Result<()
 		}
 	}
 	envoys.drain_connections().await;
-	services.shutdown().await;
 
 	tracing::info!("guard shutdown complete");
 
 	Ok(())
+}
+
+/// Keep liveness independent of replica catch-up: recovery must not cause kubelet restarts.
+fn readiness_router(ctx: EngineContext) -> Router {
+	Router::new().route(
+		"/ready",
+		get(move || {
+			let ctx = ctx.clone();
+			async move {
+				let (status, state) = if ctx.is_ready() {
+					(hyper::StatusCode::OK, "ok")
+				} else {
+					(hyper::StatusCode::SERVICE_UNAVAILABLE, "not_ready")
+				};
+				(status, Json(serde_json::json!({"status": state})))
+			}
+		}),
+	)
 }
 
 // Helper function to process regular connections

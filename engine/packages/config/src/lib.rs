@@ -2,7 +2,8 @@ use std::{ops::Deref, path::Path, result::Result::Ok, sync::Arc};
 
 use ::config as config_loader;
 use anyhow::*;
-use parking_lot::RwLock;
+use arc_swap::ArcSwap;
+use parking_lot::Mutex;
 
 pub mod build_meta;
 pub mod config;
@@ -21,11 +22,11 @@ struct ConfigData {
 	/// process, so it stays reachable by reference through `Deref`.
 	config: config::Root,
 	/// The same config with any runtime changes applied, which reading is opt-in through
-	/// [`Config::dynamic`].
-	///
-	/// This is a sync lock because it is read from sync `&self` accessors. Every critical section
-	/// clones an `Arc` or swaps one in, so a guard is never held across an await.
-	dynamic: RwLock<Arc<config::Root>>,
+	/// [`Config::dynamic`]. Readers load it without a lock, so request paths can read it.
+	dynamic: ArcSwap<config::Root>,
+	/// Serializes runtime config changes, which read the current config, change it, swap it in
+	/// and notify. Readers never take it, and it is sync because the update is.
+	dynamic_update: Mutex<()>,
 	/// Notifies long-lived workers when the dynamic config changes.
 	dynamic_tx: tokio::sync::watch::Sender<Arc<config::Root>>,
 	/// Build metadata for this process, stamped once at startup by the binary that has it.
@@ -126,7 +127,8 @@ impl Config {
 		let (dynamic_tx, _) = tokio::sync::watch::channel(shared.clone());
 		let (protocols_tx, _) = tokio::sync::watch::channel(Arc::new(protocols));
 		Self(Arc::new(ConfigData {
-			dynamic: RwLock::new(shared),
+			dynamic: ArcSwap::new(shared),
+			dynamic_update: Mutex::new(()),
 			dynamic_tx,
 			build_meta: Arc::new(build_meta),
 			protocols_tx,
@@ -186,7 +188,14 @@ impl Config {
 	/// value. Take this snapshot once per logical decision rather than holding it, since a later
 	/// read can return different values.
 	pub fn dynamic(&self) -> Arc<config::Root> {
-		self.0.dynamic.read().clone()
+		self.0.dynamic.load_full()
+	}
+
+	/// [`Config::dynamic`] for request paths: one atomic load, and normally no reference count
+	/// change. Drop the guard within the decision it serves; a thread holding several at once
+	/// falls back to counting references.
+	pub fn dynamic_ref(&self) -> arc_swap::Guard<Arc<config::Root>> {
+		self.0.dynamic.load()
 	}
 
 	/// Subscribes to dynamic config changes. The receiver always starts with the current config.
@@ -208,8 +217,8 @@ impl Config {
 	/// startup.
 	pub fn apply_dynamic(&self, update: &DynamicConfigUpdate) -> Result<Arc<config::Root>> {
 		let base = &self.0.config;
-		let mut guard = self.0.dynamic.write();
-		let mut dynamic = (**guard).clone();
+		let _update = self.0.dynamic_update.lock();
+		let mut dynamic = config::Root::clone(&self.0.dynamic.load());
 
 		if let Some(value) = update.worker_poll_interval_ms {
 			dynamic.runtime.worker_poll_interval_ms =
@@ -300,6 +309,21 @@ impl Config {
 				.enabled = enabled;
 		}
 
+		if let Some(value) = &update.migrate_from_v2 {
+			let value = value.clone().or_else(|| base.migrate_from_v2.clone());
+			if let Some(value) = &value {
+				let base_seed = base
+					.migrate_from_v2
+					.as_ref()
+					.map_or(0, |base| base.migrate_seed);
+				ensure!(
+					value.migrate_seed == base_seed,
+					"migrate_from_v2.migrate_seed cannot change at runtime; it is fixed at startup"
+				);
+			}
+			dynamic.migrate_from_v2 = value;
+		}
+
 		// Runtime snapshots already contain the names derived at startup. Restore
 		// map input before validation so these are not treated as name overrides.
 		if let Some(topology) = &mut dynamic.topology {
@@ -314,7 +338,7 @@ impl Config {
 		dynamic.validate_and_set_defaults()?;
 
 		let dynamic = Arc::new(dynamic);
-		*guard = dynamic.clone();
+		self.0.dynamic.store(dynamic.clone());
 		self.0.dynamic_tx.send_replace(dynamic.clone());
 
 		Ok(dynamic)

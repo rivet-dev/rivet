@@ -1,4 +1,5 @@
 import { type ActorContextOf, actor, event, UserError } from "rivetkit";
+import { db } from "rivetkit/db";
 import { interval } from "rivetkit/utils";
 import type { registry } from "../index.ts";
 import { getPlayerColor } from "../player-color.ts";
@@ -8,9 +9,13 @@ import {
 	SCORE_LIMIT,
 	SHOOT_ANGLE,
 	SHOOT_RANGE,
+	SNAPSHOT_INTERVAL_MS,
 	TICK_MS,
 	WORLD_SIZE,
 } from "./config.ts";
+
+// How long to wait before sending a failed match report again
+const REPORT_RETRY_MS = 1_000;
 
 interface PlayerEntry {
 	connId: string | null;
@@ -23,13 +28,17 @@ interface PlayerEntry {
 	rating: number;
 }
 
-interface State {
+interface MatchVars {
 	matchId: string;
 	tick: number;
 	phase: "waiting" | "live" | "finished";
 	players: Record<string, PlayerEntry>;
 	winnerId: string | null;
 	resultReported: boolean;
+	// A failed report armed a retry schedule, so the loop stops sending it.
+	reportRetryScheduled: boolean;
+	// `onWake` stores its loop here so `onSleep` can wait for it.
+	loop: Promise<void> | null;
 }
 
 interface AssignedPlayer {
@@ -37,36 +46,103 @@ interface AssignedPlayer {
 	rating: number;
 }
 
+type MatchInfoRow = {
+	tick: number;
+	phase: MatchVars["phase"];
+	winner_id: string | null;
+	result_reported: number;
+};
+
+type RosterRow = {
+	username: string;
+	rating: number;
+	x: number;
+	y: number;
+	score: number;
+};
+
 export const rankedMatch = actor({
 	options: { name: "Ranked - Match", icon: "ranking-star" },
 	events: {
 		snapshot: event<Snapshot>(),
 		shoot: event<ShootEvent>(),
 	},
-	createState: (
-		_c,
-		input: { matchId: string; assignedPlayers: AssignedPlayer[] },
-	): State => {
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS match_info (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					tick INTEGER NOT NULL DEFAULT 0,
+					phase TEXT NOT NULL DEFAULT 'waiting',
+					winner_id TEXT,
+					result_reported INTEGER NOT NULL DEFAULT 0
+				)
+			`);
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS roster (
+					username TEXT PRIMARY KEY,
+					rating INTEGER NOT NULL,
+					x REAL NOT NULL,
+					y REAL NOT NULL,
+					score INTEGER NOT NULL DEFAULT 0
+				)
+			`);
+		},
+	}),
+	onCreate: async (
+		c,
+		input: { assignedPlayers: AssignedPlayer[] },
+	) => {
+		// Save the two players, their ratings, and a random spawn point once,
+		// so every start of this match sees the same roster.
+		await c.db.transaction(
+			async (tx) => {
+				await tx.execute("INSERT INTO match_info (id) VALUES (1)");
+				for (const ap of input.assignedPlayers) {
+					await tx.execute(
+						"INSERT INTO roster (username, rating, x, y) VALUES (?, ?, ?, ?)",
+						ap.username,
+						ap.rating,
+						Math.random() * WORLD_SIZE,
+						Math.random() * WORLD_SIZE,
+					);
+				}
+			},
+			{ name: "create-match" },
+		);
+	},
+	createVars: async (c): Promise<MatchVars> => {
+		const [info] = await c.db.execute<MatchInfoRow>(
+			"SELECT tick, phase, winner_id, result_reported FROM match_info WHERE id = 1",
+		);
+		const roster = await c.db.execute<RosterRow>(
+			"SELECT username, rating, x, y, score FROM roster",
+		);
+
+		// The live duel runs in memory and starts from the last save. No
+		// connection survives a restart, so both players start unbound.
 		const players: Record<string, PlayerEntry> = {};
-		for (const ap of input.assignedPlayers) {
-			players[ap.username] = {
+		for (const row of roster) {
+			players[row.username] = {
 				connId: null,
-				color: getPlayerColor(ap.username),
-				x: Math.random() * WORLD_SIZE,
-				y: Math.random() * WORLD_SIZE,
+				color: getPlayerColor(row.username),
+				x: row.x,
+				y: row.y,
 				lastPositionAt: Date.now(),
 				alive: true,
-				score: 0,
-				rating: ap.rating,
+				score: row.score,
+				rating: row.rating,
 			};
 		}
 		return {
-			matchId: input.matchId,
-			tick: 0,
-			phase: "waiting",
+			matchId: c.key[0]!,
+			tick: info!.tick,
+			phase: info!.phase,
 			players,
-			winnerId: null,
-			resultReported: false,
+			winnerId: info!.winner_id,
+			resultReported: info!.result_reported === 1,
+			reportRetryScheduled: false,
+			loop: null,
 		};
 	},
 	onConnect: (c, conn) => {
@@ -76,54 +152,62 @@ export const rankedMatch = actor({
 			conn.disconnect("invalid_player");
 			return;
 		}
-		const player = c.state.players[playerId];
+		const player = c.vars.players[playerId];
 		if (!player) {
 			conn.disconnect("invalid_player");
 			return;
 		}
 		player.connId = conn.id;
 
-		if (c.state.phase === "waiting") {
-			const allConnected = Object.values(c.state.players).every(
+		if (c.vars.phase === "waiting") {
+			const allConnected = Object.values(c.vars.players).every(
 				(p) => p.connId !== null,
 			);
 			if (allConnected) {
-				c.state.phase = "live";
+				c.vars.phase = "live";
 			}
 		}
 		broadcastSnapshot(c);
 	},
 	onDestroy: async (c) => {
+		// `c.abortSignal` also fires on destroy. Wait for the loop to exit, so a
+		// result it is still reporting is not reported a second time here.
+		await c.vars.loop;
 		await reportMatchCompletedIfNeeded(c, { allowNoResult: true });
 	},
 	onDisconnect: (c, conn) => {
-		const found = findPlayerByConnId(c.state, conn.id);
+		const found = findPlayerByConnId(c.vars, conn.id);
 		if (!found) return;
 		const [, player] = found;
 		player.connId = null;
 		broadcastSnapshot(c);
 	},
 	// docs:start tick
-	run: async (c) => {
-		const tick = interval(TICK_MS);
-		while (!c.aborted) {
-			await tick();
-			if (c.aborted) break;
-			if (c.state.phase !== "live") {
-				await reportMatchCompletedIfNeeded(c);
-				continue;
-			}
-			c.state.tick += 1;
-			checkWinCondition(c);
-			await reportMatchCompletedIfNeeded(c);
-			broadcastSnapshot(c);
-		}
+	// `onWake` runs on every start, so the loop restarts after a sleep or crash
+	onWake: (c) => {
+		c.vars.loop = runMatch(c).catch((error) => {
+			c.log.error({ msg: "match loop failed", error });
+		});
+	},
+	// `c.abortSignal` fires on shutdown, so the loop saves and exits on its own
+	onSleep: async (c) => {
+		await c.vars.loop;
 	},
 	// docs:end tick
 	actions: {
+		// Runs from the schedule that `reportResult` arms after a failed report.
+		retryReport: async (c) => {
+			if (!c.scheduledFire) {
+				throw new UserError("retryReport only runs from a schedule", {
+					code: "schedule_only",
+				});
+			}
+			c.vars.reportRetryScheduled = false;
+			await reportResult(c);
+		},
 		// docs:start validate
 		updatePosition: (c, input: { x: number; y: number }) => {
-			const found = findPlayerByConnId(c.state, c.conn.id);
+			const found = findPlayerByConnId(c.vars, c.conn.id);
 			if (!found) {
 				return;
 			}
@@ -158,7 +242,7 @@ export const rankedMatch = actor({
 		},
 		// docs:end validate
 		shoot: (c, input: { dirX: number; dirY: number }) => {
-			const found = findPlayerByConnId(c.state, c.conn.id);
+			const found = findPlayerByConnId(c.vars, c.conn.id);
 			if (!found) {
 				return;
 			}
@@ -168,7 +252,7 @@ export const rankedMatch = actor({
 					code: "not_alive",
 				});
 			}
-			if (c.state.phase !== "live") {
+			if (c.vars.phase !== "live") {
 				throw new UserError("match is not live", { code: "not_live" });
 			}
 
@@ -182,7 +266,7 @@ export const rankedMatch = actor({
 			let closestId: string | null = null;
 			let closestDist = Infinity;
 
-			for (const [targetId, target] of Object.entries(c.state.players)) {
+			for (const [targetId, target] of Object.entries(c.vars.players)) {
 				if (targetId === shooterId) continue;
 				if (!target.alive) continue;
 
@@ -202,7 +286,7 @@ export const rankedMatch = actor({
 			}
 
 			if (closestId) {
-				const victim = c.state.players[closestId]!;
+				const victim = c.vars.players[closestId]!;
 				shooter.score += 1;
 				victim.x = Math.random() * WORLD_SIZE;
 				victim.y = Math.random() * WORLD_SIZE;
@@ -220,7 +304,7 @@ export const rankedMatch = actor({
 			c.broadcast("shoot", shootEvent);
 
 			checkWinCondition(c);
-			if ((c.state.phase as string) === "finished") {
+			if ((c.vars.phase as string) === "finished") {
 				broadcastSnapshot(c);
 			}
 		},
@@ -229,61 +313,61 @@ export const rankedMatch = actor({
 });
 
 function checkWinCondition(c: ActorContextOf<typeof rankedMatch>) {
-	if (c.state.phase !== "live") return;
-	for (const [id, player] of Object.entries(c.state.players)) {
+	if (c.vars.phase !== "live") return;
+	for (const [id, player] of Object.entries(c.vars.players)) {
 		if (player.score >= SCORE_LIMIT) {
-			c.state.phase = "finished";
-			c.state.winnerId = id;
+			c.vars.phase = "finished";
+			c.vars.winnerId = id;
 			return;
 		}
 	}
 }
 
 // docs:start elo
+/** Sends the match result to the matchmaker once. Returns true if this call sent it. */
 async function reportMatchCompletedIfNeeded(
 	c: ActorContextOf<typeof rankedMatch>,
 	options?: { allowNoResult?: boolean },
-) {
+): Promise<boolean> {
 	const allowNoResult = options?.allowNoResult ?? false;
 
-	if (c.state.resultReported) return;
-	if (c.state.phase !== "finished" && !allowNoResult) return;
+	if (c.vars.resultReported) return false;
+	if (c.vars.phase !== "finished" && !allowNoResult) return false;
 
 	const client = c.client<typeof registry>();
-	const entries = Object.entries(c.state.players);
-	if (c.state.winnerId && entries.length === 2) {
+	const entries = Object.entries(c.vars.players);
+	if (c.vars.winnerId && entries.length === 2) {
 		const loserUsername = entries.find(
-			([id]) => id !== c.state.winnerId,
+			([id]) => id !== c.vars.winnerId,
 		)?.[0];
-		const winner = c.state.players[c.state.winnerId];
+		const winner = c.vars.players[c.vars.winnerId];
 		const loser = loserUsername
-			? c.state.players[loserUsername]
+			? c.vars.players[loserUsername]
 			: undefined;
 		if (winner && loser && loserUsername) {
 			const [newWR, newLR] = calculateElo(winner.rating, loser.rating);
-			await client.rankedMatchmaker
-				.getOrCreate(["main"])
-				.send("matchCompleted", {
-					matchId: c.state.matchId,
-					winnerUsername: c.state.winnerId,
-					loserUsername,
-					winnerNewRating: newWR,
-					loserNewRating: newLR,
-				});
-			c.state.resultReported = true;
-			return;
+			await client.rankedMatchmaker.getOrCreate(["main"]).matchCompleted({
+				matchId: c.vars.matchId,
+				winnerUsername: c.vars.winnerId,
+				loserUsername,
+				winnerNewRating: newWR,
+				loserNewRating: newLR,
+			});
+			c.vars.resultReported = true;
+			return true;
 		}
 	}
-	if (!allowNoResult) return;
+	if (!allowNoResult) return false;
 
-	await client.rankedMatchmaker.getOrCreate(["main"]).send("matchCompleted", {
-		matchId: c.state.matchId,
+	await client.rankedMatchmaker.getOrCreate(["main"]).matchCompleted({
+		matchId: c.vars.matchId,
 		winnerUsername: "",
 		loserUsername: "",
 		winnerNewRating: 0,
 		loserNewRating: 0,
 	});
-	c.state.resultReported = true;
+	c.vars.resultReported = true;
+	return true;
 }
 
 function calculateElo(
@@ -302,6 +386,97 @@ function calculateElo(
 function broadcastSnapshot(c: ActorContextOf<typeof rankedMatch>) {
 	c.broadcast("snapshot", buildSnapshot(c));
 }
+
+// docs:start tick
+/** Steps the duel every `TICK_MS` until the actor starts shutting down. */
+async function runMatch(c: ActorContextOf<typeof rankedMatch>): Promise<void> {
+	const tick = interval(TICK_MS);
+	let savedAt = Date.now();
+	while (!c.aborted) {
+		await tick();
+		if (c.aborted) break;
+
+		// Ticks and actions only change memory. Save to SQLite every
+		// SNAPSHOT_INTERVAL_MS in every phase, so a finished match stays
+		// finished after a crash.
+		const now = Date.now();
+		if (now - savedAt >= SNAPSHOT_INTERVAL_MS) {
+			await saveMatch(c);
+			savedAt = now;
+		}
+
+		if (c.vars.phase !== "live") {
+			if (!c.vars.reportRetryScheduled) await reportResult(c);
+			continue;
+		}
+		c.vars.tick += 1;
+		checkWinCondition(c);
+		broadcastSnapshot(c);
+	}
+
+	// Save once more when the Actor stops, so a clean restart loses nothing.
+	await saveMatch(c);
+}
+// docs:end tick
+
+/**
+ * Reports a finished match and saves that it did, so a restart does not send
+ * the report again. The report is safe to send again, so a failure arms a
+ * retry schedule instead of stopping the loop. A schedule wakes the match
+ * even after both players have left and it went to sleep.
+ */
+async function reportResult(c: ActorContextOf<typeof rankedMatch>) {
+	try {
+		if (await reportMatchCompletedIfNeeded(c)) await saveMatch(c);
+	} catch (error) {
+		c.log.warn({ msg: "reporting the match result failed; retrying", error });
+		c.vars.reportRetryScheduled = true;
+		await c.schedule.after(REPORT_RETRY_MS, "retryReport");
+	}
+}
+
+// docs:start save
+/**
+ * Writes the phase, tick, winner, whether the result was reported, and both
+ * players' positions and scores to SQLite in one transaction, so a crash
+ * leaves either the previous save or this one, never part of both.
+ */
+async function saveMatch(c: ActorContextOf<typeof rankedMatch>) {
+	// Copy the values first, because actions such as updatePosition can run
+	// while the transaction waits on SQLite.
+	const { tick, phase, winnerId, resultReported } = c.vars;
+	const players = Object.entries(c.vars.players).map(
+		([username, player]) => ({
+			username,
+			x: player.x,
+			y: player.y,
+			score: player.score,
+		}),
+	);
+
+	await c.db.transaction(
+		async (tx) => {
+			await tx.execute(
+				"UPDATE match_info SET tick = ?, phase = ?, winner_id = ?, result_reported = ? WHERE id = 1",
+				tick,
+				phase,
+				winnerId,
+				resultReported ? 1 : 0,
+			);
+			for (const player of players) {
+				await tx.execute(
+					"UPDATE roster SET x = ?, y = ?, score = ? WHERE username = ?",
+					player.x,
+					player.y,
+					player.score,
+					player.username,
+				);
+			}
+		},
+		{ name: "save-match" },
+	);
+}
+// docs:end save
 
 interface Snapshot {
 	matchId: string;
@@ -327,7 +502,7 @@ interface ShootEvent {
 
 function buildSnapshot(c: ActorContextOf<typeof rankedMatch>): Snapshot {
 	const players: Snapshot["players"] = {};
-	for (const [id, entry] of Object.entries(c.state.players)) {
+	for (const [id, entry] of Object.entries(c.vars.players)) {
 		players[id] = {
 			x: entry.x,
 			y: entry.y,
@@ -337,10 +512,10 @@ function buildSnapshot(c: ActorContextOf<typeof rankedMatch>): Snapshot {
 		};
 	}
 	return {
-		matchId: c.state.matchId,
-		tick: c.state.tick,
-		phase: c.state.phase,
-		winnerId: c.state.winnerId,
+		matchId: c.vars.matchId,
+		tick: c.vars.tick,
+		phase: c.vars.phase,
+		winnerId: c.vars.winnerId,
 		worldSize: WORLD_SIZE,
 		scoreLimit: SCORE_LIMIT,
 		players,
@@ -348,10 +523,10 @@ function buildSnapshot(c: ActorContextOf<typeof rankedMatch>): Snapshot {
 }
 
 function findPlayerByConnId(
-	state: State,
+	vars: MatchVars,
 	connId: string,
 ): [string, PlayerEntry] | null {
-	for (const [id, entry] of Object.entries(state.players)) {
+	for (const [id, entry] of Object.entries(vars.players)) {
 		if (entry.connId === connId) return [id, entry];
 	}
 	return null;

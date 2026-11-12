@@ -1,0 +1,5 @@
+{
+  "code": "migrate_from_v2_unsupported",
+  "group": "actor",
+  "message": "The cluster cannot hold actors for a V2 migration yet."
+}

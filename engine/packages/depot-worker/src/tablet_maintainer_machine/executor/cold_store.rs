@@ -1,7 +1,7 @@
 //! SlateDB handle owned by one tablet grant. Filesystem apply and lifecycle
 //! metadata share the same ordered storage owner and durability barrier.
 
-mod deletion;
+pub(crate) mod deletion;
 
 pub use deletion::DeleteSweepResult;
 
@@ -10,7 +10,7 @@ use depot_types::{
 	VolumeLogKey,
 	keys::{s3::TabletVolumePrefix, slatedb::VolumeRecordKey},
 };
-use rivet_data::generated::shared_depot_fs_v1::FsVolumeRecord;
+use rivet_data::generated::shared_depot_fs_v2::FsVolumeRecord;
 use rivet_env::capabilities::slatedb::{DatabaseCreation, SlateDbFactory};
 use rivet_keys::keys::codec::{FormalKey, KeyAddress};
 use slatedb::{
@@ -68,6 +68,8 @@ pub struct ColdStoreConfig {
 	pub volume_locks: crate::filesystem::locks::VolumeLockMode,
 	/// How read sessions scan large chunk runs; see `BulkRunConfig`.
 	pub bulk_run: crate::filesystem::session::BulkRunConfig,
+	/// See `SessionConfig::inline_metadata_bytes`.
+	pub inline_metadata_bytes: usize,
 	/// The process-wide byte budget for bulk runs, shared by every tablet's sessions.
 	pub bulk_budget: Option<std::sync::Arc<crate::filesystem::bulk_budget::BulkReadBudget>>,
 	/// Fewest keys an SST needs before SlateDB builds its filters. A tablet's memtable
@@ -100,6 +102,7 @@ impl Default for ColdStoreConfig {
 			volume_lock_stripes: crate::filesystem::locks::DEFAULT_VOLUME_LOCK_STRIPES,
 			volume_locks: Default::default(),
 			bulk_run: Default::default(),
+			inline_metadata_bytes: 256 * 1024,
 			bulk_budget: None,
 			min_compaction_sources: 4,
 			max_compaction_sources: 16,
@@ -236,7 +239,7 @@ impl ColdStore {
 		config: &ColdStoreConfig,
 		env: &dyn rivet_env::Env,
 		guard: std::sync::Arc<dyn rivet_env::MutationGuard>,
-		base_reader: Option<std::sync::Arc<dyn crate::filesystem::base::BaseChunkReader>>,
+		base_reader: Option<std::sync::Arc<dyn crate::filesystem::base::BaseLayerReader>>,
 	) -> Result<Self> {
 		let tablet_id = Uuid::from_bytes(tablet.id);
 		let epoch = NonZeroU64::new(tablet.tablet_grant_epoch).context("zero tablet grant")?;
@@ -262,6 +265,7 @@ impl ColdStore {
 			read_session_idle_ms: config.read_session_idle_ms,
 			latest_session_idle_ms: config.latest_session_idle_ms,
 			bulk: config.bulk_run,
+			inline_metadata_bytes: config.inline_metadata_bytes,
 			..Default::default()
 		};
 		let (compaction_stalls, unflushed_full) =

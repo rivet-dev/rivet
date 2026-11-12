@@ -2,7 +2,6 @@ import { actor, setup } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
 
 const api = actor({
-  state: { requestCount: 0 },
   actions: { makeRequest: (c) => {} }
 });
 

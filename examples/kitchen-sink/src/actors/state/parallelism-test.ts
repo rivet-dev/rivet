@@ -2,9 +2,8 @@ import { actor, event } from "rivetkit";
 import { db } from "rivetkit/db";
 
 export const parallelismTest = actor({
-	state: {
-		stateCount: 0,
-	},
+	// The in-memory counter contrasts with the SQLite counter below.
+	createVars: () => ({ stateCount: 0 }),
 	db: db({
 		onMigrate: async (db) => {
 			await db.execute(`
@@ -24,12 +23,12 @@ export const parallelismTest = actor({
 	},
 	actions: {
 		incrementState: (c) => {
-			c.state.stateCount += 1;
-			c.broadcast("stateCountChanged", { count: c.state.stateCount });
-			return { count: c.state.stateCount };
+			c.vars.stateCount += 1;
+			c.broadcast("stateCountChanged", { count: c.vars.stateCount });
+			return { count: c.vars.stateCount };
 		},
 		getStateCount: (c) => {
-			return { count: c.state.stateCount };
+			return { count: c.vars.stateCount };
 		},
 		incrementSqlite: async (c) => {
 			await c.db.execute(

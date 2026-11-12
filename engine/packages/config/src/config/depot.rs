@@ -2,6 +2,9 @@ use anyhow::{Result, bail};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+/// Longest `storage.zone`, which every worker's heartbeat carries.
+const MAX_ZONE_BYTES: usize = 128;
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(rename = "StorageConfig")]
@@ -21,6 +24,12 @@ pub struct DepotConfig {
 	pub checkpoints: CheckpointConfig,
 	#[serde(default)]
 	pub forks: ForkConfig,
+	/// The depot-wide events every storage worker polls: group forks and archives.
+	#[serde(default)]
+	pub events: EventsConfig,
+	/// Volume groups: the lineage depth cap and the inline metadata threshold.
+	#[serde(default)]
+	pub groups: GroupsConfig,
 	/// Cold-write age from the first unflushed entry, plus up to a tenth of it as jitter.
 	/// Defaults to one minute. Storage workers require the age with its jitter to stay below
 	/// `stop_timeout_ms`, so a stopping worker never waits on a slower tiering cadence than
@@ -57,6 +66,11 @@ pub struct DepotConfig {
 	pub coordinator_request_capacity: Option<usize>,
 	/// Existing directory owned by one storage process. Required when storage services start.
 	pub log_directory: Option<std::path::PathBuf>,
+	/// The failure domain this storage worker runs in, such as a cloud availability zone. An
+	/// opaque label compared only for equality, advertised in the worker's heartbeat. A storage
+	/// worker without one stops shortly after starting if another live storage worker has one, so
+	/// set it on every storage worker.
+	pub zone: Option<String>,
 	/// Creates this many partitions over this storage worker when the cluster has none, so a
 	/// single-process engine serves actors without an operator. A restart finishes a run that
 	/// stopped partway; partitions it did not start are left alone. Clusters with several storage
@@ -114,6 +128,13 @@ pub struct DepotConfig {
 	/// for forks, replica log reads for applies, fork jobs and fork cleanup jobs are each bounded
 	/// by it separately, so they never take client read slots. Defaults to 4.
 	pub max_background_cold_reads: Option<u32>,
+	/// Reads of one inherited layer a partition maintainer serves at once for fork children:
+	/// each page or metadata row a child has not rewritten is one of these on its ancestor's
+	/// partition, made for a live client. Past the cap a read is refused as retryable
+	/// `depot.overloaded` with a hint, which the child's caller sends again. Separate from
+	/// `max_background_cold_reads`, so a mass wake of fork children never takes the parent's
+	/// background windows. Defaults to 64; must be positive.
+	pub max_base_reads: Option<u32>,
 	/// Simulation only: processing time each filesystem read request costs a partition maintainer, in
 	/// microseconds, spent on the simulated clock so a maintainer busy with reads queues them
 	/// as a loaded one does. Unset in deployments, where real processing time passes on its own.
@@ -281,6 +302,11 @@ impl DepotConfig {
 
 	pub fn validate(&self) -> Result<()> {
 		self.balancing.validate()?;
+		if let Some(zone) = &self.zone
+			&& (zone.is_empty() || zone.len() > MAX_ZONE_BYTES)
+		{
+			bail!("storage.zone must be between 1 and {MAX_ZONE_BYTES} bytes");
+		}
 		if self.auto_provision_tablets == Some(0) {
 			bail!("storage.auto_provision_partitions must be positive when set");
 		}
@@ -306,6 +332,8 @@ impl DepotConfig {
 		self.filesystem.validate()?;
 		self.checkpoints.validate()?;
 		self.forks.validate()?;
+		self.events.validate()?;
+		self.groups.validate()?;
 		if self.idle_unload_after_ms == Some(0)
 			|| self.write_to_cold_after_ms == Some(0)
 			|| self
@@ -373,6 +401,9 @@ impl DepotConfig {
 		}
 		if self.max_background_cold_reads == Some(0) {
 			bail!("storage.max_background_cold_reads must be positive");
+		}
+		if self.max_base_reads == Some(0) {
+			bail!("storage.max_base_reads must be positive");
 		}
 		Ok(())
 	}
@@ -587,7 +618,9 @@ pub struct LogShardConfig {
 	pub preallocate_segments: Option<bool>,
 	pub checkpoint_bytes: Option<u64>,
 	/// Encoded bytes of synced log entry payloads the shard keeps in memory for reads;
-	/// defaults to a sixteenth of `max_memory_bytes`. Older payloads are read from disk.
+	/// defaults to a sixteenth of `max_memory_bytes`. Older payloads are read from disk. It is
+	/// a soft limit: the reported usage also counts payloads not yet synced, which only
+	/// `max_memory_bytes` bounds, so usage can exceed it under write load.
 	pub max_retained_payload_bytes: Option<u64>,
 	/// Synced payload bytes one volume replica keeps after each disk write; defaults to
 	/// 32 KiB.
@@ -803,6 +836,13 @@ pub struct FilesystemConfig {
 	pub max_transaction_age_ms: u64,
 	/// Bytes all filesystem row caches in one process may retain together.
 	pub max_process_cache_bytes: usize,
+	/// Bytes of checkpoint and head metadata all filesystem rollbacks in one process may hold
+	/// together while they plan. A rollback that would pass it is refused as overloaded before
+	/// it writes anything, and may be sent again shortly.
+	pub max_rollback_bytes: usize,
+	/// Metadata rows one rollback reads from each of the checkpoint and the current state at
+	/// most. A volume with more is refused as too large before anything is written.
+	pub max_rollback_rows: usize,
 	/// How long a write's overlay notes ("this page is at this sequence") outlive the write
 	/// before the filesystem drops them and keeps their rows only as cache. A later miss on one
 	/// of those rows reads it from the maintainer once it has applied the write. About ten
@@ -830,6 +870,8 @@ impl Default for FilesystemConfig {
 			max_transaction_bytes: 128 * 1024 * 1024,
 			max_transaction_age_ms: 300_000,
 			max_process_cache_bytes: 1024 * 1024 * 1024,
+			max_rollback_bytes: 512 * 1024 * 1024,
+			max_rollback_rows: 1 << 20,
 			note_ttl_ms: 1_000,
 			max_unapplied_bytes: 256 * 1024 * 1024,
 		}
@@ -847,6 +889,8 @@ impl FilesystemConfig {
 			self.max_pending_commits,
 			self.max_transaction_bytes,
 			self.max_unapplied_bytes,
+			self.max_rollback_bytes,
+			self.max_rollback_rows,
 		]
 		.contains(&0)
 			|| self.max_transaction_age_ms == 0
@@ -925,6 +969,176 @@ impl ForkConfig {
 			|| self.materialize_batch_chunks == 0
 		{
 			bail!("fork cleanup age and materialization bounds must be positive");
+		}
+		Ok(())
+	}
+}
+
+/// The event shards of a region and how often a storage worker polls them. Shards are
+/// unprefixed KV volumes; growing the count changes nothing for readers, since an event may be
+/// posted to any shard and nothing relies on their order.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct EventsConfig {
+	pub shards: Option<u16>,
+	pub poll_interval_ms: Option<u64>,
+	/// Most rows one event shard keeps. Each post trims the row this many below it, so a
+	/// storage worker whose cursor falls further behind than this misses rows and reads every
+	/// cached group's record again. Must be positive.
+	pub retained_rows: Option<u64>,
+}
+
+impl EventsConfig {
+	pub fn shards(&self) -> u16 {
+		self.shards.unwrap_or(16)
+	}
+
+	pub fn poll_interval_ms(&self) -> u64 {
+		self.poll_interval_ms.unwrap_or(1_000)
+	}
+
+	pub fn retained_rows(&self) -> u64 {
+		self.retained_rows.unwrap_or(100_000)
+	}
+
+	pub fn validate(&self) -> Result<()> {
+		if self.shards() == 0 || self.poll_interval_ms() == 0 || self.retained_rows() == 0 {
+			bail!(
+				"events.shards, events.poll_interval_ms and events.retained_rows must be positive"
+			);
+		}
+		Ok(())
+	}
+}
+
+/// Volume group limits. `max_lineage_depth` counts the root: 4 allows a root and three forks
+/// below it, and raising it later is a check, not a migration. `inline_metadata_bytes` is the
+/// most metadata an acquire reply carries for a lazily forked volume.
+/// `max_open_waiters_per_volume` is how many opens of one grouped volume a tablet maintainer
+/// holds while the volume's lazy fork or a group read it needs is in progress; an open
+/// arriving with that many already waiting is refused as overloaded. `max_wanted_forks` is how
+/// many fork numbers a tablet maintainer's group cache wants read at once, and
+/// `max_pin_wait_children` how many child groups it learns the status of at once for the fork
+/// pins its loaded volumes left waiting; work past either waits for the cache to drain.
+/// `max_reads_in_flight` is how many group volume reads a tablet maintainer's group cache has
+/// in flight at once; further reads start as these finish. `max_absent_lazy_forks` is how many
+/// volumes each tablet maintainer remembers a lazy fork found absent at the fork, so a process
+/// holds up to this many per tablet it maintains; past it the oldest is forgotten, and that
+/// volume's next open runs a lazy fork job again, which adds a lineage walk, a store round and a
+/// caller round trip, or is refused as overloaded when no job is free. `max_lazy_fork_jobs` is
+/// how many lazy fork jobs each tablet maintainer runs at once, apart from the
+/// `storage.max_background_cold_reads` window of other fork jobs, so a wake of many fork
+/// children and an actor fork never take each other's jobs; an open of a grouped volume with no
+/// record that finds every lazy fork job taken is refused as overloaded (default 32).
+/// `max_parked_lazy_fork_jobs` is how many lazy fork jobs each tablet maintainer keeps parked
+/// behind a parent whose tail is unproven, waiting for the next open of their volume; a parked
+/// job is a few hundred bytes of memory and does no I/O, and past the cap the oldest is dropped,
+/// so its volume's next open resumes its stored fork with one more store round (default 1024).
+/// `max_archive_fences` is how many recoveries each tablet maintainer runs at once to fence the
+/// writers of an archived group's loaded volumes, apart from the crash repair slots; further
+/// volumes wait for a slot (default 16). `max_cached_records` is how many group records a
+/// storage worker process keeps in the cache its tablet maintainers share, so a tablet with no
+/// loaded volume of a group answers a create's lineage walk and fork stamp, and a due alarm's
+/// archived check, without reading the group volume; the events poll keeps it current, and past
+/// the cap the least recently used group is dropped and read again on its next use (default
+/// 65,536).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct GroupsConfig {
+	pub max_lineage_depth: Option<u8>,
+	pub inline_metadata_bytes: Option<u64>,
+	pub max_open_waiters_per_volume: Option<u32>,
+	pub max_wanted_forks: Option<u32>,
+	pub max_pin_wait_children: Option<u32>,
+	pub max_reads_in_flight: Option<u32>,
+	pub max_absent_lazy_forks: Option<u32>,
+	pub max_lazy_fork_jobs: Option<u32>,
+	pub max_parked_lazy_fork_jobs: Option<u32>,
+	pub max_archive_fences: Option<u32>,
+	pub max_cached_records: Option<u32>,
+}
+
+impl GroupsConfig {
+	pub fn max_lineage_depth(&self) -> u8 {
+		self.max_lineage_depth.unwrap_or(4)
+	}
+
+	pub fn inline_metadata_bytes(&self) -> u64 {
+		self.inline_metadata_bytes.unwrap_or(256 * 1024)
+	}
+
+	pub fn max_open_waiters_per_volume(&self) -> u32 {
+		self.max_open_waiters_per_volume.unwrap_or(64)
+	}
+
+	pub fn max_wanted_forks(&self) -> u32 {
+		self.max_wanted_forks.unwrap_or(16_384)
+	}
+
+	pub fn max_pin_wait_children(&self) -> u32 {
+		self.max_pin_wait_children.unwrap_or(16_384)
+	}
+
+	pub fn max_reads_in_flight(&self) -> u32 {
+		self.max_reads_in_flight.unwrap_or(64)
+	}
+
+	pub fn max_absent_lazy_forks(&self) -> u32 {
+		self.max_absent_lazy_forks.unwrap_or(65_536)
+	}
+
+	pub fn max_lazy_fork_jobs(&self) -> u32 {
+		self.max_lazy_fork_jobs.unwrap_or(32)
+	}
+
+	pub fn max_parked_lazy_fork_jobs(&self) -> u32 {
+		self.max_parked_lazy_fork_jobs.unwrap_or(1024)
+	}
+
+	pub fn max_archive_fences(&self) -> u32 {
+		self.max_archive_fences.unwrap_or(16)
+	}
+
+	pub fn max_cached_records(&self) -> u32 {
+		self.max_cached_records.unwrap_or(65_536)
+	}
+
+	pub fn validate(&self) -> Result<()> {
+		if self.max_lineage_depth() == 0 {
+			bail!("groups.max_lineage_depth must be at least 1");
+		}
+		if self.max_open_waiters_per_volume() == 0 {
+			bail!("groups.max_open_waiters_per_volume must be at least 1");
+		}
+		// A read asks for at least one fork, so a cap of zero would hold every pin forever.
+		if self.max_wanted_forks() == 0 {
+			bail!("groups.max_wanted_forks must be at least 1");
+		}
+		// Every group record read waits for a slot, so a cap of zero would read nothing.
+		if self.max_reads_in_flight() == 0 {
+			bail!("groups.max_reads_in_flight must be at least 1");
+		}
+		// The open that follows an absent walk reads the mark, so a cap of zero would walk the
+		// lineage again on every open of a volume that does not exist at the fork.
+		if self.max_absent_lazy_forks() == 0 {
+			bail!("groups.max_absent_lazy_forks must be at least 1");
+		}
+		// Every open of a grouped volume with no record needs a job, so zero would refuse them all.
+		if self.max_lazy_fork_jobs() == 0 {
+			bail!("groups.max_lazy_fork_jobs must be at least 1");
+		}
+		// A lazy fork behind an unproven parent tail parks; with no room it could only ask
+		// again on a timer.
+		if self.max_parked_lazy_fork_jobs() == 0 {
+			bail!("groups.max_parked_lazy_fork_jobs must be at least 1");
+		}
+		// An archived group's loaded volumes wait for a fence, so zero would never close them.
+		if self.max_archive_fences() == 0 {
+			bail!("groups.max_archive_fences must be at least 1");
+		}
+		// A read fills the cache before its answer is used, so zero would cache nothing.
+		if self.max_cached_records() == 0 {
+			bail!("groups.max_cached_records must be at least 1");
 		}
 		Ok(())
 	}

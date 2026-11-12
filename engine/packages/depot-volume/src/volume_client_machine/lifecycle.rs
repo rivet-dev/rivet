@@ -9,7 +9,7 @@ use super::{
 };
 use rivet_data::generated::{
 	depot_log_shard_v1::VolumeLogReplicaState, depot_storage_worker_protocol_v1::RejectResponse,
-	shared_depot_fs_v1::FsVolumeStatus,
+	shared_depot_fs_v2::FsVolumeStatus,
 };
 use rivet_state_machine::Entropy;
 use rivet_topology::worker::WorkerId;
@@ -112,7 +112,7 @@ pub(super) fn open(s: &mut VolumeClientState, fx: &mut Effects) {
 pub(super) fn opened(
 	s: &mut VolumeClientState,
 	op: OpId,
-	result: Result<rivet_data::generated::depot_client_protocol_v1::VolumeOpenResponse, RpcError>,
+	result: Result<rivet_data::generated::depot_client_protocol_v2::VolumeOpenResponse, RpcError>,
 	replayed: bool,
 	entropy: Entropy,
 	fx: &mut Effects,
@@ -192,6 +192,7 @@ pub(super) fn opened(
 	s.cold_receipts = row.recent_writes;
 	s.applied_history = applied_history;
 	s.has_base_chain = !row.base_chain.is_empty();
+	s.lazy_fork = row.lazy_fork.clone();
 	s.cold = row.cold;
 	s.commit_publishing.committed = s.commit_publishing.committed.max(s.cold.volume_seq);
 	s.next_volume_seq = s.next_volume_seq.max(s.cold.volume_seq.saturating_add(1));
@@ -563,9 +564,9 @@ pub(super) fn closed(
 			| RpcError::RoutingUnavailable
 			| RpcError::Overloaded { .. }
 			| RpcError::LifecycleRejected(
-				rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse::NotMaintainer(_)
-				| rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse::Overloaded(_)
-				| rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse::TabletSplitting,
+				rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse::NotMaintainer(_)
+				| rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse::Overloaded(_)
+				| rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse::TabletSplitting,
 			),
 		) if s.purpose == OpenPurpose::Serve => Ok(()),
 		result => result.map_err(lifecycle_error),
@@ -584,7 +585,7 @@ pub(super) fn fail(s: &mut VolumeClientState, error: WriteError, fx: &mut Effect
 
 /// Keep definitive lifecycle rejections distinct from a maintainer request with an unknown outcome.
 fn lifecycle_error(error: RpcError) -> WriteError {
-	use rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse as Reject;
+	use rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse as Reject;
 	match error {
 		RpcError::LifecycleRejected(Reject::VolumeNotFound | Reject::VolumeDeleted) => {
 			WriteError::VolumeNotFound
@@ -613,7 +614,7 @@ fn lifecycle_error(error: RpcError) -> WriteError {
 /// `None` when the open must fail. A volume slot refuses an open queued behind its own
 /// unsettled close the same way, so both paths classify a maintainer answer identically.
 pub fn open_refusal(error: &RpcError) -> Option<(OpenRefusal, u64)> {
-	use rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse as Reject;
+	use rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse as Reject;
 	match error {
 		RpcError::Unavailable => Some((OpenRefusal::Unreachable, OPEN_REFUSAL_RETRY_AFTER_MS)),
 		RpcError::RoutingUnavailable => Some((OpenRefusal::NoRoute, OPEN_REFUSAL_RETRY_AFTER_MS)),
@@ -631,11 +632,18 @@ pub fn open_refusal(error: &RpcError) -> Option<(OpenRefusal, u64)> {
 		RpcError::LifecycleRejected(Reject::TabletSplitting) => {
 			Some((OpenRefusal::TabletSplitting, OPEN_REFUSAL_RETRY_AFTER_MS))
 		}
+		RpcError::LifecycleRejected(Reject::VolumeTailUnproven(refusal)) => Some((
+			OpenRefusal::TailUnproven {
+				parent: refusal.parent_volume_key.clone(),
+			},
+			refusal.retry_after_ms,
+		)),
 		RpcError::LifecycleRejected(
 			Reject::VolumeNotFound
 			| Reject::VolumeExists
 			| Reject::VolumeDeleted
-			| Reject::VolumeRecordMissing(_),
+			| Reject::VolumeRecordMissing(_)
+			| Reject::VolumeGroupArchived,
 		)
 		| RpcError::Rejected(_) => None,
 	}

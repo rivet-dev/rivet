@@ -27,6 +27,8 @@ pub use txn::TxnHandle;
 pub mod owner;
 pub use owner::OpenedFilesystem;
 pub mod remote;
+pub mod rollback;
+pub use rollback::{CheckpointImage, RollbackBudget, RollbackOutcome};
 mod transaction;
 pub mod transport;
 
@@ -47,6 +49,11 @@ pub enum Error {
 	Fenced,
 	#[error("filesystem request exceeds its byte limit")]
 	TooLarge,
+	/// A budget or window refused the request before it ran: this client's memory, pending
+	/// commit or snapshot budget, the transport's request window, or a remote refusal at
+	/// admission. A refusal after a write was admitted becomes a [`WriteError`] carrying its
+	/// token instead, so this error always proves nothing ran and the edge may send the request
+	/// again after [`OVERLOADED_RETRY_AFTER_MS`].
 	#[error("filesystem memory or request budget is exhausted")]
 	Overloaded,
 	/// This opening's admitted writes are too far ahead of the tablet's apply, as when a slow
@@ -54,6 +61,17 @@ pub enum Error {
 	/// it was built, so the edge may send it again after `retry_after_ms`.
 	#[error("volume writes are ahead of the tablet's apply; retry after {retry_after_ms} ms")]
 	ApplyBacklog { retry_after_ms: u64 },
+	/// The `depot.fs_entry` version the topology selected cannot carry this write: it names
+	/// another claim log or a group fork, which a storage worker of an older release cannot
+	/// decode. The write was refused at admission, before anything was sent, so the edge may send
+	/// it again after `retry_after_ms`: a stale topology view refreshes within that time, and a
+	/// live worker of the older release refuses until the roll completes. Produced by
+	/// `transport::seal_entry`; the actor SQLite path answers it as a retryable
+	/// `depot.overloaded`.
+	#[error(
+		"the selected filesystem entry version cannot carry this write; retry after {retry_after_ms} ms"
+	)]
+	VersionUnavailable { retry_after_ms: u64 },
 	#[error("snapshot has expired")]
 	TooOld,
 	#[error("transaction read set conflicts with a newer write")]
@@ -63,8 +81,9 @@ pub enum Error {
 	#[error("cold store is unavailable")]
 	Unavailable,
 	/// The tablet maintainer did not serve a cold read: the route names no maintainer, the
-	/// maintainer refused the read, or the request failed in transport. Reads are idempotent,
-	/// so a caller may send the read again after a pause, for example once a re-grant lands.
+	/// maintainer refused the read, UPS refused to admit the request, or the request failed in
+	/// transport. Reads are idempotent, so a caller may send the read again after a pause, for
+	/// example once a re-grant lands or a full request lane drains.
 	#[error("cold read was refused while the tablet maintainer is unavailable")]
 	ColdReadRefused,
 	#[error("inherited filesystem data is unavailable")]
@@ -83,6 +102,14 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// The hint of a write refused as [`Error::VersionUnavailable`]: the scale of a topology
+/// listing refresh, after which a stale view selects the fleet's version again.
+pub(crate) const VERSION_UNAVAILABLE_RETRY_AFTER_MS: u64 = 1_000;
+
+/// The hint of a request refused as [`Error::Overloaded`]: a budget frees as soon as the
+/// requests ahead of it finish, on the scale of one round trip.
+pub(crate) const OVERLOADED_RETRY_AFTER_MS: u64 = 100;
+
 /// The hint of a refused cold read, which carries none of its own. A refusal while the
 /// tablet's maintainer moves or a split's children start settles on the scale of the route
 /// refresh the refusal already triggered.
@@ -96,12 +123,14 @@ impl Error {
 		match self {
 			Self::Log(error) => error.retry_after_ms(),
 			Self::ColdReadRefused => Some(COLD_READ_REFUSED_RETRY_AFTER_MS),
-			Self::ApplyBacklog { retry_after_ms } => Some(*retry_after_ms),
+			Self::Overloaded => Some(OVERLOADED_RETRY_AFTER_MS),
+			Self::ApplyBacklog { retry_after_ms } | Self::VersionUnavailable { retry_after_ms } => {
+				Some(*retry_after_ms)
+			}
 			Self::Busy
 			| Self::Filesystem(_)
 			| Self::Fenced
 			| Self::TooLarge
-			| Self::Overloaded
 			| Self::TooOld
 			| Self::Conflict
 			| Self::Lagging

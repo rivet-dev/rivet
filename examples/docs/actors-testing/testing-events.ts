@@ -9,16 +9,16 @@ interface ChatMessage {
 
 // Define the chat room actor
 const chatRoom = actor({
-  state: {
+  createVars: () => ({
     messages: [] as ChatMessage[]
-  },
+  }),
   actions: {
     sendMessage: (c, username: string, message: string) => {
-      c.state.messages.push({ username, message });
+      c.vars.messages.push({ username, message });
       c.broadcast("newMessage", username, message);
     },
     getHistory: (c) => {
-      return c.state.messages;
+      return c.vars.messages;
     },
   },
 });

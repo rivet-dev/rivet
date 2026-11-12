@@ -11,6 +11,8 @@ edition.workspace = true
 [lib]
 crate-type = ["lib"]
 
+[features]
+
 [dependencies]
 rivet-config.workspace = true
 parking_lot.workspace = true

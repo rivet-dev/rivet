@@ -249,6 +249,31 @@ pub async fn start(
 		result = context.start_background(registration) => result?,
 	);
 
+	// Nothing serves before the first storage listing completes, so no request is answered, no
+	// command is sealed and no health endpoint reports ready on a version floor no listing
+	// established.
+	let topology = context.topology();
+	let listed: Result<bool> = rivet_env::select_biased!("termination cancels the first-listing wait",
+		signal = startup_shutdown.recv() => signal.map(|_| false).map_err(anyhow::Error::from),
+		result = topology.wait_for_first_listing() => result.map(|()| true),
+	);
+	match listed {
+		Ok(true) => {}
+		Ok(false) => {
+			background.shutdown().await?;
+			return Ok(());
+		}
+		Err(error) => {
+			if let Err(shutdown_error) = background.shutdown().await {
+				tracing::warn!(
+					?shutdown_error,
+					"background shutdown failed after startup failed"
+				);
+			}
+			return Err(error);
+		}
+	}
+
 	// Spawn services
 	tracing::info!(services=?services.len(), "starting services");
 	let mut running_services = Vec::new();

@@ -1,9 +1,7 @@
 import { actor, UserError } from "rivetkit";
 
 export const errorHandlingActor = actor({
-	state: {
-		errorLog: [] as string[],
-	},
+	createVars: () => ({ errorLog: [] as string[] }),
 	actions: {
 		// Action that throws a UserError with just a message
 		throwSimpleError: () => {
@@ -52,18 +50,18 @@ export const errorHandlingActor = actor({
 
 		// Log an error for inspection
 		logError: (c, error: string) => {
-			c.state.errorLog.push(error);
-			return c.state.errorLog;
+			c.vars.errorLog.push(error);
+			return c.vars.errorLog;
 		},
 
 		// Get the error log
 		getErrorLog: (c) => {
-			return c.state.errorLog;
+			return c.vars.errorLog;
 		},
 
 		// Clear the error log
 		clearErrorLog: (c) => {
-			c.state.errorLog = [];
+			c.vars.errorLog = [];
 			return true;
 		},
 	},
@@ -74,7 +72,6 @@ export const errorHandlingActor = actor({
 
 // Actor with custom timeout
 export const customTimeoutActor = actor({
-	state: {},
 	actions: {
 		quickAction: async () => {
 			await new Promise((resolve) => setTimeout(resolve, 50));

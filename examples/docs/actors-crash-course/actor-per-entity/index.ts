@@ -1,12 +1,12 @@
 import { actor, setup } from "rivetkit";
 
 export const user = actor({
-  state: { name: "" },
+  vars: { name: "" },
   actions: {},
 });
 
 export const document = actor({
-  state: { content: "" },
+  vars: { content: "" },
   actions: {},
 });
 

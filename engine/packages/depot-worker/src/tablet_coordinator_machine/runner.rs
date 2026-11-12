@@ -518,6 +518,8 @@ impl Executor<TabletCoordinatorMachine> for ManifestExecutor {
 			}
 			tracing::info!(
 				admitted_workers = status.admitted_workers,
+				zone_degraded_tablets = status.zone_degraded_tablets,
+				unknown_zone_tablets = status.unknown_zone_tablets,
 				desired_tablets = status.desired_tablets,
 				projected_tablets = status.projected_tablets,
 				pending_splits = status.pending_splits,
@@ -533,6 +535,8 @@ impl Executor<TabletCoordinatorMachine> for ManifestExecutor {
 				"tablet placement changed"
 			);
 			for (kind, value) in [
+				("zone_degraded", status.zone_degraded_tablets),
+				("unknown_zone", status.unknown_zone_tablets),
 				("desired", status.desired_tablets),
 				("projected", status.projected_tablets),
 				("admitted_workers", status.admitted_workers),

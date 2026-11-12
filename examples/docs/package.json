@@ -9,6 +9,12 @@
 	},
 	"dependencies": {
 		"@durable-streams/client": "^0.2.6",
+		"@rivet-dev/agentos-core": "^0.4.7",
+		"@rivet-dev/sandbox-adapter": "^0.5.6",
+		"@daytonaio/sdk": "^0.216.0",
+		"e2b": "^2.51.0",
+		"freestyle": "^0.2.16",
+		"cbor-x": "^1.6.0",
 		"rivetkit": "workspace:*",
 		"@rivetkit/react": "workspace:*",
 		"@rivetkit/engine-api-full": "workspace:*",

@@ -6,21 +6,32 @@ import { anthropic } from "@ai-sdk/anthropic";
 import type { DurableStream } from "@durable-streams/client";
 import { streamText } from "ai";
 import { type ActorContextOf, actor, event, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { getStreams } from "./shared/streams.ts";
 import type { PromptMessage, ResponseChunk } from "./shared/types.ts";
 
-interface State {
-	conversationId: string;
-	promptStreamOffset: string | undefined;
-}
-
 export const aiAgent = actor({
-	createState: (_c, input: { conversationId: string }): State => ({
-		conversationId: input.conversationId,
-		// Offset tracking for durable stream consumption
-		// undefined means start from the beginning of the stream
-		promptStreamOffset: undefined as string | undefined,
+	// The conversation and stream offset are saved in SQLite so consumption
+	// resumes where it left off: https://rivet.dev/docs/actors/sqlite
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS conversation (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					conversation_id TEXT NOT NULL,
+					prompt_stream_offset TEXT
+				)
+			`);
+		},
 	}),
+
+	onCreate: async (c, input: { conversationId: string }) => {
+		await c.db.execute(
+			"INSERT INTO conversation (id, conversation_id) VALUES (1, ?)",
+			input.conversationId,
+		);
+	},
+
 	events: {
 		responseError: event<{ promptId: string; error: string }>(),
 		responseComplete: event<{ promptId: string; fullResponse: string }>(),
@@ -31,8 +42,18 @@ export const aiAgent = actor({
 	},
 
 	actions: {
-		getConversationId: (c) => c.state.conversationId,
-		getPromptStreamOffset: (c) => c.state.promptStreamOffset,
+		getConversationId: async (c) => {
+			const [row] = await c.db.execute<{ conversation_id: string }>(
+				"SELECT conversation_id FROM conversation WHERE id = 1",
+			);
+			return row.conversation_id;
+		},
+		getPromptStreamOffset: async (c) => {
+			const [row] = await c.db.execute<{
+				prompt_stream_offset: string | null;
+			}>("SELECT prompt_stream_offset FROM conversation WHERE id = 1");
+			return row.prompt_stream_offset ?? undefined;
+		},
 	},
 
 	options: {
@@ -51,15 +72,20 @@ export const registry = setup({
 registry.start();
 
 async function consumeStream(c: ActorContextOf<typeof aiAgent>) {
-	c.log.info({
-		msg: "consumeStream started",
-		conversationId: c.state.conversationId,
-		offset: c.state.promptStreamOffset,
-	});
-
-	const { promptStream, responseStream } = await getStreams(
-		c.state.conversationId,
+	const [conversation] = await c.db.execute<{
+		conversation_id: string;
+		prompt_stream_offset: string | null;
+	}>(
+		"SELECT conversation_id, prompt_stream_offset FROM conversation WHERE id = 1",
 	);
+	const conversationId = conversation.conversation_id;
+	// Offset tracking for durable stream consumption.
+	// undefined means start from the beginning of the stream.
+	const offset = conversation.prompt_stream_offset ?? undefined;
+
+	c.log.info({ msg: "consumeStream started", conversationId, offset });
+
+	const { promptStream, responseStream } = await getStreams(conversationId);
 
 	c.log.info({ msg: "streams obtained" });
 
@@ -68,12 +94,9 @@ async function consumeStream(c: ActorContextOf<typeof aiAgent>) {
 	try {
 		// NOTE: promptStream.json does not provide offsets, have to manually
 		// parse
-		c.log.info({
-			msg: "starting read loop",
-			offset: c.state.promptStreamOffset,
-		});
+		c.log.info({ msg: "starting read loop", offset });
 		const streamIter = promptStream.read({
-			offset: c.state.promptStreamOffset,
+			offset,
 			live: "long-poll",
 			signal: c.abortSignal,
 		});
@@ -86,7 +109,10 @@ async function consumeStream(c: ActorContextOf<typeof aiAgent>) {
 
 			if (c.aborted) break;
 
-			c.state.promptStreamOffset = chunk.offset;
+			await c.db.execute(
+				"UPDATE conversation SET prompt_stream_offset = ? WHERE id = 1",
+				chunk.offset,
+			);
 
 			if (chunk.data.length === 0) continue;
 

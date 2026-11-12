@@ -63,6 +63,8 @@ pub enum FenceReason {
 	DependentFailed,
 	/// Other live storage workers could write a family at a version this binary cannot read.
 	IncompatibleVersion,
+	/// This storage worker started without `storage.zone` while another live one has a zone.
+	MissingZone,
 }
 
 impl FenceReason {
@@ -75,6 +77,7 @@ impl FenceReason {
 			Self::RegistrationFailed => "registration_failed",
 			Self::DependentFailed => "dependent_failed",
 			Self::IncompatibleVersion => "incompatible_version",
+			Self::MissingZone => "missing_zone",
 		}
 	}
 }
@@ -116,6 +119,33 @@ pub struct RenewalLateReport {
 	pub remaining_lease_ms: u64,
 }
 
+/// The read floor's age after a listing response, for its gauge and stale-view warning.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct FloorAgeReport {
+	/// Time since the last listing that read every storage worker it listed was issued, or
+	/// since this process's first listing when none has (`fully_observed` false).
+	pub age_ms: u64,
+	/// The heartbeat lease ttl, past which the floor is reported stale.
+	pub ttl_ms: u64,
+	/// Some listing in this process read every storage worker it listed.
+	pub fully_observed: bool,
+	/// What version selection rests on now.
+	pub floor: super::state::FloorEvidence,
+	pub change: FloorAgeChange,
+}
+
+/// Whether this listing response moved the read floor across `ttl_ms`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum FloorAgeChange {
+	/// The floor stayed on the same side of the ttl.
+	Unchanged,
+	/// The floor's age passed the ttl: for longer than a lease lasts, listings have failed or
+	/// could read some listed worker only through an earlier observation or not at all.
+	BecameStale,
+	/// A listing renewed a floor that was stale.
+	Renewed,
+}
+
 /// Immutable for the process lifetime. Written into every heartbeat this worker claims
 /// or renews.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -128,7 +158,8 @@ pub struct WorkerRegistration {
 	pub role: WorkerRole,
 	/// Advertised to peers through the heartbeat for direct requests.
 	pub api_peer_address: String,
-	/// Diagnostics only.
+	/// Diagnostics, and for readers that advertise `pegboard.actor` version 3, which of the two
+	/// layouts under that header they decode; see `rivet_data::families::legacy_decoded_max_read`.
 	pub build_version: String,
 	/// Per-family version ranges this binary reads and writes, advertised in every heartbeat.
 	/// Usually `versions::compiled_versions()`; tests advertise other ranges.
@@ -143,6 +174,9 @@ pub struct WorkerRegistration {
 	/// Active or Draining heartbeat naming it may claim that heartbeat without the takeover
 	/// wait: holding the lock proves the previous holder exited.
 	pub directory_lock: Option<crate::heartbeat::DirectoryLock>,
+	/// The failure domain from `storage.zone`. Heartbeats carry it from schema version 2, so one
+	/// written at version 1 omits it.
+	pub zone: Option<String>,
 }
 
 /// Cached endpoint hint. Hints never establish ownership.

@@ -1,6 +1,7 @@
 use super::types::*;
 use super::{effect::*, event::*, state::*};
 use crate::heartbeat::*;
+use crate::worker::WorkerRole;
 use rivet_state_machine_util::{IoCall, IoTimer, LeaseChange};
 
 pub(super) fn read_local_heartbeat(state: &mut State, out: &mut Effects) {
@@ -139,6 +140,7 @@ fn emit_write(
 		state: write.state.clone(),
 		versions: worker_registration.versions.to_vec(),
 		directory_lock: worker_registration.directory_lock.clone(),
+		zone: worker_registration.zone.clone().map(Into::into),
 	};
 
 	let op = state.sequence.next(Slot::Heartbeat);
@@ -156,10 +158,12 @@ fn emit_write(
 	let call = IoCall::arm(op, timeout_ms, Timer::Io, out);
 	state.calls.insert(op.slot, call);
 
+	let heartbeat_version = state.heartbeat_version;
 	out.execute(Effect::WriteLocalHeartbeatRequest {
 		op,
 		worker_registration,
 		heartbeat,
+		heartbeat_version,
 		expected_etag,
 	});
 }
@@ -444,6 +448,9 @@ pub(super) fn list_storage_workers(
 		.inc();
 
 	state.discovery.last_list_issued_boot_ms = Some(now_boot_ms);
+	if state.discovery.first_list_issued_boot_ms.is_none() {
+		state.discovery.first_list_issued_boot_ms = Some(now_boot_ms);
+	}
 	out.cancel_timer(Timer::Refresh);
 
 	let op = state.sequence.next(Slot::Discovery);
@@ -578,10 +585,51 @@ pub(super) fn handle_response(
 			Write::Unknown => retry_unknown_write(state, now_boot_ms, out),
 		},
 		Event::ListStorageWorkersResponse { result, .. } => {
-			handle_list_storage_workers_response(state, result, false, now_boot_ms, out)
+			let completeness = match result.is_some() {
+				true => ListingCompleteness::Complete,
+				false => ListingCompleteness::Failed,
+			};
+			handle_list_storage_workers_response(state, result, completeness, now_boot_ms, out)
 		}
-		Event::ListStorageWorkersPartialResponse { entries, .. } => {
-			handle_list_storage_workers_response(state, Some(entries), true, now_boot_ms, out)
+		Event::ListStorageWorkersPartialResponse {
+			mut entries,
+			unobserved,
+			unconfirmed,
+			..
+		} => {
+			// A heartbeat the listing proves expired belongs to a worker that cannot be serving,
+			// so it neither keeps the listing partial nor keeps an earlier observation of it.
+			let (expired_unobserved, unobserved): (Vec<_>, Vec<_>) = unobserved
+				.into_iter()
+				.partition(|worker| listing_proves_expired(state, &worker.reason));
+			let (expired_unconfirmed, unconfirmed): (Vec<_>, Vec<_>) = unconfirmed
+				.into_iter()
+				.partition(|worker| listing_proves_expired(state, &worker.reason));
+			entries.retain(|entry| {
+				entry.role != WorkerRole::Storage
+					|| !expired_unconfirmed
+						.iter()
+						.any(|worker| worker.worker_id == entry.worker_id)
+			});
+
+			let mut expired = expired_unobserved;
+			expired.extend(expired_unconfirmed);
+			if !expired.is_empty() {
+				out.execute(Effect::RecordUnobservedWorkersExpired { workers: expired });
+			}
+
+			let completeness = match (unobserved.is_empty(), unconfirmed.is_empty()) {
+				(false, _) => ListingCompleteness::Unobserved,
+				(true, false) => ListingCompleteness::Partial,
+				(true, true) => ListingCompleteness::Complete,
+			};
+			handle_list_storage_workers_response(
+				state,
+				Some(entries),
+				completeness,
+				now_boot_ms,
+				out,
+			)
 		}
 		Event::ResolveEndpointRequest { .. }
 		| Event::InvalidateEndpointRequest { .. }
@@ -632,10 +680,47 @@ fn retry_unknown_write(state: &mut State, now_boot_ms: u64, out: &mut Effects) {
 	}
 }
 
+/// Whether the listing in flight proves that a heartbeat it read but could not use belongs to
+/// a worker that can no longer be serving. The heartbeat is the worker's lease record, renewed
+/// by rewriting it, so its `Last-Modified` is the last renewal. As in `refresh_discovery`, the
+/// listing must have been issued after that renewal's lease ended by the store clock: a renewal
+/// before then would have shown in the GET that followed the listing, and a later one is
+/// confirmed only after the worker fenced. An unreadable heartbeat proves nothing.
+fn listing_proves_expired(state: &State, reason: &UnobservedReason) -> bool {
+	let Some(modified_unix_ms) = reason.modified_unix_ms() else {
+		return false;
+	};
+	let (Some(store_clock), Some(issued_boot_ms)) = (
+		&state.discovery.store_clock,
+		state.discovery.last_list_issued_boot_ms,
+	) else {
+		return false;
+	};
+	let expired_unix_ms = modified_unix_ms as i128 + state.config.lease.ttl_ms as i128;
+	let expired_boot_ms =
+		store_clock.at_boot_ms as i128 + expired_unix_ms - store_clock.lower_unix_ms as i128;
+	issued_boot_ms as i128 >= expired_boot_ms
+}
+
+/// How much of the storage fleet a listing response observed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ListingCompleteness {
+	/// The listing failed or timed out; it observed nothing.
+	Failed,
+	/// Every listed heartbeat was read or reused unchanged, or belongs to a worker the listing
+	/// proves expired.
+	Complete,
+	/// Some heartbeat GET was unreadable, but an earlier listing observed every such worker,
+	/// so the read floor still counts every listed worker.
+	Partial,
+	/// Some unreadable heartbeat belongs to a worker no listing has observed.
+	Unobserved,
+}
+
 fn handle_list_storage_workers_response(
 	state: &mut State,
 	result: Option<Vec<Observation>>,
-	partial: bool,
+	completeness: ListingCompleteness,
 	now_boot_ms: u64,
 	out: &mut Effects,
 ) {
@@ -644,15 +729,43 @@ fn handle_list_storage_workers_response(
 		.round
 		.checked_add(1)
 		.expect("discovery counter exhausted");
+	let partial = match completeness {
+		ListingCompleteness::Failed | ListingCompleteness::Complete => false,
+		ListingCompleteness::Partial | ListingCompleteness::Unobserved => true,
+	};
 	state.discovery.ok = result.is_some() && !partial;
 
+	// The floor counts every listed worker unless one was never observed. A listing that
+	// failed changes nothing: the floor it would replace stays in use.
+	match completeness {
+		ListingCompleteness::Failed => {}
+		ListingCompleteness::Complete | ListingCompleteness::Partial => {
+			state.discovery.floor = FloorEvidence::Observed;
+			state.discovery.unobserved_listings = 0;
+		}
+		ListingCompleteness::Unobserved => {
+			state.discovery.floor = FloorEvidence::Unobserved;
+			state.discovery.unobserved_listings =
+				state.discovery.unobserved_listings.saturating_add(1);
+		}
+	}
+
 	let Some(mut entries) = result else {
+		record_floor_age(state, now_boot_ms, out);
 		// An entry waiting for evidence of its expiry keeps a possibly dead worker listed, so
 		// retry sooner than the full interval, backing off from the hint spacing so a store
 		// outage does not multiply listings on every process.
 		state.discovery.failed_listings = state.discovery.failed_listings.saturating_add(1);
 		let lease = &state.config.lease;
-		let retry_ms = match state.discovery.awaiting_expiry_evidence {
+		// Before the first completed listing, opens, tablet starts and commands wait for one,
+		// and while a listed worker is unobserved writes use the lowest version, so retry on the
+		// same backoff.
+		let prompt = state.discovery.awaiting_expiry_evidence
+			|| matches!(
+				state.discovery.floor,
+				FloorEvidence::Unlisted | FloorEvidence::Unobserved
+			);
+		let retry_ms = match prompt {
 			true => {
 				let shift = (state.discovery.failed_listings - 1).min(16);
 				lease
@@ -666,10 +779,10 @@ fn handle_list_storage_workers_response(
 		return;
 	};
 	state.discovery.failed_listings = 0;
-	state.discovery.partial = partial;
 	if !partial {
 		state.discovery.entries_listed_boot_ms = state.discovery.last_list_issued_boot_ms;
 	}
+	record_floor_age(state, now_boot_ms, out);
 
 	entries.sort_by(|a, b| a.worker_id.cmp(&b.worker_id));
 
@@ -755,6 +868,9 @@ fn handle_list_storage_workers_response(
 	super::watch::listing_observed(state, &entries, issued_boot_ms, now_boot_ms, out);
 	state.discovery.entries = Some(entries);
 	state.recompute_read_floor();
+	if !partial {
+		state.select_heartbeat_version();
+	}
 
 	// A storage worker that other live storage workers could outpace must stop serving
 	// before it reads or replicates data at a version it cannot decode.
@@ -762,6 +878,11 @@ fn handle_list_storage_workers_response(
 		if let Some(incompatibility) = incompatible_version(state, now_boot_ms) {
 			out.execute(Effect::RecordIncompatibleVersion { incompatibility });
 			fence(state, FenceReason::IncompatibleVersion, out);
+			return;
+		}
+		if let Some(labelled) = labelled_peer_of_unlabelled_worker(state, now_boot_ms) {
+			out.execute(Effect::RecordMissingZone { labelled });
+			fence(state, FenceReason::MissingZone, out);
 			return;
 		}
 	}
@@ -780,7 +901,62 @@ fn handle_list_storage_workers_response(
 		next_at =
 			next_at.min(now_boot_ms.saturating_add(state.config.lease.refresh_hint_interval_ms));
 	}
+	// A worker that was never observed keeps version selection at the lowest write version,
+	// so relist soon to observe it, backing off from the hint spacing so a heartbeat that never
+	// reads does not multiply listings.
+	if state.discovery.floor == FloorEvidence::Unobserved {
+		next_at = next_at.min(now_boot_ms.saturating_add(unobserved_relist_ms(state)));
+	}
 	out.arm_timer_at(Timer::Refresh, next_at);
+}
+
+/// The wait before relisting after `unobserved_listings` listings in a row named a worker no
+/// listing has observed: the hint spacing, doubled per such listing, capped at the interval.
+fn unobserved_relist_ms(state: &State) -> u64 {
+	let lease = &state.config.lease;
+	let shift = state
+		.discovery
+		.unobserved_listings
+		.saturating_sub(1)
+		.min(16);
+	lease
+		.refresh_hint_interval_ms
+		.saturating_mul(1 << shift)
+		.min(lease.refresh_interval_ms)
+}
+
+/// Reports the read floor's age after a listing response, warning once when it passes
+/// `ttl_ms` and noting once when a listing renews it. The age counts from the last listing that
+/// read every storage worker it listed, or from this process's first listing before one did, so
+/// a view kept up only by retained observations ages too. Listing responses arrive at least
+/// every `refresh_interval_ms`, failed ones included, so the gauge follows a stuck view.
+fn record_floor_age(state: &mut State, now_boot_ms: u64, out: &mut Effects) {
+	let fully_observed = state.discovery.entries_listed_boot_ms.is_some();
+	let Some(since_boot_ms) = state
+		.discovery
+		.entries_listed_boot_ms
+		.or(state.discovery.first_list_issued_boot_ms)
+	else {
+		return;
+	};
+	let ttl_ms = state.config.lease.ttl_ms;
+	let age_ms = now_boot_ms.saturating_sub(since_boot_ms);
+	let stale = age_ms >= ttl_ms;
+	let change = match (state.discovery.floor_stale, stale) {
+		(false, true) => FloorAgeChange::BecameStale,
+		(true, false) => FloorAgeChange::Renewed,
+		(false, false) | (true, true) => FloorAgeChange::Unchanged,
+	};
+	state.discovery.floor_stale = stale;
+	out.execute(Effect::RecordReadFloorAge {
+		report: FloorAgeReport {
+			age_ms,
+			ttl_ms,
+			fully_observed,
+			floor: state.discovery.floor,
+			change,
+		},
+	});
 }
 
 /// Checks a newly live storage registration against the other live storage workers in the
@@ -826,6 +1002,47 @@ fn incompatible_version(
 		.map(|entry| entry.heartbeat.versions.as_slice())
 		.collect();
 	crate::versions::incompatibility(&worker_registration.versions, &others)
+}
+
+/// Another live storage worker with a zone, when this storage worker started without one. Only
+/// the first complete listing after the claim counts, so this costs no extra request and never
+/// fences a worker that was already running when its peers gained labels.
+fn labelled_peer_of_unlabelled_worker(
+	state: &mut State,
+	now_boot_ms: u64,
+) -> Option<crate::worker::WorkerId> {
+	let LeaseState::Live {
+		worker_registration,
+		..
+	} = &state.lease
+	else {
+		return None;
+	};
+	if state.zone_checked {
+		return None;
+	}
+
+	let unlabelled = worker_registration.role == crate::worker::WorkerRole::Storage
+		&& worker_registration.zone.is_none();
+	let own_id = worker_registration.identity.worker_id.clone();
+	let store_now = state
+		.discovery
+		.store_clock
+		.as_ref()
+		.map(|clock| clock.lower_bound(now_boot_ms));
+	let ttl_ms = state.config.lease.ttl_ms as i128;
+	let labelled = state
+		.reader_entries()
+		.filter(|entry| unlabelled && entry.worker_id != own_id)
+		.filter(|entry| {
+			store_now
+				.is_some_and(|now| (now as i128 - entry.modified_unix_ms as i128).max(0) < ttl_ms)
+		})
+		.find(|entry| entry.heartbeat.zone.is_some())
+		.map(|entry| entry.worker_id.clone());
+
+	state.zone_checked = true;
+	labelled
 }
 
 fn wait_registration(

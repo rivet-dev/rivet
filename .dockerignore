@@ -39,7 +39,8 @@ LICENSE*
 **/target
 
 # JavaScript
-**/*.log*
+**/*.log
+**/*.log.*
 !engine/sdks/schemas/**/*.bare
 **/.cache/
 **/.next/

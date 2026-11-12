@@ -4,6 +4,7 @@ pub(crate) mod alarms;
 pub(crate) mod assignment;
 pub(crate) mod catch_up;
 pub(crate) mod claim_epochs;
+pub(crate) mod claims;
 pub mod cold;
 pub(crate) mod cold_pass;
 pub(crate) mod deletion;
@@ -11,7 +12,9 @@ pub(crate) mod drain;
 pub mod filesystem;
 pub(crate) mod filesystem_reads;
 pub mod footprint;
+pub(crate) mod groups;
 pub(crate) mod holders;
+pub(crate) mod lazy_fork_waiters;
 pub(crate) mod lifecycle;
 pub(crate) mod logged_ops;
 pub mod maintainer_log;
@@ -32,6 +35,7 @@ pub(crate) mod replica_creation;
 pub(crate) mod retired;
 pub(crate) mod signals;
 pub mod split;
+pub(crate) mod startup;
 pub(crate) mod stop;
 pub(crate) mod store;
 pub(crate) mod unload;
@@ -54,7 +58,7 @@ use depot_types::VolumeLogKey;
 use rivet_data::generated::{
 	depot_log_shard_v1::VolumeLogReplicaState,
 	depot_tablet_manifest_v1::Tablet,
-	shared_depot_fs_v1::{FsVolumeRecord, FsVolumeStatus},
+	shared_depot_fs_v2::{FsVolumeRecord, FsVolumeStatus},
 	shared_depot_types_v1::{ClientIdentity, VolumeLogPosition, VolumeLogReplicaStatus},
 };
 use rivet_topology::worker::WorkerId;
@@ -201,8 +205,8 @@ impl LoadedVolume {
 			.as_deref()
 			.or_else(|| self.creation.as_ref().map(|v| &v.row))
 			.or(self.unacknowledged_cold_open.as_deref());
-		// Without a row, the replicas' creation evidence still names the base chain and
-		// retention the volume was created with.
+		// Without a row, the replicas' creation evidence still names the base chain, retention
+		// and group fork fields the volume was created with.
 		let evidence = metadata
 			.is_none()
 			.then(|| self.replica_creation())
@@ -235,6 +239,30 @@ impl LoadedVolume {
 				FsVolumeStatus::Live
 			},
 			cold: best.cold.clone(),
+			// No replica reports the group fork fields. The fork the volume was created at, its
+			// lazy fork origin and whether its metadata is local come from the record, else
+			// from its creation evidence, so a volume made by a lazy fork keeps its origin, and
+			// its state machines their fork reset, in every row rebuilt from its members, and a
+			// grouped volume keeps its place in its group's forks before its first record is
+			// stored. Registration rebuilds the pin high-water mark from the pin rows, and a
+			// delete stamps its own fork, so those two come from the record alone.
+			fork_pinned_through: metadata.and_then(|row| row.fork_pinned_through),
+			created_at_fork: match (metadata, &evidence) {
+				(Some(row), _) => row.created_at_fork,
+				(None, Some(evidence)) => evidence.created_at_fork,
+				(None, None) => None,
+			},
+			deleted_at_fork: metadata.and_then(|row| row.deleted_at_fork),
+			lazy_fork: match (metadata, &evidence) {
+				(Some(row), _) => row.lazy_fork.clone(),
+				(None, Some(evidence)) => evidence.lazy_fork.clone(),
+				(None, None) => None,
+			},
+			metadata_local: match (metadata, &evidence) {
+				(Some(row), _) => row.metadata_local,
+				(None, Some(evidence)) => evidence.metadata_local,
+				(None, None) => false,
+			},
 		});
 		if self
 			.stored_row
@@ -315,6 +343,13 @@ pub(crate) enum Operation {
 	ForkPeer {
 		volume_key: depot_types::VolumeKey,
 	},
+	/// One group record read, with the fork children it asked for.
+	GroupRead {
+		group: rivet_keys::keys::codec::GroupId,
+		/// The fork numbers the read asked children for, which leave the entry's wanted
+		/// set when it answers whether or not it found them.
+		fork_numbers: Vec<u64>,
+	},
 	ForkReference {
 		request_id: RequestId,
 		/// The spec's parent and destination volumes that live in this tablet.
@@ -333,6 +368,10 @@ pub(crate) enum Operation {
 	},
 	SweepPending {
 		scope: depot_fs_core::keys::slatedb::Scope,
+	},
+	/// A fork pin pass of a registered grouped volume, started by a group read.
+	ForkPinPass {
+		key: VolumeLogKey,
 	},
 	Checkpoint {
 		request_id: RequestId,
@@ -366,13 +405,13 @@ pub(crate) enum Operation {
 	FilesystemApply {
 		resolved: depot_fs_core::txn::Resolver,
 		applied_bytes: u64,
-		receipts: Vec<rivet_data::generated::shared_depot_fs_v1::FsWriteReceipt>,
+		receipts: Vec<rivet_data::generated::shared_depot_fs_v2::FsWriteReceipt>,
 		/// The page's entries where the client epoch changes from the entry before it in the
 		/// page, starting with its first entry. Merged into the volume's `epochs` on success.
 		epochs: Vec<VolumeLogPosition>,
 		/// The policy of the page's last `FsRetentionSet`, which the loaded record takes
 		/// when the apply succeeds. `Some(None)` restores the default policy.
-		retention: Option<Option<rivet_data::generated::shared_depot_fs_v1::FsRetentionPolicy>>,
+		retention: Option<Option<rivet_data::generated::shared_depot_fs_v2::FsRetentionPolicy>>,
 		/// Whether the page releases a checkpoint or fork hold, which can leave a pending
 		/// sweep of a retired incarnation for discovery to find.
 		releases_holds: bool,
@@ -631,8 +670,17 @@ pub struct MaintainerState {
 	/// postponing an earlier one's retry.
 	pub(crate) held_sweep_retry_armed: bool,
 	pub(crate) pending_fork_references: BTreeMap<RequestId, fork_references::Pending>,
+	/// Group fork acquires in `pending_fork_references` parked in `WaitingPin`, by the parent
+	/// volume name they wait to see pinned, so a pin or registration of that parent finds
+	/// them without a scan.
+	pub(crate) pin_waiting_acquires: BTreeSet<(depot_types::VolumeKey, RequestId)>,
 	pub(crate) pending_checkpoints: BTreeMap<RequestId, checkpoints::Pending>,
 	pub filesystem: filesystem::Filesystem,
+	/// What the maintainer knows of the volume groups its loaded volumes belong to.
+	pub(crate) groups: groups::Groups,
+	/// Volumes whose lazy fork walked the whole lineage and found them absent at the fork; see
+	/// `forks::AbsentLazyForks`.
+	pub(crate) lazy_forks_absent: forks::AbsentLazyForks,
 	/// Operator repair calls of this lifetime; see `operator_repair`.
 	pub(crate) repairs: operator_repair::Repairs,
 	pub(crate) retired: BTreeMap<[u8; 16], retired::Cleanup>,
@@ -669,13 +717,17 @@ pub struct MaintainerState {
 	/// again and draws a new incarnation. The old incarnation's data is swept in the background,
 	/// so the wait covers the replica tombstones and the record handoff, not the data sweep.
 	pub(crate) awaiting_deletion: BTreeMap<depot_types::VolumeKey, OpenVolume>,
+	/// Opens of a grouped volume with no record, each under its own deadline, waiting for the
+	/// lazy fork job that makes the volume from its parent group or finds it absent, or for a
+	/// group read the open needs. They are admitted again one at a time once the wait ends.
+	pub(crate) awaiting_lazy_fork: lazy_fork_waiters::LazyForkWaiters,
 	/// The volume key of every open whose deadline timer is armed, so an expiry finds its
-	/// caller in `pending` or `awaiting_deletion` without scanning them.
+	/// caller in `pending`, `awaiting_deletion` or `awaiting_lazy_fork` without scanning them.
 	pub(crate) open_deadlines: lifecycle::OpenDeadlines,
 	/// Opens whose reply waits for a read-back of named keys, by caller.
 	pub(crate) open_reads: BTreeMap<RequestId, open_reads::OpenRead>,
 	pub(crate) pending_fs_reads:
-		BTreeMap<RequestId, rivet_data::generated::shared_depot_fs_read_v1::FsReadRequest>,
+		BTreeMap<RequestId, rivet_data::generated::shared_depot_fs_read_v2::FsReadRequest>,
 	/// Session opens at a position this maintainer has not applied yet, by volume, with the
 	/// position each waits for. Every one is also in `pending_fs_reads` with its deadline
 	/// timer armed; an apply that reaches its position queues it again, and its timer answers
@@ -784,6 +836,7 @@ impl MaintainerState {
 			+ self.pending_checkpoints.len()
 			+ self.pending.len()
 			+ self.awaiting_deletion.len()
+			+ self.awaiting_lazy_fork.len()
 			+ self.pending_fs_reads.len()
 			+ deletion::pending_requests(self)
 	}
@@ -876,6 +929,8 @@ impl MaintainerState {
 			maintainer_log: Default::default(),
 			claim_epochs: Default::default(),
 			filesystem: Default::default(),
+			groups: Default::default(),
+			lazy_forks_absent: Default::default(),
 			repairs: Default::default(),
 			alarms: Default::default(),
 			retired: BTreeMap::new(),
@@ -905,6 +960,7 @@ impl MaintainerState {
 			operations: operations::Operations::default(),
 			pending: BTreeMap::new(),
 			awaiting_deletion: BTreeMap::new(),
+			awaiting_lazy_fork: Default::default(),
 			open_deadlines: Default::default(),
 			open_reads: BTreeMap::new(),
 			initial_bytes_held: 0,
@@ -918,6 +974,7 @@ impl MaintainerState {
 			opens_admitted_while_budget_full: Vec::new(),
 			pending_checkpoints: BTreeMap::new(),
 			pending_fork_references: BTreeMap::new(),
+			pin_waiting_acquires: BTreeSet::new(),
 			fork_checked: BTreeSet::new(),
 			forks: Default::default(),
 			fork_cleanup: Default::default(),
@@ -984,6 +1041,7 @@ impl MaintainerState {
 			| Operation::MaterializeStore { .. }
 			| Operation::PendingWork { .. }
 			| Operation::SweepPending { .. }
+			| Operation::ForkPinPass { .. }
 			| Operation::ReplayOp { .. } => self.config.tuning().cold_io_timeout_ms,
 			Operation::PrepareSplit { .. } | Operation::DeleteRetired { .. } => {
 				SPLIT_STORAGE_TIMEOUT_MS
@@ -991,6 +1049,7 @@ impl MaintainerState {
 			Operation::MaterializePeer { .. }
 			| Operation::ForkCleanupPeer { .. }
 			| Operation::ForkPeer { .. }
+			| Operation::GroupRead { .. }
 			| Operation::PromotionList { .. }
 			| Operation::CatchUp { .. }
 			| Operation::DeleteReplica { .. }
@@ -1042,6 +1101,9 @@ impl MaintainerState {
 			stop::load_finished(self, op_id);
 		}
 		effects.cancel_timer(MaintainerTimer::Operation(op_id));
+		// A pass over a volume's fork pins that never answered applied nothing the cache
+		// counts; a completed one took its record before finishing.
+		self.groups.archive_passes.remove(&op_id);
 		let volumes = pending_volumes_written(&operation);
 		pending_work::wrote(self, volumes, effects);
 		unload::operation_finished(self, &operation);
@@ -1164,6 +1226,7 @@ pub(crate) fn differing_fields(a: &MaintainerState, b: &MaintainerState) -> Vec<
 		held_sweeps,
 		held_sweep_retry_armed,
 		pending_fork_references,
+		pin_waiting_acquires,
 		pending_checkpoints,
 		retired,
 		deleting,
@@ -1263,8 +1326,10 @@ fn pending_volumes_written(operation: &Operation) -> Vec<depot_fs_core::work::Pe
 		Operation::MaterializePeer { .. }
 		| Operation::ForkCleanupPeer { .. }
 		| Operation::ForkPeer { .. }
+		| Operation::GroupRead { .. }
 		| Operation::PendingWork { .. }
 		| Operation::SweepPending { .. }
+		| Operation::ForkPinPass { .. }
 		| Operation::FilesystemQuery { .. }
 		| Operation::FilesystemLoad { .. }
 		| Operation::FilesystemRead { .. }
@@ -1390,6 +1455,7 @@ fn store_operation_name(operation: &Operation) -> &'static str {
 	match operation {
 		Operation::PendingWork { .. } => "pending_work",
 		Operation::SweepPending { .. } => "sweep_pending",
+		Operation::ForkPinPass { .. } => "fork_pin_pass",
 		Operation::Checkpoint { .. } => "checkpoint",
 		Operation::ForkReference { .. } => "fork_reference",
 		Operation::ForkStore { .. } => "fork_store",
@@ -1411,6 +1477,7 @@ fn store_operation_name(operation: &Operation) -> &'static str {
 		| Operation::MaterializePeer { .. }
 		| Operation::ForkCleanupPeer { .. }
 		| Operation::ForkPeer { .. }
+		| Operation::GroupRead { .. }
 		| Operation::PromotionList { .. }
 		| Operation::CatchUp { .. }
 		| Operation::DeleteReplica { .. }
@@ -1465,6 +1532,20 @@ pub(crate) fn fence(state: &mut MaintainerState, effects: &mut Effects) {
 	revoke_lifetime(state, effects);
 }
 
+/// Ends this lifetime gracefully: its authority and work end as in a fence, without counting
+/// one, and the lifetime is `Stopped` once its cold store closes. The supervisor's drain sends
+/// it, and the maintainer does it itself to hand a grant back. An ending lifetime is left alone.
+pub(crate) fn stop_gracefully(state: &mut MaintainerState, effects: &mut Effects) {
+	if matches!(
+		state.phase,
+		MaintainerPhase::Fenced | MaintainerPhase::Stopped | MaintainerPhase::Draining
+	) {
+		return;
+	}
+	revoke_lifetime(state, effects);
+	state.phase = MaintainerPhase::Draining;
+}
+
 /// Withdraws this lifetime's authority and cancels its work before closing the cold store.
 /// Graceful drains share the same cleanup without reporting an unexpected fence.
 pub(super) fn revoke_lifetime(state: &mut MaintainerState, effects: &mut Effects) {
@@ -1477,6 +1558,7 @@ pub(super) fn revoke_lifetime(state: &mut MaintainerState, effects: &mut Effects
 	effects.cancel_timer(MaintainerTimer::FilesystemFlushBatch);
 	effects.cancel_timer(MaintainerTimer::MaintainerLogDue);
 	effects.cancel_timer(MaintainerTimer::MemtableBudgetShed);
+	effects.cancel_timer(MaintainerTimer::InexpressibleHoldDeadline);
 	for worker in std::mem::take(&mut state.maintainer_log)
 		.members
 		.into_keys()
@@ -1523,6 +1605,7 @@ pub(super) fn revoke_lifetime(state: &mut MaintainerState, effects: &mut Effects
 	poll::fence(state);
 	member_repair::clear(state, effects);
 	effects.cancel_timer(MaintainerTimer::Alarms);
+	alarms::lifetime_revoked(state);
 	for (id, operation) in state.operations.take_all() {
 		if matches!(
 			operation,
@@ -1533,6 +1616,10 @@ pub(super) fn revoke_lifetime(state: &mut MaintainerState, effects: &mut Effects
 			)
 		) {
 			effects.execute(MaintainerEffect::CancelAlarmRequest { op_id: id });
+		}
+		if let Operation::GroupRead { group, .. } = operation {
+			effects.execute(MaintainerEffect::CancelGroupReadRequest { op_id: id });
+			groups::read_revoked(state, id, group);
 		}
 		effects.cancel_timer(MaintainerTimer::Operation(id));
 	}
@@ -1551,7 +1638,10 @@ pub(super) fn revoke_lifetime(state: &mut MaintainerState, effects: &mut Effects
 			effects,
 		);
 	}
-	for (_, caller) in std::mem::take(&mut state.awaiting_deletion) {
+	for caller in std::mem::take(&mut state.awaiting_deletion)
+		.into_values()
+		.chain(state.awaiting_lazy_fork.take_all())
+	{
 		lifecycle::reject(
 			caller.request_id,
 			depot_types::client::not_maintainer(),
@@ -1562,6 +1652,8 @@ pub(super) fn revoke_lifetime(state: &mut MaintainerState, effects: &mut Effects
 	effects.cancel_timer(MaintainerTimer::ForkCleanupDue);
 	state.fork_cleanup = Default::default();
 	materialize::fence(state, effects);
+	state.pin_waiting_acquires.clear();
+	state.groups.acquire_refs.clear();
 	for (request_id, _) in std::mem::take(&mut state.pending_fork_references) {
 		effects.cancel_timer(MaintainerTimer::ForkReferenceRequest(request_id));
 		lifecycle::reject(request_id, depot_types::client::not_maintainer(), effects);

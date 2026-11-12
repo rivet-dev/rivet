@@ -1,5 +1,6 @@
 export const LOBBY_CAPACITY = 16;
 export const TICK_MS = 100; // 10 tps
+export const SNAPSHOT_INTERVAL_MS = 1_000; // Saving this often bounds how much progress a crash can lose.
 export const WORLD_SIZE = 1200;
 export const MAX_SPEED = 150; // pixels per second
 export const SHOOT_RANGE = 250;

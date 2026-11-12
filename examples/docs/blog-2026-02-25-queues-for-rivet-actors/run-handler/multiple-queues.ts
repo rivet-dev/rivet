@@ -1,10 +1,18 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { actor, queue, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { joinSignals } from "rivetkit/utils";
 
 const agent = actor({
-  state: { running: false, messages: [] as string[] },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(
+        "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL)",
+      );
+    },
+  }),
+  vars: { running: false },
   queues: {
     // Separate queues for different message types
     prompt: queue<{ prompt: string }, undefined>(),
@@ -28,17 +36,17 @@ const agent = actor({
         .catch(() => {});
 
       // Generate until complete or cancelled
-      c.state.running = true;
+      c.vars.running = true;
       const { text } = await generateText({
         model: openai("gpt-5"),
         prompt: promptMessage.body.prompt,
         abortSignal: runSignal,
       }).finally(() => {
         stopController.abort();
-        c.state.running = false;
+        c.vars.running = false;
       });
 
-      c.state.messages.push(text);
+      await c.db.execute("INSERT INTO messages (text) VALUES (?)", text);
       await promptMessage.complete();
     }
   },

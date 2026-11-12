@@ -25,15 +25,12 @@ type LocalAlarmTask = JoinHandle<()>;
 #[cfg(feature = "wasm-runtime")]
 type LocalAlarmTask = futures::future::AbortHandle;
 
-#[cfg(feature = "sqlite-local")]
-use crate::actor::actor_runtime_socket::{
-	ActorRuntimeSocketEndpoint, ActorRuntimeSocketEndpointInfo,
-};
 use crate::actor::connection::{
 	ConnHandle, ConnHandles, HibernatableConnectionMetadata, PendingHibernationChanges,
 	hibernatable_id_from_slice,
 };
 use crate::actor::diagnostics::ActorDiagnostics;
+use crate::actor::fork::{ForkLink, StartFork};
 use crate::actor::internal_storage;
 use crate::actor::kv::LegacyActorKv;
 use crate::actor::lifecycle_hooks::Reply;
@@ -48,7 +45,7 @@ use crate::actor::task_types::UserTaskKind;
 use crate::actor::work_registry::{ActorWorkKind, CountGuard, RegionGuard};
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::{Inspector, InspectorSnapshot};
-use crate::sqlite::SqliteDb;
+use crate::sqlite::{SqliteBatchStatement, SqliteDb};
 use crate::telemetry::{
 	ActorInvocationTelemetry, ActorInvocationTraceContext, ActorTelemetryIdentity,
 	IncomingTraceContext, OutboundCallInvocation, WorkflowRunInvocation, WorkflowRunOutcome,
@@ -99,8 +96,13 @@ pub(crate) struct ActorContextInner {
 	/// phase. Startup consumes it once.
 	// Forced-sync: set once before the actor task starts and taken by its startup.
 	start_received_at: parking_lot::Mutex<Option<crate::time::Instant>>,
-	#[cfg(feature = "sqlite-local")]
-	actor_runtime_socket: ActorRuntimeSocketEndpoint,
+	/// The individual actor fork the start command named. Startup consumes it once.
+	// Forced-sync: set once before the actor task starts and taken by its startup.
+	start_fork: parking_lot::Mutex<Option<StartFork>>,
+	/// The individual actor forks behind this actor, oldest first, loaded at startup. A start
+	/// that runs a fork hook appends that fork before the hook runs.
+	// Forced-sync: read by synchronous accessors and never held across `.await`.
+	fork_chain: RwLock<Vec<ForkLink>>,
 	// Forced-sync: actor state snapshots are exposed through synchronous
 	// accessors and are never held across `.await`.
 	pub(super) current_state: RwLock<Vec<u8>>,
@@ -208,6 +210,7 @@ pub(crate) struct ActorContextInner {
 	name: String,
 	key: ActorKey,
 	region: String,
+	namespace: String,
 }
 
 #[derive(Debug, Default)]
@@ -407,6 +410,7 @@ impl ActorContext {
 		name: String,
 		key: ActorKey,
 		region: String,
+		namespace: String,
 		_generation: Option<u32>,
 		_envoy_key: String,
 		config: ActorConfig,
@@ -422,9 +426,6 @@ impl ActorContext {
 		#[cfg(feature = "sqlite-local")]
 		sql.set_vfs_metrics(Arc::new(metrics.clone()));
 		let diagnostics = ActorDiagnostics::new(actor_id.clone());
-		#[cfg(feature = "sqlite-local")]
-		let actor_runtime_socket =
-			ActorRuntimeSocketEndpoint::new(config.enable_actor_runtime_socket, sql.clone());
 		let state_save_interval = config.state_save_interval;
 		let tracing_config = Arc::clone(&config.tracing);
 		let max_schedules = config.max_schedules;
@@ -438,8 +439,8 @@ impl ActorContext {
 			sql,
 			new_actor_storage: AtomicBool::new(false),
 			start_received_at: parking_lot::Mutex::new(None),
-			#[cfg(feature = "sqlite-local")]
-			actor_runtime_socket,
+			start_fork: parking_lot::Mutex::new(None),
+			fork_chain: RwLock::new(Vec::new()),
 			current_state: RwLock::new(Vec::new()),
 			persisted: RwLock::new(PersistedActor::default()),
 			last_pushed_alarm: RwLock::new(None),
@@ -529,6 +530,7 @@ impl ActorContext {
 			name,
 			key,
 			region,
+			namespace,
 		});
 		let ctx = Self(inner, None);
 		ctx.configure_sleep_hooks();
@@ -536,35 +538,35 @@ impl ActorContext {
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub async fn kv_batch_get(&self, keys: &[&[u8]]) -> Result<Vec<Option<Vec<u8>>>> {
 		self.0.user_kv.batch_get(keys).await
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub async fn kv_batch_put(&self, entries: &[(&[u8], &[u8])]) -> Result<()> {
 		self.0.user_kv.batch_put(entries).await
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub async fn kv_batch_delete(&self, keys: &[&[u8]]) -> Result<()> {
 		self.0.user_kv.batch_delete(keys).await
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub async fn kv_delete_range(&self, start: &[u8], end: &[u8]) -> Result<()> {
 		self.0.user_kv.delete_range(start, end).await
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub async fn kv_list_prefix(
 		&self,
@@ -575,7 +577,7 @@ impl ActorContext {
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub async fn kv_list_range(
 		&self,
@@ -587,7 +589,7 @@ impl ActorContext {
 	}
 
 	#[deprecated(
-		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+		note = "actor KV was deprecated in 3.0 and will be removed in a future version. Store data in SQLite (`sql()`). See https://rivet.dev/actors/docs/deprecated/kv"
 	)]
 	pub fn kv(&self) -> &ActorKv {
 		&self.0.user_kv
@@ -615,6 +617,27 @@ impl ActorContext {
 		*self.0.start_received_at.lock() = Some(received_at);
 	}
 
+	/// Records the individual actor fork this generation's start command named.
+	pub(crate) fn set_start_fork(&self, fork: Option<StartFork>) {
+		*self.0.start_fork.lock() = fork;
+	}
+
+	/// The fork this generation's start command named, at most once.
+	pub(crate) fn take_start_fork(&self) -> Option<StartFork> {
+		self.0.start_fork.lock().take()
+	}
+
+	/// The individual actor forks behind this actor, oldest first; empty when it was never
+	/// forked. During the fork hook it already ends with the fork being applied. Namespace
+	/// forks are not listed.
+	pub fn fork_chain(&self) -> Vec<ForkLink> {
+		self.0.fork_chain.read().clone()
+	}
+
+	pub(crate) fn set_fork_chain(&self, chain: Vec<ForkLink>) {
+		*self.0.fork_chain.write() = chain;
+	}
+
 	/// When the runtime received this generation's start, at most once.
 	pub(crate) fn take_start_received_at(&self) -> Option<crate::time::Instant> {
 		self.0.start_received_at.lock().take()
@@ -624,16 +647,6 @@ impl ActorContext {
 	/// at most once, so a restart within this context probes storage again.
 	pub(crate) fn take_new_actor_storage(&self) -> bool {
 		self.0.new_actor_storage.swap(false, Ordering::AcqRel)
-	}
-
-	#[cfg(feature = "sqlite-local")]
-	pub async fn provision_actor_runtime_socket(&self) -> Result<ActorRuntimeSocketEndpointInfo> {
-		self.0.actor_runtime_socket.provision().await
-	}
-
-	#[cfg(feature = "sqlite-local")]
-	pub(crate) async fn shutdown_actor_runtime_socket(&self) {
-		self.0.actor_runtime_socket.shutdown().await;
 	}
 
 	pub async fn db_exec(&self, sql: &str) -> Result<Vec<u8>> {
@@ -871,10 +884,14 @@ impl ActorContext {
 	/// Deprecated no-op. Use `keep_awake` to hold the actor awake for the
 	/// duration of a future, or `wait_until` to keep work alive across the
 	/// sleep grace period. Retained only for NAPI bridge compatibility.
-	#[deprecated(note = "no-op: use `keep_awake` or `wait_until` instead")]
+	#[deprecated(
+		note = "`set_prevent_sleep` was deprecated in 3.0 and will be removed in a future version. It is a no-op. Use `keep_awake` or `wait_until`. See https://rivet.dev/actors/docs/deprecated/prevent-sleep"
+	)]
 	pub fn set_prevent_sleep(&self, _enabled: bool) {}
 
-	#[deprecated(note = "no-op: always returns false")]
+	#[deprecated(
+		note = "`prevent_sleep` was deprecated in 3.0 and will be removed in a future version. It is a no-op that always returns false. Use `keep_awake` or `wait_until`. See https://rivet.dev/actors/docs/deprecated/prevent-sleep"
+	)]
 	pub fn prevent_sleep(&self) -> bool {
 		false
 	}
@@ -1004,6 +1021,12 @@ impl ActorContext {
 
 	pub fn region(&self) -> &str {
 		&self.0.region
+	}
+
+	/// The name of the namespace the actor runs in. After a namespace fork it differs from the
+	/// source actor's namespace while the actor id stays the same.
+	pub fn namespace(&self) -> &str {
+		&self.0.namespace
 	}
 
 	pub fn has_state(&self) -> bool {
@@ -1307,14 +1330,23 @@ impl ActorContext {
 	}
 
 	pub async fn disconnect_conn(&self, id: ConnId) -> Result<()> {
-		self.disconnect_transport_only(|conn| conn.id() == id).await
+		self.disconnect_conn_with_reason(id, None).await
+	}
+
+	pub async fn disconnect_conn_with_reason(
+		&self,
+		id: ConnId,
+		reason: Option<&str>,
+	) -> Result<()> {
+		self.disconnect_transport_only(|conn| conn.id() == id, reason)
+			.await
 	}
 
 	pub async fn disconnect_conns<F>(&self, predicate: F) -> Result<()>
 	where
 		F: FnMut(&ConnHandle) -> bool,
 	{
-		self.disconnect_transport_only(predicate).await
+		self.disconnect_transport_only(predicate, None).await
 	}
 
 	pub(crate) fn request_hibernation_transport_save(&self, conn_id: &str) {
@@ -1823,6 +1855,25 @@ impl ActorContext {
 		save_request_revision: u64,
 		state_transaction_epoch: u64,
 	) -> Result<bool> {
+		self.save_state_carrying_at_transaction_epoch(
+			deltas,
+			save_request_revision,
+			state_transaction_epoch,
+			&mut Vec::new(),
+		)
+		.await
+	}
+
+	/// Like `save_state_with_revision_at_transaction_epoch`, but the batch that writes the
+	/// state also runs the statements in `carried`, which it empties. `carried` keeps its
+	/// statements when nothing was written, so the caller can write them another way.
+	pub(crate) async fn save_state_carrying_at_transaction_epoch(
+		&self,
+		deltas: Vec<StateDelta>,
+		save_request_revision: u64,
+		state_transaction_epoch: u64,
+		carried: &mut Vec<SqliteBatchStatement>,
+	) -> Result<bool> {
 		let (deltas, pending_hibernation_changes) = match self.prepare_state_deltas(deltas) {
 			Ok(prepared) => prepared,
 			Err(error) => return Err(error),
@@ -1833,6 +1884,7 @@ impl ActorContext {
 				None,
 				save_request_revision,
 				Some(state_transaction_epoch),
+				carried,
 			)
 			.await
 		{
@@ -1884,6 +1936,7 @@ impl ActorContext {
 				Some(workflow_writes),
 				save_request_revision,
 				expected_state_transaction_epoch,
+				&mut Vec::new(),
 			)
 			.await
 		{

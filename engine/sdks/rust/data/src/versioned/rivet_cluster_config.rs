@@ -8,4 +8,8 @@ pub enum RivetClusterConfigData {
 	V1(rivet_cluster_config_v1::Data),
 }
 
-impl_versioned_v1!(RivetClusterConfigData, rivet_cluster_config_v1::Data);
+impl_versioned_v1!(
+	RivetClusterConfigData,
+	RIVET_CLUSTER_CONFIG,
+	rivet_cluster_config_v1::Data
+);

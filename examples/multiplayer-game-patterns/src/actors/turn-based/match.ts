@@ -1,25 +1,23 @@
 import { type ActorContextOf, actor, event, UserError } from "rivetkit";
-import { interval } from "rivetkit/utils";
+import { db } from "rivetkit/db";
 import type { registry } from "../index.ts";
 import { getPlayerColor } from "../player-color.ts";
 import { BOARD_SIZE, type CellValue, type GameResult } from "./config.ts";
 
 const EMPTY_MATCH_DESTROY_DELAY_MS = 10_000;
 
-interface PlayerEntry {
-	connId: string | null;
-	name: string;
-	color: string;
-	symbol: "X" | "O";
-}
-
-interface State {
-	matchId: string;
-	board: CellValue[][];
-	players: Record<string, PlayerEntry>;
-	currentTurn: "X" | "O";
+type GameRow = {
+	board: string;
+	current_turn: "X" | "O";
 	result: GameResult;
-	moveCount: number;
+	move_count: number;
+};
+
+interface MatchVars {
+	// The live connection playing each seat, keyed by player id.
+	connIds: Map<string, string>;
+	// When the last player left. It is null while a player is connected and
+	// after a restart.
 	emptySince: number | null;
 }
 
@@ -29,132 +27,181 @@ export const turnBasedMatch = actor({
 		gameUpdate: event<GameSnapshot>(),
 	},
 	// docs:start state
-	createState: (_c, input: { matchId: string }): State => {
-		const board: CellValue[][] = [];
-		for (let r = 0; r < BOARD_SIZE; r++) {
-			board.push(Array(BOARD_SIZE).fill(""));
-		}
-		return {
-			matchId: input.matchId,
-			board,
-			players: {},
-			currentTurn: "X",
-			result: null,
-			moveCount: 0,
-			emptySince: null,
-		};
-	},
-	onConnect: (c, conn) => {
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS game (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					board TEXT NOT NULL,
+					current_turn TEXT NOT NULL,
+					result TEXT,
+					move_count INTEGER NOT NULL
+				)
+			`);
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS players (
+					player_id TEXT PRIMARY KEY,
+					name TEXT NOT NULL,
+					symbol TEXT NOT NULL
+				)
+			`);
+			await db.execute(
+				"INSERT OR IGNORE INTO game (id, board, current_turn, result, move_count) VALUES (1, ?, 'X', NULL, 0)",
+				JSON.stringify(emptyBoard()),
+			);
+		},
+	}),
+	// Connections end when the Actor stops, so the connection playing each seat
+	// only lives in memory.
+	createVars: (): MatchVars => ({
+		connIds: new Map(),
+		emptySince: null,
+	}),
+	onConnect: async (c, conn) => {
 		const playerId = (conn.params as { playerId?: string })?.playerId;
 		if (!playerId) return;
-		const player = c.state.players[playerId];
-		if (!player) {
+		const [seat] = await c.db.execute(
+			"SELECT player_id FROM players WHERE player_id = ?",
+			playerId,
+		);
+		if (!seat) {
 			conn.disconnect("invalid_player");
 			return;
 		}
-		player.connId = conn.id;
-		c.state.emptySince = null;
-		broadcastSnapshot(c);
+		c.vars.connIds.set(playerId, conn.id);
+		c.vars.emptySince = null;
+		await broadcastSnapshot(c);
 	},
 	// docs:end state
 	// docs:start abandon
-	onDisconnect: (c, conn) => {
-		const found = findPlayerByConnId(c.state, conn.id);
-		if (!found) return;
-		const [, player] = found;
-		player.connId = null;
-		broadcastSnapshot(c);
-
-		const anyConnected = Object.values(c.state.players).some(
-			(p) => p.connId !== null,
-		);
-		if (!anyConnected) {
-			c.state.emptySince = Date.now();
-		}
-	},
-	run: async (c) => {
-		const tick = interval(1_000);
-		while (!c.aborted) {
-			await tick();
-			if (c.aborted) break;
-
-			const anyConnected = Object.values(c.state.players).some(
-				(p) => p.connId !== null,
+	onDisconnect: async (c, conn) => {
+		const playerId = findPlayerByConnId(c.vars, conn.id);
+		if (!playerId) return;
+		c.vars.connIds.delete(playerId);
+		// A shutdown disconnects everyone, but those players come back after
+		// the restart, so only a real leave starts the countdown.
+		if (c.vars.connIds.size === 0 && !c.aborted) {
+			// A schedule survives a sleep or restart, which a timer in memory
+			// would not, and it wakes the Actor to run.
+			const emptySince = Date.now();
+			c.vars.emptySince = emptySince;
+			await c.schedule.after(
+				EMPTY_MATCH_DESTROY_DELAY_MS,
+				"destroyIfEmpty",
+				emptySince,
 			);
-			if (anyConnected) {
-				c.state.emptySince = null;
-				continue;
-			}
-			if (c.state.emptySince === null) continue;
-			if (
-				Date.now() - c.state.emptySince >=
-				EMPTY_MATCH_DESTROY_DELAY_MS
-			) {
-				c.destroy();
-				break;
-			}
 		}
+		await broadcastSnapshot(c);
 	},
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
 		await client.turnBasedMatchmaker
 			.getOrCreate(["main"])
-			.send("closeMatch", { matchId: c.state.matchId });
+			.closeMatch({ matchId: c.key[0]! });
 	},
 	// docs:end abandon
 	actions: {
-		createPlayer: (
+		// docs:start abandon
+		destroyIfEmpty: (c, emptySince: number) => {
+			if (!c.scheduledFire) {
+				throw new UserError("destroyIfEmpty only runs from a schedule", {
+					code: "schedule_only",
+				});
+			}
+			// Keep the match if a player came back. A player who came back and
+			// left again armed a newer schedule, so only that one may destroy
+			// the match. After a restart `emptySince` is null and nobody has
+			// connected since.
+			if (c.vars.connIds.size > 0) return;
+			if (
+				c.vars.emptySince !== null &&
+				c.vars.emptySince !== emptySince
+			) {
+				return;
+			}
+			c.destroy();
+		},
+		// docs:end abandon
+		createPlayer: async (
 			c,
 			input: { playerId: string; playerName: string; symbol: "X" | "O" },
 		) => {
-			c.state.players[input.playerId] = {
-				connId: null,
-				name: input.playerName,
-				color: getPlayerColor(input.playerId),
-				symbol: input.symbol,
-			};
+			await c.db.execute(
+				"INSERT OR REPLACE INTO players (player_id, name, symbol) VALUES (?, ?, ?)",
+				input.playerId,
+				input.playerName,
+				input.symbol,
+			);
 		},
 		// docs:start make-move
-		makeMove: (c, input: { row: number; col: number }) => {
-			if (c.state.result !== null) {
-				throw new UserError("game is over", { code: "game_over" });
-			}
-			const found = findPlayerByConnId(c.state, c.conn.id);
-			if (!found) {
-				throw new UserError("player not found", {
-					code: "player_not_found",
-				});
-			}
-			const [, player] = found;
-			if (player.symbol !== c.state.currentTurn) {
-				throw new UserError("not your turn", { code: "not_your_turn" });
-			}
-			const { row, col } = input;
-			if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) {
-				throw new UserError("invalid cell", { code: "invalid_cell" });
-			}
-			if (c.state.board[row]?.[col] !== "") {
-				throw new UserError("cell already taken", {
-					code: "cell_taken",
-				});
-			}
+		makeMove: async (c, input: { row: number; col: number }) => {
+			const playerId = findPlayerByConnId(c.vars, c.conn.id);
 
-			c.state.board[row]![col] = player.symbol;
-			c.state.moveCount += 1;
+			// Check and save the move in one transaction, so two moves sent at
+			// once cannot both pass the turn check.
+			await c.db.transaction(
+				async (tx) => {
+					const [game] = await tx.execute<GameRow>(
+						"SELECT board, current_turn, result, move_count FROM game WHERE id = 1",
+					);
+					if (game!.result !== null) {
+						throw new UserError("game is over", {
+							code: "game_over",
+						});
+					}
+					// A connection without a seat has a null player id and finds no row.
+					const [player] = await tx.execute<{ symbol: "X" | "O" }>(
+						"SELECT symbol FROM players WHERE player_id = ?",
+						playerId,
+					);
+					if (!player) {
+						throw new UserError("player not found", {
+							code: "player_not_found",
+						});
+					}
+					if (player.symbol !== game!.current_turn) {
+						throw new UserError("not your turn", { code: "not_your_turn" });
+					}
+					const { row, col } = input;
+					if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) {
+						throw new UserError("invalid cell", { code: "invalid_cell" });
+					}
+					const board = JSON.parse(game!.board) as CellValue[][];
+					if (board[row]?.[col] !== "") {
+						throw new UserError("cell already taken", {
+							code: "cell_taken",
+						});
+					}
 
-			const winner = checkWinner(c.state.board);
-			if (winner) {
-				c.state.result = winner === "X" ? "x_wins" : "o_wins";
-			} else if (c.state.moveCount >= BOARD_SIZE * BOARD_SIZE) {
-				c.state.result = "draw";
-			} else {
-				c.state.currentTurn = c.state.currentTurn === "X" ? "O" : "X";
-			}
+					board[row]![col] = player.symbol;
+					const moveCount = game!.move_count + 1;
+					let currentTurn = game!.current_turn;
+					let result: GameResult = null;
 
-			broadcastSnapshot(c);
+					const winner = checkWinner(board);
+					if (winner) {
+						result = winner === "X" ? "x_wins" : "o_wins";
+					} else if (moveCount >= BOARD_SIZE * BOARD_SIZE) {
+						result = "draw";
+					} else {
+						currentTurn = currentTurn === "X" ? "O" : "X";
+					}
+
+					await tx.execute(
+						"UPDATE game SET board = ?, current_turn = ?, result = ?, move_count = ? WHERE id = 1",
+						JSON.stringify(board),
+						currentTurn,
+						result,
+						moveCount,
+					);
+				},
+				{ name: "make-move" },
+			);
+
+			await broadcastSnapshot(c);
 		},
 		// docs:end make-move
-		getSnapshot: (c) => buildSnapshot(c),
+		getSnapshot: (c): Promise<GameSnapshot> => buildSnapshot(c),
 	},
 });
 
@@ -206,36 +253,53 @@ interface GameSnapshot {
 	>;
 }
 
-function buildSnapshot(c: ActorContextOf<typeof turnBasedMatch>): GameSnapshot {
+async function buildSnapshot(
+	c: ActorContextOf<typeof turnBasedMatch>,
+): Promise<GameSnapshot> {
+	const [game] = await c.db.execute<GameRow>(
+		"SELECT board, current_turn, result, move_count FROM game WHERE id = 1",
+	);
+	// Seats are listed in the order they were taken.
+	const seats = await c.db.execute<{
+		player_id: string;
+		name: string;
+		symbol: "X" | "O";
+	}>("SELECT player_id, name, symbol FROM players ORDER BY rowid");
+
 	const players: GameSnapshot["players"] = {};
-	for (const [id, entry] of Object.entries(c.state.players)) {
-		players[id] = {
-			name: entry.name,
-			color: entry.color,
-			symbol: entry.symbol,
-			connected: entry.connId !== null,
+	for (const seat of seats) {
+		players[seat.player_id] = {
+			name: seat.name,
+			color: getPlayerColor(seat.player_id),
+			symbol: seat.symbol,
+			connected: c.vars.connIds.has(seat.player_id),
 		};
 	}
 	return {
-		matchId: c.state.matchId,
-		board: c.state.board,
-		currentTurn: c.state.currentTurn,
-		result: c.state.result,
-		moveCount: c.state.moveCount,
+		matchId: c.key[0]!,
+		board: JSON.parse(game!.board) as CellValue[][],
+		currentTurn: game!.current_turn,
+		result: game!.result,
+		moveCount: game!.move_count,
 		players,
 	};
 }
 
-function broadcastSnapshot(c: ActorContextOf<typeof turnBasedMatch>) {
-	c.broadcast("gameUpdate", buildSnapshot(c));
+async function broadcastSnapshot(c: ActorContextOf<typeof turnBasedMatch>) {
+	c.broadcast("gameUpdate", await buildSnapshot(c));
 }
 
-function findPlayerByConnId(
-	state: State,
-	connId: string,
-): [string, PlayerEntry] | null {
-	for (const [id, entry] of Object.entries(state.players)) {
-		if (entry.connId === connId) return [id, entry];
+function emptyBoard(): CellValue[][] {
+	const board: CellValue[][] = [];
+	for (let r = 0; r < BOARD_SIZE; r++) {
+		board.push(Array(BOARD_SIZE).fill(""));
+	}
+	return board;
+}
+
+function findPlayerByConnId(vars: MatchVars, connId: string): string | null {
+	for (const [playerId, playerConnId] of vars.connIds) {
+		if (playerConnId === connId) return playerId;
 	}
 	return null;
 }

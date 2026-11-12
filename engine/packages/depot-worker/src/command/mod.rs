@@ -1,5 +1,10 @@
 //! Typed handlers execute beside the maintainer's filesystem, outside its lifecycle loop.
+pub mod groups;
 mod kv;
+
+/// The name of the KV file every command volume keeps under its root; the point reads of
+/// writerless commands and the writer path address the same file.
+pub const KV_FILE: &[u8] = b"kv";
 mod session;
 mod speculation;
 pub mod volume_host;
@@ -8,13 +13,16 @@ use anyhow::{Result, ensure};
 use bytes::Bytes;
 use depot_client::filesystem::{Error, Filesystem};
 pub use depot_client::filesystem::{Error as CommitError, Transaction};
-use depot_protocol::command::{Command, CommandTag, Request, Response};
+use depot_protocol::command::{Command, CommandTag, Request, Response, body_version};
 use futures_util::future::BoxFuture;
 use parking_lot::Mutex;
+use rivet_data::families::VersionedFamily;
 use std::sync::Weak;
 use std::{collections::BTreeMap, future::Future, sync::Arc, time::Duration};
 use tokio_util::sync::{CancellationToken, DropGuard};
 use vbare::Versioned;
+
+use crate::tablet_maintainer_machine::state::MaintainerPhase;
 
 /// A command-scoped database handle. The maintainer owns opening and closing the filesystem.
 #[derive(Clone)]
@@ -33,6 +41,219 @@ pub struct KvHandle {
 	speculative: Option<Arc<speculation::SpeculativeWriter>>,
 	/// Selects the version of each versioned value a command stores; the worker's topology.
 	versions: Arc<dyn rivet_topology::versions::WriteVersions>,
+	/// The volume was made from its parent group's copy at a fork, as the record the open
+	/// answered says; `None` for a volume created in place or opened speculatively.
+	lazy_fork: Option<rivet_data::generated::shared_depot_fs_v2::FsLazyForkOrigin>,
+	/// Makes a tablet version mark durable before a value above the read floor is stored;
+	/// the hosting maintainer.
+	marks: Arc<dyn VersionMarks>,
+}
+
+/// Raises the version marks of the tablet a command's volume lives in. A command stores a
+/// value of a family above the version `KvHandle::write_version` selected only when the
+/// selected version cannot express it, and only after the tablet's durable record carries
+/// a mark of that family at that version.
+///
+/// Two layers keep a worker that cannot read the mark from hosting the tablet. The record is
+/// durable before the command commits, and a worker that opens the record refuses a mark it
+/// cannot read (reports the refusal and fences), so it never decodes the value. The raised
+/// mark also reaches the coordinator, which then never grants or places the tablet on such a
+/// worker; that report is sent once the pass carrying the mark is dispatched, so it usually
+/// lands before the commit, but nothing orders the two. A grant to an older worker in that
+/// window costs one refused open and a re-grant, never a misread.
+pub trait VersionMarks: Send + Sync + 'static {
+	/// Resolves once the tablet's durable record carries `mark` or a higher version of its
+	/// family. Fails at once for a mark this binary does not write, and with a typed
+	/// retryable refusal when the hosting maintainer is still opening (`TabletOpening`),
+	/// cannot take the request now (`CommitError::Overloaded`) or is not serving or stops
+	/// serving first (`CommitError::Fenced`, which the caller follows to the tablet's next
+	/// host); nothing the command planned is stored.
+	fn ensure(
+		&self,
+		mark: rivet_data::generated::shared_depot_types_v1::VersionMark,
+	) -> BoxFuture<'_, Result<()>>;
+}
+
+/// A command needed a version mark while its tablet's maintainer was still opening. Nothing
+/// was requested or stored; the command host answers it as an overloaded volume transition,
+/// so the edge sends the command again after the hint instead of re-resolving the route.
+#[derive(Debug, thiserror::Error)]
+#[error("the tablet is still opening, so its version marks cannot be raised yet")]
+pub(crate) struct TabletOpening;
+
+/// Sends `MaintainerEvent::VersionMarkWanted` to the hosting maintainer's inbox. Refuses with
+/// `CommitError::Overloaded` when the inbox is full and `CommitError::Fenced` when the
+/// maintainer is gone. It is called while `MaintainerVersionMarks::requested` is locked, so
+/// it must not block or await (`try_send` does neither).
+pub(crate) type RequestVersionMark = Arc<
+	dyn Fn(rivet_data::generated::shared_depot_types_v1::VersionMark) -> Result<(), CommitError>
+		+ Send
+		+ Sync,
+>;
+
+/// The hosting maintainer's marks: its published durable marks, and its inbox for a mark it
+/// does not carry yet.
+pub(crate) struct MaintainerVersionMarks {
+	pub(crate) snapshot:
+		tokio::sync::watch::Receiver<crate::tablet_maintainer_machine::MaintainerSnapshot>,
+	pub(crate) request: RequestVersionMark,
+	/// Marks one of this host's commands sent and is still waiting on, so concurrent commands
+	/// that need the same or a lower version wait on that request instead of each taking an
+	/// inbox slot. A command removes its entry when its wait ends, however it ends, so a later
+	/// command asks again if the mark is still not durable. Held only for short pushes and
+	/// removals, never across an await, and removed from `Drop`.
+	pub(crate) requested:
+		parking_lot::Mutex<Vec<rivet_data::generated::shared_depot_types_v1::VersionMark>>,
+}
+
+impl MaintainerVersionMarks {
+	pub(crate) fn new(
+		snapshot: tokio::sync::watch::Receiver<
+			crate::tablet_maintainer_machine::MaintainerSnapshot,
+		>,
+		request: RequestVersionMark,
+	) -> Self {
+		Self {
+			snapshot,
+			request,
+			requested: parking_lot::Mutex::new(Vec::new()),
+		}
+	}
+
+	/// Sends a request for `mark` and records it, unless another command already waits on a
+	/// delivered request covering it (`Ok(None)`). The send happens under the lock and the
+	/// entry is recorded only when it succeeds, so a command never waits on a request the
+	/// maintainer did not get: a racing command either sees the delivered request or sends
+	/// its own and is refused at admission like the first. The returned guard removes the
+	/// entry when dropped.
+	fn request_or_share(
+		&self,
+		mark: &rivet_data::generated::shared_depot_types_v1::VersionMark,
+	) -> Result<Option<RequestedMark<'_>>, CommitError> {
+		let mut requested = self.requested.lock();
+		if marks_cover(&requested, mark) {
+			return Ok(None);
+		}
+		(self.request)(mark.clone())?;
+		requested.push(mark.clone());
+		Ok(Some(RequestedMark {
+			requested: &self.requested,
+			mark: mark.clone(),
+		}))
+	}
+}
+
+/// One command's outstanding `VersionMarkWanted` in `MaintainerVersionMarks::requested`.
+struct RequestedMark<'a> {
+	requested:
+		&'a parking_lot::Mutex<Vec<rivet_data::generated::shared_depot_types_v1::VersionMark>>,
+	mark: rivet_data::generated::shared_depot_types_v1::VersionMark,
+}
+
+impl Drop for RequestedMark<'_> {
+	fn drop(&mut self) {
+		let mut requested = self.requested.lock();
+		if let Some(index) = requested.iter().position(|mark| mark == &self.mark) {
+			requested.swap_remove(index);
+		}
+	}
+}
+
+/// Whether this binary writes `mark`: its family is known and its version lies between the
+/// family's `min_read` and `max_write`.
+fn writes_mark(mark: &rivet_data::generated::shared_depot_types_v1::VersionMark) -> bool {
+	rivet_data::families::VersionFamily(mark.family)
+		.info()
+		.is_some_and(|info| info.min_read <= mark.version && mark.version <= info.max_write)
+}
+
+/// Whether `marks` carry `mark` or a higher version of its family.
+fn marks_cover(
+	marks: &[rivet_data::generated::shared_depot_types_v1::VersionMark],
+	mark: &rivet_data::generated::shared_depot_types_v1::VersionMark,
+) -> bool {
+	rivet_data::families::mark_of(marks, rivet_data::families::VersionFamily(mark.family))
+		.is_some_and(|version| version >= mark.version)
+}
+
+impl VersionMarks for MaintainerVersionMarks {
+	fn ensure(
+		&self,
+		mark: rivet_data::generated::shared_depot_types_v1::VersionMark,
+	) -> BoxFuture<'_, Result<()>> {
+		Box::pin(async move {
+			// The command host and the maintainer are the same binary, so a mark it does not
+			// write is a bug in the command; the maintainer would ignore it and the command
+			// would wait out its deadline.
+			ensure!(
+				writes_mark(&mark),
+				"a command asked for version {} of family {}, which this binary does not write",
+				mark.version,
+				mark.family
+			);
+			let phase = {
+				let snapshot = self.snapshot.borrow();
+				if marks_cover(&snapshot.version_marks_durable, &mark) {
+					return Ok(());
+				}
+				snapshot.phase.clone()
+			};
+
+			// Refuse before asking when no pass can raise the mark. An opening maintainer will
+			// serve shortly on this host, so the command is shed as a transition and sent again
+			// here; any other phase means the tablet's authority is moving or ending, so the
+			// refusal is `Fenced` and the caller follows the route to the next host.
+			match phase {
+				MaintainerPhase::Serving => {}
+				MaintainerPhase::Opening => return Err(TabletOpening.into()),
+				MaintainerPhase::Frozen
+				| MaintainerPhase::Draining
+				| MaintainerPhase::Stopped
+				| MaintainerPhase::Fenced => return Err(CommitError::Fenced.into()),
+			}
+
+			// Ask once per host, then wait for a pass to make the raised record durable. The
+			// wait ends with the grant's serving phase, refused as `Fenced` like the phases
+			// above, or with the command when its deadline drops it.
+			let _requested = self.request_or_share(&mark)?;
+			let mut snapshot = self.snapshot.clone();
+			let reached = snapshot
+				.wait_for(|snapshot| {
+					marks_cover(&snapshot.version_marks_durable, &mark)
+						|| snapshot.phase != MaintainerPhase::Serving
+				})
+				.await
+				.map_err(|_| CommitError::Fenced)?;
+			if !marks_cover(&reached.version_marks_durable, &mark) {
+				return Err(CommitError::Fenced.into());
+			}
+			Ok(())
+		})
+	}
+}
+
+/// What a command may learn of the record of the volume it runs on: the incarnation it
+/// holds and, for a volume made by a group fork, where it was forked from. A state machine
+/// that inherits state through a fork resets it once per incarnation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VolumeRecordView {
+	pub incarnation: [u8; 16],
+	pub lazy_fork: Option<rivet_data::generated::shared_depot_fs_v2::FsLazyForkOrigin>,
+}
+
+impl VolumeRecordView {
+	/// The incarnation a state last reset for `stamp` must be reset for now: this volume's,
+	/// when it was made by a group fork and the stamp is not already it. A volume created in
+	/// place inherits nothing and never needs a reset.
+	pub fn pending_fork_reset(&self, stamp: Option<[u8; 16]>) -> Option<[u8; 16]> {
+		if self.lazy_fork.is_none() {
+			return None;
+		}
+		if stamp == Some(self.incarnation) {
+			return None;
+		}
+		Some(self.incarnation)
+	}
 }
 
 /// The commits one command has in flight, and whether its caller's deadline has passed. A
@@ -41,15 +262,26 @@ pub struct KvHandle {
 /// nothing it starts lands after the caller was told the command timed out.
 #[derive(Debug)]
 pub(crate) struct CommandCommits {
+	deadline_boot_ms: u64,
 	in_flight: tokio::sync::watch::Sender<usize>,
 	expired: std::sync::atomic::AtomicBool,
+	/// Set once the command dispatches its first commit and never cleared.
+	dispatched: std::sync::atomic::AtomicBool,
 }
 
 impl Default for CommandCommits {
 	fn default() -> Self {
+		Self::new(u64::MAX)
+	}
+}
+
+impl CommandCommits {
+	fn new(deadline_boot_ms: u64) -> Self {
 		Self {
+			deadline_boot_ms,
 			in_flight: tokio::sync::watch::Sender::new(0),
 			expired: std::sync::atomic::AtomicBool::new(false),
+			dispatched: std::sync::atomic::AtomicBool::new(false),
 		}
 	}
 }
@@ -65,6 +297,11 @@ impl CommandCommits {
 		self.expired.load(std::sync::atomic::Ordering::Acquire)
 	}
 
+	/// Whether the command dispatched a commit, whatever its outcome.
+	pub(crate) fn dispatched(&self) -> bool {
+		self.dispatched.load(std::sync::atomic::Ordering::Acquire)
+	}
+
 	/// Resolves once no commit of the command is in flight.
 	pub(crate) async fn settled(&self) {
 		let mut in_flight = self.in_flight.subscribe();
@@ -77,6 +314,9 @@ struct CommitInFlight<'a>(&'a CommandCommits);
 
 impl<'a> CommitInFlight<'a> {
 	fn new(commits: &'a CommandCommits) -> Self {
+		commits
+			.dispatched
+			.store(true, std::sync::atomic::Ordering::Release);
 		commits.in_flight.send_modify(|count| *count += 1);
 		Self(commits)
 	}
@@ -108,19 +348,55 @@ impl KvOwner {
 	pub fn same_opening(&self, other: &Self) -> bool {
 		self.filesystem.ptr_eq(&other.filesystem)
 	}
+
+	/// Whether the opening still exists and may serve, for work the opening started that holds
+	/// no handle of it, such as a background task that must stop once the volume moved away.
+	pub fn may_serve(&self) -> bool {
+		(self.may_serve)() && self.filesystem.strong_count() > 0
+	}
 }
 
 impl rivet_topology::versions::WriteVersions for KvHandle {
 	fn write_version(&self, family: rivet_data::families::VersionFamily) -> Result<u16> {
 		self.versions.write_version(family)
 	}
+
+	fn floor_listed(&self) -> bool {
+		self.versions.floor_listed()
+	}
+
+	fn wait_for_read_floor(&self, deadline_boot_ms: u64) -> BoxFuture<'_, Result<bool>> {
+		self.versions.wait_for_read_floor(deadline_boot_ms)
+	}
 }
 
 impl KvHandle {
+	/// This command's admission deadline in the worker's monotonic clock domain.
+	/// Nested reads may use an earlier deadline to leave time for their owning command to commit.
+	pub fn deadline_boot_ms(&self) -> u64 {
+		self.commits.deadline_boot_ms
+	}
+
 	/// The version to encode a value of `family` stored in this volume at: the highest every
 	/// live storage worker reads. A command takes every versioned value's version from here.
 	pub fn write_version(&self, family: rivet_data::families::VersionFamily) -> Result<u16> {
 		self.versions.write_version(family)
+	}
+
+	/// Resolves once the tablet this volume lives in durably carries a mark of `family` at
+	/// `version`. A command calls it before committing a value of `family` encoded above the
+	/// version `write_version` selected; see [`VersionMarks`].
+	pub async fn ensure_version_mark(
+		&self,
+		family: rivet_data::families::VersionFamily,
+		version: u16,
+	) -> Result<()> {
+		self.marks
+			.ensure(rivet_data::generated::shared_depot_types_v1::VersionMark {
+				family: family.0,
+				version,
+			})
+			.await
 	}
 
 	pub fn has_alarm_owner(
@@ -130,11 +406,27 @@ impl KvHandle {
 		(self.may_serve)() && self.alarm_owner.as_ref() == Some(owner)
 	}
 
+	/// The record of the volume this handle runs on, as the open answered it.
+	pub fn volume_record(&self) -> VolumeRecordView {
+		VolumeRecordView {
+			incarnation: self.volume_log_key().0.volume_incarnation,
+			lazy_fork: self.lazy_fork.clone(),
+		}
+	}
+
 	/// Whether this command's caller deadline has passed. Once it has, `begin`, `snapshot` and
 	/// `commit` refuse, so a handler that coordinates other commands' work, such as an event
 	/// group holder, must hand that work to a live command instead of taking it.
 	pub fn expired(&self) -> bool {
 		self.commits.expired()
+	}
+
+	/// Reserves optional derived data against the filesystem process cache budget.
+	pub fn reserve_cache(
+		&self,
+		bytes: usize,
+	) -> Option<depot_client::filesystem::CacheReservation> {
+		self.writer().0.reserve_cache(bytes)
 	}
 
 	/// This opening's shared value of type `T`, created on first use. Commands of the same
@@ -301,6 +593,8 @@ impl KvHandle {
 pub struct ReadHandle {
 	source: ReadSource,
 	volume_key: depot_types::VolumeKey,
+	/// Selects the version the command's response is encoded at; the worker's topology.
+	versions: Arc<dyn rivet_topology::versions::WriteVersions>,
 }
 
 #[derive(Clone)]
@@ -313,9 +607,11 @@ impl ReadHandle {
 	/// Wraps a writer-backed command context, for tests and the host's writer path.
 	pub fn from_writer(kv: KvHandle) -> Self {
 		let volume_key = kv.volume_key.clone();
+		let versions = kv.versions.clone();
 		Self {
 			source: ReadSource::Writer(kv),
 			volume_key,
+			versions,
 		}
 	}
 
@@ -336,6 +632,32 @@ impl ReadHandle {
 		match &self.source {
 			ReadSource::Writer(kv) => Ok(kv.snapshot().await?.get(key).await?),
 			ReadSource::Writerless(read) => read.get(key).await,
+		}
+	}
+
+	/// Reads `keys` from one snapshot, in one round trip when the read is writerless. The
+	/// values come back in the order of `keys`, `None` for a key with no row.
+	pub async fn get_many(&self, keys: &[Vec<u8>]) -> Result<Vec<Option<Vec<u8>>>> {
+		match &self.source {
+			ReadSource::Writer(kv) => {
+				let mut snapshot = kv.snapshot().await?;
+				let mut values = Vec::with_capacity(keys.len());
+				for key in keys {
+					values.push(snapshot.get(key).await?);
+				}
+				Ok(values)
+			}
+			ReadSource::Writerless(read) => read.get_many(keys).await,
+		}
+	}
+
+	/// [`Self::get_many`], with how many volume seqs the snapshot lagged the highest commit the
+	/// volume's maintainer knew of when it answered. A writer's snapshot holds every commit of
+	/// the volume, so it lags none.
+	pub async fn get_many_with_lag(&self, keys: &[Vec<u8>]) -> Result<(Vec<Option<Vec<u8>>>, u64)> {
+		match &self.source {
+			ReadSource::Writer(_) => Ok((self.get_many(keys).await?, 0)),
+			ReadSource::Writerless(read) => read.get_many_with_lag(keys).await,
 		}
 	}
 }
@@ -457,6 +779,25 @@ impl CommandRegistry {
 		let mut registry = Self::new();
 		registry.register::<depot_protocol::command::KvGet>(kv::get)?;
 		registry.register::<depot_protocol::command::KvApply>(kv::apply)?;
+		registry.register_read::<depot_protocol::command::GroupRead>(
+			256,
+			None,
+			groups::group_read,
+		)?;
+		registry.register_read::<depot_protocol::command::EventsRead>(
+			256,
+			None,
+			groups::events_read,
+		)?;
+		registry.register::<depot_protocol::command::GroupCreate>(groups::group_create)?;
+		registry.register::<depot_protocol::command::GroupForkDraw>(groups::group_fork_draw)?;
+		registry
+			.register::<depot_protocol::command::GroupChildCreate>(groups::group_child_create)?;
+		registry.register::<depot_protocol::command::GroupArchive>(groups::group_archive)?;
+		registry.register::<depot_protocol::command::GroupChildArchived>(
+			groups::group_child_archived,
+		)?;
+		registry.register::<depot_protocol::command::EventPost>(groups::event_post)?;
 		Ok(registry)
 	}
 
@@ -528,9 +869,13 @@ impl CommandRegistry {
 				handler: RegisteredHandler::Write(Box::new(move |kv, body| {
 					let handler = handler.clone();
 					Box::pin(async move {
+						let request_version = embedded_version(&body)?;
 						let request = C::Request::deserialize_with_embedded_version(&body)?;
+						let response_version = response_version::<C>(request_version, |family| {
+							kv.write_version(family)
+						})?;
 						let response = handler.execute(kv, request).await?;
-						C::Response::serialize_with_embedded_version(&response, C::Response::LATEST)
+						seal_response::<C>(&response, response_version)
 					})
 				})),
 			},
@@ -566,9 +911,13 @@ impl CommandRegistry {
 				handler: RegisteredHandler::Read(Box::new(move |read, body| {
 					let handler = handler.clone();
 					Box::pin(async move {
+						let request_version = embedded_version(&body)?;
 						let request = C::Request::deserialize_with_embedded_version(&body)?;
+						let response_version = response_version::<C>(request_version, |family| {
+							read.versions.write_version(family)
+						})?;
 						let response = handler.execute(read, request).await?;
-						C::Response::serialize_with_embedded_version(&response, C::Response::LATEST)
+						seal_response::<C>(&response, response_version)
 					})
 				})),
 			},
@@ -593,6 +942,92 @@ impl CommandRegistry {
 			"undeclared command tag"
 		);
 		Ok(())
+	}
+}
+
+/// A command's answer cannot be expressed at the version [`response_version`] selected for it:
+/// the response family's negotiated version, capped at the request's version when both share a
+/// family. The host answers no higher because a caller of the previous release reads no newer
+/// one, and a caller of this release seals at the fleet's read floor, so it hits this while the
+/// floor is below the answer's version: only when a storage worker of the previous release is
+/// listed after grouped, forked or moving actors exist, which happens for one heartbeat ttl after
+/// such a worker restarts once the roll is done (it then fences itself), or in a rollback.
+///
+/// The command may have been applied. A caller of this release reads this answer as a retryable
+/// `depot.overloaded` (reason `response_version_pending`) and the edge sends the command again;
+/// every command whose answer can need a newer version re-executes safely: `ActorRead` is a
+/// read, `ActorCreate` of an existing actor wakes it with the same waiter, and `ActorEvent`
+/// answers a version-only outcome only to a wake (`TryStart`, `Create`) or to a `Reallocate`
+/// fenced by its epoch.
+#[derive(Debug, serde::Serialize, serde::Deserialize, rivet_error::RivetError)]
+#[error(
+	"depot",
+	"response_version_unavailable",
+	"The command's answer cannot be expressed at the version its caller reads; it may have been applied.",
+	"The command's answer cannot be expressed at version {version}, which its caller reads; it may have been applied."
+)]
+pub struct ResponseVersionUnavailable {
+	pub version: u16,
+}
+
+/// The version header of a command body, which the caller sealed it at.
+fn embedded_version(body: &[u8]) -> Result<u16> {
+	let Some(header) = body.get(..2) else {
+		anyhow::bail!("command body has no version header");
+	};
+	Ok(u16::from_le_bytes([header[0], header[1]]))
+}
+
+/// The version a command's answer is sealed at: the response family's negotiated version (see
+/// [`body_version`]), so a caller on another binary of a rolling deploy decodes it. When the
+/// request and response envelopes share a family, it is also no higher than the request's
+/// version: a caller seals its request no higher than the version it reads, so a caller of an
+/// older release, which seals and reads only an older version, decodes the answer. When no
+/// version of that shared family is selectable, because a live storage worker of an older
+/// release lacks the family, the caller sealed its request at its latest instead (see
+/// `depot_client::command::request_version`), and the answer takes the request's version too.
+/// Envelopes of different families number their versions independently, so the request's
+/// version does not bound the answer then.
+pub(crate) fn response_version<C: Command>(
+	request_version: u16,
+	write_version: impl FnOnce(rivet_data::families::VersionFamily) -> Result<u16>,
+) -> Result<u16> {
+	let negotiated = body_version::<C::Response>(write_version);
+	let same_family = match (C::Request::FAMILY, C::Response::FAMILY) {
+		(Some(request), Some(response)) => request == response,
+		(Some(_), None) | (None, Some(_)) | (None, None) => false,
+	};
+	match (same_family, negotiated) {
+		(true, Ok(negotiated)) => Ok(negotiated.min(request_version)),
+		(true, Err(error)) => {
+			tracing::debug!(
+				?error,
+				request_version,
+				"no version of the command's family is selectable; answering at the request's version"
+			);
+			Ok(request_version)
+		}
+		(false, negotiated) => negotiated,
+	}
+}
+
+/// Seals a command's answer at `version`, capped at the response envelope's latest. An answer
+/// that version cannot express fails the command with [`ResponseVersionUnavailable`], which
+/// travels in the command envelope every release decodes.
+pub(crate) fn seal_response<C: Command>(response: &Response<C>, version: u16) -> Result<Vec<u8>> {
+	let version = version.min(C::Response::LATEST);
+	match C::Response::seal_to_vec(response, version) {
+		Ok(body) => Ok(body),
+		Err(vbare::EncodeError::Conversion(error)) if version < C::Response::LATEST => {
+			tracing::warn!(
+				?error,
+				command = C::TAG.0,
+				version,
+				"a command answer cannot be expressed at the version its caller reads; a caller of an older release asked for state only a newer release writes"
+			);
+			Err(ResponseVersionUnavailable { version }.build())
+		}
+		Err(error) => Err(error.into()),
 	}
 }
 

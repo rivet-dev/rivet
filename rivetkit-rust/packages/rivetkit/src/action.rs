@@ -449,10 +449,13 @@ fn decode_value<T: DeserializeOwned>(value: &Value) -> Result<T> {
 		.context("decode positional action args from cbor")
 }
 
-pub trait Handles<A: Action>: Actor + Sized {
-	type Future: Future<Output = Result<A::Output>> + Send + 'static;
-
-	fn handle(self: Arc<Self>, ctx: Ctx<Self>, action: A) -> Self::Future;
+/// Runs one action type. Implement it with `async fn handle`.
+pub trait Handler<A: Action>: Actor + Sized {
+	fn handle(
+		self: Arc<Self>,
+		ctx: Ctx<Self>,
+		action: A,
+	) -> impl Future<Output = Result<A::Output>> + Send + 'static;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -494,7 +497,7 @@ macro_rules! impl_action_set {
 	($($action:ident),+) => {
 		impl<Act, $($action),+> ActionSet<Act> for ($($action,)+)
 		where
-			Act: Actor + $(Handles<$action> +)+,
+			Act: Actor + $(Handler<$action> +)+,
 			$($action: Action,)+
 		{
 			fn entries() -> Vec<ActionEntry<Act>> {
@@ -514,7 +517,7 @@ macro_rules! impl_action_set {
 							let action = decode_positional::<$action>(&args).with_context(|| {
 								format!("decode action '{}' args", <$action as Action>::NAME)
 							})?;
-							let output = <Act as Handles<$action>>::handle(actor, ctx, action).await?;
+							let output = <Act as Handler<$action>>::handle(actor, ctx, action).await?;
 							encode_cbor(&output, "action response")
 						}));
 					}

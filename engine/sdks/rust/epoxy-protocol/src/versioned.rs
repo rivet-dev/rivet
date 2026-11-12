@@ -1,11 +1,17 @@
 use anyhow::{Result, ensure};
+use rivet_data::families::{VersionFamily, VersionedFamily};
 use vbare::{Bytes, DecodeError, DecodeErrorKind, Encode, Message, Versioned};
 
 use crate::{PROTOCOL_VERSION, generated::v5};
 
-/// Implements [`Versioned`] for a single-version envelope `enum $name { V5($latest) }`.
+/// Implements [`Versioned`] for a single-version envelope `enum $name { V5($latest) }`. Its
+/// version is pinned out of band by `PROTOCOL_VERSION`, so it has no family to negotiate.
 macro_rules! impl_versioned_single {
 	($name:ident, $latest:ty) => {
+		impl VersionedFamily for $name {
+			const FAMILY: Option<VersionFamily> = None;
+		}
+
 		impl Versioned for $name {
 			type Latest = $latest;
 

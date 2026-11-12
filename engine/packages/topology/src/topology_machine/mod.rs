@@ -96,9 +96,12 @@ impl rivet_state_machine::Effect for Effect {
 			Effect::RecordLookupRejected => "record_lookup_rejected",
 			Effect::RecordEndpointTimeout { .. } => "record_endpoint_timeout",
 			Effect::RecordIncompatibleVersion { .. } => "record_incompatible_version",
+			Effect::RecordMissingZone { .. } => "record_missing_zone",
 			Effect::RecordFence { .. } => "record_fence",
 			Effect::RecordRenewal { .. } => "record_renewal",
 			Effect::RecordRenewalLate { .. } => "record_renewal_late",
+			Effect::RecordReadFloorAge { .. } => "record_read_floor_age",
+			Effect::RecordUnobservedWorkersExpired { .. } => "record_unobserved_workers_expired",
 		}
 	}
 }
@@ -357,14 +360,26 @@ impl EphemeralStateMachine for TopologyStateMachine {
 			heartbeat_state: state.lease.heartbeat_state(),
 			storage_workers: state
 				.current_storage_entries()
-				.map(crate::heartbeat::Observation::worker)
+				.map(|entry| {
+					let mut worker = entry.worker();
+					// Our own configured label is known even when the heartbeat write
+					// floor is v1. Never project it onto another worker or incarnation.
+					if let Some(registration) = state.lease.worker_registration().filter(|r| {
+						r.role == worker.role
+							&& r.identity.worker_id == worker.id
+							&& r.identity.instance_id == worker.instance_id
+					}) {
+						worker.zone = registration.zone.clone().or(worker.zone);
+					}
+					worker
+				})
 				.collect(),
 			valid_until_boot_ms: state.discovery.valid_until_boot_ms,
 			store_clock: state.discovery.store_clock.clone(),
 			read_floor: state.discovery.read_floor.clone(),
 			discovery_round: state.discovery.round,
 			discovery_ok: state.discovery.ok,
-			discovery_partial: state.discovery.partial,
+			floor: state.discovery.floor,
 			endpoints: state.lookups.entries.clone(),
 			invalidated: state.lookups.invalidated.clone(),
 			watched_processes: state.watches.watches.len(),

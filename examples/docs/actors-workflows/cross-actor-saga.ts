@@ -1,4 +1,5 @@
 import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 type CheckoutMessage = {
@@ -21,9 +22,19 @@ export const billingActor = actor({
 });
 
 export const checkoutSagaActor = actor({
-  state: {
-    completedOrders: 0,
-  },
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS saga_stats (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          completed_orders INTEGER NOT NULL
+        );
+      `);
+      await db.execute(
+        "INSERT OR IGNORE INTO saga_stats (id, completed_orders) VALUES (1, 0)",
+      );
+    },
+  }),
   run: workflow(async (ctx) => {
     await ctx.loop("checkout-loop", async (loopCtx) => {
         const [message] = await loopCtx.queue.nextBatch("wait-order", {
@@ -60,7 +71,12 @@ export const checkoutSagaActor = actor({
       });
   }),
   actions: {
-    getState: (c) => c.state,
+    getState: async (c) => {
+      const rows = await c.db.execute<{ completedOrders: number }>(
+        "SELECT completed_orders AS completedOrders FROM saga_stats WHERE id = 1",
+      );
+      return rows[0];
+    },
   },
 });
 
@@ -100,10 +116,12 @@ async function refundCheckout(
   });
 }
 
-function markOrderComplete(
+async function markOrderComplete(
   ctx: WorkflowStepContextOf<typeof checkoutSagaActor>,
-): void {
-  ctx.state.completedOrders += 1;
+): Promise<void> {
+  await ctx.db.execute(
+    "UPDATE saga_stats SET completed_orders = completed_orders + 1 WHERE id = 1",
+  );
 }
 
 export const registry = setup({

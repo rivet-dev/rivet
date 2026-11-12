@@ -1,0 +1,58 @@
+---
+title: "Deprecated KV"
+description: "Migrate actors off the deprecated c.kv key-value store to SQLite."
+---
+
+<Warning>
+Actor KV was deprecated in 3.0 and will be removed in a future version. It still works today, so you can migrate at your own pace.
+</Warning>
+
+## What is deprecated
+
+`c.kv` is a low-level key-value store on every actor. All of its methods are deprecated: `get`, `put`, `delete`, `list`, `listPrefix`, `listRange`, `batchGet`, `batchPut`, `batchDelete` and `deleteRange`. In Rust, `Ctx::kv` is deprecated.
+
+<CodeSnippet file="examples/docs/actors-deprecated-kv/before.ts" />
+
+Store the same data in [SQLite](/actors/docs/sqlite) (`c.db`) instead. A table with a primary key covers every KV pattern, and SQLite adds indexes, queries and transactions.
+
+## Replace KV with a table
+
+| KV | SQLite |
+| --- | --- |
+| `c.kv.put(key, value)` | `INSERT ... ON CONFLICT (key) DO UPDATE` |
+| `c.kv.get(key)` | `SELECT ... WHERE key = ?` |
+| `c.kv.delete(key)` | `DELETE ... WHERE key = ?` |
+| `c.kv.list(prefix)` | `SELECT ... WHERE key >= ? AND key < ?`, or a separate table per prefix |
+| `c.kv.batchPut(entries)` | Several statements in `c.db.transaction` |
+| Binary values | A `BLOB` column |
+
+Most KV prefixes map to their own table, with the rest of the key as the primary key:
+
+<CodeSnippet file="examples/docs/actors-deprecated-kv/sqlite-kv.ts" />
+
+## Migrate existing data
+
+Copy existing KV entries into SQLite the next time each actor starts:
+
+1. Create the new tables and a `migrations` table in `onMigrate`.
+2. In `onWake`, skip the copy if it already ran, otherwise read the old entries with `c.kv.list` and upsert them.
+3. Record the copy in `migrations` so it runs once.
+
+<CodeSnippet file="examples/docs/actors-deprecated-kv/migrate.ts" />
+
+The upsert makes the copy safe to repeat, so a crash partway through retries it on the next start. Once every actor has started on the new version, remove the copy and stop reading from `c.kv`.
+
+For binary keys or values, pass `keyType: "binary"` and `type: "binary"` to `c.kv.list` and store them in `BLOB` columns.
+
+Entries written with `c.kv.batchPut` are not returned by `c.kv.list`. Read them back with `c.kv.batchGet` using the same keys.
+
+## Limits
+
+KV data is stored in a table in the actor's SQLite database, and these limits apply until you migrate:
+
+| Name | Limit | Description |
+| --- | --- | --- |
+| Max key size | 2 KiB | Maximum size of a single key written. |
+| Max value size | 128 KiB | Maximum size of a single value. |
+
+Batch operations have no fixed limit on the number of keys. A batch put of more than 128 entries or 512 KiB is written in several transactions, so it is not atomic.

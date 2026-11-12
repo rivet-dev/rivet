@@ -1,0 +1,350 @@
+---
+title: "Durable Streams"
+description: "Real-time streams with durable, replayable history on Rivet: create streams, write and read them, follow them live, fork them, and use the HTTP API."
+---
+
+[Durable Streams](https://github.com/durable-streams/durable-streams) is an open standard for real-time streams with durable, replayable history. Rivet provides an implementation backed by Rivet Actors.
+
+## Quickstart
+
+<Steps>
+
+<Step title="Run locally">
+
+<Tabs>
+
+<Tab title="Standalone">
+
+Start the local Rivet control plane and the Durable Streams worker:
+
+```sh
+npx @rivet-dev/services dev
+```
+
+Durable Streams is available at `http://127.0.0.1:8642/durable-streams/v1/stream/<path>`.
+
+</Tab>
+
+<Tab title="RivetKit TypeScript SDK">
+
+Already running Rivet Actors with the RivetKit TypeScript SDK? Durable Streams is already available to you on RivetKit 2.3.12. No separate server needed.
+
+</Tab>
+
+</Tabs>
+
+</Step>
+
+<Step title="Connect to a stream">
+
+<Tabs>
+
+<Tab title="TypeScript client">
+
+Install the official client:
+
+```sh
+npm install @durable-streams/client
+```
+
+<CodeSnippet file="examples/docs/durable-streams/client.ts" title="client.ts" />
+
+</Tab>
+
+<Tab title="HTTP">
+
+Create a stream, append a record, and read its contents:
+
+```sh
+curl -i -X PUT \
+  -H 'content-type: application/json' \
+  --data '[{"message":"hello"}]' \
+  http://127.0.0.1:8642/durable-streams/v1/stream/demo
+
+curl -i -X POST \
+  -H 'content-type: application/json' \
+  --data '{"message":"world"}' \
+  http://127.0.0.1:8642/durable-streams/v1/stream/demo
+
+curl 'http://127.0.0.1:8642/durable-streams/v1/stream/demo?offset=-1'
+```
+
+</Tab>
+
+</Tabs>
+
+</Step>
+
+<Step title="Deploy">
+
+<Tabs>
+
+<Tab title="Rivet Cloud">
+
+1. Sign up at the [Rivet dashboard](https://dashboard.rivet.dev) and create a new project.
+2. When creating the project, choose Durable Streams as the product.
+3. Point your Durable Streams client at the services URL you're given, for example `https://xxxxx.rivet.run/durable-streams/`.
+
+</Tab>
+
+<Tab title="Self-hosted">
+
+Run the Rivet Services node next to your own control plane. See [Rivet Services](/docs/deploy/self-host/nodes/services/).
+
+</Tab>
+
+</Tabs>
+
+</Step>
+
+</Steps>
+
+## Streams
+
+A stream is an append-only log at its own URL. Writers add to the end, and every reader sees the same messages in the same order.
+
+The rest of this page follows one example: an AI agent streams its reply into `chat/session-1`, and a browser shows it as it arrives.
+
+<Diagram
+  id="durable-streams-streams"
+  label="An agent appends its reply to the chat/session-1 stream, and a browser reads it."
+  legend={false}
+  nodes={[
+    { id: "agent", x: 20, y: 30, w: 150, title: "Agent", subtitle: "writes the reply" },
+    { id: "stream", x: 330, y: 30, w: 220, product: "durable-streams", title: "`chat/session-1`" },
+    { id: "browser", x: 710, y: 30, w: 150, title: "Browser", subtitle: "shows the reply" },
+  ]}
+  edges={[
+    { from: "agent", to: "stream", label: "write" },
+    { from: "stream", to: "browser", label: "read" },
+  ]}
+/>
+
+### Create a stream
+
+Pick any path. Slashes are fine, and there is nothing to register first.
+
+<CodeSnippet file="examples/docs/durable-streams/create.ts" title="create.ts" />
+
+Creating the same stream twice is safe. Creating it again with different settings returns `409 Conflict`.
+
+### Choose JSON or bytes
+
+The content type is set at creation and never changes.
+
+- **`application/json`**: each append is one message, and reads return a JSON array. Use it for chat, events, and agent output.
+- **Anything else**, such as `text/plain` or `application/octet-stream`: one continuous run of bytes. Frame messages yourself, for example one JSON object per line.
+
+### Clean up automatically
+
+Set one of these when you create the stream, or neither to keep it until you delete it:
+
+- **`ttlSeconds`**: delete after this many seconds with no reads or writes. An active stream never expires.
+- **`expiresAt`**: delete at a fixed time, such as `2027-01-01T00:00:00Z`.
+
+To delete a stream now, call `stream.delete()`.
+
+On Rivet, each stream is its own Rivet Actor, so streams scale independently and sleep when no one is using them.
+
+## Writing
+
+Writers add messages to the end of a stream. Once a write is acknowledged it is stored, and every reader sees it in the same place.
+
+### Append messages
+
+In a JSON stream, each append is one message. Close the stream when the reply is complete, optionally with a last message in the same call.
+
+<CodeSnippet file="examples/docs/durable-streams/write.ts" title="write.ts" />
+
+### Retry without duplicates
+
+If a response is lost, a plain append cannot tell whether it landed, and a retry may write it twice. An idempotent producer numbers every write so the server drops repeats.
+
+<CodeSnippet file="examples/docs/durable-streams/producer.ts" title="producer.ts" />
+
+- **Producer ID**: a stable name for the writer. Reuse it after a restart.
+- **`autoClaim`**: a restarted writer takes over, and the old one is rejected, so a stalled process cannot write over its replacement.
+
+Rivet remembers each producer for seven days after its last write. A retry sent later than that may be written again.
+
+### Finish the reply
+
+Closing tells readers no more data is coming. Close a stream when the work it records is done, such as a finished agent reply.
+
+- Call `stream.close()`, or `producer.close()` when writing through a producer.
+- A closed stream stays readable, but new appends are rejected.
+- Closing is permanent.
+
+### Keep writes in your own order
+
+If your writes carry their own sequence, such as database commit numbers, pass it as `seq` on each append. The server rejects any write whose `seq` is not greater than the last one. Values compare as strings, so pad numbers to a fixed width, such as `00000042`.
+
+## Reading
+
+Readers start at an offset and move forward. An offset is a position in the stream, and every read tells you the offset to continue from.
+
+### Load everything so far
+
+<CodeSnippet file="examples/docs/durable-streams/read-history.ts" title="read-history.ts" />
+
+`res.offset` is where the next read should start.
+
+### Pick up where you left off
+
+Save the latest offset, for example in `localStorage`, and pass it back as `offset` next time. You get every message after it: nothing missed, nothing repeated.
+
+- **`-1`** starts at the beginning.
+- **`now`** skips history and starts at the end.
+
+Offsets are opaque strings. Store them and send them back as-is.
+
+### Know when a stream is done
+
+A closed stream tells readers that nothing more will arrive, so they can stop waiting. Without closing, a reader cannot tell "nothing yet" from "nothing ever".
+
+## Realtime streaming
+
+A live read catches up from an offset, then keeps the connection open and delivers new messages as they are written. This is how the browser shows the agent's reply token by token.
+
+### Follow a stream live
+
+<CodeSnippet file="examples/docs/durable-streams/read-live.ts" title="read-live.ts" />
+
+The callback runs for each batch, first with the history after your offset, then with every new write.
+
+### Reconnect without gaps
+
+Connections drop: a laptop sleeps, a phone changes networks, a tab refreshes. Save `batch.offset` as you go and pass it back as `offset` when you reconnect. The read resumes right after the last message you saw.
+
+The client also reconnects on its own while the page stays open.
+
+### Transport methods
+
+- **Server-Sent Events** (`live: "sse"`): one open connection, and the server pushes each write as it lands. Lowest latency. Byte streams arrive base64-encoded, and the client decodes them.
+- **Long-polling** (`live: "long-poll"` or `live: true`): each request waits for new data, then the client sends the next one. Use it when a proxy buffers streaming responses.
+- Both deliver the same messages and offsets. See [Live reads](#live-reads) to use them without the client.
+
+### Stop when the stream closes
+
+When the writer [closes the stream](#finish-the-reply), a live read stops once it reaches the end.
+
+## Forking
+
+A fork is a new stream that starts with another stream's history, then goes its own way. Use it to retry an agent from partway through a conversation, or to try two answers side by side.
+
+<Diagram
+  id="durable-streams-forking"
+  label="A fork named chat/session-1-retry starts from the history of chat/session-1, then receives its own writes."
+  legend={false}
+  nodes={[
+    { id: "stream", x: 20, y: 30, w: 230, product: "durable-streams", title: "`chat/session-1`" },
+    { id: "fork", x: 470, y: 30, w: 250, product: "durable-streams", title: "`chat/session-1-retry`" },
+  ]}
+  edges={[{ from: "stream", to: "fork", label: "fork" }]}
+/>
+
+### Fork a stream
+
+Create the new stream with `Stream-Forked-From` set to the source stream's path:
+
+```sh
+curl -X PUT \
+  -H 'Stream-Forked-From: /durable-streams/v1/stream/chat/session-1' \
+  http://127.0.0.1:8642/durable-streams/v1/stream/chat/session-1-retry
+```
+
+The TypeScript client does not create forks yet. Once the fork exists, read and write it like any other stream.
+
+### Fork from an earlier point
+
+By default a fork copies the whole history. Add `Stream-Fork-Offset` with an offset from a previous read to branch from that point instead, for example right before the agent's last reply.
+
+### What a fork shares
+
+- The fork keeps the source's content type and history up to the fork point.
+- History is shared, not copied, so forking a long stream is cheap.
+- Writes to the fork never touch the source, and later writes to the source do not appear in the fork.
+
+## HTTP API
+
+Every stream is a URL, and every operation is a plain HTTP request on it:
+
+```txt
+http://127.0.0.1:8642/durable-streams/v1/stream/<path>
+```
+
+Any HTTP client works, and existing Durable Streams clients work unchanged. The [Durable Streams protocol](https://github.com/durable-streams/durable-streams/blob/main/PROTOCOL.md) covers every edge case.
+
+### Requests
+
+| Method | Does | Notes |
+| --- | --- | --- |
+| `PUT` | Create a stream | Body is optional initial data. Repeating the same `PUT` is safe; a different configuration returns `409`. |
+| `POST` | Append | Body is the data, in the stream's content type. |
+| `GET` | Read | Starts at the `offset` query parameter. Add `live` to wait for new data. |
+| `HEAD` | Read metadata | Content type, end offset, expiry, and whether the stream is closed. |
+| `DELETE` | Delete the stream and its history | |
+
+```sh
+STREAM=http://127.0.0.1:8642/durable-streams/v1/stream/chat/session-1
+
+curl -X PUT -H 'content-type: application/json' $STREAM
+curl -X POST -H 'content-type: application/json' --data '{"token":"hello"}' $STREAM
+curl "$STREAM?offset=-1"
+curl -I $STREAM
+curl -X DELETE $STREAM
+```
+
+### Creating
+
+| Request header | Use |
+| --- | --- |
+| `content-type` | The stream's format, fixed for its lifetime. `application/json` stores separate messages; anything else stores bytes. |
+| `Stream-TTL` | Delete after this many seconds with no reads or writes. |
+| `Stream-Expires-At` | Delete at an RFC 3339 timestamp. Use one of `Stream-TTL` or `Stream-Expires-At`, not both. |
+| `Stream-Forked-From` | Create a [fork](#forking) of the stream at this path. |
+| `Stream-Fork-Offset` | Fork from this offset instead of the end. |
+
+### Appending
+
+In a JSON stream, posting a JSON array stores each element as its own message, so one request can carry a batch.
+
+| Request header | Use |
+| --- | --- |
+| `Producer-Id` | Stable name of an idempotent writer. |
+| `Producer-Epoch` | The writer's session. Raise it when the writer restarts; requests with an older epoch return `403`. |
+| `Producer-Seq` | Starts at `0` and goes up by one per request in the epoch. A repeated sequence returns `204` and writes nothing. Send all three producer headers or none. |
+| `Stream-Seq` | Your own ordering value. A value not greater than the last one returns `409`. Compared as strings. |
+| `Stream-Closed: true` | Close the stream, with or without a final message in the body. |
+
+### Reading over HTTP
+
+| Query parameter | Use |
+| --- | --- |
+| `offset` | Where to start: an offset from a previous read, `-1` for the beginning, or `now` for the end. |
+| `live` | `sse` or `long-poll` to wait for new data. Omit for a one-off read. |
+
+| Response header | Meaning |
+| --- | --- |
+| `Stream-Next-Offset` | Pass this as `offset` on the next read. |
+| `Stream-Up-To-Date: true` | You have everything written so far. |
+| `Stream-Closed: true` | Nothing more will ever arrive. |
+
+### Live reads
+
+- **`live=sse`**: Server-Sent Events. `data` events carry messages and `control` events carry `streamNextOffset`, `upToDate`, and closed status. The server ends connections periodically; reconnect from the last `streamNextOffset`. For byte streams, `data` is base64-encoded and the response carries `stream-sse-data-encoding: base64`.
+- **`live=long-poll`**: the request waits until data arrives, then responds like a normal read. Returns `204` on timeout; retry with the same offset.
+
+```sh
+curl -N "$STREAM?offset=-1&live=sse"
+```
+
+### Status codes
+
+| Code | Meaning |
+| --- | --- |
+| `200`, `201` | Success, such as a read or a new stream. |
+| `204` | Success with no body, such as an append or close. Also returned for a duplicate producer write and a long-poll timeout. |
+| `403` | Producer epoch is older than the current one. |
+| `404` | The stream does not exist. |
+| `409` | Stream exists with a different configuration, is closed, or `Stream-Seq` went backwards. |

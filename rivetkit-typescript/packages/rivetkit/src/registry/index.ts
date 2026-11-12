@@ -20,6 +20,7 @@ import { logger } from "./log";
 import { buildConfiguredRegistry } from "./native";
 import { convertNativeHttpResponse } from "./native-http";
 import type {
+	CancellationTokenHandle,
 	CoreRuntime,
 	RuntimeApplicationFetch,
 	RuntimeHttpResponseBodyStream,
@@ -27,6 +28,8 @@ import type {
 } from "./runtime";
 
 type ShutdownSignal = "SIGINT" | "SIGTERM";
+
+type ConfiguredRegistry = Awaited<ReturnType<typeof buildConfiguredRegistry>>;
 
 const REGISTRY_READY_TIMEOUT_MS = 30_000;
 // A managed Engine restart can wait for the old process to release storage and
@@ -36,6 +39,9 @@ const LOCAL_ENGINE_READY_TIMEOUT_MS = 60_000;
 // reports. Leave time to close the node connection after that, while staying
 // below the five-second force-kill ceiling used by tsx watch.
 const LOCAL_DEV_SHUTDOWN_GRACE_PERIOD_MS = 4_000;
+// Matches the engine's default `pegboard.actor_stop_threshold`. Used only when the
+// node has not received the engine's advertised threshold before shutdown begins.
+const DEFAULT_ACTOR_STOP_THRESHOLD_MS = 30_000;
 
 // Serverless is disabled for v3; keep the implementation for a later release.
 function rejectServerless(): void {
@@ -176,6 +182,11 @@ export class Registry<A extends RegistryActors> {
 	#shutdownInstalled = false;
 	#shutdownInFlight: Promise<void> | null = null;
 	#signalHandlers: Partial<Record<ShutdownSignal, () => void>> = {};
+	#envoyConfiguredRegistry?: ConfiguredRegistry;
+	#activeActorCountListeners = new Set<(count: number) => void>();
+	#activeActorCountToken?: CancellationTokenHandle;
+	#lastActiveActorCount?: number;
+	#activeActorCountSupported?: boolean;
 
 	constructor(config: RegistryConfigInput<A>, deps?: Partial<RegistryDeps>) {
 		this.#config = config;
@@ -674,6 +685,21 @@ export class Registry<A extends RegistryActors> {
 			const configuredRegistryPromise =
 				this.#buildConfiguredRegistry(config);
 			this.#runtimeServeConfiguredPromise = configuredRegistryPromise;
+			configuredRegistryPromise.then(
+				(configured) => {
+					this.#envoyConfiguredRegistry = configured;
+					try {
+						this.#syncActiveActorCountSubscription();
+					} catch (error) {
+						logger().error(
+							{ error },
+							"failed to subscribe to the active actor count",
+						);
+					}
+				},
+				// The serve lifecycle below reports build failures.
+				() => undefined,
+			);
 			this.#runtimeServeLifecyclePromise = configuredRegistryPromise.then(
 				async ({ runtime, registry, serveConfig }) => {
 					await runtime.serveRegistry(registry, serveConfig);
@@ -799,7 +825,7 @@ export class Registry<A extends RegistryActors> {
 				? LOCAL_DEV_SHUTDOWN_GRACE_PERIOD_MS
 				: ((await this.#actorStopThresholdMs(
 						modeAPromise ?? modeBPromise,
-					)) ?? 30 * 60 * 1000);
+					)) ?? DEFAULT_ACTOR_STOP_THRESHOLD_MS);
 		}
 		// Race the entire drain sequence (both modes + serve promise) against
 		// a single grace ceiling. Local dev signal shutdowns allow the watcher
@@ -1024,6 +1050,121 @@ export class Registry<A extends RegistryActors> {
 		}
 		const config = this.parseConfig();
 		this.#startEnvoy(config, true);
+	}
+
+	/**
+	 * Returns the number of actors hosted by this process's envoy, which is zero
+	 * while it is not serving. Requires the native runtime.
+	 */
+	public activeActorCount(): number {
+		this.#assertActiveActorCountSupported("activeActorCount");
+		const configured = this.#envoyConfiguredRegistry;
+		if (!configured) return 0;
+		const { runtime, registry } = configured;
+		if (!runtime.registryActiveActorCount) {
+			throw new Error(
+				"registry.activeActorCount() is not supported by this runtime",
+			);
+		}
+		return runtime.registryActiveActorCount(registry);
+	}
+
+	/**
+	 * Calls `callback` with the number of actors hosted by this process's envoy
+	 * and again whenever it changes. Rapid changes may coalesce.
+	 * Returns a function that unsubscribes. Requires the native runtime.
+	 *
+	 * @example
+	 * ```ts
+	 * const unsubscribe = registry.onActiveActorCountChange((count) => {
+	 * 	setTaskProtection(count > 0);
+	 * });
+	 * ```
+	 */
+	public onActiveActorCountChange(
+		callback: (count: number) => void,
+	): () => void {
+		this.#assertActiveActorCountSupported("onActiveActorCountChange");
+		// Wrap so the same callback can subscribe twice and unsubscribe independently.
+		const listener = (count: number) => callback(count);
+		this.#activeActorCountListeners.add(listener);
+		this.#syncActiveActorCountSubscription();
+
+		// Start late listeners from the stream, not a direct read, which could see a
+		// change the stream coalesced away and never corrects.
+		const lastCount = this.#lastActiveActorCount;
+		if (lastCount !== undefined) {
+			queueMicrotask(() => {
+				if (this.#activeActorCountListeners.has(listener)) {
+					this.#deliverActiveActorCount(listener, lastCount);
+				}
+			});
+		}
+
+		return () => {
+			this.#activeActorCountListeners.delete(listener);
+			this.#syncActiveActorCountSubscription();
+		};
+	}
+
+	#assertActiveActorCountSupported(method: string): void {
+		this.#activeActorCountSupported ??=
+			this.parseConfig().runtime !== "wasm";
+		if (!this.#activeActorCountSupported) {
+			throw new Error(
+				`registry.${method}() requires the native runtime; WebAssembly registries do not host an envoy`,
+			);
+		}
+	}
+
+	/** Holds one native subscription while any listener is registered. */
+	#syncActiveActorCountSubscription(): void {
+		const configured = this.#envoyConfiguredRegistry;
+		if (!configured) return;
+		const { runtime, registry } = configured;
+		const token = this.#activeActorCountToken;
+
+		if (this.#activeActorCountListeners.size === 0) {
+			if (token !== undefined) {
+				this.#activeActorCountToken = undefined;
+				this.#lastActiveActorCount = undefined;
+				runtime.cancelCancellationToken(token);
+			}
+			return;
+		}
+		if (token !== undefined) return;
+
+		if (!runtime.onRegistryActiveActorCountChange) {
+			throw new Error(
+				"active actor count subscriptions are not supported by this runtime",
+			);
+		}
+		const nextToken = runtime.createCancellationToken();
+		this.#activeActorCountToken = nextToken;
+		runtime.onRegistryActiveActorCountChange(
+			registry,
+			(count) => {
+				// Drop calls still queued from a released subscription.
+				if (this.#activeActorCountToken !== nextToken) return;
+				this.#lastActiveActorCount = count;
+				// Iterate a copy so listeners added by a callback are not called twice.
+				for (const listener of [...this.#activeActorCountListeners]) {
+					this.#deliverActiveActorCount(listener, count);
+				}
+			},
+			nextToken,
+		);
+	}
+
+	#deliverActiveActorCount(
+		listener: (count: number) => void,
+		count: number,
+	): void {
+		try {
+			listener(count);
+		} catch (error) {
+			logger().error({ error }, "active actor count listener threw");
+		}
 	}
 
 	#printWelcome(

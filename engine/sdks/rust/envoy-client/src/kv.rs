@@ -16,6 +16,13 @@ pub struct KvRequestEntry {
 	pub _inflight: rivet_metrics::IntGaugeGuard,
 }
 
+/// How long a KV or SQLite storage request waits for its reply before it fails as timed out.
+///
+/// A failed actor start's teardown depends on this bound: its strict SQLite close waits for the
+/// native worker's running command, and a command blocked on one storage request stops only
+/// when that request ends, while the engine's stop for the actor waits behind the teardown. Keep
+/// it below pegboard's `envoy_lost_threshold` (40 s by default) so one stalled request ends
+/// before the engine treats the envoy as lost.
 pub const KV_EXPIRE_MS: u64 = 30_000;
 
 fn kv_deadline(timestamp: crate::time::Instant) -> crate::time::Instant {

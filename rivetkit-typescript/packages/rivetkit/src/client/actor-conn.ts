@@ -162,6 +162,7 @@ export class ActorConnRaw {
 	#connStatus: ActorConnStatus = "idle";
 	/** The opening failure that stopped retries. Later actions must fail instead of queueing. */
 	#connectionOpenError?: errors.ActorError;
+	#dispatchedErrors = new WeakSet<errors.ActorError>();
 
 	#actorId?: string;
 	#connId?: string;
@@ -296,19 +297,30 @@ export class ActorConnRaw {
 	}
 
 	#shouldReconnectForStaleActor(group: string, code: string): boolean {
-		return (
-			isDynamicActorQuery(this.#actorResolutionState) &&
-			isStaleResolvedActorError(group, code) &&
-			this.#onOpenPromise !== undefined &&
-			this.#connStatus !== "connected"
-		);
+		if (
+			!isDynamicActorQuery(this.#actorResolutionState) ||
+			!isStaleResolvedActorError(group, code) ||
+			this.#onOpenPromise === undefined ||
+			this.#connStatus === "connected"
+		) {
+			return false;
+		}
+		if (
+			errors.isActorNotFound(group, code) &&
+			"getForKey" in this.#actorResolutionState
+		) {
+			return false;
+		}
+		return true;
 	}
 
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	send(
 		name: string,
 		body: unknown,
 		options: QueueSendWaitOptions,
 	): Promise<QueueSendResult>;
+	/** @deprecated Queues were deprecated in 3.0 and will be removed in a future version. Use actions and store pending work in SQLite (`c.db`). See https://rivet.dev/actors/docs/deprecated/queues */
 	send(
 		name: string,
 		body: unknown,
@@ -549,7 +561,9 @@ export class ActorConnRaw {
 
 			this.#connectionOpenError = actorError;
 			this.#rejectPendingPromises(actorError, false);
-			this.#dispatchActorError(actorError);
+			if (!this.#dispatchedErrors.has(actorError)) {
+				this.#dispatchActorError(actorError);
+			}
 			this.#setConnStatus("idle");
 
 			throw new AbortError(
@@ -1083,6 +1097,29 @@ export class ActorConnRaw {
 				this.#dispatchActorError(error);
 			}
 
+			// A destroyed actor is gone. Reconnecting through `getOrCreate` would
+			// create it again, so the connection stops and later calls fail with
+			// the same error.
+			if (
+				error instanceof errors.ActorError &&
+				errors.isActorDestroyed(error.group, error.code)
+			) {
+				this.#connectionOpenError = error;
+				this.#setConnStatus("idle");
+				return;
+			}
+
+			// A refused token that could not be refreshed would be refused again on reconnect.
+			if (
+				error instanceof errors.ActorError &&
+				isInvalidToken(error.group, error.code) &&
+				!this.#authRetryAvailable
+			) {
+				this.#connectionOpenError = error;
+				this.#setConnStatus("idle");
+				return;
+			}
+
 			// Automatically reconnect if we were connected
 			if (wasConnected && this.#authRetryAvailable) {
 				logger().debug({
@@ -1168,6 +1205,7 @@ export class ActorConnRaw {
 	}
 
 	#dispatchActorError(error: errors.ActorError) {
+		this.#dispatchedErrors.add(error);
 		// Call all registered error handlers
 		for (const handler of [...this.#errorHandlers]) {
 			try {

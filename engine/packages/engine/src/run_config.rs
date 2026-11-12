@@ -15,21 +15,6 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			|_config, ctx| Box::pin(rivet_guard::start(ctx)),
 			true,
 		),
-		// TODO: Restore these services as their legacy dependencies are replaced.
-		/*
-		Service::new(
-			"guard",
-			ServiceClass::Stateless,
-			|config, context| Box::pin(rivet_guard::start(config, context)),
-			true,
-		),
-		Service::new(
-			"bootstrap",
-			ServiceClass::Once,
-			|config, context| Box::pin(rivet_bootstrap::start(config, context)),
-			false,
-		),
-		*/
 		Service::new(
 			"api_peer",
 			ServiceClass::Always,
@@ -43,20 +28,14 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			|config, context| rivet_cluster_config::services::start(config, context),
 			false,
 		),
-		/*
+		// Legacy: moves the catalog's legacy namespace rows into their namespace volumes once
+		// the fleet reads them. Removed in 3.1 with the backfill.
 		Service::new(
-			"version_management",
-			ServiceClass::Always,
-			|config, context| Box::pin(rivet_version_management::start(config, context)),
+			"pegboard_legacy_namespace_rows",
+			ServiceClass::Storage,
+			|_config, context| pegboard::services::legacy_namespace_rows::legacy_start(context),
 			false,
 		),
-		Service::new(
-			"cache_purge",
-			ServiceClass::Always,
-			|config, context| Box::pin(rivet_cache_purge::start(config, context)),
-			false,
-		),
-		*/
 	];
 
 	Ok(RunConfigData { services })
@@ -87,7 +66,7 @@ fn depot_service(role: WorkerRole) -> Service {
 
 fn storage_service(
 	directory: Arc<depot_worker::bootstrap::StorageDirectory>,
-	epoxy: Option<Arc<crate::epoxy_services::EpoxyServices>>,
+	singletons: Option<Arc<dyn rivet_singleton_coordinator::runtime::SingletonServices>>,
 	handover: watch::Sender<Option<rivet_singleton_coordinator::runtime::Handover>>,
 	coordinator: watch::Sender<Option<depot_worker::services::storage::CoordinatorActive>>,
 ) -> Service {
@@ -96,7 +75,7 @@ fn storage_service(
 		ServiceClass::Storage,
 		move |config, ctx| {
 			let directory = directory.clone();
-			let epoxy = epoxy.clone();
+			let singletons = singletons.clone();
 			let handover = handover.clone();
 			let coordinator = coordinator.clone();
 			async move {
@@ -109,9 +88,12 @@ fn storage_service(
 				crate::depot_command::kv::register(&mut commands)?;
 				pegboard::commands::register(&mut commands, &ctx)?;
 				pegboard::index::register(&mut commands, &ctx)?;
+				pegboard_v2_migrator::commands::register(&mut commands)?;
 
 				let deps = depot_worker::services::storage::StorageDependencies {
+					readiness: Some(ctx.storage_readiness().clone()),
 					fork_peer: Some(Arc::new(crate::depot_peer::BaseReader(ctx.clone()))),
+					group_commands: Some(Arc::new(crate::depot_peer::BaseReader(ctx.clone()))),
 					base_reader: Some(Arc::new(crate::depot_peer::BaseReader(ctx.clone()))),
 					commands: Arc::new(commands),
 					directory,
@@ -120,16 +102,17 @@ fn storage_service(
 					object_store: ctx.object_stores().primary.clone(),
 					lease_object_store: ctx.object_stores().lease.clone(),
 					databases: ctx.depot_databases(),
-					singleton_services: epoxy.map(|host| {
-						host as Arc<dyn rivet_singleton_coordinator::runtime::SingletonServices>
-					}),
+					singleton_services: singletons,
 					filesystem_cache: Some(ctx.filesystem_cache()),
 					log_shard_snapshot: None,
 					singleton_handover: Some(handover),
 					coordinator_active: Some(coordinator),
 				};
-				// Due actor timers come back to their volumes as `ActorAlarm` commands.
-				let alarms = Arc::new(pegboard::commands::ActorAlarmDriver(ctx.clone()));
+				// Due actor and namespace timers come back to their volumes as alarm commands.
+				let alarms = Arc::new(AlarmDriver {
+					actors: pegboard::commands::ActorAlarmDriver(ctx.clone()),
+					ctx: ctx.clone(),
+				});
 				depot_worker::services::storage::start_with_driver(
 					ctx.shutdown(),
 					config,
@@ -141,6 +124,26 @@ fn storage_service(
 		},
 		true,
 	)
+}
+
+/// Routes a due depot alarm to the state machine that owns its volume: a namespace's volume goes to
+/// the namespace state machine, and every other volume goes to the actor alarm driver.
+struct AlarmDriver {
+	actors: pegboard::commands::ActorAlarmDriver,
+	ctx: rivet_engine_context::EngineContext,
+}
+
+impl depot_worker::alarms::DepotDriver for AlarmDriver {
+	fn on_alarm(
+		&self,
+		key: depot_types::VolumeKey,
+		alarm: depot_worker::alarms::AlarmContext,
+	) -> futures_util::future::BoxFuture<'_, Result<()>> {
+		if pegboard::catalog::is_namespace_volume(&key) {
+			return Box::pin(pegboard::catalog::deliver_alarm(&self.ctx, key, alarm));
+		}
+		self.actors.on_alarm(key, alarm)
+	}
 }
 
 pub(crate) fn depot_role(services: &[Service]) -> Result<Option<WorkerRole>> {
@@ -179,7 +182,7 @@ pub async fn start(
 	context: rivet_engine_context::EngineContext,
 	services: Vec<Service>,
 	storage: Option<Arc<depot_worker::bootstrap::StorageDirectory>>,
-	epoxy: Option<Arc<crate::epoxy_services::EpoxyServices>>,
+	singletons: Option<Arc<dyn rivet_singleton_coordinator::runtime::SingletonServices>>,
 	host_metrics: bool,
 ) -> Result<()> {
 	let role = depot_role(&services)?;
@@ -203,7 +206,7 @@ pub async fn start(
 		services.push(match role {
 			WorkerRole::Storage => storage_service(
 				storage.context("storage service requires an owned log directory")?,
-				epoxy,
+				singletons,
 				handover,
 				coordinator,
 			),
@@ -255,6 +258,7 @@ pub async fn start(
 		build_git_sha: config.build_meta().git_sha.clone(),
 		started_at_unix_ms: context.topology().started_at_unix_ms(),
 		directory_lock: directory_lock.clone(),
+		zone: config.depot().zone.clone(),
 	});
 	let peer = services
 		.iter()

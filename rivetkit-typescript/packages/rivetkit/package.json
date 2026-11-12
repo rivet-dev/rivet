@@ -1,6 +1,6 @@
 {
 	"name": "rivetkit",
-	"version": "3.0.0",
+	"version": "3.1.1",
 	"description": "Lightweight libraries for building stateful actors on edge platforms",
 	"license": "Apache-2.0",
 	"keywords": [
@@ -247,6 +247,9 @@
 		"vite-tsconfig-paths": "^5.1.4",
 		"vitest": "^3.1.1",
 		"ws": "^8.18.1"
+	},
+	"optionalDependencies": {
+		"@rivet-dev/services": "^0.2.5"
 	},
 	"peerDependencies": {
 		"drizzle-kit": "^0.31.2",

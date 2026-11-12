@@ -23,11 +23,12 @@ npm run dev
 
 This example demonstrates database integration with Rivet Actors using Drizzle ORM:
 
-- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/drizzle/src/backend/registry.ts)): Shows how to integrate Drizzle ORM for type-safe database operations within actors
+- **Schema** ([`src/db/schema.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/sqlite-drizzle/src/db/schema.ts)): Defines the `users_table` table with Drizzle
+- **Actor Definition** ([`src/index.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/sqlite-drizzle/src/index.ts)): Defines the `userDirectory` actor, which stores and lists users in its own SQLite database through Drizzle
 
 ## Resources
 
-Read more about [database integration](/docs/actors/database), [actions](/docs/actors/actions), and [state](/docs/actors/state).
+Read more about [SQLite](https://rivet.dev/actors/docs/sqlite), [Drizzle](https://rivet.dev/actors/docs/sqlite-drizzle), and [actions](https://rivet.dev/actors/docs/actions).
 
 ## License
 

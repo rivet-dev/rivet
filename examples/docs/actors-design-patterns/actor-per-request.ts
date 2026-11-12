@@ -3,7 +3,6 @@ import { createClient } from "rivetkit/client";
 import { Hono } from "hono";
 
 const processor = actor({
-  state: {},
   actions: {
     process: (c, body: unknown) => ({ processed: true }),
     destroySelf: (c) => c.destroy(),

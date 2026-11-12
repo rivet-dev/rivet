@@ -1,7 +1,7 @@
 import { actor, event } from "rivetkit";
 
 const reminder = actor({
-  state: { message: "Time to check your tasks." },
+  vars: { message: "Time to check your tasks." },
   events: {
     reminder: event<{ message: string }>(),
   },
@@ -17,7 +17,7 @@ const reminder = actor({
   },
   actions: {
     sendReminder: (c) => {
-      c.broadcast("reminder", { message: c.state.message });
+      c.broadcast("reminder", { message: c.vars.message });
     },
   },
 });

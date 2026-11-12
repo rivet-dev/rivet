@@ -1,0 +1,5 @@
+{
+  "code": "transaction_unknown",
+  "group": "sqlite",
+  "message": "Unknown SQLite transaction handle."
+}

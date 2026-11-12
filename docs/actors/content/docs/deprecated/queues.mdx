@@ -1,0 +1,104 @@
+---
+title: "Deprecated Queues"
+description: "Migrate actors off the deprecated queue APIs to actions and SQLite."
+---
+
+<Warning>
+Queues were deprecated in 3.0 and will be removed in a future version. They still work today, so you can migrate at your own pace.
+</Warning>
+
+## What is deprecated
+
+Queues delivered durable messages to an actor's `run` loop. The following are deprecated:
+
+- The `queues` actor option, the `queue()` schema helper, and `canPublish`.
+- The `maxQueueSize` and `maxQueueMessageSize` actor options.
+- `c.queue` and all of its methods: `send`, `next`, `nextBatch`, `tryNext`, `tryNextBatch`, `iter`, `waitForNames`, `waitForAvailable`, `complete` and `enqueueAndWait`.
+- `handle.send()` and `conn.send()` on the client.
+- `ctx.queue.send`, `ctx.queue.next` and `ctx.queue.nextBatch` in workflows.
+- `POST /gateway/{actor}/queue/{name}` on the HTTP API.
+
+The Rust SDK no longer has a queue API. Use actions, and store pending work in SQLite with `ctx.sql()`.
+
+<CodeSnippet file="examples/docs/actors-deprecated-queues/before.ts" />
+
+Use these instead:
+
+- **Updates and request/reply** are plain [actions](/actors/docs/actions) that return a value to the caller. Actions run concurrently, so keep each update atomic in SQLite.
+- **Durable background work** is a table in [SQLite](/actors/docs/sqlite) that the actor drains. See [Build a durable job queue](#build-a-durable-job-queue).
+- **Durable, replayable streams** can use [Durable Streams](/durable-streams/docs). Waking an actor when a stream receives data is coming soon.
+
+## Replace queue messages with actions
+
+Most queues serialized updates to actor data and, with `wait: true`, returned a result. An action returns its result directly. Actions run concurrently and interleave at every `await`, so make each update a single SQL statement, as below, or wrap a multi-step update in `c.db.transaction`.
+
+<CodeSnippet file="examples/docs/actors-deprecated-queues/actions.ts" />
+
+Clients call `handle.increment(5)` instead of `handle.send("increment", { amount: 5 })`.
+
+## Build a durable job queue
+
+When work must survive a crash or sleep and run after the caller returns, store it in SQLite and drain it in the background:
+
+1. An action inserts a row. The job is durable as soon as the insert resolves.
+2. A drain loop processes rows in order and deletes each one after it succeeds.
+3. `c.keepAwake` holds the actor awake until the drain finishes.
+4. `onWake` restarts the drain, so jobs left over from before a sleep or crash still run.
+
+<CodeSnippet file="examples/docs/actors-deprecated-queues/mini-queue.ts" />
+
+The drain state lives in `c.vars`, so it resets on every start. The `pending` flag catches jobs that arrive while a drain is already running. A failed job is logged and left in the table, and the drain stops until the next enqueue or wake. Because a row is deleted only after its work succeeds, a job can run again after a crash, so make the work idempotent.
+
+## Move pending messages
+
+Messages that were still waiting in the old queue can be moved into your own table on the next start. Remove the hook once every actor has woken on the new version.
+
+<CodeSnippet file="examples/docs/actors-deprecated-queues/drain-legacy.ts" />
+
+A queue message is removed when it is received, so a crash between receiving and inserting it loses that message.
+
+## Workflows
+
+`ctx.queue.next` and `ctx.queue.nextBatch` are deprecated along with the rest of the queue API. A replacement for delivering messages to a running workflow is coming soon. Until it ships, existing workflows that read from queues keep working.
+
+While a workflow waits on `ctx.queue.next`, the actor can still sleep. The workflow resumes when the actor wakes.
+
+## Reference
+
+These details apply to queues until you migrate.
+
+### Limits
+
+| Name | Default | Description |
+| --- | --- | --- |
+| Max queue size | 1,000 messages | Maximum number of messages in the queue before new messages are rejected. Configurable with the `maxQueueSize` actor option. |
+| Max queue message size | 64 KiB | Maximum size of each message. Configurable with the `maxQueueMessageSize` actor option. The usable payload is slightly smaller after serialization overhead. Messages sent over HTTP are also limited by `maxIncomingMessageSize`. |
+
+### `canPublish`
+
+`queues.<name>.canPublish` allows or denies an inbound publish. It can be async and must return a boolean: `true` allows the message, and `false` rejects it with `forbidden`. Returning `undefined`, `null`, or any other non-boolean throws an internal error. Return `false` unless the caller is explicitly allowed.
+
+`canPublish` applies only to queue names declared in `queues`. Messages for undeclared queues are ignored, and the publish still reports as completed.
+
+### Send over HTTP
+
+`POST /gateway/{actor}/queue/{name}` sends a message to the queue `name`. `{actor}` accepts the same selectors as the other gateway endpoints. See [Actor Routing](/docs/api/actor-routing) and [Authentication](/docs/api/authentication).
+
+```bash
+curl -X POST "https://rivet.example.com/gateway/counter/queue/increment?rvt-namespace=$RIVET_NAMESPACE&rvt-method=getOrCreate&rvt-key=my-counter&rvt-pool=default" \
+  -H "x-rivet-token: $RIVET_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"body": {"amount": 1}, "wait": true, "timeout": 5000}'
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `body` | `any` | Yes | Message payload. Any JSON value. |
+| `wait` | `boolean` | No | Wait for the actor to complete the message and return its response. |
+| `timeout` | `integer` | No | How long to wait for completion, in milliseconds. Only used with `wait`. |
+
+By default, the request returns once the message is enqueued. With `wait: true`, it waits for `message.complete(...)`, and a timeout returns `status: "timedOut"` without canceling the queued work. The response always includes `status`, and includes `response` when the actor passed a value to `complete()`:
+
+```json
+{ "status": "completed", "response": { "count": 1 } }
+```

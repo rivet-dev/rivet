@@ -1,7 +1,7 @@
 ---
 title: "Types"
 seoTitle: "TypeScript Types for Rivet Actors"
-description: "Use Rivet Actors TypeScript context and helper types to derive actor state, actions, events, connections, queues, and registry interfaces."
+description: "Use Rivet Actors TypeScript context and helper types to derive actor contexts, actions, events, connections, and registry interfaces."
 skill: true
 ---
 
@@ -23,10 +23,8 @@ Each lifecycle hook and handler has a corresponding `*ContextOf` type, exported 
 
 | Hook / Handler | Context Type |
 |---|---|
-| `createState` | `CreateContextOf` |
 | `onCreate` | `CreateContextOf` |
 | `createVars` | `CreateVarsContextOf` |
-| `createConnState` | `CreateConnStateContextOf` |
 | `onBeforeConnect` | `BeforeConnectContextOf` |
 | `onConnect` | `ConnectContextOf` |
 | `onDisconnect` | `DisconnectContextOf` |
@@ -34,7 +32,6 @@ Each lifecycle hook and handler has a corresponding `*ContextOf` type, exported 
 | `onMigrate` | `MigrateContextOf` |
 | `onWake` | `WakeContextOf` |
 | `onSleep` | `SleepContextOf` |
-| `onStateChange` | `StateChangeContextOf` |
 | `onBeforeActionResponse` | `BeforeActionResponseContextOf` |
 | `actions.*` | `ActionContextOf` |
 | `run` | `RunContextOf` |

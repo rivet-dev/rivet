@@ -72,7 +72,12 @@ impl EnvoyHandle {
 	/// True once the envoy loop has finished its cleanup block. Latched: stays
 	/// true forever after the loop exits.
 	pub fn is_stopped(&self) -> bool {
-		*self.shared.stopped_tx.borrow() != crate::context::StopStatus::Running
+		self.stop_status() != crate::context::StopStatus::Running
+	}
+
+	/// How the envoy loop ended, or `Running` while it has not. Latched like `is_stopped`.
+	pub fn stop_status(&self) -> crate::context::StopStatus {
+		*self.shared.stopped_tx.borrow()
 	}
 
 	/// Resolves when the envoy loop has finished its cleanup block.
@@ -303,6 +308,30 @@ impl EnvoyHandle {
 			return false;
 		}
 		rx.await.is_ok()
+	}
+
+	/// Resolve with the active actor count once it differs from `last`, or `None` once the
+	/// envoy has stopped.
+	pub async fn wait_active_actor_count_change(&self, last: Option<usize>) -> Option<usize> {
+		loop {
+			let notified = self.shared.actors_notify.notified();
+			tokio::pin!(notified);
+			notified.as_mut().enable();
+
+			if self.is_stopped() {
+				return None;
+			}
+
+			let count = self.active_actor_count();
+			if last != Some(count) {
+				return Some(count);
+			}
+
+			tokio::select! {
+				_ = notified => {}
+				_ = self.wait_stopped() => return None,
+			}
+		}
 	}
 
 	pub fn http_request_counter(

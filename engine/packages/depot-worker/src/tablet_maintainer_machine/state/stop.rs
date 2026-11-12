@@ -13,7 +13,7 @@ use rivet_data::generated::{
 		NotReady, ReadinessPurpose, StaleTabletGrantEpoch, StaleTabletReplicaSet, StopReadiness,
 		StopReadinessResponse as Response,
 	},
-	shared_depot_fs_v1::FsVolumeStatus,
+	shared_depot_fs_v2::FsVolumeStatus,
 	shared_depot_types_v1::{TabletPhase, VolumeBlocker, VolumeLogReplicaStatus},
 };
 use rivet_topology::worker::WorkerId;
@@ -36,6 +36,7 @@ struct OwnerQuiescence {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) struct Checks {
+	pub(super) startup: super::startup::Checks,
 	owner: Option<OwnerQuiescence>,
 	/// Each waiting request with the barrier generation that must finish before it is answered.
 	pending: BTreeMap<RequestId, (StopReadiness, u64)>,
@@ -161,6 +162,7 @@ pub(crate) fn manifest_observed(
 		.is_some_and(|owner| owner.manifest_version.is_some_and(|fence| version > fence))
 	{
 		state.stop_checks.owner = None;
+		super::lazy_fork_waiters::handoff_ended(state);
 	}
 }
 
@@ -265,7 +267,7 @@ pub(crate) fn handoff(
 	reply(effects, id, response);
 }
 
-fn reply(effects: &mut Effects, request_id: RequestId, response: Response) {
+pub(super) fn reply(effects: &mut Effects, request_id: RequestId, response: Response) {
 	effects.execute(MaintainerEffect::StopReadinessResponse {
 		request_id,
 		response,
@@ -336,6 +338,8 @@ pub(crate) fn admit(
 /// A barrier round began; observations from earlier rounds no longer count.
 pub(crate) fn started(state: &mut MaintainerState) {
 	state.stop_checks.observations.clear();
+	state.stop_checks.startup.observations.clear();
+	state.stop_checks.startup.absent.clear();
 }
 
 pub(crate) fn observe(
@@ -395,7 +399,7 @@ pub(crate) fn completed(state: &mut MaintainerState, effects: &mut Effects) {
 					observations.and_then(|members| members.get(&WorkerId::from_bytes(*worker)));
 				if observed.is_some_and(|r| {
 					r.status == VolumeLogReplicaStatus::InSync
-						|| caught_up_to_cold(state, key, volume, observations, *worker, r)
+						|| covered_by_cold(state, key, volume, observations, *worker, r)
 				}) {
 					continue;
 				}
@@ -505,12 +509,58 @@ pub(crate) fn completed(state: &mut MaintainerState, effects: &mut Effects) {
 	for ((key, worker), source) in reloads {
 		super::member_repair::absent_at_cold(state, key, worker, source, effects);
 	}
+	super::startup::completed(state, effects);
 	state.stop_checks.observations.clear();
+	state.stop_checks.startup.observations.clear();
+	state.stop_checks.startup.absent.clear();
+}
+
+/// The existing recovery operations are also available to startup checks. They never
+/// quiesce creates, replay a close, or grant permission from recovery progress alone.
+pub(super) fn recover_replica(
+	state: &mut MaintainerState,
+	key: &VolumeLogKey,
+	worker: &WorkerId,
+	fx: &mut Effects,
+) {
+	let Some(volume) = state.loaded_volumes.get(key) else {
+		return;
+	};
+	let observations = state.stop_checks.startup.observations.get(key);
+	let read_record = volume.stored_row.is_none()
+		&& observations.is_some_and(|answers| {
+			answers.iter().any(|(worker, replica)| {
+				state.disk_incarnation(worker).is_some()
+					&& super::membership::voter(&state.tablet.replica_set, worker)
+					&& !replica.lost_entries
+					&& replica.status != VolumeLogReplicaStatus::Deleted
+			})
+		});
+	let reload = if observations
+		.and_then(|answers| answers.get(worker))
+		.is_none()
+	{
+		cold_reload_source(state, key, volume, observations)
+	} else {
+		None
+	};
+	let tier = state.filesystem.volumes.get(key).is_some_and(|volume| {
+		volume.applied.volume_seq > volume.record.cold.volume_seq || !volume.record_persisted
+	});
+	if read_record {
+		super::filesystem::load_stop_record(state, key.clone());
+	}
+	if tier {
+		super::filesystem::request_due_flush(state, key, fx);
+	}
+	if let Some(source) = reload {
+		super::member_repair::absent_at_cold(state, key.clone(), worker.clone(), source, fx);
+	}
 }
 
 /// A durable row and a fresh intact replica authorize nonvoting reconstruction only. Existing
 /// replicas are returned unchanged by Load, including an unseen suffix. Only the later fresh
-/// quorum proof in `caught_up_to_cold` may count the reconstructed replica for permission.
+/// quorum proof in `covered_by_cold` may count the reconstructed replica for permission.
 fn cold_reload_source(
 	state: &MaintainerState,
 	key: &VolumeLogKey,
@@ -539,7 +589,7 @@ fn cold_reload_source(
 		return None;
 	}
 	let cold_quorum = observations.iter().any(|(worker, replica)| {
-		caught_up_to_cold(
+		covered_by_cold(
 			state,
 			key,
 			volume,
@@ -584,15 +634,17 @@ fn cold_reload_source(
 	})
 }
 
-/// Whether `worker`'s `Repairing` replica of `key`, observed in this round, held every
-/// acknowledged entry when the round observed it, so a stop may count it as a survivor.
+/// Whether `worker`'s replica of `key`, observed in this round, held every acknowledged
+/// entry at the durable cold row. InSync and Repairing targets require the same cold
+/// evidence; InSync status alone does not replace a voting read quorum for startup.
 ///
 /// This is the proof an open uses to promote a caught-up member (see
 /// `lifecycle::promote_caught_up`): a quorum of this round's answers holds nothing above the
 /// stored cold row, no observed member holds or knows a commit above it, and the replica ends
 /// exactly at that row without lost entries. An acknowledged entry above the row would be on one
 /// of that quorum, so every entry acknowledged by then is in the cold store and on this replica.
-/// Only its status keeps it from voting, and the next open of the volume promotes it.
+/// For a Repairing replica only its status keeps it from voting, and the next open
+/// of the volume promotes it.
 ///
 /// The round fences no client, as for an in-sync survivor: a live client may still commit above
 /// the row afterwards on its in-sync members and must bring this member in sync itself before it
@@ -602,7 +654,7 @@ fn cold_reload_source(
 /// gone: a client that closed before repairing it leaves the close to an unload that waits for
 /// tiering, and a new grant does not know about that close. The volume then parks under the
 /// client's still-live process and never goes idle.
-fn caught_up_to_cold(
+pub(super) fn covered_by_cold(
 	state: &MaintainerState,
 	key: &VolumeLogKey,
 	volume: &super::LoadedVolume,
@@ -625,8 +677,10 @@ fn caught_up_to_cold(
 		|| state
 			.disk_incarnation(&WorkerId::from_bytes(worker))
 			.is_none()
-		|| replica.status != VolumeLogReplicaStatus::Repairing
-		|| replica.lost_entries
+		|| !matches!(
+			replica.status,
+			VolumeLogReplicaStatus::InSync | VolumeLogReplicaStatus::Repairing
+		) || replica.lost_entries
 		|| replica.appended != row.cold
 		|| replica.cold != row.cold
 		|| row.status != FsVolumeStatus::Live
@@ -708,6 +762,7 @@ fn unload_released(
 
 /// Assignment changes and fencing invalidate the whole observation round.
 pub(crate) fn cancel(state: &mut MaintainerState, effects: &mut Effects) {
+	super::startup::cancel(state, effects);
 	for (id, _) in std::mem::take(&mut state.stop_checks.pending) {
 		reply(effects, id, Response::NotServing);
 	}
@@ -715,5 +770,5 @@ pub(crate) fn cancel(state: &mut MaintainerState, effects: &mut Effects) {
 }
 
 pub(crate) fn pending(state: &MaintainerState) -> usize {
-	state.stop_checks.pending.len()
+	state.stop_checks.pending.len() + super::startup::pending(state)
 }

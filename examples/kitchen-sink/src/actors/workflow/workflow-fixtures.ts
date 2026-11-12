@@ -1,16 +1,47 @@
 import { actor, event, queue } from "rivetkit";
 import { Loop, type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
+import {
+	loadRecord,
+	recordDb,
+	saveRecord,
+	updateRecord,
+} from "./record-store.ts";
 
 const WORKFLOW_GUARD_KV_KEY = "__rivet_actor_workflow_guard_triggered";
 
 const WORKFLOW_QUEUE_NAME = "workflow-default";
 const WORKFLOW_TIMEOUT_QUEUE_NAME = "workflow-timeout";
 
+type WorkflowCounterRecord = {
+	runCount: number;
+	guardTriggered: boolean;
+	history: number[];
+};
+
+type WorkflowQueueRecord = {
+	received: unknown[];
+};
+
+type WorkflowSleepRecord = {
+	ticks: number;
+};
+
+type WorkflowQueueTimeoutRecord = {
+	processed: number;
+	ticks: number;
+	lastTickAt: number | null;
+	lastJob: { id: string; payload: string } | null;
+	timeoutMs: number;
+};
+
 export const workflowCounterActor = actor({
-	state: {
-		runCount: 0,
-		guardTriggered: false,
-		history: [] as number[],
+	db: recordDb(),
+	onCreate: async (c) => {
+		await saveRecord<WorkflowCounterRecord>(c.db, {
+			runCount: 0,
+			guardTriggered: false,
+			history: [],
+		});
 	},
 	run: workflow(async (ctx) => {
 		let leakedCtx:
@@ -18,7 +49,7 @@ export const workflowCounterActor = actor({
 			| undefined;
 		await ctx.loop("counter", async (loopCtx) => {
 			await loopCtx.step("increment", async (c) => {
-				incrementWorkflowCounter(c);
+				await incrementWorkflowCounter(c);
 				// Capture the step context to verify it cannot be used after
 				// its step has finished.
 				leakedCtx = c;
@@ -26,9 +57,9 @@ export const workflowCounterActor = actor({
 
 			if (leakedCtx) {
 				try {
-					// Accessing state on a finished step context should throw.
+					// Accessing the database on a finished step context should throw.
 					// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
-					leakedCtx.state;
+					leakedCtx.db;
 				} catch {}
 			}
 
@@ -39,10 +70,16 @@ export const workflowCounterActor = actor({
 	actions: {
 		getState: async (c) => {
 			const guardFlag = await c.kv.get(WORKFLOW_GUARD_KV_KEY);
-			if (guardFlag === "true") {
-				c.state.guardTriggered = true;
+			const record = await loadRecord<WorkflowCounterRecord>(c.db);
+			if (guardFlag === "true" && !record.guardTriggered) {
+				return await updateRecord<WorkflowCounterRecord>(
+					c.db,
+					(record) => {
+						record.guardTriggered = true;
+					},
+				);
 			}
-			return c.state;
+			return record;
 		},
 	},
 	options: {
@@ -51,8 +88,9 @@ export const workflowCounterActor = actor({
 });
 
 export const workflowQueueActor = actor({
-	state: {
-		received: [] as unknown[],
+	db: recordDb(),
+	onCreate: async (c) => {
+		await saveRecord<WorkflowQueueRecord>(c.db, { received: [] });
 	},
 	queues: {
 		[WORKFLOW_QUEUE_NAME]: queue<unknown, { echo: unknown }>(),
@@ -74,25 +112,29 @@ export const workflowQueueActor = actor({
 		});
 	}),
 	actions: {
-		getMessages: (c) => c.state.received,
+		getMessages: async (c) => {
+			const record = await loadRecord<WorkflowQueueRecord>(c.db);
+			return record.received;
+		},
 	},
 });
 
 export const workflowSleepActor = actor({
-	state: {
-		ticks: 0,
+	db: recordDb(),
+	onCreate: async (c) => {
+		await saveRecord<WorkflowSleepRecord>(c.db, { ticks: 0 });
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("sleep", async (loopCtx) => {
 			await loopCtx.step("tick", async (c) => {
-				incrementWorkflowSleepTick(c);
+				await incrementWorkflowSleepTick(c);
 			});
 			await loopCtx.sleep("delay", 40);
 			return Loop.continue(undefined);
 		});
 	}),
 	actions: {
-		getState: (c) => c.state,
+		getState: (c) => loadRecord<WorkflowSleepRecord>(c.db),
 	},
 	options: {
 		sleepTimeout: 50,
@@ -100,12 +142,15 @@ export const workflowSleepActor = actor({
 });
 
 export const workflowQueueTimeoutActor = actor({
-	state: {
-		processed: 0,
-		ticks: 0,
-		lastTickAt: null as number | null,
-		lastJob: null as { id: string; payload: string } | null,
-		timeoutMs: 2_000,
+	db: recordDb(),
+	onCreate: async (c) => {
+		await saveRecord<WorkflowQueueTimeoutRecord>(c.db, {
+			processed: 0,
+			ticks: 0,
+			lastTickAt: null,
+			lastJob: null,
+			timeoutMs: 2_000,
+		});
 	},
 	events: {
 		tick: event<{ ticks: number; at: number }>(),
@@ -119,9 +164,12 @@ export const workflowQueueTimeoutActor = actor({
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("queue-timeout-loop", async (loopCtx) => {
-			const timeoutMs = await loopCtx.step("read-timeout", async (c) =>
-				readWorkflowTimeoutMs(c),
-			);
+			const timeoutMs = await loopCtx.step("read-timeout", async (c) => {
+				const record = await loadRecord<WorkflowQueueTimeoutRecord>(
+					c.db,
+				);
+				return record.timeoutMs;
+			});
 
 			const [message] = await loopCtx.queue.nextBatch(
 				"wait-job-or-timeout",
@@ -133,13 +181,13 @@ export const workflowQueueTimeoutActor = actor({
 
 			if (!message) {
 				await loopCtx.step("tick", async (c) => {
-					recordWorkflowTimeoutTick(c);
+					await recordWorkflowTimeoutTick(c);
 				});
 				return Loop.continue(undefined);
 			}
 
 			await loopCtx.step("process-job", async (c) => {
-				processWorkflowTimeoutJob(c, message.body);
+				await processWorkflowTimeoutJob(c, message.body);
 			});
 			return Loop.continue(undefined);
 		});
@@ -150,19 +198,26 @@ export const workflowQueueTimeoutActor = actor({
 			await c.queue.send(WORKFLOW_TIMEOUT_QUEUE_NAME, job);
 			return job;
 		},
-		setTimeoutMs: (c, timeoutMs: number) => {
-			c.state.timeoutMs = Math.max(100, Math.floor(timeoutMs));
-			return c.state.timeoutMs;
+		setTimeoutMs: async (c, timeoutMs: number) => {
+			const updated = await updateRecord<WorkflowQueueTimeoutRecord>(
+				c.db,
+				(record) => {
+					record.timeoutMs = Math.max(100, Math.floor(timeoutMs));
+				},
+			);
+			return updated.timeoutMs;
 		},
-		getState: (c) => c.state,
+		getState: (c) => loadRecord<WorkflowQueueTimeoutRecord>(c.db),
 	},
 });
 
-function incrementWorkflowCounter(
+async function incrementWorkflowCounter(
 	ctx: WorkflowStepContextOf<typeof workflowCounterActor>,
-): void {
-	ctx.state.runCount += 1;
-	ctx.state.history.push(ctx.state.runCount);
+): Promise<void> {
+	await updateRecord<WorkflowCounterRecord>(ctx.db, (record) => {
+		record.runCount += 1;
+		record.history.push(record.runCount);
+	});
 }
 
 async function storeWorkflowQueueMessage(
@@ -170,42 +225,50 @@ async function storeWorkflowQueueMessage(
 	body: unknown,
 	complete: (response: { echo: unknown }) => Promise<void>,
 ): Promise<void> {
-	ctx.state.received.push(body);
+	await updateRecord<WorkflowQueueRecord>(ctx.db, (record) => {
+		record.received.push(body);
+	});
 	await complete({ echo: body });
 }
 
-function incrementWorkflowSleepTick(
+async function incrementWorkflowSleepTick(
 	ctx: WorkflowStepContextOf<typeof workflowSleepActor>,
-): void {
-	ctx.state.ticks += 1;
+): Promise<void> {
+	await updateRecord<WorkflowSleepRecord>(ctx.db, (record) => {
+		record.ticks += 1;
+	});
 }
 
-function readWorkflowTimeoutMs(
+async function recordWorkflowTimeoutTick(
 	ctx: WorkflowStepContextOf<typeof workflowQueueTimeoutActor>,
-): number {
-	return ctx.state.timeoutMs;
-}
-
-function recordWorkflowTimeoutTick(
-	ctx: WorkflowStepContextOf<typeof workflowQueueTimeoutActor>,
-): void {
+): Promise<void> {
 	const at = Date.now();
-	ctx.state.ticks += 1;
-	ctx.state.lastTickAt = at;
+	const updated = await updateRecord<WorkflowQueueTimeoutRecord>(
+		ctx.db,
+		(record) => {
+			record.ticks += 1;
+			record.lastTickAt = at;
+		},
+	);
 	ctx.broadcast("tick", {
-		ticks: ctx.state.ticks,
+		ticks: updated.ticks,
 		at,
 	});
 }
 
-function processWorkflowTimeoutJob(
+async function processWorkflowTimeoutJob(
 	ctx: WorkflowStepContextOf<typeof workflowQueueTimeoutActor>,
 	job: { id: string; payload: string },
-): void {
-	ctx.state.processed += 1;
-	ctx.state.lastJob = job;
+): Promise<void> {
+	const updated = await updateRecord<WorkflowQueueTimeoutRecord>(
+		ctx.db,
+		(record) => {
+			record.processed += 1;
+			record.lastJob = job;
+		},
+	);
 	ctx.broadcast("jobProcessed", {
-		processed: ctx.state.processed,
+		processed: updated.processed,
 		job,
 	});
 }

@@ -1,7 +1,7 @@
 //! Volume client request latency observed at the production transport adapter.
 
 use crate::volume_client_machine::event::RpcError;
-use rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse;
+use rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse;
 use rivet_metrics::prometheus::{
 	HistogramOpts, HistogramVec, register_histogram_vec_with_registry,
 };
@@ -67,6 +67,8 @@ fn lifecycle_label(reason: &VolumeRejectResponse) -> &'static str {
 		VolumeRejectResponse::Overloaded(_) => "overloaded",
 		VolumeRejectResponse::VolumeRecordMissing(_) => "record_missing",
 		VolumeRejectResponse::VolumeUnderRepair(_) => "under_repair",
+		VolumeRejectResponse::VolumeGroupArchived => "group_archived",
+		VolumeRejectResponse::VolumeTailUnproven(_) => "tail_unproven",
 	}
 }
 

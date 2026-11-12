@@ -72,10 +72,6 @@ impl SqliteTransaction {
 	pub async fn rollback(&self) -> Result<()> {
 		self.db.finish_transaction(&self.key, false).await
 	}
-
-	pub async fn expire(&self) -> Result<()> {
-		self.db.expire_transaction(&self.key).await
-	}
 }
 
 pub(super) struct TransactionCoordinator {
@@ -99,6 +95,14 @@ pub(super) struct TransactionCoordinatorState {
 	pub(super) poisoned_order: VecDeque<String>,
 	pub(super) last_expired_timeout: Option<Duration>,
 	pub(super) closed: bool,
+}
+
+/// A bounded coordinator shutdown stopped waiting for a statement that still holds the
+/// coordinator.
+pub(super) struct CoordinatorDrainTimedOut {
+	/// Whether a transaction was active when the coordinator closed. Without one, the holder is
+	/// an ordinary statement, such as a detached one a failed start's hook left running.
+	pub(super) transaction_active: bool,
 }
 
 /// An expired transaction key, counted on the process-wide expired key gauge while it is kept.
@@ -225,6 +229,10 @@ impl Drop for ManualTransactionWaitGuard<'_> {
 			.fetch_sub(1, Ordering::AcqRel);
 	}
 }
+
+/// The active transaction's key, statement lock and remote session, as a coordinator shutdown
+/// captures them before it waits.
+type ActiveOperation = (String, Arc<AsyncMutex<()>>, Option<u64>);
 
 pub(super) struct ActiveTransaction {
 	key: String,
@@ -389,15 +397,6 @@ impl SqliteDb {
 			timeout,
 		)
 		.await
-	}
-
-	pub async fn begin_transaction_with_key(
-		&self,
-		key: impl Into<String>,
-		timeout: Option<Duration>,
-	) -> Result<SqliteTransaction> {
-		self.begin_transaction_with_key_and_name(key, None, timeout)
-			.await
 	}
 
 	async fn begin_transaction_with_key_and_name(
@@ -883,9 +882,9 @@ impl SqliteDb {
 				let rollback_result = self
 					.execute_backend_in_session("ROLLBACK".to_owned(), None, remote_session)
 					.await;
-				let rollback_failed = rollback_result
-					.as_ref()
-					.is_err_and(|error| !is_no_active_transaction_error(error));
+				let rollback_failed = rollback_result.as_ref().is_err_and(|error| {
+					!is_no_active_transaction_error(error) && !is_database_closed_error(error)
+				});
 				self.release_transaction(
 					key,
 					TransactionTerminalState::RolledBack,
@@ -1003,7 +1002,9 @@ impl SqliteDb {
 			.execute_backend_in_session("ROLLBACK".to_owned(), None, remote_session)
 			.await;
 		let rollback_failed = rollback.as_ref().is_err_and(|error| {
-			!is_no_active_transaction_error(error) && !is_remote_connection_error(error)
+			!is_no_active_transaction_error(error)
+				&& !is_remote_connection_error(error)
+				&& !is_database_closed_error(error)
 		});
 		// Advance again before releasing the exclusive gate. Calls submitted both
 		// before and during expiry cleanup must observe a changed epoch and fail;
@@ -1187,20 +1188,61 @@ impl SqliteDb {
 		}
 	}
 
+	/// Closes the coordinator and waits for it to drain: a statement running inside the active
+	/// transaction finishes, the transaction rolls back, and every ordinary statement ends. The
+	/// returned gate proves nothing else runs on the connection. Waits without a bound.
 	pub(super) async fn shutdown_transaction_coordinator(&self) -> OwnedRwLockWriteGuard<()> {
-		let active_operation = {
-			let mut state = self.transaction_coordinator.state.lock().await;
-			state.closed = true;
-			self.transaction_coordinator.closed_token.cancel();
-			state.active.as_ref().map(|active| {
-				(
-					active.key.clone(),
-					Arc::clone(&active.operation),
-					active.remote_session,
-				)
-			})
-		};
+		let active_operation = self.close_transaction_coordinator().await;
+		self.drain_transaction_coordinator(active_operation).await
+	}
+
+	/// Like [`Self::shutdown_transaction_coordinator`], but stops waiting for the drain after
+	/// `limit`, as when user code is mid-statement on a reply that never comes. The coordinator
+	/// is closed either way, so nothing new is admitted. Past the limit it returns
+	/// [`CoordinatorDrainTimedOut`]: the statement and the transaction holding the gate are left
+	/// to end on their own, and a transaction left open never commits because its commit finds
+	/// the coordinator closed.
+	///
+	/// The timeout can cancel the drain after it took the statement lock and while its
+	/// `ROLLBACK` is in flight. The epoch bump and the transaction's release are then skipped,
+	/// so `active` stays set. That is harmless only because the coordinator stays closed for
+	/// good and the failed start that closed it drops it; no caller may reuse a coordinator
+	/// closed this way.
+	pub(super) async fn shutdown_transaction_coordinator_within(
+		&self,
+		limit: Duration,
+	) -> std::result::Result<OwnedRwLockWriteGuard<()>, CoordinatorDrainTimedOut> {
+		let active_operation = self.close_transaction_coordinator().await;
+		let transaction_active = active_operation.is_some();
+		crate::time::timeout(limit, self.drain_transaction_coordinator(active_operation))
+			.await
+			.map_err(|_| CoordinatorDrainTimedOut { transaction_active })
+	}
+
+	/// Marks the coordinator closed and stops admission. Returns the active transaction, if
+	/// any, for the drain to roll back.
+	async fn close_transaction_coordinator(&self) -> Option<ActiveOperation> {
+		let mut state = self.transaction_coordinator.state.lock().await;
+		state.closed = true;
+		self.transaction_coordinator.closed_token.cancel();
+		let active_operation = state.active.as_ref().map(|active| {
+			(
+				active.key.clone(),
+				Arc::clone(&active.operation),
+				active.remote_session,
+			)
+		});
+		drop(state);
 		self.transaction_coordinator.admission.close();
+		active_operation
+	}
+
+	/// Waits for the statement running inside `active_operation`'s transaction, rolls that
+	/// transaction back, and takes the exclusive gate.
+	async fn drain_transaction_coordinator(
+		&self,
+		active_operation: Option<ActiveOperation>,
+	) -> OwnedRwLockWriteGuard<()> {
 		if let Some((key, operation, remote_session)) = active_operation {
 			let _operation = operation.lock().await;
 			let still_active = {
@@ -1215,12 +1257,21 @@ impl SqliteDb {
 					.execute_backend_in_session("ROLLBACK".to_owned(), None, remote_session)
 					.await;
 				let rollback_failed = rollback.as_ref().is_err_and(|error| {
-					!is_no_active_transaction_error(error) && !is_remote_connection_error(error)
+					!is_no_active_transaction_error(error)
+						&& !is_remote_connection_error(error)
+						&& !is_database_closed_error(error)
 				});
-				if let Err(error) = &rollback
-					&& rollback_failed
-				{
-					tracing::error!(%error, "sqlite rollback during coordinator shutdown failed");
+				match &rollback {
+					Err(error) if rollback_failed => {
+						tracing::error!(%error, "sqlite rollback during coordinator shutdown failed");
+					}
+					Err(error) if is_database_closed_error(error) => {
+						tracing::debug!(
+							%error,
+							"sqlite database already closing at coordinator shutdown; its close rolls the transaction back"
+						);
+					}
+					Err(_) | Ok(_) => {}
 				}
 				self.transaction_coordinator
 					.epoch
@@ -1622,6 +1673,21 @@ fn is_no_active_transaction_error(error: &anyhow::Error) -> bool {
 			.to_ascii_lowercase()
 			.contains("no transaction is active")
 	})
+}
+
+/// Whether the database refused the statement because it is closing or already closed, for
+/// example after a fork start discarded its corked commits. Closing the connection rolls back
+/// any open transaction, so a refused `ROLLBACK` leaves nothing to undo and is not a failure that
+/// must close the coordinator or report a worker fatal.
+///
+/// The closed error also covers a dead or fatally failed worker (a panic, a lost fence, a failed
+/// commit) and, on the remote backend, a head fence mismatch. Those fatals are still reported
+/// where the worker's result is mapped. In that case the coordinator stays open: later
+/// transactions are admitted and then fail as closed when the database refuses their work,
+/// rather than being refused at admission.
+fn is_database_closed_error(error: &anyhow::Error) -> bool {
+	let structured = rivet_error::RivetError::extract(error);
+	structured.group() == "sqlite" && structured.code() == "closed"
 }
 
 fn transaction_queue_full_error() -> anyhow::Error {

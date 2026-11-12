@@ -1,4 +1,4 @@
-import { type ActorContextOf, actor, event, queue } from "rivetkit";
+import { type ActorContextOf, actor, event } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
 export interface LeaderboardEntry {
@@ -13,14 +13,6 @@ export const rankedLeaderboard = actor({
 	db: db({
 		onMigrate: migrateTables,
 	}),
-	queues: {
-		updatePlayer: queue<{
-			username: string;
-			rating: number;
-			wins: number;
-			losses: number;
-		}>(),
-	},
 	events: {
 		leaderboardUpdate: event<LeaderboardEntry[]>(),
 	},
@@ -34,32 +26,25 @@ export const rankedLeaderboard = actor({
 				losses: number;
 			},
 		) => {
-			await c.queue.send("updatePlayer", input);
-		},
-		getTopScores: async (c) => {
-			return await getTop(c);
-		},
-	},
-	run: async (c) => {
-		for await (const message of c.queue.iter()) {
-			if (message.name !== "updatePlayer") continue;
-
+			// Two matches for one player can finish at once and report out of
+			// order. Every result adds one win or loss, so only a profile with
+			// at least as many games as the saved row replaces it.
 			await c.db.execute(
 				`INSERT INTO leaderboard (username, rating, wins, losses, updated_at) VALUES (?, ?, ?, ?, ?)
-					 ON CONFLICT(username) DO UPDATE SET rating = ?, wins = ?, losses = ?, updated_at = ?`,
-				message.body.username,
-				message.body.rating,
-				message.body.wins,
-				message.body.losses,
-				Date.now(),
-				message.body.rating,
-				message.body.wins,
-				message.body.losses,
+					 ON CONFLICT(username) DO UPDATE SET rating = excluded.rating, wins = excluded.wins, losses = excluded.losses, updated_at = excluded.updated_at
+					 WHERE excluded.wins + excluded.losses >= leaderboard.wins + leaderboard.losses`,
+				input.username,
+				input.rating,
+				input.wins,
+				input.losses,
 				Date.now(),
 			);
 			const top = await getTop(c);
 			c.broadcast("leaderboardUpdate", top);
-		}
+		},
+		getTopScores: async (c) => {
+			return await getTop(c);
+		},
 	},
 });
 

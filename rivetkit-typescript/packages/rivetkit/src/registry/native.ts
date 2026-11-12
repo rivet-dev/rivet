@@ -9,6 +9,7 @@ import {
 	type ActorCron,
 	type ActorCronEveryOptions,
 	type ActorCronSetOptions,
+	type ActorForkLink,
 	type ActorLogger,
 	type ActorRun,
 	type ActorSchedule,
@@ -115,6 +116,7 @@ import type {
 	CoreRuntime,
 	RegistryHandle,
 	RuntimeActorConfig,
+	RuntimeActorKeySegment,
 	RuntimeActorTracingConfig,
 	RuntimeBytes,
 	RuntimeCronFire,
@@ -2858,12 +2860,6 @@ export class ActorContextHandleAdapter {
 		return this.#kv;
 	}
 
-	async actorRuntimeSocket(): Promise<{ path: string }> {
-		return await callNative(() =>
-			this.#runtime.actorRuntimeSocketProvision(this.#ctx),
-		);
-	}
-
 	get db() {
 		if (!this.#databaseProvider) {
 			throw databaseNotConfiguredError();
@@ -3033,8 +3029,22 @@ export class ActorContextHandleAdapter {
 		);
 	}
 
+	get forkChain(): ActorForkLink[] {
+		return callNativeSync(() =>
+			this.#runtime.actorForkChain(this.#ctx),
+		).map((link) => ({
+			actorId: link.actorId,
+			key: toActorKey(link.key),
+			forkedAt: link.forkedAt,
+		}));
+	}
+
 	get region(): string {
 		return callNativeSync(() => this.#runtime.actorRegion(this.#ctx));
+	}
+
+	get namespace(): string {
+		return callNativeSync(() => this.#runtime.actorNamespace(this.#ctx));
 	}
 
 	get conns(): ReadonlyMap<string, NativeConnAdapter> {
@@ -3529,17 +3539,17 @@ export class ActorContextHandleAdapter {
 	// need to keep an actor awake should use `keepAwake(promise)` or
 	// `waitUntil(promise)` so the native counter machinery in rivetkit-core
 	// owns the lifecycle.
-	/** @deprecated Use `keepAwake(promise)` or `waitUntil(promise)` instead. */
+	/** @deprecated `setPreventSleep` was deprecated in 3.0 and will be removed in a future version. It is a no-op. Use `c.keepAwake(promise)` or `c.waitUntil(promise)`. See https://rivet.dev/actors/docs/deprecated/prevent-sleep */
 	setPreventSleep(_preventSleep: boolean): void {
 		logger().warn({
-			msg: "setPreventSleep is deprecated and is a no-op; use keepAwake(promise) or waitUntil(promise) instead",
+			msg: "setPreventSleep was deprecated in 3.0 and will be removed in a future version. It is a no-op; use keepAwake(promise) or waitUntil(promise) instead. See https://rivet.dev/actors/docs/deprecated/prevent-sleep",
 		});
 	}
 
-	/** @deprecated Use `keepAwake(promise)` or `waitUntil(promise)` instead. */
+	/** @deprecated `preventSleep` was deprecated in 3.0 and will be removed in a future version. It is a no-op that always returns `false`. Use `c.keepAwake(promise)` or `c.waitUntil(promise)`. See https://rivet.dev/actors/docs/deprecated/prevent-sleep */
 	get preventSleep(): boolean {
 		logger().warn({
-			msg: "preventSleep is deprecated and always returns false; use keepAwake(promise) or waitUntil(promise) instead",
+			msg: "preventSleep was deprecated in 3.0 and will be removed in a future version. It always returns false; use keepAwake(promise) or waitUntil(promise) instead. See https://rivet.dev/actors/docs/deprecated/prevent-sleep",
 		});
 		return false;
 	}
@@ -4009,7 +4019,6 @@ function buildActorConfig(
 			definition.config.actions,
 			definition.config.tracing,
 		),
-		enableActorRuntimeSocket: options.enableActorRuntimeSocket === true,
 		hasState:
 			config.state !== undefined ||
 			typeof config.createState === "function",
@@ -4839,6 +4848,39 @@ export function buildNativeFactory(
 						},
 					)
 				: undefined,
+		onFork:
+			typeof config.onFork === "function"
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: ActorContextHandle;
+								fork: {
+									actorId: string;
+									key: RuntimeActorKeySegment[];
+									forkedAt: number;
+									input?: RuntimeBytes;
+								};
+							},
+						) => {
+							const { ctx, fork } = unwrapTsfnPayload(
+								error,
+								payload,
+							);
+							const actorCtx = makeActorCtx(ctx);
+							try {
+								await config.onFork(actorCtx, {
+									actorId: fork.actorId,
+									key: toActorKey(fork.key),
+									forkedAt: fork.forkedAt,
+									input: decodeValue(fork.input),
+								});
+							} finally {
+								await actorCtx.dispose();
+							}
+						},
+					)
+				: undefined,
 		onWake:
 			typeof config.onWake === "function"
 				? wrapNativeCallback(
@@ -5512,6 +5554,11 @@ export function buildNativeFactory(
 							conn != null
 								? makeConnCtx(ctx, conn, undefined, cancelToken)
 								: makeActorCtx(ctx, undefined, cancelToken);
+						if (scheduledFire) {
+							Object.defineProperty(actorCtx, "scheduledFire", {
+								value: scheduledFire,
+							});
+						}
 						const runAction = async () => {
 							try {
 								return encodeValue(
@@ -5680,7 +5727,7 @@ export function buildNativeFactory(
 
 export async function buildServeConfig(
 	config: RegistryConfig,
-	resolveServicesBinary = true,
+	resolveNativeBinaries = true,
 ): Promise<RuntimeServeConfig> {
 	if (!config.endpoint) {
 		throw nativeEndpointNotConfiguredError();
@@ -5693,7 +5740,7 @@ export async function buildServeConfig(
 		token: config.token,
 		namespace: config.namespace,
 		poolName: config.node.poolName,
-		startServices: resolveServicesBinary && config.startServices,
+		startServices: resolveNativeBinaries && config.startServices,
 		handleInspectorHttpInRuntime: true,
 		serverlessBasePath: config.serverless.basePath,
 		serverlessPackageVersion: VERSION,
@@ -5704,28 +5751,30 @@ export async function buildServeConfig(
 		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
 	};
 
-	// Always best-effort resolve the npm-installed engine binary and hand its
-	// path to the core. The core alone decides whether to actually spawn a local
+	// For native runtimes, best-effort resolve the npm-installed engine binary
+	// and hand its path to the core. The core decides whether to spawn a local
 	// engine using the resolved spawn decision, so
 	// JS must not duplicate that decision here. Only JS knows the npm
 	// `node_modules` layout, so it resolves the path; if no binary is available
 	// (remote-only install, unsupported platform, optional deps skipped), leave
 	// it unset and let the core report `engine.binary_unavailable` if it actually
 	// needs one.
-	try {
-		const { getEnginePath } = await loadEngineCli();
-		serveConfig.engineBinaryPath = getEnginePath();
-	} catch (error) {
-		// The npm-installed engine binary could not be resolved. The core still
-		// decides whether it needs to spawn a local engine; if it does, it will
-		// fail with engine.binary_unavailable (auto-download is off in the napi
-		// runtime). Warn so the cause is actionable.
-		logger().warn({
-			msg: "could not resolve a local engine binary; if a local engine must be spawned it will fail with engine.binary_unavailable — set RIVET_ENGINE_BINARY_PATH or install the @rivetkit/engine-cli platform package",
-			error: stringifyError(error),
-		});
+	if (resolveNativeBinaries) {
+		try {
+			const { getEnginePath } = await loadEngineCli();
+			serveConfig.engineBinaryPath = getEnginePath();
+		} catch (error) {
+			// The npm-installed engine binary could not be resolved. The core still
+			// decides whether it needs to spawn a local engine; if it does, it will
+			// fail with engine.binary_unavailable (auto-download is off in the napi
+			// runtime). Warn so the cause is actionable.
+			logger().warn({
+				msg: "could not resolve a local engine binary; if a local engine must be spawned it will fail with engine.binary_unavailable — set RIVET_ENGINE_BINARY_PATH or install the @rivetkit/engine-cli platform package",
+				error: stringifyError(error),
+			});
+		}
 	}
-	if (resolveServicesBinary && config.startServices) {
+	if (resolveNativeBinaries && config.startServices) {
 		const servicesBinary = getEnvUniversal("RIVET_SERVICES_BINARY");
 		if (servicesBinary) {
 			serveConfig.servicesBinaryPath = servicesBinary;

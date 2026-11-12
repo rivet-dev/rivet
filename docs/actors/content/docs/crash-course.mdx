@@ -40,15 +40,15 @@ Use the client SDK that matches your app:
 
 ## Actor Quick Reference
 
-### In-Memory State
+### State
 
-Persistent data that survives restarts, crashes, and deployments. State is persisted on Rivet Cloud or Rivet self-hosted, so it survives restarts if the current process crashes or exits.
+Store data that must survive restarts, crashes, and deployments in the actor's embedded SQLite database. Change it with one atomic statement such as `UPDATE ... RETURNING` instead of reading a value and writing it back, because concurrent actions can interleave at every `await`. The database is persisted on Rivet Cloud or Rivet self-hosted, so it survives restarts if the current process crashes or exits.
 
 <Tabs>
-<Tab title="Static Initial State">
+<Tab title="Static Initial Value">
 <CodeSnippet file="examples/docs/actors-crash-course/state-static.ts" />
 </Tab>
-<Tab title="Dynamic Initial State">
+<Tab title="Seed From Input">
 <CodeSnippet file="examples/docs/actors-crash-course/state-dynamic.ts" />
 
 </Tab>
@@ -68,7 +68,7 @@ Don't build keys with string interpolation like `"org:${userId}"` when `userId` 
 
 ### Input
 
-Pass initialization data when creating actors. Input is only available in `createState` and `onCreate`, so store it in state if you need it later.
+Pass initialization data when creating actors. Input is only available in `onCreate`, so store it in SQLite if you need it later.
 
 <CodeSnippet file="examples/docs/actors-crash-course/input.ts" />
 
@@ -110,13 +110,13 @@ Events enable real-time communication from actors to connected clients.
 
 ### Connections
 
-Access the current connection via `c.conn` or all connected clients via `c.conns`. Use `c.conn.id` or `c.conn.state` to securely identify who is calling an action. `c.conn` is only available for actions invoked through a connected client; stateless actor-handle calls run without a connection, so guard against that. Connection state is initialized via `connState` or `createConnState`, which receives parameters passed by the client on connect.
+Access the current connection via `c.conn` or all connected clients via `c.conns`. Use `c.conn.id` to securely identify who is calling an action. `c.conn` is only available for actions invoked through a connected client; stateless actor-handle calls run without a connection, so guard against that. Track per-connection data in `c.vars` keyed by `conn.id`: add it in `onConnect` from the parameters the client passed, and remove it in `onDisconnect`.
 
 <Tabs>
-<Tab title="Static Connection Initial State">
+<Tab title="Generated Per Connection">
 <CodeSnippet file="examples/docs/actors-crash-course/conn-static.ts" />
 </Tab>
-<Tab title="Dynamic Connection Initial State">
+<Tab title="From Connection Params">
 <CodeSnippet file="examples/docs/actors-crash-course/conn-dynamic.ts" />
 
 </Tab>
@@ -124,17 +124,17 @@ Access the current connection via `c.conn` or all connected clients via `c.conns
 
 [Documentation](/actors/docs/connections)
 
-### Queues
+### Background Tasks
 
-Use queues to process durable messages in order inside a `run` loop.
+Start long-running background work, such as a tick loop, from `onWake`. `onWake` runs on every start, so the task restarts after a sleep or crash. The task stops when `c.abortSignal` fires, and `onSleep` waits for it. A background task does not keep the actor awake, so wrap work that must finish in `c.keepAwake(promise)`.
 
-<CodeSnippet file="examples/docs/actors-crash-course/queues.ts" />
+<CodeSnippet file="examples/docs/actors-crash-course/background-task.ts" />
 
-[Documentation](/actors/docs/queues)
+[Documentation](/actors/docs/lifecycle#background-tasks)
 
 ### Workflows
 
-Use workflows when your `run` logic needs durable, replayable multi-step execution.
+Set `run` to a workflow for durable, replayable multi-step execution. Each completed step is recorded, so the workflow resumes where it left off after a sleep, crash, or upgrade.
 
 <CodeSnippet file="examples/docs/actors-crash-course/workflows.ts" />
 
@@ -166,7 +166,7 @@ Permanently delete an actor and its state using `c.destroy()`.
 
 ### Lifecycle Hooks
 
-Actors support hooks for initialization, background processing, connections, networking, and state changes. Use `run` for long-lived background loops, and use `c.aborted` or `c.abortSignal` for graceful shutdown.
+Actors support hooks for initialization, background processing, connections, and networking. Start long-lived background tasks from `onWake`, and use `c.aborted` or `c.abortSignal` to stop them on shutdown.
 
 <CodeSnippet file="examples/docs/actors-crash-course/lifecycle.ts" />
 
@@ -252,29 +252,18 @@ Create one actor per user, document, or room. Use compound keys to scope entitie
 <CodeSnippet file="examples/docs/actors-crash-course/coordinator/client.ts" title="client.ts" />
 </CodeGroup>
 
-### Run Loop
+### Concurrent Actions
 
-Use a `run` loop for continuous background work inside an actor. Process queue messages in order, run logic on intervals, stream AI responses, or coordinate long-running tasks.
+- Actions run concurrently and interleave at every `await`, so never read a value, `await` something else, and then write it back.
+- Make each update a single SQL statement, such as `UPDATE ... RETURNING`, or wrap related writes in `c.db.transaction` with a static `name`.
+- Do not `await` other actors, `fetch`, or other network work inside a transaction. It blocks the actor's SQL until it finishes.
 
-<CodeSnippet file="examples/docs/actors-crash-course/run-loop.ts" />
-
-### Workflow Loop
-
-Use this pattern for long-lived, durable workflows that initialize resources, process commands in a loop, then clean up.
-
-<CodeSnippet file="examples/docs/actors-crash-course/workflow-loop.ts" />
-
-[Documentation](/workflows/docs)
-
-### Actions vs Queues
-
-- **Actions** are not durable. Use them for realtime reads, ephemeral data, and low-latency communication like player input.
-- **Queues** are durable. Use them to serialize mutations through the run loop, avoiding race conditions with SQLite and other local state. Callers can still wait for a response from queued work.
+[Documentation](/actors/docs/sqlite#transactions)
 
 ### Authentication, Security, & CORS
 
-- Validate credentials in `onBeforeConnect` or `createConnState` and throw an error to reject unauthorized connections.
-- Use `c.conn.state` to securely identify users in actions rather than trusting action parameters.
+- Validate credentials in `onBeforeConnect` and throw an error to reject unauthorized connections.
+- Identify users in actions by `c.conn.id` and the identity verified when they connected, rather than trusting action parameters.
 - For cross-origin access, validate the request origin in `onBeforeConnect`.
 
 [Authentication Documentation](/actors/docs/permissions) · [CORS Documentation](/actors/docs/cors)

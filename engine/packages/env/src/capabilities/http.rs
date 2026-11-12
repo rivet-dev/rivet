@@ -77,6 +77,46 @@ pub trait HttpClient: Send + Sync {
 	) -> HttpFuture<'_, Response<Bytes>>;
 }
 
+/// Frames written to an outbound WebSocket. They use the server socket's message type, so a
+/// proxy forwards frames between the two sockets as they are.
+#[cfg(not(target_arch = "wasm32"))]
+pub type WebSocketSink = Pin<
+	Box<
+		dyn futures_util::Sink<crate::capabilities::websocket::Message, Error = anyhow::Error>
+			+ Send,
+	>,
+>;
+
+/// Frames read from an outbound WebSocket. The stream ends when the connection closes.
+#[cfg(not(target_arch = "wasm32"))]
+pub type WebSocketStream =
+	futures_util::stream::BoxStream<'static, Result<crate::capabilities::websocket::Message>>;
+
+/// An open outbound WebSocket and the server's handshake response.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct ClientWebSocket {
+	/// The `101` response, whose headers carry the negotiated subprotocol.
+	pub response: Response<()>,
+	pub sink: WebSocketSink,
+	pub stream: WebSocketStream,
+}
+
+/// HTTP and WebSocket clients for servers outside the cluster, such as the V2 deployment a
+/// migration from V2 proxies to. Unlike [`HttpClient`], it speaks HTTP/1.1, or HTTP/2 when TLS
+/// negotiates it, and it keeps the status, headers and body of every response. It follows no
+/// redirects and has no ambient deadline, so callers bound each call through Env.
+#[cfg(not(target_arch = "wasm32"))]
+pub trait ExternalHttpClient: Send + Sync {
+	/// Returns after the response headers. Both bodies stream, and an error status is a
+	/// response, not an error.
+	fn execute(&self, request: Request<HttpBody>) -> HttpFuture<'_, Response<HttpBody>>;
+
+	/// Opens a WebSocket to the `ws`, `wss`, `http` or `https` URI. The adapter writes the
+	/// handshake headers, and the request's other headers, such as `sec-websocket-protocol`,
+	/// are sent as given. A handshake the server refuses is an error.
+	fn connect_websocket(&self, request: Request<()>) -> HttpFuture<'_, ClientWebSocket>;
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub trait HttpServer: Send + Sync {
 	fn bind(&self, address: SocketAddr) -> HttpFuture<'_, Box<dyn HttpListener>>;

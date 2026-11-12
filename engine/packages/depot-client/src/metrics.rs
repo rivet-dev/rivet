@@ -38,13 +38,13 @@ lazy_static::lazy_static! {
 	).unwrap();
 
 	pub(crate) static ref COMMAND_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		HistogramOpts::new("depot_client_command_duration_seconds", "Typed command latency from submission to final reply, by result: ok, overloaded, read_interrupted, deadline or error.")
+		HistogramOpts::new("depot_client_command_duration_seconds", "Typed command latency from submission to final reply, by result: ok, not_found, overloaded, read_interrupted, deadline or error.")
 			.buckets(rivet_metrics::BUCKETS.to_vec()),
 		&["command", "result"],
 		*rivet_metrics::REGISTRY
 	).unwrap();
 	pub(crate) static ref COMMAND_REJECTIONS: IntCounterVec = register_int_counter_vec_with_registry!(
-		Opts::new("depot_client_command_rejections_total", "Typed command attempts the storage host refused or transport failed, by reason. A not_maintainer attempt follows the refreshed route; every other reason returns to the caller."),
+		Opts::new("depot_client_command_rejections_total", "Typed command attempts the storage host refused or transport failed, by reason. A not_maintainer attempt follows the refreshed route; every other reason returns to the caller. Volume requests (command volume_*) and their answers (volume_*_answer) count here with reason version_pending when the version their receiver or sender reads cannot carry them."),
 		&["command", "reason"],
 		*rivet_metrics::REGISTRY
 	).unwrap();
@@ -52,6 +52,14 @@ lazy_static::lazy_static! {
 	/// The bounded cause behind each filesystem `Overloaded` error a client returns.
 	pub(crate) static ref FS_OVERLOADED: IntCounterVec = register_int_counter_vec_with_registry!(
 		Opts::new("depot_filesystem_overloaded_total", "Filesystem requests refused as overloaded, by cause."),
+		&["reason"],
+		*rivet_metrics::REGISTRY
+	).unwrap();
+
+	/// Filesystem writes refused at admission because the selected entry version cannot carry
+	/// them, by reason: entry (a part the version lacks, such as another claim log).
+	pub(crate) static ref FS_ENTRY_VERSION_REFUSALS: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("depot_filesystem_entry_version_refusals_total", "Filesystem writes refused at admission because the selected entry version cannot carry them, by reason: entry."),
 		&["reason"],
 		*rivet_metrics::REGISTRY
 	).unwrap();
@@ -107,6 +115,18 @@ lazy_static::lazy_static! {
 		*rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref FS_PROCESS_CACHE_CAPACITY: IntGauge = register_int_gauge_with_registry!(
 		Opts::new("depot_filesystem_process_cache_capacity_bytes", "Configured process-wide filesystem cache budget."),
+		*rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref FS_ROLLBACK_BYTES: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("depot_filesystem_rollback_bytes", "Estimated bytes of checkpoint and head metadata that filesystem rollbacks in this process hold while they plan."),
+		*rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref FS_ROLLBACK_CAPACITY: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("depot_filesystem_rollback_capacity_bytes", "Configured process-wide filesystem rollback budget (depot.filesystem.max_rollback_bytes)."),
+		*rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref FS_ROLLBACK_ROWS_CAPACITY: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("depot_filesystem_rollback_rows_capacity", "Configured metadata rows one filesystem rollback reads from each image at most (depot.filesystem.max_rollback_rows)."),
+		*rivet_metrics::REGISTRY).unwrap();
+	pub(crate) static ref FS_ROLLBACK_TOO_MANY_ROWS: IntCounter = register_int_counter_with_registry!(
+		Opts::new("depot_filesystem_rollback_too_many_rows_total", "Filesystem rollbacks refused because an image held more metadata rows than depot.filesystem.max_rollback_rows."),
 		*rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref FS_IDLE_CACHE_RELEASES: IntCounter = register_int_counter_with_registry!(
 		Opts::new("depot_filesystem_idle_cache_releases_total", "Filesystem caches released after an idle period."),

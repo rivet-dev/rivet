@@ -8,6 +8,22 @@ skill: true
 
 Deploy new code by rolling your nodes like any other service. When a node stops, its Rivet Actors sleep and save their state, then wake on a running node on their next request. During the rollout, old and new nodes both run Rivet Actors, so keep each deploy compatible with the state the previous one wrote. See [Upgrading Actor State](#upgrading-actor-state).
 
+### Setting the version
+
+Set `RIVET_NODE_VERSION` to a number that increases on every deploy. Within a node pool, new and waking Rivet Actors are only placed on nodes running the newest version that has a connected node, so as soon as the first node of a deploy connects, the previous deploy stops receiving new actors. Actors already running on older nodes keep running until those nodes stop. A version whose nodes have all disconnected is ignored, so a failed deploy does not block placement.
+
+Without `RIVET_NODE_VERSION`, every node reports version 1 and placement spreads across all connected nodes in the pool. The version of each node is shown in the node listing API as `version`.
+
+### Drain on version upgrade
+
+Placement alone leaves Rivet Actors that never sleep on the old nodes until those nodes stop. Set `drain_on_version_upgrade` on the pool to move them as well: once a node of a newer version is connected, actors on older nodes are stopped the same way a node shutdown stops them, and they wake on the newest version on their next request. Eviction starts after `actor_eviction_delay` seconds and is paced by `actor_eviction_period` and `actor_eviction_rate`, so a large pool is not rescheduled all at once. See [Pool settings](/docs/nodes#pool-settings).
+
+The older nodes stay connected and keep receiving heartbeats, but no new actors are placed on them. Rivet never exits a node process; stopping or replacing the old nodes is up to whatever runs them. If every node of the newer version disconnects, the drain stops and the older nodes serve again. A pool's settings are read when a node connects, so changing them applies to nodes that connect afterwards.
+
+### Upgrading RivetKit
+
+If you self-host the control plane, upgrade it before RivetKit. A new RivetKit release may rely on protocol changes that an older control plane cannot read. See [Upgrades](/docs/deploy/self-host/control-plane/upgrades/).
+
 
 ## Upgrading Actor State
 
@@ -25,23 +41,6 @@ For actors using [raw SQLite](/actors/docs/sqlite), use `migrations` to apply nu
 
 <CodeSnippet file="examples/docs/actors-versions/sqlite-migrate.ts" />
 
-### In-memory state (`c.state`)
-
-If you use `c.state` for persistence, you are responsible for handling schema changes yourself. If you add, remove, or rename fields between versions, your code must handle the old shape gracefully.
-
-**Manual defaults in `onWake`**
-
-Apply defaults for missing fields:
-
-<CodeSnippet file="examples/docs/actors-versions/onwake-defaults.ts" />
-
-**Zod schema coercion**
-
-Use [Zod](https://zod.dev/) to parse persisted state on wake. Zod's `.default()` fills in missing fields automatically, so old actor state is coerced to the current schema:
-
-<CodeSnippet file="examples/docs/actors-versions/zod-coercion.ts" />
-
-For anything beyond simple defaults, consider moving to [SQLite](/actors/docs/sqlite) where you get proper migration tooling.
 
 ## Stopping a node
 

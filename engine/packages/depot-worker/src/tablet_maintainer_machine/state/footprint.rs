@@ -415,6 +415,7 @@ pub(crate) fn work_slot(work: &StoreWork) -> WorkSlot {
 		| StoreWork::ForkReference { .. }
 		| StoreWork::PendingWork
 		| StoreWork::SweepPending { .. }
+		| StoreWork::ForkPinPass { .. }
 		| StoreWork::Checkpoint { .. }
 		| StoreWork::SweepDeleted { .. }
 		| StoreWork::PrepareSplit
@@ -442,6 +443,9 @@ pub(crate) fn operation_footprint(operation: &Operation) -> StoreFootprint {
 		}
 		Operation::SweepPending { scope } | Operation::MaterializeStore { scope } => {
 			StoreFootprint::volume(scope, VolumeAccess::Write)
+		}
+		Operation::ForkPinPass { key } => {
+			StoreFootprint::volume(&key.0.volume_key, VolumeAccess::Write)
 		}
 		Operation::ForkCleanupStore { work } => {
 			StoreFootprint::volume(&work.scope, VolumeAccess::Write)
@@ -503,7 +507,7 @@ pub(crate) fn operation_footprint(operation: &Operation) -> StoreFootprint {
 			}
 			(QueryOrder::Ordered, None)
 			| (QueryOrder::Session | QueryOrder::Claim, _)
-			| (QueryOrder::HeldImage, _) => StoreFootprint::none(),
+			| (QueryOrder::HeldImage | QueryOrder::BaseRead, _) => StoreFootprint::none(),
 		},
 		Operation::Alarm(
 			super::alarms::Attempt::Running(request)
@@ -516,6 +520,7 @@ pub(crate) fn operation_footprint(operation: &Operation) -> StoreFootprint {
 		Operation::MaterializePeer { .. }
 		| Operation::ForkCleanupPeer { .. }
 		| Operation::ForkPeer { .. }
+		| Operation::GroupRead { .. }
 		| Operation::FilesystemRead { .. }
 		| Operation::PromotionList { .. }
 		| Operation::CatchUp { .. }
@@ -587,6 +592,9 @@ pub(crate) fn work_footprint(work: &StoreWork, state: &MaintainerState) -> Store
 		StoreWork::PrepareSplit => StoreFootprint::tablet(TabletAccess::Exclusive),
 		StoreWork::Materialize { scope } | StoreWork::SweepPending { scope } => {
 			StoreFootprint::volume(scope, VolumeAccess::Write)
+		}
+		StoreWork::ForkPinPass { key } => {
+			StoreFootprint::volume(&key.0.volume_key, VolumeAccess::Write)
 		}
 		StoreWork::ForkCleanup { work } => StoreFootprint::volume(&work.scope, VolumeAccess::Write),
 		StoreWork::SweepDeleted { key } => {
@@ -714,7 +722,9 @@ pub(crate) fn writes_pending_rows(operation: &Operation) -> bool {
 		Operation::MaterializePeer { .. }
 		| Operation::ForkCleanupPeer { .. }
 		| Operation::ForkPeer { .. }
+		| Operation::GroupRead { .. }
 		| Operation::PendingWork { .. }
+		| Operation::ForkPinPass { .. }
 		| Operation::FilesystemQuery { .. }
 		| Operation::FilesystemLoad { .. }
 		| Operation::FilesystemRead { .. }
@@ -764,6 +774,7 @@ pub(crate) fn work_writes_pending_rows(work: &StoreWork) -> bool {
 		| StoreWork::WriteToCold { .. } => true,
 		StoreWork::FilesystemFlush
 		| StoreWork::PendingWork
+		| StoreWork::ForkPinPass { .. }
 		| StoreWork::FilesystemQuery { .. }
 		| StoreWork::FilesystemLoad { .. }
 		| StoreWork::FilesystemApply { .. }

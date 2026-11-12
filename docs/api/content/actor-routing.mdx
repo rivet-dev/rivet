@@ -46,7 +46,7 @@ This is what the RivetKit client does for `client.counter.getOrCreate(["my-count
 | `rvt-method` | Yes | `get` to fail if the actor does not exist, or `getOrCreate` to create it on first use. |
 | `rvt-key` | No | Actor key. Separate multi-part keys with commas: `rvt-key=org-1,room-2`. Omit for a keyless actor. |
 | `rvt-pool` | For `getOrCreate` | Pool to create the actor on. RivetKit registers the `default` pool unless configured otherwise. `rvt-runner` is a deprecated alias. |
-| `rvt-input` | No | Base64url-encoded CBOR passed to `createState` and `onCreate` if the actor is created. Only with `getOrCreate`. |
+| `rvt-input` | No | Base64url-encoded CBOR passed to `onCreate` if the actor is created. Only with `getOrCreate`. |
 | `rvt-region` | No | Preferred region if the actor is created. Only with `getOrCreate`. |
 | `rvt-crash-policy` | No | `restart`, `sleep`, or `destroy`. RivetKit defaults to `sleep`. Only with `getOrCreate`. |
 | `rvt-skip-ready-wait` | No | `true` to forward the request as soon as the actor is resolved instead of waiting for it to be ready. |

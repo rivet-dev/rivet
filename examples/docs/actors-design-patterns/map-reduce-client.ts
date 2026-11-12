@@ -12,16 +12,15 @@ interface Result {
 }
 
 const coordinator = actor({
-  state: { results: [] as Result[] },
+  vars: { results: [] as Result[] },
   actions: {
     startJob: async (c, tasks: Task[]) => {},
-    reportResult: (c, result: Result) => { c.state.results.push(result); },
-    getResults: (c) => c.state.results,
+    reportResult: (c, result: Result) => { c.vars.results.push(result); },
+    getResults: (c) => c.vars.results,
   },
 });
 
 const worker = actor({
-  state: {},
   actions: {
     process: async (c, task: Task) => {},
   },

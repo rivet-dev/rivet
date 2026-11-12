@@ -56,6 +56,10 @@
 					"href": "/docs/versions"
 				},
 				{
+					"title": "Migrating from Rivet 2",
+					"href": "/docs/migrating-from-v2"
+				},
+				{
 					"title": "Regions",
 					"href": "/docs/regions"
 				}

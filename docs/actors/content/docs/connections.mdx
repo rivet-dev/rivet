@@ -22,23 +22,7 @@ For example:
 
 ## Connection State
 
-There are two ways to define an actor's connection state:
-
-<Tabs>
-	<Tab title="connState">
-		Define connection state as a constant value:
-
-		<CodeSnippet file="examples/docs/actors-connections/conn-state-const.ts" />
-
-		This value will be cloned for every new connection using `structuredClone`.
-	</Tab>
-
-	<Tab title="createConnState">
-		Create connection state dynamically with a function called for each connection:
-
-		<CodeSnippet file="examples/docs/actors-connections/conn-state-dynamic.ts" />
-	</Tab>
-</Tabs>
+Track per-connection data in [`c.vars`](/actors/docs/state#ephemeral-state), keyed by `conn.id`. Add it in `onConnect` and remove it in `onDisconnect`. For data that must outlive the actor's memory, such as on a hibernatable WebSocket, store it in [SQLite](/actors/docs/sqlite) instead.
 
 ## Connection Lifecycle
 
@@ -47,28 +31,19 @@ Each client connection goes through a series of lifecycle hooks that allow you t
 **On Connect** (per client)
 
 - `onBeforeConnect`
-- `createConnState`
 - `onConnect`
 
-Pending connections are not visible in `c.conns` while `onBeforeConnect` or `createConnState` is running. RivetKit adds the connection to `c.conns` after those hooks succeed and before `onConnect` runs.
+Pending connections are not visible in `c.conns` while `onBeforeConnect` is running. RivetKit adds the connection to `c.conns` after it succeeds and before `onConnect` runs.
 
 **On Disconnect** (per client)
 
 - `onDisconnect`
 
-### `createConnState` and `connState`
-
-There are two ways to define the initial state for connections:
-1. `connState`: Define a constant object that will be used as the initial state for all connections
-2. `createConnState`: A function that dynamically creates initial connection state based on connection parameters. Can be async.
-
-Connections are not visible in `c.conns` until `createConnState` completes successfully.
-
 ### `onBeforeConnect`
 
 The `onBeforeConnect` hook is called whenever a new client connects to the actor. Can be async. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
 
-The `onBeforeConnect` hook does NOT return connection state - it's used solely for validation.
+The `onBeforeConnect` hook is used solely for validation. To keep per-connection data, store it in `c.vars` from `onConnect`.
 
 Connections are not visible in `c.conns` while `onBeforeConnect` is running.
 

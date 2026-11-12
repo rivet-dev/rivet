@@ -15,20 +15,20 @@ See the [Rust Quickstart](/docs/actors/quickstart/rust) for creating the actor a
 
 ## Features
 
-- **Actor state management**: Persistent counter state managed by Rivet Actors
+- **Persistent data**: The counter is stored in the actor's SQLite database
 - **Real-time updates**: Counter values synchronized across all connected clients via events
 - **Multiple actor instances**: Each counter key creates a separate actor instance
-- **Typed Rust runtime**: Built on the `rivetkit` crate's `Actor` and `Handles` traits
+- **Typed Rust runtime**: Built on the `rivetkit` crate's `Actor` and `Handler` traits
 
 ## Implementation
 
 This example demonstrates the core RivetKit concepts with a simple counter:
 
-- **Actor Definition** ([`src/lib.rs`](https://github.com/rivet-dev/rivet/tree/main/examples/hello-world-rust/src/lib.rs)): A `counter` actor with persistent state, an `increment` action, and a `newCount` broadcast event
+- **Actor Definition** ([`src/lib.rs`](https://github.com/rivet-dev/rivet/tree/main/examples/hello-world-rust/src/lib.rs)): A `counter` actor with a SQLite-backed count, an `increment` action, and a `newCount` broadcast event
 
 ## Resources
 
-Read more about [actions](/docs/actors/actions), [state](/docs/actors/state), and [events](/docs/actors/events).
+Read more about [actions](/docs/actors/actions), [SQLite](/docs/actors/sqlite), and [events](/docs/actors/events).
 
 ## License
 

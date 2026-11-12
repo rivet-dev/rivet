@@ -18,8 +18,7 @@ use rivet_data::generated::{
 use rivet_state_machine::DeadlineQueue;
 use rivet_topology::worker::WorkerId;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
-use std::ops::Bound::{Excluded, Unbounded};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// Progress of the barrier round, the only status work that visits every loaded volume.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -29,11 +28,11 @@ pub(crate) enum PollCycle {
 	Idle,
 	/// Visiting loaded volumes in key order for barrier `generation`, one chunk of keys
 	/// per status request. `chunk` is being sent to members in order, starting at
-	/// `next_member`; `after` is the last key the chunk covered, where the next chunk
-	/// starts. `outstanding` counts this round's requests still in flight.
+	/// `next_member`; `remaining` freezes the inventory when the round starts so new
+	/// opens cannot extend it. `outstanding` counts this round's requests still in flight.
 	Scanning {
 		generation: u64,
-		after: Option<VolumeLogKey>,
+		remaining: VecDeque<VolumeLogKey>,
 		chunk: Vec<VolumeLogKey>,
 		next_member: usize,
 		outstanding: u32,
@@ -187,6 +186,7 @@ pub(crate) fn volume_refreshed(state: &MaintainerState, barrier: &VolumeBarrier)
 /// its next reads if a later request is waiting, or drops the entry.
 fn settle_volume(state: &mut MaintainerState, key: &VolumeLogKey) {
 	super::catch_up::mark(state, key);
+	super::unload::mark(state, key);
 	let polls = &mut state.status_polls;
 	if polls
 		.volume_sending
@@ -270,7 +270,11 @@ fn drive_volume_barriers(
 				});
 				keys.push(key);
 			} else {
+				// The barrier finishes with nothing to read, so whoever waits on it, such as a
+				// parked unload, is marked as a finished read would mark it.
 				state.status_polls.volume_barriers.remove(&key);
+				super::catch_up::mark(state, &key);
+				super::unload::mark(state, &key);
 			}
 		}
 		if keys.is_empty() {
@@ -300,7 +304,7 @@ fn begin_round(state: &mut MaintainerState) {
 	super::stop::started(state);
 	state.poll = PollCycle::Scanning {
 		generation: state.status_polls.requested_generation,
-		after: None,
+		remaining: state.loaded_volumes.keys().cloned().collect(),
 		chunk: Vec::new(),
 		next_member: 0,
 		outstanding: 0,
@@ -611,7 +615,7 @@ pub(crate) fn drive(state: &mut MaintainerState, effects: &mut Effects) {
 	while active < max_requests {
 		let PollCycle::Scanning {
 			generation,
-			after,
+			remaining,
 			chunk,
 			next_member,
 			outstanding,
@@ -637,39 +641,31 @@ pub(crate) fn drive(state: &mut MaintainerState, effects: &mut Effects) {
 		}
 		let outstanding = *outstanding;
 
-		// Take the next chunk of pollable volumes after the previous one.
-		let lower = match after {
-			Some(key) => Excluded(key.clone()),
-			None => Unbounded,
-		};
-		let mut visited = None;
+		// Take the next chunk from the finite inventory. Removed or retiring keys
+		// need no poll; later opens belong to another round, not this caller's cut.
+		let mut remaining = std::mem::take(remaining);
 		let mut keys = Vec::new();
-		for key in state
-			.loaded_volumes
-			.range((lower, Unbounded))
-			.map(|(key, _)| key)
-		{
-			if keys.len() >= batch {
+		while keys.len() < batch {
+			let Some(key) = remaining.pop_front() else {
 				break;
-			}
-			visited = Some(key.clone());
-			if pollable(state, key) {
-				keys.push(key.clone());
+			};
+			if pollable(state, &key) {
+				keys.push(key);
 			}
 		}
-		let Some(last) = visited else {
+		if keys.is_empty() {
 			state.poll = PollCycle::WaitingForReplies {
 				generation,
 				outstanding,
 			};
 			break;
-		};
+		}
 		for key in &keys {
 			state.poll_targets.remove(key);
 		}
 		state.poll = PollCycle::Scanning {
 			generation,
-			after: Some(last),
+			remaining,
 			chunk: keys,
 			next_member: 0,
 			outstanding,
@@ -861,6 +857,20 @@ fn observe_reply(
 			wire::VolumeLogStatus::VolumeNotLoaded => RejectResponse::VolumeNotLoaded,
 			wire::VolumeLogStatus::NotServing => RejectResponse::NotServing,
 		};
+		if let Some(PollBarrier::Round(generation)) = barrier {
+			match &reason {
+				RejectResponse::BelowCold(reply) => {
+					super::startup::observe(state, generation, &key, &worker, &reply.state)
+				}
+				RejectResponse::VolumeLogReplicaDeleted(reply) => {
+					super::startup::observe(state, generation, &key, &worker, &reply.state)
+				}
+				RejectResponse::VolumeNotLoaded => {
+					super::startup::absent(state, generation, &key, &worker)
+				}
+				_ => {}
+			}
+		}
 		// A quorum-confirmed close intentionally leaves no replica on the learner.
 		// Its expected absence must not invalidate discovery for every live volume.
 		// NotServing still needs fresh disk/phase evidence even for a closed key.
@@ -956,6 +966,8 @@ fn observed(
 				.as_ref()
 				.is_none_or(|previous| previous.status != VolumeLogReplicaStatus::InSync);
 		cold::observe(state, &key, worker, observed.clone());
+		// The observation may prove the tail a grouped log's pin floor waits for.
+		super::groups::members_observed(state, &key);
 		if now_in_sync {
 			report_missing_members(state, &key, effects);
 		}

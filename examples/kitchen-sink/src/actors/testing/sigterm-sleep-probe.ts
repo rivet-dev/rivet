@@ -3,7 +3,7 @@ import {
 	type RivetMessageEvent,
 	type UniversalWebSocket,
 } from "rivetkit";
-import { db } from "rivetkit/db";
+import { db, type RawAccess } from "rivetkit/db";
 
 export const DEFAULT_ON_SLEEP_DURATION_MS = 5_000;
 export const DEFAULT_ON_SLEEP_TICK_MS = 1_000;
@@ -21,22 +21,87 @@ function formatError(error: unknown): string {
 	return String(error);
 }
 
+/** Probe status that must survive sleep so `getProof` can report it after a wake. */
+interface ProbeStatus {
+	label: string;
+	wakeCount: number;
+	sleepCount: number;
+	onSleepDurationMs: number;
+	onSleepTickMs: number;
+	onSleepStartedAt: number | null;
+	onSleepAsyncFinishedAt: number | null;
+	onSleepFinishedAt: number | null;
+	onSleepLastError: string | null;
+}
+
+type ProbeStatusRow = {
+	label: string;
+	wake_count: number;
+	sleep_count: number;
+	on_sleep_duration_ms: number;
+	on_sleep_tick_ms: number;
+	on_sleep_started_at: number | null;
+	on_sleep_async_finished_at: number | null;
+	on_sleep_finished_at: number | null;
+	on_sleep_last_error: string | null;
+};
+
+/**
+ * Runs a statement that selects the single probe status row, or updates it
+ * with `RETURNING *`, and returns the row.
+ */
+async function queryProbeStatus(
+	database: RawAccess,
+	sql: string,
+	...args: unknown[]
+): Promise<ProbeStatus> {
+	const [row] = await database.execute<ProbeStatusRow>(sql, ...args);
+	if (!row) {
+		throw new Error("probe_status row is missing");
+	}
+	return {
+		label: row.label,
+		wakeCount: row.wake_count,
+		sleepCount: row.sleep_count,
+		onSleepDurationMs: row.on_sleep_duration_ms,
+		onSleepTickMs: row.on_sleep_tick_ms,
+		onSleepStartedAt: row.on_sleep_started_at,
+		onSleepAsyncFinishedAt: row.on_sleep_async_finished_at,
+		onSleepFinishedAt: row.on_sleep_finished_at,
+		onSleepLastError: row.on_sleep_last_error,
+	};
+}
+
+function loadProbeStatus(database: RawAccess): Promise<ProbeStatus> {
+	return queryProbeStatus(
+		database,
+		"SELECT * FROM probe_status WHERE id = 1",
+	);
+}
+
+/** Appends one event to the proof log that `getProof` returns. */
+async function logProbeEvent(
+	database: RawAccess,
+	event: string,
+	sleepCount: number,
+	detail: string,
+	createdAt: number,
+): Promise<void> {
+	await database.execute(
+		"INSERT INTO sigterm_sleep_log (event, sleep_count, detail, created_at) VALUES (?, ?, ?, ?)",
+		event,
+		sleepCount,
+		detail,
+		createdAt,
+	);
+}
+
 export const sigtermSleepProbe = actor({
-	state: {
-		label: "unprepared",
-		wakeCount: 0,
-		sleepCount: 0,
-		onSleepDurationMs: DEFAULT_ON_SLEEP_DURATION_MS,
-		onSleepTickMs: DEFAULT_ON_SLEEP_TICK_MS,
-		connectionCount: 0,
-		messageCount: 0,
-		onSleepStartedAt: null as number | null,
-		onSleepAsyncFinishedAt: null as number | null,
-		onSleepFinishedAt: null as number | null,
-		onSleepLastError: null as string | null,
-	},
+	// Live connection counters only describe the current run.
 	createVars: () => ({
 		websockets: new Set<UniversalWebSocket>(),
+		connectionCount: 0,
+		messageCount: 0,
 	}),
 	db: db({
 		onMigrate: async (database) => {
@@ -49,31 +114,36 @@ export const sigtermSleepProbe = actor({
 					created_at INTEGER NOT NULL
 				)
 			`);
+			await database.execute(`
+				CREATE TABLE IF NOT EXISTS probe_status (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					label TEXT NOT NULL,
+					wake_count INTEGER NOT NULL,
+					sleep_count INTEGER NOT NULL,
+					on_sleep_duration_ms INTEGER NOT NULL,
+					on_sleep_tick_ms INTEGER NOT NULL,
+					on_sleep_started_at INTEGER,
+					on_sleep_async_finished_at INTEGER,
+					on_sleep_finished_at INTEGER,
+					on_sleep_last_error TEXT
+				)
+			`);
+			await database.execute(
+				`INSERT OR IGNORE INTO probe_status
+					(id, label, wake_count, sleep_count, on_sleep_duration_ms, on_sleep_tick_ms)
+				VALUES (1, 'unprepared', 0, 0, ?, ?)`,
+				DEFAULT_ON_SLEEP_DURATION_MS,
+				DEFAULT_ON_SLEEP_TICK_MS,
+			);
 		},
 	}),
 	onWebSocket: (c, websocket: UniversalWebSocket) => {
 		c.vars.websockets.add(websocket);
-		c.state.connectionCount += 1;
+		c.vars.connectionCount += 1;
 		const connectionId = crypto.randomUUID();
 
-		c.log.info({
-			msg: "sigterm sleep probe websocket connected",
-			label: c.state.label,
-			connectionId,
-			connectionCount: c.state.connectionCount,
-		});
-
-		websocket.send(
-			JSON.stringify({
-				type: "welcome",
-				connectionId,
-				label: c.state.label,
-				connectionCount: c.state.connectionCount,
-			}),
-		);
-
 		websocket.addEventListener("message", (event: RivetMessageEvent) => {
-			c.state.messageCount += 1;
+			c.vars.messageCount += 1;
 			const data = event.data;
 			if (typeof data !== "string") return;
 
@@ -84,7 +154,7 @@ export const sigtermSleepProbe = actor({
 						JSON.stringify({
 							type: "pong",
 							connectionId,
-							messageCount: c.state.messageCount,
+							messageCount: c.vars.messageCount,
 							timestamp: Date.now(),
 						}),
 					);
@@ -97,7 +167,7 @@ export const sigtermSleepProbe = actor({
 					type: "echo",
 					connectionId,
 					received: data,
-					messageCount: c.state.messageCount,
+					messageCount: c.vars.messageCount,
 					timestamp: Date.now(),
 				}),
 			);
@@ -105,48 +175,85 @@ export const sigtermSleepProbe = actor({
 
 		websocket.addEventListener("close", (event) => {
 			c.vars.websockets.delete(websocket);
-			c.state.connectionCount -= 1;
+			c.vars.connectionCount -= 1;
 			c.log.info({
 				msg: "sigterm sleep probe websocket closed",
-				label: c.state.label,
 				connectionId,
-				connectionCount: c.state.connectionCount,
+				connectionCount: c.vars.connectionCount,
 				code: event.code,
 				reason: event.reason,
 			});
 		});
+
+		// The listeners are attached before this read, so no message or close
+		// event is missed while the label loads.
+		const sendWelcome = async () => {
+			const status = await loadProbeStatus(c.db);
+			c.log.info({
+				msg: "sigterm sleep probe websocket connected",
+				label: status.label,
+				connectionId,
+				connectionCount: c.vars.connectionCount,
+			});
+			if (websocket.readyState !== 1) return;
+			websocket.send(
+				JSON.stringify({
+					type: "welcome",
+					connectionId,
+					label: status.label,
+					connectionCount: c.vars.connectionCount,
+				}),
+			);
+		};
+		sendWelcome().catch((error) => {
+			c.log.error({
+				msg: "sigterm sleep probe failed to send welcome",
+				connectionId,
+				error: formatError(error),
+			});
+		});
 	},
 	onWake: async (c) => {
-		c.state.wakeCount += 1;
+		const status = await queryProbeStatus(
+			c.db,
+			"UPDATE probe_status SET wake_count = wake_count + 1 WHERE id = 1 RETURNING *",
+		);
 		c.log.info({
 			msg: "sigterm sleep probe onWake",
-			label: c.state.label,
-			wakeCount: c.state.wakeCount,
-			sleepCount: c.state.sleepCount,
+			label: status.label,
+			wakeCount: status.wakeCount,
+			sleepCount: status.sleepCount,
 		});
-		await c.db.execute(
-			"INSERT INTO sigterm_sleep_log (event, sleep_count, detail, created_at) VALUES (?, ?, ?, ?)",
+		await logProbeEvent(
+			c.db,
 			"wake",
-			c.state.sleepCount,
-			`wake-${c.state.wakeCount}`,
+			status.sleepCount,
+			`wake-${status.wakeCount}`,
 			Date.now(),
 		);
 	},
 	onSleep: async (c) => {
-		const sleepCount = c.state.sleepCount + 1;
 		const startedAt = Date.now();
-		c.state.sleepCount = sleepCount;
-		c.state.onSleepStartedAt = startedAt;
-		c.state.onSleepAsyncFinishedAt = null;
-		c.state.onSleepFinishedAt = null;
-		c.state.onSleepLastError = null;
+		const status = await queryProbeStatus(
+			c.db,
+			`UPDATE probe_status SET
+				sleep_count = sleep_count + 1,
+				on_sleep_started_at = ?,
+				on_sleep_async_finished_at = NULL,
+				on_sleep_finished_at = NULL,
+				on_sleep_last_error = NULL
+			WHERE id = 1
+			RETURNING *`,
+			startedAt,
+		);
+		const { label, sleepCount, onSleepDurationMs, onSleepTickMs } = status;
 
 		c.log.info({
 			msg: "sigterm sleep probe onSleep start",
-			label: c.state.label,
+			label,
 			sleepCount,
-			onSleepDurationMs: c.state.onSleepDurationMs,
-			onSleepTickMs: c.state.onSleepTickMs,
+			onSleepDurationMs,
+			onSleepTickMs,
 		});
 
 		try {
@@ -156,26 +263,26 @@ export const sigtermSleepProbe = actor({
 					JSON.stringify({
 						type: "onSleepStarted",
 						sleepCount,
-						onSleepDurationMs: c.state.onSleepDurationMs,
-						onSleepTickMs: c.state.onSleepTickMs,
+						onSleepDurationMs,
+						onSleepTickMs,
 						timestamp: startedAt,
 					}),
 				);
 			}
 
-			await c.db.execute(
-				"INSERT INTO sigterm_sleep_log (event, sleep_count, detail, created_at) VALUES (?, ?, ?, ?)",
+			await logProbeEvent(
+				c.db,
 				"on-sleep-start",
 				sleepCount,
-				c.state.label,
+				label,
 				startedAt,
 			);
 
-			const deadline = startedAt + c.state.onSleepDurationMs;
+			const deadline = startedAt + onSleepDurationMs;
 			let tickIndex = 0;
 			while (Date.now() < deadline) {
 				const waitMs = Math.min(
-					c.state.onSleepTickMs,
+					onSleepTickMs,
 					Math.max(0, deadline - Date.now()),
 				);
 				if (waitMs > 0) await sleep(waitMs);
@@ -183,8 +290,8 @@ export const sigtermSleepProbe = actor({
 				tickIndex += 1;
 				const tickAt = Date.now();
 				const detail = `tick=${tickIndex} elapsed-ms=${tickAt - startedAt}`;
-				await c.db.execute(
-					"INSERT INTO sigterm_sleep_log (event, sleep_count, detail, created_at) VALUES (?, ?, ?, ?)",
+				await logProbeEvent(
+					c.db,
 					"on-sleep-tick",
 					sleepCount,
 					detail,
@@ -192,7 +299,7 @@ export const sigtermSleepProbe = actor({
 				);
 				c.log.info({
 					msg: "sigterm sleep probe onSleep tick",
-					label: c.state.label,
+					label,
 					sleepCount,
 					tickIndex,
 					elapsedMs: tickAt - startedAt,
@@ -213,9 +320,12 @@ export const sigtermSleepProbe = actor({
 			}
 
 			const asyncFinishedAt = Date.now();
-			c.state.onSleepAsyncFinishedAt = asyncFinishedAt;
 			await c.db.execute(
-				"INSERT INTO sigterm_sleep_log (event, sleep_count, detail, created_at) VALUES (?, ?, ?, ?)",
+				"UPDATE probe_status SET on_sleep_async_finished_at = ? WHERE id = 1",
+				asyncFinishedAt,
+			);
+			await logProbeEvent(
+				c.db,
 				"on-sleep-after-await",
 				sleepCount,
 				`delay-ms=${asyncFinishedAt - startedAt}`,
@@ -223,12 +333,15 @@ export const sigtermSleepProbe = actor({
 			);
 
 			const finishedAt = Date.now();
-			c.state.onSleepFinishedAt = finishedAt;
 			await c.db.execute(
-				"INSERT INTO sigterm_sleep_log (event, sleep_count, detail, created_at) VALUES (?, ?, ?, ?)",
+				"UPDATE probe_status SET on_sleep_finished_at = ? WHERE id = 1",
+				finishedAt,
+			);
+			await logProbeEvent(
+				c.db,
 				"on-sleep-finish",
 				sleepCount,
-				c.state.label,
+				label,
 				finishedAt,
 			);
 
@@ -250,16 +363,19 @@ export const sigtermSleepProbe = actor({
 
 			c.log.info({
 				msg: "sigterm sleep probe onSleep finish",
-				label: c.state.label,
+				label,
 				sleepCount,
 				elapsedMs: finishedAt - startedAt,
 			});
 		} catch (error) {
 			const message = formatError(error);
-			c.state.onSleepLastError = message;
+			await c.db.execute(
+				"UPDATE probe_status SET on_sleep_last_error = ? WHERE id = 1",
+				message,
+			);
 			c.log.error({
 				msg: "sigterm sleep probe onSleep error",
-				label: c.state.label,
+				label,
 				sleepCount,
 				error: message,
 			});
@@ -283,27 +399,32 @@ export const sigtermSleepProbe = actor({
 					"onSleepTickMs must be a finite positive number",
 				);
 			}
-			c.state.label = label;
-			c.state.onSleepDurationMs = onSleepDurationMs;
-			c.state.onSleepTickMs = onSleepTickMs;
-			await c.db.execute(
-				"INSERT INTO sigterm_sleep_log (event, sleep_count, detail, created_at) VALUES (?, ?, ?, ?)",
+			const status = await queryProbeStatus(
+				c.db,
+				"UPDATE probe_status SET label = ?, on_sleep_duration_ms = ?, on_sleep_tick_ms = ? WHERE id = 1 RETURNING *",
+				label,
+				onSleepDurationMs,
+				onSleepTickMs,
+			);
+			await logProbeEvent(
+				c.db,
 				"prepared",
-				c.state.sleepCount,
+				status.sleepCount,
 				label,
 				Date.now(),
 			);
 			return {
-				label: c.state.label,
-				onSleepDurationMs: c.state.onSleepDurationMs,
-				onSleepTickMs: c.state.onSleepTickMs,
-				wakeCount: c.state.wakeCount,
-				sleepCount: c.state.sleepCount,
-				connectionCount: c.state.connectionCount,
-				messageCount: c.state.messageCount,
+				label: status.label,
+				onSleepDurationMs: status.onSleepDurationMs,
+				onSleepTickMs: status.onSleepTickMs,
+				wakeCount: status.wakeCount,
+				sleepCount: status.sleepCount,
+				connectionCount: c.vars.connectionCount,
+				messageCount: c.vars.messageCount,
 			};
 		},
 		getProof: async (c) => {
+			const status = await loadProbeStatus(c.db);
 			const rows = await c.db.execute<{
 				id: number;
 				event: string;
@@ -313,17 +434,17 @@ export const sigtermSleepProbe = actor({
 			}>("SELECT * FROM sigterm_sleep_log ORDER BY id");
 			return {
 				state: {
-					label: c.state.label,
-					wakeCount: c.state.wakeCount,
-					sleepCount: c.state.sleepCount,
-					onSleepDurationMs: c.state.onSleepDurationMs,
-					onSleepTickMs: c.state.onSleepTickMs,
-					connectionCount: c.state.connectionCount,
-					messageCount: c.state.messageCount,
-					onSleepStartedAt: c.state.onSleepStartedAt,
-					onSleepAsyncFinishedAt: c.state.onSleepAsyncFinishedAt,
-					onSleepFinishedAt: c.state.onSleepFinishedAt,
-					onSleepLastError: c.state.onSleepLastError,
+					label: status.label,
+					wakeCount: status.wakeCount,
+					sleepCount: status.sleepCount,
+					onSleepDurationMs: status.onSleepDurationMs,
+					onSleepTickMs: status.onSleepTickMs,
+					connectionCount: c.vars.connectionCount,
+					messageCount: c.vars.messageCount,
+					onSleepStartedAt: status.onSleepStartedAt,
+					onSleepAsyncFinishedAt: status.onSleepAsyncFinishedAt,
+					onSleepFinishedAt: status.onSleepFinishedAt,
+					onSleepLastError: status.onSleepLastError,
 				},
 				rows,
 			};

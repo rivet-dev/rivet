@@ -64,19 +64,20 @@ export const loadTestAgent = actor({
 			`);
 		},
 	}),
-	state: {
+	// Load-test counters are runtime-only stats, so they live in memory.
+	createVars: () => ({
 		connectionCount: 0,
 		inferenceCount: 0,
 		tokenCount: 0,
-	},
+	}),
 	onWebSocket(c, websocket: UniversalWebSocket) {
-		c.state.connectionCount += 1;
+		c.vars.connectionCount += 1;
 		const connectionId = crypto.randomUUID();
 
 		send(websocket, {
 			type: "connected",
 			connectionId,
-			connectionCount: c.state.connectionCount,
+			connectionCount: c.vars.connectionCount,
 			timestamp: Date.now(),
 		});
 
@@ -128,7 +129,7 @@ export const loadTestAgent = actor({
 					);
 
 					const inference = (async () => {
-						c.state.inferenceCount += 1;
+						c.vars.inferenceCount += 1;
 						send(websocket, {
 							type: "inference-start",
 							connectionId,
@@ -159,7 +160,7 @@ export const loadTestAgent = actor({
 								token,
 								createdAt,
 							);
-							c.state.tokenCount += 1;
+							c.vars.tokenCount += 1;
 
 							send(websocket, {
 								type: "token",
@@ -204,15 +205,15 @@ export const loadTestAgent = actor({
 		);
 
 		websocket.addEventListener("close", () => {
-			c.state.connectionCount -= 1;
+			c.vars.connectionCount -= 1;
 		});
 	},
 	actions: {
 		getStats(c) {
 			return {
-				connectionCount: c.state.connectionCount,
-				inferenceCount: c.state.inferenceCount,
-				tokenCount: c.state.tokenCount,
+				connectionCount: c.vars.connectionCount,
+				inferenceCount: c.vars.inferenceCount,
+				tokenCount: c.vars.tokenCount,
 			};
 		},
 	},

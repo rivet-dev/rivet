@@ -51,7 +51,7 @@ mod imp {
 					retry_after_ms = close_reason
 						.as_ref()
 						.and_then(|reason| reason.retry_after_ms);
-					if super::super::report_connection_close(&shared, session, close_reason) {
+					if super::super::report_connection_close(&shared, session, close_reason, None) {
 						return;
 					}
 				}
@@ -66,6 +66,7 @@ mod imp {
 						ToEnvoyMessage::ConnClose {
 							evict: false,
 							session,
+							contact_deadline: None,
 						},
 					);
 				}
@@ -383,6 +384,7 @@ mod imp {
 			ToEnvoyMessage::ConnClose {
 				evict: false,
 				session: 0,
+				contact_deadline: None,
 			},
 		);
 		tracing::error!("wasm envoy transport requires the wasm32 target");

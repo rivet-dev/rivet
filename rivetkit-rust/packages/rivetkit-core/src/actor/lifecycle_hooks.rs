@@ -3,6 +3,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::actor::connection::ConnHandle;
 use crate::actor::context::ActorContext;
+use crate::actor::fork::ActorForkStart;
 use crate::actor::messages::ActorEvent;
 
 pub struct Reply<T> {
@@ -20,6 +21,23 @@ impl<T> Reply<T> {
 
 	pub fn send(mut self, result: Result<T>) {
 		self.deliver(result);
+	}
+
+	/// Runs cancellation-safe work and replies with its result. If the caller
+	/// abandons the reply, drops the work instead. This does not roll back I/O
+	/// or stop a JavaScript promise that has already started executing.
+	pub async fn send_or_cancel<F>(mut self, work: F)
+	where
+		F: std::future::Future<Output = Result<T>>,
+	{
+		let Some(tx) = self.tx.as_mut() else {
+			return;
+		};
+		tokio::select! {
+			biased;
+			_ = tx.closed() => {}
+			result = work => self.deliver(result),
+		}
 	}
 
 	fn deliver(&mut self, result: Result<T>) {
@@ -111,6 +129,9 @@ pub struct ActorStart {
 	pub is_new: bool,
 	pub snapshot: Option<Vec<u8>>,
 	pub hibernated: Vec<(ConnHandle, Vec<u8>)>,
+	/// The individual actor fork whose hook runs in this start, at the first start of a forked
+	/// actor. The runtime runs the hook once its state is loaded and before `onWake`.
+	pub fork: Option<ActorForkStart>,
 	pub events: ActorEvents,
 	pub startup_ready: Option<oneshot::Sender<Result<()>>>,
 }

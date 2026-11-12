@@ -25,6 +25,13 @@ disallowed-methods = [
   { path = "tokio::net::TcpSocket::listen", reason = "use the injected rivet-env HTTP/socket adapters; transport construction and DNS belong in production adapters" },
   { path = "tokio::net::lookup_host", reason = "use the injected rivet-env HTTP/socket adapters; transport construction and DNS belong in production adapters" },
   { path = "std::net::ToSocketAddrs::to_socket_addrs", reason = "use the injected rivet-env HTTP/socket adapters; transport construction and DNS belong in production adapters" },
+  { path = "tokio_tungstenite::connect_async", reason = "open outbound WebSockets through rivet_env ExternalHttpClient::connect_websocket; sockets, DNS and TLS belong in production adapters" },
+  { path = "tokio_tungstenite::connect_async_with_config", reason = "open outbound WebSockets through rivet_env ExternalHttpClient::connect_websocket; sockets, DNS and TLS belong in production adapters" },
+  { path = "tokio_tungstenite::connect_async_tls_with_config", reason = "open outbound WebSockets through rivet_env ExternalHttpClient::connect_websocket; sockets, DNS and TLS belong in production adapters" },
+  { path = "tokio_tungstenite::client_async", reason = "open outbound WebSockets through rivet_env ExternalHttpClient::connect_websocket; sockets, DNS and TLS belong in production adapters" },
+  { path = "tokio_tungstenite::client_async_with_config", reason = "open outbound WebSockets through rivet_env ExternalHttpClient::connect_websocket; sockets, DNS and TLS belong in production adapters" },
+  { path = "tokio_tungstenite::client_async_tls", reason = "open outbound WebSockets through rivet_env ExternalHttpClient::connect_websocket; sockets, DNS and TLS belong in production adapters" },
+  { path = "tokio_tungstenite::client_async_tls_with_config", reason = "open outbound WebSockets through rivet_env ExternalHttpClient::connect_websocket; sockets, DNS and TLS belong in production adapters" },
 
   { path = "libc::statvfs", reason = "read disk space through rivet_env::fs::Fs::disk_space so simulations can size disks" },
   { path = "libc::fstatvfs", reason = "read disk space through rivet_env::fs::Fs::disk_space so simulations can size disks" },

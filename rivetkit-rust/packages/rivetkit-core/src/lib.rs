@@ -132,12 +132,14 @@ pub use actor::action::ActionDispatchError;
 pub use actor::config::{
 	ActionDefinition, ActorConfig, ActorConfigInput, ActorConfigOverrides, ActorTracingConfig,
 	CanHibernateWebSocket, SqliteProfilingConfig, SqliteProfilingConfigInput,
+	SqliteProfilingMetrics, SqliteProfilingMetricsInput,
 };
 pub use actor::connection::ConnHandle;
 pub use actor::context::{
 	ActorContext, ActorKv, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion,
 };
 pub use actor::factory::{ActorEntryFn, ActorFactory};
+pub use actor::fork::{ActorForkStart, ForkLink};
 pub use actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 pub use actor::messages::{
 	ActorEvent, ActorHttpResponse, QueueSendResult, QueueSendStatus, Request, Response,

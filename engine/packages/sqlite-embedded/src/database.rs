@@ -10,13 +10,13 @@ use tokio::sync::watch;
 use crate::{
 	query::{BindParam, ExecResult, ExecuteResult, QueryResult},
 	vfs::{
-		InitialPages, NativeVfsHandle, SqliteOpenPhase, SqliteTransportHandle, SqliteVfs,
-		SqliteVfsMetrics, SqliteVfsMetricsSnapshot, VfsConfig,
+		CorkClose, InitialPages, NativeVfsHandle, SqliteOpenPhase, SqliteTransportHandle,
+		SqliteVfs, SqliteVfsMetrics, SqliteVfsMetricsSnapshot, VfsConfig,
 		fetch_initial_pages_for_registration,
 	},
 	worker::{
-		SqlitePool, SqliteWorkerCloseTimeoutError, SqliteWorkerFatalError, SqliteWorkerHandle,
-		SqliteWorkerResult,
+		SqlitePool, SqliteWorkerCloseTimeoutError, SqliteWorkerClosingError,
+		SqliteWorkerFatalError, SqliteWorkerHandle, SqliteWorkerResult,
 	},
 };
 
@@ -395,10 +395,12 @@ impl NativeDatabaseHandle {
 	}
 
 	/// Holds every later commit in memory until `uncork_commits` sends them to depot as one
-	/// commit. None of the held transactions is durable until uncorking succeeds.
-	pub async fn cork_commits(&self) -> Result<()> {
+	/// commit. None of the held transactions is durable until uncorking succeeds. `close`
+	/// decides whether a close before uncorking, on any path including a panicking command,
+	/// sends or drops them.
+	pub async fn cork_commits(&self, close: CorkClose) -> Result<()> {
 		self.check_fatal_error()?;
-		self.map_worker_result(self.worker.cork_commits().await)
+		self.map_worker_result(self.worker.cork_commits(close).await)
 	}
 
 	/// Sends the transactions committed since `cork_commits` to depot as one commit. Inside an
@@ -406,6 +408,19 @@ impl NativeDatabaseHandle {
 	pub async fn uncork_commits(&self) -> Result<()> {
 		self.check_fatal_error()?;
 		self.map_worker_result(self.worker.uncork_commits().await)
+	}
+
+	/// Drops the transactions committed since `cork_commits` without sending them, for a start
+	/// that failed before they were meant to become durable. Depot keeps the state from before
+	/// the cork; the database is unusable afterwards and must close.
+	///
+	/// The discard marks the connection fatal on purpose, so its reply skips the fatal check
+	/// that other commands run: a deliberate close is not a crash and reports none. From this
+	/// call on the worker refuses every SQL command as closing, also one that passed the fatal
+	/// check before the discard ran, and the close drops the corked commits even if the
+	/// discard never runs; see `SqliteWorkerHandle::discard_corked_commits`.
+	pub async fn discard_corked_commits(&self) -> Result<()> {
+		self.worker.discard_corked_commits().await
 	}
 
 	pub async fn query(&self, sql: String, params: Option<Vec<BindParam>>) -> Result<QueryResult> {
@@ -455,6 +470,11 @@ impl NativeDatabaseHandle {
 		self.map_worker_result(self.worker.execute_batch(statements).await)
 	}
 
+	/// Stops accepting SQL and lets the pool finish closing its retained connection and VFS.
+	pub fn request_close(&self) {
+		self.worker.request_close();
+	}
+
 	pub async fn close(&self) -> Result<()> {
 		self.map_worker_close_result(self.worker.close().await)
 	}
@@ -463,6 +483,19 @@ impl NativeDatabaseHandle {
 	/// Any returned error is reported only after the worker thread has terminated.
 	pub async fn close_and_wait(&self) -> Result<()> {
 		self.map_worker_close_result(self.worker.close_and_wait().await)
+	}
+
+	/// Interrupts the statement running on the worker without closing the database; the
+	/// database must close afterwards. See [`SqliteWorkerHandle::interrupt`].
+	pub fn interrupt(&self) {
+		self.worker.interrupt();
+	}
+
+	/// Like [`Self::close_and_wait`], and first interrupts the statement running on the
+	/// worker, for a caller that has no use for its outcome. See
+	/// [`SqliteWorkerHandle::interrupt_and_close_and_wait`].
+	pub async fn interrupt_and_close_and_wait(&self) -> Result<()> {
+		self.map_worker_close_result(self.worker.interrupt_and_close_and_wait().await)
 	}
 
 	fn map_worker_close_result(&self, result: Result<()>) -> Result<()> {
@@ -549,8 +582,14 @@ impl NativeDatabaseHandle {
 		}
 	}
 
+	/// The connection's fatal error, if it has one. A connection whose owner discarded its
+	/// corked commits is marked fatal on purpose and only closes, so it reports closing, as a
+	/// close does, rather than a fatal error that reads as a crash.
 	fn fatal_error(&self) -> Option<anyhow::Error> {
-		self.clone_fatal_error()
-			.map(|message| SqliteWorkerFatalError::new(message).into())
+		let message = self.clone_fatal_error()?;
+		if self.worker.discard_requested() {
+			return Some(SqliteWorkerClosingError.into());
+		}
+		Some(SqliteWorkerFatalError::new(message).into())
 	}
 }
