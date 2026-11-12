@@ -603,9 +603,14 @@ fn method_not_allowed_response(
 }
 
 fn rearm_sleep_after_request(ctx: ActorContext) {
+	// one waiter per actor, not one per request: under steady load the count rarely reaches zero
+	if !ctx.claim_http_idle_rearm() {
+		return;
+	}
 	let sleep_ctx = ctx.clone();
 	ctx.wait_until(async move {
 		sleep_ctx.wait_for_http_requests_idle().await;
+		sleep_ctx.release_http_idle_rearm();
 		sleep_ctx.reset_sleep_timer();
 	});
 }
