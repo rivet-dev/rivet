@@ -5194,6 +5194,14 @@ export function buildNativeFactory(
 							);
 							const actorCtx = makeConnCtx(ctx, conn);
 							try {
+								if (
+									!hasSchemaConfigKey(
+										schemaConfig.events,
+										eventName,
+									)
+								) {
+									throw forbiddenError();
+								}
 								const canSubscribe = getEventCanSubscribe(
 									schemaConfig.events,
 									eventName,
