@@ -37,6 +37,7 @@ mod envoy_sqlite_transport;
 pub(crate) mod pool_metrics;
 #[cfg(feature = "sqlite-local")]
 pub(crate) mod profiling;
+mod sync;
 mod tx;
 
 pub use tx::{
@@ -61,6 +62,7 @@ use sqlite_embedded::{
 		NativeDatabaseHandle, open_database_from_transport_on_pool,
 		open_new_database_from_transport_on_pool,
 	},
+	query::SqliteStatementError,
 	vfs::{CommitMode, CorkClose, DatabaseFailure, SqliteVfsMetrics, SqliteVfsMetricsSnapshot},
 	worker::{
 		SQLITE_WORKER_QUEUE_CAPACITY, SqlitePool, SqliteWorkerCloseTimeoutError,
@@ -255,6 +257,11 @@ pub struct SqliteDb {
 	/// always sets up sqlite storage under the hood, so handle/actor_id are
 	/// not a reliable signal for whether the user opted in; this flag is.
 	enabled: bool,
+	/// Opens the local database in deferred-commit mode. See
+	/// `ActorConfig::sqlite_deferred_commits`.
+	deferred_commits: bool,
+	/// Set on handles used from a foreign runtime's host thread. See `sync.rs`.
+	host_thread: bool,
 	invocation_telemetry: Option<crate::ActorInvocationTelemetry>,
 	#[cfg(feature = "sqlite-local")]
 	// Forced-sync: native SQLite handles are used inside spawn_blocking and
@@ -290,6 +297,8 @@ impl Default for SqliteDb {
 				SqliteBackend::RemoteEnvoy
 			},
 			enabled: false,
+			deferred_commits: false,
+			host_thread: false,
 			invocation_telemetry: None,
 			#[cfg(feature = "sqlite-local")]
 			db: Default::default(),
@@ -330,6 +339,8 @@ impl SqliteDb {
 			generation,
 			backend: select_sqlite_backend(remote_sqlite)?,
 			enabled,
+			deferred_commits: false,
+			host_thread: false,
 			invocation_telemetry: None,
 			#[cfg(feature = "sqlite-local")]
 			db: Default::default(),
@@ -347,6 +358,16 @@ impl SqliteDb {
 			#[cfg(feature = "sqlite-local")]
 			worker_pool: None,
 		})
+	}
+
+	/// Opts the database into deferred commits. Fails unless the backend is local native SQLite,
+	/// because only the native VFS can commit locally.
+	pub fn with_deferred_commits(mut self, enabled: bool) -> Result<Self> {
+		if enabled && self.backend != SqliteBackend::LocalNative {
+			return Err(SqliteRuntimeError::DeferredCommitsUnsupported.build());
+		}
+		self.deferred_commits = enabled;
+		Ok(self)
 	}
 
 	#[cfg(feature = "sqlite-local")]
@@ -446,6 +467,11 @@ impl SqliteDb {
 					let generation = config
 						.generation
 						.ok_or_else(|| sqlite_not_configured("generation"))?;
+					let commit_mode = if self.deferred_commits {
+						CommitMode::Deferred
+					} else {
+						CommitMode::Awaited
+					};
 					let opened = if _new {
 						open_new_database_from_transport_on_pool(
 							self.worker_pool.as_ref(),
@@ -454,7 +480,7 @@ impl SqliteDb {
 							generation,
 							rt_handle,
 							vfs_metrics,
-							CommitMode::Awaited,
+							commit_mode,
 						)
 						.await
 					} else {
@@ -465,7 +491,7 @@ impl SqliteDb {
 							generation,
 							rt_handle,
 							vfs_metrics,
-							CommitMode::Awaited,
+							commit_mode,
 						)
 						.await
 					};
@@ -500,6 +526,7 @@ impl SqliteDb {
 	async fn local_exec_profiled(&self, sql: String) -> Result<SqliteWorkerResult<QueryResult>> {
 		self.open().await?;
 		self.map_local_worker_result(self.native_db_handle()?.exec_profiled(sql).await)
+			.map(|reply| self.map_local_worker_reply(reply))
 	}
 
 	#[cfg(not(feature = "sqlite-local"))]
@@ -525,6 +552,7 @@ impl SqliteDb {
 	) -> Result<SqliteWorkerResult<ExecuteResult>> {
 		self.open().await?;
 		self.map_local_worker_result(self.native_db_handle()?.execute_profiled(sql, params).await)
+			.map(|reply| self.map_local_worker_reply(reply))
 	}
 
 	#[cfg(not(feature = "sqlite-local"))]
@@ -1186,6 +1214,21 @@ impl SqliteDb {
 		}
 	}
 
+	/// Profiled worker calls carry the statement's own result inside a successful reply. Only
+	/// statement errors are structured here; other errors stay raw for the Actor Runtime
+	/// Socket's wire mapping.
+	#[cfg(feature = "sqlite-local")]
+	fn map_local_worker_reply<T>(&self, mut reply: SqliteWorkerResult<T>) -> SqliteWorkerResult<T> {
+		reply.result = reply.result.map_err(|error| {
+			if error.downcast_ref::<SqliteStatementError>().is_some() {
+				map_local_worker_error(error)
+			} else {
+				error
+			}
+		});
+		reply
+	}
+
 	#[cfg(feature = "sqlite-local")]
 	fn report_worker_fatal(&self, error: &anyhow::Error) {
 		let Ok(config) = self.runtime_config() else {
@@ -1241,6 +1284,29 @@ impl SqliteDb {
 		#[cfg(not(feature = "sqlite-local"))]
 		{
 			None
+		}
+	}
+
+	/// Whether this generation reported a SQLite crash to the engine, which restarts the actor
+	/// from durable state. Nothing this generation writes afterwards can become durable.
+	pub(crate) fn generation_failed(&self) -> bool {
+		self.worker_fatal_reported.load(Ordering::Acquire)
+	}
+
+	/// Restarts the owning actor from durable state, as a flush failure does: the engine records
+	/// a crash, and the database breaks so every later write fails, including the final state
+	/// save. Native database providers use it when their in-memory state can no longer be
+	/// trusted. Idempotent.
+	pub fn abort_generation(&self, reason: impl Into<String>) {
+		let message = format!("actor aborted: {}", reason.into());
+		// Report before breaking the database, so the crash carries this reason rather than the
+		// flush failure the break raises.
+		if let Ok(config) = self.runtime_config() {
+			report_sqlite_worker_fatal(&self.worker_fatal_reported, config, message.clone());
+		}
+		#[cfg(feature = "sqlite-local")]
+		if let Ok(db) = self.native_db_handle() {
+			db.break_database(message);
 		}
 	}
 
@@ -1652,6 +1718,24 @@ fn map_local_worker_error(error: anyhow::Error) -> anyhow::Error {
 				.build()
 			}
 		};
+	}
+
+	// The statement is the actor's own SQL, so SQLite's message is safe to return. The statement
+	// error stays in the chain for the Actor Runtime Socket's wire mapping.
+	if let Some(statement) = error.downcast_ref::<SqliteStatementError>() {
+		return SqliteRuntimeError::StatementFailed {
+			message: statement.detail.clone(),
+			code: statement.code,
+			offset: statement.offset,
+		}
+		.build()
+		.context(SqliteStatementError {
+			code: statement.code,
+			statement_index: statement.statement_index,
+			message: statement.message.clone(),
+			detail: statement.detail.clone(),
+			offset: statement.offset,
+		});
 	}
 
 	if let Some(indeterminate) =
