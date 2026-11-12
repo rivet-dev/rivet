@@ -531,7 +531,8 @@ impl RemoteManager {
 			req = req.body(body_data);
 		}
 
-		let res = req.send().await?;
+		// The gateway URL carries `rvt-token`, and reqwest quotes the URL in a failed send.
+		let res = req.send().await.map_err(reqwest::Error::without_url)?;
 		Ok(res)
 	}
 
