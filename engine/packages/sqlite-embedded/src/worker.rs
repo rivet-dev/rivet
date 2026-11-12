@@ -1823,8 +1823,7 @@ fn run_command_inner(
 			let _ = reply.send(worker_command_result(db, vfs, progress, worker_result));
 		}
 		SqliteCommand::Cork { close, reply } => {
-			db.cork_commits(close);
-			let _ = reply.send(Ok(()));
+			let _ = reply.send(db.cork_commits(close));
 		}
 		SqliteCommand::DiscardCork { reply } => {
 			db.discard_corked_commits();
