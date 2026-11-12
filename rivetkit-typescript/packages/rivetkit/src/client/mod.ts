@@ -54,6 +54,7 @@ export type {
 	ExtractRegistryFromClient,
 	ForkOptions,
 	GetOptions,
+	GetOrCreateOptions,
 	GetWithIdOptions,
 	QueryOptions,
 	Region,

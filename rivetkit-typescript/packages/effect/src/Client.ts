@@ -13,14 +13,10 @@ import * as RivetError from "./RivetError.ts";
 const TypeId = "~@rivetkit/effect/Client";
 
 /**
- * Connection options for the Rivet Engine client transport. Mirrors
- * the `(endpoint, token, namespace)` subset of rivetkit's
- * `ClientConfigInput`.
+ * Connection options forwarded to the Rivet Engine client transport.
+ * Logging is configured through `RivetLogger`.
  */
-export type Options = Pick<
-	RivetkitClient.ClientConfigInput,
-	"endpoint" | "token" | "namespace"
->;
+export type Options = RivetkitClient.ClientConfigInput;
 
 /**
  * Per-call metadata envelope shipped as `args[1]` alongside the encoded
@@ -60,10 +56,11 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
 	return Client.of({
 		[TypeId]: TypeId,
 		makeActorAccessor: (actor) => ({
-			getOrCreate: (key) => {
+			getOrCreate: (key, options) => {
 				const rivetkitActorHandle = rivetkitClient.getOrCreate(
 					actor.name,
 					key,
+					options,
 				);
 
 				return Record.fromIterableWith(actor.actions, (action) => {
