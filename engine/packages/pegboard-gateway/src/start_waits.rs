@@ -110,6 +110,8 @@ pub struct StartWaits {
 	near_full: AtomicBool,
 	/// Test hook: when set, notices are acknowledged without completing waits.
 	drop_notices: AtomicBool,
+	/// The epochs that tell hibernated WebSockets their actor runs again.
+	wakes: Arc<crate::sibling_wake::SiblingWakes>,
 }
 
 impl StartWaits {
@@ -127,7 +129,12 @@ impl StartWaits {
 			next_wait_id: AtomicU64::new(1),
 			near_full: AtomicBool::new(false),
 			drop_notices: AtomicBool::new(false),
+			wakes: crate::sibling_wake::SiblingWakes::new(),
 		})
+	}
+
+	pub fn wakes(&self) -> &Arc<crate::sibling_wake::SiblingWakes> {
+		&self.wakes
 	}
 
 	/// Joins the actor's wait, creating it when none exists. Returns `None` when the process holds

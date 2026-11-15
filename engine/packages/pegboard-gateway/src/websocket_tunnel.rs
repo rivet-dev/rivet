@@ -6,8 +6,11 @@ use rivet_env::{Clock, ClockError};
 use rivet_envoy_protocol as p;
 use std::future::Future;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use universalpubsub::{DuplexStream, PacketReceiver, PacketSender};
 use vbare::Versioned;
+
+use crate::sibling_wake::SiblingWake;
 
 /// Whichever peer has made progress, or the keepalive interval; the loop owns both directions'
 /// ordering.
@@ -182,12 +185,18 @@ where
 /// neither a RivetKit client nor an idle actor sends anything on its own. The ping is sent
 /// whether or not the connection was busy: a proxy's idle timer resets on any frame, and
 /// watching for the last frame would cost a clock read per forwarded message.
+///
+/// `wake` is the actor's record of the latest epoch this gateway reached it at. A hibernated
+/// socket re-opens its tunnel when its own client sends a frame, and also when that epoch moves
+/// past the one it went to sleep on: another request woke the actor, which restored this
+/// connection and may already have sent on it.
 pub async fn proxy<S, Reopen, ReopenFut>(
 	socket: &mut WebSocket,
 	stream: S,
 	identity: p::MessageId,
 	open: p::ToEnvoyWebSocketOpen,
 	reopen: Reopen,
+	wake: SiblingWake,
 	clock: Arc<dyn Clock>,
 	keepalive_interval_ms: u64,
 ) -> Result<()>
@@ -196,6 +205,21 @@ where
 	Reopen: Fn() -> ReopenFut,
 	ReopenFut: Future<Output = Result<Reopened<S>>>,
 {
+	// The epoch of the tunnel this socket holds. Every stream the socket acquires moves it and
+	// tells the actor's other sockets on this gateway.
+	let epoch = AtomicU32::new(open.actor_generation.unwrap_or_default());
+	wake.publish(epoch.load(Ordering::Relaxed));
+	let reopen = || {
+		let reopened = reopen();
+		let (epoch, wake) = (&epoch, &wake);
+		async move {
+			let reopened = reopened.await?;
+			let reached = reopened.2.actor_generation.unwrap_or_default();
+			epoch.fetch_max(reached, Ordering::Relaxed);
+			wake.publish(reached);
+			anyhow::Ok(reopened)
+		}
+	};
 	let Tunnel {
 		mut sender,
 		mut receiver,
@@ -266,9 +290,9 @@ where
 						if can_hibernate && actor_stopped(&close) =>
 					{
 						// The actor went to sleep. Keep the client socket, answer pings
-						// ourselves and wake the actor on the next client frame, re-opening the
-						// tunnel with the same gateway/request ids so the actor restores the
-						// hibernated connection.
+						// ourselves and re-open the tunnel with the same gateway/request ids,
+						// so the actor restores the hibernated connection, on the next client
+						// frame or as soon as another request has woken the actor.
 						if let Err(error) = sender.finish().await {
 							tracing::debug!(%error, "stopped WebSocket tunnel peer already closed");
 						}
@@ -278,8 +302,16 @@ where
 						// A frame the actor never acknowledged must be replayed, so wake
 						// at once instead of waiting for another client frame.
 						if !credit.requeue_unacked() {
-							let first = hibernate_wait(socket, &mut keepalive).await?;
-							credit.replay.push_back(first);
+							let asleep = epoch.load(Ordering::Relaxed);
+							match hibernate_wait(socket, &mut keepalive, wake.newer_than(asleep))
+								.await?
+							{
+								Some(first) => credit.replay.push_back(first),
+								// Nothing to replay: the socket only re-attaches.
+								None => tracing::debug!(
+									"another request woke the actor; re-attaching the hibernated client WebSocket"
+								),
+							}
 						}
 
 						// The wake opens the tunnel like the first open: `reopen` retries refused
@@ -310,7 +342,7 @@ where
 						sender = tunnel.sender;
 						receiver = tunnel.receiver;
 						identity = tunnel.identity;
-						tracing::debug!("client WebSocket woke the actor and was re-attached");
+						tracing::debug!("hibernated client WebSocket was re-attached to the actor");
 					}
 					p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
 						socket
@@ -455,21 +487,26 @@ impl ClientCredit {
 }
 
 /// Waits, with the actor asleep, for the next client frame that must
-/// reach the actor. Pings are answered by the WebSocket layer and the gateway keeps pinging the
-/// client, so neither wakes the actor. A client close or disconnect is returned as a close frame
-/// so the actor still learns that the connection ended.
+/// reach the actor, or for `woken`, which resolves when another request has woken the actor.
+/// Returns the frame, or `None` when the actor was woken without one. Pings are answered by the
+/// WebSocket layer and the gateway keeps pinging the client, so neither wakes the actor. A
+/// client close or disconnect is returned as a close frame so the actor still learns that the
+/// connection ended.
 async fn hibernate_wait(
 	socket: &mut WebSocket,
 	keepalive: &mut rivet_env::tokio::time::Interval,
-) -> Result<Message> {
+	woken: impl Future<Output = ()>,
+) -> Result<Option<Message>> {
+	let mut woken = std::pin::pin!(woken);
 	loop {
-		rivet_env::select_biased!("a client frame wakes the actor; keepalive pings only touch the client",
+		rivet_env::select_biased!("a client frame wakes the actor and is taken before a wake by another request; keepalive pings only touch the client",
 			message = socket.next() => match message {
-				Some(Ok(message @ (Message::Text(_) | Message::Binary(_) | Message::Close(_)))) => return Ok(message),
+				Some(Ok(message @ (Message::Text(_) | Message::Binary(_) | Message::Close(_)))) => return Ok(Some(message)),
 				// A dropped connection still tells the actor that the client is gone.
-				None | Some(Err(_)) => return Ok(Message::Close(None)),
+				None | Some(Err(_)) => return Ok(Some(Message::Close(None))),
 				Some(Ok(Message::Ping(_) | Message::Pong(_))) => {}
 			},
+			_ = &mut woken => return Ok(None),
 			tick = keepalive.tick() => {
 				tick.context("keepalive clock failed")?;
 				send_keepalive_ping(socket).await?;
@@ -555,7 +592,13 @@ mod tests {
 						let clock = Arc::new(TokioClock::new().unwrap());
 						let mut keepalive = rivet_env::interval(clock, keepalive_ms);
 						keepalive.tick().await.unwrap();
-						let result = hibernate_wait(&mut socket, &mut keepalive).await;
+						let result = hibernate_wait(
+							&mut socket,
+							&mut keepalive,
+							std::future::pending(),
+						)
+						.await
+						.map(|frame| frame.expect("nothing else wakes the actor"));
 						if let Some(tx) = tx.lock().unwrap().take() {
 							let _ = tx.send(result);
 						}
@@ -852,12 +895,16 @@ mod tests {
 							}
 						};
 						let clock = Arc::new(TokioClock::new().unwrap());
+						let wake = crate::sibling_wake::SiblingWakes::new()
+							.subscribe(rivet_util::Id::nil())
+							.await;
 						let result = proxy(
 							&mut socket,
 							stream,
 							message_id(1, 2),
 							websocket_open(),
 							reopen,
+							wake,
 							clock,
 							60_000,
 						)
@@ -951,6 +998,270 @@ mod tests {
 			.unwrap()
 			.unwrap()
 			.unwrap();
+		server.abort();
+	}
+
+	fn websocket_open_at(epoch: u32) -> p::ToEnvoyWebSocketOpen {
+		p::ToEnvoyWebSocketOpen {
+			actor_generation: Some(epoch),
+			..websocket_open()
+		}
+	}
+
+	/// Runs `proxy` for one client on epoch 1 of `actor_id`. Each reopen takes the next stream of
+	/// `reopened` and reaches epoch 2. Returns the client, the result of `proxy`, and the server.
+	async fn proxied_client(
+		wakes: Arc<crate::sibling_wake::SiblingWakes>,
+		actor_id: rivet_util::Id,
+		identity: p::MessageId,
+		first: FakeStream,
+		reopened: Vec<FakeStream>,
+	) -> (
+		Client,
+		oneshot::Receiver<Result<()>>,
+		tokio::task::JoinHandle<()>,
+	) {
+		let streams = Arc::new(std::sync::Mutex::new(std::collections::VecDeque::from(
+			reopened,
+		)));
+		let (done_tx, done_rx) = oneshot::channel();
+		let done_tx = Arc::new(std::sync::Mutex::new(Some(done_tx)));
+		let first = Arc::new(std::sync::Mutex::new(Some(first)));
+		let app = Router::new().route(
+			"/",
+			get(move |upgrade: WebSocketUpgrade| async move {
+				upgrade.on_upgrade(move |mut socket| async move {
+					let stream = first.lock().unwrap().take().unwrap();
+					let reopen = move || {
+						let stream = streams.lock().unwrap().pop_front();
+						async move {
+							let stream = stream.context("no stream left to reopen")?;
+							anyhow::Ok((stream, message_id(9, 9), websocket_open_at(2)))
+						}
+					};
+					let clock = Arc::new(TokioClock::new().unwrap());
+					let wake = wakes.subscribe(actor_id).await;
+					let result = proxy(
+						&mut socket,
+						stream,
+						identity,
+						websocket_open_at(1),
+						reopen,
+						wake,
+						clock,
+						60_000,
+					)
+					.await;
+					if let Some(tx) = done_tx.lock().unwrap().take() {
+						let _ = tx.send(result);
+					}
+				})
+			}),
+		);
+		let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		let server = tokio::spawn(async move {
+			axum::serve(listener, app).await.unwrap();
+		});
+		let (client, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/"))
+			.await
+			.unwrap();
+		(client, done_rx, server)
+	}
+
+	/// The next frame the client receives that is not a ping or pong.
+	async fn next_data(client: &mut Client) -> ClientMessage {
+		loop {
+			let frame = tokio::time::timeout(std::time::Duration::from_secs(5), client.next())
+				.await
+				.expect("the client received nothing")
+				.unwrap()
+				.unwrap();
+			if !matches!(frame, ClientMessage::Ping(_) | ClientMessage::Pong(_)) {
+				break frame;
+			}
+		}
+	}
+
+	fn ws_text(text: &str) -> p::ToRivetTunnelMessageKind {
+		p::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(p::ToRivetWebSocketMessage {
+			data: text.as_bytes().to_vec().into(),
+			binary: false,
+		})
+	}
+
+	/// Two clients of one actor hibernate. The first client's frame wakes the actor; the second
+	/// client sends nothing, yet its tunnel is re-opened under its own ids and it receives what
+	/// the woken actor sends, with no frame replayed to the actor on its behalf.
+	#[tokio::test]
+	async fn a_wake_by_one_client_reattaches_its_hibernated_sibling() {
+		let wakes = crate::sibling_wake::SiblingWakes::new();
+		let actor_id = rivet_util::Id::nil();
+		let (waker_first, mut waker_asleep) = fake_stream();
+		let (waker_second, mut waker_woken) = fake_stream();
+		let (sibling_first, mut sibling_asleep) = fake_stream();
+		let (sibling_second, mut sibling_woken) = fake_stream();
+		let (mut waker, _waker_done, waker_server) = proxied_client(
+			wakes.clone(),
+			actor_id,
+			message_id(1, 1),
+			waker_first,
+			vec![waker_second],
+		)
+		.await;
+		let (mut sibling, sibling_done, sibling_server) = proxied_client(
+			wakes.clone(),
+			actor_id,
+			message_id(1, 2),
+			sibling_first,
+			vec![sibling_second],
+		)
+		.await;
+
+		// The actor accepts both connections as hibernatable, then goes to sleep.
+		for asleep in [&mut waker_asleep, &mut sibling_asleep] {
+			let id = asleep.recv_open().await;
+			asleep.send(&id, ws_accept());
+			asleep.send(&id, ws_close(1012, "actor.stopped"));
+		}
+
+		// Only the first client sends a frame.
+		waker
+			.send(ClientMessage::Text("wake".into()))
+			.await
+			.unwrap();
+		let waker_id = waker_woken.recv_open().await;
+		assert_eq!(waker_id.request_id, [1; 4]);
+		waker_woken.send(&waker_id, ws_accept());
+
+		// The sibling re-opens under its own hibernated ids without a frame from its client.
+		let sibling_id = sibling_woken.recv_open().await;
+		assert_eq!(sibling_id.gateway_id, [1; 4]);
+		assert_eq!(sibling_id.request_id, [2; 4]);
+		sibling_woken.send(&sibling_id, ws_accept());
+
+		// What the woken actor sends reaches the sibling, in order.
+		sibling_woken.send(&sibling_id, ws_text("broadcast-1"));
+		sibling_woken.send(&sibling_id, ws_text("broadcast-2"));
+		for expected in ["broadcast-1", "broadcast-2"] {
+			let frame = next_data(&mut sibling).await;
+			assert!(
+				matches!(&frame, ClientMessage::Text(text) if text.as_str() == expected),
+				"unexpected frame {frame:?}"
+			);
+		}
+
+		// Nothing was replayed for the sibling: the next thing the actor sees from it is the
+		// frame its client sends now.
+		sibling
+			.send(ClientMessage::Text("mine".into()))
+			.await
+			.unwrap();
+		let message = sibling_woken.recv().await;
+		let p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(data) = message.message_kind
+		else {
+			panic!("expected the sibling's own frame");
+		};
+		assert_eq!(data.data.as_ref(), b"mine");
+		sibling_woken.send(
+			&message.message_id,
+			p::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(
+				p::ToRivetWebSocketMessageAck {
+					index: message.message_id.message_index,
+				},
+			),
+		);
+
+		sibling.close(None).await.unwrap();
+		assert!(matches!(
+			sibling_woken.recv().await.message_kind,
+			p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(_)
+		));
+		tokio::time::timeout(std::time::Duration::from_secs(5), sibling_done)
+			.await
+			.unwrap()
+			.unwrap()
+			.unwrap();
+		waker_server.abort();
+		sibling_server.abort();
+	}
+
+	/// The sibling learns that its actor stopped only after another request already woke the
+	/// actor. It must not wait for a wake that has passed: it re-opens at once.
+	#[tokio::test]
+	async fn a_sibling_that_learns_of_the_stop_after_the_wake_still_reattaches() {
+		let wakes = crate::sibling_wake::SiblingWakes::new();
+		let actor_id = rivet_util::Id::nil();
+		let (first, mut asleep) = fake_stream();
+		let (second, mut woken) = fake_stream();
+		let (mut client, _done, server) = proxied_client(
+			wakes.clone(),
+			actor_id,
+			message_id(1, 2),
+			first,
+			vec![second],
+		)
+		.await;
+
+		let id = asleep.recv_open().await;
+		asleep.send(&id, ws_accept());
+		// The actor already runs at epoch 2 when this socket's stop of epoch 1 arrives.
+		wakes.publish(actor_id, 2).await;
+		asleep.send(&id, ws_close(1012, "actor.stopped"));
+
+		let woken_id = woken.recv_open().await;
+		assert_eq!(woken_id.request_id, [2; 4]);
+		woken.send(&woken_id, ws_accept());
+		woken.send(&woken_id, ws_text("broadcast"));
+		let frame = next_data(&mut client).await;
+		assert!(
+			matches!(&frame, ClientMessage::Text(text) if text.as_str() == "broadcast"),
+			"unexpected frame {frame:?}"
+		);
+		server.abort();
+	}
+
+	/// An actor that sleeps again stays asleep: a socket re-attached on the latest epoch waits
+	/// for its client or for a newer epoch, and does not wake the actor by itself.
+	#[tokio::test]
+	async fn a_reattached_sibling_does_not_wake_an_actor_that_sleeps_again() {
+		let wakes = crate::sibling_wake::SiblingWakes::new();
+		let actor_id = rivet_util::Id::nil();
+		let (first, mut asleep) = fake_stream();
+		let (second, mut woken) = fake_stream();
+		let (third, mut woken_again) = fake_stream();
+		let (mut client, _done, server) = proxied_client(
+			wakes.clone(),
+			actor_id,
+			message_id(1, 2),
+			first,
+			vec![second, third],
+		)
+		.await;
+
+		let id = asleep.recv_open().await;
+		asleep.send(&id, ws_accept());
+		asleep.send(&id, ws_close(1012, "actor.stopped"));
+		wakes.publish(actor_id, 2).await;
+		let woken_id = woken.recv_open().await;
+		woken.send(&woken_id, ws_accept());
+
+		// Epoch 2 goes to sleep. No request reached a newer epoch, so the socket waits.
+		woken.send(&woken_id, ws_close(1012, "actor.stopped"));
+		let reopened = tokio::time::timeout(
+			std::time::Duration::from_millis(300),
+			woken_again.from_gateway.recv(),
+		)
+		.await;
+		assert!(reopened.is_err(), "the socket woke a sleeping actor by itself");
+
+		// Its own client still wakes the actor.
+		client
+			.send(ClientMessage::Text("wake".into()))
+			.await
+			.unwrap();
+		let again_id = woken_again.recv_open().await;
+		assert_eq!(again_id.request_id, [2; 4]);
 		server.abort();
 	}
 }

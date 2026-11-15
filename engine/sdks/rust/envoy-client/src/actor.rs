@@ -151,6 +151,9 @@ struct WsEntry {
 	rivet_message_index: u16,
 	ws_handler: Option<WebSocketHandler>,
 	outgoing_tx: mpsc::UnboundedSender<WsOutgoing>,
+	/// Set while a restored hibernated connection has no tunnel yet. Its outgoing task holds
+	/// what the actor sends until the gateway re-opens the tunnel and this fires.
+	parked_gate: Option<oneshot::Sender<()>>,
 }
 
 struct ActorContext {
@@ -705,10 +708,43 @@ fn spawn_ws_outgoing_task(
 	gateway_id: protocol::GatewayId,
 	request_id: protocol::RequestId,
 	mut outgoing_rx: mpsc::UnboundedReceiver<WsOutgoing>,
+	gate: Option<oneshot::Receiver<()>>,
 ) {
 	let ws_task = async move {
+		// A parked connection has no tunnel to send on. Hold what the actor sends, in order,
+		// until the gate fires, and answer flushes at once so no caller waits on a tunnel that
+		// may never open. A dropped gate means the connection ended while parked.
+		let mut parked = std::collections::VecDeque::new();
+		if let Some(mut gate) = gate {
+			loop {
+				tokio::select! {
+					biased;
+					opened = &mut gate => {
+						if opened.is_err() {
+							return;
+						}
+						break;
+					}
+					msg = outgoing_rx.recv() => match msg {
+						Some(WsOutgoing::Flush { tx }) => {
+							let _ = tx.send(());
+						}
+						Some(msg) => parked.push_back(msg),
+						None => return,
+					},
+				}
+			}
+		}
+
 		let mut idx: u16 = 0;
-		while let Some(msg) = outgoing_rx.recv().await {
+		loop {
+			let msg = match parked.pop_front() {
+				Some(msg) => msg,
+				None => match outgoing_rx.recv().await {
+					Some(msg) => msg,
+					None => break,
+				},
+			};
 			idx += 1;
 			match msg {
 				WsOutgoing::Message { data, binary } => {
@@ -780,6 +816,34 @@ async fn handle_ws_open(
 	let restored_ws = ctx
 		.ws_entries
 		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+	let restored_ws = match restored_ws {
+		Some(mut ws) if ws.ws_handler.is_some() && ws.parked_gate.is_some() => {
+			// The actor already restored this connection when it started. Attach the tunnel:
+			// the open goes first, then everything the actor sent while it was parked.
+			let gate = ws.parked_gate.take().expect("checked above");
+			ws.rivet_message_index = message_id.message_index;
+			ctx.ws_entries
+				.insert(&[&message_id.gateway_id, &message_id.request_id], ws);
+			send_actor_message(
+				ctx,
+				message_id.gateway_id,
+				message_id.request_id,
+				protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(
+					protocol::ToRivetWebSocketOpen {
+						can_hibernate: true,
+					},
+				),
+			)
+			.await;
+			let _ = gate.send(());
+			tracing::debug!(
+				request_id = id_to_str(&message_id.request_id),
+				"gateway re-opened a parked hibernated websocket"
+			);
+			return;
+		}
+		other => other,
+	};
 	let is_restoring_hibernatable = restored_ws
 		.as_ref()
 		.map(|ws| ws.is_hibernatable)
@@ -956,6 +1020,7 @@ async fn finish_ws_open(
 					rivet_message_index: message_id.message_index,
 					ws_handler: Some(ws_handler),
 					outgoing_tx,
+					parked_gate: None,
 				},
 			);
 
@@ -964,6 +1029,7 @@ async fn finish_ws_open(
 				message_id.gateway_id,
 				message_id.request_id,
 				outgoing_rx,
+				None,
 			);
 
 			// Gateway wake flows still wait for a websocket-open ack before they
@@ -1177,6 +1243,7 @@ async fn handle_hws_restore(
 							rivet_message_index: meta.rivet_message_index,
 							ws_handler: Some(ws_handler),
 							outgoing_tx: hws_outgoing_tx,
+							parked_gate: None,
 						},
 					);
 					if !handle
@@ -1219,6 +1286,7 @@ async fn handle_hws_restore(
 						hib_req.gateway_id,
 						hib_req.request_id,
 						hws_outgoing_rx,
+						None,
 					);
 					if let Some(ws) = ctx
 						.ws_entries
@@ -1297,21 +1365,86 @@ async fn handle_hws_restore(
 				// The start command does not track hibernating requests: the gateway keeps the
 				// client socket open while the actor sleeps. Keep the persisted connection and
 				// wait for the gateway to re-open the tunnel with the same gateway and request
-				// ids (the restore path in `handle_ws_open`) instead of closing it as stale.
+				// ids (`handle_ws_open`) instead of closing it as stale.
+				//
+				// The connection is restored into the actor now, before any tunnel exists, so
+				// the actor's code holds every hibernated socket from the moment it wakes. A
+				// wake by one client would otherwise leave the others unknown to the actor
+				// until each sent a frame of its own, and a broadcast made meanwhile would
+				// never reach them. What the actor sends is held by the parked outgoing task
+				// and goes out, in order, when the gateway re-opens the tunnel.
 				ctx.websocket_requests.insert(
 					&[&meta.gateway_id, &meta.request_id],
 					WebSocketRequestState {
 						envoy_message_index: 0,
 					},
 				);
-				let (parked_tx, _parked_rx) = mpsc::unbounded_channel();
+				let mut full_headers = meta.headers.clone();
+				full_headers.insert("Upgrade".to_string(), "websocket".to_string());
+				full_headers.insert("Connection".to_string(), "Upgrade".to_string());
+				let request = HttpRequest {
+					method: "GET".to_string(),
+					path: meta.path.clone(),
+					headers: full_headers.clone(),
+					body: None,
+					body_stream: None,
+				};
+				let (parked_tx, parked_rx) = mpsc::unbounded_channel();
+				let ws_result = ctx
+					.shared
+					.config
+					.callbacks
+					.websocket(
+						handle.clone(),
+						ctx.actor_id.clone(),
+						meta.gateway_id,
+						meta.request_id,
+						request,
+						meta.path.clone(),
+						full_headers,
+						true,
+						true,
+						WebSocketSender {
+							tx: parked_tx.clone(),
+						},
+					)
+					.await;
+				let (ws_handler, parked_gate) = match ws_result {
+					Ok(mut ws_handler) => {
+						let (gate_tx, gate_rx) = oneshot::channel();
+						spawn_ws_outgoing_task(
+							ctx.shared.clone(),
+							meta.gateway_id,
+							meta.request_id,
+							parked_rx,
+							Some(gate_rx),
+						);
+						if let Some(on_open) = ws_handler.on_open.take() {
+							on_open(WebSocketSender {
+								tx: parked_tx.clone(),
+							})
+							.await;
+						}
+						(Some(ws_handler), Some(gate_tx))
+					}
+					Err(error) => {
+						// Leave the connection for the gateway's re-open to restore or reject.
+						tracing::warn!(
+							request_id = id_to_str(&meta.request_id),
+							?error,
+							"could not restore a parked hibernated websocket at actor start"
+						);
+						(None, None)
+					}
+				};
 				ctx.ws_entries.insert(
 					&[&meta.gateway_id, &meta.request_id],
 					WsEntry {
 						is_hibernatable: true,
 						rivet_message_index: meta.rivet_message_index,
-						ws_handler: None,
+						ws_handler,
 						outgoing_tx: parked_tx,
+						parked_gate,
 					},
 				);
 				tracing::debug!(

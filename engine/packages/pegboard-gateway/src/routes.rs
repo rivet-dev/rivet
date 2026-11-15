@@ -268,6 +268,7 @@ pub async fn gateway(
 			//
 			// `Fn`, not `FnOnce`: a hibernatable WebSocket whose actor went to sleep calls it
 			// again to wake the actor on the client's next frame.
+			let wakes = waits.wakes().clone();
 			let reopen = move || {
 				let ctx = ctx.clone();
 				let waits = waits.clone();
@@ -309,12 +310,14 @@ pub async fn gateway(
 			ws.protocols(protocols)
 				.read_buffer_size(ACTOR_WEBSOCKET_READ_BUFFER_BYTES)
 				.on_upgrade(move |mut socket| async move {
+					let wake = wakes.subscribe(actor_id).await;
 					if let Err(error) = crate::websocket_tunnel::proxy(
 						&mut socket,
 						stream,
 						message_id,
 						open,
 						reopen,
+						wake,
 						clock,
 						keepalive_interval_ms,
 					)

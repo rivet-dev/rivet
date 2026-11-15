@@ -183,6 +183,11 @@ pub(crate) async fn acquire(
 		Err(error) => Err(error.into()),
 	};
 	acquire.wait.release().await;
+	// Every request that reaches the actor tells its hibernated WebSockets on this gateway
+	// which epoch runs, so they re-attach to an actor another request woke.
+	if let Ok((epoch, _)) = &result {
+		waits.wakes().publish(actor_id, *epoch).await;
+	}
 	result
 }
 
