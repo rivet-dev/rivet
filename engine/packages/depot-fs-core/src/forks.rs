@@ -1,12 +1,17 @@
 //! Pure fork image rules shared by local reads, remote base reads and materialization.
 pub mod cleanup;
 pub mod materialize;
-use crate::{CHUNK_BYTES, Error, FsInode, FsKind, Result, store::Row};
+use crate::{CHUNK_BYTES, Error, FsCut, FsInode, FsKind, Result, store::Row};
 use rivet_data::generated::shared_depot_types_v1::VolumeLogPosition;
 
 /// Copy metadata at sequence zero, but reserve every inherited inode ordinal.
-/// The fresh log starts above this floor with its own client epoch.
-pub fn initial_position(source: &VolumeLogPosition) -> Result<VolumeLogPosition> {
+/// The fresh log starts above this floor with its own client epoch. The floor is the cut's
+/// claim log 0 entry, since the fork's own log 0 continues that log's numbering; a cut
+/// without one is invalid.
+pub fn initial_position(source: &FsCut) -> Result<VolumeLogPosition> {
+	let Some(source) = source.root_position() else {
+		return Err(Error::Invalid);
+	};
 	if source.volume_seq == u64::MAX {
 		return Err(Error::TooLarge);
 	}
@@ -121,10 +126,21 @@ pub enum MaterializeProgress {
 /// this durable proof even if the initiating caller has already expired.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ReferenceResult {
-	/// No source receipt exists; the core must establish fresh applied progress.
+	/// No source receipt exists; the core must establish fresh applied progress. A lookup
+	/// that planned an idle parent's fork pin answers this when the pin is already in place
+	/// or the fork needs none.
 	SourceProgressRequired,
+	/// A group fork acquire's lookup found the idle parent with no pin covering the fork:
+	/// the pin it computed at the parent's stored cut, which the maintainer logs and applies
+	/// before the acquire is tried again. Nothing was written.
+	NeedsIdlePin(Box<rivet_data::generated::depot_maintainer_log_v2::ForkPinOp>),
+	/// A group fork acquire's lookup found the idle parent's last pin through
+	/// `first_fork - 1`, and the children it was given do not cover every fork from
+	/// `first_fork` through the acquired one, which the pin would wait on. The maintainer
+	/// reads that range of its group cache and plans again; nothing was written.
+	NeedsGroupChildren { first_fork: u64 },
 	Complete {
-		response: Box<rivet_data::generated::depot_client_protocol_v1::FsForkReferenceResponse>,
+		response: Box<rivet_data::generated::depot_client_protocol_v2::FsForkReferenceResponse>,
 		record: Option<crate::FsVolumeRecord>,
 	},
 }
@@ -144,6 +160,9 @@ pub struct LifecycleLookup {
 	/// For a lookup of one incarnation: the name's pointer names a newer incarnation, so this
 	/// one no longer holds the name.
 	pub superseded: bool,
+	/// For a delete's lookup of one incarnation: the last fork its pin rows, stored pin mark or
+	/// creation stamp cover, or none when nothing does or the lookup did not ask.
+	pub pinned_through: Option<u64>,
 }
 
 impl From<Option<crate::FsVolumeRecord>> for LifecycleLookup {
@@ -152,6 +171,7 @@ impl From<Option<crate::FsVolumeRecord>> for LifecycleLookup {
 			row,
 			pending: None,
 			superseded: false,
+			pinned_through: None,
 		}
 	}
 }
@@ -165,8 +185,14 @@ pub enum StoreAction {
 	Remember(crate::FsForkImage),
 	Copy {
 		after: Option<Vec<u8>>,
-		page: rivet_data::generated::shared_depot_fs_read_v1::FsForkMetadataPage,
+		page: rivet_data::generated::shared_depot_fs_read_v2::FsForkMetadataPage,
 	},
+	/// A lazy fork's acquire found the ancestor says nothing about the fork: the pending
+	/// preparation moves to the next ancestor's spec and acquires again.
+	Retarget(crate::FsForkSpec),
+	/// A lazy fork over the inline metadata threshold copies nothing: its preparation is
+	/// ready with the image alone and the volume reads its metadata through the chain.
+	SkipCopy,
 	/// Revalidate the old incarnation after all previously admitted store work.
 	RestoreTarget,
 	Publish {
@@ -175,6 +201,9 @@ pub enum StoreAction {
 		logged: bool,
 		/// The published incarnation's `incarnation_epoch`, from its maintainer log op.
 		incarnation_epoch: u64,
+		/// The group's latest fork as the maintainer knows it, stamped on a lazy fork's
+		/// record; `None` for a fork outside any group.
+		created_at_fork: Option<u64>,
 	},
 	Fail(crate::FsForkError),
 }
@@ -188,4 +217,21 @@ pub enum StoreResult {
 	RestoreTarget(crate::FsVolumeRecord),
 	Progress(Preparation),
 	Rejected(crate::FsForkError),
+	/// The store cannot encode a row of `action`, a copied page, at its current
+	/// `depot.fs_rows` version `version`, but the highest version this grant reaches can: the
+	/// pass that makes the raised rows mark durable resolves it. Nothing was staged, and the
+	/// action comes back so the job holds it and runs it again then.
+	RowsMarkPending {
+		action: StoreAction,
+		row: String,
+		version: u16,
+	},
+	/// The store cannot encode a row of `action` at any version this grant reaches, the
+	/// highest being `reachable`, as while a storage worker of an older release is live.
+	/// Nothing was staged, and the action comes back so the job holds it.
+	RowsInexpressible {
+		action: StoreAction,
+		row: String,
+		reachable: u16,
+	},
 }

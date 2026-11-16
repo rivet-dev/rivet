@@ -61,6 +61,11 @@ jobs:
       - name: Check event-driven drain invariants
         run: rivetkit-rust/packages/rivetkit-core/scripts/check-event-driven-drains.sh
 
+      # Readers on a release decode its schema versions as they shipped, so a change to one
+      # must be a new version with converters instead.
+      - name: Check released schemas are unchanged
+        run: python3 scripts/schemas/released_schemas.py
+
       - name: Check
         run: cargo check --workspace --exclude rivetkit-wasm
         env:

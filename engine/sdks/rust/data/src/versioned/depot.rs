@@ -62,23 +62,27 @@ impl_versioned_v1!(
 /// Versioned `ClientRequest` with strict payload decoding.
 pub enum DepotClientRequestData {
 	V1(crate::generated::depot_client_protocol_v1::ClientRequest),
+	V2(crate::generated::depot_client_protocol_v2::ClientRequest),
 }
 
-impl_versioned_v1!(
+impl_versioned_v2!(
 	DepotClientRequestData,
 	DEPOT_CLIENT_PROTOCOL,
-	crate::generated::depot_client_protocol_v1::ClientRequest
+	crate::generated::depot_client_protocol_v1::ClientRequest,
+	crate::generated::depot_client_protocol_v2::ClientRequest
 );
 
 /// Versioned `ClientResponse` with strict payload decoding.
 pub enum DepotClientResponseData {
 	V1(crate::generated::depot_client_protocol_v1::ClientResponse),
+	V2(crate::generated::depot_client_protocol_v2::ClientResponse),
 }
 
-impl_versioned_v1!(
+impl_versioned_v2!(
 	DepotClientResponseData,
 	DEPOT_CLIENT_PROTOCOL,
-	crate::generated::depot_client_protocol_v1::ClientResponse
+	crate::generated::depot_client_protocol_v1::ClientResponse,
+	crate::generated::depot_client_protocol_v2::ClientResponse
 );
 
 /// Versioned `TabletCoordinatorResponse` with strict payload decoding.
@@ -247,43 +251,51 @@ impl_versioned_v1!(
 /// Versioned `MaintainerEntry`, the payload of one tablet maintainer log entry.
 pub enum DepotMaintainerEntryData {
 	V1(crate::generated::depot_maintainer_log_v1::MaintainerEntry),
+	V2(crate::generated::depot_maintainer_log_v2::MaintainerEntry),
 }
 
-impl_versioned_v1!(
+impl_versioned_v2!(
 	DepotMaintainerEntryData,
 	DEPOT_MAINTAINER_LOG,
-	crate::generated::depot_maintainer_log_v1::MaintainerEntry
+	crate::generated::depot_maintainer_log_v1::MaintainerEntry,
+	crate::generated::depot_maintainer_log_v2::MaintainerEntry
 );
 
 /// Versioned `MaintainerLogRecord`, the tablet store's record of its maintainer log.
 pub enum DepotMaintainerLogRecordData {
 	V1(crate::generated::depot_maintainer_log_v1::MaintainerLogRecord),
+	V2(crate::generated::depot_maintainer_log_v2::MaintainerLogRecord),
 }
 
-impl_versioned_v1!(
+impl_versioned_v2!(
 	DepotMaintainerLogRecordData,
 	DEPOT_MAINTAINER_LOG,
-	crate::generated::depot_maintainer_log_v1::MaintainerLogRecord
+	crate::generated::depot_maintainer_log_v1::MaintainerLogRecord,
+	crate::generated::depot_maintainer_log_v2::MaintainerLogRecord
 );
 
 /// Versioned `RepairAuditOp`, the stored audit row of one operator repair call.
 pub enum DepotRepairAuditData {
 	V1(crate::generated::depot_maintainer_log_v1::RepairAuditOp),
+	V2(crate::generated::depot_maintainer_log_v2::RepairAuditOp),
 }
 
-impl_versioned_v1!(
+impl_versioned_v2!(
 	DepotRepairAuditData,
 	DEPOT_MAINTAINER_LOG,
-	crate::generated::depot_maintainer_log_v1::RepairAuditOp
+	crate::generated::depot_maintainer_log_v1::RepairAuditOp,
+	crate::generated::depot_maintainer_log_v2::RepairAuditOp
 );
 
 /// Versioned `VolumeCreation`, the creation evidence a volume's replicas hold.
 pub enum DepotVolumeCreationData {
 	V1(crate::generated::depot_maintainer_log_v1::VolumeCreation),
+	V2(crate::generated::depot_maintainer_log_v2::VolumeCreation),
 }
 
-impl_versioned_v1!(
+impl_versioned_v2!(
 	DepotVolumeCreationData,
 	DEPOT_MAINTAINER_LOG,
-	crate::generated::depot_maintainer_log_v1::VolumeCreation
+	crate::generated::depot_maintainer_log_v1::VolumeCreation,
+	crate::generated::depot_maintainer_log_v2::VolumeCreation
 );

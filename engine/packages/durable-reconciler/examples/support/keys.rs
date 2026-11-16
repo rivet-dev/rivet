@@ -1,10 +1,13 @@
 use super::versioned;
 
-rivet_keys::volume_key! {
-	pub CounterPartition(id: u64) => [{id}];
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKey)]
+#[volume(key = [id])]
+pub struct CounterPartition {
+	pub id: u64,
 }
 
-rivet_keys::volume_kv_key! {
-	pub CounterKey(id: u64) => [{id}];
-	value: vbare(versioned::CounterData, versioned::VERSION);
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [id], value = vbare(versioned::CounterData, versioned::VERSION))]
+pub struct CounterKey {
+	pub id: u64,
 }

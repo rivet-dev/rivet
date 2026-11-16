@@ -6,7 +6,7 @@ use depot_fs_core::{
 	store::{ReadRequest, Row, RowKey, RowRange, RowStore},
 };
 use rivet_data::generated::{
-	shared_depot_fs_read_v1::*,
+	shared_depot_fs_read_v2::*,
 	shared_depot_types_v1::{VolumeKey, VolumeLogKey},
 };
 use std::collections::BTreeMap;
@@ -49,7 +49,7 @@ impl Snapshot {
 				target: FsReadTarget::VolumeKey(key.clone()),
 				client_epoch: None,
 				operation: FsReadOperation::FsReadOpen(FsReadOpen {
-					position: None,
+					cut: None,
 					prefetch: None,
 				}),
 			},
@@ -59,7 +59,13 @@ impl Snapshot {
 		let FsReadResponse::FsReadOpened(opened) = response else {
 			return Err(Error::Corrupt);
 		};
-		if opened.volume_log_key.volume_key != key || opened.as_of != opened.applied.volume_seq {
+		// The volume has one claim log, so the applied cut names claim log 0 alone.
+		if opened.volume_log_key.volume_key != key
+			|| opened
+				.applied
+				.root_position()
+				.is_none_or(|applied| opened.as_of != applied.volume_seq)
+		{
 			return Err(Error::Corrupt);
 		}
 		Ok(Self {
@@ -102,7 +108,10 @@ impl Snapshot {
 		};
 		if rows.session != Some(self.session)
 			|| rows.as_of != self.as_of
-			|| rows.applied.volume_seq < self.as_of
+			|| rows
+				.applied
+				.root_position()
+				.is_none_or(|applied| applied.volume_seq < self.as_of)
 		{
 			return Err(Error::Corrupt);
 		}

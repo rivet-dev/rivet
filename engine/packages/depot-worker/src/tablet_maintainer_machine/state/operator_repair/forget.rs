@@ -16,7 +16,7 @@ use crate::tablet_maintainer_machine::{
 };
 use depot_types::VolumeLogKey;
 use rivet_data::generated::{
-	depot_client_protocol_v1::{
+	depot_client_protocol_v2::{
 		RepairForgetPlan, RepairRefusalCode, RepairRefused, RepairReplicaForget,
 	},
 	depot_storage_worker_protocol_v1::{self as wire, RejectResponse, StorageWorkerResponse},

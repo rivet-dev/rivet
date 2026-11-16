@@ -1,0 +1,5 @@
+{
+  "code": "backfill_pending",
+  "group": "namespace",
+  "message": "The namespace's volumes from before volume groups are still being moved into its group; retry later."
+}

@@ -4,10 +4,9 @@ use anyhow::{Context, Result, ensure};
 use object_store::{GetResult, ObjectStore, ObjectStoreExt};
 use rivet_keys::keys::KeyAddress;
 
-rivet_keys::s3_key! {
-	pub SigningKeyRingKey() => [RIVET, CLUSTER, AUTH, JWT, KEY_RING];
-	value: vbare(rivet_data::versioned::AuthJwtKeyRingData, rivet_data::AUTH_JWT_KEY_RING_VERSION);
-}
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::S3Key)]
+#[s3(key = [RIVET, CLUSTER, AUTH, JWT, KEY_RING], value = vbare(rivet_data::versioned::AuthJwtKeyRingData, rivet_data::AUTH_JWT_KEY_RING_VERSION))]
+pub struct SigningKeyRingKey {}
 pub const MAX_RING_BYTES: u64 = 64 * 1024;
 
 /// Reject malformed, oversized or unversioned objects without ever treating them as absent.

@@ -428,5 +428,11 @@ pub fn stringify_to_envoy(message: &protocol::ToEnvoy) -> String {
 		protocol::ToEnvoy::ToEnvoyPing(val) => {
 			format!("ToEnvoyPing{{ts: {}}}", val.ts)
 		}
+		protocol::ToEnvoy::ToEnvoySqliteProveTail(val) => {
+			format!(
+				"ToEnvoySqliteProveTail{{actorId: {}, generation: {}}}",
+				val.actor_id, val.generation
+			)
+		}
 	}
 }

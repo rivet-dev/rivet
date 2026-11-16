@@ -29,6 +29,10 @@ pub struct Start<A: Actor> {
 	pub input: Input<A>,
 	pub is_new: bool,
 	pub hibernated: Vec<Hibernated<A>>,
+	/// The individual actor fork at the first start of a forked actor: the source, the fork
+	/// time and the fork input. Handle it before serving events; it is not offered again once
+	/// this start succeeds.
+	pub fork: Option<rivetkit_core::ActorForkStart>,
 	pub events: Events<A>,
 	#[doc(hidden)]
 	pub startup_ready: Option<tokio::sync::oneshot::Sender<Result<()>>>,
@@ -121,8 +125,12 @@ impl<A: Actor> Events<A> {
 				reply.send(Ok(()));
 				None
 			}
-			ActorEvent::DisconnectConn { conn_id, reply } => {
-				reply.send(self.ctx.disconnect_conn(&conn_id).await);
+			ActorEvent::DisconnectConn {
+				conn_id,
+				reason,
+				reply,
+			} => {
+				reply.send(self.ctx.disconnect_conn_with_reason(&conn_id, reason).await);
 				None
 			}
 			ActorEvent::RunWake { reply, .. } => {
@@ -147,10 +155,14 @@ impl<A: Actor> Events<A> {
 				reply.send(Ok(()));
 				None
 			}
-			ActorEvent::DisconnectConn { conn_id, reply } => {
+			ActorEvent::DisconnectConn {
+				conn_id,
+				reason,
+				reply,
+			} => {
 				let ctx = self.ctx.clone();
 				tokio::spawn(async move {
-					reply.send(ctx.disconnect_conn(&conn_id).await);
+					reply.send(ctx.disconnect_conn_with_reason(&conn_id, reason).await);
 				});
 				None
 			}
@@ -177,6 +189,7 @@ pub async fn run_actor<A: Actor>(start: Start<A>) -> Result<()> {
 		input: _,
 		is_new,
 		hibernated: _,
+		fork,
 		mut events,
 		startup_ready,
 	} = start;
@@ -190,6 +203,9 @@ pub async fn run_actor<A: Actor>(start: Start<A>) -> Result<()> {
 		let actor = Arc::new(A::create(&ctx).await?);
 		if is_new {
 			actor.clone().on_create(ctx.clone()).await?;
+		}
+		if let Some(fork) = fork {
+			actor.clone().on_fork(ctx.clone(), fork).await?;
 		}
 		actor.clone().on_start(ctx.clone()).await?;
 		Ok::<_, anyhow::Error>(actor)
@@ -449,8 +465,12 @@ async fn handle_actor_event<A: Actor>(
 			reply.send(result);
 			// Keep the loop alive until core closes the channel after the finalize phase.
 		}
-		ActorEvent::DisconnectConn { conn_id, reply } => {
-			reply.send(ctx.disconnect_conn(&conn_id).await);
+		ActorEvent::DisconnectConn {
+			conn_id,
+			reason,
+			reply,
+		} => {
+			reply.send(ctx.disconnect_conn_with_reason(&conn_id, reason).await);
 		}
 		ActorEvent::WorkflowHistoryRequested { reply } => {
 			reply.send(Err(not_configured("workflow history")));
@@ -523,6 +543,7 @@ pub fn wrap_start<A: Actor>(core_start: ActorStart) -> Result<Start<A>> {
 		is_new,
 		snapshot: _,
 		hibernated,
+		fork,
 		events,
 		startup_ready,
 	} = core_start;
@@ -544,6 +565,7 @@ pub fn wrap_start<A: Actor>(core_start: ActorStart) -> Result<Start<A>> {
 		},
 		is_new,
 		hibernated,
+		fork,
 		events: Events {
 			ctx,
 			rx: events,

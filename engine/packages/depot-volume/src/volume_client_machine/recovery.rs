@@ -1328,7 +1328,7 @@ fn probe_result(
 pub(super) fn created(
 	s: &mut VolumeClientState,
 	created: Option<&VolumeLogPosition>,
-	states: &[rivet_data::generated::depot_client_protocol_v1::MemberReplicaState],
+	states: &[rivet_data::generated::depot_client_protocol_v2::MemberReplicaState],
 	fx: &mut Effects,
 ) -> bool {
 	let initial = std::mem::take(&mut s.initial_writes);

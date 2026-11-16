@@ -1,0 +1,205 @@
+---
+title: "Agent Swarms"
+description: "Fan an agent out to many forks at once, such as one per file in a repository, collect a one-line review from each fork, and summarize them."
+---
+
+<Diagram
+  id="agent-swarms"
+  label="A backend script gives the agent its context with prompt, then forks it once per file, at most 10 at a time. Each fork starts with the agent's conversation, reviews one file with prompt, returns a one-line review, and is discarded. The script then sends every review to the original agent with prompt, so the summary lands in its conversation. The numbers show the order of the calls. There is one fork per file."
+  stackLabel="One per file, 10 at a time"
+  nodes={[
+    { id: "script", x: 20, y: 120, w: 150, title: "Backend script", subtitle: "`swarm.ts`" },
+    { id: "agent", x: 400, y: 30, w: 190, product: "agents", highlight: true, title: "`agent`", subtitle: "the team's context" },
+    { id: "forks", x: 400, y: 210, w: 190, product: "agents", stack: true, title: "Fork", subtitle: "reviews one file" },
+  ]}
+  edges={[
+    { from: "script", to: "agent", fromSide: "top", toSide: "left", fromOffset: -35, toOffset: -14, via: [[60, 46]], label: "`prompt` the context", labelAt: [215, 38], step: 1 },
+    { from: "agent", to: "forks", fromSide: "bottom", toSide: "top", label: "`fork` per file", labelAt: [505, 150], labelAnchor: "start", step: 2 },
+    { from: "script", to: "forks", fromSide: "right", toSide: "left", via: [[285, 150], [285, 240]], label: "`prompt` one file", labelAt: [300, 232], labelAnchor: "start", step: 3 },
+    { from: "forks", to: "script", kind: "reply", fromSide: "bottom", toSide: "bottom", via: [[495, 310], [95, 310]], label: "one-line review", step: 4 },
+    { from: "script", to: "agent", fromSide: "top", toSide: "left", fromOffset: 35, toOffset: 14, via: [[130, 74]], label: "`prompt` the summary", labelAt: [215, 66], step: 5 },
+  ]}
+/>
+
+A swarm runs many copies of one agent in parallel. Each [fork](/actors/docs/forking) starts with the agent's full context, does one small job, and returns a short report. Forks are copy-on-write, so a hundred forks of a long conversation do not copy it a hundred times.
+
+What we'll build:
+
+- A [Pi](/agents/docs) agent that holds a team's review rules in its conversation.
+- A backend script that forks it once per file, at most 10 at a time, and asks each fork for a one-line review.
+- Retries for refused forks that can never make a second copy.
+- A summary of every review in the original agent's conversation.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add @rivet-dev/pi @earendil-works/pi-durable @earendil-works/pi-ai @earendil-works/chord rivetkit
+```
+
+</Step>
+
+<Step title="Create the agent">
+
+```ts server.ts
+import { createRegistry } from "@earendil-works/pi-durable";
+import { pi } from "@rivet-dev/pi";
+import { setup } from "rivetkit";
+
+export const agent = pi({
+	model: "anthropic/claude-opus-5-5",
+	registry: createRegistry(),
+	actions: {
+		discard: (c) => {
+			c.destroy();
+		},
+	},
+});
+
+export const registry = setup({ use: { agent } });
+
+registry.start();
+```
+
+</Step>
+
+<Step title="Run the swarm">
+
+```ts swarm.ts
+import { readFile } from "node:fs/promises";
+import { ActorError, createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>();
+
+// How many forks may be alive at once. Each fork is a running agent.
+const MAX_FORKS = 10;
+
+const files = process.argv.slice(2);
+const agent = client.agent.getOrCreate(["code-review"]);
+await agent.prompt(
+	"You review TypeScript for our team. We care about error handling and clear names.",
+	{ requestId: crypto.randomUUID() },
+);
+
+// A turn in progress would be copied into every fork, so fork an idle agent.
+await agent.harness.waitForIdle();
+const agentId = await agent.resolve();
+
+// One key per fork makes a retried fork safe: it can never make a second copy.
+const runId = crypto.randomUUID();
+
+const reports = await mapWithLimit(files, MAX_FORKS, async (path) => {
+	const fork = await forkWithRetry(agentId, ["review", runId, path]);
+	try {
+		const source = await readFile(path, "utf8");
+		const result = await fork.prompt(
+			`Review ${path} in one line.\n\n${source}`,
+			{
+				requestId: `review:${runId}:${path}`,
+			},
+		);
+		const line =
+			result.status === "done"
+				? result.text?.split("\n")[0]
+				: result.reason;
+		return `${path}: ${line ?? "no review"}`;
+	} finally {
+		await fork.discard();
+	}
+});
+
+// The summary is a normal turn, so it lands in the agent's conversation.
+const summary = await agent.prompt(
+	`One-line reviews of every file:\n${reports.join("\n")}\n\nSummarize the biggest risks.`,
+	{ requestId: crypto.randomUUID() },
+);
+console.log(summary.status === "done" ? summary.text : summary.reason);
+
+/** Forks the agent, waiting and retrying when storage asks the caller to slow down. */
+async function forkWithRetry(sourceId: string, key: string[]) {
+	for (let attempt = 1; ; attempt++) {
+		try {
+			return await client.agent.fork(sourceId, { key });
+		} catch (error) {
+			if (!(error instanceof ActorError)) throw error;
+
+			// The fork exists: an earlier attempt made it, or its copy is still running.
+			if (
+				error.group === "actor" &&
+				(error.code === "duplicate_key" ||
+					error.code === "fork_pending")
+			) {
+				return client.agent.get(key);
+			}
+
+			// Refused before any work. Wait as long as asked, with jitter.
+			const overloaded =
+				error.group === "depot" && error.code === "overloaded";
+			if (!overloaded || attempt >= 5) throw error;
+			const metadata = error.metadata as
+				| { retry_after_ms?: number }
+				| undefined;
+			const waitMs =
+				(metadata?.retry_after_ms ?? 200) * (1 + Math.random());
+			await new Promise((resolve) => setTimeout(resolve, waitMs));
+		}
+	}
+}
+
+/** Runs `fn` on every item with at most `limit` running at once, keeping order. */
+async function mapWithLimit<T, R>(
+	items: T[],
+	limit: number,
+	fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+	const results: R[] = new Array(items.length);
+	let next = 0;
+	const workers = Array.from(
+		{ length: Math.min(limit, items.length) },
+		async () => {
+			while (next < items.length) {
+				const index = next++;
+				results[index] = await fn(items[index]);
+			}
+		},
+	);
+	await Promise.all(workers);
+	return results;
+}
+```
+
+- `harness.waitForIdle` makes sure the agent is not in the middle of a turn, which every fork would copy.
+- Each worker in `mapWithLimit` forks the agent, asks the fork about one file, and discards it before it takes the next file, so at most `MAX_FORKS` forks are alive.
+- The final `prompt` goes to the original agent, so the summary lands in its conversation.
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+export ANTHROPIC_API_KEY=sk-ant-...
+npx tsx server.ts
+```
+
+In another terminal, pass the files to review:
+
+```sh
+npx tsx swarm.ts src/*.ts
+```
+
+</Step>
+
+</Steps>
+
+## Handling Bursts
+
+- **Forks start immediately.** Each fork becomes a running agent on your nodes as soon as it is created. Forking 500 files at once starts 500 agents at once. `MAX_FORKS` caps how many forks are alive.
+- **Keep `onFork` tiny.** If you add an `onFork`, every fork in a burst runs it at the same moment, with 5 seconds each. A slow hook under load can run out of time, which fails the start and runs the hook again, adding more load.
+- **Throttle at the caller.** The same cap limits concurrent model calls and the read load on the source. Every fork reads the data it has not changed from the source's storage, so a burst of forks concentrates reads there. Start with a small cap and raise it while watching for refusals.
+- **Retry refusals after the hinted delay.** Under load, storage can refuse a fork with `depot.overloaded` and `metadata.retry_after_ms`. The client does not retry this error, so `forkWithRetry` waits that long, with jitter, and tries again a few times.
+- **Key every fork.** A keyed fork can never be created twice. When a retry answers `actor.duplicate_key` or `actor.fork_pending`, the fork exists, and the script uses it.
+- **Run the fan-out outside an action.** An action stops after its `actionTimeout`, which a large swarm can outlast. Run it from your backend as here, or from a [workflow](/workflows/docs).
+- **Discard every fork.** A fork keeps its storage until it is destroyed. The `finally` discards it even when its review fails.
+- **Fork only agents without a sandbox.** A fork of an agent with a [sandbox](/guides/agent-sandboxes) copies the record of that sandbox, so every fork would run its tools in the same sandbox.

@@ -1,0 +1,338 @@
+#import "shared/uuid_v4.v1.bare"
+#import "shared/depot.alarms.v1.bare"
+
+# One namespace's volume, `[NAMESPACE_VOLUME, name]`, holds its namespace state machine. The
+# machine's state is the namespace record: its group, its phase, and the fork or archive in
+# flight. The catalog volume keeps only a listing index of names.
+
+type GroupId data[16]
+type WorkerId data
+
+# The group a namespace was forked from and the parent's fork number that made it.
+type NamespaceBase struct {
+    parentNamespace: str
+    forkNumber: u64
+    forkedUnixMs: i64
+}
+
+# The volume group of a namespace.
+type NamespaceGroup struct {
+    # The hash of the namespace's own group key.
+    group: GroupId
+    # The lineage's root group.
+    root: GroupId
+    # 0 for a root; below the lineage depth cap.
+    depth: u8
+    # Absent for a root; written when the fork completes.
+    base: optional<NamespaceBase>
+    # Fixed for the lineage at the root's creation: a child's bucket reads through the
+    # parent's bucket of the same number.
+    indexBucketCount: u64
+}
+
+# The group fork is outstanding; `Retry` re-sends it with the namespace's operation id.
+type NamespaceForking struct {
+    parentNamespace: str
+    parent: GroupId
+    attempt: u32
+}
+type NamespaceLive void
+# The group archive is outstanding; `Retry` re-sends it with the next attempt.
+type NamespaceArchiving struct { attempt: u32 }
+type NamespaceArchived struct { archivedUnixMs: i64 }
+# A fork refused after the namespace was written; the name is retired and never reused.
+type NamespaceFailed struct { reason: str }
+# A root's group record is being created; `Retry` re-sends the create with the next attempt.
+type NamespaceCreating struct { attempt: u32 }
+type NamespacePhase union {
+    NamespaceForking |
+    NamespaceLive |
+    NamespaceArchiving |
+    NamespaceArchived |
+    NamespaceFailed |
+    NamespaceCreating
+}
+
+# The listing-index write: pending while `IndexRetry` is armed.
+type NamespaceIndexPending struct { attempt: u32 }
+type NamespaceIndexWritten void
+type NamespaceIndexState union { NamespaceIndexPending | NamespaceIndexWritten }
+
+# Legacy: the copy of the namespace's unprefixed volumes, made before namespaces had groups,
+# into its group. A namespace moved from a legacy catalog row starts `Pending`; one created
+# through `NamespaceCreate` is `Done` at birth. Until `Done`, opens fall back to the unprefixed
+# volumes, and forks and archives of the namespace are refused. Removed in 3.1 with the backfill.
+#
+# `Pending` waits for the fleet: `fleetReadySeen` records that the last `BackfillRetry` found
+# every storage worker the topology lists reading namespace volumes, so the backfill starts only
+# on a second such read one start delay later, which gives a rolling upgrade of the stateless
+# workers, which are never listed, that time. It then waits for the V2 migrator: the backfill
+# starts only once a read of the migrator's state finds no in-flight entry at the legacy
+# placement admitted for this namespace or for an unknown one, whatever the migration
+# configuration says now. The migrator finishes such an entry only once its actor's legacy index
+# entry is written, so every actor it activated there is listed when the walk starts, and the
+# walk moves it.
+type NamespaceBackfillPending struct {
+    fleetReadySeen: bool
+}
+# A position in a legacy index bucket, in the bucket's listing order.
+type NamespaceBackfillAfter struct {
+    createUnixMs: i64
+    actorId: data
+}
+# Where the backfill's walk stands: the actor name and legacy index bucket it is in, and the
+# last actor of that bucket it moved or passed. Names are walked in order, and each name's
+# buckets from 0 to the lineage's bucket count.
+type NamespaceBackfillCursor struct {
+    name: str
+    bucket: u64
+    after: optional<NamespaceBackfillAfter>
+}
+# The end of the walk: every `(name, bucket)` is probed for an actor left behind, in order, and
+# this one is probed next, from after `after`, the last entry of the bucket a page probed before
+# its deadline, or from the bucket's start. Names are listed again on each page; `namesHash` is a
+# stable 64-bit hash of the sorted names listed when this position was reached, and a page whose
+# listing hashes differently starts probing over from the first name, since a name recorded
+# since may sort before this one.
+type NamespaceBackfillProbing struct {
+    name: str
+    bucket: u64
+    namesHash: u64
+    after: optional<NamespaceBackfillAfter>
+}
+# The end of the walk, after every bucket probed empty: the legacy buckets are deleted in order,
+# each probed once more right before its delete, and this one is deleted next, its probe resuming
+# after `after` as for `NamespaceBackfillProbing`. `namesHash` is as for
+# `NamespaceBackfillProbing`: a page whose names hash differently probes over from the first.
+type NamespaceBackfillDeleting struct {
+    name: str
+    bucket: u64
+    namesHash: u64
+    after: optional<NamespaceBackfillAfter>
+}
+# Where the next backfill page starts: in the walk, probing at its end, or deleting the buckets.
+type NamespaceBackfillPosition union {
+    NamespaceBackfillCursor |
+    NamespaceBackfillProbing |
+    NamespaceBackfillDeleting
+}
+# An actor the backfill gave up on after `pegboard.backfill.max_actor_attempts` failed sends of
+# the page it starts: its legacy index entry, by the name and bucket it is listed in. It stays
+# in the legacy shape; the walk passes it and the end of the walk leaves its bucket. `key` is
+# the actor's key as its record held it at the give-up, so an operator reading the list can find
+# a keyed actor; absent for an actor without a key.
+type NamespaceBackfillSkipped struct {
+    name: str
+    bucket: u64
+    createUnixMs: i64
+    actorId: data
+    key: optional<str>
+}
+# The job is moving the namespace's actors one page at a time, from `cursor` (absent before the
+# first page). `attempt` counts the re-sends of the current page; `BackfillRetry` re-sends it,
+# and only a report of the current attempt counts. `skipped` lists the actors given up on.
+# `mover` is the token of the latest page sent: every send, first or re-send, takes the next one,
+# so a page task still running in a process that lost the namespace's volume always holds a
+# lower token than the page sent after it, and the actors it writes refuse it.
+type NamespaceBackfillRunning struct {
+    cursor: optional<NamespaceBackfillPosition>
+    attempt: u32
+    skipped: list<NamespaceBackfillSkipped>
+    mover: u64
+}
+# Every actor from before groups was moved, except `skippedCount` of them, which forks and
+# archives of the namespace and 3.1's startup check refuse over. `skipped` lists the first of
+# them, up to 1000; the count goes on past the list. A listed actor stays reachable by its id and
+# key at its unprefixed volume, so an operator can read and export it, and a destroy of it through
+# the API removes it from the list and the count.
+type NamespaceBackfillDone struct {
+    skipped: list<NamespaceBackfillSkipped>
+    skippedCount: u32
+}
+type NamespaceBackfill union {
+    NamespaceBackfillPending |
+    NamespaceBackfillRunning |
+    NamespaceBackfillDone
+}
+
+# A create waiting for the namespace's fork to end, notified on its own wait subject.
+type NamespaceWaiter struct {
+    workerId: WorkerId
+    waitId: u64
+    expiresUnixMs: i64
+}
+
+type NamespaceState struct {
+    createUnixMs: i64
+    # Drawn at create; the namespace's own fork dedupes on it.
+    operationId: UuidV4
+    # Absent only for a namespace served from its legacy catalog row while older binaries run;
+    # every namespace on its own volume has a group.
+    group: optional<NamespaceGroup>
+    phase: NamespacePhase
+    index: NamespaceIndexState
+    # Legacy: see `NamespaceBackfill`. Removed in 3.1 with the backfill.
+    backfill: NamespaceBackfill
+    # Creates waiting for `Creating` or `Forking` to end; empty in every other phase.
+    startWaiters: list<NamespaceWaiter>
+}
+
+# Re-sends the outstanding group create, fork or group archive with the next attempt.
+type NamespaceRetry void
+# Re-sends the listing-index write with the next attempt.
+type NamespaceIndexRetry struct { attempt: u32 }
+# Legacy: while the backfill is `Pending`, starts it once the fleet reads namespace volumes;
+# while it is `Running`, re-sends the page of `attempt` with the next attempt. Removed in 3.1
+# with the backfill.
+type NamespaceBackfillRetry struct { attempt: u32 }
+type NamespaceTimer union { NamespaceRetry | NamespaceIndexRetry | NamespaceBackfillRetry }
+
+# The parent of a fork as the caller read it: the transition re-checks what it can.
+type NamespaceParent struct {
+    name: str
+    group: NamespaceGroup
+}
+
+# Creates the namespace on its volume, or answers the one already there. A create that forks
+# joins a fork of the same parent already in progress.
+type NamespaceCreateRequest struct {
+    createUnixMs: i64
+    forkFrom: optional<NamespaceParent>
+    waiter: optional<NamespaceWaiter>
+}
+type NamespaceCreateResponse struct {
+    # Whether this request wrote the namespace or joined its fork in progress.
+    created: bool
+    state: NamespaceState
+}
+
+# Legacy: moves a namespace whose record is a legacy row of the catalog into its namespace
+# volume, `Live`, with the row's create time. The machine then writes the index entry, which
+# deletes the row in the same catalog transaction; a move of a namespace already on its volume
+# changes nothing.
+type LegacyNamespaceMoveRequest struct { createUnixMs: i64 }
+type LegacyNamespaceMoveResponse struct { state: NamespaceState }
+
+type NamespaceReadRequest void
+type NamespaceReadResponse struct { state: optional<NamespaceState> }
+
+# Archives the namespace: refuses new work for it, stops what its envoys host, then archives
+# its group. Answers the state as it stands.
+type NamespaceArchiveRequest void
+type NamespaceArchiveResponse struct { state: NamespaceState }
+
+# The outcome of one of the machine's effects, reported by its executor.
+type NamespaceForkOutcomeOk struct { forkNumber: u64 }
+# A refusal from Depot, by error code, such as `group.archived` or `group.lineage_too_deep`.
+type NamespaceOutcomeRefused struct { code: str }
+# A transport failure, a crash or a refusal before the write ran: nothing is known; the retry
+# timer re-drives the effect. `retryAfterMs` is the hint of a refusal that proves the write did
+# not run, after which the machine re-drives the effect sooner than its retry interval.
+type NamespaceOutcomeUnknown struct { retryAfterMs: optional<u64> }
+type NamespaceForkOutcome union { NamespaceForkOutcomeOk | NamespaceOutcomeRefused | NamespaceOutcomeUnknown }
+type NamespaceArchiveOutcomeOk void
+type NamespaceArchiveOutcome union { NamespaceArchiveOutcomeOk | NamespaceOutcomeRefused | NamespaceOutcomeUnknown }
+type NamespaceCreateOutcomeOk void
+type NamespaceCreateOutcome union { NamespaceCreateOutcomeOk | NamespaceOutcomeUnknown }
+# Whether the listing index entry was written; every attempt writes the same entry.
+type NamespaceIndexOutcome struct { written: bool }
+type NamespaceStepFork struct { outcome: NamespaceForkOutcome }
+type NamespaceStepArchive struct { outcome: NamespaceArchiveOutcome }
+type NamespaceStepIndex struct { outcome: NamespaceIndexOutcome }
+type NamespaceStepCreate struct { outcome: NamespaceCreateOutcome }
+# Legacy: the page after the one that ran, or the end of the walk, once the legacy index buckets
+# are deleted. Removed in 3.1 with the backfill.
+type NamespaceBackfillNextPage struct { cursor: NamespaceBackfillPosition }
+type NamespaceBackfillFinished void
+type NamespaceBackfillNext union { NamespaceBackfillNextPage | NamespaceBackfillFinished }
+# Legacy: one backfill page that ran from `from` under `attempt` as `mover`, the cursor, attempt
+# and mover token it was sent with, moving `moved` actors, and giving up on `skipped`, whose
+# position `next` is past. Only the report of the current send's mover counts, since a cursor
+# and attempt can repeat across sends. Removed in 3.1 with the backfill.
+type NamespaceBackfillOutcome struct {
+    from: optional<NamespaceBackfillPosition>
+    attempt: u32
+    mover: u64
+    moved: u32
+    skipped: optional<NamespaceBackfillSkipped>
+    next: NamespaceBackfillNext
+}
+type NamespaceStepBackfill struct { outcome: NamespaceBackfillOutcome }
+# Legacy: a request destroyed `actorId`, an actor the backfill lists as skipped, at its
+# unprefixed volume, so it leaves the namespace's skipped list, while the backfill runs or once it
+# is done. Removed in 3.1 with the backfill.
+type NamespaceStepLegacySkippedDestroyed struct { actorId: data }
+# Legacy: one backfill page sent from `from` under `attempt` as `mover` failed at its first actor,
+# `actorId` listed under `name`, without giving up on it, so the walk waits on that actor.
+# Removed in 3.1 with the backfill.
+type NamespaceBackfillPageFailed struct {
+    from: optional<NamespaceBackfillPosition>
+    attempt: u32
+    mover: u64
+    name: str
+    actorId: data
+}
+type NamespaceStepBackfillPageFailed struct { failed: NamespaceBackfillPageFailed }
+# Legacy: whether the V2 migrator holds an in-flight entry that may place an actor at this
+# namespace's legacy unprefixed placement, as a read of the migrator's state answered it while the
+# backfill was `Pending`. Removed in 3.1 with the backfill.
+type NamespaceStepLegacyMigratorHolds struct { held: bool }
+# Legacy: the V2 migrator finished legacy-placed entries, so a backfill waiting on them reads the
+# migrator's state again. Removed in 3.1 with the backfill.
+type NamespaceStepLegacyMigratorSettled void
+type NamespaceStepRequest union {
+    NamespaceStepFork |
+    NamespaceStepArchive |
+    NamespaceStepIndex |
+    NamespaceStepCreate |
+    NamespaceStepBackfill |
+    NamespaceStepLegacySkippedDestroyed |
+    NamespaceStepBackfillPageFailed |
+    NamespaceStepLegacyMigratorHolds |
+    NamespaceStepLegacyMigratorSettled
+}
+type NamespaceStepResponse void
+
+# A due Depot alarm of a namespace volume, delivered back to its namespace state machine.
+type NamespaceAlarmRequest struct { revision: AlarmRevision owner: AlarmOwner }
+type NamespaceAlarmResponse void
+
+# Sent to each waiter when the namespace leaves `Creating` or `Forking`.
+type NamespaceStartNotice struct {
+    name: str
+    state: NamespaceState
+}
+
+# The catalog's listing index: one entry per namespace created after namespace volumes.
+type NamespaceIndexEntry struct { createUnixMs: i64 }
+type NamespaceIndexPutRequest struct { name: str createUnixMs: i64 }
+type NamespaceIndexPutResponse void
+# Pages the index in name order, merged with the legacy record rows not yet moved.
+type NamespaceIndexListRequest struct {
+    after: optional<str>
+    limit: u32
+    # Legacy: list only the index entries, leaving out the legacy record rows not yet moved. The
+    # legacy namespace listing sends it to tell whether any namespace already moved into its
+    # volume. Removed in 3.1 with the backfill.
+    legacyIndexOnly: bool
+}
+type NamespaceIndexListResponse struct {
+    names: list<str>
+    cursor: optional<str>
+}
+
+# Legacy: records on the namespace's volume an actor name that a legacy fallback read found an
+# actor under, so the backfill walks it even when no envoy record names it. Removed in 3.1 with
+# the backfill.
+type LegacyBackfillNameRecordRequest struct { name: str }
+type LegacyBackfillNameRecordResponse void
+# Legacy: pages the names `LegacyBackfillNameRecord` recorded, in order, after `after`. Removed in
+# 3.1 with the backfill.
+type LegacyBackfillNameListRequest struct {
+    after: optional<str>
+    limit: u32
+}
+type LegacyBackfillNameListResponse struct {
+    names: list<str>
+    cursor: optional<str>
+}

@@ -72,7 +72,10 @@ export function retryDelayMs(
 	attempt: number,
 	opts: { initialDelayMs: number; maxDelayMs: number; hintMs?: number },
 ): number {
-	const backoff = Math.min(opts.initialDelayMs * 2 ** attempt, opts.maxDelayMs);
+	const backoff = Math.min(
+		opts.initialDelayMs * 2 ** attempt,
+		opts.maxDelayMs,
+	);
 	const jittered = backoff / 2 + Math.random() * (backoff / 2);
 	return Math.max(jittered, opts.hintMs ?? 0);
 }

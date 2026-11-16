@@ -4,20 +4,31 @@
 use crate::{PartitionKeyHash, VolumeKey};
 use vbare::Versioned;
 
-rivet_keys::slatedb_key! {
-	pub AlarmCurrentKey(hash: PartitionKeyHash, name: Option<Vec<u8>>, incarnation: uuid::Uuid) => [VOLUME, {hash}, {name}, {incarnation}, ALARM_CURRENT];
-	value: vbare(rivet_data::versioned::DepotAlarmCurrentData, rivet_data::versioned::DepotAlarmCurrentData::LATEST);
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::SlatedbKey)]
+#[slatedb(key = [VOLUME, hash, name, incarnation, ALARM_CURRENT], value = vbare(rivet_data::versioned::DepotAlarmCurrentData, rivet_data::versioned::DepotAlarmCurrentData::LATEST))]
+pub struct AlarmCurrentKey {
+	pub hash: PartitionKeyHash,
+	pub name: Option<Vec<u8>>,
+	pub incarnation: uuid::Uuid,
 }
-rivet_keys::slatedb_key! {
-	pub AlarmTimeKey(deadline: u64, hash: PartitionKeyHash, name: Option<Vec<u8>>, incarnation: uuid::Uuid) => [ALARM_TIME, {deadline}, {hash}, {name}, {incarnation}];
-	value: vbare(rivet_data::versioned::DepotAlarmTimeData, rivet_data::versioned::DepotAlarmTimeData::LATEST);
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::SlatedbKey)]
+#[slatedb(key = [ALARM_TIME, deadline, hash, name, incarnation], value = vbare(rivet_data::versioned::DepotAlarmTimeData, rivet_data::versioned::DepotAlarmTimeData::LATEST))]
+pub struct AlarmTimeKey {
+	pub deadline: u64,
+	pub hash: PartitionKeyHash,
+	pub name: Option<Vec<u8>>,
+	pub incarnation: uuid::Uuid,
 }
-rivet_keys::slatedb_prefix! { pub AlarmTimePrefix() => [ALARM_TIME]; }
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::SlatedbKey)]
+#[slatedb(prefix = [ALARM_TIME])]
+pub struct AlarmTimePrefix {}
 
 // This marker survives snapshot inheritance, unlike each child's bootstrap cursor.
-rivet_keys::slatedb_key! {
-	pub SplitSnapshotKey(hash: PartitionKeyHash, checkpoint: uuid::Uuid) => [VOLUME, {hash}, FS_SPLIT_SNAPSHOT, {checkpoint}];
-	value: vbare(rivet_data::versioned::DepotSplitSnapshotData, rivet_data::versioned::DepotSplitSnapshotData::LATEST);
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::SlatedbKey)]
+#[slatedb(key = [VOLUME, hash, FS_SPLIT_SNAPSHOT, checkpoint], value = vbare(rivet_data::versioned::DepotSplitSnapshotData, rivet_data::versioned::DepotSplitSnapshotData::LATEST))]
+pub struct SplitSnapshotKey {
+	pub hash: PartitionKeyHash,
+	pub checkpoint: uuid::Uuid,
 }
 
 /// Share all data/index families while excluding the parent's bootstrap cursors.
@@ -31,9 +42,11 @@ pub fn split_snapshot_range() -> (std::ops::Bound<bytes::Bytes>, std::ops::Bound
 		std::ops::Bound::Excluded(end.into()),
 	)
 }
-rivet_keys::slatedb_key! {
-	pub VolumeRecordKey(partition_key_hash: PartitionKeyHash, name: Option<Vec<u8>>) => [VOLUME, {partition_key_hash}, {name}, RECORD];
-	value: vbare_selected(rivet_data::versioned::DepotFsVolumeRecordData);
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::SlatedbKey)]
+#[slatedb(key = [VOLUME, partition_key_hash, name, RECORD], value = vbare_selected(rivet_data::versioned::DepotFsVolumeRecordData))]
+pub struct VolumeRecordKey {
+	pub partition_key_hash: PartitionKeyHash,
+	pub name: Option<Vec<u8>>,
 }
 
 impl VolumeRecordKey {
@@ -51,22 +64,26 @@ impl VolumeRecordKey {
 	}
 }
 
-rivet_keys::slatedb_prefix! {
-	pub TabletHashBoundary(partition_key_hash: PartitionKeyHash) => [VOLUME, {partition_key_hash}];
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::SlatedbKey)]
+#[slatedb(prefix = [VOLUME, partition_key_hash])]
+pub struct TabletHashBoundary {
+	pub partition_key_hash: PartitionKeyHash,
 }
 
-rivet_keys::slatedb_prefix! {
-	pub VolumeDataPrefix() => [VOLUME];
-}
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::SlatedbKey)]
+#[slatedb(prefix = [VOLUME])]
+pub struct VolumeDataPrefix {}
 
-rivet_keys::slatedb_prefix! {
-	pub TabletPendingHashBoundary(partition_key_hash: PartitionKeyHash) => [FS_PENDING, {partition_key_hash}];
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::SlatedbKey)]
+#[slatedb(prefix = [FS_PENDING, partition_key_hash])]
+pub struct TabletPendingHashBoundary {
+	pub partition_key_hash: PartitionKeyHash,
 }
 
 // The family bound for tablet ranges; `depot-fs-core` owns the pending row keys.
-rivet_keys::slatedb_prefix! {
-	TabletPendingFamily() => [FS_PENDING];
-}
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::SlatedbKey)]
+#[slatedb(prefix = [FS_PENDING])]
+struct TabletPendingFamily {}
 
 type KeyRange = (std::ops::Bound<bytes::Bytes>, std::ops::Bound<bytes::Bytes>);
 
@@ -120,14 +137,12 @@ fn family_range(
 	(Bound::Included(boundary(range.start)), Bound::Excluded(end))
 }
 
-rivet_keys::slatedb_key! {
-	pub AlarmBootstrapKey() => [ALARM_BOOTSTRAP];
-	value: vbare(rivet_data::versioned::DepotAlarmIndexProgressData, rivet_data::versioned::DepotAlarmIndexProgressData::LATEST);
-}
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::SlatedbKey)]
+#[slatedb(key = [ALARM_BOOTSTRAP], value = vbare(rivet_data::versioned::DepotAlarmIndexProgressData, rivet_data::versioned::DepotAlarmIndexProgressData::LATEST))]
+pub struct AlarmBootstrapKey {}
 
 // A split child's progress copying its pending work rows from the parent checkpoint. It is
 // outside every tablet range, so a later split never carries it into a grandchild.
-rivet_keys::slatedb_key! {
-	pub PendingImportKey() => [FS_PENDING_IMPORT];
-	value: vbare(rivet_data::versioned::DepotAlarmIndexProgressData, rivet_data::versioned::DepotAlarmIndexProgressData::LATEST);
-}
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::SlatedbKey)]
+#[slatedb(key = [FS_PENDING_IMPORT], value = vbare(rivet_data::versioned::DepotAlarmIndexProgressData, rivet_data::versioned::DepotAlarmIndexProgressData::LATEST))]
+pub struct PendingImportKey {}

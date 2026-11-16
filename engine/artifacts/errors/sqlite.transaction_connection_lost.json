@@ -1,0 +1,5 @@
+{
+  "code": "transaction_connection_lost",
+  "group": "sqlite",
+  "message": "SQLite transaction connection was lost."
+}

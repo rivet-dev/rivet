@@ -100,6 +100,8 @@ impl rivet_state_machine::Effect for Effect {
 			Effect::RecordFence { .. } => "record_fence",
 			Effect::RecordRenewal { .. } => "record_renewal",
 			Effect::RecordRenewalLate { .. } => "record_renewal_late",
+			Effect::RecordReadFloorAge { .. } => "record_read_floor_age",
+			Effect::RecordUnobservedWorkersExpired { .. } => "record_unobserved_workers_expired",
 		}
 	}
 }
@@ -377,7 +379,7 @@ impl EphemeralStateMachine for TopologyStateMachine {
 			read_floor: state.discovery.read_floor.clone(),
 			discovery_round: state.discovery.round,
 			discovery_ok: state.discovery.ok,
-			discovery_partial: state.discovery.partial,
+			floor: state.discovery.floor,
 			endpoints: state.lookups.entries.clone(),
 			invalidated: state.lookups.invalidated.clone(),
 			watched_processes: state.watches.watches.len(),

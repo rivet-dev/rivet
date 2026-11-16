@@ -23,7 +23,7 @@ use crate::actor::task::LifecycleEvent;
 use crate::actor::task_types::StateMutationReason;
 use crate::error::{ActorLifecycle, ActorRuntime};
 use crate::runtime::RuntimeSpawner;
-use crate::sqlite::{BindParam, ExecuteResult, SqliteTransaction};
+use crate::sqlite::{BindParam, ExecuteResult, SqliteBatchStatement, SqliteTransaction};
 use crate::types::SaveStateOpts;
 
 pub type PersistedScheduleEvent = persist_v4::ScheduleEvent;
@@ -213,6 +213,16 @@ impl ActorStateTransaction {
 				"actor state transaction is already finalized"
 			));
 		}
+		// The actor's teardown, including a failed start's, closed state transactions while this
+		// commit waited for the transaction, so it rolls back instead: a teardown that stopped
+		// waiting for its rollback must never see the transaction commit after it. The caller
+		// sees the structured `actor.stopping`, as a transaction begun after the teardown does.
+		if owner.ctx.state_transactions_closed() {
+			if let Err(error) = roll_back_owner(&mut owner).await {
+				tracing::debug!(?error, "closed state transaction rollback failed");
+			}
+			return Err(ActorLifecycle::Stopping.build());
+		}
 
 		let save_request_revision = owner.save_request_revision;
 		let transaction = owner.transaction.clone();
@@ -249,14 +259,44 @@ impl ActorStateTransaction {
 				"actor state transaction is already finalized"
 			));
 		}
-		let result = owner.transaction.rollback().await;
-		owner.finalized = true;
-		owner.restore_connection_states();
-		owner.advance_epoch();
-		owner.write_guard.take();
-		owner.save_exclusion.take();
-		owner.ctx.schedule_save(None);
-		result
+		roll_back_owner(&mut owner).await
+	}
+}
+
+/// Rolls back the unfinalized transaction `owner` holds, restores the connection states it
+/// changed, and releases the save exclusion.
+async fn roll_back_owner(owner: &mut ActorStateTransactionOwner) -> Result<()> {
+	let result = owner.transaction.rollback().await;
+	owner.finalized = true;
+	owner.restore_connection_states();
+	owner.advance_epoch();
+	owner.write_guard.take();
+	owner.save_exclusion.take();
+	owner.ctx.schedule_save(None);
+	result
+}
+
+/// What [`ActorContext::close_state_transactions_within`] found.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum StateTransactionClose {
+	/// No state transaction was open, so nothing was rolled back.
+	NoneOpen,
+	/// The open state transaction was rolled back.
+	RolledBack,
+	/// The open state transaction's rollback did not finish within the limit, as when user code
+	/// holds the transaction mid-statement. The transaction still never commits: its commit
+	/// rolls back once it runs, since state transactions are closed.
+	RollbackTimedOut,
+}
+
+/// Rolls back `transaction`, which closing state transactions found open. A transaction that
+/// finalized first is left as it is.
+async fn roll_back_closed(transaction: ActorStateTransaction) {
+	if let Err(error) = transaction.rollback().await {
+		tracing::debug!(
+			?error,
+			"state transaction finalized before its teardown rollback"
+		);
 	}
 }
 
@@ -424,8 +464,48 @@ impl ActorContext {
 	/// An open transaction is rolled back here, a transaction that is still
 	/// beginning rolls itself back instead of opening, and later begins are
 	/// rejected. A transaction already committing finishes first, and its
-	/// rollback is then a no-op.
+	/// rollback is then a no-op; a commit that starts later rolls back instead.
 	pub(crate) async fn close_state_transactions(&self) {
+		let Some(transaction) = self.close_state_transaction_slot() else {
+			return;
+		};
+
+		tracing::warn!(
+			actor_id = %self.actor_id(),
+			"rolling back state transaction left open at shutdown; the action did not finish within the grace period"
+		);
+		roll_back_closed(transaction).await;
+	}
+
+	/// Closes state transactions like [`Self::close_state_transactions`], for a teardown that
+	/// cannot wait on user code: the rollback waits on the transaction's owner, which a hook
+	/// stuck mid-statement holds, so it stops waiting after `limit`. Logs nothing, so the caller
+	/// logs the event once with what this found.
+	pub(crate) async fn close_state_transactions_within(
+		&self,
+		limit: Duration,
+	) -> StateTransactionClose {
+		let Some(transaction) = self.close_state_transaction_slot() else {
+			return StateTransactionClose::NoneOpen;
+		};
+		match crate::time::timeout(limit, roll_back_closed(transaction)).await {
+			Ok(()) => StateTransactionClose::RolledBack,
+			Err(_) => StateTransactionClose::RollbackTimedOut,
+		}
+	}
+
+	/// Whether the actor's teardown closed state transactions for good.
+	fn state_transactions_closed(&self) -> bool {
+		match *self.0.state_transaction.lock() {
+			StateTransactionSlot::Closed => true,
+			StateTransactionSlot::Idle
+			| StateTransactionSlot::Beginning
+			| StateTransactionSlot::Open(_) => false,
+		}
+	}
+
+	/// Marks state transactions closed and answers the transaction that was open, if any.
+	fn close_state_transaction_slot(&self) -> Option<ActorStateTransaction> {
 		let previous = std::mem::replace(
 			&mut *self.0.state_transaction.lock(),
 			StateTransactionSlot::Closed,
@@ -435,21 +515,8 @@ impl ActorContext {
 			StateTransactionSlot::Idle
 			| StateTransactionSlot::Beginning
 			| StateTransactionSlot::Closed => None,
-		};
-		let Some(owner) = owner else {
-			return;
-		};
-
-		tracing::warn!(
-			actor_id = %self.actor_id(),
-			"rolling back state transaction left open at shutdown; the action did not finish within the grace period"
-		);
-		if let Err(error) = (ActorStateTransaction { owner }).rollback().await {
-			tracing::debug!(
-				?error,
-				"state transaction finalized before shutdown rollback"
-			);
-		}
+		}?;
+		Some(ActorStateTransaction { owner })
 	}
 
 	/// Wakes the actor task after a state transaction releases `save_guard`.
@@ -464,19 +531,29 @@ impl ActorContext {
 	}
 
 	pub(crate) async fn persist_state(&self, opts: SaveStateOpts) -> Result<()> {
+		self.persist_state_carrying(opts, &mut Vec::new()).await
+	}
+
+	/// Like `persist_state`, but the batch that writes the state also runs the statements in
+	/// `carried`, which it empties. `carried` keeps its statements when the state was clean.
+	pub(crate) async fn persist_state_carrying(
+		&self,
+		opts: SaveStateOpts,
+		carried: &mut Vec<SqliteBatchStatement>,
+	) -> Result<()> {
 		if !self.is_dirty() {
 			return Ok(());
 		}
 
 		let result = if opts.immediate {
 			self.clear_pending_save();
-			self.persist_if_dirty().await
+			self.persist_if_dirty_carrying(carried).await
 		} else {
 			let delay = self.compute_save_delay(None);
 			if !delay.is_zero() {
 				sleep(delay).await;
 			}
-			self.persist_if_dirty().await
+			self.persist_if_dirty_carrying(carried).await
 		};
 		result?;
 		self.record_state_updated();
@@ -699,17 +776,21 @@ impl ActorContext {
 		deltas: Vec<StateDelta>,
 		save_request_revision: u64,
 	) -> Result<()> {
-		self.apply_state_deltas_inner(deltas, None, save_request_revision, None)
+		self.apply_state_deltas_inner(deltas, None, save_request_revision, None, &mut Vec::new())
 			.await
 			.map(|_| ())
 	}
 
+	/// Applies `deltas` and writes them in one batch. A batch that writes state or connections
+	/// without workflow writes also runs, and empties, the statements in `carried`; a call that
+	/// writes nothing leaves them for the caller.
 	pub(super) async fn apply_state_deltas_inner(
 		&self,
 		deltas: Vec<StateDelta>,
 		workflow_writes: Option<Vec<WorkflowKvWrite>>,
 		save_request_revision: u64,
 		expected_state_transaction_epoch: Option<u64>,
+		carried: &mut Vec<SqliteBatchStatement>,
 	) -> Result<bool> {
 		let delta_count = deltas.len();
 		let delta_bytes: usize = deltas.iter().map(StateDelta::payload_len).sum();
@@ -829,11 +910,12 @@ impl ActorContext {
 			|| !connections_to_persist.is_empty()
 			|| !connections_to_delete.is_empty()
 		{
-			internal_storage::persist_actor_core_and_connections(
+			internal_storage::persist_actor_core_and_connections_with(
 				self.sql(),
 				actor_to_persist.as_ref(),
 				&connections_to_persist,
 				&connections_to_delete,
+				std::mem::take(carried),
 			)
 			.await
 			.context("persist actor state and connection deltas to sqlite")?;
@@ -1261,6 +1343,15 @@ impl ActorContext {
 	}
 
 	async fn persist_if_dirty(&self) -> Result<()> {
+		self.persist_if_dirty_carrying(&mut Vec::new()).await
+	}
+
+	/// Writes the persisted actor when it is dirty, running and emptying the statements in
+	/// `carried` in the same batch. A clean actor writes nothing and leaves them.
+	async fn persist_if_dirty_carrying(
+		&self,
+		carried: &mut Vec<SqliteBatchStatement>,
+	) -> Result<()> {
 		if !self.is_dirty() {
 			return Ok(());
 		}
@@ -1276,9 +1367,13 @@ impl ActorContext {
 			(revision, persisted, self.begin_write())
 		};
 
-		internal_storage::persist_actor_snapshot(self.sql(), &actor_to_persist)
-			.await
-			.context("persist actor state to sqlite")?;
+		internal_storage::persist_actor_snapshot_with(
+			self.sql(),
+			&actor_to_persist,
+			std::mem::take(carried),
+		)
+		.await
+		.context("persist actor state to sqlite")?;
 
 		*self.0.last_save_at.lock() = Some(StdInstant::now());
 

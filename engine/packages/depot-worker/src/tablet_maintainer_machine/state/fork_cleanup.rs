@@ -12,7 +12,7 @@ use crate::tablet_maintainer_machine::{
 	types::{MaintainerTimer, OpId},
 };
 use depot_fs_core::{FsForkPresence, FsForkSpec, forks::cleanup::*};
-use rivet_data::generated::depot_client_protocol_v1::*;
+use rivet_data::generated::depot_client_protocol_v2::*;
 use rivet_state_machine::IndexedDeadlineQueue;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

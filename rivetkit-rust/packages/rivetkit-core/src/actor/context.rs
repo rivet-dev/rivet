@@ -30,6 +30,7 @@ use crate::actor::connection::{
 	hibernatable_id_from_slice,
 };
 use crate::actor::diagnostics::ActorDiagnostics;
+use crate::actor::fork::{ForkLink, StartFork};
 use crate::actor::internal_storage;
 use crate::actor::kv::LegacyActorKv;
 use crate::actor::lifecycle_hooks::Reply;
@@ -44,7 +45,7 @@ use crate::actor::task_types::UserTaskKind;
 use crate::actor::work_registry::{ActorWorkKind, CountGuard, RegionGuard};
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::{Inspector, InspectorSnapshot};
-use crate::sqlite::SqliteDb;
+use crate::sqlite::{SqliteBatchStatement, SqliteDb};
 use crate::telemetry::{
 	ActorInvocationTelemetry, ActorInvocationTraceContext, ActorTelemetryIdentity,
 	IncomingTraceContext, OutboundCallInvocation, WorkflowRunInvocation, WorkflowRunOutcome,
@@ -95,6 +96,13 @@ pub(crate) struct ActorContextInner {
 	/// phase. Startup consumes it once.
 	// Forced-sync: set once before the actor task starts and taken by its startup.
 	start_received_at: parking_lot::Mutex<Option<crate::time::Instant>>,
+	/// The individual actor fork the start command named. Startup consumes it once.
+	// Forced-sync: set once before the actor task starts and taken by its startup.
+	start_fork: parking_lot::Mutex<Option<StartFork>>,
+	/// The individual actor forks behind this actor, oldest first, loaded at startup. A start
+	/// that runs a fork hook appends that fork before the hook runs.
+	// Forced-sync: read by synchronous accessors and never held across `.await`.
+	fork_chain: RwLock<Vec<ForkLink>>,
 	// Forced-sync: actor state snapshots are exposed through synchronous
 	// accessors and are never held across `.await`.
 	pub(super) current_state: RwLock<Vec<u8>>,
@@ -202,6 +210,7 @@ pub(crate) struct ActorContextInner {
 	name: String,
 	key: ActorKey,
 	region: String,
+	namespace: String,
 }
 
 #[derive(Debug, Default)]
@@ -401,6 +410,7 @@ impl ActorContext {
 		name: String,
 		key: ActorKey,
 		region: String,
+		namespace: String,
 		_generation: Option<u32>,
 		_envoy_key: String,
 		config: ActorConfig,
@@ -429,6 +439,8 @@ impl ActorContext {
 			sql,
 			new_actor_storage: AtomicBool::new(false),
 			start_received_at: parking_lot::Mutex::new(None),
+			start_fork: parking_lot::Mutex::new(None),
+			fork_chain: RwLock::new(Vec::new()),
 			current_state: RwLock::new(Vec::new()),
 			persisted: RwLock::new(PersistedActor::default()),
 			last_pushed_alarm: RwLock::new(None),
@@ -518,6 +530,7 @@ impl ActorContext {
 			name,
 			key,
 			region,
+			namespace,
 		});
 		let ctx = Self(inner, None);
 		ctx.configure_sleep_hooks();
@@ -602,6 +615,27 @@ impl ActorContext {
 	/// Records when the runtime received this generation's start.
 	pub(crate) fn set_start_received_at(&self, received_at: crate::time::Instant) {
 		*self.0.start_received_at.lock() = Some(received_at);
+	}
+
+	/// Records the individual actor fork this generation's start command named.
+	pub(crate) fn set_start_fork(&self, fork: Option<StartFork>) {
+		*self.0.start_fork.lock() = fork;
+	}
+
+	/// The fork this generation's start command named, at most once.
+	pub(crate) fn take_start_fork(&self) -> Option<StartFork> {
+		self.0.start_fork.lock().take()
+	}
+
+	/// The individual actor forks behind this actor, oldest first; empty when it was never
+	/// forked. During the fork hook it already ends with the fork being applied. Namespace
+	/// forks are not listed.
+	pub fn fork_chain(&self) -> Vec<ForkLink> {
+		self.0.fork_chain.read().clone()
+	}
+
+	pub(crate) fn set_fork_chain(&self, chain: Vec<ForkLink>) {
+		*self.0.fork_chain.write() = chain;
 	}
 
 	/// When the runtime received this generation's start, at most once.
@@ -989,6 +1023,12 @@ impl ActorContext {
 		&self.0.region
 	}
 
+	/// The name of the namespace the actor runs in. After a namespace fork it differs from the
+	/// source actor's namespace while the actor id stays the same.
+	pub fn namespace(&self) -> &str {
+		&self.0.namespace
+	}
+
 	pub fn has_state(&self) -> bool {
 		self.0.connection_config.read().has_state
 	}
@@ -1290,14 +1330,23 @@ impl ActorContext {
 	}
 
 	pub async fn disconnect_conn(&self, id: ConnId) -> Result<()> {
-		self.disconnect_transport_only(|conn| conn.id() == id).await
+		self.disconnect_conn_with_reason(id, None).await
+	}
+
+	pub async fn disconnect_conn_with_reason(
+		&self,
+		id: ConnId,
+		reason: Option<&str>,
+	) -> Result<()> {
+		self.disconnect_transport_only(|conn| conn.id() == id, reason)
+			.await
 	}
 
 	pub async fn disconnect_conns<F>(&self, predicate: F) -> Result<()>
 	where
 		F: FnMut(&ConnHandle) -> bool,
 	{
-		self.disconnect_transport_only(predicate).await
+		self.disconnect_transport_only(predicate, None).await
 	}
 
 	pub(crate) fn request_hibernation_transport_save(&self, conn_id: &str) {
@@ -1806,6 +1855,25 @@ impl ActorContext {
 		save_request_revision: u64,
 		state_transaction_epoch: u64,
 	) -> Result<bool> {
+		self.save_state_carrying_at_transaction_epoch(
+			deltas,
+			save_request_revision,
+			state_transaction_epoch,
+			&mut Vec::new(),
+		)
+		.await
+	}
+
+	/// Like `save_state_with_revision_at_transaction_epoch`, but the batch that writes the
+	/// state also runs the statements in `carried`, which it empties. `carried` keeps its
+	/// statements when nothing was written, so the caller can write them another way.
+	pub(crate) async fn save_state_carrying_at_transaction_epoch(
+		&self,
+		deltas: Vec<StateDelta>,
+		save_request_revision: u64,
+		state_transaction_epoch: u64,
+		carried: &mut Vec<SqliteBatchStatement>,
+	) -> Result<bool> {
 		let (deltas, pending_hibernation_changes) = match self.prepare_state_deltas(deltas) {
 			Ok(prepared) => prepared,
 			Err(error) => return Err(error),
@@ -1816,6 +1884,7 @@ impl ActorContext {
 				None,
 				save_request_revision,
 				Some(state_transaction_epoch),
+				carried,
 			)
 			.await
 		{
@@ -1867,6 +1936,7 @@ impl ActorContext {
 				Some(workflow_writes),
 				save_request_revision,
 				expected_state_transaction_epoch,
+				&mut Vec::new(),
 			)
 			.await
 		{

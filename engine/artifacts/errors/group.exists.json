@@ -1,0 +1,5 @@
+{
+  "code": "exists",
+  "group": "group",
+  "message": "A different group already exists with this id."
+}

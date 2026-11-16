@@ -1,0 +1,5 @@
+{
+  "code": "invalid_schedule_row",
+  "group": "schedule",
+  "message": "Stored schedule data is invalid."
+}

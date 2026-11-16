@@ -8,6 +8,13 @@ export interface JsActorKeySegment {
   stringValue?: string
   numberValue?: number
 }
+/** One individual actor fork behind an actor, as `c.forkChain` lists it. */
+export interface JsForkLink {
+  actorId: string
+  key: Array<JsActorKeySegment>
+  /** Milliseconds since the epoch. */
+  forkedAt: number
+}
 /** Active actor invocation correlation exposed to the TypeScript runtime adapter. */
 export interface JsActorInvocationTraceContext {
   rayId?: string
@@ -387,7 +394,11 @@ export declare class ActorContext {
   actorId(): string
   name(): string
   key(): Array<JsActorKeySegment>
+  /** The individual actor forks behind this actor, oldest first. */
+  forkChain(): Array<JsForkLink>
   region(): string
+  /** The name of the namespace the actor runs in. */
+  namespace(): string
   sleep(): void
   destroy(): void
   destroyRequested(): boolean

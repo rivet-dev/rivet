@@ -22,7 +22,7 @@ use depot_worker::{
 	tablet_coordinator_machine::{store, types::ReadResult},
 };
 use rivet_data::generated::{
-	depot_client_protocol_v1::VolumeRejectResponse,
+	depot_client_protocol_v2::VolumeRejectResponse,
 	depot_storage_worker_protocol_v1::{
 		GetDiskIncarnationResponse, RejectResponse, StorageWorkerRequest, StorageWorkerResponse,
 	},

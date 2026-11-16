@@ -11,6 +11,7 @@ mod envoy_record;
 pub mod keys;
 mod kv;
 mod lifecycle;
+mod missing_pools;
 mod queue;
 mod rejection;
 mod routes;
@@ -26,6 +27,8 @@ pub struct Service {
 	pub(crate) sqlite_pool: sqlite_embedded::worker::SqlitePool,
 	/// The connect budget every Envoy connect to this process is admitted against.
 	pub(crate) connect_admission: std::sync::Arc<admission::ConnectAdmission>,
+	/// Pool names this process refused node connects for, for the sustained refusal warning.
+	pub(crate) missing_pools: std::sync::Arc<missing_pools::MissingPools>,
 }
 
 /// Guard owns this signal; cancellation must also ask detached upgrades to drain.
@@ -57,6 +60,9 @@ pub fn service(ctx: &EngineContext) -> Service {
 			ctx.config().pegboard().sqlite_remote_worker_threads(),
 			None,
 		),
+		missing_pools: std::sync::Arc::new(missing_pools::MissingPools::new(
+			ctx.config().pegboard().envoy_missing_pools_capacity(),
+		)),
 		connect_admission: std::sync::Arc::new(admission::ConnectAdmission::new(
 			admission::ConnectBudget {
 				admissions_per_second: ctx

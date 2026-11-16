@@ -6,6 +6,8 @@ import type {
 	ActorsCreateRequest,
 	ActorsCreateResponse,
 	ActorsDeleteResponse,
+	ActorsForkRequest,
+	ActorsForkResponse,
 	ActorsGetOrCreateRequest,
 	ActorsGetOrCreateResponse,
 	ActorsListResponse,
@@ -101,6 +103,20 @@ export async function createActor(
 		config,
 		"POST",
 		`/actors`,
+		request,
+	);
+}
+
+// MARK: Fork actor
+export async function forkActor(
+	config: ClientConfig,
+	actorId: RivetId,
+	request: ActorsForkRequest,
+): Promise<ActorsForkResponse> {
+	return apiCall<ActorsForkRequest, ActorsForkResponse>(
+		config,
+		"POST",
+		`/actors/${encodeURIComponent(actorId)}/fork`,
 		request,
 	);
 }

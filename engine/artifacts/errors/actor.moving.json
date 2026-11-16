@@ -1,0 +1,5 @@
+{
+  "code": "moving",
+  "group": "actor",
+  "message": "The actor is being moved by an engine upgrade. Clients never receive this code: the gateway retries the request, then answers guard.service_unavailable with reason actor_moving and a Retry-After hint."
+}

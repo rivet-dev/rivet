@@ -72,6 +72,25 @@ pub enum Resource {
 }
 
 impl Resource {
+	/// Whether reaching the near-cap band is worth a warning. The retained payload cache is
+	/// meant to sit at its cap: the shard keeps synced payloads until the cap and releases the
+	/// least recently appended ones past it, refusing nothing, so a full cache is its normal
+	/// state and only its usage gauge reports it. Every other resource refuses or waits at its
+	/// cap.
+	pub fn warns_near_capacity(self) -> bool {
+		match self {
+			Self::RetainedPayloadBytes => false,
+			Self::PendingRequests
+			| Self::PendingBytes
+			| Self::DiskBytes
+			| Self::Replicas
+			| Self::QuarantinedBytes
+			| Self::Inbox
+			| Self::DiskReads
+			| Self::AdmissionWaitMs => true,
+		}
+	}
+
 	pub fn label(self) -> &'static str {
 		match self {
 			Self::PendingRequests => "pending_requests",

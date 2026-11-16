@@ -1,0 +1,5 @@
+{
+  "code": "backfill_skipped",
+  "group": "namespace",
+  "message": "The namespace still has actors from before volume groups that its backfill could not move; destroy them first."
+}

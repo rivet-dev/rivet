@@ -52,15 +52,23 @@ pub enum Effect {
 	///
 	/// **Executor**
 	///
-	/// Sends `ActorMigrateFromV2Begin`, which holds the V3 actor as `MigratingFromV2` and names
-	/// the incarnation whose database volume the import fills, then streams V2's export into that
-	/// volume and checks its digest, then returns `CopyResponse`.
+	/// Reads the standing of the entry's namespace once, or of the configured target namespace
+	/// for an entry that names none. When the entry is placed at the legacy
+	/// placement and the namespace has a group now, returns `CopyResponse` with `PlacementMoved`
+	/// before writing anything. Otherwise sends `ActorMigrateFromV2Begin` at `group`, which holds
+	/// the V3 actor as `MigratingFromV2` and names the incarnation whose database volume the
+	/// import fills, then streams V2's export into that volume at `group` and checks its digest,
+	/// then returns `CopyResponse`.
 	CopyRequest {
 		op: OpId,
 		v2_actor_id: Id,
 		v3_actor_id: Id,
 		migration_id: u64,
 		candidate: wire::MigrateFromV2Candidate,
+		/// The entry's persisted placement.
+		group: Option<[u8; 16]>,
+		/// The namespace the entry was admitted for.
+		namespace: Option<String>,
 	},
 	/// **When**
 	///
@@ -68,13 +76,14 @@ pub enum Effect {
 	///
 	/// **Executor**
 	///
-	/// Reads the held V3 actor and reports its key reservation, then returns
+	/// Reads the held V3 actor at `group` and reports its key reservation, then returns
 	/// `ReadReservationResponse`.
 	ReadReservationRequest {
 		op: OpId,
 		v2_actor_id: Id,
 		v3_actor_id: Id,
 		migration_id: u64,
+		group: Option<[u8; 16]>,
 	},
 	/// **When**
 	///
@@ -111,8 +120,12 @@ pub enum Effect {
 	///
 	/// **Executor**
 	///
-	/// Sends `MigrateFromV2Activate`, which moves the held V3 actor to `Sleeping` with its alarm
-	/// and index entry, reads the actor back to learn whether it applied, then returns
+	/// Sends `MigrateFromV2Activate` at `group`, which moves the held V3 actor to `Sleeping` with
+	/// its alarm and starts its index write, and reads the actor back to learn whether it
+	/// applied; an actor missing there answers `Vanished`. At the legacy placement an activated
+	/// actor answers `IndexPending` until its legacy index entry is written; once it is, the name
+	/// is recorded on the volume of the namespace the actor's record names, when the namespace has
+	/// one, so the backfill's walk lists the name and moves the actor into the group. Returns
 	/// `ActivateResponse`.
 	ActivateRequest {
 		op: OpId,
@@ -120,6 +133,7 @@ pub enum Effect {
 		v3_actor_id: Id,
 		migration_id: u64,
 		candidate: wire::MigrateFromV2Candidate,
+		group: Option<[u8; 16]>,
 	},
 	/// **When**
 	///
@@ -127,14 +141,16 @@ pub enum Effect {
 	///
 	/// **Executor**
 	///
-	/// Sends `MigrateFromV2Discard`, which destroys the held V3 actor and with it the imported
-	/// database volume, reads the actor back to learn whether it applied, then returns
-	/// `DiscardResponse`.
+	/// Sends `MigrateFromV2Discard` at `group`, which destroys the held V3 actor and with it the
+	/// imported database volume, reads the actor back to learn whether it applied, then returns
+	/// `DiscardResponse`. An actor never held at `group` has nothing to discard; one that
+	/// vanished after the discard was sent fails the step.
 	DiscardRequest {
 		op: OpId,
 		v2_actor_id: Id,
 		v3_actor_id: Id,
 		migration_id: u64,
+		group: Option<[u8; 16]>,
 	},
 	/// **When**
 	///
@@ -181,6 +197,19 @@ pub enum Effect {
 	///
 	/// Adds `bytes` to `migrate_from_v2_copy_admitted_bytes_total`. No response.
 	RecordCopyAdmitted { bytes: u64 },
+	/// **When**
+	///
+	/// A state write landed that deleted a finished entry placed at the legacy placement, or that
+	/// stored one moved into the group before its begin. Emitted once per namespace those entries
+	/// name.
+	///
+	/// **Executor**
+	///
+	/// Sends `namespace`, or the configured target namespace for an entry written by version 1,
+	/// a `NamespaceStepLegacyMigratorSettled` step, so a backfill that waits for the migrator's
+	/// legacy-placed entries reads its state again. Best effort: a failure is logged, and the
+	/// backfill's retry timer reads the state anyway. No response.
+	NotifyLegacySettled { namespace: Option<String> },
 	/// **When**
 	///
 	/// A pass ended.

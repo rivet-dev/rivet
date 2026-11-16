@@ -1,0 +1,5 @@
+{
+  "code": "operation_unavailable",
+  "group": "auth",
+  "message": "The operation cannot be granted until every engine worker supports it. Retry after the engine upgrade finishes."
+}

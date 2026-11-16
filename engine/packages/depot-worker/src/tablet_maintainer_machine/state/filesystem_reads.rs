@@ -8,7 +8,7 @@ use crate::tablet_maintainer_machine::{
 };
 use depot_types::VolumeLogKey;
 use rivet_data::generated::{
-	depot_client_protocol_v1::ClientResponse, shared_depot_fs_read_v1::*,
+	depot_client_protocol_v2::ClientResponse, shared_depot_fs_read_v2::*,
 	shared_depot_types_v1::VolumeLogPosition,
 };
 
@@ -41,9 +41,27 @@ pub(crate) enum QueryOrder {
 	/// delete or a new incarnation, is caught by the completion's lifecycle check before the
 	/// reply.
 	Claim,
-	/// A cross-volume source read against a held image; bounded separately and
-	/// rejected rather than queued when its window is full.
+	/// A cross-volume source read against a held image for a fork job's copy: its metadata
+	/// pages and key listings. Bounded by the held-image background window and rejected
+	/// rather than queued when that window is full.
 	HeldImage,
+	/// A fork child's read of one inherited layer against a held image: a page batch
+	/// (`FsBaseChunksRequest`) or metadata rows (`FsBaseRowsRequest`) the child has not
+	/// rewritten, made for a live client of the child. Treated as `HeldImage` for the store,
+	/// but bounded by its own window, `max_base_reads`, so a wake of many fork children never
+	/// takes the background windows and background work never refuses a child's reads. Past
+	/// the window it is refused as retryable overload, never queued.
+	BaseRead,
+}
+
+impl QueryOrder {
+	/// Whether the query reads a held source image rather than its target's own state.
+	pub(crate) fn reads_held_image(self) -> bool {
+		match self {
+			Self::HeldImage | Self::BaseRead => true,
+			Self::Ordered | Self::Session | Self::Claim => false,
+		}
+	}
 }
 
 /// Bounded metric label for a filesystem read operation.
@@ -61,7 +79,8 @@ fn operation_label(operation: &FsReadOperation) -> &'static str {
 		},
 		FsReadOperation::FsBaseChunksRequest(_)
 		| FsReadOperation::FsForkMetadataRequest(_)
-		| FsReadOperation::FsBaseKeysRequest(_) => "other",
+		| FsReadOperation::FsBaseKeysRequest(_)
+		| FsReadOperation::FsBaseRowsRequest(_) => "other",
 	}
 }
 
@@ -77,7 +96,8 @@ fn claim_read(operation: &FsReadOperation) -> Option<&FsClaimRead> {
 		| FsReadOperation::FsForkMetadataRequest(_)
 		| FsReadOperation::FsBaseKeysRequest(_)
 		| FsReadOperation::FsReadKeys(_)
-		| FsReadOperation::FsReadRaw(_) => return None,
+		| FsReadOperation::FsReadRaw(_)
+		| FsReadOperation::FsBaseRowsRequest(_) => return None,
 	};
 	match at {
 		FsReadAt::FsClaimRead(read) => Some(read),
@@ -110,7 +130,20 @@ pub(crate) fn waiting_claim_floor<'a>(
 /// Classifies a request by the store state it can observe.
 pub(crate) fn query_order(request: &FsReadRequest) -> QueryOrder {
 	if depot_fs_core::wire::source_link(&request.operation).is_some() {
-		return QueryOrder::HeldImage;
+		return match &request.operation {
+			FsReadOperation::FsBaseChunksRequest(_) | FsReadOperation::FsBaseRowsRequest(_) => {
+				QueryOrder::BaseRead
+			}
+			FsReadOperation::FsForkMetadataRequest(_)
+			| FsReadOperation::FsBaseKeysRequest(_)
+			| FsReadOperation::FsReadOpen(_)
+			| FsReadOperation::FsReadClose(_)
+			| FsReadOperation::FsReadKeys(_)
+			| FsReadOperation::FsReadRaw(_)
+			| FsReadOperation::FsReadGet(_)
+			| FsReadOperation::FsReadScan(_)
+			| FsReadOperation::FsReadChunks(_) => QueryOrder::HeldImage,
+		};
 	}
 	if claim_read(&request.operation).is_some() {
 		return QueryOrder::Claim;
@@ -118,7 +151,8 @@ pub(crate) fn query_order(request: &FsReadRequest) -> QueryOrder {
 	match &request.operation {
 		FsReadOperation::FsReadOpen(_)
 		| FsReadOperation::FsReadKeys(_)
-		| FsReadOperation::FsReadRaw(_) => QueryOrder::Ordered,
+		| FsReadOperation::FsReadRaw(_)
+		| FsReadOperation::FsBaseRowsRequest(_) => QueryOrder::Ordered,
 		FsReadOperation::FsReadGet(_)
 		| FsReadOperation::FsReadScan(_)
 		| FsReadOperation::FsReadChunks(_)
@@ -151,36 +185,41 @@ fn target_key(state: &MaintainerState, request: &FsReadRequest) -> Option<Volume
 /// target may name.
 fn opens_latest(operation: &FsReadOperation) -> bool {
 	match operation {
-		FsReadOperation::FsReadOpen(FsReadOpen { position, .. }) => position.is_none(),
-		FsReadOperation::FsReadKeys(FsReadKeys { position, .. }) => position.is_none(),
-		FsReadOperation::FsReadRaw(FsReadRaw { position, .. }) => position.is_none(),
+		FsReadOperation::FsReadOpen(FsReadOpen { cut, .. }) => cut.is_none(),
+		FsReadOperation::FsReadKeys(FsReadKeys { cut, .. }) => cut.is_none(),
+		FsReadOperation::FsReadRaw(FsReadRaw { cut, .. }) => cut.is_none(),
 		FsReadOperation::FsReadGet(_)
 		| FsReadOperation::FsReadScan(_)
 		| FsReadOperation::FsReadChunks(_)
 		| FsReadOperation::FsReadClose(_)
 		| FsReadOperation::FsBaseChunksRequest(_)
 		| FsReadOperation::FsForkMetadataRequest(_)
-		| FsReadOperation::FsBaseKeysRequest(_) => false,
+		| FsReadOperation::FsBaseKeysRequest(_)
+		| FsReadOperation::FsBaseRowsRequest(_) => false,
 	}
 }
 
 /// The position a session open or point read pins, or the floor a claim read needs applied,
-/// if it names one.
+/// if it names one. The volume has one claim log, so a pinned cut's position is its claim log
+/// 0 entry; a cut without one pins nothing here and the read refuses it when it dispatches.
 fn pinned_position(operation: &FsReadOperation) -> Option<&VolumeLogPosition> {
 	if let Some(read) = claim_read(operation) {
 		return Some(&read.floor);
 	}
 	match operation {
-		FsReadOperation::FsReadOpen(FsReadOpen { position, .. })
-		| FsReadOperation::FsReadKeys(FsReadKeys { position, .. })
-		| FsReadOperation::FsReadRaw(FsReadRaw { position, .. }) => position.as_ref(),
+		FsReadOperation::FsReadOpen(FsReadOpen { cut, .. })
+		| FsReadOperation::FsReadKeys(FsReadKeys { cut, .. })
+		| FsReadOperation::FsReadRaw(FsReadRaw { cut, .. }) => {
+			cut.as_ref().and_then(|cut| cut.root_position())
+		}
 		FsReadOperation::FsReadGet(_)
 		| FsReadOperation::FsReadScan(_)
 		| FsReadOperation::FsReadChunks(_)
 		| FsReadOperation::FsReadClose(_)
 		| FsReadOperation::FsBaseChunksRequest(_)
 		| FsReadOperation::FsForkMetadataRequest(_)
-		| FsReadOperation::FsBaseKeysRequest(_) => None,
+		| FsReadOperation::FsBaseKeysRequest(_)
+		| FsReadOperation::FsBaseRowsRequest(_) => None,
 	}
 }
 
@@ -191,7 +230,9 @@ fn applied_wait(operation: &FsReadOperation) -> Option<&VolumeLogPosition> {
 		return Some(&read.floor);
 	}
 	match operation {
-		FsReadOperation::FsReadOpen(FsReadOpen { position, .. }) => position.as_ref(),
+		FsReadOperation::FsReadOpen(FsReadOpen { cut, .. }) => {
+			cut.as_ref().and_then(|cut| cut.root_position())
+		}
 		FsReadOperation::FsReadKeys(_)
 		| FsReadOperation::FsReadRaw(_)
 		| FsReadOperation::FsReadGet(_)
@@ -200,7 +241,8 @@ fn applied_wait(operation: &FsReadOperation) -> Option<&VolumeLogPosition> {
 		| FsReadOperation::FsReadClose(_)
 		| FsReadOperation::FsBaseChunksRequest(_)
 		| FsReadOperation::FsForkMetadataRequest(_)
-		| FsReadOperation::FsBaseKeysRequest(_) => None,
+		| FsReadOperation::FsBaseKeysRequest(_)
+		| FsReadOperation::FsBaseRowsRequest(_) => None,
 	}
 }
 
@@ -335,7 +377,7 @@ fn check(state: &MaintainerState, request: &FsReadRequest) -> Result<(), FsReadE
 /// `filesystem::record_missing`). Held-image reads name no such target: a fork child reads
 /// what it inherits from archived checkpoint rows, which do not depend on the lost record.
 fn record_missing_target(state: &MaintainerState, request: &FsReadRequest) -> Option<[u8; 16]> {
-	if query_order(request) == QueryOrder::HeldImage {
+	if query_order(request).reads_held_image() {
 		return None;
 	}
 	let key = target_key(state, request)?;
@@ -351,7 +393,7 @@ fn record_missing_target(state: &MaintainerState, request: &FsReadRequest) -> Op
 pub(crate) fn reject(
 	state: &mut MaintainerState,
 	id: RequestId,
-	reason: rivet_data::generated::depot_client_protocol_v1::VolumeRejectResponse,
+	reason: rivet_data::generated::depot_client_protocol_v2::VolumeRejectResponse,
 	fx: &mut Effects,
 ) {
 	let removed = state.pending_fs_reads.remove(&id);
@@ -402,27 +444,31 @@ pub(crate) fn admit(
 		return;
 	}
 	let order = query_order(&request);
-	let independent = order == QueryOrder::HeldImage;
-	let reads_full = independent
-		&& state
-			.operations
-			.values()
-			.filter(|op| {
-				matches!(
-					op,
-					Operation::FilesystemQuery {
-						order: QueryOrder::HeldImage,
-						..
-					}
-				)
-			})
-			.count() >= state.config.max_background_cold_reads as usize;
-	let error = if reads_full
+	// A fork job's held-image reads are background work and share the held-image window. A
+	// fork child's read of one inherited layer serves a live client, so it has its own window
+	// and never takes a background slot; each is refused past its window as retryable.
+	let counts = &state.operations.index().counts;
+	let window_full = match order {
+		QueryOrder::HeldImage
+			if counts.held_image_query >= state.config.max_background_cold_reads =>
+		{
+			Some("read_capacity")
+		}
+		QueryOrder::BaseRead if counts.base_read >= state.config.max_base_reads => {
+			Some("base_read_capacity")
+		}
+		QueryOrder::HeldImage
+		| QueryOrder::BaseRead
+		| QueryOrder::Ordered
+		| QueryOrder::Session
+		| QueryOrder::Claim => None,
+	};
+	let error = if window_full.is_some()
 		|| deadline <= fx.clocks().boot_ms
 		|| state.request_count() >= state.config.max_requests as usize
 	{
-		let reason = if reads_full {
-			"read_capacity"
+		let reason = if let Some(reason) = window_full {
+			reason
 		} else if deadline <= fx.clocks().boot_ms {
 			"deadline"
 		} else {
@@ -442,7 +488,7 @@ pub(crate) fn admit(
 		reply(state, id, FsReadResponse::FsReadError(error), fx);
 		return;
 	}
-	if !independent
+	if !order.reads_held_image()
 		&& !matches!(request.operation, FsReadOperation::FsReadClose(_))
 		&& let Some(key) = target_key(state, &request)
 	{
@@ -454,7 +500,7 @@ pub(crate) fn admit(
 	state.pending_fs_reads.insert(id, request);
 	fx.arm_timer_at(MaintainerTimer::ReadRequest(id), deadline);
 	match order {
-		QueryOrder::HeldImage => {
+		QueryOrder::HeldImage | QueryOrder::BaseRead => {
 			dispatch(state, id, fx);
 		}
 		QueryOrder::Session | QueryOrder::Claim => state.session_reads.push_back(id),
@@ -595,7 +641,7 @@ pub(crate) fn dispatch(state: &mut MaintainerState, id: RequestId, fx: &mut Effe
 		QueryOrder::Ordered | QueryOrder::Session | QueryOrder::Claim => {
 			target_key(state, &request)
 		}
-		QueryOrder::HeldImage => None,
+		QueryOrder::HeldImage | QueryOrder::BaseRead => None,
 	};
 	// A filesystem's snapshot can sit above cold, at a position an earlier maintainer had
 	// applied; after a move this maintainer starts again from cold. A session must never
@@ -670,7 +716,9 @@ pub(crate) fn dispatch(state: &mut MaintainerState, id: RequestId, fx: &mut Effe
 	let record = volume.map(|v| v.record.to_record());
 	let volume_key = match order {
 		QueryOrder::Ordered => Some(request.volume_key().clone()),
-		QueryOrder::Session | QueryOrder::Claim | QueryOrder::HeldImage => None,
+		QueryOrder::Session | QueryOrder::Claim | QueryOrder::HeldImage | QueryOrder::BaseRead => {
+			None
+		}
 	};
 	let mut request = request;
 	if let Some(key) = key {
@@ -693,6 +741,32 @@ pub(crate) fn dispatch(state: &mut MaintainerState, id: RequestId, fx: &mut Effe
 	});
 	true
 }
+/// The commit a point read of `key` reports, at least `stored`: the highest commit this
+/// maintainer knows of the volume, or `u64::MAX` while that is unknown, which a reader treats
+/// as lagging and never caches. It is unknown while the loaded volume's members have not been
+/// observed, as on a fresh load, or while an in-sync member holds a tail above what the members
+/// prove committed, as after a maintainer move before the shards' notices prove the tail: a
+/// commit may lie there that the answer's snapshot lacks. It is also unknown after a requested
+/// close until its members are observed: the writer announces nothing at close, so until the
+/// shards' notices of its last appends arrive, or the probe after the notice window observes a
+/// quorum of members when a notice was lost, the members may show the tail they had before
+/// those appends. A volume this maintainer has not loaded is all in cold, since a serving
+/// maintainer listed every replica, so its answer is at the commit.
+pub(crate) fn reported_committed(state: &MaintainerState, key: &VolumeLogKey, stored: u64) -> u64 {
+	let known = super::filesystem::known_committed(state, key);
+	let unobserved = state
+		.loaded_volumes
+		.get(key)
+		.is_some_and(|volume| volume.members.is_empty());
+	if unobserved
+		|| super::unload::close_notices_pending(state, key)
+		|| super::filesystem::member_tail(state, key) > known
+	{
+		return u64::MAX;
+	}
+	stored.max(known)
+}
+
 pub(crate) fn completed(
 	state: &mut MaintainerState,
 	id: OpId,
@@ -744,6 +818,15 @@ pub(crate) fn completed(
 		Ok(()) => response,
 		Err(error) => FsReadResponse::FsReadError(error),
 	};
+	// A point read reports the highest commit this maintainer knows of the volume at the
+	// reply, so a reader can tell an answer at the commit from one its apply still lags. Read
+	// at the reply rather than at dispatch, it can only be higher, which makes the reader
+	// treat more answers as lagging, never fewer.
+	let mut response = response;
+	if let FsReadResponse::FsReadValues(values) = &mut response {
+		let key = VolumeLogKey(values.volume_log_key.clone());
+		values.committed = reported_committed(state, &key, values.committed);
+	}
 	if store_refused
 		&& matches!(
 			response,

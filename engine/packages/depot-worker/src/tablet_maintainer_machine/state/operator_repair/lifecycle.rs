@@ -6,7 +6,7 @@
 use super::calls::{Run, refusal};
 use crate::tablet_maintainer_machine::{Effects, state::MaintainerState, types::MaintainerTimer};
 use depot_types::VolumeLogKey;
-use rivet_data::generated::depot_client_protocol_v1::{
+use rivet_data::generated::depot_client_protocol_v2::{
 	RepairAbortUnloadPlan, RepairRedrivePlan, RepairRefusalCode, RepairRefused,
 };
 

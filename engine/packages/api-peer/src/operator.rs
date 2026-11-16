@@ -23,12 +23,11 @@ use axum::{
 };
 use depot_types::keys::pubsub::VolumeCommandSubject;
 use rivet_data::{
-	DEPOT_CLIENT_PROTOCOL_VERSION,
-	generated::depot_client_protocol_v1::{
+	generated::depot_client_protocol_v2::{
 		ClientRequest, ClientResponse, OperatorCachesOutcome, OperatorDropCachesRequest,
 		OperatorTabletOutcome, OperatorTierRequest,
 	},
-	versioned::{DepotClientRequestData, DepotClientResponseData},
+	versioned::DepotClientResponseData,
 };
 use rivet_engine_context::EngineContext;
 use rivet_topology::worker::WorkerId;
@@ -110,9 +109,13 @@ async fn respond(
 
 /// Sends one operator request to `worker` and reports its reply as JSON.
 async fn send(ctx: &EngineContext, worker: &WorkerId, request: ClientRequest) -> Result<Value> {
-	let payload = DepotClientRequestData::serialize_with_embedded_version(
+	// Sealed at the version the worker reads, so a worker of an older release decodes it.
+	let topology = ctx.topology();
+	let version = depot_client::client_protocol::request_version(topology.as_ref(), worker);
+	let payload = depot_client::client_protocol::seal_request(
 		&request,
-		DEPOT_CLIENT_PROTOCOL_VERSION,
+		version,
+		topology.config().lease.refresh_hint_interval_ms,
 	)?;
 	let reply = ctx
 		.ups()?

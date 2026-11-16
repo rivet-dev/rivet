@@ -99,11 +99,13 @@ async fn open_actor(
 	sender: &mut impl TunnelSender,
 	receiver: &mut impl TunnelReceiver,
 	identity: &mut p::MessageId,
+	version: u16,
 	open: p::ToEnvoyWebSocketOpen,
 ) -> Result<OpenReply> {
 	send(
 		sender,
 		identity,
+		version,
 		p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(open),
 	)
 	.await?;
@@ -140,6 +142,8 @@ fn decode_reply(
 
 /// The actor side of a WebSocket once the actor answered its open.
 pub(crate) struct Tunnel<S: TunnelStream> {
+	/// The envoy protocol version of every message to the actor's host on this tunnel.
+	pub(crate) version: u16,
 	pub(crate) sender: S::Sender,
 	pub(crate) receiver: S::Receiver,
 	pub(crate) identity: p::MessageId,
@@ -150,20 +154,25 @@ pub(crate) struct Tunnel<S: TunnelStream> {
 /// when a pipelined open arrives ahead of the actor's start, is sent once more on the stream
 /// `reopen` acquires after the actor runs; a second refusal is the answer. Ordered UPS lanes do
 /// not prevent the first refusal, because the start reaches the Envoy from the pegboard executor
-/// while the open travels on this gateway's stream.
-pub(crate) async fn open_tunnel<S, Reopen, ReopenFut>(
+/// while the open travels on this gateway's stream. Messages to the actor's host are encoded at
+/// the version `version_of` gives for the stream they travel on, fixed when it opens; see
+/// `pegboard::envoy_protocol`.
+pub(crate) async fn open_tunnel<S, VersionOf, Reopen, ReopenFut>(
 	stream: S,
+	version_of: VersionOf,
 	mut identity: p::MessageId,
 	open: p::ToEnvoyWebSocketOpen,
 	reopen: Reopen,
 ) -> Result<Tunnel<S>>
 where
 	S: TunnelStream,
+	VersionOf: Fn(&S) -> u16,
 	Reopen: FnOnce() -> ReopenFut,
 	ReopenFut: Future<Output = Result<Reopened<S>>>,
 {
+	let mut version = version_of(&stream);
 	let (mut sender, mut receiver) = stream.split();
-	let mut reply = open_actor(&mut sender, &mut receiver, &mut identity, open).await?;
+	let mut reply = open_actor(&mut sender, &mut receiver, &mut identity, version, open).await?;
 	if let OpenReply::Closed(close) = &reply
 		&& refused_before_admission(close)
 	{
@@ -175,11 +184,13 @@ where
 			tracing::debug!(%error, "refused WebSocket tunnel peer already closed");
 		}
 		let (stream, next_identity, open) = reopen().await?;
+		version = version_of(&stream);
 		(sender, receiver) = stream.split();
 		identity = next_identity;
-		reply = open_actor(&mut sender, &mut receiver, &mut identity, open).await?;
+		reply = open_actor(&mut sender, &mut receiver, &mut identity, version, open).await?;
 	}
 	Ok(Tunnel {
+		version,
 		sender,
 		receiver,
 		identity,
@@ -209,9 +220,10 @@ where
 /// the actor slept before the socket re-attached, and then the socket goes back to waiting,
 /// for its client or for an epoch newer than the one it just looked for. So an actor that
 /// sleeps soon after it wakes is never started by its own hibernated sockets.
-pub async fn proxy<S, Reopen, ReopenFut>(
+pub async fn proxy<S, VersionOf, Reopen, ReopenFut>(
 	socket: &mut WebSocket,
 	stream: S,
+	version_of: VersionOf,
 	identity: p::MessageId,
 	open: p::ToEnvoyWebSocketOpen,
 	reopen: Reopen,
@@ -221,6 +233,7 @@ pub async fn proxy<S, Reopen, ReopenFut>(
 ) -> Result<()>
 where
 	S: TunnelStream,
+	VersionOf: Fn(&S) -> u16,
 	Reopen: Fn(ReopenCause) -> ReopenFut,
 	ReopenFut: Future<Output = Result<Reopened<S>>>,
 {
@@ -242,11 +255,15 @@ where
 		}
 	};
 	let Tunnel {
+		mut version,
 		mut sender,
 		mut receiver,
 		mut identity,
 		reply,
-	} = open_tunnel(stream, identity, open, || reopen(ReopenCause::Client)).await?;
+	} = open_tunnel(stream, &version_of, identity, open, || {
+		reopen(ReopenCause::Client)
+	})
+	.await?;
 	let mut can_hibernate = match reply {
 		OpenReply::Accepted { can_hibernate } => can_hibernate,
 		OpenReply::Closed(close) => {
@@ -361,7 +378,7 @@ where
 							let reopened = async {
 								let (stream, woken, open) =
 									reopen_hibernated(&reopen, cause, &hibernated).await?;
-								open_tunnel(stream, woken, open, || {
+								open_tunnel(stream, &version_of, woken, open, || {
 									reopen_hibernated(&reopen, cause, &hibernated)
 								})
 								.await
@@ -395,6 +412,7 @@ where
 								return Ok(());
 							}
 						}
+						version = tunnel.version;
 						sender = tunnel.sender;
 						receiver = tunnel.receiver;
 						identity = tunnel.identity;
@@ -423,6 +441,7 @@ where
 						send(
 							&mut sender,
 							&mut identity,
+							version,
 							p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(
 								p::ToEnvoyWebSocketMessage {
 									data: text.into(),
@@ -439,6 +458,7 @@ where
 						send(
 							&mut sender,
 							&mut identity,
+							version,
 							p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(
 								p::ToEnvoyWebSocketMessage { data, binary: true },
 							),
@@ -449,6 +469,7 @@ where
 						send(
 							&mut sender,
 							&mut identity,
+							version,
 							p::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(
 								p::ToEnvoyWebSocketClose {
 									code: close.as_ref().map(|c| c.code),
@@ -596,6 +617,7 @@ where
 async fn send(
 	sender: &mut impl TunnelSender,
 	identity: &mut p::MessageId,
+	version: u16,
 	kind: p::ToEnvoyTunnelMessageKind,
 ) -> Result<()> {
 	let bytes = p::versioned::ToEnvoy::serialize_with_embedded_version(
@@ -603,7 +625,7 @@ async fn send(
 			message_id: identity.clone(),
 			message_kind: kind,
 		}),
-		p::PROTOCOL_VERSION,
+		version,
 	)?;
 	sender.send(bytes.into()).await?;
 	identity.message_index = identity.message_index.wrapping_add(1);
@@ -897,6 +919,7 @@ mod tests {
 			actor_generation: Some(1),
 			path: "/".to_owned().into(),
 			headers: Default::default(),
+			group: None,
 		}
 	}
 
@@ -955,6 +978,7 @@ mod tests {
 						let result = proxy(
 							&mut socket,
 							stream,
+							|_: &FakeStream| p::PROTOCOL_VERSION,
 							message_id(1, 2),
 							websocket_open(),
 							reopen,
@@ -1147,6 +1171,7 @@ mod tests {
 					let result = proxy(
 						&mut socket,
 						stream,
+						|_: &FakeStream| p::PROTOCOL_VERSION,
 						identity,
 						websocket_open_at(1),
 						reopen,

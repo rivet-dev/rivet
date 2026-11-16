@@ -205,6 +205,12 @@ pub(crate) struct CreateConnStatePayload {
 }
 
 #[derive(Clone)]
+pub(crate) struct ForkPayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) fork: rivetkit_core::ActorForkStart,
+}
+
+#[derive(Clone)]
 pub(crate) struct MigratePayload {
 	pub(crate) ctx: CoreActorContext,
 	pub(crate) is_new: bool,
@@ -311,6 +317,7 @@ pub(crate) struct CallbackBindings {
 	pub(crate) create_vars: Option<CallbackTsfn<LifecyclePayload>>,
 	pub(crate) on_migrate: Option<CallbackTsfn<MigratePayload>>,
 	pub(crate) on_wake: Option<CallbackTsfn<LifecyclePayload>>,
+	pub(crate) on_fork: Option<CallbackTsfn<ForkPayload>>,
 	pub(crate) on_before_actor_start: Option<CallbackTsfn<LifecyclePayload>>,
 	pub(crate) on_sleep: Option<CallbackTsfn<LifecyclePayload>>,
 	pub(crate) on_destroy: Option<CallbackTsfn<LifecyclePayload>>,
@@ -476,6 +483,7 @@ impl CallbackBindings {
 			create_vars: optional_tsfn(&callbacks, "createVars", build_lifecycle_payload)?,
 			on_migrate: optional_tsfn(&callbacks, "onMigrate", build_migrate_payload)?,
 			on_wake: optional_tsfn(&callbacks, "onWake", build_lifecycle_payload)?,
+			on_fork: optional_tsfn(&callbacks, "onFork", build_fork_payload)?,
 			on_before_actor_start: optional_tsfn(
 				&callbacks,
 				"onBeforeActorStart",
@@ -708,6 +716,17 @@ impl TsfnPayloadSummary for CreateConnStatePayload {
 	}
 }
 
+impl TsfnPayloadSummary for ForkPayload {
+	fn payload_summary(&self) -> String {
+		format!(
+			"actor_id={} source_actor_id={} input_bytes={}",
+			self.ctx.actor_id(),
+			self.fork.link.actor_id,
+			self.fork.input.as_ref().map(Vec::len).unwrap_or(0)
+		)
+	}
+}
+
 impl TsfnPayloadSummary for MigratePayload {
 	fn payload_summary(&self) -> String {
 		format!("actor_id={} is_new={}", self.ctx.actor_id(), self.is_new)
@@ -825,6 +844,19 @@ fn build_lifecycle_payload(
 ) -> napi::Result<Vec<napi::JsUnknown>> {
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
+	Ok(vec![object.into_unknown()])
+}
+
+fn build_fork_payload(env: &Env, payload: ForkPayload) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut fork = env.create_object()?;
+	let link = crate::actor_context::js_fork_link(&payload.fork.link);
+	fork.set("actorId", link.actor_id)?;
+	fork.set("key", link.key)?;
+	fork.set("forkedAt", link.forked_at)?;
+	fork.set("input", payload.fork.input.map(Buffer::from))?;
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("fork", fork)?;
 	Ok(vec![object.into_unknown()])
 }
 

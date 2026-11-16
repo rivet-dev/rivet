@@ -36,6 +36,14 @@ Region can be accessed from the context object via `c.region`.
 
 <Warning>`c.region` is only supported on Rivet at the moment.</Warning>
 
+## Namespace
+
+Get the name of the namespace the actor runs in with `c.namespace`.
+
+A namespace fork copies the namespace's actors into the new namespace with the same actor IDs and databases, and does not run `onFork`. If an actor owns something outside Rivet, such as a sandbox, store `c.namespace` next to it. When the stored namespace differs from `c.namespace`, the actor is a copy and the resource belongs to the source actor:
+
+<CodeSnippet file="examples/docs/actors-metadata/namespace.ts" />
+
 ## Example Usage
 
 <CodeGroup>

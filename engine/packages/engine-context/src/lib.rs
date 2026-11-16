@@ -12,7 +12,10 @@ mod singleton_scope;
 pub use production::{object_storage, reqwest};
 
 pub use crate::{
-	context::{EngineAdapters, EngineBackground, EngineContext},
+	context::{
+		CachedNamespace, EngineAdapters, EngineBackground, EngineContext, LegacyNameMark,
+		LegacyNameWrite, NamespaceRefresh, NamespaceRefreshBegin,
+	},
 	db::ups::UpsPool,
 	error::Error,
 	node_id::NodeId,

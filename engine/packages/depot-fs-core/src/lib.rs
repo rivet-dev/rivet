@@ -4,16 +4,19 @@
 
 pub mod apply;
 pub mod forks;
+pub mod inode;
 pub mod keys;
+pub mod overlay;
+pub mod rollback;
 pub mod rules;
 pub mod store;
 pub mod txn;
 pub mod wire;
 
-pub use rivet_data::generated::depot_fs_entry_v1::{
+pub use rivet_data::generated::depot_fs_entry_v2::{
 	FsEntry, FsTxn, FsTxnAbort, FsTxnCommit, FsTxnPending,
 };
-pub use rivet_data::generated::shared_depot_fs_v1::*;
+pub use rivet_data::generated::shared_depot_fs_v2::*;
 
 pub const CHUNK_BYTES: usize = 4096;
 /// Creation default only. Mutations use the filesystem's persisted format row.
@@ -47,6 +50,10 @@ pub enum Error {
 	NoAttribute,
 	#[error("corrupt filesystem row")]
 	Corrupt,
+	/// The claim log that would number a new inode ran out of numbers. The filesystem reports
+	/// it as `ENOSPC`.
+	#[error("no inode numbers are left in this claim log")]
+	NoInodes,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

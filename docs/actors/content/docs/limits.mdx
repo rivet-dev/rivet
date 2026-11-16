@@ -95,6 +95,28 @@ If a transaction fails with `sqlite.transaction_too_large`, split the work into 
 | Actor start threshold | N/A | 30 seconds | Maximum time for an actor to report running after its start is sent before the start is given up and retried. |
 | Actor stop threshold | N/A | 30 seconds | Time a node is given to stop its actors once asked. RivetKit uses it as the default `shutdown.gracePeriodMs` for draining the whole process; each actor's own budget is `sleepGracePeriod`. A stop that goes unanswered for about 45 seconds is treated as lost. |
 
+### Forks
+
+See [Forking](/actors/docs/forking).
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Max fork depth | N/A | 16 forks | Maximum forks behind one actor, counting forks of forks. Forking an actor that is already 16 forks deep fails with `actor.fork_too_deep`. |
+| Fork call deadline | N/A | 30 seconds | Time a fork call waits for the copy. Past it, the call fails with `actor.fork_pending` and the new actor's ID in `metadata.actor_id`, and the copy goes on. |
+| `onFork` timeout | N/A | 5 seconds | Time `onFork` has to finish on the native runtime. A throw or timeout fails the start, and `onFork` runs again on the next start. |
+| Fork first start | N/A | 15 seconds | Time a fork's first start has to run `onMigrate`, `createVars`, and `onFork` and save the result. Past it, the start fails and `onFork` runs again. On the WebAssembly runtime this is the only limit on `onFork`. |
+| Max `onFork` writes | N/A | 32,768 pages (128 MiB) | On the native runtime, every SQLite change `onFork` makes is saved in one commit with the fork. More fails the start; move a large backfill into a later action. |
+| Max namespace fork depth | N/A | 3 forks | A namespace can be forked, and its fork forked again, down to 3 levels below the original. A deeper fork fails with `namespace.lineage_too_deep`. |
+| Namespace fork call deadline | N/A | 30 seconds | Time a namespace fork call waits for the fork to go live. Past it, the call answers with the namespace as it stands; poll `GET /namespaces?name=` until it is `live`. |
+
+### Tokens
+
+See [Scoped Tokens](/docs/jwt).
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Max operations per grant | N/A | 6 | One grant can allow each of `create`, `read`, `update`, `delete`, `list`, and `fork` once. |
+
 ## Increasing Limits
 
 These limits are sane defaults designed to protect your application from exploits and accidental runaway bugs. If you have a use case that requires different limits, [contact us](/talk-to-an-engineer/) to discuss your requirements.

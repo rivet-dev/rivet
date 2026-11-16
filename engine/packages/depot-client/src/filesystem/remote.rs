@@ -8,8 +8,9 @@ use depot_fs_core::store::{Row, RowKey, RowRange};
 use depot_types::VolumeLogKey;
 use futures_util::future::BoxFuture;
 use rivet_data::generated::{
-	depot_client_protocol_v1::{ClientRequest, ClientResponse, VolumeRejectResponse},
-	shared_depot_fs_read_v1::*,
+	depot_client_protocol_v2::{ClientRequest, ClientResponse, VolumeRejectResponse},
+	shared_depot_fs_read_v2::*,
+	shared_depot_fs_v2::FsCut,
 	shared_depot_types_v1::VolumeLogPosition,
 };
 use rivet_env::Clock;
@@ -94,6 +95,13 @@ fn read_response(response: anyhow::Result<ClientResponse>) -> Result<FsReadRespo
 		}
 		let kind = error.downcast_ref::<rivet_error::RivetError>();
 		match kind.map(|kind| (kind.group(), kind.code())) {
+			// The maintainer runs an older release whose version cannot carry the read.
+			Some(("depot", "overloaded")) => {
+				crate::metrics::FS_OVERLOADED
+					.with_label_values(&["version_pending"])
+					.inc();
+				Error::Overloaded
+			}
 			Some(("depot", "routing_unavailable"))
 			| Some((
 				"ups",
@@ -324,8 +332,8 @@ async fn open_position(
 		target: FsReadTarget::VolumeLogKey(volume.clone().into()),
 		client_epoch: Some(status.client_epoch),
 		operation: FsReadOperation::FsReadOpen(FsReadOpen {
-			position: match opening {
-				Opening::Exact(position) => Some(position.clone()),
+			cut: match opening {
+				Opening::Exact(position) => Some(FsCut::single(position.clone())),
 				Opening::Latest { .. } => None,
 			},
 			prefetch: Some(wire_prefetch(prefetch)),
@@ -347,17 +355,24 @@ async fn open_position(
 	if opened.volume_log_key != volume.0 || opened.session.is_some() {
 		return Err(corrupt!());
 	}
+	let applied = applied_position(&opened.applied)?;
 	let position = match opening {
 		Opening::Exact(position) => {
-			validate_position(journal, volume, position, opened.as_of, &opened.applied)?;
+			validate_position(journal, volume, position, opened.as_of, applied)?;
 			position.clone()
 		}
 		Opening::Latest { floor } => {
-			validate_latest(journal, volume, floor, opened.as_of, &opened.applied)?;
-			opened.applied.clone()
+			validate_latest(journal, volume, floor, opened.as_of, applied)?;
+			applied.clone()
 		}
 	};
-	Ok((position, opened.applied.volume_seq, opened.rows))
+	Ok((position, applied.volume_seq, opened.rows))
+}
+
+/// The applied position of the one claim log this opening holds. A volume an opening claims
+/// has one claim log, so a reply whose cut does not name claim log 0 is corrupt.
+fn applied_position(applied: &FsCut) -> Result<&VolumeLogPosition> {
+	applied.root_position().ok_or_else(|| corrupt!())
 }
 
 /// Checks that a latest open served the maintainer's applied position under the opening's
@@ -501,16 +516,16 @@ impl ClaimSnapshot {
 		if rows.session.is_some() {
 			return Err(corrupt!());
 		}
+		let applied = applied_position(&rows.applied)?;
 		validate_claim_read(
 			self.journal.as_ref(),
 			&self.volume,
 			&self.floor,
 			through,
 			rows.as_of,
-			&rows.applied,
+			applied,
 		)?;
-		self.applied
-			.fetch_max(rows.applied.volume_seq, Ordering::AcqRel);
+		self.applied.fetch_max(applied.volume_seq, Ordering::AcqRel);
 		Ok(rows.rows)
 	}
 

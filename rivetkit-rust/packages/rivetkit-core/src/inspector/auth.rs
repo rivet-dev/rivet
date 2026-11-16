@@ -92,6 +92,24 @@ pub async fn init_inspector_token(ctx: &ActorContext) -> Result<()> {
 	Ok(())
 }
 
+/// Replaces the actor's inspector token in SQLite and returns the new token, whose KV mirror
+/// the caller writes once the held startup commit carrying it is durable. The first start of an
+/// individual actor fork calls it, since the copy holds its source's token. Returns `None` and
+/// changes nothing under the test override, as [`init_inspector_token`] does.
+pub(crate) async fn rotate_inspector_token(ctx: &ActorContext) -> Result<Option<String>> {
+	if configured_test_token().is_some() {
+		return Ok(None);
+	}
+	let Some(token) = new_inspector_token() else {
+		return Ok(None);
+	};
+	internal_storage::persist_inspector_token(ctx.sql(), &token)
+		.await
+		.context("persist rotated inspector token to sqlite")?;
+	tracing::debug!(actor_id = %ctx.actor_id(), "rotated inspector token for a forked actor");
+	Ok(Some(token))
+}
+
 /// Rewrites the KV mirror of the stored `token` when it is missing or stale. SQLite is
 /// authoritative, and a bootstrap writes the mirror only after its SQLite commit, so a crash
 /// between them leaves the mirror missing.

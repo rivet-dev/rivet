@@ -184,7 +184,10 @@ impl Filesystem {
 		}
 	}
 	pub(super) fn footprint_busy(state: &State, entry: &FsEntry, seq: u64) -> bool {
-		let footprint = txn::footprint(seq, &entry.ops);
+		// An entry whose create has no number left is refused at admission; the busy check
+		// then compares nothing of its own.
+		let created = txn::created(state.resolver.claim_log(), seq, &entry.ops).unwrap_or(seq);
+		let footprint = txn::footprint(created, &entry.ops);
 		let own = entry.txn.as_ref().map(txn::id);
 		state.transactions.iter().any(|(id, pending)| {
 			Some(id.as_slice()) != own && !pending.footprint.is_disjoint(&footprint)
@@ -409,8 +412,9 @@ impl TxnHandle {
 	}
 	pub async fn edit_file(&mut self, ino: u64, edits: &[FileEdit]) -> Result<u64> {
 		let _scratch = self.fs.reserve_edits(edits, &[], &[])?;
+		let claim_log = self.fs.claim_log;
 		self.append(false, |v, seq, now| {
-			file_batch::build(v, seq, now, ino, edits, &[], &[])
+			file_batch::build(v, claim_log, seq, now, ino, edits, &[], &[])
 		})
 		.await
 	}
@@ -468,9 +472,10 @@ impl TxnHandle {
 		extra: Vec<FsOp>,
 	) -> Result<u64> {
 		let _scratch = self.fs.reserve_edits(edits, xattrs, &extra)?;
+		let claim_log = self.fs.claim_log;
 		let result = self
 			.append(true, |v, seq, now| {
-				file_batch::build(v, seq, now, ino, &edits, xattrs, &extra)
+				file_batch::build(v, claim_log, seq, now, ino, &edits, xattrs, &extra)
 			})
 			.await;
 		self.finished = result.is_ok();
@@ -546,9 +551,10 @@ impl TxnHandle {
 			self.fs
 				.fenced(crate::fences::FenceReason::TransactionMissing)
 		})?;
-		let mut footprint = txn::footprint(status.next_seq, &entry.ops);
+		let created = txn::created(self.fs.claim_log, status.next_seq, &entry.ops)?;
+		let mut footprint = txn::footprint(created, &entry.ops);
 		if commit && entry.ops.iter().any(txn::creates) {
-			footprint.remove(&status.next_seq);
+			footprint.remove(&created);
 		}
 		if !footprint.is_subset(&pending.footprint) {
 			return Err(depot_fs_core::Error::Invalid.into());

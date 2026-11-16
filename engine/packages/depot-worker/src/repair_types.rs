@@ -2,7 +2,7 @@
 
 use bytes::Bytes;
 use depot_fs_core::FsVolumeRecord;
-use rivet_data::generated::depot_client_protocol_v1::RepairAuditRow;
+use rivet_data::generated::depot_client_protocol_v2::RepairAuditRow;
 
 /// What the store holds for one repair call before it runs: the call's audit row, for a
 /// record rebuild whether the incarnation's format row and root inode exist at the cold
@@ -29,7 +29,7 @@ pub enum PrepareReads {
 	Rows {
 		record: FsVolumeRecord,
 		applied: rivet_data::generated::shared_depot_types_v1::VolumeLogPosition,
-		keys: Vec<rivet_data::generated::shared_depot_fs_read_v1::FsRowKey>,
+		keys: Vec<rivet_data::generated::shared_depot_fs_read_v2::FsRowKey>,
 	},
 }
 

@@ -27,7 +27,7 @@ pub(crate) fn opened(
 	state: &mut MaintainerState,
 	id: OpId,
 	result: Result<
-		Option<rivet_data::generated::depot_maintainer_log_v1::MaintainerLogRecord>,
+		Option<rivet_data::generated::depot_maintainer_log_v2::MaintainerLogRecord>,
 		String,
 	>,
 	effects: &mut Effects,
@@ -260,7 +260,7 @@ pub(crate) fn is_orphan(
 			.range(super::incarnations(&key.0.volume_key))
 			.any(|(other, candidate)| {
 				candidate.row(other).is_some_and(|row| {
-					row.status == rivet_data::generated::shared_depot_fs_v1::FsVolumeStatus::Deleted
+					row.status == rivet_data::generated::shared_depot_fs_v2::FsVolumeStatus::Deleted
 				})
 			}) && !volume
 		.members
@@ -405,6 +405,7 @@ pub(crate) fn finish(state: &mut MaintainerState, effects: &mut Effects) {
 			MaintainerPhase::Serving
 		};
 		if state.phase == MaintainerPhase::Serving {
+			super::groups::began_serving(state, effects);
 			if matches!(
 				state.tablet.replica_set.phase,
 				rivet_data::generated::shared_depot_types_v1::TabletPhase::Learning(_)

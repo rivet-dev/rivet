@@ -2,14 +2,13 @@
 
 use depot_log::log_shard_machine::{runner::StatusNotifier, types::NoticeOutcome};
 use rivet_data::{
-	DEPOT_CLIENT_PROTOCOL_VERSION,
-	generated::depot_client_protocol_v1::{
+	generated::depot_client_protocol_v2::{
 		ClientRequest, ClientResponse, ReplicaStatusNoticeRequest, VolumeRejectResponse,
 	},
-	versioned::{DepotClientRequestData, DepotClientResponseData},
+	versioned::DepotClientResponseData,
 };
-use rivet_topology::worker::WorkerId;
-use std::{future::Future, pin::Pin, time::Duration};
+use rivet_topology::{versions::PeerVersions, worker::WorkerId};
+use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 use universalpubsub::{PubSub, SubjectCapacities};
 use vbare::Versioned;
 
@@ -20,6 +19,9 @@ pub struct UpsStatusNotifier {
 	pub pubsub: PubSub,
 	pub capacities: SubjectCapacities,
 	pub timeout: Duration,
+	/// Topology's view of the version each maintainer reads, so a notice to a worker of an
+	/// older release is sealed at a version it decodes.
+	pub versions: Arc<dyn PeerVersions>,
 }
 
 impl StatusNotifier for UpsStatusNotifier {
@@ -31,6 +33,9 @@ impl StatusNotifier for UpsStatusNotifier {
 		let pubsub = self.pubsub.clone();
 		let capacities = self.capacities;
 		let timeout = self.timeout;
+		let version =
+			depot_client::client_protocol::request_version(self.versions.as_ref(), &worker);
+		let retry_after_ms = self.versions.refresh_hint_ms();
 		Box::pin(async move {
 			let subject = depot_types::keys::pubsub::VolumeCommandSubject::new(worker.clone());
 			let Ok(_reservation) = pubsub.reserve_request_subject(
@@ -40,9 +45,10 @@ impl StatusNotifier for UpsStatusNotifier {
 			) else {
 				return NoticeOutcome::Failed;
 			};
-			let Ok(payload) = DepotClientRequestData::serialize_with_embedded_version(
+			let Ok(payload) = depot_client::client_protocol::seal_request(
 				&ClientRequest::ReplicaStatusNoticeRequest(request),
-				DEPOT_CLIENT_PROTOCOL_VERSION,
+				version,
+				retry_after_ms,
 			) else {
 				return NoticeOutcome::Failed;
 			};

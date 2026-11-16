@@ -45,6 +45,14 @@ Loading ──Start──▶ Ready ──spawn driver──▶ Started
 3. `onWake`, which starts any [background tasks](#background-tasks)
 4. `run` workflow (background, does not block)
 
+**On Fork** (first start of a [fork](/actors/docs/forking))
+
+1. `onMigrate`
+2. `createVars`
+3. `onFork`
+4. `onWake`, which starts any [background tasks](#background-tasks)
+5. `run` workflow (background, does not block)
+
 **On Sleep** (after idle period)
 
 1. `c.abortSignal` fires, so the `run` workflow and background tasks can stop
@@ -95,6 +103,10 @@ The `createVars` function dynamically initializes ephemeral variables. Can be as
 The `onCreate` hook is called when the actor is first created and receives the actor's input. Can be async. It runs only once per actor, so use it for one-time setup such as seeding [SQLite](/actors/docs/sqlite) from input.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/on-create.ts" />
+
+### `onFork`
+
+The `onFork` hook runs once, at the first start of an actor made by [forking](/actors/docs/forking) another actor, in place of `onCreate`. Can be async. It receives the source actor's ID and key, the time of the fork, and the caller's fork input, and has 5 seconds to finish. Use it to cancel schedules the fork copied and to drop resources that belong to the source. See [onFork](/actors/docs/forking#onfork).
 
 ### `onDestroy`
 

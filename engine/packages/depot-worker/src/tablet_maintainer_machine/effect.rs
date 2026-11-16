@@ -1,11 +1,11 @@
 //! Work selected by the deterministic tablet maintainer.
 
-use super::types::{OpId, RequestId};
+use super::types::{GroupChildren, OpId, RequestId};
 use rivet_data::generated::shared_depot_types_v1::VolumeLogPosition;
 use rivet_data::generated::{
-	depot_client_protocol_v1::ClientResponse,
+	depot_client_protocol_v2::ClientResponse,
 	depot_storage_worker_protocol_v1::StorageWorkerRequest, depot_tablet_manifest_v1::Tablet,
-	shared_depot_fs_v1::FsVolumeRecord,
+	shared_depot_fs_v2::FsVolumeRecord,
 };
 use rivet_topology::worker::WorkerId;
 use serde::{Deserialize, Serialize};
@@ -131,7 +131,7 @@ pub enum MaintainerEffect {
 	ForkPeerRequest {
 		op_id: OpId,
 		region: u16,
-		request: rivet_data::generated::depot_client_protocol_v1::ClientRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::ClientRequest,
 		deadline_boot_ms: u64,
 	},
 
@@ -146,15 +146,66 @@ pub enum MaintainerEffect {
 
 	/// **When**
 	///
-	/// Reference administration owns the ordered store slot after its apply barrier.
+	/// A volume of a group the maintainer has not cached registers, or a pin needs fork
+	/// children the cache lacks.
+	///
+	/// **Executor**
+	///
+	/// Answers a read that asks for no fork child rows from the process's group record cache
+	/// when it holds the group and every event shard is current, with no command. Otherwise
+	/// runs the `GroupRead` command on the group's volume through the worker's group commands
+	/// and fills the cache with the record. Either way it answers with `GroupReadResponse`; a
+	/// missing volume answers as a group with no record. The read's task is kept by operation
+	/// id until `CancelGroupReadRequest` or close.
+	GroupReadRequest {
+		op_id: OpId,
+		group: rivet_keys::keys::codec::GroupId,
+		fork_numbers: Vec<u64>,
+	},
+
+	/// **When**
+	///
+	/// A group read reaches its operation timeout. The core frees its read slot at the same
+	/// transition and ignores a late answer by operation id.
+	///
+	/// **Executor**
+	///
+	/// Aborts the read's local task, so this maintainer waits on no more group reads than the
+	/// slots count. The abort stops only the local wait: a read already sent to the group
+	/// volume's owner, which may be another worker, can still finish there under its own
+	/// deadline. The read changes no durable state, so an abort mid-read needs no cleanup.
+	/// Returns no event.
+	CancelGroupReadRequest { op_id: OpId },
+
+	/// **When**
+	///
+	/// An archive event, or a group read that finds the group archived, names a group with
+	/// registered volumes on this tablet, or a volume registers into a group the cache already
+	/// knows archived because its load was admitted before the archive was known.
+	///
+	/// **Executor**
+	///
+	/// The command host drops each volume's slot, fencing its filesystem as released, so the
+	/// next command reopens and is refused as archived; the filesystem store revokes every
+	/// read session of the volumes. Returns no event. The writer's own fence is the recovery
+	/// claim the maintainer starts separately.
+	CloseArchivedVolumes {
+		keys: Vec<depot_types::VolumeLogKey>,
+	},
+
+	/// **When**
+	///
+	/// Reference administration owns the ordered store slot after its apply barrier, or an
+	/// idle parent's group fork acquire enters `PlanningPin`.
 	///
 	/// **Executor**
 	///
 	/// Applies the exact reference operation in the local region and returns
-	/// ForkReferenceResponse, including any durable source record proof.
+	/// ForkReferenceResponse, including any durable source record proof. A lookup carrying
+	/// `group_children` also plans the idle parent's fork pin without writing it.
 	ForkReferenceRequest {
 		op_id: OpId,
-		request: rivet_data::generated::depot_client_protocol_v1::FsForkReferenceRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::FsForkReferenceRequest,
 		region: u16,
 		barrier: depot_fs_core::forks::ReferenceBarrier,
 		record: Option<FsVolumeRecord>,
@@ -165,6 +216,10 @@ pub enum MaintainerEffect {
 		/// Incarnations of the fork parent the maintainer holds loaded. A release never
 		/// schedules a sweep of one of them, even when its record is not stored yet.
 		loaded_parent_incarnations: Vec<[u8; 16]>,
+		/// Set only on a group fork acquire's lookup of a parent the tablet does not hold
+		/// registered: the parent group's fork children the cache knows, which the store
+		/// plans the parent's pin with and answers `NeedsIdlePin` when one is needed.
+		group_children: Option<GroupChildren>,
 	},
 
 	/// **When**
@@ -189,11 +244,37 @@ pub enum MaintainerEffect {
 	///
 	/// **Executor**
 	///
-	/// Revalidates every hold, sweeps one page and persists its cursor, then
+	/// Drops `archived_children` from the scope's fork pins, deleting a pin left waiting on no
+	/// one, then revalidates every hold, sweeps one page and persists its cursor, and
 	/// returns SweepPendingResponse. The final marker is deleted last.
 	SweepPendingRequest {
 		op_id: OpId,
 		scope: depot_fs_core::keys::slatedb::Scope,
+		/// The archived child groups the group cache learned among those the scope's fork
+		/// pins wait on, for a deleted incarnation whose sweep only fork pins held; empty
+		/// for any other sweep.
+		archived_children: Vec<[u8; 16]>,
+	},
+
+	/// **When**
+	///
+	/// The group cache learned, while the tablet serves, that a child group one of a
+	/// registered base volume's fork pins waits on is archived: from a fork child row or
+	/// from the child group's own record, read for the wait. The pass is queued
+	/// again for every later read that finds another, and dispatched from the ordered store
+	/// queue under a write footprint on the base volume, so it serializes with the volume's
+	/// pin op apply and its load.
+	///
+	/// **Executor**
+	///
+	/// Scans the volume's own fork pin rows, drops `archived_children` from their waiting
+	/// lists, deletes a pin left waiting on no one, all in one memtable batch, releases the
+	/// deleted pins' cuts from the retention catalog, and returns ForkPinPassResponse.
+	ForkPinPassRequest {
+		op_id: OpId,
+		key: depot_types::VolumeLogKey,
+		/// The children of the volume's group the group cache knows to be archived.
+		archived_children: Vec<[u8; 16]>,
 	},
 
 	/// **When**
@@ -213,26 +294,35 @@ pub enum MaintainerEffect {
 	/// **Executor**
 	///
 	/// Runs the op's guarded store change against the given record and applied position,
-	/// writing to the memtable only, and returns MaintainerOpResponse.
+	/// writing to the memtable only, and returns MaintainerOpResponse. A fork pin op also
+	/// drops `archived_children` from the volume's earlier pins in the same batch.
 	MaintainerOpRequest {
 		op_id: OpId,
-		op: rivet_data::generated::depot_maintainer_log_v1::MaintainerOp,
+		op: rivet_data::generated::depot_maintainer_log_v2::MaintainerOp,
 		record: Option<FsVolumeRecord>,
 		applied: Option<VolumeLogPosition>,
 		region: u16,
 		/// Incarnations of the fork parent the maintainer holds loaded. A release never
 		/// schedules a sweep of one of them, even when its record is not stored yet.
 		loaded_parent_incarnations: Vec<[u8; 16]>,
+		/// For a fork pin op, the children of the volume's group the group cache knows to be
+		/// archived; empty for every other op. Not part of the op: a replay with an empty
+		/// cache writes only the pin row, and the next pin or load makes the drop.
+		archived_children: Vec<[u8; 16]>,
 	},
 
 	CheckpointRequest {
 		op_id: OpId,
-		request: rivet_data::generated::depot_client_protocol_v1::VolumeCheckpointRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::VolumeCheckpointRequest,
 		record: Option<FsVolumeRecord>,
 		applied: Option<VolumeLogPosition>,
 		/// The time of the maintainer log op that is this change's durable record, when the
 		/// change has no holder. The executor then writes the change to the memtable only.
 		logged: Option<i64>,
+		/// The cut over every claim log a logged change of a volume with several claims takes
+		/// its checkpoint at, whose claim log 0 position is `applied`. `None` for a volume
+		/// with one claim.
+		claims: Option<rivet_data::generated::shared_depot_fs_v2::FsCut>,
 	},
 
 	/// **When**
@@ -249,7 +339,7 @@ pub enum MaintainerEffect {
 	/// ordinary reader waits for an inherited chunk.
 	FilesystemQueryRequest {
 		op_id: OpId,
-		request: rivet_data::generated::shared_depot_fs_read_v1::FsReadRequest,
+		request: rivet_data::generated::shared_depot_fs_read_v2::FsReadRequest,
 		applied: Option<VolumeLogPosition>,
 		/// The highest applied position with no filesystem transaction half applied, which a
 		/// latest open serves.
@@ -273,11 +363,22 @@ pub enum MaintainerEffect {
 	///
 	/// **Executor**
 	///
-	/// Reads the incarnation's own record row and returns FilesystemLoadResponse.
+	/// Reads the incarnation's own record row and returns FilesystemLoadResponse. For a grouped
+	/// volume it rebuilds
+	/// `fork_pinned_through` from the volume's fork pin rows. A registration also runs the pin
+	/// pass over those rows: it drops `archived_children` from their waiting lists, deleting a
+	/// pin left waiting on no one, in one memtable batch, releases the deleted pins' cuts from
+	/// the retention catalog, and reports the pins left waiting. A stop-proof load writes
+	/// nothing.
 	///
 	FilesystemLoadRequest {
 		op_id: super::types::OpId,
 		key: depot_types::VolumeLogKey,
+		/// Why the record is read; only a registration runs the pin pass.
+		purpose: super::state::filesystem::LoadPurpose,
+		/// The children of the volume's group the group cache knows to be archived, empty
+		/// outside a group or before the cache holds the group.
+		archived_children: Vec<[u8; 16]>,
 	},
 	/// **When**
 	///
@@ -677,14 +778,14 @@ pub enum MaintainerEffect {
 	/// **Executor**
 	///
 	/// The filesystem read task reads the typed volume row and exact pending-fork key under the store's mutation lock,
-	/// then returns ReadRowResponse. Without `incarnation` the row is the name's pointer, which an open of an unloaded
-	/// name reads; with it, that incarnation's own row, which deletes and unloads of a known incarnation read. It runs
-	/// beside any IO-loop mutation the core admitted it next to, and fences instead when the grant ended or the store
-	/// closed.
+	/// then returns ReadRowResponse. `read` names the row: the name's pointer, which an open of an unloaded name
+	/// reads, or an incarnation's own row, which deletes and unloads of a known incarnation read; a delete's read also
+	/// returns the incarnation's pin mark. It runs beside any IO-loop mutation the core admitted it next to, and fences
+	/// instead when the grant ended or the store closed.
 	ReadRowRequest {
 		op_id: OpId,
 		volume_key: depot_types::VolumeKey,
-		incarnation: Option<[u8; 16]>,
+		read: super::types::RowRead,
 	},
 
 	/// **When**
@@ -702,7 +803,7 @@ pub enum MaintainerEffect {
 		key: depot_types::VolumeLogKey,
 		record: FsVolumeRecord,
 		applied: VolumeLogPosition,
-		read: rivet_data::generated::depot_client_protocol_v1::VolumeReadKeys,
+		read: rivet_data::generated::depot_client_protocol_v2::VolumeReadKeys,
 	},
 
 	/// **When**
@@ -736,6 +837,7 @@ impl rivet_state_machine::Effect for MaintainerEffect {
 	fn name(&self) -> &'static str {
 		match self {
 			Self::RefreshCommandReplicaSets => "refresh_command_replica_sets",
+			Self::CloseArchivedVolumes { .. } => "close_archived_volumes",
 			Self::AlarmRequest { .. } => "alarm_request",
 			Self::CancelAlarmRequest { .. } => "cancel_alarm_request",
 			MaintainerEffect::StopReadinessResponse { .. } => "stop_readiness_response",
@@ -744,10 +846,13 @@ impl rivet_state_machine::Effect for MaintainerEffect {
 			MaintainerEffect::ForkCleanupRequest { .. } => "fork_cleanup_request",
 			MaintainerEffect::ForkStoreRequest { .. } => "fork_store_request",
 			MaintainerEffect::ForkPeerRequest { .. } => "fork_peer_request",
+			MaintainerEffect::GroupReadRequest { .. } => "group_read_request",
+			MaintainerEffect::CancelGroupReadRequest { .. } => "cancel_group_read_request",
 			MaintainerEffect::CancelForkPeerRequest { .. } => "cancel_fork_peer_request",
 			MaintainerEffect::ForkReferenceRequest { .. } => "fork_reference_request",
 			MaintainerEffect::PendingWorkRequest { .. } => "pending_work_request",
 			MaintainerEffect::SweepPendingRequest { .. } => "sweep_pending_request",
+			MaintainerEffect::ForkPinPassRequest { .. } => "fork_pin_pass_request",
 			MaintainerEffect::CheckpointRequest { .. } => "checkpoint_request",
 			MaintainerEffect::FilesystemQueryRequest { .. } => "filesystem_query_request",
 			MaintainerEffect::CancelFilesystemQueryRequest { .. } => {
@@ -809,7 +914,7 @@ pub enum RepairEffect {
 	/// and returns the correlated DiagnosticsResponse. It never changes lifecycle state.
 	DiagnosticsRequest {
 		op_id: OpId,
-		request: rivet_data::generated::depot_client_protocol_v1::RepairDiagnosticsRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::RepairDiagnosticsRequest,
 	},
 	/// **When**
 	///

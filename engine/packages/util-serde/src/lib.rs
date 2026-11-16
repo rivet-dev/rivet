@@ -251,27 +251,6 @@ impl<K: Eq + Hash, V: Hash> Extend<(K, V)> for HashableMap<K, V> {
 	}
 }
 
-// TODO: This doesn't work
-// impl<K: ToSchema + Eq + Hash, T: ToSchema + Hash> ToSchema for HashableMap<K, T> {
-// 	fn schemas(
-// 		schemas: &mut Vec<(
-// 			String,
-// 			utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
-// 		)>,
-// 	) {
-// 		K::schemas(schemas);
-// 		T::schemas(schemas);
-// 	}
-// }
-//
-// impl<K: ToSchema + Eq + Hash, T: ToSchema + Hash> PartialSchema for HashableMap<K, T> {
-// 	fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
-// 		utoipa::openapi::ObjectBuilder::new()
-// 			.additional_properties(Some(T::schema()))
-// 			.into()
-// 	}
-// }
-
 /// Allows partial json ser/de.
 /// Effectively a `serde_json::value::RawValue` with type information.
 pub struct Raw<T> {

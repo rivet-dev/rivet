@@ -5,7 +5,7 @@ use super::{
 	json::{self, VolumeLogKey},
 };
 use axum::{Json, extract::State};
-use rivet_data::generated::depot_client_protocol_v1::{
+use rivet_data::generated::depot_client_protocol_v2::{
 	ClientRequest, ClientResponse, RepairDiagnosticsKind, RepairDiagnosticsRequest,
 };
 use rivet_engine_context::EngineContext;

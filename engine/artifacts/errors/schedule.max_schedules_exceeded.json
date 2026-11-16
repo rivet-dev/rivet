@@ -1,0 +1,5 @@
+{
+  "code": "max_schedules_exceeded",
+  "group": "schedule",
+  "message": "Actor schedule limit reached."
+}

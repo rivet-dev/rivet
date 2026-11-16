@@ -107,7 +107,7 @@ impl PartitionKeyHashRange {
 	}
 }
 
-impl crate::generated::shared_depot_fs_v1::FsVolumeRecord {
+impl crate::generated::shared_depot_fs_v2::FsVolumeRecord {
 	pub fn volume_key(&self) -> VolumeKey {
 		VolumeKey {
 			partition_key: self.partition_key.clone(),
@@ -116,9 +116,9 @@ impl crate::generated::shared_depot_fs_v1::FsVolumeRecord {
 	}
 }
 
-impl crate::generated::shared_depot_fs_read_v1::FsReadRequest {
+impl crate::generated::shared_depot_fs_read_v2::FsReadRequest {
 	pub fn volume_key(&self) -> &VolumeKey {
-		use crate::generated::shared_depot_fs_read_v1::FsReadTarget;
+		use crate::generated::shared_depot_fs_read_v2::FsReadTarget;
 		match &self.target {
 			FsReadTarget::VolumeKey(key) => key,
 			FsReadTarget::VolumeLogKey(key) => &key.volume_key,
@@ -126,15 +126,15 @@ impl crate::generated::shared_depot_fs_read_v1::FsReadRequest {
 	}
 	pub fn volume_log_key(&self) -> Option<&crate::generated::shared_depot_types_v1::VolumeLogKey> {
 		match &self.target {
-			crate::generated::shared_depot_fs_read_v1::FsReadTarget::VolumeLogKey(key) => Some(key),
+			crate::generated::shared_depot_fs_read_v2::FsReadTarget::VolumeLogKey(key) => Some(key),
 			_ => None,
 		}
 	}
 }
 
-impl crate::generated::depot_client_protocol_v1::FsForkReferenceRequest {
-	pub fn spec(&self) -> &crate::generated::shared_depot_fs_v1::FsForkSpec {
-		use crate::generated::depot_client_protocol_v1::FsForkReferenceRequest::*;
+impl crate::generated::depot_client_protocol_v2::FsForkReferenceRequest {
+	pub fn spec(&self) -> &crate::generated::shared_depot_fs_v2::FsForkSpec {
+		use crate::generated::depot_client_protocol_v2::FsForkReferenceRequest::*;
 		match self {
 			FsForkAcquire(v) => &v.spec,
 			FsForkRelease(v) => &v.spec,

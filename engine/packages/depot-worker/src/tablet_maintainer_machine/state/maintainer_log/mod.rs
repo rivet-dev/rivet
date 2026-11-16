@@ -30,13 +30,13 @@ use rivet_data::generated::{
 	depot_log_shard_v1::{
 		PayloadCodec, PayloadWrite, VolumeLogEntry, VolumeLogEntryBody, VolumeLogReplicaState,
 	},
-	depot_maintainer_log_v1::{MaintainerEntry, MaintainerLogRecord, MaintainerOp},
+	depot_maintainer_log_v2::{MaintainerEntry, MaintainerLogRecord, MaintainerOp},
 	depot_storage_worker_protocol_v1::{
 		self as wire, RejectResponse, StorageWorkerRequest as Request,
 		StorageWorkerResponse as Response,
 	},
 	shared_depot_types_v1::{
-		ClientIdentity, TabletPhase, VolumeLogPosition, VolumeLogReplicaStatus,
+		ClientIdentity, TabletPhase, VersionMark, VolumeLogPosition, VolumeLogReplicaStatus,
 	},
 };
 use rivet_state_machine::Entropy;
@@ -240,6 +240,22 @@ pub struct MaintainerLog {
 	pub(crate) passes_completed: u64,
 	/// The cold position a dispatched pass is writing to the store, by its dispatch count.
 	pub(crate) writing: BTreeMap<u64, VolumeLogPosition>,
+	/// The dispatch count of the pass carrying marks this grant raised, until a pass carrying
+	/// them completes. Until then the in-memory record leads the store's, every pass carries
+	/// the record, and the store encodes rows outside those passes at the old `depot.fs_rows`
+	/// mark; see [`rows_mark_pending`].
+	pub(crate) raising_marks: Option<u64>,
+	/// Marks commands asked for (`MaintainerEvent::VersionMarkWanted`) that the in-memory
+	/// record does not carry yet. The next pass that writes the record raises them and
+	/// empties this; a pass that cannot write the record, such as during a split, leaves them.
+	pub(crate) wanted_marks: Vec<VersionMark>,
+	/// The record's marks as the store holds them durably: the record opening read, raised
+	/// by each completed pass that wrote the record. Published to commands as
+	/// `MaintainerSnapshot::version_marks_durable`.
+	pub(crate) durable_marks: Vec<VersionMark>,
+	/// The marks each dispatched pass that writes the record carries, by its dispatch count,
+	/// until it completes and they join `durable_marks`.
+	pub(crate) marks_writing: BTreeMap<u64, Vec<VersionMark>>,
 	/// The oldest store write outside any log that only an ordinary pass makes durable, such
 	/// as a deleted record's removal, and the dispatch count a covering pass must exceed.
 	pub(crate) uncovered: Option<Uncovered>,
@@ -280,6 +296,10 @@ impl Default for MaintainerLog {
 			pass_dispatches: 0,
 			passes_completed: 0,
 			writing: BTreeMap::new(),
+			raising_marks: None,
+			wanted_marks: Vec::new(),
+			durable_marks: Vec::new(),
+			marks_writing: BTreeMap::new(),
 			uncovered: None,
 			pass_wanted: false,
 			due_at: None,
@@ -356,6 +376,9 @@ pub(crate) fn record_read(state: &mut MaintainerState, mut record: Option<Mainta
 		state.maintainer_log.cold = record.cold.clone();
 		state.maintainer_log.own_record_stored = true;
 	}
+	state.maintainer_log.durable_marks = record
+		.as_ref()
+		.map_or_else(Vec::new, |record| record.version_marks.clone());
 	state.maintainer_log.record = Some(record.unwrap_or(MaintainerLogRecord {
 		tablet_id: state.tablet.id,
 		cold: zero(),
@@ -1370,15 +1393,30 @@ pub(crate) fn pass_dispatched(state: &mut MaintainerState) -> (u64, Option<Recor
 	};
 	let advanced = cold.volume_seq > record.cold.volume_seq || record.tablet_id != state.tablet.id;
 	let mut version_marks = record.version_marks.clone();
-	let marks_raised =
-		super::version_marks::raise_written(&mut version_marks, &state.config.write_versions);
-	if !advanced && !marks_raised {
+	let marks_raised = super::version_marks::raise_written(
+		&mut version_marks,
+		&state.config.write_versions,
+		&log.wanted_marks,
+	);
+	log.wanted_marks.clear();
+	// A pass dispatched while the pass raising the marks uploads carries them too, so its own
+	// records are encoded at the raised version in a batch that holds the mark. Its record
+	// names the same cold position or a later one, never an earlier one: an earlier pass
+	// writing a newer position makes this one advance as well.
+	let carries_marks = marks_raised || log.raising_marks.is_some();
+	if !advanced && !carries_marks {
 		return (dispatch, None);
 	}
 	if marks_raised && let Some(current) = &mut log.record {
 		// The pass that carries the raised marks fences the maintainer if it fails, so the
 		// in-memory record may lead the store's.
 		current.version_marks = version_marks.clone();
+		// Rows wait only for a `depot.fs_rows` mark above the durable one. An absent mark
+		// reads as version 1, so recording it, or raising only the maintainer log's own mark,
+		// holds nothing: the store already encodes rows at that version.
+		if rows_mark(&version_marks) > rows_mark(&record.version_marks) {
+			log.raising_marks = Some(dispatch);
+		}
 	}
 	let record = MaintainerLogRecord {
 		tablet_id: state.tablet.id,
@@ -1388,6 +1426,8 @@ pub(crate) fn pass_dispatched(state: &mut MaintainerState) -> (u64, Option<Recor
 	if advanced {
 		log.writing.insert(dispatch, cold);
 	}
+	log.marks_writing
+		.insert(dispatch, record.version_marks.clone());
 	let volume_key = own_key(state).0.volume_key;
 	let version = state.config.write_versions.maintainer_log;
 	(
@@ -1398,6 +1438,65 @@ pub(crate) fn pass_dispatched(state: &mut MaintainerState) -> (u64, Option<Recor
 			version,
 		}),
 	)
+}
+
+/// Whether rows written outside the pass that raises the tablet's `depot.fs_rows` mark must
+/// wait for that pass: this grant writes a higher version than the store's durable mark, and
+/// the pass carrying the raised mark has not completed. Until it does, the store encodes such
+/// rows at the old mark, which cannot hold every row, such as a volume created in a group;
+/// writing one would fail the pass and fence the maintainer. Only a pass that can carry the
+/// marks waits: during a split no pass writes the record, so rows keep the old encoding.
+///
+/// This holds in every log phase, not only while the log serves: a pass dispatched before the
+/// log serves carries no record, so a row it wrote would be encoded at the old mark too. The
+/// maintainer leaves `Opening` only once its log serves, and then arms the cold pass for rows
+/// queued while opening, so held rows run once a pass can raise the mark. Before the store
+/// record is read nothing writes rows, and the mark is unknown.
+pub(crate) fn rows_mark_pending(state: &MaintainerState) -> bool {
+	let log = &state.maintainer_log;
+	if log.raising_marks.is_some() {
+		return true;
+	}
+	if state.tablet.split.is_some() {
+		return false;
+	}
+	let Some(record) = &log.record else {
+		return false;
+	};
+	rows_mark(&record.version_marks) < state.config.write_versions.fs_rows
+}
+
+/// The `depot.fs_rows` version `marks` admit. An absent mark admits version 1, which every
+/// binary that records marks reads.
+pub(crate) fn rows_mark(
+	marks: &[rivet_data::generated::shared_depot_types_v1::VersionMark],
+) -> u16 {
+	rivet_data::families::mark_of(marks, rivet_data::families::VersionFamily::DEPOT_FS_ROWS)
+		.unwrap_or(1)
+}
+
+/// Asks promptly for the pass that raises the `depot.fs_rows` mark, for work waiting on it.
+/// The pass carries the maintainer log record even with no volume records to flush.
+pub(crate) fn request_mark_pass(state: &mut MaintainerState, fx: &mut Effects) {
+	if state.phase != MaintainerPhase::Serving || state.maintainer_log.raising_marks.is_some() {
+		return;
+	}
+	if state.maintainer_log.due_at.take().is_some() {
+		fx.cancel_timer(MaintainerTimer::MaintainerLogDue);
+	}
+	state.maintainer_log.pass_wanted = true;
+	super::filesystem::request_log_pass(state, true, fx);
+}
+
+/// Asks promptly for a pass that writes the record, carrying the marks commands want.
+/// Unlike [`request_mark_pass`] it asks even while a pass raising the rows mark is in
+/// flight, since that pass may have been dispatched before the wanted marks arrived.
+pub(crate) fn request_marks_pass(state: &mut MaintainerState, fx: &mut Effects) {
+	if state.maintainer_log.due_at.take().is_some() {
+		fx.cancel_timer(MaintainerTimer::MaintainerLogDue);
+	}
+	state.maintainer_log.pass_wanted = true;
+	super::filesystem::request_log_pass(state, true, fx);
 }
 
 /// The highest position every entry through which is covered and whose volumes are cold past
@@ -1462,6 +1561,39 @@ pub(crate) fn store_pass_dispatched(state: &mut MaintainerState) -> u64 {
 pub(crate) fn pass_completed(state: &mut MaintainerState, dispatch: u64, fx: &mut Effects) {
 	let log = &mut state.maintainer_log;
 	log.passes_completed = log.passes_completed.max(dispatch);
+	// The record this pass and every earlier one wrote is durable, so commands waiting for
+	// its marks may store values at them.
+	let durable: Vec<u64> = log
+		.marks_writing
+		.range(..=dispatch)
+		.map(|(written, _)| *written)
+		.collect();
+	for written in durable {
+		if let Some(marks) = log.marks_writing.remove(&written) {
+			rivet_data::families::merge_marks(&mut log.durable_marks, &marks);
+		}
+	}
+	if log.raising_marks.is_some_and(|raising| dispatch >= raising) {
+		log.raising_marks = None;
+		// The raised marks are durable, so the store encodes every row at them now. Work
+		// that waited for them runs again: the held rows' cold pass, and the flush that pass
+		// hands the first records of registered volumes to. That flush is queued behind the
+		// pass, so it carries those records at once rather than a throttle window later.
+		// It saves latency after a restart too: until a volume's record is cold, a restart
+		// proves a tail its dead claimant left unproven only through the recovery of the
+		// volume's holder-gone or idle unload, so a fork waiting on that tail waits a holder
+		// check interval or more.
+		if !state.pending_rows.is_empty() {
+			super::store::queue_cold_pass(state);
+			super::filesystem::queue_flush(state);
+		}
+		super::materialize::release_held(state);
+		super::fork_references::pins_progressed(state, None, fx);
+		super::filesystem::release_held_applies(state);
+		// Group fork jobs that discovery or a log replay started before the mark landed.
+		super::forks::rows_landed(state, fx);
+	}
+	let log = &mut state.maintainer_log;
 	if log
 		.uncovered
 		.as_ref()
@@ -1516,6 +1648,7 @@ pub(crate) fn names_volume(state: &MaintainerState, key: &VolumeLogKey) -> bool 
 /// A pass dispatched as `dispatch` failed. The maintainer fences, so nothing changes.
 pub(crate) fn pass_failed(state: &mut MaintainerState, dispatch: u64) {
 	state.maintainer_log.writing.remove(&dispatch);
+	state.maintainer_log.marks_writing.remove(&dispatch);
 }
 
 /// Whether a pass should run for the log even when no volume asked for one.

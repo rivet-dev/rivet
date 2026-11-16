@@ -8,10 +8,11 @@
 use anyhow::Result;
 use depot_client::filesystem::remote::ReadTransport;
 use rivet_data::generated::{
-	shared_depot_fs_read_v1::{
+	shared_depot_fs_read_v2::{
 		FsReadError, FsReadKeys, FsReadOperation, FsReadRequest, FsReadResponse, FsReadTarget,
 		FsReadValues,
 	},
+	shared_depot_fs_v2::FsCut,
 	shared_depot_types_v1::{VolumeLogKey, VolumeLogPosition},
 };
 use std::sync::Arc;
@@ -81,23 +82,38 @@ impl WriterlessRead {
 	/// Reads one key of the `kv` file in one round trip. A volume without a `kv` file holds
 	/// no keys.
 	pub(crate) async fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+		let mut values = self.get_many(std::slice::from_ref(&key.to_vec())).await?;
+		Ok(values.pop().flatten())
+	}
+
+	/// Reads `keys` of the `kv` file in one round trip, in their order; see [`Self::get`].
+	pub(crate) async fn get_many(&self, keys: &[Vec<u8>]) -> Result<Vec<Option<Vec<u8>>>> {
+		Ok(self.get_many_with_lag(keys).await?.0)
+	}
+
+	/// [`Self::get_many`], with how many volume seqs the snapshot lagged the highest commit the
+	/// maintainer knew of when it answered.
+	pub(crate) async fn get_many_with_lag(
+		&self,
+		keys: &[Vec<u8>],
+	) -> Result<(Vec<Option<Vec<u8>>>, u64)> {
 		let mut pinned = self.pinned.lock().await;
 		let current = pinned.clone();
 		if current.is_some() {
 			drop(pinned);
-			let (_, value) = self.point_read(current, key).await?;
-			return Ok(value);
+			let (_, values, lag) = self.point_read(current, keys).await?;
+			return Ok((values, lag));
 		}
-		let (observed, value) = self.point_read(None, key).await?;
+		let (observed, values, lag) = self.point_read(None, keys).await?;
 		*pinned = Some(observed);
-		Ok(value)
+		Ok((values, lag))
 	}
 
 	async fn point_read(
 		&self,
 		pinned: Option<Pinned>,
-		key: &[u8],
-	) -> Result<(Pinned, Option<Vec<u8>>)> {
+		keys: &[Vec<u8>],
+	) -> Result<(Pinned, Vec<Option<Vec<u8>>>, u64)> {
 		let (target, position) = match &pinned {
 			Some(pinned) => (
 				FsReadTarget::VolumeLogKey(pinned.volume_log_key.clone()),
@@ -109,9 +125,9 @@ impl WriterlessRead {
 			target,
 			client_epoch: None,
 			operation: FsReadOperation::FsReadKeys(FsReadKeys {
-				position,
+				cut: position.map(FsCut::single),
 				file: self.kv_name.clone().into(),
-				keys: vec![key.to_vec().into()],
+				keys: keys.iter().map(|key| key.clone().into()).collect(),
 			}),
 		};
 		let response = self.transport.read_at(request, self.deadline_boot_ms).await;
@@ -141,8 +157,21 @@ impl WriterlessRead {
 			volume_log_key,
 			applied,
 			as_of,
+			committed,
 			values,
 		} = values;
+		// A maintainer that does not know the commit, or a v1 or v2 answer upgraded on the way,
+		// reports `u64::MAX`, and the lag is then unknown too: `u64::MAX`, never a distance.
+		let lag = if committed == u64::MAX {
+			u64::MAX
+		} else {
+			committed.saturating_sub(as_of)
+		};
+		// The volume has one claim log, so the applied cut names claim log 0 alone.
+		let Ok(applied) = applied.into_single() else {
+			tracing::debug!("point read answered with a cut over another claim log");
+			return Err(WriterlessReadError::Unavailable.into());
+		};
 		if pinned
 			.as_ref()
 			.is_some_and(|pinned| pinned.volume_log_key != volume_log_key)
@@ -150,10 +179,10 @@ impl WriterlessRead {
 			tracing::debug!("point read answered from another incarnation");
 			return Err(WriterlessReadError::Unavailable.into());
 		}
-		let Ok([value]) = <[_; 1]>::try_from(values) else {
+		if values.len() != keys.len() {
 			tracing::debug!("point read returned the wrong number of values");
 			return Err(WriterlessReadError::Unavailable.into());
-		};
+		}
 		// The snapshot is at `as_of`; when it is the applied position, that position names it.
 		let position = match pinned {
 			Some(pinned) => pinned.position,
@@ -168,7 +197,11 @@ impl WriterlessRead {
 				volume_log_key,
 				position,
 			},
-			value.map(Vec::from),
+			values
+				.into_iter()
+				.map(|value| value.map(Vec::from))
+				.collect(),
+			lag,
 		))
 	}
 }

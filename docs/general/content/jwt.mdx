@@ -45,7 +45,7 @@ This grant does not allow Actor creation, listing, node registration, or pool ma
 
 ## Grants
 
-Each grant names a `resource`, a `target`, and `operations` drawn from `create`, `read`, `update`, `delete`, and `list`. A target is `"any"` or an object such as `{"id":"<actor-id>"}`. Replace the placeholder with the resolved Actor ID.
+Each grant names a `resource`, a `target`, and `operations` drawn from `create`, `read`, `update`, `delete`, `list`, and `fork`. A target is `"any"` or an object such as `{"id":"<actor-id>"}`. Replace the placeholder with the resolved Actor ID.
 
 | Resource | Purpose |
 | --- | --- |
@@ -55,6 +55,19 @@ Each grant names a `resource`, a `target`, and `operations` drawn from `create`,
 | `pool` | Read or manage node pool configuration. |
 
 Actor management and gateway access require separate grants. Permission to reach one Actor does not allow the holder to create other Actors. Namespace administration and token issuance require the admin credential.
+
+### Forking an Actor
+
+A fork copies everything an Actor holds into a new Actor the caller controls, so only the `fork` operation allows it. Grant `fork` on the source Actor, by its ID or `"any"`, together with `create` on `"any"` Actor, because the new Actor's ID is not known before the fork:
+
+```json
+[
+  {"resource":"actor","target":{"id":"<actor-id>"},"operations":["fork"]},
+  {"resource":"actor","target":"any","operations":["create"]}
+]
+```
+
+No other operation includes `fork`: tokens that can read, create, or connect to an Actor cannot fork it. The fork input comes from whoever forks the Actor, so validate it in `onFork` like any client input. While an engine upgrade is rolling out, issuing a token that grants `fork` answers `auth.operation_unavailable` (503 with `Retry-After`) until every engine worker supports it.
 
 ## Inspect and renew
 

@@ -10,11 +10,12 @@ use rivet_singleton_coordinator::{
 /// Every service runs for the whole tenure. The tenure's run ends once all of them return, which
 /// each does when the authority is revoked.
 pub(crate) struct CompositeSingletons {
-	services: Vec<Arc<dyn SingletonServices>>,
+	/// Each service with a bounded name for stop diagnostics.
+	services: Vec<(&'static str, Arc<dyn SingletonServices>)>,
 }
 
 impl CompositeSingletons {
-	pub(crate) fn new(services: Vec<Arc<dyn SingletonServices>>) -> Self {
+	pub(crate) fn new(services: Vec<(&'static str, Arc<dyn SingletonServices>)>) -> Self {
 		Self { services }
 	}
 }
@@ -25,7 +26,7 @@ impl SingletonServices for CompositeSingletons {
 		let runs = self
 			.services
 			.iter()
-			.map(|service| service.run(authority.clone()));
+			.map(|(_, service)| service.run(authority.clone()));
 		let results = futures_util::future::join_all(runs).await;
 		results.into_iter().collect::<Result<Vec<_>>>()?;
 		Ok(())
@@ -35,8 +36,16 @@ impl SingletonServices for CompositeSingletons {
 	/// service's tasks running past the lease.
 	async fn reconcile_stopped(&self, tenure: &CoordinatorTenure) -> Result<()> {
 		let mut first_error = None;
-		for service in &self.services {
-			if let Err(error) = service.reconcile_stopped(tenure).await {
+		for (name, service) in &self.services {
+			let result = service.reconcile_stopped(tenure).await;
+			// A service that never finishes stopping is the one named last before the
+			// coordinator's stop watchdog exits the process.
+			tracing::info!(
+				service = name,
+				ok = result.is_ok(),
+				"singleton service reconciled"
+			);
+			if let Err(error) = result {
 				tracing::warn!(?error, "a singleton service failed to stop cleanly");
 				first_error.get_or_insert(error);
 			}

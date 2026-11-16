@@ -20,6 +20,7 @@ import type {
 	RuntimeBytes,
 	RuntimeCronFire,
 	RuntimeCronJobInfo,
+	RuntimeForkLink,
 	RuntimeHttpRequest,
 	RuntimeInspectorSnapshot,
 	RuntimeKvEntry,
@@ -586,8 +587,16 @@ export class WasmCoreRuntime implements CoreRuntime {
 		return callHandle(asWasmActorContext(ctx), "key");
 	}
 
+	actorForkChain(ctx: ActorContextHandle): RuntimeForkLink[] {
+		return callHandle(asWasmActorContext(ctx), "forkChain");
+	}
+
 	actorRegion(ctx: ActorContextHandle): string {
 		return callHandle(asWasmActorContext(ctx), "region");
+	}
+
+	actorNamespace(ctx: ActorContextHandle): string {
+		return callHandle(asWasmActorContext(ctx), "namespace");
 	}
 
 	actorSleep(ctx: ActorContextHandle): void {

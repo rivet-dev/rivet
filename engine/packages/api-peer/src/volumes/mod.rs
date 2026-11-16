@@ -20,7 +20,7 @@ use http::{HeaderMap, StatusCode};
 use read::Snapshot;
 use rivet_config::config::api_peer::VolumesConfig;
 use rivet_data::{
-	generated::{shared_depot_fs_read_v1::*, shared_depot_types_v1::VolumeLogKey},
+	generated::{shared_depot_fs_read_v2::*, shared_depot_types_v1::VolumeLogKey},
 	versioned::DepotFsDirectoryCursorData,
 };
 use std::{sync::Arc, time::Duration};

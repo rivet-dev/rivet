@@ -2066,7 +2066,99 @@ export function writeHibernatingRequest(bc: bare.ByteCursor, x: HibernatingReque
     writeRequestId(bc, x.requestId)
 }
 
-function read20(bc: bare.ByteCursor): readonly HibernatingRequest[] {
+/**
+ * One individual actor fork in a fork chain: the source actor, its key, and when the fork was
+ * made.
+ */
+export type ActorForkLink = {
+    readonly actorId: Id
+    readonly key: string | null
+    readonly forkedAt: i64
+}
+
+export function readActorForkLink(bc: bare.ByteCursor): ActorForkLink {
+    return {
+        actorId: readId(bc),
+        key: read17(bc),
+        forkedAt: bare.readI64(bc),
+    }
+}
+
+export function writeActorForkLink(bc: bare.ByteCursor, x: ActorForkLink): void {
+    writeId(bc, x.actorId)
+    write17(bc, x.key)
+    bare.writeI64(bc, x.forkedAt)
+}
+
+function read20(bc: bare.ByteCursor): readonly ActorForkLink[] {
+    const len = bare.readUintSafe(bc)
+    if (len === 0) {
+        return []
+    }
+    const result = [readActorForkLink(bc)]
+    for (let i = 1; i < len; i++) {
+        result[i] = readActorForkLink(bc)
+    }
+    return result
+}
+
+function write20(bc: bare.ByteCursor, x: readonly ActorForkLink[]): void {
+    bare.writeUintSafe(bc, x.length)
+    for (let i = 0; i < x.length; i++) {
+        writeActorForkLink(bc, x[i])
+    }
+}
+
+/**
+ * The individual actor fork an actor's database was copied in. The engine sends it on every
+ * start of the forked actor; the runtime runs its fork hook once, on the first start whose
+ * `forkId` it has not applied, with the fork input in `ActorConfig.input`.
+ */
+export type ActorFork = {
+    /**
+     * Drawn by the fork request: one per fork, never reused.
+     */
+    readonly forkId: ArrayBuffer
+    /**
+     * The source actor.
+     */
+    readonly actorId: Id
+    /**
+     * The source actor's key.
+     */
+    readonly key: string | null
+    /**
+     * When the fork was made, in milliseconds since the epoch: the forked actor's create time.
+     */
+    readonly forkedAt: i64
+    /**
+     * The source's own fork chain, oldest first, without this fork: the engine's record of every
+     * individual actor fork behind the source, at most 16 links. The runtime uses it when the
+     * copied database does not hold the source's chain, which happens when the source never
+     * committed its first start before it was forked again.
+     */
+    readonly chain: readonly ActorForkLink[]
+}
+
+export function readActorFork(bc: bare.ByteCursor): ActorFork {
+    return {
+        forkId: bare.readData(bc),
+        actorId: readId(bc),
+        key: read17(bc),
+        forkedAt: bare.readI64(bc),
+        chain: read20(bc),
+    }
+}
+
+export function writeActorFork(bc: bare.ByteCursor, x: ActorFork): void {
+    bare.writeData(bc, x.forkId)
+    writeId(bc, x.actorId)
+    write17(bc, x.key)
+    bare.writeI64(bc, x.forkedAt)
+    write20(bc, x.chain)
+}
+
+function read21(bc: bare.ByteCursor): readonly HibernatingRequest[] {
     const len = bare.readUintSafe(bc)
     if (len === 0) {
         return []
@@ -2078,21 +2170,32 @@ function read20(bc: bare.ByteCursor): readonly HibernatingRequest[] {
     return result
 }
 
-function write20(bc: bare.ByteCursor, x: readonly HibernatingRequest[]): void {
+function write21(bc: bare.ByteCursor, x: readonly HibernatingRequest[]): void {
     bare.writeUintSafe(bc, x.length)
     for (let i = 0; i < x.length; i++) {
         writeHibernatingRequest(bc, x[i])
     }
 }
 
-function read21(bc: bare.ByteCursor): PreloadedKv | null {
+function read22(bc: bare.ByteCursor): PreloadedKv | null {
     return bare.readBool(bc) ? readPreloadedKv(bc) : null
 }
 
-function write21(bc: bare.ByteCursor, x: PreloadedKv | null): void {
+function write22(bc: bare.ByteCursor, x: PreloadedKv | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         writePreloadedKv(bc, x)
+    }
+}
+
+function read23(bc: bare.ByteCursor): ActorFork | null {
+    return bare.readBool(bc) ? readActorFork(bc) : null
+}
+
+function write23(bc: bare.ByteCursor, x: ActorFork | null): void {
+    bare.writeBool(bc, x != null)
+    if (x != null) {
+        writeActorFork(bc, x)
     }
 }
 
@@ -2100,20 +2203,26 @@ export type CommandStartActor = {
     readonly config: ActorConfig
     readonly hibernatingRequests: readonly HibernatingRequest[]
     readonly preloadedKv: PreloadedKv | null
+    /**
+     * Set for an actor made by an individual actor fork. Added in v9.
+     */
+    readonly fork: ActorFork | null
 }
 
 export function readCommandStartActor(bc: bare.ByteCursor): CommandStartActor {
     return {
         config: readActorConfig(bc),
-        hibernatingRequests: read20(bc),
-        preloadedKv: read21(bc),
+        hibernatingRequests: read21(bc),
+        preloadedKv: read22(bc),
+        fork: read23(bc),
     }
 }
 
 export function writeCommandStartActor(bc: bare.ByteCursor, x: CommandStartActor): void {
     writeActorConfig(bc, x.config)
-    write20(bc, x.hibernatingRequests)
-    write21(bc, x.preloadedKv)
+    write21(bc, x.hibernatingRequests)
+    write22(bc, x.preloadedKv)
+    write23(bc, x.fork)
 }
 
 export enum StopActorReason {
@@ -2221,18 +2330,27 @@ export function writeCommand(bc: bare.ByteCursor, x: Command): void {
 export type CommandWrapper = {
     readonly checkpoint: ActorCheckpoint
     readonly inner: Command
+    /**
+     * The volume group of the namespace whose actor state machine sent this command, set for
+     * an actor in a group. Actor ids repeat across a namespace and its forks, so pegboard-envoy
+     * refuses a command naming another group than its connection's instead of handing it to
+     * the other namespace's actor. Never forwarded to the envoy. Added in v9.
+     */
+    readonly group: ArrayBuffer | null
 }
 
 export function readCommandWrapper(bc: bare.ByteCursor): CommandWrapper {
     return {
         checkpoint: readActorCheckpoint(bc),
         inner: readCommand(bc),
+        group: read18(bc),
     }
 }
 
 export function writeCommandWrapper(bc: bare.ByteCursor, x: CommandWrapper): void {
     writeActorCheckpoint(bc, x.checkpoint)
     writeCommand(bc, x.inner)
+    write18(bc, x.group)
 }
 
 /**
@@ -2320,18 +2438,18 @@ export function writeMessageId(bc: bare.ByteCursor, x: MessageId): void {
     writeMessageIndex(bc, x.messageIndex)
 }
 
-function read22(bc: bare.ByteCursor): u32 | null {
+function read24(bc: bare.ByteCursor): u32 | null {
     return bare.readBool(bc) ? bare.readU32(bc) : null
 }
 
-function write22(bc: bare.ByteCursor, x: u32 | null): void {
+function write24(bc: bare.ByteCursor, x: u32 | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         bare.writeU32(bc, x)
     }
 }
 
-function read23(bc: bare.ByteCursor): ReadonlyMap<string, string> {
+function read25(bc: bare.ByteCursor): ReadonlyMap<string, string> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, string>()
     for (let i = 0; i < len; i++) {
@@ -2346,7 +2464,7 @@ function read23(bc: bare.ByteCursor): ReadonlyMap<string, string> {
     return result
 }
 
-function write23(bc: bare.ByteCursor, x: ReadonlyMap<string, string>): void {
+function write25(bc: bare.ByteCursor, x: ReadonlyMap<string, string>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -2373,30 +2491,39 @@ export type ToEnvoyRequestStart = {
      * Whether the gateway can accept a streamed response body.
      */
     readonly responseStream: boolean
+    /**
+     * The volume group of the namespace the gateway routed this request in, set for an actor
+     * in a group. Actor ids repeat across a namespace and its forks, so pegboard-envoy refuses
+     * a request naming another group than its connection's instead of handing it to the other
+     * namespace's actor. Never forwarded to the envoy. Added in v9.
+     */
+    readonly group: ArrayBuffer | null
 }
 
 export function readToEnvoyRequestStart(bc: bare.ByteCursor): ToEnvoyRequestStart {
     return {
         actorId: readId(bc),
-        actorGeneration: read22(bc),
+        actorGeneration: read24(bc),
         method: bare.readString(bc),
         path: bare.readString(bc),
-        headers: read23(bc),
+        headers: read25(bc),
         body: read18(bc),
         stream: bare.readBool(bc),
         responseStream: bare.readBool(bc),
+        group: read18(bc),
     }
 }
 
 export function writeToEnvoyRequestStart(bc: bare.ByteCursor, x: ToEnvoyRequestStart): void {
     writeId(bc, x.actorId)
-    write22(bc, x.actorGeneration)
+    write24(bc, x.actorGeneration)
     bare.writeString(bc, x.method)
     bare.writeString(bc, x.path)
-    write23(bc, x.headers)
+    write25(bc, x.headers)
     write18(bc, x.body)
     bare.writeBool(bc, x.stream)
     bare.writeBool(bc, x.responseStream)
+    write18(bc, x.group)
 }
 
 export type ToEnvoyRequestChunk = {
@@ -2504,11 +2631,11 @@ export function writeHttpStreamAbortReason(bc: bare.ByteCursor, x: HttpStreamAbo
     write17(bc, x.detail)
 }
 
-function read24(bc: bare.ByteCursor): Id | null {
+function read26(bc: bare.ByteCursor): Id | null {
     return bare.readBool(bc) ? readId(bc) : null
 }
 
-function write24(bc: bare.ByteCursor, x: Id | null): void {
+function write26(bc: bare.ByteCursor, x: Id | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         writeId(bc, x)
@@ -2527,15 +2654,15 @@ export type ToEnvoyRequestAbort = {
 
 export function readToEnvoyRequestAbort(bc: bare.ByteCursor): ToEnvoyRequestAbort {
     return {
-        actorId: read24(bc),
-        actorGeneration: read22(bc),
+        actorId: read26(bc),
+        actorGeneration: read24(bc),
         reason: readHttpStreamAbortReason(bc),
     }
 }
 
 export function writeToEnvoyRequestAbort(bc: bare.ByteCursor, x: ToEnvoyRequestAbort): void {
-    write24(bc, x.actorId)
-    write22(bc, x.actorGeneration)
+    write26(bc, x.actorId)
+    write24(bc, x.actorGeneration)
     writeHttpStreamAbortReason(bc, x.reason)
 }
 
@@ -2554,7 +2681,7 @@ export type ToRivetResponseStart = {
 export function readToRivetResponseStart(bc: bare.ByteCursor): ToRivetResponseStart {
     return {
         status: bare.readU16(bc),
-        headers: read23(bc),
+        headers: read25(bc),
         body: read18(bc),
         stream: bare.readBool(bc),
     }
@@ -2562,7 +2689,7 @@ export function readToRivetResponseStart(bc: bare.ByteCursor): ToRivetResponseSt
 
 export function writeToRivetResponseStart(bc: bare.ByteCursor, x: ToRivetResponseStart): void {
     bare.writeU16(bc, x.status)
-    write23(bc, x.headers)
+    write25(bc, x.headers)
     write18(bc, x.body)
     bare.writeBool(bc, x.stream)
 }
@@ -2628,22 +2755,31 @@ export type ToEnvoyWebSocketOpen = {
     readonly actorGeneration: u32 | null
     readonly path: string
     readonly headers: ReadonlyMap<string, string>
+    /**
+     * The volume group of the namespace the gateway routed this request in, set for an actor
+     * in a group. Actor ids repeat across a namespace and its forks, so pegboard-envoy refuses
+     * a request naming another group than its connection's instead of handing it to the other
+     * namespace's actor. Never forwarded to the envoy. Added in v9.
+     */
+    readonly group: ArrayBuffer | null
 }
 
 export function readToEnvoyWebSocketOpen(bc: bare.ByteCursor): ToEnvoyWebSocketOpen {
     return {
         actorId: readId(bc),
-        actorGeneration: read22(bc),
+        actorGeneration: read24(bc),
         path: bare.readString(bc),
-        headers: read23(bc),
+        headers: read25(bc),
+        group: read18(bc),
     }
 }
 
 export function writeToEnvoyWebSocketOpen(bc: bare.ByteCursor, x: ToEnvoyWebSocketOpen): void {
     writeId(bc, x.actorId)
-    write22(bc, x.actorGeneration)
+    write24(bc, x.actorGeneration)
     bare.writeString(bc, x.path)
-    write23(bc, x.headers)
+    write25(bc, x.headers)
+    write18(bc, x.group)
 }
 
 export type ToEnvoyWebSocketMessage = {
@@ -2663,11 +2799,11 @@ export function writeToEnvoyWebSocketMessage(bc: bare.ByteCursor, x: ToEnvoyWebS
     bare.writeBool(bc, x.binary)
 }
 
-function read25(bc: bare.ByteCursor): u16 | null {
+function read27(bc: bare.ByteCursor): u16 | null {
     return bare.readBool(bc) ? bare.readU16(bc) : null
 }
 
-function write25(bc: bare.ByteCursor, x: u16 | null): void {
+function write27(bc: bare.ByteCursor, x: u16 | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         bare.writeU16(bc, x)
@@ -2681,13 +2817,13 @@ export type ToEnvoyWebSocketClose = {
 
 export function readToEnvoyWebSocketClose(bc: bare.ByteCursor): ToEnvoyWebSocketClose {
     return {
-        code: read25(bc),
+        code: read27(bc),
         reason: read17(bc),
     }
 }
 
 export function writeToEnvoyWebSocketClose(bc: bare.ByteCursor, x: ToEnvoyWebSocketClose): void {
-    write25(bc, x.code)
+    write27(bc, x.code)
     write17(bc, x.reason)
 }
 
@@ -2744,14 +2880,14 @@ export type ToRivetWebSocketClose = {
 
 export function readToRivetWebSocketClose(bc: bare.ByteCursor): ToRivetWebSocketClose {
     return {
-        code: read25(bc),
+        code: read27(bc),
         reason: read17(bc),
         hibernate: bare.readBool(bc),
     }
 }
 
 export function writeToRivetWebSocketClose(bc: bare.ByteCursor, x: ToRivetWebSocketClose): void {
-    write25(bc, x.code)
+    write27(bc, x.code)
     write17(bc, x.reason)
     bare.writeBool(bc, x.hibernate)
 }
@@ -2992,7 +3128,7 @@ export function writeToEnvoyPing(bc: bare.ByteCursor, x: ToEnvoyPing): void {
     bare.writeI64(bc, x.ts)
 }
 
-function read26(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
+function read28(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, ActorName>()
     for (let i = 0; i < len; i++) {
@@ -3007,7 +3143,7 @@ function read26(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     return result
 }
 
-function write26(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
+function write28(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -3015,22 +3151,22 @@ function write26(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     }
 }
 
-function read27(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
-    return bare.readBool(bc) ? read26(bc) : null
+function read29(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
+    return bare.readBool(bc) ? read28(bc) : null
 }
 
-function write27(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
+function write29(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
-        write26(bc, x)
+        write28(bc, x)
     }
 }
 
-function read28(bc: bare.ByteCursor): Json | null {
+function read30(bc: bare.ByteCursor): Json | null {
     return bare.readBool(bc) ? readJson(bc) : null
 }
 
-function write28(bc: bare.ByteCursor, x: Json | null): void {
+function write30(bc: bare.ByteCursor, x: Json | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         writeJson(bc, x)
@@ -3047,14 +3183,14 @@ export type ToRivetMetadata = {
 
 export function readToRivetMetadata(bc: bare.ByteCursor): ToRivetMetadata {
     return {
-        prepopulateActorNames: read27(bc),
-        metadata: read28(bc),
+        prepopulateActorNames: read29(bc),
+        metadata: read30(bc),
     }
 }
 
 export function writeToRivetMetadata(bc: bare.ByteCursor, x: ToRivetMetadata): void {
-    write27(bc, x.prepopulateActorNames)
-    write28(bc, x.metadata)
+    write29(bc, x.prepopulateActorNames)
+    write30(bc, x.metadata)
 }
 
 export type ToRivetEvents = readonly EventWrapper[]
@@ -3078,7 +3214,7 @@ export function writeToRivetEvents(bc: bare.ByteCursor, x: ToRivetEvents): void 
     }
 }
 
-function read29(bc: bare.ByteCursor): readonly ActorCheckpoint[] {
+function read31(bc: bare.ByteCursor): readonly ActorCheckpoint[] {
     const len = bare.readUintSafe(bc)
     if (len === 0) {
         return []
@@ -3090,7 +3226,7 @@ function read29(bc: bare.ByteCursor): readonly ActorCheckpoint[] {
     return result
 }
 
-function write29(bc: bare.ByteCursor, x: readonly ActorCheckpoint[]): void {
+function write31(bc: bare.ByteCursor, x: readonly ActorCheckpoint[]): void {
     bare.writeUintSafe(bc, x.length)
     for (let i = 0; i < x.length; i++) {
         writeActorCheckpoint(bc, x[i])
@@ -3103,12 +3239,12 @@ export type ToRivetAckCommands = {
 
 export function readToRivetAckCommands(bc: bare.ByteCursor): ToRivetAckCommands {
     return {
-        lastCommandCheckpoints: read29(bc),
+        lastCommandCheckpoints: read31(bc),
     }
 }
 
 export function writeToRivetAckCommands(bc: bare.ByteCursor, x: ToRivetAckCommands): void {
-    write29(bc, x.lastCommandCheckpoints)
+    write31(bc, x.lastCommandCheckpoints)
 }
 
 export type ToRivetStopping = null
@@ -3503,12 +3639,12 @@ export type ToEnvoyAckEvents = {
 
 export function readToEnvoyAckEvents(bc: bare.ByteCursor): ToEnvoyAckEvents {
     return {
-        lastEventCheckpoints: read29(bc),
+        lastEventCheckpoints: read31(bc),
     }
 }
 
 export function writeToEnvoyAckEvents(bc: bare.ByteCursor, x: ToEnvoyAckEvents): void {
-    write29(bc, x.lastEventCheckpoints)
+    write31(bc, x.lastEventCheckpoints)
 }
 
 export type ToEnvoyKvResponse = {
@@ -3664,6 +3800,30 @@ export function writeToEnvoySqliteExecuteBatchResponse(bc: bare.ByteCursor, x: T
     writeSqliteExecuteBatchResponse(bc, x.data)
 }
 
+/**
+ * Asks the engine worker holding generation `generation` of actor `actorId`'s database to make
+ * a quorum of its volume's members prove the volume's tail committed. Engine-internal: pegboard
+ * sends it over UPS to the pegboard-envoy connection the actor's allocation names, when a fork
+ * of the running actor is refused because its tail is unproven, and pegboard-envoy answers it
+ * itself. It never travels on the envoy WebSocket. Added in v9; a v8 receiver cannot take it.
+ */
+export type ToEnvoySqliteProveTail = {
+    readonly actorId: Id
+    readonly generation: u32
+}
+
+export function readToEnvoySqliteProveTail(bc: bare.ByteCursor): ToEnvoySqliteProveTail {
+    return {
+        actorId: readId(bc),
+        generation: bare.readU32(bc),
+    }
+}
+
+export function writeToEnvoySqliteProveTail(bc: bare.ByteCursor, x: ToEnvoySqliteProveTail): void {
+    writeId(bc, x.actorId)
+    bare.writeU32(bc, x.generation)
+}
+
 export type ToEnvoy =
     | { readonly tag: "ToEnvoyInit"; readonly val: ToEnvoyInit }
     | { readonly tag: "ToEnvoyCommands"; readonly val: ToEnvoyCommands }
@@ -3679,6 +3839,7 @@ export type ToEnvoy =
     | { readonly tag: "ToEnvoySqliteExecResponse"; readonly val: ToEnvoySqliteExecResponse }
     | { readonly tag: "ToEnvoySqliteExecuteResponse"; readonly val: ToEnvoySqliteExecuteResponse }
     | { readonly tag: "ToEnvoySqliteExecuteBatchResponse"; readonly val: ToEnvoySqliteExecuteBatchResponse }
+    | { readonly tag: "ToEnvoySqliteProveTail"; readonly val: ToEnvoySqliteProveTail }
 
 export function readToEnvoy(bc: bare.ByteCursor): ToEnvoy {
     const offset = bc.offset
@@ -3712,6 +3873,8 @@ export function readToEnvoy(bc: bare.ByteCursor): ToEnvoy {
             return { tag: "ToEnvoySqliteExecuteResponse", val: readToEnvoySqliteExecuteResponse(bc) }
         case 13:
             return { tag: "ToEnvoySqliteExecuteBatchResponse", val: readToEnvoySqliteExecuteBatchResponse(bc) }
+        case 14:
+            return { tag: "ToEnvoySqliteProveTail", val: readToEnvoySqliteProveTail(bc) }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -3789,6 +3952,11 @@ export function writeToEnvoy(bc: bare.ByteCursor, x: ToEnvoy): void {
         case "ToEnvoySqliteExecuteBatchResponse": {
             bare.writeU8(bc, 13)
             writeToEnvoySqliteExecuteBatchResponse(bc, x.val)
+            break
+        }
+        case "ToEnvoySqliteProveTail": {
+            bare.writeU8(bc, 14)
+            writeToEnvoySqliteProveTail(bc, x.val)
             break
         }
     }
@@ -4063,4 +4231,4 @@ function assert(condition: boolean, message?: string): asserts condition {
     if (!condition) throw new Error(message ?? "Assertion failed")
 }
 
-export const VERSION = 8;
+export const VERSION = 9;

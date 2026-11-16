@@ -1,0 +1,5 @@
+{
+  "code": "fork_too_deep",
+  "group": "actor",
+  "message": "The actor is too many forks deep to fork again."
+}

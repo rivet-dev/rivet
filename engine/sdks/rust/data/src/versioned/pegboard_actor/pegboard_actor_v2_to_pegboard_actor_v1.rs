@@ -1,8 +1,9 @@
 //! Field-by-field conversion of every `pegboard.actor` type from version 2 to version 1. A value that only version 2 can represent fails to convert.
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 
 use crate::generated::{pegboard_actor_v1, pegboard_actor_v2};
+use crate::versioned::Inexpressible;
 
 pub fn convert_actor_data_pegboard_actor_v2_to_pegboard_actor_v1(
 	x: pegboard_actor_v2::ActorData,
@@ -208,7 +209,7 @@ pub fn convert_actor_phase_pegboard_actor_v2_to_pegboard_actor_v1(
 		),
 		pegboard_actor_v2::ActorPhase::Destroyed => pegboard_actor_v1::ActorPhase::Destroyed,
 		pegboard_actor_v2::ActorPhase::MigratingFromV2(_) => {
-			bail!("version 1 actor state cannot hold an actor for the V2 migrator")
+			return Err(Inexpressible::lacks(1, "actor held for the V2 migrator"));
 		}
 	})
 }
@@ -268,7 +269,10 @@ pub fn convert_actor_state_pegboard_actor_v2_to_pegboard_actor_v1(
 	if matches!(x.storage_origin, pegboard_actor_v2::StorageOrigin::Imported)
 		&& x.command_index == 0
 	{
-		bail!("version 1 actor state cannot hold an imported actor before its first start");
+		return Err(Inexpressible::lacks(
+			1,
+			"imported actor before its first start",
+		));
 	}
 
 	Ok(pegboard_actor_v1::ActorState {
@@ -364,10 +368,10 @@ pub fn convert_actor_timer_pegboard_actor_v2_to_pegboard_actor_v1(
 			)
 		}
 		pegboard_actor_v2::ActorTimer::EnvoyCheckTimeout(_) => {
-			bail!("version 1 has no envoy check timeout")
+			return Err(Inexpressible::lacks(1, "envoy check timeout"));
 		}
 		pegboard_actor_v2::ActorTimer::StopThresholdTimeout(_) => {
-			bail!("version 1 has no stop threshold timeout")
+			return Err(Inexpressible::lacks(1, "stop threshold timeout"));
 		}
 	})
 }
@@ -531,7 +535,7 @@ pub fn convert_actor_event_pegboard_actor_v2_to_pegboard_actor_v1(
 			convert_envoy_gone_pegboard_actor_v2_to_pegboard_actor_v1(v)?,
 		),
 		pegboard_actor_v2::ActorEvent::MigrateFromV2(_) => {
-			bail!("version 1 actor events have no V2 migration events")
+			return Err(Inexpressible::lacks(1, "V2 migration events"));
 		}
 	})
 }
@@ -591,7 +595,10 @@ pub fn convert_try_start_outcome_pegboard_actor_v2_to_pegboard_actor_v1(
 			pegboard_actor_v1::TryStartOutcome::TryStartFull
 		}
 		pegboard_actor_v2::TryStartOutcome::TryStartMigratingFromV2 => {
-			bail!("version 1 start outcomes cannot report an actor held for the V2 migrator")
+			return Err(Inexpressible::lacks(
+				1,
+				"start outcome for an actor held for the V2 migrator",
+			));
 		}
 	})
 }
@@ -678,7 +685,10 @@ pub fn convert_actor_start_notice_kind_pegboard_actor_v2_to_pegboard_actor_v1(
 		pegboard_actor_v2::ActorStartNoticeKind::ActorStartNoticeEpoxyAlreadyReserved(v) => pegboard_actor_v1::ActorStartNoticeKind::ActorStartNoticeEpoxyAlreadyReserved(convert_actor_start_notice_epoxy_already_reserved_pegboard_actor_v2_to_pegboard_actor_v1(v)?),
 		pegboard_actor_v2::ActorStartNoticeKind::ActorStartNoticeDestroyed => pegboard_actor_v1::ActorStartNoticeKind::ActorStartNoticeDestroyed,
 		pegboard_actor_v2::ActorStartNoticeKind::ActorStartNoticeMigratingFromV2 => {
-			bail!("version 1 start notices cannot report an actor held for the V2 migrator")
+			return Err(Inexpressible::lacks(
+				1,
+				"start notice for an actor held for the V2 migrator",
+			))
 		}
 	})
 }

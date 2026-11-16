@@ -133,13 +133,24 @@ impl From<VolumeLogKey> for WireVolumeLogKey {
 }
 
 /// Routes only the partition key. A placed key carries its placement hash and routes by it;
-/// any other key routes by XXH3-128 with seed zero of its bytes. The name and incarnation are
-/// excluded so related volumes and recreations stay in the same tablet. Range producers,
-/// cold-store keys and clients must share this exact codec.
+/// any other key routes by XXH3-128 with seed zero of its bytes. A grouped key hashes its group
+/// together with what the key routes by: the group and the placement for a placed key, and the
+/// whole key, which starts with the group, for any other. So one actor's volumes in a group and
+/// in its forks land on different tablets, while a key with no group prefix, the `default`
+/// namespace's root group, routes exactly as it did before groups existed. The name and
+/// incarnation are excluded so related volumes and recreations stay in the same tablet. Range
+/// producers, cold-store keys and clients must share this exact codec.
 pub fn partition_key_hash(volume_key: &crate::VolumeKey) -> crate::PartitionKeyHash {
-	match rivet_keys::keys::codec::embedded_placement(&volume_key.partition_key) {
-		Some(placement) => placement,
-		None => xxhash_rust::xxh3::xxh3_128(&volume_key.partition_key).to_be_bytes(),
+	let prefixes = rivet_keys::keys::codec::prefixes(&volume_key.partition_key);
+	match (prefixes.group, prefixes.placement) {
+		(None, Some(placement)) => placement,
+		(Some(group), Some(placement)) => {
+			let mut input = [0u8; 32];
+			input[..16].copy_from_slice(&group);
+			input[16..].copy_from_slice(&placement);
+			xxhash_rust::xxh3::xxh3_128(&input).to_be_bytes()
+		}
+		(_, None) => xxhash_rust::xxh3::xxh3_128(&volume_key.partition_key).to_be_bytes(),
 	}
 }
 

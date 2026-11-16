@@ -1,6 +1,6 @@
 //! One volume record shared by the stored row and the filesystem registration.
 
-use rivet_data::generated::shared_depot_fs_v1::FsVolumeRecord;
+use rivet_data::generated::shared_depot_fs_v2::FsVolumeRecord;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

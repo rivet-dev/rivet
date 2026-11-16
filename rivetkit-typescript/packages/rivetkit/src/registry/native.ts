@@ -9,6 +9,7 @@ import {
 	type ActorCron,
 	type ActorCronEveryOptions,
 	type ActorCronSetOptions,
+	type ActorForkLink,
 	type ActorLogger,
 	type ActorRun,
 	type ActorSchedule,
@@ -115,6 +116,7 @@ import type {
 	CoreRuntime,
 	RegistryHandle,
 	RuntimeActorConfig,
+	RuntimeActorKeySegment,
 	RuntimeActorTracingConfig,
 	RuntimeBytes,
 	RuntimeCronFire,
@@ -3027,8 +3029,22 @@ export class ActorContextHandleAdapter {
 		);
 	}
 
+	get forkChain(): ActorForkLink[] {
+		return callNativeSync(() =>
+			this.#runtime.actorForkChain(this.#ctx),
+		).map((link) => ({
+			actorId: link.actorId,
+			key: toActorKey(link.key),
+			forkedAt: link.forkedAt,
+		}));
+	}
+
 	get region(): string {
 		return callNativeSync(() => this.#runtime.actorRegion(this.#ctx));
+	}
+
+	get namespace(): string {
+		return callNativeSync(() => this.#runtime.actorNamespace(this.#ctx));
 	}
 
 	get conns(): ReadonlyMap<string, NativeConnAdapter> {
@@ -4826,6 +4842,39 @@ export function buildNativeFactory(
 							} catch (error) {
 								await actorCtx.closeDatabase();
 								throw error;
+							} finally {
+								await actorCtx.dispose();
+							}
+						},
+					)
+				: undefined,
+		onFork:
+			typeof config.onFork === "function"
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: ActorContextHandle;
+								fork: {
+									actorId: string;
+									key: RuntimeActorKeySegment[];
+									forkedAt: number;
+									input?: RuntimeBytes;
+								};
+							},
+						) => {
+							const { ctx, fork } = unwrapTsfnPayload(
+								error,
+								payload,
+							);
+							const actorCtx = makeActorCtx(ctx);
+							try {
+								await config.onFork(actorCtx, {
+									actorId: fork.actorId,
+									key: toActorKey(fork.key),
+									forkedAt: fork.forkedAt,
+									input: decodeValue(fork.input),
+								});
 							} finally {
 								await actorCtx.dispose();
 							}

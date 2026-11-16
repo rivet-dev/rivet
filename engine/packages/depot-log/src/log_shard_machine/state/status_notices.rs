@@ -36,7 +36,7 @@ use crate::log_shard_machine::types::{LogShardTimer, NoticeOutcome};
 use crate::log_shard_machine::{Effects, effect::LogShardEffect};
 use depot_types::{VolumeLogKey, partition_key_hash};
 use rivet_data::generated::{
-	depot_client_protocol_v1::{
+	depot_client_protocol_v2::{
 		ReplicaNoticeColdWrite, ReplicaStatusNotice, ReplicaStatusNoticeRequest,
 		ReplicaStatusNoticeTablet,
 	},

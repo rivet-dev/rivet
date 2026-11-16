@@ -153,7 +153,7 @@ pub enum VolumeClientEffect {
 		/// The creating open's first writes; empty on every other open.
 		initial: Vec<super::state::InitialWrite>,
 		/// Keys the creating open asks to read back; `None` on every other open.
-		read: Option<rivet_data::generated::depot_client_protocol_v1::VolumeReadKeys>,
+		read: Option<rivet_data::generated::depot_client_protocol_v2::VolumeReadKeys>,
 	},
 
 	/// **When**

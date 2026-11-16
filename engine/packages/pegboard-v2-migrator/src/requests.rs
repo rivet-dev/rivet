@@ -84,9 +84,11 @@ impl Replies {
 		self.0.lock().pending = None;
 	}
 
+	/// Queues one request and waits for its answer. It holds the runner's inbox only while
+	/// queueing, so a caller waiting for an answer never keeps a stopping runner alive.
 	async fn request(
 		&self,
-		inbox: &mpsc::Sender<Event>,
+		inbox: &mpsc::WeakSender<Event>,
 		v2_actor_id: Id,
 	) -> Result<MigrateActorResult> {
 		let (sender, receiver) = oneshot::channel();
@@ -108,6 +110,7 @@ impl Replies {
 			replies: self,
 			request,
 		};
+		let inbox = inbox.upgrade().context("the migrator stopped")?;
 		inbox
 			.send(Event::MigrateActorRequest {
 				request,
@@ -115,6 +118,7 @@ impl Replies {
 			})
 			.await
 			.context("the migrator stopped")?;
+		drop(inbox);
 		receiver
 			.await
 			.context("the migrator tenure ended before answering")
@@ -159,11 +163,13 @@ pub async fn request(
 }
 
 /// Answers operator requests for one tenure, one at a time. The subscription lives only while the
-/// tenure runs, so a request that reaches a former holder finds no subscriber.
+/// tenure runs, so a request that reaches a former holder finds no subscriber. It holds only a weak
+/// sender: the tenure joins the migrator runner, which stops once its last strong sender is
+/// dropped, while this transport may still be waiting for the next request.
 pub(crate) async fn serve(
 	pubsub: PubSub,
 	authority: Authority,
-	inbox: mpsc::Sender<Event>,
+	inbox: mpsc::WeakSender<Event>,
 	replies: Arc<Replies>,
 ) -> Result<()> {
 	ensure!(

@@ -12,18 +12,19 @@
 use rivet_error::RivetError;
 use serde::{Deserialize, Serialize};
 
-use rivet_data::families::advertised;
 pub use rivet_data::families::{VersionFamily, compiled_versions};
+use rivet_data::families::{advertised, legacy_decoded_max_read};
 pub use rivet_data::generated::topology_worker_heartbeat_v1::FamilyVersions;
 
-/// The snapshot's storage view has expired or was never listed, so the readers of persisted
-/// data are unknown. Retry after the next listing.
+/// No storage listing has completed in this process, or the last one named a storage worker no
+/// listing has observed, so the readers of persisted data are unknown. Retry after the next
+/// listing; discovery relists promptly while it lasts.
 #[derive(RivetError, Debug, Serialize, Deserialize)]
 #[error(
 	"topology",
 	"version_unknown",
 	"The storage workers that read persisted data are unknown.",
-	"Cannot select a version for family {family}: storage discovery has expired."
+	"Cannot select a version for family {family}: no storage listing has observed every listed storage worker yet."
 )]
 pub struct VersionUnknown {
 	pub family: u16,
@@ -77,31 +78,30 @@ pub struct ReadFloor {
 	pub max_read: std::collections::BTreeMap<u16, u16>,
 }
 
+/// One storage worker counted by the read floor: its advertised ranges and build version.
+#[derive(Clone, Copy, Debug)]
+pub struct Reader<'a> {
+	pub versions: &'a [FamilyVersions],
+	/// Read only by [`legacy_family_floor`], to tell `pegboard.actor` readers on 3.0.2 from those
+	/// on 3.0.3 through 3.0.7. Drop it with that rule.
+	pub build_version: &'a str,
+}
+
 impl ReadFloor {
-	/// Computes the floor over each counted worker's advertised versions. A worker that does
-	/// not advertise a family predates it and reads none of its versions.
-	pub fn new<'a>(readers: impl Iterator<Item = &'a [FamilyVersions]> + Clone) -> Self {
+	/// Computes the floor over each counted worker's decoded versions. A worker that does not
+	/// advertise a family predates it and reads none of its versions.
+	pub fn new<'a>(readers: impl Iterator<Item = Reader<'a>> + Clone) -> Self {
 		let mut families: Vec<u16> = readers
 			.clone()
-			.flat_map(|versions| versions.iter().map(|range| range.family))
+			.flat_map(|reader| reader.versions.iter().map(|range| range.family))
 			.collect();
 		families.sort_unstable();
 		families.dedup();
 
-		let mut max_read = std::collections::BTreeMap::new();
-		for family in families {
-			let floor = readers
-				.clone()
-				.map(|versions| {
-					versions
-						.iter()
-						.find(|range| range.family == family)
-						.map_or(0, |range| range.max_read)
-				})
-				.min()
-				.unwrap_or(0);
-			max_read.insert(family, floor);
-		}
+		let max_read = families
+			.into_iter()
+			.map(|family| (family, legacy_family_floor(family, readers.clone())))
+			.collect();
 		Self {
 			readers: readers.count(),
 			max_read,
@@ -115,6 +115,34 @@ impl ReadFloor {
 		}
 		Some(self.max_read.get(&family.0).copied().unwrap_or(0))
 	}
+}
+
+/// The minimum version of `family` the readers decode.
+///
+/// Without the legacy rule this is the minimum advertised `maxRead`. `pegboard.actor` readers on
+/// 3.0.3 through 3.0.7 advertise 3 but decode v4's layout under that header, so
+/// [`legacy_decoded_max_read`] counts them as 4 and a reader on 3.0.2 as 3 (see
+/// `rivet_data::versioned::legacy_v3` for the walkthrough). A fleet is assumed to upgrade from
+/// one release, so it never mixes 3.0.2 with 3.0.3 through 3.0.7; with a 3.0.2 reader live, the
+/// released layout is selected.
+///
+/// Exists only for readers on 3.0.2 through 3.0.7. Without it, a fleet of 3.0.3 through 3.0.7
+/// readers selects version 3 and they misread the released layout. Delete it once no reader
+/// older than the first release with `pegboard.actor` v5 can be live, and compute the plain
+/// minimum.
+fn legacy_family_floor<'a>(family: u16, readers: impl Iterator<Item = Reader<'a>>) -> u16 {
+	readers
+		.map(|reader| {
+			reader
+				.versions
+				.iter()
+				.find(|range| range.family == family)
+				.map_or(0, |range| {
+					legacy_decoded_max_read(range, reader.build_version)
+				})
+		})
+		.min()
+		.unwrap_or(0)
 }
 
 /// The version to write for persisted `family` data: the read floor capped by `own`
@@ -172,6 +200,39 @@ pub fn lowest_write(own: Option<&FamilyVersions>, family: VersionFamily) -> anyh
 pub trait WriteVersions: Send + Sync + 'static {
 	/// The version to encode `family` at now. A refusal means no version is safe to write.
 	fn write_version(&self, family: VersionFamily) -> anyhow::Result<u16>;
+
+	/// Whether `write_version` already rests on a completed storage listing rather than a
+	/// fallback taken before the first one. Required, so a wrapper cannot silently skip the
+	/// wait: an implementation whose versions never depend on a listing answers `true`.
+	fn floor_listed(&self) -> bool;
+
+	/// Waits until `floor_listed` holds or `deadline_boot_ms` passes, answering whether it
+	/// holds. Opens that select versions call it once before their first write, so a process
+	/// that just started does not write the lowest version while its first listing is in
+	/// flight. An implementation whose versions never depend on a listing is ready at once.
+	fn wait_for_read_floor(
+		&self,
+		deadline_boot_ms: u64,
+	) -> futures_util::future::BoxFuture<'_, anyhow::Result<bool>>;
+}
+
+/// Chooses the version of a message to one known worker that decodes, acts on and drops it,
+/// such as a volume request to a tablet maintainer. Reads memory only, so a sender may call it
+/// per message.
+pub trait PeerVersions: Send + Sync + 'static {
+	/// The version to encode a message of `family` to `worker` at: `min(own maxWrite, worker's
+	/// maxRead)` when the in-memory view of the fleet knows `worker`, and otherwise the
+	/// family's write version, the fleet's read floor or this binary's lowest write version.
+	/// Fails when `worker` reads nothing of `family` this binary writes.
+	fn peer_version(
+		&self,
+		family: VersionFamily,
+		worker: &crate::worker::WorkerId,
+	) -> anyhow::Result<u16>;
+
+	/// The retry hint of a message refused because the version `worker` reads cannot carry it:
+	/// the prompt relist interval, after which the view may show the worker upgraded.
+	fn refresh_hint_ms(&self) -> u64;
 }
 
 /// The version for a message to one peer that decodes, acts on and drops it:
@@ -216,6 +277,10 @@ pub struct Incompatibility {
 /// a version this binary does not read: their minimum `maxRead`. Writers that listed after this worker registered
 /// count it; writers that listed before counted only workers it now also sees, so this view
 /// bounds what any of them can select.
+///
+/// External message families, which this binary knows as `FamilyInfo::external`, are skipped:
+/// nothing persists them, so reading an older version of one puts no stored data at risk. A
+/// family this binary does not know cannot be told apart and still counts.
 pub fn incompatibility(
 	own: &[FamilyVersions],
 	others: &[&[FamilyVersions]],
@@ -228,6 +293,13 @@ pub fn incompatibility(
 	families.dedup();
 
 	for family in families {
+		let external = VersionFamily(family)
+			.info()
+			.is_some_and(|info| info.external);
+		if external {
+			continue;
+		}
+
 		// The floor alone bounds what any writer selects, including stateless writers whose
 		// own maxWrite is not listed here.
 		let mut selected = u16::MAX;

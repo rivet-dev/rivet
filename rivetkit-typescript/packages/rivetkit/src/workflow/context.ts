@@ -13,6 +13,7 @@ import type {
 	WorkflowQueueMessage,
 } from "@rivetkit/workflow-engine";
 import type {
+	ActorForkLink,
 	QueueFilterName,
 	QueueNextBatchOptions,
 	QueueNextOptions,
@@ -353,6 +354,14 @@ export class WorkflowStepContext<
 		return this.#runCtx.key;
 	}
 
+	get forkChain(): ActorForkLink[] {
+		return this.#runCtx.forkChain;
+	}
+
+	get namespace(): string {
+		return this.#runCtx.namespace;
+	}
+
 	get log() {
 		return this.#runCtx.log;
 	}
@@ -506,6 +515,14 @@ export class WorkflowContext<
 
 	get key(): string[] {
 		return this.#runCtx.key;
+	}
+
+	get forkChain(): ActorForkLink[] {
+		return this.#runCtx.forkChain;
+	}
+
+	get namespace(): string {
+		return this.#runCtx.namespace;
 	}
 
 	get log() {

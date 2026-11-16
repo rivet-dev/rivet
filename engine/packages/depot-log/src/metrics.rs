@@ -276,7 +276,8 @@ pub(crate) fn observe_segment_pin_age(age_ms: u64) {
 }
 
 /// A runner-owned observer publishes gauges and warns once per near-capacity episode, at
-/// most once a minute per resource. `now_boot_ms` is read only when a resource enters the
+/// most once a minute per resource, for the resources that refuse or wait at their cap (see
+/// `Resource::warns_near_capacity`). `now_boot_ms` is read only when a resource enters the
 /// near band.
 pub(crate) fn observe(
 	resources: impl IntoIterator<Item = ResourceUsage>,
@@ -290,6 +291,9 @@ pub(crate) fn observe(
 		CAPACITY
 			.with_label_values(&[value.resource.label()])
 			.set(value.capacity.min(i64::MAX as u64) as i64);
+		if !value.resource.warns_near_capacity() {
+			continue;
+		}
 
 		let warning = warnings.entry(value.resource).or_default();
 		if let Some(episode) = warning.observe(value.used, value.capacity, &now_boot_ms) {

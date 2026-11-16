@@ -1,0 +1,202 @@
+---
+title: "Forking"
+description: "Fork a Rivet Actor into a new actor that starts with the source's SQLite database without copying it, then runs on its own."
+skill: true
+---
+
+A fork is a new Rivet Actor that starts with everything another actor had saved: its SQLite database, its schedules, and its workflow progress. The fork gets its own ID and key, starts as soon as it is created, and then runs on its own. Writes to the fork never reach the source, and writes to the source never reach the fork. Use forks to branch an agent's conversation, fan work out to copies that share the same context, or duplicate a document.
+
+**Forks are copy-on-write: a fork shares the source's data instead of copying it, and stores only what it writes afterwards.**
+
+<div style="overflow-x:auto">
+<svg viewBox="0 0 400 244" role="img" aria-label="Two SQLite databases side by side, each holding six rows: alice, bob, carol, dave, erin and frank. After the fork, the source actor wrote carol: 20 and frank: 13, and the fork wrote bob: 8 and erin: 30. The fork still shares alice: 42, carol: 19, dave: 5 and frank: 12 with the source, as they were at the fork, so it does not see the source's new values, and the source does not see the fork's." style="width:100%;max-width:460px;height:auto;display:block;margin:2.5rem auto;font-family:system-ui,sans-serif">
+  <defs><marker id="fork-db-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="rgb(var(--site-pine, 46 64 52))"/></marker></defs>
+  <g text-anchor="middle">
+    <text x="99" y="18" font-size="13" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Source actor</text>
+    <text x="99" y="34" font-size="11" fill="rgb(var(--site-ink-soft, 86 82 74))">SQLite database</text>
+    <text x="301" y="18" font-size="13" font-weight="600" fill="rgb(var(--site-ink, 27 25 22))">Fork</text>
+    <text x="301" y="34" font-size="11" fill="rgb(var(--site-ink-soft, 86 82 74))">SQLite database</text>
+    <text x="200" y="16" font-size="11" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink, 27 25 22))">fork</text>
+  </g>
+  <line x1="152" y1="24" x2="248" y2="24" stroke="rgb(var(--site-pine, 46 64 52))" stroke-width="1.4" marker-end="url(#fork-db-arrow)"/>
+  <rect x="10" y="44" width="178" height="134" rx="9" fill="rgb(var(--site-paper-mid, 250 248 243))" stroke="rgb(var(--site-ink-faint, 138 133 120))" stroke-width="1"/>
+  <rect x="212" y="44" width="178" height="134" rx="9" fill="rgb(var(--site-paper-mid, 250 248 243))" stroke="rgb(var(--site-ink-faint, 138 133 120))" stroke-width="1"/>
+  <rect x="20" y="56" width="76" height="32" rx="5" fill="rgb(var(--site-surface, 255 255 255))" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.3"/>
+  <text x="58" y="76" text-anchor="middle" font-size="12" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink, 27 25 22))">alice: 42</text>
+  <rect x="102" y="56" width="76" height="32" rx="5" fill="rgb(var(--site-surface, 255 255 255))" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.3"/>
+  <text x="140" y="76" text-anchor="middle" font-size="12" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink, 27 25 22))">bob: 7</text>
+  <rect x="20" y="96" width="76" height="32" rx="5" fill="#fb923c" stroke="#c2410c" stroke-width="1.3"/>
+  <text x="58" y="116" text-anchor="middle" font-size="12" font-family="ui-monospace,monospace" fill="#2a1708">carol: 20</text>
+  <rect x="102" y="96" width="76" height="32" rx="5" fill="rgb(var(--site-surface, 255 255 255))" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.3"/>
+  <text x="140" y="116" text-anchor="middle" font-size="12" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink, 27 25 22))">dave: 5</text>
+  <rect x="20" y="136" width="76" height="32" rx="5" fill="rgb(var(--site-surface, 255 255 255))" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.3"/>
+  <text x="58" y="156" text-anchor="middle" font-size="12" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink, 27 25 22))">erin: 31</text>
+  <rect x="102" y="136" width="76" height="32" rx="5" fill="#fb923c" stroke="#c2410c" stroke-width="1.3"/>
+  <text x="140" y="156" text-anchor="middle" font-size="12" font-family="ui-monospace,monospace" fill="#2a1708">frank: 13</text>
+  <rect x="222" y="56" width="76" height="32" rx="5" fill="none" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.3" stroke-dasharray="2 3"/>
+  <text x="260" y="76" text-anchor="middle" font-size="12" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink-soft, 86 82 74))">alice: 42</text>
+  <rect x="304" y="56" width="76" height="32" rx="5" fill="#fb923c" stroke="#c2410c" stroke-width="1.3"/>
+  <text x="342" y="76" text-anchor="middle" font-size="12" font-family="ui-monospace,monospace" fill="#2a1708">bob: 8</text>
+  <rect x="222" y="96" width="76" height="32" rx="5" fill="none" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.3" stroke-dasharray="2 3"/>
+  <text x="260" y="116" text-anchor="middle" font-size="12" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink-soft, 86 82 74))">carol: 19</text>
+  <rect x="304" y="96" width="76" height="32" rx="5" fill="none" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.3" stroke-dasharray="2 3"/>
+  <text x="342" y="116" text-anchor="middle" font-size="12" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink-soft, 86 82 74))">dave: 5</text>
+  <rect x="222" y="136" width="76" height="32" rx="5" fill="#fb923c" stroke="#c2410c" stroke-width="1.3"/>
+  <text x="260" y="156" text-anchor="middle" font-size="12" font-family="ui-monospace,monospace" fill="#2a1708">erin: 30</text>
+  <rect x="304" y="136" width="76" height="32" rx="5" fill="none" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.3" stroke-dasharray="2 3"/>
+  <text x="342" y="156" text-anchor="middle" font-size="12" font-family="ui-monospace,monospace" fill="rgb(var(--site-ink-soft, 86 82 74))">frank: 12</text>
+  <rect x="10" y="196" width="14" height="14" rx="3" fill="#fb923c" stroke="#c2410c" stroke-width="1.3"/>
+  <text x="32" y="207" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">Written after the fork</text>
+  <rect x="212" y="196" width="14" height="14" rx="3" fill="none" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.3" stroke-dasharray="2 3"/>
+  <text x="234" y="207" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">Shared from the source</text>
+  <rect x="10" y="220" width="14" height="14" rx="3" fill="rgb(var(--site-surface, 255 255 255))" stroke="rgb(var(--site-ink, 27 25 22))" stroke-width="1.3"/>
+  <text x="32" y="231" font-size="12" fill="rgb(var(--site-ink-soft, 86 82 74))">Saved before the fork</text>
+</svg>
+</div>
+
+## Quickstart
+
+<Steps>
+
+<Step title="Define an actor with onFork">
+
+`onFork` runs once, at the first start of a fork, in place of `onCreate`:
+
+<CodeSnippet file="examples/docs/actors-forking/quickstart/index.ts" title="index.ts" />
+
+</Step>
+
+<Step title="Fork it">
+
+Fork an actor by its ID with `client.<actor>.fork`:
+
+<CodeSnippet file="examples/docs/actors-forking/quickstart/client.ts" title="client.ts" />
+
+</Step>
+
+<Step title="Check that the copies are independent">
+
+The fork starts with the original's body and its own title, and each one keeps its own writes:
+
+```
+{ title: 'Untitled', body: 'First draft', forkedFrom: null }
+{ title: 'Copy of doc-1', body: 'Second draft', forkedFrom: '<ID of doc-1>' }
+```
+
+</Step>
+
+</Steps>
+
+## Forking from a client
+
+Call `client.<actor>.fork` with the source actor's ID. It returns a handle to the new actor once its copy is ready:
+
+<CodeSnippet file="examples/docs/actors-forking/from-client.ts" title="client.ts" />
+
+| Option | Description |
+| --- | --- |
+| `key` | The new actor's key. Omit it for a keyless actor. |
+| `input` | Any CBOR-compatible value. It reaches the new actor's `onFork` as `fork.input`. |
+| `params`, `signal` | Connection parameters for the returned handle, and a signal that aborts the call. |
+
+- Call `fork` on the accessor for the source's actor type, since a fork always has the source's name and node pool.
+- The fork holds every write the source had saved when the call arrived. Writes the source has not saved yet, such as a transaction that is still open or anything in `c.vars`, are not in it.
+- A fork is not idempotent: each call makes a new actor, and a `key` that is already taken fails with `actor.duplicate_key`. Give forks a key when a retry must never make a second copy.
+
+## Forking from an actor
+
+Inside an action, fork through the [server-side actor client](/actors/docs/communicating-between-actors), `c.client()`. Pass `c.actorId` to fork the actor itself, or another actor's ID to fork that one. The new actor's `onFork` receives the input:
+
+<CodeSnippet file="examples/docs/actors-forking/from-actor.ts" title="index.ts" />
+
+See [Forking Subagents](/guides/forking-subagents) for an agent that forks itself once per subtask.
+
+## onFork
+
+`onFork(c, fork)` runs once, at the first start of a fork, after `onMigrate` and `createVars` and before `onWake`. `createState` and `onCreate` do not run for a fork.
+
+| Field | Description |
+| --- | --- |
+| `fork.actorId` | The source actor's ID. |
+| `fork.key` | The source actor's key, as an array. |
+| `fork.forkedAt` | When the fork was made, in milliseconds since the epoch. |
+| `fork.input` | The `input` passed to `fork`, or `undefined`. It comes from the caller. |
+
+Use it to cancel the schedules and cron jobs the fork copied, to drop or replace resources that belong to the source, and to record the fork input:
+
+<CodeSnippet file="examples/docs/actors-forking/on-fork.ts" />
+
+## Fork chain
+
+`c.forkChain` lists every fork behind an actor, oldest first, each with `actorId`, `key`, and `forkedAt`. It is empty for an actor that was never forked, and `c.forkChain.at(-1)` is the actor this one was forked from. Namespace forks are not listed.
+
+<CodeSnippet file="examples/docs/actors-forking/fork-chain.ts" />
+
+## Permissions
+
+A token needs two grants to fork an actor:
+
+- `fork` on the source actor, by its ID or `"any"`, because the fork copies the source's data.
+- `create` on `"any"` actor, because the fork is a new actor whose ID is not known before the fork.
+
+No other operation allows a fork: a token that can read, create, or connect to an actor cannot fork it. Issue one from your backend with `client.auth.issueToken`:
+
+```ts token.ts @nocheck
+import { createClient } from "rivetkit/client";
+import type { registry } from "./index";
+
+// Runs on your backend. The endpoint carries your Rivet token.
+const client = createClient<typeof registry>();
+
+// A token that can fork doc-1 into new actors, and nothing else.
+const sourceId = await client.document.getOrCreate(["doc-1"]).resolve();
+const { token, expiresAt } = await client.auth.issueToken({
+	subject: "user-123",
+	expiresIn: 900,
+	grants: [
+		{ resource: "actor", target: { id: sourceId }, operations: ["fork"] },
+		{ resource: "actor", target: "any", operations: ["create"] },
+	],
+});
+```
+
+Namespace forks need the admin token. See [Scoped Tokens](/docs/jwt) for issuing tokens with grants.
+
+## Namespace forks
+
+A namespace fork copies a whole namespace into a new one: every actor, with the same actor IDs, keys, and databases as of the fork. Use it for a staging copy of production, or a preview environment with real data. Like an actor fork, it is copy-on-write.
+
+```bash
+curl -X POST "$RIVET_API/namespaces?wait=settled" \
+  -H "Authorization: Bearer $RIVET_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"staging-copy","fork_from":"production"}'
+```
+
+- **Admin only.** Namespace forks need the admin token.
+- **Saved writes only.** The fork includes every write the parent acknowledged before the call. `?wait=settled` waits a few more seconds once the fork is live, so writes made after the call usually stay out of the fork. It does not guarantee it.
+- **Answers once live.** The new namespace's status is `forking`, then `live`. If that takes longer than 30 seconds, the call answers with the namespace as it stands. Poll `GET /namespaces?name=` until it is `live`.
+- **Node pools are not copied.** Create the pools in the new namespace and connect nodes to it before its actors can run. See [Namespaces](/docs/namespaces).
+- **`onFork` does not run.** `c.forkChain` stays the same. `c.namespace` returns the new namespace, so an actor that owns something outside Rivet can tell that it is a copy. See [Metadata](/actors/docs/metadata#namespace).
+- **Archive forks first.** A namespace cannot be archived while a fork of it is not archived (`namespace.has_forks`).
+
+See [Create Namespace](/docs/api/namespaces/create) for every field and response.
+
+## Limits
+
+| Limit | Value |
+| --- | --- |
+| Fork depth | 16 forks |
+| Namespace fork depth | 3 forks below the original namespace |
+| Fork call deadline | 30 seconds, then `actor.fork_pending` |
+| `onFork` duration | 5 seconds on the native runtime |
+| Fork first start | 15 seconds, including `onFork` |
+
+See [Limits](/actors/docs/limits#forks) for details.
+
+## Guides
+
+- [Side Questions with /btw](/guides/side-questions): ask a fork a quick question without touching the agent's thread.
+- [Branch Conversations with /fork](/guides/branch-conversations): continue a conversation in a new thread.
+- [Forking Subagents](/guides/forking-subagents): split work across forks that report back.
+- [Agent Swarms](/guides/agent-swarms): fan out to many forks at once.

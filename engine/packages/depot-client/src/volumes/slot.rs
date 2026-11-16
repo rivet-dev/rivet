@@ -27,7 +27,7 @@ use depot_volume::{
 };
 use futures_util::{FutureExt, future::BoxFuture};
 use rivet_data::generated::{
-	depot_client_protocol_v1::{
+	depot_client_protocol_v2::{
 		CheckpointError, ClientRequest, ClientResponse, VolumeCreateRequest, VolumeDeleteRequest,
 		VolumeOpenResponse, VolumeRejectResponse,
 	},
@@ -162,7 +162,7 @@ impl Slot {
 		may_dispatch: Arc<dyn Fn() -> bool + Send + Sync>,
 	) -> Result<Response, Error> {
 		use crate::checkpoints::request;
-		use rivet_data::generated::depot_client_protocol_v1::*;
+		use rivet_data::generated::depot_client_protocol_v2::*;
 		if !may_dispatch() {
 			return Err(Error::Closed);
 		}
@@ -258,7 +258,7 @@ impl Slot {
 		may_dispatch: Arc<dyn Fn() -> bool + Send + Sync>,
 	) -> Result<Response, Error> {
 		use crate::checkpoints::{CheckpointUpdate, request};
-		use rivet_data::generated::depot_client_protocol_v1::*;
+		use rivet_data::generated::depot_client_protocol_v2::*;
 		if !may_dispatch() {
 			return Err(Error::Closed);
 		}
@@ -1089,6 +1089,9 @@ fn close_retry_wait_ms(refusal: &RpcError) -> Option<u64> {
 		RpcError::LifecycleRejected(VolumeRejectResponse::VolumeUnderRepair(refusal)) => {
 			Some(refusal.retry_after_ms.max(1))
 		}
+		RpcError::LifecycleRejected(VolumeRejectResponse::VolumeTailUnproven(refusal)) => {
+			Some(refusal.retry_after_ms.max(1))
+		}
 		RpcError::LifecycleRejected(VolumeRejectResponse::TabletSplitting)
 		| RpcError::RoutingUnavailable => Some(CLOSE_ROUTE_RETRY_MS),
 		// This process's own transport refused the close before sending it.
@@ -1099,7 +1102,8 @@ fn close_retry_wait_ms(refusal: &RpcError) -> Option<u64> {
 			VolumeRejectResponse::VolumeExists
 			| VolumeRejectResponse::VolumeNotFound
 			| VolumeRejectResponse::VolumeDeleted
-			| VolumeRejectResponse::VolumeRecordMissing(_),
+			| VolumeRejectResponse::VolumeRecordMissing(_)
+			| VolumeRejectResponse::VolumeGroupArchived,
 		) => None,
 	}
 }

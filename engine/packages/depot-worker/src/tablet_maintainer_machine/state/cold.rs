@@ -100,7 +100,7 @@ pub(crate) fn queue_lagging_trims(state: &mut MaintainerState, key: &VolumeLogKe
 	let Some(row) = volume.row(key) else {
 		return;
 	};
-	if row.status != rivet_data::generated::shared_depot_fs_v1::FsVolumeStatus::Live
+	if row.status != rivet_data::generated::shared_depot_fs_v2::FsVolumeStatus::Live
 		|| row.cold.volume_seq == 0
 	{
 		return;

@@ -7,7 +7,7 @@ use crate::tablet_maintainer_machine::{Effects, effect::MaintainerEffect as Fx, 
 use depot_types::VolumeLogKey;
 use depot_volume::volume_client_machine::types::RecoveryReport;
 use rivet_data::generated::{
-	shared_depot_fs_v1::FsVolumeRecord,
+	shared_depot_fs_v2::FsVolumeRecord,
 	shared_depot_types_v1::{TabletPhase, VolumeLogReplicaStatus as Status},
 };
 use rivet_topology::worker::WorkerId;
@@ -16,7 +16,20 @@ use serde::{Deserialize, Serialize};
 /// Why a recovery started, which decides what its completion reports.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) enum RecoveryPurpose {
+	/// Releases a volume whose holder is gone or idle so it can unload. Takes a slot of
+	/// `max_repairs`.
 	Unload,
+	/// Fences the writer of a loaded volume of an archived group, which then unloads when idle.
+	/// Takes a slot of `max_archive_fences`, so an archive of a busy namespace never takes the
+	/// slots crash repairs need.
+	ArchiveFence,
+	/// Proves the tail of a grouped volume whose delete waits to log its fork pin
+	/// (`DeleteStep::Pinning`) behind an unproven pin floor. The recovery commits a claim entry
+	/// above every committed entry, which resolves the floor, so the pin is logged without
+	/// waiting for the holder's next write or process exit. The delete would fence the holder
+	/// next anyway. Takes a slot of `max_repairs`.
+	DeletePin,
+	/// Brings a learner of a replica set change up to date. Takes a slot of `max_repairs`.
 	Membership {
 		grant_epoch: u64,
 		replica_set_version: u64,
@@ -270,7 +283,9 @@ fn released(s: &mut MaintainerState, key: VolumeLogKey, fx: &mut Effects) {
 		return;
 	}
 	super::lifecycle::resume_after_repair(s, &key.0.volume_key, fx);
+	// A volume being deleted is not unloaded: its delete forgets the replicas.
 	if !s.pending.contains_key(&key.0.volume_key)
+		&& !s.deleting.contains_key(&key)
 		&& !holds_key(s, &key.0.volume_key)
 		&& s.loaded_volumes
 			.get(&key)

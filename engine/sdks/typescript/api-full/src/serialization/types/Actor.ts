@@ -16,6 +16,7 @@ export const Actor: core.serialization.ObjectSchema<serializers.Actor.Raw, Rivet
     sleepTs: core.serialization.property("sleep_ts", core.serialization.number() .nullable()),
     rescheduleTs: core.serialization.property("reschedule_ts", core.serialization.number() .nullable()),
     destroyTs: core.serialization.property("destroy_ts", core.serialization.number() .nullable()),
+    forkedFrom: core.serialization.property("forked_from", RivetId.nullable().optional()),
 });
 
 export declare namespace Actor {
@@ -32,5 +33,6 @@ export declare namespace Actor {
         sleep_ts: number | null;
         reschedule_ts: number | null;
         destroy_ts: number | null;
+        forked_from?: RivetId.Raw | null;
     }
 }

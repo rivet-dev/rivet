@@ -46,7 +46,7 @@ pub trait StatusNotifier: Send + Sync + 'static {
 	fn notify(
 		&self,
 		worker: WorkerId,
-		request: rivet_data::generated::depot_client_protocol_v1::ReplicaStatusNoticeRequest,
+		request: rivet_data::generated::depot_client_protocol_v2::ReplicaStatusNoticeRequest,
 	) -> std::pin::Pin<Box<dyn std::future::Future<Output = super::types::NoticeOutcome> + Send>>;
 }
 

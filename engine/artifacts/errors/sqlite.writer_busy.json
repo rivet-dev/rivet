@@ -1,0 +1,5 @@
+{
+  "code": "writer_busy",
+  "group": "sqlite",
+  "message": "SQLite writer is busy."
+}

@@ -63,6 +63,16 @@
 				"build"
 			]
 		},
+		"openapi:generate": {
+			"cache": false
+		},
+		"@rivet-gg/cloud#fern:generate": {
+			"dependsOn": [
+				"@rivet-gg/cloud-api#openapi:generate",
+				"@rivet-gg/cloud-api-v2#openapi:generate"
+			],
+			"cache": false
+		},
 		"fmt": {
 			"cache": false,
 			"inputs": [

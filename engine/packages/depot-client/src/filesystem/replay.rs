@@ -28,7 +28,7 @@ impl Filesystem {
 		start: VolumeLogPosition,
 		deadline: u64,
 	) -> Result<()> {
-		state.resolver = Resolver::new(start.clone());
+		state.resolver = Resolver::new(self.claim_log, start.clone());
 		state.last_seq = start.volume_seq;
 		let mut pending = BTreeMap::<Vec<u8>, Vec<_>>::new();
 		let mut entries = history.entries;
@@ -61,7 +61,7 @@ impl Filesystem {
 						state,
 						Layer::indexed(
 							log.volume_seq,
-							apply::plan(log.volume_seq, &entry)?,
+							apply::plan(self.claim_log, log.volume_seq, &entry)?,
 							&self.budget,
 							self.journal.clone(),
 						)?,
@@ -76,7 +76,7 @@ impl Filesystem {
 							.or_default()
 							.push(Layer::indexed(
 								log.volume_seq,
-								apply::plan(log.volume_seq, &entry)?,
+								apply::plan(self.claim_log, log.volume_seq, &entry)?,
 								&self.budget,
 								self.journal.clone(),
 							)?);
@@ -85,7 +85,7 @@ impl Filesystem {
 						let mut layers = pending.remove(&id).ok_or_else(|| corrupt!())?;
 						layers.push(Layer::indexed(
 							log.volume_seq,
-							apply::plan(log.volume_seq, &entry)?,
+							apply::plan(self.claim_log, log.volume_seq, &entry)?,
 							&self.budget,
 							self.journal.clone(),
 						)?);
@@ -311,7 +311,7 @@ impl Filesystem {
 	) -> Result<()> {
 		let seq = log.volume_seq;
 		let entry = decode(log)?;
-		let plan = apply::plan(seq, &entry)?;
+		let plan = apply::plan(self.claim_log, seq, &entry)?;
 		let bytes = super::admission::row_bytes(&plan);
 		let layer = match source {
 			ReadBack::Log => Layer::indexed(seq, plan, &self.budget, self.journal.clone())?,
@@ -361,7 +361,10 @@ impl Filesystem {
 				layers.push(layer);
 				let merged = Layer::merge(seq, &layers, &self.budget)?;
 				let mut footprint = open.footprint.clone();
-				footprint.extend(depot_fs_core::txn::footprint(seq, &entry.ops));
+				footprint.extend(depot_fs_core::txn::footprint(
+					depot_fs_core::txn::created(self.claim_log, seq, &entry.ops)?,
+					&entry.ops,
+				));
 				let change = Change::footprint(seq, now, &footprint, &self.budget)?;
 				state.conflicts.push(change, &self.config);
 				self.push_layer(state, merged);

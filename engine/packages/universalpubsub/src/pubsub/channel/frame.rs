@@ -210,7 +210,8 @@ impl ByteBudget {
 	}
 
 	/// Whether new work must be refused at admission: the budget is used up, or a reservation
-	/// is already waiting for room it did not find.
+	/// is already waiting for room it did not find. A reservation that fits at once never
+	/// registers as a waiter, so concurrent reservations under the cap never read as full.
 	pub(super) fn is_full(&self) -> bool {
 		use std::sync::atomic::Ordering;
 		self.waiters.load(Ordering::Acquire) > 0

@@ -2,8 +2,8 @@
 use super::store::FilesystemStore;
 use anyhow::{Result, bail, ensure};
 use bytes::Bytes;
-use depot_fs_core::keys::slatedb as keys;
-use rivet_data::generated::depot_client_protocol_v1::*;
+use depot_fs_core::{FsCut, keys::slatedb as keys};
+use rivet_data::generated::depot_client_protocol_v2::*;
 use rivet_keys::keys::{KeyAddress, PrefixAddress, codec::FormalKey};
 use std::ops::Bound;
 use uuid::Uuid;
@@ -45,7 +45,7 @@ impl FilesystemStore {
 					decoded: Some(RepairDiagnosticValue::RepairPin(RepairPin {
 						session_id: *session.id.as_bytes(),
 						as_of: session.as_of,
-						applied: session.applied.clone(),
+						applied: FsCut::single(session.applied.clone()),
 						expires_boot_ms: session.deadline_boot_ms(),
 						base_chain: session.base_chain.clone(),
 					})),

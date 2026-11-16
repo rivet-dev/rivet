@@ -1,0 +1,5 @@
+{
+  "code": "transaction_closed",
+  "group": "sqlite",
+  "message": "SQLite transaction coordinator is closed."
+}

@@ -730,6 +730,81 @@ export class RivetClient {
         }
     }
 
+    /**
+     * Forks an actor: creates a new actor in the same namespace, with the source's name and pool,
+     * whose database is a copy of the source's, and starts it.
+     *
+     * @param {Rivet.RivetId} actorId
+     * @param {Rivet.ActorsForkRequest} request
+     * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.actorsFork("actor_id", {
+     *         namespace: "namespace",
+     *     })
+     */
+    public async actorsFork(
+        actorId: Rivet.RivetId,
+        request: Rivet.ActorsForkRequest,
+        requestOptions?: RivetClient.RequestOptions,
+    ): Promise<Rivet.ActorsForkResponse> {
+        const { namespace, ..._body } = request;
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
+        if (namespace != null) _queryParams["namespace"] = namespace;
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                `actors/${encodeURIComponent(serializers.RivetId.jsonOrThrow(actorId))}/fork`,
+            ),
+            method: "POST",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            queryParameters: _queryParams,
+            requestType: "json",
+            body: serializers.ActorsForkRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.ActorsForkResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /actors/{actor_id}/fork.");
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
     protected async _getAuthorizationHeader(): Promise<string> {
         return `Bearer ${await core.Supplier.get(this._options.token)}`;
     }

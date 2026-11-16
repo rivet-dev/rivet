@@ -8,7 +8,7 @@ mod backoff;
 pub mod client;
 mod common;
 pub mod connection;
-pub mod drivers;
+pub(crate) mod drivers;
 pub mod handle;
 pub mod protocol;
 mod remote_manager;

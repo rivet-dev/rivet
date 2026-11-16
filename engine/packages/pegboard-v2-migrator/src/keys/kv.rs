@@ -1,19 +1,22 @@
-//! Entries of the migration volume.
+//! Entries of the migration volume. Each value is written at the version the writing command's
+//! handle selects for `pegboard.v2_migrator`, the highest every live storage worker reads, so a
+//! storage worker of an older release that takes the volume over decodes every entry.
 use rivet_util::Id;
 
-rivet_keys::volume_kv_key! {
-	pub V2MigratorFenceKey() => [V2_MIGRATOR_FENCE];
-	value: vbare(rivet_data::versioned::MigrateFromV2Fence, rivet_data::generated::PEGBOARD_V2_MIGRATOR_VERSION);
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [V2_MIGRATOR_FENCE], value = vbare_selected(rivet_data::versioned::MigrateFromV2Fence))]
+pub struct V2MigratorFenceKey {}
+
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [V2_MIGRATOR_PASS], value = vbare_selected(rivet_data::versioned::MigrateFromV2Pass))]
+pub struct V2MigratorPassKey {}
+
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [V2_MIGRATOR_IN_FLIGHT, v2_actor_id], value = vbare_selected(rivet_data::versioned::MigrateFromV2InFlight))]
+pub struct V2MigratorInFlightKey {
+	pub v2_actor_id: Id,
 }
 
-rivet_keys::volume_kv_key! {
-	pub V2MigratorPassKey() => [V2_MIGRATOR_PASS];
-	value: vbare(rivet_data::versioned::MigrateFromV2Pass, rivet_data::generated::PEGBOARD_V2_MIGRATOR_VERSION);
-}
-
-rivet_keys::volume_kv_key! {
-	pub V2MigratorInFlightKey(v2_actor_id: Id) => [V2_MIGRATOR_IN_FLIGHT, {v2_actor_id}];
-	value: vbare(rivet_data::versioned::MigrateFromV2InFlight, rivet_data::generated::PEGBOARD_V2_MIGRATOR_VERSION);
-}
-
-rivet_keys::volume_kv_key! { pub V2MigratorInFlightPrefix() => [V2_MIGRATOR_IN_FLIGHT]; }
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [V2_MIGRATOR_IN_FLIGHT])]
+pub struct V2MigratorInFlightPrefix {}

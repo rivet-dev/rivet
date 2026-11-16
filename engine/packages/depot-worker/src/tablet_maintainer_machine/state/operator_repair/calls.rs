@@ -27,12 +27,12 @@ use crate::tablet_maintainer_machine::{
 };
 use depot_types::VolumeLogKey;
 use rivet_data::generated::{
-	depot_client_protocol_v1::{
+	depot_client_protocol_v2::{
 		ClientResponse, RepairApplied, RepairAuditRow, RepairBody, RepairDetail, RepairOutcome,
 		RepairPlan, RepairPlanned, RepairRefusalCode, RepairRefused, RepairRequest, RepairResponse,
 		RepairResult, RepairUnknown,
 	},
-	depot_maintainer_log_v1::{MaintainerOp, RepairAuditOp},
+	depot_maintainer_log_v2::{MaintainerOp, RepairAuditOp},
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

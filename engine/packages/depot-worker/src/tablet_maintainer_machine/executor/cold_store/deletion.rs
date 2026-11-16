@@ -1,7 +1,7 @@
 //! Bounded cleanup of one deleted incarnation; discovery remains a maintainer decision.
 
 use super::*;
-use rivet_data::generated::shared_depot_fs_v1::FsVolumeStatus;
+use rivet_data::generated::shared_depot_fs_v2::FsVolumeStatus;
 
 pub use crate::tablet_maintainer_machine::types::DeleteSweepResult;
 
@@ -155,10 +155,15 @@ impl ColdStore {
 				))?,
 			);
 		}
-		if pointer.as_ref().is_some_and(|pointer| {
-			pointer.volume_incarnation == key.0.volume_incarnation
-				&& pointer.volume_key() == key.0.volume_key
-		}) {
+		// A grouped incarnation deleted after a fork of its group stays the name's tombstone:
+		// a child of that fork finds it through the pointer and reads it through the pin its
+		// delete logged. One record per such name, kept because the group exists.
+		let tombstone_kept = keeps_tombstone(&own);
+		if !tombstone_kept
+			&& pointer.as_ref().is_some_and(|pointer| {
+				pointer.volume_incarnation == key.0.volume_incarnation
+					&& pointer.volume_key() == key.0.volume_key
+			}) {
 			batch.delete(VolumeRecordKey::for_volume(&key.0.volume_key).pack());
 		}
 		batch.delete(
@@ -170,4 +175,13 @@ impl ColdStore {
 		self.filesystem().admit()?;
 		Ok(DeleteSweepResult::Complete)
 	}
+}
+
+/// Whether a deleted incarnation's record stays the name's pointer after its sweep releases
+/// its metadata: it is in a group and the group was forked while it lived, so a child of such a
+/// fork must find it, deleted at `deleted_at_fork`, rather than nothing. Any other incarnation
+/// releases its pointer as before.
+pub(crate) fn keeps_tombstone(record: &FsVolumeRecord) -> bool {
+	depot_types::keys::partition::forkable_group(&record.partition_key).is_some()
+		&& record.deleted_at_fork.unwrap_or(0) > record.created_at_fork.unwrap_or(0)
 }

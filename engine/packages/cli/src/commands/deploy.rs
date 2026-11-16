@@ -55,8 +55,8 @@ pub struct Opts {
 	env_vars: Vec<String>,
 	/// A runner pool variable taking a cluster secret's latest version,
 	/// repeatable as KEY (a secret named like the variable) or
-	/// KEY=SECRET_NAME, and kept with the pool's others. Clusters only; roll
-	/// the secret out first with `rivet cluster secret rollout`.
+	/// KEY=SECRET_NAME, and kept with the pool's others. Clusters only; set
+	/// the secret first with `rivet cluster secret set`.
 	#[arg(long = "secret", value_name = "KEY[=SECRET_NAME]")]
 	secrets: Vec<String>,
 	/// Skip prompts.

@@ -2,12 +2,18 @@
 //! positions; only completed entries may be published in its read-session view.
 
 use super::{
-	filter::{Catalog, Retention},
+	filter::{Catalog, PinnedCut, Retention},
 	session::SessionConfig,
 };
+use crate::tablet_maintainer_machine::types::FilesystemApplyError;
 use anyhow::{Result, ensure};
 use bytes::Bytes;
-use depot_fs_core::{keys::slatedb as keys, store::Batch, work::SweepHold, *};
+use depot_fs_core::{
+	keys::slatedb as keys,
+	store::{Batch, Row, RowKey},
+	work::SweepHold,
+	*,
+};
 use futures_util::{StreamExt, stream::FuturesOrdered};
 use rivet_env::{Clock, MutationGuard};
 use rivet_keys::keys::{
@@ -187,10 +193,44 @@ pub(crate) fn ensure_record_follows(old: &FsVolumeRecord, record: &FsVolumeRecor
 	Ok(())
 }
 
+/// The fork index row of a Deleted `record` written at `depot.fs_rows` version `version`: present
+/// for a grouped incarnation deleted after a fork of its group, the same incarnations whose
+/// record stays the name's tombstone, and only at the row version that carries fork pins.
+pub(crate) fn deleted_incarnation_key(
+	record: &FsVolumeRecord,
+	version: u16,
+) -> Option<keys::DeletedIncarnationKey> {
+	let indexed = record.status == FsVolumeStatus::Deleted
+		&& version >= super::fork_pins::FORK_PIN_ROW_VERSION
+		&& crate::tablet_maintainer_machine::executor::cold_store::deletion::keeps_tombstone(
+			record,
+		);
+	if !indexed {
+		return None;
+	}
+	let scope = record_scope(record);
+	Some(keys::DeletedIncarnationKey::new(
+		scope.hash,
+		scope.name,
+		record.partition_key.clone().into(),
+		record.deleted_at_fork.unwrap_or(0),
+		scope.incarnation,
+	))
+}
+
 /// The row address of one incarnation's own record.
 pub(crate) fn incarnation_record_key(record: &FsVolumeRecord) -> keys::VolumeIncarnationRecordKey {
 	let scope = record_scope(record);
 	keys::VolumeIncarnationRecordKey::new(scope.hash, scope.name, scope.incarnation)
+}
+
+/// The row space `record`'s log writes and the claim log it writes as. A claim log's own
+/// record lives under its own name, but its rows live in its base volume's row space.
+pub(crate) fn rows_scope(record: &FsVolumeRecord) -> (keys::Scope, u16) {
+	keys::Scope::of_log(
+		&record_key(record),
+		Uuid::from_bytes(record.volume_incarnation),
+	)
 }
 
 fn record_scope(record: &FsVolumeRecord) -> keys::Scope {
@@ -204,6 +244,98 @@ fn record_key(record: &FsVolumeRecord) -> depot_types::VolumeKey {
 	depot_types::VolumeKey {
 		partition_key: record.partition_key.clone(),
 		name: record.name.clone(),
+	}
+}
+
+/// The kind of a filesystem row, for refusals and their logs.
+fn row_kind(key: &RowKey) -> &'static str {
+	match key {
+		RowKey::Format => "format",
+		RowKey::Inode(_) => "inode",
+		RowKey::Dentry(..) => "dentry",
+		RowKey::Link(..) => "link",
+		RowKey::Xattr(..) => "xattr",
+		RowKey::Kv(..) => "kv",
+		RowKey::Orphan(_) => "orphan",
+		RowKey::Chunk(..) => "chunk",
+		RowKey::KvRangeWhiteout(..) => "kv_range_whiteout",
+	}
+}
+
+/// Turns `error`, the refusal to encode a row at `version`, into the typed outcome that names
+/// which version expresses the row: `reachable`, the highest version this grant reaches, which
+/// a durable rows mark unlocks, or only a newer one, which a later grant must select. A row no version expresses keeps its
+/// original error, which fences the maintainer as corruption.
+#[allow(
+	clippy::too_many_arguments,
+	reason = "the arguments are one encode_row call and the two versions it is retried at"
+)]
+fn classify_refusal(
+	scope: &keys::Scope,
+	key: &RowKey,
+	claim_log: u16,
+	seq: u64,
+	value: Option<Row>,
+	version: u16,
+	reachable: u16,
+	error: anyhow::Error,
+) -> anyhow::Error {
+	let row = row_kind(key).to_owned();
+	if version < reachable
+		&& keys::encode_row(scope, key, claim_log, seq, value.clone(), reachable).is_ok()
+	{
+		return FilesystemApplyError::RowsMarkPending { row, version }.into();
+	}
+	if reachable < rivet_data::DEPOT_FS_ROWS_VERSION
+		&& keys::encode_row(
+			scope,
+			key,
+			claim_log,
+			seq,
+			value,
+			rivet_data::DEPOT_FS_ROWS_VERSION,
+		)
+		.is_ok()
+	{
+		return FilesystemApplyError::RowsInexpressible { row, reachable }.into();
+	}
+	error
+}
+
+/// Encodes one row at `version`, the store's current row version, for a write the maintainer
+/// can hold instead of fencing: an apply's entry or a fork's copied page.
+///
+/// A row `version` cannot express refuses the whole write with a typed
+/// [`FilesystemApplyError`]: `RowsMarkPending` when `reachable`, the highest version this grant
+/// reaches, expresses it, so the pass that makes the raised rows mark durable resolves it, and
+/// `RowsInexpressible` when only a version above `reachable` does. Any other refusal is returned
+/// as is.
+pub(super) fn encode_held_row(
+	scope: &keys::Scope,
+	key: &RowKey,
+	claim_log: u16,
+	seq: u64,
+	value: Option<Row>,
+	version: u16,
+	reachable: u16,
+) -> Result<(Bytes, Bytes)> {
+	// Only a version below the newest can refuse a row it cannot express, so only then is the
+	// value kept to find which version would.
+	let retained = if version < rivet_data::DEPOT_FS_ROWS_VERSION {
+		Some(value.clone())
+	} else {
+		None
+	};
+	match keys::encode_row(scope, key, claim_log, seq, value, version) {
+		Ok(encoded) => Ok(encoded),
+		Err(error) => {
+			let Some(value) = retained else {
+				return Err(error);
+			};
+			Err(classify_refusal(
+				scope, key, claim_log, seq, value, version, reachable, error,
+			))
+		}
 	}
 }
 
@@ -242,15 +374,23 @@ pub const DEFAULT_FLUSH_STAGE_CONCURRENCY: usize = 16;
 
 /// Cloning this executor does not acquire a grant or start tasks. Its containing
 /// cold-store owner closes the database and joins SlateDB's tasks on shutdown.
-/// The `depot.fs_rows` version a tablet's store encodes rows at: the version the grant
-/// selected from the topology's read floor, capped by the `depot.fs_rows` mark already durable
-/// in the tablet's maintainer log record.
+/// The `depot.fs_rows` version a tablet's store encodes rows at: exactly the `depot.fs_rows`
+/// mark already durable in the tablet's maintainer log record. The version the grant selected
+/// from the topology's read floor only decides how far a record pass raises that mark.
 ///
-/// The cap is what lets any pass make rows durable, including one that writes no record, such
-/// as a write-to-cold pass or a pass during a split: a row is never encoded above a mark that
-/// is already durable, so no reader the coordinator may grant the tablet to finds a row it
-/// cannot read. The mark rises only through a record pass, which raises it to the selected
-/// version, so rows follow one pass after it.
+/// Never above the mark: that is what lets any pass make rows durable, including one that
+/// writes no record, such as a write-to-cold pass or a pass during a split, since no reader
+/// the coordinator may grant the tablet to finds a row it cannot read. The mark rises only
+/// through a record pass, which raises it to the selected version, so rows follow one pass
+/// after it. The one exception is that pass's own records: they share the batch that writes
+/// the mark, so they are encoded at the raised version, and a record only that version holds,
+/// such as a grouped volume's, is written by the very pass that raises it.
+///
+/// Never below the mark either, even when the grant selected a lower version: the topology
+/// selects version 1 whenever its snapshot is partial or stale, but a durable mark proves that
+/// every worker the coordinator may grant the tablet to reads it, and this grant read the
+/// record. Encoding below it would refuse rows the lower version lacks, such as range
+/// whiteouts, in a fleet that is fully upgraded.
 pub(crate) struct RowVersion {
 	selected: std::sync::atomic::AtomicU16,
 	marked: std::sync::atomic::AtomicU16,
@@ -267,8 +407,14 @@ impl RowVersion {
 	}
 
 	fn current(&self) -> u16 {
+		self.marked.load(std::sync::atomic::Ordering::Acquire)
+	}
+
+	/// The highest version rows reach in this grant: the selected version once a pass makes it
+	/// the durable mark, or the durable mark itself when the grant selected less.
+	fn reachable(&self) -> u16 {
 		let selected = self.selected.load(std::sync::atomic::Ordering::Acquire);
-		selected.min(self.marked.load(std::sync::atomic::Ordering::Acquire))
+		selected.max(self.current())
 	}
 
 	fn open(
@@ -280,6 +426,19 @@ impl RowVersion {
 			.store(selected, std::sync::atomic::Ordering::Release);
 		self.marked
 			.store(Self::rows_mark(marks), std::sync::atomic::Ordering::Release);
+	}
+
+	/// The version the batch that writes a maintainer log record with `marks` encodes its
+	/// own rows at. SlateDB applies a batch atomically and the opening maintainer reads the
+	/// record before any row, so those rows may follow the mark the batch itself raises, up to
+	/// the selected version, and never fall below the mark already durable.
+	fn with_marks(
+		&self,
+		marks: &[rivet_data::generated::shared_depot_types_v1::VersionMark],
+	) -> u16 {
+		let selected = self.selected.load(std::sync::atomic::Ordering::Acquire);
+		let marked = self.marked.load(std::sync::atomic::Ordering::Acquire);
+		marked.max(selected.min(Self::rows_mark(marks)))
 	}
 
 	fn marked_durable(&self, marks: &[rivet_data::generated::shared_depot_types_v1::VersionMark]) {
@@ -304,7 +463,7 @@ pub struct FilesystemStore {
 	pub(crate) guard: Arc<dyn MutationGuard>,
 	pub(crate) catalog: Catalog,
 	pub(crate) config: SessionConfig,
-	pub(super) base_reader: Option<Arc<dyn super::base::BaseChunkReader>>,
+	pub(super) base_reader: Option<Arc<dyn super::base::BaseLayerReader>>,
 	pub(crate) sessions: parking_lot::Mutex<super::session::SessionTable>,
 	pub(crate) rng: rivet_env::RngStream,
 	pub(crate) session_slots: Arc<tokio::sync::Semaphore>,
@@ -338,7 +497,7 @@ impl FilesystemStore {
 	/// The grant opened the store: rows are encoded at `selected`, the version the grant
 	/// chose from the read floor, but never above the mark in `marks`, the store's durable
 	/// maintainer log record. Called once, before the grant writes anything.
-	pub(crate) fn open_row_version(
+	pub fn open_row_version(
 		&self,
 		selected: u16,
 		marks: &[rivet_data::generated::shared_depot_types_v1::VersionMark],
@@ -348,7 +507,7 @@ impl FilesystemStore {
 
 	/// A flush made a maintainer log record with `marks` durable, so rows may now be
 	/// encoded up to its `depot.fs_rows` mark.
-	pub(crate) fn rows_marked_durable(
+	pub fn rows_marked_durable(
 		&self,
 		marks: &[rivet_data::generated::shared_depot_types_v1::VersionMark],
 	) {
@@ -434,7 +593,7 @@ impl FilesystemStore {
 		self
 	}
 
-	pub fn with_base_reader(mut self, reader: Arc<dyn super::base::BaseChunkReader>) -> Self {
+	pub fn with_base_reader(mut self, reader: Arc<dyn super::base::BaseLayerReader>) -> Self {
 		self.base_reader = Some(reader);
 		self
 	}
@@ -554,7 +713,7 @@ impl FilesystemStore {
 	/// under one catalog lock; a loader that lost the race reads again. The last insert
 	/// therefore always comes from a snapshot taken after every earlier insert.
 	pub async fn load_retention(&self, record: &FsVolumeRecord) -> Result<()> {
-		let scope = record_scope(record);
+		let (scope, _) = rows_scope(record);
 		for _ in 0..MAX_RETENTION_LOAD_ATTEMPTS {
 			self.admit()?;
 			let loaded = self.retention_loads(&scope);
@@ -570,13 +729,48 @@ impl FilesystemStore {
 		)
 	}
 
-	/// The checkpoint sequences a scope's named, retention and fork-hold rows pin, as of
-	/// `snapshot`.
+	/// Reloads the pinned cuts of `scope`'s catalog entry from its rows after a pin pass deleted
+	/// fork pins, so their cuts leave the catalog now rather than at the volume's next flush,
+	/// which a volume that is only read never has. Only the cuts are replaced: a checkpoint or
+	/// fork hold at a deleted pin's cut keeps its entry, and the cold positions stay those the
+	/// last flush set. A scope with no entry has nothing to release. Races with other loaders
+	/// as [`Self::load_retention`] does.
+	pub(crate) async fn reload_retention_pins(&self, scope: &keys::Scope) -> Result<()> {
+		for _ in 0..MAX_RETENTION_LOAD_ATTEMPTS {
+			self.admit()?;
+			let Some(loaded) = self
+				.catalog
+				.lock()
+				.get(scope)
+				.map(|retention| retention.loads)
+			else {
+				return Ok(());
+			};
+			let snapshot = self.db.snapshot().await?;
+			let pins = Self::retained_checkpoints(&snapshot, scope).await?;
+			self.admit()?;
+			let mut catalog = self.catalog.lock();
+			let Some(retention) = catalog.get_mut(scope) else {
+				return Ok(());
+			};
+			if retention.loads == loaded {
+				retention.pins = pins;
+				retention.loads = retention.loads.wrapping_add(1);
+				return Ok(());
+			}
+		}
+		anyhow::bail!(
+			"retention reload of a scope kept losing to concurrent loaders; the next flush reloads it"
+		)
+	}
+
+	/// The cuts a scope's named, retention, fork-hold and fork-pin rows pin, as of `snapshot`.
+	/// A row written before cuts existed pins the one-log cut its key describes.
 	async fn retained_checkpoints(
 		snapshot: &slatedb::DbSnapshot,
 		scope: &keys::Scope,
-	) -> Result<BTreeSet<u64>> {
-		let mut checkpoints = BTreeSet::new();
+	) -> Result<BTreeSet<PinnedCut>> {
+		let mut pins = BTreeSet::new();
 		let prefix =
 			keys::CheckpointRowsPrefix::new(scope.hash, scope.name.clone(), scope.incarnation, 0)
 				.pack();
@@ -585,7 +779,10 @@ impl FilesystemStore {
 			let address = keys::VolumeCheckpointKey::unpack(&row.key)?;
 			let value = address.deserialize(row.value)?;
 			if value.named || value.retention {
-				checkpoints.insert(address.sequence());
+				pins.insert(value.cut.as_ref().map_or_else(
+					|| PinnedCut::single(address.sequence()),
+					PinnedCut::from_cut,
+				));
 			}
 		}
 		let prefix =
@@ -593,38 +790,61 @@ impl FilesystemStore {
 				.pack();
 		let mut rows = snapshot.scan_prefix(prefix, ..).await?;
 		while let Some(row) = rows.next().await? {
-			checkpoints.insert(keys::ForkHoldKey::unpack(&row.key)?.sequence());
+			let address = keys::ForkHoldKey::unpack(&row.key)?;
+			let value = address.deserialize(row.value)?;
+			pins.insert(value.cut.as_ref().map_or_else(
+				|| PinnedCut::single(address.sequence()),
+				PinnedCut::from_cut,
+			));
 		}
-		Ok(checkpoints)
+		// A fork pin stays while any child group of its forks is unarchived; the pin path
+		// deletes it, so every row still present pins its cut.
+		let prefix =
+			keys::ForkPinRowsPrefix::new(scope.hash, scope.name.clone(), scope.incarnation, 0)
+				.pack();
+		let mut rows = snapshot.scan_prefix(prefix, ..).await?;
+		while let Some(row) = rows.next().await? {
+			let address = keys::ForkPinKey::unpack(&row.key)?;
+			let value = address.deserialize(row.value)?;
+			pins.insert(PinnedCut::from_cut(&value.cut));
+		}
+		Ok(pins)
 	}
 
 	/// Replaces a scope's catalog entry if its load count is still `loaded`, keeping its
-	/// apply boundary and sessions. Returns whether it replaced the entry.
+	/// apply boundary and sessions. Returns whether it replaced the entry. `record` is the
+	/// record of one claim log of the scope: it sets that log's cold position, and claim log
+	/// 0's record also says whether the volume has a base. Every other log's cold position
+	/// is kept.
 	fn insert_retention_if(
 		&self,
 		scope: keys::Scope,
 		record: &FsVolumeRecord,
-		checkpoints: BTreeSet<u64>,
+		pins: BTreeSet<PinnedCut>,
 		loaded: u64,
 	) -> bool {
 		let mut catalog = self.catalog.lock();
 		if catalog.get(&scope).map_or(0, |retention| retention.loads) != loaded {
 			return false;
 		}
-		let old = catalog.remove(&scope);
-		let apply_cold = old.as_ref().and_then(|old| old.apply_cold.clone());
-		let loads = old.as_ref().map_or(0, |old| old.loads).wrapping_add(1);
-		let sessions = old.map_or_else(BTreeMap::new, |old| old.sessions);
+		let (_, claim_log) = rows_scope(record);
+		let old = catalog.remove(&scope).unwrap_or_default();
+		let mut cold = old.cold;
+		cold.insert(claim_log, record.cold.volume_seq);
+		let has_base = match claim_log {
+			rivet_data::ROOT_CLAIM_LOG => !record.base_chain.is_empty(),
+			_ => old.has_base,
+		};
 		catalog.insert(
 			scope,
 			Retention {
-				apply_cold,
-				cold: record.cold.volume_seq,
+				apply_cold: old.apply_cold,
+				cold,
 				cold_barrier: Some(self.db.manifest().last_l0_seq()),
-				checkpoints,
-				has_base: !record.base_chain.is_empty(),
-				sessions,
-				loads,
+				pins,
+				has_base,
+				sessions: old.sessions,
+				loads: old.loads.wrapping_add(1),
 			},
 		);
 		true
@@ -638,7 +858,9 @@ impl FilesystemStore {
 			return;
 		}
 		if let Some(retention) = self.catalog.lock().get_mut(scope) {
-			retention.checkpoints.extend(written.iter().copied());
+			retention
+				.pins
+				.extend(written.iter().map(|seq| PinnedCut::single(*seq)));
 			retention.loads = retention.loads.wrapping_add(1);
 		}
 	}
@@ -653,12 +875,13 @@ impl FilesystemStore {
 
 	/// Apply progress is mirrored from the resolver only after all row work completes.
 	/// Administrative flushes must use the same boundary as normal background flushes.
-	pub(super) fn limit_cold(&self, scope: &keys::Scope, record: &mut FsVolumeRecord) {
+	pub(super) fn limit_cold(&self, record: &mut FsVolumeRecord) {
+		let (scope, claim_log) = rows_scope(record);
 		if let Some(limit) = self
 			.catalog
 			.lock()
-			.get(scope)
-			.and_then(|v| v.apply_cold.as_ref())
+			.get(&scope)
+			.and_then(|v| v.apply_cold.get(claim_log))
 		{
 			if limit.volume_seq < record.cold.volume_seq {
 				record.cold = limit.clone();
@@ -676,18 +899,31 @@ impl FilesystemStore {
 		self.admit()?;
 		Ok(())
 	}
+	/// Encodes the rows one entry of `claim_log` writes at `seq` into `scope`, at the store's
+	/// current row version, as [`encode_held_row`] does each. Encoding is pure, so a refusal
+	/// leaves nothing staged.
 	pub(super) fn encode_batch(
+		&self,
 		scope: &keys::Scope,
+		claim_log: u16,
 		seq: u64,
 		rows: Batch,
-		version: u16,
 	) -> Result<WriteBatch> {
+		let version = self.row_version();
+		let reachable = self.rows.reachable();
 		let mut batch = WriteBatch::new();
 		for (key, value) in rows.rows {
-			let (key, value) = keys::encode_row(scope, &key, seq, value, version)?;
-			batch.put(key, value);
+			let (address, encoded) =
+				encode_held_row(scope, &key, claim_log, seq, value, version, reachable)?;
+			batch.put(address, encoded);
 		}
 		Ok(batch)
+	}
+
+	/// The store's current row version and the highest one this grant reaches, read together
+	/// for one batch of [`encode_held_row`] calls.
+	pub(super) fn row_versions(&self) -> (u16, u16) {
+		(self.row_version(), self.rows.reachable())
 	}
 	/// Stage all due records together, then flush once. The maintainer may issue
 	/// Trim only after success. A lost reply requires replay/readback, never trim.
@@ -724,8 +960,15 @@ impl FilesystemStore {
 				.map(|volume| (volume, super::locks::VolumeAccess::Write)),
 		);
 		self.admit()?;
+		// The pass that raises the rows mark stages its records in the batch that writes the
+		// mark, so they are encoded at the raised version; every other write waits for the
+		// mark to be durable.
+		let version = match maintainer_log {
+			Some(write) => self.rows.with_marks(&write.record.version_marks),
+			None => self.row_version(),
+		};
 		let plans = self
-			.plan_flush(records, self.flush_stage_concurrency)
+			.plan_flush(records, self.flush_stage_concurrency, version)
 			.await?;
 		let request = records
 			.iter()
@@ -762,10 +1005,8 @@ impl FilesystemStore {
 	/// the catalog before it releases its shared stripe, and the compaction filter keeps
 	/// what those pins name even after the stage deletes the checkpoint row.
 	fn recheck_flush_record(&self, record: &FsVolumeRecord) -> Result<()> {
-		let key = record_key(record);
-		let scope = keys::Scope::new(&key, Uuid::from_bytes(record.volume_incarnation));
 		let mut bounded = record.clone();
-		self.limit_cold(&scope, &mut bounded);
+		self.limit_cold(&mut bounded);
 		ensure!(
 			bounded.cold == record.cold,
 			"flush crosses an open transaction"
@@ -774,14 +1015,15 @@ impl FilesystemStore {
 	}
 
 	/// Reads what each record's flush must write, `concurrency` records at a time, and
-	/// returns the writes in input order. Each record reads and writes only its own scope,
-	/// and the duplicate check before any read makes the scopes distinct, so the result
-	/// does not depend on how the reads interleave. It takes no lock: the core orders the
-	/// stage against every other writer of its records.
+	/// returns the writes in input order, with each record encoded at `version`. Each record
+	/// reads and writes only its own scope, and the duplicate check before any read makes the
+	/// scopes distinct, so the result does not depend on how the reads interleave. It takes
+	/// no lock: the core orders the stage against every other writer of its records.
 	pub(crate) async fn plan_flush(
 		&self,
 		records: &[FsVolumeRecord],
 		concurrency: usize,
+		version: u16,
 	) -> Result<Vec<PlannedWrites>> {
 		let mut unique = BTreeSet::new();
 		for record in records {
@@ -799,7 +1041,7 @@ impl FilesystemStore {
 				let Some(record) = remaining.next() else {
 					break;
 				};
-				reading.push_back(self.plan_flush_record(record));
+				reading.push_back(self.plan_flush_record(record, version));
 			}
 			let Some(plan) = reading.next().await else {
 				break;
@@ -833,7 +1075,11 @@ impl FilesystemStore {
 		Ok(plans)
 	}
 
-	async fn plan_flush_record(&self, record: &FsVolumeRecord) -> Result<PlannedWrites> {
+	async fn plan_flush_record(
+		&self,
+		record: &FsVolumeRecord,
+		version: u16,
+	) -> Result<PlannedWrites> {
 		let key = record_key(record);
 		let pointer = self.pointer(&key).await?;
 		// The pointer is a copy of the row of the incarnation it names, so only a record of
@@ -850,9 +1096,8 @@ impl FilesystemStore {
 		if let Some(old) = &stored {
 			ensure_record_follows(old, record)?;
 		}
-		let scope = keys::Scope::new(&key, Uuid::from_bytes(record.volume_incarnation));
 		let mut bounded = record.clone();
-		self.limit_cold(&scope, &mut bounded);
+		self.limit_cold(&mut bounded);
 		ensure!(
 			bounded.cold == record.cold,
 			"flush crosses an open transaction"
@@ -860,11 +1105,17 @@ impl FilesystemStore {
 		let mut planned = PlannedWrites::default();
 		self.plan_alarm_index(record, &mut planned).await?;
 		self.retention_updates(record, &mut planned).await?;
-		planned.record(pointer.as_ref(), record, self.row_version())?;
+		planned.record(pointer.as_ref(), record, version)?;
 		if record.status == FsVolumeStatus::Deleted {
+			let scope = record_scope(record);
 			let marker =
 				keys::PendingDeleteKey::new(scope.hash, scope.name.clone(), scope.incarnation);
 			planned.put(marker.pack(), marker.serialize(())?);
+			// A grouped incarnation deleted after a fork stays findable by that fork's children
+			// after a newer incarnation takes the name's pointer.
+			if let Some(index) = deleted_incarnation_key(record, version) {
+				planned.put(index.pack(), index.serialize(())?);
+			}
 		}
 		Ok(planned)
 	}
@@ -927,9 +1178,12 @@ impl FilesystemStore {
 	pub(crate) async fn plan_retention(
 		&self,
 		records: &[FsVolumeRecord],
-	) -> Result<Vec<(keys::Scope, u64, BTreeSet<u64>)>> {
+	) -> Result<Vec<(keys::Scope, u64, BTreeSet<PinnedCut>)>> {
 		self.admit()?;
-		let scopes = records.iter().map(record_scope).collect::<Vec<_>>();
+		let scopes = records
+			.iter()
+			.map(|record| rows_scope(record).0)
+			.collect::<Vec<_>>();
 		let loads = scopes
 			.iter()
 			.map(|scope| self.retention_loads(scope))
@@ -969,7 +1223,7 @@ impl FilesystemStore {
 	pub(crate) async fn publish_retention(
 		&self,
 		records: &[FsVolumeRecord],
-		plan: Vec<(keys::Scope, u64, BTreeSet<u64>)>,
+		plan: Vec<(keys::Scope, u64, BTreeSet<PinnedCut>)>,
 	) -> Result<std::time::Duration> {
 		let mut lock_wait = std::time::Duration::ZERO;
 		for (record, (scope, loaded, pinned)) in records.iter().zip(plan) {
@@ -1096,6 +1350,28 @@ impl FilesystemStore {
 		if forks.next().await?.is_some() {
 			return Ok(SweepOutcome::Held(SweepHold::Checkpoint));
 		}
+		// A fork pin keeps the incarnation readable to the child groups waiting on it, and a
+		// deleted incarnation's own explicit fork holds stay with it until it is swept. The
+		// children the pins wait on are reported, so the maintainer can resume the sweep once
+		// they are archived. A volume's pins are few (one per batch of forks it was written
+		// across), so the scan reads only them.
+		let mut pins = held
+			.scan_prefix(
+				keys::ForkPinRowsPrefix::new(scope.hash, scope.name.clone(), scope.incarnation, 0)
+					.pack(),
+				..,
+			)
+			.await?;
+		let mut waiting = std::collections::BTreeSet::new();
+		while let Some(row) = pins.next().await? {
+			let key = keys::ForkPinKey::unpack(&row.key)?;
+			waiting.extend(key.deserialize(row.value)?.waiting);
+		}
+		if !waiting.is_empty() {
+			return Ok(SweepOutcome::Held(SweepHold::ForkPins {
+				waiting: waiting.into_iter().collect(),
+			}));
+		}
 		let prefix =
 			keys::IncarnationPrefix::new(scope.hash, scope.name.clone(), scope.incarnation).pack();
 		let snapshot = self.db.snapshot().await?;
@@ -1130,8 +1406,14 @@ impl FilesystemStore {
 			self.complete_fork_sweep(scope, &mut batch).await?;
 			// The incarnation's own record is its last row: it proves the incarnation's final
 			// position to fork base reads for as long as any of its data remains. A pointer
-			// that still names the incarnation goes with it.
+			// that still names the incarnation goes with it, and so does its fork index row,
+			// since every child its fork pins waited on is archived.
 			batch.delete(record_key.pack());
+			if let Some(index) = record.as_ref().and_then(|record| {
+				deleted_incarnation_key(record, super::fork_pins::FORK_PIN_ROW_VERSION)
+			}) {
+				batch.delete(index.pack());
+			}
 			let pointer = keys::VolumeRecordKey::new(scope.hash, scope.name.clone());
 			if let Some(value) = self.db.get(pointer.pack()).await?
 				&& pointer.deserialize(value)?.volume_incarnation == *scope.incarnation.as_bytes()

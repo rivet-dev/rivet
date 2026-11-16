@@ -219,11 +219,27 @@ impl CoordinatorExecutor {
 			scope.tasks.cancel();
 		}
 		let services = self.services.clone();
+		let clock = self.authority.env.clock();
 		self.tasks.spawn(async move {
+			let started_boot_ms = clock.boot_ms().ok();
 			if let Some(scope) = &scope {
 				scope.tasks.shutdown().await;
 			}
-			let effects_safe = services.reconcile_stopped(&tenure).await.is_ok();
+			let joined_boot_ms = clock.boot_ms().ok();
+			tracing::info!(
+				coordinator_generation = tenure.coordinator_generation,
+				elapsed_ms = elapsed_ms(started_boot_ms, joined_boot_ms),
+				"singleton scope tasks joined"
+			);
+			let reconciled = services.reconcile_stopped(&tenure).await;
+			tracing::info!(
+				coordinator_generation = tenure.coordinator_generation,
+				elapsed_ms = elapsed_ms(joined_boot_ms, clock.boot_ms().ok()),
+				ok = reconciled.is_ok(),
+				error = reconciled.as_ref().err().map(|error| format!("{error:#}")),
+				"singleton services reconciled"
+			);
+			let effects_safe = reconciled.is_ok();
 			if let Some(scope) = &scope
 				&& effects_safe
 			{
@@ -355,4 +371,9 @@ impl Executor<SingletonCoordinator> for CoordinatorExecutor {
 			);
 		});
 	}
+}
+
+/// The milliseconds between two boot-clock readings, when both are available.
+fn elapsed_ms(from_boot_ms: Option<u64>, to_boot_ms: Option<u64>) -> Option<u64> {
+	Some(to_boot_ms?.saturating_sub(from_boot_ms?))
 }

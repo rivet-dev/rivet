@@ -100,6 +100,7 @@ impl FilesystemStore {
 			let (address, value) = keys::encode_row(
 				&scope,
 				&RowKey::Chunk(position.ino, position.index),
+				rivet_data::ROOT_CLAIM_LOG,
 				0,
 				chunk.bytes.map(Row::Bytes),
 				self.row_version(),

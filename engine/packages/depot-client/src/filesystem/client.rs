@@ -17,7 +17,7 @@ use futures_util::{StreamExt, TryStreamExt};
 use rivet_data::generated::shared_depot_types_v1::VolumeLogPosition;
 use rivet_env::Clock;
 use std::{
-	collections::BTreeMap,
+	collections::{BTreeMap, BTreeSet},
 	sync::{
 		Arc, Weak,
 		atomic::{AtomicBool, AtomicU64, Ordering},
@@ -60,6 +60,13 @@ pub(super) struct State {
 	pub conflicts: ConflictWindow,
 	pub pins: Vec<Weak<Pin>>,
 	pub handles: BTreeMap<u64, usize>,
+	/// The orphans the layers this filesystem made visible left, which a close or unlink
+	/// reclaims once no handle holds them. The open reclaims every orphan already stored, so
+	/// after it every orphan comes from a visible layer and none needs a scan to find.
+	pub orphans: BTreeSet<u64>,
+	/// Whether a visible layer removed a range that may hold orphan rows, so `orphans` may
+	/// miss some and the next reclaim scans for them.
+	pub orphans_untracked: bool,
 	pub locks: BTreeMap<u64, Vec<FileLock>>,
 	/// Formatting ops of a volume that has never committed a write, waiting for the first
 	/// commit to carry them. Their rows sit in a layer at sequence 0, so every view sees them.
@@ -323,6 +330,9 @@ pub struct Filesystem {
 	pub(super) transaction_wake: tokio::sync::Notify,
 	pub(super) queue_wake: tokio::sync::Notify,
 	pub(super) key: VolumeLogKey,
+	/// The claim log this filesystem writes, which numbers the inodes it creates: claim log 0
+	/// for a volume's base key.
+	pub(super) claim_log: u16,
 	pub(super) fenced: AtomicBool,
 	/// The highest sequence whose commit wait ended undecided while this opening kept serving,
 	/// or 0. Until the volume client reports it committed, every request that refreshes the
@@ -331,6 +341,9 @@ pub struct Filesystem {
 	pub(super) undecided_through: AtomicU64,
 	/// Whether this opening logged its first fence cause.
 	fence_logged: AtomicBool,
+	/// Whether the command host released this filesystem as a lost speculation; see
+	/// [`Filesystem::release_lost_speculation`].
+	speculation_lost: AtomicBool,
 	/// Runs when a write adds the first pending note, so the owner schedules the note timer.
 	notes_armed: parking_lot::Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
@@ -351,9 +364,11 @@ impl<'a> Attempt<'a> {
 }
 impl Drop for Attempt<'_> {
 	fn drop(&mut self) {
-		if self.armed {
-			self.fs
-				.fence_with(crate::fences::FenceReason::AttemptAbandoned);
+		if !self.armed {
+			return;
+		}
+		if let Some(reason) = self.fs.abandoned_attempt_fence() {
+			self.fs.fence_with(reason);
 		}
 	}
 }
@@ -388,14 +403,14 @@ impl Filesystem {
 		};
 		Ok(FsForkMinimum {
 			incarnation: self.key.0.volume_incarnation,
-			position,
+			position: FsCut::single(position),
 		})
 	}
 
 	pub(crate) async fn checkpoint_entry(
 		&self,
 		name: Vec<u8>,
-	) -> Result<rivet_data::generated::depot_client_protocol_v1::CheckpointPosition> {
+	) -> Result<rivet_data::generated::depot_client_protocol_v2::CheckpointPosition> {
 		if !depot_fs_core::checkpoints::valid_name(&name) {
 			return Err(depot_fs_core::Error::Invalid.into());
 		}
@@ -414,7 +429,7 @@ impl Filesystem {
 		&self,
 		incarnation: [u8; 16],
 		name: Vec<u8>,
-	) -> Result<rivet_data::generated::depot_client_protocol_v1::CheckpointPosition> {
+	) -> Result<rivet_data::generated::depot_client_protocol_v2::CheckpointPosition> {
 		self.administrative_entry(|_| {
 			FsOp::FsCheckpointRelease(FsCheckpointRelease {
 				name: name.clone().into(),
@@ -428,7 +443,7 @@ impl Filesystem {
 	pub(crate) async fn retention_entry(
 		&self,
 		policy: Option<FsRetentionPolicy>,
-	) -> Result<rivet_data::generated::depot_client_protocol_v1::CheckpointPosition> {
+	) -> Result<rivet_data::generated::depot_client_protocol_v2::CheckpointPosition> {
 		self.administrative_entry(|_| {
 			FsOp::FsRetentionSet(FsRetentionSet {
 				policy: policy.clone(),
@@ -442,16 +457,16 @@ impl Filesystem {
 	async fn administrative_entry(
 		&self,
 		build: impl Fn(i64) -> FsOp,
-	) -> Result<rivet_data::generated::depot_client_protocol_v1::CheckpointPosition> {
+	) -> Result<rivet_data::generated::depot_client_protocol_v2::CheckpointPosition> {
 		let MutationOutcome::Committed(committed) =
 			self.mutate_entry(|_, _, now| Ok(vec![build(now)])).await?
 		else {
 			return Err(corrupt!());
 		};
 		Ok(
-			rivet_data::generated::depot_client_protocol_v1::CheckpointPosition {
+			rivet_data::generated::depot_client_protocol_v2::CheckpointPosition {
 				volume_incarnation: self.key.0.volume_incarnation,
-				position: committed.position,
+				cut: FsCut::single(committed.position),
 			},
 		)
 	}
@@ -780,7 +795,9 @@ impl Filesystem {
 		}
 		let budget = Budget::new(config.max_memory_bytes);
 		let cache_share = CacheShare::new(process_cache);
+		let claim_log = claim_log_of(&status.key);
 		let rows = RowCache::new(
+			claim_log,
 			snapshot.position().clone(),
 			budget.clone(),
 			config.max_cache_bytes,
@@ -792,12 +809,14 @@ impl Filesystem {
 		}
 		let fs = Arc::new(Self {
 			fence_logged: AtomicBool::new(false),
+			speculation_lost: AtomicBool::new(false),
 			notes_armed: parking_lot::Mutex::new(None),
 			journal,
 			cold_store,
 			write_gate: Mutex::new(()),
 			clock,
 			key: status.key.clone(),
+			claim_log,
 			fenced: AtomicBool::new(false),
 			undecided_through: AtomicU64::new(0),
 			rows,
@@ -811,12 +830,14 @@ impl Filesystem {
 				layers: Vec::new(),
 				positions: BTreeMap::new(),
 				last_seq: start.volume_seq,
-				resolver: txn::Resolver::new(start.clone()),
+				resolver: txn::Resolver::new(claim_log, start.clone()),
 				transactions: BTreeMap::new(),
 				next_transaction: 0,
 				conflicts: ConflictWindow::default(),
 				pins: Vec::new(),
 				handles: BTreeMap::new(),
+				orphans: BTreeSet::new(),
+				orphans_untracked: false,
 				locks: BTreeMap::new(),
 				staged_format: None,
 				unobserved_admission: None,
@@ -961,6 +982,7 @@ impl Filesystem {
 
 	fn staged_layer(&self, entry: &StagedEntry) -> Result<Arc<Layer>> {
 		let plan = apply::plan(
+			self.claim_log,
 			entry.seq,
 			&FsEntry {
 				txn: None,
@@ -1069,6 +1091,7 @@ impl Filesystem {
 	/// when it is the first pending note. Without a clock nothing else serves either, so the
 	/// note then waits for a snapshot install.
 	pub(super) fn push_layer(&self, state: &mut State, layer: Arc<Layer>) {
+		track_orphans(state, &layer);
 		let expires_boot_ms = self.now().map_or(u64::MAX, |now| {
 			now.boot_ms.saturating_add(self.config.note_ttl_ms)
 		});
@@ -1297,6 +1320,23 @@ impl Filesystem {
 	pub fn fence(&self) {
 		self.fence_with(crate::fences::FenceReason::OwnerReleased);
 	}
+	/// Releases a filesystem a command host ran a speculative first command on, after the open
+	/// found the volume already existed. It counts once as `speculation_lost`, logged at
+	/// debug, and the commit the dropped command abandons counts no second fence.
+	pub fn release_lost_speculation(&self) {
+		self.speculation_lost.store(true, Ordering::Release);
+		self.fence_with(crate::fences::FenceReason::SpeculationLost);
+	}
+
+	/// The fence an unfinished mutation attempt counts when dropped: none after a lost
+	/// speculation, whose release already counted it, and `AttemptAbandoned` otherwise.
+	pub(super) fn abandoned_attempt_fence(&self) -> Option<crate::fences::FenceReason> {
+		if self.speculation_lost.load(Ordering::Acquire) {
+			return None;
+		}
+		Some(crate::fences::FenceReason::AttemptAbandoned)
+	}
+
 	/// Fences this opening and its journal, counting `reason` and logging the first cause.
 	pub fn fence_with(&self, reason: crate::fences::FenceReason) {
 		self.record_fence(reason);
@@ -1864,6 +1904,85 @@ impl Filesystem {
 		Ok(())
 	}
 
+	/// Makes a quorum of the volume's members prove this opening's tail committed, and returns
+	/// the committed position that covers it.
+	///
+	/// A claim that settled with no claim entry of its own leaves the previous writer's tail on
+	/// the members under this opening's claim. After a maintainer restart nothing proves that
+	/// tail committed until this opening's own entry reaches a quorum, so a nonholder's `Latest`
+	/// fork or checkpoint waits for it. This appends one standalone entry with no operations,
+	/// which changes no data and leaves open transactions alone, and waits for its commit. It
+	/// appends even when the tail is already this opening's own entry, so the proof never
+	/// depends on which members hold entries above that tail; it is still one quorum append,
+	/// sent only when a fork asks for it, never on a timer.
+	///
+	/// `caller_deadline_boot_ms` is the asking caller's own deadline, when it has one. The proof
+	/// stops at the earlier of it and this opening's request timeout, and settles an entry
+	/// still undecided there the way a write does: a caller's deadline alone never fences this
+	/// opening, and [`Self::proof_undecided`] tells that outcome from a decided failure.
+	/// Callers must pass their deadline here instead of cancelling the returned future:
+	/// dropping it between admission and commit abandons the attempt, which fences this
+	/// opening.
+	pub async fn prove_tail(&self, caller_deadline_boot_ms: Option<u64>) -> Result<u64> {
+		let own_deadline = self.deadline()?;
+		let deadline = match caller_deadline_boot_ms {
+			Some(caller_deadline) => own_deadline.min(caller_deadline),
+			None => own_deadline,
+		};
+		let _write = rivet_env::timeout_at(self.clock.as_ref(), deadline, self.write_gate.lock())
+			.await
+			.map_err(|_| Error::DeadlineExceeded)?;
+		// A read holding the state may wait on storage past the caller; nothing is admitted
+		// yet, so the wait ends at the deadline like the write gate's.
+		let mut state = rivet_env::timeout_at(self.clock.as_ref(), deadline, self.state.lock())
+			.await
+			.map_err(|_| Error::DeadlineExceeded)?;
+		let status = self.refresh(&mut state, deadline).await?;
+		let expected_next = state.last_seq.checked_add(1).ok_or_else(|| corrupt!())?;
+		if status.next_seq < expected_next {
+			return Err(corrupt!());
+		}
+		// The refresh installed every entry this opening admitted without observing its
+		// outcome, so the log can hold no entry above the view here.
+		if status.next_seq > expected_next {
+			self.fence_with(crate::fences::FenceReason::UnappliedLogEntries);
+			return Err(Error::Fenced);
+		}
+
+		self.shed_unapplied_backlog(&mut state, deadline).await?;
+		let receipt = self
+			.admit(
+				&mut state,
+				FsEntry {
+					txn: None,
+					ops: Vec::new(),
+				},
+				status,
+				deadline,
+			)
+			.await?;
+		drop(state);
+		let committed = self.finish_write(receipt, deadline).await?;
+		Ok(committed.volume_seq)
+	}
+
+	/// Whether a [`Self::prove_tail`] error left the proof undecided rather than failed: its
+	/// deadline passed, its quorum had not answered, its wait was refused under load, or its
+	/// admission's outcome is unknown (such as a cold store blip while admitting), and this
+	/// opening still serves. An entry it admitted then settles with this opening's next
+	/// request, so the caller may ask again.
+	///
+	/// The error alone cannot tell: once the entry is admitted, a decided failure (a refusal
+	/// that blocks the history, a join answered by a newer claim) can surface as a deadline or
+	/// quorum error, but it leaves the attempt armed and fences this opening. So the answer also
+	/// requires that this opening is not fenced and its journal still serves. Call it right
+	/// after the proof returns.
+	pub fn proof_undecided(&self, error: &Error) -> bool {
+		!self.fenced.load(Ordering::Acquire)
+			&& (Self::commit_undecided(error) || Self::outcome_unknown(error))
+			&& self.status().is_ok()
+	}
+
 	pub async fn lookup(&self, parent: u64, name: &[u8]) -> Result<FsDentry> {
 		self.read_with(|v| rules::lookup(v, parent, name, None))
 			.await
@@ -2047,10 +2166,24 @@ impl Filesystem {
 		Ok(seq)
 	}
 	pub async fn rename(&self, from: u64, name: &[u8], to: u64, new_name: &[u8]) -> Result<u64> {
+		self.rename_with(from, name, to, new_name, rules::RenameFlags::default())
+			.await
+	}
+
+	/// [`Self::rename`] with `flags`. With `no_replace`, an existing target fails with
+	/// [`depot_fs_core::Error::Exists`], checked against the same view the rename is built on.
+	pub async fn rename_with(
+		&self,
+		from: u64,
+		name: &[u8],
+		to: u64,
+		new_name: &[u8],
+		flags: rules::RenameFlags,
+	) -> Result<u64> {
 		let seq = self
 			.mutate(|v, _, now| {
 				Ok(
-					rules::rename(v, from, name.to_vec(), to, new_name.to_vec(), now)?
+					rules::rename_with(v, from, name.to_vec(), to, new_name.to_vec(), flags, now)?
 						.into_iter()
 						.collect(),
 				)
@@ -2124,16 +2257,32 @@ impl Filesystem {
 			.await
 	}
 	pub async fn open_handle(&self, ino: u64) -> Result<()> {
+		self.open_handle_checked(ino, |v| store::inode(v, ino, None).map(drop))
+			.await
+	}
+
+	/// [`Self::open_handle`] once `check` passes on the view the handle opens on.
+	pub(super) async fn open_handle_checked(
+		&self,
+		ino: u64,
+		check: impl Fn(&View) -> depot_fs_core::Result<()>,
+	) -> Result<()> {
 		let deadline = self.deadline()?;
 		let mut state = self.state.lock().await;
 		self.refresh(&mut state, deadline).await?;
 		let mut view = self.view(&state, state.last_seq);
-		self.evaluate(&mut view, deadline, |v| store::inode(v, ino, None))
-			.await?;
+		self.evaluate(&mut view, deadline, check).await?;
 		*state.handles.entry(ino).or_default() += 1;
 		Ok(())
 	}
 	pub async fn close_handle(&self, ino: u64, owner: u64) -> Result<()> {
+		self.release_handle(ino, owner).await?;
+		self.reclaim_closed().await
+	}
+
+	/// Closes one handle on `ino` and drops `owner`'s locks on it without reclaiming. A
+	/// failure leaves the handle open.
+	pub(super) async fn release_handle(&self, ino: u64, owner: u64) -> Result<()> {
 		let mut state = self.state.lock().await;
 		self.current(&mut state, self.deadline()?).await?;
 		let count = state
@@ -2147,8 +2296,7 @@ impl Filesystem {
 		if let Some(locks) = state.locks.get_mut(&ino) {
 			locks.retain(|l| l.owner != owner);
 		}
-		drop(state);
-		self.reclaim_closed().await
+		Ok(())
 	}
 	pub async fn lock(&self, ino: u64, lock: FileLock) -> Result<()> {
 		let mut state = self.state.lock().await;
@@ -2208,7 +2356,22 @@ impl Filesystem {
 		}
 		Ok(())
 	}
-	async fn reclaim_closed(&self) -> Result<()> {
+	/// Reclaims every orphan no handle of this filesystem holds. The orphans come from
+	/// `State::orphans`, so a close with none to reclaim takes no lock and sends nothing; only
+	/// a filesystem whose layers removed an orphan range scans the volume's orphan rows.
+	pub(super) async fn reclaim_closed(&self) -> Result<()> {
+		{
+			let state = self.state.lock().await;
+			let tracked = !state.orphans_untracked;
+			if tracked
+				&& state
+					.orphans
+					.iter()
+					.all(|ino| state.handles.contains_key(ino))
+			{
+				return Ok(());
+			}
+		}
 		let _write = self.write_gate.lock().await;
 		// Each candidate is rechecked while holding the admission lock. An open
 		// racing unlink cannot be reclaimed underneath its newly acquired handle.
@@ -2217,26 +2380,56 @@ impl Filesystem {
 			let mut state = self.state.lock().await;
 			let status = self.refresh(&mut state, deadline).await?;
 			let mut view = self.view(&state, state.last_seq);
-			let candidate = self
-				.evaluate(&mut view, deadline, |v| {
-					let mut cursor = None;
-					loop {
-						let page = v.scan(&RowRange::Orphans, cursor.as_ref(), 128, None)?;
-						if page.is_empty() {
-							return Ok(None);
-						}
-						cursor = page.last().map(|(k, _)| k.clone());
-						for (key, _) in page {
-							if let RowKey::Orphan(ino) = key
-								&& !state.handles.contains_key(&ino)
-							{
-								return Ok(Some(ino));
+			let scan = state.orphans_untracked;
+			let candidate = match scan {
+				true => {
+					let found = self
+						.evaluate(&mut view, deadline, |v| {
+							let mut cursor = None;
+							loop {
+								let page =
+									v.scan(&RowRange::Orphans, cursor.as_ref(), 128, None)?;
+								if page.is_empty() {
+									return Ok(None);
+								}
+								cursor = page.last().map(|(k, _)| k.clone());
+								for (key, _) in page {
+									if let RowKey::Orphan(ino) = key
+										&& !state.handles.contains_key(&ino)
+									{
+										return Ok(Some(ino));
+									}
+								}
 							}
-						}
+						})
+						.await?;
+					if found.is_none() {
+						state.orphans_untracked = false;
 					}
-				})
-				.await?;
+					found
+				}
+				false => {
+					let tracked = state
+						.orphans
+						.iter()
+						.find(|ino| !state.handles.contains_key(ino))
+						.copied();
+					let Some(ino) = tracked else { return Ok(()) };
+					// A tracked orphan the view no longer holds was reclaimed or relinked.
+					let stored = self
+						.evaluate(&mut view, deadline, |v| {
+							Ok(v.get(&RowKey::Orphan(ino), None)?.is_some())
+						})
+						.await?;
+					if !stored {
+						state.orphans.remove(&ino);
+						continue;
+					}
+					Some(ino)
+				}
+			};
 			let Some(ino) = candidate else { return Ok(()) };
+			drop(view);
 			let entry = FsEntry {
 				txn: None,
 				ops: vec![FsOp::FsReclaim(FsReclaim { ino })],
@@ -2244,6 +2437,35 @@ impl Filesystem {
 			let receipt = self.admit(&mut state, entry, status, deadline).await?;
 			drop(state);
 			self.finish_write(receipt, deadline).await?;
+		}
+	}
+}
+
+/// Records the orphans `layer` adds and removes in `state.orphans`, and marks them untracked
+/// when it removes a range that may hold orphan rows.
+fn track_orphans(state: &mut State, layer: &Layer) {
+	for range in &layer.ranges {
+		match range {
+			RowRange::All | RowRange::MetadataAll | RowRange::Orphans => {
+				state.orphans_untracked = true;
+			}
+			RowRange::ChunksAll
+			| RowRange::Metadata(_)
+			| RowRange::Chunks(_)
+			| RowRange::ChunkSuffix { .. }
+			| RowRange::Directory(_)
+			| RowRange::Xattrs(_)
+			| RowRange::Kv { .. }
+			| RowRange::KvRangeWhiteouts(_)
+			| RowRange::KvRangeWhiteoutsAll => {}
+		}
+	}
+	for (key, row) in &layer.batch.rows {
+		if let RowKey::Orphan(ino) = key {
+			match row {
+				Some(_) => state.orphans.insert(*ino),
+				None => state.orphans.remove(ino),
+			};
 		}
 	}
 }
@@ -2269,3 +2491,12 @@ pub(super) const MAX_HELD_LAYERS: usize = 1024;
 
 /// The shortest time between two floor moves the memory budget triggers once it is half used.
 const PRESSED_RELEASE_MS: u64 = 100;
+
+/// The claim log a filesystem on `key` writes: the key's claim log, or claim log 0 for a
+/// volume's base key.
+pub(super) fn claim_log_of(key: &VolumeLogKey) -> u16 {
+	match depot_types::is_claim_log(&key.0.volume_key) {
+		Some((_, claim_log)) => claim_log,
+		None => depot_fs_core::inode::ROOT_CLAIM_LOG,
+	}
+}

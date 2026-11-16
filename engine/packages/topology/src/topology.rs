@@ -283,6 +283,21 @@ impl Topology {
 		.await
 	}
 
+	/// The version a message of `family` to `worker` is encoded at, by discovery or the
+	/// exact-id endpoint cache, without any I/O: `None` on a miss, a cached negative lookup, or
+	/// once this worker's topology stopped, and an inner error when `worker` reads nothing of
+	/// `family` this binary writes. Paths that must not wait on a lookup, such as choosing the
+	/// version of a message to `worker`, use this; the request that follows resolves and caches
+	/// the endpoint as usual. Copies no worker record, so it is cheap on hot paths.
+	pub fn cached_peer_version(
+		&self,
+		family: crate::versions::VersionFamily,
+		worker: &WorkerId,
+	) -> Result<Option<Result<u16>>> {
+		let now = self.env.clock().boot_ms()?;
+		Ok(self.snapshot()?.peer_version(family, worker, now))
+	}
+
 	/// Reports whether `worker`'s lease is live, by an exact-id heartbeat read with its own cache
 	/// and admission. It never lists workers. Over capacity, before topology knows store time,
 	/// or on a failed read it returns `Unknown` without waiting.
@@ -559,27 +574,81 @@ impl Topology {
 	}
 
 	/// The version to write for persisted `family` data. See `TopologySnapshot::version_for`.
-	/// Reads the published snapshot and the boot clock only; it never waits for a listing.
+	/// Reads the published snapshot only; it never waits for a listing.
 	pub fn version_for(&self, family: crate::versions::VersionFamily) -> Result<u16> {
-		let now = self.env.clock().boot_ms()?;
-		self.snapshot()?.version_for(family, now)
+		self.snapshot()?.version_for(family)
 	}
 
 	/// The version a writer encodes `family` at. See `TopologySnapshot::write_version`.
-	/// Reads the published snapshot and the boot clock only; it never waits for a listing.
+	/// Reads the published snapshot only; it never waits for a listing.
 	pub fn write_version(&self, family: crate::versions::VersionFamily) -> Result<u16> {
-		let now = self.env.clock().boot_ms()?;
-		self.snapshot()?.write_version(family, now)
+		self.snapshot()?.write_version(family)
 	}
 
-	/// The version for a message `peer` decodes and drops. See
-	/// `TopologySnapshot::version_for_peer`.
-	pub fn version_for_peer(
-		&self,
-		family: crate::versions::VersionFamily,
-		peer: &Worker,
-	) -> Result<u16> {
-		self.snapshot()?.version_for_peer(family, peer)
+	/// Waits until a storage listing has completed in this process's lifetime, whatever it
+	/// observed, so the versions this topology selects rest on a listing: the fleet's read floor,
+	/// or the lowest write version when the listing named a worker it could not observe. Returns
+	/// `Ok(true)` once that holds, at once on every call after the first listing, and `Ok(false)`
+	/// when `deadline_boot_ms` passes first. Waits on the published snapshots, never by polling,
+	/// and fails when the topology stops.
+	pub async fn wait_for_read_floor(&self, deadline_boot_ms: u64) -> Result<bool> {
+		let mut snapshots = self.subscribe()?;
+		if snapshots.borrow().floor_listed() {
+			return Ok(true);
+		}
+
+		let clock = self.env.clock();
+		let remaining_ms = deadline_boot_ms.saturating_sub(clock.boot_ms()?);
+		let listed = rivet_env::timeout(
+			clock.as_ref(),
+			Duration::from_millis(remaining_ms),
+			snapshots.wait_for(|snapshot| {
+				snapshot.floor_listed()
+					|| matches!(
+						snapshot.status,
+						LeaseStatus::Releasing | LeaseStatus::Fenced { .. } | LeaseStatus::Stopped
+					)
+			}),
+		)
+		.await;
+		match listed {
+			Ok(snapshot) => {
+				let snapshot = snapshot.context("topology runner stopped")?;
+				ensure!(
+					snapshot.floor_listed(),
+					"topology stopped before its first listing"
+				);
+				Ok(true)
+			}
+			Err(_) => Ok(false),
+		}
+	}
+
+	/// Waits for this process's first completed storage listing. A process starts no serving
+	/// service and reports no readiness before it, so every version it selects rests on a
+	/// listing. Discovery retries a failed listing on the prompt backoff by itself. Warns once
+	/// when the wait passes `refresh_hint_interval_ms`, and fails when it passes
+	/// `boot_timeout_ms`, the bound on this process's start, so its supervisor restarts it.
+	pub async fn wait_for_first_listing(&self) -> Result<()> {
+		let lease = &self.config.lease;
+		let started_boot_ms = self.env.clock().boot_ms()?;
+
+		let warn_at_boot_ms = started_boot_ms.saturating_add(lease.refresh_hint_interval_ms);
+		if self.wait_for_read_floor(warn_at_boot_ms).await? {
+			return Ok(());
+		}
+		tracing::warn!(
+			waited_ms = lease.refresh_hint_interval_ms,
+			boot_timeout_ms = lease.boot_timeout_ms,
+			"the first storage listing has not completed, so this process does not serve yet; check object-store latency and topology discovery errors"
+		);
+
+		let deadline_boot_ms = started_boot_ms.saturating_add(lease.boot_timeout_ms);
+		ensure!(
+			self.wait_for_read_floor(deadline_boot_ms).await?,
+			"the first storage listing did not complete within boot_timeout_ms"
+		);
+		Ok(())
 	}
 
 	pub async fn begin_drain(&self) -> Result<()> {
@@ -651,5 +720,34 @@ impl Topology {
 impl crate::versions::WriteVersions for Topology {
 	fn write_version(&self, family: crate::versions::VersionFamily) -> Result<u16> {
 		Topology::write_version(self, family)
+	}
+
+	fn floor_listed(&self) -> bool {
+		self.snapshot()
+			.is_ok_and(|snapshot| snapshot.floor_listed())
+	}
+
+	fn wait_for_read_floor(
+		&self,
+		deadline_boot_ms: u64,
+	) -> futures_util::future::BoxFuture<'_, Result<bool>> {
+		Box::pin(Topology::wait_for_read_floor(self, deadline_boot_ms))
+	}
+}
+
+impl crate::versions::PeerVersions for Topology {
+	fn peer_version(
+		&self,
+		family: crate::versions::VersionFamily,
+		worker: &WorkerId,
+	) -> Result<u16> {
+		match self.cached_peer_version(family, worker)? {
+			Some(version) => version,
+			None => Topology::write_version(self, family),
+		}
+	}
+
+	fn refresh_hint_ms(&self) -> u64 {
+		self.config().lease.refresh_hint_interval_ms
 	}
 }

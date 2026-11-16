@@ -14,7 +14,7 @@ use crate::tablet_maintainer_machine::types::ApplyAuthority;
 use anyhow::{Result, ensure};
 use depot_fs_core::{
 	keys::slatedb as keys,
-	store::Batch,
+	store::{Batch, Row, RowKey},
 	txn::{Resolution, Resolver},
 	*,
 };
@@ -77,7 +77,11 @@ impl FilesystemStore {
 				})
 			}
 		}
-		let mut resolver = Resolver::new(previous.clone());
+		let (_, claim_log) = keys::Scope::of_log(
+			&key.0.volume_key,
+			Uuid::from_bytes(key.0.volume_incarnation),
+		);
+		let mut resolver = Resolver::new(claim_log, previous.clone());
 		self.apply_resolved(key, &mut resolver, entries, &Slice(entries))
 			.await?;
 		ensure!(
@@ -146,20 +150,26 @@ impl FilesystemStore {
 		)]);
 		let mut ordered = Some(self.lock(request.clone(), LockOperation::Apply).await);
 		self.admit()?;
-		let scope = keys::Scope::new(
+		// A claim log writes its base volume's rows, stamped with its own claim log.
+		let (scope, claim_log) = keys::Scope::of_log(
 			&key.0.volume_key,
 			Uuid::from_bytes(key.0.volume_incarnation),
 		);
 		if let Some(retention) = self.catalog.lock().get(&scope) {
 			ensure!(
-				resolver.cold().volume_seq >= retention.cold,
+				resolver.cold().volume_seq >= retention.cold_of(claim_log),
 				"filesystem replay precedes persisted cold position"
 			);
 		}
-		if let Some(record) = self
+		let record = self
 			.incarnation_row(&key.0.volume_key, key.0.volume_incarnation)
-			.await?
-		{
+			.await?;
+		// A volume that reads its metadata through its base keeps the range whiteouts its
+		// range deletes leave; one that holds its own metadata reads nothing through them.
+		let reads_through = record
+			.as_ref()
+			.is_some_and(|record| !record.base_chain.is_empty() && !record.metadata_local);
+		if let Some(record) = &record {
 			let admitted = match authority {
 				ApplyAuthority::Current => record.status != FsVolumeStatus::Deleted,
 				// A recovered delete applies the tail its tombstones kept under the
@@ -183,10 +193,12 @@ impl FilesystemStore {
 					let applied = self
 						.apply_part(
 							&scope,
+							claim_log,
 							entry.volume_seq,
 							entry.client_epoch,
 							previous.volume_seq,
 							&decoded,
+							reads_through,
 						)
 						.await?;
 					self.finish_checkpoints(&scope, entry.client_epoch, applied.checkpoints)
@@ -202,11 +214,13 @@ impl FilesystemStore {
 					alarm_changed = true;
 					self.apply_transaction(
 						&scope,
+						claim_log,
 						&open,
 						&id,
 						entry.volume_seq,
 						entry.client_epoch,
 						&commit,
+						reads_through,
 						reader,
 						&request,
 						&mut ordered,
@@ -217,8 +231,17 @@ impl FilesystemStore {
 			}
 		}
 		self.admit()?;
-		self.catalog.lock().entry(scope).or_default().apply_cold =
-			Some(next_resolver.cold().clone());
+		self.catalog
+			.lock()
+			.entry(scope)
+			.or_default()
+			.apply_cold
+			.insert(claim_log, next_resolver.cold().clone());
+		// The index reads the volume's own alarm row only, never through a lazy fork's lineage,
+		// so this holds no apply lock across another volume's reads. A lazily forked volume's
+		// inherited alarm is indexed once the child writes the row: actor and filesystem state
+		// volumes, the only volumes with alarms, are written solely by their durable state
+		// machine, whose first commit in a forked incarnation arms the alarm again.
 		let alarm = if alarm_changed {
 			self.update_alarm_index(key, next_resolver.position().clone())
 				.await?
@@ -240,11 +263,13 @@ impl FilesystemStore {
 	async fn apply_transaction<'a>(
 		&'a self,
 		scope: &keys::Scope,
+		claim_log: u16,
 		open: &txn::OpenTxn,
 		id: &[u8],
 		seq: u64,
 		epoch: u64,
 		commit: &FsEntry,
+		reads_through: bool,
 		reader: &dyn TransactionReader,
 		request: &super::locks::LockRequest,
 		ordered: &mut Option<super::locks::StoreGuard<'a>>,
@@ -278,7 +303,7 @@ impl FilesystemStore {
 						"transaction already closed"
 					);
 					checkpoints.extend(
-						self.apply_part(scope, seq, epoch, seq, &part)
+						self.apply_part(scope, claim_log, seq, epoch, seq, &part, reads_through)
 							.await?
 							.into_rows()?,
 					);
@@ -287,7 +312,7 @@ impl FilesystemStore {
 			ensure!(next > start, "transaction replay did not advance");
 		}
 		checkpoints.extend(
-			self.apply_part(scope, seq, epoch, seq, commit)
+			self.apply_part(scope, claim_log, seq, epoch, seq, commit, reads_through)
 				.await?
 				.into_rows()?,
 		);
@@ -297,12 +322,14 @@ impl FilesystemStore {
 	async fn apply_part(
 		&self,
 		scope: &keys::Scope,
+		claim_log: u16,
 		seq: u64,
 		epoch: u64,
 		before_seq: u64,
 		entry: &FsEntry,
+		reads_through: bool,
 	) -> Result<Applied> {
-		let mut plan = apply::plan(seq, entry)?;
+		let mut plan = apply::plan(claim_log, seq, entry)?;
 		let before = ReadSession::internal(
 			self.db.snapshot().await?,
 			scope.clone(),
@@ -314,6 +341,16 @@ impl FilesystemStore {
 			self.guard.clone(),
 			self.config.clone(),
 		);
+		self.plan_range_whiteouts(&before, &mut plan, reads_through)
+			.await?;
+		// The final rows are encoded before any row of the entry is staged, so a row the store
+		// cannot encode yet refuses the entry with nothing of it written. A range delete's
+		// tombstones are encoded page by page as they are read; they carry no value, so only a
+		// claim log that the current version cannot name refuses one, and the pages staged
+		// before it stay hidden at the entry's sequence until the replay stages them again.
+		let checkpoints = std::mem::take(&mut plan.final_rows.checkpoints);
+		let admin = std::mem::take(&mut plan.final_rows.admin);
+		let final_rows = self.encode_batch(scope, claim_log, seq, plan.final_rows)?;
 		for range in plan.ranges {
 			let mut cursor = None;
 			loop {
@@ -327,26 +364,132 @@ impl FilesystemStore {
 				if rows.is_empty() {
 					break;
 				}
-				cursor = rows.last().map(|(key, _)| key.clone());
+				cursor = rows.last().map(|(key, _, _)| key.clone());
 				let batch = Batch {
-					rows: rows.into_iter().map(|(key, _)| (key, None)).collect(),
+					rows: rows.into_iter().map(|(key, _, _)| (key, None)).collect(),
 					checkpoints: BTreeMap::new(),
 					admin: Vec::new(),
 				};
-				self.stage(Self::encode_batch(scope, seq, batch, self.row_version())?)
+				self.stage(self.encode_batch(scope, claim_log, seq, batch)?)
 					.await?;
 			}
 		}
-		let checkpoints = std::mem::take(&mut plan.final_rows.checkpoints);
-		let admin = std::mem::take(&mut plan.final_rows.admin);
-		self.stage(Self::encode_batch(
-			scope,
-			seq,
-			plan.final_rows,
-			self.row_version(),
-		)?)
-		.await?;
+		self.stage(final_rows).await?;
 		Ok(Applied { checkpoints, admin })
+	}
+
+	/// Adds the range whiteouts the plan's KV range deletes leave on a volume with a base,
+	/// which hide the keys of each range that a base link holds; a volume without a base reads
+	/// nothing through a whiteout and writes none. Each is coalesced with the file's existing
+	/// whiteouts it overlaps or touches, so a file keeps one row per disjoint deleted range. Only
+	/// those whiteouts are read, never every whiteout of the file, so no count of earlier range
+	/// deletes can fail a committed one. The existing whiteouts are read at the sequence before
+	/// the entry, so a replay settles them the same.
+	async fn plan_range_whiteouts(
+		&self,
+		before: &ReadSession,
+		plan: &mut apply::ApplyPlan,
+		reads_through: bool,
+	) -> Result<()> {
+		use depot_fs_core::{overlay, store::RowRange};
+		if !reads_through {
+			return Ok(());
+		}
+
+		// The entry's own ranges merged first, so each merged range is disjoint from the others
+		// and does not touch them.
+		let mut added: Vec<overlay::RangeWhiteout> = Vec::new();
+		for range in &plan.ranges {
+			if let RowRange::Kv { ino, start, end } = range {
+				added = overlay::coalesce(
+					added,
+					overlay::RangeWhiteout {
+						ino: *ino,
+						start: start.clone(),
+						end: end.clone(),
+					},
+				);
+			}
+		}
+		if added.is_empty() {
+			return Ok(());
+		}
+
+		// Each range takes in the whiteout at or before its start when that one reaches it, then
+		// every whiteout starting inside it or where it ends, growing as they extend it. A range
+		// that touches the one written before it in the same file joins it instead.
+		let page = self.batch_rows.min(self.config.max_rows).max(1);
+		let mut merged: Vec<overlay::RangeWhiteout> = Vec::new();
+		let mut removed: BTreeMap<(u64, Vec<u8>), overlay::RangeWhiteout> = BTreeMap::new();
+		for range in added {
+			let mut whiteout = match merged.pop() {
+				Some(mut previous)
+					if previous.ino == range.ino && reaches(&previous, &range.start) =>
+				{
+					previous.end = wider_end(previous.end.take(), range.end.clone());
+					previous
+				}
+				previous => {
+					merged.extend(previous);
+					let mut whiteout = range.clone();
+					let before_start = before
+						.own_whiteout_at_or_before(range.ino, &range.start)
+						.await?;
+					if let Some(existing) = before_start
+						&& reaches(&existing, &range.start)
+					{
+						whiteout.start = existing.start.clone();
+						whiteout.end = wider_end(whiteout.end.take(), existing.end.clone());
+						removed.insert((existing.ino, existing.start.clone()), existing);
+					}
+					whiteout
+				}
+			};
+
+			// Whiteouts starting after the range's start, up to where the merged range ends.
+			let mut cursor = range.start.clone();
+			loop {
+				let next = before
+					.own_whiteouts_after(whiteout.ino, &cursor, whiteout.end.as_deref(), page)
+					.await?;
+				let Some(last) = next.last() else {
+					break;
+				};
+				cursor = last.start.clone();
+				for existing in next {
+					whiteout.end = wider_end(whiteout.end.take(), existing.end.clone());
+					removed.insert((existing.ino, existing.start.clone()), existing);
+				}
+			}
+			merged.push(whiteout);
+		}
+
+		// Only the whiteouts the delete changed are written: the ones it took in as tombstones,
+		// unless a merged whiteout keeps the same start, and new or widened ones as rows.
+		let batch = &mut plan.final_rows;
+		for ((ino, start), _) in &removed {
+			let kept = merged
+				.iter()
+				.any(|whiteout| whiteout.ino == *ino && &whiteout.start == start);
+			if !kept {
+				batch
+					.rows
+					.insert(RowKey::KvRangeWhiteout(*ino, start.clone()), None);
+			}
+		}
+		for whiteout in merged {
+			let unchanged = removed
+				.get(&(whiteout.ino, whiteout.start.clone()))
+				.is_some_and(|existing| existing == &whiteout);
+			if unchanged {
+				continue;
+			}
+			batch.rows.insert(
+				RowKey::KvRangeWhiteout(whiteout.ino, whiteout.start),
+				Some(Row::KvRangeWhiteout(whiteout.end)),
+			);
+		}
+		Ok(())
 	}
 
 	/// Applies the administrative ops of one standalone entry after its rows. Each is
@@ -535,5 +678,18 @@ impl TransactionReader for ReplicaTransactionReader<'_> {
 
 			Ok(page.entries)
 		})
+	}
+}
+
+/// Whether a range starting at `start` overlaps or touches `whiteout`, so the two coalesce.
+fn reaches(whiteout: &depot_fs_core::overlay::RangeWhiteout, start: &[u8]) -> bool {
+	whiteout.start.as_slice() <= start && whiteout.end.as_deref().is_none_or(|end| start <= end)
+}
+
+/// The later of two exclusive range ends, where `None` is unbounded.
+fn wider_end(a: Option<Vec<u8>>, b: Option<Vec<u8>>) -> Option<Vec<u8>> {
+	match (a, b) {
+		(Some(a), Some(b)) => Some(a.max(b)),
+		(None, _) | (_, None) => None,
 	}
 }

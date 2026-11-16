@@ -3,7 +3,7 @@
 
 use crate::{Client, volume_requests::VolumeRequests};
 use depot_types::VolumeKey;
-use rivet_data::generated::{depot_client_protocol_v1::*, shared_depot_fs_v1::*};
+use rivet_data::generated::{depot_client_protocol_v2::*, shared_depot_fs_v2::*};
 
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum Error {
@@ -37,7 +37,9 @@ const CHECKPOINT_INTERRUPTED_RETRY_AFTER_MS: u64 = 100;
 
 impl Error {
 	/// The hint of a refusal that ran nothing, which the edge waits before sending the
-	/// checkpoint request again, or `None` for every other error.
+	/// checkpoint request again, or `None` for every other error. A `Latest` checkpoint refused
+	/// as `TailUnproven` ran nothing too but has no hint: sending it again only helps once the
+	/// volume's holder writes or a recovery runs, so the caller proves the tail first.
 	pub fn retry_after_ms(&self) -> Option<u64> {
 		match self {
 			Self::Lifecycle(VolumeRejectResponse::TabletSplitting) => {

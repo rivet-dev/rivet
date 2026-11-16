@@ -12,8 +12,8 @@ use depot_volume::volume_client_machine::{
 	types::{ErrorDisposition, VolumeClientConfig, WriteError},
 };
 use rivet_data::generated::{
-	depot_client_protocol_v1::{CheckpointError, VolumeRejectResponse},
-	shared_depot_fs_v1::FsVolumeRecord,
+	depot_client_protocol_v2::{CheckpointError, VolumeRejectResponse},
+	shared_depot_fs_v2::FsVolumeRecord,
 };
 use std::sync::Arc;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
@@ -85,10 +85,17 @@ impl Error {
 		)
 	}
 
+	/// Whether a writer's open found no volume to open, because it was never created.
+	pub fn is_write_volume_not_found(&self) -> bool {
+		matches!(self, Self::Write(WriteError::VolumeNotFound))
+	}
+
 	pub fn disposition(&self) -> ErrorDisposition {
 		match self {
 			Self::Checkpoint(
-				crate::checkpoints::Error::Rejected(CheckpointError::Lagging)
+				crate::checkpoints::Error::Rejected(
+					CheckpointError::Lagging | CheckpointError::TailUnproven,
+				)
 				| crate::checkpoints::Error::Interrupted { .. },
 			) => ErrorDisposition::NotExecuted,
 			Self::Checkpoint(crate::checkpoints::Error::Rejected(_)) => ErrorDisposition::Permanent,
@@ -121,12 +128,14 @@ impl Error {
 			Self::Lifecycle(RpcError::LifecycleRejected(reason)) => match reason {
 				VolumeRejectResponse::VolumeNotFound
 				| VolumeRejectResponse::VolumeExists
-				| VolumeRejectResponse::VolumeRecordMissing(_) => ErrorDisposition::Permanent,
+				| VolumeRejectResponse::VolumeRecordMissing(_)
+				| VolumeRejectResponse::VolumeGroupArchived => ErrorDisposition::Permanent,
 				VolumeRejectResponse::NotMaintainer(_)
 				| VolumeRejectResponse::TabletSplitting
 				| VolumeRejectResponse::VolumeDeleted
 				| VolumeRejectResponse::Overloaded(_)
-				| VolumeRejectResponse::VolumeUnderRepair(_) => ErrorDisposition::NotExecuted,
+				| VolumeRejectResponse::VolumeUnderRepair(_)
+				| VolumeRejectResponse::VolumeTailUnproven(_) => ErrorDisposition::NotExecuted,
 			},
 		}
 	}
@@ -186,7 +195,7 @@ impl Command {
 
 enum Response {
 	ForkMinimum(Option<depot_fs_core::FsForkMinimum>),
-	Checkpoint(rivet_data::generated::shared_depot_fs_v1::FsCheckpointInfo),
+	Checkpoint(rivet_data::generated::shared_depot_fs_v2::FsCheckpointInfo),
 	CheckpointUpdated,
 	/// The opened filesystem, and whether this open created the volume with its `initial`
 	/// entries as the first writes.
@@ -228,6 +237,9 @@ pub struct VolumeClient {
 	config: Config,
 	may_dispatch: Arc<dyn Fn() -> bool + Send + Sync>,
 	versions: Arc<dyn rivet_topology::versions::WriteVersions>,
+	/// Each volume request's bound, which also bounds an open's wait for the first storage
+	/// listing.
+	timeout: std::time::Duration,
 }
 
 impl VolumeClient {
@@ -245,7 +257,7 @@ impl VolumeClient {
 		&self,
 		key: depot_types::VolumeKey,
 		name: Vec<u8>,
-	) -> Result<rivet_data::generated::shared_depot_fs_v1::FsCheckpointInfo, Error> {
+	) -> Result<rivet_data::generated::shared_depot_fs_v2::FsCheckpointInfo, Error> {
 		if !depot_fs_core::checkpoints::valid_name(&name) {
 			return Err(Error::InvalidRequest);
 		}
@@ -332,7 +344,33 @@ impl VolumeClient {
 			Arc<crate::filesystem::Filesystem>,
 		) -> futures_util::future::BoxFuture<'static, anyhow::Result<T>>,
 	{
+		self.open_or_create_filesystem_with_first_write_prefetching(
+			key,
+			crate::filesystem::transport::OpenPrefetch::default(),
+			write,
+		)
+		.await
+	}
+
+	/// [`VolumeClient::open_or_create_filesystem_with_first_write`] whose open also reads
+	/// `prefetch`, so an open of an existing volume finds those rows in its first round.
+	pub async fn open_or_create_filesystem_with_first_write_prefetching<T, F>(
+		&self,
+		key: depot_types::VolumeKey,
+		prefetch: crate::filesystem::transport::OpenPrefetch,
+		write: F,
+	) -> anyhow::Result<FirstWriteOpen<T>>
+	where
+		F: FnOnce(
+			Arc<crate::filesystem::Filesystem>,
+		) -> futures_util::future::BoxFuture<'static, anyhow::Result<T>>,
+	{
 		use crate::filesystem::capture::{CaptureJournal, NoColdStore};
+
+		// The first write selects its entry version before the open is sent, so it waits for
+		// the first listing here. The fallback open below does not wait again, but its requests
+		// keep their own timeout: at worst the wait plus one request timeout.
+		self.wait_for_first_listing().await?;
 
 		// Run the write on an empty in-memory volume up to its first commit.
 		let journal = Arc::new(CaptureJournal::new(
@@ -359,13 +397,7 @@ impl VolumeClient {
 		let initial = journal.initial_writes();
 		if !committing || initial.is_empty() {
 			journal.decide(false);
-			let opened = self
-				.open(
-					key,
-					true,
-					crate::filesystem::transport::OpenPrefetch::default(),
-				)
-				.await?;
+			let opened = self.open_listed(key, true, prefetch).await?;
 			return Ok(FirstWriteOpen {
 				opened,
 				first: None,
@@ -378,7 +410,7 @@ impl VolumeClient {
 				key,
 				create_if_absent: true,
 				initial,
-				prefetch: crate::filesystem::transport::OpenPrefetch::default(),
+				prefetch,
 			})
 			.await;
 		let (opened, created) = match opened {
@@ -403,6 +435,18 @@ impl VolumeClient {
 		create_if_absent: bool,
 		prefetch: crate::filesystem::transport::OpenPrefetch,
 	) -> anyhow::Result<crate::filesystem::OpenedFilesystem> {
+		self.wait_for_first_listing().await?;
+		self.open_listed(key, create_if_absent, prefetch).await
+	}
+
+	/// Opens once the first storage listing has completed. The open's own requests keep their
+	/// per-request bounds.
+	async fn open_listed(
+		&self,
+		key: depot_types::VolumeKey,
+		create_if_absent: bool,
+		prefetch: crate::filesystem::transport::OpenPrefetch,
+	) -> anyhow::Result<crate::filesystem::OpenedFilesystem> {
 		let command = Command::Open {
 			key,
 			create_if_absent,
@@ -413,6 +457,31 @@ impl VolumeClient {
 			Response::Opened(opened, _) => Ok(opened),
 			_ => unreachable!("open has one response type"),
 		}
+	}
+
+	/// Waits, before this process's first storage listing only, until one request timeout from
+	/// now. After the first listing it reads no clock and returns at once.
+	async fn wait_for_first_listing(&self) -> Result<(), Error> {
+		if self.versions.floor_listed() {
+			return Ok(());
+		}
+		let clock = self.lifecycle.clock();
+		let deadline_boot_ms =
+			rivet_env::deadline_after(clock.as_ref(), self.timeout).map_err(|error| {
+				tracing::warn!(?error, "clock failed before a filesystem open");
+				Error::Closed
+			})?;
+		self.wait_for_read_floor(deadline_boot_ms).await
+	}
+
+	/// See [`wait_for_read_floor`].
+	async fn wait_for_read_floor(&self, deadline_boot_ms: u64) -> Result<(), Error> {
+		wait_for_read_floor(
+			self.versions.as_ref(),
+			self.lifecycle.clock().as_ref(),
+			deadline_boot_ms,
+		)
+		.await
 	}
 
 	pub fn worker_id(&self) -> &rivet_topology::worker::WorkerId {
@@ -516,5 +585,40 @@ impl VolumeClient {
 			return Err(Error::Lifecycle(RpcError::Unavailable));
 		}
 		response
+	}
+}
+
+/// Waits, once per process, for the first completed storage listing, until `deadline_boot_ms`.
+/// Before it the topology selects the lowest entry version with no listing behind it, so an
+/// opened filesystem would refuse every write that version cannot carry.
+/// Every open after the first listing returns at once, whatever that listing observed. A wait
+/// that reaches its deadline fails with [`crate::filesystem::Error::DeadlineExceeded`], having
+/// sent nothing.
+async fn wait_for_read_floor(
+	versions: &dyn rivet_topology::versions::WriteVersions,
+	clock: &dyn rivet_env::Clock,
+	deadline_boot_ms: u64,
+) -> Result<(), Error> {
+	if versions.floor_listed() {
+		return Ok(());
+	}
+
+	match versions.wait_for_read_floor(deadline_boot_ms).await {
+		Ok(true) => Ok(()),
+		Ok(false) => {
+			let now_boot_ms = clock.boot_ms().ok();
+			tracing::warn!(
+				deadline_boot_ms,
+				?now_boot_ms,
+				"filesystem open reached its deadline waiting for the first storage listing; check object-store latency and topology discovery errors"
+			);
+			Err(Error::Filesystem(
+				crate::filesystem::Error::DeadlineExceeded,
+			))
+		}
+		Err(error) => {
+			tracing::warn!(?error, "topology stopped before its first storage listing");
+			Err(Error::Closed)
+		}
 	}
 }

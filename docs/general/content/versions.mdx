@@ -20,6 +20,10 @@ Placement alone leaves Rivet Actors that never sleep on the old nodes until thos
 
 The older nodes stay connected and keep receiving heartbeats, but no new actors are placed on them. Rivet never exits a node process; stopping or replacing the old nodes is up to whatever runs them. If every node of the newer version disconnects, the drain stops and the older nodes serve again. A pool's settings are read when a node connects, so changing them applies to nodes that connect afterwards.
 
+### Upgrading RivetKit
+
+If you self-host the control plane, upgrade it before RivetKit. A new RivetKit release may rely on protocol changes that an older control plane cannot read. See [Upgrades](/docs/deploy/self-host/control-plane/upgrades/).
+
 
 ## Upgrading Actor State
 

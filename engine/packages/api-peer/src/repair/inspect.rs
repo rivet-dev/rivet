@@ -9,7 +9,7 @@ use axum::{Json, extract::State};
 use depot_volume::ups::UpsLogClient;
 use futures_util::future::join_all;
 use rivet_data::generated::{
-	depot_client_protocol_v1::{
+	depot_client_protocol_v2::{
 		CheckpointList, CheckpointOperation, ClientRequest, ClientResponse, RepairInspectRequest,
 		RepairInspection, VolumeCheckpointRequest,
 	},
@@ -19,10 +19,11 @@ use rivet_data::generated::{
 		StorageWorkerResponse, VolumeLogStatus,
 	},
 	depot_tablet_manifest_v1::Tablet,
-	shared_depot_fs_read_v1::{
+	shared_depot_fs_read_v2::{
 		FsReadAt, FsReadClose, FsReadError, FsReadOpen, FsReadOperation, FsReadRaw, FsReadRequest,
 		FsReadResponse, FsReadScan, FsReadTarget, FsSessionRead,
 	},
+	shared_depot_fs_v2::FsCut,
 	shared_depot_types_v1::{self as wire, VolumeLogReplicaStatus},
 };
 use rivet_engine_context::EngineContext;
@@ -238,7 +239,10 @@ pub(crate) async fn rows_get(
 			target,
 			client_epoch: None,
 			operation: FsReadOperation::FsReadRaw(FsReadRaw {
-				position: body.position.as_ref().map(Position::wire),
+				cut: body
+					.position
+					.as_ref()
+					.map(|position| FsCut::single(Position::wire(position))),
 				key: body.key.wire()?,
 				versions,
 			}),
@@ -267,7 +271,10 @@ pub(crate) async fn rows_scan(
 			target,
 			client_epoch: None,
 			operation: FsReadOperation::FsReadOpen(FsReadOpen {
-				position: body.position.as_ref().map(Position::wire),
+				cut: body
+					.position
+					.as_ref()
+					.map(|position| FsCut::single(Position::wire(position))),
 				prefetch: None,
 			}),
 		},

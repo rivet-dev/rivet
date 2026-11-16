@@ -1,0 +1,24 @@
+#import "shared/depot.fs.v2.bare"
+
+# Formal keys select one row envelope. Every stored value names the claim log whose entry wrote
+# the version, so a cut is tested against a version by reading the value's first field in place;
+# a version 1 value reads as claim log 0. Deletion remains a versioned value.
+type FormatRowValue union { FsFormat | FsDeleted }
+type FormatRow struct { claimLog: u16 row: FormatRowValue }
+type InodeRowValue union { FsInode | FsDeleted }
+type InodeRow struct { claimLog: u16 row: InodeRowValue }
+type DentryRowValue union { FsDentry | FsDeleted }
+type DentryRow struct { claimLog: u16 row: DentryRowValue }
+type LinkRowValue union { FsPresent | FsDeleted }
+type LinkRow struct { claimLog: u16 row: LinkRowValue }
+type XattrRowValue union { FsBytes | FsDeleted }
+type XattrRow struct { claimLog: u16 row: XattrRowValue }
+type KvRowValue union { FsBytes | FsDeleted }
+type KvRow struct { claimLog: u16 row: KvRowValue }
+type OrphanRowValue union { FsPresent | FsDeleted }
+type OrphanRow struct { claimLog: u16 row: OrphanRowValue }
+type ChunkRowValue union { FsBytes | FsDeleted }
+type ChunkRow struct { claimLog: u16 row: ChunkRowValue }
+# A range whiteout row exists only from version 2, on a volume with a base.
+type KvRangeWhiteoutRowValue union { FsKvRangeWhiteout | FsDeleted }
+type KvRangeWhiteoutRow struct { claimLog: u16 row: KvRangeWhiteoutRowValue }

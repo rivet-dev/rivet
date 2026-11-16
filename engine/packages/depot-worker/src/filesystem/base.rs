@@ -4,11 +4,36 @@ use super::{
 	store::FilesystemStore,
 };
 use depot_fs_core::{CHUNK_BYTES, FsBaseLink, MAX_FORK_CHAIN_DEPTH, forks::ChunkLookup};
+use rivet_data::generated::shared_depot_fs_read_v2::{FsBaseRead, FsBaseRowsPage};
 
-/// Implementations send a bounded point batch to the link's region and tablet.
-/// They read only that layer; this caller owns the flat nearest-first chain walk.
+/// The error a child's read of an inherited layer fails with when the ancestor's maintainer
+/// answered `error`. A read the ancestor refused as overloaded ran nothing, so it stays a
+/// retryable refusal that reaches the child's caller with a hint; every other answer means the
+/// inherited data cannot be served now.
+pub fn base_read_error(
+	error: rivet_data::generated::shared_depot_fs_read_v2::FsReadError,
+) -> Error {
+	use rivet_data::generated::shared_depot_fs_read_v2::FsReadError;
+	match error {
+		FsReadError::Overloaded => Error::Overloaded,
+		FsReadError::TooOld
+		| FsReadError::Lagging
+		| FsReadError::Fenced
+		| FsReadError::TooLarge
+		| FsReadError::NotFound
+		| FsReadError::Corrupt
+		| FsReadError::Unavailable
+		| FsReadError::BaseUnavailable
+		| FsReadError::NotServing => Error::BaseUnavailable,
+	}
+}
+
+/// Reads one base link's own layer at the link's cut, on the link's region and tablet. An
+/// implementation reads only that layer and never its bases; this caller owns the flat
+/// nearest-first chain walk.
 #[async_trait::async_trait]
-pub trait BaseChunkReader: Send + Sync {
+pub trait BaseLayerReader: Send + Sync {
+	/// A bounded point batch of chunks.
 	async fn read(
 		&self,
 		link: &FsBaseLink,
@@ -16,6 +41,14 @@ pub trait BaseChunkReader: Send + Sync {
 		indices: &[u64],
 		deadline_boot_ms: u64,
 	) -> Result<Vec<ChunkLookup>>;
+
+	/// Metadata rows: one key's version at the cut, or a page of a range, whiteouts included.
+	async fn rows(
+		&self,
+		link: &FsBaseLink,
+		read: FsBaseRead,
+		deadline_boot_ms: u64,
+	) -> Result<FsBaseRowsPage>;
 }
 
 impl ReadSession {

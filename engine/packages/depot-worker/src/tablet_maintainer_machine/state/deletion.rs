@@ -9,12 +9,12 @@ use super::{LoadedVolume, MaintainerPhase, MaintainerState, Operation, store::St
 use crate::tablet_maintainer_machine::{Effects, effect::MaintainerEffect, types::*};
 use depot_types::{VolumeLogKey, partition_key_hash};
 use rivet_data::generated::{
-	depot_client_protocol_v1::{ClientResponse, VolumeRejectResponse},
+	depot_client_protocol_v2::{ClientResponse, VolumeRejectResponse},
 	depot_storage_worker_protocol_v1::{
 		self as wire, RejectResponse, StorageWorkerRequest as Request,
 		StorageWorkerResponse as Response,
 	},
-	shared_depot_fs_v1::{FsVolumeRecord, FsVolumeStatus},
+	shared_depot_fs_v2::{FsVolumeRecord, FsVolumeStatus},
 	shared_depot_types_v1::{ClientIdentity, VolumeLogReplicaStatus as Status},
 };
 use rivet_state_machine::Entropy;
@@ -53,6 +53,20 @@ pub(crate) enum DeleteStep {
 	/// the delete reads its record.
 	WaitingForCover {
 		through_dispatch: u64,
+	},
+	/// A live grouped incarnation whose group was forked after the last fork it stands pinned
+	/// through logs its fork pin before the delete claims or drains it, so each child of those
+	/// forks keeps reading it at the fork once its data would otherwise be swept. `row` is the
+	/// record the delete read; nothing is claimed, stamped or written yet, and the incarnation
+	/// is not retiring meanwhile, so it registers and applies through its pin floor under the
+	/// ordinary pin path (`groups::pin_need`). A claim log of the volume waits here while its
+	/// volume's delete does, so it can register for the pin's cut. Left for `ReadingRow`, which
+	/// reads the record again and claims and drains from the answer, once the volume stands
+	/// pinned through the group's latest fork, at the first drive after its pin applies
+	/// (`pin_applied`) or at the retry deadline armed while waiting. A replay finds the logged
+	/// pin in the volume's record and pins nothing again.
+	Pinning {
+		row: FsVolumeRecord,
 	},
 	Active(DeleteProgress),
 }
@@ -165,7 +179,8 @@ pub(crate) fn recreate(state: &MaintainerState, key: &depot_types::VolumeKey) ->
 			}
 			DeleteStep::ReadingRow { .. }
 			| DeleteStep::WaitingForReplay { .. }
-			| DeleteStep::WaitingForCover { .. } => false,
+			| DeleteStep::WaitingForCover { .. }
+			| DeleteStep::Pinning { .. } => false,
 		};
 		if !acknowledged || deleted {
 			return Recreate::Blocked;
@@ -347,9 +362,13 @@ pub(crate) fn admit(
 		.get(&key)
 		.is_some_and(|volume| volume.creation.is_some() || volume.stored_row.is_some())
 		|| state.operations.index().pass_rows.contains_key(&key);
-	if let Some(row) = row.filter(|_| known_floor && state.fork_checked.contains(&key.0.volume_key))
-	{
-		activate(state, key, row, entropy, fx);
+	// A grouped incarnation already deleted without a stamp needs its pin mark, which only its
+	// row lookup reads.
+	let ready = |row: &FsVolumeRecord| {
+		known_floor && state.fork_checked.contains(&key.0.volume_key) && !needs_pin_mark(&key, row)
+	};
+	if let Some(row) = row.filter(ready) {
+		activate(state, key, row, None, entropy, fx);
 	} else {
 		state
 			.store_queue
@@ -375,6 +394,11 @@ fn loaded_row(state: &MaintainerState, key: &VolumeLogKey) -> Option<FsVolumeRec
 					volume_incarnation: key.0.volume_incarnation,
 					status: FsVolumeStatus::Live,
 					cold: replica.cold.clone(),
+					fork_pinned_through: None,
+					created_at_fork: None,
+					deleted_at_fork: None,
+					lazy_fork: None,
+					metadata_local: false,
 				})
 		})
 	})
@@ -413,6 +437,10 @@ fn resolve_row(
 		return;
 	};
 	let observed = observed.clone();
+	let pin_mark = result
+		.as_ref()
+		.ok()
+		.and_then(|lookup| lookup.pinned_through);
 	if result.as_ref().is_ok_and(|lookup| lookup.superseded) {
 		state
 			.deleting
@@ -459,13 +487,14 @@ fn resolve_row(
 			if observed.is_some() {
 				row.status = FsVolumeStatus::Deleted;
 			}
-			activate(state, key, row, entropy, fx);
+			activate(state, key, row, pin_mark, entropy, fx);
 		}
 		Ok(None) if observed.is_some() => {
 			activate(
 				state,
 				key,
 				observed.expect("recovered tombstone"),
+				pin_mark,
 				entropy,
 				fx,
 			);
@@ -482,7 +511,7 @@ fn resolve_row(
 			{
 				row.status = FsVolumeStatus::Deleted;
 			}
-			activate(state, key, row, entropy, fx);
+			activate(state, key, row, pin_mark, entropy, fx);
 		}
 		Ok(None) => {
 			if let Some(id) = state.deleting.remove(&key).and_then(|delete| delete.caller) {
@@ -495,15 +524,50 @@ fn resolve_row(
 }
 
 /// Stop selecting writes before publishing deletion; already dispatched store work retains its queue position.
+/// `pin_mark` is the incarnation's pin mark its delete's row lookup read, if any.
 fn activate(
 	state: &mut MaintainerState,
 	key: VolumeLogKey,
 	mut row: FsVolumeRecord,
+	pin_mark: Option<u64>,
 	entropy: Entropy,
 	fx: &mut Effects,
 ) {
 	// Choose one identity above every observed fence, retaining it across member retries.
 	let known_deleted = row.status == FsVolumeStatus::Deleted;
+	// A grouped volume records the fork it was deleted at, so a child of a later fork finds it
+	// absent and a child of an earlier fork still reads it through the pin. A missing stamp
+	// would read as fork 0, so the delete waits for the group's record, read meanwhile, and
+	// activates after the retry delay.
+	let deleted_at_fork = match row.deleted_at_fork {
+		Some(stamp) => Some(stamp),
+		// A delete already past its tombstones was stamped when it began, and its stamp is
+		// missing only when its Deleted record never landed, or is fork 0 under a grant that
+		// cannot record one. It logged its fork pin through that fork before any tombstone, so
+		// the pin mark is the fork it was deleted at; the group may have forked since, and a
+		// later stamp would claim the volume existed at a fork nothing pins it at.
+		None if known_deleted => recovered_stamp(state, &key, &row, pin_mark),
+		None => match super::groups::fork_stamp(state, &key.0.volume_key, fx) {
+			Ok(stamp) => super::groups::recorded_stamp(state, &key.0.volume_key, stamp),
+			Err(_) => {
+				if let Some(delete) = state.deleting.get_mut(&key) {
+					delete.step = DeleteStep::ReadingRow {
+						observed: known_deleted.then(|| row.clone()),
+					};
+				}
+				fx.arm_timer_after(
+					MaintainerTimer::DeleteRetry(key),
+					state.config.tuning().retry_ms,
+				);
+				return;
+			}
+		},
+	};
+	// A live grouped incarnation logs its fork pin before anything claims or drains it.
+	if !known_deleted && needs_pin(state, &key, &row, deleted_at_fork) {
+		start_pinning(state, key, row, fx);
+		return;
+	}
 	let floor = state
 		.loaded_volumes
 		.get(&key)
@@ -593,8 +657,9 @@ fn activate(
 			status: Default::default(),
 		});
 	super::track_loaded(state, &key);
-	let volume = &state.loaded_volumes[&key];
 	row.status = FsVolumeStatus::Deleted;
+	row.deleted_at_fork = deleted_at_fork;
+	let volume = &state.loaded_volumes[&key];
 	// Missing members load a tombstone directly; present live replicas must be claimed first.
 	let observations = volume.members.clone();
 	let members = state
@@ -645,6 +710,258 @@ fn activate(
 		let (client, cold) = (client.clone(), row.cold.clone());
 		super::drain::start(state, &key, client, Some(cold));
 	}
+}
+
+/// Whether the delete of `key`, whose record is `row`, must log its volume's fork pin before it
+/// claims and drains: the volume is in a group (`latest_fork`, the group's latest fork, is set)
+/// and stands pinned through an earlier fork, by its registered record when it is registered,
+/// since a pin it logged in this grant is there first. A volume created at or after the latest
+/// fork, and any volume outside a group, needs none and pays nothing. A claim log of a grouped
+/// volume waits while its volume's delete has not claimed yet: the volume's pin may still need
+/// it registered, and its own row read can finish before the volume's decides whether to pin.
+/// Activating the volume's delete, its entering the step or its pin applying wakes it.
+fn needs_pin(
+	state: &MaintainerState,
+	key: &VolumeLogKey,
+	row: &FsVolumeRecord,
+	latest_fork: Option<u64>,
+) -> bool {
+	if depot_types::is_claim_log(&key.0.volume_key).is_some() {
+		let (base, _) = super::claims::base_of(key);
+		// A registered claim log whose volume stands pinned through the latest fork has
+		// nothing left to wait for, even while the volume's delete reads its record again.
+		let pinned = state.filesystem.volumes.contains_key(key)
+			&& super::groups::pin_need(state, key) == super::groups::PinNeed::None;
+		if super::groups::group_of(&base).is_none() || pinned {
+			return false;
+		}
+		return match state.deleting.get(&base).map(|delete| &delete.step) {
+			Some(
+				DeleteStep::ReadingRow { .. }
+				| DeleteStep::WaitingForReplay { .. }
+				| DeleteStep::WaitingForCover { .. }
+				| DeleteStep::Pinning { .. },
+			) => true,
+			Some(DeleteStep::Active(_)) | None => false,
+		};
+	}
+	let Some(latest_fork) = latest_fork else {
+		return false;
+	};
+	let pinned_through = match state.filesystem.volumes.get(key) {
+		Some(volume) => super::groups::pinned_through(&volume.record),
+		None => row.fork_pinned_through.or(row.created_at_fork).unwrap_or(0),
+	};
+	latest_fork > pinned_through
+}
+
+/// Whether the delete of `key` starting from `row` must read the incarnation's pin mark with its
+/// row before it activates: a grouped incarnation already deleted whose row carries no stamp,
+/// which [`recovered_stamp`] then takes from the pin mark.
+fn needs_pin_mark(key: &VolumeLogKey, row: &FsVolumeRecord) -> bool {
+	row.status == FsVolumeStatus::Deleted
+		&& row.deleted_at_fork.is_none()
+		&& depot_types::keys::partition::forkable_group(&key.0.volume_key.partition_key).is_some()
+}
+
+/// The fork a delete recovered from its tombstones was deleted at, for a grouped volume: the
+/// last fork its pin rows, stored pin mark or creation stamp cover, or fork 0 when none does.
+/// An ungrouped volume has none.
+fn recovered_stamp(
+	state: &MaintainerState,
+	key: &VolumeLogKey,
+	row: &FsVolumeRecord,
+	pin_mark: Option<u64>,
+) -> Option<u64> {
+	if depot_types::keys::partition::forkable_group(&key.0.volume_key.partition_key).is_none() {
+		return None;
+	}
+	let stamp = pin_mark
+		.max(row.fork_pinned_through)
+		.max(row.created_at_fork)
+		.unwrap_or(0);
+	super::groups::recorded_stamp(state, &key.0.volume_key, Some(stamp))
+}
+
+/// Moves the delete of `key` to `DeleteStep::Pinning` with the record it read. An incarnation
+/// the tablet does not hold loaded is loaded from that record, so it registers and its pin is
+/// logged at its stored cut, which holds everything it applied.
+fn start_pinning(
+	state: &mut MaintainerState,
+	key: VolumeLogKey,
+	row: FsVolumeRecord,
+	fx: &mut Effects,
+) {
+	fx.arm_timer_after(
+		MaintainerTimer::DeleteRetry(key.clone()),
+		state.config.tuning().retry_ms,
+	);
+	state
+		.loaded_volumes
+		.entry(key.clone())
+		.or_insert_with(|| LoadedVolume {
+			members: Default::default(),
+			last_activity: state.now_boot_ms,
+			creation: None,
+			unacknowledged_cold_open: None,
+			stored_row: Some(row.clone().into()),
+			status: Default::default(),
+		});
+	super::track_loaded(state, &key);
+	if let Some(delete) = state.deleting.get_mut(&key) {
+		delete.step = DeleteStep::Pinning { row };
+	}
+	state.deletion_drive.dirty.insert(key);
+}
+
+/// Drives a delete in `DeleteStep::Pinning`: registers the volume, logs its fork pin through
+/// the ordinary pin path, and activates the delete once the volume stands pinned through the
+/// group's latest fork. While it waits, the retry deadline armed when it entered the step, and
+/// again at each firing (`pin_retry`), re-drives it, since a pin that could not be logged yet
+/// (an apply or another op of the volume in flight, a group read) sends no notification of its
+/// own. Repeating it with nothing changed emits nothing new.
+fn drive_pin(state: &mut MaintainerState, key: &VolumeLogKey, fx: &mut Effects) {
+	let Some(Deletion {
+		step: DeleteStep::Pinning { row },
+		..
+	}) = state.deleting.get(key)
+	else {
+		return;
+	};
+	let row = row.clone();
+	let Ok(latest_fork) = super::groups::fork_stamp(state, &key.0.volume_key, fx) else {
+		return;
+	};
+	let pinned = !needs_pin(state, key, &row, latest_fork)
+		|| (state.filesystem.volumes.contains_key(key)
+			&& super::groups::pin_need(state, key) == super::groups::PinNeed::None);
+	// A recovery proving the volume's tail for the pin is left to join before the delete
+	// claims; the finished operation marks the delete again.
+	if pinned && super::repair::holds_key(state, &key.0.volume_key) {
+		return;
+	}
+	// The delete reads its record again and activates from the answer, as any delete does,
+	// so its drain starts before this pass's drain drive and is adopted when it ends.
+	if pinned {
+		if depot_types::is_claim_log(&key.0.volume_key).is_none() {
+			crate::metrics::DELETE_FORK_PINS.inc();
+		}
+		fx.cancel_timer(MaintainerTimer::DeleteRetry(key.clone()));
+		if let Some(delete) = state.deleting.get_mut(key) {
+			delete.step = DeleteStep::ReadingRow { observed: None };
+		}
+		state
+			.store_queue
+			.push_back(StoreWork::ReadDeleteRow { key: key.clone() });
+		return;
+	}
+	// A claim log only registers, so its volume's pin can span it, and only once its volume's
+	// delete is pinning; before that it waits for the volume's decision.
+	if depot_types::is_claim_log(&key.0.volume_key).is_some() {
+		let (base, _) = super::claims::base_of(key);
+		if pinning(state, &base) {
+			super::filesystem::load(state, key.clone());
+		}
+		return;
+	}
+	if !state.filesystem.volumes.contains_key(key) {
+		super::filesystem::load(state, key.clone());
+		return;
+	}
+	match super::groups::pin_need(state, key) {
+		super::groups::PinNeed::None => {}
+		super::groups::PinNeed::Read => super::groups::hold_for_read(state, key, fx),
+		super::groups::PinNeed::Pin | super::groups::PinNeed::Apply => {
+			super::groups::pin(state, key, fx)
+		}
+		super::groups::PinNeed::Unsupported => super::groups::unsupported(state, key),
+	}
+}
+
+/// Starts a recovery of each log of `key`'s volume whose pin floor waits for an unproven tail
+/// (`RecoveryPurpose::DeletePin`). The delete's own claim, which would prove the tail, comes
+/// only after the pin, and a deleted actor's holder writes nothing more, so without it the pin
+/// would wait until the holder's process exits. A log that a recovery already holds, or for
+/// which no `max_repairs` slot is free, waits for the next firing of the retry deadline of
+/// `DeleteStep::Pinning`, which starts these recoveries rather than the drive, so no event
+/// that frees a slot or ends another recovery has to wake the delete.
+fn prove_unproven_tails(state: &mut MaintainerState, key: &VolumeLogKey, fx: &mut Effects) {
+	for log in super::groups::unproven_logs(state, key) {
+		if super::repair::active_jobs(state) >= state.config.tuning().max_repairs as usize {
+			tracing::debug!(?log, "a delete's tail proof waits for a repair slot");
+			return;
+		}
+		if super::repair::holds_key(state, &log.0.volume_key) {
+			continue;
+		}
+		let Some(row) = state
+			.loaded_volumes
+			.get(&log)
+			.and_then(|volume| volume.row(&log))
+		else {
+			continue;
+		};
+		crate::metrics::DELETE_PIN_TAIL_PROOFS.inc();
+		super::repair::recover(
+			state,
+			log,
+			row,
+			super::repair::RecoveryPurpose::DeletePin,
+			fx,
+		);
+	}
+}
+
+/// The retry deadline of a delete waiting for its fork pin fired: it is armed again while the
+/// delete still waits, a pin that waits for an unproven tail has the tail proven
+/// (`prove_unproven_tails`), and the drive looks at the pin (`retry` marks it).
+pub(crate) fn pin_retry(state: &mut MaintainerState, key: &VolumeLogKey, fx: &mut Effects) {
+	if !pinning(state, key) {
+		return;
+	}
+	fx.arm_timer_after(
+		MaintainerTimer::DeleteRetry(key.clone()),
+		state.config.tuning().retry_ms,
+	);
+	if depot_types::is_claim_log(&key.0.volume_key).is_none() {
+		prove_unproven_tails(state, key, fx);
+	}
+}
+
+/// A fork pin of `volume_key`'s volume applied, or the volume registered: its deletes waiting
+/// to pin look again at the next drive. A claim log's registration also wakes its volume's
+/// delete.
+pub(crate) fn pin_applied(state: &mut MaintainerState, volume_key: &depot_types::VolumeKey) {
+	let mut keys = pinning_incarnations(state, volume_key);
+	if let Some((base, _)) = depot_types::is_claim_log(volume_key) {
+		keys.extend(pinning_incarnations(state, &base));
+	}
+	state.deletion_drive.dirty.extend(keys);
+}
+
+/// The incarnations of `volume_key` whose deletes wait in `DeleteStep::Pinning`.
+fn pinning_incarnations(
+	state: &MaintainerState,
+	volume_key: &depot_types::VolumeKey,
+) -> Vec<VolumeLogKey> {
+	state
+		.deleting
+		.range(super::incarnations(volume_key))
+		.filter(|(_, delete)| matches!(delete.step, DeleteStep::Pinning { .. }))
+		.map(|(key, _)| key.clone())
+		.collect()
+}
+
+/// Whether the delete of `key` waits for its volume's fork pin, so the incarnation still
+/// registers and applies like a live one.
+pub(crate) fn pinning(state: &MaintainerState, key: &VolumeLogKey) -> bool {
+	matches!(
+		state.deleting.get(key),
+		Some(Deletion {
+			step: DeleteStep::Pinning { .. },
+			..
+		})
+	)
 }
 
 /// The tail a deleted incarnation's replicas hold above `cold`, if any: the shortest log
@@ -910,6 +1227,10 @@ pub(crate) fn retry(state: &mut MaintainerState, key: VolumeLogKey) {
 		}
 		// Only the end of the name's replay moves a delete waiting for it.
 		Some(DeleteStep::WaitingForReplay { .. }) => {}
+		// The drive looks at the pin again.
+		Some(DeleteStep::Pinning { .. }) => {
+			state.deletion_drive.dirty.insert(key);
+		}
 		Some(DeleteStep::ReadingRow { .. }) | Some(DeleteStep::WaitingForCover { .. }) | None => {}
 	}
 }
@@ -1026,8 +1347,8 @@ pub(crate) fn drive(state: &mut MaintainerState, entropy: Entropy, fx: &mut Effe
 				DeleteStep::WaitingForReplay {
 					observed: Some(row),
 				};
-		} else if confirmed_row {
-			activate(state, key, row, entropy.clone(), fx);
+		} else if confirmed_row && !needs_pin_mark(&key, &row) {
+			activate(state, key, row, None, entropy.clone(), fx);
 		} else {
 			state
 				.store_queue
@@ -1066,6 +1387,10 @@ pub(crate) fn drive(state: &mut MaintainerState, entropy: Entropy, fx: &mut Effe
 			break;
 		}
 		for key in keys {
+			if pinning(state, &key) {
+				drive_pin(state, &key, fx);
+				continue;
+			}
 			if super::drain::active(state, &key) {
 				continue;
 			}
@@ -1520,6 +1845,11 @@ pub(crate) fn swept(
 			return;
 		};
 		progress.cold = ColdProgress::Removed { through_dispatch };
+		// A claim log's delete releasing its record may let its volume's sweep go on.
+		let (base, claim_log) = super::claims::base_of(&key);
+		if claim_log != rivet_data::ROOT_CLAIM_LOG {
+			state.deletion_drive.dirty.insert(base);
+		}
 		// The sweep released the metadata and left the data to the incarnation's pending
 		// sweep, which runs in the background so the key can be created again at once.
 		let sweep = StoreWork::SweepPending {

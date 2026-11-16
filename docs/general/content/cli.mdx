@@ -22,7 +22,7 @@ npx @rivetkit/cli <command>
 | `rivet pool` | List or delete compute pools in a namespace. |
 | `rivet cluster logs` | Read or follow a cluster's engine and runner logs. |
 | `rivet cluster env` | List, set, or unset a cluster pool's environment variables. |
-| `rivet cluster secret` | List, roll out, or delete a cluster's secrets. |
+| `rivet cluster secret` | List, set, or delete a cluster's secrets. |
 | `rivet api` | Make an authenticated request to the Rivet Cloud API. |
 | `rivet engine` | Run the bundled `rivet-engine` binary directly. |
 | `rivet setup-ci` | Install the GitHub Actions deploy workflow. |
@@ -107,7 +107,7 @@ rivet deploy --cluster my-cluster --build <build-id>
 | `--image` | cluster name | Image name recorded on the build. |
 | `--tag` | git short SHA | Image tag recorded on the build. |
 | `--env` | — | Pool variable as `KEY=VAL`, repeatable. Kept with the pool's other variables. |
-| `--secret` | — | Pool variable taking a cluster secret's latest version, as `KEY` for a secret named like the variable or `KEY=SECRET_NAME`, repeatable. Roll the secret out first with [`rivet cluster secret rollout`](#rivet-cluster-secret). |
+| `--secret` | — | Pool variable taking a cluster secret's latest version, as `KEY` for a secret named like the variable or `KEY=SECRET_NAME`, repeatable. Set the secret first with [`rivet cluster secret set`](#rivet-cluster-secret). |
 
 The saved image must be 5 GiB or smaller. `--namespace`, `--reuse-image`, and the resource and scaling flags apply to projects only and are rejected for a cluster. `--env` and `--secret` keep the pool's other variables, apply in the same rollout as the build, and are checked before the build starts. They also unpin any secret a rollback pinned. See [`rivet cluster env`](#rivet-cluster-env). `rivet pool`, `rivet logs`, and `rivet token` do not support clusters. Read a cluster's logs with [`rivet cluster logs`](#rivet-cluster-logs).
 
@@ -254,26 +254,26 @@ Names are letters, digits, and `_`, not starting with a digit. Values are one li
 Manages a cluster's secrets, which are encrypted values that pool variables reference by name. No command prints a secret's value.
 
 ```bash
-rivet cluster secret rollout DATABASE_URL
+rivet cluster secret set DATABASE_URL
 ```
 
 | Subcommand | Description |
 | --- | --- |
-| `list` | Print each secret's name, latest version, and last rollout time. |
-| `rollout <name>` | Store a new value, creating the secret if needed. Every pool using it rolls, except pools a rollback pinned. The same value again does nothing. |
+| `list` | Print each secret's name, latest version, and when it was last set. |
+| `set <name>` | Set the value, creating the secret if needed. Every pool using it rolls, except pools a rollback pinned. The same value again does nothing. |
 | `delete <name>` | Delete the secret. Refused while a pool uses it. |
 
-`rollout` and `delete` show what will change and ask to confirm. `--yes` skips this and is required without a terminal, such as in CI.
+`set` and `delete` show what will change and ask to confirm. `--yes` skips this and is required without a terminal, such as in CI.
 
-`rollout` never takes the value as an argument, where it would land in shell history. It prompts for the value without echoing it, reads stdin when piped, or reads the variable `--from-env` names. Values must be one line and at most 1 KiB, so base64-encode multi-line values such as PEM keys. Empty values are refused unless you pass `--allow-empty`.
+`set` never takes the value as an argument, where it would land in shell history. It prompts for the value without echoing it, reads stdin when piped, or reads the variable `--from-env` names. Values must be one line and at most 1 KiB, so base64-encode multi-line values such as PEM keys. Empty values are refused unless you pass `--allow-empty`.
 
 Secret names are letters, digits, `_`, and `-`, up to 64 characters. A cluster holds up to 64 secrets. A cluster token needs `rivet:cluster:secrets:write` and `rivet:cluster:read` to manage secrets, plus `rivet:cluster:deploy` to change a pool's variables.
 
 | Flag | Description |
 | --- | --- |
-| `--from-env <VAR>` | `rollout` only. Read the value from this environment variable instead of a prompt or stdin. |
-| `--allow-empty` | `rollout` only. Roll out an empty value instead of refusing it. |
-| `--yes` | `rollout` and `delete`. Act without asking to confirm. Required without a terminal. |
+| `--from-env <VAR>` | `set` only. Read the value from this environment variable instead of a prompt or stdin. |
+| `--allow-empty` | `set` only. Set an empty value instead of refusing it. |
+| `--yes` | `set` and `delete`. Act without asking to confirm. Required without a terminal. |
 | `--json` | `list` only. Emit JSON instead of formatted output. |
 | `--cluster`, `--org`, `--token`, `--cloud-api` | Same as `rivet deploy`. |
 

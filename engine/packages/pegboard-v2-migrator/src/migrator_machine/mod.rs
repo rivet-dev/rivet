@@ -14,6 +14,17 @@
 //! **Failover.** A loaded `Copying` entry is discarded and retried by a later pass; `CuttingOver`,
 //! `Activating` and `Discarding` reissue their effect; `Confirming` waits for `confirmAt`.
 //!
+//! **Placement.** An admission places its entry where a fresh create in the target namespace goes,
+//! in the namespace's volume group or, while it has none, at the legacy unprefixed placement, and
+//! persists that placement with the entry; every effect addresses it, whatever the namespace's
+//! standing says later. Entries that 3.0.2 and 3.0.3 wrote are all legacy-placed. A legacy-placed
+//! entry whose namespace has a group by now is begun again in the group when V2 has not been
+//! touched yet: a loaded `Copying` or `Reserving` entry is discarded at the legacy placement and a
+//! later pass admits the actor in the group, and a `Copying` entry whose copy finds the group
+//! before its begin is moved there in place. Once V2 was cut over the entry finishes at the legacy
+//! placement, and the namespace's backfill, which does not start while the migrator holds a
+//! legacy-placed entry, moves the activated actor into the group.
+//!
 //! **Listing.** One candidates page at a time, finishing each configured V2 datacenter's cursor
 //! before starting the next. Pages are full size, since most candidates are not selected. Selected
 //! candidates are admitted until the free slots run out; the cursor then moves to the last
@@ -39,6 +50,7 @@ use rivet_state_machine_ephemeral::{
 	EphemeralStateMachine, EphemeralStateMachineEvent, RuntimeEvent,
 };
 use rivet_util::Id;
+use std::collections::BTreeSet;
 
 pub mod effect;
 pub mod event;
@@ -69,6 +81,11 @@ const CANDIDATE_TIMEOUT_MS: u64 = 20_000;
 /// one second of `max_copy_bytes_per_sec`. Small actors are admitted in bursts up to it; an actor
 /// larger than it is admitted alone once the earlier charges are nearly paid.
 pub const COPY_BURST_MS: i64 = 1_000;
+/// Activation attempts that may find no actor at the entry's placement before the entry finishes
+/// as needing recovery. An authoritative missing or deleted volume does not come back, so the
+/// retries only cover a misread; without a bound the entry would hold its slot, and at the legacy
+/// placement its namespace's backfill, forever.
+pub const HOLD_VANISHED_MAX_ATTEMPTS: u32 = 5;
 /// Operator-requested actors in flight at once, beyond `max_in_flight`. A script that migrates one
 /// actor at a time and waits for each uses one.
 pub const MAX_REQUESTED_IN_FLIGHT: usize = 4;
@@ -116,6 +133,7 @@ impl rivet_state_machine::Effect for Effect {
 			Effect::RecordEffectFailure { .. } => "record_effect_failure",
 			Effect::RecordCopyAdmitted { .. } => "record_copy_admitted",
 			Effect::ReportPassEnd { .. } => "report_pass_end",
+			Effect::NotifyLegacySettled { .. } => "notify_legacy_settled",
 		}
 	}
 }
@@ -182,7 +200,7 @@ impl EphemeralStateMachine for MigratorStateMachine {
 				return;
 			}
 			RuntimeEvent::Input(Event::SettingsChanged { settings }) => {
-				state.settings = settings;
+				on_settings(state, settings);
 			}
 			RuntimeEvent::Input(Event::MigrateActorRequest {
 				request,
@@ -275,13 +293,30 @@ impl EphemeralStateMachine for MigratorStateMachine {
 			}) => {
 				if take_running(state, v2_actor_id, op, out) {
 					match result {
-						V3Result::Applied => {
+						ActivateResult::Applied => {
 							finish(state, v2_actor_id, Outcome::Confirmed, Reason::None)
+						}
+						// The actor is activated, but its legacy index entry is not written yet.
+						// The entry stays, so the namespace's backfill keeps waiting, and reads the
+						// actor again after a backoff; the actor state machine retries the write.
+						ActivateResult::IndexPending => {
+							if let Some(entry) = state.entries.get_mut(&v2_actor_id) {
+								entry.failures += 1;
+								tracing::debug!(
+									%v2_actor_id,
+									"the activated actor's legacy index entry is not written yet; reading it again"
+								);
+								entry.step = Step::Waiting;
+								out.arm_timer_after(
+									Timer::Entry(v2_actor_id),
+									backoff_ms(entry.failures),
+								);
+							}
 						}
 						// Another migration holds the V3 actor. That answer comes from a read of the
 						// actor's state and no retry changes it, so the entry finishes and frees its
 						// slot. V2's parked record still names the V3 actor for the operator.
-						V3Result::Refused => {
+						ActivateResult::Refused => {
 							if let Some(entry) = state.entries.get(&v2_actor_id) {
 								tracing::error!(
 									%v2_actor_id,
@@ -297,7 +332,12 @@ impl EphemeralStateMachine for MigratorStateMachine {
 								Reason::ActivateRefused,
 							);
 						}
-						V3Result::Failed(error) => retry_later(state, v2_actor_id, &error, out),
+						ActivateResult::Vanished(error) => {
+							on_activation_vanished(state, v2_actor_id, &error, out)
+						}
+						ActivateResult::Failed(error) => {
+							retry_later(state, v2_actor_id, &error, out)
+						}
 					}
 				}
 			}
@@ -402,8 +442,11 @@ fn on_loaded(state: &mut State, op: OpId, result: LoadResult, now: Clocks, out: 
 			record,
 			step: Step::Ready,
 			failures: 0,
+			vanished: 0,
+			placement_moved: false,
 			finished: None,
 		};
+		let placement_moved = entry.record.group.is_none() && state.settings.target_group.is_some();
 		match &entry.record.phase {
 			// The copy restarts on a later pass. Reopening the volume fences the old writer.
 			wire::MigrateFromV2Phase::MigrateFromV2Copying => {
@@ -421,6 +464,23 @@ fn on_loaded(state: &mut State, op: OpId, result: LoadResult, now: Clocks, out: 
 					boot_at(now, confirming.confirm_at),
 				);
 			}
+			// A legacy-placed hold of a namespace that has a group now is begun again in the
+			// group: V2 was not cut over yet, so discarding the hold loses nothing, and a later
+			// pass admits the actor at the group's placement.
+			wire::MigrateFromV2Phase::MigrateFromV2Reserving if placement_moved => {
+				tracing::info!(
+					%v2_actor_id,
+					"a legacy-placed migration of a namespace that has a volume group now is discarded and begun again in the group"
+				);
+				entry.record.phase = wire::MigrateFromV2Phase::MigrateFromV2Discarding(
+					wire::MigrateFromV2Discarding {
+						reason: wire::MigrateFromV2DiscardReason::Failover,
+					},
+				);
+				entry.step = Step::Dirty;
+			}
+			// V2 was cut over or the hold is being discarded, so the entry finishes where it was
+			// placed. The backfill moves an actor activated at the legacy placement.
 			wire::MigrateFromV2Phase::MigrateFromV2Reserving
 			| wire::MigrateFromV2Phase::MigrateFromV2CuttingOver(_)
 			| wire::MigrateFromV2Phase::MigrateFromV2Activating(_)
@@ -488,11 +548,18 @@ fn on_written(state: &mut State, op: OpId, result: WriteResult, now: Clocks, out
 	match result {
 		WriteResult::Written => {
 			state.persist_failures = 0;
+			// The namespaces whose backfill may read again, because this write stored the end of
+			// one of their legacy-placed entries.
+			let mut legacy_settled = BTreeSet::new();
 			for v2_actor_id in &persist.deletes {
 				state.requested_entries.remove(v2_actor_id);
-				if let Some(entry) = state.entries.remove(v2_actor_id)
-					&& let Some((outcome, reason)) = entry.finished
-				{
+				let Some(entry) = state.entries.remove(v2_actor_id) else {
+					continue;
+				};
+				if entry.record.group.is_none() {
+					legacy_settled.insert(entry_namespace(&entry.record));
+				}
+				if let Some((outcome, reason)) = entry.finished {
 					out.execute(Effect::RecordResult { outcome, reason });
 				}
 			}
@@ -500,6 +567,11 @@ fn on_written(state: &mut State, op: OpId, result: WriteResult, now: Clocks, out
 				let Some(entry) = state.entries.get_mut(v2_actor_id) else {
 					continue;
 				};
+				// The write stored the entry's move into the group, so the migrator no longer
+				// holds it at the legacy placement.
+				if std::mem::take(&mut entry.placement_moved) {
+					legacy_settled.insert(entry_namespace(&entry.record));
+				}
 				if entry.step != Step::Persisting(op) {
 					continue;
 				}
@@ -515,6 +587,9 @@ fn on_written(state: &mut State, op: OpId, result: WriteResult, now: Clocks, out
 					}
 					_ => Step::Ready,
 				};
+			}
+			for namespace in legacy_settled {
+				out.execute(Effect::NotifyLegacySettled { namespace });
 			}
 		}
 		WriteResult::Fenced => {
@@ -666,18 +741,50 @@ pub fn in_share(actor_id: Id, settings: &Settings) -> bool {
 
 /// The V3 id of a migrated actor: a keyless actor keeps its V2 id, since V3 placement derives
 /// from the id; a keyed actor takes V3's key-derived id, so its key, state and database share
-/// one placement.
+/// one placement. The id is the one a fresh create in the target namespace takes today; an
+/// in-flight entry keeps the id it persisted.
 pub fn v3_actor_id(candidate: &CandidateFacts, settings: &Settings) -> Id {
+	placed_v3_actor_id(
+		candidate.actor_id,
+		&candidate.name,
+		candidate.key.as_deref(),
+		settings.target_group.is_some(),
+		settings,
+	)
+}
+
+/// The V3 id of the V2 actor `v2_actor_id`, named `name` with the V2 slash key `key`, placed in
+/// the target namespace's group when `grouped`, at the legacy unprefixed placement otherwise.
+fn placed_v3_actor_id(
+	v2_actor_id: Id,
+	name: &str,
+	key: Option<&str>,
+	grouped: bool,
+	settings: &Settings,
+) -> Id {
 	// A key without a canonical translation is never selected, so it keeps the V2 id here.
-	match candidate.key.as_deref().and_then(v3_key) {
-		Some(key) => pegboard::actor_key::keyed_actor_id(
+	match key.and_then(v3_key) {
+		Some(key) if grouped => {
+			pegboard::actor_key::keyed_actor_id(settings.v3_datacenter_label, name, &key)
+		}
+		Some(key) => pegboard::actor_key::legacy_keyed_actor_id(
 			settings.v3_datacenter_label,
 			&settings.target_namespace,
-			&candidate.name,
+			name,
 			&key,
 		),
-		None => candidate.actor_id,
+		None => v2_actor_id,
 	}
+}
+
+/// Takes new settings. A namespace gains its volume group once and never loses it, so settings
+/// read from a standing older than one this tenure already saw grouped keep the group.
+fn on_settings(state: &mut State, mut settings: Settings) {
+	let same_namespace = settings.target_namespace == state.settings.target_namespace;
+	if same_namespace && settings.target_group.is_none() {
+		settings.target_group = state.settings.target_group;
+	}
+	state.settings = settings;
 }
 
 /// The canonical V3 key of a key V2 stored in its slash form, or `None` when the V2 key is not
@@ -881,11 +988,15 @@ fn new_entry(
 		},
 		started_at: now.unix_ms,
 		phase: wire::MigrateFromV2Phase::MigrateFromV2Copying,
+		group: settings.target_group,
+		namespace: Some(settings.target_namespace.clone().into()),
 	};
 	Entry {
 		record,
 		step: Step::Dirty,
 		failures: 0,
+		vanished: 0,
+		placement_moved: false,
 		finished: None,
 	}
 }
@@ -1111,6 +1222,7 @@ fn set_phase(state: &mut State, v2_actor_id: Id, phase: wire::MigrateFromV2Phase
 		entry.record.phase = phase;
 		entry.step = Step::Dirty;
 		entry.failures = 0;
+		entry.vanished = 0;
 	}
 }
 
@@ -1138,6 +1250,49 @@ fn finish(state: &mut State, v2_actor_id: Id, outcome: Outcome, reason: Reason) 
 		}
 		state.pass_dirty = true;
 	}
+}
+
+/// An activation found no actor at the entry's placement. It is retried, and after
+/// [`HOLD_VANISHED_MAX_ATTEMPTS`] such answers within this phase of this tenure, consecutive or
+/// not (the count is reset only with the phase and is not persisted), the entry finishes as
+/// needing recovery: V2 parked
+/// the actor, and nothing at the placement is left to activate, so only an operator can resolve
+/// it. Finishing frees its slot and, at the legacy placement, its namespace's backfill, which has
+/// nothing there to move.
+fn on_activation_vanished(state: &mut State, v2_actor_id: Id, error: &str, out: &mut Effects) {
+	let Some(entry) = state.entries.get_mut(&v2_actor_id) else {
+		return;
+	};
+	entry.vanished += 1;
+	if entry.vanished < HOLD_VANISHED_MAX_ATTEMPTS {
+		retry_later(state, v2_actor_id, error, out);
+		return;
+	}
+
+	tracing::warn!(
+		%v2_actor_id,
+		v3_actor_id = ?Id::from_slice(&entry.record.v3_actor_id).ok(),
+		migration_id = entry.record.migration_id,
+		grouped = entry.record.group.is_some(),
+		attempts = entry.vanished,
+		%error,
+		"V2 parked this actor but its V3 hold is gone from the placement its migration entry names; it is served by neither until an operator resolves it"
+	);
+	finish(
+		state,
+		v2_actor_id,
+		Outcome::NeedsRecovery,
+		Reason::HoldVanished,
+	);
+}
+
+/// The namespace an entry was admitted for, as its effects carry it: `None` for an entry written
+/// by version 1, which did not record it.
+fn entry_namespace(record: &wire::MigrateFromV2InFlight) -> Option<String> {
+	record
+		.namespace
+		.as_ref()
+		.map(|namespace| namespace.to_string())
 }
 
 /// Keeps the entry's phase and reissues its effect after a backoff.
@@ -1191,6 +1346,7 @@ fn on_copied(state: &mut State, v2_actor_id: Id, result: CopyResult) {
 		CopyResult::NativeActor => {
 			finish(state, v2_actor_id, Outcome::Skipped, Reason::DuplicateKey)
 		}
+		CopyResult::PlacementMoved { group } => move_placement(state, v2_actor_id, group),
 		CopyResult::FenceMoved => discard(
 			state,
 			v2_actor_id,
@@ -1215,6 +1371,65 @@ fn on_copied(state: &mut State, v2_actor_id: Id, result: CopyResult) {
 			);
 		}
 	}
+}
+
+/// The copy of a legacy-placed `Copying` entry found the namespace the entry was admitted for in
+/// the volume group `group` before it sent the begin, so nothing was written for the entry. The
+/// entry is placed in the group in place, with the id a keyed actor takes there, and stored again
+/// before its copy is issued. An operator request still waiting for the entry to be stored
+/// answers with the new id.
+///
+/// Later admissions are placed in the group only when the entry was admitted for the configured
+/// target namespace. After a retarget the group belongs to the entry's earlier namespace, and an
+/// entry written by version 1 names no namespace, so neither may place the new target's
+/// admissions; those keep the target's own standing.
+fn move_placement(state: &mut State, v2_actor_id: Id, group: [u8; 16]) {
+	let Some(entry) = state.entries.get(&v2_actor_id) else {
+		return;
+	};
+	let admitted_for_target =
+		entry.record.namespace.as_deref() == Some(state.settings.target_namespace.as_str());
+	if admitted_for_target {
+		state.settings.target_group = Some(group);
+	}
+
+	let settings = state.settings.clone();
+	let Some(entry) = state.entries.get_mut(&v2_actor_id) else {
+		return;
+	};
+	let candidate = &entry.record.candidate;
+	let v3_actor_id = placed_v3_actor_id(
+		v2_actor_id,
+		&*candidate.name,
+		candidate.key.as_deref(),
+		true,
+		&settings,
+	);
+	tracing::info!(
+		%v2_actor_id,
+		%v3_actor_id,
+		"the target namespace has a volume group now; placing the migration there before its begin"
+	);
+	entry.record.group = Some(group);
+	entry.record.v3_actor_id = v3_actor_id.as_bytes().into();
+	entry.placement_moved = true;
+	if let Some(Requested {
+		v2_actor_id: requested,
+		step: RequestedStep::Storing {
+			v3_actor_id: answered,
+			..
+		},
+		..
+	}) = state.requested.as_mut()
+		&& *requested == v2_actor_id
+	{
+		*answered = v3_actor_id;
+	}
+	set_phase(
+		state,
+		v2_actor_id,
+		wire::MigrateFromV2Phase::MigrateFromV2Copying,
+	);
 }
 
 /// Cuts V2 over once the held actor's key is reserved. The actor state machine owns the
@@ -1491,6 +1706,8 @@ fn issue_entry_effects(state: &mut State, out: &mut Effects) {
 		let op = state.next_op();
 		let v3_actor_id = Id::from_slice(&record.v3_actor_id).unwrap_or(v2_actor_id);
 		let migration_id = record.migration_id;
+		let group = record.group;
+		let namespace = entry_namespace(&record);
 		let (effect, timeout_ms) = match &record.phase {
 			wire::MigrateFromV2Phase::MigrateFromV2Copying => (
 				Effect::CopyRequest {
@@ -1499,6 +1716,8 @@ fn issue_entry_effects(state: &mut State, out: &mut Effects) {
 					v3_actor_id,
 					migration_id,
 					candidate: record.candidate.clone(),
+					group,
+					namespace,
 				},
 				COPY_TIMEOUT_MS,
 			),
@@ -1508,6 +1727,7 @@ fn issue_entry_effects(state: &mut State, out: &mut Effects) {
 					v2_actor_id,
 					v3_actor_id,
 					migration_id,
+					group,
 				},
 				IO_TIMEOUT_MS,
 			),
@@ -1538,6 +1758,7 @@ fn issue_entry_effects(state: &mut State, out: &mut Effects) {
 					v3_actor_id,
 					migration_id,
 					candidate: record.candidate.clone(),
+					group,
 				},
 				IO_TIMEOUT_MS,
 			),
@@ -1547,6 +1768,7 @@ fn issue_entry_effects(state: &mut State, out: &mut Effects) {
 					v2_actor_id,
 					v3_actor_id,
 					migration_id,
+					group,
 				},
 				IO_TIMEOUT_MS,
 			),

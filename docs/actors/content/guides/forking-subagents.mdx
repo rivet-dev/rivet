@@ -1,0 +1,222 @@
+---
+title: "Forking Subagents"
+description: "Fork an agent once per subtask so every subagent starts with the full context, have each one report back, and combine the reports in the parent."
+---
+
+<Diagram
+  id="forking-subagents"
+  label="The client calls research on the parent agent. The parent forks itself once per supplier, so each subagent starts with the parent's conversation and gets its task as fork input. Each subagent answers its task and calls report on the parent, then destroys itself. When every subagent has reported, the parent combines the reports and streams its answer to the client. The numbers show the order of the calls. There is one subagent per supplier."
+  stackLabel="One per supplier"
+  nodes={[
+    { id: "client", x: 20, y: 40, w: 150, title: "Client", subtitle: "starts the research" },
+    { id: "parent", x: 340, y: 40, w: 190, product: "agents", highlight: true, title: "Parent `agent`", subtitle: "combines the reports" },
+    { id: "sub", x: 340, y: 220, w: 190, product: "agents", stack: true, title: "Subagent", subtitle: "a fork of the parent" },
+  ]}
+  edges={[
+    { from: "client", to: "parent", fromOffset: -12, toOffset: -12, label: "`research`", step: 1 },
+    { from: "parent", to: "sub", fromSide: "bottom", toSide: "top", fromOffset: -40, toOffset: -40, label: "`fork` with a task", labelAt: [380, 165], labelAnchor: "end", step: 2 },
+    { from: "sub", to: "parent", kind: "reply", fromSide: "top", toSide: "bottom", fromOffset: 40, toOffset: 40, label: "`report`", labelAt: [490, 165], labelAnchor: "start", step: 3 },
+    { from: "parent", to: "client", kind: "reply", fromOffset: 12, toOffset: 12, label: "`answer` event", step: 4 },
+  ]}
+/>
+
+A parent agent with several independent pieces of work, such as researching three suppliers, can [fork](/actors/docs/forking) itself once per subtask. Each subagent starts with the parent's whole conversation, so the parent never restates the context. Each subagent reports back, and the parent combines the reports when the last one arrives.
+
+What we'll build:
+
+- A [Pi](/agents/docs) agent that plays both roles: parent and subagent.
+- A `research` action that forks the parent once per supplier, with the task as fork input.
+- Subagents that answer their task, report to the parent, and destroy themselves.
+- A parent that combines the reports in its own conversation and streams the result.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add @rivet-dev/pi @earendil-works/pi-durable @earendil-works/pi-ai @earendil-works/chord rivetkit zod
+```
+
+</Step>
+
+<Step title="Create the agent">
+
+```ts server.ts
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { createRegistry } from "@earendil-works/pi-durable";
+import { pi } from "@rivet-dev/pi";
+import { event, setup } from "rivetkit";
+import { z } from "zod";
+
+// The task a parent hands to a subagent. It arrives as fork input, which any
+// caller allowed to fork can set, so it is validated.
+const TaskInput = z.object({
+	name: z.string().min(1).max(100),
+	instructions: z.string().min(1).max(4_000),
+});
+
+export const agent = pi({
+	model: "anthropic/claude-opus-5-5",
+	registry: createRegistry(),
+	state: {
+		// On a subagent: its task and the parent to report to.
+		task: null as null | {
+			name: string;
+			instructions: string;
+			parentId: string;
+		},
+		// On a parent: the subtasks it waits for, and their reports.
+		waiting: [] as string[],
+		reports: {} as Record<string, string>,
+	},
+	events: { answer: event<string>() },
+
+	// Runs once, at the first start of a fork. fork.actorId is the parent: it
+	// comes from Rivet, not from the input.
+	onFork: (c, fork) => {
+		const task = TaskInput.safeParse(fork.input);
+		c.state.task = task.success
+			? { ...task.data, parentId: fork.actorId }
+			: null;
+		c.state.waiting = [];
+		c.state.reports = {};
+	},
+
+	// Pi runs the app's onWake before it resumes work. A subagent queues its
+	// task here; the request id keeps a later wake from queueing it twice.
+	onWake: async (c) => {
+		if (!c.state.task) return;
+		const conversation = await c.pi.root(BACKGROUND_CONTEXT);
+		await conversation.submit(
+			{
+				type: "input",
+				content: c.state.task.instructions,
+				requestId: "subtask",
+			},
+			BACKGROUND_CONTEXT,
+		);
+	},
+
+	// A subagent reports its answer and goes away. A parent streams its answers.
+	onAnswer: async (c, answer) => {
+		if (c.state.task) {
+			await c.schedule.after(0, "finishTask", answer.text ?? "");
+		} else {
+			c.broadcast("answer", answer.text ?? "");
+		}
+	},
+
+	actions: {
+		// Parent: fork one subagent per supplier. Each starts with this conversation.
+		research: async (c, suppliers: string[]): Promise<void> => {
+			// A turn in progress would be copied into every subagent, so wait for it.
+			await c.pi.waitForIdle(BACKGROUND_CONTEXT);
+			c.state.waiting = suppliers;
+			c.state.reports = {};
+
+			const client = c.client<typeof registry>();
+			await Promise.all(
+				suppliers.map((name) =>
+					client.agent.fork(c.actorId, {
+						input: {
+							name,
+							instructions: `Research the supplier ${name} for the request above: pricing, lead times and risks. Answer in one paragraph.`,
+						},
+					}),
+				),
+			);
+		},
+
+		// Subagent: send the report to the parent, then destroy this subagent.
+		finishTask: async (c, report: string): Promise<void> => {
+			const task = c.state.task;
+			if (!task) return;
+			await c
+				.client<typeof registry>()
+				.agent.getForId(task.parentId)
+				.report(task.name, report);
+			c.destroy();
+		},
+
+		// Parent: store a report, and combine them once every subagent reported.
+		report: async (c, name: string, report: string): Promise<void> => {
+			if (!c.state.waiting.includes(name)) return;
+			c.state.reports[name] = report;
+			if (!c.state.waiting.every((waited) => waited in c.state.reports))
+				return;
+
+			const reports = c.state.waiting
+				.map((waited) => `${waited}: ${c.state.reports[waited]}`)
+				.join("\n\n");
+			const conversation = await c.pi.root(BACKGROUND_CONTEXT);
+			// The request id makes a second, concurrent last report a no-op.
+			await conversation.submit(
+				{
+					type: "input",
+					content: `Your subagents reported:\n\n${reports}\n\nCombine them into one recommendation.`,
+					requestId: `combine:${c.state.waiting.join(",")}`,
+				},
+				BACKGROUND_CONTEXT,
+			);
+		},
+	},
+});
+
+export const registry = setup({ use: { agent } });
+
+registry.start();
+```
+
+- `research` waits for the parent to be idle, then forks it once per supplier. A turn in progress would otherwise be copied into every subagent.
+- A subagent's `onFork` validates its task and records the parent's ID from `fork.actorId`. Its `onWake` then queues the task. Pi runs the app's `onWake` before it resumes work, and the request id keeps a later wake from queueing it twice.
+- `onAnswer` runs for every final answer. On a subagent it schedules `finishTask`, which calls the parent's `report` action and destroys the subagent.
+- When the last report arrives, the parent submits one message with every report. Its request id turns a second, concurrent last report into a no-op.
+
+</Step>
+
+<Step title="Start the research">
+
+```ts client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>();
+
+const agent = client.agent.getOrCreate(["sourcing"]);
+await agent.prompt(
+	"We need 10,000 aluminum enclosures per month. Lead time matters more than price.",
+	{ requestId: crypto.randomUUID() },
+);
+
+// Print the combined recommendation when every subagent has reported.
+const connection = agent.connect();
+connection.on("answer", (text) => console.log(text));
+
+await agent.research(["Supplier A", "Supplier B", "Supplier C"]);
+```
+
+`research` returns once every subagent exists. The combined recommendation arrives as an `answer` event after the last report.
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+export ANTHROPIC_API_KEY=sk-ant-...
+npx tsx server.ts
+```
+
+In another terminal, run `npx tsx client.ts`. It prints the first answer, then the combined recommendation once the three subagents have reported.
+
+</Step>
+
+</Steps>
+
+## Gotchas
+
+- **Report to `fork.actorId`.** The parent's ID comes from Rivet, not from the fork input, so a caller cannot redirect reports by forging input. Validate the input itself like any request body.
+- **`onFork` only records the task.** It has 5 seconds and runs before Pi is open, so the model call happens later, in the subagent's own turn.
+- **Subagents start with the parent's state.** The parent's `waiting` list and reports are copied too, so `onFork` resets them.
+- **Keep or discard subagents.** This example destroys each subagent after it reports. Keep them instead if your app shows each subagent's conversation.
+- **Fork only agents without a sandbox.** A subagent of an agent with a [sandbox](/guides/agent-sandboxes) copies the record of that sandbox, so it would run its tools in the parent's sandbox.
+- **Many subtasks at once.** Forks start as soon as they are created. For more than a handful, cap how many run at once, as in [Agent Swarms](/guides/agent-swarms).

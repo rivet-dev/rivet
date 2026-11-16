@@ -77,6 +77,27 @@ pub trait Actor: Send + Sync + Sized + 'static {
 		Ok(())
 	}
 
+	/// Runs once at the first start of an actor made by an individual actor fork, before
+	/// `on_start`, with the source, the fork time and the fork input. `ctx.fork_chain()`
+	/// already ends with this fork.
+	///
+	/// State edits made here commit with the record that the fork ran. On native SQLite the
+	/// hook's SQL writes and any save it starts itself join that commit, and a failed start
+	/// drops them. On remote SQLite (wasm runtimes) SQL writes, and state the hook writes itself
+	/// in a state transaction, commit at once, without the fork record; only state left to the
+	/// startup save, which also carries a save the hook only requests, is atomic with it, so the
+	/// hook must be idempotent there. On native SQLite the hook's writes must fit one commit: a
+	/// transaction that would take them past it fails as too large instead of committing part
+	/// of them early, so nothing the hook wrote lands without the fork record. `on_create`
+	/// differs: its writes held so far are committed early instead.
+	async fn on_fork(
+		self: Arc<Self>,
+		_ctx: Ctx<Self>,
+		_fork: rivetkit_core::ActorForkStart,
+	) -> Result<()> {
+		Ok(())
+	}
+
 	async fn on_start(self: Arc<Self>, _ctx: Ctx<Self>) -> Result<()> {
 		Ok(())
 	}

@@ -37,6 +37,17 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
+	/// Alarm deliveries for a revision the machine no longer had armed, acknowledged without
+	/// firing: each raced a transition that re-armed or cleared the alarm.
+	pub static ref STALE_ALARM_DELIVERIES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"state_machine_durable_stale_alarm_deliveries_total",
+			"Durable state machine alarm deliveries for a revision no longer armed, acknowledged without firing.",
+		),
+		&["machine"],
+		*REGISTRY
+	).unwrap();
+
 	/// Events applied in one durable commit.
 	pub static ref EVENTS_PER_COMMIT: HistogramVec = register_histogram_vec_with_registry!(
 		HistogramOpts::new(

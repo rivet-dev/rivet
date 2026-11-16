@@ -145,8 +145,20 @@ impl<A: Actor> Ctx<A> {
 		self.inner.key()
 	}
 
+	/// The individual actor forks behind this actor, oldest first; empty when it was never
+	/// forked.
+	pub fn fork_chain(&self) -> Vec<rivetkit_core::ForkLink> {
+		self.inner.fork_chain()
+	}
+
 	pub fn region(&self) -> &str {
 		self.inner.region()
+	}
+
+	/// The name of the namespace the actor runs in. After a namespace fork it differs from the
+	/// source actor's namespace while the actor id stays the same.
+	pub fn namespace(&self) -> &str {
+		self.inner.namespace()
 	}
 
 	#[deprecated(
@@ -288,6 +300,16 @@ impl<A: Actor> Ctx<A> {
 
 	pub async fn disconnect_conn(&self, id: &ConnId) -> Result<()> {
 		self.inner.disconnect_conn(id.clone()).await
+	}
+
+	pub(crate) async fn disconnect_conn_with_reason(
+		&self,
+		id: &ConnId,
+		reason: Option<&str>,
+	) -> Result<()> {
+		self.inner
+			.disconnect_conn_with_reason(id.clone(), reason)
+			.await
 	}
 
 	pub async fn disconnect_conns<F>(&self, pred: F) -> Result<()>

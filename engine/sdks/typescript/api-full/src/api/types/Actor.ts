@@ -24,4 +24,6 @@ export interface Actor {
     rescheduleTs: number | null;
     /** When the actor was destroyed, in Unix milliseconds. Only set in listings that include destroyed actors; otherwise `null`. */
     destroyTs: number | null;
+    /** ID of the source actor this actor's database was forked from, or `null` for an actor that was not made by a fork. Servers released before forks omit it. */
+    forkedFrom?: Rivet.RivetId | null;
 }

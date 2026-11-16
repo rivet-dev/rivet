@@ -157,6 +157,58 @@ pub(crate) fn embedded_version(payload: &[u8]) -> Result<u16> {
 	}
 }
 
+/// Seals `entry` at exactly `selected`, the version every live storage worker reads, which the
+/// payload's vbare header carries. Never above it: a storage worker of an older release could
+/// not decode the entry and would fence on it. The topology selects within this binary's own
+/// advertised write range, so `selected` never exceeds what this binary encodes. When that
+/// version cannot express the entry, such as version 1 for a group fork's check-done op, the
+/// write is refused at admission with [`Error::VersionUnavailable`]: nothing was admitted, and
+/// the edge retries once the topology selects a newer version. An entry the newest version
+/// cannot encode either, or a version this binary does not write, is corruption.
+pub(crate) fn seal_entry(entry: &depot_fs_core::FsEntry, selected: u16) -> Result<Bytes> {
+	use vbare::Versioned;
+
+	let version = selected;
+	match rivet_data::versioned::DepotFsEntryData::seal_to_bytes(entry, version) {
+		Ok(payload) => Ok(payload),
+		Err(vbare::EncodeError::Conversion(error))
+			if version < rivet_data::DEPOT_FS_ENTRY_VERSION =>
+		{
+			// The newest version must encode what the selected one refused; anything else is a
+			// malformed entry, not a version the fleet has yet to reach.
+			if rivet_data::versioned::DepotFsEntryData::seal_to_bytes(
+				entry,
+				rivet_data::DEPOT_FS_ENTRY_VERSION,
+			)
+			.is_err()
+			{
+				return Err(corrupt!());
+			}
+			tracing::debug!(
+				?error,
+				"selected filesystem entry version cannot express the entry"
+			);
+			Err(version_unavailable(version, "entry"))
+		}
+		Err(_) => Err(corrupt!()),
+	}
+}
+
+/// The refusal of an entry `version` cannot carry without loss; `what` names the part.
+fn version_unavailable(version: u16, what: &'static str) -> Error {
+	crate::metrics::FS_ENTRY_VERSION_REFUSALS
+		.with_label_values(&[what])
+		.inc();
+	tracing::debug!(
+		version,
+		what,
+		"refused a filesystem write the selected entry version cannot express; the topology view may be stale or a storage worker of an older release is live"
+	);
+	Error::VersionUnavailable {
+		retry_after_ms: super::VERSION_UNAVAILABLE_RETRY_AFTER_MS,
+	}
+}
+
 /// The `depot.fs_entry` version `versions` selects. A refusal means no version is readable
 /// by every live storage worker, so nothing is admitted until the fleet converges.
 pub(crate) fn select_entry_version(versions: &dyn WriteVersions) -> Result<u16> {

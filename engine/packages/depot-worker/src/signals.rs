@@ -7,7 +7,7 @@
 
 use crate::tablet_maintainer_machine::{MaintainerSnapshot, state::MaintainerPhase};
 use rivet_data::generated::{
-	depot_client_protocol_v1::VolumeRejectResponse, depot_log_shard_v1::VolumeLogEntry,
+	depot_client_protocol_v2::VolumeRejectResponse, depot_log_shard_v1::VolumeLogEntry,
 	shared_depot_types_v1::TabletPhase,
 };
 use rivet_metrics::{GaugeGuardExt, IntGaugeGuard};
@@ -48,6 +48,10 @@ pub(crate) fn volume_request_refused(reason: &VolumeRejectResponse) {
 		VolumeRejectResponse::VolumeRecordMissing(_) => ("record_missing", None),
 		VolumeRejectResponse::VolumeUnderRepair(refusal) => {
 			("under_repair", Some(refusal.retry_after_ms))
+		}
+		VolumeRejectResponse::VolumeGroupArchived => ("group_archived", None),
+		VolumeRejectResponse::VolumeTailUnproven(refusal) => {
+			("tail_unproven", Some(refusal.retry_after_ms))
 		}
 	};
 	crate::metrics::TABLET_VOLUME_REFUSALS

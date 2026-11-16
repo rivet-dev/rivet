@@ -249,6 +249,7 @@ pub fn create_actor(
 	config: protocol::ActorConfig,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
+	fork: Option<protocol::ActorFork>,
 ) -> (mpsc::UnboundedSender<ToActor>, Arc<AsyncCounter>) {
 	// The start command is handled synchronously on receipt, so this is its receipt time.
 	let received = crate::time::Instant::now();
@@ -262,6 +263,7 @@ pub fn create_actor(
 		config,
 		hibernating_requests,
 		preloaded_kv,
+		fork,
 		tx.clone(),
 		rx,
 		active_http_request_count.clone(),
@@ -299,6 +301,7 @@ async fn actor_inner(
 	config: protocol::ActorConfig,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
+	fork: Option<protocol::ActorFork>,
 	tx: mpsc::UnboundedSender<ToActor>,
 	mut rx: mpsc::UnboundedReceiver<ToActor>,
 	active_http_request_count: Arc<AsyncCounter>,
@@ -339,6 +342,7 @@ async fn actor_inner(
 			generation,
 			config,
 			preloaded_kv,
+			fork,
 		)
 		.await;
 

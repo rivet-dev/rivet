@@ -126,9 +126,11 @@ impl TypedCommand for CompareAndSet {
 	type Response = rivet_data::versioned::DepotOperatorCompareAndSetResponseData;
 }
 
-rivet_keys::volume_kv_key! {
-	MutationKey(key: Bytes, operation_id: uuid::Uuid) => [OPERATOR_MUTATION, {key}, {operation_id}];
-	value: vbare(rivet_data::versioned::DepotOperatorMutationTagData, rivet_data::DEPOT_OPERATOR_COMMAND_VERSION);
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [OPERATOR_MUTATION, key, operation_id], value = vbare(rivet_data::versioned::DepotOperatorMutationTagData, rivet_data::DEPOT_OPERATOR_COMMAND_VERSION))]
+struct MutationKey {
+	pub key: Bytes,
+	pub operation_id: uuid::Uuid,
 }
 
 pub(crate) fn register(registry: &mut depot_worker::command::CommandRegistry) -> Result<()> {

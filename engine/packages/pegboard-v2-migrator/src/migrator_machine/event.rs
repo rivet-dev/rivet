@@ -135,15 +135,18 @@ pub enum Event {
 	///
 	/// **State**
 	///
-	/// `Applied` finishes the entry as confirmed. A failure retries; a refusal finishes it as failed.
+	/// `Applied` finishes the entry as confirmed. `IndexPending` keeps it `Activating` and reads
+	/// it again after a backoff. A failure retries. A refusal finishes it as needing recovery, as
+	/// does the `HOLD_VANISHED_MAX_ATTEMPTS`th answer that the hold vanished within this phase of
+	/// this tenure, whatever answers came between them (`Entry::vanished`).
 	///
 	/// **Effects**
 	///
-	/// Dispatch; a failure arms `Entry`.
+	/// Dispatch; `IndexPending` and a retried failure arm `Entry`.
 	ActivateResponse {
 		op: OpId,
 		v2_actor_id: Id,
-		result: V3Result,
+		result: ActivateResult,
 	},
 	/// **When**
 	///

@@ -34,6 +34,16 @@ slatedb-regenerate *args:
 slatedb-check *args:
 	python3 vendor/slatedb/regenerate.py --check "$@"
 
+# Fail if a BARE schema version that an OSS release shipped has changed.
+[group('schemas')]
+schemas-check-released:
+	python3 scripts/schemas/released_schemas.py
+
+# Re-pin released schema versions after a release. Needs the OSS release tags fetched locally.
+[group('schemas')]
+schemas-pin-released:
+	python3 scripts/schemas/released_schemas.py --update
+
 # Azure fleet deployment recipes live with the deployment configuration.
 [group('deploy')]
 [positional-arguments]

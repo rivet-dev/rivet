@@ -14,7 +14,7 @@ on:
       - "engine/artifacts/errors/**"
       - "rivetkit-openapi/**"
       - "rivetkit-asyncapi/**"
-      - "engine/packages/guard-core/src/utils.rs"
+      - "engine/packages/guard-core/src/errors.rs"
       - "engine/packages/api-builder/src/error_response.rs"
       - "rivetkit-rust/packages/rivetkit-core/src/registry/http.rs"
       - "rivetkit-rust/packages/rivetkit-core/src/error.rs"

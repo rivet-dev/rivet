@@ -158,12 +158,43 @@ pub struct DiscoveryState {
 	pub round: u64,
 	/// Whether the latest listing succeeded.
 	pub ok: bool,
-	/// The last applied listing retained observations after unreadable heartbeat GETs.
-	/// Version selection cannot use its incomplete read floor.
-	pub partial: bool,
 	/// Read floor over the retained Active and Draining storage entries. Recomputed only
 	/// when the retained entries change, so snapshots share it.
 	pub read_floor: Arc<crate::versions::ReadFloor>,
+	/// What the last completed listing established about the read floor. Never returns to
+	/// `Unlisted`.
+	#[serde(default)]
+	pub floor: FloorEvidence,
+	/// Completed listings in a row that named a storage worker no listing has observed, for the
+	/// backoff of the prompt relist that tries to observe it.
+	#[serde(default)]
+	pub(super) unobserved_listings: u32,
+	/// When this process issued its first listing. The read floor's age counts from here until
+	/// a listing reads every storage worker it lists.
+	#[serde(default)]
+	pub(super) first_list_issued_boot_ms: Option<u64>,
+	/// The read floor's age passed `ttl_ms` at the last listing response. Logged once per
+	/// episode.
+	#[serde(default)]
+	pub(super) floor_stale: bool,
+}
+
+/// What the last completed storage listing established about the read floor. A failed listing
+/// changes nothing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum FloorEvidence {
+	/// No listing has completed in this process. Version selection falls back to the lowest
+	/// write version, and filesystem opens and tablet starts wait for the first listing.
+	#[default]
+	Unlisted,
+	/// The last completed listing named a storage worker that no listing has observed, which
+	/// could run an older binary. Version selection falls back to the lowest write version, and
+	/// discovery relists promptly to observe it.
+	Unobserved,
+	/// The last completed listing observed every storage worker it listed, by reading its
+	/// heartbeat or through an observation an earlier listing made. Version selection uses the
+	/// read floor.
+	Observed,
 }
 
 /// Owns endpoint hints, invalidations, and pending exact-key reads.
@@ -411,9 +442,14 @@ impl State {
 
 	/// Recomputes `discovery.read_floor` from the retained entries.
 	pub(super) fn recompute_read_floor(&mut self) {
-		let readers: Vec<&[crate::versions::FamilyVersions]> = self
+		// Build versions feed the legacy `pegboard.actor` v3 layout rule; see
+		// `crate::versions::legacy_family_floor` and `rivet_data::versioned::legacy_v3`.
+		let readers: Vec<crate::versions::Reader<'_>> = self
 			.reader_entries()
-			.map(|entry| entry.heartbeat.versions.as_slice())
+			.map(|entry| crate::versions::Reader {
+				versions: entry.heartbeat.versions.as_slice(),
+				build_version: entry.heartbeat.build_version.as_str(),
+			})
 			.collect();
 		let floor = crate::versions::ReadFloor::new(readers.iter().copied());
 		self.discovery.read_floor = Arc::new(floor);

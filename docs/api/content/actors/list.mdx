@@ -62,6 +62,7 @@ Matching actors and a cursor for the next page. `pagination.cursor` is `null` on
 | `actors[].sleep_ts` | `integer \| null` | When the actor went to sleep. Not recorded by this version, so always `null`. |
 | `actors[].reschedule_ts` | `integer \| null` | When the actor will next try to allocate. Not recorded by this version, so always `null`. |
 | `actors[].destroy_ts` | `integer \| null` | When the actor was destroyed, in Unix milliseconds. Only set in listings that include destroyed actors; otherwise `null`. |
+| `actors[].forked_from` | `any \| null \| string` | ID of the source actor this actor's database was forked from, or `null` for an actor that was not made by [Fork Actor](/docs/api/actors/fork). |
 | `pagination` | `object` |  |
 | `pagination.cursor` | `string \| null` | Cursor for the next page, or `null` when there are no more results. |
 
@@ -80,7 +81,8 @@ Matching actors and a cursor for the next page. `pagination.cursor` is `null` on
       "connectable_ts": null,
       "sleep_ts": null,
       "reschedule_ts": null,
-      "destroy_ts": null
+      "destroy_ts": null,
+      "forked_from": null
     }
   ],
   "pagination": {
@@ -98,7 +100,7 @@ Matching actors and a cursor for the next page. `pagination.cursor` is `null` on
 | `group` | `string` | Error group, for example `actor`. |
 | `code` | `string` | Error code within the group, for example `not_found`. |
 | `message` | `string` | Human-readable error message. |
-| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+| `metadata` | `any` | Extra details on some errors, for example the retry hint of a refusal or the new actor of a pending fork. |
 
 ```json
 {
@@ -117,7 +119,7 @@ Matching actors and a cursor for the next page. `pagination.cursor` is `null` on
 | `group` | `string` | Error group, for example `actor`. |
 | `code` | `string` | Error code within the group, for example `not_found`. |
 | `message` | `string` | Human-readable error message. |
-| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+| `metadata` | `any` | Extra details on some errors, for example the retry hint of a refusal or the new actor of a pending fork. |
 
 ```json
 {
@@ -136,7 +138,7 @@ Matching actors and a cursor for the next page. `pagination.cursor` is `null` on
 | `group` | `string` | Error group, for example `actor`. |
 | `code` | `string` | Error code within the group, for example `not_found`. |
 | `message` | `string` | Human-readable error message. |
-| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+| `metadata` | `any` | Extra details on some errors, for example the retry hint of a refusal or the new actor of a pending fork. |
 
 ```json
 {
@@ -155,7 +157,7 @@ Matching actors and a cursor for the next page. `pagination.cursor` is `null` on
 | `group` | `string` | Error group, for example `actor`. |
 | `code` | `string` | Error code within the group, for example `not_found`. |
 | `message` | `string` | Human-readable error message. |
-| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+| `metadata` | `any` | Extra details on some errors, for example the retry hint of a refusal or the new actor of a pending fork. |
 
 ```json
 {
@@ -174,7 +176,7 @@ Matching actors and a cursor for the next page. `pagination.cursor` is `null` on
 | `group` | `string` | Error group, for example `actor`. |
 | `code` | `string` | Error code within the group, for example `not_found`. |
 | `message` | `string` | Human-readable error message. |
-| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+| `metadata` | `any` | Extra details on some errors, for example the retry hint of a refusal or the new actor of a pending fork. |
 
 ```json
 {
@@ -193,7 +195,7 @@ Matching actors and a cursor for the next page. `pagination.cursor` is `null` on
 | `group` | `string` | Error group, for example `actor`. |
 | `code` | `string` | Error code within the group, for example `not_found`. |
 | `message` | `string` | Human-readable error message. |
-| `metadata` | `any` | Extra details. Only present on some errors raised while authenticating or authorizing the request. |
+| `metadata` | `any` | Extra details on some errors, for example the retry hint of a refusal or the new actor of a pending fork. |
 
 ```json
 {

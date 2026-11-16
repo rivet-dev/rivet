@@ -1,6 +1,6 @@
 //! The latest `pegboard.actor` schema, which every actor record and timer is written in once the
 //! fleet negotiates it.
-pub use crate::generated::pegboard_actor_v3::*;
+pub use crate::generated::pegboard_actor_v6::*;
 use vbare::Versioned;
 
 /// The version a record is written at: the negotiated `pegboard.actor` version, capped at the

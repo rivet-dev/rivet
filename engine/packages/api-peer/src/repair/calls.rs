@@ -17,14 +17,14 @@ use super::{
 use axum::{Json, extract::State};
 use http::StatusCode;
 use rivet_data::generated::{
-	depot_client_protocol_v1::{
+	depot_client_protocol_v2::{
 		ClientRequest, ClientResponse, RepairAppend, RepairAuditListRequest, RepairBody,
 		RepairClaimAcquire, RepairClaimRelease, RepairEnvelope, RepairPreimage,
 		RepairRebuildRecord, RepairReplicaForget, RepairReplicaReload, RepairRequest,
 		RepairResponse,
 	},
-	depot_fs_entry_v1::{FsEntry, FsTxn, FsTxnAbort},
-	shared_depot_fs_v1::{FsKvDelete, FsKvDeleteRange, FsKvPut, FsOp},
+	depot_fs_entry_v2::{FsEntry, FsTxn, FsTxnAbort},
+	shared_depot_fs_v2::{FsKvDelete, FsKvDeleteRange, FsKvPut, FsOp},
 	shared_depot_types_v1::ClientIdentity,
 };
 use rivet_engine_context::EngineContext;
@@ -430,6 +430,13 @@ pub(crate) async fn restore(
 			retry_after_ms: None,
 			current: None,
 		},
+		depot_client::forks::Error::LifecycleRejected(reject) => Refusal {
+			status: StatusCode::CONFLICT,
+			code: "FORK_REJECTED",
+			message: format!("{reject:?}"),
+			retry_after_ms: None,
+			current: None,
+		},
 		depot_client::forks::Error::Refused {
 			reason,
 			retry_after_ms,
@@ -538,7 +545,7 @@ pub(crate) async fn call(ctx: &EngineContext, request: RepairRequest) -> RepairR
 
 /// A repair response in the routes' common shape.
 pub(crate) fn render(response: &RepairResponse) -> Value {
-	use rivet_data::generated::depot_client_protocol_v1::RepairResult as Result;
+	use rivet_data::generated::depot_client_protocol_v2::RepairResult as Result;
 	let operation_id = uuid::Uuid::from_bytes(response.operation_id).to_string();
 	match &response.result {
 		Result::RepairPlanned(planned) => json!({

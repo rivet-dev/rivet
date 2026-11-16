@@ -1,0 +1,5 @@
+{
+  "code": "legacy_moved_away",
+  "group": "actor",
+  "message": "The actor event reached an abandoned copy of an actor being moved by an engine upgrade. Clients never receive this code: the engine delivers the event to the original actor."
+}

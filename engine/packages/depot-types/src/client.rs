@@ -1,6 +1,6 @@
 //! Routing inputs shared by the client and the tablet command service.
 
-use rivet_data::generated::depot_client_protocol_v1::{
+use rivet_data::generated::depot_client_protocol_v2::{
 	ClientRequest, NotMaintainer, Overloaded, VolumeRecordMissing, VolumeRejectResponse,
 };
 
@@ -41,11 +41,13 @@ pub fn retry_after_ms(reject: &VolumeRejectResponse) -> Option<u64> {
 		VolumeRejectResponse::NotMaintainer(reject) => Some(reject.retry_after_ms),
 		VolumeRejectResponse::Overloaded(reject) => Some(reject.retry_after_ms),
 		VolumeRejectResponse::VolumeUnderRepair(reject) => Some(reject.retry_after_ms),
+		VolumeRejectResponse::VolumeTailUnproven(reject) => Some(reject.retry_after_ms),
 		VolumeRejectResponse::TabletSplitting
 		| VolumeRejectResponse::VolumeNotFound
 		| VolumeRejectResponse::VolumeExists
 		| VolumeRejectResponse::VolumeDeleted
-		| VolumeRejectResponse::VolumeRecordMissing(_) => None,
+		| VolumeRejectResponse::VolumeRecordMissing(_)
+		| VolumeRejectResponse::VolumeGroupArchived => None,
 	}
 }
 

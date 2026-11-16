@@ -65,6 +65,7 @@ async fn serve(ctx: EngineContext, envoys: pegboard_envoy::Service) -> Result<()
 		.merge(pegboard_envoy::router(&ctx, &envoys))
 		.merge(rivet_api_public_shim::router_with_retry_budget(
 			&ctx,
+			&start_waits,
 			retry_budget,
 		));
 

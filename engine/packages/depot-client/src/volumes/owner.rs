@@ -83,6 +83,7 @@ impl Volumes {
 			config: config.clone(),
 			may_dispatch: may_dispatch.clone(),
 			versions: versions.clone(),
+			timeout,
 		};
 		let log_lanes = depot_volume::ups::UpsLogClient::lanes(
 			&pubsub,

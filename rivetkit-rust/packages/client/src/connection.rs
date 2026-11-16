@@ -3,7 +3,7 @@ use futures_util::FutureExt;
 use parking_lot::Mutex as SyncMutex;
 use scc::{hash_map::Entry as SccEntry, HashMap as SccHashMap};
 use serde_json::Value;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
@@ -85,10 +85,6 @@ impl Default for SendMsgOpts {
 	}
 }
 
-// struct WatchPair {
-//     tx: watch::Sender<bool>,
-//     rx: watch::Receiver<bool>,
-// }
 type WatchPair = (watch::Sender<bool>, watch::Receiver<bool>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,7 +99,7 @@ pub type ActorConnection = Arc<ActorConnectionInner>;
 
 struct ConnectionAttempt {
 	did_open: bool,
-	_task_end_reason: DriverStopReason,
+	task_end_reason: DriverStopReason,
 }
 
 pub struct ActorConnectionInner {
@@ -132,6 +128,7 @@ pub struct ActorConnectionInner {
 	connection_token: Mutex<Option<String>>,
 
 	dc_watch: WatchPair,
+	stop_error: Mutex<Option<StopError>>,
 	status_watch: (
 		watch::Sender<ConnectionStatus>,
 		watch::Receiver<ConnectionStatus>,
@@ -167,6 +164,7 @@ impl ActorConnectionInner {
 			connection_id: Mutex::new(None),
 			connection_token: Mutex::new(None),
 			dc_watch: watch::channel(false),
+			stop_error: Mutex::new(None),
 			status_watch: watch::channel(ConnectionStatus::Idle),
 			disconnection_rx: Mutex::new(None),
 		})
@@ -203,7 +201,7 @@ impl ActorConnectionInner {
 				self.set_status(ConnectionStatus::Disconnected).await;
 				return ConnectionAttempt {
 					did_open: false,
-					_task_end_reason: DriverStopReason::TaskError,
+					task_end_reason: DriverStopReason::TaskError,
 				};
 			}
 		};
@@ -268,7 +266,7 @@ impl ActorConnectionInner {
 
 		ConnectionAttempt {
 			did_open: did_connection_open,
-			_task_end_reason: task_end_reason,
+			task_end_reason,
 		}
 	}
 
@@ -409,11 +407,20 @@ impl ActorConnectionInner {
 	}
 
 	pub async fn action(self: &Arc<Self>, method: &str, params: Vec<Value>) -> Result<Value> {
+		if let Some(stop_error) = self.stop_error.lock().await.as_ref() {
+			return Err(stop_error.to_rpc_error());
+		}
 		let id: u64 = self.rpc_counter.fetch_add(1, Ordering::SeqCst);
 
 		let (tx, rx) = oneshot::channel();
 		if self.in_flight_rpcs.insert_async(id, tx).await.is_err() {
 			return Err(anyhow::anyhow!("duplicate rpc id"));
+		}
+		// A stop between the check above and the insert has already cleared the in-flight map, so
+		// this call would never be answered.
+		if let Some(stop_error) = self.stop_error.lock().await.as_ref() {
+			self.in_flight_rpcs.remove_async(&id).await;
+			return Err(stop_error.to_rpc_error());
 		}
 
 		// Encode params as CBOR
@@ -432,6 +439,9 @@ impl ActorConnectionInner {
 		.await;
 
 		let Ok(res) = rx.await else {
+			if let Some(stop_error) = self.stop_error.lock().await.as_ref() {
+				return Err(stop_error.to_rpc_error());
+			}
 			return Err(anyhow::anyhow!("Socket closed during rpc"));
 		};
 
@@ -679,6 +689,52 @@ impl ActorConnectionInner {
 	pub async fn dispose(self: &Arc<Self>) {
 		self.disconnect().await
 	}
+
+	async fn stop_permanently(self: &Arc<Self>, stop_error: StopError) {
+		let message = stop_error.to_string();
+		*self.stop_error.lock().await = Some(stop_error);
+		self.set_status(ConnectionStatus::Idle).await;
+		self.in_flight_rpcs.clear_async().await;
+		self.emit_error(&message).await;
+	}
+}
+
+#[derive(Debug, Clone)]
+struct StopError {
+	group: String,
+	code: String,
+	reason: String,
+}
+
+impl StopError {
+	fn from_close_reason(reason: &str) -> Self {
+		let group_code = reason.split('#').next().unwrap_or(reason);
+		let (group, code) = group_code.split_once('.').unwrap_or((group_code, ""));
+		Self {
+			group: group.to_owned(),
+			code: code.to_owned(),
+			reason: reason.to_owned(),
+		}
+	}
+
+	fn to_rpc_error(&self) -> anyhow::Error {
+		anyhow::anyhow!(
+			"RPC Error({}/{}): Connection closed: {}",
+			self.group,
+			self.code,
+			self.reason
+		)
+	}
+}
+
+impl Display for StopError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"{}.{}: Connection closed: {}",
+			self.group, self.code, self.reason
+		)
+	}
 }
 
 pub fn start_connection(
@@ -716,6 +772,39 @@ pub fn start_connection(
 
 				if conn.is_disconnecting() {
 					break 'keepalive;
+				}
+
+				match &attempt.task_end_reason {
+					DriverStopReason::ActorDestroyed { reason } => {
+						conn.stop_permanently(StopError::from_close_reason(reason))
+							.await;
+						break 'keepalive;
+					}
+					// The client cannot refresh its token, so a refused connection would be refused
+					// again on every retry.
+					DriverStopReason::AuthRefused { reason } => {
+						conn.stop_permanently(StopError::from_close_reason(reason))
+							.await;
+						break 'keepalive;
+					}
+					DriverStopReason::ActorNotFound { reason } => {
+						let stops = match &conn.query {
+							ActorQuery::GetForId { .. } => true,
+							ActorQuery::GetForKey { .. } => !attempt.did_open,
+							ActorQuery::GetOrCreateForKey { .. } | ActorQuery::Create { .. } => {
+								false
+							}
+						};
+						if stops {
+							conn.stop_permanently(StopError::from_close_reason(reason))
+								.await;
+							break 'keepalive;
+						}
+					}
+					DriverStopReason::UserAborted
+					| DriverStopReason::ServerDisconnect
+					| DriverStopReason::ServerError
+					| DriverStopReason::TaskError => {}
 				}
 
 				if attempt.did_open {

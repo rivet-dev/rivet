@@ -3,7 +3,7 @@
 //! outcome as the matching response event.
 use anyhow::{Context, Result};
 use migrate_from_v2_protocol as proto;
-use pegboard::wire as pb;
+use pegboard::{keys::partition::V2MigratorVolume, wire as pb};
 use rivet_engine_context::EngineContext;
 use rivet_env::TaskScope;
 use rivet_singleton_coordinator::authority::Authority;
@@ -16,7 +16,6 @@ use super::{MigratorStateMachine, effect::Effect, event::Event, types::*};
 use crate::{
 	commands::{MigrateFromV2StateLoad, MigrateFromV2StateWrite},
 	import::{self, CopyOutcome},
-	keys::partition::V2MigratorVolume,
 	metrics,
 	requests::Replies,
 	v2_client::{V2ApiError, V2Client},
@@ -113,7 +112,8 @@ impl Executor<MigratorStateMachine> for MigratorExecutor {
 			| Effect::CutoverRequest { .. }
 			| Effect::ConfirmRequest { .. }
 			| Effect::ActivateRequest { .. }
-			| Effect::DiscardRequest { .. } => {}
+			| Effect::DiscardRequest { .. }
+			| Effect::NotifyLegacySettled { .. } => {}
 		}
 
 		// The tenure must still hold the lease when the effect is dispatched. A write already sent
@@ -198,6 +198,8 @@ async fn run(ctx: &EngineContext, v2: Option<&V2Client>, effect: Effect) -> Opti
 			v3_actor_id,
 			migration_id,
 			candidate,
+			group,
+			namespace,
 		} => Event::CopyResponse {
 			op,
 			v2_actor_id,
@@ -205,7 +207,8 @@ async fn run(ctx: &EngineContext, v2: Option<&V2Client>, effect: Effect) -> Opti
 				Some(v2) => copy(
 					ctx,
 					v2,
-					v2.target_namespace(),
+					namespace.as_deref().unwrap_or(v2.target_namespace()),
+					group,
 					v2_actor_id,
 					v3_actor_id,
 					migration_id,
@@ -292,10 +295,11 @@ async fn run(ctx: &EngineContext, v2: Option<&V2Client>, effect: Effect) -> Opti
 			v2_actor_id,
 			v3_actor_id,
 			migration_id,
+			group,
 		} => Event::ReadReservationResponse {
 			op,
 			v2_actor_id,
-			result: read_reservation(ctx, v3_actor_id, migration_id)
+			result: read_reservation(ctx, group, v3_actor_id, migration_id)
 				.await
 				.unwrap_or_else(|error| ReservationResult::Failed(format!("{error:#}"))),
 		},
@@ -305,25 +309,34 @@ async fn run(ctx: &EngineContext, v2: Option<&V2Client>, effect: Effect) -> Opti
 			v3_actor_id,
 			migration_id,
 			candidate,
+			group,
 		} => Event::ActivateResponse {
 			op,
 			v2_actor_id,
-			result: activate(ctx, v3_actor_id, migration_id, &candidate)
+			result: activate(ctx, group, v3_actor_id, migration_id, &candidate)
 				.await
-				.unwrap_or_else(|error| V3Result::Failed(format!("{error:#}"))),
+				.unwrap_or_else(|error| match v3_actor::is_hold_vanished(&error) {
+					true => ActivateResult::Vanished(format!("{error:#}")),
+					false => ActivateResult::Failed(format!("{error:#}")),
+				}),
 		},
 		Effect::DiscardRequest {
 			op,
 			v2_actor_id,
 			v3_actor_id,
 			migration_id,
+			group,
 		} => Event::DiscardResponse {
 			op,
 			v2_actor_id,
-			result: discard(ctx, v3_actor_id, migration_id)
+			result: discard(ctx, group, v3_actor_id, migration_id)
 				.await
 				.unwrap_or_else(|error| V3Result::Failed(format!("{error:#}"))),
 		},
+		Effect::NotifyLegacySettled { namespace } => {
+			notify_legacy_settled(ctx, namespace).await;
+			return None;
+		}
 		Effect::RecordResult { .. }
 		| Effect::RecordEffectFailure { .. }
 		| Effect::RecordCopyAdmitted { .. }
@@ -440,20 +453,40 @@ async fn list(
 	})
 }
 
+#[allow(
+	clippy::too_many_arguments,
+	reason = "one argument per part of the copy effect"
+)]
 async fn copy(
 	ctx: &EngineContext,
 	v2: &V2Client,
 	target_namespace: &str,
+	group: Option<[u8; 16]>,
 	v2_actor_id: Id,
 	v3_actor_id: Id,
 	migration_id: u64,
 	candidate: &wire::MigrateFromV2Candidate,
 ) -> Result<CopyResult> {
+	// A legacy-placed entry whose namespace has a group by now is placed in the group before
+	// anything is written for it. The namespace gains its group once, so a grouped entry is never
+	// moved back, even when this process's cached standing predates the group.
+	let target = pegboard::catalog::namespace_standing(ctx, target_namespace).await?;
+	if let (None, Some(standing_group)) = (group, target.group_id()) {
+		return Ok(CopyResult::PlacementMoved {
+			group: standing_group,
+		});
+	}
+
 	// Hold the V3 actor before writing its database, so a native V3 actor of the same id (a
-	// keyed actor whose key V3 already holds) is never touched. Requests still reach V2.
+	// keyed actor whose key V3 already holds) is never touched. Requests still reach V2. A legacy
+	// placement names the namespace in the actor's record, as a create there does.
+	let legacy_namespace = match group {
+		Some(_) => None,
+		None => Some(target_namespace.to_owned()),
+	};
 	let init = pb::ActorCreateData {
 		actor_id: v3_actor_id.as_bytes().into(),
-		namespace: target_namespace.to_owned().into(),
+		legacy_namespace: legacy_namespace.map(Into::into),
 		pool_name: candidate.pool_name.clone(),
 		name: candidate.name.clone(),
 		// The candidate carries V2's slash key; V3 stores the canonical key. Selection admits
@@ -467,12 +500,15 @@ async fn copy(
 			.transpose()?
 			.map(Into::into),
 		input: None,
+		fork_from: None,
+		legacy_move: None,
 	};
 	// A refused begin ran nothing, so it is sent again after the hint rather than failing the
 	// copy and leaving a discard behind.
 	let begun = import::resend_refused(ctx.env().clock().as_ref(), || {
 		v3_actor::begin(
 			ctx,
+			group,
 			v3_actor_id,
 			migration_id,
 			init.clone(),
@@ -501,6 +537,7 @@ async fn copy(
 	let outcome = import::copy(
 		ctx,
 		v2,
+		group,
 		v2_actor_id,
 		v3_actor_id,
 		create_unix_ms,
@@ -531,11 +568,12 @@ async fn copy(
 
 async fn read_reservation(
 	ctx: &EngineContext,
+	group: Option<[u8; 16]>,
 	v3_actor_id: Id,
 	migration_id: u64,
 ) -> Result<ReservationResult> {
 	Ok(
-		match v3_actor::reservation(ctx, v3_actor_id, migration_id).await? {
+		match v3_actor::reservation(ctx, group, v3_actor_id, migration_id).await? {
 			v3_actor::Reservation::Reserved => ReservationResult::Reserved,
 			v3_actor::Reservation::Pending => ReservationResult::Pending,
 			v3_actor::Reservation::OwnedElsewhere => ReservationResult::OwnedElsewhere,
@@ -545,26 +583,102 @@ async fn read_reservation(
 	)
 }
 
+/// Activates the held actor at the entry's placement. An actor activated at the legacy placement
+/// has its name recorded on the volume of the namespace its record names before the step reports
+/// success, so the backfill's walk lists the name and moves the actor into the group; a failed
+/// record fails the step, whose retry activates nothing again and records the name again. A
+/// namespace with no volume yet has no backfill either, and its walk will find the name where it
+/// finds every other legacy actor's. The record names the namespace whatever the configuration
+/// says now, so a migration removed or retargeted since the entry's admission records it where
+/// the actor lives.
 async fn activate(
 	ctx: &EngineContext,
+	group: Option<[u8; 16]>,
 	v3_actor_id: Id,
 	migration_id: u64,
 	candidate: &wire::MigrateFromV2Candidate,
-) -> Result<V3Result> {
-	let settled =
-		v3_actor::activate(ctx, v3_actor_id, migration_id, candidate.wake_deadline_ts).await?;
-	Ok(match settled {
-		v3_actor::Settled::Applied => V3Result::Applied,
-		v3_actor::Settled::StillHeld => {
-			V3Result::Failed("the activation did not apply; the actor is still held".into())
+) -> Result<ActivateResult> {
+	let activation = v3_actor::activate(
+		ctx,
+		group,
+		v3_actor_id,
+		migration_id,
+		candidate.wake_deadline_ts,
+	)
+	.await?;
+	Ok(match activation {
+		v3_actor::Activation::Applied { legacy_namespace } => {
+			if group.is_none() {
+				record_legacy_name(ctx, legacy_namespace.as_deref(), &candidate.name).await?;
+			}
+			ActivateResult::Applied
 		}
-		v3_actor::Settled::Elsewhere => V3Result::Refused,
+		v3_actor::Activation::IndexPending => ActivateResult::IndexPending,
+		v3_actor::Activation::StillHeld => {
+			ActivateResult::Failed("the activation did not apply; the actor is still held".into())
+		}
+		v3_actor::Activation::Elsewhere => ActivateResult::Refused,
 	})
 }
 
-async fn discard(ctx: &EngineContext, v3_actor_id: Id, migration_id: u64) -> Result<V3Result> {
+/// The namespace an entry names, or the configured target namespace for an entry written by
+/// version 1, which did not record it. `None` when neither is known.
+fn entry_namespace(ctx: &EngineContext, namespace: Option<&str>) -> Option<String> {
+	match namespace {
+		Some(namespace) => Some(namespace.to_owned()),
+		None => ctx
+			.config()
+			.dynamic()
+			.migrate_from_v2()
+			.map(|migration| migration.target_namespace().to_owned()),
+	}
+}
+
+/// Tells `namespace` that legacy-placed entries finished, so its backfill reads the migrator's
+/// state again. Best effort, since the backfill's retry timer reads it anyway.
+async fn notify_legacy_settled(ctx: &EngineContext, namespace: Option<String>) {
+	let Some(namespace) = entry_namespace(ctx, namespace.as_deref()) else {
+		return;
+	};
+	let namespace = namespace.as_str();
+	if let Err(error) = pegboard::catalog::legacy_notify_migrator_settled(ctx, namespace).await {
+		tracing::warn!(
+			?error,
+			namespace,
+			"telling the namespace that legacy-placed migrations finished failed; its backfill reads the migrator's state on its retry timer"
+		);
+	}
+}
+
+/// Records `name` for the backfill of `namespace`, the namespace the activated actor's record
+/// names, which walks the legacy index buckets of the names it lists. A record that names none
+/// falls back to the configured target namespace.
+async fn record_legacy_name(
+	ctx: &EngineContext,
+	namespace: Option<&str>,
+	name: &str,
+) -> Result<()> {
+	let namespace = entry_namespace(ctx, namespace).context(
+		"the activated actor's record names no namespace and no migration is configured",
+	)?;
+	let recorded = pegboard::catalog::legacy_record_backfill_name(ctx, &namespace, name).await?;
+	if !recorded {
+		tracing::debug!(
+			namespace,
+			"the namespace has no volume yet; its backfill finds the activated actor's name as it finds every legacy actor's"
+		);
+	}
+	Ok(())
+}
+
+async fn discard(
+	ctx: &EngineContext,
+	group: Option<[u8; 16]>,
+	v3_actor_id: Id,
+	migration_id: u64,
+) -> Result<V3Result> {
 	Ok(
-		match v3_actor::discard(ctx, v3_actor_id, migration_id).await? {
+		match v3_actor::discard(ctx, group, v3_actor_id, migration_id).await? {
 			v3_actor::Settled::Applied | v3_actor::Settled::Elsewhere => V3Result::Applied,
 			v3_actor::Settled::StillHeld => {
 				V3Result::Failed("the discard did not apply; the actor is still held".into())

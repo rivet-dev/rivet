@@ -21,7 +21,7 @@ use rivet_data::generated::{
 		self as wire, StorageWorkerRequest as Request, StorageWorkerResponse as Response,
 		TabletGrant,
 	},
-	shared_depot_fs_v1::FsVolumeRecord,
+	shared_depot_fs_v2::FsVolumeRecord,
 	shared_depot_types_v1::{ClientIdentity, VolumeLogPosition},
 };
 use rivet_env::{Env, TaskHandle};
@@ -292,13 +292,13 @@ impl VolumeClientTransport for RepairTransport {
 		client_incarnation: [u8; 16],
 		_create_if_absent: bool,
 		_initial: Vec<rivet_data::generated::depot_log_shard_v1::PayloadWrite>,
-		_read: Option<rivet_data::generated::depot_client_protocol_v1::VolumeReadKeys>,
+		_read: Option<rivet_data::generated::depot_client_protocol_v2::VolumeReadKeys>,
 		_deadline_boot_ms: u64,
-	) -> TransportFuture<'_, rivet_data::generated::depot_client_protocol_v1::VolumeOpenResponse> {
+	) -> TransportFuture<'_, rivet_data::generated::depot_client_protocol_v2::VolumeOpenResponse> {
 		Box::pin(async move {
 			if key == self.key.0.volume_key {
 				Ok(
-					rivet_data::generated::depot_client_protocol_v1::VolumeOpenResponse {
+					rivet_data::generated::depot_client_protocol_v2::VolumeOpenResponse {
 						record: self.row.clone(),
 						// The recovery client claims every member at this granted epoch.
 						open_claim: Some(rivet_data::generated::shared_depot_types_v1::OpenClaim {

@@ -111,7 +111,7 @@ pub async fn start(
 ) -> Result<()> {
 	let tenure = authority.tenure().coordinator_generation;
 	let mut config = ctx.config().dynamic_watch();
-	let (settings, v2) = load_settings(&ctx)?;
+	let (settings, v2) = load_settings(&ctx).await?;
 	tracing::info!(
 		tenure,
 		enabled = settings.enabled,
@@ -135,7 +135,12 @@ pub async fn start(
 	// Operator requests reach this tenure only while it runs. A failed subscription leaves the
 	// migration running without them.
 	let mut serving = true;
-	let transport = requests::serve(ctx.ups()?, authority, runner.inbox.clone(), replies.clone());
+	let transport = requests::serve(
+		ctx.ups()?,
+		authority,
+		runner.inbox.downgrade(),
+		replies.clone(),
+	);
 	tokio::pin!(transport);
 	let mut snapshot = runner.snapshot.clone();
 	let mut current = settings;
@@ -197,7 +202,7 @@ pub async fn start(
 					);
 				}
 			}
-			Wake::Config => match load_settings(&ctx) {
+			Wake::Config => match load_settings(&ctx).await {
 				Ok((settings, v2)) => {
 					executor.set_v2(v2);
 					if settings != current {
@@ -230,9 +235,16 @@ enum Wake {
 	TransportEnded(Result<()>),
 }
 
-fn load_settings(ctx: &EngineContext) -> Result<(Settings, Option<V2Client>)> {
+/// Reads the settings from the dynamic config, and the target namespace's volume group from its
+/// standing, so new entries are placed, and keyed candidates take their id, as a fresh create
+/// there would.
+async fn load_settings(ctx: &EngineContext) -> Result<(Settings, Option<V2Client>)> {
 	let dynamic = ctx.config().dynamic();
-	let settings = settings_from_config(&dynamic, ctx.config().dc_label());
+	let target_group = match dynamic.migrate_from_v2() {
+		Some(_) => crate::v3_actor::target(ctx).await?.group_id(),
+		None => None,
+	};
+	let settings = settings_from_config(&dynamic, ctx.config().dc_label(), target_group);
 	let v2 = match dynamic.migrate_from_v2() {
 		Some(migration) if !migration.api_urls.is_empty() => {
 			Some(V2Client::new(ctx.external_http(), migration)?)

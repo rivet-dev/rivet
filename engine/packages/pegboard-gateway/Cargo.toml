@@ -7,6 +7,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+rivet-keys.workspace = true
 rivet-topology.workspace = true
 anyhow.workspace = true
 depot-client.workspace = true

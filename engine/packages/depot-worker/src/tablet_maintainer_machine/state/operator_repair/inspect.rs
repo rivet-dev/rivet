@@ -9,7 +9,7 @@ use crate::tablet_maintainer_machine::{
 	types::{OpId, RepairRecords, RequestId},
 };
 use depot_types::VolumeLogKey;
-use rivet_data::generated::depot_client_protocol_v1::{
+use rivet_data::generated::depot_client_protocol_v2::{
 	ClientResponse, RepairIncarnationView, RepairInspection, RepairMemberView,
 };
 
@@ -129,7 +129,7 @@ fn incarnation_view(
 	state: &MaintainerState,
 	key: &VolumeLogKey,
 	volume: &super::super::LoadedVolume,
-	stored: Option<rivet_data::generated::shared_depot_fs_v1::FsVolumeRecord>,
+	stored: Option<rivet_data::generated::shared_depot_fs_v2::FsVolumeRecord>,
 ) -> RepairIncarnationView {
 	let registered = state.filesystem.volumes.get(key);
 	RepairIncarnationView {

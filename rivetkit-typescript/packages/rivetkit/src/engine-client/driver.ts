@@ -23,6 +23,8 @@ export interface EngineControlClient {
 	getWithKey(input: GetWithKeyInput): Promise<ActorOutput | undefined>;
 	getOrCreateWithKey(input: GetOrCreateWithKeyInput): Promise<ActorOutput>;
 	createActor(input: CreateInput): Promise<ActorOutput>;
+	/** Forks the actor `actorId` into a new actor of the same name, started on a copy of its database. */
+	forkActor(input: ForkInput): Promise<ActorOutput>;
 	listActors(input: ListActorsInput): Promise<ActorOutput[]>;
 
 	sendRequest(
@@ -103,6 +105,16 @@ export interface CreateInput {
 	crashPolicy?: CrashPolicy;
 	/** Overrides the client's configured pool name for this actor. */
 	poolName?: string;
+}
+
+export interface ForkInput {
+	c?: HonoContext | undefined;
+	/** The source actor. */
+	actorId: string;
+	/** The new actor's key; omitted for a keyless actor. */
+	key?: ActorKey;
+	/** The fork input, given to the new actor's `onFork` hook. */
+	input?: unknown;
 }
 
 export interface ListActorsInput {

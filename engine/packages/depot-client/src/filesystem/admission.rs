@@ -7,8 +7,6 @@ use super::{
 };
 use depot_fs_core::{store::Row, *};
 use depot_volume::volume_client_machine::types::ErrorDisposition;
-use rivet_data::versioned::DepotFsEntryData;
-use vbare::Versioned;
 impl Filesystem {
 	pub(super) async fn admit<'a>(
 		&'a self,
@@ -36,13 +34,14 @@ impl Filesystem {
 			.and_then(|staged| staged.entries.last())
 		{
 			let staged = apply::plan(
+				self.claim_log,
 				last.seq,
 				&FsEntry {
 					txn: None,
 					ops: last.ops.clone(),
 				},
 			)?;
-			let update = apply::plan(status.next_seq, &entry)?;
+			let update = apply::plan(self.claim_log, status.next_seq, &entry)?;
 			staged.final_rows.rows.keys().any(|key| {
 				matches!(key, store::RowKey::Inode(_)) && update.final_rows.rows.contains_key(key)
 			})
@@ -118,10 +117,15 @@ impl Filesystem {
 				}
 			},
 		};
+		// A created inode takes its number from this entry's position in the claim log; a claim
+		// log whose numbers ran out refuses the create before anything is admitted.
+		if creates_inode(&entry.ops) {
+			depot_fs_core::inode::pack(self.claim_log, status.next_seq)?;
+		}
 		// The entry is encoded once. The journal, the receipt and the volume client share these
 		// bytes, and pages inside them are never copied again.
-		let payload = DepotFsEntryData::seal_to_bytes(&entry, self.journal.entry_version()?)
-			.map_err(|_| corrupt!())?;
+		let version = self.journal.entry_version()?;
+		let payload = super::transport::seal_entry(&entry, version)?;
 		if payload.len() > status.max_payload_bytes
 			|| payload.len() > self.config.max_operation_bytes
 		{
@@ -133,7 +137,7 @@ impl Filesystem {
 		if Self::footprint_busy(state, &entry, status.next_seq) {
 			return Err(Error::Busy);
 		}
-		let batch = apply::plan(status.next_seq, &entry)?;
+		let batch = apply::plan(self.claim_log, status.next_seq, &entry)?;
 		let bytes = row_bytes(&batch);
 		let pending_entry = matches!(entry.txn, Some(FsTxn::FsTxnPending(_)));
 		let id = entry.txn.as_ref().map(txn::id);
@@ -183,7 +187,10 @@ impl Filesystem {
 			)?),
 			txn::Resolution::Commit { open, .. } => {
 				let mut footprint = open.footprint.clone();
-				footprint.extend(txn::footprint(status.next_seq, &entry.ops));
+				footprint.extend(txn::footprint(
+					txn::created(self.claim_log, status.next_seq, &entry.ops)?,
+					&entry.ops,
+				));
 				Some(super::transaction::Change::footprint(
 					status.next_seq,
 					self.now()?.boot_ms,

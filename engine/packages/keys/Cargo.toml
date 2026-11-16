@@ -6,13 +6,17 @@ authors.workspace = true
 license.workspace = true
 edition.workspace = true
 
+[features]
+
 [dependencies]
 anyhow.workspace = true
 bytes.workspace = true
 foundationdb-tuple.workspace = true
 object_store.workspace = true
 percent-encoding = "2.3.2"
+rivet-keys-macros.workspace = true
 rivet-util-id.workspace = true
 rivet-data.workspace = true
 vbare.workspace = true
 uuid.workspace = true
+

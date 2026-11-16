@@ -51,6 +51,7 @@ pub(crate) fn start(
 		capacities,
 		timeout,
 		may_dispatch.clone(),
+		topology.clone(),
 	)?
 	.with_command_capacity(config.kv_commands.request_capacity())?
 	.with_command_limit(

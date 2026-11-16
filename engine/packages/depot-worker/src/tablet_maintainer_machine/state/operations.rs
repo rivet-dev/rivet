@@ -16,7 +16,7 @@ use super::{
 };
 use crate::tablet_maintainer_machine::types::{OpId, RequestId};
 use depot_types::{VolumeKey, VolumeLogKey};
-use rivet_data::generated::shared_depot_fs_v1::FsVolumeStatus;
+use rivet_data::generated::shared_depot_fs_v2::FsVolumeStatus;
 use rivet_topology::worker::WorkerId;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::{BTreeMap, BTreeSet};
@@ -33,7 +33,10 @@ pub(crate) struct OperationCounts {
 	pub poll: u32,
 	pub promotion_list: u32,
 	pub trim: u32,
+	/// Recoveries other than archive fences, which `max_repairs` bounds.
 	pub recover_volume: u32,
+	/// Archive fence recoveries, which `max_archive_fences` bounds.
+	pub archive_fence: u32,
 	pub catch_up: u32,
 	pub report_catch_up: u32,
 	/// Retired-tablet deletion and its coordinator report, which share one slot.
@@ -48,6 +51,8 @@ pub(crate) struct OperationCounts {
 	pub filesystem_flush: u32,
 	pub write_to_cold: u32,
 	pub held_image_query: u32,
+	/// Fork children's reads of one inherited layer (`QueryOrder::BaseRead`).
+	pub base_read: u32,
 	/// Split preparation and its coordinator report.
 	pub split: u32,
 	pub list: u32,
@@ -331,8 +336,15 @@ impl OperationIndex {
 					mark(&mut self.trims, (key.clone(), worker.clone()), id, add);
 				}
 			}
-			Operation::RecoverVolume { key, .. } => {
-				count(&mut counts.recover_volume, add);
+			Operation::RecoverVolume { key, purpose, .. } => {
+				match purpose {
+					super::repair::RecoveryPurpose::ArchiveFence => {
+						count(&mut counts.archive_fence, add)
+					}
+					super::repair::RecoveryPurpose::Unload
+					| super::repair::RecoveryPurpose::DeletePin
+					| super::repair::RecoveryPurpose::Membership { .. } => count(&mut counts.recover_volume, add),
+				}
 				mark(&mut self.repair_holds, key.clone(), id, add);
 			}
 			Operation::CatchUp { key, learner, step } => {
@@ -428,6 +440,7 @@ impl OperationIndex {
 					}
 				}
 				QueryOrder::HeldImage => count(&mut counts.held_image_query, add),
+				QueryOrder::BaseRead => count(&mut counts.base_read, add),
 				QueryOrder::Session | QueryOrder::Claim => {}
 			},
 			Operation::ReadOpenKeys { .. } | Operation::Repair(_) => {}
@@ -493,9 +506,11 @@ impl OperationIndex {
 			| Operation::ForkCleanupPeer { .. }
 			| Operation::ForkStore { .. }
 			| Operation::ForkPeer { .. }
+			| Operation::GroupRead { .. }
 			| Operation::ForkReference { .. }
 			| Operation::PendingWork { .. }
 			| Operation::SweepPending { .. }
+			| Operation::ForkPinPass { .. }
 			| Operation::Checkpoint { .. }
 			| Operation::SweepDeleted { .. }
 			| Operation::OpenCold

@@ -1,0 +1,133 @@
+---
+title: "Branch Conversations with /fork"
+description: "Fork an agent into a new thread that keeps the full history up to the fork, keep working in it, and let the original thread continue separately."
+---
+
+<Diagram
+  id="branch-conversations"
+  label="The chat client talks to the agent for the main thread with prompt. A /fork command forks that agent into a new agent with its own key, which starts with the whole history. The client keeps talking to the branch, and the main thread goes on separately. The numbers show the order of the calls. There is one agent per thread."
+  stackLabel="One per thread"
+  nodes={[
+    { id: "client", x: 20, y: 120, w: 150, title: "Chat client", subtitle: "`/fork` command" },
+    { id: "main", x: 400, y: 30, w: 190, product: "agents", stack: true, title: "`agent`", subtitle: "main thread" },
+    { id: "branch", x: 400, y: 210, w: 190, product: "agents", stack: true, highlight: true, title: "`agent`", subtitle: "branch, its own key" },
+  ]}
+  edges={[
+    { from: "client", to: "main", fromSide: "top", toSide: "left", via: [[95, 60]], label: "`prompt`", labelAt: [215, 52], step: 1 },
+    { from: "main", to: "branch", fromSide: "bottom", toSide: "top", label: "`fork` keeps the history", labelAt: [505, 150], labelAnchor: "start", step: 2 },
+    { from: "client", to: "branch", fromSide: "right", toSide: "left", via: [[285, 150], [285, 240]], label: "`prompt`", labelAt: [300, 232], labelAnchor: "start", step: 3 },
+  ]}
+/>
+
+A `/fork` command branches a conversation. The new thread starts with everything said so far and the user keeps working in it, while the original thread goes on separately. Use it to try another direction without losing the current one. For a quick question that leaves no thread behind, see [Side Questions with /btw](/guides/side-questions).
+
+Each thread is one [Pi](/agents/docs) agent, keyed by the thread. Branching a thread is a [fork](/actors/docs/forking) of that agent.
+
+What we'll build:
+
+- A Pi agent per thread, with a `parent` action that names the thread it branched from.
+- A `/fork` that forks the agent into a new thread with its own key.
+- Two threads that share the history up to the fork and then go their own ways.
+
+<Steps>
+
+<Step title="Install">
+
+```sh
+npm add @rivet-dev/pi @earendil-works/pi-durable @earendil-works/pi-ai @earendil-works/chord rivetkit
+```
+
+</Step>
+
+<Step title="Create the agent">
+
+```ts server.ts
+import { createRegistry } from "@earendil-works/pi-durable";
+import { pi } from "@rivet-dev/pi";
+import { setup } from "rivetkit";
+
+export const agent = pi({
+	model: "anthropic/claude-opus-5-5",
+	registry: createRegistry(),
+	actions: {
+		// The thread this one branched from, or null for an original thread.
+		parent: (c) => c.forkChain.at(-1)?.actorId ?? null,
+	},
+});
+
+export const registry = setup({ use: { agent } });
+
+registry.start();
+```
+
+`c.forkChain` lists the forks behind an agent, oldest first, so its last entry is the thread this one branched from.
+
+</Step>
+
+<Step title="Branch a conversation">
+
+```ts client.ts
+import { ROOT_CONVERSATION_ID } from "@earendil-works/pi-durable";
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>();
+
+async function say(thread: ReturnType<typeof client.agent.get>, text: string) {
+	const result = await thread.prompt(text, {
+		requestId: crypto.randomUUID(),
+	});
+	console.log(
+		result.status === "done" ? result.text : `No answer: ${result.reason}`,
+	);
+}
+
+const main = client.agent.getOrCreate(["thread", "main"]);
+await say(main, "Plan a three-day trip to Lisbon.");
+
+// /fork: branch the conversation into a new thread with its own key.
+const branchKey = ["thread", crypto.randomUUID()];
+const branch = await client.agent.fork(await main.resolve(), {
+	key: branchKey,
+});
+
+// A turn the original was in the middle of is copied too. Stop it in the
+// branch, so only the original thread finishes it.
+await branch.conversation.abort(ROOT_CONVERSATION_ID);
+
+await say(branch, "Redo the plan on a tight budget.");
+
+// The original thread goes on separately.
+await say(main, "Add a day trip to Sintra.");
+
+// Later, reopen the branch by its key.
+const reopened = client.agent.get(branchKey);
+console.log(await reopened.parent()); // the main thread's actor ID
+```
+
+- `client.agent.fork` gives the branch the main thread's whole history, without copying it, and a key of its own.
+- If the main thread was in the middle of a turn, the branch copied that turn too. `conversation.abort` stops it in the branch, so only the original thread finishes it.
+- After the fork, each thread keeps its own messages. The branch never sees "Add a day trip to Sintra."
+
+</Step>
+
+<Step title="Try it">
+
+```sh
+export ANTHROPIC_API_KEY=sk-ant-...
+npx tsx server.ts
+```
+
+In another terminal, run `npx tsx client.ts`. It prints the plan, the budget plan from the branch, the main thread's Sintra plan, and the main thread's ID as the branch's parent.
+
+</Step>
+
+</Steps>
+
+## Gotchas
+
+- **A key is taken once.** A second fork with the same key fails with `actor.duplicate_key`. Use a new ID for every branch. When you retry a fork whose reply was lost, `actor.duplicate_key` means the branch exists.
+- **Keep your own list of threads.** A fork is not listed under its source. After `fork` returns, record the new thread's key wherever your app lists threads.
+- **The branch starts from saved steps.** Pi saves each step as it goes, so text the agent is writing at the moment of the fork is not in the branch.
+- **Fork only agents without a sandbox.** A fork of an agent with a [sandbox](/guides/agent-sandboxes) copies the record of that sandbox, so both threads would run their tools in the same sandbox.
+- **Branches cost only what they add.** Each thread stores the messages it writes after the fork. The shared history is stored once.

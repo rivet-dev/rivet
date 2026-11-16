@@ -35,6 +35,7 @@ export const HEADER_RIVET_SKIP_READY_WAIT = "x-rivet-skip-ready-wait";
 export const WS_PROTOCOL_STANDARD = "rivet";
 export const WS_PROTOCOL_TARGET = "rivet_target.";
 export const WS_PROTOCOL_ACTOR = "rivet_actor.";
+export const WS_PROTOCOL_NAMESPACE = "rivet_namespace.";
 export const WS_PROTOCOL_ENCODING = "rivet_encoding.";
 export const WS_PROTOCOL_CONN_PARAMS = "rivet_conn_params.";
 export const WS_PROTOCOL_TOKEN = "rivet_token.";

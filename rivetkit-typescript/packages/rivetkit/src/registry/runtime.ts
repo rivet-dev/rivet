@@ -34,6 +34,13 @@ export interface RuntimeActorKeySegment {
 	numberValue?: number;
 }
 
+/** One individual actor fork behind an actor, as the runtime reports it. */
+export interface RuntimeForkLink {
+	actorId: string;
+	key: RuntimeActorKeySegment[];
+	forkedAt: number;
+}
+
 /** Resolves correlation at operation time so retained clients cannot freeze stale context. */
 export type CurrentActorInvocation = () =>
 	| ActorInvocationTraceContext
@@ -624,7 +631,11 @@ export interface CoreRuntime {
 	currentInvocationScope(): object | undefined;
 	actorName(ctx: ActorContextHandle): string;
 	actorKey(ctx: ActorContextHandle): RuntimeActorKeySegment[];
+	/** The individual actor forks behind the actor, oldest first. */
+	actorForkChain(ctx: ActorContextHandle): RuntimeForkLink[];
 	actorRegion(ctx: ActorContextHandle): string;
+	/** The name of the namespace the actor runs in. */
+	actorNamespace(ctx: ActorContextHandle): string;
 	actorSleep(ctx: ActorContextHandle): void;
 	actorDestroy(ctx: ActorContextHandle): void;
 	actorAbortSignal(ctx: ActorContextHandle): AbortSignal;

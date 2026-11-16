@@ -7,6 +7,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+rivet-keys.workspace = true
 url.workspace = true
 rivet-auth-jwt.workspace = true
 rivet-auth-policy.workspace = true
@@ -16,6 +17,7 @@ axum = { workspace = true, features = ["ws"] }
 base64.workspace = true
 bytes.workspace = true
 depot-client.workspace = true
+depot-fs-core.workspace = true
 futures-util.workspace = true
 http.workspace = true
 hyper.workspace = true

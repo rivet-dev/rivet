@@ -1,0 +1,5 @@
+{
+  "code": "has_nodes",
+  "group": "namespace",
+  "message": "A node of this namespace is connected; stop its nodes before archiving it."
+}

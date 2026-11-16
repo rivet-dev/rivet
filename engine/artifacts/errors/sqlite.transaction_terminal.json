@@ -1,0 +1,5 @@
+{
+  "code": "transaction_terminal",
+  "group": "sqlite",
+  "message": "SQLite transaction handle is terminal."
+}

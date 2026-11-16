@@ -17,7 +17,7 @@ use rivet_data::{
 	generated::{
 		depot_alarm_v1::{AlarmCurrent, AlarmRetryRecord, AlarmTimeRecord, AlarmValue},
 		shared_depot_alarms_v1::AlarmSummary,
-		shared_depot_fs_v1::{FsVolumeRecord, FsVolumeStatus},
+		shared_depot_fs_v2::{FsVolumeRecord, FsVolumeStatus},
 		shared_depot_types_v1::VolumeLogPosition,
 	},
 	versioned::DepotVolumeAlarmData,
@@ -47,6 +47,10 @@ pub(crate) fn time_key(key: &VolumeLogKey, deadline: i64) -> AlarmTimeKey {
 }
 
 impl FilesystemStore {
+	/// The volume's own alarm row at `position`, never one read through its lineage. An apply
+	/// calls this under the apply lock, so it must not wait on another volume's reads. A
+	/// lazily forked volume's inherited row is indexed only once the child writes it: its
+	/// first command arms the alarm again in its own commit, which this then reads locally.
 	async fn alarm_value_at(
 		&self,
 		key: &VolumeLogKey,
@@ -94,6 +98,23 @@ impl FilesystemStore {
 			.map(|bytes| address.deserialize(bytes))
 			.transpose()
 	}
+	/// Drops the index rows of `key`, whose group is archived: its alarm never fires again, and
+	/// the volume's own alarm row stays as it is for a reader of its history.
+	pub(crate) async fn forget_alarm(&self, key: &VolumeLogKey) -> Result<()> {
+		let Some(old) = self.current_alarm(key).await? else {
+			return Ok(());
+		};
+		let mut planned = PlannedWrites::default();
+		if let Some(at) = index_deadline(&old.summary) {
+			planned.delete(time_key(key, at).pack());
+		}
+		planned.delete(current_key(key).pack());
+		let mut batch = slatedb::WriteBatch::new();
+		planned.apply(&mut batch);
+		self.stage(batch).await?;
+		Ok(())
+	}
+
 	/// Complete replay advances the projection monotonically; older replay cannot restore a clear.
 	pub(crate) async fn update_alarm_index(
 		&self,

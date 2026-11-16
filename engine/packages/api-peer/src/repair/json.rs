@@ -3,7 +3,7 @@
 //! every byte string and fixed byte array rendered as lowercase hex.
 
 use super::Refusal;
-use rivet_data::generated::{shared_depot_fs_read_v1 as read, shared_depot_types_v1 as wire};
+use rivet_data::generated::{shared_depot_fs_read_v2 as read, shared_depot_types_v1 as wire};
 use serde::Deserialize;
 use serde_json::Value;
 

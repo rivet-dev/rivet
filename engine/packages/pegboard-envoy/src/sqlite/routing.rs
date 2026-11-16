@@ -61,18 +61,26 @@ pub(crate) async fn request(
 	ctx: &EngineContext,
 	sessions: &Sessions,
 	actor_id: &str,
-	owned: Result<Option<(u32, i64)>>,
+	owned: Result<Option<super::OwnedEpoch>>,
 	message: p::ToRivet,
 ) -> Result<p::ToEnvoy> {
 	let id = Id::parse(actor_id)?;
 	let owned = match owned {
 		Ok(owned) => owned,
 		Err(error) => {
+			if let Some(retry_after_ms) = refused_before_dispatch(&error) {
+				prove_inherited_tail(ctx, id, &error).await;
+				return Ok(refused_failure(
+					ReplyTo::of(&message)?,
+					refusal_reason(&error),
+					retry_after_ms,
+				));
+			}
 			return failure(&message, "sqlite", "storage_error", error.to_string());
 		}
 	};
-	let create_unix_ms = owned.map(|(_, create_unix_ms)| create_unix_ms);
-	let owned = owned.map(|(epoch, _)| epoch);
+	let bound = owned;
+	let owned = owned.map(|owned| owned.epoch);
 	let Some(epoch) = admitted_epoch(owned, &message) else {
 		// No epoch owns the actor here, so its session is retired. A request of a stale
 		// epoch only retires sessions older than the one this connection owns.
@@ -89,14 +97,21 @@ pub(crate) async fn request(
 		);
 	};
 
-	let create_unix_ms = create_unix_ms.context("owned epoch without an incarnation")?;
+	let bound = bound.context("admitted epoch without its binding")?;
 	// The request moves into its session; an error reply needs only its kind and ID.
 	let reply_to = ReplyTo::of(&message)?;
 	let span = tracing::trace_span!(target: "sqlite_prefetch::trace", "sqlite_request",
         wire_request_id = reply_to.request_id, wire_kind = ?reply_to.kind);
 	let result = super::trace_scope::scope(
 		span,
-		sessions.execute(ctx.depot(), id, epoch, create_unix_ms, message),
+		sessions.execute(
+			ctx.depot(),
+			id,
+			epoch,
+			bound.create_unix_ms,
+			bound.group,
+			message,
+		),
 	)
 	.await;
 
@@ -116,12 +131,34 @@ pub(crate) async fn request(
 		}
 		Err(error) => {
 			if let Some(retry_after_ms) = refused_before_dispatch(&error) {
-				return Ok(refused_failure(reply_to, retry_after_ms));
+				prove_inherited_tail(ctx, id, &error).await;
+				return Ok(refused_failure(
+					reply_to,
+					refusal_reason(&error),
+					retry_after_ms,
+				));
 			}
 			tracing::warn!(%actor_id, ?error, "actor SQLite request failed");
 			Ok(reply_to.failure("sqlite", "storage_error", error.to_string()))
 		}
 	}
+}
+
+/// Has the ancestor's tail proven when `error` refused the open of an inherited actor's
+/// database because its lazy fork waits for that tail: the ancestor's actor is quiet under a
+/// live holder, so nothing else proves it. Runs once per such refusal, before the refusal is
+/// answered, so the runtime's next attempt finds the tail proven; every other error costs
+/// nothing.
+async fn prove_inherited_tail(ctx: &EngineContext, actor_id: Id, error: &anyhow::Error) {
+	let Some(ancestor_database) = depot_client::tail_unproven_parent(error) else {
+		return;
+	};
+	pegboard::actor_machine::executor::prove_inherited_database_tail(
+		ctx,
+		actor_id,
+		ancestor_database,
+	)
+	.await;
 }
 
 /// The retry hint of a request depot refused before running it: a write the volume client
@@ -200,14 +237,28 @@ pub(crate) fn inbound_overloaded_failure(
 /// such as a missing route or an entry the shards cannot accept.
 const REFUSED_WRITE_RETRY_AFTER_MS: u64 = 100;
 
-/// The reply to a request whose write the volume client refused before dispatching it: a typed
-/// `depot.overloaded` error naming its retry hint, so the runtime may send it again.
-fn refused_failure(reply_to: ReplyTo, retry_after_ms: u64) -> p::ToEnvoy {
+/// The `reason` a refused request's reply names: `version_unavailable` for a write the
+/// selected entry version cannot carry, `client_budget` for a request a volume client budget
+/// or window refused, `write_refused` for every other refusal.
+fn refusal_reason(error: &anyhow::Error) -> &'static str {
+	match error.downcast_ref::<depot_client::filesystem::Error>() {
+		Some(depot_client::filesystem::Error::VersionUnavailable { .. }) => "version_unavailable",
+		Some(depot_client::filesystem::Error::Overloaded) => "client_budget",
+		Some(_) | None => "write_refused",
+	}
+}
+
+/// The reply to a request whose write depot refused before dispatching it: a typed
+/// `depot.overloaded` error naming its reason and retry hint, so the runtime may send it again.
+/// A write the selected entry version cannot carry answers this code too, not
+/// `topology.version_unavailable`, because released RivetKit runtimes retry only
+/// `depot.overloaded`; the reason in the message tells them apart.
+fn refused_failure(reply_to: ReplyTo, reason: &str, retry_after_ms: u64) -> p::ToEnvoy {
 	reply_to.failure(
 		"depot",
 		"overloaded",
 		format!(
-			"volume write refused before dispatch (reason=write_refused, retry_after_ms={retry_after_ms})"
+			"volume request refused before dispatch (reason={reason}, retry_after_ms={retry_after_ms})"
 		),
 	)
 }

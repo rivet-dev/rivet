@@ -1,0 +1,5 @@
+{
+  "code": "invalid_input",
+  "group": "actor",
+  "message": "The input is not valid base64."
+}

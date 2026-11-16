@@ -5,7 +5,7 @@ use crate::{
 		MachineStateKey, MachineTimerByIdKey, MachineTimerKey, MachineTimerPrefix,
 	},
 };
-use anyhow::{Result, bail, ensure};
+use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use depot_worker::command::KvHandle;
 use depot_worker::command::{CommitError, Transaction};
@@ -148,11 +148,47 @@ impl<M: DurableStateMachine> Runner<M> {
 			};
 			(machine, legacy_timers, due_timers)
 		};
+		// A delivery for a revision the machine no longer has armed raced a transition that
+		// re-armed or cleared the alarm in the same commit as the Depot alarm row, so the current
+		// revision, if any, has its own delivery. The stale one is acknowledged as done without
+		// firing anything; refusing it would only log an internal error and retry it.
+		if let BackendEvent::Alarm(revision) = &event
+			&& !machine
+				.data
+				.alarm
+				.as_ref()
+				.is_some_and(|alarm| alarm.arm_id == revision.arm_id)
+		{
+			tracing::debug!(
+				machine = M::DEBUG_NAME,
+				"durable alarm delivery is for a revision that is no longer armed; acknowledged as stale"
+			);
+			crate::metrics::STALE_ALARM_DELIVERIES_TOTAL
+				.with_label_values(&[M::DEBUG_NAME])
+				.inc();
+			drop(guard);
+			return Ok(Attempt::Committed(machine.state));
+		}
+
 		let armed_head = machine
 			.data
 			.alarm
 			.as_ref()
 			.map(|alarm| alarm.deadline_unix_ms);
+		// A volume made by a group fork inherits its parent's machine data and Depot alarm row,
+		// but its lazy fork indexed no alarm, so nothing fires until this volume arms it again.
+		// That happens in the first commit of this incarnation: the one that resets the
+		// inherited state for it. Its deadline can equal the inherited one, so the comparison
+		// below alone would skip it.
+		let rearm_inherited_alarm = machine.stored_state.is_some()
+			&& db
+				.volume_record()
+				.pending_fork_reset(M::fork_reset(&machine.state))
+				.is_some();
+		// Selected once per batch: the version every live storage worker reads. The state,
+		// the writes and the timers are encoded at it, or above it behind a tablet version
+		// mark when it cannot express them; see the write pass.
+		let selected = db.write_version(M::FAMILY)?;
 		let mut plan: Vec<Transition<M>> = Vec::new();
 
 		if !machine.has_started() {
@@ -186,16 +222,6 @@ impl<M: DurableStateMachine> Runner<M> {
 				None
 			}
 			BackendEvent::Alarm(revision) => {
-				let armed = machine
-					.data
-					.alarm
-					.as_ref()
-					.is_some_and(|alarm| alarm.arm_id == revision.arm_id);
-				ensure!(
-					armed,
-					"durable alarm delivery is for a revision that is no longer armed"
-				);
-
 				// Timers an earlier transition of this batch armed or cancelled, by identity:
 				// the deadline it now has, or none. A due timer whose row that transition
 				// replaced or removed is skipped, as it would be if the row were read back.
@@ -243,10 +269,14 @@ impl<M: DurableStateMachine> Runner<M> {
 		// quorum, a speculative creating capture and a volume opened empty, hold no stored
 		// state, so `stored_state` is `None` there and the batch commits. An alarm always
 		// commits its acknowledgement, and legacy timers always commit their move.
-		let version = db.write_version(M::FAMILY)?;
-		let state_bytes = M::serialize_state(&machine.state, version)?;
+		//
+		// The comparison is by bytes at this batch's version, so the first batch on a state
+		// stored at another version rewrites it once: one extra durable write on that actor's
+		// first wake after the upgrade.
+		let (state_bytes, state_version) = state_encoding::<M>(&machine.state, selected)?;
 		let unchanged = alarm_revision.is_none()
 			&& legacy_timers.is_empty()
+			&& !rearm_inherited_alarm
 			&& !machine.data_changed
 			&& machine.stored_state.as_deref() == Some(state_bytes.as_slice())
 			&& plan.iter().all(Transition::is_read_only);
@@ -263,6 +293,23 @@ impl<M: DurableStateMachine> Runner<M> {
 			}
 			drop(guard);
 			return Ok(Attempt::Committed(machine.state));
+		}
+
+		// A batch storing the state, a write or an armed timer above the selected version,
+		// because the selected version cannot express it, first makes the tablet's mark of
+		// the family durable at that version, so no worker that cannot read it is granted
+		// the tablet. Writes follow the state's version; a cancel writes nothing it encodes.
+		let mut stored_version = state_version;
+		for transition in &plan {
+			for effect in &transition.effects {
+				if let RuntimeEffect::ArmTimer { timer, .. } = effect {
+					let (_, timer_version) = timer_encoding::<M>(timer, selected)?;
+					stored_version = stored_version.max(timer_version);
+				}
+			}
+		}
+		if stored_version > selected {
+			db.ensure_version_mark(M::FAMILY, stored_version).await?;
 		}
 
 		// Write pass: the planned transitions become one transaction, in order. A fired timer's
@@ -285,7 +332,7 @@ impl<M: DurableStateMachine> Runner<M> {
 				timers.remove(&mut tx, &fired.key)?;
 			}
 			for write in transition.writes {
-				executor.write(write, &mut tx).await?;
+				executor.write(write, &mut tx, state_version).await?;
 			}
 			// Timer deadlines are relative to the transition's own clock snapshot.
 			let clocks = transition.clocks;
@@ -294,11 +341,15 @@ impl<M: DurableStateMachine> Runner<M> {
 					RuntimeEffect::Execute(effect) => executions.push(effect),
 					RuntimeEffect::ArmTimer { timer, at_boot_ms } => {
 						let timer_id = Bytes::from(M::timer_id(&timer));
+						// A rearm of the timer that just fired keeps at least the version its fired
+						// payload was stored at. That payload is already in this tablet, so the
+						// tablet's version mark covers its version.
+						let (payload, payload_version) = timer_encoding::<M>(&timer, selected)?;
 						let payload = match &transition.fired {
 							Some(fired) if fired.key.timer_id == timer_id => {
-								M::serialize_rearmed_timer(&timer, version, &fired.payload)?
+								M::serialize_rearmed_timer(&timer, payload_version, &fired.payload)?
 							}
-							_ => M::serialize_timer(&timer, version)?,
+							_ => payload,
 						};
 						timers
 							.arm(
@@ -343,7 +394,13 @@ impl<M: DurableStateMachine> Runner<M> {
 				machine.data.alarm = next;
 				machine.data_changed = true;
 			}
-			None if next_deadline != armed_deadline => {
+			// The first command of a lazily forked incarnation arms its inherited alarm here,
+			// never a read or the fork itself. This is intentional: it keeps a fork O(1), a
+			// fork cannot wake every inherited alarm at once and overload the child's pools,
+			// and reading an actor does not start it. Two later options are not built: the
+			// parent fires its children's alarms, or a colocated import places volumes by root
+			// group and copies alarm entries on `GROUP_FORKED`.
+			None if rearm_inherited_alarm || next_deadline != armed_deadline => {
 				let next = next_deadline.map(|deadline_unix_ms| wire::Alarm {
 					arm_id: *ctx.env().rng("durable.alarm.arm").uuid_v4().as_bytes(),
 					deadline_unix_ms,
@@ -452,6 +509,80 @@ impl<M: DurableStateMachine> Transition<M> {
 			writes: effects.drain_writes(),
 		}
 	}
+}
+
+/// The timer payload's encoding at the lowest version of the machine's family it can be stored
+/// at: `selected`, or the lowest newer one that expresses it when `selected` cannot. The row
+/// that holds it is named by `timer_id`, which no version change moves. Only a version's
+/// [`Inexpressible`](rivet_data::versioned::Inexpressible) refusal moves on to the next
+/// version: any other encoding error fails the batch, since skipping it would hide a converter
+/// bug behind a version mark.
+fn timer_encoding<M: DurableStateMachine>(
+	timer: &M::Timer,
+	selected: u16,
+) -> Result<(Vec<u8>, u16)> {
+	let max_write = M::FAMILY
+		.info()
+		.map(|info| info.max_write)
+		.with_context(|| format!("this binary does not know family {}", M::FAMILY))?;
+	let mut refusal = None;
+	for version in selected..=max_write {
+		match M::serialize_timer(timer, version) {
+			Ok(bytes) => return Ok((bytes, version)),
+			Err(error) if error.is::<rivet_data::versioned::Inexpressible>() => {
+				refusal = Some(error)
+			}
+			Err(error) => {
+				return Err(error.context(format!(
+					"failed to encode a timer of family {} at version {version}",
+					M::FAMILY
+				)));
+			}
+		}
+	}
+	Err(refusal.unwrap_or_else(|| {
+		anyhow::anyhow!(
+			"no version of family {} from {selected} encodes the timer",
+			M::FAMILY
+		)
+	}))
+}
+
+/// The state's encoding at the lowest version of the machine's family it can be stored at:
+/// `selected`, the version the storage read floor allows, or the lowest newer one that
+/// expresses it when `selected` cannot, such as actor state under a floor of version 1. Only a
+/// version's [`Inexpressible`](rivet_data::versioned::Inexpressible) refusal moves on to the
+/// next version: any other encoding error fails the batch, since skipping it would hide a
+/// converter bug behind a version mark and the bounded cold flush the mark costs.
+fn state_encoding<M: DurableStateMachine>(
+	state: &M::State,
+	selected: u16,
+) -> Result<(Vec<u8>, u16)> {
+	let max_write = M::FAMILY
+		.info()
+		.map(|info| info.max_write)
+		.with_context(|| format!("this binary does not know family {}", M::FAMILY))?;
+	let mut refusal = None;
+	for version in selected..=max_write {
+		match M::serialize_state(state, version) {
+			Ok(bytes) => return Ok((bytes, version)),
+			Err(error) if error.is::<rivet_data::versioned::Inexpressible>() => {
+				refusal = Some(error)
+			}
+			Err(error) => {
+				return Err(error.context(format!(
+					"failed to encode the state of family {} at version {version}",
+					M::FAMILY
+				)));
+			}
+		}
+	}
+	Err(refusal.unwrap_or_else(|| {
+		anyhow::anyhow!(
+			"no version of family {} from {selected} encodes the state",
+			M::FAMILY
+		)
+	}))
 }
 
 /// Converts a boot clock deadline to unix time, keeping the delay from the transition's clock

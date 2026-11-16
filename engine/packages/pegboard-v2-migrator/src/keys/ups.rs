@@ -2,4 +2,10 @@
 use rivet_topology::worker::WorkerId;
 
 // Operator requests to the migrator of the singleton tenure held by `worker_id`.
-rivet_keys::ups_subject! { pub V2MigratorSubject(worker_id: WorkerId) => [RIVET, V2_MIGRATOR, {worker_id}]; }
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::UpsSubject)]
+#[ups(subject = [RIVET, V2_MIGRATOR, worker_id])]
+pub struct V2MigratorSubject {
+	worker_id: WorkerId,
+	#[subject]
+	subject: Vec<u8>,
+}

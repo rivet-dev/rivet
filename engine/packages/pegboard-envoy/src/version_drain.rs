@@ -213,7 +213,11 @@ impl State {
 		);
 		for actor in candidates {
 			let actor_id = rivet_util_id::Id::parse(&actor.actor_id)?;
-			pegboard::envoy_check::report_reallocate(ctx, actor_id, actor.epoch, false).await?;
+			// An actor the backfill has not moved, or skipped, is still bound to its legacy
+			// volume on a grouped connection, so each actor is addressed where it lives.
+			let group = scope.actor_group(ctx, actor_id).await?;
+			pegboard::envoy_check::report_reallocate(ctx, group, actor_id, actor.epoch, false)
+				.await?;
 			let _ = self.asked.insert_async((actor.actor_id, actor.epoch)).await;
 			pegboard::ENVOY_VERSION_EVICTIONS
 				.with_label_values(&[&scope.namespace, &scope.pool_name])

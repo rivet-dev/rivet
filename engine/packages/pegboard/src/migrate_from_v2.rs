@@ -8,11 +8,16 @@
 
 use anyhow::{Context, Result, ensure};
 use bytes::Bytes;
+use depot_protocol::command::{Command, CommandTag};
 use futures_util::StreamExt;
 use rivet_config::config::MigrateFromV2;
+use rivet_data::generated::pegboard_v2_migrator_v2 as migrator;
 use rivet_engine_context::EngineContext;
 use rivet_env::capabilities::http::{Method, Request, StatusCode};
+use rivet_keys::keys::tags::depot_command::PEGBOARD_V2_MIGRATOR_STATE_READ;
 use std::time::Duration;
+
+use crate::keys::partition::V2MigratorVolume;
 
 /// How long a V2 public API call may take.
 const V2_API_TIMEOUT: Duration = Duration::from_secs(15);
@@ -31,7 +36,7 @@ pub fn applies<'a>(
 /// The key's place in `[0, 1)` for `create_ratio`: the leading 53 bits of its placement hash,
 /// so every process and every create of the key sees the same value.
 pub fn key_share(namespace: &str, name: &str, key: &str) -> f64 {
-	let placement = crate::keys::partition::key_placement(namespace, name, key);
+	let placement = crate::keys::partition::legacy_key_placement(namespace, name, key);
 	let mut leading = [0u8; 8];
 	leading.copy_from_slice(&placement[..8]);
 	(u64::from_be_bytes(leading) >> 11) as f64 / (1u64 << 53) as f64
@@ -133,4 +138,68 @@ pub async fn key_exists(
 #[derive(serde::Deserialize)]
 struct ListedActors {
 	actors: Vec<serde_json::Value>,
+}
+
+/// Reads the V2 migrator's pass entry and every in-flight entry without claiming its state, for
+/// operators and for a namespace whose backfill waits on the migrator. It never raises the fence,
+/// so it cannot stop a running tenure. The migrator registers its handler.
+pub struct MigrateFromV2StateRead;
+
+impl Command for MigrateFromV2StateRead {
+	const TAG: CommandTag = CommandTag(PEGBOARD_V2_MIGRATOR_STATE_READ);
+	const READ_ONLY: bool = true;
+
+	type Request = rivet_data::versioned::MigrateFromV2StateReadRequest;
+	type Response = rivet_data::versioned::MigrateFromV2StateLoadResponse;
+}
+
+/// Legacy: whether the V2 migrator holds an in-flight entry at the legacy unprefixed placement
+/// for `namespace` ([`legacy_entries_hold`]). The answer never depends on the current
+/// `migrate_from_v2` configuration: the migrator keeps driving the entries it loaded while the
+/// migration is removed or retargeted, and a later activation at the legacy placement must still
+/// find the namespace's backfill waiting. A cluster where no migrator ever wrote has no migration
+/// volume, so it holds nothing.
+///
+/// One read of a bounded state: the entries are at most `max_in_flight` plus the operator's
+/// allowance. Taken only while a namespace's backfill is pending. Removed in 3.1 with the
+/// backfill.
+pub(crate) async fn legacy_migrator_holds_legacy_entries(
+	ctx: &EngineContext,
+	namespace: &str,
+) -> Result<bool> {
+	let read = ctx
+		.depot()
+		.command::<MigrateFromV2StateRead>(&V2MigratorVolume::new().volume_key(), ())
+		.await;
+	let response = match read {
+		Ok(response) => response,
+		Err(error) if crate::commands::is_volume_gone(&error) => return Ok(false),
+		Err(error) => return Err(error.context("read the V2 migrator's state")),
+	};
+	let in_flight = match response {
+		migrator::MigrateFromV2StateLoadResponse::MigrateFromV2StateLoaded(loaded) => {
+			loaded.in_flight
+		}
+		migrator::MigrateFromV2StateLoadResponse::MigrateFromV2StateFenced(_) => {
+			anyhow::bail!("a read of the V2 migrator's state answered as fenced")
+		}
+	};
+	Ok(legacy_entries_hold(&in_flight, namespace))
+}
+
+/// Legacy: whether `in_flight` holds `namespace`'s backfill: an entry with no volume group that
+/// was admitted for `namespace`, or one that does not say which namespace it was admitted for,
+/// as every entry 3.0.2 and 3.0.3 wrote. Such an entry holds every namespace's backfill until it
+/// finishes; these entries only drain. Removed in 3.1 with the backfill.
+pub(crate) fn legacy_entries_hold(
+	in_flight: &[migrator::MigrateFromV2InFlight],
+	namespace: &str,
+) -> bool {
+	in_flight.iter().any(|entry| {
+		let admitted_here = match entry.namespace.as_deref() {
+			Some(admitted_for) => admitted_for == namespace,
+			None => true,
+		};
+		entry.group.is_none() && admitted_here
+	})
 }

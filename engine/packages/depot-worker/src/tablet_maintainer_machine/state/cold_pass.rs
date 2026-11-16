@@ -4,7 +4,7 @@
 use super::{MaintainerPhase, MaintainerState, Operation, fence};
 use crate::tablet_maintainer_machine::{Effects, effect::MaintainerEffect, types::*};
 use depot_types::VolumeLogKey;
-use rivet_data::generated::shared_depot_fs_v1::FsVolumeRecord;
+use rivet_data::generated::shared_depot_fs_v2::FsVolumeRecord;
 use rivet_data::generated::shared_depot_types_v1::VolumeLogKey as WireVolumeLogKey;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -157,6 +157,13 @@ pub(crate) fn dispatch(
 		return;
 	}
 	if state.pending_rows.is_empty() || state.operations.index().counts.write_to_cold > 0 {
+		return;
+	}
+	// A row may need the version a raised `depot.fs_rows` mark admits, such as a volume
+	// created in a group; the store encodes it there only once the mark is durable. The rows
+	// wait for the prompt pass that carries the mark, which queues this pass again.
+	if super::maintainer_log::rows_mark_pending(state) {
+		super::maintainer_log::request_mark_pass(state, effects);
 		return;
 	}
 

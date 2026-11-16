@@ -38,15 +38,15 @@ use crate::tablet_maintainer_machine::{
 
 use depot_types::VolumeLogKey;
 use rivet_data::generated::{
-	depot_client_protocol_v1::{
+	depot_client_protocol_v2::{
 		RepairAppend, RepairAppendPlan, RepairAppended, RepairClaimAcquire, RepairClaimGranted,
 		RepairClaimPlan, RepairClaimRelease, RepairDetail, RepairRefusalCode, RepairRefused,
 		RepairReleasePlan, RepairReloadPlan, RepairReplicaReload, RepairRowChange,
 		VolumeRejectResponse, VolumeUnderRepair,
 	},
-	depot_fs_entry_v1::{FsEntry, FsTxn},
+	depot_fs_entry_v2::{FsEntry, FsTxn},
 	depot_log_shard_v1::{PayloadCodec, PayloadWrite},
-	shared_depot_fs_v1::{FsOp, FsVolumeStatus},
+	shared_depot_fs_v2::{FsOp, FsVolumeStatus},
 	shared_depot_types_v1::{
 		ClientIdentity, TabletPhase, VolumeLogPosition, VolumeLogReplicaStatus,
 	},
