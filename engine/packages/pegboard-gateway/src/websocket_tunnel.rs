@@ -1600,4 +1600,43 @@ mod tests {
 		waker_server.abort();
 		sibling_server.abort();
 	}
+
+	/// The actor closed a parked connection because it sent more than the connection may hold
+	/// while no tunnel was open. The re-open is answered with that close, and the gateway hands
+	/// it to the client so the client reconnects.
+	#[tokio::test]
+	async fn a_parked_overflow_close_reaches_the_client_on_reopen() {
+		let wakes = crate::sibling_wake::SiblingWakes::new();
+		let actor_id = rivet_util::Id::nil();
+		let (first, mut asleep) = fake_stream();
+		let (second, mut woken) = fake_stream();
+		let (mut client, done, server) = proxied_client(
+			wakes.clone(),
+			actor_id,
+			message_id(1, 2),
+			first,
+			vec![second],
+		)
+		.await;
+
+		let id = asleep.recv_open().await;
+		asleep.send(&id, ws_accept());
+		asleep.send(&id, ws_close(1012, "actor.stopped"));
+		wakes.publish(actor_id, 2).await;
+
+		let woken_id = woken.recv_open().await;
+		woken.send(&woken_id, ws_close(1011, "ws.parked_overflow"));
+		let frame = next_data(&mut client).await;
+		let ClientMessage::Close(Some(close)) = &frame else {
+			panic!("unexpected frame {frame:?}");
+		};
+		assert_eq!(u16::from(close.code), 1011);
+		assert_eq!(close.reason.as_str(), "ws.parked_overflow");
+		tokio::time::timeout(std::time::Duration::from_secs(5), done)
+			.await
+			.unwrap()
+			.unwrap()
+			.unwrap();
+		server.abort();
+	}
 }

@@ -23,6 +23,7 @@ use crate::utils::{
 use crate::websocket::{WebSocketHandler, WebSocketMessage, WebSocketSender, WsOutgoing};
 
 mod http;
+mod parked;
 
 /// HTTP requests admitted to one actor and not yet taken by its task. Shared by the actor's
 /// entry, which admits against the cap, and the requests in its inbox.
@@ -140,6 +141,11 @@ pub enum ToActor {
 		request_id: protocol::RequestId,
 		envoy_message_index: u16,
 	},
+	/// The actor sent more to a parked hibernated connection than the connection may hold.
+	WsParkedOverflow {
+		gateway_id: protocol::GatewayId,
+		request_id: protocol::RequestId,
+	},
 }
 
 struct WebSocketRequestState {
@@ -167,6 +173,9 @@ struct ActorContext {
 	http_requests: http::HttpRequests,
 	websocket_requests: BufferMap<WebSocketRequestState>,
 	ws_entries: BufferMap<WsEntry>,
+	/// Parked connections closed for overflow whose client the gateway still holds. The
+	/// gateway's re-open of one is answered with the overflow close.
+	parked_overflows: BufferMap<()>,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	active_http_request_count: Arc<AsyncCounter>,
 }
@@ -311,6 +320,7 @@ async fn actor_inner(
 		http_requests: http::HttpRequests::new(),
 		websocket_requests: BufferMap::new(),
 		ws_entries: BufferMap::new(),
+		parked_overflows: BufferMap::new(),
 		hibernating_requests,
 		active_http_request_count,
 	};
@@ -549,6 +559,12 @@ async fn actor_inner(
 					} => {
 						handle_hws_ack(&mut ctx, gateway_id, request_id, envoy_message_index).await;
 					}
+					ToActor::WsParkedOverflow {
+						gateway_id,
+						request_id,
+					} => {
+						handle_ws_parked_overflow(&mut ctx, gateway_id, request_id).await;
+					}
 				}
 			}
 			stop_result = async {
@@ -708,37 +724,24 @@ fn spawn_ws_outgoing_task(
 	gateway_id: protocol::GatewayId,
 	request_id: protocol::RequestId,
 	mut outgoing_rx: mpsc::UnboundedReceiver<WsOutgoing>,
-	gate: Option<oneshot::Receiver<()>>,
+	parked: Option<parked::ParkedTunnel>,
 ) {
 	let ws_task = async move {
-		// A parked connection has no tunnel to send on. Hold what the actor sends, in order,
-		// until the gate fires, and answer flushes at once so no caller waits on a tunnel that
-		// may never open. A dropped gate means the connection ended while parked.
-		let mut parked = std::collections::VecDeque::new();
-		if let Some(mut gate) = gate {
-			loop {
-				tokio::select! {
-					biased;
-					opened = &mut gate => {
-						if opened.is_err() {
-							return;
-						}
-						break;
-					}
-					msg = outgoing_rx.recv() => match msg {
-						Some(WsOutgoing::Flush { tx }) => {
-							let _ = tx.send(());
-						}
-						Some(msg) => parked.push_back(msg),
-						None => return,
-					},
+		// A parked connection has no tunnel to send on. What the actor sends is held, in
+		// order and within the connection's limits, until the gateway re-opens the tunnel.
+		let mut held = match parked {
+			Some(parked) => {
+				match parked::park(&mut outgoing_rx, parked, gateway_id, request_id).await {
+					Some(held) => held,
+					None => return,
 				}
 			}
-		}
+			None => std::collections::VecDeque::new(),
+		};
 
 		let mut idx: u16 = 0;
 		loop {
-			let msg = match parked.pop_front() {
+			let msg = match held.pop_front() {
 				Some(msg) => msg,
 				None => match outgoing_rx.recv().await {
 					Some(msg) => msg,
@@ -811,6 +814,23 @@ async fn handle_ws_open(
 	}
 	if pending.futures.len() >= ctx.shared.config.max_queued_requests_per_actor {
 		reject_ws_open(ctx, message_id, 1013, "Actor Overloaded").await;
+		return;
+	}
+	if ctx
+		.parked_overflows
+		.remove(&[&message_id.gateway_id, &message_id.request_id])
+		.is_some()
+	{
+		// The actor closed this connection while it was parked, and the client behind it
+		// missed what was dropped. Answering the re-open with that close makes the client
+		// reconnect. Opening it as a new connection would resume the stream with a hole.
+		reject_ws_open(
+			ctx,
+			message_id,
+			parked::OVERFLOW_CLOSE_CODE,
+			parked::OVERFLOW_CLOSE_REASON,
+		)
+		.await;
 		return;
 	}
 	let restored_ws = ctx
@@ -1174,6 +1194,46 @@ async fn handle_ws_close(
 	}
 }
 
+/// Closes a parked connection whose actor sent more than the connection may hold. Its outgoing
+/// task already dropped what it held. The actor's code is told the connection closed, so it
+/// stops sending on it, and the client is told when the gateway reaches the actor: at the
+/// re-open if the tunnel is still closed, or at once if the gateway re-opened it meanwhile.
+async fn handle_ws_parked_overflow(
+	ctx: &mut ActorContext,
+	gateway_id: protocol::GatewayId,
+	request_id: protocol::RequestId,
+) {
+	let Some(ws) = ctx.ws_entries.remove(&[&gateway_id, &request_id]) else {
+		// The connection ended before the notice arrived.
+		return;
+	};
+	if ws.parked_gate.is_some() {
+		ctx.parked_overflows.insert(&[&gateway_id, &request_id], ());
+	} else {
+		send_actor_message(
+			ctx,
+			gateway_id,
+			request_id,
+			protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
+				protocol::ToRivetWebSocketClose {
+					code: Some(parked::OVERFLOW_CLOSE_CODE),
+					reason: Some(parked::OVERFLOW_CLOSE_REASON.to_owned().into()),
+					hibernate: false,
+				},
+			),
+		)
+		.await;
+	}
+	ctx.websocket_requests.remove(&[&gateway_id, &request_id]);
+	if let Some(handler) = ws.ws_handler {
+		(handler.on_close)(
+			parked::OVERFLOW_CLOSE_CODE,
+			parked::OVERFLOW_CLOSE_REASON.to_owned(),
+		)
+		.await;
+	}
+}
+
 async fn handle_hws_restore(
 	ctx: &mut ActorContext,
 	handle: &EnvoyHandle,
@@ -1372,7 +1432,8 @@ async fn handle_hws_restore(
 				// wake by one client would otherwise leave the others unknown to the actor
 				// until each sent a frame of its own, and a broadcast made meanwhile would
 				// never reach them. What the actor sends is held by the parked outgoing task
-				// and goes out, in order, when the gateway re-opens the tunnel.
+				// and goes out, in order, when the gateway re-opens the tunnel. The task holds
+				// a bounded amount, since the gateway may never re-open the tunnel (`parked.rs`).
 				ctx.websocket_requests.insert(
 					&[&meta.gateway_id, &meta.request_id],
 					WebSocketRequestState {
@@ -1417,7 +1478,14 @@ async fn handle_hws_restore(
 							meta.gateway_id,
 							meta.request_id,
 							parked_rx,
-							Some(gate_rx),
+							Some(parked::ParkedTunnel {
+								gate: gate_rx,
+								limits: parked::ParkedLimits {
+									messages: ctx.shared.config.max_parked_websocket_messages,
+									bytes: ctx.shared.config.max_parked_websocket_bytes,
+								},
+								actor_tx: ctx.tx.clone(),
+							}),
 						);
 						if let Some(on_open) = ws_handler.on_open.take() {
 							on_open(WebSocketSender {

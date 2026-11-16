@@ -22,6 +22,14 @@ pub const DEFAULT_STOPPED_GENERATION_FLOOR_TTL: Duration = Duration::from_secs(1
 /// Default for `EnvoyConfig::max_queued_requests_per_actor`.
 pub const DEFAULT_MAX_QUEUED_REQUESTS_PER_ACTOR: usize = 1024;
 
+/// Default for `EnvoyConfig::max_parked_websocket_messages`. A parked connection is usually
+/// re-opened within a second of its actor waking, so this is room for a burst, not a backlog.
+pub const DEFAULT_MAX_PARKED_WEBSOCKET_MESSAGES: usize = 1024;
+
+/// Default for `EnvoyConfig::max_parked_websocket_bytes`. The default largest outgoing
+/// message of a RivetKit actor, so one message of any allowed size is held.
+pub const DEFAULT_MAX_PARKED_WEBSOCKET_BYTES: usize = 1024 * 1024;
+
 pub struct EnvoyConfig {
 	pub version: u32,
 	pub endpoint: String,
@@ -51,6 +59,17 @@ pub struct EnvoyConfig {
 	/// `envoy.actor_overloaded` instead of growing the inbox. Also bounds concurrent
 	/// WebSocket initializations per actor; excess opens close with 1013.
 	pub max_queued_requests_per_actor: usize,
+
+	/// Most messages an actor's hibernated WebSocket holds while it is parked: restored at
+	/// actor start, with the gateway yet to re-open its tunnel. A connection that is sent more
+	/// drops what it held and closes with 1011 `ws.parked_overflow`, so its client reconnects.
+	/// The gateway may never re-open a parked connection, so without a limit an actor that
+	/// keeps sending would grow its host's memory for as long as it stays awake.
+	pub max_parked_websocket_messages: usize,
+
+	/// Most payload bytes a parked hibernated WebSocket holds, counted with
+	/// `max_parked_websocket_messages`. Whichever limit is passed first closes the connection.
+	pub max_parked_websocket_bytes: usize,
 
 	pub callbacks: Arc<dyn EnvoyCallbacks>,
 
