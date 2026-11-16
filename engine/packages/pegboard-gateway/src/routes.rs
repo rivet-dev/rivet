@@ -20,11 +20,15 @@ use rivetkit_shared_types::actor_key;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, hash_map::Entry};
 
-use crate::acquire::{CreateActor, DelegatedToV2, HeldByMigrateFromV2, RoutingDeadline, acquire};
+use crate::acquire::{
+	ActorNotRunning, CreateActor, DelegatedToV2, HeldByMigrateFromV2, Reach, RoutingDeadline,
+	acquire,
+};
 use crate::migrate_from_v2::{self, V3Actor, decision, proxy};
 use crate::raw_rest_path::RawRestPath;
 use crate::retry_budget::RetryBudget;
 use crate::start_waits::StartWaits;
+use crate::websocket_tunnel::ReopenCause;
 use crate::{ActorNotFound, GatewayError, QueryInvalidParams};
 use std::sync::Arc;
 
@@ -267,9 +271,15 @@ pub async fn gateway(
 			// the budget first opens share.
 			//
 			// `Fn`, not `FnOnce`: a hibernatable WebSocket whose actor went to sleep calls it
-			// again to wake the actor on the client's next frame.
+			// again to wake the actor on the client's next frame. It also calls it when
+			// another request woke the actor, and that re-open only attaches: it never starts
+			// an actor that went back to sleep, and fails with `ActorNotRunning` instead.
 			let wakes = waits.wakes().clone();
-			let reopen = move || {
+			let reopen = move |cause: ReopenCause| {
+				let reach = match cause {
+					ReopenCause::Client => Reach::Start,
+					ReopenCause::Sibling => Reach::AttachOnly,
+				};
 				let ctx = ctx.clone();
 				let waits = waits.clone();
 				let budget = budget.clone();
@@ -288,6 +298,7 @@ pub async fn gateway(
 							None,
 							class,
 							false,
+							reach,
 							&credential,
 							deadline,
 						)
@@ -296,7 +307,9 @@ pub async fn gateway(
 							Ok(acquired) => break acquired,
 							Err(error) => error,
 						};
-						if rivet_error::RivetError::extract(&error).group() == "auth" {
+						if rivet_error::RivetError::extract(&error).group() == "auth"
+							|| error.is::<ActorNotRunning>()
+						{
 							return Err(error);
 						}
 						retries.retry(ctx.env().as_ref(), error).await?;
@@ -475,6 +488,7 @@ async fn prepare(
 			get_or_create.clone(),
 			class,
 			true,
+			Reach::Start,
 			&credential,
 			deadline,
 		)

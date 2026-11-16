@@ -10,6 +10,12 @@
 //! The record holds the latest epoch, so a socket that learns of its actor's stop after a
 //! sibling already woke the actor still sees the newer epoch and re-opens at once.
 //!
+//! A newer epoch only tells a socket to look for its actor. The re-open it triggers attaches to
+//! an actor that runs and never starts one (`Reach::AttachOnly` in `acquire.rs`), so an actor
+//! that went back to sleep before a socket re-attached stays asleep, and the socket then waits
+//! for an epoch newer than the one it looked for. Only a request a client made starts an
+//! actor, so every epoch in the record goes back to one.
+//!
 //! The record is local to one gateway process. An actor woken without a request through this
 //! gateway (an alarm, or a request through another gateway node) does not re-attach the sockets
 //! hibernated here until a request for it passes through this gateway.
@@ -103,6 +109,11 @@ impl SiblingWake {
 		}
 	}
 
+	/// The latest epoch the gateway reached the actor at.
+	pub fn latest(&self) -> u32 {
+		*self.updates.borrow()
+	}
+
 	/// Resolves once the gateway reached the actor at an epoch after `epoch`, at once if it
 	/// already did.
 	pub async fn newer_than(&self, epoch: u32) {
@@ -126,6 +137,10 @@ impl Drop for SiblingWake {
 }
 
 #[cfg(test)]
+#[allow(
+	clippy::disallowed_methods,
+	reason = "the tests wait on the record with a tokio runtime"
+)]
 mod tests {
 	use super::*;
 	use std::time::Duration;
@@ -151,6 +166,7 @@ mod tests {
 		assert!(!resolves(&second, 3).await, "the same epoch is not a wake");
 
 		first.publish(4);
+		assert_eq!(second.latest(), 4);
 		assert!(resolves(&second, 3).await);
 		assert!(resolves(&first, 3).await);
 		assert!(!resolves(&other_actor, 3).await, "wakes are per actor");
