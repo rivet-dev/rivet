@@ -77,6 +77,7 @@ members = [
   "engine/sdks/rust/test-envoy",
   "engine/sdks/rust/universaldb-commit",
   "engine/sdks/rust/ups-protocol",
+  "engine/sdks/rust/v2-migration-protocol",
   "rivetkit-rust/packages/actor-persist",
   "rivetkit-rust/packages/client",
   "rivetkit-rust/packages/client-protocol",
@@ -698,6 +699,9 @@ members = [
 
     [workspace.dependencies.epoxy-protocol]
     path = "engine/sdks/rust/epoxy-protocol"
+
+    [workspace.dependencies.v2-migration-protocol]
+    path = "engine/sdks/rust/v2-migration-protocol"
 
     [workspace.dependencies.rivet-test-envoy]
     path = "engine/sdks/rust/test-envoy"

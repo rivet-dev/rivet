@@ -6,6 +6,7 @@ pub mod envoys;
 mod errors;
 pub mod health;
 pub mod metadata;
+pub mod migration;
 pub mod namespaces;
 pub mod router;
 pub mod runner_configs;

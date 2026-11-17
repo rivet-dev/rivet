@@ -1168,6 +1168,37 @@
 			]
 		},
 		{
+			"name": "migration",
+			"description": null,
+			"errors": [
+				{
+					"code": "actor_not_found",
+					"message": "The actor does not exist in this namespace.",
+					"statuses": []
+				},
+				{
+					"code": "backfill_incomplete",
+					"message": "Migration is unavailable until the actor migration fix backfill finishes.",
+					"statuses": []
+				},
+				{
+					"code": "cutover_mismatch",
+					"message": "The actor was parked by a different cutover.",
+					"statuses": []
+				},
+				{
+					"code": "invalid_request",
+					"message": "Invalid migration request.",
+					"statuses": []
+				},
+				{
+					"code": "wrong_datacenter",
+					"message": "The actor belongs to another datacenter.",
+					"statuses": []
+				}
+			]
+		},
+		{
 			"name": "namespace",
 			"description": "Namespace lookup and creation.",
 			"errors": [
