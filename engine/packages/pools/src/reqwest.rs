@@ -35,7 +35,11 @@ pub async fn client() -> Result<Client, reqwest::Error> {
 pub async fn guarded_client(config: &rivet_config::Config) -> Result<Client> {
 	GUARDED_CLIENT
 		.get_or_try_init(|| async {
-			build_guarded_client(config, Some(std::time::Duration::from_secs(30))).await
+			guarded_client_builder(config)
+				.await?
+				.timeout(std::time::Duration::from_secs(30))
+				.build()
+				.context("failed building guarded client")
 		})
 		.await
 		.cloned()
@@ -43,29 +47,31 @@ pub async fn guarded_client(config: &rivet_config::Config) -> Result<Client> {
 
 /// Same as [`guarded_client`] but without a request timeout, for long-lived streaming requests
 /// such as the serverless SSE connection.
+///
+/// Uses HTTP/1.1 so each stream holds its own connection. Over HTTP/2 every stream to a host
+/// shares one connection, and once the server's `SETTINGS_MAX_CONCURRENT_STREAMS` is reached
+/// (100 on Cloud Run) new requests wait in the client with no timeout until a long-lived stream
+/// ends.
 pub async fn guarded_client_no_timeout(config: &rivet_config::Config) -> Result<Client> {
 	GUARDED_CLIENT_NO_TIMEOUT
-		.get_or_try_init(|| async { build_guarded_client(config, None).await })
+		.get_or_try_init(|| async {
+			guarded_client_builder(config)
+				.await?
+				.http1_only()
+				.build()
+				.context("failed building guarded client")
+		})
 		.await
 		.cloned()
 }
 
-async fn build_guarded_client(
-	config: &rivet_config::Config,
-	timeout: Option<std::time::Duration>,
-) -> Result<Client> {
+async fn guarded_client_builder(config: &rivet_config::Config) -> Result<reqwest::ClientBuilder> {
 	let policy = outbound_policy(config).await?;
 
-	let mut builder = Client::builder()
+	Ok(Client::builder()
 		.user_agent(CLIENT_USER_AGENT)
 		.dns_resolver(Arc::new(GuardedResolver::new(policy.clone())))
-		.redirect(rivet_outbound_guard::redirect_policy(policy));
-
-	if let Some(timeout) = timeout {
-		builder = builder.timeout(timeout);
-	}
-
-	builder.build().context("failed building guarded client")
+		.redirect(rivet_outbound_guard::redirect_policy(policy)))
 }
 
 /// The destination policy applied to every request to a user-configured URL.
