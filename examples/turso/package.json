@@ -13,7 +13,7 @@
 	"dependencies": {
 		"@libsql/client": "^0.18.0",
 		"@tursodatabase/api": "^2.0.5",
-		"rivetkit": "^2.3.31"
+		"rivetkit": "^2.3.32"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
