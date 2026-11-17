@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
 use gas::prelude::*;
-use http_body_util::{BodyExt, Full};
+use http_body_util::Full;
 use hyper::{Request, Response};
 use rivet_guard_core::request_context::RequestContext;
 use rivet_guard_core::{CustomServeTrait, ResponseBody, RoutingOutput};
@@ -34,17 +34,7 @@ impl CustomServeTrait for ApiPublicService {
 			.await
 			.context("failed to call api-public service")?;
 
-		// Collect the body and convert to ResponseBody
-		let (parts, body) = response.into_parts();
-		let collected = body
-			.collect()
-			.await
-			.context("failed to collect response body")?;
-		let bytes = collected.to_bytes();
-		let response_body = ResponseBody::Full(Full::new(bytes));
-		let response = Response::from_parts(parts, response_body);
-
-		Ok(response)
+		Ok(response.map(ResponseBody::Axum))
 	}
 }
 
