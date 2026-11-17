@@ -5196,8 +5196,11 @@ name = "rivet-api-public"
 version = "2.3.31"
 dependencies = [
  "anyhow",
+ "async-stream",
  "axum 0.8.4",
  "axum-test",
+ "base64 0.22.1",
+ "depot",
  "epoxy",
  "epoxy-protocol",
  "fs_extra",
@@ -5207,6 +5210,7 @@ dependencies = [
  "indexmap 2.14.0",
  "namespace",
  "pegboard",
+ "rand 0.8.5",
  "reqwest 0.12.22",
  "rivet-api-builder",
  "rivet-api-peer",
@@ -5227,8 +5231,12 @@ dependencies = [
  "tokio",
  "tower-http",
  "tracing",
+ "universaldb",
  "urlencoding",
  "utoipa",
+ "v2-migration-protocol",
+ "vbare",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -5670,7 +5678,9 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "v2-migration-protocol",
  "vbare",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -8634,6 +8644,18 @@ dependencies = [
  "js-sys",
  "serde_core",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "v2-migration-protocol"
+version = "2.3.31"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_bare",
+ "serde_bytes",
+ "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]

@@ -1,0 +1,5 @@
+{
+  "code": "actor_not_found",
+  "group": "migration",
+  "message": "The actor does not exist in this namespace."
+}

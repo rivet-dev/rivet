@@ -21,3 +21,40 @@ pub enum Validation {
 	)]
 	RaceCondition,
 }
+
+#[derive(RivetError, Debug, Deserialize, Serialize)]
+#[error("migration")]
+pub enum Migration {
+	#[error("actor_not_found", "The actor does not exist in this namespace.")]
+	ActorNotFound,
+	#[error(
+		"wrong_datacenter",
+		"The actor belongs to another datacenter.",
+		"The actor belongs to datacenter {actor_datacenter_label}, but this is datacenter {datacenter_label}. Call the owning datacenter's API."
+	)]
+	WrongDatacenter {
+		actor_datacenter_label: u16,
+		datacenter_label: u16,
+	},
+	#[error(
+		"invalid_request",
+		"Invalid migration request.",
+		"Invalid migration request: {message}"
+	)]
+	InvalidRequest { message: String },
+	#[error(
+		"cutover_mismatch",
+		"The actor was parked by a different cutover.",
+		"The actor was parked by cutover {parked_cutover_ts}, not {cutover_ts}."
+	)]
+	CutoverMismatch {
+		parked_cutover_ts: i64,
+		cutover_ts: i64,
+	},
+	#[error(
+		"backfill_incomplete",
+		"Migration is unavailable until the actor migration fix backfill finishes.",
+		"Migration is unavailable until the actor migration fix backfill finishes. It runs on engine start; retry once it completes."
+	)]
+	BackfillIncomplete,
+}

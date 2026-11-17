@@ -10,8 +10,8 @@ use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 
 use crate::{
-	actors, auth, ctx, datacenters, envoys, health, metadata, namespaces, runner_configs, runners,
-	ui,
+	actors, auth, ctx, datacenters, envoys, health, metadata, migration, namespaces,
+	runner_configs, runners, ui,
 };
 
 #[derive(OpenApi)]
@@ -139,6 +139,31 @@ pub async fn router(
 			.route("/ui", axum::routing::get(ui::serve_index))
 			.route("/ui/", axum::routing::get(ui::serve_index))
 			.route("/ui/{*path}", axum::routing::get(ui::serve_ui))
+			// MARK: Migration
+			.route(
+				"/migration/v1/namespaces/{namespace}/candidates",
+				axum::routing::get(migration::candidates),
+			)
+			.route(
+				"/migration/v1/actors/{actor_id}/candidate",
+				axum::routing::get(migration::candidate),
+			)
+			.route(
+				"/migration/v1/actors/{actor_id}/export",
+				axum::routing::get(migration::export),
+			)
+			.route(
+				"/migration/v1/actors/{actor_id}/cutover",
+				axum::routing::post(migration::cutover),
+			)
+			.route(
+				"/migration/v1/actors/{actor_id}/confirm",
+				axum::routing::post(migration::confirm),
+			)
+			.route(
+				"/migration/v1/actors/{actor_id}/restore",
+				axum::routing::post(migration::restore),
+			)
 			// MARK: Middleware (must go after all routes)
 			// Add CORS layer that mirrors the request origin
 			.layer(

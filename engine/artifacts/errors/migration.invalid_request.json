@@ -1,0 +1,5 @@
+{
+  "code": "invalid_request",
+  "group": "migration",
+  "message": "Invalid migration request."
+}

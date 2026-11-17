@@ -8,7 +8,10 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-stream.workspace = true
 axum.workspace = true
+base64.workspace = true
+depot.workspace = true
 epoxy-protocol.workspace = true
 epoxy.workspace = true
 futures-util.workspace = true
@@ -17,6 +20,7 @@ include_dir.workspace = true
 indexmap.workspace = true
 namespace.workspace = true
 pegboard.workspace = true
+rand.workspace = true
 reqwest.workspace = true
 rivet-api-builder.workspace = true
 rivet-api-peer.workspace = true
@@ -37,8 +41,12 @@ subtle.workspace = true
 tokio.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
+universaldb.workspace = true
 urlencoding.workspace = true
 utoipa.workspace = true
+v2-migration-protocol.workspace = true
+vbare.workspace = true
+xxhash-rust.workspace = true
 
 [build-dependencies]
 anyhow.workspace = true

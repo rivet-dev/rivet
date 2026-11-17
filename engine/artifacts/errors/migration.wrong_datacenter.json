@@ -1,0 +1,5 @@
+{
+  "code": "wrong_datacenter",
+  "group": "migration",
+  "message": "The actor belongs to another datacenter."
+}
