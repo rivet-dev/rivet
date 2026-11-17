@@ -41,6 +41,8 @@ fn simulated_latency() -> Option<Duration> {
 pub struct Database {
 	driver: DatabaseDriverHandle,
 	throttle: Arc<ThrottleState>,
+	/// When false, [`Transaction::tag`] is a no-op on every transaction this database creates.
+	transaction_tags_enabled: bool,
 }
 
 impl Database {
@@ -50,7 +52,15 @@ impl Database {
 		Database {
 			driver,
 			throttle: Arc::new(ThrottleState::new(None)),
+			transaction_tags_enabled: true,
 		}
+	}
+
+	/// Controls whether transactions forward throttle tags to the driver. Disabling keeps every
+	/// `tag` call site in place while sending nothing to the backend.
+	pub fn with_transaction_tags(mut self, enabled: bool) -> Self {
+		self.transaction_tags_enabled = enabled;
+		self
 	}
 
 	/// Enables cluster-wide byte-rate throttling for transactions that opt in with
@@ -136,7 +146,10 @@ impl Database {
 			.run(Box::new(|tx| {
 				attempts.fetch_add(1, Ordering::AcqRel);
 
-				let tx = tx.with_name(name).with_throttle(throttle.clone());
+				let tx = tx
+					.with_name(name)
+					.with_throttle(throttle.clone())
+					.with_transaction_tags(self.transaction_tags_enabled);
 				let guard = ThrottleAttemptGuard::new(tx.deref().clone());
 				async move {
 					let _guard = guard;
@@ -194,7 +207,8 @@ impl Database {
 		Ok(self
 			.driver
 			.create_txn()?
-			.with_throttle(Arc::new(ThrottleTxn::new(self.throttle.clone(), false))))
+			.with_throttle(Arc::new(ThrottleTxn::new(self.throttle.clone(), false)))
+			.with_transaction_tags(self.transaction_tags_enabled))
 	}
 
 	pub fn txn_retry_limit(&self, limit: i32) -> Result<()> {

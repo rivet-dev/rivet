@@ -1848,7 +1848,7 @@ impl DatabaseKv {
 				let mut last_key = last_key.clone();
 
 				async move {
-					tx.tag(&format!("find_dead_workflows:{name}"))?;
+					tx.tag("find_dead_workflows")?;
 
 					let mut workflows = Vec::new();
 

@@ -78,7 +78,7 @@ pub async fn pegboard_actor_get_for_gateway(
 				return Ok(None);
 			};
 
-			tx.tag(&format!("actor_get_for_gateway:{namespace_id}"))?;
+			tx.tag("actor_get_for_gateway")?;
 
 			let envoy_protocol_version = if let Some(envoy_key) = &envoy_key {
 				tx.read_opt(

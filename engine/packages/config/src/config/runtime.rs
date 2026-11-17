@@ -66,6 +66,10 @@ pub struct Runtime {
 	/// read and write axes independently, for example
 	/// `udb_throttle_bytes_per_second.depot_compaction.read`. An axis with no entry is unthrottled.
 	udb_throttle_bytes_per_second: Option<HashMap<String, UdbThrottle>>,
+	/// Whether UniversalDB transactions pass throttle tags to the storage backend. Defaults to
+	/// false, which makes every `Transaction::tag` call a no-op so FoundationDB's GRV proxy tag
+	/// throttler never sees the tags. Requires restart.
+	udb_transaction_tags_enabled: Option<bool>,
 }
 
 /// Byte-rate budgets for one UniversalDB throttle. An axis left unset is unthrottled.
@@ -200,6 +204,10 @@ impl Runtime {
 
 	pub fn allow_version_rollback(&self) -> bool {
 		self.allow_version_rollback.unwrap_or_default()
+	}
+
+	pub fn udb_transaction_tags_enabled(&self) -> bool {
+		self.udb_transaction_tags_enabled.unwrap_or(false)
 	}
 
 	pub fn gasoline_prune_eligibility_duration(&self) -> Option<Duration> {

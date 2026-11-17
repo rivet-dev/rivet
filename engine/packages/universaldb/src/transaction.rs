@@ -77,6 +77,8 @@ pub struct Transaction {
 	counters: Arc<TxnCounters>,
 	/// Throttle bookkeeping, attached by the [`crate::Database`] this transaction came from.
 	throttle: Option<Arc<ThrottleTxn>>,
+	/// When false, [`Transaction::tag`] is a no-op.
+	tags_enabled: bool,
 }
 
 impl Transaction {
@@ -87,6 +89,7 @@ impl Transaction {
 			name: DEFAULT_TXN_NAME,
 			counters: Arc::new(TxnCounters::default()),
 			throttle: None,
+			tags_enabled: true,
 		}
 	}
 
@@ -97,6 +100,7 @@ impl Transaction {
 			name,
 			counters: self.counters.clone(),
 			throttle: self.throttle.clone(),
+			tags_enabled: self.tags_enabled,
 		}
 	}
 
@@ -107,6 +111,18 @@ impl Transaction {
 			name: self.name,
 			counters: self.counters.clone(),
 			throttle: Some(throttle),
+			tags_enabled: self.tags_enabled,
+		}
+	}
+
+	pub(crate) fn with_transaction_tags(&self, enabled: bool) -> Self {
+		Transaction {
+			driver: self.driver.clone(),
+			subspace: self.subspace.clone(),
+			name: self.name,
+			counters: self.counters.clone(),
+			throttle: self.throttle.clone(),
+			tags_enabled: enabled,
 		}
 	}
 
@@ -118,6 +134,7 @@ impl Transaction {
 			name: self.name,
 			counters: self.counters.clone(),
 			throttle: self.throttle.clone(),
+			tags_enabled: self.tags_enabled,
 		}
 	}
 
@@ -596,8 +613,13 @@ impl Transaction {
 		self.driver.approximate_size()
 	}
 
-	/// Adds a tag intended for throttling to the current transaction.
+	/// Adds a tag intended for throttling to the current transaction. Does nothing when the owning
+	/// [`crate::Database`] has transaction tags disabled.
 	pub fn tag(&self, tag: &str) -> Result<()> {
+		if !self.tags_enabled {
+			return Ok(());
+		}
+
 		self.driver.tag(tag)
 	}
 
@@ -731,6 +753,13 @@ impl RetryableTransaction {
 	pub(crate) fn with_throttle(&self, throttle: Arc<ThrottleTxn>) -> Self {
 		RetryableTransaction {
 			inner: self.inner.with_throttle(throttle),
+			maybe_committed: self.maybe_committed,
+		}
+	}
+
+	pub(crate) fn with_transaction_tags(&self, enabled: bool) -> Self {
+		RetryableTransaction {
+			inner: self.inner.with_transaction_tags(enabled),
 			maybe_committed: self.maybe_committed,
 		}
 	}
