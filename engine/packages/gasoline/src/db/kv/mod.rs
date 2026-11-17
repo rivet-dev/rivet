@@ -943,7 +943,7 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_dispatch_workflow", |tx| async move {
-				tx.tag(&format!("dispatch_workflow:{workflow_name}"))?;
+				tx.tag("dispatch_workflow")?;
 
 				self.dispatch_workflow_inner(
 					ray_id,
@@ -1088,7 +1088,7 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_find_workflow", |tx| async move {
-				tx.tag(&format!("find_workflow:{workflow_name}"))?;
+				tx.tag("find_workflow")?;
 				self.find_workflow_inner(workflow_name, tags, &tx).await
 			})
 			.custom_instrument(tracing::info_span!("find_workflow_tx"))
@@ -2486,7 +2486,7 @@ impl Database for DatabaseKv {
 		Ok(())
 	}
 
-	#[tracing::instrument(skip_all, fields(?workflow_id, %location))]
+	#[tracing::instrument(skip_all, fields(?workflow_id, %workflow_name, %location))]
 	async fn pull_next_signals(
 		&self,
 		worker_id: Id,
@@ -2516,7 +2516,7 @@ impl Database for DatabaseKv {
 					let owned_filter = owned_filter.clone();
 
 					async move {
-						tx.tag(&format!("pull_next_signals:{workflow_name}"))?;
+						tx.tag("pull_next_signals")?;
 
 						self.validate_lease(&tx, workflow_id, worker_id).await?;
 
@@ -2887,7 +2887,7 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_publish_signal_from_workflow", |tx| async move {
-				tx.tag(&format!("publish_signal:{from_workflow_id}"))?;
+				tx.tag("publish_signal")?;
 
 				self.validate_lease(&tx, from_workflow_id, worker_id)
 					.await?;
@@ -2952,7 +2952,7 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_dispatch_sub_workflow", |tx| async move {
-				tx.tag(&format!("dispatch_workflow:{sub_workflow_name}"))?;
+				tx.tag("dispatch_workflow")?;
 
 				self.validate_lease(&tx, from_workflow_id, worker_id)
 					.await?;
@@ -3008,7 +3008,7 @@ impl Database for DatabaseKv {
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_update_workflow_state", |tx| {
 				async move {
-					tx.tag(&format!("workflow_state_update:{workflow_id}"))?;
+					tx.tag("workflow_state_update")?;
 
 					self.validate_lease(&tx, workflow_id, worker_id).await?;
 
@@ -3053,7 +3053,7 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_commit_workflow_activity_event", |tx| async move {
-				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+				tx.tag("update_workflow_history")?;
 
 				self.validate_lease(&tx, from_workflow_id, worker_id)
 					.await?;
@@ -3097,7 +3097,7 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_commit_workflow_message_send_event", |tx| async move {
-				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+				tx.tag("update_workflow_history")?;
 
 				self.validate_lease(&tx, from_workflow_id, worker_id)
 					.await?;
@@ -3142,7 +3142,7 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_upsert_workflow_loop_event", |tx| async move {
-				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+				tx.tag("update_workflow_history")?;
 
 				self.validate_lease(&tx, from_workflow_id, worker_id)
 					.await?;
@@ -3291,7 +3291,7 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_commit_workflow_sleep_event", |tx| async move {
-				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+				tx.tag("update_workflow_history")?;
 
 				self.validate_lease(&tx, from_workflow_id, worker_id)
 					.await?;
@@ -3330,7 +3330,7 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_update_workflow_sleep_state", |tx| async move {
-				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+				tx.tag("update_workflow_history")?;
 
 				self.validate_lease(&tx, from_workflow_id, worker_id)
 					.await?;
@@ -3367,7 +3367,7 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_commit_workflow_branch_event", |tx| async move {
-				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+				tx.tag("update_workflow_history")?;
 
 				self.validate_lease(&tx, from_workflow_id, worker_id)
 					.await?;
@@ -3406,7 +3406,7 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_commit_workflow_removed_event", |tx| async move {
-				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+				tx.tag("update_workflow_history")?;
 
 				self.validate_lease(&tx, from_workflow_id, worker_id)
 					.await?;
@@ -3447,7 +3447,7 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.txn("gas_commit_workflow_version_check_event", |tx| async move {
-				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+				tx.tag("update_workflow_history")?;
 
 				self.validate_lease(&tx, from_workflow_id, worker_id)
 					.await?;

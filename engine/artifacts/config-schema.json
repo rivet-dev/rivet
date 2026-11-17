@@ -154,6 +154,7 @@
         "gasoline_prune_interval_duration": null,
         "guard_shutdown_duration": null,
         "udb_throttle_bytes_per_second": null,
+        "udb_transaction_tags_enabled": null,
         "worker_cpu_max": null,
         "worker_load_shedding_beta": null,
         "worker_load_shedding_curve": null,
@@ -1847,6 +1848,13 @@
           "additionalProperties": {
             "$ref": "#/definitions/UdbThrottle"
           }
+        },
+        "udb_transaction_tags_enabled": {
+          "description": "Whether UniversalDB transactions pass throttle tags to the storage backend. Defaults to false, which makes every `Transaction::tag` call a no-op so FoundationDB's GRV proxy tag throttler never sees the tags. Requires restart.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "worker_cpu_max": {
           "description": "Adjusts worker curve around this value (in millecores, i.e. 1000 = 1 core). Is not a hard limit. When unset, uses /sys/fs/cgroup/cpu.max, and if that is unset uses total host cpu.",

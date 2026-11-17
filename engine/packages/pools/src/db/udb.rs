@@ -62,7 +62,9 @@ pub async fn setup(config: &Config) -> Result<Option<UdbPool>> {
 
 	tracing::debug!("udb started");
 
-	let db = universaldb::Database::new(db_driver).with_throttle(throttle_config(config));
+	let db = universaldb::Database::new(db_driver)
+		.with_throttle(throttle_config(config))
+		.with_transaction_tags(config.runtime.udb_transaction_tags_enabled());
 
 	Ok(Some(UdbPool { db }))
 }
