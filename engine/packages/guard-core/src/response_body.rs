@@ -69,6 +69,8 @@ pub enum ResponseBody {
 	Full(Full<Bytes>),
 	/// Streaming response body
 	Incoming(BodyIncoming),
+	/// Response body produced by an axum router
+	Axum(axum::body::Body),
 	/// Channel-backed streaming response body
 	Channel(mpsc::Receiver<Result<Bytes, ResponseBodyError>>),
 	/// Bounded channel with an out-of-band terminal error slot.
@@ -192,6 +194,19 @@ impl http_body::Body for ResponseBody {
 					std::task::Poll::Pending => std::task::Poll::Pending,
 				}
 			}
+			ResponseBody::Axum(body) => {
+				let pin = std::pin::Pin::new(body);
+				match pin.poll_frame(cx) {
+					std::task::Poll::Ready(Some(Ok(frame))) => {
+						std::task::Poll::Ready(Some(Ok(frame)))
+					}
+					std::task::Poll::Ready(Some(Err(e))) => {
+						std::task::Poll::Ready(Some(Err(Box::new(e))))
+					}
+					std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
+					std::task::Poll::Pending => std::task::Poll::Pending,
+				}
+			}
 			ResponseBody::Channel(rx) => match rx.poll_recv(cx) {
 				std::task::Poll::Ready(Some(Ok(bytes))) => {
 					std::task::Poll::Ready(Some(Ok(http_body::Frame::data(bytes))))
@@ -247,6 +262,7 @@ impl http_body::Body for ResponseBody {
 			}
 			ResponseBody::Full(body) => body.is_end_stream(),
 			ResponseBody::Incoming(body) => body.is_end_stream(),
+			ResponseBody::Axum(body) => body.is_end_stream(),
 			ResponseBody::Channel(rx) => rx.is_closed() && rx.is_empty(),
 			ResponseBody::ChannelWithTerminal { body, terminal } => {
 				body.is_closed()
@@ -267,6 +283,7 @@ impl http_body::Body for ResponseBody {
 			ResponseBody::AuthorizationDeadline { .. } => http_body::SizeHint::default(),
 			ResponseBody::Full(body) => body.size_hint(),
 			ResponseBody::Incoming(body) => body.size_hint(),
+			ResponseBody::Axum(body) => body.size_hint(),
 			ResponseBody::Channel(_) => http_body::SizeHint::default(),
 			ResponseBody::ChannelWithTerminal { .. } => http_body::SizeHint::default(),
 			ResponseBody::WithCompletion { body, .. } => body.size_hint(),

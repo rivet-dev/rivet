@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+axum.workspace = true
 bytes.workspace = true
 futures-util.workspace = true
 futures.workspace = true
