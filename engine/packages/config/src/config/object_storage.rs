@@ -112,4 +112,10 @@ pub struct S3ObjectStoreConfig {
 	pub access_key_id: Option<String>,
 	#[serde(default)]
 	pub secret_access_key: Option<Secret<String>>,
+	/// Sends the ETag of every compare-and-swap (`If-Match`) without its surrounding quotes.
+	/// Hetzner Object Storage answers 412 to the quoted form even when the ETag is current,
+	/// which would fail every lease, heartbeat and manifest write; AWS S3, R2 and MinIO accept
+	/// both forms. Defaults to false.
+	#[serde(default)]
+	pub unquoted_if_match: Option<bool>,
 }

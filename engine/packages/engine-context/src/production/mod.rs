@@ -3,6 +3,7 @@
 pub mod local_object_store;
 pub mod object_storage;
 pub mod reqwest;
+pub mod unquoted_if_match;
 
 use crate::{EngineAdapters, ObjectStores};
 use anyhow::Result;
