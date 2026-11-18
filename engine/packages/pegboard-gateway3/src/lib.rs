@@ -17,7 +17,6 @@ use rivet_guard_core::{
 	utils::is_ws_hibernate,
 };
 use std::{
-	collections::HashMap,
 	sync::{Arc, atomic::AtomicU64},
 	time::{Duration, Instant},
 };
@@ -128,12 +127,8 @@ impl PegboardGateway3 {
 		let gateway_id = self.shared_state.gateway_id();
 
 		// Extract headers
-		let mut request_headers = HashMap::new();
-		for (name, value) in req_ctx.headers() {
-			if let Result::Ok(value_str) = value.to_str() {
-				request_headers.insert(name.to_string(), value_str.to_string());
-			}
-		}
+		let mut request_headers =
+			rivet_guard_core::utils::actor_forwarded_headers(req_ctx.headers());
 		req_ctx.forward_ray(&mut request_headers);
 
 		let (mut stopped_sub, _) = tokio::try_join!(
