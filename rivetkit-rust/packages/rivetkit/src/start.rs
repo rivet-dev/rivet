@@ -407,9 +407,14 @@ async fn handle_actor_event<A: Actor>(
 			reply.send(Err(queue_handler_not_found(name)));
 		}
 		ActorEvent::WebSocketOpen {
-			ws, request, reply, ..
+			conn,
+			ws,
+			request,
+			reply,
 		} => {
-			let ctx = ctx.with_request(request.clone());
+			let ctx = ctx
+				.with_request(request.clone())
+				.with_conn(Some(ConnCtx::from(conn)));
 			reply.send(
 				actor
 					.on_websocket(ctx, ws, request.unwrap_or_default())
