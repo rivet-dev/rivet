@@ -267,19 +267,12 @@ where
 	let mut can_hibernate = match reply {
 		OpenReply::Accepted { can_hibernate } => can_hibernate,
 		OpenReply::Closed(close) => {
-			socket
-				.send(Message::Close(close.code.map(|code| CloseFrame {
-					code,
-					reason: close.reason.unwrap_or_default().to_string().into(),
-				})))
-				.await?;
-			sender.finish().await?;
-			return Ok(());
+			return forward_actor_close(socket, sender, close).await;
 		}
 	};
 	// The first tick completes at once and is skipped; the socket was just opened. Missed ticks
 	// are skipped too, so a connection that was busy for a while sends one ping, not a burst.
-	let mut keepalive = rivet_env::interval(clock, keepalive_interval_ms);
+	let mut keepalive = rivet_env::interval(clock.clone(), keepalive_interval_ms);
 	keepalive.tick().await.context("keepalive clock failed")?;
 
 	let mut credit = ClientCredit::default();
@@ -402,14 +395,7 @@ where
 								can_hibernate: still_hibernatable,
 							} => can_hibernate = still_hibernatable,
 							OpenReply::Closed(close) => {
-								socket
-									.send(Message::Close(close.code.map(|code| CloseFrame {
-										code,
-										reason: close.reason.unwrap_or_default().to_string().into(),
-									})))
-									.await?;
-								tunnel.sender.finish().await?;
-								return Ok(());
+								return forward_actor_close(socket, tunnel.sender, close).await;
 							}
 						}
 						version = tunnel.version;
@@ -419,14 +405,7 @@ where
 						tracing::debug!("hibernated client WebSocket was re-attached to the actor");
 					}
 					p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
-						socket
-							.send(Message::Close(close.code.map(|code| CloseFrame {
-								code,
-								reason: close.reason.unwrap_or_default().to_string().into(),
-							})))
-							.await?;
-						sender.finish().await?;
-						return Ok(());
+						return forward_actor_close(socket, sender, close).await;
 					}
 					_ => bail!("unexpected WebSocket response kind"),
 				}
@@ -438,7 +417,7 @@ where
 						if can_hibernate {
 							credit.sent(identity.message_index, Message::Text(text.clone()));
 						}
-						send(
+						let sent = send(
 							&mut sender,
 							&mut identity,
 							version,
@@ -449,13 +428,25 @@ where
 								},
 							),
 						)
-						.await?;
+						.await;
+						if let Err(error) = sent {
+							return close_after_failed_send(
+								socket,
+								sender,
+								&mut receiver,
+								&identity,
+								can_hibernate,
+								clock.as_ref(),
+								error,
+							)
+							.await;
+						}
 					}
 					Some(Message::Binary(data)) => {
 						if can_hibernate {
 							credit.sent(identity.message_index, Message::Binary(data.clone()));
 						}
-						send(
+						let sent = send(
 							&mut sender,
 							&mut identity,
 							version,
@@ -463,7 +454,19 @@ where
 								p::ToEnvoyWebSocketMessage { data, binary: true },
 							),
 						)
-						.await?;
+						.await;
+						if let Err(error) = sent {
+							return close_after_failed_send(
+								socket,
+								sender,
+								&mut receiver,
+								&identity,
+								can_hibernate,
+								clock.as_ref(),
+								error,
+							)
+							.await;
+						}
 					}
 					Some(Message::Close(close)) => {
 						send(
@@ -495,6 +498,88 @@ where
 			}
 		}
 	}
+}
+
+/// How long a failed send to the actor waits for a close the actor sent before its host ended
+/// the stream. The close and the end of the stream travel separately, so the close can arrive
+/// just after the send fails; on a real tunnel failure this only delays the error close.
+const ACTOR_CLOSE_GRACE_MS: u64 = 250;
+
+/// The client close frame for the actor's close.
+fn client_close(close: p::ToRivetWebSocketClose) -> Message {
+	Message::Close(close.code.map(|code| CloseFrame {
+		code,
+		reason: close.reason.unwrap_or_default().to_string().into(),
+	}))
+}
+
+/// Sends the actor's close to the client and ends the actor side. The actor's host ends its
+/// stream once it has forwarded a final close, so a failed finish here only means that peer is
+/// already gone; the close reached the client and the tunnel ends normally.
+async fn forward_actor_close(
+	socket: &mut WebSocket,
+	sender: impl TunnelSender,
+	close: p::ToRivetWebSocketClose,
+) -> Result<()> {
+	socket.send(client_close(close)).await?;
+	if let Err(error) = sender.finish().await {
+		tracing::debug!(%error, "actor WebSocket tunnel peer already closed after the actor's close");
+	}
+	Ok(())
+}
+
+/// A client frame could not be sent to the actor. When the actor closed the WebSocket, its host
+/// ends the stream after forwarding that close, and the frame, often one replayed right after a
+/// wake, can find the stream ended before the gateway has read the close. Reads what the actor
+/// sent, for up to `ACTOR_CLOSE_GRACE_MS`; if it ends with the actor's close, the client gets
+/// the actor's messages before it, in order, then that close, and the tunnel ends normally.
+/// Otherwise nothing reaches the client and `error` is returned as before. A stop to sleep is
+/// not such a close: the frame that failed could not be kept for the wake, so it stays an error.
+async fn close_after_failed_send(
+	socket: &mut WebSocket,
+	sender: impl TunnelSender,
+	receiver: &mut impl TunnelReceiver,
+	identity: &p::MessageId,
+	can_hibernate: bool,
+	clock: &dyn Clock,
+	error: anyhow::Error,
+) -> Result<()> {
+	let Ok(now) = clock.boot_ms() else {
+		return Err(error);
+	};
+	let deadline = now.saturating_add(ACTOR_CLOSE_GRACE_MS);
+	let mut messages = Vec::new();
+	let close = loop {
+		let Ok(Ok(Some(bytes))) = rivet_env::timeout_at(clock, deadline, receiver.recv()).await
+		else {
+			return Err(error);
+		};
+		match decode_reply(bytes, identity) {
+			Ok(p::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(message)) => {
+				let message = if message.binary {
+					Message::Binary(message.data)
+				} else {
+					let Ok(text) = message.data.try_into() else {
+						return Err(error);
+					};
+					Message::Text(text)
+				};
+				messages.push(message);
+			}
+			Ok(p::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_)) => {}
+			Ok(p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close))
+				if !(can_hibernate && actor_stopped(&close)) =>
+			{
+				break close;
+			}
+			_ => return Err(error),
+		}
+	};
+	tracing::debug!(%error, "send to the actor failed after the actor closed the WebSocket; forwarding its close");
+	for message in messages {
+		socket.send(message).await?;
+	}
+	forward_actor_close(socket, sender, close).await
 }
 
 /// Sends one keepalive ping to the client and counts it. A failed send means the client socket
@@ -835,7 +920,9 @@ mod tests {
 			async move { sent }
 		}
 
+		/// Fails like a UPS `finish` once the actor's host stopped consuming the stream.
 		async fn finish(self) -> Result<()> {
+			ensure!(!self.0.is_closed(), "fake actor stream closed");
 			Ok(())
 		}
 	}
@@ -1662,6 +1749,134 @@ mod tests {
 			.unwrap()
 			.unwrap()
 			.unwrap();
+		server.abort();
+	}
+
+	/// The result `proxy` ended with.
+	async fn finished(done: oneshot::Receiver<Result<()>>) -> Result<()> {
+		tokio::time::timeout(std::time::Duration::from_secs(5), done)
+			.await
+			.expect("proxy did not end")
+			.unwrap()
+	}
+
+	/// The client's frame wakes the actor, which closes its restored connections at once. Its
+	/// host forwards the close and ends the stream before the gateway sends the frame queued for
+	/// replay, so that send fails. The client still gets the actor's close, not the tunnel's
+	/// error close.
+	#[tokio::test]
+	async fn the_waking_client_gets_the_actors_close_when_the_replay_send_fails() {
+		let wakes = crate::sibling_wake::SiblingWakes::new();
+		let actor_id = rivet_util::Id::nil();
+		let (first, mut asleep) = fake_stream();
+		let (second, mut woken) = fake_stream();
+		let (mut client, done, server) = proxied_client(
+			wakes.clone(),
+			actor_id,
+			message_id(1, 2),
+			first,
+			vec![second],
+		)
+		.await;
+
+		let id = asleep.recv_open().await;
+		asleep.send(&id, ws_accept());
+		asleep.send(&id, ws_close(1012, "actor.stopped"));
+
+		client
+			.send(ClientMessage::Text("wake".into()))
+			.await
+			.unwrap();
+		let woken_id = woken.recv_open().await;
+		// The host stops consuming the stream before the gateway reads the accept, so the
+		// replayed frame cannot be sent; the actor's close is already on its way.
+		woken.from_gateway.close();
+		woken.send(&woken_id, ws_accept());
+		woken.send(&woken_id, ws_close(1008, "restored.rejected"));
+
+		let frame = next_data(&mut client).await;
+		let ClientMessage::Close(Some(close)) = &frame else {
+			panic!("unexpected frame {frame:?}");
+		};
+		assert_eq!(u16::from(close.code), 1008);
+		assert_eq!(close.reason.as_str(), "restored.rejected");
+		finished(done).await.unwrap();
+		server.abort();
+	}
+
+	/// A re-attached sibling receives the actor's close; the host already ended the stream, so
+	/// ending the gateway's side fails. The close was delivered and the tunnel ends without an
+	/// error.
+	#[tokio::test]
+	async fn a_sibling_ends_normally_when_finish_fails_after_the_actors_close() {
+		let wakes = crate::sibling_wake::SiblingWakes::new();
+		let actor_id = rivet_util::Id::nil();
+		let (first, mut asleep) = fake_stream();
+		let (second, mut woken) = fake_stream();
+		let (mut client, done, server) = proxied_client(
+			wakes.clone(),
+			actor_id,
+			message_id(1, 2),
+			first,
+			vec![second],
+		)
+		.await;
+
+		let id = asleep.recv_open().await;
+		asleep.send(&id, ws_accept());
+		asleep.send(&id, ws_close(1012, "actor.stopped"));
+		wakes.publish(actor_id, 2).await;
+
+		let woken_id = woken.recv_open().await;
+		woken.from_gateway.close();
+		woken.send(&woken_id, ws_accept());
+		woken.send(&woken_id, ws_close(1008, "restored.rejected"));
+
+		let frame = next_data(&mut client).await;
+		let ClientMessage::Close(Some(close)) = &frame else {
+			panic!("unexpected frame {frame:?}");
+		};
+		assert_eq!(u16::from(close.code), 1008);
+		assert_eq!(close.reason.as_str(), "restored.rejected");
+		finished(done).await.unwrap();
+		server.abort();
+	}
+
+	/// A send to the actor fails and the actor sent no close: the tunnel still ends with the
+	/// error, which the route turns into its error close, and the actor's pending message is
+	/// not delivered, as before.
+	#[tokio::test]
+	async fn a_failed_send_without_an_actor_close_is_still_an_error() {
+		let (first, mut actor) = fake_stream();
+		let (mut client, done, server) = proxied_client(
+			crate::sibling_wake::SiblingWakes::new(),
+			rivet_util::Id::nil(),
+			message_id(1, 2),
+			first,
+			vec![],
+		)
+		.await;
+
+		let id = actor.recv_open().await;
+		actor.send(&id, ws_accept());
+		actor.send(&id, ws_text("before"));
+		let frame = next_data(&mut client).await;
+		assert!(
+			matches!(&frame, ClientMessage::Text(text) if text.as_str() == "before"),
+			"unexpected frame {frame:?}"
+		);
+		actor.from_gateway.close();
+		actor.send(&id, ws_text("pending"));
+		client
+			.send(ClientMessage::Text("lost".into()))
+			.await
+			.unwrap();
+
+		let error = finished(done).await.unwrap_err();
+		assert!(
+			error.to_string().contains("fake actor stream closed"),
+			"unexpected error {error:#}"
+		);
 		server.abort();
 	}
 }
