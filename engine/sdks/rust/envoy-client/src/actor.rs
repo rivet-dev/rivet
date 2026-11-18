@@ -1653,3 +1653,279 @@ async fn send_actor_message(
 		);
 	}
 }
+
+#[cfg(test)]
+#[allow(
+	clippy::disallowed_methods,
+	reason = "the tests run the actor loop on a tokio runtime"
+)]
+mod actor_closed_tests {
+	//! A hibernatable connection the actor closes itself must reach the actor's `on_close`, the
+	//! only path by which rivetkit-core's raw WebSocket handler disconnects the connection and
+	//! queues its persisted record for removal.
+	use super::*;
+	use crate::callbacks::EnvoyCallbacks;
+	use crate::config::EnvoyConfig;
+	use crate::tunnel::HibernatingWebSocketMetadata;
+	use std::sync::Mutex as StdMutex;
+	use std::time::Duration;
+
+	const GATEWAY_ID: protocol::GatewayId = [1; 4];
+	const REQUEST_ID: protocol::RequestId = [2; 4];
+	const ACTOR_ID: &str = "actor";
+
+	#[derive(Clone, Copy, PartialEq)]
+	enum CloseAt {
+		/// In the handler's open, while the actor restores the parked connection.
+		Restore,
+		/// On the first client frame after the gateway re-attached the connection.
+		Message,
+		/// The actor never closes; the client does, through the gateway. Checks the harness.
+		Gateway,
+		/// In the handler's open of a new live connection, not a restored one.
+		Live,
+	}
+
+	struct Callbacks {
+		close_at: CloseAt,
+		closed: Arc<StdMutex<Vec<(u16, String)>>>,
+	}
+
+	impl EnvoyCallbacks for Callbacks {
+		fn on_actor_start(
+			&self,
+			handle: EnvoyHandle,
+			actor_id: String,
+			_generation: u32,
+			_config: protocol::ActorConfig,
+			_preloaded_kv: Option<protocol::PreloadedKv>,
+			_fork: Option<protocol::ActorFork>,
+		) -> crate::callbacks::BoxFuture<anyhow::Result<()>> {
+			// As rivetkit-core does when it loads a persisted hibernatable connection.
+			handle.restore_hibernating_requests(
+				actor_id,
+				vec![HibernatingWebSocketMetadata {
+					gateway_id: GATEWAY_ID,
+					request_id: REQUEST_ID,
+					envoy_message_index: 0,
+					rivet_message_index: 0,
+					path: "/raw".to_owned(),
+					headers: HashMap::new(),
+				}],
+			);
+			Box::pin(async { Ok(()) })
+		}
+
+		fn on_shutdown(&self) {}
+
+		fn fetch(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_gateway_id: protocol::GatewayId,
+			_request_id: protocol::RequestId,
+			_request: HttpRequest,
+		) -> crate::callbacks::BoxFuture<anyhow::Result<crate::http::HttpResponse>> {
+			Box::pin(async { anyhow::bail!("no fetch in this test") })
+		}
+
+		fn websocket(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_gateway_id: protocol::GatewayId,
+			_request_id: protocol::RequestId,
+			_request: HttpRequest,
+			_path: String,
+			_headers: HashMap<String, String>,
+			_is_hibernatable: bool,
+			_is_restoring_hibernatable: bool,
+			_sender: WebSocketSender,
+		) -> crate::callbacks::BoxFuture<anyhow::Result<WebSocketHandler>> {
+			let close_at = self.close_at;
+			let closed = self.closed.clone();
+			Box::pin(async move {
+				Ok(WebSocketHandler {
+					on_message: Box::new(move |message: WebSocketMessage| {
+						Box::pin(async move {
+							if close_at == CloseAt::Message {
+								message
+									.sender
+									.close(Some(1008), Some("closed by actor".to_owned()));
+							}
+						})
+					}),
+					on_close: Box::new(move |code, reason| {
+						closed.lock().unwrap().push((code, reason));
+						Box::pin(async {})
+					}),
+					on_open: Some(Box::new(move |sender: WebSocketSender| {
+						Box::pin(async move {
+							if matches!(close_at, CloseAt::Restore | CloseAt::Live) {
+								sender.close(Some(1008), Some("closed by actor".to_owned()));
+							}
+						})
+					})),
+				})
+			})
+		}
+
+		fn can_hibernate<'a>(
+			&'a self,
+			_actor_id: &'a str,
+			_gateway_id: &'a protocol::GatewayId,
+			_request_id: &'a protocol::RequestId,
+			_request: &'a HttpRequest,
+		) -> crate::callbacks::BorrowedBoxFuture<'a, anyhow::Result<bool>> {
+			Box::pin(async { Ok(true) })
+		}
+	}
+
+	fn shared(callbacks: Callbacks) -> Arc<SharedContext> {
+		let (envoy_tx, envoy_rx) = mpsc::unbounded_channel();
+		// Nothing reads what the actor sends to the envoy loop; keep the channel open.
+		std::mem::forget(envoy_rx);
+		Arc::new(SharedContext {
+			config: EnvoyConfig {
+				version: 1,
+				endpoint: "http://127.0.0.1:1".to_owned(),
+				token: None,
+				namespace: "default".to_owned(),
+				pool_name: "default".to_owned(),
+				prepopulate_actor_names: HashMap::new(),
+				metadata: None,
+				not_global: true,
+				debug_latency_ms: None,
+				stopped_generation_floor_ttl: Duration::from_secs(60),
+				stopped_generation_floor_capacity: 16,
+				max_queued_requests_per_actor: 16,
+				max_parked_websocket_messages: 16,
+				max_parked_websocket_bytes: 1024,
+				callbacks: Arc::new(callbacks),
+				connector: None,
+			},
+			envoy_key: "envoy".to_owned(),
+			envoy_tx,
+			actors: Default::default(),
+			actors_notify: Default::default(),
+			live_tunnel_requests: Default::default(),
+			pending_hibernation_restores: Default::default(),
+			ws_tx: Default::default(),
+			http_ws_tx: Default::default(),
+			connection_session: Default::default(),
+			next_connection_session: Default::default(),
+			connection_session_tx: tokio::sync::watch::channel(0).0,
+			expired_connection_session: Default::default(),
+			protocol_metadata: Default::default(),
+			shutting_down: Default::default(),
+			last_ping_ts: Default::default(),
+			contact_before_install_ms: Default::default(),
+			last_contact_ms: Default::default(),
+			stopped_tx: tokio::sync::watch::channel(Default::default()).0,
+		})
+	}
+
+	fn message_id(message_index: u16) -> protocol::MessageId {
+		protocol::MessageId {
+			gateway_id: GATEWAY_ID,
+			request_id: REQUEST_ID,
+			message_index,
+		}
+	}
+
+	/// A new connection, not the persisted one.
+	fn live_message_id() -> protocol::MessageId {
+		protocol::MessageId {
+			gateway_id: GATEWAY_ID,
+			request_id: [3; 4],
+			message_index: 0,
+		}
+	}
+
+	/// Starts an actor with one persisted hibernatable connection and no tracked hibernating
+	/// request, so the connection is parked; then the gateway re-opens its tunnel. Returns what
+	/// the actor's `on_close` saw within a few seconds.
+	async fn run(close_at: CloseAt) -> Vec<(u16, String)> {
+		let closed = Arc::new(StdMutex::new(Vec::new()));
+		let shared = shared(Callbacks {
+			close_at,
+			closed: closed.clone(),
+		});
+		let (tx, _count) = create_actor(
+			shared,
+			ACTOR_ID.to_owned(),
+			1,
+			protocol::ActorConfig {
+				name: "test".into(),
+				key: None,
+				create_ts: 0,
+				input: None,
+			},
+			Vec::new(),
+			None,
+			None,
+		);
+		tx.send(ToActor::WsOpen {
+			message_id: if close_at == CloseAt::Live {
+				live_message_id()
+			} else {
+				message_id(0)
+			},
+			path: "/raw".to_owned(),
+			headers: BTreeMap::new(),
+		})
+		.unwrap();
+		if close_at == CloseAt::Message {
+			tx.send(ToActor::WsMsg {
+				message_id: message_id(1),
+				msg: protocol::ToEnvoyWebSocketMessage {
+					data: b"hello".to_vec().into(),
+					binary: false,
+				},
+			})
+			.unwrap();
+		}
+		if close_at == CloseAt::Gateway {
+			tx.send(ToActor::WsClose {
+				message_id: message_id(1),
+				close: protocol::ToEnvoyWebSocketClose {
+					code: Some(1000),
+					reason: Some("client".to_owned().into()),
+				},
+			})
+			.unwrap();
+		}
+		for _ in 0..50 {
+			if !closed.lock().unwrap().is_empty() {
+				break;
+			}
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+		let seen = closed.lock().unwrap().clone();
+		seen
+	}
+
+	#[tokio::test]
+	async fn a_live_connection_the_actor_closes_is_closed_in_the_actor() {
+		let closed = run(CloseAt::Live).await;
+		assert_eq!(closed, [(1008, "closed by actor".to_owned())]);
+	}
+
+	#[tokio::test]
+	async fn a_client_close_through_the_gateway_is_closed_in_the_actor() {
+		let closed = run(CloseAt::Gateway).await;
+		assert_eq!(closed, [(1000, "client".to_owned())]);
+	}
+
+	#[tokio::test]
+	async fn a_restored_connection_the_actor_closes_while_parked_is_closed_in_the_actor() {
+		let closed = run(CloseAt::Restore).await;
+		assert_eq!(closed, [(1008, "closed by actor".to_owned())]);
+	}
+
+	#[tokio::test]
+	async fn a_reattached_connection_the_actor_closes_is_closed_in_the_actor() {
+		let closed = run(CloseAt::Message).await;
+		assert_eq!(closed, [(1008, "closed by actor".to_owned())]);
+	}
+}
