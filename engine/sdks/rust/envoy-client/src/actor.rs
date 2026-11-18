@@ -146,6 +146,13 @@ pub enum ToActor {
 		gateway_id: protocol::GatewayId,
 		request_id: protocol::RequestId,
 	},
+	/// The actor closed a connection and its outgoing task sent the close.
+	WsActorClosed {
+		gateway_id: protocol::GatewayId,
+		request_id: protocol::RequestId,
+		code: Option<u16>,
+		reason: Option<String>,
+	},
 }
 
 struct WebSocketRequestState {
@@ -569,6 +576,18 @@ async fn actor_inner(
 					} => {
 						handle_ws_parked_overflow(&mut ctx, gateway_id, request_id).await;
 					}
+					ToActor::WsActorClosed {
+						gateway_id,
+						request_id,
+						code,
+						reason,
+					} => {
+						// The gateway answers an actor's close with nothing, so the actor's side
+						// of the connection ends here, as it does for a close from the client.
+						let message_id = protocol::MessageId { gateway_id, request_id, message_index: 0 };
+						let close = protocol::ToEnvoyWebSocketClose { code, reason: reason.map(Into::into) };
+						handle_ws_close(&mut ctx, message_id, close).await;
+					}
 				}
 			}
 			stop_result = async {
@@ -729,6 +748,7 @@ fn spawn_ws_outgoing_task(
 	request_id: protocol::RequestId,
 	mut outgoing_rx: mpsc::UnboundedReceiver<WsOutgoing>,
 	parked: Option<parked::ParkedTunnel>,
+	actor_tx: mpsc::UnboundedSender<ToActor>,
 ) {
 	let ws_task = async move {
 		// A parked connection has no tunnel to send on. What the actor sends is held, in
@@ -789,13 +809,19 @@ fn spawn_ws_outgoing_task(
 							message_kind: protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
 								protocol::ToRivetWebSocketClose {
 									code,
-									reason: reason.map(Into::into),
+									reason: reason.clone().map(Into::into),
 									hibernate: false,
 								},
 							),
 						}),
 					)
 					.await;
+					let _ = actor_tx.send(ToActor::WsActorClosed {
+						gateway_id,
+						request_id,
+						code,
+						reason,
+					});
 					break;
 				}
 			}
@@ -1054,6 +1080,7 @@ async fn finish_ws_open(
 				message_id.request_id,
 				outgoing_rx,
 				None,
+				ctx.tx.clone(),
 			);
 
 			// Gateway wake flows still wait for a websocket-open ack before they
@@ -1351,6 +1378,7 @@ async fn handle_hws_restore(
 						hib_req.request_id,
 						hws_outgoing_rx,
 						None,
+						ctx.tx.clone(),
 					);
 					if let Some(ws) = ctx
 						.ws_entries
@@ -1490,6 +1518,7 @@ async fn handle_hws_restore(
 								},
 								actor_tx: ctx.tx.clone(),
 							}),
+							ctx.tx.clone(),
 						);
 						if let Some(on_open) = ws_handler.on_open.take() {
 							on_open(WebSocketSender {
