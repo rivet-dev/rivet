@@ -10,6 +10,7 @@ use rivet_error::{INTERNAL_ERROR, RivetError};
 use rivet_metrics::{GaugeGuardExt, IntGaugeGuard};
 use rivet_runner_protocol as protocol;
 use rivet_util::throttle::{RateLimitMethod, RateLimiter};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio_tungstenite::tungstenite::error::ProtocolError;
@@ -190,6 +191,43 @@ pub(crate) fn proxied_request_builder(
 	add_proxy_headers_with_addr(headers, &req_ctx)?;
 
 	Ok(builder)
+}
+
+/// Prefix of the WebSocket subprotocol that carries the engine token.
+const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
+
+/// Collects the client's request headers to forward to an actor. The engine token is dropped so
+/// actor code never receives the credential the client used to reach the gateway: the
+/// `x-rivet-token` header is removed and `rivet_token.*` entries are removed from
+/// `sec-websocket-protocol`. Every other header, including `Authorization`, is forwarded as is.
+pub fn actor_forwarded_headers(headers: &hyper::HeaderMap) -> HashMap<String, String> {
+	let mut forwarded = HashMap::new();
+	for (name, value) in headers {
+		if name == X_RIVET_TOKEN {
+			continue;
+		}
+		let Ok(value) = value.to_str() else {
+			continue;
+		};
+		let value = if name == hyper::header::SEC_WEBSOCKET_PROTOCOL {
+			strip_token_protocol(value)
+		} else {
+			value.to_owned()
+		};
+		forwarded.insert(name.to_string(), value);
+	}
+	forwarded
+}
+
+/// Removes `rivet_token.*` entries from a `sec-websocket-protocol` value, keeping every other
+/// subprotocol in order.
+fn strip_token_protocol(protocols: &str) -> String {
+	protocols
+		.split(',')
+		.map(str::trim)
+		.filter(|protocol| !protocol.starts_with(WS_PROTOCOL_TOKEN))
+		.collect::<Vec<_>>()
+		.join(", ")
 }
 
 /// Renders a request URI for logs with the values of credential query parameters replaced.

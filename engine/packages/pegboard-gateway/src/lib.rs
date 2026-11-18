@@ -21,7 +21,6 @@ use rivet_guard_core::{
 };
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK1_VERSION};
 use std::{
-	collections::HashMap,
 	sync::{Arc, atomic::AtomicU64},
 	time::Duration,
 };
@@ -100,16 +99,7 @@ impl PegboardGateway {
 		let request_id = req_ctx.in_flight_request_id()?;
 
 		// Extract request parts
-		let headers = req
-			.headers()
-			.iter()
-			.filter_map(|(name, value)| {
-				value
-					.to_str()
-					.ok()
-					.map(|value_str| (name.to_string(), value_str.to_string()))
-			})
-			.collect::<HashMap<_, _>>();
+		let headers = rivet_guard_core::utils::actor_forwarded_headers(req.headers());
 
 		// NOTE: Size constraints have already been applied by guard
 		let body_bytes = req
@@ -260,12 +250,7 @@ impl PegboardGateway {
 		let request_id = req_ctx.in_flight_request_id()?;
 
 		// Extract headers
-		let mut request_headers = HashMap::new();
-		for (name, value) in req_ctx.headers() {
-			if let Result::Ok(value_str) = value.to_str() {
-				request_headers.insert(name.to_string(), value_str.to_string());
-			}
-		}
+		let request_headers = rivet_guard_core::utils::actor_forwarded_headers(req_ctx.headers());
 
 		let (mut stopped_sub, runner_protocol_version, _) = tokio::try_join!(
 			ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
