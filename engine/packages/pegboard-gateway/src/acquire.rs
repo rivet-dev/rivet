@@ -7,6 +7,10 @@
 //! read may send one. Notices and the fallback poll drive the next read. The gateway also
 //! judges the envoy an actor was allocated to, since the state machine has no start or stop
 //! timeout: a dead or draining envoy is reported with a `Reallocate`.
+//!
+//! A request with `Reach::AttachOnly` reads the actor and sends it nothing. It is how a
+//! hibernated WebSocket re-attaches to an actor another request woke, without waking an actor
+//! that went back to sleep meanwhile.
 use crate::ActorNotFound;
 use crate::start_wait::{Next, StartWait, Wake};
 use crate::start_waits::StartWaits;
@@ -29,6 +33,13 @@ const STREAM_RETRY_INITIAL_DELAY: Duration = Duration::from_millis(50);
 
 /// Longest wait between stream open retries to a running actor.
 const STREAM_RETRY_MAX_DELAY: Duration = Duration::from_millis(500);
+
+/// First wait of an attach-only acquisition before it reads a starting actor again. It sends
+/// no `TryStart`, so no start notice reaches it and it polls instead.
+const ATTACH_POLL_INITIAL_DELAY: Duration = Duration::from_millis(50);
+
+/// Longest wait between an attach-only acquisition's reads of a starting actor.
+const ATTACH_POLL_MAX_DELAY: Duration = Duration::from_secs(1);
 
 /// How long a request waits for its actor before failing.
 const ACQUIRE_TIMEOUT: Duration = Duration::from_secs(45);
@@ -155,6 +166,61 @@ impl std::fmt::Display for DelegatedToV2 {
 
 impl std::error::Error for DelegatedToV2 {}
 
+/// What a request may do to an actor that does not run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Reach {
+	/// Start it. A client asked for the actor.
+	Start,
+	/// Leave it as it is. A hibernated WebSocket re-opens its tunnel because another request
+	/// reached the actor, and no client asked for anything, so the re-open may only attach to
+	/// an actor that runs. It sends the actor no `TryStart`, `Reallocate` or create in any
+	/// phase, and fails with `ActorNotRunning` when the actor does not run.
+	AttachOnly,
+}
+
+/// An attach-only acquisition found the actor not running and left it that way.
+#[derive(Debug)]
+pub(crate) struct ActorNotRunning;
+
+impl std::fmt::Display for ActorNotRunning {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("the actor does not run and this request may not start it")
+	}
+}
+
+impl std::error::Error for ActorNotRunning {}
+
+/// What an attach-only acquisition does with an actor in a given phase.
+#[derive(Debug, PartialEq, Eq)]
+enum Attach {
+	/// The actor runs: open a stream to it.
+	Open,
+	/// Another request started the actor and it does not run yet: read it again shortly. A
+	/// pipelined request publishes the actor's epoch while it still starts, so the sockets it
+	/// woke find it here.
+	Poll,
+	/// The actor sleeps or is on its way there: leave it alone.
+	NotRunning,
+	/// The actor is gone or served elsewhere: the usual answer of a request that may not create.
+	Unavailable,
+}
+
+fn attach_only(phase: &wire::ActorPhase) -> Attach {
+	match phase {
+		wire::ActorPhase::Running(_) => Attach::Open,
+		wire::ActorPhase::Starting(_) => Attach::Poll,
+		// A `TryStart` to a stopping actor starts it again once it has stopped, so a stopping
+		// actor is left alone like a sleeping one.
+		wire::ActorPhase::Initializing(_)
+		| wire::ActorPhase::Stopping(_)
+		| wire::ActorPhase::Sleeping(_) => Attach::NotRunning,
+		wire::ActorPhase::Destroying(_)
+		| wire::ActorPhase::Destroyed
+		| wire::ActorPhase::DelegatedToV2
+		| wire::ActorPhase::MigratingFromV2(_) => Attach::Unavailable,
+	}
+}
+
 /// Where an acquisition starts, carried from one attempt of a request to the next so a retried
 /// attempt resumes from where the last one left off rather than from the request's resolve.
 pub(crate) struct AcquireTarget {
@@ -226,7 +292,9 @@ impl AcquireTarget {
 /// Waits until the actor runs and opens a stream to it on `class`. With `create`, the actor is
 /// created first and created again if it is found destroyed. With `pipeline`, the request may
 /// follow the start command to its envoy before the actor runs; a request the envoy already
-/// refused there waits for the actor to run instead. Returns the actor's epoch and the stream.
+/// refused there waits for the actor to run instead. With `Reach::AttachOnly`, the actor is
+/// never started: the acquisition fails with `ActorNotRunning` unless the actor runs or another
+/// request is starting it. Returns the actor's epoch and the stream.
 /// `namespace` is the request's validated namespace, which a token is checked against. `target`
 /// is where the acquisition starts; it is updated in place whether the acquisition succeeds or
 /// fails, so the request's next attempt starts from it. A create always makes the create's own
@@ -240,6 +308,7 @@ pub(crate) async fn acquire(
 	namespace: &str,
 	class: universalpubsub::RequestClass,
 	pipeline: bool,
+	reach: Reach,
 	credential: &rivet_guard_core::auth::Credential,
 	deadline: RoutingDeadline,
 ) -> Result<Acquired> {
@@ -254,6 +323,7 @@ pub(crate) async fn acquire(
 		target,
 		namespace,
 		pipeline,
+		reach,
 		credential,
 		authorization_namespace: None,
 		last_phase: "unread",
@@ -267,6 +337,10 @@ pub(crate) async fn acquire(
 			group: acquire.target.group,
 		}),
 		Ok(Err(error)) => Err(error),
+		// The actor another request started did not run in time. The socket keeps waiting.
+		Err(rivet_env::TimeoutError::Elapsed) if reach == Reach::AttachOnly => {
+			Err(ActorNotRunning.into())
+		}
 		Err(rivet_env::TimeoutError::Elapsed) => {
 			tracing::warn!(actor_id = %acquire.target.actor_id, last_phase = acquire.last_phase, "actor did not become ready before the gateway deadline");
 			Err(crate::RequestTimeout.build())
@@ -274,6 +348,14 @@ pub(crate) async fn acquire(
 		Err(error) => Err(error.into()),
 	};
 	acquire.wait.release().await;
+	// Every request that reaches the actor tells its hibernated WebSockets on this gateway
+	// which epoch runs, so they re-attach to an actor another request woke.
+	if let Ok(acquired) = &result {
+		waits
+			.wakes()
+			.publish(acquired.actor_id, acquired.epoch)
+			.await;
+	}
 	result
 }
 
@@ -317,6 +399,7 @@ struct Acquire<'a> {
 	/// The namespace the request named, the only scope a token is checked against.
 	namespace: &'a str,
 	pipeline: bool,
+	reach: Reach,
 	credential: &'a rivet_guard_core::auth::Credential,
 	/// The request's namespace once an actor read or this keyed creation authorized it; `None`
 	/// until then, so a JWT does not route on a notice alone.
@@ -330,6 +413,7 @@ impl Acquire<'_> {
 		let ctx = self.ctx;
 		let clock = ctx.env().clock();
 		let mut stream_retry_delay = STREAM_RETRY_INITIAL_DELAY;
+		let mut attach_poll_delay = ATTACH_POLL_INITIAL_DELAY;
 		let mut next = match self.target.creates_first() {
 			true => self.create().await?,
 			false => Next::Read,
@@ -391,6 +475,9 @@ impl Acquire<'_> {
 					} => (actor, epoch, phase),
 					Read::Initializing => {
 						self.last_phase = "initializing";
+						if self.reach == Reach::AttachOnly {
+							return Err(ActorNotRunning.into());
+						}
 						next = if self.credential.is_namespace_scoped()
 							&& self.authorization_namespace.is_none()
 						{
@@ -427,6 +514,19 @@ impl Acquire<'_> {
 			self.authorization_namespace = Some(self.namespace.to_owned());
 			last_actor = Some(actor.clone());
 			self.last_phase = phase_name(&phase);
+
+			if self.reach == Reach::AttachOnly {
+				match attach_only(&phase) {
+					// The running and unavailable arms below send the actor nothing here.
+					Attach::Open | Attach::Unavailable => {}
+					Attach::Poll => {
+						rivet_env::sleep(clock.as_ref(), attach_poll_delay).await?;
+						attach_poll_delay = (attach_poll_delay * 2).min(ATTACH_POLL_MAX_DELAY);
+						continue;
+					}
+					Attach::NotRunning => return Err(ActorNotRunning.into()),
+				}
+			}
 
 			match phase {
 				wire::ActorPhase::Initializing(_) | wire::ActorPhase::Sleeping(_) => {
@@ -619,6 +719,7 @@ impl Acquire<'_> {
 		let Some(mut create) = self.target.create.clone() else {
 			return Err(ActorNotFound.build());
 		};
+		self.may_start()?;
 		let standing =
 			pegboard::actor_key::keyed_create_standing(self.ctx, &create.standing).await?;
 		create.actor = pegboard::actor_key::keyed_create_actor(
@@ -674,6 +775,15 @@ impl Acquire<'_> {
 		Ok(settled.unwrap_or(Next::Wait))
 	}
 
+	/// Every event that can start the actor or move it passes through here first: the create,
+	/// the `TryStart` and the `Reallocate`. An attach-only acquisition sends none of them.
+	fn may_start(&self) -> Result<()> {
+		match self.reach {
+			Reach::Start => Ok(()),
+			Reach::AttachOnly => Err(ActorNotRunning.into()),
+		}
+	}
+
 	/// A destroyed actor is created again by a request that may create, and is not found by
 	/// one that may not.
 	async fn create_or_not_found(&mut self) -> Result<Next> {
@@ -686,6 +796,7 @@ impl Acquire<'_> {
 	/// Wakes the actor and registers for its notices, then waits for a notice or the fallback
 	/// poll unless the answer already settled the next step.
 	async fn not_running(&mut self) -> Result<Next> {
+		self.may_start()?;
 		match self.wait.try_start(self.ctx, self.deadline_unix_ms).await? {
 			Some(next) => Ok(next),
 			None => self.wait.wait(self.ctx).await,
@@ -714,6 +825,7 @@ impl Acquire<'_> {
 	/// Tells the actor its epoch's envoy is lost or draining, with this request's waiter so it
 	/// follows the reallocation's notices, and returns what the answer settled.
 	async fn reallocate(&mut self, epoch: u32, lost: bool) -> Result<Next> {
+		self.may_start()?;
 		let waiter = self.wait.waiter(self.ctx, self.deadline_unix_ms).await?;
 		let response = crate::start_wait::send_event(
 			self.ctx,
@@ -749,5 +861,47 @@ fn phase_name(phase: &wire::ActorPhase) -> &'static str {
 		wire::ActorPhase::Destroyed => "destroyed",
 		wire::ActorPhase::MigratingFromV2(_) => "migrating_from_v2",
 		wire::ActorPhase::DelegatedToV2 => "delegated_to_v2",
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn allocation() -> wire::ActorAllocation {
+		wire::ActorAllocation {
+			envoy_key: "envoy".to_owned().into(),
+			worker_id: Vec::new().into(),
+			connection_id: Vec::new().into(),
+		}
+	}
+
+	/// An attach-only acquisition opens a stream to a running actor, polls one that another
+	/// request is starting, and leaves every actor that does not run as it is.
+	#[test]
+	fn an_attach_only_acquisition_starts_no_actor() {
+		let running = wire::ActorPhase::Running(wire::Running {
+			allocation: allocation(),
+		});
+		let starting = wire::ActorPhase::Starting(wire::Starting {
+			allocation: allocation(),
+		});
+		let stopping = wire::ActorPhase::Stopping(wire::Stopping {
+			allocation: allocation(),
+		});
+		let sleeping = wire::ActorPhase::Sleeping(wire::Sleeping { wake_retries: 0 });
+
+		assert_eq!(attach_only(&running), Attach::Open);
+		assert_eq!(attach_only(&starting), Attach::Poll);
+		assert_eq!(attach_only(&stopping), Attach::NotRunning);
+		assert_eq!(attach_only(&sleeping), Attach::NotRunning);
+		assert_eq!(
+			attach_only(&wire::ActorPhase::Destroyed),
+			Attach::Unavailable
+		);
+		assert_eq!(
+			attach_only(&wire::ActorPhase::DelegatedToV2),
+			Attach::Unavailable
+		);
 	}
 }

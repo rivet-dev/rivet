@@ -714,6 +714,10 @@ impl CoreServerlessRuntime {
 			debug_latency_ms: None,
 			max_queued_requests_per_actor:
 				rivet_envoy_client::config::DEFAULT_MAX_QUEUED_REQUESTS_PER_ACTOR,
+			max_parked_websocket_messages:
+				rivet_envoy_client::config::DEFAULT_MAX_PARKED_WEBSOCKET_MESSAGES,
+			max_parked_websocket_bytes:
+				rivet_envoy_client::config::DEFAULT_MAX_PARKED_WEBSOCKET_BYTES,
 			stopped_generation_floor_ttl:
 				rivet_envoy_client::config::DEFAULT_STOPPED_GENERATION_FLOOR_TTL,
 			stopped_generation_floor_capacity:

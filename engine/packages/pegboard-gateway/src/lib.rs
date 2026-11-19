@@ -13,6 +13,7 @@ mod namespace_fallback;
 mod raw_rest_path;
 mod retry_budget;
 mod routes;
+pub mod sibling_wake;
 mod start_wait;
 pub mod start_waits;
 mod websocket_tunnel;

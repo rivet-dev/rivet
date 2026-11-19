@@ -48,6 +48,7 @@ pub struct EnvoyClientMetrics {
 	pub actor_queued_requests: IntGauge,
 	pub actor_queued_requests_capacity: IntGauge,
 	pub actor_queued_requests_overloaded_total: IntCounter,
+	pub parked_websocket_overflow_total: IntCounter,
 }
 
 impl EnvoyClientMetrics {
@@ -303,6 +304,15 @@ impl EnvoyClientMetrics {
 			"HTTP requests refused because their actor already had the configured number queued",
 		)
 		.expect("create envoy_client_actor_queued_requests_overloaded_total counter");
+		let parked_websocket_overflow_total = IntCounter::new(
+			"rivetkit_envoy_client_parked_websocket_overflow_total",
+			"hibernated WebSockets closed because their actor sent more than a connection holds before the gateway re-opens its tunnel",
+		)
+		.expect("create envoy_client_parked_websocket_overflow_total counter");
+		register(
+			&rivet_metrics::REGISTRY,
+			parked_websocket_overflow_total.clone(),
+		);
 		register(&rivet_metrics::REGISTRY, actor_queued_requests.clone());
 		register(
 			&rivet_metrics::REGISTRY,
@@ -340,6 +350,7 @@ impl EnvoyClientMetrics {
 			actor_queued_requests,
 			actor_queued_requests_capacity,
 			actor_queued_requests_overloaded_total,
+			parked_websocket_overflow_total,
 		}
 	}
 }

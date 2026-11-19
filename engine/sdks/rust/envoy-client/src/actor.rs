@@ -23,6 +23,7 @@ use crate::utils::{
 use crate::websocket::{WebSocketHandler, WebSocketMessage, WebSocketSender, WsOutgoing};
 
 mod http;
+mod parked;
 
 /// HTTP requests admitted to one actor and not yet taken by its task. Shared by the actor's
 /// entry, which admits against the cap, and the requests in its inbox.
@@ -140,6 +141,18 @@ pub enum ToActor {
 		request_id: protocol::RequestId,
 		envoy_message_index: u16,
 	},
+	/// The actor sent more to a parked hibernated connection than the connection may hold.
+	WsParkedOverflow {
+		gateway_id: protocol::GatewayId,
+		request_id: protocol::RequestId,
+	},
+	/// The actor closed a connection and its outgoing task sent the close.
+	WsActorClosed {
+		gateway_id: protocol::GatewayId,
+		request_id: protocol::RequestId,
+		code: Option<u16>,
+		reason: Option<String>,
+	},
 }
 
 struct WebSocketRequestState {
@@ -151,6 +164,9 @@ struct WsEntry {
 	rivet_message_index: u16,
 	ws_handler: Option<WebSocketHandler>,
 	outgoing_tx: mpsc::UnboundedSender<WsOutgoing>,
+	/// Set while a restored hibernated connection has no tunnel yet. Its outgoing task holds
+	/// what the actor sends until the gateway re-opens the tunnel and this fires.
+	parked_gate: Option<oneshot::Sender<()>>,
 }
 
 struct ActorContext {
@@ -164,6 +180,9 @@ struct ActorContext {
 	http_requests: http::HttpRequests,
 	websocket_requests: BufferMap<WebSocketRequestState>,
 	ws_entries: BufferMap<WsEntry>,
+	/// Parked connections closed for overflow whose client the gateway still holds. The
+	/// gateway's re-open of one is answered with the overflow close.
+	parked_overflows: BufferMap<()>,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	active_http_request_count: Arc<AsyncCounter>,
 }
@@ -311,6 +330,7 @@ async fn actor_inner(
 		http_requests: http::HttpRequests::new(),
 		websocket_requests: BufferMap::new(),
 		ws_entries: BufferMap::new(),
+		parked_overflows: BufferMap::new(),
 		hibernating_requests,
 		active_http_request_count,
 	};
@@ -550,6 +570,24 @@ async fn actor_inner(
 					} => {
 						handle_hws_ack(&mut ctx, gateway_id, request_id, envoy_message_index).await;
 					}
+					ToActor::WsParkedOverflow {
+						gateway_id,
+						request_id,
+					} => {
+						handle_ws_parked_overflow(&mut ctx, gateway_id, request_id).await;
+					}
+					ToActor::WsActorClosed {
+						gateway_id,
+						request_id,
+						code,
+						reason,
+					} => {
+						// The gateway answers an actor's close with nothing, so the actor's side
+						// of the connection ends here, as it does for a close from the client.
+						let message_id = protocol::MessageId { gateway_id, request_id, message_index: 0 };
+						let close = protocol::ToEnvoyWebSocketClose { code, reason: reason.map(Into::into) };
+						handle_ws_close(&mut ctx, message_id, close).await;
+					}
 				}
 			}
 			stop_result = async {
@@ -709,10 +747,31 @@ fn spawn_ws_outgoing_task(
 	gateway_id: protocol::GatewayId,
 	request_id: protocol::RequestId,
 	mut outgoing_rx: mpsc::UnboundedReceiver<WsOutgoing>,
+	parked: Option<parked::ParkedTunnel>,
+	actor_tx: mpsc::UnboundedSender<ToActor>,
 ) {
 	let ws_task = async move {
+		// A parked connection has no tunnel to send on. What the actor sends is held, in
+		// order and within the connection's limits, until the gateway re-opens the tunnel.
+		let mut held = match parked {
+			Some(parked) => {
+				match parked::park(&mut outgoing_rx, parked, gateway_id, request_id).await {
+					Some(held) => held,
+					None => return,
+				}
+			}
+			None => std::collections::VecDeque::new(),
+		};
+
 		let mut idx: u16 = 0;
-		while let Some(msg) = outgoing_rx.recv().await {
+		loop {
+			let msg = match held.pop_front() {
+				Some(msg) => msg,
+				None => match outgoing_rx.recv().await {
+					Some(msg) => msg,
+					None => break,
+				},
+			};
 			idx += 1;
 			match msg {
 				WsOutgoing::Message { data, binary } => {
@@ -750,13 +809,19 @@ fn spawn_ws_outgoing_task(
 							message_kind: protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
 								protocol::ToRivetWebSocketClose {
 									code,
-									reason: reason.map(Into::into),
+									reason: reason.clone().map(Into::into),
 									hibernate: false,
 								},
 							),
 						}),
 					)
 					.await;
+					let _ = actor_tx.send(ToActor::WsActorClosed {
+						gateway_id,
+						request_id,
+						code,
+						reason,
+					});
 					break;
 				}
 			}
@@ -781,9 +846,54 @@ async fn handle_ws_open(
 		reject_ws_open(ctx, message_id, 1013, "Actor Overloaded").await;
 		return;
 	}
+	if ctx
+		.parked_overflows
+		.remove(&[&message_id.gateway_id, &message_id.request_id])
+		.is_some()
+	{
+		// The actor closed this connection while it was parked, and the client behind it
+		// missed what was dropped. Answering the re-open with that close makes the client
+		// reconnect. Opening it as a new connection would resume the stream with a hole.
+		reject_ws_open(
+			ctx,
+			message_id,
+			parked::OVERFLOW_CLOSE_CODE,
+			parked::OVERFLOW_CLOSE_REASON,
+		)
+		.await;
+		return;
+	}
 	let restored_ws = ctx
 		.ws_entries
 		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+	let restored_ws = match restored_ws {
+		Some(mut ws) if ws.ws_handler.is_some() && ws.parked_gate.is_some() => {
+			// The actor already restored this connection when it started. Attach the tunnel:
+			// the open goes first, then everything the actor sent while it was parked.
+			let gate = ws.parked_gate.take().expect("checked above");
+			ws.rivet_message_index = message_id.message_index;
+			ctx.ws_entries
+				.insert(&[&message_id.gateway_id, &message_id.request_id], ws);
+			send_actor_message(
+				ctx,
+				message_id.gateway_id,
+				message_id.request_id,
+				protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(
+					protocol::ToRivetWebSocketOpen {
+						can_hibernate: true,
+					},
+				),
+			)
+			.await;
+			let _ = gate.send(());
+			tracing::debug!(
+				request_id = id_to_str(&message_id.request_id),
+				"gateway re-opened a parked hibernated websocket"
+			);
+			return;
+		}
+		other => other,
+	};
 	let is_restoring_hibernatable = restored_ws
 		.as_ref()
 		.map(|ws| ws.is_hibernatable)
@@ -960,6 +1070,7 @@ async fn finish_ws_open(
 					rivet_message_index: message_id.message_index,
 					ws_handler: Some(ws_handler),
 					outgoing_tx,
+					parked_gate: None,
 				},
 			);
 
@@ -968,6 +1079,8 @@ async fn finish_ws_open(
 				message_id.gateway_id,
 				message_id.request_id,
 				outgoing_rx,
+				None,
+				ctx.tx.clone(),
 			);
 
 			// Gateway wake flows still wait for a websocket-open ack before they
@@ -1112,6 +1225,46 @@ async fn handle_ws_close(
 	}
 }
 
+/// Closes a parked connection whose actor sent more than the connection may hold. Its outgoing
+/// task already dropped what it held. The actor's code is told the connection closed, so it
+/// stops sending on it, and the client is told when the gateway reaches the actor: at the
+/// re-open if the tunnel is still closed, or at once if the gateway re-opened it meanwhile.
+async fn handle_ws_parked_overflow(
+	ctx: &mut ActorContext,
+	gateway_id: protocol::GatewayId,
+	request_id: protocol::RequestId,
+) {
+	let Some(ws) = ctx.ws_entries.remove(&[&gateway_id, &request_id]) else {
+		// The connection ended before the notice arrived.
+		return;
+	};
+	if ws.parked_gate.is_some() {
+		ctx.parked_overflows.insert(&[&gateway_id, &request_id], ());
+	} else {
+		send_actor_message(
+			ctx,
+			gateway_id,
+			request_id,
+			protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
+				protocol::ToRivetWebSocketClose {
+					code: Some(parked::OVERFLOW_CLOSE_CODE),
+					reason: Some(parked::OVERFLOW_CLOSE_REASON.to_owned().into()),
+					hibernate: false,
+				},
+			),
+		)
+		.await;
+	}
+	ctx.websocket_requests.remove(&[&gateway_id, &request_id]);
+	if let Some(handler) = ws.ws_handler {
+		(handler.on_close)(
+			parked::OVERFLOW_CLOSE_CODE,
+			parked::OVERFLOW_CLOSE_REASON.to_owned(),
+		)
+		.await;
+	}
+}
+
 async fn handle_hws_restore(
 	ctx: &mut ActorContext,
 	handle: &EnvoyHandle,
@@ -1181,6 +1334,7 @@ async fn handle_hws_restore(
 							rivet_message_index: meta.rivet_message_index,
 							ws_handler: Some(ws_handler),
 							outgoing_tx: hws_outgoing_tx,
+							parked_gate: None,
 						},
 					);
 					if !handle
@@ -1223,6 +1377,8 @@ async fn handle_hws_restore(
 						hib_req.gateway_id,
 						hib_req.request_id,
 						hws_outgoing_rx,
+						None,
+						ctx.tx.clone(),
 					);
 					if let Some(ws) = ctx
 						.ws_entries
@@ -1297,6 +1453,108 @@ async fn handle_hws_restore(
 			.any(|req| req.gateway_id == meta.gateway_id && req.request_id == meta.request_id);
 
 		if !is_connected {
+			if hibernating_requests.is_empty() {
+				// The start command does not track hibernating requests: the gateway keeps the
+				// client socket open while the actor sleeps. Keep the persisted connection and
+				// wait for the gateway to re-open the tunnel with the same gateway and request
+				// ids (`handle_ws_open`) instead of closing it as stale.
+				//
+				// The connection is restored into the actor now, before any tunnel exists, so
+				// the actor's code holds every hibernated socket from the moment it wakes. A
+				// wake by one client would otherwise leave the others unknown to the actor
+				// until each sent a frame of its own, and a broadcast made meanwhile would
+				// never reach them. What the actor sends is held by the parked outgoing task
+				// and goes out, in order, when the gateway re-opens the tunnel. The task holds
+				// a bounded amount, since the gateway may never re-open the tunnel (`parked.rs`).
+				ctx.websocket_requests.insert(
+					&[&meta.gateway_id, &meta.request_id],
+					WebSocketRequestState {
+						envoy_message_index: 0,
+					},
+				);
+				let mut full_headers = meta.headers.clone();
+				full_headers.insert("Upgrade".to_string(), "websocket".to_string());
+				full_headers.insert("Connection".to_string(), "Upgrade".to_string());
+				let request = HttpRequest {
+					method: "GET".to_string(),
+					path: meta.path.clone(),
+					headers: full_headers.clone(),
+					body: None,
+					body_stream: None,
+				};
+				let (parked_tx, parked_rx) = mpsc::unbounded_channel();
+				let ws_result = ctx
+					.shared
+					.config
+					.callbacks
+					.websocket(
+						handle.clone(),
+						ctx.actor_id.clone(),
+						meta.gateway_id,
+						meta.request_id,
+						request,
+						meta.path.clone(),
+						full_headers,
+						true,
+						true,
+						WebSocketSender {
+							tx: parked_tx.clone(),
+						},
+					)
+					.await;
+				let (ws_handler, parked_gate) = match ws_result {
+					Ok(mut ws_handler) => {
+						let (gate_tx, gate_rx) = oneshot::channel();
+						spawn_ws_outgoing_task(
+							ctx.shared.clone(),
+							meta.gateway_id,
+							meta.request_id,
+							parked_rx,
+							Some(parked::ParkedTunnel {
+								gate: gate_rx,
+								limits: parked::ParkedLimits {
+									messages: ctx.shared.config.max_parked_websocket_messages,
+									bytes: ctx.shared.config.max_parked_websocket_bytes,
+								},
+								actor_tx: ctx.tx.clone(),
+							}),
+							ctx.tx.clone(),
+						);
+						if let Some(on_open) = ws_handler.on_open.take() {
+							on_open(WebSocketSender {
+								tx: parked_tx.clone(),
+							})
+							.await;
+						}
+						(Some(ws_handler), Some(gate_tx))
+					}
+					Err(error) => {
+						// Leave the connection for the gateway's re-open to restore or reject.
+						tracing::warn!(
+							request_id = id_to_str(&meta.request_id),
+							?error,
+							"could not restore a parked hibernated websocket at actor start"
+						);
+						(None, None)
+					}
+				};
+				ctx.ws_entries.insert(
+					&[&meta.gateway_id, &meta.request_id],
+					WsEntry {
+						is_hibernatable: true,
+						rivet_message_index: meta.rivet_message_index,
+						ws_handler,
+						outgoing_tx: parked_tx,
+						parked_gate,
+					},
+				);
+				tracing::debug!(
+					request_id = id_to_str(&meta.request_id),
+					"parked hibernated websocket until the gateway re-opens it"
+				);
+				continue;
+			}
+
 			tracing::debug!(
 				request_id = id_to_str(&meta.request_id),
 				"removing stale persisted websocket"
@@ -1422,5 +1680,281 @@ async fn send_actor_message(
 			&ctx.shared,
 			crate::envoy::ToEnvoyMessage::SendOrBufferTunnelMsg { msg: buffer_msg },
 		);
+	}
+}
+
+#[cfg(test)]
+#[allow(
+	clippy::disallowed_methods,
+	reason = "the tests run the actor loop on a tokio runtime"
+)]
+mod actor_closed_tests {
+	//! A hibernatable connection the actor closes itself must reach the actor's `on_close`, the
+	//! only path by which rivetkit-core's raw WebSocket handler disconnects the connection and
+	//! queues its persisted record for removal.
+	use super::*;
+	use crate::callbacks::EnvoyCallbacks;
+	use crate::config::EnvoyConfig;
+	use crate::tunnel::HibernatingWebSocketMetadata;
+	use std::sync::Mutex as StdMutex;
+	use std::time::Duration;
+
+	const GATEWAY_ID: protocol::GatewayId = [1; 4];
+	const REQUEST_ID: protocol::RequestId = [2; 4];
+	const ACTOR_ID: &str = "actor";
+
+	#[derive(Clone, Copy, PartialEq)]
+	enum CloseAt {
+		/// In the handler's open, while the actor restores the parked connection.
+		Restore,
+		/// On the first client frame after the gateway re-attached the connection.
+		Message,
+		/// The actor never closes; the client does, through the gateway. Checks the harness.
+		Gateway,
+		/// In the handler's open of a new live connection, not a restored one.
+		Live,
+	}
+
+	struct Callbacks {
+		close_at: CloseAt,
+		closed: Arc<StdMutex<Vec<(u16, String)>>>,
+	}
+
+	impl EnvoyCallbacks for Callbacks {
+		fn on_actor_start(
+			&self,
+			handle: EnvoyHandle,
+			actor_id: String,
+			_generation: u32,
+			_config: protocol::ActorConfig,
+			_preloaded_kv: Option<protocol::PreloadedKv>,
+			_fork: Option<protocol::ActorFork>,
+		) -> crate::callbacks::BoxFuture<anyhow::Result<()>> {
+			// As rivetkit-core does when it loads a persisted hibernatable connection.
+			handle.restore_hibernating_requests(
+				actor_id,
+				vec![HibernatingWebSocketMetadata {
+					gateway_id: GATEWAY_ID,
+					request_id: REQUEST_ID,
+					envoy_message_index: 0,
+					rivet_message_index: 0,
+					path: "/raw".to_owned(),
+					headers: HashMap::new(),
+				}],
+			);
+			Box::pin(async { Ok(()) })
+		}
+
+		fn on_shutdown(&self) {}
+
+		fn fetch(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_gateway_id: protocol::GatewayId,
+			_request_id: protocol::RequestId,
+			_request: HttpRequest,
+		) -> crate::callbacks::BoxFuture<anyhow::Result<crate::http::HttpResponse>> {
+			Box::pin(async { anyhow::bail!("no fetch in this test") })
+		}
+
+		fn websocket(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_gateway_id: protocol::GatewayId,
+			_request_id: protocol::RequestId,
+			_request: HttpRequest,
+			_path: String,
+			_headers: HashMap<String, String>,
+			_is_hibernatable: bool,
+			_is_restoring_hibernatable: bool,
+			_sender: WebSocketSender,
+		) -> crate::callbacks::BoxFuture<anyhow::Result<WebSocketHandler>> {
+			let close_at = self.close_at;
+			let closed = self.closed.clone();
+			Box::pin(async move {
+				Ok(WebSocketHandler {
+					on_message: Box::new(move |message: WebSocketMessage| {
+						Box::pin(async move {
+							if close_at == CloseAt::Message {
+								message
+									.sender
+									.close(Some(1008), Some("closed by actor".to_owned()));
+							}
+						})
+					}),
+					on_close: Box::new(move |code, reason| {
+						closed.lock().unwrap().push((code, reason));
+						Box::pin(async {})
+					}),
+					on_open: Some(Box::new(move |sender: WebSocketSender| {
+						Box::pin(async move {
+							if matches!(close_at, CloseAt::Restore | CloseAt::Live) {
+								sender.close(Some(1008), Some("closed by actor".to_owned()));
+							}
+						})
+					})),
+				})
+			})
+		}
+
+		fn can_hibernate<'a>(
+			&'a self,
+			_actor_id: &'a str,
+			_gateway_id: &'a protocol::GatewayId,
+			_request_id: &'a protocol::RequestId,
+			_request: &'a HttpRequest,
+		) -> crate::callbacks::BorrowedBoxFuture<'a, anyhow::Result<bool>> {
+			Box::pin(async { Ok(true) })
+		}
+	}
+
+	fn shared(callbacks: Callbacks) -> Arc<SharedContext> {
+		let (envoy_tx, envoy_rx) = mpsc::unbounded_channel();
+		// Nothing reads what the actor sends to the envoy loop; keep the channel open.
+		std::mem::forget(envoy_rx);
+		Arc::new(SharedContext {
+			config: EnvoyConfig {
+				version: 1,
+				endpoint: "http://127.0.0.1:1".to_owned(),
+				token: None,
+				namespace: "default".to_owned(),
+				pool_name: "default".to_owned(),
+				prepopulate_actor_names: HashMap::new(),
+				metadata: None,
+				not_global: true,
+				debug_latency_ms: None,
+				stopped_generation_floor_ttl: Duration::from_secs(60),
+				stopped_generation_floor_capacity: 16,
+				max_queued_requests_per_actor: 16,
+				max_parked_websocket_messages: 16,
+				max_parked_websocket_bytes: 1024,
+				callbacks: Arc::new(callbacks),
+				connector: None,
+			},
+			envoy_key: "envoy".to_owned(),
+			envoy_tx,
+			actors: Default::default(),
+			actors_notify: Default::default(),
+			live_tunnel_requests: Default::default(),
+			pending_hibernation_restores: Default::default(),
+			ws_tx: Default::default(),
+			http_ws_tx: Default::default(),
+			connection_session: Default::default(),
+			next_connection_session: Default::default(),
+			connection_session_tx: tokio::sync::watch::channel(0).0,
+			expired_connection_session: Default::default(),
+			protocol_metadata: Default::default(),
+			shutting_down: Default::default(),
+			last_ping_ts: Default::default(),
+			contact_before_install_ms: Default::default(),
+			last_contact_ms: Default::default(),
+			stopped_tx: tokio::sync::watch::channel(Default::default()).0,
+		})
+	}
+
+	fn message_id(message_index: u16) -> protocol::MessageId {
+		protocol::MessageId {
+			gateway_id: GATEWAY_ID,
+			request_id: REQUEST_ID,
+			message_index,
+		}
+	}
+
+	/// A new connection, not the persisted one.
+	fn live_message_id() -> protocol::MessageId {
+		protocol::MessageId {
+			gateway_id: GATEWAY_ID,
+			request_id: [3; 4],
+			message_index: 0,
+		}
+	}
+
+	/// Starts an actor with one persisted hibernatable connection and no tracked hibernating
+	/// request, so the connection is parked; then the gateway re-opens its tunnel. Returns what
+	/// the actor's `on_close` saw within a few seconds.
+	async fn run(close_at: CloseAt) -> Vec<(u16, String)> {
+		let closed = Arc::new(StdMutex::new(Vec::new()));
+		let shared = shared(Callbacks {
+			close_at,
+			closed: closed.clone(),
+		});
+		let (tx, _count) = create_actor(
+			shared,
+			ACTOR_ID.to_owned(),
+			1,
+			protocol::ActorConfig {
+				name: "test".into(),
+				key: None,
+				create_ts: 0,
+				input: None,
+			},
+			Vec::new(),
+			None,
+			None,
+		);
+		tx.send(ToActor::WsOpen {
+			message_id: if close_at == CloseAt::Live {
+				live_message_id()
+			} else {
+				message_id(0)
+			},
+			path: "/raw".to_owned(),
+			headers: BTreeMap::new(),
+		})
+		.unwrap();
+		if close_at == CloseAt::Message {
+			tx.send(ToActor::WsMsg {
+				message_id: message_id(1),
+				msg: protocol::ToEnvoyWebSocketMessage {
+					data: b"hello".to_vec().into(),
+					binary: false,
+				},
+			})
+			.unwrap();
+		}
+		if close_at == CloseAt::Gateway {
+			tx.send(ToActor::WsClose {
+				message_id: message_id(1),
+				close: protocol::ToEnvoyWebSocketClose {
+					code: Some(1000),
+					reason: Some("client".to_owned().into()),
+				},
+			})
+			.unwrap();
+		}
+		for _ in 0..50 {
+			if !closed.lock().unwrap().is_empty() {
+				break;
+			}
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+		let seen = closed.lock().unwrap().clone();
+		seen
+	}
+
+	#[tokio::test]
+	async fn a_live_connection_the_actor_closes_is_closed_in_the_actor() {
+		let closed = run(CloseAt::Live).await;
+		assert_eq!(closed, [(1008, "closed by actor".to_owned())]);
+	}
+
+	#[tokio::test]
+	async fn a_client_close_through_the_gateway_is_closed_in_the_actor() {
+		let closed = run(CloseAt::Gateway).await;
+		assert_eq!(closed, [(1000, "client".to_owned())]);
+	}
+
+	#[tokio::test]
+	async fn a_restored_connection_the_actor_closes_while_parked_is_closed_in_the_actor() {
+		let closed = run(CloseAt::Restore).await;
+		assert_eq!(closed, [(1008, "closed by actor".to_owned())]);
+	}
+
+	#[tokio::test]
+	async fn a_reattached_connection_the_actor_closes_is_closed_in_the_actor() {
+		let closed = run(CloseAt::Message).await;
+		assert_eq!(closed, [(1008, "closed by actor".to_owned())]);
 	}
 }

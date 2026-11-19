@@ -240,7 +240,9 @@ impl ActorContext {
 		if self.pending_disconnect_count() > 0 {
 			return CanSleep::ActiveDisconnectCallbacks;
 		}
-		if !self.conns().is_empty() {
+		// Hibernatable WebSockets are held by the gateway while the actor sleeps, so only
+		// non-hibernatable connections keep the actor awake.
+		if self.conns().any(|conn| !conn.is_hibernatable()) {
 			return CanSleep::ActiveConnections;
 		}
 		if self.websocket_callback_count() > 0 {

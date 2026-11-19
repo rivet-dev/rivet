@@ -22,13 +22,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, hash_map::Entry};
 
 use crate::acquire::{
-	AcquireTarget, CreateActor, DelegatedToV2, HeldByMigrateFromV2, RoutingDeadline, acquire,
+	AcquireTarget, ActorNotRunning, CreateActor, DelegatedToV2, HeldByMigrateFromV2, Reach,
+	RoutingDeadline, acquire,
 };
 use crate::migrate_from_v2::{self, V3Actor, decision, proxy};
 use crate::namespace_fallback::{NamespaceFallbacks, RouteKind};
 use crate::raw_rest_path::RawRestPath;
 use crate::retry_budget::RetryBudget;
 use crate::start_waits::StartWaits;
+use crate::websocket_tunnel::ReopenCause;
 use crate::{ActorNotFound, GatewayError, QueryInvalidParams};
 use pegboard::legacy_volumes::ResolvedRead;
 use std::sync::Arc;
@@ -294,56 +296,80 @@ pub async fn gateway(
 			// Each reopen credits the budget like a received request before it may draw on it,
 			// so reopens under sustained refusals pay for their own retries instead of draining
 			// the budget first opens share.
-			let reopen = move || async move {
-				let deadline = RoutingDeadline::new(&ctx)?;
-				budget.deposit();
-				let mut retries = budget.retries(deadline.boot_ms);
-				let mut target = AcquireTarget::new(
-					actor_id,
-					group,
-					pegboard::legacy_volumes::ResolvedRead::Unread,
-					None,
-				);
-				let acquired = loop {
-					let attempt = acquire(
-						&ctx,
-						&waits,
-						&mut target,
-						&namespace,
-						class,
-						false,
-						&credential,
-						deadline,
-					)
-					.await;
-					let error = match attempt {
-						Ok(acquired) => break acquired,
-						Err(error) => error,
-					};
-					if rivet_error::RivetError::extract(&error).group() == "auth" {
-						return Err(error);
-					}
-					// Legacy: the reopen addresses the actor id the first open resolved, which
-					// a move destroys, so a moving refusal is not retried here; the client's
-					// retry resolves the actor again. Removed in 3.1 with the backfill.
-					let moving = crate::retry_budget::refusal(&error).is_some_and(|refusal| {
-						refusal.kind == crate::retry_budget::RefusalKind::LegacyActorMoving
-					});
-					if moving {
-						return Err(error);
-					}
-					retries.retry(ctx.env().as_ref(), error).await?;
+			//
+			// `Fn`, not `FnOnce`: a hibernatable WebSocket whose actor went to sleep calls it
+			// again to wake the actor on the client's next frame. It also calls it when
+			// another request woke the actor, and that re-open only attaches: it never starts
+			// an actor that went back to sleep, and fails with `ActorNotRunning` instead.
+			let wakes = waits.wakes().clone();
+			let reopen = move |cause: ReopenCause| {
+				let reach = match cause {
+					ReopenCause::Client => Reach::Start,
+					ReopenCause::Sibling => Reach::AttachOnly,
 				};
-				let epoch = acquired.epoch;
-				let stream = acquired.stream;
-				let message_id = new_message_id(&ctx)?;
-				let open = websocket_open(actor_id, group, epoch, &path, &request_headers);
-				anyhow::Ok((stream, message_id, open))
+				let ctx = ctx.clone();
+				let waits = waits.clone();
+				let budget = budget.clone();
+				let credential = credential.clone();
+				let namespace = namespace.clone();
+				let path = path.clone();
+				let request_headers = request_headers.clone();
+				async move {
+					let deadline = RoutingDeadline::new(&ctx)?;
+					budget.deposit();
+					let mut retries = budget.retries(deadline.boot_ms);
+					let mut target = AcquireTarget::new(
+						actor_id,
+						group,
+						pegboard::legacy_volumes::ResolvedRead::Unread,
+						None,
+					);
+					let acquired = loop {
+						let attempt = acquire(
+							&ctx,
+							&waits,
+							&mut target,
+							&namespace,
+							class,
+							false,
+							reach,
+							&credential,
+							deadline,
+						)
+						.await;
+						let error = match attempt {
+							Ok(acquired) => break acquired,
+							Err(error) => error,
+						};
+						if rivet_error::RivetError::extract(&error).group() == "auth"
+							|| error.is::<ActorNotRunning>()
+						{
+							return Err(error);
+						}
+						// Legacy: the reopen addresses the actor id the first open resolved,
+						// which a move destroys, so a moving refusal is not retried here; the
+						// client's retry resolves the actor again. Removed in 3.1 with the
+						// backfill.
+						let moving = crate::retry_budget::refusal(&error).is_some_and(|refusal| {
+							refusal.kind == crate::retry_budget::RefusalKind::LegacyActorMoving
+						});
+						if moving {
+							return Err(error);
+						}
+						retries.retry(ctx.env().as_ref(), error).await?;
+					};
+					let epoch = acquired.epoch;
+					let stream = acquired.stream;
+					let message_id = new_message_id(&ctx)?;
+					let open = websocket_open(actor_id, group, epoch, &path, &request_headers);
+					anyhow::Ok((stream, message_id, open))
+				}
 			};
 
 			ws.protocols(protocols)
 				.read_buffer_size(ACTOR_WEBSOCKET_READ_BUFFER_BYTES)
 				.on_upgrade(move |mut socket| async move {
+					let wake = wakes.subscribe(actor_id).await;
 					if let Err(error) = crate::websocket_tunnel::proxy(
 						&mut socket,
 						stream,
@@ -351,6 +377,7 @@ pub async fn gateway(
 						message_id,
 						open,
 						reopen,
+						wake,
 						clock,
 						keepalive_interval_ms,
 					)
@@ -595,6 +622,7 @@ async fn prepare(
 			&request_namespace,
 			class,
 			true,
+			Reach::Start,
 			&credential,
 			deadline,
 		)
