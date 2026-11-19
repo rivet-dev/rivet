@@ -18,6 +18,7 @@ npx @rivetkit/cli <command>
 | `rivet login` | Sign in to Rivet Cloud in the browser. |
 | `rivet link` | Link the current directory to a project or cluster. |
 | `rivet deploy` | Build and deploy the project to Rivet Cloud. |
+| `rivet build prepare` | Upload a cluster build to roll out later with `rivet deploy --build`. |
 | `rivet logs` | Read or follow a project's compute logs. |
 | `rivet pool` | List or delete compute pools in a namespace. |
 | `rivet cluster logs` | Read or follow a cluster's engine and runner logs. |
@@ -95,6 +96,8 @@ Roll back by deploying an earlier build ID. This skips the Docker build and uplo
 rivet deploy --cluster my-cluster --build <build-id>
 ```
 
+To build early and roll out later, prepare the build with [`rivet build prepare`](#rivet-build-prepare), then pass its ID to `--build`. The rollout waits for the boot image if it is not ready yet and fails if the build failed.
+
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--cluster` | `RIVET_CLUSTER` / linked cluster | Cluster to deploy to instead of a project. |
@@ -110,6 +113,28 @@ rivet deploy --cluster my-cluster --build <build-id>
 | `--secret` | — | Pool variable taking a cluster secret's latest version, as `KEY` for a secret named like the variable or `KEY=SECRET_NAME`, repeatable. Set the secret first with [`rivet cluster secret set`](#rivet-cluster-secret). |
 
 The saved image must be 5 GiB or smaller. `--namespace`, `--reuse-image`, and the resource and scaling flags apply to projects only and are rejected for a cluster. `--env` and `--secret` keep the pool's other variables, apply in the same rollout as the build, and are checked before the build starts. They also unpin any secret a rollback pinned. See [`rivet cluster env`](#rivet-cluster-env). `rivet pool`, `rivet logs`, and `rivet token` do not support clusters. Read a cluster's logs with [`rivet cluster logs`](#rivet-cluster-logs).
+
+## `rivet build prepare`
+
+Builds the image and uploads it as a cluster build without rolling it out, then prints the build ID. It exits while the build's boot image is still being prepared, which takes a few minutes, so CI can start it early and roll it out later with [`rivet deploy --build`](#deploying-to-a-cluster).
+
+```bash
+BUILD_ID=$(rivet build prepare --cluster my-cluster)
+# ...later
+rivet deploy --cluster my-cluster --build "$BUILD_ID"
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--cluster` | `RIVET_CLUSTER` / linked cluster | Cluster to upload the build to. |
+| `--org` | `RIVET_ORG` / linked organization | Organization the cluster belongs to. |
+| `--dockerfile` | `Dockerfile` | Dockerfile to build. |
+| `--build-context` | `.` | Docker build context. |
+| `--image` | cluster name | Image name recorded on the build. |
+| `--tag` | git short SHA | Image tag recorded on the build. |
+| `--token`, `--cloud-api` | | Token and Cloud API endpoint, resolved as in [Signing in and linking](#signing-in-and-linking). |
+
+The pool, region and variables are chosen by the rollout, so pass `--pool`, `--region`, `--env` and `--secret` to `rivet deploy --build`. The saved image must be 5 GiB or smaller.
 
 ## `rivet api`
 

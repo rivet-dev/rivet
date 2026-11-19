@@ -80,6 +80,9 @@ pub struct SqliteVfsMetricsSnapshot {
 	pub commit_count: u64,
 }
 
+/// Profiling name for the transaction that runs an `execute_batch` call on the local backend.
+const EXECUTE_BATCH_TRANSACTION_NAME: &str = "rivetkit-execute-batch";
+
 #[derive(Clone)]
 pub struct SqliteRuntimeConfig {
 	pub handle: EnvoyHandle,
@@ -888,7 +891,9 @@ impl SqliteDb {
 			// the transaction expires.
 			let db = self.clone().with_invocation_telemetry(None);
 			let batch = async move {
-				let transaction = db.begin_transaction(None).await?;
+				let transaction = db
+					.begin_named_transaction(Some(EXECUTE_BATCH_TRANSACTION_NAME), None)
+					.await?;
 				let mut results = Vec::with_capacity(statements.len());
 				for statement in statements {
 					match transaction.execute(statement.sql, statement.params).await {

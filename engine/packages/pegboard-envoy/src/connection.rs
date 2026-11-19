@@ -1514,21 +1514,9 @@ async fn handle_ws_msg(
 			forward_tunnel_reply(conn, message_key, TunnelReply::from(message)).await?;
 		}
 		p::ToRivet::ToRivetKvRequest(request) => {
-			let Some(handle) =
-				inbound_actor_handle(conn, tasks, &request.actor_id, OwnershipUse::Storage).await?
-			else {
-				conn.send_storage_refusal(crate::kv::error_response(
-					request.request_id,
-					"actor is not running on this envoy".into(),
-				))?;
-				return Ok(None);
-			};
-			if let Some(refused) = handle.try_recv_kv(request)? {
-				conn.send_storage_refusal(crate::kv::error_response(
-					refused.request_id,
-					storage_lane_full_message(),
-				))?;
-			}
+			let handle =
+				inbound_actor_handle(conn, tasks, &request.actor_id, OwnershipUse::Storage).await;
+			dispatch_kv_request(conn, request, handle)?;
 		}
 		p::ToRivet::ToRivetSqliteGetPagesRequest(_)
 		| p::ToRivet::ToRivetSqliteCommitRequest(_)
@@ -2848,6 +2836,48 @@ fn record_owner(
 	})
 }
 
+/// Routes KV work after ownership lookup or replies to a refusal before execution.
+fn dispatch_kv_request(
+	conn: &Connection,
+	request: p::ToRivetKvRequest,
+	handle: Result<Option<Arc<ActorHandle>>>,
+) -> Result<()> {
+	let handle = match handle {
+		Ok(Some(handle)) => handle,
+		Ok(None) => {
+			return conn.send_storage_refusal(crate::kv::error_response(
+				request.request_id,
+				"actor is not running on this envoy".into(),
+			));
+		}
+		Err(error) => {
+			if p::util::is_kv_write(&request.data) {
+				let hint = depot_client::retry_after_ms(&error).or_else(|| {
+					error
+						.downcast_ref::<rivet_error::RivetError>()
+						.filter(|error| (error.group(), error.code()) == ("ups", "overloaded"))
+						.map(|_| STORAGE_LANE_RETRY_AFTER_MS)
+				});
+				if let Some(hint) = hint {
+					return conn.send_storage_refusal(crate::kv::overloaded_response(
+						request.request_id,
+						&error.to_string(),
+						hint,
+					));
+				}
+			}
+			return Err(error);
+		}
+	};
+	if let Some(refused) = handle.try_recv_kv(request)? {
+		conn.send_storage_refusal(crate::kv::error_response(
+			refused.request_id,
+			storage_lane_full_message(),
+		))?;
+	}
+	Ok(())
+}
+
 /// Runs one KV request against the actor volume. Failures become request-scoped KV errors so
 /// one actor's storage trouble never closes the shared socket.
 async fn kv_request(
@@ -2857,6 +2887,7 @@ async fn kv_request(
 	request: p::ToRivetKvRequest,
 ) -> p::ToEnvoy {
 	let request_id = request.request_id;
+	let is_write = p::util::is_kv_write(&request.data);
 	let result = async {
 		let Some(owned) = owned_epoch(conn, actor_id, bound).await? else {
 			return Ok(crate::kv::error_response(
@@ -2887,7 +2918,7 @@ async fn kv_request(
 		Ok(reply) => reply,
 		Err(error) => {
 			tracing::warn!(%actor_id, ?error, "actor KV request failed");
-			crate::kv::error_response(request_id, error.to_string())
+			crate::kv::request_error(request_id, is_write, &error)
 		}
 	}
 }

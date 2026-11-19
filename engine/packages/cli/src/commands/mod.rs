@@ -1,5 +1,6 @@
 pub mod account;
 pub mod api;
+pub mod build;
 pub mod cluster;
 pub mod deploy;
 pub mod engine;

@@ -1,4 +1,5 @@
 use rivet_envoy_protocol as protocol;
+use rivet_error::{RivetError, RivetErrorKind};
 use tokio::sync::oneshot;
 
 use crate::connection::ws_send;
@@ -24,6 +25,36 @@ pub struct KvRequestEntry {
 /// it below pegboard's `envoy_lost_threshold` (40 s by default) so one stalled request ends
 /// before the engine treats the envoy as lost.
 pub const KV_EXPIRE_MS: u64 = 30_000;
+
+/// Decodes the retry hint in the existing Envoy KV error message.
+fn kv_error(message: &str) -> anyhow::Error {
+	let refusal = message
+		.strip_prefix("depot.overloaded: ")
+		.and_then(|detail| {
+			let (detail, params) = detail.strip_suffix(')')?.rsplit_once(" (")?;
+			// Existing queue refusals include an additional reason parameter.
+			let hint = match params.strip_prefix("reason=") {
+				Some(params) => params.rsplit_once(", ")?.1,
+				None => params,
+			};
+			let delay = hint.strip_prefix("retry_after_ms=")?.parse::<u64>().ok()?;
+			Some((detail, delay))
+		});
+	let Some((detail, delay)) = refusal else {
+		return anyhow::anyhow!("{message}");
+	};
+	RivetError {
+		kind: RivetErrorKind::Dynamic {
+			group: "depot".into(),
+			code: "overloaded".into(),
+			default_message: detail.into(),
+		},
+		meta: serde_json::value::to_raw_value(&serde_json::json!({ "retry_after_ms": delay })).ok(),
+		message: None,
+		actor: None,
+	}
+	.into()
+}
 
 fn kv_deadline(timestamp: crate::time::Instant) -> crate::time::Instant {
 	timestamp + std::time::Duration::from_millis(KV_EXPIRE_MS)
@@ -67,16 +98,22 @@ pub async fn handle_kv_response(ctx: &mut EnvoyContext, response: protocol::ToEn
 	ctx.deadlines.cancel(&DeadlineKey::Kv(response.request_id));
 
 	if let Some(request) = request {
-		match response.data {
-			protocol::KvResponseData::KvErrorResponse(ref e) => {
-				let _ = request
-					.response_tx
-					.send(Err(anyhow::anyhow!("{}", e.message)));
+		let result = match response.data {
+			protocol::KvResponseData::KvErrorResponse(error)
+				if protocol::util::is_kv_write(&request.data) =>
+			{
+				Err(kv_error(error.message.as_str()))
 			}
-			_ => {
-				let _ = request.response_tx.send(Ok(response.data));
+			protocol::KvResponseData::KvErrorResponse(error) => {
+				Err(anyhow::anyhow!("{}", error.message))
 			}
-		}
+			data @ (protocol::KvResponseData::KvGetResponse(_)
+			| protocol::KvResponseData::KvListResponse(_)
+			| protocol::KvResponseData::KvPutResponse
+			| protocol::KvResponseData::KvDeleteResponse
+			| protocol::KvResponseData::KvDropResponse) => Ok(data),
+		};
+		let _ = request.response_tx.send(result);
 	} else {
 		tracing::error!(
 			request_id = response.request_id,

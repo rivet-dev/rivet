@@ -8,6 +8,9 @@ import type {
 	SqliteTransactionDatabase,
 } from "./config";
 
+// Matches the name core uses for the transaction behind a native executeBatch call.
+const EXECUTE_BATCH_TRANSACTION_NAME = "rivetkit-execute-batch";
+
 type NativeBindNoValues = {
 	intValue?: never;
 	floatValue?: never;
@@ -84,6 +87,7 @@ export interface JsNativeDatabaseLike {
 	beginStateTransaction?(
 		timeoutMs?: number,
 		context?: unknown,
+		name?: string,
 	): Promise<JsNativeTransactionLike>;
 	beginTransaction(
 		timeoutMs?: number,
@@ -105,6 +109,7 @@ export type StateAwareSqliteDatabase = SqliteDatabase & {
 	beginStateTransaction(
 		timeoutMs?: number,
 		context?: unknown,
+		name?: string,
 	): Promise<SqliteTransactionDatabase>;
 };
 
@@ -403,7 +408,10 @@ export function wrapJsNativeDatabase(
 				const results = database.executeBatch
 					? await database.executeBatch(nativeStatements)
 					: await (async () => {
-							transaction = await database.beginTransaction();
+							transaction = await database.beginTransaction(
+								undefined,
+								EXECUTE_BATCH_TRANSACTION_NAME,
+							);
 							const transactionResults: NativeExecuteResult[] =
 								[];
 							for (const statement of nativeStatements) {
@@ -459,6 +467,7 @@ export function wrapJsNativeDatabase(
 		async beginStateTransaction(
 			timeoutMs?: number,
 			context?: unknown,
+			name?: string,
 		): Promise<SqliteTransactionDatabase> {
 			if (!database.beginStateTransaction) {
 				throw new Error("actor state transactions are not configured");
@@ -469,6 +478,7 @@ export function wrapJsNativeDatabase(
 				transaction = await database.beginStateTransaction(
 					timeoutMs,
 					context,
+					name,
 				);
 			} catch (error) {
 				enrichNativeDatabaseError(database, error);

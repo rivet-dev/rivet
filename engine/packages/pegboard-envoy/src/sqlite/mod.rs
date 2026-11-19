@@ -961,7 +961,24 @@ impl Sessions {
 		open: impl FnOnce(Arc<dyn Fn() -> bool + Send + Sync>) -> F,
 	) -> Result<p::KvResponseData> {
 		let lane = self.lane(id).await?;
-		let (_actor, mut pages) = Self::prepare(&lane, epoch, create_unix_ms, open).await?;
+		let (_actor, mut pages) = match Self::prepare(&lane, epoch, create_unix_ms, open).await {
+			Ok(prepared) => prepared,
+			Err(error) => {
+				// These fallback hints apply only while opening the volume. The KV write
+				// has yet to run, and errors from its execution use Depot's own hints.
+				if p::util::is_kv_write(&data)
+					&& let Some(retry_after_ms) = unhinted_open_refusal_ms(&error)
+				{
+					lane.check()?;
+					return Err(depot_client::Overloaded {
+						reason: format!("actor database open: {error}"),
+						retry_after_ms,
+					}
+					.build());
+				}
+				return Err(error);
+			}
+		};
 		let ino = pages.kv_ino().await?;
 		let fs = pages.fs()?.clone();
 		let result = crate::kv::execute(
@@ -1507,16 +1524,16 @@ fn refused_cold_read_hint_ms(error: &anyhow::Error) -> Option<u64> {
 	depot_client::retry_after_ms(error)
 }
 
-/// The hint of an open that depot refused without running it, or `None` when it may have run
-/// or will be refused the same way however often it is sent. A missing route and a full
-/// volume cache or request queue refuse without a hint.
+/// The hint of an open that Depot refused before dispatch.
 fn open_refusal_hint_ms(error: &anyhow::Error) -> Option<u64> {
+	depot_client::retry_after_ms(error).or_else(|| unhinted_open_refusal_ms(error))
+}
+
+/// The fallback delay for open refusals that carry no hint of their own.
+fn unhinted_open_refusal_ms(error: &anyhow::Error) -> Option<u64> {
 	use depot_client::volumes::Error;
 	use depot_volume::volume_client_machine::{event::RpcError, types::WriteError};
 
-	if let Some(hint_ms) = depot_client::retry_after_ms(error) {
-		return Some(hint_ms);
-	}
 	match error.downcast_ref::<Error>() {
 		Some(
 			Error::Overloaded

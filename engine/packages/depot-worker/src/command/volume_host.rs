@@ -1780,6 +1780,7 @@ impl VolumeHost {
 						matches!(
 							error,
 							FilesystemError::Overloaded
+								| FilesystemError::ApplyBacklog { .. }
 								| FilesystemError::Conflict
 								| FilesystemError::TooOld
 								| FilesystemError::Fenced

@@ -12,3 +12,14 @@ pub fn generate_request_id() -> crate::RequestId {
 pub fn id_to_string(gateway_id: &crate::GatewayId) -> String {
 	hex::encode(gateway_id)
 }
+
+/// Whether this KV request can mutate data.
+pub fn is_kv_write(data: &crate::KvRequestData) -> bool {
+	match data {
+		crate::KvRequestData::KvGetRequest(_) | crate::KvRequestData::KvListRequest(_) => false,
+		crate::KvRequestData::KvPutRequest(_)
+		| crate::KvRequestData::KvDeleteRequest(_)
+		| crate::KvRequestData::KvDeleteRangeRequest(_)
+		| crate::KvRequestData::KvDropRequest => true,
+	}
+}

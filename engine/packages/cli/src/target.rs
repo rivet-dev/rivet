@@ -83,6 +83,38 @@ impl CloudArgs {
 		Ok((cloud, auth, target))
 	}
 
+	/// Connects for a command that only works on a cluster, taken from
+	/// `--cluster` or a linked cluster. Unlike `connect`, it never inspects a
+	/// token, prompts for a project or offers to link the directory.
+	pub async fn connect_cluster(&self) -> Result<(CloudClient, ClusterTarget)> {
+		let target = self.cluster_target()?;
+		let auth = resolve_auth(self.token.as_deref(), &self.cloud_api).await?;
+		let cloud = CloudClient::new(&self.cloud_api, auth.token.clone())?
+			.with_login_refresh(&auth, &self.cloud_api)
+			.with_organization(target.org.clone());
+		Ok((cloud, target))
+	}
+
+	/// The cluster from `--cluster`, else from a linked cluster unless
+	/// `--project` names a project.
+	fn cluster_target(&self) -> Result<ClusterTarget> {
+		if let Some(cluster) = &self.cluster {
+			return Ok(ClusterTarget {
+				cluster: cluster.clone(),
+				org: self.org.clone(),
+			});
+		}
+		if self.project.is_none()
+			&& let Some((Link::Cluster { cluster, org }, _)) = find_link()?
+		{
+			return Ok(ClusterTarget {
+				cluster,
+				org: self.org.clone().or(org),
+			});
+		}
+		bail!("no cluster selected; pass --cluster or run `rivet link --cluster <name>`")
+	}
+
 	pub async fn connect_project(&self) -> Result<(CloudClient, Auth, ProjectTarget)> {
 		let (cloud, auth, target) = self.connect().await?;
 		match target {

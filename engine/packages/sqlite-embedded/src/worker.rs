@@ -1019,11 +1019,19 @@ impl DatabaseSlot {
 				// After a discard of the corked commits the connection only closes. A command
 				// that would run SQL or uncork, even one queued before the discard ran, would
 				// otherwise commit straight to depot, since the cork is gone.
-				if self.inner.discard_requested.load(Ordering::Acquire)
-					&& command.command.refused_after_discard()
-				{
-					fail_command(command.command);
-					return ConnectionSlot::Parked(open);
+				if command.command.refused_after_discard() {
+					if self.inner.discard_requested.load(Ordering::Acquire) {
+						fail_command(command.command, sqlite_closing_error());
+						return ConnectionSlot::Parked(open);
+					}
+					if let Some(message) = self.vfs.clone_fatal_error() {
+						let error = SqliteWorkerFatalError::new(message);
+						if let Some(reply) = open.pending_uncork.take() {
+							let _ = reply.send(Err(error.clone().into()));
+						}
+						fail_command(command.command, error.into());
+						return ConnectionSlot::Parked(open);
+					}
 				}
 				if let Some(guard) = self.progress.guard() {
 					guard.reset();
@@ -1116,7 +1124,7 @@ impl Drop for DatabaseSlot {
 
 fn fail_queued_commands(commands: &mut VecDeque<QueuedCommand>) {
 	for command in commands.drain(..) {
-		fail_command(command.command);
+		fail_command(command.command, sqlite_closing_error());
 	}
 }
 
@@ -2093,23 +2101,21 @@ fn strip_leading_sql_noise(sql: &str) -> &str {
 	}
 }
 
-fn fail_command(command: SqliteCommand) {
-	// Cancelled requests may sit in the bounded queue until the worker observes
-	// them. Once observed during shutdown, they fail instead of running.
+fn fail_command(command: SqliteCommand, error: anyhow::Error) {
 	match command {
 		SqliteCommand::Execute { reply, .. } => {
-			let _ = reply.send(Err(sqlite_closing_error()));
+			let _ = reply.send(Err(error));
 		}
 		SqliteCommand::Exec { reply, .. } => {
-			let _ = reply.send(Err(sqlite_closing_error()));
+			let _ = reply.send(Err(error));
 		}
 		SqliteCommand::ExecuteBatch { reply, .. } => {
-			let _ = reply.send(Err(sqlite_closing_error()));
+			let _ = reply.send(Err(error));
 		}
 		SqliteCommand::Cork { reply, .. }
 		| SqliteCommand::Uncork { reply }
 		| SqliteCommand::DiscardCork { reply } => {
-			let _ = reply.send(Err(sqlite_closing_error()));
+			let _ = reply.send(Err(error));
 		}
 	}
 }

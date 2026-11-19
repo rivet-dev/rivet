@@ -42,6 +42,8 @@ enum Commands {
 	Engine(commands::engine::Opts),
 	/// Manage Rivet Cloud clusters.
 	Cluster(commands::cluster::Opts),
+	/// Prepare cluster builds to roll out later.
+	Build(commands::build::Opts),
 	/// Build and deploy the current project to Rivet Cloud.
 	Deploy(commands::deploy::Opts),
 	/// View logs for your Rivet Compute instances.
@@ -68,6 +70,7 @@ async fn main() -> Result<()> {
 		Commands::Api(opts) => opts.execute().await,
 		Commands::Engine(opts) => opts.execute().await,
 		Commands::Cluster(opts) => opts.execute().await,
+		Commands::Build(opts) => opts.execute().await,
 		Commands::Deploy(opts) => opts.execute().await,
 		Commands::Logs(opts) => opts.execute().await,
 		Commands::Pool(opts) => opts.execute().await,

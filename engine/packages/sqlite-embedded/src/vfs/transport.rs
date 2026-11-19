@@ -2420,8 +2420,8 @@ impl VfsContext {
 
 	/// Sends every transaction committed while corked to depot as one commit, then commits
 	/// directly again. It must run between transactions, and fails without uncorking inside
-	/// one. On a failed commit the pages are not durable and the database is unusable, as
-	/// after any failed commit.
+	/// one. If storage cannot acknowledge the commit, this connection must reopen from
+	/// storage before it can serve again.
 	fn uncork(&self) -> std::result::Result<(), CommitBufferError> {
 		{
 			let mut state = self.state.write();
@@ -2439,7 +2439,16 @@ impl VfsContext {
 				.map(|cork| cork.pages)
 				.unwrap_or_default();
 		}
-		self.flush_dirty_pages().map(|_| ())
+		self.flush_dirty_pages().map(|_| ()).inspect_err(|error| {
+			// SQLite already completed these transactions and kept their pages in its
+			// pager. A later statement could write only its own changes against that
+			// undurable state. Discard the local batch and prevent further VFS writes,
+			// including on close, before the worker returns the flush error.
+			self.discard_unsent_commits();
+			self.mark_fatal(format!(
+				"could not commit corked SQLite transactions: {error:?}"
+			));
+		})
 	}
 }
 
@@ -4014,10 +4023,17 @@ impl NativeDatabase {
 		if autocommit == 0 {
 			anyhow::bail!("cannot uncork sqlite commits inside a transaction");
 		}
-		self._vfs
-			.ctx()
-			.uncork()
-			.map_err(|error| anyhow::anyhow!("uncork sqlite commits: {error:?}"))
+		let ctx = self._vfs.ctx();
+		ctx.uncork().map_err(|error| match error {
+			CommitBufferError::Indeterminate(operation) => {
+				let _ = ctx.take_indeterminate_result();
+				SqliteCommitIndeterminateError(operation).into()
+			}
+			CommitBufferError::Storage(error) => error.into(),
+			error @ (CommitBufferError::Other(_) | CommitBufferError::FenceMismatch(_)) => {
+				anyhow::anyhow!("uncork sqlite commits: {error:?}")
+			}
+		})
 	}
 
 	/// Drops the transactions committed since `cork_commits` without sending them, for a start

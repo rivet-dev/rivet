@@ -58,7 +58,7 @@ pub enum Error {
 	Overloaded,
 	/// This opening's admitted writes are too far ahead of the tablet's apply, as when a slow
 	/// cold store or compaction holds back its memtable flushes. The write was refused before
-	/// it was built, so the edge may send it again after `retry_after_ms`.
+	/// appending, so the edge may send it again after `retry_after_ms`.
 	#[error("volume writes are ahead of the tablet's apply; retry after {retry_after_ms} ms")]
 	ApplyBacklog { retry_after_ms: u64 },
 	/// The `depot.fs_entry` version the topology selected cannot carry this write: it names

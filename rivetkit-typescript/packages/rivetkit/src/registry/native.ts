@@ -692,7 +692,7 @@ function getOrCreateNativeSqlDatabase(
 					runtime.actorSqlTransactionRollback(transaction),
 			};
 		},
-		beginStateTransaction: async (timeoutMs, context) => {
+		beginStateTransaction: async (timeoutMs, context, name) => {
 			const scope = context as NativeStateTransactionScope | undefined;
 			if (!scope) {
 				throw new Error(
@@ -702,6 +702,7 @@ function getOrCreateNativeSqlDatabase(
 			const transaction = await runtime.actorBeginStateTransaction(
 				ctx,
 				timeoutMs,
+				name,
 			);
 			return {
 				exec: async () => {
@@ -3201,11 +3202,11 @@ export class ActorContextHandleAdapter {
 						);
 					},
 				},
-				async (timeoutMs, context) =>
+				async (timeoutMs, context, name) =>
 					await getOrCreateNativeSqlDatabase(
 						this.#runtime,
 						this.#ctx,
-					).beginStateTransaction(timeoutMs, context),
+					).beginStateTransaction(timeoutMs, context, name),
 			),
 		});
 		runtimeState.databaseClient = {

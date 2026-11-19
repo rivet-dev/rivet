@@ -891,15 +891,17 @@ export class WasmCoreRuntime implements CoreRuntime {
 	async actorBeginStateTransaction(
 		ctx: ActorContextHandle,
 		timeoutMs?: number,
+		name?: string,
 	): Promise<ActorStateTransactionHandle> {
 		return (await callWasm(() =>
 			(
 				asWasmActorContext(ctx) as unknown as {
 					beginStateTransaction(
 						timeoutMs?: number,
+						name?: string,
 					): Promise<ActorStateTransactionHandle>;
 				}
-			).beginStateTransaction(timeoutMs),
+			).beginStateTransaction(timeoutMs, name),
 		)) as ActorStateTransactionHandle;
 	}
 

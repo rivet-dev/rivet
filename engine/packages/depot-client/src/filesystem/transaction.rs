@@ -486,6 +486,7 @@ impl Filesystem {
 			ops: Vec::new(),
 		};
 		let mut writes = Vec::new();
+		let mut write_admission = None;
 		let mut rebased_without_evidence = false;
 		while let Some(p) = pending.pop_front() {
 			if p.reply.is_closed() {
@@ -561,7 +562,7 @@ impl Filesystem {
 			let bytes = super::transport::seal_entry(&entry, entry_version)?.len();
 			if bytes > status.max_payload_bytes || bytes > self.config.max_operation_bytes {
 				entry.ops.truncate(old_len);
-				if accepted.is_empty() {
+				if old_len == 0 {
 					let _ = p.reply.send(Err(Error::TooLarge));
 					continue;
 				}
@@ -570,6 +571,18 @@ impl Filesystem {
 				pending.append(&mut queue.pending);
 				queue.pending = pending;
 				break;
+			}
+			// Check once per write group after validation and sizing, before any append.
+			// A transaction that only pins and reads a snapshot can still finish.
+			if !p.tx.ops.is_empty() {
+				if write_admission.is_none() {
+					write_admission = Some(self.shed_unapplied_backlog(&mut state, deadline).await);
+				}
+				if let Some(Err(error)) = &write_admission {
+					entry.ops.truncate(old_len);
+					let _ = p.reply.send(Err(error.clone()));
+					continue;
+				}
 			}
 			writes.extend(write_ranges(&FsEntry {
 				txn: None,
@@ -706,7 +719,13 @@ impl Transaction {
 		let next = self
 			.bytes
 			.checked_add(bytes)
-			.filter(|n| *n <= self.fs.config.max_operation_bytes)
+			.filter(|n| {
+				*n <= self
+					.fs
+					.config
+					.max_operation_bytes
+					.min(self.fs.config.max_memory_bytes)
+			})
 			.ok_or(Error::TooLarge)?;
 		self.charges.push(self.fs.budget.reserve(bytes)?);
 		self.bytes = next;

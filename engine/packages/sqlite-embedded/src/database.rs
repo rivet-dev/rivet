@@ -10,8 +10,8 @@ use tokio::sync::watch;
 use crate::{
 	query::{BindParam, ExecResult, ExecuteResult, QueryResult},
 	vfs::{
-		CorkClose, InitialPages, NativeVfsHandle, SqliteOpenPhase, SqliteTransportHandle,
-		SqliteVfs, SqliteVfsMetrics, SqliteVfsMetricsSnapshot, VfsConfig,
+		CorkClose, InitialPages, NativeVfsHandle, SqliteOpenPhase, SqliteStorageError,
+		SqliteTransportHandle, SqliteVfs, SqliteVfsMetrics, SqliteVfsMetricsSnapshot, VfsConfig,
 		fetch_initial_pages_for_registration,
 	},
 	worker::{
@@ -407,7 +407,15 @@ impl NativeDatabaseHandle {
 	/// explicit transaction it waits until the transaction ends, so the commit includes it.
 	pub async fn uncork_commits(&self) -> Result<()> {
 		self.check_fatal_error()?;
-		self.map_worker_result(self.worker.uncork_commits().await)
+		let result = self.worker.uncork_commits().await;
+		// Preserve the refusal or timeout that made this connection unusable.
+		if result
+			.as_ref()
+			.is_err_and(|error| error.is::<SqliteStorageError>())
+		{
+			return result;
+		}
+		self.map_worker_result(result)
 	}
 
 	/// Drops the transactions committed since `cork_commits` without sending them, for a start

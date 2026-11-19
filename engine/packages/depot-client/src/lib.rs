@@ -12,8 +12,8 @@ pub mod fences;
 mod volume_observer;
 pub use command::{
 	CommandOptions, Conflict, Corrupt, Fenced, Overloaded, ROUTE_UNRESOLVED_REASON,
-	ReadInterrupted, RequestDeadlineExceeded, Unavailable, overload_reason_label,
-	overload_reason_of_label, refusal_reason, refused_before_running,
+	ReadInterrupted, RequestDeadlineExceeded, Unavailable, command_routing_unavailable,
+	overload_reason_label, overload_reason_of_label, refusal_reason, refused_before_running,
 	reject_refused_before_running, retry_after_ms, route_unresolved, tail_unproven_parent,
 	unavailable_reason_label,
 };

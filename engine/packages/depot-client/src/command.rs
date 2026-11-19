@@ -874,19 +874,24 @@ fn checkpoint_refusal_reason(error: &crate::checkpoints::Error) -> &'static str 
 /// route or its endpoint could not be resolved. Its retry routes afresh rather than waiting
 /// out shed load.
 pub fn route_unresolved(error: &anyhow::Error) -> bool {
-	let Some(error) = error.downcast_ref::<rivet_error::RivetError>() else {
-		return false;
-	};
-	if error.group() != "depot" || error.code() != "overloaded" {
-		return false;
-	}
-	let reason = error
-		.metadata()
-		.and_then(|meta| meta.get("reason")?.as_str().map(ToOwned::to_owned));
 	matches!(
-		reason.as_deref(),
+		command_overload_reason(error).as_deref(),
 		Some(ROUTE_UNRESOLVED_REASON | ROUTING_UNAVAILABLE_REASON)
 	)
+}
+
+/// Whether a command was refused before dispatch because the cached manifest has no maintainer route.
+pub fn command_routing_unavailable(error: &anyhow::Error) -> bool {
+	command_overload_reason(error).as_deref() == Some(ROUTING_UNAVAILABLE_REASON)
+}
+
+fn command_overload_reason(error: &anyhow::Error) -> Option<String> {
+	let error = error.downcast_ref::<rivet_error::RivetError>()?;
+	if error.group() != "depot" || error.code() != "overloaded" {
+		return None;
+	}
+	let meta = error.metadata()?;
+	Some(meta.get("reason")?.as_str()?.to_owned())
 }
 
 /// The bounded reason label of an [`OverloadReason`], also the `reason` of [`Overloaded`].

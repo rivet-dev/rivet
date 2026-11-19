@@ -13,6 +13,9 @@ use parking_lot::Mutex;
 use super::{ExecuteResult, SqliteBatchStatement, SqliteDb};
 use crate::actor::internal_storage::schema::HAS_INTERNAL_SCHEMA_SQL;
 
+/// Profiling name for the transaction that commits staged bootstrap statements on their own.
+const BOOTSTRAP_TRANSACTION_NAME: &str = "rivetkit-sqlite-bootstrap";
+
 #[derive(Default)]
 pub(super) struct DeferredBootstrap {
 	/// Forced-sync: read and replaced without awaiting. The exclusive transaction gate
@@ -52,7 +55,7 @@ impl SqliteDb {
 			return Ok(());
 		}
 		let transaction = self
-			.begin_transaction(None)
+			.begin_named_transaction(Some(BOOTSTRAP_TRANSACTION_NAME), None)
 			.await
 			.context("begin deferred sqlite bootstrap")?;
 		transaction

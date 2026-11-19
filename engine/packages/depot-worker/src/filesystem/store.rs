@@ -486,6 +486,7 @@ pub struct FilesystemStore {
 	pub(crate) observer: Option<Arc<parking_lot::Mutex<crate::metrics::ColdStoreObserver>>>,
 	/// The memtable flush the tablet's passes and split imports share.
 	pub(crate) shared_flush: super::shared_flush::SharedFlush,
+	reclamation: Option<Arc<super::filter::Reclamation>>,
 }
 
 impl FilesystemStore {
@@ -560,7 +561,19 @@ impl FilesystemStore {
 			base_reader: None,
 			observer: None,
 			shared_flush: Default::default(),
+			reclamation: None,
 		})
+	}
+
+	pub fn with_reclamation(mut self, reclamation: Arc<super::filter::Reclamation>) -> Self {
+		self.reclamation = Some(reclamation);
+		self
+	}
+
+	pub(crate) fn release_reclamation_after_close(&self) {
+		if let Some(reclamation) = &self.reclamation {
+			reclamation.release_after_close();
+		}
 	}
 
 	/// Set before publishing this store to its grant's operations.
@@ -720,7 +733,11 @@ impl FilesystemStore {
 			let snapshot = self.db.snapshot().await?;
 			let checkpoints = Self::retained_checkpoints(&snapshot, &scope).await?;
 			self.admit()?;
-			if self.insert_retention_if(scope.clone(), record, checkpoints, loaded) {
+			// A retention load can follow a staged write. In particular, the
+			// detached fork record can be visible before its copied rows are
+			// durable. A compaction must cover that write before dropping masks.
+			if self.insert_retention_if(scope.clone(), record, checkpoints, loaded, snapshot.seq())
+			{
 				return Ok(());
 			}
 		}
@@ -754,6 +771,20 @@ impl FilesystemStore {
 				return Ok(());
 			};
 			if retention.loads == loaded {
+				if !retention.pins.is_subset(&pins) {
+					// A pin pass may have staged the deleted pin. Cover that cut before
+					// offering a rewrite that relies on its removal.
+					if let Some(barrier) = &mut retention.cold_barrier {
+						*barrier = (*barrier).max(snapshot.seq());
+					}
+					if let Some(reclamation) = &self.reclamation
+						&& retention.knows_base()
+						&& !retention.has_base
+						&& retention.has_cold()
+					{
+						reclamation.queue(scope);
+					}
+				}
 				retention.pins = pins;
 				retention.loads = retention.loads.wrapping_add(1);
 				return Ok(());
@@ -822,6 +853,7 @@ impl FilesystemStore {
 		record: &FsVolumeRecord,
 		pins: BTreeSet<PinnedCut>,
 		loaded: u64,
+		cold_barrier: u64,
 	) -> bool {
 		let mut catalog = self.catalog.lock();
 		if catalog.get(&scope).map_or(0, |retention| retention.loads) != loaded {
@@ -829,18 +861,35 @@ impl FilesystemStore {
 		}
 		let (_, claim_log) = rows_scope(record);
 		let old = catalog.remove(&scope).unwrap_or_default();
-		let mut cold = old.cold;
-		cold.insert(claim_log, record.cold.volume_seq);
 		let has_base = match claim_log {
 			rivet_data::ROOT_CLAIM_LOG => !record.base_chain.is_empty(),
 			_ => old.has_base,
 		};
+		if let Some(reclamation) = &self.reclamation {
+			let previous = old.cold_of(claim_log);
+			let current = record.cold.volume_seq;
+			if current > previous {
+				reclamation.wake_for_cold(&scope, claim_log, current);
+			}
+			// Queue newly cold scopes and rescan when durable protection shrinks.
+			if !has_base
+				&& (current > 0 || old.has_cold())
+				&& (old.knows_base() || claim_log == rivet_data::ROOT_CLAIM_LOG)
+				&& (!old.knows_base()
+					|| old.has_base || (previous == 0 && current > 0)
+					|| !old.pins.is_subset(&pins))
+			{
+				reclamation.queue(&scope);
+			}
+		}
+		let mut cold = old.cold;
+		cold.insert(claim_log, record.cold.volume_seq);
 		catalog.insert(
 			scope,
 			Retention {
 				apply_cold: old.apply_cold,
 				cold,
-				cold_barrier: Some(self.db.manifest().last_l0_seq()),
+				cold_barrier: Some(old.cold_barrier.unwrap_or(0).max(cold_barrier)),
 				pins,
 				has_base,
 				sessions: old.sessions,
@@ -1237,7 +1286,8 @@ impl FilesystemStore {
 				)
 				.await;
 			lock_wait += waiting.elapsed();
-			if !self.insert_retention_if(scope, record, pinned, loaded) {
+			let durable = self.db.manifest().last_l0_seq();
+			if !self.insert_retention_if(scope, record, pinned, loaded, durable) {
 				// The reload reads SlateDB, so it runs without the guard.
 				drop(ordered);
 				self.load_retention(record).await?;
@@ -1433,7 +1483,11 @@ impl FilesystemStore {
 		if count < limit {
 			// The scope stripe excludes new pins and apply. Retirement and hold checks
 			// above proved that no reader can need the reclaimed incarnation again.
-			self.catalog.lock().remove(scope);
+			let mut catalog = self.catalog.lock();
+			catalog.remove(scope);
+			if let Some(reclamation) = &self.reclamation {
+				reclamation.forget(scope);
+			}
 		}
 		crate::metrics::DELETE_ROWS.inc_by(deleted);
 		Ok(if count < limit {

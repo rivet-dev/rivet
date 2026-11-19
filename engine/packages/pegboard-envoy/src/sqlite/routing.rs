@@ -1,7 +1,8 @@
 //! Fences and dispatches actor SQLite requests arriving on an envoy connection.
 use super::{IndeterminateResult, Sessions};
 use anyhow::{Context, Result};
-use depot_volume::volume_client_machine::types::ErrorDisposition;
+use depot_client::filesystem::Error as FilesystemError;
+use depot_volume::volume_client_machine::types::WriteError;
 use rivet_engine_context::EngineContext;
 use rivet_envoy_protocol as p;
 use rivet_util_id::Id;
@@ -161,26 +162,21 @@ async fn prove_inherited_tail(ctx: &EngineContext, actor_id: Id, error: &anyhow:
 	.await;
 }
 
-/// The retry hint of a request depot refused before running it: a write the volume client
-/// refused before dispatching it, or an open or lifecycle request the maintainer or a quorum
-/// refused with a hint. Nothing ran, so the request may be sent again after the hint.
+/// The delay before retrying a transient Depot refusal. Depot supplies explicit hints for
+/// safe retries. A missing route or a splitting tablet can recover without a change to the
+/// request, so those refusals can also use a default delay.
 fn refused_before_dispatch(error: &anyhow::Error) -> Option<u64> {
 	if let Some(retry_after_ms) = depot_client::retry_after_ms(error) {
 		return Some(retry_after_ms);
 	}
-	let Some(depot_client::filesystem::Error::Log(error)) =
-		error.downcast_ref::<depot_client::filesystem::Error>()
-	else {
-		return None;
+	let transient = match error.downcast_ref::<FilesystemError>() {
+		Some(FilesystemError::Log(WriteError::RoutingUnavailable)) => true,
+		Some(FilesystemError::Log(WriteError::LifecycleRejected(reject))) => {
+			depot_client::reject_refused_before_running(reject)
+		}
+		Some(_) | None => false,
 	};
-	if error.disposition() != ErrorDisposition::NotExecuted {
-		return None;
-	}
-	Some(
-		error
-			.retry_after_ms()
-			.unwrap_or(REFUSED_WRITE_RETRY_AFTER_MS),
-	)
+	transient.then_some(REFUSED_WRITE_RETRY_AFTER_MS)
 }
 
 /// Builds the request-scoped error reply for a SQLite request.
@@ -233,18 +229,20 @@ pub(crate) fn inbound_overloaded_failure(
 	)
 }
 
-/// How long the runtime waits before sending a write the volume client refused without a hint,
-/// such as a missing route or an entry the shards cannot accept.
+/// Delay for a transient refusal that carries no retry hint.
 const REFUSED_WRITE_RETRY_AFTER_MS: u64 = 100;
 
-/// The `reason` a refused request's reply names: `version_unavailable` for a write the
-/// selected entry version cannot carry, `client_budget` for a request a volume client budget
-/// or window refused, `write_refused` for every other refusal.
+/// Uses Depot's bounded refusal labels and keeps SQLite's budget and fallback labels.
 fn refusal_reason(error: &anyhow::Error) -> &'static str {
-	match error.downcast_ref::<depot_client::filesystem::Error>() {
-		Some(depot_client::filesystem::Error::VersionUnavailable { .. }) => "version_unavailable",
-		Some(depot_client::filesystem::Error::Overloaded) => "client_budget",
-		Some(_) | None => "write_refused",
+	if matches!(
+		error.downcast_ref::<FilesystemError>(),
+		Some(FilesystemError::Overloaded)
+	) {
+		return "client_budget";
+	}
+	match depot_client::refusal_reason(error) {
+		"refused" => "write_refused",
+		reason => reason,
 	}
 }
 

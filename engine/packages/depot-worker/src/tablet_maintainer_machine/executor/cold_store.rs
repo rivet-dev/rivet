@@ -49,6 +49,8 @@ pub struct ColdStoreConfig {
 	/// storage on this tick only while a compaction is running.
 	pub compactor_commit_interval_ms: u64,
 	pub max_concurrent_compactions: usize,
+	/// All tablet configs cloned by this storage worker share these probe and merge limits.
+	pub cleanup_budget: crate::filesystem::filter::CleanupBudget,
 	pub min_compaction_sources: usize,
 	/// At least `l0_max_ssts`, so one compaction drains a full L0 instead of leaving
 	/// flushes stalled behind a second compaction cycle.
@@ -95,6 +97,7 @@ impl Default for ColdStoreConfig {
 			manifest_poll_interval_ms: 5000,
 			compactor_commit_interval_ms: 250,
 			max_concurrent_compactions: 2,
+			cleanup_budget: Default::default(),
 			max_read_sessions: depot_fs_core::wire::DEFAULT_MAX_SESSIONS,
 			read_session_idle_ms: depot_fs_core::wire::DEFAULT_READ_SESSION_IDLE_MS,
 			latest_session_idle_ms: depot_fs_core::wire::DEFAULT_LATEST_SESSION_IDLE_MS,
@@ -169,11 +172,6 @@ impl ColdStoreConfig {
 			max_concurrent_compactions: self.max_concurrent_compactions,
 			..Default::default()
 		};
-		if let Some(worker) = compactor.worker.as_mut() {
-			worker.compactions_poll_interval =
-				Duration::from_millis(self.compactor_poll_interval_ms);
-			worker.max_sst_size = self.compacted_sst_size_bytes;
-		}
 		compactor.scheduler_options.insert(
 			"min_compaction_sources".into(),
 			self.min_compaction_sources.to_string(),
@@ -182,6 +180,18 @@ impl ColdStoreConfig {
 			"max_compaction_sources".into(),
 			self.max_compaction_sources.to_string(),
 		);
+		let cleanup_enabled =
+			!frozen && crate::filesystem::filter::supports_reclamation(&compactor);
+		if let Some(worker) = compactor.worker.as_mut() {
+			worker.compactions_poll_interval =
+				Duration::from_millis(self.compactor_poll_interval_ms);
+			worker.max_sst_size = self.compacted_sst_size_bytes;
+			if cleanup_enabled {
+				// SlateDB prefetches input before the filter acquires a merge slot.
+				worker.max_fetch_tasks = 1;
+				worker.bytes_to_fetch = 256 * 1024;
+			}
+		}
 		let mut settings = Settings {
 			wal_enabled: false,
 			flush_interval: None,
@@ -213,6 +223,7 @@ pub struct ColdStore {
 	/// write waits for a memtable upload.
 	unflushed_full: tokio::sync::watch::Receiver<bool>,
 	pub tablet_grant_epoch: u64,
+	reclamation_probe: Option<crate::filesystem::filter::ReclamationProbe>,
 }
 
 impl ColdStore {
@@ -254,10 +265,11 @@ impl ColdStore {
 		};
 		let catalog =
 			std::sync::Arc::new(parking_lot::Mutex::new(std::collections::BTreeMap::new()));
-		let policy = crate::filesystem::filter::storage_policy_in_range(
+		let (policy, reclamation) = crate::filesystem::filter::storage_policy_with_reclamation(
 			catalog.clone(),
 			env.clock(),
 			Some(tablet.hash_range.clone()),
+			config.cleanup_budget.clone(),
 		);
 		let session_config = crate::filesystem::session::SessionConfig {
 			scan: policy.scan.clone(),
@@ -272,12 +284,17 @@ impl ColdStore {
 			crate::metrics::CompactionStalls::for_tablet(tablet_id)
 				.with_unflushed_limit(config.max_unflushed_bytes);
 		let compaction_stalls = std::sync::Arc::new(compaction_stalls);
+		let settings = config.settings(frozen)?;
+		let probe_enabled = settings
+			.compactor_options
+			.as_ref()
+			.is_some_and(crate::filesystem::filter::supports_reclamation);
 		let db = factory
 			.open_with_storage_policy(
 				TabletVolumePrefix::new(tablet_id).pack(),
 				epoch,
 				creation,
-				config.settings(frozen)?,
+				settings,
 				Some(compaction_stalls.clone()),
 				policy,
 			)
@@ -325,7 +342,11 @@ impl ColdStore {
 		);
 		observer.observe(&db);
 		let observer = std::sync::Arc::new(parking_lot::Mutex::new(observer));
+		if probe_enabled {
+			filesystem = filesystem.with_reclamation(reclamation.clone());
+		}
 		let filesystem = std::sync::Arc::new(filesystem.with_observer(observer));
+		let reclamation_probe = probe_enabled.then(|| reclamation.start(env, filesystem.clone()));
 		Ok(Self {
 			tablet_id,
 			filesystem,
@@ -333,6 +354,7 @@ impl ColdStore {
 			compaction_stalls,
 			unflushed_full,
 			tablet_grant_epoch: epoch.get(),
+			reclamation_probe,
 		})
 	}
 	pub(crate) fn filesystem(&self) -> &crate::filesystem::store::FilesystemStore {
@@ -443,8 +465,13 @@ impl ColdStore {
 	/// `close_without_upload`, since the upload records no cold position. Tests use it to
 	/// contrast the two.
 	#[tracing::instrument(skip_all)]
-	pub async fn close(self) -> Result<()> {
-		self.db.close().await?;
+	pub async fn close(mut self) -> Result<()> {
+		if let Some(probe) = self.reclamation_probe.take() {
+			probe.stop().await;
+		}
+		let result = self.db.close().await;
+		self.filesystem.release_reclamation_after_close();
+		result?;
 		Ok(())
 	}
 
@@ -455,7 +482,10 @@ impl ColdStore {
 	/// as a materialize or sweep cursor or an alarm's retry backoff. Uploads already handed to
 	/// the uploader finish; everything else is dropped.
 	#[tracing::instrument(skip_all)]
-	pub async fn close_without_upload(self) -> Result<()> {
+	pub async fn close_without_upload(mut self) -> Result<()> {
+		if let Some(probe) = self.reclamation_probe.take() {
+			probe.stop().await;
+		}
 		let status = self.db.status();
 		tracing::debug!(
 			tablet_id = %self.tablet_id,
@@ -466,7 +496,9 @@ impl ColdStore {
 			"closing grant-owned SlateDB writer"
 		);
 		let options = slatedb::config::CloseOptions::default().with_flush_type(None);
-		self.db.close_with_options(options).await?;
+		let result = self.db.close_with_options(options).await;
+		self.filesystem.release_reclamation_after_close();
+		result?;
 		Ok(())
 	}
 }

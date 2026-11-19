@@ -740,6 +740,7 @@ export interface CoreRuntime {
 	actorBeginStateTransaction(
 		ctx: ActorContextHandle,
 		timeoutMs?: number,
+		name?: string,
 	): Promise<ActorStateTransactionHandle>;
 	actorStateTransactionExecute(
 		transaction: ActorStateTransactionHandle,

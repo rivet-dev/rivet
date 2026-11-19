@@ -4,6 +4,7 @@ pub mod apply;
 pub mod base;
 pub mod bulk_budget;
 pub mod checkpoints;
+mod compaction;
 pub mod filter;
 mod fork_cleanup;
 pub(crate) mod fork_pins;

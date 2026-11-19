@@ -286,7 +286,11 @@ pub enum LoadResult {
 		in_flight: Vec<wire::MigrateFromV2InFlight>,
 	},
 	Fenced,
-	Failed(String),
+	Failed {
+		error: String,
+		/// Depot refused the load before dispatch because it had no maintainer route.
+		routing_unavailable: bool,
+	},
 }
 
 /// What a V2 read of one actor's candidate facts returned.

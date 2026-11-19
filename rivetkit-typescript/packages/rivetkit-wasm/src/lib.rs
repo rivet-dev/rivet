@@ -1475,10 +1475,11 @@ impl WasmActorContext {
 	pub async fn begin_state_transaction(
 		&self,
 		timeout_ms: Option<f64>,
+		name: Option<String>,
 	) -> Result<WasmActorStateTransaction, JsValue> {
 		let timeout = timeout_ms.map(transaction_timeout).transpose()?;
 		self.inner
-			.begin_state_transaction(timeout)
+			.begin_named_state_transaction(name.as_deref(), timeout)
 			.await
 			.map(|inner| WasmActorStateTransaction { inner })
 			.map_err(anyhow_to_js_error)

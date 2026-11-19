@@ -42,7 +42,7 @@ pub trait Command: Send + Sync + 'static {
 	/// response envelope can fail to downgrade, after checking every outcome that can need
 	/// the newer version.
 	const IDEMPOTENT_ANSWER: bool = false;
-	const TIMEOUT: Duration = Duration::from_secs(5);
+	const TIMEOUT: Duration = Duration::from_secs(30);
 	/// The client and the host can run different binaries during a rolling deploy, so each
 	/// body is encoded at its envelope family's negotiated version, never the compiled latest.
 	/// The caller seals the request at the highest version every live storage worker reads,

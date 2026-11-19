@@ -72,6 +72,8 @@ const IO_TIMEOUT_MS: u64 = 60_000;
 const COPY_TIMEOUT_MS: u64 = 60 * 60 * 1000;
 const RETRY_BASE_MS: u64 = 1_000;
 const RETRY_MAX_MS: u64 = 30_000;
+/// Allow time for initial tablet placement before warning about a missing maintainer route.
+const LOAD_ROUTING_GRACE_MS: u64 = 3 * 60_000;
 /// Largest candidates page.
 const PAGE_LIMIT: u32 = 200;
 /// Timeout of an operator request's candidate read. The operator's UPS request waits at most 30
@@ -144,6 +146,7 @@ impl State {
 			tenure,
 			settings,
 			phase: Phase::LoadBackoff,
+			load_started_boot_ms: 0,
 			pass: None,
 			pass_dirty: false,
 			listing: Listing::Idle,
@@ -184,7 +187,8 @@ impl EphemeralStateMachine for MigratorStateMachine {
 		}
 	}
 
-	fn start(state: &mut State, _now: Clocks, _entropy: Entropy, out: &mut Effects) {
+	fn start(state: &mut State, now: Clocks, _entropy: Entropy, out: &mut Effects) {
+		state.load_started_boot_ms = now.boot_ms;
 		load(state, out);
 	}
 
@@ -412,8 +416,16 @@ fn on_loaded(state: &mut State, op: OpId, result: LoadResult, now: Clocks, out: 
 			state.phase = Phase::Stopped;
 			return;
 		}
-		LoadResult::Failed(error) => {
-			tracing::warn!(%error, "loading the migration state failed; retrying");
+		LoadResult::Failed {
+			error,
+			routing_unavailable,
+		} => {
+			let elapsed_ms = now.boot_ms.saturating_sub(state.load_started_boot_ms);
+			if routing_unavailable && elapsed_ms < LOAD_ROUTING_GRACE_MS {
+				tracing::debug!(%error, elapsed_ms, "loading the migration state failed; retrying");
+			} else {
+				tracing::warn!(%error, elapsed_ms, "loading the migration state failed; retrying");
+			}
 			state.phase = Phase::LoadBackoff;
 			out.arm_timer_after(Timer::Load, RETRY_BASE_MS * 5);
 			return;
@@ -1563,7 +1575,16 @@ fn on_confirm(state: &mut State, v2_actor_id: Id, result: ConfirmResult, out: &m
 fn on_io_timeout(state: &mut State, op: OpId, now: Clocks, out: &mut Effects) {
 	// A load, a write and a listing time out like a failure of the same request.
 	if state.phase == (Phase::Loading { op }) {
-		on_loaded(state, op, LoadResult::Failed("timed out".into()), now, out);
+		on_loaded(
+			state,
+			op,
+			LoadResult::Failed {
+				error: "timed out".into(),
+				routing_unavailable: false,
+			},
+			now,
+			out,
+		);
 		return;
 	}
 	if let Persist::Writing(persist) = &state.persist

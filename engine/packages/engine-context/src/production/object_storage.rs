@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use super::local_object_store::LocalObjectStore;
-use anyhow::Result;
+use anyhow::{Result, bail};
 use depot_worker::{
 	object_store_first_attempt::FirstAttemptDeadlines,
 	object_store_metrics::InstrumentedHttpConnector,
@@ -126,6 +126,32 @@ impl RequestPolicy {
 	}
 }
 
+/// Check the selected endpoint against the S3 client's plaintext HTTP policy before bootstrap.
+fn validate_s3_endpoint(builder: &AmazonS3Builder) -> Result<()> {
+	let endpoint = builder
+		.get_config_value(&AmazonS3ConfigKey::S3Endpoint)
+		.or_else(|| builder.get_config_value(&AmazonS3ConfigKey::Endpoint));
+	if endpoint
+		.as_deref()
+		.and_then(|endpoint| endpoint.split_once(':'))
+		.is_some_and(|(scheme, _)| scheme.eq_ignore_ascii_case("http"))
+		&& !builder
+			.get_config_value(&AmazonS3ConfigKey::Client(ClientConfigKey::AllowHttp))
+			.is_some_and(|value| {
+				// Match object_store's boolean configuration parser.
+				matches!(
+					value.to_ascii_lowercase().as_str(),
+					"1" | "true" | "on" | "yes" | "y"
+				)
+			}) {
+		bail!(
+			"S3 object-store endpoint must use HTTPS. Check object_storage.primary.s3.endpoint and any AWS endpoint overrides. \
+			To explicitly allow plaintext HTTP, set AWS_ALLOW_HTTP=true."
+		);
+	}
+	Ok(())
+}
+
 fn build_object_store(
 	config: &ObjectStoreBackend,
 	policy: RequestPolicy,
@@ -197,6 +223,7 @@ fn build_object_store(
 				}
 				builder = builder.with_retry(retry);
 			}
+			validate_s3_endpoint(&builder)?;
 			let store = builder.build()?;
 			if let Some(prefix) = s3.prefix.as_deref().filter(|prefix| !prefix.is_empty()) {
 				Ok(Arc::new(PrefixStore::new(store, prefix)))

@@ -103,7 +103,7 @@ pub struct DepotConfig {
 	/// a commit is in flight are grouped up to this bound. Defaults to 16.
 	pub durable_max_events_per_commit: Option<u32>,
 	/// Floor for every typed storage command deadline, in milliseconds. Each command keeps its own
-	/// default (5 seconds generic, 30 seconds for actor storage); when set, the larger of the two
+	/// default (30 seconds unless the command specifies otherwise). When set, the larger of the two
 	/// bounds both the client's retry budget and the maintainer's handler timeout. Unset keeps the
 	/// per-command defaults.
 	pub command_timeout_ms: Option<u64>,

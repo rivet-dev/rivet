@@ -35,6 +35,7 @@ const nativeStateTransactionOpeners = new WeakMap<
 	(
 		timeoutMs?: number,
 		context?: unknown,
+		name?: string,
 	) => Promise<SqliteTransactionDatabase>
 >();
 type NativeStateTransactionContext = {
@@ -54,6 +55,7 @@ export function registerNativeStateTransactionOpener<
 	opener: (
 		timeoutMs?: number,
 		context?: unknown,
+		name?: string,
 	) => Promise<SqliteTransactionDatabase>,
 ): T {
 	nativeStateTransactionOpeners.set(provider, opener);
@@ -224,6 +226,7 @@ export function db({
 										return beginStateTransaction(
 											options?.timeout,
 											stateScope,
+											options?.name,
 										);
 									})()
 								: await db.beginTransaction(

@@ -33,7 +33,7 @@ pub use super::slatedb_result::DeleteDatabaseResult;
 
 pub use slatedb::config::{CompressionCodec, Settings};
 
-/// Upstream cache/filter controls shared by the writer and its embedded compactor.
+/// Upstream cache, filter and scheduler controls for the writer and its embedded compactor.
 /// Scan options are consumed by the database owner for individual snapshot reads.
 #[derive(Clone, Default)]
 pub struct StoragePolicy {
@@ -41,6 +41,7 @@ pub struct StoragePolicy {
 	pub block_cache: slatedb::BlockCachePolicy,
 	pub filters: Option<Vec<Arc<dyn slatedb::FilterPolicy>>>,
 	pub compaction_filter: Option<Arc<dyn slatedb::CompactionFilterSupplier>>,
+	pub compaction_scheduler: Option<Arc<dyn slatedb::compactor::CompactionSchedulerSupplier>>,
 	pub scan: slatedb::config::ScanOptions,
 }
 

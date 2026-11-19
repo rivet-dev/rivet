@@ -46,6 +46,15 @@ pub struct ClusterDeploy {
 	pub env: BTreeMap<String, EnvValue>,
 }
 
+/// A build `rivet build prepare` uploads, which no pool runs yet.
+pub struct ClusterUpload {
+	pub cluster: String,
+	pub dockerfile: PathBuf,
+	pub build_context: PathBuf,
+	pub image: Option<String>,
+	pub tag: Option<String>,
+}
+
 /// The pool's variables after a deploy that sets `env`, which overwrites the
 /// same names and keeps the rest. `None` when the deploy changes none, so the
 /// upsert leaves the pool's variables, and any rollback pins, as they are.
@@ -75,17 +84,12 @@ pub async fn deploy(cloud: &CloudClient, opts: ClusterDeploy) -> Result<()> {
 	let build_id = match opts.build {
 		Some(build_id) => build_id,
 		None => {
-			let image_ref = format!(
-				"{}:{}",
-				opts.image.as_deref().unwrap_or(cluster),
-				opts.tag.unwrap_or_else(default_image_tag)
-			);
 			upload_image(
 				cloud,
 				cluster,
 				&opts.build_context,
 				&opts.dockerfile,
-				&image_ref,
+				&image_ref(cluster, opts.image, opts.tag),
 			)
 			.await?
 		}
@@ -139,6 +143,46 @@ pub async fn deploy(cloud: &CloudClient, opts: ClusterDeploy) -> Result<()> {
 	Ok(())
 }
 
+/// Builds and uploads a new build without rolling it out, then prints its id.
+/// It returns once the upload is complete, while the platform still verifies
+/// it and prepares its boot image; a later `rivet deploy --build <id>` waits
+/// for that and reports a build that failed.
+pub async fn upload(cloud: &CloudClient, opts: ClusterUpload) -> Result<()> {
+	let cluster = opts.cluster.as_str();
+	let (build_id, build) = upload_build(
+		cloud,
+		cluster,
+		&opts.build_context,
+		&opts.dockerfile,
+		&image_ref(cluster, opts.image, opts.tag),
+	)
+	.await?;
+
+	// Completing the upload may already refuse the build, such as one that
+	// fails verification. Nothing is waited for past what completion returned.
+	build_step(&build_id, &build)?;
+	tracing::info!(
+		%cluster,
+		%build_id,
+		"uploaded build without rolling it out; its boot image is being prepared, roll it out with `rivet deploy --build`"
+	);
+
+	// The build id is the command's result; print it to stdout so it can be
+	// captured by scripts and passed back as `--build`.
+	println!("{build_id}");
+	Ok(())
+}
+
+/// The image name recorded on a build, defaulting to the cluster name and the
+/// git short SHA.
+fn image_ref(cluster: &str, image: Option<String>, tag: Option<String>) -> String {
+	format!(
+		"{}:{}",
+		image.as_deref().unwrap_or(cluster),
+		tag.unwrap_or_else(default_image_tag)
+	)
+}
+
 /// Creates the build, waiting while a new cluster refuses uploads because its
 /// bucket is not ready yet.
 async fn create_build_when_ready(
@@ -160,6 +204,8 @@ async fn create_build_when_ready(
 	bail!("cluster {cluster} did not become ready for uploads; check its status in the dashboard")
 }
 
+/// Builds and uploads a new build and returns its id; `wait_for_build` checks
+/// it before any rollout.
 async fn upload_image(
 	cloud: &CloudClient,
 	cluster: &str,
@@ -167,6 +213,19 @@ async fn upload_image(
 	dockerfile: &Path,
 	image_ref: &str,
 ) -> Result<String> {
+	let (build_id, _) = upload_build(cloud, cluster, build_context, dockerfile, image_ref).await?;
+	Ok(build_id)
+}
+
+/// Builds and uploads a new build, returning its id and the build as
+/// completing the upload left it.
+async fn upload_build(
+	cloud: &CloudClient,
+	cluster: &str,
+	build_context: &Path,
+	dockerfile: &Path,
+	image_ref: &str,
+) -> Result<(String, v2::Build)> {
 	tracing::info!("building Docker image");
 	docker_build(build_context, dockerfile, image_ref)?;
 
@@ -193,8 +252,8 @@ async fn upload_image(
 		create_build_when_ready(cloud, cluster, image_ref, content_length, &content_md5).await?;
 	tracing::info!(build_id = %build.build_id, content_length, "uploading build");
 	v2::upload_build(cloud, &build.upload_url, &tar, content_length, &content_md5).await?;
-	v2::complete_build(cloud, cluster, &build.build_id).await?;
-	Ok(build.build_id)
+	let completed = v2::complete_build(cloud, cluster, &build.build_id).await?;
+	Ok((build.build_id, completed))
 }
 
 /// Returns the file's size and its base64 MD5 digest, as `Content-MD5` carries it.
@@ -260,23 +319,11 @@ async fn wait_for_build(cloud: &CloudClient, cluster: &str, build_id: &str) -> R
 	let mut last_retry: Option<String> = None;
 	loop {
 		let build = v2::get_build(cloud, cluster, build_id).await?;
-		let step = match build.status {
-			BuildStatus::Ready => {
-				if last_status.is_some() {
-					tracing::info!(%build_id, elapsed_s = started.elapsed().as_secs(), "build is ready");
-				}
-				return Ok(());
+		let Some(step) = build_step(build_id, &build)? else {
+			if last_status.is_some() {
+				tracing::info!(%build_id, elapsed_s = started.elapsed().as_secs(), "build is ready");
 			}
-			BuildStatus::Failed => bail!("{}", failure_message(build_id, build.failure.as_ref())),
-			BuildStatus::Expired => bail!(
-				"build {build_id} expired before the upload arrived; deploy again to create a new build"
-			),
-			BuildStatus::Deleting => bail!("build {build_id} was deleted before it became ready"),
-			BuildStatus::Uploading => "waiting for the upload",
-			BuildStatus::Completing => "verifying the upload",
-			BuildStatus::Preparing => {
-				"preparing the boot image, which usually takes about 3 minutes"
-			}
+			return Ok(());
 		};
 
 		// A preparing build carries the platform failure it is retrying.
@@ -309,13 +356,33 @@ async fn wait_for_build(cloud: &CloudClient, cluster: &str, build_id: &str) -> R
 
 /// Says why a build failed and whose fault it was, so a platform failure is not
 /// mistaken for a problem with the image.
+/// What a build is waiting on, `None` once it is ready, or an error for a build
+/// that can never become ready.
+fn build_step(build_id: &str, build: &v2::Build) -> Result<Option<&'static str>> {
+	match build.status {
+		BuildStatus::Ready => Ok(None),
+		BuildStatus::Uploading => Ok(Some("waiting for the upload")),
+		BuildStatus::Completing => Ok(Some("verifying the upload")),
+		BuildStatus::Preparing => Ok(Some(
+			"preparing the boot image, which usually takes about 3 minutes",
+		)),
+		BuildStatus::Failed => bail!("{}", failure_message(build_id, build.failure.as_ref())),
+		BuildStatus::Expired => {
+			bail!("build {build_id} expired before the upload arrived; upload a new build")
+		}
+		BuildStatus::Deleting => bail!("build {build_id} was deleted before it became ready"),
+	}
+}
+
 fn failure_message(build_id: &str, failure: Option<&BuildFailure>) -> String {
 	let Some(failure) = failure else {
-		return format!("build {build_id} failed; deploy again to create a new build");
+		return format!("build {build_id} failed; upload a new build");
 	};
 	let advice = match failure.fault {
-		v2::Fault::User => "fix the image and deploy again",
-		v2::Fault::Platform => "this is a platform problem, not your image; deploy again to retry",
+		v2::Fault::User => "fix the image and upload a new build",
+		v2::Fault::Platform => {
+			"this is a platform problem, not your image; upload a new build to retry"
+		}
 	};
 	format!(
 		"build {build_id} failed ({} fault, {}): {}; {advice}",

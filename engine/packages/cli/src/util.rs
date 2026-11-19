@@ -220,7 +220,7 @@ pub fn docker_login(registry: &str, token: &str) -> Result<()> {
 	let mut child = StdCommand::new("docker")
 		.args(["login", registry, "--username", "rivet", "--password-stdin"])
 		.stdin(Stdio::piped())
-		.stdout(Stdio::inherit())
+		.stdout(Stdio::from(std::io::stderr()))
 		.stderr(Stdio::inherit())
 		.spawn()
 		.context("docker login")?;
@@ -257,12 +257,14 @@ pub fn docker_build(context: &Path, dockerfile: &Path, image_ref: &str) -> Resul
 	)
 }
 
+/// Runs a command to completion. Its stdout goes to our stderr, because our
+/// stdout holds only the command's result for scripts to capture.
 pub fn run_command(program: &str, args: &[&str], cwd: Option<&Path>) -> Result<()> {
 	tracing::info!(command = %format!("{} {}", program, args.join(" ")), "running command");
 	let mut command = StdCommand::new(program);
 	command
 		.args(args)
-		.stdout(Stdio::inherit())
+		.stdout(Stdio::from(std::io::stderr()))
 		.stderr(Stdio::inherit());
 	if let Some(cwd) = cwd {
 		command.current_dir(cwd);

@@ -13,6 +13,8 @@ pub struct State {
 	pub tenure: u64,
 	pub settings: Settings,
 	pub phase: Phase,
+	/// Boot time of the first state load in this tenure, for startup retry logging.
+	pub(super) load_started_boot_ms: u64,
 	/// The pass entry as this tenure last changed it. `pass_dirty` is set until a write holds it.
 	pub pass: Option<wire::MigrateFromV2Pass>,
 	pub pass_dirty: bool,

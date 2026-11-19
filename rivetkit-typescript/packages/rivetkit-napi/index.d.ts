@@ -389,7 +389,7 @@ export declare class ActorContext {
   takePendingHibernationChanges(): Array<string>
   dirtyHibernatableConns(): Array<ConnHandle>
   saveState(payload: StateDeltaPayload): Promise<void>
-  beginStateTransaction(timeoutMs?: number | undefined | null): Promise<JsActorStateTransaction>
+  beginStateTransaction(timeoutMs?: number | undefined | null, name?: string | undefined | null): Promise<JsActorStateTransaction>
   saveStateAndWorkflowBatch(writes: Array<WorkflowKvWritePayload>): Promise<void>
   actorId(): string
   name(): string

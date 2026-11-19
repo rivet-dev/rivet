@@ -23,7 +23,7 @@ use crate::{
 	},
 };
 
-mod cluster;
+pub(crate) mod cluster;
 
 #[derive(Parser)]
 pub struct Opts {

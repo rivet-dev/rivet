@@ -69,6 +69,30 @@ pub(crate) fn error_response(request_id: u32, message: String) -> p::ToEnvoy {
 	})
 }
 
+/// Builds a retryable reply for a request that did not execute.
+pub(crate) fn overloaded_response(
+	request_id: u32,
+	message: &str,
+	retry_after_ms: u64,
+) -> p::ToEnvoy {
+	// The Envoy KV error message already carries hints in this form for queue refusals.
+	error_response(
+		request_id,
+		format!("depot.overloaded: {message} (retry_after_ms={retry_after_ms})"),
+	)
+}
+
+/// Only Depot errors with an explicit safe-resubmission hint become overloaded replies.
+pub(crate) fn request_error(request_id: u32, is_write: bool, error: &anyhow::Error) -> p::ToEnvoy {
+	if is_write && let Some(retry_after_ms) = depot_client::retry_after_ms(error) {
+		let message = error
+			.downcast_ref::<RivetError>()
+			.map_or_else(|| error.to_string(), |typed| typed.message().to_owned());
+		return overloaded_response(request_id, &message, retry_after_ms);
+	}
+	error_response(request_id, error.to_string())
+}
+
 /// A refused request's error, carried as `<group>.<code>: <message>` because the KV error
 /// response has only a message.
 fn refusal(error: anyhow::Error) -> p::KvResponseData {

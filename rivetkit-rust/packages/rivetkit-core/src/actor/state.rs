@@ -26,6 +26,9 @@ use crate::runtime::RuntimeSpawner;
 use crate::sqlite::{BindParam, ExecuteResult, SqliteBatchStatement, SqliteTransaction};
 use crate::types::SaveStateOpts;
 
+/// Profiling name for a state transaction whose caller gives no name.
+const STATE_TRANSACTION_NAME: &str = "rivetkit-state-transaction";
+
 pub type PersistedScheduleEvent = persist_v4::ScheduleEvent;
 pub type PersistedActor = persist_v4::Actor;
 
@@ -371,6 +374,17 @@ impl ActorContext {
 		&self,
 		timeout: Option<Duration>,
 	) -> Result<ActorStateTransaction> {
+		self.begin_named_state_transaction(None, timeout).await
+	}
+
+	/// Begins a state transaction whose SQLite profile is grouped under `name`.
+	/// Without a name it uses a shared RivetKit name, so state transactions never
+	/// report as unnamed.
+	pub async fn begin_named_state_transaction(
+		&self,
+		name: Option<&str>,
+		timeout: Option<Duration>,
+	) -> Result<ActorStateTransaction> {
 		self.clear_pending_save();
 		let save_guard = Arc::clone(&self.0.save_guard).lock_owned().await;
 		{
@@ -399,7 +413,10 @@ impl ActorContext {
 			.map(|conn| (conn.id().to_owned(), conn.state()))
 			.collect();
 		let sql = self.invocation_sql();
-		let transaction = match sql.begin_transaction(timeout).await {
+		let transaction = match sql
+			.begin_named_transaction(Some(name.unwrap_or(STATE_TRANSACTION_NAME)), timeout)
+			.await
+		{
 			Ok(transaction) => transaction,
 			Err(error) => {
 				self.0

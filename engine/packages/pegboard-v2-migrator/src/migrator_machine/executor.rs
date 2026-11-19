@@ -148,7 +148,10 @@ async fn run(ctx: &EngineContext, v2: Option<&V2Client>, effect: Effect) -> Opti
 			op,
 			result: load(ctx, tenure)
 				.await
-				.unwrap_or_else(|error| LoadResult::Failed(format!("{error:#}"))),
+				.unwrap_or_else(|error| LoadResult::Failed {
+					routing_unavailable: depot_client::command_routing_unavailable(&error),
+					error: format!("{error:#}"),
+				}),
 		},
 		Effect::WriteStateRequest {
 			op,

@@ -9,7 +9,7 @@ use crate::{
 		MAX_SECRET_BYTES, SecretUsage, delete_plan, secret_usage, set_outcome, set_plan,
 		validate_secret_name,
 	},
-	target::{CloudArgs, ClusterTarget, Target},
+	target::{CloudArgs, ClusterTarget},
 	terminal,
 };
 
@@ -90,13 +90,8 @@ impl Opts {
 
 /// The cluster the command targets, and its organization when one was named.
 pub(super) async fn connect(cloud: &CloudArgs) -> Result<(CloudClient, String, Option<String>)> {
-	let (client, _, target) = cloud.connect().await?;
-	match target {
-		Target::Cluster(ClusterTarget { cluster, org }) => Ok((client, cluster, org)),
-		Target::Project(_) => {
-			bail!("no cluster selected; pass --cluster or run `rivet link --cluster <name>`")
-		}
-	}
+	let (client, ClusterTarget { cluster, org }) = cloud.connect_cluster().await?;
+	Ok((client, cluster, org))
 }
 
 /// The secret's latest version, or `None` when the cluster does not hold it,

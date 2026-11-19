@@ -529,18 +529,23 @@ impl SlateDbFactory for ProductionSlateDbFactory {
 				);
 			}
 			let seed = self.env.rng(&format!("slatedb.{path}")).next_u64();
-			let compactor = policy
-				.compaction_filter
-				.clone()
-				.filter(|_| settings.compactor_options.is_some())
-				.map(|supplier| {
+			let compactor = settings
+				.compactor_options
+				.as_ref()
+				.filter(|_| {
+					policy.compaction_filter.is_some() || policy.compaction_scheduler.is_some()
+				})
+				.map(|options| {
 					let mut builder =
 						slatedb::CompactorBuilder::new(path.clone(), self.db_store.clone())
 							.with_system_clock(Arc::new(SlateClock(self.env.clock())))
 							.with_seed(seed)
-							.with_compaction_filter_supplier(supplier);
-					if let Some(options) = &settings.compactor_options {
-						builder = builder.with_options(options.clone());
+							.with_options(options.clone());
+					if let Some(supplier) = policy.compaction_filter {
+						builder = builder.with_compaction_filter_supplier(supplier);
+					}
+					if let Some(supplier) = policy.compaction_scheduler {
+						builder = builder.with_scheduler_supplier(supplier);
 					}
 					if let Some(filters) = &policy.filters {
 						builder = builder.with_filter_policies(filters.clone());

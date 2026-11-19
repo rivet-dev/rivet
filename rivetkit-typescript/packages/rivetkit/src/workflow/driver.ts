@@ -17,6 +17,9 @@ const WORKFLOW_STORAGE_PREFIX = workflowStoragePrefix();
 // and index pages, so it needs the same conservative budget as core imports.
 const WORKFLOW_SQLITE_MAX_BATCH_ROWS = 128;
 const WORKFLOW_SQLITE_MAX_BATCH_BYTES = 512 * 1024;
+// Static names group each kind of workflow storage transaction in SQLite profiles.
+const WORKFLOW_BATCH_TRANSACTION_NAME = "rivetkit-workflow-batch";
+const WORKFLOW_DELETE_TRANSACTION_NAME = "rivetkit-workflow-delete";
 
 // Mirrors the element shape returned by `queueManager.receive`. The actor
 // instance is reached through a loose type here, so the call's result is
@@ -165,15 +168,18 @@ class WorkflowStorage {
 	async batch(writes: KVWrite[]): Promise<void> {
 		if (writes.length === 0) return;
 		for (const chunk of chunkWorkflowWrites(writes)) {
-			await this.#db.transaction(async (tx) => {
-				for (const { key, value } of chunk) {
-					await tx.execute(
-						"INSERT INTO _rivet_wf_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-						makeWorkflowKey(key),
-						value,
-					);
-				}
-			});
+			await this.#db.transaction(
+				async (tx) => {
+					for (const { key, value } of chunk) {
+						await tx.execute(
+							"INSERT INTO _rivet_wf_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+							makeWorkflowKey(key),
+							value,
+						);
+					}
+				},
+				{ name: WORKFLOW_BATCH_TRANSACTION_NAME },
+			);
 		}
 	}
 
@@ -201,17 +207,20 @@ class WorkflowStorage {
 			start < keys.length;
 			start += WORKFLOW_SQLITE_MAX_BATCH_ROWS
 		) {
-			await this.#db.transaction(async (tx) => {
-				for (const key of keys.slice(
-					start,
-					start + WORKFLOW_SQLITE_MAX_BATCH_ROWS,
-				)) {
-					await tx.execute(
-						"DELETE FROM _rivet_wf_kv WHERE key = ?",
-						key,
-					);
-				}
-			});
+			await this.#db.transaction(
+				async (tx) => {
+					for (const key of keys.slice(
+						start,
+						start + WORKFLOW_SQLITE_MAX_BATCH_ROWS,
+					)) {
+						await tx.execute(
+							"DELETE FROM _rivet_wf_kv WHERE key = ?",
+							key,
+						);
+					}
+				},
+				{ name: WORKFLOW_DELETE_TRANSACTION_NAME },
+			);
 		}
 	}
 }

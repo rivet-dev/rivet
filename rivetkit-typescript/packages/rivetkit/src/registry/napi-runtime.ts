@@ -949,9 +949,11 @@ export class NapiCoreRuntime implements CoreRuntime {
 	async actorBeginStateTransaction(
 		ctx: ActorContextHandle,
 		timeoutMs?: number,
+		name?: string,
 	): Promise<ActorStateTransactionHandle> {
 		return (await this.#actorContextForOperation(ctx).beginStateTransaction(
 			timeoutMs,
+			name,
 		)) as unknown as ActorStateTransactionHandle;
 	}
 

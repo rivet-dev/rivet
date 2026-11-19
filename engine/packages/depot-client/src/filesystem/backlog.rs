@@ -1,5 +1,5 @@
 //! Commit admission against the tablet's apply. A writer whose own admitted bytes run too far
-//! ahead of what the maintainer has applied is refused before its next write is built, with a
+//! ahead of what the maintainer has applied is refused before its next write is admitted, with a
 //! typed retry hint, instead of growing a backlog that log retention, a maintainer move's
 //! replay and every read waiting on the apply must pay for.
 
@@ -122,11 +122,11 @@ impl Filesystem {
 		self.move_floor(state, position, "applied");
 	}
 
-	/// Refuses a new write before it is built when this opening's admitted bytes are more than
+	/// Refuses a new write before appending when this opening's admitted bytes are more than
 	/// `max_unapplied_bytes`, or its entries more than `MAX_HELD_LAYERS`, ahead of the
 	/// maintainer's applied position. The refusal changed nothing, so the edge may send the
-	/// write again after its hint. Writes already inside a transaction are never refused here:
-	/// a transaction is admitted once, at its start.
+	/// write again after its hint. Filesystem transactions are admitted once at their start.
+	/// Optimistic KV transactions are admitted at group commit, when they first write the log.
 	///
 	/// The applied position comes from the maintainer's read replies. A writer that reads
 	/// nothing would otherwise see a stale one, so a backlog over the cap, or many held layers,

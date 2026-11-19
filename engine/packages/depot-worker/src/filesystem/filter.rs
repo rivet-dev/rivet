@@ -7,6 +7,8 @@
 //! the scalar rule, and it stays right when a row's versions come from several logs, where a
 //! per-log rule would drop the version a pin still returns.
 
+pub(crate) use super::compaction::supports_reclamation;
+pub use super::compaction::{CleanupBudget, Reclamation, ReclamationProbe};
 use async_trait::async_trait;
 use depot_fs_core::keys::slatedb::{
 	Scope, decode_key, deleted_incarnation_prefix_len, fork_pin_prefix_len, row_stamp,
@@ -71,13 +73,12 @@ pub struct Retention {
 	/// Per claim log, the completed resolver boundary; open transactions prevent publishing a
 	/// later cold record of that log.
 	pub apply_cold: PerLog<VolumeLogPosition>,
-	/// Internal SlateDB durable sequence covering this cold record and all rows
-	/// preceding it. None conservatively prevents newest-tombstone removal.
+	/// Internal SlateDB sequence covering the cold record and preceding writes.
+	/// None conservatively prevents newest-tombstone removal.
 	///
-	/// It is read from the manifest after this flush's own memtable flush returned.
-	/// The manifest's last L0 sequence only moves forward, so under overlapping flushes
-	/// it is never older than this flush's cut; a newer value only makes the
-	/// compaction filter's test harder to pass, which is conservative.
+	/// The ordinary pass publishes the manifest's sequence after flushing.
+	/// An on-demand load uses its snapshot sequence, which also covers staged
+	/// writes that may still be waiting for a flush.
 	pub cold_barrier: Option<u64>,
 	/// The cuts checkpoints and fork holds pin.
 	pub pins: BTreeSet<PinnedCut>,
@@ -96,6 +97,42 @@ impl Retention {
 	/// catalog does not know.
 	pub fn cold_of(&self, claim_log: u16) -> u64 {
 		self.cold.get(claim_log).copied().unwrap_or(0)
+	}
+
+	pub(super) fn has_cold(&self) -> bool {
+		match &self.cold {
+			PerLog::Empty => false,
+			PerLog::Root(seq) => *seq > 0,
+			PerLog::Logs(logs) => logs.values().any(|seq| *seq > 0),
+		}
+	}
+
+	/// Only the root record describes the base shared by the claim logs.
+	pub(super) fn knows_base(&self) -> bool {
+		self.cold.get(ROOT_CLAIM_LOG).is_some()
+	}
+
+	pub(super) fn permits_delete(&self, claim_log: u16, seq: u64) -> bool {
+		self.knows_base()
+			&& !self.has_base
+			&& self.pins.iter().all(|pin| pin.contains(claim_log, seq))
+	}
+
+	/// The lowest position shared by every durable pin, if there are any.
+	fn durable_pin(&self) -> Option<PerLog<u64>> {
+		let first = self.pins.first()?;
+		let mut common = PerLog::Empty;
+		for (&log, &seq) in &first.0 {
+			if let Some(seq) = self
+				.pins
+				.iter()
+				.skip(1)
+				.try_fold(seq, |seq, pin| pin.0.get(&log).map(|&at| seq.min(at)))
+			{
+				common.insert(log, seq);
+			}
+		}
+		Some(common)
 	}
 
 	/// Whether a checkpoint or fork hold pins claim log 0 exactly at `seq`.
@@ -154,7 +191,24 @@ pub struct VersionFilterSupplier {
 	pub catalog: Catalog,
 	pub clock: Arc<dyn Clock>,
 	pub hash_range: Option<depot_types::PartitionKeyHashRange>,
+	reclamation: Arc<Reclamation>,
 }
+
+impl VersionFilterSupplier {
+	pub fn new(
+		catalog: Catalog,
+		clock: Arc<dyn Clock>,
+		hash_range: Option<depot_types::PartitionKeyHashRange>,
+	) -> Self {
+		Self {
+			catalog,
+			clock,
+			hash_range,
+			reclamation: Arc::new(Reclamation::default()),
+		}
+	}
+}
+
 #[async_trait]
 impl CompactionFilterSupplier for VersionFilterSupplier {
 	fn requires_full_input(&self) -> bool {
@@ -164,6 +218,15 @@ impl CompactionFilterSupplier for VersionFilterSupplier {
 		&self,
 		context: &CompactionJobContext,
 	) -> Result<Box<dyn CompactionFilter>, CompactionFilterError> {
+		let merge_permit = match self.reclamation.merge_permits(context.destination) {
+			Some(permits) => Some(
+				permits
+					.acquire_owned()
+					.await
+					.map_err(|error| CompactionFilterError::CreationError(Box::new(error)))?,
+			),
+			None => None,
+		};
 		let now = self
 			.clock
 			.observe()
@@ -171,6 +234,7 @@ impl CompactionFilterSupplier for VersionFilterSupplier {
 			.boot_ms;
 
 		Ok(Box::new(VersionFilter {
+			_merge_permit: merge_permit,
 			catalog: self.catalog.clone(),
 			captured_at_boot_ms: now,
 			retention: None,
@@ -180,6 +244,9 @@ impl CompactionFilterSupplier for VersionFilterSupplier {
 			previous: None,
 			satisfied: Satisfied::From(0),
 			generation: 0,
+			reclamation: self.reclamation.clone(),
+			queued_scope: false,
+			waiting_for_cold: PerLog::Empty,
 		}))
 	}
 }
@@ -190,6 +257,7 @@ struct Loaded {
 	cold_barrier: Option<u64>,
 	has_base: bool,
 	pins: LoadedPins,
+	durable_pin: Option<PerLog<u64>>,
 }
 
 impl Loaded {
@@ -286,6 +354,7 @@ struct Previous {
 }
 
 struct VersionFilter {
+	_merge_permit: Option<tokio::sync::OwnedSemaphorePermit>,
 	catalog: Catalog,
 	captured_at_boot_ms: u64,
 	/// Sorted input keeps each scope contiguous. Capture only scopes that input visits.
@@ -299,6 +368,9 @@ struct VersionFilter {
 	/// Counts physical rows, so `Satisfied::Generations` resets by comparison instead of by
 	/// clearing.
 	generation: u64,
+	reclamation: Arc<Reclamation>,
+	queued_scope: bool,
+	waiting_for_cold: PerLog<u64>,
 }
 
 impl VersionFilter {
@@ -409,14 +481,17 @@ impl CompactionFilter for VersionFilter {
 			let loaded = self.catalog.lock().get(&scope).map(|retention| Loaded {
 				cold: retention.cold.clone(),
 				cold_barrier: retention.cold_barrier,
-				has_base: retention.has_base,
+				has_base: retention.has_base || !retention.knows_base(),
 				pins: LoadedPins::of(retention, self.captured_at_boot_ms),
+				durable_pin: retention.durable_pin(),
 			});
 			self.satisfied = match loaded.as_ref().map(|loaded| &loaded.pins) {
 				Some(LoadedPins::Cuts(cuts)) => Satisfied::Generations(vec![0; cuts.len()]),
 				Some(LoadedPins::Root(_)) | None => Satisfied::From(0),
 			};
 			self.retention = Some((scope.clone(), loaded));
+			self.queued_scope = false;
+			self.waiting_for_cold = PerLog::Empty;
 		}
 		let newer = self
 			.previous
@@ -461,18 +536,39 @@ impl CompactionFilter for VersionFilter {
 				drop = !protect
 					&& ((newer_seq == seq && was_dropped)
 						|| (newer_seq > seq && newer_seq <= loaded.cold_of(newer_log) && !needed));
-			} else if self.bottom
-				&& loaded
-					.cold_barrier
-					.zip(self.complete_input_through)
-					.is_some_and(|(cold, input)| cold <= input)
-				&& seq <= loaded.cold_of(claim_log)
-				&& !loaded.has_base
-				&& loaded.every_pin_contains(claim_log, seq)
-			{
+			} else if deleted && !loaded.has_base {
+				let cold = loaded.cold_of(claim_log);
 				// Every pin reads this tombstone, so every pin reads the row as absent, which
 				// is what removing the tombstone leaves.
-				drop = deleted;
+				drop = self.bottom
+					&& loaded
+						.cold_barrier
+						.zip(self.complete_input_through)
+						.is_some_and(|(cold, input)| cold <= input)
+					&& seq <= cold && loaded.every_pin_contains(claim_log, seq);
+				if !drop
+					&& loaded
+						.durable_pin
+						.as_ref()
+						.is_none_or(|pin| pin.get(claim_log).is_some_and(|at| seq <= *at))
+				{
+					if seq > cold {
+						if self
+							.waiting_for_cold
+							.get(claim_log)
+							.is_none_or(|pending| seq < *pending)
+						{
+							self.waiting_for_cold.insert(claim_log, seq);
+							self.reclamation
+								.wait_for_cold(&self.catalog, &scope, claim_log, seq);
+						}
+					} else if !self.queued_scope {
+						// The probe can wait out a temporary read pin or retry once a merge
+						// can cover the necessary inputs.
+						self.reclamation.queue(&scope);
+						self.queued_scope = true;
+					}
+				}
 			}
 		}
 		self.previous = Some(Previous {
@@ -554,25 +650,35 @@ pub(crate) fn sst_filters() -> Vec<Arc<dyn slatedb::FilterPolicy>> {
 /// and index entry, a bloom filter over row and scope prefixes, and a block cache that also
 /// takes each memtable flush's data blocks.
 pub fn storage_policy(catalog: Catalog, clock: Arc<dyn Clock>) -> StoragePolicy {
-	storage_policy_in_range(catalog, clock, None)
+	storage_policy_with_reclamation(catalog, clock, None, CleanupBudget::default()).0
 }
 
-pub(crate) fn storage_policy_in_range(
+pub fn storage_policy_with_reclamation(
 	catalog: Catalog,
 	clock: Arc<dyn Clock>,
 	hash_range: Option<depot_types::PartitionKeyHashRange>,
-) -> StoragePolicy {
-	StoragePolicy {
+	budget: CleanupBudget,
+) -> (StoragePolicy, Arc<Reclamation>) {
+	let reclamation = Arc::new(Reclamation::with_budget(budget));
+	let version_filter = VersionFilterSupplier {
+		catalog: catalog.clone(),
+		clock: clock.clone(),
+		hash_range,
+		reclamation: reclamation.clone(),
+	};
+	let policy = StoragePolicy {
 		sst_block_size: Some(slatedb::SstBlockSize::Block4Kib),
 		block_cache: slatedb::BlockCachePolicy::default(),
 		filters: Some(sst_filters()),
-		compaction_filter: Some(Arc::new(VersionFilterSupplier {
+		compaction_scheduler: Some(Arc::new(super::compaction::Supplier {
 			catalog,
 			clock,
-			hash_range,
+			reclamation: reclamation.clone(),
 		})),
+		compaction_filter: Some(Arc::new(version_filter)),
 		scan: slatedb::config::ScanOptions::default()
 			.with_cache_blocks(true)
 			.with_read_ahead_bytes(4096),
-	}
+	};
+	(policy, reclamation)
 }

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use chrono::{SecondsFormat, Utc};
 use clap::{Parser, builder::PossibleValuesParser};
 
@@ -9,7 +9,7 @@ use crate::{
 		CloudClient,
 		v2::{self, LogLine, LogQuery},
 	},
-	target::{CloudArgs, ClusterTarget, Target},
+	target::{CloudArgs, ClusterTarget},
 	util::color_enabled,
 };
 
@@ -51,13 +51,7 @@ pub struct Opts {
 
 impl Opts {
 	pub async fn execute(self) -> Result<()> {
-		let (cloud, _, target) = self.cloud.connect().await?;
-		let cluster = match target {
-			Target::Cluster(ClusterTarget { cluster, .. }) => cluster,
-			Target::Project(_) => {
-				bail!("no cluster selected; pass --cluster or run `rivet link --cluster <name>`")
-			}
-		};
+		let (cloud, ClusterTarget { cluster, .. }) = self.cloud.connect_cluster().await?;
 		self.run(&cloud, &cluster).await
 	}
 
