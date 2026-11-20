@@ -109,12 +109,17 @@ impl Opts {
 			None => Some(Value::Object(fields)),
 		};
 
-		let auth = resolve_auth(self.cloud.token.as_deref(), &self.cloud.cloud_api).await?;
-		// A login token names only the user, so API v2 needs the organization
-		// when the user belongs to several.
-		let cloud = CloudClient::new(&self.cloud.cloud_api, auth.token.clone())?
-			.with_login_refresh(&auth, &self.cloud.cloud_api)
-			.with_organization(self.cloud.org.clone());
+		let cloud = match self.cloud.connect_github_actions().await? {
+			Some((cloud, _, _)) => cloud,
+			None => {
+				let auth = resolve_auth(self.cloud.token.as_deref(), &self.cloud.cloud_api).await?;
+				// A login token names only the user, so API v2 needs the
+				// organization when the user belongs to several.
+				CloudClient::new(&self.cloud.cloud_api, auth.token.clone())?
+					.with_login_refresh(&auth, &self.cloud.cloud_api)
+					.with_organization(self.cloud.org.clone())
+			}
+		};
 		let mut headers = Vec::with_capacity(self.headers.len());
 		for header in &self.headers {
 			let (name, value) = header

@@ -39,9 +39,10 @@ const LOCAL_ENGINE_READY_TIMEOUT_MS = 60_000;
 // reports. Leave time to close the node connection after that, while staying
 // below the five-second force-kill ceiling used by tsx watch.
 const LOCAL_DEV_SHUTDOWN_GRACE_PERIOD_MS = 4_000;
-// Matches the engine's default `pegboard.actor_stop_threshold`. Used only when the
-// node has not received the engine's advertised threshold before shutdown begins.
-const DEFAULT_ACTOR_STOP_THRESHOLD_MS = 30_000;
+// Matches the engine's default shutdown budget: a pool without an eviction delay or period,
+// plus the default `pegboard.actor_stop_threshold`. Used only when the node has not received
+// the engine's advertised budget before shutdown begins.
+const DEFAULT_SHUTDOWN_BUDGET_MS = 30_000;
 
 // Serverless is disabled for v3; keep the implementation for a later release.
 function rejectServerless(): void {
@@ -823,13 +824,14 @@ export class Registry<A extends RegistryActors> {
 		if (gracePeriodMs === undefined) {
 			gracePeriodMs = localDevSignal
 				? LOCAL_DEV_SHUTDOWN_GRACE_PERIOD_MS
-				: ((await this.#actorStopThresholdMs(
+				: ((await this.#shutdownBudgetMs(
 						modeAPromise ?? modeBPromise,
-					)) ?? DEFAULT_ACTOR_STOP_THRESHOLD_MS);
+					)) ?? DEFAULT_SHUTDOWN_BUDGET_MS);
 		}
 		// Race the entire drain sequence (both modes + serve promise) against
 		// a single grace ceiling. Local dev signal shutdowns allow the watcher
-		// to restart promptly; other shutdowns use the engine's actor stop threshold.
+		// to restart promptly; other shutdowns use the engine's shutdown budget, its drain
+		// period plus its actor stop threshold.
 		const drain = async () => {
 			// Shut down every live `CoreRegistry` we know about. Mode A
 			// (`start()`) and Mode B (`handler()`) each build a separate
@@ -892,7 +894,7 @@ export class Registry<A extends RegistryActors> {
 		);
 	}
 
-	async #actorStopThresholdMs(
+	async #shutdownBudgetMs(
 		configuredRegistryPromise:
 			| ReturnType<typeof buildConfiguredRegistry>
 			| undefined,
@@ -900,19 +902,18 @@ export class Registry<A extends RegistryActors> {
 		if (configuredRegistryPromise === undefined) return undefined;
 		try {
 			const { runtime, registry } = await configuredRegistryPromise;
-			const thresholdMs =
-				await runtime.registryActorStopThresholdMs?.(registry);
+			const budgetMs = await runtime.registryShutdownBudgetMs?.(registry);
 			if (
-				thresholdMs !== undefined &&
-				Number.isFinite(thresholdMs) &&
-				thresholdMs > 0
+				budgetMs !== undefined &&
+				Number.isFinite(budgetMs) &&
+				budgetMs > 0
 			) {
-				return thresholdMs;
+				return budgetMs;
 			}
 		} catch (err) {
 			logger().warn(
 				{ err },
-				"failed to read actor stop threshold for shutdown grace",
+				"failed to read the shutdown budget for shutdown grace",
 			);
 		}
 		return undefined;

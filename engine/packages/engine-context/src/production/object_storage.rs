@@ -28,6 +28,9 @@ pub struct ObjectStores {
 	/// the primary client's request slots; a saturated upload link once delayed renewals past
 	/// the lease on every engine.
 	pub lease: Arc<dyn ObjectStore>,
+	/// `migrate_from_v2.backup` as loaded at startup, where the V2 migrator writes the backup of
+	/// each actor it copies, or `None` when unset. Dynamic config cannot change it.
+	pub migrate_from_v2_backup: Option<Arc<dyn ObjectStore>>,
 }
 
 /// Build stores before EngineContext: startup needs the primary store to validate cluster config
@@ -53,7 +56,22 @@ pub fn create_object_stores(config: &Config) -> Result<ObjectStores> {
 			)?)
 		}
 	};
-	Ok(ObjectStores { primary, lease })
+	let backup = config
+		.migrate_from_v2()
+		.and_then(|migration| migration.backup.as_ref());
+	let migrate_from_v2_backup = match backup {
+		Some(backend) => Some(
+			depot_worker::object_store_metrics::InstrumentedObjectStore::wrap(build_object_store(
+				backend, policy,
+			)?),
+		),
+		None => None,
+	};
+	Ok(ObjectStores {
+		primary,
+		lease,
+		migrate_from_v2_backup,
+	})
 }
 
 fn first_attempt_deadlines(storage: &ObjectStorageConfig) -> FirstAttemptDeadlines {

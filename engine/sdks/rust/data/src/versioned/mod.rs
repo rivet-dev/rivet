@@ -292,9 +292,13 @@ mod pegboard_actor;
 pub use pegboard_actor::*;
 mod pegboard_namespace;
 pub use pegboard_namespace::*;
+mod pegboard_pool;
+pub use pegboard_pool::*;
 
 mod pegboard_v2_migrator;
 pub use pegboard_v2_migrator::*;
+mod pegboard_v2_migration_backup;
+pub use pegboard_v2_migration_backup::*;
 
 mod depot_fs;
 pub use depot_fs::*;

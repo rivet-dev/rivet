@@ -1,0 +1,143 @@
+# One node pool's volume, `[ACTIVE_ENVOY_INDEX, namespace, pool_name]`, holds the pool's
+# configuration and its active envoys. Each connected envoy has one state row, which is also its
+# admission, and, per actor name it serves, a few positions on a hash ring. Allocation samples
+# random ring positions and compares the actor counts of the envoys it lands on. Heartbeats
+# overwrite the state row in place and never move a ring entry.
+
+type Uuid data
+type WorkerId data
+
+# The state of one envoy connection in the pool. It fences the envoy's ring entries by
+# connection epoch and records where they sit, so an older connection can neither overwrite nor
+# delete a newer connection's entries.
+type PoolEnvoyState struct {
+    envoyKey: str
+    connectionEpoch: u64
+    workerId: WorkerId
+    connectionId: Uuid
+    version: u32
+    names: list<str>
+    # The ring positions per name this connection wrote, so a delete removes exactly those.
+    virtualNodes: u32
+    heartbeatUnixMs: i64
+    # Actors the connection held at `heartbeatUnixMs`.
+    actorCount: u32
+    # A stopping envoy stays admitted, so its pool cannot be deleted under it, but is never
+    # picked for an allocation.
+    stopping: bool
+}
+
+# One envoy's latest state, as its connection's worker last observed it.
+type PoolHeartbeat struct {
+    envoyKey: str
+    connectionEpoch: u64
+    workerId: WorkerId
+    connectionId: Uuid
+    version: u32
+    names: list<str>
+    heartbeatUnixMs: i64
+    actorCount: u32
+    stopping: bool
+}
+
+# Every envoy one worker holds in the pool, written in one transaction.
+type PoolHeartbeatsRequest struct {
+    heartbeats: list<PoolHeartbeat>
+}
+
+type PoolHeartbeatReply struct {
+    # A newer connection of the envoy owns its state, so this connection must close.
+    superseded: bool
+    # The pool was deleted, so this connection must close and register again.
+    admissionLost: bool
+    # The highest version among the pool's other envoys with a live heartbeat, or the envoy's
+    # own version when it is higher. An envoy below it is superseded by a newer deployment.
+    newestLiveVersion: u32
+}
+
+# One reply per heartbeat, in request order.
+type PoolHeartbeatsResponse struct {
+    replies: list<PoolHeartbeatReply>
+    # The pool's configuration has not moved into this volume yet, so nothing was written and
+    # there are no replies. The caller moves it and sends the heartbeats again.
+    unmigrated: bool
+}
+
+# Picks candidates for an actor of `name` at the newest version with a live envoy. Each pivot
+# is a random 16-byte ring position chosen by the caller; each resolves to the first live envoy
+# at or after it.
+type PoolPickEnvoyRequest struct {
+    name: str
+    pivots: list<data>
+}
+
+type PoolCandidate struct {
+    envoyKey: str
+    workerId: WorkerId
+    connectionId: Uuid
+    actorCount: u32
+}
+
+# Distinct candidates, at most one per pivot. Empty when no envoy of the pool serves the name.
+type PoolPickEnvoyResponse struct {
+    candidates: list<PoolCandidate>
+}
+
+# The newest heartbeat an envoy reported at one version, for one name or for the whole pool,
+# refreshed at most every few seconds. A reader skips a version whose stamp is too old to belong
+# to a live envoy without reading any of its entries.
+type PoolVersionStamp struct {
+    newestHeartbeatUnixMs: i64
+}
+
+type PoolConfig struct {
+    drainOnVersionUpgrade: bool
+    actorEvictionDelay: u32
+    actorEvictionPeriod: u32
+    actorEvictionRate: f64
+    metadata: optional<data>
+}
+
+# The pool's configuration, or none once the pool was deleted. A volume without a record belongs
+# to a pool whose configuration is still in its namespace's catalog.
+type PoolRecord struct {
+    config: optional<PoolConfig>
+}
+
+type PoolAdminRead void
+
+type PoolAdminPut PoolConfig
+
+type PoolAdminDelete void
+
+# Legacy: writes the configuration read from the namespace catalog, or a deleted record when the
+# catalog has none, unless the volume already has a record. Sent only for a pool whose
+# configuration was written before pools kept it in their own volume.
+type LegacyPoolAdminAdopt struct {
+    config: optional<PoolConfig>
+}
+
+type PoolAdminOperation union {
+    PoolAdminRead |
+    PoolAdminPut |
+    PoolAdminDelete |
+    LegacyPoolAdminAdopt
+}
+
+type PoolAdminRequest struct {
+    operation: PoolAdminOperation
+}
+
+type PoolAdminStatus enum {
+    OK
+    NOT_FOUND
+    # A delete found an admitted node.
+    CONNECTED
+    # The volume has no record; the configuration is still in the namespace catalog.
+    UNMIGRATED
+}
+
+type PoolAdminResponse struct {
+    status: PoolAdminStatus
+    config: optional<PoolConfig>
+}

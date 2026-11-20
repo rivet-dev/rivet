@@ -19,6 +19,9 @@ pub struct State {
 	pub pass: Option<wire::MigrateFromV2Pass>,
 	pub pass_dirty: bool,
 	pub listing: Listing,
+	/// Whether `settings.target_group` is known for the target namespace. Admissions place their
+	/// entries and derive keyed ids by it, so none starts until it is `Known`.
+	pub target_group: TargetGroupRead,
 	/// In-flight entries keyed by V2 actor id: at most `max_in_flight`, plus the operator-requested
 	/// ones in `requested_entries`.
 	pub entries: BTreeMap<Id, Entry>,
@@ -84,6 +87,20 @@ pub enum Listing {
 	Backoff,
 	/// Every cursor is done; the `Pass` timer starts the next pass.
 	PassDone,
+}
+
+/// What the tenure knows of the target namespace's volume group.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TargetGroupRead {
+	/// Not read yet. The state load reads it, and a load that found another namespace's group
+	/// leaves it here until the tenure reads the current one.
+	Unread,
+	/// `settings.target_group` holds the target namespace's group, or `None` when it has none.
+	Known,
+	/// A `ReadTargetGroupRequest` for the target namespace is in flight.
+	Reading { op: OpId },
+	/// A read failed; the `TargetGroup` timer reads it again.
+	Backoff,
 }
 
 /// The state writes of this tenure. At most one write is in flight, and none while a failed

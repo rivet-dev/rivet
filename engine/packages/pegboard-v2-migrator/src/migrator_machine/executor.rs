@@ -104,6 +104,7 @@ impl Executor<MigratorStateMachine> for MigratorExecutor {
 				return;
 			}
 			Effect::LoadStateRequest { .. }
+			| Effect::ReadTargetGroupRequest { .. }
 			| Effect::WriteStateRequest { .. }
 			| Effect::ListCandidatesRequest { .. }
 			| Effect::ReadCandidateRequest { .. }
@@ -144,14 +145,28 @@ fn missing_v2() -> String {
 
 async fn run(ctx: &EngineContext, v2: Option<&V2Client>, effect: Effect) -> Option<Event> {
 	Some(match effect {
-		Effect::LoadStateRequest { op, tenure } => Event::LoadStateResponse {
+		Effect::LoadStateRequest {
 			op,
-			result: load(ctx, tenure)
+			tenure,
+			target_namespace,
+		} => Event::LoadStateResponse {
+			op,
+			result: load(ctx, tenure, target_namespace)
 				.await
 				.unwrap_or_else(|error| LoadResult::Failed {
 					routing_unavailable: depot_client::command_routing_unavailable(&error),
 					error: format!("{error:#}"),
 				}),
+		},
+		Effect::ReadTargetGroupRequest { op, namespace } => Event::ReadTargetGroupResponse {
+			op,
+			result: match read_target_group(ctx, namespace).await {
+				Ok(read) => TargetGroupResult::Read(read),
+				Err(error) => TargetGroupResult::Failed {
+					routing_unavailable: depot_client::command_routing_unavailable(&error),
+					error: format!("{error:#}"),
+				},
+			},
 		},
 		Effect::WriteStateRequest {
 			op,
@@ -176,11 +191,12 @@ async fn run(ctx: &EngineContext, v2: Option<&V2Client>, effect: Effect) -> Opti
 			datacenter_label,
 			after,
 			limit,
+			actor_name,
 		} => Event::ListCandidatesResponse {
 			op,
 			datacenter_label,
 			result: match v2 {
-				Some(v2) => list(v2, datacenter_label, after, limit)
+				Some(v2) => list(v2, datacenter_label, after, limit, actor_name.as_deref())
 					.await
 					.unwrap_or_else(|error| ListResult::Failed(format!("{error:#}"))),
 				None => ListResult::Failed(missing_v2()),
@@ -348,7 +364,17 @@ async fn run(ctx: &EngineContext, v2: Option<&V2Client>, effect: Effect) -> Opti
 	})
 }
 
-async fn load(ctx: &EngineContext, tenure: u64) -> Result<LoadResult> {
+/// Loads the state, after reading the target namespace's group when one is asked for, so a
+/// refused group read fails the load before it raises the fence.
+async fn load(
+	ctx: &EngineContext,
+	tenure: u64,
+	target_namespace: Option<String>,
+) -> Result<LoadResult> {
+	let target_group = match target_namespace {
+		Some(namespace) => Some(read_target_group(ctx, namespace).await?),
+		None => None,
+	};
 	let response = ctx
 		.depot()
 		.command::<MigrateFromV2StateLoad>(
@@ -363,9 +389,19 @@ async fn load(ctx: &EngineContext, tenure: u64) -> Result<LoadResult> {
 			LoadResult::Loaded {
 				pass: loaded.pass,
 				in_flight: loaded.in_flight,
+				target_group,
 			}
 		}
 		wire::MigrateFromV2StateLoadResponse::MigrateFromV2StateFenced(_) => LoadResult::Fenced,
+	})
+}
+
+/// The volume group of `namespace`'s standing, which a fresh create there is placed in.
+async fn read_target_group(ctx: &EngineContext, namespace: String) -> Result<TargetGroup> {
+	let standing = pegboard::catalog::namespace_standing(ctx, &namespace).await?;
+	Ok(TargetGroup {
+		group: standing.group_id(),
+		namespace,
 	})
 }
 
@@ -435,9 +471,15 @@ async fn list(
 	datacenter_label: u16,
 	after: Option<Vec<u8>>,
 	limit: u32,
+	actor_name: Option<&str>,
 ) -> Result<ListResult> {
 	let page = v2
-		.candidates(datacenter_label, after.as_deref(), limit as usize)
+		.candidates(
+			datacenter_label,
+			after.as_deref(),
+			limit as usize,
+			actor_name,
+		)
 		.await?;
 	let candidates = page
 		.candidates

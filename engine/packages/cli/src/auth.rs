@@ -13,7 +13,8 @@ use url::Url;
 use crate::credentials::{Session, SessionUser, read_credentials, session_key, write_credentials};
 
 const CLIENT_ID: &str = "rivet-cli";
-const SCOPE: &str = "rivet:cloud:read rivet:cloud:write";
+const BASE_SCOPES: [&str; 2] = ["rivet:cloud:read", "rivet:cloud:write"];
+pub const OIDC_TRUSTS_WRITE_SCOPE: &str = "rivet:v2:cluster:oidc-trusts:write";
 const REFRESH_SKEW_MS: i64 = 60_000;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -22,6 +23,7 @@ pub enum AuthSource {
 	Env,
 	Login,
 	LegacyFile,
+	GitHubActions,
 }
 
 impl AuthSource {
@@ -31,6 +33,7 @@ impl AuthSource {
 			AuthSource::Env => "RIVET_CLOUD_TOKEN environment variable",
 			AuthSource::Login => "rivet login",
 			AuthSource::LegacyFile => "Cloud API token in ~/.rivet/credentials",
+			AuthSource::GitHubActions => "GitHub Actions OIDC token",
 		}
 	}
 }
@@ -45,6 +48,91 @@ impl Auth {
 	pub fn is_login(&self) -> bool {
 		self.source == AuthSource::Login
 	}
+}
+
+/// Whether the job may request a GitHub Actions OIDC token, which needs the
+/// workflow's `id-token: write` permission.
+pub fn in_github_actions() -> bool {
+	env::var_os("ACTIONS_ID_TOKEN_REQUEST_URL").is_some()
+}
+
+/// Whether a token was given with the flag or `RIVET_CLOUD_TOKEN`.
+pub fn has_explicit_token(flag: Option<&str>) -> bool {
+	flag.is_some() || env::var("RIVET_CLOUD_TOKEN").is_ok_and(|token| !token.trim().is_empty())
+}
+
+#[derive(Deserialize)]
+struct ActionsIdToken {
+	value: String,
+}
+
+#[derive(Deserialize)]
+struct ExchangedToken {
+	cluster_token: String,
+}
+
+#[derive(Deserialize)]
+struct ApiError {
+	message: Option<String>,
+}
+
+/// Exchanges the job's GitHub Actions OIDC token for a credential of
+/// `cluster`, scoped by the cluster's matching trust. It lasts 15 minutes.
+pub async fn github_actions_token(
+	cloud_api: &str,
+	organization: &str,
+	cluster: &str,
+) -> Result<String> {
+	let request_url = env::var("ACTIONS_ID_TOKEN_REQUEST_URL").context(
+		"ACTIONS_ID_TOKEN_REQUEST_URL is not set; add `permissions: id-token: write` to the workflow",
+	)?;
+	let request_token = env::var("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+		.context("ACTIONS_ID_TOKEN_REQUEST_TOKEN is not set")?;
+	let mut request_url =
+		Url::parse(&request_url).context("invalid ACTIONS_ID_TOKEN_REQUEST_URL")?;
+	request_url
+		.query_pairs_mut()
+		.append_pair("audience", cloud_api.trim_end_matches('/'));
+
+	let http = reqwest::Client::new();
+	let response = http
+		.get(request_url)
+		.bearer_auth(request_token)
+		.send()
+		.await
+		.context("request GitHub Actions OIDC token")?;
+	let status = response.status();
+	if !status.is_success() {
+		let text = response.text().await.unwrap_or_default();
+		bail!("GitHub did not issue an OIDC token ({status}): {text}");
+	}
+	let id_token: ActionsIdToken = response
+		.json()
+		.await
+		.context("invalid GitHub Actions OIDC token response")?;
+
+	let response = http
+		.post(endpoint(cloud_api, "v2/oidc/token")?)
+		.json(&json!({
+			"organization": organization,
+			"cluster": cluster,
+			"subject_token": id_token.value,
+		}))
+		.send()
+		.await
+		.context("exchange GitHub Actions OIDC token")?;
+	let status = response.status();
+	let text = response.text().await.unwrap_or_default();
+	if !status.is_success() {
+		let message = serde_json::from_str::<ApiError>(&text)
+			.ok()
+			.and_then(|error| error.message)
+			.unwrap_or(text);
+		bail!("could not exchange the GitHub Actions OIDC token ({status}): {message}");
+	}
+	let exchanged: ExchangedToken =
+		serde_json::from_str(&text).context("invalid OIDC exchange response")?;
+	Ok(exchanged.cluster_token)
 }
 
 /// Resolves credentials in order: the flag, `RIVET_CLOUD_TOKEN`, the `rivet
@@ -113,6 +201,41 @@ pub async fn login_access_token(cloud_api: &str, force: bool) -> Result<String> 
 	Ok(session.access_token)
 }
 
+/// Fails unless the `rivet login` session for `cloud_api` holds every scope in
+/// `required`, telling the user how to sign in again with them. It refreshes
+/// the session first, so it sees the scopes the server grants now rather than
+/// those saved at sign-in.
+pub async fn require_login_scopes(cloud_api: &str, command: &str, required: &[&str]) -> Result<()> {
+	let session = refreshed_login_session(cloud_api).await?;
+	let missing: Vec<&str> = required
+		.iter()
+		.copied()
+		.filter(|scope| !session.scopes.iter().any(|granted| granted == scope))
+		.collect();
+	if missing.is_empty() {
+		return Ok(());
+	}
+
+	let flags: Vec<String> = missing
+		.iter()
+		.map(|scope| format!("--scope {scope}"))
+		.collect();
+	bail!(
+		"`{command}` needs permission your `rivet login` session was not granted: {}\nrun `rivet login {}` and approve it, then run `{command}` again",
+		missing.join(", "),
+		flags.join(" "),
+	)
+}
+
+async fn refreshed_login_session(cloud_api: &str) -> Result<Session> {
+	let credentials = read_credentials()?;
+	let session = credentials
+		.sessions
+		.get(&session_key(cloud_api))
+		.context("not signed in to Rivet Cloud; run `rivet login`")?;
+	refresh(cloud_api, session).await
+}
+
 #[derive(Deserialize)]
 struct DeviceCodeResponse {
 	device_code: String,
@@ -128,6 +251,7 @@ struct TokenResponse {
 	access_token: String,
 	refresh_token: String,
 	expires_in: i64,
+	scope: String,
 	user: SessionUser,
 }
 
@@ -137,11 +261,25 @@ struct OAuthError {
 	error_description: Option<String>,
 }
 
-pub async fn login(cloud_api: &str, open_browser: bool) -> Result<Session> {
+/// Signs in with the device flow, requesting the base scopes plus `extra_scopes`.
+/// The approved scopes replace any the CLI was granted before.
+pub async fn login(
+	cloud_api: &str,
+	open_browser: bool,
+	extra_scopes: &[String],
+) -> Result<Session> {
+	let mut scopes: Vec<&str> = BASE_SCOPES.to_vec();
+	for scope in extra_scopes {
+		if !scopes.contains(&scope.as_str()) {
+			scopes.push(scope);
+		}
+	}
+	let scope = scopes.join(" ");
+
 	let http = reqwest::Client::new();
 	let response = http
 		.post(endpoint(cloud_api, "api/auth/device/code")?)
-		.json(&json!({ "client_id": CLIENT_ID, "scope": SCOPE }))
+		.json(&json!({ "client_id": CLIENT_ID, "scope": scope }))
 		.send()
 		.await
 		.context("request device code")?;
@@ -262,6 +400,7 @@ fn session_from(token: TokenResponse) -> Session {
 		access_token: token.access_token,
 		refresh_token: token.refresh_token,
 		expires_at: now_ms() + token.expires_in * 1000,
+		scopes: token.scope.split_whitespace().map(str::to_string).collect(),
 		user: token.user,
 	}
 }

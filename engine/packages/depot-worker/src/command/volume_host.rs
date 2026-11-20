@@ -2531,6 +2531,10 @@ fn handler_failure(
 /// nothing: its transaction aborted with the error, so its own command ran nothing either, and
 /// the caller's edge may send it again after the hint as it would a refusal at admission. As an
 /// application error the refusal would lose its hint, and the edge would answer a final error.
+///
+/// The same holds for this host's own refusal of a command whose family it can select no write
+/// version for (`KvHandle::write_version`), which has no wire reason of its own. It answers with
+/// the filesystem's reason, as a write the selected entry version cannot express does.
 fn nested_refusal(error: &anyhow::Error) -> Option<KvCommandResponse> {
 	let structured = error.downcast_ref::<rivet_error::RivetError>()?;
 	if structured.group() != "depot" || structured.code() != "overloaded" {
@@ -2539,6 +2543,9 @@ fn nested_refusal(error: &anyhow::Error) -> Option<KvCommandResponse> {
 	let retry_after_ms = depot_client::retry_after_ms(error)?;
 	let metadata = structured.metadata()?;
 	let label = metadata.get("reason")?.as_str()?;
-	let reason = depot_client::overload_reason_of_label(label)?;
+	let reason = match label {
+		super::VERSION_UNAVAILABLE_REASON => OverloadReason::FilesystemOverloaded,
+		label => depot_client::overload_reason_of_label(label)?,
+	};
 	Some(overloaded_after(reason, retry_after_ms))
 }

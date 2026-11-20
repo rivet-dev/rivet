@@ -23,6 +23,20 @@ pub enum Event {
 	LoadStateResponse { op: OpId, result: LoadResult },
 	/// **When**
 	///
+	/// The executor finished `ReadTargetGroupRequest`.
+	///
+	/// **State**
+	///
+	/// A response for an op other than the read in flight is stale and changes nothing, and so is
+	/// a group read for a namespace the settings no longer target. `Read` records the group and
+	/// makes it known, which lets admissions start. `Failed` waits in backoff.
+	///
+	/// **Effects**
+	///
+	/// Dispatch runs; `Failed` arms `TargetGroup`.
+	ReadTargetGroupResponse { op: OpId, result: TargetGroupResult },
+	/// **When**
+	///
 	/// The executor finished `WriteStateRequest`.
 	///
 	/// **State**

@@ -3,7 +3,9 @@
 //! The migrator is a singleton state machine (see [`migrator_machine`]) that drives V2's
 //! `/migration/v1/` routes and writes the moved actors into V3. Routing during the migration lives
 //! in the gateway and the API shim.
+pub mod backup;
 pub mod commands;
+pub mod delete_parked;
 pub mod import;
 pub mod keys;
 pub mod metrics;

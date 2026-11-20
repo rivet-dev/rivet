@@ -48,6 +48,7 @@ futures.workspace = true
 http.workspace = true
 http-body-util = { workspace = true, optional = true }
 include_dir = { workspace = true }
+lazy_static.workspace = true
 nix = { workspace = true, optional = true, features = ["process"] }
 parking_lot.workspace = true
 opentelemetry = { version = "0.28", default-features = false, features = [

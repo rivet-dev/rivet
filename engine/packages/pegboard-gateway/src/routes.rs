@@ -617,9 +617,20 @@ async fn prepare(
 		let delegated = error.downcast_ref::<DelegatedToV2>().is_some();
 		let held = error.downcast_ref::<HeldByMigrateFromV2>().is_some();
 		if migration.is_some() && (not_here || delegated || (held && get_or_create.is_none())) {
+			let direct_actor = match direct {
+				true => Some(target.actor_id),
+				false => None,
+			};
+			authorize_v2_gateway(
+				&credential,
+				ctx.env().clock().observe()?.unix_ms,
+				&request_namespace,
+				direct_actor,
+			)?;
 			return Ok(Routed::V2(V2Target {
 				v3_id: target.actor_id,
 				group: target.group,
+				client_token: token.map(ToOwned::to_owned),
 			}));
 		}
 		if held {
@@ -1021,6 +1032,28 @@ struct V2Target {
 	v3_id: Id,
 	/// The group that id's volumes are keyed in.
 	group: Option<rivet_keys::keys::codec::GroupId>,
+	/// The token this cluster authenticated the request with. V2 cannot verify it, so it is
+	/// removed wherever it rode before the request is proxied.
+	client_token: Option<String>,
+}
+
+/// Authorizes a request V2 serves. V2 is reached with the migration's token, never the client's,
+/// so this cluster checks gateway access as it would for an actor it holds: to `direct_actor` for a
+/// request by id. A keyed request cannot know the V2 actor's id, so it needs gateway access to
+/// every actor in the namespace.
+fn authorize_v2_gateway(
+	credential: &auth::Credential,
+	now_unix_ms: i64,
+	namespace: &str,
+	direct_actor: Option<Id>,
+) -> Result<()> {
+	credential.authorize(
+		now_unix_ms,
+		namespace,
+		auth::ResourceKind::ActorGateway,
+		direct_actor,
+		auth::OperationKind::Read,
+	)
 }
 
 /// The parts of a request proxied to V2 unchanged.
@@ -1057,12 +1090,24 @@ async fn proxy_to_v2(
 ) -> Result<Response> {
 	let uri = proxy::gateway_uri(migration.config, &request.original_uri, request.keyed)?;
 	let namespace = migration.namespace.clone();
+	let credentials = proxy::V2Credentials {
+		client_token: v2.client_token.as_deref(),
+		v2_token: migration.config.token.as_deref(),
+	};
 
 	let ws = match ws {
 		Ok(ws) => ws,
 		Err(_) => {
-			let outcome =
-				proxy::http(ctx, &namespace, uri, request.method, &request.headers, body).await?;
+			let outcome = proxy::http(
+				ctx,
+				&namespace,
+				uri,
+				request.method,
+				&request.headers,
+				&credentials,
+				body,
+			)
+			.await?;
 			let response = match outcome {
 				proxy::HttpOutcome::Response(response) => response,
 				proxy::HttpOutcome::NotFound => {
@@ -1075,7 +1120,15 @@ async fn proxy_to_v2(
 		}
 	};
 
-	let upstream = match proxy::websocket_connect(ctx, &namespace, uri, &request.headers).await {
+	let upstream = match proxy::websocket_connect(
+		ctx,
+		&namespace,
+		uri,
+		&request.headers,
+		&credentials,
+	)
+	.await
+	{
 		Ok(upstream) => upstream,
 		Err(error) => {
 			tracing::warn!(
@@ -1363,6 +1416,10 @@ const TRY_AGAIN_LATER_CLOSE_CODE: u16 = 1013;
 /// Retry hint for a WebSocket open that ran out of time waiting for its actor.
 const WEBSOCKET_OPEN_RETRY_AFTER_MS: u64 = 1_000;
 
+/// Retry hint for a WebSocket open the actor's host refused before admission twice. The
+/// generation it named is stopping, so a retry soon after finds the actor's next start.
+const REFUSED_OPEN_RETRY_AFTER_MS: u64 = 100;
+
 /// Why an actor WebSocket failed to open.
 enum WebSocketRejection {
 	/// The open may succeed later; the client retries after `retry_after_ms`.
@@ -1415,6 +1472,15 @@ fn tunnel_close_frame(error: &anyhow::Error, ray_id: Option<Id>) -> (u16, String
 		.close_frame(),
 		None => errors::close_frame(error, ray_id),
 	}
+}
+
+/// The retryable close code and reason for an actor WebSocket open its host refused before
+/// admission twice.
+pub(crate) fn websocket_retry_close() -> (u16, String) {
+	WebSocketRejection::Retry {
+		retry_after_ms: REFUSED_OPEN_RETRY_AFTER_MS,
+	}
+	.close_frame()
 }
 
 /// The close reason for an actor WebSocket open the client should retry:

@@ -52,7 +52,7 @@ impl ObjectStorageConfig {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum ObjectStoreBackend {
 	#[default]
@@ -66,7 +66,7 @@ pub enum ObjectStoreBackend {
 
 /// A local directory used by one engine process at a time. Conditional writes are atomic
 /// only among requests of that process.
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FileSystemObjectStoreConfig {
 	/// Created when it does not exist.
@@ -74,7 +74,7 @@ pub struct FileSystemObjectStoreConfig {
 }
 
 /// Google Cloud Storage; defaults to the adapter's application default credentials.
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GcsObjectStoreConfig {
 	pub bucket: String,
@@ -86,7 +86,7 @@ pub struct GcsObjectStoreConfig {
 }
 
 /// Azure Blob storage used by SlateDB, topology, and cluster configuration.
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AzureObjectStoreConfig {
 	pub account: String,
@@ -98,7 +98,7 @@ pub struct AzureObjectStoreConfig {
 	pub access_key: Option<Secret<String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct S3ObjectStoreConfig {
 	pub bucket: String,

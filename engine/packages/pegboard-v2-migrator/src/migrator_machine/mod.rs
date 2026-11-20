@@ -101,6 +101,7 @@ impl rivet_state_machine::EventBody for Event {
 	fn name(&self) -> &'static str {
 		match self {
 			Event::LoadStateResponse { .. } => "load_state_response",
+			Event::ReadTargetGroupResponse { .. } => "read_target_group_response",
 			Event::WriteStateResponse { .. } => "write_state_response",
 			Event::ListCandidatesResponse { .. } => "list_candidates_response",
 			Event::CopyResponse { .. } => "copy_response",
@@ -121,6 +122,7 @@ impl rivet_state_machine::Effect for Effect {
 	fn name(&self) -> &'static str {
 		match self {
 			Effect::LoadStateRequest { .. } => "load_state_request",
+			Effect::ReadTargetGroupRequest { .. } => "read_target_group_request",
 			Effect::WriteStateRequest { .. } => "write_state_request",
 			Effect::ListCandidatesRequest { .. } => "list_candidates_request",
 			Effect::CopyRequest { .. } => "copy_request",
@@ -150,6 +152,7 @@ impl State {
 			pass: None,
 			pass_dirty: false,
 			listing: Listing::Idle,
+			target_group: TargetGroupRead::Unread,
 			entries: Default::default(),
 			persist: Persist::Idle,
 			persist_failures: 0,
@@ -184,6 +187,7 @@ impl EphemeralStateMachine for MigratorStateMachine {
 			Timer::Pass => "pass",
 			Timer::Entry(_) => "entry",
 			Timer::Io(_) => "io",
+			Timer::TargetGroup => "target_group",
 		}
 	}
 
@@ -204,7 +208,15 @@ impl EphemeralStateMachine for MigratorStateMachine {
 				return;
 			}
 			RuntimeEvent::Input(Event::SettingsChanged { settings }) => {
-				on_settings(state, settings);
+				on_settings(state, settings, out);
+			}
+			RuntimeEvent::Input(Event::ReadTargetGroupResponse { op, result }) => {
+				on_target_group(state, op, result, now, out);
+			}
+			RuntimeEvent::Timer(Timer::TargetGroup) => {
+				if state.target_group == TargetGroupRead::Backoff {
+					read_target_group(state, out);
+				}
 			}
 			RuntimeEvent::Input(Event::MigrateActorRequest {
 				request,
@@ -397,7 +409,76 @@ fn load(state: &mut State, out: &mut Effects) {
 	out.execute(Effect::LoadStateRequest {
 		op,
 		tenure: state.tenure,
+		target_namespace: enabled_target(&state.settings),
 	});
+}
+
+/// The target namespace whose group admissions need, or `None` while the migration is disabled.
+fn enabled_target(settings: &Settings) -> Option<String> {
+	match settings.enabled {
+		true => Some(settings.target_namespace.clone()),
+		false => None,
+	}
+}
+
+/// Reads the target namespace's group while the tenure runs, after a retarget or a failed read.
+fn read_target_group(state: &mut State, out: &mut Effects) {
+	let Some(namespace) = enabled_target(&state.settings) else {
+		state.target_group = TargetGroupRead::Unread;
+		return;
+	};
+	let op = state.next_op();
+	state.target_group = TargetGroupRead::Reading { op };
+	out.arm_timer_after(Timer::Io(op), IO_TIMEOUT_MS);
+	out.execute(Effect::ReadTargetGroupRequest { op, namespace });
+}
+
+/// Records a group read for the namespace the settings still target, which makes it known.
+/// Returns false for a read of another namespace, which the caller reads again.
+fn record_target_group(state: &mut State, read: TargetGroup) -> bool {
+	if read.namespace != state.settings.target_namespace {
+		return false;
+	}
+	// A namespace gains its group once and never loses it, so a group already seen stays.
+	if read.group.is_some() {
+		state.settings.target_group = read.group;
+	}
+	state.target_group = TargetGroupRead::Known;
+	true
+}
+
+fn on_target_group(
+	state: &mut State,
+	op: OpId,
+	result: TargetGroupResult,
+	now: Clocks,
+	out: &mut Effects,
+) {
+	if state.target_group != (TargetGroupRead::Reading { op }) {
+		return;
+	}
+	out.cancel_timer(Timer::Io(op));
+
+	match result {
+		TargetGroupResult::Read(read) => {
+			if !record_target_group(state, read) {
+				read_target_group(state, out);
+			}
+		}
+		TargetGroupResult::Failed {
+			error,
+			routing_unavailable,
+		} => {
+			let elapsed_ms = now.boot_ms.saturating_sub(state.load_started_boot_ms);
+			if routing_unavailable && elapsed_ms < LOAD_ROUTING_GRACE_MS {
+				tracing::debug!(%error, "reading the target namespace's group failed; retrying");
+			} else {
+				tracing::warn!(%error, "reading the target namespace's group failed; retrying");
+			}
+			state.target_group = TargetGroupRead::Backoff;
+			out.arm_timer_after(Timer::TargetGroup, RETRY_BASE_MS * 5);
+		}
+	}
 }
 
 fn on_loaded(state: &mut State, op: OpId, result: LoadResult, now: Clocks, out: &mut Effects) {
@@ -406,8 +487,12 @@ fn on_loaded(state: &mut State, op: OpId, result: LoadResult, now: Clocks, out: 
 	}
 	out.cancel_timer(Timer::Io(op));
 
-	let (pass, in_flight) = match result {
-		LoadResult::Loaded { pass, in_flight } => (pass, in_flight),
+	let (pass, in_flight, target_group) = match result {
+		LoadResult::Loaded {
+			pass,
+			in_flight,
+			target_group,
+		} => (pass, in_flight, target_group),
 		LoadResult::Fenced => {
 			tracing::warn!(
 				tenure = state.tenure,
@@ -432,7 +517,16 @@ fn on_loaded(state: &mut State, op: OpId, result: LoadResult, now: Clocks, out: 
 		}
 	};
 
+	// The group is recorded before the entries are rebuilt, which place legacy entries by it. A
+	// load that read a namespace the settings changed away from meanwhile reads the current one.
+	let recorded = match target_group {
+		Some(read) => record_target_group(state, read),
+		None => false,
+	};
 	state.phase = Phase::Running;
+	if !recorded {
+		read_target_group(state, out);
+	}
 	state.pass = pass;
 	if state.pass.is_none() {
 		start_pass(state, now);
@@ -711,6 +805,16 @@ fn select_with(
 	if share == Share::Applied && !in_share(candidate.actor_id, settings) {
 		return Err(Reason::NotSelected);
 	}
+	// V2 lists only the configured name. Selection checks it too, so a listing that returns another
+	// name never moves it.
+	if share == Share::Applied
+		&& settings
+			.actor_name
+			.as_ref()
+			.is_some_and(|name| *name != candidate.name)
+	{
+		return Err(Reason::NotSelected);
+	}
 	if candidate.version == 1 {
 		return Err(Reason::ActorV1);
 	}
@@ -791,12 +895,28 @@ fn placed_v3_actor_id(
 
 /// Takes new settings. A namespace gains its volume group once and never loses it, so settings
 /// read from a standing older than one this tenure already saw grouped keep the group.
-fn on_settings(state: &mut State, mut settings: Settings) {
+/// Applies new settings. The group is read by the state machine, never carried in, so the
+/// settings keep the group known for their namespace; a retarget reads the new namespace's group,
+/// and admissions wait for it.
+fn on_settings(state: &mut State, mut settings: Settings, out: &mut Effects) {
 	let same_namespace = settings.target_namespace == state.settings.target_namespace;
-	if same_namespace && settings.target_group.is_none() {
+	let was_enabled = state.settings.enabled;
+	if same_namespace {
 		settings.target_group = state.settings.target_group;
+	} else {
+		settings.target_group = None;
 	}
 	state.settings = settings;
+
+	let group_current = same_namespace && (was_enabled || !state.settings.enabled);
+	if group_current {
+		return;
+	}
+	// Before the load answers, the next load carries the new namespace instead.
+	state.target_group = TargetGroupRead::Unread;
+	if state.phase == Phase::Running {
+		read_target_group(state, out);
+	}
 }
 
 /// The canonical V3 key of a key V2 stored in its slash form, or `None` when the V2 key is not
@@ -1020,7 +1140,7 @@ fn on_migrate_actor_request(
 	v2_actor_id: Id,
 	out: &mut Effects,
 ) {
-	let refusal = if state.phase != Phase::Running {
+	let refusal = if state.phase != Phase::Running || state.target_group != TargetGroupRead::Known {
 		Some(Unavailable::Loading)
 	} else if state.requested.is_some() {
 		Some(Unavailable::RequestPending)
@@ -1573,7 +1693,7 @@ fn on_confirm(state: &mut State, v2_actor_id: Id, result: ConfirmResult, out: &m
 }
 
 fn on_io_timeout(state: &mut State, op: OpId, now: Clocks, out: &mut Effects) {
-	// A load, a write and a listing time out like a failure of the same request.
+	// A load, a write, a group read and a listing time out like a failure of the same request.
 	if state.phase == (Phase::Loading { op }) {
 		on_loaded(
 			state,
@@ -1591,6 +1711,19 @@ fn on_io_timeout(state: &mut State, op: OpId, now: Clocks, out: &mut Effects) {
 		&& persist.op == op
 	{
 		on_written(state, op, WriteResult::Failed("timed out".into()), now, out);
+		return;
+	}
+	if state.target_group == (TargetGroupRead::Reading { op }) {
+		on_target_group(
+			state,
+			op,
+			TargetGroupResult::Failed {
+				error: "timed out".into(),
+				routing_unavailable: false,
+			},
+			now,
+			out,
+		);
 		return;
 	}
 	if state
@@ -1806,6 +1939,10 @@ fn list(state: &mut State, now: Clocks, out: &mut Effects) {
 	if state.listing != Listing::Idle || !state.settings.enabled {
 		return;
 	}
+	// Admissions are placed by the target's group, so the listing waits until it is known.
+	if state.target_group != TargetGroupRead::Known {
+		return;
+	}
 	let Some(pass) = state.pass.as_mut() else {
 		return;
 	};
@@ -1872,5 +2009,6 @@ fn list(state: &mut State, now: Clocks, out: &mut Effects) {
 		datacenter_label: cursor.datacenter_label,
 		after: cursor.after.map(|after| after.to_vec()),
 		limit: PAGE_LIMIT,
+		actor_name: state.settings.actor_name.clone(),
 	});
 }

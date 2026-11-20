@@ -25,7 +25,7 @@ use crate::handle::EnvoyHandle;
 use crate::kv::{
 	KvRequestEntry, handle_kv_request, handle_kv_response, process_unsent_kv_requests,
 };
-use crate::metrics::METRICS;
+use crate::metrics;
 use crate::sqlite::{
 	RemoteSqliteRequest, RemoteSqliteRequestEntry, RemoteSqliteResponseEnvelope, SqliteRequest,
 	SqliteRequestEntry, SqliteResponse, fail_remote_sqlite_requests_with_shutdown,
@@ -494,9 +494,7 @@ pub fn start_envoy_sync(config: EnvoyConfig) -> EnvoyHandle {
 }
 
 fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
-	crate::metrics::METRICS
-		.actor_queued_requests_capacity
-		.set(config.max_queued_requests_per_actor as i64);
+	metrics::ACTOR_QUEUED_REQUESTS_CAPACITY.set(config.max_queued_requests_per_actor as i64);
 	let (envoy_tx, envoy_rx) = mpsc::unbounded_channel::<ToEnvoyMessage>();
 	let (start_tx, start_rx) = tokio::sync::watch::channel(None);
 	let (stopped_tx, _stopped_rx) =
@@ -608,14 +606,17 @@ async fn envoy_loop(
 		#[allow(unused_assignments)]
 		let mut branch: &'static str = "unknown";
 		tokio::select! {
-			_ = sleep_until_deadline(ctx.shutdown.deadline()) => { continue; }
+			_ = sleep_until_deadline(ctx.shutdown.next_wake()) => {
+				sweep_due_actors(&mut ctx);
+				continue;
+			}
 			msg = rx.recv() => {
 				branch = "envoy_msg";
 				let Some(msg) = msg else {
 					observe_envoy_loop_iteration(branch, iter_start);
 					break;
 				};
-				METRICS.envoy_tx_depth.dec();
+				metrics::ENVOY_TX_DEPTH.dec();
 
 				match msg {
 					ToEnvoyMessage::ConnMessage { message, session } => {
@@ -844,8 +845,7 @@ pub(crate) fn remove_http_routes_for_session(ctx: &mut EnvoyContext, session: u6
 
 fn observe_envoy_loop_iteration(branch: &'static str, start: crate::time::Instant) {
 	let elapsed = start.elapsed();
-	METRICS
-		.envoy_loop_iteration_duration_seconds
+	metrics::ENVOY_LOOP_ITERATION_DURATION_SECONDS
 		.with_label_values(&[branch])
 		.observe(elapsed.as_secs_f64());
 }
@@ -859,7 +859,7 @@ pub fn send_to_envoy_tx(
 ) -> Result<(), tokio::sync::mpsc::error::SendError<ToEnvoyMessage>> {
 	match shared.envoy_tx.send(msg) {
 		Ok(()) => {
-			METRICS.envoy_tx_depth.inc();
+			metrics::ENVOY_TX_DEPTH.inc();
 			Ok(())
 		}
 		Err(e) => Err(e),
@@ -972,6 +972,10 @@ async fn handle_conn_message(
 				"ignoring an engine-internal SQLite tail proof request sent to the envoy; the engine forwarded a message it should answer"
 			);
 		}
+		protocol::ToEnvoy::ToEnvoyPreConnect(_) => {
+			// The connection task consumes the pre-connect before the session starts.
+			tracing::warn!("ignoring a pre-connect message after the connection was chosen");
+		}
 	}
 
 	AfterMessage::Continue(lost_deadline)
@@ -1057,33 +1061,71 @@ fn lost_deadline_after_close(
 	now + std::time::Duration::from_millis(lost_threshold)
 }
 
+/// The longest the envoy waits after the drain period for the engine's last stop commands
+/// before it asks the remaining actors to sleep itself. It covers the engine's last eviction
+/// batch, which runs on the first heartbeat after the period ends.
+const DRAIN_SWEEP_GRACE_MS: u64 = 5_000;
+
+/// Begins a graceful shutdown. The envoy tells the engine it is stopping and waits for the
+/// engine to stop its actors over the advertised drain period, so a rolling deploy does not
+/// wake every actor elsewhere at once. Each actor then has `actor_stop_threshold` to stop, so the
+/// drain ends after the period plus that threshold. A sweep shortly after the period asks any
+/// actor the engine has not stopped to sleep. Without metadata from the engine, nothing will
+/// drive the drain, so the sweep runs at once.
 async fn handle_shutdown(ctx: &mut EnvoyContext) {
-	let budget_ms = ctx
+	let metadata = ctx
 		.shared
 		.protocol_metadata
 		.lock()
 		.await
 		.as_ref()
-		.map(|metadata| metadata.actor_stop_threshold)
-		.unwrap_or(30_000)
-		.max(1) as u64;
+		.map(|metadata| (metadata.actor_stop_threshold, metadata.envoy_drain_period));
+	let (stop_threshold_ms, drain_period_ms, sweep_grace_ms) = match metadata {
+		Some((actor_stop_threshold, envoy_drain_period)) => {
+			let stop_threshold_ms = actor_stop_threshold.max(1) as u64;
+			let drain_period_ms = envoy_drain_period.max(0) as u64;
+			// The sweep leaves swept actors at least half the stop threshold.
+			let sweep_grace_ms = DRAIN_SWEEP_GRACE_MS.min(stop_threshold_ms / 2);
+			(stop_threshold_ms, drain_period_ms, sweep_grace_ms)
+		}
+		None => (30_000, 0, 0),
+	};
+	let sweep_after_ms = drain_period_ms.saturating_add(sweep_grace_ms);
+	let budget_ms = drain_period_ms.saturating_add(stop_threshold_ms);
 	if !ctx.shutdown.begin(
 		crate::time::Instant::now(),
+		std::time::Duration::from_millis(sweep_after_ms),
 		std::time::Duration::from_millis(budget_ms),
 	) {
 		return;
 	}
 	ws_send(&ctx.shared, protocol::ToRivet::ToRivetStopping).await;
-	// Actor inboxes exist before asynchronous startup begins. Sleep intents queue
-	// behind startup; generations already processing an Engine stop retain its reason.
+	sweep_due_actors(ctx);
+}
+
+/// Runs the shutdown sweep if it is due: asks every actor the engine has not stopped to sleep.
+/// Actor inboxes exist before asynchronous startup begins, so sleep intents queue behind
+/// startup; generations already processing an engine stop retain its reason.
+fn sweep_due_actors(ctx: &mut EnvoyContext) {
+	if !ctx.shutdown.take_due_sweep(crate::time::Instant::now()) {
+		return;
+	}
+	let mut swept = 0usize;
 	for generations in ctx.actors.values() {
 		for actor in generations.values() {
 			if !actor.received_stop {
+				swept += 1;
 				let _ = actor.handle.send(ToActor::Intent {
 					intent: protocol::ActorIntent::ActorIntentSleep,
 					error: None,
 				});
 			}
 		}
+	}
+	if swept > 0 {
+		tracing::info!(
+			swept,
+			"asking actors the engine has not stopped to sleep before the node shutdown deadline"
+		);
 	}
 }

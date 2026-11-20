@@ -40,14 +40,34 @@ pub struct EnvoyQuery {
 pub(crate) struct EnvoyScope {
 	pub namespace: String,
 	pub pool_name: String,
-	/// The volume group of the namespace, resolved at connect: every actor volume this
-	/// connection opens is in it.
-	pub group: Option<rivet_keys::keys::codec::GroupId>,
+	/// Where the connection's actor volumes live. Shared by every clone of the scope, so a
+	/// group the connection adopts after connect is seen by all of its lanes.
+	volumes: ScopeVolumes,
+}
+
+/// An Envoy connection's actor volume shape: the namespace's group as resolved at connect, and,
+/// legacy, the group it adopted later. Shared by every clone of the connection's scope.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ScopeVolumes(Arc<ScopeVolumesInner>);
+
+#[derive(Debug, PartialEq, Eq)]
+struct ScopeVolumesInner {
+	at_connect: VolumeShape,
+	/// Legacy: the shape adopted when the namespace moved into its group after a connect that
+	/// found it without one; see [`EnvoyScope::legacy_adopt_group`]. Set at most once, since a
+	/// namespace gains its group once and never changes it. Removed in 3.1 with the backfill.
+	legacy_adopted: std::sync::OnceLock<VolumeShape>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct VolumeShape {
+	/// The volume group of the namespace: every actor volume this connection opens is in it.
+	group: Option<rivet_keys::keys::codec::GroupId>,
 	/// Legacy: which actors' volumes may still be unprefixed: every actor while the namespace's
 	/// backfill is not done, the actors it skipped once done; see `pegboard::legacy_volumes`.
-	/// Read from the process's cached standing while it was not done at connect, so a connection
-	/// stops falling back once the backfill finishes. Removed in 3.1 with the backfill.
-	pub legacy_fallback: LegacyFallbackView,
+	/// Read from the process's cached standing while it was not done, so a connection stops
+	/// falling back once the backfill finishes. Removed in 3.1 with the backfill.
+	legacy_fallback: LegacyFallbackView,
 }
 
 /// Legacy: an envoy connection's view of which actors' volumes may still be unprefixed. The
@@ -118,14 +138,88 @@ impl LegacyFallbackView {
 }
 
 impl EnvoyScope {
+	/// A scope whose actor volumes are in `group`, with `legacy_fallback` naming those that may
+	/// still be unprefixed.
+	pub(crate) fn new(
+		namespace: String,
+		pool_name: String,
+		group: Option<rivet_keys::keys::codec::GroupId>,
+		legacy_fallback: pegboard::catalog::LegacyFallback,
+	) -> Self {
+		Self {
+			namespace,
+			pool_name,
+			volumes: ScopeVolumes(Arc::new(ScopeVolumesInner {
+				at_connect: VolumeShape {
+					group,
+					legacy_fallback: LegacyFallbackView::new(legacy_fallback),
+				},
+				legacy_adopted: std::sync::OnceLock::new(),
+			})),
+		}
+	}
+
+	/// The shape the connection's actor volumes have now: the adopted one once the connection
+	/// adopted its namespace's group, the one resolved at connect before.
+	fn shape(&self) -> &VolumeShape {
+		let volumes = &*self.volumes.0;
+		volumes.legacy_adopted.get().unwrap_or(&volumes.at_connect)
+	}
+
+	/// The volume group of the namespace: every actor volume this connection opens is in it, or
+	/// `None` for a connection whose namespace had no group at connect and has not adopted one.
+	pub(crate) fn group(&self) -> Option<rivet_keys::keys::codec::GroupId> {
+		self.shape().group
+	}
+
+	/// Legacy: the connection's view of which actors' volumes may still be unprefixed; see
+	/// [`LegacyFallbackView`]. Removed in 3.1 with the backfill.
+	pub(crate) fn legacy_fallback(&self) -> &LegacyFallbackView {
+		&self.shape().legacy_fallback
+	}
+
+	/// Legacy: makes a connection opened while its namespace had no group serve the namespace's
+	/// group `group`, which the namespace moved into after connect. The legacy behavior closed the
+	/// connection so the envoy reconnected with the group, which failed every request then in
+	/// flight on it. The new behavior keeps the connection and gives it the shape a connect after
+	/// the move gets: the group, with every actor falling back to its unprefixed volume until the
+	/// cached standing shows the backfill done. The group comes from a trusted read of the
+	/// connection's own namespace, never from the envoy, so adopting it widens nothing the
+	/// connection may reach. Epochs bound before the adopt keep the group they were bound in, so a
+	/// legacy-bound epoch still opens only its unprefixed volume and is fenced once its copy
+	/// exists. Taken when a command, gateway request or event first names the group or finds the
+	/// namespace moved; a connection that had a group at connect never adopts one. Returns whether
+	/// the connection now serves `group`. Removed in 3.1 with the backfill.
+	pub(crate) fn legacy_adopt_group(&self, group: rivet_keys::keys::codec::GroupId) -> bool {
+		let volumes = &*self.volumes.0;
+		if volumes.at_connect.group.is_some() {
+			return volumes.at_connect.group == Some(group);
+		}
+		let adopted = volumes.legacy_adopted.get_or_init(|| {
+			tracing::debug!(
+				namespace = %self.namespace,
+				"envoy connection opened before its namespace moved into its volume group adopted the group"
+			);
+			VolumeShape {
+				group: Some(group),
+				legacy_fallback: LegacyFallbackView::new(
+					pegboard::catalog::LegacyFallback::Every {
+						namespace: self.namespace.clone(),
+					},
+				),
+			}
+		});
+		adopted.group == Some(group)
+	}
+
 	/// Legacy: which actors' volumes may still be unprefixed now; see [`LegacyFallbackView`].
 	/// Removed in 3.1 with the backfill.
 	pub(crate) async fn legacy_fallback_now(
 		&self,
 		ctx: &EngineContext,
 	) -> &pegboard::catalog::LegacyFallback {
-		self.legacy_fallback
-			.current(self.group, || {
+		self.legacy_fallback()
+			.current(self.group(), || {
 				pegboard::catalog::cached_namespace_standing(ctx, &self.namespace)
 			})
 			.await
@@ -141,7 +235,7 @@ impl EnvoyScope {
 		let fallback = self.legacy_fallback_now(ctx).await;
 		pegboard::legacy_volumes::legacy_resolve_actor_volume_in(
 			&ctx.depot(),
-			self.group,
+			self.group(),
 			fallback.namespace_for(actor_id),
 			actor_id,
 		)
@@ -165,7 +259,7 @@ impl EnvoyScope {
 		let fallback = self.legacy_fallback_now(ctx).await;
 		let found = pegboard::legacy_volumes::legacy_resolve_actor_in(
 			&depot,
-			self.group,
+			self.group(),
 			fallback.namespace_for(actor_id),
 			actor_id,
 		)
@@ -205,12 +299,12 @@ pub(crate) fn scope(namespace: Option<&str>, pool_name: Option<&str>) -> Result<
 	pegboard::validation::namespace_name(namespace)?;
 	let pool_name = pool_name.context("missing pool_name")?;
 	pegboard::validation::pool_name(pool_name)?;
-	Ok(EnvoyScope {
-		namespace: namespace.to_owned(),
-		pool_name: pool_name.to_owned(),
-		group: None,
-		legacy_fallback: LegacyFallbackView::new(pegboard::catalog::LegacyFallback::Off),
-	})
+	Ok(EnvoyScope::new(
+		namespace.to_owned(),
+		pool_name.to_owned(),
+		None,
+		pegboard::catalog::LegacyFallback::Off,
+	))
 }
 
 /// Legacy: the connection's scope for the namespace's cached `standing`. A standing without a
@@ -232,11 +326,12 @@ where
 {
 	let standing =
 		pegboard::catalog::legacy_fresh_ungrouped_standing(standing, volumes_open, reread).await?;
-	Ok(EnvoyScope {
-		group: standing.group_id(),
-		legacy_fallback: LegacyFallbackView::new(standing.legacy_fallback().clone()),
-		..scope
-	})
+	Ok(EnvoyScope::new(
+		scope.namespace,
+		scope.pool_name,
+		standing.group_id(),
+		standing.legacy_fallback().clone(),
+	))
 }
 
 /// The close code for a connect refused while reading its namespace: a policy violation when the
@@ -466,8 +561,8 @@ fn trace_connection_id(allocate: impl FnOnce() -> uuid::Uuid) -> Option<uuid::Uu
 }
 
 /// Whether a connection ended for an expected reason: this process cancelled its tasks while
-/// shutting down, a newer connection superseded it, its pool admission must be obtained again
-/// through a fresh connection, or its namespace moved into its group after connect.
+/// shutting down, a newer connection superseded it, or its pool admission must be obtained again
+/// through a fresh connection.
 fn ended_by_shutdown_or_reconnect(error: &anyhow::Error) -> bool {
 	let cancelled = error
 		.downcast_ref::<JoinError>()
@@ -476,5 +571,4 @@ fn ended_by_shutdown_or_reconnect(error: &anyhow::Error) -> bool {
 	cancelled
 		|| error.is::<crate::envoy_record::Superseded>()
 		|| error.is::<crate::envoy_record::PoolAdmissionLost>()
-		|| error.is::<crate::lifecycle::LegacyNamespaceMoved>()
 }

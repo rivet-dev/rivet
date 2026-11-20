@@ -1536,8 +1536,7 @@ fn unhinted_open_refusal_ms(error: &anyhow::Error) -> Option<u64> {
 
 	match error.downcast_ref::<Error>() {
 		Some(
-			Error::Overloaded
-			| Error::Lifecycle(RpcError::RoutingUnavailable)
+			Error::Lifecycle(RpcError::RoutingUnavailable)
 			| Error::Write(WriteError::RoutingUnavailable),
 		) => Some(REFUSAL_BASE_BACKOFF_MS),
 		Some(_) | None => None,

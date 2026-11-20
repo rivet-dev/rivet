@@ -3030,7 +3030,8 @@
               "null"
             ],
             "format": "int64",
-            "description": "When the actor first started. Not recorded by this version, so always `null`."
+            "description": "When the actor first started. Not recorded, so always `null`.",
+            "deprecated": true
           },
           "pending_allocation_ts": {
             "type": [
@@ -3038,7 +3039,8 @@
               "null"
             ],
             "format": "int64",
-            "description": "When the actor started waiting for a node. Not recorded by this version, so always `null`."
+            "description": "When the actor started waiting for a node. Not recorded, so always `null`. An actor with no node to start on sleeps and retries instead of waiting.",
+            "deprecated": true
           },
           "connectable_ts": {
             "type": [
@@ -3046,7 +3048,7 @@
               "null"
             ],
             "format": "int64",
-            "description": "When the actor last became connectable. Not recorded by this version, so always `null`."
+            "description": "When a running actor became connectable, in Unix milliseconds. `null` while the actor is not running, and for an actor that has not started since the engine began recording it."
           },
           "sleep_ts": {
             "type": [
@@ -3054,7 +3056,7 @@
               "null"
             ],
             "format": "int64",
-            "description": "When the actor went to sleep. Not recorded by this version, so always `null`."
+            "description": "When a sleeping actor went to sleep, in Unix milliseconds. `null` while the actor is not asleep, and for an actor that has not slept since the engine began recording it."
           },
           "reschedule_ts": {
             "type": [
@@ -3062,7 +3064,8 @@
               "null"
             ],
             "format": "int64",
-            "description": "When the actor will next try to allocate. Not recorded by this version, so always `null`."
+            "description": "When the actor will next try to allocate. Not recorded, so always `null`.",
+            "deprecated": true
           },
           "destroy_ts": {
             "type": [

@@ -82,6 +82,21 @@ function classifyActorError(
 		);
 	}
 
+	// Storage refused the actor's write before running it, as when a new actor's startup commit
+	// is shed under load. The connection may open again after the hint the close carried, but
+	// an action that failed this way already ran its handler, so it is not sent again.
+	if (
+		(error.group === "sqlite" && error.code === "storage_overloaded") ||
+		(error.group === "depot" && error.code === "overloaded")
+	) {
+		return buildLifecycleBoundaryInfo(
+			"reconnect_only",
+			"actor_error",
+			error.message,
+			{ group: error.group, code: error.code },
+		);
+	}
+
 	if (
 		(error.group === "ups" && error.code === "consumer_closed") ||
 		(error.group === "depot" && error.code === "request_deadline_exceeded")

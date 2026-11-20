@@ -61,20 +61,26 @@ curl -X PUT "$RIVET_API/pools/gpu?namespace=$RIVET_NAMESPACE" \
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `drain_on_version_upgrade` | `bool` | `false` | When nodes with a newer version connect, stop the older nodes' actors so they wake on the new version. See [Versions & Upgrades](/docs/versions#drain-on-version-upgrade). |
-| `actor_eviction_delay` | `u32` (seconds) | `0` | Delay before actor eviction begins after a drain starts. Gives clients time to see the drain before actors move. |
-| `actor_eviction_period` | `u32` (seconds) | `0` | Window over which evictions are batched. Used with `actor_eviction_rate` to smooth the load on the rest of the pool. |
-| `actor_eviction_rate` | `f32` (actors/sec) | `1.0` | Maximum number of actors evicted per second once eviction is underway. Set it higher for fast cutovers and lower to spread reschedule load. |
+| `actor_eviction_delay` | `u32` (seconds) | `0` | Delay before actor eviction begins after a drain starts, when a node shuts down or a newer version supersedes it. Gives clients time to see the drain before actors move. |
+| `actor_eviction_period` | `u32` (seconds) | `0` | Window after the delay over which a draining node's actors are evicted. Every actor has been evicted by its end. `0` evicts them all at once. |
+| `actor_eviction_rate` | `f32` (actors/sec) | `1.0` | Slowest pace of eviction once it is underway. Eviction goes faster when the period requires it, so the rate only shortens a drain. |
 | `metadata` | `object` | none | Your own JSON metadata, up to 16 KiB. |
 
 ### Tuning eviction
 
-Eviction runs when nodes are drained, most often during a version upgrade with `drain_on_version_upgrade` enabled. A typical starting point:
+Eviction runs when nodes are drained: when a node shuts down, for example during a rolling deploy, and during a version upgrade with `drain_on_version_upgrade` enabled. A typical starting point:
 
 - `actor_eviction_delay: 5` gives clients a five-second head start before actors move.
-- `actor_eviction_period: 60` batches evictions over one minute.
-- `actor_eviction_rate: 1` evicts one actor per second.
+- `actor_eviction_period: 60` spreads evictions over one minute.
+- `actor_eviction_rate: 1` evicts at least one actor per second.
 
-Raise `actor_eviction_rate` for small pools where a full cutover finishes in seconds. Lower it for large pools to avoid bursts of reschedule traffic.
+A longer period spreads the reschedule load of a large node further. Raise `actor_eviction_rate` for small pools where a full cutover should finish in seconds.
+
+### Node shutdown
+
+When a node shuts down, for example during a rolling deploy, it stops accepting new actors and the control plane stops its actors for it, paced by the pool's eviction settings, so a deploy does not move every actor of a node at once. They wake on other nodes on their next request. Every actor has been asked to stop once `actor_eviction_delay` plus `actor_eviction_period` have passed, and each still has the actor stop threshold (30 seconds by default) to finish.
+
+A node therefore needs the eviction delay plus the period plus the actor stop threshold to shut down. RivetKit waits that long by default, and whatever supervises the node must allow it too, for example with Kubernetes `terminationGracePeriodSeconds`.
 
 ## Read pools and nodes
 

@@ -50,4 +50,6 @@
 102 depot.group
 # 103 pegboard.namespace_jobs (retired: schema deleted)
 104 pegboard.namespace
-105 envoy.protocol 8 9
+106 pegboard.pool
+105 envoy.protocol 8 10
+107 pegboard.v2_migration_backup

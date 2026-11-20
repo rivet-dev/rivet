@@ -309,19 +309,12 @@ impl Config {
 				.enabled = enabled;
 		}
 
-		if let Some(value) = &update.migrate_from_v2 {
-			let value = value.clone().or_else(|| base.migrate_from_v2.clone());
-			if let Some(value) = &value {
-				let base_seed = base
-					.migrate_from_v2
-					.as_ref()
-					.map_or(0, |base| base.migrate_seed);
-				ensure!(
-					value.migrate_seed == base_seed,
-					"migrate_from_v2.migrate_seed cannot change at runtime; it is fixed at startup"
-				);
-			}
-			dynamic.migrate_from_v2 = value;
+		if update.legacy_migrate_from_v2.is_some() || update.migrate_from_v2_overrides.is_some() {
+			let section = legacy_migrate_from_v2_section(update, base.migrate_from_v2.as_ref())?;
+			dynamic.migrate_from_v2 = match update.migrate_from_v2_overrides.clone().flatten() {
+				Some(overrides) => Some(overrides.apply(section.as_ref())?),
+				None => section,
+			};
 		}
 
 		// Runtime snapshots already contain the names derived at startup. Restore
@@ -351,6 +344,27 @@ impl Deref for Config {
 	fn deref(&self) -> &Self::Target {
 		&self.0.config
 	}
+}
+
+/// Legacy: the `migrate_from_v2` section that overrides apply to. A whole section stored by a 3.0
+/// release under the old `migrate_from_v2` key stands in for the startup section, keeping the
+/// startup `backup` and requiring the startup `migrate_seed`; without one, the startup section
+/// applies. New updates clear the old key, so this reads only overrides stored before them.
+fn legacy_migrate_from_v2_section(
+	update: &DynamicConfigUpdate,
+	startup: Option<&config::MigrateFromV2>,
+) -> Result<Option<config::MigrateFromV2>> {
+	let Some(Some(legacy)) = &update.legacy_migrate_from_v2 else {
+		return Ok(startup.cloned());
+	};
+	let startup_seed = startup.map_or(0, |startup| startup.migrate_seed);
+	ensure!(
+		legacy.migrate_seed == startup_seed,
+		"migrate_from_v2.migrate_seed cannot change at runtime; it is fixed at startup"
+	);
+	let mut section = legacy.clone();
+	section.backup = startup.and_then(|startup| startup.backup.clone());
+	Ok(Some(section))
 }
 
 /// Adds a source to the config builder. If the path is a directory, it reads all config files.

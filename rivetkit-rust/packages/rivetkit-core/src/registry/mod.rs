@@ -121,14 +121,17 @@ impl CoreEnvoyHandle {
 		self.handle.wait_active_actor_count_change(last).await
 	}
 
-	/// Engine-reported drain threshold in milliseconds. `None` until the
-	/// envoy has completed its first protocol-metadata exchange with the
-	/// engine.
-	pub async fn actor_stop_threshold_ms(&self) -> Option<i64> {
-		self.handle
-			.get_protocol_metadata()
-			.await
-			.map(|metadata| metadata.actor_stop_threshold)
+	/// The time a graceful shutdown of this node takes at most, in milliseconds: the drain
+	/// period over which the engine stops the node's actors, its pool's eviction delay plus
+	/// period, plus the time each actor is given to stop. `None` until the envoy has completed its first protocol-metadata exchange with
+	/// the engine.
+	pub async fn shutdown_budget_ms(&self) -> Option<i64> {
+		self.handle.get_protocol_metadata().await.map(|metadata| {
+			metadata
+				.envoy_drain_period
+				.max(0)
+				.saturating_add(metadata.actor_stop_threshold)
+		})
 	}
 }
 

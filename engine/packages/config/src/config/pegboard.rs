@@ -119,9 +119,9 @@ pub struct Pegboard {
 	/// Maximum time for an actor to stop before it is considered lost. The engine resends an
 	/// unanswered stop, and once this threshold plus a 5 second margin has passed since the
 	/// first stop it ends the actor's run as lost and moves on, as if the node were gone. It is
-	/// also advertised to the node on connect as the time it is given to stop: a node shutting
-	/// down drains its actors within this budget, and RivetKit uses it as the default shutdown
-	/// grace period.
+	/// also advertised to the node on connect as the time each actor is given to stop: a node
+	/// shutting down drains its actors within its pool's eviction delay and period plus this
+	/// budget, and RivetKit uses that sum as the default shutdown grace period.
 	///
 	/// Unit is in milliseconds (default 30000, 30 seconds).
 	pub actor_stop_threshold: Option<u64>,
@@ -131,6 +131,14 @@ pub struct Pegboard {
 	/// Ping interval for node updates in milliseconds.
 	#[serde(rename = "node_update_ping_interval")]
 	pub envoy_update_ping_interval: Option<u64>,
+	/// How often each engine process writes the heartbeats and actor counts of the nodes it
+	/// holds to their pool's index, in one write per pool. A node's heartbeat becomes visible to
+	/// allocation up to this long after its pong, so keep it well below the 15 second
+	/// allocation window. Must be greater than 0.
+	///
+	/// Unit is in milliseconds. Defaults to 1000.
+	#[serde(rename = "node_index_flush_interval")]
+	pub envoy_index_flush_interval: Option<u64>,
 	/// Time a lifecycle event may spend retrying storage command deadlines before its node
 	/// socket is closed for reconnection. Defaults to 120000 ms.
 	#[serde(rename = "node_event_delivery_timeout_ms")]
@@ -214,6 +222,12 @@ impl Pegboard {
 		if !(1..self.envoy_lost_threshold()).contains(&self.envoy_update_ping_interval()) {
 			bail!(
 				"pegboard.node_update_ping_interval must be positive and less than pegboard.node_lost_threshold"
+			);
+		}
+
+		if !(1..self.envoy_lost_threshold()).contains(&self.envoy_index_flush_interval()) {
+			bail!(
+				"pegboard.node_index_flush_interval must be positive and less than pegboard.node_lost_threshold"
 			);
 		}
 
@@ -522,6 +536,10 @@ impl Pegboard {
 
 	pub fn envoy_ping_timeout(&self) -> i64 {
 		self.envoy_ping_timeout.unwrap_or(15_000)
+	}
+
+	pub fn envoy_index_flush_interval(&self) -> u64 {
+		self.envoy_index_flush_interval.unwrap_or(1_000)
 	}
 
 	pub fn envoy_update_ping_interval(&self) -> u64 {

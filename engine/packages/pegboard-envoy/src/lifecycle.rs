@@ -1,5 +1,5 @@
 //! Translates envoy lifecycle events into actor state machine events.
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use pegboard::{keys::partition::ActorVolume, wire};
 use rivet_engine_context::EngineContext;
 use rivet_envoy_protocol as p;
@@ -68,26 +68,14 @@ pub(crate) fn is_stopped(event: &p::EventWrapper) -> bool {
 	)
 }
 
-/// Legacy: the connection's namespace had no group at connect and has one now, so this
-/// connection's scope is stale and it must close. The envoy reconnects with the grouped scope and
-/// replays the event, which stays unacknowledged. Removed in 3.1 with the backfill.
-#[derive(Debug)]
-pub(crate) struct LegacyNamespaceMoved;
-
-impl std::fmt::Display for LegacyNamespaceMoved {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.write_str("envoy namespace moved into its volume group after connect")
-	}
-}
-
-impl std::error::Error for LegacyNamespaceMoved {}
-
 /// Delivers one envoy event to the actor state machine. Returns `false` when the delivery
 /// budget ran out, leaving the event unacknowledged so the envoy replays it after reconnecting.
 /// An event for an actor that is gone, or whose record is not in the connection's namespace, is
-/// dropped and acknowledged, since no delivery could ever apply it. Fails with
-/// [`LegacyNamespaceMoved`], leaving the event unacknowledged, when the connection's namespace
-/// moved into its group after connect.
+/// dropped and acknowledged, since no delivery could ever apply it. Legacy: when the connection's
+/// namespace moved into its group after connect, the connection adopts the group
+/// ([`crate::routes::EnvoyScope::legacy_adopt_group`]) and the event is delivered again there;
+/// the legacy behavior closed the connection so the envoy replayed the event on a grouped one.
+/// Removed in 3.1 with the backfill.
 ///
 /// `legacy_foreign_logged` is the connection's flag for its first refused foreign event: only
 /// that one logs a warning, so an envoy that keeps naming another namespace's actors cannot flood
@@ -103,17 +91,28 @@ pub(crate) async fn deliver(
 	event: p::EventWrapper,
 ) -> Result<bool> {
 	let id = Id::parse(actor_id).context("invalid envoy event actor id")?;
-	let fallback = scope.legacy_fallback_now(ctx).await;
-	let store = DepotEventStore {
-		ctx,
-		scope,
-		fallback,
-		actor_id: id,
-		event: actor_event(&event),
-	};
 	let budget = Duration::from_millis(ctx.config().pegboard().envoy_event_delivery_timeout_ms());
-	let falls_back = fallback.namespace_for(id).is_some();
-	let delivery = deliver_within(ctx.env().as_ref(), budget, scope, falls_back, &store).await;
+	let delivery = loop {
+		let fallback = scope.legacy_fallback_now(ctx).await;
+		let store = DepotEventStore {
+			ctx,
+			scope,
+			fallback,
+			actor_id: id,
+			event: actor_event(&event),
+		};
+		let falls_back = fallback.namespace_for(id).is_some();
+		let delivery = deliver_within(ctx.env().as_ref(), budget, scope, falls_back, &store).await;
+		// Legacy: a delivery ends this way only on a connection without a group, and an adopt
+		// gives the connection one, so the event is delivered again at most once. Removed in 3.1
+		// with the backfill.
+		if let Delivery::LegacyNamespaceMoved(group) = delivery
+			&& scope.legacy_adopt_group(group)
+		{
+			continue;
+		}
+		break delivery;
+	};
 
 	match delivery {
 		Delivery::Delivered => Ok(true),
@@ -143,14 +142,11 @@ pub(crate) async fn deliver(
 			}
 			Ok(true)
 		}
-		Delivery::LegacyNamespaceMoved => {
-			tracing::info!(
-				%actor_id,
-				namespace = %scope.namespace,
-				epoch = event.checkpoint.generation,
-				"actor event reached a connection opened before its namespace moved into its group; closing it so the envoy reconnects and replays"
-			);
-			Err(LegacyNamespaceMoved.into())
+		// A namespace gains one group and never changes it, so a refused adopt means the
+		// connection's view is inconsistent: the lane fails with the event unacknowledged and the
+		// envoy replays it on a new connection.
+		Delivery::LegacyNamespaceMoved(_) => {
+			bail!("envoy connection already serves another group than its namespace's")
 		}
 		Delivery::Exhausted => {
 			tracing::warn!(
@@ -175,9 +171,10 @@ enum Delivery {
 	/// Removed in 3.1 with the backfill.
 	LegacyForeign,
 	/// Legacy: the connection's namespace had no group at connect, the actor's unprefixed state
-	/// volume is absent, and the namespace has a group now, so the actor may live in it. The
-	/// event is not acknowledged and the connection closes. Removed in 3.1 with the backfill.
-	LegacyNamespaceMoved,
+	/// volume is absent, and the namespace has the group it names now, so the actor may live in
+	/// it. The caller adopts the group and delivers the event again. Removed in 3.1 with the
+	/// backfill.
+	LegacyNamespaceMoved(GroupId),
 	/// The budget ran out with the event still undelivered.
 	Exhausted,
 }
@@ -266,7 +263,7 @@ trait EventStore {
 /// Legacy: in a scope without a group, a gone answer is never final on its own. The connection's
 /// scope was fixed at connect, so the namespace may have moved into its group since and the actor
 /// may live there; the namespace is read once, uncached, and a group there ends the delivery with
-/// [`Delivery::LegacyNamespaceMoved`]. Otherwise a deleted volume is final and a missing one is
+/// [`Delivery::LegacyNamespaceMoved`], which the caller answers by adopting the group. Otherwise a deleted volume is final and a missing one is
 /// retried within the budget, after which the connection closes and the envoy replays. Removed in
 /// 3.1 with the backfill.
 ///
@@ -283,7 +280,7 @@ async fn deliver_within<S: EventStore>(
 	store: &S,
 ) -> Delivery {
 	let clock = env.clock();
-	let mut target = match (scope.group, falls_back) {
+	let mut target = match (scope.group(), falls_back) {
 		(None, _) => EventTarget::LegacyUngrouped,
 		(Some(_), true) => EventTarget::Unresolved,
 		(Some(group), false) => EventTarget::Resolved(Some(group)),
@@ -309,7 +306,7 @@ async fn deliver_within<S: EventStore>(
 					Ok(LegacyUngroupedRecord::Absent(absence)) => Ok(absence),
 					Err(error) => Err(error),
 				},
-				EventTarget::Unresolved => match store.send(scope.group).await {
+				EventTarget::Unresolved => match store.send(scope.group()).await {
 					Ok(()) => return Delivery::Delivered,
 					Err(error) if is_volume_deleted(&error) => return Delivery::Gone,
 					// Legacy: an abandoned copy of the legacy actor refused the event; the
@@ -372,7 +369,7 @@ async fn deliver_within<S: EventStore>(
 							(Some(_), true) | (None, _) => return Delivery::Delivered,
 						}
 					}
-					Err(error) => match (Absence::of(&error), scope.group, group) {
+					Err(error) => match (Absence::of(&error), scope.group(), group) {
 						(None, _, _) => Err(error),
 						// The scope's own group answered: the actor is gone.
 						(Some(_), Some(_), Some(_)) => return Delivery::Gone,
@@ -399,7 +396,7 @@ async fn deliver_within<S: EventStore>(
 					};
 					target = EventTarget::LegacyUngrouped;
 					match (group, absence) {
-						(Ok(Some(_)), _) => return Delivery::LegacyNamespaceMoved,
+						(Ok(Some(group)), _) => return Delivery::LegacyNamespaceMoved(group),
 						(Ok(None), Absence::Deleted) => return Delivery::Gone,
 						(Ok(None), Absence::Missing) => {
 							legacy_group_read = Some(None);
@@ -431,7 +428,7 @@ fn ungrouped_target(
 	found: pegboard::legacy_volumes::ResolvedActor,
 ) -> EventTarget {
 	match found.read {
-		pegboard::legacy_volumes::ResolvedRead::Gone => EventTarget::Resolved(scope.group),
+		pegboard::legacy_volumes::ResolvedRead::Gone => EventTarget::Resolved(scope.group()),
 		pegboard::legacy_volumes::ResolvedRead::Found(_)
 		| pegboard::legacy_volumes::ResolvedRead::Unread => EventTarget::Resolved(found.group),
 	}
@@ -481,7 +478,7 @@ impl EventStore for DepotEventStore<'_> {
 			.context("an ungrouped resolve needs the legacy fallback")?;
 		let found = pegboard::legacy_volumes::legacy_resolve_ungrouped_actor(
 			&self.ctx.depot(),
-			self.scope.group,
+			self.scope.group(),
 			namespace,
 			self.actor_id,
 		)

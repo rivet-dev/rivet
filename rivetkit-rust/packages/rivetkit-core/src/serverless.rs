@@ -299,9 +299,9 @@ impl CoreServerlessRuntime {
 			.map(|handle| CoreEnvoyHandle::new(handle).status())
 	}
 
-	pub async fn active_envoy_actor_stop_threshold_ms(&self) -> Option<i64> {
+	pub async fn active_envoy_shutdown_budget_ms(&self) -> Option<i64> {
 		let handle = self.cached_envoy_handle().await?;
-		CoreEnvoyHandle::new(handle).actor_stop_threshold_ms().await
+		CoreEnvoyHandle::new(handle).shutdown_budget_ms().await
 	}
 
 	async fn cached_envoy_handle(&self) -> Option<EnvoyHandle> {

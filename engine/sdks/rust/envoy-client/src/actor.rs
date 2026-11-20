@@ -7,6 +7,7 @@ use futures_util::{StreamExt, stream::FuturesUnordered};
 
 use crate::async_counter::AsyncCounter;
 use rivet_envoy_protocol as protocol;
+use rivet_metrics::GaugeGuardExt;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
@@ -51,9 +52,7 @@ impl QueuedRequests {
 		}
 		Some(QueuedRequest {
 			queue: self.clone(),
-			_gauge: rivet_metrics::GaugeGuardExt::inc_guard(
-				&crate::metrics::METRICS.actor_queued_requests,
-			),
+			_gauge: crate::metrics::ACTOR_QUEUED_REQUESTS.inc_guard(),
 		})
 	}
 }
@@ -367,9 +366,7 @@ async fn actor_inner(
 	}
 
 	// Send running state
-	crate::metrics::METRICS
-		.actor_start_seconds
-		.observe(received.elapsed().as_secs_f64());
+	crate::metrics::ACTOR_START_SECONDS.observe(received.elapsed().as_secs_f64());
 	send_event(
 		&mut ctx,
 		protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
@@ -817,6 +814,22 @@ async fn handle_ws_open(
 	}));
 }
 
+/// The close code and `<group>.<code>` reason for a WebSocket open the actor failed. A refusal
+/// with a `retry_after_ms` hint ran nothing for this connection, such as a startup commit that
+/// storage refused before running it, so it closes with 1013 and the hint after `#`, which
+/// clients read as retryable. Every other failure closes with 1011.
+fn websocket_open_rejection(error: &anyhow::Error) -> (u16, String) {
+	let error = rivet_error::RivetError::extract(error);
+	let retry_after_ms = error
+		.metadata()
+		.and_then(|metadata| metadata.get("retry_after_ms")?.as_u64());
+	let reason = format!("{}.{}", error.group(), error.code());
+	match retry_after_ms {
+		Some(retry_after_ms) => (1013, format!("{reason}#retry_after_ms={retry_after_ms}")),
+		None => (1011, reason),
+	}
+}
+
 async fn reject_ws_open(
 	ctx: &mut ActorContext,
 	message_id: protocol::MessageId,
@@ -1005,7 +1018,8 @@ async fn finish_ws_open(
 			tracing::error!(?error, "error handling websocket open");
 
 			if close.is_none() {
-				reject_ws_open(ctx, message_id.clone(), 1011, "Server Error").await;
+				let (code, reason) = websocket_open_rejection(&error);
+				reject_ws_open(ctx, message_id.clone(), code, &reason).await;
 			}
 
 			ctx.websocket_requests

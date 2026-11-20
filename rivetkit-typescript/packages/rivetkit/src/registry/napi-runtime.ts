@@ -345,12 +345,11 @@ export class NapiCoreRuntime implements CoreRuntime {
 		await this.#bindings.shutdownTelemetry();
 	}
 
-	async registryActorStopThresholdMs(
+	async registryShutdownBudgetMs(
 		registry: RegistryHandle,
 	): Promise<number | undefined> {
 		return (
-			(await asNativeRegistry(registry).actorStopThresholdMs()) ??
-			undefined
+			(await asNativeRegistry(registry).shutdownBudgetMs()) ?? undefined
 		);
 	}
 

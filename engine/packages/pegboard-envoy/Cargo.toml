@@ -9,6 +9,7 @@ autotests = false
 
 [dependencies]
 rivet-metrics.workspace = true
+lazy_static.workspace = true
 async-trait.workspace = true
 depot-client.workspace = true
 depot-fs-core.workspace = true

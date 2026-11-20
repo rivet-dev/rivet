@@ -7,29 +7,29 @@ use crate::migrator_machine::types::wire;
 
 lazy_static::lazy_static! {
 	pub static ref ACTOR_RESULT_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
-		"migrate_from_v2_actor_result_total",
-		"V2 actors the migrator finished or skipped, by result (confirmed, woke, destroyed, skipped, failed) and reason.",
+		Opts::new("migrate_from_v2_actor_result_total",
+		"V2 actors the migrator finished or skipped, by result (confirmed, woke, destroyed, skipped, failed) and reason."),
 		&["namespace", "result", "reason"],
 		*REGISTRY
 	).unwrap();
 
 	pub static ref ACTORS: IntGaugeVec = register_int_gauge_vec_with_registry!(
-		"migrate_from_v2_actors",
-		"Actor counts from the last full pass, by state: v2_remaining, eligible_pending, migrated, skipped, too_large or needs_recovery.",
+		Opts::new("migrate_from_v2_actors",
+		"Actor counts from the last full pass, by state: v2_remaining, eligible_pending, migrated, skipped, too_large or needs_recovery."),
 		&["namespace", "state"],
 		*REGISTRY
 	).unwrap();
 
 	pub static ref MIGRATE_RATIO: GaugeVec = register_gauge_vec_with_registry!(
-		"migrate_from_v2_target_ratio",
-		"The configured share of existing V2 actors to migrate (migrate_from_v2.migrate_ratio).",
+		Opts::new("migrate_from_v2_target_ratio",
+		"The configured share of existing V2 actors to migrate (migrate_from_v2.migrate_ratio)."),
 		&["namespace"],
 		*REGISTRY
 	).unwrap();
 
 	pub static ref PASS_COMPLETED_AT_SECONDS: IntGaugeVec = register_int_gauge_vec_with_registry!(
-		"migrate_from_v2_pass_completed_at_seconds",
-		"Unix time at which the last migration pass ended.",
+		Opts::new("migrate_from_v2_pass_completed_at_seconds",
+		"Unix time at which the last migration pass ended."),
 		&["namespace"],
 		*REGISTRY
 	).unwrap();
@@ -54,42 +54,42 @@ lazy_static::lazy_static! {
 	).unwrap();
 
 	pub static ref IN_FLIGHT: IntGaugeVec = register_int_gauge_vec_with_registry!(
-		"migrate_from_v2_in_flight",
-		"Actors the migrator has in flight, by phase: copying, reserving, cutting_over, confirming, activating or discarding.",
+		Opts::new("migrate_from_v2_in_flight",
+		"Actors the migrator has in flight, by phase: copying, reserving, cutting_over, confirming, activating or discarding."),
 		&["namespace", "phase"],
 		*REGISTRY
 	).unwrap();
 
 	pub static ref IN_FLIGHT_OLDEST_STARTED_AT_SECONDS: IntGaugeVec = register_int_gauge_vec_with_registry!(
-		"migrate_from_v2_in_flight_oldest_started_at_seconds",
-		"Unix time at which the oldest in-flight actor was admitted, or 0 with none in flight. An actor stuck retrying a step keeps it old.",
+		Opts::new("migrate_from_v2_in_flight_oldest_started_at_seconds",
+		"Unix time at which the oldest in-flight actor was admitted, or 0 with none in flight. An actor stuck retrying a step keeps it old."),
 		&["namespace"],
 		*REGISTRY
 	).unwrap();
 
 	pub static ref EFFECT_FAILURES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
-		"migrate_from_v2_effect_failures_total",
-		"Failed or timed-out migration steps that are retried, by the phase that failed.",
+		Opts::new("migrate_from_v2_effect_failures_total",
+		"Failed or timed-out migration steps that are retried, by the phase that failed."),
 		&["namespace", "phase"],
 		*REGISTRY
 	).unwrap();
 
 	pub static ref COPY_ADMITTED_BYTES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
-		"migrate_from_v2_copy_admitted_bytes_total",
-		"Copy bytes charged against the copy byte budget, by V2's reported size, when an actor is admitted. Its rate is the budget in use.",
+		Opts::new("migrate_from_v2_copy_admitted_bytes_total",
+		"Copy bytes charged against the copy byte budget, by V2's reported size, when an actor is admitted. Its rate is the budget in use."),
 		&["namespace"],
 		*REGISTRY
 	).unwrap();
 
 	pub static ref COPY_BUDGET_BYTES_PER_SECOND: IntGauge = register_int_gauge_with_registry!(
-		"migrate_from_v2_copy_budget_bytes_per_second",
-		"Configured migrate_from_v2.max_copy_bytes_per_sec.",
+		Opts::new("migrate_from_v2_copy_budget_bytes_per_second",
+		"Configured migrate_from_v2.max_copy_bytes_per_sec."),
 		*REGISTRY
 	).unwrap();
 
 	pub static ref IN_FLIGHT_CAPACITY: IntGauge = register_int_gauge_with_registry!(
-		"migrate_from_v2_in_flight_capacity",
-		"Configured migrate_from_v2.max_in_flight.",
+		Opts::new("migrate_from_v2_in_flight_capacity",
+		"Configured migrate_from_v2.max_in_flight."),
 		*REGISTRY
 	).unwrap();
 }

@@ -3582,6 +3582,11 @@ export type ProtocolMetadata = {
     readonly envoyLostThreshold: i64
     readonly actorStopThreshold: i64
     readonly maxResponsePayloadSize: u64
+    /**
+     * Milliseconds over which the engine stops a stopping envoy's actors. The envoy waits for
+     * the engine's stop commands, so its drain deadline is this period plus actorStopThreshold.
+     */
+    readonly envoyDrainPeriod: i64
 }
 
 export function readProtocolMetadata(bc: bare.ByteCursor): ProtocolMetadata {
@@ -3589,6 +3594,7 @@ export function readProtocolMetadata(bc: bare.ByteCursor): ProtocolMetadata {
         envoyLostThreshold: bare.readI64(bc),
         actorStopThreshold: bare.readI64(bc),
         maxResponsePayloadSize: bare.readU64(bc),
+        envoyDrainPeriod: bare.readI64(bc),
     }
 }
 
@@ -3596,6 +3602,7 @@ export function writeProtocolMetadata(bc: bare.ByteCursor, x: ProtocolMetadata):
     bare.writeI64(bc, x.envoyLostThreshold)
     bare.writeI64(bc, x.actorStopThreshold)
     bare.writeU64(bc, x.maxResponsePayloadSize)
+    bare.writeI64(bc, x.envoyDrainPeriod)
 }
 
 export type ToEnvoyInit = {
@@ -3824,6 +3831,39 @@ export function writeToEnvoySqliteProveTail(bc: bare.ByteCursor, x: ToEnvoySqlit
     bare.writeU32(bc, x.generation)
 }
 
+/**
+ * The engine's first message on a connection, sent before it reads anything or writes any
+ * connection state. A node may open two connections at once, keep the one whose engine holds
+ * fewer node connections and close the other before sending `ToRivetMetadata`. Added in v10;
+ * a v9 receiver cannot take it.
+ */
+export type ToEnvoyPreConnect = {
+    /**
+     * The topology worker ID of the engine that accepted this connection. Two connections that
+     * name the same worker reached the same engine.
+     */
+    readonly workerId: ArrayBuffer
+    /**
+     * Node connections that chose this engine and are still open, not counting this one.
+     */
+    readonly envoyConnections: u32
+}
+
+export function readToEnvoyPreConnect(bc: bare.ByteCursor): ToEnvoyPreConnect {
+    return {
+        workerId: bare.readFixedData(bc, 16),
+        envoyConnections: bare.readU32(bc),
+    }
+}
+
+export function writeToEnvoyPreConnect(bc: bare.ByteCursor, x: ToEnvoyPreConnect): void {
+    {
+        assert(x.workerId.byteLength === 16)
+        bare.writeFixedData(bc, x.workerId)
+    }
+    bare.writeU32(bc, x.envoyConnections)
+}
+
 export type ToEnvoy =
     | { readonly tag: "ToEnvoyInit"; readonly val: ToEnvoyInit }
     | { readonly tag: "ToEnvoyCommands"; readonly val: ToEnvoyCommands }
@@ -3840,6 +3880,7 @@ export type ToEnvoy =
     | { readonly tag: "ToEnvoySqliteExecuteResponse"; readonly val: ToEnvoySqliteExecuteResponse }
     | { readonly tag: "ToEnvoySqliteExecuteBatchResponse"; readonly val: ToEnvoySqliteExecuteBatchResponse }
     | { readonly tag: "ToEnvoySqliteProveTail"; readonly val: ToEnvoySqliteProveTail }
+    | { readonly tag: "ToEnvoyPreConnect"; readonly val: ToEnvoyPreConnect }
 
 export function readToEnvoy(bc: bare.ByteCursor): ToEnvoy {
     const offset = bc.offset
@@ -3875,6 +3916,8 @@ export function readToEnvoy(bc: bare.ByteCursor): ToEnvoy {
             return { tag: "ToEnvoySqliteExecuteBatchResponse", val: readToEnvoySqliteExecuteBatchResponse(bc) }
         case 14:
             return { tag: "ToEnvoySqliteProveTail", val: readToEnvoySqliteProveTail(bc) }
+        case 15:
+            return { tag: "ToEnvoyPreConnect", val: readToEnvoyPreConnect(bc) }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -3957,6 +4000,11 @@ export function writeToEnvoy(bc: bare.ByteCursor, x: ToEnvoy): void {
         case "ToEnvoySqliteProveTail": {
             bare.writeU8(bc, 14)
             writeToEnvoySqliteProveTail(bc, x.val)
+            break
+        }
+        case "ToEnvoyPreConnect": {
+            bare.writeU8(bc, 15)
+            writeToEnvoyPreConnect(bc, x.val)
             break
         }
     }
@@ -4231,4 +4279,4 @@ function assert(condition: boolean, message?: string): asserts condition {
     if (!condition) throw new Error(message ?? "Assertion failed")
 }
 
-export const VERSION = 9;
+export const VERSION = 10;

@@ -9,351 +9,234 @@
 //! `actor_key`, `runner_id`, `request_id`, or other unbounded values may be
 //! added here.
 
-use std::sync::LazyLock;
+use rivet_metrics::{BUCKETS, MICRO_BUCKETS, REGISTRY, START_BUCKETS, prometheus::*};
 
-use rivet_metrics::prometheus::{
-	Histogram, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, Opts, Registry,
-};
+lazy_static::lazy_static! {
+	pub static ref SQLITE_REQUEST_EXPIRED: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("rivetkit_envoy_client_sqlite_request_expired_total",
+		"total VFS sqlite requests expired by cleanup (smoking-gun signal: was_sent=true means a request was abandoned without resolution)"),
+		&["kind", "was_sent"],
+		*REGISTRY
+	)
+	.unwrap();
 
-const SQLITE_REQUEST_EXPIRED_LABELS: &[&str] = &["kind", "was_sent"];
-const ENVOY_LOOP_ITER_LABELS: &[&str] = &["branch"];
-const WS_TX_LOCK_LABELS: &[&str] = &["message_kind"];
-const SQLITE_SEND_LABELS: &[&str] = &["kind"];
-const WS_RECONNECT_LABELS: &[&str] = &["reason"];
+	pub static ref SQLITE_REQUESTS_INFLIGHT: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("rivetkit_envoy_client_sqlite_requests_inflight",
+		"current in-flight VFS sqlite requests tracked in envoy ctx"),
+		*REGISTRY
+	)
+	.unwrap();
 
-pub struct EnvoyClientMetrics {
-	pub sqlite_request_expired_total: IntCounterVec,
-	pub sqlite_requests_inflight: IntGauge,
-	pub remote_sqlite_requests_inflight: IntGauge,
-	pub kv_requests_inflight: IntGauge,
-	pub envoy_loop_iteration_duration_seconds: HistogramVec,
-	pub ws_tx_lock_wait_duration_seconds: HistogramVec,
-	pub ws_tx_lock_hold_duration_seconds: HistogramVec,
-	pub sqlite_request_total_duration_seconds: HistogramVec,
-	pub sqlite_request_submit_duration_seconds: HistogramVec,
-	pub sqlite_request_wait_duration_seconds: HistogramVec,
-	pub ws_reconnect_total: IntCounterVec,
-	pub ws_session_duration_seconds: Histogram,
-	pub envoy_tx_depth: IntGauge,
-	pub http_detached_sends_inflight: IntGauge,
-	pub http_detached_sends_capacity: IntGauge,
-	pub http_detached_send_dropped_total: IntCounter,
-	pub ws_read_handler_duration: Histogram,
-	pub ws_decode_duration: Histogram,
-	pub ws_rx_bytes_total: IntCounter,
-	pub ws_rx_messages_total: IntCounter,
-	pub stopped_floors: IntGauge,
-	pub stopped_floors_capacity: IntGauge,
-	pub actor_start_seconds: Histogram,
-	pub actor_queued_requests: IntGauge,
-	pub actor_queued_requests_capacity: IntGauge,
-	pub actor_queued_requests_overloaded_total: IntCounter,
-}
+	pub static ref REMOTE_SQLITE_REQUESTS_INFLIGHT: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("rivetkit_envoy_client_remote_sqlite_requests_inflight",
+		"current in-flight remote sqlite (exec/execute) requests tracked in envoy ctx"),
+		*REGISTRY
+	)
+	.unwrap();
 
-impl EnvoyClientMetrics {
-	fn new() -> Self {
-		let sqlite_request_expired_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_envoy_client_sqlite_request_expired_total",
-				"total VFS sqlite requests expired by cleanup (smoking-gun signal: was_sent=true means a request was abandoned without resolution)",
-			),
-			SQLITE_REQUEST_EXPIRED_LABELS,
+	pub static ref KV_REQUESTS_INFLIGHT: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("rivetkit_envoy_client_kv_requests_inflight",
+		"current in-flight KV requests tracked in envoy ctx"),
+		*REGISTRY
+	)
+	.unwrap();
+
+	pub static ref ENVOY_LOOP_ITERATION_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_envoy_client_envoy_loop_iteration_duration_seconds",
+			"duration of one envoy_loop select branch in seconds; long tails indicate the single fan-in loop stalled",
 		)
-		.expect("create envoy_client_sqlite_request_expired_total counter");
+		.buckets(MICRO_BUCKETS.to_vec()),
+		&["branch"],
+		*REGISTRY
+	)
+	.unwrap();
 
-		let sqlite_requests_inflight = IntGauge::new(
-			"rivetkit_envoy_client_sqlite_requests_inflight",
-			"current in-flight VFS sqlite requests tracked in envoy ctx",
+	pub static ref WS_TX_LOCK_WAIT_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_envoy_client_ws_tx_lock_wait_duration_seconds",
+			"time spent waiting to acquire the ws_tx mutex in seconds",
 		)
-		.expect("create envoy_client_sqlite_requests_inflight gauge");
+		.buckets(MICRO_BUCKETS.to_vec()),
+		&["message_kind"],
+		*REGISTRY
+	)
+	.unwrap();
 
-		let remote_sqlite_requests_inflight = IntGauge::new(
-			"rivetkit_envoy_client_remote_sqlite_requests_inflight",
-			"current in-flight remote sqlite (exec/execute) requests tracked in envoy ctx",
+	pub static ref WS_TX_LOCK_HOLD_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_envoy_client_ws_tx_lock_hold_duration_seconds",
+			"time the ws_tx mutex guard was held in seconds (covers encode + send)",
 		)
-		.expect("create envoy_client_remote_sqlite_requests_inflight gauge");
+		.buckets(MICRO_BUCKETS.to_vec()),
+		&["message_kind"],
+		*REGISTRY
+	)
+	.unwrap();
 
-		let kv_requests_inflight = IntGauge::new(
-			"rivetkit_envoy_client_kv_requests_inflight",
-			"current in-flight KV requests tracked in envoy ctx",
+	pub static ref SQLITE_REQUEST_TOTAL_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_envoy_client_sqlite_request_total_duration_seconds",
+			"end-to-end duration from send_sqlite_request call to oneshot resolution in seconds",
 		)
-		.expect("create envoy_client_kv_requests_inflight gauge");
+		.buckets(BUCKETS.to_vec()),
+		&["kind"],
+		*REGISTRY
+	)
+	.unwrap();
 
-		let envoy_loop_iteration_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_envoy_client_envoy_loop_iteration_duration_seconds",
-				"duration of one envoy_loop select branch in seconds; long tails indicate the single fan-in loop stalled",
-			)
-			.buckets(rivet_metrics::MICRO_BUCKETS.to_vec()),
-			ENVOY_LOOP_ITER_LABELS,
+	pub static ref SQLITE_REQUEST_SUBMIT_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_envoy_client_sqlite_request_submit_duration_seconds",
+			"time from send_sqlite_request entry to envoy_tx.send return in seconds",
 		)
-		.expect("create envoy_client_envoy_loop_iteration_duration_seconds histogram");
+		.buckets(MICRO_BUCKETS.to_vec()),
+		&["kind"],
+		*REGISTRY
+	)
+	.unwrap();
 
-		let ws_tx_lock_wait_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_envoy_client_ws_tx_lock_wait_duration_seconds",
-				"time spent waiting to acquire the ws_tx mutex in seconds",
-			)
-			.buckets(rivet_metrics::MICRO_BUCKETS.to_vec()),
-			WS_TX_LOCK_LABELS,
+	pub static ref SQLITE_REQUEST_WAIT_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_envoy_client_sqlite_request_wait_duration_seconds",
+			"time from envoy_tx.send return to oneshot resolution in seconds",
 		)
-		.expect("create envoy_client_ws_tx_lock_wait_duration_seconds histogram");
+		.buckets(BUCKETS.to_vec()),
+		&["kind"],
+		*REGISTRY
+	)
+	.unwrap();
 
-		let ws_tx_lock_hold_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_envoy_client_ws_tx_lock_hold_duration_seconds",
-				"time the ws_tx mutex guard was held in seconds (covers encode + send)",
-			)
-			.buckets(rivet_metrics::MICRO_BUCKETS.to_vec()),
-			WS_TX_LOCK_LABELS,
-		)
-		.expect("create envoy_client_ws_tx_lock_hold_duration_seconds histogram");
+	pub static ref WS_RECONNECT: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("rivetkit_envoy_client_ws_reconnect_total",
+		"total websocket reconnect events by reason"),
+		&["reason"],
+		*REGISTRY
+	)
+	.unwrap();
 
-		let sqlite_request_total_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_envoy_client_sqlite_request_total_duration_seconds",
-				"end-to-end duration from send_sqlite_request call to oneshot resolution in seconds",
-			)
-			.buckets(rivet_metrics::BUCKETS.to_vec()),
-			SQLITE_SEND_LABELS,
-		)
-		.expect("create envoy_client_sqlite_request_total_duration_seconds histogram");
+	pub static ref WS_PRE_CONNECT: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("rivetkit_envoy_client_ws_pre_connect_total",
+		"total engine choices at connect by how the engine was chosen; retried_* results count retries after both connections reached the same engine"),
+		&["result"],
+		*REGISTRY
+	)
+	.unwrap();
 
-		let sqlite_request_submit_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_envoy_client_sqlite_request_submit_duration_seconds",
-				"time from send_sqlite_request entry to envoy_tx.send return in seconds",
-			)
-			.buckets(rivet_metrics::MICRO_BUCKETS.to_vec()),
-			SQLITE_SEND_LABELS,
+	pub static ref WS_SESSION_DURATION_SECONDS: Histogram = register_histogram_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_envoy_client_ws_session_duration_seconds",
+			"duration of a single websocket session from connect to disconnect in seconds",
 		)
-		.expect("create envoy_client_sqlite_request_submit_duration_seconds histogram");
+		.buckets(BUCKETS.to_vec()),
+		*REGISTRY
+	)
+	.unwrap();
 
-		let sqlite_request_wait_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_envoy_client_sqlite_request_wait_duration_seconds",
-				"time from envoy_tx.send return to oneshot resolution in seconds",
-			)
-			.buckets(rivet_metrics::BUCKETS.to_vec()),
-			SQLITE_SEND_LABELS,
-		)
-		.expect("create envoy_client_sqlite_request_wait_duration_seconds histogram");
+	pub static ref ENVOY_TX_DEPTH: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("rivetkit_envoy_client_envoy_tx_depth",
+		"current depth of the unbounded envoy_tx mpsc between WS read task and envoy_loop"),
+		*REGISTRY
+	)
+	.unwrap();
 
-		let ws_reconnect_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_envoy_client_ws_reconnect_total",
-				"total websocket reconnect events by reason",
-			),
-			WS_RECONNECT_LABELS,
-		)
-		.expect("create envoy_client_ws_reconnect_total counter");
+	pub static ref HTTP_DETACHED_SENDS_INFLIGHT: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("rivetkit_envoy_client_http_detached_sends_inflight",
+		"current detached tasks sending terminal HTTP frames while the HTTP stream is saturated"),
+		*REGISTRY
+	)
+	.unwrap();
 
-		let ws_session_duration_seconds = Histogram::with_opts(
-			HistogramOpts::new(
-				"rivetkit_envoy_client_ws_session_duration_seconds",
-				"duration of a single websocket session from connect to disconnect in seconds",
-			)
-			.buckets(rivet_metrics::BUCKETS.to_vec()),
-		)
-		.expect("create envoy_client_ws_session_duration_seconds histogram");
+	pub static ref HTTP_DETACHED_SENDS_CAPACITY: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("rivetkit_envoy_client_http_detached_sends_capacity",
+		"maximum detached terminal HTTP frame sends per WebSocket session"),
+		*REGISTRY
+	)
+	.unwrap();
 
-		let envoy_tx_depth = IntGauge::new(
-			"rivetkit_envoy_client_envoy_tx_depth",
-			"current depth of the unbounded envoy_tx mpsc between WS read task and envoy_loop",
-		)
-		.expect("create envoy_client_envoy_tx_depth gauge");
+	pub static ref HTTP_DETACHED_SEND_DROPPED: IntCounter = register_int_counter_with_registry!(
+		Opts::new("rivetkit_envoy_client_http_detached_send_dropped_total",
+		"total terminal HTTP frames dropped because the detached send budget was exhausted"),
+		*REGISTRY
+	)
+	.unwrap();
 
-		let http_detached_sends_inflight = IntGauge::new(
-			"rivetkit_envoy_client_http_detached_sends_inflight",
-			"current detached tasks sending terminal HTTP frames while the HTTP stream is saturated",
+	pub static ref WS_READ_HANDLER_DURATION: Histogram = register_histogram_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_envoy_client_ws_read_handler_duration",
+			"time the websocket read loop spends decoding and dispatching one frame, during which the socket is not being drained",
 		)
-		.expect("create envoy_client_http_detached_sends_inflight gauge");
+		.buckets(MICRO_BUCKETS.to_vec()),
+		*REGISTRY
+	)
+	.unwrap();
 
-		let http_detached_sends_capacity = IntGauge::new(
-			"rivetkit_envoy_client_http_detached_sends_capacity",
-			"maximum detached terminal HTTP frame sends per WebSocket session",
+	pub static ref WS_DECODE_DURATION: Histogram = register_histogram_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_envoy_client_ws_decode_duration",
+			"time to deserialize one inbound websocket frame",
 		)
-		.expect("create envoy_client_http_detached_sends_capacity gauge");
+		.buckets(MICRO_BUCKETS.to_vec()),
+		*REGISTRY
+	)
+	.unwrap();
 
-		let http_detached_send_dropped_total = IntCounter::new(
-			"rivetkit_envoy_client_http_detached_send_dropped_total",
-			"total terminal HTTP frames dropped because the detached send budget was exhausted",
-		)
-		.expect("create envoy_client_http_detached_send_dropped_total counter");
+	pub static ref WS_RX_BYTES: IntCounter = register_int_counter_with_registry!(
+		Opts::new("rivetkit_envoy_client_ws_rx_bytes_total",
+		"total bytes read from the engine websocket; the rate of this is how fast this pod consumes websocket data"),
+		*REGISTRY
+	)
+	.unwrap();
 
-		let ws_read_handler_duration = Histogram::with_opts(
-			HistogramOpts::new(
-				"rivetkit_envoy_client_ws_read_handler_duration",
-				"time the websocket read loop spends decoding and dispatching one frame, during which the socket is not being drained",
-			)
-			.buckets(rivet_metrics::MICRO_BUCKETS.to_vec()),
-		)
-		.expect("create envoy_client_ws_read_handler_duration histogram");
+	pub static ref WS_RX_MESSAGES: IntCounter = register_int_counter_with_registry!(
+		Opts::new("rivetkit_envoy_client_ws_rx_messages_total",
+		"total inbound websocket frames read from the engine"),
+		*REGISTRY
+	)
+	.unwrap();
 
-		let ws_decode_duration = Histogram::with_opts(
-			HistogramOpts::new(
-				"rivetkit_envoy_client_ws_decode_duration",
-				"time to deserialize one inbound websocket frame",
-			)
-			.buckets(rivet_metrics::MICRO_BUCKETS.to_vec()),
-		)
-		.expect("create envoy_client_ws_decode_duration histogram");
+	pub static ref STOPPED_FLOORS: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("rivetkit_envoy_client_stopped_floors",
+		"actors whose highest stopped generation this Envoy remembers"),
+		*REGISTRY
+	)
+	.unwrap();
 
-		let ws_rx_bytes_total = IntCounter::new(
-			"rivetkit_envoy_client_ws_rx_bytes_total",
-			"total bytes read from the engine websocket; the rate of this is how fast this pod consumes websocket data",
-		)
-		.expect("create envoy_client_ws_rx_bytes_total counter");
+	pub static ref STOPPED_FLOORS_CAPACITY: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("rivetkit_envoy_client_stopped_floors_capacity",
+		"configured cap on remembered stopped generation floors"),
+		*REGISTRY
+	)
+	.unwrap();
 
-		let ws_rx_messages_total = IntCounter::new(
-			"rivetkit_envoy_client_ws_rx_messages_total",
-			"total inbound websocket frames read from the engine",
+	pub static ref ACTOR_START_SECONDS: Histogram = register_histogram_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_envoy_client_actor_start_seconds",
+			"time from receiving CommandStartActor to sending the actor's Running event, including the runtime's on_actor_start",
 		)
-		.expect("create envoy_client_ws_rx_messages_total counter");
+		.buckets(START_BUCKETS.to_vec()),
+		*REGISTRY
+	)
+	.unwrap();
 
-		register(
-			&rivet_metrics::REGISTRY,
-			sqlite_request_expired_total.clone(),
-		);
-		register(&rivet_metrics::REGISTRY, sqlite_requests_inflight.clone());
-		register(
-			&rivet_metrics::REGISTRY,
-			remote_sqlite_requests_inflight.clone(),
-		);
-		register(&rivet_metrics::REGISTRY, kv_requests_inflight.clone());
-		register(
-			&rivet_metrics::REGISTRY,
-			envoy_loop_iteration_duration_seconds.clone(),
-		);
-		register(
-			&rivet_metrics::REGISTRY,
-			ws_tx_lock_wait_duration_seconds.clone(),
-		);
-		register(
-			&rivet_metrics::REGISTRY,
-			ws_tx_lock_hold_duration_seconds.clone(),
-		);
-		register(
-			&rivet_metrics::REGISTRY,
-			sqlite_request_total_duration_seconds.clone(),
-		);
-		register(
-			&rivet_metrics::REGISTRY,
-			sqlite_request_submit_duration_seconds.clone(),
-		);
-		register(
-			&rivet_metrics::REGISTRY,
-			sqlite_request_wait_duration_seconds.clone(),
-		);
-		register(&rivet_metrics::REGISTRY, ws_reconnect_total.clone());
-		register(
-			&rivet_metrics::REGISTRY,
-			ws_session_duration_seconds.clone(),
-		);
-		register(&rivet_metrics::REGISTRY, envoy_tx_depth.clone());
-		register(
-			&rivet_metrics::REGISTRY,
-			http_detached_sends_inflight.clone(),
-		);
-		register(
-			&rivet_metrics::REGISTRY,
-			http_detached_sends_capacity.clone(),
-		);
-		register(
-			&rivet_metrics::REGISTRY,
-			http_detached_send_dropped_total.clone(),
-		);
-		register(&rivet_metrics::REGISTRY, ws_read_handler_duration.clone());
-		register(&rivet_metrics::REGISTRY, ws_decode_duration.clone());
-		register(&rivet_metrics::REGISTRY, ws_rx_bytes_total.clone());
-		register(&rivet_metrics::REGISTRY, ws_rx_messages_total.clone());
-		let stopped_floors = IntGauge::new(
-			"rivetkit_envoy_client_stopped_floors",
-			"actors whose highest stopped generation this Envoy remembers",
-		)
-		.expect("create envoy_client_stopped_floors gauge");
-		let stopped_floors_capacity = IntGauge::new(
-			"rivetkit_envoy_client_stopped_floors_capacity",
-			"configured cap on remembered stopped generation floors",
-		)
-		.expect("create envoy_client_stopped_floors_capacity gauge");
-		register(&rivet_metrics::REGISTRY, stopped_floors.clone());
-		register(&rivet_metrics::REGISTRY, stopped_floors_capacity.clone());
-		let actor_start_seconds = Histogram::with_opts(
-			HistogramOpts::new(
-				"rivetkit_envoy_client_actor_start_seconds",
-				"time from receiving CommandStartActor to sending the actor's Running event, including the runtime's on_actor_start",
-			)
-			.buckets(rivet_metrics::START_BUCKETS.to_vec()),
-		)
-		.expect("create envoy_client_actor_start_seconds histogram");
-		register(&rivet_metrics::REGISTRY, actor_start_seconds.clone());
-		let actor_queued_requests = IntGauge::new(
-			"rivetkit_envoy_client_actor_queued_requests",
-			"HTTP requests admitted to actors on this process and not yet taken by their actor tasks, including requests waiting for an actor to start",
-		)
-		.expect("create envoy_client_actor_queued_requests gauge");
-		let actor_queued_requests_capacity = IntGauge::new(
-			"rivetkit_envoy_client_actor_queued_requests_capacity",
-			"configured cap on queued HTTP requests per actor",
-		)
-		.expect("create envoy_client_actor_queued_requests_capacity gauge");
-		let actor_queued_requests_overloaded_total = IntCounter::new(
-			"rivetkit_envoy_client_actor_queued_requests_overloaded_total",
-			"HTTP requests refused because their actor already had the configured number queued",
-		)
-		.expect("create envoy_client_actor_queued_requests_overloaded_total counter");
-		register(&rivet_metrics::REGISTRY, actor_queued_requests.clone());
-		register(
-			&rivet_metrics::REGISTRY,
-			actor_queued_requests_capacity.clone(),
-		);
-		register(
-			&rivet_metrics::REGISTRY,
-			actor_queued_requests_overloaded_total.clone(),
-		);
+	pub static ref ACTOR_QUEUED_REQUESTS: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("rivetkit_envoy_client_actor_queued_requests",
+		"HTTP requests admitted to actors on this process and not yet taken by their actor tasks, including requests waiting for an actor to start"),
+		*REGISTRY
+	)
+	.unwrap();
 
-		Self {
-			sqlite_request_expired_total,
-			sqlite_requests_inflight,
-			remote_sqlite_requests_inflight,
-			kv_requests_inflight,
-			envoy_loop_iteration_duration_seconds,
-			ws_tx_lock_wait_duration_seconds,
-			ws_tx_lock_hold_duration_seconds,
-			sqlite_request_total_duration_seconds,
-			sqlite_request_submit_duration_seconds,
-			sqlite_request_wait_duration_seconds,
-			ws_reconnect_total,
-			ws_session_duration_seconds,
-			envoy_tx_depth,
-			http_detached_sends_inflight,
-			http_detached_sends_capacity,
-			http_detached_send_dropped_total,
-			ws_read_handler_duration,
-			ws_decode_duration,
-			ws_rx_bytes_total,
-			ws_rx_messages_total,
-			stopped_floors,
-			stopped_floors_capacity,
-			actor_start_seconds,
-			actor_queued_requests,
-			actor_queued_requests_capacity,
-			actor_queued_requests_overloaded_total,
-		}
-	}
-}
+	pub static ref ACTOR_QUEUED_REQUESTS_CAPACITY: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("rivetkit_envoy_client_actor_queued_requests_capacity",
+		"configured cap on queued HTTP requests per actor"),
+		*REGISTRY
+	)
+	.unwrap();
 
-pub static METRICS: LazyLock<EnvoyClientMetrics> = LazyLock::new(EnvoyClientMetrics::new);
-
-fn register<M>(registry: &Registry, metric: M)
-where
-	M: rivet_metrics::prometheus::core::Collector + Clone + Send + Sync + 'static,
-{
-	if let Err(error) = registry.register(Box::new(metric)) {
-		tracing::warn!(
-			?error,
-			"envoy-client metric registration failed, using existing collector"
-		);
-	}
+	pub static ref ACTOR_QUEUED_REQUESTS_OVERLOADED: IntCounter = register_int_counter_with_registry!(
+		Opts::new("rivetkit_envoy_client_actor_queued_requests_overloaded_total",
+		"HTTP requests refused because their actor already had the configured number queued"),
+		*REGISTRY
+	)
+	.unwrap();
 }

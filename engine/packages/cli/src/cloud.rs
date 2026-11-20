@@ -11,7 +11,7 @@ use tokio::time::sleep;
 use url::Url;
 
 use crate::{
-	auth::{Auth, login_access_token},
+	auth::{Auth, github_actions_token, login_access_token},
 	util::encode,
 };
 
@@ -137,20 +137,30 @@ pub struct CloudClient {
 	http: reqwest::Client,
 	base: Url,
 	token: tokio::sync::RwLock<String>,
-	/// Set when the token comes from a `rivet login` session, whose access token
-	/// expires after minutes. Requests then refresh it as it nears expiry.
-	login: Option<LoginRefresh>,
+	/// Set when the token expires after minutes: a `rivet login` session's
+	/// access token, or a credential exchanged for a GitHub Actions OIDC token.
+	refresh: Option<Refresh>,
 	/// The organization a cluster request acts in, sent as
 	/// `x-rivet-organization`. A login token names only the user, so API v2
 	/// needs it when the user belongs to several organizations.
 	organization: Option<String>,
 }
 
-struct LoginRefresh {
+struct Refresh {
 	cloud_api: String,
+	source: RefreshSource,
 	/// Serializes refreshes, because a refresh rotates the refresh token and a
 	/// second one with the old token would fail.
 	lock: tokio::sync::Mutex<()>,
+}
+
+enum RefreshSource {
+	Login,
+	/// Exchanged again once the credential expires.
+	GitHubActions {
+		organization: String,
+		cluster: String,
+	},
 }
 
 impl CloudClient {
@@ -159,29 +169,63 @@ impl CloudClient {
 			http: reqwest::Client::new(),
 			base: Url::parse(base).context("invalid Cloud API endpoint")?,
 			token: tokio::sync::RwLock::new(token),
-			login: None,
+			refresh: None,
 			organization: None,
 		})
 	}
 
 	/// Keeps a `rivet login` session's access token fresh for the life of the
 	/// client. Tokens from `--token` or `RIVET_CLOUD_TOKEN` are used as they are.
-	pub fn with_login_refresh(mut self, auth: &Auth, cloud_api: &str) -> Self {
+	pub fn with_login_refresh(self, auth: &Auth, cloud_api: &str) -> Self {
 		if auth.is_login() {
-			self.login = Some(LoginRefresh {
-				cloud_api: cloud_api.to_string(),
-				lock: tokio::sync::Mutex::new(()),
-			});
+			return self.with_refresh(cloud_api, RefreshSource::Login);
 		}
 		self
 	}
 
+	/// Exchanges a new GitHub Actions OIDC token when the cluster credential
+	/// expires, so a deploy may outlast it.
+	pub fn with_github_actions_refresh(
+		self,
+		cloud_api: &str,
+		organization: &str,
+		cluster: &str,
+	) -> Self {
+		self.with_refresh(
+			cloud_api,
+			RefreshSource::GitHubActions {
+				organization: organization.to_string(),
+				cluster: cluster.to_string(),
+			},
+		)
+	}
+
+	fn with_refresh(mut self, cloud_api: &str, source: RefreshSource) -> Self {
+		self.refresh = Some(Refresh {
+			cloud_api: cloud_api.to_string(),
+			source,
+			lock: tokio::sync::Mutex::new(()),
+		});
+		self
+	}
+
 	async fn token(&self, force_refresh: bool) -> Result<String> {
-		let Some(login) = &self.login else {
+		let Some(refresh) = &self.refresh else {
 			return Ok(self.token.read().await.clone());
 		};
-		let _guard = login.lock.lock().await;
-		let token = login_access_token(&login.cloud_api, force_refresh).await?;
+		let _guard = refresh.lock.lock().await;
+		let token = match &refresh.source {
+			RefreshSource::Login => login_access_token(&refresh.cloud_api, force_refresh).await?,
+			RefreshSource::GitHubActions {
+				organization,
+				cluster,
+			} => {
+				if !force_refresh {
+					return Ok(self.token.read().await.clone());
+				}
+				github_actions_token(&refresh.cloud_api, organization, cluster).await?
+			}
+		};
 		*self.token.write().await = token.clone();
 		Ok(token)
 	}
@@ -212,7 +256,7 @@ impl CloudClient {
 			.send()
 			.await
 			.context("Cloud API request failed")?;
-		if response.status() != StatusCode::UNAUTHORIZED || self.login.is_none() {
+		if response.status() != StatusCode::UNAUTHORIZED || self.refresh.is_none() {
 			return Ok(response);
 		}
 		self.token(true).await?;

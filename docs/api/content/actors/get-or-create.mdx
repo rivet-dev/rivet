@@ -69,11 +69,11 @@ The existing or created actor.
 | `actor.namespace` | `string` | Name of the namespace the actor belongs to. |
 | `actor.pool` | `string` | Name of the node pool the actor runs in. |
 | `actor.create_ts` | `integer` | When the actor was created, in Unix milliseconds. |
-| `actor.start_ts` | `integer \| null` | When the actor first started. Not recorded by this version, so always `null`. |
-| `actor.pending_allocation_ts` | `integer \| null` | When the actor started waiting for a node. Not recorded by this version, so always `null`. |
-| `actor.connectable_ts` | `integer \| null` | When the actor last became connectable. Not recorded by this version, so always `null`. |
-| `actor.sleep_ts` | `integer \| null` | When the actor went to sleep. Not recorded by this version, so always `null`. |
-| `actor.reschedule_ts` | `integer \| null` | When the actor will next try to allocate. Not recorded by this version, so always `null`. |
+| `actor.start_ts` | `integer \| null` | When the actor first started. Not recorded, so always `null`. Deprecated. |
+| `actor.pending_allocation_ts` | `integer \| null` | When the actor started waiting for a node. Not recorded, so always `null`. An actor with no node to start on sleeps and retries instead of waiting. Deprecated. |
+| `actor.connectable_ts` | `integer \| null` | When a running actor became connectable, in Unix milliseconds. `null` while the actor is not running, and for an actor that has not started since the engine began recording it. |
+| `actor.sleep_ts` | `integer \| null` | When a sleeping actor went to sleep, in Unix milliseconds. `null` while the actor is not asleep, and for an actor that has not slept since the engine began recording it. |
+| `actor.reschedule_ts` | `integer \| null` | When the actor will next try to allocate. Not recorded, so always `null`. Deprecated. |
 | `actor.destroy_ts` | `integer \| null` | When the actor was destroyed, in Unix milliseconds. Only set in listings that include destroyed actors; otherwise `null`. |
 | `actor.forked_from` | `any \| null \| string` | ID of the actor this actor's database was forked from, or `null`. |
 | `created` | `boolean` | `true` if this request created the actor, `false` if it already existed. |
@@ -87,11 +87,8 @@ The existing or created actor.
     "namespace": "my-namespace",
     "pool": "default",
     "create_ts": 1700000000000,
-    "start_ts": null,
-    "pending_allocation_ts": null,
     "connectable_ts": null,
     "sleep_ts": null,
-    "reschedule_ts": null,
     "destroy_ts": null,
     "forked_from": null
   },

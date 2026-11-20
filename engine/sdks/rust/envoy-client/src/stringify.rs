@@ -434,5 +434,12 @@ pub fn stringify_to_envoy(message: &protocol::ToEnvoy) -> String {
 				val.actor_id, val.generation
 			)
 		}
+		protocol::ToEnvoy::ToEnvoyPreConnect(val) => {
+			format!(
+				"ToEnvoyPreConnect{{workerId: {}, envoyConnections: {}}}",
+				uuid::Uuid::from_bytes(val.worker_id),
+				val.envoy_connections
+			)
+		}
 	}
 }

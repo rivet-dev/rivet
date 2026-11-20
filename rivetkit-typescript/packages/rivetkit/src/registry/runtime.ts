@@ -499,7 +499,8 @@ export interface CoreRuntime {
 	waitRegistryReady(registry: RegistryHandle): Promise<void>;
 	shutdownRegistry(registry: RegistryHandle): Promise<void>;
 	shutdownTelemetry?(): Promise<void>;
-	registryActorStopThresholdMs?(
+	/** The engine's drain period plus its actor stop threshold, once the node connected. */
+	registryShutdownBudgetMs?(
 		registry: RegistryHandle,
 	): Promise<number | undefined>;
 	registryActiveActorCount?(registry: RegistryHandle): number;

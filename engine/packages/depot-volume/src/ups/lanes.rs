@@ -31,7 +31,7 @@ use rivet_data::generated::depot_storage_worker_protocol_v1::{
 };
 use rivet_error::RivetError;
 use rivet_metrics::prometheus::{
-	Histogram, IntGauge, register_histogram_with_registry, register_int_gauge_with_registry,
+	Histogram, IntGauge, Opts, register_histogram_with_registry, register_int_gauge_with_registry,
 };
 use rivet_metrics::{GaugeGuardExt, IntGaugeGuard};
 use rivet_topology::worker::WorkerId;
@@ -51,14 +51,14 @@ lazy_static::lazy_static! {
 	)
 	.unwrap();
 	static ref QUEUED_REQUESTS: IntGauge = register_int_gauge_with_registry!(
-		"depot_volume_log_client_queued_requests",
-		"Log shard requests waiting for an in-flight slot to their destination worker, across workers.",
+		Opts::new("depot_volume_log_client_queued_requests",
+		"Log shard requests waiting for an in-flight slot to their destination worker, across workers."),
 		*rivet_metrics::REGISTRY
 	)
 	.unwrap();
 	static ref QUEUE_CAPACITY: IntGauge = register_int_gauge_with_registry!(
-		"depot_volume_log_client_queue_capacity",
-		"Configured per-worker log shard request queue capacity, summed over live coalescers.",
+		Opts::new("depot_volume_log_client_queue_capacity",
+		"Configured per-worker log shard request queue capacity, summed over live coalescers."),
 		*rivet_metrics::REGISTRY
 	)
 	.unwrap();

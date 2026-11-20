@@ -5,7 +5,8 @@
 //! released layout, v4 the edited one, and v5 the same layout under its own header. Every piece
 //! that exists only for those releases lives in [`legacy_v3`], which walks through the problem,
 //! how writers and readers handle it, and when it can be deleted. v6 adds namespace and actor
-//! forks and the backfill that moves ungrouped actors into their namespace's group.
+//! forks and the backfill that moves ungrouped actors into their namespace's group. v7 records
+//! when an actor became connectable and when it went to sleep.
 
 pub mod legacy_v3;
 mod pegboard_actor_v1_to_pegboard_actor_v2;
@@ -18,11 +19,14 @@ mod pegboard_actor_v4_to_pegboard_actor_v5;
 mod pegboard_actor_v5_to_pegboard_actor_v4;
 mod pegboard_actor_v5_to_pegboard_actor_v6;
 mod pegboard_actor_v6_to_pegboard_actor_v5;
+mod pegboard_actor_v6_to_pegboard_actor_v7;
+mod pegboard_actor_v7_to_pegboard_actor_v6;
 
 use super::unchanged;
 use crate::generated::{
 	pegboard_actor_v1 as v1, pegboard_actor_v2 as v2, pegboard_actor_v3 as v3,
 	pegboard_actor_v4 as v4, pegboard_actor_v5 as v5, pegboard_actor_v6 as v6,
+	pegboard_actor_v7 as v7,
 };
 use legacy_v3::{LegacyV3Layout, legacy_decode_v3_header, legacy_seal};
 use pegboard_actor_v1_to_pegboard_actor_v2 as up;
@@ -46,6 +50,17 @@ fn downgrade_v6_v5<V6: super::Downgrade>(value: V6) -> anyhow::Result<V6::Older>
 	value.downgrade()
 }
 
+/// Upgrades a version 6 value through its `From` into version 7: generated for a type that is the
+/// same at both versions, written in `pegboard_actor_v6_to_pegboard_actor_v7` for one that is not.
+fn upgrade_v6_v7<V6, V7: From<V6>>(value: V6) -> anyhow::Result<V7> {
+	Ok(value.into())
+}
+
+/// Downgrades a version 7 value through its [`super::Downgrade`].
+fn downgrade_v7_v6<V7: super::Downgrade>(value: V7) -> anyhow::Result<V7::Older> {
+	value.downgrade()
+}
+
 /// The envoy version read back from records written at a version that does not carry one.
 /// Clients default to version 1 when none is configured, so such an envoy ranks with those.
 pub const ENVOY_VERSION_BEFORE_VERSIONS: u32 = 1;
@@ -58,9 +73,9 @@ pub const ENVOY_VERSION_ACTOR_VERSION: u16 = 2;
 /// or found in V2, and an actor delegated to V2.
 pub const V2_DELEGATION_ACTOR_VERSION: u16 = 4;
 
-/// Six versions of an actor envelope. The header 3 decode branch, the v4 passthrough in the
+/// Seven versions of an actor envelope. The header 3 decode branch, the v4 passthrough in the
 /// v3 upgrade and the `seal` override exist only for [`legacy_v3`] and go with it.
-macro_rules! impl_versioned_v1_to_v6 {
+macro_rules! impl_versioned_v1_to_v7 {
 	(
 		$name:ident,
 		$family:ident,
@@ -70,6 +85,7 @@ macro_rules! impl_versioned_v1_to_v6 {
 		$v4:ty,
 		$v5:ty,
 		$v6:ty,
+		$v7:ty,
 		$up12:path,
 		$down21:path,
 		$up23:path,
@@ -79,7 +95,9 @@ macro_rules! impl_versioned_v1_to_v6 {
 		$up45:path,
 		$down54:path,
 		$up56:path,
-		$down65:path
+		$down65:path,
+		$up67:path,
+		$down76:path
 	) => {
 		impl_versioned_family!($name, $family);
 
@@ -90,11 +108,12 @@ macro_rules! impl_versioned_v1_to_v6 {
 			V4($v4),
 			V5($v5),
 			V6($v6),
+			V7($v7),
 		}
 
 		impl ::vbare::Versioned for $name {
-			type Latest = $v6;
-			const LATEST: u16 = 6;
+			type Latest = $v7;
+			const LATEST: u16 = 7;
 			const UPGRADES: &'static [::vbare::Converter<Self>] = &[
 				|value| match value {
 					Self::V1(v) => Ok(Self::V2($up12(v)?)),
@@ -118,8 +137,16 @@ macro_rules! impl_versioned_v1_to_v6 {
 					Self::V5(v) => Ok(Self::V6($up56(v)?)),
 					_ => ::anyhow::bail!("expected version 5"),
 				},
+				|value| match value {
+					Self::V6(v) => Ok(Self::V7($up67(v)?)),
+					_ => ::anyhow::bail!("expected version 6"),
+				},
 			];
 			const DOWNGRADES: &'static [::vbare::Converter<Self>] = &[
+				|value| match value {
+					Self::V7(v) => Ok(Self::V6($down76(v)?)),
+					_ => ::anyhow::bail!("expected version 7"),
+				},
 				|value| match value {
 					Self::V6(v) => Ok(Self::V5($down65(v)?)),
 					_ => ::anyhow::bail!("expected version 6"),
@@ -142,11 +169,11 @@ macro_rules! impl_versioned_v1_to_v6 {
 				},
 			];
 			fn wrap_latest(value: Self::Latest) -> Self {
-				Self::V6(value)
+				Self::V7(value)
 			}
 			fn unwrap_latest(self) -> ::anyhow::Result<Self::Latest> {
 				match self {
-					Self::V6(value) => Ok(value),
+					Self::V7(value) => Ok(value),
 					_ => ::anyhow::bail!("expected latest version"),
 				}
 			}
@@ -166,7 +193,8 @@ macro_rules! impl_versioned_v1_to_v6 {
 					),
 					4 => Ok(Self::V4(<$v4 as ::vbare::Body>::from_body(body)?)),
 					5 => Ok(Self::V5(<$v5 as ::vbare::Body>::from_body(body)?)),
-					_ => Err($crate::versioned::unsupported_version(version, 6)),
+					6 => Ok(Self::V6(<$v6 as ::vbare::Body>::from_body(body)?)),
+					_ => Err($crate::versioned::unsupported_version(version, 7)),
 				}
 			}
 			fn encode_version<S: ::vbare::Sink>(
@@ -181,6 +209,7 @@ macro_rules! impl_versioned_v1_to_v6 {
 					(Self::V4(v), 4) => ::vbare::Body::put_body(v, out),
 					(Self::V5(v), 5) => ::vbare::Body::put_body(v, out),
 					(Self::V6(v), 6) => ::vbare::Body::put_body(v, out),
+					(Self::V7(v), 7) => ::vbare::Body::put_body(v, out),
 					_ => return Err(::vbare::EncodeError::UnsupportedVersion(version)),
 				}
 				Ok(())
@@ -197,9 +226,9 @@ macro_rules! impl_versioned_v1_to_v6 {
 	};
 }
 
-/// [`impl_versioned_v1_to_v6`] for an envelope version 2 introduced. Version 1 neither decodes
+/// [`impl_versioned_v1_to_v7`] for an envelope version 2 introduced. Version 1 neither decodes
 /// nor encodes it, so its upgrade slot refuses.
-macro_rules! impl_versioned_v2_to_v6 {
+macro_rules! impl_versioned_v2_to_v7 {
 	(
 		$name:ident,
 		$family:ident,
@@ -208,6 +237,7 @@ macro_rules! impl_versioned_v2_to_v6 {
 		$v4:ty,
 		$v5:ty,
 		$v6:ty,
+		$v7:ty,
 		$up23:path,
 		$down32:path,
 		$up34:path,
@@ -215,7 +245,9 @@ macro_rules! impl_versioned_v2_to_v6 {
 		$up45:path,
 		$down54:path,
 		$up56:path,
-		$down65:path
+		$down65:path,
+		$up67:path,
+		$down76:path
 	) => {
 		impl_versioned_family!($name, $family);
 
@@ -225,11 +257,12 @@ macro_rules! impl_versioned_v2_to_v6 {
 			V4($v4),
 			V5($v5),
 			V6($v6),
+			V7($v7),
 		}
 
 		impl ::vbare::Versioned for $name {
-			type Latest = $v6;
-			const LATEST: u16 = 6;
+			type Latest = $v7;
+			const LATEST: u16 = 7;
 			const UPGRADES: &'static [::vbare::Converter<Self>] = &[
 				|_| ::anyhow::bail!("version 1 has no {}", stringify!($name)),
 				|value| match value {
@@ -250,8 +283,16 @@ macro_rules! impl_versioned_v2_to_v6 {
 					Self::V5(v) => Ok(Self::V6($up56(v)?)),
 					_ => ::anyhow::bail!("expected version 5"),
 				},
+				|value| match value {
+					Self::V6(v) => Ok(Self::V7($up67(v)?)),
+					_ => ::anyhow::bail!("expected version 6"),
+				},
 			];
 			const DOWNGRADES: &'static [::vbare::Converter<Self>] = &[
+				|value| match value {
+					Self::V7(v) => Ok(Self::V6($down76(v)?)),
+					_ => ::anyhow::bail!("expected version 7"),
+				},
 				|value| match value {
 					Self::V6(v) => Ok(Self::V5($down65(v)?)),
 					_ => ::anyhow::bail!("expected version 6"),
@@ -271,11 +312,11 @@ macro_rules! impl_versioned_v2_to_v6 {
 				|_| ::anyhow::bail!("version 1 has no {}", stringify!($name)),
 			];
 			fn wrap_latest(value: Self::Latest) -> Self {
-				Self::V6(value)
+				Self::V7(value)
 			}
 			fn unwrap_latest(self) -> ::anyhow::Result<Self::Latest> {
 				match self {
-					Self::V6(value) => Ok(value),
+					Self::V7(value) => Ok(value),
 					_ => ::anyhow::bail!("expected latest version"),
 				}
 			}
@@ -294,7 +335,8 @@ macro_rules! impl_versioned_v2_to_v6 {
 					),
 					4 => Ok(Self::V4(<$v4 as ::vbare::Body>::from_body(body)?)),
 					5 => Ok(Self::V5(<$v5 as ::vbare::Body>::from_body(body)?)),
-					_ => Err($crate::versioned::unsupported_version(version, 6)),
+					6 => Ok(Self::V6(<$v6 as ::vbare::Body>::from_body(body)?)),
+					_ => Err($crate::versioned::unsupported_version(version, 7)),
 				}
 			}
 			fn encode_version<S: ::vbare::Sink>(
@@ -308,6 +350,7 @@ macro_rules! impl_versioned_v2_to_v6 {
 					(Self::V4(v), 4) => ::vbare::Body::put_body(v, out),
 					(Self::V5(v), 5) => ::vbare::Body::put_body(v, out),
 					(Self::V6(v), 6) => ::vbare::Body::put_body(v, out),
+					(Self::V7(v), 7) => ::vbare::Body::put_body(v, out),
 					_ => return Err(::vbare::EncodeError::UnsupportedVersion(version)),
 				}
 				Ok(())
@@ -324,21 +367,22 @@ macro_rules! impl_versioned_v2_to_v6 {
 	};
 }
 
-/// A type that version 6 introduced. Versions 1 to 5 neither decode nor encode it, so every
-/// converter slot refuses.
-macro_rules! impl_versioned_v6_only {
-	($(#[$meta:meta])* $name:ident, $v6:ty) => {
+/// A type that version 6 introduced. Versions 1 to 5 neither decode nor encode it, so their
+/// converter slots refuse.
+macro_rules! impl_versioned_v6_to_v7 {
+	($(#[$meta:meta])* $name:ident, $v6:ty, $v7:ty) => {
 		$(#[$meta])*
 		pub enum $name {
 			V6($v6),
+			V7($v7),
 		}
 
 		impl_versioned_family!($name, PEGBOARD_ACTOR);
 
 		impl ::vbare::Versioned for $name {
-			type Latest = $v6;
+			type Latest = $v7;
 
-			const LATEST: u16 = 6;
+			const LATEST: u16 = 7;
 
 			const UPGRADES: &'static [::vbare::Converter<Self>] = &[
 				|_| Err($crate::versioned::Inexpressible::lacks(1, stringify!($name))),
@@ -346,9 +390,17 @@ macro_rules! impl_versioned_v6_only {
 				|_| Err($crate::versioned::Inexpressible::lacks(3, stringify!($name))),
 				|_| Err($crate::versioned::Inexpressible::lacks(4, stringify!($name))),
 				|_| Err($crate::versioned::Inexpressible::lacks(5, stringify!($name))),
+				|value| match value {
+					Self::V6(v) => Ok(Self::V7(upgrade_v6_v7(v)?)),
+					_ => ::anyhow::bail!("expected version 6"),
+				},
 			];
 
 			const DOWNGRADES: &'static [::vbare::Converter<Self>] = &[
+				|value| match value {
+					Self::V7(v) => Ok(Self::V6(downgrade_v7_v6(v)?)),
+					_ => ::anyhow::bail!("expected version 7"),
+				},
 				|_| Err($crate::versioned::Inexpressible::lacks(5, stringify!($name))),
 				|_| Err($crate::versioned::Inexpressible::lacks(4, stringify!($name))),
 				|_| Err($crate::versioned::Inexpressible::lacks(3, stringify!($name))),
@@ -357,20 +409,24 @@ macro_rules! impl_versioned_v6_only {
 			];
 
 			fn wrap_latest(value: Self::Latest) -> Self {
-				Self::V6(value)
+				Self::V7(value)
 			}
 
 			fn unwrap_latest(self) -> ::anyhow::Result<Self::Latest> {
 				match self {
-					Self::V6(value) => Ok(value),
+					Self::V7(value) => Ok(value),
+					Self::V6(_) => ::anyhow::bail!("expected latest version"),
 				}
 			}
 
 			fn decode_version(
 				version: u16,
-				_body: ::vbare::Bytes,
+				body: ::vbare::Bytes,
 			) -> ::std::result::Result<Self, ::vbare::DecodeError> {
-				Err($crate::versioned::unsupported_version(version, 6))
+				match version {
+					6 => Ok(Self::V6(<$v6 as ::vbare::Body>::from_body(body)?)),
+					_ => Err($crate::versioned::unsupported_version(version, 7)),
+				}
 			}
 
 			fn encode_version<S: ::vbare::Sink>(
@@ -380,6 +436,7 @@ macro_rules! impl_versioned_v6_only {
 			) -> ::std::result::Result<(), ::vbare::EncodeError> {
 				match (self, version) {
 					(Self::V6(v), 6) => ::vbare::Body::put_body(v, out),
+					(Self::V7(v), 7) => ::vbare::Body::put_body(v, out),
 					_ => return Err(::vbare::EncodeError::UnsupportedVersion(version)),
 				}
 				Ok(())
@@ -388,7 +445,7 @@ macro_rules! impl_versioned_v6_only {
 	};
 }
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	ActorData,
 	PEGBOARD_ACTOR,
 	v1::ActorData,
@@ -397,6 +454,7 @@ impl_versioned_v1_to_v6!(
 	v4::ActorData,
 	v5::ActorData,
 	v6::ActorData,
+	v7::ActorData,
 	up::convert_actor_data_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_actor_data_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_actor_data_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -406,10 +464,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_actor_data_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_actor_data_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	ActorState,
 	PEGBOARD_ACTOR,
 	v1::ActorState,
@@ -418,6 +478,7 @@ impl_versioned_v1_to_v6!(
 	v4::ActorState,
 	v5::ActorState,
 	v6::ActorState,
+	v7::ActorState,
 	up::convert_actor_state_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_actor_state_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_actor_state_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -427,10 +488,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_actor_state_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_actor_state_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	ActorTimer,
 	PEGBOARD_ACTOR,
 	v1::ActorTimer,
@@ -439,6 +502,7 @@ impl_versioned_v1_to_v6!(
 	v4::ActorTimer,
 	v5::ActorTimer,
 	v6::ActorTimer,
+	v7::ActorTimer,
 	up::convert_actor_timer_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_actor_timer_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_actor_timer_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -448,10 +512,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_actor_timer_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_actor_timer_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	ActorCreateRequest,
 	PEGBOARD_ACTOR,
 	v1::ActorCreateRequest,
@@ -460,6 +526,7 @@ impl_versioned_v1_to_v6!(
 	v4::ActorCreateRequest,
 	v5::ActorCreateRequest,
 	v6::ActorCreateRequest,
+	v7::ActorCreateRequest,
 	up::convert_actor_create_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_actor_create_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_actor_create_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -469,10 +536,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_actor_create_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_actor_create_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	ActorCreateResponse,
 	PEGBOARD_ACTOR,
 	v1::ActorCreateResponse,
@@ -481,6 +550,7 @@ impl_versioned_v1_to_v6!(
 	v4::ActorCreateResponse,
 	v5::ActorCreateResponse,
 	v6::ActorCreateResponse,
+	v7::ActorCreateResponse,
 	up::convert_actor_create_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_actor_create_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_actor_create_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -490,10 +560,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_actor_create_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_actor_create_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	ActorReadRequest,
 	PEGBOARD_ACTOR,
 	v1::ActorReadRequest,
@@ -502,6 +574,9 @@ impl_versioned_v1_to_v6!(
 	v4::ActorReadRequest,
 	v5::ActorReadRequest,
 	v6::ActorReadRequest,
+	v7::ActorReadRequest,
+	unchanged,
+	unchanged,
 	unchanged,
 	unchanged,
 	unchanged,
@@ -514,7 +589,7 @@ impl_versioned_v1_to_v6!(
 	unchanged
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	ActorReadResponse,
 	PEGBOARD_ACTOR,
 	v1::ActorReadResponse,
@@ -523,6 +598,7 @@ impl_versioned_v1_to_v6!(
 	v4::ActorReadResponse,
 	v5::ActorReadResponse,
 	v6::ActorReadResponse,
+	v7::ActorReadResponse,
 	up::convert_actor_read_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_actor_read_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_actor_read_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -532,10 +608,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_actor_read_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_actor_read_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	ActorStartNotice,
 	PEGBOARD_ACTOR,
 	v1::ActorStartNotice,
@@ -544,6 +622,7 @@ impl_versioned_v1_to_v6!(
 	v4::ActorStartNotice,
 	v5::ActorStartNotice,
 	v6::ActorStartNotice,
+	v7::ActorStartNotice,
 	up::convert_actor_start_notice_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_actor_start_notice_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_actor_start_notice_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -553,10 +632,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_actor_start_notice_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_actor_start_notice_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	ActorEvent,
 	PEGBOARD_ACTOR,
 	v1::ActorEvent,
@@ -565,6 +646,7 @@ impl_versioned_v1_to_v6!(
 	v4::ActorEvent,
 	v5::ActorEvent,
 	v6::ActorEvent,
+	v7::ActorEvent,
 	up::convert_actor_event_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_actor_event_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_actor_event_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -574,10 +656,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_actor_event_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_actor_event_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	ActorEventResponse,
 	PEGBOARD_ACTOR,
 	v1::ActorEventResponse,
@@ -586,6 +670,7 @@ impl_versioned_v1_to_v6!(
 	v4::ActorEventResponse,
 	v5::ActorEventResponse,
 	v6::ActorEventResponse,
+	v7::ActorEventResponse,
 	up::convert_actor_event_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_actor_event_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_actor_event_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -595,10 +680,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_actor_event_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_actor_event_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexInsertActorRequest,
 	PEGBOARD_ACTOR,
 	v1::IndexInsertActorRequest,
@@ -607,6 +694,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexInsertActorRequest,
 	v5::IndexInsertActorRequest,
 	v6::IndexInsertActorRequest,
+	v7::IndexInsertActorRequest,
 	up::convert_index_insert_actor_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_insert_actor_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_insert_actor_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -616,10 +704,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_insert_actor_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_insert_actor_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexInsertActorResponse,
 	PEGBOARD_ACTOR,
 	v1::IndexInsertActorResponse,
@@ -628,6 +718,9 @@ impl_versioned_v1_to_v6!(
 	v4::IndexInsertActorResponse,
 	v5::IndexInsertActorResponse,
 	v6::IndexInsertActorResponse,
+	v7::IndexInsertActorResponse,
+	unchanged,
+	unchanged,
 	unchanged,
 	unchanged,
 	unchanged,
@@ -640,7 +733,7 @@ impl_versioned_v1_to_v6!(
 	unchanged
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexDeleteActorRequest,
 	PEGBOARD_ACTOR,
 	v1::IndexDeleteActorRequest,
@@ -649,6 +742,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexDeleteActorRequest,
 	v5::IndexDeleteActorRequest,
 	v6::IndexDeleteActorRequest,
+	v7::IndexDeleteActorRequest,
 	up::convert_index_delete_actor_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_delete_actor_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_delete_actor_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -658,10 +752,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_delete_actor_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_delete_actor_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexDeleteActorResponse,
 	PEGBOARD_ACTOR,
 	v1::IndexDeleteActorResponse,
@@ -670,6 +766,9 @@ impl_versioned_v1_to_v6!(
 	v4::IndexDeleteActorResponse,
 	v5::IndexDeleteActorResponse,
 	v6::IndexDeleteActorResponse,
+	v7::IndexDeleteActorResponse,
+	unchanged,
+	unchanged,
 	unchanged,
 	unchanged,
 	unchanged,
@@ -682,7 +781,7 @@ impl_versioned_v1_to_v6!(
 	unchanged
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexListActorsRequest,
 	PEGBOARD_ACTOR,
 	v1::IndexListActorsRequest,
@@ -691,6 +790,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexListActorsRequest,
 	v5::IndexListActorsRequest,
 	v6::IndexListActorsRequest,
+	v7::IndexListActorsRequest,
 	up::convert_index_list_actors_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_list_actors_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_list_actors_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -700,10 +800,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_list_actors_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_list_actors_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexListActorsResponse,
 	PEGBOARD_ACTOR,
 	v1::IndexListActorsResponse,
@@ -712,6 +814,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexListActorsResponse,
 	v5::IndexListActorsResponse,
 	v6::IndexListActorsResponse,
+	v7::IndexListActorsResponse,
 	up::convert_index_list_actors_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_list_actors_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_list_actors_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -721,10 +824,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_list_actors_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_list_actors_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	DestroyedActorIndexEntry,
 	PEGBOARD_ACTOR,
 	v1::DestroyedActorIndexEntry,
@@ -733,6 +838,7 @@ impl_versioned_v1_to_v6!(
 	v4::DestroyedActorIndexEntry,
 	v5::DestroyedActorIndexEntry,
 	v6::DestroyedActorIndexEntry,
+	v7::DestroyedActorIndexEntry,
 	up::convert_destroyed_actor_index_entry_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_destroyed_actor_index_entry_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_destroyed_actor_index_entry_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -742,10 +848,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_destroyed_actor_index_entry_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_destroyed_actor_index_entry_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexReadDestroyedActorRequest,
 	PEGBOARD_ACTOR,
 	v1::IndexReadDestroyedActorRequest,
@@ -754,6 +862,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexReadDestroyedActorRequest,
 	v5::IndexReadDestroyedActorRequest,
 	v6::IndexReadDestroyedActorRequest,
+	v7::IndexReadDestroyedActorRequest,
 	up::convert_index_read_destroyed_actor_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_read_destroyed_actor_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_read_destroyed_actor_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -763,10 +872,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_read_destroyed_actor_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_read_destroyed_actor_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexReadDestroyedActorResponse,
 	PEGBOARD_ACTOR,
 	v1::IndexReadDestroyedActorResponse,
@@ -775,6 +886,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexReadDestroyedActorResponse,
 	v5::IndexReadDestroyedActorResponse,
 	v6::IndexReadDestroyedActorResponse,
+	v7::IndexReadDestroyedActorResponse,
 	up::convert_index_read_destroyed_actor_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_read_destroyed_actor_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_read_destroyed_actor_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -784,10 +896,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_read_destroyed_actor_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_read_destroyed_actor_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexListEnvoysRequest,
 	PEGBOARD_ACTOR,
 	v1::IndexListEnvoysRequest,
@@ -796,6 +910,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexListEnvoysRequest,
 	v5::IndexListEnvoysRequest,
 	v6::IndexListEnvoysRequest,
+	v7::IndexListEnvoysRequest,
 	up::convert_index_list_envoys_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_list_envoys_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_list_envoys_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -805,10 +920,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_list_envoys_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_list_envoys_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexListEnvoysResponse,
 	PEGBOARD_ACTOR,
 	v1::IndexListEnvoysResponse,
@@ -817,6 +934,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexListEnvoysResponse,
 	v5::IndexListEnvoysResponse,
 	v6::IndexListEnvoysResponse,
+	v7::IndexListEnvoysResponse,
 	up::convert_index_list_envoys_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_list_envoys_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_list_envoys_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -826,10 +944,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_list_envoys_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_list_envoys_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	EpoxyActorByKeyEntry,
 	PEGBOARD_ACTOR,
 	v1::EpoxyActorByKeyEntry,
@@ -838,6 +958,7 @@ impl_versioned_v1_to_v6!(
 	v4::EpoxyActorByKeyEntry,
 	v5::EpoxyActorByKeyEntry,
 	v6::EpoxyActorByKeyEntry,
+	v7::EpoxyActorByKeyEntry,
 	up::convert_epoxy_actor_by_key_entry_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_epoxy_actor_by_key_entry_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_epoxy_actor_by_key_entry_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -847,10 +968,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_epoxy_actor_by_key_entry_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_epoxy_actor_by_key_entry_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	KvValue,
 	PEGBOARD_ACTOR,
 	v1::KvValue,
@@ -859,6 +982,7 @@ impl_versioned_v1_to_v6!(
 	v4::KvValue,
 	v5::KvValue,
 	v6::KvValue,
+	v7::KvValue,
 	up::convert_kv_value_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_kv_value_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_kv_value_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -868,10 +992,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_kv_value_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_kv_value_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	EnvoyData,
 	PEGBOARD_ACTOR,
 	v1::EnvoyData,
@@ -880,6 +1006,7 @@ impl_versioned_v1_to_v6!(
 	v4::EnvoyData,
 	v5::EnvoyData,
 	v6::EnvoyData,
+	v7::EnvoyData,
 	up::convert_envoy_data_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_envoy_data_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_envoy_data_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -889,10 +1016,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_envoy_data_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_envoy_data_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	EnvoyUpsertRequest,
 	PEGBOARD_ACTOR,
 	v1::EnvoyUpsertRequest,
@@ -901,6 +1030,7 @@ impl_versioned_v1_to_v6!(
 	v4::EnvoyUpsertRequest,
 	v5::EnvoyUpsertRequest,
 	v6::EnvoyUpsertRequest,
+	v7::EnvoyUpsertRequest,
 	up::convert_envoy_upsert_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_envoy_upsert_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_envoy_upsert_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -910,10 +1040,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_envoy_upsert_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_envoy_upsert_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	EnvoyUpsertResponse,
 	PEGBOARD_ACTOR,
 	v1::EnvoyUpsertResponse,
@@ -922,6 +1054,7 @@ impl_versioned_v1_to_v6!(
 	v4::EnvoyUpsertResponse,
 	v5::EnvoyUpsertResponse,
 	v6::EnvoyUpsertResponse,
+	v7::EnvoyUpsertResponse,
 	up::convert_envoy_upsert_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_envoy_upsert_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_envoy_upsert_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -931,10 +1064,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_envoy_upsert_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_envoy_upsert_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	EnvoyReadRequest,
 	PEGBOARD_ACTOR,
 	v1::EnvoyReadRequest,
@@ -943,6 +1078,9 @@ impl_versioned_v1_to_v6!(
 	v4::EnvoyReadRequest,
 	v5::EnvoyReadRequest,
 	v6::EnvoyReadRequest,
+	v7::EnvoyReadRequest,
+	unchanged,
+	unchanged,
 	unchanged,
 	unchanged,
 	unchanged,
@@ -955,7 +1093,7 @@ impl_versioned_v1_to_v6!(
 	unchanged
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	EnvoyReadResponse,
 	PEGBOARD_ACTOR,
 	v1::EnvoyReadResponse,
@@ -964,6 +1102,7 @@ impl_versioned_v1_to_v6!(
 	v4::EnvoyReadResponse,
 	v5::EnvoyReadResponse,
 	v6::EnvoyReadResponse,
+	v7::EnvoyReadResponse,
 	up::convert_envoy_read_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_envoy_read_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_envoy_read_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -973,10 +1112,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_envoy_read_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_envoy_read_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexInsertEnvoyRequest,
 	PEGBOARD_ACTOR,
 	v1::IndexInsertEnvoyRequest,
@@ -985,6 +1126,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexInsertEnvoyRequest,
 	v5::IndexInsertEnvoyRequest,
 	v6::IndexInsertEnvoyRequest,
+	v7::IndexInsertEnvoyRequest,
 	up::convert_index_insert_envoy_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_insert_envoy_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_insert_envoy_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -994,10 +1136,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_insert_envoy_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_insert_envoy_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexInsertEnvoyResponse,
 	PEGBOARD_ACTOR,
 	v1::IndexInsertEnvoyResponse,
@@ -1006,6 +1150,9 @@ impl_versioned_v1_to_v6!(
 	v4::IndexInsertEnvoyResponse,
 	v5::IndexInsertEnvoyResponse,
 	v6::IndexInsertEnvoyResponse,
+	v7::IndexInsertEnvoyResponse,
+	unchanged,
+	unchanged,
 	unchanged,
 	unchanged,
 	unchanged,
@@ -1018,7 +1165,7 @@ impl_versioned_v1_to_v6!(
 	unchanged
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexUpsertActiveEnvoyRequest,
 	PEGBOARD_ACTOR,
 	v1::IndexUpsertActiveEnvoyRequest,
@@ -1027,6 +1174,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexUpsertActiveEnvoyRequest,
 	v5::IndexUpsertActiveEnvoyRequest,
 	v6::IndexUpsertActiveEnvoyRequest,
+	v7::IndexUpsertActiveEnvoyRequest,
 	up::convert_index_upsert_active_envoy_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_upsert_active_envoy_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_upsert_active_envoy_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1036,10 +1184,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_upsert_active_envoy_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_upsert_active_envoy_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexUpsertActiveEnvoyResponse,
 	PEGBOARD_ACTOR,
 	v1::IndexUpsertActiveEnvoyResponse,
@@ -1048,6 +1198,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexUpsertActiveEnvoyResponse,
 	v5::IndexUpsertActiveEnvoyResponse,
 	v6::IndexUpsertActiveEnvoyResponse,
+	v7::IndexUpsertActiveEnvoyResponse,
 	up::convert_index_upsert_active_envoy_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_upsert_active_envoy_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_upsert_active_envoy_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1057,10 +1208,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_upsert_active_envoy_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_upsert_active_envoy_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexDeleteActiveEnvoyRequest,
 	PEGBOARD_ACTOR,
 	v1::IndexDeleteActiveEnvoyRequest,
@@ -1069,6 +1222,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexDeleteActiveEnvoyRequest,
 	v5::IndexDeleteActiveEnvoyRequest,
 	v6::IndexDeleteActiveEnvoyRequest,
+	v7::IndexDeleteActiveEnvoyRequest,
 	up::convert_index_delete_active_envoy_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_delete_active_envoy_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_delete_active_envoy_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1078,10 +1232,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_delete_active_envoy_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_delete_active_envoy_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexDeleteActiveEnvoyResponse,
 	PEGBOARD_ACTOR,
 	v1::IndexDeleteActiveEnvoyResponse,
@@ -1090,6 +1246,9 @@ impl_versioned_v1_to_v6!(
 	v4::IndexDeleteActiveEnvoyResponse,
 	v5::IndexDeleteActiveEnvoyResponse,
 	v6::IndexDeleteActiveEnvoyResponse,
+	v7::IndexDeleteActiveEnvoyResponse,
+	unchanged,
+	unchanged,
 	unchanged,
 	unchanged,
 	unchanged,
@@ -1102,7 +1261,7 @@ impl_versioned_v1_to_v6!(
 	unchanged
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexPutEnvoyPoolRequest,
 	PEGBOARD_ACTOR,
 	v1::IndexPutEnvoyPoolRequest,
@@ -1111,6 +1270,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexPutEnvoyPoolRequest,
 	v5::IndexPutEnvoyPoolRequest,
 	v6::IndexPutEnvoyPoolRequest,
+	v7::IndexPutEnvoyPoolRequest,
 	up::convert_index_put_envoy_pool_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_put_envoy_pool_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_put_envoy_pool_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1120,10 +1280,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_put_envoy_pool_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_put_envoy_pool_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexPutEnvoyPoolResponse,
 	PEGBOARD_ACTOR,
 	v1::IndexPutEnvoyPoolResponse,
@@ -1132,6 +1294,9 @@ impl_versioned_v1_to_v6!(
 	v4::IndexPutEnvoyPoolResponse,
 	v5::IndexPutEnvoyPoolResponse,
 	v6::IndexPutEnvoyPoolResponse,
+	v7::IndexPutEnvoyPoolResponse,
+	unchanged,
+	unchanged,
 	unchanged,
 	unchanged,
 	unchanged,
@@ -1144,7 +1309,7 @@ impl_versioned_v1_to_v6!(
 	unchanged
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexListEnvoyPoolsRequest,
 	PEGBOARD_ACTOR,
 	v1::IndexListEnvoyPoolsRequest,
@@ -1153,6 +1318,9 @@ impl_versioned_v1_to_v6!(
 	v4::IndexListEnvoyPoolsRequest,
 	v5::IndexListEnvoyPoolsRequest,
 	v6::IndexListEnvoyPoolsRequest,
+	v7::IndexListEnvoyPoolsRequest,
+	unchanged,
+	unchanged,
 	unchanged,
 	unchanged,
 	unchanged,
@@ -1165,7 +1333,7 @@ impl_versioned_v1_to_v6!(
 	unchanged
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexListEnvoyPoolsResponse,
 	PEGBOARD_ACTOR,
 	v1::IndexListEnvoyPoolsResponse,
@@ -1174,6 +1342,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexListEnvoyPoolsResponse,
 	v5::IndexListEnvoyPoolsResponse,
 	v6::IndexListEnvoyPoolsResponse,
+	v7::IndexListEnvoyPoolsResponse,
 	up::convert_index_list_envoy_pools_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_list_envoy_pools_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_list_envoy_pools_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1183,10 +1352,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_list_envoy_pools_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_list_envoy_pools_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexListActiveEnvoysRequest,
 	PEGBOARD_ACTOR,
 	v1::IndexListActiveEnvoysRequest,
@@ -1195,6 +1366,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexListActiveEnvoysRequest,
 	v5::IndexListActiveEnvoysRequest,
 	v6::IndexListActiveEnvoysRequest,
+	v7::IndexListActiveEnvoysRequest,
 	up::convert_index_list_active_envoys_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_list_active_envoys_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_list_active_envoys_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1204,10 +1376,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_list_active_envoys_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_list_active_envoys_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexListActiveEnvoysResponse,
 	PEGBOARD_ACTOR,
 	v1::IndexListActiveEnvoysResponse,
@@ -1216,6 +1390,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexListActiveEnvoysResponse,
 	v5::IndexListActiveEnvoysResponse,
 	v6::IndexListActiveEnvoysResponse,
+	v7::IndexListActiveEnvoysResponse,
 	up::convert_index_list_active_envoys_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_list_active_envoys_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_list_active_envoys_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1225,10 +1400,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_list_active_envoys_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_list_active_envoys_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexListActiveEnvoyStatesRequest,
 	PEGBOARD_ACTOR,
 	v1::IndexListActiveEnvoyStatesRequest,
@@ -1237,6 +1414,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexListActiveEnvoyStatesRequest,
 	v5::IndexListActiveEnvoyStatesRequest,
 	v6::IndexListActiveEnvoyStatesRequest,
+	v7::IndexListActiveEnvoyStatesRequest,
 	up::convert_index_list_active_envoy_states_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_list_active_envoy_states_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_list_active_envoy_states_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1246,10 +1424,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_list_active_envoy_states_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_list_active_envoy_states_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	IndexListActiveEnvoyStatesResponse,
 	PEGBOARD_ACTOR,
 	v1::IndexListActiveEnvoyStatesResponse,
@@ -1258,6 +1438,7 @@ impl_versioned_v1_to_v6!(
 	v4::IndexListActiveEnvoyStatesResponse,
 	v5::IndexListActiveEnvoyStatesResponse,
 	v6::IndexListActiveEnvoyStatesResponse,
+	v7::IndexListActiveEnvoyStatesResponse,
 	up::convert_index_list_active_envoy_states_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_index_list_active_envoy_states_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_index_list_active_envoy_states_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1267,10 +1448,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_index_list_active_envoy_states_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_index_list_active_envoy_states_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	ActiveEnvoyIndexEntry,
 	PEGBOARD_ACTOR,
 	v1::ActiveEnvoyIndexEntry,
@@ -1279,6 +1462,7 @@ impl_versioned_v1_to_v6!(
 	v4::ActiveEnvoyIndexEntry,
 	v5::ActiveEnvoyIndexEntry,
 	v6::ActiveEnvoyIndexEntry,
+	v7::ActiveEnvoyIndexEntry,
 	up::convert_active_envoy_index_entry_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_active_envoy_index_entry_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_active_envoy_index_entry_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1288,10 +1472,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_active_envoy_index_entry_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_active_envoy_index_entry_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	ActiveEnvoyState,
 	PEGBOARD_ACTOR,
 	v1::ActiveEnvoyState,
@@ -1300,6 +1486,7 @@ impl_versioned_v1_to_v6!(
 	v4::ActiveEnvoyState,
 	v5::ActiveEnvoyState,
 	v6::ActiveEnvoyState,
+	v7::ActiveEnvoyState,
 	up::convert_active_envoy_state_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_active_envoy_state_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_active_envoy_state_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1309,13 +1496,15 @@ impl_versioned_v1_to_v6!(
 	up45::convert_active_envoy_state_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_active_envoy_state_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
 // Legacy: a namespace record row in the shared catalog volume. Namespaces now live in their own
 // namespace volumes (`pegboard.namespace`). Read only for a namespace written before namespace
 // volumes, or created while the fleet cannot read them yet, until it is moved.
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	LegacyNamespaceRecord,
 	PEGBOARD_ACTOR,
 	v1::NamespaceRecord,
@@ -1324,6 +1513,7 @@ impl_versioned_v1_to_v6!(
 	v4::NamespaceRecord,
 	v5::NamespaceRecord,
 	v6::NamespaceRecord,
+	v7::NamespaceRecord,
 	up::convert_namespace_record_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_namespace_record_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_namespace_record_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1333,12 +1523,14 @@ impl_versioned_v1_to_v6!(
 	up45::convert_namespace_record_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_namespace_record_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
 // Legacy: creates a record row in the shared catalog. New binaries send it only while the
 // fleet cannot read namespace volumes; old binaries send it at any time.
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	LegacyNamespaceCreateRequest,
 	PEGBOARD_ACTOR,
 	v1::NamespaceCreateRequest,
@@ -1347,6 +1539,7 @@ impl_versioned_v1_to_v6!(
 	v4::NamespaceCreateRequest,
 	v5::NamespaceCreateRequest,
 	v6::NamespaceCreateRequest,
+	v7::NamespaceCreateRequest,
 	up::convert_namespace_create_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_namespace_create_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_namespace_create_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1356,11 +1549,13 @@ impl_versioned_v1_to_v6!(
 	up45::convert_namespace_create_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_namespace_create_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
 // Legacy: the answer to [`LegacyNamespaceCreateRequest`].
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	LegacyNamespaceCreateResponse,
 	PEGBOARD_ACTOR,
 	v1::NamespaceCreateResponse,
@@ -1369,6 +1564,7 @@ impl_versioned_v1_to_v6!(
 	v4::NamespaceCreateResponse,
 	v5::NamespaceCreateResponse,
 	v6::NamespaceCreateResponse,
+	v7::NamespaceCreateResponse,
 	up::convert_namespace_create_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_namespace_create_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_namespace_create_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1378,12 +1574,14 @@ impl_versioned_v1_to_v6!(
 	up45::convert_namespace_create_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_namespace_create_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
 // Legacy: reads one record row of the shared catalog. Sent for a name whose namespace volume
 // holds no state yet, and by old binaries.
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	LegacyNamespaceReadRequest,
 	PEGBOARD_ACTOR,
 	v1::NamespaceReadRequest,
@@ -1392,6 +1590,7 @@ impl_versioned_v1_to_v6!(
 	v4::NamespaceReadRequest,
 	v5::NamespaceReadRequest,
 	v6::NamespaceReadRequest,
+	v7::NamespaceReadRequest,
 	up::convert_namespace_read_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_namespace_read_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_namespace_read_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1401,11 +1600,13 @@ impl_versioned_v1_to_v6!(
 	up45::convert_namespace_read_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_namespace_read_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
 // Legacy: the answer to [`LegacyNamespaceReadRequest`].
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	LegacyNamespaceReadResponse,
 	PEGBOARD_ACTOR,
 	v1::NamespaceReadResponse,
@@ -1414,6 +1615,7 @@ impl_versioned_v1_to_v6!(
 	v4::NamespaceReadResponse,
 	v5::NamespaceReadResponse,
 	v6::NamespaceReadResponse,
+	v7::NamespaceReadResponse,
 	up::convert_namespace_read_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_namespace_read_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_namespace_read_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1423,12 +1625,14 @@ impl_versioned_v1_to_v6!(
 	up45::convert_namespace_read_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_namespace_read_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
 // Legacy: pages the shared catalog's record rows. Old binaries list namespaces with it; new
 // binaries page the listing index, which merges these rows until none are left.
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	LegacyNamespaceListRequest,
 	PEGBOARD_ACTOR,
 	v1::NamespaceListRequest,
@@ -1437,6 +1641,7 @@ impl_versioned_v1_to_v6!(
 	v4::NamespaceListRequest,
 	v5::NamespaceListRequest,
 	v6::NamespaceListRequest,
+	v7::NamespaceListRequest,
 	up::convert_namespace_list_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_namespace_list_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_namespace_list_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1446,11 +1651,13 @@ impl_versioned_v1_to_v6!(
 	up45::convert_namespace_list_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_namespace_list_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
 // Legacy: the answer to [`LegacyNamespaceListRequest`].
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	LegacyNamespaceListResponse,
 	PEGBOARD_ACTOR,
 	v1::NamespaceListResponse,
@@ -1459,6 +1666,7 @@ impl_versioned_v1_to_v6!(
 	v4::NamespaceListResponse,
 	v5::NamespaceListResponse,
 	v6::NamespaceListResponse,
+	v7::NamespaceListResponse,
 	up::convert_namespace_list_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_namespace_list_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_namespace_list_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1468,10 +1676,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_namespace_list_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_namespace_list_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	NodePoolConfig,
 	PEGBOARD_ACTOR,
 	v1::NodePoolConfig,
@@ -1480,6 +1690,7 @@ impl_versioned_v1_to_v6!(
 	v4::NodePoolConfig,
 	v5::NodePoolConfig,
 	v6::NodePoolConfig,
+	v7::NodePoolConfig,
 	up::convert_node_pool_config_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_node_pool_config_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_node_pool_config_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1489,10 +1700,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_node_pool_config_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_node_pool_config_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	PoolRequest,
 	PEGBOARD_ACTOR,
 	v1::PoolRequest,
@@ -1501,6 +1714,7 @@ impl_versioned_v1_to_v6!(
 	v4::PoolRequest,
 	v5::PoolRequest,
 	v6::PoolRequest,
+	v7::PoolRequest,
 	up::convert_pool_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_pool_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_pool_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1510,10 +1724,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_pool_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_pool_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	PoolResponse,
 	PEGBOARD_ACTOR,
 	v1::PoolResponse,
@@ -1522,6 +1738,7 @@ impl_versioned_v1_to_v6!(
 	v4::PoolResponse,
 	v5::PoolResponse,
 	v6::PoolResponse,
+	v7::PoolResponse,
 	up::convert_pool_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_pool_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_pool_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1531,10 +1748,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_pool_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_pool_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	PoolLease,
 	PEGBOARD_ACTOR,
 	v1::PoolLease,
@@ -1543,6 +1762,7 @@ impl_versioned_v1_to_v6!(
 	v4::PoolLease,
 	v5::PoolLease,
 	v6::PoolLease,
+	v7::PoolLease,
 	up::convert_pool_lease_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_pool_lease_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_pool_lease_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1552,10 +1772,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_pool_lease_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_pool_lease_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	PoolListRequest,
 	PEGBOARD_ACTOR,
 	v1::PoolListRequest,
@@ -1564,6 +1786,7 @@ impl_versioned_v1_to_v6!(
 	v4::PoolListRequest,
 	v5::PoolListRequest,
 	v6::PoolListRequest,
+	v7::PoolListRequest,
 	up::convert_pool_list_request_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_pool_list_request_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_pool_list_request_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1573,10 +1796,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_pool_list_request_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_pool_list_request_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v1_to_v6!(
+impl_versioned_v1_to_v7!(
 	PoolListResponse,
 	PEGBOARD_ACTOR,
 	v1::PoolListResponse,
@@ -1585,6 +1810,7 @@ impl_versioned_v1_to_v6!(
 	v4::PoolListResponse,
 	v5::PoolListResponse,
 	v6::PoolListResponse,
+	v7::PoolListResponse,
 	up::convert_pool_list_response_pegboard_actor_v1_to_pegboard_actor_v2,
 	down::convert_pool_list_response_pegboard_actor_v2_to_pegboard_actor_v1,
 	up23::convert_pool_list_response_pegboard_actor_v2_to_pegboard_actor_v3,
@@ -1594,10 +1820,12 @@ impl_versioned_v1_to_v6!(
 	up45::convert_pool_list_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_pool_list_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v2_to_v6!(
+impl_versioned_v2_to_v7!(
 	MigrateFromV2Begin,
 	PEGBOARD_ACTOR,
 	v2::MigrateFromV2Begin,
@@ -1605,6 +1833,7 @@ impl_versioned_v2_to_v6!(
 	v4::MigrateFromV2Begin,
 	v5::MigrateFromV2Begin,
 	v6::MigrateFromV2Begin,
+	v7::MigrateFromV2Begin,
 	up23::convert_migrate_from_v2_begin_pegboard_actor_v2_to_pegboard_actor_v3,
 	down32::convert_migrate_from_v2_begin_pegboard_actor_v3_to_pegboard_actor_v2,
 	up34::convert_migrate_from_v2_begin_pegboard_actor_v3_to_pegboard_actor_v4,
@@ -1612,10 +1841,12 @@ impl_versioned_v2_to_v6!(
 	up45::convert_migrate_from_v2_begin_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_migrate_from_v2_begin_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v2_to_v6!(
+impl_versioned_v2_to_v7!(
 	ActorMigrateFromV2BeginResponse,
 	PEGBOARD_ACTOR,
 	v2::ActorMigrateFromV2BeginResponse,
@@ -1623,6 +1854,7 @@ impl_versioned_v2_to_v6!(
 	v4::ActorMigrateFromV2BeginResponse,
 	v5::ActorMigrateFromV2BeginResponse,
 	v6::ActorMigrateFromV2BeginResponse,
+	v7::ActorMigrateFromV2BeginResponse,
 	up23::convert_actor_migrate_from_v2_begin_response_pegboard_actor_v2_to_pegboard_actor_v3,
 	down32::convert_actor_migrate_from_v2_begin_response_pegboard_actor_v3_to_pegboard_actor_v2,
 	up34::convert_actor_migrate_from_v2_begin_response_pegboard_actor_v3_to_pegboard_actor_v4,
@@ -1630,18 +1862,22 @@ impl_versioned_v2_to_v6!(
 	up45::convert_actor_migrate_from_v2_begin_response_pegboard_actor_v4_to_pegboard_actor_v5,
 	down54::convert_actor_migrate_from_v2_begin_response_pegboard_actor_v5_to_pegboard_actor_v4,
 	upgrade_v5_v6,
-	downgrade_v6_v5
+	downgrade_v6_v5,
+	upgrade_v6_v7,
+	downgrade_v7_v6
 );
 
-impl_versioned_v6_only!(
+impl_versioned_v6_to_v7!(
 	/// Legacy: the backfill's read of an actor's scheduled alarm, which versions 1 to 5 never
 	/// had. Removed in 3.1 with the backfill.
 	LegacyActorAlarmReadRequest,
-	v6::LegacyActorAlarmReadRequest
+	v6::LegacyActorAlarmReadRequest,
+	v7::LegacyActorAlarmReadRequest
 );
 
-impl_versioned_v6_only!(
+impl_versioned_v6_to_v7!(
 	/// Legacy: see [`LegacyActorAlarmReadRequest`]. Removed in 3.1 with the backfill.
 	LegacyActorAlarmReadResponse,
-	v6::LegacyActorAlarmReadResponse
+	v6::LegacyActorAlarmReadResponse,
+	v7::LegacyActorAlarmReadResponse
 );

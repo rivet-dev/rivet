@@ -343,7 +343,12 @@ impl Acquire<'_> {
 					Some(actor) => (
 						actor.clone(),
 						epoch,
-						wire::ActorPhase::Running(wire::Running { allocation }),
+						// The notice does not say when the actor became connectable, and routing
+						// does not need it.
+						wire::ActorPhase::Running(wire::Running {
+							allocation,
+							connectable_unix_ms: None,
+						}),
 					),
 					// The notice names where the actor runs, so route there before reading
 					// it. Only a failed open needs the actor's data, for the envoy fallback.
@@ -443,7 +448,7 @@ impl Acquire<'_> {
 						None => self.not_running().await?,
 					};
 				}
-				wire::ActorPhase::Running(wire::Running { allocation }) => {
+				wire::ActorPhase::Running(wire::Running { allocation, .. }) => {
 					let route = Route::of_allocation(&allocation)?;
 					let error = match self.open(&route).await {
 						Ok(stream) => return Ok((epoch, stream)),

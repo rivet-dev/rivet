@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use rivet_envoy_protocol as protocol;
+use rivet_metrics::GaugeGuardExt;
 #[cfg(any(
 	feature = "native-transport",
 	all(feature = "wasm-transport", target_arch = "wasm32")
@@ -15,7 +16,7 @@ use crate::context::{HttpConnectionTx, HttpWsTxMessage, SharedContext, WsTxMessa
 	all(feature = "wasm-transport", target_arch = "wasm32")
 ))]
 use crate::envoy::ToEnvoyMessage;
-use crate::metrics::METRICS;
+use crate::metrics;
 #[cfg(any(
 	feature = "native-transport",
 	all(feature = "wasm-transport", target_arch = "wasm32")
@@ -109,9 +110,7 @@ pub(crate) async fn install_connection_with_http(
 		byte_budget: http_byte_budget,
 		detached_send_budget: Arc::new(tokio::sync::Semaphore::new(HTTP_WS_DETACHED_SEND_CAPACITY)),
 	});
-	METRICS
-		.http_detached_sends_capacity
-		.set(HTTP_WS_DETACHED_SEND_CAPACITY as i64);
+	metrics::HTTP_DETACHED_SENDS_CAPACITY.set(HTTP_WS_DETACHED_SEND_CAPACITY as i64);
 	drop(http_guard);
 	drop(guard);
 	shared.connection_session_tx.send_replace(session);
@@ -263,7 +262,7 @@ fn spawn_waiting_http_send(
 	let permit = match connection.detached_send_budget.clone().try_acquire_owned() {
 		Ok(permit) => permit,
 		Err(_) => {
-			METRICS.http_detached_send_dropped_total.inc();
+			metrics::HTTP_DETACHED_SEND_DROPPED.inc();
 			tracing::debug!(
 				expected_session,
 				capacity = HTTP_WS_DETACHED_SEND_CAPACITY,
@@ -286,7 +285,7 @@ fn spawn_waiting_http_send(
 	}
 
 	let shared = shared.clone();
-	let inflight = rivet_metrics::GaugeGuardExt::inc_guard(&METRICS.http_detached_sends_inflight);
+	let inflight = metrics::HTTP_DETACHED_SENDS_INFLIGHT.inc_guard();
 	crate::utils::spawn_detached(async move {
 		let _ = ws_send_http_for_session(&shared, message, expected_session).await;
 		drop(inflight);
@@ -435,6 +434,11 @@ async fn forward_to_envoy(shared: &SharedContext, session: u64, message: protoco
 			)
 			.await;
 		}
+		protocol::ToEnvoy::ToEnvoyPreConnect(_) => {
+			// A transport that opens a single connection has no engine to choose, so it lets
+			// the pre-connect through to here and ignores it.
+			tracing::debug!("ignoring the pre-connect on a single connection");
+		}
 		other => {
 			let _ = crate::envoy::send_to_envoy_tx(
 				shared,
@@ -489,8 +493,7 @@ pub(crate) async fn ws_send_for_session(
 	let wait_start = crate::time::Instant::now();
 	let guard = shared.ws_tx.lock().await;
 	let wait_elapsed = wait_start.elapsed();
-	METRICS
-		.ws_tx_lock_wait_duration_seconds
+	metrics::WS_TX_LOCK_WAIT_DURATION_SECONDS
 		.with_label_values(&[message_kind])
 		.observe(wait_elapsed.as_secs_f64());
 
@@ -505,8 +508,7 @@ pub(crate) async fn ws_send_for_session(
 	}
 	let Some(tx) = guard.as_ref() else {
 		// Still observe hold duration on the early-return path.
-		METRICS
-			.ws_tx_lock_hold_duration_seconds
+		metrics::WS_TX_LOCK_HOLD_DURATION_SECONDS
 			.with_label_values(&[message_kind])
 			.observe(hold_start.elapsed().as_secs_f64());
 		tracing::debug!("websocket not available for sending");
@@ -527,8 +529,7 @@ pub(crate) async fn ws_send_for_session(
 		return WsSendResult::Unavailable;
 	}
 	drop(guard);
-	METRICS
-		.ws_tx_lock_hold_duration_seconds
+	metrics::WS_TX_LOCK_HOLD_DURATION_SECONDS
 		.with_label_values(&[message_kind])
 		.observe(hold_start.elapsed().as_secs_f64());
 	WsSendResult::Sent { session: current }

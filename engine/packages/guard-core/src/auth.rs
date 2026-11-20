@@ -52,7 +52,7 @@ pub fn transport_token(headers: &HeaderMap) -> Option<&str> {
 }
 
 /// The token of an `Authorization: Bearer` value. The scheme matches case-insensitively.
-fn bearer_token(value: &str) -> Option<&str> {
+pub fn bearer_token(value: &str) -> Option<&str> {
 	let (scheme, token) = value.split_once(' ')?;
 	if scheme.eq_ignore_ascii_case("bearer") {
 		Some(token.trim())

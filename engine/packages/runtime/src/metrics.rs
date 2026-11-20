@@ -3,61 +3,61 @@ use rivet_metrics::{REGISTRY, TASK_POLL_BUCKETS, prometheus::*};
 lazy_static::lazy_static! {
 	// MARK: Tokio
 	pub static ref TOKIO_THREAD_COUNT: IntGauge = register_int_gauge_with_registry!(
-		"tokio_thread_count",
-		"Total number of Tokio threads.",
+		Opts::new("tokio_thread_count",
+		"Total number of Tokio threads."),
 		*REGISTRY
 	).unwrap();
 	pub static ref TOKIO_GLOBAL_QUEUE_DEPTH: IntGauge = register_int_gauge_with_registry!(
-		"tokio_global_queue_depth",
-		"Number of pending tasks in the global queue.",
+		Opts::new("tokio_global_queue_depth",
+		"Number of pending tasks in the global queue."),
 		*REGISTRY
 	).unwrap();
 	pub static ref TOKIO_BLOCKING_QUEUE_DEPTH: IntGauge = register_int_gauge_with_registry!(
-		"tokio_blocking_queue_depth",
-		"Number of tasks queued for the blocking thread pool.",
+		Opts::new("tokio_blocking_queue_depth",
+		"Number of tasks queued for the blocking thread pool."),
 		*REGISTRY
 	).unwrap();
 	pub static ref TOKIO_TASK_TOTAL: IntCounter = register_int_counter_with_registry!(
-		"tokio_task_total",
-		"Total number of spawned tasks.",
+		Opts::new("tokio_task_total",
+		"Total number of spawned tasks."),
 		*REGISTRY
 	).unwrap();
 	pub static ref TOKIO_ACTIVE_TASK_COUNT: IntGauge = register_int_gauge_with_registry!(
-		"tokio_active_task_count",
-		"Total number of active (running or sleeping) tasks.",
+		Opts::new("tokio_active_task_count",
+		"Total number of active (running or sleeping) tasks."),
 		*REGISTRY
 	).unwrap();
 	pub static ref TOKIO_BLOCKING_THREAD_COUNT: IntGauge = register_int_gauge_with_registry!(
-		"tokio_blocking_thread_count",
-		"Number of threads in the blocking thread pool.",
+		Opts::new("tokio_blocking_thread_count",
+		"Number of threads in the blocking thread pool."),
 		*REGISTRY
 	).unwrap();
 	pub static ref TOKIO_IDLE_BLOCKING_THREAD_COUNT: IntGauge = register_int_gauge_with_registry!(
-		"tokio_idle_blocking_thread_count",
-		"Number of idle threads in the blocking thread pool.",
+		Opts::new("tokio_idle_blocking_thread_count",
+		"Number of idle threads in the blocking thread pool."),
 		*REGISTRY
 	).unwrap();
 	pub static ref TOKIO_WORKER_OVERFLOW_COUNT: IntGaugeVec = register_int_gauge_vec_with_registry!(
-		"tokio_worker_overflow_count",
-		"Number of times the given worker thread saturated its local queue.",
+		Opts::new("tokio_worker_overflow_count",
+		"Number of times the given worker thread saturated its local queue."),
 		&["worker"],
 		*REGISTRY
 	).unwrap();
 	pub static ref TOKIO_WORKER_LOCAL_QUEUE_DEPTH: IntGaugeVec = register_int_gauge_vec_with_registry!(
-		"tokio_worker_local_queue_depth",
-		"Number of pending tasks in a worker's queue.",
+		Opts::new("tokio_worker_local_queue_depth",
+		"Number of pending tasks in a worker's queue."),
 		&["worker"],
 		*REGISTRY
 	).unwrap();
 	pub static ref TOKIO_WORKER_BUSY_DURATION_SECONDS_TOTAL: CounterVec = register_counter_vec_with_registry!(
-		"tokio_worker_busy_duration_seconds_total",
-		"Seconds a worker has spent polling tasks. Its rate against wall clock time is the worker's busy fraction, which separates a saturated runtime from one whose workers are parked.",
+		Opts::new("tokio_worker_busy_duration_seconds_total",
+		"Seconds a worker has spent polling tasks. Its rate against wall clock time is the worker's busy fraction, which separates a saturated runtime from one whose workers are parked."),
 		&["worker"],
 		*REGISTRY
 	).unwrap();
 	pub static ref TOKIO_WORKER_BUSY_CPU_SECONDS_TOTAL: Counter = register_counter_with_registry!(
-		"tokio_worker_busy_cpu_seconds_total",
-		"CPU time worker threads used between unpark and park, summed over workers. Against tokio_worker_busy_duration_seconds_total, the wall time workers were busy, the gap is time busy workers spent blocked in a syscall or lock or waiting for a CPU instead of computing.",
+		Opts::new("tokio_worker_busy_cpu_seconds_total",
+		"CPU time worker threads used between unpark and park, summed over workers. Against tokio_worker_busy_duration_seconds_total, the wall time workers were busy, the gap is time busy workers spent blocked in a syscall or lock or waiting for a CPU instead of computing."),
 		*REGISTRY
 	).unwrap();
 	pub static ref TOKIO_TASK_POLL_DURATION_SECONDS: Histogram = register_histogram_with_registry!(

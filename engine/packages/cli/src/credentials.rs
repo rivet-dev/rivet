@@ -20,6 +20,10 @@ pub struct Session {
 	pub refresh_token: String,
 	/// Access token expiry as epoch milliseconds.
 	pub expires_at: i64,
+	/// Scopes granted at the last sign-in or refresh. Empty for sessions saved
+	/// before scopes were recorded.
+	#[serde(default)]
+	pub scopes: Vec<String>,
 	pub user: SessionUser,
 }
 

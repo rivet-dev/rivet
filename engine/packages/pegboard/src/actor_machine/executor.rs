@@ -59,14 +59,6 @@ pub const COMMANDS_ACK: &[u8] = b"ok";
 /// whose actor may have the same id. Nothing was queued, so the send failed.
 pub const COMMANDS_REFUSED_FOREIGN_GROUP: &[u8] = b"foreign_group";
 
-/// Legacy: the answer of an envoy connection that opened before its namespace moved into the
-/// volume group its routed commands name. Nothing was queued, so the send failed; the connection
-/// closes and leaves the active envoy index, and the envoy reconnects with the group, so the
-/// actor's next wake reaches it. The legacy behavior refused such commands as foreign, which left
-/// every grouped actor hashed to that envoy unstarted until it happened to reconnect. Removed in
-/// 3.1 with the backfill.
-pub const LEGACY_COMMANDS_REFUSED_NAMESPACE_MOVED: &[u8] = b"namespace_moved";
-
 /// The acknowledgement an envoy connection sends once the actor database volume it holds has a
 /// committed entry of its own claim at its tail, so the volume's members prove the tail.
 pub const TAIL_PROVEN_ACK: &[u8] = b"tail proven";
@@ -2101,10 +2093,6 @@ async fn send_commands(ctx: &EngineContext, route: &Route, payload: &Bytes) -> R
 		ack.as_ref() != COMMANDS_REFUSED_FOREIGN_GROUP,
 		"the envoy connection serves another namespace and refused the commands"
 	);
-	ensure!(
-		ack.as_ref() != LEGACY_COMMANDS_REFUSED_NAMESPACE_MOVED,
-		"the envoy connection opened before its namespace moved into its group and closes; the envoy reconnects with the group"
-	);
 	ensure!(ack.as_ref() == COMMANDS_ACK, "unexpected envoy ack");
 	Ok(())
 }
@@ -2246,10 +2234,11 @@ async fn mark_disconnected(
 	}
 }
 
-/// Picks an envoy for the actor by rendezvous hashing over every live envoy that serves its name
-/// Chooses the envoy to run `actor_id` among the pool's active envoys serving `name`, with its
-/// route from the index entry: the actor's allocation. `None` when no active envoy serves the
-/// name.
+/// Chooses the envoy to run `actor_id` among the pool's active envoys serving `name`: the
+/// actor's allocation. Once every storage worker reads the ring index, the less loaded of two
+/// sampled ring envoys (`envoy_ring::pick_envoy`); before that, or when the ring has no live
+/// envoy for the name because envoys are still moving onto it, rendezvous hashing over the
+/// full listing. `None` when no active envoy serves the name.
 pub(crate) async fn select_allocation(
 	ctx: &EngineContext,
 	actor_id: &[u8],
@@ -2257,13 +2246,32 @@ pub(crate) async fn select_allocation(
 	pool_name: &str,
 	name: &str,
 ) -> Result<Option<wire::ActorAllocation>> {
+	// The ring pick also reads the legacy index, so once the ring is open it is the only read.
+	if crate::envoy_ring::ring_open(ctx) {
+		let allocation = crate::envoy_ring::pick_envoy(ctx, namespace, pool_name, name).await?;
+		let source = if allocation.is_some() { "ring" } else { "none" };
+		crate::metrics::ENVOY_ALLOCATIONS
+			.with_label_values(&[namespace, source])
+			.inc();
+		return Ok(allocation);
+	}
 	let envoys = index::list_active_envoys(ctx, namespace, pool_name, name).await?;
-	Ok(choose_envoy(actor_id, envoys))
+	let allocation = choose_envoy(actor_id, envoys);
+	let source = if allocation.is_some() {
+		"listing"
+	} else {
+		"none"
+	};
+	crate::metrics::ENVOY_ALLOCATIONS
+		.with_label_values(&[namespace, source])
+		.inc();
+	Ok(allocation)
 }
 
 /// Rendezvous hashing of `actor_id` over the candidate allocations: the envoy whose key hashes
 /// highest with the actor id wins, so two selections against the same active set agree and an
-/// envoy joining or leaving moves only the actors that hash to it.
+/// envoy joining or leaving moves only the actors that hash to it. Used only before the ring
+/// opens.
 pub(crate) fn choose_envoy(
 	actor_id: &[u8],
 	candidates: Vec<wire::ActorAllocation>,

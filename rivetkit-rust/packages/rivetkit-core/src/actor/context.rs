@@ -74,12 +74,14 @@ pub struct ActorKv {
 }
 
 /// The startup commit that runs while the actor serves its first requests.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct StartupCommit {
 	/// Startup commits still in flight: one for a new local actor, otherwise none.
 	pub(crate) pending: usize,
-	/// Whether one of them failed. The actor is then stopping with an error.
-	pub(crate) failed: bool,
+	/// The error of the first one that failed, kept so requests waiting for the commit report
+	/// its cause, such as a storage refusal the client may retry. The actor is then stopping
+	/// with an error.
+	pub(crate) failure: Option<rivet_error::RivetError>,
 	/// Whether startup has returned. A commit that fails before then fails the startup itself;
 	/// one that fails after stops the running actor with an error.
 	pub(crate) returned: bool,

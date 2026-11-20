@@ -84,6 +84,8 @@ The current pass should list the namespace's actors as `not_selected`, because t
 
 Switch your clients and backend to the Rivet 3 endpoint. Every request now goes through Rivet 3, which forwards everything to Rivet 2 until actors start moving. Note that you will still need actor nodes pointed at Rivet 2 until the end of the migration. See [Run nodes on both control planes](#run-nodes-on-both-control-planes).
 
+Clients need Rivet 3 tokens, so issue them before you switch. Rivet 3 does not accept Rivet 2 tokens. It checks a Rivet 3 token itself and reaches actors still on Rivet 2 with the migration's Rivet 2 token, so one Rivet 3 token works for every actor throughout the migration. Ship the new endpoint and the new token in the same client release. A token scoped to particular actor IDs reaches an actor on Rivet 2 by its ID, but a lookup by key of an actor still on Rivet 2 needs a token with access to every actor in the namespace.
+
 </Step>
 </Steps>
 
@@ -101,19 +103,14 @@ Make those calls through a client created with `createClient` and pointed at the
 
 ## Changing settings without a restart
 
-Every migration setting except `migrate_seed` can be changed while the control plane runs, through its dynamic configuration. This is how you ramp the ratios, tune the pacing, and switch to the next namespace, all without restarting a single control plane instance.
+Every migration setting except `migrate_seed` and `backup` can be changed while the control plane runs, through its dynamic configuration. This is how you ramp the ratios, tune the pacing, and switch to the next namespace, all without restarting a single control plane instance.
 
-Write the complete `migrate_from_v2` section as a JSON file and apply it from any Rivet 3 control plane instance:
+Write the settings you want to change as a JSON file and apply it from any Rivet 3 control plane instance:
 
 ```json
 {
-  "endpoint": "http://rivet2.internal:6420",
-  "api_urls": { "1": "http://rivet2.internal:6420" },
-  "namespace": "my-namespace",
-  "token": "<rivet-2-namespace-token>",
   "create_ratio": 0.1,
-  "migrate_ratio": 0.1,
-  "min_sleep_ms": 600000
+  "migrate_ratio": 0.1
 }
 ```
 
@@ -121,12 +118,13 @@ Write the complete `migrate_from_v2` section as a JSON file and apply it from an
 rivet-engine migrate-from-v2 set-config migrate.json
 ```
 
-- **The file replaces the whole section.** Fields you leave out fall back to their defaults, not to the configuration file's values, so always write every field you rely on. That includes the Rivet 2 token: `RIVET__MIGRATE_FROM_V2__TOKEN` only fills in the configuration file, so a dynamic update has to carry the token itself. Keep the file private and delete it once applied.
+- **Each field overrides one setting.** Settings the file leaves out keep their current value, whether that comes from an earlier update or from the configuration file, so the Rivet 2 token and addresses stay as configured. Set a field to `null` to return that one setting to the configuration file's value.
+- **A migration can start without a restart.** When the configuration file has no `migrate_from_v2` section, the first update must set at least `endpoint` and `namespace`, and the token if Rivet 2 needs one. Keep a file that holds the token private and delete it once applied.
 - **Every instance applies it within about a minute.** The gateway and the migrator both read the new values, so check `rivet-engine migrate-from-v2 status` and the [metrics](#what-to-watch) after about a minute before changing anything else.
 - **It persists and takes priority.** A dynamic update survives restarts and takes priority over the `migrate_from_v2` section of the configuration file until you remove it.
-- **`migrate_seed` is fixed at startup.** A new seed would reshuffle which actors `migrate_ratio` selects, so an update must keep the seed the control plane started with.
+- **`migrate_seed` and `backup` are fixed at startup.** A new seed would reshuffle which actors `migrate_ratio` selects, and the backup store is opened once when the control plane starts. Change either one in the configuration file and restart.
 
-To drop the dynamic update and return to the configuration file, run:
+To drop every dynamic update and return to the configuration file, run:
 
 ```bash
 rivet-engine migrate-from-v2 clear-config
@@ -154,6 +152,8 @@ The first create of a key settles where it lives, and every later create of that
 | `create_ratio` | `0.0` | Share of new actors created in Rivet 3, by a stable hash of the key for keyed actors. |
 | `migrate_ratio` | `0.0` | Share of existing actors the migrator moves. |
 | `migrate_seed` | `0` | Seed of the hash behind `migrate_ratio`. Read at startup only, because a new seed reshuffles which actors are selected. |
+| `backup` | none | Optional store that every moved actor is backed up to. Read at startup only. See [Backing up moved actors](#backing-up-moved-actors). |
+| `actor_name` | none | Move only the actors with this name. Rivet 2 lists one name's actors oldest first, so the name moves in creation order. Actors moved by hand move whatever their name. Needs a Rivet 2 release whose migration API accepts the name filter. |
 | `min_sleep_ms` | 10 minutes | How long an actor must have been asleep before it can move. |
 | `wake_horizon_ms` | 5 minutes | An actor with an alarm due sooner than this stays where it is for now. |
 | `pass_interval_ms` | 5 minutes | Time between passes over the namespace. |
@@ -298,11 +298,42 @@ Scale the Rivet 2 node deployment to zero and keep the Rivet 3 deployment. Switc
 Run `rivet-engine migrate-from-v2 clear-config` if you used [dynamic updates](#changing-settings-without-a-restart), then remove the `migrate_from_v2` section from the Rivet 3 configuration. Rivet 3 now serves the namespace on its own.
 
 </Step>
+<Step title="Delete the moved actors from Rivet 2">
+
+Once you are confident in the migration, delete Rivet 2's copy of the moved actors. See [Deleting moved actors from Rivet 2](#deleting-moved-actors-from-rivet-2).
+
+</Step>
 <Step title="Retire Rivet 2">
 
 Keep the Rivet 2 control plane and its storage until you are confident in the migration, because returning an actor needs it. Back up its storage before you shut it down.
 
 </Step>
 </Steps>
+
+### Backing up moved actors
+
+Rivet 3 can keep a backup of every actor it moves, outside its live data, so an actor can be restored after its Rivet 2 copy is deleted. The backup is optional; without it, nothing is written. To turn it on, add a `backup` store to the `migrate_from_v2` section of the configuration file. It takes the same backends as `object_storage.primary`:
+
+```yaml
+migrate_from_v2:
+  backup:
+    s3:
+      bucket: my-migration-backups
+      prefix: rivet2
+```
+
+Each actor is written under `<namespace>/<rivet-2-actor-id>/<generation>/` as Rivet 2 exported it: its metadata, key-value data, and SQLite pages, followed by a `manifest` object once the backup is complete. A move whose backup cannot be written is retried, so no actor leaves Rivet 2 without one. The store is read at startup only and cannot be set with a dynamic update, so configure it on every control plane instance before you start moving actors.
+
+### Deleting moved actors from Rivet 2
+
+Rivet 2 keeps its copy of every actor that moved, parked so that it never runs. To free that storage, run from a Rivet 3 control plane instance:
+
+```bash
+rivet-engine migrate-from-v2 delete-parked --concurrency 8
+```
+
+Rivet 2 destroys each parked actor through its normal destroy steps, which delete its key-value and SQLite data, and records the deletion. **This cannot be undone, and a deleted actor can no longer be returned to Rivet 2 with `recover`.** An actor is only deleted once it has finished moving to Rivet 3 and, when a backup store is configured, its backup is complete. Any other actor is skipped and listed in the result.
+
+Rivet 2 keeps the command's progress, so running it again continues where it stopped and checks the skipped actors again. Pass `--datacenter <label>` to delete in one Rivet 2 datacenter only; by default it runs through every datacenter in `api_urls`. Deleting needs a Rivet 2 release whose migration API supports it, and a Rivet 2 token that may delete actors.
 
 To move another namespace, point `namespace` at it, either in the configuration file or with a [dynamic update](#changing-settings-without-a-restart), and start again from [Set up Rivet 3 beside Rivet 2](#set-up-rivet-3-beside-rivet-2).

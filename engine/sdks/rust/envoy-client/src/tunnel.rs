@@ -483,9 +483,7 @@ async fn handle_request_start(
 	let (actor_handle, queued) = match admitted {
 		Some((handle, Some(queued))) => (Some(handle), Some(queued)),
 		Some((_, None)) => {
-			crate::metrics::METRICS
-				.actor_queued_requests_overloaded_total
-				.inc();
+			crate::metrics::ACTOR_QUEUED_REQUESTS_OVERLOADED.inc();
 			if request_stream {
 				drain_rejected_upload(
 					ctx,

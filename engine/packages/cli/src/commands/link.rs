@@ -1,5 +1,3 @@
-use std::io::IsTerminal;
-
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use reqwest::Method;
@@ -9,6 +7,7 @@ use crate::{
 	auth::resolve_auth,
 	cloud::{CloudClient, TokenInspectResponse},
 	target::{Link, ProjectTarget, pick_target, remove_link, write_link},
+	terminal::is_interactive,
 };
 
 #[derive(Parser)]
@@ -49,7 +48,7 @@ impl LinkOpts {
 				let cloud = CloudClient::new(&self.cloud_api, auth.token.clone())?
 					.with_login_refresh(&auth, &self.cloud_api);
 				if auth.is_login() {
-					if !std::io::stdin().is_terminal() {
+					if !is_interactive() {
 						bail!("pass --org and --project to link non-interactively");
 					}
 					pick_target(&cloud, org.as_deref(), project.as_deref()).await?

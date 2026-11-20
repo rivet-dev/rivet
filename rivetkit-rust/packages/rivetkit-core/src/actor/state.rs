@@ -1418,11 +1418,13 @@ impl ActorContext {
 			async move {
 				let result = commit.await;
 				drop(write);
-				let failed = result.is_err();
+				let failure = result.as_ref().err().map(rivet_error::RivetError::extract);
 				let mut returned = false;
 				ctx.0.startup_commit.send_modify(|startup| {
 					startup.pending = startup.pending.saturating_sub(1);
-					startup.failed |= failed;
+					if startup.failure.is_none() {
+						startup.failure = failure;
+					}
 					returned = startup.returned;
 				});
 				if let Err(error) = result {
@@ -1453,37 +1455,39 @@ impl ActorContext {
 	pub(crate) fn begin_startup_commits(&self) {
 		self.0.startup_commit.send_modify(|startup| {
 			startup.returned = false;
-			startup.failed = false;
+			startup.failure = None;
 		});
 	}
 
-	/// Marks startup as returned, and reports whether a startup commit already failed, in
-	/// which case the start must fail. A commit that fails later stops the actor itself.
+	/// Marks startup as returned, and fails with the error of a startup commit that already
+	/// failed, in which case the start must fail. A commit that fails later stops the actor
+	/// itself.
 	pub(crate) fn finish_startup_commits(&self) -> Result<()> {
-		let mut failed = false;
+		let mut failure = None;
 		self.0.startup_commit.send_modify(|startup| {
 			startup.returned = true;
-			failed = startup.failed;
+			failure = startup.failure.clone();
 		});
-		if failed {
-			return Err(ActorLifecycle::Stopping.build())
-				.context("actor startup state commit failed");
+		match failure {
+			Some(error) => Err(error).context("actor startup state commit failed"),
+			None => Ok(()),
 		}
-		Ok(())
 	}
 
 	/// Waits until every startup commit of this generation is durable. An error means one
 	/// failed and the actor is stopping, so a request served in the meantime must not report
-	/// success.
+	/// success. The error is the commit's own, so a refusal that ran nothing, such as
+	/// `sqlite.storage_overloaded`, keeps its retry hint for the client.
 	pub(crate) async fn wait_startup_commit(&self) -> Result<()> {
 		let mut startup = self.0.startup_commit.subscribe();
-		let failed = startup
+		let failure = startup
 			.wait_for(|startup| startup.pending == 0)
 			.await
-			.map(|startup| startup.failed);
-		match failed {
-			Ok(false) => Ok(()),
-			Ok(true) | Err(_) => {
+			.map(|startup| startup.failure.clone());
+		match failure {
+			Ok(None) => Ok(()),
+			Ok(Some(error)) => Err(error).context("actor startup state commit failed"),
+			Err(_) => {
 				Err(ActorLifecycle::Stopping.build()).context("actor startup state commit failed")
 			}
 		}

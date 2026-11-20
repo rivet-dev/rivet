@@ -289,7 +289,9 @@ export const RegistryConfigSchema = z
 				/**
 				 * Wait this many milliseconds for the serve promise to resolve
 				 * after calling `CoreRegistry::shutdown()`. Defaults to the
-				 * engine-provided actor stop threshold once the node connects. A
+				 * engine's shutdown budget once the node connects: the pool's
+				 * eviction delay and period, over which it stops the node's actors,
+				 * plus the time each actor is given to stop. A
 				 * signal-driven shutdown of a managed local development engine waits
 				 * four seconds by default so actors can acknowledge stopping before
 				 * a file watcher restarts the process.

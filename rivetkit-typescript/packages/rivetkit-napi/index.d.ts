@@ -588,7 +588,11 @@ export declare class CoreRegistry {
    * separately to avoid re-entrancy.
    */
   shutdown(): Promise<void>
-  actorStopThresholdMs(): Promise<number | null>
+  /**
+   * The engine's drain period plus its actor stop threshold, the longest a graceful
+   * shutdown takes, or `None` before the envoy received the engine's metadata.
+   */
+  shutdownBudgetMs(): Promise<number | null>
   /** Number of actors hosted by the serverful envoy, or zero while it is not serving. */
   activeActorCount(): number
   /**

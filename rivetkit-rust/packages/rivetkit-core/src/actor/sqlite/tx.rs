@@ -4,14 +4,20 @@ use std::{
 	fmt,
 	future::Future,
 	sync::{
-		Arc, LazyLock,
+		Arc,
 		atomic::{AtomicU64, Ordering},
 	},
 	time::Duration,
 };
 
 use anyhow::{Context, Result};
-use rivet_metrics::prometheus::{IntCounter, IntGauge};
+use rivet_metrics::{
+	GaugeGuardExt, REGISTRY,
+	prometheus::{
+		IntCounter, IntGauge, Opts, register_int_counter_with_registry,
+		register_int_gauge_with_registry,
+	},
+};
 use serde::Serialize;
 #[cfg(target_arch = "wasm32")]
 use tokio::sync::oneshot;
@@ -111,88 +117,56 @@ pub(super) struct ExpiredKey {
 	_metric: rivet_metrics::IntGaugeGuard,
 }
 
-/// Process-wide usage of the per-actor expired transaction key maps. The
-/// usage gauge is summed over every actor in the process.
-struct ExpiredKeyMetrics {
-	keys: IntGauge,
-	evicted_total: IntCounter,
-}
-
-static EXPIRED_KEY_METRICS: LazyLock<ExpiredKeyMetrics> = LazyLock::new(|| {
-	let keys = IntGauge::new(
-		"rivetkit_sqlite_transaction_expired_keys",
-		"expired SQLite transaction keys remembered across all actors in the process",
+lazy_static::lazy_static! {
+	/// Expired transaction keys summed over every actor in the process.
+	static ref SQLITE_TRANSACTION_EXPIRED_KEYS: IntGauge = register_int_gauge_with_registry!(
+		Opts::new(
+			"rivetkit_sqlite_transaction_expired_keys",
+			"expired SQLite transaction keys remembered across all actors in the process",
+		),
+		*REGISTRY
 	)
-	.expect("create rivetkit_sqlite_transaction_expired_keys gauge");
-	let capacity = IntGauge::new(
-		"rivetkit_sqlite_transaction_expired_keys_capacity",
-		"maximum expired SQLite transaction keys remembered per actor",
+	.unwrap();
+
+	/// Set to `TRANSACTION_EXPIRED_CAPACITY` whenever a coordinator is created.
+	static ref SQLITE_TRANSACTION_EXPIRED_KEYS_CAPACITY: IntGauge = register_int_gauge_with_registry!(
+		Opts::new(
+			"rivetkit_sqlite_transaction_expired_keys_capacity",
+			"maximum expired SQLite transaction keys remembered per actor",
+		),
+		*REGISTRY
 	)
-	.expect("create rivetkit_sqlite_transaction_expired_keys_capacity gauge");
-	let evicted_total = IntCounter::new(
-		"rivetkit_sqlite_transaction_expired_keys_evicted_total",
-		"total expired SQLite transaction keys evicted because an actor reached the cap",
+	.unwrap();
+
+	static ref SQLITE_TRANSACTION_EXPIRED_KEYS_EVICTED_TOTAL: IntCounter = register_int_counter_with_registry!(
+		Opts::new(
+			"rivetkit_sqlite_transaction_expired_keys_evicted_total",
+			"total expired SQLite transaction keys evicted because an actor reached the cap",
+		),
+		*REGISTRY
 	)
-	.expect("create rivetkit_sqlite_transaction_expired_keys_evicted_total counter");
-	capacity.set(TRANSACTION_EXPIRED_CAPACITY as i64);
+	.unwrap();
 
-	for collector in [
-		Box::new(keys.clone()) as Box<dyn rivet_metrics::prometheus::core::Collector>,
-		Box::new(capacity),
-		Box::new(evicted_total.clone()),
-	] {
-		if let Err(error) = rivet_metrics::REGISTRY.register(collector) {
-			tracing::warn!(
-				?error,
-				"sqlite transaction metric registration failed, using existing collector"
-			);
-		}
-	}
-
-	ExpiredKeyMetrics {
-		keys,
-		evicted_total,
-	}
-});
-
-/// Process-wide visibility into coordinated transactions that wait for a
-/// manual transaction (`BEGIN` through ordinary statements) to finish.
-struct ManualTransactionWaitMetrics {
-	waiters: IntGauge,
-	timeouts_total: IntCounter,
-}
-
-static MANUAL_TRANSACTION_WAIT_METRICS: LazyLock<ManualTransactionWaitMetrics> = LazyLock::new(
-	|| {
-		let waiters = IntGauge::new(
+	/// Coordinated transactions that wait for a manual transaction (`BEGIN` through ordinary
+	/// statements) to finish.
+	static ref SQLITE_MANUAL_TRANSACTION_WAITERS: IntGauge = register_int_gauge_with_registry!(
+		Opts::new(
 			"rivetkit_sqlite_manual_transaction_waiters",
 			"coordinated SQLite transactions waiting for a manual transaction to finish across all actors in the process",
-		)
-		.expect("create rivetkit_sqlite_manual_transaction_waiters gauge");
-		let timeouts_total = IntCounter::new(
+		),
+		*REGISTRY
+	)
+	.unwrap();
+
+	static ref SQLITE_MANUAL_TRANSACTION_WAIT_TIMEOUTS_TOTAL: IntCounter = register_int_counter_with_registry!(
+		Opts::new(
 			"rivetkit_sqlite_manual_transaction_wait_timeouts_total",
 			"total coordinated SQLite transactions that timed out waiting for a manual transaction to finish",
-		)
-		.expect("create rivetkit_sqlite_manual_transaction_wait_timeouts_total counter");
-
-		for collector in [
-			Box::new(waiters.clone()) as Box<dyn rivet_metrics::prometheus::core::Collector>,
-			Box::new(timeouts_total.clone()),
-		] {
-			if let Err(error) = rivet_metrics::REGISTRY.register(collector) {
-				tracing::warn!(
-					?error,
-					"sqlite manual transaction metric registration failed, using existing collector"
-				);
-			}
-		}
-
-		ManualTransactionWaitMetrics {
-			waiters,
-			timeouts_total,
-		}
-	},
-);
+		),
+		*REGISTRY
+	)
+	.unwrap();
+}
 
 /// Counts one coordinated begin parked behind a manual transaction.
 struct ManualTransactionWaitGuard<'a> {
@@ -215,9 +189,7 @@ impl<'a> ManualTransactionWaitGuard<'a> {
 		}
 		Self {
 			coordinator,
-			_metric: rivet_metrics::GaugeGuardExt::inc_guard(
-				&MANUAL_TRANSACTION_WAIT_METRICS.waiters,
-			),
+			_metric: SQLITE_MANUAL_TRANSACTION_WAITERS.inc_guard(),
 		}
 	}
 }
@@ -300,6 +272,8 @@ impl Drop for CoordinatorWaitGuard<'_> {
 
 impl Default for TransactionCoordinator {
 	fn default() -> Self {
+		SQLITE_TRANSACTION_EXPIRED_KEYS_CAPACITY.set(TRANSACTION_EXPIRED_CAPACITY as i64);
+
 		Self {
 			gate: Arc::new(RwLock::new(())),
 			admission: Arc::new(Semaphore::new(TRANSACTION_COORDINATOR_QUEUE_CAPACITY)),
@@ -627,7 +601,7 @@ impl SqliteDb {
 					return Err(transaction_coordinator_closed_error());
 				}
 				_ = crate::time::sleep_until(deadline) => {
-					MANUAL_TRANSACTION_WAIT_METRICS.timeouts_total.inc();
+					SQLITE_MANUAL_TRANSACTION_WAIT_TIMEOUTS_TOTAL.inc();
 					return Err(manual_transaction_open_error(timeout));
 				}
 			}
@@ -1614,7 +1588,7 @@ pub(super) fn insert_terminal_state(
 	if let TransactionTerminalState::Expired(timeout) = terminal {
 		let expired = ExpiredKey {
 			timeout,
-			_metric: rivet_metrics::GaugeGuardExt::inc_guard(&EXPIRED_KEY_METRICS.keys),
+			_metric: SQLITE_TRANSACTION_EXPIRED_KEYS.inc_guard(),
 		};
 		if state.poisoned.insert(key.clone(), expired).is_none() {
 			state.poisoned_order.push_back(key);
@@ -1630,7 +1604,7 @@ pub(super) fn insert_terminal_state(
 				break;
 			};
 			if state.poisoned.remove(&evicted_key).is_some() {
-				EXPIRED_KEY_METRICS.evicted_total.inc();
+				SQLITE_TRANSACTION_EXPIRED_KEYS_EVICTED_TOTAL.inc();
 			}
 		}
 		return;

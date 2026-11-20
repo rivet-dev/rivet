@@ -2,7 +2,11 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{DeriveInput, Fields, LitStr, Meta, parse_macro_input};
 
-#[proc_macro_derive(RivetError, attributes(error))]
+/// Derives a `RivetError` and writes its `engine/artifacts/errors/<group>.<code>.json`, which the
+/// published error codes reference is built from. `#[no_artifact]` on a struct or variant skips
+/// that file, for an error whose group and code another crate already documents publicly; two
+/// writers with different messages would leave the artifact to whichever compiled last.
+#[proc_macro_derive(RivetError, attributes(error, no_artifact))]
 pub fn derive_rivet_error(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 
@@ -228,7 +232,9 @@ fn derive_struct_error(input: DeriveInput, data_struct: &syn::DataStruct) -> Tok
 	};
 
 	// Write error documentation
-	if let Err(e) = write_error_doc(&args.group, &args.code, &args.description) {
+	if !skips_artifact(&input.attrs)
+		&& let Err(e) = write_error_doc(&args.group, &args.code, &args.description)
+	{
 		panic!(
 			"Failed to write error documentation for {}.{}: {}",
 			args.group, args.code, e
@@ -291,7 +297,9 @@ fn derive_enum_error(input: DeriveInput, data_enum: &syn::DataEnum) -> TokenStre
 		};
 
 		// Write error documentation
-		if let Err(e) = write_error_doc(&group, &code, &description) {
+		if !skips_artifact(&variant.attrs)
+			&& let Err(e) = write_error_doc(&group, &code, &description)
+		{
 			panic!(
 				"Failed to write error documentation for {}.{}: {}",
 				group, code, e
@@ -571,6 +579,11 @@ impl syn::parse::Parse for ErrorArgs {
 			formatted_desc,
 		})
 	}
+}
+
+/// Whether the item carries `#[no_artifact]`; see [`derive_rivet_error`].
+fn skips_artifact(attrs: &[syn::Attribute]) -> bool {
+	attrs.iter().any(|attr| attr.path().is_ident("no_artifact"))
 }
 
 #[allow(

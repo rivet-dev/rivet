@@ -25,6 +25,15 @@ where
 	}
 }
 
+impl<T> PartialEq for Secret<T>
+where
+	T: Clone + PartialEq,
+{
+	fn eq(&self, other: &Self) -> bool {
+		self.0 == other.0
+	}
+}
+
 impl<T> fmt::Debug for Secret<T>
 where
 	T: Clone,

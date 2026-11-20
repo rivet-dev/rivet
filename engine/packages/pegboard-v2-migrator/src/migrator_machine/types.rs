@@ -23,6 +23,8 @@ pub enum Timer {
 	Entry(Id),
 	/// The effect `OpId` did not answer in time.
 	Io(OpId),
+	/// Reads the target namespace's volume group again after a failed read.
+	TargetGroup,
 }
 
 /// Correlates an operator's request to migrate one actor with its reply. The service that received
@@ -38,6 +40,9 @@ pub struct Settings {
 	/// `migrate_ratio` (**a**) in parts per million, so the state stays hashable.
 	pub migrate_ratio_ppm: u32,
 	pub migrate_seed: u64,
+	/// When set, the listing asks V2 for only this actor name and selection skips any other name
+	/// as `NotSelected`.
+	pub actor_name: Option<String>,
 	pub max_in_flight: u32,
 	pub max_actors_per_sec: u32,
 	pub pass_interval_ms: u64,
@@ -54,10 +59,12 @@ pub struct Settings {
 	/// from.
 	pub target_namespace: String,
 	pub v3_datacenter_label: u16,
-	/// The target namespace's volume group, or `None` while it has none. An admission places its
-	/// entry here and derives a keyed actor's id for that placement, as a fresh keyed create in
-	/// the namespace would: the group's id when grouped, the legacy namespace-hashed id at the
-	/// unprefixed placement otherwise. The entry keeps both for its life. A namespace gains its
+	/// The target namespace's volume group, or `None` while it has none or it is not read yet.
+	/// The state machine reads it, with the state load and again after a retarget, and
+	/// `State::target_group` says whether it is known; the config never carries it. An admission
+	/// places its entry here and derives a keyed actor's id for that placement, as a fresh keyed
+	/// create in the namespace would: the group's id when grouped, the legacy namespace-hashed id at
+	/// the unprefixed placement otherwise. The entry keeps both for its life. A namespace gains its
 	/// group once and never loses it, so a group, once seen, is never replaced by `None`.
 	pub target_group: Option<[u8; 16]>,
 }
@@ -68,6 +75,7 @@ impl Settings {
 			enabled: false,
 			migrate_ratio_ppm: 0,
 			migrate_seed: 0,
+			actor_name: None,
 			max_in_flight: 1,
 			max_actors_per_sec: 1,
 			pass_interval_ms: 60_000,
@@ -284,11 +292,33 @@ pub enum LoadResult {
 	Loaded {
 		pass: Option<wire::MigrateFromV2Pass>,
 		in_flight: Vec<wire::MigrateFromV2InFlight>,
+		/// The group of the target namespace the load was asked to read, or `None` when the
+		/// migration was disabled.
+		target_group: Option<TargetGroup>,
 	},
 	Fenced,
 	Failed {
 		error: String,
 		/// Depot refused the load before dispatch because it had no maintainer route.
+		routing_unavailable: bool,
+	},
+}
+
+/// The volume group a read found for one target namespace.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TargetGroup {
+	pub namespace: String,
+	/// `None` while the namespace has no group, so admissions take the legacy placement.
+	pub group: Option<[u8; 16]>,
+}
+
+/// What a read of the target namespace's volume group returned.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TargetGroupResult {
+	Read(TargetGroup),
+	Failed {
+		error: String,
+		/// Depot refused the read before dispatch because it had no maintainer route.
 		routing_unavailable: bool,
 	},
 }
@@ -323,7 +353,7 @@ pub enum MigrateActorResult {
 /// Why the migrator cannot take a requested actor now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Unavailable {
-	/// The tenure has not loaded the migration state yet.
+	/// The tenure has not loaded the migration state, or the target namespace's volume group, yet.
 	Loading,
 	/// `migrate_from_v2` lists no V2 API for the actor's datacenter.
 	DatacenterNotConfigured,

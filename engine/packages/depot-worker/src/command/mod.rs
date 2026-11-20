@@ -370,6 +370,40 @@ impl rivet_topology::versions::WriteVersions for KvHandle {
 	}
 }
 
+/// The `depot.overloaded` reason of a command refused because its host's topology view selects
+/// no version of a family it must write.
+pub const VERSION_UNAVAILABLE_REASON: &str = "version_unavailable";
+
+/// [`KvHandle::write_version`]'s answer from the host's selection: the selected version, the
+/// retryable refusal when the view selects none of a family this binary knows, and any other
+/// error as it is.
+fn refuse_unselectable(
+	family: rivet_data::families::VersionFamily,
+	selected: Result<u16>,
+) -> Result<u16> {
+	let error = match selected {
+		Ok(version) => return Ok(version),
+		Err(error) => error,
+	};
+	let structured = rivet_error::RivetError::extract(&error);
+	if structured.group() != "topology"
+		|| structured.code() != "version_unavailable"
+		|| family.info().is_none()
+	{
+		return Err(error);
+	}
+	tracing::debug!(
+		?error,
+		family = %family,
+		"refused a command whose family no listed storage worker version can carry; this host's topology view likely still lists a departed worker of an older release"
+	);
+	Err(depot_client::Overloaded {
+		reason: VERSION_UNAVAILABLE_REASON.to_owned(),
+		retry_after_ms: depot_client::filesystem::VERSION_UNAVAILABLE_RETRY_AFTER_MS,
+	}
+	.build())
+}
+
 impl KvHandle {
 	/// This command's admission deadline in the worker's monotonic clock domain.
 	/// Nested reads may use an earlier deadline to leave time for their owning command to commit.
@@ -378,9 +412,18 @@ impl KvHandle {
 	}
 
 	/// The version to encode a value of `family` stored in this volume at: the highest every
-	/// live storage worker reads. A command takes every versioned value's version from here.
+	/// live storage worker reads. A command takes every versioned value's version from here, before
+	/// it writes anything.
+	///
+	/// While a storage worker that cannot read any version this binary writes is still listed in
+	/// this host's view, there is no such version, and the command is refused as the retryable
+	/// `depot.overloaded` (reason `version_unavailable`) rather than failed. Requesters gate new
+	/// families on their own topology view, which can drop a departed worker a listing before this
+	/// host's does, so the refusal is how that window resolves: nothing was written, and the edge
+	/// sends the command again once this host's view catches up. A family this binary does not know
+	/// at all stays an error.
 	pub fn write_version(&self, family: rivet_data::families::VersionFamily) -> Result<u16> {
-		self.versions.write_version(family)
+		refuse_unselectable(family, self.versions.write_version(family))
 	}
 
 	/// Resolves once the tablet this volume lives in durably carries a mark of `family` at

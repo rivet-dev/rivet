@@ -5,11 +5,13 @@ pub mod catalog;
 pub mod commands;
 pub mod envoy_check;
 pub mod envoy_protocol;
+pub mod envoy_ring;
 pub mod epoch;
 pub mod errors;
 pub mod index;
 pub use catalog::NamespaceStanding;
 pub use rivet_data::generated::pegboard_namespace_v1 as namespace_wire;
+pub use rivet_data::generated::pegboard_pool_v1 as pool_wire;
 pub use rivet_data::pegboard_actor as wire;
 pub mod keys;
 mod legacy_backfill;
@@ -19,12 +21,13 @@ mod metrics;
 pub mod migrate_from_v2;
 pub mod namespace_machine;
 pub mod namespace_waits;
+pub mod pool_admin;
 pub mod sealed;
 pub mod services;
 pub mod validation;
 pub use metrics::{
-	ACTOR_FORKS, ENVOY_INDEX_UPSERTS, ENVOY_VERSION_EVICTIONS, STARTUP_PHASE_DURATION,
-	STORAGE_OPERATION_DURATION,
+	ACTOR_FORKS, ENVOY_DRAIN_EVICTIONS, ENVOY_INDEX_UPSERTS, ENVOY_VERSION_EVICTIONS,
+	STARTUP_PHASE_DURATION, STORAGE_OPERATION_DURATION,
 };
 
 pub const DEFAULT_NAMESPACE: &str = "default";

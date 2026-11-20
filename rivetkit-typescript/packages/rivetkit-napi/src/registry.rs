@@ -338,8 +338,10 @@ impl CoreRegistry {
 		Ok(())
 	}
 
-	#[napi(js_name = "actorStopThresholdMs")]
-	pub async fn actor_stop_threshold_ms(&self) -> napi::Result<Option<i64>> {
+	/// The engine's drain period plus its actor stop threshold, the longest a graceful
+	/// shutdown takes, or `None` before the envoy received the engine's metadata.
+	#[napi(js_name = "shutdownBudgetMs")]
+	pub async fn shutdown_budget_ms(&self) -> napi::Result<Option<i64>> {
 		let (active_envoy, serverless_runtime) = {
 			let guard = self.state.lock().await;
 			match &*guard {
@@ -353,11 +355,11 @@ impl CoreRegistry {
 		};
 
 		if let Some(runtime) = serverless_runtime {
-			return Ok(runtime.active_envoy_actor_stop_threshold_ms().await);
+			return Ok(runtime.active_envoy_shutdown_budget_ms().await);
 		}
 
 		match active_envoy {
-			Some(envoy) => Ok(envoy.actor_stop_threshold_ms().await),
+			Some(envoy) => Ok(envoy.shutdown_budget_ms().await),
 			None => Ok(None),
 		}
 	}

@@ -657,7 +657,18 @@ pub fn retry_after_ms(error: &anyhow::Error) -> Option<u64> {
 			return Some(*retry_after_ms);
 		}
 		Some(crate::volumes::Error::Checkpoint(error)) => return error.retry_after_ms(),
-		Some(_) | None => {}
+		Some(crate::volumes::Error::Overloaded) => {
+			return Some(crate::volumes::OVERLOADED_RETRY_AFTER_MS);
+		}
+		Some(
+			crate::volumes::Error::Lifecycle(
+				RpcError::RoutingUnavailable | RpcError::Rejected(_) | RpcError::Unavailable,
+			)
+			| crate::volumes::Error::Closed
+			| crate::volumes::Error::InvalidRequest
+			| crate::volumes::Error::InUse,
+		)
+		| None => {}
 	}
 	if let Some(error) = error.downcast_ref::<crate::filesystem::Error>() {
 		return error.retry_after_ms();

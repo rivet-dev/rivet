@@ -1,5 +1,5 @@
 {
   "code": "not_found",
   "group": "actor",
-  "message": "Actor resource was not found."
+  "message": "The actor does not exist or was destroyed."
 }

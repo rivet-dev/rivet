@@ -102,9 +102,10 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// The hint of a write refused as [`Error::VersionUnavailable`]: the scale of a topology
-/// listing refresh, after which a stale view selects the fleet's version again.
-pub(crate) const VERSION_UNAVAILABLE_RETRY_AFTER_MS: u64 = 1_000;
+/// The hint of a write refused as [`Error::VersionUnavailable`], or of a command refused because
+/// its host's view cannot select a version yet: the scale of a topology listing refresh, after
+/// which a stale view selects the fleet's version again.
+pub const VERSION_UNAVAILABLE_RETRY_AFTER_MS: u64 = 1_000;
 
 /// The hint of a request refused as [`Error::Overloaded`]: a budget frees as soon as the
 /// requests ahead of it finish, on the scale of one round trip.

@@ -12,6 +12,10 @@ pub struct LoginOpts {
 	/// Print the sign-in URL instead of opening a browser.
 	#[arg(long)]
 	no_browser: bool,
+	/// Extra scope to request beyond the default ones, such as one a command
+	/// reports missing. Repeatable.
+	#[arg(long = "scope", value_name = "SCOPE")]
+	scopes: Vec<String>,
 	/// Cloud API endpoint.
 	#[arg(long, default_value = DEFAULT_CLOUD_API)]
 	cloud_api: String,
@@ -19,7 +23,7 @@ pub struct LoginOpts {
 
 impl LoginOpts {
 	pub async fn execute(self) -> Result<()> {
-		let session = auth::login(&self.cloud_api, !self.no_browser).await?;
+		let session = auth::login(&self.cloud_api, !self.no_browser, &self.scopes).await?;
 		eprintln!("signed in as {}", session.user.email);
 		Ok(())
 	}

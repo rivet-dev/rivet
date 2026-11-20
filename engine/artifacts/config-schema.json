@@ -1643,13 +1643,21 @@
       "additionalProperties": false
     },
     "MigrateFromV2": {
-      "description": "Settings for moving one V2 namespace's actors into this cluster.\n\nThe section is read through `config.dynamic()`, and a dynamic config update replaces it as a whole. `migrate_seed` is the exception: it is fixed at startup, because a new seed reshuffles which actors fall under `migrate_ratio`, so raising the ratio would no longer only add actors.",
+      "description": "Settings for moving one V2 namespace's actors into this cluster.\n\nThe section is read through `config.dynamic()`. A dynamic config update overrides it field by field with [`MigrateFromV2Overrides`], except for the two fields fixed at startup: `migrate_seed`, because a new seed reshuffles which actors fall under `migrate_ratio`, so raising the ratio would no longer only add actors, and `backup`, whose store is built once at startup.",
       "type": "object",
       "required": [
         "endpoint",
         "namespace"
       ],
       "properties": {
+        "actor_name": {
+          "description": "Moves only the V2 actors with this name when set. V2 lists one name's actors oldest first, so a name moves in creation order. Actors an operator requests by id move whatever their name. Needs a V2 whose candidates route takes the `name` filter; an older one refuses it.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "api_urls": {
           "description": "V2's public API per datacenter label, which the migrator lists and moves actors through.",
           "default": {},
@@ -1657,6 +1665,18 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "backup": {
+          "description": "Where the migrator backs up every actor it copies from V2: its metadata, KV and SQLite pages as V2 exported them, outside live data, so the actor can be restored once its V2 data is deleted. While it is set, a copy whose backup cannot be written fails and is retried, so no actor is cut over from V2 without one. Unset by default, which writes no backup. Fixed at startup.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ObjectStoreBackend"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "confirm_delay_ms": {
           "type": [
@@ -1752,7 +1772,7 @@
           ]
         },
         "token": {
-          "description": "The namespace-wide V2 token for V2's migration API and the public API calls routing makes. Never logged.",
+          "description": "The namespace-wide V2 token for V2's migration API, the public API calls routing makes and gateway requests proxied to V2. Clients authenticate here with this cluster's tokens, which V2 cannot verify, so the gateway authorizes them here and reaches V2 with this token instead. Never logged.",
           "default": null,
           "type": [
             "string",
@@ -2197,7 +2217,7 @@
           "minimum": 0.0
         },
         "actor_stop_threshold": {
-          "description": "Maximum time for an actor to stop before it is considered lost. The engine resends an unanswered stop, and once this threshold plus a 5 second margin has passed since the first stop it ends the actor's run as lost and moves on, as if the node were gone. It is also advertised to the node on connect as the time it is given to stop: a node shutting down drains its actors within this budget, and RivetKit uses it as the default shutdown grace period.\n\nUnit is in milliseconds (default 30000, 30 seconds).",
+          "description": "Maximum time for an actor to stop before it is considered lost. The engine resends an unanswered stop, and once this threshold plus a 5 second margin has passed since the first stop it ends the actor's run as lost and moves on, as if the node were gone. It is also advertised to the node on connect as the time each actor is given to stop: a node shutting down drains its actors within its pool's eviction delay and period plus this budget, and RivetKit uses that sum as the default shutdown grace period.\n\nUnit is in milliseconds (default 30000, 30 seconds).",
           "type": [
             "integer",
             "null"
@@ -2418,6 +2438,15 @@
         },
         "node_event_delivery_timeout_ms": {
           "description": "Time a lifecycle event may spend retrying storage command deadlines before its node socket is closed for reconnection. Defaults to 120000 ms.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "node_index_flush_interval": {
+          "description": "How often each engine process writes the heartbeats and actor counts of the nodes it holds to their pool's index, in one write per pool. A node's heartbeat becomes visible to allocation up to this long after its pong, so keep it well below the 15 second allocation window. Must be greater than 0.\n\nUnit is in milliseconds. Defaults to 1000.",
           "type": [
             "integer",
             "null"

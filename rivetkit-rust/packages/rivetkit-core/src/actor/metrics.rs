@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 #[cfg(feature = "sqlite-local")]
 use std::sync::atomic::{AtomicU64, AtomicUsize};
-use std::sync::{Arc, LazyLock};
 #[cfg(feature = "sqlite-local")]
-use std::sync::{OnceLock, mpsc};
+use std::sync::{LazyLock, OnceLock, mpsc};
 use std::time::Duration;
 #[cfg(feature = "sqlite-local")]
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -13,8 +13,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use parking_lot::Mutex;
 #[cfg(feature = "sqlite-local")]
 use rivet_metrics::prometheus::{Counter, Histogram, IntCounter, IntGauge};
-use rivet_metrics::prometheus::{
-	CounterVec, HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Opts, Registry,
+use rivet_metrics::{
+	REGISTRY,
+	prometheus::{
+		CounterVec, HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Opts,
+		register_counter_vec_with_registry, register_histogram_vec_with_registry,
+		register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry,
+	},
 };
 
 use crate::actor::task_types::{ShutdownKind, StateMutationReason, UserTaskKind};
@@ -150,6 +155,15 @@ const SQLITE_WORKER_COMMAND_LABELS: &[&str] = &[
 ];
 #[cfg(feature = "sqlite-local")]
 const SQLITE_WORKER_ERROR_LABELS: &[&str] = &["actor_name", "operation", "code"];
+#[cfg(feature = "sqlite-local")]
+const SQLITE_QUERY_LABELS: &[&str] = &[
+	"actor_name",
+	"type",
+	"fingerprint",
+	"fingerprint_source",
+	"transaction_mode",
+	"storage_transport",
+];
 
 #[derive(Clone)]
 pub(crate) struct ActorMetrics {
@@ -216,115 +230,588 @@ struct ActorMetricState {
 	sqlite_vfs_cached_bytes: i64,
 }
 
-struct ActorMetricCollectors {
-	actor_active_count: IntGaugeVec,
-	actor_started_total: IntCounterVec,
-	actor_stopped_total: IntCounterVec,
-	startup_phase_duration_seconds: HistogramVec,
-	create_state_duration_seconds: HistogramVec,
-	create_vars_duration_seconds: HistogramVec,
-	runtime_callback_duration_seconds: HistogramVec,
-	queue_depth: IntGaugeVec,
-	queue_messages_sent_total: IntCounterVec,
-	queue_messages_received_total: IntCounterVec,
-	active_connections: IntGaugeVec,
-	connections_total: IntCounterVec,
-	inbox_depth: IntGaugeVec,
-	user_tasks_active: IntGaugeVec,
-	user_task_duration_seconds: HistogramVec,
-	http_requests_active: IntGaugeVec,
-	keep_awake_active: IntGaugeVec,
-	shutdown_tasks_active: IntGaugeVec,
-	shutdown_wait_seconds: HistogramVec,
-	shutdown_timeout_total: CounterVec,
-	state_mutation_total: CounterVec,
-	direct_subsystem_shutdown_warning_total: CounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_open_phase_duration_seconds: HistogramVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_startup_preload_pages_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_resolve_pages_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_resolve_pages_requested_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_resolve_pages_cache_hits_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_resolve_pages_cache_misses_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_get_pages_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_pages_fetched_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_prefetch_pages_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_prefetch_unused_pages_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_bytes_fetched_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_prefetch_bytes_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_get_pages_duration_seconds: HistogramVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_commit_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_commit_dirty_pages: HistogramVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_commit_phase_duration_seconds_total: CounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_commit_duration_seconds_total: CounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_worker_queue_depth: IntGaugeVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_vfs_cached_bytes: IntGaugeVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_workers_active: IntGaugeVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_worker_queue_overload_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_worker_command_duration_seconds: HistogramVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_transaction_round_trips: HistogramVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_worker_command_error_total: CounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_worker_close_duration_seconds: HistogramVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_worker_close_timeout_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_worker_crash_total: IntCounterVec,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_worker_unclean_close_total: IntCounterVec,
+// Actor lifecycle, connection, queue and shutdown metrics.
+lazy_static::lazy_static! {
+	static ref ACTOR_ACTIVE_COUNT: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new("rivetkit_actor_active_count", "current active actors in this process"),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_STARTED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("rivetkit_actor_started_total", "total actors started in this process"),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_STOPPED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("rivetkit_actor_stopped_total", "total actors stopped in this process"),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_STARTUP_PHASE_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_actor_startup_phase_duration_seconds",
+			"actor startup phase duration in seconds",
+		)
+		.buckets(startup_duration_buckets()),
+		STARTUP_PHASE_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_CREATE_STATE_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_actor_create_state_duration_seconds",
+			"typed actor state creation time during startup in seconds",
+		),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_CREATE_VARS_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_actor_create_vars_duration_seconds",
+			"typed actor vars creation time during startup in seconds",
+		),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_RUNTIME_CALLBACK_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_actor_runtime_callback_duration_seconds",
+			"foreign runtime lifecycle callback time during the startup preamble in seconds",
+		)
+		.buckets(startup_duration_buckets()),
+		RUNTIME_CALLBACK_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_QUEUE_DEPTH: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new("rivetkit_actor_queue_depth", "current actor queue depth"),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_QUEUE_MESSAGES_SENT_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("rivetkit_actor_queue_messages_sent_total", "total queue messages sent"),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_QUEUE_MESSAGES_RECEIVED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("rivetkit_actor_queue_messages_received_total", "total queue messages received"),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_CONNECTIONS_ACTIVE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new("rivetkit_actor_connections_active", "current active actor connections"),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_CONNECTIONS_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_connections_total",
+			"total successfully established actor connections",
+		),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_INBOX_DEPTH: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new("rivetkit_actor_inbox_depth", "current actor inbox depth"),
+		INBOX_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_USER_TASKS_ACTIVE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new("rivetkit_actor_user_tasks_active", "current active actor user tasks"),
+		USER_TASK_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_USER_TASK_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_actor_user_task_duration_seconds",
+			"actor user task execution time in seconds",
+		),
+		USER_TASK_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_HTTP_REQUESTS_ACTIVE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new("rivetkit_actor_http_requests_active", "current actor-scoped HTTP requests"),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_KEEP_AWAKE_ACTIVE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new("rivetkit_actor_keep_awake_active", "current actor keep-awake work"),
+		WORK_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SHUTDOWN_TASKS_ACTIVE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_shutdown_tasks_active",
+			"current actor work draining during shutdown",
+		),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SHUTDOWN_WAIT_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_actor_shutdown_wait_seconds",
+			"actor shutdown wait time in seconds",
+		),
+		SHUTDOWN_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SHUTDOWN_TIMEOUT_TOTAL: CounterVec = register_counter_vec_with_registry!(
+		Opts::new("rivetkit_actor_shutdown_timeout_total", "total actor shutdown timeout events"),
+		SHUTDOWN_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_STATE_MUTATION_TOTAL: CounterVec = register_counter_vec_with_registry!(
+		Opts::new("rivetkit_actor_state_mutation_total", "total actor state mutations"),
+		STATE_MUTATION_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_DIRECT_SUBSYSTEM_SHUTDOWN_WARNING_TOTAL: CounterVec = register_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_direct_subsystem_shutdown_warning_total",
+			"total actor shutdown warnings emitted by direct subsystem drains",
+		),
+		DIRECT_SHUTDOWN_LABELS,
+		*REGISTRY
+	).unwrap();
 }
 
-static METRICS: LazyLock<ActorMetricCollectors> = LazyLock::new(ActorMetricCollectors::new);
-
+// Native SQLite VFS and worker metrics.
 #[cfg(feature = "sqlite-local")]
-struct SqliteProfileCollectors {
-	duration_seconds: Mutex<Option<(Vec<f64>, HistogramVec)>>,
-	operation_total: IntCounterVec,
-	duration_seconds_total: CounterVec,
-	pages_fetched_total: IntCounterVec,
-	phase_duration_seconds: HistogramVec,
-	get_pages_round_trips: HistogramVec,
-	transaction_statement_count: HistogramVec,
-	outcome_total: IntCounterVec,
-	local_pages_total: IntCounterVec,
-	local_bytes_total: IntCounterVec,
-	get_pages_duration_seconds: HistogramVec,
-	get_pages_pages: HistogramVec,
-	get_pages_response_bytes: HistogramVec,
-	get_pages_missing_pages_total: IntCounterVec,
-	fingerprint_overflow_total: IntCounterVec,
-	event_dropped_total: IntCounterVec,
-	worker_queue_depth: IntGaugeVec,
-	worker_inflight: IntGaugeVec,
-	coordinator_queue_depth: IntGaugeVec,
+lazy_static::lazy_static! {
+	static ref ACTOR_SQLITE_OPEN_PHASE_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_actor_sqlite_open_phase_duration_seconds",
+			"native SQLite open phase duration in seconds",
+		)
+		.buckets(startup_duration_buckets()),
+		SQLITE_OPEN_PHASE_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_STARTUP_PRELOAD_PAGES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_startup_preload_pages_total",
+			"total SQLite startup preload pages requested or loaded",
+		),
+		SQLITE_STARTUP_PRELOAD_PAGE_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_PREFETCH_UNUSED_PAGES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_prefetch_unused_pages_total",
+			"prefetched SQLite pages discarded before first use, including close and TTL expiry",
+		),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_RESOLVE_PAGES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_resolve_pages_total",
+			"total VFS page resolution attempts",
+		),
+		SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_RESOLVE_PAGES_REQUESTED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_resolve_pages_requested_total",
+			"total pages requested by VFS page resolution attempts",
+		),
+		SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_RESOLVE_PAGES_CACHE_HITS_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_resolve_pages_cache_hits_total",
+			"total pages resolved from the VFS page buffers or write buffer",
+		),
+		SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_RESOLVE_PAGES_CACHE_MISSES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_resolve_pages_cache_misses_total",
+			"total pages missing from the VFS page buffers and write buffer",
+		),
+		SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_GET_PAGES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_get_pages_total",
+			"total VFS to engine get_pages requests",
+		),
+		SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_PAGES_FETCHED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_pages_fetched_total",
+			"total pages requested from the engine by VFS get_pages calls",
+		),
+		SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_PREFETCH_PAGES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_prefetch_pages_total",
+			"total pages requested speculatively by VFS prefetch",
+		),
+		SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_BYTES_FETCHED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_bytes_fetched_total",
+			"total bytes requested from the engine by VFS get_pages calls",
+		),
+		SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_PREFETCH_BYTES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_prefetch_bytes_total",
+			"total bytes requested speculatively by VFS prefetch",
+		),
+		SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_GET_PAGES_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_actor_sqlite_vfs_get_pages_duration_seconds",
+			"VFS get_pages request duration in seconds",
+		)
+		.buckets(vec![0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]),
+		SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_COMMIT_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("rivetkit_actor_sqlite_vfs_commit_total", "total successful VFS commits"),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_COMMIT_DIRTY_PAGES: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_actor_sqlite_vfs_commit_dirty_pages",
+			"dirty pages written by each successful VFS commit",
+		)
+		.buckets(rivet_metrics::PAGE_COUNT_BUCKETS.to_vec()),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_COMMIT_PHASE_DURATION_SECONDS_TOTAL: CounterVec = register_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_commit_phase_duration_seconds_total",
+			"cumulative VFS commit phase duration in seconds",
+		),
+		SQLITE_COMMIT_PHASE_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_COMMIT_DURATION_SECONDS_TOTAL: CounterVec = register_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_commit_duration_seconds_total",
+			"cumulative VFS commit duration in seconds",
+		),
+		SQLITE_COMMIT_PHASE_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_WORKER_QUEUE_DEPTH: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_worker_queue_depth",
+			"current native SQLite worker SQL command queue depth",
+		),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_VFS_CACHED_BYTES: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_vfs_cached_bytes",
+			"bytes held by native SQLite VFS page buffers",
+		),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_WORKERS_ACTIVE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new("rivetkit_actor_sqlite_workers_active", "current active native SQLite workers"),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_WORKER_QUEUE_OVERLOAD_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_worker_queue_overload_total",
+			"total native SQLite worker SQL command queue overloads",
+		),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_WORKER_COMMAND_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_actor_sqlite_worker_command_duration_seconds",
+			"native SQLite worker SQL command duration in seconds",
+		)
+		.buckets(sqlite_worker_duration_buckets()),
+		SQLITE_WORKER_COMMAND_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_TRANSACTION_ROUND_TRIPS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_actor_sqlite_transaction_round_trips",
+			"network round trips (get_pages + commit) per native SQLite transaction",
+		)
+		.buckets(sqlite_round_trip_count_buckets()),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_WORKER_COMMAND_ERROR_TOTAL: CounterVec = register_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_worker_command_error_total",
+			"total native SQLite worker SQL command errors",
+		),
+		SQLITE_WORKER_ERROR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_WORKER_CLOSE_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_actor_sqlite_worker_close_duration_seconds",
+			"native SQLite worker close duration in seconds",
+		)
+		.buckets(sqlite_worker_duration_buckets()),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_WORKER_CLOSE_TIMEOUT_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_worker_close_timeout_total",
+			"total native SQLite worker close timeouts",
+		),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_WORKER_CRASH_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_worker_crash_total",
+			"total native SQLite worker crashes",
+		),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref ACTOR_SQLITE_WORKER_UNCLEAN_CLOSE_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_actor_sqlite_worker_unclean_close_total",
+			"total native SQLite worker channel drops without clean close",
+		),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
 }
 
+// SQLite query profiling metrics. The duration histogram is registered separately by
+// `configure_sqlite_duration_histogram`.
 #[cfg(feature = "sqlite-local")]
-static SQLITE_PROFILE_METRICS: LazyLock<SqliteProfileCollectors> =
-	LazyLock::new(SqliteProfileCollectors::new);
+lazy_static::lazy_static! {
+	static ref SQLITE_OPERATIONS_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_sqlite_operations_total",
+			"SQLite operation count without duration buckets",
+		),
+		SQLITE_QUERY_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_DURATION_SECONDS_TOTAL: CounterVec = register_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_sqlite_duration_seconds_total",
+			"cumulative SQLite operation seconds without duration buckets",
+		),
+		SQLITE_QUERY_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_PAGES_FETCHED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_sqlite_pages_fetched_total",
+			"pages returned from storage per SQLite statement",
+		),
+		SQLITE_QUERY_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_PHASE_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_sqlite_phase_duration_seconds",
+			"SQLite operation phase duration in seconds",
+		)
+		.buckets(sqlite_worker_duration_buckets()),
+		&["actor_name", "type", "fingerprint", "fingerprint_source", "transaction_mode", "storage_transport", "phase"],
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_GET_PAGES_ROUND_TRIPS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_sqlite_get_pages_round_trips",
+			"physical get_pages calls per SQLite operation",
+		)
+		.buckets(sqlite_round_trip_count_buckets()),
+		&["actor_name", "type", "fingerprint", "fingerprint_source", "transaction_mode", "storage_transport"],
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_TRANSACTION_STATEMENT_COUNT: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_sqlite_transaction_statement_count",
+			"user statements per explicit SQLite transaction",
+		)
+		.buckets(sqlite_round_trip_count_buckets()),
+		&["actor_name", "type", "fingerprint", "fingerprint_source", "transaction_mode", "storage_transport"],
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_OUTCOME_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("rivetkit_sqlite_outcome_total", "SQLite operation outcomes"),
+		&["actor_name", "type", "fingerprint", "fingerprint_source", "transaction_mode", "storage_transport", "outcome"],
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_LOCAL_PAGES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("rivetkit_sqlite_local_pages_total", "local SQLite page totals"),
+		&["actor_name", "type", "page_kind", "storage_transport"],
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_LOCAL_BYTES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("rivetkit_sqlite_local_bytes_total", "local SQLite logical byte totals"),
+		&["actor_name", "type", "byte_kind", "storage_transport"],
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_GET_PAGES_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_sqlite_get_pages_duration_seconds",
+			"physical get_pages request duration in seconds",
+		)
+		.buckets(sqlite_worker_duration_buckets()),
+		&["actor_name", "request_ordinal", "outcome_class", "storage_transport"],
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_GET_PAGES_PAGES: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_sqlite_get_pages_pages",
+			"pages per physical get_pages request",
+		)
+		.buckets(sqlite_round_trip_count_buckets()),
+		&["actor_name", "request_ordinal", "page_kind", "storage_transport"],
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_GET_PAGES_RESPONSE_BYTES: HistogramVec = register_histogram_vec_with_registry!(
+		HistogramOpts::new(
+			"rivetkit_sqlite_get_pages_response_bytes",
+			"bytes per physical get_pages response",
+		)
+		.buckets(vec![512.0, 4096.0, 16_384.0, 65_536.0, 262_144.0, 1_048_576.0]),
+		&["actor_name", "request_ordinal", "storage_transport"],
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_GET_PAGES_MISSING_PAGES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_sqlite_get_pages_missing_pages_total",
+			"missing pages in physical get_pages responses",
+		),
+		&["actor_name", "request_ordinal", "storage_transport"],
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_FINGERPRINT_OVERFLOW_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_sqlite_fingerprint_overflow_total",
+			"SQLite observations routed to the shared other fingerprint",
+		),
+		&["actor_name", "type", "reason"],
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_EVENT_DROPPED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_sqlite_event_dropped_total",
+			"SQLite diagnostic events dropped before export",
+		),
+		&["actor_name", "reason"],
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_WORKER_QUEUE_DEPTH: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new("rivetkit_sqlite_worker_queue_depth", "queued native SQLite commands"),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_WORKER_INFLIGHT: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new("rivetkit_sqlite_worker_inflight", "native SQLite commands executing"),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+
+	static ref SQLITE_COORDINATOR_QUEUE_DEPTH: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new(
+			"rivetkit_sqlite_coordinator_queue_depth",
+			"operations waiting for SQLite transaction coordination",
+		),
+		ACTOR_LABELS,
+		*REGISTRY
+	).unwrap();
+}
+
+/// The configured SQLite duration histogram and its buckets. The buckets come from runtime
+/// configuration, so the first actor that enables the histogram registers it.
+#[cfg(feature = "sqlite-local")]
+static SQLITE_DURATION_SECONDS: Mutex<Option<(Vec<f64>, HistogramVec)>> = Mutex::new(None);
 
 #[cfg(feature = "sqlite-local")]
 const SQLITE_PROFILE_PAGE_KINDS: [&str; 11] = [
@@ -405,7 +892,7 @@ fn set_optional_aggregated_gauge(current: &mut i64, next: i64, metric: &Option<I
 /// Registry-owned histogram configuration, validated before actors start.
 #[cfg(feature = "sqlite-local")]
 pub(crate) fn configure_sqlite_duration_histogram(buckets: &[f64]) -> anyhow::Result<()> {
-	let mut configured = SQLITE_PROFILE_METRICS.duration_seconds.lock();
+	let mut configured = SQLITE_DURATION_SECONDS.lock();
 	if let Some((existing, _)) = configured.as_ref() {
 		anyhow::ensure!(
 			existing == buckets,
@@ -428,7 +915,8 @@ pub(crate) fn configure_sqlite_duration_histogram(buckets: &[f64]) -> anyhow::Re
 				"outcome_class",
 			],
 		)?;
-		rivet_metrics::REGISTRY.register(Box::new(metric.clone()))?;
+		// Registered by hand because its buckets come from runtime configuration.
+		REGISTRY.register(Box::new(metric.clone()))?;
 		*configured = Some((buckets.to_vec(), metric));
 	}
 	Ok(())
@@ -474,36 +962,23 @@ impl SqliteFingerprintMetricHandles {
 		];
 		let phase = |name| {
 			metrics.phase_duration_histogram.then(|| {
-				SQLITE_PROFILE_METRICS
-					.phase_duration_seconds
-					.with_label_values(&[
-						base[0], base[1], base[2], base[3], base[4], base[5], name,
-					])
+				SQLITE_PHASE_DURATION_SECONDS.with_label_values(&[
+					base[0], base[1], base[2], base[3], base[4], base[5], name,
+				])
 			})
 		};
 		let is_transaction = operation_type == "transaction";
 		let duration_histogram = metrics.duration && metrics.duration_histogram;
 		let counter_duration = metrics.duration && !metrics.duration_histogram;
 		Self {
-			count: counter_duration.then(|| {
-				SQLITE_PROFILE_METRICS
-					.operation_total
-					.with_label_values(&base)
-			}),
-			duration_total: counter_duration.then(|| {
-				SQLITE_PROFILE_METRICS
-					.duration_seconds_total
-					.with_label_values(&base)
-			}),
-			pages_fetched: (metrics.pages_fetched && !is_transaction).then(|| {
-				SQLITE_PROFILE_METRICS
-					.pages_fetched_total
-					.with_label_values(&base)
-			}),
+			count: counter_duration.then(|| SQLITE_OPERATIONS_TOTAL.with_label_values(&base)),
+			duration_total: counter_duration
+				.then(|| SQLITE_DURATION_SECONDS_TOTAL.with_label_values(&base)),
+			pages_fetched: (metrics.pages_fetched && !is_transaction)
+				.then(|| SQLITE_PAGES_FETCHED_TOTAL.with_label_values(&base)),
 			duration: std::array::from_fn(|index| {
 				duration_histogram.then(|| {
-					SQLITE_PROFILE_METRICS
-						.duration_seconds
+					SQLITE_DURATION_SECONDS
 						.lock()
 						.as_ref()
 						.expect("validated duration histogram")
@@ -525,21 +1000,15 @@ impl SqliteFingerprintMetricHandles {
 			local_work: phase("local_work"),
 			application_time: is_transaction.then(|| phase("application_time")).flatten(),
 			commit: is_transaction.then(|| phase("commit")).flatten(),
-			get_pages_round_trips: metrics.get_pages_round_trips_histogram.then(|| {
-				SQLITE_PROFILE_METRICS
-					.get_pages_round_trips
-					.with_label_values(&base)
-			}),
+			get_pages_round_trips: metrics
+				.get_pages_round_trips_histogram
+				.then(|| SQLITE_GET_PAGES_ROUND_TRIPS.with_label_values(&base)),
 			transaction_statement_count: (is_transaction
 				&& metrics.transaction_statement_count_histogram)
-				.then(|| {
-					SQLITE_PROFILE_METRICS
-						.transaction_statement_count
-						.with_label_values(&base)
-				}),
+				.then(|| SQLITE_TRANSACTION_STATEMENT_COUNT.with_label_values(&base)),
 			outcomes: std::array::from_fn(|index| {
 				metrics.outcomes.then(|| {
-					SQLITE_PROFILE_METRICS.outcome_total.with_label_values(&[
+					SQLITE_OUTCOME_TOTAL.with_label_values(&[
 						base[0],
 						base[1],
 						base[2],
@@ -631,13 +1100,11 @@ impl SqliteLowCardMetricHandles {
 			overflow: std::array::from_fn(|operation| {
 				std::array::from_fn(|reason| {
 					metrics.fingerprint_overflow.then(|| {
-						SQLITE_PROFILE_METRICS
-							.fingerprint_overflow_total
-							.with_label_values(&[
-								actor_name,
-								operation_types[operation],
-								["logical_cap", "series_budget"][reason],
-							])
+						SQLITE_FINGERPRINT_OVERFLOW_TOTAL.with_label_values(&[
+							actor_name,
+							operation_types[operation],
+							["logical_cap", "series_budget"][reason],
+						])
 					})
 				})
 			}),
@@ -645,28 +1112,24 @@ impl SqliteLowCardMetricHandles {
 			local_pages: std::array::from_fn(|operation_index| {
 				std::array::from_fn(|kind_index| {
 					metrics.local_pages.then(|| {
-						SQLITE_PROFILE_METRICS
-							.local_pages_total
-							.with_label_values(&[
-								actor_name,
-								operation_types[operation_index],
-								SQLITE_PROFILE_PAGE_KINDS[kind_index],
-								storage_transport,
-							])
+						SQLITE_LOCAL_PAGES_TOTAL.with_label_values(&[
+							actor_name,
+							operation_types[operation_index],
+							SQLITE_PROFILE_PAGE_KINDS[kind_index],
+							storage_transport,
+						])
 					})
 				})
 			}),
 			local_bytes: std::array::from_fn(|operation_index| {
 				std::array::from_fn(|kind_index| {
 					metrics.local_bytes.then(|| {
-						SQLITE_PROFILE_METRICS
-							.local_bytes_total
-							.with_label_values(&[
-								actor_name,
-								operation_types[operation_index],
-								SQLITE_PROFILE_BYTE_KINDS[kind_index],
-								storage_transport,
-							])
+						SQLITE_LOCAL_BYTES_TOTAL.with_label_values(&[
+							actor_name,
+							operation_types[operation_index],
+							SQLITE_PROFILE_BYTE_KINDS[kind_index],
+							storage_transport,
+						])
 					})
 				})
 			}),
@@ -675,23 +1138,21 @@ impl SqliteLowCardMetricHandles {
 				SqliteRequestMetricHandles {
 					duration: std::array::from_fn(|outcome_index| {
 						metrics.get_pages_duration_histogram.then(|| {
-							SQLITE_PROFILE_METRICS
-								.get_pages_duration_seconds
-								.with_label_values(&[
-									actor_name,
-									ordinal,
-									if outcome_index == 0 {
-										"success"
-									} else {
-										"non_success"
-									},
-									storage_transport,
-								])
+							SQLITE_GET_PAGES_DURATION_SECONDS.with_label_values(&[
+								actor_name,
+								ordinal,
+								if outcome_index == 0 {
+									"success"
+								} else {
+									"non_success"
+								},
+								storage_transport,
+							])
 						})
 					}),
 					pages: std::array::from_fn(|kind_index| {
 						metrics.get_pages_pages_histogram.then(|| {
-							SQLITE_PROFILE_METRICS.get_pages_pages.with_label_values(&[
+							SQLITE_GET_PAGES_PAGES.with_label_values(&[
 								actor_name,
 								ordinal,
 								SQLITE_PROFILE_REQUEST_PAGE_KINDS[kind_index],
@@ -700,46 +1161,42 @@ impl SqliteLowCardMetricHandles {
 						})
 					}),
 					response_bytes: metrics.get_pages_response_bytes_histogram.then(|| {
-						SQLITE_PROFILE_METRICS
-							.get_pages_response_bytes
-							.with_label_values(&[actor_name, ordinal, storage_transport])
+						SQLITE_GET_PAGES_RESPONSE_BYTES.with_label_values(&[
+							actor_name,
+							ordinal,
+							storage_transport,
+						])
 					}),
 					missing_pages: metrics.get_pages_missing_pages.then(|| {
-						SQLITE_PROFILE_METRICS
-							.get_pages_missing_pages_total
-							.with_label_values(&[actor_name, ordinal, storage_transport])
+						SQLITE_GET_PAGES_MISSING_PAGES_TOTAL.with_label_values(&[
+							actor_name,
+							ordinal,
+							storage_transport,
+						])
 					}),
 				}
 			}),
 			event_dropped: std::array::from_fn(|index| {
 				metrics.event_dropped.then(|| {
-					SQLITE_PROFILE_METRICS
-						.event_dropped_total
-						.with_label_values(&[
-							actor_name,
-							if index == 0 {
-								"rate_limit"
-							} else {
-								"backpressure"
-							},
-						])
+					SQLITE_EVENT_DROPPED_TOTAL.with_label_values(&[
+						actor_name,
+						if index == 0 {
+							"rate_limit"
+						} else {
+							"backpressure"
+						},
+					])
 				})
 			}),
-			worker_queue_depth: metrics.worker_queue_depth.then(|| {
-				SQLITE_PROFILE_METRICS
-					.worker_queue_depth
-					.with_label_values(&[actor_name])
-			}),
-			worker_inflight: metrics.worker_inflight.then(|| {
-				SQLITE_PROFILE_METRICS
-					.worker_inflight
-					.with_label_values(&[actor_name])
-			}),
-			coordinator_queue_depth: metrics.coordinator_queue_depth.then(|| {
-				SQLITE_PROFILE_METRICS
-					.coordinator_queue_depth
-					.with_label_values(&[actor_name])
-			}),
+			worker_queue_depth: metrics
+				.worker_queue_depth
+				.then(|| SQLITE_WORKER_QUEUE_DEPTH.with_label_values(&[actor_name])),
+			worker_inflight: metrics
+				.worker_inflight
+				.then(|| SQLITE_WORKER_INFLIGHT.with_label_values(&[actor_name])),
+			coordinator_queue_depth: metrics
+				.coordinator_queue_depth
+				.then(|| SQLITE_COORDINATOR_QUEUE_DEPTH.with_label_values(&[actor_name])),
 		}
 	}
 }
@@ -953,919 +1410,6 @@ fn try_acquire_sqlite_diagnostic_rate(max_events_per_minute: usize) -> bool {
 	}
 }
 
-#[cfg(feature = "sqlite-local")]
-impl SqliteProfileCollectors {
-	fn new() -> Self {
-		let duration_seconds = Mutex::new(None);
-		let query_labels = &[
-			"actor_name",
-			"type",
-			"fingerprint",
-			"fingerprint_source",
-			"transaction_mode",
-			"storage_transport",
-		];
-		let operation_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_sqlite_operations_total",
-				"SQLite operation count without duration buckets",
-			),
-			query_labels,
-		)
-		.expect("operation counter");
-		let duration_seconds_total = CounterVec::new(
-			Opts::new(
-				"rivetkit_sqlite_duration_seconds_total",
-				"cumulative SQLite operation seconds without duration buckets",
-			),
-			query_labels,
-		)
-		.expect("duration counter");
-		let pages_fetched_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_sqlite_pages_fetched_total",
-				"pages returned from storage per SQLite statement",
-			),
-			query_labels,
-		)
-		.expect("pages fetched counter");
-		register_metric(&rivet_metrics::REGISTRY, operation_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, duration_seconds_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, pages_fetched_total.clone());
-		let phase_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_sqlite_phase_duration_seconds",
-				"SQLite operation phase duration in seconds",
-			)
-			.buckets(sqlite_worker_duration_buckets()),
-			&[
-				"actor_name",
-				"type",
-				"fingerprint",
-				"fingerprint_source",
-				"transaction_mode",
-				"storage_transport",
-				"phase",
-			],
-		)
-		.expect("create sqlite profiling phase histogram");
-		let get_pages_round_trips = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_sqlite_get_pages_round_trips",
-				"physical get_pages calls per SQLite operation",
-			)
-			.buckets(sqlite_round_trip_count_buckets()),
-			&[
-				"actor_name",
-				"type",
-				"fingerprint",
-				"fingerprint_source",
-				"transaction_mode",
-				"storage_transport",
-			],
-		)
-		.expect("create sqlite profiling get_pages histogram");
-		let transaction_statement_count = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_sqlite_transaction_statement_count",
-				"user statements per explicit SQLite transaction",
-			)
-			.buckets(sqlite_round_trip_count_buckets()),
-			&[
-				"actor_name",
-				"type",
-				"fingerprint",
-				"fingerprint_source",
-				"transaction_mode",
-				"storage_transport",
-			],
-		)
-		.expect("create sqlite transaction statement count histogram");
-		let outcome_total = IntCounterVec::new(
-			Opts::new("rivetkit_sqlite_outcome_total", "SQLite operation outcomes"),
-			&[
-				"actor_name",
-				"type",
-				"fingerprint",
-				"fingerprint_source",
-				"transaction_mode",
-				"storage_transport",
-				"outcome",
-			],
-		)
-		.expect("create sqlite outcome counter");
-		let local_pages_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_sqlite_local_pages_total",
-				"local SQLite page totals",
-			),
-			&["actor_name", "type", "page_kind", "storage_transport"],
-		)
-		.expect("create sqlite local pages counter");
-		let local_bytes_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_sqlite_local_bytes_total",
-				"local SQLite logical byte totals",
-			),
-			&["actor_name", "type", "byte_kind", "storage_transport"],
-		)
-		.expect("create sqlite local bytes counter");
-		let get_pages_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_sqlite_get_pages_duration_seconds",
-				"physical get_pages request duration in seconds",
-			)
-			.buckets(sqlite_worker_duration_buckets()),
-			&[
-				"actor_name",
-				"request_ordinal",
-				"outcome_class",
-				"storage_transport",
-			],
-		)
-		.expect("create sqlite request duration histogram");
-		let get_pages_pages = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_sqlite_get_pages_pages",
-				"pages per physical get_pages request",
-			)
-			.buckets(sqlite_round_trip_count_buckets()),
-			&[
-				"actor_name",
-				"request_ordinal",
-				"page_kind",
-				"storage_transport",
-			],
-		)
-		.expect("create sqlite request pages histogram");
-		let get_pages_response_bytes = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_sqlite_get_pages_response_bytes",
-				"bytes per physical get_pages response",
-			)
-			.buckets(vec![
-				512.0,
-				4096.0,
-				16_384.0,
-				65_536.0,
-				262_144.0,
-				1_048_576.0,
-			]),
-			&["actor_name", "request_ordinal", "storage_transport"],
-		)
-		.expect("create sqlite request response bytes histogram");
-		let get_pages_missing_pages_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_sqlite_get_pages_missing_pages_total",
-				"missing pages in physical get_pages responses",
-			),
-			&["actor_name", "request_ordinal", "storage_transport"],
-		)
-		.expect("create sqlite missing pages counter");
-		let fingerprint_overflow_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_sqlite_fingerprint_overflow_total",
-				"SQLite observations routed to the shared other fingerprint",
-			),
-			&["actor_name", "type", "reason"],
-		)
-		.expect("create sqlite fingerprint overflow counter");
-		let event_dropped_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_sqlite_event_dropped_total",
-				"SQLite diagnostic events dropped before export",
-			),
-			&["actor_name", "reason"],
-		)
-		.expect("create sqlite diagnostic event drop counter");
-		let worker_queue_depth = IntGaugeVec::new(
-			Opts::new(
-				"rivetkit_sqlite_worker_queue_depth",
-				"queued native SQLite commands",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create sqlite worker queue depth gauge");
-		let worker_inflight = IntGaugeVec::new(
-			Opts::new(
-				"rivetkit_sqlite_worker_inflight",
-				"native SQLite commands executing",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create sqlite worker inflight gauge");
-		let coordinator_queue_depth = IntGaugeVec::new(
-			Opts::new(
-				"rivetkit_sqlite_coordinator_queue_depth",
-				"operations waiting for SQLite transaction coordination",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create sqlite coordinator queue depth gauge");
-
-		register_metric(&rivet_metrics::REGISTRY, phase_duration_seconds.clone());
-		register_metric(&rivet_metrics::REGISTRY, get_pages_round_trips.clone());
-		register_metric(
-			&rivet_metrics::REGISTRY,
-			transaction_statement_count.clone(),
-		);
-		register_metric(&rivet_metrics::REGISTRY, outcome_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, local_pages_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, local_bytes_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, get_pages_duration_seconds.clone());
-		register_metric(&rivet_metrics::REGISTRY, get_pages_pages.clone());
-		register_metric(&rivet_metrics::REGISTRY, get_pages_response_bytes.clone());
-		register_metric(
-			&rivet_metrics::REGISTRY,
-			get_pages_missing_pages_total.clone(),
-		);
-		register_metric(&rivet_metrics::REGISTRY, fingerprint_overflow_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, event_dropped_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, worker_queue_depth.clone());
-		register_metric(&rivet_metrics::REGISTRY, worker_inflight.clone());
-		register_metric(&rivet_metrics::REGISTRY, coordinator_queue_depth.clone());
-
-		Self {
-			duration_seconds,
-			operation_total,
-			duration_seconds_total,
-			pages_fetched_total,
-			phase_duration_seconds,
-			get_pages_round_trips,
-			transaction_statement_count,
-			outcome_total,
-			local_pages_total,
-			local_bytes_total,
-			get_pages_duration_seconds,
-			get_pages_pages,
-			get_pages_response_bytes,
-			get_pages_missing_pages_total,
-			fingerprint_overflow_total,
-			event_dropped_total,
-			worker_queue_depth,
-			worker_inflight,
-			coordinator_queue_depth,
-		}
-	}
-}
-
-impl ActorMetricCollectors {
-	fn new() -> Self {
-		let actor_active_count = IntGaugeVec::new(
-			Opts::new(
-				"rivetkit_actor_active_count",
-				"current active actors in this process",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_active_count gauge");
-		let actor_started_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_started_total",
-				"total actors started in this process",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_started_total counter");
-		let actor_stopped_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_stopped_total",
-				"total actors stopped in this process",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_stopped_total counter");
-		let startup_phase_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_actor_startup_phase_duration_seconds",
-				"actor startup phase duration in seconds",
-			)
-			.buckets(startup_duration_buckets()),
-			STARTUP_PHASE_LABELS,
-		)
-		.expect("create actor_startup_phase_duration_seconds histogram");
-		let create_state_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_actor_create_state_duration_seconds",
-				"typed actor state creation time during startup in seconds",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_create_state_duration_seconds histogram");
-		let create_vars_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_actor_create_vars_duration_seconds",
-				"typed actor vars creation time during startup in seconds",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_create_vars_duration_seconds histogram");
-		let runtime_callback_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_actor_runtime_callback_duration_seconds",
-				"foreign runtime lifecycle callback time during the startup preamble in seconds",
-			)
-			.buckets(startup_duration_buckets()),
-			RUNTIME_CALLBACK_LABELS,
-		)
-		.expect("create actor_runtime_callback_duration_seconds histogram");
-		let queue_depth = IntGaugeVec::new(
-			Opts::new("rivetkit_actor_queue_depth", "current actor queue depth"),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_queue_depth gauge");
-		let queue_messages_sent_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_queue_messages_sent_total",
-				"total queue messages sent",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_queue_messages_sent_total counter");
-		let queue_messages_received_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_queue_messages_received_total",
-				"total queue messages received",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_queue_messages_received_total counter");
-		let active_connections = IntGaugeVec::new(
-			Opts::new(
-				"rivetkit_actor_connections_active",
-				"current active actor connections",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_connections_active gauge");
-		let connections_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_connections_total",
-				"total successfully established actor connections",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_connections_total counter");
-		let inbox_depth = IntGaugeVec::new(
-			Opts::new("rivetkit_actor_inbox_depth", "current actor inbox depth"),
-			INBOX_LABELS,
-		)
-		.expect("create actor_inbox_depth gauge");
-		let user_tasks_active = IntGaugeVec::new(
-			Opts::new(
-				"rivetkit_actor_user_tasks_active",
-				"current active actor user tasks",
-			),
-			USER_TASK_LABELS,
-		)
-		.expect("create actor_user_tasks_active gauge");
-		let user_task_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_actor_user_task_duration_seconds",
-				"actor user task execution time in seconds",
-			),
-			USER_TASK_LABELS,
-		)
-		.expect("create actor_user_task_duration_seconds histogram");
-		let http_requests_active = IntGaugeVec::new(
-			Opts::new(
-				"rivetkit_actor_http_requests_active",
-				"current actor-scoped HTTP requests",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_http_requests_active gauge");
-		let keep_awake_active = IntGaugeVec::new(
-			Opts::new(
-				"rivetkit_actor_keep_awake_active",
-				"current actor keep-awake work",
-			),
-			WORK_LABELS,
-		)
-		.expect("create actor_keep_awake_active gauge");
-		let shutdown_tasks_active = IntGaugeVec::new(
-			Opts::new(
-				"rivetkit_actor_shutdown_tasks_active",
-				"current actor work draining during shutdown",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_shutdown_tasks_active gauge");
-		let shutdown_wait_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_actor_shutdown_wait_seconds",
-				"actor shutdown wait time in seconds",
-			),
-			SHUTDOWN_LABELS,
-		)
-		.expect("create actor_shutdown_wait_seconds histogram");
-		let shutdown_timeout_total = CounterVec::new(
-			Opts::new(
-				"rivetkit_actor_shutdown_timeout_total",
-				"total actor shutdown timeout events",
-			),
-			SHUTDOWN_LABELS,
-		)
-		.expect("create actor_shutdown_timeout_total counter");
-		let state_mutation_total = CounterVec::new(
-			Opts::new(
-				"rivetkit_actor_state_mutation_total",
-				"total actor state mutations",
-			),
-			STATE_MUTATION_LABELS,
-		)
-		.expect("create actor_state_mutation_total counter");
-		let direct_subsystem_shutdown_warning_total = CounterVec::new(
-			Opts::new(
-				"rivetkit_actor_direct_subsystem_shutdown_warning_total",
-				"total actor shutdown warnings emitted by direct subsystem drains",
-			),
-			DIRECT_SHUTDOWN_LABELS,
-		)
-		.expect("create actor_direct_subsystem_shutdown_warning_total counter");
-
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_open_phase_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_actor_sqlite_open_phase_duration_seconds",
-				"native SQLite open phase duration in seconds",
-			)
-			.buckets(startup_duration_buckets()),
-			SQLITE_OPEN_PHASE_LABELS,
-		)
-		.expect("create actor_sqlite_open_phase_duration_seconds histogram");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_startup_preload_pages_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_startup_preload_pages_total",
-				"total SQLite startup preload pages requested or loaded",
-			),
-			SQLITE_STARTUP_PRELOAD_PAGE_LABELS,
-		)
-		.expect("create actor_sqlite_startup_preload_pages_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_prefetch_unused_pages_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_prefetch_unused_pages_total",
-				"prefetched SQLite pages discarded before first use, including close and TTL expiry",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create sqlite_vfs_prefetch_unused_pages_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_resolve_pages_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_resolve_pages_total",
-				"total VFS page resolution attempts",
-			),
-			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_resolve_pages_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_resolve_pages_requested_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_resolve_pages_requested_total",
-				"total pages requested by VFS page resolution attempts",
-			),
-			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_resolve_pages_requested_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_resolve_pages_cache_hits_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_resolve_pages_cache_hits_total",
-				"total pages resolved from the VFS page buffers or write buffer",
-			),
-			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_resolve_pages_cache_hits_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_resolve_pages_cache_misses_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_resolve_pages_cache_misses_total",
-				"total pages missing from the VFS page buffers and write buffer",
-			),
-			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_resolve_pages_cache_misses_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_get_pages_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_get_pages_total",
-				"total VFS to engine get_pages requests",
-			),
-			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_get_pages_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_pages_fetched_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_pages_fetched_total",
-				"total pages requested from the engine by VFS get_pages calls",
-			),
-			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_pages_fetched_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_prefetch_pages_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_prefetch_pages_total",
-				"total pages requested speculatively by VFS prefetch",
-			),
-			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_prefetch_pages_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_bytes_fetched_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_bytes_fetched_total",
-				"total bytes requested from the engine by VFS get_pages calls",
-			),
-			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_bytes_fetched_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_prefetch_bytes_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_prefetch_bytes_total",
-				"total bytes requested speculatively by VFS prefetch",
-			),
-			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_prefetch_bytes_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_get_pages_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_actor_sqlite_vfs_get_pages_duration_seconds",
-				"VFS get_pages request duration in seconds",
-			)
-			.buckets(vec![
-				0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-			]),
-			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_get_pages_duration_seconds histogram");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_commit_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_commit_total",
-				"total successful VFS commits",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_commit_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_commit_dirty_pages = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_actor_sqlite_vfs_commit_dirty_pages",
-				"dirty pages written by each successful VFS commit",
-			)
-			.buckets(rivet_metrics::PAGE_COUNT_BUCKETS.to_vec()),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_commit_dirty_pages histogram");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_commit_phase_duration_seconds_total = CounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_commit_phase_duration_seconds_total",
-				"cumulative VFS commit phase duration in seconds",
-			),
-			SQLITE_COMMIT_PHASE_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_commit_phase_duration_seconds_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_commit_duration_seconds_total = CounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_commit_duration_seconds_total",
-				"cumulative VFS commit duration in seconds",
-			),
-			SQLITE_COMMIT_PHASE_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_commit_duration_seconds_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_worker_queue_depth = IntGaugeVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_worker_queue_depth",
-				"current native SQLite worker SQL command queue depth",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_sqlite_worker_queue_depth gauge");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_vfs_cached_bytes = IntGaugeVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_vfs_cached_bytes",
-				"bytes held by native SQLite VFS page buffers",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_sqlite_vfs_cached_bytes gauge");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_workers_active = IntGaugeVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_workers_active",
-				"current active native SQLite workers",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_sqlite_workers_active gauge");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_worker_queue_overload_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_worker_queue_overload_total",
-				"total native SQLite worker SQL command queue overloads",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_sqlite_worker_queue_overload_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_worker_command_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_actor_sqlite_worker_command_duration_seconds",
-				"native SQLite worker SQL command duration in seconds",
-			)
-			.buckets(sqlite_worker_duration_buckets()),
-			SQLITE_WORKER_COMMAND_LABELS,
-		)
-		.expect("create actor_sqlite_worker_command_duration_seconds histogram");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_transaction_round_trips = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_actor_sqlite_transaction_round_trips",
-				"network round trips (get_pages + commit) per native SQLite transaction",
-			)
-			.buckets(sqlite_round_trip_count_buckets()),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_sqlite_transaction_round_trips histogram");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_worker_command_error_total = CounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_worker_command_error_total",
-				"total native SQLite worker SQL command errors",
-			),
-			SQLITE_WORKER_ERROR_LABELS,
-		)
-		.expect("create actor_sqlite_worker_command_error_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_worker_close_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_actor_sqlite_worker_close_duration_seconds",
-				"native SQLite worker close duration in seconds",
-			)
-			.buckets(sqlite_worker_duration_buckets()),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_sqlite_worker_close_duration_seconds histogram");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_worker_close_timeout_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_worker_close_timeout_total",
-				"total native SQLite worker close timeouts",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_sqlite_worker_close_timeout_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_worker_crash_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_worker_crash_total",
-				"total native SQLite worker crashes",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_sqlite_worker_crash_total counter");
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_worker_unclean_close_total = IntCounterVec::new(
-			Opts::new(
-				"rivetkit_actor_sqlite_worker_unclean_close_total",
-				"total native SQLite worker channel drops without clean close",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_sqlite_worker_unclean_close_total counter");
-
-		register_metric(&rivet_metrics::REGISTRY, actor_active_count.clone());
-		register_metric(&rivet_metrics::REGISTRY, actor_started_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, actor_stopped_total.clone());
-		register_metric(
-			&rivet_metrics::REGISTRY,
-			create_state_duration_seconds.clone(),
-		);
-		register_metric(
-			&rivet_metrics::REGISTRY,
-			startup_phase_duration_seconds.clone(),
-		);
-		register_metric(
-			&rivet_metrics::REGISTRY,
-			create_vars_duration_seconds.clone(),
-		);
-		register_metric(
-			&rivet_metrics::REGISTRY,
-			runtime_callback_duration_seconds.clone(),
-		);
-		register_metric(&rivet_metrics::REGISTRY, queue_depth.clone());
-		register_metric(&rivet_metrics::REGISTRY, queue_messages_sent_total.clone());
-		register_metric(
-			&rivet_metrics::REGISTRY,
-			queue_messages_received_total.clone(),
-		);
-		register_metric(&rivet_metrics::REGISTRY, active_connections.clone());
-		register_metric(&rivet_metrics::REGISTRY, connections_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, inbox_depth.clone());
-		register_metric(&rivet_metrics::REGISTRY, user_tasks_active.clone());
-		register_metric(&rivet_metrics::REGISTRY, user_task_duration_seconds.clone());
-		register_metric(&rivet_metrics::REGISTRY, http_requests_active.clone());
-		register_metric(&rivet_metrics::REGISTRY, keep_awake_active.clone());
-		register_metric(&rivet_metrics::REGISTRY, shutdown_tasks_active.clone());
-		register_metric(&rivet_metrics::REGISTRY, shutdown_wait_seconds.clone());
-		register_metric(&rivet_metrics::REGISTRY, shutdown_timeout_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, state_mutation_total.clone());
-		register_metric(
-			&rivet_metrics::REGISTRY,
-			direct_subsystem_shutdown_warning_total.clone(),
-		);
-		#[cfg(feature = "sqlite-local")]
-		{
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_open_phase_duration_seconds.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_startup_preload_pages_total.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_resolve_pages_total.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_resolve_pages_requested_total.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_resolve_pages_cache_hits_total.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_resolve_pages_cache_misses_total.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_prefetch_unused_pages_total.clone(),
-			);
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_get_pages_total.clone());
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_pages_fetched_total.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_prefetch_pages_total.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_bytes_fetched_total.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_prefetch_bytes_total.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_get_pages_duration_seconds.clone(),
-			);
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_commit_total.clone());
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_commit_dirty_pages.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_commit_phase_duration_seconds_total.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_vfs_commit_duration_seconds_total.clone(),
-			);
-			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_queue_depth.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_cached_bytes.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_workers_active.clone());
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_worker_queue_overload_total.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_worker_command_duration_seconds.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_transaction_round_trips.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_worker_command_error_total.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_worker_close_duration_seconds.clone(),
-			);
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_worker_close_timeout_total.clone(),
-			);
-			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_crash_total.clone());
-			register_metric(
-				&rivet_metrics::REGISTRY,
-				sqlite_worker_unclean_close_total.clone(),
-			);
-		}
-
-		Self {
-			actor_active_count,
-			actor_started_total,
-			actor_stopped_total,
-			startup_phase_duration_seconds,
-			create_state_duration_seconds,
-			create_vars_duration_seconds,
-			runtime_callback_duration_seconds,
-			queue_depth,
-			queue_messages_sent_total,
-			queue_messages_received_total,
-			active_connections,
-			connections_total,
-			inbox_depth,
-			user_tasks_active,
-			user_task_duration_seconds,
-			http_requests_active,
-			keep_awake_active,
-			shutdown_tasks_active,
-			shutdown_wait_seconds,
-			shutdown_timeout_total,
-			state_mutation_total,
-			direct_subsystem_shutdown_warning_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_open_phase_duration_seconds,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_startup_preload_pages_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_resolve_pages_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_resolve_pages_requested_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_resolve_pages_cache_hits_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_resolve_pages_cache_misses_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_get_pages_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_pages_fetched_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_prefetch_pages_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_prefetch_unused_pages_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_bytes_fetched_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_prefetch_bytes_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_get_pages_duration_seconds,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_commit_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_commit_dirty_pages,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_commit_phase_duration_seconds_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_commit_duration_seconds_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_worker_queue_depth,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_vfs_cached_bytes,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_workers_active,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_worker_queue_overload_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_worker_command_duration_seconds,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_transaction_round_trips,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_worker_command_error_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_worker_close_duration_seconds,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_worker_close_timeout_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_worker_crash_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_worker_unclean_close_total,
-		}
-	}
-}
-
 impl ActorMetrics {
 	pub(crate) fn new(actor_name: impl Into<String>) -> Self {
 		Self::new_with_sqlite_profiling(actor_name, crate::SqliteProfilingConfig::default())
@@ -1892,14 +1436,10 @@ impl ActorMetrics {
 		};
 		#[cfg(feature = "sqlite-local")]
 		let _ = sqlite_diagnostic_sender(_sqlite_profiling.diagnostic_event_queue_capacity);
-		let metrics = &*METRICS;
 		let active = rivet_metrics::GaugeGuardExt::inc_guard(
-			&metrics
-				.actor_active_count
-				.with_label_values(&labels.as_label_values()),
+			&ACTOR_ACTIVE_COUNT.with_label_values(&labels.as_label_values()),
 		);
-		metrics
-			.actor_started_total
+		ACTOR_STARTED_TOTAL
 			.with_label_values(&labels.as_label_values())
 			.inc();
 		Self {
@@ -2020,8 +1560,7 @@ impl ActorMetrics {
 		duration: Duration,
 	) {
 		let labels = self.actor_labels();
-		METRICS
-			.startup_phase_duration_seconds
+		ACTOR_STARTUP_PHASE_DURATION_SECONDS
 			.with_label_values(&[
 				labels[0],
 				phase.as_label(),
@@ -2071,22 +1610,19 @@ impl ActorMetrics {
 	}
 
 	pub(crate) fn observe_create_state(&self, duration: Duration) {
-		METRICS
-			.create_state_duration_seconds
+		ACTOR_CREATE_STATE_DURATION_SECONDS
 			.with_label_values(&self.actor_labels())
 			.observe(duration.as_secs_f64());
 	}
 
 	pub(crate) fn observe_create_vars(&self, duration: Duration) {
-		METRICS
-			.create_vars_duration_seconds
+		ACTOR_CREATE_VARS_DURATION_SECONDS
 			.with_label_values(&self.actor_labels())
 			.observe(duration.as_secs_f64());
 	}
 
 	pub(crate) fn observe_runtime_callback(&self, callback: &'static str, duration: Duration) {
-		METRICS
-			.runtime_callback_duration_seconds
+		ACTOR_RUNTIME_CALLBACK_DURATION_SECONDS
 			.with_label_values(&[self.actor_labels()[0], callback])
 			.observe(duration.as_secs_f64());
 	}
@@ -2097,21 +1633,19 @@ impl ActorMetrics {
 		set_aggregated_gauge(
 			&mut state.queue_depth,
 			i64::from(depth),
-			&METRICS.queue_depth,
+			&ACTOR_QUEUE_DEPTH,
 			&labels,
 		);
 	}
 
 	pub(crate) fn add_queue_messages_sent(&self, count: u64) {
-		METRICS
-			.queue_messages_sent_total
+		ACTOR_QUEUE_MESSAGES_SENT_TOTAL
 			.with_label_values(&self.actor_labels())
 			.inc_by(count);
 	}
 
 	pub(crate) fn add_queue_messages_received(&self, count: u64) {
-		METRICS
-			.queue_messages_received_total
+		ACTOR_QUEUE_MESSAGES_RECEIVED_TOTAL
 			.with_label_values(&self.actor_labels())
 			.inc_by(count);
 	}
@@ -2122,14 +1656,13 @@ impl ActorMetrics {
 		set_aggregated_gauge(
 			&mut state.active_connections,
 			usize_to_i64(count),
-			&METRICS.active_connections,
+			&ACTOR_CONNECTIONS_ACTIVE,
 			&labels,
 		);
 	}
 
 	pub(crate) fn inc_connections_total(&self) {
-		METRICS
-			.connections_total
+		ACTOR_CONNECTIONS_TOTAL
 			.with_label_values(&self.actor_labels())
 			.inc();
 	}
@@ -2158,7 +1691,7 @@ impl ActorMetrics {
 		set_aggregated_gauge(
 			current,
 			usize_to_i64(depth),
-			&METRICS.inbox_depth,
+			&ACTOR_INBOX_DEPTH,
 			&[labels[0], inbox],
 		);
 	}
@@ -2169,12 +1702,7 @@ impl ActorMetrics {
 		let mut state = self.inner.state.lock();
 		let current = state.user_tasks_active.entry(kind).or_default();
 		let next = (*current).saturating_add(1);
-		set_aggregated_gauge(
-			current,
-			next,
-			&METRICS.user_tasks_active,
-			&[labels[0], kind],
-		);
+		set_aggregated_gauge(current, next, &ACTOR_USER_TASKS_ACTIVE, &[labels[0], kind]);
 	}
 
 	pub(crate) fn end_user_task(&self, kind: UserTaskKind, duration: Duration) {
@@ -2184,15 +1712,9 @@ impl ActorMetrics {
 			let mut state = self.inner.state.lock();
 			let current = state.user_tasks_active.entry(kind).or_default();
 			let next = (*current).saturating_sub(1);
-			set_aggregated_gauge(
-				current,
-				next,
-				&METRICS.user_tasks_active,
-				&[labels[0], kind],
-			);
+			set_aggregated_gauge(current, next, &ACTOR_USER_TASKS_ACTIVE, &[labels[0], kind]);
 		}
-		METRICS
-			.user_task_duration_seconds
+		ACTOR_USER_TASK_DURATION_SECONDS
 			.with_label_values(&[labels[0], kind])
 			.observe(duration.as_secs_f64());
 	}
@@ -2203,7 +1725,7 @@ impl ActorMetrics {
 		set_aggregated_gauge(
 			&mut state.http_requests_active,
 			usize_to_i64(count),
-			&METRICS.http_requests_active,
+			&ACTOR_HTTP_REQUESTS_ACTIVE,
 			&labels,
 		);
 	}
@@ -2214,7 +1736,7 @@ impl ActorMetrics {
 		set_aggregated_gauge(
 			&mut state.keep_awake_active,
 			usize_to_i64(count),
-			&METRICS.keep_awake_active,
+			&ACTOR_KEEP_AWAKE_ACTIVE,
 			&[labels[0], "keep_awake"],
 		);
 	}
@@ -2225,7 +1747,7 @@ impl ActorMetrics {
 		set_aggregated_gauge(
 			&mut state.internal_keep_awake_active,
 			usize_to_i64(count),
-			&METRICS.keep_awake_active,
+			&ACTOR_KEEP_AWAKE_ACTIVE,
 			&[labels[0], "internal_keep_awake"],
 		);
 	}
@@ -2236,39 +1758,35 @@ impl ActorMetrics {
 		set_aggregated_gauge(
 			&mut state.shutdown_tasks_active,
 			usize_to_i64(count),
-			&METRICS.shutdown_tasks_active,
+			&ACTOR_SHUTDOWN_TASKS_ACTIVE,
 			&labels,
 		);
 	}
 
 	pub(crate) fn observe_shutdown_wait(&self, reason: ShutdownKind, duration: Duration) {
 		let labels = self.actor_labels();
-		METRICS
-			.shutdown_wait_seconds
+		ACTOR_SHUTDOWN_WAIT_SECONDS
 			.with_label_values(&[labels[0], reason.as_metric_label()])
 			.observe(duration.as_secs_f64());
 	}
 
 	pub(crate) fn inc_shutdown_timeout(&self, reason: ShutdownKind) {
 		let labels = self.actor_labels();
-		METRICS
-			.shutdown_timeout_total
+		ACTOR_SHUTDOWN_TIMEOUT_TOTAL
 			.with_label_values(&[labels[0], reason.as_metric_label()])
 			.inc();
 	}
 
 	pub(crate) fn inc_state_mutation(&self, reason: StateMutationReason) {
 		let labels = self.actor_labels();
-		METRICS
-			.state_mutation_total
+		ACTOR_STATE_MUTATION_TOTAL
 			.with_label_values(&[labels[0], reason.as_metric_label()])
 			.inc();
 	}
 
 	pub(crate) fn inc_direct_subsystem_shutdown_warning(&self, subsystem: &str, operation: &str) {
 		let labels = self.actor_labels();
-		METRICS
-			.direct_subsystem_shutdown_warning_total
+		ACTOR_DIRECT_SUBSYSTEM_SHUTDOWN_WARNING_TOTAL
 			.with_label_values(&[labels[0], subsystem, operation])
 			.inc();
 	}
@@ -2292,9 +1810,7 @@ impl ActorMetricInner {
 		drop(active);
 
 		self.clear_aggregated_gauges();
-		let metrics = &*METRICS;
-		metrics
-			.actor_stopped_total
+		ACTOR_STOPPED_TOTAL
 			.with_label_values(&self.labels.as_label_values())
 			.inc();
 	}
@@ -2302,56 +1818,56 @@ impl ActorMetricInner {
 	fn clear_aggregated_gauges(&self) {
 		let labels = self.labels.as_label_values();
 		let mut state = self.state.lock();
-		set_aggregated_gauge(&mut state.queue_depth, 0, &METRICS.queue_depth, &labels);
+		set_aggregated_gauge(&mut state.queue_depth, 0, &ACTOR_QUEUE_DEPTH, &labels);
 		set_aggregated_gauge(
 			&mut state.active_connections,
 			0,
-			&METRICS.active_connections,
+			&ACTOR_CONNECTIONS_ACTIVE,
 			&labels,
 		);
 		set_aggregated_gauge(
 			&mut state.lifecycle_inbox_depth,
 			0,
-			&METRICS.inbox_depth,
+			&ACTOR_INBOX_DEPTH,
 			&[labels[0], "lifecycle"],
 		);
 		set_aggregated_gauge(
 			&mut state.dispatch_inbox_depth,
 			0,
-			&METRICS.inbox_depth,
+			&ACTOR_INBOX_DEPTH,
 			&[labels[0], "dispatch"],
 		);
 		set_aggregated_gauge(
 			&mut state.lifecycle_event_inbox_depth,
 			0,
-			&METRICS.inbox_depth,
+			&ACTOR_INBOX_DEPTH,
 			&[labels[0], "lifecycle_event"],
 		);
 		for (kind, current) in state.user_tasks_active.iter_mut() {
-			set_aggregated_gauge(current, 0, &METRICS.user_tasks_active, &[labels[0], *kind]);
+			set_aggregated_gauge(current, 0, &ACTOR_USER_TASKS_ACTIVE, &[labels[0], *kind]);
 		}
 		set_aggregated_gauge(
 			&mut state.http_requests_active,
 			0,
-			&METRICS.http_requests_active,
+			&ACTOR_HTTP_REQUESTS_ACTIVE,
 			&labels,
 		);
 		set_aggregated_gauge(
 			&mut state.keep_awake_active,
 			0,
-			&METRICS.keep_awake_active,
+			&ACTOR_KEEP_AWAKE_ACTIVE,
 			&[labels[0], "keep_awake"],
 		);
 		set_aggregated_gauge(
 			&mut state.internal_keep_awake_active,
 			0,
-			&METRICS.keep_awake_active,
+			&ACTOR_KEEP_AWAKE_ACTIVE,
 			&[labels[0], "internal_keep_awake"],
 		);
 		set_aggregated_gauge(
 			&mut state.shutdown_tasks_active,
 			0,
-			&METRICS.shutdown_tasks_active,
+			&ACTOR_SHUTDOWN_TASKS_ACTIVE,
 			&labels,
 		);
 		#[cfg(feature = "sqlite-local")]
@@ -2359,19 +1875,19 @@ impl ActorMetricInner {
 			set_aggregated_gauge(
 				&mut state.sqlite_worker_queue_depth,
 				0,
-				&METRICS.sqlite_worker_queue_depth,
+				&ACTOR_SQLITE_WORKER_QUEUE_DEPTH,
 				&labels,
 			);
 			set_aggregated_gauge(
 				&mut state.sqlite_vfs_cached_bytes,
 				0,
-				&METRICS.sqlite_vfs_cached_bytes,
+				&ACTOR_SQLITE_VFS_CACHED_BYTES,
 				&labels,
 			);
 			set_aggregated_gauge(
 				&mut state.sqlite_workers_active,
 				0,
-				&METRICS.sqlite_workers_active,
+				&ACTOR_SQLITE_WORKERS_ACTIVE,
 				&labels,
 			);
 			if let Some(Some(handles)) = self.sqlite_profile_low_card_handles.get() {
@@ -2983,57 +2499,47 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 	}
 	fn record_resolve_pages(&self, requested_pages: u64) {
 		let labels = self.sqlite_vfs_labels();
-		METRICS
-			.sqlite_vfs_resolve_pages_total
+		ACTOR_SQLITE_VFS_RESOLVE_PAGES_TOTAL
 			.with_label_values(&labels)
 			.inc();
-		METRICS
-			.sqlite_vfs_resolve_pages_requested_total
+		ACTOR_SQLITE_VFS_RESOLVE_PAGES_REQUESTED_TOTAL
 			.with_label_values(&labels)
 			.inc_by(requested_pages);
 	}
 
 	fn record_resolve_cache_hits(&self, pages: u64) {
-		METRICS
-			.sqlite_vfs_resolve_pages_cache_hits_total
+		ACTOR_SQLITE_VFS_RESOLVE_PAGES_CACHE_HITS_TOTAL
 			.with_label_values(&self.sqlite_vfs_labels())
 			.inc_by(pages);
 	}
 
 	fn record_resolve_cache_misses(&self, pages: u64) {
-		METRICS
-			.sqlite_vfs_resolve_pages_cache_misses_total
+		ACTOR_SQLITE_VFS_RESOLVE_PAGES_CACHE_MISSES_TOTAL
 			.with_label_values(&self.sqlite_vfs_labels())
 			.inc_by(pages);
 	}
 
 	fn record_get_pages_request(&self, pages: u64, prefetch_pages: u64, page_size: u64) {
 		let labels = self.sqlite_vfs_labels();
-		METRICS
-			.sqlite_vfs_get_pages_total
+		ACTOR_SQLITE_VFS_GET_PAGES_TOTAL
 			.with_label_values(&labels)
 			.inc();
-		METRICS
-			.sqlite_vfs_pages_fetched_total
+		ACTOR_SQLITE_VFS_PAGES_FETCHED_TOTAL
 			.with_label_values(&labels)
 			.inc_by(pages);
-		METRICS
-			.sqlite_vfs_prefetch_pages_total
+		ACTOR_SQLITE_VFS_PREFETCH_PAGES_TOTAL
 			.with_label_values(&labels)
 			.inc_by(prefetch_pages);
-		METRICS
-			.sqlite_vfs_bytes_fetched_total
+		ACTOR_SQLITE_VFS_BYTES_FETCHED_TOTAL
 			.with_label_values(&labels)
 			.inc_by(pages.saturating_mul(page_size));
-		METRICS
-			.sqlite_vfs_prefetch_bytes_total
+		ACTOR_SQLITE_VFS_PREFETCH_BYTES_TOTAL
 			.with_label_values(&labels)
 			.inc_by(prefetch_pages.saturating_mul(page_size));
 	}
 
 	fn observe_get_pages_duration(&self, duration_ns: u64) {
-		METRICS
-			.sqlite_vfs_get_pages_duration_seconds
+		ACTOR_SQLITE_VFS_GET_PAGES_DURATION_SECONDS
 			.with_label_values(&self.sqlite_vfs_labels())
 			.observe(ns_to_seconds(duration_ns));
 	}
@@ -3045,8 +2551,7 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 		duration_ns: u64,
 	) {
 		let labels = self.actor_labels();
-		METRICS
-			.sqlite_open_phase_duration_seconds
+		ACTOR_SQLITE_OPEN_PHASE_DURATION_SECONDS
 			.with_label_values(&[
 				labels[0],
 				phase.as_label(),
@@ -3058,20 +2563,17 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 
 	fn record_startup_preload_pages(&self, kind: &'static str, pages: u64) {
 		let labels = self.actor_labels();
-		METRICS
-			.sqlite_startup_preload_pages_total
+		ACTOR_SQLITE_STARTUP_PRELOAD_PAGES_TOTAL
 			.with_label_values(&[labels[0], self.startup_is_new_label(), kind])
 			.inc_by(pages);
 	}
 
 	fn record_commit(&self, dirty_pages: u64) {
 		let labels = self.actor_labels();
-		METRICS
-			.sqlite_vfs_commit_total
+		ACTOR_SQLITE_VFS_COMMIT_TOTAL
 			.with_label_values(&labels)
 			.inc();
-		METRICS
-			.sqlite_vfs_commit_dirty_pages
+		ACTOR_SQLITE_VFS_COMMIT_DIRTY_PAGES
 			.with_label_values(&labels)
 			.observe(dirty_pages as f64);
 	}
@@ -3091,13 +2593,11 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 			("transport", transport_ns),
 			("state_update", state_update_ns),
 		] {
-			METRICS
-				.sqlite_vfs_commit_phase_duration_seconds_total
+			ACTOR_SQLITE_VFS_COMMIT_PHASE_DURATION_SECONDS_TOTAL
 				.with_label_values(&[labels[0], phase])
 				.inc_by(ns_to_seconds(duration_ns));
 		}
-		METRICS
-			.sqlite_vfs_commit_duration_seconds_total
+		ACTOR_SQLITE_VFS_COMMIT_DURATION_SECONDS_TOTAL
 			.with_label_values(&[labels[0], "total"])
 			.inc_by(ns_to_seconds(total_ns));
 	}
@@ -3108,7 +2608,7 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 		set_aggregated_gauge(
 			&mut state.sqlite_worker_queue_depth,
 			u64_to_i64(depth),
-			&METRICS.sqlite_worker_queue_depth,
+			&ACTOR_SQLITE_WORKER_QUEUE_DEPTH,
 			&labels,
 		);
 		if let Some(Some(handles)) = self.inner.sqlite_profile_low_card_handles.get() {
@@ -3126,7 +2626,7 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 		set_aggregated_gauge(
 			&mut state.sqlite_workers_active,
 			if active { 1 } else { 0 },
-			&METRICS.sqlite_workers_active,
+			&ACTOR_SQLITE_WORKERS_ACTIVE,
 			&labels,
 		);
 	}
@@ -3142,8 +2642,7 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 	}
 
 	fn record_prefetch_unused_pages(&self, pages: u64) {
-		METRICS
-			.sqlite_vfs_prefetch_unused_pages_total
+		ACTOR_SQLITE_VFS_PREFETCH_UNUSED_PAGES_TOTAL
 			.with_label_values(&self.actor_labels())
 			.inc_by(pages);
 	}
@@ -3154,7 +2653,7 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 		set_aggregated_gauge(
 			&mut state.sqlite_vfs_cached_bytes,
 			u64_to_i64(bytes),
-			&METRICS.sqlite_vfs_cached_bytes,
+			&ACTOR_SQLITE_VFS_CACHED_BYTES,
 			&labels,
 		);
 	}
@@ -3174,8 +2673,7 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 	}
 
 	fn record_worker_queue_overload(&self) {
-		METRICS
-			.sqlite_worker_queue_overload_total
+		ACTOR_SQLITE_WORKER_QUEUE_OVERLOAD_TOTAL
 			.with_label_values(&self.actor_labels())
 			.inc();
 	}
@@ -3188,8 +2686,7 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 		duration_ns: u64,
 	) {
 		let labels = self.actor_labels();
-		METRICS
-			.sqlite_worker_command_duration_seconds
+		ACTOR_SQLITE_WORKER_COMMAND_DURATION_SECONDS
 			.with_label_values(&[
 				labels[0],
 				operation,
@@ -3201,44 +2698,38 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 	}
 
 	fn observe_transaction_round_trips(&self, get_pages_round_trips: u64, commit_round_trips: u64) {
-		METRICS
-			.sqlite_transaction_round_trips
+		ACTOR_SQLITE_TRANSACTION_ROUND_TRIPS
 			.with_label_values(&self.actor_labels())
 			.observe((get_pages_round_trips.saturating_add(commit_round_trips)) as f64);
 	}
 
 	fn record_worker_command_error(&self, operation: &'static str, code: &'static str) {
 		let labels = self.actor_labels();
-		METRICS
-			.sqlite_worker_command_error_total
+		ACTOR_SQLITE_WORKER_COMMAND_ERROR_TOTAL
 			.with_label_values(&[labels[0], operation, code])
 			.inc();
 	}
 
 	fn observe_worker_close_duration(&self, duration_ns: u64) {
-		METRICS
-			.sqlite_worker_close_duration_seconds
+		ACTOR_SQLITE_WORKER_CLOSE_DURATION_SECONDS
 			.with_label_values(&self.actor_labels())
 			.observe(ns_to_seconds(duration_ns));
 	}
 
 	fn record_worker_close_timeout(&self) {
-		METRICS
-			.sqlite_worker_close_timeout_total
+		ACTOR_SQLITE_WORKER_CLOSE_TIMEOUT_TOTAL
 			.with_label_values(&self.actor_labels())
 			.inc();
 	}
 
 	fn record_worker_crash(&self) {
-		METRICS
-			.sqlite_worker_crash_total
+		ACTOR_SQLITE_WORKER_CRASH_TOTAL
 			.with_label_values(&self.actor_labels())
 			.inc();
 	}
 
 	fn record_worker_unclean_close(&self) {
-		METRICS
-			.sqlite_worker_unclean_close_total
+		ACTOR_SQLITE_WORKER_UNCLEAN_CLOSE_TOTAL
 			.with_label_values(&self.actor_labels())
 			.inc();
 	}
@@ -3345,18 +2836,6 @@ fn u64_to_i64(value: u64) -> i64 {
 impl ActorMetricLabels {
 	fn as_label_values(&self) -> [&str; 1] {
 		[self.actor_name.as_str()]
-	}
-}
-
-fn register_metric<M>(registry: &Registry, metric: M)
-where
-	M: rivet_metrics::prometheus::core::Collector + Clone + Send + Sync + 'static,
-{
-	if let Err(error) = registry.register(Box::new(metric)) {
-		tracing::warn!(
-			?error,
-			"actor metric registration failed, using existing collector"
-		);
 	}
 }
 

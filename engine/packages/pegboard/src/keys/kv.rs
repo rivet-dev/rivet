@@ -2,7 +2,7 @@
 //! A value is encoded at the version its writer's handle selects for its family, the highest
 //! every live storage worker reads, so no binary of a rolling deploy reads a version it does
 //! not know. Every value is in `pegboard.actor` except the namespace index entry, which is in
-//! `pegboard.namespace`.
+//! `pegboard.namespace`, and the pool envoy state, which is in `pegboard.pool`.
 use anyhow::Result;
 use depot_worker::command::KvHandle;
 use rivet_data::families::VersionFamily;
@@ -157,6 +157,96 @@ pub struct ActiveEnvoyStateKey {
 #[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
 #[kv(key = [ENVOY_STATE])]
 pub struct ActiveEnvoyStatePrefix {}
+
+/// Pairs a pool row value with the version it is written at: the highest version of
+/// `pegboard.pool` that every live storage worker reads.
+pub(crate) fn at_pool_write_version<T>(db: &KvHandle, value: T) -> Result<AtVersion<T>> {
+	let version = db.write_version(VersionFamily::PEGBOARD_POOL)?;
+	Ok(AtVersion::new(value, version))
+}
+
+// The pool's configuration in its own volume, or a deleted record. A pool volume without one
+// belongs to a pool whose configuration is still only in its namespace's catalog.
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [POOL_RECORD], value = vbare_selected(rivet_data::versioned::PoolRecord))]
+pub struct PoolRecordKey {}
+
+// The newest heartbeat an envoy of `name` reported at `version`, written before any entry it
+// stamps and refreshed only once it is [`crate::envoy_ring::VERSION_STAMP_REFRESH_MS`] old. A
+// pick walks these newest version first and skips a version whose stamp no live envoy could
+// have left, so a pool with no live envoy costs one catalog scan rather than a walk of every
+// version ever deployed.
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [POOL_NAME_VERSION, name, version], value = vbare_selected(rivet_data::versioned::PoolVersionStamp))]
+pub struct PoolNameVersionKey {
+	pub name: String,
+	pub version: DescendingU64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [POOL_NAME_VERSION, name])]
+pub struct PoolNameVersionPrefix {
+	pub name: String,
+}
+
+// The newest heartbeat any envoy of the pool reported at `version`, written and refreshed like
+// [`PoolNameVersionKey`]. A heartbeat batch's walk for the pool's newest live version skips a
+// version whose stamp no live envoy could have left.
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [POOL_VERSION, version], value = vbare_selected(rivet_data::versioned::PoolVersionStamp))]
+pub struct PoolVersionKey {
+	pub version: DescendingU64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [POOL_VERSION])]
+pub struct PoolVersionPrefix {}
+
+// One state per envoy connection in its pool's volume. It is the source of an allocation's
+// route, heartbeat and actor count, and fences the envoy's ring entries by connection epoch.
+// Heartbeats overwrite it in place, so its key never moves.
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [POOL_ENVOY_STATE, envoy_key], value = vbare_selected(rivet_data::versioned::PoolEnvoyState))]
+pub struct PoolEnvoyStateKey {
+	pub envoy_key: String,
+}
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [POOL_ENVOY_STATE])]
+pub struct PoolEnvoyStatePrefix {}
+
+// One of an envoy's positions on the hash ring of an actor name it serves. The version leads
+// the position, descending, so a pick samples only the newest live version. The position is
+// `xxh3_128_with_seed(envoy_key, i)` for each virtual node `i`, big-endian so byte order is
+// numeric order. Entries are written when a connection joins and deleted when it leaves, never
+// on heartbeat.
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [POOL_ENVOY_RING, name, version, position, envoy_key])]
+pub struct PoolEnvoyRingKey {
+	pub name: String,
+	pub version: DescendingU64,
+	pub position: [u8; 16],
+	pub envoy_key: String,
+}
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [POOL_ENVOY_RING, name, version])]
+pub struct PoolEnvoyRingVersionPrefix {
+	pub name: String,
+	pub version: DescendingU64,
+}
+
+// One entry per envoy under its version, for the pool-wide newest live version a drain on
+// version upgrade compares against. Like the ring, it moves only when the connection does.
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [POOL_ENVOY_VERSION, version, envoy_key])]
+pub struct PoolEnvoyVersionKey {
+	pub version: DescendingU64,
+	pub envoy_key: String,
+}
+#[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
+#[kv(key = [POOL_ENVOY_VERSION, version])]
+pub struct PoolEnvoyVersionNumberPrefix {
+	pub version: DescendingU64,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
 #[kv(key = [ENVOY_POOL, pool_name], value = vbare_selected(rivet_data::versioned::NodePoolConfig))]

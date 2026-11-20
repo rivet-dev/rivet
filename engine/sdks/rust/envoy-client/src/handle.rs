@@ -7,7 +7,7 @@ use tokio::sync::oneshot;
 
 use crate::context::SharedContext;
 use crate::envoy::{ActorInfo, ToEnvoyMessage};
-use crate::metrics::METRICS;
+use crate::metrics;
 use crate::sqlite::{RemoteSqliteRequest, RemoteSqliteResponse, SqliteRequest, SqliteResponse};
 use crate::tunnel::HibernatingWebSocketMetadata;
 
@@ -917,8 +917,7 @@ impl EnvoyHandle {
 		)
 		.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
 		let submit_elapsed = submit_start.elapsed();
-		METRICS
-			.sqlite_request_submit_duration_seconds
+		metrics::SQLITE_REQUEST_SUBMIT_DURATION_SECONDS
 			.with_label_values(&[kind])
 			.observe(submit_elapsed.as_secs_f64());
 
@@ -927,12 +926,10 @@ impl EnvoyHandle {
 			.await
 			.map_err(|_| anyhow::anyhow!("sqlite response channel closed"))?;
 		let wait_elapsed = wait_start.elapsed();
-		METRICS
-			.sqlite_request_wait_duration_seconds
+		metrics::SQLITE_REQUEST_WAIT_DURATION_SECONDS
 			.with_label_values(&[kind])
 			.observe(wait_elapsed.as_secs_f64());
-		METRICS
-			.sqlite_request_total_duration_seconds
+		metrics::SQLITE_REQUEST_TOTAL_DURATION_SECONDS
 			.with_label_values(&[kind])
 			.observe(total_start.elapsed().as_secs_f64());
 		result
@@ -957,8 +954,7 @@ impl EnvoyHandle {
 		)
 		.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
 		let submit_elapsed = submit_start.elapsed();
-		METRICS
-			.sqlite_request_submit_duration_seconds
+		metrics::SQLITE_REQUEST_SUBMIT_DURATION_SECONDS
 			.with_label_values(&[kind])
 			.observe(submit_elapsed.as_secs_f64());
 
@@ -967,12 +963,10 @@ impl EnvoyHandle {
 			.await
 			.map_err(|_| anyhow::anyhow!("remote sqlite response channel closed"))?;
 		let wait_elapsed = wait_start.elapsed();
-		METRICS
-			.sqlite_request_wait_duration_seconds
+		metrics::SQLITE_REQUEST_WAIT_DURATION_SECONDS
 			.with_label_values(&[kind])
 			.observe(wait_elapsed.as_secs_f64());
-		METRICS
-			.sqlite_request_total_duration_seconds
+		metrics::SQLITE_REQUEST_TOTAL_DURATION_SECONDS
 			.with_label_values(&[kind])
 			.observe(total_start.elapsed().as_secs_f64());
 		result

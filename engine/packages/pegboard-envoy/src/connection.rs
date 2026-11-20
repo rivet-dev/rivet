@@ -30,6 +30,8 @@ use uuid::Uuid;
 use vbare::Versioned;
 
 mod inbound;
+mod index_writer;
+pub(crate) use index_writer::IndexWriter;
 
 struct Connection {
 	ctx: EngineContext,
@@ -47,8 +49,13 @@ struct Connection {
 	last_heartbeat_unix_ms: AtomicI64,
 	/// Last pong timestamp whose pool admission renewal was durably acknowledged.
 	pool_heartbeat_unix_ms: AtomicI64,
-	/// Whether a newer version superseded this envoy, and the eviction of its actors.
-	version_drain: crate::version_drain::State,
+	/// Membership in the pool's ring index writer, once the fleet reads the ring index.
+	ring: index_writer::RingMembership,
+	/// This process's ring index writer. A connection leaves it before its disconnect.
+	index_writer: Arc<IndexWriter>,
+	/// Whether this envoy is stopping or a newer version superseded it, and the eviction of
+	/// its actors.
+	drain: crate::drain::State,
 	to_envoy_tx: crate::queue::Sender<ToEnvoyFrame>,
 	/// Small control replies have their own bounded lane so data backpressure cannot block
 	/// the socket reader before its next pong. The writer fairly drains both lanes.
@@ -133,6 +140,20 @@ pub async fn run(
 	connection_id: Option<Uuid>,
 ) -> Result<()> {
 	tracing::debug!(%envoy_key, namespace = %scope.namespace, pool_name = %scope.pool_name, "envoy connecting");
+
+	// Nothing is read, subscribed or written until the node chooses this engine by sending its
+	// first message, so a connection it closes for another engine costs no storage I/O.
+	let mut socket = socket;
+	if !crate::pre_connect::send(ctx, &mut socket, version, &service.envoy_connections).await? {
+		return Ok(());
+	}
+	let Some(first_message) =
+		crate::pre_connect::first_message(ctx, &mut socket, service.stopping.subscribe()).await?
+	else {
+		return Ok(());
+	};
+	let _counted = service.envoy_connections.count();
+
 	let stored = match ctx
 		.depot()
 		.command::<EnvoyRead>(&envoy_volume(&scope, &envoy_key), ())
@@ -143,7 +164,6 @@ pub async fn run(
 		Err(error) => {
 			// Close with a reason instead of dropping the socket, so the envoy can tell a
 			// storage outage from a network fault and retry after the hint.
-			let mut socket = socket;
 			let rejection = crate::rejection::Rejection::connect(
 				error,
 				ctx.config().pegboard().envoy_connect_retry_after_ms(),
@@ -185,7 +205,8 @@ pub async fn run(
 		queue_pressure.clone(),
 	);
 	let inbound_bytes = Arc::new(tokio::sync::Semaphore::new(SOCKET_INBOUND_BYTES));
-	let (mut socket_tx, mut socket_rx) = socket.split();
+	let (mut socket_tx, socket_rx) = socket.split();
+	let mut socket_rx = futures_util::stream::iter([Ok(first_message)]).chain(socket_rx);
 	let (event_failure, mut event_failures) = mpsc::channel(1);
 	let (ping, mut ping_rx) = tokio::sync::watch::channel(0);
 
@@ -196,7 +217,7 @@ pub async fn run(
 	let conn = Arc::new(Connection {
 		ctx: ctx.clone(),
 		sqlite: crate::sqlite::Sessions::new(
-			scope.group,
+			scope.group(),
 			legacy_namespace_check(ctx, &scope.namespace),
 			ctx.config().pegboard().sqlite_sessions(),
 			crate::sqlite::RemoteLimits {
@@ -209,14 +230,16 @@ pub async fn run(
 				Arc::new(move || config.dynamic().pegboard().sqlite_server_prefetch())
 			},
 		)?
-		.with_legacy_fallback(scope.legacy_fallback.clone()),
+		.with_legacy_fallback(scope.legacy_fallback().clone()),
 		envoy_key,
 		scope,
 		record,
 		pool_config: Default::default(),
 		last_heartbeat_unix_ms: AtomicI64::new(0),
 		pool_heartbeat_unix_ms: AtomicI64::new(0),
-		version_drain: Default::default(),
+		ring: Default::default(),
+		index_writer: service.index_writer.clone(),
+		drain: Default::default(),
 		to_envoy_tx,
 		control_tx,
 		rejected: AtomicBool::new(false),
@@ -399,6 +422,10 @@ pub async fn run(
 		run_ping_loop(
 			clock, period_ms, &conn2.ping,
 			|| async {
+				// Once the fleet reads the pool volume, the ring heartbeat renews admission.
+				if pegboard::envoy_ring::ring_open(&ctx2) {
+					return Ok(());
+				}
 				match renew_pool_admission(&ctx2, &conn2).await {
 					Ok(()) => Ok(()),
 					Err(error) if error.is::<crate::envoy_record::PoolAdmissionLost>() => {
@@ -412,10 +439,18 @@ pub async fn run(
 				}
 			},
 			|| async {
-				match write_heartbeat(&ctx2, &conn2).await {
+				// Once the fleet reads the ring index, this process's writer flushes the
+				// connection's heartbeat with the rest of its pool.
+				let refreshed = if pegboard::envoy_ring::ring_open(&ctx2) {
+					conn2.index_writer.join(&ctx2, &conn2).await;
+					Ok(())
+				} else {
+					write_heartbeat(&ctx2, &conn2).await
+				};
+				match refreshed {
 					Ok(()) => {
-						if let Err(error) = evict_actors_from_superseded_envoy(&ctx2, &conn2).await {
-							tracing::debug!(?error, "eviction from a superseded envoy failed; the next heartbeat retries it");
+						if let Err(error) = evict_draining_actors(&ctx2, &conn2).await {
+							tracing::debug!(?error, "eviction from a draining envoy failed; the next heartbeat retries it");
 						}
 					}
 					Err(error) if error.is::<crate::envoy_record::Superseded>() => {
@@ -446,6 +481,14 @@ pub async fn run(
 		rivet_env::select!( ctx.env().rng("envoy.control");
 			res = supersede_task => res?.context("task cancelled")?,
 			error = event_failures.recv() => Err(error.context("actor event failure channel closed")?),
+			_ = conn.ring.superseded.notified() => {
+				tracing::info!("closing envoy connection whose ring index state belongs to a newer connection");
+				Err(crate::envoy_record::Superseded.into())
+			},
+			_ = conn.ring.admission_lost.notified() => {
+				tracing::info!("closing node connection whose pool was deleted; the runtime reconnects for fresh admission");
+				Err(crate::envoy_record::PoolAdmissionLost.into())
+			},
 		)
 	};
 	let background = async {
@@ -463,6 +506,8 @@ pub async fn run(
 	);
 
 	tasks.shutdown().await;
+	// Leave the writer before the disconnect removes the index rows, so no flush writes them back.
+	conn.index_writer.leave(&conn).await;
 
 	// Clear the record's connection within the shutdown budget. A superseded connection no
 	// longer owns the record; a final failure is covered by readers' delivery rules.
@@ -607,7 +652,7 @@ async fn write_heartbeat(ctx: &EngineContext, conn: &Connection) -> Result<()> {
 	conn.last_heartbeat_unix_ms
 		.fetch_max(heartbeat_unix_ms, Ordering::AcqRel);
 	if let Some(config) = conn.pool_config.get() {
-		conn.version_drain
+		conn.drain
 			.observe(
 				&conn.scope,
 				&conn.envoy_key,
@@ -621,16 +666,19 @@ async fn write_heartbeat(ctx: &EngineContext, conn: &Connection) -> Result<()> {
 	Ok(())
 }
 
-/// Asks the actors due in this heartbeat's eviction batch to move off this envoy, when a newer
-/// envoy version superseded it in a pool that drains on version upgrade. The pool configuration
-/// is the one captured at connect. Each move request is fenced by the actor's epoch.
-async fn evict_actors_from_superseded_envoy(ctx: &EngineContext, conn: &Connection) -> Result<()> {
-	let Some(config) = conn.pool_config.get() else {
-		return Ok(());
-	};
-	if !config.drain_on_version_upgrade || !conn.version_drain.is_draining().await {
+/// Asks the actors due in this eviction batch to move off this envoy, when it is stopping or a
+/// newer envoy version superseded it in a pool that drains on version upgrade. The pool
+/// configuration is the one captured at connect. Each move request is fenced by the actor's
+/// epoch.
+async fn evict_draining_actors(ctx: &EngineContext, conn: &Connection) -> Result<()> {
+	if !conn.drain.is_draining().await {
 		return Ok(());
 	}
+	let pacing = conn
+		.pool_config
+		.get()
+		.map(crate::drain::Pacing::of_pool)
+		.unwrap_or_default();
 	if live_pool_heartbeat(
 		conn.pool_heartbeat_unix_ms.load(Ordering::Acquire),
 		ctx.env().clock().observe()?.unix_ms,
@@ -643,7 +691,7 @@ async fn evict_actors_from_superseded_envoy(ctx: &EngineContext, conn: &Connecti
 	conn.actor_handles
 		.iter_async(|actor_id, handle| {
 			if let Some(epoch) = handle.epoch.get() {
-				bound.push(crate::version_drain::BoundActor {
+				bound.push(crate::drain::BoundActor {
 					actor_id: actor_id.clone(),
 					epoch,
 				});
@@ -651,12 +699,12 @@ async fn evict_actors_from_superseded_envoy(ctx: &EngineContext, conn: &Connecti
 			true
 		})
 		.await;
-	conn.version_drain
+	conn.drain
 		.evict_due(
 			ctx,
 			&conn.scope,
 			&conn.envoy_key,
-			crate::version_drain::Pacing::of_pool(config),
+			pacing,
 			bound,
 			ctx.env().clock().observe()?.boot_ms,
 		)
@@ -741,7 +789,8 @@ fn expected_class(first: &p::ToEnvoy) -> Result<universalpubsub::RequestClass> {
 		| p::ToEnvoy::ToEnvoySqliteCommitFinalizeResponse(_)
 		| p::ToEnvoy::ToEnvoySqliteExecResponse(_)
 		| p::ToEnvoy::ToEnvoySqliteExecuteResponse(_)
-		| p::ToEnvoy::ToEnvoySqliteExecuteBatchResponse(_) => {
+		| p::ToEnvoy::ToEnvoySqliteExecuteBatchResponse(_)
+		| p::ToEnvoy::ToEnvoyPreConnect(_) => {
 			bail!("unexpected first message on an envoy stream")
 		}
 	}
@@ -848,8 +897,8 @@ async fn handle_sub_stream(
 				// Actor ids repeat across a namespace and its forks, so a command naming another
 				// group was routed on another namespace's allocation and must not reach the actor
 				// this connection hosts under the same id. Legacy: a connection opened before its
-				// namespace moved into the named group closes instead, so the envoy reconnects with
-				// the group and the next start reaches it. Removed in 3.1 with the backfill.
+				// namespace moved into the named group adopts the group and serves the command; see
+				// `check_group`. Removed in 3.1 with the backfill.
 				let mut legacy_group_read = None;
 				for command in &commands {
 					let named = command.group.as_deref();
@@ -870,15 +919,6 @@ async fn handle_sub_stream(
 								"refusing actor commands for another namespace's actor with the same id; the sender's allocation names an envoy of another namespace"
 							);
 							pegboard::actor_machine::executor::COMMANDS_REFUSED_FOREIGN_GROUP
-						}
-						GroupCheck::LegacyNamespaceMoved => {
-							tracing::info!(
-								actor_id = %command.checkpoint.actor_id,
-								namespace = %conn.scope.namespace,
-								"actor command for a grouped actor reached a connection opened before its namespace moved into its group; closing it so the envoy reconnects with the group"
-							);
-							legacy_close_moved_namespace(&conn);
-							pegboard::actor_machine::executor::LEGACY_COMMANDS_REFUSED_NAMESPACE_MOVED
 						}
 					};
 					stream_tx.send(Bytes::from_static(refusal)).await?;
@@ -907,7 +947,7 @@ async fn handle_sub_stream(
 						// group, or none for a legacy actor, so that is the group the instance's
 						// storage opens in for its whole life.
 						let group = match command.group {
-							Some(_) => conn.scope.group,
+							Some(_) => conn.scope.group(),
 							None => None,
 						};
 						handle.bind_epoch(crate::sqlite::OwnedEpoch {
@@ -1006,8 +1046,8 @@ async fn handle_sub_stream(
 			// group was routed on another namespace's allocation. It is refused before the envoy
 			// sees it, as the envoy refuses an actor it does not host, and the gateway reads the
 			// actor again. Legacy: a connection opened before its namespace moved into the named
-			// group also closes, so the envoy reconnects with the group. Removed in 3.1 with the
-			// backfill.
+			// group adopts the group and serves the request; see `check_group`. Removed in 3.1
+			// with the backfill.
 			let checked = check_group(&conn.scope, group.as_deref(), &mut None, || {
 				pegboard::catalog::legacy_read_namespace_group(&conn.ctx, &conn.scope.namespace)
 			})
@@ -1020,15 +1060,6 @@ async fn handle_sub_stream(
 						epoch = actor_epoch,
 						"refusing a gateway request for another namespace's actor with the same id; the gateway routed it on an allocation of another namespace"
 					);
-					true
-				}
-				GroupCheck::LegacyNamespaceMoved => {
-					tracing::info!(
-						%actor_id,
-						namespace = %conn.scope.namespace,
-						"gateway request for a grouped actor reached a connection opened before its namespace moved into its group; closing it so the envoy reconnects with the group"
-					);
-					legacy_close_moved_namespace(&conn);
 					true
 				}
 			};
@@ -1355,21 +1386,9 @@ where
 		if let Some(rejection) = rejection {
 			log_connect_rejection(&conn.ctx, &conn.missing_pools, &conn.scope, &rejection).await;
 			conn.rejected.store(true, Ordering::Release);
-			let namespace_moved = rejection
-				.error
-				.is::<crate::lifecycle::LegacyNamespaceMoved>();
-			let sent = conn.control_tx.try_send(ToEnvoyFrame::Reject(rejection));
-			// Legacy: a moved namespace's close that finds the control queue full ends the
-			// connection with the typed error, which is expected, like the event lane's. A closed
-			// writer is not a full queue and fails below. Removed in 3.1 with the backfill.
-			if namespace_moved && matches!(sent, Err(mpsc::error::TrySendError::Full(_))) {
-				tracing::info!(
-					namespace = %conn.scope.namespace,
-					"envoy control queue full while closing a moved namespace's connection; closing it without a reason so the envoy reconnects and replays"
-				);
-				return Err(crate::lifecycle::LegacyNamespaceMoved.into());
-			}
-			sent.map_err(control_send_error)?;
+			conn.control_tx
+				.try_send(ToEnvoyFrame::Reject(rejection))
+				.map_err(control_send_error)?;
 		}
 	}
 	Ok(())
@@ -1445,6 +1464,18 @@ async fn handle_ws_msg(
 						)
 						.context("pegboard.actor_stop_threshold exceeds the protocol's range")?,
 						max_response_payload_size: 32 * 1024 * 1024,
+						// Every actor of a stopping envoy has been asked to move once its pool's
+						// eviction delay and period have passed.
+						envoy_drain_period: i64::try_from(
+							conn.pool_config
+								.get()
+								.map(crate::drain::Pacing::of_pool)
+								.unwrap_or_default()
+								.drain_ms(),
+						)
+						.context(
+							"the pool's eviction delay and period exceed the protocol's range",
+						)?,
 					},
 				}))
 				.await?;
@@ -1457,6 +1488,23 @@ async fn handle_ws_msg(
 			})
 			.await?;
 			leave_active_index(ctx, conn).await?;
+
+			// An envoy that speaks v10 waits for the engine to stop its actors, paced by its
+			// pool. Older envoys stop all their actors themselves.
+			if conn.version >= crate::drain::PACED_DRAIN_PROTOCOL_VERSION {
+				conn.drain
+					.begin_stopping(ctx.env().clock().observe()?.boot_ms)
+					.await;
+				// The first batch goes now, which is every actor for a pool without an
+				// eviction delay or period, rather than at the next heartbeat. A failed one
+				// is retried by that heartbeat.
+				if let Err(error) = evict_draining_actors(ctx, conn).await {
+					tracing::debug!(
+						?error,
+						"eviction from a stopping envoy failed; the next heartbeat retries it"
+					);
+				}
+			}
 		}
 		p::ToRivet::ToRivetAckCommands(_) => {}
 		p::ToRivet::ToRivetEvents(events) => {
@@ -1466,30 +1514,35 @@ async fn handle_ws_msg(
 			let mut orphan_checkpoints = Vec::new();
 			let mut legacy_group_checked = false;
 			for event in events {
-				let Some(handle) = inbound_actor_handle(
+				let mut handle = inbound_actor_handle(
 					conn,
 					tasks,
 					&event.checkpoint.actor_id,
 					OwnershipUse::Events,
 				)
-				.await?
-				else {
+				.await?;
+				// Legacy: a miss on a connection without a group may be a grouped actor, since the
+				// namespace may have moved since connect; once the connection adopted the group,
+				// the actor's ownership is looked up again there. Removed in 3.1 with the backfill.
+				if handle.is_none() {
 					let unowned = unowned_event(&conn.scope, &mut legacy_group_checked, || {
 						pegboard::catalog::legacy_read_namespace_group(ctx, &conn.scope.namespace)
 					})
 					.await?;
 					match unowned {
 						UnownedEvent::Acknowledge => {}
-						UnownedEvent::LegacyNamespaceMoved => {
-							tracing::info!(
-								actor_id = %event.checkpoint.actor_id,
-								namespace = %conn.scope.namespace,
-								epoch = event.checkpoint.generation,
-								"replayed actor event reached a connection opened before its namespace moved into its group; closing it so the envoy reconnects and replays"
-							);
-							return Ok(Some(crate::rejection::Rejection::legacy_namespace_moved()));
+						UnownedEvent::LegacyGroupAdopted => {
+							handle = inbound_actor_handle(
+								conn,
+								tasks,
+								&event.checkpoint.actor_id,
+								OwnershipUse::Events,
+							)
+							.await?;
 						}
 					}
+				}
+				let Some(handle) = handle else {
 					// A replay from an epoch whose ownership already ended has no side effects.
 					// Acknowledge it without retaining lanes for an actor no longer hosted here.
 					orphan_checkpoints.push(event.checkpoint);
@@ -1551,14 +1604,6 @@ async fn log_connect_rejection(
 	scope: &crate::routes::EnvoyScope,
 	rejection: &crate::rejection::Rejection,
 ) {
-	// Legacy: a moved namespace's close is expected and logged where it is decided. Removed in
-	// 3.1 with the backfill.
-	if rejection
-		.error
-		.is::<crate::lifecycle::LegacyNamespaceMoved>()
-	{
-		return;
-	}
 	// A node that connects before its pool is written is an expected race of deploys and
 	// scripts that start nodes and write pools concurrently; the close reason tells the node,
 	// and the reconnect after the pool write registers it. Refusals of one pool name that
@@ -1674,7 +1719,14 @@ async fn connect(ctx: &EngineContext, conn: &Arc<Connection>, names: Vec<String>
 			)
 			.await?;
 	}
-	write_heartbeat(ctx, conn).await?;
+	// The envoy is allocatable once this returns: its first index write lands before the
+	// connect completes, on the ring once the fleet reads it.
+	if pegboard::envoy_ring::ring_open(ctx) {
+		conn.index_writer.join(ctx, conn).await;
+		conn.index_writer.flush_for(ctx, conn).await?;
+	} else {
+		write_heartbeat(ctx, conn).await?;
+	}
 
 	let previous = conn.record.lock().await.previous.take();
 	if let Some(previous) = previous.filter(|previous| previous.connected) {
@@ -1941,20 +1993,21 @@ enum UnownedEvent {
 	/// Acknowledge the event: a replay from an epoch whose ownership already ended has no side
 	/// effects.
 	Acknowledge,
-	/// Legacy: close the connection and leave the event unacknowledged, since the connection's
-	/// namespace moved into its group after connect and the actor may live there. Removed in 3.1
-	/// with the backfill.
-	LegacyNamespaceMoved,
+	/// Legacy: the connection's namespace moved into its group after connect, and the connection
+	/// adopted the group, so the actor may live there: its ownership is looked up again before
+	/// anything is acknowledged. Removed in 3.1 with the backfill.
+	LegacyGroupAdopted,
 }
 
 /// Decides what happens to an event for an actor this connection does not own. A grouped scope
 /// acknowledges it. Legacy: a scope without a group reads only unprefixed volumes, so a grouped
 /// actor reads as not owned there; `namespace_group` reads the namespace's group now (see
-/// `pegboard::catalog::legacy_read_namespace_group`), and a group closes the connection
-/// instead of acknowledging. A read that found no group is remembered in `legacy_group_checked`
-/// for the rest of the batch, so a batch costs at most one read. The legacy behavior acknowledged
-/// every such event; the new behavior closes when the namespace moved since connect. Removed in
-/// 3.1 with the backfill.
+/// `pegboard::catalog::legacy_read_namespace_group`), and a group makes the connection adopt it
+/// ([`crate::routes::EnvoyScope::legacy_adopt_group`]) instead of acknowledging. A read that
+/// found no group is remembered in `legacy_group_checked` for the rest of the batch, so a batch
+/// costs at most one read. The legacy behavior closed the connection so the envoy replayed the
+/// event on a grouped one, failing every request then in flight on it; the new behavior keeps the
+/// connection and looks the actor up again in the group. Removed in 3.1 with the backfill.
 ///
 /// The read goes straight to the namespace volume and does not depend on this process's view of
 /// the fleet or on the legacy catalog row: a process whose view lags would otherwise skip the
@@ -1972,11 +2025,17 @@ where
 	F: FnOnce() -> Fut,
 	Fut: std::future::Future<Output = Result<Option<rivet_keys::keys::codec::GroupId>>>,
 {
-	if scope.group.is_some() || *legacy_group_checked {
+	if scope.group().is_some() || *legacy_group_checked {
 		return Ok(UnownedEvent::Acknowledge);
 	}
 	match namespace_group().await? {
-		Some(_) => Ok(UnownedEvent::LegacyNamespaceMoved),
+		// A namespace gains one group and never changes it, so a refused adopt means the
+		// connection's view is inconsistent: the connection ends with the event unacknowledged
+		// rather than dropping it, and the envoy replays it on a new connection.
+		Some(group) => match scope.legacy_adopt_group(group) {
+			true => Ok(UnownedEvent::LegacyGroupAdopted),
+			false => bail!("envoy connection already serves another group than its namespace's"),
+		},
 		None => {
 			*legacy_group_checked = true;
 			Ok(UnownedEvent::Acknowledge)
@@ -2138,26 +2197,7 @@ impl ActorHandle {
 			)
 			.await
 			{
-				// Legacy: a connection whose namespace moved into its group closes with a typed
-				// reason after every frame queued before it, so the envoy reconnects with the
-				// grouped scope and replays. A full socket queue falls back to the plain failure.
-				// Removed in 3.1 with the backfill.
-				//
-				// The Reject path does not report to the owner, since the owner would cancel the
-				// writer before it sends the close. The connection then ends when the writer
-				// reaches the Reject, after the frames queued before it; the other lanes keep
-				// running until then, and a ping timeout bounds a writer the envoy stopped
-				// draining. A stale lane cannot acknowledge a grouped actor's event meanwhile,
-				// since its delivery closes the same way.
-				if err.is::<crate::lifecycle::LegacyNamespaceMoved>() {
-					let rejection = crate::rejection::Rejection::legacy_namespace_moved();
-					if conn2.to_envoy_tx.try_send(ToEnvoyFrame::Reject(rejection)).is_ok() {
-						return;
-					}
-					tracing::info!(%actor_id, "envoy socket queue full while closing a moved namespace's connection; closing it without a reason so the envoy reconnects and replays");
-				} else {
-					tracing::error!(%actor_id, ?err, "actor event lane failed; closing connection to replay unacknowledged events");
-				}
+				tracing::error!(%actor_id, ?err, "actor event lane failed; closing connection to replay unacknowledged events");
 				// Only the first failure is needed. The owner cancels and joins all lanes,
 				// even if the socket queue is full or its writer is blocked.
 				let _ = conn2.event_failure.try_send(err);
@@ -2803,7 +2843,7 @@ fn record_owner(
 	};
 	let allocation = match phase {
 		wire::ActorPhase::Starting(wire::Starting { allocation, .. })
-		| wire::ActorPhase::Running(wire::Running { allocation })
+		| wire::ActorPhase::Running(wire::Running { allocation, .. })
 		| wire::ActorPhase::Stopping(wire::Stopping { allocation, .. }) => allocation,
 		wire::ActorPhase::Initializing(_)
 		| wire::ActorPhase::Sleeping(_)
@@ -3368,21 +3408,18 @@ enum GroupCheck {
 	/// The message names another group than this connection's namespace has, so it was routed on
 	/// another namespace's allocation and is refused.
 	Foreign,
-	/// Legacy: the connection has no group because it opened before its namespace moved into the
-	/// group the message names. The connection closes so the envoy reconnects with the group, and
-	/// the message is refused. Removed in 3.1 with the backfill.
-	LegacyNamespaceMoved,
 }
 
 /// Checks the group a message names against this connection's scope. Legacy: a connection
 /// without a group cannot tell a foreign group from its own namespace's new one, so it reads the
 /// namespace's group now with `namespace_group` (see
 /// `pegboard::catalog::legacy_read_namespace_group`) and remembers the answer in
-/// `legacy_group_read` for the rest of the message batch. The legacy behavior refused every such
-/// message, which left a grouped actor hashed to this envoy never starting after its namespace's
-/// move; the new behavior closes the connection when the namespace moved into the named group.
-/// The read runs only when a groupless connection gets a grouped message, which happens only
-/// after its namespace moved. Removed in 3.1 with the backfill.
+/// `legacy_group_read` for the rest of the message batch. When the namespace moved into the named
+/// group, the connection adopts it ([`crate::routes::EnvoyScope::legacy_adopt_group`]) and the
+/// message is served. The legacy behavior closed the connection so the envoy reconnected with the
+/// group, failing every request then in flight on it. The read runs only when a groupless
+/// connection gets a grouped message, which happens only after its namespace moved. Removed in
+/// 3.1 with the backfill.
 async fn check_group<F, Fut>(
 	scope: &crate::routes::EnvoyScope,
 	group: Option<&[u8]>,
@@ -3396,7 +3433,7 @@ where
 	let Some(group) = group else {
 		return Ok(GroupCheck::Serves);
 	};
-	if let Some(own) = scope.group {
+	if let Some(own) = scope.group() {
 		return match own.as_slice() == group {
 			true => Ok(GroupCheck::Serves),
 			false => Ok(GroupCheck::Foreign),
@@ -3411,31 +3448,11 @@ where
 		}
 	};
 	match current {
-		Some(current) if current.as_slice() == group => Ok(GroupCheck::LegacyNamespaceMoved),
+		Some(current) if current.as_slice() == group && scope.legacy_adopt_group(current) => {
+			Ok(GroupCheck::Serves)
+		}
 		Some(_) | None => Ok(GroupCheck::Foreign),
 	}
-}
-
-/// Legacy: closes a connection opened before its namespace moved into its group, after every
-/// frame queued before the close, as the event lane does. A full socket queue ends the connection
-/// through the event failure channel without a reason instead; the envoy reconnects either way.
-/// Removed in 3.1 with the backfill.
-fn legacy_close_moved_namespace(conn: &Connection) {
-	let rejection = crate::rejection::Rejection::legacy_namespace_moved();
-	if conn
-		.to_envoy_tx
-		.try_send(ToEnvoyFrame::Reject(rejection))
-		.is_ok()
-	{
-		return;
-	}
-	tracing::info!(
-		namespace = %conn.scope.namespace,
-		"envoy socket queue full while closing a moved namespace's connection; closing it without a reason so the envoy reconnects"
-	);
-	let _ = conn
-		.event_failure
-		.try_send(crate::lifecycle::LegacyNamespaceMoved.into());
 }
 
 /// The answer to a gateway request this connection refused for naming another namespace's

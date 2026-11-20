@@ -26,7 +26,7 @@ pub use epoxy::*;
 pub use guard::*;
 pub use logs::*;
 pub use metrics::*;
-pub use migrate_from_v2::MigrateFromV2;
+pub use migrate_from_v2::{MigrateFromV2, MigrateFromV2Overrides};
 pub use object_storage::*;
 pub use outbound::*;
 pub use pegboard::*;

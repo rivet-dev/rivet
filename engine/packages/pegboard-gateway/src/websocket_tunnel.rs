@@ -18,8 +18,13 @@ enum Input {
 
 /// How the actor answered a WebSocket open.
 pub(crate) enum OpenReply {
-	Accepted { can_hibernate: bool },
+	Accepted {
+		can_hibernate: bool,
+	},
 	Closed(p::ToRivetWebSocketClose),
+	/// The actor's host refused the open before admission again after it was opened once more.
+	/// The client may retry, so it gets a retryable close instead of the host's internal reason.
+	Refused,
 }
 
 /// Whether the actor's host refused the open before the actor admitted it, so the same open
@@ -125,6 +130,15 @@ where
 		(sender, receiver) = stream.split();
 		identity = next_identity;
 		reply = open_actor(&mut sender, &mut receiver, &mut identity, version, open).await?;
+		if let OpenReply::Closed(close) = &reply
+			&& refused_before_admission(close)
+		{
+			tracing::debug!(
+				reason = ?close.reason,
+				"actor refused a WebSocket open before admission twice; the client retries it"
+			);
+			reply = OpenReply::Refused;
+		}
 	}
 	Ok(Tunnel {
 		version,
@@ -176,6 +190,17 @@ where
 				.send(Message::Close(close.code.map(|code| CloseFrame {
 					code,
 					reason: close.reason.unwrap_or_default().to_string().into(),
+				})))
+				.await?;
+			sender.finish().await?;
+			return Ok(());
+		}
+		OpenReply::Refused => {
+			let (code, reason) = crate::routes::websocket_retry_close();
+			socket
+				.send(Message::Close(Some(CloseFrame {
+					code,
+					reason: reason.into(),
 				})))
 				.await?;
 			sender.finish().await?;

@@ -84,6 +84,11 @@ impl V2Client {
 		})
 	}
 
+	/// The V2 namespace being migrated.
+	pub fn namespace(&self) -> &str {
+		&self.namespace
+	}
+
 	pub fn target_namespace(&self) -> &str {
 		&self.target_namespace
 	}
@@ -93,11 +98,20 @@ impl V2Client {
 	}
 
 	fn url(&self, datacenter_label: u16, path: &str) -> Result<String> {
+		self.versioned_url(datacenter_label, 1, path)
+	}
+
+	/// A route added with v2 of the migration protocol, whose bodies are v2 types.
+	fn url_v2(&self, datacenter_label: u16, path: &str) -> Result<String> {
+		self.versioned_url(datacenter_label, 2, path)
+	}
+
+	fn versioned_url(&self, datacenter_label: u16, version: u8, path: &str) -> Result<String> {
 		let base = self
 			.api_urls
 			.get(&datacenter_label)
 			.with_context(|| format!("no V2 api url for datacenter {datacenter_label}"))?;
-		Ok(format!("{base}/migration/v1/{path}"))
+		Ok(format!("{base}/migration/v{version}/{path}"))
 	}
 
 	fn request(&self, method: Method, url: &str, body: Vec<u8>) -> Result<Request<HttpBody>> {
@@ -137,16 +151,23 @@ impl V2Client {
 		Ok(body)
 	}
 
+	/// One page of candidates. With `actor_name`, V2 lists only that name's actors, oldest first.
+	/// A V2 that predates the filter refuses the request, so the filter needs V2 upgraded first.
 	pub async fn candidates(
 		&self,
 		datacenter_label: u16,
 		after: Option<&[u8]>,
 		limit: usize,
+		actor_name: Option<&str>,
 	) -> Result<proto::CandidatesResponse> {
 		let mut path = format!(
 			"namespaces/{}/candidates?limit={limit}",
 			urlencoding::encode(&self.namespace)
 		);
+		if let Some(actor_name) = actor_name {
+			path.push_str("&name=");
+			path.push_str(&urlencoding::encode(actor_name));
+		}
 		if let Some(after) = after {
 			path.push_str("&after=");
 			path.push_str(&base64_url(after));
@@ -252,6 +273,82 @@ impl V2Client {
 				proto::encode(request),
 			)
 			.await?;
+		proto::decode(&body)
+	}
+
+	/// One page of the actors V2 parked in this namespace on one datacenter, in V2's parked index
+	/// order.
+	pub async fn parked(
+		&self,
+		datacenter_label: u16,
+		after: Option<&[u8]>,
+		limit: usize,
+	) -> Result<proto::ParkedResponse> {
+		let mut path = format!(
+			"namespaces/{}/parked?limit={limit}",
+			urlencoding::encode(&self.namespace)
+		);
+		if let Some(after) = after {
+			path.push_str("&after=");
+			path.push_str(&base64_url(after));
+		}
+		let body = self
+			.call(
+				Method::GET,
+				self.url_v2(datacenter_label, &path)?,
+				Vec::new(),
+			)
+			.await?;
+		proto::decode(&body)
+	}
+
+	/// The deletion cursor V2 keeps for this namespace on one datacenter.
+	pub async fn delete_cursor(&self, datacenter_label: u16) -> Result<proto::DeleteCursor> {
+		let body = self
+			.call(
+				Method::GET,
+				self.url_v2(datacenter_label, &self.delete_cursor_path())?,
+				Vec::new(),
+			)
+			.await?;
+		proto::decode(&body)
+	}
+
+	pub async fn set_delete_cursor(
+		&self,
+		datacenter_label: u16,
+		cursor: &proto::DeleteCursor,
+	) -> Result<()> {
+		self.call(
+			Method::PUT,
+			self.url_v2(datacenter_label, &self.delete_cursor_path())?,
+			proto::encode(cursor),
+		)
+		.await?;
+		Ok(())
+	}
+
+	fn delete_cursor_path(&self) -> String {
+		format!(
+			"namespaces/{}/parked/delete-cursor",
+			urlencoding::encode(&self.namespace)
+		)
+	}
+
+	/// Asks V2 to destroy a parked actor with its data, or reports how far its destroy got.
+	pub async fn delete(
+		&self,
+		v2_actor_id: Id,
+		request: &proto::DeleteRequest,
+	) -> Result<proto::DeleteResponse> {
+		let url = self.url_v2(
+			v2_actor_id.label(),
+			&format!(
+				"actors/{v2_actor_id}/delete?namespace={}",
+				urlencoding::encode(&self.namespace)
+			),
+		)?;
+		let body = self.call(Method::POST, url, proto::encode(request)).await?;
 		proto::decode(&body)
 	}
 

@@ -13,8 +13,8 @@ lazy_static::lazy_static! {
 		*rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref LEASE_REMAINING_MS: IntGauge = register_int_gauge_with_registry!(
-		"topology_lease_remaining_ms",
-		"Time left on this worker's heartbeat lease, sampled at each confirmed renewal and late-renewal warning; 0 once fenced.",
+		Opts::new("topology_lease_remaining_ms",
+		"Time left on this worker's heartbeat lease, sampled at each confirmed renewal and late-renewal warning; 0 once fenced."),
 		*rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref EXITED_PREDECESSOR_CLAIMS: IntCounter = register_int_counter_with_registry!(
@@ -30,8 +30,8 @@ lazy_static::lazy_static! {
 		&["reason"], *rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref READ_FLOOR_AGE: Gauge = register_gauge_with_registry!(
-		"topology_read_floor_age_seconds",
-		"Age of the read floor version selection uses: time since the last storage listing that observed every listed storage worker was issued, sampled at each listing response. Above the heartbeat ttl the view is stuck.",
+		Opts::new("topology_read_floor_age_seconds",
+		"Age of the read floor version selection uses: time since the last storage listing that observed every listed storage worker was issued, sampled at each listing response. Above the heartbeat ttl the view is stuck."),
 		*rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref HEARTBEAT_RENEWAL_ATTEMPTS: IntCounterVec = register_int_counter_vec_with_registry!(
@@ -39,10 +39,10 @@ lazy_static::lazy_static! {
 		&["result"], *rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref WATCHES: IntGauge = register_int_gauge_with_registry!(
-		"topology_watches", "Worker processes watched for cleanup, one per process however many subscribers hold it.", *rivet_metrics::REGISTRY
+		Opts::new("topology_watches", "Worker processes watched for cleanup, one per process however many subscribers hold it."), *rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref WATCH_CAPACITY: IntGauge = register_int_gauge_with_registry!(
-		"topology_watch_capacity", "Configured cap on watched worker processes.", *rivet_metrics::REGISTRY
+		Opts::new("topology_watch_capacity", "Configured cap on watched worker processes."), *rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref WATCH_REJECTED: IntCounter = register_int_counter_with_registry!(
 		Opts::new("topology_watch_rejected_total", "New process watches refused at the watch capacity."),
@@ -61,10 +61,10 @@ lazy_static::lazy_static! {
 		&["result"], *rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref WORKER_LEASE_CACHE_ENTRIES: IntGauge = register_int_gauge_with_registry!(
-		"topology_worker_lease_cache_entries", "Cached worker lease verdicts.", *rivet_metrics::REGISTRY
+		Opts::new("topology_worker_lease_cache_entries", "Cached worker lease verdicts."), *rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref WORKER_LEASE_CACHE_CAPACITY: IntGauge = register_int_gauge_with_registry!(
-		"topology_worker_lease_cache_capacity", "Configured worker lease verdict cache capacity.", *rivet_metrics::REGISTRY
+		Opts::new("topology_worker_lease_cache_capacity", "Configured worker lease verdict cache capacity."), *rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref LOOKUP_EXPIRY_VISITS: IntCounter = register_int_counter_with_registry!(
 		Opts::new(
@@ -105,24 +105,24 @@ lazy_static::lazy_static! {
 		*rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref ENDPOINT_CACHE_ENTRIES: IntGauge = register_int_gauge_with_registry!(
-		"topology_endpoint_cache_entries",
-		"Retained endpoint hints for exact-id lookups of workers discovery does not list (stateless workers). Storage workers resolve from discovery and are never cached here, so this stays 0 when only storage workers are looked up.",
+		Opts::new("topology_endpoint_cache_entries",
+		"Retained endpoint hints for exact-id lookups of workers discovery does not list (stateless workers). Storage workers resolve from discovery and are never cached here, so this stays 0 when only storage workers are looked up."),
 		*rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref ENDPOINT_CACHE_CAPACITY: IntGauge = register_int_gauge_with_registry!(
-		"topology_endpoint_cache_capacity",
-		"Total configured endpoint-entry capacity across active caches.",
+		Opts::new("topology_endpoint_cache_capacity",
+		"Total configured endpoint-entry capacity across active caches."),
 		*rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref LOOKUP_REJECTED: IntCounter = register_int_counter_with_registry!(
-		"topology_lookup_rejected_total",
-		"Endpoint requests rejected at configured admission or concurrency limits.",
+		Opts::new("topology_lookup_rejected_total",
+		"Endpoint requests rejected at configured admission or concurrency limits."),
 		*rivet_metrics::REGISTRY
 	).unwrap();
 	/// Endpoint invalidations dropped because the invalidation admission was full.
 	pub static ref INVALIDATIONS_DROPPED: IntCounter = register_int_counter_with_registry!(
-		"topology_endpoint_invalidations_dropped_total",
-		"Endpoint invalidations dropped because the bounded invalidation admission was full.",
+		Opts::new("topology_endpoint_invalidations_dropped_total",
+		"Endpoint invalidations dropped because the bounded invalidation admission was full."),
 		*rivet_metrics::REGISTRY
 	).unwrap();
 	/// Opening timeouts reported to topology, by how they were handled.
@@ -131,13 +131,13 @@ lazy_static::lazy_static! {
 		&["result"], *rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref LOOKUP_READS: IntGauge = register_int_gauge_with_registry!(
-		"topology_lookup_reads", "Pending endpoint reads.", *rivet_metrics::REGISTRY
+		Opts::new("topology_lookup_reads", "Pending endpoint reads."), *rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref LOOKUP_READ_CAPACITY: IntGauge = register_int_gauge_with_registry!(
-		"topology_lookup_read_capacity", "Configured endpoint-read capacity.", *rivet_metrics::REGISTRY
+		Opts::new("topology_lookup_read_capacity", "Configured endpoint-read capacity."), *rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref LOOKUP_REQUEST_CAPACITY: IntGauge = register_int_gauge_with_registry!(
-		"topology_lookup_request_capacity", "Configured endpoint-request admission capacity.", *rivet_metrics::REGISTRY
+		Opts::new("topology_lookup_request_capacity", "Configured endpoint-request admission capacity."), *rivet_metrics::REGISTRY
 	).unwrap();
 
 	pub static ref HEARTBEAT_GC_SCAN: IntCounterVec = register_int_counter_vec_with_registry!(
@@ -157,10 +157,10 @@ lazy_static::lazy_static! {
 		&["resource"], *rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref HEARTBEAT_GC_BATCH_ENTRIES: IntGauge = register_int_gauge_with_registry!(
-		"topology_heartbeat_gc_batch_entries", "Entries examined in the most recent cleanup batch.", *rivet_metrics::REGISTRY
+		Opts::new("topology_heartbeat_gc_batch_entries", "Entries examined in the most recent cleanup batch."), *rivet_metrics::REGISTRY
 	).unwrap();
 	pub static ref HEARTBEAT_GC_DELETES_IN_FLIGHT: IntGauge = register_int_gauge_with_registry!(
-		"topology_heartbeat_gc_deletes_in_flight", "Pending conditional heartbeat deletions.", *rivet_metrics::REGISTRY
+		Opts::new("topology_heartbeat_gc_deletes_in_flight", "Pending conditional heartbeat deletions."), *rivet_metrics::REGISTRY
 	).unwrap();
 
 	pub static ref HEARTBEAT_GC_BATCH_DURATION: Histogram = register_histogram_with_registry!(

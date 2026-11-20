@@ -23,7 +23,7 @@ use rivet_util::Id;
 use sqlite_embedded_filesystem::page_protocol::database::{self, Database};
 use vbare::Versioned;
 
-use crate::v2_client::V2Client;
+use crate::{backup::Backup, v2_client::V2Client};
 
 /// Stream breaks the import resumes from the last fence before it gives up.
 const MAX_RESUMES: usize = 3;
@@ -62,7 +62,8 @@ pub struct Copied {
 /// `create_unix_ms` of `v3_actor_id`, at `group`, the placement the hold was begun at.
 ///
 /// The volume is deleted first, so a copy restarted after a failover or a takeover of the hold
-/// never mixes with an earlier one.
+/// never mixes with an earlier one. When `migrate_from_v2.backup` is set, the
+/// export is also written there, and a backup write that fails fails the copy.
 #[allow(
 	clippy::too_many_arguments,
 	reason = "one argument per part of the copy's identity and V2 fence"
@@ -88,12 +89,27 @@ pub async fn copy(
 	})
 	.await?;
 	let fs = opened.filesystem().clone();
+	let backup = ctx
+		.object_stores()
+		.migrate_from_v2_backup
+		.clone()
+		.map(|store| {
+			Backup::new(
+				store,
+				v2.namespace(),
+				v2_actor_id,
+				v3_actor_id,
+				generation,
+				sleep_ts,
+			)
+		});
 
 	let result = import(
 		v2,
 		&fs,
 		ctx.env().clock(),
 		ctx.topology(),
+		backup,
 		v2_actor_id,
 		generation,
 		sleep_ts,
@@ -117,8 +133,36 @@ struct Import {
 	kv_entries: u64,
 	kv_bytes: u64,
 	pages: u32,
-	/// The last fence's cursor and the digest and counts as of it, where a resume restarts.
-	resume: Option<(Vec<u8>, [u8; 16], u64, u64, u32)>,
+	backup: Option<Backup>,
+	/// Where a broken stream resumes: the last fence it received.
+	resume: Option<Resume>,
+}
+
+/// The last fence's cursor, with the digest and counts as of it and the backup segments written
+/// through it.
+struct Resume {
+	cursor: Vec<u8>,
+	digest: [u8; 16],
+	kv_entries: u64,
+	kv_bytes: u64,
+	pages: u32,
+	backup_segments: u32,
+}
+
+impl Import {
+	/// Rolls the counts and the backup back to the last fence, for a stream that resumes there.
+	fn rewind(&mut self) {
+		let Some(resume) = &self.resume else {
+			return;
+		};
+		self.digest = resume.digest;
+		self.kv_entries = resume.kv_entries;
+		self.kv_bytes = resume.kv_bytes;
+		self.pages = resume.pages;
+		if let Some(backup) = &mut self.backup {
+			backup.rewind(resume.backup_segments);
+		}
+	}
 }
 
 async fn import(
@@ -126,6 +170,7 @@ async fn import(
 	fs: &Arc<Filesystem>,
 	clock: Arc<dyn Clock>,
 	versions: Arc<dyn WriteVersions>,
+	backup: Option<Backup>,
 	v2_actor_id: Id,
 	generation: u32,
 	sleep_ts: i64,
@@ -141,13 +186,14 @@ async fn import(
 		kv_entries: 0,
 		kv_bytes: 0,
 		pages: 0,
+		backup,
 		resume: None,
 	};
 
 	let mut resumes = 0;
 	let mut refusals = 0;
 	loop {
-		let resume_cursor = state.resume.as_ref().map(|(cursor, ..)| cursor.clone());
+		let resume_cursor = state.resume.as_ref().map(|resume| resume.cursor.clone());
 		match stream_once(
 			v2,
 			&mut state,
@@ -175,22 +221,12 @@ async fn import(
 					Duration::from_millis(retry_after_ms),
 				)
 				.await?;
-				if let Some((_, digest, kv_entries, kv_bytes, pages)) = &state.resume {
-					state.digest = *digest;
-					state.kv_entries = *kv_entries;
-					state.kv_bytes = *kv_bytes;
-					state.pages = *pages;
-				}
+				state.rewind();
 			}
 			Err(error) if resumes < MAX_RESUMES && state.resume.is_some() => {
 				resumes += 1;
 				tracing::warn!(?error, %v2_actor_id, resumes, "V2 export stream broke; resuming from the last fence");
-				if let Some((_, digest, kv_entries, kv_bytes, pages)) = &state.resume {
-					state.digest = *digest;
-					state.kv_entries = *kv_entries;
-					state.kv_bytes = *kv_bytes;
-					state.pages = *pages;
-				}
+				state.rewind();
 			}
 			Err(error) => return Err(error),
 		}
@@ -224,6 +260,12 @@ async fn stream_once(
 					if header.generation != generation || header.sleep_ts != sleep_ts {
 						return Ok(CopyOutcome::FenceMoved);
 					}
+					// A resumed stream sends the header again; the backup keeps only the first.
+					if state.resume.is_none()
+						&& let Some(backup) = &mut state.backup
+					{
+						backup.push_frame(&frame_body)?;
+					}
 					state.db_size_pages =
 						header.sqlite.as_ref().map_or(0, |head| head.db_size_pages);
 					if let Some(head) = &header.sqlite {
@@ -237,20 +279,33 @@ async fn stream_once(
 				}
 				proto::Frame::KvBatch(batch) => {
 					state.digest = proto::chain_digest(&state.digest, &frame_body);
+					if let Some(backup) = &mut state.backup {
+						backup.push_frame(&frame_body)?;
+					}
 					write_kv(state, batch).await?;
 				}
 				proto::Frame::PageBatch(batch) => {
 					state.digest = proto::chain_digest(&state.digest, &frame_body);
+					if let Some(backup) = &mut state.backup {
+						backup.push_frame(&frame_body)?;
+					}
 					write_pages(state, batch).await?;
 				}
 				proto::Frame::ExportFence(fence) => {
-					state.resume = Some((
-						fence.cursor.to_vec(),
-						state.digest,
-						state.kv_entries,
-						state.kv_bytes,
-						state.pages,
-					));
+					// The segment ending at this fence is uploaded before the fence becomes the
+					// resume point, so a resume never skips frames the backup lacks.
+					if let Some(backup) = &mut state.backup {
+						backup.push_frame(&frame_body)?;
+						backup.write_segment().await?;
+					}
+					state.resume = Some(Resume {
+						cursor: fence.cursor.to_vec(),
+						digest: state.digest,
+						kv_entries: state.kv_entries,
+						kv_bytes: state.kv_bytes,
+						pages: state.pages,
+						backup_segments: state.backup.as_ref().map_or(0, Backup::segments),
+					});
 				}
 				proto::Frame::ExportEnd(end) => {
 					ensure!(
@@ -261,6 +316,12 @@ async fn stream_once(
 						end.kv_entries == state.kv_entries && end.pages == state.pages,
 						"V2 export counts do not match the imported frames"
 					);
+					if let Some(backup) = &mut state.backup {
+						backup.push_frame(&frame_body)?;
+						backup.write_segment().await?;
+						let written_at = state.clock.observe()?.unix_ms;
+						backup.write_manifest(&end, written_at).await?;
+					}
 					return Ok(CopyOutcome::Copied(Copied {
 						kv_entries: state.kv_entries,
 						kv_bytes: state.kv_bytes,

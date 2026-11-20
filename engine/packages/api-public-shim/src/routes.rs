@@ -205,17 +205,8 @@ pub async fn list_pools(
 	if let Some(cursor) = &query.cursor {
 		pegboard::validation::pool_name(cursor)?;
 	}
-	let reply = ctx
-		.depot()
-		.command::<pegboard::catalog::PoolList>(
-			&pegboard::keys::partition::EnvoyPoolIndexVolume::new(namespace.name.clone())
-				.volume_key(),
-			wire::PoolListRequest {
-				after: query.cursor.map(Into::into),
-				limit: limit as u32,
-			},
-		)
-		.await?;
+	let reply =
+		pegboard::catalog::list_pools(&ctx, &namespace.name, query.cursor, limit as u32).await?;
 	let pools = reply
 		.pools
 		.iter()
@@ -985,7 +976,7 @@ async fn create_actor_inner(
 			.await?
 			.context("keyless actor was destroyed during creation")?;
 		return Ok(Created::Actor(Json(
-			json!({ "actor": actor_json(&data, &namespace.name, None)?, "created": true }),
+			json!({ "actor": actor_json(&data, None, &namespace.name, None)?, "created": true }),
 		)));
 	};
 
@@ -1009,8 +1000,9 @@ async fn create_actor_inner(
 		if !get_or_create {
 			return Err(DuplicateKey.build());
 		}
+		let listed = actor_json(&actor.data, actor.phase.as_ref(), &namespace.name, None)?;
 		return Ok(Created::Actor(Json(
-			json!({ "actor": actor_json(&actor.data, &namespace.name, None)?, "created": false }),
+			json!({ "actor": listed, "created": false }),
 		)));
 	}
 
@@ -1061,8 +1053,9 @@ async fn create_actor_inner(
 				if !get_or_create {
 					return Err(DuplicateKey.build());
 				}
+				let listed = actor_json(&actor.data, actor.phase.as_ref(), &namespace.name, None)?;
 				return Ok(Created::Actor(Json(
-					json!({ "actor": actor_json(&actor.data, &namespace.name, None)?, "created": false }),
+					json!({ "actor": listed, "created": false }),
 				)));
 			}
 		};
@@ -1100,7 +1093,7 @@ async fn create_actor_inner(
 			continue;
 		};
 		return Ok(Created::Actor(Json(
-			json!({ "actor": actor_json(&data, &namespace.name, None)?, "created": true }),
+			json!({ "actor": actor_json(&data, None, &namespace.name, None)?, "created": true }),
 		)));
 	}
 }
@@ -1626,7 +1619,7 @@ async fn fork_actor_inner(
 			)
 			.await?;
 			return Ok(Json(
-				json!({ "actor": actor_json(&data, &namespace.name, None)? }),
+				json!({ "actor": actor_json(&data, None, &namespace.name, None)? }),
 			));
 		}
 	})
@@ -1909,7 +1902,12 @@ pub async fn list_actors(
 						destroy_unix_ms,
 					)?),
 					None if actor.destroyed && !include_destroyed => {}
-					None => actors.push(actor_json(&actor.data, &namespace.name, None)?),
+					None => actors.push(actor_json(
+						&actor.data,
+						actor.phase.as_ref(),
+						&namespace.name,
+						None,
+					)?),
 				}
 			}
 			next_cursor = page
@@ -1941,7 +1939,12 @@ async fn lookup_actor(
 		return Ok(None);
 	}
 	if !actor.destroyed {
-		return Ok(Some(actor_json(&actor.data, &namespace.name, None)?));
+		return Ok(Some(actor_json(
+			&actor.data,
+			actor.phase.as_ref(),
+			&namespace.name,
+			None,
+		)?));
 	}
 	if !include_destroyed {
 		return Ok(None);
@@ -1957,6 +1960,7 @@ async fn lookup_actor(
 	.await?;
 	Ok(Some(actor_json(
 		&actor.data,
+		actor.phase.as_ref(),
 		&namespace.name,
 		destroy_unix_ms,
 	)?))
@@ -1972,7 +1976,7 @@ fn destroyed_entry_json(
 	create_unix_ms: i64,
 	destroy_unix_ms: i64,
 ) -> Result<Value> {
-	let mut actor = actor_json(data, namespace, Some(destroy_unix_ms))?;
+	let mut actor = actor_json(data, None, namespace, Some(destroy_unix_ms))?;
 	actor["create_ts"] = json!(create_unix_ms);
 	Ok(actor)
 }
@@ -2142,9 +2146,8 @@ pub async fn get_actor(
 		return Err(ActorNotFound.build().into());
 	};
 
-	Ok(Json(
-		json!({ "actor": actor_json(&actor.data, &namespace.name, None)? }),
-	))
+	let listed = actor_json(&actor.data, actor.phase.as_ref(), &namespace.name, None)?;
+	Ok(Json(json!({ "actor": listed })))
 }
 
 pub async fn destroy_actor(
@@ -2528,6 +2531,9 @@ pub(super) struct ReadActor {
 	destroyed: bool,
 	/// The V2 migrator holds the actor while its data moves in.
 	held: bool,
+	/// The current incarnation's phase, which says when the actor last became connectable or
+	/// went to sleep.
+	phase: Option<wire::ActorPhase>,
 }
 
 /// What a read of an actor found.
@@ -2571,6 +2577,7 @@ fn read_actor_of(res: wire::ActorReadResponse) -> Option<ReadActor> {
 		data,
 		destroyed,
 		held,
+		phase: res.phase,
 	})
 }
 
@@ -2605,14 +2612,32 @@ fn forked_from_json(actor: &wire::ActorData) -> Result<Value> {
 	}
 }
 
-/// An actor in main's public shape, in the namespace it was asked about. v3 does not record
-/// when an actor started, became connectable, slept or waited for an allocation, so those
-/// fields are null.
+/// An actor in main's public shape, in the namespace it was asked about. `phase` is the current
+/// incarnation's phase when the caller read it: a running actor lists when it became connectable
+/// and a sleeping one when it went to sleep, and either is null for a state written before the
+/// engine recorded them. v3 does not record when an actor first started, waited for an
+/// allocation or will next try one, so those fields are always null.
 pub fn actor_json(
 	actor: &wire::ActorData,
+	phase: Option<&wire::ActorPhase>,
 	namespace: &str,
 	destroy_unix_ms: Option<i64>,
 ) -> Result<Value> {
+	let (connectable_unix_ms, sleep_unix_ms) = match phase {
+		Some(wire::ActorPhase::Running(running)) => (running.connectable_unix_ms, None),
+		Some(wire::ActorPhase::Sleeping(sleeping)) => (None, sleeping.sleep_unix_ms),
+		Some(
+			wire::ActorPhase::Initializing(_)
+			| wire::ActorPhase::Starting(_)
+			| wire::ActorPhase::Stopping(_)
+			| wire::ActorPhase::Destroying(_)
+			| wire::ActorPhase::Destroyed
+			| wire::ActorPhase::MigratingFromV2(_)
+			| wire::ActorPhase::DelegatedToV2,
+		)
+		| None => (None, None),
+	};
+
 	Ok(json!({
 		"actor_id": Id::from_slice(&actor.actor_id)?.to_string(),
 		"name": actor.name,
@@ -2622,8 +2647,8 @@ pub fn actor_json(
 		"create_ts": actor.create_unix_ms,
 		"start_ts": null,
 		"pending_allocation_ts": null,
-		"connectable_ts": null,
-		"sleep_ts": null,
+		"connectable_ts": connectable_unix_ms,
+		"sleep_ts": sleep_unix_ms,
 		"reschedule_ts": null,
 		"destroy_ts": destroy_unix_ms,
 		"forked_from": forked_from_json(actor)?,

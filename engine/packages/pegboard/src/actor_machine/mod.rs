@@ -464,6 +464,7 @@ impl DurableStateMachine for ActorStateMachine {
 
 								state.phase = wire::ActorPhase::Running(wire::Running {
 									allocation: allocation.clone(),
+									connectable_unix_ms: Some(now_unix_ms),
 								});
 
 								match &state.pending_action {
@@ -2782,7 +2783,10 @@ pub fn reset_for_fork(
 	let index_bucket_count = state.index_bucket_count;
 	let inherited = std::mem::replace(
 		&mut state.phase,
-		wire::ActorPhase::Sleeping(wire::Sleeping { wake_retries: 0 }),
+		wire::ActorPhase::Sleeping(wire::Sleeping {
+			wake_retries: 0,
+			sleep_unix_ms: None,
+		}),
 	);
 	// Timers are identified by variant, so any payload cancels the inherited one.
 	effects.cancel_timer(wire::ActorTimer::EnvoyCheckTimeout(
@@ -3170,11 +3174,15 @@ fn cancel_allocation_retry(
 	}));
 }
 
-/// Puts the actor to sleep. An actor already asleep keeps its alarm's retry count, so a request
-/// that found no envoy either does not restart the backoff.
-fn enter_sleeping(state: &mut wire::ActorState) {
+/// Puts the actor to sleep at `now_unix_ms`. An actor already asleep keeps its alarm's retry
+/// count and the time it went to sleep, so a request that found no envoy neither restarts the
+/// backoff nor reports a later sleep.
+fn enter_sleeping(state: &mut wire::ActorState, now_unix_ms: i64) {
 	if !matches!(state.phase, wire::ActorPhase::Sleeping(_)) {
-		state.phase = wire::ActorPhase::Sleeping(wire::Sleeping { wake_retries: 0 });
+		state.phase = wire::ActorPhase::Sleeping(wire::Sleeping {
+			wake_retries: 0,
+			sleep_unix_ms: Some(now_unix_ms),
+		});
 	}
 }
 
@@ -3214,11 +3222,11 @@ fn handle_stopped(
 
 	match &state.pending_action {
 		wire::PendingAction::PendingNone | wire::PendingAction::PendingSleep => {
-			enter_sleeping(state);
+			enter_sleeping(state, now_unix_ms);
 			set_pending_action(&mut state.pending_action, wire::PendingAction::PendingNone);
 		}
 		wire::PendingAction::PendingReallocate if write_version >= ALLOCATION_RETRY_VERSION => {
-			enter_sleeping(state);
+			enter_sleeping(state, now_unix_ms);
 			arm_allocation_retry(state, effects, 0, entropy);
 		}
 		wire::PendingAction::PendingReallocate => {
@@ -3258,7 +3266,7 @@ fn allocate_actor(
 	match &state.pending_action {
 		wire::PendingAction::PendingNone | wire::PendingAction::PendingReallocate => {}
 		wire::PendingAction::PendingSleep => {
-			enter_sleeping(state);
+			enter_sleeping(state, now_unix_ms);
 			set_pending_action(&mut state.pending_action, wire::PendingAction::PendingNone);
 			return;
 		}
@@ -3271,7 +3279,7 @@ fn allocate_actor(
 		&& state.pending_action == wire::PendingAction::PendingReallocate
 		&& matches!(state.phase, wire::ActorPhase::Sleeping(_))
 	{
-		enter_sleeping(state);
+		enter_sleeping(state, now_unix_ms);
 		return;
 	}
 	set_pending_action(&mut state.pending_action, wire::PendingAction::PendingNone);
@@ -3279,7 +3287,7 @@ fn allocate_actor(
 	// Legacy: an actor the backfill is moving never starts; it sleeps until its destroy.
 	// Removed in 3.1 with the backfill.
 	if legacy_moving(state) {
-		enter_sleeping(state);
+		enter_sleeping(state, now_unix_ms);
 		return;
 	}
 	match allocation {
@@ -3291,7 +3299,7 @@ fn allocate_actor(
 			start_threshold_ms,
 			now_unix_ms,
 		),
-		None => enter_sleeping(state),
+		None => enter_sleeping(state, now_unix_ms),
 	}
 }
 
@@ -3718,7 +3726,7 @@ fn activate_from_v2(
 		return;
 	}
 
-	enter_sleeping(state);
+	enter_sleeping(state, now_unix_ms);
 	match alarm_unix_ms {
 		Some(alarm_unix_ms) => set_alarm(effects, Some(alarm_unix_ms), now_unix_ms),
 		None => {

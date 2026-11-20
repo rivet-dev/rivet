@@ -1,15 +1,16 @@
 //! Wire types for V2's public `/migration/v1/` routes, which the V3 migrator calls.
 //!
-//! This is a copy of V2's schema (`engine/sdks/schemas/v2-migration-protocol/v1.bare` on V2).
-//! Bodies are raw BARE: the `/v1` path pins the schema version for both peers, so no version
-//! header is written. Keep the schema byte-identical to V2's.
+//! This is a copy of V2's schemas (`engine/sdks/schemas/v2-migration-protocol/` on V2). Bodies
+//! are raw BARE: each route's path pins the schema version for both peers, so no version header
+//! is written. The `/migration/v1/` routes' types are byte-identical in v2, so the latest version
+//! serves every route. Keep the schemas byte-identical to V2's.
 
 use anyhow::{Context, Result, bail};
 use vbare::{Bytes, Encode, Message};
 
 pub mod generated;
 
-pub use generated::v1::*;
+pub use generated::v2::*;
 
 /// Content type of the streamed export response.
 pub const EXPORT_CONTENT_TYPE: &str = "application/x-rivet-v2-migration";

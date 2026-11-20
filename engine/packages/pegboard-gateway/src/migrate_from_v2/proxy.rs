@@ -1,5 +1,7 @@
 //! Forwarding to the V2 deployment a migration takes over: gateway requests and WebSockets
-//! proxied unchanged. The V2 public API client lives in `pegboard::migrate_from_v2`.
+//! proxied unchanged apart from their credentials. V2 cannot verify this cluster's tokens, so the
+//! gateway authorizes the client here, removes its token, and reaches V2 with the migration's
+//! token instead. The V2 public API client lives in `pegboard::migrate_from_v2`.
 
 use anyhow::{Context, Result};
 use axum::body::Body;
@@ -12,6 +14,7 @@ use rivet_env::capabilities::{
 	websocket::{CloseFrame, Message, WebSocket},
 };
 use rivet_env::{Clock, ClockError};
+use rivet_guard_core::auth::{WS_PROTOCOL_TOKEN, X_RIVET_TOKEN, bearer_token};
 use std::{sync::Arc, time::Duration};
 
 /// How long a proxied request waits for V2's response headers. V2's gateway may wake the
@@ -38,12 +41,17 @@ const HOP_BY_HOP_HEADERS: [&str; 9] = [
 	"host",
 ];
 
+/// The prefix of a gateway path whose first segment selects the actor.
+const GATEWAY_PATH_PREFIX: &str = "/gateway/";
+
 /// The V2 gateway URI for a request this gateway received as `original`. The path and query
-/// are kept byte for byte, except that `rvt-namespace` names the V2 namespace. A keyed request
-/// gets `rvt-namespace` even when the client left it out, because V2 requires it.
+/// are kept byte for byte, except that `rvt-namespace` names the V2 namespace and the client's
+/// token is removed from both: from `rvt-token`, and from a direct selector's `{actor_id}@{token}`.
+/// A keyed request gets `rvt-namespace` even when the client left it out, because V2 requires it.
 pub fn gateway_uri(config: &MigrateFromV2, original: &Uri, keyed: bool) -> Result<Uri> {
-	let query = rewrite_namespace(original.query(), &config.namespace, keyed);
-	let path = original.path();
+	let query = rewrite_query(original.query(), &config.namespace, keyed);
+	let path = without_selector_token(original.path(), keyed);
+	let path = path.as_str();
 	let path_and_query = match query {
 		Some(query) => format!("{path}?{query}"),
 		None => path.to_owned(),
@@ -54,8 +62,29 @@ pub fn gateway_uri(config: &MigrateFromV2, original: &Uri, keyed: bool) -> Resul
 		.context("invalid V2 gateway URI")
 }
 
-/// `query` with `rvt-namespace` set to `namespace`. Every other parameter is kept as it was.
-pub fn rewrite_namespace(query: Option<&str>, namespace: &str, ensure: bool) -> Option<String> {
+/// `path` without the token a direct selector carries as `{actor_id}@{token}`. A keyed selector
+/// is an actor name, whose `@` is not a token, so its path is kept.
+fn without_selector_token(path: &str, keyed: bool) -> String {
+	if keyed {
+		return path.to_owned();
+	}
+	let Some(rest) = path.strip_prefix(GATEWAY_PATH_PREFIX) else {
+		return path.to_owned();
+	};
+	let (selector, tail) = match rest.find('/') {
+		Some(end) => rest.split_at(end),
+		None => (rest, ""),
+	};
+	let actor = match selector.split_once('@') {
+		Some((actor, _token)) => actor,
+		None => selector,
+	};
+	format!("{GATEWAY_PATH_PREFIX}{actor}{tail}")
+}
+
+/// `query` with `rvt-namespace` set to `namespace` and without `rvt-token`. Every other parameter
+/// is kept as it was.
+pub fn rewrite_query(query: Option<&str>, namespace: &str, ensure: bool) -> Option<String> {
 	let encoded = serde_html_form::to_string([("rvt-namespace", namespace)]).ok()?;
 	let mut found = false;
 	let mut parts = Vec::new();
@@ -65,6 +94,9 @@ pub fn rewrite_namespace(query: Option<&str>, namespace: &str, ensure: bool) -> 
 		.filter(|part| !part.is_empty())
 	{
 		let name = part.split('=').next().unwrap_or("");
+		if name == "rvt-token" {
+			continue;
+		}
 		if name == "rvt-namespace" {
 			found = true;
 			parts.push(encoded.clone());
@@ -82,14 +114,70 @@ pub fn rewrite_namespace(query: Option<&str>, namespace: &str, ensure: bool) -> 
 	}
 }
 
-/// The client's headers without connection-scoped ones. Credentials are kept: V2 authorizes
-/// the request with the client's own token.
-pub fn forward_headers(headers: &HeaderMap) -> HeaderMap {
+/// The credentials of a request proxied to V2.
+pub struct V2Credentials<'a> {
+	/// The token this cluster authenticated the client with, which V2 cannot verify.
+	pub client_token: Option<&'a str>,
+	/// `migrate_from_v2.token`, which V2 authorizes the request with instead.
+	pub v2_token: Option<&'a str>,
+}
+
+/// The client's headers without connection-scoped ones and without the client's token, with the
+/// migration's token in its place. V2's gateway reads its token from `x-rivet-token` for a request
+/// and from a `rivet_token.` subprotocol for a WebSocket, and strips both before actor code sees
+/// the request, so the token goes there. An `Authorization` bearer is removed only when it is the
+/// client's token, so an actor-level bearer still reaches the actor.
+pub fn forward_headers(
+	headers: &HeaderMap,
+	credentials: &V2Credentials<'_>,
+	websocket: bool,
+) -> Result<HeaderMap> {
 	let mut forwarded = headers.clone();
 	for name in HOP_BY_HOP_HEADERS {
 		forwarded.remove(name);
 	}
-	forwarded
+	forwarded.remove(X_RIVET_TOKEN);
+
+	let client_bearer = forwarded
+		.get(header::AUTHORIZATION)
+		.and_then(|value| value.to_str().ok())
+		.and_then(bearer_token)
+		.is_some_and(|token| Some(token) == credentials.client_token);
+	if client_bearer {
+		forwarded.remove(header::AUTHORIZATION);
+	}
+
+	// Every subprotocol but a token one is kept, in order, on one header line.
+	let mut protocols = forwarded
+		.get_all(header::SEC_WEBSOCKET_PROTOCOL)
+		.iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(|value| value.split(','))
+		.map(str::trim)
+		.filter(|protocol| !protocol.is_empty() && !protocol.starts_with(WS_PROTOCOL_TOKEN))
+		.map(ToOwned::to_owned)
+		.collect::<Vec<_>>();
+	forwarded.remove(header::SEC_WEBSOCKET_PROTOCOL);
+
+	if let Some(v2_token) = credentials.v2_token {
+		if websocket {
+			protocols.push(format!("{WS_PROTOCOL_TOKEN}{v2_token}"));
+		} else {
+			forwarded.insert(
+				X_RIVET_TOKEN,
+				header::HeaderValue::from_str(v2_token)
+					.context("migrate_from_v2.token is not a valid header value")?,
+			);
+		}
+	}
+	if !protocols.is_empty() {
+		forwarded.insert(
+			header::SEC_WEBSOCKET_PROTOCOL,
+			header::HeaderValue::from_str(&protocols.join(", "))
+				.context("invalid WebSocket subprotocols")?,
+		);
+	}
+	Ok(forwarded)
 }
 
 /// Whether V2's gateway answered that it does not hold the actor.
@@ -124,6 +212,7 @@ pub async fn http(
 	uri: Uri,
 	method: Method,
 	headers: &HeaderMap,
+	credentials: &V2Credentials<'_>,
 	body: Body,
 ) -> Result<HttpOutcome> {
 	// A streamed body has no known length, so a request without one says so explicitly.
@@ -134,7 +223,7 @@ pub async fn http(
 			.map(|chunk| chunk.map_err(anyhow::Error::from))
 			.boxed(),
 	)?;
-	*request.headers_mut() = forward_headers(headers);
+	*request.headers_mut() = forward_headers(headers, credentials, false)?;
 	if empty {
 		request
 			.headers_mut()
@@ -175,9 +264,10 @@ pub async fn websocket_connect(
 	namespace_label: &str,
 	uri: Uri,
 	headers: &HeaderMap,
+	credentials: &V2Credentials<'_>,
 ) -> Result<ClientWebSocket> {
 	let mut request = Request::builder().uri(uri).body(())?;
-	*request.headers_mut() = forward_headers(headers);
+	*request.headers_mut() = forward_headers(headers, credentials, true)?;
 
 	#[allow(clippy::disallowed_methods, reason = "metrics use real time")]
 	let started = std::time::Instant::now();
@@ -196,13 +286,15 @@ pub async fn websocket_connect(
 	Ok(socket)
 }
 
-/// The subprotocol V2 accepted, for the client's upgrade.
+/// The subprotocol V2 accepted, for the client's upgrade. A token subprotocol is never offered
+/// to the client, since it would carry the migration's token.
 pub fn accepted_protocol(socket: &ClientWebSocket) -> Option<String> {
 	socket
 		.response
 		.headers()
 		.get(header::SEC_WEBSOCKET_PROTOCOL)
 		.and_then(|value| value.to_str().ok())
+		.filter(|protocol| !protocol.trim().starts_with(WS_PROTOCOL_TOKEN))
 		.map(ToOwned::to_owned)
 }
 

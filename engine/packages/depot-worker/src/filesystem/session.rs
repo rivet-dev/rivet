@@ -7,7 +7,7 @@ use super::{
 };
 use bytes::Bytes;
 use depot_fs_core::{
-	FsBaseLink, FsVolumeRecord, FsVolumeStatus,
+	FsBaseLink, FsInode, FsVolumeRecord, FsVolumeStatus,
 	keys::slatedb as keys,
 	overlay::{self, Level, RangeWhiteout},
 	store::{Row, RowKey, RowRange},
@@ -1433,20 +1433,38 @@ impl ReadSession {
 		ino: u64,
 		indices: &[u64],
 	) -> Result<Vec<depot_fs_core::forks::ChunkLookup>> {
-		use depot_fs_core::forks::{ChunkLookup, chunk_lookup};
 		self.check_chunk_count(indices.len())?;
-		let inode = match self
+		let Some(inode) = self.chunk_inode(ino).await? else {
+			return Ok(vec![
+				depot_fs_core::forks::ChunkLookup::Resolved(None);
+				indices.len()
+			]);
+		};
+		self.read_inode_chunks(ino, &inode, indices).await
+	}
+
+	pub(super) async fn chunk_inode(&self, ino: u64) -> Result<Option<FsInode>> {
+		match self
 			.version(&RowKey::Inode(ino))
 			.await?
 			.and_then(|(_, _, row)| row)
 		{
-			Some(Row::Inode(inode)) => inode,
-			None => return Ok(vec![ChunkLookup::Resolved(None); indices.len()]),
-			_ => return Err(Error::Corrupt),
-		};
+			Some(Row::Inode(inode)) => Ok(Some(inode)),
+			None => Ok(None),
+			_ => Err(Error::Corrupt),
+		}
+	}
+
+	pub(super) async fn read_inode_chunks(
+		&self,
+		ino: u64,
+		inode: &FsInode,
+		indices: &[u64],
+	) -> Result<Vec<depot_fs_core::forks::ChunkLookup>> {
+		use depot_fs_core::forks::{ChunkLookup, chunk_lookup};
 		let mut result = Vec::with_capacity(indices.len());
 		for (index, version) in indices.iter().zip(self.chunk_versions(ino, indices).await?) {
-			let value = chunk_lookup(&inode, *index, version).map_err(|_| Error::Corrupt)?;
+			let value = chunk_lookup(inode, *index, version).map_err(|_| Error::Corrupt)?;
 			result.push(
 				if matches!(value, ChunkLookup::Base { .. }) && self.base_chain.is_empty() {
 					ChunkLookup::Resolved(None)

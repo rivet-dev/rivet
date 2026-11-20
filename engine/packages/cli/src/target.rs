@@ -1,6 +1,6 @@
 use std::{
 	fs,
-	io::{IsTerminal, Write},
+	io::Write,
 	path::{Path, PathBuf},
 };
 
@@ -11,8 +11,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
 	DEFAULT_CLOUD_API,
-	auth::{Auth, resolve_auth},
+	auth::{
+		Auth, AuthSource, github_actions_token, has_explicit_token, in_github_actions, resolve_auth,
+	},
 	cloud::{CloudClient, TokenInspectResponse},
+	terminal::is_interactive,
 	util::encode,
 };
 
@@ -56,6 +59,11 @@ pub struct ClusterTarget {
 	pub org: Option<String>,
 }
 
+struct GitHubActionsCluster {
+	org: String,
+	cluster: String,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Link {
@@ -72,6 +80,10 @@ pub enum Link {
 
 impl CloudArgs {
 	pub async fn connect(&self) -> Result<(CloudClient, Auth, Target)> {
+		if let Some(connected) = self.connect_github_actions().await? {
+			return Ok(connected);
+		}
+
 		let auth = resolve_auth(self.token.as_deref(), &self.cloud_api).await?;
 		let cloud = CloudClient::new(&self.cloud_api, auth.token.clone())?
 			.with_login_refresh(&auth, &self.cloud_api);
@@ -125,6 +137,46 @@ impl CloudArgs {
 		}
 	}
 
+	/// Connects with a GitHub Actions OIDC token exchanged for a cluster
+	/// credential, when the job may request one, no token was given and a
+	/// cluster is selected.
+	pub async fn connect_github_actions(&self) -> Result<Option<(CloudClient, Auth, Target)>> {
+		let Some(target) = self.github_actions_cluster()? else {
+			return Ok(None);
+		};
+		let token = github_actions_token(&self.cloud_api, &target.org, &target.cluster).await?;
+		let auth = Auth {
+			token: token.clone(),
+			source: AuthSource::GitHubActions,
+			user: None,
+		};
+		let cloud = CloudClient::new(&self.cloud_api, token)?
+			.with_github_actions_refresh(&self.cloud_api, &target.org, &target.cluster)
+			.with_organization(Some(target.org.clone()));
+		let target = Target::Cluster(ClusterTarget {
+			cluster: target.cluster,
+			org: Some(target.org),
+		});
+		Ok(Some((cloud, auth, target)))
+	}
+
+	fn github_actions_cluster(&self) -> Result<Option<GitHubActionsCluster>> {
+		if has_explicit_token(self.token.as_deref()) || !in_github_actions() {
+			return Ok(None);
+		}
+		let (cluster, linked_org) = match (&self.cluster, find_link()?) {
+			(Some(cluster), _) => (cluster.clone(), None),
+			(None, Some((Link::Cluster { cluster, org }, _))) if self.project.is_none() => {
+				(cluster, org)
+			}
+			_ => return Ok(None),
+		};
+		let org = self.org.clone().or(linked_org).with_context(|| {
+			format!("pass --org or set RIVET_ORG to reach cluster {cluster} from GitHub Actions")
+		})?;
+		Ok(Some(GitHubActionsCluster { org, cluster }))
+	}
+
 	async fn resolve_target(&self, cloud: &CloudClient, auth: &Auth) -> Result<Target> {
 		if let Some(cluster) = &self.cluster {
 			return Ok(Target::Cluster(ClusterTarget {
@@ -176,7 +228,7 @@ impl CloudArgs {
 			Some(Link::Cluster { .. }) | None => {}
 		}
 
-		if !std::io::stdin().is_terminal() {
+		if !is_interactive() {
 			bail!(
 				"no project selected; run `rivet link` in this directory or pass --org and --project"
 			);
@@ -222,6 +274,24 @@ struct Pagination {
 	cursor: Option<String>,
 }
 
+/// Prompts for one of the signed-in user's organizations and returns its slug.
+pub async fn pick_org(cloud: &CloudClient) -> Result<String> {
+	let response: OrganizationsResponse = cloud
+		.request_ok(Method::GET, "/oauth/organizations", None)
+		.await?
+		.context("organization list returned no body")?;
+	let mut organizations = response.organizations;
+	if organizations.is_empty() {
+		bail!("your account has no organizations; create one in the dashboard first");
+	}
+	let labels: Vec<String> = organizations
+		.iter()
+		.map(|org| format!("{} ({})", org.name, org.slug))
+		.collect();
+	let index = choose("Select an organization", &labels)?;
+	Ok(organizations.swap_remove(index).slug)
+}
+
 /// Prompts for the organization and project the caller did not already pass.
 pub async fn pick_target(
 	cloud: &CloudClient,
@@ -230,22 +300,7 @@ pub async fn pick_target(
 ) -> Result<ProjectTarget> {
 	let org = match org {
 		Some(org) => org.to_string(),
-		None => {
-			let response: OrganizationsResponse = cloud
-				.request_ok(Method::GET, "/oauth/organizations", None)
-				.await?
-				.context("organization list returned no body")?;
-			let mut organizations = response.organizations;
-			if organizations.is_empty() {
-				bail!("your account has no organizations; create one in the dashboard first");
-			}
-			let labels: Vec<String> = organizations
-				.iter()
-				.map(|org| format!("{} ({})", org.name, org.slug))
-				.collect();
-			let index = choose("Select an organization", &labels)?;
-			organizations.swap_remove(index).slug
-		}
+		None => pick_org(cloud).await?,
 	};
 
 	let project = match project {
@@ -292,7 +347,7 @@ async fn list_projects(cloud: &CloudClient, org: &str) -> Result<Vec<Project>> {
 	}
 }
 
-fn choose(prompt: &str, options: &[String]) -> Result<usize> {
+pub fn choose(prompt: &str, options: &[String]) -> Result<usize> {
 	if options.len() == 1 {
 		eprintln!("{prompt}: {}", options[0]);
 		return Ok(0);

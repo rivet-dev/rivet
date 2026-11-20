@@ -15,6 +15,11 @@
 //! same volume fences the entries by connection epoch and remembers where they sit, so an older
 //! connection of the envoy can neither overwrite nor delete a newer connection's route.
 //!
+//! Once every storage worker reads `pegboard.pool`, envoys move onto the hash-ring index in the
+//! same volume ([`crate::envoy_ring`]), which allocation samples by power of two choices. An
+//! envoy has rows in exactly one of the two, so the listings here merge both, and the legacy
+//! upsert and delete also remove the envoy's ring rows up to their connection epoch.
+//!
 //! The pool catalog keeps one entry per pool of a namespace, in one volume per namespace, so the
 //! configured pools can be enumerated even before any envoy connects.
 //!
@@ -31,10 +36,10 @@ use crate::keys::{
 	kv::ActiveEnvoyStateKey, kv::ActiveEnvoyStatePrefix, kv::ActiveEnvoyVersionKey,
 	kv::ActiveEnvoyVersionPrefix, kv::ActorIndexKey, kv::ActorIndexPrefix,
 	kv::DestroyedActorIndexKey, kv::DestroyedActorIndexPrefix, kv::EnvoyIndexKey,
-	kv::EnvoyIndexPrefix, kv::EnvoyPoolKey, kv::EnvoyPoolPrefix, kv::at_write_version,
-	partition::ActiveEnvoyIndexVolume, partition::ActorIndexVolume, partition::EnvoyIndexVolume,
-	partition::EnvoyPoolIndexVolume, partition::EnvoyVolume, partition::LegacyActorIndexVolume,
-	partition::actor_index_bucket,
+	kv::EnvoyIndexPrefix, kv::EnvoyPoolKey, kv::EnvoyPoolPrefix, kv::PoolEnvoyVersionKey,
+	kv::at_write_version, partition::ActiveEnvoyIndexVolume, partition::ActorIndexVolume,
+	partition::EnvoyIndexVolume, partition::EnvoyPoolIndexVolume, partition::EnvoyVolume,
+	partition::LegacyActorIndexVolume, partition::actor_index_bucket,
 };
 use crate::wire;
 use anyhow::{Context, Result, ensure};
@@ -186,6 +191,8 @@ impl Command for IndexListActiveEnvoyStates {
 pub fn register(registry: &mut CommandRegistry, ctx: &EngineContext) -> Result<()> {
 	let buckets = ctx.config().pegboard().actor_index_buckets_per_name();
 	crate::catalog::register(registry, ctx)?;
+	crate::envoy_ring::register(registry, ctx)?;
+	crate::pool_admin::register(registry, ctx)?;
 	let concurrency = ctx.config().pegboard().command_concurrency.index();
 	registry.register_with_concurrency::<IndexInsertActor>(
 		concurrency,
@@ -633,7 +640,7 @@ async fn apply_index_repairs(db: &KvHandle, repairs: IndexRepairs) -> Result<()>
 	db.commit(txn).await?;
 	Ok(())
 }
-fn shrink_index_page(error: &anyhow::Error, rows: &mut usize) -> bool {
+pub(crate) fn shrink_index_page(error: &anyhow::Error, rows: &mut usize) -> bool {
 	if *rows > 1
 		&& matches!(
 			error.downcast_ref::<depot_client::filesystem::Error>(),
@@ -848,7 +855,7 @@ async fn reconcile_active_envoy_page(
 /// TooLarge shrinks the page without advancing its checkpoint. A timed-out command resumes
 /// completed pages, while an abandoned commit fences and reopens through normal recovery.
 /// Empty speculative volumes require no creating transaction here.
-async fn prepare_active_envoy_index(db: &KvHandle, write_version: u16) -> Result<()> {
+pub(crate) async fn prepare_active_envoy_index(db: &KvHandle, write_version: u16) -> Result<()> {
 	let write_version = rivet_data::pegboard_actor::record_write_version(write_version);
 	let opening = db.opening_state::<ActiveEnvoyIndexOpening>().await?;
 	let mut progress = opening.reconciliation.lock().await;
@@ -993,7 +1000,7 @@ async fn prepare_active_envoy_index(db: &KvHandle, write_version: u16) -> Result
 }
 
 /// The stored state of an envoy in the active index, if it has one.
-async fn read_active_envoy_state(
+pub(crate) async fn read_active_envoy_state(
 	txn: &mut depot_worker::command::Transaction,
 	state_key: &ActiveEnvoyStateKey,
 ) -> Result<Option<wire::ActiveEnvoyState>> {
@@ -1004,7 +1011,7 @@ async fn read_active_envoy_state(
 }
 
 /// Deletes the index entries the stored state says the envoy sits at.
-fn delete_active_envoy_entries(
+pub(crate) fn delete_active_envoy_entries(
 	txn: &mut depot_worker::command::Transaction,
 	envoy_key: &str,
 	stored: &wire::ActiveEnvoyState,
@@ -1031,7 +1038,7 @@ fn delete_active_envoy_entries(
 /// preserve the existing registration transaction budget, including very wide registrations.
 /// A cancelled or superseded request may leave extra hints; live-window validation makes
 /// those harmless. Blind concurrent puts of the same empty value cannot lose information.
-async fn ensure_active_envoy_versions(
+pub(crate) async fn ensure_active_envoy_versions(
 	db: &KvHandle,
 	names: &[vbare::Str],
 	version: DescendingU64,
@@ -1099,6 +1106,19 @@ async fn upsert_active_envoy_handler(
 	};
 
 	ensure_active_envoy_versions(&db, &request.names, DescendingU64(u64::from(version))).await?;
+	// A ring pick reaches a legacy envoy only through its version's stamp. Until this host can
+	// write the pool family, allocation lists the legacy index instead and needs no stamp.
+	if db.write_version(VersionFamily::PEGBOARD_POOL).is_ok() {
+		let mut stamps = crate::envoy_ring::VersionStamps::default();
+		stamps.add(&request.names, version, request.heartbeat_unix_ms);
+		let mut snapshot = db.snapshot().await?;
+		let stale = stamps.stale(&mut snapshot).await?;
+		drop(snapshot);
+		if !stale.is_empty() {
+			let _lock = crate::envoy_ring::lock_pool(&db).await?;
+			crate::envoy_ring::refresh_version_stamps(&db, &stamps).await?;
+		}
+	}
 	let mut txn = db.begin().await?;
 	// The pool's newest live version is read before this envoy's rows change, skipping the
 	// envoy's own row so a redeploy to a lower version does not see itself as superseded.
@@ -1111,6 +1131,15 @@ async fn upsert_active_envoy_handler(
 	.map_or(version, |newest| {
 		u32::try_from(newest.0).unwrap_or(u32::MAX).max(version)
 	});
+	// An envoy is in one index at a time; a newer connection on the ring supersedes this one.
+	if crate::envoy_ring::leave_ring(&mut txn, &envoy_key, request.connection_epoch).await?
+		== crate::envoy_ring::RingLeave::Superseded
+	{
+		return Ok(wire::IndexUpsertActiveEnvoyResponse {
+			superseded: true,
+			newest_live_version,
+		});
+	}
 	if let Some(stored) = read_active_envoy_state(&mut txn, &state_key).await? {
 		if stored.connection_epoch > request.connection_epoch {
 			return Ok(wire::IndexUpsertActiveEnvoyResponse {
@@ -1171,8 +1200,8 @@ async fn upsert_active_envoy_handler(
 	})
 }
 
-/// Removes the envoy's index entries and state, unless a newer connection owns them. No state
-/// means nothing to remove.
+/// Removes the envoy's entries and state from both the legacy index and the ring, except those
+/// a newer connection wrote. No state means nothing to remove.
 async fn delete_active_envoy_handler(
 	db: KvHandle,
 	request: wire::IndexDeleteActiveEnvoyRequest,
@@ -1184,14 +1213,19 @@ async fn delete_active_envoy_handler(
 	prepare_active_envoy_index(&db, db.write_version(VersionFamily::PEGBOARD_ACTOR)?).await?;
 
 	let mut txn = db.begin().await?;
-	let Some(stored) = read_active_envoy_state(&mut txn, &state_key).await? else {
-		return Ok(());
-	};
-	if stored.connection_epoch > request.connection_epoch {
+	let ring =
+		crate::envoy_ring::leave_ring(&mut txn, &envoy_key, request.connection_epoch).await?;
+	let mut changed = ring == crate::envoy_ring::RingLeave::Removed;
+	if let Some(stored) = read_active_envoy_state(&mut txn, &state_key).await?
+		&& stored.connection_epoch <= request.connection_epoch
+	{
+		delete_active_envoy_entries(&mut txn, &envoy_key, &stored)?;
+		txn.delete(&state_key.pack())?;
+		changed = true;
+	}
+	if !changed {
 		return Ok(());
 	}
-	delete_active_envoy_entries(&mut txn, &envoy_key, &stored)?;
-	txn.delete(&state_key.pack())?;
 	db.commit(txn).await?;
 	crate::metrics::ENVOY_INDEX_UPSERTS
 		.with_label_values(&[&volume.namespace, "disconnect"])
@@ -1201,20 +1235,24 @@ async fn delete_active_envoy_handler(
 }
 
 /// The oldest heartbeat still inside [`crate::ENVOY_HEARTBEAT_TIMEOUT_MS`] at `now_unix_ms`.
-fn oldest_eligible_heartbeat(now_unix_ms: i64) -> i64 {
+pub(crate) fn oldest_eligible_heartbeat(now_unix_ms: i64) -> i64 {
 	now_unix_ms.saturating_sub(crate::ENVOY_HEARTBEAT_TIMEOUT_MS) + 1
 }
 
 /// The first key of `version`'s eligibility window under `name`: the oldest heartbeat still
 /// inside [`crate::ENVOY_HEARTBEAT_TIMEOUT_MS`], with the empty envoy key that sorts before every
 /// other key at that heartbeat.
-fn active_envoy_window_start(name: &str, version: DescendingU64, oldest_eligible: i64) -> Vec<u8> {
+pub(crate) fn active_envoy_window_start(
+	name: &str,
+	version: DescendingU64,
+	oldest_eligible: i64,
+) -> Vec<u8> {
 	ActiveEnvoyIndexKey::new(name.to_owned(), version, oldest_eligible, String::new())
 		.pack()
 		.to_vec()
 }
 
-fn bound_slice(bound: &Bound<Vec<u8>>) -> Bound<&[u8]> {
+pub(crate) fn bound_slice(bound: &Bound<Vec<u8>>) -> Bound<&[u8]> {
 	match bound {
 		Bound::Included(key) => Bound::Included(key.as_slice()),
 		Bound::Excluded(key) => Bound::Excluded(key.as_slice()),
@@ -1222,9 +1260,10 @@ fn bound_slice(bound: &Bound<Vec<u8>>) -> Bound<&[u8]> {
 	}
 }
 
-/// The highest candidate with a live route. Catalog keys contain no heartbeat and are never
-/// retired, so discovering a version cannot walk the physical history of moved route keys.
-async fn newest_live_active_envoy_version(
+/// The highest candidate with a live route in either the legacy index or the ring. Catalog keys
+/// contain no heartbeat and are never retired, so discovering a version cannot walk the
+/// physical history of moved route keys.
+pub(crate) async fn newest_live_active_envoy_version(
 	snapshot: &mut depot_worker::command::Transaction,
 	name: &str,
 	oldest_eligible: i64,
@@ -1256,6 +1295,8 @@ async fn newest_live_active_envoy_version(
 			)
 			.await?
 			.is_empty()
+			|| crate::envoy_ring::ring_live_at(snapshot, name, candidate.version, oldest_eligible)
+				.await?
 		{
 			return Ok(Some(candidate.version));
 		}
@@ -1331,6 +1372,25 @@ async fn list_active_envoys_handler(
 	let oldest_eligible = oldest_eligible_heartbeat(now_unix_ms);
 	let mut snapshot = db.snapshot().await?;
 
+	// A ring cursor resumes the ring half of the version the listing chose.
+	if let Some(cursor) = request.cursor.as_deref()
+		&& let Ok(cursor_key) = PoolEnvoyVersionKey::unpack(cursor)
+	{
+		let (states, cursor) = crate::envoy_ring::list_ring_page(
+			&mut snapshot,
+			&name,
+			cursor_key.version,
+			Some(cursor),
+			PAGE_SIZE,
+			oldest_eligible,
+		)
+		.await?;
+		return Ok(wire::IndexListActiveEnvoysResponse {
+			envoys: states.into_iter().map(ring_allocation).collect(),
+			cursor: cursor.map(Into::into),
+		});
+	}
+
 	let (version, lower) = match request.cursor.as_deref() {
 		Some(cursor) => {
 			let range = ActiveEnvoyIndexNamePrefix::new(name.clone()).range();
@@ -1384,21 +1444,11 @@ async fn list_active_envoys_handler(
 	let has_more = entries.len() > PAGE_SIZE;
 	entries.truncate(PAGE_SIZE);
 
-	// The deployed versioned reader always parses canonical cursors, including when
-	// discovery falls back to encoding v1. Accept older incoming cursors above, but
-	// never choose an emitted wire format from a temporary encoding decision.
-	let cursor = if has_more {
-		entries.last().map(|(key, _)| key.clone())
-	} else {
-		None
-	};
-
 	let mut envoys = Vec::with_capacity(entries.len());
-	for (raw_key, value) in entries {
-		let key =
-			ActiveEnvoyIndexKey::unpack(&raw_key).context("invalid active envoy index key")?;
+	for (raw_key, value) in &entries {
+		let key = ActiveEnvoyIndexKey::unpack(raw_key).context("invalid active envoy index key")?;
 		let entry = key
-			.deserialize(value.into())
+			.deserialize(value.clone().into())
 			.context("invalid active envoy index entry")?;
 		envoys.push(wire::ActorAllocation {
 			envoy_key: key.envoy_key.into(),
@@ -1407,10 +1457,41 @@ async fn list_active_envoys_handler(
 		});
 	}
 
+	// The deployed versioned reader always parses canonical cursors, including when
+	// discovery falls back to encoding v1. Accept older incoming cursors above, but
+	// never choose an emitted wire format from a temporary encoding decision.
+	if has_more {
+		return Ok(wire::IndexListActiveEnvoysResponse {
+			envoys,
+			cursor: entries.last().map(|(key, _)| key.clone().into()),
+		});
+	}
+
+	// The legacy half is done; the rest of the page comes from the ring at the same version.
+	let remaining = PAGE_SIZE.saturating_sub(envoys.len()).max(1);
+	let (states, cursor) = crate::envoy_ring::list_ring_page(
+		&mut snapshot,
+		&name,
+		version,
+		None,
+		remaining,
+		oldest_eligible,
+	)
+	.await?;
+	envoys.extend(states.into_iter().map(ring_allocation));
 	Ok(wire::IndexListActiveEnvoysResponse {
 		envoys,
 		cursor: cursor.map(Into::into),
 	})
+}
+
+/// The allocation a ring envoy's state routes to.
+fn ring_allocation(state: crate::pool_wire::PoolEnvoyState) -> wire::ActorAllocation {
+	wire::ActorAllocation {
+		envoy_key: state.envoy_key,
+		worker_id: state.worker_id,
+		connection_id: state.connection_id,
+	}
 }
 
 /// Lists one page of envoy states in envoy key order, skipping envoys whose heartbeat is outside
@@ -1426,36 +1507,36 @@ async fn list_active_envoy_states_handler(
 	let range = ActiveEnvoyStatePrefix::new().range();
 	let oldest_eligible = oldest_eligible_heartbeat(now_unix_ms);
 
-	let lower = match request.cursor.as_deref() {
+	let after = match request.cursor.as_deref() {
 		Some(cursor) => {
 			ensure!(
 				range.start.as_slice() <= cursor && cursor < range.end.as_slice(),
 				"cursor outside index range"
 			);
-			ActiveEnvoyStateKey::unpack(cursor).context("invalid index cursor")?;
-			Bound::Excluded(cursor)
+			Some(
+				ActiveEnvoyStateKey::unpack(cursor)
+					.context("invalid index cursor")?
+					.envoy_key,
+			)
 		}
-		None => Bound::Included(range.start.as_slice()),
+		None => None,
 	};
+	let lower = request
+		.cursor
+		.as_deref()
+		.map_or(Bound::Included(range.start.as_slice()), Bound::Excluded);
 
+	// Each envoy has a state in exactly one of the legacy index and the ring, so one page merges
+	// both in envoy key order and its cursor is the legacy state key of the last envoy scanned.
 	let mut snapshot = db.snapshot().await?;
-	let mut entries = snapshot
+	let entries = snapshot
 		.scan(
 			(lower, Bound::Excluded(range.end.as_slice())),
 			Some(PAGE_SIZE + 1),
 			false,
 		)
 		.await?;
-	let has_more = entries.len() > PAGE_SIZE;
-	entries.truncate(PAGE_SIZE);
-
-	let cursor = if has_more {
-		entries.last().map(|(key, _)| key.clone())
-	} else {
-		None
-	};
-
-	let mut envoys = Vec::with_capacity(entries.len());
+	let mut scanned = BTreeMap::new();
 	for (raw_key, value) in entries {
 		let key =
 			ActiveEnvoyStateKey::unpack(&raw_key).context("invalid active envoy state key")?;
@@ -1466,6 +1547,34 @@ async fn list_active_envoy_states_handler(
 			state.envoy_key.to_string() == key.envoy_key,
 			"active envoy state names another envoy than its key"
 		);
+		scanned.insert(key.envoy_key, state);
+	}
+	let ring = crate::envoy_ring::list_states_after(&mut snapshot, after.as_deref(), PAGE_SIZE + 1)
+		.await?;
+	for state in ring {
+		scanned.insert(
+			state.envoy_key.to_string(),
+			wire::ActiveEnvoyState {
+				envoy_key: state.envoy_key,
+				connection_epoch: state.connection_epoch,
+				version: state.version,
+				heartbeat_unix_ms: state.heartbeat_unix_ms,
+				names: state.names,
+			},
+		);
+	}
+	let has_more = scanned.len() > PAGE_SIZE;
+	let cursor = if has_more {
+		scanned
+			.keys()
+			.nth(PAGE_SIZE - 1)
+			.map(|envoy_key| ActiveEnvoyStateKey::new(envoy_key.clone()).pack().to_vec())
+	} else {
+		None
+	};
+
+	let mut envoys = Vec::with_capacity(PAGE_SIZE);
+	for (_, state) in scanned.into_iter().take(PAGE_SIZE) {
 		if state.heartbeat_unix_ms < oldest_eligible {
 			crate::metrics::ENVOY_INDEX_STALE_ROWS
 				.with_label_values(&[&volume.namespace, "heartbeat_expired", "skipped"])

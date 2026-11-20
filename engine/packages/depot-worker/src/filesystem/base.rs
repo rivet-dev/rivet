@@ -3,7 +3,7 @@ use super::{
 	session::{Error, ReadSession, Result},
 	store::FilesystemStore,
 };
-use depot_fs_core::{CHUNK_BYTES, FsBaseLink, MAX_FORK_CHAIN_DEPTH, forks::ChunkLookup};
+use depot_fs_core::{CHUNK_BYTES, FsBaseLink, FsInode, MAX_FORK_CHAIN_DEPTH, forks::ChunkLookup};
 use rivet_data::generated::shared_depot_fs_read_v2::{FsBaseRead, FsBaseRowsPage};
 
 /// The error a child's read of an inherited layer fails with when the ancestor's maintainer
@@ -58,21 +58,43 @@ impl ReadSession {
 		first: u64,
 		count: usize,
 	) -> Result<Vec<Option<Vec<u8>>>> {
+		self.read_chunks_with_inode(ino, first, count, None).await
+	}
+
+	pub(super) async fn read_chunks_with_inode(
+		&self,
+		ino: u64,
+		first: u64,
+		count: usize,
+		inode: Option<&FsInode>,
+	) -> Result<Vec<Option<Vec<u8>>>> {
 		self.check_chunk_count(count)?;
 		let indices = (0..count)
 			.map(|offset| first.checked_add(offset as u64).ok_or(Error::TooLarge))
 			.collect::<Result<Vec<_>>>()?;
-		self.resolve_chunks(ino, &indices).await
+		self.resolve_chunks_with_inode(ino, &indices, inode).await
 	}
 
 	/// Own writes and holes never need the parent. Each remaining link receives
 	/// one batch, and every partial truncation limit is carried into its reply.
 	pub async fn resolve_chunks(&self, ino: u64, indices: &[u64]) -> Result<Vec<Option<Vec<u8>>>> {
+		self.resolve_chunks_with_inode(ino, indices, None).await
+	}
+
+	async fn resolve_chunks_with_inode(
+		&self,
+		ino: u64,
+		indices: &[u64],
+		inode: Option<&FsInode>,
+	) -> Result<Vec<Option<Vec<u8>>>> {
 		self.check()?;
 		if self.base_chain.len() > MAX_FORK_CHAIN_DEPTH {
 			return Err(Error::Corrupt);
 		}
-		let local = self.read_local_chunks(ino, indices).await?;
+		let local = match inode {
+			Some(inode) => self.read_inode_chunks(ino, inode, indices).await?,
+			None => self.read_local_chunks(ino, indices).await?,
+		};
 		let mut result = vec![None; indices.len()];
 		let mut pending = Vec::new();
 		for (slot, lookup) in local.into_iter().enumerate() {

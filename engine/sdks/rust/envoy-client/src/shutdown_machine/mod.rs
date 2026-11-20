@@ -15,8 +15,14 @@ pub enum State {
 	/// Actor starts may be admitted. No shutdown work is outstanding.
 	#[default]
 	Running,
-	/// Admission is closed; accepted generations must finish local teardown.
-	DrainingActors { deadline: Instant },
+	/// Admission is closed; accepted generations must finish local teardown. The engine stops
+	/// them over its drain period. At `sweep_at`, if still set, the envoy asks every actor the
+	/// engine has not stopped to sleep, so an engine that stopped driving the drain still leaves
+	/// each actor time to stop before the deadline.
+	DrainingActors {
+		deadline: Instant,
+		sweep_at: Option<Instant>,
+	},
 	/// Every accepted generation finished locally; retain transport until event ACKs arrive.
 	AcknowledgingEvents { deadline: Instant },
 }
@@ -28,15 +34,40 @@ pub enum Completion {
 }
 
 impl State {
-	/// Returns true only for the first request. Later requests cannot extend the budget.
-	pub fn begin(&mut self, now: Instant, budget: Duration) -> bool {
+	/// Returns true only for the first request. Later requests cannot extend the budget or
+	/// move the sweep. The sweep runs `sweep_after` from now, and the drain ends `budget` from
+	/// now.
+	pub fn begin(&mut self, now: Instant, sweep_after: Duration, budget: Duration) -> bool {
 		if self.is_draining() {
 			return false;
 		}
 		*self = Self::DrainingActors {
 			deadline: now + budget,
+			sweep_at: Some(now + sweep_after),
 		};
 		true
+	}
+
+	/// Whether the sweep is due at `now`. It is due once: a true result clears it.
+	pub fn take_due_sweep(&mut self, now: Instant) -> bool {
+		match self {
+			Self::DrainingActors { sweep_at, .. } if sweep_at.is_some_and(|at| now >= at) => {
+				*sweep_at = None;
+				true
+			}
+			Self::Running | Self::DrainingActors { .. } | Self::AcknowledgingEvents { .. } => false,
+		}
+	}
+
+	/// The next time the loop must wake for shutdown work: the sweep, or else the deadline.
+	pub fn next_wake(&self) -> Option<Instant> {
+		match self {
+			Self::Running => None,
+			Self::DrainingActors { deadline, sweep_at } => {
+				Some(sweep_at.map_or(*deadline, |sweep_at| sweep_at.min(*deadline)))
+			}
+			Self::AcknowledgingEvents { deadline } => Some(*deadline),
+		}
 	}
 
 	pub fn is_draining(&self) -> bool {
@@ -46,7 +77,7 @@ impl State {
 	pub fn deadline(&self) -> Option<Instant> {
 		match self {
 			Self::Running => None,
-			Self::DrainingActors { deadline } | Self::AcknowledgingEvents { deadline } => {
+			Self::DrainingActors { deadline, .. } | Self::AcknowledgingEvents { deadline } => {
 				Some(*deadline)
 			}
 		}

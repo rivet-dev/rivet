@@ -31,7 +31,7 @@ npx @rivetkit/cli <command>
 
 ## Signing in and linking
 
-`rivet login` opens a browser to sign in and stores the session in `~/.rivet/credentials`, refreshing it as needed. Pass `--no-browser` to print the sign-in URL instead. `rivet logout` removes the session and `rivet whoami` shows the signed-in account and linked project.
+`rivet login` opens a browser to sign in and stores the session in `~/.rivet/credentials`, refreshing it as needed. Pass `--no-browser` to print the sign-in URL instead. Pass `--scope` to request a permission beyond the defaults when a command asks for one. `rivet logout` removes the session and `rivet whoami` shows the signed-in account and linked project.
 
 ```bash
 rivet login
@@ -313,11 +313,20 @@ rivet engine wf list   # inspect workflows
 
 ## `rivet setup-ci`
 
-Installs `.github/workflows/rivet-deploy.yml`, which deploys to Rivet Cloud on push and pull request. Add `--force` to overwrite. Then set the token secret:
+Installs `.github/workflows/rivet-deploy.yml`, which deploys a branch to a cluster on push. The workflow stores no Rivet secret: each run exchanges its GitHub Actions OIDC token for a short-lived cluster credential.
 
 ```bash
-gh secret set RIVET_CLOUD_TOKEN
+rivet setup-ci --org my-org --cluster production --branch main
 ```
+
+When you are signed in with `rivet login`, it also adds a GitHub Actions trust to the cluster for the repository, the branch and the `rivet-deploy.yml` workflow with the Deploy scopes, so other workflows of the repository cannot deploy. Adding the trust needs a permission `rivet login` does not request by default, so sign in with `rivet login --scope rivet:v2:cluster:oidc-trusts:write` first; setup-ci stops and says so when the session lacks it. Otherwise it prints the trust to add in the cluster's settings. When signed in, it also checks that the cluster exists before writing the workflow.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--cluster` / `--org` | linked cluster | Cluster to deploy to and its organization. When signed in at a terminal, it prompts for any that are missing. |
+| `--branch` | `main` | Branch that deploys. |
+| `--repo` | `origin` remote | GitHub repository as `owner/repo`. |
+| `--force` | — | Overwrite an existing workflow. |
 
 ## `rivet token`
 

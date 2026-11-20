@@ -13,6 +13,12 @@ const PASTE_SETTLE: Duration = Duration::from_millis(50);
 /// The exit code a shell reports for a process stopped by Ctrl-C.
 const INTERRUPTED_EXIT_CODE: i32 = 130;
 
+/// Whether the CLI can prompt: it reads answers from stdin and writes prompts
+/// to stderr, so both must be terminals.
+pub fn is_interactive() -> bool {
+	std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+}
+
 /// Asks `question` on the terminal and returns whether the answer was yes.
 /// Fails when there is no terminal to ask on, telling the user to pass
 /// `--yes` to `action` without confirming. The terminal is stdin, or

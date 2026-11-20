@@ -103,42 +103,23 @@ pub(crate) struct ActorHandlePermit {
 	_usage: rivet_metrics::IntGaugeGuard,
 }
 
-static ACTOR_HANDLES: std::sync::LazyLock<rivet_metrics::prometheus::IntGauge> =
-	std::sync::LazyLock::new(|| {
-		let gauge = rivet_metrics::prometheus::IntGauge::new(
-			"pegboard_node_actor_handles",
-			"Retained actor handles across node connections.",
-		)
-		.unwrap();
-		rivet_metrics::REGISTRY
-			.register(Box::new(gauge.clone()))
-			.unwrap();
-		gauge
-	});
-static ACTOR_HANDLE_CAPACITY: std::sync::LazyLock<rivet_metrics::prometheus::IntGauge> =
-	std::sync::LazyLock::new(|| {
-		let gauge = rivet_metrics::prometheus::IntGauge::new(
-			"pegboard_node_actor_handles_capacity",
-			"Configured actor handle cap per node connection.",
-		)
-		.unwrap();
-		rivet_metrics::REGISTRY
-			.register(Box::new(gauge.clone()))
-			.unwrap();
-		gauge
-	});
-
 impl ActorHandleBudget {
 	pub(crate) fn new(
 		capacity: usize,
 		pressure: std::sync::Arc<crate::queue::QueuePressure>,
 	) -> Self {
-		ACTOR_HANDLE_CAPACITY.set(capacity as i64);
+		crate::metrics::ACTOR_HANDLE_CAPACITY.set(capacity as i64);
 		Self {
 			permits: std::sync::Arc::new(tokio::sync::Semaphore::new(capacity)),
 			capacity,
 			pressure,
 		}
+	}
+
+	/// Actor handles the connection holds now, as the load allocation compares envoys by.
+	pub(crate) fn in_use(&self) -> usize {
+		self.capacity
+			.saturating_sub(self.permits.available_permits())
 	}
 
 	pub(crate) fn try_admit(&self, now_boot_ms: u64) -> anyhow::Result<ActorHandlePermit> {
@@ -147,9 +128,7 @@ impl ActorHandleBudget {
 			.clone()
 			.try_acquire_owned()
 			.map_err(|_| universalpubsub::errors::Overloaded.build())?;
-		let in_use = self
-			.capacity
-			.saturating_sub(self.permits.available_permits());
+		let in_use = self.in_use();
 		if crate::queue::near_capacity(in_use, self.capacity)
 			&& self.pressure.claim_warning(now_boot_ms)
 		{
@@ -162,7 +141,7 @@ impl ActorHandleBudget {
 		}
 		Ok(ActorHandlePermit {
 			_slot: slot,
-			_usage: rivet_metrics::GaugeGuardExt::inc_guard(&*ACTOR_HANDLES),
+			_usage: rivet_metrics::GaugeGuardExt::inc_guard(&*crate::metrics::ACTOR_HANDLES),
 		})
 	}
 }

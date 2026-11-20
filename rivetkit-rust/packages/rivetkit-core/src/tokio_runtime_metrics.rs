@@ -11,10 +11,7 @@
 //! processes collect them differently.
 
 use std::{
-	sync::{
-		LazyLock,
-		atomic::{AtomicBool, Ordering},
-	},
+	sync::atomic::{AtomicBool, Ordering},
 	time::Duration,
 };
 
@@ -23,7 +20,8 @@ use rivet_metrics::prometheus::{IntGaugeVec, register_int_gauge_vec_with_registr
 use rivet_metrics::{
 	REGISTRY,
 	prometheus::{
-		CounterVec, IntGauge, register_counter_vec_with_registry, register_int_gauge_with_registry,
+		CounterVec, IntGauge, Opts, register_counter_vec_with_registry,
+		register_int_gauge_with_registry,
 	},
 };
 
@@ -34,85 +32,79 @@ const SAMPLE_INTERVAL: Duration = Duration::from_secs(5);
 
 const WORKER_LABELS: &[&str] = &["worker"];
 
-static GLOBAL_QUEUE_DEPTH: LazyLock<IntGauge> = LazyLock::new(|| {
-	register_int_gauge_with_registry!(
-		"tokio_global_queue_depth",
-		"Number of pending tasks in the global queue.",
+lazy_static::lazy_static! {
+	static ref GLOBAL_QUEUE_DEPTH: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("tokio_global_queue_depth", "Number of pending tasks in the global queue."),
 		*REGISTRY
 	)
-	.unwrap()
-});
+	.unwrap();
 
-#[cfg(tokio_unstable)]
-static BLOCKING_QUEUE_DEPTH: LazyLock<IntGauge> = LazyLock::new(|| {
-	register_int_gauge_with_registry!(
-		"tokio_blocking_queue_depth",
-		"Number of tasks queued for the blocking thread pool.",
+	static ref ACTIVE_TASK_COUNT: IntGauge = register_int_gauge_with_registry!(
+		Opts::new(
+			"tokio_active_task_count",
+			"Total number of active (running or sleeping) tasks.",
+		),
 		*REGISTRY
 	)
-	.unwrap()
-});
+	.unwrap();
 
-static ACTIVE_TASK_COUNT: LazyLock<IntGauge> = LazyLock::new(|| {
-	register_int_gauge_with_registry!(
-		"tokio_active_task_count",
-		"Total number of active (running or sleeping) tasks.",
-		*REGISTRY
-	)
-	.unwrap()
-});
-
-#[cfg(tokio_unstable)]
-static BLOCKING_THREAD_COUNT: LazyLock<IntGauge> = LazyLock::new(|| {
-	register_int_gauge_with_registry!(
-		"tokio_blocking_thread_count",
-		"Number of threads in the blocking thread pool.",
-		*REGISTRY
-	)
-	.unwrap()
-});
-
-#[cfg(tokio_unstable)]
-static IDLE_BLOCKING_THREAD_COUNT: LazyLock<IntGauge> = LazyLock::new(|| {
-	register_int_gauge_with_registry!(
-		"tokio_idle_blocking_thread_count",
-		"Number of idle threads in the blocking thread pool.",
-		*REGISTRY
-	)
-	.unwrap()
-});
-
-#[cfg(tokio_unstable)]
-static WORKER_LOCAL_QUEUE_DEPTH: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-	register_int_gauge_vec_with_registry!(
-		"tokio_worker_local_queue_depth",
-		"Number of pending tasks in a worker's queue.",
+	static ref WORKER_BUSY_DURATION_SECONDS_TOTAL: CounterVec = register_counter_vec_with_registry!(
+		Opts::new(
+			"tokio_worker_busy_duration_seconds_total",
+			"Seconds a worker has spent polling tasks. Its rate against wall clock time is the worker's busy fraction, which separates a saturated runtime from one whose workers are parked.",
+		),
 		WORKER_LABELS,
 		*REGISTRY
 	)
-	.unwrap()
-});
+	.unwrap();
+}
 
 #[cfg(tokio_unstable)]
-static WORKER_OVERFLOW_COUNT: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-	register_int_gauge_vec_with_registry!(
-		"tokio_worker_overflow_count",
-		"Number of times the given worker thread saturated its local queue.",
-		WORKER_LABELS,
+lazy_static::lazy_static! {
+	static ref BLOCKING_QUEUE_DEPTH: IntGauge = register_int_gauge_with_registry!(
+		Opts::new(
+			"tokio_blocking_queue_depth",
+			"Number of tasks queued for the blocking thread pool.",
+		),
 		*REGISTRY
 	)
-	.unwrap()
-});
+	.unwrap();
 
-static WORKER_BUSY_DURATION_SECONDS_TOTAL: LazyLock<CounterVec> = LazyLock::new(|| {
-	register_counter_vec_with_registry!(
-		"tokio_worker_busy_duration_seconds_total",
-		"Seconds a worker has spent polling tasks. Its rate against wall clock time is the worker's busy fraction, which separates a saturated runtime from one whose workers are parked.",
+	static ref BLOCKING_THREAD_COUNT: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("tokio_blocking_thread_count", "Number of threads in the blocking thread pool."),
+		*REGISTRY
+	)
+	.unwrap();
+
+	static ref IDLE_BLOCKING_THREAD_COUNT: IntGauge = register_int_gauge_with_registry!(
+		Opts::new(
+			"tokio_idle_blocking_thread_count",
+			"Number of idle threads in the blocking thread pool.",
+		),
+		*REGISTRY
+	)
+	.unwrap();
+
+	static ref WORKER_LOCAL_QUEUE_DEPTH: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new(
+			"tokio_worker_local_queue_depth",
+			"Number of pending tasks in a worker's queue.",
+		),
 		WORKER_LABELS,
 		*REGISTRY
 	)
-	.unwrap()
-});
+	.unwrap();
+
+	static ref WORKER_OVERFLOW_COUNT: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new(
+			"tokio_worker_overflow_count",
+			"Number of times the given worker thread saturated its local queue.",
+		),
+		WORKER_LABELS,
+		*REGISTRY
+	)
+	.unwrap();
+}
 
 static SAMPLER_STARTED: AtomicBool = AtomicBool::new(false);
 

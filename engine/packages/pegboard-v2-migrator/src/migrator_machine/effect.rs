@@ -14,9 +14,25 @@ pub enum Effect {
 	///
 	/// **Executor**
 	///
-	/// Sends `MigrateFromV2StateLoad` with the tenure, which raises the fence and returns every entry,
-	/// then returns `LoadStateResponse`.
-	LoadStateRequest { op: OpId, tenure: u64 },
+	/// Reads the volume group of `target_namespace` first, when set, so a refused read leaves the
+	/// fence untouched. Then sends `MigrateFromV2StateLoad` with the tenure, which raises the fence
+	/// and returns every entry, and returns `LoadStateResponse` with both. Either failure returns
+	/// `Failed`.
+	LoadStateRequest {
+		op: OpId,
+		tenure: u64,
+		/// The configured target namespace while the migration is enabled.
+		target_namespace: Option<String>,
+	},
+	/// **When**
+	///
+	/// A settings change retargets the migration to another namespace while the tenure runs, or
+	/// the `TargetGroup` timer fires after a failed read.
+	///
+	/// **Executor**
+	///
+	/// Reads the namespace's standing, then returns `ReadTargetGroupResponse`.
+	ReadTargetGroupRequest { op: OpId, namespace: String },
 	/// **When**
 	///
 	/// Dispatch finds changed entries or a changed pass entry while `persist` is `Idle`: no write is
@@ -45,6 +61,8 @@ pub enum Effect {
 		datacenter_label: u16,
 		after: Option<Vec<u8>>,
 		limit: u32,
+		/// `Settings::actor_name`, which V2 lists alone when set.
+		actor_name: Option<String>,
 	},
 	/// **When**
 	///

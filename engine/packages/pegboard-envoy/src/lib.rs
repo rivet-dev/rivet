@@ -7,16 +7,18 @@ use rivet_engine_context::EngineContext;
 
 mod admission;
 mod connection;
+mod drain;
 mod envoy_record;
 pub mod keys;
 mod kv;
 mod lifecycle;
+mod metrics;
 mod missing_pools;
+mod pre_connect;
 mod queue;
 mod rejection;
 mod routes;
 mod sqlite;
-mod version_drain;
 
 /// Process-wide state shared by every Envoy connection. Building it starts nothing.
 #[derive(Clone)]
@@ -29,6 +31,10 @@ pub struct Service {
 	pub(crate) connect_admission: std::sync::Arc<admission::ConnectAdmission>,
 	/// Pool names this process refused node connects for, for the sustained refusal warning.
 	pub(crate) missing_pools: std::sync::Arc<missing_pools::MissingPools>,
+	/// Writes every connection's heartbeat to its pool's ring index, one write per pool.
+	pub(crate) index_writer: std::sync::Arc<connection::IndexWriter>,
+	/// The node connections this process holds, sent in every pre-connect.
+	pub(crate) envoy_connections: std::sync::Arc<pre_connect::ConnectionCount>,
 }
 
 /// Guard owns this signal; cancellation must also ask detached upgrades to drain.
@@ -49,6 +55,7 @@ impl Service {
 	pub async fn drain_connections(&self) {
 		self.stopping.send_replace(true);
 		self.connections.drain().await;
+		self.index_writer.shutdown().await;
 	}
 }
 
@@ -60,6 +67,8 @@ pub fn service(ctx: &EngineContext) -> Service {
 			ctx.config().pegboard().sqlite_remote_worker_threads(),
 			None,
 		),
+		index_writer: std::sync::Arc::new(connection::IndexWriter::new(ctx)),
+		envoy_connections: Default::default(),
 		missing_pools: std::sync::Arc::new(missing_pools::MissingPools::new(
 			ctx.config().pegboard().envoy_missing_pools_capacity(),
 		)),

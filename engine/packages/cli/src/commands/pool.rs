@@ -1,7 +1,4 @@
-use std::{
-	io::{IsTerminal, Write},
-	time::Duration,
-};
+use std::{io::Write, time::Duration};
 
 use anstyle::{AnsiColor, Style};
 use anyhow::{Result, bail};
@@ -14,6 +11,7 @@ use crate::{
 		CloudClient, PoolConfig, PoolResources, PoolSummary, delete_pool, get_namespace, list_pools,
 	},
 	target::{CloudArgs, ProjectTarget},
+	terminal::is_interactive,
 	util::color_enabled,
 };
 
@@ -152,10 +150,10 @@ async fn wait_for_deletion(
 	bail!("timed out waiting for pool '{name}' to delete; check `rivet pool list`")
 }
 
-/// Prompts for confirmation on a destructive delete. Fails closed when stdin is
-/// not a terminal so scripts must pass `--yes` explicitly rather than hang.
+/// Prompts for confirmation on a destructive delete. Fails closed without a
+/// terminal so scripts must pass `--yes` explicitly rather than hang.
 fn confirm(pool: &str, namespace: &str) -> Result<bool> {
-	if !std::io::stdin().is_terminal() {
+	if !is_interactive() {
 		bail!("refusing to delete without confirmation; pass --yes to delete non-interactively");
 	}
 	eprint!("delete pool '{pool}' in namespace '{namespace}'? [y/N] ");

@@ -6,7 +6,7 @@ use rivet_envoy_protocol as protocol;
 use crate::actor::create_actor;
 use crate::connection::ws_send;
 use crate::envoy::EnvoyContext;
-use crate::metrics::METRICS;
+use crate::metrics;
 use crate::stringify::stringify_command_wrapper;
 use crate::time::Instant;
 
@@ -95,8 +95,8 @@ impl StoppedGenerationFloors {
 
 	fn observe(&mut self, capacity: usize) {
 		let usage = self.floors.len();
-		METRICS.stopped_floors.set(usage as i64);
-		METRICS.stopped_floors_capacity.set(capacity as i64);
+		metrics::STOPPED_FLOORS.set(usage as i64);
+		metrics::STOPPED_FLOORS_CAPACITY.set(capacity as i64);
 		let near_cap = usage.saturating_mul(10) >= capacity.saturating_mul(9);
 		if near_cap && !self.warned {
 			self.warned = true;

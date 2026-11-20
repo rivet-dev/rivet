@@ -6,7 +6,7 @@ use crate::connection::{WsSendResult, ws_send_for_session};
 use crate::deadlines::DeadlineKey;
 use crate::envoy::EnvoyContext;
 use crate::kv::KV_EXPIRE_MS;
-use crate::metrics::METRICS;
+use crate::metrics;
 use crate::utils::{
 	EnvoyShutdownError, RemoteSqliteConnectionSessionLostError,
 	RemoteSqliteIndeterminateResultError, SqliteRequestTimeoutError,
@@ -157,7 +157,7 @@ pub async fn handle_sqlite_request(
 		sent: false,
 		sent_session: None,
 		timestamp: crate::time::Instant::now(),
-		_inflight: METRICS.sqlite_requests_inflight.inc_guard(),
+		_inflight: metrics::SQLITE_REQUESTS_INFLIGHT.inc_guard(),
 	};
 
 	ctx.deadlines.schedule(
@@ -192,7 +192,7 @@ pub async fn handle_remote_sqlite_request(
 		sent_session: None,
 		sent: false,
 		timestamp: crate::time::Instant::now(),
-		_inflight: METRICS.remote_sqlite_requests_inflight.inc_guard(),
+		_inflight: metrics::REMOTE_SQLITE_REQUESTS_INFLIGHT.inc_guard(),
 	};
 
 	ctx.deadlines.schedule(
@@ -558,8 +558,7 @@ pub(crate) fn expire_sqlite_request(
 		.expect("checked sqlite request");
 	let kind = request.request.kind();
 	let was_sent = if request.sent { "true" } else { "false" };
-	METRICS
-		.sqlite_request_expired_total
+	metrics::SQLITE_REQUEST_EXPIRED
 		.with_label_values(&[kind, was_sent])
 		.inc();
 	tracing::warn!(
@@ -598,8 +597,7 @@ pub(crate) fn expire_remote_sqlite_request(
 		.expect("checked remote sqlite request");
 	let kind = request.request.kind();
 	let was_sent = if request.sent { "true" } else { "false" };
-	METRICS
-		.sqlite_request_expired_total
+	metrics::SQLITE_REQUEST_EXPIRED
 		.with_label_values(&[kind, was_sent])
 		.inc();
 	tracing::warn!(

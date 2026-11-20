@@ -78,14 +78,26 @@ pub struct DynamicConfigUpdate {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub depot_balancing_enabled: Option<Option<bool>>,
-	/// Replaces the whole `migrate_from_v2` section. `migrate_seed` must stay what was loaded at
-	/// startup.
+	/// Legacy: a whole `migrate_from_v2` section, which 3.0 releases wrote to replace the startup
+	/// section. Read only for overrides stored before `migrate_from_v2_overrides` existed: when
+	/// set, it stands in for the startup section, apart from `backup`, which stays as loaded at
+	/// startup, and `migrate_seed`, which must match it. Updates never write a section here; they
+	/// clear it and write `migrate_from_v2_overrides`.
+	#[serde(
+		rename = "migrate_from_v2",
+		default,
+		deserialize_with = "double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub legacy_migrate_from_v2: Option<Option<crate::config::MigrateFromV2>>,
+	/// Overrides `migrate_from_v2` field by field. A patch that sets some of its fields merges
+	/// into the stored overrides, and a field set to `null` returns to the startup value.
 	#[serde(
 		default,
 		deserialize_with = "double_option",
 		skip_serializing_if = "Option::is_none"
 	)]
-	pub migrate_from_v2: Option<Option<crate::config::MigrateFromV2>>,
+	pub migrate_from_v2_overrides: Option<Option<crate::config::MigrateFromV2Overrides>>,
 }
 
 /// Deserializes a present `null` as `Some(None)` rather than `None`, so clearing a property stays

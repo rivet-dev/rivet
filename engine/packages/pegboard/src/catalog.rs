@@ -2321,7 +2321,9 @@ pub async fn settled_namespace_standing(
 /// deadline.
 const NAMESPACE_LOOKUP_TIMED_OUT_REASON: &str = "namespace_lookup_timed_out";
 
-/// Executes pool administration or connection registration in its namespace's catalog.
+/// Executes pool administration or connection registration. Once every storage worker reads
+/// `pegboard.pool`, the pool's own volume holds its configuration and admission
+/// ([`crate::pool_admin`]); before that, its namespace's catalog does.
 pub async fn pool(
 	ctx: &EngineContext,
 	namespace: &str,
@@ -2330,6 +2332,50 @@ pub async fn pool(
 ) -> Result<wire::PoolResponse> {
 	ensure_namespace(ctx, namespace).await?;
 	crate::validation::pool_name(name)?;
+	if crate::envoy_ring::ring_open(ctx) {
+		return crate::pool_admin::pool(ctx, namespace, name, operation).await;
+	}
+	catalog_pool_command(ctx, namespace, name, operation).await
+}
+
+/// Lists one page of a namespace's configured pools in name order. Once pools keep their
+/// configuration in their own volume, each entry is the pool's own record, and deleted pools whose
+/// catalog copy remains are dropped, so a page may come back short.
+pub async fn list_pools(
+	ctx: &EngineContext,
+	namespace: &str,
+	after: Option<String>,
+	limit: u32,
+) -> Result<wire::PoolListResponse> {
+	let reply = ctx
+		.depot()
+		.command::<PoolList>(
+			&EnvoyPoolIndexVolume::new(namespace.to_owned()).volume_key(),
+			wire::PoolListRequest {
+				after: after.map(Into::into),
+				limit,
+			},
+		)
+		.await?;
+	if !crate::envoy_ring::ring_open(ctx) {
+		return Ok(reply);
+	}
+	let pools = crate::pool_admin::reconcile_listing(ctx, namespace, reply.pools).await?;
+	Ok(wire::PoolListResponse {
+		pools,
+		cursor: reply.cursor,
+	})
+}
+
+/// Runs a pool operation in the namespace's catalog: the authority before every storage worker
+/// reads `pegboard.pool`, and afterwards the listing copy and the leases of connections admitted
+/// before.
+pub(crate) async fn catalog_pool_command(
+	ctx: &EngineContext,
+	namespace: &str,
+	name: &str,
+	operation: wire::PoolOperation,
+) -> Result<wire::PoolResponse> {
 	ctx.depot()
 		.command::<Pool>(
 			&EnvoyPoolIndexVolume::new(namespace.to_owned()).volume_key(),

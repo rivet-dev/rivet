@@ -203,6 +203,8 @@ pub enum ActorRuntime {
 	)]
 	NotConfigured { component: String },
 
+	// The engine's gateway documents the public `actor.not_found`, so this one writes no artifact.
+	#[no_artifact]
 	#[error(
 		"not_found",
 		"Actor resource was not found.",

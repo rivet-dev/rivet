@@ -1,11 +1,12 @@
 use rivet_envoy_protocol as protocol;
 use rivet_error::{RivetError, RivetErrorKind};
+use rivet_metrics::GaugeGuardExt;
 use tokio::sync::oneshot;
 
 use crate::connection::ws_send;
 use crate::deadlines::DeadlineKey;
 use crate::envoy::EnvoyContext;
-use crate::metrics::METRICS;
+use crate::metrics;
 
 pub struct KvRequestEntry {
 	pub actor_id: String,
@@ -76,7 +77,7 @@ pub async fn handle_kv_request(
 		response_tx,
 		sent: false,
 		timestamp,
-		_inflight: rivet_metrics::GaugeGuardExt::inc_guard(&METRICS.kv_requests_inflight),
+		_inflight: metrics::KV_REQUESTS_INFLIGHT.inc_guard(),
 	};
 
 	ctx.kv_requests.insert(request_id, entry);

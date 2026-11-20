@@ -4,21 +4,23 @@ use std::{path::PathBuf, time::Duration};
 use anyhow::{Context, Result, bail};
 use clap::Subcommand;
 use pegboard_v2_migrator::migrator_machine::types::wire;
-use rivet_config::{DynamicConfigUpdate, config::MigrateFromV2};
+use rivet_config::{DynamicConfigUpdate, config::MigrateFromV2Overrides};
 use rivet_engine_context::EngineContext;
 use rivet_util::Id;
 use serde_json::{Value, json};
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-	/// Replaces the cluster's `migrate_from_v2` settings with a JSON file, through dynamic
-	/// config. Every process applies it within about a minute. `migrate_seed` must stay as loaded
-	/// at startup.
+	/// Overrides `migrate_from_v2` settings with a JSON file, through dynamic config. Each field
+	/// in the file replaces that one setting, a field set to `null` returns it to the startup
+	/// value, and settings the file leaves out keep their current override. Every process applies
+	/// it within about a minute. `migrate_seed` and `backup` are fixed at startup and cannot be
+	/// set here. Run it only once every process runs a release that reads per-field overrides.
 	SetConfig {
-		/// JSON object with the `migrate_from_v2` fields.
+		/// JSON object with the `migrate_from_v2` fields to override.
 		file: PathBuf,
 	},
-	/// Clears the dynamic `migrate_from_v2` override, so the startup config applies again.
+	/// Clears every dynamic `migrate_from_v2` override, so the startup config applies again.
 	ClearConfig,
 	/// Prints the durable migration state: the current pass and every actor in flight.
 	Status,
@@ -47,6 +49,21 @@ pub enum Command {
 		#[arg(long)]
 		v3_actor_id: Option<String>,
 	},
+	/// Deletes V2's copy of every actor V2 parked after it migrated here: V2's actor workflow
+	/// destroys it with its KV and SQLite data, and V2 marks its parked record deleted. This
+	/// cannot be undone. An actor is deleted only once it has left the migration here and, when
+	/// `migrate_from_v2.backup` is set, its backup is complete; any other is skipped
+	/// and listed in the result. The run resumes from a cursor V2 keeps per namespace and
+	/// datacenter, so running it again continues where it stopped and checks skipped actors again.
+	DeleteParked {
+		/// Actors deleted at once.
+		#[arg(long, default_value_t = 8)]
+		concurrency: usize,
+		/// A V2 datacenter label to delete in; repeat for several. Defaults to every datacenter
+		/// in `migrate_from_v2.api_urls`.
+		#[arg(long = "datacenter")]
+		datacenter_labels: Vec<u16>,
+	},
 }
 
 pub(crate) async fn execute(ctx: &EngineContext, command: Command) -> Result<Value> {
@@ -57,10 +74,19 @@ pub(crate) async fn execute(ctx: &EngineContext, command: Command) -> Result<Val
 				.read(&file)
 				.await
 				.with_context(|| format!("read {}", file.display()))?;
-			let migration: MigrateFromV2 =
+			let fields: Value =
 				serde_json::from_slice(&raw).context("parse migrate_from_v2 json")?;
-			migration.validate()?;
-			update_config(ctx, Some(migration)).await
+			for fixed in ["migrate_seed", "backup"] {
+				if fields.get(fixed).is_some() {
+					bail!(
+						"migrate_from_v2.{fixed} is fixed at startup; set it in the config file and restart"
+					);
+				}
+			}
+			let overrides: MigrateFromV2Overrides =
+				serde_json::from_value(fields).context("parse migrate_from_v2 json")?;
+			// The merged section is validated against the stored overrides before it is written.
+			update_config(ctx, Some(overrides)).await
 		}
 		Command::ClearConfig => update_config(ctx, None).await,
 		// Every status read and recovery step is idempotent, so a refused attempt is sent again
@@ -99,6 +125,27 @@ pub(crate) async fn execute(ctx: &EngineContext, command: Command) -> Result<Val
 				pegboard_v2_migrator::operator::recover(ctx, v2_actor_id, v3_actor_id)
 			})
 			.await
+		}
+		// Every step is idempotent and the run resumes from V2's cursor, so it is not resent here;
+		// an operator runs it again.
+		Command::DeleteParked {
+			concurrency,
+			datacenter_labels,
+		} => {
+			let datacenter_labels = if datacenter_labels.is_empty() {
+				None
+			} else {
+				Some(datacenter_labels)
+			};
+			let summaries = pegboard_v2_migrator::delete_parked::delete_parked(
+				ctx,
+				pegboard_v2_migrator::delete_parked::DeleteOptions {
+					concurrency,
+					datacenter_labels,
+				},
+			)
+			.await?;
+			Ok(json!({ "datacenters": summaries }))
 		}
 	}
 }
@@ -282,11 +329,16 @@ fn progress(message: &str) {
 	eprintln!("{message}");
 }
 
-/// Writes only the `migrate_from_v2` field of the cluster's dynamic config, so unrelated
-/// settings survive. `None` removes the override.
-async fn update_config(ctx: &EngineContext, migration: Option<MigrateFromV2>) -> Result<Value> {
+/// Merges `overrides` into the stored `migrate_from_v2` overrides, so unrelated settings
+/// survive; `None` removes every override. Either way the legacy whole-section override is
+/// cleared, so the stored config holds only per-field overrides afterwards.
+async fn update_config(
+	ctx: &EngineContext,
+	overrides: Option<MigrateFromV2Overrides>,
+) -> Result<Value> {
 	let update = DynamicConfigUpdate {
-		migrate_from_v2: Some(migration),
+		legacy_migrate_from_v2: Some(None),
+		migrate_from_v2_overrides: Some(overrides),
 		..Default::default()
 	};
 	rivet_cluster_config::update_dynamic_config(

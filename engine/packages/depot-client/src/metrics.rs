@@ -66,8 +66,8 @@ lazy_static::lazy_static! {
 
 	/// Filesystem opens started again because the cold store moved past the history they read.
 	pub(crate) static ref FS_OPEN_RESTARTS: IntCounter = register_int_counter_with_registry!(
-		"depot_filesystem_open_restarts_total",
-		"Filesystem opens started again from a fresh history because the cold store moved past the one they read.",
+		Opts::new("depot_filesystem_open_restarts_total",
+		"Filesystem opens started again from a fresh history because the cold store moved past the one they read."),
 		*rivet_metrics::REGISTRY
 	).unwrap();
 
@@ -82,15 +82,15 @@ lazy_static::lazy_static! {
 	/// Bytes charged to filesystem memory budgets across the process: the indexes of committed
 	/// layers above each filesystem's snapshot and the rows cached beside them.
 	pub(crate) static ref FS_MEMORY_BYTES: IntGauge = register_int_gauge_with_registry!(
-		"depot_filesystem_memory_bytes",
-		"Bytes charged to open filesystems' memory budgets: committed layer indexes above their snapshots and cached rows.",
+		Opts::new("depot_filesystem_memory_bytes",
+		"Bytes charged to open filesystems' memory budgets: committed layer indexes above their snapshots and cached rows."),
 		*rivet_metrics::REGISTRY
 	).unwrap();
 
 	/// Combined memory budget of the process's open filesystems.
 	pub(crate) static ref FS_MEMORY_CAPACITY: IntGauge = register_int_gauge_with_registry!(
-		"depot_filesystem_memory_capacity_bytes",
-		"Combined memory budget of open filesystems.",
+		Opts::new("depot_filesystem_memory_capacity_bytes",
+		"Combined memory budget of open filesystems."),
 		*rivet_metrics::REGISTRY
 	).unwrap();
 

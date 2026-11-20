@@ -1,0 +1,26 @@
+# The backup of one V2 actor that the V3 migrator copied, kept outside live data so the actor can be
+# restored after its V2 data is deleted.
+#
+# A backup is a directory of objects named `{v2Namespace}/{v2ActorId}/{generation}/` in the
+# `migrate_from_v2.backup` store. A sleeping actor's data cannot change, and a wake moves its
+# generation, so the generation names one export; it is the one V2's parked record keeps. Its
+# segments `segment-{index}`, with a zero-padded six-digit index, hold V2's export stream verbatim:
+# length-prefixed frames of the V2 migration protocol, the header first and the end frame last.
+# Concatenated in index order they are one complete export. The `manifest` object holds this record
+# and is written after every segment, so a backup without a manifest is incomplete.
+
+type BackupManifest struct {
+	v2Namespace: str
+	v2ActorId: data
+	v3ActorId: data
+	# The V2 fence the export was taken at.
+	generation: u32
+	sleepTs: i64
+	writtenAt: i64
+	segments: u32
+	kvEntries: u64
+	kvBytes: u64
+	pages: u32
+	# The export's chained digest over its KV and page frames, as its end frame carries it.
+	digest: data
+}

@@ -701,12 +701,24 @@ async fn read_chunk_ranges(
 			return Err(Error::TooLarge);
 		}
 	}
+	// The session pins the inode version for every range in the request.
+	let inode = if ranges.len() > 1 && session.base_chain.is_empty() {
+		for range in ranges {
+			session.check_chunk_count(range.count as usize)?;
+		}
+		session.chunk_inode(ino).await?
+	} else {
+		None
+	};
 	let mut reads = Vec::with_capacity(ranges.len());
 	for range in ranges {
 		let first = range.first;
 		let count = range.count as usize;
+		let inode = inode.as_ref();
 		reads.push(async move {
-			let values = session.read_chunks(ino, first, count).await?;
+			let values = session
+				.read_chunks_with_inode(ino, first, count, inode)
+				.await?;
 			Ok::<_, Error>((first, values))
 		});
 	}

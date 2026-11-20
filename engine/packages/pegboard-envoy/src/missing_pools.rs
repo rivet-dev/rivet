@@ -15,32 +15,6 @@ pub(crate) const WARN_AFTER_MS: u64 = 60_000;
 /// How long without a refusal ends a pool name's run of refusals.
 pub(crate) const RUN_ENDS_AFTER_MS: u64 = 5 * 60_000;
 
-static MISSING_POOLS: std::sync::LazyLock<rivet_metrics::prometheus::IntGauge> =
-	std::sync::LazyLock::new(|| {
-		let gauge = rivet_metrics::prometheus::IntGauge::new(
-			"pegboard_node_missing_pools",
-			"Pool names this process refused node connects for, tracked for the sustained refusal warning.",
-		)
-		.unwrap();
-		rivet_metrics::REGISTRY
-			.register(Box::new(gauge.clone()))
-			.unwrap();
-		gauge
-	});
-
-static MISSING_POOLS_CAPACITY: std::sync::LazyLock<rivet_metrics::prometheus::IntGauge> =
-	std::sync::LazyLock::new(|| {
-		let gauge = rivet_metrics::prometheus::IntGauge::new(
-			"pegboard_node_missing_pools_capacity",
-			"Configured cap on the pool names one process tracks for refused node connects.",
-		)
-		.unwrap();
-		rivet_metrics::REGISTRY
-			.register(Box::new(gauge.clone()))
-			.unwrap();
-		gauge
-	});
-
 /// The pool names this process refused node connects for, keyed by namespace and pool name,
 /// holding at most `capacity` names.
 pub(crate) struct MissingPools {
@@ -71,7 +45,7 @@ pub(crate) enum Refusal {
 impl MissingPools {
 	pub(crate) fn new(capacity: usize) -> Self {
 		let capacity = capacity.max(1);
-		MISSING_POOLS_CAPACITY.set(capacity as i64);
+		crate::metrics::MISSING_POOLS_CAPACITY.set(capacity as i64);
 		Self {
 			capacity,
 			refusals: scc::HashMap::new(),
@@ -134,7 +108,7 @@ impl MissingPools {
 					last_boot_ms: now_boot_ms,
 					count: 1,
 					warned: false,
-					_tracked: MISSING_POOLS.inc_guard(),
+					_tracked: crate::metrics::MISSING_POOLS.inc_guard(),
 				});
 				Refusal::Expected
 			}

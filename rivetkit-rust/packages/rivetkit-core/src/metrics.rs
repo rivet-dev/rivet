@@ -3,13 +3,12 @@ use std::sync::LazyLock;
 use anyhow::{Context, Result};
 use parking_lot::Mutex;
 use rivet_metrics::prometheus::{
-	Encoder, IntGaugeVec, TextEncoder, register_int_gauge_vec_with_registry,
+	Encoder, IntGaugeVec, Opts, TextEncoder, register_int_gauge_vec_with_registry,
 };
 
-static RIVETKIT_INFO: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-	register_int_gauge_vec_with_registry!(
-		"rivetkit_info",
-		"Static RivetKit build information.",
+lazy_static::lazy_static! {
+	static ref RIVETKIT_INFO: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		Opts::new("rivetkit_info", "Static RivetKit build information."),
 		&[
 			"runtime",
 			"version",
@@ -20,8 +19,8 @@ static RIVETKIT_INFO: LazyLock<IntGaugeVec> = LazyLock::new(|| {
 		],
 		*rivet_metrics::REGISTRY
 	)
-	.unwrap()
-});
+	.unwrap();
+}
 
 static CURRENT_RIVETKIT_INFO: LazyLock<Mutex<Option<RivetKitInfo>>> =
 	LazyLock::new(|| Mutex::new(None));

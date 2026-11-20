@@ -61,6 +61,11 @@ impl Default for Config {
 	}
 }
 
+/// The hint of a request refused as [`Error::Overloaded`] before dispatch. A full request
+/// semaphore or owner inbox frees within a round trip. A full loaded-volume cap frees only as
+/// idle volumes close, which the edge's growing backoff covers.
+pub const OVERLOADED_RETRY_AFTER_MS: u64 = 100;
+
 /// Preserves retry evidence instead of flattening a possibly applied write into a routing failure.
 #[derive(Debug)]
 pub enum Error {
