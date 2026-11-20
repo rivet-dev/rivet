@@ -3076,6 +3076,10 @@ impl sqlite_embedded::vfs::SqliteVfsMetrics for ActorMetrics {
 			.observe(dirty_pages as f64);
 	}
 
+	fn record_flush_retry(&self, class: &'static str) {
+		crate::actor::sqlite::pool_metrics::record_deferred_flush_retry(class);
+	}
+
 	fn observe_commit_phases(
 		&self,
 		request_build_ns: u64,

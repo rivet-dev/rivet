@@ -2,7 +2,9 @@
 
 use std::sync::LazyLock;
 
-use rivet_metrics::prometheus::{Histogram, HistogramOpts, HistogramVec, IntGauge, Opts};
+use rivet_metrics::prometheus::{
+	Histogram, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts,
+};
 
 struct PoolCollectors {
 	threads: IntGauge,
@@ -16,6 +18,8 @@ struct PoolCollectors {
 	pager_cache_pages: IntGauge,
 	pager_cache_capacity_bytes: IntGauge,
 	pager_cache_unbudgeted_bytes: IntGauge,
+	deferred_unflushed_bytes: IntGauge,
+	deferred_flush_retries_total: IntCounterVec,
 }
 
 static POOL_METRICS: LazyLock<PoolCollectors> = LazyLock::new(|| {
@@ -81,6 +85,19 @@ static POOL_METRICS: LazyLock<PoolCollectors> = LazyLock::new(|| {
 		"bytes of in-memory and temporary database pages the process-wide SQLite pager cache holds outside its budget",
 	))
 	.expect("create sqlite_pager_cache_unbudgeted_bytes gauge");
+	let deferred_unflushed_bytes = IntGauge::with_opts(Opts::new(
+		"rivetkit_sqlite_deferred_unflushed_bytes",
+		"bytes every deferred-commit SQLite database in the process committed locally that storage has not acknowledged",
+	))
+	.expect("create sqlite_deferred_unflushed_bytes gauge");
+	let deferred_flush_retries_total = IntCounterVec::new(
+		Opts::new(
+			"rivetkit_sqlite_deferred_flush_retries_total",
+			"failed deferred-commit flush attempts that were retried, by failure class",
+		),
+		&["class"],
+	)
+	.expect("create sqlite_deferred_flush_retries_total counter");
 	for collector in [
 		Box::new(threads.clone()) as Box<dyn rivet_metrics::prometheus::core::Collector>,
 		Box::new(busy.clone()),
@@ -93,6 +110,8 @@ static POOL_METRICS: LazyLock<PoolCollectors> = LazyLock::new(|| {
 		Box::new(pager_cache_pages.clone()),
 		Box::new(pager_cache_capacity_bytes.clone()),
 		Box::new(pager_cache_unbudgeted_bytes.clone()),
+		Box::new(deferred_unflushed_bytes.clone()),
+		Box::new(deferred_flush_retries_total.clone()),
 	] {
 		if let Err(error) = rivet_metrics::REGISTRY.register(collector) {
 			tracing::warn!(?error, "sqlite pool metric registration failed");
@@ -110,8 +129,19 @@ static POOL_METRICS: LazyLock<PoolCollectors> = LazyLock::new(|| {
 		pager_cache_pages,
 		pager_cache_capacity_bytes,
 		pager_cache_unbudgeted_bytes,
+		deferred_unflushed_bytes,
+		deferred_flush_retries_total,
 	}
 });
+
+/// Counts one retried deferred-commit flush attempt. The counter is process-wide, so its
+/// cardinality is the handful of failure classes.
+pub(crate) fn record_deferred_flush_retry(class: &'static str) {
+	POOL_METRICS
+		.deferred_flush_retries_total
+		.with_label_values(&[class])
+		.inc();
+}
 
 /// Reports the pool through the process-global registry.
 pub(crate) struct PoolMetrics;
@@ -144,6 +174,10 @@ impl sqlite_embedded::worker::SqlitePoolMetrics for PoolMetrics {
 
 	fn set_page_buffer_capacity_pages(&self, pages: u64) {
 		POOL_METRICS.page_buffer_capacity_pages.set(pages as i64);
+	}
+
+	fn set_deferred_unflushed_bytes(&self, bytes: u64) {
+		POOL_METRICS.deferred_unflushed_bytes.set(bytes as i64);
 	}
 
 	fn set_page_buffer_pages(&self, pages: u64) {
