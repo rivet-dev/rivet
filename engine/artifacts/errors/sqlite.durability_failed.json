@@ -1,0 +1,5 @@
+{
+  "code": "durability_failed",
+  "group": "sqlite",
+  "message": "SQLite commits could not be made durable."
+}

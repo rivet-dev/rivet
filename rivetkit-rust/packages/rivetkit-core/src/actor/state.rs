@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -23,7 +24,9 @@ use crate::actor::task::LifecycleEvent;
 use crate::actor::task_types::StateMutationReason;
 use crate::error::{ActorLifecycle, ActorRuntime};
 use crate::runtime::RuntimeSpawner;
-use crate::sqlite::{BindParam, ExecuteResult, SqliteBatchStatement, SqliteTransaction};
+use crate::sqlite::{
+	BindParam, ExecuteResult, HostThreadLease, SqliteBatchStatement, SqliteDb, SqliteTransaction,
+};
 use crate::types::SaveStateOpts;
 
 /// Profiling name for a state transaction whose caller gives no name.
@@ -385,6 +388,36 @@ impl ActorContext {
 		name: Option<&str>,
 		timeout: Option<Duration>,
 	) -> Result<ActorStateTransaction> {
+		self.begin_state_transaction_on(self.invocation_sql(), None, name, timeout)
+			.await
+	}
+
+	/// Begins a state transaction owned by a foreign runtime's host thread. It counts as a
+	/// host-thread transaction from this call, before the returned future first runs, so a
+	/// synchronous SQLite call made while it is pending or open fails fast instead of waiting on
+	/// work only the blocked host thread could finish.
+	pub fn begin_host_thread_state_transaction(
+		&self,
+		name: Option<&str>,
+		timeout: Option<Duration>,
+	) -> impl Future<Output = Result<ActorStateTransaction>> + use<> {
+		let sql = self.invocation_sql().for_host_thread();
+		let lease = sql.reserve_host_thread_lease();
+		let ctx = self.clone();
+		let name = name.map(ToOwned::to_owned);
+		async move {
+			ctx.begin_state_transaction_on(sql, lease, name.as_deref(), timeout)
+				.await
+		}
+	}
+
+	async fn begin_state_transaction_on(
+		&self,
+		sql: SqliteDb,
+		lease: Option<HostThreadLease>,
+		name: Option<&str>,
+		timeout: Option<Duration>,
+	) -> Result<ActorStateTransaction> {
 		self.clear_pending_save();
 		let save_guard = Arc::clone(&self.0.save_guard).lock_owned().await;
 		{
@@ -412,9 +445,12 @@ impl ActorContext {
 			.filter(|conn| conn.is_hibernatable())
 			.map(|conn| (conn.id().to_owned(), conn.state()))
 			.collect();
-		let sql = self.invocation_sql();
 		let transaction = match sql
-			.begin_named_transaction(Some(name.unwrap_or(STATE_TRANSACTION_NAME)), timeout)
+			.begin_leased_transaction(
+				lease,
+				Some(name.unwrap_or(STATE_TRANSACTION_NAME).to_owned()),
+				timeout,
+			)
 			.await
 		{
 			Ok(transaction) => transaction,
