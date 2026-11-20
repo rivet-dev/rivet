@@ -138,6 +138,8 @@ export interface JsActorConfig {
   icon?: string
   hasDatabase?: boolean
   remoteSqlite?: boolean
+  /** Internal. Set by rivetkit when the actor's database provider opts into deferred commits. */
+  sqliteDeferredCommits?: boolean
   sqliteProfiling?: JsSqliteProfilingConfig
   tracing?: JsActorTracingConfig
   hasState?: boolean
@@ -389,6 +391,10 @@ export declare class ActorContext {
   takePendingHibernationChanges(): Array<string>
   dirtyHibernatableConns(): Array<ConnHandle>
   saveState(payload: StateDeltaPayload): Promise<void>
+  /**
+   * Starts the begin during this call, so the transaction counts as the JavaScript thread's
+   * even before it opens. See `JsNativeDatabase::begin_transaction`.
+   */
   beginStateTransaction(timeoutMs?: number | undefined | null, name?: string | undefined | null): Promise<JsActorStateTransaction>
   saveStateAndWorkflowBatch(writes: Array<WorkflowKvWritePayload>): Promise<void>
   actorId(): string
@@ -511,13 +517,34 @@ export declare class JsNativeDatabase {
   executeBatch(statements: Array<JsSqliteBatchStatement>): Promise<Array<NativeExecuteResult>>
   exec(sql: string): Promise<QueryResult>
   close(): Promise<void>
+  /**
+   * Starts the begin during this call rather than when the runtime first polls it, so the
+   * transaction counts as the JavaScript thread's even before it opens. A synchronous call
+   * made before the promise settles then fails fast instead of blocking that thread.
+   */
   beginTransaction(timeoutMs?: number | undefined | null, name?: string | undefined | null): Promise<JsSqliteTransaction>
+  /** Opens the database so later synchronous calls never fetch its first pages. */
+  open(): Promise<void>
+  executeSync(sql: string, params?: Array<JsBindParam> | undefined | null): NativeExecuteResult
+  execSync(sql: string): QueryResult
+  beginTransactionSync(timeoutMs?: number | undefined | null, name?: string | undefined | null): JsSqliteTransaction
+  /**
+   * Returns the latest local commit as a ticket. Tickets stay below 2^53 for any realistic
+   * generation, so they cross to JavaScript as numbers.
+   */
+  commitTicket(): number
+  abortGeneration(reason: string): void
+  whenDurable(ticket: number): Promise<void>
 }
 export declare class JsSqliteTransaction {
   execute(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<NativeExecuteResult>
   exec(sql: string): Promise<QueryResult>
   commit(): Promise<void>
   rollback(): Promise<void>
+  executeSync(sql: string, params?: Array<JsBindParam> | undefined | null): NativeExecuteResult
+  execSync(sql: string): QueryResult
+  commitSync(): void
+  rollbackSync(): void
 }
 export declare class JsActorStateTransaction {
   execute(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<NativeExecuteResult>
