@@ -10,6 +10,10 @@ Running against a real model needs an OpenAI API key:
 export OPENAI_API_KEY=sk-...
 ```
 
+The first-party OpenAI endpoint uses `gpt-6-luna` because GPT-4o mini is
+[deprecated](https://developers.openai.com/api/docs/deprecations). Custom
+`OPENAI_BASE_URL` endpoints keep the existing `gpt-4o-mini` model name.
+
 The test suite needs neither a key nor network access: it runs a real in-process mock LLM server instead.
 
 ## Getting Started
