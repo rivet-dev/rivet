@@ -18,7 +18,9 @@ use std::{
 use lru::LruCache;
 use parking_lot::{Mutex, RwLock};
 use sqlite_types::PageBytes;
+use tokio::sync::watch;
 
+use crate::optimization_flags::sqlite_optimization_flags;
 use crate::worker::SqlitePoolMetrics;
 
 /// Expired pages an insert may drop from its shard's cold end.
@@ -567,4 +569,98 @@ impl Drop for BufferInner {
 	fn drop(&mut self) {
 		self.generation.get_mut().unread.close();
 	}
+}
+
+/// Bytes deferred databases committed locally that storage has not acknowledged yet, shared by
+/// every deferred database in the process. Writers that outrun storage wait on it instead of
+/// growing memory without bound. These pages cannot be evicted, so they stay out of
+/// [`PageBudget`].
+pub(crate) struct UnflushedBudget {
+	cap: u64,
+	// Forced-sync: changed from VFS callbacks and the flusher without awaiting. Updating the
+	// gauge under the lock keeps it in step with the count.
+	used: Mutex<u64>,
+	/// Bumped after every release, so waiting writers can try again.
+	released: watch::Sender<u64>,
+	metrics: std::sync::OnceLock<Arc<dyn SqlitePoolMetrics>>,
+}
+
+impl UnflushedBudget {
+	pub(crate) fn new(cap: u64) -> Self {
+		Self {
+			cap,
+			used: Mutex::new(0),
+			released: watch::Sender::new(0),
+			metrics: std::sync::OnceLock::new(),
+		}
+	}
+
+	pub(crate) fn used(&self) -> u64 {
+		*self.used.lock()
+	}
+
+	/// Reserves `bytes` when they fit under the cap.
+	pub(crate) fn try_reserve(&self, bytes: u64) -> bool {
+		self.reserve_if(bytes, |used| used.saturating_add(bytes) <= self.cap)
+	}
+
+	/// Reserves `bytes` when they fit under the cap, or when the budget holds nothing, so a
+	/// transaction larger than the whole budget can still commit on its own.
+	pub(crate) fn try_reserve_or_alone(&self, bytes: u64) -> bool {
+		self.reserve_if(bytes, |used| {
+			used == 0 || used.saturating_add(bytes) <= self.cap
+		})
+	}
+
+	fn reserve_if(&self, bytes: u64, admit: impl FnOnce(u64) -> bool) -> bool {
+		let mut used = self.used.lock();
+		if !admit(*used) {
+			return false;
+		}
+		*used = used.saturating_add(bytes);
+		self.report(*used);
+		true
+	}
+
+	pub(crate) fn release(&self, bytes: u64) {
+		if bytes == 0 {
+			return;
+		}
+		{
+			let mut used = self.used.lock();
+			*used = used.saturating_sub(bytes);
+			self.report(*used);
+		}
+		self.released
+			.send_modify(|version| *version = version.wrapping_add(1));
+	}
+
+	pub(crate) fn subscribe(&self) -> watch::Receiver<u64> {
+		self.released.subscribe()
+	}
+
+	/// Reports the budget to the first pool's metrics.
+	pub(crate) fn attach_metrics(&self, metrics: Arc<dyn SqlitePoolMetrics>) {
+		if self.metrics.set(metrics).is_ok() {
+			self.report(*self.used.lock());
+		}
+	}
+
+	fn report(&self, used: u64) {
+		if let Some(metrics) = self.metrics.get() {
+			metrics.set_deferred_unflushed_bytes(used);
+		}
+	}
+}
+
+/// The unflushed budget every deferred database in this process shares.
+pub(crate) fn process_unflushed_budget() -> &'static Arc<UnflushedBudget> {
+	static BUDGET: std::sync::OnceLock<Arc<UnflushedBudget>> = std::sync::OnceLock::new();
+	BUDGET.get_or_init(|| {
+		Arc::new(UnflushedBudget::new(
+			sqlite_optimization_flags()
+				.deferred_process_unflushed_kib
+				.saturating_mul(1024),
+		))
+	})
 }

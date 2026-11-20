@@ -25,6 +25,9 @@ pub mod optimization_flags;
 #[cfg(feature = "transport")]
 mod page_buffer;
 
+#[cfg(feature = "transport")]
+mod interior_pages;
+
 /// Guards for connections that run SQL sent by an untrusted peer.
 #[cfg(feature = "transport")]
 pub mod guard;

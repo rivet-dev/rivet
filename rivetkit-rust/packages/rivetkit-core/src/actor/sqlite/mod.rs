@@ -61,7 +61,7 @@ use sqlite_embedded::{
 		NativeDatabaseHandle, open_database_from_transport_on_pool,
 		open_new_database_from_transport_on_pool,
 	},
-	vfs::{CorkClose, SqliteVfsMetrics, SqliteVfsMetricsSnapshot},
+	vfs::{CommitMode, CorkClose, DatabaseFailure, SqliteVfsMetrics, SqliteVfsMetricsSnapshot},
 	worker::{
 		SQLITE_WORKER_QUEUE_CAPACITY, SqlitePool, SqliteWorkerCloseTimeoutError,
 		SqliteWorkerClosingError, SqliteWorkerDeadError, SqliteWorkerFatalError,
@@ -457,6 +457,7 @@ impl SqliteDb {
 							generation,
 							rt_handle,
 							vfs_metrics,
+							CommitMode::Awaited,
 						)
 						.await
 					} else {
@@ -467,6 +468,7 @@ impl SqliteDb {
 							generation,
 							rt_handle,
 							vfs_metrics,
+							CommitMode::Awaited,
 						)
 						.await
 					};
@@ -1210,13 +1212,17 @@ impl SqliteDb {
 		self.abort_worker_failure_monitor();
 		let reported = Arc::clone(&self.worker_fatal_reported);
 		let task = RuntimeSpawner::spawn(async move {
-			if native_db.wait_for_worker_failure().await {
-				report_sqlite_worker_fatal(
-					&reported,
-					config,
-					"sqlite worker thread stopped unexpectedly".to_string(),
-				);
-			}
+			let message = match native_db.wait_for_failure().await {
+				DatabaseFailure::Closed => return,
+				DatabaseFailure::WorkerStopped => {
+					"sqlite worker thread stopped unexpectedly".to_string()
+				}
+				// Commits callers already saw can never become durable, and the broken database
+				// fails every later write. A crash makes the engine restart the actor from
+				// durable state.
+				DatabaseFailure::Flush(error) => format!("sqlite durability failed: {error}"),
+			};
+			report_sqlite_worker_fatal(&reported, config, message);
 		});
 		*self.worker_failure_task.lock() = Some(task);
 	}

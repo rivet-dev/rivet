@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use rivet_envoy_protocol as protocol;
 use tokio::runtime::Handle;
@@ -10,8 +10,9 @@ use tokio::sync::watch;
 use crate::{
 	query::{BindParam, ExecResult, ExecuteResult, QueryResult},
 	vfs::{
-		CorkClose, InitialPages, NativeVfsHandle, SqliteOpenPhase, SqliteStorageError,
-		SqliteTransportHandle, SqliteVfs, SqliteVfsMetrics, SqliteVfsMetricsSnapshot, VfsConfig,
+		CommitAdmission, CommitMode, CorkClose, DatabaseFailure, FlushError, InitialPages,
+		NativeVfsHandle, SqliteOpenPhase, SqliteStorageError, SqliteTransportHandle, SqliteVfs,
+		SqliteVfsMetrics, SqliteVfsMetricsSnapshot, VfsConfig,
 		fetch_initial_pages_for_registration,
 	},
 	worker::{
@@ -85,8 +86,16 @@ pub async fn open_database_from_transport(
 	rt_handle: Handle,
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 ) -> Result<NativeDatabaseHandle> {
-	open_database_from_transport_on_pool(None, transport, actor_id, generation, rt_handle, metrics)
-		.await
+	open_database_from_transport_on_pool(
+		None,
+		transport,
+		actor_id,
+		generation,
+		rt_handle,
+		metrics,
+		CommitMode::Awaited,
+	)
+	.await
 }
 
 /// Opens the database on the runtime's shared worker pool, or on a dedicated single-thread
@@ -98,10 +107,20 @@ pub async fn open_database_from_transport_on_pool(
 	generation: u64,
 	rt_handle: Handle,
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+	commit_mode: CommitMode,
 ) -> Result<NativeDatabaseHandle> {
 	let vfs_name = vfs_name_for_actor_database(&actor_id, generation);
-	open_database_from_transport_with_guard(
-		pool, vfs_name, transport, actor_id, generation, rt_handle, metrics, None,
+	open_database(
+		pool,
+		vfs_name,
+		transport,
+		actor_id,
+		generation,
+		rt_handle,
+		metrics,
+		None,
+		Preload::Fetch,
+		commit_mode,
 	)
 	.await
 }
@@ -119,6 +138,7 @@ pub async fn open_new_database_from_transport_on_pool(
 	generation: u64,
 	rt_handle: Handle,
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+	commit_mode: CommitMode,
 ) -> Result<NativeDatabaseHandle> {
 	let vfs_name = vfs_name_for_actor_database(&actor_id, generation);
 	open_database(
@@ -131,6 +151,7 @@ pub async fn open_new_database_from_transport_on_pool(
 		metrics,
 		None,
 		Preload::Empty,
+		commit_mode,
 	)
 	.await
 }
@@ -159,6 +180,7 @@ pub async fn open_database_from_transport_with_guard(
 		metrics,
 		guard,
 		Preload::Fetch,
+		CommitMode::Awaited,
 	)
 	.await
 }
@@ -182,6 +204,7 @@ async fn open_database(
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 	guard: Option<crate::guard::ConnectionGuard>,
 	preload: Preload,
+	commit_mode: CommitMode,
 ) -> Result<NativeDatabaseHandle> {
 	let open_timer = SqliteOpenTimer::new(&metrics);
 	// A database without a shared pool runs on its own single-thread pool, which also owns its
@@ -196,6 +219,7 @@ async fn open_database(
 	};
 	let mut config = VfsConfig::default();
 	config.page_budget = pool.page_budget().clone();
+	config.commit_mode = commit_mode;
 	let transport: SqliteTransportHandle = Arc::new(GenerationFencedTransport {
 		inner: transport,
 		generation,
@@ -210,7 +234,8 @@ async fn open_database(
 				&config,
 			)
 			.await
-			.map_err(|err| anyhow!("failed to preload sqlite pages: {err}"));
+			// The context keeps a storage refusal typed for the caller.
+			.context("failed to preload sqlite pages");
 			let initial_pages = observe_open_phase_result(
 				&metrics,
 				SqliteOpenPhase::InitialPreload,
@@ -404,7 +429,8 @@ impl NativeDatabaseHandle {
 	}
 
 	/// Sends the transactions committed since `cork_commits` to depot as one commit. Inside an
-	/// explicit transaction it waits until the transaction ends, so the commit includes it.
+	/// explicit transaction it waits until the transaction ends, so the commit includes it. A
+	/// deferred database commits them locally as one commit and waits until it is durable.
 	pub async fn uncork_commits(&self) -> Result<()> {
 		self.check_fatal_error()?;
 		let result = self.worker.uncork_commits().await;
@@ -415,7 +441,11 @@ impl NativeDatabaseHandle {
 		{
 			return result;
 		}
-		self.map_worker_result(result)
+		self.map_worker_result(result)?;
+		if self.vfs.commit_mode() == CommitMode::Deferred {
+			self.wait_for_flush(self.vfs.commit_seq()).await?;
+		}
+		Ok(())
 	}
 
 	/// Drops the transactions committed since `cork_commits` without sending them, for a start
@@ -483,14 +513,39 @@ impl NativeDatabaseHandle {
 		self.worker.request_close();
 	}
 
+	/// Closes the worker, then waits for commits held in deferred mode to become durable.
 	pub async fn close(&self) -> Result<()> {
-		self.map_worker_close_result(self.worker.close().await)
+		self.vfs.begin_close();
+		let result = self.worker.close().await;
+		self.finish_close(result).await
 	}
 
 	/// Closes the database without returning while its worker still owns SQLite.
 	/// Any returned error is reported only after the worker thread has terminated.
 	pub async fn close_and_wait(&self) -> Result<()> {
-		self.map_worker_close_result(self.worker.close_and_wait().await)
+		self.vfs.begin_close();
+		let result = self.worker.close_and_wait().await;
+		self.finish_close(result).await
+	}
+
+	async fn finish_close(&self, worker_result: Result<()>) -> Result<()> {
+		if worker_result.as_ref().err().is_some_and(|error| {
+			error
+				.downcast_ref::<SqliteWorkerCloseTimeoutError>()
+				.is_some()
+		}) {
+			// The worker may still own SQLite and commit more, so held commits cannot drain.
+			self.vfs
+				.abort_flusher("sqlite worker close timed out")
+				.await;
+			return worker_result;
+		}
+		let flush_result = self.vfs.drain_flusher(self.vfs.close_flush_timeout()).await;
+		match (self.map_worker_close_result(worker_result), flush_result) {
+			(Err(error), _) => Err(error),
+			(Ok(()), Err(error)) => Err(anyhow!(error)),
+			(Ok(()), Ok(())) => Ok(()),
+		}
 	}
 
 	/// Interrupts the statement running on the worker without closing the database; the
@@ -503,7 +558,9 @@ impl NativeDatabaseHandle {
 	/// worker, for a caller that has no use for its outcome. See
 	/// [`SqliteWorkerHandle::interrupt_and_close_and_wait`].
 	pub async fn interrupt_and_close_and_wait(&self) -> Result<()> {
-		self.map_worker_close_result(self.worker.interrupt_and_close_and_wait().await)
+		self.vfs.begin_close();
+		let result = self.worker.interrupt_and_close_and_wait().await;
+		self.finish_close(result).await
 	}
 
 	fn map_worker_close_result(&self, result: Result<()>) -> Result<()> {
@@ -523,8 +580,57 @@ impl NativeDatabaseHandle {
 		}
 	}
 
-	pub async fn wait_for_worker_failure(&self) -> bool {
-		self.worker.wait_for_failure().await
+	/// Resolves once the database stops serving its generation: its worker stopped, deferred
+	/// commits can no longer become durable, or it closed.
+	pub async fn wait_for_failure(&self) -> DatabaseFailure {
+		tokio::select! {
+			failure = self.vfs.wait_for_failure() => failure,
+			failed = self.worker.wait_for_failure() => {
+				if failed {
+					DatabaseFailure::WorkerStopped
+				} else {
+					DatabaseFailure::Closed
+				}
+			}
+		}
+	}
+
+	pub fn commit_mode(&self) -> CommitMode {
+		self.vfs.commit_mode()
+	}
+
+	/// A handle to the same database whose `execute` and `exec` commits follow `admission`.
+	pub fn with_commit_admission(&self, admission: CommitAdmission) -> Self {
+		Self {
+			vfs: self.vfs.clone(),
+			worker: self.worker.with_commit_admission(admission),
+		}
+	}
+
+	/// The newest local commit's sequence, which `wait_for_flush` takes as a ticket.
+	pub fn commit_seq(&self) -> u64 {
+		self.vfs.commit_seq()
+	}
+
+	/// Pages committed locally that are not durable yet.
+	pub fn unflushed_pages(&self) -> usize {
+		self.vfs.unflushed_pages()
+	}
+
+	/// Why deferred commits can no longer become durable, once the database broke.
+	pub fn flush_error(&self) -> Option<FlushError> {
+		self.vfs.flush_error()
+	}
+
+	/// Resolves once local commit `seq` and every earlier one are durable.
+	pub async fn wait_for_flush(&self, seq: u64) -> std::result::Result<(), FlushError> {
+		self.vfs.wait_for_flush(seq).await
+	}
+
+	/// Breaks the database: every later statement fails and flush waits reject. Commits held
+	/// locally never become durable.
+	pub fn break_database(&self, reason: String) {
+		self.vfs.break_database(reason);
 	}
 
 	/// Returns whether the connection has an open explicit transaction, such as

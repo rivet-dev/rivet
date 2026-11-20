@@ -10,6 +10,12 @@ pub const PAGER_CACHE_SIZE_KIB_ENV: &str = "RIVETKIT_SQLITE_OPT_PAGER_CACHE_SIZE
 pub const PAGER_PROCESS_CACHE_KIB_ENV: &str = "RIVETKIT_SQLITE_OPT_PAGER_PROCESS_CACHE_KIB";
 pub const IDLE_RELEASE_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_IDLE_RELEASE_MS";
 pub const PAGE_RANGE_CONCURRENCY_ENV: &str = "RIVETKIT_SQLITE_OPT_PAGE_RANGE_CONCURRENCY";
+pub const FLUSH_RETRY_DEADLINE_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_FLUSH_RETRY_DEADLINE_MS";
+pub const FLUSH_RETRY_BACKOFF_MIN_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_FLUSH_RETRY_BACKOFF_MIN_MS";
+pub const FLUSH_RETRY_BACKOFF_MAX_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_FLUSH_RETRY_BACKOFF_MAX_MS";
+pub const DEFERRED_DB_UNFLUSHED_KIB_ENV: &str = "RIVETKIT_SQLITE_OPT_DEFERRED_DB_UNFLUSHED_KIB";
+pub const DEFERRED_PROCESS_UNFLUSHED_KIB_ENV: &str =
+	"RIVETKIT_SQLITE_OPT_DEFERRED_PROCESS_UNFLUSHED_KIB";
 pub const DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 131_072;
 pub const MAX_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 4_194_304;
 pub const DEFAULT_VFS_STAGING_CACHE_TTL_MS: u64 = 30_000;
@@ -22,6 +28,17 @@ pub const DEFAULT_IDLE_RELEASE_MS: u64 = 30_000;
 pub const MAX_IDLE_RELEASE_MS: u64 = 3_600_000;
 pub const DEFAULT_PAGE_RANGE_CONCURRENCY: usize = 16;
 pub const MAX_PAGE_RANGE_CONCURRENCY: usize = 64;
+pub const DEFAULT_FLUSH_RETRY_DEADLINE_MS: u64 = 30_000;
+pub const MAX_FLUSH_RETRY_DEADLINE_MS: u64 = 600_000;
+pub const DEFAULT_FLUSH_RETRY_BACKOFF_MIN_MS: u64 = 50;
+pub const DEFAULT_FLUSH_RETRY_BACKOFF_MAX_MS: u64 = 2_000;
+pub const MAX_FLUSH_RETRY_BACKOFF_MS: u64 = 60_000;
+/// The most one single-shot commit carries: `COMMIT_STAGE_THRESHOLD_PAGES` 4 KiB pages. A
+/// backlog within it always flushes as one single-shot commit, never through the staged path.
+pub const MAX_DEFERRED_DB_UNFLUSHED_KIB: u64 = 1280;
+pub const DEFAULT_DEFERRED_DB_UNFLUSHED_KIB: u64 = MAX_DEFERRED_DB_UNFLUSHED_KIB;
+pub const DEFAULT_DEFERRED_PROCESS_UNFLUSHED_KIB: u64 = 128 * 1024;
+pub const MAX_DEFERRED_PROCESS_UNFLUSHED_KIB: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SqliteVfsPageCacheMode {
@@ -62,6 +79,16 @@ pub struct SqliteOptimizationFlags {
 	pub pager_process_cache_kib: u64,
 	pub idle_release_ms: u64,
 	pub page_range_concurrency: usize,
+	/// How long a deferred-commit flush retries before the database breaks.
+	pub flush_retry_deadline_ms: u64,
+	pub flush_retry_backoff_min_ms: u64,
+	pub flush_retry_backoff_max_ms: u64,
+	/// Unflushed bytes one deferred database may hold before its next commit waits. A commit
+	/// into an empty backlog is admitted up to the commit page cap, within the process budget.
+	pub deferred_db_unflushed_kib: u64,
+	/// Unflushed bytes all deferred databases in the process may hold together before a
+	/// commit waits. Only a commit into an empty process budget may exceed it.
+	pub deferred_process_unflushed_kib: u64,
 }
 impl Default for SqliteOptimizationFlags {
 	fn default() -> Self {
@@ -109,6 +136,31 @@ impl SqliteOptimizationFlags {
 				MAX_PAGE_RANGE_CONCURRENCY,
 			)
 			.max(1),
+			flush_retry_deadline_ms: u64_bounded_by_default(
+				read_env(FLUSH_RETRY_DEADLINE_MS_ENV).as_deref(),
+				DEFAULT_FLUSH_RETRY_DEADLINE_MS,
+				MAX_FLUSH_RETRY_DEADLINE_MS,
+			),
+			flush_retry_backoff_min_ms: u64_bounded_by_default(
+				read_env(FLUSH_RETRY_BACKOFF_MIN_MS_ENV).as_deref(),
+				DEFAULT_FLUSH_RETRY_BACKOFF_MIN_MS,
+				MAX_FLUSH_RETRY_BACKOFF_MS,
+			),
+			flush_retry_backoff_max_ms: u64_bounded_by_default(
+				read_env(FLUSH_RETRY_BACKOFF_MAX_MS_ENV).as_deref(),
+				DEFAULT_FLUSH_RETRY_BACKOFF_MAX_MS,
+				MAX_FLUSH_RETRY_BACKOFF_MS,
+			),
+			deferred_db_unflushed_kib: u64_bounded_by_default(
+				read_env(DEFERRED_DB_UNFLUSHED_KIB_ENV).as_deref(),
+				DEFAULT_DEFERRED_DB_UNFLUSHED_KIB,
+				MAX_DEFERRED_DB_UNFLUSHED_KIB,
+			),
+			deferred_process_unflushed_kib: u64_bounded_by_default(
+				read_env(DEFERRED_PROCESS_UNFLUSHED_KIB_ENV).as_deref(),
+				DEFAULT_DEFERRED_PROCESS_UNFLUSHED_KIB,
+				MAX_DEFERRED_PROCESS_UNFLUSHED_KIB,
+			),
 		}
 	}
 }
