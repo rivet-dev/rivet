@@ -10,6 +10,7 @@ export type {
 	SqliteDatabase,
 	SqliteNativeMetrics,
 	SqliteProfilingOptions,
+	SqliteProfilingMetricsOptions,
 	SqliteQueryResult,
 	SqliteTransactionOptions,
 } from "@/common/database/config";

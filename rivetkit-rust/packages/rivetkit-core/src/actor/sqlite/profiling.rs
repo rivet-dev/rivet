@@ -1,5 +1,6 @@
 use depot_client::vfs::SqliteOperationProfile;
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 
 use crate::SqliteProfilingConfig;
 
@@ -9,6 +10,36 @@ pub(super) const FINGERPRINT_FORMAT_VERSION: u8 = 2;
 pub(super) struct StatementFingerprint {
 	pub(super) display: String,
 	pub(super) hash: String,
+}
+
+/// Query filters are compiled once per metric sink.
+#[derive(Debug)]
+pub(crate) struct QuerySelection {
+	fingerprints: HashSet<String>,
+	track_all: bool,
+}
+impl QuerySelection {
+	pub(crate) fn new(config: &SqliteProfilingConfig) -> Self {
+		let mut fingerprints = config
+			.filter_query_fingerprints
+			.iter()
+			.cloned()
+			.collect::<HashSet<_>>();
+		fingerprints.extend(
+			config
+				.filter_queries
+				.iter()
+				.filter_map(|sql| statement_fingerprint(sql).map(|value| value.display)),
+		);
+		Self {
+			fingerprints,
+			track_all: config.filter_queries.is_empty()
+				&& config.filter_query_fingerprints.is_empty(),
+		}
+	}
+	pub(crate) fn contains(&self, fingerprint: &str) -> bool {
+		!fingerprint.is_empty() && (self.track_all || self.fingerprints.contains(fingerprint))
+	}
 }
 
 #[derive(Debug)]
@@ -45,7 +76,12 @@ impl SqliteProfilingState {
 	}
 
 	pub(super) fn mark_cataloged(&self, fingerprint: &str) -> bool {
-		self.cataloged.insert_sync(fingerprint.to_owned()).is_ok()
+		self.cataloged.len()
+			< self
+				.config
+				.max_tracked_statement_fingerprints
+				.saturating_add(self.config.max_tracked_transaction_fingerprints)
+			&& self.cataloged.insert_sync(fingerprint.to_owned()).is_ok()
 	}
 }
 
@@ -199,6 +235,16 @@ impl TransactionProfile {
 	pub(super) fn shape_fingerprint(&self) -> String {
 		format!("shape-{}", hex_prefix(&self.shape.clone().finalize()))
 	}
+}
+
+/// Hashes exact SQL only for fingerprint metrics or a selected diagnostic.
+pub(super) fn statement_fingerprint(sql: &str) -> Option<StatementFingerprint> {
+	let class = statement_class(sql)?;
+	let hash = fingerprint_hash(b"rivetkit-sqlite-statement", sql.as_bytes());
+	Some(StatementFingerprint {
+		display: format!("{class}-{hash}"),
+		hash,
+	})
 }
 
 fn fingerprint_hash(domain: &[u8], value: &[u8]) -> String {
