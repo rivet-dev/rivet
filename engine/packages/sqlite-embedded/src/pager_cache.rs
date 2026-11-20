@@ -119,7 +119,7 @@ pub fn install(capacity_bytes: u64, metrics: Option<Arc<dyn SqlitePoolMetrics>>)
 	installed
 }
 
-/// The installed cache, if any, for tests and metrics.
+/// The installed cache, if any. Deferred databases skip idle release only while it is.
 pub fn installed() -> Option<&'static PagerCache> {
 	let cache = PROCESS_PAGER_CACHE.load(Ordering::Acquire);
 	// SAFETY: a non-null pointer is a cache leaked for the life of the process.
