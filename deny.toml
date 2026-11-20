@@ -1,21 +1,5 @@
 [advisories]
 ignore = [
-	# chrono depends on time 0.1, which is not patched
-    "RUSTSEC-2020-0071",
-	# webpki 0.21.4 only used by aws-smithy-client 0.41.0 in our deprecated
-	# generated clients. This is used only for type ser/de and old tests.
-	"RUSTSEC-2023-0052",
-	# rustls 0.19.1 is only used by aws-smithy-client in our deprecated
-	# generated clients. This is used only for type ser/de and old tests.
-	"RUSTSEC-2024-0336",
-	# Inputs are only read from trusted sources
-	"RUSTSEC-2024-0421",
-	# TODO(RVT-4096):
-	"RUSTSEC-2023-0071",
-	# Unmaintained, low-impact crates
-	"RUSTSEC-2020-0163",
-	"RUSTSEC-2024-0370",
-	"RUSTSEC-2024-0384",
 	# SlateDB currently pulls in bincode 1, which is unmaintained without a patched release.
 	"RUSTSEC-2025-0141",
 ]
