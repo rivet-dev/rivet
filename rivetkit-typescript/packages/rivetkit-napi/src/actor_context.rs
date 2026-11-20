@@ -344,7 +344,7 @@ impl ActorContext {
 	#[napi]
 	pub fn sql(&self) -> JsNativeDatabase {
 		JsNativeDatabase::new(
-			self.inner.invocation_sql(),
+			self.inner.invocation_sql().for_host_thread(),
 			Some(self.inner.actor_id().to_owned()),
 		)
 	}
@@ -537,18 +537,28 @@ impl ActorContext {
 			.map_err(napi_anyhow_error)
 	}
 
-	#[napi]
-	pub async fn begin_state_transaction(
+	/// Starts the begin during this call, so the transaction counts as the JavaScript thread's
+	/// even before it opens. See `JsNativeDatabase::begin_transaction`.
+	#[napi(ts_return_type = "Promise<JsActorStateTransaction>")]
+	pub fn begin_state_transaction(
 		&self,
+		env: Env,
 		timeout_ms: Option<f64>,
 		name: Option<String>,
-	) -> napi::Result<JsActorStateTransaction> {
-		let timeout = timeout_ms.map(transaction_timeout).transpose()?;
-		self.inner
-			.begin_named_state_transaction(name.as_deref(), timeout)
-			.await
-			.map(JsActorStateTransaction::new)
-			.map_err(napi_anyhow_error)
+	) -> napi::Result<JsObject> {
+		let begin = timeout_ms
+			.map(transaction_timeout)
+			.transpose()
+			.map(|timeout| {
+				self.inner
+					.begin_host_thread_state_transaction(name.as_deref(), timeout)
+			});
+		env.spawn_future(async move {
+			begin?
+				.await
+				.map(JsActorStateTransaction::new)
+				.map_err(napi_anyhow_error)
+		})
 	}
 
 	#[napi]
