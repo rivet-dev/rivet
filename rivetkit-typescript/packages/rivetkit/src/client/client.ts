@@ -421,7 +421,10 @@ export class ClientRaw {
 		});
 
 		// Create the actor
-		const actorId = await resolveGatewayTarget(this.#driver, createQuery);
+		const actorId = await resolveGatewayTarget(this.#driver, createQuery, {
+			budget: this.#retryBudget,
+			signal: opts?.signal,
+		});
 		logger().debug({
 			msg: "created actor with ID",
 			name,

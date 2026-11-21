@@ -330,6 +330,28 @@ export function isRetryableForkRefusal(error: unknown): boolean {
 }
 
 /**
+ * Whether the engine refused an actor create before submitting it, so sending it again cannot
+ * make a second actor: a storage, gateway or namespace refusal that carries a `retry_after_ms`
+ * hint, which the actor API answers only for a refusal left before the create was sent, or a
+ * retryable lifecycle error. A create that may already have been sent answers
+ * `actor.create_pending` instead and goes to the caller, as does every other error.
+ */
+export function isRetryableCreateRefusal(error: unknown): boolean {
+	if (isRetryableLifecycleRequestError(error)) {
+		return true;
+	}
+	if (!(error instanceof ActorError) || retryAfterMs(error) === undefined) {
+		return false;
+	}
+	return (
+		(error.group === "depot" &&
+			(error.code === "overloaded" || error.code === "read_interrupted")) ||
+		(error.group === "guard" && error.code === "service_unavailable") ||
+		(error.group === "namespace" && error.code === "creating")
+	);
+}
+
+/**
  * Runs `run`, retrying retryable lifecycle and refusal errors with jittered exponential backoff
  * that honors the service's `retry_after_ms` hint. With a `budget`, the call credits it once and
  * every retry spends a token; a spent budget returns the error instead of retrying.

@@ -3,7 +3,7 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use pegboard::{
 	commands::EnvoyRead,
-	envoy_check::ACTOR_STOPPED_DETAIL,
+	envoy_check::{ACTOR_STOPPED_DETAIL, CONNECTION_ENDED_CLOSE_REASON, CONNECTION_ENDED_DETAIL},
 	epoch::{wrapping_ge, wrapping_gt, wrapping_le},
 	index::{IndexDeleteActiveEnvoy, IndexInsertEnvoy, IndexUpsertActiveEnvoy},
 	keys::{
@@ -77,6 +77,12 @@ struct Connection {
 	/// never waits for a slot in the socket queue and a busy but reading envoy still answers.
 	ping: tokio::sync::watch::Sender<i64>,
 	gateway_handles: scc::HashMap<([u8; 4], [u8; 4]), Arc<GatewayHandle>>,
+	/// Set once the connection is ending, so a gateway stream registered afterwards is answered
+	/// at once instead of being cancelled with no answer; see [`end_tunnels`].
+	tunnels_ending: AtomicBool,
+	/// Notified whenever a gateway stream leaves `gateway_handles`, so [`end_tunnels`] can wait
+	/// for every answered stream to finish.
+	tunnel_removed: tokio::sync::Notify,
 	actor_handles: scc::HashMap<String, Arc<ActorHandle>>,
 	actor_handle_budget: crate::admission::ActorHandleBudget,
 	/// This process's pool names refused node connects, for the sustained refusal warning.
@@ -249,6 +255,8 @@ pub async fn run(
 		last_pong_boot_ms: AtomicU64::new(started.boot_ms),
 		ping,
 		gateway_handles: scc::HashMap::new(),
+		tunnels_ending: AtomicBool::new(false),
+		tunnel_removed: tokio::sync::Notify::new(),
 		actor_handles: scc::HashMap::new(),
 		actor_handle_budget,
 		missing_pools: service.missing_pools.clone(),
@@ -505,6 +513,8 @@ pub async fn run(
 		res = socket_reader_task => res?.context("task cancelled")?,
 	);
 
+	// Every gateway stream gets its final answer while its task still runs.
+	end_tunnels(&conn).await;
 	tasks.shutdown().await;
 	// Leave the writer before the disconnect removes the index rows, so no flush writes them back.
 	conn.index_writer.leave(&conn).await;
@@ -1019,6 +1029,7 @@ async fn handle_sub_stream(
 		}
 		p::ToEnvoy::ToEnvoyTunnelMessage(mut tunnel_msg) => {
 			let mut last_message_id = tunnel_msg.message_id.clone();
+			let first_message_id = tunnel_msg.message_id.clone();
 			let message_key = (
 				tunnel_msg.message_id.gateway_id,
 				tunnel_msg.message_id.request_id,
@@ -1066,7 +1077,7 @@ async fn handle_sub_stream(
 			if refused {
 				let reply_version =
 					pegboard::envoy_protocol::reply_version(&ctx, &peer, request_version);
-				let refusal = foreign_group_refusal(
+				let refusal = refusal_before_admission(
 					tunnel_msg.message_id.clone(),
 					is_websocket,
 					&actor_id,
@@ -1087,6 +1098,8 @@ async fn handle_sub_stream(
 				actor_epoch,
 				stopped: tokio::sync::Notify::new(),
 				overloaded: tokio::sync::Notify::new(),
+				connection_ended: tokio::sync::Notify::new(),
+				sent: AtomicBool::new(false),
 			});
 			{
 				let scc::hash_map::Entry::Vacant(entry) =
@@ -1096,6 +1109,10 @@ async fn handle_sub_stream(
 				};
 
 				entry.insert_entry(gateway_handle.clone());
+			}
+			// A stream registered after the connection began ending is answered at once.
+			if conn.tunnels_ending.load(Ordering::Acquire) {
+				gateway_handle.connection_ended.notify_one();
 			}
 
 			// Replies to the gateway are encoded at one version for the whole stream, the one the
@@ -1110,6 +1127,7 @@ async fn handle_sub_stream(
 				// is on the lane ahead of it; overload cancellation also covers this setup.
 				Box::pin(actor_handle.await_start(&conn, &actor_id, actor_epoch)).await;
 				Box::pin(actor_handle.recv_tunnel_msg(tunnel_msg)).await?;
+				gateway_handle.sent.store(true, Ordering::Release);
 				loop {
 					rivet_env::select!( ctx.env().rng("envoy.subs");
 						// The execution stopped. Its tunnels end with it; the gateway closes the
@@ -1182,6 +1200,33 @@ async fn handle_sub_stream(
 			};
 			let handler_res = gateway_handle.run(handler).await;
 
+			// The envoy connection ended: answer the stream from here, since the envoy can no
+			// longer reply and its task is about to be cancelled.
+			let connection_ended = handler_res
+				.as_ref()
+				.err()
+				.is_some_and(|error| error.is::<TunnelConnectionEnded>());
+			let handler_res = match connection_ended {
+				true => {
+					answer_ended_tunnel(
+						&mut stream_tx,
+						&mut to_recipient_rx,
+						&gateway_handle,
+						TunnelIdentity {
+							first_message_id: first_message_id.clone(),
+							last_message_id: &mut last_message_id,
+							is_websocket,
+							actor_id: &actor_id,
+							actor_epoch,
+						},
+						reply_version,
+						stream_finalized_by_reply,
+					)
+					.await
+				}
+				false => handler_res,
+			};
+
 			Box::pin(
 				conn.gateway_handles
 					.remove_if_async(&message_key, |current| {
@@ -1189,9 +1234,10 @@ async fn handle_sub_stream(
 					}),
 			)
 			.await;
+			conn.tunnel_removed.notify_waiters();
 
 			// Handle ungraceful termination with best effort closure
-			if !stream_finalized_by_reply {
+			if !stream_finalized_by_reply && !connection_ended {
 				last_message_id.message_index = last_message_id.message_index.wrapping_add(1);
 
 				let message_kind = if is_websocket {
@@ -3235,16 +3281,160 @@ struct GatewayHandle {
 	stopped: tokio::sync::Notify,
 	/// Cancels this stream even while its gateway has stopped reading a pending send.
 	overloaded: tokio::sync::Notify,
+	/// Notified when the envoy connection ends, so the stream is answered before its task is
+	/// cancelled; see [`end_tunnels`].
+	connection_ended: tokio::sync::Notify,
+	/// Whether the request or WebSocket open was handed to the actor's lane for the envoy. Before
+	/// that the actor cannot have seen it, so a connection end refuses it retryably; after it the
+	/// actor may be running it.
+	sent: AtomicBool,
 }
+
+/// A gateway stream stopped because its envoy connection ended.
+#[derive(Debug)]
+struct TunnelConnectionEnded;
+
+impl std::fmt::Display for TunnelConnectionEnded {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("the envoy connection carrying this gateway stream ended")
+	}
+}
+
+impl std::error::Error for TunnelConnectionEnded {}
 
 impl GatewayHandle {
 	/// Cancel the whole stream on overload, including setup and a blocked peer send. Merely
-	/// checking between messages would leave a slow gateway's accepted work stuck forever.
+	/// checking between messages would leave a slow gateway's accepted work stuck forever. A
+	/// connection end stops the stream the same way, and the caller answers it.
 	async fn run(&self, transfer: impl std::future::Future<Output = Result<()>>) -> Result<()> {
-		rivet_env::select_biased!("a full gateway reply queue cancels only its stream",
+		rivet_env::select_biased!("a full gateway reply queue or a connection end stops only its stream",
 			_ = self.overloaded.notified() => Err(anyhow::anyhow!("gateway reply queue is full")),
+			_ = self.connection_ended.notified() => Err(TunnelConnectionEnded.into()),
 			result = transfer => result,
 		)
+	}
+}
+
+/// How long an ending connection waits for its gateway streams to send their final answers
+/// before its tasks are cancelled.
+const TUNNEL_END_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// What identifies a gateway stream's messages to its gateway.
+struct TunnelIdentity<'a> {
+	/// The id of the gateway's first message, which a refusal before admission answers.
+	first_message_id: p::MessageId,
+	/// The id of the stream's last message, advanced for each message this end sends.
+	last_message_id: &'a mut p::MessageId,
+	is_websocket: bool,
+	actor_id: &'a str,
+	actor_epoch: u32,
+}
+
+/// The final answer [`answer_ended_tunnel`] sends once no reply finished the stream: the refusal
+/// before admission when nothing was `sent` to the actor, and otherwise a reconnectable close for
+/// a WebSocket or an abort of unknown outcome for HTTP.
+fn ended_tunnel_answer(sent: bool, identity: TunnelIdentity<'_>) -> Result<p::ToRivet> {
+	let answer = match sent {
+		false => refusal_before_admission(
+			identity.first_message_id,
+			identity.is_websocket,
+			identity.actor_id,
+			identity.actor_epoch,
+		)?,
+		true => {
+			let last_message_id = identity.last_message_id;
+			last_message_id.message_index = last_message_id.message_index.wrapping_add(1);
+			let message_kind = match identity.is_websocket {
+				true => {
+					p::ToRivetTunnelMessageKind::ToRivetWebSocketClose(p::ToRivetWebSocketClose {
+						code: Some(1001),
+						reason: Some(CONNECTION_ENDED_CLOSE_REASON.into()),
+						hibernate: false,
+					})
+				}
+				false => {
+					p::ToRivetTunnelMessageKind::ToRivetResponseAbort(p::ToRivetResponseAbort {
+						reason: p::HttpStreamAbortReason {
+							kind: p::HttpStreamAbortReasonKind::Cancelled,
+							detail: Some(CONNECTION_ENDED_DETAIL.into()),
+						},
+					})
+				}
+			};
+			p::ToRivet::ToRivetTunnelMessage(p::ToRivetTunnelMessage {
+				message_id: last_message_id.clone(),
+				message_kind,
+			})
+		}
+	};
+	Ok(answer)
+}
+
+/// Answers a gateway stream whose envoy connection ended. Replies the envoy already sent are
+/// forwarded first, so a response that finished in time still reaches the client. After that, a
+/// stream the actor never saw gets [`refusal_before_admission`], which the gateway retries on
+/// another connection; a WebSocket the actor took is closed with
+/// [`CONNECTION_ENDED_CLOSE_REASON`], so the client reconnects to the actor, which keeps running;
+/// and a request the actor may be running is aborted with [`CONNECTION_ENDED_DETAIL`], whose
+/// outcome the gateway reports as unknown. `finalized` is whether the stream already sent its
+/// final reply.
+async fn answer_ended_tunnel(
+	stream_tx: &mut universalpubsub::PacketSender,
+	replies: &mut crate::queue::Receiver<TunnelReply>,
+	handle: &GatewayHandle,
+	identity: TunnelIdentity<'_>,
+	reply_version: u16,
+	mut finalized: bool,
+) -> Result<()> {
+	while !finalized && let Some(reply) = replies.try_recv() {
+		finalized = reply.is_final()?;
+		let payload = reply.into_payload(reply_version)?;
+		Box::pin(stream_tx.send(payload)).await?;
+	}
+	if finalized {
+		return Ok(());
+	}
+
+	let answer = ended_tunnel_answer(handle.sent.load(Ordering::Acquire), identity)?;
+	let payload = Bytes::from(p::versioned::ToRivet::serialize_with_embedded_version(
+		&answer,
+		reply_version,
+	)?);
+	Box::pin(stream_tx.send(payload)).await?;
+	Ok(())
+}
+
+/// Answers every gateway stream still open on an ending connection before its tasks are
+/// cancelled, so the gateway never sees a stream dropped without a reply: a request the actor
+/// never saw is refused retryably, one it may be running is aborted as of unknown outcome, and a
+/// WebSocket is closed so the client reconnects. Waits up to [`TUNNEL_END_TIMEOUT`] for the
+/// streams to finish; one still sending then is cancelled as before.
+async fn end_tunnels(conn: &Connection) {
+	conn.tunnels_ending.store(true, Ordering::Release);
+	conn.gateway_handles
+		.iter_async(|_, handle| {
+			handle.connection_ended.notify_one();
+			true
+		})
+		.await;
+
+	let clock = conn.ctx.env().clock();
+	let drained = rivet_env::timeout(clock.as_ref(), TUNNEL_END_TIMEOUT, async {
+		loop {
+			let removed = conn.tunnel_removed.notified();
+			tokio::pin!(removed);
+			removed.as_mut().enable();
+			if conn.gateway_handles.is_empty() {
+				break;
+			}
+			removed.await;
+		}
+	})
+	.await;
+	if drained.is_err() {
+		tracing::debug!(
+			"gateway streams still sending when the envoy connection ended; cancelling them"
+		);
 	}
 }
 
@@ -3455,11 +3645,12 @@ where
 	}
 }
 
-/// The answer to a gateway request this connection refused for naming another namespace's
-/// group: the envoy's own refusal of an actor it does not host, a 503 `envoy.actor_not_found`
-/// for HTTP and a close with that reason for a WebSocket, which the gateway treats as a refusal
-/// before admission.
-fn foreign_group_refusal(
+/// The answer to a gateway request this connection refused before the actor could see it: one
+/// naming another namespace's group, or one still unsent when the connection ended. It is the
+/// envoy's own refusal of an actor it does not host, a 503 `envoy.actor_not_found` for HTTP and a
+/// close with that reason for a WebSocket, which the gateway treats as a refusal before admission
+/// and retries.
+fn refusal_before_admission(
 	message_id: p::MessageId,
 	is_websocket: bool,
 	actor_id: &str,

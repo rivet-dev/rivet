@@ -3,17 +3,32 @@ import type {
 	EngineControlClient,
 	GatewayTarget,
 } from "@/engine-client/driver";
+import {
+	isRetryableCreateRefusal,
+	retryOnLifecycleBoundary,
+} from "./lifecycle-errors";
+import type { RetryBudget } from "./retry-budget";
 
 /**
  * Resolves a GatewayTarget to a concrete actor ID string.
  *
  * Shared across all EngineControlClient implementations to avoid duplicating the
- * same query-to-actorId dispatch logic.
+ * same query-to-actorId dispatch logic. The client is the retry owner of a create: one the
+ * engine refused before submitting it is sent again after the service's hint, within
+ * `opts.budget`.
  */
 export async function resolveGatewayTarget(
 	driver: EngineControlClient,
 	target: GatewayTarget,
+	opts?: { budget?: RetryBudget; signal?: AbortSignal },
 ): Promise<string> {
+	const retryCreate = <T>(run: () => Promise<T>) =>
+		retryOnLifecycleBoundary(run, {
+			signal: opts?.signal,
+			budget: opts?.budget,
+			isRetryable: isRetryableCreateRefusal,
+		});
+
 	if ("directId" in target) {
 		return target.directId;
 	}
@@ -36,24 +51,28 @@ export async function resolveGatewayTarget(
 	}
 
 	if ("getOrCreateForKey" in target) {
-		const output = await driver.getOrCreateWithKey({
-			name: target.getOrCreateForKey.name,
-			key: target.getOrCreateForKey.key,
-			input: target.getOrCreateForKey.input,
-			region: target.getOrCreateForKey.region,
-			poolName: target.getOrCreateForKey.poolName,
-		});
+		const output = await retryCreate(() =>
+			driver.getOrCreateWithKey({
+				name: target.getOrCreateForKey.name,
+				key: target.getOrCreateForKey.key,
+				input: target.getOrCreateForKey.input,
+				region: target.getOrCreateForKey.region,
+				poolName: target.getOrCreateForKey.poolName,
+			}),
+		);
 		return output.actorId;
 	}
 
 	if ("create" in target) {
-		const output = await driver.createActor({
-			name: target.create.name,
-			key: target.create.key,
-			input: target.create.input,
-			region: target.create.region,
-			poolName: target.create.poolName,
-		});
+		const output = await retryCreate(() =>
+			driver.createActor({
+				name: target.create.name,
+				key: target.create.key,
+				input: target.create.input,
+				region: target.create.region,
+				poolName: target.create.poolName,
+			}),
+		);
 		return output.actorId;
 	}
 

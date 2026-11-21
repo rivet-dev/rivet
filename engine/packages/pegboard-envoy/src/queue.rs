@@ -191,4 +191,9 @@ impl<T> Receiver<T> {
 		let queued = self.rx.recv().await?;
 		Some(queued.value)
 	}
+
+	/// The next queued value without waiting, or `None` when nothing is queued now.
+	pub(crate) fn try_recv(&mut self) -> Option<T> {
+		self.rx.try_recv().ok().map(|queued| queued.value)
+	}
 }

@@ -61,11 +61,12 @@ pub async fn proxy(
 		.context("HTTP tunnel stopped before response headers")??;
 	let start = match head {
 		ResponseHead::Start(start) => start,
-		ResponseHead::ActorStopped => {
-			// The actor's epoch stopped before it answered. Drop the upload/response owner
-			// and let the caller re-resolve its actor, as for an admission refusal.
+		ResponseHead::OutcomeUnknown => {
+			// The actor received the request and then stopped, or its envoy connection ended,
+			// before it answered. It may have run the request, so the caller must not send it
+			// again: unlike an admission refusal, this is not retried.
 			drop(scope);
-			return actor_stopped_while_waiting();
+			return Err(RequestOutcomeUnknown.build());
 		}
 	};
 	if let Some(response) = admission_rejection(&start)? {
@@ -127,9 +128,21 @@ pub async fn proxy(
 /// What the actor answered before any response body.
 enum ResponseHead {
 	Start(protocol::ToRivetResponseStart),
-	/// The actor's epoch stopped before it sent response headers.
-	ActorStopped,
+	/// The actor received the request, then its epoch stopped or its envoy connection ended
+	/// before it sent response headers.
+	OutcomeUnknown,
 }
+
+/// A request the actor received but never answered, because its epoch stopped or its envoy
+/// connection ended first. The actor may have run it, so neither the gateway nor the client sends
+/// it again; a request the actor never received is refused retryably instead.
+#[derive(Debug, serde::Serialize, rivet_error::RivetError)]
+#[error(
+	"guard",
+	"request_outcome_unknown",
+	"The actor received the request but stopped or disconnected before answering, so it may have run; it is not retried."
+)]
+struct RequestOutcomeUnknown;
 
 /// An actor aborted its HTTP response. Its kind and detail say why.
 #[derive(Debug)]
@@ -150,10 +163,17 @@ impl std::fmt::Display for ResponseAborted {
 
 impl std::error::Error for ResponseAborted {}
 
-/// Whether an abort is pegboard-envoy reporting that the actor's epoch stopped.
-fn actor_stopped(reason: &protocol::HttpStreamAbortReason) -> bool {
-	let detail_matches =
-		reason.detail.as_deref() == Some(pegboard::envoy_check::ACTOR_STOPPED_DETAIL);
+/// Whether an abort is pegboard-envoy reporting that a request it had sent to the actor lost its
+/// actor: the actor's epoch stopped, or the envoy connection carrying the request ended. Either
+/// way the actor may have run the request.
+fn lost_after_send(reason: &protocol::HttpStreamAbortReason) -> bool {
+	let detail_matches = matches!(
+		reason.detail.as_deref(),
+		Some(
+			pegboard::envoy_check::ACTOR_STOPPED_DETAIL
+				| pegboard::envoy_check::CONNECTION_ENDED_DETAIL
+		)
+	);
 	matches!(reason.kind, protocol::HttpStreamAbortReasonKind::Cancelled) && detail_matches
 }
 
@@ -272,9 +292,9 @@ async fn forward(
 						}
 					}
 					protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(abort) => {
-						if actor_stopped(&abort.reason) && let Some(headers) = headers.take() {
-							tracing::debug!("actor stopped before its HTTP response headers; refusing the request");
-							headers.send(Ok(ResponseHead::ActorStopped)).map_err(|_| anyhow!("HTTP caller disconnected"))?;
+						if lost_after_send(&abort.reason) && let Some(headers) = headers.take() {
+							tracing::debug!(detail = ?abort.reason.detail, "actor lost a request before its HTTP response headers; its outcome is unknown");
+							headers.send(Ok(ResponseHead::OutcomeUnknown)).map_err(|_| anyhow!("HTTP caller disconnected"))?;
 							return Ok(());
 						}
 						return Err(ResponseAborted {
@@ -380,7 +400,7 @@ fn admission_rejection(start: &protocol::ToRivetResponseStart) -> Result<Option<
 	Ok(Some(actor_stopped_while_waiting()?))
 }
 
-/// The retryable refusal for a request the actor never answered: the client re-resolves the
+/// The retryable refusal for a request the actor never admitted: the client re-resolves the
 /// actor and replays the request.
 fn actor_stopped_while_waiting() -> Result<Response> {
 	Ok(http::Response::builder()

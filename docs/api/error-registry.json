@@ -792,6 +792,18 @@
 					]
 				},
 				{
+					"code": "request_outcome_unknown",
+					"message": "The actor received the request but stopped or disconnected before answering, so it may have run; it is not retried.",
+					"statuses": [
+						{
+							"status": 409,
+							"surfaces": [
+								"gateway"
+							]
+						}
+					]
+				},
+				{
 					"code": "request_timeout",
 					"message": "Timed out waiting for the actor to become ready.",
 					"statuses": [

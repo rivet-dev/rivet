@@ -186,9 +186,19 @@ pub async fn report_reallocate(
 }
 
 /// The HTTP abort detail and WebSocket close reason pegboard-envoy sends on a gateway tunnel
-/// whose actor epoch stopped. The gateway answers an HTTP abort carrying it before response
-/// headers with the same retryable refusal as an envoy admission refusal.
+/// whose actor epoch stopped after the request was sent to it. The actor may have run the
+/// request, so the gateway answers an HTTP abort carrying it before response headers as of
+/// unknown outcome, never with the retryable refusal of an envoy admission refusal.
 pub const ACTOR_STOPPED_DETAIL: &str = "actor.stopped";
+
+/// The HTTP abort detail pegboard-envoy sends on a gateway tunnel whose envoy connection ended
+/// after the request was sent to the actor and before its response finished. The actor may still
+/// run the request, so the gateway answers that its outcome is unknown.
+pub const CONNECTION_ENDED_DETAIL: &str = "envoy.connection_ended";
+
+/// The WebSocket close reason pegboard-envoy sends on a gateway tunnel whose envoy connection
+/// ended. The actor keeps running, so the client reconnects to it.
+pub const CONNECTION_ENDED_CLOSE_REASON: &str = "ws.going_away";
 
 /// Whether an envoy refused a request or WebSocket open with `code` before the actor admitted
 /// it: it does not host the actor, or not the generation the request named.

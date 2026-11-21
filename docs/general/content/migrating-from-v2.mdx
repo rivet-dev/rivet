@@ -29,7 +29,7 @@ If you store actor IDs of keyed actors, for example in your own database, resolv
 
 ## Before you start
 
-- **Upgrade Rivet 2 to the latest 2.x release.** The migrator talks to a migration API that only recent 2.x releases serve. Check that the Rivet 2 control plane answers under `/migration/v1/` before going further.
+- **Upgrade Rivet 2 to 2.3.33 or later.** The migrator talks to a migration API that earlier 2.x releases do not serve in full. See the [Rivet releases](https://github.com/rivet-dev/rivet/releases). Check that the Rivet 2 control plane answers under `/migration/v1/` before going further.
 - **Make sure Rivet 3 can reach Rivet 2.** Only Rivet 3 makes calls, to the Rivet 2 gateway and to the Rivet 2 API of every Rivet 2 datacenter. Rivet 2 does not need to reach Rivet 3. These addresses do not have to be public: if Rivet 2 sits behind a proxy or load balancer and Rivet 3 runs next to it, point Rivet 3 at an internal address it can reach directly.
 - **Plan for the storage load.** Every move reads the actor's state from Rivet 2. On a large namespace, start slowly and watch Rivet 2's storage and memory as the rate goes up. See [Pacing](#pacing).
 - **Check how your actors call each other.** See [Actor-to-actor calls](#actor-to-actor-calls).
@@ -153,7 +153,7 @@ The first create of a key settles where it lives, and every later create of that
 | `migrate_ratio` | `0.0` | Share of existing actors the migrator moves. |
 | `migrate_seed` | `0` | Seed of the hash behind `migrate_ratio`. Read at startup only, because a new seed reshuffles which actors are selected. |
 | `backup` | none | Optional store that every moved actor is backed up to. Read at startup only. See [Backing up moved actors](#backing-up-moved-actors). |
-| `actor_name` | none | Move only the actors with this name. Rivet 2 lists one name's actors oldest first, so the name moves in creation order. Actors moved by hand move whatever their name. Needs a Rivet 2 release whose migration API accepts the name filter. |
+| `actor_name` | none | Move only the actors with this name. Rivet 2 lists one name's actors oldest first, so the name moves in creation order. Actors moved by hand move whatever their name. Needs Rivet 2.3.33 or later. |
 | `min_sleep_ms` | 10 minutes | How long an actor must have been asleep before it can move. |
 | `wake_horizon_ms` | 5 minutes | An actor with an alarm due sooner than this stays where it is for now. |
 | `pass_interval_ms` | 5 minutes | Time between passes over the namespace. |
@@ -334,6 +334,6 @@ rivet-engine migrate-from-v2 delete-parked --concurrency 8
 
 Rivet 2 destroys each parked actor through its normal destroy steps, which delete its key-value and SQLite data, and records the deletion. **This cannot be undone, and a deleted actor can no longer be returned to Rivet 2 with `recover`.** An actor is only deleted once it has finished moving to Rivet 3 and, when a backup store is configured, its backup is complete. Any other actor is skipped and listed in the result.
 
-Rivet 2 keeps the command's progress, so running it again continues where it stopped and checks the skipped actors again. Pass `--datacenter <label>` to delete in one Rivet 2 datacenter only; by default it runs through every datacenter in `api_urls`. Deleting needs a Rivet 2 release whose migration API supports it, and a Rivet 2 token that may delete actors.
+Rivet 2 keeps the command's progress, so running it again continues where it stopped and checks the skipped actors again. Pass `--datacenter <label>` to delete in one Rivet 2 datacenter only; by default it runs through every datacenter in `api_urls`. Deleting needs Rivet 2.3.33 or later, and a Rivet 2 token that may delete actors.
 
 To move another namespace, point `namespace` at it, either in the configuration file or with a [dynamic update](#changing-settings-without-a-restart), and start again from [Set up Rivet 3 beside Rivet 2](#set-up-rivet-3-beside-rivet-2).

@@ -681,6 +681,7 @@ export class ActorHandleRaw {
 			this.#resolvingActorId = resolveGatewayTarget(
 				this.#driver,
 				this.#actorResolutionState,
+				{ budget: this.#retryBudget, signal: this.#signal },
 			).then((actorId) => {
 				this.#resolvedActorId = actorId;
 				return actorId;

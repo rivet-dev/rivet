@@ -1,0 +1,5 @@
+{
+  "code": "request_outcome_unknown",
+  "group": "guard",
+  "message": "The actor received the request but stopped or disconnected before answering, so it may have run; it is not retried."
+}
