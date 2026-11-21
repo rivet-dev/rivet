@@ -139,6 +139,13 @@ pub struct Pegboard {
 	///
 	/// Unit is in milliseconds.
 	pub envoy_lost_threshold: Option<i64>,
+	/// How often a running actor's workflow wakes to check that its envoy is still pinging. The
+	/// engine process that owned the envoy's connection already evicts the envoy's actors
+	/// `envoy_lost_threshold` after the connection drops, so this check is the backstop for a lost
+	/// eviction, for example when that process died with the connection. Every running actor pays
+	/// one wake, one read and one history write per interval. Unit is in milliseconds. Defaults to
+	/// 120000.
+	pub actor_liveness_check_interval: Option<i64>,
 	/// Max time since last pong before the envoy connection is terminated. Unit is in milliseconds.
 	pub envoy_ping_timeout: Option<i64>,
 	/// GC interval for actor event demuxer in milliseconds.
@@ -198,6 +205,12 @@ pub struct Pegboard {
 
 impl Pegboard {
 	pub fn validate(&self) -> Result<()> {
+		if self
+			.actor_liveness_check_interval
+			.is_some_and(|interval| interval <= 0)
+		{
+			bail!("pegboard.actor_liveness_check_interval must be greater than 0");
+		}
 		if let Some(EnvoyLoadBalancer::Hash {
 			virtual_nodes,
 			samples,
@@ -377,6 +390,10 @@ impl Pegboard {
 
 	pub fn envoy_lost_threshold(&self) -> i64 {
 		self.envoy_lost_threshold.unwrap_or(15_000)
+	}
+
+	pub fn actor_liveness_check_interval(&self) -> i64 {
+		self.actor_liveness_check_interval.unwrap_or(120_000)
 	}
 
 	pub fn envoy_ping_timeout(&self) -> i64 {

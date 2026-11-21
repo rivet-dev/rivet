@@ -1254,6 +1254,14 @@
           "format": "uint64",
           "minimum": 0.0
         },
+        "actor_liveness_check_interval": {
+          "description": "How often a running actor's workflow wakes to check that its envoy is still pinging. The engine process that owned the envoy's connection already evicts the envoy's actors `envoy_lost_threshold` after the connection drops, so this check is the backstop for a lost eviction, for example when that process died with the connection. Every running actor pays one wake, one read and one history write per interval. Unit is in milliseconds. Defaults to 120000.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
         "actor_retry_duration_threshold": {
           "description": "How long to wait after starting to attempt to reallocate before before setting actor to sleep.\n\nUnit is in milliseconds.",
           "type": [
