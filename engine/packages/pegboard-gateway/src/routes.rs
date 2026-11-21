@@ -686,7 +686,7 @@ async fn prepare(
 async fn legacy_resolve_moved(
 	ctx: &EngineContext,
 	target: &mut Target,
-	standing: &pegboard::NamespaceStanding,
+	standing: &Arc<pegboard::NamespaceStanding>,
 	deadline: RoutingDeadline,
 	moving: crate::retry_budget::Refusal,
 ) -> Result<pegboard::legacy_volumes::ResolvedRead> {
@@ -1272,8 +1272,41 @@ impl Target {
 	/// names; see [`pegboard::actor_key::resolve_keyed_actor`]. Returns what the lookup learned
 	/// about the actor's state volume, for the acquisition's first read. Legacy: an actor from
 	/// before groups is routed through its unprefixed volumes, at its legacy id when keyed, until
-	/// the namespace's backfill is done. Removed in 3.1 with the backfill.
+	/// the namespace's backfill is done. A cached standing with no group may predate the
+	/// namespace's move into its group, so a resolve that finds no actor through it reads the
+	/// namespace again uncached ([`pegboard::catalog::legacy_fresh_ungrouped_standing`]) and, when
+	/// the namespace has a group now, resolves once more there. The legacy behavior answered such
+	/// a miss as not found, so an actor created in the group after the move read as missing
+	/// through this gateway until the cached standing expired. Only a miss on an ungrouped
+	/// standing pays the read. Removed in 3.1 with the backfill.
 	async fn resolve(
+		&mut self,
+		ctx: &EngineContext,
+		namespace: &Arc<pegboard::NamespaceStanding>,
+	) -> Result<ResolvedRead> {
+		let found = self.resolve_in(ctx, namespace).await?;
+		if namespace.group_id().is_some() || !matches!(found, ResolvedRead::Gone) {
+			return Ok(found);
+		}
+
+		let fresh = pegboard::catalog::legacy_fresh_ungrouped_standing(
+			namespace,
+			pegboard::catalog::namespace_volumes_open(ctx),
+			|| pegboard::catalog::lookup_namespace(ctx, &namespace.name),
+		)
+		.await?;
+		if fresh.group_id().is_none() {
+			return Ok(found);
+		}
+		tracing::debug!(
+			namespace = %namespace.name,
+			"an actor resolve missed through a cached standing without a group; the namespace moved into its group, resolving there"
+		);
+		self.resolve_in(ctx, &fresh).await
+	}
+
+	/// [`Self::resolve`] through `namespace` as given.
+	async fn resolve_in(
 		&mut self,
 		ctx: &EngineContext,
 		namespace: &pegboard::NamespaceStanding,

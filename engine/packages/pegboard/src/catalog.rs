@@ -2042,9 +2042,9 @@ pub async fn legacy_clear_skipped(
 /// binaries are known to run (`Ok(false)`): no namespace moves into its group then, so the read
 /// is skipped. An unknown view of the fleet (`Err`) reads, since a namespace may have moved. The
 /// legacy behavior trusted the cached standing; the new behavior acts on the group the moment
-/// any process moved the namespace into it. Taken by keyed creates and envoy connects, which would
-/// otherwise act on a group-less scope for up to the status TTL after a move. Removed in 3.1 with
-/// the backfill.
+/// any process moved the namespace into it. Taken by keyed creates, envoy connects and gateway
+/// actor resolves that found no actor, which would otherwise act on a group-less scope for up to
+/// the status TTL after a move. Removed in 3.1 with the backfill.
 pub async fn legacy_fresh_ungrouped_standing<F, Fut>(
 	standing: &Arc<NamespaceStanding>,
 	volumes_open: Result<bool>,
