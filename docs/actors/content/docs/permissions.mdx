@@ -99,7 +99,7 @@ Authorization is explicit per surface. Nothing is checked implicitly.
 
 `canSubscribe` must return a boolean. `true` allows, `false` denies with `forbidden`. Returning `undefined`, `null`, or any non-boolean throws an internal error.
 
-`canSubscribe` applies only to event names declared in `events`, and broadcasting an undeclared event still reaches its subscribers.
+If an actor declares `canSubscribe` on at least one event, a subscription to an event name that is not in `events` fails with `forbidden`. If no event declares `canSubscribe`, every subscription is allowed.
 
 ## Patterns
 
