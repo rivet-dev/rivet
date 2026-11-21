@@ -904,6 +904,7 @@ impl ActorContext {
 			self.next_schedule_timestamp(false).await?,
 			self.run_wake_at(),
 		);
+		self.wait_for_durable_schedule().await?;
 		self.sync_alarm_timestamp(next_alarm)
 	}
 
@@ -912,7 +913,22 @@ impl ActorContext {
 			self.next_schedule_timestamp(true).await?,
 			self.run_wake_at(),
 		);
+		self.wait_for_durable_schedule().await?;
 		self.sync_alarm_timestamp(next_alarm)
+	}
+
+	/// With deferred commits, the schedule rows the next alarm comes from can still be local.
+	/// Pushing the alarm first could leave the engine, after a crash, without the wakeup of a
+	/// durable schedule whose cancellation was lost. Awaited commits are durable already.
+	async fn wait_for_durable_schedule(&self) -> Result<()> {
+		if !self.0.schedule_dirty_since_push.load(Ordering::SeqCst) {
+			return Ok(());
+		}
+		let ticket = self.sql().commit_ticket();
+		if ticket == 0 {
+			return Ok(());
+		}
+		self.sql().when_durable(ticket).await
 	}
 
 	/// Pushes `next_alarm` to the engine unless it equals the last alarm this generation

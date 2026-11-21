@@ -55,7 +55,7 @@ impl SqliteDb {
 			return Ok(());
 		}
 		let transaction = self
-			.begin_named_transaction(Some(BOOTSTRAP_TRANSACTION_NAME), None)
+			.begin_internal_transaction(BOOTSTRAP_TRANSACTION_NAME)
 			.await
 			.context("begin deferred sqlite bootstrap")?;
 		transaction

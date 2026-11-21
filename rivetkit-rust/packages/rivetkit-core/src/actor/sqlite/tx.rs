@@ -5,7 +5,7 @@ use std::{
 	future::Future,
 	sync::{
 		Arc, LazyLock,
-		atomic::{AtomicU64, Ordering},
+		atomic::{AtomicU64, AtomicUsize, Ordering},
 	},
 	time::Duration,
 };
@@ -42,7 +42,7 @@ static UNNAMED_TRANSACTION_WARNINGS: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone)]
 pub struct SqliteTransaction {
-	db: SqliteDb,
+	pub(super) db: SqliteDb,
 	key: String,
 }
 
@@ -85,6 +85,9 @@ pub(super) struct TransactionCoordinator {
 	/// Cancelled when the coordinator closes so begins parked behind a manual
 	/// transaction stop waiting.
 	closed_token: CancellationToken,
+	/// Transactions owned by a foreign runtime's host thread, open or waiting for the writer.
+	/// Only that thread can finish them, so a synchronous call there must not wait for them.
+	host_thread_leases: Arc<AtomicUsize>,
 }
 
 pub(super) struct TransactionCoordinatorState {
@@ -243,8 +246,26 @@ pub(super) struct ActiveTransaction {
 	gate_guard: Option<OwnedRwLockWriteGuard<()>>,
 	operation: Arc<AsyncMutex<()>>,
 	timeout_task: Option<CancellationToken>,
+	_host_thread_lease: Option<HostThreadLease>,
 	#[cfg(feature = "sqlite-local")]
 	profile: Option<TransactionProfile>,
+}
+
+/// Counts one host-thread transaction from the call that begins it until it ends. Synchronous
+/// calls fail fast with `sqlite.writer_busy` while any is counted.
+pub(crate) struct HostThreadLease(Arc<AtomicUsize>);
+
+impl HostThreadLease {
+	fn new(count: &Arc<AtomicUsize>) -> Self {
+		count.fetch_add(1, Ordering::AcqRel);
+		Self(Arc::clone(count))
+	}
+}
+
+impl Drop for HostThreadLease {
+	fn drop(&mut self) {
+		self.0.fetch_sub(1, Ordering::AcqRel);
+	}
 }
 
 #[derive(Clone, Copy)]
@@ -316,7 +337,24 @@ impl Default for TransactionCoordinator {
 			waiters: AtomicU64::new(0),
 			manual_transaction_waiters: AtomicU64::new(0),
 			closed_token: CancellationToken::new(),
+			host_thread_leases: Arc::new(AtomicUsize::new(0)),
 		}
+	}
+}
+
+impl TransactionCoordinator {
+	pub(super) fn host_thread_lease_count(&self) -> usize {
+		self.host_thread_leases.load(Ordering::Acquire)
+	}
+}
+
+impl SqliteDb {
+	/// Counts a transaction this handle is about to begin as owned by the host thread, when the
+	/// handle is a host-thread one. Callers take it before creating the begin future, so a
+	/// begin that has not run yet already counts.
+	pub(crate) fn reserve_host_thread_lease(&self) -> Option<HostThreadLease> {
+		self.host_thread
+			.then(|| HostThreadLease::new(&self.transaction_coordinator.host_thread_leases))
 	}
 }
 
@@ -343,11 +381,20 @@ impl SqliteDb {
 	pub(super) async fn begin_admitted_operation(&self) -> Result<RegularOperationGuard> {
 		let epoch = self.transaction_coordinator.epoch.load(Ordering::Acquire);
 		let permit = self.try_transaction_admission()?;
-		let wait = CoordinatorWaitGuard::new(self);
-		let gate = Arc::clone(&self.transaction_coordinator.gate)
-			.read_owned()
-			.await;
-		drop(wait);
+		let gate = if self.sync_call {
+			// A transaction holds the gate for as long as its statements and commit take, which
+			// is unbounded while storage is behind, so a synchronous call never waits for it.
+			Arc::clone(&self.transaction_coordinator.gate)
+				.try_read_owned()
+				.map_err(|_| crate::error::SqliteRuntimeError::WriterBusy.build())?
+		} else {
+			let wait = CoordinatorWaitGuard::new(self);
+			let gate = Arc::clone(&self.transaction_coordinator.gate)
+				.read_owned()
+				.await;
+			drop(wait);
+			gate
+		};
 		let state = self.transaction_coordinator.state.lock().await;
 		if state.closed {
 			return Err(transaction_coordinator_closed_error());
@@ -366,20 +413,47 @@ impl SqliteDb {
 		})
 	}
 
-	pub async fn begin_transaction(&self, timeout: Option<Duration>) -> Result<SqliteTransaction> {
-		self.begin_named_transaction(None, timeout).await
+	pub fn begin_transaction(
+		&self,
+		timeout: Option<Duration>,
+	) -> impl Future<Output = Result<SqliteTransaction>> + use<> {
+		self.begin_named_transaction(None, timeout)
 	}
 
-	pub async fn begin_named_transaction(
+	/// Begins a transaction. On a host-thread handle the transaction counts as the host
+	/// thread's from this call, before the returned future first runs, so a synchronous call
+	/// made while the begin is still pending fails fast instead of waiting on it.
+	pub fn begin_named_transaction(
 		&self,
 		name: Option<&str>,
+		timeout: Option<Duration>,
+	) -> impl Future<Output = Result<SqliteTransaction>> + use<> {
+		let lease = self.reserve_host_thread_lease();
+		let db = self.clone();
+		let name = name.map(ToOwned::to_owned);
+		async move { db.begin_leased_transaction(lease, name, timeout).await }
+	}
+
+	/// Begins a transaction core runs to completion itself, such as a batch. It never counts as
+	/// the host thread's. A synchronous call still fails with `sqlite.writer_busy` while it is
+	/// open, because its commit may wait on storage.
+	pub(super) async fn begin_internal_transaction(&self, name: &str) -> Result<SqliteTransaction> {
+		self.begin_leased_transaction(None, Some(name.to_owned()), None)
+			.await
+	}
+
+	/// Begins a transaction that holds `lease`, if any, until it ends.
+	pub(crate) async fn begin_leased_transaction(
+		&self,
+		lease: Option<HostThreadLease>,
+		name: Option<String>,
 		timeout: Option<Duration>,
 	) -> Result<SqliteTransaction> {
 		#[cfg(feature = "sqlite-local")]
 		let max_name_bytes = self.profiling.config.max_transaction_name_bytes;
 		#[cfg(not(feature = "sqlite-local"))]
 		let max_name_bytes = MAX_TRANSACTION_NAME_BYTES;
-		if let Some(name) = name {
+		if let Some(name) = name.as_deref() {
 			if name.is_empty() {
 				return Err(transaction_invalid_argument_error(
 					"transaction name must not be empty",
@@ -393,8 +467,9 @@ impl SqliteDb {
 		}
 		self.begin_transaction_with_key_and_name(
 			uuid::Uuid::new_v4().to_string(),
-			name.map(ToOwned::to_owned),
+			name,
 			timeout,
+			lease,
 		)
 		.await
 	}
@@ -404,6 +479,7 @@ impl SqliteDb {
 		key: impl Into<String>,
 		name: Option<String>,
 		timeout: Option<Duration>,
+		lease: Option<HostThreadLease>,
 	) -> Result<SqliteTransaction> {
 		#[cfg(feature = "sqlite-local")]
 		let started_at =
@@ -428,6 +504,7 @@ impl SqliteDb {
 					key,
 					timeout,
 					name,
+					lease,
 					#[cfg(feature = "sqlite-local")]
 					started_at,
 				)
@@ -443,6 +520,7 @@ impl SqliteDb {
 		key: String,
 		timeout: Duration,
 		_name: Option<String>,
+		host_thread_lease: Option<HostThreadLease>,
 		#[cfg(feature = "sqlite-local")] started_at: Option<crate::time::Instant>,
 	) -> Result<SqliteTransaction> {
 		#[cfg(feature = "sqlite-local")]
@@ -530,6 +608,7 @@ impl SqliteDb {
 				gate_guard: Some(gate_guard),
 				operation,
 				timeout_task: None,
+				_host_thread_lease: host_thread_lease,
 				#[cfg(feature = "sqlite-local")]
 				profile: started_at.map(|started_at| {
 					let mut profile = TransactionProfile::new(
@@ -567,8 +646,11 @@ impl SqliteDb {
 			timeout_task.cancel();
 		}
 		drop(state);
+		// The expiry rollback runs on a runtime task, not the host thread, so it may wait.
+		let mut expiry_db = self.clone();
+		expiry_db.sync_call = false;
 		spawn_transaction_timeout(
-			self.clone(),
+			expiry_db,
 			key.clone(),
 			timeout,
 			timeout_task,
@@ -607,9 +689,15 @@ impl SqliteDb {
 		let deadline = crate::time::Instant::now() + timeout;
 		let mut wait_guard = None;
 		loop {
-			let gate_guard = Arc::clone(&self.transaction_coordinator.gate)
-				.write_owned()
-				.await;
+			let gate_guard = if self.sync_call {
+				Arc::clone(&self.transaction_coordinator.gate)
+					.try_write_owned()
+					.map_err(|_| crate::error::SqliteRuntimeError::WriterBusy.build())?
+			} else {
+				Arc::clone(&self.transaction_coordinator.gate)
+					.write_owned()
+					.await
+			};
 			let Some(mut explicit_transaction) = self.subscribe_explicit_transaction() else {
 				return Ok(gate_guard);
 			};
@@ -617,6 +705,11 @@ impl SqliteDb {
 				return Ok(gate_guard);
 			}
 			drop(gate_guard);
+			// Only the host thread can end a manual transaction, and a synchronous call is
+			// blocking that thread.
+			if self.sync_call {
+				return Err(crate::error::SqliteRuntimeError::WriterBusy.build());
+			}
 
 			if wait_guard.is_none() {
 				wait_guard = Some(ManualTransactionWaitGuard::new(self, timeout));
