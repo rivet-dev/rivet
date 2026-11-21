@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "depot-client"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1089,7 +1089,7 @@ dependencies = [
 
 [[package]]
 name = "depot-fs-core"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1105,7 +1105,7 @@ dependencies = [
 
 [[package]]
 name = "depot-log"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1131,7 +1131,7 @@ dependencies = [
 
 [[package]]
 name = "depot-protocol"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "rivet-data",
@@ -1141,7 +1141,7 @@ dependencies = [
 
 [[package]]
 name = "depot-types"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1161,7 +1161,7 @@ dependencies = [
 
 [[package]]
 name = "depot-volume"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "depot-types",
@@ -1184,7 +1184,7 @@ dependencies = [
 
 [[package]]
 name = "depot-worker"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1406,7 +1406,7 @@ dependencies = [
 
 [[package]]
 name = "epoxy"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -1438,7 +1438,7 @@ dependencies = [
 
 [[package]]
 name = "epoxy-protocol"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "rivet-data",
@@ -2752,7 +2752,7 @@ dependencies = [
 
 [[package]]
 name = "migrate-from-v2-protocol"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "serde",
@@ -3292,7 +3292,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3337,7 +3337,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-envoy"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3385,7 +3385,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-gateway"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -3424,7 +3424,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-v2-migrator"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4099,7 +4099,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-peer"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -4129,7 +4129,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-public-shim"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -4166,7 +4166,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-auth-jwt"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4203,7 +4203,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-auth-policy"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "rivet-error",
@@ -4214,7 +4214,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-build-meta"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "epoxy-protocol",
@@ -4227,7 +4227,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-cli"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anstyle",
  "anyhow",
@@ -4253,7 +4253,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-cluster-config"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "object_store",
@@ -4277,7 +4277,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-config"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -4297,7 +4297,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-config-schema-gen"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "rivet-config",
  "schemars",
@@ -4306,7 +4306,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-data"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "rivet-util-id",
@@ -4321,7 +4321,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-durable-reconciler"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -4346,7 +4346,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-engine"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4400,7 +4400,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-engine-context"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4431,7 +4431,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-env"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4463,7 +4463,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-envoy-client"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -4492,7 +4492,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-envoy-protocol"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "hex",
@@ -4508,7 +4508,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-error"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "indoc",
@@ -4519,7 +4519,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-error-macros"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4529,7 +4529,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-guard"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -4553,7 +4553,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-guard-core"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -4578,7 +4578,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-keys"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -4594,7 +4594,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-keys-macros"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4603,7 +4603,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-metrics"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "lazy_static",
  "parking_lot",
@@ -4612,7 +4612,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-metrics-server"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -4632,7 +4632,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-object-store-util"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "rivet-state-machine-ephemeral",
  "rivet-state-machine-util",
@@ -4641,7 +4641,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-outbound-guard"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "ipnet",
@@ -4655,7 +4655,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-runtime"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "console-subscriber",
@@ -4675,7 +4675,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-service-manager"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -4690,7 +4690,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-singleton-coordinator"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4711,7 +4711,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-sqlite-types"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "bytes",
  "serde",
@@ -4719,7 +4719,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-state-machine"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "lazy_static",
@@ -4732,7 +4732,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-state-machine-durable"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -4755,7 +4755,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-state-machine-ephemeral"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "parking_lot",
@@ -4769,7 +4769,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-state-machine-util"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "rivet-env",
  "rivet-state-machine",
@@ -4780,7 +4780,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-telemetry"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "rivet-config",
@@ -4790,7 +4790,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-topology"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4820,7 +4820,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-tracing-utils"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "futures-util",
  "lazy_static",
@@ -4830,7 +4830,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4851,7 +4851,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-id"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
@@ -4861,7 +4861,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-serde"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "indexmap 2.14.2",
  "serde",
@@ -4871,7 +4871,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4894,7 +4894,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-actor-persist"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "serde",
@@ -4906,7 +4906,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-client"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4935,7 +4935,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-client-protocol"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "serde",
@@ -4946,7 +4946,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-core"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5007,7 +5007,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-engine-process"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "libc",
@@ -5023,7 +5023,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-inspector-protocol"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "serde",
@@ -5034,7 +5034,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-napi"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "napi",
@@ -5057,7 +5057,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-shared-types"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -5066,7 +5066,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-wasm"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -5879,7 +5879,7 @@ dependencies = [
 
 [[package]]
 name = "sqlite-embedded"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5898,7 +5898,7 @@ dependencies = [
 
 [[package]]
 name = "sqlite-embedded-filesystem"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5919,7 +5919,7 @@ dependencies = [
 
 [[package]]
 name = "sqlite-prefetch"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6696,7 +6696,7 @@ checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
 
 [[package]]
 name = "universalpubsub"
-version = "3.1.2-rc.2"
+version = "3.1.2-rc.3"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
