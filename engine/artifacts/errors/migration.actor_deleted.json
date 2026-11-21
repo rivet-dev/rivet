@@ -1,0 +1,5 @@
+{
+  "code": "actor_deleted",
+  "group": "migration",
+  "message": "The parked actor is being deleted from V2, so it can no longer be restored."
+}

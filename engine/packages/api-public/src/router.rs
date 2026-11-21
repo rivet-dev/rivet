@@ -164,6 +164,18 @@ pub async fn router(
 				"/migration/v1/actors/{actor_id}/restore",
 				axum::routing::post(migration::restore),
 			)
+			.route(
+				"/migration/v2/namespaces/{namespace}/parked",
+				axum::routing::get(migration::parked),
+			)
+			.route(
+				"/migration/v2/namespaces/{namespace}/parked/delete-cursor",
+				axum::routing::get(migration::get_delete_cursor).put(migration::put_delete_cursor),
+			)
+			.route(
+				"/migration/v2/actors/{actor_id}/delete",
+				axum::routing::post(migration::delete),
+			)
 			// MARK: Middleware (must go after all routes)
 			// Add CORS layer that mirrors the request origin
 			.layer(

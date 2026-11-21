@@ -1,8 +1,9 @@
-//! The `/migration/v1/` API the V3 migrator drives to move one namespace's actors out of V2.
+//! The `/migration/` API the V3 migrator drives to move one namespace's actors out of V2.
 //!
 //! Every route is a stateless handler over existing pegboard, gasoline and depot state, so the
 //! module does nothing until called. Bodies are raw BARE from `v2-migration-protocol`, pinned by the
-//! `/v1` path.
+//! path: the `/v1` routes move actors and the `/v2` routes delete the ones already moved (see
+//! [`parked`]).
 //!
 //! The protocol per actor is list (or a read of one candidate by id), export, cutover, confirm, and
 //! optionally restore:
@@ -39,6 +40,7 @@ mod export;
 mod facts;
 pub mod keys;
 mod park;
+mod parked;
 
 #[derive(Debug, Deserialize)]
 pub struct NamespacePath {
@@ -53,6 +55,15 @@ pub struct ActorPath {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CandidatesQuery {
+	pub after: Option<String>,
+	pub limit: Option<usize>,
+	/// Lists only actors with this name, oldest first.
+	pub name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ParkedQuery {
 	pub after: Option<String>,
 	pub limit: Option<usize>,
 }
@@ -122,6 +133,38 @@ pub async fn restore(
 	body: Bytes,
 ) -> Response {
 	respond(park::restore(ctx, path.actor_id, query.namespace, body).await)
+}
+
+pub async fn parked(
+	Extension(ctx): Extension<ApiCtx>,
+	Path(path): Path<NamespacePath>,
+	Query(query): Query<ParkedQuery>,
+) -> Response {
+	respond(parked::list(ctx, path.namespace, query).await)
+}
+
+pub async fn get_delete_cursor(
+	Extension(ctx): Extension<ApiCtx>,
+	Path(path): Path<NamespacePath>,
+) -> Response {
+	respond(parked::get_delete_cursor(ctx, path.namespace).await)
+}
+
+pub async fn put_delete_cursor(
+	Extension(ctx): Extension<ApiCtx>,
+	Path(path): Path<NamespacePath>,
+	body: Bytes,
+) -> Response {
+	respond(parked::put_delete_cursor(ctx, path.namespace, body).await)
+}
+
+pub async fn delete(
+	Extension(ctx): Extension<ApiCtx>,
+	Path(path): Path<ActorPath>,
+	Query(query): Query<ActorQuery>,
+	body: Bytes,
+) -> Response {
+	respond(parked::delete(ctx, path.actor_id, query.namespace, body).await)
 }
 
 fn respond(result: Result<Vec<u8>>) -> Response {

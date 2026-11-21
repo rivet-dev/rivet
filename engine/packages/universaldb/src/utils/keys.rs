@@ -173,4 +173,5 @@ define_keys! {
 	(145, MIGRATION, "migration"),
 	(146, PARKED, "parked"),
 	(147, UNCUT, "uncut"),
+	(148, DELETE_CURSOR, "delete_cursor"),
 }

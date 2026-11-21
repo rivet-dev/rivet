@@ -41,10 +41,9 @@ pub async fn candidates(ctx: ApiCtx, namespace: String, query: CandidatesQuery) 
 		None => None,
 	};
 
-	// The scan covers every actor name and includes sleeping actors.
+	// The scan includes sleeping actors and covers every actor name, or only `name` when set.
 	let active_subspace =
 		keys::subspace().subspace(&(NAMESPACE, namespace_id, ACTOR, BY_NAME, ACTIVE));
-	let (range_start, range_end) = active_subspace.range();
 	if let Some(after) = &after {
 		if !after.starts_with(active_subspace.bytes()) {
 			return Err(errors::Migration::InvalidRequest {
@@ -53,6 +52,25 @@ pub async fn candidates(ctx: ApiCtx, namespace: String, query: CandidatesQuery) 
 			.build());
 		}
 	}
+	let scanned_subspace = match &query.name {
+		Some(name) => active_subspace.subspace(&(name.as_str(),)),
+		None => active_subspace.clone(),
+	};
+	let (range_start, range_end) = scanned_subspace.range();
+
+	// A cursor is a position in the namespace's whole index, so one written by an unfiltered
+	// listing or under another name still resumes a filtered one: a cursor before the name's
+	// rows starts at its first row, and one past them leaves nothing to list.
+	let after = match after {
+		Some(after) if after < range_start => None,
+		Some(after) if after >= range_end => {
+			return proto::encode(&proto::CandidatesResponse {
+				candidates: Vec::new(),
+				next: None,
+			});
+		}
+		after => after,
+	};
 
 	let hibernating_since_ts = facts::hibernating_since_ts(
 		ctx.config()

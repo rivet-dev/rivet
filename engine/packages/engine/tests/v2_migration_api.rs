@@ -1095,3 +1095,375 @@ async fn export_running_kv(dc: &common::TestDatacenter, actor_id: Id) -> Vec<(Ve
 	.unwrap();
 	keys.into_iter().zip(values).collect()
 }
+
+// MARK: Parked actor deletion
+
+fn url_v2(dc: &common::TestDatacenter, path: &str) -> String {
+	format!("http://127.0.0.1:{}/migration/v2/{path}", dc.guard_port())
+}
+
+async fn send_v2(
+	dc: &common::TestDatacenter,
+	method: reqwest::Method,
+	path: &str,
+	body: Vec<u8>,
+) -> Result<Vec<u8>> {
+	let res = reqwest::Client::new()
+		.request(method, url_v2(dc, path))
+		.bearer_auth(common::TEST_ADMIN_TOKEN)
+		.body(body)
+		.send()
+		.await?;
+	let status = res.status();
+	let body = res.bytes().await?.to_vec();
+	if !status.is_success() {
+		bail!(
+			"{path} returned {status}: {}",
+			String::from_utf8_lossy(&body)
+		);
+	}
+	Ok(body)
+}
+
+async fn parked_page(
+	dc: &common::TestDatacenter,
+	namespace: &str,
+	query: &str,
+) -> proto::ParkedResponse {
+	let body = send_v2(
+		dc,
+		reqwest::Method::GET,
+		&format!("namespaces/{namespace}/parked?{query}"),
+		Vec::new(),
+	)
+	.await
+	.unwrap();
+	proto::decode(&body).unwrap()
+}
+
+async fn delete_cursor(dc: &common::TestDatacenter, namespace: &str) -> Option<Vec<u8>> {
+	let body = send_v2(
+		dc,
+		reqwest::Method::GET,
+		&format!("namespaces/{namespace}/parked/delete-cursor"),
+		Vec::new(),
+	)
+	.await
+	.unwrap();
+	proto::decode::<proto::DeleteCursor>(&body).unwrap().cursor
+}
+
+async fn put_delete_cursor(dc: &common::TestDatacenter, namespace: &str, cursor: Option<Vec<u8>>) {
+	send_v2(
+		dc,
+		reqwest::Method::PUT,
+		&format!("namespaces/{namespace}/parked/delete-cursor"),
+		proto::encode(&proto::DeleteCursor { cursor }).unwrap(),
+	)
+	.await
+	.unwrap();
+}
+
+async fn delete_parked(
+	dc: &common::TestDatacenter,
+	namespace: &str,
+	actor_id: Id,
+) -> proto::DeleteResponse {
+	let body = send_v2(
+		dc,
+		reqwest::Method::POST,
+		&format!("actors/{actor_id}/delete?namespace={namespace}"),
+		proto::encode(&proto::DeleteRequest {
+			v3_actor_id: actor_id.as_bytes(),
+		})
+		.unwrap(),
+	)
+	.await
+	.unwrap();
+	proto::decode(&body).unwrap()
+}
+
+async fn actor_namespace_id(dc: &common::TestDatacenter, actor_id: Id) -> Id {
+	dc.workflow_ctx
+		.udb()
+		.unwrap()
+		.txn("test_read_namespace_id", |tx| async move {
+			tx.with_subspace(pegboard::keys::subspace())
+				.read(
+					&pegboard::keys::actor::NamespaceIdKey::new(actor_id),
+					Serializable,
+				)
+				.await
+		})
+		.await
+		.unwrap()
+}
+
+/// Cuts over and confirms a seeded actor, so V2 parks it with the actor's own id as its V3 id.
+async fn park_seeded(dc: &common::TestDatacenter, seeded: &Seeded) -> i64 {
+	let actor_id = seeded.actor_id;
+	let namespace = &seeded.namespace;
+	let c = candidate(dc, namespace, actor_id).await;
+	let cutover_ts = rivet_util::timestamp::now();
+	let cut: proto::CutoverResponse = post(
+		dc,
+		&format!("actors/{actor_id}/cutover?namespace={namespace}"),
+		&proto::CutoverRequest {
+			generation: 1,
+			cutover_ts,
+		},
+	)
+	.await
+	.unwrap();
+	assert_eq!(cut, proto::CutoverResponse::Cut);
+	let confirmed: proto::ConfirmResponse = post(
+		dc,
+		&format!("actors/{actor_id}/confirm?namespace={namespace}"),
+		&proto::ConfirmRequest {
+			generation: 1,
+			sleep_ts: c.sleep_ts.unwrap(),
+			wake_deadline_ts: c.wake_deadline_ts,
+			cutover_ts,
+			horizon_ms: 0,
+			v3_actor_id: actor_id.as_bytes(),
+		},
+	)
+	.await
+	.unwrap();
+	assert_eq!(confirmed, proto::ConfirmResponse::Confirmed);
+	cutover_ts
+}
+
+/// The name filter lists only that name's actors, and clamps a cursor from the namespace's whole
+/// index order: one before the name's rows starts at its first row, one past them lists nothing.
+#[test]
+fn migration_lists_candidates_of_one_name() {
+	common::run(
+		common::TestOpts::new(1).with_timeout(60),
+		|ctx| async move {
+			let dc = ctx.leader_dc();
+			let seeded = seed_sleeping_actor(dc, 3_600_000).await;
+			let actor_id = seeded.actor_id;
+			let namespace = seeded.namespace.clone();
+			let namespace_id = actor_namespace_id(dc, actor_id).await;
+
+			let list = |query: String| {
+				let namespace = namespace.clone();
+				async move {
+					let body = get_bytes(dc, &format!("namespaces/{namespace}/candidates?{query}"))
+						.await
+						.unwrap();
+					proto::decode::<proto::CandidatesResponse>(&body).unwrap()
+				}
+			};
+			let ids = |page: &proto::CandidatesResponse| {
+				page.candidates
+					.iter()
+					.map(|c| c.actor_id.clone())
+					.collect::<Vec<_>>()
+			};
+
+			let named = list(format!("limit=500&name={ACTOR_NAME}")).await;
+			assert_eq!(ids(&named), vec![actor_id.as_bytes()]);
+			assert_eq!(named.next, None);
+			let other = list("limit=500&name=other-actor".to_string()).await;
+			assert!(other.candidates.is_empty());
+
+			// Cursors from rows of other names, as an unfiltered listing would have written.
+			let row = |name: &str| {
+				pegboard::keys::subspace().pack(&pegboard::keys::ns::ActiveActorKey::new(
+					namespace_id,
+					name.to_string(),
+					0,
+					Id::new_v1(dc.config.dc_label()),
+				))
+			};
+			let encode =
+				|raw: Vec<u8>| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw);
+
+			let before = list(format!(
+				"limit=500&name={ACTOR_NAME}&after={}",
+				encode(row("a-actor"))
+			))
+			.await;
+			assert_eq!(
+				ids(&before),
+				vec![actor_id.as_bytes()],
+				"a cursor before the name's rows starts at its first row"
+			);
+
+			let past = list(format!(
+				"limit=500&name={ACTOR_NAME}&after={}",
+				encode(row("z-actor"))
+			))
+			.await;
+			assert!(past.candidates.is_empty());
+			assert_eq!(
+				past.next, None,
+				"a cursor past the name's rows ends the listing"
+			);
+
+			// The actor's own cursor still resumes right after it.
+			let own = list(format!(
+				"limit=500&name={ACTOR_NAME}&after={}",
+				encode(named.candidates[0].cursor.clone())
+			))
+			.await;
+			assert!(own.candidates.is_empty());
+
+			drop(seeded.envoy);
+		},
+	);
+}
+
+/// A parked actor is listed, deleted through its own workflow with its KV, and stays listed as
+/// deleted. A signal sent while it was parked must not wake it in V2, and restore is refused.
+#[test]
+fn migration_deletes_a_parked_real_actor2() {
+	common::run(
+		common::TestOpts::new(1).with_timeout(120),
+		|ctx| async move {
+			let dc = ctx.leader_dc();
+			let mut seeded = seed_sleeping_actor(dc, 3_600_000).await;
+			let actor_id = seeded.actor_id;
+			let workflow_id = seeded.workflow_id;
+			let namespace = seeded.namespace.clone();
+			let cutover_ts = park_seeded(dc, &seeded).await;
+
+			// A record without a delete is written as v1, which older V2 binaries read.
+			let raw = dc
+				.workflow_ctx
+				.udb()
+				.unwrap()
+				.txn("test_read_parked", |tx| async move {
+					Ok(tx
+						.get(&mkeys::parked(actor_id), Serializable)
+						.await?
+						.map(|raw| raw.to_vec()))
+				})
+				.await
+				.unwrap()
+				.expect("parked record");
+			assert_eq!(u16::from_le_bytes([raw[0], raw[1]]), 1);
+			let record =
+				<v2_migration_protocol::versioned::ParkedRecord as vbare::OwnedVersionedData>::deserialize_with_embedded_version(&raw)
+					.unwrap();
+			assert_eq!(record.cutover_ts, cutover_ts);
+			assert_eq!(
+				(record.delete_requested_at, record.deleted_at),
+				(None, None)
+			);
+
+			// The listing shows the actor in its namespace only.
+			let page = parked_page(dc, &namespace, "limit=500").await;
+			let listed = page
+				.actors
+				.iter()
+				.find(|a| a.actor_id == actor_id.as_bytes())
+				.expect("parked actor should be listed");
+			assert_eq!(listed.cutover_ts, cutover_ts);
+			assert_eq!(listed.delete_requested_at, None);
+			let (other_namespace, _) = common::setup_test_namespace(dc).await;
+			let other = parked_page(dc, &other_namespace, "limit=500").await;
+			assert!(
+				other
+					.actors
+					.iter()
+					.all(|a| a.actor_id != actor_id.as_bytes())
+			);
+
+			// The delete cursor round-trips and clears.
+			assert_eq!(delete_cursor(dc, &namespace).await, None);
+			put_delete_cursor(dc, &namespace, Some(listed.cursor.clone())).await;
+			assert_eq!(
+				delete_cursor(dc, &namespace).await,
+				Some(listed.cursor.clone())
+			);
+			let after = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&listed.cursor);
+			let resumed = parked_page(dc, &namespace, &format!("limit=500&after={after}")).await;
+			assert!(
+				resumed
+					.actors
+					.iter()
+					.all(|a| a.actor_id != actor_id.as_bytes())
+			);
+			put_delete_cursor(dc, &namespace, None).await;
+			assert_eq!(delete_cursor(dc, &namespace).await, None);
+
+			// A wake sent while parked waits as a pending signal without waking the workflow.
+			dc.workflow_ctx
+				.signal(pegboard::workflows::actor2::Wake {})
+				.to_workflow_id(workflow_id)
+				.send()
+				.await
+				.unwrap();
+			assert_eq!(
+				raw_subspace_len(dc, mkeys::pending_signal_subspace(workflow_id)).await,
+				1
+			);
+
+			assert_eq!(
+				delete_parked(dc, &namespace, actor_id).await,
+				proto::DeleteResponse::Deleting
+			);
+			assert!(!raw_exists(dc, mkeys::silence_ts(workflow_id)).await);
+
+			common::wait_with_poll(Duration::from_secs(30), Duration::from_millis(200), || {
+				let namespace = namespace.clone();
+				async move {
+					match delete_parked(dc, &namespace, actor_id).await {
+						proto::DeleteResponse::Deleted => Some(()),
+						proto::DeleteResponse::Deleting => None,
+						proto::DeleteResponse::NotParked => panic!("the parked record went away"),
+					}
+				}
+			})
+			.await
+			.expect("the parked actor should be deleted");
+
+			// The workflow destroyed the actor in V2 without starting it, and cleared its KV.
+			assert_eq!(
+				wait_for_start(&mut seeded.lifecycle_rx, actor_id, Duration::from_secs(2)).await,
+				None,
+				"the stray wake must not start the actor"
+			);
+			assert!(
+				raw_subspace_len(dc, mkeys::output_subspace(workflow_id)).await > 0,
+				"the workflow completed"
+			);
+			assert_ne!(destroy_ts(dc, actor_id).await, Some(cutover_ts));
+			assert!(export_running_kv(dc, actor_id).await.is_empty());
+
+			// The record stays as the record of the delete, written as v2.
+			let page = parked_page(dc, &namespace, "limit=500").await;
+			let listed = page
+				.actors
+				.iter()
+				.find(|a| a.actor_id == actor_id.as_bytes())
+				.expect("a deleted actor stays listed");
+			assert!(listed.delete_requested_at.is_some());
+			assert!(listed.deleted_at.is_some());
+			assert_eq!(
+				delete_parked(dc, &namespace, actor_id).await,
+				proto::DeleteResponse::Deleted
+			);
+
+			let restore = post::<_, proto::RestoreResponse>(
+				dc,
+				&format!("actors/{actor_id}/restore?namespace={namespace}"),
+				&proto::RestoreRequest {
+					cutover_ts: Some(cutover_ts),
+					v3_actor_id: Some(actor_id.as_bytes()),
+				},
+			)
+			.await
+			.unwrap_err();
+			assert!(
+				restore.to_string().contains("actor_deleted"),
+				"restore after delete: {restore:#}"
+			);
+
+			drop(seeded.envoy);
+		},
+	);
+}

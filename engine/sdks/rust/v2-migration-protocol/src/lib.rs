@@ -1,14 +1,16 @@
-//! Wire types for the V2 public API's `/migration/v1/` routes.
+//! Wire types for the V2 public API's `/migration/` routes.
 //!
-//! Request and response bodies are raw BARE: the `/v1` path pins the schema version for both peers.
-//! The parked record is persisted, so it alone carries a vbare version header (see [`versioned`]).
+//! Request and response bodies are raw BARE: a route's path pins the schema version of its bodies
+//! for both peers. The `/migration/v1/` routes keep the types they had in v1, which are
+//! byte-identical in v2, and the routes added with v2 live under `/migration/v2/`. The parked
+//! record is persisted, so it alone carries a vbare version header (see [`versioned`]).
 
 use anyhow::{Context, Result, bail};
 
 pub mod generated;
 pub mod versioned;
 
-pub use generated::v1::*;
+pub use generated::v2::*;
 
 /// Content type of the streamed export response.
 pub const EXPORT_CONTENT_TYPE: &str = "application/x-rivet-v2-migration";

@@ -100,3 +100,27 @@ pub fn uncut(actor_id: Id) -> Vec<u8> {
 pub fn parked(actor_id: Id) -> Vec<u8> {
 	pegboard::keys::subspace().pack(&(MIGRATION, PARKED, actor_id))
 }
+
+/// Every parked record, in actor id order across all namespaces.
+pub fn parked_subspace() -> Subspace {
+	pegboard::keys::subspace().subspace(&(MIGRATION, PARKED))
+}
+
+/// The actor id of a parked record's key, or `None` for a key outside [`parked_subspace`].
+pub fn parked_actor_id(raw_key: &[u8]) -> Option<Id> {
+	parked_subspace()
+		.unpack::<(Id,)>(raw_key)
+		.ok()
+		.map(|(actor_id,)| actor_id)
+}
+
+/// The deletion cursor of one namespace in this datacenter: the parked key of the last actor a
+/// deletion run finished. Value: the raw parked key.
+pub fn delete_cursor(namespace_id: Id) -> Vec<u8> {
+	pegboard::keys::subspace().pack(&(MIGRATION, DELETE_CURSOR, namespace_id))
+}
+
+/// The chunks of the workflow's output, which gasoline writes when the workflow completes.
+pub fn output_subspace(workflow_id: Id) -> Subspace {
+	gasoline_subspace().subspace(&(WORKFLOW, DATA, workflow_id, OUTPUT))
+}
