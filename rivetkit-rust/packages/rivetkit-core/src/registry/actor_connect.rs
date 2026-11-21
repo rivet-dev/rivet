@@ -1,6 +1,7 @@
-use super::inspector::{decode_cbor_json, encode_json_as_cbor};
+use super::inspector::encode_json_as_cbor;
 use super::*;
 use crate::error::ProtocolError;
+use base64::{Engine, engine::general_purpose::STANDARD};
 
 pub(super) fn send_actor_connect_message(
 	sender: &WebSocketSender,
@@ -116,7 +117,10 @@ pub(super) fn actor_connect_message_json_value(
 				),
 			]);
 			if let Some(metadata) = payload.metadata.as_ref() {
-				value.insert("metadata".to_owned(), decode_cbor_json(metadata.as_ref())?);
+				value.insert(
+					"metadata".to_owned(),
+					decode_cbor_client_json(metadata.as_ref())?,
+				);
 			}
 			if let Some(actor) = payload.actor.as_ref() {
 				value.insert(
@@ -144,14 +148,14 @@ pub(super) fn actor_connect_message_json_value(
 			"tag": "ActionResponse",
 			"val": {
 				"id": json_compat_bigint(payload.id),
-				"output": decode_cbor_json(payload.output.as_ref())?,
+				"output": decode_cbor_client_json(payload.output.as_ref())?,
 			},
 		}),
 		ActorConnectToClient::Event(payload) => json!({
 			"tag": "Event",
 			"val": {
 				"name": payload.name.clone(),
-				"args": decode_cbor_json(payload.args.as_ref())?,
+				"args": decode_cbor_client_json(payload.args.as_ref())?,
 			},
 		}),
 	};
@@ -252,6 +256,69 @@ pub(super) fn actor_connect_request_from_json_value(
 			format!("unknown tag `{other}`"),
 		)),
 	}
+}
+
+pub(super) fn decode_cbor_client_json(payload: &[u8]) -> Result<JsonValue> {
+	let value: ciborium::Value =
+		ciborium::from_reader(Cursor::new(payload)).context("decode cbor payload")?;
+	Ok(cbor_to_client_json(value))
+}
+
+fn cbor_to_client_json(value: ciborium::Value) -> JsonValue {
+	match value {
+		ciborium::Value::Null => JsonValue::Null,
+		ciborium::Value::Bool(value) => JsonValue::Bool(value),
+		ciborium::Value::Integer(value) => {
+			let value = i128::from(value);
+			if let Ok(value) = i64::try_from(value) {
+				JsonValue::from(value)
+			} else if let Ok(value) = u64::try_from(value) {
+				JsonValue::from(value)
+			} else {
+				json!(["$BigInt", value.to_string()])
+			}
+		}
+		ciborium::Value::Float(value) => serde_json::Number::from_f64(value)
+			.map(JsonValue::Number)
+			.unwrap_or(JsonValue::Null),
+		ciborium::Value::Text(value) => JsonValue::String(value),
+		ciborium::Value::Bytes(value) => json!(["$Uint8Array", STANDARD.encode(value)]),
+		ciborium::Value::Array(items) => {
+			JsonValue::Array(items.into_iter().map(cbor_to_client_json).collect())
+		}
+		ciborium::Value::Map(entries) => JsonValue::Object(
+			entries
+				.into_iter()
+				.map(|(key, value)| (cbor_map_key(key), cbor_to_client_json(value)))
+				.collect(),
+		),
+		ciborium::Value::Tag(1, epoch) => cbor_epoch_to_iso(*epoch),
+		ciborium::Value::Tag(_, inner) => cbor_to_client_json(*inner),
+		_ => JsonValue::Null,
+	}
+}
+
+fn cbor_map_key(key: ciborium::Value) -> String {
+	match cbor_to_client_json(key) {
+		JsonValue::String(key) => key,
+		key => key.to_string(),
+	}
+}
+
+fn cbor_epoch_to_iso(epoch: ciborium::Value) -> JsonValue {
+	let millis = match epoch {
+		ciborium::Value::Integer(seconds) => i64::try_from(i128::from(seconds))
+			.ok()
+			.and_then(|seconds| seconds.checked_mul(1000)),
+		ciborium::Value::Float(seconds) if seconds.is_finite() => {
+			Some((seconds * 1000.0).round() as i64)
+		}
+		_ => None,
+	};
+	millis
+		.and_then(chrono::DateTime::from_timestamp_millis)
+		.map(|date| JsonValue::String(date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)))
+		.unwrap_or(JsonValue::Null)
 }
 
 pub(super) fn json_compat_bigint(value: u64) -> JsonValue {
