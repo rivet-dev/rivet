@@ -3,16 +3,16 @@ import {
 	type RemoteCallback,
 	type SqliteRemoteDatabase,
 } from "drizzle-orm/sqlite-proxy";
+import { databaseClosed } from "@/actor/errors";
 import type {
 	DatabaseProvider,
 	DatabaseProviderContext,
 	RawAccess,
-	SqliteProfilingOptions,
-	SqliteTransactionOptions,
 	SqliteDatabase,
+	SqliteProfilingOptions,
 	SqliteTransactionDatabase,
+	SqliteTransactionOptions,
 } from "@/common/database/config";
-import { getLogger } from "@/common/log";
 import {
 	isManualTransactionControl,
 	MIGRATION_TRANSACTION_TIMEOUT_MS,
@@ -20,6 +20,7 @@ import {
 	validateTransactionName,
 	validateTransactionTimeout,
 } from "@/common/database/shared";
+import { getLogger } from "@/common/log";
 import { sha256Hex } from "@/utils/crypto";
 
 export type { SQLiteTable } from "drizzle-orm/sqlite-core";
@@ -116,9 +117,7 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 			let manualTransactionWarned = false;
 			const ensureOpen = () => {
 				if (closed) {
-					throw new Error(
-						"Database is closed. This usually means a background timer (setInterval, setTimeout) or a stray promise is still running after the actor stopped. Use c.abortSignal to clean up timers before the actor shuts down.",
-					);
+					throw databaseClosed();
 				}
 			};
 
