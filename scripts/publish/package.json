@@ -12,7 +12,7 @@
 	"dependencies": {
 		"commander": "^12.1.0",
 		"execa": "^8.0.1",
-		"glob": "^10.3.10",
+		"glob": "^14.0.2",
 		"semver": "^7.6.0"
 	},
 	"devDependencies": {
