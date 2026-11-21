@@ -434,6 +434,15 @@ export function actorStopping(identifier?: string): RivetError {
 	);
 }
 
+export function databaseClosed(): RivetError {
+	return new RivetError(
+		"actor",
+		"stopping",
+		"Actor stopping: database accessed after actor stopped. This usually means a background timer (setInterval, setTimeout) or a stray promise is still running after the actor stopped. Use c.abortSignal to clean up timers before the actor shuts down.",
+		{ public: true },
+	);
+}
+
 export interface ActorRestartingOptions {
 	phase?: "stopping" | "sleeping" | "waking" | "runner_shutdown";
 	retryAfterMs?: number;

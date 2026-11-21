@@ -1,4 +1,4 @@
-import { decodeBridgeRivetError } from "@/actor/errors";
+import { databaseClosed, decodeBridgeRivetError } from "@/actor/errors";
 import type {
 	SqliteBatchStatement,
 	SqliteBindings,
@@ -299,9 +299,7 @@ class NativeCloseGate {
 
 	enter(): () => void {
 		if (this.#closed) {
-			throw new Error(
-				"Database is closed. This usually means a background timer (setInterval, setTimeout) or a stray promise is still running after the actor stopped. Use c.abortSignal to clean up timers before the actor shuts down.",
-			);
+			throw databaseClosed();
 		}
 
 		this.#active++;

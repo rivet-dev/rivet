@@ -1,3 +1,4 @@
+import { databaseClosed } from "@/actor/errors";
 import { getLogger } from "@/common/log";
 import type {
 	DatabaseProvider,
@@ -102,9 +103,7 @@ export function db({
 			let manualTransactionWarned = false;
 			const ensureOpen = () => {
 				if (closed) {
-					throw new Error(
-						"Database is closed. This usually means a background timer (setInterval, setTimeout) or a stray promise is still running after the actor stopped. Use c.abortSignal to clean up timers before the actor shuts down.",
-					);
+					throw databaseClosed();
 				}
 			};
 
