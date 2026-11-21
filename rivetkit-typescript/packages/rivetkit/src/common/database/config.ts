@@ -161,6 +161,58 @@ export interface SqliteTransactionDatabase {
 }
 
 /**
+ * A native database as `NativeDatabaseProvider.open` returns it. The synchronous calls and commit
+ * tickets work only when the database provider opts into deferred commits, which only embedders
+ * that hold output until writes are durable do. Internal: not exported from `rivetkit/db`.
+ */
+export interface DeferredSqliteDatabase extends SqliteDatabase {
+	/**
+	 * Never waits behind other work. Fails with `sqlite.sync_unsupported` unless the actor uses
+	 * deferred commits. Fails with the retryable `sqlite.writer_busy` while a transaction is open,
+	 * including a state save, or while another call on this database is running, and with the
+	 * retryable `sqlite.storage_overloaded` while too many earlier writes wait for storage.
+	 */
+	execSync(
+		sql: string,
+		callback?: (row: unknown[], columns: string[]) => void,
+	): void;
+	/** Fails like `execSync`. */
+	executeSync(sql: string, params?: SqliteBindings): SqliteExecuteResult;
+	/**
+	 * Fails like `execSync`, also while a transaction is beginning or a manual `BEGIN` is open.
+	 */
+	beginTransactionSync(
+		timeoutMs?: number,
+		name?: string,
+	): SynchronousSqliteTransactionDatabase;
+	/**
+	 * Returns the ticket of the latest local commit. Synchronous writes return before they are
+	 * durable; pass the ticket to `whenDurable` before releasing output that depends on them.
+	 */
+	commitTicket(): number;
+	/**
+	 * Resolves once the commit `ticket` names and every earlier commit are durable. Rejects with
+	 * `sqlite.durability_failed` once the database broke and the actor is restarting.
+	 */
+	whenDurable(ticket: number): Promise<void>;
+	/**
+	 * Restarts the owning actor from durable state. Every later write fails, including the final
+	 * state save. For native database providers whose in-memory state can no longer be trusted.
+	 */
+	abortGeneration(reason: string): void;
+}
+
+export type SynchronousSqliteTransactionDatabase = SqliteTransactionDatabase & {
+	execSync(
+		sql: string,
+		callback?: (row: unknown[], columns: string[]) => void,
+	): void;
+	executeSync(sql: string, params?: SqliteBindings): SqliteExecuteResult;
+	commitSync(): void;
+	rollbackSync(): void;
+};
+
+/**
  * Provider for opening native databases from the active runtime.
  */
 export interface NativeDatabaseProvider {
