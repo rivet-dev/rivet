@@ -514,8 +514,8 @@ async fn listen_for_signals(
 			lost_timeout_ts,
 			..
 		} => {
-			let next_check_ts =
-				envoy.last_liveness_check_ts + ctx.config().pegboard().envoy_lost_threshold();
+			let next_check_ts = envoy.last_liveness_check_ts
+				+ ctx.config().pegboard().actor_liveness_check_interval();
 			let sleep_ts = next_check_ts.min(*lost_timeout_ts);
 
 			// Listen for signals with periodic liveness check timeout
@@ -555,8 +555,8 @@ async fn listen_for_signals(
 			}
 		}
 		Transition::Running { envoy } => {
-			let next_check_ts =
-				envoy.last_liveness_check_ts + ctx.config().pegboard().envoy_lost_threshold();
+			let next_check_ts = envoy.last_liveness_check_ts
+				+ ctx.config().pegboard().actor_liveness_check_interval();
 
 			// Listen for signals with periodic liveness check timeout
 			let signals = ctx.listen_n_until::<Main>(next_check_ts, 256).await?;

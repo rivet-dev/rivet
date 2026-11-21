@@ -49,6 +49,13 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
+	pub static ref LOST_SWEEP_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"envoy_lost_sweep_total",
+		"Count of lost-envoy sweeps run after an envoy connection dropped, by outcome.",
+		&["namespace_id", "result"],
+		*REGISTRY
+	).unwrap();
+
 	pub static ref CONNECTION_ACTIVE: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"envoy_connection_active",
 		"Count of envoy connections currently active.",

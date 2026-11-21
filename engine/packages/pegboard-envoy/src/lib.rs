@@ -8,9 +8,10 @@ use rivet_error::RivetError;
 use rivet_guard_core::{
 	ResponseBody, WebSocketHandle, custom_serve::CustomServeTrait, request_context::RequestContext,
 };
-use std::sync::atomic::Ordering;
+use std::{sync::atomic::Ordering, time::Duration};
 use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
+use tracing::Instrument;
 use universalpubsub::PublishOpts;
 
 mod actor_event_demuxer;
@@ -347,6 +348,13 @@ impl CustomServeTrait for PegboardEnvoyWs {
 					"failed to expire envoy during disconnect"
 				);
 			}
+
+			spawn_lost_sweep(
+				self.ctx.clone(),
+				conn.namespace_id,
+				conn.envoy_key.clone(),
+				conn.envoy_conn_id,
+			);
 		}
 
 		actor_lifecycle::shutdown_conn_actors(&conn).await;
@@ -520,4 +528,60 @@ fn classify_final_envoy_state(
 			}
 		}
 	}
+}
+
+/// Gives a disconnected envoy `envoy_lost_threshold` to reconnect, then tells its actors it is lost.
+///
+/// The sweep lives only in this process; if the process goes away with it, the actor workflow's
+/// own liveness check (`actor_liveness_check_interval`) catches the loss later. A reconnect inside
+/// the threshold, on any engine process, makes the sweep a no-op.
+fn spawn_lost_sweep(ctx: StandaloneCtx, namespace_id: Id, envoy_key: String, envoy_conn_id: Id) {
+	let threshold = ctx.config().pegboard().envoy_lost_threshold();
+	let delay = Duration::from_millis(threshold.max(0) as u64);
+	let span = tracing::info_span!("envoy_lost_sweep", %envoy_key);
+
+	tokio::spawn(
+		async move {
+			tokio::time::sleep(delay).await;
+
+			let res = ctx
+				.op(pegboard::ops::envoy::lost_actors::Input {
+					namespace_id,
+					envoy_key: envoy_key.clone(),
+					envoy_conn_id,
+				})
+				.await;
+			let result = match &res {
+				Ok(pegboard::ops::envoy::lost_actors::Outcome::Alive) => "alive",
+				Ok(pegboard::ops::envoy::lost_actors::Outcome::Lost { .. }) => "lost",
+				Err(_) => "error",
+			};
+			metrics::LOST_SWEEP_TOTAL
+				.with_label_values(&[namespace_id.to_string().as_str(), result])
+				.inc();
+
+			match res {
+				Ok(pegboard::ops::envoy::lost_actors::Outcome::Lost { actor_count }) => {
+					tracing::warn!(
+						?namespace_id,
+						%envoy_key,
+						actor_count,
+						"envoy did not reconnect within the lost threshold, its actors were told it is lost"
+					);
+				}
+				Ok(pegboard::ops::envoy::lost_actors::Outcome::Alive) => {
+					tracing::debug!(?namespace_id, %envoy_key, "envoy reconnected before the lost sweep");
+				}
+				Err(err) => {
+					tracing::error!(
+						?namespace_id,
+						%envoy_key,
+						?err,
+						"lost-envoy sweep failed; the actor liveness check will catch the loss later"
+					);
+				}
+			}
+		}
+		.instrument(span),
+	);
 }
