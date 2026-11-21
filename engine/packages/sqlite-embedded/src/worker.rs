@@ -831,16 +831,21 @@ impl DatabaseSlot {
 			other => return Err(anyhow!("unknown sqlite worker state {other}")),
 		}
 		let mut work = self.work.lock();
-		// A command that must not wait never queues: the command ahead of it may wait for
-		// storage or the network for as long as storage is behind. Its own reply is one of the
+		// A command that must not wait is refused only while a commit ahead of it waits for
+		// storage: that wait lasts for as long as storage is behind. Behind any other command it
+		// queues, because that command finishes without waiting. Refusing it there failed a
+		// commit, and the rollback after it, on an open transaction just because an unrelated
+		// command was in flight, and that broke the database. Its own reply is one of the
 		// unfinished commands. Checked under the lock, so a command counted after this check
 		// queues behind this one.
-		if command.refuses_to_wait() && self.inner.unfinished_commands.load(Ordering::Acquire) > 1 {
+		let must_not_wait =
+			command.refuses_to_wait() && self.inner.unfinished_commands.load(Ordering::Acquire) > 1;
+		if let Some(error) = must_not_wait
+			.then(|| self.vfs.storage_wait_refusal())
+			.flatten()
+		{
 			drop(work);
-			return Err(match self.vfs.storage_wait_refusal() {
-				Some(error) => error.into(),
-				None => SqliteWorkerBusyError.into(),
-			});
+			return Err(error.into());
 		}
 		let control = matches!(command, SqliteCommand::DiscardCork { .. });
 		if !control && work.commands.len() >= SQLITE_WORKER_QUEUE_CAPACITY {
