@@ -382,6 +382,20 @@ impl Default for HttpActionRequestJson {
 	}
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+struct HttpActionRequestCbor {
+	args: ciborium::Value,
+}
+
+impl Default for HttpActionRequestCbor {
+	fn default() -> Self {
+		Self {
+			args: ciborium::Value::Array(Vec::new()),
+		}
+	}
+}
+
 /// Only config resolution can opt into managing a local development engine.
 /// A supplied endpoint is connect-only, including loopback addresses.
 pub(crate) fn should_manage_engine(spawn_mode: EngineSpawnMode) -> bool {
@@ -565,7 +579,7 @@ enum ActorConnectToServer {
 struct ActorConnectActionRequestJson {
 	id: u64,
 	name: String,
-	args: JsonValue,
+	args: ciborium::Value,
 }
 
 #[derive(Debug, Deserialize)]
