@@ -82,9 +82,12 @@ impl Filesystem {
 	/// observed applied position. Its rows are not needed, and a refusal or timeout leaves the
 	/// observed position as it is.
 	pub(super) async fn observe_applied(&self, state: &State, deadline: u64) {
-		let _ = state
-			.cold
-			.snapshot
+		// The opening may still use EmptyColdSnapshot, whose reads never reach the
+		// maintainer. Probe a real claim snapshot without changing the read floor.
+		let snapshot = self
+			.cold_store
+			.claim_snapshot(self.key.clone(), state.cold.snapshot.position().clone());
+		let _ = snapshot
 			.get_inode(depot_fs_core::ROOT_INO, state.last_seq, deadline)
 			.await;
 	}
@@ -176,5 +179,158 @@ impl Filesystem {
 		Err(Error::ApplyBacklog {
 			retry_after_ms: BACKLOG_RETRY_AFTER_MS,
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::filesystem::{capture::CaptureJournal, transport::*};
+	use depot_fs_core::store::{Row, RowKey, RowRange};
+	use depot_types::VolumeLogKey;
+	use futures_util::future::BoxFuture;
+	use rivet_data::generated::shared_depot_types_v1::{
+		VolumeKey, VolumeLogKey as WireKey, VolumeLogPosition,
+	};
+	use rivet_topology::versions::{VersionFamily, WriteVersions};
+	use std::sync::{
+		Arc,
+		atomic::{AtomicU64, Ordering},
+	};
+
+	struct Versions;
+	impl WriteVersions for Versions {
+		fn write_version(&self, _: VersionFamily) -> anyhow::Result<u16> {
+			Ok(1)
+		}
+	}
+	struct Store {
+		applied: Arc<AtomicU64>,
+		fail: bool,
+	}
+	struct Snapshot {
+		floor: VolumeLogPosition,
+		applied: Arc<AtomicU64>,
+		fail: bool,
+	}
+	impl ColdStore for Store {
+		fn open_prefetching(
+			&self,
+			_: VolumeLogKey,
+			_: VolumeLogPosition,
+			_: OpenPrefetch,
+			_: u64,
+		) -> BoxFuture<'_, Result<OpenedSnapshot>> {
+			Box::pin(async { panic!("an empty opening must not read cold rows") })
+		}
+		fn open_latest_prefetching(
+			&self,
+			_: VolumeLogKey,
+			_: VolumeLogPosition,
+			_: OpenPrefetch,
+			_: u64,
+		) -> BoxFuture<'_, Result<OpenedSnapshot>> {
+			Box::pin(async { panic!("an empty opening must not read cold rows") })
+		}
+		fn claim_snapshot(
+			&self,
+			_: VolumeLogKey,
+			floor: VolumeLogPosition,
+		) -> Arc<dyn ColdSnapshot> {
+			Arc::new(Snapshot {
+				floor,
+				applied: self.applied.clone(),
+				fail: self.fail,
+			})
+		}
+		fn observed_applied(&self) -> u64 {
+			self.applied.load(Ordering::Acquire)
+		}
+	}
+	impl ColdSnapshot for Snapshot {
+		fn position(&self) -> &VolumeLogPosition {
+			&self.floor
+		}
+		fn get(&self, _: RowKey, _: u64, _: u64) -> BoxFuture<'_, Result<Option<Row>>> {
+			Box::pin(async { panic!("the progress probe reads an inode") })
+		}
+		fn get_inode(
+			&self,
+			ino: u64,
+			through: u64,
+			_: u64,
+		) -> BoxFuture<'_, Result<Option<crate::filesystem::Inode>>> {
+			Box::pin(async move {
+				assert_eq!(ino, depot_fs_core::ROOT_INO);
+				if self.fail {
+					return Err(Error::DeadlineExceeded);
+				}
+				self.applied.store(through, Ordering::Release);
+				Ok(None)
+			})
+		}
+		fn scan(
+			&self,
+			_: RowRange,
+			_: Option<RowKey>,
+			_: usize,
+			_: u64,
+			_: u64,
+		) -> BoxFuture<'_, Result<Vec<(RowKey, Row)>>> {
+			Box::pin(async { panic!("the progress probe does not scan") })
+		}
+	}
+	async fn fixture(fail: bool) -> (Arc<Filesystem>, Arc<Store>) {
+		let key = VolumeLogKey::from(WireKey {
+			volume_key: VolumeKey {
+				partition_key: vec![1].into(),
+				name: None,
+			},
+			volume_incarnation: [0; 16],
+		});
+		let store = Arc::new(Store {
+			applied: Arc::new(AtomicU64::new(0)),
+			fail,
+		});
+		let fs = Filesystem::open_staging_empty(
+			Arc::new(CaptureJournal::new(key, Arc::new(Versions))),
+			store.clone(),
+			Arc::new(rivet_env::TokioClock::new().unwrap()),
+			Default::default(),
+			None,
+			Default::default(),
+		)
+		.await
+		.unwrap();
+		(fs, store)
+	}
+	#[tokio::test]
+	async fn empty_opening_probes_real_apply_progress_before_refusing_writes() {
+		let (fs, store) = fixture(false).await;
+		let mut state = fs.state.lock().await;
+		state.staged_format = None;
+		state.last_seq = MAX_HELD_LAYERS as u64 + 1;
+		let floor = state.cold.snapshot.position().clone();
+		fs.shed_unapplied_backlog(&mut state, u64::MAX)
+			.await
+			.unwrap();
+		assert_eq!(store.observed_applied(), state.last_seq);
+		assert_eq!(
+			*state.cold.snapshot.position(),
+			floor,
+			"a progress probe must not move the read floor without applied layers"
+		);
+	}
+	#[tokio::test]
+	async fn failed_progress_probe_preserves_backpressure() {
+		let (fs, store) = fixture(true).await;
+		let mut state = fs.state.lock().await;
+		state.staged_format = None;
+		state.last_seq = MAX_HELD_LAYERS as u64 + 1;
+		assert!(matches!(
+			fs.shed_unapplied_backlog(&mut state, u64::MAX).await,
+			Err(Error::ApplyBacklog { .. })
+		));
+		assert_eq!(store.observed_applied(), 0);
 	}
 }
