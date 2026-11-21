@@ -206,19 +206,20 @@ pub fn no_responders(error: &anyhow::Error) -> bool {
 	structured.group() == "ups" && structured.code() == "no_responders"
 }
 
-/// Whether a UPS request failed without the worker answering: its route is unknown, the
-/// transport failed, or the request timed out.
+/// Whether a UPS request failed without the worker answering: its route is unknown, its
+/// endpoint could not be resolved, the transport failed, or the request timed out.
 pub fn unreachable_worker(error: &anyhow::Error) -> bool {
 	let structured = rivet_error::RivetError::extract(error);
 	structured.group() == "ups"
 		&& matches!(
 			structured.code(),
-			"unknown_worker" | "transport" | "timeout"
+			"unknown_worker" | "transport" | "timeout" | "endpoint_unresolved"
 		)
 }
 
 /// Whether a failed UPS request to an envoy connection may succeed on another route: a stale
-/// route, a missing worker or a transport failure, as opposed to a refused or malformed request.
+/// route, an unresolvable endpoint, a missing worker or a transport failure, as opposed to a
+/// refused or malformed request.
 pub fn retryable_ups_error(error: &anyhow::Error) -> bool {
 	let structured = rivet_error::RivetError::extract(error);
 	structured.group() == "ups"
@@ -229,5 +230,47 @@ pub fn retryable_ups_error(error: &anyhow::Error) -> bool {
 				| "wrong_worker"
 				| "timeout" | "consumer_closed"
 				| "transport"
+				| "endpoint_unresolved"
 		)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_endpoint_unresolved_is_unreachable_worker() {
+		let err = universalpubsub::errors::EndpointUnresolved.build();
+		assert!(unreachable_worker(&err));
+	}
+
+	#[test]
+	fn test_endpoint_unresolved_is_retryable_ups_error() {
+		let err = universalpubsub::errors::EndpointUnresolved.build();
+		assert!(retryable_ups_error(&err));
+	}
+
+	#[test]
+	fn test_ups_error_classifications() {
+		let no_resp = universalpubsub::errors::NoResponders.build();
+		assert!(no_responders(&no_resp));
+		assert!(retryable_ups_error(&no_resp));
+		assert!(!unreachable_worker(&no_resp));
+
+		let unk_worker = universalpubsub::errors::UnknownWorker.build();
+		assert!(unreachable_worker(&unk_worker));
+		assert!(retryable_ups_error(&unk_worker));
+
+		let timeout = universalpubsub::errors::Timeout.build();
+		assert!(unreachable_worker(&timeout));
+		assert!(retryable_ups_error(&timeout));
+
+		let unres = universalpubsub::errors::EndpointUnresolved.build();
+		assert!(unreachable_worker(&unres));
+		assert!(retryable_ups_error(&unres));
+
+		let custom_err = anyhow::anyhow!("unrelated application error");
+		assert!(!unreachable_worker(&custom_err));
+		assert!(!retryable_ups_error(&custom_err));
+	}
 }
