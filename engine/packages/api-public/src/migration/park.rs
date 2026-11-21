@@ -259,6 +259,8 @@ async fn park(
 		workflow_name,
 		wake_deadline_ts: actor.wake_deadline_ts,
 		wake_signals,
+		delete_requested_at: None,
+		deleted_at: None,
 	};
 	tx.set(
 		&mkeys::parked(actor.actor_id),
@@ -290,6 +292,9 @@ pub async fn restore(ctx: ApiCtx, actor_id: Id, namespace: String, body: Bytes) 
 					return Ok(proto::RestoreResponse::NotParked);
 				};
 				let parked = facts::decode_parked(&raw)?;
+				if parked.delete_requested_at.is_some() {
+					return Err(errors::Migration::ActorDeleted.build());
+				}
 				if request
 					.cutover_ts
 					.is_some_and(|cutover_ts| cutover_ts != parked.cutover_ts)

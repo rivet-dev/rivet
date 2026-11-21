@@ -1172,6 +1172,11 @@
 			"description": null,
 			"errors": [
 				{
+					"code": "actor_deleted",
+					"message": "The parked actor is being deleted from V2, so it can no longer be restored.",
+					"statuses": []
+				},
+				{
 					"code": "actor_not_found",
 					"message": "The actor does not exist in this namespace.",
 					"statuses": []

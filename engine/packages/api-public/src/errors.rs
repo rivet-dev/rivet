@@ -57,4 +57,9 @@ pub enum Migration {
 		"Migration is unavailable until the actor migration fix backfill finishes. It runs on engine start; retry once it completes."
 	)]
 	BackfillIncomplete,
+	#[error(
+		"actor_deleted",
+		"The parked actor is being deleted from V2, so it can no longer be restored."
+	)]
+	ActorDeleted,
 }

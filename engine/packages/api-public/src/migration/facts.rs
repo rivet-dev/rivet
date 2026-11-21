@@ -326,8 +326,16 @@ pub fn decode_parked(raw: &[u8]) -> Result<v2_migration_protocol::ParkedRecord> 
 		.context("decode parked record")
 }
 
+/// Encodes a parked record. A record with no delete in progress is written as v1, which every
+/// V2 binary reads, so a rollout that adds deletes never leaves an older reader with a record it
+/// cannot decode until a delete is first requested.
 pub fn encode_parked(record: v2_migration_protocol::ParkedRecord) -> Result<Vec<u8>> {
+	let version = if record.delete_requested_at.is_some() || record.deleted_at.is_some() {
+		2
+	} else {
+		1
+	};
 	v2_migration_protocol::versioned::ParkedRecord::wrap_latest(record)
-		.serialize_with_embedded_version(1)
+		.serialize_with_embedded_version(version)
 		.context("encode parked record")
 }
