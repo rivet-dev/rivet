@@ -181,7 +181,8 @@ impl ActorConnectionInner {
 		let conn_id = self.connection_id.lock().await.clone();
 		let conn_token = self.connection_token.lock().await.clone();
 
-		let (driver, mut recver, task) = match connect_driver(
+		let mut dc_rx = self.dc_watch.0.subscribe();
+		let dial = connect_driver(
 			self.transport_kind,
 			DriverConnectArgs {
 				remote_manager: self.remote_manager.clone(),
@@ -191,9 +192,19 @@ impl ActorConnectionInner {
 				conn_id,
 				conn_token,
 			},
-		)
-		.await
-		{
+		);
+		// disconnect() has no driver to close until the dial returns, so drop the dial here.
+		let dial = tokio::select! {
+			res = dial => res,
+			_ = dc_rx.wait_for(|x| *x) => {
+				return ConnectionAttempt {
+					did_open: false,
+					task_end_reason: DriverStopReason::UserAborted,
+				};
+			}
+		};
+
+		let (driver, mut recver, task) = match dial {
 			Ok(value) => value,
 			Err(error) => {
 				let message = error.to_string();
@@ -208,7 +219,13 @@ impl ActorConnectionInner {
 
 		{
 			let mut my_driver = self.driver.lock().await;
-			*my_driver = Some(driver);
+			// disconnect() sets the flag before it takes this lock, so it either sees this driver
+			// or we see the flag.
+			if self.is_disconnecting() {
+				driver.disconnect();
+			} else {
+				*my_driver = Some(driver);
+			}
 		}
 
 		let mut task_end_reason = task.map(|res| match res {
