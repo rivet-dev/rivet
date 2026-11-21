@@ -1,3 +1,4 @@
+use super::actor_connect::decode_cbor_client_json;
 use super::dispatch::*;
 use super::inspector::*;
 use super::*;
@@ -998,14 +999,17 @@ pub(super) fn encode_http_action_response(
 			|| {
 				let body = match encoding {
 				HttpResponseEncoding::Json => serde_json::to_vec(&json!({
-					"output": decode_cbor_json_or_null(&output),
+					"output": decode_cbor_client_json(&output).unwrap_or(JsonValue::Null),
 				}))?,
 				HttpResponseEncoding::Cbor => {
+					let output: ciborium::Value = ciborium::from_reader(Cursor::new(&output))
+						.unwrap_or(ciborium::Value::Null);
 					let mut out = Vec::new();
 					ciborium::into_writer(
-						&json!({
-							"output": decode_cbor_json_or_null(&output),
-						}),
+						&ciborium::Value::Map(vec![(
+							ciborium::Value::Text("output".to_owned()),
+							output,
+						)]),
 						&mut out,
 					)?;
 					out
