@@ -1725,6 +1725,30 @@ importers:
         specifier: ^5.0.3
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@22.19.15)(@vitest/coverage-v8@5.0.5)(msw@2.14.6(@types/node@22.19.15)(typescript@5.9.3))(vite@8.2.0(@types/node@22.19.15)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0))
 
+  rivetkit-typescript/packages/effect-cluster:
+    devDependencies:
+      '@arethetypeswrong/cli':
+        specifier: ^0.18.3
+        version: 0.18.3
+      '@effect/language-service':
+        specifier: ^0.85.1
+        version: 0.85.1
+      '@types/node':
+        specifier: ^22.18.1
+        version: 22.19.15
+      effect:
+        specifier: 4.1.4
+        version: 4.1.4
+      publint:
+        specifier: ^0.3.21
+        version: 0.3.21
+      rivetkit:
+        specifier: workspace:*
+        version: link:../rivetkit
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   rivetkit-typescript/packages/engine-cli: {}
 
   rivetkit-typescript/packages/framework-base:
@@ -7959,6 +7983,9 @@ packages:
 
   effect@4.0.0:
     resolution: {integrity: sha512-ooc1TG5t+FfzgYnFz2ff6BBKyZ7EwBRVXC7c4RhQUAD6/TZ2gTXXMeb4WX7a19ozQo4J73/QW+S00YAIresoMQ==}
+
+  effect@4.1.4:
+    resolution: {integrity: sha512-Tgrv/9FN+TZYyOn8XSli+fVqAfwDrDAkiX5Uu9vztINb675VTQdhD0gWI5Kzvhlh9QqzjZvw72iugqw5pwoghQ==}
 
   ejs@3.1.10:
     resolution: {integrity: sha512-UeJmFfOrAQS8OJWPZ4qtgHyWExa088/MtK5UEyoJGFH67cDEXkZSviOiKRCZ4Xij0zxI3JECgYs3oKx+AizQBA==}
@@ -17927,6 +17954,8 @@ snapshots:
   ee-first@1.1.1: {}
 
   effect@4.0.0: {}
+
+  effect@4.1.4: {}
 
   ejs@3.1.10:
     dependencies:

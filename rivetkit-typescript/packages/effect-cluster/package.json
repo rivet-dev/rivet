@@ -1,0 +1,45 @@
+{
+	"name": "@rivetkit/effect-cluster",
+	"version": "3.1.2-rc.5",
+	"description": "Effect Cluster backend for Rivet Actors",
+	"license": "Apache-2.0",
+	"type": "module",
+	"sideEffects": false,
+	"files": [
+		"src/**/*.ts",
+		"dist/**/*.js",
+		"dist/**/*.js.map",
+		"dist/**/*.d.ts",
+		"dist/**/*.d.ts.map",
+		"LICENSE-effect",
+		"README.md"
+	],
+	"exports": {
+		".": "./src/mod.ts"
+	},
+	"publishConfig": {
+		"access": "public",
+		"exports": {
+			".": "./dist/mod.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"check-types": "tsc --noEmit",
+		"lint:publint": "publint --strict",
+		"lint:attw": "attw --pack . --profile esm-only"
+	},
+	"peerDependencies": {
+		"effect": "^4.1.4",
+		"rivetkit": "workspace:*"
+	},
+	"devDependencies": {
+		"@arethetypeswrong/cli": "^0.18.3",
+		"@effect/language-service": "^0.85.1",
+		"@types/node": "^22.18.1",
+		"effect": "4.1.4",
+		"publint": "^0.3.21",
+		"rivetkit": "workspace:*",
+		"typescript": "^5.9.2"
+	}
+}
