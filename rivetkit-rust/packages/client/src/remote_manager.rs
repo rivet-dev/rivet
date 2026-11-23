@@ -84,7 +84,6 @@ struct ActorsGetOrCreateRequest {
 	input: Option<String>, // base64-encoded CBOR
 	#[serde(rename = "pool")]
 	runner_name_selector: String,
-	crash_policy: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -117,7 +116,6 @@ struct ActorsCreateRequest {
 	input: Option<String>, // base64-encoded CBOR
 	#[serde(rename = "pool")]
 	runner_name_selector: String,
-	crash_policy: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -340,7 +338,6 @@ impl RemoteManager {
 			key: key_str,
 			input: input_encoded,
 			runner_name_selector: pool_name.unwrap_or_else(|| self.pool_name.clone()),
-			crash_policy: "destroy".to_string(),
 		};
 
 		let req = self.apply_common_headers_with(
@@ -405,7 +402,6 @@ impl RemoteManager {
 			key: key_str,
 			input: input_encoded,
 			runner_name_selector: pool_name.unwrap_or_else(|| self.pool_name.clone()),
-			crash_policy: "destroy".to_string(),
 		};
 
 		let req = self.apply_common_headers_with(

@@ -110,6 +110,14 @@ impl RemoteSqliteRequest {
 		}
 	}
 
+	fn actor(&self) -> (&str, u64) {
+		match self {
+			RemoteSqliteRequest::Exec(request) => (&request.actor_id, request.generation),
+			RemoteSqliteRequest::Execute(request) => (&request.actor_id, request.generation),
+			RemoteSqliteRequest::ExecuteBatch(request) => (&request.actor_id, request.generation),
+		}
+	}
+
 	pub fn kind(&self) -> &'static str {
 		match self {
 			RemoteSqliteRequest::Exec(_) => "remote_exec",
@@ -338,6 +346,25 @@ fn handle_remote_sqlite_response(
 	ctx.deadlines.cancel(&DeadlineKey::RemoteSqlite(request_id));
 
 	if let Some(request) = request {
+		if let Some(error) = indeterminate_reply(&response) {
+			let operation = request.request.operation();
+			let (actor_id, generation) = request.request.actor();
+			// The engine already dropped this actor's remote SQL session. Its filesystem may be
+			// fenced or a commit outcome unknown, so this needs attention, unlike a disconnect.
+			tracing::error!(
+				request_id,
+				actor_id,
+				generation,
+				operation,
+				reason = %error.message,
+				"engine could not confirm a remote sqlite result; the actor's filesystem may be fenced or a commit outcome unknown"
+			);
+			let _ = request.response_tx.send(Err(anyhow::anyhow!(
+				RemoteSqliteIndeterminateResultError { operation }
+			)));
+			return;
+		}
+
 		let session = request
 			.sent_session
 			.expect("a remote sqlite response must belong to a sent request");
@@ -350,6 +377,31 @@ fn handle_remote_sqlite_response(
 			op,
 			"received remote sqlite response for unknown request id"
 		);
+	}
+}
+
+/// Returns the engine's reply when it answered that it cannot say if the request took effect.
+/// The caller handles this exactly like a response lost to a disconnect, because in both cases a
+/// write may have landed.
+fn indeterminate_reply(response: &RemoteSqliteResponse) -> Option<&protocol::SqliteErrorResponse> {
+	let error = match response {
+		RemoteSqliteResponse::Exec(protocol::SqliteExecResponse::SqliteErrorResponse(error))
+		| RemoteSqliteResponse::Execute(protocol::SqliteExecuteResponse::SqliteErrorResponse(
+			error,
+		))
+		| RemoteSqliteResponse::ExecuteBatch(
+			protocol::SqliteExecuteBatchResponse::SqliteErrorResponse(error),
+		) => error,
+		RemoteSqliteResponse::Exec(protocol::SqliteExecResponse::SqliteExecOk(_))
+		| RemoteSqliteResponse::Execute(protocol::SqliteExecuteResponse::SqliteExecuteOk(_))
+		| RemoteSqliteResponse::ExecuteBatch(
+			protocol::SqliteExecuteBatchResponse::SqliteExecuteBatchOk(_),
+		) => return None,
+	};
+	if error.group == "sqlite" && error.code == "remote_indeterminate_result" {
+		Some(error)
+	} else {
+		None
 	}
 }
 

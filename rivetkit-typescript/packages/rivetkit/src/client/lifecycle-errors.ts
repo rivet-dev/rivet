@@ -345,7 +345,8 @@ export function isRetryableCreateRefusal(error: unknown): boolean {
 	}
 	return (
 		(error.group === "depot" &&
-			(error.code === "overloaded" || error.code === "read_interrupted")) ||
+			(error.code === "overloaded" ||
+				error.code === "read_interrupted")) ||
 		(error.group === "guard" && error.code === "service_unavailable") ||
 		(error.group === "namespace" && error.code === "creating")
 	);

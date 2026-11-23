@@ -325,7 +325,7 @@ pub async fn gateway(
 					}
 					// Legacy: the reopen addresses the actor id the first open resolved, which
 					// a move destroys, so a moving refusal is not retried here; the client's
-					// retry resolves the actor again. Removed in 3.1 with the backfill.
+					// retry resolves the actor again.
 					let moving = crate::retry_budget::refusal(&error).is_some_and(|refusal| {
 						refusal.kind == crate::retry_budget::RefusalKind::LegacyActorMoving
 					});
@@ -567,7 +567,6 @@ async fn prepare(
 	// Legacy: while the namespace's backfill is not done this reads the actor's state volume,
 	// and for an actor not yet moved the unprefixed one too. The acquisition's first read reuses
 	// what it read, so a grouped actor costs no extra read and one not yet moved costs one.
-	// Removed in 3.1 with the backfill.
 	let resolved = target.resolve(ctx, &standing).await?;
 	let class = tunnel_class(websocket);
 
@@ -645,8 +644,7 @@ async fn prepare(
 			// again, which finds it at its new id once the move made it. A re-resolve refused at
 			// admission is tried once more after its hint, since a move's own writes can briefly
 			// shed the read; any other failure goes to the client. Both stay within the request
-			// deadline, past which the client gets the moving refusal. Removed in 3.1 with the
-			// backfill.
+			// deadline, past which the client gets the moving refusal.
 			crate::retry_budget::RefusalKind::LegacyActorMoving => {
 				let resolved =
 					legacy_resolve_moved(ctx, &mut target, &standing, deadline, refused).await?;
@@ -682,7 +680,7 @@ async fn prepare(
 }
 
 /// Legacy: resolves `target` again after its actor answered the `moving` refusal, bounded by the
-/// request's `deadline`; see [`legacy_reresolve_within`]. Removed in 3.1 with the backfill.
+/// request's `deadline`; see [`legacy_reresolve_within`].
 async fn legacy_resolve_moved(
 	ctx: &EngineContext,
 	target: &mut Target,
@@ -710,8 +708,7 @@ async fn legacy_resolve_moved(
 /// failure is the request's error. A deadline that passes answers the `moving` refusal with its
 /// hint, so the client gets the retryable 503 or WebSocket 1013 it gets for any refusal, never
 /// an internal error. The legacy behavior answers wakes during a backfill move; the new behavior
-/// has no move. Taken only for an actor of a namespace whose backfill is not done. Removed in
-/// 3.1 with the backfill.
+/// has no move. Taken only for an actor of a namespace whose backfill is not done.
 async fn legacy_reresolve_within<S, T, F>(
 	clock: &dyn rivet_env::Clock,
 	deadline_boot_ms: u64,
@@ -820,7 +817,7 @@ pub async fn direct(
 }
 
 fn not_found() -> Response {
-	(StatusCode::NOT_FOUND, "amogus\n").into_response()
+	(StatusCode::NOT_FOUND, "not found\n").into_response()
 }
 
 /// Whether a request outside the gateway paths names an actor as its target: by the
@@ -1278,7 +1275,7 @@ impl Target {
 	/// the namespace has a group now, resolves once more there. The legacy behavior answered such
 	/// a miss as not found, so an actor created in the group after the move read as missing
 	/// through this gateway until the cached standing expired. Only a miss on an ungrouped
-	/// standing pays the read. Removed in 3.1 with the backfill.
+	/// standing pays the read.
 	async fn resolve(
 		&mut self,
 		ctx: &EngineContext,

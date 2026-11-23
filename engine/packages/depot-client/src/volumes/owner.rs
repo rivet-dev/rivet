@@ -169,23 +169,23 @@ impl IdleSignal {
 	}
 
 	/// Called from sync contexts such as `Drop` and runner observers, so it uses the sync insert.
-	/// No async code waits on this map.
+	/// Every operation on this set, including draining, must stay synchronous. An async
+	/// operation can receive a bucket lock before it is repolled, blocking the executor
+	/// threads in sync callbacks that must finish before that operation can resume.
 	pub(crate) fn signal(&self, key: &depot_types::VolumeKey) {
 		let _ = self.keys.insert_sync(key.clone());
 		self.notify.notify_one();
 	}
 
-	async fn drain(&self) -> Vec<depot_types::VolumeKey> {
+	fn drain(&self) -> Vec<depot_types::VolumeKey> {
 		let mut keys = vec![];
 		if self.keys.is_empty() {
 			return keys;
 		}
-		self.keys
-			.retain_async(|key| {
-				keys.push(key.clone());
-				false
-			})
-			.await;
+		self.keys.retain_sync(|key| {
+			keys.push(key.clone());
+			false
+		});
 		keys
 	}
 }
@@ -237,7 +237,7 @@ async fn run(
 		}
 
 		// Every signalled key is checked now; the check itself decides its next deadline.
-		for key in deps.idle.drain().await {
+		for key in deps.idle.drain() {
 			if slots.contains_key(&key) {
 				idle.schedule_earliest(key, now);
 			}

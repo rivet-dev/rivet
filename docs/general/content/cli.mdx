@@ -102,7 +102,7 @@ To build early and roll out later, prepare the build with [`rivet build prepare`
 | --- | --- | --- |
 | `--cluster` | `RIVET_CLUSTER` / linked cluster | Cluster to deploy to instead of a project. |
 | `--org` | `RIVET_ORG` / linked organization | Organization the cluster belongs to. |
-| `--region` | the cluster's only region | Region of the pool. Required when the cluster has several regions. |
+| `--region` | the cluster's only region | Region of the pool. Required when the cluster has several regions. Managed clusters only. |
 | `--pool` | `default` | Pool to roll out. |
 | `--build` | new build | Roll out an existing build instead of building a new one. |
 | `--dockerfile` | `Dockerfile` | Dockerfile to build. |
@@ -112,7 +112,23 @@ To build early and roll out later, prepare the build with [`rivet build prepare`
 | `--env` | — | Pool variable as `KEY=VAL`, repeatable. Kept with the pool's other variables. |
 | `--secret` | — | Pool variable taking a cluster secret's latest version, as `KEY` for a secret named like the variable or `KEY=SECRET_NAME`, repeatable. Set the secret first with [`rivet cluster secret set`](#rivet-cluster-secret). |
 
-The saved image must be 5 GiB or smaller. `--namespace`, `--reuse-image`, and the resource and scaling flags apply to projects only and are rejected for a cluster. `--env` and `--secret` keep the pool's other variables, apply in the same rollout as the build, and are checked before the build starts. They also unpin any secret a rollback pinned. See [`rivet cluster env`](#rivet-cluster-env). `rivet pool`, `rivet logs`, and `rivet token` do not support clusters. Read a cluster's logs with [`rivet cluster logs`](#rivet-cluster-logs).
+The saved image must be 5 GiB or smaller. `--namespace`, `--reuse-image`, and the resource and scaling flags apply to projects only and are rejected for a managed cluster; a [BYOC cluster](#deploying-to-a-byoc-cluster) takes its own. `--env` and `--secret` keep the pool's other variables, apply in the same rollout as the build, and are checked before the build starts. They also unpin any secret a rollback pinned. See [`rivet cluster env`](#rivet-cluster-env). `rivet pool`, `rivet logs`, and `rivet token` do not support clusters. Read a cluster's logs with [`rivet cluster logs`](#rivet-cluster-logs).
+
+### Deploying to a BYOC cluster
+
+`rivet deploy --cluster` works the same on a BYOC cluster, with these differences:
+
+```bash
+rivet deploy --cluster my-byoc-cluster --org my-org
+```
+
+- `--cpu` and `--memory` set vCPUs and memory per actor node, such as `0.5` or `2` and `512Mi` or `2Gi`.
+- Omitted sizes, replica counts and variables keep the pool's current values (1 vCPU / 2 GiB, 1 replica for a new pool).
+- `--env KEY=VAL` replaces the pool's variables. Without `--env`, the pool keeps its current ones. On a managed cluster, `--env` keeps the pool's other variables.
+- `--secret-env KEY=SECRET/KEY` sets a variable from a Kubernetes Secret in the cluster, and replaces the pool's secret variables the same way. `--secret` is managed-only.
+- `--min-replicas` and `--max-replicas` set the number of actor nodes, `1` to `1000`. A `--min-replicas` above the pool's current maximum raises the maximum to it. `--pool-config` sets the Engine's configuration of the pool as JSON.
+- `--region` is managed-only: a BYOC cluster runs in one region.
+- The image must run a RivetKit runner that connects with `RIVET_ENDPOINT`, `RIVET_TOKEN` and `RIVET_POOL`, which the cluster sets on every actor node.
 
 ## `rivet build prepare`
 

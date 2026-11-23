@@ -547,13 +547,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -698,13 +696,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -878,13 +874,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -1020,13 +1014,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -1162,13 +1154,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -1304,13 +1294,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -1446,13 +1434,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -1588,13 +1574,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -1730,13 +1714,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -1874,13 +1856,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -2029,13 +2009,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -2203,13 +2181,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -2365,13 +2341,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -2533,13 +2507,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -2715,13 +2687,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -3067,13 +3037,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -3229,13 +3197,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -3389,13 +3355,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -3564,13 +3528,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -3736,13 +3698,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -3932,13 +3892,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",
@@ -4095,13 +4053,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "restart",
-                "sleep",
-                "destroy"
+                "sleep"
               ]
             },
             "name": "rvt-crash-policy",
-            "description": "Crash policy for getOrCreate."
+            "description": "Crash policy for getOrCreate. Only `sleep` is supported."
           },
           {
             "in": "query",

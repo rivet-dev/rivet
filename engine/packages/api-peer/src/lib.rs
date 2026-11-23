@@ -2,6 +2,7 @@
 //! token; every other route is served without authentication.
 
 pub mod filesystem;
+pub mod health;
 pub mod operator;
 pub mod repair;
 pub mod router;

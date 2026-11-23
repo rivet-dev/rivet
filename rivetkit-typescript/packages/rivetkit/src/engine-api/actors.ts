@@ -32,7 +32,6 @@ export const ActorsCreateRequestSchema = z.object({
 	datacenter: z.string().optional(),
 	name: z.string(),
 	pool: z.string(),
-	crash_policy: z.string(),
 	key: z.string().nullable().optional(),
 	input: z.string().nullable().optional(),
 });
@@ -61,7 +60,6 @@ export const ActorsGetOrCreateRequestSchema = z.object({
 	name: z.string(),
 	key: z.string(),
 	pool: z.string(),
-	crash_policy: z.string(),
 	input: z.string().nullable().optional(),
 });
 export type ActorsGetOrCreateRequest = z.infer<

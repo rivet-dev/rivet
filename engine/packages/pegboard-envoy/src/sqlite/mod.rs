@@ -14,8 +14,8 @@ use rivet_state_machine::IndexedDeadlineQueue;
 use rivet_topology::versions::WriteVersions;
 use rivet_util_id::Id;
 pub(crate) use routing::{
-	actor_id, expected_epoch, inbound_overloaded_failure, not_running_failure, overloaded_failure,
-	request, stopped_failure,
+	actor_id, expected_epoch, inbound_overloaded_failure, missing_generation_reply,
+	not_running_failure, overloaded_failure, request, stopped_failure,
 };
 use std::sync::{
 	Arc, Weak,
@@ -49,11 +49,10 @@ pub(crate) struct Sessions {
 	group: Option<rivet_keys::keys::codec::GroupId>,
 	/// Legacy: which actors' database volumes may still be unprefixed, as the connection's
 	/// scope reads it, so each legacy-bound open resolves its shape; see
-	/// `pegboard::legacy_volumes`. Removed in 3.1 with the backfill.
+	/// `pegboard::legacy_volumes`.
 	legacy_fallback: crate::routes::LegacyFallbackView,
 	/// Legacy: how a legacy-bound open reads its namespace's cached standing and, on a connection
-	/// without a group, its namespace's current group; see [`legacy_open_resolve`]. Removed in
-	/// 3.1 with the backfill.
+	/// without a group, its namespace's current group; see [`legacy_open_resolve`].
 	legacy_namespace: Arc<LegacyNamespaceCheck>,
 	/// Each actor's lane. A request finds an existing lane with a shared bucket read that
 	/// allocates nothing, so requests of different actors never queue on one map lock.
@@ -89,7 +88,7 @@ pub(crate) struct OwnedEpoch {
 pub(crate) type ServerPrefetch = Arc<dyn Fn() -> bool + Send + Sync>;
 
 /// Legacy: reads the group a namespace has now, uncached
-/// (`pegboard::catalog::legacy_read_namespace_group`). Removed in 3.1 with the backfill.
+/// (`pegboard::catalog::legacy_read_namespace_group`).
 pub(crate) type LegacyNamespaceGroupRead = Arc<
 	dyn Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<GroupId>>> + Send>>
 		+ Send
@@ -97,7 +96,7 @@ pub(crate) type LegacyNamespaceGroupRead = Arc<
 >;
 
 /// Legacy: reads a namespace's standing from the process cache, with no command
-/// (`pegboard::catalog::cached_namespace_standing`). Removed in 3.1 with the backfill.
+/// (`pegboard::catalog::cached_namespace_standing`).
 pub(crate) type LegacyCachedStandingRead = Arc<
 	dyn Fn() -> std::pin::Pin<
 			Box<
@@ -110,8 +109,7 @@ pub(crate) type LegacyCachedStandingRead = Arc<
 
 /// Legacy: the connection's namespace, the read of its current group, which a legacy-bound open
 /// on a connection without a group makes before it opens, and the read of its cached standing,
-/// which a legacy-bound open on a connection with a group makes for its fallback. Removed in 3.1
-/// with the backfill.
+/// which a legacy-bound open on a connection with a group makes for its fallback.
 #[derive(Clone)]
 pub(crate) struct LegacyNamespaceCheck {
 	namespace: String,
@@ -378,8 +376,7 @@ impl Pages {
 const KV_NAME: &[u8] = b"kv";
 impl Sessions {
 	/// A connection's sessions. `legacy_namespace` is how a legacy-bound open on a connection
-	/// without a group reads its namespace's current group (legacy, removed in 3.1 with the
-	/// backfill).
+	/// without a group reads its namespace's current group (legacy).
 	pub fn new(
 		group: Option<rivet_keys::keys::codec::GroupId>,
 		legacy_namespace: LegacyNamespaceCheck,
@@ -409,7 +406,7 @@ impl Sessions {
 	}
 
 	/// Legacy: makes the database opens of the actors `fallback` covers resolve the actor's
-	/// volume shape. Removed in 3.1 with the backfill.
+	/// volume shape.
 	pub fn with_legacy_fallback(mut self, fallback: crate::routes::LegacyFallbackView) -> Self {
 		self.legacy_fallback = fallback;
 		self
@@ -468,7 +465,6 @@ impl Sessions {
 		let group = self.group;
 		// Legacy: only a legacy-bound epoch resolves on its open, so only its requests take
 		// the fallback and the namespace check; a grouped epoch's requests touch neither.
-		// Removed in 3.1 with the backfill.
 		let legacy = match bound_group {
 			Some(_) => None,
 			None => Some((self.legacy_fallback.clone(), self.legacy_namespace.clone())),
@@ -478,7 +474,7 @@ impl Sessions {
 				// The namespace read, the resolve and the open share one refusal budget.
 				let started_boot_ms = client.env().clock().observe()?.boot_ms;
 				// Legacy: a legacy-bound epoch resolves on the open itself, so only opens pay
-				// for it, never a request on an open volume. Removed in 3.1 with the backfill.
+				// for it, never a request on an open volume.
 				let resolving_client = &client;
 				let reading_guard = guard.clone();
 				let group = legacy_bound_volume_group(bound_group, || async move {
@@ -1245,7 +1241,7 @@ fn open_volume_in(
 /// group's volume is the copy's database. The epoch then fails for good with
 /// [`LegacyEpochMoved`] and never opens, claims or creates the copy's database. The legacy
 /// behavior opened wherever the resolve answered; it is kept only as this check, taken on the
-/// opens of legacy-bound epochs. Removed in 3.1 with the backfill.
+/// opens of legacy-bound epochs.
 async fn legacy_bound_volume_group<F, Fut>(
 	bound_group: Option<GroupId>,
 	resolve: F,
@@ -1276,8 +1272,7 @@ where
 /// with that group and the namespace as the fallback, which answers the group when the copy
 /// exists and the legacy volume while the actor has not moved. A connection without a group has
 /// no fallback (`pegboard::catalog::LegacyFallback::Off`), so `fallback_namespace` is unused
-/// there. The legacy behavior resolved with the connection's view alone. Removed in 3.1 with the
-/// backfill.
+/// there. The legacy behavior resolved with the connection's view alone.
 async fn legacy_open_resolve<N, NF, R, RF>(
 	connection_group: Option<GroupId>,
 	fallback_namespace: Option<String>,
@@ -1303,7 +1298,7 @@ where
 /// [`legacy_open_resolve`]. The read is part of the open, so a read depot refused without
 /// running it, as while the namespace volume's maintainer moves or under overload, is sent again
 /// under `guard` within the refusal budget counted from `started_boot_ms`, like the open's own
-/// refusals; any other error fails the open at once. Removed in 3.1 with the backfill.
+/// refusals; any other error fails the open at once.
 async fn legacy_namespace_group(
 	env: &Arc<dyn rivet_env::Env>,
 	guard: Arc<dyn Fn() -> bool + Send + Sync>,
@@ -1316,7 +1311,7 @@ async fn legacy_namespace_group(
 /// Legacy: makes an epoch whose open found its legacy actor moved into its namespace's
 /// group fenced on its lane, so its later requests fail without opening again, and turns the
 /// error into the head fence mismatch the runtime treats as lost ownership. Any other error is
-/// returned unchanged. Removed in 3.1 with the backfill.
+/// returned unchanged.
 fn fence_moved_epoch(actor: &mut Actor, epoch: u32, error: anyhow::Error) -> anyhow::Error {
 	if !error.is::<LegacyEpochMoved>() {
 		return error;
@@ -1545,7 +1540,7 @@ fn unhinted_open_refusal_ms(error: &anyhow::Error) -> Option<u64> {
 
 /// Legacy: a legacy actor's epoch found, at its storage open, that the backfill moved its
 /// actor into its namespace's group. Its storage ended for good: the group's database volume
-/// with its id and incarnation is the copy's. Removed in 3.1 with the backfill.
+/// with its id and incarnation is the copy's.
 #[derive(Debug)]
 pub(crate) struct LegacyEpochMoved;
 

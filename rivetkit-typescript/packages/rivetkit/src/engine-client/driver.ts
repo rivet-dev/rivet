@@ -1,6 +1,6 @@
 import type { Hono, Context as HonoContext } from "hono";
 import type { ActorKey, Encoding, UniversalWebSocket } from "@/actor/mod";
-import type { ActorQuery, CrashPolicy } from "@/client/query";
+import type { ActorQuery } from "@/client/query";
 import type { IssuedToken, IssueTokenOptions } from "@/client/auth";
 import type { RegistryConfig } from "@/registry/config";
 import type { GetUpgradeWebSocket } from "@/utils";
@@ -91,7 +91,6 @@ export interface GetOrCreateWithKeyInput {
 	key: ActorKey;
 	input?: unknown;
 	region?: string;
-	crashPolicy?: CrashPolicy;
 	/** Overrides the client's configured pool name for this actor. */
 	poolName?: string;
 }
@@ -102,7 +101,6 @@ export interface CreateInput {
 	key: ActorKey;
 	input?: unknown;
 	region?: string;
-	crashPolicy?: CrashPolicy;
 	/** Overrides the client's configured pool name for this actor. */
 	poolName?: string;
 }

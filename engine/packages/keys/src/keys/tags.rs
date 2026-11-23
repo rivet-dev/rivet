@@ -194,8 +194,7 @@ pub mod partition {
 		(116, NAMESPACE_VOLUME, "namespace-volume"),
 		(117, NAMESPACE_STATE, "namespace-state"),
 		(118, NAMESPACE_INDEX, "namespace-index"),
-		// Legacy: an actor name a legacy fallback read found, on a namespace volume. Removed in
-		// 3.1 with the backfill.
+		// Legacy: an actor name a legacy fallback read found, on a namespace volume.
 		(119, LEGACY_BACKFILL_NAME, "legacy-backfill-name"),
 		(120, POOL_ENVOY_STATE, "pool-envoy-state"),
 		(121, POOL_ENVOY_RING, "pool-envoy-ring"),
@@ -262,10 +261,8 @@ pub mod depot_command {
 		(122, LEGACY_PEGBOARD_NAMESPACE_MOVE, "pegboard.namespace.legacy-move"),
 		(123, LEGACY_PEGBOARD_ACTOR_ALARM_READ, "pegboard.actor.legacy-alarm-read"),
 		// Legacy: records an actor name a legacy fallback read found, on a namespace volume.
-		// Removed in 3.1 with the backfill.
 		(124, LEGACY_PEGBOARD_BACKFILL_NAME_RECORD, "pegboard.namespace.legacy-backfill-name-record"),
-		// Legacy: pages the actor names recorded on a namespace volume for the backfill. Removed in
-		// 3.1 with the backfill.
+		// Legacy: pages the actor names recorded on a namespace volume for the backfill.
 		(125, LEGACY_PEGBOARD_BACKFILL_NAME_LIST, "pegboard.namespace.legacy-backfill-name-list"),
 		(126, PEGBOARD_POOL_HEARTBEATS, "pegboard.pool.heartbeats"),
 		(127, PEGBOARD_POOL_PICK_ENVOY, "pegboard.pool.pick-envoy"),

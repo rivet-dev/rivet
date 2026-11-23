@@ -474,6 +474,10 @@ impl KvHandle {
 
 	/// This opening's shared value of type `T`, created on first use. Commands of the same
 	/// opening, and clones of their handles, get the same value.
+	///
+	/// Use it for derived data and caches, not for mutual exclusion: serialize handlers with
+	/// [`KvHandle::lock_partition`], which stops waiting when the worker loses the volume and
+	/// lets handlers on unrelated keys run in parallel.
 	pub async fn opening_state<T: Default + Send + Sync + 'static>(&self) -> Result<Arc<T>> {
 		let value = self
 			.shared
@@ -580,7 +584,19 @@ impl KvHandle {
 		}
 		result
 	}
-	/// End exclusive. Not reentrant. Not fair.
+	/// Locks `range` of this volume's keys against every other command of the same opening,
+	/// waiting while an overlapping range is held. The guard releases it on drop.
+	///
+	/// This is how a command handler serializes a read-modify-write: take the lock before the
+	/// first read and hold it through `commit`, so two handlers deciding on the same keys cannot
+	/// interleave. Lock the narrowest range that names what the handler decides on, such as one
+	/// record's `SubspaceRange::range()`; the range is only a lock name, so it may stand for
+	/// related keys in other families as long as every writer of them takes the same range.
+	///
+	/// Waiting fails once the worker may no longer serve the volume, so a fenced worker does not
+	/// keep queuing. The range is end-exclusive and must be non-empty. The lock is not reentrant,
+	/// so a handler must drop a guard before locking an overlapping range again, and it is not
+	/// fair. It is held in memory for this opening only and does not reach other workers.
 	pub async fn lock_partition(
 		&self,
 		range: std::ops::Range<impl Into<Bytes>>,

@@ -103,7 +103,6 @@ pub fn legacy_v3_create_refusal(error: anyhow::Error) -> anyhow::Error {
 }
 
 /// Legacy: reads when the actor's scheduled alarm fires; see `legacy_alarm_read_handler`.
-/// Removed in 3.1 with the backfill.
 pub struct LegacyActorAlarmRead;
 
 impl Command for LegacyActorAlarmRead {
@@ -330,7 +329,7 @@ fn try_start_outcome(
 	waiter: Option<&wire::StartWaiter>,
 ) -> wire::TryStartOutcome {
 	// Legacy: a wake of an actor the backfill is moving started nothing; a running one still
-	// serves until the backfill's sleep stops it. Removed in 3.1 with the backfill.
+	// serves until the backfill's sleep stops it.
 	let starts_nothing = match &state.phase {
 		wire::ActorPhase::Initializing(_)
 		| wire::ActorPhase::Starting(_)
@@ -441,7 +440,7 @@ async fn actor_read_handler(
 /// alarm that fires between two reads, moving from the timer row into the mark, is never missed.
 /// The legacy behavior kept an actor's alarm only in its own state volume; the backfill reads it
 /// because the move creates a new state volume. Taken only by the backfill of a namespace from
-/// before volume groups. Removed in 3.1 with the backfill.
+/// before volume groups.
 async fn legacy_alarm_read_handler(
 	db: KvHandle,
 	_request: (),
@@ -468,8 +467,7 @@ async fn legacy_alarm_read_handler(
 }
 
 /// Legacy: the alarm armed in a timer row from before timers had stable ids, which stays there
-/// until the actor's next commit moves it. An actor holds a few timers at most. Removed in 3.1
-/// with the backfill.
+/// until the actor's next commit moves it. An actor holds a few timers at most.
 async fn legacy_row_alarm_unix_ms(snapshot: &mut Transaction) -> Result<Option<i64>> {
 	let range = rivet_state_machine_durable::keys::kv::LegacyMachineTimerPrefix::new().range();
 	let rows = snapshot
@@ -577,7 +575,7 @@ async fn actor_event_handler(
 /// report whose handling restarts the actor, is refused after it was applied, and the legacy actor
 /// it is then sent to ignores it too. The record is read only once the state alone would refuse,
 /// so an event at a live actor's current epoch costs nothing more. The legacy behavior accepted
-/// every such event. Removed in 3.1 with the backfill.
+/// every such event.
 async fn legacy_refuses_envoy_event(
 	db: &KvHandle,
 	state: &wire::ActorState,

@@ -133,13 +133,24 @@ pub(crate) fn is_client_error_public(group: &str, code: &str) -> bool {
 	public_error_status_code(group, code).is_some()
 }
 
-/// Masks private error messages before serializing them to clients because they
-/// may contain private implementation details or user data.
+/// Returns the client-facing message. Private errors use fixed text because
+/// their original messages may contain implementation details or user data.
 pub(crate) fn client_error_message<'a>(group: &str, code: &str, message: &'a str) -> &'a str {
 	if is_client_error_public(group, code) {
-		message
-	} else {
-		INTERNAL_ERROR.default_message
+		return message;
+	}
+
+	match (group, code) {
+		("actor", "overloaded") => {
+			"The actor is at capacity. Reduce concurrent requests to this actor. Retry with backoff only if the action is safe to repeat."
+		}
+		("sqlite", "storage_overloaded") => {
+			"SQLite storage could not accept a request. If failures increase with load, reduce concurrent database operations. Retry the action with backoff only if it is safe to repeat."
+		}
+		("sqlite", "remote_indeterminate_result") => {
+			"The SQLite operation may have completed, but Rivet did not receive confirmation. Verify the outcome before retrying the action. If you cannot verify it, retry only if the action is safe to repeat."
+		}
+		_ => INTERNAL_ERROR.default_message,
 	}
 }
 
@@ -327,7 +338,7 @@ pub(crate) enum SqliteRuntimeError {
 	#[error(
 		"remote_indeterminate_result",
 		"Remote SQLite result is indeterminate.",
-		"Remote SQLite {operation} may have completed, but its result was lost before it returned, to an envoy disconnect or its deadline."
+		"Remote SQLite {operation} may have completed, but its outcome is unknown: its response was lost to an envoy disconnect or its deadline, or the engine could not confirm it."
 	)]
 	RemoteIndeterminateResult { operation: String },
 

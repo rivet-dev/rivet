@@ -375,8 +375,7 @@ async fn reserve_key(
 	key_check: KeyCheck,
 ) -> Result<wire::ReserveEpoxyPhase> {
 	let ctx = &executor.ctx;
-	// Legacy: only a retry reads the record, which commits with the create. Removed in 3.1 with
-	// the backfill.
+	// Legacy: only a retry reads the record, which commits with the create.
 	let legacy_namespace = match carried_legacy_namespace {
 		Some(namespace) => Some(namespace),
 		None => executor.legacy_namespace().await?,
@@ -1684,7 +1683,7 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 
 					// A failed stop is sent again by the state machine's stop timer.
 					if let Err(err) = res {
-						tracing::warn!(
+						tracing::debug!(
 							?err,
 							"failed to send stop command; the stop timer resends it"
 						);
@@ -1924,7 +1923,7 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 						let data = data_key.deserialize(data.into())?;
 
 						// Legacy: a moved actor's entry stays until the backfill confirms its
-						// copy; the page deletes it then. Removed in 3.1 with the backfill.
+						// copy; the page deletes it then.
 						if !legacy_keep_index_entry {
 							self2
 								.ctx
@@ -1959,7 +1958,6 @@ impl rivet_state_machine_durable::Executor<ActorStateMachine> for Executor {
 						// skipped list however it was destroyed, its own destroy through the
 						// envoy included. Only a listed actor sends the step, and a failed step
 						// fails this attempt, so the retry sends the idempotent step again.
-						// Removed in 3.1 with the backfill.
 						if self2.group.is_none() {
 							let namespace = legacy_index_namespace(None, &data)?;
 							let standing =
@@ -2105,7 +2103,7 @@ async fn send_commands(ctx: &EngineContext, route: &Route, payload: &Bytes) -> R
 /// destroy, so a namespace volume that sheds or moves never holds up destroys; the cost is at
 /// most one namespace read per status TTL per process on a cold cache. A missed entry, from an
 /// unreadable standing or one cached before the backfill finished, is cleared by the actor API's
-/// idempotent destroy of the skipped actor. Removed in 3.1 with the backfill.
+/// idempotent destroy of the skipped actor.
 pub(crate) fn legacy_destroy_clears_skipped(
 	namespace: &str,
 	standing: std::result::Result<&crate::NamespaceStanding, &anyhow::Error>,

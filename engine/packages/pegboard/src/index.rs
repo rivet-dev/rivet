@@ -1862,7 +1862,7 @@ pub struct ActorPage {
 /// stays valid when the backfill finishes mid-pagination and the unprefixed sources drop out. A
 /// page at that moment may repeat or skip an actor once: a moved entry reappears in a grouped
 /// bucket, and a keyed actor's moved entry carries its new id, which sorts elsewhere at the same
-/// creation time. Removed in 3.1 with the backfill.
+/// creation time.
 pub async fn list_actors(
 	ctx: &EngineContext,
 	namespace: &crate::NamespaceStanding,
@@ -1883,7 +1883,7 @@ pub async fn list_actors(
 	let started = std::time::Instant::now();
 
 	// Legacy: until the namespace's backfill is done, its unprefixed buckets are listed as more
-	// sources beside the grouped ones, numbered after them. Removed in 3.1 with the backfill.
+	// sources beside the grouped ones, numbered after them.
 	let sources = match namespace.legacy_fallback().every() {
 		true => buckets.saturating_mul(2),
 		false => buckets,
@@ -1973,7 +1973,7 @@ fn collect_destroyed(
 /// Reads when the incarnation of `actor_id` created at `create_unix_ms` was destroyed, or
 /// `None` when the index holds no destroyed entry for it. Until the namespace's backfill is done
 /// a miss also reads the legacy unprefixed bucket, where an actor from before groups has its
-/// entry; this is a legacy read removed in 3.1 with the backfill.
+/// entry; this is a legacy read.
 pub async fn read_destroyed_actor(
 	ctx: &EngineContext,
 	namespace: &crate::NamespaceStanding,
@@ -2080,7 +2080,7 @@ async fn list_bucket(
 		.await;
 
 	// Legacy: the backfill deletes a namespace's unprefixed buckets once it moved their actors,
-	// so a deleted one is empty too. Removed in 3.1 with the backfill.
+	// so a deleted one is empty too.
 	let empty = |error: &anyhow::Error| {
 		is_volume_not_found(error) || (legacy && crate::commands::is_volume_gone(error))
 	};

@@ -17,12 +17,12 @@ export const ActorKeySchema = z.array(z.string().max(MAX_ACTOR_KEY_SIZE));
 export type ActorKey = z.infer<typeof ActorKeySchema>;
 
 /**
- * Crash policy for actor lifecycle management.
+ * Crash policy sent as `rvt-crash-policy` when a gateway query creates an actor.
  *
- * This schema is only used by the engine driver for actor creation. The manager
- * driver ignores crash policy and passes it through to the engine unchanged.
+ * The engine supports only `sleep`: a crashed actor sleeps and wakes on its next
+ * request. The gateway rejects any other value.
  */
-export const CrashPolicySchema = z.enum(["restart", "sleep", "destroy"]);
+export const CrashPolicySchema = z.enum(["sleep"]);
 
 export type CrashPolicy = z.infer<typeof CrashPolicySchema>;
 

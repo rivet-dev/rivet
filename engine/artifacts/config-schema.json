@@ -537,7 +537,7 @@
           "minimum": 0.0
         },
         "index": {
-          "description": "Index inserts, deletes and listings, including the namespace index's writes and listings. Defaults to 256.",
+          "description": "Index inserts, deletes and listings, including the namespace index's writes and listings, the namespace pool catalog's writes and listings, and pool administration. Defaults to 256.",
           "type": [
             "integer",
             "null"
@@ -1307,11 +1307,11 @@
       "additionalProperties": false
     },
     "LegacyBackfill": {
-      "description": "Legacy: the backfill that moves a namespace's actors from before volume groups into its group. Removed in 3.1 with the backfill.",
+      "description": "Legacy: the backfill that moves a namespace's actors from before volume groups into its group.",
       "type": "object",
       "properties": {
         "max_actor_attempts": {
-          "description": "Sends of one backfill page that may fail at the same actor before the backfill gives up on that actor, records it as skipped and moves on (default 10). A namespace with a skipped actor still finishes its backfill, but 3.1 refuses to start until an operator resolves it.",
+          "description": "Sends of one backfill page that may fail at the same actor before the backfill gives up on that actor, records it as skipped and moves on (default 10). A namespace with a skipped actor still finishes its backfill, and refuses forks and archives until an operator resolves it.",
           "type": [
             "integer",
             "null"
@@ -2226,7 +2226,7 @@
           "minimum": 0.0
         },
         "backfill": {
-          "description": "Legacy: the move of a namespace's actors from before volume groups into its group, which runs once per namespace upgraded from 3.0. Removed in 3.1 with the backfill.",
+          "description": "Legacy: the move of a namespace's actors from before volume groups into its group, which runs once per namespace upgraded from 3.0.",
           "default": {
             "max_actor_attempts": null,
             "max_skipped": null,

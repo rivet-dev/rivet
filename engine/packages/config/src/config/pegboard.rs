@@ -206,7 +206,7 @@ pub struct Pegboard {
 	#[serde(default)]
 	pub command_concurrency: CommandConcurrency,
 	/// Legacy: the move of a namespace's actors from before volume groups into its group, which
-	/// runs once per namespace upgraded from 3.0. Removed in 3.1 with the backfill.
+	/// runs once per namespace upgraded from 3.0.
 	#[serde(default)]
 	pub backfill: LegacyBackfill,
 }
@@ -549,7 +549,6 @@ impl Pegboard {
 }
 
 /// Legacy: the backfill that moves a namespace's actors from before volume groups into its group.
-/// Removed in 3.1 with the backfill.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyBackfill {
@@ -573,8 +572,8 @@ pub struct LegacyBackfill {
 	pub page_timeout_ms: Option<u64>,
 	/// Sends of one backfill page that may fail at the same actor before the backfill gives up
 	/// on that actor, records it as skipped and moves on (default 10). A namespace with a
-	/// skipped actor still finishes its backfill, but 3.1 refuses to start until an operator
-	/// resolves it.
+	/// skipped actor still finishes its backfill, and refuses forks and archives until an
+	/// operator resolves it.
 	pub max_actor_attempts: Option<u32>,
 	/// Actor names one process remembers having recorded for the backfill after a legacy
 	/// fallback read, so each is written once (default 100000). Past it, reads record no new
@@ -662,7 +661,8 @@ pub struct CommandConcurrency {
 	/// Actor creation. Defaults to 256.
 	pub actor: Option<usize>,
 	/// Index inserts, deletes and listings, including the namespace index's writes and
-	/// listings. Defaults to 256.
+	/// listings, the namespace pool catalog's writes and listings, and pool administration.
+	/// Defaults to 256.
 	pub index: Option<usize>,
 }
 

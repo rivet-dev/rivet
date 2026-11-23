@@ -75,7 +75,6 @@ pub(crate) fn is_stopped(event: &p::EventWrapper) -> bool {
 /// namespace moved into its group after connect, the connection adopts the group
 /// ([`crate::routes::EnvoyScope::legacy_adopt_group`]) and the event is delivered again there;
 /// the legacy behavior closed the connection so the envoy replayed the event on a grouped one.
-/// Removed in 3.1 with the backfill.
 ///
 /// `legacy_foreign_logged` is the connection's flag for its first refused foreign event: only
 /// that one logs a warning, so an envoy that keeps naming another namespace's actors cannot flood
@@ -104,8 +103,7 @@ pub(crate) async fn deliver(
 		let falls_back = fallback.namespace_for(id).is_some();
 		let delivery = deliver_within(ctx.env().as_ref(), budget, scope, falls_back, &store).await;
 		// Legacy: a delivery ends this way only on a connection without a group, and an adopt
-		// gives the connection one, so the event is delivered again at most once. Removed in 3.1
-		// with the backfill.
+		// gives the connection one, so the event is delivered again at most once.
 		if let Delivery::LegacyNamespaceMoved(group) = delivery
 			&& scope.legacy_adopt_group(group)
 		{
@@ -168,12 +166,10 @@ enum Delivery {
 	/// The actor's state volume is deleted or never existed, so the actor is gone.
 	Gone,
 	/// Legacy: the actor's unprefixed record names another namespace than the connection's.
-	/// Removed in 3.1 with the backfill.
 	LegacyForeign,
 	/// Legacy: the connection's namespace had no group at connect, the actor's unprefixed state
 	/// volume is absent, and the namespace has the group it names now, so the actor may live in
-	/// it. The caller adopts the group and delivers the event again. Removed in 3.1 with the
-	/// backfill.
+	/// it. The caller adopts the group and delivers the event again.
 	LegacyNamespaceMoved(GroupId),
 	/// The budget ran out with the event still undelivered.
 	Exhausted,
@@ -184,10 +180,10 @@ enum Delivery {
 enum EventTarget {
 	/// Legacy: the connection's namespace had no group at connect, so the actor's volume is
 	/// unprefixed and only its record's legacy namespace says whose it is: the record is read
-	/// first. Removed in 3.1 with the backfill.
+	/// first.
 	LegacyUngrouped,
 	/// Legacy: the namespace's backfill is not done, so the grouped volume is tried first and
-	/// the actor resolved from what that send answers. Removed in 3.1 with the backfill.
+	/// the actor resolved from what that send answers.
 	Unresolved,
 	/// The group the actor's state volume is in.
 	Resolved(Option<GroupId>),
@@ -216,7 +212,7 @@ impl Absence {
 }
 
 /// Legacy: what [`EventStore::legacy_ungrouped_record`] found at the actor's unprefixed state
-/// volume. Removed in 3.1 with the backfill.
+/// volume.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LegacyUngroupedRecord {
 	/// A record whose legacy namespace is the connection's.
@@ -233,20 +229,18 @@ trait EventStore {
 	async fn send(&self, group: Option<GroupId>) -> Result<()>;
 
 	/// Legacy: resolves the actor once its grouped state volume was found missing, reading the
-	/// unprefixed one. Removed in 3.1 with the backfill.
+	/// unprefixed one.
 	async fn resolve_ungrouped(&self) -> Result<pegboard::legacy_volumes::ResolvedActor>;
 
 	/// Resolves the group of the actor's volumes after a send failed for another reason.
 	async fn resolve(&self) -> Result<Option<GroupId>>;
 
-	/// Legacy: reads the actor's unprefixed record to tell whose it is. Removed in 3.1 with the
-	/// backfill.
+	/// Legacy: reads the actor's unprefixed record to tell whose it is.
 	async fn legacy_ungrouped_record(&self) -> Result<LegacyUngroupedRecord>;
 
 	/// Legacy: reads the connection's namespace uncached and answers its group now, for a
 	/// connection whose namespace had none at connect. Answers `None` without a read while older
-	/// binaries are known to run, since no namespace moves into its group then. Removed in 3.1
-	/// with the backfill.
+	/// binaries are known to run, since no namespace moves into its group then.
 	async fn legacy_namespace_group(&self) -> Result<Option<GroupId>>;
 }
 
@@ -264,8 +258,7 @@ trait EventStore {
 /// scope was fixed at connect, so the namespace may have moved into its group since and the actor
 /// may live there; the namespace is read once, uncached, and a group there ends the delivery with
 /// [`Delivery::LegacyNamespaceMoved`], which the caller answers by adopting the group. Otherwise a deleted volume is final and a missing one is
-/// retried within the budget, after which the connection closes and the envoy replays. Removed in
-/// 3.1 with the backfill.
+/// retried within the budget, after which the connection closes and the envoy replays.
 ///
 /// Without a group the actor's volume key carries no namespace, so an untrusted envoy could
 /// name another namespace's legacy actor id; the record's legacy namespace is checked before
@@ -286,11 +279,10 @@ async fn deliver_within<S: EventStore>(
 		(Some(group), false) => EventTarget::Resolved(Some(group)),
 	};
 	// Legacy: the namespace group a scope without one read after an absent volume, once per
-	// delivery. Removed in 3.1 with the backfill.
+	// delivery.
 	let mut legacy_group_read: Option<Option<GroupId>> = None;
 	// Legacy: whether the unprefixed actor already answered for an event a backfill copy refused,
 	// either resolved gone or sent the event once, so the copy's next refusal ends the delivery.
-	// Removed in 3.1 with the backfill.
 	let mut legacy_unprefixed_answered = false;
 
 	let attempts = async {
@@ -310,8 +302,7 @@ async fn deliver_within<S: EventStore>(
 					Ok(()) => return Delivery::Delivered,
 					Err(error) if is_volume_deleted(&error) => return Delivery::Gone,
 					// Legacy: an abandoned copy of the legacy actor refused the event; the
-					// unprefixed actor is resolved as for a missing grouped volume. Removed in
-					// 3.1 with the backfill.
+					// unprefixed actor is resolved as for a missing grouped volume.
 					Err(error)
 						if depot_client::groups::is_volume_not_found(&error)
 							|| legacy_is_moved_away(&error) =>
@@ -351,7 +342,7 @@ async fn deliver_within<S: EventStore>(
 					// namespace: a group fork's child keeps its parent's move mark, so the refusal
 					// alone does not prove the unprefixed actor is this namespace's. Once it
 					// answered, or was resolved gone, no actor is left to take the event, as when
-					// a destroyed actor ignores it. Removed in 3.1 with the backfill.
+					// a destroyed actor ignores it.
 					Err(error) if legacy_is_moved_away(&error) => {
 						match (group, legacy_unprefixed_answered) {
 							(Some(_), false) => match store.legacy_ungrouped_record().await {
@@ -386,7 +377,7 @@ async fn deliver_within<S: EventStore>(
 
 			// Legacy: an absent unprefixed volume in a scope without a group re-reads the
 			// namespace before anything is final. A volume still missing then is retried, with
-			// no error to report. Removed in 3.1 with the backfill.
+			// no error to report.
 			let failed = match absence {
 				Err(error) => Some(error),
 				Ok(absence) => {
@@ -422,7 +413,7 @@ async fn deliver_within<S: EventStore>(
 
 /// Legacy: where a delivery sends next once the unprefixed volume was resolved: there when the
 /// actor was found, otherwise to the grouped volume once more, since an actor absent in both
-/// shapes may have just moved into the group. Removed in 3.1 with the backfill.
+/// shapes may have just moved into the group.
 fn ungrouped_target(
 	scope: &crate::routes::EnvoyScope,
 	found: pegboard::legacy_volumes::ResolvedActor,
@@ -435,8 +426,7 @@ fn ungrouped_target(
 }
 
 /// Legacy: whether an event was refused by an abandoned copy the backfill made of the legacy
-/// actor with the same id ([`pegboard::validation::LegacyActorMovedAway`]). Removed in 3.1 with
-/// the backfill.
+/// actor with the same id ([`pegboard::validation::LegacyActorMovedAway`]).
 fn legacy_is_moved_away(error: &anyhow::Error) -> bool {
 	let extracted = rivet_error::RivetError::extract(error);
 	extracted.group() == "actor" && extracted.code() == "legacy_moved_away"
@@ -452,8 +442,7 @@ fn is_volume_deleted(error: &anyhow::Error) -> bool {
 struct DepotEventStore<'a> {
 	ctx: &'a EngineContext,
 	scope: &'a crate::routes::EnvoyScope,
-	/// Legacy: the connection's fallback as the delivery read it once at its start. Removed in
-	/// 3.1 with the backfill.
+	/// Legacy: the connection's fallback as the delivery read it once at its start.
 	fallback: &'a pegboard::catalog::LegacyFallback,
 	actor_id: Id,
 	event: wire::ActorEvent,

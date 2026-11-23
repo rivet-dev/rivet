@@ -11,6 +11,30 @@ use crate::util::encode;
 #[derive(Deserialize)]
 struct ApiError {
 	message: String,
+	/// Request validation failures, by field where one is named.
+	#[serde(default)]
+	errors: Vec<FieldError>,
+}
+
+#[derive(Deserialize)]
+struct FieldError {
+	#[serde(default)]
+	field: Option<String>,
+	message: String,
+}
+
+impl ApiError {
+	/// The message followed by each field error.
+	fn describe(&self) -> String {
+		let mut text = self.message.clone();
+		for error in &self.errors {
+			match &error.field {
+				Some(field) => text.push_str(&format!("; {field}: {}", error.message)),
+				None => text.push_str(&format!("; {}", error.message)),
+			}
+		}
+		text
+	}
 }
 
 #[derive(Deserialize)]
@@ -199,7 +223,7 @@ async fn send(
 fn decode<T: DeserializeOwned>(path: &str, status: StatusCode, text: &str) -> Result<T> {
 	if !status.is_success() {
 		match serde_json::from_str::<ApiError>(text) {
-			Ok(error) => bail!("{}", error.message),
+			Ok(error) => bail!("{}", error.describe()),
 			Err(_) => bail!("Cloud API error {status}: {text}"),
 		}
 	}
@@ -516,4 +540,249 @@ pub async fn delete_secret(cloud: &CloudClient, cluster: &str, name: &str) -> Re
 		decode::<Value>(&path, status, &text)?;
 	}
 	Ok(())
+}
+
+/// A BYOC build as the Cloud API returns it, reduced to what the CLI reads.
+#[derive(Deserialize)]
+pub struct ByocBuild {
+	pub id: String,
+	pub status: ByocBuildStatus,
+	/// Why a `failed` build failed, such as `mismatch` for a tar that is not
+	/// the declared size and MD5.
+	#[serde(default)]
+	pub failure: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ByocBuildStatus {
+	Uploading,
+	Ready,
+	Failed,
+	Expired,
+}
+
+/// Where and how the tar of a new BYOC build is uploaded. Both headers are
+/// signed into the URL, so the upload sends exactly these.
+#[derive(Deserialize)]
+pub struct ByocUpload {
+	pub url: String,
+	pub method: String,
+	pub headers: BTreeMap<String, String>,
+}
+
+#[derive(Deserialize)]
+pub struct CreatedByocBuild {
+	pub build: ByocBuild,
+	pub upload: ByocUpload,
+}
+
+/// What a new BYOC build is registered with.
+#[derive(Serialize)]
+pub struct NewByocBuild<'a> {
+	pub image: &'a str,
+	pub architecture: &'a str,
+	pub content_length: u64,
+	/// Base64, as `Content-MD5` carries it.
+	pub content_md5: &'a str,
+	/// Lowercase hex.
+	pub sha256: &'a str,
+}
+
+/// The pool a BYOC deploy applies. `env` and `secret_env`, when given,
+/// replace the pool's. A field left out is never sent, and the cluster's
+/// operator keeps the pool's current value, or for a new pool 1 vCPU, 2Gi,
+/// 1 replica, `max_replicas` equal to `min_replicas` and no variables.
+#[derive(Serialize)]
+pub struct ByocPoolApply {
+	pub build_id: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub resources: Option<ByocResources>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub min_replicas: Option<u32>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub max_replicas: Option<u32>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub env: Option<BTreeMap<String, String>>,
+	/// `NAME -> "<secret>/<key>"`, read from Kubernetes Secrets in the cluster.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub secret_env: Option<BTreeMap<String, String>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub pool_config: Option<serde_json::Map<String, Value>>,
+}
+
+/// Kubernetes quantities for each actor node. Only the sizes given are sent.
+#[derive(Serialize)]
+pub struct ByocResources {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cpu: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub memory: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ByocCommandStatus {
+	Completed,
+	Failed,
+	/// The Cloud API gave up on the command; `timed_out` says why. A late
+	/// report from the operator can still complete it.
+	#[serde(rename = "timed_out")]
+	TimedOut,
+}
+
+/// Why the Cloud API timed a command out, past its server-side limit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ByocTimeoutReason {
+	/// The operator never took the command; queued since `since`.
+	NotPickedUp,
+	/// The operator took the command at `since` and never reported.
+	NoReport,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct ByocTimedOut {
+	pub reason: ByocTimeoutReason,
+	pub since: String,
+}
+
+/// A command queued for a BYOC cluster's operator, reduced to what the CLI
+/// reads while it waits on one.
+#[derive(Deserialize)]
+pub struct ByocCommand {
+	pub idx: i64,
+	/// Null until the operator reports the command.
+	pub status: Option<ByocCommandStatus>,
+	/// What the operator reported: `code`, a stable result code, and a few
+	/// fields of data.
+	#[serde(default)]
+	pub result: Option<serde_json::Map<String, Value>>,
+	/// When an operator received the command.
+	#[serde(default)]
+	pub seen_at: Option<String>,
+	/// Set exactly when `status` is `timed_out`. Parsed but not shown: the
+	/// user only learns that the command timed out.
+	#[serde(default)]
+	#[allow(dead_code)]
+	pub timed_out: Option<ByocTimedOut>,
+}
+
+#[derive(Deserialize)]
+struct WrappedByocCommand {
+	command: ByocCommand,
+}
+
+#[derive(Deserialize)]
+struct WrappedByocBuild {
+	build: ByocBuild,
+}
+
+fn byoc_cluster_path(cluster: &str) -> String {
+	format!("/v2/byoc/clusters/{}", encode(cluster))
+}
+
+/// Whether `cluster` is one of the organization's BYOC clusters. A managed
+/// cluster is not found there, one whose name is not a DNS label is refused
+/// as a bad request since every BYOC cluster name is one, and a credential
+/// that may not read BYOC clusters is forbidden; all three mean the managed
+/// path. A server error fails instead, because guessing managed could deploy
+/// a BYOC cluster's build to the wrong place.
+pub async fn is_byoc_cluster(cloud: &CloudClient, cluster: &str) -> Result<bool> {
+	let path = byoc_cluster_path(cluster);
+	let (status, text) = send(cloud, Method::GET, &path, None).await?;
+	if status == StatusCode::NOT_FOUND
+		|| status == StatusCode::BAD_REQUEST
+		|| status == StatusCode::FORBIDDEN
+	{
+		return Ok(false);
+	}
+	if status.is_server_error() {
+		bail!(
+			"Rivet Cloud returned an internal server error (status {}) while checking the cluster; try again",
+			status.as_u16()
+		);
+	}
+	decode::<Value>(&path, status, &text)?;
+	Ok(true)
+}
+
+pub async fn create_byoc_build(
+	cloud: &CloudClient,
+	cluster: &str,
+	build: &NewByocBuild<'_>,
+) -> Result<CreatedByocBuild> {
+	let path = format!("{}/builds", byoc_cluster_path(cluster));
+	let body = serde_json::to_value(build).context("encode the build")?;
+	request(cloud, Method::POST, &path, Some(body)).await
+}
+
+/// PUTs the tar to the presigned URL with exactly the returned headers and
+/// its length, and without the Cloud API token.
+pub async fn upload_byoc_build(
+	cloud: &CloudClient,
+	upload: &ByocUpload,
+	tar: &Path,
+	content_length: u64,
+) -> Result<()> {
+	if upload.method != "PUT" {
+		bail!(
+			"the Cloud API asked for a build upload by {}; this CLI only uploads by PUT, update the CLI",
+			upload.method
+		);
+	}
+	let file = tokio::fs::File::open(tar)
+		.await
+		.with_context(|| format!("open {}", tar.display()))?;
+	let mut request = cloud.http.put(&upload.url);
+	for (name, value) in &upload.headers {
+		request = request.header(name.as_str(), value.as_str());
+	}
+	let response = request
+		.header(CONTENT_LENGTH, content_length)
+		.body(reqwest::Body::from(file))
+		.send()
+		.await
+		.context("build upload failed")?;
+	let status = response.status();
+	if !status.is_success() {
+		let text = response.text().await.unwrap_or_default();
+		bail!("build upload failed with {status}: {text}");
+	}
+	Ok(())
+}
+
+pub async fn complete_byoc_build(
+	cloud: &CloudClient,
+	cluster: &str,
+	build_id: &str,
+) -> Result<ByocBuild> {
+	let path = format!(
+		"{}/builds/{}/complete",
+		byoc_cluster_path(cluster),
+		encode(build_id)
+	);
+	let wrapped: WrappedByocBuild = request(cloud, Method::POST, &path, None).await?;
+	Ok(wrapped.build)
+}
+
+/// Queues an `actor_node_pool_apply` for the pool and returns the command.
+pub async fn put_byoc_pool(
+	cloud: &CloudClient,
+	cluster: &str,
+	pool: &str,
+	apply: &ByocPoolApply,
+) -> Result<ByocCommand> {
+	let path = format!("{}/pools/{}", byoc_cluster_path(cluster), encode(pool));
+	let body = serde_json::to_value(apply).context("encode the pool")?;
+	let queued: WrappedByocCommand = request(cloud, Method::PUT, &path, Some(body)).await?;
+	Ok(queued.command)
+}
+
+/// Reads one command of the cluster by its index.
+pub async fn get_byoc_command(cloud: &CloudClient, cluster: &str, idx: i64) -> Result<ByocCommand> {
+	let path = format!("{}/commands/{idx}", byoc_cluster_path(cluster));
+	let read: WrappedByocCommand = request(cloud, Method::GET, &path, None).await?;
+	Ok(read.command)
 }

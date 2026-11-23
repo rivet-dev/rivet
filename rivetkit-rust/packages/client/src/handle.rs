@@ -1,11 +1,14 @@
 use crate::{
 	common::{EncodingKind, RawWebSocket, TransportKind, HEADER_CONN_PARAMS, HEADER_ENCODING},
-	connection::{start_connection, ActorConnection, ActorConnectionInner},
+	connection::{
+		start_connection, ActorConnection, ActorConnectionInner, ConnParams, ParamsCallback,
+	},
 	protocol::{codec, query::*},
 	remote_manager::{GatewayTarget, RemoteManager},
 };
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
+use futures_util::FutureExt;
 use reqwest::{
 	header::{HeaderMap, HeaderValue},
 	Method, Response,
@@ -13,6 +16,7 @@ use reqwest::{
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use std::{
+	future::Future,
 	ops::Deref,
 	sync::{Arc, Mutex},
 	time::Duration,
@@ -393,12 +397,39 @@ impl ActorHandle {
 	}
 
 	pub fn connect(&self) -> ActorConnection {
+		self.start_connection(ConnParams::Static(self.params.clone()))
+	}
+
+	/// Connects like [`ActorHandle::connect`], but runs `get_params` before every dial, the
+	/// first connect and each reconnect, and sends its result as the connection params instead
+	/// of the handle's params. Use it for params that expire, such as a short-lived token.
+	///
+	/// When `get_params` returns an error, `on_error` receives a `client.get_params_failed`
+	/// message with the cause, and the connection retries with backoff like a failed dial.
+	/// Queued actions stay queued. A panic in `get_params` is not caught: it behaves like a
+	/// panic in any other connection callback.
+	///
+	/// [`ActorConnectionInner::disconnect`] drops a `get_params` future that is still running,
+	/// so the future must be cancellation-safe. A call that started before the disconnect may
+	/// still be in flight; its result is discarded, and no socket opened with it survives the
+	/// disconnect. There is no separate timeout: a future that never resolves keeps the
+	/// connection in `Connecting` until it is disconnected.
+	pub fn connect_with_params<F, Fut>(&self, get_params: F) -> ActorConnection
+	where
+		F: Fn() -> Fut + Send + Sync + 'static,
+		Fut: Future<Output = Result<JsonValue>> + Send + 'static,
+	{
+		let get_params: Box<ParamsCallback> = Box::new(move || get_params().boxed());
+		self.start_connection(ConnParams::Callback(get_params))
+	}
+
+	fn start_connection(&self, params: ConnParams) -> ActorConnection {
 		let conn = ActorConnectionInner::new(
 			self.remote_manager.clone(),
 			self.query.clone(),
 			self.transport_kind,
 			self.encoding_kind,
-			self.params.clone(),
+			params,
 		);
 
 		let rx = self.client_shutdown_tx.subscribe();

@@ -14,8 +14,7 @@
 //!
 //! Legacy: an actor the backfill is moving refuses its wake with `actor.moving`, which nothing
 //! reached the actor for either. Its retry resolves the actor again, which finds it at its new
-//! id once the move made it, so a move of about a second rarely reaches the client. Removed in
-//! 3.1 with the backfill.
+//! id once the move made it, so a move of about a second rarely reaches the client.
 use anyhow::Result;
 use axum::{body::Body, response::Response};
 use hyper::header::{self, HeaderValue};
@@ -65,12 +64,11 @@ pub(crate) enum RefusalKind {
 	/// and the budget. The hint is only for the client once those run out.
 	RouteUnresolved,
 	/// Legacy: the backfill is moving the actor. A retry waits at least the hint, within the
-	/// per-request cap, and resolves the actor again. Removed in 3.1 with the backfill.
+	/// per-request cap, and resolves the actor again.
 	LegacyActorMoving,
 }
 
-/// Legacy: the retry hint of `actor.moving` when its metadata carries none. Removed in 3.1 with
-/// the backfill.
+/// Legacy: the retry hint of `actor.moving` when its metadata carries none.
 const LEGACY_ACTOR_MOVING_RETRY_AFTER_MS: u64 = 1_000;
 
 /// The retry hint of `namespace.creating` when its metadata carries none.
@@ -105,7 +103,7 @@ pub(crate) fn refusal(error: &anyhow::Error) -> Option<Refusal> {
 			kind: RefusalKind::Overloaded,
 		});
 	}
-	// Legacy: removed in 3.1 with the backfill.
+	// Legacy: an actor the volume group backfill is moving refuses with `actor.moving`.
 	let extracted = rivet_error::RivetError::extract(error);
 	if extracted.group() == "actor" && extracted.code() == "moving" {
 		let retry_after_ms = extracted
@@ -176,7 +174,7 @@ pub(crate) fn refusal_error(refusal: Refusal) -> anyhow::Error {
 /// moved yet, answered where the request cannot wait for the move. It is the
 /// `guard.service_unavailable` with reason `actor_moving` and the hint the gateway answers once
 /// it stops retrying a moving actor, which a released client retries after the hint. The new
-/// behavior has no such move. Removed in 3.1 with the backfill.
+/// behavior has no such move.
 pub fn legacy_actor_moving_error() -> anyhow::Error {
 	refusal_error(Refusal {
 		reason: "actor_moving",

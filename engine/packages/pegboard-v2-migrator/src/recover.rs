@@ -188,7 +188,7 @@ pub async fn recover(
 /// (`LegacyMoveMarkMoved`, kept through `Destroying` and `Destroyed`). The backfill creates the
 /// moved copy at the id the key takes in the group, which hashes the name and key alone. An
 /// unkeyed actor keeps its id, so the resolve finds its copy and this answers `None`, as for any
-/// other record. Removed in 3.1 with the backfill.
+/// other record.
 pub fn legacy_moved_keyed_copy(
 	read: &pb::ActorReadResponse,
 	namespace: &str,

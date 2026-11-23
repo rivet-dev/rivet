@@ -512,7 +512,7 @@
 				},
 				{
 					"code": "request_deadline_exceeded",
-					"message": "The command deadline elapsed; its outcome may be unknown.",
+					"message": "Rivet timed out waiting for storage. If the request could have changed data, verify its outcome before retrying. If timeouts increase with load, reduce the request rate or concurrency.",
 					"statuses": []
 				},
 				{

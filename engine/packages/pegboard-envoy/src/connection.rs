@@ -90,7 +90,7 @@ struct Connection {
 	connection_id: Uuid,
 	version: u16,
 	/// Legacy: set once this connection logged a warning for an event naming another
-	/// namespace's legacy actor; later ones log at debug. Removed in 3.1 with the backfill.
+	/// namespace's legacy actor; later ones log at debug.
 	legacy_foreign_event_logged: AtomicBool,
 }
 
@@ -534,7 +534,6 @@ pub async fn run(
 
 /// Legacy: the uncached read of `namespace`'s current group that a legacy-bound storage open on
 /// a connection without a group makes before it opens (see `sqlite::legacy_open_resolve`).
-/// Removed in 3.1 with the backfill.
 fn legacy_namespace_check(
 	ctx: &EngineContext,
 	namespace: &str,
@@ -908,7 +907,7 @@ async fn handle_sub_stream(
 				// group was routed on another namespace's allocation and must not reach the actor
 				// this connection hosts under the same id. Legacy: a connection opened before its
 				// namespace moved into the named group adopts the group and serves the command; see
-				// `check_group`. Removed in 3.1 with the backfill.
+				// `check_group`.
 				let mut legacy_group_read = None;
 				for command in &commands {
 					let named = command.group.as_deref();
@@ -1057,8 +1056,7 @@ async fn handle_sub_stream(
 			// group was routed on another namespace's allocation. It is refused before the envoy
 			// sees it, as the envoy refuses an actor it does not host, and the gateway reads the
 			// actor again. Legacy: a connection opened before its namespace moved into the named
-			// group adopts the group and serves the request; see `check_group`. Removed in 3.1
-			// with the backfill.
+			// group adopts the group and serves the request; see `check_group`.
 			let checked = check_group(&conn.scope, group.as_deref(), &mut None, || {
 				pegboard::catalog::legacy_read_namespace_group(&conn.ctx, &conn.scope.namespace)
 			})
@@ -1396,8 +1394,14 @@ where
 					// Command ACKs currently have no effects or ordering requirements.
 					p::ToRivet::ToRivetAckCommands(_) => {}
 					msg => {
-						for refused in queue_inbound(inbound_tx, inbound_bytes, msg, wire_bytes)? {
-							refuse_inbound(conn, refused)?;
+						if let Some(reply) = crate::sqlite::missing_generation_reply(&msg) {
+							conn.send_storage_refusal(reply)?;
+						} else {
+							for refused in
+								queue_inbound(inbound_tx, inbound_bytes, msg, wire_bytes)?
+							{
+								refuse_inbound(conn, refused)?;
+							}
 						}
 						// Buffered frames can all be ready without another I/O poll. Give the
 						// dispatcher a turn; this never waits on its storage work.
@@ -1569,7 +1573,7 @@ async fn handle_ws_msg(
 				.await?;
 				// Legacy: a miss on a connection without a group may be a grouped actor, since the
 				// namespace may have moved since connect; once the connection adopted the group,
-				// the actor's ownership is looked up again there. Removed in 3.1 with the backfill.
+				// the actor's ownership is looked up again there.
 				if handle.is_none() {
 					let unowned = unowned_event(&conn.scope, &mut legacy_group_checked, || {
 						pegboard::catalog::legacy_read_namespace_group(ctx, &conn.scope.namespace)
@@ -2041,7 +2045,7 @@ enum UnownedEvent {
 	Acknowledge,
 	/// Legacy: the connection's namespace moved into its group after connect, and the connection
 	/// adopted the group, so the actor may live there: its ownership is looked up again before
-	/// anything is acknowledged. Removed in 3.1 with the backfill.
+	/// anything is acknowledged.
 	LegacyGroupAdopted,
 }
 
@@ -2053,7 +2057,7 @@ enum UnownedEvent {
 /// found no group is remembered in `legacy_group_checked` for the rest of the batch, so a batch
 /// costs at most one read. The legacy behavior closed the connection so the envoy replayed the
 /// event on a grouped one, failing every request then in flight on it; the new behavior keeps the
-/// connection and looks the actor up again in the group. Removed in 3.1 with the backfill.
+/// connection and looks the actor up again in the group.
 ///
 /// The read goes straight to the namespace volume and does not depend on this process's view of
 /// the fleet or on the legacy catalog row: a process whose view lags would otherwise skip the
@@ -2723,8 +2727,7 @@ enum OwnershipUse {
 	/// actor's own current record places on this envoy owns it.
 	Storage,
 	/// Lifecycle event delivery. Legacy: a moved random-id actor's old incarnation still
-	/// stopping on this envoy also owns its events, so its stopped report reaches it. Removed in
-	/// 3.1 with the backfill.
+	/// stopping on this envoy also owns its events, so its stopped report reaches it.
 	Events,
 }
 
@@ -2740,8 +2743,7 @@ trait OwnerReads {
 		Option<wire::ActorReadResponse>,
 	)>;
 
-	/// Legacy: the actor's unprefixed record, or `None` once its volume is gone. Removed in 3.1
-	/// with the backfill.
+	/// Legacy: the actor's unprefixed record, or `None` once its volume is gone.
 	async fn legacy_unprefixed(
 		&self,
 		actor_id: rivet_util_id::Id,
@@ -2810,7 +2812,7 @@ async fn owned_epoch(
 /// which would leave it stopping with its stop resent forever. That epoch is never bound
 /// and never owns storage: its storage ended with the move, and the copy keeps the legacy
 /// actor's id and incarnation, so only the copy's epochs open that database. The read runs
-/// only on such a miss. Removed in 3.1 with the backfill.
+/// only on such a miss.
 async fn resolve_owner(
 	scope: &crate::routes::EnvoyScope,
 	envoy_key: &str,
@@ -2847,8 +2849,7 @@ async fn resolve_owner(
 }
 
 /// Legacy: whether `read`, the record of `actor_id` in `group`, is a backfill copy moved from
-/// the unprefixed actor with the same id, as every moved random-id actor's is. Removed in 3.1
-/// with the backfill.
+/// the unprefixed actor with the same id, as every moved random-id actor's is.
 fn legacy_moved_copy_of(
 	group: Option<rivet_keys::keys::codec::GroupId>,
 	read: &wire::ActorReadResponse,
@@ -3608,8 +3609,7 @@ enum GroupCheck {
 /// group, the connection adopts it ([`crate::routes::EnvoyScope::legacy_adopt_group`]) and the
 /// message is served. The legacy behavior closed the connection so the envoy reconnected with the
 /// group, failing every request then in flight on it. The read runs only when a groupless
-/// connection gets a grouped message, which happens only after its namespace moved. Removed in
-/// 3.1 with the backfill.
+/// connection gets a grouped message, which happens only after its namespace moved.
 async fn check_group<F, Fut>(
 	scope: &crate::routes::EnvoyScope,
 	group: Option<&[u8]>,

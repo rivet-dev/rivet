@@ -12,7 +12,7 @@ use crate::{
 	auth::Auth,
 	cloud::{
 		CloudClient, create_or_update_pool, create_registry_token, dashboard_endpoint,
-		ensure_namespace, pool_exists, registry_endpoint, revoke_api_token, wait_for_pool,
+		ensure_namespace, pool_exists, registry_endpoint, revoke_api_token, v2, wait_for_pool,
 	},
 	cluster_env::parse_set_args,
 	credentials::store_cloud_token,
@@ -23,6 +23,7 @@ use crate::{
 	},
 };
 
+pub(crate) mod byoc;
 pub(crate) mod cluster;
 
 #[derive(Parser)]
@@ -35,8 +36,9 @@ pub struct Opts {
 	/// Compute pool to deploy to. On a cluster, the runner pool.
 	#[arg(long, default_value = crate::POOL_NAME)]
 	pool: String,
-	/// Cluster region to deploy to. Defaults to the cluster's only region.
-	/// Clusters only.
+	/// Cluster region to deploy to. Managed clusters only, where it defaults to
+	/// the cluster's only region. Refused for a project and for a BYOC cluster,
+	/// which runs in one region.
 	#[arg(long)]
 	region: Option<String>,
 	/// Roll out an existing build instead of building and uploading a new one.
@@ -49,14 +51,15 @@ pub struct Opts {
 	/// Docker build context.
 	#[arg(long, default_value = ".")]
 	build_context: PathBuf,
-	/// Environment override, repeatable as KEY=VAL. On a cluster, sets these
-	/// runner pool variables and keeps the pool's others.
+	/// Environment override, repeatable as KEY=VAL. On a managed cluster, sets
+	/// these runner pool variables and keeps the pool's others. On a BYOC
+	/// cluster, replaces the pool's variables; without it they are kept.
 	#[arg(long = "env")]
 	env_vars: Vec<String>,
 	/// A runner pool variable taking a cluster secret's latest version,
 	/// repeatable as KEY (a secret named like the variable) or
-	/// KEY=SECRET_NAME, and kept with the pool's others. Clusters only; set
-	/// the secret first with `rivet cluster secret set`.
+	/// KEY=SECRET_NAME, and kept with the pool's others. Managed clusters only;
+	/// set the secret first with `rivet cluster secret set`.
 	#[arg(long = "secret", value_name = "KEY[=SECRET_NAME]")]
 	secrets: Vec<String>,
 	/// Skip prompts.
@@ -68,14 +71,36 @@ pub struct Opts {
 	/// Image tag. Defaults to the current git short SHA, or a timestamp outside git.
 	#[arg(long)]
 	tag: Option<String>,
-	/// vCPU count per actor. Range 0.08 to 8; must be 1, 2, 4, or 8, or a value
-	/// in [0.08, 1) with at most two decimals. Defaults to 1 server-side.
+	/// vCPUs. Project: per actor, 1, 2, 4 or 8, or a value in [0.08, 1) with at
+	/// most two decimals; defaults to 1 server-side. BYOC cluster: per actor
+	/// node, any positive number such as 0.5 or 2; optional, keeps the pool's
+	/// current value, or 1 vCPU for a new pool. Refused for a managed cluster.
 	#[arg(long)]
 	cpu: Option<f64>,
-	/// Memory per actor as <number>Mi or <number>Gi, between 512Mi and 4Gi.
-	/// Defaults to 512Mi server-side.
+	/// Memory. Project: per actor, <number>Mi or <number>Gi between 512Mi and
+	/// 4Gi; defaults to 512Mi server-side. BYOC cluster: per actor node, a
+	/// Kubernetes quantity such as 2Gi; optional, keeps the pool's current
+	/// value, or 2 GiB for a new pool. Refused for a managed cluster.
 	#[arg(long)]
 	memory: Option<String>,
+	/// Fewest actor nodes the pool runs, 1 to 1000. Without it the pool keeps
+	/// its current value, or 1 for a new pool. BYOC clusters only.
+	#[arg(long)]
+	min_replicas: Option<u32>,
+	/// Most actor nodes the pool scales to, 1 to 1000. Without it the pool
+	/// keeps its current value, raised to --min-replicas when below it, or
+	/// --min-replicas for a new pool. BYOC clusters only.
+	#[arg(long)]
+	max_replicas: Option<u32>,
+	/// A pool variable read from a Kubernetes Secret in the cluster, repeatable
+	/// as KEY=SECRET/KEY. Replaces the pool's secret variables; without it they
+	/// are kept. BYOC clusters only.
+	#[arg(long = "secret-env", value_name = "KEY=SECRET/KEY")]
+	secret_env: Vec<String>,
+	/// The Engine's configuration of the pool as a JSON object, replacing the
+	/// pool's. BYOC clusters only.
+	#[arg(long, value_name = "JSON")]
+	pool_config: Option<String>,
 	/// Minimum number of actors to keep running. Range 0 to 100. Defaults to 0 server-side.
 	#[arg(long)]
 	min_scale: Option<u32>,
@@ -116,20 +141,6 @@ impl Opts {
 			bail!("Dockerfile not found: {}", self.dockerfile.display());
 		}
 
-		// Validate compute resources client-side before doing any build work.
-		let resources = build_resources(
-			self.cpu,
-			self.memory.as_deref(),
-			self.min_scale,
-			self.max_scale,
-			self.instance_request_concurrency,
-		)?;
-		let runner_config = build_runner_config(
-			self.max_concurrent_actors,
-			self.drain_grace_period,
-			self.drain_on_version_upgrade,
-		)?;
-
 		let (cloud, auth, target) = self.cloud.connect().await?;
 		match target {
 			Target::Project(project) => {
@@ -139,19 +150,45 @@ impl Opts {
 						("--region", self.region.is_some()),
 						("--build", self.build.is_some()),
 						("--secret", !self.secrets.is_empty()),
+						("--min-replicas", self.min_replicas.is_some()),
+						("--max-replicas", self.max_replicas.is_some()),
+						("--secret-env", !self.secret_env.is_empty()),
+						("--pool-config", self.pool_config.is_some()),
 					],
+				)?;
+
+				// Validate compute resources client-side before doing any build work.
+				let resources = build_resources(
+					self.cpu,
+					self.memory.as_deref(),
+					self.min_scale,
+					self.max_scale,
+					self.instance_request_concurrency,
+				)?;
+				let runner_config = build_runner_config(
+					self.max_concurrent_actors,
+					self.drain_grace_period,
+					self.drain_on_version_upgrade,
 				)?;
 				let env = parse_env_vars(&self.env_vars)?;
 				self.deploy_project(cloud, auth, project, env, resources, runner_config)
 					.await
 			}
 			Target::Cluster(ClusterTarget { cluster, .. }) => {
+				if v2::is_byoc_cluster(&cloud, &cluster).await? {
+					return self.deploy_byoc(&cloud, cluster).await;
+				}
+
 				reject_flags(
-					"cluster",
+					"managed cluster",
 					&[
 						("--namespace", self.namespace.is_some()),
 						("--cpu", self.cpu.is_some()),
 						("--memory", self.memory.is_some()),
+						("--min-replicas", self.min_replicas.is_some()),
+						("--max-replicas", self.max_replicas.is_some()),
+						("--secret-env", !self.secret_env.is_empty()),
+						("--pool-config", self.pool_config.is_some()),
 						("--min-scale", self.min_scale.is_some()),
 						("--max-scale", self.max_scale.is_some()),
 						(
@@ -188,6 +225,60 @@ impl Opts {
 				.await
 			}
 		}
+	}
+
+	async fn deploy_byoc(self, cloud: &CloudClient, cluster: String) -> Result<()> {
+		reject_flags("BYOC cluster", &self.byoc_refused_flags())?;
+		byoc::validate_pool_name(&self.pool)?;
+		let pool_apply = byoc::pool_settings(
+			self.cpu,
+			self.memory.as_deref(),
+			self.min_replicas,
+			self.max_replicas,
+			&self.env_vars,
+			&self.secret_env,
+			self.pool_config.as_deref(),
+		)?;
+		byoc::deploy(
+			cloud,
+			byoc::ByocDeploy {
+				cluster,
+				pool: self.pool,
+				build: self.build,
+				dockerfile: self.dockerfile,
+				build_context: self.build_context,
+				image: self.image,
+				tag: self.tag,
+				pool_apply,
+			},
+		)
+		.await
+	}
+
+	/// The flags that are set but mean nothing on a BYOC cluster: a project's
+	/// pool settings, and a managed cluster's region and Rivet-stored secrets.
+	fn byoc_refused_flags(&self) -> Vec<(&'static str, bool)> {
+		vec![
+			("--namespace", self.namespace.is_some()),
+			("--region", self.region.is_some()),
+			("--secret (use --secret-env)", !self.secrets.is_empty()),
+			("--min-scale (use --min-replicas)", self.min_scale.is_some()),
+			("--max-scale (use --max-replicas)", self.max_scale.is_some()),
+			(
+				"--max-concurrent-actors",
+				self.max_concurrent_actors.is_some(),
+			),
+			("--drain-grace-period", self.drain_grace_period.is_some()),
+			(
+				"--drain-on-version-upgrade",
+				self.drain_on_version_upgrade.is_some(),
+			),
+			(
+				"--instance-request-concurrency",
+				self.instance_request_concurrency.is_some(),
+			),
+			("--reuse-image", self.reuse_image),
+		]
 	}
 
 	async fn deploy_project(

@@ -216,19 +216,21 @@ pub fn no_responders(error: &anyhow::Error) -> bool {
 	structured.group() == "ups" && structured.code() == "no_responders"
 }
 
-/// Whether a UPS request failed without the worker answering: its route is unknown, the
-/// transport failed, or the request timed out.
+/// Whether a UPS request failed without the worker answering: its route is unknown, its endpoint
+/// refused the connection before the request was sent, the transport failed, or the request
+/// timed out.
 pub fn unreachable_worker(error: &anyhow::Error) -> bool {
 	let structured = rivet_error::RivetError::extract(error);
 	structured.group() == "ups"
 		&& matches!(
 			structured.code(),
-			"unknown_worker" | "transport" | "timeout"
+			"unknown_worker" | "endpoint_unresolved" | "transport" | "timeout"
 		)
 }
 
 /// Whether a failed UPS request to an envoy connection may succeed on another route: a stale
-/// route, a missing worker or a transport failure, as opposed to a refused or malformed request.
+/// route, a missing or unreachable worker, such as a killed engine that refuses connections, or
+/// a transport failure, as opposed to a refused or malformed request.
 pub fn retryable_ups_error(error: &anyhow::Error) -> bool {
 	let structured = rivet_error::RivetError::extract(error);
 	structured.group() == "ups"
@@ -236,6 +238,7 @@ pub fn retryable_ups_error(error: &anyhow::Error) -> bool {
 			structured.code(),
 			"no_responders"
 				| "unknown_worker"
+				| "endpoint_unresolved"
 				| "wrong_worker"
 				| "timeout" | "consumer_closed"
 				| "transport"

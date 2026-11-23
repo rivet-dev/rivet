@@ -122,7 +122,7 @@ pub struct NamespaceNotForkable;
 pub struct NamespaceMigratingFromV2;
 
 /// Legacy: the namespace still has volumes from before namespaces had groups, so it cannot be
-/// archived until they are copied into its group. Removed in 3.1 with the backfill.
+/// archived until they are copied into its group.
 #[derive(Debug, RivetError)]
 #[error(
 	"namespace",
@@ -133,7 +133,7 @@ pub struct NamespaceBackfillPending;
 
 /// Legacy: the namespace's finished backfill gave up on actors from before namespaces had groups,
 /// which stay at unprefixed keys outside its group, so it cannot be forked or archived until an
-/// operator destroys them. Removed in 3.1 with the backfill.
+/// operator destroys them.
 #[derive(Debug, RivetError, Serialize, Deserialize)]
 #[error(
 	"namespace",
@@ -286,8 +286,7 @@ pub struct ActorForkUnavailable {
 /// Legacy: a wake of an actor that the backfill is moving into its namespace's group, from
 /// before namespaces had groups; the new behavior has no such move. Nothing was started; retry
 /// after `retry_after_ms`, which resolves the actor again and finds it at its new id once the
-/// move made it. Answered only while the namespace's backfill is not done. Removed in 3.1 with
-/// the backfill.
+/// move made it. Answered only while the namespace's backfill is not done.
 #[derive(Debug, RivetError, Serialize, Deserialize)]
 #[error(
 	"actor",
@@ -303,7 +302,7 @@ pub struct LegacyActorMoving {
 /// and abandoned ([`crate::legacy_volumes::legacy_abandoned_copy`]). The copy is not the actor, so
 /// it refuses the event instead of accepting and ignoring it, and Envoy event delivery sends the
 /// event to the legacy actor's unprefixed volume. The new behavior has no such copy. Answered only
-/// to Envoy event delivery, inside the engine. Removed in 3.1 with the backfill.
+/// to Envoy event delivery, inside the engine.
 #[derive(Debug, RivetError)]
 #[error(
 	"actor",

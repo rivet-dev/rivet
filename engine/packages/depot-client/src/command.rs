@@ -26,7 +26,7 @@ use vbare::Versioned;
 #[error(
 	"depot",
 	"request_deadline_exceeded",
-	"The command deadline elapsed; its outcome may be unknown."
+	"Rivet timed out waiting for storage. If the request could have changed data, verify its outcome before retrying. If timeouts increase with load, reduce the request rate or concurrency."
 )]
 pub struct RequestDeadlineExceeded;
 

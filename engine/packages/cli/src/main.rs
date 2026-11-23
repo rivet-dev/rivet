@@ -86,6 +86,8 @@ fn init_tracing() {
 	fmt()
 		.with_env_filter(filter)
 		.with_writer(std::io::stderr)
+		// No escape codes in a pipe, a CI log or a file, or with NO_COLOR.
+		.with_ansi(util::stderr_color_enabled())
 		.without_time()
 		.with_target(false)
 		.init();

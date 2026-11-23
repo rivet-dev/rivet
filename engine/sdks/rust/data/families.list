@@ -7,7 +7,7 @@
 # to the protocol crate's supported versions; a test in the crate that encodes it checks this.
 # Such a protocol must be a message protocol that nothing persists: the storage incompatibility
 # fence ignores it.
-# 1 acl.audit_entry (retired: schema deleted)
+# Retired (schema deleted); listed as external so engines from before its removal can roll forward.
 6 auth.grants
 7 auth.jwt_key_ring
 8 depot.client_protocol

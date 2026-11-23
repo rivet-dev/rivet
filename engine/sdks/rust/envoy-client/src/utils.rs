@@ -31,8 +31,9 @@ impl std::fmt::Display for EnvoyShutdownError {
 
 impl std::error::Error for EnvoyShutdownError {}
 
-/// Error returned when a sent remote SQLite request may have completed but the
-/// WebSocket closed before the response arrived.
+/// Error returned when a sent remote SQLite request may have completed but its outcome is
+/// unknown: the WebSocket closed before the response arrived, or the engine replied that it
+/// could not tell.
 #[derive(Debug)]
 pub struct RemoteSqliteIndeterminateResultError {
 	pub operation: &'static str,
@@ -42,7 +43,7 @@ impl std::fmt::Display for RemoteSqliteIndeterminateResultError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
 			f,
-			"remote sqlite {} result is indeterminate after envoy disconnect",
+			"remote sqlite {} result is indeterminate",
 			self.operation
 		)
 	}

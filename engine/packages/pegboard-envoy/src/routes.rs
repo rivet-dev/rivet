@@ -55,7 +55,7 @@ struct ScopeVolumesInner {
 	at_connect: VolumeShape,
 	/// Legacy: the shape adopted when the namespace moved into its group after a connect that
 	/// found it without one; see [`EnvoyScope::legacy_adopt_group`]. Set at most once, since a
-	/// namespace gains its group once and never changes it. Removed in 3.1 with the backfill.
+	/// namespace gains its group once and never changes it.
 	legacy_adopted: std::sync::OnceLock<VolumeShape>,
 }
 
@@ -66,7 +66,7 @@ struct VolumeShape {
 	/// Legacy: which actors' volumes may still be unprefixed: every actor while the namespace's
 	/// backfill is not done, the actors it skipped once done; see `pegboard::legacy_volumes`.
 	/// Read from the process's cached standing while it was not done, so a connection stops
-	/// falling back once the backfill finishes. Removed in 3.1 with the backfill.
+	/// falling back once the backfill finishes.
 	legacy_fallback: LegacyFallbackView,
 }
 
@@ -78,7 +78,7 @@ struct VolumeShape {
 /// at each use; the first standing of the connection's group whose backfill is done settles the
 /// fallback for good, since a finished backfill never runs again and its skipped list only
 /// shrinks. Taken by every open, delivery and resolve of a connection whose fallback at connect
-/// was `Every`. Removed in 3.1 with the backfill.
+/// was `Every`.
 /// Shared by every clone of the connection's scope, so a clone costs one reference count.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LegacyFallbackView(Arc<LegacyFallbackViewInner>);
@@ -173,7 +173,7 @@ impl EnvoyScope {
 	}
 
 	/// Legacy: the connection's view of which actors' volumes may still be unprefixed; see
-	/// [`LegacyFallbackView`]. Removed in 3.1 with the backfill.
+	/// [`LegacyFallbackView`].
 	pub(crate) fn legacy_fallback(&self) -> &LegacyFallbackView {
 		&self.shape().legacy_fallback
 	}
@@ -189,7 +189,7 @@ impl EnvoyScope {
 	/// legacy-bound epoch still opens only its unprefixed volume and is fenced once its copy
 	/// exists. Taken when a command, gateway request or event first names the group or finds the
 	/// namespace moved; a connection that had a group at connect never adopts one. Returns whether
-	/// the connection now serves `group`. Removed in 3.1 with the backfill.
+	/// the connection now serves `group`.
 	pub(crate) fn legacy_adopt_group(&self, group: rivet_keys::keys::codec::GroupId) -> bool {
 		let volumes = &*self.volumes.0;
 		if volumes.at_connect.group.is_some() {
@@ -213,7 +213,6 @@ impl EnvoyScope {
 	}
 
 	/// Legacy: which actors' volumes may still be unprefixed now; see [`LegacyFallbackView`].
-	/// Removed in 3.1 with the backfill.
 	pub(crate) async fn legacy_fallback_now(
 		&self,
 		ctx: &EngineContext,
@@ -274,7 +273,7 @@ impl EnvoyScope {
 	/// actor id and have its record acted on. The epoch and phase checks on the record already keep such
 	/// an envoy from binding or starting that actor, so this closes the cross-namespace read
 	/// rather than a write. Grouped keys carry their namespace, so this check only matters while
-	/// unprefixed volumes exist. Removed in 3.1 with the backfill.
+	/// unprefixed volumes exist.
 	fn legacy_in_scope(
 		&self,
 		group: Option<rivet_keys::keys::codec::GroupId>,
@@ -313,7 +312,7 @@ pub(crate) fn scope(namespace: Option<&str>, pool_name: Option<&str>) -> Result<
 /// cache predates the namespace's move into its group is never fixed to a group-less scope for
 /// its whole life, where a grouped actor's replayed events would find no actor. The legacy
 /// behavior fixed the scope from the cached standing; the new behavior fixes it from the re-read
-/// whenever the cached one has no group. Removed in 3.1 with the backfill.
+/// whenever the cached one has no group.
 pub(crate) async fn legacy_connect_scope<F, Fut>(
 	scope: EnvoyScope,
 	standing: &Arc<pegboard::NamespaceStanding>,
@@ -481,7 +480,7 @@ pub async fn connect(
 	}
 
 	// Legacy: a cached standing without a group is read again uncached, after admission since it
-	// is the one read a connect pays beyond the cache. Removed in 3.1 with the backfill.
+	// is the one read a connect pays beyond the cache.
 	let namespace = scope.namespace.clone();
 	let scope = match legacy_connect_scope(
 		scope,

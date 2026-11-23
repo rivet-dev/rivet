@@ -29,7 +29,7 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			false,
 		),
 		// Legacy: moves the catalog's legacy namespace rows into their namespace volumes once
-		// the fleet reads them. Removed in 3.1 with the backfill.
+		// the fleet reads them.
 		Service::new(
 			"pegboard_legacy_namespace_rows",
 			ServiceClass::Storage,

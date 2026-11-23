@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 /// Legacy: how long a client waits before it retries a request to an actor the backfill is
 /// moving. A move of one actor takes about a database fork, so a retry a second later usually
-/// finds the actor at its new id. Removed in 3.1 with the backfill.
+/// finds the actor at its new id.
 const LEGACY_MOVING_RETRY_AFTER_MS: u64 = 1_000;
 
 /// What a waiting request does next.
@@ -225,7 +225,7 @@ impl StartWait {
 			wire::TryStartOutcome::TryStartDestroyed => return Ok(Some(Next::Wait)),
 			// Legacy: the backfill is moving the actor, so nothing will start this copy. The
 			// client retries and resolves the actor again, which finds its new id once the move
-			// made it. Removed in 3.1 with the backfill.
+			// made it.
 			wire::TryStartOutcome::TryStartLegacyMoving => {
 				return Err(pegboard::validation::LegacyActorMoving {
 					retry_after_ms: LEGACY_MOVING_RETRY_AFTER_MS,

@@ -619,7 +619,7 @@ impl Acquire<'_> {
 	/// moves to the created actor first, with a start wait for it in place of the old one.
 	/// Legacy: a create whose standing has no group reads the namespace again first and creates
 	/// at the new id in the group when the namespace has moved into one; see
-	/// [`pegboard::actor_key::keyed_create_standing`]. Removed in 3.1 with the backfill.
+	/// [`pegboard::actor_key::keyed_create_standing`].
 	async fn create(&mut self) -> Result<Next> {
 		let Some(mut create) = self.target.create.clone() else {
 			return Err(ActorNotFound.build());

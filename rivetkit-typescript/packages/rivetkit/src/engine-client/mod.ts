@@ -235,14 +235,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 	): Promise<ActorOutput> {
 		await this.#metadataPromise;
 
-		const {
-			name,
-			key,
-			input: actorInput,
-			region,
-			crashPolicy,
-			poolName,
-		} = input;
+		const { name, key, input: actorInput, region, poolName } = input;
 
 		logger().info({
 			msg: "getOrCreateWithKey: getting or creating actor via engine api",
@@ -262,7 +255,6 @@ export class RemoteEngineControlClient implements EngineControlClient {
 								encodeCborCompat(actorInput as JsonCompatValue),
 							)
 						: undefined,
-					crash_policy: crashPolicy ?? "sleep",
 				}),
 			);
 
@@ -315,7 +307,6 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		key,
 		input,
 		region,
-		crashPolicy,
 		poolName,
 	}: CreateInput): Promise<ActorOutput> {
 		await this.#metadataPromise;
@@ -334,7 +325,6 @@ export class RemoteEngineControlClient implements EngineControlClient {
 							encodeCborCompat(input as JsonCompatValue),
 						)
 					: undefined,
-				crash_policy: crashPolicy ?? "sleep",
 			}),
 		);
 

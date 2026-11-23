@@ -1869,14 +1869,14 @@ impl_versioned_v2_to_v7!(
 
 impl_versioned_v6_to_v7!(
 	/// Legacy: the backfill's read of an actor's scheduled alarm, which versions 1 to 5 never
-	/// had. Removed in 3.1 with the backfill.
+	/// had.
 	LegacyActorAlarmReadRequest,
 	v6::LegacyActorAlarmReadRequest,
 	v7::LegacyActorAlarmReadRequest
 );
 
 impl_versioned_v6_to_v7!(
-	/// Legacy: see [`LegacyActorAlarmReadRequest`]. Removed in 3.1 with the backfill.
+	/// Legacy: see [`LegacyActorAlarmReadRequest`].
 	LegacyActorAlarmReadResponse,
 	v6::LegacyActorAlarmReadResponse,
 	v7::LegacyActorAlarmReadResponse

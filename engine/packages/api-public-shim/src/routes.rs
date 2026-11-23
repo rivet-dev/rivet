@@ -499,7 +499,7 @@ pub async fn archive_namespace(
 	if !matches!(pegboard::catalog::namespace_volumes_open(&ctx), Ok(true)) {
 		return Err(pegboard::validation::NamespacePending.build().into());
 	}
-	// Legacy: removed in 3.1 with the backfill; see `NamespaceBackfillPending`.
+	// Legacy: see `NamespaceBackfillPending`.
 	match &state.backfill {
 		namespace_wire::NamespaceBackfill::NamespaceBackfillDone(done)
 			if done.skipped_count > 0 =>
@@ -589,7 +589,7 @@ fn namespace_json(name: &str, state: &namespace_wire::NamespaceState) -> Result<
 /// Legacy: the actors the namespace's finished backfill gave up on, listed by id, name and key
 /// in the slash form the actor API reads (up to the list's cap), and how many it still counts, so an operator can find and destroy them
 /// without the error log. Empty and zero before the backfill is done and for a namespace that
-/// never had one. Removed in 3.1 with the backfill.
+/// never had one.
 fn legacy_skipped_json(backfill: &namespace_wire::NamespaceBackfill) -> Result<(Vec<Value>, u32)> {
 	match backfill {
 		namespace_wire::NamespaceBackfill::NamespaceBackfillDone(done) => {
@@ -646,7 +646,7 @@ pub async fn list_namespaces(
 
 	// Legacy: while a storage worker from before namespace volumes lives, it may host the
 	// catalog and knows only the record-row listing, and every namespace is a legacy row. An
-	// unknown fleet view surfaces as it does for a create. Removed in 3.1.
+	// unknown fleet view surfaces as it does for a create.
 	if !pegboard::catalog::namespace_volumes_open(&ctx)? {
 		let (namespaces, cursor) = pegboard::catalog::legacy_list_namespaces(
 			&ctx,
@@ -982,7 +982,7 @@ async fn create_actor_inner(
 
 	// Legacy: a lookup that finds no live actor in a namespace whose cached standing has no
 	// group reads the namespace again, so the create below agrees with processes that
-	// already see its group; see `legacy_find_keyed_actor`. Removed in 3.1 with the backfill.
+	// already see its group; see `legacy_find_keyed_actor`.
 	// The lookup only reads, so a refused attempt is retried whole.
 	let (namespace, existing) = create_step(ctx, retries, "actor_lookup", || {
 		legacy_find_keyed_actor(
@@ -1077,7 +1077,7 @@ async fn create_actor_inner(
 			}
 			wire::TryStartOutcome::TryStartDelegatedToV2 => return Ok(Created::DelegatedToV2),
 			// Legacy: only an unprefixed actor the backfill moves answers `LegacyMoving`, and
-			// creates go to the group. Removed in 3.1 with the backfill.
+			// creates go to the group.
 			wire::TryStartOutcome::TryStartWaiting
 			| wire::TryStartOutcome::TryStartStarting(_)
 			| wire::TryStartOutcome::TryStartRunning(_)
@@ -1130,7 +1130,7 @@ async fn find_keyed_actor(
 /// behavior read the namespace before every keyed lookup; the new behavior spares an existing
 /// actor that read, since only a create can land at the wrong id. Taken for every keyed create
 /// and getOrCreate; `reread` itself reads nothing for a grouped standing or while older binaries
-/// run. Removed in 3.1 with the backfill.
+/// run.
 async fn legacy_find_keyed_actor<T, F, FindFut, R, RereadFut>(
 	namespace: Arc<NamespaceStanding>,
 	find: F,
@@ -1154,8 +1154,7 @@ where
 	Ok((fresh, actor))
 }
 
-/// Legacy: what one pass of a keyed create loop decided ([`legacy_create_or_find`]). Removed in
-/// 3.1 with the backfill.
+/// Legacy: what one pass of a keyed create loop decided ([`legacy_create_or_find`]).
 enum LegacyCreateStep<T> {
 	/// The create was sent and answered this outcome.
 	Sent(wire::TryStartOutcome),
@@ -1170,8 +1169,7 @@ enum LegacyCreateStep<T> {
 /// itself; the resolve reads through it to the live legacy actor once it is destroying, so a
 /// create that waited it out never makes a fresh actor that shadows the legacy one, whose data
 /// the next attempt's duplicate rule would destroy. The legacy behavior re-sent the create
-/// without resolving. A create answered anything else costs nothing more. Removed in 3.1 with
-/// the backfill.
+/// without resolving. A create answered anything else costs nothing more.
 async fn legacy_create_or_find<T, C, CF, F, FF>(create: C, find: F) -> Result<LegacyCreateStep<T>>
 where
 	C: FnOnce() -> CF,
@@ -1397,7 +1395,7 @@ fn source_never_started(read: &wire::ActorReadResponse) -> bool {
 /// copy's `forked_from` and fork chain for good, so it is refused with a retryable refusal until
 /// the move made the source's lasting id. A keyless source keeps its id when moved, and one the
 /// finished backfill skipped is never moved, so neither waits. The new behavior has no such
-/// move. Removed in 3.1 with the backfill.
+/// move.
 fn legacy_source_awaits_move(
 	source_group: Option<GroupId>,
 	source: &wire::ActorData,
@@ -1473,7 +1471,7 @@ async fn fork_actor_inner(
 			),
 			Some(key) => {
 				// Legacy: a namespace whose cached standing has no group is read again first;
-				// see `keyed_create_standing`. Removed in 3.1 with the backfill.
+				// see `keyed_create_standing`.
 				let create_namespace =
 					pegboard::actor_key::keyed_create_standing(ctx, &namespace).await?;
 				let found = pegboard::actor_key::resolve_keyed_actor(
@@ -1600,7 +1598,7 @@ async fn fork_actor_inner(
 					return Err(ActorMigratingFromV2::error());
 				}
 				// Legacy: only an unprefixed actor the backfill moves answers `LegacyMoving`, and
-				// creates go to the group. Removed in 3.1 with the backfill.
+				// creates go to the group.
 				wire::TryStartOutcome::TryStartWaiting
 				| wire::TryStartOutcome::TryStartStarting(_)
 				| wire::TryStartOutcome::TryStartRunning(_)
@@ -2177,7 +2175,7 @@ pub async fn destroy_actor(
 /// namespace stop waiting for it and its opens stop falling back. Idempotent: an actor already
 /// destroyed, or whose volume is already gone, is not sent the destroy again but still has its
 /// entry removed, so a retry after a lost step, or after the actor destroyed itself through its
-/// envoy, clears the list. Removed in 3.1 with the backfill.
+/// envoy, clears the list.
 async fn legacy_destroy_skipped(
 	ctx: &EngineContext,
 	namespace: &NamespaceStanding,
@@ -2203,7 +2201,7 @@ async fn legacy_destroy_skipped(
 
 /// Legacy: whether a listed skipped actor, as its unprefixed volume read, still needs the
 /// destroy sent: only a live one does. An actor already destroying or destroyed, or whose volume
-/// is gone, only has its skipped entry removed. Removed in 3.1 with the backfill.
+/// is gone, only has its skipped entry removed.
 fn legacy_skipped_needs_destroy(read: pegboard::legacy_volumes::ResolvedRead) -> bool {
 	match read {
 		pegboard::legacy_volumes::ResolvedRead::Found(read) => {

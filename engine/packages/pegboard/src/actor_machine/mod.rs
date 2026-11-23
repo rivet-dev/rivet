@@ -121,8 +121,7 @@ impl DurableStateMachine for ActorStateMachine {
 		}
 
 		// Legacy: the backfill's marks and their deadline, and its destroys, which are fenced by
-		// its mover token and become an ordinary destroy once accepted. Removed in 3.1 with the
-		// backfill.
+		// its mover token and become an ordinary destroy once accepted.
 		let event = match event {
 			RuntimeEvent::Input(input) => {
 				match legacy_move_input(
@@ -602,8 +601,7 @@ impl DurableStateMachine for ActorStateMachine {
 				// epoch, which a request would find out through its failed open. An alarm has
 				// no request, so the check stands in for one. Legacy: an actor the backfill is
 				// moving also keeps the alarm in its mark, since a lost envoy's reallocation starts
-				// nothing under the mark and the move carries only the mark's alarm. Removed in 3.1
-				// with the backfill.
+				// nothing under the mark and the move carries only the mark's alarm.
 				RuntimeEvent::Timer(wire::ActorTimer::AlarmTimeout) => {
 					let allocation = phase.allocation.clone();
 					legacy_defer_alarm(state, now_unix_ms);
@@ -925,7 +923,7 @@ impl DurableStateMachine for ActorStateMachine {
 				// With no envoy to start on, as right after the engine starts and before its
 				// envoys reconnect, the alarm is armed again so the wake is not lost. Legacy: an
 				// actor the backfill is moving selects no envoy, and `alarm_fired` keeps the
-				// alarm in its mark for the move to carry instead. Removed in 3.1 with the backfill.
+				// alarm in its mark for the move to carry instead.
 				RuntimeEvent::Timer(wire::ActorTimer::AlarmTimeout) => {
 					if prepared_allocation.is_some() || legacy_moving(state) {
 						alarm_fired(
@@ -965,8 +963,7 @@ impl DurableStateMachine for ActorStateMachine {
 						// Legacy: an actor the backfill is moving selects no envoy, so its retry
 						// arms nothing and the mark keeps the reallocation as a due alarm, which
 						// the move carries or the mark's end fires. This also covers a mark an
-						// older binary applied without the deferral. Removed in 3.1 with the
-						// backfill.
+						// older binary applied without the deferral.
 						if prepared_allocation.is_some() {
 							allocate_actor(
 								state,
@@ -1406,7 +1403,7 @@ fn try_complete_initialization(
 			match fork {
 				// Legacy: a moved actor stays here until the backfill confirms its move, so it
 				// never starts before the old actor's destroy ended its epoch. A pending destroy
-				// still ends it. Removed in 3.1 with the backfill.
+				// still ends it.
 				None | Some((wire::ForkDatabasePhase::ForkDatabasePhaseForked, _))
 					if legacy_move_pending
 						&& state.pending_action != wire::PendingAction::PendingDestroy => {}
@@ -1531,7 +1528,6 @@ fn try_complete_initialization(
 /// `legacy_move` is the backfill moving an unprefixed actor here; it keeps the old creation time,
 /// copies the old database the same way, carries the old alarm, and is held in `Initializing`
 /// until `legacy_confirm_move`, with no fork recorded, so the runtime never runs its fork hook.
-/// Removed in 3.1 with the backfill.
 fn initialize(
 	state: &mut wire::ActorState,
 	init: wire::ActorCreateData,
@@ -1542,7 +1538,7 @@ fn initialize(
 	now_unix_ms: i64,
 ) {
 	// Legacy: a backfill move keeps the old incarnation's creation time, so the actor lists and
-	// sorts where it did. Removed in 3.1 with the backfill.
+	// sorts where it did.
 	let created_at = match &init.legacy_move {
 		Some(legacy_move) => legacy_move.create_unix_ms,
 		None => now_unix_ms,
@@ -1622,8 +1618,7 @@ fn initialize(
 		},
 	});
 	// Legacy: the first attempt runs before this transition's data record commits, so it carries
-	// the legacy namespace an unprefixed create names instead of reading the record. Removed in
-	// 3.1 with the backfill.
+	// the legacy namespace an unprefixed create names instead of reading the record.
 	walk_reserve_epoxy(
 		&mut init_phase.reserve_epoxy,
 		create_unix_ms,
@@ -1695,8 +1690,7 @@ pub fn source_fork_chain(source: &wire::ActorData) -> Result<Vec<wire::ActorFork
 /// with one of the old actor's on an envoy, which keys actors by id and generation: a random-id
 /// actor keeps its id through the move. The carried alarm is armed and initialization ends,
 /// starting the actor on the envoy selected for this transition, which replaces one a request
-/// stored during the move and may have gone since, or leaving it asleep. Removed in 3.1 with the
-/// backfill.
+/// stored during the move and may have gone since, or leaving it asleep.
 fn legacy_confirm_move(
 	state: &mut wire::ActorState,
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
@@ -1761,7 +1755,7 @@ fn legacy_confirm_move(
 /// (`legacy_move_pending`, the copy still held for its confirm) asks only Epoxy. The actor's V3
 /// ownership of the key was settled when it was created, so asking V2 again could only delegate
 /// a live V3 actor away, ending its copy `DelegatedToV2` with no data. Every other create asks V2
-/// too. Removed in 3.1 with the backfill.
+/// too.
 fn create_key_check(legacy_move_pending: bool) -> KeyCheck {
 	if legacy_move_pending {
 		KeyCheck::Epoxy
@@ -2350,7 +2344,6 @@ fn wake(
 	now_unix_ms: i64,
 ) {
 	// Legacy: an actor the backfill is moving is not woken; the backfill's sleep stays pending.
-	// Removed in 3.1 with the backfill.
 	if legacy_moving(state) {
 		return;
 	}
@@ -2412,8 +2405,7 @@ fn wake(
 
 /// The actor's alarm fired: it wakes the actor. Legacy: an actor the backfill is moving keeps the
 /// alarm in its mark instead, so the move carries it to the moved copy and the old actor never
-/// wakes for it, and it fires when the mark ends without a destroy. Removed in 3.1 with the
-/// backfill.
+/// wakes for it, and it fires when the mark ends without a destroy.
 fn alarm_fired(
 	state: &mut wire::ActorState,
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
@@ -2441,8 +2433,7 @@ fn alarm_fired(
 /// fired alarm, a pending reallocation is kept this way: the moving actor starts nothing, so its
 /// reallocation would otherwise wait on a retry timer the move does not carry. A deferral at the
 /// fire time is a wake, not a user alarm: the started runtime runs its overdue schedules and
-/// pushes its next alarm itself. The legacy behavior armed no deferral. Removed in 3.1 with the
-/// backfill.
+/// pushes its next alarm itself. The legacy behavior armed no deferral.
 fn legacy_defer_alarm(state: &mut wire::ActorState, now_unix_ms: i64) -> bool {
 	match &mut state.legacy_move {
 		Some(wire::LegacyMoveMark::LegacyMoveMarkMoving(moving)) => {
@@ -2460,8 +2451,7 @@ fn legacy_defer_alarm(state: &mut wire::ActorState, now_unix_ms: i64) -> bool {
 
 /// Legacy: the alarm the backfill carries into the moved copy of an actor in `state` whose
 /// timer row arms `armed_unix_ms`: the earlier of that and an alarm that came due while the
-/// actor was marked moving, which `alarm_fired` keeps in the mark instead of arming. Removed in
-/// 3.1 with the backfill.
+/// actor was marked moving, which `alarm_fired` keeps in the mark instead of arming.
 pub(crate) fn legacy_carried_alarm(
 	state: &wire::ActorState,
 	armed_unix_ms: Option<i64>,
@@ -2481,8 +2471,7 @@ pub(crate) fn legacy_carried_alarm(
 	}
 }
 
-/// Legacy: whether the backfill holds this actor's moving mark, so nothing starts it. Removed in
-/// 3.1 with the backfill.
+/// Legacy: whether the backfill holds this actor's moving mark, so nothing starts it.
 pub(crate) fn legacy_moving(state: &wire::ActorState) -> bool {
 	matches!(
 		state.legacy_move,
@@ -2513,8 +2502,7 @@ fn legacy_held(state: &wire::ActorState) -> Option<&wire::LegacyMoveHold> {
 /// actor refuses marks below the highest mover it has seen even after that mark ended, and its
 /// destroy or abandon finds the mark gone or the copy no longer its to abandon. An ordinary
 /// `Destroy` drops a moving mark, since the actor is then destroyed, not moved, and records a
-/// request's destroy of a held copy, so the backfill destroys the old actor too. Removed in 3.1
-/// with the backfill.
+/// request's destroy of a held copy, so the backfill destroys the old actor too.
 fn legacy_move_input(
 	state: &mut wire::ActorState,
 	input: wire::ActorEvent,
@@ -2673,7 +2661,7 @@ fn legacy_move_input(
 /// its page deletes the entry once the moved copy is confirmed. Without it, a page resumed
 /// after a crash between the old actor's destroy and the confirm would no longer list the
 /// actor, and the held copy would never be confirmed. The legacy behavior deleted the entry in
-/// every destroy. Removed in 3.1 with the backfill.
+/// every destroy.
 fn legacy_keeps_index_entry(mark: &Option<wire::LegacyMoveMark>) -> bool {
 	match mark {
 		Some(wire::LegacyMoveMark::LegacyMoveMarkMoved(_)) => true,
@@ -2686,8 +2674,7 @@ fn legacy_keeps_index_entry(mark: &Option<wire::LegacyMoveMark>) -> bool {
 	}
 }
 
-/// Legacy: the mover of the backfill's moving mark the actor holds. Removed in 3.1 with the
-/// backfill.
+/// Legacy: the mover of the backfill's moving mark the actor holds.
 fn legacy_moving_mover(state: &wire::ActorState) -> Option<u64> {
 	match &state.legacy_move {
 		Some(wire::LegacyMoveMark::LegacyMoveMarkMoving(moving)) => Some(moving.mover),
@@ -2705,7 +2692,7 @@ fn legacy_moving_mover(state: &wire::ActorState) -> Option<u64> {
 /// highest mover seen in `LegacyMoveMarkCleared` so no lower mover marks the actor again, and
 /// fires an alarm that came due while it was marked, which wakes the actor on `allocation`. A
 /// sleeping actor with no envoy to start on has the alarm armed again with the no-envoy backoff,
-/// as any due alarm that finds none. Removed in 3.1 with the backfill.
+/// as any due alarm that finds none.
 fn legacy_end_mark(
 	state: &mut wire::ActorState,
 	effects: &mut Effects<Effect, wire::ActorTimer, WriteEffect>,
@@ -2746,7 +2733,7 @@ fn legacy_end_mark(
 }
 
 /// Legacy: whether ending the actor's moving mark under `mover` or a later one fires a deferred
-/// alarm that starts it, so the executor selects an envoy. Removed in 3.1 with the backfill.
+/// alarm that starts it, so the executor selects an envoy.
 fn legacy_end_mark_starts(state: &wire::ActorState, mover: u64) -> bool {
 	match &state.legacy_move {
 		Some(wire::LegacyMoveMark::LegacyMoveMarkMoving(moving)) => {
@@ -2815,7 +2802,7 @@ pub fn reset_for_fork(
 			// forked, so the child destroys it instead, deleting whatever the fork left.
 			// Legacy: a backfill move still held for its confirm never completed either: its old
 			// actor may still be the actor, so the child destroys the copy rather than make it
-			// startable. Removed in 3.1 with the backfill.
+			// startable.
 			let fork_finished = match &init.fork_database {
 				Some(fork) => {
 					effects.cancel_timer(fork_database_timer(fork, create_unix_ms));
@@ -2952,7 +2939,7 @@ pub(crate) fn needs_allocation_at_version(
 	write_version: u16,
 ) -> bool {
 	// Legacy: an actor the backfill is moving never starts, so it selects no envoy, unless the
-	// event ends its mark and fires the alarm the mark kept. Removed in 3.1 with the backfill.
+	// event ends its mark and fires the alarm the mark kept.
 	let ends_mark = match event {
 		RuntimeEvent::Input(Event(wire::ActorEvent::LegacyClearMoving(clear))) => {
 			Some(legacy_end_mark_starts(state, clear.mover))
@@ -2978,8 +2965,7 @@ pub(crate) fn needs_allocation_at_version(
 	match event {
 		RuntimeEvent::Input(Event(input)) => match input {
 			wire::ActorEvent::TryStart(_) => sleeping || initializing_without_allocation,
-			// Legacy: a backfill move leaves its actor asleep, so it selects no envoy. Removed in
-			// 3.1 with the backfill.
+			// Legacy: a backfill move leaves its actor asleep, so it selects no envoy.
 			wire::ActorEvent::Create(create) if create.init.legacy_move.is_some() => false,
 			wire::ActorEvent::Create(_) => {
 				sleeping
@@ -3036,11 +3022,10 @@ pub(crate) fn needs_allocation_at_version(
 			| wire::ActorEvent::LegacyMarkMoving(_)
 			| wire::ActorEvent::LegacyMoveDestroy(_)
 			| wire::ActorEvent::LegacyMoveAbandon(_) => false,
-			// Legacy: decided above, since it ends the mark. Removed in 3.1 with the backfill.
+			// Legacy: decided above, since it ends the mark.
 			wire::ActorEvent::LegacyClearMoving(_) => false,
 			// Legacy: a confirmed move starts only when a request stored an envoy during the
-			// move, and on one selected now, since the stored one may be gone. Removed in 3.1
-			// with the backfill.
+			// move, and on one selected now, since the stored one may be gone.
 			wire::ActorEvent::LegacyMoveConfirm(_) => matches!(
 				&state.phase,
 				wire::ActorPhase::Initializing(init) if init.allocation.is_some()
@@ -3065,7 +3050,7 @@ pub(crate) fn needs_allocation_at_version(
 			| wire::ActorTimer::DestroyTimeout(_)
 			| wire::ActorTimer::ForkDatabaseTimeout(_)
 			| wire::ActorTimer::ForkDatabaseRetry(_) => false,
-			// Legacy: decided above, since it ends the mark. Removed in 3.1 with the backfill.
+			// Legacy: decided above, since it ends the mark.
 			wire::ActorTimer::LegacyMovingTimeout(_) => false,
 		},
 	}
@@ -3215,7 +3200,7 @@ fn handle_stopped(
 
 	// Legacy: an actor the backfill is moving starts nothing, so its reallocation is kept in the
 	// mark as a due alarm, which the move carries, before the retry is armed or the allocation
-	// sleeps. Removed in 3.1 with the backfill.
+	// sleeps.
 	if state.pending_action == wire::PendingAction::PendingReallocate {
 		legacy_defer_alarm(state, now_unix_ms);
 	}
@@ -3285,7 +3270,6 @@ fn allocate_actor(
 	set_pending_action(&mut state.pending_action, wire::PendingAction::PendingNone);
 
 	// Legacy: an actor the backfill is moving never starts; it sleeps until its destroy.
-	// Removed in 3.1 with the backfill.
 	if legacy_moving(state) {
 		enter_sleeping(state, now_unix_ms);
 		return;
@@ -3485,7 +3469,7 @@ fn resend_stop(
 /// resend that reaches the runtime after the first stop was lost, and the first stop of an
 /// actor that was still starting when the destroy came; neither runs the user's destroy hook.
 /// The state keeps `PendingDestroy`, so the stopped report still ends the actor in
-/// `Destroying`. Removed in 3.1 with the backfill.
+/// `Destroying`.
 fn stop_command_action(state: &wire::ActorState) -> wire::PendingAction {
 	let moved = match &state.legacy_move {
 		Some(wire::LegacyMoveMark::LegacyMoveMarkMoved(_)) => true,
@@ -3518,7 +3502,7 @@ fn try_start(
 	now_unix_ms: i64,
 ) {
 	// Legacy: a wake of an actor the backfill is moving stores no waiter, since nothing will
-	// start it; the command answers `TryStartLegacyMoving`. Removed in 3.1 with the backfill.
+	// start it; the command answers `TryStartLegacyMoving`.
 	if !legacy_moving(state) {
 		store_start_waiter(state, waiter, start_waiters_capacity, now_unix_ms);
 	}
@@ -3785,7 +3769,7 @@ fn recall_to_v2(
 pub enum KeyCheck {
 	/// Only Epoxy. The V2 migrator's hold reserves the key of an actor V2 holds by definition,
 	/// so asking V2 would always find it. Legacy: a backfill move reserves the key of an actor
-	/// V3 already owns (see `create_key_check`). Removed in 3.1 with the backfill.
+	/// V3 already owns (see `create_key_check`).
 	Epoxy,
 	/// Epoxy, and V2 while the actor's namespace migrates in from V2, so a create of a key V2
 	/// already holds ends delegated to V2. The executor reads the migration config when it
@@ -3812,8 +3796,7 @@ pub enum Effect {
 		key_check: KeyCheck,
 		/// Legacy: the namespace of an unprefixed actor, carried by the first attempt from its
 		/// create, since that attempt runs before the create's data record commits. Absent for a
-		/// grouped actor and for later attempts, which read it from the record. Removed in 3.1
-		/// with the backfill.
+		/// grouped actor and for later attempts, which read it from the record.
 		legacy_namespace: Option<String>,
 	},
 	/// **When**
@@ -3874,8 +3857,7 @@ pub enum Effect {
 		/// Legacy: the actor is an unprefixed actor the backfill moved, whose index entry the
 		/// backfill page deletes once the moved copy is confirmed, so a page resumed after a
 		/// crash still lists it and confirms the copy. The legacy behavior deleted the entry in
-		/// the destroy. Set only while the actor holds `LegacyMoveMarkMoved`. Removed in 3.1 with
-		/// the backfill.
+		/// the destroy. Set only while the actor holds `LegacyMoveMarkMoved`.
 		legacy_keep_index_entry: bool,
 	},
 	/// **When**

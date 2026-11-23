@@ -140,7 +140,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -186,7 +186,7 @@ importers:
         version: 0.0.66(zod@4.3.6)
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@4.3.6)
@@ -355,7 +355,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -404,7 +404,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -447,7 +447,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -490,7 +490,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -533,7 +533,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -691,7 +691,7 @@ importers:
         version: https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8b
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@4.1.13)
@@ -783,7 +783,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1108,7 +1108,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1157,7 +1157,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1200,7 +1200,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1243,7 +1243,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1409,7 +1409,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1452,7 +1452,7 @@ importers:
     dependencies:
       '@rivetkit/react':
         specifier: ^3.1.2-rc.5
-        version: link:../../rivetkit-typescript/packages/react
+        version: 3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1925,10 +1925,10 @@ importers:
         version: 22.19.10
       tsup:
         specifier: ^8.5.0
-        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.1)(typescript@6.0.3)(yaml@2.9.0)
+        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.1)(typescript@5.9.3)(yaml@2.9.0)
       typescript:
-        specifier: 6.0.3
-        version: 6.0.3
+        specifier: ^5.9.2
+        version: 5.9.3
 
   rivetkit-typescript/packages/traces:
     dependencies:
@@ -5334,9 +5334,18 @@ packages:
     cpu: [x64]
     os: [linux]
 
+  '@rivetkit/framework-base@3.1.2-rc.6':
+    resolution: {integrity: sha512-qgdp5L0zpAKI+/GXrwDREhjM/zCYAstWmA2wcQlIEvwEGABxBM4ePCDtbiTiaYKpc8xuhB1grf7bPdUsyL8P7Q==}
+
   '@rivetkit/on-change@6.0.1':
     resolution: {integrity: sha512-QBN/KRBXLJdCgN4gBTL3XAc/zKm58atSnieXWMOyFSPmo6F1/yIVV/LTRdvAktfCttrGx7W6c32i/lwqCHWnsQ==}
     engines: {node: '>=20'}
+
+  '@rivetkit/react@3.1.2-rc.6':
+    resolution: {integrity: sha512-RGfAI+EGm/v2+b5wYFKB/Q7ynHRObKsKQiVytfF3YuivLbzIj0zCkIL6SYl6Jf+fR1x1/r6YqBdrdEeawbsrzw==}
+    peerDependencies:
+      react: 19.1.0
+      react-dom: 19.1.0
 
   '@rivetkit/rivetkit-napi-linux-x64-gnu@2.3.5':
     resolution: {integrity: sha512-KZxr4zTFEG5UokI7foz+X+lBvzyUh+D1LccPSjNS9By8RJgh+PdROfEimlwUIOr9SAf5RQHXuTccYLzUWgdCBQ==}
@@ -15198,7 +15207,21 @@ snapshots:
 
   '@rivetkit/engine-cli-linux-x64-musl@2.3.5': {}
 
+  '@rivetkit/framework-base@3.1.2-rc.6':
+    dependencies:
+      '@tanstack/store': 0.7.5
+      fast-deep-equal: 3.1.3
+      rivetkit: link:rivetkit-typescript/packages/rivetkit
+
   '@rivetkit/on-change@6.0.1': {}
+
+  '@rivetkit/react@3.1.2-rc.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@rivetkit/framework-base': 3.1.2-rc.6
+      '@tanstack/react-store': 0.7.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+      rivetkit: link:rivetkit-typescript/packages/rivetkit
 
   '@rivetkit/rivetkit-napi-linux-x64-gnu@2.3.5': {}
 
@@ -21328,36 +21351,6 @@ snapshots:
       '@swc/core': 1.15.11(@swc/helpers@0.5.17)
       postcss: 8.5.25
       typescript: 5.9.3
-    transitivePeerDependencies:
-      - jiti
-      - supports-color
-      - tsx
-      - yaml
-
-  tsup@8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.1)(typescript@6.0.3)(yaml@2.9.0):
-    dependencies:
-      bundle-require: 5.1.0(esbuild@0.27.3)
-      cac: 6.7.14
-      chokidar: 4.0.3
-      consola: 3.4.2
-      debug: 4.4.3(supports-color@8.1.1)
-      esbuild: 0.27.3
-      fix-dts-default-cjs-exports: 1.0.1
-      joycon: 3.1.1
-      picocolors: 1.1.1
-      postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.1)(yaml@2.9.0)
-      resolve-from: 5.0.0
-      rollup: 4.57.1
-      source-map: 0.7.6
-      sucrase: 3.35.1
-      tinyexec: 0.3.2
-      tinyglobby: 0.2.15
-      tree-kill: 1.2.2
-    optionalDependencies:
-      '@microsoft/api-extractor': 7.53.2(@types/node@22.19.10)
-      '@swc/core': 1.15.11(@swc/helpers@0.5.17)
-      postcss: 8.5.25
-      typescript: 6.0.3
     transitivePeerDependencies:
       - jiti
       - supports-color

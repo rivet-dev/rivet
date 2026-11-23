@@ -4,7 +4,11 @@ use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 
 use crate::{
-	commands::deploy::cluster::{self, ClusterUpload},
+	cloud::v2,
+	commands::deploy::{
+		byoc::{self, ByocPrepare},
+		cluster::{self, ClusterUpload},
+	},
 	target::{CloudArgs, ClusterTarget},
 };
 
@@ -55,6 +59,19 @@ impl PrepareOpts {
 		}
 
 		let (cloud, ClusterTarget { cluster, .. }) = self.cloud.connect_cluster().await?;
+		if v2::is_byoc_cluster(&cloud, &cluster).await? {
+			return byoc::upload(
+				&cloud,
+				ByocPrepare {
+					cluster,
+					dockerfile: self.dockerfile,
+					build_context: self.build_context,
+					image: self.image,
+					tag: self.tag,
+				},
+			)
+			.await;
+		}
 		cluster::upload(
 			&cloud,
 			ClusterUpload {

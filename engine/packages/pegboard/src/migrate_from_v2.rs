@@ -161,8 +161,7 @@ impl Command for MigrateFromV2StateRead {
 /// volume, so it holds nothing.
 ///
 /// One read of a bounded state: the entries are at most `max_in_flight` plus the operator's
-/// allowance. Taken only while a namespace's backfill is pending. Removed in 3.1 with the
-/// backfill.
+/// allowance. Taken only while a namespace's backfill is pending.
 pub(crate) async fn legacy_migrator_holds_legacy_entries(
 	ctx: &EngineContext,
 	namespace: &str,
@@ -190,7 +189,7 @@ pub(crate) async fn legacy_migrator_holds_legacy_entries(
 /// Legacy: whether `in_flight` holds `namespace`'s backfill: an entry with no volume group that
 /// was admitted for `namespace`, or one that does not say which namespace it was admitted for,
 /// as every entry 3.0.2 and 3.0.3 wrote. Such an entry holds every namespace's backfill until it
-/// finishes; these entries only drain. Removed in 3.1 with the backfill.
+/// finishes; these entries only drain.
 pub(crate) fn legacy_entries_hold(
 	in_flight: &[migrator::MigrateFromV2InFlight],
 	namespace: &str,

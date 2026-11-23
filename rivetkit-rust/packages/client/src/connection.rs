@@ -1,5 +1,5 @@
 use anyhow::Result;
-use futures_util::FutureExt;
+use futures_util::{future::BoxFuture, FutureExt};
 use parking_lot::Mutex as SyncMutex;
 use scc::{hash_map::Entry as SccEntry, HashMap as SccHashMap};
 use serde_json::Value;
@@ -24,6 +24,15 @@ type EventCallback = dyn Fn(Event) + Send + Sync;
 type VoidCallback = dyn Fn() + Send + Sync;
 type ErrorCallback = dyn Fn(&str) + Send + Sync;
 type StatusCallback = dyn Fn(ConnectionStatus) + Send + Sync;
+pub(crate) type ParamsCallback = dyn Fn() -> BoxFuture<'static, Result<Value>> + Send + Sync;
+
+/// Where a connection gets the params it sends on each dial.
+pub(crate) enum ConnParams {
+	/// The same params on every dial.
+	Static(Option<Value>),
+	/// Params from a callback that runs before every dial, so they can carry a fresh token.
+	Callback(Box<ParamsCallback>),
+}
 
 #[derive(Debug, Clone)]
 pub struct Event {
@@ -107,7 +116,7 @@ pub struct ActorConnectionInner {
 	transport_kind: TransportKind,
 	encoding_kind: EncodingKind,
 	query: ActorQuery,
-	parameters: Option<Value>,
+	parameters: ConnParams,
 
 	driver: Mutex<Option<DriverHandle>>,
 	msg_queue: Mutex<Vec<Arc<to_server::ToServer>>>,
@@ -142,7 +151,7 @@ impl ActorConnectionInner {
 		query: ActorQuery,
 		transport_kind: TransportKind,
 		encoding_kind: EncodingKind,
-		parameters: Option<Value>,
+		parameters: ConnParams,
 	) -> ActorConnection {
 		Arc::new(Self {
 			remote_manager,
@@ -174,30 +183,81 @@ impl ActorConnectionInner {
 		*self.dc_watch.1.borrow() == true
 	}
 
-	async fn try_connect(self: &Arc<Self>) -> ConnectionAttempt {
-		self.set_status(ConnectionStatus::Connecting).await;
+	async fn resolve_params(&self) -> Result<Option<Value>> {
+		match &self.parameters {
+			ConnParams::Static(params) => Ok(params.clone()),
+			// on_error receives only the top-level message, so it carries the cause too.
+			ConnParams::Callback(get_params) => get_params().await.map(Some).map_err(|error| {
+				anyhow::anyhow!(
+					"client.get_params_failed: Failed to resolve connection params: {error:#}"
+				)
+			}),
+		}
+	}
+
+	async fn dial(self: &Arc<Self>) -> Result<DriverConnection> {
+		let parameters = self.resolve_params().await?;
 
 		// Get connection info for reconnection
 		let conn_id = self.connection_id.lock().await.clone();
 		let conn_token = self.connection_token.lock().await.clone();
 
-		let (driver, mut recver, task) = match connect_driver(
+		connect_driver(
 			self.transport_kind,
 			DriverConnectArgs {
 				remote_manager: self.remote_manager.clone(),
 				query: self.query.clone(),
 				encoding_kind: self.encoding_kind,
-				parameters: self.parameters.clone(),
+				parameters,
 				conn_id,
 				conn_token,
 			},
 		)
 		.await
-		{
+	}
+
+	async fn try_connect(self: &Arc<Self>) -> ConnectionAttempt {
+		let aborted = ConnectionAttempt {
+			did_open: false,
+			task_end_reason: DriverStopReason::UserAborted,
+		};
+
+		self.set_status(ConnectionStatus::Connecting).await;
+
+		// Race the dial against disconnect(). Dropping the dial future closes its socket, so a
+		// dial that disconnect() cancels can never open later.
+		let mut dc_rx = self.dc_watch.0.subscribe();
+		// Check the stop first, so a stop that is already requested never runs the params
+		// callback.
+		let dial_result = tokio::select! {
+			biased;
+			// Drop the watch guard here so it is not held across the await below.
+			_ = async { dc_rx.wait_for(|disconnecting| *disconnecting).await.ok(); } => {
+				debug!("dial cancelled by disconnect");
+				self.set_status(ConnectionStatus::Disconnected).await;
+				return aborted;
+			}
+			result = self.dial() => result,
+		};
+
+		let (driver, mut recver, task) = match dial_result {
 			Ok(value) => value,
 			Err(error) => {
+				// A stop that landed while the dial ran discards its result.
+				if self.is_disconnecting() {
+					self.set_status(ConnectionStatus::Disconnected).await;
+					return aborted;
+				}
 				let message = error.to_string();
-				self.emit_error(&message).await;
+				let callbacks = self.on_error_callbacks.lock().await;
+				for callback in callbacks.iter() {
+					// Check again before each listener: an earlier one may have disconnected.
+					if self.is_disconnecting() {
+						break;
+					}
+					callback(&message);
+				}
+				drop(callbacks);
 				self.set_status(ConnectionStatus::Disconnected).await;
 				return ConnectionAttempt {
 					did_open: false,
@@ -208,6 +268,17 @@ impl ActorConnectionInner {
 
 		{
 			let mut my_driver = self.driver.lock().await;
+			// disconnect() sets the flag before it takes this lock. Either it finds the driver
+			// stored here and closes it, or this check sees the flag and closes it, never both.
+			if self.is_disconnecting() {
+				drop(my_driver);
+				// An abort only requests cancellation. Wait for the socket task to exit, so the
+				// socket is closed before disconnect() returns.
+				driver.disconnect();
+				let _ = task.await;
+				self.set_status(ConnectionStatus::Disconnected).await;
+				return aborted;
+			}
 			*my_driver = Some(driver);
 		}
 
@@ -291,8 +362,10 @@ impl ActorConnectionInner {
 			self.send_subscription(event_name.clone(), true).await;
 		}
 
-		// Flush message queue
-		for msg in self.msg_queue.lock().await.drain(..) {
+		// Flush message queue. Take the messages out first: send_msg() requeues a message that
+		// fails to send, which needs the same lock.
+		let queued = std::mem::take(&mut *self.msg_queue.lock().await);
+		for msg in queued {
 			// If its in the queue, it isn't ephemeral, so we pass
 			// default SendMsgOpts
 			self.send_msg(msg, SendMsgOpts::default()).await;
@@ -659,6 +732,9 @@ impl ActorConnectionInner {
 		*self.status_watch.1.borrow()
 	}
 
+	/// Returns a receiver for the latest status. A watch keeps only the newest value, so a
+	/// receiver can skip a short-lived status, such as `Disconnected` between a server close and
+	/// the immediate redial. Use [`Self::on_status_change`] to observe every transition.
 	pub fn status_receiver(self: &Arc<Self>) -> watch::Receiver<ConnectionStatus> {
 		self.status_watch.1.clone()
 	}
@@ -671,11 +747,13 @@ impl ActorConnectionInner {
 
 		debug!("Disconnecting from actor conn");
 
+		// Set the flag before taking the driver lock. try_connect checks it under the same lock,
+		// so a dial that finishes now is closed by exactly one side.
 		self.dc_watch.0.send(true).ok();
 		self.set_status(ConnectionStatus::Disconnected).await;
 
-		if let Some(d) = self.driver.lock().await.deref() {
-			d.disconnect();
+		if let Some(driver) = self.driver.lock().await.take() {
+			driver.disconnect();
 		}
 		self.in_flight_rpcs.clear_async().await;
 		self.event_subscriptions.clear_async().await;
@@ -762,6 +840,10 @@ pub fn start_connection(
 			let mut backoff = Backoff::new(Duration::from_secs(1), Duration::from_secs(30));
 			let mut retry_attempt = 0;
 			'retry: loop {
+				if conn.is_disconnecting() {
+					break 'keepalive;
+				}
+
 				retry_attempt += 1;
 				debug!(
 					"Establish conn: attempt={}, timeout={:?}",
