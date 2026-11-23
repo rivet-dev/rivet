@@ -524,6 +524,7 @@ where
 		async move {
 			super::send_initial_metadata(&shared2).await;
 
+			let mut http_first = false;
 			loop {
 				let msg = tokio::select! {
 					biased;
@@ -535,8 +536,12 @@ where
 						let Some(pong) = pong else { continue };
 						Some(EitherWrite::Legacy(WsTxMessage::Send(pong)))
 					}
-					msg = ws_rx.recv() => msg.map(EitherWrite::Legacy),
-					msg = http_ws_rx.recv() => msg.map(EitherWrite::Http),
+					msg = next_queued_write(&mut ws_rx, &mut http_ws_rx, http_first) => {
+						if let Some(msg) = &msg {
+							http_first = matches!(msg, EitherWrite::Legacy(_));
+						}
+						msg
+					}
 				};
 				let Some(msg) = msg else { break };
 				match msg {
@@ -750,6 +755,31 @@ async fn read_close_after_writer(
 enum EitherWrite {
 	Legacy(WsTxMessage),
 	Http(HttpWsTxMessage),
+}
+
+/// The next frame from the writer queues. When both hold one, `http_first` picks the queue, and
+/// the writer flips it after each frame so the two take turns. Storage requests can arrive
+/// faster than the engine reads them, so a fixed order would hold every HTTP response until
+/// storage traffic stops.
+async fn next_queued_write(
+	ws_rx: &mut mpsc::UnboundedReceiver<WsTxMessage>,
+	http_ws_rx: &mut mpsc::Receiver<HttpWsTxMessage>,
+	http_first: bool,
+) -> Option<EitherWrite> {
+	if http_first {
+		// A closed HTTP queue never ends the writer ahead of a queued close frame.
+		tokio::select! {
+			biased;
+			Some(msg) = http_ws_rx.recv() => Some(EitherWrite::Http(msg)),
+			msg = ws_rx.recv() => msg.map(EitherWrite::Legacy),
+		}
+	} else {
+		tokio::select! {
+			biased;
+			msg = ws_rx.recv() => msg.map(EitherWrite::Legacy),
+			msg = http_ws_rx.recv() => msg.map(EitherWrite::Http),
+		}
+	}
 }
 
 fn extract_host(url: &str) -> String {
