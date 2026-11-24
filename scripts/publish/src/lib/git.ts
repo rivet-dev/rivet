@@ -29,8 +29,15 @@ export async function tagAndPush(version: string): Promise<void> {
  * Create (or update) a GitHub release for the version. If a release with the
  * same name already exists, its tag is updated to match. New releases with a
  * prerelease identifier (anything containing `-`) are marked as prerelease.
+ *
+ * `latest` is passed to GitHub explicitly because `gh release create` marks
+ * every new stable release as the repository's latest release by default, so a
+ * release from a maintenance line such as `2.x` would otherwise take it over.
  */
-export async function createGhRelease(version: string): Promise<void> {
+export async function createGhRelease(
+	version: string,
+	latest: boolean,
+): Promise<void> {
 	log.info(`creating GitHub release for ${version}`);
 
 	const { stdout: currentTag } = await $`git describe --tags --exact-match`;
@@ -55,7 +62,7 @@ export async function createGhRelease(version: string): Promise<void> {
 	log.info(`creating new release ${version} -> tag ${tagName}`);
 	await $({
 		stdio: "inherit",
-	})`gh release create ${tagName} --title ${version} --generate-notes`;
+	})`gh release create ${tagName} --title ${version} --generate-notes --latest=${latest ? "true" : "false"}`;
 
 	// Prerelease detection: anything with a `-` is a prerelease per semver.
 	if (version.includes("-")) {

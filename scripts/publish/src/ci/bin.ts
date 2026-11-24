@@ -448,10 +448,13 @@ program
 	.command("gh-release")
 	.description("Create or update GitHub release")
 	.option("--version <version>", "Version (defaults to resolved context)")
+	.option("--latest <bool>", "Mark the release as GitHub's latest (defaults to resolved context)")
 	.action(async (opts) => {
-		const version =
-			opts.version ?? (await resolveContext()).version;
-		await createGhRelease(version);
+		const ctx = await resolveContext();
+		const version: string = opts.version ?? ctx.version;
+		const latest =
+			opts.latest !== undefined ? opts.latest === "true" : ctx.latest;
+		await createGhRelease(version, latest);
 	});
 
 // ---------------------------------------------------------------------------
