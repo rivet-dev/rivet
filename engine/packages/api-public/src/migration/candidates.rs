@@ -4,6 +4,8 @@
 //! V2 applies no eligibility rule. It returns raw facts so policy such as the minimum sleep age
 //! or the largest copy stays in the migrator's configuration.
 
+use std::time::{Duration, Instant};
+
 use anyhow::{Context, Result};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use futures_util::{StreamExt, TryStreamExt};
@@ -17,8 +19,9 @@ use crate::{ctx::ApiCtx, errors};
 
 const DEFAULT_LIMIT: usize = 200;
 const MAX_LIMIT: usize = 500;
-/// Actors whose facts are read concurrently within the page's transaction.
+/// Actors whose facts are read concurrently within one transaction.
 const READ_CONCURRENCY: usize = 32;
+const EARLY_TXN_TIMEOUT: Duration = Duration::from_millis(2500);
 
 pub async fn candidates(ctx: ApiCtx, namespace: String, query: CandidatesQuery) -> Result<Vec<u8>> {
 	let namespace_id = authorize(&ctx, &namespace).await?;
@@ -78,12 +81,18 @@ pub async fn candidates(ctx: ApiCtx, namespace: String, query: CandidatesQuery) 
 			.hibernating_request_eligible_threshold(),
 	);
 	let udb = ctx.pools().udb()?;
-	let response = udb
-		.txn("migration_candidates", |tx| {
+
+	// The index scan and the facts reads run in separate transactions, so a page of actors never
+	// shares one transaction's time limit.
+	let (index_rows, last_key, has_more) = udb
+		.txn("migration_candidates_index", |tx| {
 			let after = after.clone();
 			let range_start = range_start.clone();
 			let range_end = range_end.clone();
 			async move {
+				let start = Instant::now();
+				let tx = tx.with_subspace(keys::subspace());
+
 				// The cursor is the last returned key, so the page starts just after it.
 				let begin = match after {
 					Some(mut after) => {
@@ -93,45 +102,105 @@ pub async fn candidates(ctx: ApiCtx, namespace: String, query: CandidatesQuery) 
 					None => range_start,
 				};
 
-				let index_rows = tx
-					.get_ranges_keyvalues(
-						universaldb::RangeOption {
-							limit: Some(limit),
-							mode: StreamingMode::WantAll,
-							..(begin, range_end).into()
-						},
-						Snapshot,
-					)
-					.map(|entry| {
-						let entry = entry?;
-						let key = tx
-							.with_subspace(keys::subspace())
-							.unpack::<keys::ns::ActiveActorKey>(entry.key())?;
-						Ok::<_, anyhow::Error>((entry.key().to_vec(), key.actor_id))
-					})
-					.try_collect::<Vec<_>>()
-					.await?;
+				let mut stream = tx.get_ranges_keyvalues(
+					universaldb::RangeOption {
+						limit: Some(limit),
+						mode: StreamingMode::Iterator,
+						..(begin, range_end).into()
+					},
+					Snapshot,
+				);
 
-				let next = if index_rows.len() == limit {
-					index_rows.last().map(|(raw_key, _)| raw_key.clone())
-				} else {
-					None
-				};
+				let mut index_rows = Vec::new();
+				let mut last_key = None;
+				let mut scanned = 0;
+				let mut timed_out = false;
 
-				let candidates = futures_util::stream::iter(index_rows)
-					.map(|(raw_key, actor_id)| {
-						let tx = tx.clone();
-						async move { read_candidate(&tx, actor_id, raw_key, hibernating_since_ts).await }
-					})
-					.buffered(READ_CONCURRENCY)
-					.try_filter_map(|candidate| async move { Ok(candidate) })
-					.try_collect::<Vec<_>>()
-					.await?;
+				while let Some(entry) = stream.try_next().await? {
+					scanned += 1;
+					last_key = Some(entry.key().to_vec());
 
-				Ok(proto::CandidatesResponse { candidates, next })
+					match tx.unpack::<keys::ns::ActiveActorKey>(entry.key()) {
+						Ok(key) => index_rows.push((entry.key().to_vec(), key.actor_id)),
+						Err(err) => {
+							tracing::error!(
+								?err,
+								"failed to unpack active actor index key, skipping"
+							);
+						}
+					}
+
+					if start.elapsed() > EARLY_TXN_TIMEOUT {
+						tracing::warn!("timed out scanning migration candidates");
+						timed_out = true;
+						break;
+					}
+				}
+
+				Ok((index_rows, last_key, timed_out || scanned == limit))
 			}
 		})
 		.await?;
+
+	// Reads facts in as many transactions as it takes. Each one resumes at the first actor the
+	// previous one did not read.
+	let mut candidates = Vec::new();
+	let mut read_count = 0;
+	while read_count < index_rows.len() {
+		let (chunk, chunk_read_count) = udb
+			.txn("migration_candidates_facts", |tx| {
+				let pending = &index_rows[read_count..];
+				async move {
+					let start = Instant::now();
+					let mut stream = futures_util::stream::iter(pending.iter().cloned())
+						.map(|(raw_key, actor_id)| {
+							let tx = tx.clone();
+							async move {
+								let candidate =
+									read_candidate(&tx, actor_id, raw_key, hibernating_since_ts)
+										.await;
+								(actor_id, candidate)
+							}
+						})
+						.buffered(READ_CONCURRENCY);
+
+					let mut chunk = Vec::new();
+					let mut chunk_read_count = 0;
+					while let Some((actor_id, candidate)) = stream.next().await {
+						chunk_read_count += 1;
+
+						// One actor that fails to read must not fail the page, or the migrator
+						// would retry the same cursor forever. A skipped actor is listed again on
+						// the next pass.
+						match candidate {
+							Ok(Some(candidate)) => chunk.push(candidate),
+							Ok(None) => {}
+							Err(err) => {
+								tracing::error!(
+									?actor_id,
+									?err,
+									"failed to read migration candidate, skipping"
+								);
+							}
+						}
+
+						if start.elapsed() > EARLY_TXN_TIMEOUT {
+							tracing::warn!("timed out reading migration candidate facts");
+							break;
+						}
+					}
+
+					Ok((chunk, chunk_read_count))
+				}
+			})
+			.await?;
+
+		candidates.extend(chunk);
+		read_count += chunk_read_count;
+	}
+
+	let next = if has_more { last_key } else { None };
+	let response = proto::CandidatesResponse { candidates, next };
 
 	let next = response
 		.next
