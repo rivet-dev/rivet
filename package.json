@@ -37,7 +37,7 @@
 		"@iarna/toml": "^2.2.5",
 		"@sentry/vite-plugin": "^2.23.1",
 		"fast-glob": "^3.3.3",
-		"handlebars": "^4.7.9"
+		"handlebars": "^4.7.10"
 	},
 	"resolutions": {
 		"@rivetkit/engine-api-full": "workspace:*",
