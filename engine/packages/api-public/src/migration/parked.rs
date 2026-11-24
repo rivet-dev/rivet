@@ -15,6 +15,8 @@
 //! and the destroy ends the workflow. Every step is idempotent, so a caller retries a failed
 //! delete with the same request.
 
+use std::time::{Duration, Instant};
+
 use anyhow::{Context, Result, bail};
 use axum::body::Bytes;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -33,6 +35,7 @@ use crate::{ctx::ApiCtx, errors};
 
 const DEFAULT_LIMIT: usize = 200;
 const MAX_LIMIT: usize = 500;
+const EARLY_TXN_TIMEOUT: Duration = Duration::from_millis(2500);
 
 /// Times a delete silences newly arrived signals before it gives up and leaves the retry to the
 /// caller. Each round only finds signals sent during the previous one.
@@ -60,10 +63,14 @@ pub async fn list(ctx: ApiCtx, namespace: String, query: ParkedQuery) -> Result<
 	};
 
 	let udb = ctx.pools().udb()?;
-	let response = udb
-		.txn("migration_parked_list", |tx| {
+
+	// The scan and the namespace reads run in separate transactions, so a page of records never
+	// shares one transaction's time limit.
+	let (rows, last_key, has_more) = udb
+		.txn("migration_parked_list_scan", |tx| {
 			let after = after.clone();
 			async move {
+				let start = Instant::now();
 				let (range_start, range_end) = mkeys::parked_subspace().range();
 				// The cursor is the last scanned key, so the page starts just after it.
 				let begin = match after {
@@ -74,54 +81,94 @@ pub async fn list(ctx: ApiCtx, namespace: String, query: ParkedQuery) -> Result<
 					None => range_start,
 				};
 
-				let rows = tx
-					.get_ranges_keyvalues(
-						universaldb::RangeOption {
-							limit: Some(limit),
-							mode: StreamingMode::WantAll,
-							..(begin, range_end).into()
-						},
-						Snapshot,
-					)
-					.map_ok(|entry| (entry.key().to_vec(), entry.value().to_vec()))
-					.try_collect::<Vec<_>>()
-					.await?;
+				let mut stream = tx.get_ranges_keyvalues(
+					universaldb::RangeOption {
+						limit: Some(limit),
+						mode: StreamingMode::Iterator,
+						..(begin, range_end).into()
+					},
+					Snapshot,
+				);
 
-				let next = if rows.len() == limit {
-					rows.last().map(|(raw_key, _)| raw_key.clone())
-				} else {
-					None
-				};
+				let mut rows = Vec::new();
+				let mut last_key = None;
+				let mut scanned = 0;
+				let mut timed_out = false;
 
-				let pb = tx.with_subspace(keys::subspace());
-				let mut actors = Vec::new();
-				for (raw_key, raw_value) in rows {
-					let actor_id = mkeys::parked_actor_id(&raw_key)
-						.context("parked record key has no actor id")?;
-					let actor_namespace_id = pb
-						.read_opt(&keys::actor::NamespaceIdKey::new(actor_id), Snapshot)
-						.await?;
-					if actor_namespace_id != Some(namespace_id) {
-						continue;
+				while let Some(entry) = stream.try_next().await? {
+					scanned += 1;
+					last_key = Some(entry.key().to_vec());
+
+					match mkeys::parked_actor_id(entry.key()) {
+						Some(actor_id) => {
+							rows.push((entry.key().to_vec(), actor_id, entry.value().to_vec()))
+						}
+						None => tracing::error!("failed to unpack parked record key, skipping"),
 					}
 
-					let record = facts::decode_parked(&raw_value)?;
-					actors.push(proto::ParkedActor {
-						actor_id: actor_id.as_bytes(),
-						v3_actor_id: record.v3_actor_id,
-						generation: record.generation,
-						cutover_ts: record.cutover_ts,
-						parked_at: record.parked_at,
-						delete_requested_at: record.delete_requested_at,
-						deleted_at: record.deleted_at,
-						cursor: raw_key,
-					});
+					if start.elapsed() > EARLY_TXN_TIMEOUT {
+						tracing::warn!("timed out scanning parked records");
+						timed_out = true;
+						break;
+					}
 				}
 
-				Ok(proto::ParkedResponse { actors, next })
+				Ok((rows, last_key, timed_out || scanned == limit))
 			}
 		})
 		.await?;
+
+	// Reads each record's namespace in as many transactions as it takes. Each one resumes at the
+	// first record the previous one did not read.
+	let mut actors = Vec::new();
+	let mut read_count = 0;
+	while read_count < rows.len() {
+		let (chunk, chunk_read_count) = udb
+			.txn("migration_parked_list_namespaces", |tx| {
+				let pending = &rows[read_count..];
+				async move {
+					let start = Instant::now();
+					let pb = tx.with_subspace(keys::subspace());
+					let mut chunk = Vec::new();
+					let mut chunk_read_count = 0;
+
+					for (raw_key, actor_id, raw_value) in pending {
+						chunk_read_count += 1;
+
+						let actor_namespace_id = pb
+							.read_opt(&keys::actor::NamespaceIdKey::new(*actor_id), Snapshot)
+							.await?;
+						if actor_namespace_id == Some(namespace_id) {
+							let record = facts::decode_parked(raw_value)?;
+							chunk.push(proto::ParkedActor {
+								actor_id: actor_id.as_bytes(),
+								v3_actor_id: record.v3_actor_id,
+								generation: record.generation,
+								cutover_ts: record.cutover_ts,
+								parked_at: record.parked_at,
+								delete_requested_at: record.delete_requested_at,
+								deleted_at: record.deleted_at,
+								cursor: raw_key.clone(),
+							});
+						}
+
+						if start.elapsed() > EARLY_TXN_TIMEOUT {
+							tracing::warn!("timed out reading parked record namespaces");
+							break;
+						}
+					}
+
+					Ok((chunk, chunk_read_count))
+				}
+			})
+			.await?;
+
+		actors.extend(chunk);
+		read_count += chunk_read_count;
+	}
+
+	let next = if has_more { last_key } else { None };
+	let response = proto::ParkedResponse { actors, next };
 
 	proto::encode(&response)
 }
@@ -427,6 +474,8 @@ async fn authorize_delete(ctx: &ApiCtx, namespace: &str) -> Result<()> {
 	.await
 }
 
+/// A cursor is any key in the parked subspace, not only a readable parked record key: a page that
+/// ends on a record key it skipped as unreadable returns that key as `next`.
 fn decode_cursor(cursor: &str) -> Result<Vec<u8>> {
 	let raw = URL_SAFE_NO_PAD.decode(cursor).map_err(|_| {
 		errors::Migration::InvalidRequest {
@@ -434,7 +483,7 @@ fn decode_cursor(cursor: &str) -> Result<Vec<u8>> {
 		}
 		.build()
 	})?;
-	if mkeys::parked_actor_id(&raw).is_none() {
+	if !raw.starts_with(mkeys::parked_subspace().bytes()) {
 		return Err(errors::Migration::InvalidRequest {
 			message: "after is not a parked actor cursor".to_string(),
 		}
