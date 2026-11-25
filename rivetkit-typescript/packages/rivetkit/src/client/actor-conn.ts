@@ -87,10 +87,26 @@ export type ActorConnStatus =
 	| "connected"
 	| "disconnected";
 
+interface QueuedMessage {
+	body:
+		| {
+				tag: "ActionRequest";
+				val: { id: bigint; name: string; args: unknown };
+		  }
+		| {
+				tag: "SubscriptionRequest";
+				val: { eventName: string; subscribe: boolean };
+		  };
+}
+
+function abortReason(signal: AbortSignal): unknown {
+	return signal.reason ?? new Error("Operation aborted");
+}
+
 interface ActionInFlight {
 	name: string;
 	resolve: (response: { id: bigint; output: unknown }) => void;
-	reject: (error: Error) => void;
+	reject: (error: unknown) => void;
 }
 
 interface EventSubscriptions<Args extends Array<unknown>> {
@@ -167,17 +183,7 @@ export class ActorConnRaw {
 	#actorId?: string;
 	#connId?: string;
 
-	#messageQueue: Array<{
-		body:
-			| {
-					tag: "ActionRequest";
-					val: { id: bigint; name: string; args: unknown };
-			  }
-			| {
-					tag: "SubscriptionRequest";
-					val: { eventName: string; subscribe: boolean };
-			  };
-	}> = [];
+	#messageQueue: QueuedMessage[] = [];
 	#actionsInFlight = new Map<number, ActionInFlight>();
 
 	#eventSubscriptions = new Map<string, Set<EventSubscriptions<any[]>>>();
@@ -350,6 +356,10 @@ export class ActorConnRaw {
 	 * @template Response - The type of the response returned by the action function.
 	 * @param {string} name - The name of the action function to call.
 	 * @param {...Args} args - The arguments to pass to the action function.
+	 * @param {AbortSignal} [signal] - Gives up on the call. While the connection is reopening the
+	 *   action waits in a queue; aborting then removes it, so it is never sent. Once sent, aborting
+	 *   only rejects this promise and the action may still run. Use `AbortSignal.timeout(ms)` for
+	 *   a deadline.
 	 * @returns {Promise<Response>} - A promise that resolves to the response of the action function.
 	 */
 	async action<
@@ -372,6 +382,8 @@ export class ActorConnRaw {
 		}
 		if (this.#disposed) throw new errors.ActorConnDisposed();
 		if (this.#connectionOpenError) throw this.#connectionOpenError;
+		const { signal } = opts;
+		if (signal?.aborted) throw abortReason(signal);
 		logger().debug({ msg: "action", name: opts.name, args: opts.args });
 
 		// If we have an active connection, use the websockactionId
@@ -394,7 +406,7 @@ export class ActorConnRaw {
 			inFlightCount: this.#actionsInFlight.size,
 		});
 
-		this.#sendMessage({
+		const message: QueuedMessage = {
 			body: {
 				tag: "ActionRequest",
 				val: {
@@ -403,17 +415,65 @@ export class ActorConnRaw {
 					args: opts.args,
 				},
 			},
-		});
+		};
+		this.#sendMessage(message);
+
+		const onAbort = signal
+			? () => this.#abortAction(actionId, message, signal)
+			: undefined;
+		if (signal && onAbort) {
+			signal.addEventListener("abort", onAbort, { once: true });
+		}
 
 		// TODO: Throw error if disconnect is called
 
-		const { id: responseId, output } = await promise;
-		if (responseId !== BigInt(actionId))
-			throw new Error(
-				`Request ID ${actionId} does not match response ID ${responseId}`,
-			);
+		try {
+			const { id: responseId, output } = await promise;
+			if (responseId !== BigInt(actionId))
+				throw new Error(
+					`Request ID ${actionId} does not match response ID ${responseId}`,
+				);
 
-		return output as Response;
+			return output as Response;
+		} finally {
+			if (signal && onAbort) {
+				signal.removeEventListener("abort", onAbort);
+			}
+		}
+	}
+
+	/**
+	 * Gives up on an action whose caller's signal aborted. A message still in the queue is
+	 * removed so it is never sent after a reconnect. A message already sent may still run,
+	 * so its in-flight entry stays to absorb the response; only the caller's promise rejects.
+	 */
+	#abortAction(
+		actionId: number,
+		message: QueuedMessage,
+		signal: AbortSignal,
+	) {
+		const inFlight = this.#actionsInFlight.get(actionId);
+		if (!inFlight) return;
+
+		const reason = abortReason(signal);
+		const queueIndex = this.#messageQueue.indexOf(message);
+		if (queueIndex !== -1) {
+			this.#messageQueue.splice(queueIndex, 1);
+			this.#actionsInFlight.delete(actionId);
+			logger().debug({
+				msg: "aborted queued action before send",
+				actionId,
+				actionName: inFlight.name,
+				queueLength: this.#messageQueue.length,
+			});
+		} else {
+			logger().debug({
+				msg: "aborted action after send, outcome unknown",
+				actionId,
+				actionName: inFlight.name,
+			});
+		}
+		inFlight.reject(reason);
 	}
 
 	/**
@@ -1391,20 +1451,7 @@ export class ActorConnRaw {
 		};
 	}
 
-	#sendMessage(
-		message: {
-			body:
-				| {
-						tag: "ActionRequest";
-						val: { id: bigint; name: string; args: unknown };
-				  }
-				| {
-						tag: "SubscriptionRequest";
-						val: { eventName: string; subscribe: boolean };
-				  };
-		},
-		opts?: SendHttpMessageOpts,
-	) {
+	#sendMessage(message: QueuedMessage, opts?: SendHttpMessageOpts) {
 		if (this.#disposed) {
 			if (opts?.ephemeral) {
 				return;
