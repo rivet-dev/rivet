@@ -63,6 +63,18 @@ The actor client includes type safety out of the box. When you use `createClient
 
 </CodeGroup>
 
+### Timeouts and Cancellation
+
+Pass a `signal` to stop waiting for an action call, for example with `AbortSignal.timeout()`. Use `.action({ name, args, signal })` for this, since the shorthand `counterActor.increment(1)` doesn't take options. It works the same on handles and connections:
+
+<CodeSnippet file="examples/docs/actors-actions/calling-with-signal.ts" title="client.ts" />
+
+When the signal aborts, the call rejects with the signal's reason. If the action was already sent, it may still run on the actor; only the client stops waiting. On a connection, an action still queued while the connection reconnects is dropped and never sent.
+
+On a handle, a `signal` passed to `get()` or `getOrCreate()` applies to every action call that doesn't pass its own.
+
+To cancel work inside the actor itself, see [Canceling Long-Running Actions](#canceling-long-running-actions).
+
 ## Error Handling
 
 Actors provide robust error handling out of the box for actions.
