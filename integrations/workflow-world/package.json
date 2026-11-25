@@ -38,7 +38,7 @@
 		"@workflow/world-testing": "5.0.0-beta.35",
 		"tsx": "^4.20.0",
 		"typescript": "^5.5.2",
-		"vite": "^7.0.0",
+		"vite": "^6.4.5",
 		"vitest": "^4.1.9"
 	},
 	"engines": {
