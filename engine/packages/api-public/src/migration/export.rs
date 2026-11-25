@@ -169,11 +169,14 @@ pub async fn export(ctx: ApiCtx, actor_id: Id, query: ExportQuery) -> Result<Res
 		}),
 	};
 
+	// The process's own node id, as every other depot database in this process uses: the depot
+	// metrics are labelled by it, so a fresh id per export would add a set of series for every
+	// exported actor until the process restarts.
 	let depot_db = Db::new(
 		udb.clone(),
 		namespace_id,
 		actor_id.to_string(),
-		rivet_pools::NodeId::new(),
+		ctx.pools().node_id(),
 	)
 	.with_config(ctx.config().clone());
 

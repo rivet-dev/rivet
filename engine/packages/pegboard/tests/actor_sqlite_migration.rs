@@ -120,6 +120,7 @@ async fn migrate(
 	pegboard::actor_sqlite::migrate_v1_to_v2(
 		db.clone(),
 		rivet_config::Config::from_root(rivet_config::config::Root::default()),
+		rivet_pools::NodeId::new(),
 		pegboard::actor_sqlite::MigrateV1ToV2Input {
 			actor_id,
 			namespace_id: test_namespace(),

@@ -79,9 +79,13 @@ pub struct MigrateV1ToV2Output {
 	pub migrated: bool,
 }
 
+/// Migrates the actor's v1 SQLite data to the v2 format. `node_id` is the process's own, which
+/// labels the depot metrics; a fresh id per migration would add a set of series for every
+/// migrated actor until the process restarts.
 pub async fn migrate_v1_to_v2(
 	db: universaldb::Database,
 	config: rivet_config::Config,
+	node_id: NodeId,
 	input: MigrateV1ToV2Input,
 ) -> Result<MigrateV1ToV2Output> {
 	let recipient = Recipient {
@@ -90,7 +94,7 @@ pub async fn migrate_v1_to_v2(
 		name: input.name,
 	};
 
-	let migrated = maybe_migrate_v1_to_v2(&db, &config, &recipient).await?;
+	let migrated = maybe_migrate_v1_to_v2(&db, &config, node_id, &recipient).await?;
 
 	Ok(MigrateV1ToV2Output { migrated })
 }
@@ -98,6 +102,7 @@ pub async fn migrate_v1_to_v2(
 async fn maybe_migrate_v1_to_v2(
 	db: &universaldb::Database,
 	config: &rivet_config::Config,
+	node_id: NodeId,
 	recipient: &Recipient,
 ) -> Result<bool> {
 	if !crate::actor_kv::sqlite_v1_data_exists(db, recipient.actor_id).await? {
@@ -143,7 +148,7 @@ async fn maybe_migrate_v1_to_v2(
 		Arc::new(db.clone()),
 		recipient.namespace_id,
 		actor_id.clone(),
-		NodeId::new(),
+		node_id,
 	)
 	.with_config(config.clone());
 
