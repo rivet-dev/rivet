@@ -1,4 +1,4 @@
-import { Action, Actor } from "@rivetkit/effect";
+import { Action, Actor, Event } from "@rivetkit/effect";
 import { Schema } from "effect";
 
 // --- Errors ---
@@ -30,6 +30,14 @@ export const GetCount = Action.make("GetCount", {
 	success: Schema.Number,
 });
 
+// --- Events ---
+
+// The actor sends events to its connections. The payload is encoded with its
+// schema, like action payloads.
+export const CountChanged = Event.make("CountChanged", {
+	payload: { count: Schema.Number },
+});
+
 // --- Actor Definition ---
 
 // The definition is the actor's public contract. It carries no implementation
@@ -37,4 +45,5 @@ export const GetCount = Action.make("GetCount", {
 // leaking server details.
 export const Counter = Actor.make("Counter", {
 	actions: [Increment, GetCount],
+	events: [CountChanged],
 });

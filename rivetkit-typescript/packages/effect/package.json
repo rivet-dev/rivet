@@ -13,12 +13,22 @@
 		"dist/**/*.d.ts.map"
 	],
 	"exports": {
-		".": "./src/mod.ts"
+		".": {
+			"types": "./src/mod.ts",
+			"workerd": "./src/mod.ts",
+			"browser": "./src/mod.browser.ts",
+			"default": "./src/mod.ts"
+		}
 	},
 	"publishConfig": {
 		"access": "public",
 		"exports": {
-			".": "./dist/mod.js"
+			".": {
+				"types": "./dist/mod.d.ts",
+				"workerd": "./dist/mod.js",
+				"browser": "./dist/mod.browser.js",
+				"default": "./dist/mod.js"
+			}
 		}
 	},
 	"scripts": {
@@ -28,6 +38,9 @@
 		"lint:attw": "attw --pack . --profile esm-only",
 		"test": "vitest --typecheck",
 		"coverage": "vitest run --coverage"
+	},
+	"dependencies": {
+		"@rivet-dev/workflows": "^1.1.1"
 	},
 	"peerDependencies": {
 		"effect": "^4.0.0",
@@ -40,6 +53,7 @@
 		"@types/node": "^22.18.1",
 		"@vitest/coverage-v8": "^5.0.3",
 		"effect": "4.0.0",
+		"esbuild": "^0.27.3",
 		"publint": "^0.3.21",
 		"rivetkit": "workspace:*",
 		"typescript": "^5.9.2",

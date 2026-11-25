@@ -1,7 +1,7 @@
+import { db } from "@rivetkit/effect";
 import { Effect } from "effect";
 import { LanguageModel, type Prompt } from "effect/ai";
-import { db } from "rivetkit/db";
-import { Agent, EmptyMessageError, Message } from "./api.ts";
+import { Agent, EmptyMessageError, type Message } from "./api.ts";
 
 // The system prompt is applied on every call but never persisted as a turn.
 const SYSTEM_PROMPT =
@@ -20,24 +20,22 @@ const SYSTEM_PROMPT =
 // OpenAI model in `main.ts`, a mock model in the test). That is the dependency
 // injection seam that makes the LLM swappable.
 export const AgentLive = Agent.toLayer(
-	Effect.fnUntraced(function* ({ rawRivetkitContext }) {
-		const appendTurn = (turn: Message) =>
-			Effect.tryPromise(() =>
-				rawRivetkitContext.db.execute(
-					"INSERT INTO messages (role, content) VALUES (?, ?)",
-					turn.role,
-					turn.content,
-				),
-			).pipe(Effect.orDie);
+	Effect.fn(function* () {
+		// An `effect/sql` client on the actor's SQLite database.
+		const sql = yield* Agent.sql;
 
-		const readHistory = Effect.tryPromise(() =>
-			rawRivetkitContext.db.execute<Message>(
-				"SELECT role, content FROM messages ORDER BY id",
-			),
-		).pipe(Effect.orDie);
+		const appendTurn = (turn: Message) =>
+			sql`INSERT INTO messages (role, content) VALUES (${turn.role}, ${turn.content})`.pipe(
+				Effect.orDie,
+			);
+
+		const readHistory =
+			sql<Message>`SELECT role, content FROM messages ORDER BY id`.pipe(
+				Effect.orDie,
+			);
 
 		return Agent.of({
-			SendMessage: Effect.fnUntraced(function* ({ payload }) {
+			SendMessage: Effect.fn(function* ({ payload }) {
 				const content = payload.content.trim();
 
 				// Reject before writing, so the error path leaves the history

@@ -263,6 +263,7 @@ impl VolumeRecordView {
 #[derive(Debug)]
 pub(crate) struct CommandCommits {
 	deadline_boot_ms: u64,
+	admitted_budget_ms: u64,
 	in_flight: tokio::sync::watch::Sender<usize>,
 	expired: std::sync::atomic::AtomicBool,
 	/// Set once the command dispatches its first commit and never cleared.
@@ -271,14 +272,15 @@ pub(crate) struct CommandCommits {
 
 impl Default for CommandCommits {
 	fn default() -> Self {
-		Self::new(u64::MAX)
+		Self::new(u64::MAX, 30_000)
 	}
 }
 
 impl CommandCommits {
-	fn new(deadline_boot_ms: u64) -> Self {
+	fn new(deadline_boot_ms: u64, admitted_budget_ms: u64) -> Self {
 		Self {
 			deadline_boot_ms,
+			admitted_budget_ms,
 			in_flight: tokio::sync::watch::Sender::new(0),
 			expired: std::sync::atomic::AtomicBool::new(false),
 			dispatched: std::sync::atomic::AtomicBool::new(false),
@@ -409,6 +411,21 @@ impl KvHandle {
 	/// Nested reads may use an earlier deadline to leave time for their owning command to commit.
 	pub fn deadline_boot_ms(&self) -> u64 {
 		self.commits.deadline_boot_ms
+	}
+
+	/// The effective caller and handler budget when this command reached the volume host.
+	pub fn admitted_budget_ms(&self) -> u64 {
+		self.commits.admitted_budget_ms
+	}
+
+	/// The injected clock in the same domain as the command deadline.
+	pub fn clock(&self) -> Arc<dyn rivet_env::Clock> {
+		self.filesystem.clock()
+	}
+
+	/// The normal filesystem read budget of a new snapshot of this volume.
+	pub fn snapshot_read_timeout_ms(&self) -> u64 {
+		self.writer().0.snapshot_read_timeout_ms()
 	}
 
 	/// The version to encode a value of `family` stored in this volume at: the highest every

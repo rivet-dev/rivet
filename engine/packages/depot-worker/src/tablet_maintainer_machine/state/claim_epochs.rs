@@ -11,9 +11,31 @@
 //! So every epoch a lifetime issues sorts above every epoch an earlier lifetime issued,
 //! without a durable write. The replicas' strict claim check stays the safety net.
 
-use super::MaintainerState;
+use super::{MaintainerState, volume_keys::KeyId};
 use crate::tablet_maintainer_machine::Effects;
+use depot_types::VolumeLogKey;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub(super) struct VolumeClaims {
+	/// Latest application claim issued for this incarnation, including claims still in flight.
+	pub(super) open: Option<u64>,
+	/// Startup recovery claims issued since the latest application claim.
+	pub(super) startup_repairs: Option<StartupRepairEpochs>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub(super) struct StartupRepairEpochs {
+	first: u64,
+	pub(super) latest: u64,
+}
+
+impl StartupRepairEpochs {
+	pub(super) fn contains(self, epoch: u64) -> bool {
+		(self.first..=self.latest).contains(&epoch)
+	}
+}
 
 /// The claim counter of this lifetime's grant.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -22,6 +44,36 @@ pub(crate) struct ClaimEpochs {
 	/// `u32::MAX` the grant's epochs are exhausted and `drive` fences the maintainer, so its
 	/// supervisor asks for a fresh grant.
 	issued: u32,
+	/// Local claim evidence lives with the loaded volume under this grant.
+	pub(super) volumes: BTreeMap<KeyId, VolumeClaims>,
+}
+
+pub(super) fn record_open(state: &mut MaintainerState, key: &VolumeLogKey, epoch: u64) {
+	let id = state.volume_keys.intern(key);
+	let claims = state.claim_epochs.volumes.entry(id).or_default();
+	if Some(epoch) > claims.open {
+		claims.open = Some(epoch);
+		claims.startup_repairs = None;
+	}
+}
+
+pub(super) fn record_startup_repair(state: &mut MaintainerState, key: &VolumeLogKey, epoch: u64) {
+	let id = state.volume_keys.intern(key);
+	let claims = state.claim_epochs.volumes.entry(id).or_default();
+	let repairs = claims.startup_repairs.get_or_insert(StartupRepairEpochs {
+		first: epoch,
+		latest: epoch,
+	});
+	repairs.latest = epoch;
+}
+
+pub(super) fn get(state: &MaintainerState, key: &VolumeLogKey) -> VolumeClaims {
+	state
+		.volume_keys
+		.find(key)
+		.and_then(|id| state.claim_epochs.volumes.get(&id))
+		.copied()
+		.unwrap_or_default()
 }
 
 /// The first claim epoch of a lifetime under `grant_epoch`, or `None` when the grant does

@@ -1,5 +1,5 @@
-//! Volume recoveries that unloads and membership changes start. Each runs a recovery-only
-//! volume client, which owns every recovery decision.
+//! Maintainer-owned recoveries for volume lifecycle and replica catch-up. Each runs a
+//! recovery-only volume client, which owns every log recovery decision.
 
 use super::{MaintainerPhase, MaintainerState, Operation};
 use crate::tablet_maintainer_machine::types::REPAIR_TIMEOUT_MS;
@@ -12,6 +12,7 @@ use rivet_data::generated::{
 };
 use rivet_topology::worker::WorkerId;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 /// Why a recovery started, which decides what its completion reports.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -34,6 +35,12 @@ pub(crate) enum RecoveryPurpose {
 		grant_epoch: u64,
 		replica_set_version: u64,
 	},
+	/// Matches a returning voter that startup found behind an intact voting quorum.
+	/// Takes a slot of `max_repairs` and requires this voter to finish matching.
+	Startup {
+		worker: [u8; 16],
+		replica_set_version: u64,
+	},
 }
 
 /// Canceled recovery owners keep their concurrency reservation until they join.
@@ -42,7 +49,7 @@ pub(crate) fn active_jobs(s: &MaintainerState) -> usize {
 	counts.recover_volume as usize
 }
 
-/// Starts one selected recovery under the shared job budget; the caller must hold an eligible closed key.
+/// Starts one selected recovery under the caller's job budget and lifecycle checks.
 pub(crate) fn recover(
 	s: &mut MaintainerState,
 	key: VolumeLogKey,
@@ -90,15 +97,16 @@ pub(crate) fn recover(
 		tracing::debug!(?key, "recovery waits for a claim epoch");
 		return;
 	};
+	if matches!(purpose, RecoveryPurpose::Startup { .. }) {
+		super::claim_epochs::record_startup_repair(s, &key, claim_epoch);
+	}
 	// The stored row can make an unregistered volume eligible for filesystem apply.
 	super::filesystem::offer(s, &key);
 	super::deletion::observe_loaded(s, &key);
-	let required_members = if matches!(purpose, RecoveryPurpose::Membership { .. }) {
-		healthy_learner(s, &key)
-			.into_iter()
-			.collect::<std::collections::BTreeSet<_>>()
-	} else {
-		Default::default()
+	let required_members: BTreeSet<_> = match purpose {
+		RecoveryPurpose::Membership { .. } => healthy_learner(s, &key).into_iter().collect(),
+		RecoveryPurpose::Startup { worker, .. } => [WorkerId::from_bytes(worker)].into(),
+		_ => Default::default(),
 	};
 	let op_id = s.begin(
 		Operation::RecoverVolume {
@@ -110,13 +118,15 @@ pub(crate) fn recover(
 		fx,
 	);
 	fx.arm_timer_after(MaintainerTimer::Operation(op_id), REPAIR_TIMEOUT_MS);
-	// A healthy discovered learner must finish matching before Learning can advance.
-	// Its conditional promotion may outlast the optional-peer window. The original
-	// operation deadline already bounds this required work and is never rearmed here.
+	// Required members can take longer than the optional-peer window to match. The
+	// operation's original deadline bounds this work.
 	fx.execute(Fx::RecoverVolumeRequest {
 		op_id,
 		request: RecoveryRequest {
-			finish_recovery_timeout_ms: if matches!(purpose, RecoveryPurpose::Membership { .. }) {
+			finish_recovery_timeout_ms: if matches!(
+				purpose,
+				RecoveryPurpose::Membership { .. } | RecoveryPurpose::Startup { .. }
+			) {
 				Some(if required_members.is_empty() {
 					250
 				} else {
@@ -269,6 +279,16 @@ pub(crate) fn completed(
 		// Cancellation cannot undo a sent claim entry. Once this owner joins, even a
 		// timed-out recovery gives the next writer a fresh holder allowance.
 		super::catch_up::membership_recovery_finished(s, &key);
+	}
+	// A timeout cancels the child, and it may already have sent a claim. Back off
+	// after it joins just as for any other attempt. Old assignments own no goals.
+	if let RecoveryPurpose::Startup {
+		replica_set_version,
+		..
+	} = purpose
+		&& replica_set_version == s.tablet.replica_set.tablet_replica_set_version
+	{
+		super::startup::repair_finished(s, &key);
 	}
 	if result.is_ok() {
 		super::poll::request(s, key.clone(), fx);

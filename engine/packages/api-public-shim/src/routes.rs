@@ -146,23 +146,32 @@ fn create_result<T>(
 	.map_err(|error| create_error(progress, error))
 }
 
-/// Only refusals left before an actor create may be returned as retryable overloads.
+/// Only failures left before an actor create may be returned as retryable 5xx answers. A create
+/// that may have been sent already answers `actor.create_pending` instead, so a
+/// `depot.unavailable` or `depot.request_deadline_exceeded` that reaches here came from a read
+/// before the create, and sending the whole request again cannot create a second actor.
 fn create_response(result: Result<Response>) -> Response {
 	match result {
 		Ok(response) => response,
 		Err(error) => {
 			let refused = depot_client::retry_after_ms(&error).is_some();
-			let deadline_elapsed =
-				error
-					.downcast_ref::<rivet_error::RivetError>()
-					.is_some_and(|error| {
-						error.group() == "depot" && error.code() == "request_deadline_exceeded"
-					});
+			let depot_code = error
+				.downcast_ref::<rivet_error::RivetError>()
+				.filter(|error| error.group() == "depot")
+				.map(|error| error.code().to_owned());
 			let mut response = ApiError::from(error).into_response();
 			if refused {
 				*response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
-			} else if deadline_elapsed {
-				*response.status_mut() = StatusCode::GATEWAY_TIMEOUT;
+			} else {
+				match depot_code.as_deref() {
+					Some("request_deadline_exceeded") => {
+						*response.status_mut() = StatusCode::GATEWAY_TIMEOUT;
+					}
+					Some("unavailable") => {
+						*response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
+					}
+					_ => {}
+				}
 			}
 			response
 		}
@@ -863,6 +872,119 @@ async fn create_or_proxy(
 			None => Err(ActorMigratingFromV2::error()),
 		},
 	}
+}
+
+/// Largest request body forwarded to V2 for a client this cluster did not authenticate.
+const UNVERIFIED_BODY_LIMIT_BYTES: usize = 2 * 1024 * 1024;
+
+/// Serves an actor API request whose token this cluster refused. While a migration from V2 only
+/// passes through, V2 holds every actor of the namespace, so the request is forwarded to V2's
+/// public API with the client's own credentials and V2 decides; see
+/// [`migrate_from_v2::unverified`]. Any other request, and a keyed create whose key already lives
+/// here, is refused with `error`, so V2 never creates a key a second time.
+pub(crate) async fn unverified_v2(
+	ctx: &EngineContext,
+	token: Option<&str>,
+	error: anyhow::Error,
+	request: axum::extract::Request,
+) -> Result<Response> {
+	let path = request.uri().path();
+	let actor_route = path == "/actors" || path.starts_with("/actors/");
+	if !actor_route {
+		return Err(error);
+	}
+	let query: Vec<(String, String)> =
+		url::form_urlencoded::parse(request.uri().query().unwrap_or("").as_bytes())
+			.into_owned()
+			.collect();
+	let named = query
+		.iter()
+		.find(|(name, _)| name == "namespace")
+		.map(|(_, value)| value.as_str());
+	let dynamic = migrate_from_v2::snapshot(ctx);
+	let migration = match migrate_from_v2::unverified(dynamic.as_deref(), named, token, &error) {
+		Some(migrate_from_v2::Unverified::Forward(migration)) => migration,
+		Some(migrate_from_v2::Unverified::Refuse(migration)) => {
+			migration.count_request("v2_token_refused");
+			return Err(error);
+		}
+		None => return Err(error),
+	};
+
+	// A request that asks to be created here needs this cluster's authorization.
+	if migrate_from_v2::forces_actor_v3(request.headers())? {
+		migration.count_request("v2_token_refused");
+		return Err(error);
+	}
+
+	let (parts, body) = request.into_parts();
+	let raw = axum::body::to_bytes(body, UNVERIFIED_BODY_LIMIT_BYTES)
+		.await
+		.context("request body is too large to forward to V2")?;
+
+	let create = parts.method == Method::POST || parts.method == Method::PUT;
+	if create && parts.uri.path() == "/actors" {
+		let held_here = keyed_create_held_here(ctx, &migration.namespace, &raw).await?;
+		if held_here {
+			migration.count_request("v2_token_refused");
+			return Err(error);
+		}
+	}
+
+	// V2 knows the namespace by its V2 name.
+	let query = query
+		.into_iter()
+		.map(|(name, value)| match name.as_str() {
+			"namespace" => (name, migration.config.namespace.clone()),
+			_ => (name, value),
+		})
+		.collect::<Vec<_>>();
+	let path_and_query = match query.is_empty() {
+		true => parts.uri.path().to_owned(),
+		false => format!(
+			"{}?{}",
+			parts.uri.path(),
+			serde_html_form::to_string(&query)?
+		),
+	};
+	let headers = proxy::forward_headers(&parts.headers, &proxy::V2Credentials::Client, false)?;
+	let body = match raw.is_empty() {
+		true => None,
+		false => Some(raw),
+	};
+	let response = pegboard::migrate_from_v2::api_with_headers(
+		ctx,
+		migration.config,
+		parts.method,
+		&path_and_query,
+		headers,
+		body,
+	)
+	.await;
+	let response = match response {
+		Ok(response) => response,
+		Err(error) => {
+			migration.count_request("v2_error");
+			return Err(error);
+		}
+	};
+	migration.count_request("v2_token");
+	Ok(proxy::api_response(response))
+}
+
+/// Whether a create's key already names a live actor in `namespace` here. A keyless create, or a
+/// body this cluster cannot read, holds nothing here, and V2 answers it.
+async fn keyed_create_held_here(ctx: &EngineContext, namespace: &str, raw: &Bytes) -> Result<bool> {
+	let Ok(body) = serde_json::from_slice::<CreateActorRequest>(raw) else {
+		return Ok(false);
+	};
+	let Some(key) = body.key.as_deref() else {
+		return Ok(false);
+	};
+	let key = canonical_key(key)?;
+	let standing = pegboard::catalog::namespace_standing(ctx, namespace).await?;
+	let existing = find_keyed_actor(ctx, standing, &body.name, &key).await?;
+	Ok(existing.is_some())
 }
 
 /// Sends the create to V2's public API in the migrated V2 namespace.

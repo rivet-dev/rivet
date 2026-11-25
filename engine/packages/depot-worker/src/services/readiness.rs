@@ -3,6 +3,13 @@
 //! turn ongoing writes, new actor volumes or unrelated placement into startup work.
 
 use super::super::tablet_coordinator_machine::{store, types::ReadResult};
+use crate::{
+	metrics,
+	tablet_maintainer_machine::types::{
+		STARTUP_READINESS_SAMPLE_LIMIT, STARTUP_READINESS_WARN_AFTER_MS,
+		STARTUP_READINESS_WARN_INTERVAL_MS,
+	},
+};
 use anyhow::{Result, bail, ensure};
 use depot_log::log_shard_machine::{snapshot::LogShardSnapshot, state::LogShardPhase};
 use depot_types::keys::pubsub::ReplicaReadinessSubject;
@@ -17,6 +24,7 @@ use rivet_data::{
 	},
 	versioned::{DepotReplicaReadinessData, DepotStopReadinessResponseData},
 };
+use rivet_env::TimeoutError;
 use rivet_topology::{Topology, worker::WorkerId};
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tokio::sync::watch;
@@ -49,9 +57,18 @@ impl Readiness {
 }
 
 struct Owner(Readiness);
+impl Owner {
+	fn clear_metrics() {
+		metrics::STARTUP_READINESS_BLOCKING_TABLETS.set(0);
+		metrics::STARTUP_READINESS_BLOCKING_VOLUMES.set(0);
+		metrics::STARTUP_READINESS_WAIT_SECONDS.set(0);
+	}
+}
+
 impl Drop for Owner {
 	fn drop(&mut self) {
 		self.0.invalidate();
+		Self::clear_metrics();
 	}
 }
 
@@ -118,7 +135,13 @@ pub(super) async fn run(
 	mut stop: watch::Receiver<bool>,
 ) -> Result<()> {
 	let _owner = Owner(readiness.clone());
+	Owner::clear_metrics();
+	let started = metrics::telemetry_elapsed();
 	let clock = pubsub.env().clock();
+	let mut next_warning_at = clock
+		.observe()
+		.ok()
+		.map(|now| now.boot_ms.saturating_add(STARTUP_READINESS_WARN_AFTER_MS));
 	let worker = *pubsub.worker_id().as_bytes();
 	let instance = *pubsub.instance_id().as_bytes();
 	let mut rng = pubsub.env().rng("depot.startup_readiness");
@@ -127,6 +150,17 @@ pub(super) async fn run(
 		if *stop.borrow() {
 			return Ok(());
 		}
+		let warn = clock.observe().ok().is_some_and(|now| {
+			let next_warning_at = next_warning_at
+				.get_or_insert_with(|| now.boot_ms.saturating_add(STARTUP_READINESS_WARN_AFTER_MS));
+			if now.boot_ms < *next_warning_at {
+				return false;
+			}
+			*next_warning_at = now
+				.boot_ms
+				.saturating_add(STARTUP_READINESS_WARN_INTERVAL_MS);
+			true
+		});
 		let disk = shard.borrow().disk_incarnation;
 		let round = async {
 			ensure!(
@@ -142,24 +176,58 @@ pub(super) async fn run(
 				})
 				.cloned()
 				.collect::<Vec<_>>();
+			let mut blocking_tablets = work.len();
+			let mut reported_blocking_volumes = 0u64;
 			let checks = stream::iter(work.into_iter().map(|tablet| {
 				let pubsub = &pubsub;
 				let topology = topology.as_ref();
 				async move {
-					let ready = check(
+					let result = check(
 						&pubsub, &topology, capacities, &tablet, worker, instance, disk, timeout,
 					)
 					.await;
-					(tablet, ready)
+					(tablet, result)
 				}
 			}))
 			.buffer_unordered(8);
 			tokio::pin!(checks);
 			while let Some((tablet, result)) = checks.next().await {
-				if result.unwrap_or(false) {
+				let label = check_result(&result);
+				metrics::STARTUP_READINESS_CHECKS_TOTAL
+					.with_label_values(&[label])
+					.inc();
+				if matches!(result, Ok(Some(StopReadinessResponse::Ready))) {
+					blocking_tablets -= 1;
 					completed.insert(tablet.id, tablet);
+					continue;
+				}
+				let details = match &result {
+					Ok(Some(StopReadinessResponse::NotReady(details))) => {
+						reported_blocking_volumes =
+							reported_blocking_volumes.saturating_add(details.blocking_volumes);
+						Some(details)
+					}
+					_ => None,
+				};
+				if warn {
+					tracing::warn!(
+						tablet_id = %uuid::Uuid::from_bytes(tablet.id),
+						maintainer = ?tablet.maintainer.map(WorkerId::from_bytes),
+						joining_worker = %pubsub.worker_id(),
+						result = label,
+						blocking_volumes = details.map(|details| details.blocking_volumes),
+						sample = ?details.map(|details| {
+							&details.sample[..details.sample.len().min(STARTUP_READINESS_SAMPLE_LIMIT)]
+						}),
+						error = ?result.as_ref().err(),
+						"storage startup is waiting for tablet readiness"
+					);
 				}
 			}
+			metrics::STARTUP_READINESS_BLOCKING_TABLETS
+				.set(i64::try_from(blocking_tablets).unwrap_or(i64::MAX));
+			metrics::STARTUP_READINESS_BLOCKING_VOLUMES
+				.set(i64::try_from(reported_blocking_volumes).unwrap_or(i64::MAX));
 			let current = read_manifest(store.as_ref()).await?;
 			Ok::<_, anyhow::Error>(
 				complete(&current, worker, instance, &completed)
@@ -172,7 +240,23 @@ pub(super) async fn run(
 			changed = stop.changed() => { let _ = changed; return Ok(()); },
 			result = rivet_env::timeout(clock.as_ref(), timeout, round) => result,
 		);
+		let (round_result, error): (_, Option<&dyn std::fmt::Display>) = match &result {
+			Ok(Ok(true)) => ("ready", None),
+			Ok(Ok(false)) => ("blocked", None),
+			Ok(Err(error)) => ("error", Some(error)),
+			Err(error @ TimeoutError::Elapsed) => ("timeout", Some(error)),
+			Err(error @ TimeoutError::Clock(_)) => ("clock_error", Some(error)),
+		};
+		metrics::STARTUP_READINESS_ROUNDS_TOTAL
+			.with_label_values(&[round_result])
+			.inc();
+		if warn && let Some(error) = error {
+			tracing::warn!(result = round_result, %error, "storage startup readiness round failed");
+		}
+		let elapsed = metrics::telemetry_elapsed().saturating_sub(started);
 		if matches!(result, Ok(Ok(true))) {
+			Owner::clear_metrics();
+			metrics::STARTUP_READINESS_DURATION_SECONDS.observe(elapsed.as_secs_f64());
 			drop(completed);
 			*readiness.0.write() = Some(Completion {
 				disk,
@@ -187,6 +271,8 @@ pub(super) async fn run(
 				);
 			}
 		}
+		metrics::STARTUP_READINESS_WAIT_SECONDS
+			.set(i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX));
 		let next = clock
 			.observe()?
 			.boot_ms
@@ -196,6 +282,19 @@ pub(super) async fn run(
 			changed = manifests.changed() => { changed?; },
 			result = clock.sleep_until(next) => result?,
 		);
+	}
+}
+
+fn check_result(result: &Result<Option<StopReadinessResponse>>) -> &'static str {
+	match result {
+		Ok(Some(StopReadinessResponse::Ready)) => "ready",
+		Ok(Some(StopReadinessResponse::NotReady(_))) => "not_ready",
+		Ok(Some(StopReadinessResponse::NotServing)) => "not_serving",
+		Ok(Some(StopReadinessResponse::Overloaded(_))) => "overloaded",
+		Ok(Some(StopReadinessResponse::StaleTabletGrantEpoch(_))) => "stale_grant",
+		Ok(Some(StopReadinessResponse::StaleTabletReplicaSet(_))) => "stale_replica_set",
+		Ok(None) => "not_assigned",
+		Err(_) => "error",
 	}
 }
 
@@ -223,7 +322,7 @@ async fn check(
 	instance: [u8; 16],
 	disk: [u8; 16],
 	timeout: Duration,
-) -> Result<bool> {
+) -> Result<Option<StopReadinessResponse>> {
 	if !tablet.replica_set.members.contains(&worker)
 		|| !tablet
 			.replica_set
@@ -231,7 +330,7 @@ async fn check(
 			.iter()
 			.any(|entry| entry.worker_id == worker && entry.disk_incarnation == disk)
 	{
-		return Ok(false);
+		return Ok(None);
 	}
 	let maintainer = WorkerId::from_bytes(
 		tablet
@@ -263,8 +362,7 @@ async fn check(
 			&|| topology.may_admit().unwrap_or(false),
 		)
 		.await?;
-	Ok(
-		DepotStopReadinessResponseData::deserialize_with_embedded_version(&bytes)?
-			== StopReadinessResponse::Ready,
-	)
+	Ok(Some(
+		DepotStopReadinessResponseData::deserialize_with_embedded_version(&bytes)?,
+	))
 }

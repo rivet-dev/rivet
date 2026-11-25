@@ -74,8 +74,6 @@ const RETRY_BASE_MS: u64 = 1_000;
 const RETRY_MAX_MS: u64 = 30_000;
 /// Allow time for initial tablet placement before warning about a missing maintainer route.
 const LOAD_ROUTING_GRACE_MS: u64 = 3 * 60_000;
-/// Largest candidates page.
-const PAGE_LIMIT: u32 = 200;
 /// Timeout of an operator request's candidate read. The operator's UPS request waits at most 30
 /// s, so the read fails in time for the reply to reach it.
 const CANDIDATE_TIMEOUT_MS: u64 = 20_000;
@@ -2008,7 +2006,7 @@ fn list(state: &mut State, now: Clocks, out: &mut Effects) {
 		op,
 		datacenter_label: cursor.datacenter_label,
 		after: cursor.after.map(|after| after.to_vec()),
-		limit: PAGE_LIMIT,
+		limit: state.settings.candidates_page_limit,
 		actor_name: state.settings.actor_name.clone(),
 	});
 }

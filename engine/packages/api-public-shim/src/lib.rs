@@ -168,12 +168,23 @@ async fn require_credential(
 		anyhow::Ok(())
 	}
 	.await;
-	if let Err(error) = result {
+	let Err(error) = result else {
+		return next.run(request).await;
+	};
+	if !auth::is_token_rejection(&error) {
 		return auth::http_rejection(&error)
 			.map(axum::body::Body::from)
 			.into_response();
 	}
-	next.run(request).await
+
+	// While a migration from V2 only passes through, V2 may accept a token this cluster refused.
+	match routes::unverified_v2(&ctx, token.as_deref(), error, request).await {
+		Ok(response) => response,
+		Err(error) if auth::is_token_rejection(&error) => auth::http_rejection(&error)
+			.map(axum::body::Body::from)
+			.into_response(),
+		Err(error) => ApiError::from(error).into_response(),
+	}
 }
 
 /// A request's failure as an HTTP response. A structured error keeps its group, code and

@@ -171,6 +171,8 @@ pub(crate) struct AcquireTarget {
 	/// Whether an attempt already sent the create, so a later attempt reads the actor first and
 	/// creates again only once it finds the actor gone.
 	pub(crate) create_sent: bool,
+	/// Whether the request named the actor by name and key rather than by id.
+	pub(crate) keyed: bool,
 }
 
 impl AcquireTarget {
@@ -179,6 +181,7 @@ impl AcquireTarget {
 		group: Option<rivet_keys::keys::codec::GroupId>,
 		resolved: ResolvedRead,
 		create: Option<CreateActor>,
+		keyed: bool,
 	) -> Self {
 		Self {
 			actor_id,
@@ -186,7 +189,23 @@ impl AcquireTarget {
 			resolved: Some(resolved),
 			create,
 			create_sent: false,
+			keyed,
 		}
+	}
+
+	/// Whether the actor is known to be in the request's namespace before anything reads it,
+	/// so a namespace-scoped credential can be checked against that namespace up front.
+	///
+	/// A grouped actor's volumes are keyed in its namespace's group, so a read through the
+	/// request namespace's group can only reach that namespace's actors, whatever the id. A keyed
+	/// actor's id is derived from its key, and for the legacy unprefixed shape also from its
+	/// namespace's name ([`pegboard::actor_key::legacy_keyed_actor_id`]), so a key resolved in the
+	/// request's namespace names only that namespace's actor. Only an id the client chose, at
+	/// the legacy unprefixed keys every namespace without a group shares, may name another
+	/// namespace's actor; there the record's legacy namespace decides
+	/// ([`pegboard::catalog::actor_in_namespace`]), so the credential waits for a read.
+	fn in_request_namespace(&self) -> bool {
+		self.group.is_some() || self.keyed
 	}
 
 	/// Whether the acquisition starts with its create instead of a read: only when it may
@@ -293,6 +312,7 @@ pub(crate) fn retryable_open_error(error: &anyhow::Error) -> bool {
 }
 
 /// What a read of the actor found.
+#[derive(Debug)]
 enum Read {
 	/// The actor's data and phase.
 	Actor {
@@ -300,10 +320,50 @@ enum Read {
 		epoch: u32,
 		phase: wire::ActorPhase,
 	},
-	/// Created but its data is not written yet: it is initializing.
+	/// The actor has state but no data record yet: its create is committing.
 	Initializing,
-	/// No state volume: the actor never existed or was destroyed and deleted.
+	/// The actor's key belongs to V2: its state holds the delegation and no data record.
+	DelegatedToV2,
+	/// The V2 migrator holds the actor.
+	MigratingFromV2,
+	/// No actor: the actor never existed, was destroyed and deleted, or its state volume holds
+	/// no state because a create failed before its first commit.
 	Gone,
+}
+
+/// Classifies a read of the actor's state volume. A volume without machine state holds no
+/// actor, so it reads as gone and a request that may create the actor creates it. Reading it as
+/// initializing would wait for a start that nothing sends, since a `TryStart` there finds the
+/// default destroyed state.
+///
+/// A delegation to V2 or a migrator's hold is read from the phase itself, never left to a
+/// `TryStart`, so it costs no second round trip, and a namespace-scoped request for an id at
+/// the legacy unprefixed keys, which sends no `TryStart` to an actor without data, does not wait
+/// out its deadline for a start that never comes. Routing authorizes the request before it
+/// forwards to V2.
+fn classify_read(response: wire::ActorReadResponse) -> Read {
+	match (response.data, response.phase) {
+		(Some(actor), Some(phase)) => Read::Actor {
+			actor,
+			epoch: response.epoch,
+			phase,
+		},
+		(None, Some(wire::ActorPhase::DelegatedToV2)) => Read::DelegatedToV2,
+		(None, Some(wire::ActorPhase::MigratingFromV2(_))) => Read::MigratingFromV2,
+		(
+			None,
+			Some(
+				wire::ActorPhase::Initializing(_)
+				| wire::ActorPhase::Starting(_)
+				| wire::ActorPhase::Running(_)
+				| wire::ActorPhase::Stopping(_)
+				| wire::ActorPhase::Sleeping(_)
+				| wire::ActorPhase::Destroying(_)
+				| wire::ActorPhase::Destroyed,
+			),
+		) => Read::Initializing,
+		(_, None) => Read::Gone,
+	}
 }
 
 /// One request's acquisition, kept outside the deadline so its wait is released however it ends.
@@ -330,6 +390,19 @@ impl Acquire<'_> {
 		let ctx = self.ctx;
 		let clock = ctx.env().clock();
 		let mut stream_retry_delay = STREAM_RETRY_INITIAL_DELAY;
+		// A credential bound to a namespace is checked before the first read whenever the actor
+		// is known to be in the request's namespace. Its reads, notices and `TryStart`s then
+		// take the same path as any other credential's, and an actor without a data record yet
+		// is woken rather than waited on.
+		if self.credential.is_namespace_scoped() && self.target.in_request_namespace() {
+			authorize_read(
+				self.credential,
+				clock.observe()?.unix_ms,
+				self.namespace,
+				self.target.actor_id,
+			)?;
+			self.authorization_namespace = Some(self.namespace.to_owned());
+		}
 		let mut next = match self.target.creates_first() {
 			true => self.create().await?,
 			false => Next::Read,
@@ -396,6 +469,10 @@ impl Acquire<'_> {
 					} => (actor, epoch, phase),
 					Read::Initializing => {
 						self.last_phase = "initializing";
+						// Only a namespace-scoped request for an id at the legacy unprefixed
+						// keys is still unauthorized here: nothing but the record shows which
+						// namespace the actor is in, so it waits for the record instead of
+						// waking an actor it may not touch.
 						next = if self.credential.is_namespace_scoped()
 							&& self.authorization_namespace.is_none()
 						{
@@ -404,6 +481,14 @@ impl Acquire<'_> {
 							self.not_running().await?
 						};
 						continue;
+					}
+					Read::DelegatedToV2 => {
+						self.last_phase = "delegated_to_v2";
+						return Err(DelegatedToV2.into());
+					}
+					Read::MigratingFromV2 => {
+						self.last_phase = "migrating_from_v2";
+						return Err(HeldByMigrateFromV2.into());
 					}
 					Read::Gone => {
 						self.last_phase = "gone";
@@ -545,8 +630,9 @@ impl Acquire<'_> {
 		Ok(stream)
 	}
 
-	/// Notices carry no namespace, so a namespace-scoped credential can route only after a read
-	/// or keyed creation established its scope. Fresh expiry checks also cover opens resumed
+	/// Notices carry no namespace, so a namespace-scoped credential can route only once its
+	/// scope is established: up front for an actor known to be in the request's namespace
+	/// ([`AcquireTarget::in_request_namespace`]), or by a read or keyed creation. Fresh expiry checks also cover opens resumed
 	/// from a notice.
 	fn authorize_route(&self) -> Result<()> {
 		if !self.credential.is_namespace_scoped() {
@@ -603,14 +689,7 @@ impl Acquire<'_> {
 				}
 			}
 		};
-		Ok(match (response.data, response.phase) {
-			(Some(actor), Some(phase)) => Read::Actor {
-				actor,
-				epoch: response.epoch,
-				phase,
-			},
-			(None, _) | (_, None) => Read::Initializing,
-		})
+		Ok(classify_read(response))
 	}
 
 	/// Creates the actor with this request's waiter and returns what the answer settled. The

@@ -4644,6 +4644,7 @@ dependencies = [
  "reqwest 0.12.28",
  "rivet-metrics",
  "serde",
+ "serde_json",
  "slatedb",
  "slatedb-common",
  "tokio",

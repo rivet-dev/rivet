@@ -7,7 +7,7 @@ license.workspace = true
 edition.workspace = true
 
 [features]
-slatedb = ["dep:slatedb", "dep:slatedb-common", "dep:chrono", "dep:async-trait"]
+slatedb = ["dep:slatedb", "dep:slatedb-common", "dep:chrono", "dep:async-trait", "dep:serde_json"]
 default = []
 
 [dependencies]
@@ -21,6 +21,7 @@ rivet-metrics.workspace = true
 tower = { workspace = true, features = ["util"] }
 uuid.workspace = true
 serde.workspace = true
+serde_json = { workspace = true, optional = true }
 anyhow.workspace = true
 chrono = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }

@@ -1,7 +1,9 @@
 //! Forwarding to the V2 deployment a migration takes over: gateway requests and WebSockets
 //! proxied unchanged apart from their credentials. V2 cannot verify this cluster's tokens, so the
 //! gateway authorizes the client here, removes its token, and reaches V2 with the migration's
-//! token instead. The V2 public API client lives in `pegboard::migrate_from_v2`.
+//! token instead. A token this cluster cannot authenticate, which may be one of V2's own, is
+//! forwarded as the client sent it while the migration only passes through, and V2 authorizes it.
+//! The V2 public API client lives in `pegboard::migrate_from_v2`.
 
 use anyhow::{Context, Result};
 use axum::body::Body;
@@ -45,12 +47,22 @@ const HOP_BY_HOP_HEADERS: [&str; 9] = [
 const GATEWAY_PATH_PREFIX: &str = "/gateway/";
 
 /// The V2 gateway URI for a request this gateway received as `original`. The path and query
-/// are kept byte for byte, except that `rvt-namespace` names the V2 namespace and the client's
-/// token is removed from both: from `rvt-token`, and from a direct selector's `{actor_id}@{token}`.
-/// A keyed request gets `rvt-namespace` even when the client left it out, because V2 requires it.
-pub fn gateway_uri(config: &MigrateFromV2, original: &Uri, keyed: bool) -> Result<Uri> {
-	let query = rewrite_query(original.query(), &config.namespace, keyed);
-	let path = without_selector_token(original.path(), keyed);
+/// are kept byte for byte, except that `rvt-namespace` names the V2 namespace and, when
+/// `credentials` replace the client's token, that token is removed from both: from `rvt-token`,
+/// and from a direct selector's `{actor_id}@{token}`. A keyed request gets `rvt-namespace` even
+/// when the client left it out, because V2 requires it.
+pub fn gateway_uri(
+	config: &MigrateFromV2,
+	original: &Uri,
+	keyed: bool,
+	credentials: &V2Credentials<'_>,
+) -> Result<Uri> {
+	let strip_token = credentials.replaces_client_token();
+	let query = rewrite_query(original.query(), &config.namespace, keyed, strip_token);
+	let path = match strip_token {
+		true => without_selector_token(original.path(), keyed),
+		false => original.path().to_owned(),
+	};
 	let path = path.as_str();
 	let path_and_query = match query {
 		Some(query) => format!("{path}?{query}"),
@@ -82,9 +94,14 @@ fn without_selector_token(path: &str, keyed: bool) -> String {
 	format!("{GATEWAY_PATH_PREFIX}{actor}{tail}")
 }
 
-/// `query` with `rvt-namespace` set to `namespace` and without `rvt-token`. Every other parameter
-/// is kept as it was.
-pub fn rewrite_query(query: Option<&str>, namespace: &str, ensure: bool) -> Option<String> {
+/// `query` with `rvt-namespace` set to `namespace`, and without `rvt-token` when `strip_token`.
+/// Every other parameter is kept as it was.
+pub fn rewrite_query(
+	query: Option<&str>,
+	namespace: &str,
+	ensure: bool,
+	strip_token: bool,
+) -> Option<String> {
 	let encoded = serde_html_form::to_string([("rvt-namespace", namespace)]).ok()?;
 	let mut found = false;
 	let mut parts = Vec::new();
@@ -94,7 +111,7 @@ pub fn rewrite_query(query: Option<&str>, namespace: &str, ensure: bool) -> Opti
 		.filter(|part| !part.is_empty())
 	{
 		let name = part.split('=').next().unwrap_or("");
-		if name == "rvt-token" {
+		if strip_token && name == "rvt-token" {
 			continue;
 		}
 		if name == "rvt-namespace" {
@@ -114,19 +131,38 @@ pub fn rewrite_query(query: Option<&str>, namespace: &str, ensure: bool) -> Opti
 	}
 }
 
-/// The credentials of a request proxied to V2.
-pub struct V2Credentials<'a> {
-	/// The token this cluster authenticated the client with, which V2 cannot verify.
-	pub client_token: Option<&'a str>,
-	/// `migrate_from_v2.token`, which V2 authorizes the request with instead.
-	pub v2_token: Option<&'a str>,
+/// How a request proxied to V2 is authorized.
+pub enum V2Credentials<'a> {
+	/// This cluster authorized the client, whose token V2 cannot verify. The client's token is
+	/// removed wherever it rode and V2 authorizes the request with the migration's token.
+	Migration {
+		/// The token this cluster authenticated the client with.
+		client_token: Option<&'a str>,
+		/// `migrate_from_v2.token`.
+		v2_token: Option<&'a str>,
+	},
+	/// This cluster could not authenticate the client's token, which may be one of V2's own, so V2
+	/// authorizes the request with the client's credentials exactly as it sent them. The
+	/// migration's token is never attached, since nothing here vouched for the client.
+	Client,
 }
 
-/// The client's headers without connection-scoped ones and without the client's token, with the
-/// migration's token in its place. V2's gateway reads its token from `x-rivet-token` for a request
-/// and from a `rivet_token.` subprotocol for a WebSocket, and strips both before actor code sees
-/// the request, so the token goes there. An `Authorization` bearer is removed only when it is the
-/// client's token, so an actor-level bearer still reaches the actor.
+impl V2Credentials<'_> {
+	/// Whether the client's token is removed before the request reaches V2.
+	fn replaces_client_token(&self) -> bool {
+		match self {
+			Self::Migration { .. } => true,
+			Self::Client => false,
+		}
+	}
+}
+
+/// The client's headers without connection-scoped ones. With [`V2Credentials::Migration`] the
+/// client's token is removed too and the migration's token takes its place. V2's gateway reads its
+/// token from `x-rivet-token` for a request and from a `rivet_token.` subprotocol for a WebSocket,
+/// and strips both before actor code sees the request, so the token goes there. An
+/// `Authorization` bearer is removed only when it is the client's token, so an actor-level bearer
+/// still reaches the actor.
 pub fn forward_headers(
 	headers: &HeaderMap,
 	credentials: &V2Credentials<'_>,
@@ -136,13 +172,20 @@ pub fn forward_headers(
 	for name in HOP_BY_HOP_HEADERS {
 		forwarded.remove(name);
 	}
+	let (client_token, v2_token) = match credentials {
+		V2Credentials::Migration {
+			client_token,
+			v2_token,
+		} => (*client_token, *v2_token),
+		V2Credentials::Client => return Ok(forwarded),
+	};
 	forwarded.remove(X_RIVET_TOKEN);
 
 	let client_bearer = forwarded
 		.get(header::AUTHORIZATION)
 		.and_then(|value| value.to_str().ok())
 		.and_then(bearer_token)
-		.is_some_and(|token| Some(token) == credentials.client_token);
+		.is_some_and(|token| Some(token) == client_token);
 	if client_bearer {
 		forwarded.remove(header::AUTHORIZATION);
 	}
@@ -159,7 +202,7 @@ pub fn forward_headers(
 		.collect::<Vec<_>>();
 	forwarded.remove(header::SEC_WEBSOCKET_PROTOCOL);
 
-	if let Some(v2_token) = credentials.v2_token {
+	if let Some(v2_token) = v2_token {
 		if websocket {
 			protocols.push(format!("{WS_PROTOCOL_TOKEN}{v2_token}"));
 		} else {

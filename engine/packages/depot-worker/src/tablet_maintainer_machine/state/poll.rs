@@ -12,6 +12,7 @@ use super::{MaintainerPhase, MaintainerState, Operation, cold, volume_keys::KeyI
 use crate::tablet_maintainer_machine::{Effects, effect::MaintainerEffect, types::*};
 use depot_types::VolumeLogKey;
 use rivet_data::generated::{
+	depot_log_shard_v1::VolumeLogReplicaState,
 	depot_storage_worker_protocol_v1::{self as wire, RejectResponse, StorageWorkerResponse},
 	shared_depot_types_v1::VolumeLogReplicaStatus,
 };
@@ -961,6 +962,21 @@ fn observed(
 			reset(state, &key);
 		}
 		super::stop::observe(state, &key, &worker, &observed);
+		// Status snapshots can arrive out of order. The shard's claim only advances
+		// within a replica incarnation, so an older reply cannot replace its holder.
+		let claim_epoch = |replica: &VolumeLogReplicaState| {
+			replica
+				.claimed_client
+				.as_ref()
+				.map(|claim| claim.client_epoch)
+		};
+		if observed.status != VolumeLogReplicaStatus::Deleted
+			&& previous.as_ref().is_some_and(|old| {
+				old.replica_incarnation == observed.replica_incarnation
+					&& claim_epoch(old) > claim_epoch(&observed)
+			}) {
+			return;
+		}
 		let now_in_sync = observed.status == VolumeLogReplicaStatus::InSync
 			&& previous
 				.as_ref()

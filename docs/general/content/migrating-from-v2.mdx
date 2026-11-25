@@ -84,7 +84,11 @@ The current pass should list the namespace's actors as `not_selected`, because t
 
 Switch your clients and backend to the Rivet 3 endpoint. Every request now goes through Rivet 3, which forwards everything to Rivet 2 until actors start moving. Note that you will still need actor nodes pointed at Rivet 2 until the end of the migration. See [Run nodes on both control planes](#run-nodes-on-both-control-planes).
 
-Clients need Rivet 3 tokens, so issue them before you switch. Rivet 3 does not accept Rivet 2 tokens. It checks a Rivet 3 token itself and reaches actors still on Rivet 2 with the migration's Rivet 2 token, so one Rivet 3 token works for every actor throughout the migration. Ship the new endpoint and the new token in the same client release. A token scoped to particular actor IDs reaches an actor on Rivet 2 by its ID, but a lookup by key of an actor still on Rivet 2 needs a token with access to every actor in the namespace.
+You can point your existing hostname at Rivet 3 without changing client tokens first. While both ratios are 0, Rivet 3 forwards a gateway or actor API request whose token it does not accept to Rivet 2 unchanged, and Rivet 2 checks the token itself. Clients that still hold Rivet 2 tokens keep working during and after the DNS change.
+
+After DNS points at Rivet 3, switch every client to a Rivet 3 token. Rivet 3 checks a Rivet 3 token itself and reaches actors still on Rivet 2 with the migration's Rivet 2 token, so one Rivet 3 token works for every actor throughout the migration. A token scoped to particular actor IDs reaches an actor on Rivet 2 by its ID, but a lookup by key of an actor still on Rivet 2 needs a token with access to every actor in the namespace.
+
+**Finish switching tokens before you raise `create_ratio` or `migrate_ratio` above 0, or move actors by hand.** Once either ratio is above 0, Rivet 3 refuses Rivet 2 tokens, because it cannot authorize them for the actors it holds or decide where the keys they create belong. For the same reason, a request with a Rivet 2 token that sends `x-rivet-actor-version: 3`, or creates a key Rivet 3 already holds, is refused. Wait until `rivet_gateway_migrate_from_v2_requests_total{route="v2_token"}` stays flat. Short-lived JWTs drain on their own as they expire. ACL tokens may never expire, so issue Rivet 3 tokens for them, or register each one on Rivet 3 with the same secret, passed in the `token` field of the token create API, so clients need no change.
 
 </Step>
 </Steps>
@@ -93,6 +97,8 @@ Clients need Rivet 3 tokens, so issue them before you switch. Rivet 3 does not a
 
 Keep your current node deployment connected to Rivet 2, and add a second deployment of the same code connected to Rivet 3. Size the Rivet 3 deployment for the actors you expect to move in the next stretch of the migration, then grow it as the share moves over. Both deployments run until the last actor has moved.
 
+The Rivet 3 deployment needs its own Rivet 3 credentials. Set its `RIVET_ENDPOINT` to the Rivet 3 endpoint with a Rivet 3 token that may register nodes in the namespace, such as `https://my-namespace:<token>@rivet3.example.com`. Use a token that does not expire, such as an ACL token, because a node holds its connection for as long as it runs. The Rivet 2 deployment keeps its current endpoint and token.
+
 Deploy new code to both deployments together for the duration of the migration, since an actor can run on either one depending on whether it has moved yet.
 
 ### Actor-to-actor calls
@@ -100,6 +106,8 @@ Deploy new code to both deployments together for the duration of the migration, 
 An actor's own client (`c.client()`) talks to the control plane its node is connected to. On a node connected to Rivet 2, that is Rivet 2, which does not know about actors that have already moved. A call by key to a moved actor can then fail, or create a second actor with the same key in Rivet 2.
 
 Make those calls through a client created with `createClient` and pointed at the Rivet 3 endpoint on both node deployments, for as long as the migration runs. Rivet 3 reaches every actor, wherever it lives, and decides where each new key is created, so a call that goes straight to Rivet 2 can create a key Rivet 3 has already placed. Do this before raising `create_ratio` above 0.
+
+This client needs a Rivet 3 token on both deployments, including the one connected to Rivet 2, whose own credentials are Rivet 2's. Pass it to `createClient` with the Rivet 3 endpoint, for example through its own environment variable, so it does not replace the node's `RIVET_ENDPOINT`.
 
 ## Changing settings without a restart
 
@@ -162,6 +170,8 @@ The first create of a key settles where it lives, and every later create of that
 | `max_copy_bytes` | 10 GiB | Largest actor copied, by stored SQLite size plus key-value size. Larger actors are skipped as `too_large`. |
 | `max_copy_bytes_per_sec` | 32 MiB/s | State admitted for copying per second, which bounds the read load on Rivet 2's storage. |
 | `confirm_delay_ms` | 20 s | How long a handover waits before it is confirmed, so a wake already on its way to Rivet 2 lands first. |
+| `candidates_page_limit` | `200` | Actors the migrator asks Rivet 2 for in one listing request, at most `500`. A smaller page keeps each listing request shorter. |
+| `parked_page_limit` | `100` | Parked actors `migrate-from-v2 delete-parked` asks Rivet 2 for in one listing request, at most `500`. A smaller page keeps each listing request shorter. |
 
 ### Pacing
 
@@ -194,6 +204,8 @@ rivet-engine migrate-from-v2 status
 A request can ask for its new actor to be created in Rivet 3 regardless of `create_ratio`, by sending the `x-rivet-actor-version: 3` header. Browsers and other clients that cannot set headers on a WebSocket upgrade can send the `rivet_actor_version.3` WebSocket subprotocol instead.
 
 With the header, an actor without a key is created in Rivet 3, and a keyed `getOrCreate` creates it in Rivet 3 unless the key already belongs to Rivet 2, in which case it returns the Rivet 2 actor. A key belongs to Rivet 2 when Rivet 2 holds it, or when an earlier create without the header placed it there, so the header only decides where a key's first create lands. Any other version is refused with `actor.invalid_version`. Use it to try new features on Rivet 3 or to route a specific part of your app there early. Without a migration configured, the header has no effect.
+
+Do not send the header until every client has switched to a Rivet 3 token. Rivet 3 forwards a create with a Rivet 2 token to Rivet 2 without placing its key, so a key created with the header at the same moment could be created in both control planes.
 
 ### Returning an actor to Rivet 2
 
@@ -257,7 +269,7 @@ The same picture is available as Prometheus metrics from every control plane ins
 | `rivet_migrate_from_v2_copy_bytes`, `rivet_migrate_from_v2_copy_duration_seconds` | Size and duration of each copy. |
 | `rivet_migrate_from_v2_pass_duration_seconds`, `rivet_migrate_from_v2_pass_completed_at_seconds` | Pass length and the time the last pass finished. |
 | `rivet_migrate_from_v2_effect_failures_total` | Failed calls to Rivet 2 or Rivet 3 during moves, by phase. |
-| `rivet_gateway_migrate_from_v2_requests_total` | Requests by `route`: served by Rivet 3 (`v3`), forwarded to Rivet 2 (`v2_fallback`), refused because Rivet 2 failed (`v2_error`), asked to retry (`retry_later`), or `not_found`. |
+| `rivet_gateway_migrate_from_v2_requests_total` | Gateway and actor API requests by `route`: served by Rivet 3 (`v3`), forwarded to Rivet 2 (`v2_fallback`), forwarded to Rivet 2 with a token Rivet 3 does not accept (`v2_token`), refused for such a token once actors move (`v2_token_refused`), refused because Rivet 2 failed (`v2_error`), asked to retry (`retry_later`), or `not_found`. |
 
 As the migration progresses, `v3` grows and `v2_fallback` shrinks toward 0. A steady stream of `v2_error` means Rivet 3 cannot reliably reach Rivet 2.
 
@@ -285,7 +297,7 @@ Wait for a pass whose `already_migrated` count equals its `listed` count, with n
 </Step>
 <Step title="Confirm nothing reaches Rivet 2">
 
-`rivet_gateway_migrate_from_v2_requests_total{route="v2_fallback"}` should stay flat. Requests still being forwarded mean an actor is still on Rivet 2.
+`rivet_gateway_migrate_from_v2_requests_total{route="v2_fallback"}` should stay flat. Requests still being forwarded mean an actor is still on Rivet 2. `v2_token_refused` should stay flat too. Requests counted there come from clients that still hold Rivet 2 tokens.
 
 </Step>
 <Step title="Stop the Rivet 2 nodes">

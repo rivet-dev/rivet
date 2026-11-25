@@ -69,19 +69,39 @@ pub async fn api(
 	path_and_query: &str,
 	body: Option<Bytes>,
 ) -> Result<ApiResponse> {
+	let mut headers = http::HeaderMap::new();
+	if body.is_some() {
+		headers.insert(
+			http::header::CONTENT_TYPE,
+			http::HeaderValue::from_static("application/json"),
+		);
+	}
+	if let Some(token) = &config.token {
+		headers.insert(
+			http::header::AUTHORIZATION,
+			http::HeaderValue::from_str(&format!("Bearer {token}"))
+				.context("migrate_from_v2.token is not a valid header value")?,
+		);
+	}
+	api_with_headers(ctx, config, method, path_and_query, headers, body).await
+}
+
+/// Calls V2's public API with `headers` as given, which carry the request's credentials.
+/// `path_and_query` starts with `/`.
+pub async fn api_with_headers(
+	ctx: &EngineContext,
+	config: &MigrateFromV2,
+	method: Method,
+	path_and_query: &str,
+	headers: http::HeaderMap,
+	body: Option<Bytes>,
+) -> Result<ApiResponse> {
 	let uri: http::Uri = format!("{}{path_and_query}", api_url(config)?)
 		.parse()
 		.context("invalid V2 public API URI")?;
-	let has_body = body.is_some();
 	let body = futures_util::stream::iter(body.map(Ok)).boxed();
-	let mut builder = Request::builder().method(method).uri(uri);
-	if has_body {
-		builder = builder.header(http::header::CONTENT_TYPE, "application/json");
-	}
-	if let Some(token) = &config.token {
-		builder = builder.header(http::header::AUTHORIZATION, format!("Bearer {token}"));
-	}
-	let request = builder.body(body)?;
+	let mut request = Request::builder().method(method).uri(uri).body(body)?;
+	*request.headers_mut() = headers;
 
 	let clock = ctx.env().clock();
 	let deadline = rivet_env::deadline_after(clock.as_ref(), V2_API_TIMEOUT)?;

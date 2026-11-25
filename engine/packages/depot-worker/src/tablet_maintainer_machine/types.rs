@@ -91,6 +91,10 @@ pub const MAX_ORPHAN_SCAN_KEYS: u32 = 128;
 /// Deadline for one operator repair cycle of a volume.
 pub const REPAIR_TIMEOUT_MS: u64 = 60_000;
 
+pub(crate) const STARTUP_READINESS_WARN_AFTER_MS: u64 = 120_000;
+pub(crate) const STARTUP_READINESS_WARN_INTERVAL_MS: u64 = 60_000;
+pub(crate) const STARTUP_READINESS_SAMPLE_LIMIT: usize = 4;
+
 /// Brief coalescing window for ready cuts from different volumes.
 pub const COLD_BATCH_DELAY_MS: u64 = 10;
 

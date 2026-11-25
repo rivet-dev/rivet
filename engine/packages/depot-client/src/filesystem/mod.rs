@@ -35,7 +35,7 @@ pub mod transport;
 pub use cache::{CacheBudget, CacheReservation};
 pub use client::{FileLock, Filesystem, NoteExpiry, StagedFile};
 pub use depot_fs_core::{FsKind as Kind, rules::Attributes};
-pub use transaction::{ReadRange, Transaction};
+pub use transaction::{MAX_KV_KEY_BYTES, ReadRange, Transaction};
 
 use depot_volume::volume_client_machine::types::WriteError;
 

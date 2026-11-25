@@ -220,6 +220,11 @@
 							"icon": "faRust"
 						},
 						{
+							"title": "Effect",
+							"href": "/actors/docs/clients/effect",
+							"icon": "faLayerGroup"
+						},
+						{
 							"title": "Swift",
 							"href": "/actors/docs/clients/swift",
 							"icon": "faSwift"

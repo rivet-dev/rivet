@@ -1,10 +1,10 @@
 ---
 title: "Clients"
-description: "Choose a Rivet Actors client for JavaScript, React, Rust, Swift, or SwiftUI and connect applications to your actor backend."
+description: "Choose a Rivet Actors client for JavaScript, React, Rust, Effect, Swift, or SwiftUI and connect applications to your actor backend."
 skill: false
 ---
 
-import { faNodeJs, faReact, faRust, faSwift } from "@rivet-gg/icons";
+import { faLayerGroup, faNodeJs, faReact, faRust, faSwift } from "@rivet-gg/icons";
 
 <CardGroup cols={2}>
 <Card title="JavaScript" href="/docs/clients/javascript" icon={faNodeJs}>
@@ -15,6 +15,9 @@ import { faNodeJs, faReact, faRust, faSwift } from "@rivet-gg/icons";
 </Card>
 <Card title="Rust" href="/docs/clients/rust" icon={faRust}>
   Connect Rust apps and backends to actors with a typed client
+</Card>
+<Card title="Effect" href="/actors/docs/clients/effect" icon={faLayerGroup}>
+  Call actors from Effect programs with typed errors and event streams
 </Card>
 <Card title="Swift" href="/docs/clients/swift" icon={faSwift}>
   Connect iOS, macOS, and server-side Swift apps to actors

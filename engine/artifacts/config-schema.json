@@ -1678,6 +1678,15 @@
             }
           ]
         },
+        "candidates_page_limit": {
+          "description": "Candidates the migrator asks V2 for in one listing request. V2 accepts 1 to 500; a smaller page keeps each V2 listing request shorter. Defaults to 200.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
         "confirm_delay_ms": {
           "type": [
             "integer",
@@ -1754,6 +1763,15 @@
         "namespace": {
           "description": "The V2 namespace being migrated.",
           "type": "string"
+        },
+        "parked_page_limit": {
+          "description": "Parked actors `rivet-engine migrate-from-v2 delete-parked` asks V2 for in one listing request. V2 accepts 1 to 500; a smaller page keeps each V2 listing request shorter. Defaults to 100.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
         },
         "pass_interval_ms": {
           "type": [

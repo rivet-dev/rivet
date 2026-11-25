@@ -1077,6 +1077,13 @@ impl Filesystem {
 		self.clock.clone()
 	}
 
+	/// The normal read budget of a newly opened snapshot.
+	pub fn snapshot_read_timeout_ms(&self) -> u64 {
+		self.config
+			.request_timeout_ms
+			.min(self.config.max_snapshot_age_ms)
+	}
+
 	pub fn memory_bytes(&self) -> usize {
 		self.budget.used()
 	}
@@ -1375,7 +1382,8 @@ impl Filesystem {
 	pub(super) fn now(&self) -> Result<rivet_env::Clocks> {
 		self.clock.observe().map_err(|_| Error::Unavailable)
 	}
-	pub(super) fn deadline(&self) -> Result<u64> {
+	/// Absolute boot-time deadline for an operation starting now, including its fallback reads.
+	pub fn deadline(&self) -> Result<u64> {
 		Ok(self
 			.now()?
 			.boot_ms
@@ -2006,6 +2014,30 @@ impl Filesystem {
 	pub async fn read(&self, ino: u64, offset: u64, count: usize) -> Result<Vec<u8>> {
 		let mut ranges = self.read_ranges(ino, &[(offset, count)]).await?;
 		ranges.pop().ok_or_else(|| corrupt!())
+	}
+
+	/// Hints whether at least `minimum` distinct chunks need cold reads. Pass sorted byte
+	/// offsets and a positive threshold. A busy or changing view declines read-ahead.
+	pub fn has_cold_file_chunks(
+		&self,
+		ino: u64,
+		offsets: impl Iterator<Item = u64>,
+		minimum: usize,
+	) -> bool {
+		let Ok(state) = self.state.try_lock() else {
+			return false;
+		};
+		let Ok(status) = self.status() else {
+			return false;
+		};
+		if status.committed != state.last_seq
+			|| status.cold.volume_seq > state.cold.snapshot.position().volume_seq
+		{
+			return false;
+		}
+		let view = self.view(&state, state.last_seq);
+		drop(state);
+		view.has_cold_chunks(ino, offsets, minimum)
 	}
 
 	/// Reads several ranges of `ino`, each `(offset, count)`, together: their chunks come

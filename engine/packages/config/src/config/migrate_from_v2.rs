@@ -16,6 +16,8 @@ const MAX_IN_FLIGHT: u32 = 10_000;
 const MAX_ACTORS_PER_SEC: u32 = 100_000;
 const MAX_INTERVAL_MS: u64 = 7 * 24 * 60 * 60 * 1000;
 const MAX_NAMESPACE_NAME_BYTES: usize = 63;
+/// Largest page V2's candidates and parked listings accept.
+const MAX_PAGE_LIMIT: u32 = 500;
 
 /// Settings for moving one V2 namespace's actors into this cluster.
 ///
@@ -81,6 +83,13 @@ pub struct MigrateFromV2 {
 	/// the copy load on the storage nodes, which the actor count alone does not when actors are
 	/// large. The migrator is a singleton, so the budget is per datacenter. Defaults to 32 MiB/s.
 	pub max_copy_bytes_per_sec: Option<u64>,
+	/// Candidates the migrator asks V2 for in one listing request. V2 accepts 1 to 500; a smaller
+	/// page keeps each V2 listing request shorter. Defaults to 200.
+	pub candidates_page_limit: Option<u32>,
+	/// Parked actors `rivet-engine migrate-from-v2 delete-parked` asks V2 for in one listing
+	/// request. V2 accepts 1 to 500; a smaller page keeps each V2 listing request shorter.
+	/// Defaults to 100.
+	pub parked_page_limit: Option<u32>,
 }
 
 impl std::fmt::Debug for MigrateFromV2 {
@@ -103,6 +112,8 @@ impl std::fmt::Debug for MigrateFromV2 {
 			.field("confirm_delay_ms", &self.confirm_delay_ms)
 			.field("max_copy_bytes", &self.max_copy_bytes)
 			.field("max_copy_bytes_per_sec", &self.max_copy_bytes_per_sec)
+			.field("candidates_page_limit", &self.candidates_page_limit)
+			.field("parked_page_limit", &self.parked_page_limit)
 			.field("backup", &self.backup)
 			.finish()
 	}
@@ -214,6 +225,18 @@ pub struct MigrateFromV2Overrides {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub max_copy_bytes_per_sec: Option<Option<u64>>,
+	#[serde(
+		default,
+		deserialize_with = "crate::dynamic::double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub candidates_page_limit: Option<Option<u32>>,
+	#[serde(
+		default,
+		deserialize_with = "crate::dynamic::double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub parked_page_limit: Option<Option<u32>>,
 }
 
 impl std::fmt::Debug for MigrateFromV2Overrides {
@@ -235,6 +258,8 @@ impl std::fmt::Debug for MigrateFromV2Overrides {
 			.field("confirm_delay_ms", &self.confirm_delay_ms)
 			.field("max_copy_bytes", &self.max_copy_bytes)
 			.field("max_copy_bytes_per_sec", &self.max_copy_bytes_per_sec)
+			.field("candidates_page_limit", &self.candidates_page_limit)
+			.field("parked_page_limit", &self.parked_page_limit)
 			.finish()
 	}
 }
@@ -268,6 +293,8 @@ impl MigrateFromV2Overrides {
 				backup: None,
 				max_copy_bytes: None,
 				max_copy_bytes_per_sec: None,
+				candidates_page_limit: None,
+				parked_page_limit: None,
 			},
 		};
 
@@ -319,6 +346,12 @@ impl MigrateFromV2Overrides {
 		if let Some(Some(value)) = self.max_copy_bytes_per_sec {
 			section.max_copy_bytes_per_sec = Some(value);
 		}
+		if let Some(Some(value)) = self.candidates_page_limit {
+			section.candidates_page_limit = Some(value);
+		}
+		if let Some(Some(value)) = self.parked_page_limit {
+			section.parked_page_limit = Some(value);
+		}
 		Ok(section)
 	}
 }
@@ -360,6 +393,14 @@ impl MigrateFromV2 {
 
 	pub fn max_copy_bytes_per_sec(&self) -> u64 {
 		self.max_copy_bytes_per_sec.unwrap_or(32 * 1024 * 1024)
+	}
+
+	pub fn candidates_page_limit(&self) -> u32 {
+		self.candidates_page_limit.unwrap_or(200)
+	}
+
+	pub fn parked_page_limit(&self) -> u32 {
+		self.parked_page_limit.unwrap_or(100)
 	}
 
 	pub fn validate(&self) -> Result<()> {
@@ -415,6 +456,15 @@ impl MigrateFromV2 {
 			self.max_copy_bytes_per_sec() > 0,
 			"migrate_from_v2.max_copy_bytes_per_sec must be positive"
 		);
+		for (name, value) in [
+			("candidates_page_limit", self.candidates_page_limit()),
+			("parked_page_limit", self.parked_page_limit()),
+		] {
+			ensure!(
+				(1..=MAX_PAGE_LIMIT).contains(&value),
+				"migrate_from_v2.{name} must be between 1 and {MAX_PAGE_LIMIT}, the page sizes V2 accepts"
+			);
+		}
 		ensure!(
 			self.wake_horizon_ms() >= MIN_WAKE_HORIZON_MS,
 			"migrate_from_v2.wake_horizon_ms must be at least {MIN_WAKE_HORIZON_MS}, past V2's deadline pull-ahead"

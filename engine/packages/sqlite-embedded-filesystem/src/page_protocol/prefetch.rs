@@ -1,5 +1,6 @@
 //! Drives the SQLite planner against the actor's ordinary Depot files and KV sidecars.
 use super::database::{Database, OVERFLOW_PREFIX, PAGE, RECENT_PREFIX, storage_key};
+use super::scan_windows::MIN_PLANNED_PAGES;
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -16,6 +17,7 @@ pub(super) struct BackgroundRows {
 
 struct Store<'a> {
 	database: &'a Database,
+	use_scan_windows: bool,
 }
 
 #[async_trait]
@@ -25,7 +27,12 @@ impl driver::Store for Store<'_> {
 	}
 
 	async fn read_pages(&self, pages: &[u32]) -> Result<Vec<Option<Bytes>>> {
-		self.database.read_pages(pages).await
+		if !self.use_scan_windows
+			|| (pages.len() < MIN_PLANNED_PAGES && self.database.scan_windows.get().is_none())
+		{
+			return self.database.read_pages(pages).await;
+		}
+		self.database.read_planned_pages(pages).await
 	}
 	async fn kv_get(&self, sidecar: Sidecar, key: &[u8]) -> Result<Option<Vec<u8>>> {
 		Ok(self
@@ -182,6 +189,9 @@ impl Database {
 	/// Sets whether later page replies carry predicted pages. The engine reads this from its
 	/// runtime config on every request.
 	pub fn set_server_prefetch(&mut self, on: bool) {
+		if !on && self.server_prefetch {
+			self.scan_windows.take();
+		}
 		self.server_prefetch = on;
 	}
 
@@ -207,7 +217,11 @@ impl Database {
 		let now = self.fs.clock().observe()?.boot_ms;
 		let mut planner = self.take_prefetcher();
 		let pending = std::mem::take(&mut self.pending_lookups);
-		let store = Store { database: self };
+		// Fetch the persisted opening hints together so the first page reply stays one cold batch.
+		let store = Store {
+			database: self,
+			use_scan_windows: !opening,
+		};
 		if let Err(error) = driver::run_lookups(&mut planner, &store, pending, "leaf").await {
 			tracing::debug!(?error, "SQLite overflow metadata read failed");
 		}
@@ -252,7 +266,10 @@ impl Database {
 		let mut planner = self.take_prefetcher();
 		let plan = driver::plan_commit(
 			&mut planner,
-			&Store { database: self },
+			&Store {
+				database: self,
+				use_scan_windows: true,
+			},
 			builder,
 			size,
 			self.root.txid.saturating_add(1),

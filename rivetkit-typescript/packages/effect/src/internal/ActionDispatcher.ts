@@ -6,7 +6,6 @@ import {
 	Option,
 	Record,
 	Schema,
-	type Scope,
 	Tracer,
 } from "effect";
 import * as Rivetkit from "rivetkit";
@@ -20,27 +19,70 @@ import type {
 import * as ActionErrorEnvelope from "./ActionErrorEnvelope.ts";
 import { makeActorLogAnnotations } from "./logging.ts";
 import { readTraceMeta, rpcSystem } from "./tracing.ts";
-import { hasStringProperty } from "./utils.ts";
+
+type RunFork = <A, E>(
+	effect: Effect.Effect<A, E, any>,
+	options?: Effect.RunOptions,
+) => Fiber.Fiber<A, E>;
+
+/** The `onBeforeActionResponse` hooks as `MyActor.of` gets them, by action tag. */
+export type ActionResponseHooks = {
+	readonly [tag: string]:
+		| ((response: any) => Effect.Effect<unknown, never, any>)
+		| undefined;
+};
 
 export type Instance<ActionHandlers> = {
 	readonly actionHandlers: ActionHandlers;
-	readonly runFork: <A, E>(
-		effect: Effect.Effect<A, E, any>,
-		options?: Effect.RunOptions,
-	) => Fiber.Fiber<A, E>;
-	readonly connectionScope: (connectionId: string) => Scope.Scope;
+	readonly onBeforeActionResponse?: ActionResponseHooks | undefined;
+	readonly runFork: RunFork;
+	readonly connection: (conn: {
+		readonly id: string;
+		readonly params: unknown;
+	}) => Effect.Effect<ActionConnection<unknown>, Rivetkit.RivetError>;
+};
+
+/**
+ * Runs `effect` in the actor instance runtime and settles the promise the way
+ * RivetKit expects from a callback.
+ */
+export const runInstanceEffect = async <A>(
+	runFork: RunFork,
+	effect: Effect.Effect<A, unknown, any>,
+	options?: Effect.RunOptions,
+): Promise<A> => {
+	const fiber = runFork(effect, options);
+	const exit = await new Promise<Exit.Exit<A, unknown>>((resolve) =>
+		fiber.addObserver(resolve),
+	);
+
+	if (Exit.isSuccess(exit)) return exit.value;
+	/**
+	 * Fibers can be interrupted by a caller abort signal or by the actor
+	 * instance scope closing during sleep, destroy, or shutdown. Surface those
+	 * lifecycle exits as RivetKit's structured action-aborted error instead of
+	 * an internal error.
+	 */
+	if (Cause.hasInterruptsOnly(exit.cause)) {
+		throw makeActorAbortedError();
+	}
+	const expectedError = Exit.findErrorOption(exit);
+	if (Option.isSome(expectedError)) {
+		throw expectedError.value;
+	}
+	throw Cause.squash(exit.cause);
 };
 
 export const make = <
 	Name extends string,
 	Actions extends Action.AnyWithProps,
-	ActionHandlers extends ActionHandlersFrom<Actions>,
+	ActionHandlers extends ActionHandlersFrom<Actions, any>,
 	ActorDefinition extends Rivetkit.AnyActorDefinition,
 >({
 	actor,
 	getInstance,
 }: {
-	readonly actor: Actor<Name, Actions>;
+	readonly actor: Pick<Actor<Name, Actions, any>, "name" | "actions">;
 	readonly getInstance: (
 		actorId: string,
 	) => Instance<ActionHandlers> | undefined;
@@ -77,10 +119,11 @@ export const make = <
 				const traceMeta = readTraceMeta(meta);
 
 				const instance = getInstance(c.actorId);
-				if (!instance) {
-					if (c.abortSignal.aborted) throw makeActorAbortedError();
-					throw new Error("actor instance missing");
-				}
+				/**
+				 * Sleep and destroy can remove the instance before the request's
+				 * abort signal fires, so a missing instance is a lifecycle abort.
+				 */
+				if (!instance) throw makeActorAbortedError();
 
 				const actionEffect = Effect.gen(function* () {
 					// The handler map is keyed by the same action
@@ -103,6 +146,12 @@ export const make = <
 					const decodedPayload = yield* decodePayload(
 						payloadForDecode,
 					).pipe(
+						Effect.tapError((schemaError) =>
+							Effect.logDebug(
+								`Invalid payload for action ${actor.name}/${action._tag}`,
+								schemaError,
+							),
+						),
 						Effect.mapError(
 							() =>
 								new Rivetkit.RivetError(
@@ -112,6 +161,13 @@ export const make = <
 								),
 						),
 					);
+					/**
+					 * Scheduled actions run without a connection, although the
+					 * RivetKit context type declares `conn` as always present.
+					 */
+					const connection = c.conn
+						? Option.some(yield* instance.connection(c.conn))
+						: Option.none();
 					// The payload was decoded with this action's schema,
 					// so this is the runtime boundary that restores the
 					// typed envelope expected by the user handler.
@@ -119,17 +175,24 @@ export const make = <
 						_tag: action._tag,
 						action,
 						payload: decodedPayload,
-						connection: makeActionConnection(c, instance),
-					} as ActionRequest<typeof action>;
+						connection,
+					} as unknown as ActionRequest<typeof action>;
 
 					const resultExit = yield* Effect.exit(
 						actionHandler(actionRequest),
 					);
 
 					if (Exit.isSuccess(resultExit)) {
-						return yield* encodeSuccess(resultExit.value).pipe(
-							Effect.orDie,
-						);
+						const onBeforeActionResponse =
+							instance.onBeforeActionResponse?.[action._tag];
+						const success =
+							onBeforeActionResponse === undefined
+								? resultExit.value
+								: yield* onBeforeActionResponse({
+										...actionRequest,
+										success: resultExit.value,
+									});
+						return yield* encodeSuccess(success).pipe(Effect.orDie);
 					}
 
 					const expectedError = Exit.findErrorOption(resultExit);
@@ -140,19 +203,9 @@ export const make = <
 						).pipe(Effect.orDie);
 
 						return yield* Effect.fail(
-							new Rivetkit.UserError(
-								hasStringProperty("message")(encodedError)
-									? encodedError.message
-									: `${action._tag} failed`,
-								{
-									code: hasStringProperty("_tag")(
-										encodedError,
-									)
-										? encodedError._tag
-										: undefined,
-									metadata:
-										ActionErrorEnvelope.make(encodedError),
-								},
+							ActionErrorEnvelope.toUserError(
+								encodedError,
+								`${action._tag} failed`,
 							),
 						);
 					}
@@ -171,50 +224,14 @@ export const make = <
 					}),
 					Effect.annotateLogs(makeActorLogAnnotations(c)),
 				);
-				const fiber = instance.runFork(actionEffect, {
+				return runInstanceEffect(instance.runFork, actionEffect, {
 					signal: c.abortSignal,
 				});
-				const exit = await new Promise<Exit.Exit<unknown, unknown>>(
-					(resolve) => fiber.addObserver(resolve),
-				);
-
-				if (Exit.isSuccess(exit)) return exit.value;
-				// Action fibers can be interrupted by a caller abort signal
-				// or by the actor instance scope closing during sleep, destroy,
-				// or shutdown. Surface those lifecycle exits as RivetKit's
-				// structured action-aborted error instead of an internal error.
-				if (Cause.hasInterruptsOnly(exit.cause)) {
-					throw makeActorAbortedError();
-				}
-				const expectedError = Exit.findErrorOption(exit);
-				if (Option.isSome(expectedError)) {
-					throw expectedError.value;
-				}
-				throw Cause.squash(exit.cause);
 			},
 		];
 	});
 
-const makeActionConnection = (
-	c: { readonly conn?: { readonly id: string } },
-	instance: Pick<Instance<unknown>, "connectionScope">,
-): Option.Option<ActionConnection> => {
-	// Scheduled actions run without a connection, although the RivetKit
-	// context type declares `conn` as always present.
-	if (!c.conn) return Option.none();
-
-	const { id } = c.conn;
-	return Option.some({
-		id,
-		// Most handlers never read this, and the first read checks the
-		// connection list, which costs O(connections).
-		get scope() {
-			return instance.connectionScope(id);
-		},
-	});
-};
-
-const makeActorAbortedError = () =>
+export const makeActorAbortedError = () =>
 	new Rivetkit.RivetError("actor", "aborted", "Actor aborted", {
 		public: true,
 	});

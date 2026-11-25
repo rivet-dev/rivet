@@ -303,6 +303,7 @@ pub async fn gateway(
 					group,
 					pegboard::legacy_volumes::ResolvedRead::Unread,
 					None,
+					false,
 				);
 				let acquired = loop {
 					let attempt = acquire(
@@ -500,8 +501,25 @@ async fn prepare(
 	let token = selector_token
 		.or(query.token.as_deref())
 		.or_else(|| auth::transport_token(headers));
-	let credential = auth::authenticate(ctx, token).await?;
 	let named = named_namespace(query.namespace.as_deref(), headers, websocket)?;
+	let credential = match auth::authenticate(ctx, token).await {
+		Ok(credential) => credential,
+		Err(error) => {
+			return unverified_route(
+				ctx,
+				dynamic,
+				resolved_namespace,
+				named.as_deref(),
+				token,
+				error,
+				selector,
+				&query,
+				headers,
+				deadline,
+			)
+			.await;
+		}
+	};
 	let direct = query.method.is_none();
 	let namespace = request_namespace(named.as_deref(), direct, &credential);
 	if named.is_none() && credential_namespace(direct, &credential).is_none() {
@@ -585,6 +603,7 @@ async fn prepare(
 		target.group,
 		resolved,
 		get_or_create.clone(),
+		target.keyed.is_some(),
 	);
 	let acquired = loop {
 		let attempt = acquire(
@@ -627,9 +646,13 @@ async fn prepare(
 				direct_actor,
 			)?;
 			return Ok(Routed::V2(V2Target {
-				v3_id: target.actor_id,
-				group: target.group,
-				client_token: token.map(ToOwned::to_owned),
+				v3: Some(V3Lookup {
+					actor_id: target.actor_id,
+					group: target.group,
+				}),
+				auth: V2Auth::Migration {
+					client_token: token.map(ToOwned::to_owned),
+				},
 			}));
 		}
 		if held {
@@ -653,6 +676,7 @@ async fn prepare(
 					target.group,
 					resolved,
 					get_or_create.clone(),
+					target.keyed.is_some(),
 				);
 			}
 		}
@@ -786,7 +810,11 @@ pub async fn direct(
 	let ray_id = request
 		.as_ref()
 		.map(|axum::Extension(request)| request.ray_id());
-	if let Err(error) = auth::authenticate(&ctx, auth::transport_token(&headers)).await {
+	// While a migration from V2 is configured, a token this cluster refuses may still be
+	// forwarded to V2, so `gateway` authenticates and decides.
+	if migrate_from_v2::snapshot(&ctx).is_none()
+		&& let Err(error) = auth::authenticate(&ctx, auth::transport_token(&headers)).await
+	{
 		return reject(ws, error, ray_id);
 	}
 	let actor_id = match direct_actor_id(&headers, ws.is_ok()) {
@@ -1025,13 +1053,121 @@ enum Routed {
 
 /// An actor a request reaches in V2.
 struct V2Target {
-	/// The id this cluster would hold it under, read again when V2 does not have it.
-	v3_id: Id,
-	/// The group that id's volumes are keyed in.
+	/// What this cluster would hold the actor as, read again when V2 does not have it. `None`
+	/// for a request this cluster did not authenticate, whose answer from V2 is final.
+	v3: Option<V3Lookup>,
+	auth: V2Auth,
+}
+
+/// The actor id this cluster would hold a V2 actor under, and the group its volumes are keyed in.
+struct V3Lookup {
+	actor_id: Id,
 	group: Option<rivet_keys::keys::codec::GroupId>,
-	/// The token this cluster authenticated the request with. V2 cannot verify it, so it is
-	/// removed wherever it rode before the request is proxied.
-	client_token: Option<String>,
+}
+
+/// Who authorizes a request proxied to V2.
+enum V2Auth {
+	/// This cluster did. The token it authenticated the request with is removed wherever it rode,
+	/// since V2 cannot verify it, and V2 is reached with the migration's token.
+	Migration { client_token: Option<String> },
+	/// V2 does, with the client's own credentials; see [`proxy::V2Credentials::Client`].
+	Client,
+}
+
+impl V2Auth {
+	/// The route a request V2 served is counted under.
+	fn served_route(&self) -> &'static str {
+		match self {
+			Self::Migration { .. } => "v2_fallback",
+			Self::Client => "v2_token",
+		}
+	}
+}
+
+/// Routes a request whose token this cluster refused. While a migration from V2 only passes
+/// through, V2 serves every actor of the namespace, so the request is forwarded with the
+/// client's own credentials and V2 decides; see [`migrate_from_v2::unverified`]. Any other
+/// request is refused with `error`.
+///
+/// A keyed getOrCreate is forwarded only while this cluster holds nothing for its key. A key can
+/// already live here during passthrough, created with `x-rivet-actor-version: 3` or moved by
+/// hand, and V2 would create it again.
+#[allow(clippy::too_many_arguments)]
+async fn unverified_route(
+	ctx: &EngineContext,
+	dynamic: Option<&Root>,
+	resolved_namespace: &mut Option<String>,
+	named: Option<&str>,
+	token: Option<&str>,
+	error: anyhow::Error,
+	selector: &str,
+	query: &GatewayQuery,
+	headers: &HeaderMap,
+	deadline: RoutingDeadline,
+) -> Result<Routed> {
+	let migration = match migrate_from_v2::unverified(dynamic, named, token, &error) {
+		Some(migrate_from_v2::Unverified::Forward(migration)) => migration,
+		Some(migrate_from_v2::Unverified::Refuse(migration)) => {
+			migration.count_request("v2_token_refused");
+			return Err(error);
+		}
+		None => return Err(error),
+	};
+	*resolved_namespace = Some(migration.namespace.clone());
+
+	// A request that asks to be created here needs this cluster's authorization.
+	if migrate_from_v2::forces_actor_v3(headers)? {
+		migration.count_request("v2_token_refused");
+		return Err(error);
+	}
+
+	if matches!(query.method, Some(GatewayMethod::GetOrCreate)) {
+		let held_here = key_held_here(ctx, &migration, selector, query, deadline).await?;
+		if held_here {
+			migration.count_request("v2_token_refused");
+			return Err(error);
+		}
+	}
+
+	Ok(Routed::V2(V2Target {
+		v3: None,
+		auth: V2Auth::Client,
+	}))
+}
+
+/// Whether this cluster holds the actor a keyed request names, in the migration's target
+/// namespace: a live actor or one the migrator holds.
+async fn key_held_here(
+	ctx: &EngineContext,
+	migration: &migrate_from_v2::Active<'_>,
+	selector: &str,
+	query: &GatewayQuery,
+	deadline: RoutingDeadline,
+) -> Result<bool> {
+	let lookup = rivet_env::timeout_at(
+		ctx.env().clock().as_ref(),
+		deadline.boot_ms,
+		pegboard::catalog::ensure_settled_namespace(ctx, &migration.namespace, deadline.boot_ms),
+	)
+	.await;
+	let standing = match lookup {
+		Ok(standing) => standing?,
+		Err(rivet_env::TimeoutError::Elapsed) => return Err(crate::RequestTimeout.build()),
+		Err(error) => return Err(error.into()),
+	};
+	let mut target = Target::of(
+		ctx.config().dc_label(),
+		selector,
+		query,
+		standing.clone(),
+		query.pool_name().to_owned(),
+	)?;
+	target.resolve(ctx, &standing).await?;
+	let state = migrate_from_v2::read_v3_actor(ctx, target.group, target.actor_id).await?;
+	Ok(match state {
+		V3Actor::Active | V3Actor::Held => true,
+		V3Actor::Delegated | V3Actor::None => false,
+	})
 }
 
 /// Authorizes a request V2 serves. V2 is reached with the migration's token, never the client's,
@@ -1085,12 +1221,21 @@ async fn proxy_to_v2(
 	body: Body,
 	ray_id: Option<Id>,
 ) -> Result<Response> {
-	let uri = proxy::gateway_uri(migration.config, &request.original_uri, request.keyed)?;
-	let namespace = migration.namespace.clone();
-	let credentials = proxy::V2Credentials {
-		client_token: v2.client_token.as_deref(),
-		v2_token: migration.config.token.as_deref(),
+	let credentials = match &v2.auth {
+		V2Auth::Migration { client_token } => proxy::V2Credentials::Migration {
+			client_token: client_token.as_deref(),
+			v2_token: migration.config.token.as_deref(),
+		},
+		V2Auth::Client => proxy::V2Credentials::Client,
 	};
+	let uri = proxy::gateway_uri(
+		migration.config,
+		&request.original_uri,
+		request.keyed,
+		&credentials,
+	)?;
+	let namespace = migration.namespace.clone();
+	let served_route = v2.auth.served_route();
 
 	let ws = match ws {
 		Ok(ws) => ws,
@@ -1108,11 +1253,16 @@ async fn proxy_to_v2(
 			let response = match outcome {
 				proxy::HttpOutcome::Response(response) => response,
 				proxy::HttpOutcome::NotFound => {
-					let state = migrate_from_v2::read_v3_actor(ctx, v2.group, v2.v3_id).await?;
+					let state = match &v2.v3 {
+						Some(v3) => {
+							migrate_from_v2::read_v3_actor(ctx, v3.group, v3.actor_id).await?
+						}
+						None => V3Actor::None,
+					};
 					return Err(after_v2_not_found(migration, state));
 				}
 			};
-			migration.count_request("v2_fallback");
+			migration.count_request(served_route);
 			return Ok(response);
 		}
 	};
@@ -1136,7 +1286,7 @@ async fn proxy_to_v2(
 			return Ok(reject(Ok(ws), error, ray_id));
 		}
 	};
-	migration.count_request("v2_fallback");
+	migration.count_request(served_route);
 	let ws = match proxy::accepted_protocol(&upstream) {
 		Some(protocol) => ws.protocols([protocol]),
 		None => ws,
@@ -1149,12 +1299,17 @@ async fn proxy_to_v2(
 		.read_buffer_size(ACTOR_WEBSOCKET_READ_BUFFER_BYTES)
 		.on_upgrade(move |socket| async move {
 			let decide = move || async move {
-				let state = match migrate_from_v2::read_v3_actor(&ctx, v2.group, v2.v3_id).await {
-					Ok(state) => state,
-					Err(error) => {
-						tracing::debug!(?error, "re-read after a V2 not_found failed");
-						return None;
+				let state = match &v2.v3 {
+					Some(v3) => {
+						match migrate_from_v2::read_v3_actor(&ctx, v3.group, v3.actor_id).await {
+							Ok(state) => state,
+							Err(error) => {
+								tracing::debug!(?error, "re-read after a V2 not_found failed");
+								return None;
+							}
+						}
 					}
+					None => V3Actor::None,
 				};
 				let route = decision::after_v2_not_found(state);
 				let error = match route {

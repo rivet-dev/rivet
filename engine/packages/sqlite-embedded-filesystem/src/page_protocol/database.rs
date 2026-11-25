@@ -1,13 +1,18 @@
 //! An actor database is one ordinary SQLite-format file, `/actor/sqlite/main.db`, in the actor's
 //! database volume. SQLite's side files sit beside it, so every SQLite-owned file stays in one
 //! directory apart from the volume's other contents.
+use super::scan_windows::ScanWindows;
 use anyhow::{Result, ensure};
 use depot_client::filesystem::{
 	Error, FileEdit, FileWrite, Filesystem, OpenedFilesystem, transport::OpenPrefetch,
 };
 use depot_fs_core::{FsKind, ROOT_INO, rules};
 use rivet_envoy_protocol as p;
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+	collections::BTreeSet,
+	sync::{Arc, OnceLock},
+};
+use tokio::sync::Mutex;
 
 /// The directory under the volume root that holds every SQLite-owned file.
 pub const ACTOR: &str = "actor";
@@ -26,8 +31,7 @@ const LEGACY_ROOT_ENTRIES: [&str; 2] = ["kv", "sqlite"];
 pub const NAME: &str = "main.db";
 pub(super) const PAGE: usize = 4096;
 
-/// Storage reads join only contiguous planned pages; speculation belongs to the planner.
-const MAX_GAP_PAGES: u32 = 0;
+const MAX_RANGE_PAGES: usize = 1024;
 
 /// A run of the file that covers requested pages, read as one range.
 #[derive(Debug, PartialEq, Eq)]
@@ -39,24 +43,16 @@ pub(super) struct PageRange {
 	pub pages: Vec<(usize, usize)>,
 }
 
-/// The file offset and byte count of a range of `len` whole pages from `first_pgno`.
-fn range_bytes(first_pgno: u32, len: usize) -> (u64, usize) {
-	(u64::from(first_pgno - 1) * PAGE as u64, len * PAGE)
+impl PageRange {
+	pub(super) fn fill_pages(&self, bytes: &bytes::Bytes, pages: &mut [Option<bytes::Bytes>]) {
+		for &(index, offset) in &self.pages {
+			pages[index] = Some(bytes.slice(offset * PAGE..(offset + 1) * PAGE));
+		}
+	}
 }
 
-/// Covers the requested pages inside the file with ranges of at most `page_range_pages`, in file
-/// order, reading through gaps of at most `MAX_GAP_PAGES` between requested pages. Pages past
-/// `size_pages` are left out and read back as `None`.
-pub(super) fn page_ranges(pgnos: &[u32], size_pages: u32) -> Vec<PageRange> {
-	page_ranges_of(pgnos, size_pages, 1024)
-}
-
-/// `page_ranges` with ranges of at most `max_range_pages`.
-pub(super) fn page_ranges_of(
-	pgnos: &[u32],
-	size_pages: u32,
-	max_range_pages: usize,
-) -> Vec<PageRange> {
+/// Covers the requested pages inside the file with contiguous ranges in file order.
+fn page_ranges(pgnos: &[u32], size_pages: u32) -> Vec<PageRange> {
 	let mut wanted: Vec<(u32, usize)> = pgnos
 		.iter()
 		.enumerate()
@@ -64,19 +60,18 @@ pub(super) fn page_ranges_of(
 		.map(|(index, pgno)| (*pgno, index))
 		.collect();
 	wanted.sort_unstable();
+	page_ranges_for(wanted)
+}
 
+/// Groups `(page number, reply index)` pairs in page order, preserving duplicate requests.
+pub(super) fn page_ranges_for(wanted: impl IntoIterator<Item = (u32, usize)>) -> Vec<PageRange> {
 	let mut ranges: Vec<PageRange> = Vec::new();
 	for (pgno, index) in wanted {
 		if let Some(last) = ranges.last_mut() {
-			let end = last.first_pgno + last.len as u32;
-			if pgno < end {
-				last.pages.push((index, (pgno - last.first_pgno) as usize));
-				continue;
-			}
-			let covered = (pgno - last.first_pgno) as usize + 1;
-			if pgno - end <= MAX_GAP_PAGES && covered <= max_range_pages {
-				last.len = covered;
-				last.pages.push((index, covered - 1));
+			let offset = (pgno - last.first_pgno) as usize;
+			if offset <= last.len && offset < MAX_RANGE_PAGES {
+				last.len = last.len.max(offset + 1);
+				last.pages.push((index, offset));
 				continue;
 			}
 		}
@@ -161,6 +156,7 @@ pub struct Database {
 	pub fs: Arc<Filesystem>,
 	pub ino: u64,
 	pub root: Head,
+	pub(super) scan_windows: OnceLock<Mutex<ScanWindows>>,
 	pub(super) prefetch_ino: u64,
 	pub(super) prefetcher: sqlite_prefetch::Prefetcher,
 	pub(super) pending_lookups: Vec<sqlite_prefetch::Lookup>,
@@ -266,6 +262,7 @@ impl Database {
 			fs,
 			ino,
 			root,
+			scan_windows: OnceLock::new(),
 			prefetch_ino,
 			prefetcher,
 			pending_lookups: Vec::new(),
@@ -279,6 +276,7 @@ impl Database {
 	pub async fn refresh(&mut self) -> Result<()> {
 		let root = read_head(&self.fs, self.ino).await?;
 		if root.txid != self.root.txid {
+			self.scan_windows.take();
 			self.prefetcher.commit_failed();
 			self.pending_lookups.clear();
 		}
@@ -298,21 +296,46 @@ impl Database {
 		ensure!(pgnos.iter().all(|&pgno| pgno > 0), "invalid SQLite page");
 
 		let ranges = page_ranges(pgnos, self.root.size_pages);
+		let mut pages = vec![None; pgnos.len()];
+		self.read_exact_ranges(ranges, &mut pages).await?;
+		Ok(pages)
+	}
+
+	pub(super) async fn read_exact_ranges(
+		&self,
+		ranges: Vec<PageRange>,
+		pages: &mut [Option<bytes::Bytes>],
+	) -> Result<()> {
+		let buffers = self.fetch_page_ranges(&ranges).await?;
+		for (range, bytes) in ranges.into_iter().zip(buffers) {
+			range.fill_pages(&bytes::Bytes::from(bytes), pages);
+		}
+		Ok(())
+	}
+
+	pub(super) async fn fetch_page_ranges<'a>(
+		&self,
+		ranges: impl IntoIterator<Item = &'a PageRange>,
+	) -> Result<Vec<Vec<u8>>> {
 		let byte_ranges: Vec<(u64, usize)> = ranges
-			.iter()
-			.map(|range| range_bytes(range.first_pgno, range.len))
+			.into_iter()
+			.map(|range| {
+				(
+					u64::from(range.first_pgno - 1) * PAGE as u64,
+					range.len * PAGE,
+				)
+			})
 			.collect();
 		let reads = self.fs.read_ranges(self.ino, &byte_ranges).await?;
-
-		let mut pages = vec![None; pgnos.len()];
-		for (range, bytes) in ranges.iter().zip(reads) {
-			ensure!(bytes.len() == range.len * PAGE, "incomplete SQLite page");
-			let bytes = bytes::Bytes::from(bytes);
-			for &(index, offset) in &range.pages {
-				pages[index] = Some(bytes.slice(offset * PAGE..(offset + 1) * PAGE));
-			}
-		}
-		Ok(pages)
+		ensure!(
+			reads.len() == byte_ranges.len()
+				&& reads
+					.iter()
+					.zip(byte_ranges)
+					.all(|(bytes, (_, len))| bytes.len() == len),
+			"incomplete SQLite page"
+		);
+		Ok(reads)
 	}
 	/// The wire single-shot path stays one standalone filesystem entry.
 	pub async fn commit(&mut self, dirty: Vec<p::SqliteDirtyPage>, size_pages: u32) -> Result<u64> {
@@ -371,6 +394,7 @@ impl Database {
 	/// sequence of the entry that last wrote it, so the head is `seq` and the size the commit
 	/// set. Only this opening writes the file, so no other entry lands in between.
 	pub(super) fn committed(&mut self, seq: u64, size_pages: u32) -> u64 {
+		self.scan_windows.take();
 		self.root = Head {
 			txid: seq,
 			size_pages,

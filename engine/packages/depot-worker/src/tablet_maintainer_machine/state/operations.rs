@@ -343,6 +343,7 @@ impl OperationIndex {
 					}
 					super::repair::RecoveryPurpose::Unload
 					| super::repair::RecoveryPurpose::DeletePin
+					| super::repair::RecoveryPurpose::Startup { .. }
 					| super::repair::RecoveryPurpose::Membership { .. } => count(&mut counts.recover_volume, add),
 				}
 				mark(&mut self.repair_holds, key.clone(), id, add);

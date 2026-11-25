@@ -35,9 +35,10 @@
 //! found. Legacy entries carry no actor count, so they are candidates only when the ring has none
 //! at that version.
 use crate::index::{
-	active_envoy_window_start, bound_slice, delete_active_envoy_entries,
-	ensure_active_envoy_versions, oldest_eligible_heartbeat, prepare_active_envoy_index,
-	read_active_envoy_state, shrink_index_page,
+	active_envoy_window_start, bound_slice, defer_queued_heartbeat_for_reconciliation,
+	delete_active_envoy_entries, ensure_active_envoy_versions, oldest_eligible_heartbeat,
+	prepare_active_envoy_index, prepare_active_envoy_index_with_budget, read_active_envoy_state,
+	shrink_index_page,
 };
 use crate::keys::kv::{
 	ActiveEnvoyIndexKey, ActiveEnvoyIndexVersionPrefix, ActiveEnvoyStateKey, ActiveEnvoyVersionKey,
@@ -640,7 +641,7 @@ async fn walk_live_versions(
 	}
 }
 
-async fn heartbeats_handler(
+pub(crate) async fn heartbeats_handler(
 	clock: Arc<dyn Clock>,
 	lost_threshold_ms: i64,
 	db: KvHandle,
@@ -652,9 +653,11 @@ async fn heartbeats_handler(
 		"too many heartbeats in one command"
 	);
 	let _lock = lock_pool(&db).await?;
+	defer_queued_heartbeat_for_reconciliation(&db).await?;
 
 	// A heartbeat is the envoy's admission, so it lands only in a pool that exists here. A pool
 	// whose configuration is still in the namespace catalog is moved by the caller first.
+	let read_started = clock.boot_ms()?;
 	let mut txn = db.begin().await?;
 	let record = read_record(&mut txn).await?;
 	drop(txn);
@@ -680,7 +683,14 @@ async fn heartbeats_handler(
 	}
 
 	// The legacy rows a heartbeat replaces must be in their reconciled layout first.
-	prepare_active_envoy_index(&db, db.write_version(VersionFamily::PEGBOARD_ACTOR)?).await?;
+	let record_read_ms = clock.boot_ms()?.saturating_sub(read_started);
+	let reconciliation_budget_ms = db.admitted_budget_ms().saturating_sub(record_read_ms);
+	prepare_active_envoy_index_with_budget(
+		&db,
+		db.write_version(VersionFamily::PEGBOARD_ACTOR)?,
+		reconciliation_budget_ms,
+	)
+	.await?;
 
 	// Version catalogs are monotonic hints a pick walks, published before any entry under them.
 	let mut names_by_version = BTreeMap::<u32, BTreeSet<String>>::new();
@@ -931,7 +941,7 @@ async fn legacy_candidates(
 	Ok(candidates)
 }
 
-async fn pick_handler(
+pub(crate) async fn pick_handler(
 	clock: Arc<dyn Clock>,
 	lost_threshold_ms: i64,
 	db: KvHandle,

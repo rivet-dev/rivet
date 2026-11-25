@@ -14,7 +14,7 @@ const program = Effect.gen(function* () {
 	const room = chatRoomClient.getOrCreate(`chatroom_${crypto.randomUUID()}`);
 
 	yield* Effect.addFinalizer(
-		Effect.fnUntraced(function* () {
+		Effect.fn(function* () {
 			yield* room.Archive().pipe(Effect.orDie);
 			yield* Effect.log("archived room");
 		}),

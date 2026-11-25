@@ -22,8 +22,6 @@ use serde::Serialize;
 
 use crate::{backup, recover::legacy_moved_keyed_copy, v2_client::V2Client, v3_actor};
 
-/// Parked actors listed per page.
-const PAGE_LIMIT: usize = 100;
 /// How often a requested delete is asked about while V2's workflow destroys the actor.
 const DELETE_POLL: Duration = Duration::from_secs(2);
 /// How long one actor's destroy may run before the run reports it as still deleting and moves on.
@@ -80,10 +78,14 @@ pub async fn delete_parked(
 		None => v2.datacenter_labels(),
 	};
 	let concurrency = options.concurrency.max(1);
+	let page_limit = usize::try_from(migration.parked_page_limit())
+		.context("migrate_from_v2.parked_page_limit does not fit in usize")?;
 
 	let mut summaries = Vec::new();
 	for datacenter_label in datacenter_labels {
-		summaries.push(delete_in_datacenter(ctx, &v2, datacenter_label, concurrency).await?);
+		let summary =
+			delete_in_datacenter(ctx, &v2, datacenter_label, concurrency, page_limit).await?;
+		summaries.push(summary);
 	}
 	Ok(summaries)
 }
@@ -94,6 +96,7 @@ async fn delete_in_datacenter(
 	v2: &V2Client,
 	datacenter_label: u16,
 	concurrency: usize,
+	page_limit: usize,
 ) -> Result<DatacenterSummary> {
 	let mut summary = DatacenterSummary {
 		datacenter_label,
@@ -106,7 +109,7 @@ async fn delete_in_datacenter(
 
 	loop {
 		let page = v2
-			.parked(datacenter_label, after.as_deref(), PAGE_LIMIT)
+			.parked(datacenter_label, after.as_deref(), page_limit)
 			.await?;
 		let mut finished_through = None;
 
