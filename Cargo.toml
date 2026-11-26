@@ -70,6 +70,8 @@ members = [
   "rivetkit-rust/packages/inspector-protocol",
   "rivetkit-rust/packages/rivetkit",
   "rivetkit-rust/packages/rivetkit-core",
+  "rivetkit-rust/packages/rivetkit-ffi",
+  "rivetkit-rust/packages/rivetkit-host-adapter",
   "rivetkit-rust/packages/shared-types",
   "rivetkit-typescript/packages/rivetkit-napi",
   "rivetkit-typescript/packages/rivetkit-wasm",

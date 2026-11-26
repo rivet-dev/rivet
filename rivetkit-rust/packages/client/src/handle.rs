@@ -20,6 +20,29 @@ use std::{
 
 pub use crate::protocol::codec::{QueueSendResult, QueueSendStatus};
 
+/// An action rejected by the actor or the engine, with Rivet's error group and code.
+/// Downcast an action's `anyhow::Error` to this to branch on the code. The display
+/// text is `action failed ({group}/{code}): {message}, metadata={metadata:?}`.
+#[derive(Debug, Clone)]
+pub struct ActionError {
+	pub group: String,
+	pub code: String,
+	pub message: String,
+	pub metadata: Option<JsonValue>,
+}
+
+impl std::fmt::Display for ActionError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"action failed ({}/{}): {}, metadata={:?}",
+			self.group, self.code, self.message, self.metadata
+		)
+	}
+}
+
+impl std::error::Error for ActionError {}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SendOpts {}
 
@@ -86,11 +109,25 @@ impl ActorHandleStateless {
 	}
 
 	pub async fn action(&self, name: &str, args: Vec<JsonValue>) -> Result<JsonValue> {
+		let body = codec::encode_http_action_request(self.encoding_kind, &args)?;
+		let output = self.post_action(name, body).await?;
+		codec::decode_http_action_response(self.encoding_kind, &output)
+	}
+
+	/// Calls an action with the arguments already CBOR-encoded (a CBOR array of
+	/// positional arguments) and returns the CBOR-encoded output. With the default
+	/// BARE encoding the bytes are passed through without decoding, so values JSON
+	/// cannot hold (byte strings, tags) survive.
+	pub async fn action_cbor(&self, name: &str, args_cbor: &[u8]) -> Result<Vec<u8>> {
+		let body = codec::encode_http_action_request_cbor(self.encoding_kind, args_cbor)?;
+		let output = self.post_action(name, body).await?;
+		codec::decode_http_action_response_cbor(self.encoding_kind, &output)
+	}
+
+	async fn post_action(&self, name: &str, body: Vec<u8>) -> Result<Bytes> {
 		// Resolve gateway target (query targets are resolved by the gateway).
 		let query = self.query.lock().expect("query lock poisoned").clone();
 		let target = self.remote_manager.gateway_target(&query).await?;
-
-		let body = codec::encode_http_action_request(self.encoding_kind, &args)?;
 
 		let headers = self.protocol_headers()?;
 
@@ -113,16 +150,17 @@ impl ActorHandleStateless {
 			if let Ok((group, code, message, metadata)) =
 				codec::decode_http_error(self.encoding_kind, &body)
 			{
-				return Err(anyhow!(
-					"action failed ({group}/{code}): {message}, metadata={metadata:?}"
-				));
+				return Err(anyhow::Error::new(ActionError {
+					group,
+					code,
+					message,
+					metadata,
+				}));
 			}
 			return Err(anyhow!("action failed: {status}"));
 		}
 
-		// Decode response
-		let output = res.bytes().await?;
-		codec::decode_http_action_response(self.encoding_kind, &output)
+		Ok(res.bytes().await?)
 	}
 
 	#[deprecated(

@@ -1,0 +1,65 @@
+package dev.rivet.kit.internal;
+
+import dev.rivet.kit.Cron;
+import dev.rivet.kit.Fn;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+
+/** {@link Cron} over the wire. */
+final class CronImpl implements Cron {
+    private final Instance instance;
+
+    CronImpl(Instance instance) {
+        this.instance = instance;
+    }
+
+    private void set(String name, Long intervalMs, String expression, ZoneId zone, Recorder.Invocation invocation) {
+        Calls.requireTurn(instance, "ctx.cron()");
+        Recorder.Recorded call = Recorder.record(instance.model(), invocation);
+        Native.callSync(instance.handle, Wire.OP_CRON_SET,
+                new Wire.CronSetCall(name, call.action().name, intervalMs, expression,
+                        zone == null ? null : zone.getId(), null),
+                call.action().args.encode(call.args()));
+    }
+
+    @Override
+    public <A> void every(String name, Duration interval, Fn.Call0<A> action) {
+        set(name, interval.toMillis(), null, null, p -> action.call(ScheduleImpl.as(p)));
+    }
+
+    @Override
+    public <A, T1> void every(String name, Duration interval, Fn.Call1<A, T1> action, T1 a1) {
+        set(name, interval.toMillis(), null, null, p -> action.call(ScheduleImpl.as(p), a1));
+    }
+
+    @Override
+    public <A> void at(String name, String expression, ZoneId zone, Fn.Call0<A> action) {
+        set(name, null, expression, zone, p -> action.call(ScheduleImpl.as(p)));
+    }
+
+    @Override
+    public <A, T1> void at(String name, String expression, ZoneId zone, Fn.Call1<A, T1> action, T1 a1) {
+        set(name, null, expression, zone, p -> action.call(ScheduleImpl.as(p), a1));
+    }
+
+    @Override
+    public boolean delete(String name) {
+        Calls.requireTurn(instance, "ctx.cron().delete");
+        Native.Answer answer = Native.callSync(instance.handle, Wire.OP_CRON_DELETE, new Wire.NameCall(name), null);
+        return Codec.decode(answer.header(), Wire.Removed.class).removed();
+    }
+
+    @Override
+    public List<Job> list() {
+        Native.Answer answer = Native.callSync(instance.handle, Wire.OP_CRON_LIST, null, null);
+        List<Job> out = new ArrayList<>();
+        for (Wire.CronJob job : Codec.decode(answer.header(), Wire.CronList.class).jobs()) {
+            out.add(new Job(job.name(), job.action(), Instant.ofEpochMilli(job.nextRunAt()),
+                    job.intervalMs() == null ? null : Duration.ofMillis(job.intervalMs()), job.expression()));
+        }
+        return out;
+    }
+}

@@ -1,0 +1,45 @@
+[package]
+name = "rivetkit-ffi"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+workspace = "../../../"
+description = "C ABI over rivetkit-core for foreign-language SDKs (Java FFM first)"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["sqlite"]
+# Matches the Rust SDK default: actor storage goes through the engine.
+sqlite = ["rivetkit-core/sqlite-remote"]
+# Embed SQLite in the library instead.
+sqlite-local = ["rivetkit-host-adapter/sqlite-local"]
+
+[dependencies]
+anyhow.workspace = true
+parking_lot.workspace = true
+rivetkit-core.workspace = true
+rivetkit-host-adapter = { path = "../rivetkit-host-adapter" }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+# Benchmark comparison only (examples/bench_*.rs); not linked into the cdylib.
+async-trait.workspace = true
+futures.workspace = true
+rivetkit.workspace = true
+rivetkit-client.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio-util.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "signal"] }
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"

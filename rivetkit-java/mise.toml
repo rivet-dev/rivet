@@ -1,0 +1,81 @@
+# Toolchain for the Java SDK. Scoped to rivetkit-java/ so the rest of the repo is
+# unaffected. `rust` follows the repo's rust-toolchain.toml.
+#
+# Only `mise run bindings` needs cbindgen and jextract; normal builds use the
+# committed header and bindings.
+
+[tools]
+java = "temurin-25.0.5.1+2.0.LTS"
+gradle = "9.9.2"
+rust = "1.99.0"
+"cargo:cbindgen" = "0.29.4"
+
+[tools."http:jextract"]
+version = "25-2-4"
+bin_path = "jextract-25/bin"
+
+[tools."http:jextract".platforms]
+linux-x64 = { url = "https://download.java.net/java/early_access/jextract/25/2/openjdk-25-jextract+2-4_linux-x64_bin.tar.gz", checksum = "sha256:d0cc481abc1adb16fb9514e1c5e0bfc08d38c29228bece667fb5054ceaffaa42" }
+linux-arm64 = { url = "https://download.java.net/java/early_access/jextract/25/2/openjdk-25-jextract+2-4_linux-aarch64_bin.tar.gz", checksum = "sha256:0e25e6f6efa042f8758eaec65a873887fd2247fcf2e3e22dcfd7e4179fc8b0ae" }
+macos-arm64 = { url = "https://download.java.net/java/early_access/jextract/25/2/openjdk-25-jextract+2-4_macos-aarch64_bin.tar.gz", checksum = "sha256:3dd1dd1bde059d271739e2cc2290c64f93f85488c86c01e566c0e374eece798f" }
+macos-x64 = { url = "https://download.java.net/java/early_access/jextract/25/2/openjdk-25-jextract+2-4_macos-x64_bin.tar.gz", checksum = "sha256:6ae7a46e7e7b56f077ab72623c0a894a8d525d5b698c90785b97c241f95a99b1" }
+
+# --- tasks ----------------------------------------------------------------------
+
+[tasks.build]
+description = "Build the native library and the Java modules"
+run = "gradle build -x :examples:test"
+
+[tasks.test]
+description = "Rust tests (incl. fixture drift) + all Java tests, incl. end-to-end (spawns a local engine)"
+run = [
+  "cargo test -q -p rivetkit-host-adapter -p rivetkit-ffi --manifest-path ../Cargo.toml",
+  "gradle test",
+]
+
+[tasks.bindings]
+description = "Regenerate include/rivetkit.h (cbindgen) and the Java FFM bindings (jextract)"
+run = '''
+set -euo pipefail
+ffi=../rivetkit-rust/packages/rivetkit-ffi
+header=$ffi/include/rivetkit.h
+cbindgen --quiet --config $ffi/cbindgen.toml --crate rivetkit-ffi --output $header $ffi
+fns=$(grep -oE '\brivet_[a-z_]+\(' $header | tr -d '(' | sort -u | sed 's/^/--include-function /')
+consts=$(grep -oE '\bRIVET_[A-Z_]+ =' $header | tr -d ' =' | sort -u | sed 's/^/--include-constant /')
+rm -rf ffi/src/main/java
+jextract --target-package dev.rivet.kit.ffi.internal --header-class-name RivetFfi \
+  --output ffi/src/main/java $fns $consts \
+  --include-typedef rivet_event_cb --include-typedef rivet_complete_cb $header
+'''
+
+[tasks."bindings:check"]
+description = "Fail when the committed header or bindings are stale (incl. new untracked files)"
+depends = ["bindings"]
+run = '''
+set -euo pipefail
+changes=$(git status --porcelain -- ../rivetkit-rust/packages/rivetkit-ffi/include ffi/src)
+if [ -n "$changes" ]; then echo "bindings are stale or uncommitted:"; echo "$changes"; exit 1; fi
+'''
+
+[tasks."unsafe:check"]
+description = "rivetkit-ffi may contain exactly one unsafe block, in abi.rs"
+run = '''
+set -euo pipefail
+src=../rivetkit-rust/packages/rivetkit-ffi/src
+count=$(grep -rhE 'unsafe \{|unsafe fn|unsafe impl|unsafe extern' $src | grep -vE '^\s*//' | wc -l)
+where=$(grep -rlE 'unsafe \{' $src)
+if [ "$count" -ne 1 ] || [ "$where" != "$src/abi.rs" ]; then
+  echo "expected exactly 1 unsafe block (in abi.rs), found $count:"; grep -rnE 'unsafe \{|unsafe fn|unsafe impl|unsafe extern' $src; exit 1
+fi
+echo "ok: 1 unsafe block, in abi.rs"
+'''
+
+
+[tasks.miri]
+description = "Run the abi tests (the one unsafe block) under Miri. Needs a nightly toolchain with miri (not pinned)."
+dir = "{{config_root}}/.."
+run = "cargo +nightly miri test -p rivetkit-ffi --lib abi::"
+
+[tasks."bench:compare"]
+description = "Same counter actor on the Rust, Java and TypeScript SDKs, one Rust client driver, one engine"
+run = "bash bench/compare.sh"

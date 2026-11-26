@@ -72,6 +72,47 @@ pub fn decode_http_action_response(encoding: EncodingKind, payload: &[u8]) -> Re
 	}
 }
 
+/// Like [`encode_http_action_request`], with the args already CBOR-encoded (a
+/// CBOR array of positional arguments). With BARE the bytes pass through
+/// untouched; JSON and CBOR envelopes need a decode.
+pub fn encode_http_action_request_cbor(
+	encoding: EncodingKind,
+	args_cbor: &[u8],
+) -> Result<Vec<u8>> {
+	match encoding {
+		EncodingKind::Bare => wire::versioned::HttpActionRequest::serialize_with_embedded_version(
+			&wire::HttpActionRequest {
+				args: args_cbor.to_vec().into(),
+			},
+			wire::PROTOCOL_VERSION,
+		),
+		EncodingKind::Json | EncodingKind::Cbor => {
+			let args: Vec<JsonValue> =
+				serde_cbor::from_slice(args_cbor).context("decode cbor action args")?;
+			encode_http_action_request(encoding, &args)
+		}
+	}
+}
+
+/// Like [`decode_http_action_response`], returning the CBOR-encoded output. With
+/// BARE the bytes pass through untouched.
+pub fn decode_http_action_response_cbor(encoding: EncodingKind, payload: &[u8]) -> Result<Vec<u8>> {
+	match encoding {
+		EncodingKind::Bare => {
+			let response =
+				<wire::versioned::HttpActionResponse as Versioned>::deserialize_with_embedded_version(
+					payload,
+				)
+				.context("decode bare action response")?;
+			Ok(response.output.to_vec())
+		}
+		EncodingKind::Json | EncodingKind::Cbor => {
+			let output = decode_http_action_response(encoding, payload)?;
+			Ok(serde_cbor::to_vec(&output)?)
+		}
+	}
+}
+
 pub fn encode_http_queue_request<T: Serialize>(
 	encoding: EncodingKind,
 	name: &str,

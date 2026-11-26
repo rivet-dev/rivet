@@ -5214,6 +5214,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivetkit-ffi"
+version = "3.1.2-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
+ "rivetkit",
+ "rivetkit-client",
+ "rivetkit-core",
+ "rivetkit-host-adapter",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "rivetkit-host-adapter"
+version = "3.1.2-rc.5"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "ciborium",
+ "futures",
+ "http",
+ "parking_lot",
+ "rivet-error",
+ "rivetkit-client",
+ "rivetkit-core",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tungstenite 0.26.2",
+]
+
+[[package]]
 name = "rivetkit-inspector-protocol"
 version = "3.1.2-rc.5"
 dependencies = [

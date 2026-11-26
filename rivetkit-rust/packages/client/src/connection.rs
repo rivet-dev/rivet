@@ -406,6 +406,57 @@ impl ActorConnectionInner {
 		return;
 	}
 
+	/// Calls an action with the arguments already CBOR-encoded (a CBOR array of
+	/// positional arguments) and returns the CBOR-encoded output, without decoding
+	/// either. Actor errors come back as [`crate::ActionError`].
+	pub async fn action_cbor(
+		self: &Arc<Self>,
+		method: &str,
+		args_cbor: Vec<u8>,
+	) -> Result<Vec<u8>> {
+		if let Some(stop_error) = self.stop_error.lock().await.as_ref() {
+			return Err(stop_error.to_rpc_error());
+		}
+		let id: u64 = self.rpc_counter.fetch_add(1, Ordering::SeqCst);
+		let (tx, rx) = oneshot::channel();
+		if self.in_flight_rpcs.insert_async(id, tx).await.is_err() {
+			return Err(anyhow::anyhow!("duplicate rpc id"));
+		}
+		if let Some(stop_error) = self.stop_error.lock().await.as_ref() {
+			self.in_flight_rpcs.remove_async(&id).await;
+			return Err(stop_error.to_rpc_error());
+		}
+		self.send_msg(
+			Arc::new(to_server::ToServer {
+				body: to_server::ToServerBody::ActionRequest(to_server::ActionRequest {
+					id,
+					name: method.to_string(),
+					args: args_cbor,
+				}),
+			}),
+			SendMsgOpts::default(),
+		)
+		.await;
+		let Ok(res) = rx.await else {
+			if let Some(stop_error) = self.stop_error.lock().await.as_ref() {
+				return Err(stop_error.to_rpc_error());
+			}
+			return Err(anyhow::anyhow!("Socket closed during rpc"));
+		};
+		match res {
+			Ok(ok) => Ok(ok.output.to_vec()),
+			Err(err) => Err(anyhow::Error::new(crate::ActionError {
+				group: err.group.clone(),
+				code: err.code.clone(),
+				message: err.message.clone(),
+				metadata: err
+					.metadata
+					.as_ref()
+					.and_then(|md| serde_cbor::from_slice::<Value>(md).ok()),
+			})),
+		}
+	}
+
 	pub async fn action(self: &Arc<Self>, method: &str, params: Vec<Value>) -> Result<Value> {
 		if let Some(stop_error) = self.stop_error.lock().await.as_ref() {
 			return Err(stop_error.to_rpc_error());
