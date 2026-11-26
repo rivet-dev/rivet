@@ -310,7 +310,7 @@ pub enum SqlValue {
 	Blob(#[serde(with = "serde_bytes")] Vec<u8>),
 }
 
-// Hand-written: serde's untagged matching lets text and byte strings stand in for
+// Not derived: serde's untagged matching lets text and byte strings stand in for
 // each other, which would turn blobs into text.
 impl<'de> Deserialize<'de> for SqlValue {
 	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {

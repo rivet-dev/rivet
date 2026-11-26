@@ -24,7 +24,7 @@ is a thin Java layer over the Rust core:
 | Boundary | `u64` handles, a `u32` kind or op, a CBOR header, an untouched body | Payloads pass through and are never re-encoded. Bodies over 64 KiB and every stream chunk are leased, so Java reads them in place. One `unsafe` block. |
 | Serialization | CBOR (already Rivet's format for user values) | Each host language needs one codec, not two. BARE, protobuf and FlatBuffers would add a toolchain per language for about 20 small headers. |
 | Streams | Credit by lease release (256 KiB window) | The same model as the engine's envoy window updates. A slow reader pauses the sender. |
-| Sync across languages | Hand-written headers, golden fixtures, exhaustive matches, cbindgen enums read by Java as constants, an ABI version check at load | Drift fails a build or a test. Code generation isn't worth it at this size. |
+| Sync across languages | Header types defined on each side, golden fixtures, exhaustive matches, cbindgen enums read by Java as constants, an ABI version check at load | Drift fails a build or a test. Code generation isn't worth it at this size. |
 
 The research behind these decisions surveyed:
 - Confluent kafka-clients, Temporal sdk-core, the ScyllaDB Rust drivers, libsignal,
