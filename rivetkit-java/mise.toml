@@ -79,3 +79,10 @@ run = "cargo +nightly miri test -p rivetkit-ffi --lib abi::"
 [tasks."bench:compare"]
 description = "Same counter actor on the Rust, Java and TypeScript SDKs, one Rust client driver, one engine"
 run = "bash bench/compare.sh"
+
+[tasks.coverage]
+description = "Java coverage (unit + end-to-end) at build/reports/coverage/index.html, and Rust unit coverage (needs cargo-llvm-cov)"
+run = [
+  "gradle coverage --rerun-tasks",
+  "cargo llvm-cov -q -p rivetkit-host-adapter -p rivetkit-ffi --summary-only --manifest-path ../Cargo.toml",
+]
