@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use futures::FutureExt;
 use tokio::sync::mpsc;
 
 use super::runtime::{Answer, Pending, Wire};
@@ -36,18 +37,19 @@ impl OrderedBody {
 		let (queue, mut ops) = mpsc::unbounded_channel();
 		wire.tokio.spawn(async move {
 			while let Some(op) = ops.recv().await {
-				match op {
-					BodyOp::Write { data, fin, done } => {
-						done.complete(write(&body, &data, fin).await.map(|()| Answer::empty()));
-					}
-					BodyOp::Error { message, done } => {
-						done.complete(body.error(message).await.map(|()| Answer::empty()));
-					}
+				// A panic must abort the response, not end it as if it were complete.
+				// The op's `Pending`, dropped while unwinding, fails its call.
+				let applied = std::panic::AssertUnwindSafe(apply(&body, op))
+					.catch_unwind()
+					.await;
+				if applied.is_err() {
+					body.error("response body failed".to_owned()).await;
+					// Dropping `ops` fails every op still queued.
+					return;
 				}
 			}
 			// No-op when the body already ended or failed.
-			let _ = body
-				.error("response abandoned by the host".to_owned())
+			body.error("response abandoned by the host".to_owned())
 				.await;
 		});
 		Self { queue }
@@ -65,6 +67,18 @@ impl OrderedBody {
 		// The task only stops after every handle is gone, so this cannot fail while
 		// `self` exists; if it did, dropping the op's `Pending` still completes it.
 		let _ = self.queue.send(op);
+	}
+}
+
+async fn apply(body: &ResponseBody, op: BodyOp) {
+	match op {
+		BodyOp::Write { data, fin, done } => {
+			done.complete(write(body, &data, fin).await.map(|()| Answer::empty()));
+		}
+		BodyOp::Error { message, done } => {
+			body.error(message).await;
+			done.complete(Ok(Answer::empty()));
+		}
 	}
 }
 

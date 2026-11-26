@@ -100,7 +100,7 @@ enum rivet_op
   RIVET_OP_CONN_SEND = 21,
   // [`messages::ConnDisconnectCall`].
   RIVET_OP_CONN_DISCONNECT = 22,
-  // → [`messages::ConnList`].
+  // → [`messages::ConnList`]. Host-neutral; the Java SDK keeps its own map instead.
   RIVET_OP_CONN_LIST = 23,
   RIVET_OP_SLEEP = 24,
   RIVET_OP_DESTROY = 25,
@@ -112,9 +112,10 @@ enum rivet_op
   RIVET_OP_ACTOR_CLIENT = 28,
   // [`messages::SqlCall`] (no params) → [`messages::SqlResult`]; body rows.
   RIVET_OP_SQL_EXEC = 30,
-  // [`messages::SqlCall`] → [`messages::SqlResult`]; body rows.
+  // [`messages::SqlCall`] → [`messages::SqlResult`]; body rows. Host-neutral; the
+  // Java SDK uses `SqlExecute` for both reads and writes.
   RIVET_OP_SQL_QUERY = 31,
-  // [`messages::SqlCall`] → [`messages::SqlResult`] (no rows).
+  // [`messages::SqlCall`] → [`messages::SqlResult`] (no rows). Host-neutral, as above.
   RIVET_OP_SQL_RUN = 32,
   // [`messages::SqlCall`] → [`messages::SqlResult`]; body rows.
   RIVET_OP_SQL_EXECUTE = 33,

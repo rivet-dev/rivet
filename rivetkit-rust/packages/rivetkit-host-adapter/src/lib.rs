@@ -4,9 +4,11 @@
 //! Something has to turn those events into calls to user code in another
 //! language: run the lifecycle hooks in the right order, bound every call with a
 //! timeout, deliver actions, connections, HTTP requests and WebSockets, and shut
-//! down cleanly. That logic used to live inside each binding (napi, wasm). This
-//! crate holds it once, behind the [`HostActor`] / [`HostInstance`] traits, so a
-//! new language binding only maps calls to its own runtime.
+//! down cleanly. That logic lives inside each binding (napi, wasm). This crate is
+//! meant to hold it once, behind the [`HostActor`] / [`HostInstance`] traits, so a
+//! new language binding only maps calls to its own runtime. Today only the Java SDK
+//! (through `rivetkit-ffi`) uses it; napi and wasm still carry their own copies, and
+//! moving them here is follow-up work.
 //!
 //! Two layers:
 //! - [`event_loop`]: the per-actor loop, generic over [`HostInstance`]. It works

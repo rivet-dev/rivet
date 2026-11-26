@@ -62,10 +62,4 @@ final class Turn {
     boolean owns(Ticket ticket) {
         return ticket != null && owner == ticket;
     }
-
-    /** The thread holding the turn, if it has started. */
-    Thread ownerThread() {
-        Ticket current = owner;
-        return current == null ? null : current.thread;
-    }
 }

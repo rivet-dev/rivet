@@ -30,6 +30,7 @@ public final class LabActor
         implements Lab, OnCreate<Lab.CreateInput>, OnWake, OnSleep, OnDestroy, OnSubscribe<Lab.Event>,
                 OnDisconnect<Lab.Params>, OnRequest, OnWebSocket {
     private final ActorContext<Lab, Event> ctx;
+    private InputStream ignoredBody;
     private int disconnects;
     private int socketsClosed;
     private int spawned;
@@ -107,7 +108,7 @@ public final class LabActor
     public Response onRequest(Request request) throws Exception {
         if (request.path().endsWith("/headers")) {
             String agent = request.header("X-Test").orElse("none");
-            return Response.of(201, (agent + "|" + request.text()).getBytes(), Map.of("x-echo", agent));
+            return Response.of(201, Map.of("x-echo", agent), (agent + "|" + request.text()).getBytes());
         }
         if (request.path().endsWith("/bytewise")) {
             // Reads one byte at a time and streams one byte at a time.
@@ -127,6 +128,10 @@ public final class LabActor
                 throw new IllegalStateException("writer failed");
             });
         }
+        if (request.path().endsWith("/ignored")) {
+            // Answers without reading the body; the SDK must still close it.
+            ignoredBody = request.body();
+        }
         return Response.text(404, "nope");
     }
 
@@ -138,7 +143,7 @@ public final class LabActor
             } else if (!message.binary() && message.text().equals("hold")) {
                 // Holds the turn so later frames pile up (overload test).
                 try {
-                    Thread.sleep(3_000);
+                    Thread.sleep(300);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -300,6 +305,27 @@ public final class LabActor
     @Override
     public int disconnects() {
         return disconnects;
+    }
+
+    @Override
+    public boolean ignoredBodyClosed() throws Exception {
+        InputStream body = ignoredBody;
+        if (body == null) return false;
+        // The body is 1 MiB, so an open one returns data (or blocks waiting for it). A closed one
+        // ends at once (-1, as a closed SequenceInputStream does) or throws.
+        CompletableFuture<Boolean> closed = new CompletableFuture<>();
+        Thread.ofVirtual().start(() -> {
+            try {
+                closed.complete(body.read() < 0);
+            } catch (java.io.IOException e) {
+                closed.complete(true);
+            }
+        });
+        try {
+            return closed.get(1, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (java.util.concurrent.TimeoutException stillOpen) {
+            return false;
+        }
     }
 
     @Override

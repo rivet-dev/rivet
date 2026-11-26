@@ -34,9 +34,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 final class Instance {
     private static final System.Logger LOG = System.getLogger("dev.rivet.kit");
-    /** Events waiting for the turn before new ones are refused. */
-    static final int MAX_WAITING = 10_000;
-
     final ActorType type;
     final long handle;
     final Turn turn = new Turn();
@@ -73,16 +70,17 @@ final class Instance {
             // past the limit the socket is closed instead, and later frames are dropped.
             ServerSocket socket = sockets.get(event);
             if (socket == null || !socket.isOpen()) return;
-            if (turn.waiting() >= MAX_WAITING) {
+            if (turn.waiting() >= type.maxWaiting) {
                 socket.overloaded();
                 return;
             }
         }
         boolean concurrent = kind == Wire.ACTION && isConcurrent(header);
         boolean reply = kind != Wire.WS_MESSAGE;
-        if (!concurrent && turn.waiting() >= MAX_WAITING && reply) {
+        if (!concurrent && turn.waiting() >= type.maxWaiting && reply) {
+            if (kind == Wire.REQUEST) closeQuietly(requestBodies.remove(event));
             Threads.VIRTUAL.execute(() -> Native.replyError(event, new RivetException(
-                    "actor", "overloaded", "the actor has " + MAX_WAITING + " events waiting; try again later")));
+                    "actor", "overloaded", "the actor has " + type.maxWaiting + " events waiting; try again later")));
             return;
         }
         Turn.Ticket ticket = concurrent ? null : turn.reserve();
@@ -140,7 +138,11 @@ final class Instance {
         Calls.Call call = new Calls.Call(this, ticket, connOf(kind, header), null);
         boolean reply = kind != Wire.WS_MESSAGE;
         try {
-            if (cancelled.remove(event)) return;
+            if (cancelled.remove(event)) {
+                // Rust stopped waiting before this ran; a request's body would stay leased.
+                if (kind == Wire.REQUEST) closeQuietly(requestBodies.remove(event));
+                return;
+            }
             if (reply) running.put(event, Thread.currentThread());
             ScopedValue.where(Calls.CURRENT, call).call(() -> {
                 dispatch(kind, event, header, body, call);
@@ -306,9 +308,12 @@ final class Instance {
                 case Response.Bytes whole -> Native.reply(event,
                         Codec.encode(new Wire.RequestReply(whole.status(), whole.headers(), false)), whole.body());
                 case Response.Streaming streaming -> {
+                    // Before the head: if the actor is stopping this throws, and the client
+                    // gets an error instead of a head whose body never ends.
+                    long region = ctx.keepAwakeRegion();
                     Native.reply(event,
                             Codec.encode(new Wire.RequestReply(streaming.status(), streaming.headers(), true)), null);
-                    stream(streaming.writer(), new Streams.Outbound(requestEvent.responseBody()), request.body());
+                    stream(streaming.writer(), new Streams.Outbound(requestEvent.responseBody()), request.body(), region);
                     handedOff = true;
                 }
             }
@@ -318,7 +323,7 @@ final class Instance {
     }
 
     /** Runs a streaming response's writer as a background turn; the writer may still read the request body. */
-    private void stream(Response.Writer writer, Streams.Outbound out, InputStream requestBody) {
+    private void stream(Response.Writer writer, Streams.Outbound out, InputStream requestBody, long region) {
         spawn(() -> {
             BufferedOutputStream buffered = new BufferedOutputStream(out, 64 * 1024);
             try {
@@ -336,10 +341,11 @@ final class Instance {
             } catch (Exception e) {
                 LOG.log(Level.DEBUG, "rivetkit: client went away before the response ended", e);
             }
-        }, ctx.keepAwakeRegion());
+        }, region);
     }
 
     private static void closeQuietly(InputStream in) {
+        if (in == null) return;
         try {
             in.close();
         } catch (Exception ignored) {

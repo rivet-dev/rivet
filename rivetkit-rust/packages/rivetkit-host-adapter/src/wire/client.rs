@@ -150,6 +150,10 @@ fn conn(wire: &Wire, id: u64) -> Result<Arc<ConnSlot>> {
 	})
 }
 
+fn client_closed() -> anyhow::Error {
+	anyhow!("the client was closed")
+}
+
 fn status_name(status: ConnectionStatus) -> &'static str {
 	match status {
 		ConnectionStatus::Idle => "idle",
@@ -195,7 +199,13 @@ pub(crate) fn connect(
 			subscriptions: Mutex::new(HashMap::new()),
 			tokio: wire.tokio.clone(),
 		});
-		let conn_id = wire.insert(owner, Handle::ClientConn(slot));
+		let conn_id = match wire.insert_owned(owner, Handle::ClientConn(slot)) {
+			Ok(id) => id,
+			Err(orphan) => {
+				wire.discard(orphan);
+				return pending.complete(Err(client_closed()));
+			}
+		};
 		// The host learns `conn_id` from the completion, which travels apart from events.
 		// Hold status events until it is out, then flush them in order and add a snapshot
 		// of the current status (transitions before the callbacks existed are not reported).
@@ -222,7 +232,7 @@ pub(crate) fn connect(
 		})
 		.await;
 		pending.complete(Ok(Answer::header(encode(&Created { handle: conn_id }))));
-		status.open(ClientStatusEvent {
+		status.open(|| ClientStatusEvent {
 			status: status_name(conn.conn_status()).to_owned(),
 			error: None,
 		});
@@ -232,7 +242,7 @@ pub(crate) fn connect(
 
 /// Status events for one connection, held until the host knows the connection.
 #[derive(Clone)]
-struct StatusGate {
+pub(super) struct StatusGate {
 	wire: Arc<Wire>,
 	owner: u64,
 	conn_id: u64,
@@ -241,7 +251,7 @@ struct StatusGate {
 }
 
 impl StatusGate {
-	fn new(wire: Arc<Wire>, owner: u64, conn_id: u64) -> Self {
+	pub(super) fn new(wire: Arc<Wire>, owner: u64, conn_id: u64) -> Self {
 		Self {
 			wire,
 			owner,
@@ -250,7 +260,7 @@ impl StatusGate {
 		}
 	}
 
-	fn send(&self, event: ClientStatusEvent) {
+	pub(super) fn send(&self, event: ClientStatusEvent) {
 		let mut held = self.held.lock();
 		match held.as_mut() {
 			Some(waiting) => waiting.push(event),
@@ -258,14 +268,21 @@ impl StatusGate {
 		}
 	}
 
-	/// Flushes the held events, then `snapshot`. Holds the lock so a concurrent
-	/// `send` cannot overtake them.
-	fn open(&self, snapshot: ClientStatusEvent) {
+	/// Flushes the held events, then the current status unless it repeats the last
+	/// one. Everything happens under the lock: a concurrent `send` cannot overtake
+	/// the flush, and `current` is read after every held event. The client updates
+	/// its status before running the callbacks, so it is never older than they are.
+	pub(super) fn open(&self, current: impl FnOnce() -> ClientStatusEvent) {
 		let mut held = self.held.lock();
-		for event in held.take().unwrap_or_default() {
-			self.notify(&event);
+		let events = held.take().unwrap_or_default();
+		for event in &events {
+			self.notify(event);
 		}
-		self.notify(&snapshot);
+		let snapshot = current();
+		let last_status = events.iter().rev().find(|event| event.error.is_none());
+		if last_status != Some(&snapshot) {
+			self.notify(&snapshot);
+		}
 	}
 
 	fn notify(&self, event: &ClientStatusEvent) {
@@ -382,7 +399,9 @@ pub(crate) fn fetch(
 				)
 			})
 			.collect();
-		let reserved = streams::reserve(&task_wire, owner);
+		let Some(reserved) = streams::reserve_owned(&task_wire, owner) else {
+			return pending.complete(Err(client_closed()));
+		};
 		pending.complete(Ok(Answer::header(encode(&FetchResult {
 			status,
 			headers,
@@ -446,15 +465,19 @@ pub(crate) fn web_socket(
 		let (mut sink, mut source) = socket.split();
 		let (outgoing, mut outgoing_rx) = mpsc::channel(SOCKET_SEND_QUEUE);
 		let cancel = CancellationToken::new();
-		let socket_id = task_wire.insert(
-			owner,
-			Handle::ClientSocket(Arc::new(SocketSlot {
-				outgoing,
-				cancel: cancel.clone(),
-			})),
-		);
+		let slot = Handle::ClientSocket(Arc::new(SocketSlot {
+			outgoing,
+			cancel: cancel.clone(),
+		}));
+		let socket_id = match task_wire.insert_owned(owner, slot) {
+			Ok(id) => id,
+			Err(_orphan) => {
+				let _ = sink.send(Message::Close(None)).await;
+				return pending.complete(Err(client_closed()));
+			}
+		};
 		pending.complete(Ok(Answer::header(encode(&Created { handle: socket_id }))));
-		let (code, reason, was_clean) = loop {
+		let (code, reason, was_clean) = 'socket: loop {
 			tokio::select! {
 				_ = cancel.cancelled() => {
 					let _ = sink.send(Message::Close(None)).await;
@@ -463,7 +486,13 @@ pub(crate) fn web_socket(
 				message = outgoing_rx.recv() => match message {
 					Some(message) => {
 						let closing = matches!(message, Message::Close(_));
-						if sink.send(message).await.is_err() {
+						// A peer that stopped reading must not keep a closed socket's
+						// senders waiting until TCP gives up.
+						let sent = tokio::select! {
+							sent = sink.send(message) => sent,
+							_ = cancel.cancelled() => break 'socket (1000, String::new(), true),
+						};
+						if sent.is_err() {
 							break (1006, "send failed".to_owned(), false);
 						}
 						if closing {

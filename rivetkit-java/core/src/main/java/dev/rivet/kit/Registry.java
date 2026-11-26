@@ -105,7 +105,7 @@ public final class Registry {
             ActorOptions options = new ActorOptions();
             configure.accept(options);
             ApiModel model = ApiModel.of(api);
-            entries.add(new Entry(new ActorType(model, (Function) factory, options.migrate), options));
+            entries.add(new Entry(new ActorType(model, (Function) factory, options.migrate, options.maxWaitingEvents), options));
             return this;
         }
 
@@ -130,6 +130,7 @@ public final class Registry {
         private Duration hookTimeout;
         private Duration requestTimeout;
         private boolean noSleep;
+        private int maxWaitingEvents = 10_000;
 
         private ActorOptions() {}
 
@@ -170,6 +171,17 @@ public final class Registry {
         /** Never sleep. */
         public ActorOptions noSleep() {
             this.noSleep = true;
+            return this;
+        }
+
+        /**
+         * Events an instance lets wait for its turn (default 10,000). Past it, calls and requests
+         * are refused with {@code actor/overloaded} and a WebSocket sending frames is closed with
+         * 1013 (try again later): an actor's queue never grows without bound.
+         */
+        public ActorOptions maxWaitingEvents(int events) {
+            if (events < 1) throw new IllegalArgumentException("maxWaitingEvents must be at least 1");
+            this.maxWaitingEvents = events;
             return this;
         }
     }

@@ -6,6 +6,7 @@ import dev.rivet.kit.RivetException;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -72,7 +73,7 @@ public final class RivetTest implements AutoCloseable {
      * scheduled onto the new pool. Only the first call to a fresh actor needs it.
      */
     public <T> T retry(Supplier<T> call) {
-        long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
+        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
         while (true) {
             try {
                 return call.get();
@@ -88,6 +89,15 @@ public final class RivetTest implements AutoCloseable {
                     throw e;
                 }
             }
+        }
+    }
+
+    /** Polls {@code condition} every 25 ms until it holds; fails after {@code timeout}. */
+    public static void eventually(BooleanSupplier condition, Duration timeout) throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (!condition.getAsBoolean()) {
+            if (System.nanoTime() > deadline) throw new AssertionError("condition not met within " + timeout);
+            Thread.sleep(25);
         }
     }
 

@@ -85,8 +85,9 @@ final class ServerSocket implements WebSocket {
         if (!open) return;
         open = false;
         String reason = "actor.overloaded";
-        Threads.VIRTUAL.execute(() -> Native.call(id, Wire.OP_WS_CLOSE, new Wire.WsCloseCall(1013, reason), null));
-        instance.spawn(() -> dispatchClose(1013, reason, false), 0);
+        Threads.VIRTUAL.execute(() ->
+                Native.call(id, Wire.OP_WS_CLOSE, new Wire.WsCloseCall(Limits.CLOSE_OVERLOADED, reason), null));
+        instance.spawn(() -> dispatchClose(Limits.CLOSE_OVERLOADED, reason, false), 0);
     }
 
     @Override

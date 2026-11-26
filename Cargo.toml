@@ -535,6 +535,10 @@ members = [
     path = "rivetkit-rust/packages/client"
     version = "=3.1.2-rc.8"
 
+    [workspace.dependencies.rivetkit-host-adapter]
+    path = "rivetkit-rust/packages/rivetkit-host-adapter"
+    version = "=3.1.2-rc.8"
+
     [workspace.dependencies.rivetkit-actor-persist]
     path = "rivetkit-rust/packages/actor-persist"
     version = "=3.1.2-rc.8"

@@ -129,7 +129,7 @@ pub enum Op {
 	ConnSend = 21,
 	/// [`messages::ConnDisconnectCall`].
 	ConnDisconnect = 22,
-	/// → [`messages::ConnList`].
+	/// → [`messages::ConnList`]. Host-neutral; the Java SDK keeps its own map instead.
 	ConnList = 23,
 	Sleep = 24,
 	Destroy = 25,
@@ -143,9 +143,10 @@ pub enum Op {
 	// Target: actor or transaction.
 	/// [`messages::SqlCall`] (no params) → [`messages::SqlResult`]; body rows.
 	SqlExec = 30,
-	/// [`messages::SqlCall`] → [`messages::SqlResult`]; body rows.
+	/// [`messages::SqlCall`] → [`messages::SqlResult`]; body rows. Host-neutral; the
+	/// Java SDK uses `SqlExecute` for both reads and writes.
 	SqlQuery = 31,
-	/// [`messages::SqlCall`] → [`messages::SqlResult`] (no rows).
+	/// [`messages::SqlCall`] → [`messages::SqlResult`] (no rows). Host-neutral, as above.
 	SqlRun = 32,
 	/// [`messages::SqlCall`] → [`messages::SqlResult`]; body rows.
 	SqlExecute = 33,

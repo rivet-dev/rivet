@@ -27,22 +27,44 @@ final class CronImpl<A> implements Cron<A> {
 
     @Override
     public void every(String name, Duration interval, Fn.Call0<A> action) {
-        set(name, interval.toMillis(), null, null, p -> action.call(ScheduleImpl.as(p)));
+        set(name, interval.toMillis(), null, null, p -> action.call(Recorder.as(p)));
     }
 
     @Override
     public <T1> void every(String name, Duration interval, Fn.Call1<A, T1> action, T1 a1) {
-        set(name, interval.toMillis(), null, null, p -> action.call(ScheduleImpl.as(p), a1));
+        set(name, interval.toMillis(), null, null, p -> action.call(Recorder.as(p), a1));
+    }
+
+    @Override
+    public <T1, T2> void every(String name, Duration interval, Fn.Call2<A, T1, T2> action, T1 a1, T2 a2) {
+        set(name, interval.toMillis(), null, null, p -> action.call(Recorder.as(p), a1, a2));
+    }
+
+    @Override
+    public <T1, T2, T3> void every(String name, Duration interval, Fn.Call3<A, T1, T2, T3> action,
+            T1 a1, T2 a2, T3 a3) {
+        set(name, interval.toMillis(), null, null, p -> action.call(Recorder.as(p), a1, a2, a3));
     }
 
     @Override
     public void at(String name, String expression, ZoneId zone, Fn.Call0<A> action) {
-        set(name, null, expression, zone, p -> action.call(ScheduleImpl.as(p)));
+        set(name, null, expression, zone, p -> action.call(Recorder.as(p)));
     }
 
     @Override
     public <T1> void at(String name, String expression, ZoneId zone, Fn.Call1<A, T1> action, T1 a1) {
-        set(name, null, expression, zone, p -> action.call(ScheduleImpl.as(p), a1));
+        set(name, null, expression, zone, p -> action.call(Recorder.as(p), a1));
+    }
+
+    @Override
+    public <T1, T2> void at(String name, String expression, ZoneId zone, Fn.Call2<A, T1, T2> action, T1 a1, T2 a2) {
+        set(name, null, expression, zone, p -> action.call(Recorder.as(p), a1, a2));
+    }
+
+    @Override
+    public <T1, T2, T3> void at(String name, String expression, ZoneId zone, Fn.Call3<A, T1, T2, T3> action,
+            T1 a1, T2 a2, T3 a3) {
+        set(name, null, expression, zone, p -> action.call(Recorder.as(p), a1, a2, a3));
     }
 
     @Override

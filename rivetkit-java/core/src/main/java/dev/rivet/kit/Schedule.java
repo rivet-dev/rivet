@@ -18,11 +18,15 @@ public interface Schedule<A> {
 
     <T1, T2> String after(Duration delay, Fn.Call2<A, T1, T2> action, T1 a1, T2 a2);
 
+    <T1, T2, T3> String after(Duration delay, Fn.Call3<A, T1, T2, T3> action, T1 a1, T2 a2, T3 a3);
+
     String at(Instant time, Fn.Call0<A> action);
 
     <T1> String at(Instant time, Fn.Call1<A, T1> action, T1 a1);
 
     <T1, T2> String at(Instant time, Fn.Call2<A, T1, T2> action, T1 a1, T2 a2);
+
+    <T1, T2, T3> String at(Instant time, Fn.Call3<A, T1, T2, T3> action, T1 a1, T2 a2, T3 a3);
 
     boolean cancel(String id);
 

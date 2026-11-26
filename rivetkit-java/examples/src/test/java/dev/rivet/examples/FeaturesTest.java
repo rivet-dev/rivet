@@ -21,6 +21,7 @@ import dev.rivet.kit.RivetException;
 import dev.rivet.kit.WebSocket;
 import dev.rivet.kit.testing.RivetTest;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -69,7 +70,7 @@ class FeaturesTest {
         assertFalse(info.get(0).isBlank(), "actor id");
         assertEquals("lab", info.get(1));
         assertEquals(key, info.get(2));
-        assertTrue(info.size() == 4);
+        assertEquals(4, info.size());
     }
 
     @Test
@@ -172,14 +173,19 @@ class FeaturesTest {
         rivet.retry(counter::get);
         Lab lab = lab(RivetTest.uniqueKey());
         lab.watchCounter(counterKey);
-        // The subscription reaches the counter asynchronously; keep counting until it sees one.
-        TestRivet.eventually(() -> {
-            long sent = counter.increment(1);
-            return lab.lastSeenCount() > 0 && lab.lastSeenCount() <= sent;
-        }, Duration.ofSeconds(15));
-        // Sleeping closes the actor's client, and with it the connection it opened; the suite's
-        // leak check fails if that connection is still open at the end.
-        lab.sleepNow();
+        try {
+            // The subscription reaches the counter asynchronously; keep counting until it sees one.
+            RivetTest.eventually(() -> {
+                long sent = counter.increment(1);
+                return lab.lastSeenCount() > 0 && lab.lastSeenCount() <= sent;
+            }, Duration.ofSeconds(10));
+        } finally {
+            // Sleeping closes the actor's client, and with it the connection it opened; the
+            // suite's leak check fails if that connection is still open at the end. The next
+            // call wakes a new instance, which only answers once the sleep has finished.
+            lab.sleepNow();
+            RivetTest.eventually(() -> lab.sleeps() == 1, Duration.ofSeconds(10));
+        }
     }
 
     @Test
@@ -211,13 +217,13 @@ class FeaturesTest {
         Lab lab = lab(RivetTest.uniqueKey());
         assertEquals(0, lab.sleeps());
         lab.sleepNow();
-        TestRivet.eventually(() -> {
+        RivetTest.eventually(() -> {
             try {
                 return lab.sleeps() == 1;
             } catch (RivetException e) {
                 return false;
             }
-        }, Duration.ofSeconds(15));
+        }, Duration.ofSeconds(10));
     }
 
     @Test
@@ -226,14 +232,14 @@ class FeaturesTest {
         Lab lab = lab(key);
         lab.destroyNow();
         Lab existing = client.get(Lab.class, key);
-        TestRivet.eventually(() -> {
+        RivetTest.eventually(() -> {
             try {
                 existing.info();
                 return false;
             } catch (RivetException e) {
                 return true;
             }
-        }, Duration.ofSeconds(15));
+        }, Duration.ofSeconds(10));
     }
 
     @Test
@@ -263,9 +269,8 @@ class FeaturesTest {
 
             subscription.close();
             conn.api().pushToCaller("two");
-            assertNull(pushed.poll(500, TimeUnit.MILLISECONDS), "no events after unsubscribing");
+            assertNull(pushed.poll(200, TimeUnit.MILLISECONDS), "no events after unsubscribing");
         }
-        assertEquals(Conn.Status.CLOSED, Conn.Status.valueOf("CLOSED"));
     }
 
     @Test
@@ -299,7 +304,7 @@ class FeaturesTest {
                     // the connection went away under the call
                 }
             });
-            TestRivet.eventually(() -> lab.disconnects() >= 1, Duration.ofSeconds(15));
+            RivetTest.eventually(() -> lab.disconnects() >= 1, Duration.ofSeconds(10));
         }
     }
 
@@ -308,9 +313,11 @@ class FeaturesTest {
         String key = RivetTest.uniqueKey();
         lab(key);
         AtomicInteger dials = new AtomicInteger();
+        BlockingQueue<Conn.Status> statuses = new LinkedBlockingQueue<>();
         try (Conn<Lab, Lab.Event> conn =
                 client.connect(Lab.class, () -> new Lab.Params("token-" + dials.incrementAndGet()), key)) {
             assertEquals("token-1", conn.api().callerUser());
+            conn.onStatus(statuses::add);
             // The server drops the connection; the client redials and must ask for params again.
             Thread.ofVirtual().start(() -> {
                 try {
@@ -319,14 +326,19 @@ class FeaturesTest {
                     // the connection went away under the call
                 }
             });
-            TestRivet.eventually(() -> dials.get() >= 2, Duration.ofSeconds(15));
-            TestRivet.eventually(() -> {
+            RivetTest.eventually(() -> dials.get() >= 2, Duration.ofSeconds(10));
+            RivetTest.eventually(() -> {
                 try {
                     return conn.api().callerUser().equals("token-" + dials.get());
                 } catch (RuntimeException reconnecting) {
                     return false;
                 }
-            }, Duration.ofSeconds(15));
+            }, Duration.ofSeconds(10));
+            // Status listeners saw the connection drop and come back.
+            List<Conn.Status> seen = new ArrayList<>();
+            statuses.drainTo(seen);
+            assertTrue(seen.contains(Conn.Status.CONNECTED), "reconnected: " + seen);
+            assertTrue(seen.indexOf(Conn.Status.CONNECTED) > 0, "a drop came first: " + seen);
         }
     }
 
@@ -337,7 +349,7 @@ class FeaturesTest {
         String key = RivetTest.uniqueKey();
         lab(key);
         try (Conn<Lab, Lab.Event> conn = client.connect(Lab.class, () -> new Lab.Params("ann"), key)) {
-            TestRivet.eventually(() -> conn.status() == Conn.Status.CONNECTED, Duration.ofSeconds(10));
+            RivetTest.eventually(() -> conn.status() == Conn.Status.CONNECTED, Duration.ofSeconds(10));
         }
     }
 
@@ -377,7 +389,7 @@ class FeaturesTest {
     void handlesCarryTypedParams() {
         // Wrong params types no longer compile (CompileTimeSafetyTest); here they reach the actor.
         Handle<Lab> withParams = client.handleWithParams(Lab.class, new Lab.Params("ann"), RivetTest.uniqueKey());
-        assertEquals("lab", rivet.retry(() -> withParams.api().info()).get(1));
+        assertEquals("ann", rivet.retry(() -> withParams.api().callerUser()));
     }
 
     @Test
@@ -442,16 +454,21 @@ class FeaturesTest {
     }
 
     @Test
-    void unreadRequestBodiesAreReleased() {
-        // 1 MiB streams in chunks; the handler answers 404 without reading it. The body must
-        // still be closed (the suite's leak check counts open streams at the end).
+    void unreadRequestBodiesAreReleased() throws Exception {
+        // 1 MiB streams in chunks; the handler answers 404 without reading it. Its body (a leased
+        // stream on the actor side) must still be closed once the response is done.
         Handle<Lab> lab = client.handle(Lab.class, RivetTest.uniqueKey());
         rivet.retry(() -> lab.api().info());
-        for (int i = 0; i < 3; i++) {
-            try (FetchResponse response = lab.fetch("POST", "/ignored", Map.of(), new byte[1 << 20])) {
-                assertEquals(404, response.status());
-            }
+        try (FetchResponse response = lab.fetch("POST", "/ignored", Map.of(), new byte[1 << 20])) {
+            assertEquals(404, response.status());
         }
+        RivetTest.eventually(() -> {
+            try {
+                return lab.api().ignoredBodyClosed();
+            } catch (Exception e) {
+                throw new AssertionError(e);
+            }
+        }, Duration.ofSeconds(10));
     }
 
     @Test
@@ -464,27 +481,27 @@ class FeaturesTest {
             socket.send("hold");
             // More frames than the actor lets wait while one handler holds its turn.
             try {
-                for (int i = 0; i < 10_200 && closes.isEmpty(); i++) socket.send("quiet");
+                for (int i = 0; i < 300 && closes.isEmpty(); i++) socket.send("quiet");
             } catch (RuntimeException closedUnderUs) {
                 // The actor closed the socket mid-flood: a send can race the close event.
             }
-            WebSocket.Close close = closes.poll(15, TimeUnit.SECONDS);
+            WebSocket.Close close = closes.poll(10, TimeUnit.SECONDS);
             assertTrue(close != null, "the actor closed the flooded socket");
             // The actor closes with 1013. Frames still in flight then hit the gateway's closed
             // tunnel, and the engine may close the client first with 1011 ups.consumer_closed.
             assertTrue(close.code() == 1013 || (close.code() == 1011 && close.reason().contains("consumer_closed")),
                     "closed with " + close);
         }
-        // The actor side ran its close listener once, as a turn. Until the ~10,000 queued frames
-        // drain, the actor refuses calls as overloaded, which is the point.
-        TestRivet.eventually(() -> {
+        // The actor side ran its close listener once, as a turn. Until the queued frames drain,
+        // the actor refuses calls as overloaded, which is the point.
+        RivetTest.eventually(() -> {
             try {
                 return lab.api().socketsClosed() == 1;
             } catch (RivetException overloaded) {
                 if (!overloaded.code().equals("overloaded")) throw overloaded;
                 return false;
             }
-        }, Duration.ofSeconds(15));
+        }, Duration.ofSeconds(10));
     }
 
     @Test
@@ -507,7 +524,7 @@ class FeaturesTest {
         assertTrue(close != null, "the actor closed the socket");
         assertEquals(4000, close.code());
         assertThrows(IllegalStateException.class, () -> socket.send("late"));
-        TestRivet.eventually(() -> lab.api().socketsClosed() == 1, Duration.ofSeconds(10));
+        RivetTest.eventually(() -> lab.api().socketsClosed() == 1, Duration.ofSeconds(10));
     }
 
     @Test

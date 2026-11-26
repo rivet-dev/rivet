@@ -3,9 +3,9 @@
 //! in-memory count and returns it, the same shape as the Java and TypeScript bench
 //! servers.
 //!
-//! Note: Rust SDK actors have no framework-managed state, so this count is not
-//! persisted. The Java and TypeScript servers persist state, but off the request
-//! path (throttled saves), so per-call work is comparable.
+//! None of the three persist the count on the request path: this one and the Java
+//! one keep it in memory, and the TypeScript one uses actor `state` (deprecated in
+//! RivetKit 3.0; saved off the request path, throttled). Per-call work is comparable.
 //!
 //! Env: RIVET_ENDPOINT (default http://127.0.0.1:6420), RIVET_POOL (required),
 //! BENCH_SPAWN_ENGINE=1 to spawn the local engine and keep it alive while this runs

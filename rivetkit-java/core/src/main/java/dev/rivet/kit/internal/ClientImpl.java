@@ -13,6 +13,7 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -65,23 +66,51 @@ public final class ClientImpl implements Client {
     }
 
     @Override
-    public <P, A extends Actor<?, P>> Handle<A> handleWithParams(Class<A> api, P params, String... key) {
-        return new HandleImpl<>(this, ApiModel.of(api), List.of(key), null, false,
+    public <P, A extends Actor<?, P>> Handle<A> handleWithParams(Class<A> api, P params, String key, String... rest) {
+        List<String> parts = new ArrayList<>(rest.length + 1);
+        parts.add(key);
+        parts.addAll(List.of(rest));
+        return new HandleImpl<>(this, ApiModel.of(api), List.copyOf(parts), null, false,
                 params == null ? null : Codec.encode(params), null);
     }
 
     @Override
     public <E, A extends Actor<E, ?>> Conn<A, E> connect(Class<A> api, String... key) {
-        return ConnClient.open(this, ApiModel.of(api), new HandleImpl<>(this, ApiModel.of(api), List.of(key), null,
-                false, null, null).target(), null);
+        return openConn(api, null, key);
     }
 
     @Override
     public <E, P, A extends Actor<E, P>> Conn<A, E> connect(
             Class<A> api, Supplier<? extends P> params, String... key) {
-        Objects.requireNonNull(params, "params");
-        HandleImpl<A> handle = new HandleImpl<>(this, ApiModel.of(api), List.of(key), null, false, null, null);
-        return ConnClient.open(this, ApiModel.of(api), handle.target(), params);
+        return openConn(api, Objects.requireNonNull(params, "params"), key);
+    }
+
+    private <A, E> Conn<A, E> openConn(Class<A> api, Supplier<?> params, String... key) {
+        ApiModel model = ApiModel.of(api);
+        Wire.ActorTarget target = new HandleImpl<>(this, model, List.of(key), null, false, null, null).target();
+        return ConnClient.open(this, model, target, params);
+    }
+
+    /**
+     * Waits for a call whose answer creates a resource (a connection, socket or body). If the
+     * wait is abandoned (the caller was interrupted, for example a cancelled action), the
+     * resource that the late answer still creates is closed: nothing would ever hold it.
+     */
+    static Native.Answer awaitCreating(CompletableFuture<Native.Answer> answer, AtomicReference<? extends AutoCloseable> created) {
+        try {
+            return Calls.outbound(() -> Native.await(answer));
+        } catch (RuntimeException abandoned) {
+            answer.whenComplete((ignored, error) -> {
+                AutoCloseable orphan = created.get();
+                if (orphan == null) return;
+                try {
+                    orphan.close();
+                } catch (Exception e) {
+                    LOG.log(Level.DEBUG, "rivetkit: closing an abandoned resource failed", e);
+                }
+            });
+            throw abandoned;
+        }
     }
 
     @Override
@@ -211,45 +240,51 @@ public final class ClientImpl implements Client {
 
         @Override
         public <R> CompletableFuture<R> async(Fn.Get0<A, R> action) {
-            return invoke(p -> action.call(ScheduleImpl.as(p)));
+            return invoke(p -> action.call(Recorder.as(p)));
         }
 
         @Override
         public <T1, R> CompletableFuture<R> async(Fn.Get1<A, T1, R> action, T1 a1) {
-            return invoke(p -> action.call(ScheduleImpl.as(p), a1));
+            return invoke(p -> action.call(Recorder.as(p), a1));
         }
 
         @Override
         public <T1, T2, R> CompletableFuture<R> async(Fn.Get2<A, T1, T2, R> action, T1 a1, T2 a2) {
-            return invoke(p -> action.call(ScheduleImpl.as(p), a1, a2));
+            return invoke(p -> action.call(Recorder.as(p), a1, a2));
         }
 
         @Override
         public <T1, T2, T3, R> CompletableFuture<R> async(Fn.Get3<A, T1, T2, T3, R> action, T1 a1, T2 a2, T3 a3) {
-            return invoke(p -> action.call(ScheduleImpl.as(p), a1, a2, a3));
+            return invoke(p -> action.call(Recorder.as(p), a1, a2, a3));
         }
 
         @Override
         public CompletableFuture<Void> run(Fn.Call0<A> action) {
-            return invoke(p -> action.call(ScheduleImpl.as(p)));
+            return invoke(p -> action.call(Recorder.as(p)));
         }
 
         @Override
         public <T1> CompletableFuture<Void> run(Fn.Call1<A, T1> action, T1 a1) {
-            return invoke(p -> action.call(ScheduleImpl.as(p), a1));
+            return invoke(p -> action.call(Recorder.as(p), a1));
         }
 
         @Override
         public <T1, T2> CompletableFuture<Void> run(Fn.Call2<A, T1, T2> action, T1 a1, T2 a2) {
-            return invoke(p -> action.call(ScheduleImpl.as(p), a1, a2));
+            return invoke(p -> action.call(Recorder.as(p), a1, a2));
+        }
+
+        @Override
+        public <T1, T2, T3> CompletableFuture<Void> run(Fn.Call3<A, T1, T2, T3> action, T1 a1, T2 a2, T3 a3) {
+            return invoke(p -> action.call(Recorder.as(p), a1, a2, a3));
         }
 
         @Override
         public FetchResponse fetch(String method, String path, Map<String, String> headers, byte[] body) {
             AtomicReference<Streams.Inbound> stream = new AtomicReference<>();
-            Native.Answer answer = Calls.outbound(() -> Native.await(Native.call(client.handle, Wire.OP_CLIENT_FETCH,
+            Native.Answer answer = awaitCreating(Native.call(client.handle, Wire.OP_CLIENT_FETCH,
                     new Wire.ClientFetchCall(target(), method, path, headers == null ? Map.of() : headers), body,
-                    a -> stream.set(new Streams.Inbound(Codec.decode(a.header(), Wire.FetchResult.class).body())))));
+                    a -> stream.set(new Streams.Inbound(Codec.decode(a.header(), Wire.FetchResult.class).body()))),
+                    stream);
             Wire.FetchResult result = Codec.decode(answer.header(), Wire.FetchResult.class);
             return new FetchResponse(result.status(), Map.copyOf(result.headers()), stream.get());
         }
@@ -259,9 +294,9 @@ public final class ClientImpl implements Client {
             AtomicReference<ClientSocket> socket = new AtomicReference<>();
             // Captured here: the completion runs on a Rust thread, outside the actor's call.
             Dispatch dispatch = Dispatch.forCurrentCall();
-            Calls.outbound(() -> Native.await(Native.call(client.handle, Wire.OP_CLIENT_WEB_SOCKET,
+            awaitCreating(Native.call(client.handle, Wire.OP_CLIENT_WEB_SOCKET,
                     new Wire.ClientWebSocketCall(target(), path, List.of()), null,
-                    a -> socket.set(new ClientSocket(client, Native.handleOf(a), dispatch)))));
+                    a -> socket.set(new ClientSocket(client, Native.handleOf(a), dispatch))), socket);
             return socket.get();
         }
     }
@@ -288,30 +323,46 @@ public final class ClientImpl implements Client {
             return new Dispatch(call == null ? null : call.instance);
         }
 
-        synchronized boolean submit(Runnable task) {
+        /** What became of a submitted listener task. */
+        enum Outcome {
+            ACCEPTED,
+            /** Listeners are more than {@link Conn#MAX_QUEUED_EVENTS} behind. */
+            BEHIND,
+            /** The actor instance that opened this stopped (slept or was destroyed). */
+            OWNER_GONE
+        }
+
+        /** Bound while a listener of this dispatch runs (see {@link ClientSocket#send}). */
+        static final ScopedValue<Dispatch> LISTENING = ScopedValue.newInstance();
+
+        boolean isRunningListener() {
+            return LISTENING.isBound() && LISTENING.get() == this;
+        }
+
+        synchronized Outcome submit(Runnable task) {
+            Runnable scoped = () -> ScopedValue.where(LISTENING, this).run(task);
             if (owner != null) {
-                // The actor instance stopped (slept or was destroyed): its listeners are gone.
-                if (owner.released) return true;
-                if (inFlight >= Conn.MAX_QUEUED_EVENTS) return false;
+                if (owner.released) return Outcome.OWNER_GONE;
+                if (inFlight >= Conn.MAX_QUEUED_EVENTS) return Outcome.BEHIND;
                 inFlight++;
                 owner.spawn(() -> {
                     try {
-                        task.run();
+                        scoped.run();
                     } finally {
                         synchronized (this) {
                             inFlight--;
                         }
                     }
                 }, 0);
-                return true;
+                return Outcome.ACCEPTED;
             }
-            if (queue.size() >= Conn.MAX_QUEUED_EVENTS) return false;
-            queue.addLast(task);
+            if (queue.size() >= Conn.MAX_QUEUED_EVENTS) return Outcome.BEHIND;
+            queue.addLast(scoped);
             if (!draining) {
                 draining = true;
                 Threads.start("rivet-events", this::drain);
             }
-            return true;
+            return Outcome.ACCEPTED;
         }
 
         private void drain() {
@@ -361,14 +412,14 @@ public final class ClientImpl implements Client {
             AtomicReference<ConnClient<A, E>> conn = new AtomicReference<>();
             long source = params == null ? 0 : Native.registerParams(params);
             try {
-                Calls.outbound(() -> Native.await(Native.call(client.handle, Wire.OP_CLIENT_CONNECT,
+                awaitCreating(Native.call(client.handle, Wire.OP_CLIENT_CONNECT,
                         new Wire.ClientConnectCall(target, source == 0 ? null : source), null, answer -> {
                             ConnClient<A, E> created =
                                     new ConnClient<>(client, model, Native.handleOf(answer), dispatch, source);
                             Native.registerResource(created.id, created);
                             conn.set(created);
                             client.adopt(created);
-                        })));
+                        }), conn);
             } catch (RuntimeException e) {
                 if (source != 0) Native.unregisterParams(source);
                 throw e;
@@ -383,21 +434,16 @@ public final class ClientImpl implements Client {
                 List<Consumer<Object>> targets = listeners.get(name);
                 Codec.EventCodec codec = model.eventsByName.get(name);
                 if (targets == null || codec == null) return;
-                boolean accepted = dispatch.submit(() -> {
+                deliver(() -> {
                     Object event = codec.decode(body);
                     for (Consumer<Object> listener : targets) listener.accept(event);
                 });
-                if (!accepted) {
-                    LOG.log(Level.ERROR, "rivetkit: connection {0} closed: listeners fell more than {1} events behind",
-                            id, Conn.MAX_QUEUED_EVENTS);
-                    close();
-                }
             } else if (kind == Wire.CLIENT_STATUS) {
                 Wire.ClientStatusEvent event = Codec.decode(header, Wire.ClientStatusEvent.class);
                 if (event.error() != null) {
                     RivetException error = new RivetException(
                             event.error().group(), event.error().code(), event.error().message());
-                    for (Consumer<RivetException> listener : errorListeners) dispatch.submit(() -> listener.accept(error));
+                    for (Consumer<RivetException> listener : errorListeners) deliver(() -> listener.accept(error));
                     return;
                 }
                 Status next = switch (event.status()) {
@@ -409,7 +455,7 @@ public final class ClientImpl implements Client {
                 // Rust follows the held-back events with a snapshot, which may repeat the last one.
                 if (status == Status.CLOSED || status == next) return;
                 status = next;
-                for (Consumer<Status> listener : statusListeners) dispatch.submit(() -> listener.accept(next));
+                for (Consumer<Status> listener : statusListeners) deliver(() -> listener.accept(next));
             }
         }
 
@@ -482,6 +528,22 @@ public final class ClientImpl implements Client {
             if (paramsSource != 0) Native.unregisterParams(paramsSource);
             client.disown(this);
         }
+
+        private void deliver(Runnable listener) {
+            switch (dispatch.submit(listener)) {
+                case ACCEPTED -> {}
+                case BEHIND -> {
+                    LOG.log(Level.ERROR, "rivetkit: connection {0} closed: listeners fell more than {1} events behind",
+                            id, Conn.MAX_QUEUED_EVENTS);
+                    close();
+                }
+                case OWNER_GONE -> {
+                    LOG.log(Level.WARNING, "rivetkit: connection {0} closed: the actor instance that opened it"
+                            + " stopped; open connections with ctx.client() and reopen them on wake", id);
+                    close();
+                }
+            }
+        }
     }
 
     // --- raw websockets ---------------------------------------------------------------
@@ -506,9 +568,18 @@ public final class ClientImpl implements Client {
         public void onEvent(int kind, byte[] header, byte[] body) {
             if (kind == Wire.WS_MESSAGE) {
                 Message message = new Message(Codec.decode(header, Wire.WsMessageEvent.class).binary(), body);
-                if (!dispatch.submit(() -> messageListeners.forEach(l -> l.accept(message)))) {
-                    LOG.log(Level.ERROR, "rivetkit: websocket {0} closed: listeners fell behind", id);
-                    close(1008, "client too slow");
+                switch (dispatch.submit(() -> messageListeners.forEach(l -> l.accept(message)))) {
+                    case ACCEPTED -> {}
+                    case BEHIND -> {
+                        LOG.log(Level.ERROR, "rivetkit: websocket {0} closed: listeners fell more than {1} frames behind",
+                                id, Conn.MAX_QUEUED_EVENTS);
+                        close(Limits.CLOSE_OVERLOADED, "client.overloaded");
+                    }
+                    case OWNER_GONE -> {
+                        LOG.log(Level.WARNING, "rivetkit: websocket {0} closed: the actor instance that opened it"
+                                + " stopped; open sockets with ctx.client() and reopen them on wake", id);
+                        close(1001, "client.owner_stopped");
+                    }
                 }
             } else if (kind == Wire.WS_CLOSE) {
                 open = false;
@@ -532,8 +603,15 @@ public final class ClientImpl implements Client {
 
         private void send(boolean binary, byte[] data) {
             if (!open) throw new IllegalStateException("websocket is closed");
-            // Waits while the peer is slow (bounded queue in Rust), so give up the turn meanwhile.
-            Calls.outbound(() -> Native.callSync(id, Wire.OP_WS_SEND, new Wire.WsSendCall(binary), data));
+            Supplier<Native.Answer> send = () -> Native.callSync(id, Wire.OP_WS_SEND, new Wire.WsSendCall(binary), data);
+            if (dispatch.isRunningListener()) {
+                // Sending from this socket's own listener keeps the turn, so the next frame's
+                // listener does not start before this one returns (frame order).
+                send.get();
+            } else {
+                // Waits while the peer is slow (bounded queue in Rust): give up the turn meanwhile.
+                Calls.outbound(send);
+            }
         }
 
         @Override

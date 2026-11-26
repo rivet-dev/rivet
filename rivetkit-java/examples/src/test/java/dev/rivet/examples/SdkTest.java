@@ -20,7 +20,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,10 +34,6 @@ class SdkTest {
     static void start() {
         rivet = TestRivet.get();
         client = rivet.client();
-    }
-
-    private static void eventually(BooleanSupplier condition, Duration timeout) throws InterruptedException {
-        TestRivet.eventually(condition, timeout);
     }
 
     @Test
@@ -76,7 +71,7 @@ class SdkTest {
         try (Conn<ChatRoom, ChatRoom.Event> conn =
                 client.connect(ChatRoom.class, () -> new ChatRoom.Params("alice", "t"), room)) {
             conn.onEvent(events::add);
-            eventually(() -> conn.status() == Conn.Status.CONNECTED, Duration.ofSeconds(10));
+            RivetTest.eventually(() -> conn.status() == Conn.Status.CONNECTED, Duration.ofSeconds(10));
 
             // Known race in the shared Rust client (rivetkit-client connection.rs): a subscribe
             // sent while the connection is opening can be overtaken by the first action, so its
@@ -114,7 +109,7 @@ class SdkTest {
                 client.connect(ChatRoom.class, () -> new ChatRoom.Params("mallory", "banned"), room)) {
             conn.onError(errors::add);
             conn.api(); // connecting starts on open; the rejection arrives as an error
-            RivetException error = errors.poll(20, TimeUnit.SECONDS);
+            RivetException error = errors.poll(10, TimeUnit.SECONDS);
             if (error == null) throw new AssertionError("no connection error");
             assertTrue(error.getMessage().contains("banned"), error.getMessage());
         }
@@ -127,13 +122,13 @@ class SdkTest {
         rivet.retry(() -> chat.send("one"));
         assertEquals(1, chat.sentSinceWake());
         chat.goToSleep();
-        eventually(() -> {
+        RivetTest.eventually(() -> {
             try {
                 return chat.sentSinceWake() == 0;
             } catch (RivetException e) {
                 return false;
             }
-        }, Duration.ofSeconds(15));
+        }, Duration.ofSeconds(10));
         assertEquals(List.of("one"), chat.history(10).stream().map(ChatRoom.Message::text).toList());
     }
 
@@ -178,7 +173,15 @@ class SdkTest {
         try (WebSocket socket = echo.webSocket("/")) {
             socket.onMessage(message -> received.add(message.text()));
             for (int i = 1; i <= n; i++) socket.send("m" + i);
-            for (int i = 1; i <= n; i++) assertEquals(i + ":m" + i, received.poll(10, TimeUnit.SECONDS));
+            for (int i = 1; i <= n; i++) {
+                String echoed = received.poll(10, TimeUnit.SECONDS);
+                if (echoed == null) {
+                    // Which way was it lost: did the actor get the frame?
+                    throw new AssertionError("frame " + i + " never came back; the actor saw "
+                            + echo.api().frames() + " of " + n);
+                }
+                assertEquals(i + ":m" + i, echoed);
+            }
         }
     }
 
@@ -188,7 +191,7 @@ class SdkTest {
         rivet.retry(() -> pinger.api().bumps());
         List<CompletableFuture<Integer>> calls = new ArrayList<>();
         for (int i = 0; i < 100; i++) calls.add(pinger.async(Pinger::bump));
-        CompletableFuture.allOf(calls.toArray(CompletableFuture[]::new)).get(60, TimeUnit.SECONDS);
+        CompletableFuture.allOf(calls.toArray(CompletableFuture[]::new)).get(10, TimeUnit.SECONDS);
         assertEquals(100, pinger.api().bumps());
     }
 
@@ -206,7 +209,7 @@ class SdkTest {
         Pinger pinger = client.getOrCreate(Pinger.class, RivetTest.uniqueKey());
         rivet.retry(pinger::ticks);
         pinger.tickLater(200);
-        eventually(() -> pinger.ticks() == 1, Duration.ofSeconds(15));
+        RivetTest.eventually(() -> pinger.ticks() == 1, Duration.ofSeconds(10));
         assertEquals(1, pinger.ticksConcurrently());
     }
 }

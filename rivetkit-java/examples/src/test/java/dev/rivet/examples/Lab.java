@@ -43,6 +43,9 @@ public interface Lab extends Actor<Lab.Event, Lab.Params> {
     /** The {@code user} the calling connection's params carried. */
     String callerUser();
 
+    /** Whether the SDK closed the body of the last request {@code onRequest} left unread. */
+    boolean ignoredBodyClosed() throws Exception;
+
     String createdWith();
 
     long sleeps();

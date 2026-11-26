@@ -10,15 +10,12 @@ use tokio::sync::mpsc;
 pub struct ResponseBody {
 	/// Taken by `end` or `error`.
 	tx: Mutex<Option<mpsc::Sender<ResponseChunk>>>,
-	/// Kept to observe the reader going away after the body ends.
-	closed: mpsc::Sender<ResponseChunk>,
 }
 
 impl ResponseBody {
 	pub(crate) fn new(tx: mpsc::Sender<ResponseChunk>) -> Self {
 		Self {
-			tx: Mutex::new(Some(tx.clone())),
-			closed: tx,
+			tx: Mutex::new(Some(tx)),
 		}
 	}
 
@@ -59,17 +56,12 @@ impl ResponseBody {
 		.map_err(|_| anyhow!("http response body reader is gone"))
 	}
 
-	/// Aborts the body; the client sees a broken response.
-	pub async fn error(&self, message: String) -> Result<()> {
+	/// Aborts the body; the client sees a broken response. A no-op once the body
+	/// ended or failed, or when the reader is already gone.
+	pub async fn error(&self, message: String) {
 		let Some(tx) = self.tx.lock().take() else {
-			return Ok(());
+			return;
 		};
 		let _ = tx.send(ResponseChunk::Error(message)).await;
-		Ok(())
-	}
-
-	/// Resolves when the client stops reading.
-	pub async fn cancelled(&self) {
-		self.closed.closed().await;
 	}
 }

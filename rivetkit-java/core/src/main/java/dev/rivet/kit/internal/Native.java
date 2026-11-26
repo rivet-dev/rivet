@@ -54,6 +54,8 @@ public final class Native {
     /** Connection params suppliers, asked by Rust (CONN_PARAMS) before every dial. */
     private static final Map<Long, Supplier<?>> PARAMS = new ConcurrentHashMap<>();
     private static final AtomicLong NEXT_PARAMS = new AtomicLong(1);
+    /** Threads answering a CONN_PARAMS event, by event, so a CANCEL can stop a slow supplier. */
+    private static final Map<Long, Thread> ASKING = new ConcurrentHashMap<>();
 
     static {
         NativeLoader.load();
@@ -142,6 +144,12 @@ public final class Native {
                 answerParams(id, head);
                 return;
             }
+            if (kind == Wire.CANCEL && actorType == 0) {
+                // Rust stopped waiting for a params request (the connection was closed).
+                Thread asking = ASKING.get(Codec.decode(head, Wire.CancelEvent.class).event());
+                if (asking != null) asking.interrupt();
+                return;
+            }
             if (actorType != 0 && kind != Wire.STREAM_END && kind != Wire.CLIENT_EVENT && kind != Wire.CLIENT_STATUS) {
                 TypeSink sink = TYPES.get(actorType);
                 if (sink != null) {
@@ -165,11 +173,14 @@ public final class Native {
         long source = Codec.decode(header, Wire.ConnParamsEvent.class).source();
         Supplier<?> params = PARAMS.get(source);
         Threads.VIRTUAL.execute(() -> {
+            ASKING.put(event, Thread.currentThread());
             try {
                 if (params == null) throw new IllegalStateException("the connection was closed");
                 reply(event, null, Codec.encode(params.get()));
             } catch (Throwable t) {
                 replyError(event, t);
+            } finally {
+                ASKING.remove(event);
             }
         });
     }

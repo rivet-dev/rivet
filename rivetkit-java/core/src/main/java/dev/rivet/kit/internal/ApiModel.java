@@ -167,10 +167,6 @@ public final class ApiModel {
         return codec;
     }
 
-    List<Class<?>> eventClasses() {
-        return new ArrayList<>(eventsByClass.keySet());
-    }
-
     private void collectEvents(Type type) {
         Class<?> raw = rawOf(type);
         if (raw == None.class) return;

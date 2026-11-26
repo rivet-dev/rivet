@@ -46,9 +46,9 @@ engine, mean of 2 rounds (`mise run bench:compare`).
 Java is within 5% of Rust and ahead of TypeScript. Its memory is the JVM's default heap
 sizing; set `-Xmx` to bring it down.
 
-Tests (`mise run test`, about 15s warm on a 32-core laptop):
-- **Rust:** 27 tests (wire behaviour, ordering, ownership, fixture drift, the ABI), plus Miri on the `unsafe` block.
-- **Java unit:** codec, turns, API validation, fixtures, and 16 compile-safety cases.
+Tests (`mise run test`, about 15 s warm on a 32-core laptop: 4 s Rust, 11 s Java):
+- **Rust:** 30 tests (wire behaviour, ordering, ownership, status hold-back, fixture drift, the ABI), plus Miri on the `unsafe` block.
+- **Java unit:** codec, turns, API validation, fixtures, and 16 compile-safety cases (15 mistakes, one good program).
 - **End to end:** 47 tests against a real engine on a free port, run concurrently on one shared
   registry, covering actions, errors, async, events, connections, vars and SQL across sleep,
   transactions, HTTP streaming, WebSockets, turn atomicity, A→B→A calls, schedules and cron.

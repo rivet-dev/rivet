@@ -1,9 +1,6 @@
 package dev.rivet.kit;
 
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -11,26 +8,47 @@ import java.util.Map;
  * arrives. Read it with {@link #bytes}/{@link #text}, or stream {@link #body}; close the
  * response if you do not read the body to the end, so its buffers are released.
  */
-public record FetchResponse(int status, Map<String, String> headers, InputStream body) implements AutoCloseable {
-    /** The whole body; reads the stream to the end and closes it. */
+public final class FetchResponse implements AutoCloseable {
+    private final int status;
+    private final Map<String, String> headers;
+    private final InputStream body;
+
+    /** Built by the SDK; tests can build one to stand in for a fetch. */
+    public FetchResponse(int status, Map<String, String> headers, InputStream body) {
+        this.status = status;
+        this.headers = headers == null ? Map.of() : Map.copyOf(headers);
+        this.body = body == null ? InputStream.nullInputStream() : body;
+    }
+
+    public int status() {
+        return status;
+    }
+
+    public Map<String, String> headers() {
+        return headers;
+    }
+
+    /** The body as it arrives. */
+    public InputStream body() {
+        return body;
+    }
+
+    /** The whole body; reads the stream to the end and closes it, so call it once. */
     public byte[] bytes() {
-        try (InputStream in = body) {
-            return in.readAllBytes();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        return Bodies.readAll(body);
     }
 
     public String text() {
-        return new String(bytes(), StandardCharsets.UTF_8);
+        return Bodies.text(bytes());
     }
 
     @Override
     public void close() {
-        try {
-            body.close();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        Bodies.close(body);
+    }
+
+    @Override
+    public String toString() {
+        return "FetchResponse[" + status + "]";
     }
 }

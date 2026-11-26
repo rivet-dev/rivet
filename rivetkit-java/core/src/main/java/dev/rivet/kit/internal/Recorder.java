@@ -12,6 +12,12 @@ import java.lang.reflect.Proxy;
 final class Recorder {
     private Recorder() {}
 
+    /** Types the recording proxy as the API a method reference expects. */
+    @SuppressWarnings("unchecked")
+    static <T> T as(Object proxy) {
+        return (T) proxy;
+    }
+
     /** The recorded call. */
     record Recorded(ApiModel.Action action, Object[] args) {}
 

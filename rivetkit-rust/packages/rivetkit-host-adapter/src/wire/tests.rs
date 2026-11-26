@@ -389,16 +389,22 @@ async fn stream_writes_reach_the_body_in_call_order() {
 		);
 	}
 	let mut seen = Vec::new();
-	while let Some(chunk) = rx.recv().await {
-		match chunk {
-			ResponseChunk::Data {
-				data,
-				finish: false,
-			} => seen.extend(data),
-			ResponseChunk::Data { finish: true, .. } => break,
-			ResponseChunk::Error(message) => panic!("body aborted: {message}"),
+	let read = async {
+		while let Some(chunk) = rx.recv().await {
+			match chunk {
+				ResponseChunk::Data {
+					data,
+					finish: false,
+				} => seen.extend(data),
+				ResponseChunk::Data { finish: true, .. } => return,
+				ResponseChunk::Error(message) => panic!("body aborted: {message}"),
+			}
 		}
-	}
+		panic!("body ended without fin");
+	};
+	tokio::time::timeout(Duration::from_secs(10), read)
+		.await
+		.expect("the body ended within 10s");
 	assert_eq!(
 		seen,
 		(0..50u8).collect::<Vec<_>>(),
@@ -433,4 +439,68 @@ async fn done_waiters_settle_when_a_registry_is_released_without_serving() {
 		(completions[1].token, completions[1].status),
 		(2, Status::Error)
 	);
+}
+
+fn status(name: &str) -> super::messages::ClientStatusEvent {
+	super::messages::ClientStatusEvent {
+		status: name.into(),
+		error: None,
+	}
+}
+
+fn statuses(recorder: &Recorder) -> Vec<String> {
+	recorder
+		.events
+		.lock()
+		.iter()
+		.filter(|event| event.kind == EventKind::ClientStatus)
+		.map(|event| {
+			decode::<super::messages::ClientStatusEvent>(&event.header, "status")
+				.unwrap()
+				.status
+		})
+		.collect()
+}
+
+#[tokio::test]
+async fn status_events_wait_for_the_host_then_flush_in_order() {
+	let (wire, recorder) = setup();
+	let gate = super::client::StatusGate::new(wire.clone(), 0, 7);
+	gate.send(status("connecting"));
+	gate.send(status("connected"));
+	assert!(
+		statuses(&recorder).is_empty(),
+		"held until the host knows the connection"
+	);
+	// The snapshot repeats the last held status, so it is not sent again.
+	gate.open(|| status("connected"));
+	assert_eq!(statuses(&recorder), ["connecting", "connected"]);
+	gate.send(status("disconnected"));
+	assert_eq!(
+		statuses(&recorder),
+		["connecting", "connected", "disconnected"]
+	);
+}
+
+#[tokio::test]
+async fn a_status_snapshot_reports_transitions_nothing_saw() {
+	let (wire, recorder) = setup();
+	let gate = super::client::StatusGate::new(wire.clone(), 0, 7);
+	// The connection came up before the callbacks were registered.
+	gate.open(|| status("connected"));
+	assert_eq!(statuses(&recorder), ["connected"]);
+}
+
+#[tokio::test]
+async fn nothing_can_be_added_to_a_released_owner() {
+	let (wire, _recorder) = setup();
+	let owner = wire.insert(0, super::runtime::Handle::InStream(Default::default()));
+	let child = tokio_util::sync::CancellationToken::new();
+	assert!(
+		wire.insert_owned(owner, super::runtime::Handle::InStream(child))
+			.is_ok()
+	);
+	wire.release(owner).unwrap();
+	let late = wire.insert_owned(owner, super::runtime::Handle::InStream(Default::default()));
+	assert!(late.is_err(), "a released owner takes no new handles");
 }

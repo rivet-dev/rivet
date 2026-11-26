@@ -31,6 +31,15 @@ pub(crate) fn reserve(wire: &Arc<Wire>, owner: u64) -> Reserved {
 	Reserved { id, owner, cancel }
 }
 
+/// Like [`reserve`], but `None` when `owner` was released meanwhile.
+pub(crate) fn reserve_owned(wire: &Arc<Wire>, owner: u64) -> Option<Reserved> {
+	let cancel = CancellationToken::new();
+	let id = wire
+		.insert_owned(owner, Handle::InStream(cancel.clone()))
+		.ok()?;
+	Some(Reserved { id, owner, cancel })
+}
+
 /// Pumps `source` to the host as `STREAM_CHUNK` events on `reserved.id`, then one
 /// `STREAM_END`. Releasing the stream handle cancels it.
 pub(crate) fn start(

@@ -105,6 +105,30 @@ impl Wire {
 		id
 	}
 
+	/// Inserts `handle` for `owner` unless the owner was released meanwhile (a client
+	/// closed while one of its connections was still opening). Then the handle comes
+	/// back, for the caller to close: nothing would ever release it. The check and the
+	/// insert share the lock that `release` removes the owner under, so a handle is
+	/// either refused here or swept by the owner's `release_owned`.
+	pub(crate) fn insert_owned(
+		&self,
+		owner: u64,
+		handle: Handle,
+	) -> std::result::Result<u64, Handle> {
+		let mut handles = self.handles.lock();
+		if !handles.contains_key(&owner) {
+			return Err(handle);
+		}
+		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+		handles.insert(id, Entry { owner, handle });
+		Ok(id)
+	}
+
+	/// Closes a handle that was never inserted; see [`Self::insert_owned`].
+	pub(crate) fn discard(&self, handle: Handle) {
+		self.cleanup(handle);
+	}
+
 	pub(crate) fn remove(&self, id: u64) -> Option<Handle> {
 		self.handles.lock().remove(&id).map(|entry| entry.handle)
 	}
@@ -194,7 +218,7 @@ impl Wire {
 	}
 
 	/// Delivers an event whose body stays alive until the host releases the lease.
-	#[allow(clippy::too_many_arguments)]
+	#[expect(clippy::too_many_arguments)]
 	pub(crate) fn emit_leased(
 		&self,
 		kind: EventKind,

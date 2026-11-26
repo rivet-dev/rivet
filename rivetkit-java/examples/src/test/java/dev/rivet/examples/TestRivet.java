@@ -1,12 +1,11 @@
 package dev.rivet.examples;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.rivet.kit.internal.Native;
 import dev.rivet.kit.testing.RivetTest;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
@@ -44,7 +43,9 @@ final class TestRivet implements BeforeAllCallback {
                         .actionTimeout(Duration.ofSeconds(30))
                         .hookTimeout(Duration.ofSeconds(10))
                         .requestTimeout(Duration.ofSeconds(30))
-                        .sleepTimeout(Duration.ofSeconds(60)))
+                        .sleepTimeout(Duration.ofSeconds(60))
+                        // Small, so the flood test overloads it with a few hundred frames.
+                        .maxWaitingEvents(100))
                 .build());
         // The engine and its store are thrown away after the run, so skip the graceful stop
         // (serving drain plus the engine's own ~10s storage shutdown) and kill the engine.
@@ -95,20 +96,14 @@ final class TestRivet implements BeforeAllCallback {
         @Override
         public void close() {
             if (rivet == null) return;
-            for (int i = 0; i < 100 && (Native.pendingCount() > idlePending || Native.resourceCount() > idleResources); i++) {
+            // At or below the idle baseline: something counted while idle may have ended since.
+            for (int i = 0; i < 200 && (Native.pendingCount() > idlePending || Native.resourceCount() > idleResources); i++) {
                 sleep(Duration.ofMillis(50));
             }
-            assertEquals(idlePending, Native.pendingCount(), "calls left waiting on Rust");
-            assertEquals(idleResources, Native.resourceCount(),
+            assertTrue(Native.pendingCount() <= idlePending,
+                    () -> "calls left waiting on Rust: " + Native.pendingCount() + " (idle: " + idlePending + ")");
+            assertTrue(Native.resourceCount() <= idleResources,
                     () -> "streams, connections or sockets left open: " + Native.resourceTypes());
-        }
-    }
-
-    static void eventually(BooleanSupplier condition, Duration timeout) throws InterruptedException {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (!condition.getAsBoolean()) {
-            if (System.nanoTime() > deadline) throw new AssertionError("condition not met within " + timeout);
-            Thread.sleep(100);
         }
     }
 

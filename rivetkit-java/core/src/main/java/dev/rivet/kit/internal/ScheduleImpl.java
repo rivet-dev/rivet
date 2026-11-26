@@ -15,11 +15,6 @@ final class ScheduleImpl<A> implements Schedule<A> {
         this.instance = instance;
     }
 
-    @SuppressWarnings("unchecked")
-    static <T> T as(Object proxy) {
-        return (T) proxy;
-    }
-
     private String schedule(Long delayMs, Long timestampMs, Recorder.Invocation invocation) {
         Calls.requireTurn(instance, "ctx.schedule()");
         Recorder.Recorded call = Recorder.record(instance.model(), invocation);
@@ -35,32 +30,42 @@ final class ScheduleImpl<A> implements Schedule<A> {
 
     @Override
     public String after(Duration delay, Fn.Call0<A> action) {
-        return schedule(millis(delay), null, p -> action.call(as(p)));
+        return schedule(millis(delay), null, p -> action.call(Recorder.as(p)));
     }
 
     @Override
     public <T1> String after(Duration delay, Fn.Call1<A, T1> action, T1 a1) {
-        return schedule(millis(delay), null, p -> action.call(as(p), a1));
+        return schedule(millis(delay), null, p -> action.call(Recorder.as(p), a1));
     }
 
     @Override
     public <T1, T2> String after(Duration delay, Fn.Call2<A, T1, T2> action, T1 a1, T2 a2) {
-        return schedule(millis(delay), null, p -> action.call(as(p), a1, a2));
+        return schedule(millis(delay), null, p -> action.call(Recorder.as(p), a1, a2));
+    }
+
+    @Override
+    public <T1, T2, T3> String after(Duration delay, Fn.Call3<A, T1, T2, T3> action, T1 a1, T2 a2, T3 a3) {
+        return schedule(millis(delay), null, p -> action.call(Recorder.as(p), a1, a2, a3));
     }
 
     @Override
     public String at(Instant time, Fn.Call0<A> action) {
-        return schedule(null, time.toEpochMilli(), p -> action.call(as(p)));
+        return schedule(null, time.toEpochMilli(), p -> action.call(Recorder.as(p)));
     }
 
     @Override
     public <T1> String at(Instant time, Fn.Call1<A, T1> action, T1 a1) {
-        return schedule(null, time.toEpochMilli(), p -> action.call(as(p), a1));
+        return schedule(null, time.toEpochMilli(), p -> action.call(Recorder.as(p), a1));
     }
 
     @Override
     public <T1, T2> String at(Instant time, Fn.Call2<A, T1, T2> action, T1 a1, T2 a2) {
-        return schedule(null, time.toEpochMilli(), p -> action.call(as(p), a1, a2));
+        return schedule(null, time.toEpochMilli(), p -> action.call(Recorder.as(p), a1, a2));
+    }
+
+    @Override
+    public <T1, T2, T3> String at(Instant time, Fn.Call3<A, T1, T2, T3> action, T1 a1, T2 a2, T3 a3) {
+        return schedule(null, time.toEpochMilli(), p -> action.call(Recorder.as(p), a1, a2, a3));
     }
 
     @Override

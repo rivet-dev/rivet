@@ -14,10 +14,19 @@ public interface Cron<A> {
 
     <T1> void every(String name, Duration interval, Fn.Call1<A, T1> action, T1 a1);
 
+    <T1, T2> void every(String name, Duration interval, Fn.Call2<A, T1, T2> action, T1 a1, T2 a2);
+
+    <T1, T2, T3> void every(String name, Duration interval, Fn.Call3<A, T1, T2, T3> action, T1 a1, T2 a2, T3 a3);
+
     /** A cron expression ({@code "0 * * * *"}) in {@code zone} (null: UTC). */
     void at(String name, String expression, ZoneId zone, Fn.Call0<A> action);
 
     <T1> void at(String name, String expression, ZoneId zone, Fn.Call1<A, T1> action, T1 a1);
+
+    <T1, T2> void at(String name, String expression, ZoneId zone, Fn.Call2<A, T1, T2> action, T1 a1, T2 a2);
+
+    <T1, T2, T3> void at(String name, String expression, ZoneId zone, Fn.Call3<A, T1, T2, T3> action,
+            T1 a1, T2 a2, T3 a3);
 
     boolean delete(String name);
 

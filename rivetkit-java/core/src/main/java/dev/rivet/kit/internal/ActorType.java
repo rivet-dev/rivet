@@ -16,12 +16,15 @@ public final class ActorType implements Native.TypeSink {
     final ApiModel model;
     final Function<ActorContext<?, ?>, ?> factory;
     final Consumer<Db> migrate;
+    /** Events an instance lets wait for its turn before refusing more. */
+    final int maxWaiting;
     private final Map<Long, Instance> instances = new ConcurrentHashMap<>();
 
-    public ActorType(ApiModel model, Function<ActorContext<?, ?>, ?> factory, Consumer<Db> migrate) {
+    public ActorType(ApiModel model, Function<ActorContext<?, ?>, ?> factory, Consumer<Db> migrate, int maxWaiting) {
         this.model = model;
         this.factory = factory;
         this.migrate = migrate;
+        this.maxWaiting = maxWaiting;
     }
 
     public long id() {
@@ -37,11 +40,8 @@ public final class ActorType implements Native.TypeSink {
      * so every instance hook is declared; an absent one is answered right away.
      */
     public Wire.Hooks hooks() {
+        // Every hook but migrate: the instance decides (see Wire.Hooks).
         return new Wire.Hooks(migrate != null, true, true, true, true, true, true, true, true, true, true, true, true);
-    }
-
-    public int liveInstances() {
-        return instances.size();
     }
 
     @Override

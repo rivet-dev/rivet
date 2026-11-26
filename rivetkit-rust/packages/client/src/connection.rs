@@ -482,6 +482,11 @@ impl ActorConnectionInner {
 	/// Calls an action with the arguments already CBOR-encoded (a CBOR array of
 	/// positional arguments) and returns the CBOR-encoded output, without decoding
 	/// either. Actor errors come back as [`crate::ActionError`].
+	///
+	/// Note: this mirrors [`Self::action`] (send, stop-error race guard, reply) apart
+	/// from encoding, and unlike it returns `ActionError`. `action` could become
+	/// "encode, `action_cbor`, decode" so both share one path and one error type; that
+	/// changes `action`'s error type for existing callers, so it is left for upstream.
 	pub async fn action_cbor(
 		self: &Arc<Self>,
 		method: &str,

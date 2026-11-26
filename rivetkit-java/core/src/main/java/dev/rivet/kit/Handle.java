@@ -41,6 +41,8 @@ public interface Handle<A> {
 
     <T1, T2> CompletableFuture<Void> run(Fn.Call2<A, T1, T2> action, T1 a1, T2 a2);
 
+    <T1, T2, T3> CompletableFuture<Void> run(Fn.Call3<A, T1, T2, T3> action, T1 a1, T2 a2, T3 a3);
+
     /** A raw HTTP request to the actor's {@link OnRequest}. The body streams as it arrives. */
     FetchResponse fetch(String method, String path, Map<String, String> headers, byte[] body);
 

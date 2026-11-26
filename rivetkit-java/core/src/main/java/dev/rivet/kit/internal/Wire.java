@@ -96,7 +96,6 @@ public final class Wire {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record ErrorBody(String group, String code, String message, Object metadata) {}
 
-    public record Empty() {}
 
     public record Created(long handle) {}
 
@@ -151,7 +150,11 @@ public final class Wire {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record InitOptions(String logFilter) {}
 
-    /** Which hooks the actor class implements. Field names match Rust's {@code Hooks}. */
+    /**
+     * Which hooks Rust calls. Java asks for every hook but migrate and decides per instance
+     * whether the class implements it (a missing hook is a no-op reply), since a registered
+     * API can be served by implementations with different hooks. Names match Rust's {@code Hooks}.
+     */
     public record Hooks(
             boolean onMigrate,
             boolean onCreate,

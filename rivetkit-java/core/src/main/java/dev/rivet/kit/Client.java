@@ -35,8 +35,11 @@ public interface Client extends AutoCloseable {
     /** A handle for options (input, by id), async calls, raw HTTP and WebSockets. */
     <A extends Actor<?, ?>> Handle<A> handle(Class<A> api, String... key);
 
-    /** A handle whose calls carry {@code params}, which must be the API's params type. */
-    <P, A extends Actor<?, P>> Handle<A> handleWithParams(Class<A> api, P params, String... key);
+    /**
+     * A handle whose calls carry {@code params}, which must be the API's params type. The key
+     * has at least one part, so params of type {@code String} cannot be mistaken for a key.
+     */
+    <P, A extends Actor<?, P>> Handle<A> handleWithParams(Class<A> api, P params, String key, String... rest);
 
     /** A live connection: actions over one WebSocket, plus the actor's events. */
     <E, A extends Actor<E, ?>> Conn<A, E> connect(Class<A> api, String... key);
