@@ -2,6 +2,7 @@
 //! The caller serializes requests for one database and owns its filesystem lease.
 pub mod database;
 mod prefetch;
+mod scan_windows;
 mod stage;
 use anyhow::{Result, ensure};
 use rivet_envoy_protocol as p;

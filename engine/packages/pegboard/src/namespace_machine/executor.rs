@@ -28,7 +28,7 @@ pub struct Executor {
 	name: String,
 	/// Legacy: the opening of the namespace's volume this executor runs for, which owns the
 	/// backfill page tasks. Absent for an executor that only runs a group create outside any
-	/// command. Removed in 3.1 with the backfill.
+	/// command.
 	opening: Option<LegacyPageOwner>,
 }
 
@@ -37,8 +37,7 @@ pub struct Executor {
 /// which is when this process loses the volume, the scope drops and cancels every page task in
 /// it. Losing the right to serve while the opening stays stops a page at its next ownership
 /// check, before its next move or bucket delete, and the actors fence its writes by mover token.
-/// At most one page runs: a re-send of the page aborts the previous one. Removed in 3.1 with the
-/// backfill.
+/// At most one page runs: a re-send of the page aborts the previous one.
 #[derive(Default)]
 pub(crate) struct LegacyBackfillPages {
 	scope: std::sync::OnceLock<rivet_env::TaskScope>,
@@ -59,8 +58,7 @@ impl Drop for LegacyBackfillPages {
 }
 
 /// Legacy: the page tasks of an opening and the opening's weak identity, which a page checks
-/// before each move. Only the executor holds it, never a task it spawns. Removed in 3.1 with the
-/// backfill.
+/// before each move. Only the executor holds it, never a task it spawns.
 #[derive(Clone)]
 struct LegacyPageOwner {
 	pages: std::sync::Arc<LegacyBackfillPages>,
@@ -69,15 +67,14 @@ struct LegacyPageOwner {
 
 impl LegacyBackfillPages {
 	/// Legacy: records that this opening set the skipped list gauge of `namespace`, whose series
-	/// it removes when it goes. Removed in 3.1 with the backfill.
+	/// it removes when it goes.
 	fn legacy_track_listed(&self, namespace: &str) {
 		self.listed_series.get_or_init(|| namespace.to_owned());
 	}
 
 	/// Legacy: starts a page task through `spawn` in this opening's scope, and aborts the page it
 	/// outdates, which this opening may still run, so that page stops rather than walk on beside
-	/// the new one. The task must not hold this value, or the scope would never drop. Removed in
-	/// 3.1 with the backfill.
+	/// the new one. The task must not hold this value, or the scope would never drop.
 	pub(crate) fn legacy_start(
 		&self,
 		env: &std::sync::Arc<dyn rivet_env::Env>,
@@ -122,7 +119,7 @@ impl Executor {
 
 	/// Legacy: sets the skipped list gauge from `state` the first time this executor's opening
 	/// sees it, so a namespace whose volume opened in this process after its backfill finished
-	/// reports its list, which no transition would set again. Removed in 3.1 with the backfill.
+	/// reports its list, which no transition would set again.
 	fn legacy_observe_listed_once(&self, state: &State) {
 		let Some(opening) = &self.opening else {
 			return;
@@ -166,7 +163,7 @@ impl Executor {
 	/// attempt and mover it was sent with. The page is bounded by the page timeout end to end, after
 	/// which `BackfillRetry` sends it again. A page that failed before moving anything is sent
 	/// again by its `BackfillRetry`; one that failed at its first actor reports that actor in
-	/// `BackfillPageFailed`, and any other failure reports nothing. Removed in 3.1 with the backfill.
+	/// `BackfillPageFailed`, and any other failure reports nothing.
 	async fn legacy_run_page(
 		&self,
 		page: crate::legacy_backfill::PageRequest,
@@ -242,7 +239,7 @@ impl Executor {
 
 	/// Legacy: reads whether the V2 migrator holds an in-flight entry at the legacy placement
 	/// that may target this namespace, and reports it. A failed read reports nothing; the pending
-	/// backfill's `BackfillRetry` reads again. Removed in 3.1 with the backfill.
+	/// backfill's `BackfillRetry` reads again.
 	async fn legacy_read_migrator_holds(&self) {
 		// A read refused for now is read again at the refusal's hint, doubled for each refusal,
 		// within one start delay: the backfill's retry timer, armed with this read, reads again
@@ -360,7 +357,7 @@ const MIGRATOR_READ_BACKOFF_DOUBLINGS: u32 = 6;
 /// Legacy: when the V2 migrator's state is read again after the read's `refusals`th refusal for
 /// now, which carried the hint `retry_after_ms`: at the hint, doubled for each earlier refusal up
 /// to [`MIGRATOR_READ_BACKOFF_DOUBLINGS`] times, when that falls before `deadline_boot_ms`.
-/// `None` leaves the read to the backfill's retry timer. Removed in 3.1 with the backfill.
+/// `None` leaves the read to the backfill's retry timer.
 pub(super) fn migrator_read_again_at(
 	retry_after_ms: Option<u64>,
 	refusals: u32,
@@ -601,7 +598,7 @@ impl rivet_state_machine_durable::Executor<NamespaceStateMachine> for Executor {
 					namespace = %self.name,
 					actor_name = %skipped.name,
 					%actor_id,
-					"the backfill gave up on an actor it could not move after its configured attempts; it stays in the legacy shape, reachable by its id and key, and the namespace refuses forks and archives until it is destroyed through the actor API; export and destroy it before 3.1 removes the backfill"
+					"the backfill gave up on an actor it could not move after its configured attempts; it stays in the legacy shape, reachable by its id and key, and the namespace refuses forks and archives until it is destroyed through the actor API"
 				);
 				crate::metrics::BACKFILL_SKIPPED
 					.with_label_values(&[self.name.as_str()])
@@ -639,12 +636,11 @@ fn count_retry(kind: &str, attempt: u32) {
 }
 
 /// Legacy: how many sends of one backfill page pass before its failures are logged as a
-/// warning, and how many more between two warnings. Removed in 3.1 with the backfill.
+/// warning, and how many more between two warnings.
 const BACKFILL_RETRIES_WARN_AFTER: u32 = 3;
 const BACKFILL_RETRIES_WARN_EVERY: u32 = 10;
 
 /// Legacy: warns when a backfill page keeps failing: at its third re-send, then every tenth.
-/// Removed in 3.1 with the backfill.
 fn legacy_warn_backfill_retries(namespace: &str, attempt: u32) {
 	if attempt >= BACKFILL_RETRIES_WARN_AFTER
 		&& (attempt - BACKFILL_RETRIES_WARN_AFTER) % BACKFILL_RETRIES_WARN_EVERY == 0
@@ -847,8 +843,7 @@ async fn archive_group(
 	}
 }
 
-/// Legacy: sets the gauges of a namespace's list of skipped actors. Removed in 3.1 with the
-/// backfill.
+/// Legacy: sets the gauges of a namespace's list of skipped actors.
 fn observe_skipped_listed(
 	namespace: &str,
 	opening: Option<&LegacyPageOwner>,
@@ -862,7 +857,7 @@ fn observe_skipped_listed(
 /// Legacy: sets `pegboard_backfill_skipped_listed` of `namespace` to `listed`, sampled from the
 /// namespace's state, and ties the series to `opening`, the opening of its volume in this
 /// process, which removes it when the opening goes, so a process that lost the volume shows no
-/// stale value beside the one that holds it. Removed in 3.1 with the backfill.
+/// stale value beside the one that holds it.
 fn legacy_observe_listed(namespace: &str, opening: Option<&LegacyPageOwner>, listed: u32) {
 	crate::metrics::BACKFILL_SKIPPED_LISTED
 		.with_label_values(&[namespace])
@@ -877,7 +872,7 @@ fn legacy_observe_listed(namespace: &str, opening: Option<&LegacyPageOwner>, lis
 /// transitions set the gauge only when the list changes, and an opening removes its series when
 /// it goes, so without this a namespace whose backfill finished before its volume opened here
 /// would show no series while its skipped actors still refuse forks and archives. A backfill not
-/// yet running lists nothing and sets nothing. Removed in 3.1 with the backfill.
+/// yet running lists nothing and sets nothing.
 pub(crate) fn legacy_observe_listed_at_open(
 	namespace: &str,
 	pages: &LegacyBackfillPages,
@@ -900,8 +895,7 @@ pub(crate) fn legacy_observe_listed_at_open(
 	pages.legacy_track_listed(namespace);
 }
 
-/// Legacy: an actor id from a backfill record, for a log field. Removed in 3.1 with the
-/// backfill.
+/// Legacy: an actor id from a backfill record, for a log field.
 fn legacy_actor_id_label(actor_id: &[u8]) -> String {
 	rivet_util::Id::from_slice(actor_id)
 		.map(|id| id.to_string())

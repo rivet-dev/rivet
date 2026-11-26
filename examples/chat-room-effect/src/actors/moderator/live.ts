@@ -1,19 +1,19 @@
+import { db } from "@rivetkit/effect";
 import { Effect } from "effect";
-import { db } from "rivetkit/db";
 import { BannedWordsError, Moderator } from "./api.ts";
 
 const bannedWords = ["spam", "scam"];
 
 export const ModeratorLive = Moderator.toLayer(
-	Effect.fnUntraced(function* ({ rawRivetkitContext }) {
+	Effect.fn(function* () {
+		const sql = yield* Moderator.sql;
+
 		return Moderator.of({
-			Review: Effect.fnUntraced(function* ({ payload }) {
+			Review: Effect.fn(function* ({ payload }) {
 				// Count every reviewed message in the actor's SQLite database.
-				yield* Effect.tryPromise(() =>
-					rawRivetkitContext.db.execute(
-						"UPDATE stats SET reviewed = reviewed + 1 WHERE id = 1",
-					),
-				).pipe(Effect.orDie);
+				yield* sql`UPDATE stats SET reviewed = reviewed + 1 WHERE id = 1`.pipe(
+					Effect.orDie,
+				);
 
 				const lower = payload.text.toLowerCase();
 				const hit = bannedWords.find((word) => lower.includes(word));

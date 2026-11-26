@@ -537,7 +537,7 @@
           "minimum": 0.0
         },
         "index": {
-          "description": "Index inserts, deletes and listings, including the namespace index's writes and listings. Defaults to 256.",
+          "description": "Index inserts, deletes and listings, including the namespace index's writes and listings, the namespace pool catalog's writes and listings, and pool administration. Defaults to 256.",
           "type": [
             "integer",
             "null"
@@ -1307,11 +1307,11 @@
       "additionalProperties": false
     },
     "LegacyBackfill": {
-      "description": "Legacy: the backfill that moves a namespace's actors from before volume groups into its group. Removed in 3.1 with the backfill.",
+      "description": "Legacy: the backfill that moves a namespace's actors from before volume groups into its group.",
       "type": "object",
       "properties": {
         "max_actor_attempts": {
-          "description": "Sends of one backfill page that may fail at the same actor before the backfill gives up on that actor, records it as skipped and moves on (default 10). A namespace with a skipped actor still finishes its backfill, but 3.1 refuses to start until an operator resolves it.",
+          "description": "Sends of one backfill page that may fail at the same actor before the backfill gives up on that actor, records it as skipped and moves on (default 10). A namespace with a skipped actor still finishes its backfill, and refuses forks and archives until an operator resolves it.",
           "type": [
             "integer",
             "null"
@@ -1678,6 +1678,15 @@
             }
           ]
         },
+        "candidates_page_limit": {
+          "description": "Candidates the migrator asks V2 for in one listing request. V2 accepts 1 to 500; a smaller page keeps each V2 listing request shorter. Defaults to 200.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
         "confirm_delay_ms": {
           "type": [
             "integer",
@@ -1754,6 +1763,15 @@
         "namespace": {
           "description": "The V2 namespace being migrated.",
           "type": "string"
+        },
+        "parked_page_limit": {
+          "description": "Parked actors `rivet-engine migrate-from-v2 delete-parked` asks V2 for in one listing request. V2 accepts 1 to 500; a smaller page keeps each V2 listing request shorter. Defaults to 100.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
         },
         "pass_interval_ms": {
           "type": [
@@ -2226,7 +2244,7 @@
           "minimum": 0.0
         },
         "backfill": {
-          "description": "Legacy: the move of a namespace's actors from before volume groups into its group, which runs once per namespace upgraded from 3.0. Removed in 3.1 with the backfill.",
+          "description": "Legacy: the move of a namespace's actors from before volume groups into its group, which runs once per namespace upgraded from 3.0.",
           "default": {
             "max_actor_attempts": null,
             "max_skipped": null,

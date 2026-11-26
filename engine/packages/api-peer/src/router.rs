@@ -10,7 +10,9 @@ pub fn router(ctx: EngineContext) -> anyhow::Result<Router> {
 	let client: Arc<dyn Fn() -> depot_client::Client + Send + Sync> =
 		Arc::new(move || client_ctx.depot());
 	let authority = ctx.clone();
-	let operator = crate::operator::router(ctx.clone()).merge(crate::repair::router(ctx.clone()));
+	let operator = crate::health::router()
+		.merge(crate::operator::router(ctx.clone()))
+		.merge(crate::repair::router(ctx.clone()));
 	Ok(operator.merge(
 		crate::volumes::router(client.clone(), ctx.config().api_peer().volumes.clone())?.merge(
 			crate::filesystem::router(crate::filesystem::PeerService {

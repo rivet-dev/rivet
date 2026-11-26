@@ -99,7 +99,9 @@ function classifyActorError(
 
 	if (
 		(error.group === "ups" && error.code === "consumer_closed") ||
-		(error.group === "depot" && error.code === "request_deadline_exceeded")
+		(error.group === "depot" &&
+			(error.code === "request_deadline_exceeded" ||
+				error.code === "unavailable"))
 	) {
 		// The connection can recover, but an interrupted action may already have run.
 		return buildLifecycleBoundaryInfo(
@@ -345,7 +347,8 @@ export function isRetryableCreateRefusal(error: unknown): boolean {
 	}
 	return (
 		(error.group === "depot" &&
-			(error.code === "overloaded" || error.code === "read_interrupted")) ||
+			(error.code === "overloaded" ||
+				error.code === "read_interrupted")) ||
 		(error.group === "guard" && error.code === "service_unavailable") ||
 		(error.group === "namespace" && error.code === "creating")
 	);

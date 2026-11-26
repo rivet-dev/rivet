@@ -22,7 +22,7 @@ pub struct PlacedEpoxyKey {
 /// Legacy: a placed key's volume at its unprefixed key. Keys written before namespaces had groups
 /// live at unprefixed keys; new behavior keeps every placed key in its caller's volume group
 /// ([`PlacedEpoxyKey`]). Taken for a logical key that carries no group, which only legacy
-/// reservations do. Removed in 3.1 with the backfill.
+/// reservations do.
 #[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKey)]
 #[volume(key = [PLACED, placement, EPOXY_KEY, replica_id, key], name = EPOXY_KEY)]
 pub struct LegacyPlacedEpoxyKey {

@@ -3,7 +3,7 @@
 //! have an id that hashed their namespace; new behavior keys every volume under the namespace's
 //! group, and a keyed actor's id hashes its name and key alone. Taken only by the namespace state
 //! machine's `MovePage` effect, for a namespace moved from its legacy catalog row whose backfill
-//! is not done. Removed in 3.1 with the backfill.
+//! is not done.
 //!
 //! The walk goes through the namespace's legacy index buckets: actor names in order, each name's
 //! buckets, each bucket's live entries. A move of one actor claims its old database volume,
@@ -37,8 +37,8 @@
 //! read it through the fallback: for example one that only ran on a pool deleted since, or one
 //! created under a name no envoy ever served. This gap is intended, since nothing lists the old
 //! volumes and closing it would need an operator scan. Once the backfill is done, the fallback
-//! reads stop and such an actor answers not found; its data stays at its unprefixed keys, and
-//! after a later release removes this backfill and its legacy reads, it cannot be recovered.
+//! reads stop and such an actor answers not found; its data stays at its unprefixed keys, which
+//! nothing reads.
 //!
 //! A moved actor is reachable only through its namespace. The gateway resolves a direct actor-id
 //! request that names no namespace and uses the admin token, an ACL token or no authentication
@@ -89,7 +89,7 @@ const MOVE_AFTER_STOP_MS: u64 = 15_000;
 
 /// Legacy: the longest an old actor's stop runs once a move put it to sleep. The actor state
 /// machine ends an unanswered stop as lost once the longer of the stop and node lost thresholds,
-/// plus its margin, has passed. Removed in 3.1 with the backfill.
+/// plus its margin, has passed.
 pub(crate) fn actor_stop_deadline_ms(pegboard: &rivet_config::config::Pegboard) -> u64 {
 	pegboard
 		.actor_stop_threshold()
@@ -103,7 +103,7 @@ pub(crate) fn actor_stop_deadline_ms(pegboard: &rivet_config::config::Pegboard) 
 /// outlasts the move that started it, however long it takes. The page deadlines, the moving
 /// mark's lifetime and the namespace machine's page retry all use it. A shorter configured
 /// timeout is raised rather than refused at load, so a deployment that raised its lost threshold
-/// still starts. The defaults need no raise. Removed in 3.1 with the backfill.
+/// still starts. The defaults need no raise.
 pub(crate) fn page_timeout_ms(pegboard: &rivet_config::config::Pegboard) -> u64 {
 	let first_move_ms = actor_stop_deadline_ms(pegboard).saturating_add(MOVE_AFTER_STOP_MS);
 	pegboard
@@ -132,7 +132,7 @@ pub(crate) struct PageRequest {
 
 /// Legacy: the context of a page's failure at its first actor, without a give-up: the actor the
 /// walk waits on, by the name it is listed under and its id. The executor reports it to the
-/// namespace's machine. Removed in 3.1 with the backfill.
+/// namespace's machine.
 #[derive(Debug)]
 pub(crate) struct LegacyPageFailedAt {
 	pub name: String,
@@ -151,7 +151,7 @@ impl std::fmt::Display for LegacyPageFailedAt {
 
 /// Legacy: a later move of a page did not start on an old actor that must stop first, because
 /// less than its stop deadline was left before the page's soft deadline. Nothing was marked or
-/// written, and the next page starts with the actor. Removed in 3.1 with the backfill.
+/// written, and the next page starts with the actor.
 #[derive(Debug)]
 struct NoTimeToStop;
 
@@ -168,8 +168,7 @@ impl std::error::Error for NoTimeToStop {}
 
 /// Legacy: a move's old actor was still starting, running or stopping at the page's deadline.
 /// The move keeps its mark, which refuses wakes, so once the actor stops it stays asleep and the
-/// next page resumes the same stop rather than putting a woken actor to sleep again. Removed in
-/// 3.1 with the backfill.
+/// next page resumes the same stop rather than putting a woken actor to sleep again.
 #[derive(Debug)]
 struct StillStopping;
 
@@ -187,7 +186,7 @@ impl std::error::Error for StillStopping {}
 /// Legacy: a moved copy accepted its abandon but was not destroyed by the page's deadline,
 /// usually because its database fork had not ended, which the copy's destroy waits on. The move
 /// keeps the old actor's mark, so the old actor stays asleep rather than serving wakes while the
-/// copy ends, and the next page resumes the abandon. Removed in 3.1 with the backfill.
+/// copy ends, and the next page resumes the abandon.
 #[derive(Debug)]
 struct AbandonPending;
 
@@ -241,7 +240,7 @@ struct PageDeadlines {
 /// `Finished`; that end is bounded by the same deadline and resumes where the last page stopped. A failure at the page's first actor is an error, which the page's `BackfillRetry`
 /// re-drives, unless `page.give_up` is set: then the actor is reported skipped and the next page
 /// starts after it. A later failure ends the page early at the failing actor, so the next page
-/// starts with it. Removed in 3.1 with the backfill.
+/// starts with it.
 ///
 /// `still_owner` answers whether this process still holds the namespace's volume; the page stops
 /// before its next move once it does not. The actors fence a page that kept running anyway by
@@ -1140,7 +1139,7 @@ async fn legacy_actor_names(ctx: &EngineContext, namespace: &str) -> Result<BTre
 /// Legacy: records `name` as an actor name of `namespace` that a legacy fallback read found an
 /// actor under, so the backfill walks its legacy buckets even when no envoy record names it. The
 /// legacy behavior found names only in envoy records. Taken only by the fallback reads, while
-/// the namespace's backfill is not done. Removed in 3.1 with the backfill.
+/// the namespace's backfill is not done.
 ///
 /// Each name costs one write per process, remembered up to
 /// `pegboard.backfill.recorded_names_capacity` until the process sees the namespace's backfill
@@ -1410,8 +1409,7 @@ struct MoveProgress {
 /// A failure before the old actor's destroy abandons the copy this attempt made and clears its
 /// mark, so the old actor serves wakes until the next attempt. Once the move is decided through
 /// the move's destroy of the old actor, it deletes the old actor's index entry in bucket count
-/// `index_bucket_count`, which that destroy keeps; see [`deletes_old_entry`]. Removed in 3.1
-/// with the backfill.
+/// `index_bucket_count`, which that destroy keeps; see [`deletes_old_entry`].
 #[allow(clippy::too_many_arguments, reason = "one move's inputs")]
 pub(crate) async fn legacy_move_actor(
 	ctx: &EngineContext,
@@ -1683,7 +1681,6 @@ async fn move_actor(
 /// Whenever this holds, `plan_move` answers `AbandonAndMove`: the old actor is live under this
 /// page's mark and the copy is held by the move, unconfirmed. The early claim is released on
 /// every other plan only so that a later change to `plan_move` cannot leak it.
-/// Removed in 3.1 with the backfill.
 fn claims_before_plan(
 	old: &wire::ActorReadResponse,
 	existing: Option<&wire::ActorReadResponse>,
@@ -2215,7 +2212,7 @@ fn duration_ms(duration: Duration) -> u64 {
 /// Legacy: whether a page may start the move of an old actor in `phase` at `now_boot_ms`. An
 /// actor starting, running or stopping must stop before its database is claimed, which can take
 /// its whole stop deadline, so its move starts only until `stop_by_boot_ms`; any other actor's
-/// move starts at once. Pure, so it is tested on its own. Removed in 3.1 with the backfill.
+/// move starts at once. Pure, so it is tested on its own.
 pub(crate) fn has_time_to_stop(
 	phase: Option<&wire::ActorPhase>,
 	now_boot_ms: u64,
@@ -2241,8 +2238,7 @@ pub(crate) fn has_time_to_stop(
 }
 
 /// Legacy: whether a move failed because its old actor was still stopping at the page's
-/// deadline, so its undo keeps the mark; see [`StillStopping`]. Removed in 3.1 with the
-/// backfill.
+/// deadline, so its undo keeps the mark; see [`StillStopping`].
 pub(crate) fn still_stopping(error: &anyhow::Error) -> bool {
 	error.downcast_ref::<StillStopping>().is_some()
 }
@@ -2351,7 +2347,6 @@ enum AbandonProgress {
 /// incarnation from a mover at least its hold's, and its destroy then waits for a database fork
 /// in flight, during which it still reads as held; the read evaluates the same rule, so an
 /// accepted abandon is waited for rather than taken as a refusal. Pure, like `plan_move`.
-/// Removed in 3.1 with the backfill.
 fn abandon_progress(
 	read: Option<&wire::ActorReadResponse>,
 	copy_unix_ms: i64,
@@ -2387,8 +2382,7 @@ fn abandon_progress(
 }
 
 /// Legacy: whether a move failed because its copy accepted an abandon that had not ended by the
-/// page's deadline, so its undo keeps the mark; see [`AbandonPending`]. Removed in 3.1 with the
-/// backfill.
+/// page's deadline, so its undo keeps the mark; see [`AbandonPending`].
 fn abandon_pending(error: &anyhow::Error) -> bool {
 	error.downcast_ref::<AbandonPending>().is_some()
 }
@@ -2814,7 +2808,7 @@ pub(crate) fn plan_give_up(plan: MovePlan) -> GiveUpPlan {
 /// old actor's held copy is abandoned and waited for, so nothing blocks its key, then the mark is
 /// cleared, so the actor serves wakes in the legacy shape again and is skipped. A copy that cannot
 /// be abandoned yet keeps the mark and fails the page. A give-up that finds the move decided
-/// deletes the old actor's kept index entry as a move does. Removed in 3.1 with the backfill.
+/// deletes the old actor's kept index entry as a move does.
 #[allow(clippy::too_many_arguments, reason = "one give-up's inputs")]
 async fn give_up_actor(
 	ctx: &EngineContext,

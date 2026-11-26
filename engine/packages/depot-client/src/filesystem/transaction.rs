@@ -17,7 +17,7 @@ use tokio::sync::{Mutex, oneshot};
 use vbare::Versioned;
 
 /// Longest KV key a read or write accepts.
-const MAX_KV_KEY_BYTES: usize = 2048;
+pub const MAX_KV_KEY_BYTES: usize = 2048;
 /// The longest key a KV range delete may name as a bound: twice a put's key limit, which a
 /// caller's tuple encoding of a key at that limit reaches when every byte is escaped, plus room for
 /// the encoding's framing and the caller's own key prefix.
@@ -798,7 +798,39 @@ impl Transaction {
 		limit: Option<usize>,
 		reverse: bool,
 	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
-		let deadline = self.fs.deadline()?.min(self.pin.expires_boot_ms);
+		let deadline = self.fs.deadline()?;
+		self.scan_before(range, limit, reverse, deadline).await
+	}
+
+	/// Scans one forward page, capping the normal read budget at the caller's deadline.
+	/// Cold requests inherit the same deadline as the scan.
+	pub async fn scan_with_deadline(
+		&mut self,
+		range: impl RangeBounds<[u8]>,
+		limit: usize,
+		deadline_boot_ms: u64,
+	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+		let deadline = deadline_boot_ms
+			.min(self.fs.deadline()?)
+			.min(self.pin.expires_boot_ms);
+		let clock = self.fs.clock.clone();
+		rivet_env::timeout_at(
+			clock.as_ref(),
+			deadline,
+			self.scan_before(range, Some(limit), false, deadline),
+		)
+		.await
+		.map_err(|_| Error::DeadlineExceeded)?
+	}
+
+	async fn scan_before(
+		&mut self,
+		range: impl RangeBounds<[u8]>,
+		limit: Option<usize>,
+		reverse: bool,
+		deadline: u64,
+	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+		let deadline = deadline.min(self.pin.expires_boot_ms);
 		self.fs.recover_before(deadline).await?;
 		let range = ReadRange::from_bounds(range);
 		self.check()?;

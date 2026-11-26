@@ -1,8 +1,14 @@
-import { Actor } from "@rivetkit/effect";
+import { Actor, db } from "@rivetkit/effect";
 import { Context, DateTime, Effect, Layer } from "effect";
-import { db } from "rivetkit/db";
 import { Moderator } from "../moderator/api.ts";
-import { ChatRoom, MemberNotInRoomError } from "./api.ts";
+import {
+	ChatRoom,
+	MemberJoined,
+	MemberLeft,
+	MemberNotInRoomError,
+	NewMessage,
+	SendMessage,
+} from "./api.ts";
 
 // --- Services ---
 
@@ -41,38 +47,37 @@ export const RoomPolicyLive = Layer.succeed(
 // and returns the action handlers.
 export const ChatRoomLive = ChatRoom.toLayer(
 	// Wake scope (runs on each wake)
-	Effect.fnUntraced(function* ({ rawRivetkitContext }) {
+	Effect.fn(function* () {
 		// Actor-provided services, custom services, and actor clients are all
 		// yielded from the Effect context for this wake. They are scoped to
 		// this actor instance, not to individual action calls.
 		const address = yield* Actor.CurrentAddress;
 		const roomPolicy = yield* RoomPolicy;
 		const moderatorClient = yield* Moderator.client;
+		// An `effect/sql` client on the actor's SQLite database.
+		const sql = yield* ChatRoom.sql;
+		const schedule = yield* ChatRoom.schedule;
+		// The events API for this actor's declared events.
+		const events = yield* ChatRoom.events;
 
 		yield* Effect.log("room awake", {
 			actorId: address.actorId,
 			key: address.key.join("/"),
 		});
 
-		// Runs a query against the actor's SQLite database as an Effect.
-		const query = <TRow extends Record<string, unknown>>(
-			sql: string,
-			...args: unknown[]
-		) =>
-			Effect.tryPromise(() =>
-				rawRivetkitContext.db.execute<TRow>(sql, ...args),
-			).pipe(Effect.orDie);
-
-		const getRoomName = query<{ name: string }>(
-			"SELECT name FROM room WHERE id = 1",
-		).pipe(Effect.map((rows) => rows[0]?.name ?? ""));
-
-		const getMembers = query<{ name: string }>(
-			"SELECT name FROM members ORDER BY id",
+		const getRoomName = sql<{
+			name: string;
+		}>`SELECT name FROM room WHERE id = 1`.pipe(
+			Effect.map((rows) => rows[0]?.name ?? ""),
+			Effect.orDie,
 		);
 
+		const getMembers = sql<{
+			name: string;
+		}>`SELECT name FROM members ORDER BY id`.pipe(Effect.orDie);
+
 		// Logs every committed membership change, right after the write.
-		const logMembersChanged = Effect.fnUntraced(function* () {
+		const logMembersChanged = Effect.fn(function* () {
 			const roomName = yield* getRoomName;
 			const members = yield* getMembers;
 			yield* Effect.log("room members changed", {
@@ -83,12 +88,12 @@ export const ChatRoomLive = ChatRoom.toLayer(
 			return members.length;
 		});
 
-		// Finalizers run on sleep
+		// Finalizers run when the wake ends: on sleep and on destroy
 		yield* Effect.addFinalizer(
-			Effect.fnUntraced(function* () {
+			Effect.fn(function* () {
 				// Read the persisted room name from the actor's SQLite database
 				const roomName = yield* getRoomName;
-				yield* Effect.log("room sleeping", {
+				yield* Effect.log("room stopping", {
 					actorId: address.actorId,
 					key: address.key.join("/"),
 					roomName,
@@ -99,82 +104,56 @@ export const ChatRoomLive = ChatRoom.toLayer(
 		// Combine persisted room members with a custom service-owned domain guard.
 		const ensureMember = (name: string) =>
 			getMembers.pipe(
-				Effect.flatMap((members) => roomPolicy.requireMember(members, name)),
+				Effect.flatMap((members) =>
+					roomPolicy.requireMember(members, name),
+				),
 			);
-
-		// --- Message processing (not yet implemented) ---
-		// Pull-based: the actor controls when to take the next message.
-		// Forked into a scoped fiber, so it runs in the background and
-		// is canceled on sleep. Re-enable once ChatRoom messages land.
-		//
-		// yield* Effect.gen(function* () {
-		// 	const msg = yield* Queue.take(messages)
-		// 	yield* Match.value(msg).pipe(
-		// 		Match.tag("Reset", () =>
-		// 			Effect.gen(function* () {
-		// 				yield* state.set(0)
-		// 				yield* PubSub.publish(events.countChanged, 0)
-		// 			})
-		// 		),
-		// 		Match.tag("SendSystemMessage", ({ payload, complete }) =>
-		// 			Effect.gen(function* () {
-		// 				yield* complete(payload.text)
-		// 			})
-		// 		),
-		// 		Match.exhaustive,
-		// 	)
-		// }).pipe(Effect.forever, Effect.forkScoped)
 
 		// --- Action handlers (request-response) ---
 		return ChatRoom.of({
 			Initialize: ({ payload }) =>
-				// This replaces passing an `input` when creating an actor. Callers
-				// should initialize a room before actions that depend on a
-				// persisted room name. Only the first call sets the name.
-				query(
-					"UPDATE room SET name = ?, initialized = 1 WHERE id = 1 AND initialized = 0",
-					payload.name,
-				).pipe(Effect.asVoid),
-			Join: Effect.fnUntraced(function* ({ payload }) {
+				// Callers should initialize a room before actions that depend on
+				// a persisted room name. Only the first call sets the name.
+				sql`UPDATE room SET name = ${payload.name}, initialized = 1 WHERE id = 1 AND initialized = 0`.pipe(
+					Effect.asVoid,
+					Effect.orDie,
+				),
+			Join: Effect.fn(function* ({ payload }) {
 				const joinedAt = yield* DateTime.now;
-				const member = {
-					name: payload.name,
-					joinedAt,
-				};
-				yield* query(
-					"INSERT INTO members (name, joined_at) VALUES (?, ?)",
-					member.name,
-					DateTime.toEpochMillis(member.joinedAt),
+				yield* sql`INSERT INTO members (name, joined_at) VALUES (${payload.name}, ${DateTime.toEpochMillis(joinedAt)})`.pipe(
+					Effect.orDie,
 				);
 				const memberCount = yield* logMembersChanged();
 
-				rawRivetkitContext.broadcast("memberJoined", {
-					member: {
-						...member,
-						joinedAt: DateTime.formatIso(member.joinedAt),
-					},
+				yield* events.broadcast(MemberJoined, {
+					name: payload.name,
+					joinedAt,
 				});
 
-				// The raw scheduler dispatches the Effect action by name
-				// with the same object payload that a client would send.
-				rawRivetkitContext.schedule.after(1_000, "SendMessage", {
-					sender: "Admin",
-					text: `Welcome to the room, ${payload.name}!`,
-				});
+				/**
+				 * Schedule a call to this actor's own `SendMessage` action.
+				 * The schedule is durable, so it survives sleep.
+				 */
+				yield* schedule
+					.after("1 second", SendMessage, {
+						sender: "Admin",
+						text: `Welcome to the room, ${payload.name}!`,
+					})
+					.pipe(Effect.orDie);
 
 				return { memberCount };
 			}),
-			Leave: Effect.fnUntraced(function* ({ payload }) {
+			Leave: Effect.fn(function* ({ payload }) {
 				yield* ensureMember(payload.name);
 
-				yield* query("DELETE FROM members WHERE name = ?", payload.name);
+				yield* sql`DELETE FROM members WHERE name = ${payload.name}`.pipe(
+					Effect.orDie,
+				);
 				yield* logMembersChanged();
 
-				rawRivetkitContext.broadcast("memberLeft", {
-					name: payload.name,
-				});
+				yield* events.broadcast(MemberLeft, { name: payload.name });
 			}),
-			SendMessage: Effect.fnUntraced(function* ({ payload }) {
+			SendMessage: Effect.fn(function* ({ payload }) {
 				yield* ensureMember(payload.sender);
 
 				// Actor-to-actor RPC uses the same API as client-to-actor RPC.
@@ -190,32 +169,23 @@ export const ChatRoomLive = ChatRoom.toLayer(
 					.pipe(Effect.catchTag("RivetError", Effect.die));
 
 				const createdAt = yield* DateTime.now;
-				yield* Effect.tryPromise(() =>
-					rawRivetkitContext.db.execute(
-						"INSERT INTO messages (sender, text, created_at) VALUES (?, ?, ?)",
-						payload.sender,
-						payload.text,
-						DateTime.toEpochMillis(createdAt),
-					),
-				).pipe(Effect.orDie);
+				yield* sql`INSERT INTO messages (sender, text, created_at) VALUES (${payload.sender}, ${payload.text}, ${DateTime.toEpochMillis(createdAt)})`.pipe(
+					Effect.orDie,
+				);
 
-				rawRivetkitContext.broadcast("newMessage", {
+				yield* events.broadcast(NewMessage, {
 					sender: payload.sender,
 					text: payload.text,
-					createdAt: DateTime.formatIso(createdAt),
+					createdAt,
 				});
 			}),
 			GetHistory: () =>
-				Effect.tryPromise(() =>
-					rawRivetkitContext.db.execute<{
-						id: number;
-						sender: string;
-						text: string;
-						createdAt: number;
-					}>(
-						"SELECT id, sender, text, created_at as createdAt FROM messages ORDER BY id",
-					),
-				).pipe(
+				sql<{
+					id: number;
+					sender: string;
+					text: string;
+					createdAt: number;
+				}>`SELECT id, sender, text, created_at as createdAt FROM messages ORDER BY id`.pipe(
 					Effect.map((rows) =>
 						rows.map((row) => ({
 							...row,
@@ -224,10 +194,8 @@ export const ChatRoomLive = ChatRoom.toLayer(
 					),
 					Effect.orDie,
 				),
-			Archive: () =>
-				Effect.sync(() => {
-					rawRivetkitContext.destroy();
-				}),
+			// Destroys the actor and deletes its database.
+			Archive: () => Actor.destroy,
 		});
 	}),
 	{

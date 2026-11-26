@@ -1,4 +1,4 @@
-import { Action, Actor } from "@rivetkit/effect";
+import { Action, Actor, Event } from "@rivetkit/effect";
 import { Schema } from "effect";
 import { BannedWordsError } from "../moderator/api.ts";
 
@@ -25,7 +25,7 @@ export class MemberNotInRoomError extends Schema.TaggedError<MemberNotInRoomErro
 //    and rich decoded forms in action handlers. Schemas can also require
 //    custom services during encode/decode.
 
-// This action replaces passing an `input` when creating an actor.
+// Sets the room name. Only the first call has an effect.
 export const Initialize = Action.make("Initialize", {
 	payload: { name: Schema.String },
 });
@@ -61,21 +61,29 @@ export const GetHistory = Action.make("GetHistory", {
 	),
 });
 
-// This action replaces passing an `input` when creating an actor.
+// Destroys the room and deletes its data.
 export const Archive = Action.make("Archive");
 
-// --- Messages (not yet implemented) ---
-//
-// // Non-completable (fire-and-forget)
-// export const Reset = Message.make("Reset", {
-// 	payload: { reason: Schema.String },
-// })
-//
-// // Completable (sender can await a typed response)
-// export const SendSystemMessage = Message.make("SendSystemMessage", {
-// 	payload: { text: Schema.String },
-// 	success: Schema.String,
-// })
+// --- Events ---
+
+// The room sends events to its connections. Payloads are encoded with their
+// schemas, like action payloads.
+
+export const MemberJoined = Event.make("MemberJoined", {
+	payload: { name: Schema.String, joinedAt: Schema.DateTimeUtc },
+});
+
+export const MemberLeft = Event.make("MemberLeft", {
+	payload: { name: Schema.String },
+});
+
+export const NewMessage = Event.make("NewMessage", {
+	payload: {
+		sender: Schema.String,
+		text: Schema.String,
+		createdAt: Schema.DateTimeUtc,
+	},
+});
 
 // --- Actor Definition ---
 
@@ -87,6 +95,5 @@ export const ChatRoom = Actor.make("ChatRoom", {
 	// as it allows for shared action protocols (e.g., a `Ping` health check
 	// or `GetMetrics` action defined once and composed into multiple actors).
 	actions: [Initialize, Join, Leave, SendMessage, GetHistory, Archive],
-	// messages: [Reset, SendSystemMessage],	// durable, queued, background
-	// events: { messageAdded: Schema.String },
+	events: [MemberJoined, MemberLeft, NewMessage],
 });

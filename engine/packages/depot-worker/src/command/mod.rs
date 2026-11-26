@@ -263,6 +263,7 @@ impl VolumeRecordView {
 #[derive(Debug)]
 pub(crate) struct CommandCommits {
 	deadline_boot_ms: u64,
+	admitted_budget_ms: u64,
 	in_flight: tokio::sync::watch::Sender<usize>,
 	expired: std::sync::atomic::AtomicBool,
 	/// Set once the command dispatches its first commit and never cleared.
@@ -271,14 +272,15 @@ pub(crate) struct CommandCommits {
 
 impl Default for CommandCommits {
 	fn default() -> Self {
-		Self::new(u64::MAX)
+		Self::new(u64::MAX, 30_000)
 	}
 }
 
 impl CommandCommits {
-	fn new(deadline_boot_ms: u64) -> Self {
+	fn new(deadline_boot_ms: u64, admitted_budget_ms: u64) -> Self {
 		Self {
 			deadline_boot_ms,
+			admitted_budget_ms,
 			in_flight: tokio::sync::watch::Sender::new(0),
 			expired: std::sync::atomic::AtomicBool::new(false),
 			dispatched: std::sync::atomic::AtomicBool::new(false),
@@ -411,6 +413,21 @@ impl KvHandle {
 		self.commits.deadline_boot_ms
 	}
 
+	/// The effective caller and handler budget when this command reached the volume host.
+	pub fn admitted_budget_ms(&self) -> u64 {
+		self.commits.admitted_budget_ms
+	}
+
+	/// The injected clock in the same domain as the command deadline.
+	pub fn clock(&self) -> Arc<dyn rivet_env::Clock> {
+		self.filesystem.clock()
+	}
+
+	/// The normal filesystem read budget of a new snapshot of this volume.
+	pub fn snapshot_read_timeout_ms(&self) -> u64 {
+		self.writer().0.snapshot_read_timeout_ms()
+	}
+
 	/// The version to encode a value of `family` stored in this volume at: the highest every
 	/// live storage worker reads. A command takes every versioned value's version from here, before
 	/// it writes anything.
@@ -474,6 +491,10 @@ impl KvHandle {
 
 	/// This opening's shared value of type `T`, created on first use. Commands of the same
 	/// opening, and clones of their handles, get the same value.
+	///
+	/// Use it for derived data and caches, not for mutual exclusion: serialize handlers with
+	/// [`KvHandle::lock_partition`], which stops waiting when the worker loses the volume and
+	/// lets handlers on unrelated keys run in parallel.
 	pub async fn opening_state<T: Default + Send + Sync + 'static>(&self) -> Result<Arc<T>> {
 		let value = self
 			.shared
@@ -580,7 +601,19 @@ impl KvHandle {
 		}
 		result
 	}
-	/// End exclusive. Not reentrant. Not fair.
+	/// Locks `range` of this volume's keys against every other command of the same opening,
+	/// waiting while an overlapping range is held. The guard releases it on drop.
+	///
+	/// This is how a command handler serializes a read-modify-write: take the lock before the
+	/// first read and hold it through `commit`, so two handlers deciding on the same keys cannot
+	/// interleave. Lock the narrowest range that names what the handler decides on, such as one
+	/// record's `SubspaceRange::range()`; the range is only a lock name, so it may stand for
+	/// related keys in other families as long as every writer of them takes the same range.
+	///
+	/// Waiting fails once the worker may no longer serve the volume, so a fenced worker does not
+	/// keep queuing. The range is end-exclusive and must be non-empty. The lock is not reentrant,
+	/// so a handler must drop a guard before locking an overlapping range again, and it is not
+	/// fair. It is held in memory for this opening only and does not reach other workers.
 	pub async fn lock_partition(
 		&self,
 		range: std::ops::Range<impl Into<Bytes>>,

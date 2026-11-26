@@ -105,14 +105,14 @@ lazy_static::lazy_static! {
 		"Stale namespace statuses answered without starting a background read because every slot was taken."),
 		*REGISTRY
 	).unwrap();
-	/// Legacy: removed in 3.1 with the backfill.
+	/// Legacy: part of the volume group backfill.
 	pub static ref BACKFILL_ACTORS_MOVED: IntCounterVec = register_int_counter_vec_with_registry!(
 		Opts::new("pegboard_backfill_actors_moved_total",
 		"Actors from before volume groups that a namespace's backfill moved into its group, by namespace."),
 		&["namespace_id"],
 		*REGISTRY
 	).unwrap();
-	/// Legacy: removed in 3.1 with the backfill.
+	/// Legacy: part of the volume group backfill.
 	pub static ref BACKFILL_PAGES: IntCounterVec = register_int_counter_vec_with_registry!(
 		Opts::new("pegboard_backfill_pages_total",
 		"Backfill pages run, by namespace and result: next (more pages follow), finished (the walk ended) or failed (nothing moved; the page is sent again)."),
@@ -120,8 +120,7 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 	/// Legacy: counted by the namespace state machine's executor for each accepted transition, so
-	/// the namespaces in a phase are its entries less the next phase's. Removed in 3.1 with the
-	/// backfill.
+	/// the namespaces in a phase are its entries less the next phase's.
 	pub static ref BACKFILL_PHASE_ENTRIES: IntCounterVec = register_int_counter_vec_with_registry!(
 		Opts::new("pegboard_backfill_phase_entries_total",
 		"Namespace backfills entering a phase: pending (moved from a legacy row), running or done."),
@@ -129,66 +128,64 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 	/// Legacy: counted once per skip by the namespace state machine's accepted transition.
-	/// Removed in 3.1 with the backfill.
 	pub static ref BACKFILL_SKIPPED: IntCounterVec = register_int_counter_vec_with_registry!(
 		Opts::new("pegboard_backfill_skipped_total",
-		"Actors from before volume groups a namespace's backfill gave up on after its configured attempts and left in the legacy shape, by namespace. 3.1 refuses to start while any are left."),
+		"Actors from before volume groups a namespace's backfill gave up on after its configured attempts and left in the legacy shape, by namespace. The namespace refuses forks and archives while any are left."),
 		&["namespace_id"],
 		*REGISTRY
 	).unwrap();
-	/// Legacy: set from each skip and each refused give-up. Removed in 3.1 with the backfill.
+	/// Legacy: set from each skip and each refused give-up.
 	pub static ref BACKFILL_SKIPPED_LISTED: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		Opts::new("pegboard_backfill_skipped_listed",
 		"Actors a namespace's running backfill gave up on and carries in its state, by namespace."),
 		&["namespace_id"],
 		*REGISTRY
 	).unwrap();
-	/// Legacy: removed in 3.1 with the backfill.
+	/// Legacy: part of the volume group backfill.
 	pub static ref BACKFILL_SKIPPED_CAPACITY: IntGauge = register_int_gauge_with_registry!(
 		Opts::new("pegboard_backfill_skipped_capacity",
 		"The configured capacity of pegboard_backfill_skipped_listed."),
 		*REGISTRY
 	).unwrap();
-	/// Legacy: counted once per page send that reached its attempts at the cap. Removed in 3.1
-	/// with the backfill.
+	/// Legacy: counted once per page send that reached its attempts at the cap.
 	pub static ref BACKFILL_GIVE_UPS_REFUSED: IntCounterVec = register_int_counter_vec_with_registry!(
 		Opts::new("pegboard_backfill_give_ups_refused_total",
 		"Page sends of a namespace's backfill that reached their attempts at an actor but did not give up on it, because the skipped actors were at their configured capacity, by namespace."),
 		&["namespace_id"],
 		*REGISTRY
 	).unwrap();
-	/// Legacy: removed in 3.1 with the backfill.
+	/// Legacy: part of the volume group backfill.
 	pub static ref BACKFILL_RECORDED_NAMES: IntGauge = register_int_gauge_with_registry!(
 		Opts::new("pegboard_backfill_recorded_names",
 		"Namespace and actor name pairs this process remembers having recorded for the backfill after a legacy fallback read."),
 		*REGISTRY
 	).unwrap();
-	/// Legacy: removed in 3.1 with the backfill.
+	/// Legacy: part of the volume group backfill.
 	pub static ref BACKFILL_RECORDED_NAMES_CAPACITY: IntGauge = register_int_gauge_with_registry!(
 		Opts::new("pegboard_backfill_recorded_names_capacity",
 		"The configured capacity of pegboard_backfill_recorded_names."),
 		*REGISTRY
 	).unwrap();
-	/// Legacy: removed in 3.1 with the backfill.
+	/// Legacy: part of the volume group backfill.
 	pub static ref BACKFILL_NAME_RECORDS_SKIPPED: IntCounterVec = register_int_counter_vec_with_registry!(
 		Opts::new("pegboard_backfill_name_records_skipped_total",
 		"Actor names a legacy fallback read did not record for the backfill, because this process's recorded names or name record writes in flight were at their configured capacity, by namespace. The backfill finds such a name only in the namespace's node records."),
 		&["namespace_id"],
 		*REGISTRY
 	).unwrap();
-	/// Legacy: held by each background name record write. Removed in 3.1 with the backfill.
+	/// Legacy: held by each background name record write.
 	pub static ref BACKFILL_NAME_RECORD_WRITES: IntGauge = register_int_gauge_with_registry!(
 		Opts::new("pegboard_backfill_name_record_writes",
 		"Backfill name record writes this process runs in the background."),
 		*REGISTRY
 	).unwrap();
-	/// Legacy: removed in 3.1 with the backfill.
+	/// Legacy: part of the volume group backfill.
 	pub static ref BACKFILL_NAME_RECORD_WRITES_CAPACITY: IntGauge = register_int_gauge_with_registry!(
 		Opts::new("pegboard_backfill_name_record_writes_capacity",
 		"The configured capacity of pegboard_backfill_name_record_writes."),
 		*REGISTRY
 	).unwrap();
-	/// Legacy: removed in 3.1 with the backfill.
+	/// Legacy: part of the volume group backfill.
 	pub static ref BACKFILL_DUPLICATES: IntCounterVec = register_int_counter_vec_with_registry!(
 		Opts::new("pegboard_backfill_duplicates_total",
 		"Legacy keyed actors a backfill destroyed instead of moving, because a live grouped actor already held their new id, by namespace."),
@@ -211,19 +208,19 @@ lazy_static::lazy_static! {
 		"Namespaces moved from their legacy catalog row into their namespace volume."),
 		*REGISTRY
 	).unwrap();
-	/// Legacy: removed in 3.1 with the backfill.
+	/// Legacy: part of the volume group backfill.
 	pub static ref LEGACY_NAMESPACE_ROW_PASS_MOVES: IntCounter = register_int_counter_with_registry!(
 		Opts::new("pegboard_legacy_namespace_row_pass_moves_total",
 		"Legacy catalog rows the legacy namespace row pass moved into their namespace volume."),
 		*REGISTRY
 	).unwrap();
-	/// Legacy: removed in 3.1 with the backfill.
+	/// Legacy: part of the volume group backfill.
 	pub static ref LEGACY_NAMESPACE_ROW_PASSES_FINISHED: IntCounter = register_int_counter_with_registry!(
 		Opts::new("pegboard_legacy_namespace_row_passes_finished_total",
 		"Legacy namespace row passes that ended with a full walk finding no legacy catalog row."),
 		*REGISTRY
 	).unwrap();
-	/// Legacy: removed in 3.1 with the backfill.
+	/// Legacy: part of the volume group backfill.
 	pub static ref LEGACY_NAMESPACE_ROW_PASS_REFUSALS: IntCounter = register_int_counter_with_registry!(
 		Opts::new("pegboard_legacy_namespace_row_pass_refusals_total",
 		"Pages or moves of the legacy namespace row pass that failed or passed their deadline; the pass sends them again after its retry wait."),
@@ -425,7 +422,6 @@ lazy_static::lazy_static! {
 
 lazy_static::lazy_static! {
 	/// Legacy: counted by the fallback resolves while a namespace's backfill is not done.
-	/// Removed in 3.1 with the backfill.
 	pub static ref LEGACY_ACTOR_READS: IntCounterVec = register_int_counter_vec_with_registry!(
 		Opts::new("pegboard_legacy_actor_reads_total",
 		"Actor resolves through the legacy unprefixed fallback, by result: grouped (found in the namespace's group), legacy (found unprefixed) or not_found."),

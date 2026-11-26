@@ -1273,15 +1273,15 @@ impl SqliteDb {
 		error: &anyhow::Error,
 	) {
 		let structured = RivetError::extract(error);
-		// Engine rollouts can disconnect after a mutation was sent but before its response arrives.
-		// The transport already reports the disconnect, so keep this operation-level event compact.
+		// A sent mutation's outcome is unknown when its response is lost to a disconnect or the
+		// engine cannot confirm it. Envoy-client already logs the cause, so keep this compact.
 		if structured.group() == "sqlite" && structured.code() == "remote_indeterminate_result" {
 			tracing::debug!(
 				actor_id = self.actor_id.as_deref().unwrap_or("<unknown>"),
 				generation = ?self.generation,
 				backend = ?self.backend,
 				operation,
-				"sqlite operation result indeterminate after envoy disconnect"
+				"sqlite operation result indeterminate"
 			);
 		} else {
 			let error_chain = error.chain().map(ToString::to_string).collect::<Vec<_>>();
@@ -1519,6 +1519,10 @@ impl SqliteDb {
 			.ok_or_else(|| sqlite_not_configured("handle"))
 	}
 
+	/// Maps an engine error reply for a remote SQL request to the public SQLite error. Replies with
+	/// no public equivalent stay `remote_execution_failed`, but keep the engine's group and code in
+	/// the message so the cause is not lost. Envoy-client already turned an indeterminate reply
+	/// into `RemoteSqliteIndeterminateResultError`, so it never reaches this mapping.
 	fn remote_sqlite_error_response(&self, error: protocol::SqliteErrorResponse) -> anyhow::Error {
 		if let Some(retry_after_ms) =
 			sqlite_types::storage_overload_retry_after_ms(&error.group, &error.code, &error.message)
@@ -1547,7 +1551,7 @@ impl SqliteDb {
 			.build();
 		}
 
-		remote_sqlite_error_response(error.message.to_string())
+		remote_sqlite_error_response(&error.group, &error.code, &error.message)
 	}
 }
 
@@ -1771,12 +1775,18 @@ fn remote_request_error(error: anyhow::Error) -> anyhow::Error {
 	error
 }
 
-fn remote_sqlite_error_response(message: String) -> anyhow::Error {
+fn remote_sqlite_error_response(group: &str, code: &str, message: &str) -> anyhow::Error {
 	if message.contains("unavailable") || message.contains("unsupported") {
-		return SqliteRuntimeError::RemoteUnavailable { reason: message }.build();
+		return SqliteRuntimeError::RemoteUnavailable {
+			reason: format!("{group}.{code}: {message}"),
+		}
+		.build();
 	}
 
-	SqliteRuntimeError::RemoteExecutionFailed { message }.build()
+	SqliteRuntimeError::RemoteExecutionFailed {
+		message: format!("{group}.{code}: {message}"),
+	}
+	.build()
 }
 
 fn is_head_fence_mismatch_response(error: &protocol::SqliteErrorResponse) -> bool {

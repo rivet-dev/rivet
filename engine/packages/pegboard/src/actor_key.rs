@@ -222,7 +222,7 @@ pub fn keyed_actor_id(datacenter_label: u16, name: &str, key: &str) -> Id {
 /// name ([`crate::keys::partition::legacy_key_placement`]). New behavior is [`keyed_actor_id`].
 /// Taken only for a keyed actor in a namespace without a group ([`keyed_create_actor`] and
 /// [`resolve_keyed_actor`]), and by [`legacy_resolve_keyed_actor`] for an actor its namespace's
-/// backfill has not moved yet. Removed in 3.1 with the backfill.
+/// backfill has not moved yet.
 pub fn legacy_keyed_actor_id(datacenter_label: u16, namespace: &str, name: &str, key: &str) -> Id {
 	let placement = crate::keys::partition::legacy_key_placement(namespace, name, key);
 	Id::v1(uuid::Uuid::from_bytes(placement), datacenter_label)
@@ -279,7 +279,7 @@ pub fn keyed_create_actor(
 /// of the fleet can still list an upgraded worker as old for up to its discovery validity window
 /// after another process, whose view is newer, moved the namespace: this process then skips the
 /// re-read and creates at the legacy id. The namespace's backfill resolves either pair by keeping
-/// the grouped actor and destroying the legacy duplicate. Removed in 3.1 with the backfill.
+/// the grouped actor and destroying the legacy duplicate.
 pub async fn keyed_create_standing(
 	ctx: &EngineContext,
 	namespace: &Arc<crate::NamespaceStanding>,
@@ -294,7 +294,7 @@ pub async fn keyed_create_standing(
 
 /// Legacy: the standing a keyed create acts on after [`keyed_create_standing`]'s uncached
 /// re-read of the ungrouped `cached` standing answered `reread`. The re-read is admitted again,
-/// since the namespace may have moved on since it was cached. Removed in 3.1 with the backfill.
+/// since the namespace may have moved on since it was cached.
 pub(crate) fn legacy_reread_standing(
 	cached: &crate::NamespaceStanding,
 	reread: Option<crate::namespace_wire::NamespaceState>,
@@ -312,8 +312,7 @@ pub(crate) fn legacy_reread_standing(
 /// unprefixed reservation and index entry and the namespace recorded as the actor's legacy
 /// namespace. New behavior creates [`keyed_actor_id`] in the namespace's group. Taken only for a
 /// create in a namespace that has no group record yet, while binaries from before groups run; the
-/// backfill later moves these actors like any other legacy actor. Removed in 3.1 with the
-/// backfill.
+/// backfill later moves these actors like any other legacy actor.
 fn legacy_keyed_create_actor(
 	datacenter_label: u16,
 	namespace: &str,
@@ -352,7 +351,7 @@ pub async fn resolve_keyed_actor(
 			)
 			.await?;
 			// Legacy: a key found at its unprefixed volume records its name for the backfill
-			// while the backfill runs. Removed in 3.1 with the backfill.
+			// while the backfill runs.
 			if found.actor.group.is_none() && !namespace.backfill_done() {
 				crate::legacy_backfill::legacy_record_actor_name(ctx, &namespace.name, name).await;
 			}
@@ -368,7 +367,7 @@ pub async fn resolve_keyed_actor(
 /// Legacy: whether a lookup of `name` and `key` in `namespace` reads for the actor at its
 /// unprefixed keys: always while the backfill is not done, and after it only when the key's
 /// legacy id is one the backfill lists as skipped, which costs a hash and a lookup in that
-/// bounded set, no read. Removed in 3.1 with the backfill.
+/// bounded set, no read.
 fn legacy_keyed_falls_back(
 	namespace: &crate::NamespaceStanding,
 	datacenter_label: u16,
@@ -401,7 +400,7 @@ fn legacy_keyed_falls_back(
 /// actor, so no create ever reuses the legacy id. Taken only while the namespace's
 /// backfill is not done; it costs one state volume read per keyed lookup, and a second for an
 /// actor not yet moved, accepted until the backfill finishes. The read it answers with is
-/// returned for reuse. Removed in 3.1 with the backfill.
+/// returned for reuse.
 pub async fn legacy_resolve_keyed_actor(
 	depot: &depot_client::Client,
 	datacenter_label: u16,

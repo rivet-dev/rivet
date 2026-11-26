@@ -69,19 +69,39 @@ pub async fn api(
 	path_and_query: &str,
 	body: Option<Bytes>,
 ) -> Result<ApiResponse> {
+	let mut headers = http::HeaderMap::new();
+	if body.is_some() {
+		headers.insert(
+			http::header::CONTENT_TYPE,
+			http::HeaderValue::from_static("application/json"),
+		);
+	}
+	if let Some(token) = &config.token {
+		headers.insert(
+			http::header::AUTHORIZATION,
+			http::HeaderValue::from_str(&format!("Bearer {token}"))
+				.context("migrate_from_v2.token is not a valid header value")?,
+		);
+	}
+	api_with_headers(ctx, config, method, path_and_query, headers, body).await
+}
+
+/// Calls V2's public API with `headers` as given, which carry the request's credentials.
+/// `path_and_query` starts with `/`.
+pub async fn api_with_headers(
+	ctx: &EngineContext,
+	config: &MigrateFromV2,
+	method: Method,
+	path_and_query: &str,
+	headers: http::HeaderMap,
+	body: Option<Bytes>,
+) -> Result<ApiResponse> {
 	let uri: http::Uri = format!("{}{path_and_query}", api_url(config)?)
 		.parse()
 		.context("invalid V2 public API URI")?;
-	let has_body = body.is_some();
 	let body = futures_util::stream::iter(body.map(Ok)).boxed();
-	let mut builder = Request::builder().method(method).uri(uri);
-	if has_body {
-		builder = builder.header(http::header::CONTENT_TYPE, "application/json");
-	}
-	if let Some(token) = &config.token {
-		builder = builder.header(http::header::AUTHORIZATION, format!("Bearer {token}"));
-	}
-	let request = builder.body(body)?;
+	let mut request = Request::builder().method(method).uri(uri).body(body)?;
+	*request.headers_mut() = headers;
 
 	let clock = ctx.env().clock();
 	let deadline = rivet_env::deadline_after(clock.as_ref(), V2_API_TIMEOUT)?;
@@ -161,8 +181,7 @@ impl Command for MigrateFromV2StateRead {
 /// volume, so it holds nothing.
 ///
 /// One read of a bounded state: the entries are at most `max_in_flight` plus the operator's
-/// allowance. Taken only while a namespace's backfill is pending. Removed in 3.1 with the
-/// backfill.
+/// allowance. Taken only while a namespace's backfill is pending.
 pub(crate) async fn legacy_migrator_holds_legacy_entries(
 	ctx: &EngineContext,
 	namespace: &str,
@@ -190,7 +209,7 @@ pub(crate) async fn legacy_migrator_holds_legacy_entries(
 /// Legacy: whether `in_flight` holds `namespace`'s backfill: an entry with no volume group that
 /// was admitted for `namespace`, or one that does not say which namespace it was admitted for,
 /// as every entry 3.0.2 and 3.0.3 wrote. Such an entry holds every namespace's backfill until it
-/// finishes; these entries only drain. Removed in 3.1 with the backfill.
+/// finishes; these entries only drain.
 pub(crate) fn legacy_entries_hold(
 	in_flight: &[migrator::MigrateFromV2InFlight],
 	namespace: &str,

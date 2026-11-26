@@ -17,8 +17,16 @@ pub fn encode(value: &str) -> String {
 /// Reports whether colored output should be used. Color is on by default and
 /// disabled when `NO_COLOR` is set to a non-empty value or stdout is not a TTY.
 pub fn color_enabled() -> bool {
-	let no_color = std::env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty());
-	!no_color && std::io::stdout().is_terminal()
+	!no_color() && std::io::stdout().is_terminal()
+}
+
+/// Like [`color_enabled`], for stderr, where log lines go.
+pub fn stderr_color_enabled() -> bool {
+	!no_color() && std::io::stderr().is_terminal()
+}
+
+fn no_color() -> bool {
+	std::env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty())
 }
 
 /// Parses repeated `KEY=VAL` arguments into a map.

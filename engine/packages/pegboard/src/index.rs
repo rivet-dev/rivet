@@ -43,6 +43,7 @@ use crate::keys::{
 };
 use crate::wire;
 use anyhow::{Context, Result, ensure};
+use depot_client::filesystem::MAX_KV_KEY_BYTES;
 use depot_protocol::command::{Command, CommandTag};
 use depot_worker::command::{CommandRegistry, KvHandle};
 use futures_util::StreamExt;
@@ -69,6 +70,34 @@ use std::sync::Arc;
 
 /// Maximum number of entries returned by one list page.
 const PAGE_SIZE: usize = 100;
+/// Share this time budget across all short attempts after a normal-budget timeout.
+const RECONCILIATION_SHORT_BUDGET_MS: u64 = 2_000;
+/// Limit subdivision even when a short read reports a timeout immediately.
+const MAX_RECONCILIATION_SHORT_SPLITS: usize = 8;
+/// Bound the pending ranges that are retained between commands under persistent timeouts.
+const MAX_RECONCILIATION_PENDING_RANGES: usize = 64;
+/// Allow the handler to record a read timeout before the command deadline drops it.
+const RECONCILIATION_SCAN_FINISH_MARGIN_MS: u64 = 250;
+
+fn reconciliation_finish_margin_ms(admitted_budget_ms: u64) -> u64 {
+	RECONCILIATION_SCAN_FINISH_MARGIN_MS.min(admitted_budget_ms / 10)
+}
+
+fn reconciliation_scan_budget_ms(budget_ms: u64, margin_ms: u64) -> u64 {
+	budget_ms.saturating_sub(2 * margin_ms)
+}
+
+fn legacy_probe_fits(db: &KvHandle, reconciliation_budget_ms: u64, now_ms: u64) -> bool {
+	let margin_ms = reconciliation_finish_margin_ms(db.admitted_budget_ms());
+	let probe_budget_ms = db
+		.snapshot_read_timeout_ms()
+		.min(reconciliation_scan_budget_ms(
+			reconciliation_budget_ms,
+			margin_ms,
+		));
+	let cutoff = db.deadline_boot_ms().saturating_sub(margin_ms);
+	now_ms.saturating_add(probe_budget_ms) <= cutoff
+}
 
 /// Entries the merge first requests from each bucket. Uniform hashing puts about `limit / N`
 /// entries of a page in each bucket, so a small first page rarely needs a refill.
@@ -505,7 +534,88 @@ async fn list_envoy_pools_handler(
 /// because a previous binary may have maintained either historical layout during a handoff.
 #[derive(Default)]
 struct ActiveEnvoyIndexOpening {
-	reconciliation: tokio::sync::Mutex<ActiveEnvoyReconciliation>,
+	reconciliation: tokio::sync::Mutex<ActiveEnvoyIndexProgress>,
+}
+
+#[derive(Default)]
+struct ActiveEnvoyIndexProgress {
+	phase: ActiveEnvoyReconciliation,
+	window: ReconciliationScanWindow,
+}
+
+/// Pending exclusive ends of ranges split after a scan deadline, innermost first when
+/// popped. Exhausting one range advances the inclusive start even if it had no live rows.
+#[derive(Default)]
+struct ReconciliationScanWindow {
+	start: Vec<u8>,
+	ends: VecDeque<Vec<u8>>,
+	short_attempts_remaining: usize,
+	short_deadline: Option<u64>,
+}
+
+impl ReconciliationScanWindow {
+	fn retry_pending(&self) -> bool {
+		self.short_attempts_remaining > 0 || !self.ends.is_empty()
+	}
+
+	fn bounds(&self, range: &Range<Vec<u8>>, after: Option<&[u8]>) -> (Vec<u8>, Vec<u8>) {
+		let mut start = self.start.as_slice().max(&range.start).to_vec();
+		if let Some(after) = after.filter(|after| *after >= start.as_slice()) {
+			start = after.to_vec();
+			start.push(0);
+		}
+		let end = self.ends.back().unwrap_or(&range.end).clone();
+		(start, end)
+	}
+
+	fn split(&mut self, start: &[u8], end: &[u8]) -> bool {
+		let common = start.iter().zip(end).take_while(|(a, b)| a == b).count();
+		let mut boundary = start[..common].to_vec();
+		match start.get(common) {
+			None if end[common] == 0 && end.len() == common + 1 => return false,
+			None => boundary.push(end[common] / 2),
+			Some(&low) if end[common] - low > 1 => boundary.push(low + (end[common] - low) / 2),
+			Some(_) if end.len() > common + 1 => boundary.push(end[common]),
+			Some(_) => {
+				boundary.push(start[common]);
+				// Both sides are adjacent at their first differing byte. Bisect the suffix
+				// under the lower byte, which is entirely below the exclusive end.
+				let suffix = &start[common + 1..];
+				if let Some(index) = suffix.iter().position(|&byte| byte != u8::MAX) {
+					boundary.extend_from_slice(&suffix[..index]);
+					let byte = suffix[index];
+					boundary.push(byte + (u8::MAX - byte).div_ceil(2));
+				} else {
+					boundary.extend_from_slice(suffix);
+					boundary.push(128);
+				}
+			}
+		}
+		if boundary.len() > MAX_KV_KEY_BYTES {
+			return false;
+		}
+		if self.ends.len() == MAX_RECONCILIATION_PENDING_RANGES {
+			// The oldest end only separates two unvisited ranges. The phase's original
+			// end still bounds their union, so dropping that boundary skips no keys.
+			self.ends.pop_front();
+		}
+		self.ends.push_back(boundary);
+		true
+	}
+
+	fn advance(&mut self) -> bool {
+		let Some(end) = self.ends.pop_back() else {
+			return false;
+		};
+		self.start = end;
+		true
+	}
+
+	fn coalesce_pending(&mut self) {
+		self.ends.clear();
+		self.short_attempts_remaining = 0;
+		self.short_deadline = None;
+	}
 }
 
 /// Optional immutable node-state cache for one reconciliation phase. Source state cannot
@@ -579,12 +689,20 @@ impl ActiveEnvoyAmbiguity {
 }
 type ActiveEnvoyAmbiguities = BTreeMap<String, ActiveEnvoyAmbiguity>;
 
+#[derive(Default)]
+struct LegacyProbes {
+	// A failed page has not changed its legacy rows. Keep its answers across retries.
+	presence: BTreeMap<String, bool>,
+	retry: Option<String>,
+}
+
 enum ActiveEnvoyReconciliation {
 	/// Validate current pointers, import legacy rows, and retain ambiguous witness pairs.
 	RepairingRoutes {
 		after: Option<Vec<u8>>,
 		ambiguous: ActiveEnvoyAmbiguities,
 		states: ActiveEnvoyStateCache,
+		legacy_probes: Option<LegacyProbes>,
 	},
 	/// Remove other names of ambiguous nodes, including names preceding their witnesses.
 	CleaningAmbiguousRoutes {
@@ -621,6 +739,7 @@ impl Default for ActiveEnvoyReconciliation {
 			after: None,
 			ambiguous: ActiveEnvoyAmbiguities::new(),
 			states: ActiveEnvoyStateCache::default(),
+			legacy_probes: Some(LegacyProbes::default()),
 		}
 	}
 }
@@ -671,22 +790,43 @@ fn unpack_active_envoy_row(raw: &[u8]) -> Result<(ActiveEnvoyIndexKey, bool)> {
 	}
 }
 
+async fn probe_legacy_routes(
+	snapshot: &mut depot_worker::command::Transaction,
+	name: &str,
+	deadline: u64,
+) -> depot_client::filesystem::Result<bool> {
+	let lower = LegacyActiveEnvoyIndexKey::new(name.to_owned(), i64::MIN, String::new()).pack();
+	let range = ActiveEnvoyIndexNamePrefix::new(name.to_owned()).range();
+	let rows = snapshot
+		.scan_with_deadline(
+			(
+				Bound::Included(lower.as_ref()),
+				Bound::Excluded(range.end.as_slice()),
+			),
+			1,
+			deadline,
+		)
+		.await?;
+	Ok(!rows.is_empty())
+}
+
 async fn reconcile_active_envoy_page(
 	db: &KvHandle,
 	snapshot: &mut depot_worker::command::Transaction,
 	rows: &[(Vec<u8>, Vec<u8>)],
 	progress: &mut ActiveEnvoyReconciliation,
 	write_version: u16,
+	cutoff: u64,
 ) -> Result<(IndexRepairs, ActiveEnvoyAmbiguities)> {
 	let mut repairs = IndexRepairs::new();
 	let mut newly_ambiguous = ActiveEnvoyAmbiguities::new();
 	match progress {
 		ActiveEnvoyReconciliation::RepairingRoutes {
-			ambiguous, states, ..
+			ambiguous,
+			states,
+			legacy_probes,
+			..
 		} => {
-			// Canonical rows sort before legacy rows for each name. One absence probe
-			// per name/page avoids a separate missing legacy point read for every node.
-			let mut legacy_presence: Option<(String, bool)> = None;
 			for (raw, value) in rows {
 				let (key, legacy) = unpack_active_envoy_row(raw)?;
 				if let Some(witness) = ambiguous
@@ -722,31 +862,33 @@ async fn reconcile_active_envoy_page(
 				let other = if legacy {
 					snapshot.get(&canonical.pack()).await?
 				} else {
-					if legacy_presence
-						.as_ref()
-						.is_none_or(|(name, _)| name != &key.name)
-					{
-						let lower = LegacyActiveEnvoyIndexKey::new(
-							key.name.clone(),
-							i64::MIN,
-							String::new(),
-						)
-						.pack();
-						let range = ActiveEnvoyIndexNamePrefix::new(key.name.clone()).range();
-						let exists = !snapshot
-							.scan(
-								(
-									Bound::Included(lower.as_ref()),
-									Bound::Excluded(range.end.as_slice()),
-								),
-								Some(1),
-								false,
-							)
-							.await?
-							.is_empty();
-						legacy_presence = Some((key.name.clone(), exists));
-					}
-					if legacy_presence.as_ref().is_some_and(|(_, exists)| *exists) {
+					let may_have_legacy = match legacy_probes {
+						None => true,
+						Some(probes) => match probes.presence.get(&key.name) {
+							Some(&present) => present,
+							None => {
+								let probe = if db.clock().boot_ms()? >= cutoff {
+									Err(depot_client::filesystem::Error::DeadlineExceeded)
+								} else {
+									probe_legacy_routes(snapshot, &key.name, cutoff).await
+								};
+								match probe {
+									Ok(present) => {
+										probes.presence.insert(key.name.clone(), present);
+										present
+									}
+									Err(
+										error @ depot_client::filesystem::Error::DeadlineExceeded,
+									) => {
+										probes.retry = Some(key.name.clone());
+										return Err(error.into());
+									}
+									Err(error) => return Err(error.into()),
+								}
+							}
+						},
+					};
+					if may_have_legacy {
 						snapshot.get(&old.pack()).await?
 					} else {
 						None
@@ -851,16 +993,115 @@ async fn reconcile_active_envoy_page(
 	Ok((repairs, newly_ambiguous))
 }
 
-/// Reconcile once per exclusive opening. Read views and repair batches are byte-bounded;
-/// TooLarge shrinks the page without advancing its checkpoint. A timed-out command resumes
-/// completed pages, while an abandoned commit fences and reopens through normal recovery.
+/// Reconcile once per exclusive opening. Use the normal read budget until a fresh command's
+/// scan times out, then let the next command subdivide that range within a shared short budget.
+/// If a normal-budget read of a narrowed range still takes longer than the short budget, merge
+/// the unread suffix. Scan windows and committed repair cursors survive command retries.
+/// TooLarge shrinks a page without advancing its cursor.
+/// An abandoned commit fences and reopens normally.
 /// Empty speculative volumes require no creating transaction here.
 pub(crate) async fn prepare_active_envoy_index(db: &KvHandle, write_version: u16) -> Result<()> {
+	prepare_active_envoy_index_with_budget(db, write_version, db.admitted_budget_ms()).await
+}
+
+/// Let a waiting heartbeat release the pool lock before reading the pool record when
+/// reconciliation has a retry that needs the time from a fresh command.
+pub(crate) async fn defer_queued_heartbeat_for_reconciliation(db: &KvHandle) -> Result<()> {
+	let budget_ms = db.admitted_budget_ms();
+	let now = db.clock().boot_ms()?;
+	let margin_ms = reconciliation_finish_margin_ms(budget_ms);
+	let cutoff = db.deadline_boot_ms().saturating_sub(margin_ms);
+	// This reservation covers the pool-record read as well as the retry itself.
+	if now.saturating_add(reconciliation_scan_budget_ms(budget_ms, margin_ms)) <= cutoff {
+		return Ok(());
+	}
+	let opening = db.opening_state::<ActiveEnvoyIndexOpening>().await?;
+	let Ok(progress) = opening.reconciliation.try_lock() else {
+		return Ok(());
+	};
+	let probe_pending = matches!(
+		&progress.phase,
+		ActiveEnvoyReconciliation::RepairingRoutes { legacy_probes: Some(probes), .. }
+			if probes.retry.is_some()
+	);
+	if probe_pending || progress.window.retry_pending() {
+		return Err(depot_client::filesystem::Error::DeadlineExceeded.into());
+	}
+	Ok(())
+}
+
+/// `reconciliation_budget_ms` excludes work the handler must do before reconciliation.
+/// Keep lock wait time in the budget so a queued command cannot displace a fresh retry.
+pub(crate) async fn prepare_active_envoy_index_with_budget(
+	db: &KvHandle,
+	write_version: u16,
+	reconciliation_budget_ms: u64,
+) -> Result<()> {
 	let write_version = rivet_data::pegboard_actor::record_write_version(write_version);
 	let opening = db.opening_state::<ActiveEnvoyIndexOpening>().await?;
-	let mut progress = opening.reconciliation.lock().await;
+	let (mut opening_progress, queued) = match opening.reconciliation.try_lock() {
+		Ok(progress) => (progress, false),
+		Err(_) => (opening.reconciliation.lock().await, true),
+	};
+	if matches!(opening_progress.phase, ActiveEnvoyReconciliation::Ready) {
+		return Ok(());
+	}
+	let ActiveEnvoyIndexProgress {
+		phase: progress,
+		window,
+	} = &mut *opening_progress;
+	let clock = db.clock();
+	let margin = reconciliation_finish_margin_ms(db.admitted_budget_ms());
+	let scan_budget_ms = reconciliation_scan_budget_ms(reconciliation_budget_ms, margin);
+	let short_budget_ms = scan_budget_ms.min(RECONCILIATION_SHORT_BUDGET_MS);
+	let cutoff = db.deadline_boot_ms().saturating_sub(margin);
+	// A queued command can arrive before a timeout has marked a source retry. Both
+	// paths can need the normal scan budget, including a fallback after short attempts.
+	if (queued || window.retry_pending())
+		&& clock.boot_ms()?.saturating_add(scan_budget_ms) > cutoff
+	{
+		return Err(depot_client::filesystem::Error::DeadlineExceeded.into());
+	}
+	// Retry the interrupted probe before scanning or repairing the source page again.
+	if let ActiveEnvoyReconciliation::RepairingRoutes { legacy_probes, .. } = progress
+		&& let Some(probes) = legacy_probes
+		&& let Some(name) = probes.retry.as_ref()
+	{
+		// Expiring waiters must release the opening without taking up the time a fresh
+		// command needs to retry this probe.
+		if !legacy_probe_fits(db, reconciliation_budget_ms, clock.boot_ms()?) {
+			return Err(depot_client::filesystem::Error::DeadlineExceeded.into());
+		}
+		let mut snapshot = match rivet_env::timeout_at(clock.as_ref(), cutoff, db.snapshot()).await
+		{
+			Ok(snapshot) => snapshot?,
+			Err(rivet_env::TimeoutError::Elapsed) => {
+				return Err(depot_client::filesystem::Error::DeadlineExceeded.into());
+			}
+			Err(rivet_env::TimeoutError::Clock(error)) => return Err(error.into()),
+		};
+		let now = clock.boot_ms()?;
+		if cutoff <= now {
+			return Err(depot_client::filesystem::Error::DeadlineExceeded.into());
+		}
+		match probe_legacy_routes(&mut snapshot, name, cutoff).await {
+			Ok(present) => {
+				probes.presence.insert(name.clone(), present);
+				probes.retry = None;
+			}
+			Err(error) => {
+				// This command had the reserved budget at entry and reached the probe.
+				// Only a real probe timeout can enable exact reads.
+				if matches!(error, depot_client::filesystem::Error::DeadlineExceeded) {
+					*legacy_probes = None;
+				}
+				return Err(error.into());
+			}
+		}
+	}
 	let mut page_rows = PAGE_SIZE;
-	loop {
+	let mut first_page = true;
+	'source: loop {
 		if let ActiveEnvoyReconciliation::RemovingAmbiguityWitnesses { remaining } = &mut *progress
 		{
 			if remaining.is_empty() {
@@ -883,6 +1124,7 @@ pub(crate) async fn prepare_active_envoy_index(db: &KvHandle, write_version: u16
 			for key in keys {
 				remaining.remove(&key);
 			}
+			first_page = false;
 			continue;
 		}
 		let (range, after) = match &*progress {
@@ -903,23 +1145,81 @@ pub(crate) async fn prepare_active_envoy_index(db: &KvHandle, write_version: u16
 				unreachable!("witness phase handled above")
 			}
 		};
-		let lower = after
-			.as_ref()
-			.map_or(Bound::Included(range.start.as_slice()), |key| {
-				Bound::Excluded(key.as_slice())
+		let (start, end) = window.bounds(&range, after.as_deref());
+		let first_attempt = std::mem::replace(&mut first_page, false);
+		let singleton = end.strip_prefix(start.as_slice()) == Some(&[0]);
+		let now = clock.boot_ms()?;
+		let short_deadline = window
+			.short_deadline
+			.unwrap_or_else(|| now.saturating_add(short_budget_ms));
+		let short_scan = start < end
+			&& !singleton
+			&& window.short_attempts_remaining > 0
+			&& short_deadline > now;
+		// Release the opening promptly if a waiting caller lost its scan budget.
+		if cutoff <= now || (short_scan && short_deadline > cutoff) {
+			return Err(depot_client::filesystem::Error::DeadlineExceeded.into());
+		}
+		let deadline = if short_scan {
+			// Snapshot setup shares the short budget. If setup spends it, retry with the
+			// normal allowance without treating that delay as evidence about the range.
+			window.short_deadline = Some(short_deadline);
+			short_deadline
+		} else {
+			cutoff
+		};
+		let mut snapshot =
+			match rivet_env::timeout_at(clock.as_ref(), deadline, db.snapshot()).await {
+				Ok(snapshot) => snapshot?,
+				Err(rivet_env::TimeoutError::Elapsed) if short_scan => continue,
+				Err(rivet_env::TimeoutError::Elapsed) => {
+					return Err(depot_client::filesystem::Error::DeadlineExceeded.into());
+				}
+				Err(rivet_env::TimeoutError::Clock(error)) => return Err(error.into()),
+			};
+		let (page, coalesce_pending) = if start >= end {
+			(Ok(Vec::new()), false)
+		} else if singleton {
+			// There is only one possible key in this window. Use the point-read path
+			// and its regular budget since splitting cannot make any further progress.
+			let page = snapshot.get(&start).await.map(|value| {
+				value
+					.into_iter()
+					.map(|value| (start.clone(), value))
+					.collect()
 			});
-		let mut snapshot = db.snapshot().await?;
-		let page = snapshot
-			.scan(
-				(lower, Bound::Excluded(range.end.as_slice())),
-				Some(page_rows),
-				false,
-			)
-			.await
-			.map_err(anyhow::Error::from);
+			(page, false)
+		} else {
+			let bounds = (
+				Bound::Included(start.as_slice()),
+				Bound::Excluded(end.as_slice()),
+			);
+			let page = snapshot
+				.scan_with_deadline(bounds, page_rows, deadline)
+				.await;
+			let coalesce_pending = !short_scan
+				&& page.is_ok()
+				&& !window.ends.is_empty()
+				&& clock.boot_ms()?.saturating_sub(now) >= short_budget_ms;
+			(page, coalesce_pending)
+		};
 		let rows = match page {
 			Ok(rows) => rows,
+			Err(error @ depot_client::filesystem::Error::DeadlineExceeded) => {
+				if short_scan && window.split(&start, &end) {
+					window.short_attempts_remaining -= 1;
+					continue;
+				}
+				// A command that already worked through pages or short retries may have
+				// little time left. Keep its range for a fresh command's longer read.
+				if !short_scan && first_attempt && window.split(&start, &end) {
+					window.short_attempts_remaining = MAX_RECONCILIATION_SHORT_SPLITS;
+					window.short_deadline = None;
+				}
+				return Err(error.into());
+			}
 			Err(error) => {
+				let error = anyhow::Error::from(error);
 				if shrink_index_page(&error, &mut page_rows) {
 					continue;
 				}
@@ -927,6 +1227,13 @@ pub(crate) async fn prepare_active_envoy_index(db: &KvHandle, write_version: u16
 			}
 		};
 		if rows.is_empty() {
+			if window.advance() {
+				if coalesce_pending {
+					window.coalesce_pending();
+				}
+				continue;
+			}
+			*window = ReconciliationScanWindow::default();
 			*progress = match &mut *progress {
 				ActiveEnvoyReconciliation::RepairingRoutes { ambiguous, .. } => {
 					if ambiguous.is_empty() {
@@ -962,39 +1269,69 @@ pub(crate) async fn prepare_active_envoy_index(db: &KvHandle, write_version: u16
 			};
 			continue;
 		}
-		let page =
-			reconcile_active_envoy_page(db, &mut snapshot, &rows, &mut progress, write_version)
-				.await;
-		let (repairs, newly_ambiguous) = match page {
-			Ok(page) => page,
-			Err(error) => {
+		// Keep the source scan batched. After a probe timeout, checkpoint each exact
+		// lookup so a command deadline cannot make retries replay a full page.
+		let chunk_size = if matches!(
+			progress,
+			ActiveEnvoyReconciliation::RepairingRoutes {
+				legacy_probes: None,
+				..
+			}
+		) {
+			1
+		} else {
+			rows.len()
+		};
+		for chunk in rows.chunks(chunk_size) {
+			let page = reconcile_active_envoy_page(
+				db,
+				&mut snapshot,
+				chunk,
+				progress,
+				write_version,
+				cutoff,
+			)
+			.await;
+			let (repairs, newly_ambiguous) = match page {
+				Ok(page) => page,
+				Err(error) => {
+					if shrink_index_page(&error, &mut page_rows) {
+						continue 'source;
+					}
+					return Err(error);
+				}
+			};
+			if let Err(error) = apply_index_repairs(db, repairs).await {
 				if shrink_index_page(&error, &mut page_rows) {
-					continue;
+					continue 'source;
 				}
 				return Err(error);
 			}
-		};
-		if let Err(error) = apply_index_repairs(db, repairs).await {
-			if shrink_index_page(&error, &mut page_rows) {
-				continue;
+			// Publish source checkpoints and ambiguity facts only after successful effects.
+			let last = chunk.last().unwrap().0.clone();
+			match &mut *progress {
+				ActiveEnvoyReconciliation::RepairingRoutes {
+					after,
+					ambiguous,
+					legacy_probes,
+					..
+				} => {
+					ambiguous.extend(newly_ambiguous);
+					*after = Some(last);
+					if let Some(probes) = legacy_probes {
+						probes.presence.clear();
+					}
+				}
+				ActiveEnvoyReconciliation::AddingVersions { after }
+				| ActiveEnvoyReconciliation::AddingNameVersions { after }
+				| ActiveEnvoyReconciliation::AddingPoolVersions { after }
+				| ActiveEnvoyReconciliation::PruningVersions { after, .. }
+				| ActiveEnvoyReconciliation::CleaningAmbiguousRoutes { after, .. } => *after = Some(last),
+				_ => unreachable!("non-source phase handled above"),
 			}
-			return Err(error);
 		}
-		// Publish source checkpoints and ambiguity facts only after successful effects.
-		let last = rows.last().unwrap().0.clone();
-		match &mut *progress {
-			ActiveEnvoyReconciliation::RepairingRoutes {
-				after, ambiguous, ..
-			} => {
-				ambiguous.extend(newly_ambiguous);
-				*after = Some(last);
-			}
-			ActiveEnvoyReconciliation::AddingVersions { after }
-			| ActiveEnvoyReconciliation::AddingNameVersions { after }
-			| ActiveEnvoyReconciliation::AddingPoolVersions { after }
-			| ActiveEnvoyReconciliation::PruningVersions { after, .. }
-			| ActiveEnvoyReconciliation::CleaningAmbiguousRoutes { after, .. } => *after = Some(last),
-			_ => unreachable!("non-source phase handled above"),
+		if coalesce_pending {
+			window.coalesce_pending();
 		}
 	}
 }
@@ -1862,7 +2199,7 @@ pub struct ActorPage {
 /// stays valid when the backfill finishes mid-pagination and the unprefixed sources drop out. A
 /// page at that moment may repeat or skip an actor once: a moved entry reappears in a grouped
 /// bucket, and a keyed actor's moved entry carries its new id, which sorts elsewhere at the same
-/// creation time. Removed in 3.1 with the backfill.
+/// creation time.
 pub async fn list_actors(
 	ctx: &EngineContext,
 	namespace: &crate::NamespaceStanding,
@@ -1883,7 +2220,7 @@ pub async fn list_actors(
 	let started = std::time::Instant::now();
 
 	// Legacy: until the namespace's backfill is done, its unprefixed buckets are listed as more
-	// sources beside the grouped ones, numbered after them. Removed in 3.1 with the backfill.
+	// sources beside the grouped ones, numbered after them.
 	let sources = match namespace.legacy_fallback().every() {
 		true => buckets.saturating_mul(2),
 		false => buckets,
@@ -1973,7 +2310,7 @@ fn collect_destroyed(
 /// Reads when the incarnation of `actor_id` created at `create_unix_ms` was destroyed, or
 /// `None` when the index holds no destroyed entry for it. Until the namespace's backfill is done
 /// a miss also reads the legacy unprefixed bucket, where an actor from before groups has its
-/// entry; this is a legacy read removed in 3.1 with the backfill.
+/// entry; this is a legacy read.
 pub async fn read_destroyed_actor(
 	ctx: &EngineContext,
 	namespace: &crate::NamespaceStanding,
@@ -2080,7 +2417,7 @@ async fn list_bucket(
 		.await;
 
 	// Legacy: the backfill deletes a namespace's unprefixed buckets once it moved their actors,
-	// so a deleted one is empty too. Removed in 3.1 with the backfill.
+	// so a deleted one is empty too.
 	let empty = |error: &anyhow::Error| {
 		is_volume_not_found(error) || (legacy && crate::commands::is_volume_gone(error))
 	};

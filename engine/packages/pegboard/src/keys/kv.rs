@@ -308,8 +308,7 @@ pub struct NamespaceIndexPrefix {}
 
 // Legacy: an actor name on a namespace volume that a legacy fallback read found an actor under,
 // so the backfill walks that name's legacy buckets even when no envoy record names it. Written
-// by `legacy_record_actor_name`, read by the backfill, and never deleted: the namespace volume
-// keeps them until 3.1 removes the backfill.
+// by `legacy_record_actor_name`, read by the backfill, and never deleted.
 #[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
 #[kv(key = [LEGACY_BACKFILL_NAME, name])]
 pub struct LegacyBackfillNameKey {

@@ -1122,6 +1122,7 @@ impl MaintainerState {
 		self.filesystem.waiting_opens.remove(key);
 		self.filesystem.record_missing.remove(key);
 		if let Some(id) = self.volume_keys.find(key) {
+			self.claim_epochs.volumes.remove(&id);
 			holders::unpark(&mut self.held_volumes, id);
 			self.idle_checks.queue.cancel(&id);
 			self.filesystem.retention.cancel(&id);

@@ -53,6 +53,8 @@ pub struct Settings {
 	pub max_copy_bytes: u64,
 	/// Copy bytes admitted per second; see `State::copy_budget_unix_ms`.
 	pub max_copy_bytes_per_sec: u64,
+	/// Candidates asked of V2 per listing request, 1 to 500.
+	pub candidates_page_limit: u32,
 	/// V2 datacenters to list, ascending.
 	pub datacenter_labels: Vec<u16>,
 	/// The namespace the actors land in and this datacenter's label, which keyed ids derive
@@ -84,6 +86,7 @@ impl Settings {
 			confirm_delay_ms: 20_000,
 			max_copy_bytes: u64::MAX,
 			max_copy_bytes_per_sec: u64::MAX,
+			candidates_page_limit: 200,
 			datacenter_labels: Vec::new(),
 			target_namespace: String::new(),
 			v3_datacenter_label: 0,

@@ -26,6 +26,8 @@ pub(crate) struct Unloading {
 	pub row_check: RowCheck,
 	/// Why the volume unloads, which decides what is rechecked when it reaches the store.
 	pub reason: UnloadReason,
+	/// The exact claim explicitly closed by a client, when the unload came from such a close.
+	pub requested_client: Option<rivet_data::generated::shared_depot_types_v1::ClientIdentity>,
 	/// This unload may return a newly drawn, unacknowledged incarnation to creation cleanup.
 	pub abandoned_create: bool,
 	pub remaining: BTreeSet<WorkerId>,
@@ -161,7 +163,7 @@ pub(crate) fn admit(
 		match close_match(volume, client.as_ref()) {
 			CloseMatch::Matches if !deleted && !state.unloading.contains_key(&key) => {
 				state.pending_closes.remove(&key);
-				begin(state, key.clone(), UnloadReason::Requested);
+				begin_requested(state, key.clone(), client);
 				// The client announces nothing at close, so the notices of its last appends
 				// may still be on their way. The unload waits one notice window for them
 				// before it decides what it may forget; see `notices_due`.
@@ -307,7 +309,7 @@ pub(crate) fn status_observed(state: &mut MaintainerState, key: &VolumeLogKey) {
 		CloseMatch::Matches => {
 			state.pending_closes.remove(key);
 			if !deleted && !state.unloading.contains_key(key) {
-				begin(state, key.clone(), UnloadReason::Requested);
+				begin_requested(state, key.clone(), Some(client));
 			}
 		}
 		CloseMatch::Mismatch => {
@@ -318,6 +320,17 @@ pub(crate) fn status_observed(state: &mut MaintainerState, key: &VolumeLogKey) {
 				state.pending_closes.remove(key);
 			}
 		}
+	}
+}
+
+fn begin_requested(
+	state: &mut MaintainerState,
+	key: VolumeLogKey,
+	client: Option<rivet_data::generated::shared_depot_types_v1::ClientIdentity>,
+) {
+	begin(state, key.clone(), UnloadReason::Requested);
+	if let Some(unload) = state.unloading.get_mut(&key) {
+		unload.requested_client = client;
 	}
 }
 
@@ -341,6 +354,7 @@ pub(crate) fn begin(state: &mut MaintainerState, key: VolumeLogKey, reason: Unlo
 		Unloading {
 			row_check: RowCheck::Queued,
 			reason,
+			requested_client: None,
 			abandoned_create: state
 				.loaded_volumes
 				.get(&key)
@@ -1504,7 +1518,7 @@ fn store_busy(state: &MaintainerState, key: &VolumeLogKey) -> bool {
 }
 
 /// Whether a forget of any member of this incarnation is in flight.
-fn forgetting(state: &MaintainerState, key: &VolumeLogKey) -> bool {
+pub(super) fn forgetting(state: &MaintainerState, key: &VolumeLogKey) -> bool {
 	state
 		.operations
 		.index()

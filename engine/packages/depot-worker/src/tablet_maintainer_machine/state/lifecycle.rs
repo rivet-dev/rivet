@@ -1347,6 +1347,9 @@ fn load(
 				holder,
 			},
 		);
+	if let Some(open) = &open_claim {
+		super::claim_epochs::record_open(state, &key, open.client.client_epoch);
+	}
 	let initial_through = initial_entries.last().map(|entry| VolumeLogPosition {
 		volume_seq: entry.volume_seq,
 		client_epoch: entry.client_epoch,
@@ -2247,6 +2250,7 @@ pub(crate) fn complete_load(
 							client_incarnation: granted.client.client_incarnation,
 						};
 						record_grant(state, &key, client.clone(), Vec::new());
+						super::claim_epochs::record_open(state, &key, epoch);
 						Some(rivet_data::generated::shared_depot_types_v1::OpenClaim {
 							client,
 							..granted

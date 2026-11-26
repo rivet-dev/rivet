@@ -4,12 +4,14 @@ import {
 	type HttpMiddleware,
 	type HttpServerError,
 	type HttpServerRequest,
-	type HttpServerResponse,
+	HttpServerResponse,
 } from "effect/http";
 import * as Rivetkit from "rivetkit";
 import type * as RivetkitLog from "rivetkit/log";
 import * as Client from "./Client.ts";
 import { BaseLogger, getOrCreateBaseLogger } from "./internal/logging.ts";
+import { RegistryService } from "./internal/RegistryService.ts";
+import { makeRivetkitActor } from "./internal/RivetkitActorDefinition.ts";
 import * as RivetLogger from "./RivetLogger.ts";
 
 const TypeId = "~@rivetkit/effect/Registry";
@@ -17,10 +19,31 @@ type ServerlessOptions = NonNullable<
 	Rivetkit.RegistryConfigInput<Rivetkit.RegistryActors>["serverless"]
 >;
 
+type RivetkitRegistryConfigInput =
+	Rivetkit.RegistryConfigInput<Rivetkit.RegistryActors>;
+
+/**
+ * `startEngine`, `startServices` and `runtime` are the RivetKit options for
+ * a node that runs on its own, for example in a Docker image: set
+ * `startEngine: false`, `startServices: false` and `runtime: "native"`.
+ * `node.version` is the version of this node. Increase it on every deploy.
+ */
 export type Options = Pick<
-	Rivetkit.RegistryConfigInput<Rivetkit.RegistryActors>,
-	"endpoint" | "token" | "namespace" | "noWelcome" | "sqlite"
->;
+	RivetkitRegistryConfigInput,
+	| "endpoint"
+	| "token"
+	| "namespace"
+	| "noWelcome"
+	| "sqlite"
+	| "startEngine"
+	| "startServices"
+	| "runtime"
+> & {
+	readonly node?: Pick<
+		NonNullable<RivetkitRegistryConfigInput["node"]>,
+		"version"
+	>;
+};
 
 export interface Registry {
 	readonly [TypeId]: typeof TypeId;
@@ -30,20 +53,26 @@ export interface Registry {
 	readonly baseLogger: RivetkitLog.Logger;
 
 	readonly rivetkitActors: Map<string, Rivetkit.AnyActorDefinition>;
+
+	/** @internal The RivetKit registry that `serve` or `test` made. */
+	readonly rivetkitRegistry: {
+		current: Rivetkit.Registry<Rivetkit.RegistryActors> | undefined;
+	};
+
+	/** @internal */
+	readonly makeRivetkitActor: typeof makeRivetkitActor;
 }
 
-export const Registry: Context.Service<Registry, Registry> =
-	Context.Service<Registry>("@rivetkit/effect/Registry");
+export const Registry: Context.Service<Registry, Registry> = RegistryService;
 
 /**
  * Creates the shared registry that actor layers register into.
  *
  * @remarks
  * Actor layers created with {@link Actor.Actor.toLayer|`Actor.toLayer()`}
- * register into this service. Registry entrypoints such as
- * {@link serve|`Registry.serve()`}, {@link toWebHandler|`Registry.toWebHandler()`},
- * and {@link toHttpEffect|`Registry.toHttpEffect()`} later use the collected
- * actors to create the underlying RivetKit runtime.
+ * register into this service. {@link serve|`Registry.serve()`} and
+ * {@link test|`Registry.test`} later use the collected actors to create the
+ * underlying RivetKit runtime.
  *
  * @param options - RivetKit runtime options shared by the registered actors.
  *
@@ -64,9 +93,6 @@ export const Registry: Context.Service<Registry, Registry> =
  *
  * @see {@link serve|`Registry.serve()`} for starting a long-running actor
  * server.
- * @see {@link toWebHandler|`Registry.toWebHandler()`} for Fetch-compatible
- * serverless handlers.
- * @see {@link toHttpEffect|`Registry.toHttpEffect()`} for Effect HTTP handlers.
  */
 export const layer = (options: Options = {}): Layer.Layer<Registry> =>
 	Layer.effect(
@@ -77,6 +103,8 @@ export const layer = (options: Options = {}): Layer.Layer<Registry> =>
 				options,
 				baseLogger,
 				rivetkitActors: new Map(),
+				rivetkitRegistry: { current: undefined },
+				makeRivetkitActor,
 			}),
 		),
 	);
@@ -87,16 +115,43 @@ const setupRivetkitRegistry = (
 		readonly serverless?: ServerlessOptions | undefined;
 	},
 ) =>
-	Effect.sync(() =>
-		Rivetkit.setup({
+	Effect.sync(() => {
+		const rivetkitRegistry = Rivetkit.setup({
 			use: Object.fromEntries(registry.rivetkitActors),
 			...registry.options,
 			logging: { baseLogger: registry.baseLogger },
+			/**
+			 * Effect owns SIGINT/SIGTERM: `NodeRuntime.runMain` interrupts, the
+			 * scope closes, and `startRivetkitRegistry`'s finalizer runs
+			 * `shutdown()`.
+			 */
+			shutdown: { disableSignalHandlers: true },
 			...(options?.serverless === undefined
 				? {}
 				: { serverless: options.serverless }),
-		}),
-	);
+		});
+		registry.rivetkitRegistry.current = rivetkitRegistry;
+		return rivetkitRegistry;
+	});
+
+/**
+ * Starts the envoy and waits until it registers with the engine. Closing the
+ * surrounding scope shuts the registry down and sleeps its actors. A rejected
+ * start is a defect.
+ */
+const startRivetkitRegistry = (
+	rivetkitRegistry: Rivetkit.Registry<Rivetkit.RegistryActors>,
+): Effect.Effect<void, never, Scope.Scope> =>
+	Effect.gen(function* () {
+		/**
+		 * Added before the start, not via `acquireRelease`, so the start stays
+		 * interruptible and a failed or interrupted start also shuts down.
+		 */
+		yield* Effect.addFinalizer(() =>
+			Effect.promise(() => rivetkitRegistry.shutdown()),
+		);
+		yield* Effect.promise(() => rivetkitRegistry.startAndWait());
+	});
 
 /**
  * Serves the actors registered by `actorsLayer`.
@@ -105,8 +160,11 @@ const setupRivetkitRegistry = (
  * Provide this with {@link layer|`Registry.layer()`} at the application root.
  * Building the returned layer evaluates the actor layer, collects its registered
  * actors, and starts the underlying RivetKit runtime using the options from
- * {@link layer|`Registry.layer()`}. Launch the resulting layer with
- * {@link Layer.launch|`Layer.launch()`} to keep the server process alive.
+ * {@link layer|`Registry.layer()`}. The layer finishes building once the
+ * envoy registers with the engine; a failed start is a defect. Launch the
+ * resulting layer with {@link Layer.launch|`Layer.launch()`} to keep the
+ * server process alive. Closing its scope (for example on SIGINT under
+ * `NodeRuntime.runMain`) shuts the registry down and sleeps its actors.
  *
  * @param actorsLayer - A layer containing one or more
  * {@link Actor.Actor.toLayer|`Actor.toLayer()`} registrations.
@@ -128,11 +186,6 @@ const setupRivetkitRegistry = (
  *
  * Layer.launch(MainLayer).pipe(NodeRuntime.runMain);
  * ```
- *
- * @see {@link toWebHandler|`Registry.toWebHandler()`} for Fetch-compatible
- * serverless handlers.
- * @see {@link toHttpEffect|`Registry.toHttpEffect()`} for Effect HTTP handlers.
- *
  */
 export const serve = <E, R>(
 	actorsLayer: Layer.Layer<never, E, R>,
@@ -148,19 +201,89 @@ export const serve = <E, R>(
 				),
 			);
 			const rivetkitRegistry = yield* setupRivetkitRegistry(registry);
-			yield* Effect.sync(() => rivetkitRegistry.start());
+			yield* startRivetkitRegistry(rivetkitRegistry);
 		}),
 	);
 
 /**
- * In-process test runtime. Boots the rivetkit registry against the
- * configured engine, waits for `/health` to answer, and provides
+ * Answers with a route of the RivetKit registry. Before `serve` makes that
+ * registry, a registry that has not started gives RivetKit's own `503`.
+ */
+const answerWithRivetkitRoute = (
+	route: (
+		routes: Rivetkit.Registry<Rivetkit.RegistryActors>["routes"],
+	) => Promise<Response>,
+): Effect.Effect<HttpServerResponse.HttpServerResponse, never, Registry> =>
+	Effect.gen(function* () {
+		const registry = yield* Registry;
+		const rivetkitRegistry =
+			registry.rivetkitRegistry.current ?? Rivetkit.setup({ use: {} });
+		const response = yield* Effect.promise(() =>
+			route(rivetkitRegistry.routes),
+		);
+		return HttpServerResponse.fromWeb(response);
+	});
+
+/**
+ * Answers a request with the Prometheus metrics of the registry, as
+ * `registry.routes.prometheusMetrics()` of RivetKit does. Before
+ * {@link serve|`Registry.serve()`} starts the registry, it answers `503`.
+ *
+ * Serve it on a private port. A cluster reads the metrics of a node from
+ * `GET /metrics` on `127.0.0.1` at `RIVETKIT_METRICS_PORT` (default: 9464).
+ *
+ * @example
+ * ```ts
+ * import { createServer } from "node:http"
+ * import { NodeHttpServer } from "@effect/platform-node"
+ * import { Registry } from "@rivetkit/effect"
+ * import { Layer } from "effect"
+ * import { HttpRouter } from "effect/http"
+ *
+ * const MetricsServer = HttpRouter.add(
+ *   "GET",
+ *   "/metrics",
+ *   Registry.prometheusMetrics,
+ * ).pipe(
+ *   HttpRouter.serve,
+ *   Layer.provide(
+ *     NodeHttpServer.layer(createServer, { host: "127.0.0.1", port: 9464 }),
+ *   ),
+ * )
+ * ```
+ */
+export const prometheusMetrics: Effect.Effect<
+	HttpServerResponse.HttpServerResponse,
+	never,
+	Registry
+> = answerWithRivetkitRoute((routes) => routes.prometheusMetrics());
+
+/**
+ * Answers a request with the health of the registry as JSON, as
+ * `registry.routes.health()` of RivetKit does, for probes. Before
+ * {@link serve|`Registry.serve()`} starts the registry, it answers `503`
+ * with `status: "not_started"`.
+ *
+ * @example
+ * ```ts
+ * import { Registry } from "@rivetkit/effect"
+ * import { HttpRouter } from "effect/http"
+ *
+ * const HealthRoute = HttpRouter.add("GET", "/health", Registry.health)
+ * ```
+ */
+export const health: Effect.Effect<
+	HttpServerResponse.HttpServerResponse,
+	never,
+	Registry
+> = answerWithRivetkitRoute((routes) => routes.health());
+
+/**
+ * In-process test runtime. Starts the rivetkit registry against the
+ * configured engine, waits until its envoy registers, and provides
  * `Client` from the same Layer so consumers don't need to wire
- * `Client.layer` separately. Mirrors `Registry.start` plus test-mode
- * flags and a scoped client dispose. The registry itself is leaked
- * to process exit because the public rivetkit `Registry` doesn't
- * expose a public `shutdown()` today; only the SIGINT handler can
- * drive `#runShutdown`. This matches `setupTest`'s existing behavior.
+ * `Client.layer` separately. Closing the layer's scope disposes the
+ * client and shuts the registry down.
  */
 export const test: Layer.Layer<Client.Client, never, Registry> = Layer.effect(
 	Client.Client,
@@ -172,22 +295,18 @@ export const test: Layer.Layer<Client.Client, never, Registry> = Layer.effect(
 			enabled: true,
 		};
 		rivetkitRegistry.config.noWelcome = true;
-		// Auto-spawn the engine when no endpoint was provided, so
-		// `Registry.test` works out of the box without requiring the
-		// caller to start an engine externally. If the user wired an
-		// explicit endpoint via `Registry.layer({ endpoint: ... })`,
-		// honor it and skip the local spawn.
-		if (registry.options.endpoint === undefined) {
+		/**
+		 * Starts a local engine when the caller set neither `endpoint` nor
+		 * `startEngine`, so `Registry.test` works without an engine.
+		 */
+		if (
+			registry.options.endpoint === undefined &&
+			registry.options.startEngine === undefined
+		) {
 			rivetkitRegistry.config.startEngine = true;
 		}
-		yield* Effect.sync(() => rivetkitRegistry.start());
+		yield* startRivetkitRegistry(rivetkitRegistry);
 
-		// The rivetkitRegistry itself is leaked until process exit (matches
-		// setupTest's behavior). The public Rivetkit.Registry doesn't
-		// expose a shutdown method; only the SIGINT handler can drive the
-		// inner .shutdown(). Disposing the client is the only cleanup we
-		// can do cleanly today.
-		//
 		// When the engine was auto-spawned, propagate its resolved
 		// endpoint to the client so `createClient` doesn't fall back
 		// to its (warning-emitting) default.
@@ -220,6 +339,11 @@ const makeHttpEffect = (
 			),
 	);
 
+/**
+ * @deprecated Serverless is disabled in RivetKit v3, so every request fails.
+ * Use {@link serve|`Registry.serve()`} with `Layer.launch` instead.
+ * See https://github.com/rivet-dev/rivet/blob/dcbfd6bc0d4f0b061c9cd2609472460ddccfa9a3/rivetkit-typescript/packages/rivetkit/src/registry/index.ts#L46-L49
+ */
 export type ToHttpEffectOptions = ServerlessOptions;
 
 /**
@@ -228,6 +352,10 @@ export type ToHttpEffectOptions = ServerlessOptions;
  * The registry layer is built once in the surrounding scope. Registered Rivet
  * Actors are materialized into a single underlying RivetKit registry, and each
  * request is delegated to that registry's serverless handler.
+ *
+ * @deprecated Serverless is disabled in RivetKit v3, so every request fails.
+ * Use {@link serve|`Registry.serve()`} with `Layer.launch` instead.
+ * See https://github.com/rivet-dev/rivet/blob/dcbfd6bc0d4f0b061c9cd2609472460ddccfa9a3/rivetkit-typescript/packages/rivetkit/src/registry/index.ts#L46-L49
  */
 export const toHttpEffect = Effect.fnUntraced(function* <E>(
 	registryLayer: Layer.Layer<Registry, E>,
@@ -252,6 +380,11 @@ export const toHttpEffect = Effect.fnUntraced(function* <E>(
 	return httpEffect.pipe(Effect.provide(context));
 });
 
+/**
+ * @deprecated Serverless is disabled in RivetKit v3, so every request fails.
+ * Use {@link serve|`Registry.serve()`} with `Layer.launch` instead.
+ * See https://github.com/rivet-dev/rivet/blob/dcbfd6bc0d4f0b061c9cd2609472460ddccfa9a3/rivetkit-typescript/packages/rivetkit/src/registry/index.ts#L46-L49
+ */
 export type ToWebHandlerOptions = ServerlessOptions & {
 	/**
 	 * Effect HTTP middleware applied around the generated handler.
@@ -269,6 +402,10 @@ export type ToWebHandlerOptions = ServerlessOptions & {
  * This is the serverless entrypoint for the Effect SDK. The registry layer must
  * provide `Registry`, usually by composing actor layers with `Registry.layer`
  * via `Layer.provideMerge`.
+ *
+ * @deprecated Serverless is disabled in RivetKit v3, so every request fails.
+ * Use {@link serve|`Registry.serve()`} with `Layer.launch` instead.
+ * See https://github.com/rivet-dev/rivet/blob/dcbfd6bc0d4f0b061c9cd2609472460ddccfa9a3/rivetkit-typescript/packages/rivetkit/src/registry/index.ts#L46-L49
  */
 export const toWebHandler = <E>(
 	registryLayer: Layer.Layer<Registry, E>,

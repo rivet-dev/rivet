@@ -44,13 +44,13 @@ type ActorData struct {
     # whose it is. Records from before namespaces had groups named their namespace; new records
     # name none. Set from version 1's `namespace` by the upgrade, and by a create on unprefixed
     # keys, which only a namespace without a group makes while older binaries run. Read only by
-    # the checks of unprefixed volumes. Removed in 3.1 with the backfill.
+    # the checks of unprefixed volumes.
     legacyNamespace: optional<str>
     # The source actor this incarnation's database was copied from, for an actor made by an
     # individual actor fork. Absent for an ordinary create.
     forkedFrom: optional<ActorForkSource>
     # Legacy: the unprefixed actor this one was moved from by its namespace's backfill. Absent
-    # for every other create. Removed in 3.1 with the backfill.
+    # for every other create.
     legacyMovedFrom: optional<Id>
 }
 
@@ -115,7 +115,7 @@ type PendingAction union {
 # redone after an earlier attempt's copy was abandoned there lists one millisecond later than
 # the old actor; a first move keeps it exactly. `mover` is the mover token of the backfill
 # page that made it (see `LegacyMarkMoving`), which `LegacyMoveConfirm` must name and which a
-# `LegacyMoveAbandon` must be at least. Removed in 3.1 with the backfill.
+# `LegacyMoveAbandon` must be at least.
 type LegacyActorMove struct {
     movedFrom: Id
     createUnixMs: i64
@@ -125,8 +125,7 @@ type LegacyActorMove struct {
 }
 
 # Legacy: what a moved actor holds until its move is confirmed: the old actor's scheduled
-# alarm, armed only by the confirm, so it never fires during the move. Removed in 3.1 with the
-# backfill.
+# alarm, armed only by the confirm, so it never fires during the move.
 type LegacyMoveHold struct {
     alarmUnixMs: optional<i64>
     # See `LegacyActorMove.mover`.
@@ -139,13 +138,12 @@ type ActorCreateData struct {
     name: str
     key: optional<str>
     input: optional<data>
-    # Legacy: see `ActorData.legacyNamespace`, which the create copies. Removed in 3.1 with the
-    # backfill.
+    # Legacy: see `ActorData.legacyNamespace`, which the create copies.
     legacyNamespace: optional<str>
     # Set by an individual actor fork: the new incarnation's database volume is a Depot fork of
     # this source's, made in `Initializing` before the first start.
     forkFrom: optional<ActorForkSource>
-    # Legacy: see `LegacyActorMove`. Removed in 3.1 with the backfill.
+    # Legacy: see `LegacyActorMove`.
     legacyMove: optional<LegacyActorMove>
 }
 
@@ -226,7 +224,7 @@ type Initializing struct {
     # Legacy: present while a moved actor waits for the backfill's `LegacyMoveConfirm`. The
     # actor stays `Initializing` until then even with its key reserved and its database copied,
     # so it cannot start before the backfill proved its claim on the old database and destroyed
-    # the old actor. Removed in 3.1 with the backfill.
+    # the old actor.
     legacyMove: optional<LegacyMoveHold>
 }
 
@@ -384,26 +382,24 @@ type ActorDatabaseOrigin union {
 # mark, so a move that stopped making progress never refuses wakes for longer than one page. The
 # job's `LegacyMoveDestroy` and `LegacyClearMoving` under this mover end it sooner; a newer mover
 # replaces it, and an ordinary destroy drops it. When the mark ends without a destroy, a deferred
-# alarm fires at once and the mark becomes `LegacyMoveMarkCleared`. Removed in 3.1 with the
-# backfill.
+# alarm fires at once and the mark becomes `LegacyMoveMarkCleared`.
 type LegacyMoveMarkMoving struct {
     mover: u64
     deferredAlarmUnixMs: optional<i64>
 }
 # Legacy: the old actor was destroyed by the move of `mover`, whose claim check passed: its held
 # copy, the one whose `LegacyMoveHold.mover` is `mover`, is the actor now and is confirmed. Kept
-# through `Destroying` and `Destroyed`. Removed in 3.1 with the backfill.
+# through `Destroying` and `Destroyed`.
 type LegacyMoveMarkMoved struct {
     mover: u64
 }
 # Legacy: on a moved copy, an ordinary destroy reached it while it was held for its confirm, so
 # a request destroyed the actor: the backfill destroys the old actor too instead of moving it
-# again. Removed in 3.1 with the backfill.
+# again.
 type LegacyMoveMarkCopyDestroyed void
 # Legacy: a moving mark ended without a destroy, by its page's clear or at its deadline. `mover`
 # is the highest mover the actor has seen, so a later `LegacyMarkMoving` below it, from a page
 # that outlived its turn, is refused: the actor serves wakes until a newer page marks it.
-# Removed in 3.1 with the backfill.
 type LegacyMoveMarkCleared struct {
     mover: u64
 }
@@ -428,12 +424,11 @@ type ActorState struct {
     # inherited state whose volume's incarnation differs is reset before its first event.
     forkReset: optional<UuidV4>
     databaseOrigin: ActorDatabaseOrigin
-    # Legacy: the backfill's mark on this actor; see `LegacyMoveMark`. Removed in 3.1 with the
-    # backfill.
+    # Legacy: the backfill's mark on this actor; see `LegacyMoveMark`.
     legacyMove: optional<LegacyMoveMark>
     # Legacy: the namespace of an ungrouped actor, as its record's `legacyNamespace` names it, so
     # the state of a legacy actor still downgrades to version 3 during a rolling deploy. Absent
-    # for a grouped actor. Removed in 3.1 with the backfill.
+    # for a grouped actor.
     legacyNamespace: optional<str>
 }
 
@@ -499,7 +494,7 @@ type ForkDatabaseRetry struct {
 
 # Legacy: armed with a `LegacyMoveMarkMoving` of `mover` for the mark's duration. When it fires
 # while that mark is still held, the mark ends and a deferred alarm fires; any other mark, or
-# none, is left alone. Removed in 3.1 with the backfill.
+# none, is left alone.
 type LegacyMovingTimeout struct {
     mover: u64
 }
@@ -655,7 +650,6 @@ type ForkDatabaseRefused struct {
 # and generation. Anything else changes nothing. Effects: arms the carried alarm, then ends
 # initialization: a start to the envoy selected for the confirm, else to the one a request
 # stored during the move, or sleep. The page reads the copy back to learn it was accepted.
-# Removed in 3.1 with the backfill.
 type LegacyMoveConfirm struct {
     createUnixMs: i64
     oldEpoch: u32
@@ -669,8 +663,7 @@ type LegacyMoveConfirm struct {
 # `ActorState.legacyMove` to `LegacyMoveMarkMoving { mover }`, until `forMs` from now, unless
 # the actor is being destroyed or holds a mark of a higher mover; an alarm the replaced mark
 # deferred is kept. The page reads the actor back to learn whether it holds the mark. Effects:
-# arms `LegacyMovingTimeout` for the mark's end and cancels the replaced mark's. Removed in 3.1
-# with the backfill.
+# arms `LegacyMovingTimeout` for the mark's end and cancels the replaced mark's.
 type LegacyMarkMoving struct {
     mover: u64
     forMs: u64
@@ -679,7 +672,7 @@ type LegacyMarkMoving struct {
 # Legacy: an event. When: a backfill page whose move failed, or that gave up on the actor, ends
 # its mark. State: clears a `LegacyMoveMarkMoving` of `mover` or a lower one; anything else is
 # kept. Effects: cancels the mark's `LegacyMovingTimeout`, and fires an alarm the mark deferred,
-# which wakes the actor. Removed in 3.1 with the backfill.
+# which wakes the actor.
 type LegacyClearMoving struct {
     mover: u64
 }
@@ -689,7 +682,7 @@ type LegacyClearMoving struct {
 # `LegacyMoveMarkMoving { mover }`: the mark becomes `LegacyMoveMarkMoved { mover }` and the
 # actor is destroyed as by `Destroy`. Anything else, including a newer mover's mark or an
 # ordinary destroy in between, changes nothing, and the page reads that back. Effects: those of
-# `Destroy`. Removed in 3.1 with the backfill.
+# `Destroy`.
 type LegacyMoveDestroy struct {
     mover: u64
 }
@@ -697,8 +690,7 @@ type LegacyMoveDestroy struct {
 # Legacy: an event. When: a backfill page destroys a moved copy that an earlier or failed
 # attempt left held. State: accepted only for the incarnation `createUnixMs` while it is held and
 # `mover` is at least the copy's `LegacyMoveHold.mover`; it is destroyed as by `Destroy`, with
-# no mark. Anything else changes nothing. Effects: those of `Destroy`. Removed in 3.1 with the
-# backfill.
+# no mark. Anything else changes nothing. Effects: those of `Destroy`.
 type LegacyMoveAbandon struct {
     createUnixMs: i64
     mover: u64
@@ -755,7 +747,7 @@ type TryStartDelegatedToV2 void
 
 # Legacy: the actor is being moved into its namespace's group by the backfill, so the wake
 # started nothing and stored no waiter. The caller retries shortly and resolves the actor again,
-# which finds its new id once the move made it. Removed in 3.1 with the backfill.
+# which finds its new id once the move made it.
 type TryStartLegacyMoving void
 
 type TryStartOutcome union {
@@ -782,13 +774,12 @@ type ActorReadResponse struct {
     # runner has created its database volume yet. Absent when the actor has no data yet, or
     # when the response was upgraded from version 3 or older, which did not report it.
     commandIndex: optional<i64>
-    # Legacy: the backfill's mark; see `LegacyMoveMark`. Removed in 3.1 with the backfill.
+    # Legacy: the backfill's mark; see `LegacyMoveMark`.
     legacyMove: optional<LegacyMoveMark>
     # Legacy: the phase of the current incarnation's index write, so the V2 migrator settles an
     # activation at the legacy placement only once the actor's legacy index entry, which the
     # backfill's walk lists, is written. Absent when the actor has no state, or when the
-    # response was upgraded from version 3 or older, which did not report it. Removed in 3.1
-    # with the backfill.
+    # response was upgraded from version 3 or older, which did not report it.
     legacyWriteIndexPhase: optional<WriteIndexPhase>
 }
 
@@ -800,8 +791,7 @@ type ActorMigrateFromV2BeginResponse struct {
     phase: ActorPhase
     createUnixMs: i64
     # Legacy: the held actor's `ActorState.legacyNamespace`, so the begin of an ungrouped actor
-    # still downgrades to version 3 during a rolling deploy. Absent for a grouped actor. Removed
-    # in 3.1 with the backfill.
+    # still downgrades to version 3 during a rolling deploy. Absent for a grouped actor.
     legacyNamespace: optional<str>
 }
 
@@ -1120,8 +1110,7 @@ type PoolListResponse struct {
 }
 
 # Legacy: reads when an actor's scheduled alarm fires, from its state volume, so the backfill
-# carries it into the actor's moved copy. Absent when no alarm is scheduled. Removed in 3.1 with
-# the backfill.
+# carries it into the actor's moved copy. Absent when no alarm is scheduled.
 type LegacyActorAlarmReadRequest void
 type LegacyActorAlarmReadResponse struct {
     alarmUnixMs: optional<i64>

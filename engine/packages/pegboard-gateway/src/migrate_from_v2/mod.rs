@@ -42,6 +42,52 @@ impl<'a> Active<'a> {
 	}
 }
 
+/// What becomes of a request this cluster refused to authenticate while a migration from V2
+/// applies to it.
+pub enum Unverified<'a> {
+	/// The migration only passes through: both ratios are 0, so V2 serves every actor in the
+	/// namespace and the request is forwarded with the client's own credentials for V2 to check.
+	Forward(Active<'a>),
+	/// The migration has started moving actors or creates here. This cluster cannot authorize the
+	/// client for those, nor place a key it creates, so the refusal stands.
+	Refuse(Active<'a>),
+}
+
+/// The migration a request takes part in after this cluster refused its token. The request must
+/// have presented a token, the refusal must be a rejection of that token (`auth.invalid_token`
+/// or `auth.token_expired`) rather than a failure to check it, and the request must name the
+/// migration's V2 namespace, its target namespace, or no namespace. A client still holding a V2
+/// token speaks to V2, so it names the V2 namespace.
+pub fn unverified<'a>(
+	dynamic: Option<&'a Root>,
+	named: Option<&str>,
+	token: Option<&str>,
+	error: &anyhow::Error,
+) -> Option<Unverified<'a>> {
+	let config = dynamic?.migrate_from_v2()?;
+	token?;
+	if !rivet_guard_core::auth::is_token_rejection(error) {
+		return None;
+	}
+	let names_migration = match named {
+		Some(named) => named == config.namespace || named == config.target_namespace(),
+		None => true,
+	};
+	if !names_migration {
+		return None;
+	}
+
+	let active = Active {
+		config,
+		namespace: config.target_namespace().to_owned(),
+	};
+	if config.create_ratio == 0.0 && config.migrate_ratio == 0.0 {
+		Some(Unverified::Forward(active))
+	} else {
+		Some(Unverified::Refuse(active))
+	}
+}
+
 /// Request header with which a create asks to land in this cluster while a V2 namespace migrates
 /// in. `3` creates the actor here whatever `create_ratio` says: a keyless create lands here, and
 /// a keyed getOrCreate lands here unless its key already belongs to V2. Without a migration the

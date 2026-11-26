@@ -1475,6 +1475,55 @@ impl View {
 		Some(fetched.map(|inode| inode.inode))
 	}
 
+	/// Probe chunk rows without fetching them or changing their LRU order. Indexed log rows
+	/// can also be locally available, so count only chunks missing from every layer.
+	pub(super) fn has_cold_chunks(
+		&self,
+		ino: u64,
+		offsets: impl Iterator<Item = u64>,
+		minimum: usize,
+	) -> bool {
+		let Some(cache) = self.cold.rows.state.try_lock() else {
+			return false;
+		};
+		if cache.snapshot_version != self.cold.snapshot_version {
+			return false;
+		}
+		// This fresh view has no earlier reads. Check its layers and snapshot under one
+		// cache guard so looking up the inode cannot block or promote a row in the LRU.
+		let key = RowKey::Inode(ino);
+		let row = self.overlay(&key, self.seq).or_else(|| {
+			let cached = cache.lru.values.get(&(key, Version::Snapshot))?;
+			cached.change_seq?;
+			Some(&cached.value)
+		});
+		let Some(Some(Row::Inode(inode))) = row else {
+			return false;
+		};
+		if inode.kind != FsKind::File || inode.inline.is_some() {
+			return false;
+		}
+		let mut last_chunk = None;
+		let mut cold = 0;
+		for offset in offsets.take_while(|&offset| offset < inode.size) {
+			let chunk = offset / CHUNK_BYTES as u64;
+			if last_chunk.is_some_and(|last| chunk <= last) {
+				continue;
+			}
+			last_chunk = Some(chunk);
+			let key = RowKey::Chunk(ino, chunk);
+			if self.overlay(&key, self.seq).is_none()
+				&& !cache.lru.values.contains_key(&(key, Version::Snapshot))
+			{
+				cold += 1;
+				if cold >= minimum {
+					return true;
+				}
+			}
+		}
+		false
+	}
+
 	/// Loads the chunks of `ino` in `first..first + count` that no layer holds and no earlier
 	/// read fetched: from the row cache when it has them, and otherwise from the cold
 	/// snapshot in one request per contiguous run. A file read then evaluates once instead of

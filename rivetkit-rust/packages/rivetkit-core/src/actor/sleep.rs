@@ -367,13 +367,23 @@ impl ActorContext {
 		loop {
 			let shutdown_count = self.shutdown_task_count();
 			let websocket_count = self.websocket_callback_count();
-			if shutdown_count == 0 && websocket_count == 0 {
+			// In-flight HTTP requests (raw `onRequest`) are not on the shutdown counter, but
+			// their handlers can still use the database. Wait for them too, so sleep cleanup
+			// does not detach storage under a live request.
+			let http_counter = self.http_request_counter();
+			let http_count = http_counter.as_ref().map_or(0, |counter| counter.load());
+			if shutdown_count == 0 && websocket_count == 0 && http_count == 0 {
 				return;
 			}
 
 			tokio::select! {
 				_ = self.0.sleep.work.shutdown_counter.wait_zero_unbounded(), if shutdown_count > 0 => {}
 				_ = self.0.sleep.work.websocket_callback.wait_zero_unbounded(), if websocket_count > 0 => {}
+				_ = async {
+					if let Some(counter) = &http_counter {
+						counter.wait_zero_unbounded().await;
+					}
+				}, if http_count > 0 => {}
 			}
 		}
 	}
@@ -383,20 +393,6 @@ impl ActorContext {
 			return true;
 		};
 		counter.wait_zero(deadline).await
-	}
-
-	pub(crate) async fn wait_for_http_requests_idle(&self) {
-		loop {
-			let idle = self.0.sleep.work.idle_notify.notified();
-			tokio::pin!(idle);
-			idle.as_mut().enable();
-
-			if self.active_http_request_count() == 0 {
-				return;
-			}
-
-			idle.await;
-		}
 	}
 
 	pub(crate) fn keep_awake_region_state(&self) -> RegionGuard {

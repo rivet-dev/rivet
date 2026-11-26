@@ -146,23 +146,32 @@ fn create_result<T>(
 	.map_err(|error| create_error(progress, error))
 }
 
-/// Only refusals left before an actor create may be returned as retryable overloads.
+/// Only failures left before an actor create may be returned as retryable 5xx answers. A create
+/// that may have been sent already answers `actor.create_pending` instead, so a
+/// `depot.unavailable` or `depot.request_deadline_exceeded` that reaches here came from a read
+/// before the create, and sending the whole request again cannot create a second actor.
 fn create_response(result: Result<Response>) -> Response {
 	match result {
 		Ok(response) => response,
 		Err(error) => {
 			let refused = depot_client::retry_after_ms(&error).is_some();
-			let deadline_elapsed =
-				error
-					.downcast_ref::<rivet_error::RivetError>()
-					.is_some_and(|error| {
-						error.group() == "depot" && error.code() == "request_deadline_exceeded"
-					});
+			let depot_code = error
+				.downcast_ref::<rivet_error::RivetError>()
+				.filter(|error| error.group() == "depot")
+				.map(|error| error.code().to_owned());
 			let mut response = ApiError::from(error).into_response();
 			if refused {
 				*response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
-			} else if deadline_elapsed {
-				*response.status_mut() = StatusCode::GATEWAY_TIMEOUT;
+			} else {
+				match depot_code.as_deref() {
+					Some("request_deadline_exceeded") => {
+						*response.status_mut() = StatusCode::GATEWAY_TIMEOUT;
+					}
+					Some("unavailable") => {
+						*response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
+					}
+					_ => {}
+				}
 			}
 			response
 		}
@@ -499,7 +508,7 @@ pub async fn archive_namespace(
 	if !matches!(pegboard::catalog::namespace_volumes_open(&ctx), Ok(true)) {
 		return Err(pegboard::validation::NamespacePending.build().into());
 	}
-	// Legacy: removed in 3.1 with the backfill; see `NamespaceBackfillPending`.
+	// Legacy: see `NamespaceBackfillPending`.
 	match &state.backfill {
 		namespace_wire::NamespaceBackfill::NamespaceBackfillDone(done)
 			if done.skipped_count > 0 =>
@@ -589,7 +598,7 @@ fn namespace_json(name: &str, state: &namespace_wire::NamespaceState) -> Result<
 /// Legacy: the actors the namespace's finished backfill gave up on, listed by id, name and key
 /// in the slash form the actor API reads (up to the list's cap), and how many it still counts, so an operator can find and destroy them
 /// without the error log. Empty and zero before the backfill is done and for a namespace that
-/// never had one. Removed in 3.1 with the backfill.
+/// never had one.
 fn legacy_skipped_json(backfill: &namespace_wire::NamespaceBackfill) -> Result<(Vec<Value>, u32)> {
 	match backfill {
 		namespace_wire::NamespaceBackfill::NamespaceBackfillDone(done) => {
@@ -646,7 +655,7 @@ pub async fn list_namespaces(
 
 	// Legacy: while a storage worker from before namespace volumes lives, it may host the
 	// catalog and knows only the record-row listing, and every namespace is a legacy row. An
-	// unknown fleet view surfaces as it does for a create. Removed in 3.1.
+	// unknown fleet view surfaces as it does for a create.
 	if !pegboard::catalog::namespace_volumes_open(&ctx)? {
 		let (namespaces, cursor) = pegboard::catalog::legacy_list_namespaces(
 			&ctx,
@@ -865,6 +874,119 @@ async fn create_or_proxy(
 	}
 }
 
+/// Largest request body forwarded to V2 for a client this cluster did not authenticate.
+const UNVERIFIED_BODY_LIMIT_BYTES: usize = 2 * 1024 * 1024;
+
+/// Serves an actor API request whose token this cluster refused. While a migration from V2 only
+/// passes through, V2 holds every actor of the namespace, so the request is forwarded to V2's
+/// public API with the client's own credentials and V2 decides; see
+/// [`migrate_from_v2::unverified`]. Any other request, and a keyed create whose key already lives
+/// here, is refused with `error`, so V2 never creates a key a second time.
+pub(crate) async fn unverified_v2(
+	ctx: &EngineContext,
+	token: Option<&str>,
+	error: anyhow::Error,
+	request: axum::extract::Request,
+) -> Result<Response> {
+	let path = request.uri().path();
+	let actor_route = path == "/actors" || path.starts_with("/actors/");
+	if !actor_route {
+		return Err(error);
+	}
+	let query: Vec<(String, String)> =
+		url::form_urlencoded::parse(request.uri().query().unwrap_or("").as_bytes())
+			.into_owned()
+			.collect();
+	let named = query
+		.iter()
+		.find(|(name, _)| name == "namespace")
+		.map(|(_, value)| value.as_str());
+	let dynamic = migrate_from_v2::snapshot(ctx);
+	let migration = match migrate_from_v2::unverified(dynamic.as_deref(), named, token, &error) {
+		Some(migrate_from_v2::Unverified::Forward(migration)) => migration,
+		Some(migrate_from_v2::Unverified::Refuse(migration)) => {
+			migration.count_request("v2_token_refused");
+			return Err(error);
+		}
+		None => return Err(error),
+	};
+
+	// A request that asks to be created here needs this cluster's authorization.
+	if migrate_from_v2::forces_actor_v3(request.headers())? {
+		migration.count_request("v2_token_refused");
+		return Err(error);
+	}
+
+	let (parts, body) = request.into_parts();
+	let raw = axum::body::to_bytes(body, UNVERIFIED_BODY_LIMIT_BYTES)
+		.await
+		.context("request body is too large to forward to V2")?;
+
+	let create = parts.method == Method::POST || parts.method == Method::PUT;
+	if create && parts.uri.path() == "/actors" {
+		let held_here = keyed_create_held_here(ctx, &migration.namespace, &raw).await?;
+		if held_here {
+			migration.count_request("v2_token_refused");
+			return Err(error);
+		}
+	}
+
+	// V2 knows the namespace by its V2 name.
+	let query = query
+		.into_iter()
+		.map(|(name, value)| match name.as_str() {
+			"namespace" => (name, migration.config.namespace.clone()),
+			_ => (name, value),
+		})
+		.collect::<Vec<_>>();
+	let path_and_query = match query.is_empty() {
+		true => parts.uri.path().to_owned(),
+		false => format!(
+			"{}?{}",
+			parts.uri.path(),
+			serde_html_form::to_string(&query)?
+		),
+	};
+	let headers = proxy::forward_headers(&parts.headers, &proxy::V2Credentials::Client, false)?;
+	let body = match raw.is_empty() {
+		true => None,
+		false => Some(raw),
+	};
+	let response = pegboard::migrate_from_v2::api_with_headers(
+		ctx,
+		migration.config,
+		parts.method,
+		&path_and_query,
+		headers,
+		body,
+	)
+	.await;
+	let response = match response {
+		Ok(response) => response,
+		Err(error) => {
+			migration.count_request("v2_error");
+			return Err(error);
+		}
+	};
+	migration.count_request("v2_token");
+	Ok(proxy::api_response(response))
+}
+
+/// Whether a create's key already names a live actor in `namespace` here. A keyless create, or a
+/// body this cluster cannot read, holds nothing here, and V2 answers it.
+async fn keyed_create_held_here(ctx: &EngineContext, namespace: &str, raw: &Bytes) -> Result<bool> {
+	let Ok(body) = serde_json::from_slice::<CreateActorRequest>(raw) else {
+		return Ok(false);
+	};
+	let Some(key) = body.key.as_deref() else {
+		return Ok(false);
+	};
+	let key = canonical_key(key)?;
+	let standing = pegboard::catalog::namespace_standing(ctx, namespace).await?;
+	let existing = find_keyed_actor(ctx, standing, &body.name, &key).await?;
+	Ok(existing.is_some())
+}
+
 /// Sends the create to V2's public API in the migrated V2 namespace.
 async fn proxy_create(
 	ctx: &EngineContext,
@@ -982,7 +1104,7 @@ async fn create_actor_inner(
 
 	// Legacy: a lookup that finds no live actor in a namespace whose cached standing has no
 	// group reads the namespace again, so the create below agrees with processes that
-	// already see its group; see `legacy_find_keyed_actor`. Removed in 3.1 with the backfill.
+	// already see its group; see `legacy_find_keyed_actor`.
 	// The lookup only reads, so a refused attempt is retried whole.
 	let (namespace, existing) = create_step(ctx, retries, "actor_lookup", || {
 		legacy_find_keyed_actor(
@@ -1077,7 +1199,7 @@ async fn create_actor_inner(
 			}
 			wire::TryStartOutcome::TryStartDelegatedToV2 => return Ok(Created::DelegatedToV2),
 			// Legacy: only an unprefixed actor the backfill moves answers `LegacyMoving`, and
-			// creates go to the group. Removed in 3.1 with the backfill.
+			// creates go to the group.
 			wire::TryStartOutcome::TryStartWaiting
 			| wire::TryStartOutcome::TryStartStarting(_)
 			| wire::TryStartOutcome::TryStartRunning(_)
@@ -1130,7 +1252,7 @@ async fn find_keyed_actor(
 /// behavior read the namespace before every keyed lookup; the new behavior spares an existing
 /// actor that read, since only a create can land at the wrong id. Taken for every keyed create
 /// and getOrCreate; `reread` itself reads nothing for a grouped standing or while older binaries
-/// run. Removed in 3.1 with the backfill.
+/// run.
 async fn legacy_find_keyed_actor<T, F, FindFut, R, RereadFut>(
 	namespace: Arc<NamespaceStanding>,
 	find: F,
@@ -1154,8 +1276,7 @@ where
 	Ok((fresh, actor))
 }
 
-/// Legacy: what one pass of a keyed create loop decided ([`legacy_create_or_find`]). Removed in
-/// 3.1 with the backfill.
+/// Legacy: what one pass of a keyed create loop decided ([`legacy_create_or_find`]).
 enum LegacyCreateStep<T> {
 	/// The create was sent and answered this outcome.
 	Sent(wire::TryStartOutcome),
@@ -1170,8 +1291,7 @@ enum LegacyCreateStep<T> {
 /// itself; the resolve reads through it to the live legacy actor once it is destroying, so a
 /// create that waited it out never makes a fresh actor that shadows the legacy one, whose data
 /// the next attempt's duplicate rule would destroy. The legacy behavior re-sent the create
-/// without resolving. A create answered anything else costs nothing more. Removed in 3.1 with
-/// the backfill.
+/// without resolving. A create answered anything else costs nothing more.
 async fn legacy_create_or_find<T, C, CF, F, FF>(create: C, find: F) -> Result<LegacyCreateStep<T>>
 where
 	C: FnOnce() -> CF,
@@ -1397,7 +1517,7 @@ fn source_never_started(read: &wire::ActorReadResponse) -> bool {
 /// copy's `forked_from` and fork chain for good, so it is refused with a retryable refusal until
 /// the move made the source's lasting id. A keyless source keeps its id when moved, and one the
 /// finished backfill skipped is never moved, so neither waits. The new behavior has no such
-/// move. Removed in 3.1 with the backfill.
+/// move.
 fn legacy_source_awaits_move(
 	source_group: Option<GroupId>,
 	source: &wire::ActorData,
@@ -1473,7 +1593,7 @@ async fn fork_actor_inner(
 			),
 			Some(key) => {
 				// Legacy: a namespace whose cached standing has no group is read again first;
-				// see `keyed_create_standing`. Removed in 3.1 with the backfill.
+				// see `keyed_create_standing`.
 				let create_namespace =
 					pegboard::actor_key::keyed_create_standing(ctx, &namespace).await?;
 				let found = pegboard::actor_key::resolve_keyed_actor(
@@ -1600,7 +1720,7 @@ async fn fork_actor_inner(
 					return Err(ActorMigratingFromV2::error());
 				}
 				// Legacy: only an unprefixed actor the backfill moves answers `LegacyMoving`, and
-				// creates go to the group. Removed in 3.1 with the backfill.
+				// creates go to the group.
 				wire::TryStartOutcome::TryStartWaiting
 				| wire::TryStartOutcome::TryStartStarting(_)
 				| wire::TryStartOutcome::TryStartRunning(_)
@@ -2177,7 +2297,7 @@ pub async fn destroy_actor(
 /// namespace stop waiting for it and its opens stop falling back. Idempotent: an actor already
 /// destroyed, or whose volume is already gone, is not sent the destroy again but still has its
 /// entry removed, so a retry after a lost step, or after the actor destroyed itself through its
-/// envoy, clears the list. Removed in 3.1 with the backfill.
+/// envoy, clears the list.
 async fn legacy_destroy_skipped(
 	ctx: &EngineContext,
 	namespace: &NamespaceStanding,
@@ -2203,7 +2323,7 @@ async fn legacy_destroy_skipped(
 
 /// Legacy: whether a listed skipped actor, as its unprefixed volume read, still needs the
 /// destroy sent: only a live one does. An actor already destroying or destroyed, or whose volume
-/// is gone, only has its skipped entry removed. Removed in 3.1 with the backfill.
+/// is gone, only has its skipped entry removed.
 fn legacy_skipped_needs_destroy(read: pegboard::legacy_volumes::ResolvedRead) -> bool {
 	match read {
 		pegboard::legacy_volumes::ResolvedRead::Found(read) => {

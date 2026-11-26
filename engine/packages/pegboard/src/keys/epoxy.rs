@@ -25,8 +25,7 @@ pub struct ActorKeyKey {
 /// Legacy: a keyed actor's reservation at its unprefixed key, which names its namespace.
 /// Reservations made before namespaces had groups live at unprefixed keys; new behavior reserves
 /// every key under its namespace's group with no namespace string ([`ActorKeyKey`]). Taken only
-/// to read a reservation of a namespace whose backfill is not done. Removed in 3.1 with the
-/// backfill.
+/// to read a reservation of a namespace whose backfill is not done.
 #[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKvKey)]
 #[kv(
 	key = [ACTOR_KEY, namespace, name, key],
@@ -42,7 +41,7 @@ pub struct LegacyActorKeyKey {
 impl ActorKeyKey {}
 
 /// Legacy: the placement of an unprefixed reservation, the legacy keyed id's placement, so it
-/// stays with the volumes of the actor it reserves. Removed in 3.1 with the backfill.
+/// stays with the volumes of the actor it reserves.
 fn legacy_reservation_placement(namespace: &str, name: &str, key: &str) -> Placement {
 	crate::keys::partition::legacy_key_placement(namespace, name, key)
 }

@@ -25,6 +25,7 @@ rivetkit-engine-process.workspace = true
 rpassword.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "signal", "process", "fs", "io-std", "net"] }
 tracing.workspace = true

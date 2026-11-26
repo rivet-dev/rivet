@@ -18,7 +18,7 @@ use crate::{
 use anyhow::{Context, Result, ensure};
 use depot_protocol::command::{Command, CommandTag};
 use depot_types::keys::partition::NamespaceGroupKey;
-use depot_worker::command::{CommandRegistry, KvHandle};
+use depot_worker::command::{CommandRegistry, KvHandle, RangeLockGuard};
 use futures_util::StreamExt;
 use rivet_data::families::VersionFamily;
 use rivet_data::generated::pegboard_namespace_v1 as ns;
@@ -33,8 +33,23 @@ use rivet_metrics::GaugeGuardExt;
 use rivet_state_machine_durable::{DurableStateMachine, Method, Runner};
 use std::{collections::HashSet, ops::Bound, sync::Arc};
 
-#[derive(Default)]
-struct CatalogLock(tokio::sync::Mutex<()>);
+/// Serializes the catalog writes that decide one namespace name: its listing index entry, its
+/// legacy record row, and a legacy create's check that the name is free. Each holds this lock
+/// from its first read through its commit, so a legacy create cannot claim a name that an index
+/// write is taking. Other names proceed in parallel.
+async fn lock_namespace_name(db: &KvHandle, name: &str) -> Result<RangeLockGuard> {
+	db.lock_partition(NamespaceIndexKey::new(name.to_owned()).range())
+		.await
+}
+
+/// Serializes one pool's operations in its namespace's pool catalog: its configuration, its
+/// connections and their heartbeats. Each holds this lock from its first read through its
+/// commit, so a delete's check for connected nodes cannot interleave with a connect that admits
+/// one. Other pools proceed in parallel.
+async fn lock_catalog_pool(db: &KvHandle, name: &str) -> Result<RangeLockGuard> {
+	db.lock_partition(EnvoyPoolKey::new(name.to_owned()).range())
+		.await
+}
 
 /// What a namespace lookup answers: the name, the volume group its volumes live in when it has
 /// one, and its phase as last read. Every request path that opens a namespace's volumes builds
@@ -45,20 +60,18 @@ pub struct NamespaceStanding {
 	pub group: Option<ns::NamespaceGroup>,
 	pub phase: ns::NamespacePhase,
 	/// Legacy: whether the namespace's unprefixed volumes are copied into its group yet.
-	/// Removed in 3.1 with the backfill.
 	pub backfill: ns::NamespaceBackfill,
 	/// Legacy: [`NamespaceStanding::legacy_fallback`], derived once from `group` and `backfill`
 	/// when the standing is built, so request paths read it without rebuilding the skipped set.
 	/// Private so every standing is built through [`NamespaceStanding::new`] and the two never
-	/// disagree. Removed in 3.1 with the backfill.
+	/// disagree.
 	legacy_fallback: LegacyFallback,
 }
 
 /// Legacy: which actors of a namespace an open, a lookup or an event still looks for at their
 /// unprefixed keys when the grouped volume does not exist, and the namespace name such a record
 /// must carry. The legacy behavior keyed every volume unprefixed; new behavior keys every volume
-/// under the namespace's group. Taken from [`NamespaceStanding::legacy_fallback`]. Removed in
-/// 3.1 with the backfill.
+/// under the namespace's group. Taken from [`NamespaceStanding::legacy_fallback`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LegacyFallback {
 	/// No actor falls back: the namespace has no group, or its backfill is done and skipped
@@ -99,7 +112,7 @@ impl LegacyFallback {
 }
 
 /// Legacy: the fallback of a namespace with `group` and `backfill`; see
-/// [`NamespaceStanding::legacy_fallback`]. Removed in 3.1 with the backfill.
+/// [`NamespaceStanding::legacy_fallback`].
 fn derive_legacy_fallback(
 	name: &str,
 	group: Option<&ns::NamespaceGroup>,
@@ -171,7 +184,6 @@ impl NamespaceStanding {
 	/// Legacy: whether the namespace's backfill is done, so it has no unprefixed volumes left and
 	/// its opens skip the legacy fallback, and it can be forked and archived. A namespace created
 	/// through `NamespaceCreate` is done at birth; one moved from a legacy catalog row is not.
-	/// Removed in 3.1 with the backfill.
 	pub fn backfill_done(&self) -> bool {
 		match self.backfill {
 			ns::NamespaceBackfill::NamespaceBackfillDone(_) => true,
@@ -184,14 +196,13 @@ impl NamespaceStanding {
 	/// not exist: every actor of a grouped namespace whose backfill is not done, and after it is
 	/// done only the actors it lists as skipped, so an operator can still read, export and
 	/// destroy them. A namespace without a group keys everything unprefixed and falls back for
-	/// nothing. Derived once when the standing is built. Removed in 3.1 with the backfill.
+	/// nothing. Derived once when the standing is built.
 	pub fn legacy_fallback(&self) -> &LegacyFallback {
 		&self.legacy_fallback
 	}
 
 	/// Legacy: how many actors the finished backfill gave up on and still counts, which forks and
-	/// archives of the namespace wait for. Zero before the backfill is done. Removed in 3.1 with
-	/// the backfill.
+	/// archives of the namespace wait for. Zero before the backfill is done.
 	pub fn legacy_skipped_count(&self) -> u32 {
 		match &self.backfill {
 			ns::NamespaceBackfill::NamespaceBackfillDone(done) => done.skipped_count,
@@ -205,7 +216,7 @@ impl NamespaceStanding {
 	/// whose they are; new behavior keys every volume under its namespace's group and records no
 	/// namespace. Taken only for a namespace without a group, which exists only while served from
 	/// its legacy catalog row while older binaries run and still creates at unprefixed keys; `None`
-	/// for every grouped namespace. Removed in 3.1 with the backfill.
+	/// for every grouped namespace.
 	pub fn legacy_create_namespace(&self) -> Option<String> {
 		match &self.group {
 			Some(_) => None,
@@ -396,7 +407,7 @@ impl Command for PoolList {
 }
 
 /// Legacy: records an actor name for the backfill on a namespace volume; see
-/// `legacy_backfill_name_record_handler`. Removed in 3.1 with the backfill.
+/// `legacy_backfill_name_record_handler`.
 pub struct LegacyBackfillNameRecord;
 impl Command for LegacyBackfillNameRecord {
 	const TAG: CommandTag = CommandTag(LEGACY_PEGBOARD_BACKFILL_NAME_RECORD);
@@ -408,8 +419,7 @@ impl Command for LegacyBackfillNameRecord {
 /// Legacy: tells the namespace `namespace` that the V2 migrator finished in-flight entries at the
 /// legacy placement, so a backfill waiting on them reads the migrator's state again. Best effort:
 /// a namespace with no volume, or one whose backfill does not wait, ignores it, and a lost
-/// notification is covered by the pending backfill's retry timer. Removed in 3.1 with the
-/// backfill.
+/// notification is covered by the pending backfill's retry timer.
 pub async fn legacy_notify_migrator_settled(ctx: &EngineContext, namespace: &str) -> Result<()> {
 	let sent = ctx
 		.depot()
@@ -428,8 +438,7 @@ pub async fn legacy_notify_migrator_settled(ctx: &EngineContext, namespace: &str
 /// Legacy: records `name` for the backfill of `namespace` and waits for the write, for a caller
 /// that must know the backfill will walk the name, such as the V2 migrator once it activated an
 /// actor at the legacy placement. Answers false when the namespace has no volume yet: it is still
-/// a legacy catalog row, its backfill has not started, and nothing can be recorded for it. Removed
-/// in 3.1 with the backfill.
+/// a legacy catalog row, its backfill has not started, and nothing can be recorded for it.
 pub async fn legacy_record_backfill_name(
 	ctx: &EngineContext,
 	namespace: &str,
@@ -452,7 +461,7 @@ pub async fn legacy_record_backfill_name(
 }
 
 /// Legacy: pages the actor names recorded for the backfill on a namespace volume. A snapshot
-/// read. Removed in 3.1 with the backfill.
+/// read.
 pub struct LegacyBackfillNameList;
 impl Command for LegacyBackfillNameList {
 	const TAG: CommandTag = CommandTag(LEGACY_PEGBOARD_BACKFILL_NAME_LIST);
@@ -498,9 +507,8 @@ pub(crate) fn register(registry: &mut CommandRegistry, ctx: &EngineContext) -> R
 		move |db, request| legacy_move_handler(ctx2.clone(), db, request),
 	)?;
 
-	// The catalog's writers share its lock, so the legacy create cannot claim one name twice.
-	// The legacy read is a snapshot read outside the lock: it serves old binaries' every
-	// resolution during a rollout.
+	// The legacy backfill name record is an idempotent put, so it takes no lock. Its listing is
+	// a snapshot read.
 	registry.register_with_concurrency::<LegacyBackfillNameRecord>(
 		concurrency.actor(),
 		legacy_backfill_name_record_handler,
@@ -512,18 +520,26 @@ pub(crate) fn register(registry: &mut CommandRegistry, ctx: &EngineContext) -> R
 	)?;
 
 	// The index volume is one volume for every namespace, so overlapping creates and listings
-	// reach it at once. Its writes serialize on the catalog lock inside the handler; a cap of one
+	// reach it at once. Its writes serialize per name on a partition lock inside the handler; a
+	// cap of one
 	// would only refuse the overlap as `CommandCapacity`, which the namespace's index retry then
 	// waits out. The index command cap bounds them instead.
 	registry
 		.register_with_concurrency::<NamespaceIndexPut>(concurrency.index(), index_put_handler)?;
 	registry
 		.register_with_concurrency::<NamespaceIndexList>(concurrency.index(), index_list_handler)?;
+	// The legacy catalog and each namespace's pool catalog are shared by every caller of that
+	// catalog, so they take the index cap too: their writers serialize per name on a partition
+	// lock, the listings read a snapshot, and a cap of one would refuse every overlap, such as
+	// nodes of one pool starting together, as `CommandCapacity`.
 	let clock = ctx.env().clock();
 	let ctx2 = ctx.clone();
-	registry.register_with_concurrency::<LegacyNamespaceCreate>(1, move |db, request| {
-		legacy_create_handler(clock.clone(), legacy_old_binaries_run(&ctx2), db, request)
-	})?;
+	registry.register_with_concurrency::<LegacyNamespaceCreate>(
+		concurrency.index(),
+		move |db, request| {
+			legacy_create_handler(clock.clone(), legacy_old_binaries_run(&ctx2), db, request)
+		},
+	)?;
 	registry.register_snapshot_read::<LegacyNamespaceRead>(
 		concurrency.actor_read(),
 		None,
@@ -531,15 +547,18 @@ pub(crate) fn register(registry: &mut CommandRegistry, ctx: &EngineContext) -> R
 	)?;
 	let clock = ctx.env().clock();
 	let ctx2 = ctx.clone();
-	registry.register_with_concurrency::<LegacyNamespaceList>(1, move |db, request| {
-		legacy_list_handler(clock.clone(), legacy_old_binaries_run(&ctx2), db, request)
-	})?;
+	registry.register_with_concurrency::<LegacyNamespaceList>(
+		concurrency.index(),
+		move |db, request| {
+			legacy_list_handler(clock.clone(), legacy_old_binaries_run(&ctx2), db, request)
+		},
+	)?;
 
 	let clock = ctx.env().clock();
-	registry.register_with_concurrency::<Pool>(1, move |db, request| {
+	registry.register_with_concurrency::<Pool>(concurrency.index(), move |db, request| {
 		pool_handler(clock.clone(), db, request)
 	})?;
-	registry.register_with_concurrency::<PoolList>(1, pool_list_handler)?;
+	registry.register_with_concurrency::<PoolList>(concurrency.index(), pool_list_handler)?;
 	Ok(())
 }
 
@@ -634,7 +653,7 @@ async fn read_handler(db: KvHandle, _request: ()) -> Result<ns::NamespaceReadRes
 	let name = volume_name(&db)?;
 	let state = stored_state(&db).await?;
 	// Legacy: reads are what usually open a finished namespace's volume, so the first one sets
-	// its skipped list gauge for this opening. Removed in 3.1 with the backfill.
+	// its skipped list gauge for this opening.
 	let pages = db
 		.opening_state::<crate::namespace_machine::executor::LegacyBackfillPages>()
 		.await?;
@@ -664,7 +683,7 @@ async fn archive_handler(
 		return Err(crate::validation::NamespaceProtected.build());
 	}
 	// Legacy: the namespace's unprefixed volumes are in no group, so archiving the group would
-	// not close them. Removed in 3.1 with the backfill.
+	// not close them.
 	match &state.backfill {
 		ns::NamespaceBackfill::NamespaceBackfillDone(done) if done.skipped_count > 0 => {
 			return Err(crate::validation::NamespaceBackfillSkipped {
@@ -783,8 +802,7 @@ async fn legacy_move_handler(
 async fn index_put_handler(db: KvHandle, request: ns::NamespaceIndexPutRequest) -> Result<()> {
 	NamespaceCatalogVolume::from_volume_key(db.volume_key())?;
 	crate::validation::namespace_name(&request.name)?;
-	let serial = db.opening_state::<CatalogLock>().await?;
-	let _serial = serial.0.lock().await;
+	let _lock = lock_namespace_name(&db, &request.name).await?;
 	let key = NamespaceIndexKey::new(request.name.to_string());
 	let mut txn = db.begin().await?;
 	let entry = ns::NamespaceIndexEntry {
@@ -800,8 +818,7 @@ async fn index_put_handler(db: KvHandle, request: ns::NamespaceIndexPutRequest) 
 /// Legacy: writes `request.name` as an actor name the namespace's backfill walks. The legacy
 /// behavior found actor names only in envoy records; a name a legacy fallback read found an actor
 /// under is recorded here too, so an idle actor whose name no envoy record keeps is still moved.
-/// Taken only while the namespace's backfill is not done. Idempotent. Removed in 3.1 with the
-/// backfill.
+/// Taken only while the namespace's backfill is not done. Idempotent.
 async fn legacy_backfill_name_record_handler(
 	db: KvHandle,
 	request: ns::LegacyBackfillNameRecordRequest,
@@ -815,7 +832,7 @@ async fn legacy_backfill_name_record_handler(
 }
 
 /// Legacy: pages the actor names `legacy_backfill_name_record_handler` wrote, in order, after
-/// `request.after`. Removed in 3.1 with the backfill.
+/// `request.after`.
 async fn legacy_backfill_name_list_handler(
 	db: KvHandle,
 	request: ns::LegacyBackfillNameListRequest,
@@ -886,7 +903,7 @@ async fn index_list_handler(
 		)
 		.await?;
 
-	// Legacy: the record rows not yet moved. Removed in 3.1 with the backfill.
+	// Legacy: the record rows not yet moved.
 	let legacy = match request.legacy_index_only {
 		true => Vec::new(),
 		false => {
@@ -935,6 +952,7 @@ async fn legacy_bootstrap(clock: &dyn Clock, old_binaries: bool, db: &KvHandle) 
 	if !old_binaries {
 		return Ok(());
 	}
+	let _lock = lock_namespace_name(db, crate::DEFAULT_NAMESPACE).await?;
 	let key = LegacyNamespaceKey::new(crate::DEFAULT_NAMESPACE.to_owned());
 	let mut txn = db.begin().await?;
 	if txn.get(&key.pack()).await?.is_none() {
@@ -956,10 +974,11 @@ async fn legacy_create_handler(
 	db: KvHandle,
 	request: wire::NamespaceCreateRequest,
 ) -> Result<wire::NamespaceCreateResponse> {
-	let serial = db.opening_state::<CatalogLock>().await?;
-	let _serial = serial.0.lock().await;
 	crate::validation::namespace_name(&request.name)?;
+	// The bootstrap takes and releases the `default` name's lock before this create takes its
+	// own name's lock, since the lock is not reentrant and the name may be `default`.
 	legacy_bootstrap(clock.as_ref(), old_binaries, &db).await?;
+	let _lock = lock_namespace_name(&db, &request.name).await?;
 	let key = LegacyNamespaceKey::new(request.name.to_string());
 	let mut txn = db.begin().await?;
 	if let Some(stored) = txn.get(&key.pack()).await? {
@@ -1014,8 +1033,6 @@ async fn legacy_list_handler(
 	db: KvHandle,
 	request: wire::NamespaceListRequest,
 ) -> Result<wire::NamespaceListResponse> {
-	let serial = db.opening_state::<CatalogLock>().await?;
-	let _serial = serial.0.lock().await;
 	legacy_bootstrap(clock.as_ref(), old_binaries, &db).await?;
 	ensure!(request.limit > 0, "namespace list limit must be positive");
 	let range = LegacyNamespacePrefix::new().range();
@@ -1104,11 +1121,10 @@ async fn pool_handler(
 	db: KvHandle,
 	request: wire::PoolRequest,
 ) -> Result<wire::PoolResponse> {
-	let serial = db.opening_state::<CatalogLock>().await?;
-	let _serial = serial.0.lock().await;
 	EnvoyPoolIndexVolume::from_volume_key(db.volume_key())?;
 	crate::validation::pool_name(&request.pool_name)?;
 	let name = request.pool_name.to_string();
+	let _lock = lock_catalog_pool(&db, &name).await?;
 	let key = EnvoyPoolKey::new(name.clone());
 	let mut txn = db.begin().await?;
 	let mut config = txn
@@ -1380,7 +1396,7 @@ pub async fn legacy_read_namespace(
 /// from these rows; the new one pages the listing index and reads each namespace's volume. Taken
 /// only while a storage worker that cannot read namespace volumes lives: such a worker, from
 /// before namespace volumes, does not know the index list command, and every namespace is a
-/// legacy row until the fleet reads namespace volumes. Removed in 3.1.
+/// legacy row until the fleet reads namespace volumes.
 ///
 /// The fleet can read as unable to open namespace volumes again after namespaces moved into
 /// them, when a storage worker of the previous release is listed once more. The rows then miss
@@ -1495,7 +1511,7 @@ pub async fn legacy_move_namespace(
 /// Legacy: one page of the catalog's legacy record rows after `after`, through the legacy list
 /// command, for the legacy namespace row pass. The legacy behavior listed these rows for binaries
 /// from before namespace volumes; the pass lists them to move every one. Taken only by the pass,
-/// once every storage worker reads namespace volumes. Removed in 3.1 with the backfill.
+/// once every storage worker reads namespace volumes.
 pub(crate) async fn legacy_list_rows(
 	ctx: &EngineContext,
 	after: Option<String>,
@@ -1524,7 +1540,7 @@ pub(crate) async fn legacy_list_rows(
 /// Legacy: moves `name` from its legacy catalog row into its namespace volume and finishes its
 /// group create, as a resolution of the name does. The legacy behavior moved a row only when a
 /// request read it; the legacy namespace row pass moves every row this way. Taken only by the
-/// pass, once every storage worker reads namespace volumes. Removed in 3.1 with the backfill.
+/// pass, once every storage worker reads namespace volumes.
 ///
 /// A row whose volume already holds an indexed state is deleted here, since no machine write
 /// will delete it. The answer is not remembered in the process cache: the pass runs on one
@@ -1553,7 +1569,7 @@ pub(crate) async fn legacy_move_row(
 /// volume wins every read, so the row is dead and the index write, which is idempotent, deletes
 /// it. Nothing is sent while the index write is pending: the machine's `IndexRetry` writes it and
 /// deletes the row. `put` is the catalog command in production and the catalog's handler in its
-/// tests, which share this decision. Removed in 3.1 with the backfill.
+/// tests, which share this decision.
 pub(crate) async fn legacy_delete_dead_row<F, Fut>(
 	name: &str,
 	state: &ns::NamespaceState,
@@ -1635,7 +1651,7 @@ async fn resolve(ctx: &EngineContext, name: &str) -> Result<Option<ns::Namespace
 /// namespace: an unknown or unavailable view reads tolerantly, answering no state from a host
 /// that does not know the read yet. A name that does not exist pays this second volume read on
 /// every lookup, since a missing name is not cached; that is accepted for as long as legacy rows
-/// exist. Removed in 3.1 with the legacy rows.
+/// exist.
 pub(crate) async fn legacy_read_after_row_gone<F, Fut>(
 	volumes_open: &Result<bool>,
 	read: F,
@@ -1711,7 +1727,7 @@ pub async fn lookup_namespace(
 /// volume; that volume does not exist for a new name, so the read was refused as not found on
 /// every create, and the create's own get-or-create of the volume already answers a name its
 /// volume holds. Taken on every create while the fleet reads namespace volumes; `default` still
-/// resolves fully, since its resolution seeds it. Removed in 3.1 with the legacy rows.
+/// resolves fully, since its resolution seeds it.
 pub async fn legacy_move_before_create(ctx: &EngineContext, name: &str) -> Result<()> {
 	crate::validation::namespace_name(name)?;
 	if name == crate::DEFAULT_NAMESPACE {
@@ -1992,7 +2008,7 @@ fn standing_of(name: &str, cached: &CachedNamespace) -> Result<Arc<NamespaceStan
 /// sent to its unprefixed volume and clears the entry: a finished backfill's list, whose actors
 /// are still reached by id, or a running backfill's, where the clear makes room below the cap of
 /// skipped actors. The running list is scanned, which only a destroy does and which its cap
-/// bounds. Removed in 3.1 with the backfill.
+/// bounds.
 pub fn legacy_lists_skipped(namespace: &NamespaceStanding, actor_id: rivet_util::Id) -> bool {
 	match namespace.legacy_fallback() {
 		LegacyFallback::Skipped { .. } => namespace
@@ -2015,7 +2031,7 @@ pub fn legacy_lists_skipped(namespace: &NamespaceStanding, actor_id: rivet_util:
 /// `namespace`'s backfill through the namespace's step command: once done, so forks and archives
 /// of the namespace stop waiting for it and its opens stop falling back; while running, so the
 /// backfill has room to give up on another actor. The step is idempotent and ignored unless the
-/// backfill lists the actor, so a caller may send it again after a lost reply. Removed in 3.1 with the backfill.
+/// backfill lists the actor, so a caller may send it again after a lost reply.
 pub async fn legacy_clear_skipped(
 	ctx: &EngineContext,
 	namespace: &str,
@@ -2044,7 +2060,7 @@ pub async fn legacy_clear_skipped(
 /// legacy behavior trusted the cached standing; the new behavior acts on the group the moment
 /// any process moved the namespace into it. Taken by keyed creates, envoy connects and gateway
 /// actor resolves that found no actor, which would otherwise act on a group-less scope for up to
-/// the status TTL after a move. Removed in 3.1 with the backfill.
+/// the status TTL after a move.
 pub async fn legacy_fresh_ungrouped_standing<F, Fut>(
 	standing: &Arc<NamespaceStanding>,
 	volumes_open: Result<bool>,
@@ -2070,7 +2086,6 @@ where
 /// an actor's event finds no unprefixed actor at delivery. A process whose view of the fleet
 /// lags skips the read, which is safe there: an actor that never existed unprefixed reads as
 /// missing, and delivery retries a missing actor until the connection closes unacknowledged.
-/// Removed in 3.1 with the backfill.
 pub async fn legacy_current_namespace_group(
 	ctx: &EngineContext,
 	name: &str,
@@ -2086,7 +2101,7 @@ pub async fn legacy_current_namespace_group(
 /// seen at connect; the new behavior reads it again. Taken by
 /// [`legacy_current_namespace_group`], and on an envoy connection without a group before a
 /// replayed event for an actor the connection does not own is acknowledged, where acknowledging
-/// would drop the event for good. Removed in 3.1 with the backfill.
+/// would drop the event for good.
 ///
 /// The read never consults the view of the fleet, the legacy catalog row or the `default` seed,
 /// and never fills the process cache: a namespace gains its group only on its volume, and the
@@ -2103,8 +2118,7 @@ pub async fn legacy_read_namespace_group(
 }
 
 /// Legacy: the group of the namespace `name` from `read`, an uncached read of its namespace
-/// volume. Split from [`legacy_read_namespace_group`] so the read is the only input. Removed in
-/// 3.1 with the backfill.
+/// volume. Split from [`legacy_read_namespace_group`] so the read is the only input.
 async fn legacy_namespace_group_from<F, Fut>(name: &str, read: F) -> Result<Option<GroupId>>
 where
 	F: FnOnce() -> Fut,

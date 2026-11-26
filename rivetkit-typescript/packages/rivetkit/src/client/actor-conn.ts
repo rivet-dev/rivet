@@ -381,12 +381,7 @@ export class ActorConnRaw {
 		const { promise, resolve, reject } = promiseWithResolvers<{
 			id: bigint;
 			output: unknown;
-		}>((reason) =>
-			logger().warn({
-				msg: "unhandled action promise rejection",
-				reason,
-			}),
-		);
+		}>();
 		this.#actionsInFlight.set(actionId, {
 			name: opts.name,
 			resolve,
@@ -1069,7 +1064,11 @@ export class ActorConnRaw {
 					error = new errors.ActorError(
 						group,
 						code,
-						`Connection closed: ${reason}`,
+						group === "guard" &&
+							code === "service_unavailable" &&
+							retryAfterMs !== undefined
+							? `The gateway could not open the actor connection. RivetKit will retry automatically after at least ${retryAfterMs} ms. If connection failures increase with load, reduce concurrent connection attempts and ramp up gradually. If they persist at low load, ask your cluster operator to check gateway and storage health.`
+							: `Connection closed: ${reason}`,
 						closeOptions,
 					);
 				}

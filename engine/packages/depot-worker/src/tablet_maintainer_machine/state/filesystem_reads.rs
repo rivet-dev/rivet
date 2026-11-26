@@ -902,6 +902,7 @@ pub(crate) fn expired(state: &mut MaintainerState, id: RequestId, fx: &mut Effec
 		return;
 	};
 	let operation = operation_label(&request.operation);
+	let cancel_scan = matches!(request.operation, FsReadOperation::FsReadScan(_));
 	let store_queued = state.store_queue.len();
 	state
 		.store_queue
@@ -920,6 +921,18 @@ pub(crate) fn expired(state: &mut MaintainerState, id: RequestId, fx: &mut Effec
 	crate::metrics::TABLET_FS_READ_EXPIRED
 		.with_label_values(&[stage, operation])
 		.inc();
+	if cancel_scan && stage == "in_flight" {
+		let op_id = state.operations.iter().find_map(|(&op_id, operation)| {
+			matches!(operation, Operation::FilesystemQuery { request_id, .. } if *request_id == id)
+				.then_some(op_id)
+		});
+		if let Some(op_id) = op_id {
+			// A retry may immediately issue a smaller scan. Retire the old iterator first
+			// so it does not keep consuming CPU and a read slot until its operation timer.
+			state.finish(op_id, fx);
+			fx.execute(MaintainerEffect::CancelFilesystemQueryRequest { op_id });
+		}
+	}
 	reply(
 		state,
 		id,

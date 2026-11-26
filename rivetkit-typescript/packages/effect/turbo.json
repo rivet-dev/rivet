@@ -20,6 +20,7 @@
 				"package.json",
 				"src/**",
 				"test/**",
+				"tests/**",
 				"tsconfig.json",
 				"../../../tsconfig.base.json",
 				"../rivetkit/tests/shared-engine.ts"
@@ -45,6 +46,7 @@
 				"package.json",
 				"src/**",
 				"test/**",
+				"tests/**",
 				"tsconfig.json",
 				"vitest.config.ts",
 				"../../../tsconfig.base.json",

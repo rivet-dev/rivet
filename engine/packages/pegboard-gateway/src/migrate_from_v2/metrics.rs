@@ -5,7 +5,7 @@ use rivet_metrics::{BUCKETS, REGISTRY, prometheus::*};
 lazy_static::lazy_static! {
 	pub static ref REQUESTS: IntCounterVec = register_int_counter_vec_with_registry!(
 		Opts::new("gateway_migrate_from_v2_requests_total",
-		"Gateway actor requests while a V2 namespace migrates in, by where they were served: v3 (including actors moved in from V2), v2_fallback, v2_error (routed to V2 but V2 was unreachable or refused), retry_later (retryable refusals sent to the client) or not_found."),
+		"Gateway actor and public API requests while a V2 namespace migrates in, by where they were served: v3 (including actors moved in from V2), v2_fallback, v2_token (a token this cluster refused, forwarded for V2 to check while the migration only passes through), v2_token_refused (such a token refused once actors or creates move here), v2_error (routed to V2 but V2 was unreachable or refused), retry_later (retryable refusals sent to the client) or not_found."),
 		&["namespace", "route"],
 		*REGISTRY
 	).unwrap();

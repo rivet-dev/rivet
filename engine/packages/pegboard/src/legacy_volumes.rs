@@ -1,7 +1,7 @@
 //! Legacy: the fallback from a grouped actor volume to its unprefixed volume. Volumes created
 //! before namespaces had groups live at unprefixed keys; new behavior keys every volume under its
 //! namespace's group. An open in a namespace whose backfill is not done tries the grouped volume
-//! first and, when it does not exist, the unprefixed one. Removed in 3.1 with the backfill.
+//! first and, when it does not exist, the unprefixed one.
 
 use crate::{
 	NamespaceStanding,
@@ -98,7 +98,6 @@ pub async fn legacy_resolve_actor(
 
 /// Legacy: records the actor name of `found` for the backfill when the resolve found the actor
 /// at its unprefixed volume, so the backfill walks that name even when no envoy record names it.
-/// Removed in 3.1 with the backfill.
 pub async fn legacy_record_found_name(ctx: &EngineContext, namespace: &str, found: &ResolvedActor) {
 	if found.group.is_some() {
 		return;
@@ -114,7 +113,7 @@ pub async fn legacy_record_found_name(ctx: &EngineContext, namespace: &str, foun
 
 /// Legacy: [`legacy_resolve_actor`] from a namespace's parts as a connection resolved them: its
 /// group, and its name when it falls back ([`NamespaceStanding::legacy_fallback`]), `None`
-/// otherwise. Removed in 3.1 with the backfill.
+/// otherwise.
 pub async fn legacy_resolve_actor_in(
 	depot: &depot_client::Client,
 	group: Option<GroupId>,
@@ -176,7 +175,7 @@ pub async fn legacy_resolve_actor_in(
 /// `namespace`, the grouped shape otherwise. Taken only while the namespace's backfill is not
 /// done. A destroyed record is answered as found, so a lookup by id reads it as destroyed; unlike
 /// [`crate::actor_key::legacy_resolve_keyed_actor`], which skips it so a create of the key goes to
-/// the new id. Removed in 3.1 with the backfill.
+/// the new id.
 pub async fn legacy_resolve_ungrouped_actor(
 	depot: &depot_client::Client,
 	group: Option<GroupId>,
@@ -202,7 +201,7 @@ pub async fn legacy_resolve_ungrouped_actor(
 }
 
 /// Legacy: reads the unprefixed state volume of `actor_id` and judges it for `namespace`
-/// ([`legacy_unprefixed_read`]), counting nothing. Removed in 3.1 with the backfill.
+/// ([`legacy_unprefixed_read`]), counting nothing.
 async fn legacy_unprefixed_actor_read(
 	depot: &depot_client::Client,
 	namespace: &str,
@@ -213,7 +212,6 @@ async fn legacy_unprefixed_actor_read(
 }
 
 /// Legacy: the group of [`legacy_resolve_actor_in`], for a caller that does not read the record.
-/// Removed in 3.1 with the backfill.
 pub async fn legacy_resolve_actor_volume_in(
 	depot: &depot_client::Client,
 	group: Option<GroupId>,
@@ -227,8 +225,7 @@ pub async fn legacy_resolve_actor_volume_in(
 	)
 }
 
-/// Legacy: what a fallback's read of the grouped state volume decides. Removed in 3.1 with the
-/// backfill.
+/// Legacy: what a fallback's read of the grouped state volume decides.
 #[derive(Debug)]
 pub(crate) enum GroupedRead {
 	/// The grouped volume exists; the actor is there.
@@ -250,8 +247,7 @@ pub(crate) enum GroupedRead {
 /// `legacy_id`. A volume that never existed falls through to the unprefixed read, and so does an
 /// abandoned copy the backfill made of `legacy_id`, since every abandoned move leaves one; a
 /// deleted volume answers the grouped shape, where the actor reads as not found instead of
-/// failing. The legacy behavior answered any existing grouped record. Removed in 3.1 with the
-/// backfill.
+/// failing. The legacy behavior answered any existing grouped record.
 pub(crate) fn legacy_grouped_read(
 	result: Result<wire::ActorReadResponse>,
 	legacy_id: Id,
@@ -266,7 +262,7 @@ pub(crate) fn legacy_grouped_read(
 }
 
 /// Legacy: whether `read` is a copy the backfill made of the legacy actor `legacy_id` and then
-/// abandoned ([`legacy_abandoned_copy`]). Removed in 3.1 with the backfill.
+/// abandoned ([`legacy_abandoned_copy`]).
 pub fn legacy_moved_away(read: &wire::ActorReadResponse, legacy_id: Id) -> bool {
 	let (Some(phase), Some(data)) = (&read.phase, &read.data) else {
 		return false;
@@ -281,8 +277,7 @@ pub fn legacy_moved_away(read: &wire::ActorReadResponse, legacy_id: Id) -> bool 
 /// still may be. A copy still destroying counts, since an abandon's destroy lasts as long as the
 /// copy's database delete, and a create that waited it out would otherwise shadow the live legacy
 /// actor. A copy a request destroyed stays destroyed, since the backfill then destroys its legacy
-/// actor too. The resolvers and Envoy event delivery share this one test. Removed in 3.1 with
-/// the backfill.
+/// actor too. The resolvers and Envoy event delivery share this one test.
 pub fn legacy_abandoned_copy(
 	phase: &wire::ActorPhase,
 	legacy_move: &Option<wire::LegacyMoveMark>,
@@ -293,7 +288,7 @@ pub fn legacy_abandoned_copy(
 }
 
 /// Legacy: the state half of [`legacy_abandoned_copy`], for a caller that holds the state and
-/// reads the record only when this passes. Removed in 3.1 with the backfill.
+/// reads the record only when this passes.
 pub fn legacy_abandoned_copy_state(
 	phase: &wire::ActorPhase,
 	legacy_move: &Option<wire::LegacyMoveMark>,
@@ -319,8 +314,7 @@ pub fn legacy_abandoned_copy_state(
 /// and ignored here, leaving the legacy actor stopping forever. That is so for an abandoned copy
 /// ([`legacy_abandoned_copy`]), for a copy still held for its confirm, which never started, and
 /// for any event whose epoch is not the copy's current one, since a confirmed copy's epochs are
-/// above every epoch of the legacy actor. Never for a copy a request destroyed. Removed in 3.1
-/// with the backfill.
+/// above every epoch of the legacy actor. Never for a copy a request destroyed.
 pub fn legacy_copy_refuses_envoy_event(
 	state: &wire::ActorState,
 	event_epoch: u32,
@@ -332,7 +326,6 @@ pub fn legacy_copy_refuses_envoy_event(
 
 /// Legacy: the state half of [`legacy_copy_refuses_envoy_event`], for a caller that reads the
 /// record only when this passes, which an event at a live actor's current epoch never does.
-/// Removed in 3.1 with the backfill.
 pub fn legacy_copy_refuses_envoy_event_state(state: &wire::ActorState, event_epoch: u32) -> bool {
 	let held = match &state.phase {
 		wire::ActorPhase::Initializing(init) => init.legacy_move.is_some(),
@@ -350,8 +343,7 @@ pub fn legacy_copy_refuses_envoy_event_state(state: &wire::ActorState, event_epo
 		|| (other_incarnation && !legacy_destroyed_by_request(&state.legacy_move))
 }
 
-/// Legacy: whether a request destroyed the actor while the backfill held it as a copy. Removed
-/// in 3.1 with the backfill.
+/// Legacy: whether a request destroyed the actor while the backfill held it as a copy.
 fn legacy_destroyed_by_request(legacy_move: &Option<wire::LegacyMoveMark>) -> bool {
 	match legacy_move {
 		Some(wire::LegacyMoveMark::LegacyMoveMarkCopyDestroyed) => true,
@@ -365,15 +357,14 @@ fn legacy_destroyed_by_request(legacy_move: &Option<wire::LegacyMoveMark>) -> bo
 }
 
 /// Legacy: whether `data` is the record of a copy the backfill made of the legacy actor
-/// `legacy_id`. Removed in 3.1 with the backfill.
+/// `legacy_id`.
 fn legacy_copy_of(data: &wire::ActorData, legacy_id: Id) -> bool {
 	data.legacy_moved_from
 		.as_ref()
 		.is_some_and(|moved_from| moved_from.as_ref() == legacy_id.as_bytes().as_slice())
 }
 
-/// Legacy: what a fallback answers for an abandoned copy of a legacy actor. Removed in 3.1 with
-/// the backfill.
+/// Legacy: what a fallback answers for an abandoned copy of a legacy actor.
 #[derive(Debug)]
 pub(crate) enum MovedAwayRead {
 	/// The legacy actor is not destroyed, so it is still the actor.
@@ -388,7 +379,7 @@ pub(crate) enum MovedAwayRead {
 /// moved and later destroyed still reads as destroyed in its group. A legacy actor marked
 /// `Moved` answers the copy too, even while it is still stopping: a move sets that mark only
 /// once it keeps the copy, so the copy is the actor, and a request destroy of a confirmed copy
-/// leaves it no `CopyDestroyed` mark. Removed in 3.1 with the backfill.
+/// leaves it no `CopyDestroyed` mark.
 pub(crate) fn legacy_settle_moved_away(
 	copy: wire::ActorReadResponse,
 	legacy: Option<wire::ActorReadResponse>,
@@ -410,7 +401,7 @@ pub(crate) fn legacy_settle_moved_away(
 /// Legacy: judges a fallback's read of the unprefixed state volume for `namespace`: the read when
 /// its record names `namespace`, and `None` for a missing or deleted volume, a record with no
 /// data yet, or one of another namespace, since every namespace from before groups shares that
-/// key space. Removed in 3.1 with the backfill.
+/// key space.
 pub(crate) fn legacy_unprefixed_read(
 	namespace: &str,
 	result: Result<wire::ActorReadResponse>,

@@ -1,0 +1,364 @@
+---
+title: "Effect"
+description: "Call Rivet Actors from Effect programs and write Rivet Actors as Effect programs, with typed contracts, typed errors, event streams, and SQLite."
+skill: true
+---
+
+This page is the reference for the Effect SDK (`@rivetkit/effect`): first how to call actors, then how to write actors. If you are new to the SDK, start with the [Effect quickstart](/actors/docs/quickstart/effect).
+
+## Calling Actors
+
+### Install
+
+Add the Effect SDK and its Effect packages:
+
+```sh
+npm install rivetkit @rivetkit/effect effect @effect/platform-node
+```
+
+The Effect client is typed by the actor contract. Import the contract that your actor implements. There is no need to define the actor again on the client. The examples on this page use this contract:
+
+<CodeSnippet file="examples/docs/clients-effect/api.ts" title="api.ts" />
+
+### Minimal Client
+
+`Counter.client` gives an accessor for `Counter` actors. `Client.layer` provides the connection to the control plane:
+
+<CodeSnippet file="examples/docs/clients-effect/minimal-client.ts" title="client.ts" />
+
+Provide `Client.layer` one time, at the root of the program. The other examples on this page show only the program.
+
+### Stateless vs Stateful
+
+<CodeSnippet file="examples/docs/clients-effect/stateless-vs-stateful.ts" />
+
+A stateless call on the handle is one request for each action. `handle.connect` opens a connection that you can use for many calls and for events. The connection has the same action methods as the handle.
+
+### Getting Actors
+
+<CodeSnippet file="examples/docs/clients-effect/getting-actors.ts" />
+
+- `getOrCreate`, `get` and `getForId` return a handle at once. The client finds the actor on the first call.
+- `create` is an effect. It fails with a `RivetError` if an actor for the key exists.
+- `getOrCreate` also takes `createWithInput`, `createInRegion` and `poolName`. `create` also takes `input`, `region` and `poolName`. An actor that declares `input` must get it in `create` and `getOrCreate`. See [SQLite And Migrations](#sq-lite-and-migrations).
+- `fork` copies an existing actor into a new one. See [Forking](#forking).
+- A handle has `resolve`, which succeeds with the actor ID, and `getGatewayUrl`, which succeeds with the raw URL that routes traffic to the actor. `issueToken` issues a token scoped to the actor. Without `permissions`, the token can only read through the actor gateway. To issue a token with any grants for the namespace, use `auth.issueToken` of the `Client.Client` service. See [Scoped Tokens](/docs/jwt).
+
+### Connection Parameters
+
+If the actor contract declares `connection`, each accessor method takes typed `params`:
+
+<CodeGroup workspace>
+<CodeSnippet file="examples/docs/clients-effect/connection-params.ts" title="client.ts" />
+<CodeSnippet file="examples/docs/clients-effect/room.ts" title="room.ts" />
+</CodeGroup>
+
+The actor checks the params in `authorize`. If it refuses the connection, the call fails with the declared `connection.error`. See [Connections And Events](#connections-and-events).
+
+### Subscribing to Events
+
+`connection.events` has one `Stream` of decoded payloads for each event of the contract:
+
+<CodeSnippet file="examples/docs/clients-effect/subscribing-events.ts" />
+
+A stream subscribes when it starts and ends when the connection closes.
+
+### Connection Lifecycle
+
+A connection lives in a `Scope`. `handle.connect` opens it, and it closes when the scope closes, for example at the end of `Effect.scoped`.
+
+- `connect` fails with the declared `connection.error` if `authorize` refuses the connection, and with a `RivetError` if the connection cannot open.
+- The connection reconnects after a transient failure. A reconnect makes a new connection on the actor, with a new `id`.
+- An event stream fails with a `RivetError` if the connection drops and cannot reconnect.
+- If the actor's [`canSubscribe`](#connections-and-events) refuses a subscription, RivetKit closes the connection, and each event stream of the connection fails with the `RivetError` `auth.forbidden`.
+
+### Low-Level HTTP & WebSocket
+
+For actors that implement the [`http` or `webSocket` handler](#raw-http-and-web-socket), call them directly:
+
+<CodeSnippet file="examples/docs/clients-effect/low-level.ts" />
+
+- `handle.fetch(input, init)` takes a path, or a URL or `Request` whose path is used. It succeeds with the response for any status. It fails with a `RivetError` if the actor cannot be reached. Interruption aborts the request.
+- `handle.webSocket(path, protocols)` gives a `Socket` from `effect/socket`. It connects when its reader is acquired and closes with the scope of that reader.
+- If the actor cannot be reached, the reader fails with a `SocketOpenError` whose cause is the `RivetError`.
+
+### Calling from Backend
+
+In an Effect backend, provide `Client.layer` with your other layers and yield `MyActor.client` where you need it. In a backend that is not an Effect program, make a `ManagedRuntime` and run each call on it:
+
+<CodeSnippet file="examples/docs/clients-effect/calling-from-backend.ts" />
+
+To call an actor from another actor, see [Actions And Errors](#actions-and-errors).
+
+### Error Handling
+
+An action call fails with one of these:
+
+- A declared error of the action, with its own tag. See [Actions And Errors](#actions-and-errors).
+- A `RivetError` for all other failures. Its `reason` is a tagged value, such as `ActorNotFound`, `ActionTimedOut`, `Forbidden` or `InternalError`.
+
+<CodeSnippet file="examples/docs/clients-effect/error-handling.ts" />
+
+`error.isRetryable` says if a retry can succeed. `error.retryAfter` has the delay to wait, if the reason has one.
+
+### Concepts
+
+#### Keys
+
+Keys uniquely identify actor instances. Use compound keys (arrays) for hierarchical addressing:
+
+<CodeSnippet file="examples/docs/clients-effect/keys.ts" />
+
+Don't build keys with string interpolation like `"org:${userId}"` when `userId` contains user data. Use arrays instead to prevent key injection attacks.
+
+#### Configuration
+
+`Client.layer` takes the connection options:
+
+<CodeSnippet file="examples/docs/clients-effect/configuration.ts" />
+
+- `endpoint` - URL of the control plane. Falls back to `RIVET_ENDPOINT`. It accepts the same URL auth syntax, so `https://my-namespace:my-token@api.rivet.dev` sets the namespace and token in one value.
+- `namespace` - target namespace. Falls back to `RIVET_NAMESPACE`.
+- `token` - authentication token for the control plane. Falls back to `RIVET_TOKEN`.
+- `getToken` - function that issues and renews a token on demand. It overrides `token`.
+- `poolName` - node pool that new actors are created in. Falls back to `RIVET_POOL`.
+- `headers` - extra HTTP headers sent with each request.
+
+See [Endpoints](/docs/endpoints) for details.
+
+## Writing Actors
+
+With the Effect SDK, you write Rivet Actors as [Effect](https://effect.website) programs. Actions, events, params and errors are values with `effect/Schema` types, so the server and the client share one validated contract. Actor features such as SQLite, schedules and connections are Effect services.
+
+### Contract And Implementation
+
+`Actor.make` declares the contract: the name of the actor and its `actions`, `events`, creation `input` and `connection` params. It has no server code, so client code can import it. `MyActor.toLayer` adds the implementation and makes a layer that you serve with `Registry.serve`.
+
+<CodeSnippet file="examples/docs/actors-effect/wake.ts" region="contract" title="api.ts" />
+
+The first argument of `toLayer` is the wake effect. It runs each time the actor wakes, which includes the first start after the actor is created. It returns the action handlers:
+
+<CodeSnippet file="examples/docs/actors-effect/wake.ts" region="implementation" title="live.ts" />
+
+- Values that the wake effect makes stay in memory until the actor sleeps. Store durable data in [SQLite](#sq-lite-and-migrations).
+- `MyActor.of(handlers)` checks that there is one handler for each action of the contract. If the actor needs no setup, pass it to `toLayer` directly.
+- The wake effect runs in a scope that closes when the actor sleeps or is destroyed. Add cleanup with `Effect.addFinalizer`. Fibers that you fork into the scope are interrupted when it closes. For cleanup that runs only when the actor is destroyed, see [`onDestroy`](#lifecycle-and-background-work).
+- A service that the SDK does not provide becomes a requirement of the actor layer. Provide it with `Layer.provide`. The services on `MyActor`, such as `MyActor.sql`, belong to one actor. They do not compile in the wake effect or the handlers of a different actor.
+
+### Actions And Errors
+
+`Action.make` declares an action with schemas for its payload, its success and its errors, and `MyActor.of` takes one handler for each action. An actor calls another actor with `OtherActor.client`, the same API that an application uses:
+
+<CodeSnippet file="examples/docs/actors-effect-actions/actor-to-actor.ts" />
+
+- `success` defaults to `Schema.Void`. For more than one declared error, use `Schema.Union`. A payload that does not decode fails the call before the handler runs.
+- A handler can fail only with the declared `error` of its action. Handle all other errors in the handler, for example with `Effect.orDie`. A defect reaches the caller as a `RivetError` without its cause. The actor logs the cause.
+- An actor layer that uses a client requires `Client`. Provide `Client.layer` to the actor layers. A declared error of the called action passes through the calling action only if the calling action declares it too.
+- `onBeforeActionResponse` in the hooks of `MyActor.of(handlers, hooks)` changes the success of an action before the caller gets it. Each key is an action tag. The hook does not run when the handler fails.
+
+See [Actions](/actors/docs/actions) for the concept and [Error Handling](#error-handling) for the caller side.
+
+### SQLite And Migrations
+
+Declare `db` in the `toLayer` options to give the actor a SQLite database, then yield `MyActor.sql`, the `SqlClient` of `effect/sql`, to query it. `onCreate` gets the decoded creation `input`. `onMigrate` in the `toLayer` options runs each time the actor starts, for schema migrations that are safe to repeat:
+
+<CodeSnippet file="examples/docs/actors-effect-storage-and-lifecycle/workspace.ts" title="workspace.ts" />
+
+`sql.withTransaction` runs an effect in one transaction. If the effect fails, the transaction rolls back:
+
+<CodeSnippet file="examples/docs/actors-effect-storage-and-lifecycle/ledger.ts" region="transaction" />
+
+Each time an actor starts, the SDK runs these steps in order:
+
+1. The `onMigrate` of the `db` provider.
+2. `onMigrate` from the `toLayer` options.
+3. `onCreate` from the `toLayer` options, only on the start that creates the actor. On the first start of a fork, `onFork` runs in its place. See [Forking](#forking).
+4. The [wake effect](#contract-and-implementation).
+
+- Only an actor that declares `db` gets `MyActor.sql`. In an actor without `db`, the program does not compile.
+- A query can fail with a `SqlError`. An action handler cannot fail with it, so turn it into a defect with `Effect.orDie`, or map it to a declared error.
+- Handlers of one actor can run concurrently. Use `sql.withTransaction` for writes that must stay together.
+- `onCreate` and `onMigrate` cannot use the services that need an awake actor, such as `schedule`, `events` and `Actor.sleep`. RivetKit stops waiting for `onCreate` after 5 seconds and for `onMigrate` after the `onMigrateTimeout` actor option. A defect in either stops the actor before it wakes.
+- Columns that have the same name merge into one in a result row. Give them aliases, for example `SELECT a.id AS a_id, b.id AS b_id`.
+
+See [SQLite](/actors/docs/sqlite) and [Input Parameters](/actors/docs/input) for the concepts. To pass the input from a client, see [Getting Actors](#getting-actors).
+
+### Forking
+
+`fork` on the accessor of `MyActor.client` copies an actor into a new actor. The new actor starts on a copy of the source's database, runs `onFork` from the `toLayer` options one time, and then runs independently of the source:
+
+<CodeSnippet file="examples/docs/actors-effect-storage-and-lifecycle/fork.ts" title="draft.ts" />
+
+- `onFork` gets the source actor's `actorId` and `key`, the `forkedAt` time, and the fork `input`. The SDK decodes the input with the actor's `input` schema, so an actor that declares `input` must get it in `fork`.
+- `onFork` runs in place of `onCreate`, with the same services. Input that does not decode, or a defect, fails the start of the fork.
+- A fork is not idempotent. A `key` that is already held fails with `actor.duplicate_key`.
+- `Actor.CurrentAddress.forkChain` lists the forks behind the actor, oldest first. It is empty for an actor that was never forked.
+- A namespace fork copies every actor of a namespace with the same actor IDs, and does not run `onFork`. `Actor.CurrentAddress.namespace` is the namespace the actor runs in, so an actor can compare it with a stored value to find out that it is a copy.
+
+See [Forking](/actors/docs/forking) for the concepts and the token permissions that a fork needs.
+
+### Lifecycle And Background Work
+
+An idle actor sleeps after its `sleepTimeout`, and the next call wakes it. `Actor.sleep`, `Actor.keepAwake` and `Actor.destroy` change that in the wake effect and in action handlers. The second argument of `toLayer` takes the [RivetKit actor options](/actors/docs/actor-configuration), and `Actor.CurrentAddress` has the `actorId`, `name`, `key`, `region`, `namespace` and `forkChain` of the actor:
+
+<CodeSnippet file="examples/docs/actors-effect-storage-and-lifecycle/exporter.ts" title="exporter.ts" />
+
+- `Actor.sleep` puts the actor to sleep now. `Actor.destroy` destroys the actor and deletes its data. Neither finishes before the effect returns.
+- To run work in the background, fork a fiber into the wake scope, for example with `Effect.forkScoped` in the wake effect. The fiber is interrupted when the actor sleeps or is destroyed. It does not keep the actor awake, so wrap work that must finish in `Actor.keepAwake`.
+- Data that only a background fiber saves can be lost when the actor sleeps. Write data that must not be lost to SQLite in the action. For work that must survive sleep and crashes, use a [workflow](#workflows), a [schedule or a cron job](#schedule-and-cron).
+- Timeouts and intervals in the options take a `Duration.Input`, such as `"5 minutes"`. A number is milliseconds.
+
+`onDestroy` in the hooks of `MyActor.of` runs when the actor is destroyed while it is awake. A finalizer on the wake scope runs on every sleep and destroy:
+
+<CodeSnippet file="examples/docs/actors-effect-storage-and-lifecycle/room-cleanup.ts" title="room.ts" />
+
+- Use a finalizer to release what this wake opened. Use `onDestroy` for cleanup that must not outlive the actor.
+- `onDestroy` runs after `onDisconnect` for each closing connection and before the finalizers, so the values of the wake effect and SQLite still work. RivetKit stops waiting for it after `sleepGracePeriod`. A failure is logged and the actor is destroyed anyway.
+- `onDestroy` is best effort. A sleeping actor is destroyed without a wake, and a crash takes the sleep path, so `onDestroy` does not run. Do not rely on it for a delete that must happen.
+
+See [Lifecycle](/actors/docs/lifecycle) and [Destroying Actors](/actors/docs/destroy) for the concepts.
+
+### Schedule And Cron
+
+`yield* MyActor.schedule` schedules one call of an action of the actor, and `yield* MyActor.cron` manages recurring jobs. RivetKit stores both, so they survive sleep, restarts and upgrades:
+
+<CodeSnippet file="examples/docs/actors-effect-scheduling-and-workflows/reminder.ts" title="reminder.ts" />
+
+<CodeSnippet file="examples/docs/actors-effect-scheduling-and-workflows/digest.ts" title="digest.ts" />
+
+| Method | Result |
+| --- | --- |
+| `schedule.after(delay, action, payload)` | Calls `action` after `delay`, a `Duration.Input`. Succeeds with a schedule id. |
+| `schedule.at(time, action, payload)` | Calls `action` at `time`, a `DateTime` or a `Date`. Succeeds with a schedule id. |
+| `schedule.cancel(id)`, `schedule.get(id)`, `schedule.list` | Cancel, read or list the pending calls. |
+| `cron.set(options, action, payload)` | Calls `action` each time the five-field cron `expression` matches. `timezone` is an IANA time zone. The default is UTC. |
+| `cron.every(options, action, payload)` | Calls `action` one time for each `interval`, a `Duration.Input` of 5 seconds or more. |
+| `cron.get(name)`, `cron.list`, `cron.delete(name)`, `cron.history(name)` | Read, list or delete jobs, or read the most recent runs of a job. |
+
+- A scheduled action or a job action runs like a client call, but its `connection` is `None`.
+- `name` in the cron options identifies the job. A job with a used name replaces the old job.
+- A stored call or job can stop decoding, for example after a payload schema change. `get` fails with an `Actor.ScheduledCallDecodeError` or an `Actor.CronJobDecodeError` for it. `list` skips it and logs a warning.
+- All methods fail with a `RivetError` if RivetKit rejects the call, for example when `maxSchedules` is full or an expression is not valid.
+
+See [Schedule & Cron](/actors/docs/schedule) for the concept.
+
+### Workflows
+
+`Workflow.make` defines a workflow contract: an actor that also runs a durable workflow body. It takes the same options as `Actor.make`. RivetKit records each finished step, so the workflow continues where it stopped after a sleep, a crash or an upgrade:
+
+<CodeSnippet file="examples/docs/actors-effect-scheduling-and-workflows/order.ts" title="order.ts" />
+
+Loop state, `catch`, ephemeral steps and `onError`:
+
+<CodeSnippet file="examples/docs/actors-effect-scheduling-and-workflows/sync.ts" title="sync.ts" />
+
+| Effect | Result |
+| --- | --- |
+| `Workflow.step(name, effect, options)` | Runs `effect` one time and saves the result. `rollback` in the options undoes the step when the workflow fails. |
+| `Workflow.tryStep(name, effect, options)` | Fails with a `Workflow.StepFailure` that the workflow can handle, where `Workflow.step` fails the workflow. `catch` in the options sets the kinds of failure that it returns. |
+| `Workflow.try(name, body, options)` | Fails with a `Workflow.TryFailure` when a step, join or race in `body` fails. `catch` in the options sets the kinds of failure that it returns. |
+| `Workflow.rollbackCheckpoint(name)` | Run it before the first step that has a `rollback`. |
+| `Workflow.sleep(name, duration)`, `Workflow.sleepUntil(name, time)` | Save their deadline. If the actor sleeps, RivetKit wakes it at the deadline. |
+| `Workflow.loop(name, body)` | Runs `body` again and again until it succeeds with `Workflow.loopBreak`. |
+| `Workflow.loop(name, { state, run })` | Runs `run` with the state of the loop. `run` succeeds with `Workflow.Loop.continue(next)` or `Workflow.Loop.break(value)`, and the loop succeeds with `value`. |
+| `Workflow.join(name, branches)` | Runs named branches concurrently and succeeds with the result of each branch. |
+| `Workflow.race(name, branches)` | Succeeds with the `winner` and the `value` of the first branch that finishes. The other branches are interrupted. |
+| `Workflow.getVersion(name, latest)` | Gives `latest` to a workflow that gets to the call for the first time, and 1 to a workflow that ran past this point before the call existed. |
+| `Workflow.removed(name, originalType)` | Stands in for a call that you deleted, for example a `"step"` or a `"sleep"`. |
+
+- The first argument of `toLayer` is an effect that succeeds with the workflow body. `actions` in the `toLayer` options takes `MyWorkflow.of(handlers)`, `MyWorkflow.of(handlers, hooks)`, or an effect that succeeds with one. It is required if the contract declares actions or `connection`. Both effects run on each wake, before the body starts.
+- RivetKit runs the body again from the start on each wake. A finished step, sleep or loop iteration returns its saved result. Code outside a step must be deterministic, so put each side effect, and each read of the clock, of random values or of SQLite, in a `Workflow.step`.
+- Each step, sleep and loop needs a name that is unique in its scope. Run the `Workflow` effects one at a time. They compile only in the workflow body.
+- A step result must be JSON-compatible, or pass `schema`. RivetKit runs a failed step again, up to `maxRetries` times (default: 3), so make the effect idempotent. `timeout` (default: 30 seconds) fails the workflow unless you set `retryOnTimeout`.
+- `ephemeral: true` saves the result of a step with the next write of the workflow history instead of at once. If the actor stops before that write, the step runs again.
+- The state of a loop and its `value` must be JSON-compatible. RivetKit saves the state after each iteration, so the loop continues with it after the actor sleeps.
+- Without `catch`, `Workflow.tryStep` returns `exhausted`, `timeout` and `critical` failures, and `Workflow.try` returns `step`, `join` and `race` failures. Another kind of failure fails the workflow.
+- `onError` in the `toLayer` options runs when a step attempt, a rollback or the workflow fails. It gets the services of the wake effect. RivetKit does not replay it, so use it for logs, metrics and error reports.
+- The actor does not sleep from idle while the workflow runs or waits in `Workflow.sleep`. To delete the actor when the work is done, run `Actor.destroy` in the last step.
+
+See [Workflows](/workflows/docs) for the concept.
+
+### Connections And Events
+
+Declare `connection` in `Actor.make` to type the params that a client connects with and the error that refuses a connection. The hooks `authorize`, `onConnect` and `onDisconnect` go in the second argument of `MyActor.of`, and `yield* MyActor.connections` lists and closes the open connections:
+
+<CodeSnippet file="examples/docs/actors-effect-connections/room.ts" title="room.ts" />
+
+Declare events with `Event.make` and add them to `events` in `Actor.make`. `yield* MyActor.events` sends them to every connection (`broadcast`) or to one connection (`send`):
+
+<CodeSnippet file="examples/docs/actors-effect-connections/events.ts" title="game.ts" />
+
+`canSubscribe` in the hooks of `MyActor.of` decides which connections can subscribe to an event. Each key is an event tag:
+
+<CodeSnippet file="examples/docs/actors-effect-connections/can-subscribe.ts" title="match.ts" />
+
+- `authorize` is required when the actor declares `connection`. It runs before each connection opens, also for a stateless call, a raw HTTP request and a raw WebSocket connection. A failure refuses the connection, and the client gets the declared `error`. Params that do not decode refuse the connection with a `RivetError` before `authorize` runs.
+- `canSubscribe` runs before each subscription to its event, with the connection that subscribes. When it succeeds with `false`, RivetKit closes that connection with `auth.forbidden`, and each event stream of that connection fails with that `RivetError`. An event without a hook allows every connection.
+- `onConnect` runs after `authorize` accepts a connection. `onDisconnect` runs when that connection closes while the actor is awake. The hooks run only after the wake effect completes.
+- Each action request has `connection`, an `Option` with the `id`, the `scope` and the `params` of the caller. It is `None` for an action that the schedule or a cron job starts. The `id` is an address, not an identity. Do not use it for authorization.
+- The `scope` closes when the connection closes or the actor sleeps. Add a resource to that scope to release it at that time. Keep finalizers short, because RivetKit stops waiting for them after 5 seconds.
+
+See [Connections](/actors/docs/connections), [Realtime](/actors/docs/events) and [Authentication](/actors/docs/authentication) for the concepts. To connect and read events from an Effect program, see [Connection Parameters](#connection-parameters) and [Subscribing to Events](#subscribing-to-events).
+
+### Raw HTTP And WebSocket
+
+Pass `http` and `webSocket` in the hooks of `MyActor.of` to handle raw HTTP requests and raw WebSocket connections with `effect/http` and `effect/socket`:
+
+<CodeSnippet file="examples/docs/actors-effect-connections/raw-handlers.ts" title="gateway.ts" />
+
+- `http` runs one time for each request. A failure becomes a `500` response. An actor without `http` answers `404`.
+- `webSocket` runs one time for each connection. The WebSocket closes when the handler exits: normally on success, with code `1011` on a failure. When the client disconnects or the actor sleeps, the handler is interrupted.
+- In the `webSocket` handler, the request path keeps a `/websocket` prefix. In the `http` handler, the path has no prefix.
+
+See [Low-Level HTTP Handler](/actors/docs/request-handler) and [Low-Level WebSocket Handler](/actors/docs/websocket-handler) for the concepts. To call the handlers from an Effect client, see [Low-Level HTTP & WebSocket](#low-level-http-and-web-socket).
+
+### Registry And Testing
+
+`Registry.serve` starts the actors of a layer, and `Registry.layer` holds the options that all the actors share. Merge the actor layers with `Layer.mergeAll`:
+
+<CodeSnippet file="examples/docs/actors-effect-operations/registry.ts" title="main.ts" />
+
+| Option | Use | Default |
+| --- | --- | --- |
+| `endpoint` | The URL of the control plane. | `RIVET_ENDPOINT` |
+| `namespace` | The namespace of the actors. | `RIVET_NAMESPACE` |
+| `token` | The token for the control plane. | `RIVET_TOKEN` |
+| `noWelcome` | Set to `true` to hide the welcome message at startup. | `false` |
+| `sqlite` | The SQLite backend, `"local"` or `"remote"`. | |
+| `startEngine` | Set to `true` to start a local control plane. | `RIVET_RUN_ENGINE` |
+| `startServices` | Set to `false` to not start Services with a local control plane. | `RIVET_RUN_SERVICES` |
+| `runtime` | The RivetKit runtime, `"auto"`, `"native"` or `"wasm"`. | `RIVETKIT_RUNTIME` |
+| `node.version` | The version of this node. Increase it on every deploy. | `RIVET_NODE_VERSION` |
+
+`Registry.prometheusMetrics` and `Registry.health` are `effect/http` handlers that answer with the Prometheus metrics and the health of the registry. Before the registry starts, they answer `503`. A node that runs on its own, for example in a Docker image, sets `startEngine: false`, `startServices: false` and `runtime: "native"`, serves its metrics on a private port and its health on the public one:
+
+<CodeSnippet file="examples/docs/actors-effect-operations/node.ts" title="main.ts" />
+
+`Registry.test` is a layer that starts the registry in the test process and provides a `Client` for it:
+
+<CodeSnippet file="examples/docs/actors-effect-operations/registry-test.ts" title="counter.test.ts" />
+
+- Run the program with `NodeRuntime.runMain`. On `SIGINT` or `SIGTERM`, it closes the layer. That shuts down the registry and puts its actors to sleep.
+- If `Registry.layer` has neither `endpoint` nor `startEngine`, `Registry.test` starts a local control plane. Use a new key for each test, so that tests do not share actor data. Actors that call other actors still need `Client.layer` with the endpoint of the same control plane.
+- `Effect.log` works in the wake effect, in action handlers and in hooks. The SDK adds the `actor`, `key` and `actorId` to each log line. `RIVET_LOG_LEVEL` sets the minimum level. To use your own [Pino](https://getpino.io) logger, provide `RivetLogger.layerFromPino`. For the client logs, provide it to the program that uses `Client.layer`.
+- The SDK makes a span for each action call, for example `Counter/Increment`. To export the spans, provide an Effect tracer layer. A call from an Effect client or from another actor joins the trace of the caller.
+
+See [Registry Configuration](/actors/docs/registry-configuration), [Testing](/actors/docs/testing), [Logging](/actors/docs/logging) and [Tracing](/docs/tracing) for more information.
+
+### Raw Escape Hatch
+
+For a RivetKit feature that has no Effect API, pass a function to `toLayer`. Its argument has `rawRivetkitContext`, the RivetKit context of the actor. In a workflow body, `Workflow.Workflow` has the `rawRivetkitContext` of the workflow:
+
+<CodeSnippet file="examples/docs/actors-effect-operations/raw-context.ts" />
+
+- The raw context and the Effect APIs use the same actor.
+- The SDK does not validate calls through `rawRivetkitContext` with `effect/Schema`. The types are those of the RivetKit API.
+
+## Not Available Yet
+
+- **Contract middleware.** There is no middleware in the style of Effect's `RpcMiddleware`. It waits because `effect/rpc` is marked unstable in Effect 4.x. For auth, use [`authorize`](#connections-and-events).
+- **`waitUntil` and the abort signal.** Use fibers in the wake scope, [`Actor.keepAwake`](#lifecycle-and-background-work) and Effect interruption.
+
+## API Reference
+
+**Package:** [@rivetkit/effect](https://www.npmjs.com/package/@rivetkit/effect)

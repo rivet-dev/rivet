@@ -1,4 +1,11 @@
 {
 	"$schema": "https://turbo.build/schema.json",
-	"extends": ["//"]
+	"extends": ["//"],
+	"tasks": {
+		"check-types": {
+			// index.d.ts re-exports the wasm-pack output in pkg/, so the check waits for this
+			// package's own build rather than running wasm-pack into pkg/ beside it.
+			"dependsOn": ["^build", "build"]
+		}
+	}
 }

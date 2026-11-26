@@ -1,7 +1,6 @@
-import { Actor } from "@rivetkit/effect";
+import { db } from "@rivetkit/effect";
 import { Effect } from "effect";
-import { db } from "rivetkit/db";
-import { Counter, NegativeAmountError } from "./api.ts";
+import { CountChanged, Counter, NegativeAmountError } from "./api.ts";
 
 // --- Actor Implementation ---
 
@@ -9,16 +8,17 @@ import { Counter, NegativeAmountError } from "./api.ts";
 // service in context. The first parameter is a `wake` function that runs once
 // when the actor awakes and returns the action handlers.
 export const CounterLive = Counter.toLayer(
-	Effect.fnUntraced(function* ({ rawRivetkitContext }) {
-		const readCount = Effect.tryPromise(async () => {
-			const rows = await rawRivetkitContext.db.execute<{ count: number }>(
-				"SELECT count FROM counter WHERE id = 1",
-			);
-			return rows[0]?.count ?? 0;
-		}).pipe(Effect.orDie);
+	Effect.fn(function* () {
+		/**
+		 * The actor's SQLite database, as an `effect/sql` client. Actors
+		 * that declare `db` get one.
+		 */
+		const sql = yield* Counter.sql;
+		// The events API for this actor's declared events.
+		const events = yield* Counter.events;
 
 		return Counter.of({
-			Increment: Effect.fnUntraced(function* ({ payload }) {
+			Increment: Effect.fn(function* ({ payload }) {
 				// Reject before writing, so the error path leaves the count untouched.
 				// The failure is a value in the typed error channel, not a throw.
 				if (payload.amount < 0) {
@@ -28,21 +28,25 @@ export const CounterLive = Counter.toLayer(
 					});
 				}
 
-				// Persist the new count in the actor's SQLite database.
-				yield* Effect.tryPromise(() =>
-					rawRivetkitContext.db.execute(
-						"UPDATE counter SET count = count + ? WHERE id = 1",
-						payload.amount,
-					),
-				).pipe(Effect.orDie);
-				const next = yield* readCount;
+				// Add the amount and read the new count in one atomic statement.
+				const [{ count }] = yield* sql<{
+					count: number;
+				}>`UPDATE counter SET count = count + ${payload.amount} WHERE id = 1 RETURNING count`.pipe(
+					Effect.orDie,
+				);
 
-				// Broadcast the new value to every connected client.
-				rawRivetkitContext.broadcast("newCount", next);
+				// Send the new count to every connected client.
+				yield* events.broadcast(CountChanged, { count });
 
-				return next;
+				return count;
 			}),
-			GetCount: () => readCount,
+			GetCount: () =>
+				sql<{
+					count: number;
+				}>`SELECT count FROM counter WHERE id = 1`.pipe(
+					Effect.map(([{ count }]) => count),
+					Effect.orDie,
+				),
 		});
 	}),
 	{

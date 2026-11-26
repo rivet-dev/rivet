@@ -1537,18 +1537,18 @@ impl VolumeHost {
 			return receive;
 		};
 		let deadline = deadline_boot_ms.min(local_deadline);
-		if self
-			.env
-			.clock()
-			.observe()
-			.map_or(true, |now| now.boot_ms >= deadline)
-		{
+		let Ok(admitted_at) = self.env.clock().boot_ms() else {
+			let _ = send.send(unavailable(UnavailableReason::TimedOut));
+			return receive;
+		};
+		let admitted_budget_ms = deadline.saturating_sub(admitted_at);
+		if admitted_budget_ms == 0 {
 			let _ = send.send(unavailable(UnavailableReason::TimedOut));
 			return receive;
 		}
 		// The caller's deadline tracker. A speculative run of this command that its admission
 		// starts shares it, so nothing it has not dispatched starts after the caller timed out.
-		let commits = Arc::new(super::CommandCommits::new(deadline));
+		let commits = Arc::new(super::CommandCommits::new(deadline, admitted_budget_ms));
 		let admission = match self.admit(&request, request_bytes, &commits) {
 			Ok(admission) => admission,
 			Err(error) => {

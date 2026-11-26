@@ -17,8 +17,10 @@ use slatedb::db_cache::{
 	CacheFetch, CacheLoader, CachedEntry, CachedKey, DbCache, SplitCache,
 	foyer::{FoyerCache, FoyerCacheOptions},
 };
+use slatedb::{GarbageCollectorBuilder, GcFilter, ObjectMetadata, SstReader};
 use slatedb_common::clock::{SystemClock, SystemClockTicker};
 use std::{
+	collections::HashSet,
 	future::Future,
 	num::NonZeroU64,
 	pin::Pin,
@@ -267,6 +269,48 @@ impl DbCache for ClearableCache {
 		loader: CacheLoader,
 	) -> Result<CacheFetch, slatedb::Error> {
 		self.inner().fetch_stats(key, loader).await
+	}
+}
+
+struct SstCacheEviction {
+	reader: SstReader,
+	cache: Arc<ClearableCache>,
+	cache_id: u64,
+	clock: Arc<dyn Clock>,
+}
+
+#[async_trait::async_trait]
+impl GcFilter for SstCacheEviction {
+	async fn filter(&self, candidates: HashSet<ObjectMetadata>) -> HashSet<ObjectMetadata> {
+		use futures_util::{StreamExt, stream::FuturesUnordered};
+
+		let evict = async {
+			let mut jobs = FuturesUnordered::new();
+			for object in &candidates {
+				if jobs.len() == 8 {
+					jobs.next().await;
+				}
+				jobs.push(async move {
+					let name = object.location.filename().unwrap_or_default();
+					if let Some(id) = name.strip_suffix(".sst").and_then(|name| name.parse().ok())
+						&& let Ok(sst) = self.reader.open(id).await
+						&& let Ok(index) = sst.index().await
+					{
+						for (offset, _) in index.iter() {
+							// CachedKey's versioned representation includes the database scope.
+							let value = serde_json::json!({ "V3": [self.cache_id, id, offset] });
+							if let Ok(key) = serde_json::from_value(value) {
+								self.cache.remove(&key).await;
+							}
+						}
+					}
+				});
+			}
+			while jobs.next().await.is_some() {}
+		};
+		// A failed lookup must not hold up SlateDB's deletion pass.
+		let _ = crate::timeout(&*self.clock, Duration::from_secs(2), evict).await;
+		candidates
 	}
 }
 
@@ -552,14 +596,29 @@ impl SlateDbFactory for ProductionSlateDbFactory {
 					}
 					builder
 				});
-			let mut builder = slatedb::Db::builder(path, self.db_store.clone())
+			let gc_options = settings.garbage_collector_options.clone();
+			let mut builder = slatedb::Db::builder(path.clone(), self.db_store.clone())
 				.with_system_clock(Arc::new(SlateClock(self.env.clock())))
 				.with_seed(seed)
 				.with_settings(settings)
 				.with_leadership_epoch(epoch)
 				.with_block_cache_policy(policy.block_cache);
 			if let Some(cache) = &self.cache {
-				builder = builder.with_db_cache(cache.cache.clone(), cache.next_db_cache_id());
+				let cache_id = cache.next_db_cache_id();
+				builder = builder.with_db_cache(cache.cache.clone(), cache_id);
+				if let Some(options) = gc_options
+					&& options.compacted_options.is_some_and(|gc| !gc.dry_run)
+				{
+					let gc = GarbageCollectorBuilder::new(path.clone(), self.db_store.clone())
+						.with_options(options)
+						.with_gc_filter(Arc::new(SstCacheEviction {
+							reader: SstReader::new(path, self.store.clone(), None, None),
+							cache: cache.block.clone(),
+							cache_id,
+							clock: self.env.clock(),
+						}));
+					builder = builder.with_gc_builder(gc);
+				}
 			}
 			if let Some(size) = policy.sst_block_size {
 				builder = builder.with_sst_block_size(size);

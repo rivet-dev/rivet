@@ -17,6 +17,33 @@ use std::{
 };
 
 lazy_static::lazy_static! {
+	pub(crate) static ref STARTUP_READINESS_CHECKS_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("depot_startup_readiness_checks_total", "Completed startup tablet checks by Depot reply or local error."),
+		&["result"], *rivet_metrics::REGISTRY
+	).unwrap();
+	pub(crate) static ref STARTUP_READINESS_ROUNDS_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new("depot_startup_readiness_rounds_total", "Startup readiness rounds by result, including failures before any tablet could reply."),
+		&["result"], *rivet_metrics::REGISTRY
+	).unwrap();
+	pub(crate) static ref STARTUP_READINESS_BLOCKING_TABLETS: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("depot_startup_readiness_blocking_tablets", "Unconfirmed tablets in the latest finished batch of startup checks."),
+		*rivet_metrics::REGISTRY
+	).unwrap();
+	pub(crate) static ref STARTUP_READINESS_BLOCKING_VOLUMES: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("depot_startup_readiness_blocking_volumes", "Blocker volumes reported by NotReady replies in the latest finished batch. Tablets without a NotReady reply contribute no known volume count."),
+		*rivet_metrics::REGISTRY
+	).unwrap();
+	pub(crate) static ref STARTUP_READINESS_WAIT_SECONDS: IntGauge = register_int_gauge_with_registry!(
+		Opts::new("depot_startup_readiness_wait_seconds", "Elapsed real seconds at the latest startup readiness round, or zero outside startup."),
+		*rivet_metrics::REGISTRY
+	).unwrap();
+	pub(crate) static ref STARTUP_READINESS_DURATION_SECONDS: Histogram = register_histogram_with_registry!(
+		"depot_startup_readiness_duration_seconds", "Real time from the start of the readiness task to publication of storage readiness.",
+		rivet_metrics::LIFETIME_BUCKETS.to_vec(), *rivet_metrics::REGISTRY
+	).unwrap();
+}
+
+lazy_static::lazy_static! {
 	pub(crate) static ref READ_SESSIONS: IntGauge = register_int_gauge_with_registry!(Opts::new("depot_filesystem_read_sessions", "Filesystem read sessions open across the tablets this process maintains."), *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref READ_SESSION_ROWS: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_tablet_filesystem_read_rows_total", "Rows tablet maintainer read sessions returned, by snapshot: cold when the session's position was already in cold, so every row came from SSTs, or includes_applied when its snapshot also held applied rows still in the memtable."), &["snapshot"], *rivet_metrics::REGISTRY).unwrap();
 	pub(crate) static ref READ_SESSION_BYTES: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("depot_tablet_filesystem_read_bytes_total", "Value bytes tablet maintainer read sessions returned, by the same snapshot label as depot_tablet_filesystem_read_rows_total."), &["snapshot"], *rivet_metrics::REGISTRY).unwrap();

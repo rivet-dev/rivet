@@ -205,9 +205,12 @@ export type LongTimeoutHandle = { abort: () => void };
  *
  * This is specifically for Cloudflare Workers. Their implementation of Promise.withResolvers does not work correctly.
  *
+ * `onReject` runs on every rejection, so a promise given one never reports as unhandled. Omit it when the
+ * caller awaits the promise and handles its rejection.
+ *
  * @experimental
  */
-export function promiseWithResolvers<T>(onReject: (reason?: any) => void): {
+export function promiseWithResolvers<T>(onReject?: (reason?: any) => void): {
 	promise: Promise<T>;
 	resolve: (value: T | PromiseLike<T>) => void;
 	reject: (reason?: any) => void;
@@ -218,7 +221,9 @@ export function promiseWithResolvers<T>(onReject: (reason?: any) => void): {
 		resolve = res;
 		reject = rej;
 	});
-	promise.catch(onReject);
+	if (onReject) {
+		promise.catch(onReject);
+	}
 	return { promise, resolve, reject };
 }
 

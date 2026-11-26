@@ -51,9 +51,20 @@ pub(crate) fn expected_epoch(message: &p::ToRivet) -> Option<u64> {
 
 /// The epoch a request may run as: the one this connection owns, and only when the
 /// request expects that same epoch.
-fn admitted_epoch(owned: Option<u32>, message: &p::ToRivet) -> Option<u32> {
-	let expected = expected_epoch(message);
-	owned.filter(|epoch| expected.is_none_or(|expected| expected == u64::from(*epoch)))
+fn admitted_epoch(owned: Option<u32>, expected: u64) -> Option<u32> {
+	owned.filter(|epoch| expected == u64::from(*epoch))
+}
+
+/// Rejects untagged SQLite requests before ownership lookup or storage dispatch.
+pub(crate) fn missing_generation_reply(message: &p::ToRivet) -> Option<p::ToEnvoy> {
+	if expected_epoch(message).is_some() {
+		return None;
+	}
+	Some(ReplyTo::from_request(message)?.failure(
+		"sqlite",
+		"missing_actor_generation",
+		"SQLite page requests must specify expected_generation".into(),
+	))
 }
 
 /// Runs one SQLite request for the epoch this connection owns. Every failure becomes a
@@ -65,6 +76,9 @@ pub(crate) async fn request(
 	owned: Result<Option<super::OwnedEpoch>>,
 	message: p::ToRivet,
 ) -> Result<p::ToEnvoy> {
+	let Some(expected) = expected_epoch(&message) else {
+		return missing_generation_reply(&message).context("not a SQLite request");
+	};
 	let id = Id::parse(actor_id)?;
 	let owned = match owned {
 		Ok(owned) => owned,
@@ -82,7 +96,7 @@ pub(crate) async fn request(
 	};
 	let bound = owned;
 	let owned = owned.map(|owned| owned.epoch);
-	let Some(epoch) = admitted_epoch(owned, &message) else {
+	let Some(epoch) = admitted_epoch(owned, expected) else {
 		// No epoch owns the actor here, so its session is retired. A request of a stale
 		// epoch only retires sessions older than the one this connection owns.
 		let through = match owned {
@@ -287,6 +301,10 @@ enum RequestKind {
 
 impl ReplyTo {
 	fn of(request: &p::ToRivet) -> Result<Self> {
+		Self::from_request(request).context("not a SQLite request")
+	}
+
+	fn from_request(request: &p::ToRivet) -> Option<Self> {
 		let (kind, request_id) = match request {
 			p::ToRivet::ToRivetSqliteGetPagesRequest(req) => {
 				(RequestKind::GetPages, req.request_id)
@@ -312,9 +330,9 @@ impl ReplyTo {
 			| p::ToRivet::ToRivetStopping
 			| p::ToRivet::ToRivetPong(_)
 			| p::ToRivet::ToRivetKvRequest(_)
-			| p::ToRivet::ToRivetTunnelMessage(_) => anyhow::bail!("not a SQLite request"),
+			| p::ToRivet::ToRivetTunnelMessage(_) => return None,
 		};
-		Ok(Self { kind, request_id })
+		Some(Self { kind, request_id })
 	}
 
 	/// The request-scoped error reply.

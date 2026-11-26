@@ -621,4 +621,4 @@ jobs:
         if: needs.context.outputs.trigger == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm --filter=publish exec tsx src/ci/bin.ts gh-release --version ${{ needs.context.outputs.version }}
+        run: pnpm --filter=publish exec tsx src/ci/bin.ts gh-release --version ${{ needs.context.outputs.version }} --latest ${{ needs.context.outputs.latest }}

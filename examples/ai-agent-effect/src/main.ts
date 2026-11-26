@@ -2,8 +2,8 @@ import { NodeRuntime } from "@effect/platform-node";
 import { Client, Registry } from "@rivetkit/effect";
 import { Layer } from "effect";
 import { AgentLive } from "./actors/agent/live.ts";
-import { TelemetryLayer } from "./telemetry.ts";
 import { OpenAiModelLayer } from "./model.ts";
+import { TelemetryLayer } from "./telemetry.ts";
 
 const endpoint = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 
@@ -15,11 +15,14 @@ const ActorsLayer = AgentLive.pipe(
 	Layer.provide(Client.layer({ endpoint })),
 );
 
-// Engine config defaults to spawning a local rivet-engine process and
-// listening on http://127.0.0.1:6420 (override via RIVET_ENDPOINT to
-// point at a remote engine). For dev builds without a packaged engine,
-// set RIVET_ENGINE_BINARY to the path of a `cargo build` binary, e.g.:
-//   RIVET_ENGINE_BINARY=$(pwd)/target/debug/rivet-engine pnpm start
+/**
+ * With no `RIVET_ENDPOINT`, RivetKit spawns a local rivet-engine process on
+ * http://127.0.0.1:6420 when `RIVET_RUN_ENGINE=1` is set, as `pnpm dev` and
+ * `pnpm start` do, or when `NODE_ENV` is not `production`. To use an engine
+ * that already runs, set `RIVET_ENDPOINT` and do not set `RIVET_RUN_ENGINE`.
+ * `RIVET_ENGINE_BINARY` is the path of the engine binary to spawn, for
+ * example a `cargo build` binary.
+ */
 const MainLayer = Registry.serve(ActorsLayer).pipe(
 	Layer.provide(Registry.layer()),
 	Layer.provide(TelemetryLayer),
@@ -27,11 +30,3 @@ const MainLayer = Registry.serve(ActorsLayer).pipe(
 
 // Keeps the layer alive. Tears down on SIGINT/SIGTERM.
 Layer.launch(MainLayer).pipe(NodeRuntime.runMain);
-
-// Or create a web handler, which can be used in serverless environments.
-export const { handler, dispose } = Registry.toWebHandler(
-	ActorsLayer.pipe(
-		Layer.provideMerge(Registry.layer()),
-		Layer.provide(TelemetryLayer),
-	),
-);

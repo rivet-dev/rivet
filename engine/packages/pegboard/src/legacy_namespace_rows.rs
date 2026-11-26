@@ -1,9 +1,8 @@
 //! Legacy: the pass that moves every legacy namespace row of the catalog into its namespace
 //! volume. The legacy behavior kept a namespace created by 3.0.0 as a record row of the catalog,
 //! moved into its own volume only when something read it; new behavior also moves every row no
-//! request reads, so 3.1 can delete the rows, the legacy listing and the row handlers. Taken once
+//! request reads, so every namespace ends up in its volume without waiting for a read. Taken once
 //! every storage worker reads namespace volumes, by the one storage worker elected below.
-//! Removed in 3.1 with the backfill.
 //!
 //! The pass walks the record rows in pages through the legacy list command and moves each row
 //! through the same move the read path uses, so a row the read path moved first is simply gone
@@ -34,15 +33,15 @@ use rivet_env::Clock;
 use std::{collections::BTreeMap, future::Future, time::Duration};
 
 /// Legacy: the rows one legacy list command answers per page. The legacy list caps a page at
-/// this many. Removed in 3.1 with the backfill.
+/// this many.
 const LEGACY_PAGE_LIMIT: u32 = 100;
 
 /// Legacy: the consecutive walks that find one row or refuse one page after which the pass
-/// warns, and every this many after that. Removed in 3.1 with the backfill.
+/// warns, and every this many after that.
 const LEGACY_REFUSAL_WARN_EVERY: u32 = 10;
 
 /// Legacy: the waits and deadlines of the pass, from the backfill and namespace job
-/// configuration. Removed in 3.1 with the backfill.
+/// configuration.
 #[derive(Clone, Debug)]
 pub(crate) struct LegacyRowPassPolicy {
 	/// The wait between the two fleet checks that start the pass.
@@ -68,7 +67,6 @@ impl LegacyRowPassPolicy {
 }
 
 /// Legacy: one page of legacy catalog rows and the cursor of the next, `None` at the end.
-/// Removed in 3.1 with the backfill.
 pub(crate) struct LegacyRowPage {
 	pub rows: Vec<(String, wire::NamespaceRecord)>,
 	pub cursor: Option<String>,
@@ -76,7 +74,7 @@ pub(crate) struct LegacyRowPage {
 
 /// Legacy: what the pass reads and sends. [`LegacyCatalogRows`] is the production one, over the
 /// topology view and Depot commands; the catalog unit tests drive the pass over the catalog's
-/// own handlers. Removed in 3.1 with the backfill.
+/// own handlers.
 pub(crate) trait LegacyRowPassOps: Send + Sync {
 	/// Whether the pass may walk now: every storage worker reads namespace volumes and this
 	/// worker is the one elected to walk.
@@ -100,7 +98,7 @@ pub(crate) trait LegacyRowPassOps: Send + Sync {
 	) -> impl Future<Output = Result<()>> + Send;
 }
 
-/// Legacy: how one walk over the rows ended. Removed in 3.1 with the backfill.
+/// Legacy: how one walk over the rows ended.
 #[derive(Debug, PartialEq, Eq)]
 enum LegacyWalkEnd {
 	/// The walk found no row: every namespace lives on its volume.
@@ -118,7 +116,7 @@ enum LegacyWalkEnd {
 }
 
 /// Legacy: what one find counts toward the warning: a row by name, or a page by the cursor it
-/// was listed after. Removed in 3.1 with the backfill.
+/// was listed after.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum LegacyFind {
 	Row(String),
@@ -128,7 +126,7 @@ enum LegacyFind {
 /// Legacy: how many walks in a row found each row or refused each page, for the warning.
 /// `previous` holds the finds of the last finished walk and `current` those of the walk in
 /// progress, so a row moved for good drops out after one walk. Both are bounded by the legacy
-/// rows the catalog holds, which only 3.0.0 binaries write. Removed in 3.1 with the backfill.
+/// rows the catalog holds, which only 3.0.0 binaries write.
 #[derive(Default)]
 struct LegacyFinds {
 	previous: BTreeMap<LegacyFind, u32>,
@@ -179,7 +177,6 @@ impl LegacyFinds {
 
 /// Legacy: runs the pass until a full walk finds no legacy row, as the module describes, and
 /// answers how many rows it moved. Fails only when the clock or the topology view fails.
-/// Removed in 3.1 with the backfill.
 pub(crate) async fn legacy_run_pass(
 	ops: &impl LegacyRowPassOps,
 	clock: &dyn Clock,
@@ -229,7 +226,6 @@ pub(crate) async fn legacy_run_pass(
 }
 
 /// Legacy: one walk over every row from the start, moving each, as the module describes.
-/// Removed in 3.1 with the backfill.
 async fn legacy_walk(
 	ops: &impl LegacyRowPassOps,
 	clock: &dyn Clock,
@@ -314,8 +310,7 @@ async fn legacy_walk(
 }
 
 /// Legacy: the production [`LegacyRowPassOps`]: the fleet gate and election from this process's
-/// topology view, and the catalog's legacy list and the read path's move through Depot. Removed
-/// in 3.1 with the backfill.
+/// topology view, and the catalog's legacy list and the read path's move through Depot.
 pub(crate) struct LegacyCatalogRows {
 	pub ctx: EngineContext,
 }
@@ -342,7 +337,6 @@ impl LegacyCatalogRows {
 }
 
 /// Legacy: whether `own` walks: its lease admits work and it is the lowest of `storage_workers`.
-/// Removed in 3.1 with the backfill.
 fn legacy_elected<'a>(
 	own: &rivet_topology::worker::WorkerId,
 	admitted: bool,
@@ -381,7 +375,7 @@ impl LegacyRowPassOps for LegacyCatalogRows {
 
 /// Legacy: runs the pass for this process's lifetime: once a pass finished, it runs again when
 /// the fleet or the election changes and comes back, since a storage worker of the previous
-/// release that joins again can write new rows. Removed in 3.1 with the backfill.
+/// release that joins again can write new rows.
 pub(crate) async fn legacy_run(ctx: EngineContext) -> Result<()> {
 	let policy = LegacyRowPassPolicy::from_config(&ctx);
 	let clock = ctx.env().clock();

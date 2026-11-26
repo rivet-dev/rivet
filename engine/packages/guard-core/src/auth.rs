@@ -100,6 +100,15 @@ pub fn http_rejection(error: &anyhow::Error) -> http::Response<Vec<u8>> {
 	crate::errors::http_response(error)
 }
 
+/// Whether `error` rejects a presented token itself (`auth.invalid_token` or
+/// `auth.token_expired`), as opposed to a failure to check it.
+pub fn is_token_rejection(error: &anyhow::Error) -> bool {
+	let Some(error) = error.downcast_ref::<RivetError>() else {
+		return false;
+	};
+	error.group() == "auth" && matches!(error.code(), "invalid_token" | "token_expired")
+}
+
 /// The WebSocket close reason for a request [`admit_admin_or_insecure`] refused: the error's `<group>.<code>`.
 pub fn close_reason(error: &anyhow::Error) -> String {
 	let error = RivetError::extract(error);

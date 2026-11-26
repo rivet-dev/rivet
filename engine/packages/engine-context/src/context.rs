@@ -114,17 +114,16 @@ pub(crate) struct EngineContextInner {
 	group_names: scc::HashMap<[u8; 16], String>,
 	/// Legacy: the namespace and actor name pairs this process recorded for the backfill after a
 	/// legacy fallback read, so each costs one write per process. Bounded by the caller's
-	/// configured capacity. Removed in 3.1 with the backfill.
+	/// configured capacity.
 	legacy_backfill_names: scc::HashSet<(String, String)>,
 	/// Legacy: the backfill name record writes this process runs in the background, bounded by
-	/// the caller's configured cap. Removed in 3.1 with the backfill.
+	/// the caller's configured cap.
 	legacy_backfill_name_writes: std::sync::atomic::AtomicUsize,
 	/// Legacy: whether the warning that the name record writes reached their cap was logged and
 	/// the writes have not drained to half the cap since, so sustained pressure warns once.
-	/// Removed in 3.1 with the backfill.
 	legacy_backfill_name_writes_warned: CapWarning,
 	/// Legacy: owns the backfill name record writes, which `EngineBackground::shutdown` cancels
-	/// and joins. Removed in 3.1 with the backfill.
+	/// and joins.
 	legacy_backfill_name_tasks: rivet_env::TaskScope,
 	/// The background namespace status re-reads this process runs, bounded by the caller's
 	/// configured cap; see [`EngineContext::begin_namespace_refresh`].
@@ -155,8 +154,7 @@ pub(crate) struct EngineContextInner {
 	pub(crate) filesystem_cache: Arc<depot_client::filesystem::CacheBudget>,
 }
 
-/// Legacy: whether a namespace's backfill is done, so it records no more actor names. Removed in
-/// 3.1 with the backfill.
+/// Legacy: whether a namespace's backfill is done, so it records no more actor names.
 fn legacy_backfill_done(state: &ns::NamespaceState) -> bool {
 	match state.backfill {
 		ns::NamespaceBackfill::NamespaceBackfillDone(_) => true,
@@ -165,8 +163,7 @@ fn legacy_backfill_done(state: &ns::NamespaceState) -> bool {
 	}
 }
 
-/// Legacy: what [`EngineContext::legacy_mark_backfill_name`] did. Removed in 3.1 with the
-/// backfill.
+/// Legacy: what [`EngineContext::legacy_mark_backfill_name`] did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LegacyNameMark {
 	/// Newly marked: the caller records the name.
@@ -182,7 +179,7 @@ pub enum LegacyNameMark {
 }
 
 /// Legacy: one of the `capacity` slots of [`EngineContext::legacy_begin_name_write`], freed
-/// when dropped. Removed in 3.1 with the backfill.
+/// when dropped.
 pub struct LegacyNameWrite {
 	ctx: EngineContext,
 	capacity: usize,
@@ -324,7 +321,7 @@ pub(crate) async fn end_settle_in(
 /// a name again after the finish pruned its marks. The done check and the mark run under the
 /// namespace's cache entry, and [`EngineContext::remember_namespace`] prunes a finished
 /// namespace's marks only after it replaced that entry, so a mark is either pruned or refused,
-/// never left behind. Removed in 3.1 with the backfill.
+/// never left behind.
 pub(crate) async fn legacy_mark_name_in(
 	namespaces: &scc::HashMap<String, CachedNamespace>,
 	names: &scc::HashSet<(String, String)>,
@@ -546,7 +543,7 @@ impl EngineContext {
 	/// Legacy: marks `namespace` and `name` recorded for the backfill. Answers `Recorded` when
 	/// they already were, `Full` when `capacity` pairs are held, and `NamespaceDone` when this
 	/// process caches the namespace's backfill as done; only `Marked` asks the caller to record
-	/// the name. Removed in 3.1 with the backfill.
+	/// the name.
 	pub async fn legacy_mark_backfill_name(
 		&self,
 		namespace: &str,
@@ -564,7 +561,7 @@ impl EngineContext {
 	}
 
 	/// Legacy: takes one of `capacity` slots for a backfill name record write, or `None` when
-	/// every slot is taken. Removed in 3.1 with the backfill.
+	/// every slot is taken.
 	pub fn legacy_begin_name_write(&self, capacity: usize) -> Option<LegacyNameWrite> {
 		let taken = self.0.legacy_backfill_name_writes.try_update(
 			std::sync::atomic::Ordering::AcqRel,
@@ -586,20 +583,20 @@ impl EngineContext {
 	/// Legacy: whether the write that took a slot with `in_flight` writes running, of
 	/// `capacity`, should warn that the writes reached their cap: once when they reach it, and
 	/// again only after a finishing write left them drained to half of it (see
-	/// [`CapWarning`]). Removed in 3.1 with the backfill.
+	/// [`CapWarning`]).
 	pub fn legacy_name_writes_reached_cap(&self, in_flight: usize, capacity: usize) -> bool {
 		self.0
 			.legacy_backfill_name_writes_warned
 			.reached(in_flight, capacity)
 	}
 
-	/// Legacy: how many backfill name record writes run now. Removed in 3.1 with the backfill.
+	/// Legacy: how many backfill name record writes run now.
 	pub fn legacy_name_writes_in_flight(&self) -> usize {
 		self.0.legacy_backfill_name_writes.load(Ordering::Acquire)
 	}
 
 	/// Legacy: runs a backfill name record write in the scope this context owns, which the
-	/// process's background shutdown cancels and joins. Removed in 3.1 with the backfill.
+	/// process's background shutdown cancels and joins.
 	pub fn legacy_spawn_name_write(
 		&self,
 		write: impl std::future::Future<Output = ()> + Send + 'static,
@@ -608,14 +605,12 @@ impl EngineContext {
 	}
 
 	/// Legacy: forgets a mark whose record write failed, so the next read records it again.
-	/// Removed in 3.1 with the backfill.
 	pub async fn legacy_unmark_backfill_name(&self, namespace: &str, name: &str) {
 		let pair = (namespace.to_owned(), name.to_owned());
 		self.0.legacy_backfill_names.remove_async(&pair).await;
 	}
 
-	/// Legacy: how many namespace and actor name pairs this process holds as recorded. Removed in
-	/// 3.1 with the backfill.
+	/// Legacy: how many namespace and actor name pairs this process holds as recorded.
 	pub fn legacy_backfill_names_held(&self) -> usize {
 		self.0.legacy_backfill_names.len()
 	}
@@ -731,7 +726,7 @@ impl EngineContext {
 		// other namespaces. Pruned after the entry is replaced and released: a mark checks the
 		// entry under its lock, so once the entry says done no mark lands, and every mark that
 		// landed before is in the set the prune walks. The walk holds no namespace entry, so
-		// lookups of other namespaces never wait on it. Removed in 3.1 with the backfill.
+		// lookups of other namespaces never wait on it.
 		if done && !was_done {
 			self.0
 				.legacy_backfill_names
@@ -953,7 +948,7 @@ pub struct EngineBackground(EngineContext);
 impl EngineBackground {
 	pub async fn shutdown(self) -> Result<()> {
 		// Legacy: backfill name record writes are best effort, so they are cancelled, not
-		// awaited to completion. Removed in 3.1 with the backfill.
+		// awaited to completion.
 		self.0.0.legacy_backfill_name_tasks.shutdown().await;
 		// Namespace status re-reads only refresh a cache, so they are cancelled too.
 		self.0.0.namespace_refresh_tasks.shutdown().await;

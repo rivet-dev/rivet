@@ -94,7 +94,7 @@ impl RegistryDispatcher {
 		let response = match route {
 			RegistryHttpRoute::Framework(route) => {
 				let response = self.handle_framework_fetch(&instance, request, route).await;
-				rearm_sleep_after_request(instance.ctx.clone());
+				instance.ctx.reset_sleep_timer();
 				response
 			}
 			RegistryHttpRoute::UserRawRequest => {
@@ -141,7 +141,7 @@ impl RegistryDispatcher {
 
 		match reply {
 			Ok(response) => {
-				rearm_sleep_after_request(instance.ctx.clone());
+				instance.ctx.reset_sleep_timer();
 				let mut response = build_envoy_response(response, &request_method)?;
 				// A streaming body outlives this call, so it cancels the token
 				// when it is dropped. Otherwise the guard cancels it on return.
@@ -158,7 +158,7 @@ impl RegistryDispatcher {
 					?error,
 					"actor request callback failed"
 				);
-				rearm_sleep_after_request(instance.ctx.clone());
+				instance.ctx.reset_sleep_timer();
 				framework_anyhow_error_response_with_actor(
 					encoding,
 					error,
@@ -600,14 +600,6 @@ fn method_not_allowed_response(
 		.build(),
 		actor,
 	)
-}
-
-fn rearm_sleep_after_request(ctx: ActorContext) {
-	let sleep_ctx = ctx.clone();
-	ctx.wait_until(async move {
-		sleep_ctx.wait_for_http_requests_idle().await;
-		sleep_ctx.reset_sleep_timer();
-	});
 }
 
 pub(super) fn single_path_segment<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {

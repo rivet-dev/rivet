@@ -20,7 +20,7 @@
 //! finds no in-flight entry at the legacy placement, then `Running`, one `MovePage` at a time under `BackfillRetry`, accepting
 //! only the report of the page's current attempt, and `Done` once every actor from before groups
 //! is moved into the group or given up on, every moved actor's old copy is destroyed and the
-//! legacy index buckets are deleted. Removed in 3.1 with the backfill.
+//! legacy index buckets are deleted.
 
 use anyhow::{Result, ensure};
 use depot_types::keys::partition::NamespaceGroupKey;
@@ -172,7 +172,7 @@ pub enum Event {
 	///
 	/// Legacy: the executor reports a `MovePage` that ran, with the cursor and attempt it was
 	/// sent with, the actors it moved, the actor it gave up on if any, and where the walk goes
-	/// next. Removed in 3.1 with the backfill.
+	/// next.
 	///
 	/// **State**
 	///
@@ -194,7 +194,7 @@ pub enum Event {
 	/// unprefixed volume, and a step command reports it: the actor API's destroy sends it, again
 	/// on every retry, even once the actor's volume is gone, and the actor's own destroy effect
 	/// sends it when its process's cached standing lists the actor, so a destroy through the
-	/// envoy clears the entry too. Removed in 3.1 with the backfill.
+	/// envoy clears the entry too.
 	///
 	/// **State**
 	///
@@ -213,8 +213,7 @@ pub enum Event {
 	///
 	/// Legacy: the executor reports a `MovePage` that failed at its first actor without giving
 	/// up on it, with the cursor, attempt and mover it was sent with and the actor's name and id.
-	/// Sent for every such failure; a page that failed anywhere else reports nothing. Removed in
-	/// 3.1 with the backfill.
+	/// Sent for every such failure; a page that failed anywhere else reports nothing.
 	///
 	/// **State**
 	///
@@ -231,8 +230,7 @@ pub enum Event {
 	/// **When**
 	///
 	/// Legacy: the executor reports a `LegacyReadMigratorHolds`: whether the V2 migrator holds an
-	/// in-flight entry that may place an actor at this namespace's legacy placement. Removed in
-	/// 3.1 with the backfill.
+	/// in-flight entry that may place an actor at this namespace's legacy placement.
 	///
 	/// **State**
 	///
@@ -250,7 +248,7 @@ pub enum Event {
 	///
 	/// Legacy: the V2 migrator deleted in-flight entries placed at the legacy placement and
 	/// notifies the target namespace, best effort; a lost notification is covered by the pending
-	/// backfill's `BackfillRetry`. Removed in 3.1 with the backfill.
+	/// backfill's `BackfillRetry`.
 	///
 	/// **State**
 	///
@@ -293,17 +291,16 @@ pub struct Policy {
 	/// The most creates waiting at once for the namespace's group create or fork.
 	pub start_waiters_capacity: usize,
 	/// Legacy: the wait before a pending backfill checks the fleet, after the move and between
-	/// checks. Removed in 3.1 with the backfill.
+	/// checks.
 	pub backfill_start_delay_ms: u64,
 	/// Legacy: how long one backfill page runs before `BackfillRetry` sends it again: the
 	/// configured page timeout, raised to cover an actor's stop as
-	/// `legacy_backfill::page_timeout_ms` does. Removed in 3.1 with the backfill.
+	/// `legacy_backfill::page_timeout_ms` does.
 	pub backfill_page_timeout_ms: u64,
 	/// Legacy: the sends of one page after which a page gives up on an actor it cannot move.
-	/// Removed in 3.1 with the backfill.
 	pub backfill_max_actor_attempts: u32,
 	/// Legacy: the actors a running backfill may give up on; at it, a page that reaches its
-	/// attempts fails instead. Removed in 3.1 with the backfill.
+	/// attempts fails instead.
 	pub backfill_max_skipped: usize,
 }
 
@@ -332,7 +329,7 @@ pub struct Preparation {
 	pub index_bucket_count: u64,
 	/// Legacy: whether every storage worker reads namespace volumes, so no binary from before
 	/// groups is known to run and a pending backfill may start. Read from the in-memory
-	/// topology view before the transition. Removed in 3.1 with the backfill.
+	/// topology view before the transition.
 	pub backfill_fleet_ready: bool,
 }
 
@@ -407,7 +404,7 @@ pub enum Effect {
 	/// **When**
 	///
 	/// Legacy: a pending backfill starts, a page reports a next page, and every
-	/// `BackfillRetry` while the backfill is `Running`. Removed in 3.1 with the backfill.
+	/// `BackfillRetry` while the backfill is `Running`.
 	///
 	/// **Executor**
 	///
@@ -442,7 +439,7 @@ pub enum Effect {
 	///
 	/// Legacy: the backfill enters a phase: `Pending` at a legacy move, `Running` at its start,
 	/// `Done` at its end. Executed after the transition commits, so a failed commit counts
-	/// nothing. Removed in 3.1 with the backfill.
+	/// nothing.
 	///
 	/// **Executor**
 	///
@@ -451,12 +448,12 @@ pub enum Effect {
 	/// **When**
 	///
 	/// Legacy: an accepted `BackfillOutcome` reports an actor the page gave up on. Executed after
-	/// the transition commits. Removed in 3.1 with the backfill.
+	/// the transition commits.
 	///
 	/// **Executor**
 	///
 	/// Logs an error naming the namespace, the actor's name and its id, for an operator to
-	/// resolve before 3.1, and counts it in `pegboard_backfill_skipped_total`. Sets
+	/// resolve, and counts it in `pegboard_backfill_skipped_total`. Sets
 	/// `pegboard_backfill_skipped_listed` to `listed`, the actors the backfill now carries, and
 	/// its capacity gauge to `capacity`, and warns from 90% of it. Returns nothing.
 	ObserveBackfillSkipped {
@@ -469,7 +466,7 @@ pub enum Effect {
 	/// Legacy: an accepted `BackfillPageFailed` reports the page that reached
 	/// `backfill_max_actor_attempts` while the backfill carried `backfill_max_skipped` skipped
 	/// actors, so it was sent without a give-up and failed at `actor_id`, listed under
-	/// `actor_name`. Executed after the transition commits. Removed in 3.1 with the backfill.
+	/// `actor_name`. Executed after the transition commits.
 	///
 	/// **Executor**
 	///
@@ -487,7 +484,7 @@ pub enum Effect {
 	///
 	/// Legacy: the backfill's list of skipped actors changed without a skip: the backfill
 	/// reached `Done`, carrying its `Done` list, or a destroyed skipped actor left the list.
-	/// Executed after the transition commits. Removed in 3.1 with the backfill.
+	/// Executed after the transition commits.
 	///
 	/// **Executor**
 	///
@@ -498,7 +495,7 @@ pub enum Effect {
 	///
 	/// Legacy: a pending backfill found the fleet ready on two checks one start delay apart, at
 	/// that `BackfillRetry` and every later one while it stays pending, and on each
-	/// `LegacyMigratorSettled`. Removed in 3.1 with the backfill.
+	/// `LegacyMigratorSettled`.
 	///
 	/// **Executor**
 	///
@@ -510,7 +507,7 @@ pub enum Effect {
 	LegacyReadMigratorHolds,
 }
 
-/// Legacy: a backfill phase, as `ObserveBackfill` counts it. Removed in 3.1 with the backfill.
+/// Legacy: a backfill phase, as `ObserveBackfill` counts it.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BackfillPhase {
 	Pending,
@@ -1012,7 +1009,7 @@ fn create_outcome(
 			// workers finish first. Its move is the first check: a namespace moves only once the
 			// fleet reads namespace volumes, and this outcome records whether it still does in
 			// the timer it arms, not in `fleet_ready_seen`, so no report or notification before
-			// the timer can start the backfill. Removed in 3.1 with the backfill.
+			// the timer can start the backfill.
 			if matches!(
 				namespace.backfill,
 				ns::NamespaceBackfill::NamespaceBackfillPending(_)
@@ -1319,8 +1316,7 @@ fn index_retry(
 
 /// Legacy: the `BackfillRetry` attempt of the timer a moved namespace's group create outcome
 /// arms when it found the fleet reading namespace volumes, which counts as the backfill's first
-/// fleet check. A pending backfill's checks otherwise arm attempt 0. Removed in 3.1 with the
-/// backfill.
+/// fleet check. A pending backfill's checks otherwise arm attempt 0.
 const LEGACY_MOVE_FOUND_FLEET_READY: u32 = 1;
 
 /// Legacy: `BackfillRetry` fired. A pending backfill starts once two checks one start delay
@@ -1332,7 +1328,7 @@ const LEGACY_MOVE_FOUND_FLEET_READY: u32 = 1;
 /// false clears it, and a check that finds both true reads the migrator's state, with this timer
 /// re-armed one start delay later as the read's deadline and the wait's. A running backfill sends its current page again with the next attempt, giving up on
 /// the page's first actor once the attempts reach `backfill_max_actor_attempts`; a timer of an
-/// earlier attempt, or of a finished backfill, changes nothing. Removed in 3.1 with the backfill.
+/// earlier attempt, or of a finished backfill, changes nothing.
 fn legacy_backfill_retry(
 	state: &mut State,
 	attempt: u32,
@@ -1396,7 +1392,7 @@ fn legacy_backfill_retry(
 
 /// Legacy: whether a pending backfill waits only for the V2 migrator: the fleet was found ready on
 /// two checks one start delay apart, and the namespace is live and the fleet still reads
-/// namespace volumes now. Removed in 3.1 with the backfill.
+/// namespace volumes now.
 fn legacy_awaits_migrator(state: &State, preparation: &Preparation) -> bool {
 	let Some(namespace) = &state.0 else {
 		return false;
@@ -1420,7 +1416,7 @@ fn legacy_awaits_migrator(state: &State, preparation: &Preparation) -> bool {
 /// back to the legacy placement and the actor is lost. The migrator finishes such an entry only
 /// once the actor's index entry is written, so `held: false` means every actor it activated here
 /// is listed. New entries are placed in the group once the namespace has one, so the entries
-/// waited for only drain. Removed in 3.1 with the backfill.
+/// waited for only drain.
 fn legacy_migrator_holds(
 	state: &mut State,
 	held: bool,
@@ -1469,7 +1465,7 @@ fn legacy_migrator_holds(
 /// Legacy: a backfill page reported. Only a report of the current send, by cursor, attempt and
 /// mover token, counts:
 /// it records an actor the page gave up on, then moves the walk to the next page, or finishes the
-/// backfill. Removed in 3.1 with the backfill.
+/// backfill.
 fn legacy_backfill_outcome(
 	state: &mut State,
 	outcome: ns::NamespaceBackfillOutcome,
@@ -1552,7 +1548,7 @@ fn legacy_backfill_outcome(
 /// Legacy: a backfill page failed at its first actor without giving up on it. Only a failure of
 /// the current send, by cursor, attempt and mover token, of a send that refused to give up at the
 /// cap is observed, naming the actor the walk now waits on. Changes no state: the page's
-/// `BackfillRetry` sends it again. Removed in 3.1 with the backfill.
+/// `BackfillRetry` sends it again.
 fn legacy_backfill_page_failed(
 	state: &State,
 	failed: ns::NamespaceBackfillPageFailed,
@@ -1581,20 +1577,19 @@ fn legacy_backfill_page_failed(
 
 /// Legacy: whether the page send of `attempt`, with `skipped` actors already skipped, reached
 /// `backfill_max_actor_attempts` at the `backfill_max_skipped` cap, so it is sent without a
-/// give-up and a failure at its first actor fails it. Removed in 3.1 with the backfill.
+/// give-up and a failure at its first actor fails it.
 fn legacy_give_up_refused(attempt: u32, skipped: usize, policy: &Policy) -> bool {
 	legacy_attempts_reached(attempt, policy) && skipped >= policy.backfill_max_skipped
 }
 
 /// Legacy: whether the page send of `attempt` is the last one allowed before a give-up.
-/// Removed in 3.1 with the backfill.
 fn legacy_attempts_reached(attempt: u32, policy: &Policy) -> bool {
 	attempt.saturating_add(1) >= policy.backfill_max_actor_attempts
 }
 
 /// Legacy: a request destroyed the skipped actor `actor_id`, which leaves the backfill's list:
 /// a finished backfill's list and count, or a running backfill's list, making room below its
-/// cap. Removed in 3.1 with the backfill.
+/// cap.
 fn legacy_skipped_destroyed(state: &mut State, actor_id: &[u8], effects: &mut NamespaceEffects) {
 	let Some(namespace) = &mut state.0 else {
 		return;
@@ -1621,13 +1616,11 @@ fn legacy_skipped_destroyed(state: &mut State, actor_id: &[u8], effects: &mut Na
 
 /// Legacy: the most skipped actors a finished backfill lists, so its record stays bounded; the
 /// count goes on past the list. A skipped actor is one no attempt could move, which is rare.
-/// Removed in 3.1 with the backfill.
 const LEGACY_BACKFILL_DONE_SKIPPED_LISTED: usize = 1_000;
 
 /// Legacy: sends the backfill page at `cursor` under the `BackfillRetry` of `attempt`, passing the
 /// actors in `skipped`, as `mover`; the send that reaches `backfill_max_actor_attempts` gives up
 /// on an actor it cannot move, unless `skipped` holds `backfill_max_skipped` actors already.
-/// Removed in 3.1 with the backfill.
 #[allow(
 	clippy::too_many_arguments,
 	reason = "one field per part of the MovePage effect"

@@ -17,7 +17,6 @@ pub struct ActorVolume {
 /// Legacy: an actor's state volume at its unprefixed key. Volumes created before namespaces had
 /// groups live at unprefixed keys; new behavior puts every volume under its namespace's group
 /// ([`ActorVolume`]). Taken only to read a volume of a namespace whose backfill is not done.
-/// Removed in 3.1 with the backfill.
 #[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKey)]
 #[volume(key = [ACTOR, actor_id], name = ACTOR_STATE, placement = actor_placement(*actor_id))]
 pub struct LegacyActorVolume {
@@ -66,7 +65,7 @@ pub struct ActorDatabaseVolume {
 /// Legacy: an incarnation's database volume at its unprefixed key. Volumes created before
 /// namespaces had groups live at unprefixed keys; new behavior puts every volume under its
 /// namespace's group ([`ActorDatabaseVolume`]). Taken only to read a volume of a namespace whose
-/// backfill is not done. Removed in 3.1 with the backfill.
+/// backfill is not done.
 #[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKey)]
 #[volume(
 	key = [ACTOR, actor_id, create_unix_ms],
@@ -113,7 +112,7 @@ pub struct ActorIndexVolume {
 /// Legacy: an index bucket at its unprefixed key, which names its namespace. Buckets created
 /// before namespaces had groups live at unprefixed keys; new behavior puts every bucket under its
 /// namespace's group with no namespace string ([`ActorIndexVolume`]). Taken only to list or read
-/// the buckets of a namespace whose backfill is not done. Removed in 3.1 with the backfill.
+/// the buckets of a namespace whose backfill is not done.
 #[derive(Clone, Debug, PartialEq, Eq, rivet_keys::VolumeKey)]
 #[volume(key = [ACTOR_INDEX, namespace, name, bucket])]
 pub struct LegacyActorIndexVolume {
@@ -188,8 +187,7 @@ pub fn key_placement(name: &str, key: &str) -> Placement {
 /// hashes the name and key alone ([`key_placement`]), under another domain tag so the two never
 /// meet. Taken only to find an actor not yet moved by its namespace's backfill: a keyed lookup in
 /// a namespace whose backfill is not done, and a namespace without a group, which only exists
-/// while older binaries run and keeps every key in the legacy shape. Removed in 3.1 with the
-/// backfill.
+/// while older binaries run and keeps every key in the legacy shape.
 pub fn legacy_key_placement(namespace: &str, name: &str, key: &str) -> Placement {
 	let mut input = Vec::with_capacity(64 + namespace.len() + name.len() + key.len());
 	input.extend_from_slice(b"rivet.actor.key_placement.v1");
