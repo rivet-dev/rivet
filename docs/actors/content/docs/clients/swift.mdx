@@ -307,6 +307,8 @@ await conn.dispose()
 await client.dispose()
 ```
 
+To give up on an action, cancel the task that calls it. The call throws `CancellationError`. An action still queued while the connection opens or reconnects is never sent. An action already sent can still run on the actor.
+
 ## Low-Level HTTP & WebSocket
 
 For actors that implement `onRequest` or `onWebSocket`, you can call them directly:

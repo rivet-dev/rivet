@@ -59,6 +59,8 @@ use crate::types::{ActorKey, ActorKeySegment, WsMessage, format_actor_key};
 use crate::websocket::WebSocket;
 
 mod actor_connect;
+mod cbor_args;
+mod cbor_payload;
 mod dispatch;
 mod envoy_callbacks;
 pub(crate) use envoy_callbacks::actor_key_from_protocol;
@@ -559,25 +561,6 @@ struct ActorConnectSubscriptionRequest {
 enum ActorConnectToServer {
 	ActionRequest(ActorConnectActionRequest),
 	SubscriptionRequest(ActorConnectSubscriptionRequest),
-}
-
-#[derive(Debug, Deserialize)]
-struct ActorConnectActionRequestJson {
-	id: u64,
-	name: String,
-	args: JsonValue,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(tag = "tag", content = "val")]
-enum ActorConnectToServerJsonBody {
-	ActionRequest(ActorConnectActionRequestJson),
-	SubscriptionRequest(ActorConnectSubscriptionRequest),
-}
-
-#[derive(Debug, Deserialize)]
-struct ActorConnectToServerJsonEnvelope {
-	body: ActorConnectToServerJsonBody,
 }
 
 impl CoreRegistry {

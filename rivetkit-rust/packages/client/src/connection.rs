@@ -20,6 +20,14 @@ use crate::{
 use tracing::debug;
 
 type RpcResponse = Result<to_client::ActionResponse, to_client::Error>;
+
+/// An action call waiting for its reply.
+struct InFlightRpc {
+	tx: oneshot::Sender<RpcResponse>,
+	/// Whether the action went out on the current socket. A reconnect opens a new connection on
+	/// the actor, so a sent action never gets a reply after its socket closes.
+	sent: bool,
+}
 type EventCallback = dyn Fn(Event) + Send + Sync;
 type VoidCallback = dyn Fn() + Send + Sync;
 type ErrorCallback = dyn Fn(&str) + Send + Sync;
@@ -123,7 +131,7 @@ pub struct ActorConnectionInner {
 
 	rpc_counter: AtomicU64,
 	event_subscription_counter: AtomicU64,
-	in_flight_rpcs: SccHashMap<u64, oneshot::Sender<RpcResponse>>,
+	in_flight_rpcs: SccHashMap<u64, InFlightRpc>,
 
 	event_subscriptions: SccHashMap<String, Vec<Arc<EventSubscription>>>,
 	on_open_callbacks: Mutex<Vec<Box<VoidCallback>>>,
@@ -330,6 +338,11 @@ impl ActorConnectionInner {
 			};
 
 			d.disconnect();
+
+			// Fail the actions sent on this socket, because no reply can reach them now. Queued
+			// actions stay queued for the next socket. Holding the driver lock orders this after
+			// every send on this socket.
+			self.in_flight_rpcs.retain_async(|_, rpc| !rpc.sent).await;
 		}
 
 		self.set_status(ConnectionStatus::Disconnected).await;
@@ -366,10 +379,28 @@ impl ActorConnectionInner {
 		// fails to send, which needs the same lock.
 		let queued = std::mem::take(&mut *self.msg_queue.lock().await);
 		for msg in queued {
+			if self.drop_if_abandoned(&msg).await {
+				continue;
+			}
 			// If its in the queue, it isn't ephemeral, so we pass
 			// default SendMsgOpts
 			self.send_msg(msg, SendMsgOpts::default()).await;
 		}
+	}
+
+	/// Removes the in-flight entry of a queued action whose caller dropped its `action` future,
+	/// and returns whether it did. The actor never sees a queued action, so the flush drops it
+	/// instead of running an action nobody waits for.
+	async fn drop_if_abandoned(self: &Arc<Self>, msg: &to_server::ToServer) -> bool {
+		let action_id = match &msg.body {
+			to_server::ToServerBody::ActionRequest(request) => request.id,
+			to_server::ToServerBody::SubscriptionRequest(_) => return false,
+		};
+		let abandoned = self
+			.in_flight_rpcs
+			.remove_if_async(&action_id, |rpc| rpc.tx.is_closed())
+			.await;
+		abandoned.is_some()
 	}
 
 	async fn on_message(self: &Arc<Self>, msg: Arc<to_client::ToClient>) {
@@ -381,11 +412,11 @@ impl ActorConnectionInner {
 			}
 			to_client::ToClientBody::ActionResponse(ar) => {
 				let id = ar.id;
-				let Some((_, tx)) = self.in_flight_rpcs.remove_async(&id).await else {
+				let Some((_, rpc)) = self.in_flight_rpcs.remove_async(&id).await else {
 					debug!("Unexpected response: rpc id not found");
 					return;
 				};
-				if let Err(e) = tx.send(Ok(ar.clone())) {
+				if let Err(e) = rpc.tx.send(Ok(ar.clone())) {
 					debug!("{:?}", e);
 					return;
 				}
@@ -410,11 +441,11 @@ impl ActorConnectionInner {
 			}
 			to_client::ToClientBody::Error(e) => {
 				if let Some(action_id) = e.action_id {
-					let Some((_, tx)) = self.in_flight_rpcs.remove_async(&action_id).await else {
+					let Some((_, rpc)) = self.in_flight_rpcs.remove_async(&action_id).await else {
 						debug!("Unexpected response: rpc id not found");
 						return;
 					};
-					if let Err(e) = tx.send(Err(e.clone())) {
+					if let Err(e) = rpc.tx.send(Err(e.clone())) {
 						debug!("{:?}", e);
 						return;
 					}
@@ -468,6 +499,15 @@ impl ActorConnectionInner {
 				break 'send_immediately;
 			};
 
+			match &msg.body {
+				to_server::ToServerBody::ActionRequest(request) => {
+					self.in_flight_rpcs
+						.update_async(&request.id, |_, rpc| rpc.sent = true)
+						.await;
+				}
+				to_server::ToServerBody::SubscriptionRequest(_) => {}
+			}
+
 			return;
 		}
 
@@ -479,6 +519,14 @@ impl ActorConnectionInner {
 		return;
 	}
 
+	/// Calls an action over the connection, queueing it while the connection opens.
+	///
+	/// To give up on a call, drop the future, for example with `tokio::time::timeout`. An action
+	/// still queued when its future is dropped is never sent. An action already sent may still
+	/// run on the actor.
+	///
+	/// If the connection closes after the action is sent, the call fails, because a reconnect
+	/// opens a new connection that cannot receive the reply. The action may still have run.
 	pub async fn action(self: &Arc<Self>, method: &str, params: Vec<Value>) -> Result<Value> {
 		if let Some(stop_error) = self.stop_error.lock().await.as_ref() {
 			return Err(stop_error.to_rpc_error());
@@ -486,7 +534,12 @@ impl ActorConnectionInner {
 		let id: u64 = self.rpc_counter.fetch_add(1, Ordering::SeqCst);
 
 		let (tx, rx) = oneshot::channel();
-		if self.in_flight_rpcs.insert_async(id, tx).await.is_err() {
+		if self
+			.in_flight_rpcs
+			.insert_async(id, InFlightRpc { tx, sent: false })
+			.await
+			.is_err()
+		{
 			return Err(anyhow::anyhow!("duplicate rpc id"));
 		}
 		// A stop between the check above and the insert has already cleared the in-flight map, so

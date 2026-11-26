@@ -378,6 +378,21 @@ export function reviveJsonCompatValue(
 	input: any,
 	options: JsonCompatReviveOptions = {},
 ): any {
+	return reviveValue(input, options, new WeakMap());
+}
+
+/**
+ * `revived` maps each object already walked to its revived value. Decoded CBOR
+ * can use one object in many places through cbor-x shared references, and
+ * walking it once per place grows exponentially with nesting. Containers are
+ * recorded before their children are walked, so cyclic input revives to a
+ * cyclic value instead of recursing forever.
+ */
+function reviveValue(
+	input: any,
+	options: JsonCompatReviveOptions,
+	revived: WeakMap<object, unknown>,
+): any {
 	if (typeof input === "bigint") {
 		if (
 			options.coerceSafeIntegerBigInts &&
@@ -388,15 +403,22 @@ export function reviveJsonCompatValue(
 		}
 		return input;
 	}
+	if (typeof input !== "object" || input === null) {
+		return input;
+	}
+	if (revived.has(input)) {
+		return revived.get(input);
+	}
 	if (input instanceof Map) {
-		const revived = new Map();
+		const map = new Map();
+		revived.set(input, map);
 		for (const [k, v] of input.entries()) {
-			revived.set(
-				reviveJsonCompatValue(k, options),
-				reviveJsonCompatValue(v, options),
+			map.set(
+				reviveValue(k, options, revived),
+				reviveValue(v, options, revived),
 			);
 		}
-		return revived;
+		return map;
 	}
 	if (Array.isArray(input)) {
 		if (
@@ -417,27 +439,35 @@ export function reviveJsonCompatValue(
 				return undefined;
 			}
 			if (input[0] === JSON_COMPAT_SET) {
-				const items = (input[1] as unknown[]).map((v) =>
-					reviveJsonCompatValue(v, options),
-				);
-				return new Set(items);
+				const set = new Set();
+				revived.set(input, set);
+				for (const value of input[1] as unknown[]) {
+					set.add(reviveValue(value, options, revived));
+				}
+				return set;
 			}
 			if (input[0].startsWith("$$")) {
-				return [
-					input[0].substring(1),
-					reviveJsonCompatValue(input[1], options),
-				];
+				const escaped: unknown[] = [input[0].substring(1)];
+				revived.set(input, escaped);
+				escaped.push(reviveValue(input[1], options, revived));
+				return escaped;
 			}
 			throw new Error(
 				`Unknown JSON encoding type: ${input[0]}. This may indicate corrupted data or a version mismatch.`,
 			);
 		}
-		return input.map((value) => reviveJsonCompatValue(value, options));
+		const array: unknown[] = [];
+		revived.set(input, array);
+		for (const value of input) {
+			array.push(reviveValue(value, options, revived));
+		}
+		return array;
 	}
 	if (isPlainObject(input)) {
 		const decoded: Record<string, unknown> = {};
+		revived.set(input, decoded);
 		for (const [key, value] of Object.entries(input)) {
-			decoded[key] = reviveJsonCompatValue(value, options);
+			decoded[key] = reviveValue(value, options, revived);
 		}
 		return decoded;
 	}

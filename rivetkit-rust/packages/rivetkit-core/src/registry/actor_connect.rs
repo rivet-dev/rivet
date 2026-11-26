@@ -1,3 +1,5 @@
+use super::cbor_args::cbor_map_fields;
+use super::cbor_payload::decode_client_payload_json;
 use super::inspector::{decode_cbor_json, encode_json_as_cbor};
 use super::*;
 use crate::error::ProtocolError;
@@ -144,14 +146,14 @@ pub(super) fn actor_connect_message_json_value(
 			"tag": "ActionResponse",
 			"val": {
 				"id": json_compat_bigint(payload.id),
-				"output": decode_cbor_json(payload.output.as_ref())?,
+				"output": decode_client_payload_json(payload.output.as_ref())?,
 			},
 		}),
 		ActorConnectToClient::Event(payload) => json!({
 			"tag": "Event",
 			"val": {
 				"name": payload.name.clone(),
-				"args": decode_cbor_json(payload.args.as_ref())?,
+				"args": decode_client_payload_json(payload.args.as_ref())?,
 			},
 		}),
 	};
@@ -168,33 +170,53 @@ pub(super) fn decode_actor_connect_message(
 				serde_json::from_slice(payload).context("decode actor websocket json request")?;
 			actor_connect_request_from_json_value(&envelope)
 		}
-		ActorConnectEncoding::Cbor => {
-			let envelope: ActorConnectToServerJsonEnvelope =
-				ciborium::from_reader(Cursor::new(payload))
-					.context("decode actor websocket cbor request")?;
-			actor_connect_request_from_json(envelope)
-		}
+		ActorConnectEncoding::Cbor => decode_actor_connect_message_cbor(payload)
+			.context("decode actor websocket cbor request"),
 		ActorConnectEncoding::Bare => decode_actor_connect_message_bare(payload),
 	}
 }
 
-pub(super) fn actor_connect_request_from_json(
-	envelope: ActorConnectToServerJsonEnvelope,
-) -> Result<ActorConnectToServer> {
-	match envelope.body {
-		ActorConnectToServerJsonBody::ActionRequest(request) => Ok(
-			ActorConnectToServer::ActionRequest(ActorConnectActionRequest {
-				id: request.id,
-				name: request.name,
-				args: ByteBuf::from(
-					encode_json_as_cbor(&request.args)
-						.context("encode actor websocket action request args")?,
-				),
-			}),
-		),
-		ActorConnectToServerJsonBody::SubscriptionRequest(request) => {
+/// Decodes a cbor message. The message is read field by field from its raw
+/// bytes, so the field order does not matter and the args reach the actor as
+/// raw CBOR.
+fn decode_actor_connect_message_cbor(payload: &[u8]) -> Result<ActorConnectToServer> {
+	let [body] = cbor_map_fields(payload, ["body"])?;
+	let body = body.ok_or_else(|| invalid_actor_connect("body", "missing object"))?;
+	let [tag, val] = cbor_map_fields(body, ["tag", "val"])?;
+	let tag: String =
+		ciborium::from_reader(tag.ok_or_else(|| invalid_actor_connect("tag", "missing string"))?)
+			.context("decode actor websocket message tag")?;
+	let val = val.ok_or_else(|| invalid_actor_connect("val", "missing object"))?;
+
+	match tag.as_str() {
+		"ActionRequest" => {
+			let [id, name, args] = cbor_map_fields(val, ["id", "name", "args"])?;
+			let id: u64 = ciborium::from_reader(
+				id.ok_or_else(|| invalid_actor_connect("id", "missing value"))?,
+			)
+			.context("decode actor websocket action request id")?;
+			let name: String = ciborium::from_reader(
+				name.ok_or_else(|| invalid_actor_connect("name", "missing string"))?,
+			)
+			.context("decode actor websocket action request name")?;
+			let args = args.ok_or_else(|| invalid_actor_connect("args", "missing value"))?;
+			Ok(ActorConnectToServer::ActionRequest(
+				ActorConnectActionRequest {
+					id,
+					name,
+					args: ByteBuf::from(args.to_vec()),
+				},
+			))
+		}
+		"SubscriptionRequest" => {
+			let request: ActorConnectSubscriptionRequest = ciborium::from_reader(val)
+				.context("decode actor websocket subscription request")?;
 			Ok(ActorConnectToServer::SubscriptionRequest(request))
 		}
+		other => Err(invalid_actor_connect(
+			"tag",
+			format!("unknown tag `{other}`"),
+		)),
 	}
 }
 

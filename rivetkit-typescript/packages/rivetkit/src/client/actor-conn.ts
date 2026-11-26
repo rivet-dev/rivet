@@ -345,6 +345,10 @@ export class ActorConnRaw {
 	/**
 	 * Call a raw action connection. See {@link ActorConn} for type-safe action calls.
 	 *
+	 * Aborting `signal` rejects the call with `signal.reason`. An action still queued while the
+	 * connection opens or reconnects is dropped and never sent. An action already sent may
+	 * still run on the actor.
+	 *
 	 * @see {@link ActorConn}
 	 * @template Args - The type of arguments to pass to the action function.
 	 * @template Response - The type of the response returned by the action function.
@@ -370,6 +374,8 @@ export class ActorConnRaw {
 				`Invalid action call: expected an options object { name, args }, got ${typeof opts}. Use conn.actionName(...args) for the shorthand API.`,
 			);
 		}
+		const signal = opts.signal;
+		if (signal?.aborted) throw signal.reason;
 		if (this.#disposed) throw new errors.ActorConnDisposed();
 		if (this.#connectionOpenError) throw this.#connectionOpenError;
 		logger().debug({ msg: "action", name: opts.name, args: opts.args });
@@ -394,26 +400,44 @@ export class ActorConnRaw {
 			inFlightCount: this.#actionsInFlight.size,
 		});
 
-		this.#sendMessage({
+		const message = {
 			body: {
-				tag: "ActionRequest",
+				tag: "ActionRequest" as const,
 				val: {
 					id: BigInt(actionId),
 					name: opts.name,
 					args: opts.args,
 				},
 			},
-		});
+		};
+		this.#sendMessage(message);
+
+		// The actor never sees a queued action, so an abort drops it from the queue. Once the
+		// action is sent, an abort only rejects the caller. The actor may still run it, and its
+		// late reply settles nothing.
+		const onAbort = () => {
+			const queuedIndex = this.#messageQueue.indexOf(message);
+			if (queuedIndex !== -1) {
+				this.#messageQueue.splice(queuedIndex, 1);
+				this.#actionsInFlight.delete(actionId);
+			}
+			reject(signal?.reason);
+		};
+		signal?.addEventListener("abort", onAbort, { once: true });
 
 		// TODO: Throw error if disconnect is called
 
-		const { id: responseId, output } = await promise;
-		if (responseId !== BigInt(actionId))
-			throw new Error(
-				`Request ID ${actionId} does not match response ID ${responseId}`,
-			);
+		try {
+			const { id: responseId, output } = await promise;
+			if (responseId !== BigInt(actionId))
+				throw new Error(
+					`Request ID ${actionId} does not match response ID ${responseId}`,
+				);
 
-		return output as Response;
+			return output as Response;
+		} finally {
+			signal?.removeEventListener("abort", onAbort);
+		}
 	}
 
 	/**
