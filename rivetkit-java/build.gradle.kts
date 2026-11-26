@@ -26,6 +26,9 @@ subprojects {
             // FFM restricted methods (downcalls, upcalls, reinterpret) are allowed
             // only for code on the classpath, which is where the SDK lives in tests.
             jvmArgs("--enable-native-access=ALL-UNNAMED")
+            // -Privet.ffi.library=/path/lib.so tests against a specific native build
+            // (for example an instrumented one for Rust coverage).
+            providers.gradleProperty("rivet.ffi.library").orNull?.let { systemProperty("rivet.ffi.library", it) }
             testLogging {
                 events("passed", "failed", "skipped")
                 exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

@@ -33,6 +33,15 @@ class CodecTest {
     }
 
     @Test
+    void anObjectFirstArgumentIsNotTheStructForm() {
+        Codec.Positional args = new Codec.Positional(new Type[] {Message.class, int.class}, new String[] {"m", "priority"});
+        Message m = new Message("a", "b", 3);
+        Object[] decoded = args.decode(args.encode(new Object[] {m, 5}));
+        assertEquals(m, decoded[0]);
+        assertEquals(5, decoded[1]);
+    }
+
+    @Test
     void missingPrimitiveIsAnError() {
         Codec.Positional args = new Codec.Positional(new Type[] {long.class}, new String[] {"amount"});
         RivetException e = assertThrows(RivetException.class, () -> args.decode(Codec.encode(List.of())));

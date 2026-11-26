@@ -297,11 +297,19 @@ final class Instance {
         Native.reply(event, Codec.encode(new Wire.RequestReply(response.status(), headers, true)), null);
         Streams.Outbound out = new Streams.Outbound(requestEvent.responseBody());
         spawn(() -> {
-            try (BufferedOutputStream buffered = new BufferedOutputStream(out, 64 * 1024)) {
+            BufferedOutputStream buffered = new BufferedOutputStream(out, 64 * 1024);
+            try {
                 response.writer().write(buffered);
             } catch (Exception e) {
+                // Abort without closing: closing would end the body cleanly.
                 LOG.log(Level.WARNING, "rivetkit: streaming response failed", e);
                 out.abort(String.valueOf(e.getMessage()));
+                return;
+            }
+            try {
+                buffered.close();
+            } catch (Exception e) {
+                LOG.log(Level.DEBUG, "rivetkit: client went away before the response ended", e);
             }
         }, ctx.keepAwakeRegion());
     }

@@ -242,9 +242,23 @@ Gradle builds the Rust library and packages it under `native/<os>-<arch>/`.
 
 | Layer | Tests |
 |---|---|
-| Rust | `wire/tests.rs`: replies, cancel-on-drop, leases, stream credit, op errors, handle sweeping. `messages.rs`: fixtures, with an exhaustive match so every kind and op has one. `abi.rs`: input checks, the panic guard, every export guarded; also run under Miri. |
-| Java unit | `CodecTest` (positional args, the Rust struct form, events), `TurnTest` (order, mutual exclusion), `ApiModelTest` (validation, recorder), `FixturesTest` (every Rust fixture decodes, and re-encodes to the same CBOR), `CompileTimeSafetyTest` (10 mistakes that must not compile, 1 that must). |
-| End to end | `examples/SdkTest`, against a real engine: typed actions, user errors, async calls, typed events, rejected connections, vars reset on wake while SQL persists, HTTP streaming both ways, WebSocket echo, turn atomicity under 100 concurrent calls, A→B→A calls, schedules. |
+| Rust | `wire/tests.rs`: replies, cancel-on-drop, leases (including after the actor stops), stream credit, op errors, handle sweeping. `messages.rs`: fixtures, with an exhaustive match so every kind and op has one. `abi.rs`: input checks, the panic guard, every export guarded; also run under Miri. |
+| Java unit | `CodecTest`, `TurnTest`, `ApiModelTest`, `FixturesTest` (every Rust fixture decodes, and re-encodes to the same CBOR), `CompileTimeSafetyTest` (10 mistakes that must not compile), `RegistryValidationTest` (mistakes javac can't see fail at registration). |
+| End to end | Both test classes go through the public API only, against a real engine. `examples/SdkTest` covers the example actors. `examples/FeaturesTest` covers the rest of the API, using the `Lab` test actor: every `ctx` and `Db` call, schedules and cron, every hook, connections and subscriptions, raw HTTP and WebSockets, and client options. |
+
+How the end-to-end suite stays fast:
+- **Concurrency.** Tests run concurrently (`junit-platform.properties`, 4 threads). They share one registry and engine (`TestRivet`), and each test uses fresh actor keys.
+- **A fresh engine store.** Every run gets an empty store (`RIVETKIT_STORAGE_PATH` under `examples/build/`). An engine started on old data first replays every actor earlier runs left behind, which delayed the first call by about 30 s.
+- **Hangs fail fast.** Each test has a 20 s timeout.
+
+The whole suite runs in about 15 s.
+
+Coverage: `mise run coverage` writes JaCoCo for `core` (unit plus end-to-end) to
+`build/reports/coverage/`; it is about 90% of lines. For Rust coverage under the Java tests:
+1. Build `rivetkit-ffi` with `cargo llvm-cov show-env`.
+2. Run Gradle with `-Privet.ffi.library=<instrumented .so>` and
+   `RIVET_ENGINE_BINARY_PATH` set.
+3. Run `cargo llvm-cov report`.
 
 ## 9. Open items
 
@@ -253,12 +267,13 @@ Gradle builds the Rust library and packages it under `native/<os>-<arch>/`.
 - `onBeforeActionResponse`, typed error subclasses (`@Code`), and a validation-only annotation
   processor (compile-time overload checks, `rivet-api.json` for rename diffs and other-language
   clients).
-- Tests still to add: a TypeScript client calling a Java actor, cron firing, and abort on
-  sleep.
+- Tests still to add: a TypeScript client calling a Java actor, and cron actually firing (its
+  minimum interval is 5 s).
 - The Rust client decodes event args to JSON eagerly. A lazy `raw_args` path would save that
   work.
 - A rejected connection keeps retrying, as in the other clients. Java surfaces it through
-  `Conn.onError`.
+  `Conn.onError`. A subscription refused by `OnSubscribe` closes the whole connection (core
+  sends close code 1011); the client sees `DISCONNECTED` and reconnects.
 - The repo's simulation lints (`clippy.toml` bans raw tokio and `HashMap`) are not applied to
   the RivetKit host crates yet; the Rust SDK and napi don't follow them either.
 

@@ -32,23 +32,18 @@ class SdkTest {
 
     @BeforeAll
     static void start() {
-        rivet = RivetTest.start(Examples.registry());
+        rivet = TestRivet.get();
         client = rivet.client();
     }
 
     @AfterAll
-    static void stop() throws InterruptedException {
-        if (rivet != null) rivet.close();
-        for (int i = 0; i < 100 && Native.pendingCount() > 0; i++) Thread.sleep(50);
-        assertEquals(0, Native.pendingCount(), "calls left waiting on Rust");
+    static void noCallsLeftWaiting() throws InterruptedException {
+        for (int i = 0; i < 100 && Native.pendingCount() > TestRivet.idlePending; i++) Thread.sleep(50);
+        assertEquals(TestRivet.idlePending, Native.pendingCount(), "calls left waiting on Rust");
     }
 
     private static void eventually(BooleanSupplier condition, Duration timeout) throws InterruptedException {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (!condition.getAsBoolean()) {
-            if (System.nanoTime() > deadline) throw new AssertionError("condition not met within " + timeout);
-            Thread.sleep(100);
-        }
+        TestRivet.eventually(condition, timeout);
     }
 
     @Test

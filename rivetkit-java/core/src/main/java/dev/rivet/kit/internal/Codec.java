@@ -9,7 +9,6 @@ import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.Map;
 import tools.jackson.core.JsonGenerator;
 import tools.jackson.core.JsonParser;
 import tools.jackson.core.JsonToken;
@@ -58,12 +57,6 @@ public final class Codec {
         return MAPPER.constructType(type);
     }
 
-    /** Decodes CBOR into plain Java values (maps, lists, strings, numbers, byte[]). */
-    public static Object plain(byte[] bytes) {
-        if (bytes == null || bytes.length == 0) return null;
-        return MAPPER.readValue(bytes, Object.class);
-    }
-
     public static <T> T convert(Object value, JavaType type) {
         return MAPPER.convertValue(value, type);
     }
@@ -100,10 +93,6 @@ public final class Codec {
                     && (types.length > 1 || (types.length == 1 && isScalar(this.types[0])));
         }
 
-        public int arity() {
-            return types.length;
-        }
-
         public byte[] encode(Object[] args) {
             if (args == null || args.length == 0) return EMPTY_ARRAY.clone();
             ByteArrayOutputStream out = new ByteArrayOutputStream(64);
@@ -126,14 +115,16 @@ public final class Codec {
                     throw invalidArgs("arguments must be an array", null);
                 }
                 JsonToken t = p.nextToken();
+                int i = 0;
                 if (byNameAllowed && t == JsonToken.START_OBJECT) {
                     JsonNode object = MAPPER.readTree(p);
-                    if (p.nextToken() != JsonToken.END_ARRAY) {
-                        throw invalidArgs("a by-name argument map must be the only argument", null);
-                    }
-                    return decodeByName(object);
+                    t = p.nextToken();
+                    // One map and nothing else: the Rust client's struct form.
+                    if (t == JsonToken.END_ARRAY) return decodeByName(object);
+                    // Otherwise the map is simply the first positional argument.
+                    args[0] = readers[0].readValue(object);
+                    i = 1;
                 }
-                int i = 0;
                 for (; t != JsonToken.END_ARRAY && t != null; t = p.nextToken(), i++) {
                     if (i < types.length) {
                         args[i] = readers[i].readValue(p);
@@ -266,12 +257,5 @@ public final class Codec {
             }
             return count > 0;
         }
-    }
-
-    /** The CBOR map of an object, for tests and debugging. */
-    static Map<String, Object> asMap(byte[] bytes) {
-        @SuppressWarnings("unchecked")
-        Map<String, Object> map = MAPPER.readValue(bytes, Map.class);
-        return map;
     }
 }

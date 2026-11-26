@@ -7,12 +7,16 @@ public final class Examples {
     private Examples() {}
 
     public static Registry registry() {
+        return builder().build();
+    }
+
+    /** The example actors, open for more registrations (tests add their own). */
+    public static Registry.Builder builder() {
         return Registry.builder()
                 .actor(Counter.class, CounterActor::new, actor -> actor.migrate(CounterActor::migrate))
                 .actor(ChatRoom.class, ChatRoomActor::new, actor -> actor.migrate(ChatRoomActor::migrate))
                 .actor(Files.class, FilesActor::new)
                 .actor(Echo.class, EchoActor::new)
-                .actor(Pinger.class, PingerActor::new, actor -> actor.migrate(PingerActor::migrate))
-                .build();
+                .actor(Pinger.class, PingerActor::new, actor -> actor.migrate(PingerActor::migrate));
     }
 }

@@ -299,3 +299,15 @@ async fn registry_handles_create_and_stop() {
 	wire.release(created.handle).unwrap();
 	assert_eq!(wire.handle_count(), 0);
 }
+
+#[tokio::test]
+async fn stopping_an_actor_keeps_leases_the_host_still_reads() {
+	let (wire, recorder) = setup();
+	let body = vec![3u8; super::LEASE_THRESHOLD + 1];
+	wire.emit(EventKind::WsMessage, 1, 99, 5, &[], body);
+	let lease = recorder.events.lock()[0].lease;
+	wire.release_owned(99);
+	assert_eq!(wire.handle_count(), 1, "the lease outlives the actor");
+	wire.lease_release(lease).unwrap();
+	assert_eq!(wire.handle_count(), 0);
+}

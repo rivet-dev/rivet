@@ -142,7 +142,11 @@ impl Wire {
 			let mut handles = self.handles.lock();
 			let ids: Vec<u64> = handles
 				.iter()
-				.filter(|(_, entry)| entry.owner == owner)
+				// Leases stay until the host releases them: the host may still be
+				// reading the buffer in place after the actor stopped.
+				.filter(|(_, entry)| {
+					entry.owner == owner && !matches!(entry.handle, Handle::Lease { .. })
+				})
 				.map(|(id, _)| *id)
 				.collect();
 			ids.into_iter()

@@ -13,6 +13,7 @@ final class ServerSocket implements WebSocket {
     private final List<Consumer<Message>> messageListeners = new CopyOnWriteArrayList<>();
     private final List<Consumer<Close>> closeListeners = new CopyOnWriteArrayList<>();
     private volatile boolean open = true;
+    private boolean closeDispatched;
 
     ServerSocket(Instance instance, long id) {
         this.instance = instance;
@@ -34,11 +35,13 @@ final class ServerSocket implements WebSocket {
         Native.callSync(id, Wire.OP_WS_SEND, new Wire.WsSendCall(binary), data);
     }
 
+    /** Core reports only closes the client starts, so a close from this side runs the listeners here. */
     @Override
     public void close(int code, String reason) {
         if (!open) return;
         open = false;
         Native.call(id, Wire.OP_WS_CLOSE, new Wire.WsCloseCall(code, reason), null);
+        dispatchClose(code, reason, true);
     }
 
     @Override
@@ -58,6 +61,10 @@ final class ServerSocket implements WebSocket {
 
     void dispatchClose(int code, String reason, boolean wasClean) {
         open = false;
+        synchronized (this) {
+            if (closeDispatched) return;
+            closeDispatched = true;
+        }
         Close close = new Close(code, reason, wasClean);
         for (Consumer<Close> listener : closeListeners) listener.accept(close);
     }
